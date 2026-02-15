@@ -283,6 +283,8 @@ export interface ParagraphFormatting {
   widowControl?: boolean;
   /** Page break before (w:pageBreakBefore) */
   pageBreakBefore?: boolean;
+  /** Contextual spacing — suppress space between paragraphs of the same style (w:contextualSpacing) */
+  contextualSpacing?: boolean;
 
   // Numbering/List
   /** Numbering properties (w:numPr) */

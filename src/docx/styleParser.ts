@@ -538,6 +538,9 @@ function parseParagraphProperties(
   const pageBreakBefore = findChild(pPr, 'w', 'pageBreakBefore');
   if (pageBreakBefore) formatting.pageBreakBefore = parseBooleanElement(pageBreakBefore);
 
+  const contextualSpacing = findChild(pPr, 'w', 'contextualSpacing');
+  if (contextualSpacing) formatting.contextualSpacing = parseBooleanElement(contextualSpacing);
+
   // Numbering properties
   const numPr = findChild(pPr, 'w', 'numPr');
   if (numPr) {

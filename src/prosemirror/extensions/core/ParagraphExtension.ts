@@ -121,6 +121,7 @@ const paragraphNodeSpec: NodeSpec = {
     pageBreakBefore: { default: null },
     keepNext: { default: null },
     keepLines: { default: null },
+    contextualSpacing: { default: null },
     defaultTextFormatting: { default: null },
     sectionBreakType: { default: null },
     outlineLevel: { default: null },

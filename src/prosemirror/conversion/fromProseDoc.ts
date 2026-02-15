@@ -245,7 +245,8 @@ function paragraphAttrsToFormatting(attrs: ParagraphAttrs): ParagraphFormatting 
     attrs.borders ||
     attrs.shading ||
     attrs.tabs ||
-    attrs.outlineLevel != null;
+    attrs.outlineLevel != null ||
+    attrs.contextualSpacing;
 
   if (!hasFormatting) {
     return undefined;
@@ -267,6 +268,7 @@ function paragraphAttrsToFormatting(attrs: ParagraphAttrs): ParagraphFormatting 
     shading: attrs.shading || undefined,
     tabs: attrs.tabs || undefined,
     outlineLevel: attrs.outlineLevel ?? undefined,
+    contextualSpacing: attrs.contextualSpacing || undefined,
   };
 }
 

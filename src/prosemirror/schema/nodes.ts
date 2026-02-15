@@ -76,6 +76,8 @@ export interface ParagraphAttrs {
   pageBreakBefore?: boolean;
   keepNext?: boolean;
   keepLines?: boolean;
+  /** Contextual spacing — suppress space between same-style paragraphs */
+  contextualSpacing?: boolean;
 
   // Default text formatting for empty paragraphs (persists when navigating away)
   // Maps to OOXML pPr/rPr (paragraph's default run properties)

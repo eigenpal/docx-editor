@@ -483,6 +483,12 @@ function convertParagraphAttrs(pmAttrs: PMParagraphAttrs): ParagraphAttrs {
   if (pmAttrs.keepLines) {
     attrs.keepLines = true;
   }
+  if (pmAttrs.contextualSpacing) {
+    attrs.contextualSpacing = true;
+  }
+  if (pmAttrs.styleId) {
+    attrs.styleId = pmAttrs.styleId;
+  }
 
   // List properties
   if (pmAttrs.numPr) {

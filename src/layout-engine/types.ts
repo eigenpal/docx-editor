@@ -212,6 +212,7 @@ export type ParagraphAttrs = {
   keepLines?: boolean;
   pageBreakBefore?: boolean;
   styleId?: string;
+  contextualSpacing?: boolean;
   borders?: ParagraphBorders;
   shading?: string; // CSS background color
   tabs?: TabStop[]; // Custom tab stops

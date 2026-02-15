@@ -542,6 +542,11 @@ export function parseParagraphProperties(
     formatting.pageBreakBefore = parseBooleanElement(pageBreakBefore);
   }
 
+  const contextualSpacing = findChild(pPr, 'w', 'contextualSpacing');
+  if (contextualSpacing) {
+    formatting.contextualSpacing = parseBooleanElement(contextualSpacing);
+  }
+
   // === Numbering Properties (List Info) ===
   const numPr = findChild(pPr, 'w', 'numPr');
   if (numPr) {
@@ -1058,9 +1063,21 @@ export function parseParagraph(
   // This reduces fragmentation (e.g., 252 tiny runs → a few larger runs)
   paragraph.content = consolidateParagraphContent(rawContent);
 
-  // Compute list rendering if this is a list item
-  if (paragraph.formatting?.numPr && numbering) {
-    const { numId, ilvl = 0 } = paragraph.formatting.numPr;
+  // Compute list rendering if this is a list item.
+  // numPr can come from inline pPr or from the referenced paragraph style.
+  let effectiveNumPr = paragraph.formatting?.numPr;
+  if (!effectiveNumPr && paragraph.formatting?.styleId && styles) {
+    const style = styles.get(paragraph.formatting.styleId);
+    if (style?.pPr?.numPr) {
+      effectiveNumPr = style.pPr.numPr;
+      // Store it on the paragraph formatting so downstream code sees it
+      if (!paragraph.formatting) paragraph.formatting = {};
+      paragraph.formatting.numPr = effectiveNumPr;
+    }
+  }
+
+  if (effectiveNumPr && numbering) {
+    const { numId, ilvl = 0 } = effectiveNumPr;
     if (numId !== undefined && numId !== 0) {
       const level = numbering.getLevel(numId, ilvl);
       if (level) {

@@ -393,6 +393,10 @@ export function serializeParagraphFormatting(formatting: ParagraphFormatting | u
     parts.push('<w:keepLines/>');
   }
 
+  if (formatting.contextualSpacing) {
+    parts.push('<w:contextualSpacing/>');
+  }
+
   if (formatting.pageBreakBefore) {
     parts.push('<w:pageBreakBefore/>');
   }
