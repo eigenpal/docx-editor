@@ -869,16 +869,13 @@ export function Toolbar({
         </ToolbarButton>
       </ToolbarGroup>
 
-      {/* Alignment Group */}
+      {/* Alignment Dropdown */}
       {showAlignmentButtons && (
-        <ToolbarGroup label="Paragraph alignment">
-          <AlignmentButtons
-            value={currentFormatting.alignment || 'left'}
-            onChange={handleAlignmentChange}
-            disabled={disabled}
-            compact
-          />
-        </ToolbarGroup>
+        <AlignmentButtons
+          value={currentFormatting.alignment || 'left'}
+          onChange={handleAlignmentChange}
+          disabled={disabled}
+        />
       )}
 
       {/* List Buttons and Line Spacing */}

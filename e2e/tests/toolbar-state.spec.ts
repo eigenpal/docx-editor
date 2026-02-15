@@ -627,11 +627,10 @@ test.describe('Alignment Detection at Cursor', () => {
 
     await page.waitForTimeout(100);
 
-    const centerButton = page.locator('[aria-label="Center (Ctrl+E)"]');
-    const isActive = await centerButton.evaluate((el) => {
-      return el.getAttribute('aria-pressed') === 'true' || el.classList.contains('active');
-    });
-    expect(isActive).toBe(true);
+    // The alignment dropdown trigger's aria-label reflects the current alignment
+    const alignmentTrigger = page.locator('[data-testid="toolbar-alignment"]');
+    const ariaLabel = await alignmentTrigger.getAttribute('aria-label');
+    expect(ariaLabel).toContain('Center');
   });
 
   test('cursor in right-aligned paragraph shows right active', async ({ page }) => {
@@ -664,11 +663,10 @@ test.describe('Alignment Detection at Cursor', () => {
 
     await page.waitForTimeout(100);
 
-    const rightButton = page.locator('[aria-label="Align Right (Ctrl+R)"]');
-    const isActive = await rightButton.evaluate((el) => {
-      return el.getAttribute('aria-pressed') === 'true' || el.classList.contains('active');
-    });
-    expect(isActive).toBe(true);
+    // The alignment dropdown trigger's aria-label reflects the current alignment
+    const alignmentTrigger = page.locator('[data-testid="toolbar-alignment"]');
+    const ariaLabel = await alignmentTrigger.getAttribute('aria-label');
+    expect(ariaLabel).toContain('Align Right');
   });
 });
 

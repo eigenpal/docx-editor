@@ -1,16 +1,19 @@
 /**
- * Alignment Buttons Component
+ * Alignment Dropdown Component (Google Docs style)
  *
- * A component for paragraph alignment controls in the DOCX editor:
- * - Left, Center, Right, Justify buttons
- * - Shows active state for current paragraph alignment
- * - Applies alignment to current paragraph(s)
+ * A single dropdown button for paragraph alignment controls:
+ * - Shows current alignment icon + chevron
+ * - Opens a floating panel with Left, Center, Right, Justify options
+ * - Active option is highlighted
  */
 
-import React, { useState, useCallback } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import type { CSSProperties, ReactNode } from 'react';
 import type { ParagraphAlignment } from '../../types/document';
 import { MaterialSymbol } from './MaterialSymbol';
+import { Button } from './Button';
+import { Tooltip } from './Tooltip';
+import { cn } from '../../lib/utils';
 
 // ============================================================================
 // TYPES
@@ -26,6 +29,8 @@ export interface AlignmentOption {
   label: string;
   /** Icon to display */
   icon: ReactNode;
+  /** Material symbol icon name */
+  iconName: string;
   /** Keyboard shortcut hint */
   shortcut?: string;
 }
@@ -71,54 +76,6 @@ export interface AlignmentButtonProps {
 }
 
 // ============================================================================
-// STYLES
-// ============================================================================
-
-const CONTAINER_STYLE: CSSProperties = {
-  display: 'inline-flex',
-  alignItems: 'center',
-  gap: '4px',
-};
-
-const BUTTON_STYLE: CSSProperties = {
-  display: 'flex',
-  alignItems: 'center',
-  justifyContent: 'center',
-  width: '32px',
-  height: '32px',
-  padding: '4px',
-  border: 'none',
-  borderRadius: '4px',
-  backgroundColor: 'transparent',
-  cursor: 'pointer',
-  transition: 'background-color 0.1s',
-  color: 'var(--doc-text-muted)',
-};
-
-const BUTTON_HOVER_STYLE: CSSProperties = {
-  ...BUTTON_STYLE,
-  backgroundColor: 'var(--doc-bg-hover)',
-};
-
-const BUTTON_ACTIVE_STYLE: CSSProperties = {
-  ...BUTTON_STYLE,
-  backgroundColor: 'var(--doc-primary-light)',
-  color: 'var(--doc-primary)',
-};
-
-const BUTTON_DISABLED_STYLE: CSSProperties = {
-  ...BUTTON_STYLE,
-  cursor: 'default',
-  opacity: 0.38,
-};
-
-const COMPACT_BUTTON_STYLE: CSSProperties = {
-  width: '28px',
-  height: '28px',
-  padding: '2px',
-};
-
-// ============================================================================
 // ICON SIZE CONSTANT
 // ============================================================================
 
@@ -133,142 +90,177 @@ const ALIGNMENT_OPTIONS: AlignmentOption[] = [
     value: 'left',
     label: 'Align Left',
     icon: <MaterialSymbol name="format_align_left" size={ICON_SIZE} />,
+    iconName: 'format_align_left',
     shortcut: 'Ctrl+L',
   },
   {
     value: 'center',
     label: 'Center',
     icon: <MaterialSymbol name="format_align_center" size={ICON_SIZE} />,
+    iconName: 'format_align_center',
     shortcut: 'Ctrl+E',
   },
   {
     value: 'right',
     label: 'Align Right',
     icon: <MaterialSymbol name="format_align_right" size={ICON_SIZE} />,
+    iconName: 'format_align_right',
     shortcut: 'Ctrl+R',
   },
   {
     value: 'both',
     label: 'Justify',
     icon: <MaterialSymbol name="format_align_justify" size={ICON_SIZE} />,
+    iconName: 'format_align_justify',
     shortcut: 'Ctrl+J',
   },
 ];
-
-// ============================================================================
-// ALIGNMENT BUTTON COMPONENT
-// ============================================================================
-
-/**
- * Individual alignment button
- */
-export function AlignmentButton({
-  active = false,
-  disabled = false,
-  title,
-  onClick,
-  children,
-  className,
-  style,
-}: AlignmentButtonProps) {
-  const [isHovered, setIsHovered] = useState(false);
-
-  const buttonStyle: CSSProperties = {
-    ...(disabled
-      ? BUTTON_DISABLED_STYLE
-      : active
-        ? BUTTON_ACTIVE_STYLE
-        : isHovered
-          ? BUTTON_HOVER_STYLE
-          : BUTTON_STYLE),
-    ...style,
-  };
-
-  // Prevent mousedown from stealing focus/selection from the editor
-  const handleMouseDown = (e: React.MouseEvent) => {
-    e.preventDefault();
-  };
-
-  return (
-    <button
-      type="button"
-      className={`docx-alignment-button ${active ? 'docx-alignment-button-active' : ''} ${
-        disabled ? 'docx-alignment-button-disabled' : ''
-      } ${className || ''}`}
-      style={buttonStyle}
-      onMouseDown={handleMouseDown}
-      onClick={disabled ? undefined : onClick}
-      onMouseEnter={() => setIsHovered(true)}
-      onMouseLeave={() => setIsHovered(false)}
-      disabled={disabled}
-      title={title}
-      aria-label={title}
-      aria-pressed={active}
-      role="button"
-    >
-      {children}
-    </button>
-  );
-}
 
 // ============================================================================
 // MAIN COMPONENT
 // ============================================================================
 
 /**
- * Alignment buttons component for paragraph alignment controls
+ * Alignment dropdown component — single button with popover panel
  */
 export function AlignmentButtons({
   value = 'left',
   onChange,
   disabled = false,
-  className,
-  style,
-  showLabels = false,
-  compact = false,
 }: AlignmentButtonsProps) {
-  /**
-   * Handle alignment change
-   */
-  const handleAlignmentChange = useCallback(
+  const [isOpen, setIsOpen] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  // Close on click-outside and Escape
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleClickOutside = (e: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        setIsOpen(false);
+      }
+    };
+    const handleEscape = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setIsOpen(false);
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    document.addEventListener('keydown', handleEscape);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('keydown', handleEscape);
+    };
+  }, [isOpen]);
+
+  const handleMouseDown = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+  }, []);
+
+  const handleOptionClick = useCallback(
     (alignment: ParagraphAlignment) => {
       if (!disabled) {
         onChange?.(alignment);
       }
+      setIsOpen(false);
     },
     [disabled, onChange]
   );
 
-  /**
-   * Get button style with compact option
-   */
-  const getButtonStyle = useCallback(
-    (): CSSProperties => (compact ? { ...COMPACT_BUTTON_STYLE } : {}),
-    [compact]
+  // Find the current alignment option for the trigger icon
+  const currentOption =
+    ALIGNMENT_OPTIONS.find((opt) => opt.value === value) || ALIGNMENT_OPTIONS[0];
+
+  const triggerButton = (
+    <Button
+      variant="ghost"
+      size="icon-sm"
+      className={cn(
+        'text-slate-500 hover:text-slate-900 hover:bg-slate-100/80',
+        isOpen && 'bg-slate-100',
+        disabled && 'opacity-30 cursor-not-allowed'
+      )}
+      onMouseDown={handleMouseDown}
+      onClick={() => !disabled && setIsOpen((prev) => !prev)}
+      disabled={disabled}
+      aria-label={`${currentOption.label}${currentOption.shortcut ? ` (${currentOption.shortcut})` : ''}`}
+      aria-expanded={isOpen}
+      aria-haspopup="true"
+      data-testid="toolbar-alignment"
+    >
+      <MaterialSymbol name={currentOption.iconName} size={ICON_SIZE} />
+      <MaterialSymbol name="arrow_drop_down" size={14} className="-ml-1" />
+    </Button>
   );
 
   return (
-    <div
-      className={`docx-alignment-buttons ${className || ''}`}
-      style={{ ...CONTAINER_STYLE, ...style }}
-      role="group"
-      aria-label="Paragraph alignment"
-    >
-      {ALIGNMENT_OPTIONS.map((option) => (
-        <AlignmentButton
-          key={option.value}
-          active={value === option.value}
-          disabled={disabled}
-          title={`${option.label}${option.shortcut ? ` (${option.shortcut})` : ''}`}
-          onClick={() => handleAlignmentChange(option.value)}
-          style={getButtonStyle()}
+    <div ref={containerRef} style={{ position: 'relative', display: 'inline-block' }}>
+      {!isOpen ? (
+        <Tooltip
+          content={`${currentOption.label}${currentOption.shortcut ? ` (${currentOption.shortcut})` : ''}`}
         >
-          {option.icon}
-          {showLabels && (
-            <span style={{ marginLeft: '4px', fontSize: '12px' }}>{option.label}</span>
-          )}
-        </AlignmentButton>
-      ))}
+          {triggerButton}
+        </Tooltip>
+      ) : (
+        triggerButton
+      )}
+
+      {isOpen && !disabled && (
+        <div
+          style={{
+            position: 'absolute',
+            top: '100%',
+            left: 0,
+            marginTop: 4,
+            backgroundColor: 'white',
+            border: '1px solid var(--doc-border)',
+            borderRadius: 8,
+            boxShadow: '0 4px 16px rgba(0, 0, 0, 0.12)',
+            padding: 6,
+            zIndex: 1000,
+          }}
+          onMouseDown={(e) => e.stopPropagation()}
+        >
+          <div style={{ display: 'flex', gap: 2 }}>
+            {ALIGNMENT_OPTIONS.map((option) => {
+              const isActive = value === option.value;
+              return (
+                <button
+                  key={option.value}
+                  type="button"
+                  title={`${option.label}${option.shortcut ? ` (${option.shortcut})` : ''}`}
+                  data-testid={`alignment-${option.value}`}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    width: 32,
+                    height: 32,
+                    border: '1px solid transparent',
+                    borderRadius: 4,
+                    backgroundColor: isActive ? 'var(--doc-primary-light)' : 'transparent',
+                    cursor: 'pointer',
+                    color: isActive ? 'var(--doc-primary)' : 'var(--doc-text)',
+                  }}
+                  onMouseDown={(e) => e.preventDefault()}
+                  onMouseEnter={(e) => {
+                    if (!isActive) {
+                      (e.currentTarget as HTMLButtonElement).style.backgroundColor =
+                        'var(--doc-bg-hover)';
+                    }
+                  }}
+                  onMouseLeave={(e) => {
+                    (e.currentTarget as HTMLButtonElement).style.backgroundColor = isActive
+                      ? 'var(--doc-primary-light)'
+                      : 'transparent';
+                  }}
+                  onClick={() => handleOptionClick(option.value)}
+                >
+                  <MaterialSymbol name={option.iconName} size={18} />
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
