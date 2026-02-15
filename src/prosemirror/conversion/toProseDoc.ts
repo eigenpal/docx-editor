@@ -239,6 +239,8 @@ function paragraphFormattingToAttrs(
     listNumFmt: paragraph.listRendering?.numFmt,
     listIsBullet: paragraph.listRendering?.isBullet,
     listMarker: paragraph.listRendering?.marker,
+    // Store original inline formatting for lossless serialization round-trip
+    _originalFormatting: formatting || undefined,
   };
 
   // If we have a style resolver, resolve the style and get base properties

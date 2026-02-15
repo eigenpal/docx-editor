@@ -365,15 +365,22 @@ export function useAutoHistory<T>(
 /**
  * Hook for document history with specialized comparison
  */
-export function useDocumentHistory<T extends { package?: { document?: unknown } | null } | null>(
-  document: T,
-  options: Omit<UseHistoryOptions<T>, 'isEqual'> = {}
-): UseHistoryReturn<T> {
-  // Compare only the document content for detecting changes
+export function useDocumentHistory<
+  T extends {
+    package?: { document?: unknown; headers?: unknown; footers?: unknown } | null;
+  } | null,
+>(document: T, options: Omit<UseHistoryOptions<T>, 'isEqual'> = {}): UseHistoryReturn<T> {
+  // Compare document content, headers, and footers for detecting changes
   const isEqual = useCallback((a: T, b: T): boolean => {
-    const docA = JSON.stringify(a?.package?.document);
-    const docB = JSON.stringify(b?.package?.document);
-    return docA === docB;
+    if (a?.package?.document !== b?.package?.document) {
+      if (JSON.stringify(a?.package?.document) !== JSON.stringify(b?.package?.document)) {
+        return false;
+      }
+    }
+    // Also compare headers/footers (stored as Maps, use reference equality first)
+    if (a?.package?.headers !== b?.package?.headers) return false;
+    if (a?.package?.footers !== b?.package?.footers) return false;
+    return true;
   }, []);
 
   return useHistory(document, { ...options, isEqual });

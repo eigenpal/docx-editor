@@ -793,7 +793,7 @@ export function renderPage(
     headerEl.style.maxHeight = `${maxHeaderHeight}px`;
     headerEl.style.overflow = 'hidden';
     // Minimum height so empty areas are clickable
-    headerEl.style.minHeight = '20px';
+    headerEl.style.minHeight = '24px';
 
     if (options.headerContent && options.headerContent.blocks.length > 0) {
       const headerContentEl = renderHeaderFooterContent(
@@ -822,7 +822,7 @@ export function renderPage(
     footerEl.style.width = `${footerContentWidth}px`;
     footerEl.style.maxHeight = `${maxFooterHeight}px`;
     footerEl.style.overflow = 'hidden';
-    footerEl.style.minHeight = '20px';
+    footerEl.style.minHeight = '24px';
 
     if (options.footerContent && options.footerContent.blocks.length > 0) {
       const footerContentEl = renderHeaderFooterContent(

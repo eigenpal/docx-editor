@@ -132,6 +132,10 @@ export interface PagedEditorProps {
   pluginOverlays?: React.ReactNode;
   /** Callback when header or footer is double-clicked for editing. */
   onHeaderFooterDoubleClick?: (position: 'header' | 'footer') => void;
+  /** Active header/footer editing mode (dims body, intercepts body clicks). */
+  hfEditMode?: 'header' | 'footer' | null;
+  /** Called when user clicks the body area while in HF editing mode. */
+  onBodyClick?: () => void;
   /** Custom class name. */
   className?: string;
   /** Custom styles. */
@@ -809,17 +813,42 @@ function convertDocumentRunsToFlowRuns(content: unknown[]): Run[] {
     if (itemObj.type === 'simpleField') {
       const fieldType = itemObj.fieldType as string;
 
+      // Extract formatting from content runs (same approach as ComplexField)
+      const fieldFormatting: RunFormatting = {};
+      if (Array.isArray(itemObj.content) && itemObj.content.length > 0) {
+        const firstRun = itemObj.content[0] as Record<string, unknown>;
+        if (firstRun?.type === 'run' && firstRun.formatting) {
+          const formatting = firstRun.formatting as Record<string, unknown>;
+          if (formatting.fontSize) {
+            fieldFormatting.fontSize = (formatting.fontSize as number) / 2;
+          }
+          if (formatting.fontFamily) {
+            const ff = formatting.fontFamily as Record<string, unknown>;
+            fieldFormatting.fontFamily = (ff.ascii || ff.hAnsi) as string;
+          }
+          if (formatting.bold) fieldFormatting.bold = true;
+          if (formatting.italic) fieldFormatting.italic = true;
+          if (formatting.color) {
+            const c = formatting.color as Record<string, unknown>;
+            const val = (c.rgb || c.val) as string | undefined;
+            if (val) fieldFormatting.color = val.startsWith('#') ? val : `#${val}`;
+          }
+        }
+      }
+
       if (fieldType === 'PAGE') {
         runs.push({
           kind: 'field',
           fieldType: 'PAGE',
           fallback: '1',
+          ...fieldFormatting,
         });
       } else if (fieldType === 'NUMPAGES') {
         runs.push({
           kind: 'field',
           fieldType: 'NUMPAGES',
           fallback: '1',
+          ...fieldFormatting,
         });
       } else if (Array.isArray(itemObj.content)) {
         // Use the display content for other fields
@@ -848,6 +877,11 @@ function convertDocumentRunsToFlowRuns(content: unknown[]): Run[] {
           }
           if (formatting.bold) fieldFormatting.bold = true;
           if (formatting.italic) fieldFormatting.italic = true;
+          if (formatting.color) {
+            const c = formatting.color as Record<string, unknown>;
+            const val = (c.rgb || c.val) as string | undefined;
+            if (val) fieldFormatting.color = val.startsWith('#') ? val : `#${val}`;
+          }
         }
       }
 
@@ -983,6 +1017,8 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
       onRenderedDomContextReady,
       pluginOverlays,
       onHeaderFooterDoubleClick,
+      hfEditMode,
+      onBodyClick,
       className,
       style,
     } = props;
@@ -1643,6 +1679,21 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
         if (!hiddenPMRef.current || e.button !== 0) return; // Only handle left click
         if (readOnly) return;
 
+        // When in HF edit mode, clicks outside header/footer area close the HF editor
+        if (hfEditMode && onBodyClick) {
+          const target = e.target as HTMLElement;
+          const isInHfArea =
+            target.closest('.layout-page-header') ||
+            target.closest('.layout-page-footer') ||
+            target.closest('.hf-inline-editor');
+          if (!isInHfArea) {
+            e.preventDefault();
+            e.stopPropagation();
+            onBodyClick();
+            return;
+          }
+        }
+
         // Column resize: intercept clicks on resize handles
         const target = e.target as HTMLElement;
         if (target.classList.contains('layout-table-resize-handle')) {
@@ -1799,7 +1850,7 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
         hiddenPMRef.current.focus();
         setIsFocused(true);
       },
-      [getPositionFromMouse, findCellPosFromPmPos, readOnly]
+      [getPositionFromMouse, findCellPosFromPmPos, readOnly, hfEditMode, onBodyClick]
     );
 
     /**
@@ -2335,6 +2386,22 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
       // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
+    // Re-layout when header/footer content changes (e.g., after HF editor save).
+    // runLayoutPipeline includes headerContent/footerContent in its deps, but it
+    // only runs when explicitly called — this effect triggers it.
+    const headerFooterEpochRef = useRef(0);
+    useEffect(() => {
+      // Skip the initial render — handleEditorViewReady already does the first layout
+      if (headerFooterEpochRef.current === 0) {
+        headerFooterEpochRef.current = 1;
+        return;
+      }
+      const view = hiddenPMRef.current?.getView();
+      if (view) {
+        runLayoutPipeline(view.state);
+      }
+    }, [headerContent, footerContent, runLayoutPipeline]);
+
     // Re-compute selection overlay when the container resizes.
     // Page elements shift during window resize (centering, scrollbar changes),
     // causing caret/selection coordinates to become stale.
@@ -2498,7 +2565,7 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
           {/* Pages container */}
           <div
             ref={pagesContainerRef}
-            className="paged-editor__pages"
+            className={`paged-editor__pages${hfEditMode ? ` paged-editor--hf-editing paged-editor--editing-${hfEditMode}` : ''}`}
             style={pagesContainerStyles}
             onMouseDown={handlePagesMouseDown}
             onClick={handlePagesClick}

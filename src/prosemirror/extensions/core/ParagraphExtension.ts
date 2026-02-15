@@ -124,6 +124,7 @@ const paragraphNodeSpec: NodeSpec = {
     defaultTextFormatting: { default: null },
     sectionBreakType: { default: null },
     outlineLevel: { default: null },
+    _originalFormatting: { default: null },
   },
   parseDOM: [
     {

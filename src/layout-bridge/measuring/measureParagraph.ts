@@ -14,6 +14,7 @@ import type {
   TabRun,
   ImageRun,
   LineBreakRun,
+  FieldRun,
   ParagraphSpacing,
 } from '../../layout-engine/types';
 
@@ -184,6 +185,13 @@ function isImageRun(run: Run): run is ImageRun {
  */
 function isLineBreakRun(run: Run): run is LineBreakRun {
   return run.kind === 'lineBreak';
+}
+
+/**
+ * Check if a run is a field run
+ */
+function isFieldRun(run: Run): run is FieldRun {
+  return run.kind === 'field';
 }
 
 /**
@@ -518,6 +526,32 @@ export function measureParagraph(
       }
 
       currentLine.width += imageWidth;
+      currentLine.toRun = runIndex;
+      currentLine.toChar = 1;
+      continue;
+    }
+
+    if (isFieldRun(run)) {
+      // Measure field using fallback text (actual value substituted at render time)
+      const fallback = run.fallback || '1';
+      const style: FontStyle = {
+        fontFamily: run.fontFamily ?? DEFAULT_FONT_FAMILY,
+        fontSize: run.fontSize ?? DEFAULT_FONT_SIZE,
+        bold: run.bold,
+        italic: run.italic,
+      };
+      updateMaxFont(style);
+
+      const fieldWidth = measureTextWidth(fallback, style);
+      if (
+        currentLine.width > 0 &&
+        currentLine.width + fieldWidth > currentLine.availableWidth + WIDTH_TOLERANCE
+      ) {
+        startNewLine(runIndex, 0);
+        updateMaxFont(style);
+      }
+
+      currentLine.width += fieldWidth;
       currentLine.toRun = runIndex;
       currentLine.toChar = 1;
       continue;

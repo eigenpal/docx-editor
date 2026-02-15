@@ -8,6 +8,7 @@
 
 import type {
   ParagraphAlignment,
+  ParagraphFormatting,
   LineSpacingRule,
   BorderSpec,
   ShadingProperties,
@@ -85,6 +86,10 @@ export interface ParagraphAttrs {
 
   // Outline level for TOC (0-9)
   outlineLevel?: number;
+
+  /** Original inline paragraph formatting from DOCX (pre-style-resolution).
+   *  Used by fromProseDoc for lossless round-trip serialization. */
+  _originalFormatting?: ParagraphFormatting;
 }
 
 /**

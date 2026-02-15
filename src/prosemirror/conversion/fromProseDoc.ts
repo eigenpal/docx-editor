@@ -196,7 +196,42 @@ function insertCommentRanges(content: ParagraphContent[], paragraph: PMNode): Pa
 }
 
 function paragraphAttrsToFormatting(attrs: ParagraphAttrs): ParagraphFormatting | undefined {
-  // Check if any formatting is present
+  // If we have the original inline formatting from the DOCX, use it as a base
+  // for lossless round-trip. This preserves properties like contextualSpacing,
+  // widowControl, beforeAutospacing, runProperties, etc. that aren't tracked
+  // as individual PM attrs. It also avoids "inlining" style-inherited values
+  // (spacing, indentation, numPr) which would override style definitions
+  // and break rendering in Word/Pages/Google Docs.
+  //
+  // We then apply overrides for any properties the user may have changed
+  // via editor commands (alignment, list toggle, etc.).
+  if (attrs._originalFormatting) {
+    const orig = attrs._originalFormatting;
+    const result = { ...orig };
+
+    // Override properties that user may have changed via editor commands.
+    // Only override if the PM attr differs from the original value.
+    if (attrs.alignment !== (orig.alignment || undefined)) {
+      result.alignment = attrs.alignment || undefined;
+    }
+    if (attrs.numPr !== orig.numPr) {
+      // Use JSON comparison since these are objects
+      if (JSON.stringify(attrs.numPr) !== JSON.stringify(orig.numPr)) {
+        result.numPr = attrs.numPr || undefined;
+      }
+    }
+    if (attrs.styleId !== (orig.styleId || undefined)) {
+      result.styleId = attrs.styleId || undefined;
+    }
+    if (attrs.pageBreakBefore !== (orig.pageBreakBefore || undefined)) {
+      result.pageBreakBefore = attrs.pageBreakBefore || undefined;
+    }
+
+    return result;
+  }
+
+  // Fallback: reconstruct formatting from individual attrs (e.g. for
+  // newly created paragraphs that don't have _originalFormatting)
   const hasFormatting =
     attrs.alignment ||
     attrs.spaceBefore ||
@@ -404,7 +439,7 @@ function extractParagraphContent(paragraph: PMNode): ParagraphContent[] {
         currentRun = null;
         currentMarksKey = null;
       }
-      content.push(createFieldFromNode(node));
+      content.push(createFieldFromNode(node, node.marks));
     } else if (node.type.name === 'sdt') {
       // SDT ends current run and emits an InlineSdt content item
       if (currentRun) {
@@ -540,7 +575,7 @@ function createTabRun(): Run {
 /**
  * Create a SimpleField or ComplexField from a PM field node
  */
-function createFieldFromNode(node: PMNode): SimpleField | ComplexField {
+function createFieldFromNode(node: PMNode, marks?: readonly Mark[]): SimpleField | ComplexField {
   const attrs = node.attrs as {
     fieldType: string;
     instruction: string;
@@ -550,9 +585,12 @@ function createFieldFromNode(node: PMNode): SimpleField | ComplexField {
     dirty: boolean;
   };
 
+  const formatting = marks && marks.length > 0 ? marksToTextFormatting(marks) : undefined;
+
   const displayRun: Run = {
     type: 'run',
     content: [{ type: 'text' as const, text: attrs.displayText || '' }],
+    ...(formatting && Object.keys(formatting).length > 0 ? { formatting } : {}),
   };
 
   if (attrs.fieldKind === 'complex') {

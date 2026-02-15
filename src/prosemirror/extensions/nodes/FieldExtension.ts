@@ -60,10 +60,10 @@ export const FieldExtension = createNodeExtension({
       if (!text) {
         switch (fieldType) {
           case 'PAGE':
-            text = '#';
+            text = '{page}';
             break;
           case 'NUMPAGES':
-            text = '#';
+            text = '{pages}';
             break;
           case 'DATE':
           case 'TIME':
