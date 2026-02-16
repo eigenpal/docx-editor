@@ -23,13 +23,14 @@ import { MaterialSymbol } from './ui/MaterialSymbol';
 import { ZoomControl } from './ui/ZoomControl';
 import { Button } from './ui/Button';
 import { Tooltip } from './ui/Tooltip';
-import { TableGridPicker } from './ui/TableGridPicker';
+import { TableGridInline } from './ui/TableGridInline';
 import { TableBorderPicker } from './ui/TableBorderPicker';
 import { TableBorderColorPicker } from './ui/TableBorderColorPicker';
 import { TableBorderWidthPicker } from './ui/TableBorderWidthPicker';
 import { TableCellFillPicker } from './ui/TableCellFillPicker';
 import { TableMoreDropdown } from './ui/TableMoreDropdown';
-import { ShapeGallery } from './ui/ShapeGallery';
+import { MenuDropdown } from './ui/MenuDropdown';
+import type { MenuEntry } from './ui/MenuDropdown';
 import type { TableAction } from './ui/TableToolbar';
 import { cn } from '../lib/utils';
 
@@ -163,6 +164,8 @@ export interface ToolbarProps {
   showTableInsert?: boolean;
   /** Callback when user wants to insert an image */
   onInsertImage?: () => void;
+  /** Callback when user wants to insert a page break */
+  onInsertPageBreak?: () => void;
   /** Callback when user wants to insert a shape */
   onInsertShape?: (data: {
     shapeType: string;
@@ -365,7 +368,7 @@ export function Toolbar({
   onInsertTable,
   showTableInsert = true,
   onInsertImage,
-  onInsertShape,
+  onInsertPageBreak,
   imageContext,
   onImageWrapType,
   onImageTransform,
@@ -696,7 +699,52 @@ export function Toolbar({
       onMouseDown={handleToolbarMouseDown}
       onMouseUp={handleToolbarMouseUp}
     >
-      {/* Undo/Redo/Print Group */}
+      {/* File Menu */}
+      {showPrintButton && onPrint && (
+        <MenuDropdown
+          label="File"
+          disabled={disabled}
+          items={[{ icon: 'print', label: 'Print', shortcut: 'Ctrl+P', onClick: onPrint }]}
+        />
+      )}
+
+      {/* Insert Menu */}
+      <MenuDropdown
+        label="Insert"
+        disabled={disabled}
+        items={[
+          ...(onInsertImage
+            ? [{ icon: 'image', label: 'Image', onClick: onInsertImage } as MenuEntry]
+            : []),
+          ...(showTableInsert && onInsertTable
+            ? [
+                {
+                  icon: 'grid_on',
+                  label: 'Table',
+                  submenuContent: (closeMenu: () => void) => (
+                    <TableGridInline
+                      onInsert={(rows: number, cols: number) => {
+                        handleTableInsert(rows, cols);
+                        closeMenu();
+                      }}
+                    />
+                  ),
+                } as MenuEntry,
+              ]
+            : []),
+          ...(onInsertImage || (showTableInsert && onInsertTable)
+            ? [{ type: 'separator' as const } as MenuEntry]
+            : []),
+          {
+            icon: 'page_break',
+            label: 'Page break',
+            onClick: onInsertPageBreak,
+            disabled: !onInsertPageBreak,
+          },
+        ]}
+      />
+
+      {/* Undo/Redo Group */}
       <ToolbarGroup label="History">
         <ToolbarButton
           onClick={handleUndo}
@@ -714,16 +762,6 @@ export function Toolbar({
         >
           <MaterialSymbol name="redo" size={ICON_SIZE} />
         </ToolbarButton>
-        {showPrintButton && (
-          <ToolbarButton
-            onClick={onPrint}
-            disabled={disabled || !onPrint}
-            title="Print (Ctrl+P)"
-            ariaLabel="Print"
-          >
-            <MaterialSymbol name="print" size={ICON_SIZE} />
-          </ToolbarButton>
-        )}
       </ToolbarGroup>
 
       {/* Zoom Control */}
@@ -901,30 +939,6 @@ export function Toolbar({
               disabled={disabled}
             />
           )}
-        </ToolbarGroup>
-      )}
-
-      {/* Insert group */}
-      {(showTableInsert || onInsertImage || onInsertShape) && (
-        <ToolbarGroup label="Insert">
-          {showTableInsert && onInsertTable && (
-            <TableGridPicker
-              onInsert={handleTableInsert}
-              disabled={disabled}
-              tooltip="Insert table"
-            />
-          )}
-          {onInsertImage && (
-            <ToolbarButton
-              onClick={onInsertImage}
-              disabled={disabled}
-              title="Insert image"
-              ariaLabel="Insert image"
-            >
-              <MaterialSymbol name="image" size={ICON_SIZE} />
-            </ToolbarButton>
-          )}
-          {onInsertShape && <ShapeGallery onInsertShape={onInsertShape} disabled={disabled} />}
         </ToolbarGroup>
       )}
 

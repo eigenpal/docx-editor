@@ -671,6 +671,14 @@ export function IconMoreVert(props: IconProps) {
   );
 }
 
+export function IconPageBreak(props: IconProps) {
+  return (
+    <SvgIcon {...props}>
+      <path d="M120-440v-80h160v80H120Zm200 0v-80h160v80H320Zm200 0v-80h160v80H520Zm200 0v-80h120v80H720ZM240-120q-33 0-56.5-23.5T160-200v-120h80v120h480v-120h80v120q0 33-23.5 56.5T720-120H240Zm-80-520v-120q0-33 23.5-56.5T240-840h480q33 0 56.5 23.5T800-760v120h-80v-120H240v120h-80Z" />
+    </SvgIcon>
+  );
+}
+
 // ============================================================================
 // ICON MAP - for MaterialSymbol compatibility
 // ============================================================================
@@ -757,6 +765,8 @@ const iconMap: Record<string, React.ComponentType<IconProps>> = {
   keyboard_arrow_left: IconKeyboardArrowLeft,
   keyboard_arrow_right: IconKeyboardArrowRight,
   more_vert: IconMoreVert,
+  // Page break
+  page_break: IconPageBreak,
 };
 
 /**

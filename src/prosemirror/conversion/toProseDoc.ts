@@ -74,6 +74,10 @@ export function toProseDoc(document: Document, options?: ToProseDocOptions): PMN
       for (const tb of textBoxes) {
         nodes.push(convertTextBox(tb, styleResolver));
       }
+      // If any run in this paragraph contains a page break, emit a pageBreak node after
+      if (paragraphHasPageBreak(block)) {
+        nodes.push(schema.node('pageBreak'));
+      }
     } else if (block.type === 'table') {
       const pmTable = convertTable(block, styleResolver);
       nodes.push(pmTable);
@@ -1702,6 +1706,22 @@ export function headerFooterToProseDoc(
   }
 
   return schema.node('doc', null, nodes);
+}
+
+/**
+ * Check if a paragraph contains a page break in any of its runs
+ */
+function paragraphHasPageBreak(paragraph: Paragraph): boolean {
+  for (const item of paragraph.content) {
+    if (item.type === 'run') {
+      for (const content of (item as Run).content) {
+        if (content.type === 'break' && content.breakType === 'page') {
+          return true;
+        }
+      }
+    }
+  }
+  return false;
 }
 
 /**

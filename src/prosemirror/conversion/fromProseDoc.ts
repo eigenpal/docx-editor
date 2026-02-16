@@ -98,10 +98,25 @@ function extractBlocks(pmDoc: PMNode): (Paragraph | Table)[] {
     } else if (node.type.name === 'textBox') {
       // Convert text box back to a paragraph containing a shape with text body
       blocks.push(convertPMTextBox(node));
+    } else if (node.type.name === 'pageBreak') {
+      // Convert page break node to a paragraph with a page break run
+      blocks.push(createPageBreakParagraph());
     }
   });
 
   return blocks;
+}
+
+/**
+ * Create a paragraph containing only a page break run (for DOCX serialization)
+ */
+function createPageBreakParagraph(): Paragraph {
+  const breakContent: BreakContent = { type: 'break', breakType: 'page' };
+  const run: Run = { type: 'run', content: [breakContent] };
+  return {
+    type: 'paragraph',
+    content: [run],
+  };
 }
 
 /**

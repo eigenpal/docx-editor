@@ -128,5 +128,7 @@ export {
   setCellFillColor,
   setTableBorderColor,
   setTableBorderWidth,
+  // Page break
+  insertPageBreak,
 } from './commands';
 export type { TableContextInfo, BorderPreset } from './commands';

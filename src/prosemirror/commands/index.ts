@@ -102,3 +102,6 @@ export {
   setTableBorderWidth,
 } from './table';
 export type { TableContextInfo, BorderPreset } from './table';
+
+// Page break
+export { insertPageBreak } from './pageBreak';

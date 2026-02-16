@@ -114,6 +114,8 @@ import {
   setHyperlink,
   removeHyperlink,
   insertHyperlink,
+  // Page break command
+  insertPageBreak,
   // Table commands
   getTableContext,
   insertTable,
@@ -745,6 +747,14 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
     },
     [getActiveEditorView, focusActiveEditor]
   );
+
+  // Insert a page break at cursor
+  const handleInsertPageBreak = useCallback(() => {
+    const view = getActiveEditorView();
+    if (!view) return;
+    insertPageBreak(view.state, view.dispatch);
+    focusActiveEditor();
+  }, [getActiveEditorView, focusActiveEditor]);
 
   // Trigger file picker for image insert
   const handleInsertImageClick = useCallback(() => {
@@ -2032,6 +2042,7 @@ body { background: white; }
                     onInsertTable={handleInsertTable}
                     showTableInsert={true}
                     onInsertImage={handleInsertImageClick}
+                    onInsertPageBreak={handleInsertPageBreak}
                     imageContext={state.pmImageContext}
                     onImageWrapType={handleImageWrapType}
                     onImageTransform={handleImageTransform}

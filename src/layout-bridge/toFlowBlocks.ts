@@ -896,16 +896,17 @@ export function toFlowBlocks(doc: PMNode, options: ToFlowBlocksOptions = {}): Fl
         break;
 
       case 'horizontalRule':
-        // Could be treated as a page break or separator
-        const pageBreak: PageBreakBlock = {
+      case 'pageBreak': {
+        const pb: PageBreakBlock = {
           kind: 'pageBreak',
           id: nextBlockId(),
           pmStart: pos,
           pmEnd: pos + node.nodeSize,
         };
-        blocks.push(pageBreak);
+        blocks.push(pb);
         listCounters.clear();
         break;
+      }
     }
   });
 
