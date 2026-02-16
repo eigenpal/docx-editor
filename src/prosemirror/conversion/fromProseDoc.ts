@@ -703,6 +703,16 @@ function createInlineSdtFromNode(node: PMNode): InlineSdt {
 function createImageRun(node: PMNode): Run {
   const attrs = node.attrs as ImageAttrs;
 
+  // Determine wrap type from attrs (default: inline)
+  const wrapType = attrs.wrapType || 'inline';
+  const PX_TO_EMU = 914400 / 96;
+
+  const wrap: import('../../types/content').ImageWrap = { type: wrapType };
+  if (attrs.distTop !== undefined) wrap.distT = Math.round(attrs.distTop * PX_TO_EMU);
+  if (attrs.distBottom !== undefined) wrap.distB = Math.round(attrs.distBottom * PX_TO_EMU);
+  if (attrs.distLeft !== undefined) wrap.distL = Math.round(attrs.distLeft * PX_TO_EMU);
+  if (attrs.distRight !== undefined) wrap.distR = Math.round(attrs.distRight * PX_TO_EMU);
+
   const image: Image = {
     type: 'image',
     rId: attrs.rId || '',
@@ -713,8 +723,31 @@ function createImageRun(node: PMNode): Run {
       width: attrs.width || 0,
       height: attrs.height || 0,
     },
-    wrap: { type: 'inline' },
+    wrap,
   };
+
+  // Round-trip floating image position (ImagePositionAttrs uses loose strings;
+  // cast to the strict OOXML union types for the Document model)
+  if (attrs.position?.horizontal && attrs.position?.vertical) {
+    const pos = attrs.position;
+    type HRelativeTo = import('../../types/content').ImagePosition['horizontal']['relativeTo'];
+    type HAlignment = import('../../types/content').ImagePosition['horizontal']['alignment'];
+    type VRelativeTo = import('../../types/content').ImagePosition['vertical']['relativeTo'];
+    type VAlignment = import('../../types/content').ImagePosition['vertical']['alignment'];
+
+    image.position = {
+      horizontal: {
+        relativeTo: (pos.horizontal!.relativeTo || 'column') as HRelativeTo,
+        alignment: pos.horizontal!.align as HAlignment,
+        posOffset: pos.horizontal!.posOffset,
+      },
+      vertical: {
+        relativeTo: (pos.vertical!.relativeTo || 'paragraph') as VRelativeTo,
+        alignment: pos.vertical!.align as VAlignment,
+        posOffset: pos.vertical!.posOffset,
+      },
+    };
+  }
 
   // Round-trip border/outline
   if (attrs.borderWidth && attrs.borderWidth > 0) {

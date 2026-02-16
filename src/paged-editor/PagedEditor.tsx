@@ -25,6 +25,7 @@ import React, {
   memo,
 } from 'react';
 import type { CSSProperties } from 'react';
+import { NodeSelection } from 'prosemirror-state';
 import type { EditorState, Transaction, Plugin } from 'prosemirror-state';
 import { CellSelection } from 'prosemirror-tables';
 import type { EditorView } from 'prosemirror-view';
@@ -32,6 +33,7 @@ import type { EditorView } from 'prosemirror-view';
 // Internal components
 import { HiddenProseMirror, type HiddenProseMirrorRef } from './HiddenProseMirror';
 import { SelectionOverlay } from './SelectionOverlay';
+import { ImageSelectionOverlay, type ImageSelectionInfo } from './ImageSelectionOverlay';
 
 // Layout engine
 import { layoutDocument } from '../layout-engine';
@@ -1128,6 +1130,25 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
     const [selectionRects, setSelectionRects] = useState<SelectionRect[]>([]);
     const [caretPosition, setCaretPosition] = useState<CaretPosition | null>(null);
 
+    // Image selection state
+    const [selectedImageInfo, setSelectedImageInfo] = useState<ImageSelectionInfo | null>(null);
+    const isImageInteractingRef = useRef(false);
+
+    /** Build ImageSelectionInfo from a DOM element with data-pm-start */
+    const buildImageSelectionInfo = useCallback(
+      (el: HTMLElement, pmPos: number): ImageSelectionInfo => {
+        const imgTag = el.tagName === 'IMG' ? el : el.querySelector('img');
+        const rect = (imgTag ?? el).getBoundingClientRect();
+        return {
+          element: (imgTag ?? el) as HTMLElement,
+          pmPos,
+          width: Math.round(rect.width / zoom),
+          height: Math.round(rect.height / zoom),
+        };
+      },
+      [zoom]
+    );
+
     // Drag selection state
     const isDraggingRef = useRef(false);
     const dragAnchorRef = useRef<number | null>(null);
@@ -1737,9 +1758,40 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
      */
     const handleSelectionChange = useCallback(
       (state: EditorState) => {
-        updateSelectionOverlay(state);
+        // Check if this is an image node selection - suppress text overlay if so
+        const { selection } = state;
+        if (selection instanceof NodeSelection && selection.node.type.name === 'image') {
+          // Suppress text selection overlay for image selections
+          setSelectionRects([]);
+          setCaretPosition(null);
+        } else {
+          updateSelectionOverlay(state);
+        }
+
+        // Defer image selection check until after layout update
+        requestAnimationFrame(() => {
+          const view = hiddenPMRef.current?.getView();
+          if (!view) {
+            setSelectedImageInfo(null);
+            return;
+          }
+          const { selection: sel } = view.state;
+          if (sel instanceof NodeSelection && sel.node.type.name === 'image') {
+            const pmPos = sel.from;
+            const imgEl = pagesContainerRef.current?.querySelector(
+              `[data-pm-start="${pmPos}"]`
+            ) as HTMLElement | null;
+            if (imgEl) {
+              setSelectedImageInfo(buildImageSelectionInfo(imgEl, pmPos));
+              return;
+            }
+          }
+          if (!isImageInteractingRef.current) {
+            setSelectedImageInfo(null);
+          }
+        });
       },
-      [updateSelectionOverlay]
+      [updateSelectionOverlay, zoom, buildImageSelectionInfo]
     );
 
     /**
@@ -1832,6 +1884,37 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
         }
       } catch {
         // Position resolution failed
+      }
+      return null;
+    }, []);
+
+    /**
+     * Find the closest image element from a click target.
+     * Returns the element with data-pm-start if it's an image, or null.
+     */
+    const findImageElement = useCallback((target: HTMLElement): HTMLElement | null => {
+      const IMAGE_CONTAINER_CLASSES = [
+        'layout-block-image',
+        'layout-image',
+        'layout-page-floating-image',
+      ];
+      const isImageContainer = (el: HTMLElement) =>
+        !!el.dataset.pmStart && IMAGE_CONTAINER_CLASSES.some((c) => el.classList.contains(c));
+
+      // Inline images: <img class="layout-run layout-run-image" data-pm-start="X">
+      if (target.tagName === 'IMG' && target.classList.contains('layout-run-image')) {
+        return target;
+      }
+      // Click on <img> inside a container div, or directly on the container
+      if (
+        target.tagName === 'IMG' &&
+        target.parentElement &&
+        isImageContainer(target.parentElement)
+      ) {
+        return target.parentElement;
+      }
+      if (isImageContainer(target)) {
+        return target;
       }
       return null;
     }, []);
@@ -1998,6 +2081,29 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
           return;
         }
 
+        // Check if the click target is an image element
+        const imageEl = findImageElement(target);
+        if (imageEl) {
+          e.preventDefault();
+          e.stopPropagation();
+
+          const pmStart = imageEl.dataset.pmStart;
+          if (pmStart !== undefined) {
+            const pos = parseInt(pmStart, 10);
+            hiddenPMRef.current.setNodeSelection(pos);
+            setSelectedImageInfo(buildImageSelectionInfo(imageEl, pos));
+            setSelectionRects([]);
+            setCaretPosition(null);
+          }
+
+          hiddenPMRef.current.focus();
+          setIsFocused(true);
+          return;
+        }
+
+        // Clicking outside an image clears image selection
+        setSelectedImageInfo(null);
+
         e.preventDefault(); // Prevent native text selection
 
         const pmPos = getPositionFromMouse(e.clientX, e.clientY);
@@ -2033,7 +2139,7 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
         hiddenPMRef.current.focus();
         setIsFocused(true);
       },
-      [getPositionFromMouse, findCellPosFromPmPos, readOnly, hfEditMode, onBodyClick]
+      [getPositionFromMouse, findCellPosFromPmPos, readOnly, hfEditMode, onBodyClick, zoom]
     );
 
     /**
@@ -2461,6 +2567,142 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
     }, []);
 
     /**
+     * Handle image resize from the overlay.
+     */
+    const handleImageResize = useCallback((pmPos: number, newWidth: number, newHeight: number) => {
+      const view = hiddenPMRef.current?.getView();
+      if (!view) return;
+
+      try {
+        const node = view.state.doc.nodeAt(pmPos);
+        if (!node || node.type.name !== 'image') return;
+
+        const tr = view.state.tr.setNodeMarkup(pmPos, undefined, {
+          ...node.attrs,
+          width: newWidth,
+          height: newHeight,
+        });
+        view.dispatch(tr);
+
+        // Re-select the image after resize
+        hiddenPMRef.current?.setNodeSelection(pmPos);
+      } catch {
+        // Position may have changed during resize
+      }
+    }, []);
+
+    /**
+     * Handle image resize start - prevent text selection during resize.
+     */
+    const handleImageResizeStart = useCallback(() => {
+      isImageInteractingRef.current = true;
+    }, []);
+
+    /**
+     * Handle image resize end.
+     */
+    const handleImageResizeEnd = useCallback(() => {
+      isImageInteractingRef.current = false;
+    }, []);
+
+    /**
+     * Handle image drag-to-move: move image node from its current position
+     * to the drop position determined by mouse coordinates.
+     */
+    const handleImageDragMove = useCallback(
+      (pmPos: number, clientX: number, clientY: number) => {
+        const view = hiddenPMRef.current?.getView();
+        if (!view) return;
+
+        try {
+          const node = view.state.doc.nodeAt(pmPos);
+          if (!node || node.type.name !== 'image') return;
+
+          const isFloating =
+            node.attrs.displayMode === 'float' ||
+            (node.attrs.wrapType &&
+              ['square', 'tight', 'through'].includes(node.attrs.wrapType as string));
+
+          if (isFloating) {
+            // For floating images: update position attributes so the image
+            // moves to the drop point while staying floating.
+            // Find the page under the drop point
+            const pages = pagesContainerRef.current?.querySelectorAll('.layout-page');
+            if (!pages || pages.length === 0) return;
+
+            let contentEl: HTMLElement | null = null;
+            for (const page of pages) {
+              const rect = page.getBoundingClientRect();
+              if (clientY >= rect.top && clientY <= rect.bottom) {
+                contentEl = page.querySelector('.layout-page-content') as HTMLElement;
+                break;
+              }
+            }
+            if (!contentEl) {
+              // Fallback to last page if below all pages
+              contentEl = pages[pages.length - 1].querySelector(
+                '.layout-page-content'
+              ) as HTMLElement;
+            }
+            if (!contentEl) return;
+
+            const contentRect = contentEl.getBoundingClientRect();
+            // Convert drop coordinates to content-area-relative pixels
+            const dropX = (clientX - contentRect.left) / zoom;
+            const dropY = (clientY - contentRect.top) / zoom;
+            // Pixels to EMU: px * 914400 / 96
+            const PIXELS_TO_EMU = 914400 / 96;
+            const hOffsetEmu = Math.round(dropX * PIXELS_TO_EMU);
+            const vOffsetEmu = Math.round(dropY * PIXELS_TO_EMU);
+
+            const newPosition = {
+              horizontal: { posOffset: hOffsetEmu, relativeTo: 'margin' },
+              vertical: { posOffset: vOffsetEmu, relativeTo: 'margin' },
+            };
+
+            const tr = view.state.tr.setNodeMarkup(pmPos, undefined, {
+              ...node.attrs,
+              position: newPosition,
+            });
+            view.dispatch(tr);
+            hiddenPMRef.current?.setNodeSelection(pmPos);
+          } else {
+            // For inline images: move to the drop text position
+            const dropPos = getPositionFromMouse(clientX, clientY);
+            if (dropPos === null) return;
+            if (dropPos === pmPos || dropPos === pmPos + 1) return;
+
+            let tr = view.state.tr;
+
+            if (dropPos <= pmPos) {
+              tr = tr.delete(pmPos, pmPos + node.nodeSize);
+              tr = tr.insert(dropPos, node);
+              hiddenPMRef.current?.setNodeSelection(dropPos);
+            } else {
+              tr = tr.delete(pmPos, pmPos + node.nodeSize);
+              const adjusted = dropPos - node.nodeSize;
+              tr = tr.insert(Math.min(adjusted, tr.doc.content.size), node);
+              hiddenPMRef.current?.setNodeSelection(Math.min(adjusted, tr.doc.content.size - 1));
+            }
+
+            view.dispatch(tr);
+          }
+        } catch {
+          // Position may be invalid
+        }
+      },
+      [getPositionFromMouse, zoom]
+    );
+
+    const handleImageDragStart = useCallback(() => {
+      isImageInteractingRef.current = true;
+    }, []);
+
+    const handleImageDragEnd = useCallback(() => {
+      isImageInteractingRef.current = false;
+    }, []);
+
+    /**
      * Handle keyboard events on container.
      * Most keyboard handling is done by ProseMirror, but we intercept
      * specific keys for navigation and ensure focus stays on hidden PM.
@@ -2762,6 +3004,19 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
             isFocused={isFocused}
             pageGap={pageGap}
             readOnly={readOnly}
+          />
+
+          {/* Image selection overlay */}
+          <ImageSelectionOverlay
+            imageInfo={selectedImageInfo}
+            zoom={zoom}
+            isFocused={isFocused}
+            onResize={handleImageResize}
+            onResizeStart={handleImageResizeStart}
+            onResizeEnd={handleImageResizeEnd}
+            onDragMove={handleImageDragMove}
+            onDragStart={handleImageDragStart}
+            onDragEnd={handleImageDragEnd}
           />
 
           {/* Plugin overlays (highlights, annotations) */}

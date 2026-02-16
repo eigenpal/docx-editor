@@ -51,6 +51,10 @@ interface PageFloatingImage {
   distBottom: number;
   distLeft: number;
   distRight: number;
+  /** ProseMirror start position for click-to-select */
+  pmStart?: number;
+  /** ProseMirror end position */
+  pmEnd?: number;
 }
 
 /**
@@ -362,6 +366,8 @@ function extractFloatingImagesFromParagraph(
       distBottom,
       distLeft,
       distRight,
+      pmStart: imgRun.pmStart,
+      pmEnd: imgRun.pmEnd,
     });
   }
 
@@ -437,6 +443,8 @@ function renderFloatingImagesLayer(
     container.style.pointerEvents = 'auto'; // Make images clickable
     container.style.top = `${floatImg.y}px`;
     container.style.left = `${floatImg.x}px`;
+    if (floatImg.pmStart !== undefined) container.dataset.pmStart = String(floatImg.pmStart);
+    if (floatImg.pmEnd !== undefined) container.dataset.pmEnd = String(floatImg.pmEnd);
 
     const img = doc.createElement('img');
     img.src = floatImg.src;

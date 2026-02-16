@@ -785,10 +785,9 @@ export function renderParagraphFragment(
     fragmentEl.dataset.continuesOnNext = 'true';
   }
 
-  // NOTE: Floating image exclusion zones (options.floatingImageInfo) and
-  // fragment Y position (options.fragmentContentY) are accepted but not used.
-  // Text wrapping around floating images is not yet implemented at measurement time.
-  // Floating images skip during inline rendering - they're rendered at page level.
+  // Text wrapping around floating images is handled at measurement time via
+  // per-line leftOffset/rightOffset in MeasuredLine. Floating images themselves
+  // skip inline rendering - they're rendered at page level.
   for (const run of block.runs) {
     if (isImageRun(run)) {
       const isFloating =

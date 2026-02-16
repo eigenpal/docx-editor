@@ -31,6 +31,8 @@ import { TableCellFillPicker } from './ui/TableCellFillPicker';
 import { TableMoreDropdown } from './ui/TableMoreDropdown';
 import { MenuDropdown } from './ui/MenuDropdown';
 import type { MenuEntry } from './ui/MenuDropdown';
+import { ImageWrapDropdown } from './ui/ImageWrapDropdown';
+import { ImageTransformDropdown } from './ui/ImageTransformDropdown';
 import type { TableAction } from './ui/TableToolbar';
 import { cn } from '../lib/utils';
 
@@ -186,8 +188,6 @@ export interface ToolbarProps {
   onImageWrapType?: (wrapType: string) => void;
   /** Callback for image transform (rotate/flip) */
   onImageTransform?: (action: 'rotateCW' | 'rotateCCW' | 'flipH' | 'flipV') => void;
-  /** Callback to open image position dialog */
-  onOpenImagePosition?: () => void;
   /** Callback to open image properties dialog (alt text + border) */
   onOpenImageProperties?: () => void;
   /** Table context when cursor is in a table */
@@ -372,7 +372,6 @@ export function Toolbar({
   imageContext,
   onImageWrapType,
   onImageTransform,
-  onOpenImagePosition,
   onOpenImageProperties,
   tableContext,
   onTableAction,
@@ -942,72 +941,16 @@ export function Toolbar({
         </ToolbarGroup>
       )}
 
-      {/* Image Wrapping - shown when image is selected */}
+      {/* Image controls - shown when image is selected */}
       {imageContext && onImageWrapType && (
         <ToolbarGroup label="Image">
-          <ToolbarButton
-            active={imageContext.wrapType === 'inline'}
-            onClick={() => onImageWrapType('inline')}
+          <ImageWrapDropdown
+            imageContext={imageContext}
+            onChange={onImageWrapType}
             disabled={disabled}
-            title="Inline with text"
-            ariaLabel="Inline with text"
-          >
-            <MaterialSymbol name="format_image_left" size={ICON_SIZE} />
-          </ToolbarButton>
-          <ToolbarButton
-            active={imageContext.displayMode === 'float' && imageContext.cssFloat === 'left'}
-            onClick={() => onImageWrapType('wrapRight')}
-            disabled={disabled}
-            title="Wrap text (float left)"
-            ariaLabel="Float left"
-          >
-            <MaterialSymbol name="format_image_right" size={ICON_SIZE} />
-          </ToolbarButton>
-          <ToolbarButton
-            active={imageContext.displayMode === 'float' && imageContext.cssFloat === 'right'}
-            onClick={() => onImageWrapType('wrapLeft')}
-            disabled={disabled}
-            title="Wrap text (float right)"
-            ariaLabel="Float right"
-          >
-            <MaterialSymbol name="format_image_left" size={ICON_SIZE} />
-          </ToolbarButton>
-          <ToolbarButton
-            active={imageContext.wrapType === 'topAndBottom'}
-            onClick={() => onImageWrapType('topAndBottom')}
-            disabled={disabled}
-            title="Top and bottom"
-            ariaLabel="Top and bottom"
-          >
-            <MaterialSymbol name="horizontal_rule" size={ICON_SIZE} />
-          </ToolbarButton>
-          <ToolbarButton
-            active={imageContext.wrapType === 'behind'}
-            onClick={() => onImageWrapType('behind')}
-            disabled={disabled}
-            title="Behind text"
-            ariaLabel="Behind text"
-          >
-            <MaterialSymbol name="flip_to_back" size={ICON_SIZE} />
-          </ToolbarButton>
-          <ToolbarButton
-            active={imageContext.wrapType === 'inFront'}
-            onClick={() => onImageWrapType('inFront')}
-            disabled={disabled}
-            title="In front of text"
-            ariaLabel="In front of text"
-          >
-            <MaterialSymbol name="flip_to_front" size={ICON_SIZE} />
-          </ToolbarButton>
-          {onOpenImagePosition && (
-            <ToolbarButton
-              onClick={onOpenImagePosition}
-              disabled={disabled}
-              title="Image position..."
-              ariaLabel="Image position"
-            >
-              <MaterialSymbol name="open_with" size={ICON_SIZE} />
-            </ToolbarButton>
+          />
+          {onImageTransform && (
+            <ImageTransformDropdown onTransform={onImageTransform} disabled={disabled} />
           )}
           {onOpenImageProperties && (
             <ToolbarButton
@@ -1018,42 +961,6 @@ export function Toolbar({
             >
               <MaterialSymbol name="tune" size={ICON_SIZE} />
             </ToolbarButton>
-          )}
-          {onImageTransform && (
-            <>
-              <ToolbarButton
-                onClick={() => onImageTransform('rotateCW')}
-                disabled={disabled}
-                title="Rotate clockwise"
-                ariaLabel="Rotate clockwise"
-              >
-                <MaterialSymbol name="rotate_right" size={ICON_SIZE} />
-              </ToolbarButton>
-              <ToolbarButton
-                onClick={() => onImageTransform('rotateCCW')}
-                disabled={disabled}
-                title="Rotate counter-clockwise"
-                ariaLabel="Rotate counter-clockwise"
-              >
-                <MaterialSymbol name="rotate_left" size={ICON_SIZE} />
-              </ToolbarButton>
-              <ToolbarButton
-                onClick={() => onImageTransform('flipH')}
-                disabled={disabled}
-                title="Flip horizontal"
-                ariaLabel="Flip horizontal"
-              >
-                <MaterialSymbol name="swap_horiz" size={ICON_SIZE} />
-              </ToolbarButton>
-              <ToolbarButton
-                onClick={() => onImageTransform('flipV')}
-                disabled={disabled}
-                title="Flip vertical"
-                ariaLabel="Flip vertical"
-              >
-                <MaterialSymbol name="swap_vert" size={ICON_SIZE} />
-              </ToolbarButton>
-            </>
           )}
         </ToolbarGroup>
       )}

@@ -923,11 +923,6 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
     [getActiveEditorView, focusActiveEditor, state.pmImageContext]
   );
 
-  // Open image position dialog
-  const handleOpenImagePosition = useCallback(() => {
-    setImagePositionOpen(true);
-  }, []);
-
   // Apply image position changes
   const handleApplyImagePosition = useCallback(
     (data: ImagePositionData) => {
@@ -2046,7 +2041,6 @@ body { background: white; }
                     imageContext={state.pmImageContext}
                     onImageWrapType={handleImageWrapType}
                     onImageTransform={handleImageTransform}
-                    onOpenImagePosition={handleOpenImagePosition}
                     onOpenImageProperties={handleOpenImageProperties}
                     tableContext={state.pmTableContext}
                     onTableAction={handleTableAction}
