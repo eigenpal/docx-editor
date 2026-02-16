@@ -6,7 +6,7 @@
  * - Commands from paragraph.ts (alignment, spacing, indent, style)
  */
 
-import type { NodeSpec, Schema } from 'prosemirror-model';
+import { Fragment, type NodeSpec, type Schema } from 'prosemirror-model';
 import type { Command, EditorState } from 'prosemirror-state';
 import type {
   ParagraphAlignment,
@@ -19,6 +19,7 @@ import type {
   TabLeader,
 } from '../../../types/document';
 import { paragraphToStyle } from '../../../utils/formatToStyle';
+import { collectHeadings } from '../../../utils/headingCollector';
 import { createNodeExtension } from '../create';
 import type { ExtensionContext, ExtensionRuntime } from '../types';
 import type { ParagraphAttrs } from '../../schema/nodes';
@@ -125,6 +126,7 @@ const paragraphNodeSpec: NodeSpec = {
     defaultTextFormatting: { default: null },
     sectionBreakType: { default: null },
     outlineLevel: { default: null },
+    bookmarks: { default: null },
     _originalFormatting: { default: null },
   },
   parseDOM: [
@@ -498,64 +500,67 @@ export const ParagraphExtension = createNodeExtension({
             state: EditorState,
             dispatch?: (tr: import('prosemirror-state').Transaction) => void
           ) => {
+            const headings = collectHeadings(state.doc);
+            if (headings.length === 0) return false;
             if (!dispatch) return true;
 
-            // Collect headings with outline levels
-            const headings: { text: string; level: number }[] = [];
-            state.doc.descendants((node) => {
-              if (node.type.name === 'paragraph') {
-                const level = node.attrs.outlineLevel;
-                const styleId = node.attrs.styleId as string | null;
-                // Heading styles typically have outline levels, or detect from styleId
-                let effectiveLevel = level;
-                if (effectiveLevel == null && styleId) {
-                  const match = styleId.match(/^[Hh]eading(\d)$/);
-                  if (match) effectiveLevel = parseInt(match[1], 10) - 1;
-                }
-                if (effectiveLevel != null && effectiveLevel >= 0 && effectiveLevel <= 8) {
-                  let text = '';
-                  node.forEach((child) => {
-                    if (child.isText) text += child.text || '';
-                  });
-                  if (text.trim()) {
-                    headings.push({ text: text.trim(), level: effectiveLevel });
-                  }
-                }
-              }
-            });
-
-            if (headings.length === 0) return false;
-
-            // Build TOC paragraphs and insert at cursor
             const { schema: s } = state;
+            const tr = state.tr;
+
+            // Generate unique bookmark names for each heading and set them on heading paragraphs
+            const bookmarkEntries: Array<{ name: string; level: number; text: string }> = [];
+            for (const h of headings) {
+              const bookmarkName = `_Toc${Math.floor(100000000 + Math.random() * 900000000)}`;
+              bookmarkEntries.push({ name: bookmarkName, level: h.level, text: h.text });
+
+              // Set bookmark attr on the heading paragraph
+              const $pos = tr.doc.resolve(h.pmPos);
+              const paragraphNode = $pos.nodeAfter;
+              if (paragraphNode && paragraphNode.type.name === 'paragraph') {
+                const existingBookmarks =
+                  (paragraphNode.attrs.bookmarks as Array<{ id: number; name: string }>) || [];
+                const newBookmarks = [
+                  ...existingBookmarks,
+                  { id: Math.floor(Math.random() * 2147483647), name: bookmarkName },
+                ];
+                tr.setNodeMarkup(tr.mapping.map(h.pmPos), undefined, {
+                  ...paragraphNode.attrs,
+                  bookmarks: newBookmarks,
+                });
+              }
+            }
+
+            // Build TOC paragraphs
             const tocNodes: import('prosemirror-model').Node[] = [];
 
             // TOC title
             tocNodes.push(
-              s.node('paragraph', { alignment: 'center' }, [
+              s.node('paragraph', { styleId: 'TOCHeading', alignment: 'center' }, [
                 s.text('Table of Contents', [s.marks.bold.create()]),
               ])
             );
 
-            // TOC entries
-            for (const h of headings) {
-              const indent = h.level * 720; // 0.5 inch per level
+            // TOC entries with hyperlinks
+            for (const entry of bookmarkEntries) {
+              const indent = entry.level * 720; // 0.5 inch per level in twips
+              const tocStyleId = `TOC${entry.level + 1}`; // TOC1, TOC2, etc.
+              const linkMark = s.marks.hyperlink.create({ href: `#${entry.name}` });
+
               tocNodes.push(
                 s.node(
                   'paragraph',
                   {
+                    styleId: tocStyleId,
                     indentLeft: indent > 0 ? indent : null,
                   },
-                  [s.text(h.text)]
+                  [s.text(entry.text, [linkMark])]
                 )
               );
             }
 
-            const tr = state.tr;
-            const insertPos = state.selection.from;
-            for (let i = tocNodes.length - 1; i >= 0; i--) {
-              tr.insert(insertPos, tocNodes[i]);
-            }
+            // Insert TOC at cursor position — use a Fragment for correct ordering
+            const insertPos = tr.mapping.map(state.selection.from);
+            tr.insert(insertPos, Fragment.from(tocNodes));
             dispatch(tr.scrollIntoView());
             return true;
           };

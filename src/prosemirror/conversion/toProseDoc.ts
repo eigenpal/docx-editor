@@ -106,6 +106,7 @@ function convertParagraph(
 ): PMNode {
   const attrs = paragraphFormattingToAttrs(paragraph, styleResolver);
   const inlineNodes: PMNode[] = [];
+  let bookmarksArr: Array<{ id: number; name: string }> | undefined;
 
   // Track active comment ranges for this paragraph
   const commentIds = activeCommentIds ?? new Set<number>();
@@ -164,7 +165,15 @@ function convertParagraph(
       const mathNode = convertMathEquation(content);
       if (mathNode) inlineNodes.push(mathNode);
     }
-    // Skip other content types for now (bookmarks, etc.)
+    // Collect bookmarkStart entries for round-trip
+    if (content.type === 'bookmarkStart') {
+      if (!bookmarksArr) bookmarksArr = [];
+      bookmarksArr.push({ id: content.id, name: content.name });
+    }
+  }
+
+  if (bookmarksArr) {
+    attrs.bookmarks = bookmarksArr;
   }
 
   return schema.node('paragraph', attrs, inlineNodes);
@@ -1323,9 +1332,10 @@ function convertHyperlink(
 ): PMNode[] {
   const nodes: PMNode[] = [];
 
-  // Create link mark
+  // Create link mark — internal anchors use #bookmarkName format
+  const href = hyperlink.href || (hyperlink.anchor ? `#${hyperlink.anchor}` : '');
   const linkMark = schema.mark('hyperlink', {
-    href: hyperlink.href || hyperlink.anchor || '',
+    href,
     tooltip: hyperlink.tooltip,
     rId: hyperlink.rId,
   });

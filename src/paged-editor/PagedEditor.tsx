@@ -178,6 +178,8 @@ export interface PagedEditorRef {
   getLayout(): Layout | null;
   /** Force re-layout. */
   relayout(): void;
+  /** Scroll the visible pages to bring a PM position into view. */
+  scrollToPosition(pmPos: number): void;
 }
 
 // =============================================================================
@@ -1927,6 +1929,14 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
         if (!hiddenPMRef.current || e.button !== 0) return; // Only handle left click
         if (readOnly) return;
 
+        // Intercept internal anchor link clicks (TOC entries, cross-references)
+        const anchorEl = (e.target as HTMLElement).closest('a[href^="#"]');
+        if (anchorEl) {
+          e.preventDefault();
+          e.stopPropagation();
+          return; // Let handlePagesClick handle the navigation
+        }
+
         // When in HF edit mode, clicks outside header/footer area close the HF editor
         if (hfEditMode && onBodyClick) {
           const target = e.target as HTMLElement;
@@ -2458,6 +2468,46 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
      */
     const handlePagesClick = useCallback(
       (e: React.MouseEvent) => {
+        // Intercept internal anchor link clicks (TOC entries, cross-references)
+        const anchorEl = (e.target as HTMLElement).closest('a[href^="#"]');
+        if (anchorEl) {
+          e.preventDefault();
+          e.stopPropagation();
+          const bookmarkName = anchorEl.getAttribute('href')?.substring(1);
+          if (bookmarkName && hiddenPMRef.current) {
+            const view = hiddenPMRef.current.getView();
+            if (view) {
+              // Walk PM doc to find the paragraph with matching bookmark
+              let targetPos: number | null = null;
+              view.state.doc.descendants((node, pos) => {
+                if (targetPos !== null) return false; // stop once found
+                if (node.type.name === 'paragraph') {
+                  const bookmarks = node.attrs.bookmarks as
+                    | Array<{ id: number; name: string }>
+                    | undefined;
+                  if (bookmarks?.some((b) => b.name === bookmarkName)) {
+                    targetPos = pos;
+                    return false;
+                  }
+                }
+              });
+              if (targetPos !== null) {
+                // Find the DOM element in visible pages with matching data-pm-start
+                const pageContainer = pagesContainerRef.current;
+                if (pageContainer) {
+                  const targetEl = pageContainer.querySelector(`[data-pm-start="${targetPos}"]`);
+                  if (targetEl) {
+                    targetEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    // Also move selection to the heading
+                    hiddenPMRef.current.setSelection(targetPos + 1);
+                  }
+                }
+              }
+            }
+          }
+          return;
+        }
+
         // Double-click on header/footer area triggers editing mode
         if (e.detail === 2 && onHeaderFooterDoubleClick) {
           const target = e.target as HTMLElement;
@@ -2893,6 +2943,14 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
             runLayoutPipeline(state);
           }
         },
+        scrollToPosition(pmPos: number) {
+          const pageContainer = pagesContainerRef.current;
+          if (!pageContainer) return;
+          const targetEl = pageContainer.querySelector(`[data-pm-start="${pmPos}"]`);
+          if (targetEl) {
+            targetEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          }
+        },
       }),
       [layout, runLayoutPipeline]
     );
@@ -2934,6 +2992,14 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
             const state = hiddenPMRef.current?.getState();
             if (state) {
               runLayoutPipeline(state);
+            }
+          },
+          scrollToPosition: (pmPos: number) => {
+            const pageContainer = pagesContainerRef.current;
+            if (!pageContainer) return;
+            const targetEl = pageContainer.querySelector(`[data-pm-start="${pmPos}"]`);
+            if (targetEl) {
+              targetEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
             }
           },
         });

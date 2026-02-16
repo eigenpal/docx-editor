@@ -79,3 +79,6 @@ export function insertSectionBreak(
   return cmds.insertSectionBreak(breakType);
 }
 export const removeSectionBreak: Command = cmds.removeSectionBreak();
+
+// Table of Contents
+export const generateTOC: Command = cmds.generateTOC();

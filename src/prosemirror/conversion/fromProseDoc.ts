@@ -124,7 +124,22 @@ function createPageBreakParagraph(): Paragraph {
  */
 function convertPMParagraph(node: PMNode): Paragraph {
   const attrs = node.attrs as ParagraphAttrs;
-  const content = insertCommentRanges(extractParagraphContent(node), node);
+  let content = insertCommentRanges(extractParagraphContent(node), node);
+
+  // Emit BookmarkStart/End from bookmarks attr (for TOC anchors, cross-references)
+  const bookmarks = attrs.bookmarks as Array<{ id: number; name: string }> | undefined;
+  if (bookmarks && bookmarks.length > 0) {
+    const starts: import('../../types/content').ParagraphContent[] = bookmarks.map((b) => ({
+      type: 'bookmarkStart' as const,
+      id: b.id,
+      name: b.name,
+    }));
+    const ends: import('../../types/content').ParagraphContent[] = bookmarks.map((b) => ({
+      type: 'bookmarkEnd' as const,
+      id: b.id,
+    }));
+    content = [...starts, ...content, ...ends];
+  }
 
   const paragraph: Paragraph = {
     type: 'paragraph',
@@ -375,7 +390,9 @@ function extractParagraphContent(paragraph: PMNode): ParagraphContent[] {
       // Start or continue hyperlink
       const linkKey = getLinkKey(linkMark);
 
-      if (currentHyperlink && currentHyperlink.href === linkKey) {
+      const currentKey =
+        currentHyperlink?.href || (currentHyperlink?.anchor ? `#${currentHyperlink.anchor}` : '');
+      if (currentHyperlink && currentKey === linkKey) {
         // Continue current hyperlink
         addNodeToHyperlink(currentHyperlink, node);
       } else {
@@ -511,9 +528,19 @@ function getMarksKey(marks: readonly Mark[]): string {
  * Create a Hyperlink from a link mark
  */
 function createHyperlink(linkMark: Mark): Hyperlink {
+  const href = linkMark.attrs.href as string;
+  // Internal bookmark links use the anchor property in OOXML
+  if (href?.startsWith('#')) {
+    return {
+      type: 'hyperlink',
+      anchor: href.substring(1),
+      tooltip: linkMark.attrs.tooltip || undefined,
+      children: [],
+    };
+  }
   return {
     type: 'hyperlink',
-    href: linkMark.attrs.href,
+    href,
     tooltip: linkMark.attrs.tooltip || undefined,
     rId: linkMark.attrs.rId || undefined,
     children: [],

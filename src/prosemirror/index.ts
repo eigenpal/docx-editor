@@ -130,5 +130,7 @@ export {
   setTableBorderWidth,
   // Page break
   insertPageBreak,
+  // Table of Contents
+  generateTOC,
 } from './commands';
 export type { TableContextInfo, BorderPreset } from './commands';

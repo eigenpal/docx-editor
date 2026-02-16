@@ -25,6 +25,7 @@ import type { Document, Theme, HeaderFooter } from '../types/document';
 import { Toolbar, type SelectionFormatting, type FormattingAction } from './Toolbar';
 import { pointsToHalfPoints } from './ui/FontSizePicker';
 import { VariablePanel } from './VariablePanel';
+import { DocumentOutline, type OutlineHeading } from './DocumentOutline';
 import { ErrorBoundary, ErrorProvider } from './ErrorBoundary';
 import type { TableAction } from './ui/TableToolbar';
 import { mapHexToHighlightName } from './toolbarUtils';
@@ -116,6 +117,8 @@ import {
   insertHyperlink,
   // Page break command
   insertPageBreak,
+  // Table of Contents command
+  generateTOC,
   // Table commands
   getTableContext,
   insertTable,
@@ -151,6 +154,7 @@ import {
   setTableBorderWidth,
   type TableContextInfo,
 } from '../prosemirror';
+import { collectHeadings } from '../utils/headingCollector';
 
 // Paginated editor
 import { PagedEditor, type PagedEditorRef } from '../paged-editor/PagedEditor';
@@ -385,6 +389,9 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
   const [footnotePropsOpen, setFootnotePropsOpen] = useState(false);
   // Header/footer editing state
   const [hfEditPosition, setHfEditPosition] = useState<'header' | 'footer' | null>(null);
+  // Document outline sidebar state
+  const [showOutline, setShowOutline] = useState(false);
+  const [outlineHeadings, setOutlineHeadings] = useState<OutlineHeading[]>([]);
 
   // History hook for undo/redo - start with null document
   const history = useDocumentHistory<Document | null>(initialDocument || null, {
@@ -410,11 +417,34 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
   const lastSelectionRef = useRef<{ from: number; to: number } | null>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
   const editorContentRef = useRef<HTMLDivElement>(null);
+  const toolbarWrapperRef = useRef<HTMLDivElement>(null);
+  const toolbarRoRef = useRef<ResizeObserver | null>(null);
+  const [toolbarHeight, setToolbarHeight] = useState(0);
   // Keep history.state accessible in stable callbacks without stale closures
   const historyStateRef = useRef(history.state);
   historyStateRef.current = history.state;
   // Track current border color/width for border presets (like Google Docs)
   const borderSpecRef = useRef({ style: 'single', size: 4, color: { rgb: '000000' } });
+
+  // Measure toolbar height for positioning the outline panel below it
+  const toolbarRefCallback = useCallback((el: HTMLDivElement | null) => {
+    toolbarWrapperRef.current = el;
+    // Clean up previous observer
+    if (toolbarRoRef.current) {
+      toolbarRoRef.current.disconnect();
+      toolbarRoRef.current = null;
+    }
+    if (!el) {
+      setToolbarHeight(0);
+      return;
+    }
+    setToolbarHeight(el.offsetHeight);
+    const ro = new ResizeObserver(() => {
+      setToolbarHeight(el.offsetHeight);
+    });
+    ro.observe(el);
+    toolbarRoRef.current = ro;
+  }, []);
 
   // Helper to get the active editor's view — returns HF editor view when in HF editing mode
   const getActiveEditorView = useCallback(() => {
@@ -537,8 +567,15 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
     (newDocument: Document) => {
       history.push(newDocument);
       onChange?.(newDocument);
+      // Update outline headings if sidebar is open
+      if (showOutline) {
+        const view = pagedEditorRef.current?.getView();
+        if (view) {
+          setOutlineHeadings(collectHeadings(view.state.doc));
+        }
+      }
     },
-    [onChange, history]
+    [onChange, history, showOutline]
   );
 
   // Handle selection changes from ProseMirror
@@ -755,6 +792,36 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
     insertPageBreak(view.state, view.dispatch);
     focusActiveEditor();
   }, [getActiveEditorView, focusActiveEditor]);
+
+  // Insert a table of contents at cursor
+  const handleInsertTOC = useCallback(() => {
+    const view = getActiveEditorView();
+    if (!view) return;
+    generateTOC(view.state, view.dispatch);
+    focusActiveEditor();
+  }, [getActiveEditorView, focusActiveEditor]);
+
+  // Toggle document outline sidebar
+  const handleToggleOutline = useCallback(() => {
+    setShowOutline((prev) => {
+      if (!prev) {
+        // Opening: collect headings immediately
+        const view = pagedEditorRef.current?.getView();
+        if (view) {
+          setOutlineHeadings(collectHeadings(view.state.doc));
+        }
+      }
+      return !prev;
+    });
+  }, []);
+
+  // Navigate to a heading from the outline
+  const handleOutlineHeadingClick = useCallback((pmPos: number) => {
+    pagedEditorRef.current?.scrollToPosition(pmPos);
+    // Also set selection to the heading
+    pagedEditorRef.current?.setSelection(pmPos + 1);
+    pagedEditorRef.current?.focus();
+  }, []);
 
   // Trigger file picker for image insert
   const handleInsertImageClick = useCallback(() => {
@@ -1950,6 +2017,7 @@ body { background: white; }
 
   const editorContainerStyle: CSSProperties = {
     flex: 1,
+    minHeight: 0,
     overflow: 'auto', // This is the scroll container - sticky toolbar will stick to this
     position: 'relative',
   };
@@ -2012,176 +2080,237 @@ body { background: white; }
         >
           {/* Main content area */}
           <div style={mainContentStyle}>
-            {/* Editor container - this is the scroll container */}
-            <div style={editorContainerStyle}>
-              {/* Toolbar - sticky at top of scroll container */}
-              {/* Hide toolbar in read-only mode unless explicitly requested */}
-              {showToolbar && !readOnly && (
-                <div className="sticky top-0 z-50 flex flex-col gap-0 bg-white shadow-sm">
-                  <Toolbar
-                    currentFormatting={state.selectionFormatting}
-                    onFormat={handleFormat}
-                    onUndo={undoActiveEditor}
-                    onRedo={redoActiveEditor}
-                    canUndo={true}
-                    canRedo={true}
-                    disabled={readOnly}
-                    documentStyles={history.state?.package.styles?.styles}
-                    theme={history.state?.package.theme || theme}
-                    showPrintButton={showPrintButton}
-                    onPrint={handleDirectPrint}
-                    showZoomControl={showZoomControl}
-                    zoom={state.zoom}
-                    onZoomChange={handleZoomChange}
-                    onRefocusEditor={focusActiveEditor}
-                    onInsertTable={handleInsertTable}
-                    showTableInsert={true}
-                    onInsertImage={handleInsertImageClick}
-                    onInsertPageBreak={handleInsertPageBreak}
-                    imageContext={state.pmImageContext}
-                    onImageWrapType={handleImageWrapType}
-                    onImageTransform={handleImageTransform}
-                    onOpenImageProperties={handleOpenImageProperties}
-                    tableContext={state.pmTableContext}
-                    onTableAction={handleTableAction}
+            {/* Wrapper for scroll container + outline overlay */}
+            <div
+              style={{
+                position: 'relative',
+                flex: 1,
+                minHeight: 0,
+                display: 'flex',
+                flexDirection: 'column',
+              }}
+            >
+              {/* Editor container - this is the scroll container */}
+              <div style={editorContainerStyle}>
+                {/* Toolbar - sticky at top of scroll container */}
+                {/* Hide toolbar in read-only mode unless explicitly requested */}
+                {showToolbar && !readOnly && (
+                  <div
+                    ref={toolbarRefCallback}
+                    className="sticky top-0 z-50 flex flex-col gap-0 bg-white shadow-sm"
                   >
-                    {toolbarExtra}
-                  </Toolbar>
+                    <Toolbar
+                      currentFormatting={state.selectionFormatting}
+                      onFormat={handleFormat}
+                      onUndo={undoActiveEditor}
+                      onRedo={redoActiveEditor}
+                      canUndo={true}
+                      canRedo={true}
+                      disabled={readOnly}
+                      documentStyles={history.state?.package.styles?.styles}
+                      theme={history.state?.package.theme || theme}
+                      showPrintButton={showPrintButton}
+                      onPrint={handleDirectPrint}
+                      showZoomControl={showZoomControl}
+                      zoom={state.zoom}
+                      onZoomChange={handleZoomChange}
+                      onRefocusEditor={focusActiveEditor}
+                      onInsertTable={handleInsertTable}
+                      showTableInsert={true}
+                      onInsertImage={handleInsertImageClick}
+                      onInsertPageBreak={handleInsertPageBreak}
+                      onInsertTOC={handleInsertTOC}
+                      imageContext={state.pmImageContext}
+                      onImageWrapType={handleImageWrapType}
+                      onImageTransform={handleImageTransform}
+                      onOpenImageProperties={handleOpenImageProperties}
+                      tableContext={state.pmTableContext}
+                      onTableAction={handleTableAction}
+                    >
+                      {toolbarExtra}
+                    </Toolbar>
 
-                  {/* Horizontal Ruler - sticky with toolbar */}
-                  {showRuler && (
-                    <div className="flex justify-center px-5 py-1 overflow-x-auto flex-shrink-0 bg-doc-bg">
-                      <HorizontalRuler
-                        sectionProps={history.state?.package.document?.finalSectionProperties}
-                        zoom={state.zoom}
-                        unit={rulerUnit}
-                        editable={!readOnly}
-                        onLeftMarginChange={handleLeftMarginChange}
-                        onRightMarginChange={handleRightMarginChange}
-                      />
-                    </div>
-                  )}
+                    {/* Horizontal Ruler - sticky with toolbar */}
+                    {showRuler && (
+                      <div className="flex justify-center px-5 py-1 overflow-x-auto flex-shrink-0 bg-doc-bg">
+                        <HorizontalRuler
+                          sectionProps={history.state?.package.document?.finalSectionProperties}
+                          zoom={state.zoom}
+                          unit={rulerUnit}
+                          editable={!readOnly}
+                          onLeftMarginChange={handleLeftMarginChange}
+                          onRightMarginChange={handleRightMarginChange}
+                        />
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Vertical Ruler - fixed on left edge (hidden in read-only mode) */}
+                {showRuler && !readOnly && (
+                  <div
+                    style={{
+                      position: 'absolute',
+                      left: 0,
+                      top: 0,
+                      paddingTop: 20,
+                      zIndex: 10,
+                    }}
+                  >
+                    <VerticalRuler
+                      sectionProps={history.state?.package.document?.finalSectionProperties}
+                      zoom={state.zoom}
+                      unit={rulerUnit}
+                      editable={!readOnly}
+                      onTopMarginChange={handleTopMarginChange}
+                      onBottomMarginChange={handleBottomMarginChange}
+                    />
+                  </div>
+                )}
+
+                {/* Editor content wrapper */}
+                <div style={{ display: 'flex', flex: 1, minHeight: 0, position: 'relative' }}>
+                  {/* Editor content area */}
+                  <div
+                    ref={editorContentRef}
+                    style={{ position: 'relative', flex: 1, minWidth: 0 }}
+                    onMouseDown={(e) => {
+                      // Focus editor when clicking on the background area (not the editor itself)
+                      // Using mouseDown for immediate response before focus can be lost
+                      if (e.target === e.currentTarget) {
+                        e.preventDefault();
+                        pagedEditorRef.current?.focus();
+                      }
+                    }}
+                  >
+                    <PagedEditor
+                      ref={pagedEditorRef}
+                      document={history.state}
+                      styles={history.state?.package.styles}
+                      theme={history.state?.package.theme || theme}
+                      sectionProperties={history.state?.package.document?.finalSectionProperties}
+                      headerContent={headerContent}
+                      footerContent={footerContent}
+                      onHeaderFooterDoubleClick={handleHeaderFooterDoubleClick}
+                      hfEditMode={hfEditPosition}
+                      onBodyClick={handleBodyClick}
+                      zoom={state.zoom}
+                      readOnly={readOnly}
+                      extensionManager={extensionManager}
+                      onDocumentChange={handleDocumentChange}
+                      onSelectionChange={(_from, _to) => {
+                        // Extract full selection state from PM and use the standard handler
+                        const view = pagedEditorRef.current?.getView();
+                        if (view) {
+                          const selectionState = extractSelectionState(view.state);
+                          handleSelectionChange(selectionState);
+                        } else {
+                          handleSelectionChange(null);
+                        }
+                      }}
+                      externalPlugins={externalPlugins}
+                      onReady={(ref) => {
+                        onEditorViewReady?.(ref.getView()!);
+                      }}
+                      onRenderedDomContextReady={onRenderedDomContextReady}
+                      pluginOverlays={pluginOverlays}
+                    />
+
+                    {/* Page navigation / indicator */}
+                    {showPageNumbers &&
+                      state.totalPages > 0 &&
+                      (enablePageNavigation ? (
+                        <PageNavigator
+                          currentPage={state.currentPage}
+                          totalPages={state.totalPages}
+                          onNavigate={handlePageNavigate}
+                          position={pageNumberPosition as PageNavigatorPosition}
+                          variant={pageNumberVariant as PageNavigatorVariant}
+                          floating
+                        />
+                      ) : (
+                        <PageNumberIndicator
+                          currentPage={state.currentPage}
+                          totalPages={state.totalPages}
+                          position={pageNumberPosition as PageIndicatorPosition}
+                          variant={pageNumberVariant as PageIndicatorVariant}
+                          floating
+                        />
+                      ))}
+
+                    {/* Inline Header/Footer Editor — positioned over the target area */}
+                    {hfEditPosition &&
+                      (hfEditPosition === 'header' ? headerContent : footerContent) &&
+                      (() => {
+                        const targetEl = getHfTargetElement(hfEditPosition);
+                        const parentEl = editorContentRef.current;
+                        if (!targetEl || !parentEl) return null;
+                        return (
+                          <InlineHeaderFooterEditor
+                            ref={hfEditorRef}
+                            headerFooter={
+                              (hfEditPosition === 'header'
+                                ? headerContent
+                                : footerContent) as HeaderFooter
+                            }
+                            position={hfEditPosition}
+                            styles={history.state?.package.styles}
+                            targetElement={targetEl}
+                            parentElement={parentEl}
+                            onSave={handleHeaderFooterSave}
+                            onClose={() => setHfEditPosition(null)}
+                            onSelectionChange={handleSelectionChange}
+                            onRemove={handleRemoveHeaderFooter}
+                          />
+                        );
+                      })()}
+                  </div>
                 </div>
+                {/* end editor flex wrapper */}
+              </div>
+              {/* end scroll container */}
+
+              {/* Document outline sidebar — absolutely positioned, doesn't scroll */}
+              {showOutline && (
+                <DocumentOutline
+                  headings={outlineHeadings}
+                  onHeadingClick={handleOutlineHeadingClick}
+                  onClose={() => setShowOutline(false)}
+                  topOffset={toolbarHeight}
+                />
               )}
 
-              {/* Vertical Ruler - fixed on left edge (hidden in read-only mode) */}
-              {showRuler && !readOnly && (
-                <div
+              {/* Outline toggle button — absolutely positioned below toolbar */}
+              {!showOutline && (
+                <button
+                  className="docx-outline-nav"
+                  onClick={handleToggleOutline}
+                  onMouseDown={(e) => e.stopPropagation()}
+                  title="Show document outline"
                   style={{
                     position: 'absolute',
-                    left: 0,
-                    top: 0,
-                    paddingTop: 20,
-                    zIndex: 10,
+                    left: 48,
+                    top: toolbarHeight + 12,
+                    zIndex: 20,
+                    background: 'transparent',
+                    border: 'none',
+                    borderRadius: '50%',
+                    padding: 6,
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
                   }}
                 >
-                  <VerticalRuler
-                    sectionProps={history.state?.package.document?.finalSectionProperties}
-                    zoom={state.zoom}
-                    unit={rulerUnit}
-                    editable={!readOnly}
-                    onTopMarginChange={handleTopMarginChange}
-                    onBottomMarginChange={handleBottomMarginChange}
-                  />
-                </div>
+                  <span
+                    className="material-symbols-outlined"
+                    style={{ fontSize: 20, color: '#444746' }}
+                  >
+                    format_list_bulleted
+                  </span>
+                </button>
               )}
-
-              {/* Editor content area */}
-              <div
-                ref={editorContentRef}
-                style={{ position: 'relative' }}
-                onMouseDown={(e) => {
-                  // Focus editor when clicking on the background area (not the editor itself)
-                  // Using mouseDown for immediate response before focus can be lost
-                  if (e.target === e.currentTarget) {
-                    e.preventDefault();
-                    pagedEditorRef.current?.focus();
-                  }
-                }}
-              >
-                <PagedEditor
-                  ref={pagedEditorRef}
-                  document={history.state}
-                  styles={history.state?.package.styles}
-                  theme={history.state?.package.theme || theme}
-                  sectionProperties={history.state?.package.document?.finalSectionProperties}
-                  headerContent={headerContent}
-                  footerContent={footerContent}
-                  onHeaderFooterDoubleClick={handleHeaderFooterDoubleClick}
-                  hfEditMode={hfEditPosition}
-                  onBodyClick={handleBodyClick}
-                  zoom={state.zoom}
-                  readOnly={readOnly}
-                  extensionManager={extensionManager}
-                  onDocumentChange={handleDocumentChange}
-                  onSelectionChange={(_from, _to) => {
-                    // Extract full selection state from PM and use the standard handler
-                    const view = pagedEditorRef.current?.getView();
-                    if (view) {
-                      const selectionState = extractSelectionState(view.state);
-                      handleSelectionChange(selectionState);
-                    } else {
-                      handleSelectionChange(null);
-                    }
-                  }}
-                  externalPlugins={externalPlugins}
-                  onReady={(ref) => {
-                    onEditorViewReady?.(ref.getView()!);
-                  }}
-                  onRenderedDomContextReady={onRenderedDomContextReady}
-                  pluginOverlays={pluginOverlays}
-                />
-
-                {/* Page navigation / indicator */}
-                {showPageNumbers &&
-                  state.totalPages > 0 &&
-                  (enablePageNavigation ? (
-                    <PageNavigator
-                      currentPage={state.currentPage}
-                      totalPages={state.totalPages}
-                      onNavigate={handlePageNavigate}
-                      position={pageNumberPosition as PageNavigatorPosition}
-                      variant={pageNumberVariant as PageNavigatorVariant}
-                      floating
-                    />
-                  ) : (
-                    <PageNumberIndicator
-                      currentPage={state.currentPage}
-                      totalPages={state.totalPages}
-                      position={pageNumberPosition as PageIndicatorPosition}
-                      variant={pageNumberVariant as PageIndicatorVariant}
-                      floating
-                    />
-                  ))}
-
-                {/* Inline Header/Footer Editor — positioned over the target area */}
-                {hfEditPosition &&
-                  (hfEditPosition === 'header' ? headerContent : footerContent) &&
-                  (() => {
-                    const targetEl = getHfTargetElement(hfEditPosition);
-                    const parentEl = editorContentRef.current;
-                    if (!targetEl || !parentEl) return null;
-                    return (
-                      <InlineHeaderFooterEditor
-                        ref={hfEditorRef}
-                        headerFooter={
-                          (hfEditPosition === 'header'
-                            ? headerContent
-                            : footerContent) as HeaderFooter
-                        }
-                        position={hfEditPosition}
-                        styles={history.state?.package.styles}
-                        targetElement={targetEl}
-                        parentElement={parentEl}
-                        onSave={handleHeaderFooterSave}
-                        onClose={() => setHfEditPosition(null)}
-                        onSelectionChange={handleSelectionChange}
-                        onRemove={handleRemoveHeaderFooter}
-                      />
-                    );
-                  })()}
-              </div>
             </div>
+            {/* end wrapper for scroll container + outline */}
 
             {/* Variable panel (hidden in read-only mode) */}
             {showVariablePanel && !readOnly && detectedVariables.length > 0 && (

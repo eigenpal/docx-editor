@@ -168,6 +168,8 @@ export interface ToolbarProps {
   onInsertImage?: () => void;
   /** Callback when user wants to insert a page break */
   onInsertPageBreak?: () => void;
+  /** Callback when user wants to insert a table of contents */
+  onInsertTOC?: () => void;
   /** Callback when user wants to insert a shape */
   onInsertShape?: (data: {
     shapeType: string;
@@ -369,6 +371,7 @@ export function Toolbar({
   showTableInsert = true,
   onInsertImage,
   onInsertPageBreak,
+  onInsertTOC,
   imageContext,
   onImageWrapType,
   onImageTransform,
@@ -739,6 +742,12 @@ export function Toolbar({
             label: 'Page break',
             onClick: onInsertPageBreak,
             disabled: !onInsertPageBreak,
+          },
+          {
+            icon: 'format_list_numbered',
+            label: 'Table of contents',
+            onClick: onInsertTOC,
+            disabled: !onInsertTOC,
           },
         ]}
       />
