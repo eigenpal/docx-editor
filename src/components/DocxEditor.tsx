@@ -25,7 +25,8 @@ import type { Document, Theme, HeaderFooter } from '../types/document';
 import { Toolbar, type SelectionFormatting, type FormattingAction } from './Toolbar';
 import { pointsToHalfPoints } from './ui/FontSizePicker';
 import { VariablePanel } from './VariablePanel';
-import { DocumentOutline, type OutlineHeading } from './DocumentOutline';
+import { DocumentOutline } from './DocumentOutline';
+import type { HeadingInfo } from '../utils/headingCollector';
 import { ErrorBoundary, ErrorProvider } from './ErrorBoundary';
 import type { TableAction } from './ui/TableToolbar';
 import { mapHexToHighlightName } from './toolbarUtils';
@@ -391,7 +392,9 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
   const [hfEditPosition, setHfEditPosition] = useState<'header' | 'footer' | null>(null);
   // Document outline sidebar state
   const [showOutline, setShowOutline] = useState(false);
-  const [outlineHeadings, setOutlineHeadings] = useState<OutlineHeading[]>([]);
+  const showOutlineRef = useRef(false);
+  showOutlineRef.current = showOutline;
+  const [outlineHeadings, setHeadingInfos] = useState<HeadingInfo[]>([]);
 
   // History hook for undo/redo - start with null document
   const history = useDocumentHistory<Document | null>(initialDocument || null, {
@@ -444,6 +447,13 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
     });
     ro.observe(el);
     toolbarRoRef.current = ro;
+  }, []);
+
+  // Cleanup ResizeObserver on unmount
+  useEffect(() => {
+    return () => {
+      toolbarRoRef.current?.disconnect();
+    };
   }, []);
 
   // Helper to get the active editor's view — returns HF editor view when in HF editing mode
@@ -568,14 +578,14 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
       history.push(newDocument);
       onChange?.(newDocument);
       // Update outline headings if sidebar is open
-      if (showOutline) {
+      if (showOutlineRef.current) {
         const view = pagedEditorRef.current?.getView();
         if (view) {
-          setOutlineHeadings(collectHeadings(view.state.doc));
+          setHeadingInfos(collectHeadings(view.state.doc));
         }
       }
     },
-    [onChange, history, showOutline]
+    [onChange, history]
   );
 
   // Handle selection changes from ProseMirror
@@ -808,7 +818,7 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
         // Opening: collect headings immediately
         const view = pagedEditorRef.current?.getView();
         if (view) {
-          setOutlineHeadings(collectHeadings(view.state.doc));
+          setHeadingInfos(collectHeadings(view.state.doc));
         }
       }
       return !prev;
@@ -816,7 +826,7 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
   }, []);
 
   // Navigate to a heading from the outline
-  const handleOutlineHeadingClick = useCallback((pmPos: number) => {
+  const handleHeadingInfoClick = useCallback((pmPos: number) => {
     pagedEditorRef.current?.scrollToPosition(pmPos);
     // Also set selection to the heading
     pagedEditorRef.current?.setSelection(pmPos + 1);
@@ -2274,7 +2284,7 @@ body { background: white; }
               {showOutline && (
                 <DocumentOutline
                   headings={outlineHeadings}
-                  onHeadingClick={handleOutlineHeadingClick}
+                  onHeadingClick={handleHeadingInfoClick}
                   onClose={() => setShowOutline(false)}
                   topOffset={toolbarHeight}
                 />

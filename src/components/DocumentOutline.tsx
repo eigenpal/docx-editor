@@ -1,13 +1,11 @@
 import React, { useEffect, useState } from 'react';
+import type { HeadingInfo } from '../utils/headingCollector';
 
-export interface OutlineHeading {
-  text: string;
-  level: number;
-  pmPos: number;
-}
+/** @deprecated Use HeadingInfo from utils/headingCollector instead */
+export type OutlineHeading = HeadingInfo;
 
 interface DocumentOutlineProps {
-  headings: OutlineHeading[];
+  headings: HeadingInfo[];
   onHeadingClick: (pmPos: number) => void;
   onClose: () => void;
   topOffset?: number;
@@ -27,8 +25,10 @@ export const DocumentOutline: React.FC<DocumentOutlineProps> = ({
   }, []);
 
   return (
-    <div
+    <nav
       className="docx-outline-nav"
+      role="navigation"
+      aria-label="Document outline"
       style={{
         position: 'absolute',
         top: topOffset,
@@ -57,6 +57,7 @@ export const DocumentOutline: React.FC<DocumentOutlineProps> = ({
       >
         <button
           onClick={onClose}
+          aria-label="Close outline"
           style={{
             background: 'none',
             border: 'none',
@@ -93,6 +94,7 @@ export const DocumentOutline: React.FC<DocumentOutlineProps> = ({
               }}
             >
               <button
+                className="docx-outline-heading-btn"
                 onClick={() => onHeadingClick(heading.pmPos)}
                 style={{
                   display: 'block',
@@ -112,12 +114,6 @@ export const DocumentOutline: React.FC<DocumentOutlineProps> = ({
                   borderRadius: 0,
                   letterSpacing: '0.01em',
                 }}
-                onMouseOver={(e) => {
-                  (e.currentTarget as HTMLElement).style.backgroundColor = '#f1f3f4';
-                }}
-                onMouseOut={(e) => {
-                  (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent';
-                }}
                 title={heading.text}
               >
                 {heading.text}
@@ -126,6 +122,6 @@ export const DocumentOutline: React.FC<DocumentOutlineProps> = ({
           ))
         )}
       </div>
-    </div>
+    </nav>
   );
 };

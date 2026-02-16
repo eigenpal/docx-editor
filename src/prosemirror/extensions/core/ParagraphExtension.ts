@@ -513,17 +513,22 @@ export const ParagraphExtension = createNodeExtension({
               const bookmarkName = `_Toc${Math.floor(100000000 + Math.random() * 900000000)}`;
               bookmarkEntries.push({ name: bookmarkName, level: h.level, text: h.text });
 
-              // Set bookmark attr on the heading paragraph
-              const $pos = tr.doc.resolve(h.pmPos);
+              // Map position through prior transaction steps, then resolve against current tr.doc
+              const mappedPos = tr.mapping.map(h.pmPos);
+              const $pos = tr.doc.resolve(mappedPos);
               const paragraphNode = $pos.nodeAfter;
               if (paragraphNode && paragraphNode.type.name === 'paragraph') {
+                // Filter out any existing _Toc bookmarks to avoid duplicates on regeneration
                 const existingBookmarks =
                   (paragraphNode.attrs.bookmarks as Array<{ id: number; name: string }>) || [];
+                const filteredBookmarks = existingBookmarks.filter(
+                  (b) => !b.name.startsWith('_Toc')
+                );
                 const newBookmarks = [
-                  ...existingBookmarks,
+                  ...filteredBookmarks,
                   { id: Math.floor(Math.random() * 2147483647), name: bookmarkName },
                 ];
-                tr.setNodeMarkup(tr.mapping.map(h.pmPos), undefined, {
+                tr.setNodeMarkup(mappedPos, undefined, {
                   ...paragraphNode.attrs,
                   bookmarks: newBookmarks,
                 });

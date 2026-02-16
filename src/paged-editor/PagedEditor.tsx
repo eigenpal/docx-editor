@@ -1921,21 +1921,33 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
       return null;
     }, []);
 
+    /** Scroll visible pages to a ProseMirror position */
+    const scrollToPositionImpl = useCallback((pmPos: number) => {
+      const pageContainer = pagesContainerRef.current;
+      if (!pageContainer) return;
+      const targetEl = pageContainer.querySelector(`[data-pm-start="${pmPos}"]`);
+      if (targetEl) {
+        targetEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+    }, []);
+
     /**
      * Handle mousedown on pages - start selection or drag.
      */
     const handlePagesMouseDown = useCallback(
       (e: React.MouseEvent) => {
         if (!hiddenPMRef.current || e.button !== 0) return; // Only handle left click
-        if (readOnly) return;
 
         // Intercept internal anchor link clicks (TOC entries, cross-references)
+        // Must be before readOnly check so links work in read-only mode
         const anchorEl = (e.target as HTMLElement).closest('a[href^="#"]');
         if (anchorEl) {
           e.preventDefault();
           e.stopPropagation();
           return; // Let handlePagesClick handle the navigation
         }
+
+        if (readOnly) return;
 
         // When in HF edit mode, clicks outside header/footer area close the HF editor
         if (hfEditMode && onBodyClick) {
@@ -2492,16 +2504,9 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
                 }
               });
               if (targetPos !== null) {
-                // Find the DOM element in visible pages with matching data-pm-start
-                const pageContainer = pagesContainerRef.current;
-                if (pageContainer) {
-                  const targetEl = pageContainer.querySelector(`[data-pm-start="${targetPos}"]`);
-                  if (targetEl) {
-                    targetEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                    // Also move selection to the heading
-                    hiddenPMRef.current.setSelection(targetPos + 1);
-                  }
-                }
+                scrollToPositionImpl(targetPos);
+                // Also move selection to the heading
+                hiddenPMRef.current.setSelection(targetPos + 1);
               }
             }
           }
@@ -2943,16 +2948,9 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
             runLayoutPipeline(state);
           }
         },
-        scrollToPosition(pmPos: number) {
-          const pageContainer = pagesContainerRef.current;
-          if (!pageContainer) return;
-          const targetEl = pageContainer.querySelector(`[data-pm-start="${pmPos}"]`);
-          if (targetEl) {
-            targetEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
-          }
-        },
+        scrollToPosition: scrollToPositionImpl,
       }),
-      [layout, runLayoutPipeline]
+      [layout, runLayoutPipeline, scrollToPositionImpl]
     );
 
     // Update selection overlay when layout changes
@@ -2994,14 +2992,7 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
               runLayoutPipeline(state);
             }
           },
-          scrollToPosition: (pmPos: number) => {
-            const pageContainer = pagesContainerRef.current;
-            if (!pageContainer) return;
-            const targetEl = pageContainer.querySelector(`[data-pm-start="${pmPos}"]`);
-            if (targetEl) {
-              targetEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
-            }
-          },
+          scrollToPosition: scrollToPositionImpl,
         });
       }
     }, [layout, runLayoutPipeline]);

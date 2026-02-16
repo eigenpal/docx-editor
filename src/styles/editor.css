@@ -430,6 +430,11 @@
  * RESPONSIVE: Hide document outline on small screens
  * ============================================================================ */
 
+/* Outline heading hover */
+.docx-outline-heading-btn:hover {
+  background-color: #f1f3f4;
+}
+
 @media (max-width: 768px) {
   .docx-outline-nav {
     display: none !important;
