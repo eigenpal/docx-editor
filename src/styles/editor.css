@@ -435,7 +435,7 @@
   background-color: #f1f3f4;
 }
 
-@media (max-width: 768px) {
+@media (max-width: 1280px) {
   .docx-outline-nav {
     display: none !important;
   }
