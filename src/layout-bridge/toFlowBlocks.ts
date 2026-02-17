@@ -70,10 +70,11 @@ function constrainImageToPage(
 const DEFAULT_SIZE = 11; // points (Word 2007+ default)
 
 /**
- * Convert twips to pixels (1 twip = 1/20 point, 1 point = 1.333px at 96 DPI).
+ * Convert twips to pixels (1 twip = 1/1440 inch, 1 inch = 96 CSS px).
+ * No rounding — precision prevents cumulative layout drift across paragraphs.
  */
 function twipsToPixels(twips: number): number {
-  return Math.round((twips / 20) * 1.333);
+  return (twips / 1440) * 96;
 }
 
 /**
