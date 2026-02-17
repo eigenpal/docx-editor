@@ -871,18 +871,12 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
           let width = img.naturalWidth;
           let height = img.naturalHeight;
 
-          // Constrain to reasonable max dimensions (content area of US Letter page at 96dpi)
+          // Constrain to reasonable max width (content area of US Letter page at 96dpi)
           const maxWidth = 612; // ~6.375 inches
-          const maxHeight = 792; // ~8.25 inches
           if (width > maxWidth) {
             const scale = maxWidth / width;
             width = maxWidth;
             height = Math.round(height * scale);
-          }
-          if (height > maxHeight) {
-            const scale = maxHeight / height;
-            height = maxHeight;
-            width = Math.round(width * scale);
           }
 
           const rId = `rId_img_${Date.now()}`;

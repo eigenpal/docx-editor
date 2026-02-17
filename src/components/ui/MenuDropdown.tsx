@@ -1,6 +1,7 @@
 /**
  * MenuDropdown — a reusable dropdown menu with text label trigger
  *
+ * Uses position:fixed so dropdowns escape overflow:auto/hidden ancestors.
  * Supports submenu panels that appear to the right on hover (Google Docs style).
  */
 
@@ -58,20 +59,6 @@ const triggerOpenStyle: CSSProperties = {
   background: 'var(--doc-hover, #f3f4f6)',
 };
 
-const dropdownStyle: CSSProperties = {
-  position: 'absolute',
-  top: '100%',
-  left: 0,
-  marginTop: 2,
-  backgroundColor: 'white',
-  border: '1px solid var(--doc-border, #d1d5db)',
-  borderRadius: 6,
-  boxShadow: '0 4px 12px rgba(0, 0, 0, 0.12)',
-  padding: '4px 0',
-  zIndex: 1000,
-  minWidth: 200,
-};
-
 const menuItemStyle: CSSProperties = {
   display: 'flex',
   alignItems: 'center',
@@ -121,18 +108,36 @@ const submenuPanelStyle: CSSProperties = {
 export function MenuDropdown({ label, items, disabled }: MenuDropdownProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [hoveredSubmenu, setHoveredSubmenu] = useState<string | null>(null);
-  const containerRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+  const [dropdownPos, setDropdownPos] = useState<{ top: number; left: number }>({
+    top: 0,
+    left: 0,
+  });
 
   const closeMenu = useCallback(() => {
     setIsOpen(false);
     setHoveredSubmenu(null);
   }, []);
 
+  // Calculate position when opening
+  useEffect(() => {
+    if (!isOpen || !triggerRef.current) return;
+    const rect = triggerRef.current.getBoundingClientRect();
+    setDropdownPos({ top: rect.bottom + 2, left: rect.left });
+  }, [isOpen]);
+
   useEffect(() => {
     if (!isOpen) return;
 
     function handleClickOutside(e: MouseEvent) {
-      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+      const target = e.target as Node;
+      if (
+        triggerRef.current &&
+        !triggerRef.current.contains(target) &&
+        dropdownRef.current &&
+        !dropdownRef.current.contains(target)
+      ) {
         closeMenu();
       }
     }
@@ -141,11 +146,18 @@ export function MenuDropdown({ label, items, disabled }: MenuDropdownProps) {
       if (e.key === 'Escape') closeMenu();
     }
 
+    // Close on scroll of any ancestor (dropdown position would be stale)
+    function handleScroll() {
+      closeMenu();
+    }
+
     document.addEventListener('mousedown', handleClickOutside);
     document.addEventListener('keydown', handleEscape);
+    window.addEventListener('scroll', handleScroll, true);
     return () => {
       document.removeEventListener('mousedown', handleClickOutside);
       document.removeEventListener('keydown', handleEscape);
+      window.removeEventListener('scroll', handleScroll, true);
     };
   }, [isOpen, closeMenu]);
 
@@ -157,8 +169,9 @@ export function MenuDropdown({ label, items, disabled }: MenuDropdownProps) {
   };
 
   return (
-    <div ref={containerRef} style={{ position: 'relative' }}>
+    <div style={{ position: 'relative' }}>
       <button
+        ref={triggerRef}
         type="button"
         onClick={() => !disabled && setIsOpen(!isOpen)}
         onMouseDown={(e) => e.preventDefault()}
@@ -170,7 +183,22 @@ export function MenuDropdown({ label, items, disabled }: MenuDropdownProps) {
       </button>
 
       {isOpen && (
-        <div style={dropdownStyle}>
+        <div
+          ref={dropdownRef}
+          style={{
+            position: 'fixed',
+            top: dropdownPos.top,
+            left: dropdownPos.left,
+            backgroundColor: 'white',
+            border: '1px solid var(--doc-border, #d1d5db)',
+            borderRadius: 6,
+            boxShadow: '0 4px 12px rgba(0, 0, 0, 0.12)',
+            padding: '4px 0',
+            zIndex: 10000,
+            minWidth: 200,
+          }}
+          onMouseDown={(e) => e.preventDefault()}
+        >
           {items.map((entry, i) => {
             if (isSeparator(entry)) {
               return <div key={`sep-${i}`} style={separatorStyle} />;

@@ -45,9 +45,28 @@ export type ToFlowBlocksOptions = {
   defaultSize?: number;
   /** Theme for resolving theme colors. */
   theme?: Theme | null;
+  /** Page content height in pixels (pageHeight - marginTop - marginBottom). Images taller than this are scaled down to fit. */
+  pageContentHeight?: number;
 };
 
 const DEFAULT_FONT = 'Calibri';
+
+/**
+ * Constrain image dimensions to fit within the page content area.
+ * Scales proportionally if height exceeds pageContentHeight.
+ */
+function constrainImageToPage(
+  width: number,
+  height: number,
+  pageContentHeight: number | undefined
+): { width: number; height: number } {
+  if (!pageContentHeight || height <= pageContentHeight) {
+    return { width, height };
+  }
+  const scale = pageContentHeight / height;
+  return { width: Math.round(width * scale), height: pageContentHeight };
+}
+
 const DEFAULT_SIZE = 11; // points (Word 2007+ default)
 
 /**
@@ -226,11 +245,16 @@ function paragraphToRuns(node: PMNode, startPos: number, _options: ToFlowBlocksO
     } else if (child.type.name === 'image') {
       // Image within paragraph
       const attrs = child.attrs;
+      const constrained = constrainImageToPage(
+        (attrs.width as number) || 100,
+        (attrs.height as number) || 100,
+        _options.pageContentHeight
+      );
       const run: ImageRun = {
         kind: 'image',
         src: attrs.src as string,
-        width: (attrs.width as number) || 100,
-        height: (attrs.height as number) || 100,
+        width: constrained.width,
+        height: constrained.height,
         alt: attrs.alt as string | undefined,
         transform: attrs.transform as string | undefined,
         // Preserve wrap attributes for proper rendering
@@ -314,11 +338,16 @@ function paragraphToRuns(node: PMNode, startPos: number, _options: ToFlowBlocksO
           runs.push(run);
         } else if (sdtChild.type.name === 'image') {
           const attrs = sdtChild.attrs;
+          const sdtConstrained = constrainImageToPage(
+            (attrs.width as number) || 100,
+            (attrs.height as number) || 100,
+            _options.pageContentHeight
+          );
           const run: ImageRun = {
             kind: 'image',
             src: attrs.src as string,
-            width: (attrs.width as number) || 100,
-            height: (attrs.height as number) || 100,
+            width: sdtConstrained.width,
+            height: sdtConstrained.height,
             alt: attrs.alt as string | undefined,
             transform: attrs.transform as string | undefined,
             wrapType: attrs.wrapType as string | undefined,
@@ -804,7 +833,7 @@ function convertTable(node: PMNode, startPos: number, options: ToFlowBlocksOptio
 /**
  * Convert an image node to an ImageBlock.
  */
-function convertImage(node: PMNode, startPos: number): ImageBlock {
+function convertImage(node: PMNode, startPos: number, pageContentHeight?: number): ImageBlock {
   const attrs = node.attrs;
   const wrapType = attrs.wrapType as string | undefined;
 
@@ -813,12 +842,18 @@ function convertImage(node: PMNode, startPos: number): ImageBlock {
   // which we don't support yet, so treat them as block-level images
   const shouldAnchor = wrapType === 'behind' || wrapType === 'inFront';
 
+  const constrained = constrainImageToPage(
+    (attrs.width as number) || 100,
+    (attrs.height as number) || 100,
+    pageContentHeight
+  );
+
   return {
     kind: 'image',
     id: nextBlockId(),
     src: attrs.src as string,
-    width: (attrs.width as number) || 100,
-    height: (attrs.height as number) || 100,
+    width: constrained.width,
+    height: constrained.height,
     alt: attrs.alt as string | undefined,
     transform: attrs.transform as string | undefined,
     anchor: shouldAnchor
@@ -842,6 +877,7 @@ function convertImage(node: PMNode, startPos: number): ImageBlock {
  */
 export function toFlowBlocks(doc: PMNode, options: ToFlowBlocksOptions = {}): FlowBlock[] {
   const opts: ToFlowBlocksOptions = {
+    ...options,
     defaultFont: options.defaultFont ?? DEFAULT_FONT,
     defaultSize: options.defaultSize ?? DEFAULT_SIZE,
   };
@@ -891,7 +927,7 @@ export function toFlowBlocks(doc: PMNode, options: ToFlowBlocksOptions = {}): Fl
 
       case 'image':
         // Standalone image block (if not inline)
-        blocks.push(convertImage(node, pos));
+        blocks.push(convertImage(node, pos, opts.pageContentHeight));
         listCounters.clear();
         break;
 

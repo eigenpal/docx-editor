@@ -157,17 +157,8 @@ export function layoutDocument(
   const keepNextChains = computeKeepNextChains(blocks);
   const midChainIndices = getMidChainIndices(keepNextChains);
 
-  // Safety limit to prevent runaway page generation (e.g., from measurement bugs)
-  const MAX_PAGES = 500;
-
   // Process each block
   for (let i = 0; i < blocks.length; i++) {
-    if (paginator.pages.length > MAX_PAGES) {
-      console.warn(
-        `[layoutDocument] Page limit (${MAX_PAGES}) exceeded at block ${i}/${blocks.length}. Stopping layout.`
-      );
-      break;
-    }
     const block = blocks[i];
     const measure = measures[i];
 
