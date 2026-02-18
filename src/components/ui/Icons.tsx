@@ -679,6 +679,14 @@ export function IconPageBreak(props: IconProps) {
   );
 }
 
+export function IconArrowBack(props: IconProps) {
+  return (
+    <SvgIcon {...props}>
+      <path d="M313-440l224 224-57 56-320-320 320-320 57 56-224 224h487v80H313Z" />
+    </SvgIcon>
+  );
+}
+
 // ============================================================================
 // ICON MAP - for MaterialSymbol compatibility
 // ============================================================================
@@ -767,6 +775,8 @@ const iconMap: Record<string, React.ComponentType<IconProps>> = {
   more_vert: IconMoreVert,
   // Page break
   page_break: IconPageBreak,
+  // Navigation
+  arrow_back: IconArrowBack,
 };
 
 /**

@@ -141,17 +141,14 @@ const MENU_ITEMS: MenuItem[] = [
 // STYLES
 // ============================================================================
 
-const dropdownStyles: CSSProperties = {
-  position: 'absolute',
-  top: '100%',
-  left: 0,
-  marginTop: 4,
+const baseDropdownStyles: CSSProperties = {
+  position: 'fixed',
   backgroundColor: 'white',
   border: '1px solid var(--doc-border)',
   borderRadius: 8,
   boxShadow: '0 4px 16px rgba(0, 0, 0, 0.12)',
   padding: '4px 0',
-  zIndex: 1000,
+  zIndex: 10000,
   minWidth: 220,
   maxHeight: '70vh',
   overflowY: 'auto',
@@ -810,16 +807,33 @@ export function TableOptionsDropdown({
   const [isOpen, setIsOpen] = useState(false);
   const [hoveredItem, setHoveredItem] = useState<string | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+  const [dropdownPos, setDropdownPos] = useState<{ top: number; left: number }>({
+    top: 0,
+    left: 0,
+  });
   const currentJustification =
     (tableContext?.table?.attrs?.justification as 'left' | 'center' | 'right' | null | undefined) ??
     'left';
+
+  // Calculate position when opening
+  useEffect(() => {
+    if (!isOpen || !containerRef.current) return;
+    const rect = containerRef.current.getBoundingClientRect();
+    setDropdownPos({ top: rect.bottom + 4, left: rect.left });
+  }, [isOpen]);
 
   // Close dropdown when clicking outside
   useEffect(() => {
     if (!isOpen) return;
 
     const handleClickOutside = (e: MouseEvent) => {
-      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+      if (
+        containerRef.current &&
+        !containerRef.current.contains(e.target as Node) &&
+        dropdownRef.current &&
+        !dropdownRef.current.contains(e.target as Node)
+      ) {
         setIsOpen(false);
       }
     };
@@ -830,12 +844,18 @@ export function TableOptionsDropdown({
       }
     };
 
+    const handleScroll = () => {
+      setIsOpen(false);
+    };
+
     document.addEventListener('mousedown', handleClickOutside);
     document.addEventListener('keydown', handleEscape);
+    window.addEventListener('scroll', handleScroll, true);
 
     return () => {
       document.removeEventListener('mousedown', handleClickOutside);
       document.removeEventListener('keydown', handleEscape);
+      window.removeEventListener('scroll', handleScroll, true);
     };
   }, [isOpen]);
 
@@ -901,8 +921,9 @@ export function TableOptionsDropdown({
 
       {isOpen && !disabled && (
         <div
+          ref={dropdownRef}
           className="docx-table-options-dropdown"
-          style={dropdownStyles}
+          style={{ ...baseDropdownStyles, top: dropdownPos.top, left: dropdownPos.left }}
           role="menu"
           aria-label="Table options menu"
           onMouseDown={(e) => {

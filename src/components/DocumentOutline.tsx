@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import type { HeadingInfo } from '../utils/headingCollector';
+import { MaterialSymbol } from './ui/Icons';
 
 /** @deprecated Use HeadingInfo from utils/headingCollector instead */
 export type OutlineHeading = HeadingInfo;
@@ -70,9 +71,7 @@ export const DocumentOutline: React.FC<DocumentOutlineProps> = ({
           }}
           title="Close outline"
         >
-          <span className="material-symbols-outlined" style={{ fontSize: 20 }}>
-            arrow_back
-          </span>
+          <MaterialSymbol name="arrow_back" size={20} />
         </button>
         <span style={{ fontWeight: 400, fontSize: 14, color: '#1f1f1f', letterSpacing: '0.01em' }}>
           Outline
