@@ -2099,12 +2099,14 @@ body { background: white; }
     display: 'flex',
     flex: 1,
     minHeight: 0, // Allow flex item to shrink below content size
+    minWidth: 0, // Allow flex item to shrink below content width on narrow viewports
     flexDirection: variablePanelPosition === 'left' ? 'row-reverse' : 'row',
   };
 
   const editorContainerStyle: CSSProperties = {
     flex: 1,
     minHeight: 0,
+    minWidth: 0, // Allow flex item to shrink below content width on narrow viewports
     overflow: 'auto', // This is the scroll container - sticky toolbar will stick to this
     position: 'relative',
   };
@@ -2173,6 +2175,7 @@ body { background: white; }
                 position: 'relative',
                 flex: 1,
                 minHeight: 0,
+                minWidth: 0,
                 display: 'flex',
                 flexDirection: 'column',
               }}
