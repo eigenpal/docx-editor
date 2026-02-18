@@ -372,7 +372,7 @@ export function serializeTextFormatting(formatting: TextFormatting | undefined):
 /**
  * Serialize text content (w:t)
  */
-function serializeTextContent(content: TextContent): string {
+function serializeTextContent(content: TextContent, textTagName: 't' | 'delText' = 't'): string {
   const needsPreserve =
     content.preserveSpace ||
     content.text.startsWith(' ') ||
@@ -381,7 +381,7 @@ function serializeTextContent(content: TextContent): string {
 
   const spaceAttr = needsPreserve ? ' xml:space="preserve"' : '';
 
-  return `<w:t${spaceAttr}>${escapeXml(content.text)}</w:t>`;
+  return `<w:${textTagName}${spaceAttr}>${escapeXml(content.text)}</w:${textTagName}>`;
 }
 
 /**
@@ -816,10 +816,11 @@ function serializeShapeContent(content: ShapeContent): string {
 /**
  * Serialize a single run content item
  */
-function serializeRunContent(content: RunContent): string {
+function serializeRunContent(content: RunContent, options: SerializeRunOptions = {}): string {
+  const textTagName = options.textTagName ?? 't';
   switch (content.type) {
     case 'text':
-      return serializeTextContent(content);
+      return serializeTextContent(content, textTagName);
     case 'tab':
       return serializeTabContent(content);
     case 'break':
@@ -857,6 +858,25 @@ function serializeRunContent(content: RunContent): string {
  * @returns XML string for the run
  */
 export function serializeRun(run: Run): string {
+  return serializeRunWithOptions(run);
+}
+
+/**
+ * Options for run serialization.
+ */
+export interface SerializeRunOptions {
+  /**
+   * Tag used for text nodes inside the run.
+   * - 't' for normal runs
+   * - 'delText' for text inside w:del tracked changes
+   */
+  textTagName?: 't' | 'delText';
+}
+
+/**
+ * Serialize a run to OOXML XML (w:r) with optional serialization flags.
+ */
+export function serializeRunWithOptions(run: Run, options: SerializeRunOptions = {}): string {
   const parts: string[] = [];
 
   // Add run properties if present
@@ -867,7 +887,7 @@ export function serializeRun(run: Run): string {
 
   // Add run content
   for (const content of run.content) {
-    const contentXml = serializeRunContent(content);
+    const contentXml = serializeRunContent(content, options);
     if (contentXml) {
       parts.push(contentXml);
     }

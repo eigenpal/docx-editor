@@ -35,7 +35,7 @@ import type {
 
 import { executeCommand, executeCommands } from './executor';
 import type { AgentCommand } from '../types/agentApi';
-import { repackDocx, createDocx } from '../docx/rezip';
+import { repackDocx, createDocx, type RepackOptions } from '../docx/rezip';
 import { detectVariables } from '../utils/variableDetector';
 import { processTemplate } from '../utils/processTemplate';
 import { parseDocx } from '../docx/parser';
@@ -98,6 +98,11 @@ export interface FormattedTextSegment {
   /** Hyperlink URL if applicable */
   hyperlinkUrl?: string;
 }
+
+/**
+ * Options for exporting a document buffer/blob.
+ */
+export interface ExportOptions extends RepackOptions {}
 
 // ============================================================================
 // DOCUMENT AGENT CLASS
@@ -671,11 +676,16 @@ export class DocumentAgent {
    *
    * @returns Promise resolving to DOCX file as ArrayBuffer
    */
-  async toBuffer(): Promise<ArrayBuffer> {
+  async toBuffer(options: ExportOptions = {}): Promise<ArrayBuffer> {
     // If we have an original buffer, use repack (preserves styles, themes, etc.)
     // Otherwise, create a new DOCX from scratch
     if (this._document.originalBuffer) {
-      return repackDocx(this._document);
+      // Default to deterministic metadata for compare-friendly output.
+      // Callers can opt in to timestamp updates with { updateModifiedDate: true }.
+      return repackDocx(this._document, {
+        updateModifiedDate: false,
+        ...options,
+      });
     }
     return createDocx(this._document);
   }
@@ -687,9 +697,10 @@ export class DocumentAgent {
    * @returns Promise resolving to DOCX file as Blob
    */
   async toBlob(
-    mimeType = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+    mimeType = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    options: ExportOptions = {}
   ): Promise<Blob> {
-    const buffer = await this.toBuffer();
+    const buffer = await this.toBuffer(options);
     return new Blob([buffer], { type: mimeType });
   }
 

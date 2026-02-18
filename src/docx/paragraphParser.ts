@@ -36,6 +36,9 @@ import type {
   SdtProperties,
   Insertion,
   Deletion,
+  MoveFrom,
+  MoveTo,
+  MoveRangeInfo,
   TrackedChangeInfo,
   MathEquation,
 } from '../types/document';
@@ -58,7 +61,6 @@ import {
   parseBookmarkEnd as parseBookmarkEndFromModule,
 } from './bookmarkParser';
 import { parseSectionProperties } from './sectionParser';
-import { consolidateParagraphContent } from './runConsolidator';
 
 // ============================================================================
 // SDT PROPERTIES PARSER
@@ -767,6 +769,29 @@ function parseSimpleField(
 }
 
 /**
+ * Parse tracked change metadata shared by w:ins, w:del, w:moveFrom, w:moveTo.
+ */
+function parseTrackedChangeInfo(node: XmlElement): TrackedChangeInfo {
+  return {
+    id: parseInt(getAttribute(node, 'w', 'id') ?? '0', 10),
+    author: getAttribute(node, 'w', 'author') ?? 'Unknown',
+    date: getAttribute(node, 'w', 'date') ?? undefined,
+  };
+}
+
+/**
+ * Parse move range metadata from w:moveToRangeStart / w:moveFromRangeStart.
+ */
+function parseMoveRangeInfo(node: XmlElement): MoveRangeInfo {
+  return {
+    id: parseInt(getAttribute(node, 'w', 'id') ?? '0', 10),
+    name: getAttribute(node, 'w', 'name') ?? undefined,
+    author: getAttribute(node, 'w', 'author') ?? undefined,
+    date: getAttribute(node, 'w', 'date') ?? undefined,
+  };
+}
+
+/**
  * Parse all content within a paragraph
  *
  * Returns the parsed content and any complex fields that span multiple runs
@@ -781,6 +806,8 @@ function parseParagraphContents(
 ): ParagraphContent[] {
   const contents: ParagraphContent[] = [];
   const children = getChildElements(paraElement);
+  const activeMoveToRanges: MoveRangeInfo[] = [];
+  const activeMoveFromRanges: MoveRangeInfo[] = [];
 
   // State for tracking complex fields
   let inComplexField = false;
@@ -929,11 +956,7 @@ function parseParagraphContents(
 
       case 'ins': {
         // Track change: insertion — parse content and wrap
-        const insInfo: TrackedChangeInfo = {
-          id: parseInt(getAttribute(child, 'w', 'id') ?? '0', 10),
-          author: getAttribute(child, 'w', 'author') ?? 'Unknown',
-          date: getAttribute(child, 'w', 'date') ?? undefined,
-        };
+        const insInfo = parseTrackedChangeInfo(child);
         const insContent = parseParagraphContents(child, styles, theme, null, rels, media);
         const insertion: Insertion = {
           type: 'insertion',
@@ -947,11 +970,7 @@ function parseParagraphContents(
       }
       case 'del': {
         // Track change: deletion — parse content and wrap
-        const delInfo: TrackedChangeInfo = {
-          id: parseInt(getAttribute(child, 'w', 'id') ?? '0', 10),
-          author: getAttribute(child, 'w', 'author') ?? 'Unknown',
-          date: getAttribute(child, 'w', 'date') ?? undefined,
-        };
+        const delInfo = parseTrackedChangeInfo(child);
         const delContent = parseParagraphContents(child, styles, theme, null, rels, media);
         const deletion: Deletion = {
           type: 'deletion',
@@ -963,9 +982,67 @@ function parseParagraphContents(
         contents.push(deletion);
         break;
       }
+      case 'moveToRangeStart': {
+        activeMoveToRanges.push(parseMoveRangeInfo(child));
+        break;
+      }
+      case 'moveToRangeEnd': {
+        const rangeId = parseInt(getAttribute(child, 'w', 'id') ?? '0', 10);
+        const idx = activeMoveToRanges.map((r) => r.id).lastIndexOf(rangeId);
+        if (idx >= 0) {
+          activeMoveToRanges.splice(idx, 1);
+        } else {
+          activeMoveToRanges.pop();
+        }
+        break;
+      }
+      case 'moveFromRangeStart': {
+        activeMoveFromRanges.push(parseMoveRangeInfo(child));
+        break;
+      }
+      case 'moveFromRangeEnd': {
+        const rangeId = parseInt(getAttribute(child, 'w', 'id') ?? '0', 10);
+        const idx = activeMoveFromRanges.map((r) => r.id).lastIndexOf(rangeId);
+        if (idx >= 0) {
+          activeMoveFromRanges.splice(idx, 1);
+        } else {
+          activeMoveFromRanges.pop();
+        }
+        break;
+      }
+      case 'moveTo': {
+        const moveToContent = parseParagraphContents(child, styles, theme, null, rels, media);
+        const moveTo: MoveTo = {
+          type: 'moveTo',
+          info: parseTrackedChangeInfo(child),
+          content: moveToContent.filter(
+            (c): c is Run | Hyperlink => c.type === 'run' || c.type === 'hyperlink'
+          ),
+        };
+        const activeRange = activeMoveToRanges[activeMoveToRanges.length - 1];
+        if (activeRange) {
+          moveTo.range = { ...activeRange };
+        }
+        contents.push(moveTo);
+        break;
+      }
+      case 'moveFrom': {
+        const moveFromContent = parseParagraphContents(child, styles, theme, null, rels, media);
+        const moveFrom: MoveFrom = {
+          type: 'moveFrom',
+          info: parseTrackedChangeInfo(child),
+          content: moveFromContent.filter(
+            (c): c is Run | Hyperlink => c.type === 'run' || c.type === 'hyperlink'
+          ),
+        };
+        const activeRange = activeMoveFromRanges[activeMoveFromRanges.length - 1];
+        if (activeRange) {
+          moveFrom.range = { ...activeRange };
+        }
+        contents.push(moveFrom);
+        break;
+      }
       case 'smartTag':
-      case 'moveTo':
-      case 'moveFrom':
         // Other track changes - skip for now
         break;
 
@@ -1059,20 +1136,21 @@ export function parseParagraph(
   // Parse paragraph contents (runs, hyperlinks, bookmarks, fields)
   const rawContent = parseParagraphContents(node, styles, theme, numbering, rels, media);
 
-  // Consolidate consecutive runs with identical formatting
-  // This reduces fragmentation (e.g., 252 tiny runs → a few larger runs)
-  paragraph.content = consolidateParagraphContent(rawContent);
+  // Preserve original run boundaries for lossless round-trip serialization.
+  paragraph.content = rawContent;
 
   // Compute list rendering if this is a list item.
   // numPr can come from inline pPr or from the referenced paragraph style.
+  //
+  // Important for round-trip fidelity:
+  // Keep style-/numbering-derived values out of paragraph.formatting. Those are
+  // effective defaults, not direct w:pPr values, and serializing them back as
+  // inline properties causes noisy diffs in Word compare.
   let effectiveNumPr = paragraph.formatting?.numPr;
   if (!effectiveNumPr && paragraph.formatting?.styleId && styles) {
     const style = styles.get(paragraph.formatting.styleId);
     if (style?.pPr?.numPr) {
       effectiveNumPr = style.pPr.numPr;
-      // Store it on the paragraph formatting so downstream code sees it
-      if (!paragraph.formatting) paragraph.formatting = {};
-      paragraph.formatting.numPr = effectiveNumPr;
     }
   }
 
@@ -1088,36 +1166,6 @@ export function parseParagraph(
           isBullet: level.numFmt === 'bullet',
           numFmt: level.numFmt,
         };
-
-        // Apply level's paragraph properties (indentation) as defaults.
-        // Per OOXML spec, direct w:ind on the paragraph overrides numbering
-        // level indent — only use numbering indent as fallback.
-        if (level.pPr) {
-          if (!paragraph.formatting) {
-            paragraph.formatting = {};
-          }
-          const directInd = pPr ? findChild(pPr, 'w', 'ind') : null;
-          const hasDirectLeft =
-            directInd != null &&
-            (getAttribute(directInd, 'w', 'left') !== null ||
-              getAttribute(directInd, 'w', 'start') !== null);
-          const hasDirectFirstLineOrHanging =
-            directInd != null &&
-            (getAttribute(directInd, 'w', 'firstLine') !== null ||
-              getAttribute(directInd, 'w', 'hanging') !== null);
-
-          if (!hasDirectLeft && level.pPr.indentLeft !== undefined) {
-            paragraph.formatting.indentLeft = level.pPr.indentLeft;
-          }
-          if (!hasDirectFirstLineOrHanging) {
-            if (level.pPr.indentFirstLine !== undefined) {
-              paragraph.formatting.indentFirstLine = level.pPr.indentFirstLine;
-            }
-            if (level.pPr.hangingIndent !== undefined) {
-              paragraph.formatting.hangingIndent = level.pPr.hangingIndent;
-            }
-          }
-        }
       }
     }
   }

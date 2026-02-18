@@ -23,13 +23,15 @@ import type {
   InlineSdt,
   Insertion,
   Deletion,
+  MoveFrom,
+  MoveTo,
   TabStop,
   BorderSpec,
   ShadingProperties,
   TextFormatting,
 } from '../../types/document';
 
-import { serializeRun, serializeTextFormatting } from './runSerializer';
+import { serializeRun, serializeRunWithOptions, serializeTextFormatting } from './runSerializer';
 
 // ============================================================================
 // XML ESCAPING
@@ -495,7 +497,10 @@ export function serializeParagraphFormatting(formatting: ParagraphFormatting | u
 /**
  * Serialize a hyperlink (w:hyperlink)
  */
-function serializeHyperlink(hyperlink: Hyperlink): string {
+function serializeHyperlink(
+  hyperlink: Hyperlink,
+  options: { textTagName?: 't' | 'delText' } = {}
+): string {
   const attrs: string[] = [];
 
   if (hyperlink.rId) {
@@ -526,6 +531,9 @@ function serializeHyperlink(hyperlink: Hyperlink): string {
   const childrenXml = hyperlink.children
     .map((child) => {
       if (child.type === 'run') {
+        if (options.textTagName === 'delText') {
+          return serializeRunWithOptions(child, { textTagName: 'delText' });
+        }
         return serializeRun(child);
       } else if (child.type === 'bookmarkStart') {
         return serializeBookmarkStart(child);
@@ -616,6 +624,10 @@ function serializeSimpleField(field: SimpleField): string {
  */
 function serializeComplexField(field: ComplexField): string {
   const parts: string[] = [];
+  const fieldCodeHasEndChar = field.fieldCode.some((run) =>
+    run.content.some((content) => content.type === 'fieldChar' && content.charType === 'end')
+  );
+  const hasFieldResult = field.fieldResult.length > 0;
 
   // Extract formatting from the first result run to apply to structural runs
   // (begin/separate/end). OOXML consumers expect consistent formatting across
@@ -644,6 +656,13 @@ function serializeComplexField(field: ComplexField): string {
     parts.push(
       `<w:r>${rPrXml}<w:instrText${spaceAttr}>${escapeXml(field.instruction)}</w:instrText></w:r>`
     );
+  }
+
+  // Some documents store code-only fields as begin + instrText + end (no
+  // separator/result). If parse captured that explicit end in fieldCode, avoid
+  // appending synthetic separate/end runs to preserve the original structure.
+  if (fieldCodeHasEndChar && !hasFieldResult) {
+    return parts.join('');
   }
 
   // Separate field character
@@ -733,12 +752,58 @@ function serializeTrackedChange(tag: 'ins' | 'del', change: Insertion | Deletion
 
   const contentXml = change.content
     .map((item) => {
+      if (item.type === 'run') {
+        return tag === 'del'
+          ? serializeRunWithOptions(item, { textTagName: 'delText' })
+          : serializeRun(item);
+      }
+      if (item.type === 'hyperlink') {
+        return tag === 'del'
+          ? serializeHyperlink(item, { textTagName: 'delText' })
+          : serializeHyperlink(item);
+      }
+      return '';
+    })
+    .join('');
+
+  return `<w:${tag} ${attrs.join(' ')}>${contentXml}</w:${tag}>`;
+}
+
+/**
+ * Serialize move range start marker.
+ */
+function serializeMoveRangeStart(tag: 'moveFrom' | 'moveTo', range: MoveFrom['range']): string {
+  if (!range) return '';
+  const attrs = [`w:id="${range.id}"`];
+  if (range.author) attrs.push(`w:author="${escapeXml(range.author)}"`);
+  if (range.date) attrs.push(`w:date="${escapeXml(range.date)}"`);
+  if (range.name) attrs.push(`w:name="${escapeXml(range.name)}"`);
+  return `<w:${tag}RangeStart ${attrs.join(' ')}/>`;
+}
+
+/**
+ * Serialize move range end marker.
+ */
+function serializeMoveRangeEnd(tag: 'moveFrom' | 'moveTo', range: MoveFrom['range']): string {
+  if (!range) return '';
+  return `<w:${tag}RangeEnd w:id="${range.id}"/>`;
+}
+
+/**
+ * Serialize a move tracked change wrapper.
+ */
+function serializeMoveTrackedChange(tag: 'moveFrom' | 'moveTo', change: MoveFrom | MoveTo): string {
+  const info = change.info;
+  const attrs = [`w:id="${info.id}"`, `w:author="${escapeXml(info.author)}"`];
+  if (info.date) attrs.push(`w:date="${escapeXml(info.date)}"`);
+
+  const contentXml = change.content
+    .map((item) => {
       if (item.type === 'run') return serializeRun(item);
       if (item.type === 'hyperlink') return serializeHyperlink(item);
       return '';
     })
     .join('');
-
   return `<w:${tag} ${attrs.join(' ')}>${contentXml}</w:${tag}>`;
 }
 
@@ -769,6 +834,10 @@ function serializeParagraphContent(content: ParagraphContent): string {
       return serializeTrackedChange('ins', content);
     case 'deletion':
       return serializeTrackedChange('del', content);
+    case 'moveFrom':
+      return serializeMoveTrackedChange('moveFrom', content);
+    case 'moveTo':
+      return serializeMoveTrackedChange('moveTo', content);
     case 'mathEquation':
       // Round-trip the raw OMML XML directly
       return content.ommlXml || '';
@@ -806,12 +875,46 @@ export function serializeParagraph(paragraph: Paragraph): string {
     parts.push(pPrXml);
   }
 
-  // Add paragraph content
+  // Add paragraph content and preserve move range boundaries across adjacent move wrappers.
+  let activeMoveToRange: MoveTo['range'] | undefined;
+  let activeMoveFromRange: MoveFrom['range'] | undefined;
+
   for (const content of paragraph.content) {
+    const nextMoveToRange = content.type === 'moveTo' ? content.range : undefined;
+    const nextMoveFromRange = content.type === 'moveFrom' ? content.range : undefined;
+
+    if (activeMoveToRange && (!nextMoveToRange || nextMoveToRange.id !== activeMoveToRange.id)) {
+      parts.push(serializeMoveRangeEnd('moveTo', activeMoveToRange));
+      activeMoveToRange = undefined;
+    }
+    if (
+      activeMoveFromRange &&
+      (!nextMoveFromRange || nextMoveFromRange.id !== activeMoveFromRange.id)
+    ) {
+      parts.push(serializeMoveRangeEnd('moveFrom', activeMoveFromRange));
+      activeMoveFromRange = undefined;
+    }
+
+    if (nextMoveToRange && !activeMoveToRange) {
+      parts.push(serializeMoveRangeStart('moveTo', nextMoveToRange));
+      activeMoveToRange = nextMoveToRange;
+    }
+    if (nextMoveFromRange && !activeMoveFromRange) {
+      parts.push(serializeMoveRangeStart('moveFrom', nextMoveFromRange));
+      activeMoveFromRange = nextMoveFromRange;
+    }
+
     const contentXml = serializeParagraphContent(content);
     if (contentXml) {
       parts.push(contentXml);
     }
+  }
+
+  if (activeMoveToRange) {
+    parts.push(serializeMoveRangeEnd('moveTo', activeMoveToRange));
+  }
+  if (activeMoveFromRange) {
+    parts.push(serializeMoveRangeEnd('moveFrom', activeMoveFromRange));
   }
 
   return `<w:p${attrsStr}>${parts.join('')}</w:p>`;
@@ -900,7 +1003,12 @@ export function getParagraphPlainText(paragraph: Paragraph): string {
           }
         }
       }
-    } else if (content.type === 'insertion' || content.type === 'deletion') {
+    } else if (
+      content.type === 'insertion' ||
+      content.type === 'deletion' ||
+      content.type === 'moveFrom' ||
+      content.type === 'moveTo'
+    ) {
       for (const item of content.content) {
         if (item.type === 'run') {
           for (const subItem of item.content) {

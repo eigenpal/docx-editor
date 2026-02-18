@@ -295,7 +295,7 @@ export function parseRunProperties(
       }
     }
 
-    const csTheme = getAttribute(rFonts, 'w', 'cstheme');
+    const csTheme = getAttribute(rFonts, 'w', 'csTheme');
     if (csTheme) {
       formatting.fontFamily.csTheme = csTheme;
       if (theme && !formatting.fontFamily.cs) {
@@ -544,6 +544,11 @@ function parseRunContents(
     switch (localName) {
       case 't':
         // Text content
+        contents.push(parseTextContent(child));
+        break;
+
+      case 'delText':
+        // Deleted text inside tracked deletions
         contents.push(parseTextContent(child));
         break;
 

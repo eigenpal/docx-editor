@@ -6,8 +6,8 @@
  *
  * @example
  * ```ts
- * import { DocumentAgent, parseDocx, pluginRegistry } from '@eigenpal/docx-editor/headless';
- * import { docxtemplaterPlugin } from '@eigenpal/docx-editor/core-plugins';
+ * import { DocumentAgent, parseDocx, pluginRegistry } from '@eigenpal/docx-js-editor/headless';
+ * import { docxtemplaterPlugin } from '@eigenpal/docx-js-editor/core-plugins';
  *
  * // Register plugins
  * pluginRegistry.register(docxtemplaterPlugin);
@@ -41,7 +41,7 @@
 // VERSION
 // ============================================================================
 
-export const VERSION = '0.0.2';
+export const VERSION = '0.0.8';
 
 // ============================================================================
 // DOCUMENT AGENT

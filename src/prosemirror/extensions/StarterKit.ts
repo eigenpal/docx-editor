@@ -34,7 +34,12 @@ import { SmallCapsExtension } from './marks/SmallCapsExtension';
 import { FootnoteRefExtension } from './marks/FootnoteRefExtension';
 import { CharacterSpacingExtension } from './marks/CharacterSpacingExtension';
 import { CommentExtension } from './marks/CommentExtension';
-import { InsertionExtension, DeletionExtension } from './marks/TrackedChangeExtensions';
+import {
+  InsertionExtension,
+  DeletionExtension,
+  MoveFromExtension,
+  MoveToExtension,
+} from './marks/TrackedChangeExtensions';
 import {
   EmbossExtension,
   ImprintExtension,
@@ -123,6 +128,8 @@ export function createStarterKit(options: StarterKitOptions = {}): AnyExtension[
   add('comment', CommentExtension());
   add('insertion', InsertionExtension());
   add('deletion', DeletionExtension());
+  add('moveFrom', MoveFromExtension());
+  add('moveTo', MoveToExtension());
 
   // Nodes
   add('hardBreak', HardBreakExtension());

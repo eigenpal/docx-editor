@@ -16,7 +16,7 @@
  * CSS Styles:
  * For optimal cursor visibility and selection highlighting, import the editor styles:
  * ```
- * import '@eigenpal/docx-js-editor/styles/editor.css';
+ * import '@eigenpal/docx-js-editor/styles.css';
  * ```
  */
 
@@ -24,7 +24,7 @@
 // VERSION
 // ============================================================================
 
-export const VERSION = '0.0.2';
+export const VERSION = '0.0.8';
 
 // ============================================================================
 // MAIN COMPONENT

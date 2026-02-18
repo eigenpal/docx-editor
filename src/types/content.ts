@@ -886,6 +886,46 @@ export interface Deletion {
   content: (Run | Hyperlink)[];
 }
 
+/**
+ * Move range metadata (w:moveFromRangeStart/w:moveToRangeStart attributes)
+ */
+export interface MoveRangeInfo {
+  /** Move range ID */
+  id: number;
+  /** Move range name (typically "moveN") */
+  name?: string;
+  /** Author who made the move */
+  author?: string;
+  /** Date of the move range */
+  date?: string;
+}
+
+/**
+ * Move-from wrapper (w:moveFrom) — content moved from original location
+ */
+export interface MoveFrom {
+  type: 'moveFrom';
+  /** Tracked change metadata */
+  info: TrackedChangeInfo;
+  /** Optional range metadata from surrounding moveFromRange markers */
+  range?: MoveRangeInfo;
+  /** Moved content */
+  content: (Run | Hyperlink)[];
+}
+
+/**
+ * Move-to wrapper (w:moveTo) — content moved to new location
+ */
+export interface MoveTo {
+  type: 'moveTo';
+  /** Tracked change metadata */
+  info: TrackedChangeInfo;
+  /** Optional range metadata from surrounding moveToRange markers */
+  range?: MoveRangeInfo;
+  /** Moved content */
+  content: (Run | Hyperlink)[];
+}
+
 // ============================================================================
 // STRUCTURED DOCUMENT TAGS (SDT / Content Controls)
 // ============================================================================
@@ -970,6 +1010,8 @@ export type ParagraphContent =
   | CommentRangeEnd
   | Insertion
   | Deletion
+  | MoveFrom
+  | MoveTo
   | MathEquation;
 
 /**

@@ -170,7 +170,7 @@ Returns the document as a base64 string that can be saved to a file.`,
       let buffer: ArrayBuffer;
       if (loaded.buffer) {
         // Preserve original structure
-        buffer = await repackDocx(loaded.document);
+        buffer = await repackDocx(loaded.document, { updateModifiedDate: false });
       } else {
         // Create from scratch
         buffer = await createDocx(loaded.document);

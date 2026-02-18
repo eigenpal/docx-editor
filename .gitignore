@@ -56,3 +56,6 @@ examples/plugins/*/package-lock.json
 
 # Reference documentation (large files - can be re-downloaded)
 reference/ecma-376/*.zip
+
+# Local large DOCX samples used for manual testing
+tmp/local-docs/

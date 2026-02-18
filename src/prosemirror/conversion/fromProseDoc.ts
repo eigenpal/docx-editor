@@ -41,6 +41,7 @@ import type {
   InlineSdt,
   SdtProperties,
   TrackedChangeInfo,
+  MoveRangeInfo,
   MathEquation,
 } from '../../types/document';
 import type {
@@ -312,10 +313,14 @@ function extractParagraphContent(paragraph: PMNode): ParagraphContent[] {
       return;
     }
 
-    // Check for tracked change marks (insertion/deletion)
+    // Check for tracked change marks (insertion/deletion/move)
     const insertionMark = node.marks.find((m) => m.type.name === 'insertion');
     const deletionMark = node.marks.find((m) => m.type.name === 'deletion');
-    if (insertionMark || deletionMark) {
+    const moveFromMark = node.marks.find((m) => m.type.name === 'moveFrom');
+    const moveToMark = node.marks.find((m) => m.type.name === 'moveTo');
+    const changeMark = insertionMark || deletionMark || moveFromMark || moveToMark;
+
+    if (changeMark) {
       // Finish any current content
       if (currentRun) {
         content.push(currentRun);
@@ -327,10 +332,13 @@ function extractParagraphContent(paragraph: PMNode): ParagraphContent[] {
         currentHyperlink = null;
       }
 
-      const changeMark = (insertionMark || deletionMark)!;
       // Filter out the tracked change mark for text formatting extraction
       const otherMarks = node.marks.filter(
-        (m) => m.type.name !== 'insertion' && m.type.name !== 'deletion'
+        (m) =>
+          m.type.name !== 'insertion' &&
+          m.type.name !== 'deletion' &&
+          m.type.name !== 'moveFrom' &&
+          m.type.name !== 'moveTo'
       );
       const formatting = marksToTextFormatting(otherMarks);
       const run: Run = {
@@ -345,10 +353,29 @@ function extractParagraphContent(paragraph: PMNode): ParagraphContent[] {
         date: (changeMark.attrs.date as string) || undefined,
       };
 
+      let range: MoveRangeInfo | undefined;
+      const rangeIdRaw = changeMark.attrs.rangeId;
+      const rangeId =
+        rangeIdRaw === null || rangeIdRaw === undefined || rangeIdRaw === ''
+          ? undefined
+          : Number(rangeIdRaw);
+      if (rangeId !== undefined && Number.isFinite(rangeId)) {
+        range = {
+          id: rangeId,
+          name: (changeMark.attrs.rangeName as string) || undefined,
+          author: (changeMark.attrs.rangeAuthor as string) || undefined,
+          date: (changeMark.attrs.rangeDate as string) || undefined,
+        };
+      }
+
       if (insertionMark) {
         content.push({ type: 'insertion', info, content: [run] });
-      } else {
+      } else if (deletionMark) {
         content.push({ type: 'deletion', info, content: [run] });
+      } else if (moveFromMark) {
+        content.push({ type: 'moveFrom', info, range, content: [run] });
+      } else {
+        content.push({ type: 'moveTo', info, range, content: [run] });
       }
       return;
     }
