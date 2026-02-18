@@ -105,6 +105,10 @@ import {
   toggleNumberedList,
   increaseIndent,
   decreaseIndent,
+  setIndentLeft,
+  setIndentRight,
+  setIndentFirstLine,
+  removeTabStop,
   increaseListLevel,
   decreaseListLevel,
   clearFormatting,
@@ -302,6 +306,12 @@ interface EditorState {
   currentPage: number;
   /** Total page count */
   totalPages: number;
+  /** Paragraph indent data for ruler */
+  paragraphIndentLeft: number;
+  paragraphIndentRight: number;
+  paragraphFirstLineIndent: number;
+  paragraphHangingIndent: boolean;
+  paragraphTabs: import('../types/document').TabStop[] | null;
   /** ProseMirror table context (for showing table toolbar) */
   pmTableContext: TableContextInfo | null;
   /** Image context when cursor is on an image node */
@@ -379,6 +389,11 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
     selectionFormatting: {},
     currentPage: 1,
     totalPages: 1,
+    paragraphIndentLeft: 0,
+    paragraphIndentRight: 0,
+    paragraphFirstLineIndent: 0,
+    paragraphHangingIndent: false,
+    paragraphTabs: null,
     pmTableContext: null,
     pmImageContext: null,
   });
@@ -694,6 +709,11 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
       setState((prev) => ({
         ...prev,
         selectionFormatting: formatting,
+        paragraphIndentLeft: paragraphFormatting.indentLeft ?? 0,
+        paragraphIndentRight: paragraphFormatting.indentRight ?? 0,
+        paragraphFirstLineIndent: paragraphFormatting.indentFirstLine ?? 0,
+        paragraphHangingIndent: paragraphFormatting.hangingIndent ?? false,
+        paragraphTabs: paragraphFormatting.tabs ?? null,
         pmTableContext: pmTableCtx,
         pmImageContext: pmImageCtx,
       }));
@@ -1542,6 +1562,48 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
     [createMarginHandler]
   );
 
+  // Paragraph indent handlers (for ruler)
+  const handleIndentLeftChange = useCallback(
+    (twips: number) => {
+      const view = getActiveEditorView();
+      if (!view) return;
+      setIndentLeft(twips)(view.state, view.dispatch);
+    },
+    [getActiveEditorView]
+  );
+
+  const handleIndentRightChange = useCallback(
+    (twips: number) => {
+      const view = getActiveEditorView();
+      if (!view) return;
+      setIndentRight(twips)(view.state, view.dispatch);
+    },
+    [getActiveEditorView]
+  );
+
+  const handleFirstLineIndentChange = useCallback(
+    (twips: number) => {
+      const view = getActiveEditorView();
+      if (!view) return;
+      // If twips is negative, it's a hanging indent
+      if (twips < 0) {
+        setIndentFirstLine(-twips, true)(view.state, view.dispatch);
+      } else {
+        setIndentFirstLine(twips, false)(view.state, view.dispatch);
+      }
+    },
+    [getActiveEditorView]
+  );
+
+  const handleTabStopRemove = useCallback(
+    (positionTwips: number) => {
+      const view = getActiveEditorView();
+      if (!view) return;
+      removeTabStop(positionTwips)(view.state, view.dispatch);
+    },
+    [getActiveEditorView]
+  );
+
   // Handle page navigation (from PageNavigator)
   // TODO: Implement page navigation in ProseMirror
   const handlePageNavigate = useCallback((_pageNumber: number) => {
@@ -2164,6 +2226,16 @@ body { background: white; }
                           editable={!readOnly}
                           onLeftMarginChange={handleLeftMarginChange}
                           onRightMarginChange={handleRightMarginChange}
+                          indentLeft={state.paragraphIndentLeft}
+                          indentRight={state.paragraphIndentRight}
+                          onIndentLeftChange={handleIndentLeftChange}
+                          onIndentRightChange={handleIndentRightChange}
+                          showFirstLineIndent={true}
+                          firstLineIndent={state.paragraphFirstLineIndent}
+                          hangingIndent={state.paragraphHangingIndent}
+                          onFirstLineIndentChange={handleFirstLineIndentChange}
+                          tabStops={state.paragraphTabs}
+                          onTabStopRemove={handleTabStopRemove}
                         />
                       </div>
                     )}

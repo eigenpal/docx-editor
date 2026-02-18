@@ -489,6 +489,14 @@ export const ParagraphExtension = createNodeExtension({
         setSpaceAfter: (twips: number) => setParagraphAttr('spaceAfter', twips),
         increaseIndent: (amount?: number) => makeIncreaseIndent(amount),
         decreaseIndent: (amount?: number) => makeDecreaseIndent(amount),
+        setIndentLeft: (twips: number) => setParagraphAttr('indentLeft', twips > 0 ? twips : null),
+        setIndentRight: (twips: number) =>
+          setParagraphAttr('indentRight', twips > 0 ? twips : null),
+        setIndentFirstLine: (twips: number, hanging?: boolean) =>
+          setParagraphAttrsCmd({
+            indentFirstLine: twips > 0 ? twips : null,
+            hangingIndent: hanging ?? false,
+          }),
         applyStyle: (styleId: string, resolvedAttrs?: ResolvedStyleAttrs) =>
           applyStyleFn(styleId, resolvedAttrs),
         clearStyle: () => setParagraphAttr('styleId', null),

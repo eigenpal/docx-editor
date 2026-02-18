@@ -1,88 +1,81 @@
 /**
- * HorizontalRuler Component
+ * HorizontalRuler Component — Google Docs style
  *
- * A horizontal ruler that displays above the document with:
- * - Page width scale with tick marks
- * - Left and right margin indicators
- * - First line indent indicator
- * - Optional dragging to adjust margins
- * - Support for zoom levels
+ * 3 handles only:
+ * - Left side: first-line indent (▼ down at top) + left indent (▲ up at bottom)
+ * - Right side: right indent (▼ down at top)
  *
- * Similar to Microsoft Word's horizontal ruler.
+ * Margins shown as gray zones on the ruler edges.
+ * Drag the boundary between gray/white to adjust page margins.
+ * Drag tooltip shows value during any drag.
  */
 
 import React, { useState, useRef, useCallback, useEffect } from 'react';
 import type { CSSProperties } from 'react';
-import type { SectionProperties, TabStop, TabStopAlignment } from '../../types/document';
+import type { SectionProperties, TabStop } from '../../types/document';
 import { twipsToPixels, pixelsToTwips, formatPx } from '../../utils/units';
 
 // ============================================================================
 // TYPES
 // ============================================================================
 
-/**
- * Props for the HorizontalRuler component
- */
 export interface HorizontalRulerProps {
-  /** Section properties for page layout */
   sectionProps?: SectionProperties | null;
-  /** Zoom level (1.0 = 100%) */
   zoom?: number;
-  /** Whether margins can be dragged to adjust */
   editable?: boolean;
-  /** Callback when left margin changes (in twips) */
   onLeftMarginChange?: (marginTwips: number) => void;
-  /** Callback when right margin changes (in twips) */
   onRightMarginChange?: (marginTwips: number) => void;
-  /** Callback when first line indent changes (in twips) */
   onFirstLineIndentChange?: (indentTwips: number) => void;
-  /** Show first line indent marker */
   showFirstLineIndent?: boolean;
-  /** First line indent value (in twips) */
   firstLineIndent?: number;
-  /** Unit to display (inches or cm) */
+  hangingIndent?: boolean;
+  indentLeft?: number;
+  indentRight?: number;
+  onIndentLeftChange?: (indentTwips: number) => void;
+  onIndentRightChange?: (indentTwips: number) => void;
   unit?: 'inch' | 'cm';
-  /** Additional CSS class name */
   className?: string;
-  /** Additional inline styles */
   style?: CSSProperties;
-  /** Current paragraph tab stops */
   tabStops?: TabStop[] | null;
-  /** Callback when a tab stop is added (click on ruler) */
-  onTabStopAdd?: (positionTwips: number, alignment: TabStopAlignment) => void;
-  /** Callback when a tab stop is removed (double-click on marker) */
   onTabStopRemove?: (positionTwips: number) => void;
 }
 
-/**
- * Ruler marker types
- */
-type MarkerType = 'leftMargin' | 'rightMargin' | 'firstLineIndent';
+type MarkerType = 'leftMargin' | 'rightMargin' | 'firstLineIndent' | 'leftIndent' | 'rightIndent';
 
 // ============================================================================
 // CONSTANTS
 // ============================================================================
 
-const DEFAULT_PAGE_WIDTH_TWIPS = 12240; // 8.5 inches
-const DEFAULT_MARGIN_TWIPS = 1440; // 1 inch
+const DEFAULT_PAGE_WIDTH_TWIPS = 12240;
+const DEFAULT_MARGIN_TWIPS = 1440;
 const TWIPS_PER_INCH = 1440;
 const TWIPS_PER_CM = 567;
 
-// Ruler styling - Google Docs style (transparent background)
-const RULER_HEIGHT = 20;
+const RULER_HEIGHT = 22;
 const RULER_TEXT_COLOR = 'var(--doc-text-muted)';
 const RULER_TICK_COLOR = 'var(--doc-text-subtle)';
-const MARKER_COLOR = 'var(--doc-primary)';
-const MARKER_HOVER_COLOR = 'var(--doc-primary)';
-const MARKER_ACTIVE_COLOR = 'var(--doc-primary-hover)';
+const MARGIN_ZONE_COLOR = 'rgba(0, 0, 0, 0.06)';
+const INDENT_COLOR = '#4285f4';
+const INDENT_HOVER_COLOR = '#3367d6';
+const INDENT_ACTIVE_COLOR = '#2a56c6';
+
+const TRI_SIZE = 5; // triangle half-width in px
+
+// ============================================================================
+// HELPERS
+// ============================================================================
+
+function formatValueForTooltip(twips: number, unit: 'inch' | 'cm'): string {
+  if (unit === 'inch') {
+    return (twips / TWIPS_PER_INCH).toFixed(2) + '"';
+  }
+  return (twips / TWIPS_PER_CM).toFixed(1) + ' cm';
+}
 
 // ============================================================================
 // MAIN COMPONENT
 // ============================================================================
 
-/**
- * HorizontalRuler - displays a ruler with margin markers
- */
 export function HorizontalRuler({
   sectionProps,
   zoom = 1,
@@ -92,72 +85,95 @@ export function HorizontalRuler({
   onFirstLineIndentChange,
   showFirstLineIndent = false,
   firstLineIndent = 0,
+  hangingIndent = false,
+  indentLeft = 0,
+  indentRight = 0,
+  onIndentLeftChange,
+  onIndentRightChange,
   unit = 'inch',
   className = '',
   style,
   tabStops,
-  onTabStopAdd,
   onTabStopRemove,
 }: HorizontalRulerProps): React.ReactElement {
-  // State for dragging
   const [dragging, setDragging] = useState<MarkerType | null>(null);
   const [hoveredMarker, setHoveredMarker] = useState<MarkerType | null>(null);
+  const [dragValue, setDragValue] = useState<number | null>(null);
+  const [dragPositionPx, setDragPositionPx] = useState<number | null>(null);
   const rulerRef = useRef<HTMLDivElement>(null);
 
-  // Get page dimensions from section properties
+  // Page dimensions
   const pageWidthTwips = sectionProps?.pageWidth ?? DEFAULT_PAGE_WIDTH_TWIPS;
   const leftMarginTwips = sectionProps?.marginLeft ?? DEFAULT_MARGIN_TWIPS;
   const rightMarginTwips = sectionProps?.marginRight ?? DEFAULT_MARGIN_TWIPS;
+  const contentTwips = pageWidthTwips - leftMarginTwips - rightMarginTwips;
 
-  // Convert to pixels with zoom
+  // Pixel conversions
   const pageWidthPx = twipsToPixels(pageWidthTwips) * zoom;
   const leftMarginPx = twipsToPixels(leftMarginTwips) * zoom;
   const rightMarginPx = twipsToPixels(rightMarginTwips) * zoom;
-  const firstLineIndentPx = twipsToPixels(firstLineIndent) * zoom;
+  const indentLeftPx = twipsToPixels(indentLeft) * zoom;
+  const indentRightPx = twipsToPixels(indentRight) * zoom;
 
-  // Handle drag start
+  // First line indent: hanging goes left, normal goes right
+  const effectiveFirstLineIndent = hangingIndent ? -firstLineIndent : firstLineIndent;
+  const firstLineIndentPx = twipsToPixels(effectiveFirstLineIndent) * zoom;
+
+  // Handle positions (in px from ruler left edge)
+  const leftIndentPosPx = leftMarginPx + indentLeftPx;
+  const rightIndentPosPx = pageWidthPx - rightMarginPx - indentRightPx;
+  const firstLinePosPx = leftMarginPx + indentLeftPx + firstLineIndentPx;
+
   const handleDragStart = useCallback(
     (e: React.MouseEvent, marker: MarkerType) => {
       if (!editable) return;
       e.preventDefault();
+      e.stopPropagation();
       setDragging(marker);
     },
     [editable]
   );
 
-  // Handle drag
   const handleDrag = useCallback(
     (e: MouseEvent) => {
       if (!dragging || !rulerRef.current) return;
 
       const rect = rulerRef.current.getBoundingClientRect();
       const x = e.clientX - rect.left;
-
-      // Convert pixel position to twips
+      setDragPositionPx(x);
       const positionTwips = pixelsToTwips(x / zoom);
 
       if (dragging === 'leftMargin') {
-        // Constrain left margin: minimum 0, maximum pageWidth - rightMargin - 720 (0.5 inch minimum content)
         const maxMargin = pageWidthTwips - rightMarginTwips - 720;
-        const newMargin = Math.max(0, Math.min(positionTwips, maxMargin));
-        onLeftMarginChange?.(Math.round(newMargin));
+        const rounded = Math.round(Math.max(0, Math.min(positionTwips, maxMargin)));
+        setDragValue(rounded);
+        onLeftMarginChange?.(rounded);
       } else if (dragging === 'rightMargin') {
-        // Right margin is measured from the right edge
         const fromRight = pageWidthTwips - positionTwips;
-        // Constrain: minimum 0, maximum pageWidth - leftMargin - 720
         const maxMargin = pageWidthTwips - leftMarginTwips - 720;
-        const newMargin = Math.max(0, Math.min(fromRight, maxMargin));
-        onRightMarginChange?.(Math.round(newMargin));
+        const rounded = Math.round(Math.max(0, Math.min(fromRight, maxMargin)));
+        setDragValue(rounded);
+        onRightMarginChange?.(rounded);
       } else if (dragging === 'firstLineIndent') {
-        // First line indent is relative to left margin
-        const indentFromLeftMargin = positionTwips - leftMarginTwips;
-        // Constrain: minimum -leftMargin (hanging indent), maximum content width
-        const contentTwips = pageWidthTwips - leftMarginTwips - rightMarginTwips;
-        const newIndent = Math.max(
-          -leftMarginTwips,
-          Math.min(indentFromLeftMargin, contentTwips - 720)
-        );
-        onFirstLineIndentChange?.(Math.round(newIndent));
+        const base = leftMarginTwips + indentLeft;
+        const indentFromBase = positionTwips - base;
+        const maxIndent = contentTwips - indentLeft - indentRight - 720;
+        const rounded = Math.round(Math.max(-indentLeft, Math.min(indentFromBase, maxIndent)));
+        setDragValue(rounded);
+        onFirstLineIndentChange?.(rounded);
+      } else if (dragging === 'leftIndent') {
+        const indentFromMargin = positionTwips - leftMarginTwips;
+        const maxIndent = contentTwips - indentRight - 720;
+        const rounded = Math.round(Math.max(0, Math.min(indentFromMargin, maxIndent)));
+        setDragValue(rounded);
+        onIndentLeftChange?.(rounded);
+      } else if (dragging === 'rightIndent') {
+        const rightEdge = pageWidthTwips - rightMarginTwips;
+        const indentFromRight = rightEdge - positionTwips;
+        const maxIndent = contentTwips - indentLeft - 720;
+        const rounded = Math.round(Math.max(0, Math.min(indentFromRight, maxIndent)));
+        setDragValue(rounded);
+        onIndentRightChange?.(rounded);
       }
     },
     [
@@ -166,18 +182,23 @@ export function HorizontalRuler({
       pageWidthTwips,
       leftMarginTwips,
       rightMarginTwips,
+      contentTwips,
+      indentLeft,
+      indentRight,
       onLeftMarginChange,
       onRightMarginChange,
       onFirstLineIndentChange,
+      onIndentLeftChange,
+      onIndentRightChange,
     ]
   );
 
-  // Handle drag end
   const handleDragEnd = useCallback(() => {
     setDragging(null);
+    setDragValue(null);
+    setDragPositionPx(null);
   }, []);
 
-  // Add/remove document event listeners for dragging
   useEffect(() => {
     if (dragging) {
       document.addEventListener('mousemove', handleDrag);
@@ -189,107 +210,129 @@ export function HorizontalRuler({
     }
   }, [dragging, handleDrag, handleDragEnd]);
 
-  // Generate tick marks
   const ticks = generateTicks(pageWidthTwips, zoom, unit);
-
-  // Ruler container style - transparent like Google Docs
-  const rulerStyle: CSSProperties = {
-    position: 'relative',
-    width: formatPx(pageWidthPx),
-    height: RULER_HEIGHT,
-    backgroundColor: 'transparent',
-    overflow: 'visible',
-    userSelect: 'none',
-    cursor: dragging ? 'ew-resize' : 'default',
-    ...style,
-  };
 
   return (
     <div
       ref={rulerRef}
       className={`docx-horizontal-ruler ${className}`}
-      style={rulerStyle}
+      style={{
+        position: 'relative',
+        width: formatPx(pageWidthPx),
+        height: RULER_HEIGHT,
+        backgroundColor: 'transparent',
+        overflow: 'visible',
+        userSelect: 'none',
+        cursor: dragging ? 'ew-resize' : 'default',
+        ...style,
+      }}
       role="slider"
       aria-label="Horizontal ruler"
-      onClick={(e) => {
-        if (!onTabStopAdd || !rulerRef.current || dragging) return;
-        const rect = rulerRef.current.getBoundingClientRect();
-        const clickX = e.clientX - rect.left;
-        const positionTwips = pixelsToTwips(clickX / zoom);
-        // Only add in the content area (between margins)
-        if (positionTwips > leftMarginTwips && positionTwips < pageWidthTwips - rightMarginTwips) {
-          onTabStopAdd(Math.round(positionTwips), 'left');
-        }
-      }}
       aria-valuemin={0}
       aria-valuemax={pageWidthTwips}
     >
-      {/* Tick marks */}
+      {/* Gray margin zones — click & drag anywhere in the gray area to adjust margin */}
       <div
-        className="docx-ruler-ticks"
         style={{
           position: 'absolute',
           top: 0,
           left: 0,
-          right: 0,
-          bottom: 0,
-          pointerEvents: 'none',
+          width: formatPx(leftMarginPx),
+          height: RULER_HEIGHT,
+          backgroundColor: MARGIN_ZONE_COLOR,
+          borderRight: '1px solid rgba(0,0,0,0.12)',
+          cursor: editable ? 'ew-resize' : 'default',
+          zIndex: 1,
         }}
-      >
-        {ticks.map((tick, index) => (
-          <RulerTick key={index} tick={tick} />
+        onMouseDown={
+          editable && onLeftMarginChange ? (e) => handleDragStart(e, 'leftMargin') : undefined
+        }
+      />
+      <div
+        style={{
+          position: 'absolute',
+          top: 0,
+          right: 0,
+          width: formatPx(rightMarginPx),
+          height: RULER_HEIGHT,
+          backgroundColor: MARGIN_ZONE_COLOR,
+          borderLeft: '1px solid rgba(0,0,0,0.12)',
+          cursor: editable ? 'ew-resize' : 'default',
+          zIndex: 1,
+        }}
+        onMouseDown={
+          editable && onRightMarginChange ? (e) => handleDragStart(e, 'rightMargin') : undefined
+        }
+      />
+
+      {/* Tick marks */}
+      <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }}>
+        {ticks.map((tick, i) => (
+          <RulerTick key={i} tick={tick} />
         ))}
       </div>
 
-      {/* Left margin marker */}
-      <MarginMarker
-        type="leftMargin"
-        position={leftMarginPx}
-        editable={editable}
-        isDragging={dragging === 'leftMargin'}
-        isHovered={hoveredMarker === 'leftMargin'}
-        onMouseEnter={() => setHoveredMarker('leftMargin')}
-        onMouseLeave={() => setHoveredMarker(null)}
-        onMouseDown={(e) => handleDragStart(e, 'leftMargin')}
-      />
+      {/* === 3 INDENT HANDLES (Google Docs style) === */}
 
-      {/* Right margin marker */}
-      <MarginMarker
-        type="rightMargin"
-        position={pageWidthPx - rightMarginPx}
-        editable={editable}
-        isDragging={dragging === 'rightMargin'}
-        isHovered={hoveredMarker === 'rightMargin'}
-        onMouseEnter={() => setHoveredMarker('rightMargin')}
-        onMouseLeave={() => setHoveredMarker(null)}
-        onMouseDown={(e) => handleDragStart(e, 'rightMargin')}
-      />
-
-      {/* First line indent marker */}
+      {/* First-line indent — ▼ down triangle at top-left */}
       {showFirstLineIndent && (
-        <FirstLineIndentMarker
-          position={leftMarginPx + firstLineIndentPx}
+        <IndentTriangle
+          direction="down"
+          positionPx={firstLinePosPx}
           editable={editable}
           isDragging={dragging === 'firstLineIndent'}
           isHovered={hoveredMarker === 'firstLineIndent'}
           onMouseEnter={() => setHoveredMarker('firstLineIndent')}
           onMouseLeave={() => setHoveredMarker(null)}
           onMouseDown={(e) => handleDragStart(e, 'firstLineIndent')}
+          label="First line indent"
         />
       )}
 
-      {/* Tab stop markers */}
-      {tabStops?.map((tab) => {
-        const posPx = twipsToPixels(tab.position) * zoom;
-        return (
-          <TabStopMarker
-            key={tab.position}
-            tabStop={tab}
-            positionPx={posPx}
-            onDoubleClick={() => onTabStopRemove?.(tab.position)}
-          />
-        );
-      })}
+      {/* Left indent — ▲ up triangle at bottom-left */}
+      {editable && onIndentLeftChange && (
+        <IndentTriangle
+          direction="up"
+          positionPx={leftIndentPosPx}
+          editable={editable}
+          isDragging={dragging === 'leftIndent'}
+          isHovered={hoveredMarker === 'leftIndent'}
+          onMouseEnter={() => setHoveredMarker('leftIndent')}
+          onMouseLeave={() => setHoveredMarker(null)}
+          onMouseDown={(e) => handleDragStart(e, 'leftIndent')}
+          label="Left indent"
+        />
+      )}
+
+      {/* Right indent — ▼ down triangle at top-right */}
+      {editable && onIndentRightChange && (
+        <IndentTriangle
+          direction="down"
+          positionPx={rightIndentPosPx}
+          editable={editable}
+          isDragging={dragging === 'rightIndent'}
+          isHovered={hoveredMarker === 'rightIndent'}
+          onMouseEnter={() => setHoveredMarker('rightIndent')}
+          onMouseLeave={() => setHoveredMarker(null)}
+          onMouseDown={(e) => handleDragStart(e, 'rightIndent')}
+          label="Right indent"
+        />
+      )}
+
+      {/* Tab stop markers (display only) */}
+      {tabStops?.map((tab) => (
+        <TabStopMarker
+          key={tab.position}
+          tabStop={tab}
+          positionPx={twipsToPixels(tab.position) * zoom}
+          onDoubleClick={() => onTabStopRemove?.(tab.position)}
+        />
+      ))}
+
+      {/* Drag tooltip */}
+      {dragging && dragValue !== null && dragPositionPx !== null && (
+        <DragTooltip value={formatValueForTooltip(dragValue, unit)} positionPx={dragPositionPx} />
+      )}
     </div>
   );
 }
@@ -298,181 +341,120 @@ export function HorizontalRuler({
 // SUB-COMPONENTS
 // ============================================================================
 
-/**
- * Tick mark data
- */
 interface TickData {
-  position: number; // Position in pixels
-  height: number; // Height of tick (8 = major, 4 = minor, 2 = sub-minor)
-  label?: string; // Label for major ticks
+  position: number;
+  height: number;
+  label?: string;
 }
 
-/**
- * Single tick mark
- */
 function RulerTick({ tick }: { tick: TickData }): React.ReactElement {
-  const tickStyle: CSSProperties = {
-    position: 'absolute',
-    left: formatPx(tick.position),
-    bottom: 0,
-    width: 1,
-    height: tick.height,
-    backgroundColor: RULER_TICK_COLOR,
-  };
-
-  const labelStyle: CSSProperties = {
-    position: 'absolute',
-    left: formatPx(tick.position),
-    top: 2,
-    transform: 'translateX(-50%)',
-    fontSize: '9px',
-    color: RULER_TEXT_COLOR,
-    fontFamily: 'sans-serif',
-    whiteSpace: 'nowrap',
-  };
-
   return (
     <>
-      <div style={tickStyle} />
-      {tick.label && <div style={labelStyle}>{tick.label}</div>}
+      <div
+        style={{
+          position: 'absolute',
+          left: formatPx(tick.position),
+          bottom: 0,
+          width: 1,
+          height: tick.height,
+          backgroundColor: RULER_TICK_COLOR,
+        }}
+      />
+      {tick.label && (
+        <div
+          style={{
+            position: 'absolute',
+            left: formatPx(tick.position),
+            top: 3,
+            transform: 'translateX(-50%)',
+            fontSize: '9px',
+            color: RULER_TEXT_COLOR,
+            fontFamily: 'sans-serif',
+            whiteSpace: 'nowrap',
+          }}
+        >
+          {tick.label}
+        </div>
+      )}
     </>
   );
 }
 
 /**
- * Margin marker (triangle on top)
+ * Indent triangle handle — Google Docs style.
+ * direction="down": ▼ anchored at top (first-line indent, right indent)
+ * direction="up":   ▲ anchored at bottom (left indent)
  */
-interface MarginMarkerProps {
-  type: 'leftMargin' | 'rightMargin';
-  position: number;
+interface IndentTriangleProps {
+  direction: 'up' | 'down';
+  positionPx: number;
   editable: boolean;
   isDragging: boolean;
   isHovered: boolean;
   onMouseEnter: () => void;
   onMouseLeave: () => void;
   onMouseDown: (e: React.MouseEvent) => void;
+  label: string;
 }
 
-function MarginMarker({
-  type,
-  position,
+function IndentTriangle({
+  direction,
+  positionPx,
   editable,
   isDragging,
   isHovered,
   onMouseEnter,
   onMouseLeave,
   onMouseDown,
-}: MarginMarkerProps): React.ReactElement {
-  const color = isDragging ? MARKER_ACTIVE_COLOR : isHovered ? MARKER_HOVER_COLOR : MARKER_COLOR;
+  label,
+}: IndentTriangleProps): React.ReactElement {
+  const color = isDragging ? INDENT_ACTIVE_COLOR : isHovered ? INDENT_HOVER_COLOR : INDENT_COLOR;
+  const triHeight = Math.round(TRI_SIZE * 1.6);
 
-  const markerStyle: CSSProperties = {
+  const containerStyle: CSSProperties = {
     position: 'absolute',
-    left: formatPx(position - 5),
-    top: 0,
-    width: 10,
-    height: RULER_HEIGHT,
+    left: formatPx(positionPx - TRI_SIZE),
+    width: TRI_SIZE * 2,
+    height: triHeight + 2,
     cursor: editable ? 'ew-resize' : 'default',
-    zIndex: isDragging ? 10 : 1,
+    zIndex: isDragging ? 10 : 4,
+    ...(direction === 'down' ? { top: 0 } : { bottom: 0 }),
   };
 
-  // Triangle pointing down
-  const triangleStyle: CSSProperties = {
-    position: 'absolute',
-    top: 2,
-    left: 0,
-    width: 0,
-    height: 0,
-    borderLeft: '5px solid transparent',
-    borderRight: '5px solid transparent',
-    borderTop: `8px solid ${color}`,
-    transition: 'border-top-color 0.1s',
-  };
-
-  // Vertical line extending down
-  const lineStyle: CSSProperties = {
-    position: 'absolute',
-    top: 10,
-    left: 4.5,
-    width: 1,
-    height: RULER_HEIGHT - 12,
-    backgroundColor: color,
-    transition: 'background-color 0.1s',
-  };
+  const triangleStyle: CSSProperties =
+    direction === 'down'
+      ? {
+          position: 'absolute',
+          top: 1,
+          left: 0,
+          width: 0,
+          height: 0,
+          borderLeft: `${TRI_SIZE}px solid transparent`,
+          borderRight: `${TRI_SIZE}px solid transparent`,
+          borderTop: `${triHeight}px solid ${color}`,
+          transition: 'border-top-color 0.1s',
+        }
+      : {
+          position: 'absolute',
+          bottom: 1,
+          left: 0,
+          width: 0,
+          height: 0,
+          borderLeft: `${TRI_SIZE}px solid transparent`,
+          borderRight: `${TRI_SIZE}px solid transparent`,
+          borderBottom: `${triHeight}px solid ${color}`,
+          transition: 'border-bottom-color 0.1s',
+        };
 
   return (
     <div
-      className={`docx-ruler-marker docx-ruler-marker-${type}`}
-      style={markerStyle}
+      className="docx-ruler-indent"
+      style={containerStyle}
       onMouseEnter={onMouseEnter}
       onMouseLeave={onMouseLeave}
       onMouseDown={onMouseDown}
       role="slider"
-      aria-label={type === 'leftMargin' ? 'Left margin' : 'Right margin'}
-      aria-orientation="horizontal"
-      tabIndex={editable ? 0 : -1}
-    >
-      <div style={triangleStyle} />
-      <div style={lineStyle} />
-    </div>
-  );
-}
-
-/**
- * First line indent marker (small triangle)
- */
-interface FirstLineIndentMarkerProps {
-  position: number;
-  editable: boolean;
-  isDragging: boolean;
-  isHovered: boolean;
-  onMouseEnter: () => void;
-  onMouseLeave: () => void;
-  onMouseDown: (e: React.MouseEvent) => void;
-}
-
-function FirstLineIndentMarker({
-  position,
-  editable,
-  isDragging,
-  isHovered,
-  onMouseEnter,
-  onMouseLeave,
-  onMouseDown,
-}: FirstLineIndentMarkerProps): React.ReactElement {
-  const color = isDragging ? MARKER_ACTIVE_COLOR : isHovered ? MARKER_HOVER_COLOR : MARKER_COLOR;
-
-  const markerStyle: CSSProperties = {
-    position: 'absolute',
-    left: formatPx(position - 4),
-    bottom: 0,
-    width: 8,
-    height: 10,
-    cursor: editable ? 'ew-resize' : 'default',
-    zIndex: isDragging ? 10 : 1,
-  };
-
-  // Small triangle pointing up
-  const triangleStyle: CSSProperties = {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    width: 0,
-    height: 0,
-    borderLeft: '4px solid transparent',
-    borderRight: '4px solid transparent',
-    borderBottom: `6px solid ${color}`,
-    transition: 'border-bottom-color 0.1s',
-  };
-
-  return (
-    <div
-      className="docx-ruler-marker docx-ruler-marker-first-line-indent"
-      style={markerStyle}
-      onMouseEnter={onMouseEnter}
-      onMouseLeave={onMouseLeave}
-      onMouseDown={onMouseDown}
-      role="slider"
-      aria-label="First line indent"
+      aria-label={label}
       aria-orientation="horizontal"
       tabIndex={editable ? 0 : -1}
     >
@@ -481,16 +463,43 @@ function FirstLineIndentMarker({
   );
 }
 
-/**
- * Tab stop marker — L/C/R/D symbol on the ruler
- */
+function DragTooltip({
+  value,
+  positionPx,
+}: {
+  value: string;
+  positionPx: number;
+}): React.ReactElement {
+  return (
+    <div
+      style={{
+        position: 'absolute',
+        left: formatPx(positionPx),
+        top: -22,
+        transform: 'translateX(-50%)',
+        backgroundColor: '#333',
+        color: '#fff',
+        fontSize: '10px',
+        fontFamily: 'sans-serif',
+        padding: '2px 6px',
+        borderRadius: 3,
+        whiteSpace: 'nowrap',
+        pointerEvents: 'none',
+        zIndex: 20,
+      }}
+    >
+      {value}
+    </div>
+  );
+}
+
 interface TabStopMarkerProps {
   tabStop: TabStop;
   positionPx: number;
   onDoubleClick: () => void;
 }
 
-const TAB_ALIGNMENT_SYMBOLS: Record<string, string> = {
+const TAB_SYMBOLS: Record<string, string> = {
   left: 'L',
   center: 'C',
   right: 'R',
@@ -503,35 +512,30 @@ function TabStopMarker({
   positionPx,
   onDoubleClick,
 }: TabStopMarkerProps): React.ReactElement {
-  const symbol = TAB_ALIGNMENT_SYMBOLS[tabStop.alignment] || 'L';
-
-  const markerStyle: CSSProperties = {
-    position: 'absolute',
-    left: formatPx(positionPx - 5),
-    bottom: 0,
-    width: 10,
-    height: 12,
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    fontSize: 8,
-    fontWeight: 700,
-    color: '#555',
-    cursor: 'pointer',
-    userSelect: 'none',
-  };
-
   return (
     <div
-      className="docx-ruler-tab-stop"
-      style={markerStyle}
+      style={{
+        position: 'absolute',
+        left: formatPx(positionPx - 5),
+        bottom: 0,
+        width: 10,
+        height: 12,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        fontSize: 8,
+        fontWeight: 700,
+        color: '#555',
+        cursor: 'pointer',
+        userSelect: 'none',
+      }}
       onDoubleClick={(e) => {
         e.stopPropagation();
         onDoubleClick();
       }}
       title={`${tabStop.alignment} tab at ${(tabStop.position / 1440).toFixed(2)}"`}
     >
-      {symbol}
+      {TAB_SYMBOLS[tabStop.alignment] || 'L'}
     </div>
   );
 }
@@ -540,82 +544,39 @@ function TabStopMarker({
 // UTILITY FUNCTIONS
 // ============================================================================
 
-/**
- * Generate tick marks for the ruler
- */
 function generateTicks(pageWidthTwips: number, zoom: number, unit: 'inch' | 'cm'): TickData[] {
   const ticks: TickData[] = [];
 
   if (unit === 'inch') {
-    // Ticks every 1/8 inch, labels every inch
     const eighthInchTwips = TWIPS_PER_INCH / 8;
     const totalEighths = Math.ceil(pageWidthTwips / eighthInchTwips);
-
     for (let i = 0; i <= totalEighths; i++) {
       const twipsPos = i * eighthInchTwips;
       if (twipsPos > pageWidthTwips) break;
-
       const pxPos = twipsToPixels(twipsPos) * zoom;
-
       if (i % 8 === 0) {
-        // Full inch - major tick with label
-        const inches = i / 8;
-        ticks.push({
-          position: pxPos,
-          height: 10,
-          label: inches > 0 ? String(inches) : undefined,
-        });
+        ticks.push({ position: pxPos, height: 10, label: i / 8 > 0 ? String(i / 8) : undefined });
       } else if (i % 4 === 0) {
-        // Half inch - medium tick
-        ticks.push({
-          position: pxPos,
-          height: 6,
-        });
+        ticks.push({ position: pxPos, height: 6 });
       } else if (i % 2 === 0) {
-        // Quarter inch - small tick
-        ticks.push({
-          position: pxPos,
-          height: 4,
-        });
+        ticks.push({ position: pxPos, height: 4 });
       } else {
-        // Eighth inch - tiny tick
-        ticks.push({
-          position: pxPos,
-          height: 2,
-        });
+        ticks.push({ position: pxPos, height: 2 });
       }
     }
   } else {
-    // Centimeter mode - ticks every millimeter, labels every centimeter
     const mmTwips = TWIPS_PER_CM / 10;
     const totalMm = Math.ceil(pageWidthTwips / mmTwips);
-
     for (let i = 0; i <= totalMm; i++) {
       const twipsPos = i * mmTwips;
       if (twipsPos > pageWidthTwips) break;
-
       const pxPos = twipsToPixels(twipsPos) * zoom;
-
       if (i % 10 === 0) {
-        // Full centimeter - major tick with label
-        const cm = i / 10;
-        ticks.push({
-          position: pxPos,
-          height: 10,
-          label: cm > 0 ? String(cm) : undefined,
-        });
+        ticks.push({ position: pxPos, height: 10, label: i / 10 > 0 ? String(i / 10) : undefined });
       } else if (i % 5 === 0) {
-        // Half centimeter - medium tick
-        ticks.push({
-          position: pxPos,
-          height: 6,
-        });
+        ticks.push({ position: pxPos, height: 6 });
       } else {
-        // Millimeter - small tick
-        ticks.push({
-          position: pxPos,
-          height: 3,
-        });
+        ticks.push({ position: pxPos, height: 3 });
       }
     }
   }
@@ -623,9 +584,6 @@ function generateTicks(pageWidthTwips: number, zoom: number, unit: 'inch' | 'cm'
   return ticks;
 }
 
-/**
- * Convert a ruler position to margin value
- */
 export function positionToMargin(
   positionPx: number,
   side: 'left' | 'right',
@@ -633,61 +591,33 @@ export function positionToMargin(
   zoom: number
 ): number {
   const positionTwips = pixelsToTwips(positionPx / zoom);
-
-  if (side === 'left') {
-    return Math.max(0, positionTwips);
-  } else {
-    const pageWidthTwips = pixelsToTwips(pageWidthPx / zoom);
-    return Math.max(0, pageWidthTwips - positionTwips);
-  }
+  if (side === 'left') return Math.max(0, positionTwips);
+  return Math.max(0, pixelsToTwips(pageWidthPx / zoom) - positionTwips);
 }
 
-/**
- * Get ruler dimensions based on section properties
- */
 export function getRulerDimensions(
   sectionProps?: SectionProperties | null,
   zoom: number = 1
 ): { width: number; leftMargin: number; rightMargin: number; contentWidth: number } {
-  const pageWidthTwips = sectionProps?.pageWidth ?? DEFAULT_PAGE_WIDTH_TWIPS;
-  const leftMarginTwips = sectionProps?.marginLeft ?? DEFAULT_MARGIN_TWIPS;
-  const rightMarginTwips = sectionProps?.marginRight ?? DEFAULT_MARGIN_TWIPS;
-
-  const width = twipsToPixels(pageWidthTwips) * zoom;
-  const leftMargin = twipsToPixels(leftMarginTwips) * zoom;
-  const rightMargin = twipsToPixels(rightMarginTwips) * zoom;
-  const contentWidth = width - leftMargin - rightMargin;
-
-  return { width, leftMargin, rightMargin, contentWidth };
+  const pw = sectionProps?.pageWidth ?? DEFAULT_PAGE_WIDTH_TWIPS;
+  const lm = sectionProps?.marginLeft ?? DEFAULT_MARGIN_TWIPS;
+  const rm = sectionProps?.marginRight ?? DEFAULT_MARGIN_TWIPS;
+  const width = twipsToPixels(pw) * zoom;
+  const leftMargin = twipsToPixels(lm) * zoom;
+  const rightMargin = twipsToPixels(rm) * zoom;
+  return { width, leftMargin, rightMargin, contentWidth: width - leftMargin - rightMargin };
 }
 
-/**
- * Get margin value in display units
- */
 export function getMarginInUnits(marginTwips: number, unit: 'inch' | 'cm'): string {
-  if (unit === 'inch') {
-    return (marginTwips / TWIPS_PER_INCH).toFixed(2) + '"';
-  } else {
-    return (marginTwips / TWIPS_PER_CM).toFixed(1) + ' cm';
-  }
+  return unit === 'inch'
+    ? (marginTwips / TWIPS_PER_INCH).toFixed(2) + '"'
+    : (marginTwips / TWIPS_PER_CM).toFixed(1) + ' cm';
 }
 
-/**
- * Parse a margin value from display units to twips
- */
 export function parseMarginFromUnits(value: string, unit: 'inch' | 'cm'): number | null {
   const num = parseFloat(value.replace(/[^\d.]/g, ''));
   if (isNaN(num)) return null;
-
-  if (unit === 'inch') {
-    return Math.round(num * TWIPS_PER_INCH);
-  } else {
-    return Math.round(num * TWIPS_PER_CM);
-  }
+  return Math.round(num * (unit === 'inch' ? TWIPS_PER_INCH : TWIPS_PER_CM));
 }
-
-// ============================================================================
-// EXPORTS
-// ============================================================================
 
 export default HorizontalRuler;

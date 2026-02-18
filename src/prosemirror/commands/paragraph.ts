@@ -7,10 +7,16 @@
  */
 
 import type { Command } from 'prosemirror-state';
-import type { ParagraphAlignment, LineSpacingRule } from '../../types/document';
+import type {
+  ParagraphAlignment,
+  LineSpacingRule,
+  TabStopAlignment,
+  TabLeader,
+} from '../../types/document';
 import { singletonManager } from '../schema';
 
 // Re-export types and query helpers from extensions
+import type { ResolvedStyleAttrs } from '../extensions/core/ParagraphExtension';
 export type { ResolvedStyleAttrs } from '../extensions/core/ParagraphExtension';
 export {
   getParagraphAlignment,
@@ -49,6 +55,15 @@ export function increaseIndent(amount: number = 720): Command {
 export function decreaseIndent(amount: number = 720): Command {
   return cmds.decreaseIndent(amount);
 }
+export function setIndentLeft(twips: number): Command {
+  return cmds.setIndentLeft(twips);
+}
+export function setIndentRight(twips: number): Command {
+  return cmds.setIndentRight(twips);
+}
+export function setIndentFirstLine(twips: number, hanging?: boolean): Command {
+  return cmds.setIndentFirstLine(twips, hanging);
+}
 
 // Lists
 export const toggleBulletList: Command = cmds.toggleBulletList();
@@ -66,7 +81,6 @@ export function setSpaceAfter(twips: number): Command {
 }
 
 // Paragraph styles
-import type { ResolvedStyleAttrs } from '../extensions/core/ParagraphExtension';
 export function applyStyle(styleId: string, resolvedAttrs?: ResolvedStyleAttrs): Command {
   return cmds.applyStyle(styleId, resolvedAttrs);
 }
@@ -79,6 +93,18 @@ export function insertSectionBreak(
   return cmds.insertSectionBreak(breakType);
 }
 export const removeSectionBreak: Command = cmds.removeSectionBreak();
+
+// Tab stops
+export function addTabStop(
+  position: number,
+  alignment: TabStopAlignment = 'left',
+  leader: TabLeader = 'none'
+): Command {
+  return cmds.addTabStop(position, alignment, leader);
+}
+export function removeTabStop(position: number): Command {
+  return cmds.removeTabStop(position);
+}
 
 // Table of Contents
 export const generateTOC: Command = cmds.generateTOC();
