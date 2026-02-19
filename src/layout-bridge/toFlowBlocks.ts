@@ -899,7 +899,8 @@ export function toFlowBlocks(doc: PMNode, options: ToFlowBlocksOptions = {}): Fl
           if (pmAttrs.numPr) {
             if (!pmAttrs.listMarker) {
               const numId = pmAttrs.numPr.numId;
-              if (numId == null) break;
+              // numId === 0 means "no numbering" per OOXML spec (ECMA-376)
+              if (numId == null || numId === 0) break;
               const level = pmAttrs.numPr.ilvl ?? 0;
               const counters = listCounters.get(numId) ?? new Array(9).fill(0);
 

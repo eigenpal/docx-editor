@@ -298,7 +298,8 @@ function paragraphFormattingToAttrs(
     }
 
     // If style defines numPr but inline doesn't, use style's numPr
-    if (!formatting?.numPr && stylePpr?.numPr) {
+    // numId === 0 means "no numbering" per OOXML spec — skip it
+    if (!formatting?.numPr && stylePpr?.numPr && stylePpr.numPr.numId !== 0) {
       attrs.numPr = stylePpr.numPr;
     }
   } else {
