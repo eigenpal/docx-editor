@@ -302,3 +302,21 @@
 [2026-02-06 15:15] TASK: 6.2 Footnote/endnote properties
 [2026-02-06 15:15] STATUS: starting
 [2026-02-06 15:15] NOTES: Position, numbering format, restart rules per section. Infrastructure already parsed/serialized.
+[2026-02-19 19:34] TASK: nested tables OOM investigation
+[2026-02-19 19:34] STATUS: starting
+[2026-02-19 19:34] NOTES: User identified OOM tied to nested tables; beginning targeted codepath analysis
+[2026-02-19 19:36] TASK: nested tables OOM investigation
+[2026-02-19 19:36] STATUS: editing
+[2026-02-19 19:36] NOTES: Edited src/layout-painter/renderTable.ts to remove cumulative marginTop offset for nested tables in cell flow rendering
+[2026-02-19 19:36] TASK: nested tables OOM investigation
+[2026-02-19 19:36] STATUS: running
+[2026-02-19 19:36] NOTES: Running bun run typecheck and targeted table tests
+[2026-02-19 19:37] TASK: nested tables OOM investigation
+[2026-02-19 19:37] STATUS: running
+[2026-02-19 19:37] NOTES: bun run typecheck passed after nested table rendering fix
+[2026-02-19 19:43] TASK: nested tables OOM investigation
+[2026-02-19 19:43] STATUS: testing
+[2026-02-19 19:43] NOTES: Automated Playwright checks blocked by pre-existing harness issues (outdated selectors/strict file input); retaining typecheck as green signal
+[2026-02-19 19:44] TASK: nested tables OOM investigation
+[2026-02-19 19:44] STATUS: running
+[2026-02-19 19:44] NOTES: Preparing commit for nested table cell flow fix in renderTable.ts

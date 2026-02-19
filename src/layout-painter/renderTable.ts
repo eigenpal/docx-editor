@@ -56,8 +56,6 @@ function renderCellContent(
   contentEl.style.position = 'relative';
   contentEl.style.width = `${cellMeasure.width}px`;
 
-  let cursorY = 0;
-
   for (let i = 0; i < cell.blocks.length; i++) {
     const block = cell.blocks[i];
     const measure = cellMeasure.blocks[i];
@@ -71,7 +69,7 @@ function renderCellContent(
         kind: 'paragraph',
         blockId: paragraphBlock.id,
         x: 0,
-        y: cursorY,
+        y: 0,
         width: cellMeasure.width,
         height: paragraphMeasure.totalHeight,
         fromLine: 0,
@@ -90,17 +88,16 @@ function renderCellContent(
 
       fragEl.style.position = 'relative';
       contentEl.appendChild(fragEl);
-      cursorY += paragraphMeasure.totalHeight;
     } else if (block?.kind === 'table' && measure?.kind === 'table') {
-      // Nested table - render inline
+      // Nested table - render in normal document flow.
+      // Avoid cumulative marginTop offsets here: cell content already flows vertically,
+      // and compounding offsets can produce enormous heights on deeply nested tables.
       const tableBlock = block as TableBlock;
       const tableMeasure = measure as TableMeasure;
 
       const nestedTableEl = renderNestedTable(tableBlock, tableMeasure, context, doc);
       nestedTableEl.style.position = 'relative';
-      nestedTableEl.style.marginTop = `${cursorY}px`;
       contentEl.appendChild(nestedTableEl);
-      cursorY += tableMeasure.totalHeight;
     }
   }
 
