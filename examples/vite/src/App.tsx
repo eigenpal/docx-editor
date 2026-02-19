@@ -1,12 +1,49 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react';
 import {
-  DocxEditor,
+  DirectXmlDocxEditor as DocxEditor,
   type DocxEditorRef,
   createEmptyDocument,
   type Document,
+  type HeaderFooter,
 } from '@eigenpal/docx-js-editor';
 import { ExampleSwitcher } from '../../shared/ExampleSwitcher';
 import { GitHubBadge } from '../../shared/GitHubBadge';
+import { serializeDocument } from '@/docx/serializer/documentSerializer';
+import { serializeHeaderFooter } from '@/docx/serializer/headerFooterSerializer';
+import { openDocxXml } from '@/docx/rawXmlEditor';
+import { resolveRelativePath } from '@/docx/relsParser';
+import { buildTargetedDocumentXmlPatch } from '@/docx/directXmlPlanBuilder';
+import type { RealDocChangeOperation } from '@/docx/realDocumentChangeStrategy';
+
+type UiSaveTrace = {
+  phase: 'plan' | 'save-result' | 'save-error';
+  timestamp: string;
+  fileName: string;
+  editedParagraphIdsCount?: number;
+  editedParagraphIdsSample?: string[];
+  targetedPatchUsed?: boolean;
+  targetedPatchChangedParagraphs?: number | null;
+  fallbackReason?: string | null;
+  operationCount?: number;
+  operationPaths?: string[];
+  savedBytes?: number;
+  error?: string;
+};
+
+declare global {
+  interface Window {
+    __DOCX_UI_SAVE_TRACE__?: UiSaveTrace[];
+  }
+}
+
+function pushUiSaveTrace(trace: UiSaveTrace): void {
+  if (typeof window === 'undefined') return;
+
+  const traces = window.__DOCX_UI_SAVE_TRACE__ ?? [];
+  traces.push(trace);
+  window.__DOCX_UI_SAVE_TRACE__ = traces;
+  console.info('[docx-ui-save-trace]', trace);
+}
 
 const styles: Record<string, React.CSSProperties> = {
   container: {
@@ -328,6 +365,138 @@ export function App() {
     }
   }, []);
 
+  const buildDirectXmlOperationPlan = useCallback(
+    async (context: {
+      currentDocument: Document;
+      baselineDocument: Document;
+      editedParagraphIds?: string[];
+    }): Promise<RealDocChangeOperation[]> => {
+      const { currentDocument, baselineDocument, editedParagraphIds } = context;
+      const operations: RealDocChangeOperation[] = [];
+
+      let targetedPatchUsed = false;
+      let targetedPatchChangedParagraphs: number | null = null;
+      let fallbackReason: string | null = null;
+
+      const currentDocumentXml = serializeDocument(currentDocument);
+      const baselineDocumentXml = serializeDocument(baselineDocument);
+      if (currentDocumentXml !== baselineDocumentXml) {
+        let documentXmlForSave = currentDocumentXml;
+
+        const originalBuffer = baselineDocument.originalBuffer;
+        if (originalBuffer) {
+          try {
+            const rawEditor = await openDocxXml(originalBuffer.slice(0));
+            const rawBaselineDocumentXml = await rawEditor.getXml('word/document.xml');
+            const targetedPatch = buildTargetedDocumentXmlPatch({
+              baselineDocument,
+              currentDocument,
+              baselineDocumentXml: rawBaselineDocumentXml,
+              candidateParagraphIds: editedParagraphIds,
+            });
+            if (targetedPatch) {
+              targetedPatchUsed = true;
+              targetedPatchChangedParagraphs = targetedPatch.changedParagraphIds.length;
+              documentXmlForSave = targetedPatch.xml;
+            } else {
+              fallbackReason = 'targeted-patch-returned-null';
+            }
+          } catch (error) {
+            fallbackReason =
+              error instanceof Error
+                ? `targeted-patch-error:${error.message}`
+                : 'targeted-patch-error:unknown';
+            console.warn(
+              'Failed to build targeted document.xml patch, falling back to full document.xml serialization',
+              error
+            );
+          }
+        } else {
+          fallbackReason = 'missing-original-buffer';
+        }
+
+        operations.push({
+          type: 'set-xml',
+          path: 'word/document.xml',
+          xml: documentXmlForSave,
+        });
+      }
+
+      const relationships = currentDocument.package.relationships;
+      if (relationships) {
+        const seenParts = new Set<string>();
+
+        const appendHeaderFooterOps = (
+          refs: { rId: string }[] | undefined,
+          map: Map<string, HeaderFooter> | undefined,
+          baselineMap: Map<string, HeaderFooter> | undefined
+        ): void => {
+          if (!refs || !map) return;
+
+          for (const ref of refs) {
+            const relationship = relationships.get(ref.rId);
+            const headerFooter = map.get(ref.rId);
+            if (!relationship || !headerFooter || relationship.targetMode === 'External') {
+              continue;
+            }
+
+            const partPath = resolveRelativePath(
+              'word/_rels/document.xml.rels',
+              relationship.target
+            );
+            if (seenParts.has(partPath)) {
+              continue;
+            }
+            seenParts.add(partPath);
+
+            const currentXml = serializeHeaderFooter(headerFooter);
+            const baselineHeaderFooter = baselineMap?.get(ref.rId);
+            if (baselineHeaderFooter) {
+              const baselineXml = serializeHeaderFooter(baselineHeaderFooter);
+              if (currentXml === baselineXml) {
+                continue;
+              }
+            }
+
+            operations.push({
+              type: 'set-xml',
+              path: partPath,
+              xml: currentXml,
+            });
+          }
+        };
+
+        const sectionProperties = currentDocument.package.document.finalSectionProperties;
+        appendHeaderFooterOps(
+          sectionProperties?.headerReferences,
+          currentDocument.package.headers,
+          baselineDocument.package.headers
+        );
+        appendHeaderFooterOps(
+          sectionProperties?.footerReferences,
+          currentDocument.package.footers,
+          baselineDocument.package.footers
+        );
+      }
+
+      pushUiSaveTrace({
+        phase: 'plan',
+        timestamp: new Date().toISOString(),
+        fileName,
+        editedParagraphIdsCount: editedParagraphIds?.length ?? 0,
+        editedParagraphIdsSample: (editedParagraphIds ?? []).slice(0, 20),
+        targetedPatchUsed,
+        targetedPatchChangedParagraphs,
+        fallbackReason,
+        operationCount: operations.length,
+        operationPaths: operations.map((op) => ('path' in op ? op.path : 'n/a')),
+      });
+
+      return operations;
+    },
+    [fileName]
+  );
+
   const handleSave = useCallback(async () => {
     if (!editorRef.current) return;
 
@@ -335,6 +504,13 @@ export function App() {
       setStatus('Saving...');
       const buffer = await editorRef.current.save();
       if (buffer) {
+        pushUiSaveTrace({
+          phase: 'save-result',
+          timestamp: new Date().toISOString(),
+          fileName,
+          savedBytes: buffer.byteLength,
+        });
+
         const blob = new Blob([buffer], {
           type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
         });
@@ -349,7 +525,13 @@ export function App() {
         setStatus('Saved!');
         setTimeout(() => setStatus(''), 2000);
       }
-    } catch {
+    } catch (error) {
+      pushUiSaveTrace({
+        phase: 'save-error',
+        timestamp: new Date().toISOString(),
+        fileName,
+        error: error instanceof Error ? error.message : 'unknown error',
+      });
       setStatus('Save failed');
     }
   }, [fileName]);
@@ -420,6 +602,8 @@ export function App() {
           ref={editorRef}
           document={documentBuffer ? undefined : currentDocument}
           documentBuffer={documentBuffer}
+          useDirectXmlSave={true}
+          buildDirectXmlOperations={buildDirectXmlOperationPlan}
           onChange={handleDocumentChange}
           onError={handleError}
           onFontsLoaded={handleFontsLoaded}

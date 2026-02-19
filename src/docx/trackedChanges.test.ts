@@ -166,4 +166,45 @@ describe('tracked changes ProseMirror round-trip', () => {
     if (move.content[0].type !== 'run') return;
     expect(move.content[0].content[0]).toEqual({ type: 'text', text: 'Moved once' });
   });
+
+  test('preserves non-text tracked change content (line breaks)', () => {
+    const base: Document = {
+      package: {
+        document: {
+          content: [
+            {
+              type: 'paragraph',
+              content: [
+                {
+                  type: 'deletion',
+                  info: { id: 401, author: 'Alice', date: '2026-01-03T00:00:00Z' },
+                  content: [
+                    {
+                      type: 'run',
+                      content: [{ type: 'break', breakType: 'textWrapping' }],
+                    },
+                  ],
+                },
+              ],
+            },
+          ],
+        },
+      },
+    };
+
+    const pm = toProseDoc(base);
+    const roundTripped = fromProseDoc(pm, base);
+    const paragraph = roundTripped.package.document.content[0];
+    expect(paragraph.type).toBe('paragraph');
+    if (paragraph.type !== 'paragraph') return;
+
+    expect(paragraph.content).toHaveLength(1);
+    const deletion = paragraph.content[0];
+    expect(deletion.type).toBe('deletion');
+    if (deletion.type !== 'deletion') return;
+
+    expect(deletion.content[0].type).toBe('run');
+    if (deletion.content[0].type !== 'run') return;
+    expect(deletion.content[0].content[0]).toEqual({ type: 'break', breakType: 'textWrapping' });
+  });
 });

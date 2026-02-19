@@ -31,6 +31,11 @@ export const VERSION = '0.0.8';
 // ============================================================================
 
 export { DocxEditor, type DocxEditorProps, type DocxEditorRef } from './components/DocxEditor';
+export {
+  DirectXmlDocxEditor,
+  type DirectXmlDocxEditorProps,
+  type DirectXmlOperationContext,
+} from './components/DirectXmlDocxEditor';
 export { renderAsync, type RenderAsyncOptions, type DocxEditorHandle } from './renderAsync';
 export { type DocxInput, toArrayBuffer } from './utils/docxInput';
 
@@ -58,6 +63,33 @@ export {
   serializeDocumentBody,
   serializeSectionProperties,
 } from './docx/serializer/documentSerializer';
+export {
+  DocxXmlEditor,
+  openDocxXml,
+  editDocxXml,
+  type DocxPartInfo,
+  type DocxXmlSaveOptions,
+  type DocxXmlMutator,
+} from './docx/rawXmlEditor';
+export {
+  applyRealDocChanges,
+  type XmlReplaceOccurrence,
+  type ReplaceXmlTextOperation,
+  type SetXmlOperation,
+  type SetTextOperation,
+  type SetBinaryOperation,
+  type RemovePartOperation,
+  type UpsertRelationshipOperation,
+  type RemoveRelationshipOperation,
+  type EnsureContentTypeOverrideOperation,
+  type RemoveContentTypeOverrideOperation,
+  type EnsureContentTypeDefaultOperation,
+  type RemoveContentTypeDefaultOperation,
+  type RealDocChangeOperation,
+  type ApplyRealDocChangesOptions,
+  type RealDocChangeReportItem,
+  type ApplyRealDocChangesResult,
+} from './docx/realDocumentChangeStrategy';
 export {
   processTemplate,
   processTemplateDetailed,

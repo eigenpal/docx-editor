@@ -207,7 +207,7 @@ function applyCommentMarks(nodes: PMNode[], commentIds: Set<number>): PMNode[] {
  */
 function convertTrackedChange(
   change: Insertion | Deletion | MoveFrom | MoveTo,
-  markType: 'insertion' | 'deletion' | 'moveFrom' | 'moveTo',
+  changeMarkType: 'insertion' | 'deletion' | 'moveFrom' | 'moveTo',
   styleRunFormatting?: TextFormatting,
   styleResolver?: StyleResolver | null
 ): PMNode[] {
@@ -233,10 +233,10 @@ function convertTrackedChange(
     markAttrs.rangeDate = change.range?.date ?? null;
   }
 
-  const mark = schema.marks[markType].create(markAttrs);
+  const mark = schema.marks[changeMarkType].create(markAttrs);
 
   return nodes.map((node) => {
-    if (node.isText) {
+    if (node.isInline) {
       return node.mark(mark.addToSet(node.marks));
     }
     return node;

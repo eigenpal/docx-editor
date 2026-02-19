@@ -3,8 +3,116 @@
  */
 import React, { useState, useCallback, useRef } from 'react';
 import { createRoot } from 'react-dom/client';
-import { DocxEditor } from './components/DocxEditor';
+import { DirectXmlDocxEditor as DocxEditor } from './components/DirectXmlDocxEditor';
+import type { Document, HeaderFooter } from './types/document';
+import { serializeDocument } from './docx/serializer/documentSerializer';
+import { serializeHeaderFooter } from './docx/serializer/headerFooterSerializer';
+import { openDocxXml } from './docx/rawXmlEditor';
+import { resolveRelativePath } from './docx/relsParser';
+import type { RealDocChangeOperation } from './docx/realDocumentChangeStrategy';
+import { buildTargetedDocumentXmlPatch } from './docx/directXmlPlanBuilder';
 import './index.css';
+
+async function buildDirectXmlOperationPlan(context: {
+  currentDocument: Document;
+  baselineDocument: Document;
+  editedParagraphIds?: string[];
+}): Promise<RealDocChangeOperation[]> {
+  const { currentDocument, baselineDocument, editedParagraphIds } = context;
+  const operations: RealDocChangeOperation[] = [];
+
+  const currentDocumentXml = serializeDocument(currentDocument);
+  const baselineDocumentXml = serializeDocument(baselineDocument);
+  if (currentDocumentXml !== baselineDocumentXml) {
+    let documentXmlForSave = currentDocumentXml;
+
+    const originalBuffer = baselineDocument.originalBuffer;
+    if (originalBuffer) {
+      try {
+        const rawEditor = await openDocxXml(originalBuffer.slice(0));
+        const rawBaselineDocumentXml = await rawEditor.getXml('word/document.xml');
+        const targetedPatch = buildTargetedDocumentXmlPatch({
+          baselineDocument,
+          currentDocument,
+          baselineDocumentXml: rawBaselineDocumentXml,
+          candidateParagraphIds: editedParagraphIds,
+        });
+        if (targetedPatch) {
+          documentXmlForSave = targetedPatch.xml;
+        }
+      } catch (error) {
+        console.warn(
+          'Failed to build targeted document.xml patch, falling back to full document.xml serialization',
+          error
+        );
+      }
+    }
+
+    operations.push({
+      type: 'set-xml',
+      path: 'word/document.xml',
+      xml: documentXmlForSave,
+    });
+  }
+
+  const relationships = currentDocument.package.relationships;
+  if (!relationships) {
+    return operations;
+  }
+
+  const seenParts = new Set<string>();
+
+  const appendHeaderFooterOps = (
+    refs: { rId: string }[] | undefined,
+    map: Map<string, HeaderFooter> | undefined,
+    baselineMap: Map<string, HeaderFooter> | undefined
+  ): void => {
+    if (!refs || !map) return;
+
+    for (const ref of refs) {
+      const relationship = relationships.get(ref.rId);
+      const headerFooter = map.get(ref.rId);
+      if (!relationship || !headerFooter || relationship.targetMode === 'External') {
+        continue;
+      }
+
+      const partPath = resolveRelativePath('word/_rels/document.xml.rels', relationship.target);
+      if (seenParts.has(partPath)) {
+        continue;
+      }
+      seenParts.add(partPath);
+
+      const currentXml = serializeHeaderFooter(headerFooter);
+      const baselineHeaderFooter = baselineMap?.get(ref.rId);
+      if (baselineHeaderFooter) {
+        const baselineXml = serializeHeaderFooter(baselineHeaderFooter);
+        if (currentXml === baselineXml) {
+          continue;
+        }
+      }
+
+      operations.push({
+        type: 'set-xml',
+        path: partPath,
+        xml: currentXml,
+      });
+    }
+  };
+
+  const sectionProperties = currentDocument.package.document.finalSectionProperties;
+  appendHeaderFooterOps(
+    sectionProperties?.headerReferences,
+    currentDocument.package.headers,
+    baselineDocument.package.headers
+  );
+  appendHeaderFooterOps(
+    sectionProperties?.footerReferences,
+    currentDocument.package.footers,
+    baselineDocument.package.footers
+  );
+
+  return operations;
+}
 
 /**
  * Main App component that provides file loading and editor functionality.
@@ -78,6 +186,8 @@ function App() {
       <div style={{ flex: 1, overflow: 'hidden' }}>
         <DocxEditor
           documentBuffer={documentBuffer}
+          useDirectXmlSave={true}
+          buildDirectXmlOperations={buildDirectXmlOperationPlan}
           showToolbar={true}
           showVariablePanel={true}
           showZoomControl={true}
