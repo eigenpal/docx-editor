@@ -168,9 +168,21 @@ export function createPaginator(options: PaginatorOptions) {
    */
   function ensureFits(height: number): PageState {
     let state = getCurrentState();
+    const safeHeight = Number.isFinite(height) && height > 0 ? height : 0;
+
+    // Oversized fragment guard: if a single fragment is taller than the
+    // available content area on an empty column/page, place it there and allow
+    // overflow instead of looping forever creating new pages.
+    const columnCapacity = state.contentBottom - state.topMargin;
+    if (safeHeight > columnCapacity) {
+      if (state.cursorY !== state.topMargin) {
+        state = advanceColumn(state);
+      }
+      return state;
+    }
 
     // Keep advancing until we have space
-    while (!fits(height, state)) {
+    while (!fits(safeHeight, state)) {
       state = advanceColumn(state);
     }
 

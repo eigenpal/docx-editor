@@ -320,3 +320,46 @@
 [2026-02-19 19:44] TASK: nested tables OOM investigation
 [2026-02-19 19:44] STATUS: running
 [2026-02-19 19:44] NOTES: Preparing commit for nested table cell flow fix in renderTable.ts
+[2026-02-19 19:44] TASK: nested tables OOM investigation
+[2026-02-19 19:44] STATUS: done
+[2026-02-19 19:44] NOTES: Committed nested table flow fix as 151e2a0; typecheck passed; Playwright table/demo tests currently blocked by pre-existing selector strictness
+[2026-02-19 19:46] TASK: Contract Summary nested table OOM
+[2026-02-19 19:46] STATUS: starting
+[2026-02-19 19:46] NOTES: Reproducing user-reported OOM with D:\templates\Sherlock Templates\Contract Summary.docx; using npx bun fallback
+[2026-02-19 19:51] TASK: Contract Summary nested table OOM
+[2026-02-19 19:51] STATUS: running
+[2026-02-19 19:51] NOTES: Starting local dev server on 4173 for direct repro
+[2026-02-19 20:18] TASK: Contract Summary nested table OOM
+[2026-02-19 20:18] STATUS: testing
+[2026-02-19 20:18] NOTES: Added dedicated e2e/tests/contract-summary-repro.spec.ts using current selectors and direct DOCX path
+[2026-02-19 20:48] TASK: Fix nested table OOM on Contract Summary
+[2026-02-19 20:48] STATUS: starting
+[2026-02-19 20:48] NOTES: Investigating current local diffs in paginator and PagedEditor before repro
+[2026-02-19 20:49] STATUS: researching
+[2026-02-19 20:49] NOTES: Inspecting test harness and playwright config for targeted Contract Summary repro
+[2026-02-19 20:49] STATUS: running
+[2026-02-19 20:49] NOTES: Starting dev server via npx bun run dev for Contract Summary reproduction
+[2026-02-19 20:49] STATUS: running
+[2026-02-19 20:49] NOTES: Dev server process started (cmd+npx bun run dev), checking http://localhost:5173 availability
+[2026-02-19 20:50] STATUS: testing
+[2026-02-19 20:50] NOTES: Running direct Playwright repro script with Contract Summary.docx to capture crash/error state
+[2026-02-19 20:51] STATUS: researching
+[2026-02-19 20:51] NOTES: Initial repro opened non-editor route; inspecting example app routes to locate correct editor URL
+[2026-02-19 20:52] STATUS: running
+[2026-02-19 20:52] NOTES: Found conflicting Vite server on 5173 from another repo; starting docx-js-editor on port 4173
+[2026-02-19 20:52] STATUS: testing
+[2026-02-19 20:52] NOTES: Re-running Playwright repro against localhost:4173 with Contract Summary.docx
+[2026-02-19 20:55] STATUS: testing
+[2026-02-19 20:55] NOTES: Running repeated-load stress repro for Contract Summary.docx to detect cumulative OOM behavior
+[2026-02-19 20:55] STATUS: researching
+[2026-02-19 20:55] NOTES: Checking existing test coverage for paginator/layout engine to add targeted regression test
+[2026-02-19 20:56] STATUS: editing
+[2026-02-19 20:56] NOTES: Added src/layout-engine/paginator.test.ts regression tests for oversized fragment pagination
+[2026-02-19 20:56] STATUS: running
+[2026-02-19 20:56] NOTES: Running npx bun run typecheck
+[2026-02-19 20:56] STATUS: testing
+[2026-02-19 20:56] NOTES: Running targeted test npx bun test src/layout-engine/paginator.test.ts
+[2026-02-19 20:56] STATUS: running
+[2026-02-19 20:56] NOTES: Verified typecheck and paginator tests passed; reviewing diffs before commit
+[2026-02-19 20:56] STATUS: done
+[2026-02-19 20:56] NOTES: Fixed paginator oversized fragment loop guard, added paginator regression test, verified Contract Summary loads repeatedly without crash in Playwright repro
