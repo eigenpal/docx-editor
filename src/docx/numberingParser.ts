@@ -593,8 +593,20 @@ function createNumberingMap(definitions: NumberingDefinitions): NumberingMap {
       }
 
       // Get from abstract numbering
-      const abstractNum = abstractMap.get(num.abstractNumId);
+      let abstractNum = abstractMap.get(num.abstractNumId);
       if (!abstractNum) return null;
+
+      // Follow numStyleLink: when an abstractNum has numStyleLink instead of
+      // defining levels directly, find the abstractNum that owns that style
+      // (has matching styleLink) and use its levels. Per ECMA-376 §17.9.21/22.
+      if (abstractNum.numStyleLink && abstractNum.levels.length === 0) {
+        for (const candidate of abstractMap.values()) {
+          if (candidate.styleLink === abstractNum.numStyleLink && candidate.levels.length > 0) {
+            abstractNum = candidate;
+            break;
+          }
+        }
+      }
 
       return abstractNum.levels.find((l) => l.ilvl === ilvl) ?? null;
     },

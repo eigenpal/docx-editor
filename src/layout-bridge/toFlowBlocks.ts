@@ -899,7 +899,8 @@ export function toFlowBlocks(doc: PMNode, options: ToFlowBlocksOptions = {}): Fl
           if (pmAttrs.numPr) {
             if (!pmAttrs.listMarker) {
               const numId = pmAttrs.numPr.numId;
-              if (numId == null) break;
+              // numId === 0 means "no numbering" per OOXML spec (ECMA-376)
+              if (numId == null || numId === 0) break;
               const level = pmAttrs.numPr.ilvl ?? 0;
               const counters = listCounters.get(numId) ?? new Array(9).fill(0);
 
@@ -913,8 +914,6 @@ export function toFlowBlocks(doc: PMNode, options: ToFlowBlocksOptions = {}): Fl
               const marker = pmAttrs.listIsBullet ? '•' : formatNumberedMarker(counters, level);
               block.attrs = { ...block.attrs, listMarker: marker };
             }
-          } else {
-            listCounters.clear();
           }
 
           blocks.push(block);
@@ -923,13 +922,11 @@ export function toFlowBlocks(doc: PMNode, options: ToFlowBlocksOptions = {}): Fl
 
       case 'table':
         blocks.push(convertTable(node, pos, opts));
-        listCounters.clear();
         break;
 
       case 'image':
         // Standalone image block (if not inline)
         blocks.push(convertImage(node, pos, opts.pageContentHeight));
-        listCounters.clear();
         break;
 
       case 'horizontalRule':
@@ -941,7 +938,6 @@ export function toFlowBlocks(doc: PMNode, options: ToFlowBlocksOptions = {}): Fl
           pmEnd: pos + node.nodeSize,
         };
         blocks.push(pb);
-        listCounters.clear();
         break;
       }
     }
