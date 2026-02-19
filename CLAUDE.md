@@ -330,6 +330,45 @@ When testing UI changes visually (verifying rendering, screenshots for PRs, inte
 
 ---
 
+## Issue-Driven Bug Fix Workflow
+
+The public issue tracker is at **https://github.com/eigenpal/docx-js-editor/issues**. When fixing a bug from an issue, follow this full workflow:
+
+1. **Read the issue** — Use `gh issue view <number> --repo eigenpal/docx-js-editor` to get the full description, reproduction steps, and any attached files.
+2. **Reproduce locally** — Start the Vite dev server (`bun run dev`) and use the **Claude in Chrome extension** to open `http://localhost:5173/`, load the relevant DOCX file, and reproduce the bug visually. Take a screenshot of the broken state.
+3. **Investigate the root cause** — Use the Debugging Checklist and Key File Map above to trace the issue through parsing → PM conversion → layout-painter rendering → serialization as needed.
+4. **Implement the fix** — Make the minimal change needed. Follow the dual-renderer architecture — make sure you're fixing the right system.
+5. **Add tests** — Write or update Playwright E2E tests covering the fix. Use the Test File Mapping to find the right test file. If no existing file fits, create a new spec.
+6. **Verify** — Run `bun run typecheck` + targeted Playwright tests. Also re-test visually in Chrome to confirm the fix.
+7. **Commit** — Use the commit message format below, referencing the issue number (e.g., `fix: resolve image loss on save (fixes #45)`).
+8. **Open a PR** — Push the branch and create a PR with `gh pr create` referencing the issue. Include before/after screenshots if it's a visual bug.
+
+**Example for issue #45:**
+
+```bash
+# 1. Read the issue
+gh issue view 45 --repo eigenpal/docx-js-editor
+
+# 2. Reproduce in Chrome (use Claude in Chrome tools)
+# Start dev server, navigate to localhost:5173, load test file, screenshot
+
+# 6. Verify
+bun run typecheck && npx playwright test tests/<relevant>.spec.ts --timeout=30000 --workers=4
+
+# 7. Commit
+git commit -m "$(cat <<'EOF'
+fix: resolve image loss on save (fixes #45)
+
+Co-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>
+EOF
+)"
+
+# 8. PR
+gh pr create --title "fix: resolve image loss on save" --body "Fixes #45 ..."
+```
+
+---
+
 ## Rules
 
 - **Screenshots:** Save to `screenshots/` folder

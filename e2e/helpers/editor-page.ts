@@ -123,8 +123,8 @@ export class EditorPage {
       ? filePath
       : path.join(__dirname, '..', filePath);
 
-    // Find file input and upload
-    const fileInput = this.page.locator('input[type="file"]');
+    // Find the DOCX file input specifically (not the image file input)
+    const fileInput = this.page.locator('input[type="file"][accept=".docx"]');
     await fileInput.setInputFiles(absolutePath);
 
     // Wait for document to load

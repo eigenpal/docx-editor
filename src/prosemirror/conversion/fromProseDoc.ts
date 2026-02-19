@@ -11,6 +11,7 @@
  */
 
 import type { Node as PMNode, Mark } from 'prosemirror-model';
+import { pixelsToEmu } from '../../docx/imageParser';
 import type {
   Document,
   DocumentBody,
@@ -747,8 +748,8 @@ function createImageRun(node: PMNode): Run {
     alt: attrs.alt || undefined,
     title: attrs.title || undefined,
     size: {
-      width: attrs.width || 0,
-      height: attrs.height || 0,
+      width: pixelsToEmu(attrs.width || 0),
+      height: pixelsToEmu(attrs.height || 0),
     },
     wrap,
   };
