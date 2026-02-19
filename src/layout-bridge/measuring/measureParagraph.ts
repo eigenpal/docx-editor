@@ -81,6 +81,8 @@ interface LineState {
   width: number;
   maxFontSize: number;
   maxFontMetrics: FontMetrics | null;
+  /** Maximum inline image height in pixels (already in px, not points) */
+  maxImageHeightPx: number;
   availableWidth: number;
   /** Left offset from floating images (pixels from content left edge) */
   leftOffset: number;
@@ -153,9 +155,10 @@ function calculateTypographyMetrics(
  */
 function calculateEmptyParagraphMetrics(
   fontSize: number,
-  spacing?: ParagraphSpacing
+  spacing?: ParagraphSpacing,
+  fontFamily?: string
 ): LineTypography {
-  const metrics = getFontMetrics({ fontSize, fontFamily: DEFAULT_FONT_FAMILY });
+  const metrics = getFontMetrics({ fontSize, fontFamily: fontFamily ?? DEFAULT_FONT_FAMILY });
   return calculateTypographyMetrics(fontSize, spacing, metrics);
 }
 
@@ -310,7 +313,9 @@ export function measureParagraph(
 
   // Handle empty paragraph
   if (runs.length === 0) {
-    const emptyMetrics = calculateEmptyParagraphMetrics(DEFAULT_FONT_SIZE, spacing);
+    const emptyFontSize = attrs?.defaultFontSize ?? DEFAULT_FONT_SIZE;
+    const emptyFontFamily = attrs?.defaultFontFamily ?? DEFAULT_FONT_FAMILY;
+    const emptyMetrics = calculateEmptyParagraphMetrics(emptyFontSize, spacing, emptyFontFamily);
     lines.push({
       fromRun: 0,
       fromChar: 0,
@@ -330,8 +335,9 @@ export function measureParagraph(
   // Check for empty text run only
   if (runs.length === 1 && isTextRun(runs[0]) && isEmptyTextRun(runs[0] as TextRun)) {
     const run = runs[0] as TextRun;
-    const fontSize = run.fontSize ?? DEFAULT_FONT_SIZE;
-    const emptyMetrics = calculateEmptyParagraphMetrics(fontSize, spacing);
+    const fontSize = run.fontSize ?? attrs?.defaultFontSize ?? DEFAULT_FONT_SIZE;
+    const fontFamily = run.fontFamily ?? attrs?.defaultFontFamily ?? DEFAULT_FONT_FAMILY;
+    const emptyMetrics = calculateEmptyParagraphMetrics(fontSize, spacing, fontFamily);
 
     lines.push({
       fromRun: 0,
@@ -358,6 +364,7 @@ export function measureParagraph(
     width: 0,
     maxFontSize: DEFAULT_FONT_SIZE,
     maxFontMetrics: null,
+    maxImageHeightPx: 0,
     availableWidth: firstLineWidth,
     leftOffset: firstLineFloatingMargins.leftMargin,
     rightOffset: firstLineFloatingMargins.rightMargin,
@@ -373,13 +380,22 @@ export function measureParagraph(
       currentLine.maxFontMetrics
     );
 
+    // If an inline image is taller than the text-based line height,
+    // use the image height directly (it's already in pixels — no pt→px conversion needed)
+    const finalTypography = { ...typography };
+    if (currentLine.maxImageHeightPx > finalTypography.lineHeight) {
+      finalTypography.lineHeight = currentLine.maxImageHeightPx;
+      finalTypography.ascent = currentLine.maxImageHeightPx * 0.8;
+      finalTypography.descent = currentLine.maxImageHeightPx * 0.2;
+    }
+
     const line: MeasuredLine = {
       fromRun: currentLine.fromRun,
       fromChar: currentLine.fromChar,
       toRun: currentLine.toRun,
       toChar: currentLine.toChar,
       width: currentLine.width,
-      ...typography,
+      ...finalTypography,
     };
 
     // Only add offsets if they're non-zero (for floating images)
@@ -426,6 +442,7 @@ export function measureParagraph(
       width: 0,
       maxFontSize: DEFAULT_FONT_SIZE,
       maxFontMetrics: null,
+      maxImageHeightPx: 0,
       availableWidth: adjustedWidth,
       leftOffset: floatingMargins.leftMargin,
       rightOffset: floatingMargins.rightMargin,
@@ -503,8 +520,8 @@ export function measureParagraph(
         // Update line to contain just this image
         currentLine.toRun = runIndex;
         currentLine.toChar = 1;
-        // Use image height plus margins as line height
-        currentLine.maxFontSize = imageHeight + distTop + distBottom;
+        // Use image height plus margins as line height (already in pixels)
+        currentLine.maxImageHeightPx = imageHeight + distTop + distBottom;
 
         // Start a new line after the image for subsequent content
         startNewLine(runIndex + 1, 0);
@@ -515,9 +532,9 @@ export function measureParagraph(
       const imageWidth = run.width;
       const imageHeight = run.height;
 
-      // Update max font size based on image height
-      if (imageHeight > currentLine.maxFontSize) {
-        currentLine.maxFontSize = imageHeight;
+      // Track image height separately (already in pixels, not points)
+      if (imageHeight > currentLine.maxImageHeightPx) {
+        currentLine.maxImageHeightPx = imageHeight;
       }
 
       if (currentLine.width + imageWidth > currentLine.availableWidth + WIDTH_TOLERANCE) {

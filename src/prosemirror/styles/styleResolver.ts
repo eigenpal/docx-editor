@@ -170,6 +170,20 @@ export class StyleResolver {
   }
 
   /**
+   * Get a character style's own properties WITHOUT docDefaults.
+   * Used when the caller already has docDefaults applied (e.g., from paragraph style resolution).
+   * This prevents docDefault fonts from incorrectly overriding paragraph style fonts.
+   */
+  getRunStyleOwnProperties(styleId: string | undefined | null): TextFormatting | undefined {
+    if (!styleId) return undefined;
+
+    const style = this.stylesById.get(styleId);
+    if (!style?.rPr) return undefined;
+
+    return Object.keys(style.rPr).length > 0 ? { ...style.rPr } : undefined;
+  }
+
+  /**
    * Get document defaults
    */
   getDocDefaults(): DocDefaults | undefined {

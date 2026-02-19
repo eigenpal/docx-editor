@@ -208,20 +208,14 @@ export function measureTextWidth(text: string, style: FontStyle): number {
 
   const metrics = ctx.measureText(text);
 
-  // Use actualBoundingBox for more accurate width that includes glyph overhang
-  const advanceWidth = metrics.width;
-  const paintedWidth = (metrics.actualBoundingBoxLeft || 0) + (metrics.actualBoundingBoxRight || 0);
-
-  let width = Math.max(advanceWidth, paintedWidth);
+  // Use advance width for line breaking — this is the standard metric for text flow.
+  // Painted width (actualBoundingBox) includes glyph overhang which is visual only
+  // and should not affect line breaking decisions.
+  let width = metrics.width;
 
   // Apply letter spacing if specified
   if (style.letterSpacing && text.length > 1) {
     width += style.letterSpacing * (text.length - 1);
-  }
-
-  // Word tends to wrap slightly earlier; add a tiny per-character fudge.
-  if (text.length > 1) {
-    width += (text.length - 1) * 0.15;
   }
 
   return width;

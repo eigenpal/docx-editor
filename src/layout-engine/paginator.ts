@@ -35,6 +35,8 @@ export type PaginatorOptions = {
   margins: PageMargins;
   /** Column configuration (optional). */
   columns?: ColumnLayout;
+  /** Per-page footnote reserved heights (pageNumber → height in pixels). */
+  footnoteReservedHeights?: Map<number, number>;
   /** Callback when a new page is created. */
   onNewPage?: (state: PageState) => void;
 };
@@ -87,11 +89,16 @@ export function createPaginator(options: PaginatorOptions) {
   function createNewPage(): PageState {
     const pageNumber = pages.length + 1;
 
+    // Reduce content bottom by footnote reserved height for this page
+    const footnoteHeight = options.footnoteReservedHeights?.get(pageNumber) ?? 0;
+    const pageContentBottom = contentBottom - footnoteHeight;
+
     const page: Page = {
       number: pageNumber,
       fragments: [],
       margins: { ...margins },
       size: { ...pageSize },
+      footnoteReservedHeight: footnoteHeight > 0 ? footnoteHeight : undefined,
     };
 
     const state: PageState = {
@@ -99,7 +106,7 @@ export function createPaginator(options: PaginatorOptions) {
       cursorY: topMargin,
       columnIndex: 0,
       topMargin,
-      contentBottom,
+      contentBottom: pageContentBottom,
       trailingSpacing: 0,
     };
 

@@ -5,12 +5,13 @@
  * Top, Bottom, Left, Right, and Clear.
  */
 
-import React, { useState, useRef, useEffect, useCallback } from 'react';
+import { useState, useCallback } from 'react';
 import { Button } from './Button';
 import { Tooltip } from './Tooltip';
 import { MaterialSymbol } from './MaterialSymbol';
 import { cn } from '../../lib/utils';
 import type { TableAction } from './TableToolbar';
+import { useFixedDropdown } from './useFixedDropdown';
 
 export interface TableBorderPickerProps {
   onAction: (action: TableAction) => void;
@@ -30,30 +31,11 @@ const BORDER_PRESETS: { action: TableAction; icon: string; label: string }[] = [
 
 export function TableBorderPicker({ onAction, disabled = false }: TableBorderPickerProps) {
   const [isOpen, setIsOpen] = useState(false);
-  const containerRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (!isOpen) return;
-    const handleClickOutside = (e: MouseEvent) => {
-      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
-        setIsOpen(false);
-      }
-    };
-    const handleEscape = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setIsOpen(false);
-    };
-    document.addEventListener('mousedown', handleClickOutside);
-    document.addEventListener('keydown', handleEscape);
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-      document.removeEventListener('keydown', handleEscape);
-    };
-  }, [isOpen]);
-
-  const handleMouseDown = useCallback((e: React.MouseEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-  }, []);
+  const close = useCallback(() => setIsOpen(false), []);
+  const { containerRef, dropdownRef, dropdownStyle, handleMouseDown } = useFixedDropdown({
+    isOpen,
+    onClose: close,
+  });
 
   const handlePreset = useCallback(
     (action: TableAction) => {
@@ -91,17 +73,14 @@ export function TableBorderPicker({ onAction, disabled = false }: TableBorderPic
 
       {isOpen && !disabled && (
         <div
+          ref={dropdownRef}
           style={{
-            position: 'absolute',
-            top: '100%',
-            left: 0,
-            marginTop: 4,
+            ...dropdownStyle,
             backgroundColor: 'white',
             border: '1px solid var(--doc-border)',
             borderRadius: 8,
             boxShadow: '0 4px 16px rgba(0, 0, 0, 0.12)',
             padding: 6,
-            zIndex: 1000,
           }}
           onMouseDown={(e) => e.stopPropagation()}
         >

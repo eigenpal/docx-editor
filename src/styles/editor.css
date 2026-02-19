@@ -425,3 +425,125 @@
 .layout-table-edge-handle-right.dragging {
   background-color: rgba(66, 133, 244, 0.6);
 }
+
+/* ============================================================================
+ * RESPONSIVE: Hide document outline on small screens
+ * ============================================================================ */
+
+/* Outline heading hover */
+.docx-outline-heading-btn:hover {
+  background-color: #f1f3f4;
+}
+
+@media (max-width: 1280px) {
+  .docx-outline-nav {
+    display: none !important;
+  }
+}
+
+/* ============================================================================
+ * HEADER / FOOTER EDITING
+ *
+ * These styles are needed when editing headers/footers inline (Google Docs style).
+ * They must be in dist/styles.css since the runtime CSS import in
+ * HiddenProseMirror.tsx is stripped by tsup (injectStyle: false).
+ * ============================================================================ */
+
+/* Page content area — show text cursor when hovering over editable content */
+.layout-page-content {
+  cursor: text;
+}
+
+/* Header/footer areas — double-click hint */
+.layout-page-header,
+.layout-page-footer {
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+}
+.layout-page-header:hover,
+.layout-page-footer:hover {
+  background-color: rgba(37, 99, 235, 0.06);
+}
+/* Show "Double-click to edit" hint on hover when area is empty */
+.layout-page-header:empty:hover::after {
+  content: 'Double-click to add header';
+  display: block;
+  text-align: center;
+  color: #9ca3af;
+  font-size: 11px;
+  padding: 4px 0;
+}
+.layout-page-footer:empty:hover::after {
+  content: 'Double-click to add footer';
+  display: block;
+  text-align: center;
+  color: #9ca3af;
+  font-size: 11px;
+  padding: 4px 0;
+}
+
+/* Header/footer editor ProseMirror styles */
+.hf-editor-pm .ProseMirror {
+  outline: none;
+  min-height: 40px;
+  padding: 4px;
+}
+.hf-editor-pm .ProseMirror:focus {
+  outline: none;
+}
+.hf-editor-pm .ProseMirror p {
+  display: block;
+  margin: 0;
+  padding: 0;
+  min-height: 1em;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  line-height: normal;
+}
+
+/* Dim body content when editing header/footer */
+.paged-editor--hf-editing .layout-page-content {
+  opacity: 0.4;
+  pointer-events: none;
+  transition: opacity 0.15s ease;
+}
+
+/* Dotted border on active header area */
+.paged-editor--editing-header .layout-page-header {
+  border-bottom: 1px dotted #4285f4;
+}
+
+/* Dotted border on active footer area */
+.paged-editor--editing-footer .layout-page-footer {
+  border-top: 1px dotted #4285f4;
+}
+
+/* Hide the original layout-painter content in the area being edited */
+.paged-editor--editing-header .layout-page-header > * {
+  visibility: hidden;
+}
+.paged-editor--editing-footer .layout-page-footer > * {
+  visibility: hidden;
+}
+
+/* Remove hover effect on header/footer when in editing mode */
+.paged-editor--hf-editing .layout-page-header:hover,
+.paged-editor--hf-editing .layout-page-footer:hover {
+  background-color: transparent;
+}
+
+/* Section break indicator */
+.docx-section-break {
+  position: relative;
+}
+.docx-section-break::after {
+  content: 'Section Break (' attr(data-section-break) ')';
+  display: block;
+  text-align: center;
+  font-size: 9px;
+  color: var(--doc-text-muted, #9ca3af);
+  border-top: 1px dashed var(--doc-border, #d1d5db);
+  margin-top: 4px;
+  padding-top: 2px;
+  pointer-events: none;
+}

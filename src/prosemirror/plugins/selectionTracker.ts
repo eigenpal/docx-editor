@@ -85,6 +85,18 @@ export function extractSelectionContext(state: EditorState): SelectionContext {
     if (paragraph.attrs.indentLeft) {
       paragraphFormatting.indentLeft = paragraph.attrs.indentLeft;
     }
+    if (paragraph.attrs.indentRight) {
+      paragraphFormatting.indentRight = paragraph.attrs.indentRight;
+    }
+    if (paragraph.attrs.indentFirstLine) {
+      paragraphFormatting.indentFirstLine = paragraph.attrs.indentFirstLine;
+    }
+    if (paragraph.attrs.hangingIndent) {
+      paragraphFormatting.hangingIndent = paragraph.attrs.hangingIndent;
+    }
+    if (paragraph.attrs.tabs) {
+      paragraphFormatting.tabs = paragraph.attrs.tabs;
+    }
     if (paragraph.attrs.numPr) {
       paragraphFormatting.numPr = paragraph.attrs.numPr;
     }

@@ -82,6 +82,11 @@ export {
   setLineSpacing,
   increaseIndent,
   decreaseIndent,
+  setIndentLeft,
+  setIndentRight,
+  setIndentFirstLine,
+  addTabStop,
+  removeTabStop,
   toggleBulletList,
   toggleNumberedList,
   increaseListLevel,
@@ -128,5 +133,9 @@ export {
   setCellFillColor,
   setTableBorderColor,
   setTableBorderWidth,
+  // Page break
+  insertPageBreak,
+  // Table of Contents
+  generateTOC,
 } from './commands';
 export type { TableContextInfo, BorderPreset } from './commands';

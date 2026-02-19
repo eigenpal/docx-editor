@@ -21,6 +21,7 @@ import {
   EditorState,
   Transaction,
   TextSelection,
+  NodeSelection,
   type Command,
   type Plugin,
 } from 'prosemirror-state';
@@ -96,6 +97,8 @@ export interface HiddenProseMirrorRef {
   canRedo(): boolean;
   /** Set selection by PM position */
   setSelection(anchor: number, head?: number): void;
+  /** Set node selection at a PM position (for images, etc.) */
+  setNodeSelection(pos: number): void;
   /** Set cell selection between two positions inside table cells */
   setCellSelection(anchorCellPos: number, headCellPos: number): void;
   /** Scroll the PM view to selection (no-op since hidden) */
@@ -417,6 +420,18 @@ const HiddenProseMirrorComponent = forwardRef<HiddenProseMirrorRef, HiddenProseM
           const $head = head !== undefined ? state.doc.resolve(head) : $anchor;
           const selection = TextSelection.between($anchor, $head);
           dispatch(state.tr.setSelection(selection));
+        },
+
+        setNodeSelection(pos: number) {
+          if (!viewRef.current) return;
+          const { state, dispatch } = viewRef.current;
+          try {
+            const selection = NodeSelection.create(state.doc, pos);
+            dispatch(state.tr.setSelection(selection));
+          } catch {
+            // Fallback to text selection if NodeSelection fails
+            this.setSelection(pos);
+          }
         },
 
         setCellSelection(anchorCellPos: number, headCellPos: number) {

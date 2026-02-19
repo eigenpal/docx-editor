@@ -2,10 +2,7 @@
  * TableGridPicker Component
  *
  * A compact grid picker dropdown for inserting tables.
- * Similar to Google Docs style table insert:
- * - Hover over grid cells to select dimensions
- * - Click to insert table with selected dimensions
- * - Shows preview of selected dimensions
+ * Wraps TableGridInline with a toolbar button and dropdown.
  */
 
 import React, { useState, useCallback, useRef, useEffect } from 'react';
@@ -13,6 +10,7 @@ import type { CSSProperties } from 'react';
 import { Button } from './Button';
 import { Tooltip } from './Tooltip';
 import { MaterialSymbol } from './MaterialSymbol';
+import { TableGridInline } from './TableGridInline';
 import { cn } from '../../lib/utils';
 
 // ============================================================================
@@ -39,8 +37,6 @@ export interface TableGridPickerProps {
 
 const DEFAULT_GRID_ROWS = 5;
 const DEFAULT_GRID_COLUMNS = 5;
-const CELL_SIZE = 18;
-const CELL_GAP = 2;
 
 // ============================================================================
 // STYLES
@@ -59,35 +55,6 @@ const dropdownStyle: CSSProperties = {
   zIndex: 1000,
 };
 
-const gridStyle: CSSProperties = {
-  display: 'grid',
-  gap: CELL_GAP,
-};
-
-const cellStyle: CSSProperties = {
-  width: CELL_SIZE,
-  height: CELL_SIZE,
-  backgroundColor: 'white',
-  border: '1px solid var(--doc-border)',
-  borderRadius: 2,
-  transition: 'background-color 0.1s, border-color 0.1s',
-  cursor: 'pointer',
-};
-
-const cellSelectedStyle: CSSProperties = {
-  ...cellStyle,
-  backgroundColor: 'var(--doc-primary)',
-  border: '1px solid var(--doc-primary)',
-};
-
-const labelStyle: CSSProperties = {
-  marginTop: 6,
-  fontSize: 11,
-  fontWeight: 500,
-  color: 'var(--doc-text)',
-  textAlign: 'center',
-};
-
 // ============================================================================
 // MAIN COMPONENT
 // ============================================================================
@@ -101,8 +68,6 @@ export function TableGridPicker({
   tooltip = 'Insert table',
 }: TableGridPickerProps): React.ReactElement {
   const [isOpen, setIsOpen] = useState(false);
-  const [hoverRows, setHoverRows] = useState(0);
-  const [hoverCols, setHoverCols] = useState(0);
   const containerRef = useRef<HTMLDivElement>(null);
 
   // Close dropdown when clicking outside
@@ -130,22 +95,6 @@ export function TableGridPicker({
     };
   }, [isOpen]);
 
-  // Handle cell hover
-  const handleCellHover = useCallback((row: number, col: number) => {
-    setHoverRows(row);
-    setHoverCols(col);
-  }, []);
-
-  // Handle cell click - insert table
-  const handleCellClick = useCallback(() => {
-    if (hoverRows > 0 && hoverCols > 0) {
-      onInsert(hoverRows, hoverCols);
-      setIsOpen(false);
-      setHoverRows(0);
-      setHoverCols(0);
-    }
-  }, [hoverRows, hoverCols, onInsert]);
-
   // Handle toggle dropdown
   const handleToggle = useCallback(
     (e: React.MouseEvent) => {
@@ -157,33 +106,13 @@ export function TableGridPicker({
     [disabled]
   );
 
-  // Reset hover state when dropdown closes
-  useEffect(() => {
-    if (!isOpen) {
-      setHoverRows(0);
-      setHoverCols(0);
-    }
-  }, [isOpen]);
-
-  // Generate grid cells
-  const gridCells: React.ReactElement[] = [];
-  for (let row = 1; row <= gridRows; row++) {
-    for (let col = 1; col <= gridColumns; col++) {
-      const isSelected = row <= hoverRows && col <= hoverCols;
-      gridCells.push(
-        <div
-          key={`${row}-${col}`}
-          style={isSelected ? cellSelectedStyle : cellStyle}
-          onMouseEnter={() => handleCellHover(row, col)}
-          onClick={handleCellClick}
-          role="gridcell"
-          aria-selected={isSelected}
-        />
-      );
-    }
-  }
-
-  const gridLabel = hoverRows > 0 && hoverCols > 0 ? `${hoverCols} × ${hoverRows}` : 'Select size';
+  const handleInsert = useCallback(
+    (rows: number, columns: number) => {
+      onInsert(rows, columns);
+      setIsOpen(false);
+    },
+    [onInsert]
+  );
 
   const button = (
     <Button
@@ -211,28 +140,8 @@ export function TableGridPicker({
       {tooltip ? <Tooltip content={tooltip}>{button}</Tooltip> : button}
 
       {isOpen && !disabled && (
-        <div
-          className="docx-table-grid-picker-dropdown"
-          style={dropdownStyle}
-          role="grid"
-          aria-label="Table size selector"
-        >
-          <div
-            className="docx-table-grid"
-            style={{
-              ...gridStyle,
-              gridTemplateColumns: `repeat(${gridColumns}, ${CELL_SIZE}px)`,
-            }}
-            onMouseLeave={() => {
-              setHoverRows(0);
-              setHoverCols(0);
-            }}
-          >
-            {gridCells}
-          </div>
-          <div className="docx-table-grid-label" style={labelStyle}>
-            {gridLabel}
-          </div>
+        <div className="docx-table-grid-picker-dropdown" style={dropdownStyle}>
+          <TableGridInline onInsert={handleInsert} gridRows={gridRows} gridColumns={gridColumns} />
         </div>
       )}
     </div>

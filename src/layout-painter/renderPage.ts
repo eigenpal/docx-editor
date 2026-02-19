@@ -51,6 +51,10 @@ interface PageFloatingImage {
   distBottom: number;
   distLeft: number;
   distRight: number;
+  /** ProseMirror start position for click-to-select */
+  pmStart?: number;
+  /** ProseMirror end position */
+  pmEnd?: number;
 }
 
 /**
@@ -110,6 +114,16 @@ export interface HeaderFooterContent {
 }
 
 /**
+ * A single footnote item ready for rendering at page bottom.
+ */
+export interface FootnoteRenderItem {
+  /** Display number (e.g. "1", "2") */
+  displayNumber: string;
+  /** Plain text content */
+  text: string;
+}
+
+/**
  * Options for rendering a page
  */
 export interface RenderPageOptions {
@@ -143,6 +157,8 @@ export interface RenderPageOptions {
   };
   /** Theme for resolving border colors. */
   theme?: Theme | null;
+  /** Footnotes to render at the bottom of this page. */
+  footnoteArea?: FootnoteRenderItem[];
 }
 
 /**
@@ -350,6 +366,8 @@ function extractFloatingImagesFromParagraph(
       distBottom,
       distLeft,
       distRight,
+      pmStart: imgRun.pmStart,
+      pmEnd: imgRun.pmEnd,
     });
   }
 
@@ -425,6 +443,8 @@ function renderFloatingImagesLayer(
     container.style.pointerEvents = 'auto'; // Make images clickable
     container.style.top = `${floatImg.y}px`;
     container.style.left = `${floatImg.x}px`;
+    if (floatImg.pmStart !== undefined) container.dataset.pmStart = String(floatImg.pmStart);
+    if (floatImg.pmEnd !== undefined) container.dataset.pmEnd = String(floatImg.pmEnd);
 
     const img = doc.createElement('img');
     img.src = floatImg.src;
@@ -601,6 +621,51 @@ function renderHeaderFooterContent(
 }
 
 /**
+ * Render the footnote area at the bottom of a page.
+ * Includes a separator line (33% width) and footnote entries.
+ */
+function renderFootnoteArea(
+  footnotes: FootnoteRenderItem[],
+  contentWidth: number,
+  doc: Document
+): HTMLElement {
+  const container = doc.createElement('div');
+  container.className = 'layout-footnote-area';
+  container.style.width = `${contentWidth}px`;
+
+  // Separator line (33% width, Google Docs style)
+  const separator = doc.createElement('div');
+  separator.style.width = '33%';
+  separator.style.height = '0.5px';
+  separator.style.backgroundColor = '#000';
+  separator.style.marginBottom = '6px';
+  separator.style.marginTop = '6px';
+  container.appendChild(separator);
+
+  // Render each footnote
+  for (const fn of footnotes) {
+    const fnEl = doc.createElement('div');
+    fnEl.style.fontSize = '10px';
+    fnEl.style.lineHeight = '1.3';
+    fnEl.style.marginBottom = '4px';
+    fnEl.style.color = '#000';
+
+    const sup = doc.createElement('sup');
+    sup.textContent = fn.displayNumber;
+    sup.style.fontSize = '7px';
+    sup.style.marginRight = '2px';
+    fnEl.appendChild(sup);
+
+    const textNode = doc.createTextNode(' ' + fn.text);
+    fnEl.appendChild(textNode);
+
+    container.appendChild(fnEl);
+  }
+
+  return container;
+}
+
+/**
  * Render a single page to DOM
  *
  * @param page - The page to render
@@ -774,6 +839,20 @@ export function renderPage(
     contentEl.appendChild(fragmentEl);
   }
 
+  // Render footnote area at the bottom of the content area (above footer)
+  if (options.footnoteArea && options.footnoteArea.length > 0) {
+    const fnAreaEl = renderFootnoteArea(options.footnoteArea, contentWidth, doc);
+    fnAreaEl.style.position = 'absolute';
+    // Position at page bottom minus bottom margin (bottom of content area)
+    // The reserved height includes separator + all footnotes
+    const reservedHeight = page.footnoteReservedHeight ?? 0;
+    const contentAreaBottom = page.size.h - page.margins.bottom - page.margins.top;
+    fnAreaEl.style.top = `${contentAreaBottom - reservedHeight}px`;
+    fnAreaEl.style.left = '0';
+    fnAreaEl.style.right = '0';
+    contentEl.appendChild(fnAreaEl);
+  }
+
   pageEl.appendChild(contentEl);
 
   // Render header area (always rendered for hover hint / double-click target)
@@ -781,7 +860,11 @@ export function renderPage(
     const defaultHeaderDistance = 48;
     const headerDistance = options.headerDistance ?? page.margins.header ?? defaultHeaderDistance;
     const headerContentWidth = page.size.w - page.margins.left - page.margins.right;
-    const maxHeaderHeight = Math.max(page.margins.top - headerDistance, 48);
+    const availableHeaderHeight = Math.max(page.margins.top - headerDistance, 48);
+    const actualHeaderHeight = options.headerContent?.height ?? 0;
+    // If header content fits in the original space, clip overflow; otherwise
+    // margins.top was already expanded so let content show fully.
+    const headerOverflows = actualHeaderHeight > availableHeaderHeight;
 
     const headerEl = doc.createElement('div');
     headerEl.className = PAGE_CLASS_NAMES.header;
@@ -790,8 +873,10 @@ export function renderPage(
     headerEl.style.left = `${page.margins.left}px`;
     headerEl.style.right = `${page.margins.right}px`;
     headerEl.style.width = `${headerContentWidth}px`;
-    headerEl.style.maxHeight = `${maxHeaderHeight}px`;
-    headerEl.style.overflow = 'hidden';
+    if (!headerOverflows) {
+      headerEl.style.maxHeight = `${availableHeaderHeight}px`;
+      headerEl.style.overflow = 'hidden';
+    }
     // Minimum height so empty areas are clickable
     headerEl.style.minHeight = '24px';
 
@@ -811,7 +896,9 @@ export function renderPage(
     const defaultFooterDistance = 48;
     const footerDistance = options.footerDistance ?? page.margins.footer ?? defaultFooterDistance;
     const footerContentWidth = page.size.w - page.margins.left - page.margins.right;
-    const maxFooterHeight = Math.max(page.margins.bottom - footerDistance, 48);
+    const availableFooterHeight = Math.max(page.margins.bottom - footerDistance, 48);
+    const actualFooterHeight = options.footerContent?.height ?? 0;
+    const footerOverflows = actualFooterHeight > availableFooterHeight;
 
     const footerEl = doc.createElement('div');
     footerEl.className = PAGE_CLASS_NAMES.footer;
@@ -820,8 +907,10 @@ export function renderPage(
     footerEl.style.left = `${page.margins.left}px`;
     footerEl.style.right = `${page.margins.right}px`;
     footerEl.style.width = `${footerContentWidth}px`;
-    footerEl.style.maxHeight = `${maxFooterHeight}px`;
-    footerEl.style.overflow = 'hidden';
+    if (!footerOverflows) {
+      footerEl.style.maxHeight = `${availableFooterHeight}px`;
+      footerEl.style.overflow = 'hidden';
+    }
     footerEl.style.minHeight = '24px';
 
     if (options.footerContent && options.footerContent.blocks.length > 0) {
@@ -848,7 +937,10 @@ export function renderPage(
 export function renderPages(
   pages: Page[],
   container: HTMLElement,
-  options: RenderPageOptions & { pageGap?: number } = {}
+  options: RenderPageOptions & {
+    pageGap?: number;
+    footnotesByPage?: Map<number, FootnoteRenderItem[]>;
+  } = {}
 ): void {
   const totalPages = pages.length;
   const pageGap = options.pageGap ?? 24;
@@ -872,7 +964,16 @@ export function renderPages(
       section: 'body',
     };
 
-    const pageEl = renderPage(page, context, options);
+    // Per-page footnote area
+    const pageOptions = { ...options };
+    if (options.footnotesByPage) {
+      const fns = options.footnotesByPage.get(page.number);
+      if (fns && fns.length > 0) {
+        pageOptions.footnoteArea = fns;
+      }
+    }
+
+    const pageEl = renderPage(page, context, pageOptions);
     container.appendChild(pageEl);
   }
 }

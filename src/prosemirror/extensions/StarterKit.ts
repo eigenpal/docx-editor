@@ -55,6 +55,7 @@ import { ImageExtension } from './nodes/ImageExtension';
 import { TextBoxExtension } from './nodes/TextBoxExtension';
 import { ShapeExtension } from './nodes/ShapeExtension';
 import { HorizontalRuleExtension } from './nodes/HorizontalRuleExtension';
+import { PageBreakExtension } from './nodes/PageBreakExtension';
 import { FieldExtension } from './nodes/FieldExtension';
 import { SdtExtension } from './nodes/SdtExtension';
 import { MathExtension } from './nodes/MathExtension';
@@ -140,6 +141,7 @@ export function createStarterKit(options: StarterKitOptions = {}): AnyExtension[
   add('imageDrag', ImageDragExtension());
   add('dropCursor', DropCursorExtension());
   add('horizontalRule', HorizontalRuleExtension());
+  add('pageBreak', PageBreakExtension());
   add('field', FieldExtension());
   add('sdt', SdtExtension());
   add('math', MathExtension());

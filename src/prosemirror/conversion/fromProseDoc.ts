@@ -99,6 +99,9 @@ function extractBlocks(pmDoc: PMNode): (Paragraph | Table)[] {
     } else if (node.type.name === 'textBox') {
       // Convert text box back to a paragraph containing a shape with text body
       blocks.push(convertPMTextBox(node));
+    } else if (node.type.name === 'pageBreak') {
+      // Convert page break node to a paragraph with a page break run
+      blocks.push(createPageBreakParagraph());
     }
   });
 
@@ -106,11 +109,38 @@ function extractBlocks(pmDoc: PMNode): (Paragraph | Table)[] {
 }
 
 /**
+ * Create a paragraph containing only a page break run (for DOCX serialization)
+ */
+function createPageBreakParagraph(): Paragraph {
+  const breakContent: BreakContent = { type: 'break', breakType: 'page' };
+  const run: Run = { type: 'run', content: [breakContent] };
+  return {
+    type: 'paragraph',
+    content: [run],
+  };
+}
+
+/**
  * Convert a ProseMirror paragraph node to our Paragraph type
  */
 function convertPMParagraph(node: PMNode): Paragraph {
   const attrs = node.attrs as ParagraphAttrs;
-  const content = insertCommentRanges(extractParagraphContent(node), node);
+  let content = insertCommentRanges(extractParagraphContent(node), node);
+
+  // Emit BookmarkStart/End from bookmarks attr (for TOC anchors, cross-references)
+  const bookmarks = attrs.bookmarks as Array<{ id: number; name: string }> | undefined;
+  if (bookmarks && bookmarks.length > 0) {
+    const starts: import('../../types/content').ParagraphContent[] = bookmarks.map((b) => ({
+      type: 'bookmarkStart' as const,
+      id: b.id,
+      name: b.name,
+    }));
+    const ends: import('../../types/content').ParagraphContent[] = bookmarks.map((b) => ({
+      type: 'bookmarkEnd' as const,
+      id: b.id,
+    }));
+    content = [...starts, ...content, ...ends];
+  }
 
   const paragraph: Paragraph = {
     type: 'paragraph',
@@ -395,7 +425,9 @@ function extractParagraphContent(paragraph: PMNode): ParagraphContent[] {
       // Start or continue hyperlink
       const linkKey = getLinkKey(linkMark);
 
-      if (currentHyperlink && currentHyperlink.href === linkKey) {
+      const currentKey =
+        currentHyperlink?.href || (currentHyperlink?.anchor ? `#${currentHyperlink.anchor}` : '');
+      if (currentHyperlink && currentKey === linkKey) {
         // Continue current hyperlink
         addNodeToHyperlink(currentHyperlink, node);
       } else {
@@ -531,9 +563,19 @@ function getMarksKey(marks: readonly Mark[]): string {
  * Create a Hyperlink from a link mark
  */
 function createHyperlink(linkMark: Mark): Hyperlink {
+  const href = linkMark.attrs.href as string;
+  // Internal bookmark links use the anchor property in OOXML
+  if (href?.startsWith('#')) {
+    return {
+      type: 'hyperlink',
+      anchor: href.substring(1),
+      tooltip: linkMark.attrs.tooltip || undefined,
+      children: [],
+    };
+  }
   return {
     type: 'hyperlink',
-    href: linkMark.attrs.href,
+    href,
     tooltip: linkMark.attrs.tooltip || undefined,
     rId: linkMark.attrs.rId || undefined,
     children: [],
@@ -752,6 +794,16 @@ function createInlineSdtFromNode(node: PMNode): InlineSdt {
 function createImageRun(node: PMNode): Run {
   const attrs = node.attrs as ImageAttrs;
 
+  // Determine wrap type from attrs (default: inline)
+  const wrapType = attrs.wrapType || 'inline';
+  const PX_TO_EMU = 914400 / 96;
+
+  const wrap: import('../../types/content').ImageWrap = { type: wrapType };
+  if (attrs.distTop !== undefined) wrap.distT = Math.round(attrs.distTop * PX_TO_EMU);
+  if (attrs.distBottom !== undefined) wrap.distB = Math.round(attrs.distBottom * PX_TO_EMU);
+  if (attrs.distLeft !== undefined) wrap.distL = Math.round(attrs.distLeft * PX_TO_EMU);
+  if (attrs.distRight !== undefined) wrap.distR = Math.round(attrs.distRight * PX_TO_EMU);
+
   const image: Image = {
     type: 'image',
     rId: attrs.rId || '',
@@ -762,8 +814,31 @@ function createImageRun(node: PMNode): Run {
       width: attrs.width || 0,
       height: attrs.height || 0,
     },
-    wrap: { type: 'inline' },
+    wrap,
   };
+
+  // Round-trip floating image position (ImagePositionAttrs uses loose strings;
+  // cast to the strict OOXML union types for the Document model)
+  if (attrs.position?.horizontal && attrs.position?.vertical) {
+    const pos = attrs.position;
+    type HRelativeTo = import('../../types/content').ImagePosition['horizontal']['relativeTo'];
+    type HAlignment = import('../../types/content').ImagePosition['horizontal']['alignment'];
+    type VRelativeTo = import('../../types/content').ImagePosition['vertical']['relativeTo'];
+    type VAlignment = import('../../types/content').ImagePosition['vertical']['alignment'];
+
+    image.position = {
+      horizontal: {
+        relativeTo: (pos.horizontal!.relativeTo || 'column') as HRelativeTo,
+        alignment: pos.horizontal!.align as HAlignment,
+        posOffset: pos.horizontal!.posOffset,
+      },
+      vertical: {
+        relativeTo: (pos.vertical!.relativeTo || 'paragraph') as VRelativeTo,
+        alignment: pos.vertical!.align as VAlignment,
+        posOffset: pos.vertical!.posOffset,
+      },
+    };
+  }
 
   // Round-trip border/outline
   if (attrs.borderWidth && attrs.borderWidth > 0) {

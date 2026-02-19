@@ -23,13 +23,16 @@ import { MaterialSymbol } from './ui/MaterialSymbol';
 import { ZoomControl } from './ui/ZoomControl';
 import { Button } from './ui/Button';
 import { Tooltip } from './ui/Tooltip';
-import { TableGridPicker } from './ui/TableGridPicker';
+import { TableGridInline } from './ui/TableGridInline';
 import { TableBorderPicker } from './ui/TableBorderPicker';
 import { TableBorderColorPicker } from './ui/TableBorderColorPicker';
 import { TableBorderWidthPicker } from './ui/TableBorderWidthPicker';
 import { TableCellFillPicker } from './ui/TableCellFillPicker';
 import { TableMoreDropdown } from './ui/TableMoreDropdown';
-import { ShapeGallery } from './ui/ShapeGallery';
+import { MenuDropdown } from './ui/MenuDropdown';
+import type { MenuEntry } from './ui/MenuDropdown';
+import { ImageWrapDropdown } from './ui/ImageWrapDropdown';
+import { ImageTransformDropdown } from './ui/ImageTransformDropdown';
 import type { TableAction } from './ui/TableToolbar';
 import { cn } from '../lib/utils';
 
@@ -163,6 +166,10 @@ export interface ToolbarProps {
   showTableInsert?: boolean;
   /** Callback when user wants to insert an image */
   onInsertImage?: () => void;
+  /** Callback when user wants to insert a page break */
+  onInsertPageBreak?: () => void;
+  /** Callback when user wants to insert a table of contents */
+  onInsertTOC?: () => void;
   /** Callback when user wants to insert a shape */
   onInsertShape?: (data: {
     shapeType: string;
@@ -183,8 +190,6 @@ export interface ToolbarProps {
   onImageWrapType?: (wrapType: string) => void;
   /** Callback for image transform (rotate/flip) */
   onImageTransform?: (action: 'rotateCW' | 'rotateCCW' | 'flipH' | 'flipV') => void;
-  /** Callback to open image position dialog */
-  onOpenImagePosition?: () => void;
   /** Callback to open image properties dialog (alt text + border) */
   onOpenImageProperties?: () => void;
   /** Table context when cursor is in a table */
@@ -365,11 +370,11 @@ export function Toolbar({
   onInsertTable,
   showTableInsert = true,
   onInsertImage,
-  onInsertShape,
+  onInsertPageBreak,
+  onInsertTOC,
   imageContext,
   onImageWrapType,
   onImageTransform,
-  onOpenImagePosition,
   onOpenImageProperties,
   tableContext,
   onTableAction,
@@ -686,7 +691,7 @@ export function Toolbar({
     <div
       ref={toolbarRef}
       className={cn(
-        'flex items-center gap-0 px-2 py-2 bg-white border-b border-slate-100 flex-wrap min-h-[44px]',
+        'flex items-center gap-0 px-2 py-2 bg-white border-b border-slate-100 min-h-[44px] overflow-x-auto',
         className
       )}
       style={style}
@@ -696,7 +701,58 @@ export function Toolbar({
       onMouseDown={handleToolbarMouseDown}
       onMouseUp={handleToolbarMouseUp}
     >
-      {/* Undo/Redo/Print Group */}
+      {/* File Menu */}
+      {showPrintButton && onPrint && (
+        <MenuDropdown
+          label="File"
+          disabled={disabled}
+          items={[{ icon: 'print', label: 'Print', shortcut: 'Ctrl+P', onClick: onPrint }]}
+        />
+      )}
+
+      {/* Insert Menu */}
+      <MenuDropdown
+        label="Insert"
+        disabled={disabled}
+        items={[
+          ...(onInsertImage
+            ? [{ icon: 'image', label: 'Image', onClick: onInsertImage } as MenuEntry]
+            : []),
+          ...(showTableInsert && onInsertTable
+            ? [
+                {
+                  icon: 'grid_on',
+                  label: 'Table',
+                  submenuContent: (closeMenu: () => void) => (
+                    <TableGridInline
+                      onInsert={(rows: number, cols: number) => {
+                        handleTableInsert(rows, cols);
+                        closeMenu();
+                      }}
+                    />
+                  ),
+                } as MenuEntry,
+              ]
+            : []),
+          ...(onInsertImage || (showTableInsert && onInsertTable)
+            ? [{ type: 'separator' as const } as MenuEntry]
+            : []),
+          {
+            icon: 'page_break',
+            label: 'Page break',
+            onClick: onInsertPageBreak,
+            disabled: !onInsertPageBreak,
+          },
+          {
+            icon: 'format_list_numbered',
+            label: 'Table of contents',
+            onClick: onInsertTOC,
+            disabled: !onInsertTOC,
+          },
+        ]}
+      />
+
+      {/* Undo/Redo Group */}
       <ToolbarGroup label="History">
         <ToolbarButton
           onClick={handleUndo}
@@ -714,16 +770,6 @@ export function Toolbar({
         >
           <MaterialSymbol name="redo" size={ICON_SIZE} />
         </ToolbarButton>
-        {showPrintButton && (
-          <ToolbarButton
-            onClick={onPrint}
-            disabled={disabled || !onPrint}
-            title="Print (Ctrl+P)"
-            ariaLabel="Print"
-          >
-            <MaterialSymbol name="print" size={ICON_SIZE} />
-          </ToolbarButton>
-        )}
       </ToolbarGroup>
 
       {/* Zoom Control */}
@@ -904,96 +950,16 @@ export function Toolbar({
         </ToolbarGroup>
       )}
 
-      {/* Insert group */}
-      {(showTableInsert || onInsertImage || onInsertShape) && (
-        <ToolbarGroup label="Insert">
-          {showTableInsert && onInsertTable && (
-            <TableGridPicker
-              onInsert={handleTableInsert}
-              disabled={disabled}
-              tooltip="Insert table"
-            />
-          )}
-          {onInsertImage && (
-            <ToolbarButton
-              onClick={onInsertImage}
-              disabled={disabled}
-              title="Insert image"
-              ariaLabel="Insert image"
-            >
-              <MaterialSymbol name="image" size={ICON_SIZE} />
-            </ToolbarButton>
-          )}
-          {onInsertShape && <ShapeGallery onInsertShape={onInsertShape} disabled={disabled} />}
-        </ToolbarGroup>
-      )}
-
-      {/* Image Wrapping - shown when image is selected */}
+      {/* Image controls - shown when image is selected */}
       {imageContext && onImageWrapType && (
         <ToolbarGroup label="Image">
-          <ToolbarButton
-            active={imageContext.wrapType === 'inline'}
-            onClick={() => onImageWrapType('inline')}
+          <ImageWrapDropdown
+            imageContext={imageContext}
+            onChange={onImageWrapType}
             disabled={disabled}
-            title="Inline with text"
-            ariaLabel="Inline with text"
-          >
-            <MaterialSymbol name="format_image_left" size={ICON_SIZE} />
-          </ToolbarButton>
-          <ToolbarButton
-            active={imageContext.displayMode === 'float' && imageContext.cssFloat === 'left'}
-            onClick={() => onImageWrapType('wrapRight')}
-            disabled={disabled}
-            title="Wrap text (float left)"
-            ariaLabel="Float left"
-          >
-            <MaterialSymbol name="format_image_right" size={ICON_SIZE} />
-          </ToolbarButton>
-          <ToolbarButton
-            active={imageContext.displayMode === 'float' && imageContext.cssFloat === 'right'}
-            onClick={() => onImageWrapType('wrapLeft')}
-            disabled={disabled}
-            title="Wrap text (float right)"
-            ariaLabel="Float right"
-          >
-            <MaterialSymbol name="format_image_left" size={ICON_SIZE} />
-          </ToolbarButton>
-          <ToolbarButton
-            active={imageContext.wrapType === 'topAndBottom'}
-            onClick={() => onImageWrapType('topAndBottom')}
-            disabled={disabled}
-            title="Top and bottom"
-            ariaLabel="Top and bottom"
-          >
-            <MaterialSymbol name="horizontal_rule" size={ICON_SIZE} />
-          </ToolbarButton>
-          <ToolbarButton
-            active={imageContext.wrapType === 'behind'}
-            onClick={() => onImageWrapType('behind')}
-            disabled={disabled}
-            title="Behind text"
-            ariaLabel="Behind text"
-          >
-            <MaterialSymbol name="flip_to_back" size={ICON_SIZE} />
-          </ToolbarButton>
-          <ToolbarButton
-            active={imageContext.wrapType === 'inFront'}
-            onClick={() => onImageWrapType('inFront')}
-            disabled={disabled}
-            title="In front of text"
-            ariaLabel="In front of text"
-          >
-            <MaterialSymbol name="flip_to_front" size={ICON_SIZE} />
-          </ToolbarButton>
-          {onOpenImagePosition && (
-            <ToolbarButton
-              onClick={onOpenImagePosition}
-              disabled={disabled}
-              title="Image position..."
-              ariaLabel="Image position"
-            >
-              <MaterialSymbol name="open_with" size={ICON_SIZE} />
-            </ToolbarButton>
+          />
+          {onImageTransform && (
+            <ImageTransformDropdown onTransform={onImageTransform} disabled={disabled} />
           )}
           {onOpenImageProperties && (
             <ToolbarButton
@@ -1004,42 +970,6 @@ export function Toolbar({
             >
               <MaterialSymbol name="tune" size={ICON_SIZE} />
             </ToolbarButton>
-          )}
-          {onImageTransform && (
-            <>
-              <ToolbarButton
-                onClick={() => onImageTransform('rotateCW')}
-                disabled={disabled}
-                title="Rotate clockwise"
-                ariaLabel="Rotate clockwise"
-              >
-                <MaterialSymbol name="rotate_right" size={ICON_SIZE} />
-              </ToolbarButton>
-              <ToolbarButton
-                onClick={() => onImageTransform('rotateCCW')}
-                disabled={disabled}
-                title="Rotate counter-clockwise"
-                ariaLabel="Rotate counter-clockwise"
-              >
-                <MaterialSymbol name="rotate_left" size={ICON_SIZE} />
-              </ToolbarButton>
-              <ToolbarButton
-                onClick={() => onImageTransform('flipH')}
-                disabled={disabled}
-                title="Flip horizontal"
-                ariaLabel="Flip horizontal"
-              >
-                <MaterialSymbol name="swap_horiz" size={ICON_SIZE} />
-              </ToolbarButton>
-              <ToolbarButton
-                onClick={() => onImageTransform('flipV')}
-                disabled={disabled}
-                title="Flip vertical"
-                ariaLabel="Flip vertical"
-              >
-                <MaterialSymbol name="swap_vert" size={ICON_SIZE} />
-              </ToolbarButton>
-            </>
           )}
         </ToolbarGroup>
       )}

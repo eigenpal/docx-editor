@@ -25,6 +25,7 @@ import React, {
   memo,
 } from 'react';
 import type { CSSProperties } from 'react';
+import { NodeSelection } from 'prosemirror-state';
 import type { EditorState, Transaction, Plugin } from 'prosemirror-state';
 import { CellSelection } from 'prosemirror-tables';
 import type { EditorView } from 'prosemirror-view';
@@ -32,6 +33,7 @@ import type { EditorView } from 'prosemirror-view';
 // Internal components
 import { HiddenProseMirror, type HiddenProseMirrorRef } from './HiddenProseMirror';
 import { SelectionOverlay } from './SelectionOverlay';
+import { ImageSelectionOverlay, type ImageSelectionInfo } from './ImageSelectionOverlay';
 
 // Layout engine
 import { layoutDocument } from '../layout-engine';
@@ -74,6 +76,7 @@ import {
   renderPages,
   type RenderPageOptions,
   type HeaderFooterContent,
+  type FootnoteRenderItem,
 } from '../layout-painter/renderPage';
 
 // Selection sync
@@ -90,6 +93,14 @@ import type {
   SectionProperties,
   HeaderFooter,
 } from '../types/document';
+import type { Footnote } from '../types/content';
+import { getFootnoteText } from '../docx/footnoteParser';
+import {
+  collectFootnoteRefs,
+  mapFootnotesToPages,
+  buildFootnoteContentMap,
+  calculateFootnoteReservedHeights,
+} from '../layout-bridge/footnoteLayout';
 import type { RenderedDomContext } from '../plugin-api/types';
 import { createRenderedDomContext } from '../plugin-api/RenderedDomContext';
 
@@ -167,6 +178,8 @@ export interface PagedEditorRef {
   getLayout(): Layout | null;
   /** Force re-layout. */
   relayout(): void;
+  /** Scroll the visible pages to bring a PM position into view. */
+  scrollToPosition(pmPos: number): void;
 }
 
 // =============================================================================
@@ -975,7 +988,26 @@ function convertHeaderFooterToContent(
     return undefined;
   }
 
-  const measures = measureBlocks(blocks, contentWidth);
+  // Build blocks for measurement that exclude floating images
+  // (floating images are positioned absolutely, don't affect paragraph height)
+  const blocksForMeasure: FlowBlock[] = blocks.map((block) => {
+    if (block.kind !== 'paragraph') return block;
+    const pb = block as ParagraphBlock;
+    const hasFloating = pb.runs.some(
+      (r) => r.kind === 'image' && 'position' in r && (r as Record<string, unknown>).position
+    );
+    if (!hasFloating) return block;
+    const inlineRuns = pb.runs.filter(
+      (r) => !(r.kind === 'image' && 'position' in r && (r as Record<string, unknown>).position)
+    );
+    // If only floating images remain, add an empty text run so the paragraph still measures
+    if (inlineRuns.length === 0) {
+      inlineRuns.push({ kind: 'text' as const, text: '' });
+    }
+    return { ...pb, runs: inlineRuns };
+  });
+
+  const measures = measureBlocks(blocksForMeasure, contentWidth);
   const totalHeight = measures.reduce((h, m) => {
     if (m.kind === 'paragraph') {
       return h + m.totalHeight;
@@ -988,6 +1020,53 @@ function convertHeaderFooterToContent(
     measures,
     height: totalHeight,
   };
+}
+
+// =============================================================================
+// FOOTNOTE HELPERS
+// =============================================================================
+
+/**
+ * Build per-page footnote render items from page footnote mapping.
+ */
+function buildFootnoteRenderItems(
+  pageFootnoteMap: Map<number, number[]>,
+  footnoteContentMap: Map<number, { displayNumber: number }>,
+  doc: Document | null
+): Map<number, FootnoteRenderItem[]> {
+  const result = new Map<number, FootnoteRenderItem[]>();
+  if (!doc?.package?.footnotes) return result;
+
+  // Build lookup for footnote text
+  const fnLookup = new Map<number, Footnote>();
+  for (const fn of doc.package.footnotes) {
+    if (fn.noteType && fn.noteType !== 'normal') continue;
+    fnLookup.set(fn.id, fn);
+  }
+
+  for (const [pageNumber, footnoteIds] of pageFootnoteMap) {
+    const items: FootnoteRenderItem[] = [];
+
+    for (const fnId of footnoteIds) {
+      const fn = fnLookup.get(fnId);
+      if (!fn) continue;
+
+      const content = footnoteContentMap.get(fnId);
+      const displayNum = content?.displayNumber ?? 0;
+      const text = getFootnoteText(fn);
+
+      items.push({
+        displayNumber: String(displayNum),
+        text,
+      });
+    }
+
+    if (items.length > 0) {
+      result.set(pageNumber, items);
+    }
+  }
+
+  return result;
 }
 
 // =============================================================================
@@ -1052,6 +1131,25 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
     const [isFocused, setIsFocused] = useState(false);
     const [selectionRects, setSelectionRects] = useState<SelectionRect[]>([]);
     const [caretPosition, setCaretPosition] = useState<CaretPosition | null>(null);
+
+    // Image selection state
+    const [selectedImageInfo, setSelectedImageInfo] = useState<ImageSelectionInfo | null>(null);
+    const isImageInteractingRef = useRef(false);
+
+    /** Build ImageSelectionInfo from a DOM element with data-pm-start */
+    const buildImageSelectionInfo = useCallback(
+      (el: HTMLElement, pmPos: number): ImageSelectionInfo => {
+        const imgTag = el.tagName === 'IMG' ? el : el.querySelector('img');
+        const rect = (imgTag ?? el).getBoundingClientRect();
+        return {
+          element: (imgTag ?? el) as HTMLElement,
+          pmPos,
+          width: Math.round(rect.width / zoom),
+          height: Math.round(rect.height / zoom),
+        };
+      },
+      [zoom]
+    );
 
     // Drag selection state
     const isDraggingRef = useRef(false);
@@ -1133,7 +1231,8 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
         try {
           // Step 1: Convert PM doc to flow blocks
           let stepStart = performance.now();
-          const newBlocks = toFlowBlocks(state.doc, { theme: _theme });
+          const pageContentHeight = pageSize.h - margins.top - margins.bottom;
+          const newBlocks = toFlowBlocks(state.doc, { theme: _theme, pageContentHeight });
           let stepTime = performance.now() - stepStart;
           if (stepTime > 500) {
             console.warn(
@@ -1153,13 +1252,96 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
           }
           setMeasures(newMeasures);
 
-          // Step 3: Layout blocks onto pages
-          // Use document margins directly for WYSIWYG fidelity (matches Word behavior)
+          // Step 2.5: Collect footnote references from blocks
+          const footnoteRefs = collectFootnoteRefs(newBlocks);
+          const hasFootnotes = footnoteRefs.length > 0 && document?.package?.footnotes;
+
+          // Step 2.75: Prepare header/footer content for rendering (needed before layout
+          // to compute effective margins when header content exceeds available space)
+          const headerContentForRender = convertHeaderFooterToContent(headerContent, contentWidth);
+          const footerContentForRender = convertHeaderFooterToContent(footerContent, contentWidth);
+
+          // Adjust margins if header/footer content exceeds available space
+          // (Word and Google Docs push body content down when header grows)
+          const headerDistance = margins.header ?? 48;
+          const footerDistance = margins.footer ?? 48;
+          const availableHeaderSpace = margins.top - headerDistance;
+          const availableFooterSpace = margins.bottom - footerDistance;
+          const headerContentHeight = headerContentForRender?.height ?? 0;
+          const footerContentHeight = footerContentForRender?.height ?? 0;
+
+          let effectiveMargins = margins;
+          if (
+            headerContentHeight > availableHeaderSpace ||
+            footerContentHeight > availableFooterSpace
+          ) {
+            effectiveMargins = { ...margins };
+            if (headerContentHeight > availableHeaderSpace) {
+              effectiveMargins.top = headerDistance + headerContentHeight;
+            }
+            if (footerContentHeight > availableFooterSpace) {
+              effectiveMargins.bottom = footerDistance + footerContentHeight;
+            }
+          }
+
+          // Step 3: Layout blocks onto pages (two-pass if footnotes exist)
           stepStart = performance.now();
-          const newLayout = layoutDocument(newBlocks, newMeasures, {
-            pageSize,
-            margins,
-          });
+          let newLayout: Layout;
+          let pageFootnoteMap = new Map<number, number[]>();
+          let footnoteContentMap = new Map<number, { displayNumber: number; height: number }>();
+
+          if (hasFootnotes) {
+            // Pass 1: Layout without footnote space to determine page assignments
+            const pass1Layout = layoutDocument(newBlocks, newMeasures, {
+              pageSize,
+              margins: effectiveMargins,
+            });
+
+            // Map footnote refs to pages
+            pageFootnoteMap = mapFootnotesToPages(pass1Layout.pages, footnoteRefs);
+
+            // Build footnote content and measure heights
+            footnoteContentMap = buildFootnoteContentMap(
+              document!.package.footnotes!,
+              footnoteRefs,
+              contentWidth
+            );
+
+            // Calculate per-page reserved heights
+            const footnoteReservedHeights = calculateFootnoteReservedHeights(
+              pageFootnoteMap,
+              footnoteContentMap
+            );
+
+            // Pass 2: Layout with reserved heights
+            if (footnoteReservedHeights.size > 0) {
+              newLayout = layoutDocument(newBlocks, newMeasures, {
+                pageSize,
+                margins: effectiveMargins,
+                footnoteReservedHeights,
+              });
+
+              // Re-map footnotes to pages (assignments may have shifted)
+              pageFootnoteMap = mapFootnotesToPages(newLayout.pages, footnoteRefs);
+
+              // Store footnoteIds on each page for rendering
+              for (const [pageNum, fnIds] of pageFootnoteMap) {
+                const page = newLayout.pages.find((p) => p.number === pageNum);
+                if (page) {
+                  page.footnoteIds = fnIds;
+                }
+              }
+            } else {
+              newLayout = pass1Layout;
+            }
+          } else {
+            // No footnotes — single pass
+            newLayout = layoutDocument(newBlocks, newMeasures, {
+              pageSize,
+              margins: effectiveMargins,
+            });
+          }
+
           stepTime = performance.now() - stepStart;
           if (stepTime > 500) {
             console.warn(
@@ -1167,10 +1349,6 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
             );
           }
           setLayout(newLayout);
-
-          // Step 3.5: Prepare header/footer content for rendering
-          const headerContentForRender = convertHeaderFooterToContent(headerContent, contentWidth);
-          const footerContentForRender = convertHeaderFooterToContent(footerContent, contentWidth);
 
           // Step 4: Paint to DOM
           if (pagesContainerRef.current && painterRef.current) {
@@ -1187,7 +1365,12 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
             }
             painterRef.current.setBlockLookup(blockLookup);
 
-            // Render pages to container (using header/footer content computed above)
+            // Build per-page footnote render items
+            const footnotesByPage = hasFootnotes
+              ? buildFootnoteRenderItems(pageFootnoteMap, footnoteContentMap, document)
+              : undefined;
+
+            // Render pages to container
             renderPages(newLayout.pages, pagesContainerRef.current, {
               pageGap,
               showShadow: true,
@@ -1203,7 +1386,12 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
                 : undefined,
               pageBorders: sectionProperties?.pageBorders,
               theme: _theme,
-            } as RenderPageOptions & { pageGap?: number; blockLookup?: BlockLookup });
+              footnotesByPage: footnotesByPage?.size ? footnotesByPage : undefined,
+            } as RenderPageOptions & {
+              pageGap?: number;
+              blockLookup?: BlockLookup;
+              footnotesByPage?: Map<number, FootnoteRenderItem[]>;
+            });
 
             stepTime = performance.now() - stepStart;
             if (stepTime > 500) {
@@ -1242,6 +1430,7 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
         footerContent,
         sectionProperties,
         onRenderedDomContextReady,
+        document,
       ]
     );
 
@@ -1572,9 +1761,40 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
      */
     const handleSelectionChange = useCallback(
       (state: EditorState) => {
-        updateSelectionOverlay(state);
+        // Check if this is an image node selection - suppress text overlay if so
+        const { selection } = state;
+        if (selection instanceof NodeSelection && selection.node.type.name === 'image') {
+          // Suppress text selection overlay for image selections
+          setSelectionRects([]);
+          setCaretPosition(null);
+        } else {
+          updateSelectionOverlay(state);
+        }
+
+        // Defer image selection check until after layout update
+        requestAnimationFrame(() => {
+          const view = hiddenPMRef.current?.getView();
+          if (!view) {
+            setSelectedImageInfo(null);
+            return;
+          }
+          const { selection: sel } = view.state;
+          if (sel instanceof NodeSelection && sel.node.type.name === 'image') {
+            const pmPos = sel.from;
+            const imgEl = pagesContainerRef.current?.querySelector(
+              `[data-pm-start="${pmPos}"]`
+            ) as HTMLElement | null;
+            if (imgEl) {
+              setSelectedImageInfo(buildImageSelectionInfo(imgEl, pmPos));
+              return;
+            }
+          }
+          if (!isImageInteractingRef.current) {
+            setSelectedImageInfo(null);
+          }
+        });
       },
-      [updateSelectionOverlay]
+      [updateSelectionOverlay, zoom, buildImageSelectionInfo]
     );
 
     /**
@@ -1672,11 +1892,62 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
     }, []);
 
     /**
+     * Find the closest image element from a click target.
+     * Returns the element with data-pm-start if it's an image, or null.
+     */
+    const findImageElement = useCallback((target: HTMLElement): HTMLElement | null => {
+      const IMAGE_CONTAINER_CLASSES = [
+        'layout-block-image',
+        'layout-image',
+        'layout-page-floating-image',
+      ];
+      const isImageContainer = (el: HTMLElement) =>
+        !!el.dataset.pmStart && IMAGE_CONTAINER_CLASSES.some((c) => el.classList.contains(c));
+
+      // Inline images: <img class="layout-run layout-run-image" data-pm-start="X">
+      if (target.tagName === 'IMG' && target.classList.contains('layout-run-image')) {
+        return target;
+      }
+      // Click on <img> inside a container div, or directly on the container
+      if (
+        target.tagName === 'IMG' &&
+        target.parentElement &&
+        isImageContainer(target.parentElement)
+      ) {
+        return target.parentElement;
+      }
+      if (isImageContainer(target)) {
+        return target;
+      }
+      return null;
+    }, []);
+
+    /** Scroll visible pages to a ProseMirror position */
+    const scrollToPositionImpl = useCallback((pmPos: number) => {
+      const pageContainer = pagesContainerRef.current;
+      if (!pageContainer) return;
+      const targetEl = pageContainer.querySelector(`[data-pm-start="${pmPos}"]`);
+      if (targetEl) {
+        targetEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+    }, []);
+
+    /**
      * Handle mousedown on pages - start selection or drag.
      */
     const handlePagesMouseDown = useCallback(
       (e: React.MouseEvent) => {
         if (!hiddenPMRef.current || e.button !== 0) return; // Only handle left click
+
+        // Intercept internal anchor link clicks (TOC entries, cross-references)
+        // Must be before readOnly check so links work in read-only mode
+        const anchorEl = (e.target as HTMLElement).closest('a[href^="#"]');
+        if (anchorEl) {
+          e.preventDefault();
+          e.stopPropagation();
+          return; // Let handlePagesClick handle the navigation
+        }
+
         if (readOnly) return;
 
         // When in HF edit mode, clicks outside header/footer area close the HF editor
@@ -1690,6 +1961,24 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
             e.preventDefault();
             e.stopPropagation();
             onBodyClick();
+            return;
+          }
+        }
+
+        // In normal mode, clicks in header/footer area should place cursor at
+        // start of body content, not inside header/footer (matches Word/Google Docs)
+        if (!hfEditMode) {
+          const target = e.target as HTMLElement;
+          const isInHfArea =
+            target.closest('.layout-page-header') || target.closest('.layout-page-footer');
+          if (isInHfArea) {
+            e.preventDefault();
+            // Place cursor at start of body content
+            if (hiddenPMRef.current) {
+              hiddenPMRef.current.setSelection(0);
+              hiddenPMRef.current.focus();
+              setIsFocused(true);
+            }
             return;
           }
         }
@@ -1815,6 +2104,29 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
           return;
         }
 
+        // Check if the click target is an image element
+        const imageEl = findImageElement(target);
+        if (imageEl) {
+          e.preventDefault();
+          e.stopPropagation();
+
+          const pmStart = imageEl.dataset.pmStart;
+          if (pmStart !== undefined) {
+            const pos = parseInt(pmStart, 10);
+            hiddenPMRef.current.setNodeSelection(pos);
+            setSelectedImageInfo(buildImageSelectionInfo(imageEl, pos));
+            setSelectionRects([]);
+            setCaretPosition(null);
+          }
+
+          hiddenPMRef.current.focus();
+          setIsFocused(true);
+          return;
+        }
+
+        // Clicking outside an image clears image selection
+        setSelectedImageInfo(null);
+
         e.preventDefault(); // Prevent native text selection
 
         const pmPos = getPositionFromMouse(e.clientX, e.clientY);
@@ -1850,7 +2162,7 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
         hiddenPMRef.current.focus();
         setIsFocused(true);
       },
-      [getPositionFromMouse, findCellPosFromPmPos, readOnly, hfEditMode, onBodyClick]
+      [getPositionFromMouse, findCellPosFromPmPos, readOnly, hfEditMode, onBodyClick, zoom]
     );
 
     /**
@@ -2169,6 +2481,39 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
      */
     const handlePagesClick = useCallback(
       (e: React.MouseEvent) => {
+        // Intercept internal anchor link clicks (TOC entries, cross-references)
+        const anchorEl = (e.target as HTMLElement).closest('a[href^="#"]');
+        if (anchorEl) {
+          e.preventDefault();
+          e.stopPropagation();
+          const bookmarkName = anchorEl.getAttribute('href')?.substring(1);
+          if (bookmarkName && hiddenPMRef.current) {
+            const view = hiddenPMRef.current.getView();
+            if (view) {
+              // Walk PM doc to find the paragraph with matching bookmark
+              let targetPos: number | null = null;
+              view.state.doc.descendants((node, pos) => {
+                if (targetPos !== null) return false; // stop once found
+                if (node.type.name === 'paragraph') {
+                  const bookmarks = node.attrs.bookmarks as
+                    | Array<{ id: number; name: string }>
+                    | undefined;
+                  if (bookmarks?.some((b) => b.name === bookmarkName)) {
+                    targetPos = pos;
+                    return false;
+                  }
+                }
+              });
+              if (targetPos !== null) {
+                scrollToPositionImpl(targetPos);
+                // Also move selection to the heading
+                hiddenPMRef.current.setSelection(targetPos + 1);
+              }
+            }
+          }
+          return;
+        }
+
         // Double-click on header/footer area triggers editing mode
         if (e.detail === 2 && onHeaderFooterDoubleClick) {
           const target = e.target as HTMLElement;
@@ -2275,6 +2620,142 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
         return; // Focus staying within editor
       }
       setIsFocused(false);
+    }, []);
+
+    /**
+     * Handle image resize from the overlay.
+     */
+    const handleImageResize = useCallback((pmPos: number, newWidth: number, newHeight: number) => {
+      const view = hiddenPMRef.current?.getView();
+      if (!view) return;
+
+      try {
+        const node = view.state.doc.nodeAt(pmPos);
+        if (!node || node.type.name !== 'image') return;
+
+        const tr = view.state.tr.setNodeMarkup(pmPos, undefined, {
+          ...node.attrs,
+          width: newWidth,
+          height: newHeight,
+        });
+        view.dispatch(tr);
+
+        // Re-select the image after resize
+        hiddenPMRef.current?.setNodeSelection(pmPos);
+      } catch {
+        // Position may have changed during resize
+      }
+    }, []);
+
+    /**
+     * Handle image resize start - prevent text selection during resize.
+     */
+    const handleImageResizeStart = useCallback(() => {
+      isImageInteractingRef.current = true;
+    }, []);
+
+    /**
+     * Handle image resize end.
+     */
+    const handleImageResizeEnd = useCallback(() => {
+      isImageInteractingRef.current = false;
+    }, []);
+
+    /**
+     * Handle image drag-to-move: move image node from its current position
+     * to the drop position determined by mouse coordinates.
+     */
+    const handleImageDragMove = useCallback(
+      (pmPos: number, clientX: number, clientY: number) => {
+        const view = hiddenPMRef.current?.getView();
+        if (!view) return;
+
+        try {
+          const node = view.state.doc.nodeAt(pmPos);
+          if (!node || node.type.name !== 'image') return;
+
+          const isFloating =
+            node.attrs.displayMode === 'float' ||
+            (node.attrs.wrapType &&
+              ['square', 'tight', 'through'].includes(node.attrs.wrapType as string));
+
+          if (isFloating) {
+            // For floating images: update position attributes so the image
+            // moves to the drop point while staying floating.
+            // Find the page under the drop point
+            const pages = pagesContainerRef.current?.querySelectorAll('.layout-page');
+            if (!pages || pages.length === 0) return;
+
+            let contentEl: HTMLElement | null = null;
+            for (const page of pages) {
+              const rect = page.getBoundingClientRect();
+              if (clientY >= rect.top && clientY <= rect.bottom) {
+                contentEl = page.querySelector('.layout-page-content') as HTMLElement;
+                break;
+              }
+            }
+            if (!contentEl) {
+              // Fallback to last page if below all pages
+              contentEl = pages[pages.length - 1].querySelector(
+                '.layout-page-content'
+              ) as HTMLElement;
+            }
+            if (!contentEl) return;
+
+            const contentRect = contentEl.getBoundingClientRect();
+            // Convert drop coordinates to content-area-relative pixels
+            const dropX = (clientX - contentRect.left) / zoom;
+            const dropY = (clientY - contentRect.top) / zoom;
+            // Pixels to EMU: px * 914400 / 96
+            const PIXELS_TO_EMU = 914400 / 96;
+            const hOffsetEmu = Math.round(dropX * PIXELS_TO_EMU);
+            const vOffsetEmu = Math.round(dropY * PIXELS_TO_EMU);
+
+            const newPosition = {
+              horizontal: { posOffset: hOffsetEmu, relativeTo: 'margin' },
+              vertical: { posOffset: vOffsetEmu, relativeTo: 'margin' },
+            };
+
+            const tr = view.state.tr.setNodeMarkup(pmPos, undefined, {
+              ...node.attrs,
+              position: newPosition,
+            });
+            view.dispatch(tr);
+            hiddenPMRef.current?.setNodeSelection(pmPos);
+          } else {
+            // For inline images: move to the drop text position
+            const dropPos = getPositionFromMouse(clientX, clientY);
+            if (dropPos === null) return;
+            if (dropPos === pmPos || dropPos === pmPos + 1) return;
+
+            let tr = view.state.tr;
+
+            if (dropPos <= pmPos) {
+              tr = tr.delete(pmPos, pmPos + node.nodeSize);
+              tr = tr.insert(dropPos, node);
+              hiddenPMRef.current?.setNodeSelection(dropPos);
+            } else {
+              tr = tr.delete(pmPos, pmPos + node.nodeSize);
+              const adjusted = dropPos - node.nodeSize;
+              tr = tr.insert(Math.min(adjusted, tr.doc.content.size), node);
+              hiddenPMRef.current?.setNodeSelection(Math.min(adjusted, tr.doc.content.size - 1));
+            }
+
+            view.dispatch(tr);
+          }
+        } catch {
+          // Position may be invalid
+        }
+      },
+      [getPositionFromMouse, zoom]
+    );
+
+    const handleImageDragStart = useCallback(() => {
+      isImageInteractingRef.current = true;
+    }, []);
+
+    const handleImageDragEnd = useCallback(() => {
+      isImageInteractingRef.current = false;
     }, []);
 
     /**
@@ -2468,8 +2949,9 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
             runLayoutPipeline(state);
           }
         },
+        scrollToPosition: scrollToPositionImpl,
       }),
-      [layout, runLayoutPipeline]
+      [layout, runLayoutPipeline, scrollToPositionImpl]
     );
 
     // Update selection overlay when layout changes
@@ -2511,6 +2993,7 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
               runLayoutPipeline(state);
             }
           },
+          scrollToPosition: scrollToPositionImpl,
         });
       }
     }, [layout, runLayoutPipeline]);
@@ -2579,6 +3062,19 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
             isFocused={isFocused}
             pageGap={pageGap}
             readOnly={readOnly}
+          />
+
+          {/* Image selection overlay */}
+          <ImageSelectionOverlay
+            imageInfo={selectedImageInfo}
+            zoom={zoom}
+            isFocused={isFocused}
+            onResize={handleImageResize}
+            onResizeStart={handleImageResizeStart}
+            onResizeEnd={handleImageResizeEnd}
+            onDragMove={handleImageDragMove}
+            onDragStart={handleImageDragStart}
+            onDragEnd={handleImageDragEnd}
           />
 
           {/* Plugin overlays (highlights, annotations) */}

@@ -32,6 +32,10 @@ export type RunFormatting = {
   subscript?: boolean;
   /** Hyperlink info if this run is a link */
   hyperlink?: { href: string; tooltip?: string };
+  /** Footnote reference ID (if this run contains a footnote reference) */
+  footnoteRefId?: number;
+  /** Endnote reference ID (if this run contains an endnote reference) */
+  endnoteRefId?: number;
 };
 
 /**
@@ -220,6 +224,9 @@ export type ParagraphAttrs = {
   numPr?: ListNumPr;
   listMarker?: string; // Pre-computed marker text (e.g., "1.", "•", "a)")
   listIsBullet?: boolean;
+  // Default font for empty paragraphs (from style's rPr / pPr/rPr)
+  defaultFontSize?: number; // in points
+  defaultFontFamily?: string;
 };
 
 /**
@@ -614,6 +621,10 @@ export type Page = {
     footerFirst?: string;
     footerEven?: string;
   };
+  /** Footnote IDs that appear on this page (for rendering). */
+  footnoteIds?: number[];
+  /** Height reserved for the footnote area at page bottom (pixels). */
+  footnoteReservedHeight?: number;
 };
 
 /**
@@ -663,6 +674,22 @@ export type HeaderFooterContentHeights = Partial<
 >;
 
 /**
+ * Pre-calculated footnote content for layout and rendering.
+ */
+export type FootnoteContent = {
+  /** Footnote ID. */
+  id: number;
+  /** Display number (e.g. 1, 2, 3). */
+  displayNumber: number;
+  /** FlowBlocks for rendering the footnote content. */
+  blocks: FlowBlock[];
+  /** Measurements for the blocks. */
+  measures: Measure[];
+  /** Total height in pixels. */
+  height: number;
+};
+
+/**
  * Options for the layout engine.
  */
 export type LayoutOptions = {
@@ -684,6 +711,8 @@ export type LayoutOptions = {
   titlePage?: boolean;
   /** Whether section has different even/odd headers/footers. */
   evenAndOddHeaders?: boolean;
+  /** Per-page footnote reserved heights (pageNumber → height in pixels). */
+  footnoteReservedHeights?: Map<number, number>;
 };
 
 // =============================================================================

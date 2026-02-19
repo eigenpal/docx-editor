@@ -45,16 +45,36 @@ export type ToFlowBlocksOptions = {
   defaultSize?: number;
   /** Theme for resolving theme colors. */
   theme?: Theme | null;
+  /** Page content height in pixels (pageHeight - marginTop - marginBottom). Images taller than this are scaled down to fit. */
+  pageContentHeight?: number;
 };
 
 const DEFAULT_FONT = 'Calibri';
+
+/**
+ * Constrain image dimensions to fit within the page content area.
+ * Scales proportionally if height exceeds pageContentHeight.
+ */
+function constrainImageToPage(
+  width: number,
+  height: number,
+  pageContentHeight: number | undefined
+): { width: number; height: number } {
+  if (!pageContentHeight || height <= pageContentHeight) {
+    return { width, height };
+  }
+  const scale = pageContentHeight / height;
+  return { width: Math.round(width * scale), height: pageContentHeight };
+}
+
 const DEFAULT_SIZE = 11; // points (Word 2007+ default)
 
 /**
- * Convert twips to pixels (1 twip = 1/20 point, 1 point = 1.333px at 96 DPI).
+ * Convert twips to pixels (1 twip = 1/1440 inch, 1 inch = 96 CSS px).
+ * No rounding — precision prevents cumulative layout drift across paragraphs.
  */
 function twipsToPixels(twips: number): number {
-  return Math.round((twips / 20) * 1.333);
+  return (twips / 1440) * 96;
 }
 
 /**
@@ -166,6 +186,17 @@ function extractRunFormatting(marks: readonly Mark[], theme?: Theme | null): Run
         };
         break;
       }
+
+      case 'footnoteRef': {
+        const attrs = mark.attrs as { id: string | number; noteType?: string };
+        const id = typeof attrs.id === 'string' ? parseInt(attrs.id, 10) : attrs.id;
+        if (attrs.noteType === 'endnote') {
+          formatting.endnoteRefId = id;
+        } else {
+          formatting.footnoteRefId = id;
+        }
+        break;
+      }
     }
   }
 
@@ -215,11 +246,16 @@ function paragraphToRuns(node: PMNode, startPos: number, _options: ToFlowBlocksO
     } else if (child.type.name === 'image') {
       // Image within paragraph
       const attrs = child.attrs;
+      const constrained = constrainImageToPage(
+        (attrs.width as number) || 100,
+        (attrs.height as number) || 100,
+        _options.pageContentHeight
+      );
       const run: ImageRun = {
         kind: 'image',
         src: attrs.src as string,
-        width: (attrs.width as number) || 100,
-        height: (attrs.height as number) || 100,
+        width: constrained.width,
+        height: constrained.height,
         alt: attrs.alt as string | undefined,
         transform: attrs.transform as string | undefined,
         // Preserve wrap attributes for proper rendering
@@ -303,11 +339,16 @@ function paragraphToRuns(node: PMNode, startPos: number, _options: ToFlowBlocksO
           runs.push(run);
         } else if (sdtChild.type.name === 'image') {
           const attrs = sdtChild.attrs;
+          const sdtConstrained = constrainImageToPage(
+            (attrs.width as number) || 100,
+            (attrs.height as number) || 100,
+            _options.pageContentHeight
+          );
           const run: ImageRun = {
             kind: 'image',
             src: attrs.src as string,
-            width: (attrs.width as number) || 100,
-            height: (attrs.height as number) || 100,
+            width: sdtConstrained.width,
+            height: sdtConstrained.height,
             alt: attrs.alt as string | undefined,
             transform: attrs.transform as string | undefined,
             wrapType: attrs.wrapType as string | undefined,
@@ -502,6 +543,22 @@ function convertParagraphAttrs(pmAttrs: PMParagraphAttrs): ParagraphAttrs {
   }
   if (pmAttrs.listIsBullet != null) {
     attrs.listIsBullet = pmAttrs.listIsBullet;
+  }
+
+  // Default font for empty paragraph measurement (from style's rPr / pPr/rPr)
+  const dtf = pmAttrs.defaultTextFormatting as
+    | { fontSize?: number; fontFamily?: { ascii?: string; hAnsi?: string } }
+    | undefined;
+  if (dtf) {
+    if (dtf.fontSize != null) {
+      // fontSize in TextFormatting is in half-points, convert to points
+      attrs.defaultFontSize = dtf.fontSize / 2;
+    }
+    if (dtf.fontFamily) {
+      attrs.defaultFontFamily = (dtf.fontFamily.ascii || dtf.fontFamily.hAnsi) as
+        | string
+        | undefined;
+    }
   }
 
   return attrs;
@@ -777,7 +834,7 @@ function convertTable(node: PMNode, startPos: number, options: ToFlowBlocksOptio
 /**
  * Convert an image node to an ImageBlock.
  */
-function convertImage(node: PMNode, startPos: number): ImageBlock {
+function convertImage(node: PMNode, startPos: number, pageContentHeight?: number): ImageBlock {
   const attrs = node.attrs;
   const wrapType = attrs.wrapType as string | undefined;
 
@@ -786,12 +843,18 @@ function convertImage(node: PMNode, startPos: number): ImageBlock {
   // which we don't support yet, so treat them as block-level images
   const shouldAnchor = wrapType === 'behind' || wrapType === 'inFront';
 
+  const constrained = constrainImageToPage(
+    (attrs.width as number) || 100,
+    (attrs.height as number) || 100,
+    pageContentHeight
+  );
+
   return {
     kind: 'image',
     id: nextBlockId(),
     src: attrs.src as string,
-    width: (attrs.width as number) || 100,
-    height: (attrs.height as number) || 100,
+    width: constrained.width,
+    height: constrained.height,
     alt: attrs.alt as string | undefined,
     transform: attrs.transform as string | undefined,
     anchor: shouldAnchor
@@ -815,6 +878,7 @@ function convertImage(node: PMNode, startPos: number): ImageBlock {
  */
 export function toFlowBlocks(doc: PMNode, options: ToFlowBlocksOptions = {}): FlowBlock[] {
   const opts: ToFlowBlocksOptions = {
+    ...options,
     defaultFont: options.defaultFont ?? DEFAULT_FONT,
     defaultSize: options.defaultSize ?? DEFAULT_SIZE,
   };
@@ -864,21 +928,22 @@ export function toFlowBlocks(doc: PMNode, options: ToFlowBlocksOptions = {}): Fl
 
       case 'image':
         // Standalone image block (if not inline)
-        blocks.push(convertImage(node, pos));
+        blocks.push(convertImage(node, pos, opts.pageContentHeight));
         listCounters.clear();
         break;
 
       case 'horizontalRule':
-        // Could be treated as a page break or separator
-        const pageBreak: PageBreakBlock = {
+      case 'pageBreak': {
+        const pb: PageBreakBlock = {
           kind: 'pageBreak',
           id: nextBlockId(),
           pmStart: pos,
           pmEnd: pos + node.nodeSize,
         };
-        blocks.push(pageBreak);
+        blocks.push(pb);
         listCounters.clear();
         break;
+      }
     }
   });
 

@@ -407,7 +407,6 @@ export const ResponsiveToolbar: React.FC<ResponsiveToolbarProps> = ({
         backgroundColor,
         borderBottom,
         position: 'relative',
-        overflow: 'hidden',
         ...style,
       }}
     >
