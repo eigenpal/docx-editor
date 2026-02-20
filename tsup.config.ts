@@ -32,8 +32,6 @@ export default defineConfig([
       'prosemirror-state',
       'prosemirror-tables',
       'prosemirror-view',
-      'docxtemplater',
-      'pizzip',
     ],
     injectStyle: false,
   },

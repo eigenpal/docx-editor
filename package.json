@@ -146,12 +146,10 @@
   "dependencies": {
     "@radix-ui/react-select": "^2.2.6",
     "clsx": "^2.1.0",
-    "jszip": "^3.10.1",
-    "xml-js": "^1.6.11"
-  },
-  "optionalDependencies": {
     "docxtemplater": "^3.50.0",
-    "pizzip": "^3.1.7"
+    "jszip": "^3.10.1",
+    "pizzip": "^3.1.7",
+    "xml-js": "^1.6.11"
   },
   "devDependencies": {
     "@happy-dom/global-registrator": "^13.3.8",
