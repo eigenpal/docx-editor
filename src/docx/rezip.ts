@@ -71,40 +71,33 @@ function collectNewImages(blocks: BlockContent[]): Image[] {
   return images;
 }
 
+/** Map MIME type to file extension (inverse of getContentTypeForExtension) */
+const MIME_TO_EXT: Record<string, string> = {
+  'image/png': 'png',
+  'image/jpeg': 'jpeg',
+  'image/gif': 'gif',
+  'image/bmp': 'bmp',
+  'image/tiff': 'tiff',
+  'image/webp': 'webp',
+  'image/svg+xml': 'svg',
+};
+
 /**
- * Decode a data URL to binary ArrayBuffer and extract MIME type + extension.
+ * Decode a data URL to binary ArrayBuffer and file extension.
  */
-function decodeDataUrl(dataUrl: string): {
-  data: ArrayBuffer;
-  mimeType: string;
-  extension: string;
-} {
+function decodeDataUrl(dataUrl: string): { data: ArrayBuffer; extension: string } {
   const match = dataUrl.match(/^data:([^;]+);base64,(.+)$/);
   if (!match) {
     throw new Error('Invalid data URL');
   }
 
-  const mimeType = match[1];
-  const base64 = match[2];
-  const binary = atob(base64);
+  const binary = atob(match[2]);
   const bytes = new Uint8Array(binary.length);
   for (let i = 0; i < binary.length; i++) {
     bytes[i] = binary.charCodeAt(i);
   }
 
-  const mimeToExt: Record<string, string> = {
-    'image/png': 'png',
-    'image/jpeg': 'jpeg',
-    'image/jpg': 'jpg',
-    'image/gif': 'gif',
-    'image/bmp': 'bmp',
-    'image/tiff': 'tiff',
-    'image/webp': 'webp',
-    'image/svg+xml': 'svg',
-  };
-  const extension = mimeToExt[mimeType] || 'png';
-
-  return { data: bytes.buffer, mimeType, extension };
+  return { data: bytes.buffer, extension: MIME_TO_EXT[match[1]] || 'png' };
 }
 
 /**
@@ -148,9 +141,7 @@ async function processNewImages(
   const extensionsAdded = new Set<string>();
 
   for (const image of newImages) {
-    if (!image.src?.startsWith('data:')) continue;
-
-    const { data, extension } = decodeDataUrl(image.src);
+    const { data, extension } = decodeDataUrl(image.src!);
 
     maxImageNum++;
     maxId++;
