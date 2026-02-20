@@ -37,7 +37,6 @@ import { executeCommand, executeCommands } from './executor';
 import type { AgentCommand } from '../types/agentApi';
 import { repackDocx, createDocx } from '../docx/rezip';
 import { detectVariables } from '../utils/variableDetector';
-import { processTemplate } from '../utils/processTemplate';
 import { parseDocx } from '../docx/parser';
 import type { DocxInput } from '../utils/docxInput';
 
@@ -649,7 +648,8 @@ export class DocumentAgent {
       throw new Error('Cannot apply variables: no original buffer for processing');
     }
 
-    // Process template using docxtemplater
+    // Process template using docxtemplater (dynamic import to keep it off critical path)
+    const { processTemplate } = await import('../utils/processTemplate');
     const processedBuffer = processTemplate(buffer, allVariables);
 
     // Parse the processed document

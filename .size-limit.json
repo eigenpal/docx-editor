@@ -1,0 +1,26 @@
+[
+  {
+    "path": "dist/index.js",
+    "limit": "35 KB"
+  },
+  {
+    "path": "dist/core.js",
+    "limit": "5 KB"
+  },
+  {
+    "path": "dist/react.js",
+    "limit": "5 KB"
+  },
+  {
+    "path": "dist/ui.js",
+    "limit": "10 KB"
+  },
+  {
+    "path": "dist/headless.js",
+    "limit": "10 KB"
+  },
+  {
+    "path": "dist/styles.css",
+    "limit": "25 KB"
+  }
+]

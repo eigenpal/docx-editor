@@ -18,6 +18,8 @@ import {
   useMemo,
   forwardRef,
   useImperativeHandle,
+  lazy,
+  Suspense,
 } from 'react';
 import type { CSSProperties, ReactNode } from 'react';
 import type { Document, Theme, HeaderFooter } from '../types/document';
@@ -43,8 +45,8 @@ import {
 import { HorizontalRuler } from './ui/HorizontalRuler';
 import { VerticalRuler } from './ui/VerticalRuler';
 import { type PrintOptions } from './ui/PrintPreview';
+// Dialog hooks and utilities (static imports — lightweight, no UI)
 import {
-  FindReplaceDialog,
   useFindReplace,
   findInDocument,
   scrollToMatch,
@@ -52,15 +54,31 @@ import {
   type FindOptions,
   type FindResult,
 } from './dialogs/FindReplaceDialog';
-import { HyperlinkDialog, useHyperlinkDialog, type HyperlinkData } from './dialogs/HyperlinkDialog';
-import { TablePropertiesDialog } from './dialogs/TablePropertiesDialog';
-import { ImagePositionDialog, type ImagePositionData } from './dialogs/ImagePositionDialog';
-import { ImagePropertiesDialog, type ImagePropertiesData } from './dialogs/ImagePropertiesDialog';
+import { useHyperlinkDialog, type HyperlinkData } from './dialogs/HyperlinkDialog';
+import type { ImagePositionData } from './dialogs/ImagePositionDialog';
+import type { ImagePropertiesData } from './dialogs/ImagePropertiesDialog';
 import {
   InlineHeaderFooterEditor,
   type InlineHeaderFooterEditorRef,
 } from './InlineHeaderFooterEditor';
-import { FootnotePropertiesDialog } from './dialogs/FootnotePropertiesDialog';
+
+// Dialog components (lazy-loaded — only fetched when first opened)
+const FindReplaceDialog = lazy(() => import('./dialogs/FindReplaceDialog'));
+const HyperlinkDialog = lazy(() => import('./dialogs/HyperlinkDialog'));
+const TablePropertiesDialog = lazy(() =>
+  import('./dialogs/TablePropertiesDialog').then((m) => ({ default: m.TablePropertiesDialog }))
+);
+const ImagePositionDialog = lazy(() =>
+  import('./dialogs/ImagePositionDialog').then((m) => ({ default: m.ImagePositionDialog }))
+);
+const ImagePropertiesDialog = lazy(() =>
+  import('./dialogs/ImagePropertiesDialog').then((m) => ({ default: m.ImagePropertiesDialog }))
+);
+const FootnotePropertiesDialog = lazy(() =>
+  import('./dialogs/FootnotePropertiesDialog').then((m) => ({
+    default: m.FootnotePropertiesDialog,
+  }))
+);
 import { MaterialSymbol } from './ui/Icons';
 import { getBuiltinTableStyle, type TableStylePreset } from './ui/TableStyleGallery';
 import { DocumentAgent } from '../agent/DocumentAgent';
@@ -2427,68 +2445,82 @@ body { background: white; }
             )}
           </div>
 
-          {/* Find/Replace Dialog */}
-          <FindReplaceDialog
-            isOpen={findReplace.state.isOpen}
-            onClose={findReplace.close}
-            onFind={handleFind}
-            onFindNext={handleFindNext}
-            onFindPrevious={handleFindPrevious}
-            onReplace={handleReplace}
-            onReplaceAll={handleReplaceAll}
-            initialSearchText={findReplace.state.searchText}
-            replaceMode={findReplace.state.replaceMode}
-            currentResult={findResultRef.current}
-          />
-
-          {/* Hyperlink Dialog */}
-          <HyperlinkDialog
-            isOpen={hyperlinkDialog.state.isOpen}
-            onClose={hyperlinkDialog.close}
-            onSubmit={handleHyperlinkSubmit}
-            onRemove={hyperlinkDialog.state.isEditing ? handleHyperlinkRemove : undefined}
-            initialData={hyperlinkDialog.state.initialData}
-            selectedText={hyperlinkDialog.state.selectedText}
-            isEditing={hyperlinkDialog.state.isEditing}
-          />
-          <TablePropertiesDialog
-            isOpen={tablePropsOpen}
-            onClose={() => setTablePropsOpen(false)}
-            onApply={(props) => {
-              const view = getActiveEditorView();
-              if (view) {
-                setTableProperties(props)(view.state, view.dispatch);
-              }
-            }}
-            currentProps={state.pmTableContext?.table?.attrs as Record<string, unknown> | undefined}
-          />
-          <ImagePositionDialog
-            isOpen={imagePositionOpen}
-            onClose={() => setImagePositionOpen(false)}
-            onApply={handleApplyImagePosition}
-          />
-          <ImagePropertiesDialog
-            isOpen={imagePropsOpen}
-            onClose={() => setImagePropsOpen(false)}
-            onApply={handleApplyImageProperties}
-            currentData={
-              state.pmImageContext
-                ? {
-                    alt: state.pmImageContext.alt ?? undefined,
-                    borderWidth: state.pmImageContext.borderWidth ?? undefined,
-                    borderColor: state.pmImageContext.borderColor ?? undefined,
-                    borderStyle: state.pmImageContext.borderStyle ?? undefined,
+          {/* Lazy-loaded dialogs — only fetched when first opened */}
+          <Suspense fallback={null}>
+            {findReplace.state.isOpen && (
+              <FindReplaceDialog
+                isOpen={findReplace.state.isOpen}
+                onClose={findReplace.close}
+                onFind={handleFind}
+                onFindNext={handleFindNext}
+                onFindPrevious={handleFindPrevious}
+                onReplace={handleReplace}
+                onReplaceAll={handleReplaceAll}
+                initialSearchText={findReplace.state.searchText}
+                replaceMode={findReplace.state.replaceMode}
+                currentResult={findResultRef.current}
+              />
+            )}
+            {hyperlinkDialog.state.isOpen && (
+              <HyperlinkDialog
+                isOpen={hyperlinkDialog.state.isOpen}
+                onClose={hyperlinkDialog.close}
+                onSubmit={handleHyperlinkSubmit}
+                onRemove={hyperlinkDialog.state.isEditing ? handleHyperlinkRemove : undefined}
+                initialData={hyperlinkDialog.state.initialData}
+                selectedText={hyperlinkDialog.state.selectedText}
+                isEditing={hyperlinkDialog.state.isEditing}
+              />
+            )}
+            {tablePropsOpen && (
+              <TablePropertiesDialog
+                isOpen={tablePropsOpen}
+                onClose={() => setTablePropsOpen(false)}
+                onApply={(props) => {
+                  const view = getActiveEditorView();
+                  if (view) {
+                    setTableProperties(props)(view.state, view.dispatch);
                   }
-                : undefined
-            }
-          />
-          <FootnotePropertiesDialog
-            isOpen={footnotePropsOpen}
-            onClose={() => setFootnotePropsOpen(false)}
-            onApply={handleApplyFootnoteProperties}
-            footnotePr={history.state?.package.document?.finalSectionProperties?.footnotePr}
-            endnotePr={history.state?.package.document?.finalSectionProperties?.endnotePr}
-          />
+                }}
+                currentProps={
+                  state.pmTableContext?.table?.attrs as Record<string, unknown> | undefined
+                }
+              />
+            )}
+            {imagePositionOpen && (
+              <ImagePositionDialog
+                isOpen={imagePositionOpen}
+                onClose={() => setImagePositionOpen(false)}
+                onApply={handleApplyImagePosition}
+              />
+            )}
+            {imagePropsOpen && (
+              <ImagePropertiesDialog
+                isOpen={imagePropsOpen}
+                onClose={() => setImagePropsOpen(false)}
+                onApply={handleApplyImageProperties}
+                currentData={
+                  state.pmImageContext
+                    ? {
+                        alt: state.pmImageContext.alt ?? undefined,
+                        borderWidth: state.pmImageContext.borderWidth ?? undefined,
+                        borderColor: state.pmImageContext.borderColor ?? undefined,
+                        borderStyle: state.pmImageContext.borderStyle ?? undefined,
+                      }
+                    : undefined
+                }
+              />
+            )}
+            {footnotePropsOpen && (
+              <FootnotePropertiesDialog
+                isOpen={footnotePropsOpen}
+                onClose={() => setFootnotePropsOpen(false)}
+                onApply={handleApplyFootnoteProperties}
+                footnotePr={history.state?.package.document?.finalSectionProperties?.footnotePr}
+                endnotePr={history.state?.package.document?.finalSectionProperties?.endnotePr}
+              />
+            )}
+          </Suspense>
           {/* InlineHeaderFooterEditor is rendered inside the editor content area (position:relative div) */}
           {/* Hidden file input for image insertion */}
           <input

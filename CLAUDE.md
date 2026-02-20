@@ -330,6 +330,21 @@ When testing UI changes visually (verifying rendering, screenshots for PRs, inte
 
 ---
 
+## Issue-Driven Bug Fix Workflow
+
+Issue tracker: **https://github.com/eigenpal/docx-js-editor/issues** (`gh issue view <N> --repo eigenpal/docx-js-editor`)
+
+1. **Read** the issue — get description, repro steps, attached files
+2. **Reproduce** locally — `bun run dev` + Claude in Chrome at `localhost:5173`
+3. **Investigate** root cause — use Debugging Checklist + Key File Map above
+4. **Fix** — minimal change, fix the right renderer (layout-painter vs PM)
+5. **Test** — add/update Playwright E2E tests (see Test File Mapping)
+6. **Verify** — `bun run typecheck` + targeted Playwright tests + visual check
+7. **Commit** — reference issue number: `fix: ... (fixes #N)`
+8. **PR** — `gh pr create` referencing issue, include screenshots for visual bugs
+
+---
+
 ## Rules
 
 - **Screenshots:** Save to `screenshots/` folder

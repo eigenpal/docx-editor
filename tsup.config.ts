@@ -8,6 +8,9 @@ export default defineConfig([
     entry: {
       index: 'src/index.ts',
       headless: 'src/headless.ts',
+      core: 'src/core.ts',
+      react: 'src/react.ts',
+      ui: 'src/ui.ts',
       'core-plugins': 'src/core-plugins/index.ts',
       mcp: 'src/mcp/index.ts',
     },
@@ -18,7 +21,18 @@ export default defineConfig([
     clean: true,
     treeshake: true, // Enable tree-shaking
     minify: true, // Minify the output
-    external: ['react', 'react-dom'],
+    external: [
+      'react',
+      'react-dom',
+      'prosemirror-commands',
+      'prosemirror-dropcursor',
+      'prosemirror-history',
+      'prosemirror-keymap',
+      'prosemirror-model',
+      'prosemirror-state',
+      'prosemirror-tables',
+      'prosemirror-view',
+    ],
     injectStyle: false,
   },
   // CLI build (with shebang) - bundles all deps for standalone use

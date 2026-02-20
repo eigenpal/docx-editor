@@ -31,10 +31,171 @@
 
 import JSZip from 'jszip';
 import type { Document } from '../types/document';
+import type { BlockContent, Image } from '../types/content';
 import { serializeDocument } from './serializer/documentSerializer';
 import { serializeHeaderFooter } from './serializer/headerFooterSerializer';
 import { RELATIONSHIP_TYPES } from './relsParser';
 import { type RawDocxContent } from './unzip';
+
+// ============================================================================
+// NEW IMAGE HANDLING
+// ============================================================================
+
+/**
+ * Collect all images with data-URL src from the document content.
+ * These are newly inserted images that need to be added to the ZIP.
+ */
+function collectNewImages(blocks: BlockContent[]): Image[] {
+  const images: Image[] = [];
+
+  for (const block of blocks) {
+    if (block.type === 'paragraph') {
+      for (const item of block.content) {
+        if (item.type === 'run') {
+          for (const c of item.content) {
+            if (c.type === 'drawing' && c.image.src?.startsWith('data:')) {
+              images.push(c.image);
+            }
+          }
+        }
+      }
+    } else if (block.type === 'table') {
+      for (const row of block.rows) {
+        for (const cell of row.cells) {
+          images.push(...collectNewImages(cell.content));
+        }
+      }
+    }
+  }
+
+  return images;
+}
+
+/** Map MIME type to file extension (inverse of getContentTypeForExtension) */
+const MIME_TO_EXT: Record<string, string> = {
+  'image/png': 'png',
+  'image/jpeg': 'jpeg',
+  'image/gif': 'gif',
+  'image/bmp': 'bmp',
+  'image/tiff': 'tiff',
+  'image/webp': 'webp',
+  'image/svg+xml': 'svg',
+};
+
+/**
+ * Decode a data URL to binary ArrayBuffer and file extension.
+ */
+function decodeDataUrl(dataUrl: string): { data: ArrayBuffer; extension: string } {
+  const match = dataUrl.match(/^data:([^;]+);base64,(.+)$/);
+  if (!match) {
+    throw new Error('Invalid data URL');
+  }
+
+  const binary = atob(match[2]);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) {
+    bytes[i] = binary.charCodeAt(i);
+  }
+
+  return { data: bytes.buffer, extension: MIME_TO_EXT[match[1]] || 'png' };
+}
+
+/**
+ * Process newly inserted images: add binary data to ZIP, create relationships,
+ * update content types, and rewrite rIds in the document model so the serializer
+ * outputs correct references.
+ *
+ * Mutates the images' rId fields in-place.
+ */
+async function processNewImages(
+  newImages: Image[],
+  zip: JSZip,
+  compressionLevel: number
+): Promise<void> {
+  if (newImages.length === 0) return;
+
+  // Read existing relationships
+  const relsPath = 'word/_rels/document.xml.rels';
+  const relsFile = zip.file(relsPath);
+  if (!relsFile) return;
+  let relsXml = await relsFile.async('text');
+
+  // Find highest existing rId
+  let maxId = 0;
+  for (const match of relsXml.matchAll(/Id="rId(\d+)"/g)) {
+    const id = parseInt(match[1], 10);
+    if (id > maxId) maxId = id;
+  }
+
+  // Find highest existing image number in word/media/
+  let maxImageNum = 0;
+  zip.forEach((relativePath) => {
+    const m = relativePath.match(/^word\/media\/image(\d+)\./);
+    if (m) {
+      const num = parseInt(m[1], 10);
+      if (num > maxImageNum) maxImageNum = num;
+    }
+  });
+
+  const relEntries: string[] = [];
+  const extensionsAdded = new Set<string>();
+
+  for (const image of newImages) {
+    const { data, extension } = decodeDataUrl(image.src!);
+
+    maxImageNum++;
+    maxId++;
+    const mediaFilename = `image${maxImageNum}.${extension}`;
+    const mediaPath = `word/media/${mediaFilename}`;
+    const newRId = `rId${maxId}`;
+
+    // Add binary to ZIP
+    zip.file(mediaPath, data, {
+      compression: 'DEFLATE',
+      compressionOptions: { level: compressionLevel },
+    });
+
+    // Build relationship entry
+    relEntries.push(
+      `<Relationship Id="${newRId}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="media/${mediaFilename}"/>`
+    );
+
+    extensionsAdded.add(extension);
+
+    // Rewrite the image's rId so the serializer outputs the correct reference
+    image.rId = newRId;
+  }
+
+  // Update relationships XML
+  if (relEntries.length > 0) {
+    relsXml = relsXml.replace('</Relationships>', relEntries.join('') + '</Relationships>');
+    zip.file(relsPath, relsXml, {
+      compression: 'DEFLATE',
+      compressionOptions: { level: compressionLevel },
+    });
+  }
+
+  // Update [Content_Types].xml if new extensions were added
+  if (extensionsAdded.size > 0) {
+    const ctFile = zip.file('[Content_Types].xml');
+    if (ctFile) {
+      let ctXml = await ctFile.async('text');
+      for (const ext of extensionsAdded) {
+        if (!ctXml.includes(`Extension="${ext}"`)) {
+          const contentType = getContentTypeForExtension(ext, '');
+          ctXml = ctXml.replace(
+            '</Types>',
+            `<Default Extension="${ext}" ContentType="${contentType}"/></Types>`
+          );
+        }
+      }
+      zip.file('[Content_Types].xml', ctXml, {
+        compression: 'DEFLATE',
+        compressionOptions: { level: compressionLevel },
+      });
+    }
+  }
+}
 
 // ============================================================================
 // MAIN REPACKER
@@ -95,7 +256,12 @@ export async function repackDocx(doc: Document, options: RepackOptions = {}): Pr
     });
   }
 
-  // Serialize and update document.xml
+  // Process newly inserted images (data URLs → binary media files + relationships).
+  // This mutates image rIds in-place so the serializer outputs correct references.
+  const newImages = collectNewImages(doc.package.document.content);
+  await processNewImages(newImages, newZip, compressionLevel);
+
+  // Serialize and update document.xml (after image rIds have been rewritten)
   const documentXml = serializeDocument(doc);
   newZip.file('word/document.xml', documentXml, {
     compression: 'DEFLATE',
