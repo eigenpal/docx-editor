@@ -15,6 +15,9 @@ import type {
   TabStop,
   TextFormatting,
   NumberFormat,
+  TableFormatting,
+  TableRowFormatting,
+  TableCellFormatting,
 } from '../../types/document';
 import type { FloatingTableProperties, TableLook } from '../../types';
 
@@ -149,6 +152,8 @@ export interface ImageAttrs {
   borderColor?: string;
   /** Border style (CSS border-style value) */
   borderStyle?: string;
+  /** Wrap text setting from DOCX (left, right, bothSides, largest) for round-trip */
+  wrapText?: string;
 }
 
 /**
@@ -171,6 +176,8 @@ export interface TableAttrs {
   cellMargins?: { top?: number; bottom?: number; left?: number; right?: number };
   /** Table look flags for conditional formatting (w:tblLook) */
   look?: TableLook;
+  /** Original table formatting from DOCX for lossless round-trip serialization */
+  _originalFormatting?: TableFormatting;
 }
 
 /**
@@ -183,6 +190,8 @@ export interface TableRowAttrs {
   heightRule?: string;
   /** Is header row */
   isHeader?: boolean;
+  /** Original row formatting from DOCX for lossless round-trip serialization */
+  _originalFormatting?: TableRowFormatting;
 }
 
 /**
@@ -211,4 +220,6 @@ export interface TableCellAttrs {
   borders?: { top?: BorderSpec; bottom?: BorderSpec; left?: BorderSpec; right?: BorderSpec };
   /** Cell margins/padding in twips per side */
   margins?: { top?: number; bottom?: number; left?: number; right?: number };
+  /** Original cell formatting from DOCX for lossless round-trip serialization */
+  _originalFormatting?: TableCellFormatting;
 }

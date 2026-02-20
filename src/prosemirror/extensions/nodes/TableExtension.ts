@@ -44,6 +44,7 @@ const tableSpec: NodeSpec = {
     floating: { default: null },
     cellMargins: { default: null },
     look: { default: null },
+    _originalFormatting: { default: null },
   },
   parseDOM: [
     {
@@ -98,6 +99,7 @@ const tableRowSpec: NodeSpec = {
     height: { default: null },
     heightRule: { default: null },
     isHeader: { default: false },
+    _originalFormatting: { default: null },
   },
   parseDOM: [{ tag: 'tr' }],
   toDOM(node) {
@@ -248,6 +250,7 @@ const tableCellSpec: NodeSpec = {
     margins: { default: null },
     textDirection: { default: null },
     noWrap: { default: false },
+    _originalFormatting: { default: null },
   },
   parseDOM: [
     {
@@ -313,6 +316,7 @@ const tableHeaderSpec: NodeSpec = {
     margins: { default: null },
     textDirection: { default: null },
     noWrap: { default: false },
+    _originalFormatting: { default: null },
   },
   parseDOM: [
     {

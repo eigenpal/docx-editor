@@ -526,6 +526,7 @@ function convertTable(table: Table, styleResolver: StyleResolver | null): PMNode
     floating: table.formatting?.floating,
     cellMargins: cellMarginsAttr,
     look: table.formatting?.look,
+    _originalFormatting: table.formatting || undefined,
   };
 
   const conditionalStyles = {
@@ -628,6 +629,7 @@ function convertTableRow(
     height: row.formatting?.height?.value,
     heightRule: row.formatting?.heightRule,
     isHeader: isHeaderRow || row.formatting?.header,
+    _originalFormatting: row.formatting || undefined,
   };
 
   const numCells = row.cells.length;
@@ -890,6 +892,7 @@ function convertTableCell(
             right: conditionalStyle.tcPr.margins.right?.value,
           }
         : defaultCellMargins,
+    _originalFormatting: formatting || undefined,
   };
 
   // Convert cell content (paragraphs and nested tables)
@@ -1318,6 +1321,7 @@ function convertImage(image: Image): PMNode {
     borderWidth: borderWidth,
     borderColor: borderColor,
     borderStyle: borderStyle,
+    wrapText: wrapText,
   });
 }
 

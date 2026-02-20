@@ -741,6 +741,11 @@ function createImageRun(node: PMNode): Run {
   if (attrs.distLeft !== undefined) wrap.distL = Math.round(attrs.distLeft * PX_TO_EMU);
   if (attrs.distRight !== undefined) wrap.distR = Math.round(attrs.distRight * PX_TO_EMU);
 
+  // Restore wrapText from PM attr
+  if (attrs.wrapText) {
+    wrap.wrapText = attrs.wrapText as import('../../types/content').ImageWrap['wrapText'];
+  }
+
   const image: Image = {
     type: 'image',
     rId: attrs.rId || '',
@@ -753,6 +758,25 @@ function createImageRun(node: PMNode): Run {
     },
     wrap,
   };
+
+  // Parse CSS transform string back to ImageTransform for round-trip
+  if (attrs.transform) {
+    const transformStr = attrs.transform;
+    const imgTransform: import('../../types/content').ImageTransform = {};
+    const rotateMatch = transformStr.match(/rotate\(([-\d.]+)deg\)/);
+    if (rotateMatch) {
+      imgTransform.rotation = parseFloat(rotateMatch[1]);
+    }
+    if (transformStr.includes('scaleX(-1)')) {
+      imgTransform.flipH = true;
+    }
+    if (transformStr.includes('scaleY(-1)')) {
+      imgTransform.flipV = true;
+    }
+    if (imgTransform.rotation || imgTransform.flipH || imgTransform.flipV) {
+      image.transform = imgTransform;
+    }
+  }
 
   // Round-trip floating image position (ImagePositionAttrs uses loose strings;
   // cast to the strict OOXML union types for the Document model)
@@ -1087,6 +1111,66 @@ function convertPMTable(node: PMNode): Table {
  * Convert ProseMirror table attrs to TableFormatting
  */
 function tableAttrsToFormatting(attrs: TableAttrs): TableFormatting | undefined {
+  // If we have the original formatting from the DOCX, use it as a base
+  // for lossless round-trip. This preserves properties like cellSpacing,
+  // indent, layout, bidi, overlap, shading that aren't tracked as PM attrs.
+  if (attrs._originalFormatting) {
+    const orig = attrs._originalFormatting;
+    const result = { ...orig };
+
+    // Override properties that user may have changed via editor commands
+    if (attrs.styleId !== (orig.styleId || undefined)) {
+      result.styleId = attrs.styleId || undefined;
+    }
+    if (attrs.justification !== (orig.justification || undefined)) {
+      result.justification = attrs.justification || undefined;
+    }
+    if (attrs.floating !== (orig.floating || undefined)) {
+      result.floating = attrs.floating || undefined;
+    }
+    if (attrs.look !== (orig.look || undefined)) {
+      result.look = attrs.look || undefined;
+    }
+    // Width: check if changed
+    const origWidthVal = orig.width?.value;
+    const origWidthType = orig.width?.type;
+    if (attrs.width !== origWidthVal || attrs.widthType !== origWidthType) {
+      if (attrs.width != null || attrs.widthType) {
+        result.width = {
+          value: attrs.width ?? 0,
+          type: (attrs.widthType as 'auto' | 'dxa' | 'pct' | 'nil') || 'dxa',
+        };
+      } else {
+        result.width = undefined;
+      }
+    }
+    // CellMargins: override if changed
+    if (attrs.cellMargins) {
+      result.cellMargins = {
+        top:
+          attrs.cellMargins.top != null
+            ? { value: attrs.cellMargins.top, type: 'dxa' as const }
+            : undefined,
+        bottom:
+          attrs.cellMargins.bottom != null
+            ? { value: attrs.cellMargins.bottom, type: 'dxa' as const }
+            : undefined,
+        left:
+          attrs.cellMargins.left != null
+            ? { value: attrs.cellMargins.left, type: 'dxa' as const }
+            : undefined,
+        right:
+          attrs.cellMargins.right != null
+            ? { value: attrs.cellMargins.right, type: 'dxa' as const }
+            : undefined,
+      };
+    }
+
+    return result;
+  }
+
+  // Fallback: reconstruct formatting from individual attrs (e.g. for
+  // newly created tables that don't have _originalFormatting)
   const hasFormatting =
     attrs.styleId ||
     attrs.width != null ||
@@ -1165,6 +1249,28 @@ function convertPMTableRow(node: PMNode): TableRow {
  * Convert ProseMirror table row attrs to TableRowFormatting
  */
 function tableRowAttrsToFormatting(attrs: TableRowAttrs): TableRowFormatting | undefined {
+  // If we have the original formatting from the DOCX, use it as a base
+  // for lossless round-trip. This preserves properties like cantSplit,
+  // justification, hidden, conditionalFormat that aren't tracked as PM attrs.
+  if (attrs._originalFormatting) {
+    const orig = attrs._originalFormatting;
+    const result = { ...orig };
+
+    // Override properties that user may have changed via editor commands
+    if (attrs.height !== (orig.height?.value || undefined)) {
+      result.height = attrs.height ? { value: attrs.height, type: 'dxa' as const } : undefined;
+    }
+    if (attrs.heightRule !== (orig.heightRule || undefined)) {
+      result.heightRule = (attrs.heightRule as 'auto' | 'atLeast' | 'exact') || undefined;
+    }
+    if (attrs.isHeader !== (orig.header || undefined)) {
+      result.header = attrs.isHeader || undefined;
+    }
+
+    return result;
+  }
+
+  // Fallback: reconstruct formatting from individual attrs
   const hasFormatting = attrs.height || attrs.isHeader;
 
   if (!hasFormatting) {
@@ -1211,10 +1317,58 @@ function convertPMTableCell(node: PMNode): TableCell {
  * Borders are stored as full BorderSpec objects — no conversion needed.
  */
 function tableCellAttrsToFormatting(attrs: TableCellAttrs): TableCellFormatting | undefined {
+  // If we have the original formatting from the DOCX, use it as a base
+  // for lossless round-trip. This preserves properties like vMerge, fitText,
+  // hideMark, conditionalFormat that aren't tracked as PM attrs.
+  if (attrs._originalFormatting) {
+    const orig = attrs._originalFormatting;
+    const result = { ...orig };
+
+    // Override properties that user may have changed via editor commands
+    if (attrs.colspan > 1) {
+      result.gridSpan = attrs.colspan;
+    }
+    // Width: use != null to handle width=0 correctly
+    if (attrs.width != null) {
+      result.width = {
+        value: attrs.width,
+        type: (attrs.widthType as 'auto' | 'dxa' | 'pct' | 'nil') || 'dxa',
+      };
+    }
+    if (attrs.verticalAlign !== (orig.verticalAlign || undefined)) {
+      result.verticalAlign = attrs.verticalAlign || undefined;
+    }
+    if (attrs.backgroundColor) {
+      result.shading = { fill: { rgb: attrs.backgroundColor } };
+    } else if (!attrs.backgroundColor && orig.shading) {
+      // User cleared the background color
+      result.shading = undefined;
+    }
+    if (attrs.borders) {
+      result.borders = attrs.borders as TableCellFormatting['borders'];
+    }
+    if (attrs.margins) {
+      const m = attrs.margins;
+      const margins: TableCellFormatting['margins'] = {};
+      if (m.top != null) margins.top = { value: m.top, type: 'dxa' };
+      if (m.bottom != null) margins.bottom = { value: m.bottom, type: 'dxa' };
+      if (m.left != null) margins.left = { value: m.left, type: 'dxa' };
+      if (m.right != null) margins.right = { value: m.right, type: 'dxa' };
+      result.margins = margins;
+    }
+    if (attrs.textDirection !== (orig.textDirection || undefined)) {
+      result.textDirection =
+        (attrs.textDirection as TableCellFormatting['textDirection']) || undefined;
+    }
+
+    return result;
+  }
+
+  // Fallback: reconstruct formatting from individual attrs
   const hasFormatting =
     attrs.colspan > 1 ||
     attrs.rowspan > 1 ||
-    attrs.width ||
+    attrs.width != null ||
     attrs.verticalAlign ||
     attrs.backgroundColor ||
     attrs.borders ||
@@ -1238,12 +1392,13 @@ function tableCellAttrsToFormatting(attrs: TableCellAttrs): TableCellFormatting 
 
   return {
     gridSpan: attrs.colspan > 1 ? attrs.colspan : undefined,
-    width: attrs.width
-      ? {
-          value: attrs.width,
-          type: (attrs.widthType as 'auto' | 'dxa' | 'pct' | 'nil') || 'dxa',
-        }
-      : undefined,
+    width:
+      attrs.width != null
+        ? {
+            value: attrs.width,
+            type: (attrs.widthType as 'auto' | 'dxa' | 'pct' | 'nil') || 'dxa',
+          }
+        : undefined,
     verticalAlign: attrs.verticalAlign || undefined,
     textDirection: (attrs.textDirection as TableCellFormatting['textDirection']) || undefined,
     shading: attrs.backgroundColor
