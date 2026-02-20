@@ -525,6 +525,7 @@ function convertTable(table: Table, styleResolver: StyleResolver | null): PMNode
     columnWidths: columnWidths,
     floating: table.formatting?.floating,
     cellMargins: cellMarginsAttr,
+    look: table.formatting?.look,
   };
 
   const conditionalStyles = {

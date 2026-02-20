@@ -16,7 +16,7 @@ import type {
   TextFormatting,
   NumberFormat,
 } from '../../types/document';
-import type { FloatingTableProperties } from '../../types';
+import type { FloatingTableProperties, TableLook } from '../../types';
 
 /**
  * Paragraph node attributes - maps to ParagraphFormatting
@@ -169,6 +169,8 @@ export interface TableAttrs {
   floating?: FloatingTableProperties;
   /** Default cell margins for the table (w:tblCellMar), in twips */
   cellMargins?: { top?: number; bottom?: number; left?: number; right?: number };
+  /** Table look flags for conditional formatting (w:tblLook) */
+  look?: TableLook;
 }
 
 /**
