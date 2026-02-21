@@ -356,9 +356,42 @@ function measureTableBlock(tableBlock: TableBlock, contentWidth: number): TableM
     }
   }
 
-  // Calculate cell widths based on colSpan and columnWidths
-  const rows = tableBlock.rows.map((row) => {
+  // Build a map of columns occupied by spanning cells from previous rows.
+  // Without this, cells in rows with vertical merges get the wrong column width.
+  const occupiedColumnsPerRow = new Map<number, Set<number>>();
+  for (let rowIdx = 0; rowIdx < tableBlock.rows.length; rowIdx++) {
+    const row = tableBlock.rows[rowIdx];
+    if (!row) continue;
+    let colIdx = 0;
+    const occupied = occupiedColumnsPerRow.get(rowIdx) ?? new Set<number>();
+    while (occupied.has(colIdx)) colIdx++;
+
+    for (const cell of row.cells) {
+      const colSpan = cell.colSpan ?? 1;
+      const rowSpan = cell.rowSpan ?? 1;
+
+      if (rowSpan > 1) {
+        for (let r = rowIdx + 1; r < rowIdx + rowSpan; r++) {
+          if (!occupiedColumnsPerRow.has(r)) occupiedColumnsPerRow.set(r, new Set());
+          const occSet = occupiedColumnsPerRow.get(r)!;
+          for (let c = 0; c < colSpan; c++) {
+            occSet.add(colIdx + c);
+          }
+        }
+      }
+
+      colIdx += colSpan;
+      while (occupied.has(colIdx)) colIdx++;
+    }
+  }
+
+  // Calculate cell widths based on colSpan and columnWidths,
+  // skipping columns occupied by spanning cells from previous rows.
+  const rows = tableBlock.rows.map((row, rowIdx) => {
     let columnIndex = 0;
+    const occupied = occupiedColumnsPerRow.get(rowIdx) ?? new Set<number>();
+    while (occupied.has(columnIndex)) columnIndex++;
+
     return {
       cells: row.cells.map((cell) => {
         const colSpan = cell.colSpan ?? 1;
@@ -372,6 +405,7 @@ function measureTableBlock(tableBlock: TableBlock, contentWidth: number): TableM
           cellWidth = cell.width ?? 100;
         }
         columnIndex += colSpan;
+        while (occupied.has(columnIndex)) columnIndex++;
 
         const padLeft = cell.padding?.left ?? DEFAULT_CELL_PADDING_X;
         const padRight = cell.padding?.right ?? DEFAULT_CELL_PADDING_X;

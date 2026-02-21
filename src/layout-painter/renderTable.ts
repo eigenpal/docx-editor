@@ -54,7 +54,13 @@ function renderCellContent(
   const contentEl = doc.createElement('div');
   contentEl.className = TABLE_CLASS_NAMES.cellContent;
   contentEl.style.position = 'relative';
-  contentEl.style.width = `${cellMeasure.width}px`;
+  // Content width must account for cell padding since the cell uses border-box sizing.
+  // Without this, content is wider than the available area, causing centering and
+  // clipping issues (especially for nested tables).
+  const padLeft = cell.padding?.left ?? 7;
+  const padRight = cell.padding?.right ?? 7;
+  const contentWidth = Math.max(0, cellMeasure.width - padLeft - padRight);
+  contentEl.style.width = `${contentWidth}px`;
 
   for (let i = 0; i < cell.blocks.length; i++) {
     const block = cell.blocks[i];
@@ -70,7 +76,7 @@ function renderCellContent(
         blockId: paragraphBlock.id,
         x: 0,
         y: 0,
-        width: cellMeasure.width,
+        width: contentWidth,
         height: paragraphMeasure.totalHeight,
         fromLine: 0,
         toLine: paragraphMeasure.lines.length,

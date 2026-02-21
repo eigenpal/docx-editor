@@ -64,7 +64,17 @@ export function clickToPositionDom(
     return Number(paragraphEl.dataset.pmStart);
   }
 
-  // Fallback: Find nearest text span
+  // Check if click is within a table cell. When clicking in empty space below
+  // text in a cell, restrict the search to spans within that cell to avoid
+  // the cursor jumping to a different cell (fixes #54).
+  const cellEl = elements.find((el) =>
+    el.classList.contains('layout-table-cell')
+  ) as HTMLElement | null;
+  if (cellEl) {
+    return findNearestSpanInElement(cellEl, clientX, clientY);
+  }
+
+  // Fallback: Find nearest text span on the page
   return findNearestSpan(container, pageEl, clientX, clientY, zoom);
 }
 
@@ -144,6 +154,95 @@ function findPositionInSpan(spanEl: HTMLElement, clientX: number, _clientY: numb
   }
 
   return pmStart + Math.min(left, pmEnd - pmStart);
+}
+
+/**
+ * Find the nearest text span within a specific element (e.g. a table cell).
+ * Used when a click lands in empty space within a cell to keep the cursor
+ * inside that cell rather than jumping to a different one.
+ */
+function findNearestSpanInElement(
+  element: HTMLElement,
+  clientX: number,
+  clientY: number
+): number | null {
+  // Check for empty paragraphs within this element
+  const emptyRun = element.querySelector('.layout-empty-run') as HTMLElement | null;
+  if (emptyRun) {
+    const paragraph = emptyRun.closest('.layout-paragraph') as HTMLElement | null;
+    if (paragraph && paragraph.dataset.pmStart) {
+      return Number(paragraph.dataset.pmStart);
+    }
+  }
+
+  // Find the closest line within this element
+  const lines = element.querySelectorAll('.layout-line');
+  let closestLine: HTMLElement | null = null;
+  let closestLineDistance = Infinity;
+
+  for (const line of Array.from(lines)) {
+    const lineEl = line as HTMLElement;
+    const rect = lineEl.getBoundingClientRect();
+    const centerY = (rect.top + rect.bottom) / 2;
+    const distance = Math.abs(clientY - centerY);
+
+    if (distance < closestLineDistance) {
+      closestLineDistance = distance;
+      closestLine = lineEl;
+    }
+  }
+
+  if (!closestLine) {
+    // No lines - try paragraph directly
+    const paragraph = element.querySelector(
+      '.layout-paragraph[data-pm-start]'
+    ) as HTMLElement | null;
+    if (paragraph?.dataset.pmStart) {
+      return Number(paragraph.dataset.pmStart);
+    }
+    // Last resort: use the cell's own PM position
+    if (element.dataset.pmStart) {
+      return Number(element.dataset.pmStart);
+    }
+    return null;
+  }
+
+  // Find closest span in that line
+  const lineSpans = closestLine.querySelectorAll('span[data-pm-start][data-pm-end]');
+  if (lineSpans.length === 0) {
+    const paragraph = closestLine.closest('.layout-paragraph') as HTMLElement | null;
+    if (paragraph?.dataset.pmStart) {
+      return Number(paragraph.dataset.pmStart);
+    }
+    return null;
+  }
+
+  let closestSpan: HTMLElement | null = null;
+  let closestSpanDistance = Infinity;
+
+  for (const span of Array.from(lineSpans)) {
+    const spanEl = span as HTMLElement;
+    const rect = spanEl.getBoundingClientRect();
+
+    if (clientX >= rect.left && clientX <= rect.right) {
+      return findPositionInSpan(spanEl, clientX, clientY);
+    }
+
+    const distance = clientX < rect.left ? rect.left - clientX : clientX - rect.right;
+    if (distance < closestSpanDistance) {
+      closestSpanDistance = distance;
+      closestSpan = spanEl;
+    }
+  }
+
+  if (!closestSpan) return null;
+
+  const rect = closestSpan.getBoundingClientRect();
+  if (clientX < rect.left) {
+    return Number(closestSpan.dataset.pmStart);
+  } else {
+    return Number(closestSpan.dataset.pmEnd);
+  }
 }
 
 /**
