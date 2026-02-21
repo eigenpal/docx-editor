@@ -719,16 +719,14 @@ export const TablePluginExtension = createExtension({
 
         let insertPos = $from.pos;
 
-        const tableContext = getTableContext(state);
-        if (tableContext.isInTable && tableContext.tablePos !== undefined && tableContext.table) {
-          insertPos = tableContext.tablePos + tableContext.table.nodeSize;
-        } else {
-          for (let d = $from.depth; d > 0; d--) {
-            const node = $from.node(d);
-            if (node.type.spec.group === 'block' || d === 1) {
-              insertPos = $from.after(d);
-              break;
-            }
+        // Find the right insertion point: after the current block-level node.
+        // When inside a table cell, we insert within the cell (enabling nested tables)
+        // rather than after the parent table.
+        for (let d = $from.depth; d > 0; d--) {
+          const node = $from.node(d);
+          if (node.type.name === 'paragraph' || node.type.name === 'table') {
+            insertPos = $from.after(d);
+            break;
           }
         }
 
