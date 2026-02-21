@@ -657,10 +657,14 @@ export const TablePluginExtension = createExtension({
       };
     }
 
-    function createTable(rows: number, cols: number, borderColor: string = '000000'): PMNode {
+    function createTable(
+      rows: number,
+      cols: number,
+      borderColor: string = '000000',
+      contentWidthTwips: number = 9360
+    ): PMNode {
       const tableRows: PMNode[] = [];
-      const defaultContentWidthTwips = 9360;
-      const colWidthTwips = Math.floor(defaultContentWidthTwips / cols);
+      const colWidthTwips = Math.floor(contentWidthTwips / cols);
       const defaultRowHeightTwips = 360; // 0.25in ≈ 24px at 96 DPI
       const defaultRowHeightRule = 'atLeast';
 
@@ -697,7 +701,7 @@ export const TablePluginExtension = createExtension({
       return schema.nodes.table.create(
         {
           columnWidths,
-          width: defaultContentWidthTwips,
+          width: contentWidthTwips,
           widthType: 'dxa',
         },
         tableRows
@@ -731,7 +735,20 @@ export const TablePluginExtension = createExtension({
         }
 
         if (dispatch) {
-          const table = createTable(rows, cols, borderColor);
+          // When inserting inside a table cell, size the new table to fit the cell
+          let contentWidthTwips = 9360; // default: full page width
+          for (let d = $from.depth; d > 0; d--) {
+            const node = $from.node(d);
+            if (node.type.name === 'tableCell' || node.type.name === 'tableHeader') {
+              const cellWidth = node.attrs.width as number | undefined;
+              if (cellWidth && cellWidth > 0) {
+                // Subtract cell padding (~216 twips = 108 left + 108 right)
+                contentWidthTwips = Math.max(cellWidth - 216, 360);
+              }
+              break;
+            }
+          }
+          const table = createTable(rows, cols, borderColor, contentWidthTwips);
           const emptyParagraph = schema.nodes.paragraph.create();
 
           const $insert = state.doc.resolve(insertPos);
