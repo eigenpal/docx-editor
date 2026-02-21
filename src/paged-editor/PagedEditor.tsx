@@ -335,7 +335,7 @@ function resolveTableWidthPx(
 
 function measureTableBlock(tableBlock: TableBlock, contentWidth: number): TableMeasure {
   const DEFAULT_CELL_PADDING_X = 7; // Word default: 108 twips ≈ 7px
-  const DEFAULT_CELL_PADDING_Y = 0; // Word default: 0 twips
+  const DEFAULT_CELL_PADDING_Y = 1; // OOXML spec says 0 but Word renders ~1px internal leading
   const TABLE_MIN_ROW_HEIGHT = 24;
 
   // columnWidths are already in pixels (converted in toFlowBlocks)

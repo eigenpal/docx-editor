@@ -237,10 +237,10 @@ function renderTableCell(
   cellEl.style.height = `${rowHeight}px`;
   cellEl.style.overflow = 'hidden';
   cellEl.style.boxSizing = 'border-box';
-  // Use per-cell padding from DOCX margins, default to Word's default (0 top/bottom, 7px left/right)
-  const padTop = cell.padding?.top ?? 0;
+  // Use per-cell padding from DOCX margins, default to Word's visual rendering
+  const padTop = cell.padding?.top ?? 1;
   const padRight = cell.padding?.right ?? 7;
-  const padBottom = cell.padding?.bottom ?? 0;
+  const padBottom = cell.padding?.bottom ?? 1;
   const padLeft = cell.padding?.left ?? 7;
   cellEl.style.padding = `${padTop}px ${padRight}px ${padBottom}px ${padLeft}px`;
 

@@ -699,14 +699,15 @@ function convertTableCell(node: PMNode, startPos: number, options: ToFlowBlocksO
   const attrs = node.attrs;
 
   // Convert cell margins (twips) to pixel padding
-  // Word default: 0 top/bottom, 108 twips (~7px) left/right
+  // OOXML spec: 0 top/bottom, 108 twips (~7px) left/right
+  // We add 1px top/bottom to match Word's visual rendering (internal leading)
   const margins = attrs.margins as
     | { top?: number; bottom?: number; left?: number; right?: number }
     | undefined;
   const padding = {
-    top: margins?.top != null ? twipsToPixels(margins.top) : 0,
+    top: margins?.top != null ? twipsToPixels(margins.top) : 1,
     right: margins?.right != null ? twipsToPixels(margins.right) : 7,
-    bottom: margins?.bottom != null ? twipsToPixels(margins.bottom) : 0,
+    bottom: margins?.bottom != null ? twipsToPixels(margins.bottom) : 1,
     left: margins?.left != null ? twipsToPixels(margins.left) : 7,
   };
 
