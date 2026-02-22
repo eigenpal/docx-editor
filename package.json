@@ -89,7 +89,6 @@
     "test:e2e": "npx playwright test",
     "test:e2e:ui": "npx playwright test --ui",
     "test:visual": "npx playwright test visual.spec.ts",
-    "test:screenshots": "npx playwright test --project=chromium --reporter=list",
     "prepublishOnly": "bun test && NODE_ENV=production bun run build",
     "typecheck": "tsc --noEmit",
     "lint": "eslint src/",

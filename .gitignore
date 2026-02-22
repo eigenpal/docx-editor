@@ -8,6 +8,12 @@ dist/
 .DS_Store
 Thumbs.db
 
+# Debug screenshots/images in root
+/*.png
+
+# Claude MCP config (local dev tool)
+.mcp.json
+
 # IDE
 .idea/
 .vscode/
