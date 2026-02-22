@@ -1,5 +1,7 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
+import tailwindcss from 'tailwindcss';
+import autoprefixer from 'autoprefixer';
 import path from 'path';
 import fs from 'fs';
 
@@ -18,6 +20,14 @@ export default defineConfig({
     },
     // Deduplicate React — ensure a single copy when aliasing into the monorepo
     dedupe: ['react', 'react-dom'],
+  },
+  css: {
+    postcss: {
+      plugins: [
+        tailwindcss({ config: path.join(monorepoRoot, 'tailwind.config.js') }),
+        autoprefixer(),
+      ],
+    },
   },
   server: {
     port: 5175,
