@@ -16,6 +16,8 @@ export default defineConfig({
         : {}),
       '@': path.join(monorepoRoot, 'src'),
     },
+    // Deduplicate React — ensure a single copy when aliasing into the monorepo
+    dedupe: ['react', 'react-dom'],
   },
   server: {
     port: 5175,
