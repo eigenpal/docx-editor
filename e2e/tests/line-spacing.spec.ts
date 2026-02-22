@@ -19,6 +19,7 @@ test.describe('Basic Line Spacing', () => {
     editor = new EditorPage(page);
     await editor.goto();
     await editor.waitForReady();
+    await editor.newDocument();
     await editor.focus();
   });
 
@@ -63,6 +64,7 @@ test.describe('Line Spacing Transitions', () => {
     editor = new EditorPage(page);
     await editor.goto();
     await editor.waitForReady();
+    await editor.newDocument();
     await editor.focus();
   });
 
@@ -123,6 +125,7 @@ test.describe('Multiple Paragraph Spacing', () => {
     editor = new EditorPage(page);
     await editor.goto();
     await editor.waitForReady();
+    await editor.newDocument();
     await editor.focus();
   });
 
@@ -168,6 +171,7 @@ test.describe('Line Spacing with Formatting', () => {
     editor = new EditorPage(page);
     await editor.goto();
     await editor.waitForReady();
+    await editor.newDocument();
     await editor.focus();
   });
 
@@ -239,6 +243,7 @@ test.describe('Line Spacing Undo/Redo', () => {
     editor = new EditorPage(page);
     await editor.goto();
     await editor.waitForReady();
+    await editor.newDocument();
     await editor.focus();
   });
 
@@ -281,6 +286,7 @@ test.describe('Line Spacing Edge Cases', () => {
     editor = new EditorPage(page);
     await editor.goto();
     await editor.waitForReady();
+    await editor.newDocument();
     await editor.focus();
   });
 

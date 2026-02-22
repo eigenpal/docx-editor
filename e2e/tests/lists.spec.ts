@@ -20,6 +20,7 @@ test.describe('Bullet Lists', () => {
     editor = new EditorPage(page);
     await editor.goto();
     await editor.waitForReady();
+    await editor.newDocument();
     await editor.focus();
   });
 
@@ -75,6 +76,7 @@ test.describe('Numbered Lists', () => {
     editor = new EditorPage(page);
     await editor.goto();
     await editor.waitForReady();
+    await editor.newDocument();
     await editor.focus();
   });
 
@@ -130,6 +132,7 @@ test.describe('List Conversion', () => {
     editor = new EditorPage(page);
     await editor.goto();
     await editor.waitForReady();
+    await editor.newDocument();
     await editor.focus();
   });
 
@@ -184,6 +187,7 @@ test.describe('Nested Lists', () => {
     editor = new EditorPage(page);
     await editor.goto();
     await editor.waitForReady();
+    await editor.newDocument();
     await editor.focus();
   });
 
@@ -271,6 +275,7 @@ test.describe('Lists with Formatting', () => {
     editor = new EditorPage(page);
     await editor.goto();
     await editor.waitForReady();
+    await editor.newDocument();
     await editor.focus();
   });
 
@@ -311,7 +316,7 @@ test.describe('Lists with Formatting', () => {
     await assertions.assertTextIsBold(page, 'Full formatting');
   });
 
-  test.skip('different formatting per list item', async ({ page }) => {
+  test('different formatting per list item', async ({ page }) => {
     // Type first item and make it bold using Shift+Home to select
     await editor.typeText('Bold');
     await page.keyboard.press('Shift+Home'); // Select to beginning of line
@@ -343,6 +348,7 @@ test.describe('List Undo/Redo', () => {
     editor = new EditorPage(page);
     await editor.goto();
     await editor.waitForReady();
+    await editor.newDocument();
     await editor.focus();
   });
 
@@ -399,6 +405,7 @@ test.describe('List Edge Cases', () => {
     editor = new EditorPage(page);
     await editor.goto();
     await editor.waitForReady();
+    await editor.newDocument();
     await editor.focus();
   });
 

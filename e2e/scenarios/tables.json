@@ -10,6 +10,7 @@
       "steps": [
         { "action": "goto" },
         { "action": "waitForReady" },
+        { "action": "newDocument" },
         { "action": "focus" },
         { "action": "insertTable", "args": { "rows": 3, "cols": 3 } },
         { "action": "clickTableCell", "args": { "tableIndex": 0, "row": 0, "col": 0 } },
@@ -27,6 +28,7 @@
       "steps": [
         { "action": "goto" },
         { "action": "waitForReady" },
+        { "action": "newDocument" },
         { "action": "focus" },
         { "action": "insertTable", "args": { "rows": 2, "cols": 2 } },
         { "action": "clickTableCell", "args": { "tableIndex": 0, "row": 0, "col": 0 } },
@@ -50,6 +52,7 @@
       "steps": [
         { "action": "goto" },
         { "action": "waitForReady" },
+        { "action": "newDocument" },
         { "action": "focus" },
         { "action": "insertTable", "args": { "rows": 2, "cols": 2 } },
         { "action": "clickTableCell", "args": { "tableIndex": 0, "row": 0, "col": 1 } },
@@ -72,6 +75,7 @@
       "steps": [
         { "action": "goto" },
         { "action": "waitForReady" },
+        { "action": "newDocument" },
         { "action": "focus" },
         { "action": "insertTable", "args": { "rows": 2, "cols": 2 } },
         { "action": "clickTableCell", "args": { "tableIndex": 0, "row": 0, "col": 0 } },
@@ -87,6 +91,7 @@
       "steps": [
         { "action": "goto" },
         { "action": "waitForReady" },
+        { "action": "newDocument" },
         { "action": "focus" },
         { "action": "insertTable", "args": { "rows": 2, "cols": 2 } },
         { "action": "clickTableCell", "args": { "tableIndex": 0, "row": 0, "col": 0 } },
@@ -121,6 +126,7 @@
       "steps": [
         { "action": "goto" },
         { "action": "waitForReady" },
+        { "action": "newDocument" },
         { "action": "focus" },
         { "assert": "expectTableCount", "args": { "count": 0 } },
         { "action": "insertTable", "args": { "rows": 2, "cols": 2 } },
@@ -133,6 +139,7 @@
       "steps": [
         { "action": "goto" },
         { "action": "waitForReady" },
+        { "action": "newDocument" },
         { "action": "focus" },
         { "action": "insertTable", "args": { "rows": 4, "cols": 5 } },
         { "assert": "expectTableDimensions", "args": { "tableIndex": 0, "rows": 4, "cols": 5 } }
@@ -145,6 +152,7 @@
       "steps": [
         { "action": "goto" },
         { "action": "waitForReady" },
+        { "action": "newDocument" },
         { "action": "focus" },
         { "action": "insertTable", "args": { "rows": 1, "cols": 1 } },
         { "assert": "expectTableCount", "args": { "count": 1 } },
@@ -157,6 +165,7 @@
       "steps": [
         { "action": "goto" },
         { "action": "waitForReady" },
+        { "action": "newDocument" },
         { "action": "focus" },
         { "action": "insertTable", "args": { "rows": 10, "cols": 5 } },
         { "assert": "expectTableDimensions", "args": { "tableIndex": 0, "rows": 10, "cols": 5 } }
@@ -168,6 +177,7 @@
       "steps": [
         { "action": "goto" },
         { "action": "waitForReady" },
+        { "action": "newDocument" },
         { "action": "focus" },
         { "action": "insertTable", "args": { "rows": 2, "cols": 2 } },
         { "assert": "expectTableCount", "args": { "count": 1 } },
@@ -181,6 +191,7 @@
       "steps": [
         { "action": "goto" },
         { "action": "waitForReady" },
+        { "action": "newDocument" },
         { "action": "focus" },
         { "action": "insertTable", "args": { "rows": 2, "cols": 2 } },
         { "action": "undo" },
@@ -196,6 +207,7 @@
       "steps": [
         { "action": "goto" },
         { "action": "waitForReady" },
+        { "action": "newDocument" },
         { "action": "focus" },
         { "action": "insertTable", "args": { "rows": 2, "cols": 2 } },
         { "action": "clickTableCell", "args": { "tableIndex": 0, "row": 0, "col": 0 } },
@@ -213,6 +225,7 @@
       "steps": [
         { "action": "goto" },
         { "action": "waitForReady" },
+        { "action": "newDocument" },
         { "action": "focus" },
         { "action": "insertTable", "args": { "rows": 1, "cols": 2 } },
         { "action": "clickTableCell", "args": { "tableIndex": 0, "row": 0, "col": 1 } },
@@ -228,6 +241,7 @@
       "steps": [
         { "action": "goto" },
         { "action": "waitForReady" },
+        { "action": "newDocument" },
         { "action": "focus" },
         { "action": "insertTable", "args": { "rows": 2, "cols": 2 } },
         { "action": "clickTableCell", "args": { "tableIndex": 0, "row": 0, "col": 0 } },
@@ -244,6 +258,7 @@
       "steps": [
         { "action": "goto" },
         { "action": "waitForReady" },
+        { "action": "newDocument" },
         { "action": "focus" },
         { "action": "insertTable", "args": { "rows": 2, "cols": 2 } },
         { "action": "clickTableCell", "args": { "tableIndex": 0, "row": 0, "col": 0 } },

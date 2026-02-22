@@ -9,6 +9,7 @@
       "steps": [
         { "action": "goto" },
         { "action": "waitForReady" },
+        { "action": "newDocument" },
         { "action": "focus" },
         { "action": "typeText", "args": { "text": "Hello" } },
         { "assert": "expectDocumentContains", "args": { "text": "Hello" } },
@@ -22,6 +23,7 @@
       "steps": [
         { "action": "goto" },
         { "action": "waitForReady" },
+        { "action": "newDocument" },
         { "action": "focus" },
         { "action": "typeText", "args": { "text": "Hello" } },
         { "action": "undo" },
@@ -36,6 +38,7 @@
       "steps": [
         { "action": "goto" },
         { "action": "waitForReady" },
+        { "action": "newDocument" },
         { "action": "focus" },
         { "action": "typeText", "args": { "text": "Bold text" } },
         { "action": "selectText", "args": { "text": "Bold" } },
@@ -51,6 +54,7 @@
       "steps": [
         { "action": "goto" },
         { "action": "waitForReady" },
+        { "action": "newDocument" },
         { "action": "focus" },
         { "action": "typeText", "args": { "text": "One" } },
         { "action": "pressEnter" },
@@ -72,6 +76,7 @@
       "steps": [
         { "action": "goto" },
         { "action": "waitForReady" },
+        { "action": "newDocument" },
         { "action": "focus" },
         { "action": "typeText", "args": { "text": "Shortcut test" } },
         { "action": "undoShortcut" },
@@ -85,6 +90,7 @@
       "steps": [
         { "action": "goto" },
         { "action": "waitForReady" },
+        { "action": "newDocument" },
         { "action": "focus" },
         { "action": "typeText", "args": { "text": "Shortcut test" } },
         { "action": "undoShortcut" },
@@ -98,6 +104,7 @@
       "steps": [
         { "action": "goto" },
         { "action": "waitForReady" },
+        { "action": "newDocument" },
         { "action": "focus" },
         { "action": "typeText", "args": { "text": "Original" } },
         { "action": "undo" },
@@ -114,6 +121,7 @@
       "steps": [
         { "action": "goto" },
         { "action": "waitForReady" },
+        { "action": "newDocument" },
         { "action": "focus" },
         { "action": "undo" },
         { "action": "undo" },
@@ -128,6 +136,7 @@
       "steps": [
         { "action": "goto" },
         { "action": "waitForReady" },
+        { "action": "newDocument" },
         { "action": "focus" },
         { "action": "redo" },
         { "action": "redo" },
@@ -141,6 +150,7 @@
       "steps": [
         { "action": "goto" },
         { "action": "waitForReady" },
+        { "action": "newDocument" },
         { "assert": "expectUndoNotAvailable" }
       ]
     },
@@ -150,6 +160,7 @@
       "steps": [
         { "action": "goto" },
         { "action": "waitForReady" },
+        { "action": "newDocument" },
         { "assert": "expectRedoNotAvailable" }
       ]
     },
@@ -159,6 +170,7 @@
       "steps": [
         { "action": "goto" },
         { "action": "waitForReady" },
+        { "action": "newDocument" },
         { "action": "focus" },
         { "action": "typeText", "args": { "text": "Test" } },
         { "assert": "expectUndoAvailable" }
@@ -170,6 +182,7 @@
       "steps": [
         { "action": "goto" },
         { "action": "waitForReady" },
+        { "action": "newDocument" },
         { "action": "focus" },
         { "action": "typeText", "args": { "text": "Test" } },
         { "action": "undo" },
@@ -183,6 +196,7 @@
       "steps": [
         { "action": "goto" },
         { "action": "waitForReady" },
+        { "action": "newDocument" },
         { "action": "focus" },
         { "action": "typeText", "args": { "text": "Test" } },
         { "action": "undo" },
@@ -200,6 +214,7 @@
       "steps": [
         { "action": "goto" },
         { "action": "waitForReady" },
+        { "action": "newDocument" },
         { "action": "focus" },
         { "action": "typeText", "args": { "text": "Delete me" } },
         { "action": "selectAll" },

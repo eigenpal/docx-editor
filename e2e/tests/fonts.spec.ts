@@ -19,6 +19,7 @@ test.describe('Font Family', () => {
     editor = new EditorPage(page);
     await editor.goto();
     await editor.waitForReady();
+    await editor.newDocument();
     await editor.focus();
   });
 
@@ -118,6 +119,7 @@ test.describe('Font Size', () => {
     editor = new EditorPage(page);
     await editor.goto();
     await editor.waitForReady();
+    await editor.newDocument();
     await editor.focus();
   });
 
@@ -202,6 +204,7 @@ test.describe('Combined Font Operations', () => {
     editor = new EditorPage(page);
     await editor.goto();
     await editor.waitForReady();
+    await editor.newDocument();
     await editor.focus();
   });
 
@@ -279,11 +282,11 @@ test.describe('Font Edge Cases', () => {
     editor = new EditorPage(page);
     await editor.goto();
     await editor.waitForReady();
+    await editor.newDocument();
     await editor.focus();
   });
 
-  test.skip('font change with no selection', async ({ page }) => {
-    // TODO: Flaky test - passes alone but fails in suite due to timing
+  test('font change with no selection', async ({ page }) => {
     await editor.typeText('No selection');
     // Don't select - should apply to next typed text or do nothing
     await editor.setFontFamily('Arial');
@@ -304,8 +307,7 @@ test.describe('Font Edge Cases', () => {
     await assertions.assertDocumentContainsText(page, 'Text after font set');
   });
 
-  test.skip('font size on empty document', async ({ page }) => {
-    // TODO: Flaky test - stored marks timing issues
+  test('font size on empty document', async ({ page }) => {
     // Set size before typing
     await editor.setFontSize(24);
     // Small delay to ensure stored marks are set

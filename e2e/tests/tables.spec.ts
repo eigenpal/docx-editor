@@ -21,6 +21,7 @@ test.describe('Table Creation', () => {
     editor = new EditorPage(page);
     await editor.goto();
     await editor.waitForReady();
+    await editor.newDocument();
     await editor.focus();
   });
 
@@ -76,6 +77,7 @@ test.describe('Table Content & Text Wrapping', () => {
     editor = new EditorPage(page);
     await editor.goto();
     await editor.waitForReady();
+    await editor.newDocument();
     await editor.focus();
   });
 
@@ -142,6 +144,7 @@ test.describe('Table Row/Column Operations', () => {
     editor = new EditorPage(page);
     await editor.goto();
     await editor.waitForReady();
+    await editor.newDocument();
     await editor.focus();
   });
 
@@ -246,6 +249,7 @@ test.describe('Table Border Operations', () => {
     editor = new EditorPage(page);
     await editor.goto();
     await editor.waitForReady();
+    await editor.newDocument();
     await editor.focus();
   });
 
@@ -292,6 +296,7 @@ test.describe('Table Cell Fill Color', () => {
     editor = new EditorPage(page);
     await editor.goto();
     await editor.waitForReady();
+    await editor.newDocument();
     await editor.focus();
   });
 
@@ -338,6 +343,7 @@ test.describe('Table Undo/Redo', () => {
     editor = new EditorPage(page);
     await editor.goto();
     await editor.waitForReady();
+    await editor.newDocument();
     await editor.focus();
   });
 
@@ -419,6 +425,7 @@ test.describe('Table Format Persistence', () => {
     editor = new EditorPage(page);
     await editor.goto();
     await editor.waitForReady();
+    await editor.newDocument();
     await editor.focus();
   });
 
@@ -467,6 +474,7 @@ test.describe('Table Navigation', () => {
     editor = new EditorPage(page);
     await editor.goto();
     await editor.waitForReady();
+    await editor.newDocument();
     await editor.focus();
   });
 
@@ -484,8 +492,7 @@ test.describe('Table Navigation', () => {
     expect(cell2Content).toContain('B');
   });
 
-  test.skip('Arrow keys navigate within cell content', async ({ page }) => {
-    // Known limitation: Home + ArrowRight in table cells doesn't position cursor correctly
+  test('Arrow keys navigate within cell content', async ({ page }) => {
     await editor.insertTable(2, 2);
     await editor.clickTableCell(0, 0, 0);
     await editor.typeText('Hello World');
@@ -537,6 +544,7 @@ test.describe('Table Edge Cases', () => {
     editor = new EditorPage(page);
     await editor.goto();
     await editor.waitForReady();
+    await editor.newDocument();
     await editor.focus();
   });
 

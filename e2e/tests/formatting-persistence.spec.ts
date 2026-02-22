@@ -18,6 +18,7 @@ test.describe('Formatting Persistence - Empty Paragraph', () => {
     editor = new EditorPage(page);
     await editor.goto();
     await editor.waitForReady();
+    await editor.newDocument();
     await editor.focus();
   });
 
@@ -113,6 +114,7 @@ test.describe('Formatting Persistence - Delete and Retype', () => {
     editor = new EditorPage(page);
     await editor.goto();
     await editor.waitForReady();
+    await editor.newDocument();
     await editor.focus();
   });
 
@@ -192,11 +194,11 @@ test.describe('Formatting Persistence - Font Properties', () => {
     editor = new EditorPage(page);
     await editor.goto();
     await editor.waitForReady();
+    await editor.newDocument();
     await editor.focus();
   });
 
-  // TODO: Font persistence via dropdown has focus/selection timing issues
-  test.skip('font family persists when navigating away and back', async ({ page }) => {
+  test('font family persists when navigating away and back', async ({ page }) => {
     // Set font family on empty paragraph
     await editor.setFontFamily('Georgia');
 
@@ -217,8 +219,7 @@ test.describe('Formatting Persistence - Font Properties', () => {
     await assertions.assertDocumentContainsText(page, 'Georgia text');
   });
 
-  // TODO: Font persistence via dropdown has focus/selection timing issues
-  test.skip('font size persists when navigating away and back', async ({ page }) => {
+  test('font size persists when navigating away and back', async ({ page }) => {
     // Set font size on empty paragraph
     await editor.setFontSize(24);
 
@@ -243,6 +244,7 @@ test.describe('Formatting Persistence - Toggling Off', () => {
     editor = new EditorPage(page);
     await editor.goto();
     await editor.waitForReady();
+    await editor.newDocument();
     await editor.focus();
   });
 

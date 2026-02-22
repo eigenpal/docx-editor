@@ -8,6 +8,7 @@
       "steps": [
         { "action": "goto" },
         { "action": "waitForReady" },
+        { "action": "newDocument" },
         { "action": "focus" },
         { "action": "typeText", "args": { "text": "First item" } },
         { "action": "toggleBulletList" }
@@ -20,6 +21,7 @@
       "steps": [
         { "action": "goto" },
         { "action": "waitForReady" },
+        { "action": "newDocument" },
         { "action": "focus" },
         { "action": "typeText", "args": { "text": "First item" } },
         { "action": "toggleNumberedList" }
@@ -32,6 +34,7 @@
       "steps": [
         { "action": "goto" },
         { "action": "waitForReady" },
+        { "action": "newDocument" },
         { "action": "focus" },
         { "action": "typeText", "args": { "text": "Item one" } },
         { "action": "toggleBulletList" },
@@ -52,6 +55,7 @@
       "steps": [
         { "action": "goto" },
         { "action": "waitForReady" },
+        { "action": "newDocument" },
         { "action": "focus" },
         { "action": "typeText", "args": { "text": "First" } },
         { "action": "toggleNumberedList" },
@@ -72,6 +76,7 @@
       "steps": [
         { "action": "goto" },
         { "action": "waitForReady" },
+        { "action": "newDocument" },
         { "action": "focus" },
         { "action": "typeText", "args": { "text": "List item" } },
         { "action": "toggleBulletList" },
@@ -85,6 +90,7 @@
       "steps": [
         { "action": "goto" },
         { "action": "waitForReady" },
+        { "action": "newDocument" },
         { "action": "focus" },
         { "action": "typeText", "args": { "text": "List item" } },
         { "action": "toggleNumberedList" },
@@ -98,6 +104,7 @@
       "steps": [
         { "action": "goto" },
         { "action": "waitForReady" },
+        { "action": "newDocument" },
         { "action": "focus" },
         { "action": "typeText", "args": { "text": "List item" } },
         { "action": "toggleBulletList" },
@@ -111,6 +118,7 @@
       "steps": [
         { "action": "goto" },
         { "action": "waitForReady" },
+        { "action": "newDocument" },
         { "action": "focus" },
         { "action": "typeText", "args": { "text": "List item" } },
         { "action": "toggleNumberedList" },
@@ -124,6 +132,7 @@
       "steps": [
         { "action": "goto" },
         { "action": "waitForReady" },
+        { "action": "newDocument" },
         { "action": "focus" },
         { "action": "typeText", "args": { "text": "Parent item" } },
         { "action": "toggleBulletList" },
@@ -142,6 +151,7 @@
       "steps": [
         { "action": "goto" },
         { "action": "waitForReady" },
+        { "action": "newDocument" },
         { "action": "focus" },
         { "action": "typeText", "args": { "text": "Parent item" } },
         { "action": "toggleBulletList" },
@@ -161,6 +171,7 @@
       "steps": [
         { "action": "goto" },
         { "action": "waitForReady" },
+        { "action": "newDocument" },
         { "action": "focus" },
         { "action": "typeText", "args": { "text": "Level 1" } },
         { "action": "toggleBulletList" },
@@ -183,6 +194,7 @@
       "steps": [
         { "action": "goto" },
         { "action": "waitForReady" },
+        { "action": "newDocument" },
         { "action": "focus" },
         { "action": "typeText", "args": { "text": "First" } },
         { "action": "toggleNumberedList" },
@@ -204,6 +216,7 @@
       "steps": [
         { "action": "goto" },
         { "action": "waitForReady" },
+        { "action": "newDocument" },
         { "action": "focus" },
         { "action": "typeText", "args": { "text": "Bold item" } },
         { "action": "selectAll" },
@@ -221,6 +234,7 @@
       "steps": [
         { "action": "goto" },
         { "action": "waitForReady" },
+        { "action": "newDocument" },
         { "action": "focus" },
         { "action": "typeText", "args": { "text": "Italic item" } },
         { "action": "selectAll" },
@@ -238,6 +252,7 @@
       "steps": [
         { "action": "goto" },
         { "action": "waitForReady" },
+        { "action": "newDocument" },
         { "action": "focus" },
         { "action": "typeText", "args": { "text": "Colored item" } },
         { "action": "selectAll" },
@@ -252,6 +267,7 @@
       "steps": [
         { "action": "goto" },
         { "action": "waitForReady" },
+        { "action": "newDocument" },
         { "action": "focus" },
         { "action": "typeText", "args": { "text": "List item" } },
         { "action": "toggleBulletList" },
@@ -270,6 +286,7 @@
       "steps": [
         { "action": "goto" },
         { "action": "waitForReady" },
+        { "action": "newDocument" },
         { "action": "focus" },
         { "action": "typeText", "args": { "text": "List item" } },
         { "action": "toggleBulletList" },
@@ -283,6 +300,7 @@
       "steps": [
         { "action": "goto" },
         { "action": "waitForReady" },
+        { "action": "newDocument" },
         { "action": "focus" },
         { "action": "typeText", "args": { "text": "List item" } },
         { "action": "toggleNumberedList" },
@@ -296,6 +314,7 @@
       "steps": [
         { "action": "goto" },
         { "action": "waitForReady" },
+        { "action": "newDocument" },
         { "action": "focus" },
         { "action": "typeText", "args": { "text": "First line" } },
         { "action": "pressEnter" },
@@ -313,6 +332,7 @@
       "steps": [
         { "action": "goto" },
         { "action": "waitForReady" },
+        { "action": "newDocument" },
         { "action": "focus" },
         { "action": "typeText", "args": { "text": "Item" } },
         { "action": "toggleBulletList" },
@@ -331,6 +351,7 @@
       "steps": [
         { "action": "goto" },
         { "action": "waitForReady" },
+        { "action": "newDocument" },
         { "action": "focus" },
         { "action": "typeText", "args": { "text": "Item" } },
         { "action": "toggleBulletList" },

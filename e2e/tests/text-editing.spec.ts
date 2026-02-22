@@ -21,6 +21,7 @@ test.describe('Basic Text Input', () => {
     editor = new EditorPage(page);
     await editor.goto();
     await editor.waitForReady();
+    await editor.newDocument();
     await editor.focus();
   });
 
@@ -62,6 +63,7 @@ test.describe('Line Breaks and Paragraphs', () => {
     editor = new EditorPage(page);
     await editor.goto();
     await editor.waitForReady();
+    await editor.newDocument();
     await editor.focus();
   });
 
@@ -132,6 +134,7 @@ test.describe('Backspace and Delete', () => {
     editor = new EditorPage(page);
     await editor.goto();
     await editor.waitForReady();
+    await editor.newDocument();
     await editor.focus();
   });
 
@@ -202,6 +205,7 @@ test.describe('Selection', () => {
     editor = new EditorPage(page);
     await editor.goto();
     await editor.waitForReady();
+    await editor.newDocument();
     await editor.focus();
   });
 
@@ -250,6 +254,7 @@ test.describe('Copy, Cut, Paste', () => {
     editor = new EditorPage(page);
     await editor.goto();
     await editor.waitForReady();
+    await editor.newDocument();
     await editor.focus();
   });
 
@@ -264,8 +269,7 @@ test.describe('Copy, Cut, Paste', () => {
     await assertions.assertDocumentContainsText(page, 'Copy me - Copy me');
   });
 
-  test.skip('cut and paste', async ({ page }) => {
-    // TODO: Fix cut operation - execCommand('delete') doesn't work well with ProseMirror
+  test('cut and paste', async ({ page }) => {
     await editor.typeText('ABC');
     await editor.selectText('B');
     await editor.cut();
@@ -295,6 +299,7 @@ test.describe('Navigation', () => {
     editor = new EditorPage(page);
     await editor.goto();
     await editor.waitForReady();
+    await editor.newDocument();
     await editor.focus();
   });
 
@@ -315,8 +320,7 @@ test.describe('Navigation', () => {
     await assertions.assertDocumentContainsText(page, 'XHello');
   });
 
-  test.skip('End moves to end', async ({ page }) => {
-    // TODO: End key behavior differs between platforms - needs investigation
+  test('End moves to end', async ({ page }) => {
     await editor.typeText('Hello');
     await page.keyboard.press('Home');
     await page.keyboard.press('End');
@@ -344,6 +348,7 @@ test.describe('Edge Cases', () => {
     editor = new EditorPage(page);
     await editor.goto();
     await editor.waitForReady();
+    await editor.newDocument();
     await editor.focus();
   });
 

@@ -16,6 +16,7 @@ test.describe('Race Conditions', () => {
     editor = new EditorPage(page);
     await editor.goto();
     await editor.waitForReady();
+    await editor.newDocument();
     await editor.focus();
   });
 
@@ -76,6 +77,7 @@ test.describe('Boundary Conditions', () => {
     editor = new EditorPage(page);
     await editor.goto();
     await editor.waitForReady();
+    await editor.newDocument();
     await editor.focus();
   });
 
@@ -157,6 +159,7 @@ test.describe('Focus and Blur', () => {
     editor = new EditorPage(page);
     await editor.goto();
     await editor.waitForReady();
+    await editor.newDocument();
     await editor.focus();
   });
 
@@ -195,6 +198,7 @@ test.describe('Selection Edge Cases', () => {
     editor = new EditorPage(page);
     await editor.goto();
     await editor.waitForReady();
+    await editor.newDocument();
     await editor.focus();
   });
 
@@ -246,11 +250,11 @@ test.describe('State Consistency', () => {
     editor = new EditorPage(page);
     await editor.goto();
     await editor.waitForReady();
+    await editor.newDocument();
     await editor.focus();
   });
 
-  test.skip('cursor position after formatting', async ({ page }) => {
-    // Known flaky: selectAll + applyBold keeps selection, typeText replaces it
+  test('cursor position after formatting', async ({ page }) => {
     await editor.typeText('Hello');
     await editor.selectAll();
     await editor.applyBold();
@@ -302,6 +306,7 @@ test.describe('Unicode and Special Characters', () => {
     editor = new EditorPage(page);
     await editor.goto();
     await editor.waitForReady();
+    await editor.newDocument();
     await editor.focus();
   });
 
@@ -341,6 +346,7 @@ test.describe('Performance', () => {
     editor = new EditorPage(page);
     await editor.goto();
     await editor.waitForReady();
+    await editor.newDocument();
     await editor.focus();
   });
 

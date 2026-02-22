@@ -1124,7 +1124,8 @@ export class EditorPage {
    */
   async newDocument(): Promise<void> {
     await this.page.locator('button:has-text("New")').click();
-    await this.page.waitForTimeout(200);
+    // Wait for document to be replaced with empty state
+    await this.page.waitForTimeout(500);
   }
 
   // ============================================================================

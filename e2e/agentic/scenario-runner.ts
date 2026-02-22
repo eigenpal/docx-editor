@@ -369,6 +369,10 @@ export class ScenarioRunner {
         await this.editor.zoomOut();
         break;
 
+      case 'newDocument':
+        await this.editor.newDocument();
+        break;
+
       case 'focus':
         await this.editor.focus();
         break;

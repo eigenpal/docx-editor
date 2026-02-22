@@ -529,6 +529,7 @@ export function FindReplaceDialog({
     >
       <div
         className="docx-find-replace-dialog"
+        data-testid="find-replace-dialog"
         style={DIALOG_CONTENT_STYLE}
         role="dialog"
         aria-modal="false"

@@ -9,6 +9,7 @@
       "steps": [
         { "action": "goto" },
         { "action": "waitForReady" },
+        { "action": "newDocument" },
         { "action": "focus" },
         { "action": "typeText", "args": { "text": "a" } },
         { "assert": "expectDocumentContains", "args": { "text": "a" } }
@@ -20,6 +21,7 @@
       "steps": [
         { "action": "goto" },
         { "action": "waitForReady" },
+        { "action": "newDocument" },
         { "action": "focus" },
         { "action": "typeText", "args": { "text": "Hello world." } },
         { "assert": "expectDocumentContains", "args": { "text": "Hello world." } }
@@ -31,6 +33,7 @@
       "steps": [
         { "action": "goto" },
         { "action": "waitForReady" },
+        { "action": "newDocument" },
         { "action": "focus" },
         { "action": "typeText", "args": { "text": "!@#$%^&*()_+-=[]{}|;':\",./<>?" } },
         { "assert": "expectDocumentContains", "args": { "text": "!@#$%^&*()" } }
@@ -43,6 +46,7 @@
       "steps": [
         { "action": "goto" },
         { "action": "waitForReady" },
+        { "action": "newDocument" },
         { "action": "focus" },
         { "action": "typeText", "args": { "text": "Unicode test: äöü ñ 日本語 中文 한국어" } },
         { "assert": "expectDocumentContains", "args": { "text": "日本語" } }
@@ -54,6 +58,7 @@
       "steps": [
         { "action": "goto" },
         { "action": "waitForReady" },
+        { "action": "newDocument" },
         { "action": "focus" },
         { "action": "typeText", "args": { "text": "First paragraph" } },
         { "action": "pressEnter" },
@@ -68,6 +73,7 @@
       "steps": [
         { "action": "goto" },
         { "action": "waitForReady" },
+        { "action": "newDocument" },
         { "action": "focus" },
         { "action": "typeText", "args": { "text": "Line 1" } },
         { "action": "pressShiftEnter" },
@@ -82,6 +88,7 @@
       "steps": [
         { "action": "goto" },
         { "action": "waitForReady" },
+        { "action": "newDocument" },
         { "action": "focus" },
         { "action": "typeText", "args": { "text": "Para 1" } },
         { "action": "pressEnter" },
@@ -98,6 +105,7 @@
       "steps": [
         { "action": "goto" },
         { "action": "waitForReady" },
+        { "action": "newDocument" },
         { "action": "focus" },
         { "action": "typeText", "args": { "text": "Hello" } },
         { "action": "pressBackspace" },
@@ -111,6 +119,7 @@
       "steps": [
         { "action": "goto" },
         { "action": "waitForReady" },
+        { "action": "newDocument" },
         { "action": "focus" },
         { "action": "typeText", "args": { "text": "Hello" } },
         { "action": "pressKey", "args": { "key": "Home" } },
@@ -124,6 +133,7 @@
       "steps": [
         { "action": "goto" },
         { "action": "waitForReady" },
+        { "action": "newDocument" },
         { "action": "focus" },
         { "action": "typeText", "args": { "text": "Hello World" } },
         { "action": "selectText", "args": { "text": "World" } },
@@ -138,6 +148,7 @@
       "steps": [
         { "action": "goto" },
         { "action": "waitForReady" },
+        { "action": "newDocument" },
         { "action": "focus" },
         { "action": "typeText", "args": { "text": "Test text" } },
         { "action": "selectAll" },
@@ -150,6 +161,7 @@
       "steps": [
         { "action": "goto" },
         { "action": "waitForReady" },
+        { "action": "newDocument" },
         { "action": "focus" },
         { "action": "typeText", "args": { "text": "The quick brown fox" } },
         { "action": "selectText", "args": { "text": "quick" } },
@@ -163,6 +175,7 @@
       "steps": [
         { "action": "goto" },
         { "action": "waitForReady" },
+        { "action": "newDocument" },
         { "action": "focus" },
         { "action": "typeText", "args": { "text": "Copy me" } },
         { "action": "selectAll" },
@@ -180,6 +193,7 @@
       "steps": [
         { "action": "goto" },
         { "action": "waitForReady" },
+        { "action": "newDocument" },
         { "action": "focus" },
         { "action": "typeText", "args": { "text": "ABC" } },
         { "action": "selectText", "args": { "text": "B" } },
@@ -196,6 +210,7 @@
       "steps": [
         { "action": "goto" },
         { "action": "waitForReady" },
+        { "action": "newDocument" },
         { "action": "focus" },
         { "action": "typeText", "args": { "text": "OLD" } },
         { "action": "selectAll" },
@@ -213,6 +228,7 @@
       "steps": [
         { "action": "goto" },
         { "action": "waitForReady" },
+        { "action": "newDocument" },
         { "action": "focus" },
         { "action": "typeText", "args": { "text": "Replace this" } },
         { "action": "selectText", "args": { "text": "this" } },
@@ -227,6 +243,7 @@
       "steps": [
         { "action": "goto" },
         { "action": "waitForReady" },
+        { "action": "newDocument" },
         { "action": "focus" },
         { "action": "typeText", "args": { "text": "Test" } },
         { "action": "pressKey", "args": { "key": "ArrowLeft" } },
@@ -242,6 +259,7 @@
       "steps": [
         { "action": "goto" },
         { "action": "waitForReady" },
+        { "action": "newDocument" },
         { "action": "focus" },
         { "action": "typeText", "args": { "text": "Hello" } },
         { "action": "pressKey", "args": { "key": "Home" } },
@@ -256,6 +274,7 @@
       "steps": [
         { "action": "goto" },
         { "action": "waitForReady" },
+        { "action": "newDocument" },
         { "action": "focus" },
         { "action": "typeText", "args": { "text": "Hello" } },
         { "action": "pressKey", "args": { "key": "Home" } },
@@ -271,6 +290,7 @@
       "steps": [
         { "action": "goto" },
         { "action": "waitForReady" },
+        { "action": "newDocument" },
         { "action": "focus" },
         {
           "action": "typeText",

@@ -252,7 +252,7 @@ test.describe('Visual Regression - Responsive', () => {
 });
 
 test.describe('Visual Regression - Error States', () => {
-  test.skip('loading state', async ({ page }) => {
+  test('loading state', async ({ page }) => {
     // Navigate without waiting for ready
     await page.goto('/');
 

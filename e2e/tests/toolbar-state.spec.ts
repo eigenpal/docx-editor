@@ -64,9 +64,7 @@ test.describe('Bold Detection', () => {
     expect(isActive).toBe(true);
   });
 
-  test.skip('cursor at start of bold word shows bold active', async ({ page }) => {
-    // ProseMirror uses left-side marks at mark boundaries — cursor at start of bold
-    // shows non-bold because the left side is non-bold. This is expected behavior.
+  test('cursor at start of bold word shows bold active', async ({ page }) => {
     await editor.typeText('Normal bold normal');
     await editor.selectText('bold');
     await editor.applyBold();

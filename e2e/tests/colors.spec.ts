@@ -19,6 +19,7 @@ test.describe('Text Color', () => {
     editor = new EditorPage(page);
     await editor.goto();
     await editor.waitForReady();
+    await editor.newDocument();
     await editor.focus();
   });
 
@@ -46,8 +47,7 @@ test.describe('Text Color', () => {
     await assertions.assertDocumentContainsText(page, 'Green text');
   });
 
-  test.skip('set text color to custom hex', async ({ page }) => {
-    // Flaky: custom hex input + selectAll loses text in paged editor
+  test('set text color to custom hex', async ({ page }) => {
     await editor.typeText('Custom color');
     await editor.selectAll();
     await editor.setTextColor('#FF5733');
@@ -114,6 +114,7 @@ test.describe('Highlight Color', () => {
     editor = new EditorPage(page);
     await editor.goto();
     await editor.waitForReady();
+    await editor.newDocument();
     await editor.focus();
   });
 
@@ -190,6 +191,7 @@ test.describe('Combined Color Operations', () => {
     editor = new EditorPage(page);
     await editor.goto();
     await editor.waitForReady();
+    await editor.newDocument();
     await editor.focus();
   });
 
@@ -229,8 +231,7 @@ test.describe('Combined Color Operations', () => {
     await assertions.assertTextIsBold(page, 'Bold highlighted');
   });
 
-  test.skip('color with font family change', async ({ page }) => {
-    // Flaky: selectAll + setFontFamily via native select loses ProseMirror selection/text
+  test('color with font family change', async ({ page }) => {
     await editor.typeText('Colored font test');
     await editor.selectAll();
     await editor.setFontFamily('Georgia');
@@ -268,6 +269,7 @@ test.describe('Color Edge Cases', () => {
     editor = new EditorPage(page);
     await editor.goto();
     await editor.waitForReady();
+    await editor.newDocument();
     await editor.focus();
   });
 
@@ -333,8 +335,7 @@ test.describe('Color Edge Cases', () => {
     await assertions.assertDocumentContainsText(page, 'Unicode:');
   });
 
-  test.skip('alternating colors per word', async ({ page }) => {
-    // Flaky: selectText + setTextColor + typeText sequence loses text
+  test('alternating colors per word', async ({ page }) => {
     await editor.typeText('Red ');
     await editor.selectText('Red');
     await editor.setTextColor('#FF0000');

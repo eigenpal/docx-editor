@@ -9,6 +9,7 @@
       "steps": [
         { "action": "goto" },
         { "action": "waitForReady" },
+        { "action": "newDocument" },
         { "action": "focus" },
         { "action": "typeText", "args": { "text": "Hello World" } },
         { "action": "openFind" },
@@ -22,6 +23,7 @@
       "steps": [
         { "action": "goto" },
         { "action": "waitForReady" },
+        { "action": "newDocument" },
         { "action": "focus" },
         { "action": "typeText", "args": { "text": "Hello World" } },
         { "action": "openFind" },
@@ -35,6 +37,7 @@
       "steps": [
         { "action": "goto" },
         { "action": "waitForReady" },
+        { "action": "newDocument" },
         { "action": "focus" },
         { "action": "typeText", "args": { "text": "Test one Test two Test three" } },
         { "action": "openFind" },
@@ -49,6 +52,7 @@
       "steps": [
         { "action": "goto" },
         { "action": "waitForReady" },
+        { "action": "newDocument" },
         { "action": "focus" },
         { "action": "typeText", "args": { "text": "Test one Test two Test three" } },
         { "action": "openFind" },
@@ -64,6 +68,7 @@
       "steps": [
         { "action": "goto" },
         { "action": "waitForReady" },
+        { "action": "newDocument" },
         { "action": "focus" },
         { "action": "typeText", "args": { "text": "old text here" } },
         { "action": "openFindReplace" },
@@ -79,6 +84,7 @@
       "steps": [
         { "action": "goto" },
         { "action": "waitForReady" },
+        { "action": "newDocument" },
         { "action": "focus" },
         { "action": "typeText", "args": { "text": "cat cat cat dog" } },
         { "action": "openFindReplace" },
@@ -93,6 +99,7 @@
       "steps": [
         { "action": "goto" },
         { "action": "waitForReady" },
+        { "action": "newDocument" },
         { "action": "focus" },
         { "action": "typeText", "args": { "text": "Remove this text" } },
         { "action": "openFindReplace" },
@@ -107,6 +114,7 @@
       "steps": [
         { "action": "goto" },
         { "action": "waitForReady" },
+        { "action": "newDocument" },
         { "action": "focus" },
         { "action": "typeText", "args": { "text": "Test text" } },
         { "action": "openFind" },
@@ -120,6 +128,7 @@
       "steps": [
         { "action": "goto" },
         { "action": "waitForReady" },
+        { "action": "newDocument" },
         { "action": "focus" },
         { "action": "typeText", "args": { "text": "Test TEST test" } },
         { "action": "openFind" },
@@ -133,6 +142,7 @@
       "steps": [
         { "action": "goto" },
         { "action": "waitForReady" },
+        { "action": "newDocument" },
         { "action": "focus" },
         { "action": "typeText", "args": { "text": "Hello wonderful world" } },
         { "action": "openFindReplace" },
@@ -150,6 +160,7 @@
       "steps": [
         { "action": "goto" },
         { "action": "waitForReady" },
+        { "action": "newDocument" },
         { "action": "focus" },
         { "action": "typeText", "args": { "text": "original text" } },
         { "action": "openFindReplace" },
@@ -167,6 +178,7 @@
       "steps": [
         { "action": "goto" },
         { "action": "waitForReady" },
+        { "action": "newDocument" },
         { "action": "focus" },
         { "action": "typeText", "args": { "text": "Hello (world) [test]" } },
         { "action": "openFind" },
@@ -180,6 +192,7 @@
       "steps": [
         { "action": "goto" },
         { "action": "waitForReady" },
+        { "action": "newDocument" },
         { "action": "focus" },
         { "action": "typeText", "args": { "text": "First word and more" } },
         { "action": "openFind" },
@@ -193,6 +206,7 @@
       "steps": [
         { "action": "goto" },
         { "action": "waitForReady" },
+        { "action": "newDocument" },
         { "action": "focus" },
         { "action": "typeText", "args": { "text": "Some text and last" } },
         { "action": "openFind" },

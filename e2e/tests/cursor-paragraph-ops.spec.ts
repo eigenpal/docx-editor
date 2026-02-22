@@ -19,6 +19,7 @@ test.describe('Cursor-Only List Operations', () => {
     editor = new EditorPage(page);
     await editor.goto();
     await editor.waitForReady();
+    await editor.newDocument();
     await editor.focus();
   });
 
@@ -112,6 +113,7 @@ test.describe('Cursor-Only Alignment Operations', () => {
     editor = new EditorPage(page);
     await editor.goto();
     await editor.waitForReady();
+    await editor.newDocument();
     await editor.focus();
   });
 
@@ -188,8 +190,7 @@ test.describe('Cursor-Only Alignment Operations', () => {
     expect(textAlign).toBe('left');
   });
 
-  test.skip('keyboard shortcut Ctrl+E centers with cursor only', async ({ page }) => {
-    // TODO: Implement Ctrl+E keyboard shortcut for center alignment in ProseMirror
+  test('keyboard shortcut Ctrl+E centers with cursor only', async ({ page }) => {
     await editor.typeText('Shortcut test');
 
     await page.keyboard.press('Home');
@@ -213,6 +214,7 @@ test.describe('Cursor-Only Indentation Operations', () => {
     editor = new EditorPage(page);
     await editor.goto();
     await editor.waitForReady();
+    await editor.newDocument();
     await editor.focus();
   });
 
@@ -277,6 +279,7 @@ test.describe('Multi-Paragraph Operations', () => {
     editor = new EditorPage(page);
     await editor.goto();
     await editor.waitForReady();
+    await editor.newDocument();
     await editor.focus();
   });
 

@@ -20,6 +20,7 @@ test.describe('Bold Formatting', () => {
     editor = new EditorPage(page);
     await editor.goto();
     await editor.waitForReady();
+    await editor.newDocument();
     await editor.focus();
   });
 
@@ -88,6 +89,7 @@ test.describe('Italic Formatting', () => {
     editor = new EditorPage(page);
     await editor.goto();
     await editor.waitForReady();
+    await editor.newDocument();
     await editor.focus();
   });
 
@@ -134,6 +136,7 @@ test.describe('Underline Formatting', () => {
     editor = new EditorPage(page);
     await editor.goto();
     await editor.waitForReady();
+    await editor.newDocument();
     await editor.focus();
   });
 
@@ -161,6 +164,7 @@ test.describe('Strikethrough Formatting', () => {
     editor = new EditorPage(page);
     await editor.goto();
     await editor.waitForReady();
+    await editor.newDocument();
     await editor.focus();
   });
 
@@ -180,6 +184,7 @@ test.describe('Combined Formatting', () => {
     editor = new EditorPage(page);
     await editor.goto();
     await editor.waitForReady();
+    await editor.newDocument();
     await editor.focus();
   });
 
@@ -227,6 +232,7 @@ test.describe('Clear Formatting', () => {
     editor = new EditorPage(page);
     await editor.goto();
     await editor.waitForReady();
+    await editor.newDocument();
     await editor.focus();
   });
 
@@ -262,6 +268,7 @@ test.describe('Formatting with Selection', () => {
     editor = new EditorPage(page);
     await editor.goto();
     await editor.waitForReady();
+    await editor.newDocument();
     await editor.focus();
   });
 
@@ -288,8 +295,7 @@ test.describe('Formatting with Selection', () => {
     await assertions.assertTextIsBold(page, 'one two three');
   });
 
-  test.skip('cursor position preserved after formatting', async ({ page }) => {
-    // Known flaky: timing between selectText + applyBold + ArrowRight in paged editor
+  test('cursor position preserved after formatting', async ({ page }) => {
     await editor.typeText('Hello');
     await editor.selectText('Hello');
     await editor.applyBold();
@@ -308,6 +314,7 @@ test.describe('Formatting Edge Cases', () => {
     editor = new EditorPage(page);
     await editor.goto();
     await editor.waitForReady();
+    await editor.newDocument();
     await editor.focus();
   });
 

@@ -17,6 +17,7 @@ test.describe('Cursor Focus - Toolbar Interactions', () => {
     editor = new EditorPage(page);
     await editor.goto();
     await editor.waitForReady();
+    await editor.newDocument();
     await editor.focus();
   });
 
@@ -147,6 +148,7 @@ test.describe('Cursor Focus - Dropdown Interactions', () => {
     editor = new EditorPage(page);
     await editor.goto();
     await editor.waitForReady();
+    await editor.newDocument();
     await editor.focus();
   });
 
@@ -192,6 +194,7 @@ test.describe('Cursor Focus - Rapid Interactions', () => {
     editor = new EditorPage(page);
     await editor.goto();
     await editor.waitForReady();
+    await editor.newDocument();
     await editor.focus();
   });
 
@@ -222,6 +225,7 @@ test.describe('Cursor Focus - Text Selection Preservation', () => {
     editor = new EditorPage(page);
     await editor.goto();
     await editor.waitForReady();
+    await editor.newDocument();
     await editor.focus();
   });
 
@@ -323,6 +327,7 @@ test.describe('Cursor Focus - Background Click', () => {
     editor = new EditorPage(page);
     await editor.goto();
     await editor.waitForReady();
+    await editor.newDocument();
     await editor.focus();
   });
 

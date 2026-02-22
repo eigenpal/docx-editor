@@ -19,6 +19,7 @@ test.describe('Paged Editor - Click Positioning', () => {
     editor = new EditorPage(page);
     await editor.goto();
     await editor.waitForReady();
+    await editor.newDocument();
     await editor.focus();
   });
 
@@ -110,6 +111,7 @@ test.describe('Paged Editor - Tab Click Handling', () => {
     editor = new EditorPage(page);
     await editor.goto();
     await editor.waitForReady();
+    await editor.newDocument();
     await editor.focus();
   });
 
@@ -186,6 +188,7 @@ test.describe('Paged Editor - Double/Triple Click Selection', () => {
     editor = new EditorPage(page);
     await editor.goto();
     await editor.waitForReady();
+    await editor.newDocument();
     await editor.focus();
   });
 
@@ -320,6 +323,7 @@ test.describe('Paged Editor - Click on Empty Areas', () => {
     editor = new EditorPage(page);
     await editor.goto();
     await editor.waitForReady();
+    await editor.newDocument();
     await editor.focus();
   });
 
@@ -371,6 +375,7 @@ test.describe('Paged Editor - Cursor Position Accuracy', () => {
     editor = new EditorPage(page);
     await editor.goto();
     await editor.waitForReady();
+    await editor.newDocument();
     await editor.focus();
   });
 

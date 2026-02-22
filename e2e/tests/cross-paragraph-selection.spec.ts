@@ -16,6 +16,7 @@ test.describe('Cross-Paragraph Selection', () => {
     editor = new EditorPage(page);
     await editor.goto();
     await editor.waitForReady();
+    await editor.newDocument();
     await editor.focus();
   });
 
@@ -114,8 +115,7 @@ test.describe('Cross-Paragraph Selection', () => {
   });
 
   test.describe('Selection with Lists', () => {
-    test.skip('apply bullet list to paragraph', async ({ page }) => {
-      // assertParagraphIsList uses data-paragraph-index which doesn't exist in paged editor
+    test('apply bullet list to paragraph', async ({ page }) => {
       // Create a paragraph
       await editor.typeText('List item text');
 
@@ -126,8 +126,7 @@ test.describe('Cross-Paragraph Selection', () => {
       await assertions.assertParagraphIsList(page, 0, 'bullet');
     });
 
-    test.skip('apply numbered list to paragraph', async ({ page }) => {
-      // assertParagraphIsList uses data-paragraph-index which doesn't exist in paged editor
+    test('apply numbered list to paragraph', async ({ page }) => {
       // Create a paragraph
       await editor.typeText('Numbered item');
 
