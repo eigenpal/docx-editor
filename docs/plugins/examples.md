@@ -18,7 +18,7 @@ Source: [`examples/plugins/hello-world/src/wordCountPlugin.ts`](../../examples/p
 Full-featured template variable plugin combining both plugin systems:
 
 - **EditorPlugin** (`src/plugins/template/`) — ProseMirror decorations that highlight `{variable}` tags, plus an annotation panel listing the template schema
-- **CorePlugin** (`src/core-plugins/docxtemplater/`) — headless command handlers and MCP tools for AI-driven template operations
+- **CorePlugin** (`src/core-plugins/docxtemplater/`) — headless command handlers for server-side template operations
 
 ```bash
 cd examples/plugins/docxtemplater
@@ -38,7 +38,6 @@ A single feature can span both systems. The docxtemplater plugin does this:
 | Syntax highlighting     | EditorPlugin (ProseMirror decorations) | `src/plugins/template/`           |
 | Annotation panel        | EditorPlugin (Panel component)         | `src/plugins/template/`           |
 | Insert variable command | CorePlugin (command handler)           | `src/core-plugins/docxtemplater/` |
-| AI template tools       | CorePlugin (MCP tools)                 | `src/core-plugins/docxtemplater/` |
 
 Register both independently — they share data through the `Document` model.
 

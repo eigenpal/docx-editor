@@ -2,17 +2,17 @@
 
 The docx-editor has two plugin systems for different use cases:
 
-|              | **EditorPlugin**                                           | **CorePlugin**                                     |
-| ------------ | ---------------------------------------------------------- | -------------------------------------------------- |
-| Environment  | Browser (React)                                            | Node.js (headless)                                 |
-| Purpose      | UI panels, overlays, ProseMirror decorations               | Command handlers, MCP tools for AI                 |
-| Registration | `<PluginHost plugins={[...]}>` wrapping `<DocxEditor>`     | `pluginRegistry.register(plugin)`                  |
-| State model  | Reactive — `onStateChange` fires on every edit/click/focus | Stateless — pure functions transforming `Document` |
-| Entry point  | `src/plugin-api`                                           | `src/core-plugins`                                 |
+|              | **EditorPlugin**                                           | **CorePlugin**                                         |
+| ------------ | ---------------------------------------------------------- | ------------------------------------------------------ |
+| Environment  | Browser (React)                                            | Node.js (headless)                                     |
+| Purpose      | UI panels, overlays, ProseMirror decorations               | Command handlers for server-side document manipulation |
+| Registration | `<PluginHost plugins={[...]}>` wrapping `<DocxEditor>`     | `pluginRegistry.register(plugin)`                      |
+| State model  | Reactive — `onStateChange` fires on every edit/click/focus | Stateless — pure functions transforming `Document`     |
+| Entry point  | `src/plugin-api`                                           | `src/core-plugins`                                     |
 
-Most plugins are **EditorPlugins**. Use a **CorePlugin** only when you need headless document manipulation (Node.js scripts, no DOM) or want to expose tools to AI assistants via MCP.
+Most plugins are **EditorPlugins**. Use a **CorePlugin** when you need headless document manipulation — API routes, Node.js scripts, CI pipelines — without a browser.
 
-**Important**: these two systems run in completely different environments. EditorPlugins run in your React app in the browser. CorePlugins run in Node.js — either in your own scripts, or inside the standalone `docx-editor-mcp` server process that AI assistants connect to. They share the same `Document` model and parsers, but they don't communicate with each other. See [CorePlugin & MCP](./core-plugins.md) for the full architecture.
+**Important**: these two systems run in completely different environments. EditorPlugins run in your React app in the browser. CorePlugins run in Node.js (API routes, scripts, etc.). They share the same `Document` model and parsers, but they don't communicate with each other. See [CorePlugin & Headless API](./core-plugins.md) for the full architecture.
 
 ## How Registration Works
 
@@ -162,5 +162,5 @@ See [EditorPlugin API](./editor-plugins.md) for the full reference including wor
 ## Next Steps
 
 - [EditorPlugin API reference](./editor-plugins.md) — full interface, lifecycle, panels, overlays, limitations
-- [CorePlugin & MCP](./core-plugins.md) — headless plugins, command handlers, AI integration
+- [CorePlugin & Headless API](./core-plugins.md) — server-side document manipulation, command handlers
 - [Examples & Cookbook](./examples.md) — advanced patterns and recipes

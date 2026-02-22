@@ -6,11 +6,6 @@
  * **Command handlers** — `insertTemplateVariable` and `replaceWithTemplateVariable`
  * allow DocumentAgent to programmatically insert `{variable}` placeholders.
  *
- * **MCP tools** — `get_template_variables`, `insert_template_variable`,
- * `apply_template`, and `validate_template` are exposed to AI clients
- * (e.g., Claude Desktop) through the MCP server. This lets AI assistants
- * inspect and manipulate template variables without manual UI interaction.
- *
  * @example
  * ```ts
  * import { pluginRegistry } from '@eigenpal/docx-editor/core-plugins';
@@ -50,11 +45,7 @@ export const docxtemplaterPlugin: CorePlugin = {
     replaceWithTemplateVariable: handleReplaceWithTemplateVariable,
   },
 
-  /**
-   * MCP tools exposed to AI clients (e.g., Claude Desktop).
-   * The MCP server aggregates these from all registered plugins
-   * and makes them callable over the Model Context Protocol.
-   */
+  /** MCP tools for AI integration (optional, used by the MCP server if running) */
   mcpTools: docxtemplaterMcpTools,
 };
 

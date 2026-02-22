@@ -18,16 +18,16 @@ EditorPlugin (this directory)           CorePlugin (src/core-plugins/docxtemplat
 ├── ProseMirror plugin                  ├── Command handlers
 │   ├── Scans doc for {tags}            │   ├── insertTemplateVariable
 │   ├── Creates DecorationSet           │   └── replaceWithTemplateVariable
-│   └── Updates on every transaction    └── MCP tools (AI integration)
-├── Overlay renderer                        ├── get_template_variables
-│   └── Highlights tags over visible        ├── insert_template_variable
-│       pages using RenderedDomContext       ├── apply_template
-└── AnnotationPanel                         └── validate_template
+│   └── Updates on every transaction    └── Headless document manipulation
+├── Overlay renderer
+│   └── Highlights tags over visible
+│       pages using RenderedDomContext
+└── AnnotationPanel
     └── Lists tags, click-to-navigate
 ```
 
 - **EditorPlugin** handles everything visual: the ProseMirror plugin scans the document for `{...}` patterns on every transaction, builds a `DecorationSet`, and the overlay renderer uses `RenderedDomContext` to position highlights over the visible pages.
-- **CorePlugin** handles headless operations: command handlers for `DocumentAgent`, and MCP tools so AI assistants (Claude Desktop, Cursor) can inspect and manipulate templates programmatically.
+- **CorePlugin** handles headless operations: command handlers that `DocumentAgent` dispatches to for server-side template manipulation (API routes, scripts).
 
 Both share the same `Document` model — they don't depend on each other directly.
 
