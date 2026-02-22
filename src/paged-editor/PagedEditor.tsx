@@ -1472,102 +1472,107 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
      * Get caret position using DOM-based measurement.
      * This uses the browser's text rendering to get precise pixel positions.
      */
-    const getCaretFromDom = useCallback((pmPos: number): CaretPosition | null => {
-      if (!pagesContainerRef.current) return null;
+    const getCaretFromDom = useCallback(
+      (pmPos: number, currentZoom: number = 1): CaretPosition | null => {
+        if (!pagesContainerRef.current) return null;
 
-      const overlay = pagesContainerRef.current.parentElement?.querySelector(
-        '[data-testid="selection-overlay"]'
-      );
-      if (!overlay) return null;
+        const overlay = pagesContainerRef.current.parentElement?.querySelector(
+          '[data-testid="selection-overlay"]'
+        );
+        if (!overlay) return null;
 
-      const overlayRect = overlay.getBoundingClientRect();
+        const overlayRect = overlay.getBoundingClientRect();
 
-      // Find spans with PM position data
-      const spans = pagesContainerRef.current.querySelectorAll('span[data-pm-start][data-pm-end]');
+        // Find spans with PM position data
+        const spans = pagesContainerRef.current.querySelectorAll(
+          'span[data-pm-start][data-pm-end]'
+        );
 
-      for (const span of Array.from(spans)) {
-        const spanEl = span as HTMLElement;
-        const pmStart = Number(spanEl.dataset.pmStart);
-        const pmEnd = Number(spanEl.dataset.pmEnd);
+        for (const span of Array.from(spans)) {
+          const spanEl = span as HTMLElement;
+          const pmStart = Number(spanEl.dataset.pmStart);
+          const pmEnd = Number(spanEl.dataset.pmEnd);
 
-        // Special handling for tab spans - use exclusive end to avoid boundary conflicts
-        // Tab at [5,6) means position 6 belongs to the next run, not the tab
-        if (spanEl.classList.contains('layout-run-tab')) {
-          if (pmPos >= pmStart && pmPos < pmEnd) {
-            const spanRect = spanEl.getBoundingClientRect();
+          // Special handling for tab spans - use exclusive end to avoid boundary conflicts
+          // Tab at [5,6) means position 6 belongs to the next run, not the tab
+          if (spanEl.classList.contains('layout-run-tab')) {
+            if (pmPos >= pmStart && pmPos < pmEnd) {
+              const spanRect = spanEl.getBoundingClientRect();
+              const pageEl = spanEl.closest('.layout-page');
+              const pageIndex = pageEl ? Number((pageEl as HTMLElement).dataset.pageNumber) - 1 : 0;
+              const lineEl = spanEl.closest('.layout-line');
+              const lineHeight = lineEl ? (lineEl as HTMLElement).offsetHeight : 16;
+
+              return {
+                x: (spanRect.left - overlayRect.left) / currentZoom,
+                y: (spanRect.top - overlayRect.top) / currentZoom,
+                height: lineHeight,
+                pageIndex,
+              };
+            }
+            continue; // Skip to next span
+          }
+
+          // For text runs, use inclusive range
+          if (pmPos >= pmStart && pmPos <= pmEnd && span.firstChild?.nodeType === Node.TEXT_NODE) {
+            const textNode = span.firstChild as Text;
+            const charIndex = Math.min(pmPos - pmStart, textNode.length);
+
+            // Create a range at the exact character position
+            const ownerDoc = spanEl.ownerDocument;
+            if (!ownerDoc) continue;
+            const range = ownerDoc.createRange();
+            range.setStart(textNode, charIndex);
+            range.setEnd(textNode, charIndex);
+
+            const rangeRect = range.getBoundingClientRect();
+
+            // Find which page this span is on
             const pageEl = spanEl.closest('.layout-page');
             const pageIndex = pageEl ? Number((pageEl as HTMLElement).dataset.pageNumber) - 1 : 0;
+
+            // Get line height from the line element or use default
             const lineEl = spanEl.closest('.layout-line');
             const lineHeight = lineEl ? (lineEl as HTMLElement).offsetHeight : 16;
 
             return {
-              x: spanRect.left - overlayRect.left,
-              y: spanRect.top - overlayRect.top,
+              x: (rangeRect.left - overlayRect.left) / currentZoom,
+              y: (rangeRect.top - overlayRect.top) / currentZoom,
               height: lineHeight,
               pageIndex,
             };
           }
-          continue; // Skip to next span
         }
 
-        // For text runs, use inclusive range
-        if (pmPos >= pmStart && pmPos <= pmEnd && span.firstChild?.nodeType === Node.TEXT_NODE) {
-          const textNode = span.firstChild as Text;
-          const charIndex = Math.min(pmPos - pmStart, textNode.length);
+        // Fallback: try to find position in empty paragraphs (they have empty runs)
+        const emptyRuns = pagesContainerRef.current.querySelectorAll('.layout-empty-run');
+        for (const emptyRun of Array.from(emptyRuns)) {
+          const paragraph = emptyRun.closest('.layout-paragraph') as HTMLElement;
+          if (!paragraph) continue;
 
-          // Create a range at the exact character position
-          const ownerDoc = spanEl.ownerDocument;
-          if (!ownerDoc) continue;
-          const range = ownerDoc.createRange();
-          range.setStart(textNode, charIndex);
-          range.setEnd(textNode, charIndex);
+          const pmStart = Number(paragraph.dataset.pmStart);
+          const pmEnd = Number(paragraph.dataset.pmEnd);
 
-          const rangeRect = range.getBoundingClientRect();
+          if (pmPos >= pmStart && pmPos <= pmEnd) {
+            const runRect = emptyRun.getBoundingClientRect();
+            const pageEl = paragraph.closest('.layout-page');
+            const pageIndex = pageEl ? Number((pageEl as HTMLElement).dataset.pageNumber) - 1 : 0;
+            const lineEl = emptyRun.closest('.layout-line');
+            const lineHeight = lineEl ? (lineEl as HTMLElement).offsetHeight : 16;
 
-          // Find which page this span is on
-          const pageEl = spanEl.closest('.layout-page');
-          const pageIndex = pageEl ? Number((pageEl as HTMLElement).dataset.pageNumber) - 1 : 0;
-
-          // Get line height from the line element or use default
-          const lineEl = spanEl.closest('.layout-line');
-          const lineHeight = lineEl ? (lineEl as HTMLElement).offsetHeight : 16;
-
-          return {
-            x: rangeRect.left - overlayRect.left,
-            y: rangeRect.top - overlayRect.top,
-            height: lineHeight,
-            pageIndex,
-          };
+            return {
+              x: (runRect.left - overlayRect.left) / currentZoom,
+              y: (runRect.top - overlayRect.top) / currentZoom,
+              height: lineHeight,
+              pageIndex,
+            };
+          }
         }
-      }
 
-      // Fallback: try to find position in empty paragraphs (they have empty runs)
-      const emptyRuns = pagesContainerRef.current.querySelectorAll('.layout-empty-run');
-      for (const emptyRun of Array.from(emptyRuns)) {
-        const paragraph = emptyRun.closest('.layout-paragraph') as HTMLElement;
-        if (!paragraph) continue;
-
-        const pmStart = Number(paragraph.dataset.pmStart);
-        const pmEnd = Number(paragraph.dataset.pmEnd);
-
-        if (pmPos >= pmStart && pmPos <= pmEnd) {
-          const runRect = emptyRun.getBoundingClientRect();
-          const pageEl = paragraph.closest('.layout-page');
-          const pageIndex = pageEl ? Number((pageEl as HTMLElement).dataset.pageNumber) - 1 : 0;
-          const lineEl = emptyRun.closest('.layout-line');
-          const lineHeight = lineEl ? (lineEl as HTMLElement).offsetHeight : 16;
-
-          return {
-            x: runRect.left - overlayRect.left,
-            y: runRect.top - overlayRect.top,
-            height: lineHeight,
-            pageIndex,
-          };
-        }
-      }
-
-      return null;
-    }, []);
+        return null;
+      },
+      []
+    );
 
     /**
      * Update selection overlay from PM selection.
@@ -1624,7 +1629,7 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
         // Collapsed selection - show caret
         if (from === to) {
           // Use DOM-based caret positioning for accuracy
-          const domCaret = getCaretFromDom(from);
+          const domCaret = getCaretFromDom(from, zoom);
           if (domCaret) {
             setCaretPosition(domCaret);
           } else {
@@ -1642,8 +1647,8 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
               if (caret) {
                 setCaretPosition({
                   ...caret,
-                  x: caret.x + (pageRect.left - overlayRect.left),
-                  y: caret.y + (pageRect.top - overlayRect.top),
+                  x: caret.x + (pageRect.left - overlayRect.left) / zoom,
+                  y: caret.y + (pageRect.top - overlayRect.top) / zoom,
                 });
               } else {
                 setCaretPosition(null);
@@ -1684,10 +1689,10 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
                     : 0;
 
                   domRects.push({
-                    x: spanRect.left - overlayRect.left,
-                    y: spanRect.top - overlayRect.top,
-                    width: spanRect.width,
-                    height: spanRect.height,
+                    x: (spanRect.left - overlayRect.left) / zoom,
+                    y: (spanRect.top - overlayRect.top) / zoom,
+                    width: spanRect.width / zoom,
+                    height: spanRect.height / zoom,
                     pageIndex,
                   });
                   continue;
@@ -1717,10 +1722,10 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
                       : 0;
 
                     domRects.push({
-                      x: rect.left - overlayRect.left,
-                      y: rect.top - overlayRect.top,
-                      width: rect.width,
-                      height: rect.height,
+                      x: (rect.left - overlayRect.left) / zoom,
+                      y: (rect.top - overlayRect.top) / zoom,
+                      width: rect.width / zoom,
+                      height: rect.height / zoom,
                       pageIndex,
                     });
                   }
@@ -1735,8 +1740,8 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
               const firstPage = pagesContainerRef.current.querySelector('.layout-page');
               if (firstPage) {
                 const pageRect = firstPage.getBoundingClientRect();
-                const pageOffsetX = pageRect.left - overlayRect.left;
-                const pageOffsetY = pageRect.top - overlayRect.top;
+                const pageOffsetX = (pageRect.left - overlayRect.left) / zoom;
+                const pageOffsetY = (pageRect.top - overlayRect.top) / zoom;
 
                 const rects = selectionToRects(layout, blocks, measures, from, to);
                 const adjustedRects = rects.map((rect) => ({
@@ -1755,7 +1760,7 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
           setCaretPosition(null);
         }
       },
-      [layout, blocks, measures, getCaretFromDom]
+      [layout, blocks, measures, getCaretFromDom, zoom]
       // NOTE: onSelectionChange removed from dependencies - accessed via ref to prevent infinite loops
     );
 
