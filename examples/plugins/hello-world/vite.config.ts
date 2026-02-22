@@ -2,6 +2,7 @@ import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import tailwindcss from 'tailwindcss';
 import autoprefixer from 'autoprefixer';
+import tailwindcssAnimate from 'tailwindcss-animate';
 import path from 'path';
 import fs from 'fs';
 
@@ -24,7 +25,60 @@ export default defineConfig({
   css: {
     postcss: {
       plugins: [
-        tailwindcss({ config: path.join(monorepoRoot, 'tailwind.config.js') }),
+        // Use absolute content paths so Tailwind scans the right files
+        // regardless of which directory you run `npm run dev` from.
+        tailwindcss({
+          darkMode: ['class'],
+          content: [
+            path.join(monorepoRoot, 'src/**/*.{ts,tsx}'),
+            path.join(__dirname, 'src/**/*.{ts,tsx}'),
+          ],
+          theme: {
+            extend: {
+              colors: {
+                border: 'hsl(var(--border))',
+                input: 'hsl(var(--input))',
+                ring: 'hsl(var(--ring))',
+                background: 'hsl(var(--background))',
+                foreground: 'hsl(var(--foreground))',
+                primary: {
+                  DEFAULT: 'hsl(var(--primary))',
+                  foreground: 'hsl(var(--primary-foreground))',
+                },
+                secondary: {
+                  DEFAULT: 'hsl(var(--secondary))',
+                  foreground: 'hsl(var(--secondary-foreground))',
+                },
+                destructive: {
+                  DEFAULT: 'hsl(var(--destructive))',
+                  foreground: 'hsl(var(--destructive-foreground))',
+                },
+                muted: {
+                  DEFAULT: 'hsl(var(--muted))',
+                  foreground: 'hsl(var(--muted-foreground))',
+                },
+                accent: {
+                  DEFAULT: 'hsl(var(--accent))',
+                  foreground: 'hsl(var(--accent-foreground))',
+                },
+                popover: {
+                  DEFAULT: 'hsl(var(--popover))',
+                  foreground: 'hsl(var(--popover-foreground))',
+                },
+                card: {
+                  DEFAULT: 'hsl(var(--card))',
+                  foreground: 'hsl(var(--card-foreground))',
+                },
+              },
+              borderRadius: {
+                lg: 'var(--radius)',
+                md: 'calc(var(--radius) - 2px)',
+                sm: 'calc(var(--radius) - 4px)',
+              },
+            },
+          },
+          plugins: [tailwindcssAnimate],
+        }),
         autoprefixer(),
       ],
     },
