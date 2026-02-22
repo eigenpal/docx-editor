@@ -703,6 +703,8 @@ export {
   type PluginContext,
   type PluginHostProps,
   type PluginHostRef,
+  type RenderedDomContext,
+  type PositionCoordinates,
 } from './plugin-api';
 
 // ============================================================================

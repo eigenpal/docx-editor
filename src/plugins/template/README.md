@@ -9,6 +9,28 @@ Adds [docxtemplater](https://docxtemplater.com) syntax support to the DOCX edito
 - Side panel showing the full template structure
 - Click-to-navigate from panel to tag in the document
 
+## Architecture
+
+This feature spans two plugin systems:
+
+```
+EditorPlugin (this directory)           CorePlugin (src/core-plugins/docxtemplater/)
+├── ProseMirror plugin                  ├── Command handlers
+│   ├── Scans doc for {tags}            │   ├── insertTemplateVariable
+│   ├── Creates DecorationSet           │   └── replaceWithTemplateVariable
+│   └── Updates on every transaction    └── MCP tools (AI integration)
+├── Overlay renderer                        ├── get_template_variables
+│   └── Highlights tags over visible        ├── insert_template_variable
+│       pages using RenderedDomContext       ├── apply_template
+└── AnnotationPanel                         └── validate_template
+    └── Lists tags, click-to-navigate
+```
+
+- **EditorPlugin** handles everything visual: the ProseMirror plugin scans the document for `{...}` patterns on every transaction, builds a `DecorationSet`, and the overlay renderer uses `RenderedDomContext` to position highlights over the visible pages.
+- **CorePlugin** handles headless operations: command handlers for `DocumentAgent`, and MCP tools so AI assistants (Claude Desktop, Cursor) can inspect and manipulate templates programmatically.
+
+Both share the same `Document` model — they don't depend on each other directly.
+
 ## Usage
 
 ```tsx

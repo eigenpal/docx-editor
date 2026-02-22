@@ -2,9 +2,14 @@
  * Docxtemplater Plugin
  *
  * Core plugin for template variable functionality using docxtemplater.
- * Provides:
- * - Command handlers for inserting template variables
- * - MCP tools for template operations (get variables, apply template)
+ *
+ * **Command handlers** — `insertTemplateVariable` and `replaceWithTemplateVariable`
+ * allow DocumentAgent to programmatically insert `{variable}` placeholders.
+ *
+ * **MCP tools** — `get_template_variables`, `insert_template_variable`,
+ * `apply_template`, and `validate_template` are exposed to AI clients
+ * (e.g., Claude Desktop) through the MCP server. This lets AI assistants
+ * inspect and manipulate template variables without manual UI interaction.
  *
  * @example
  * ```ts
@@ -24,7 +29,10 @@ import { docxtemplaterMcpTools } from './mcp-tools';
 // ============================================================================
 
 /**
- * Docxtemplater plugin for template variable functionality
+ * Docxtemplater plugin for template variable functionality.
+ *
+ * Dependency validation is handled lazily by `processTemplate` at call time,
+ * so no eager `initialize()` is needed.
  */
 export const docxtemplaterPlugin: CorePlugin = {
   id: 'docxtemplater',
@@ -33,7 +41,9 @@ export const docxtemplaterPlugin: CorePlugin = {
   description: 'Template variable support using standard docxtemplater syntax ({variable})',
 
   /**
-   * Command handlers for template operations
+   * Command handlers for template operations.
+   * DocumentAgent dispatches `insertTemplateVariable` and
+   * `replaceWithTemplateVariable` commands to these handlers.
    */
   commandHandlers: {
     insertTemplateVariable: handleInsertTemplateVariable,
@@ -41,33 +51,11 @@ export const docxtemplaterPlugin: CorePlugin = {
   },
 
   /**
-   * MCP tools exposed to AI clients
+   * MCP tools exposed to AI clients (e.g., Claude Desktop).
+   * The MCP server aggregates these from all registered plugins
+   * and makes them callable over the Model Context Protocol.
    */
   mcpTools: docxtemplaterMcpTools,
-
-  /**
-   * Initialize the plugin
-   *
-   * Checks that docxtemplater and pizzip are available.
-   * Note: These are already dependencies, but this validates they're importable.
-   */
-  initialize: () => {
-    // Validate docxtemplater is available
-    // We don't actually need to import it here since processTemplate handles that
-    // This is just a validation step
-    try {
-      // Check if the utilities are importable
-
-      require('docxtemplater');
-
-      require('pizzip');
-    } catch {
-      console.warn(
-        '[docxtemplater-plugin] Warning: docxtemplater or pizzip not installed. ' +
-          'Template features may not work. Install with: npm install docxtemplater pizzip'
-      );
-    }
-  },
 };
 
 // ============================================================================
