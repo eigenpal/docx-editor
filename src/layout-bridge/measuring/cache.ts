@@ -20,9 +20,10 @@ interface TextWidthEntry {
 
 /**
  * Default max entries for text width cache
- * Typical documents contain thousands of unique text measurements
+ * Large documents (30+ pages) can generate 20,000+ unique text measurements.
+ * A generous default avoids cache thrashing on big docs.
  */
-const DEFAULT_TEXT_CACHE_SIZE = 5000;
+const DEFAULT_TEXT_CACHE_SIZE = 20000;
 
 /**
  * Current max size for text width cache
@@ -241,8 +242,9 @@ interface ParagraphMeasureEntry {
 
 /**
  * Default max entries for paragraph measure cache
+ * Large documents can have 500+ unique paragraphs.
  */
-const DEFAULT_PARAGRAPH_CACHE_SIZE = 1000;
+const DEFAULT_PARAGRAPH_CACHE_SIZE = 5000;
 
 /**
  * Current max size for paragraph measure cache

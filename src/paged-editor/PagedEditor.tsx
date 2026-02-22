@@ -1468,6 +1468,54 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
       ]
     );
 
+    // =========================================================================
+    // Coalesced Layout (rAF throttle)
+    // =========================================================================
+
+    /**
+     * Ref holding a pending requestAnimationFrame ID and the latest state.
+     * Multiple rapid transactions (e.g. typing "hello") within the same frame
+     * are coalesced so only the final state triggers a full layout pass.
+     */
+    const pendingLayoutRef = useRef<{
+      rafId: number;
+      state: EditorState;
+    } | null>(null);
+
+    /**
+     * Schedule a layout pipeline run for the next animation frame.
+     * If a run is already scheduled, the pending state is replaced so only
+     * the most recent document state gets laid out.
+     */
+    const scheduleLayout = useCallback(
+      (state: EditorState) => {
+        if (pendingLayoutRef.current) {
+          // Already scheduled — just update the state to the latest
+          pendingLayoutRef.current.state = state;
+          return;
+        }
+        const rafId = requestAnimationFrame(() => {
+          const pending = pendingLayoutRef.current;
+          pendingLayoutRef.current = null;
+          if (pending) {
+            runLayoutPipeline(pending.state);
+          }
+        });
+        pendingLayoutRef.current = { rafId, state };
+      },
+      [runLayoutPipeline]
+    );
+
+    // Clean up pending rAF on unmount
+    useEffect(() => {
+      return () => {
+        if (pendingLayoutRef.current) {
+          cancelAnimationFrame(pendingLayoutRef.current.rafId);
+          pendingLayoutRef.current = null;
+        }
+      };
+    }, []);
+
     /**
      * Get caret position using DOM-based measurement.
      * This uses the browser's text rendering to get precise pixel positions.
@@ -1777,8 +1825,8 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
           // Increment state sequence to signal document changed
           syncCoordinator.incrementStateSeq();
 
-          // Content changed - full layout
-          runLayoutPipeline(newState);
+          // Content changed - schedule layout (coalesced via rAF)
+          scheduleLayout(newState);
 
           // Notify document change - use ref to avoid infinite loops
           const newDoc = hiddenPMRef.current?.getDocument();
@@ -1791,7 +1839,7 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
         syncCoordinator.requestRender();
         updateSelectionOverlay(newState);
       },
-      [runLayoutPipeline, updateSelectionOverlay, syncCoordinator]
+      [scheduleLayout, updateSelectionOverlay, syncCoordinator]
       // NOTE: onDocumentChange removed from dependencies - accessed via ref to prevent infinite loops
     );
 

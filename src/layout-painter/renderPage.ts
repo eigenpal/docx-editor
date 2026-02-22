@@ -934,6 +934,29 @@ export function renderPage(
  * @param container - Container element to append pages to
  * @param options - Rendering options
  */
+/**
+ * Number of pages to render above and below the visible area.
+ * Keeps nearby pages ready for smooth scrolling.
+ */
+const VIRTUALIZATION_BUFFER = 2;
+
+/**
+ * Minimum page count before virtualization kicks in.
+ * Small documents render all pages eagerly for simplicity.
+ */
+const VIRTUALIZATION_THRESHOLD = 8;
+
+/**
+ * Render multiple pages to a container with virtualization for large documents.
+ *
+ * For documents with fewer than VIRTUALIZATION_THRESHOLD pages, all pages
+ * are rendered eagerly. For larger documents, only pages near the visible
+ * viewport are fully rendered — off-screen pages are lightweight shells
+ * with correct dimensions to preserve scroll position.
+ *
+ * An IntersectionObserver watches page elements and populates/clears
+ * content as pages scroll into and out of view.
+ */
 export function renderPages(
   pages: Page[],
   container: HTMLElement,
@@ -944,6 +967,13 @@ export function renderPages(
 ): void {
   const totalPages = pages.length;
   const pageGap = options.pageGap ?? 24;
+
+  // Disconnect any previous observer attached to this container
+  const prevObserver = (container as PageContainer).__pageObserver;
+  if (prevObserver) {
+    prevObserver.disconnect();
+    (container as PageContainer).__pageObserver = undefined;
+  }
 
   // Clear existing content
   container.innerHTML = '';
@@ -956,26 +986,172 @@ export function renderPages(
   container.style.padding = `${pageGap}px`;
   container.style.backgroundColor = 'var(--doc-bg, #f8f9fa)';
 
+  const useVirtualization = totalPages >= VIRTUALIZATION_THRESHOLD;
+
+  // Build all page shells
+  const pageShells: HTMLElement[] = [];
   for (let i = 0; i < pages.length; i++) {
     const page = pages[i];
+
+    if (!useVirtualization) {
+      // Small document: render all pages eagerly
+      const context: RenderContext = {
+        pageNumber: page.number,
+        totalPages,
+        section: 'body',
+      };
+      const pageOptions = { ...options };
+      if (options.footnotesByPage) {
+        const fns = options.footnotesByPage.get(page.number);
+        if (fns && fns.length > 0) {
+          pageOptions.footnoteArea = fns;
+        }
+      }
+      const pageEl = renderPage(page, context, pageOptions);
+      container.appendChild(pageEl);
+      pageShells.push(pageEl);
+    } else {
+      // Large document: create lightweight shell with correct dimensions
+      const doc = options.document ?? document;
+      const pageEl = doc.createElement('div');
+      pageEl.className = options.pageClassName ?? PAGE_CLASS_NAMES.page;
+      pageEl.dataset.pageNumber = String(page.number);
+      pageEl.dataset.pageIndex = String(i);
+      applyPageStyles(pageEl, page.size.w, page.size.h, options);
+      container.appendChild(pageEl);
+      pageShells.push(pageEl);
+    }
+  }
+
+  if (!useVirtualization) return;
+
+  // --- Virtualization via IntersectionObserver ---
+
+  // Store page data for lazy rendering
+  const pageDataMap = new Map<HTMLElement, { page: Page; index: number; rendered: boolean }>();
+  for (let i = 0; i < pages.length; i++) {
+    pageDataMap.set(pageShells[i], { page: pages[i], index: i, rendered: false });
+  }
+
+  /**
+   * Populate a page shell with full content.
+   */
+  function populatePage(shell: HTMLElement): void {
+    const data = pageDataMap.get(shell);
+    if (!data || data.rendered) return;
+
     const context: RenderContext = {
-      pageNumber: page.number,
+      pageNumber: data.page.number,
       totalPages,
       section: 'body',
     };
-
-    // Per-page footnote area
     const pageOptions = { ...options };
     if (options.footnotesByPage) {
-      const fns = options.footnotesByPage.get(page.number);
+      const fns = options.footnotesByPage.get(data.page.number);
       if (fns && fns.length > 0) {
         pageOptions.footnoteArea = fns;
       }
     }
 
-    const pageEl = renderPage(page, context, pageOptions);
-    container.appendChild(pageEl);
+    // Render a full page and transplant its children into the shell
+    const fullPageEl = renderPage(data.page, context, pageOptions);
+
+    // Move all children from the fully-rendered page into the shell
+    while (fullPageEl.firstChild) {
+      shell.appendChild(fullPageEl.firstChild);
+    }
+
+    data.rendered = true;
   }
+
+  /**
+   * Clear a page shell's content (keep shell dimensions for scroll).
+   */
+  function depopulatePage(shell: HTMLElement): void {
+    const data = pageDataMap.get(shell);
+    if (!data || !data.rendered) return;
+
+    shell.innerHTML = '';
+    data.rendered = false;
+  }
+
+  // Use the browser viewport as intersection root.
+  // The scroll container may be the viewport itself, the paged-editor wrapper,
+  // or any ancestor. Using root: null (viewport) is the most robust option.
+  const observer = new IntersectionObserver(
+    (entries) => {
+      for (const entry of entries) {
+        const shell = entry.target as HTMLElement;
+        const data = pageDataMap.get(shell);
+        if (!data) continue;
+
+        if (entry.isIntersecting) {
+          // Page is near viewport — render it and neighbors
+          populatePage(shell);
+
+          // Also render buffer pages above and below
+          for (let offset = -VIRTUALIZATION_BUFFER; offset <= VIRTUALIZATION_BUFFER; offset++) {
+            const neighborIdx = data.index + offset;
+            if (neighborIdx >= 0 && neighborIdx < pageShells.length && neighborIdx !== data.index) {
+              populatePage(pageShells[neighborIdx]);
+            }
+          }
+        }
+      }
+
+      // Sweep: depopulate pages far from any currently-visible page.
+      // Determine which pages are actually near the viewport using getBoundingClientRect.
+      const viewportHeight = window.innerHeight;
+      const nearThreshold = viewportHeight * 3;
+      const nearIndices = new Set<number>();
+
+      for (const [el, data] of pageDataMap) {
+        if (!data.rendered) continue;
+        const rect = el.getBoundingClientRect();
+        if (rect.bottom > -nearThreshold && rect.top < viewportHeight + nearThreshold) {
+          nearIndices.add(data.index);
+        }
+      }
+
+      for (const [el, data] of pageDataMap) {
+        if (!data.rendered) continue;
+        let keepRendered = false;
+        for (const nearIdx of nearIndices) {
+          if (Math.abs(data.index - nearIdx) <= VIRTUALIZATION_BUFFER + 1) {
+            keepRendered = true;
+            break;
+          }
+        }
+        if (!keepRendered && nearIndices.size > 0) {
+          depopulatePage(el);
+        }
+      }
+    },
+    {
+      root: null, // browser viewport
+      // Pre-render pages 1500px above and below viewport
+      rootMargin: '1500px 0px 1500px 0px',
+    }
+  );
+
+  // Observe all page shells
+  for (const shell of pageShells) {
+    observer.observe(shell);
+  }
+
+  // Eagerly render the first few pages so the initial view isn't blank
+  const initialRenderCount = Math.min(pages.length, VIRTUALIZATION_BUFFER + 3);
+  for (let i = 0; i < initialRenderCount; i++) {
+    populatePage(pageShells[i]);
+  }
+
+  // Store observer reference on the container for cleanup
+  (container as PageContainer).__pageObserver = observer;
+}
+
+/** Extended container type with observer reference for cleanup. */
+interface PageContainer extends HTMLElement {
+  __pageObserver?: IntersectionObserver;
 }
 
 /**
