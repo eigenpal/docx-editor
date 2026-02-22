@@ -10,7 +10,9 @@ The docx-editor has two plugin systems for different use cases:
 | State model  | Reactive — `onStateChange` fires on every edit/click/focus | Stateless — pure functions transforming `Document` |
 | Entry point  | `src/plugin-api`                                           | `src/core-plugins`                                 |
 
-Most plugins are **EditorPlugins**. Use a **CorePlugin** only when you need headless document manipulation (no DOM) or want to expose tools to AI assistants via MCP.
+Most plugins are **EditorPlugins**. Use a **CorePlugin** only when you need headless document manipulation (Node.js scripts, no DOM) or want to expose tools to AI assistants via MCP.
+
+**Important**: these two systems run in completely different environments. EditorPlugins run in your React app in the browser. CorePlugins run in Node.js — either in your own scripts, or inside the standalone `docx-editor-mcp` server process that AI assistants connect to. They share the same `Document` model and parsers, but they don't communicate with each other. See [CorePlugin & MCP](./core-plugins.md) for the full architecture.
 
 ## How Registration Works
 
