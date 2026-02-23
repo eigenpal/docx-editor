@@ -200,6 +200,35 @@ function applyPmPositions(element: HTMLElement, pmStart?: number, pmEnd?: number
   }
 }
 
+function applyTrackedChangeMetadata(element: HTMLElement, run: TextRun | TabRun): void {
+  if (!run.trackedChange) return;
+
+  element.classList.add('layout-run-tracked-change');
+  element.classList.add(`layout-run-tracked-change-${run.trackedChange.type}`);
+  element.dataset.trackedChangeType = run.trackedChange.type;
+
+  if (run.trackedChange.revisionId !== undefined) {
+    element.dataset.trackedChangeRevisionId = String(run.trackedChange.revisionId);
+  }
+  if (run.trackedChange.author) {
+    element.dataset.trackedChangeAuthor = run.trackedChange.author;
+  }
+  if (run.trackedChange.date) {
+    element.dataset.trackedChangeDate = run.trackedChange.date;
+  }
+
+  const markerColor =
+    run.trackedChange.type === 'insertion' || run.trackedChange.type === 'moveTo'
+      ? '#2e7d32'
+      : '#c62828';
+  // Use paint-only effects so tracked visuals do not change text measurement/line breaks.
+  element.style.boxShadow = `inset 2px 0 0 ${markerColor}`;
+  element.style.backgroundColor =
+    run.trackedChange.type === 'insertion' || run.trackedChange.type === 'moveTo'
+      ? 'rgba(46, 125, 50, 0.08)'
+      : 'rgba(198, 40, 40, 0.08)';
+}
+
 /**
  * Render a text run
  */
@@ -209,6 +238,7 @@ function renderTextRun(run: TextRun, doc: Document): HTMLElement {
 
   applyRunStyles(span, run);
   applyPmPositions(span, run.pmStart, run.pmEnd);
+  applyTrackedChangeMetadata(span, run);
 
   // Handle hyperlinks
   if (run.hyperlink) {
@@ -247,6 +277,7 @@ function renderTabRun(run: TabRun, doc: Document, width: number, leader?: string
   span.style.width = `${width}px`;
 
   applyPmPositions(span, run.pmStart, run.pmEnd);
+  applyTrackedChangeMetadata(span, run);
 
   // Render leader character if specified
   if (leader && leader !== 'none') {

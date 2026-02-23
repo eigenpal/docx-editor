@@ -147,6 +147,8 @@ function convertPMParagraph(node: PMNode): Paragraph {
     paraId: attrs.paraId || undefined,
     textId: attrs.textId || undefined,
     formatting: paragraphAttrsToFormatting(attrs),
+    paragraphPropertiesChange: attrs._paragraphPropertiesChange || undefined,
+    paragraphMarkMoveRevisions: attrs._paragraphMarkMoveRevisions || undefined,
     content,
   };
 

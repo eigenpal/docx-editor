@@ -108,6 +108,7 @@ export function resetBlockIdCounter(): void {
  */
 function extractRunFormatting(marks: readonly Mark[], theme?: Theme | null): RunFormatting {
   const formatting: RunFormatting = {};
+  let trackedMark: Mark | null = null;
 
   for (const mark of marks) {
     switch (mark.type.name) {
@@ -197,6 +198,46 @@ function extractRunFormatting(marks: readonly Mark[], theme?: Theme | null): Run
         }
         break;
       }
+
+      case 'insertion':
+      case 'deletion':
+      case 'moveFrom':
+      case 'moveTo':
+        trackedMark = mark;
+        break;
+    }
+  }
+
+  if (trackedMark) {
+    const trackedType = trackedMark.type.name as 'insertion' | 'deletion' | 'moveFrom' | 'moveTo';
+    const trackedColor =
+      trackedType === 'insertion' || trackedType === 'moveTo' ? '#2e7d32' : '#c62828';
+
+    formatting.trackedChange = {
+      type: trackedType,
+      revisionId:
+        trackedMark.attrs.revisionId === undefined
+          ? undefined
+          : Number(trackedMark.attrs.revisionId),
+      author: trackedMark.attrs.author ? String(trackedMark.attrs.author) : undefined,
+      date: trackedMark.attrs.date ? String(trackedMark.attrs.date) : null,
+    };
+
+    formatting.color = trackedColor;
+
+    if (trackedType === 'insertion' || trackedType === 'moveTo') {
+      if (!formatting.underline) {
+        formatting.underline = { style: 'single', color: trackedColor };
+      } else if (typeof formatting.underline === 'object') {
+        formatting.underline = {
+          ...formatting.underline,
+          color: formatting.underline.color ?? trackedColor,
+        };
+      } else {
+        formatting.underline = { style: 'single', color: trackedColor };
+      }
+    } else {
+      formatting.strike = true;
     }
   }
 

@@ -44,7 +44,7 @@ interface EditorPlugin<TState = any> {
   panelConfig?: PanelConfig;
 
   /** Called on every editor state change. Return new state or undefined to keep existing. */
-  onStateChange?: (view: EditorView) => TState | undefined;
+  onStateChange?: (view: EditorView, context?: PluginStateChangeContext) => TState | undefined;
 
   /** Called once when the plugin is first loaded */
   initialize?: (view: EditorView | null) => TState;
@@ -226,6 +226,11 @@ interface PluginPanelProps<TState> {
   panelWidth: number;
   renderedDomContext: RenderedDomContext | null;
 }
+
+interface PluginStateChangeContext {
+  documentModel: Document | null;
+  mutateDocumentModel?: (updater: (document: Document) => Document | null) => boolean;
+}
 ```
 
 - `scrollToPosition` — scrolls the editor to show a ProseMirror position
@@ -310,6 +315,29 @@ Features:
 - Click-to-navigate from panel to tag in the document
 
 See [`src/plugins/template/README.md`](../src/plugins/template/README.md) for full details.
+
+### Review Plugin
+
+Tracked changes review plugin for documents that already contain revisions.
+
+```tsx
+import { DocxEditor, PluginHost, reviewPlugin } from '@eigenpal/docx-js-editor';
+
+<PluginHost plugins={[reviewPlugin]}>
+  <DocxEditor documentBuffer={file} />
+</PluginHost>;
+```
+
+Features:
+
+- Extract revision ranges (insertions, deletions, moves)
+- Per-page, right-side review rails near the active pages
+- Click-to-jump from rail items to document locations
+- Per-item accept/reject for supported revisions
+- Header/footer revisions are included in the rail (view-only for now)
+- Guarded fallback for unsupported revision structures
+
+See [`src/plugins/review/README.md`](../src/plugins/review/README.md) for details.
 
 ## Internal Extension System
 

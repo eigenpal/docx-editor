@@ -97,6 +97,8 @@ export type {
   Deletion,
   MoveFrom,
   MoveTo,
+  ParagraphPropertiesChange,
+  ParagraphMarkMoveRevision,
   SdtType,
   SdtProperties,
   InlineSdt,

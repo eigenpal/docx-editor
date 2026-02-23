@@ -9,6 +9,7 @@ import type { Plugin as ProseMirrorPlugin } from 'prosemirror-state';
 import type { EditorView } from 'prosemirror-view';
 import type { Node as ProseMirrorNode } from 'prosemirror-model';
 import type { ReactNode } from 'react';
+import type { Document } from '../types/document';
 
 /**
  * Coordinates returned by position lookup in the rendered DOM.
@@ -135,6 +136,23 @@ export interface PanelConfig {
 }
 
 /**
+ * Additional context provided to plugin state updates.
+ */
+export interface PluginStateChangeContext {
+  /**
+   * Latest parsed document model from DocxEditor.
+   * Includes package-level data such as headers/footers that are outside the
+   * main ProseMirror body document.
+   */
+  documentModel: Document | null;
+  /**
+   * Request a document-model mutation that should be applied by the host
+   * editor. Returns true when the request was scheduled.
+   */
+  mutateDocumentModel?: (updater: (document: Document) => Document | null) => boolean;
+}
+
+/**
  * Generic interface for editor plugins.
  *
  * Implement this interface to create custom plugins that can:
@@ -177,7 +195,7 @@ export interface EditorPlugin<TState = any> {
    * @param view - The current ProseMirror editor view
    * @returns The new plugin state, or undefined to keep existing state
    */
-  onStateChange?: (view: EditorView) => TState | undefined;
+  onStateChange?: (view: EditorView, context?: PluginStateChangeContext) => TState | undefined;
 
   /**
    * Initialize plugin state when the plugin is first loaded.

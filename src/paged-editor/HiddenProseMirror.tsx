@@ -148,7 +148,9 @@ function createInitialState(
   const activeSchema = manager?.getSchema() ?? schema;
   const doc = document ? toProseDoc(document, { styles: styles ?? undefined }) : createEmptyDoc();
 
-  const plugins: Plugin[] = [...(manager?.getPlugins() ?? []), ...externalPlugins];
+  // External plugins are prepended so feature modules can intercept input
+  // before built-in keymaps when needed.
+  const plugins: Plugin[] = [...externalPlugins, ...(manager?.getPlugins() ?? [])];
 
   return EditorState.create({
     doc,

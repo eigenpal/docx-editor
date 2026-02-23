@@ -2,7 +2,9 @@ import React, { useState, useRef, useCallback, useEffect } from 'react';
 import {
   DirectXmlDocxEditor as DocxEditor,
   type DocxEditorRef,
+  PluginHost,
   createEmptyDocument,
+  reviewPlugin,
   type Document,
   type HeaderFooter,
 } from '@eigenpal/docx-js-editor';
@@ -466,14 +468,43 @@ export function App() {
           }
         };
 
-        const sectionProperties = currentDocument.package.document.finalSectionProperties;
+        const collectAllSectionRefs = (kind: 'header' | 'footer'): Array<{ rId: string }> => {
+          const refs: Array<{ rId: string }> = [];
+          const seenRels = new Set<string>();
+          const append = (items: Array<{ rId: string }> | undefined) => {
+            if (!items) return;
+            for (const item of items) {
+              if (seenRels.has(item.rId)) continue;
+              seenRels.add(item.rId);
+              refs.push(item);
+            }
+          };
+
+          for (const section of currentDocument.package.document.sections ?? []) {
+            append(
+              kind === 'header'
+                ? section.properties.headerReferences
+                : section.properties.footerReferences
+            );
+          }
+
+          const finalSectionProperties = currentDocument.package.document.finalSectionProperties;
+          append(
+            kind === 'header'
+              ? finalSectionProperties?.headerReferences
+              : finalSectionProperties?.footerReferences
+          );
+
+          return refs;
+        };
+
         appendHeaderFooterOps(
-          sectionProperties?.headerReferences,
+          collectAllSectionRefs('header'),
           currentDocument.package.headers,
           baselineDocument.package.headers
         );
         appendHeaderFooterOps(
-          sectionProperties?.footerReferences,
+          collectAllSectionRefs('footer'),
           currentDocument.package.footers,
           baselineDocument.package.footers
         );
@@ -598,23 +629,25 @@ export function App() {
       )}
 
       <main style={styles.main}>
-        <DocxEditor
-          ref={editorRef}
-          document={documentBuffer ? undefined : currentDocument}
-          documentBuffer={documentBuffer}
-          useDirectXmlSave={true}
-          buildDirectXmlOperations={buildDirectXmlOperationPlan}
-          onChange={handleDocumentChange}
-          onError={handleError}
-          onFontsLoaded={handleFontsLoaded}
-          showToolbar={true}
-          showRuler={!isMobile}
-          showVariablePanel={true}
-          showZoomControl={true}
-          showPageNumbers={false}
-          initialZoom={autoZoom}
-          variablePanelPosition="right"
-        />
+        <PluginHost plugins={[reviewPlugin]}>
+          <DocxEditor
+            ref={editorRef}
+            document={documentBuffer ? undefined : currentDocument}
+            documentBuffer={documentBuffer}
+            useDirectXmlSave={true}
+            buildDirectXmlOperations={buildDirectXmlOperationPlan}
+            onChange={handleDocumentChange}
+            onError={handleError}
+            onFontsLoaded={handleFontsLoaded}
+            showToolbar={true}
+            showRuler={!isMobile}
+            showVariablePanel={true}
+            showZoomControl={true}
+            showPageNumbers={false}
+            initialZoom={autoZoom}
+            variablePanelPosition="right"
+          />
+        </PluginHost>
       </main>
     </div>
   );

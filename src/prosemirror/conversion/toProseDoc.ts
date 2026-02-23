@@ -281,6 +281,8 @@ function paragraphFormattingToAttrs(
     listMarker: paragraph.listRendering?.marker,
     // Store original inline formatting for lossless serialization round-trip
     _originalFormatting: formatting || undefined,
+    _paragraphPropertiesChange: paragraph.paragraphPropertiesChange ?? undefined,
+    _paragraphMarkMoveRevisions: paragraph.paragraphMarkMoveRevisions ?? undefined,
   };
 
   // If we have a style resolver, resolve the style and get base properties

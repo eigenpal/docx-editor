@@ -144,6 +144,7 @@ function Editor({ file }: { file: ArrayBuffer }) {
 | Plugin                                 | Description                                                                                  |
 | -------------------------------------- | -------------------------------------------------------------------------------------------- |
 | [Docxtemplater](src/plugins/template/) | Syntax highlighting and annotation panel for [docxtemplater](https://docxtemplater.com) tags |
+| [Review](src/plugins/review/)          | Tracked changes workflow for reviewing existing revisions                                    |
 
 See [docs/PLUGINS.md](docs/PLUGINS.md) for the full plugin API, including how to create custom plugins with panels, overlays, and ProseMirror integrations.
 

@@ -184,6 +184,20 @@ export interface DocxEditorProps {
   onSave?: (buffer: ArrayBuffer) => void;
   /** Callback when document changes */
   onChange?: (document: Document) => void;
+  /**
+   * Callback whenever the editor's full document model state changes.
+   * Unlike `onChange`, this also fires for initial parse/load and
+   * non-body mutations (e.g. header/footer edits).
+   */
+  onDocumentStateChange?: (document: Document | null) => void;
+  /**
+   * External mutation request to apply against the current document model.
+   * Used by PluginHost-powered workflows (e.g. review actions outside body PM).
+   */
+  externalDocumentMutationRequest?: {
+    id: number;
+    apply: (document: Document) => Document | null;
+  } | null;
   /** Callback when selection changes */
   onSelectionChange?: (state: SelectionState | null) => void;
   /** Callback on error */
@@ -342,6 +356,8 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
     document: initialDocument,
     onSave,
     onChange,
+    onDocumentStateChange,
+    externalDocumentMutationRequest,
     onSelectionChange,
     onError,
     onFontsLoaded: onFontsLoadedCallback,
@@ -593,6 +609,28 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
       agentRef.current = null;
     }
   }, [history.state]);
+
+  // Emit full document-model updates (initial load + all subsequent mutations).
+  useEffect(() => {
+    onDocumentStateChange?.(history.state ?? null);
+  }, [history.state, onDocumentStateChange]);
+
+  // Apply external document mutation requests (from PluginHost/plugin actions).
+  const lastExternalMutationIdRef = useRef<number | null>(null);
+  useEffect(() => {
+    if (!externalDocumentMutationRequest) return;
+    if (lastExternalMutationIdRef.current === externalDocumentMutationRequest.id) return;
+    lastExternalMutationIdRef.current = externalDocumentMutationRequest.id;
+
+    const current = history.state;
+    if (!current) return;
+
+    const updated = externalDocumentMutationRequest.apply(current);
+    if (!updated || updated === current) return;
+
+    history.push(updated);
+    onChange?.(updated);
+  }, [externalDocumentMutationRequest, history, onChange]);
 
   // Listen for font loading
   useEffect(() => {

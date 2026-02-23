@@ -25,6 +25,9 @@ import type {
   Deletion,
   MoveFrom,
   MoveTo,
+  ParagraphPropertiesChange,
+  ParagraphMarkMoveRevision,
+  TrackedChangeInfo,
   TabStop,
   BorderSpec,
   ShadingProperties,
@@ -47,6 +50,28 @@ function escapeXml(text: string): string {
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&apos;');
+}
+
+function unwrapXmlWrapper(xml: string, tagName: string): string {
+  if (!xml) return '';
+  const openTag = `<w:${tagName}>`;
+  const closeTag = `</w:${tagName}>`;
+  if (!xml.startsWith(openTag) || !xml.endsWith(closeTag)) {
+    return xml;
+  }
+  return xml.slice(openTag.length, -closeTag.length);
+}
+
+function serializeTrackedChangeInfoTag(tagName: string, info: TrackedChangeInfo): string {
+  const attrs = [`w:id="${info.id}"`, `w:author="${escapeXml(info.author)}"`];
+  if (info.date) {
+    attrs.push(`w:date="${escapeXml(info.date)}"`);
+  }
+  return `<w:${tagName} ${attrs.join(' ')}/>`;
+}
+
+function serializeParagraphMarkMoveRevision(revision: ParagraphMarkMoveRevision): string {
+  return serializeTrackedChangeInfoTag(revision.type, revision.info);
 }
 
 // ============================================================================
@@ -376,113 +401,152 @@ function serializeFrameProperties(frame: ParagraphFormatting['frame']): string {
 /**
  * Serialize paragraph formatting properties to w:pPr XML
  */
-export function serializeParagraphFormatting(formatting: ParagraphFormatting | undefined): string {
-  if (!formatting) return '';
+interface ParagraphFormattingSerializationMetadata {
+  propertyChange?: ParagraphPropertiesChange;
+  paragraphMarkMoveRevisions?: ParagraphMarkMoveRevision[];
+}
+
+export function serializeParagraphFormatting(
+  formatting: ParagraphFormatting | undefined,
+  tracked?: ParagraphFormattingSerializationMetadata
+): string {
+  const activeFormatting = formatting ?? ({} as ParagraphFormatting);
+  const hasTrackedMetadata = Boolean(
+    tracked?.propertyChange ||
+    (tracked?.paragraphMarkMoveRevisions && tracked.paragraphMarkMoveRevisions.length > 0)
+  );
+
+  if (!formatting && !hasTrackedMetadata) return '';
 
   const parts: string[] = [];
 
   // Style reference (must be first)
-  if (formatting.styleId) {
-    parts.push(`<w:pStyle w:val="${escapeXml(formatting.styleId)}"/>`);
+  if (activeFormatting.styleId) {
+    parts.push(`<w:pStyle w:val="${escapeXml(activeFormatting.styleId)}"/>`);
   }
 
   // Keep next/lines/widow
-  if (formatting.keepNext) {
+  if (activeFormatting.keepNext) {
     parts.push('<w:keepNext/>');
   }
 
-  if (formatting.keepLines) {
+  if (activeFormatting.keepLines) {
     parts.push('<w:keepLines/>');
   }
 
-  if (formatting.contextualSpacing) {
+  if (activeFormatting.contextualSpacing) {
     parts.push('<w:contextualSpacing/>');
   }
 
-  if (formatting.pageBreakBefore) {
+  if (activeFormatting.pageBreakBefore) {
     parts.push('<w:pageBreakBefore/>');
   }
 
   // Frame properties
-  const frameXml = serializeFrameProperties(formatting.frame);
+  const frameXml = serializeFrameProperties(activeFormatting.frame);
   if (frameXml) {
     parts.push(frameXml);
   }
 
   // Widow control
-  if (formatting.widowControl === false) {
+  if (activeFormatting.widowControl === false) {
     parts.push('<w:widowControl w:val="0"/>');
-  } else if (formatting.widowControl === true) {
+  } else if (activeFormatting.widowControl === true) {
     parts.push('<w:widowControl/>');
   }
 
   // Numbering
-  const numPrXml = serializeNumbering(formatting.numPr);
+  const numPrXml = serializeNumbering(activeFormatting.numPr);
   if (numPrXml) {
     parts.push(numPrXml);
   }
 
   // Paragraph borders
-  const bordersXml = serializeParagraphBorders(formatting.borders);
+  const bordersXml = serializeParagraphBorders(activeFormatting.borders);
   if (bordersXml) {
     parts.push(bordersXml);
   }
 
   // Shading
-  const shadingXml = serializeShading(formatting.shading);
+  const shadingXml = serializeShading(activeFormatting.shading);
   if (shadingXml) {
     parts.push(shadingXml);
   }
 
   // Tabs
-  const tabsXml = serializeTabStops(formatting.tabs);
+  const tabsXml = serializeTabStops(activeFormatting.tabs);
   if (tabsXml) {
     parts.push(tabsXml);
   }
 
   // Suppress line numbers
-  if (formatting.suppressLineNumbers) {
+  if (activeFormatting.suppressLineNumbers) {
     parts.push('<w:suppressLineNumbers/>');
   }
 
   // Suppress auto hyphens
-  if (formatting.suppressAutoHyphens) {
+  if (activeFormatting.suppressAutoHyphens) {
     parts.push('<w:suppressAutoHyphens/>');
   }
 
   // Spacing
-  const spacingXml = serializeSpacing(formatting);
+  const spacingXml = serializeSpacing(activeFormatting);
   if (spacingXml) {
     parts.push(spacingXml);
   }
 
   // Indentation
-  const indXml = serializeIndentation(formatting);
+  const indXml = serializeIndentation(activeFormatting);
   if (indXml) {
     parts.push(indXml);
   }
 
   // Text direction (bidi)
-  if (formatting.bidi) {
+  if (activeFormatting.bidi) {
     parts.push('<w:bidi/>');
   }
 
   // Justification
-  if (formatting.alignment) {
-    parts.push(`<w:jc w:val="${formatting.alignment}"/>`);
+  if (activeFormatting.alignment) {
+    parts.push(`<w:jc w:val="${activeFormatting.alignment}"/>`);
   }
 
   // Outline level
-  if (formatting.outlineLevel !== undefined) {
-    parts.push(`<w:outlineLvl w:val="${formatting.outlineLevel}"/>`);
+  if (activeFormatting.outlineLevel !== undefined) {
+    parts.push(`<w:outlineLvl w:val="${activeFormatting.outlineLevel}"/>`);
   }
 
   // Run properties (default run formatting for paragraph)
-  if (formatting.runProperties) {
-    const rPrXml = serializeTextFormatting(formatting.runProperties);
-    if (rPrXml) {
-      parts.push(rPrXml);
+  const paragraphMarkMoveRevisions = tracked?.paragraphMarkMoveRevisions ?? [];
+  const trackedMoveXml = paragraphMarkMoveRevisions
+    .map((revision) => serializeParagraphMarkMoveRevision(revision))
+    .join('');
+  const baseRPrInner = unwrapXmlWrapper(
+    serializeTextFormatting(activeFormatting.runProperties),
+    'rPr'
+  );
+  if (trackedMoveXml || baseRPrInner) {
+    parts.push(`<w:rPr>${trackedMoveXml}${baseRPrInner}</w:rPr>`);
+  }
+
+  const propertyChange = tracked?.propertyChange;
+  if (propertyChange) {
+    const attrs = [
+      `w:id="${propertyChange.info.id}"`,
+      `w:author="${escapeXml(propertyChange.info.author)}"`,
+    ];
+    if (propertyChange.info.date) {
+      attrs.push(`w:date="${escapeXml(propertyChange.info.date)}"`);
     }
+
+    const previousFormattingXml = propertyChange.previousFormatting
+      ? serializeParagraphFormatting(propertyChange.previousFormatting)
+      : '';
+    const previousFormattingInner = unwrapXmlWrapper(previousFormattingXml, 'pPr');
+    const previousPPrXml =
+      previousFormattingInner.length > 0 ? `<w:pPr>${previousFormattingInner}</w:pPr>` : '<w:pPr/>';
+
+    parts.push(`<w:pPrChange ${attrs.join(' ')}>${previousPPrXml}</w:pPrChange>`);
   }
 
   if (parts.length === 0) return '';
@@ -870,7 +934,10 @@ export function serializeParagraph(paragraph: Paragraph): string {
   const attrsStr = attrs.length > 0 ? ' ' + attrs.join(' ') : '';
 
   // Add paragraph properties if present
-  const pPrXml = serializeParagraphFormatting(paragraph.formatting);
+  const pPrXml = serializeParagraphFormatting(paragraph.formatting, {
+    propertyChange: paragraph.paragraphPropertiesChange,
+    paragraphMarkMoveRevisions: paragraph.paragraphMarkMoveRevisions,
+  });
   if (pPrXml) {
     parts.push(pPrXml);
   }

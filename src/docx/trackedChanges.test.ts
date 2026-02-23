@@ -57,6 +57,37 @@ describe('tracked changes parsing and serialization', () => {
     expect(moveTo.range?.date).toBe('2026-01-02T00:00:00Z');
   });
 
+  test('parses paragraph property change and paragraph-mark move revisions from w:pPr', () => {
+    const xml = `<w:p xmlns:w="${NS}">
+      <w:pPr>
+        <w:pStyle w:val="SummaryPara"/>
+        <w:numPr><w:ilvl w:val="0"/><w:numId w:val="72"/></w:numPr>
+        <w:rPr>
+          <w:moveTo w:id="856" w:author="Alice" w:date="2026-01-02T00:00:00Z"/>
+          <w:sz w:val="20"/>
+        </w:rPr>
+        <w:pPrChange w:id="857" w:author="Alice" w:date="2026-01-02T00:00:00Z">
+          <w:pPr>
+            <w:pStyle w:val="SummaryPara"/>
+          </w:pPr>
+        </w:pPrChange>
+      </w:pPr>
+      <w:r><w:t>Clause</w:t></w:r>
+    </w:p>`;
+
+    const p = parseXmlDocument(xml);
+    expect(p).toBeTruthy();
+    const paragraph = parseParagraph(p!, null, null, null, null, null);
+
+    expect(paragraph.paragraphPropertiesChange).toBeTruthy();
+    expect(paragraph.paragraphPropertiesChange?.info.id).toBe(857);
+    expect(paragraph.paragraphPropertiesChange?.info.author).toBe('Alice');
+    expect(paragraph.paragraphPropertiesChange?.previousFormatting?.styleId).toBe('SummaryPara');
+    expect(paragraph.paragraphMarkMoveRevisions).toHaveLength(1);
+    expect(paragraph.paragraphMarkMoveRevisions?.[0]?.type).toBe('moveTo');
+    expect(paragraph.paragraphMarkMoveRevisions?.[0]?.info.id).toBe(856);
+  });
+
   test('serializes deletion text using w:delText', () => {
     const paragraph: Paragraph = {
       type: 'paragraph',
@@ -119,6 +150,38 @@ describe('tracked changes parsing and serialization', () => {
     const endCount = (xml.match(/<w:moveToRangeEnd\b/g) || []).length;
     expect(startCount).toBe(1);
     expect(endCount).toBe(1);
+  });
+
+  test('serializes paragraph property change and paragraph-mark move revisions in w:pPr', () => {
+    const paragraph: Paragraph = {
+      type: 'paragraph',
+      formatting: {
+        styleId: 'SummaryPara',
+        numPr: {
+          ilvl: 0,
+          numId: 72,
+        },
+      },
+      paragraphPropertiesChange: {
+        info: { id: 857, author: 'Alice', date: '2026-01-02T00:00:00Z' },
+        previousFormatting: {
+          styleId: 'SummaryPara',
+        },
+      },
+      paragraphMarkMoveRevisions: [
+        {
+          type: 'moveTo',
+          info: { id: 856, author: 'Alice', date: '2026-01-02T00:00:00Z' },
+        },
+      ],
+      content: [{ type: 'run', content: [{ type: 'text', text: 'Clause' }] }],
+    };
+
+    const xml = serializeParagraph(paragraph);
+    expect(xml).toContain('<w:pPr>');
+    expect(xml).toContain('<w:rPr><w:moveTo w:id="856"');
+    expect(xml).toContain('<w:pPrChange w:id="857"');
+    expect(xml).toContain('<w:pStyle w:val="SummaryPara"/>');
   });
 });
 
@@ -206,5 +269,47 @@ describe('tracked changes ProseMirror round-trip', () => {
     expect(deletion.content[0].type).toBe('run');
     if (deletion.content[0].type !== 'run') return;
     expect(deletion.content[0].content[0]).toEqual({ type: 'break', breakType: 'textWrapping' });
+  });
+
+  test('round-trips paragraph-level tracked metadata through toProseDoc/fromProseDoc', () => {
+    const base: Document = {
+      package: {
+        document: {
+          content: [
+            {
+              type: 'paragraph',
+              paraId: 'ABCD1234',
+              formatting: {
+                styleId: 'SummaryPara',
+              },
+              paragraphPropertiesChange: {
+                info: { id: 857, author: 'Alice', date: '2026-01-02T00:00:00Z' },
+                previousFormatting: {
+                  styleId: 'BodyText1',
+                },
+              },
+              paragraphMarkMoveRevisions: [
+                {
+                  type: 'moveFrom',
+                  info: { id: 858, author: 'Alice', date: '2026-01-02T00:00:00Z' },
+                },
+              ],
+              content: [{ type: 'run', content: [{ type: 'text', text: 'Clause' }] }],
+            },
+          ],
+        },
+      },
+    };
+
+    const pm = toProseDoc(base);
+    const roundTripped = fromProseDoc(pm, base);
+    const paragraph = roundTripped.package.document.content[0];
+    expect(paragraph.type).toBe('paragraph');
+    if (paragraph.type !== 'paragraph') return;
+
+    expect(paragraph.paragraphPropertiesChange?.info.id).toBe(857);
+    expect(paragraph.paragraphPropertiesChange?.previousFormatting?.styleId).toBe('BodyText1');
+    expect(paragraph.paragraphMarkMoveRevisions?.[0]?.type).toBe('moveFrom');
+    expect(paragraph.paragraphMarkMoveRevisions?.[0]?.info.id).toBe(858);
   });
 });

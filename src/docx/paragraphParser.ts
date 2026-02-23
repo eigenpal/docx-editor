@@ -40,6 +40,8 @@ import type {
   MoveTo,
   MoveRangeInfo,
   TrackedChangeInfo,
+  ParagraphPropertiesChange,
+  ParagraphMarkMoveRevision,
   MathEquation,
 } from '../types/document';
 import type { StyleMap } from './styleParser';
@@ -791,6 +793,39 @@ function parseMoveRangeInfo(node: XmlElement): MoveRangeInfo {
   };
 }
 
+function parseParagraphPropertiesChange(
+  pPr: XmlElement,
+  theme: Theme | null,
+  styles: StyleMap | null
+): ParagraphPropertiesChange | undefined {
+  const pPrChange = findChild(pPr, 'w', 'pPrChange');
+  if (!pPrChange) return undefined;
+
+  const previousPPr = findChild(pPrChange, 'w', 'pPr');
+
+  return {
+    info: parseTrackedChangeInfo(pPrChange),
+    previousFormatting: parseParagraphProperties(previousPPr, theme, styles ?? undefined),
+  };
+}
+
+function parseParagraphMarkMoveRevisions(pPr: XmlElement): ParagraphMarkMoveRevision[] | undefined {
+  const pPrRunProps = findChild(pPr, 'w', 'rPr');
+  if (!pPrRunProps) return undefined;
+
+  const revisions: ParagraphMarkMoveRevision[] = [];
+  for (const child of getChildElements(pPrRunProps)) {
+    const localName = getLocalName(child.name);
+    if (localName !== 'moveTo' && localName !== 'moveFrom') continue;
+    revisions.push({
+      type: localName,
+      info: parseTrackedChangeInfo(child),
+    });
+  }
+
+  return revisions.length > 0 ? revisions : undefined;
+}
+
 /**
  * Parse all content within a paragraph
  *
@@ -1125,6 +1160,8 @@ export function parseParagraph(
   const pPr = findChild(node, 'w', 'pPr');
   if (pPr) {
     paragraph.formatting = parseParagraphProperties(pPr, theme, styles ?? undefined);
+    paragraph.paragraphPropertiesChange = parseParagraphPropertiesChange(pPr, theme, styles);
+    paragraph.paragraphMarkMoveRevisions = parseParagraphMarkMoveRevisions(pPr);
 
     // Check for section properties within paragraph (marks end of a section)
     const sectPr = findChild(pPr, 'w', 'sectPr');

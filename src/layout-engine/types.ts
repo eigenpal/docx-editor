@@ -36,6 +36,13 @@ export type RunFormatting = {
   footnoteRefId?: number;
   /** Endnote reference ID (if this run contains an endnote reference) */
   endnoteRefId?: number;
+  /** Tracked-change metadata used for visual review rendering in the editor. */
+  trackedChange?: {
+    type: 'insertion' | 'deletion' | 'moveFrom' | 'moveTo';
+    revisionId?: number;
+    author?: string;
+    date?: string | null;
+  };
 };
 
 /**

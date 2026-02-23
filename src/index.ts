@@ -757,6 +757,35 @@ export {
   type TagType,
 } from './plugins/template';
 
+// Review Plugin (tracked changes review workflow)
+export {
+  reviewPlugin,
+  createReviewPlugin,
+  RevisionPanel,
+  REVIEW_PANEL_STYLES,
+  extractRevisionsFromDoc,
+  findActiveRevisionId,
+  createReviewPluginState,
+  canApplyBodyModelRevisionDecision,
+  canApplyBulkBodyModelRevisionDecision,
+  canApplyHeaderFooterRevisionDecision,
+  canApplyBulkHeaderFooterRevisionDecision,
+  applyBodyModelRevisionDecisionToDocument,
+  applyBulkBodyModelRevisionDecisionToDocument,
+  applyHeaderFooterRevisionDecisionToDocument,
+  applyBulkHeaderFooterRevisionDecisionToDocument,
+  createRevisionDecisionTransaction,
+  createBulkRevisionDecisionTransaction,
+  applyRevisionDecision,
+  applyBulkRevisionDecision,
+  type ReviewPluginOptions,
+  type ReviewDecision,
+  type ReviewPluginState,
+  type ReviewRevisionItem,
+  type ReviewRevisionStatus,
+  type ReviewRevisionType,
+} from './plugins/review';
+
 // ============================================================================
 // CORE PLUGIN SYSTEM
 // ============================================================================

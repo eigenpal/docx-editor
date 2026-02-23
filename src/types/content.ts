@@ -926,6 +926,25 @@ export interface MoveTo {
   content: (Run | Hyperlink)[];
 }
 
+/**
+ * Paragraph properties tracked change (w:pPrChange)
+ */
+export interface ParagraphPropertiesChange {
+  /** Tracked change metadata */
+  info: TrackedChangeInfo;
+  /** Previous paragraph properties captured by Word in w:pPrChange/w:pPr */
+  previousFormatting?: ParagraphFormatting;
+}
+
+/**
+ * Paragraph-mark move revision marker stored under w:pPr/w:rPr
+ * (self-closing w:moveFrom / w:moveTo tags).
+ */
+export interface ParagraphMarkMoveRevision {
+  type: 'moveFrom' | 'moveTo';
+  info: TrackedChangeInfo;
+}
+
 // ============================================================================
 // STRUCTURED DOCUMENT TAGS (SDT / Content Controls)
 // ============================================================================
@@ -1025,6 +1044,10 @@ export interface Paragraph {
   textId?: string;
   /** Paragraph formatting */
   formatting?: ParagraphFormatting;
+  /** Paragraph-properties tracked change metadata (w:pPrChange) */
+  paragraphPropertiesChange?: ParagraphPropertiesChange;
+  /** Paragraph-mark move markers found in w:pPr/w:rPr */
+  paragraphMarkMoveRevisions?: ParagraphMarkMoveRevision[];
   /** Paragraph content */
   content: ParagraphContent[];
   /** Computed list rendering (if this is a list item) */

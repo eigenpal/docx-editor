@@ -19,6 +19,7 @@ import { TextSelection } from 'prosemirror-state';
 import type { EditorView } from 'prosemirror-view';
 import type { Plugin as ProseMirrorPlugin } from 'prosemirror-state';
 import type { EditorPlugin, PluginHostProps, PluginHostRef, PanelConfig } from './types';
+import type { Document } from '../types/document';
 
 // Default panel configuration
 const DEFAULT_PANEL_CONFIG: Required<PanelConfig> = {
@@ -56,6 +57,30 @@ function injectStyles(pluginId: string, css: string): () => void {
       el.remove();
     }
   };
+}
+
+function findRenderedElementForPosition(
+  pagesContainer: HTMLElement,
+  pmPos: number
+): HTMLElement | null {
+  const candidates = pagesContainer.querySelectorAll<HTMLElement>('[data-pm-start][data-pm-end]');
+  let bestMatch: HTMLElement | null = null;
+  let bestSpan = Number.POSITIVE_INFINITY;
+
+  for (const candidate of candidates) {
+    const pmStart = Number(candidate.dataset.pmStart);
+    const pmEnd = Number(candidate.dataset.pmEnd);
+    if (!Number.isFinite(pmStart) || !Number.isFinite(pmEnd)) continue;
+    if (pmPos < pmStart || pmPos > pmEnd) continue;
+
+    const span = pmEnd - pmStart;
+    if (span < bestSpan) {
+      bestMatch = candidate;
+      bestSpan = span;
+    }
+  }
+
+  return bestMatch;
 }
 
 // Default styles for PluginHost - defined here so it can be used in the component
@@ -234,12 +259,31 @@ export const PluginHost = forwardRef<PluginHostRef, PluginHostProps>(function Pl
   const [renderedDomContext, setRenderedDomContext] = useState<
     import('./types').RenderedDomContext | null
   >(null);
+  // Full parsed document model from DocxEditor (includes headers/footers).
+  const [documentModel, setDocumentModel] = useState<Document | null>(null);
+  // Pending external document mutation to be applied by DocxEditor.
+  const [externalDocumentMutationRequest, setExternalDocumentMutationRequest] = useState<{
+    id: number;
+    apply: (document: Document) => Document | null;
+  } | null>(null);
+  const externalDocumentMutationSeqRef = useRef(0);
 
   // Plugin states (map of pluginId -> state)
   const pluginStatesRef = useRef<Map<string, unknown>>(new Map());
   // State version counter - incremented when plugin states change, used as dependency for overlays
   const [stateVersion, setStateVersion] = useState(0);
   const forceUpdate = useCallback(() => setStateVersion((v) => v + 1), []);
+  const mutateDocumentModel = useCallback(
+    (updater: (document: Document) => Document | null): boolean => {
+      externalDocumentMutationSeqRef.current += 1;
+      setExternalDocumentMutationRequest({
+        id: externalDocumentMutationSeqRef.current,
+        apply: updater,
+      });
+      return true;
+    },
+    []
+  );
 
   // Panel collapsed states
   const [collapsedPanels, setCollapsedPanels] = useState<Set<string>>(() => {
@@ -317,7 +361,10 @@ export const PluginHost = forwardRef<PluginHostRef, PluginHostProps>(function Pl
       let anyChanged = false;
       for (const plugin of plugins) {
         if (plugin.onStateChange) {
-          const newState = plugin.onStateChange(editorView);
+          const newState = plugin.onStateChange(editorView, {
+            documentModel,
+            mutateDocumentModel,
+          });
           if (newState !== undefined) {
             pluginStatesRef.current.set(plugin.id, newState);
             anyChanged = true;
@@ -361,28 +408,46 @@ export const PluginHost = forwardRef<PluginHostRef, PluginHostProps>(function Pl
       if (pendingUpdate) cancelAnimationFrame(pendingUpdate);
       editorView.dispatch = originalDispatch;
     };
-  }, [editorView, plugins]);
+  }, [editorView, plugins, documentModel, forceUpdate, mutateDocumentModel]);
 
   // Callbacks for panel interaction
   const scrollToPosition = useCallback(
     (pos: number) => {
       if (!editorView) return;
 
-      // Get the coordinates for the position
-      const coords = editorView.coordsAtPos(pos);
-      if (coords) {
-        // Scroll the editor to show the position
-        editorView.dom.scrollIntoView({ block: 'center', inline: 'nearest' });
+      const { state } = editorView;
+      const safePos = Math.max(1, Math.min(pos, Math.max(1, state.doc.content.size)));
 
-        // Also set selection to the position
-        const { state } = editorView;
-        const resolved = state.doc.resolve(Math.min(pos, state.doc.content.size));
-        const tr = state.tr.setSelection(TextSelection.near(resolved));
-        editorView.dispatch(tr);
-        editorView.focus();
+      if (renderedDomContext) {
+        const targetEl = findRenderedElementForPosition(renderedDomContext.pagesContainer, safePos);
+        if (targetEl) {
+          targetEl.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'nearest' });
+        } else {
+          const coords = renderedDomContext.getCoordinatesForPosition(safePos);
+          const scrollContainer = renderedDomContext.pagesContainer.closest('.paged-editor');
+
+          if (coords && scrollContainer instanceof HTMLElement) {
+            const containerOffset = renderedDomContext.getContainerOffset();
+            const targetTop = (coords.y + containerOffset.y) * renderedDomContext.zoom;
+            const top = Math.max(0, targetTop - scrollContainer.clientHeight * 0.45);
+            scrollContainer.scrollTo({ top, behavior: 'smooth' });
+          }
+        }
+      } else {
+        try {
+          editorView.coordsAtPos(safePos);
+          editorView.dom.scrollIntoView({ block: 'center', inline: 'nearest' });
+        } catch {
+          // No visible coordinates for this position; still apply selection.
+        }
       }
+
+      const resolved = state.doc.resolve(safePos);
+      const tr = state.tr.setSelection(TextSelection.near(resolved));
+      editorView.dispatch(tr);
+      editorView.focus();
     },
-    [editorView]
+    [editorView, renderedDomContext]
   );
 
   const selectRange = useCallback(
@@ -417,14 +482,17 @@ export const PluginHost = forwardRef<PluginHostRef, PluginHostProps>(function Pl
 
     for (const plugin of plugins) {
       if (plugin.onStateChange) {
-        const newState = plugin.onStateChange(editorView);
+        const newState = plugin.onStateChange(editorView, {
+          documentModel,
+          mutateDocumentModel,
+        });
         if (newState !== undefined) {
           pluginStatesRef.current.set(plugin.id, newState);
         }
       }
     }
     forceUpdate();
-  }, [editorView, plugins]);
+  }, [editorView, plugins, documentModel, mutateDocumentModel, forceUpdate]);
 
   // Expose ref methods
   useImperativeHandle(
@@ -615,6 +683,16 @@ export const PluginHost = forwardRef<PluginHostRef, PluginHostProps>(function Pl
     // NOTE: children.props removed from dependencies - accessed via ref to prevent infinite loops
   );
 
+  const handleDocumentStateChange = useCallback((document: Document | null) => {
+    setDocumentModel(document);
+    // Call original callback if any - use ref to avoid dependency issues
+    const originalCallback = (childrenPropsRef.current as Record<string, unknown>)
+      ?.onDocumentStateChange;
+    if (typeof originalCallback === 'function') {
+      originalCallback(document);
+    }
+  }, []);
+
   // Clone the child editor with additional props
   // Define the props we're injecting into the child editor
   type InjectedEditorProps = {
@@ -622,6 +700,11 @@ export const PluginHost = forwardRef<PluginHostRef, PluginHostProps>(function Pl
     pluginOverlays?: React.ReactNode;
     onRenderedDomContextReady?: (context: import('./types').RenderedDomContext) => void;
     onEditorViewReady?: (view: EditorView) => void;
+    onDocumentStateChange?: (document: Document | null) => void;
+    externalDocumentMutationRequest?: {
+      id: number;
+      apply: (document: Document) => Document | null;
+    } | null;
   };
 
   const editorElement = useMemo(() => {
@@ -629,6 +712,8 @@ export const PluginHost = forwardRef<PluginHostRef, PluginHostProps>(function Pl
       externalPlugins: externalProseMirrorPlugins,
       pluginOverlays,
       onRenderedDomContextReady: handleRenderedDomContextReady,
+      onDocumentStateChange: handleDocumentStateChange,
+      externalDocumentMutationRequest,
       onEditorViewReady: (view: EditorView) => {
         setEditorView(view);
         // Call original callback if any - use ref to avoid dependency issues
@@ -639,7 +724,14 @@ export const PluginHost = forwardRef<PluginHostRef, PluginHostProps>(function Pl
         }
       },
     });
-  }, [children, externalProseMirrorPlugins, pluginOverlays, handleRenderedDomContextReady]);
+  }, [
+    children,
+    externalProseMirrorPlugins,
+    pluginOverlays,
+    handleRenderedDomContextReady,
+    handleDocumentStateChange,
+    externalDocumentMutationRequest,
+  ]);
 
   // Group plugins by panel position
   const pluginsByPosition = useMemo(() => {
