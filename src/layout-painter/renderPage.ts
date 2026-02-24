@@ -928,6 +928,36 @@ export function renderPage(
 }
 
 /**
+ * Full options type used by page rendering helpers.
+ */
+type FullPageOptions = RenderPageOptions & { footnotesByPage?: Map<number, FootnoteRenderItem[]> };
+
+/**
+ * Build a RenderContext and resolved page options (with footnotes) for a page.
+ * Centralises logic shared by populatePageShell, repopulatePageContent, and the eager render path.
+ */
+function buildPageRenderArgs(
+  page: Page,
+  totalPages: number,
+  options: FullPageOptions
+): { context: RenderContext; pageOptions: RenderPageOptions } {
+  const context: RenderContext = {
+    pageNumber: page.number,
+    totalPages,
+    section: 'body',
+  };
+  const pageOptions: RenderPageOptions = { ...options };
+  if (options.footnotesByPage) {
+    const fns = options.footnotesByPage.get(page.number);
+    if (fns && fns.length > 0) {
+      (pageOptions as RenderPageOptions & { footnoteArea?: FootnoteRenderItem[] }).footnoteArea =
+        fns;
+    }
+  }
+  return { context, pageOptions };
+}
+
+/**
  * State for a single page shell used in incremental rendering.
  */
 interface PageShellState {
@@ -944,7 +974,7 @@ interface PageContainerState {
   optionsHash: string;
   pageDataMap: Map<HTMLElement, { page: Page; index: number; rendered: boolean }>;
   /** Current render options — kept up-to-date so the observer closure always reads fresh values. */
-  currentOptions: RenderPageOptions & { footnotesByPage?: Map<number, FootnoteRenderItem[]> };
+  currentOptions: FullPageOptions;
 }
 
 /**
@@ -1202,18 +1232,7 @@ export function renderPages(
 
     if (!useVirtualization) {
       // Small document: render all pages eagerly
-      const context: RenderContext = {
-        pageNumber: page.number,
-        totalPages,
-        section: 'body',
-      };
-      const pageOptions = { ...options };
-      if (options.footnotesByPage) {
-        const fns = options.footnotesByPage.get(page.number);
-        if (fns && fns.length > 0) {
-          pageOptions.footnoteArea = fns;
-        }
-      }
+      const { context, pageOptions } = buildPageRenderArgs(page, totalPages, options);
       const pageEl = renderPage(page, context, pageOptions);
       container.appendChild(pageEl);
       pageShells.push(pageEl);
@@ -1348,24 +1367,12 @@ function populatePageShell(
   shell: HTMLElement,
   pageDataMap: Map<HTMLElement, { page: Page; index: number; rendered: boolean }>,
   totalPages: number,
-  options: RenderPageOptions & { footnotesByPage?: Map<number, FootnoteRenderItem[]> }
+  options: FullPageOptions
 ): void {
   const data = pageDataMap.get(shell);
   if (!data || data.rendered) return;
 
-  const context: RenderContext = {
-    pageNumber: data.page.number,
-    totalPages,
-    section: 'body',
-  };
-  const pageOptions = { ...options };
-  if (options.footnotesByPage) {
-    const fns = options.footnotesByPage.get(data.page.number);
-    if (fns && fns.length > 0) {
-      pageOptions.footnoteArea = fns;
-    }
-  }
-
+  const { context, pageOptions } = buildPageRenderArgs(data.page, totalPages, options);
   const fullPageEl = renderPage(data.page, context, pageOptions);
 
   while (fullPageEl.firstChild) {
@@ -1383,23 +1390,12 @@ function repopulatePageContent(
   shell: HTMLElement,
   pageDataMap: Map<HTMLElement, { page: Page; index: number; rendered: boolean }>,
   totalPages: number,
-  options: RenderPageOptions & { footnotesByPage?: Map<number, FootnoteRenderItem[]> }
+  options: FullPageOptions
 ): void {
   const data = pageDataMap.get(shell);
   if (!data) return;
 
-  const context: RenderContext = {
-    pageNumber: data.page.number,
-    totalPages,
-    section: 'body',
-  };
-  const pageOptions = { ...options };
-  if (options.footnotesByPage) {
-    const fns = options.footnotesByPage.get(data.page.number);
-    if (fns && fns.length > 0) {
-      pageOptions.footnoteArea = fns;
-    }
-  }
+  const { context, pageOptions } = buildPageRenderArgs(data.page, totalPages, options);
 
   // Render a full page off-screen
   const fullPageEl = renderPage(data.page, context, pageOptions);
@@ -1431,47 +1427,4 @@ function depopulatePageShell(
 
   shell.innerHTML = '';
   data.rendered = false;
-}
-
-/**
- * Update a single page (for incremental rendering)
- *
- * @param pageEl - Existing page element to update
- * @param page - New page data
- * @param context - Rendering context
- * @param options - Rendering options
- */
-export function updatePage(
-  pageEl: HTMLElement,
-  page: Page,
-  context: RenderContext,
-  options: RenderPageOptions = {}
-): void {
-  const doc = options.document ?? document;
-
-  // Find or create content area
-  let contentEl = pageEl.querySelector(`.${PAGE_CLASS_NAMES.content}`) as HTMLElement;
-  if (!contentEl) {
-    contentEl = doc.createElement('div');
-    contentEl.className = PAGE_CLASS_NAMES.content;
-    applyContentAreaStyles(contentEl, page);
-    pageEl.appendChild(contentEl);
-  }
-
-  // Clear existing fragments
-  contentEl.innerHTML = '';
-
-  // Re-render fragments
-  for (const fragment of page.fragments) {
-    const fragmentEl = renderFragment(
-      fragment,
-      { ...context, section: 'body' },
-      {
-        document: doc,
-      }
-    );
-
-    applyFragmentStyles(fragmentEl, fragment, { left: page.margins.left, top: page.margins.top });
-    contentEl.appendChild(fragmentEl);
-  }
 }

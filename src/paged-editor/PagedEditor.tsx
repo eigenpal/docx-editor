@@ -203,6 +203,22 @@ const DEFAULT_MARGINS: PageMargins = {
 
 const DEFAULT_PAGE_GAP = 24;
 
+/**
+ * Cache entry for incremental pipeline optimization.
+ * Stores a PM node reference alongside its computed measures
+ * so unchanged nodes (same reference via structural sharing) can be skipped.
+ *
+ * INVARIANT: each top-level PM node produces exactly 1 flow block.
+ * toFlowBlocks() maps paragraphs 1:1 and tables 1:1.
+ * If this ever changes, the cache indexing logic must be updated.
+ */
+interface PipelineNodeCache {
+  /** PM node reference (identity via ===) */
+  node: PMNode;
+  /** Measures for this node's blocks */
+  measures: Measure[];
+}
+
 // Stable empty array to avoid re-creating on each render
 const EMPTY_PLUGINS: Plugin[] = [];
 
@@ -1266,17 +1282,6 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
     // Layout Pipeline
     // =========================================================================
 
-    /**
-     * Cache for incremental pipeline optimization.
-     * Stores PM node references alongside their computed blocks/measures
-     * so unchanged nodes (same reference via structural sharing) can be skipped.
-     */
-    interface PipelineNodeCache {
-      /** PM node reference (identity via ===) */
-      node: PMNode;
-      /** Measures for this node's blocks */
-      measures: Measure[];
-    }
     const prevPipelineCacheRef = useRef<{
       doc: PMNode;
       entries: PipelineNodeCache[];
