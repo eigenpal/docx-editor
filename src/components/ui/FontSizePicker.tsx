@@ -10,10 +10,11 @@
  */
 
 import * as React from 'react';
-import { useState, useCallback, useRef, useEffect } from 'react';
+import { useState, useCallback, useRef } from 'react';
 import { Button } from './Button';
 import { MaterialSymbol } from './MaterialSymbol';
 import { cn } from '../../lib/utils';
+import { useFixedDropdown } from './useFixedDropdown';
 
 // ============================================================================
 // TYPES
@@ -101,42 +102,22 @@ export function FontSizePicker({
   const [inputValue, setInputValue] = useState('');
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
-  const containerRef = useRef<HTMLDivElement>(null);
-  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  const onCloseDropdown = useCallback(() => {
+    setIsDropdownOpen(false);
+    setIsEditing(false);
+  }, []);
+  const {
+    containerRef,
+    dropdownRef,
+    dropdownStyle: fixedDropdownStyle,
+  } = useFixedDropdown({
+    isOpen: isDropdownOpen,
+    onClose: onCloseDropdown,
+  });
 
   const currentValue = value ?? (parseInt(placeholder, 10) || 11);
   const displayValue = value !== undefined ? value.toString() : placeholder;
-
-  // Close dropdown when clicking outside
-  useEffect(() => {
-    if (!isDropdownOpen) return;
-
-    const handleClickOutside = (e: MouseEvent) => {
-      if (
-        containerRef.current &&
-        !containerRef.current.contains(e.target as Node) &&
-        dropdownRef.current &&
-        !dropdownRef.current.contains(e.target as Node)
-      ) {
-        setIsDropdownOpen(false);
-      }
-    };
-
-    const handleEscape = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        setIsDropdownOpen(false);
-        setIsEditing(false);
-      }
-    };
-
-    document.addEventListener('mousedown', handleClickOutside);
-    document.addEventListener('keydown', handleEscape);
-
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-      document.removeEventListener('keydown', handleEscape);
-    };
-  }, [isDropdownOpen]);
 
   // Handle decrease font size
   const handleDecrease = useCallback(
@@ -294,38 +275,43 @@ export function FontSizePicker({
             {displayValue}
           </button>
         )}
-
-        {/* Dropdown */}
-        {isDropdownOpen && (
-          <div
-            ref={dropdownRef}
-            className={cn(
-              'absolute top-full left-1/2 -translate-x-1/2 mt-1 z-50',
-              'bg-white border border-slate-200 rounded-md shadow-lg',
-              'max-h-60 overflow-y-auto min-w-[60px]'
-            )}
-            role="listbox"
-            aria-label="Font sizes"
-          >
-            {sizes.map((size) => (
-              <button
-                key={size}
-                type="button"
-                onClick={() => handleSizeSelect(size)}
-                className={cn(
-                  'w-full px-3 py-1.5 text-sm text-left',
-                  'hover:bg-slate-100',
-                  size === currentValue && 'bg-slate-100 font-medium'
-                )}
-                role="option"
-                aria-selected={size === currentValue}
-              >
-                {size}
-              </button>
-            ))}
-          </div>
-        )}
       </div>
+
+      {/* Dropdown */}
+      {isDropdownOpen && (
+        <div
+          ref={dropdownRef}
+          style={{
+            ...fixedDropdownStyle,
+            backgroundColor: 'white',
+            border: '1px solid #e2e8f0',
+            borderRadius: 6,
+            boxShadow: '0 4px 12px rgba(0, 0, 0, 0.12)',
+            maxHeight: 240,
+            overflowY: 'auto',
+            minWidth: 60,
+          }}
+          role="listbox"
+          aria-label="Font sizes"
+        >
+          {sizes.map((size) => (
+            <button
+              key={size}
+              type="button"
+              onClick={() => handleSizeSelect(size)}
+              className={cn(
+                'w-full px-3 py-1.5 text-sm text-left',
+                'hover:bg-slate-100',
+                size === currentValue && 'bg-slate-100 font-medium'
+              )}
+              role="option"
+              aria-selected={size === currentValue}
+            >
+              {size}
+            </button>
+          ))}
+        </div>
+      )}
 
       {/* Increase button */}
       <Button

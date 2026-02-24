@@ -5,13 +5,13 @@
  * Wraps TableGridInline with a toolbar button and dropdown.
  */
 
-import React, { useState, useCallback, useRef, useEffect } from 'react';
-import type { CSSProperties } from 'react';
+import React, { useState, useCallback } from 'react';
 import { Button } from './Button';
 import { Tooltip } from './Tooltip';
 import { MaterialSymbol } from './MaterialSymbol';
 import { TableGridInline } from './TableGridInline';
 import { cn } from '../../lib/utils';
+import { useFixedDropdown } from './useFixedDropdown';
 
 // ============================================================================
 // TYPES
@@ -42,17 +42,12 @@ const DEFAULT_GRID_COLUMNS = 5;
 // STYLES
 // ============================================================================
 
-const dropdownStyle: CSSProperties = {
-  position: 'absolute',
-  top: '100%',
-  left: 0,
-  marginTop: 4,
+const dropdownPanelStyle: React.CSSProperties = {
   backgroundColor: 'white',
   border: '1px solid var(--doc-border)',
   borderRadius: 6,
   boxShadow: '0 4px 16px rgba(0, 0, 0, 0.12)',
   padding: 8,
-  zIndex: 1000,
 };
 
 // ============================================================================
@@ -68,32 +63,11 @@ export function TableGridPicker({
   tooltip = 'Insert table',
 }: TableGridPickerProps): React.ReactElement {
   const [isOpen, setIsOpen] = useState(false);
-  const containerRef = useRef<HTMLDivElement>(null);
-
-  // Close dropdown when clicking outside
-  useEffect(() => {
-    if (!isOpen) return;
-
-    const handleClickOutside = (e: MouseEvent) => {
-      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
-        setIsOpen(false);
-      }
-    };
-
-    const handleEscape = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        setIsOpen(false);
-      }
-    };
-
-    document.addEventListener('mousedown', handleClickOutside);
-    document.addEventListener('keydown', handleEscape);
-
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-      document.removeEventListener('keydown', handleEscape);
-    };
-  }, [isOpen]);
+  const onClose = useCallback(() => setIsOpen(false), []);
+  const { containerRef, dropdownRef, dropdownStyle } = useFixedDropdown({
+    isOpen,
+    onClose,
+  });
 
   // Handle toggle dropdown
   const handleToggle = useCallback(
@@ -140,7 +114,11 @@ export function TableGridPicker({
       {tooltip ? <Tooltip content={tooltip}>{button}</Tooltip> : button}
 
       {isOpen && !disabled && (
-        <div className="docx-table-grid-picker-dropdown" style={dropdownStyle}>
+        <div
+          ref={dropdownRef}
+          className="docx-table-grid-picker-dropdown"
+          style={{ ...dropdownStyle, ...dropdownPanelStyle }}
+        >
           <TableGridInline onInsert={handleInsert} gridRows={gridRows} gridColumns={gridColumns} />
         </div>
       )}

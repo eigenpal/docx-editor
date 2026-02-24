@@ -77,9 +77,6 @@ function Editor({ file }: { file: ArrayBuffer }) {
 | `showRuler`             | `boolean`                                   | `false`           | Show horizontal & vertical rulers                 |
 | `rulerUnit`             | `'inch' \| 'cm'`                            | `'inch'`          | Unit for ruler display                            |
 | `showZoomControl`       | `boolean`                                   | `true`            | Show zoom controls in toolbar                     |
-| `showVariablePanel`     | `boolean`                                   | `true`            | Show template variable panel                      |
-| `variablePanelPosition` | `'left' \| 'right'`                         | `'right'`         | Variable panel position                           |
-| `variableDescriptions`  | `Record<string, string>`                    | —                 | Descriptions for template variables               |
 | `showPrintButton`       | `boolean`                                   | `true`            | Show print button in toolbar                      |
 | `showPageNumbers`       | `boolean`                                   | `true`            | Show page number indicator                        |
 | `enablePageNavigation`  | `boolean`                                   | `true`            | Enable interactive page navigation                |

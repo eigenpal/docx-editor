@@ -8,10 +8,11 @@
  * - Shows current color of selection
  */
 
-import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
+import { useState, useCallback, useMemo } from 'react';
 import type { CSSProperties, ReactNode } from 'react';
 import type { ColorValue, Theme } from '../../types/document';
 import { resolveHighlightColor } from '../../utils/colorResolver';
+import { useFixedDropdown } from './useFixedDropdown';
 
 // ============================================================================
 // TYPES
@@ -202,19 +203,6 @@ const COLOR_BAR_STYLE: CSSProperties = {
   marginTop: '-2px',
 };
 
-const DROPDOWN_STYLE: CSSProperties = {
-  position: 'absolute',
-  top: '100%',
-  left: 0,
-  zIndex: 1000,
-  marginTop: '2px',
-  padding: '8px',
-  backgroundColor: '#fff',
-  border: '1px solid #ccc',
-  borderRadius: '4px',
-  boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)',
-};
-
 const GRID_STYLE: CSSProperties = {
   display: 'grid',
   gap: '2px',
@@ -400,7 +388,11 @@ export function ColorPicker({
   const [isHovered, setIsHovered] = useState(false);
   const [customHex, setCustomHex] = useState('');
 
-  const containerRef = useRef<HTMLDivElement>(null);
+  const onClose = useCallback(() => setIsOpen(false), []);
+  const { containerRef, dropdownRef, dropdownStyle } = useFixedDropdown({
+    isOpen,
+    onClose,
+  });
 
   // Get default colors based on type
   const defaultColors = useMemo(() => {
@@ -434,21 +426,6 @@ export function ColorPicker({
     // Otherwise treat as hex without #
     return `#${value}`;
   }, [value, type]);
-
-  /**
-   * Close dropdown when clicking outside
-   */
-  useEffect(() => {
-    const handleClickOutside = (event: Event) => {
-      const mouseEvent = event as unknown as { target: Node };
-      if (containerRef.current && !containerRef.current.contains(mouseEvent.target)) {
-        setIsOpen(false);
-      }
-    };
-
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
 
   /**
    * Handle color selection from grid
@@ -530,8 +507,17 @@ export function ColorPicker({
 
       {isOpen && (
         <div
+          ref={dropdownRef}
           className="docx-color-picker-dropdown"
-          style={{ ...DROPDOWN_STYLE, width: dropdownWidth }}
+          style={{
+            ...dropdownStyle,
+            padding: '8px',
+            backgroundColor: '#fff',
+            border: '1px solid #ccc',
+            borderRadius: '4px',
+            boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)',
+            width: dropdownWidth,
+          }}
           role="dialog"
           aria-label={`${type === 'text' ? 'Font' : 'Highlight'} color picker`}
           onMouseDown={(e) => e.preventDefault()} // Prevent focus stealing from editor

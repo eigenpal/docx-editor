@@ -1,0 +1,7 @@
+/* Import editor styles
+   In standalone usage: @import '@eigenpal/docx-js-editor/styles.css'; */
+@import '../../../../src/styles/editor.css';
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
