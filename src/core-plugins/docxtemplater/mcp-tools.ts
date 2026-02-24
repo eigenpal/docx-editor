@@ -43,7 +43,7 @@ const positionSchema: JsonSchema = {
  */
 export const getVariablesTool: McpToolDefinition = {
   name: 'docx_get_variables',
-  description: `List all template variables ({{name}} format) found in the document.
+  description: `List all template variables ({name} format) found in the document.
 Returns variable names without braces, along with their locations (body, headers, footers, etc.).
 Use this to discover what data fields a template document expects.`,
 
@@ -115,7 +115,7 @@ Use this to discover what data fields a template document expects.`,
  */
 export const insertVariableTool: McpToolDefinition = {
   name: 'docx_insert_variable',
-  description: `Insert a template variable placeholder ({{name}}) at a specific position in the document.
+  description: `Insert a template variable placeholder ({name}) at a specific position in the document.
 The variable can later be substituted with actual values using docx_apply_template.
 Variable names should follow the pattern: letters, numbers, underscores, starting with a letter.`,
 
@@ -127,7 +127,7 @@ Variable names should follow the pattern: letters, numbers, underscores, startin
       variableName: {
         type: 'string',
         description:
-          'Variable name without braces (e.g., "customer_name"). Will be inserted as {{customer_name}}',
+          'Variable name without braces (e.g., "customer_name"). Will be inserted as {customer_name}',
         pattern: '^[a-zA-Z_][a-zA-Z0-9_]*$',
       },
     },
@@ -170,7 +170,7 @@ Variable names should follow the pattern: letters, numbers, underscores, startin
       const newDoc = executeCommand(loaded.document, {
         type: 'insertText',
         position,
-        text: `{{${variableName}}}`,
+        text: `{${variableName}}`,
       });
 
       // Update the document in the session
@@ -192,7 +192,7 @@ Variable names should follow the pattern: letters, numbers, underscores, startin
             text: JSON.stringify({
               success: true,
               variable: variableName,
-              insertedAs: `{{${variableName}}}`,
+              insertedAs: `{${variableName}}`,
               position,
             }),
           },

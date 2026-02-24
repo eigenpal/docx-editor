@@ -79,7 +79,6 @@ function App() {
         <DocxEditor
           documentBuffer={documentBuffer}
           showToolbar={true}
-          showVariablePanel={true}
           showZoomControl={true}
           showPageNumbers={true}
           onError={(error) => console.error('Editor error:', error)}

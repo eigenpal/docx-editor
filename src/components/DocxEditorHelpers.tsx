@@ -6,7 +6,6 @@
  */
 
 import React from 'react';
-import type { Document } from '../types/document';
 
 // ============================================================================
 // HELPER COMPONENTS
@@ -114,54 +113,4 @@ export function ParseError({ message }: { message: string }): React.ReactElement
       <p style={{ color: 'var(--doc-text-muted)', maxWidth: '400px' }}>{message}</p>
     </div>
   );
-}
-
-// ============================================================================
-// UTILITY FUNCTIONS
-// ============================================================================
-
-/**
- * Extract variable names from document
- */
-export function extractVariableNames(doc: Document): string[] {
-  const variables = new Set<string>();
-  const regex = /\{\{([^}]+)\}\}/g;
-
-  const extractFromParagraph = (paragraph: any) => {
-    for (const item of paragraph.content || []) {
-      if (item.type === 'run') {
-        for (const content of item.content || []) {
-          if (content.type === 'text') {
-            let match;
-            while ((match = regex.exec(content.text)) !== null) {
-              variables.add(match[1].trim());
-            }
-          }
-        }
-      }
-    }
-  };
-
-  const body = doc.package.document;
-  for (const block of body.content || []) {
-    if (block.type === 'paragraph') {
-      extractFromParagraph(block);
-    }
-  }
-
-  return Array.from(variables);
-}
-
-/**
- * Extract current variable values (placeholders with current text)
- */
-export function extractVariables(doc: Document): Record<string, string> {
-  const values: Record<string, string> = {};
-  const names = extractVariableNames(doc);
-
-  for (const name of names) {
-    values[name] = ''; // Default empty
-  }
-
-  return values;
 }

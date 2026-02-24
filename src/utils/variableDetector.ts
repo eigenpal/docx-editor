@@ -438,7 +438,7 @@ export function extractVariablesFromText(text: string): string[] {
 
 /**
  * Extract all variables from text (relaxed matching)
- * Allows any content between {{ and }}
+ * Allows any content between { and }
  */
 export function extractVariablesFromTextRelaxed(text: string): string[] {
   if (!text) return [];

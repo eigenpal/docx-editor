@@ -234,7 +234,7 @@ function toRoman(num: number): string {
 /**
  * Regular expression to match template variables {{...}}
  */
-const TEMPLATE_VARIABLE_REGEX = /\{\{([^{}]+)\}\}/g;
+const TEMPLATE_VARIABLE_REGEX = /\{([a-zA-Z_][a-zA-Z0-9_\-\.]*)\}/g;
 
 /**
  * Extract template variables from text

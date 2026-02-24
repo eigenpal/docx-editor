@@ -207,11 +207,9 @@ export function Editor() {
           onFontsLoaded={() => console.log('Fonts loaded')}
           showToolbar={true}
           showRuler={true}
-          showVariablePanel={true}
           showZoomControl={true}
           showPageNumbers={false}
           initialZoom={1.0}
-          variablePanelPosition="right"
         />
       </main>
     </div>

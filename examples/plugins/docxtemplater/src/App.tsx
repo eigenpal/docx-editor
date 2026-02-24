@@ -308,11 +308,9 @@ export function App() {
             onFontsLoaded={() => console.log('Fonts loaded')}
             showToolbar={true}
             showRuler={true}
-            showVariablePanel={false}
             showZoomControl={true}
             showPageNumbers={false}
             initialZoom={1.0}
-            variablePanelPosition="right"
           />
         </PluginHost>
       </main>

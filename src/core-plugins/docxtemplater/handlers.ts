@@ -42,7 +42,7 @@ export interface ReplaceWithTemplateVariableCommand extends PluginCommand {
 /**
  * Handle insertTemplateVariable command
  *
- * Inserts {{variableName}} at the specified position.
+ * Inserts {variableName} at the specified position.
  */
 export function handleInsertTemplateVariable(doc: Document, command: PluginCommand): Document {
   const cmd = command as InsertTemplateVariableCommand;
@@ -62,7 +62,7 @@ export function handleInsertTemplateVariable(doc: Document, command: PluginComma
   const paragraph = paragraphs[position.paragraphIndex];
 
   // Create the variable text
-  const variableText = `{{${variableName}}}`;
+  const variableText = `{${variableName}}`;
 
   // Insert the variable at the offset
   insertTextAtOffset(paragraph, position.offset, variableText);
@@ -81,7 +81,7 @@ export function handleInsertTemplateVariable(doc: Document, command: PluginComma
 /**
  * Handle replaceWithTemplateVariable command
  *
- * Replaces the text in the range with {{variableName}}.
+ * Replaces the text in the range with {variableName}.
  */
 export function handleReplaceWithTemplateVariable(doc: Document, command: PluginCommand): Document {
   const cmd = command as ReplaceWithTemplateVariableCommand;
@@ -108,7 +108,7 @@ export function handleReplaceWithTemplateVariable(doc: Document, command: Plugin
   deleteTextInRange(paragraph, range.start.offset, range.end.offset);
 
   // Insert the variable at the start position
-  const variableText = `{{${variableName}}}`;
+  const variableText = `{${variableName}}`;
   insertTextAtOffset(paragraph, range.start.offset, variableText);
 
   // Track the variable
