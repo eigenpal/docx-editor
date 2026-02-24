@@ -6,11 +6,12 @@
  * prevention, and optional active-state highlighting.
  */
 
-import React, { useState, useRef, useEffect, useCallback } from 'react';
+import { useState, useCallback } from 'react';
 import { MaterialSymbol } from './MaterialSymbol';
 import { Button } from './Button';
 import { Tooltip } from './Tooltip';
 import { cn } from '../../lib/utils';
+import { useFixedDropdown } from './useFixedDropdown';
 
 const ICON_SIZE = 20;
 
@@ -49,32 +50,11 @@ export function IconGridDropdown<T extends string = string>({
   testId,
 }: IconGridDropdownProps<T>) {
   const [isOpen, setIsOpen] = useState(false);
-  const containerRef = useRef<HTMLDivElement>(null);
-
-  // Close on click-outside and Escape
-  useEffect(() => {
-    if (!isOpen) return;
-    const onClickOutside = (e: MouseEvent) => {
-      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
-        setIsOpen(false);
-      }
-    };
-    const onEscape = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setIsOpen(false);
-    };
-    document.addEventListener('mousedown', onClickOutside);
-    document.addEventListener('keydown', onEscape);
-    return () => {
-      document.removeEventListener('mousedown', onClickOutside);
-      document.removeEventListener('keydown', onEscape);
-    };
-  }, [isOpen]);
-
-  // Prevent focus stealing from ProseMirror
-  const handleMouseDown = useCallback((e: React.MouseEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-  }, []);
+  const onClose = useCallback(() => setIsOpen(false), []);
+  const { containerRef, dropdownRef, dropdownStyle, handleMouseDown } = useFixedDropdown({
+    isOpen,
+    onClose,
+  });
 
   const handleOptionClick = useCallback(
     (value: T) => {
@@ -112,17 +92,14 @@ export function IconGridDropdown<T extends string = string>({
 
       {isOpen && !disabled && (
         <div
+          ref={dropdownRef}
           style={{
-            position: 'absolute',
-            top: '100%',
-            left: 0,
-            marginTop: 4,
+            ...dropdownStyle,
             backgroundColor: 'white',
             border: '1px solid var(--doc-border)',
             borderRadius: 8,
             boxShadow: '0 4px 16px rgba(0, 0, 0, 0.12)',
             padding: 6,
-            zIndex: 1000,
           }}
           onMouseDown={(e) => e.stopPropagation()}
         >
