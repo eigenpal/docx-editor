@@ -195,6 +195,7 @@ export type ParagraphBorders = {
   bottom?: BorderStyle;
   left?: BorderStyle;
   right?: BorderStyle;
+  between?: BorderStyle;
 };
 
 /**

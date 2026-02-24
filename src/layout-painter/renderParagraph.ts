@@ -10,6 +10,8 @@ import type {
   ParagraphMeasure,
   ParagraphFragment,
   ParagraphIndent,
+  ParagraphBorders,
+  BorderStyle,
   MeasuredLine,
   Run,
   TextRun,
@@ -70,6 +72,10 @@ export interface RenderParagraphOptions {
   floatingImageInfo?: FloatingImageInfo[];
   /** Fragment's Y position relative to content area (for per-line margin calculation) */
   fragmentContentY?: number;
+  /** Borders from the previous adjacent paragraph (for border grouping) */
+  prevBorders?: ParagraphBorders;
+  /** Borders from the next adjacent paragraph (for border grouping) */
+  nextBorders?: ParagraphBorders;
 }
 
 /**
@@ -749,6 +755,31 @@ export function renderLine(
 }
 
 /**
+ * Check if two individual border definitions are equal (same style, width, color).
+ */
+function bordersEqual(a?: BorderStyle, b?: BorderStyle): boolean {
+  if (!a && !b) return true;
+  if (!a || !b) return false;
+  return a.style === b.style && a.width === b.width && a.color === b.color;
+}
+
+/**
+ * Check if two ParagraphBorders form a group (ECMA-376 §17.3.1.24).
+ * Adjacent paragraphs with identical border definitions belong to the same group.
+ */
+function bordersFormGroup(a?: ParagraphBorders, b?: ParagraphBorders): boolean {
+  if (!a && !b) return false; // no borders = no group
+  if (!a || !b) return false;
+  return (
+    bordersEqual(a.top, b.top) &&
+    bordersEqual(a.bottom, b.bottom) &&
+    bordersEqual(a.left, b.left) &&
+    bordersEqual(a.right, b.right) &&
+    bordersEqual(a.between, b.between)
+  );
+}
+
+/**
  * Render a paragraph fragment
  *
  * @param fragment - The fragment to render
@@ -878,27 +909,42 @@ export function renderParagraphFragment(
     // Ensure box-sizing is set for proper border calculations
     fragmentEl.style.boxSizing = 'border-box';
 
-    if (borders.top) {
-      fragmentEl.style.borderTop = `${borders.top.width}px ${borderStyleToCss(borders.top.style)} ${borders.top.color}`;
+    const borderToCss = (b: BorderStyle) => `${b.width}px ${borderStyleToCss(b.style)} ${b.color}`;
+
+    // Word-style border grouping (ECMA-376 §17.3.1.24):
+    // Adjacent paragraphs with identical pBdr form a group.
+    // - top border → only on the first paragraph of the group
+    // - bottom border → only on the last paragraph of the group
+    // - between border → rendered as borderTop on interior paragraphs
+    // - left/right → on every paragraph in the group
+    const groupedWithPrev = bordersFormGroup(options.prevBorders, borders);
+    const groupedWithNext = bordersFormGroup(borders, options.nextBorders);
+
+    if (groupedWithPrev && borders.between) {
+      fragmentEl.style.borderTop = borderToCss(borders.between);
+    } else if (borders.top && !groupedWithPrev) {
+      fragmentEl.style.borderTop = borderToCss(borders.top);
     }
-    if (borders.bottom) {
-      fragmentEl.style.borderBottom = `${borders.bottom.width}px ${borderStyleToCss(borders.bottom.style)} ${borders.bottom.color}`;
+
+    if (borders.bottom && !groupedWithNext) {
+      fragmentEl.style.borderBottom = borderToCss(borders.bottom);
     }
     if (borders.left) {
-      fragmentEl.style.borderLeft = `${borders.left.width}px ${borderStyleToCss(borders.left.style)} ${borders.left.color}`;
+      fragmentEl.style.borderLeft = borderToCss(borders.left);
     }
     if (borders.right) {
-      fragmentEl.style.borderRight = `${borders.right.width}px ${borderStyleToCss(borders.right.style)} ${borders.right.color}`;
+      fragmentEl.style.borderRight = borderToCss(borders.right);
     }
 
     // Add small padding inside borders for text not to touch the border
     // This is standard Word behavior
     // Bottom padding needs to be larger to clear text descenders
-    const hasBorder = borders.top || borders.bottom || borders.left || borders.right;
+    const hasBorder =
+      borders.top || borders.bottom || borders.left || borders.right || borders.between;
     if (hasBorder) {
       fragmentEl.style.paddingLeft = borders.left ? '4px' : '0';
       fragmentEl.style.paddingRight = borders.right ? '4px' : '0';
-      fragmentEl.style.paddingTop = borders.top ? '2px' : '0';
+      fragmentEl.style.paddingTop = borders.top || borders.between ? '2px' : '0';
       // Use larger bottom padding to ensure border is below text descenders
       fragmentEl.style.paddingBottom = borders.bottom ? '6px' : '0';
     }

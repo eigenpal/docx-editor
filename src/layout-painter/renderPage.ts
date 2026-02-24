@@ -13,6 +13,7 @@ import type {
   ParagraphBlock,
   ParagraphMeasure,
   ParagraphFragment,
+  ParagraphBorders,
   TableBlock,
   TableMeasure,
   TableFragment,
@@ -775,7 +776,19 @@ export function renderPage(
   }
 
   // PHASE 4: Render each fragment with floating image awareness
-  for (const fragment of page.fragments) {
+  // Helper to peek at a fragment's paragraph borders (for border grouping)
+  const getParaBorders = (frag: Fragment): ParagraphBorders | undefined => {
+    if (frag.kind !== 'paragraph' || !options.blockLookup || !frag.blockId) return undefined;
+    const blockData = options.blockLookup.get(String(frag.blockId));
+    if (blockData?.block.kind === 'paragraph')
+      return (blockData.block as ParagraphBlock).attrs?.borders;
+    return undefined;
+  };
+
+  let prevParagraphBorders: ParagraphBorders | undefined;
+
+  for (let i = 0; i < page.fragments.length; i++) {
+    const fragment = page.fragments[i];
     let fragmentEl: HTMLElement;
     const fragmentContext = { ...context, section: 'body' as const, contentWidth };
 
@@ -791,17 +804,24 @@ export function renderPage(
         blockData?.block.kind === 'paragraph' &&
         blockData?.measure.kind === 'paragraph'
       ) {
+        const paragraphBlock = blockData.block as ParagraphBlock;
+        const nextBorders =
+          i + 1 < page.fragments.length ? getParaBorders(page.fragments[i + 1]) : undefined;
+
         fragmentEl = renderParagraphFragment(
           fragment as ParagraphFragment,
-          blockData.block as ParagraphBlock,
+          paragraphBlock,
           blockData.measure as ParagraphMeasure,
           fragmentContext,
           {
             document: doc,
             floatingImageInfo: exclusionZones.length > 0 ? exclusionZones : undefined,
             fragmentContentY: fragmentContentY,
+            prevBorders: prevParagraphBorders,
+            nextBorders,
           }
         );
+        prevParagraphBorders = paragraphBlock.attrs?.borders;
       } else if (
         fragment.kind === 'table' &&
         blockData?.block.kind === 'table' &&
@@ -814,6 +834,7 @@ export function renderPage(
           fragmentContext,
           { document: doc }
         );
+        prevParagraphBorders = undefined;
       } else if (
         fragment.kind === 'image' &&
         blockData?.block.kind === 'image' &&
@@ -826,13 +847,16 @@ export function renderPage(
           fragmentContext,
           { document: doc }
         );
+        prevParagraphBorders = undefined;
       } else {
         // Fallback to placeholder
         fragmentEl = renderFragment(fragment, fragmentContext, { document: doc });
+        prevParagraphBorders = undefined;
       }
     } else {
       // Use placeholder when no blockLookup
       fragmentEl = renderFragment(fragment, fragmentContext, { document: doc });
+      prevParagraphBorders = undefined;
     }
 
     applyFragmentStyles(fragmentEl, fragment, { left: page.margins.left, top: page.margins.top });

@@ -488,13 +488,15 @@ function convertParagraphAttrs(pmAttrs: PMParagraphAttrs): ParagraphAttrs {
     if (borders.bottom) attrs.borders.bottom = convertBorder(borders.bottom);
     if (borders.left) attrs.borders.left = convertBorder(borders.left);
     if (borders.right) attrs.borders.right = convertBorder(borders.right);
+    if (borders.between) attrs.borders.between = convertBorder(borders.between);
 
     // Only include if at least one border is set
     if (
       !attrs.borders.top &&
       !attrs.borders.bottom &&
       !attrs.borders.left &&
-      !attrs.borders.right
+      !attrs.borders.right &&
+      !attrs.borders.between
     ) {
       delete attrs.borders;
     }
