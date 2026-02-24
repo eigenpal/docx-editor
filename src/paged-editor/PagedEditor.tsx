@@ -27,7 +27,6 @@ import React, {
 import type { CSSProperties } from 'react';
 import { NodeSelection } from 'prosemirror-state';
 import type { EditorState, Transaction, Plugin } from 'prosemirror-state';
-import type { Node as PMNode } from 'prosemirror-model';
 import { CellSelection } from 'prosemirror-tables';
 import type { EditorView } from 'prosemirror-view';
 
@@ -59,8 +58,6 @@ import {
   measureParagraph,
   resetCanvasContext,
   clearAllCaches,
-  getCachedParagraphMeasure,
-  setCachedParagraphMeasure,
   type FloatingImageZone,
 } from '../layout-bridge/measuring';
 import { hitTestFragment, hitTestTableCell } from '../layout-bridge/hitTest';
@@ -202,22 +199,6 @@ const DEFAULT_MARGINS: PageMargins = {
 };
 
 const DEFAULT_PAGE_GAP = 24;
-
-/**
- * Cache entry for incremental pipeline optimization.
- * Stores a PM node reference alongside its computed measures
- * so unchanged nodes (same reference via structural sharing) can be skipped.
- *
- * INVARIANT: each top-level PM node produces exactly 1 flow block.
- * toFlowBlocks() maps paragraphs 1:1 and tables 1:1.
- * If this ever changes, the cache indexing logic must be updated.
- */
-interface PipelineNodeCache {
-  /** PM node reference (identity via ===) */
-  node: PMNode;
-  /** Measures for this node's blocks */
-  measures: Measure[];
-}
 
 // Stable empty array to avoid re-creating on each render
 const EMPTY_PLUGINS: Plugin[] = [];
@@ -651,29 +632,11 @@ function measureBlock(
   cumulativeY?: number
 ): Measure {
   switch (block.kind) {
-    case 'paragraph': {
-      const pBlock = block as ParagraphBlock;
-
-      // Use paragraph measurement cache for blocks WITHOUT floating zones.
-      // Floating zones alter line widths so those measurements can't be cached
-      // by content hash alone.
-      if (!floatingZones || floatingZones.length === 0) {
-        const cached = getCachedParagraphMeasure(pBlock, contentWidth);
-        if (cached) return cached;
-      }
-
-      const result = measureParagraph(pBlock, contentWidth, {
+    case 'paragraph':
+      return measureParagraph(block as ParagraphBlock, contentWidth, {
         floatingZones,
         paragraphYOffset: cumulativeY ?? 0,
       });
-
-      // Store in cache only when no floating zones affect this paragraph
-      if (!floatingZones || floatingZones.length === 0) {
-        setCachedParagraphMeasure(pBlock, contentWidth, result);
-      }
-
-      return result;
-    }
 
     case 'table': {
       return measureTableBlock(block as TableBlock, contentWidth);
@@ -1282,12 +1245,6 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
     // Layout Pipeline
     // =========================================================================
 
-    const prevPipelineCacheRef = useRef<{
-      doc: PMNode;
-      entries: PipelineNodeCache[];
-      contentWidth: number;
-    } | null>(null);
-
     /**
      * Run the full layout pipeline:
      * 1. Convert PM doc to blocks
@@ -1318,61 +1275,14 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
           }
           setBlocks(newBlocks);
 
-          // Step 2: Measure blocks with incremental optimization.
-          // Uses PM structural sharing: unchanged PM nodes keep the same
-          // object reference, so we cache measures keyed by (node, contentWidth)
-          // and skip re-measurement for unchanged nodes.
+          // Step 2: Measure all blocks.
+          // Must use full measureBlocks() because measurements depend on
+          // inter-block context (floating zones, cumulative Y). Individual
+          // block measurements cannot be cached by PM node identity since
+          // floating tables/images create exclusion zones that affect
+          // neighboring paragraphs' line widths.
           stepStart = performance.now();
-          let newMeasures: Measure[];
-
-          const prevCache = prevPipelineCacheRef.current;
-          if (prevCache && prevCache.contentWidth === contentWidth) {
-            // Build identity map: PM node ref → cached measure for that node's blocks
-            const prevMeasureByNode = new Map<PMNode, Measure[]>();
-            for (const entry of prevCache.entries) {
-              prevMeasureByNode.set(entry.node, entry.measures);
-            }
-
-            // Walk the new doc children alongside the new blocks array.
-            // For each top-level node, check if it's the same object as before.
-            const allMeasures: Measure[] = [];
-            let blockIdx = 0;
-
-            state.doc.forEach((node: PMNode) => {
-              // Each top-level PM node produces exactly 1 block
-              const cachedMeasures = prevMeasureByNode.get(node);
-              if (cachedMeasures) {
-                // Same PM node — reuse cached measures
-                allMeasures.push(...cachedMeasures);
-                blockIdx += cachedMeasures.length;
-              } else {
-                // Node changed — measure this block
-                const block = newBlocks[blockIdx];
-                if (block) {
-                  allMeasures.push(measureBlocks([block], contentWidth)[0]);
-                }
-                blockIdx += 1;
-              }
-            });
-
-            newMeasures = allMeasures;
-          } else {
-            // Full measurement (first render or content width changed)
-            newMeasures = measureBlocks(newBlocks, contentWidth);
-          }
-
-          // Update cache for next render
-          {
-            const entries: PipelineNodeCache[] = [];
-            let blockIdx = 0;
-            state.doc.forEach((node: PMNode) => {
-              const nodeMeasures = newMeasures.slice(blockIdx, blockIdx + 1);
-              entries.push({ node, measures: nodeMeasures });
-              blockIdx += 1;
-            });
-            prevPipelineCacheRef.current = { doc: state.doc, entries, contentWidth };
-          }
-
+          const newMeasures = measureBlocks(newBlocks, contentWidth);
           stepTime = performance.now() - stepStart;
           if (stepTime > 1000) {
             console.warn(
