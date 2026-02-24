@@ -21,7 +21,7 @@ import type {
   ImageMeasure,
   ImageFragment,
 } from '../layout-engine/types';
-import { renderPage, renderPages, updatePage, type RenderContext } from './renderPage';
+import { renderPage, renderPages, type RenderContext } from './renderPage';
 import { renderParagraphFragment, sliceRunsForLine, renderLine } from './renderParagraph';
 import { renderFragment, FRAGMENT_CLASS_NAMES } from './renderFragment';
 import { renderTableFragment, TABLE_CLASS_NAMES } from './renderTable';
@@ -31,7 +31,6 @@ import { renderImageFragment, IMAGE_CLASS_NAMES } from './renderImage';
 export {
   renderPage,
   renderPages,
-  updatePage,
   renderParagraphFragment,
   renderTableFragment,
   renderImageFragment,

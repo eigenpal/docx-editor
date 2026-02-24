@@ -58,6 +58,8 @@ import {
   measureParagraph,
   resetCanvasContext,
   clearAllCaches,
+  getCachedParagraphMeasure,
+  setCachedParagraphMeasure,
   type FloatingImageZone,
 } from '../layout-bridge/measuring';
 import { hitTestFragment, hitTestTableCell } from '../layout-bridge/hitTest';
@@ -632,11 +634,30 @@ function measureBlock(
   cumulativeY?: number
 ): Measure {
   switch (block.kind) {
-    case 'paragraph':
-      return measureParagraph(block as ParagraphBlock, contentWidth, {
+    case 'paragraph': {
+      const pBlock = block as ParagraphBlock;
+
+      // Cache paragraph measurements when no floating zones affect this block.
+      // Safe because without floating zones the result depends only on content
+      // and contentWidth (both captured in the cache key). When floating zones
+      // ARE present, we always measure fresh since zones depend on inter-block
+      // layout context (cumulative Y, neighboring floating tables/images).
+      if (!floatingZones || floatingZones.length === 0) {
+        const cached = getCachedParagraphMeasure(pBlock, contentWidth);
+        if (cached) return cached;
+      }
+
+      const result = measureParagraph(pBlock, contentWidth, {
         floatingZones,
         paragraphYOffset: cumulativeY ?? 0,
       });
+
+      if (!floatingZones || floatingZones.length === 0) {
+        setCachedParagraphMeasure(pBlock, contentWidth, result);
+      }
+
+      return result;
+    }
 
     case 'table': {
       return measureTableBlock(block as TableBlock, contentWidth);
@@ -1275,7 +1296,12 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
           }
           setBlocks(newBlocks);
 
-          // Step 2: Measure all blocks
+          // Step 2: Measure all blocks.
+          // Must use full measureBlocks() because measurements depend on
+          // inter-block context (floating zones, cumulative Y). Individual
+          // block measurements cannot be cached by PM node identity since
+          // floating tables/images create exclusion zones that affect
+          // neighboring paragraphs' line widths.
           stepStart = performance.now();
           const newMeasures = measureBlocks(newBlocks, contentWidth);
           stepTime = performance.now() - stepStart;
@@ -1467,6 +1493,54 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
         document,
       ]
     );
+
+    // =========================================================================
+    // Coalesced Layout (rAF throttle)
+    // =========================================================================
+
+    /**
+     * Ref holding a pending requestAnimationFrame ID and the latest state.
+     * Multiple rapid transactions (e.g. typing "hello") within the same frame
+     * are coalesced so only the final state triggers a full layout pass.
+     */
+    const pendingLayoutRef = useRef<{
+      rafId: number;
+      state: EditorState;
+    } | null>(null);
+
+    /**
+     * Schedule a layout pipeline run for the next animation frame.
+     * If a run is already scheduled, the pending state is replaced so only
+     * the most recent document state gets laid out.
+     */
+    const scheduleLayout = useCallback(
+      (state: EditorState) => {
+        if (pendingLayoutRef.current) {
+          // Already scheduled — just update the state to the latest
+          pendingLayoutRef.current.state = state;
+          return;
+        }
+        const rafId = requestAnimationFrame(() => {
+          const pending = pendingLayoutRef.current;
+          pendingLayoutRef.current = null;
+          if (pending) {
+            runLayoutPipeline(pending.state);
+          }
+        });
+        pendingLayoutRef.current = { rafId, state };
+      },
+      [runLayoutPipeline]
+    );
+
+    // Clean up pending rAF on unmount
+    useEffect(() => {
+      return () => {
+        if (pendingLayoutRef.current) {
+          cancelAnimationFrame(pendingLayoutRef.current.rafId);
+          pendingLayoutRef.current = null;
+        }
+      };
+    }, []);
 
     /**
      * Get caret position using DOM-based measurement.
@@ -1777,8 +1851,8 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
           // Increment state sequence to signal document changed
           syncCoordinator.incrementStateSeq();
 
-          // Content changed - full layout
-          runLayoutPipeline(newState);
+          // Content changed - schedule layout (coalesced via rAF)
+          scheduleLayout(newState);
 
           // Notify document change - use ref to avoid infinite loops
           const newDoc = hiddenPMRef.current?.getDocument();
@@ -1789,9 +1863,16 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
 
         // Request selection update (will only execute when layout is current)
         syncCoordinator.requestRender();
-        updateSelectionOverlay(newState);
+
+        // Only update selection overlay immediately for non-doc-changing transactions
+        // (e.g. arrow keys, clicks). For doc changes, the overlay will be updated
+        // after layout completes via the useEffect([layout]) hook, avoiding cursor
+        // flicker from stale DOM positions.
+        if (!transaction.docChanged) {
+          updateSelectionOverlay(newState);
+        }
       },
-      [runLayoutPipeline, updateSelectionOverlay, syncCoordinator]
+      [scheduleLayout, updateSelectionOverlay, syncCoordinator]
       // NOTE: onDocumentChange removed from dependencies - accessed via ref to prevent infinite loops
     );
 
@@ -1806,7 +1887,12 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
           // Suppress text selection overlay for image selections
           setSelectionRects([]);
           setCaretPosition(null);
-        } else {
+        } else if (syncCoordinator.isSafeToRender()) {
+          // Only update overlay when layout is current. When doc changed,
+          // layout is pending and DOM hasn't been updated yet — updating the
+          // overlay now would position the cursor against stale geometry,
+          // causing it to visibly jump. The overlay will be updated after
+          // layout completes via the useEffect([layout]) hook.
           updateSelectionOverlay(state);
         }
 
@@ -1833,7 +1919,7 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
           }
         });
       },
-      [updateSelectionOverlay, zoom, buildImageSelectionInfo]
+      [updateSelectionOverlay, zoom, buildImageSelectionInfo, syncCoordinator]
     );
 
     /**
