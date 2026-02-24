@@ -928,12 +928,110 @@ export function renderPage(
 }
 
 /**
- * Render multiple pages to a container
- *
- * @param pages - Array of pages to render
- * @param container - Container element to append pages to
- * @param options - Rendering options
+ * State for a single page shell used in incremental rendering.
  */
+interface PageShellState {
+  element: HTMLElement;
+  fingerprint: string;
+}
+
+/**
+ * Stored state for the page container to enable incremental updates.
+ */
+interface PageContainerState {
+  pageStates: PageShellState[];
+  totalPages: number;
+  optionsHash: string;
+  pageDataMap: Map<HTMLElement, { page: Page; index: number; rendered: boolean }>;
+  /** Current render options — kept up-to-date so the observer closure always reads fresh values. */
+  currentOptions: RenderPageOptions & { footnotesByPage?: Map<number, FootnoteRenderItem[]> };
+}
+
+/**
+ * Extended container type with observer and render state references.
+ */
+interface PageContainer extends HTMLElement {
+  __pageObserver?: IntersectionObserver;
+  __pageRenderState?: PageContainerState;
+}
+
+/**
+ * Compute a fingerprint string for a page that changes when its content changes.
+ * Used to detect which pages need re-rendering on incremental updates.
+ */
+function computePageFingerprint(page: Page): string {
+  const parts: string[] = [];
+
+  // Page-level properties
+  parts.push(`s:${page.size.w},${page.size.h}`);
+  parts.push(
+    `m:${page.margins.top},${page.margins.right},${page.margins.bottom},${page.margins.left}`
+  );
+  parts.push(`n:${page.number}`);
+  if (page.footnoteReservedHeight) parts.push(`fn:${page.footnoteReservedHeight}`);
+
+  // Each fragment's stable properties
+  for (const frag of page.fragments) {
+    let fp = `${frag.kind}:${frag.blockId},${frag.x},${frag.y},${frag.width},${frag.height}`;
+    if (frag.pmStart !== undefined) fp += `,ps:${frag.pmStart}`;
+    if (frag.pmEnd !== undefined) fp += `,pe:${frag.pmEnd}`;
+
+    if (frag.kind === 'paragraph') {
+      fp += `,fl:${frag.fromLine},tl:${frag.toLine}`;
+    } else if (frag.kind === 'table') {
+      fp += `,fr:${frag.fromRow},tr:${frag.toRow}`;
+    }
+
+    parts.push(fp);
+  }
+
+  return parts.join('|');
+}
+
+/**
+ * Compute a hash for render options that affect all pages globally.
+ * When this changes, all pages need a full re-render.
+ */
+function computeOptionsHash(options: RenderPageOptions): string {
+  const parts: string[] = [];
+
+  // Header/footer content changes affect all pages
+  if (options.headerContent) {
+    parts.push(`hdr:${options.headerContent.blocks.length},${options.headerContent.height}`);
+  }
+  if (options.footerContent) {
+    parts.push(`ftr:${options.footerContent.blocks.length},${options.footerContent.height}`);
+  }
+
+  // Theme changes
+  if (options.theme) {
+    parts.push(`thm:${options.theme.name ?? 'default'}`);
+  }
+
+  // Page border changes
+  if (options.pageBorders) {
+    parts.push(`pb:${JSON.stringify(options.pageBorders)}`);
+  }
+
+  // Header/footer distances
+  if (options.headerDistance !== undefined) parts.push(`hd:${options.headerDistance}`);
+  if (options.footerDistance !== undefined) parts.push(`fd:${options.footerDistance}`);
+
+  return parts.join('|');
+}
+
+/**
+ * Apply standard container styles for the pages wrapper.
+ */
+function applyContainerStyles(container: HTMLElement, pageGap: number): void {
+  container.style.display = 'flex';
+  container.style.flexDirection = 'column';
+  container.style.alignItems = 'center';
+  container.style.gap = `${pageGap}px`;
+  container.style.padding = `${pageGap}px`;
+  container.style.backgroundColor = 'var(--doc-bg, #f8f9fa)';
+}
+
 /**
  * Number of pages to render above and below the visible area.
  * Keeps nearby pages ready for smooth scrolling.
@@ -967,31 +1065,140 @@ export function renderPages(
 ): void {
   const totalPages = pages.length;
   const pageGap = options.pageGap ?? 24;
+  const pc = container as PageContainer;
+  const prevState = pc.__pageRenderState;
+  const currentOptionsHash = computeOptionsHash(options);
+  const useVirtualization = totalPages >= VIRTUALIZATION_THRESHOLD;
 
-  // Disconnect any previous observer attached to this container
-  const prevObserver = (container as PageContainer).__pageObserver;
+  // Determine if we can do an incremental update
+  const canIncremental =
+    prevState && prevState.optionsHash === currentOptionsHash && useVirtualization;
+
+  if (canIncremental) {
+    // --- INCREMENTAL UPDATE PATH ---
+    const prevShells = prevState.pageStates;
+    const prevDataMap = prevState.pageDataMap;
+    const observer = pc.__pageObserver;
+
+    // Compute new fingerprints
+    const newFingerprints: string[] = [];
+    for (const page of pages) {
+      newFingerprints.push(computePageFingerprint(page));
+    }
+
+    // If total page count changed, NUMPAGES fields in headers/footers are stale.
+    // Force re-render of all currently-rendered pages.
+    const totalPagesChanged = prevState.totalPages !== totalPages;
+
+    // Update existing pages
+    const commonCount = Math.min(prevShells.length, pages.length);
+    for (let i = 0; i < commonCount; i++) {
+      const prev = prevShells[i];
+      const newFp = newFingerprints[i];
+
+      if (prev.fingerprint === newFp && !totalPagesChanged) {
+        // Page unchanged — update data map with new page data (references may differ)
+        const data = prevDataMap.get(prev.element);
+        if (data) {
+          data.page = pages[i];
+        }
+        continue;
+      }
+
+      // Page changed — update the shell
+      const shell = prev.element;
+      const data = prevDataMap.get(shell);
+
+      // Update data map entry
+      if (data) {
+        data.page = pages[i];
+
+        if (data.rendered) {
+          // Surgically replace only the content area, preserving header/footer
+          repopulatePageContent(shell, prevDataMap, totalPages, options);
+        }
+        // If not rendered, it will be populated when it scrolls into view
+      }
+
+      // Update fingerprint
+      prev.fingerprint = newFp;
+
+      // Update page styles in case size changed
+      applyPageStyles(shell, pages[i].size.w, pages[i].size.h, options);
+      shell.dataset.pageNumber = String(pages[i].number);
+    }
+
+    // Handle new pages (document grew)
+    if (pages.length > prevShells.length) {
+      const doc = options.document ?? document;
+      for (let i = prevShells.length; i < pages.length; i++) {
+        const page = pages[i];
+        const pageEl = doc.createElement('div');
+        pageEl.className = options.pageClassName ?? PAGE_CLASS_NAMES.page;
+        pageEl.dataset.pageNumber = String(page.number);
+        pageEl.dataset.pageIndex = String(i);
+        applyPageStyles(pageEl, page.size.w, page.size.h, options);
+        container.appendChild(pageEl);
+
+        prevShells.push({ element: pageEl, fingerprint: newFingerprints[i] });
+        prevDataMap.set(pageEl, { page, index: i, rendered: false });
+
+        if (observer) {
+          observer.observe(pageEl);
+        }
+      }
+    }
+
+    // Handle removed pages (document shrank)
+    if (pages.length < prevShells.length) {
+      for (let i = prevShells.length - 1; i >= pages.length; i--) {
+        const shell = prevShells[i].element;
+        if (observer) {
+          observer.unobserve(shell);
+        }
+        prevDataMap.delete(shell);
+        container.removeChild(shell);
+      }
+      prevShells.length = pages.length;
+    }
+
+    // Update indices in data map (they may have shifted)
+    for (let i = 0; i < prevShells.length; i++) {
+      const data = prevDataMap.get(prevShells[i].element);
+      if (data) {
+        data.index = i;
+      }
+    }
+
+    // Update stored state with fresh options (blockLookup, footnotes, etc.)
+    prevState.totalPages = totalPages;
+    prevState.currentOptions = options;
+
+    return;
+  }
+
+  // --- FULL REBUILD PATH ---
+
+  // Disconnect any previous observer
+  const prevObserver = pc.__pageObserver;
   if (prevObserver) {
     prevObserver.disconnect();
-    (container as PageContainer).__pageObserver = undefined;
+    pc.__pageObserver = undefined;
   }
 
   // Clear existing content
   container.innerHTML = '';
+  pc.__pageRenderState = undefined;
 
-  // Apply container styles
-  container.style.display = 'flex';
-  container.style.flexDirection = 'column';
-  container.style.alignItems = 'center';
-  container.style.gap = `${pageGap}px`;
-  container.style.padding = `${pageGap}px`;
-  container.style.backgroundColor = 'var(--doc-bg, #f8f9fa)';
-
-  const useVirtualization = totalPages >= VIRTUALIZATION_THRESHOLD;
+  applyContainerStyles(container, pageGap);
 
   // Build all page shells
   const pageShells: HTMLElement[] = [];
+  const fingerprints: string[] = [];
+
   for (let i = 0; i < pages.length; i++) {
     const page = pages[i];
+    fingerprints.push(computePageFingerprint(page));
 
     if (!useVirtualization) {
       // Small document: render all pages eagerly
@@ -1023,7 +1230,11 @@ export function renderPages(
     }
   }
 
-  if (!useVirtualization) return;
+  if (!useVirtualization) {
+    // Store state for potential future incremental updates (won't be used
+    // since small docs skip the incremental path, but keeps data consistent)
+    return;
+  }
 
   // --- Virtualization via IntersectionObserver ---
 
@@ -1033,79 +1244,53 @@ export function renderPages(
     pageDataMap.set(pageShells[i], { page: pages[i], index: i, rendered: false });
   }
 
-  /**
-   * Populate a page shell with full content.
-   */
-  function populatePage(shell: HTMLElement): void {
-    const data = pageDataMap.get(shell);
-    if (!data || data.rendered) return;
-
-    const context: RenderContext = {
-      pageNumber: data.page.number,
-      totalPages,
-      section: 'body',
-    };
-    const pageOptions = { ...options };
-    if (options.footnotesByPage) {
-      const fns = options.footnotesByPage.get(data.page.number);
-      if (fns && fns.length > 0) {
-        pageOptions.footnoteArea = fns;
-      }
-    }
-
-    // Render a full page and transplant its children into the shell
-    const fullPageEl = renderPage(data.page, context, pageOptions);
-
-    // Move all children from the fully-rendered page into the shell
-    while (fullPageEl.firstChild) {
-      shell.appendChild(fullPageEl.firstChild);
-    }
-
-    data.rendered = true;
-  }
-
-  /**
-   * Clear a page shell's content (keep shell dimensions for scroll).
-   */
-  function depopulatePage(shell: HTMLElement): void {
-    const data = pageDataMap.get(shell);
-    if (!data || !data.rendered) return;
-
-    shell.innerHTML = '';
-    data.rendered = false;
-  }
-
   // Use the browser viewport as intersection root.
-  // The scroll container may be the viewport itself, the paged-editor wrapper,
-  // or any ancestor. Using root: null (viewport) is the most robust option.
+  // The observer reads from pc.__pageRenderState so it always uses
+  // the latest options/totalPages (updated by the incremental path).
   const observer = new IntersectionObserver(
     (entries) => {
+      const renderState = pc.__pageRenderState;
+      if (!renderState) return;
+      const {
+        currentOptions: liveOptions,
+        totalPages: liveTotalPages,
+        pageDataMap: liveDataMap,
+      } = renderState;
+
       for (const entry of entries) {
         const shell = entry.target as HTMLElement;
-        const data = pageDataMap.get(shell);
+        const data = liveDataMap.get(shell);
         if (!data) continue;
 
         if (entry.isIntersecting) {
           // Page is near viewport — render it and neighbors
-          populatePage(shell);
+          populatePageShell(shell, liveDataMap, liveTotalPages, liveOptions);
 
           // Also render buffer pages above and below
           for (let offset = -VIRTUALIZATION_BUFFER; offset <= VIRTUALIZATION_BUFFER; offset++) {
             const neighborIdx = data.index + offset;
-            if (neighborIdx >= 0 && neighborIdx < pageShells.length && neighborIdx !== data.index) {
-              populatePage(pageShells[neighborIdx]);
+            if (
+              neighborIdx >= 0 &&
+              neighborIdx < renderState.pageStates.length &&
+              neighborIdx !== data.index
+            ) {
+              populatePageShell(
+                renderState.pageStates[neighborIdx].element,
+                liveDataMap,
+                liveTotalPages,
+                liveOptions
+              );
             }
           }
         }
       }
 
       // Sweep: depopulate pages far from any currently-visible page.
-      // Determine which pages are actually near the viewport using getBoundingClientRect.
       const viewportHeight = window.innerHeight;
       const nearThreshold = viewportHeight * 3;
       const nearIndices = new Set<number>();
 
-      for (const [el, data] of pageDataMap) {
+      for (const [el, data] of liveDataMap) {
         if (!data.rendered) continue;
         const rect = el.getBoundingClientRect();
         if (rect.bottom > -nearThreshold && rect.top < viewportHeight + nearThreshold) {
@@ -1113,7 +1298,7 @@ export function renderPages(
         }
       }
 
-      for (const [el, data] of pageDataMap) {
+      for (const [el, data] of liveDataMap) {
         if (!data.rendered) continue;
         let keepRendered = false;
         for (const nearIdx of nearIndices) {
@@ -1123,13 +1308,12 @@ export function renderPages(
           }
         }
         if (!keepRendered && nearIndices.size > 0) {
-          depopulatePage(el);
+          depopulatePageShell(el, liveDataMap);
         }
       }
     },
     {
-      root: null, // browser viewport
-      // Pre-render pages 1500px above and below viewport
+      root: null,
       rootMargin: '1500px 0px 1500px 0px',
     }
   );
@@ -1139,19 +1323,114 @@ export function renderPages(
     observer.observe(shell);
   }
 
+  // Store observer and render state on the container BEFORE eager rendering,
+  // so the populatePageShell calls below can find state if needed.
+  pc.__pageObserver = observer;
+  pc.__pageRenderState = {
+    pageStates: pageShells.map((el, i) => ({ element: el, fingerprint: fingerprints[i] })),
+    totalPages,
+    optionsHash: currentOptionsHash,
+    pageDataMap,
+    currentOptions: options,
+  };
+
   // Eagerly render the first few pages so the initial view isn't blank
   const initialRenderCount = Math.min(pages.length, VIRTUALIZATION_BUFFER + 3);
   for (let i = 0; i < initialRenderCount; i++) {
-    populatePage(pageShells[i]);
+    populatePageShell(pageShells[i], pageDataMap, totalPages, options);
   }
-
-  // Store observer reference on the container for cleanup
-  (container as PageContainer).__pageObserver = observer;
 }
 
-/** Extended container type with observer reference for cleanup. */
-interface PageContainer extends HTMLElement {
-  __pageObserver?: IntersectionObserver;
+/**
+ * Populate a page shell with full rendered content.
+ */
+function populatePageShell(
+  shell: HTMLElement,
+  pageDataMap: Map<HTMLElement, { page: Page; index: number; rendered: boolean }>,
+  totalPages: number,
+  options: RenderPageOptions & { footnotesByPage?: Map<number, FootnoteRenderItem[]> }
+): void {
+  const data = pageDataMap.get(shell);
+  if (!data || data.rendered) return;
+
+  const context: RenderContext = {
+    pageNumber: data.page.number,
+    totalPages,
+    section: 'body',
+  };
+  const pageOptions = { ...options };
+  if (options.footnotesByPage) {
+    const fns = options.footnotesByPage.get(data.page.number);
+    if (fns && fns.length > 0) {
+      pageOptions.footnoteArea = fns;
+    }
+  }
+
+  const fullPageEl = renderPage(data.page, context, pageOptions);
+
+  while (fullPageEl.firstChild) {
+    shell.appendChild(fullPageEl.firstChild);
+  }
+
+  data.rendered = true;
+}
+
+/**
+ * Surgically replace only the content area of a rendered page shell.
+ * Preserves header/footer elements to avoid blinking.
+ */
+function repopulatePageContent(
+  shell: HTMLElement,
+  pageDataMap: Map<HTMLElement, { page: Page; index: number; rendered: boolean }>,
+  totalPages: number,
+  options: RenderPageOptions & { footnotesByPage?: Map<number, FootnoteRenderItem[]> }
+): void {
+  const data = pageDataMap.get(shell);
+  if (!data) return;
+
+  const context: RenderContext = {
+    pageNumber: data.page.number,
+    totalPages,
+    section: 'body',
+  };
+  const pageOptions = { ...options };
+  if (options.footnotesByPage) {
+    const fns = options.footnotesByPage.get(data.page.number);
+    if (fns && fns.length > 0) {
+      pageOptions.footnoteArea = fns;
+    }
+  }
+
+  // Render a full page off-screen
+  const fullPageEl = renderPage(data.page, context, pageOptions);
+
+  // Extract the new content area from the rendered page
+  const newContentEl = fullPageEl.querySelector(`.${PAGE_CLASS_NAMES.content}`);
+  const oldContentEl = shell.querySelector(`.${PAGE_CLASS_NAMES.content}`);
+
+  if (newContentEl && oldContentEl) {
+    // Replace only the content area — header/footer stay untouched
+    shell.replaceChild(newContentEl, oldContentEl);
+  } else {
+    // Fallback: full replace if structure doesn't match
+    shell.innerHTML = '';
+    data.rendered = false;
+    populatePageShell(shell, pageDataMap, totalPages, options);
+  }
+}
+
+/**
+ * Clear a page shell's content (keep shell dimensions for scroll).
+ */
+function depopulatePageShell(
+  shell: HTMLElement,
+  pageDataMap: Map<HTMLElement, { page: Page; index: number; rendered: boolean }>
+): void {
+  const data = pageDataMap.get(shell);
+  if (!data || !data.rendered) return;
+
+  shell.innerHTML = '';
+  data.rendered = false;
 }
 
 /**

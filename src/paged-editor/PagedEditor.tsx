@@ -27,6 +27,7 @@ import React, {
 import type { CSSProperties } from 'react';
 import { NodeSelection } from 'prosemirror-state';
 import type { EditorState, Transaction, Plugin } from 'prosemirror-state';
+import type { Node as PMNode } from 'prosemirror-model';
 import { CellSelection } from 'prosemirror-tables';
 import type { EditorView } from 'prosemirror-view';
 
@@ -1266,6 +1267,23 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
     // =========================================================================
 
     /**
+     * Cache for incremental pipeline optimization.
+     * Stores PM node references alongside their computed blocks/measures
+     * so unchanged nodes (same reference via structural sharing) can be skipped.
+     */
+    interface PipelineNodeCache {
+      /** PM node reference (identity via ===) */
+      node: PMNode;
+      /** Measures for this node's blocks */
+      measures: Measure[];
+    }
+    const prevPipelineCacheRef = useRef<{
+      doc: PMNode;
+      entries: PipelineNodeCache[];
+      contentWidth: number;
+    } | null>(null);
+
+    /**
      * Run the full layout pipeline:
      * 1. Convert PM doc to blocks
      * 2. Measure blocks
@@ -1295,9 +1313,61 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
           }
           setBlocks(newBlocks);
 
-          // Step 2: Measure all blocks
+          // Step 2: Measure blocks with incremental optimization.
+          // Uses PM structural sharing: unchanged PM nodes keep the same
+          // object reference, so we cache measures keyed by (node, contentWidth)
+          // and skip re-measurement for unchanged nodes.
           stepStart = performance.now();
-          const newMeasures = measureBlocks(newBlocks, contentWidth);
+          let newMeasures: Measure[];
+
+          const prevCache = prevPipelineCacheRef.current;
+          if (prevCache && prevCache.contentWidth === contentWidth) {
+            // Build identity map: PM node ref → cached measure for that node's blocks
+            const prevMeasureByNode = new Map<PMNode, Measure[]>();
+            for (const entry of prevCache.entries) {
+              prevMeasureByNode.set(entry.node, entry.measures);
+            }
+
+            // Walk the new doc children alongside the new blocks array.
+            // For each top-level node, check if it's the same object as before.
+            const allMeasures: Measure[] = [];
+            let blockIdx = 0;
+
+            state.doc.forEach((node: PMNode) => {
+              // Each top-level PM node produces exactly 1 block
+              const cachedMeasures = prevMeasureByNode.get(node);
+              if (cachedMeasures) {
+                // Same PM node — reuse cached measures
+                allMeasures.push(...cachedMeasures);
+                blockIdx += cachedMeasures.length;
+              } else {
+                // Node changed — measure this block
+                const block = newBlocks[blockIdx];
+                if (block) {
+                  allMeasures.push(measureBlocks([block], contentWidth)[0]);
+                }
+                blockIdx += 1;
+              }
+            });
+
+            newMeasures = allMeasures;
+          } else {
+            // Full measurement (first render or content width changed)
+            newMeasures = measureBlocks(newBlocks, contentWidth);
+          }
+
+          // Update cache for next render
+          {
+            const entries: PipelineNodeCache[] = [];
+            let blockIdx = 0;
+            state.doc.forEach((node: PMNode) => {
+              const nodeMeasures = newMeasures.slice(blockIdx, blockIdx + 1);
+              entries.push({ node, measures: nodeMeasures });
+              blockIdx += 1;
+            });
+            prevPipelineCacheRef.current = { doc: state.doc, entries, contentWidth };
+          }
+
           stepTime = performance.now() - stepStart;
           if (stepTime > 1000) {
             console.warn(
@@ -1857,7 +1927,14 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
 
         // Request selection update (will only execute when layout is current)
         syncCoordinator.requestRender();
-        updateSelectionOverlay(newState);
+
+        // Only update selection overlay immediately for non-doc-changing transactions
+        // (e.g. arrow keys, clicks). For doc changes, the overlay will be updated
+        // after layout completes via the useEffect([layout]) hook, avoiding cursor
+        // flicker from stale DOM positions.
+        if (!transaction.docChanged) {
+          updateSelectionOverlay(newState);
+        }
       },
       [scheduleLayout, updateSelectionOverlay, syncCoordinator]
       // NOTE: onDocumentChange removed from dependencies - accessed via ref to prevent infinite loops
@@ -1874,7 +1951,12 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
           // Suppress text selection overlay for image selections
           setSelectionRects([]);
           setCaretPosition(null);
-        } else {
+        } else if (syncCoordinator.isSafeToRender()) {
+          // Only update overlay when layout is current. When doc changed,
+          // layout is pending and DOM hasn't been updated yet — updating the
+          // overlay now would position the cursor against stale geometry,
+          // causing it to visibly jump. The overlay will be updated after
+          // layout completes via the useEffect([layout]) hook.
           updateSelectionOverlay(state);
         }
 
@@ -1901,7 +1983,7 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
           }
         });
       },
-      [updateSelectionOverlay, zoom, buildImageSelectionInfo]
+      [updateSelectionOverlay, zoom, buildImageSelectionInfo, syncCoordinator]
     );
 
     /**
