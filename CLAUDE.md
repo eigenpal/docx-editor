@@ -217,6 +217,17 @@ gh issue view <N> --repo eigenpal/docx-js-editor
 
 ---
 
+## Pre-PR Self-Review
+
+Before opening any PR, self-review the diff against **DRY, KISS, YAGNI**:
+
+1. **DRY** — Is the same logic/style repeated across files? Extract shared code.
+2. **KISS** — Is the solution more complex than needed? Simpler alternatives?
+3. **YAGNI** — Did you add anything not required by the task? Remove it.
+4. **Formatting** — Run `bun run format` to ensure Prettier compliance before pushing.
+
+---
+
 ## Rules
 
 - Client-side only. No backend.
