@@ -58,6 +58,8 @@ import {
   measureParagraph,
   resetCanvasContext,
   clearAllCaches,
+  getCachedParagraphMeasure,
+  setCachedParagraphMeasure,
   type FloatingImageZone,
 } from '../layout-bridge/measuring';
 import { hitTestFragment, hitTestTableCell } from '../layout-bridge/hitTest';
@@ -632,11 +634,30 @@ function measureBlock(
   cumulativeY?: number
 ): Measure {
   switch (block.kind) {
-    case 'paragraph':
-      return measureParagraph(block as ParagraphBlock, contentWidth, {
+    case 'paragraph': {
+      const pBlock = block as ParagraphBlock;
+
+      // Cache paragraph measurements when no floating zones affect this block.
+      // Safe because without floating zones the result depends only on content
+      // and contentWidth (both captured in the cache key). When floating zones
+      // ARE present, we always measure fresh since zones depend on inter-block
+      // layout context (cumulative Y, neighboring floating tables/images).
+      if (!floatingZones || floatingZones.length === 0) {
+        const cached = getCachedParagraphMeasure(pBlock, contentWidth);
+        if (cached) return cached;
+      }
+
+      const result = measureParagraph(pBlock, contentWidth, {
         floatingZones,
         paragraphYOffset: cumulativeY ?? 0,
       });
+
+      if (!floatingZones || floatingZones.length === 0) {
+        setCachedParagraphMeasure(pBlock, contentWidth, result);
+      }
+
+      return result;
+    }
 
     case 'table': {
       return measureTableBlock(block as TableBlock, contentWidth);
