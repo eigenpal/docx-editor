@@ -107,7 +107,11 @@ export function FontSizePicker({
     setIsDropdownOpen(false);
     setIsEditing(false);
   }, []);
-  const { containerRef, dropdownRef, dropdownStyle: fixedDropdownStyle } = useFixedDropdown({
+  const {
+    containerRef,
+    dropdownRef,
+    dropdownStyle: fixedDropdownStyle,
+  } = useFixedDropdown({
     isOpen: isDropdownOpen,
     onClose: onCloseDropdown,
   });
@@ -271,7 +275,6 @@ export function FontSizePicker({
             {displayValue}
           </button>
         )}
-
       </div>
 
       {/* Dropdown */}

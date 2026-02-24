@@ -114,7 +114,11 @@ export function TableGridPicker({
       {tooltip ? <Tooltip content={tooltip}>{button}</Tooltip> : button}
 
       {isOpen && !disabled && (
-        <div ref={dropdownRef} className="docx-table-grid-picker-dropdown" style={{ ...dropdownStyle, ...dropdownPanelStyle }}>
+        <div
+          ref={dropdownRef}
+          className="docx-table-grid-picker-dropdown"
+          style={{ ...dropdownStyle, ...dropdownPanelStyle }}
+        >
           <TableGridInline onInsert={handleInsert} gridRows={gridRows} gridColumns={gridColumns} />
         </div>
       )}
