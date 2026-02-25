@@ -48,27 +48,27 @@ const FONT_MAPPINGS: Record<string, FontMapping> = {
   calibri: {
     googleFont: 'Carlito',
     category: 'sans-serif',
-    fallbackStack: ['Carlito', 'Calibri', 'Arial', 'Helvetica', 'sans-serif'],
+    fallbackStack: ['Calibri', 'Carlito', 'Arial', 'Helvetica', 'sans-serif'],
   },
   cambria: {
     googleFont: 'Caladea',
     category: 'serif',
-    fallbackStack: ['Caladea', 'Cambria', 'Georgia', 'serif'],
+    fallbackStack: ['Cambria', 'Caladea', 'Georgia', 'serif'],
   },
   arial: {
     googleFont: 'Arimo',
     category: 'sans-serif',
-    fallbackStack: ['Arimo', 'Arial', 'Helvetica', 'sans-serif'],
+    fallbackStack: ['Arial', 'Arimo', 'Helvetica', 'sans-serif'],
   },
   'times new roman': {
     googleFont: 'Tinos',
     category: 'serif',
-    fallbackStack: ['Tinos', 'Times New Roman', 'Times', 'serif'],
+    fallbackStack: ['Times New Roman', 'Tinos', 'Times', 'serif'],
   },
   'courier new': {
     googleFont: 'Cousine',
     category: 'monospace',
-    fallbackStack: ['Cousine', 'Courier New', 'Courier', 'monospace'],
+    fallbackStack: ['Courier New', 'Cousine', 'Courier', 'monospace'],
   },
 
   // Additional common fonts

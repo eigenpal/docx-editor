@@ -408,69 +408,21 @@ export async function loadFontWithMapping(fontFamily: string): Promise<boolean> 
   const trimmed = fontFamily.trim();
   const googleFont = getGoogleFontEquivalent(trimmed);
 
-  // If there's a mapping, fetch the CSS and create alias with original name
-  // This avoids loading the font twice (once for Google name, once for alias)
+  // Load the Google Font under its own name (no aliasing).
+  // The font resolver provides CSS fallback stacks that list both the
+  // original DOCX font and the Google equivalent, so the browser will
+  // use whichever is available without @font-face aliasing that would
+  // hijack Canvas measurements.
   if (googleFont !== trimmed) {
-    await createFontAlias(trimmed, googleFont);
-    loadedFonts.add(trimmed);
-    loadedFonts.add(googleFont);
-    return true;
+    const result = await loadFont(googleFont);
+    if (result) {
+      loadedFonts.add(trimmed);
+    }
+    return result;
   }
 
   // No mapping needed, load directly
   return loadFont(googleFont);
-}
-
-/**
- * Create a CSS font-family alias by fetching the Google Fonts CSS and
- * rewriting it to use the original font name.
- *
- * @param originalName - The original font name (e.g., "Garamond")
- * @param googleFontName - The Google Font name (e.g., "EB Garamond")
- */
-async function createFontAlias(originalName: string, googleFontName: string): Promise<void> {
-  // Create a style element with @font-face that aliases the original name
-  const styleId = `font-alias-${originalName.toLowerCase().replace(/\s+/g, '-')}`;
-
-  // Don't create duplicate aliases
-  if (document.getElementById(styleId)) {
-    return;
-  }
-
-  try {
-    // Fetch the Google Fonts CSS to get the actual font URLs
-    const url = getGoogleFontsUrl(googleFontName, [400, 700], ['normal', 'italic']);
-    const response = await fetch(url);
-
-    if (!response.ok) {
-      console.warn(`Failed to fetch Google Fonts CSS for "${googleFontName}": ${response.status}`);
-      return;
-    }
-
-    const css = await response.text();
-
-    // Replace the Google Font name with the original name in all @font-face rules
-    // The CSS contains: font-family: 'EB Garamond';
-    // We want: font-family: 'Garamond';
-    const regex = new RegExp(`font-family:\\s*['"]${escapeRegExp(googleFontName)}['"]`, 'gi');
-    const aliasedCss = css.replace(regex, `font-family: '${originalName}'`);
-
-    const style = document.createElement('style');
-    style.id = styleId;
-    style.textContent = aliasedCss;
-
-    document.head.appendChild(style);
-    // Font loaded successfully
-  } catch (error) {
-    console.warn(`Failed to create font alias for "${originalName}":`, error);
-  }
-}
-
-/**
- * Escape special regex characters in a string
- */
-function escapeRegExp(string: string): string {
-  return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
 /**

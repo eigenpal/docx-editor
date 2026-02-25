@@ -121,10 +121,10 @@ function calculateTypographyMetrics(
   const ascent = metrics?.ascent ?? fontSizePx * 0.8;
   const descent = metrics?.descent ?? fontSizePx * 0.2;
 
-  // Base line height should match CSS rendering (em-box based, not ink bounding box)
-  // Use metrics.lineHeight if available (already calculated correctly in getFontMetrics)
-  // This is fontSizePx * 1.15 which matches what browsers render
-  const defaultLineHeight = metrics?.lineHeight ?? fontSizePx * DEFAULT_LINE_HEIGHT_MULTIPLIER;
+  // Font's "single line" height — the base for OOXML lineRule="auto" multipliers.
+  // metrics.lineHeight comes from fontBoundingBox (our best approximation of Word's
+  // OS/2 usWinAscent+usWinDescent). Falls back to fontSizePx * 1.15.
+  const singleLineHeight = metrics?.lineHeight ?? fontSizePx * DEFAULT_LINE_HEIGHT_MULTIPLIER;
 
   // Apply line spacing rules
   let lineHeight: number;
@@ -134,17 +134,20 @@ function calculateTypographyMetrics(
     lineHeight = spacing.line;
   } else if (spacing?.lineRule === 'atLeast' && spacing.line !== undefined) {
     // At least: use specified height or natural height, whichever is larger
-    lineHeight = Math.max(spacing.line, defaultLineHeight);
+    lineHeight = Math.max(spacing.line, singleLineHeight);
   } else if (spacing?.line !== undefined && spacing?.lineUnit === 'multiplier') {
     // Multiplier: In OOXML, lineRule="auto" the line value is a percentage of
-    // single line spacing. line=240 → 1.0x, line=480 → 2.0x
-    lineHeight = defaultLineHeight * spacing.line;
+    // single line spacing. line=240 → 1.0x (single), line=480 → 2.0x (double)
+    // Word's default style uses line=276 → 1.15x of single.
+    lineHeight = singleLineHeight * spacing.line;
   } else if (spacing?.line !== undefined && spacing?.lineUnit === 'px') {
     // Pixel value
     lineHeight = spacing.line;
   } else {
-    // Default: Word's single line spacing (1.15x) - already in defaultLineHeight
-    lineHeight = defaultLineHeight;
+    // No explicit spacing — use the font's single line height.
+    // Word's default paragraph style applies line=276 (1.15x) on top of this,
+    // but that comes through the style resolver, not here.
+    lineHeight = singleLineHeight;
   }
 
   return { ascent, descent, lineHeight };

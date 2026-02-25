@@ -27,6 +27,7 @@ import {
   type TabContext,
   type TabStop as TabCalcStop,
 } from '../prosemirror/utils/tabCalculator';
+import { resolveFontFamily } from '../utils/fontResolver';
 
 /**
  * CSS class names for paragraph rendering
@@ -116,20 +117,12 @@ function isFieldRun(run: Run): run is FieldRun {
 /**
  * Apply text run styles to an element
  */
-/**
- * Font fallback chain - MUST match measureContainer.ts to ensure
- * measurement and rendering use the same fonts
- */
-const FONT_FALLBACK = '"Segoe UI", Arial, sans-serif';
-
 function applyRunStyles(element: HTMLElement, run: TextRun | TabRun): void {
   // Font properties
   if (run.fontFamily) {
-    // Quote font names with spaces for proper CSS
-    // Use the same fallback chain as measureContainer.ts to ensure
-    // text renders with the same widths as measured
-    const fontName = run.fontFamily.includes(' ') ? `"${run.fontFamily}"` : run.fontFamily;
-    element.style.fontFamily = `${fontName}, ${FONT_FALLBACK}`;
+    // Use the font resolver for category-appropriate fallback stacks,
+    // matching the same stacks used in measureContainer.ts
+    element.style.fontFamily = resolveFontFamily(run.fontFamily).cssFallback;
   }
   if (run.fontSize) {
     // fontSize is in points - convert to pixels to match Canvas measurement
@@ -568,11 +561,12 @@ function createTextMeasurer(
 
   return (text: string, fontSize = 11, fontFamily = 'Calibri') => {
     if (!ctx) return text.length * 7; // Fallback estimate
-    // Use same fallback chain as measureContainer.ts to ensure consistent measurements
-    const fontName = fontFamily.includes(' ') ? `"${fontFamily}"` : fontFamily;
+    // Use font resolver for category-appropriate fallback stacks,
+    // matching measureContainer.ts
+    const cssFallback = resolveFontFamily(fontFamily).cssFallback;
     // Convert pt to px for canvas (1pt = 96/72 px)
     const fontSizePx = (fontSize * 96) / 72;
-    ctx.font = `${fontSizePx}px ${fontName}, ${FONT_FALLBACK}`;
+    ctx.font = `${fontSizePx}px ${cssFallback}`;
     return ctx.measureText(text).width;
   };
 }

@@ -11,6 +11,8 @@
  *   falling back to fontSize * 1.15 (Word 2007+ "single" line spacing)
  */
 
+import { resolveFontFamily } from '../../utils/fontResolver';
+
 // Constants for OOXML unit conversions
 const TWIPS_PER_INCH = 1440;
 const PX_PER_INCH = 96; // Standard CSS/DOM DPI
@@ -95,11 +97,20 @@ export function resetCanvasContext(): void {
   canvasContext = null;
 }
 
+/** Cache for resolved font CSS fallback strings */
+const fontFallbackCache = new Map<string, string>();
+
 /**
- * Default font fallback chain - must match what renderPage.ts uses
- * This ensures Canvas measurement matches actual DOM rendering.
+ * Get the CSS fallback string for a font family, with caching.
  */
-const FONT_FALLBACK = '"Segoe UI", Arial, sans-serif';
+function getResolvedFallback(fontFamily: string): string {
+  let fallback = fontFallbackCache.get(fontFamily);
+  if (fallback === undefined) {
+    fallback = resolveFontFamily(fontFamily).cssFallback;
+    fontFallbackCache.set(fontFamily, fallback);
+  }
+  return fallback;
+}
 
 /**
  * Build a CSS font string from styling properties
@@ -107,12 +118,13 @@ const FONT_FALLBACK = '"Segoe UI", Arial, sans-serif';
  * Font sizes are in points and need to be converted to pixels for canvas.
  * 1pt = 96/72 px ≈ 1.333px at standard web DPI.
  *
- * IMPORTANT: Uses the same font fallback chain as renderPage.ts to ensure
- * Canvas measurements match actual DOM rendering widths.
+ * Uses the font resolver to get category-appropriate fallback stacks
+ * (serif fonts get serif fallbacks, sans-serif get sans-serif, etc.)
+ * matching the same stacks used in rendering for consistent measurements.
  *
  * @example
  * buildFontString({ fontFamily: "Arial", fontSize: 12, bold: true })
- * // Returns: "bold 16px Arial, "Segoe UI", Arial, sans-serif" (12pt = 16px)
+ * // Returns: "bold 16px Arial, Arimo, Helvetica, sans-serif" (12pt = 16px)
  */
 export function buildFontString(style: FontStyle): string {
   const parts: string[] = [];
@@ -125,11 +137,9 @@ export function buildFontString(style: FontStyle): string {
   const fontSizePx = ptToPx(fontSizePt);
   parts.push(`${fontSizePx}px`);
 
-  // Use the same font fallback chain as the renderer to ensure
-  // measurements match actual rendering
+  // Use the font resolver for category-appropriate fallback stacks
   const fontFamily = style.fontFamily ?? DEFAULT_FONT_FAMILY;
-  const fontName = fontFamily.includes(' ') ? `"${fontFamily}"` : fontFamily;
-  parts.push(`${fontName}, ${FONT_FALLBACK}`);
+  parts.push(getResolvedFallback(fontFamily));
 
   return parts.join(' ');
 }
@@ -168,9 +178,13 @@ export function getFontMetrics(style: FontStyle): FontMetrics {
       descent = metrics.actualBoundingBoxDescent;
     }
 
-    // Use font design metrics (OS/2 table) for line height when available.
-    // fontBoundingBox represents the font's design metrics, giving per-font
-    // natural line heights that match Word's behavior.
+    // Use fontBoundingBox as the font's "single line" height.
+    // This is the browser's best approximation of the OS/2 table metrics
+    // (usWinAscent + usWinDescent) that Word uses for lineRule="auto".
+    // It serves as the base for OOXML multiplier calculations:
+    //   line=240 (Single) → 1.0x of this value
+    //   line=276 (1.15x)  → 1.15x of this value
+    //   line=480 (Double)  → 2.0x of this value
     if (
       typeof metrics.fontBoundingBoxAscent === 'number' &&
       typeof metrics.fontBoundingBoxDescent === 'number'
