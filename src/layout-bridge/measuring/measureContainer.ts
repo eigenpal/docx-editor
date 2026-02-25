@@ -45,6 +45,8 @@ export interface FontMetrics {
   descent: number;
   lineHeight: number;
   fontFamily: string;
+  /** OS/2 single-line ratio for OOXML line spacing calculation */
+  singleLineRatio: number;
 }
 
 /**
@@ -97,19 +99,33 @@ export function resetCanvasContext(): void {
   canvasContext = null;
 }
 
-/** Cache for resolved font CSS fallback strings */
-const fontFallbackCache = new Map<string, string>();
+/** Cached resolved font data (CSS fallback + single-line ratio) */
+interface ResolvedFontCache {
+  cssFallback: string;
+  singleLineRatio: number;
+}
+
+/** Cache for resolved font data */
+const fontResolvedCache = new Map<string, ResolvedFontCache>();
+
+/**
+ * Get the resolved font data for a font family, with caching.
+ */
+function getResolvedData(fontFamily: string): ResolvedFontCache {
+  let cached = fontResolvedCache.get(fontFamily);
+  if (cached === undefined) {
+    const resolved = resolveFontFamily(fontFamily);
+    cached = { cssFallback: resolved.cssFallback, singleLineRatio: resolved.singleLineRatio };
+    fontResolvedCache.set(fontFamily, cached);
+  }
+  return cached;
+}
 
 /**
  * Get the CSS fallback string for a font family, with caching.
  */
 function getResolvedFallback(fontFamily: string): string {
-  let fallback = fontFallbackCache.get(fontFamily);
-  if (fallback === undefined) {
-    fallback = resolveFontFamily(fontFamily).cssFallback;
-    fontFallbackCache.set(fontFamily, fallback);
-  }
-  return fallback;
+  return getResolvedData(fontFamily).cssFallback;
 }
 
 /**
@@ -191,12 +207,16 @@ export function getFontMetrics(style: FontStyle): FontMetrics {
   // Ensure line height is never smaller than actual glyph bounds
   lineHeight = Math.max(lineHeight, ascent + descent);
 
+  // Look up OS/2 single-line ratio for OOXML line spacing
+  const singleLineRatio = getResolvedData(fontFamily).singleLineRatio;
+
   return {
     fontSize, // Keep in points for reference
     ascent,
     descent,
     lineHeight,
     fontFamily,
+    singleLineRatio,
   };
 }
 

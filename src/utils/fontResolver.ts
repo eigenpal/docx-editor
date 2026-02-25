@@ -21,6 +21,8 @@ export interface ResolvedFont {
   originalFont: string;
   /** Whether this font has a Google Fonts equivalent */
   hasGoogleEquivalent: boolean;
+  /** OS/2 single-line ratio: (usWinAscent + usWinDescent + externalLeading) / unitsPerEm */
+  singleLineRatio: number;
 }
 
 /**
@@ -35,13 +37,25 @@ interface FontMapping {
   googleFont: string;
   category: FontCategory;
   fallbackStack: string[];
+  /** OS/2 single-line ratio: (usWinAscent + usWinDescent + externalLeading) / unitsPerEm */
+  singleLineRatio: number;
 }
+
+/**
+ * Default OS/2 single-line ratio for unmapped fonts.
+ * Middle of the common range (1.07–1.27) for standard DOCX fonts.
+ */
+export const DEFAULT_SINGLE_LINE_RATIO = 1.15;
 
 /**
  * Mapping of common DOCX fonts to Google Fonts equivalents
  *
  * These are metrically compatible fonts that preserve document layout.
  * See: https://wiki.archlinux.org/title/Metric-compatible_fonts
+ *
+ * singleLineRatio values are derived from each font's OS/2 table:
+ * (usWinAscent + usWinDescent + externalLeading) / unitsPerEm
+ * These define the Windows GDI "single line" height that OOXML lineRule="auto" uses.
  */
 const FONT_MAPPINGS: Record<string, FontMapping> = {
   // Microsoft Office fonts -> Google equivalents (via Croscore)
@@ -49,26 +63,31 @@ const FONT_MAPPINGS: Record<string, FontMapping> = {
     googleFont: 'Carlito',
     category: 'sans-serif',
     fallbackStack: ['Calibri', 'Carlito', 'Arial', 'Helvetica', 'sans-serif'],
+    singleLineRatio: 1.2207, // 2500/2048
   },
   cambria: {
     googleFont: 'Caladea',
     category: 'serif',
     fallbackStack: ['Cambria', 'Caladea', 'Georgia', 'serif'],
+    singleLineRatio: 1.2676, // 2596/2048
   },
   arial: {
     googleFont: 'Arimo',
     category: 'sans-serif',
     fallbackStack: ['Arial', 'Arimo', 'Helvetica', 'sans-serif'],
+    singleLineRatio: 1.1499, // 2355/2048
   },
   'times new roman': {
     googleFont: 'Tinos',
     category: 'serif',
     fallbackStack: ['Times New Roman', 'Tinos', 'Times', 'serif'],
+    singleLineRatio: 1.1499, // 2355/2048
   },
   'courier new': {
     googleFont: 'Cousine',
     category: 'monospace',
     fallbackStack: ['Courier New', 'Cousine', 'Courier', 'monospace'],
+    singleLineRatio: 1.1328, // 2320/2048
   },
 
   // Additional common fonts
@@ -76,66 +95,79 @@ const FONT_MAPPINGS: Record<string, FontMapping> = {
     googleFont: 'Tinos', // Similar but not perfect match
     category: 'serif',
     fallbackStack: ['Georgia', 'Tinos', 'Times New Roman', 'serif'],
+    singleLineRatio: 1.1362, // 2327/2048
   },
   verdana: {
     googleFont: 'Open Sans', // Similar sans-serif
     category: 'sans-serif',
     fallbackStack: ['Verdana', 'Open Sans', 'Arial', 'sans-serif'],
+    singleLineRatio: 1.2153, // 2489/2048
   },
   tahoma: {
     googleFont: 'Open Sans',
     category: 'sans-serif',
     fallbackStack: ['Tahoma', 'Open Sans', 'Arial', 'sans-serif'],
+    singleLineRatio: 1.2075, // 2472/2048
   },
   'trebuchet ms': {
     googleFont: 'Fira Sans',
     category: 'sans-serif',
     fallbackStack: ['Trebuchet MS', 'Fira Sans', 'Arial', 'sans-serif'],
+    singleLineRatio: 1.1431, // 2341/2048
   },
   'comic sans ms': {
     googleFont: 'Comic Neue',
     category: 'cursive',
     fallbackStack: ['Comic Sans MS', 'Comic Neue', 'cursive'],
+    singleLineRatio: 1.3936, // 2854/2048
   },
   impact: {
     googleFont: 'Anton',
     category: 'sans-serif',
     fallbackStack: ['Impact', 'Anton', 'Arial Black', 'sans-serif'],
+    singleLineRatio: 1.2197, // 2498/2048
   },
   'palatino linotype': {
     googleFont: 'EB Garamond',
     category: 'serif',
     fallbackStack: ['Palatino Linotype', 'EB Garamond', 'Palatino', 'Georgia', 'serif'],
+    singleLineRatio: 1.0259, // 2101/2048
   },
   'book antiqua': {
     googleFont: 'EB Garamond',
     category: 'serif',
     fallbackStack: ['Book Antiqua', 'EB Garamond', 'Palatino', 'Georgia', 'serif'],
+    singleLineRatio: 1.0259, // 2101/2048
   },
   garamond: {
     googleFont: 'EB Garamond',
     category: 'serif',
     fallbackStack: ['Garamond', 'EB Garamond', 'Georgia', 'serif'],
+    singleLineRatio: 1.068, // 1068/1000
   },
   'century gothic': {
     googleFont: 'Questrial',
     category: 'sans-serif',
     fallbackStack: ['Century Gothic', 'Questrial', 'Arial', 'sans-serif'],
+    singleLineRatio: 1.1611, // 2378/2048
   },
   'lucida sans': {
     googleFont: 'Open Sans',
     category: 'sans-serif',
     fallbackStack: ['Lucida Sans', 'Open Sans', 'Arial', 'sans-serif'],
+    singleLineRatio: 1.1655, // 2387/2048
   },
   'lucida console': {
     googleFont: 'Cousine',
     category: 'monospace',
     fallbackStack: ['Lucida Console', 'Cousine', 'Courier New', 'monospace'],
+    singleLineRatio: 1.1387, // 2332/2048
   },
   consolas: {
     googleFont: 'Inconsolata',
     category: 'monospace',
     fallbackStack: ['Consolas', 'Inconsolata', 'Cousine', 'Courier New', 'monospace'],
+    singleLineRatio: 1.1626, // 2381/2048
   },
 
   // CJK fonts
@@ -143,26 +175,31 @@ const FONT_MAPPINGS: Record<string, FontMapping> = {
     googleFont: 'Noto Serif JP',
     category: 'serif',
     fallbackStack: ['MS Mincho', 'Noto Serif JP', 'serif'],
+    singleLineRatio: DEFAULT_SINGLE_LINE_RATIO,
   },
   'ms gothic': {
     googleFont: 'Noto Sans JP',
     category: 'sans-serif',
     fallbackStack: ['MS Gothic', 'Noto Sans JP', 'sans-serif'],
+    singleLineRatio: DEFAULT_SINGLE_LINE_RATIO,
   },
   simhei: {
     googleFont: 'Noto Sans SC',
     category: 'sans-serif',
     fallbackStack: ['SimHei', 'Noto Sans SC', 'sans-serif'],
+    singleLineRatio: DEFAULT_SINGLE_LINE_RATIO,
   },
   simsun: {
     googleFont: 'Noto Serif SC',
     category: 'serif',
     fallbackStack: ['SimSun', 'Noto Serif SC', 'serif'],
+    singleLineRatio: DEFAULT_SINGLE_LINE_RATIO,
   },
   'malgun gothic': {
     googleFont: 'Noto Sans KR',
     category: 'sans-serif',
     fallbackStack: ['Malgun Gothic', 'Noto Sans KR', 'sans-serif'],
+    singleLineRatio: DEFAULT_SINGLE_LINE_RATIO,
   },
 };
 
@@ -246,6 +283,7 @@ export function resolveFontFamily(docxFontName: string): ResolvedFont {
       cssFallback: mapping.fallbackStack.map(quoteFontName).join(', '),
       originalFont: docxFontName,
       hasGoogleEquivalent: true,
+      singleLineRatio: mapping.singleLineRatio,
     };
   }
 
@@ -258,6 +296,7 @@ export function resolveFontFamily(docxFontName: string): ResolvedFont {
     cssFallback: `${quoteFontName(docxFontName)}, ${defaultFallback}`,
     originalFont: docxFontName,
     hasGoogleEquivalent: false,
+    singleLineRatio: DEFAULT_SINGLE_LINE_RATIO,
   };
 }
 

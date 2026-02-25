@@ -27,6 +27,8 @@ import {
   type FontMetrics,
 } from './measureContainer';
 
+import { DEFAULT_SINGLE_LINE_RATIO } from '../../utils/fontResolver';
+
 // Default values - match Word 2007+ defaults and renderPage.ts
 const DEFAULT_FONT_SIZE = 11; // 11pt (Word 2007+ default)
 const DEFAULT_FONT_FAMILY = 'Calibri';
@@ -126,11 +128,15 @@ function calculateTypographyMetrics(
   // OOXML lineRule="auto" multipliers (w:line in 240ths):
   //   line=240 → 1.0x (single), line=276 → 1.15x (Word default), line=480 → 2.0x
   //
-  // The multiplier base is the font's natural line height. In Word this comes from
-  // the font's OS/2 table (usWinAscent + usWinDescent), which for standard fonts
-  // is approximately equal to fontSizePx. We use fontSizePx as the base because
-  // Canvas fontBoundingBox metrics are unreliable with Google Font substitutes
-  // (e.g., EB Garamond reports ~30% larger than original Garamond).
+  // The multiplier base is the font's "single line" height per OOXML spec (§17.3.1.33):
+  //   singleLine = (usWinAscent + usWinDescent + externalLeading) / unitsPerEm × fontSizePx
+  // This ratio is font-specific (1.07–1.27 for common fonts). We use a hardcoded
+  // lookup table of OS/2 metrics since Canvas fontBoundingBox is unreliable
+  // cross-platform (Mac uses hhea, not usWin) and Google Font substitutes
+  // report different metrics than the original fonts.
+  const ratio = metrics?.singleLineRatio ?? DEFAULT_SINGLE_LINE_RATIO;
+  const singleLineBase = fontSizePx * ratio;
+
   let lineHeight: number;
 
   if (spacing?.lineRule === 'exact' && spacing.line !== undefined) {
@@ -138,19 +144,19 @@ function calculateTypographyMetrics(
     lineHeight = spacing.line;
   } else if (spacing?.lineRule === 'atLeast' && spacing.line !== undefined) {
     // At least: use specified height or natural height, whichever is larger
-    const defaultHeight = fontSizePx * DEFAULT_LINE_HEIGHT_MULTIPLIER;
+    const defaultHeight = singleLineBase * DEFAULT_LINE_HEIGHT_MULTIPLIER;
     lineHeight = Math.max(spacing.line, defaultHeight);
   } else if (spacing?.line !== undefined && spacing?.lineUnit === 'multiplier') {
-    // Multiplier applied to font's natural line height (≈ fontSizePx)
-    lineHeight = fontSizePx * spacing.line;
+    // Multiplier applied to font's single-line height
+    lineHeight = singleLineBase * spacing.line;
   } else if (spacing?.line !== undefined && spacing?.lineUnit === 'px') {
     // Pixel value
     lineHeight = spacing.line;
   } else {
-    // No explicit spacing — Word 2007+ default is line=276 (1.15x of font size).
+    // No explicit spacing — Word 2007+ default is line=276 (1.15x of single-line height).
     // Most paragraphs get lineSpacing from the style resolver, so this branch
     // is a fallback for paragraphs with no style and no direct formatting.
-    lineHeight = fontSizePx * DEFAULT_LINE_HEIGHT_MULTIPLIER;
+    lineHeight = singleLineBase * DEFAULT_LINE_HEIGHT_MULTIPLIER;
   }
 
   return { ascent, descent, lineHeight };
