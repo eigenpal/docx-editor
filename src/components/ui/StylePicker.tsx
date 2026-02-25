@@ -123,12 +123,23 @@ const STYLE_PREVIEW_SIZES: Record<string, number> = {
 };
 
 /**
- * Get inline styles for a style option's visual preview
+ * Get inline styles for a style option's visual preview.
+ * Uses hardcoded preview sizes for well-known styles (Title, Heading1, etc.)
+ * and derives a clamped size from the style's fontSize for custom styles.
  */
 function getStylePreviewCSS(style: StyleOption): React.CSSProperties {
   const css: React.CSSProperties = {};
 
-  css.fontSize = `${STYLE_PREVIEW_SIZES[style.styleId] ?? 14}px`;
+  // Use hardcoded size for well-known styles, otherwise derive from fontSize (half-points → px)
+  const knownSize = STYLE_PREVIEW_SIZES[style.styleId];
+  if (knownSize) {
+    css.fontSize = `${knownSize}px`;
+  } else {
+    // fontSize is in half-points; convert to pt then clamp for dropdown readability
+    const pt = style.fontSize ? style.fontSize / 2 : 11;
+    const px = Math.min(Math.max(pt, 11), 20);
+    css.fontSize = `${px}px`;
+  }
   css.lineHeight = '1.3';
 
   if (style.bold) {
@@ -163,53 +174,35 @@ export function StylePicker({
       return DEFAULT_STYLES;
     }
 
-    // Only show the core set matching Google Docs
-    const ALLOWED_STYLE_IDS = new Set([
-      'Normal',
-      'Title',
-      'Subtitle',
-      'Heading1',
-      'Heading2',
-      'Heading3',
-      'Heading4',
-      'Heading5',
-      'Heading6',
-    ]);
-
-    // Build options from document styles
+    // Show all paragraph styles that are visible:
+    // - Not hidden and not semiHidden, OR
+    // - Marked as qFormat (quick format / gallery style)
     const docStyles = styles
       .filter((s) => s.type === 'paragraph')
-      .filter((s) => ALLOWED_STYLE_IDS.has(s.styleId))
-      .map((s) => ({
-        styleId: s.styleId,
-        name: s.name || s.styleId,
-        type: s.type,
-        isDefault: s.default,
-        qFormat: s.qFormat,
-        priority: s.uiPriority ?? 99,
-        // Extract visual properties from rPr
-        fontSize: s.rPr?.fontSize,
-        bold: s.rPr?.bold,
-        italic: s.rPr?.italic,
-        color: s.rPr?.color?.rgb,
-      }));
-
-    // Merge with defaults to ensure visual info is available
-    const merged = docStyles.map((ds) => {
-      const defaultStyle = DEFAULT_STYLES.find((d) => d.styleId === ds.styleId);
-      return {
-        ...defaultStyle,
-        ...ds,
-        // Use default visual props if not in document style
-        fontSize: ds.fontSize ?? defaultStyle?.fontSize,
-        bold: ds.bold ?? defaultStyle?.bold,
-        italic: ds.italic ?? defaultStyle?.italic,
-        color: ds.color ?? defaultStyle?.color,
-      };
-    });
+      .filter((s) => {
+        if (s.qFormat) return true;
+        if (s.hidden || s.semiHidden) return false;
+        return true;
+      })
+      .map((s) => {
+        const defaultStyle = DEFAULT_STYLES.find((d) => d.styleId === s.styleId);
+        return {
+          styleId: s.styleId,
+          name: s.name || s.styleId,
+          type: s.type,
+          isDefault: s.default,
+          qFormat: s.qFormat,
+          priority: s.uiPriority ?? 99,
+          // Extract visual properties from rPr, fall back to hardcoded defaults
+          fontSize: s.rPr?.fontSize ?? defaultStyle?.fontSize,
+          bold: s.rPr?.bold ?? defaultStyle?.bold,
+          italic: s.rPr?.italic ?? defaultStyle?.italic,
+          color: s.rPr?.color?.rgb ?? defaultStyle?.color,
+        };
+      });
 
     // Sort by priority
-    return merged.sort((a, b) => (a.priority ?? 99) - (b.priority ?? 99));
+    return docStyles.sort((a, b) => (a.priority ?? 99) - (b.priority ?? 99));
   }, [styles]);
 
   const handleValueChange = React.useCallback(
