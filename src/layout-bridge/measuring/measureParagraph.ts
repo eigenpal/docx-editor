@@ -121,12 +121,16 @@ function calculateTypographyMetrics(
   const ascent = metrics?.ascent ?? fontSizePx * 0.8;
   const descent = metrics?.descent ?? fontSizePx * 0.2;
 
-  // Font's "single line" height — the base for OOXML lineRule="auto" multipliers.
-  // metrics.lineHeight comes from fontBoundingBox (our best approximation of Word's
-  // OS/2 usWinAscent+usWinDescent). Falls back to fontSizePx * 1.15.
-  const singleLineHeight = metrics?.lineHeight ?? fontSizePx * DEFAULT_LINE_HEIGHT_MULTIPLIER;
-
   // Apply line spacing rules
+  //
+  // OOXML lineRule="auto" multipliers (w:line in 240ths):
+  //   line=240 → 1.0x (single), line=276 → 1.15x (Word default), line=480 → 2.0x
+  //
+  // The multiplier base is the font's natural line height. In Word this comes from
+  // the font's OS/2 table (usWinAscent + usWinDescent), which for standard fonts
+  // is approximately equal to fontSizePx. We use fontSizePx as the base because
+  // Canvas fontBoundingBox metrics are unreliable with Google Font substitutes
+  // (e.g., EB Garamond reports ~30% larger than original Garamond).
   let lineHeight: number;
 
   if (spacing?.lineRule === 'exact' && spacing.line !== undefined) {
@@ -134,20 +138,19 @@ function calculateTypographyMetrics(
     lineHeight = spacing.line;
   } else if (spacing?.lineRule === 'atLeast' && spacing.line !== undefined) {
     // At least: use specified height or natural height, whichever is larger
-    lineHeight = Math.max(spacing.line, singleLineHeight);
+    const defaultHeight = fontSizePx * DEFAULT_LINE_HEIGHT_MULTIPLIER;
+    lineHeight = Math.max(spacing.line, defaultHeight);
   } else if (spacing?.line !== undefined && spacing?.lineUnit === 'multiplier') {
-    // Multiplier: In OOXML, lineRule="auto" the line value is a percentage of
-    // single line spacing. line=240 → 1.0x (single), line=480 → 2.0x (double)
-    // Word's default style uses line=276 → 1.15x of single.
-    lineHeight = singleLineHeight * spacing.line;
+    // Multiplier applied to font's natural line height (≈ fontSizePx)
+    lineHeight = fontSizePx * spacing.line;
   } else if (spacing?.line !== undefined && spacing?.lineUnit === 'px') {
     // Pixel value
     lineHeight = spacing.line;
   } else {
-    // No explicit spacing — use the font's single line height.
-    // Word's default paragraph style applies line=276 (1.15x) on top of this,
-    // but that comes through the style resolver, not here.
-    lineHeight = singleLineHeight;
+    // No explicit spacing — Word 2007+ default is line=276 (1.15x of font size).
+    // Most paragraphs get lineSpacing from the style resolver, so this branch
+    // is a fallback for paragraphs with no style and no direct formatting.
+    lineHeight = fontSizePx * DEFAULT_LINE_HEIGHT_MULTIPLIER;
   }
 
   return { ascent, descent, lineHeight };

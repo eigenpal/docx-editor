@@ -178,19 +178,12 @@ export function getFontMetrics(style: FontStyle): FontMetrics {
       descent = metrics.actualBoundingBoxDescent;
     }
 
-    // Use fontBoundingBox as the font's "single line" height.
-    // This is the browser's best approximation of the OS/2 table metrics
-    // (usWinAscent + usWinDescent) that Word uses for lineRule="auto".
-    // It serves as the base for OOXML multiplier calculations:
-    //   line=240 (Single) → 1.0x of this value
-    //   line=276 (1.15x)  → 1.15x of this value
-    //   line=480 (Double)  → 2.0x of this value
-    if (
-      typeof metrics.fontBoundingBoxAscent === 'number' &&
-      typeof metrics.fontBoundingBoxDescent === 'number'
-    ) {
-      lineHeight = metrics.fontBoundingBoxAscent + metrics.fontBoundingBoxDescent;
-    }
+    // Note: We intentionally do NOT use fontBoundingBoxAscent/Descent for lineHeight.
+    // When Google Font substitutes are used (e.g., EB Garamond for Garamond),
+    // their fontBoundingBox metrics are significantly larger than the original font's
+    // OS/2 metrics that Word uses (e.g., EB Garamond 12pt: 21px vs Garamond: 18px).
+    // Using fontSize * 1.15 as the base provides a better approximation of Word's
+    // single-line spacing across all fonts, including substitutes.
   } catch {
     // Use fallback ratio-based values
   }
