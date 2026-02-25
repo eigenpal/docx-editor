@@ -16,7 +16,7 @@ import {
 import { createExtension } from '../create';
 import { Priority } from '../types';
 import type { ExtensionRuntime, ExtensionContext } from '../types';
-import type { Command } from 'prosemirror-state';
+import type { Command, Transaction } from 'prosemirror-state';
 
 function chainCommands(...commands: Command[]): Command {
   return (state, dispatch, view) => {
@@ -69,32 +69,117 @@ const clearIndentOnBackspace: Command = (state, dispatch) => {
 };
 
 /**
- * Custom Enter handler that splits the block and clears paragraph borders
- * on the new paragraph. In Word, pressing Enter does NOT propagate paragraph
- * borders (w:pBdr) to the new paragraph. This matches that behavior.
+ * Custom Enter handler: splits the block, inherits style-related attrs,
+ * clears paragraph borders, and preserves font marks on the new paragraph.
+ *
+ * splitBlock creates a new paragraph with default attrs (all null),
+ * so we must manually copy style-related attrs from the source paragraph.
+ * Word does NOT propagate paragraph borders (w:pBdr) on Enter.
  */
+const INHERITED_PARA_ATTRS = [
+  'defaultTextFormatting',
+  'styleId',
+  'lineSpacing',
+  'lineSpacingRule',
+  'spaceAfter',
+  'spaceBefore',
+  'contextualSpacing',
+] as const;
+
+/** Mark types that represent style-inherited formatting (font, size, color). */
+const STYLE_MARK_NAMES = new Set(['fontFamily', 'fontSize', 'textColor']);
+
 const splitBlockClearBorders: Command = (state, dispatch, view) => {
-  // First, perform the standard split
-  if (!splitBlock(state, dispatch, view)) {
+  // Capture source paragraph info BEFORE split (splitBlock resets everything)
+  const { $from: preSplitFrom } = state.selection;
+  const sourcePara = preSplitFrom.parent.type.name === 'paragraph' ? preSplitFrom.parent : null;
+
+  // Collect style marks from the cursor position before splitting.
+  // Use storedMarks if set, otherwise resolve from the position.
+  const preMarks = state.storedMarks || preSplitFrom.marks();
+  const styleMarks = preMarks.filter((m) => STYLE_MARK_NAMES.has(m.type.name));
+
+  // Intercept splitBlock's transaction so we can modify it before dispatch.
+  // This ensures attrs + stored marks are set in a single transaction,
+  // avoiding a flash where the empty paragraph has no formatting.
+  let splitTr: Transaction | null = null;
+  const capturingDispatch = dispatch
+    ? (tr: Transaction) => {
+        splitTr = tr;
+      }
+    : undefined;
+
+  if (!splitBlock(state, capturingDispatch, view)) {
     return false;
   }
 
-  // After split, the cursor is in the new (second) paragraph.
-  // We need to clear borders on it. Since splitBlock already dispatched,
-  // we need to work with the updated state from the view.
-  if (dispatch && view) {
-    const newState = view.state;
-    const { $from } = newState.selection;
-    const paragraph = $from.parent;
+  if (dispatch && splitTr !== null) {
+    // After split, cursor is in the new (second) paragraph.
+    // Apply attr inheritance, border clearing, and stored marks to the SAME transaction.
+    const tr = splitTr as Transaction;
+    const { $from } = tr.selection;
+    const newPara = $from.parent;
 
-    if (paragraph.type.name === 'paragraph' && paragraph.attrs.borders) {
-      const pos = $from.before();
-      const tr = newState.tr.setNodeMarkup(pos, undefined, {
-        ...paragraph.attrs,
-        borders: null,
-      });
-      dispatch(tr.scrollIntoView());
+    if (newPara.type.name === 'paragraph') {
+      const newAttrs = { ...newPara.attrs };
+      let attrsChanged = false;
+
+      // Copy inherited attrs from source paragraph
+      if (sourcePara) {
+        for (const key of INHERITED_PARA_ATTRS) {
+          const srcVal = sourcePara.attrs[key];
+          if (srcVal != null && newAttrs[key] == null) {
+            newAttrs[key] = srcVal;
+            attrsChanged = true;
+          }
+        }
+      }
+
+      // Clear borders (Word does not propagate paragraph borders on Enter)
+      if (newAttrs.borders) {
+        newAttrs.borders = null;
+        attrsChanged = true;
+      }
+
+      if (attrsChanged) {
+        tr.setNodeMarkup($from.before(), undefined, newAttrs);
+      }
+
+      // For empty paragraphs (Enter at end of line), set stored marks so typed text
+      // inherits font family, font size, and text color. We skip bold/italic/etc —
+      // Word doesn't carry direct formatting to new paragraphs.
+      if (newPara.textContent.length === 0 && styleMarks.length > 0) {
+        // Sync defaultTextFormatting with the actual cursor marks so the empty
+        // paragraph measurement (used for caret height) matches the stored marks.
+        const dtf = { ...(newAttrs.defaultTextFormatting ?? {}) };
+        let dtfChanged = false;
+        for (const m of styleMarks) {
+          if (m.type.name === 'fontSize' && m.attrs.size !== dtf.fontSize) {
+            dtf.fontSize = m.attrs.size;
+            dtfChanged = true;
+          }
+          if (m.type.name === 'fontFamily') {
+            const ascii = m.attrs.ascii as string | undefined;
+            if (ascii && (!dtf.fontFamily || dtf.fontFamily.ascii !== ascii)) {
+              dtf.fontFamily = { ...dtf.fontFamily, ascii, hAnsi: m.attrs.hAnsi };
+              dtfChanged = true;
+            }
+          }
+        }
+        if (dtfChanged) {
+          tr.setNodeMarkup($from.before(), undefined, {
+            ...newAttrs,
+            defaultTextFormatting: dtf,
+          });
+        }
+
+        // IMPORTANT: setStoredMarks MUST be called AFTER all setNodeMarkup calls.
+        // setNodeMarkup adds a ReplaceStep which clears storedMarks on the transaction.
+        tr.setStoredMarks(styleMarks);
+      }
     }
+
+    dispatch(tr.scrollIntoView());
   }
 
   return true;

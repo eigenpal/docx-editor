@@ -454,7 +454,10 @@ export function measureParagraph(
    */
   const updateMaxFont = (style: FontStyle): void => {
     const fontSize = style.fontSize ?? DEFAULT_FONT_SIZE;
-    if (fontSize > currentLine.maxFontSize) {
+    // Update when this is the first run on the line (maxFontMetrics not yet set)
+    // or when we find a larger font size. Without the !maxFontMetrics check,
+    // lines with only <11pt text would use the 11pt default, inflating line height.
+    if (!currentLine.maxFontMetrics || fontSize > currentLine.maxFontSize) {
       currentLine.maxFontSize = fontSize;
       currentLine.maxFontMetrics = getFontMetrics(style);
     }
