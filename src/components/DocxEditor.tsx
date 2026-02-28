@@ -2205,7 +2205,7 @@ body { background: white; }
                     style={{
                       position: 'absolute',
                       left: 0,
-                      top: 0,
+                      top: 108,
                       paddingTop: 20,
                       zIndex: 10,
                     }}
