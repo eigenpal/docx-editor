@@ -11,8 +11,10 @@ Thumbs.db
 # Debug screenshots/images in root
 /*.png
 
-# Claude MCP config (local dev tool)
-.mcp.json
+# Claude Code (local-only files)
+.claude/settings.local.json
+.claude/CLAUDE.local.md
+.claude/worktrees/
 
 # IDE
 .idea/
