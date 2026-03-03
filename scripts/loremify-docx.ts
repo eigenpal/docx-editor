@@ -19,6 +19,7 @@ type CliOptions = {
   help: boolean;
   inPlace: boolean;
   allXml: boolean;
+  stripMedia: boolean;
   outDir?: string;
   suffix: string;
   inputs: string[];
@@ -27,6 +28,8 @@ type CliOptions = {
 type FileStats = {
   xmlFilesUpdated: number;
   wordsReplaced: number;
+  mediaFilesRemoved: number;
+  metadataFieldsSanitized: number;
 };
 
 const HELP_TEXT = `docx loremifier
@@ -39,6 +42,7 @@ OPTIONS:
   --suffix <text>   Output filename suffix (default: .lorem)
   --in-place        Overwrite original file(s)
   --all-xml         Replace text in every XML part (advanced)
+  --strip-media     Remove embedded files in word/media and image references
   -h, --help        Show this help text
 
 EXAMPLES:
@@ -83,7 +87,25 @@ const XML_ENTITIES: Record<string, string> = {
   apos: "'",
 };
 
-class LoremWordGenerator {
+const CORE_PROPERTIES_RULES: Array<{ tagName: string; replacement: string }> = [
+  { tagName: 'dc:creator', replacement: 'Sanitized' },
+  { tagName: 'cp:lastModifiedBy', replacement: 'Sanitized' },
+  { tagName: 'cp:revision', replacement: '1' },
+  { tagName: 'dc:title', replacement: '' },
+  { tagName: 'dc:subject', replacement: '' },
+  { tagName: 'dc:description', replacement: '' },
+  { tagName: 'cp:keywords', replacement: '' },
+  { tagName: 'cp:category', replacement: '' },
+  { tagName: 'cp:contentStatus', replacement: '' },
+];
+
+const APP_PROPERTIES_RULES: Array<{ tagName: string; replacement: string }> = [
+  { tagName: 'Company', replacement: 'Sanitized' },
+  { tagName: 'Manager', replacement: 'Sanitized' },
+  { tagName: 'HyperlinkBase', replacement: '' },
+];
+
+export class LoremWordGenerator {
   private index = 0;
 
   next(wordLength: number): string {
@@ -107,7 +129,7 @@ function fitWordToLength(base: string, targetLength: number): string {
   return value.slice(0, targetLength);
 }
 
-function applyCasing(source: string, replacement: string): string {
+export function applyCasing(source: string, replacement: string): string {
   if (source.toUpperCase() === source) {
     return replacement.toUpperCase();
   }
@@ -127,7 +149,7 @@ function applyCasing(source: string, replacement: string): string {
   return replacement;
 }
 
-function decodeXmlEntities(value: string): string {
+export function decodeXmlEntities(value: string): string {
   return value.replace(/&(#x?[0-9a-fA-F]+|amp|lt|gt|quot|apos);/g, (full, entity) => {
     if (entity in XML_ENTITIES) {
       return XML_ENTITIES[entity];
@@ -157,12 +179,89 @@ function escapeXmlText(value: string): string {
   return value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
-function replaceWordsKeepingLengths(
+function escapeRegex(text: string): string {
+  return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function replaceTagValue(
+  xml: string,
+  tagName: string,
+  replacement: string
+): { xml: string; replacements: number } {
+  const pattern = new RegExp(
+    `<(${escapeRegex(tagName)})(\\s[^>]*)?>([\\s\\S]*?)<\\/\\1>`,
+    'g'
+  );
+
+  let replacements = 0;
+  const updatedXml = xml.replace(pattern, (_full, fullTagName: string, attrs: string) => {
+    replacements += 1;
+    return `<${fullTagName}${attrs ?? ''}>${escapeXmlText(replacement)}</${fullTagName}>`;
+  });
+
+  return { xml: updatedXml, replacements };
+}
+
+export function sanitizeMetadataXml(zipPath: string, xml: string): { xml: string; sanitizedFields: number } {
+  const lower = zipPath.toLowerCase();
+  const rules =
+    lower === 'docprops/core.xml'
+      ? CORE_PROPERTIES_RULES
+      : lower === 'docprops/app.xml'
+        ? APP_PROPERTIES_RULES
+        : undefined;
+
+  if (!rules) {
+    return { xml, sanitizedFields: 0 };
+  }
+
+  let updatedXml = xml;
+  let sanitizedFields = 0;
+
+  for (const rule of rules) {
+    const result = replaceTagValue(updatedXml, rule.tagName, rule.replacement);
+    updatedXml = result.xml;
+    sanitizedFields += result.replacements;
+  }
+
+  return { xml: updatedXml, sanitizedFields };
+}
+
+export function stripMediaReferencesFromRels(xml: string): string {
+  return xml.replace(
+    /<Relationship\b[^>]*\bTarget=(["'])([^"']+)\1[^>]*\/>/gi,
+    (full, _quote, target: string) => {
+      const normalizedTarget = target.toLowerCase().replace(/\\/g, '/');
+      if (normalizedTarget.startsWith('media/') || normalizedTarget.includes('/media/')) {
+        return '';
+      }
+      return full;
+    }
+  );
+}
+
+export function stripMediaMarkupFromWordXml(xml: string): string {
+  const MARKUP_PATTERNS = [
+    /<(?:[\w.-]+:)?drawing\b[\s\S]*?<\/(?:[\w.-]+:)?drawing>/g,
+    /<(?:[\w.-]+:)?pict\b[\s\S]*?<\/(?:[\w.-]+:)?pict>/g,
+    /<(?:[\w.-]+:)?object\b[\s\S]*?<\/(?:[\w.-]+:)?object>/g,
+    /<(?:[\w.-]+:)?imagedata\b[^>]*\/>/g,
+  ];
+
+  let updatedXml = xml;
+  for (const pattern of MARKUP_PATTERNS) {
+    updatedXml = updatedXml.replace(pattern, '');
+  }
+
+  return updatedXml;
+}
+
+export function replaceWordsKeepingLengths(
   value: string,
   generator: LoremWordGenerator
 ): { text: string; replacedWords: number } {
   let replacedWords = 0;
-  const text = value.replace(/[\p{L}\p{N}]+/gu, (word) => {
+  const text = value.replace(/\p{L}+/gu, (word) => {
     replacedWords += 1;
     const replacement = generator.next(word.length);
     return applyCasing(word, replacement);
@@ -171,7 +270,10 @@ function replaceWordsKeepingLengths(
   return { text, replacedWords };
 }
 
-function loremifyXml(xml: string, generator: LoremWordGenerator): { xml: string; replacedWords: number } {
+export function loremifyXml(
+  xml: string,
+  generator: LoremWordGenerator
+): { xml: string; replacedWords: number } {
   let updatedXml = xml;
   let replacedWords = 0;
 
@@ -193,11 +295,12 @@ function loremifyXml(xml: string, generator: LoremWordGenerator): { xml: string;
   return { xml: updatedXml, replacedWords };
 }
 
-function parseArgs(argv: string[]): CliOptions {
+export function parseArgs(argv: string[]): CliOptions {
   const options: CliOptions = {
     help: false,
     inPlace: false,
     allXml: false,
+    stripMedia: false,
     suffix: '.lorem',
     inputs: [],
   };
@@ -217,6 +320,11 @@ function parseArgs(argv: string[]): CliOptions {
 
     if (arg === '--all-xml') {
       options.allXml = true;
+      continue;
+    }
+
+    if (arg === '--strip-media') {
+      options.stripMedia = true;
       continue;
     }
 
@@ -263,30 +371,75 @@ function getOutputPath(inputPath: string, options: CliOptions): string {
 
 async function loremifyDocxBuffer(
   buffer: Buffer,
-  options: Pick<CliOptions, 'allXml'>
+  options: Pick<CliOptions, 'allXml' | 'stripMedia'>
 ): Promise<{ output: Buffer; stats: FileStats }> {
   const zip = await JSZip.loadAsync(buffer);
   const generator = new LoremWordGenerator();
 
   let xmlFilesUpdated = 0;
   let wordsReplaced = 0;
+  let metadataFieldsSanitized = 0;
+  let mediaFilesRemoved = 0;
+
+  if (options.stripMedia) {
+    for (const [zipPath, zipFile] of Object.entries(zip.files)) {
+      if (!zipFile.dir && zipPath.toLowerCase().startsWith('word/media/')) {
+        zip.remove(zipPath);
+        mediaFilesRemoved += 1;
+      }
+    }
+  }
 
   for (const [zipPath, zipFile] of Object.entries(zip.files)) {
-    if (zipFile.dir || !zipPath.toLowerCase().endsWith('.xml')) {
-      continue;
-    }
+    const lower = zipPath.toLowerCase();
+    const isXml = lower.endsWith('.xml');
+    const isWordRels = /^word\/_rels\/.+\.rels$/.test(lower);
 
-    if (!shouldProcessXmlPart(zipPath, options.allXml)) {
+    if (zipFile.dir || (!isXml && !(options.stripMedia && isWordRels))) {
       continue;
     }
 
     const xml = await zipFile.async('text');
-    const result = loremifyXml(xml, generator);
-    wordsReplaced += result.replacedWords;
+    let updatedXml = xml;
+    let changed = false;
 
-    if (result.xml !== xml) {
+    if (isXml && shouldProcessXmlPart(zipPath, options.allXml)) {
+      const result = loremifyXml(updatedXml, generator);
+      updatedXml = result.xml;
+      wordsReplaced += result.replacedWords;
+      changed = changed || result.xml !== xml;
+    }
+
+    if (isXml) {
+      const metadataResult = sanitizeMetadataXml(zipPath, updatedXml);
+      if (metadataResult.sanitizedFields > 0) {
+        updatedXml = metadataResult.xml;
+        metadataFieldsSanitized += metadataResult.sanitizedFields;
+        changed = true;
+      }
+    }
+
+    if (options.stripMedia) {
+      if (lower.startsWith('word/') && lower.endsWith('.xml')) {
+        const withoutMarkup = stripMediaMarkupFromWordXml(updatedXml);
+        if (withoutMarkup !== updatedXml) {
+          updatedXml = withoutMarkup;
+          changed = true;
+        }
+      }
+
+      if (/^word\/_rels\/.+\.rels$/.test(lower)) {
+        const withoutMediaRelationships = stripMediaReferencesFromRels(updatedXml);
+        if (withoutMediaRelationships !== updatedXml) {
+          updatedXml = withoutMediaRelationships;
+          changed = true;
+        }
+      }
+    }
+
+    if (changed) {
       xmlFilesUpdated += 1;
-      zip.file(zipPath, result.xml, {
+      zip.file(zipPath, updatedXml, {
         compression: 'DEFLATE',
         compressionOptions: { level: 6 },
       });
@@ -301,7 +454,7 @@ async function loremifyDocxBuffer(
 
   return {
     output,
-    stats: { xmlFilesUpdated, wordsReplaced },
+    stats: { xmlFilesUpdated, wordsReplaced, mediaFilesRemoved, metadataFieldsSanitized },
   };
 }
 
@@ -342,6 +495,8 @@ async function processFile(inputPath: string, options: CliOptions): Promise<void
       `Output: ${outputPath}`,
       `Updated XML files: ${result.stats.xmlFilesUpdated}`,
       `Words replaced: ${result.stats.wordsReplaced}`,
+      `Metadata fields sanitized: ${result.stats.metadataFieldsSanitized}`,
+      `Media files removed: ${result.stats.mediaFilesRemoved}`,
       '',
     ].join('\n')
   );
@@ -368,8 +523,10 @@ async function main(): Promise<void> {
   }
 }
 
-main().catch((error) => {
-  const message = error instanceof Error ? error.message : String(error);
-  console.error(`Error: ${message}`);
-  process.exit(1);
-});
+if (import.meta.main) {
+  main().catch((error) => {
+    const message = error instanceof Error ? error.message : String(error);
+    console.error(`Error: ${message}`);
+    process.exit(1);
+  });
+}

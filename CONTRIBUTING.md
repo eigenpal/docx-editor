@@ -88,9 +88,13 @@ bun run docx:loremify -- "path/to/file.docx"
 
 # Or write sanitized files to a folder
 bun run docx:loremify -- "path/to/file.docx" --out-dir sanitized-docs
+
+# Also remove embedded media (images/screenshots/logos)
+bun run docx:loremify -- "path/to/file.docx" --strip-media
 ```
 
-The script preserves DOCX structure (tables, nesting, headers/footers, styles) and replaces words with lorem-style text while preserving per-word lengths.
+The script preserves DOCX structure (tables, nesting, headers/footers, styles), sanitizes document metadata in `docProps/core.xml` and `docProps/app.xml`, and replaces words with lorem-style text while preserving per-word lengths. Numeric characters are preserved.
+If you pass `--strip-media`, it also removes `word/media/*` files and image references from Word XML/relationship parts.
 
 ## License
 
