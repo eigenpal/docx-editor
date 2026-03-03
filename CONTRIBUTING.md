@@ -78,6 +78,24 @@ Open an issue at [github.com/eigenpal/docx-js-editor/issues](https://github.com/
 - Expected vs actual behavior
 - Attach a `.docx` file if relevant (remove sensitive content first)
 
+### Sanitizing DOCX Files for Bug Reports
+
+If your source document contains confidential text, you can generate a sanitized copy that keeps layout/formatting while replacing text content:
+
+```bash
+# Create a sanitized copy next to the original file
+bun run docx:loremify -- "path/to/file.docx"
+
+# Or write sanitized files to a folder
+bun run docx:loremify -- "path/to/file.docx" --out-dir sanitized-docs
+
+# Also remove embedded media (images/screenshots/logos)
+bun run docx:loremify -- "path/to/file.docx" --strip-media
+```
+
+The script preserves DOCX structure (tables, nesting, headers/footers, styles), sanitizes document metadata in `docProps/core.xml` and `docProps/app.xml`, and replaces words with lorem-style text while preserving per-word lengths. Numeric characters are preserved.
+If you pass `--strip-media`, it also removes `word/media/*` files and image references from Word XML/relationship parts.
+
 ## License
 
 By contributing, you agree that your contributions will be licensed under the [MIT License](LICENSE).

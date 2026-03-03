@@ -89,6 +89,7 @@
     "test:e2e": "npx playwright test",
     "test:e2e:ui": "npx playwright test --ui",
     "test:visual": "npx playwright test visual.spec.ts",
+    "docx:loremify": "bun scripts/loremify-docx.ts",
     "prepublishOnly": "bun test && NODE_ENV=production bun run build",
     "typecheck": "tsc --noEmit",
     "lint": "eslint src/",
