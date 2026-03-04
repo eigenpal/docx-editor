@@ -1,0 +1,65 @@
+# Dependencies
+node_modules/
+
+# Build outputs
+dist/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Debug screenshots/images in root
+/*.png
+
+# Claude Code (local-only files)
+.claude/settings.local.json
+.claude/CLAUDE.local.md
+.claude/worktrees/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Test coverage
+coverage/
+
+# Playwright
+playwright-report/
+test-results/
+
+screenshots/
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Lock files (optional - uncomment if you want to track)
+# bun.lock
+
+# Built packages
+*.tgz
+
+# npm lock file (using bun.lock)
+package-lock.json
+
+# Examples framework artifacts
+examples/*/node_modules/
+examples/plugins/*/node_modules/
+examples/*/.next/
+examples/*/.astro/
+examples/*/bun.lockb
+examples/*/package-lock.json
+examples/plugins/*/bun.lockb
+examples/plugins/*/package-lock.json
+
+# Reference documentation (large files - can be re-downloaded)
+reference/ecma-376/*.zip

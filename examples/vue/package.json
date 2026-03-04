@@ -1,0 +1,20 @@
+{
+  "name": "docx-editor-example-vue",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite --port 5174",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@eigenpal/docx-editor-vue": "workspace:*",
+    "@eigenpal/docx-core": "workspace:*",
+    "vue": "^3.5.0"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-vue": "^5.2.0",
+    "typescript": "^5.3.3",
+    "vite": "^7.3.1"
+  }
+}

@@ -1,0 +1,3 @@
+[test]
+# Exclude Playwright e2e tests - they should be run with `npx playwright test`
+root = "./packages"

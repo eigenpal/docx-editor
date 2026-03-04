@@ -1,0 +1,24 @@
+{
+  "name": "docx-editor-example-astro",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "astro dev --port 4321",
+    "build": "astro build",
+    "preview": "astro preview"
+  },
+  "dependencies": {
+    "@astrojs/react": "^4.2.1",
+    "@eigenpal/docx-js-editor": "^0.0.7",
+    "astro": "^5.8.5",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+  },
+  "devDependencies": {
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "autoprefixer": "^10.4.14",
+    "tailwindcss": "^3.4.0",
+    "typescript": "^5.3.3"
+  }
+}

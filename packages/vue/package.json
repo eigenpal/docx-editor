@@ -1,0 +1,46 @@
+{
+  "name": "@eigenpal/docx-editor-vue",
+  "version": "0.0.1",
+  "description": "Vue.js wrapper for the DOCX editor - community contributed",
+  "type": "module",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "typecheck": "tsc --noEmit"
+  },
+  "peerDependencies": {
+    "vue": "^3.0.0"
+  },
+  "dependencies": {
+    "@eigenpal/docx-core": "workspace:*"
+  },
+  "keywords": [
+    "docx",
+    "editor",
+    "vue",
+    "word",
+    "document"
+  ],
+  "author": "EigenPal",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/eigenpal/docx-js-editor.git",
+    "directory": "packages/vue"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}

@@ -1,0 +1,40 @@
+{
+  "compilerOptions": {
+    "target": "ES2020",
+    "useDefineForClassFields": true,
+    "lib": ["ES2020", "DOM", "DOM.Iterable"],
+    "module": "ESNext",
+    "skipLibCheck": true,
+    "moduleResolution": "bundler",
+    "allowImportingTsExtensions": true,
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "noEmit": true,
+    "jsx": "react-jsx",
+    "strict": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noFallthroughCasesInSwitch": true,
+    "declaration": true,
+    "declarationMap": true,
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["./packages/react/src/*"],
+      "@eigenpal/docx-js-editor": ["./packages/react/src/index.ts"],
+      "@eigenpal/docx-core": ["./packages/core/src/core.ts"],
+      "@eigenpal/docx-core/headless": ["./packages/core/src/headless.ts"],
+      "@eigenpal/docx-core/core-plugins": ["./packages/core/src/core-plugins/index.ts"],
+      "@eigenpal/docx-core/mcp": ["./packages/core/src/mcp/index.ts"],
+      "@eigenpal/docx-core/*": ["./packages/core/src/*"]
+    }
+  },
+  "include": [
+    "src",
+    "packages/core/src",
+    "packages/react/src",
+    "examples/shared",
+    "examples/vite",
+    "examples/plugins"
+  ],
+  "exclude": ["node_modules", "dist", "examples/nextjs", "examples/remix", "examples/astro"]
+}

@@ -1,0 +1,77 @@
+{
+  "name": "docx-editor-monorepo",
+  "version": "0.0.16",
+  "private": true,
+  "workspaces": [
+    "packages/*"
+  ],
+  "type": "module",
+  "scripts": {
+    "dev": "vite --config examples/vite/vite.config.ts",
+    "dev:nextjs": "cd examples/nextjs && npm run dev",
+    "dev:remix": "cd examples/remix && npm run dev",
+    "dev:astro": "cd examples/astro && npm run dev",
+    "dev:demo": "bash examples/dev-all.sh",
+    "build": "bun run --filter '@eigenpal/docx-core' build && bun run --filter '@eigenpal/docx-js-editor' build",
+    "build:demo": "vite build --config examples/vite/vite.config.ts",
+    "test": "bun test",
+    "test:watch": "bun test --watch",
+    "test:e2e": "npx playwright test",
+    "test:e2e:ui": "npx playwright test --ui",
+    "test:visual": "npx playwright test visual.spec.ts",
+    "typecheck": "bun run --filter '*' typecheck",
+    "lint": "eslint packages/*/src/",
+    "lint:fix": "eslint packages/*/src/ --fix",
+    "format": "prettier --write \"packages/*/src/**/*.{ts,tsx,js,jsx,json,css}\"",
+    "format:check": "prettier --check \"packages/*/src/**/*.{ts,tsx,js,jsx,json,css}\"",
+    "size": "size-limit",
+    "prepare": "husky"
+  },
+  "devDependencies": {
+    "@happy-dom/global-registrator": "^13.3.8",
+    "@playwright/test": "^1.58.1",
+    "@size-limit/file": "^12.0.0",
+    "@testing-library/react": "^16.0.0",
+    "@types/bun": "^1.0.0",
+    "@types/react": "19.0.8",
+    "@types/react-dom": "19.0.3",
+    "@typescript-eslint/eslint-plugin": "^8.54.0",
+    "@typescript-eslint/parser": "^8.54.0",
+    "@vitejs/plugin-react": "^5.1.2",
+    "autoprefixer": "^10.4.17",
+    "class-variance-authority": "^0.7.0",
+    "eslint": "^9.39.2",
+    "eslint-plugin-react": "^7.37.5",
+    "eslint-plugin-react-hooks": "^7.0.1",
+    "husky": "^9.1.7",
+    "lint-staged": "^16.2.7",
+    "postcss": "^8.4.33",
+    "prettier": "^3.8.1",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "size-limit": "^12.0.0",
+    "tailwindcss": "^3.4.1",
+    "tailwindcss-animate": "^1.0.7",
+    "tsup": "^8.0.1",
+    "typescript": "^5.3.3",
+    "vite": "^7.3.1"
+  },
+  "keywords": [
+    "docx",
+    "editor",
+    "template",
+    "word",
+    "document",
+    "react",
+    "prosemirror"
+  ],
+  "author": "EigenPal",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/eigenpal/docx-js-editor.git"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}
