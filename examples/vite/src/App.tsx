@@ -1,7 +1,9 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react';
 import {
-  DocxEditor,
+  DirectXmlDocxEditor,
   type DocxEditorRef,
+  type DirectXmlDocxEditorProps,
+  buildDirectXmlOperationPlan,
   createEmptyDocument,
   type Document,
 } from '@eigenpal/docx-js-editor';
@@ -172,6 +174,8 @@ const styles: Record<string, React.CSSProperties> = {
     overflow: 'hidden',
   },
 };
+
+type SaveModeEvent = Parameters<NonNullable<DirectXmlDocxEditorProps['onSaveModeEvent']>>[0];
 
 function useResponsiveLayout() {
   const calcZoom = () => {
@@ -367,6 +371,12 @@ export function App() {
     console.log('Fonts loaded');
   }, []);
 
+  const handleDirectXmlSaveModeEvent = useCallback((event: SaveModeEvent) => {
+    if (event.path === 'model-fallback') {
+      console.warn('[vite-demo] Direct XML save fallback used', event);
+    }
+  }, []);
+
   return (
     <div style={styles.container}>
       {isMobile ? (
@@ -416,10 +426,13 @@ export function App() {
       )}
 
       <main style={styles.main}>
-        <DocxEditor
+        <DirectXmlDocxEditor
           ref={editorRef}
           document={documentBuffer ? undefined : currentDocument}
           documentBuffer={documentBuffer}
+          buildDirectXmlOperations={buildDirectXmlOperationPlan}
+          directXmlSaveMode="bestEffort"
+          onSaveModeEvent={handleDirectXmlSaveModeEvent}
           onChange={handleDocumentChange}
           onError={handleError}
           onFontsLoaded={handleFontsLoaded}

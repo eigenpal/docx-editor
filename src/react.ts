@@ -14,6 +14,11 @@
 // ============================================================================
 
 export { DocxEditor, type DocxEditorProps, type DocxEditorRef } from './components/DocxEditor';
+export {
+  DirectXmlDocxEditor,
+  type DirectXmlDocxEditorProps,
+  type DirectXmlOperationContext,
+} from './components/DirectXmlDocxEditor';
 export { renderAsync, type RenderAsyncOptions, type DocxEditorHandle } from './renderAsync';
 export { type DocxInput, toArrayBuffer } from './utils/docxInput';
 

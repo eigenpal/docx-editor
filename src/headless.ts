@@ -118,6 +118,31 @@ export {
 
 export { parseDocx } from './docx/parser';
 export {
+  DocxXmlEditor,
+  openDocxXml,
+  editDocxXml,
+  type DocxPartInfo,
+  type DocxXmlMutator,
+  type DocxXmlSaveOptions,
+} from './docx/rawXmlEditor';
+export {
+  applyRealDocChanges,
+  type ApplyRealDocChangesOptions,
+  type ApplyRealDocChangesResult,
+  type RealDocChangeOperation,
+  type RealDocChangeReportItem,
+} from './docx/realDocumentChangeStrategy';
+export {
+  buildDirectXmlOperationPlan,
+  type BuildDirectXmlOperationPlanContext,
+  type BuildDirectXmlOperationPlanOptions,
+  type DirectXmlOperationPlanDiagnostics,
+} from './docx/buildDirectXmlOperationPlan';
+export {
+  buildTargetedDocumentXmlPatch,
+  type BuildTargetedDocumentXmlPatchResult,
+} from './docx/directXmlPlanBuilder';
+export {
   serializeDocument as serializeDocx,
   serializeDocumentBody,
   serializeSectionProperties,

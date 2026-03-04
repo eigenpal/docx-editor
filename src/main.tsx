@@ -3,7 +3,8 @@
  */
 import React, { useState, useCallback, useRef } from 'react';
 import { createRoot } from 'react-dom/client';
-import { DocxEditor } from './components/DocxEditor';
+import { DirectXmlDocxEditor, type DirectXmlSaveModeEvent } from './components/DirectXmlDocxEditor';
+import { buildDirectXmlOperationPlan } from './docx/buildDirectXmlOperationPlan';
 import './index.css';
 
 /**
@@ -34,6 +35,12 @@ function App() {
     setFileName('');
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
+    }
+  }, []);
+
+  const handleDirectXmlSaveModeEvent = useCallback((event: DirectXmlSaveModeEvent) => {
+    if (event.path === 'model-fallback') {
+      console.warn('[main] Direct XML save fallback used', event);
     }
   }, []);
 
@@ -76,8 +83,11 @@ function App() {
 
       {/* Editor area */}
       <div style={{ flex: 1, overflow: 'hidden' }}>
-        <DocxEditor
+        <DirectXmlDocxEditor
           documentBuffer={documentBuffer}
+          buildDirectXmlOperations={buildDirectXmlOperationPlan}
+          directXmlSaveMode="bestEffort"
+          onSaveModeEvent={handleDirectXmlSaveModeEvent}
           showToolbar={true}
           showZoomControl={true}
           showPageNumbers={true}
