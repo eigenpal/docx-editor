@@ -3,7 +3,7 @@
  */
 import React, { useState, useCallback, useRef } from 'react';
 import { createRoot } from 'react-dom/client';
-import { DocxEditor } from './components/DocxEditor';
+import { DocxEditor } from '@eigenpal/docx-js-editor';
 import './index.css';
 
 /**

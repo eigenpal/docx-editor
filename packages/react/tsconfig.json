@@ -1,0 +1,33 @@
+{
+  "compilerOptions": {
+    "target": "ES2020",
+    "useDefineForClassFields": true,
+    "lib": ["ES2020", "DOM", "DOM.Iterable"],
+    "module": "ESNext",
+    "skipLibCheck": true,
+    "moduleResolution": "bundler",
+    "allowImportingTsExtensions": true,
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "noEmit": true,
+    "jsx": "react-jsx",
+    "strict": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noFallthroughCasesInSwitch": true,
+    "declaration": true,
+    "declarationMap": true,
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["./src/*"],
+      "@eigenpal/docx-core": ["../core/src/core.ts"],
+      "@eigenpal/docx-core/headless": ["../core/src/headless.ts"],
+      "@eigenpal/docx-core/core-plugins": ["../core/src/core-plugins/index.ts"],
+      "@eigenpal/docx-core/mcp": ["../core/src/mcp/index.ts"],
+      "@eigenpal/docx-core/plugin-api/*": ["../core/src/plugin-api/*"],
+      "@eigenpal/docx-core/*": ["../core/src/*"]
+    }
+  },
+  "include": ["src"],
+  "exclude": ["node_modules", "dist"]
+}

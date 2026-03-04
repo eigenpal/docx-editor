@@ -1,0 +1,87 @@
+{
+  "name": "@eigenpal/docx-core",
+  "version": "0.0.1",
+  "description": "Framework-agnostic core for DOCX parsing, editing, and rendering",
+  "type": "module",
+  "main": "./dist/core.cjs",
+  "module": "./dist/core.js",
+  "types": "./dist/core.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/core.d.ts",
+      "import": "./dist/core.js",
+      "require": "./dist/core.cjs"
+    },
+    "./headless": {
+      "types": "./dist/headless.d.ts",
+      "import": "./dist/headless.js",
+      "require": "./dist/headless.cjs"
+    },
+    "./core-plugins": {
+      "types": "./dist/core-plugins.d.ts",
+      "import": "./dist/core-plugins.js",
+      "require": "./dist/core-plugins.cjs"
+    },
+    "./mcp": {
+      "types": "./dist/mcp.d.ts",
+      "import": "./dist/mcp.js",
+      "require": "./dist/mcp.cjs"
+    }
+  },
+  "typesVersions": {
+    "*": {
+      "headless": [
+        "./dist/headless.d.ts"
+      ],
+      "core-plugins": [
+        "./dist/core-plugins.d.ts"
+      ],
+      "mcp": [
+        "./dist/mcp.d.ts"
+      ]
+    }
+  },
+  "bin": {
+    "docx-editor-mcp": "./dist/mcp-cli.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "clsx": "^2.1.0",
+    "docxtemplater": "^3.50.0",
+    "jszip": "^3.10.1",
+    "pizzip": "^3.1.7",
+    "prosemirror-commands": "^1.5.2",
+    "prosemirror-dropcursor": "^1.8.2",
+    "prosemirror-history": "^1.4.0",
+    "prosemirror-keymap": "^1.2.2",
+    "prosemirror-model": "^1.19.4",
+    "prosemirror-state": "^1.4.3",
+    "prosemirror-tables": "^1.8.5",
+    "prosemirror-view": "^1.32.7",
+    "xml-js": "^1.6.11"
+  },
+  "keywords": [
+    "docx",
+    "editor",
+    "template",
+    "word",
+    "document",
+    "prosemirror"
+  ],
+  "author": "EigenPal",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/eigenpal/docx-js-editor.git",
+    "directory": "packages/core"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}

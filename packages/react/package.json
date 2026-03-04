@@ -1,0 +1,116 @@
+{
+  "name": "@eigenpal/docx-js-editor",
+  "version": "0.0.16",
+  "description": "A browser-based DOCX template editor with variable insertion support",
+  "type": "module",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    },
+    "./react": {
+      "types": "./dist/react.d.ts",
+      "import": "./dist/react.js",
+      "require": "./dist/react.cjs"
+    },
+    "./ui": {
+      "types": "./dist/ui.d.ts",
+      "import": "./dist/ui.js",
+      "require": "./dist/ui.cjs"
+    },
+    "./core": {
+      "types": "./dist/core-reexport.d.ts",
+      "import": "./dist/core-reexport.js",
+      "require": "./dist/core-reexport.cjs"
+    },
+    "./headless": {
+      "types": "./dist/headless-reexport.d.ts",
+      "import": "./dist/headless-reexport.js",
+      "require": "./dist/headless-reexport.cjs"
+    },
+    "./core-plugins": {
+      "types": "./dist/core-plugins-reexport.d.ts",
+      "import": "./dist/core-plugins-reexport.js",
+      "require": "./dist/core-plugins-reexport.cjs"
+    },
+    "./mcp": {
+      "types": "./dist/mcp-reexport.d.ts",
+      "import": "./dist/mcp-reexport.js",
+      "require": "./dist/mcp-reexport.cjs"
+    },
+    "./styles.css": "./dist/styles.css"
+  },
+  "typesVersions": {
+    "*": {
+      "react": [
+        "./dist/react.d.ts"
+      ],
+      "ui": [
+        "./dist/ui.d.ts"
+      ],
+      "core": [
+        "./dist/core-reexport.d.ts"
+      ],
+      "headless": [
+        "./dist/headless-reexport.d.ts"
+      ],
+      "core-plugins": [
+        "./dist/core-plugins-reexport.d.ts"
+      ],
+      "mcp": [
+        "./dist/mcp-reexport.d.ts"
+      ]
+    }
+  },
+  "sideEffects": [
+    "*.css"
+  ],
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsup && bun run build:css",
+    "build:css": "tailwindcss -c ../../tailwind.config.lib.js -i ./src/styles/editor.css -o ./dist/styles.css --minify",
+    "typecheck": "tsc --noEmit"
+  },
+  "peerDependencies": {
+    "react": "^18.0.0 || ^19.0.0",
+    "react-dom": "^18.0.0 || ^19.0.0"
+  },
+  "peerDependenciesMeta": {
+    "react": {
+      "optional": true
+    },
+    "react-dom": {
+      "optional": true
+    }
+  },
+  "dependencies": {
+    "@eigenpal/docx-core": "workspace:*",
+    "@radix-ui/react-select": "^2.2.6",
+    "clsx": "^2.1.0"
+  },
+  "keywords": [
+    "docx",
+    "editor",
+    "template",
+    "word",
+    "document",
+    "react",
+    "prosemirror"
+  ],
+  "author": "EigenPal",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/eigenpal/docx-js-editor.git",
+    "directory": "packages/react"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}

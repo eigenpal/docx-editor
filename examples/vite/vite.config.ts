@@ -3,22 +3,26 @@ import react from '@vitejs/plugin-react';
 import tailwindcss from 'tailwindcss';
 import autoprefixer from 'autoprefixer';
 import path from 'path';
-import fs from 'fs';
 
-// Detect monorepo: resolve to source when developing locally
 const monorepoRoot = path.resolve(__dirname, '../..');
-const isMonorepo = fs.existsSync(path.join(monorepoRoot, 'src/index.ts'));
 
 export default defineConfig({
   plugins: [react()],
   root: __dirname,
   resolve: {
     alias: {
-      // In monorepo, alias to source for live development
-      ...(isMonorepo
-        ? { '@eigenpal/docx-js-editor': path.join(monorepoRoot, 'src/index.ts') }
-        : {}),
-      '@': path.join(monorepoRoot, 'src'),
+      // Resolve package imports to source for live development
+      '@eigenpal/docx-js-editor': path.join(monorepoRoot, 'packages/react/src/index.ts'),
+      '@eigenpal/docx-core': path.join(monorepoRoot, 'packages/core/src/core.ts'),
+      '@eigenpal/docx-core/headless': path.join(monorepoRoot, 'packages/core/src/headless.ts'),
+      '@eigenpal/docx-core/core-plugins': path.join(
+        monorepoRoot,
+        'packages/core/src/core-plugins/index.ts'
+      ),
+      '@eigenpal/docx-core/mcp': path.join(monorepoRoot, 'packages/core/src/mcp/index.ts'),
+      // Wildcard alias for deep core imports used by react package
+      '@eigenpal/docx-core/': path.join(monorepoRoot, 'packages/core/src/'),
+      '@': path.join(monorepoRoot, 'packages/react/src'),
     },
   },
   css: {
