@@ -3209,7 +3209,7 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
           {/* Pages container */}
           <div
             ref={pagesContainerRef}
-            className={`paged-editor__pages${hfEditMode ? ` paged-editor--hf-editing paged-editor--editing-${hfEditMode}` : ''}`}
+            className={`paged-editor__pages${readOnly ? ' paged-editor--readonly' : ''}${hfEditMode ? ` paged-editor--hf-editing paged-editor--editing-${hfEditMode}` : ''}`}
             style={pagesContainerStyles}
             onMouseDown={handlePagesMouseDown}
             onClick={handlePagesClick}
