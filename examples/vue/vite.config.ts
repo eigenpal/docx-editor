@@ -8,16 +8,30 @@ export default defineConfig({
   plugins: [vue()],
   root: __dirname,
   resolve: {
-    alias: {
-      '@eigenpal/docx-editor-vue': path.join(monorepoRoot, 'packages/vue/src/index.ts'),
-      '@eigenpal/docx-core': path.join(monorepoRoot, 'packages/core/src/core.ts'),
-      '@eigenpal/docx-core/headless': path.join(monorepoRoot, 'packages/core/src/headless.ts'),
-      '@eigenpal/docx-core/core-plugins': path.join(
-        monorepoRoot,
-        'packages/core/src/core-plugins/index.ts'
-      ),
-      '@eigenpal/docx-core/': path.join(monorepoRoot, 'packages/core/src/'),
-    },
+    alias: [
+      {
+        find: '@eigenpal/docx-editor-vue',
+        replacement: path.join(monorepoRoot, 'packages/vue/src/index.ts'),
+      },
+      {
+        find: '@eigenpal/docx-core/headless',
+        replacement: path.join(monorepoRoot, 'packages/core/src/headless.ts'),
+      },
+      {
+        find: '@eigenpal/docx-core/core-plugins',
+        replacement: path.join(monorepoRoot, 'packages/core/src/core-plugins/index.ts'),
+      },
+      // Wildcard alias for deep core imports
+      {
+        find: /^@eigenpal\/docx-core\/(.+)/,
+        replacement: path.join(monorepoRoot, 'packages/core/src/$1'),
+      },
+      // Exact match for bare @eigenpal/docx-core (must come AFTER prefix match)
+      {
+        find: /^@eigenpal\/docx-core$/,
+        replacement: path.join(monorepoRoot, 'packages/core/src/core.ts'),
+      },
+    ],
   },
   server: {
     port: 5174,

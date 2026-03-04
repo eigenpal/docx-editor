@@ -16,6 +16,7 @@ import type { Run } from '@eigenpal/docx-core/types/document';
 import {
   copyRuns,
   handlePasteEvent,
+  parseClipboardHtml,
   runsToClipboardContent,
   type ParsedClipboardContent,
 } from '@eigenpal/docx-core/utils/clipboard';
@@ -532,7 +533,6 @@ function parseClipboardContent(
   plainText: string,
   cleanWordFormatting: boolean
 ): ParsedClipboardContent {
-  const { parseClipboardHtml } = require('@eigenpal/docx-core/utils/clipboard');
   return parseClipboardHtml(html, plainText, cleanWordFormatting);
 }
 

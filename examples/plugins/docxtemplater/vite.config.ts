@@ -4,7 +4,7 @@ import path from 'path';
 import fs from 'fs';
 
 const monorepoRoot = path.resolve(__dirname, '../../..');
-const isMonorepo = fs.existsSync(path.join(monorepoRoot, 'src/index.ts'));
+const isMonorepo = fs.existsSync(path.join(monorepoRoot, 'packages/react/src/index.ts'));
 
 export default defineConfig({
   plugins: [react()],
@@ -12,9 +12,9 @@ export default defineConfig({
   resolve: {
     alias: {
       ...(isMonorepo
-        ? { '@eigenpal/docx-js-editor': path.join(monorepoRoot, 'src/index.ts') }
+        ? { '@eigenpal/docx-js-editor': path.join(monorepoRoot, 'packages/react/src/index.ts') }
         : {}),
-      '@': path.join(monorepoRoot, 'src'),
+      '@': path.join(monorepoRoot, 'packages/react/src'),
     },
   },
   server: {

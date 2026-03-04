@@ -7,7 +7,7 @@ import path from 'path';
 import fs from 'fs';
 
 const monorepoRoot = path.resolve(__dirname, '../../..');
-const isMonorepo = fs.existsSync(path.join(monorepoRoot, 'src/index.ts'));
+const isMonorepo = fs.existsSync(path.join(monorepoRoot, 'packages/react/src/index.ts'));
 
 export default defineConfig({
   plugins: [react()],
@@ -15,9 +15,9 @@ export default defineConfig({
   resolve: {
     alias: {
       ...(isMonorepo
-        ? { '@eigenpal/docx-js-editor': path.join(monorepoRoot, 'src/index.ts') }
+        ? { '@eigenpal/docx-js-editor': path.join(monorepoRoot, 'packages/react/src/index.ts') }
         : {}),
-      '@': path.join(monorepoRoot, 'src'),
+      '@': path.join(monorepoRoot, 'packages/react/src'),
     },
     // Deduplicate React — ensure a single copy when aliasing into the monorepo
     dedupe: ['react', 'react-dom'],
@@ -30,7 +30,7 @@ export default defineConfig({
         tailwindcss({
           darkMode: ['class'],
           content: [
-            path.join(monorepoRoot, 'src/**/*.{ts,tsx}'),
+            path.join(monorepoRoot, 'packages/react/src/**/*.{ts,tsx}'),
             path.join(__dirname, 'src/**/*.{ts,tsx}'),
           ],
           theme: {
