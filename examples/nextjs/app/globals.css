@@ -4,4 +4,4 @@
 
 /* Import editor styles (CSS variables, custom properties, etc.)
    In standalone usage: @import '@eigenpal/docx-js-editor/styles.css'; */
-@import '../../../src/styles/editor.css';
+@import '../../../packages/react/src/styles/editor.css';

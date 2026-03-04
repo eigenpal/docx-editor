@@ -13,7 +13,19 @@
 
 # @eigenpal/docx-js-editor
 
-Open-source WYSIWYG DOCX editor for React. Open, edit, and save `.docx` files entirely in the browser — no server required. [Try the live demo.](https://docx-js-editor.vercel.app/)
+Open-source WYSIWYG DOCX editor. Open, edit, and save `.docx` files entirely in the browser — no server required. [Try the live demo.](https://docx-js-editor.vercel.app/)
+
+## Packages
+
+This is a monorepo with three packages:
+
+| Package                                      | Description                                                               | npm                                                                                                                                                        |
+| -------------------------------------------- | ------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [`@eigenpal/docx-core`](packages/core)       | Framework-agnostic core — DOCX parsing, ProseMirror schema, layout engine | [![npm](https://img.shields.io/npm/v/@eigenpal/docx-core.svg?style=flat-square&color=00C853)](https://www.npmjs.com/package/@eigenpal/docx-core)           |
+| [`@eigenpal/docx-js-editor`](packages/react) | React UI — toolbar, paged editor, plugin host                             | [![npm](https://img.shields.io/npm/v/@eigenpal/docx-js-editor.svg?style=flat-square&color=00C853)](https://www.npmjs.com/package/@eigenpal/docx-js-editor) |
+| [`@eigenpal/docx-editor-vue`](packages/vue)  | Vue.js UI (scaffold — community contribution welcome)                     | —                                                                                                                                                          |
+
+For most users, install `@eigenpal/docx-js-editor` — it includes everything. Use `@eigenpal/docx-core` directly for headless/server-side use or to build a custom UI in any framework.
 
 <p align="center">
   <a href="https://docx-js-editor.vercel.app/">
@@ -31,6 +43,7 @@ We built it for ourselves in [eigenpal.com](https://eigenpal.com) in order to ha
 | <img src="https://assets.vercel.com/image/upload/v1662130559/nextjs/Icon_dark_background.png" width="14" /> Next.js | [`examples/nextjs`](examples/nextjs)                                          |
 | <img src="https://remix.run/favicon-192.png" width="14" /> Remix                                                    | [`examples/remix`](examples/remix)                                            |
 | <img src="https://astro.build/favicon.svg" width="14" /> Astro                                                      | [`examples/astro`](examples/astro)                                            |
+| <img src="https://vuejs.org/logo.svg" width="14" /> Vue.js (scaffold)                                               | [`examples/vue`](examples/vue)                                                |
 
 ## Installation
 
@@ -68,38 +81,38 @@ function Editor({ file }: { file: ArrayBuffer }) {
 
 ## Props
 
-| Prop                    | Type                                        | Default           | Description                                       |
-| ----------------------- | ------------------------------------------- | ----------------- | ------------------------------------------------- |
-| `documentBuffer`        | `ArrayBuffer \| Uint8Array \| Blob \| File` | —                 | `.docx` file contents to load                     |
-| `document`              | `Document`                                  | —                 | Pre-parsed document (alternative to buffer)       |
-| `readOnly`              | `boolean`                                   | `false`           | Read-only preview (hides toolbar, rulers, panel)  |
-| `showToolbar`           | `boolean`                                   | `true`            | Show formatting toolbar                           |
-| `showRuler`             | `boolean`                                   | `false`           | Show horizontal & vertical rulers                 |
-| `rulerUnit`             | `'inch' \| 'cm'`                            | `'inch'`          | Unit for ruler display                            |
-| `showZoomControl`       | `boolean`                                   | `true`            | Show zoom controls in toolbar                     |
-| `showPrintButton`       | `boolean`                                   | `true`            | Show print button in toolbar                      |
-| `showPageNumbers`       | `boolean`                                   | `true`            | Show page number indicator                        |
-| `enablePageNavigation`  | `boolean`                                   | `true`            | Enable interactive page navigation                |
-| `pageNumberPosition`    | `string`                                    | `'bottom-center'` | Position of page number indicator                 |
-| `showOutline`           | `boolean`                                   | `false`           | Show document outline sidebar (table of contents) |
-| `showMarginGuides`      | `boolean`                                   | `false`           | Show page margin guide boundaries                 |
-| `marginGuideColor`      | `string`                                    | `'#c0c0c0'`       | Color for margin guides                           |
-| `initialZoom`           | `number`                                    | `1.0`             | Initial zoom level                                |
-| `theme`                 | `Theme \| null`                             | —                 | Theme for styling                                 |
-| `toolbarExtra`          | `ReactNode`                                 | —                 | Custom toolbar items appended to the toolbar      |
-| `placeholder`           | `ReactNode`                                 | —                 | Placeholder when no document is loaded            |
-| `loadingIndicator`      | `ReactNode`                                 | —                 | Custom loading indicator                          |
-| `className`             | `string`                                    | —                 | Additional CSS class name                         |
-| `style`                 | `CSSProperties`                             | —                 | Additional inline styles                          |
-| `onChange`              | `(doc: Document) => void`                   | —                 | Called on document change                         |
-| `onSave`                | `(buffer: ArrayBuffer) => void`             | —                 | Called on save                                    |
-| `onError`               | `(error: Error) => void`                    | —                 | Called on error                                   |
-| `onSelectionChange`     | `(state: SelectionState \| null) => void`   | —                 | Called on selection change                        |
-| `onFontsLoaded`         | `() => void`                                | —                 | Called when fonts finish loading                  |
-| `onPrint`               | `() => void`                                | —                 | Called when print is triggered                    |
-| `onCopy`                | `() => void`                                | —                 | Called when content is copied                     |
-| `onCut`                 | `() => void`                                | —                 | Called when content is cut                        |
-| `onPaste`               | `() => void`                                | —                 | Called when content is pasted                     |
+| Prop                   | Type                                        | Default           | Description                                       |
+| ---------------------- | ------------------------------------------- | ----------------- | ------------------------------------------------- |
+| `documentBuffer`       | `ArrayBuffer \| Uint8Array \| Blob \| File` | —                 | `.docx` file contents to load                     |
+| `document`             | `Document`                                  | —                 | Pre-parsed document (alternative to buffer)       |
+| `readOnly`             | `boolean`                                   | `false`           | Read-only preview (hides toolbar, rulers, panel)  |
+| `showToolbar`          | `boolean`                                   | `true`            | Show formatting toolbar                           |
+| `showRuler`            | `boolean`                                   | `false`           | Show horizontal & vertical rulers                 |
+| `rulerUnit`            | `'inch' \| 'cm'`                            | `'inch'`          | Unit for ruler display                            |
+| `showZoomControl`      | `boolean`                                   | `true`            | Show zoom controls in toolbar                     |
+| `showPrintButton`      | `boolean`                                   | `true`            | Show print button in toolbar                      |
+| `showPageNumbers`      | `boolean`                                   | `true`            | Show page number indicator                        |
+| `enablePageNavigation` | `boolean`                                   | `true`            | Enable interactive page navigation                |
+| `pageNumberPosition`   | `string`                                    | `'bottom-center'` | Position of page number indicator                 |
+| `showOutline`          | `boolean`                                   | `false`           | Show document outline sidebar (table of contents) |
+| `showMarginGuides`     | `boolean`                                   | `false`           | Show page margin guide boundaries                 |
+| `marginGuideColor`     | `string`                                    | `'#c0c0c0'`       | Color for margin guides                           |
+| `initialZoom`          | `number`                                    | `1.0`             | Initial zoom level                                |
+| `theme`                | `Theme \| null`                             | —                 | Theme for styling                                 |
+| `toolbarExtra`         | `ReactNode`                                 | —                 | Custom toolbar items appended to the toolbar      |
+| `placeholder`          | `ReactNode`                                 | —                 | Placeholder when no document is loaded            |
+| `loadingIndicator`     | `ReactNode`                                 | —                 | Custom loading indicator                          |
+| `className`            | `string`                                    | —                 | Additional CSS class name                         |
+| `style`                | `CSSProperties`                             | —                 | Additional inline styles                          |
+| `onChange`             | `(doc: Document) => void`                   | —                 | Called on document change                         |
+| `onSave`               | `(buffer: ArrayBuffer) => void`             | —                 | Called on save                                    |
+| `onError`              | `(error: Error) => void`                    | —                 | Called on error                                   |
+| `onSelectionChange`    | `(state: SelectionState \| null) => void`   | —                 | Called on selection change                        |
+| `onFontsLoaded`        | `() => void`                                | —                 | Called when fonts finish loading                  |
+| `onPrint`              | `() => void`                                | —                 | Called when print is triggered                    |
+| `onCopy`               | `() => void`                                | —                 | Called when content is copied                     |
+| `onCut`                | `() => void`                                | —                 | Called when content is cut                        |
+| `onPaste`              | `() => void`                                | —                 | Called when content is pasted                     |
 
 ## Ref Methods
 
@@ -138,9 +151,9 @@ function Editor({ file }: { file: ArrayBuffer }) {
 }
 ```
 
-| Plugin                                 | Description                                                                                  |
-| -------------------------------------- | -------------------------------------------------------------------------------------------- |
-| [Docxtemplater](src/plugins/template/) | Syntax highlighting and annotation panel for [docxtemplater](https://docxtemplater.com) tags |
+| Plugin                                                | Description                                                                                  |
+| ----------------------------------------------------- | -------------------------------------------------------------------------------------------- |
+| [Docxtemplater](packages/react/src/plugins/template/) | Syntax highlighting and annotation panel for [docxtemplater](https://docxtemplater.com) tags |
 
 See [docs/PLUGINS.md](docs/PLUGINS.md) for the full plugin API, including how to create custom plugins with panels, overlays, and ProseMirror integrations.
 
@@ -158,10 +171,32 @@ See [docs/PLUGINS.md](docs/PLUGINS.md) for the full plugin API, including how to
 
 ```bash
 bun install
-bun run dev          # Vite example on localhost:5173
+bun run dev          # Vite + React example on localhost:5173
 bun run dev:nextjs   # Next.js example on localhost:3000
 bun run dev:remix    # Remix example on localhost:3001
 bun run dev:astro    # Astro example on localhost:4321
+```
+
+### Monorepo Structure
+
+```
+packages/
+  core/     — @eigenpal/docx-core (DOCX parsing, ProseMirror, layout engine)
+  react/    — @eigenpal/docx-js-editor (React components, toolbar, plugins)
+  vue/      — @eigenpal/docx-editor-vue (scaffold for Vue.js integration)
+examples/
+  vite/     — Vite + React demo app
+  vue/      — Vue.js demo app (scaffold)
+  nextjs/   — Next.js example
+  remix/    — Remix example
+  astro/    — Astro example
+```
+
+### Building
+
+```bash
+bun run build        # Build core first, then react
+bun run typecheck    # Typecheck all packages
 ```
 
 Each example is independently deployable. Copy any `examples/<framework>/` directory to start your own project — just `npm install` and go.

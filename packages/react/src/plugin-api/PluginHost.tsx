@@ -18,7 +18,9 @@ import {
 import { TextSelection } from 'prosemirror-state';
 import type { EditorView } from 'prosemirror-view';
 import type { Plugin as ProseMirrorPlugin } from 'prosemirror-state';
-import type { EditorPlugin, PluginHostProps, PluginHostRef, PanelConfig } from './types';
+import type { ReactEditorPlugin, PluginHostProps, PluginHostRef, PanelConfig } from './types';
+// Backwards-compatible alias
+type EditorPlugin = ReactEditorPlugin;
 
 // Default panel configuration
 const DEFAULT_PANEL_CONFIG: Required<PanelConfig> = {

@@ -25,7 +25,7 @@
 
 import React from 'react';
 import { TextSelection } from 'prosemirror-state';
-import type { EditorPlugin, RenderedDomContext } from '../../plugin-api/types';
+import type { ReactEditorPlugin, RenderedDomContext } from '../../plugin-api/types';
 import type { EditorView } from 'prosemirror-view';
 import type { TemplateTag } from './prosemirror-plugin';
 import {
@@ -94,7 +94,7 @@ export function createPlugin(
     /** Panel default width */
     panelWidth?: number;
   } = {}
-): EditorPlugin<TemplatePluginState> {
+): ReactEditorPlugin<TemplatePluginState> {
   // Create the ProseMirror plugin
   const pmPlugin = createTemplatePlugin();
 

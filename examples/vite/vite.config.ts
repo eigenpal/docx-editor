@@ -10,20 +10,37 @@ export default defineConfig({
   plugins: [react()],
   root: __dirname,
   resolve: {
-    alias: {
+    alias: [
       // Resolve package imports to source for live development
-      '@eigenpal/docx-js-editor': path.join(monorepoRoot, 'packages/react/src/index.ts'),
-      '@eigenpal/docx-core': path.join(monorepoRoot, 'packages/core/src/core.ts'),
-      '@eigenpal/docx-core/headless': path.join(monorepoRoot, 'packages/core/src/headless.ts'),
-      '@eigenpal/docx-core/core-plugins': path.join(
-        monorepoRoot,
-        'packages/core/src/core-plugins/index.ts'
-      ),
-      '@eigenpal/docx-core/mcp': path.join(monorepoRoot, 'packages/core/src/mcp/index.ts'),
-      // Wildcard alias for deep core imports used by react package
-      '@eigenpal/docx-core/': path.join(monorepoRoot, 'packages/core/src/'),
-      '@': path.join(monorepoRoot, 'packages/react/src'),
-    },
+      // Order matters: more-specific prefixes before less-specific ones
+      {
+        find: '@eigenpal/docx-js-editor',
+        replacement: path.join(monorepoRoot, 'packages/react/src/index.ts'),
+      },
+      {
+        find: '@eigenpal/docx-core/headless',
+        replacement: path.join(monorepoRoot, 'packages/core/src/headless.ts'),
+      },
+      {
+        find: '@eigenpal/docx-core/core-plugins',
+        replacement: path.join(monorepoRoot, 'packages/core/src/core-plugins/index.ts'),
+      },
+      {
+        find: '@eigenpal/docx-core/mcp',
+        replacement: path.join(monorepoRoot, 'packages/core/src/mcp/index.ts'),
+      },
+      // Wildcard alias for deep core imports (e.g. @eigenpal/docx-core/utils/docxInput)
+      {
+        find: /^@eigenpal\/docx-core\/(.+)/,
+        replacement: path.join(monorepoRoot, 'packages/core/src/$1'),
+      },
+      // Exact match for bare @eigenpal/docx-core (must come AFTER the prefix match above)
+      {
+        find: /^@eigenpal\/docx-core$/,
+        replacement: path.join(monorepoRoot, 'packages/core/src/core.ts'),
+      },
+      { find: '@', replacement: path.join(monorepoRoot, 'packages/react/src') },
+    ],
   },
   css: {
     postcss: {
