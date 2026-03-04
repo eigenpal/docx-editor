@@ -4,7 +4,7 @@ export default {
   // Scope all utilities under .ep-root to avoid clashing with host app CSS
   important: '.ep-root',
   // Only scan library source files, not demo
-  content: ['./src/**/*.{ts,tsx}'],
+  content: ['./packages/react/src/**/*.{ts,tsx}'],
   theme: {
     extend: {
       colors: {

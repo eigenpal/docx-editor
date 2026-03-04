@@ -5,7 +5,7 @@ const monorepoRoot = path.resolve(__dirname, '../..');
 module.exports = {
   darkMode: ['class'],
   important: '.ep-root',
-  content: [path.join(monorepoRoot, 'src/**/*.{ts,tsx}')],
+  content: [path.join(monorepoRoot, 'packages/react/src/**/*.{ts,tsx}')],
   theme: {
     extend: {
       colors: {
