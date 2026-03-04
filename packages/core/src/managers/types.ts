@@ -4,6 +4,8 @@
  * Framework-agnostic interfaces for the editor's manager classes.
  */
 
+import type { EditorView } from 'prosemirror-view';
+
 import type { Document } from '../types/document';
 
 // ============================================================================
@@ -121,10 +123,8 @@ export interface ErrorManagerSnapshot {
 export interface PluginLifecycleConfig {
   id: string;
   styles?: string;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  initialize?: (editorView: any) => any;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  onStateChange?: (editorView: any) => any;
+  initialize?: (editorView: EditorView) => unknown;
+  onStateChange?: (editorView: EditorView) => unknown;
   destroy?: () => void;
 }
 

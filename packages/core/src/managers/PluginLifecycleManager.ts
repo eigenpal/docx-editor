@@ -6,11 +6,15 @@
  *
  * Handles:
  * - Plugin initialization and state tracking
- * - EditorView dispatch wrapping for state change detection
- * - CSS injection/cleanup
- * - DOM event listener setup for plugin state updates
+ * - Plugin state updates via `updateStates()`
  * - Plugin destroy/cleanup
+ *
+ * Does NOT handle (framework hosts are responsible for):
+ * - CSS injection (use the exported `injectStyles` utility)
+ * - DOM event listeners / dispatch wrapping
  */
+
+import type { EditorView } from 'prosemirror-view';
 
 import { Subscribable } from './Subscribable';
 import type { PluginLifecycleConfig, PluginLifecycleSnapshot } from './types';
@@ -48,10 +52,7 @@ export function injectStyles(pluginId: string, css: string): () => void {
 export class PluginLifecycleManager extends Subscribable<PluginLifecycleSnapshot> {
   private plugins: PluginLifecycleConfig[] = [];
   private pluginStates = new Map<string, unknown>();
-  private styleCleanups: (() => void)[] = [];
-  private eventCleanup: (() => void) | null = null;
   private version = 0;
-  private originalDispatch: ((tr: unknown) => void) | null = null;
 
   constructor() {
     super({ states: new Map(), version: 0 });
@@ -59,10 +60,12 @@ export class PluginLifecycleManager extends Subscribable<PluginLifecycleSnapshot
 
   /**
    * Initialize plugins with an editor view.
-   * Calls `plugin.initialize(editorView)` for each plugin,
-   * injects CSS, and sets up DOM event listeners.
+   * Calls `plugin.initialize(editorView)` for each plugin.
+   *
+   * Note: CSS injection and DOM event listeners are the responsibility
+   * of the framework-specific host (e.g. React PluginHost).
    */
-  initialize(plugins: PluginLifecycleConfig[], editorView: any): void {
+  initialize(plugins: PluginLifecycleConfig[], editorView: EditorView): void {
     // Clean up previous
     this.destroyPlugins();
 
@@ -75,16 +78,6 @@ export class PluginLifecycleManager extends Subscribable<PluginLifecycleSnapshot
       }
     }
 
-    // Inject styles
-    for (const plugin of plugins) {
-      if (plugin.styles) {
-        this.styleCleanups.push(injectStyles(plugin.id, plugin.styles));
-      }
-    }
-
-    // Set up DOM event listeners for state change detection
-    this.setupEditorListeners(editorView);
-
     this.emitSnapshot();
   }
 
@@ -92,7 +85,7 @@ export class PluginLifecycleManager extends Subscribable<PluginLifecycleSnapshot
    * Update all plugin states by calling `onStateChange` on each plugin.
    * Returns true if any plugin state changed.
    */
-  updateStates(editorView: any): boolean {
+  updateStates(editorView: EditorView): boolean {
     let anyChanged = false;
     for (const plugin of this.plugins) {
       if (plugin.onStateChange) {
@@ -142,61 +135,8 @@ export class PluginLifecycleManager extends Subscribable<PluginLifecycleSnapshot
       }
     }
 
-    // Remove injected styles
-    for (const cleanup of this.styleCleanups) {
-      cleanup();
-    }
-    this.styleCleanups = [];
-
-    // Remove event listeners
-    if (this.eventCleanup) {
-      this.eventCleanup();
-      this.eventCleanup = null;
-    }
-
     this.pluginStates.clear();
     this.plugins = [];
-  }
-
-  private setupEditorListeners(editorView: any): void {
-    if (!editorView?.dom) return;
-
-    const updatePluginStates = () => {
-      this.updateStates(editorView);
-    };
-
-    // Debounced update for transactions and input events
-    let pendingUpdate: number | null = null;
-    const debouncedUpdate = () => {
-      if (pendingUpdate) cancelAnimationFrame(pendingUpdate);
-      pendingUpdate = requestAnimationFrame(updatePluginStates);
-    };
-
-    // Initial state update
-    updatePluginStates();
-
-    const editorDom = editorView.dom as HTMLElement;
-    editorDom.addEventListener('input', debouncedUpdate);
-    editorDom.addEventListener('focus', updatePluginStates);
-    editorDom.addEventListener('click', updatePluginStates);
-
-    // Wrap dispatch to catch transactions
-    this.originalDispatch = editorView.dispatch.bind(editorView);
-    editorView.dispatch = (tr: unknown) => {
-      this.originalDispatch!(tr);
-      debouncedUpdate();
-    };
-
-    this.eventCleanup = () => {
-      editorDom.removeEventListener('input', debouncedUpdate);
-      editorDom.removeEventListener('focus', updatePluginStates);
-      editorDom.removeEventListener('click', updatePluginStates);
-      if (pendingUpdate) cancelAnimationFrame(pendingUpdate);
-      if (this.originalDispatch) {
-        editorView.dispatch = this.originalDispatch;
-        this.originalDispatch = null;
-      }
-    };
   }
 
   private emitSnapshot(): void {

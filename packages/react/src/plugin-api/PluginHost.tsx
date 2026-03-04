@@ -266,6 +266,51 @@ export const PluginHost = forwardRef<PluginHostRef, PluginHostProps>(function Pl
     };
   }, [lifecycleManager, editorView, plugins]);
 
+  // Inject plugin-specific CSS (managed by React, not the manager)
+  useEffect(() => {
+    const cleanups = plugins.filter((p) => p.styles).map((p) => injectStyles(p.id, p.styles!));
+    return () => cleanups.forEach((fn) => fn());
+  }, [plugins]);
+
+  // DOM event listeners + dispatch wrapping for plugin state updates
+  useEffect(() => {
+    if (!editorView?.dom) return;
+
+    const updatePluginStates = () => {
+      lifecycleManager.updateStates(editorView);
+    };
+
+    // Debounced update via requestAnimationFrame
+    let pendingUpdate: number | null = null;
+    const debouncedUpdate = () => {
+      if (pendingUpdate) cancelAnimationFrame(pendingUpdate);
+      pendingUpdate = requestAnimationFrame(updatePluginStates);
+    };
+
+    // Initial state update
+    updatePluginStates();
+
+    const editorDom = editorView.dom as HTMLElement;
+    editorDom.addEventListener('input', debouncedUpdate);
+    editorDom.addEventListener('focus', updatePluginStates);
+    editorDom.addEventListener('click', updatePluginStates);
+
+    // Wrap dispatch to catch transactions
+    const originalDispatch = editorView.dispatch.bind(editorView);
+    editorView.dispatch = (tr: unknown) => {
+      (originalDispatch as (tr: unknown) => void)(tr);
+      debouncedUpdate();
+    };
+
+    return () => {
+      editorDom.removeEventListener('input', debouncedUpdate);
+      editorDom.removeEventListener('focus', updatePluginStates);
+      editorDom.removeEventListener('click', updatePluginStates);
+      if (pendingUpdate) cancelAnimationFrame(pendingUpdate);
+      editorView.dispatch = originalDispatch;
+    };
+  }, [editorView, lifecycleManager]);
+
   // Inject base PluginHost styles (standalone — not plugin-specific)
   useEffect(() => {
     const cleanup = injectStyles('plugin-host-base', PLUGIN_HOST_STYLES);
