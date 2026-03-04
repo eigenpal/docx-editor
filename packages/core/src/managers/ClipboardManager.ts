@@ -33,8 +33,13 @@ export interface ClipboardSelection {
 // HELPER FUNCTIONS
 // ============================================================================
 
-/** Convert RGB color string to hex. */
-export function rgbToHex(color: string): string | null {
+/**
+ * Convert a CSS color string (rgb/rgba/hex) to a 6-char uppercase hex string.
+ *
+ * NOTE: This differs from `colorResolver.rgbToHex(r, g, b)` which takes
+ * numeric components. This function parses CSS color strings.
+ */
+export function cssColorToHex(color: string): string | null {
   if (!color || color === 'transparent' || color === 'inherit') return null;
 
   if (color.startsWith('#')) {
@@ -93,7 +98,7 @@ export function extractFormattingFromElement(element: HTMLElement): Run['formatt
   // Color
   const color = style.color;
   if (color && color !== 'rgb(0, 0, 0)') {
-    const hex = rgbToHex(color);
+    const hex = cssColorToHex(color);
     if (hex) {
       formatting.color = { rgb: hex };
     }
@@ -235,30 +240,5 @@ export function createSelectionFromDOM(): ClipboardSelection | null {
   };
 }
 
-// ============================================================================
-// MANAGER CLASS
-// ============================================================================
-
-/**
- * ClipboardManager — stateless utility class wrapping the clipboard functions.
- *
- * Since clipboard operations are inherently stateless (no ongoing state
- * to subscribe to), this class provides a convenient namespace and
- * dependency injection point for framework wrappers.
- */
-export class ClipboardManager {
-  /** Get selected runs from the current DOM selection. */
-  getSelectionRuns(): Run[] {
-    return getSelectionRuns();
-  }
-
-  /** Create a ClipboardSelection from the current DOM selection. */
-  createSelectionFromDOM(): ClipboardSelection | null {
-    return createSelectionFromDOM();
-  }
-
-  /** Extract formatting from an HTML element's computed styles. */
-  extractFormattingFromElement(element: HTMLElement): Run['formatting'] {
-    return extractFormattingFromElement(element);
-  }
-}
+// Backwards-compatible alias
+export const rgbToHex = cssColorToHex;

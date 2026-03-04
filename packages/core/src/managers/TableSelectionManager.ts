@@ -163,14 +163,6 @@ export class TableSelectionManager extends Subscribable<TableSelectionSnapshot> 
     this.setSnapshot({ selectedCell: null });
   }
 
-  /** Get cell coordinates from a DOM element via data attributes. */
-  getCellFromElement(
-    target: EventTarget | null,
-    container?: HTMLElement | null
-  ): CellCoordinates | null {
-    return findTableFromClick(target, container);
-  }
-
   /** Check if a specific cell is selected. */
   isCellSelected(tableIndex: number, rowIndex: number, columnIndex: number): boolean {
     const { selectedCell } = this.getSnapshot();

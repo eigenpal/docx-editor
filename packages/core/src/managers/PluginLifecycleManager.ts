@@ -165,20 +165,20 @@ export class PluginLifecycleManager extends Subscribable<PluginLifecycleSnapshot
       this.updateStates(editorView);
     };
 
-    // Initial state update
-    updatePluginStates();
-
-    const editorDom = editorView.dom as HTMLElement;
-    editorDom.addEventListener('input', updatePluginStates);
-    editorDom.addEventListener('focus', updatePluginStates);
-    editorDom.addEventListener('click', updatePluginStates);
-
-    // Debounced update for transactions
+    // Debounced update for transactions and input events
     let pendingUpdate: number | null = null;
     const debouncedUpdate = () => {
       if (pendingUpdate) cancelAnimationFrame(pendingUpdate);
       pendingUpdate = requestAnimationFrame(updatePluginStates);
     };
+
+    // Initial state update
+    updatePluginStates();
+
+    const editorDom = editorView.dom as HTMLElement;
+    editorDom.addEventListener('input', debouncedUpdate);
+    editorDom.addEventListener('focus', updatePluginStates);
+    editorDom.addEventListener('click', updatePluginStates);
 
     // Wrap dispatch to catch transactions
     this.originalDispatch = editorView.dispatch.bind(editorView);
@@ -188,7 +188,7 @@ export class PluginLifecycleManager extends Subscribable<PluginLifecycleSnapshot
     };
 
     this.eventCleanup = () => {
-      editorDom.removeEventListener('input', updatePluginStates);
+      editorDom.removeEventListener('input', debouncedUpdate);
       editorDom.removeEventListener('focus', updatePluginStates);
       editorDom.removeEventListener('click', updatePluginStates);
       if (pendingUpdate) cancelAnimationFrame(pendingUpdate);

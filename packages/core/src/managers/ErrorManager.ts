@@ -16,6 +16,7 @@ import type { ErrorManagerSnapshot, ErrorNotification, ErrorSeverity } from './t
 export class ErrorManager extends Subscribable<ErrorManagerSnapshot> {
   private notifications: ErrorNotification[] = [];
   private idCounter = 0;
+  private timers = new Set<ReturnType<typeof setTimeout>>();
 
   constructor() {
     super({ notifications: [] });
@@ -44,21 +45,27 @@ export class ErrorManager extends Subscribable<ErrorManagerSnapshot> {
     this.emitSnapshot();
 
     // Remove from list after animation delay
-    setTimeout(() => {
+    const timer = setTimeout(() => {
+      this.timers.delete(timer);
       this.notifications = this.notifications.filter((n) => n.id !== id);
       this.emitSnapshot();
     }, 300);
+    this.timers.add(timer);
   }
 
-  /** Clear all notifications. */
+  /** Clear all notifications and cancel pending timers. */
   clearAll(): void {
     this.notifications = [];
+    for (const timer of this.timers) clearTimeout(timer);
+    this.timers.clear();
     this.emitSnapshot();
   }
 
-  /** Get current notifications (convenience accessor). */
-  getNotifications(): ErrorNotification[] {
-    return this.notifications;
+  /** Destroy the manager and clean up all timers. */
+  destroy(): void {
+    for (const timer of this.timers) clearTimeout(timer);
+    this.timers.clear();
+    this.notifications = [];
   }
 
   // --------------------------------------------------------------------------
@@ -80,15 +87,17 @@ export class ErrorManager extends Subscribable<ErrorManagerSnapshot> {
 
     // Auto-dismiss after 5 seconds for info/warning
     if (severity !== 'error') {
-      setTimeout(() => {
+      const timer = setTimeout(() => {
+        this.timers.delete(timer);
         this.dismiss(id);
       }, 5000);
+      this.timers.add(timer);
     }
 
     return id;
   }
 
   private emitSnapshot(): void {
-    this.setSnapshot({ notifications: [...this.notifications] });
+    this.setSnapshot({ notifications: this.notifications });
   }
 }

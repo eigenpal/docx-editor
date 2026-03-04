@@ -45,7 +45,6 @@ export {
 } from './TableSelectionManager';
 
 export {
-  ClipboardManager,
   getSelectionRuns,
   createSelectionFromDOM,
   extractFormattingFromElement,

@@ -16,27 +16,10 @@ import React, {
 } from 'react';
 import type { ReactNode, ErrorInfo, CSSProperties } from 'react';
 import { ErrorManager } from '@eigenpal/docx-core';
+import type { ErrorSeverity, ErrorNotification } from '@eigenpal/docx-core';
 
-// ============================================================================
-// TYPES
-// ============================================================================
-
-/**
- * Error severity levels
- */
-export type ErrorSeverity = 'error' | 'warning' | 'info';
-
-/**
- * Error notification
- */
-export interface ErrorNotification {
-  id: string;
-  message: string;
-  severity: ErrorSeverity;
-  details?: string;
-  timestamp: number;
-  dismissed?: boolean;
-}
+// Re-export for backwards compat
+export type { ErrorSeverity, ErrorNotification };
 
 /**
  * Error context value
@@ -145,14 +128,24 @@ export function ErrorProvider({ children }: { children: ReactNode }) {
     manager.clearAll();
   }, [manager]);
 
-  const value: ErrorContextValue = {
-    notifications: snapshot.notifications,
-    showError,
-    showWarning,
-    showInfo,
-    dismissNotification,
-    clearNotifications,
-  };
+  const value: ErrorContextValue = useMemo(
+    () => ({
+      notifications: snapshot.notifications,
+      showError,
+      showWarning,
+      showInfo,
+      dismissNotification,
+      clearNotifications,
+    }),
+    [
+      snapshot.notifications,
+      showError,
+      showWarning,
+      showInfo,
+      dismissNotification,
+      clearNotifications,
+    ]
+  );
 
   return (
     <ErrorContext.Provider value={value}>

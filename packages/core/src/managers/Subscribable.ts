@@ -45,19 +45,9 @@ export abstract class Subscribable<TSnapshot> {
     this.notify();
   }
 
-  /**
-   * Notify all subscribers of a state change.
-   */
-  protected notify(): void {
+  private notify(): void {
     for (const listener of this.listeners) {
       listener();
     }
-  }
-
-  /**
-   * Get the current number of subscribers. Useful for debugging.
-   */
-  protected get subscriberCount(): number {
-    return this.listeners.size;
   }
 }

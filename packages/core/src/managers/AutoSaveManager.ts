@@ -44,12 +44,8 @@ function isLocalStorageAvailable(): boolean {
   }
 }
 
-function serializeDocument(document: Document): string {
-  const serializable = {
-    ...document,
-    originalBuffer: null,
-  };
-  return JSON.stringify(serializable);
+function serializeForStorage(document: Document): string {
+  return JSON.stringify({ ...document, originalBuffer: null });
 }
 
 function parseSavedData(json: string): SavedDocumentData | null {
@@ -145,7 +141,7 @@ export class AutoSaveManager extends Subscribable<AutoSaveSnapshot> {
     this.updateStatus('saving');
 
     try {
-      const serialized = serializeDocument(doc);
+      const serialized = serializeForStorage(doc);
 
       // Skip if unchanged
       if (serialized === this.lastSavedJson) {
@@ -153,13 +149,7 @@ export class AutoSaveManager extends Subscribable<AutoSaveSnapshot> {
         return true;
       }
 
-      const dataToSave: SavedDocumentData = {
-        document: { ...doc, originalBuffer: null as any },
-        savedAt: new Date().toISOString(),
-        version: SAVE_VERSION,
-      };
-
-      localStorage.setItem(this.storageKey, JSON.stringify(dataToSave));
+      this.persistToStorage(serialized);
       this.lastSavedJson = serialized;
 
       const saveTime = new Date();
@@ -254,13 +244,7 @@ export class AutoSaveManager extends Subscribable<AutoSaveSnapshot> {
 
     if (this._isEnabled && this.currentDocument && this.storageAvailable) {
       try {
-        const doc = this.currentDocument;
-        const dataToSave: SavedDocumentData = {
-          document: { ...doc, originalBuffer: null as any },
-          savedAt: new Date().toISOString(),
-          version: SAVE_VERSION,
-        };
-        localStorage.setItem(this.storageKey, JSON.stringify(dataToSave));
+        this.persistToStorage(serializeForStorage(this.currentDocument));
       } catch (error) {
         console.error('Failed to save on destroy:', error);
       }
@@ -279,6 +263,15 @@ export class AutoSaveManager extends Subscribable<AutoSaveSnapshot> {
       this.emitSnapshot();
       this.onRecoveryAvailableCallback?.(data);
     }
+  }
+
+  private persistToStorage(serialized: string): void {
+    const dataToSave: SavedDocumentData = {
+      document: JSON.parse(serialized),
+      savedAt: new Date().toISOString(),
+      version: SAVE_VERSION,
+    };
+    localStorage.setItem(this.storageKey, JSON.stringify(dataToSave));
   }
 
   private debounceSave(): void {

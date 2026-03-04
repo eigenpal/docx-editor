@@ -5,7 +5,7 @@
  * Provides table selection tracking and table operation dispatch.
  */
 
-import { useState, useCallback, useSyncExternalStore, useMemo } from 'react';
+import { useState, useCallback, useMemo } from 'react';
 import {
   TableSelectionManager,
   getTableFromDocument,
@@ -76,9 +76,6 @@ export function useTableSelection({
 }: UseTableSelectionOptions): UseTableSelectionReturn {
   // Create the manager once
   const manager = useMemo(() => new TableSelectionManager(), []);
-
-  // Subscribe to core manager state
-  const coreSnapshot = useSyncExternalStore(manager.subscribe, manager.getSnapshot);
 
   // Higher-level state that includes table context (depends on doc + core selection)
   const [state, setState] = useState<TableSelectionState>({
@@ -224,7 +221,7 @@ export function useTableSelection({
     (tableIndex: number, rowIndex: number, columnIndex: number): boolean => {
       return manager.isCellSelected(tableIndex, rowIndex, columnIndex);
     },
-    [manager, coreSnapshot] // re-derive when core snapshot changes
+    [manager, state] // re-derive when state changes
   );
 
   return {

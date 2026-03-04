@@ -36,19 +36,11 @@ export type RenderAsyncOptions = Omit<DocxEditorProps, 'documentBuffer' | 'docum
 
 /**
  * React-specific handle that extends the framework-agnostic EditorHandle
- * with additional methods specific to the React implementation.
+ * with zoom control.
  */
 export interface DocxEditorHandle extends EditorHandle {
-  /** Save the document and return the DOCX as an ArrayBuffer. */
-  save: () => Promise<Blob | null>;
-  /** Get the current parsed document model. */
-  getDocument: () => Document | null;
-  /** Focus the editor. */
-  focus: () => void;
   /** Set zoom level (1.0 = 100%). */
   setZoom: (zoom: number) => void;
-  /** Unmount the editor and clean up. */
-  destroy: () => void;
 }
 
 /**

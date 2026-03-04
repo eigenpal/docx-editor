@@ -165,11 +165,6 @@ export class LayoutCoordinator extends Subscribable<LayoutCoordinatorSnapshot> {
     this.emitSnapshot();
   }
 
-  /** Update drag to the given position (if desired). */
-  updateDrag(_currentPos: number): void {
-    // Position tracking is done via PM selection; this is just for state flag
-  }
-
   /** End drag selection. */
   endDrag(): void {
     this._isDragging = false;
