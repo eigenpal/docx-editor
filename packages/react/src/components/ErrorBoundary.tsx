@@ -5,29 +5,21 @@
  * Also provides error toast/notification system.
  */
 
-import React, { Component, createContext, useContext, useState, useCallback, useRef } from 'react';
+import React, {
+  Component,
+  createContext,
+  useContext,
+  useState,
+  useCallback,
+  useMemo,
+  useSyncExternalStore,
+} from 'react';
 import type { ReactNode, ErrorInfo, CSSProperties } from 'react';
+import { ErrorManager } from '@eigenpal/docx-core';
+import type { ErrorSeverity, ErrorNotification } from '@eigenpal/docx-core';
 
-// ============================================================================
-// TYPES
-// ============================================================================
-
-/**
- * Error severity levels
- */
-export type ErrorSeverity = 'error' | 'warning' | 'info';
-
-/**
- * Error notification
- */
-export interface ErrorNotification {
-  id: string;
-  message: string;
-  severity: ErrorSeverity;
-  details?: string;
-  timestamp: number;
-  dismissed?: boolean;
-}
+// Re-export for backwards compat
+export type { ErrorSeverity, ErrorNotification };
 
 /**
  * Error context value
@@ -93,83 +85,75 @@ export function useErrorNotifications(): ErrorContextValue {
 
 /**
  * Error notification provider
+ *
+ * Thin React wrapper around the framework-agnostic ErrorManager.
+ * Uses useSyncExternalStore to subscribe to ErrorManager state.
  */
 export function ErrorProvider({ children }: { children: ReactNode }) {
-  const [notifications, setNotifications] = useState<ErrorNotification[]>([]);
-  const idCounter = useRef(0);
+  // Create ErrorManager once
+  const manager = useMemo(() => new ErrorManager(), []);
 
-  const addNotification = useCallback(
-    (message: string, severity: ErrorSeverity, details?: string) => {
-      const id = `error-${++idCounter.current}-${Date.now()}`;
-      const notification: ErrorNotification = {
-        id,
-        message,
-        severity,
-        details,
-        timestamp: Date.now(),
-      };
-
-      setNotifications((prev) => [...prev, notification]);
-
-      // Auto-dismiss after 5 seconds for info/warning
-      if (severity !== 'error') {
-        setTimeout(() => {
-          dismissNotification(id);
-        }, 5000);
-      }
-
-      return id;
-    },
-    []
-  );
+  // Subscribe to manager state
+  const snapshot = useSyncExternalStore(manager.subscribe, manager.getSnapshot);
 
   const showError = useCallback(
     (message: string, details?: string) => {
-      addNotification(message, 'error', details);
+      manager.showError(message, details);
     },
-    [addNotification]
+    [manager]
   );
 
   const showWarning = useCallback(
     (message: string, details?: string) => {
-      addNotification(message, 'warning', details);
+      manager.showWarning(message, details);
     },
-    [addNotification]
+    [manager]
   );
 
   const showInfo = useCallback(
     (message: string, details?: string) => {
-      addNotification(message, 'info', details);
+      manager.showInfo(message, details);
     },
-    [addNotification]
+    [manager]
   );
 
-  const dismissNotification = useCallback((id: string) => {
-    setNotifications((prev) => prev.map((n) => (n.id === id ? { ...n, dismissed: true } : n)));
-
-    // Remove from list after animation
-    setTimeout(() => {
-      setNotifications((prev) => prev.filter((n) => n.id !== id));
-    }, 300);
-  }, []);
+  const dismissNotification = useCallback(
+    (id: string) => {
+      manager.dismiss(id);
+    },
+    [manager]
+  );
 
   const clearNotifications = useCallback(() => {
-    setNotifications([]);
-  }, []);
+    manager.clearAll();
+  }, [manager]);
 
-  const value: ErrorContextValue = {
-    notifications,
-    showError,
-    showWarning,
-    showInfo,
-    dismissNotification,
-    clearNotifications,
-  };
+  const value: ErrorContextValue = useMemo(
+    () => ({
+      notifications: snapshot.notifications,
+      showError,
+      showWarning,
+      showInfo,
+      dismissNotification,
+      clearNotifications,
+    }),
+    [
+      snapshot.notifications,
+      showError,
+      showWarning,
+      showInfo,
+      dismissNotification,
+      clearNotifications,
+    ]
+  );
 
   return (
     <ErrorContext.Provider value={value}>
       {children}
-      <NotificationContainer notifications={notifications} onDismiss={dismissNotification} />
+      <NotificationContainer
+        notifications={snapshot.notifications}
+        onDismiss={dismissNotification}
+      />
     </ErrorContext.Provider>
   );
 }

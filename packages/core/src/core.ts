@@ -250,3 +250,71 @@ export {
   type McpToolResult,
   type McpSession,
 } from './core-plugins';
+
+// ============================================================================
+// MANAGER CLASSES (Framework-Agnostic Business Logic)
+// ============================================================================
+
+export {
+  // Base class
+  Subscribable,
+  // Manager classes
+  AutoSaveManager,
+  TableSelectionManager,
+  ErrorManager,
+  PluginLifecycleManager,
+  // AutoSave utilities
+  formatLastSaveTime,
+  getAutoSaveStatusLabel,
+  getAutoSaveStorageSize,
+  formatStorageSize,
+  isAutoSaveSupported,
+  // TableSelection utilities
+  TABLE_DATA_ATTRIBUTES,
+  findTableFromClick,
+  getTableFromDocument,
+  updateTableInDocument,
+  deleteTableFromDocument,
+  // Clipboard utilities
+  getSelectionRuns,
+  createSelectionFromDOM,
+  extractFormattingFromElement,
+  rgbToHex,
+  // PluginLifecycle utilities
+  injectStyles,
+  // Coordinators
+  LayoutCoordinator,
+  EditorCoordinator,
+} from './managers';
+
+export type {
+  // EditorHandle interface
+  EditorHandle,
+  // AutoSave types
+  AutoSaveStatus,
+  AutoSaveManagerOptions,
+  SavedDocumentData,
+  AutoSaveSnapshot,
+  // TableSelection types
+  CellCoordinates,
+  TableSelectionSnapshot,
+  // Error types
+  ErrorSeverity,
+  ErrorNotification,
+  ErrorManagerSnapshot,
+  // Plugin types
+  PluginLifecycleConfig,
+  PluginLifecycleSnapshot,
+  // Clipboard types
+  ClipboardSelection,
+  // LayoutCoordinator types
+  SelectionRect,
+  CaretPosition,
+  ImageSelectionInfo,
+  ColumnResizeState,
+  LayoutCoordinatorSnapshot,
+  // EditorCoordinator types
+  EditorLoadingState,
+  EditorCoordinatorOptions,
+  EditorCoordinatorSnapshot,
+} from './managers';
