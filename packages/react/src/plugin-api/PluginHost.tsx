@@ -11,6 +11,7 @@ import {
   useCallback,
   useRef,
   useMemo,
+  useSyncExternalStore,
   forwardRef,
   useImperativeHandle,
   cloneElement,
@@ -18,6 +19,7 @@ import {
 import { TextSelection } from 'prosemirror-state';
 import type { EditorView } from 'prosemirror-view';
 import type { Plugin as ProseMirrorPlugin } from 'prosemirror-state';
+import { PluginLifecycleManager, injectStyles as coreInjectStyles } from '@eigenpal/docx-core';
 import type { ReactEditorPlugin, PluginHostProps, PluginHostRef, PanelConfig } from './types';
 // Backwards-compatible alias
 type EditorPlugin = ReactEditorPlugin;
@@ -33,32 +35,8 @@ const DEFAULT_PANEL_CONFIG: Required<PanelConfig> = {
   defaultCollapsed: false,
 };
 
-/**
- * Injects CSS styles into the document head.
- */
-function injectStyles(pluginId: string, css: string): () => void {
-  const styleId = `plugin-styles-${pluginId}`;
-
-  // Remove existing styles if any
-  const existing = document.getElementById(styleId);
-  if (existing) {
-    existing.remove();
-  }
-
-  // Inject new styles
-  const style = document.createElement('style');
-  style.id = styleId;
-  style.textContent = css;
-  document.head.appendChild(style);
-
-  // Return cleanup function
-  return () => {
-    const el = document.getElementById(styleId);
-    if (el) {
-      el.remove();
-    }
-  };
-}
+// Use the framework-agnostic injectStyles from core
+const injectStyles = coreInjectStyles;
 
 // Default styles for PluginHost - defined here so it can be used in the component
 const PLUGIN_HOST_STYLES = `
@@ -237,11 +215,15 @@ export const PluginHost = forwardRef<PluginHostRef, PluginHostProps>(function Pl
     import('./types').RenderedDomContext | null
   >(null);
 
-  // Plugin states (map of pluginId -> state)
-  const pluginStatesRef = useRef<Map<string, unknown>>(new Map());
-  // State version counter - incremented when plugin states change, used as dependency for overlays
-  const [stateVersion, setStateVersion] = useState(0);
-  const forceUpdate = useCallback(() => setStateVersion((v) => v + 1), []);
+  // PluginLifecycleManager handles: initialization, state tracking,
+  // style injection, dispatch wrapping, DOM event listeners, and destroy.
+  const lifecycleManager = useMemo(() => new PluginLifecycleManager(), []);
+
+  // Subscribe to lifecycle manager state (replaces pluginStatesRef + lifecycleSnapshot.version)
+  const lifecycleSnapshot = useSyncExternalStore(
+    lifecycleManager.subscribe,
+    lifecycleManager.getSnapshot
+  );
 
   // Panel collapsed states
   const [collapsedPanels, setCollapsedPanels] = useState<Set<string>>(() => {
@@ -265,105 +247,30 @@ export const PluginHost = forwardRef<PluginHostRef, PluginHostProps>(function Pl
     return sizes;
   });
 
-  // Initialize plugin states
+  // Initialize plugins via lifecycle manager when editorView or plugins change
   useEffect(() => {
-    for (const plugin of plugins) {
-      if (plugin.initialize && !pluginStatesRef.current.has(plugin.id)) {
-        pluginStatesRef.current.set(plugin.id, plugin.initialize(editorView));
-      }
-    }
-    forceUpdate();
-  }, [plugins, editorView]);
+    if (!editorView) return;
 
-  // Inject base PluginHost styles
+    const configs = plugins.map((plugin) => ({
+      id: plugin.id,
+      styles: plugin.styles,
+      initialize: plugin.initialize,
+      onStateChange: plugin.onStateChange,
+      destroy: plugin.destroy,
+    }));
+
+    lifecycleManager.initialize(configs, editorView);
+
+    return () => {
+      lifecycleManager.destroy();
+    };
+  }, [lifecycleManager, editorView, plugins]);
+
+  // Inject base PluginHost styles (standalone — not plugin-specific)
   useEffect(() => {
     const cleanup = injectStyles('plugin-host-base', PLUGIN_HOST_STYLES);
     return cleanup;
   }, []);
-
-  // Inject plugin styles
-  useEffect(() => {
-    const cleanupFns: (() => void)[] = [];
-
-    for (const plugin of plugins) {
-      if (plugin.styles) {
-        cleanupFns.push(injectStyles(plugin.id, plugin.styles));
-      }
-    }
-
-    return () => {
-      for (const cleanup of cleanupFns) {
-        cleanup();
-      }
-    };
-  }, [plugins]);
-
-  // Call plugin destroy on unmount
-  useEffect(() => {
-    return () => {
-      for (const plugin of plugins) {
-        if (plugin.destroy) {
-          plugin.destroy();
-        }
-      }
-    };
-  }, [plugins]);
-
-  // Update plugin states when editor state changes
-  useEffect(() => {
-    if (!editorView) return;
-
-    // We need to hook into state changes - use DOM events
-    // as a lightweight way to detect changes
-    const updatePluginStates = () => {
-      let anyChanged = false;
-      for (const plugin of plugins) {
-        if (plugin.onStateChange) {
-          const newState = plugin.onStateChange(editorView);
-          if (newState !== undefined) {
-            pluginStatesRef.current.set(plugin.id, newState);
-            anyChanged = true;
-          }
-        }
-      }
-      // Only trigger re-render if at least one plugin state actually changed
-      if (anyChanged) {
-        forceUpdate();
-      }
-    };
-
-    // Initial state update
-    updatePluginStates();
-
-    // Listen for editor updates via DOM events
-    const editorDom = editorView.dom;
-    editorDom.addEventListener('input', updatePluginStates);
-    editorDom.addEventListener('focus', updatePluginStates);
-    editorDom.addEventListener('click', updatePluginStates);
-
-    // Debounced update for transactions (hover/select from panels)
-    let pendingUpdate: number | null = null;
-    const debouncedUpdate = () => {
-      if (pendingUpdate) cancelAnimationFrame(pendingUpdate);
-      pendingUpdate = requestAnimationFrame(updatePluginStates);
-    };
-
-    // Wrap dispatch to catch hover/select transactions from panels
-    const originalDispatch = editorView.dispatch.bind(editorView);
-    editorView.dispatch = (tr) => {
-      originalDispatch(tr);
-      // Update on non-doc-changing transactions (hover/select) or after doc changes
-      debouncedUpdate();
-    };
-
-    return () => {
-      editorDom.removeEventListener('input', updatePluginStates);
-      editorDom.removeEventListener('focus', updatePluginStates);
-      editorDom.removeEventListener('click', updatePluginStates);
-      if (pendingUpdate) cancelAnimationFrame(pendingUpdate);
-      editorView.dispatch = originalDispatch;
-    };
-  }, [editorView, plugins]);
 
   // Callbacks for panel interaction
   const scrollToPosition = useCallback(
@@ -402,31 +309,27 @@ export const PluginHost = forwardRef<PluginHostRef, PluginHostProps>(function Pl
     [editorView]
   );
 
-  // Get plugin state helper
-  const getPluginState = useCallback(<T,>(pluginId: string): T | undefined => {
-    return pluginStatesRef.current.get(pluginId) as T | undefined;
-  }, []);
+  // Get plugin state helper — delegates to lifecycle manager
+  const getPluginState = useCallback(
+    <T,>(pluginId: string): T | undefined => {
+      return lifecycleManager.getPluginState<T>(pluginId);
+    },
+    [lifecycleManager]
+  );
 
-  // Set plugin state helper
-  const setPluginState = useCallback(<T,>(pluginId: string, state: T) => {
-    pluginStatesRef.current.set(pluginId, state);
-    forceUpdate();
-  }, []);
+  // Set plugin state helper — delegates to lifecycle manager
+  const setPluginState = useCallback(
+    <T,>(pluginId: string, state: T) => {
+      lifecycleManager.setPluginState(pluginId, state);
+    },
+    [lifecycleManager]
+  );
 
-  // Refresh all plugin states
+  // Refresh all plugin states — delegates to lifecycle manager
   const refreshPluginStates = useCallback(() => {
     if (!editorView) return;
-
-    for (const plugin of plugins) {
-      if (plugin.onStateChange) {
-        const newState = plugin.onStateChange(editorView);
-        if (newState !== undefined) {
-          pluginStatesRef.current.set(plugin.id, newState);
-        }
-      }
-    }
-    forceUpdate();
-  }, [editorView, plugins]);
+    lifecycleManager.updateStates(editorView);
+  }, [editorView, lifecycleManager]);
 
   // Expose ref methods
   useImperativeHandle(
@@ -528,7 +431,7 @@ export const PluginHost = forwardRef<PluginHostRef, PluginHostProps>(function Pl
     if (renderedDomContext) {
       for (const plugin of plugins) {
         if (plugin.renderOverlay) {
-          const pluginState = pluginStatesRef.current.get(plugin.id);
+          const pluginState = lifecycleSnapshot.states.get(plugin.id);
           overlays.push(
             <div key={`overlay-${plugin.id}`} className="plugin-overlay" data-plugin-id={plugin.id}>
               {plugin.renderOverlay(renderedDomContext, pluginState, editorView)}
@@ -548,7 +451,7 @@ export const PluginHost = forwardRef<PluginHostRef, PluginHostProps>(function Pl
       const isCollapsed = collapsedPanels.has(plugin.id);
       const size = panelSizes.get(plugin.id) ?? config.defaultSize;
       const Panel = plugin.Panel;
-      const pluginState = pluginStatesRef.current.get(plugin.id);
+      const pluginState = lifecycleSnapshot.states.get(plugin.id);
 
       // Use calculated position, fall back to a default if not ready
       const leftStyle = panelLeftPosition !== null ? `${panelLeftPosition}px` : 'calc(50% + 428px)';
@@ -591,7 +494,7 @@ export const PluginHost = forwardRef<PluginHostRef, PluginHostProps>(function Pl
   }, [
     renderedDomContext,
     plugins,
-    stateVersion,
+    lifecycleSnapshot.version,
     editorView,
     collapsedPanels,
     panelSizes,
@@ -669,7 +572,7 @@ export const PluginHost = forwardRef<PluginHostRef, PluginHostProps>(function Pl
     const size = panelSizes.get(plugin.id) ?? config.defaultSize;
 
     const Panel = plugin.Panel;
-    const pluginState = pluginStatesRef.current.get(plugin.id);
+    const pluginState = lifecycleSnapshot.states.get(plugin.id);
 
     return (
       <div
