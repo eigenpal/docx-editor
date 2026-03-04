@@ -34,6 +34,12 @@ export interface SelectionContext {
   listType?: 'bullet' | 'numbered';
   /** List level (0-8) */
   listLevel?: number;
+  /** Active comment IDs at cursor position */
+  activeCommentIds: number[];
+  /** Whether cursor is inside a tracked insertion */
+  inInsertion: boolean;
+  /** Whether cursor is inside a tracked deletion */
+  inDeletion: boolean;
 }
 
 /**
@@ -108,6 +114,24 @@ export function extractSelectionContext(state: EditorState): SelectionContext {
   const listType = numPr?.numId === 1 ? 'bullet' : numPr?.numId ? 'numbered' : undefined;
   const listLevel = numPr?.ilvl;
 
+  // Comment and tracked change detection
+  const allMarks = state.storedMarks || (empty ? $from.marks() : []);
+  const activeCommentIds: number[] = [];
+  let inInsertion = false;
+  let inDeletion = false;
+
+  for (const mark of allMarks) {
+    if (mark.type.name === 'comment' && mark.attrs.commentId) {
+      activeCommentIds.push(mark.attrs.commentId);
+    }
+    if (mark.type.name === 'insertion') {
+      inInsertion = true;
+    }
+    if (mark.type.name === 'deletion') {
+      inDeletion = true;
+    }
+  }
+
   return {
     hasSelection: !empty,
     isMultiParagraph: startParagraphIndex !== endParagraphIndex,
@@ -118,6 +142,9 @@ export function extractSelectionContext(state: EditorState): SelectionContext {
     inList,
     listType,
     listLevel,
+    activeCommentIds,
+    inInsertion,
+    inDeletion,
   };
 }
 
@@ -246,6 +273,9 @@ function contextsEqual(a: SelectionContext, b: SelectionContext): boolean {
     a.inList === b.inList &&
     a.listType === b.listType &&
     a.listLevel === b.listLevel &&
+    a.inInsertion === b.inInsertion &&
+    a.inDeletion === b.inDeletion &&
+    JSON.stringify(a.activeCommentIds) === JSON.stringify(b.activeCommentIds) &&
     JSON.stringify(a.textFormatting) === JSON.stringify(b.textFormatting) &&
     JSON.stringify(a.paragraphFormatting) === JSON.stringify(b.paragraphFormatting)
   );

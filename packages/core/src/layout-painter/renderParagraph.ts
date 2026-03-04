@@ -172,6 +172,29 @@ function applyRunStyles(element: HTMLElement, run: TextRun | TabRun): void {
     decorations.push('line-through');
   }
 
+  // Comment highlight
+  if (run.commentIds && run.commentIds.length > 0) {
+    element.style.backgroundColor = 'rgba(255, 212, 0, 0.25)';
+    element.style.borderBottom = '2px solid rgba(255, 212, 0, 0.6)';
+    element.dataset.commentId = String(run.commentIds[0]);
+  }
+
+  // Tracked insertion styling
+  if (run.isInsertion) {
+    element.style.color = '#2e7d32';
+    if (!decorations.includes('underline')) decorations.push('underline');
+    element.style.textDecorationColor = '#2e7d32';
+    element.classList.add('docx-insertion');
+  }
+
+  // Tracked deletion styling
+  if (run.isDeletion) {
+    element.style.color = '#c62828';
+    if (!decorations.includes('line-through')) decorations.push('line-through');
+    element.style.textDecorationColor = '#c62828';
+    element.classList.add('docx-deletion');
+  }
+
   if (decorations.length > 0) {
     element.style.textDecorationLine = decorations.join(' ');
   }

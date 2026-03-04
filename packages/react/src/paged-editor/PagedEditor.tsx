@@ -153,6 +153,8 @@ export interface PagedEditorProps {
   className?: string;
   /** Custom styles. */
   style?: CSSProperties;
+  /** Whether comments sidebar is open (shifts document left). */
+  commentsSidebarOpen?: boolean;
 }
 
 export interface PagedEditorRef {
@@ -1155,6 +1157,7 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
       onBodyClick,
       className,
       style,
+      commentsSidebarOpen = false,
     } = props;
 
     // Refs
@@ -3166,8 +3169,14 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
           style={{
             ...viewportStyles,
             minHeight: totalHeight,
-            transform: zoom !== 1 ? `scale(${zoom})` : undefined,
+            transform: (() => {
+              const parts: string[] = [];
+              if (commentsSidebarOpen) parts.push('translateX(-160px)');
+              if (zoom !== 1) parts.push(`scale(${zoom})`);
+              return parts.length > 0 ? parts.join(' ') : undefined;
+            })(),
             transformOrigin: 'top center',
+            transition: 'transform 0.2s ease',
           }}
         >
           {/* Pages container */}

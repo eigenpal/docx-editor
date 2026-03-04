@@ -36,6 +36,16 @@ export type RunFormatting = {
   footnoteRefId?: number;
   /** Endnote reference ID (if this run contains an endnote reference) */
   endnoteRefId?: number;
+  /** Comment IDs if this run is within a comment range */
+  commentIds?: number[];
+  /** Whether this run is a tracked insertion */
+  isInsertion?: boolean;
+  /** Whether this run is a tracked deletion */
+  isDeletion?: boolean;
+  /** Author of the tracked change */
+  changeAuthor?: string;
+  /** Date of the tracked change */
+  changeDate?: string;
 };
 
 /**

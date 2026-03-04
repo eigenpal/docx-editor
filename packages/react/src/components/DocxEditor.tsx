@@ -32,10 +32,18 @@ import {
   createBaselineSnapshot,
 } from '@eigenpal/docx-core/docx/revisions/baseline';
 
-import { Toolbar, type SelectionFormatting, type FormattingAction } from './Toolbar';
+import {
+  Toolbar,
+  ToolbarButton,
+  ToolbarSeparator,
+  type SelectionFormatting,
+  type FormattingAction,
+} from './Toolbar';
 import { pointsToHalfPoints } from './ui/FontSizePicker';
 import { DocumentOutline } from './DocumentOutline';
+import { CommentsSidebar, type TrackedChangeEntry } from './CommentsSidebar';
 import type { HeadingInfo } from '@eigenpal/docx-core/utils/headingCollector';
+import type { Comment } from '@eigenpal/docx-core/types/content';
 import { ErrorBoundary, ErrorProvider } from './ErrorBoundary';
 import type { TableAction } from './ui/TableToolbar';
 import { mapHexToHighlightName } from './toolbarUtils';
@@ -427,6 +435,14 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
   const showOutlineRef = useRef(false);
   showOutlineRef.current = showOutline;
   const [outlineHeadings, setHeadingInfos] = useState<HeadingInfo[]>([]);
+
+  // Comments sidebar state
+  const [showCommentsSidebar, setShowCommentsSidebar] = useState(false);
+  const [comments, setComments] = useState<Comment[]>([]);
+  const [trackedChanges] = useState<TrackedChangeEntry[]>([]);
+  const [activeCommentId, setActiveCommentId] = useState<number | null>(null);
+  const [isAddingComment, setIsAddingComment] = useState(false);
+  const [editingMode, setEditingMode] = useState<'editing' | 'suggesting'>('editing');
 
   // Sync outline visibility when prop changes
   useEffect(() => {
@@ -2248,6 +2264,52 @@ body { background: white; }
                       tableContext={state.pmTableContext}
                       onTableAction={handleTableAction}
                     >
+                      {/* Comment & Track Changes buttons */}
+                      <ToolbarSeparator />
+                      <ToolbarButton
+                        onClick={() => {
+                          if (!showCommentsSidebar) setShowCommentsSidebar(true);
+                          setIsAddingComment(true);
+                        }}
+                        disabled={readOnly}
+                        title="Add comment (Ctrl+Alt+M)"
+                        ariaLabel="Add comment"
+                      >
+                        <MaterialSymbol name="add_comment" size={20} />
+                      </ToolbarButton>
+                      <ToolbarButton
+                        onClick={() => setShowCommentsSidebar(!showCommentsSidebar)}
+                        active={showCommentsSidebar}
+                        title="Toggle comments sidebar"
+                        ariaLabel="Toggle comments sidebar"
+                      >
+                        <MaterialSymbol name="comment" size={20} />
+                      </ToolbarButton>
+                      <ToolbarSeparator />
+                      <ToolbarButton
+                        onClick={() =>
+                          setEditingMode(editingMode === 'editing' ? 'suggesting' : 'editing')
+                        }
+                        active={editingMode === 'suggesting'}
+                        title={`Mode: ${editingMode === 'editing' ? 'Editing' : 'Suggesting'} (Ctrl+Shift+E)`}
+                        ariaLabel="Toggle suggestion mode"
+                      >
+                        <MaterialSymbol name="edit_note" size={20} />
+                        {editingMode === 'suggesting' && (
+                          <span
+                            style={{
+                              position: 'absolute',
+                              bottom: 0,
+                              left: '50%',
+                              transform: 'translateX(-50%)',
+                              width: 16,
+                              height: 2,
+                              backgroundColor: '#1a73e8',
+                              borderRadius: 1,
+                            }}
+                          />
+                        )}
+                      </ToolbarButton>
                       {toolbarExtra}
                     </Toolbar>
 
@@ -2344,6 +2406,7 @@ body { background: white; }
                       }}
                       onRenderedDomContextReady={onRenderedDomContextReady}
                       pluginOverlays={pluginOverlays}
+                      commentsSidebarOpen={showCommentsSidebar}
                     />
 
                     {/* Page navigation / indicator */}
@@ -2407,6 +2470,70 @@ body { background: white; }
                   onHeadingClick={handleHeadingInfoClick}
                   onClose={() => setShowOutline(false)}
                   topOffset={toolbarHeight}
+                />
+              )}
+
+              {/* Comments sidebar — absolutely positioned right */}
+              {showCommentsSidebar && (
+                <CommentsSidebar
+                  comments={comments}
+                  trackedChanges={trackedChanges}
+                  activeCommentId={activeCommentId}
+                  onClose={() => setShowCommentsSidebar(false)}
+                  onCommentClick={(id) => setActiveCommentId(id)}
+                  onCommentResolve={(id) => {
+                    setComments((prev) =>
+                      prev.map((c) => (c.id === id ? { ...c, done: true } : c))
+                    );
+                  }}
+                  onCommentReopen={(id) => {
+                    setComments((prev) =>
+                      prev.map((c) => (c.id === id ? { ...c, done: false } : c))
+                    );
+                  }}
+                  onCommentDelete={(id) => {
+                    setComments((prev) => prev.filter((c) => c.id !== id && c.parentId !== id));
+                  }}
+                  onCommentReply={(id, text) => {
+                    const newReply: Comment = {
+                      id: Date.now(),
+                      author: 'User',
+                      date: new Date().toISOString(),
+                      content: [
+                        {
+                          type: 'paragraph',
+                          formatting: {},
+                          content: [
+                            { type: 'run', formatting: {}, content: [{ type: 'text', text }] },
+                          ],
+                        },
+                      ],
+                      parentId: id,
+                    };
+                    setComments((prev) => [...prev, newReply]);
+                  }}
+                  onAddComment={(text) => {
+                    const newComment: Comment = {
+                      id: Date.now(),
+                      author: 'User',
+                      date: new Date().toISOString(),
+                      content: [
+                        {
+                          type: 'paragraph',
+                          formatting: {},
+                          content: [
+                            { type: 'run', formatting: {}, content: [{ type: 'text', text }] },
+                          ],
+                        },
+                      ],
+                    };
+                    setComments((prev) => [...prev, newComment]);
+                    setIsAddingComment(false);
+                    // TODO: Also add comment mark to PM selection
+                  }}
+                  onCancelAddComment={() => setIsAddingComment(false)}
+                  topOffset={toolbarHeight}
+                  isAddingComment={isAddingComment}
                 />
               )}
 

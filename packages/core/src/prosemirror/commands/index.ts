@@ -113,3 +113,15 @@ export { insertPageBreak } from './pageBreak';
 
 // Table of Contents
 export { generateTOC } from './paragraph';
+
+// Comments and Track Changes
+export {
+  addCommentMark,
+  removeCommentMark,
+  acceptChange,
+  rejectChange,
+  acceptAllChanges,
+  rejectAllChanges,
+  findNextChange,
+  findPreviousChange,
+} from './comments';

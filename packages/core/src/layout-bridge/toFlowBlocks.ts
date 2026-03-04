@@ -197,6 +197,27 @@ function extractRunFormatting(marks: readonly Mark[], theme?: Theme | null): Run
         }
         break;
       }
+
+      case 'comment': {
+        const commentId = mark.attrs.commentId as number;
+        if (commentId) {
+          if (!formatting.commentIds) formatting.commentIds = [];
+          formatting.commentIds.push(commentId);
+        }
+        break;
+      }
+
+      case 'insertion':
+        formatting.isInsertion = true;
+        formatting.changeAuthor = mark.attrs.author as string;
+        formatting.changeDate = mark.attrs.date as string;
+        break;
+
+      case 'deletion':
+        formatting.isDeletion = true;
+        formatting.changeAuthor = mark.attrs.author as string;
+        formatting.changeDate = mark.attrs.date as string;
+        break;
     }
   }
 
