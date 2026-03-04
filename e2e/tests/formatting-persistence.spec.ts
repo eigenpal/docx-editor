@@ -281,7 +281,7 @@ test.describe('Formatting Persistence - Toggling Off', () => {
 
     // The text should not be bold
     const isBold = await page.evaluate(() => {
-      const p = document.querySelector('.prosemirror-editor-content p');
+      const p = document.querySelector('.ProseMirror p');
       const strong = p?.querySelector('strong');
       return strong !== null;
     });

@@ -24,7 +24,7 @@ test.describe('Hyperlinks', () => {
 
   test('should open hyperlink dialog with Cmd+K', async ({ page }) => {
     // Click in editor to focus
-    const editor = page.locator('.prosemirror-editor-content');
+    const editor = page.locator('.ProseMirror');
     await editor.click();
     await page.waitForTimeout(200);
 
@@ -52,7 +52,7 @@ test.describe('Hyperlinks', () => {
 
   test('should open hyperlink dialog via toolbar button', async ({ page }) => {
     // Click in editor to focus
-    const editor = page.locator('.prosemirror-editor-content');
+    const editor = page.locator('.ProseMirror');
     await editor.click();
     await page.waitForTimeout(200);
 
@@ -75,7 +75,7 @@ test.describe('Hyperlinks', () => {
 
   test('should insert hyperlink with URL', async ({ page }) => {
     // Click in editor to focus
-    const editor = page.locator('.prosemirror-editor-content');
+    const editor = page.locator('.ProseMirror');
     await editor.click();
     await page.waitForTimeout(200);
 
@@ -114,7 +114,7 @@ test.describe('Hyperlinks', () => {
 
   test('should require URL to submit', async ({ page }) => {
     // Click in editor to focus
-    const editor = page.locator('.prosemirror-editor-content');
+    const editor = page.locator('.ProseMirror');
     await editor.click();
     await page.waitForTimeout(200);
 
@@ -145,7 +145,7 @@ test.describe('Hyperlinks', () => {
 
   test('should close dialog on Cancel', async ({ page }) => {
     // Click in editor to focus
-    const editor = page.locator('.prosemirror-editor-content');
+    const editor = page.locator('.ProseMirror');
     await editor.click();
     await page.waitForTimeout(200);
 
@@ -173,7 +173,7 @@ test.describe('Hyperlinks', () => {
 
   test('should close dialog on Escape', async ({ page }) => {
     // Click in editor to focus
-    const editor = page.locator('.prosemirror-editor-content');
+    const editor = page.locator('.ProseMirror');
     await editor.click();
     await page.waitForTimeout(200);
 
@@ -205,7 +205,7 @@ test.describe('Hyperlinks', () => {
 
   test('should auto-add https:// if protocol missing', async ({ page }) => {
     // Click in editor to focus
-    const editor = page.locator('.prosemirror-editor-content');
+    const editor = page.locator('.ProseMirror');
     await editor.click();
     await page.waitForTimeout(200);
 
@@ -240,7 +240,7 @@ test.describe('Hyperlinks', () => {
 
   test('should support mailto: links', async ({ page }) => {
     // Click in editor to focus
-    const editor = page.locator('.prosemirror-editor-content');
+    const editor = page.locator('.ProseMirror');
     await editor.click();
     await page.waitForTimeout(200);
 
@@ -275,7 +275,7 @@ test.describe('Hyperlinks', () => {
 
   test('should open links in new tab', async ({ page }) => {
     // Click in editor to focus
-    const editor = page.locator('.prosemirror-editor-content');
+    const editor = page.locator('.ProseMirror');
     await editor.click();
     await page.waitForTimeout(200);
 
@@ -311,7 +311,7 @@ test.describe('Hyperlinks', () => {
 
   test('should insert hyperlink with tooltip', async ({ page }) => {
     // Click in editor to focus
-    const editor = page.locator('.prosemirror-editor-content');
+    const editor = page.locator('.ProseMirror');
     await editor.click();
     await page.waitForTimeout(200);
 

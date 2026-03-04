@@ -6,7 +6,6 @@ import { test, expect } from '@playwright/test';
  */
 
 test.describe('Visual Regression Tests', () => {
-
   test('capture current editor state', async ({ page }) => {
     await page.goto('/');
 
@@ -19,7 +18,7 @@ test.describe('Visual Regression Tests', () => {
     // Full page screenshot
     await page.screenshot({
       path: 'screenshots/current-state.png',
-      fullPage: true
+      fullPage: true,
     });
 
     // Check page loaded
@@ -30,11 +29,11 @@ test.describe('Visual Regression Tests', () => {
   test('no JavaScript errors on load', async ({ page }) => {
     const errors: string[] = [];
 
-    page.on('pageerror', error => {
+    page.on('pageerror', (error) => {
       errors.push(error.message);
     });
 
-    page.on('console', msg => {
+    page.on('console', (msg) => {
       if (msg.type() === 'error') {
         errors.push(msg.text());
       }
@@ -44,11 +43,14 @@ test.describe('Visual Regression Tests', () => {
     await page.waitForTimeout(2000);
 
     // Filter out known non-critical errors
-    const criticalErrors = errors.filter(e =>
-      !e.includes('favicon') &&
-      !e.includes('404') &&
-      !e.includes('500') &&
-      !e.includes('Failed to load resource')
+    const criticalErrors = errors.filter(
+      (e) =>
+        !e.includes('favicon') &&
+        !e.includes('404') &&
+        !e.includes('500') &&
+        !e.includes('Failed to load resource') &&
+        !e.includes('ERR_NAME_NOT_RESOLVED') &&
+        !e.includes('CORS policy')
     );
 
     if (criticalErrors.length > 0) {
@@ -57,17 +59,15 @@ test.describe('Visual Regression Tests', () => {
 
     expect(criticalErrors).toHaveLength(0);
   });
-
 });
 
 test.describe('Component Screenshots', () => {
-
   test('screenshot toolbar (when exists)', async ({ page }) => {
     await page.goto('/');
 
     const toolbar = page.locator('[data-testid="toolbar"], .toolbar, #toolbar');
 
-    if (await toolbar.count() > 0) {
+    if ((await toolbar.count()) > 0) {
       await toolbar.screenshot({ path: 'screenshots/component-toolbar.png' });
     }
   });
@@ -77,7 +77,7 @@ test.describe('Component Screenshots', () => {
 
     const editor = page.locator('[data-testid="editor"], .editor, #editor, [contenteditable]');
 
-    if (await editor.count() > 0) {
+    if ((await editor.count()) > 0) {
       await editor.first().screenshot({ path: 'screenshots/component-editor.png' });
     }
   });
@@ -87,9 +87,8 @@ test.describe('Component Screenshots', () => {
 
     const viewer = page.locator('[data-testid="document-viewer"], .document-viewer, .page');
 
-    if (await viewer.count() > 0) {
+    if ((await viewer.count()) > 0) {
       await viewer.first().screenshot({ path: 'screenshots/component-viewer.png' });
     }
   });
-
 });

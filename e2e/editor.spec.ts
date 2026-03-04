@@ -23,8 +23,15 @@ test.describe('DOCX Editor', () => {
     // Take screenshot
     await page.screenshot({ path: 'screenshots/01-page-load.png', fullPage: true });
 
-    // Check no console errors
-    expect(errors.filter((e) => !e.includes('favicon'))).toHaveLength(0);
+    // Check no console errors (ignore favicon and network errors from external APIs)
+    const relevantErrors = errors.filter(
+      (e) =>
+        !e.includes('favicon') &&
+        !e.includes('ERR_NAME_NOT_RESOLVED') &&
+        !e.includes('ERR_FAILED') &&
+        !e.includes('CORS policy')
+    );
+    expect(relevantErrors).toHaveLength(0);
   });
 
   test('displays placeholder when no document loaded', async ({ page }) => {

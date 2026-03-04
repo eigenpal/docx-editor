@@ -546,9 +546,11 @@ export class EditorPage {
    * Set font family
    */
   async setFontFamily(fontFamily: string): Promise<void> {
-    // Native <select> — use selectOption for reliable interaction
-    const fontPicker = this.toolbar.locator('select[aria-label="Select font family"]');
-    await fontPicker.selectOption({ label: fontFamily });
+    // Radix UI Select — click trigger to open, then click the option by text
+    const fontTrigger = this.toolbar.locator('[aria-label="Select font family"]');
+    await fontTrigger.click();
+    // Wait for Radix Select content to appear and click the matching option
+    await this.page.getByRole('option', { name: fontFamily, exact: true }).click();
     // Refocus editor after selecting from dropdown
     await this.focus();
   }
@@ -790,9 +792,11 @@ export class EditorPage {
    * Set paragraph style
    */
   async setParagraphStyle(style: string): Promise<void> {
-    // Native <select> — use selectOption for reliable interaction
-    const stylePicker = this.toolbar.locator('select[aria-label="Select paragraph style"]');
-    await stylePicker.selectOption({ label: style });
+    // Radix UI Select — click trigger to open, then click the option by text
+    const styleTrigger = this.toolbar.locator('[aria-label="Select paragraph style"]');
+    await styleTrigger.click();
+    // Wait for Radix Select content to appear and click the matching option
+    await this.page.getByRole('option', { name: style, exact: true }).click();
     // Refocus editor after selecting style
     await this.focus();
   }
@@ -898,16 +902,21 @@ export class EditorPage {
     // Open table grid selector
     await this.page.locator('[data-testid="toolbar-insert-table"]').click();
 
-    // Wait for grid to appear
-    await this.page.waitForSelector('.docx-table-grid', { state: 'visible', timeout: 5000 });
+    // Wait for grid to appear (TableGridInline uses role="grid")
+    await this.page.waitForSelector('[role="grid"][aria-label="Table size selector"]', {
+      state: 'visible',
+      timeout: 5000,
+    });
 
-    // Calculate grid cell index (row-major order, 5 columns per row)
+    // Calculate grid cell index (row-major order, 6 columns per row — default gridColumns)
     // Grid uses 1-based indexing for rows and cols
-    const cellIndex = (rows - 1) * 5 + cols;
+    const cellIndex = (rows - 1) * 6 + cols;
 
     // Get the target cell - must HOVER first to set the hover state, then click
     // The grid picker only inserts a table when hoverRows > 0 && hoverCols > 0
-    const targetCell = this.page.locator(`.docx-table-grid > div:nth-child(${cellIndex})`);
+    const targetCell = this.page.locator(
+      `[role="grid"][aria-label="Table size selector"] > [role="gridcell"]:nth-child(${cellIndex})`
+    );
 
     // Hover over the cell to set the hover state
     await targetCell.hover();
