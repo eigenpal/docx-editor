@@ -1,6 +1,9 @@
 /**
  * Simple imperative API for rendering a DOCX editor into a DOM element.
  *
+ * Returns an `EditorHandle` (from @eigenpal/docx-core) that works with
+ * any framework implementation.
+ *
  * Usage:
  * ```ts
  * import { renderAsync } from '@eigenpal/docx-js-editor';
@@ -11,7 +14,7 @@
  * });
  *
  * // Save the edited document
- * const buffer = await editor.save();
+ * const blob = await editor.save();
  *
  * // Clean up
  * editor.destroy();
@@ -23,6 +26,7 @@ import { createRoot, type Root } from 'react-dom/client';
 import { DocxEditor, type DocxEditorProps, type DocxEditorRef } from './components/DocxEditor';
 import type { DocxInput } from '@eigenpal/docx-core/utils/docxInput';
 import type { Document } from '@eigenpal/docx-core/types/document';
+import type { EditorHandle } from '@eigenpal/docx-core';
 
 /**
  * Options for {@link renderAsync}. A subset of DocxEditorProps minus
@@ -31,11 +35,12 @@ import type { Document } from '@eigenpal/docx-core/types/document';
 export type RenderAsyncOptions = Omit<DocxEditorProps, 'documentBuffer' | 'document'>;
 
 /**
- * Handle returned by {@link renderAsync} for interacting with the editor.
+ * React-specific handle that extends the framework-agnostic EditorHandle
+ * with additional methods specific to the React implementation.
  */
-export interface DocxEditorHandle {
+export interface DocxEditorHandle extends EditorHandle {
   /** Save the document and return the DOCX as an ArrayBuffer. */
-  save: () => Promise<ArrayBuffer | null>;
+  save: () => Promise<Blob | null>;
   /** Get the current parsed document model. */
   getDocument: () => Document | null;
   /** Focus the editor. */
@@ -71,7 +76,13 @@ export function renderAsync(
     }
 
     const handle: DocxEditorHandle = {
-      save: () => ref.current?.save() ?? Promise.resolve(null),
+      save: async () => {
+        const buffer = await (ref.current?.save() ?? Promise.resolve(null));
+        if (!buffer) return null;
+        return new Blob([buffer], {
+          type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        });
+      },
       getDocument: () => ref.current?.getDocument() ?? null,
       focus: () => ref.current?.focus(),
       setZoom: (z) => ref.current?.setZoom(z),
