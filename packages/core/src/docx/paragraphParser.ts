@@ -36,6 +36,9 @@ import type {
   SdtProperties,
   Insertion,
   Deletion,
+  MoveFrom,
+  MoveTo,
+  ParagraphPropertyChange,
   TrackedChangeInfo,
   MathEquation,
 } from '../types/document';
@@ -622,6 +625,84 @@ function getLocalName(name: string | undefined): string {
   return colonIndex >= 0 ? name.substring(colonIndex + 1) : name;
 }
 
+type TrackedChangeParseContext = 'default' | 'deletion';
+
+function replaceLocalName(name: string | undefined, localName: string): string {
+  if (!name) {
+    return `w:${localName}`;
+  }
+  const colonIndex = name.indexOf(':');
+  if (colonIndex < 0) {
+    return localName;
+  }
+  return `${name.substring(0, colonIndex + 1)}${localName}`;
+}
+
+function normalizeDeletionContentElement(node: XmlElement): XmlElement {
+  if (node.type !== 'element') {
+    return node;
+  }
+
+  const localName = getLocalName(node.name);
+  let mappedName = node.name;
+
+  if (localName === 'delText') {
+    mappedName = replaceLocalName(node.name, 't');
+  } else if (localName === 'delInstrText') {
+    mappedName = replaceLocalName(node.name, 'instrText');
+  }
+
+  return {
+    ...node,
+    name: mappedName,
+    elements: node.elements?.map(normalizeDeletionContentElement),
+  };
+}
+
+function parseTrackedChangeInfo(node: XmlElement): TrackedChangeInfo {
+  const rawId = getAttribute(node, 'w', 'id');
+  const parsedId = rawId ? parseInt(rawId, 10) : 0;
+  const rawAuthor = getAttribute(node, 'w', 'author');
+  const rawDate = getAttribute(node, 'w', 'date');
+  const author = rawAuthor?.trim() ?? '';
+  const date = rawDate?.trim() ?? '';
+
+  return {
+    id: Number.isInteger(parsedId) && parsedId >= 0 ? parsedId : 0,
+    author: author.length > 0 ? author : 'Unknown',
+    date: date.length > 0 ? date : undefined,
+  };
+}
+
+function parsePropertyChangeInfo(node: XmlElement): ParagraphPropertyChange['info'] {
+  const base = parseTrackedChangeInfo(node);
+  const rsid = (getAttribute(node, 'w', 'rsid') ?? '').trim();
+  return rsid.length > 0 ? { ...base, rsid } : base;
+}
+
+function parseParagraphPropertyChanges(
+  pPr: XmlElement | null,
+  theme: Theme | null,
+  styles: StyleMap | null,
+  currentFormatting: ParagraphFormatting | undefined
+): ParagraphPropertyChange[] | undefined {
+  if (!pPr) return undefined;
+
+  const changes = findChildren(pPr, 'w', 'pPrChange')
+    .map((changeElement): ParagraphPropertyChange => {
+      const previousPPr = findChild(changeElement, 'w', 'pPr');
+      return {
+        type: 'paragraphPropertyChange',
+        info: parsePropertyChangeInfo(changeElement),
+        previousFormatting: parseParagraphProperties(previousPPr, theme, styles ?? undefined),
+        currentFormatting,
+      };
+    })
+    .filter((change) => change.previousFormatting || change.currentFormatting);
+
+  return changes.length > 0 ? changes : undefined;
+}
+
 /**
  * Parse hyperlink element (w:hyperlink)
  *
@@ -777,7 +858,8 @@ function parseParagraphContents(
   theme: Theme | null,
   _numbering: NumberingMap | null,
   rels: RelationshipMap | null,
-  media: Map<string, MediaFile> | null
+  media: Map<string, MediaFile> | null,
+  trackedContext: TrackedChangeParseContext = 'default'
 ): ParagraphContent[] {
   const contents: ParagraphContent[] = [];
   const children = getChildElements(paraElement);
@@ -797,7 +879,9 @@ function parseParagraphContents(
     switch (localName) {
       case 'r': {
         // Check for field characters in this run
-        const run = parseRun(child, styles, theme, rels, media);
+        const runElement =
+          trackedContext === 'deletion' ? normalizeDeletionContentElement(child) : child;
+        const run = parseRun(runElement, styles, theme, rels, media);
 
         // Look for field characters
         let hasFieldBegin = false;
@@ -913,7 +997,15 @@ function parseParagraphContents(
             (el.name === 'w:sdtContent' || el.name?.endsWith(':sdtContent'))
         );
         if (sdtContentEl) {
-          const sdtParsed = parseParagraphContents(sdtContentEl, styles, theme, null, rels, media);
+          const sdtParsed = parseParagraphContents(
+            sdtContentEl,
+            styles,
+            theme,
+            null,
+            rels,
+            media,
+            trackedContext
+          );
           const properties = parseSdtProperties(sdtPr ?? null);
           const inlineSdt: InlineSdt = {
             type: 'inlineSdt',
@@ -929,11 +1021,7 @@ function parseParagraphContents(
 
       case 'ins': {
         // Track change: insertion — parse content and wrap
-        const insInfo: TrackedChangeInfo = {
-          id: parseInt(getAttribute(child, 'w', 'id') ?? '0', 10),
-          author: getAttribute(child, 'w', 'author') ?? 'Unknown',
-          date: getAttribute(child, 'w', 'date') ?? undefined,
-        };
+        const insInfo = parseTrackedChangeInfo(child);
         const insContent = parseParagraphContents(child, styles, theme, null, rels, media);
         const insertion: Insertion = {
           type: 'insertion',
@@ -947,12 +1035,16 @@ function parseParagraphContents(
       }
       case 'del': {
         // Track change: deletion — parse content and wrap
-        const delInfo: TrackedChangeInfo = {
-          id: parseInt(getAttribute(child, 'w', 'id') ?? '0', 10),
-          author: getAttribute(child, 'w', 'author') ?? 'Unknown',
-          date: getAttribute(child, 'w', 'date') ?? undefined,
-        };
-        const delContent = parseParagraphContents(child, styles, theme, null, rels, media);
+        const delInfo = parseTrackedChangeInfo(child);
+        const delContent = parseParagraphContents(
+          child,
+          styles,
+          theme,
+          null,
+          rels,
+          media,
+          'deletion'
+        );
         const deletion: Deletion = {
           type: 'deletion',
           info: delInfo,
@@ -963,11 +1055,67 @@ function parseParagraphContents(
         contents.push(deletion);
         break;
       }
-      case 'smartTag':
-      case 'moveTo':
-      case 'moveFrom':
-        // Other track changes - skip for now
+      case 'moveFrom': {
+        const moveFromInfo = parseTrackedChangeInfo(child);
+        const moveFromContent = parseParagraphContents(
+          child,
+          styles,
+          theme,
+          null,
+          rels,
+          media,
+          'deletion'
+        );
+        const moveFrom: MoveFrom = {
+          type: 'moveFrom',
+          info: moveFromInfo,
+          content: moveFromContent.filter(
+            (c): c is Run | Hyperlink => c.type === 'run' || c.type === 'hyperlink'
+          ),
+        };
+        contents.push(moveFrom);
         break;
+      }
+
+      case 'moveTo': {
+        const moveToInfo = parseTrackedChangeInfo(child);
+        const moveToContent = parseParagraphContents(child, styles, theme, null, rels, media);
+        const moveTo: MoveTo = {
+          type: 'moveTo',
+          info: moveToInfo,
+          content: moveToContent.filter(
+            (c): c is Run | Hyperlink => c.type === 'run' || c.type === 'hyperlink'
+          ),
+        };
+        contents.push(moveTo);
+        break;
+      }
+
+      case 'smartTag':
+        break;
+
+      case 'moveFromRangeStart': {
+        const id = parseInt(getAttribute(child, 'w', 'id') ?? '0', 10);
+        const name = getAttribute(child, 'w', 'name') ?? '';
+        contents.push({ type: 'moveFromRangeStart', id, name });
+        break;
+      }
+      case 'moveFromRangeEnd': {
+        const id = parseInt(getAttribute(child, 'w', 'id') ?? '0', 10);
+        contents.push({ type: 'moveFromRangeEnd', id });
+        break;
+      }
+      case 'moveToRangeStart': {
+        const id = parseInt(getAttribute(child, 'w', 'id') ?? '0', 10);
+        const name = getAttribute(child, 'w', 'name') ?? '';
+        contents.push({ type: 'moveToRangeStart', id, name });
+        break;
+      }
+      case 'moveToRangeEnd': {
+        const id = parseInt(getAttribute(child, 'w', 'id') ?? '0', 10);
+        contents.push({ type: 'moveToRangeEnd', id });
+        break;
+      }
 
       case 'commentRangeStart': {
         const commentId = parseInt(getAttribute(child, 'w', 'id') ?? '0', 10);
@@ -1048,6 +1196,12 @@ export function parseParagraph(
   const pPr = findChild(node, 'w', 'pPr');
   if (pPr) {
     paragraph.formatting = parseParagraphProperties(pPr, theme, styles ?? undefined);
+    paragraph.propertyChanges = parseParagraphPropertyChanges(
+      pPr,
+      theme,
+      styles,
+      paragraph.formatting
+    );
 
     // Check for section properties within paragraph (marks end of a section)
     const sectPr = findChild(pPr, 'w', 'sectPr');

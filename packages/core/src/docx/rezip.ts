@@ -36,6 +36,7 @@ import { serializeDocument } from './serializer/documentSerializer';
 import { serializeHeaderFooter } from './serializer/headerFooterSerializer';
 import { RELATIONSHIP_TYPES } from './relsParser';
 import { type RawDocxContent } from './unzip';
+import { createAllocatorAfterDocument, revisionizeDocument } from './revisions';
 
 // ============================================================================
 // NEW IMAGE HANDLING
@@ -211,6 +212,20 @@ export interface RepackOptions {
   updateModifiedDate?: boolean;
   /** Custom modifier name for lastModifiedBy */
   modifiedBy?: string;
+  /** Optional export-time tracked changes generation */
+  trackChanges?: RepackTrackChangesOptions;
+}
+
+/**
+ * Track Changes export controls for repack operations.
+ */
+export interface RepackTrackChangesOptions {
+  /** Enable tracked changes generation during export. */
+  enabled?: boolean;
+  /** Revision author for generated tracked changes. */
+  author?: string;
+  /** Optional revision timestamp (ISO 8601 string). */
+  date?: string;
 }
 
 /**
@@ -231,6 +246,7 @@ export async function repackDocx(doc: Document, options: RepackOptions = {}): Pr
   }
 
   const { compressionLevel = 6, updateModifiedDate = true, modifiedBy } = options;
+  const exportDocument = getDocumentForSerialization(doc, options);
 
   // Load the original ZIP
   const originalZip = await JSZip.loadAsync(doc.originalBuffer);
@@ -258,18 +274,18 @@ export async function repackDocx(doc: Document, options: RepackOptions = {}): Pr
 
   // Process newly inserted images (data URLs → binary media files + relationships).
   // This mutates image rIds in-place so the serializer outputs correct references.
-  const newImages = collectNewImages(doc.package.document.content);
+  const newImages = collectNewImages(exportDocument.package.document.content);
   await processNewImages(newImages, newZip, compressionLevel);
 
   // Serialize and update document.xml (after image rIds have been rewritten)
-  const documentXml = serializeDocument(doc);
+  const documentXml = serializeDocument(exportDocument);
   newZip.file('word/document.xml', documentXml, {
     compression: 'DEFLATE',
     compressionOptions: { level: compressionLevel },
   });
 
   // Serialize and update modified headers/footers
-  serializeHeadersFootersToZip(doc, newZip, compressionLevel);
+  serializeHeadersFootersToZip(exportDocument, newZip, compressionLevel);
 
   // Optionally update modification date in docProps/core.xml
   if (updateModifiedDate) {
@@ -314,6 +330,7 @@ export async function repackDocxFromRaw(
   options: RepackOptions = {}
 ): Promise<ArrayBuffer> {
   const { compressionLevel = 6, updateModifiedDate = true, modifiedBy } = options;
+  const exportDocument = getDocumentForSerialization(doc, options);
 
   // Create a new ZIP with all original files
   const newZip = new JSZip();
@@ -337,14 +354,17 @@ export async function repackDocxFromRaw(
   }
 
   // Serialize and update document.xml
-  const documentXml = serializeDocument(doc);
+  const newImages = collectNewImages(exportDocument.package.document.content);
+  await processNewImages(newImages, newZip, compressionLevel);
+
+  const documentXml = serializeDocument(exportDocument);
   newZip.file('word/document.xml', documentXml, {
     compression: 'DEFLATE',
     compressionOptions: { level: compressionLevel },
   });
 
   // Serialize and update modified headers/footers
-  serializeHeadersFootersToZip(doc, newZip, compressionLevel);
+  serializeHeadersFootersToZip(exportDocument, newZip, compressionLevel);
 
   // Optionally update core properties
   if (updateModifiedDate && rawContent.corePropsXml) {
@@ -367,6 +387,37 @@ export async function repackDocxFromRaw(
   });
 
   return arrayBuffer;
+}
+
+function getDocumentForSerialization(doc: Document, options: RepackOptions): Document {
+  if (!options.trackChanges?.enabled) {
+    return doc;
+  }
+
+  if (!doc.baselineDocument) {
+    return doc;
+  }
+
+  const baselineDocument: Document = {
+    package: doc.baselineDocument.package,
+    originalBuffer: doc.baselineDocument.originalBuffer,
+    templateVariables: doc.baselineDocument.templateVariables,
+    warnings: doc.baselineDocument.warnings,
+  };
+
+  const allocator = createAllocatorAfterDocument(baselineDocument);
+
+  return revisionizeDocument(baselineDocument, doc, {
+    allocator,
+    insertionMetadata: {
+      author: options.trackChanges.author,
+      date: options.trackChanges.date,
+    },
+    deletionMetadata: {
+      author: options.trackChanges.author,
+      date: options.trackChanges.date,
+    },
+  });
 }
 
 // ============================================================================

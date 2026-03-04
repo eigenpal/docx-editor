@@ -23,6 +23,11 @@ import type {
   InlineSdt,
   Insertion,
   Deletion,
+  MoveFrom,
+  MoveTo,
+  MoveFromRangeStart,
+  MoveToRangeStart,
+  ParagraphPropertyChange,
   TabStop,
   BorderSpec,
   ShadingProperties,
@@ -374,118 +379,153 @@ function serializeFrameProperties(frame: ParagraphFormatting['frame']): string {
 /**
  * Serialize paragraph formatting properties to w:pPr XML
  */
-export function serializeParagraphFormatting(formatting: ParagraphFormatting | undefined): string {
-  if (!formatting) return '';
-
+export function serializeParagraphFormatting(
+  formatting: ParagraphFormatting | undefined,
+  propertyChanges?: ParagraphPropertyChange[]
+): string {
   const parts: string[] = [];
 
-  // Style reference (must be first)
-  if (formatting.styleId) {
-    parts.push(`<w:pStyle w:val="${escapeXml(formatting.styleId)}"/>`);
-  }
-
-  // Keep next/lines/widow
-  if (formatting.keepNext) {
-    parts.push('<w:keepNext/>');
-  }
-
-  if (formatting.keepLines) {
-    parts.push('<w:keepLines/>');
-  }
-
-  if (formatting.contextualSpacing) {
-    parts.push('<w:contextualSpacing/>');
-  }
-
-  if (formatting.pageBreakBefore) {
-    parts.push('<w:pageBreakBefore/>');
-  }
-
-  // Frame properties
-  const frameXml = serializeFrameProperties(formatting.frame);
-  if (frameXml) {
-    parts.push(frameXml);
-  }
-
-  // Widow control
-  if (formatting.widowControl === false) {
-    parts.push('<w:widowControl w:val="0"/>');
-  } else if (formatting.widowControl === true) {
-    parts.push('<w:widowControl/>');
-  }
-
-  // Numbering
-  const numPrXml = serializeNumbering(formatting.numPr);
-  if (numPrXml) {
-    parts.push(numPrXml);
-  }
-
-  // Paragraph borders
-  const bordersXml = serializeParagraphBorders(formatting.borders);
-  if (bordersXml) {
-    parts.push(bordersXml);
-  }
-
-  // Shading
-  const shadingXml = serializeShading(formatting.shading);
-  if (shadingXml) {
-    parts.push(shadingXml);
-  }
-
-  // Tabs
-  const tabsXml = serializeTabStops(formatting.tabs);
-  if (tabsXml) {
-    parts.push(tabsXml);
-  }
-
-  // Suppress line numbers
-  if (formatting.suppressLineNumbers) {
-    parts.push('<w:suppressLineNumbers/>');
-  }
-
-  // Suppress auto hyphens
-  if (formatting.suppressAutoHyphens) {
-    parts.push('<w:suppressAutoHyphens/>');
-  }
-
-  // Spacing
-  const spacingXml = serializeSpacing(formatting);
-  if (spacingXml) {
-    parts.push(spacingXml);
-  }
-
-  // Indentation
-  const indXml = serializeIndentation(formatting);
-  if (indXml) {
-    parts.push(indXml);
-  }
-
-  // Text direction (bidi)
-  if (formatting.bidi) {
-    parts.push('<w:bidi/>');
-  }
-
-  // Justification
-  if (formatting.alignment) {
-    parts.push(`<w:jc w:val="${formatting.alignment}"/>`);
-  }
-
-  // Outline level
-  if (formatting.outlineLevel !== undefined) {
-    parts.push(`<w:outlineLvl w:val="${formatting.outlineLevel}"/>`);
-  }
-
-  // Run properties (default run formatting for paragraph)
-  if (formatting.runProperties) {
-    const rPrXml = serializeTextFormatting(formatting.runProperties);
-    if (rPrXml) {
-      parts.push(rPrXml);
+  if (formatting) {
+    // Style reference (must be first)
+    if (formatting.styleId) {
+      parts.push(`<w:pStyle w:val="${escapeXml(formatting.styleId)}"/>`);
     }
+
+    // Keep next/lines/widow
+    if (formatting.keepNext) {
+      parts.push('<w:keepNext/>');
+    }
+
+    if (formatting.keepLines) {
+      parts.push('<w:keepLines/>');
+    }
+
+    if (formatting.contextualSpacing) {
+      parts.push('<w:contextualSpacing/>');
+    }
+
+    if (formatting.pageBreakBefore) {
+      parts.push('<w:pageBreakBefore/>');
+    }
+
+    // Frame properties
+    const frameXml = serializeFrameProperties(formatting.frame);
+    if (frameXml) {
+      parts.push(frameXml);
+    }
+
+    // Widow control
+    if (formatting.widowControl === false) {
+      parts.push('<w:widowControl w:val="0"/>');
+    } else if (formatting.widowControl === true) {
+      parts.push('<w:widowControl/>');
+    }
+
+    // Numbering
+    const numPrXml = serializeNumbering(formatting.numPr);
+    if (numPrXml) {
+      parts.push(numPrXml);
+    }
+
+    // Paragraph borders
+    const bordersXml = serializeParagraphBorders(formatting.borders);
+    if (bordersXml) {
+      parts.push(bordersXml);
+    }
+
+    // Shading
+    const shadingXml = serializeShading(formatting.shading);
+    if (shadingXml) {
+      parts.push(shadingXml);
+    }
+
+    // Tabs
+    const tabsXml = serializeTabStops(formatting.tabs);
+    if (tabsXml) {
+      parts.push(tabsXml);
+    }
+
+    // Suppress line numbers
+    if (formatting.suppressLineNumbers) {
+      parts.push('<w:suppressLineNumbers/>');
+    }
+
+    // Suppress auto hyphens
+    if (formatting.suppressAutoHyphens) {
+      parts.push('<w:suppressAutoHyphens/>');
+    }
+
+    // Spacing
+    const spacingXml = serializeSpacing(formatting);
+    if (spacingXml) {
+      parts.push(spacingXml);
+    }
+
+    // Indentation
+    const indXml = serializeIndentation(formatting);
+    if (indXml) {
+      parts.push(indXml);
+    }
+
+    // Text direction (bidi)
+    if (formatting.bidi) {
+      parts.push('<w:bidi/>');
+    }
+
+    // Justification
+    if (formatting.alignment) {
+      parts.push(`<w:jc w:val="${formatting.alignment}"/>`);
+    }
+
+    // Outline level
+    if (formatting.outlineLevel !== undefined) {
+      parts.push(`<w:outlineLvl w:val="${formatting.outlineLevel}"/>`);
+    }
+
+    // Run properties (default run formatting for paragraph)
+    if (formatting.runProperties) {
+      const rPrXml = serializeTextFormatting(formatting.runProperties);
+      if (rPrXml) {
+        parts.push(rPrXml);
+      }
+    }
+  }
+
+  if (propertyChanges && propertyChanges.length > 0) {
+    parts.push(...propertyChanges.map((change) => serializeParagraphPropertyChange(change)));
   }
 
   if (parts.length === 0) return '';
 
   return `<w:pPr>${parts.join('')}</w:pPr>`;
+}
+
+function extractPPrInner(pPrXml: string): string {
+  if (!pPrXml.startsWith('<w:pPr>') || !pPrXml.endsWith('</w:pPr>')) {
+    return '';
+  }
+  return pPrXml.slice('<w:pPr>'.length, -'</w:pPr>'.length);
+}
+
+function serializeParagraphPropertyChange(change: ParagraphPropertyChange): string {
+  const normalizedId = Number.isInteger(change.info.id) && change.info.id >= 0 ? change.info.id : 0;
+  const authorCandidate = typeof change.info.author === 'string' ? change.info.author.trim() : '';
+  const normalizedAuthor = authorCandidate.length > 0 ? authorCandidate : 'Unknown';
+  const normalizedDate = typeof change.info.date === 'string' ? change.info.date.trim() : undefined;
+  const normalizedRsid = typeof change.info.rsid === 'string' ? change.info.rsid.trim() : undefined;
+  const attrs = [`w:id="${normalizedId}"`, `w:author="${escapeXml(normalizedAuthor)}"`];
+  if (normalizedDate) {
+    attrs.push(`w:date="${escapeXml(normalizedDate)}"`);
+  }
+  if (normalizedRsid) {
+    attrs.push(`w:rsid="${escapeXml(normalizedRsid)}"`);
+  }
+
+  const previousPPrXml = serializeParagraphFormatting(change.previousFormatting) || '<w:pPr/>';
+  const previousPPrInner = extractPPrInner(previousPPrXml);
+  const normalizedPreviousPPr =
+    previousPPrInner.length > 0 ? `<w:pPr>${previousPPrInner}</w:pPr>` : '<w:pPr/>';
+  return `<w:pPrChange ${attrs.join(' ')}>${normalizedPreviousPPr}</w:pPrChange>`;
 }
 
 // ============================================================================
@@ -723,17 +763,41 @@ function serializeInlineSdt(sdt: InlineSdt): string {
   return `<w:sdt><w:sdtPr>${prParts.join('')}</w:sdtPr><w:sdtContent>${contentXml}</w:sdtContent></w:sdt>`;
 }
 
+function serializeMoveRangeStart(
+  tag: 'moveFromRangeStart' | 'moveToRangeStart',
+  marker: MoveFromRangeStart | MoveToRangeStart
+): string {
+  const attrs = [`w:id="${marker.id}"`, `w:name="${escapeXml(marker.name)}"`];
+  return `<w:${tag} ${attrs.join(' ')}/>`;
+}
+
 /**
- * Serialize a tracked change (insertion or deletion) wrapper
+ * Serialize a tracked change wrapper (ins/del/moveFrom/moveTo)
  */
-function serializeTrackedChange(tag: 'ins' | 'del', change: Insertion | Deletion): string {
+function serializeTrackedChange(
+  tag: 'ins' | 'del' | 'moveFrom' | 'moveTo',
+  change: Insertion | Deletion | MoveFrom | MoveTo
+): string {
   const info = change.info;
-  const attrs = [`w:id="${info.id}"`, `w:author="${escapeXml(info.author)}"`];
-  if (info.date) attrs.push(`w:date="${escapeXml(info.date)}"`);
+  const normalizedId = Number.isInteger(info.id) && info.id >= 0 ? info.id : 0;
+  const authorCandidate = typeof info.author === 'string' ? info.author.trim() : '';
+  const normalizedAuthor = authorCandidate.length > 0 ? authorCandidate : 'Unknown';
+  const normalizedDate = typeof info.date === 'string' ? info.date.trim() : undefined;
+  const attrs = [`w:id="${normalizedId}"`, `w:author="${escapeXml(normalizedAuthor)}"`];
+  if (normalizedDate) attrs.push(`w:date="${escapeXml(normalizedDate)}"`);
 
   const contentXml = change.content
     .map((item) => {
-      if (item.type === 'run') return serializeRun(item);
+      if (item.type === 'run') {
+        if (tag === 'del' || tag === 'moveFrom') {
+          return serializeRun(item)
+            .replace(/<w:t\b/g, '<w:delText')
+            .replace(/<\/w:t>/g, '</w:delText>')
+            .replace(/<w:instrText\b/g, '<w:delInstrText')
+            .replace(/<\/w:instrText>/g, '</w:delInstrText>');
+        }
+        return serializeRun(item);
+      }
       if (item.type === 'hyperlink') return serializeHyperlink(item);
       return '';
     })
@@ -769,6 +833,18 @@ function serializeParagraphContent(content: ParagraphContent): string {
       return serializeTrackedChange('ins', content);
     case 'deletion':
       return serializeTrackedChange('del', content);
+    case 'moveFrom':
+      return serializeTrackedChange('moveFrom', content);
+    case 'moveTo':
+      return serializeTrackedChange('moveTo', content);
+    case 'moveFromRangeStart':
+      return serializeMoveRangeStart('moveFromRangeStart', content as MoveFromRangeStart);
+    case 'moveFromRangeEnd':
+      return `<w:moveFromRangeEnd w:id="${content.id}"/>`;
+    case 'moveToRangeStart':
+      return serializeMoveRangeStart('moveToRangeStart', content as MoveToRangeStart);
+    case 'moveToRangeEnd':
+      return `<w:moveToRangeEnd w:id="${content.id}"/>`;
     case 'mathEquation':
       // Round-trip the raw OMML XML directly
       return content.ommlXml || '';
@@ -801,7 +877,7 @@ export function serializeParagraph(paragraph: Paragraph): string {
   const attrsStr = attrs.length > 0 ? ' ' + attrs.join(' ') : '';
 
   // Add paragraph properties if present
-  const pPrXml = serializeParagraphFormatting(paragraph.formatting);
+  const pPrXml = serializeParagraphFormatting(paragraph.formatting, paragraph.propertyChanges);
   if (pPrXml) {
     parts.push(pPrXml);
   }
@@ -900,7 +976,12 @@ export function getParagraphPlainText(paragraph: Paragraph): string {
           }
         }
       }
-    } else if (content.type === 'insertion' || content.type === 'deletion') {
+    } else if (
+      content.type === 'insertion' ||
+      content.type === 'deletion' ||
+      content.type === 'moveFrom' ||
+      content.type === 'moveTo'
+    ) {
       for (const item of content.content) {
         if (item.type === 'run') {
           for (const subItem of item.content) {

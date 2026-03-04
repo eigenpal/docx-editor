@@ -31,6 +31,7 @@ import type {
   SoftHyphenContent,
   NoBreakHyphenContent,
   DrawingContent,
+  RunPropertyChange,
   TextFormatting,
   ColorValue,
   ShadingProperties,
@@ -43,6 +44,7 @@ import type {
 import type { StyleMap } from './styleParser';
 import {
   findChild,
+  findChildren,
   getAttribute,
   getChildElements,
   getTextContent,
@@ -380,6 +382,44 @@ export function parseRunProperties(
   return Object.keys(formatting).length > 0 ? formatting : undefined;
 }
 
+function parsePropertyChangeInfo(changeElement: XmlElement): RunPropertyChange['info'] {
+  const rawId = getAttribute(changeElement, 'w', 'id');
+  const parsedId = rawId ? parseInt(rawId, 10) : 0;
+  const author = (getAttribute(changeElement, 'w', 'author') ?? '').trim();
+  const date = (getAttribute(changeElement, 'w', 'date') ?? '').trim();
+  const rsid = (getAttribute(changeElement, 'w', 'rsid') ?? '').trim();
+
+  return {
+    id: Number.isInteger(parsedId) && parsedId >= 0 ? parsedId : 0,
+    author: author.length > 0 ? author : 'Unknown',
+    date: date.length > 0 ? date : undefined,
+    rsid: rsid.length > 0 ? rsid : undefined,
+  };
+}
+
+function parseRunPropertyChanges(
+  rPr: XmlElement | null,
+  theme: Theme | null,
+  styles: StyleMap | null,
+  currentFormatting: TextFormatting | undefined
+): RunPropertyChange[] | undefined {
+  if (!rPr) return undefined;
+
+  const changes = findChildren(rPr, 'w', 'rPrChange')
+    .map((changeElement): RunPropertyChange => {
+      const previousRPr = findChild(changeElement, 'w', 'rPr');
+      return {
+        type: 'runPropertyChange',
+        info: parsePropertyChangeInfo(changeElement),
+        previousFormatting: parseRunProperties(previousRPr, theme, styles ?? undefined),
+        currentFormatting,
+      };
+    })
+    .filter((change) => change.previousFormatting || change.currentFormatting);
+
+  return changes.length > 0 ? changes : undefined;
+}
+
 /**
  * Parse text content (w:t)
  */
@@ -666,6 +706,7 @@ export function parseRun(
   const rPr = findChild(node, 'w', 'rPr');
   if (rPr) {
     run.formatting = parseRunProperties(rPr, theme, styles ?? undefined);
+    run.propertyChanges = parseRunPropertyChanges(rPr, theme, styles, run.formatting);
   }
 
   // Parse run contents (text, tabs, breaks, images, etc.)

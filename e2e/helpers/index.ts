@@ -14,3 +14,6 @@ export type { TextPosition, TextRange, SelectionInfo } from './text-selection';
 
 // Custom Assertions
 export * as assertions from './assertions';
+
+// Track changes export helpers
+export * as trackChangesExport from './track-changes-export';

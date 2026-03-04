@@ -90,12 +90,13 @@ export function fromProseDoc(pmDoc: PMNode, baseDocument?: Document): Document {
  */
 function extractBlocks(pmDoc: PMNode): (Paragraph | Table)[] {
   const blocks: (Paragraph | Table)[] = [];
+  const documentCounts = buildDocumentTrackedChangeCounts(pmDoc);
 
   pmDoc.forEach((node) => {
     if (node.type.name === 'paragraph') {
-      blocks.push(convertPMParagraph(node));
+      blocks.push(convertPMParagraph(node, documentCounts));
     } else if (node.type.name === 'table') {
-      blocks.push(convertPMTable(node));
+      blocks.push(convertPMTable(node, documentCounts));
     } else if (node.type.name === 'textBox') {
       // Convert text box back to a paragraph containing a shape with text body
       blocks.push(convertPMTextBox(node));
@@ -123,9 +124,9 @@ function createPageBreakParagraph(): Paragraph {
 /**
  * Convert a ProseMirror paragraph node to our Paragraph type
  */
-function convertPMParagraph(node: PMNode): Paragraph {
+function convertPMParagraph(node: PMNode, documentCounts?: TrackedChangeCounts): Paragraph {
   const attrs = node.attrs as ParagraphAttrs;
-  let content = insertCommentRanges(extractParagraphContent(node), node);
+  let content = insertCommentRanges(extractParagraphContent(node, documentCounts), node);
 
   // Emit BookmarkStart/End from bookmarks attr (for TOC anchors, cross-references)
   const bookmarks = attrs.bookmarks as Array<{ id: number; name: string }> | undefined;
@@ -309,8 +310,12 @@ function paragraphAttrsToFormatting(attrs: ParagraphAttrs): ParagraphFormatting 
  * Coalesces consecutive text with the same marks into single Runs
  * for efficient DOCX representation.
  */
-function extractParagraphContent(paragraph: PMNode): ParagraphContent[] {
+function extractParagraphContent(
+  paragraph: PMNode,
+  documentCounts?: TrackedChangeCounts
+): ParagraphContent[] {
   const content: ParagraphContent[] = [];
+  const trackedChangeCounts = documentCounts ?? collectTrackedChangeCounts(paragraph);
 
   // Track current run being built
   let currentRun: Run | null = null;
@@ -375,11 +380,23 @@ function extractParagraphContent(paragraph: PMNode): ParagraphContent[] {
         author: (changeMark.attrs.author as string) || 'Unknown',
         date: (changeMark.attrs.date as string) || undefined,
       };
+      const revisionId = info.id;
+      const hasInsertionForId = (trackedChangeCounts.insertionById.get(revisionId) ?? 0) > 0;
+      const hasDeletionForId = (trackedChangeCounts.deletionById.get(revisionId) ?? 0) > 0;
+      const isMovePair = hasInsertionForId && hasDeletionForId;
 
       if (insertionMark) {
-        content.push({ type: 'insertion', info, content: [run] });
+        if (isMovePair) {
+          content.push({ type: 'moveTo', info, content: [run] });
+        } else {
+          content.push({ type: 'insertion', info, content: [run] });
+        }
       } else {
-        content.push({ type: 'deletion', info, content: [run] });
+        if (isMovePair) {
+          content.push({ type: 'moveFrom', info, content: [run] });
+        } else {
+          content.push({ type: 'deletion', info, content: [run] });
+        }
       }
       return;
     }
@@ -503,6 +520,70 @@ function extractParagraphContent(paragraph: PMNode): ParagraphContent[] {
   }
 
   return content;
+}
+
+type TrackedChangeCounts = {
+  insertionById: Map<number, number>;
+  deletionById: Map<number, number>;
+};
+
+/**
+ * Build document-wide tracked change counts by scanning all nodes.
+ * Used for cross-paragraph move pair detection (moveFrom in one paragraph,
+ * moveTo in another).
+ */
+function buildDocumentTrackedChangeCounts(pmDoc: PMNode): TrackedChangeCounts {
+  const insertionById = new Map<number, number>();
+  const deletionById = new Map<number, number>();
+
+  pmDoc.descendants((node) => {
+    const insertionMark = node.marks.find((m) => m.type.name === 'insertion');
+    const deletionMark = node.marks.find((m) => m.type.name === 'deletion');
+
+    if (insertionMark) {
+      const revisionId = Number(insertionMark.attrs.revisionId);
+      if (Number.isFinite(revisionId)) {
+        insertionById.set(revisionId, (insertionById.get(revisionId) ?? 0) + 1);
+      }
+    }
+    if (deletionMark) {
+      const revisionId = Number(deletionMark.attrs.revisionId);
+      if (Number.isFinite(revisionId)) {
+        deletionById.set(revisionId, (deletionById.get(revisionId) ?? 0) + 1);
+      }
+    }
+  });
+
+  return { insertionById, deletionById };
+}
+
+function collectTrackedChangeCounts(paragraph: PMNode): TrackedChangeCounts {
+  const insertionById = new Map<number, number>();
+  const deletionById = new Map<number, number>();
+
+  paragraph.forEach((node) => {
+    const insertionMark = node.marks.find((mark) => mark.type.name === 'insertion');
+    const deletionMark = node.marks.find((mark) => mark.type.name === 'deletion');
+
+    if (insertionMark) {
+      const revisionId = Number(insertionMark.attrs.revisionId);
+      if (Number.isFinite(revisionId)) {
+        insertionById.set(revisionId, (insertionById.get(revisionId) ?? 0) + 1);
+      }
+    }
+
+    if (deletionMark) {
+      const revisionId = Number(deletionMark.attrs.revisionId);
+      if (Number.isFinite(revisionId)) {
+        deletionById.set(revisionId, (deletionById.get(revisionId) ?? 0) + 1);
+      }
+    }
+  });
+
+  return {
+    insertionById,
+    deletionById,
+  };
 }
 
 /**
@@ -1070,13 +1151,13 @@ function inferTableBorders(rows: TableRow[]): TableBorders | undefined {
   return undefined;
 }
 
-function convertPMTable(node: PMNode): Table {
+function convertPMTable(node: PMNode, documentCounts?: TrackedChangeCounts): Table {
   const attrs = node.attrs as TableAttrs;
   const rows: TableRow[] = [];
 
   node.forEach((rowNode) => {
     if (rowNode.type.name === 'tableRow') {
-      rows.push(convertPMTableRow(rowNode));
+      rows.push(convertPMTableRow(rowNode, documentCounts));
     }
   });
 
@@ -1228,13 +1309,13 @@ function tableAttrsToFormatting(attrs: TableAttrs): TableFormatting | undefined 
 /**
  * Convert a ProseMirror table row node to our TableRow type
  */
-function convertPMTableRow(node: PMNode): TableRow {
+function convertPMTableRow(node: PMNode, documentCounts?: TrackedChangeCounts): TableRow {
   const attrs = node.attrs as TableRowAttrs;
   const cells: TableCell[] = [];
 
   node.forEach((cellNode) => {
     if (cellNode.type.name === 'tableCell' || cellNode.type.name === 'tableHeader') {
-      cells.push(convertPMTableCell(cellNode));
+      cells.push(convertPMTableCell(cellNode, documentCounts));
     }
   });
 
@@ -1292,16 +1373,16 @@ function tableRowAttrsToFormatting(attrs: TableRowAttrs): TableRowFormatting | u
 /**
  * Convert a ProseMirror table cell node to our TableCell type
  */
-function convertPMTableCell(node: PMNode): TableCell {
+function convertPMTableCell(node: PMNode, documentCounts?: TrackedChangeCounts): TableCell {
   const attrs = node.attrs as TableCellAttrs;
   const content: (Paragraph | Table)[] = [];
 
   // Extract cell content (paragraphs and nested tables)
   node.forEach((contentNode) => {
     if (contentNode.type.name === 'paragraph') {
-      content.push(convertPMParagraph(contentNode));
+      content.push(convertPMParagraph(contentNode, documentCounts));
     } else if (contentNode.type.name === 'table') {
-      content.push(convertPMTable(contentNode));
+      content.push(convertPMTable(contentNode, documentCounts));
     }
   });
 

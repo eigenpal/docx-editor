@@ -74,6 +74,8 @@ export interface UseHistoryReturn<T> {
   getUndoStack: () => HistoryEntry<T>[];
   /** Get all redo entries (for debugging/display) */
   getRedoStack: () => HistoryEntry<T>[];
+  /** Transform all stored states (current + undo/redo stacks) */
+  transformAll: (fn: (state: T) => T) => void;
 }
 
 // ============================================================================
@@ -292,6 +294,16 @@ export function useHistory<T>(
   }, [redoStack]);
 
   /**
+   * Transform all stored states (current + undo/redo stacks).
+   * Useful for bulk cleanup such as stripping cached snapshots.
+   */
+  const transformAll = useCallback((fn: (s: T) => T) => {
+    setState((prev) => fn(prev));
+    setUndoStack((prev) => prev.map((entry) => ({ ...entry, state: fn(entry.state) })));
+    setRedoStack((prev) => prev.map((entry) => ({ ...entry, state: fn(entry.state) })));
+  }, []);
+
+  /**
    * Handle keyboard shortcuts
    */
   useEffect(() => {
@@ -338,6 +350,7 @@ export function useHistory<T>(
     reset,
     getUndoStack,
     getRedoStack,
+    transformAll,
   };
 }
 

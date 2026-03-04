@@ -420,6 +420,11 @@ export function App() {
           ref={editorRef}
           document={documentBuffer ? undefined : currentDocument}
           documentBuffer={documentBuffer}
+          trackChanges={{
+            enabled: true,
+            author: 'John Doe',
+            date: new Date().toISOString(),
+          }}
           onChange={handleDocumentChange}
           onError={handleError}
           onFontsLoaded={handleFontsLoaded}

@@ -37,6 +37,8 @@ import type {
   InlineSdt,
   Insertion,
   Deletion,
+  MoveFrom,
+  MoveTo,
   MathEquation,
 } from '../../types/document';
 import { emuToPixels } from '../../docx/imageParser';
@@ -161,6 +163,22 @@ function convertParagraph(
         styleResolver
       );
       inlineNodes.push(...delNodes);
+    } else if (content.type === 'moveFrom') {
+      const moveFromNodes = convertTrackedChange(
+        content,
+        'deletion',
+        mergedStyleRunFormatting,
+        styleResolver
+      );
+      inlineNodes.push(...moveFromNodes);
+    } else if (content.type === 'moveTo') {
+      const moveToNodes = convertTrackedChange(
+        content,
+        'insertion',
+        mergedStyleRunFormatting,
+        styleResolver
+      );
+      inlineNodes.push(...moveToNodes);
     } else if (content.type === 'mathEquation') {
       const mathNode = convertMathEquation(content);
       if (mathNode) inlineNodes.push(mathNode);
@@ -201,7 +219,7 @@ function applyCommentMarks(nodes: PMNode[], commentIds: Set<number>): PMNode[] {
  * an insertion/deletion mark applied.
  */
 function convertTrackedChange(
-  change: Insertion | Deletion,
+  change: Insertion | Deletion | MoveFrom | MoveTo,
   markType: 'insertion' | 'deletion',
   styleRunFormatting?: TextFormatting,
   styleResolver?: StyleResolver | null

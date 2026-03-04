@@ -39,6 +39,10 @@ export { type DocxInput, toArrayBuffer } from '@eigenpal/docx-core/utils/docxInp
 // ============================================================================
 
 export { DocumentAgent } from '@eigenpal/docx-core/agent/DocumentAgent';
+export type {
+  SaveDocxOptions,
+  TrackChangesExportOptions,
+} from '@eigenpal/docx-core/agent/DocumentAgent';
 export { executeCommand, executeCommands } from '@eigenpal/docx-core/agent/executor';
 export {
   getAgentContext,

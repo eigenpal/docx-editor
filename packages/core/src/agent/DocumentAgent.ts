@@ -15,6 +15,7 @@
 import type {
   Document,
   DocumentBody,
+  DocumentSnapshot,
   Paragraph,
   Table,
   Run,
@@ -39,6 +40,7 @@ import { repackDocx, createDocx } from '../docx/rezip';
 import { detectVariables } from '../utils/variableDetector';
 import { parseDocx } from '../docx/parser';
 import type { DocxInput } from '../utils/docxInput';
+import { createBaselineSnapshot } from '../docx/revisions/baseline';
 
 // ============================================================================
 // TYPES
@@ -96,6 +98,26 @@ export interface FormattedTextSegment {
   isHyperlink?: boolean;
   /** Hyperlink URL if applicable */
   hyperlinkUrl?: string;
+}
+
+/**
+ * Track Changes export options.
+ */
+export interface TrackChangesExportOptions {
+  /** Enable tracked export output. */
+  enabled?: boolean;
+  /** Revision author for generated tracked changes. */
+  author?: string;
+  /** Optional revision timestamp (ISO 8601 string). */
+  date?: string;
+}
+
+/**
+ * Save/export options for DOCX generation.
+ */
+export interface SaveDocxOptions {
+  /** Track Changes export behavior. */
+  trackChanges?: TrackChangesExportOptions;
 }
 
 // ============================================================================
@@ -667,15 +689,42 @@ export class DocumentAgent {
   // ==========================================================================
 
   /**
+   * Return a new agent with a baseline document set for tracked-change export.
+   *
+   * Without a baseline, `toBuffer({ trackChanges: { enabled: true } })` is a no-op
+   * because there is nothing to diff against. Call this method to establish the
+   * reference state before making edits:
+   *
+   * @example
+   * ```ts
+   * const agent = await DocumentAgent.fromBuffer(buffer);
+   * const baseline = agent.withBaseline();       // snapshot current state
+   * const edited = baseline.insertText(...);     // make changes
+   * const out = await edited.toBuffer({ trackChanges: { enabled: true, author: 'Alice' } });
+   * ```
+   *
+   * @param snapshot - Optional explicit snapshot. Defaults to a clone of the current document.
+   * @returns New DocumentAgent with baselineDocument set.
+   */
+  withBaseline(snapshot?: DocumentSnapshot): DocumentAgent {
+    const baselineDocument = snapshot ?? createBaselineSnapshot(this._document);
+    const newAgent = new DocumentAgent({ ...this._document, baselineDocument });
+    newAgent._pendingVariables = { ...this._pendingVariables };
+    return newAgent;
+  }
+
+  /**
    * Export document to DOCX ArrayBuffer
    *
    * @returns Promise resolving to DOCX file as ArrayBuffer
    */
-  async toBuffer(): Promise<ArrayBuffer> {
+  async toBuffer(options: SaveDocxOptions = {}): Promise<ArrayBuffer> {
     // If we have an original buffer, use repack (preserves styles, themes, etc.)
     // Otherwise, create a new DOCX from scratch
     if (this._document.originalBuffer) {
-      return repackDocx(this._document);
+      return repackDocx(this._document, {
+        trackChanges: options.trackChanges,
+      });
     }
     return createDocx(this._document);
   }
@@ -687,9 +736,10 @@ export class DocumentAgent {
    * @returns Promise resolving to DOCX file as Blob
    */
   async toBlob(
-    mimeType = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+    mimeType = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    options: SaveDocxOptions = {}
   ): Promise<Blob> {
-    const buffer = await this.toBuffer();
+    const buffer = await this.toBuffer(options);
     return new Blob([buffer], { type: mimeType });
   }
 
@@ -701,7 +751,8 @@ export class DocumentAgent {
    */
   executeCommands(commands: AgentCommand[]): DocumentAgent {
     const newDoc = executeCommands(this._document, commands);
-    return new DocumentAgent(newDoc);
+    const baseline = this._document.baselineDocument;
+    return new DocumentAgent(baseline ? { ...newDoc, baselineDocument: baseline } : newDoc);
   }
 
   // ==========================================================================
@@ -713,7 +764,10 @@ export class DocumentAgent {
    */
   private _executeCommand(command: AgentCommand): DocumentAgent {
     const newDoc = executeCommand(this._document, command);
-    const newAgent = new DocumentAgent(newDoc);
+    const baseline = this._document.baselineDocument;
+    const newAgent = new DocumentAgent(
+      baseline ? { ...newDoc, baselineDocument: baseline } : newDoc
+    );
     newAgent._pendingVariables = { ...this._pendingVariables };
     return newAgent;
   }

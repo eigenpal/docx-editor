@@ -54,6 +54,8 @@ export type {
   InsertImageOptions,
   InsertHyperlinkOptions,
   FormattedTextSegment,
+  SaveDocxOptions,
+  TrackChangesExportOptions,
 } from './agent/DocumentAgent';
 
 // ============================================================================

@@ -92,8 +92,22 @@ export type {
   CommentRangeEnd,
   MathEquation,
   TrackedChangeInfo,
+  TrackedRunChange,
+  PropertyChangeInfo,
   Insertion,
   Deletion,
+  MoveFrom,
+  MoveTo,
+  MoveFromRangeStart,
+  MoveFromRangeEnd,
+  MoveToRangeStart,
+  MoveToRangeEnd,
+  RunPropertyChange,
+  ParagraphPropertyChange,
+  TablePropertyChange,
+  TableRowPropertyChange,
+  TableCellPropertyChange,
+  TableStructuralChangeInfo,
   SdtType,
   SdtProperties,
   InlineSdt,
@@ -193,6 +207,22 @@ export interface DocxPackage {
  * Complete parsed DOCX document
  */
 export interface Document {
+  /** DOCX package with all parsed content */
+  package: DocxPackage;
+  /** Original ArrayBuffer for round-trip */
+  originalBuffer?: ArrayBuffer;
+  /** Detected template variables ({{...}}) */
+  templateVariables?: string[];
+  /** Parsing warnings/errors */
+  warnings?: string[];
+  /** Immutable baseline used for export-time change tracking */
+  baselineDocument?: DocumentSnapshot;
+}
+
+/**
+ * Immutable baseline document snapshot used for tracked export diffs.
+ */
+export interface DocumentSnapshot {
   /** DOCX package with all parsed content */
   package: DocxPackage;
   /** Original ArrayBuffer for round-trip */

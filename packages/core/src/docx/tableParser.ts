@@ -27,6 +27,10 @@ import type {
   TableFormatting,
   TableRowFormatting,
   TableCellFormatting,
+  TablePropertyChange,
+  TableRowPropertyChange,
+  TableCellPropertyChange,
+  TableStructuralChangeInfo,
   TableMeasurement,
   TableWidthType,
   TableBorders,
@@ -83,6 +87,27 @@ export function parseTableMeasurement(element: XmlElement | null): TableMeasurem
  */
 function parseWidth(element: XmlElement | null): TableMeasurement | undefined {
   return parseTableMeasurement(element);
+}
+
+function parseTrackedChangeInfo(node: XmlElement): TableStructuralChangeInfo['info'] {
+  const rawId = getAttribute(node, 'w', 'id');
+  const parsedId = rawId ? parseInt(rawId, 10) : 0;
+  const author = (getAttribute(node, 'w', 'author') ?? '').trim();
+  const date = (getAttribute(node, 'w', 'date') ?? '').trim();
+
+  return {
+    id: Number.isInteger(parsedId) && parsedId >= 0 ? parsedId : 0,
+    author: author.length > 0 ? author : 'Unknown',
+    date: date.length > 0 ? date : undefined,
+  };
+}
+
+function parsePropertyChangeInfo(
+  node: XmlElement
+): TablePropertyChange['info'] | TableRowPropertyChange['info'] | TableCellPropertyChange['info'] {
+  const base = parseTrackedChangeInfo(node);
+  const rsid = (getAttribute(node, 'w', 'rsid') ?? '').trim();
+  return rsid.length > 0 ? { ...base, rsid } : base;
 }
 
 // ============================================================================
@@ -481,6 +506,125 @@ export function parseTableProperties(tblPrElement: XmlElement | null): TableForm
   return formatting;
 }
 
+function parseTablePropertyChanges(
+  tblPrElement: XmlElement | null,
+  currentFormatting: TableFormatting | undefined
+): TablePropertyChange[] | undefined {
+  if (!tblPrElement) return undefined;
+
+  const changes = findChildren(tblPrElement, 'w', 'tblPrChange')
+    .map((changeElement): TablePropertyChange => {
+      const previousTblPr = findChild(changeElement, 'w', 'tblPr');
+      return {
+        type: 'tablePropertyChange',
+        info: parsePropertyChangeInfo(changeElement),
+        previousFormatting: parseTableProperties(previousTblPr),
+        currentFormatting,
+      };
+    })
+    .filter((change) => change.previousFormatting || change.currentFormatting);
+
+  return changes.length > 0 ? changes : undefined;
+}
+
+function parseTableRowPropertyChanges(
+  trPrElement: XmlElement | null,
+  currentFormatting: TableRowFormatting | undefined
+): TableRowPropertyChange[] | undefined {
+  if (!trPrElement) return undefined;
+
+  const changes = findChildren(trPrElement, 'w', 'trPrChange')
+    .map((changeElement): TableRowPropertyChange => {
+      const previousTrPr = findChild(changeElement, 'w', 'trPr');
+      return {
+        type: 'tableRowPropertyChange',
+        info: parsePropertyChangeInfo(changeElement),
+        previousFormatting: parseTableRowProperties(previousTrPr),
+        currentFormatting,
+      };
+    })
+    .filter((change) => change.previousFormatting || change.currentFormatting);
+
+  return changes.length > 0 ? changes : undefined;
+}
+
+function parseTableCellPropertyChanges(
+  tcPrElement: XmlElement | null,
+  currentFormatting: TableCellFormatting | undefined
+): TableCellPropertyChange[] | undefined {
+  if (!tcPrElement) return undefined;
+
+  const changes = findChildren(tcPrElement, 'w', 'tcPrChange')
+    .map((changeElement): TableCellPropertyChange => {
+      const previousTcPr = findChild(changeElement, 'w', 'tcPr');
+      return {
+        type: 'tableCellPropertyChange',
+        info: parsePropertyChangeInfo(changeElement),
+        previousFormatting: parseTableCellProperties(previousTcPr),
+        currentFormatting,
+      };
+    })
+    .filter((change) => change.previousFormatting || change.currentFormatting);
+
+  return changes.length > 0 ? changes : undefined;
+}
+
+function parseTableRowStructuralChange(
+  trPrElement: XmlElement | null
+): TableStructuralChangeInfo | undefined {
+  if (!trPrElement) return undefined;
+
+  const insertion = findChild(trPrElement, 'w', 'ins');
+  if (insertion) {
+    return {
+      type: 'tableRowInsertion',
+      info: parseTrackedChangeInfo(insertion),
+    };
+  }
+
+  const deletion = findChild(trPrElement, 'w', 'del');
+  if (deletion) {
+    return {
+      type: 'tableRowDeletion',
+      info: parseTrackedChangeInfo(deletion),
+    };
+  }
+
+  return undefined;
+}
+
+function parseTableCellStructuralChange(
+  tcPrElement: XmlElement | null
+): TableStructuralChangeInfo | undefined {
+  if (!tcPrElement) return undefined;
+
+  const insertion = findChild(tcPrElement, 'w', 'cellIns');
+  if (insertion) {
+    return {
+      type: 'tableCellInsertion',
+      info: parseTrackedChangeInfo(insertion),
+    };
+  }
+
+  const deletion = findChild(tcPrElement, 'w', 'cellDel');
+  if (deletion) {
+    return {
+      type: 'tableCellDeletion',
+      info: parseTrackedChangeInfo(deletion),
+    };
+  }
+
+  const merge = findChild(tcPrElement, 'w', 'cellMerge');
+  if (merge) {
+    return {
+      type: 'tableCellMerge',
+      info: parseTrackedChangeInfo(merge),
+    };
+  }
+
+  return undefined;
+}
+
 // ============================================================================
 // TABLE ROW PROPERTIES PARSING (w:trPr)
 // ============================================================================
@@ -793,10 +937,13 @@ export function parseTableCell(
   };
 
   // Parse cell properties (w:tcPr)
-  const formatting = parseTableCellProperties(findChild(tcElement, 'w', 'tcPr'));
+  const tcPrElement = findChild(tcElement, 'w', 'tcPr');
+  const formatting = parseTableCellProperties(tcPrElement);
   if (formatting) {
     cell.formatting = formatting;
   }
+  cell.propertyChanges = parseTableCellPropertyChanges(tcPrElement, formatting);
+  cell.structuralChange = parseTableCellStructuralChange(tcPrElement);
 
   // Parse content
   cell.content = parseCellContent(tcElement, styles, theme, numbering, rels, media);
@@ -833,10 +980,13 @@ export function parseTableRow(
   };
 
   // Parse row properties (w:trPr)
-  const formatting = parseTableRowProperties(findChild(trElement, 'w', 'trPr'));
+  const trPrElement = findChild(trElement, 'w', 'trPr');
+  const formatting = parseTableRowProperties(trPrElement);
   if (formatting) {
     row.formatting = formatting;
   }
+  row.propertyChanges = parseTableRowPropertyChanges(trPrElement, formatting);
+  row.structuralChange = parseTableRowStructuralChange(trPrElement);
 
   // Parse cells
   const cells = findChildren(trElement, 'w', 'tc');
@@ -901,10 +1051,12 @@ export function parseTable(
   };
 
   // Parse table properties (w:tblPr)
-  const formatting = parseTableProperties(findChild(tblElement, 'w', 'tblPr'));
+  const tblPrElement = findChild(tblElement, 'w', 'tblPr');
+  const formatting = parseTableProperties(tblPrElement);
   if (formatting) {
     table.formatting = formatting;
   }
+  table.propertyChanges = parseTablePropertyChanges(tblPrElement, formatting);
 
   // Parse table grid (w:tblGrid)
   const columnWidths = parseTableGrid(findChild(tblElement, 'w', 'tblGrid'));

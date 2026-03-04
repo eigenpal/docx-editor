@@ -33,6 +33,7 @@ import type {
   ImagePosition,
   ImageWrap,
   Paragraph,
+  RunPropertyChange,
 } from '../../types/document';
 import { serializeParagraph } from './paragraphSerializer';
 
@@ -363,6 +364,48 @@ export function serializeTextFormatting(formatting: TextFormatting | undefined):
   if (parts.length === 0) return '';
 
   return `<w:rPr>${parts.join('')}</w:rPr>`;
+}
+
+function extractRPrInner(rPrXml: string): string {
+  if (!rPrXml.startsWith('<w:rPr>') || !rPrXml.endsWith('</w:rPr>')) {
+    return '';
+  }
+  return rPrXml.slice('<w:rPr>'.length, -'</w:rPr>'.length);
+}
+
+function serializeRunPropertyChange(change: RunPropertyChange): string {
+  const normalizedId = Number.isInteger(change.info.id) && change.info.id >= 0 ? change.info.id : 0;
+  const authorCandidate = typeof change.info.author === 'string' ? change.info.author.trim() : '';
+  const normalizedAuthor = authorCandidate.length > 0 ? authorCandidate : 'Unknown';
+  const normalizedDate = typeof change.info.date === 'string' ? change.info.date.trim() : undefined;
+  const normalizedRsid = typeof change.info.rsid === 'string' ? change.info.rsid.trim() : undefined;
+  const attrs = [`w:id="${normalizedId}"`, `w:author="${escapeXml(normalizedAuthor)}"`];
+
+  if (normalizedDate) {
+    attrs.push(`w:date="${escapeXml(normalizedDate)}"`);
+  }
+  if (normalizedRsid) {
+    attrs.push(`w:rsid="${escapeXml(normalizedRsid)}"`);
+  }
+
+  const previousRPrXml = serializeTextFormatting(change.previousFormatting) || '<w:rPr/>';
+  return `<w:rPrChange ${attrs.join(' ')}>${previousRPrXml}</w:rPrChange>`;
+}
+
+function serializeRunProperties(
+  formatting: TextFormatting | undefined,
+  propertyChanges: RunPropertyChange[] | undefined
+): string {
+  const currentRPrXml = serializeTextFormatting(formatting);
+  const currentInner = currentRPrXml ? extractRPrInner(currentRPrXml) : '';
+  const propertyChangeXml = (propertyChanges ?? []).map(serializeRunPropertyChange).join('');
+  const combined = `${currentInner}${propertyChangeXml}`;
+
+  if (!combined) {
+    return '';
+  }
+
+  return `<w:rPr>${combined}</w:rPr>`;
 }
 
 // ============================================================================
@@ -860,7 +903,7 @@ export function serializeRun(run: Run): string {
   const parts: string[] = [];
 
   // Add run properties if present
-  const rPrXml = serializeTextFormatting(run.formatting);
+  const rPrXml = serializeRunProperties(run.formatting, run.propertyChanges);
   if (rPrXml) {
     parts.push(rPrXml);
   }

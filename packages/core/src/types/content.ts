@@ -153,6 +153,8 @@ export interface Run {
   type: 'run';
   /** Text formatting properties */
   formatting?: TextFormatting;
+  /** Run-level tracked property changes (w:rPrChange) */
+  propertyChanges?: RunPropertyChange[];
   /** Run content (text, tabs, breaks, etc.) */
   content: RunContent[];
 }
@@ -763,6 +765,10 @@ export interface TableCell {
   type: 'tableCell';
   /** Cell formatting */
   formatting?: TableCellFormatting;
+  /** Cell-level tracked property changes (w:tcPrChange) */
+  propertyChanges?: TableCellPropertyChange[];
+  /** Tracked structural changes (cell insert/delete/merge) */
+  structuralChange?: TableStructuralChangeInfo;
   /** Cell content (paragraphs, tables, etc.) */
   content: (Paragraph | Table)[];
 }
@@ -774,6 +780,10 @@ export interface TableRow {
   type: 'tableRow';
   /** Row formatting */
   formatting?: TableRowFormatting;
+  /** Row-level tracked property changes (w:trPrChange) */
+  propertyChanges?: TableRowPropertyChange[];
+  /** Tracked structural changes (row insert/delete) */
+  structuralChange?: TableStructuralChangeInfo;
   /** Cells in this row */
   cells: TableCell[];
 }
@@ -785,6 +795,8 @@ export interface Table {
   type: 'table';
   /** Table formatting */
   formatting?: TableFormatting;
+  /** Table-level tracked property changes (w:tblPrChange) */
+  propertyChanges?: TablePropertyChange[];
   /** Column widths in twips */
   columnWidths?: number[];
   /** Table rows */
@@ -865,6 +877,14 @@ export interface TrackedChangeInfo {
 }
 
 /**
+ * Generic tracked property-change wrapper metadata (w:*PrChange)
+ */
+export interface PropertyChangeInfo extends TrackedChangeInfo {
+  /** Optional revision session ID */
+  rsid?: string;
+}
+
+/**
  * Insertion wrapper (w:ins) — runs inserted by tracked changes
  */
 export interface Insertion {
@@ -884,6 +904,148 @@ export interface Deletion {
   info: TrackedChangeInfo;
   /** Deleted content */
   content: (Run | Hyperlink)[];
+}
+
+/**
+ * Move-from wrapper (w:moveFrom) â€” content moved away from this position
+ */
+export interface MoveFrom {
+  type: 'moveFrom';
+  /** Tracked change metadata */
+  info: TrackedChangeInfo;
+  /** Moved content */
+  content: (Run | Hyperlink)[];
+}
+
+/**
+ * Move-to wrapper (w:moveTo) â€” content moved into this position
+ */
+export interface MoveTo {
+  type: 'moveTo';
+  /** Tracked change metadata */
+  info: TrackedChangeInfo;
+  /** Moved content */
+  content: (Run | Hyperlink)[];
+}
+
+/**
+ * Move-from range start marker (w:moveFromRangeStart) — ECMA-376 §17.13.5.22
+ * Pairs with moveFromRangeEnd to delimit the source of a move in the document.
+ */
+export interface MoveFromRangeStart {
+  type: 'moveFromRangeStart';
+  id: number;
+  name: string;
+}
+
+/**
+ * Move-from range end marker (w:moveFromRangeEnd)
+ */
+export interface MoveFromRangeEnd {
+  type: 'moveFromRangeEnd';
+  id: number;
+}
+
+/**
+ * Move-to range start marker (w:moveToRangeStart) — ECMA-376 §17.13.5.24
+ * Pairs with moveToRangeEnd to delimit the destination of a move.
+ */
+export interface MoveToRangeStart {
+  type: 'moveToRangeStart';
+  id: number;
+  name: string;
+}
+
+/**
+ * Move-to range end marker (w:moveToRangeEnd)
+ */
+export interface MoveToRangeEnd {
+  type: 'moveToRangeEnd';
+  id: number;
+}
+
+/**
+ * Run-level tracked wrappers represented in WordprocessingML.
+ */
+export type TrackedRunChange = Insertion | Deletion | MoveFrom | MoveTo;
+
+/**
+ * Run property change (w:rPrChange)
+ */
+export interface RunPropertyChange {
+  type: 'runPropertyChange';
+  /** Tracked change metadata */
+  info: PropertyChangeInfo;
+  /** Run properties before the tracked change */
+  previousFormatting?: TextFormatting;
+  /** Run properties after the tracked change (editor model convenience) */
+  currentFormatting?: TextFormatting;
+}
+
+/**
+ * Paragraph property change (w:pPrChange)
+ */
+export interface ParagraphPropertyChange {
+  type: 'paragraphPropertyChange';
+  /** Tracked change metadata */
+  info: PropertyChangeInfo;
+  /** Paragraph properties before the tracked change */
+  previousFormatting?: ParagraphFormatting;
+  /** Paragraph properties after the tracked change (editor model convenience) */
+  currentFormatting?: ParagraphFormatting;
+}
+
+/**
+ * Table property change (w:tblPrChange)
+ */
+export interface TablePropertyChange {
+  type: 'tablePropertyChange';
+  /** Tracked change metadata */
+  info: PropertyChangeInfo;
+  /** Table properties before the tracked change */
+  previousFormatting?: TableFormatting;
+  /** Table properties after the tracked change (editor model convenience) */
+  currentFormatting?: TableFormatting;
+}
+
+/**
+ * Table row property change (w:trPrChange)
+ */
+export interface TableRowPropertyChange {
+  type: 'tableRowPropertyChange';
+  /** Tracked change metadata */
+  info: PropertyChangeInfo;
+  /** Row properties before the tracked change */
+  previousFormatting?: TableRowFormatting;
+  /** Row properties after the tracked change (editor model convenience) */
+  currentFormatting?: TableRowFormatting;
+}
+
+/**
+ * Table cell property change (w:tcPrChange)
+ */
+export interface TableCellPropertyChange {
+  type: 'tableCellPropertyChange';
+  /** Tracked change metadata */
+  info: PropertyChangeInfo;
+  /** Cell properties before the tracked change */
+  previousFormatting?: TableCellFormatting;
+  /** Cell properties after the tracked change (editor model convenience) */
+  currentFormatting?: TableCellFormatting;
+}
+
+/**
+ * Table structural tracked change metadata (row/cell insert/delete/merge)
+ */
+export interface TableStructuralChangeInfo {
+  type:
+    | 'tableRowInsertion'
+    | 'tableRowDeletion'
+    | 'tableCellInsertion'
+    | 'tableCellDeletion'
+    | 'tableCellMerge';
+  /** Tracked change metadata */
+  info: TrackedChangeInfo;
 }
 
 // ============================================================================
@@ -970,6 +1132,12 @@ export type ParagraphContent =
   | CommentRangeEnd
   | Insertion
   | Deletion
+  | MoveFrom
+  | MoveTo
+  | MoveFromRangeStart
+  | MoveFromRangeEnd
+  | MoveToRangeStart
+  | MoveToRangeEnd
   | MathEquation;
 
 /**
@@ -983,6 +1151,8 @@ export interface Paragraph {
   textId?: string;
   /** Paragraph formatting */
   formatting?: ParagraphFormatting;
+  /** Paragraph-level tracked property changes (w:pPrChange) */
+  propertyChanges?: ParagraphPropertyChange[];
   /** Paragraph content */
   content: ParagraphContent[];
   /** Computed list rendering (if this is a list item) */

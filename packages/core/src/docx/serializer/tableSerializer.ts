@@ -21,6 +21,10 @@ import type {
   TableFormatting,
   TableRowFormatting,
   TableCellFormatting,
+  TablePropertyChange,
+  TableRowPropertyChange,
+  TableCellPropertyChange,
+  TableStructuralChangeInfo,
   TableMeasurement,
   TableBorders,
   TableLook,
@@ -48,6 +52,38 @@ function escapeXml(text: string): string {
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&apos;');
+}
+
+function normalizeTrackedChangeInfo(info: { id: number; author: string; date?: string }): {
+  id: number;
+  author: string;
+  date?: string;
+} {
+  const normalizedId = Number.isInteger(info.id) && info.id >= 0 ? info.id : 0;
+  const authorCandidate = typeof info.author === 'string' ? info.author.trim() : '';
+  const normalizedAuthor = authorCandidate.length > 0 ? authorCandidate : 'Unknown';
+  const normalizedDate = typeof info.date === 'string' ? info.date.trim() : undefined;
+
+  return {
+    id: normalizedId,
+    author: normalizedAuthor,
+    date: normalizedDate,
+  };
+}
+
+function serializeTrackedChangeAttributes(
+  info: { id: number; author: string; date?: string },
+  rsid?: string
+): string {
+  const normalized = normalizeTrackedChangeInfo(info);
+  const attrs = [`w:id="${normalized.id}"`, `w:author="${escapeXml(normalized.author)}"`];
+  if (normalized.date) {
+    attrs.push(`w:date="${escapeXml(normalized.date)}"`);
+  }
+  if (rsid && rsid.trim().length > 0) {
+    attrs.push(`w:rsid="${escapeXml(rsid.trim())}"`);
+  }
+  return attrs.join(' ');
 }
 
 // ============================================================================
@@ -354,87 +390,111 @@ function serializeFloatingTableProperties(floating: FloatingTableProperties | un
 /**
  * Serialize table formatting properties (w:tblPr)
  */
-export function serializeTableFormatting(formatting: TableFormatting | undefined): string {
-  if (!formatting) return '';
-
+export function serializeTableFormatting(
+  formatting: TableFormatting | undefined,
+  propertyChanges?: TablePropertyChange[]
+): string {
   const parts: string[] = [];
 
-  // Table style (must be first)
-  if (formatting.styleId) {
-    parts.push(`<w:tblStyle w:val="${escapeXml(formatting.styleId)}"/>`);
+  if (formatting) {
+    // Table style (must be first)
+    if (formatting.styleId) {
+      parts.push(`<w:tblStyle w:val="${escapeXml(formatting.styleId)}"/>`);
+    }
+
+    // Floating table properties
+    const floatingXml = serializeFloatingTableProperties(formatting.floating);
+    if (floatingXml) {
+      parts.push(floatingXml);
+    }
+
+    // Bidirectional
+    if (formatting.bidi) {
+      parts.push('<w:bidiVisual/>');
+    }
+
+    // Table width
+    const widthXml = serializeMeasurement(formatting.width, 'tblW');
+    if (widthXml) {
+      parts.push(widthXml);
+    }
+
+    // Table justification
+    if (formatting.justification) {
+      parts.push(`<w:jc w:val="${formatting.justification}"/>`);
+    }
+
+    // Cell spacing
+    const cellSpacingXml = serializeMeasurement(formatting.cellSpacing, 'tblCellSpacing');
+    if (cellSpacingXml) {
+      parts.push(cellSpacingXml);
+    }
+
+    // Table indent
+    const indentXml = serializeMeasurement(formatting.indent, 'tblInd');
+    if (indentXml) {
+      parts.push(indentXml);
+    }
+
+    // Table borders
+    const bordersXml = serializeTableBorders(formatting.borders, 'tblBorders');
+    if (bordersXml) {
+      parts.push(bordersXml);
+    }
+
+    // Default cell margins
+    const marginsXml = serializeCellMargins(formatting.cellMargins, 'tblCellMar');
+    if (marginsXml) {
+      parts.push(marginsXml);
+    }
+
+    // Table layout
+    if (formatting.layout) {
+      parts.push(`<w:tblLayout w:type="${formatting.layout}"/>`);
+    }
+
+    // Shading
+    const shadingXml = serializeShading(formatting.shading);
+    if (shadingXml) {
+      parts.push(shadingXml);
+    }
+
+    // Table look
+    const lookXml = serializeTableLook(formatting.look);
+    if (lookXml) {
+      parts.push(lookXml);
+    }
+
+    // Overlap
+    if (formatting.overlap) {
+      parts.push(`<w:tblOverlap w:val="${formatting.overlap}"/>`);
+    }
   }
 
-  // Floating table properties
-  const floatingXml = serializeFloatingTableProperties(formatting.floating);
-  if (floatingXml) {
-    parts.push(floatingXml);
-  }
-
-  // Bidirectional
-  if (formatting.bidi) {
-    parts.push('<w:bidiVisual/>');
-  }
-
-  // Table width
-  const widthXml = serializeMeasurement(formatting.width, 'tblW');
-  if (widthXml) {
-    parts.push(widthXml);
-  }
-
-  // Table justification
-  if (formatting.justification) {
-    parts.push(`<w:jc w:val="${formatting.justification}"/>`);
-  }
-
-  // Cell spacing
-  const cellSpacingXml = serializeMeasurement(formatting.cellSpacing, 'tblCellSpacing');
-  if (cellSpacingXml) {
-    parts.push(cellSpacingXml);
-  }
-
-  // Table indent
-  const indentXml = serializeMeasurement(formatting.indent, 'tblInd');
-  if (indentXml) {
-    parts.push(indentXml);
-  }
-
-  // Table borders
-  const bordersXml = serializeTableBorders(formatting.borders, 'tblBorders');
-  if (bordersXml) {
-    parts.push(bordersXml);
-  }
-
-  // Default cell margins
-  const marginsXml = serializeCellMargins(formatting.cellMargins, 'tblCellMar');
-  if (marginsXml) {
-    parts.push(marginsXml);
-  }
-
-  // Table layout
-  if (formatting.layout) {
-    parts.push(`<w:tblLayout w:type="${formatting.layout}"/>`);
-  }
-
-  // Shading
-  const shadingXml = serializeShading(formatting.shading);
-  if (shadingXml) {
-    parts.push(shadingXml);
-  }
-
-  // Table look
-  const lookXml = serializeTableLook(formatting.look);
-  if (lookXml) {
-    parts.push(lookXml);
-  }
-
-  // Overlap
-  if (formatting.overlap) {
-    parts.push(`<w:tblOverlap w:val="${formatting.overlap}"/>`);
+  if (propertyChanges && propertyChanges.length > 0) {
+    parts.push(...propertyChanges.map((change) => serializeTablePropertyChange(change)));
   }
 
   if (parts.length === 0) return '';
 
   return `<w:tblPr>${parts.join('')}</w:tblPr>`;
+}
+
+function extractTblPrInner(tblPrXml: string): string {
+  if (!tblPrXml.startsWith('<w:tblPr>') || !tblPrXml.endsWith('</w:tblPr>')) {
+    return '';
+  }
+  return tblPrXml.slice('<w:tblPr>'.length, -'</w:tblPr>'.length);
+}
+
+function serializeTablePropertyChange(change: TablePropertyChange): string {
+  const attrs = serializeTrackedChangeAttributes(change.info, change.info.rsid);
+  const previousTblPrXml = serializeTableFormatting(change.previousFormatting) || '<w:tblPr/>';
+  const previousTblPrInner = extractTblPrInner(previousTblPrXml);
+  const normalizedPreviousTblPr =
+    previousTblPrInner.length > 0 ? `<w:tblPr>${previousTblPrInner}</w:tblPr>` : '<w:tblPr/>';
+
+  return `<w:tblPrChange ${attrs}>${normalizedPreviousTblPr}</w:tblPrChange>`;
 }
 
 // ============================================================================
@@ -444,45 +504,78 @@ export function serializeTableFormatting(formatting: TableFormatting | undefined
 /**
  * Serialize table row formatting properties (w:trPr)
  */
-export function serializeTableRowFormatting(formatting: TableRowFormatting | undefined): string {
-  if (!formatting) return '';
-
+export function serializeTableRowFormatting(
+  formatting: TableRowFormatting | undefined,
+  propertyChanges?: TableRowPropertyChange[],
+  structuralChange?: TableStructuralChangeInfo
+): string {
   const parts: string[] = [];
 
-  // Can't split
-  if (formatting.cantSplit) {
-    parts.push('<w:cantSplit/>');
-  }
-
-  // Header row
-  if (formatting.header) {
-    parts.push('<w:tblHeader/>');
-  }
-
-  // Row height
-  if (formatting.height) {
-    const attrs: string[] = [`w:val="${formatting.height.value}"`];
-
-    if (formatting.heightRule) {
-      attrs.push(`w:hRule="${formatting.heightRule}"`);
+  if (formatting) {
+    // Can't split
+    if (formatting.cantSplit) {
+      parts.push('<w:cantSplit/>');
     }
 
-    parts.push(`<w:trHeight ${attrs.join(' ')}/>`);
+    // Header row
+    if (formatting.header) {
+      parts.push('<w:tblHeader/>');
+    }
+
+    // Row height
+    if (formatting.height) {
+      const attrs: string[] = [`w:val="${formatting.height.value}"`];
+
+      if (formatting.heightRule) {
+        attrs.push(`w:hRule="${formatting.heightRule}"`);
+      }
+
+      parts.push(`<w:trHeight ${attrs.join(' ')}/>`);
+    }
+
+    // Row justification
+    if (formatting.justification) {
+      parts.push(`<w:jc w:val="${formatting.justification}"/>`);
+    }
+
+    // Hidden
+    if (formatting.hidden) {
+      parts.push('<w:hidden/>');
+    }
   }
 
-  // Row justification
-  if (formatting.justification) {
-    parts.push(`<w:jc w:val="${formatting.justification}"/>`);
+  if (structuralChange) {
+    if (structuralChange.type === 'tableRowInsertion') {
+      parts.push(`<w:ins ${serializeTrackedChangeAttributes(structuralChange.info)}/>`);
+    } else if (structuralChange.type === 'tableRowDeletion') {
+      parts.push(`<w:del ${serializeTrackedChangeAttributes(structuralChange.info)}/>`);
+    }
   }
 
-  // Hidden
-  if (formatting.hidden) {
-    parts.push('<w:hidden/>');
+  if (propertyChanges && propertyChanges.length > 0) {
+    parts.push(...propertyChanges.map((change) => serializeTableRowPropertyChange(change)));
   }
 
   if (parts.length === 0) return '';
 
   return `<w:trPr>${parts.join('')}</w:trPr>`;
+}
+
+function extractTrPrInner(trPrXml: string): string {
+  if (!trPrXml.startsWith('<w:trPr>') || !trPrXml.endsWith('</w:trPr>')) {
+    return '';
+  }
+  return trPrXml.slice('<w:trPr>'.length, -'</w:trPr>'.length);
+}
+
+function serializeTableRowPropertyChange(change: TableRowPropertyChange): string {
+  const attrs = serializeTrackedChangeAttributes(change.info, change.info.rsid);
+  const previousTrPrXml = serializeTableRowFormatting(change.previousFormatting) || '<w:trPr/>';
+  const previousTrPrInner = extractTrPrInner(previousTrPrXml);
+  const normalizedPreviousTrPr =
+    previousTrPrInner.length > 0 ? `<w:trPr>${previousTrPrInner}</w:trPr>` : '<w:trPr/>';
+
+  return `<w:trPrChange ${attrs}>${normalizedPreviousTrPr}</w:trPrChange>`;
 }
 
 // ============================================================================
@@ -526,84 +619,119 @@ function serializeConditionalFormatStyle(style: ConditionalFormatStyle | undefin
 /**
  * Serialize table cell formatting properties (w:tcPr)
  */
-export function serializeTableCellFormatting(formatting: TableCellFormatting | undefined): string {
-  if (!formatting) return '';
-
+export function serializeTableCellFormatting(
+  formatting: TableCellFormatting | undefined,
+  propertyChanges?: TableCellPropertyChange[],
+  structuralChange?: TableStructuralChangeInfo
+): string {
   const parts: string[] = [];
 
-  // Conditional format style
-  const cnfStyleXml = serializeConditionalFormatStyle(formatting.conditionalFormat);
-  if (cnfStyleXml) {
-    parts.push(cnfStyleXml);
-  }
+  if (formatting) {
+    // Conditional format style
+    const cnfStyleXml = serializeConditionalFormatStyle(formatting.conditionalFormat);
+    if (cnfStyleXml) {
+      parts.push(cnfStyleXml);
+    }
 
-  // Cell width
-  const widthXml = serializeMeasurement(formatting.width, 'tcW');
-  if (widthXml) {
-    parts.push(widthXml);
-  }
+    // Cell width
+    const widthXml = serializeMeasurement(formatting.width, 'tcW');
+    if (widthXml) {
+      parts.push(widthXml);
+    }
 
-  // Grid span (horizontal merge)
-  if (formatting.gridSpan && formatting.gridSpan > 1) {
-    parts.push(`<w:gridSpan w:val="${formatting.gridSpan}"/>`);
-  }
+    // Grid span (horizontal merge)
+    if (formatting.gridSpan && formatting.gridSpan > 1) {
+      parts.push(`<w:gridSpan w:val="${formatting.gridSpan}"/>`);
+    }
 
-  // Vertical merge
-  if (formatting.vMerge) {
-    if (formatting.vMerge === 'restart') {
-      parts.push('<w:vMerge w:val="restart"/>');
-    } else {
-      // continue is the default when w:vMerge has no value
-      parts.push('<w:vMerge/>');
+    // Vertical merge
+    if (formatting.vMerge) {
+      if (formatting.vMerge === 'restart') {
+        parts.push('<w:vMerge w:val="restart"/>');
+      } else {
+        // continue is the default when w:vMerge has no value
+        parts.push('<w:vMerge/>');
+      }
+    }
+
+    // Cell borders
+    const bordersXml = serializeTableBorders(formatting.borders, 'tcBorders');
+    if (bordersXml) {
+      parts.push(bordersXml);
+    }
+
+    // Shading
+    const shadingXml = serializeShading(formatting.shading);
+    if (shadingXml) {
+      parts.push(shadingXml);
+    }
+
+    // No wrap
+    if (formatting.noWrap) {
+      parts.push('<w:noWrap/>');
+    }
+
+    // Cell margins
+    const marginsXml = serializeCellMargins(formatting.margins, 'tcMar');
+    if (marginsXml) {
+      parts.push(marginsXml);
+    }
+
+    // Text direction
+    if (formatting.textDirection) {
+      parts.push(`<w:textDirection w:val="${formatting.textDirection}"/>`);
+    }
+
+    // Fit text
+    if (formatting.fitText) {
+      parts.push('<w:tcFitText/>');
+    }
+
+    // Vertical alignment
+    if (formatting.verticalAlign) {
+      parts.push(`<w:vAlign w:val="${formatting.verticalAlign}"/>`);
+    }
+
+    // Hide mark
+    if (formatting.hideMark) {
+      parts.push('<w:hideMark/>');
     }
   }
 
-  // Cell borders
-  const bordersXml = serializeTableBorders(formatting.borders, 'tcBorders');
-  if (bordersXml) {
-    parts.push(bordersXml);
+  if (structuralChange) {
+    if (structuralChange.type === 'tableCellInsertion') {
+      parts.push(`<w:cellIns ${serializeTrackedChangeAttributes(structuralChange.info)}/>`);
+    } else if (structuralChange.type === 'tableCellDeletion') {
+      parts.push(`<w:cellDel ${serializeTrackedChangeAttributes(structuralChange.info)}/>`);
+    } else if (structuralChange.type === 'tableCellMerge') {
+      parts.push(`<w:cellMerge ${serializeTrackedChangeAttributes(structuralChange.info)}/>`);
+    }
   }
 
-  // Shading
-  const shadingXml = serializeShading(formatting.shading);
-  if (shadingXml) {
-    parts.push(shadingXml);
-  }
-
-  // No wrap
-  if (formatting.noWrap) {
-    parts.push('<w:noWrap/>');
-  }
-
-  // Cell margins
-  const marginsXml = serializeCellMargins(formatting.margins, 'tcMar');
-  if (marginsXml) {
-    parts.push(marginsXml);
-  }
-
-  // Text direction
-  if (formatting.textDirection) {
-    parts.push(`<w:textDirection w:val="${formatting.textDirection}"/>`);
-  }
-
-  // Fit text
-  if (formatting.fitText) {
-    parts.push('<w:tcFitText/>');
-  }
-
-  // Vertical alignment
-  if (formatting.verticalAlign) {
-    parts.push(`<w:vAlign w:val="${formatting.verticalAlign}"/>`);
-  }
-
-  // Hide mark
-  if (formatting.hideMark) {
-    parts.push('<w:hideMark/>');
+  if (propertyChanges && propertyChanges.length > 0) {
+    parts.push(...propertyChanges.map((change) => serializeTableCellPropertyChange(change)));
   }
 
   if (parts.length === 0) return '';
 
   return `<w:tcPr>${parts.join('')}</w:tcPr>`;
+}
+
+function extractTcPrInner(tcPrXml: string): string {
+  if (!tcPrXml.startsWith('<w:tcPr>') || !tcPrXml.endsWith('</w:tcPr>')) {
+    return '';
+  }
+  return tcPrXml.slice('<w:tcPr>'.length, -'</w:tcPr>'.length);
+}
+
+function serializeTableCellPropertyChange(change: TableCellPropertyChange): string {
+  const attrs = serializeTrackedChangeAttributes(change.info, change.info.rsid);
+  const previousTcPrXml = serializeTableCellFormatting(change.previousFormatting) || '<w:tcPr/>';
+  const previousTcPrInner = extractTcPrInner(previousTcPrXml);
+  const normalizedPreviousTcPr =
+    previousTcPrInner.length > 0 ? `<w:tcPr>${previousTcPrInner}</w:tcPr>` : '<w:tcPr/>';
+
+  return `<w:tcPrChange ${attrs}>${normalizedPreviousTcPr}</w:tcPrChange>`;
 }
 
 // ============================================================================
@@ -658,7 +786,11 @@ export function serializeTableCell(cell: TableCell): string {
   const parts: string[] = [];
 
   // Cell properties
-  const tcPrXml = serializeTableCellFormatting(cell.formatting);
+  const tcPrXml = serializeTableCellFormatting(
+    cell.formatting,
+    cell.propertyChanges,
+    cell.structuralChange
+  );
   if (tcPrXml) {
     parts.push(tcPrXml);
   }
@@ -680,7 +812,11 @@ export function serializeTableRow(row: TableRow): string {
   const parts: string[] = [];
 
   // Row properties
-  const trPrXml = serializeTableRowFormatting(row.formatting);
+  const trPrXml = serializeTableRowFormatting(
+    row.formatting,
+    row.propertyChanges,
+    row.structuralChange
+  );
   if (trPrXml) {
     parts.push(trPrXml);
   }
@@ -707,7 +843,7 @@ export function serializeTable(table: Table): string {
   const parts: string[] = [];
 
   // Table properties
-  const tblPrXml = serializeTableFormatting(table.formatting);
+  const tblPrXml = serializeTableFormatting(table.formatting, table.propertyChanges);
   if (tblPrXml) {
     parts.push(tblPrXml);
   }
