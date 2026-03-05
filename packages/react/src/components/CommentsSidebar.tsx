@@ -72,6 +72,8 @@ export interface CommentsSidebarProps {
   topOffset?: number;
   showResolved?: boolean;
   isAddingComment?: boolean;
+  /** Y position (relative to scroll container) for the new comment input */
+  addCommentYPosition?: number | null;
   /** Page width in pixels — used to position sidebar next to page edge */
   pageWidth?: number;
   /** Ref to the editor scroll container for DOM position queries */
@@ -101,6 +103,7 @@ export const CommentsSidebar: React.FC<CommentsSidebarProps> = ({
   topOffset = 0,
   showResolved: showResolvedProp = false,
   isAddingComment = false,
+  addCommentYPosition = null,
   pageWidth = 816,
   editorContainerRef,
 }) => {
@@ -799,15 +802,18 @@ export const CommentsSidebar: React.FC<CommentsSidebarProps> = ({
     >
       {/* Cards container — relative for absolute card positioning */}
       <div style={{ position: 'relative' }}>
-        {/* New comment input */}
+        {/* New comment input — positioned at selection Y if available */}
         {isAddingComment && (
           <div
             style={{
-              marginBottom: 8,
+              ...(addCommentYPosition != null
+                ? { position: 'absolute', top: addCommentYPosition, left: 0, right: 0 }
+                : { marginBottom: 8 }),
               padding: 12,
               borderRadius: 8,
               backgroundColor: '#fff',
-              boxShadow: '0 1px 3px rgba(0,0,0,0.12), 0 1px 2px rgba(0,0,0,0.08)',
+              boxShadow: '0 1px 3px rgba(60,64,67,0.3), 0 4px 8px 3px rgba(60,64,67,0.15)',
+              zIndex: 50,
             }}
           >
             <textarea

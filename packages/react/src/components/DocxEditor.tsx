@@ -447,6 +447,7 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
     from: number;
     to: number;
   } | null>(null);
+  const [addCommentYPosition, setAddCommentYPosition] = useState<number | null>(null);
   const [editingMode, setEditingMode] = useState<'editing' | 'suggesting'>('editing');
 
   // Extract tracked changes from ProseMirror state
@@ -2353,6 +2354,16 @@ body { background: white; }
                               setCommentSelectionRange({ from, to });
                             }
                           }
+                          // Compute Y position of selection relative to scroll container
+                          const container = scrollContainerRef.current;
+                          const sel = window.getSelection();
+                          if (container && sel && sel.rangeCount > 0) {
+                            const range = sel.getRangeAt(0);
+                            const rangeRect = range.getBoundingClientRect();
+                            const containerRect = container.getBoundingClientRect();
+                            const y = rangeRect.top - containerRect.top + container.scrollTop;
+                            setAddCommentYPosition(y);
+                          }
                           if (!showCommentsSidebar) setShowCommentsSidebar(true);
                           setIsAddingComment(true);
                         }}
@@ -2582,6 +2593,7 @@ body { background: white; }
                               setComments((prev) => [...prev, newComment]);
                               setIsAddingComment(false);
                               setCommentSelectionRange(null);
+                              setAddCommentYPosition(null);
                             }}
                             onTrackedChangeReply={(revisionId, text) => {
                               const newReply: Comment = {
@@ -2608,6 +2620,7 @@ body { background: white; }
                             onCancelAddComment={() => {
                               setIsAddingComment(false);
                               setCommentSelectionRange(null);
+                              setAddCommentYPosition(null);
                             }}
                             onAcceptChange={(from, to) => {
                               const view = pagedEditorRef.current?.getView();
@@ -2624,6 +2637,7 @@ body { background: white; }
                               }
                             }}
                             isAddingComment={isAddingComment}
+                            addCommentYPosition={addCommentYPosition}
                             topOffset={0}
                           />
                         ) : undefined
