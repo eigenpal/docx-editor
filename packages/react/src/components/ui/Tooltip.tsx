@@ -1,5 +1,4 @@
 import * as React from 'react';
-import { cn } from '../../lib/utils';
 
 interface TooltipProps {
   content: React.ReactNode;
@@ -67,12 +66,7 @@ export function Tooltip({ content, children, side = 'bottom', delayMs = 400 }: T
       {child}
       {isOpen && (
         <div
-          className={cn(
-            'fixed z-50 px-2 py-1 text-xs font-medium text-white bg-slate-900 rounded-md shadow-lg',
-            'animate-in fade-in-0 duration-100',
-            side === 'top' && '-translate-x-1/2 -translate-y-full',
-            side === 'bottom' && '-translate-x-1/2'
-          )}
+          className="fixed z-50 px-2 py-1 text-xs font-medium text-white bg-slate-900 rounded-md shadow-lg"
           style={{
             left: position.x,
             top: position.y,

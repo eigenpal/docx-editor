@@ -380,9 +380,9 @@ function EditingModeDropdown({
 
   const current = EDITING_MODES.find((m) => m.value === mode)!;
 
-  // Responsive: icon-only below 900px
+  // Responsive: icon-only below 1400px
   useEffect(() => {
-    const mql = window.matchMedia('(max-width: 900px)');
+    const mql = window.matchMedia('(max-width: 1400px)');
     setCompact(mql.matches);
     const handler = (e: MediaQueryListEvent) => setCompact(e.matches);
     mql.addEventListener('change', handler);
