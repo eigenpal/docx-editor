@@ -113,6 +113,41 @@ function markRangeAsDeleted(
 }
 
 /**
+ * Insert text as a tracked insertion, optionally marking replaced selection as deletion.
+ */
+function applySuggestionInsert(
+  view: EditorView,
+  from: number,
+  to: number,
+  text: string,
+  pluginState: SuggestionModeState
+): boolean {
+  const insertionType = view.state.schema.marks.insertion;
+  if (!insertionType) return false;
+
+  const tr = view.state.tr;
+  tr.setMeta(SUGGESTION_META, true);
+
+  const insertAttrs =
+    findAdjacentRevision(view.state.doc, from, 'insertion', pluginState.author) ||
+    makeMarkAttrs(pluginState);
+
+  if (from !== to) {
+    const deletionType = view.state.schema.marks.deletion;
+    if (deletionType) {
+      markRangeAsDeleted(tr, view.state.doc, from, to, insertionType, deletionType, pluginState);
+    }
+  }
+
+  const insertAt = tr.mapping.map(to);
+  tr.insertText(text, insertAt, insertAt);
+  tr.addMark(insertAt, insertAt + text.length, insertionType.create(insertAttrs));
+
+  view.dispatch(tr.scrollIntoView());
+  return true;
+}
+
+/**
  * Handle delete (forward or backward) in suggestion mode.
  */
 function handleSuggestionDelete(
@@ -205,6 +240,24 @@ export function createSuggestionModePlugin(initialActive = false, author = 'User
     },
 
     props: {
+      handleDOMEvents: {
+        // Intercept text input at the DOM level. ProseMirror's handleTextInput
+        // is NOT reliably called when the hidden PM has complex mark structures
+        // (it requires the change to span exactly one text node). By handling
+        // beforeinput directly, we ensure suggestion mode always processes input.
+        beforeinput(view: EditorView, event: InputEvent) {
+          const pluginState = suggestionModeKey.getState(view.state);
+          if (!pluginState?.active) return false;
+
+          if (event.inputType === 'insertText' && event.data) {
+            event.preventDefault();
+            const { from, to } = view.state.selection;
+            return applySuggestionInsert(view, from, to, event.data, pluginState);
+          }
+
+          return false;
+        },
+      },
       // Intercept Backspace and Delete to mark as deletion
       handleKeyDown(view: EditorView, event: KeyboardEvent): boolean {
         const pluginState = suggestionModeKey.getState(view.state);
@@ -219,47 +272,11 @@ export function createSuggestionModePlugin(initialActive = false, author = 'User
         return false;
       },
 
-      // Intercept text input to add insertion marks
+      // Backup: also handle via PM's handleTextInput for simple cases
       handleTextInput(view: EditorView, from: number, to: number, text: string): boolean {
         const pluginState = suggestionModeKey.getState(view.state);
         if (!pluginState?.active) return false;
-
-        const insertionType = view.state.schema.marks.insertion;
-        if (!insertionType) return false;
-
-        const tr = view.state.tr;
-        tr.setMeta(SUGGESTION_META, true);
-
-        // Reuse adjacent insertion's revisionId so consecutive typing groups together
-        const insertAttrs =
-          findAdjacentRevision(view.state.doc, from, 'insertion', pluginState.author) ||
-          makeMarkAttrs(pluginState);
-
-        // If replacing a selection, mark the replaced content as deletion first
-        if (from !== to) {
-          const deletionType = view.state.schema.marks.deletion;
-          if (deletionType) {
-            markRangeAsDeleted(
-              tr,
-              view.state.doc,
-              from,
-              to,
-              insertionType,
-              deletionType,
-              pluginState
-            );
-          }
-        }
-
-        // Insert new text after any deletion-marked content (not replacing it)
-        const insertAt = tr.mapping.map(to);
-        tr.insertText(text, insertAt, insertAt);
-
-        // Mark the inserted text with insertion mark
-        tr.addMark(insertAt, insertAt + text.length, insertionType.create(insertAttrs));
-
-        view.dispatch(tr.scrollIntoView());
-        return true;
+        return applySuggestionInsert(view, from, to, text, pluginState);
       },
     },
 
@@ -284,19 +301,19 @@ export function createSuggestionModePlugin(initialActive = false, author = 'User
         const stepMap = step.getMap();
         stepMap.forEach((_oldFrom, _oldTo, newFrom, newTo) => {
           if (newTo > newFrom) {
-            // Skip ranges already handled by handleTextInput / handleSuggestionDelete
-            let allMarked = true;
-            newState.doc.nodesBetween(newFrom, newTo, (node) => {
-              if (node.isText) {
-                const hasTrackedMark = node.marks.some(
-                  (m) => m.type === insertionType || (deletionType && m.type === deletionType)
-                );
-                if (!hasTrackedMark) allMarked = false;
+            // Only mark text nodes that don't already have tracked change marks.
+            // Marking the entire range would overwrite existing marks from other authors.
+            newState.doc.nodesBetween(newFrom, newTo, (node, pos) => {
+              if (!node.isText) return;
+              const hasTrackedMark = node.marks.some(
+                (m) => m.type === insertionType || (deletionType && m.type === deletionType)
+              );
+              if (!hasTrackedMark) {
+                const nodeStart = Math.max(pos, newFrom);
+                const nodeEnd = Math.min(pos + node.nodeSize, newTo);
+                tr.addMark(nodeStart, nodeEnd, insertionType.create(markAttrs));
               }
             });
-            if (!allMarked) {
-              tr.addMark(newFrom, newTo, insertionType.create(markAttrs));
-            }
           }
         });
       });
