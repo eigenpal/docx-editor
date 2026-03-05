@@ -386,12 +386,21 @@ export const CommentsSidebar: React.FC<CommentsSidebarProps> = ({
     }
     // New cards (first render with position): fade in, no top transition
     // Known cards: transition top smoothly
+    // Cards without position yet: hidden completely (no transition)
     const isNewCard = !isKnown && yPos !== undefined;
+    const noPosition = hasPositions && yPos === undefined;
     return {
       ...(hasPositions
         ? yPos !== undefined
           ? { position: 'absolute', top: yPos, left: 0, right: 0, opacity: 1 }
-          : { position: 'absolute', top: -9999, left: 0, right: 0, opacity: 0 }
+          : {
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              right: 0,
+              opacity: 0,
+              visibility: 'hidden' as const,
+            }
         : { marginBottom: 6 }),
       padding: isExpanded ? '10px 12px' : '8px 10px',
       borderRadius: 8,
@@ -400,11 +409,13 @@ export const CommentsSidebar: React.FC<CommentsSidebarProps> = ({
       boxShadow: isExpanded
         ? '0 1px 3px rgba(60,64,67,0.3), 0 4px 8px 3px rgba(60,64,67,0.15)'
         : '0 1px 3px rgba(60,64,67,0.2), 0 2px 6px rgba(60,64,67,0.08)',
-      transition: isNewCard
-        ? 'opacity 0.2s ease, box-shadow 0.2s ease'
-        : initialPositionsDone
-          ? 'opacity 0.2s ease, box-shadow 0.2s ease, top 0.15s ease'
-          : 'none',
+      transition: noPosition
+        ? 'none'
+        : isNewCard
+          ? 'opacity 0.2s ease, box-shadow 0.2s ease'
+          : initialPositionsDone
+            ? 'opacity 0.2s ease, box-shadow 0.2s ease, top 0.15s ease'
+            : 'none',
     };
   };
 
