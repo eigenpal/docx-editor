@@ -427,6 +427,30 @@
 }
 
 /* ============================================================================
+ * READONLY MODE — suppress interactive editing cues
+ * ============================================================================ */
+
+/* Hide table resize handles */
+.paged-editor--readonly .layout-table-resize-handle,
+.paged-editor--readonly .layout-table-row-resize-handle,
+.paged-editor--readonly .layout-table-edge-handle-bottom,
+.paged-editor--readonly .layout-table-edge-handle-right {
+  display: none !important;
+}
+
+/* Remove header/footer hover effects and edit hints */
+.paged-editor--readonly .layout-page-header,
+.paged-editor--readonly .layout-page-footer {
+  cursor: default;
+  pointer-events: none;
+}
+
+/* Remove text cursor from page content */
+.paged-editor--readonly .layout-page-content {
+  cursor: default;
+}
+
+/* ============================================================================
  * RESPONSIVE: Hide document outline on small screens
  * ============================================================================ */
 
