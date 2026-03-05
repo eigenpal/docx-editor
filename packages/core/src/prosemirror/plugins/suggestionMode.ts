@@ -279,11 +279,24 @@ export function createSuggestionModePlugin(initialActive = false, author = 'User
       const tr = newState.tr;
       tr.setMeta(SUGGESTION_META, true);
 
+      const deletionType = newState.schema.marks.deletion;
       userTr.steps.forEach((step) => {
         const stepMap = step.getMap();
         stepMap.forEach((_oldFrom, _oldTo, newFrom, newTo) => {
           if (newTo > newFrom) {
-            tr.addMark(newFrom, newTo, insertionType.create(markAttrs));
+            // Skip ranges already handled by handleTextInput / handleSuggestionDelete
+            let allMarked = true;
+            newState.doc.nodesBetween(newFrom, newTo, (node) => {
+              if (node.isText) {
+                const hasTrackedMark = node.marks.some(
+                  (m) => m.type === insertionType || (deletionType && m.type === deletionType)
+                );
+                if (!hasTrackedMark) allMarked = false;
+              }
+            });
+            if (!allMarked) {
+              tr.addMark(newFrom, newTo, insertionType.create(markAttrs));
+            }
           }
         });
       });
