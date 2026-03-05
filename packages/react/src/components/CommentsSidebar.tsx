@@ -175,6 +175,15 @@ export const CommentsSidebar: React.FC<CommentsSidebarProps> = ({
       }
     });
 
+    // Include the "add comment" input box in the layout if it has a Y position
+    if (isAddingComment && addCommentYPosition != null) {
+      positions.push({
+        id: 'new-comment-input',
+        targetY: addCommentYPosition,
+        height: cardRefs.current.get('new-comment-input')?.offsetHeight || 120,
+      });
+    }
+
     // Sort by target Y and resolve overlaps
     positions.sort((a, b) => a.targetY - b.targetY);
     const resolvedPositions = new Map<string, number>();
@@ -187,15 +196,20 @@ export const CommentsSidebar: React.FC<CommentsSidebarProps> = ({
     }
 
     setCardPositions(resolvedPositions);
-  }, [visibleComments, trackedChanges, editorContainerRef]);
+  }, [visibleComments, trackedChanges, editorContainerRef, isAddingComment, addCommentYPosition]);
 
   // Listen for clicks on comment/change elements in the document body → expand the sidebar card
   useEffect(() => {
     const container = editorContainerRef?.current;
     if (!container) return;
 
+    const pagesEl = container.querySelector('.paged-editor__pages');
+    if (!pagesEl) return;
+
     const handleDocClick = (e: MouseEvent) => {
       const target = e.target as HTMLElement;
+      // Only respond to clicks inside the pages area, not sidebar
+      if (!pagesEl.contains(target)) return;
 
       // Check for comment highlight click
       const commentEl = target.closest('[data-comment-id]') as HTMLElement | null;
@@ -866,84 +880,92 @@ export const CommentsSidebar: React.FC<CommentsSidebarProps> = ({
     >
       {/* Cards container — relative for absolute card positioning */}
       <div style={{ position: 'relative' }}>
-        {/* New comment input — positioned at selection Y if available */}
-        {isAddingComment && (
-          <div
-            style={{
-              ...(addCommentYPosition != null
-                ? { position: 'absolute', top: addCommentYPosition, left: 0, right: 0 }
-                : { marginBottom: 8 }),
-              padding: 12,
-              borderRadius: 8,
-              backgroundColor: '#fff',
-              boxShadow: '0 1px 3px rgba(60,64,67,0.3), 0 4px 8px 3px rgba(60,64,67,0.15)',
-              zIndex: 50,
-            }}
-          >
-            <textarea
-              ref={(el) => el?.focus()}
-              value={newCommentText}
-              onChange={(e) => setNewCommentText(e.target.value)}
-              onMouseDown={(e) => e.stopPropagation()}
-              onKeyDown={(e) => {
-                e.stopPropagation();
-                if (e.key === 'Enter' && !e.shiftKey) {
-                  e.preventDefault();
-                  handleNewCommentSubmit();
-                }
-                if (e.key === 'Escape') {
-                  onCancelAddComment?.();
-                  setNewCommentText('');
-                }
-              }}
-              placeholder="Add a comment..."
-              style={{
-                width: '100%',
-                border: 'none',
-                outline: 'none',
-                resize: 'none',
-                fontSize: 13,
-                lineHeight: '18px',
-                fontFamily: 'inherit',
-                minHeight: 40,
-              }}
-            />
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 8 }}>
-              <button
-                onClick={() => {
-                  onCancelAddComment?.();
-                  setNewCommentText('');
+        {/* New comment input — positioned like other cards via cardPositions */}
+        {isAddingComment &&
+          (() => {
+            const inputYPos = cardPositions.get('new-comment-input');
+            return (
+              <div
+                ref={(el) => {
+                  if (el) cardRefs.current.set('new-comment-input', el);
+                  else cardRefs.current.delete('new-comment-input');
                 }}
                 style={{
-                  padding: '4px 12px',
-                  fontSize: 12,
-                  border: 'none',
-                  background: 'none',
-                  color: '#5f6368',
-                  cursor: 'pointer',
-                  borderRadius: 4,
+                  ...(hasPositions && inputYPos !== undefined
+                    ? { position: 'absolute', top: inputYPos, left: 0, right: 0 }
+                    : { marginBottom: 8 }),
+                  padding: 12,
+                  borderRadius: 8,
+                  backgroundColor: '#fff',
+                  boxShadow: '0 1px 3px rgba(60,64,67,0.3), 0 4px 8px 3px rgba(60,64,67,0.15)',
+                  zIndex: 50,
                 }}
               >
-                Cancel
-              </button>
-              <button
-                onClick={handleNewCommentSubmit}
-                disabled={!newCommentText.trim()}
-                style={{
-                  padding: '4px 12px',
-                  fontSize: 12,
-                  border: 'none',
-                  borderRadius: 4,
-                  background: newCommentText.trim() ? '#1a73e8' : '#e8eaed',
-                  color: newCommentText.trim() ? '#fff' : '#80868b',
-                  cursor: newCommentText.trim() ? 'pointer' : 'default',
-                }}
-              >
-                Comment
-              </button>
-            </div>
-          </div>
-        )}
+                <textarea
+                  ref={(el) => el?.focus()}
+                  value={newCommentText}
+                  onChange={(e) => setNewCommentText(e.target.value)}
+                  onMouseDown={(e) => e.stopPropagation()}
+                  onKeyDown={(e) => {
+                    e.stopPropagation();
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                      e.preventDefault();
+                      handleNewCommentSubmit();
+                    }
+                    if (e.key === 'Escape') {
+                      onCancelAddComment?.();
+                      setNewCommentText('');
+                    }
+                  }}
+                  placeholder="Add a comment..."
+                  style={{
+                    width: '100%',
+                    border: 'none',
+                    outline: 'none',
+                    resize: 'none',
+                    fontSize: 13,
+                    lineHeight: '18px',
+                    fontFamily: 'inherit',
+                    minHeight: 40,
+                  }}
+                />
+                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 8 }}>
+                  <button
+                    onClick={() => {
+                      onCancelAddComment?.();
+                      setNewCommentText('');
+                    }}
+                    style={{
+                      padding: '4px 12px',
+                      fontSize: 12,
+                      border: 'none',
+                      background: 'none',
+                      color: '#5f6368',
+                      cursor: 'pointer',
+                      borderRadius: 4,
+                    }}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleNewCommentSubmit}
+                    disabled={!newCommentText.trim()}
+                    style={{
+                      padding: '4px 12px',
+                      fontSize: 12,
+                      border: 'none',
+                      borderRadius: 4,
+                      background: newCommentText.trim() ? '#1a73e8' : '#e8eaed',
+                      color: newCommentText.trim() ? '#fff' : '#80868b',
+                      cursor: newCommentText.trim() ? 'pointer' : 'default',
+                    }}
+                  >
+                    Comment
+                  </button>
+                </div>
+              </div>
+            );
+          })()}
 
         {/* Comments */}
         {visibleComments.map((comment, idx) => renderCommentCard(comment, idx))}
