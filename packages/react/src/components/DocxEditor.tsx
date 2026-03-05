@@ -443,6 +443,10 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
   const [trackedChanges, setTrackedChanges] = useState<TrackedChangeEntry[]>([]);
   const [activeCommentId, setActiveCommentId] = useState<number | null>(null);
   const [isAddingComment, setIsAddingComment] = useState(false);
+  const [commentSelectionRange, setCommentSelectionRange] = useState<{
+    from: number;
+    to: number;
+  } | null>(null);
   const [editingMode, setEditingMode] = useState<'editing' | 'suggesting'>('editing');
 
   // Extract tracked changes from ProseMirror state
@@ -2330,6 +2334,14 @@ body { background: white; }
                       <ToolbarSeparator />
                       <ToolbarButton
                         onClick={() => {
+                          // Capture the current PM selection range for the comment anchor
+                          const view = pagedEditorRef.current?.getView();
+                          if (view) {
+                            const { from, to } = view.state.selection;
+                            if (from !== to) {
+                              setCommentSelectionRange({ from, to });
+                            }
+                          }
                           if (!showCommentsSidebar) setShowCommentsSidebar(true);
                           setIsAddingComment(true);
                         }}
@@ -2527,8 +2539,9 @@ body { background: white; }
                               setComments((prev) => [...prev, newReply]);
                             }}
                             onAddComment={(addText) => {
+                              const commentId = Date.now();
                               const newComment: Comment = {
-                                id: Date.now(),
+                                id: commentId,
                                 author: trackChanges?.author || 'User',
                                 date: new Date().toISOString(),
                                 content: [
@@ -2545,8 +2558,19 @@ body { background: white; }
                                   },
                                 ],
                               };
+                              // Apply comment mark to the captured selection range
+                              const view = pagedEditorRef.current?.getView();
+                              if (view && commentSelectionRange) {
+                                const { from, to } = commentSelectionRange;
+                                const commentMark = view.state.schema.marks.comment.create({
+                                  commentId,
+                                });
+                                const tr = view.state.tr.addMark(from, to, commentMark);
+                                view.dispatch(tr);
+                              }
                               setComments((prev) => [...prev, newComment]);
                               setIsAddingComment(false);
+                              setCommentSelectionRange(null);
                             }}
                             onTrackedChangeReply={(revisionId, text) => {
                               const newReply: Comment = {
@@ -2570,7 +2594,10 @@ body { background: white; }
                               };
                               setComments((prev) => [...prev, newReply]);
                             }}
-                            onCancelAddComment={() => setIsAddingComment(false)}
+                            onCancelAddComment={() => {
+                              setIsAddingComment(false);
+                              setCommentSelectionRange(null);
+                            }}
                             onAcceptChange={(from, to) => {
                               const view = pagedEditorRef.current?.getView();
                               if (view) {
