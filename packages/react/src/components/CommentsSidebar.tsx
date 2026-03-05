@@ -126,17 +126,22 @@ export const CommentsSidebar: React.FC<CommentsSidebarProps> = ({
   const getReplies = (commentId: number) => comments.filter((c) => c.parentId === commentId);
 
   // Find DOM Y positions for comment/change anchors
+  // IMPORTANT: queries must be scoped to .paged-editor__pages to avoid
+  // matching sidebar card elements (which also have data-comment-id).
   const updateCardPositions = useCallback(() => {
     const container = editorContainerRef?.current;
     if (!container) return;
+
+    const pagesEl = container.querySelector('.paged-editor__pages');
+    if (!pagesEl) return;
 
     const containerRect = container.getBoundingClientRect();
     const scrollTop = container.scrollTop;
     const positions: { id: string; targetY: number; height: number }[] = [];
 
-    // Find comment highlight elements
+    // Find comment highlight elements (inside pages only, not sidebar)
     for (const comment of visibleComments) {
-      const el = container.querySelector(`[data-comment-id="${comment.id}"]`);
+      const el = pagesEl.querySelector(`[data-comment-id="${comment.id}"]`);
       if (el) {
         const rect = el.getBoundingClientRect();
         positions.push({
@@ -147,12 +152,11 @@ export const CommentsSidebar: React.FC<CommentsSidebarProps> = ({
       }
     }
 
-    // Find tracked change elements
+    // Find tracked change elements (inside pages only)
     trackedChanges.forEach((change, idx) => {
       const cardId = `tc-${change.revisionId}-${idx}`;
-      // Look for insertion/deletion elements
       const selector = change.type === 'insertion' ? '.docx-insertion' : '.docx-deletion';
-      const els = container.querySelectorAll(selector);
+      const els = pagesEl.querySelectorAll(selector);
       for (const el of els) {
         const htmlEl = el as HTMLElement;
         if (
@@ -221,43 +225,32 @@ export const CommentsSidebar: React.FC<CommentsSidebarProps> = ({
     return () => container.removeEventListener('click', handleDocClick);
   }, [editorContainerRef, trackedChanges, onCommentClick]);
 
-  // Update positions on mount, resize, and when comments/changes update
+  // Update positions on mount, resize, and when comments/changes list changes.
+  // We do NOT use a MutationObserver — it caused feedback loops because the sidebar
+  // cards (which have data-comment-id) live inside the same scroll container.
   useEffect(() => {
     const container = editorContainerRef?.current;
     if (!container) return;
 
-    // Initial position calculation (delayed to let DOM render)
-    const timer = setTimeout(() => {
+    // Calculate positions after a short delay to let the layout-painter render.
+    // Run twice: once quickly for existing elements, once delayed for new marks.
+    const timerQuick = setTimeout(() => {
       updateCardPositions();
-      requestAnimationFrame(() => setInitialPositionsDone(true));
-    }, 300);
+    }, 50);
+    const timerFull = setTimeout(() => {
+      updateCardPositions();
+      setInitialPositionsDone(true);
+    }, 400);
 
     const resizeObserver = new ResizeObserver(() => {
       requestAnimationFrame(updateCardPositions);
     });
     resizeObserver.observe(container);
 
-    // Debounced MutationObserver to pick up new comment marks in the page DOM.
-    // Only observe the pages container (not the sidebar) to avoid infinite loops.
-    let mutationTimer: ReturnType<typeof setTimeout> | null = null;
-    const pagesEl = container.querySelector('.paged-editor__pages');
-    let mutationObserver: MutationObserver | undefined;
-    if (pagesEl) {
-      mutationObserver = new MutationObserver(() => {
-        if (mutationTimer) clearTimeout(mutationTimer);
-        mutationTimer = setTimeout(updateCardPositions, 150);
-      });
-      mutationObserver.observe(pagesEl, {
-        childList: true,
-        subtree: true,
-      });
-    }
-
     return () => {
-      clearTimeout(timer);
-      if (mutationTimer) clearTimeout(mutationTimer);
+      clearTimeout(timerQuick);
+      clearTimeout(timerFull);
       resizeObserver.disconnect();
-      mutationObserver?.disconnect();
     };
   }, [updateCardPositions, editorContainerRef]);
 
