@@ -155,6 +155,10 @@ export interface PagedEditorProps {
   style?: CSSProperties;
   /** Whether comments sidebar is open (shifts document left). */
   commentsSidebarOpen?: boolean;
+  /** Sidebar overlay rendered inside the scroll container (scrolls with document). */
+  sidebarOverlay?: React.ReactNode;
+  /** Ref callback for the scroll container element. */
+  scrollContainerRef?: React.Ref<HTMLDivElement>;
 }
 
 export interface PagedEditorRef {
@@ -1158,6 +1162,8 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
       className,
       style,
       commentsSidebarOpen = false,
+      sidebarOverlay,
+      scrollContainerRef: scrollContainerRefProp,
     } = props;
 
     // Refs
@@ -2732,11 +2738,17 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
     /**
      * Handle focus on container - redirect to hidden PM.
      */
-    const handleContainerFocus = useCallback(() => {
-      if (readOnly) return;
-      hiddenPMRef.current?.focus();
-      setIsFocused(true);
-    }, [readOnly]);
+    const handleContainerFocus = useCallback(
+      (e: React.FocusEvent) => {
+        if (readOnly) return;
+        // Don't steal focus from sidebar inputs (textareas, inputs, buttons)
+        const target = e.target as HTMLElement;
+        if (target.closest('.docx-comments-sidebar')) return;
+        hiddenPMRef.current?.focus();
+        setIsFocused(true);
+      },
+      [readOnly]
+    );
 
     /**
      * Handle blur from container.
@@ -2939,14 +2951,19 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
     /**
      * Handle mousedown on container (outside pages).
      */
-    const handleContainerMouseDown = useCallback(() => {
-      if (readOnly) return;
-      // Focus hidden PM if clicking outside pages area
-      if (!hiddenPMRef.current?.isFocused()) {
-        hiddenPMRef.current?.focus();
-        setIsFocused(true);
-      }
-    }, [readOnly]);
+    const handleContainerMouseDown = useCallback(
+      (e: React.MouseEvent) => {
+        if (readOnly) return;
+        // Don't steal focus from sidebar inputs
+        if ((e.target as HTMLElement).closest('.docx-comments-sidebar')) return;
+        // Focus hidden PM if clicking outside pages area
+        if (!hiddenPMRef.current?.isFocused()) {
+          hiddenPMRef.current?.focus();
+          setIsFocused(true);
+        }
+      },
+      [readOnly]
+    );
 
     // =========================================================================
     // Initial Layout
@@ -3140,7 +3157,13 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
 
     return (
       <div
-        ref={containerRef}
+        ref={(el) => {
+          (containerRef as React.MutableRefObject<HTMLDivElement | null>).current = el;
+          if (typeof scrollContainerRefProp === 'function') scrollContainerRefProp(el);
+          else if (scrollContainerRefProp && typeof scrollContainerRefProp === 'object') {
+            (scrollContainerRefProp as React.MutableRefObject<HTMLDivElement | null>).current = el;
+          }
+        }}
         className={`ep-root paged-editor ${className ?? ''}`}
         style={{ ...containerStyles, ...style }}
         tabIndex={0}
@@ -3171,7 +3194,7 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
             minHeight: totalHeight,
             transform: (() => {
               const parts: string[] = [];
-              if (commentsSidebarOpen) parts.push('translateX(-160px)');
+              if (commentsSidebarOpen) parts.push('translateX(-120px)');
               if (zoom !== 1) parts.push(`scale(${zoom})`);
               return parts.length > 0 ? parts.join(' ') : undefined;
             })(),
@@ -3218,6 +3241,9 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
             </div>
           )}
         </div>
+
+        {/* Sidebar overlay — inside scroll container, scrolls with document */}
+        {sidebarOverlay}
       </div>
     );
   }

@@ -34,6 +34,7 @@ import type { Document } from '../types/document';
 import type { BlockContent, Image } from '../types/content';
 import { serializeDocument } from './serializer/documentSerializer';
 import { serializeHeaderFooter } from './serializer/headerFooterSerializer';
+import { serializeComments } from './serializer/commentSerializer';
 import { RELATIONSHIP_TYPES } from './relsParser';
 import { type RawDocxContent } from './unzip';
 import { createAllocatorAfterDocument, revisionizeDocument } from './revisions';
@@ -287,6 +288,16 @@ export async function repackDocx(doc: Document, options: RepackOptions = {}): Pr
   // Serialize and update modified headers/footers
   serializeHeadersFootersToZip(exportDocument, newZip, compressionLevel);
 
+  // Serialize and update comments.xml if comments exist
+  const comments = exportDocument.package.document.comments;
+  if (comments && comments.length > 0) {
+    const commentsXml = serializeComments(comments);
+    newZip.file('word/comments.xml', commentsXml, {
+      compression: 'DEFLATE',
+      compressionOptions: { level: compressionLevel },
+    });
+  }
+
   // Optionally update modification date in docProps/core.xml
   if (updateModifiedDate) {
     const corePropsPath = 'docProps/core.xml';
@@ -365,6 +376,16 @@ export async function repackDocxFromRaw(
 
   // Serialize and update modified headers/footers
   serializeHeadersFootersToZip(exportDocument, newZip, compressionLevel);
+
+  // Serialize and update comments.xml if comments exist
+  const rawComments = exportDocument.package.document.comments;
+  if (rawComments && rawComments.length > 0) {
+    const commentsXml = serializeComments(rawComments);
+    newZip.file('word/comments.xml', commentsXml, {
+      compression: 'DEFLATE',
+      compressionOptions: { level: compressionLevel },
+    });
+  }
 
   // Optionally update core properties
   if (updateModifiedDate && rawContent.corePropsXml) {

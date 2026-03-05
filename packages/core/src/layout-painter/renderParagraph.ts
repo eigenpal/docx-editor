@@ -179,20 +179,25 @@ function applyRunStyles(element: HTMLElement, run: TextRun | TabRun): void {
     element.dataset.commentId = String(run.commentIds[0]);
   }
 
-  // Tracked insertion styling
+  // Tracked insertion styling — light green background with dashed border
   if (run.isInsertion) {
-    element.style.color = '#2e7d32';
-    if (!decorations.includes('underline')) decorations.push('underline');
-    element.style.textDecorationColor = '#2e7d32';
+    element.style.backgroundColor = 'rgba(52, 168, 83, 0.08)';
+    element.style.borderBottom = '2px dashed #2e7d32';
+    element.style.paddingBottom = '1px';
     element.classList.add('docx-insertion');
+    if (run.changeAuthor) element.dataset.changeAuthor = run.changeAuthor;
+    if (run.changeDate) element.dataset.changeDate = run.changeDate;
   }
 
-  // Tracked deletion styling
+  // Tracked deletion styling — light red background with strikethrough
   if (run.isDeletion) {
+    element.style.backgroundColor = 'rgba(211, 47, 47, 0.08)';
     element.style.color = '#c62828';
     if (!decorations.includes('line-through')) decorations.push('line-through');
     element.style.textDecorationColor = '#c62828';
     element.classList.add('docx-deletion');
+    if (run.changeAuthor) element.dataset.changeAuthor = run.changeAuthor;
+    if (run.changeDate) element.dataset.changeDate = run.changeDate;
   }
 
   if (decorations.length > 0) {

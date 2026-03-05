@@ -1,11 +1,12 @@
 /**
  * Comments & Track Changes Sidebar
  *
- * Right-side panel displaying comments and tracked changes.
- * Connected to document via leader lines.
+ * Google Docs-style floating cards positioned relative to their anchored text.
+ * Cards appear at the Y position of their corresponding text in the document.
+ * Clicking a card expands it to show reply input and action buttons.
  */
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef, useCallback } from 'react';
 import type { Comment, Paragraph } from '@eigenpal/docx-core/types/content';
 import { MaterialSymbol } from './ui/Icons';
 
@@ -21,6 +22,26 @@ function getCommentText(paragraphs?: Paragraph[]): string {
         .map((t) => ('text' in t ? t.text : ''))
     )
     .join('');
+}
+
+function formatDate(dateStr?: string): string {
+  if (!dateStr) return '';
+  const d = new Date(dateStr);
+  return d.toLocaleString(undefined, {
+    hour: 'numeric',
+    minute: '2-digit',
+    month: 'short',
+    day: 'numeric',
+  });
+}
+
+function getInitials(name: string): string {
+  return name
+    .split(/\s+/)
+    .map((w) => w[0])
+    .join('')
+    .toUpperCase()
+    .slice(0, 2);
 }
 
 export interface TrackedChangeEntry {
@@ -50,19 +71,26 @@ export interface CommentsSidebarProps {
   topOffset?: number;
   showResolved?: boolean;
   isAddingComment?: boolean;
+  /** Page width in pixels — used to position sidebar next to page edge */
+  pageWidth?: number;
+  /** Ref to the editor scroll container for DOM position queries */
+  editorContainerRef?: React.RefObject<HTMLDivElement | null>;
 }
 
-export const SIDEBAR_WIDTH = 320;
+export const SIDEBAR_WIDTH = 280;
+
+// Minimum gap between stacked cards to avoid overlap
+const MIN_CARD_GAP = 8;
 
 export const CommentsSidebar: React.FC<CommentsSidebarProps> = ({
   comments,
   trackedChanges,
   activeCommentId,
-  onClose,
+  onClose: _onClose,
   onCommentClick,
   onCommentReply,
   onCommentResolve,
-  onCommentReopen,
+  onCommentReopen: _onCommentReopen,
   onCommentDelete,
   onAddComment,
   onCancelAddComment,
@@ -71,32 +99,144 @@ export const CommentsSidebar: React.FC<CommentsSidebarProps> = ({
   topOffset = 0,
   showResolved: showResolvedProp = false,
   isAddingComment = false,
+  pageWidth = 816,
+  editorContainerRef,
 }) => {
-  const [open, setOpen] = useState(false);
-  const [showResolved, setShowResolved] = useState(showResolvedProp);
+  const [showResolved] = useState(showResolvedProp);
   const [replyingTo, setReplyingTo] = useState<number | null>(null);
   const [replyText, setReplyText] = useState('');
   const [newCommentText, setNewCommentText] = useState('');
-
-  useEffect(() => {
-    requestAnimationFrame(() => setOpen(true));
-  }, []);
+  const [expandedCard, setExpandedCard] = useState<string | null>(null);
+  const [cardPositions, setCardPositions] = useState<Map<string, number>>(new Map());
+  const [initialPositionsDone, setInitialPositionsDone] = useState(false);
+  const sidebarRef = useRef<HTMLDivElement>(null);
+  const cardRefs = useRef<Map<string, HTMLDivElement>>(new Map());
 
   const visibleComments = comments.filter((c) => {
-    if (c.parentId) return false; // replies shown nested
+    if (c.parentId) return false;
     if (c.done && !showResolved) return false;
     return true;
   });
 
   const getReplies = (commentId: number) => comments.filter((c) => c.parentId === commentId);
 
-  const handleReplySubmit = (commentId: number) => {
-    if (replyText.trim()) {
-      onCommentReply?.(commentId, replyText.trim());
-      setReplyText('');
-      setReplyingTo(null);
+  // Find DOM Y positions for comment/change anchors
+  const updateCardPositions = useCallback(() => {
+    const container = editorContainerRef?.current;
+    if (!container) return;
+
+    const containerRect = container.getBoundingClientRect();
+    const scrollTop = container.scrollTop;
+    const positions: { id: string; targetY: number; height: number }[] = [];
+
+    // Find comment highlight elements
+    for (const comment of visibleComments) {
+      const el = container.querySelector(`[data-comment-id="${comment.id}"]`);
+      if (el) {
+        const rect = el.getBoundingClientRect();
+        positions.push({
+          id: `comment-${comment.id}`,
+          targetY: rect.top - containerRect.top + scrollTop,
+          height: cardRefs.current.get(`comment-${comment.id}`)?.offsetHeight || 80,
+        });
+      }
     }
-  };
+
+    // Find tracked change elements
+    trackedChanges.forEach((change, idx) => {
+      const cardId = `tc-${change.revisionId}-${idx}`;
+      // Look for insertion/deletion elements
+      const selector = change.type === 'insertion' ? '.docx-insertion' : '.docx-deletion';
+      const els = container.querySelectorAll(selector);
+      for (const el of els) {
+        const htmlEl = el as HTMLElement;
+        if (
+          htmlEl.dataset.changeAuthor === change.author &&
+          htmlEl.textContent?.includes(change.text.slice(0, 20))
+        ) {
+          const rect = el.getBoundingClientRect();
+          positions.push({
+            id: cardId,
+            targetY: rect.top - containerRect.top + scrollTop,
+            height: cardRefs.current.get(cardId)?.offsetHeight || 80,
+          });
+          break;
+        }
+      }
+    });
+
+    // Sort by target Y and resolve overlaps
+    positions.sort((a, b) => a.targetY - b.targetY);
+    const resolvedPositions = new Map<string, number>();
+    let lastBottom = 0;
+
+    for (const pos of positions) {
+      const y = Math.max(pos.targetY, lastBottom + MIN_CARD_GAP);
+      resolvedPositions.set(pos.id, y);
+      lastBottom = y + pos.height;
+    }
+
+    setCardPositions(resolvedPositions);
+  }, [visibleComments, trackedChanges, editorContainerRef]);
+
+  // Listen for clicks on comment/change elements in the document body → expand the sidebar card
+  useEffect(() => {
+    const container = editorContainerRef?.current;
+    if (!container) return;
+
+    const handleDocClick = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+
+      // Check for comment highlight click
+      const commentEl = target.closest('[data-comment-id]') as HTMLElement | null;
+      if (commentEl?.dataset.commentId) {
+        setExpandedCard(`comment-${commentEl.dataset.commentId}`);
+        onCommentClick?.(Number(commentEl.dataset.commentId));
+        return;
+      }
+
+      // Check for tracked change click
+      const insertionEl = target.closest('.docx-insertion') as HTMLElement | null;
+      const deletionEl = target.closest('.docx-deletion') as HTMLElement | null;
+      const changeEl = insertionEl || deletionEl;
+      if (changeEl) {
+        const author = changeEl.dataset.changeAuthor || '';
+        const text = changeEl.textContent || '';
+        const type = insertionEl ? 'insertion' : 'deletion';
+        const idx = trackedChanges.findIndex(
+          (tc) => tc.type === type && tc.author === author && text.includes(tc.text.slice(0, 20))
+        );
+        if (idx >= 0) {
+          setExpandedCard(`tc-${trackedChanges[idx].revisionId}-${idx}`);
+        }
+      }
+    };
+
+    container.addEventListener('click', handleDocClick);
+    return () => container.removeEventListener('click', handleDocClick);
+  }, [editorContainerRef, trackedChanges, onCommentClick]);
+
+  // Update positions once after mount and on resize (NOT on scroll or mutations)
+  useEffect(() => {
+    const container = editorContainerRef?.current;
+    if (!container) return;
+
+    // Initial position calculation (delayed to let DOM render)
+    const timer = setTimeout(() => {
+      updateCardPositions();
+      requestAnimationFrame(() => setInitialPositionsDone(true));
+    }, 300);
+
+    const resizeObserver = new ResizeObserver(() => {
+      requestAnimationFrame(updateCardPositions);
+    });
+    resizeObserver.observe(container);
+
+    return () => {
+      clearTimeout(timer);
+      resizeObserver.disconnect();
+    };
+  }, [updateCardPositions, editorContainerRef]);
 
   const handleNewCommentSubmit = () => {
     if (newCommentText.trim()) {
@@ -105,94 +245,457 @@ export const CommentsSidebar: React.FC<CommentsSidebarProps> = ({
     }
   };
 
+  const handleCardClick = (cardId: string, commentId?: number) => {
+    setExpandedCard(expandedCard === cardId ? null : cardId);
+    if (commentId !== undefined) {
+      onCommentClick?.(commentId);
+    }
+  };
+
+  // Determine if we have valid positions (fallback to stacked layout if not)
+  const hasPositions = cardPositions.size > 0;
+
+  // Shared reply section renderer (used by both comment and tracked change cards)
+  const renderReplySection = (
+    replyKey: number,
+    _cardId: string,
+    submitFn?: (id: number, text: string) => void
+  ) => (
+    <div onClick={(e) => e.stopPropagation()} style={{ marginTop: 12 }}>
+      {replyingTo === replyKey ? (
+        <div>
+          <input
+            ref={(el) => el?.focus()}
+            type="text"
+            value={replyText}
+            onChange={(e) => setReplyText(e.target.value)}
+            onMouseDown={(e) => e.stopPropagation()}
+            onKeyDown={(e) => {
+              e.stopPropagation();
+              if (e.key === 'Enter') {
+                e.preventDefault();
+                if (replyText.trim() && submitFn) submitFn(replyKey, replyText.trim());
+                setReplyText('');
+                setReplyingTo(null);
+              }
+              if (e.key === 'Escape') {
+                setReplyingTo(null);
+                setReplyText('');
+              }
+            }}
+            placeholder="Reply or add others with @"
+            style={{
+              width: '100%',
+              border: '1px solid #1a73e8',
+              borderRadius: 20,
+              outline: 'none',
+              fontSize: 14,
+              padding: '8px 16px',
+              fontFamily: 'inherit',
+              boxSizing: 'border-box',
+              color: '#202124',
+            }}
+          />
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 8 }}>
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                setReplyingTo(null);
+                setReplyText('');
+              }}
+              style={{
+                padding: '6px 16px',
+                fontSize: 14,
+                border: 'none',
+                background: 'none',
+                color: '#1a73e8',
+                cursor: 'pointer',
+                fontWeight: 500,
+                fontFamily: 'inherit',
+              }}
+            >
+              Cancel
+            </button>
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                if (replyText.trim() && submitFn) submitFn(replyKey, replyText.trim());
+                setReplyText('');
+                setReplyingTo(null);
+              }}
+              disabled={!replyText.trim()}
+              style={{
+                padding: '6px 16px',
+                fontSize: 14,
+                border: 'none',
+                borderRadius: 20,
+                background: replyText.trim() ? '#1a73e8' : '#f1f3f4',
+                color: replyText.trim() ? '#fff' : '#80868b',
+                cursor: replyText.trim() ? 'pointer' : 'default',
+                fontWeight: 500,
+                fontFamily: 'inherit',
+              }}
+            >
+              Reply
+            </button>
+          </div>
+        </div>
+      ) : (
+        <input
+          readOnly
+          onMouseDown={(e) => e.stopPropagation()}
+          onClick={(e) => {
+            e.stopPropagation();
+            setReplyingTo(replyKey);
+          }}
+          placeholder="Reply or add others with @"
+          style={{
+            width: '100%',
+            border: '1px solid #dadce0',
+            borderRadius: 20,
+            outline: 'none',
+            fontSize: 14,
+            padding: '8px 16px',
+            fontFamily: 'inherit',
+            color: '#80868b',
+            cursor: 'text',
+            backgroundColor: '#fff',
+            boxSizing: 'border-box',
+          }}
+        />
+      )}
+    </div>
+  );
+
+  const renderCommentCard = (comment: Comment, _idx: number) => {
+    const replies = getReplies(comment.id);
+    const isActive = activeCommentId === comment.id;
+    const cardId = `comment-${comment.id}`;
+    const isExpanded = expandedCard === cardId || isActive;
+    const authorInitials = getInitials(comment.author || 'U');
+    const yPos = cardPositions.get(cardId);
+
+    return (
+      <div
+        key={comment.id}
+        ref={(el) => {
+          if (el) cardRefs.current.set(cardId, el);
+          else cardRefs.current.delete(cardId);
+        }}
+        data-comment-id={comment.id}
+        className="docx-comment-card"
+        onClick={() => handleCardClick(cardId, comment.id)}
+        onMouseDown={(e) => e.stopPropagation()}
+        style={{
+          ...(hasPositions && yPos !== undefined
+            ? { position: 'absolute', top: yPos, left: 0, right: 0 }
+            : { marginBottom: 6 }),
+          padding: isExpanded ? '14px 16px' : '10px 12px',
+          borderRadius: 8,
+          backgroundColor: isExpanded ? '#fff' : '#f0f6ff',
+          cursor: 'pointer',
+          opacity: comment.done ? 0.6 : 1,
+          boxShadow: isExpanded
+            ? '0 1px 3px rgba(60,64,67,0.3), 0 4px 8px 3px rgba(60,64,67,0.15)'
+            : '0 1px 2px rgba(60,64,67,0.15)',
+          transition: initialPositionsDone ? 'box-shadow 0.2s ease, top 0.15s ease' : 'none',
+        }}
+      >
+        {/* Header: avatar + name/date + actions */}
+        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
+          <div
+            style={{
+              width: 32,
+              height: 32,
+              borderRadius: '50%',
+              backgroundColor: '#dadce0',
+              color: '#5f6368',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              fontSize: 13,
+              fontWeight: 500,
+              flexShrink: 0,
+            }}
+          >
+            {authorInitials}
+          </div>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <span style={{ fontSize: 14, fontWeight: 500, color: '#202124' }}>
+              {comment.author || 'Unknown'}
+            </span>
+            <div style={{ fontSize: 12, color: '#5f6368' }}>{formatDate(comment.date)}</div>
+          </div>
+          {isExpanded && (
+            <div style={{ display: 'flex', gap: 4, marginTop: 2 }}>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onCommentResolve?.(comment.id);
+                }}
+                title="Resolve"
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  cursor: 'pointer',
+                  padding: 4,
+                  color: '#5f6368',
+                  display: 'flex',
+                  borderRadius: '50%',
+                }}
+              >
+                <MaterialSymbol name="check" size={20} />
+              </button>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onCommentDelete?.(comment.id);
+                }}
+                title="Delete"
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  cursor: 'pointer',
+                  padding: 4,
+                  color: '#5f6368',
+                  display: 'flex',
+                  borderRadius: '50%',
+                }}
+              >
+                <MaterialSymbol name="close" size={20} />
+              </button>
+            </div>
+          )}
+        </div>
+
+        {/* Comment body */}
+        <div style={{ fontSize: 14, color: '#202124', lineHeight: '20px', marginTop: 8 }}>
+          {getCommentText(comment.content)}
+        </div>
+
+        {/* Replies */}
+        {isExpanded && replies.length > 0 && (
+          <div style={{ marginTop: 12 }}>
+            {replies.map((reply) => (
+              <div
+                key={reply.id}
+                style={{ marginBottom: 12, paddingTop: 12, borderTop: '1px solid #e8eaed' }}
+              >
+                <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
+                  <div
+                    style={{
+                      width: 32,
+                      height: 32,
+                      borderRadius: '50%',
+                      backgroundColor: '#5f6368',
+                      color: '#fff',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      fontSize: 13,
+                      fontWeight: 500,
+                      flexShrink: 0,
+                    }}
+                  >
+                    {getInitials(reply.author || 'U')}
+                  </div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <span style={{ fontSize: 14, fontWeight: 500, color: '#202124' }}>
+                      {reply.author || 'Unknown'}
+                    </span>
+                    <div style={{ fontSize: 12, color: '#5f6368' }}>{formatDate(reply.date)}</div>
+                  </div>
+                  <button
+                    onClick={(e) => e.stopPropagation()}
+                    style={{
+                      background: 'none',
+                      border: 'none',
+                      cursor: 'pointer',
+                      padding: 4,
+                      color: '#5f6368',
+                      display: 'flex',
+                    }}
+                  >
+                    <MaterialSymbol name="more_vert" size={20} />
+                  </button>
+                </div>
+                <div
+                  style={{
+                    fontSize: 14,
+                    color: '#202124',
+                    lineHeight: '20px',
+                    marginTop: 4,
+                    paddingLeft: 42,
+                  }}
+                >
+                  {getCommentText(reply.content)}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Reply input */}
+        {isExpanded && !comment.done && renderReplySection(comment.id, cardId, onCommentReply)}
+      </div>
+    );
+  };
+
+  const renderTrackedChangeCard = (change: TrackedChangeEntry, idx: number) => {
+    const authorName = change.author || 'Unknown';
+    const initials = getInitials(authorName);
+    const dateStr = formatDate(change.date);
+    const cardId = `tc-${change.revisionId}-${idx}`;
+    const isExpanded = expandedCard === cardId;
+    const yPos = cardPositions.get(cardId);
+
+    return (
+      <div
+        key={cardId}
+        ref={(el) => {
+          if (el) cardRefs.current.set(cardId, el);
+          else cardRefs.current.delete(cardId);
+        }}
+        className="docx-tracked-change-card"
+        onClick={() => handleCardClick(cardId)}
+        onMouseDown={(e) => e.stopPropagation()}
+        style={{
+          ...(hasPositions && yPos !== undefined
+            ? { position: 'absolute', top: yPos, left: 0, right: 0 }
+            : { marginBottom: 6 }),
+          padding: isExpanded ? '14px 16px' : '10px 12px',
+          borderRadius: 8,
+          backgroundColor: isExpanded ? '#fff' : '#f0f6ff',
+          cursor: 'pointer',
+          boxShadow: isExpanded
+            ? '0 1px 3px rgba(60,64,67,0.3), 0 4px 8px 3px rgba(60,64,67,0.15)'
+            : '0 1px 2px rgba(60,64,67,0.15)',
+          transition: initialPositionsDone ? 'box-shadow 0.2s ease, top 0.15s ease' : 'none',
+        }}
+      >
+        {/* Header: avatar + name/date + actions */}
+        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
+          <div
+            style={{
+              width: 32,
+              height: 32,
+              borderRadius: '50%',
+              backgroundColor: '#dadce0',
+              color: '#5f6368',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              fontSize: 13,
+              fontWeight: 500,
+              flexShrink: 0,
+            }}
+          >
+            {initials}
+          </div>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <span style={{ fontSize: 14, fontWeight: 500, color: '#202124' }}>{authorName}</span>
+            {dateStr && <div style={{ fontSize: 12, color: '#5f6368' }}>{dateStr}</div>}
+          </div>
+          {isExpanded && (
+            <div style={{ display: 'flex', gap: 4, marginTop: 2 }}>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onAcceptChange?.(change.from, change.to);
+                }}
+                title="Accept"
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  cursor: 'pointer',
+                  padding: 4,
+                  color: '#5f6368',
+                  display: 'flex',
+                  borderRadius: '50%',
+                }}
+              >
+                <MaterialSymbol name="check" size={20} />
+              </button>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onRejectChange?.(change.from, change.to);
+                }}
+                title="Reject"
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  cursor: 'pointer',
+                  padding: 4,
+                  color: '#5f6368',
+                  display: 'flex',
+                  borderRadius: '50%',
+                }}
+              >
+                <MaterialSymbol name="close" size={20} />
+              </button>
+            </div>
+          )}
+        </div>
+
+        {/* Change description */}
+        <div style={{ fontSize: 14, lineHeight: '20px', color: '#202124', marginTop: 8 }}>
+          {change.type === 'insertion' ? 'Added' : 'Deleted'}{' '}
+          <span
+            style={{ color: change.type === 'insertion' ? '#137333' : '#c5221f', fontWeight: 500 }}
+          >
+            &quot;{change.text.length > 50 ? change.text.slice(0, 50) + '...' : change.text}&quot;
+          </span>
+        </div>
+
+        {/* Reply input */}
+        {isExpanded && renderReplySection(change.revisionId, cardId)}
+      </div>
+    );
+  };
+
   return (
     <aside
+      ref={sidebarRef}
       className="docx-comments-sidebar"
       role="complementary"
       aria-label="Comments and changes"
       style={{
         position: 'absolute',
         top: topOffset,
-        right: 0,
+        left: `calc(50% - 120px + ${pageWidth / 2 + 12}px)`,
         bottom: 0,
         width: SIDEBAR_WIDTH,
-        display: 'flex',
-        flexDirection: 'column',
-        overflow: 'hidden',
         fontFamily: "'Google Sans', Roboto, Arial, sans-serif",
         zIndex: 40,
-        backgroundColor: '#fff',
-        borderLeft: '1px solid #dadce0',
-        transform: open ? 'translateX(0)' : `translateX(${SIDEBAR_WIDTH + 10}px)`,
-        transition: 'transform 0.2s ease',
+        backgroundColor: 'transparent',
+        overflowY: hasPositions ? 'visible' : 'auto',
+        overflowX: 'visible',
+        opacity: hasPositions ? 1 : 0,
+        transition: 'opacity 0.15s ease',
       }}
       onMouseDown={(e) => e.stopPropagation()}
     >
-      {/* Header */}
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          padding: '12px 16px',
-          borderBottom: '1px solid #e8eaed',
-        }}
-      >
-        <span style={{ fontWeight: 500, fontSize: 14, color: '#1f1f1f' }}>Comments</span>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-          <button
-            onClick={() => setShowResolved(!showResolved)}
-            title={showResolved ? 'Hide resolved' : 'Show resolved'}
-            style={{
-              background: 'none',
-              border: 'none',
-              cursor: 'pointer',
-              padding: 4,
-              borderRadius: '50%',
-              display: 'flex',
-              alignItems: 'center',
-              color: showResolved ? '#1a73e8' : '#5f6368',
-            }}
-          >
-            <MaterialSymbol name="check_circle" size={18} />
-          </button>
-          <button
-            onClick={onClose}
-            title="Close sidebar"
-            style={{
-              background: 'none',
-              border: 'none',
-              cursor: 'pointer',
-              padding: 4,
-              borderRadius: '50%',
-              display: 'flex',
-              alignItems: 'center',
-              color: '#5f6368',
-            }}
-          >
-            <MaterialSymbol name="close" size={18} />
-          </button>
-        </div>
-      </div>
-
-      {/* Content */}
-      <div style={{ overflowY: 'auto', flex: 1, padding: '8px 0' }}>
+      {/* Cards container — relative for absolute card positioning */}
+      <div style={{ position: 'relative' }}>
         {/* New comment input */}
         {isAddingComment && (
           <div
             style={{
-              margin: '4px 12px 8px',
+              marginBottom: 8,
               padding: 12,
               borderRadius: 8,
-              border: '1px solid #1a73e8',
               backgroundColor: '#fff',
+              boxShadow: '0 1px 3px rgba(0,0,0,0.12), 0 1px 2px rgba(0,0,0,0.08)',
             }}
           >
             <textarea
-              autoFocus
+              ref={(el) => el?.focus()}
               value={newCommentText}
               onChange={(e) => setNewCommentText(e.target.value)}
+              onMouseDown={(e) => e.stopPropagation()}
               onKeyDown={(e) => {
+                e.stopPropagation();
                 if (e.key === 'Enter' && !e.shiftKey) {
                   e.preventDefault();
                   handleNewCommentSubmit();
@@ -239,10 +742,10 @@ export const CommentsSidebar: React.FC<CommentsSidebarProps> = ({
                   padding: '4px 12px',
                   fontSize: 12,
                   border: 'none',
+                  borderRadius: 4,
                   background: newCommentText.trim() ? '#1a73e8' : '#e8eaed',
                   color: newCommentText.trim() ? '#fff' : '#80868b',
                   cursor: newCommentText.trim() ? 'pointer' : 'default',
-                  borderRadius: 4,
                 }}
               >
                 Comment
@@ -251,340 +754,16 @@ export const CommentsSidebar: React.FC<CommentsSidebarProps> = ({
           </div>
         )}
 
-        {/* Comments list */}
-        {visibleComments.map((comment) => {
-          const replies = getReplies(comment.id);
-          const isActive = activeCommentId === comment.id;
-          return (
-            <div
-              key={comment.id}
-              data-comment-id={comment.id}
-              className="docx-comment-card"
-              onClick={() => onCommentClick?.(comment.id)}
-              style={{
-                margin: '4px 12px',
-                padding: 12,
-                borderRadius: 8,
-                border: isActive ? '1px solid #1a73e8' : '1px solid #dadce0',
-                backgroundColor: comment.done ? '#f8f9fa' : '#fff',
-                cursor: 'pointer',
-                opacity: comment.done ? 0.7 : 1,
-              }}
-            >
-              {/* Comment header */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-                <div
-                  style={{
-                    width: 24,
-                    height: 24,
-                    borderRadius: '50%',
-                    backgroundColor: '#1a73e8',
-                    color: '#fff',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    fontSize: 11,
-                    fontWeight: 500,
-                    flexShrink: 0,
-                  }}
-                >
-                  {(comment.initials || comment.author.charAt(0) || 'U').toUpperCase()}
-                </div>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: 12, fontWeight: 500, color: '#1f1f1f' }}>
-                    {comment.author || 'Unknown'}
-                  </div>
-                  {comment.date && (
-                    <div style={{ fontSize: 11, color: '#80868b' }}>
-                      {new Date(comment.date).toLocaleDateString()}
-                    </div>
-                  )}
-                </div>
-                {/* Actions */}
-                <div style={{ display: 'flex', gap: 2 }}>
-                  {!comment.done ? (
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onCommentResolve?.(comment.id);
-                      }}
-                      title="Resolve"
-                      style={{
-                        background: 'none',
-                        border: 'none',
-                        cursor: 'pointer',
-                        padding: 2,
-                        color: '#5f6368',
-                        display: 'flex',
-                      }}
-                    >
-                      <MaterialSymbol name="check" size={16} />
-                    </button>
-                  ) : (
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onCommentReopen?.(comment.id);
-                      }}
-                      title="Reopen"
-                      style={{
-                        background: 'none',
-                        border: 'none',
-                        cursor: 'pointer',
-                        padding: 2,
-                        color: '#5f6368',
-                        display: 'flex',
-                      }}
-                    >
-                      <MaterialSymbol name="undo" size={16} />
-                    </button>
-                  )}
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onCommentDelete?.(comment.id);
-                    }}
-                    title="Delete"
-                    style={{
-                      background: 'none',
-                      border: 'none',
-                      cursor: 'pointer',
-                      padding: 2,
-                      color: '#5f6368',
-                      display: 'flex',
-                    }}
-                  >
-                    <MaterialSymbol name="delete" size={16} />
-                  </button>
-                </div>
-              </div>
-
-              {/* Comment text */}
-              <div style={{ fontSize: 13, color: '#3c4043', lineHeight: '18px', marginTop: 4 }}>
-                {getCommentText(comment.content)}
-              </div>
-
-              {/* Replies */}
-              {replies.length > 0 && (
-                <div style={{ marginTop: 8, paddingTop: 8, borderTop: '1px solid #e8eaed' }}>
-                  {replies.map((reply) => (
-                    <div key={reply.id} style={{ marginBottom: 8 }}>
-                      <div
-                        style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 2 }}
-                      >
-                        <div
-                          style={{
-                            width: 20,
-                            height: 20,
-                            borderRadius: '50%',
-                            backgroundColor: '#34a853',
-                            color: '#fff',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            fontSize: 10,
-                            fontWeight: 500,
-                            flexShrink: 0,
-                          }}
-                        >
-                          {(reply.initials || reply.author.charAt(0) || 'U').toUpperCase()}
-                        </div>
-                        <span style={{ fontSize: 12, fontWeight: 500, color: '#1f1f1f' }}>
-                          {reply.author || 'Unknown'}
-                        </span>
-                      </div>
-                      <div
-                        style={{
-                          fontSize: 12,
-                          color: '#3c4043',
-                          lineHeight: '16px',
-                          paddingLeft: 26,
-                        }}
-                      >
-                        {getCommentText(reply.content)}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-
-              {/* Reply input */}
-              {replyingTo === comment.id ? (
-                <div style={{ marginTop: 8 }}>
-                  <textarea
-                    autoFocus
-                    value={replyText}
-                    onChange={(e) => setReplyText(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' && !e.shiftKey) {
-                        e.preventDefault();
-                        handleReplySubmit(comment.id);
-                      }
-                      if (e.key === 'Escape') {
-                        setReplyingTo(null);
-                        setReplyText('');
-                      }
-                    }}
-                    placeholder="Reply..."
-                    style={{
-                      width: '100%',
-                      border: '1px solid #dadce0',
-                      borderRadius: 4,
-                      outline: 'none',
-                      resize: 'none',
-                      fontSize: 12,
-                      padding: 8,
-                      fontFamily: 'inherit',
-                      minHeight: 32,
-                    }}
-                  />
-                  <div
-                    style={{ display: 'flex', justifyContent: 'flex-end', gap: 4, marginTop: 4 }}
-                  >
-                    <button
-                      onClick={() => {
-                        setReplyingTo(null);
-                        setReplyText('');
-                      }}
-                      style={{
-                        padding: '2px 8px',
-                        fontSize: 11,
-                        border: 'none',
-                        background: 'none',
-                        color: '#5f6368',
-                        cursor: 'pointer',
-                      }}
-                    >
-                      Cancel
-                    </button>
-                    <button
-                      onClick={() => handleReplySubmit(comment.id)}
-                      disabled={!replyText.trim()}
-                      style={{
-                        padding: '2px 8px',
-                        fontSize: 11,
-                        border: 'none',
-                        background: replyText.trim() ? '#1a73e8' : '#e8eaed',
-                        color: replyText.trim() ? '#fff' : '#80868b',
-                        cursor: replyText.trim() ? 'pointer' : 'default',
-                        borderRadius: 4,
-                      }}
-                    >
-                      Reply
-                    </button>
-                  </div>
-                </div>
-              ) : (
-                !comment.done && (
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setReplyingTo(comment.id);
-                    }}
-                    style={{
-                      marginTop: 6,
-                      padding: '4px 0',
-                      fontSize: 12,
-                      background: 'none',
-                      border: 'none',
-                      color: '#1a73e8',
-                      cursor: 'pointer',
-                    }}
-                  >
-                    Reply
-                  </button>
-                )
-              )}
-            </div>
-          );
-        })}
+        {/* Comments */}
+        {visibleComments.map((comment, idx) => renderCommentCard(comment, idx))}
 
         {/* Tracked changes */}
-        {trackedChanges.map((change, idx) => (
-          <div
-            key={`tc-${change.revisionId}-${idx}`}
-            className="docx-tracked-change-card"
-            style={{
-              margin: '4px 12px',
-              padding: 12,
-              borderRadius: 8,
-              border: '1px solid #dadce0',
-              backgroundColor: '#fff',
-            }}
-          >
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-              <MaterialSymbol
-                name={change.type === 'insertion' ? 'add' : 'remove'}
-                size={16}
-                style={{ color: change.type === 'insertion' ? '#2e7d32' : '#c62828' }}
-              />
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: 12, fontWeight: 500, color: '#1f1f1f' }}>
-                  {change.author || 'Unknown'}
-                </div>
-                {change.date && (
-                  <div style={{ fontSize: 11, color: '#80868b' }}>
-                    {new Date(change.date).toLocaleDateString()}
-                  </div>
-                )}
-              </div>
-              <div style={{ display: 'flex', gap: 2 }}>
-                <button
-                  onClick={() => onAcceptChange?.(change.from, change.to)}
-                  title="Accept"
-                  style={{
-                    background: 'none',
-                    border: 'none',
-                    cursor: 'pointer',
-                    padding: 2,
-                    color: '#2e7d32',
-                    display: 'flex',
-                  }}
-                >
-                  <MaterialSymbol name="check" size={16} />
-                </button>
-                <button
-                  onClick={() => onRejectChange?.(change.from, change.to)}
-                  title="Reject"
-                  style={{
-                    background: 'none',
-                    border: 'none',
-                    cursor: 'pointer',
-                    padding: 2,
-                    color: '#c62828',
-                    display: 'flex',
-                  }}
-                >
-                  <MaterialSymbol name="close" size={16} />
-                </button>
-              </div>
-            </div>
-            <div
-              style={{
-                fontSize: 13,
-                lineHeight: '18px',
-                color: change.type === 'insertion' ? '#2e7d32' : '#c62828',
-                textDecoration: change.type === 'deletion' ? 'line-through' : 'underline',
-                whiteSpace: 'pre-wrap',
-                wordBreak: 'break-word',
-                maxHeight: 60,
-                overflow: 'hidden',
-              }}
-            >
-              {change.text}
-            </div>
-          </div>
-        ))}
+        {trackedChanges.map((change, idx) => renderTrackedChangeCard(change, idx))}
 
         {/* Empty state */}
         {visibleComments.length === 0 && trackedChanges.length === 0 && !isAddingComment && (
           <div
-            style={{
-              padding: '24px 16px',
-              textAlign: 'center',
-              color: '#80868b',
-              fontSize: 13,
-            }}
+            style={{ padding: '24px 16px', textAlign: 'center', color: '#80868b', fontSize: 13 }}
           >
             No comments or changes yet.
           </div>

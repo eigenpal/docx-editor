@@ -191,6 +191,7 @@ import {
   setTableBorderWidth,
   type TableContextInfo,
 } from '@eigenpal/docx-core/prosemirror';
+import { acceptChange, rejectChange } from '@eigenpal/docx-core/prosemirror/commands/comments';
 import { collectHeadings } from '@eigenpal/docx-core/utils/headingCollector';
 
 // Paginated editor
@@ -439,10 +440,42 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
   // Comments sidebar state
   const [showCommentsSidebar, setShowCommentsSidebar] = useState(false);
   const [comments, setComments] = useState<Comment[]>([]);
-  const [trackedChanges] = useState<TrackedChangeEntry[]>([]);
+  const [trackedChanges, setTrackedChanges] = useState<TrackedChangeEntry[]>([]);
   const [activeCommentId, setActiveCommentId] = useState<number | null>(null);
   const [isAddingComment, setIsAddingComment] = useState(false);
   const [editingMode, setEditingMode] = useState<'editing' | 'suggesting'>('editing');
+
+  // Extract tracked changes from ProseMirror state
+  const extractTrackedChanges = useCallback(() => {
+    const view = pagedEditorRef.current?.getView();
+    if (!view) return;
+    const { doc, schema } = view.state;
+    const insertionType = schema.marks.insertion;
+    const deletionType = schema.marks.deletion;
+    if (!insertionType && !deletionType) return;
+
+    const changes: TrackedChangeEntry[] = [];
+    doc.descendants((node, pos) => {
+      if (!node.isText) return;
+      for (const mark of node.marks) {
+        if (mark.type === insertionType || mark.type === deletionType) {
+          changes.push({
+            type: mark.type === insertionType ? 'insertion' : 'deletion',
+            text: node.text || '',
+            author: (mark.attrs.author as string) || '',
+            date: mark.attrs.date as string | undefined,
+            from: pos,
+            to: pos + node.nodeSize,
+            revisionId: mark.attrs.revisionId as number,
+          });
+        }
+      }
+    });
+    setTrackedChanges(changes);
+    if (changes.length > 0 && !showCommentsSidebar) {
+      setShowCommentsSidebar(true);
+    }
+  }, [showCommentsSidebar]);
 
   // Sync outline visibility when prop changes
   useEffect(() => {
@@ -462,6 +495,17 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
     enableKeyboardShortcuts: true,
   });
 
+  // Extract comments from document model, auto-open sidebar
+  useEffect(() => {
+    const doc = history.state;
+    if (!doc) return;
+    const bodyComments = doc.package?.document?.comments;
+    if (bodyComments && bodyComments.length > 0) {
+      setComments(bodyComments);
+      setShowCommentsSidebar(true);
+    }
+  }, [history.state]);  
+
   // Extension manager — built once, provides schema + plugins + commands
   const extensionManager = useMemo(() => {
     const mgr = new ExtensionManager(createStarterKit());
@@ -479,6 +523,7 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
   const lastSelectionRef = useRef<{ from: number; to: number } | null>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
   const editorContentRef = useRef<HTMLDivElement>(null);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
   const toolbarWrapperRef = useRef<HTMLDivElement>(null);
   const toolbarRoRef = useRef<ResizeObserver | null>(null);
   const [toolbarHeight, setToolbarHeight] = useState(0);
@@ -658,6 +703,15 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
     }
   }, [history.state]);
 
+  // Extract tracked changes once PM view is ready (after loading completes)
+  useEffect(() => {
+    if (!state.isLoading && history.state) {
+      // Delay to ensure PM view has been mounted
+      const timer = setTimeout(() => extractTrackedChanges(), 200);
+      return () => clearTimeout(timer);
+    }
+  }, [state.isLoading, history.state, extractTrackedChanges]);
+
   // Listen for font loading
   useEffect(() => {
     const cleanup = onFontsLoaded(() => {
@@ -693,8 +747,10 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
           setHeadingInfos(collectHeadings(view.state.doc));
         }
       }
+      // Re-extract tracked changes after document change
+      requestAnimationFrame(() => extractTrackedChanges());
     },
-    [onChange, pushDocumentWithBaseline]
+    [onChange, pushDocumentWithBaseline, extractTrackedChanges]
   );
 
   // Handle selection changes from ProseMirror
@@ -1671,6 +1727,12 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
     if (!agentRef.current) return null;
 
     try {
+      // Sync React comments state (including new replies) back to the document model
+      const doc = agentRef.current.getDocument();
+      if (doc.package?.document) {
+        doc.package.document.comments = comments;
+      }
+
       const saveOptions: SaveDocxOptions = { trackChanges };
       const buffer = await agentRef.current.toBuffer(saveOptions);
       onSave?.(buffer);
@@ -1679,7 +1741,7 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
       onError?.(error instanceof Error ? error : new Error('Failed to save document'));
       return null;
     }
-  }, [onSave, onError, trackChanges]);
+  }, [onSave, onError, trackChanges, comments]);
 
   // Handle error from editor
   const handleEditorError = useCallback(
@@ -2315,7 +2377,13 @@ body { background: white; }
 
                     {/* Horizontal Ruler - sticky with toolbar */}
                     {showRuler && (
-                      <div className="flex justify-center px-5 py-1 overflow-x-auto flex-shrink-0 bg-doc-bg">
+                      <div
+                        className="flex justify-center px-5 py-1 overflow-x-auto flex-shrink-0 bg-doc-bg"
+                        style={{
+                          paddingRight: showCommentsSidebar ? 'calc(20px + 240px)' : undefined,
+                          transition: 'padding 0.2s ease',
+                        }}
+                      >
                         <HorizontalRuler
                           sectionProps={history.state?.package.document?.finalSectionProperties}
                           zoom={state.zoom}
@@ -2407,6 +2475,99 @@ body { background: white; }
                       onRenderedDomContextReady={onRenderedDomContextReady}
                       pluginOverlays={pluginOverlays}
                       commentsSidebarOpen={showCommentsSidebar}
+                      scrollContainerRef={scrollContainerRef}
+                      sidebarOverlay={
+                        showCommentsSidebar ? (
+                          <CommentsSidebar
+                            comments={comments}
+                            trackedChanges={trackedChanges}
+                            pageWidth={(() => {
+                              const sp = history.state?.package?.document?.finalSectionProperties;
+                              return sp?.pageWidth ? Math.round(sp.pageWidth / 15) : 816;
+                            })()}
+                            editorContainerRef={scrollContainerRef}
+                            activeCommentId={activeCommentId}
+                            onClose={() => setShowCommentsSidebar(false)}
+                            onCommentClick={(id) => setActiveCommentId(id)}
+                            onCommentResolve={(id) => {
+                              setComments((prev) =>
+                                prev.map((c) => (c.id === id ? { ...c, done: true } : c))
+                              );
+                            }}
+                            onCommentReopen={(id) => {
+                              setComments((prev) =>
+                                prev.map((c) => (c.id === id ? { ...c, done: false } : c))
+                              );
+                            }}
+                            onCommentDelete={(id) => {
+                              setComments((prev) =>
+                                prev.filter((c) => c.id !== id && c.parentId !== id)
+                              );
+                            }}
+                            onCommentReply={(id, text) => {
+                              const newReply: Comment = {
+                                id: Date.now(),
+                                author: 'User',
+                                date: new Date().toISOString(),
+                                content: [
+                                  {
+                                    type: 'paragraph',
+                                    formatting: {},
+                                    content: [
+                                      {
+                                        type: 'run',
+                                        formatting: {},
+                                        content: [{ type: 'text', text }],
+                                      },
+                                    ],
+                                  },
+                                ],
+                                parentId: id,
+                              };
+                              setComments((prev) => [...prev, newReply]);
+                            }}
+                            onAddComment={(addText) => {
+                              const newComment: Comment = {
+                                id: Date.now(),
+                                author: 'User',
+                                date: new Date().toISOString(),
+                                content: [
+                                  {
+                                    type: 'paragraph',
+                                    formatting: {},
+                                    content: [
+                                      {
+                                        type: 'run',
+                                        formatting: {},
+                                        content: [{ type: 'text', text: addText }],
+                                      },
+                                    ],
+                                  },
+                                ],
+                              };
+                              setComments((prev) => [...prev, newComment]);
+                              setIsAddingComment(false);
+                            }}
+                            onCancelAddComment={() => setIsAddingComment(false)}
+                            onAcceptChange={(from, to) => {
+                              const view = pagedEditorRef.current?.getView();
+                              if (view) {
+                                acceptChange(from, to)(view.state, view.dispatch);
+                                extractTrackedChanges();
+                              }
+                            }}
+                            onRejectChange={(from, to) => {
+                              const view = pagedEditorRef.current?.getView();
+                              if (view) {
+                                rejectChange(from, to)(view.state, view.dispatch);
+                                extractTrackedChanges();
+                              }
+                            }}
+                            isAddingComment={isAddingComment}
+                            topOffset={0}
+                          />
+                        ) : undefined
+                      }
                     />
 
                     {/* Page navigation / indicator */}
@@ -2473,69 +2634,7 @@ body { background: white; }
                 />
               )}
 
-              {/* Comments sidebar — absolutely positioned right */}
-              {showCommentsSidebar && (
-                <CommentsSidebar
-                  comments={comments}
-                  trackedChanges={trackedChanges}
-                  activeCommentId={activeCommentId}
-                  onClose={() => setShowCommentsSidebar(false)}
-                  onCommentClick={(id) => setActiveCommentId(id)}
-                  onCommentResolve={(id) => {
-                    setComments((prev) =>
-                      prev.map((c) => (c.id === id ? { ...c, done: true } : c))
-                    );
-                  }}
-                  onCommentReopen={(id) => {
-                    setComments((prev) =>
-                      prev.map((c) => (c.id === id ? { ...c, done: false } : c))
-                    );
-                  }}
-                  onCommentDelete={(id) => {
-                    setComments((prev) => prev.filter((c) => c.id !== id && c.parentId !== id));
-                  }}
-                  onCommentReply={(id, text) => {
-                    const newReply: Comment = {
-                      id: Date.now(),
-                      author: 'User',
-                      date: new Date().toISOString(),
-                      content: [
-                        {
-                          type: 'paragraph',
-                          formatting: {},
-                          content: [
-                            { type: 'run', formatting: {}, content: [{ type: 'text', text }] },
-                          ],
-                        },
-                      ],
-                      parentId: id,
-                    };
-                    setComments((prev) => [...prev, newReply]);
-                  }}
-                  onAddComment={(text) => {
-                    const newComment: Comment = {
-                      id: Date.now(),
-                      author: 'User',
-                      date: new Date().toISOString(),
-                      content: [
-                        {
-                          type: 'paragraph',
-                          formatting: {},
-                          content: [
-                            { type: 'run', formatting: {}, content: [{ type: 'text', text }] },
-                          ],
-                        },
-                      ],
-                    };
-                    setComments((prev) => [...prev, newComment]);
-                    setIsAddingComment(false);
-                    // TODO: Also add comment mark to PM selection
-                  }}
-                  onCancelAddComment={() => setIsAddingComment(false)}
-                  topOffset={toolbarHeight}
-                  isAddingComment={isAddingComment}
-                />
-              )}
+              {/* Comments sidebar is now rendered inside PagedEditor via sidebarOverlay prop */}
 
               {/* Outline toggle button — absolutely positioned below toolbar */}
               {!showOutline && (

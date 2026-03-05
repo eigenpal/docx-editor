@@ -687,6 +687,62 @@ export function IconArrowBack(props: IconProps) {
   );
 }
 
+export function IconCheck(props: IconProps) {
+  return (
+    <SvgIcon {...props}>
+      <path d="M382-240 154-468l57-57 171 171 367-367 57 57-424 424Z" />
+    </SvgIcon>
+  );
+}
+
+export function IconClose(props: IconProps) {
+  return (
+    <SvgIcon {...props}>
+      <path d="m256-200-56-56 224-224-224-224 56-56 224 224 224-224 56 56-224 224 224 224-56 56-224-224-224 224Z" />
+    </SvgIcon>
+  );
+}
+
+export function IconCheckCircle(props: IconProps) {
+  return (
+    <SvgIcon {...props}>
+      <path d="m424-296 282-282-56-56-226 226-114-114-56 56 170 170Zm56 216q-83 0-156-31.5T197-197q-54-54-85.5-127T80-480q0-83 31.5-156T197-763q54-54 127-85.5T480-880q83 0 156 31.5T763-763q54 54 85.5 127T880-480q0 83-31.5 156T763-197q-54 54-127 85.5T480-80Zm0-80q134 0 227-93t93-227q0-134-93-227t-227-93q-134 0-227 93t-93 227q0 134 93 227t227 93Zm0-320Z" />
+    </SvgIcon>
+  );
+}
+
+export function IconMoreVertDots(props: IconProps) {
+  return (
+    <SvgIcon {...props}>
+      <path d="M480-160q-33 0-56.5-23.5T400-240q0-33 23.5-56.5T480-320q33 0 56.5 23.5T560-240q0 33-23.5 56.5T480-160Zm0-240q-33 0-56.5-23.5T400-480q0-33 23.5-56.5T480-560q33 0 56.5 23.5T560-480q0 33-23.5 56.5T480-400Zm0-240q-33 0-56.5-23.5T400-720q0-33 23.5-56.5T480-800q33 0 56.5 23.5T560-720q0 33-23.5 56.5T480-640Z" />
+    </SvgIcon>
+  );
+}
+
+export function IconAddComment(props: IconProps) {
+  return (
+    <SvgIcon {...props}>
+      <path d="M440-400h80v-120h120v-80H520v-120h-80v120H320v80h120v120ZM80-80v-720q0-33 23.5-56.5T160-880h640q33 0 56.5 23.5T880-800v480q0 33-23.5 56.5T800-240H240L80-80Zm126-240h594v-480H160v525l46-45Zm-46 0v-480 480Z" />
+    </SvgIcon>
+  );
+}
+
+export function IconComment(props: IconProps) {
+  return (
+    <SvgIcon {...props}>
+      <path d="M240-400h480v-80H240v80Zm0-120h480v-80H240v80Zm0-120h480v-80H240v80ZM80-80v-720q0-33 23.5-56.5T160-880h640q33 0 56.5 23.5T880-800v480q0 33-23.5 56.5T800-240H240L80-80Zm126-240h594v-480H160v525l46-45Zm-46 0v-480 480Z" />
+    </SvgIcon>
+  );
+}
+
+export function IconEditNote(props: IconProps) {
+  return (
+    <SvgIcon {...props}>
+      <path d="M160-400h280v-80H160v80Zm0-160h440v-80H160v80Zm0-160h440v-80H160v80Zm360 360v-123l221-220q9-9 20-13t22-4q12 0 23 4.5t20 13.5l37 37q8 9 12.5 20t4.5 22q0 11-4 22.5T863-380L643-160H520Zm300-263-37-37 37 37ZM580-220h38l121-122-18-19-19-18-122 121v38Zm141-141-19-18 37 37-18-19Z" />
+    </SvgIcon>
+  );
+}
+
 // ============================================================================
 // ICON MAP - for MaterialSymbol compatibility
 // ============================================================================
@@ -777,6 +833,13 @@ const iconMap: Record<string, React.ComponentType<IconProps>> = {
   page_break: IconPageBreak,
   // Navigation
   arrow_back: IconArrowBack,
+  // Comments sidebar
+  check: IconCheck,
+  close: IconClose,
+  check_circle: IconCheckCircle,
+  add_comment: IconAddComment,
+  comment: IconComment,
+  edit_note: IconEditNote,
 };
 
 /**
