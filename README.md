@@ -29,7 +29,7 @@ For most users, install `@eigenpal/docx-js-editor` — it includes everything. U
 
 <p align="center">
   <a href="https://docx-js-editor.vercel.app/">
-    <img src="./assets/editor.png" alt="DOCX JS Editor screenshot" width="500" />
+    <img src="./assets/editor.png" alt="DOCX JS Editor screenshot" width="700" />
   </a>
 </p>
 
