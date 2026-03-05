@@ -1057,12 +1057,12 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
       // Update floating comment button position
       if (view && selectionState.hasSelection && !isAddingComment && !readOnly) {
         const container = scrollContainerRef.current;
-        if (container) {
+        const parentEl = editorContentRef.current;
+        if (container && parentEl) {
           const { from: selFrom } = view.state.selection;
           const pagesEl = container.querySelector('.paged-editor__pages');
           if (pagesEl) {
-            // Find the page element containing the selection to get its right edge
-            const pageEl = pagesEl.querySelector('.paged-editor__page') as HTMLElement | null;
+            const pageEl = pagesEl.querySelector('.layout-page') as HTMLElement | null;
             const spans = pagesEl.querySelectorAll('span[data-pm-start]');
             for (const span of spans) {
               const el = span as HTMLElement;
@@ -1070,12 +1070,12 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
               const pmEnd = Number(el.dataset.pmEnd);
               if (selFrom >= pmStart && selFrom <= pmEnd) {
                 const rect = el.getBoundingClientRect();
-                const containerRect = container.getBoundingClientRect();
-                const top = rect.top - containerRect.top + container.scrollTop;
-                // Position at the right edge of the page element
+                const parentRect = parentEl.getBoundingClientRect();
+                const top = rect.top - parentRect.top + container.scrollTop;
+                // Position at the right edge of the page (relative to editorContentRef)
                 const left = pageEl
-                  ? pageEl.getBoundingClientRect().right - containerRect.left + 6
-                  : containerRect.width / 2 + 416;
+                  ? pageEl.getBoundingClientRect().right - parentRect.left
+                  : parentRect.width / 2 + 408;
                 setFloatingCommentBtn({ top, left });
                 break;
               }
@@ -2829,6 +2829,7 @@ body { background: white; }
                           position: 'absolute',
                           top: floatingCommentBtn.top,
                           left: floatingCommentBtn.left,
+                          transform: 'translate(-50%, -50%)',
                           zIndex: 20,
                           width: 32,
                           height: 32,
