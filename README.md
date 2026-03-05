@@ -77,41 +77,7 @@ bun run typecheck
 
 Examples: [Vite](examples/vite) | [Next.js](examples/nextjs) | [Remix](examples/remix) | [Astro](examples/astro) | [Vue](examples/vue)
 
-<details>
-<summary>Props & Ref Methods</summary>
-
-### Props
-
-| Prop             | Type                                        | Default  | Description                                 |
-| ---------------- | ------------------------------------------- | -------- | ------------------------------------------- |
-| `documentBuffer` | `ArrayBuffer \| Uint8Array \| Blob \| File` | —        | `.docx` file contents                       |
-| `document`       | `Document`                                  | —        | Pre-parsed document (alternative to buffer) |
-| `author`         | `string`                                    | `'User'` | Author name for comments and track changes  |
-| `readOnly`       | `boolean`                                   | `false`  | Read-only preview                           |
-| `showToolbar`    | `boolean`                                   | `true`   | Show formatting toolbar                     |
-| `showRuler`      | `boolean`                                   | `false`  | Show rulers                                 |
-| `initialZoom`    | `number`                                    | `1.0`    | Initial zoom level                          |
-| `theme`          | `Theme \| null`                             | —        | Theme                                       |
-| `toolbarExtra`   | `ReactNode`                                 | —        | Custom toolbar items                        |
-| `placeholder`    | `ReactNode`                                 | —        | Placeholder when no doc loaded              |
-| `onChange`       | `(doc: Document) => void`                   | —        | Document change callback                    |
-| `onSave`         | `(buffer: ArrayBuffer) => void`             | —        | Save callback                               |
-| `onError`        | `(error: Error) => void`                    | —        | Error callback                              |
-
-Full list: [`DocxEditorProps`](packages/react/src/components/DocxEditor.tsx)
-
-### Ref Methods
-
-```tsx
-await ref.current.save(); // → ArrayBuffer
-ref.current.getDocument(); // → Document
-ref.current.setZoom(1.5);
-ref.current.focus();
-ref.current.scrollToPage(3);
-ref.current.print();
-```
-
-</details>
+**[Props & Ref Methods](docs/PROPS.md)** | **[Plugins](docs/PLUGINS.md)** | **[Architecture](docs/ARCHITECTURE.md)** | **[Extensions](docs/EXTENSIONS.md)**
 
 ## License
 
