@@ -19,7 +19,7 @@ import {
   type Transaction,
 } from 'prosemirror-state';
 import type { EditorView } from 'prosemirror-view';
-import type { Node as PMNode } from 'prosemirror-model';
+import type { Node as PMNode, MarkType } from 'prosemirror-model';
 
 export const suggestionModeKey = new PluginKey<SuggestionModeState>('suggestionMode');
 
@@ -53,32 +53,79 @@ function findAdjacentRevision(
   author: string
 ): MarkAttrs | null {
   if (pos > 0) {
-    const $pos = doc.resolve(pos);
-    const before = $pos.nodeBefore;
-    if (before?.isText) {
-      const mark = before.marks.find(
-        (m) => m.type.name === markTypeName && m.attrs.author === author
-      );
-      if (mark) return mark.attrs as MarkAttrs;
+    try {
+      const $pos = doc.resolve(pos);
+      const before = $pos.nodeBefore;
+      if (before?.isText) {
+        const mark = before.marks.find(
+          (m) => m.type.name === markTypeName && m.attrs.author === author
+        );
+        if (mark) return mark.attrs as MarkAttrs;
+      }
+    } catch {
+      /* position out of range */
     }
   }
   if (pos < doc.content.size) {
-    const $pos = doc.resolve(pos);
-    const after = $pos.nodeAfter;
-    if (after?.isText) {
-      const mark = after.marks.find(
-        (m) => m.type.name === markTypeName && m.attrs.author === author
-      );
-      if (mark) return mark.attrs as MarkAttrs;
+    try {
+      const $pos = doc.resolve(pos);
+      const after = $pos.nodeAfter;
+      if (after?.isText) {
+        const mark = after.marks.find(
+          (m) => m.type.name === markTypeName && m.attrs.author === author
+        );
+        if (mark) return mark.attrs as MarkAttrs;
+      }
+    } catch {
+      /* position out of range */
     }
   }
   return null;
 }
 
 /**
+ * Walk a text range and either mark as deletion or retract own insertions.
+ * Processes in reverse order to maintain position validity.
+ */
+function markRangeAsDeleted(
+  tr: Transaction,
+  doc: PMNode,
+  from: number,
+  to: number,
+  insertionType: MarkType,
+  deletionType: MarkType,
+  pluginState: SuggestionModeState
+): void {
+  const ranges: { from: number; to: number; isOwnInsert: boolean }[] = [];
+
+  doc.nodesBetween(from, to, (node, pos) => {
+    if (!node.isText) return;
+    const start = Math.max(pos, from);
+    const end = Math.min(pos + node.nodeSize, to);
+    if (start >= end) return;
+    const isOwnInsert = node.marks.some(
+      (m) => m.type === insertionType && m.attrs.author === pluginState.author
+    );
+    ranges.push({ from: start, to: end, isOwnInsert });
+  });
+
+  if (ranges.length === 0) return;
+
+  const delAttrs =
+    findAdjacentRevision(doc, from, 'deletion', pluginState.author) || makeMarkAttrs(pluginState);
+
+  for (let i = ranges.length - 1; i >= 0; i--) {
+    const range = ranges[i];
+    if (range.isOwnInsert) {
+      tr.delete(range.from, range.to);
+    } else {
+      tr.addMark(range.from, range.to, deletionType.create(delAttrs));
+    }
+  }
+}
+
+/**
  * Handle delete (forward or backward) in suggestion mode.
- * Instead of deleting text, mark it as a deletion.
- * Exception: if the text is our own insertion, actually delete it (retract).
  */
 function handleSuggestionDelete(
   state: EditorState,
@@ -93,98 +140,55 @@ function handleSuggestionDelete(
   const deletionType = state.schema.marks.deletion;
   if (!insertionType || !deletionType) return false;
 
-  // Selection delete: mark the whole selection as deletion (or retract own insertions)
-  if (!empty) {
-    if (!dispatch) return true;
-
-    const tr = state.tr;
-    tr.setMeta('suggestionModeApplied', true);
-
-    // Walk through selected text and handle each node
-    const ranges: { from: number; to: number; isOwnInsert: boolean }[] = [];
-    state.doc.nodesBetween($from.pos, $to.pos, (node, pos) => {
-      if (!node.isText) return;
-      const start = Math.max(pos, $from.pos);
-      const end = Math.min(pos + node.nodeSize, $to.pos);
-      const hasOwnInsertion = node.marks.some(
-        (m) => m.type === insertionType && m.attrs.author === pluginState.author
-      );
-      ranges.push({ from: start, to: end, isOwnInsert: hasOwnInsertion });
-    });
-
-    // Reuse adjacent deletion revisionId so consecutive deletes group together
-    const delAttrs =
-      findAdjacentRevision(state.doc, $from.pos, 'deletion', pluginState.author) ||
-      makeMarkAttrs(pluginState);
-
-    // Process in reverse to preserve positions
-    for (let i = ranges.length - 1; i >= 0; i--) {
-      const range = ranges[i];
-      if (range.isOwnInsert) {
-        // Retract own insertion — actually delete
-        tr.delete(range.from, range.to);
-      } else {
-        // Mark as deletion
-        tr.addMark(range.from, range.to, deletionType.create(delAttrs));
-      }
-    }
-
-    // Place cursor at the start of the range
-    dispatch(tr.scrollIntoView());
-    return true;
-  }
-
-  // Single character delete (cursor, no selection)
   if (!dispatch) return true;
-
-  const isBackward = direction === 'backward';
-  const deletePos = isBackward ? $from.pos - 1 : $from.pos;
-  const deleteEnd = isBackward ? $from.pos : $from.pos + 1;
-
-  // Bounds check
-  if (deletePos < 0 || deleteEnd > state.doc.content.size) return true;
-
-  // Check what's at the position we'd delete
-  const $deletePos = state.doc.resolve(deletePos);
-  const nodeAfter = $deletePos.nodeAfter;
-
-  // If at a block boundary, let default behavior handle (join paragraphs)
-  if (!nodeAfter?.isText) return false;
 
   const tr = state.tr;
   tr.setMeta('suggestionModeApplied', true);
 
-  // Check if this text is our own insertion — retract it
-  const hasOwnInsertion = nodeAfter.marks.some(
-    (m) => m.type === insertionType && m.attrs.author === pluginState.author
-  );
-
-  // Check if already marked as deletion — skip over it
-  const hasDeletion = nodeAfter.marks.some((m) => m.type === deletionType);
-
-  if (hasDeletion) {
-    // Already deleted — just move cursor past it
-    const newPos = isBackward ? deletePos : deleteEnd;
-    tr.setSelection(TextSelection.near(tr.doc.resolve(newPos)));
+  // --- Selection delete ---
+  if (!empty) {
+    markRangeAsDeleted(tr, state.doc, $from.pos, $to.pos, insertionType, deletionType, pluginState);
+    // Collapse cursor to after the marked/retracted content
+    const cursorPos = tr.mapping.map($to.pos);
+    tr.setSelection(TextSelection.near(tr.doc.resolve(cursorPos)));
     dispatch(tr.scrollIntoView());
     return true;
   }
 
-  if (hasOwnInsertion) {
+  // --- Single character delete ---
+  const isBackward = direction === 'backward';
+  const deletePos = isBackward ? $from.pos - 1 : $from.pos;
+  const deleteEnd = isBackward ? $from.pos : $from.pos + 1;
+
+  if (deletePos < 0 || deleteEnd > state.doc.content.size) return true;
+
+  const $deletePos = state.doc.resolve(deletePos);
+  const nodeAfter = $deletePos.nodeAfter;
+
+  // At block boundary — let default behavior handle (e.g. join paragraphs)
+  if (!nodeAfter?.isText) return false;
+
+  const hasOwnInsertion = nodeAfter.marks.some(
+    (m) => m.type === insertionType && m.attrs.author === pluginState.author
+  );
+  const hasDeletion = nodeAfter.marks.some((m) => m.type === deletionType);
+
+  if (hasDeletion) {
+    // Already deleted — skip cursor past it
+    const newPos = isBackward ? deletePos : deleteEnd;
+    tr.setSelection(TextSelection.near(tr.doc.resolve(newPos)));
+  } else if (hasOwnInsertion) {
     // Retract own insertion — actually delete the character
     tr.delete(deletePos, deleteEnd);
   } else {
-    // Mark as deletion instead of removing — reuse adjacent deletion's revisionId
-    const singleDelAttrs =
+    // Mark as deletion instead of removing
+    const delAttrs =
       findAdjacentRevision(state.doc, deletePos, 'deletion', pluginState.author) ||
       makeMarkAttrs(pluginState);
-    tr.addMark(deletePos, deleteEnd, deletionType.create(singleDelAttrs));
+    tr.addMark(deletePos, deleteEnd, deletionType.create(delAttrs));
     // Move cursor past the deletion mark
-    if (isBackward) {
-      tr.setSelection(TextSelection.near(tr.doc.resolve(deletePos)));
-    } else {
-      tr.setSelection(TextSelection.near(tr.doc.resolve(deleteEnd)));
-    }
+    const newPos = isBackward ? deletePos : deleteEnd;
+    tr.setSelection(TextSelection.near(tr.doc.resolve(newPos)));
   }
 
   dispatch(tr.scrollIntoView());
@@ -239,7 +243,7 @@ export function createSuggestionModePlugin(initialActive = false, author = 'User
         tr.setMeta('suggestionModeApplied', true);
 
         // Reuse adjacent insertion's revisionId so consecutive typing groups together
-        const markAttrs =
+        const insertAttrs =
           findAdjacentRevision(view.state.doc, from, 'insertion', pluginState.author) ||
           makeMarkAttrs(pluginState);
 
@@ -247,53 +251,35 @@ export function createSuggestionModePlugin(initialActive = false, author = 'User
         if (from !== to) {
           const deletionType = view.state.schema.marks.deletion;
           if (deletionType) {
-            // Walk through selected text — retract own insertions, mark others as deleted
-            const ranges: { from: number; to: number; isOwnInsert: boolean }[] = [];
-            view.state.doc.nodesBetween(from, to, (node, pos) => {
-              if (!node.isText) return;
-              const start = Math.max(pos, from);
-              const end = Math.min(pos + node.nodeSize, to);
-              const hasOwnInsertion = node.marks.some(
-                (m) => m.type === insertionType && m.attrs.author === pluginState.author
-              );
-              ranges.push({ from: start, to: end, isOwnInsert: hasOwnInsertion });
-            });
-
-            const delAttrs =
-              findAdjacentRevision(view.state.doc, from, 'deletion', pluginState.author) ||
-              makeMarkAttrs(pluginState);
-
-            // Process own insertions — delete them; others — mark as deleted
-            for (let i = ranges.length - 1; i >= 0; i--) {
-              const range = ranges[i];
-              if (range.isOwnInsert) {
-                tr.delete(range.from, range.to);
-              } else {
-                tr.addMark(range.from, range.to, deletionType.create(delAttrs));
-              }
-            }
+            markRangeAsDeleted(
+              tr,
+              view.state.doc,
+              from,
+              to,
+              insertionType,
+              deletionType,
+              pluginState
+            );
           }
         }
 
-        // Insert the new text after the deletion-marked content
-        const insertPos = tr.mapping.map(to);
-        tr.insertText(text, from === to ? insertPos : tr.mapping.map(from), insertPos);
+        // Insert new text after any deletion-marked content (not replacing it)
+        const insertAt = tr.mapping.map(to);
+        tr.insertText(text, insertAt, insertAt);
 
         // Mark the inserted text with insertion mark
-        const insertedFrom = tr.mapping.map(from === to ? from : from);
-        const insertedTo = insertedFrom + text.length;
-        tr.addMark(insertedFrom, insertedTo, insertionType.create(markAttrs));
+        tr.addMark(insertAt, insertAt + text.length, insertionType.create(insertAttrs));
 
         view.dispatch(tr.scrollIntoView());
         return true;
       },
     },
 
+    // Catch-all: mark any unhandled new content (e.g. paste) as insertion
     appendTransaction(transactions, _oldState, newState) {
       const pluginState = suggestionModeKey.getState(newState);
       if (!pluginState?.active) return null;
 
-      // Only process user-initiated transactions that we didn't already handle
       const userTr = transactions.find(
         (tr) => tr.docChanged && !tr.getMeta('suggestionModeApplied')
       );
@@ -304,7 +290,6 @@ export function createSuggestionModePlugin(initialActive = false, author = 'User
 
       const markAttrs = makeMarkAttrs(pluginState);
 
-      // Mark any new content (e.g. from paste) as insertion
       const tr = newState.tr;
       tr.setMeta('suggestionModeApplied', true);
 

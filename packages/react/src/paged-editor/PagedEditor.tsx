@@ -2915,12 +2915,16 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
         // Prevent space from scrolling the container - let PM handle it as text input
         if (e.key === ' ' && !e.ctrlKey && !e.metaKey) {
           e.preventDefault();
-          // Forward to hidden PM by dispatching a native event
           const view = hiddenPMRef.current?.getView();
           if (view) {
-            // Insert space text via PM transaction
-            const { state, dispatch } = view;
-            dispatch(state.tr.insertText(' '));
+            // Route through handleTextInput so plugins (suggestion mode) can intercept
+            const { from, to } = view.state.selection;
+            const handled = view.someProp('handleTextInput', (f: Function) =>
+              f(view, from, to, ' ')
+            );
+            if (!handled) {
+              view.dispatch(view.state.tr.insertText(' '));
+            }
           }
           return;
         }
