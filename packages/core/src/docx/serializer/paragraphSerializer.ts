@@ -36,21 +36,7 @@ import type {
 
 import { serializeRun, serializeTextFormatting } from './runSerializer';
 
-// ============================================================================
-// XML ESCAPING
-// ============================================================================
-
-/**
- * Escape special XML characters
- */
-function escapeXml(text: string): string {
-  return text
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&apos;');
-}
+import { escapeXml } from './xmlUtils';
 
 // ============================================================================
 // BORDER SERIALIZATION
@@ -828,7 +814,10 @@ function serializeParagraphContent(content: ParagraphContent): string {
     case 'commentRangeStart':
       return `<w:commentRangeStart w:id="${content.id}"/>`;
     case 'commentRangeEnd':
-      return `<w:commentRangeEnd w:id="${content.id}"/>`;
+      return (
+        `<w:commentRangeEnd w:id="${content.id}"/>` +
+        `<w:r><w:rPr><w:rStyle w:val="CommentReference"/></w:rPr><w:commentReference w:id="${content.id}"/></w:r>`
+      );
     case 'insertion':
       return serializeTrackedChange('ins', content);
     case 'deletion':

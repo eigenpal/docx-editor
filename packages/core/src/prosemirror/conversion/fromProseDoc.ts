@@ -64,6 +64,7 @@ export function fromProseDoc(pmDoc: PMNode, baseDocument?: Document): Document {
     content: blocks,
     finalSectionProperties: baseDocument?.package.document.finalSectionProperties,
     sections: baseDocument?.package.document.sections,
+    comments: baseDocument?.package.document.comments,
   };
 
   // If we have a base document, preserve its package structure
@@ -195,6 +196,15 @@ function insertCommentRanges(content: ParagraphContent[], paragraph: PMNode): Pa
       }
     }
 
+    // Close comments that are no longer active BEFORE pushing current content,
+    // so commentRangeEnd lands after the last marked node, not after the first unmarked one
+    for (const cid of [...openedComments]) {
+      if (!nodeCommentIds.has(cid)) {
+        result.push({ type: 'commentRangeEnd', id: cid });
+        openedComments.delete(cid);
+      }
+    }
+
     // Open new comments
     for (const cid of nodeCommentIds) {
       if (!openedComments.has(cid)) {
@@ -206,14 +216,6 @@ function insertCommentRanges(content: ParagraphContent[], paragraph: PMNode): Pa
     // Push the actual content item
     if (nodeIndex < content.length) {
       result.push(content[nodeIndex]);
-    }
-
-    // Close comments that are no longer active
-    for (const cid of openedComments) {
-      if (!nodeCommentIds.has(cid)) {
-        result.push({ type: 'commentRangeEnd', id: cid });
-        openedComments.delete(cid);
-      }
     }
 
     nodeIndex++;
@@ -315,7 +317,7 @@ function extractParagraphContent(
   documentCounts?: TrackedChangeCounts
 ): ParagraphContent[] {
   const content: ParagraphContent[] = [];
-  const trackedChangeCounts = documentCounts ?? collectTrackedChangeCounts(paragraph);
+  const trackedChangeCounts = documentCounts ?? buildDocumentTrackedChangeCounts(paragraph);
 
   // Track current run being built
   let currentRun: Run | null = null;
@@ -555,35 +557,6 @@ function buildDocumentTrackedChangeCounts(pmDoc: PMNode): TrackedChangeCounts {
   });
 
   return { insertionById, deletionById };
-}
-
-function collectTrackedChangeCounts(paragraph: PMNode): TrackedChangeCounts {
-  const insertionById = new Map<number, number>();
-  const deletionById = new Map<number, number>();
-
-  paragraph.forEach((node) => {
-    const insertionMark = node.marks.find((mark) => mark.type.name === 'insertion');
-    const deletionMark = node.marks.find((mark) => mark.type.name === 'deletion');
-
-    if (insertionMark) {
-      const revisionId = Number(insertionMark.attrs.revisionId);
-      if (Number.isFinite(revisionId)) {
-        insertionById.set(revisionId, (insertionById.get(revisionId) ?? 0) + 1);
-      }
-    }
-
-    if (deletionMark) {
-      const revisionId = Number(deletionMark.attrs.revisionId);
-      if (Number.isFinite(revisionId)) {
-        deletionById.set(revisionId, (deletionById.get(revisionId) ?? 0) + 1);
-      }
-    }
-  });
-
-  return {
-    insertionById,
-    deletionById,
-  };
 }
 
 /**

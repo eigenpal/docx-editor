@@ -148,7 +148,9 @@ function createInitialState(
   const activeSchema = manager?.getSchema() ?? schema;
   const doc = document ? toProseDoc(document, { styles: styles ?? undefined }) : createEmptyDoc();
 
-  const plugins: Plugin[] = [...(manager?.getPlugins() ?? []), ...externalPlugins];
+  // External plugins go first so they can intercept before extension keymaps
+  // (e.g. suggestion mode must handle Backspace/Delete before deleteSelection)
+  const plugins: Plugin[] = [...externalPlugins, ...(manager?.getPlugins() ?? [])];
 
   return EditorState.create({
     doc,

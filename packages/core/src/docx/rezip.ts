@@ -34,9 +34,46 @@ import type { Document } from '../types/document';
 import type { BlockContent, Image } from '../types/content';
 import { serializeDocument } from './serializer/documentSerializer';
 import { serializeHeaderFooter } from './serializer/headerFooterSerializer';
+import { serializeComments } from './serializer/commentSerializer';
 import { RELATIONSHIP_TYPES } from './relsParser';
 import { type RawDocxContent } from './unzip';
-import { createAllocatorAfterDocument, revisionizeDocument } from './revisions';
+import { escapeXml } from './serializer/xmlUtils';
+
+/**
+ * Find the highest rId number in a relationships XML string.
+ */
+function findMaxRId(relsXml: string): number {
+  let maxId = 0;
+  for (const match of relsXml.matchAll(/Id="rId(\d+)"/g)) {
+    const id = parseInt(match[1], 10);
+    if (id > maxId) maxId = id;
+  }
+  return maxId;
+}
+
+// ============================================================================
+// COMMENTS SERIALIZATION
+// ============================================================================
+
+async function serializeCommentsToZip(
+  doc: Document,
+  zip: JSZip,
+  compressionLevel: number
+): Promise<void> {
+  const comments = doc.package.document.comments;
+  if (!comments || comments.length === 0) return;
+
+  const commentsXml = serializeComments(comments);
+  zip.file('word/comments.xml', commentsXml, {
+    compression: 'DEFLATE',
+    compressionOptions: { level: compressionLevel },
+  });
+
+  await Promise.all([
+    ensureCommentsContentType(zip, compressionLevel),
+    ensureCommentsRelationship(zip, compressionLevel),
+  ]);
+}
 
 // ============================================================================
 // NEW IMAGE HANDLING
@@ -122,11 +159,7 @@ async function processNewImages(
   let relsXml = await relsFile.async('text');
 
   // Find highest existing rId
-  let maxId = 0;
-  for (const match of relsXml.matchAll(/Id="rId(\d+)"/g)) {
-    const id = parseInt(match[1], 10);
-    if (id > maxId) maxId = id;
-  }
+  let maxId = findMaxRId(relsXml);
 
   // Find highest existing image number in word/media/
   let maxImageNum = 0;
@@ -212,20 +245,6 @@ export interface RepackOptions {
   updateModifiedDate?: boolean;
   /** Custom modifier name for lastModifiedBy */
   modifiedBy?: string;
-  /** Optional export-time tracked changes generation */
-  trackChanges?: RepackTrackChangesOptions;
-}
-
-/**
- * Track Changes export controls for repack operations.
- */
-export interface RepackTrackChangesOptions {
-  /** Enable tracked changes generation during export. */
-  enabled?: boolean;
-  /** Revision author for generated tracked changes. */
-  author?: string;
-  /** Optional revision timestamp (ISO 8601 string). */
-  date?: string;
 }
 
 /**
@@ -246,7 +265,7 @@ export async function repackDocx(doc: Document, options: RepackOptions = {}): Pr
   }
 
   const { compressionLevel = 6, updateModifiedDate = true, modifiedBy } = options;
-  const exportDocument = getDocumentForSerialization(doc, options);
+  const exportDocument = doc;
 
   // Load the original ZIP
   const originalZip = await JSZip.loadAsync(doc.originalBuffer);
@@ -286,6 +305,9 @@ export async function repackDocx(doc: Document, options: RepackOptions = {}): Pr
 
   // Serialize and update modified headers/footers
   serializeHeadersFootersToZip(exportDocument, newZip, compressionLevel);
+
+  // Serialize comments
+  await serializeCommentsToZip(exportDocument, newZip, compressionLevel);
 
   // Optionally update modification date in docProps/core.xml
   if (updateModifiedDate) {
@@ -330,7 +352,7 @@ export async function repackDocxFromRaw(
   options: RepackOptions = {}
 ): Promise<ArrayBuffer> {
   const { compressionLevel = 6, updateModifiedDate = true, modifiedBy } = options;
-  const exportDocument = getDocumentForSerialization(doc, options);
+  const exportDocument = doc;
 
   // Create a new ZIP with all original files
   const newZip = new JSZip();
@@ -366,6 +388,9 @@ export async function repackDocxFromRaw(
   // Serialize and update modified headers/footers
   serializeHeadersFootersToZip(exportDocument, newZip, compressionLevel);
 
+  // Serialize comments
+  await serializeCommentsToZip(exportDocument, newZip, compressionLevel);
+
   // Optionally update core properties
   if (updateModifiedDate && rawContent.corePropsXml) {
     const updatedCoreProps = updateCoreProperties(rawContent.corePropsXml, {
@@ -389,34 +414,59 @@ export async function repackDocxFromRaw(
   return arrayBuffer;
 }
 
-function getDocumentForSerialization(doc: Document, options: RepackOptions): Document {
-  if (!options.trackChanges?.enabled) {
-    return doc;
-  }
+// ============================================================================
+// COMMENT PACKAGING HELPERS
+// ============================================================================
 
-  if (!doc.baselineDocument) {
-    return doc;
-  }
+const COMMENTS_CONTENT_TYPE =
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.comments+xml';
+const COMMENTS_RELATIONSHIP_TYPE =
+  'http://schemas.openxmlformats.org/officeDocument/2006/relationships/comments';
 
-  const baselineDocument: Document = {
-    package: doc.baselineDocument.package,
-    originalBuffer: doc.baselineDocument.originalBuffer,
-    templateVariables: doc.baselineDocument.templateVariables,
-    warnings: doc.baselineDocument.warnings,
-  };
+/**
+ * Ensure [Content_Types].xml contains an Override for word/comments.xml.
+ * If the document already had comments, this is a no-op.
+ */
+async function ensureCommentsContentType(zip: JSZip, compressionLevel: number): Promise<void> {
+  const ctFile = zip.file('[Content_Types].xml');
+  if (!ctFile) return;
 
-  const allocator = createAllocatorAfterDocument(baselineDocument);
+  let ctXml = await ctFile.async('text');
+  if (ctXml.includes('/word/comments.xml')) return;
 
-  return revisionizeDocument(baselineDocument, doc, {
-    allocator,
-    insertionMetadata: {
-      author: options.trackChanges.author,
-      date: options.trackChanges.date,
-    },
-    deletionMetadata: {
-      author: options.trackChanges.author,
-      date: options.trackChanges.date,
-    },
+  // Insert before closing </Types>
+  ctXml = ctXml.replace(
+    '</Types>',
+    `<Override PartName="/word/comments.xml" ContentType="${COMMENTS_CONTENT_TYPE}"/></Types>`
+  );
+  zip.file('[Content_Types].xml', ctXml, {
+    compression: 'DEFLATE',
+    compressionOptions: { level: compressionLevel },
+  });
+}
+
+/**
+ * Ensure word/_rels/document.xml.rels contains a Relationship for comments.xml.
+ * If the document already had comments, this is a no-op.
+ */
+async function ensureCommentsRelationship(zip: JSZip, compressionLevel: number): Promise<void> {
+  const relsPath = 'word/_rels/document.xml.rels';
+  const relsFile = zip.file(relsPath);
+  if (!relsFile) return;
+
+  let relsXml = await relsFile.async('text');
+  if (relsXml.includes('comments.xml')) return;
+
+  // Generate a unique rId
+  const newRId = `rId${findMaxRId(relsXml) + 1}`;
+
+  relsXml = relsXml.replace(
+    '</Relationships>',
+    `<Relationship Id="${newRId}" Type="${COMMENTS_RELATIONSHIP_TYPE}" Target="comments.xml"/></Relationships>`
+  );
+  zip.file(relsPath, relsXml, {
+    compression: 'DEFLATE',
+    compressionOptions: { level: compressionLevel },
   });
 }
 
@@ -549,21 +599,13 @@ export async function addRelationship(
 
   const relsXml = await relsFile.async('text');
 
-  // Find highest existing rId
-  const rIdMatches = relsXml.matchAll(/Id="rId(\d+)"/g);
-  let maxId = 0;
-  for (const match of rIdMatches) {
-    const id = parseInt(match[1], 10);
-    if (id > maxId) maxId = id;
-  }
-
   // Generate new rId
-  const newRId = `rId${maxId + 1}`;
+  const newRId = `rId${findMaxRId(relsXml) + 1}`;
 
   // Build new relationship element
   const targetModeAttr = relationship.targetMode === 'External' ? ' TargetMode="External"' : '';
 
-  const newRelElement = `<Relationship Id="${newRId}" Type="${relationship.type}" Target="${escapeXmlAttr(relationship.target)}"${targetModeAttr}/>`;
+  const newRelElement = `<Relationship Id="${newRId}" Type="${relationship.type}" Target="${escapeXml(relationship.target)}"${targetModeAttr}/>`;
 
   // Insert before closing tag
   const updatedRelsXml = relsXml.replace('</Relationships>', `${newRelElement}</Relationships>`);
@@ -728,37 +770,18 @@ function updateCoreProperties(
     if (result.includes('<cp:lastModifiedBy')) {
       result = result.replace(
         /<cp:lastModifiedBy>[^<]*<\/cp:lastModifiedBy>/,
-        `<cp:lastModifiedBy>${escapeXmlText(options.modifiedBy)}</cp:lastModifiedBy>`
+        `<cp:lastModifiedBy>${escapeXml(options.modifiedBy)}</cp:lastModifiedBy>`
       );
     } else {
       // Add lastModifiedBy if not present
       result = result.replace(
         '</cp:coreProperties>',
-        `<cp:lastModifiedBy>${escapeXmlText(options.modifiedBy)}</cp:lastModifiedBy></cp:coreProperties>`
+        `<cp:lastModifiedBy>${escapeXml(options.modifiedBy)}</cp:lastModifiedBy></cp:coreProperties>`
       );
     }
   }
 
   return result;
-}
-
-/**
- * Escape special XML characters in text content
- */
-function escapeXmlText(text: string): string {
-  return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-}
-
-/**
- * Escape special XML characters in attribute values
- */
-function escapeXmlAttr(text: string): string {
-  return text
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&apos;');
 }
 
 /**

@@ -21,21 +21,20 @@ import {
   Suspense,
 } from 'react';
 import type { CSSProperties, ReactNode } from 'react';
-import type {
-  Document,
-  DocumentSnapshot,
-  Theme,
-  HeaderFooter,
-} from '@eigenpal/docx-core/types/document';
-import {
-  withBaselineDocument,
-  createBaselineSnapshot,
-} from '@eigenpal/docx-core/docx/revisions/baseline';
+import type { Document, Theme, HeaderFooter } from '@eigenpal/docx-core/types/document';
 
-import { Toolbar, type SelectionFormatting, type FormattingAction } from './Toolbar';
+import {
+  Toolbar,
+  ToolbarButton,
+  ToolbarSeparator,
+  type SelectionFormatting,
+  type FormattingAction,
+} from './Toolbar';
 import { pointsToHalfPoints } from './ui/FontSizePicker';
 import { DocumentOutline } from './DocumentOutline';
+import { CommentsSidebar, type TrackedChangeEntry } from './CommentsSidebar';
 import type { HeadingInfo } from '@eigenpal/docx-core/utils/headingCollector';
+import type { Comment } from '@eigenpal/docx-core/types/content';
 import { ErrorBoundary, ErrorProvider } from './ErrorBoundary';
 import type { TableAction } from './ui/TableToolbar';
 import { mapHexToHighlightName } from './toolbarUtils';
@@ -87,12 +86,9 @@ const FootnotePropertiesDialog = lazy(() =>
   }))
 );
 import { MaterialSymbol } from './ui/Icons';
+import { Tooltip } from './ui/Tooltip';
 import { getBuiltinTableStyle, type TableStylePreset } from './ui/TableStyleGallery';
-import {
-  DocumentAgent,
-  type TrackChangesExportOptions,
-  type SaveDocxOptions,
-} from '@eigenpal/docx-core/agent/DocumentAgent';
+import { DocumentAgent } from '@eigenpal/docx-core/agent/DocumentAgent';
 import { DefaultLoadingIndicator, DefaultPlaceholder, ParseError } from './DocxEditorHelpers';
 import { parseDocx } from '@eigenpal/docx-core/docx/parser';
 import { type DocxInput } from '@eigenpal/docx-core/utils/docxInput';
@@ -104,6 +100,10 @@ import { useDocumentHistory } from '../hooks/useHistory';
 // Extension system
 import { createStarterKit } from '@eigenpal/docx-core/prosemirror/extensions/StarterKit';
 import { ExtensionManager } from '@eigenpal/docx-core/prosemirror/extensions/ExtensionManager';
+import {
+  createSuggestionModePlugin,
+  setSuggestionMode,
+} from '@eigenpal/docx-core/prosemirror/plugins/suggestionMode';
 
 // Conversion (for HF inline editor save)
 import { proseDocToBlocks } from '@eigenpal/docx-core/prosemirror/conversion/fromProseDoc';
@@ -183,6 +183,7 @@ import {
   setTableBorderWidth,
   type TableContextInfo,
 } from '@eigenpal/docx-core/prosemirror';
+import { acceptChange, rejectChange } from '@eigenpal/docx-core/prosemirror/commands/comments';
 import { collectHeadings } from '@eigenpal/docx-core/utils/headingCollector';
 
 // Paginated editor
@@ -205,8 +206,8 @@ export interface DocxEditorProps {
   document?: Document | null;
   /** Callback when document is saved */
   onSave?: (buffer: ArrayBuffer) => void;
-  /** Default tracked export configuration used by save() */
-  trackChanges?: TrackChangesExportOptions;
+  /** Author name used for comments and track changes */
+  author?: string;
   /** Callback when document changes */
   onChange?: (document: Document) => void;
   /** Callback when selection changes */
@@ -347,8 +348,196 @@ interface EditorState {
 }
 
 // ============================================================================
+// EDITING MODE DROPDOWN (Google Docs-style)
+// ============================================================================
+
+const EDITING_MODES = [
+  {
+    value: 'editing' as const,
+    label: 'Editing',
+    icon: 'edit_note',
+    desc: 'Edit document directly',
+  },
+  {
+    value: 'suggesting' as const,
+    label: 'Suggesting',
+    icon: 'edit_note',
+    desc: 'Edits become suggestions',
+  },
+] as const;
+
+function EditingModeDropdown({
+  mode,
+  onModeChange,
+}: {
+  mode: 'editing' | 'suggesting';
+  onModeChange: (mode: 'editing' | 'suggesting') => void;
+}) {
+  const [isOpen, setIsOpen] = useState(false);
+  const [compact, setCompact] = useState(false);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+  const [pos, setPos] = useState({ top: 0, left: 0 });
+
+  const current = EDITING_MODES.find((m) => m.value === mode)!;
+
+  // Responsive: icon-only below 1400px
+  useEffect(() => {
+    const mql = window.matchMedia('(max-width: 1400px)');
+    setCompact(mql.matches);
+    const handler = (e: MediaQueryListEvent) => setCompact(e.matches);
+    mql.addEventListener('change', handler);
+    return () => mql.removeEventListener('change', handler);
+  }, []);
+
+  useEffect(() => {
+    if (!isOpen || !triggerRef.current) return;
+    const rect = triggerRef.current.getBoundingClientRect();
+    // Align dropdown to right edge of trigger so it doesn't overflow the screen
+    setPos({ top: rect.bottom + 2, left: rect.right - 220 });
+  }, [isOpen]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const close = (e: MouseEvent) => {
+      if (
+        !triggerRef.current?.contains(e.target as Node) &&
+        !dropdownRef.current?.contains(e.target as Node)
+      ) {
+        setIsOpen(false);
+      }
+    };
+    const esc = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setIsOpen(false);
+    };
+    document.addEventListener('mousedown', close);
+    document.addEventListener('keydown', esc);
+    return () => {
+      document.removeEventListener('mousedown', close);
+      document.removeEventListener('keydown', esc);
+    };
+  }, [isOpen]);
+
+  return (
+    <div style={{ position: 'relative' }}>
+      <button
+        ref={triggerRef}
+        type="button"
+        onMouseDown={(e) => e.preventDefault()}
+        onClick={() => setIsOpen(!isOpen)}
+        title={`${current.label} (Ctrl+Shift+E)`}
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: compact ? 0 : 4,
+          padding: compact ? '2px 4px' : '2px 6px 2px 4px',
+          border: 'none',
+          background: isOpen ? 'var(--doc-hover, #f3f4f6)' : 'transparent',
+          borderRadius: 4,
+          cursor: 'pointer',
+          fontSize: 13,
+          fontWeight: 400,
+          color: 'var(--doc-text, #374151)',
+          whiteSpace: 'nowrap',
+          height: 28,
+        }}
+      >
+        <MaterialSymbol name={current.icon} size={18} />
+        {!compact && <span>{current.label}</span>}
+        <MaterialSymbol name="arrow_drop_down" size={16} />
+      </button>
+
+      {isOpen && (
+        <div
+          ref={dropdownRef}
+          onMouseDown={(e) => e.preventDefault()}
+          style={{
+            position: 'fixed',
+            top: pos.top,
+            left: pos.left,
+            backgroundColor: 'white',
+            border: '1px solid var(--doc-border, #d1d5db)',
+            borderRadius: 8,
+            boxShadow: '0 4px 12px rgba(0, 0, 0, 0.12)',
+            padding: '4px 0',
+            zIndex: 10000,
+            minWidth: 220,
+          }}
+        >
+          {EDITING_MODES.map((m) => (
+            <button
+              key={m.value}
+              type="button"
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => {
+                onModeChange(m.value);
+                setIsOpen(false);
+              }}
+              onMouseOver={(e) => {
+                (e.currentTarget as HTMLButtonElement).style.backgroundColor =
+                  'var(--doc-hover, #f3f4f6)';
+              }}
+              onMouseOut={(e) => {
+                (e.currentTarget as HTMLButtonElement).style.backgroundColor = 'transparent';
+              }}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 10,
+                padding: '8px 12px',
+                border: 'none',
+                background: 'transparent',
+                cursor: 'pointer',
+                fontSize: 13,
+                color: 'var(--doc-text, #374151)',
+                width: '100%',
+                textAlign: 'left',
+              }}
+            >
+              <MaterialSymbol name={m.icon} size={20} />
+              <span style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>
+                <span style={{ fontWeight: 500 }}>{m.label}</span>
+                <span style={{ fontSize: 11, color: 'var(--doc-text-muted, #9ca3af)' }}>
+                  {m.desc}
+                </span>
+              </span>
+              {m.value === mode && (
+                <MaterialSymbol
+                  name="check"
+                  size={18}
+                  style={{ marginLeft: 'auto', color: '#1a73e8' }}
+                />
+              )}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ============================================================================
 // MAIN COMPONENT
 // ============================================================================
+
+let nextCommentId = Date.now();
+const PENDING_COMMENT_ID = -1;
+
+function createComment(text: string, authorName: string, parentId?: number): Comment {
+  return {
+    id: nextCommentId++,
+    author: authorName,
+    date: new Date().toISOString(),
+    content: [
+      {
+        type: 'paragraph',
+        formatting: {},
+        content: [{ type: 'run', formatting: {}, content: [{ type: 'text', text }] }],
+      },
+    ],
+    ...(parentId !== undefined && { parentId }),
+  };
+}
 
 /**
  * DocxEditor - Complete DOCX editor component
@@ -358,7 +547,7 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
     documentBuffer,
     document: initialDocument,
     onSave,
-    trackChanges,
+    author = 'User',
     onChange,
     onSelectionChange,
     onError,
@@ -428,6 +617,82 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
   showOutlineRef.current = showOutline;
   const [outlineHeadings, setHeadingInfos] = useState<HeadingInfo[]>([]);
 
+  // Comments sidebar state
+  const [showCommentsSidebar, setShowCommentsSidebar] = useState(false);
+  const [comments, setComments] = useState<Comment[]>([]);
+  const [trackedChanges, setTrackedChanges] = useState<TrackedChangeEntry[]>([]);
+
+  const [isAddingComment, setIsAddingComment] = useState(false);
+  const [commentSelectionRange, setCommentSelectionRange] = useState<{
+    from: number;
+    to: number;
+  } | null>(null);
+  const [addCommentYPosition, setAddCommentYPosition] = useState<number | null>(null);
+  const [editingMode, setEditingMode] = useState<'editing' | 'suggesting'>('editing');
+  // Floating "add comment" button position (relative to scroll container, null = hidden)
+  const [floatingCommentBtn, setFloatingCommentBtn] = useState<{
+    top: number;
+    left: number;
+  } | null>(null);
+
+  // Debounce timer for extractTrackedChanges (avoid full doc walk on every keystroke)
+  const extractTrackedChangesTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Extract tracked changes from ProseMirror state
+  const extractTrackedChanges = useCallback(() => {
+    const view = pagedEditorRef.current?.getView();
+    if (!view) return;
+    const { doc, schema } = view.state;
+    const insertionType = schema.marks.insertion;
+    const deletionType = schema.marks.deletion;
+    if (!insertionType && !deletionType) return;
+
+    const raw: TrackedChangeEntry[] = [];
+    doc.descendants((node, pos) => {
+      if (!node.isText) return;
+      for (const mark of node.marks) {
+        if (mark.type === insertionType || mark.type === deletionType) {
+          raw.push({
+            type: mark.type === insertionType ? 'insertion' : 'deletion',
+            text: node.text || '',
+            author: (mark.attrs.author as string) || '',
+            date: mark.attrs.date as string | undefined,
+            from: pos,
+            to: pos + node.nodeSize,
+            revisionId: mark.attrs.revisionId as number,
+          });
+        }
+      }
+    });
+
+    // Merge adjacent entries with the same revisionId and type into one
+    const merged: TrackedChangeEntry[] = [];
+    for (const entry of raw) {
+      const last = merged[merged.length - 1];
+      if (
+        last &&
+        last.revisionId === entry.revisionId &&
+        last.type === entry.type &&
+        last.to === entry.from
+      ) {
+        last.text += entry.text;
+        last.to = entry.to;
+      } else {
+        merged.push({ ...entry });
+      }
+    }
+    setTrackedChanges(merged);
+  }, []);
+
+  // Clean up debounce timer on unmount
+  useEffect(() => {
+    return () => {
+      if (extractTrackedChangesTimerRef.current) {
+        clearTimeout(extractTrackedChangesTimerRef.current);
+      }
+    };
+  }, []);
+
   // Sync outline visibility when prop changes
   useEffect(() => {
     setShowOutline(showOutlineProp);
@@ -446,6 +711,20 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
     enableKeyboardShortcuts: true,
   });
 
+  // Extract comments from document model on initial load
+  const commentsLoadedRef = useRef(false);
+  useEffect(() => {
+    if (commentsLoadedRef.current) return;
+    const doc = history.state;
+    if (!doc) return;
+    const bodyComments = doc.package?.document?.comments;
+    if (bodyComments && bodyComments.length > 0) {
+      setComments(bodyComments);
+      setShowCommentsSidebar(true);
+      commentsLoadedRef.current = true;
+    }
+  }, [history.state]);
+
   // Extension manager — built once, provides schema + plugins + commands
   const extensionManager = useMemo(() => {
     const mgr = new ExtensionManager(createStarterKit());
@@ -453,6 +732,16 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
     mgr.initializeRuntime();
     return mgr;
   }, []);
+
+  // Suggestion mode plugin — merged with external plugins
+  const suggestionPlugin = useMemo(
+    () => createSuggestionModePlugin(false, author),
+    [] // eslint-disable-line react-hooks/exhaustive-deps
+  );
+  const allExternalPlugins = useMemo(
+    () => [suggestionPlugin, ...(externalPlugins ?? [])],
+    [suggestionPlugin, externalPlugins]
+  );
 
   // Refs
   const pagedEditorRef = useRef<PagedEditorRef>(null);
@@ -463,19 +752,13 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
   const lastSelectionRef = useRef<{ from: number; to: number } | null>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
   const editorContentRef = useRef<HTMLDivElement>(null);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
   const toolbarWrapperRef = useRef<HTMLDivElement>(null);
   const toolbarRoRef = useRef<ResizeObserver | null>(null);
   const [toolbarHeight, setToolbarHeight] = useState(0);
   // Keep history.state accessible in stable callbacks without stale closures
   const historyStateRef = useRef(history.state);
   historyStateRef.current = history.state;
-  // Preserve immutable baseline snapshot for export-time diffing
-  const baselineSnapshotRef = useRef<DocumentSnapshot | undefined>(
-    initialDocument?.baselineDocument
-  );
-  // Track originalBuffer identity so we can distinguish a truly-new document (different buffer)
-  // from a controlled echo (same buffer, onChange stripped baseline before parent state update).
-  const prevOriginalBufferRef = useRef<ArrayBuffer | undefined>(undefined);
   // Track current border color/width for border presets (like Google Docs)
   const borderSpecRef = useRef({ style: 'single', size: 4, color: { rgb: '000000' } });
 
@@ -551,17 +834,9 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
   useEffect(() => {
     if (!documentBuffer) {
       if (initialDocument) {
-        const isNewDocument = prevOriginalBufferRef.current !== initialDocument.originalBuffer;
-        prevOriginalBufferRef.current = initialDocument.originalBuffer;
-        const fallback = isNewDocument ? undefined : baselineSnapshotRef.current;
-        const doc = trackChanges?.enabled
-          ? withBaselineDocument(initialDocument, fallback)
-          : initialDocument;
-        baselineSnapshotRef.current = doc.baselineDocument;
-        history.reset(doc);
+        history.reset(initialDocument);
         setState((prev) => ({ ...prev, isLoading: false }));
-        // Load fonts for initial document
-        loadDocumentFonts(doc).catch((err) => {
+        loadDocumentFonts(initialDocument).catch((err) => {
           console.warn('Failed to load document fonts:', err);
         });
       }
@@ -573,18 +848,14 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
     const parseDocument = async () => {
       try {
         const doc = await parseDocx(documentBuffer);
-        const docForHistory = trackChanges?.enabled ? withBaselineDocument(doc) : doc;
-        baselineSnapshotRef.current = docForHistory.baselineDocument;
-        // Reset history with parsed document (clears undo/redo stacks)
-        history.reset(docForHistory);
+        history.reset(doc);
         setState((prev) => ({
           ...prev,
           isLoading: false,
           parseError: null,
         }));
 
-        // Load fonts used in the document from Google Fonts
-        loadDocumentFonts(docForHistory).catch((err) => {
+        loadDocumentFonts(doc).catch((err) => {
           console.warn('Failed to load document fonts:', err);
         });
       } catch (error) {
@@ -604,34 +875,9 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
   // Update document when initialDocument changes
   useEffect(() => {
     if (initialDocument && !documentBuffer) {
-      const isNewDocument = prevOriginalBufferRef.current !== initialDocument.originalBuffer;
-      prevOriginalBufferRef.current = initialDocument.originalBuffer;
-      const fallback = isNewDocument ? undefined : baselineSnapshotRef.current;
-      const doc = trackChanges?.enabled
-        ? withBaselineDocument(initialDocument, fallback)
-        : initialDocument;
-      baselineSnapshotRef.current = doc.baselineDocument;
-      history.reset(doc);
+      history.reset(initialDocument);
     }
   }, [initialDocument, documentBuffer]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  // React to track-changes enablement transitions:
-  // - enabled → create baseline from current state so the first edit is tracked
-  // - disabled → clear baseline ref and strip baseline from current state
-  useEffect(() => {
-    if (trackChanges?.enabled) {
-      if (!baselineSnapshotRef.current && history.state) {
-        baselineSnapshotRef.current = createBaselineSnapshot(history.state);
-      }
-    } else {
-      baselineSnapshotRef.current = undefined;
-      history.transformAll((doc) => {
-        if (!doc?.baselineDocument) return doc;
-        const { baselineDocument: _, ...stripped } = doc;
-        return stripped as Document;
-      });
-    }
-  }, [trackChanges?.enabled]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Create/update agent when document changes
   useEffect(() => {
@@ -642,6 +888,26 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
     }
   }, [history.state]);
 
+  // Extract tracked changes once PM view is ready (after loading completes)
+  const trackedChangesLoadedRef = useRef(false);
+  useEffect(() => {
+    if (!state.isLoading && history.state) {
+      const timer = setTimeout(() => {
+        extractTrackedChanges();
+        // Auto-open sidebar once on initial load
+        if (!trackedChangesLoadedRef.current) {
+          trackedChangesLoadedRef.current = true;
+          // Check if we just populated tracked changes
+          setTrackedChanges((prev) => {
+            if (prev.length > 0) setShowCommentsSidebar(true);
+            return prev;
+          });
+        }
+      }, 200);
+      return () => clearTimeout(timer);
+    }
+  }, [state.isLoading, history.state, extractTrackedChanges]);
+
   // Listen for font loading
   useEffect(() => {
     const cleanup = onFontsLoaded(() => {
@@ -650,26 +916,27 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
     return cleanup;
   }, [onFontsLoadedCallback]);
 
-  const pushDocumentWithBaseline = useCallback(
+  // Sync editing mode to ProseMirror suggestion mode plugin
+  useEffect(() => {
+    const view = pagedEditorRef.current?.getView();
+    if (view) {
+      setSuggestionMode(editingMode === 'suggesting', view.state, view.dispatch, author);
+    }
+  }, [editingMode, author]);
+
+  const pushDocument = useCallback(
     (document: Document) => {
-      const doc = trackChanges?.enabled
-        ? withBaselineDocument(document, baselineSnapshotRef.current)
-        : document;
-      baselineSnapshotRef.current = doc.baselineDocument;
-      history.push(doc);
-      return doc;
+      history.push(document);
+      return document;
     },
-    [history, trackChanges?.enabled]
+    [history]
   );
 
   // Handle document change
   const handleDocumentChange = useCallback(
     (newDocument: Document) => {
-      const documentWithBaseline = pushDocumentWithBaseline(newDocument);
-      if (onChange) {
-        const { baselineDocument: _baseline, ...publicDocument } = documentWithBaseline;
-        onChange(publicDocument as Document);
-      }
+      pushDocument(newDocument);
+      onChange?.(newDocument);
       // Update outline headings if sidebar is open
       if (showOutlineRef.current) {
         const view = pagedEditorRef.current?.getView();
@@ -677,8 +944,14 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
           setHeadingInfos(collectHeadings(view.state.doc));
         }
       }
+      // Re-extract tracked changes after document change (debounced to avoid
+      // full-document walk on every keystroke in suggestion mode)
+      if (extractTrackedChangesTimerRef.current) {
+        clearTimeout(extractTrackedChangesTimerRef.current);
+      }
+      extractTrackedChangesTimerRef.current = setTimeout(extractTrackedChanges, 300);
     },
-    [onChange, pushDocumentWithBaseline]
+    [onChange, pushDocument, extractTrackedChanges]
   );
 
   // Handle selection changes from ProseMirror
@@ -724,6 +997,7 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
       }
 
       if (!selectionState) {
+        setFloatingCommentBtn(null);
         setState((prev) => ({
           ...prev,
           selectionFormatting: {},
@@ -782,10 +1056,42 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
         pmImageContext: pmImageCtx,
       }));
 
+      // Update floating comment button position
+      if (view && selectionState.hasSelection && !isAddingComment && !readOnly) {
+        const container = scrollContainerRef.current;
+        const parentEl = editorContentRef.current;
+        if (container && parentEl) {
+          const { from: selFrom } = view.state.selection;
+          const pagesEl = container.querySelector('.paged-editor__pages');
+          if (pagesEl) {
+            const pageEl = pagesEl.querySelector('.layout-page') as HTMLElement | null;
+            const spans = pagesEl.querySelectorAll('span[data-pm-start]');
+            for (const span of spans) {
+              const el = span as HTMLElement;
+              const pmStart = Number(el.dataset.pmStart);
+              const pmEnd = Number(el.dataset.pmEnd);
+              if (selFrom >= pmStart && selFrom <= pmEnd) {
+                const rect = el.getBoundingClientRect();
+                const parentRect = parentEl.getBoundingClientRect();
+                const top = rect.top - parentRect.top + container.scrollTop;
+                // Position at the right edge of the page (relative to editorContentRef)
+                const left = pageEl
+                  ? pageEl.getBoundingClientRect().right - parentRect.left
+                  : parentRect.width / 2 + 408;
+                setFloatingCommentBtn({ top, left });
+                break;
+              }
+            }
+          }
+        }
+      } else {
+        setFloatingCommentBtn(null);
+      }
+
       // Notify parent
       onSelectionChange?.(selectionState);
     },
-    [onSelectionChange]
+    [onSelectionChange, isAddingComment, readOnly]
   );
 
   // Table selection hook
@@ -1168,7 +1474,7 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
           endnotePr,
         },
       };
-      pushDocumentWithBaseline({
+      pushDocument({
         ...history.state,
         package: {
           ...history.state.package,
@@ -1176,7 +1482,7 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
         },
       });
     },
-    [history, pushDocumentWithBaseline]
+    [history, pushDocument]
   );
 
   // Handle table action from Toolbar - use ProseMirror commands
@@ -1655,15 +1961,28 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
     if (!agentRef.current) return null;
 
     try {
-      const saveOptions: SaveDocxOptions = { trackChanges };
-      const buffer = await agentRef.current.toBuffer(saveOptions);
+      const agentDoc = agentRef.current.getDocument();
+
+      // Get the document from the PM editor state — this runs fromProseDoc which
+      // converts PM comment marks into commentRangeStart/End in the document body.
+      // The agent's internal document has the original parsed content and won't
+      // include markers for newly added comments.
+      const pmDoc = pagedEditorRef.current?.getDocument();
+      if (pmDoc?.package?.document) {
+        agentDoc.package.document.content = pmDoc.package.document.content;
+      }
+
+      // Sync React comments state (including new replies) back to the document model
+      agentDoc.package.document.comments = comments;
+
+      const buffer = await agentRef.current.toBuffer();
       onSave?.(buffer);
       return buffer;
     } catch (error) {
       onError?.(error instanceof Error ? error : new Error('Failed to save document'));
       return null;
     }
-  }, [onSave, onError, trackChanges]);
+  }, [onSave, onError, comments]);
 
   // Handle error from editor
   const handleEditorError = useCallback(
@@ -2006,10 +2325,10 @@ body { background: white; }
             : pkg.document,
         },
       };
-      pushDocumentWithBaseline(newDoc);
+      pushDocument(newDoc);
       setHfEditPosition(position);
     },
-    [headerContent, footerContent, history, pushDocumentWithBaseline]
+    [headerContent, footerContent, history, pushDocument]
   );
 
   // Handle header/footer save — update document package with edited content
@@ -2053,12 +2372,12 @@ body { background: white; }
             [mapKey]: newMap,
           },
         };
-        pushDocumentWithBaseline(newDoc);
+        pushDocument(newDoc);
       }
 
       setHfEditPosition(null);
     },
-    [hfEditPosition, history, pushDocumentWithBaseline]
+    [hfEditPosition, history, pushDocument]
   );
 
   // Handle body click while in HF editing mode — save + close
@@ -2110,11 +2429,11 @@ body { background: white; }
             : pkg.document,
         },
       };
-      pushDocumentWithBaseline(newDoc);
+      pushDocument(newDoc);
     }
 
     setHfEditPosition(null);
-  }, [hfEditPosition, history, pushDocumentWithBaseline]);
+  }, [hfEditPosition, history, pushDocument]);
 
   // Get the DOM element for the header/footer area on the first page
   const getHfTargetElement = useCallback((pos: 'header' | 'footer'): HTMLElement | null => {
@@ -2248,12 +2567,36 @@ body { background: white; }
                       tableContext={state.pmTableContext}
                       onTableAction={handleTableAction}
                     >
+                      {/* Comment & Track Changes buttons */}
+                      <ToolbarSeparator />
+                      <ToolbarButton
+                        onClick={() => setShowCommentsSidebar(!showCommentsSidebar)}
+                        active={showCommentsSidebar}
+                        title="Toggle comments sidebar"
+                        ariaLabel="Toggle comments sidebar"
+                      >
+                        <MaterialSymbol name="comment" size={20} />
+                      </ToolbarButton>
+                      <ToolbarSeparator />
+                      <EditingModeDropdown
+                        mode={editingMode}
+                        onModeChange={(mode) => {
+                          setEditingMode(mode);
+                          if (mode === 'suggesting') setShowCommentsSidebar(true);
+                        }}
+                      />
                       {toolbarExtra}
                     </Toolbar>
 
                     {/* Horizontal Ruler - sticky with toolbar */}
                     {showRuler && (
-                      <div className="flex justify-center px-5 py-1 overflow-x-auto flex-shrink-0 bg-doc-bg">
+                      <div
+                        className="flex justify-center px-5 py-1 overflow-x-auto flex-shrink-0 bg-doc-bg"
+                        style={{
+                          paddingRight: showCommentsSidebar ? 'calc(20px + 240px)' : undefined,
+                          transition: 'padding 0.2s ease',
+                        }}
+                      >
                         <HorizontalRuler
                           sectionProps={history.state?.package.document?.finalSectionProperties}
                           zoom={state.zoom}
@@ -2338,13 +2681,162 @@ body { background: white; }
                           handleSelectionChange(null);
                         }
                       }}
-                      externalPlugins={externalPlugins}
+                      externalPlugins={allExternalPlugins}
                       onReady={(ref) => {
                         onEditorViewReady?.(ref.getView()!);
                       }}
                       onRenderedDomContextReady={onRenderedDomContextReady}
                       pluginOverlays={pluginOverlays}
+                      commentsSidebarOpen={showCommentsSidebar}
+                      scrollContainerRef={scrollContainerRef}
+                      sidebarOverlay={
+                        showCommentsSidebar ? (
+                          <CommentsSidebar
+                            comments={comments}
+                            trackedChanges={trackedChanges}
+                            pageWidth={(() => {
+                              const sp = history.state?.package?.document?.finalSectionProperties;
+                              return sp?.pageWidth ? Math.round(sp.pageWidth / 15) : 816;
+                            })()}
+                            editorContainerRef={scrollContainerRef}
+                            onCommentResolve={(id) => {
+                              setComments((prev) =>
+                                prev.map((c) => (c.id === id ? { ...c, done: true } : c))
+                              );
+                            }}
+                            onCommentDelete={(id) => {
+                              setComments((prev) =>
+                                prev.filter((c) => c.id !== id && c.parentId !== id)
+                              );
+                            }}
+                            onCommentReply={(id, text) => {
+                              setComments((prev) => [...prev, createComment(text, author, id)]);
+                            }}
+                            onAddComment={(addText) => {
+                              const comment = createComment(addText, author);
+                              // Replace pending comment mark with the real comment ID
+                              const view = pagedEditorRef.current?.getView();
+                              if (view && commentSelectionRange) {
+                                const { from, to } = commentSelectionRange;
+                                const pendingMark = view.state.schema.marks.comment.create({
+                                  commentId: PENDING_COMMENT_ID,
+                                });
+                                const realMark = view.state.schema.marks.comment.create({
+                                  commentId: comment.id,
+                                });
+                                const tr = view.state.tr
+                                  .removeMark(from, to, pendingMark)
+                                  .addMark(from, to, realMark);
+                                view.dispatch(tr);
+                              }
+                              setComments((prev) => [...prev, comment]);
+                              setIsAddingComment(false);
+                              setCommentSelectionRange(null);
+                              setAddCommentYPosition(null);
+                            }}
+                            onTrackedChangeReply={(revisionId, text) => {
+                              setComments((prev) => [
+                                ...prev,
+                                createComment(text, author, revisionId),
+                              ]);
+                            }}
+                            onCancelAddComment={() => {
+                              // Remove pending comment highlight
+                              const view = pagedEditorRef.current?.getView();
+                              if (view && commentSelectionRange) {
+                                const { from, to } = commentSelectionRange;
+                                const pendingMark = view.state.schema.marks.comment.create({
+                                  commentId: PENDING_COMMENT_ID,
+                                });
+                                view.dispatch(view.state.tr.removeMark(from, to, pendingMark));
+                              }
+                              setIsAddingComment(false);
+                              setCommentSelectionRange(null);
+                              setAddCommentYPosition(null);
+                            }}
+                            onAcceptChange={(from, to) => {
+                              const view = pagedEditorRef.current?.getView();
+                              if (view) {
+                                acceptChange(from, to)(view.state, view.dispatch);
+                                extractTrackedChanges();
+                              }
+                            }}
+                            onRejectChange={(from, to) => {
+                              const view = pagedEditorRef.current?.getView();
+                              if (view) {
+                                rejectChange(from, to)(view.state, view.dispatch);
+                                extractTrackedChanges();
+                              }
+                            }}
+                            isAddingComment={isAddingComment}
+                            addCommentYPosition={addCommentYPosition}
+                            topOffset={0}
+                          />
+                        ) : undefined
+                      }
                     />
+
+                    {/* Floating "add comment" button — appears on right edge of page at selection */}
+                    {floatingCommentBtn != null && !isAddingComment && !readOnly && (
+                      <Tooltip content="Add comment" side="bottom" delayMs={300}>
+                        <button
+                          type="button"
+                          onMouseDown={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            const view = pagedEditorRef.current?.getView();
+                            if (view) {
+                              const { from, to } = view.state.selection;
+                              if (from !== to) {
+                                setCommentSelectionRange({ from, to });
+                                const pendingMark = view.state.schema.marks.comment.create({
+                                  commentId: PENDING_COMMENT_ID,
+                                });
+                                const tr = view.state.tr.addMark(from, to, pendingMark);
+                                tr.setSelection(TextSelection.create(tr.doc, to));
+                                view.dispatch(tr);
+                              }
+                            }
+                            setAddCommentYPosition(floatingCommentBtn.top);
+                            if (!showCommentsSidebar) setShowCommentsSidebar(true);
+                            setIsAddingComment(true);
+                            setFloatingCommentBtn(null);
+                          }}
+                          style={{
+                            position: 'absolute',
+                            top: floatingCommentBtn.top,
+                            left: floatingCommentBtn.left,
+                            transform: 'translate(-50%, -50%)',
+                            zIndex: 50,
+                            width: 28,
+                            height: 28,
+                            borderRadius: 6,
+                            border: '1px solid rgba(26, 115, 232, 0.3)',
+                            backgroundColor: '#fff',
+                            color: '#1a73e8',
+                            cursor: 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            boxShadow: '0 1px 3px rgba(60,64,67,0.2)',
+                            transition: 'background-color 0.15s ease, box-shadow 0.15s ease',
+                          }}
+                          onMouseOver={(e) => {
+                            (e.currentTarget as HTMLButtonElement).style.backgroundColor =
+                              'rgba(26, 115, 232, 0.08)';
+                            (e.currentTarget as HTMLButtonElement).style.boxShadow =
+                              '0 1px 4px rgba(26, 115, 232, 0.3)';
+                          }}
+                          onMouseOut={(e) => {
+                            (e.currentTarget as HTMLButtonElement).style.backgroundColor = '#fff';
+                            (e.currentTarget as HTMLButtonElement).style.boxShadow =
+                              '0 1px 3px rgba(60,64,67,0.2)';
+                          }}
+                        >
+                          <MaterialSymbol name="add_comment" size={16} />
+                        </button>
+                      </Tooltip>
+                    )}
 
                     {/* Page navigation / indicator */}
                     {showPageNumbers &&
@@ -2409,6 +2901,8 @@ body { background: white; }
                   topOffset={toolbarHeight}
                 />
               )}
+
+              {/* Comments sidebar is now rendered inside PagedEditor via sidebarOverlay prop */}
 
               {/* Outline toggle button — absolutely positioned below toolbar */}
               {!showOutline && (

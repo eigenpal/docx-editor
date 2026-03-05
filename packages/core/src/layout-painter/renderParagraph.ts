@@ -172,6 +172,36 @@ function applyRunStyles(element: HTMLElement, run: TextRun | TabRun): void {
     decorations.push('line-through');
   }
 
+  // Comment highlight
+  if (run.commentIds && run.commentIds.length > 0) {
+    element.style.backgroundColor = 'rgba(255, 212, 0, 0.25)';
+    element.style.borderBottom = '2px solid rgba(255, 212, 0, 0.6)';
+    element.dataset.commentId = String(run.commentIds[0]);
+  }
+
+  // Tracked insertion styling — light green background with dashed border
+  if (run.isInsertion) {
+    element.style.backgroundColor = 'rgba(52, 168, 83, 0.08)';
+    element.style.borderBottom = '2px dashed #2e7d32';
+    element.style.paddingBottom = '1px';
+    element.classList.add('docx-insertion');
+    if (run.changeAuthor) element.dataset.changeAuthor = run.changeAuthor;
+    if (run.changeDate) element.dataset.changeDate = run.changeDate;
+    if (run.changeRevisionId) element.dataset.revisionId = String(run.changeRevisionId);
+  }
+
+  // Tracked deletion styling — light red background with strikethrough
+  if (run.isDeletion) {
+    element.style.backgroundColor = 'rgba(211, 47, 47, 0.08)';
+    element.style.color = '#c62828';
+    if (!decorations.includes('line-through')) decorations.push('line-through');
+    element.style.textDecorationColor = '#c62828';
+    element.classList.add('docx-deletion');
+    if (run.changeAuthor) element.dataset.changeAuthor = run.changeAuthor;
+    if (run.changeDate) element.dataset.changeDate = run.changeDate;
+    if (run.changeRevisionId) element.dataset.revisionId = String(run.changeRevisionId);
+  }
+
   if (decorations.length > 0) {
     element.style.textDecorationLine = decorations.join(' ');
   }

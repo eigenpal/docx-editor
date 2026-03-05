@@ -57,7 +57,6 @@ export {
 // ============================================================================
 
 export { DocumentAgent } from './agent/DocumentAgent';
-export type { SaveDocxOptions, TrackChangesExportOptions } from './agent/DocumentAgent';
 export { executeCommand, executeCommands } from './agent/executor';
 export { getAgentContext, getDocumentSummary, type AgentContextOptions } from './agent/context';
 export {

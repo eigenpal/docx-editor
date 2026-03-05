@@ -1,4 +1,4 @@
-import React, { useState, useRef, useCallback, useEffect } from 'react';
+import React, { useState, useRef, useCallback, useEffect, useMemo } from 'react';
 import {
   DocxEditor,
   type DocxEditorRef,
@@ -34,7 +34,9 @@ const styles: Record<string, React.CSSProperties> = {
   headerCenter: {
     flex: 1,
     display: 'flex',
+    alignItems: 'center',
     justifyContent: 'center',
+    gap: '8px',
   },
   headerRight: {
     display: 'flex',
@@ -195,16 +197,84 @@ function useResponsiveLayout() {
   return { zoom, isMobile };
 }
 
+const hoverHandlers = {
+  onMouseEnter: (e: React.MouseEvent<HTMLElement>) => {
+    e.currentTarget.style.background = '#f1f5f9';
+  },
+  onMouseLeave: (e: React.MouseEvent<HTMLElement>) => {
+    e.currentTarget.style.background = 'transparent';
+  },
+};
+
+function ToggleSwitch({ checked, onChange }: { checked: boolean; onChange: () => void }) {
+  return (
+    <div
+      style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer' }}
+      onClick={onChange}
+    >
+      <span
+        style={{
+          fontSize: '12px',
+          color: checked ? '#64748b' : '#0f172a',
+          fontWeight: checked ? 400 : 600,
+          whiteSpace: 'nowrap',
+        }}
+      >
+        Viewing
+      </span>
+      <div
+        style={{
+          width: '32px',
+          height: '18px',
+          borderRadius: '9px',
+          background: checked ? '#0f172a' : '#cbd5e1',
+          position: 'relative',
+          transition: 'background 0.2s',
+          flexShrink: 0,
+        }}
+      >
+        <div
+          style={{
+            width: '14px',
+            height: '14px',
+            borderRadius: '50%',
+            background: '#fff',
+            position: 'absolute',
+            top: '2px',
+            left: checked ? '16px' : '2px',
+            transition: 'left 0.2s',
+            boxShadow: '0 1px 2px rgba(0,0,0,0.2)',
+          }}
+        />
+      </div>
+      <span
+        style={{
+          fontSize: '12px',
+          color: checked ? '#0f172a' : '#64748b',
+          fontWeight: checked ? 600 : 400,
+          whiteSpace: 'nowrap',
+        }}
+      >
+        Editing
+      </span>
+    </div>
+  );
+}
+
 function MobileMenu({
   onFileSelect,
   onNew,
   onSave,
   status,
+  readOnly,
+  onToggleReadOnly,
 }: {
   onFileSelect: (e: React.ChangeEvent<HTMLInputElement>) => void;
   onNew: () => void;
   onSave: () => void;
   status: string;
+  readOnly: boolean;
+  onToggleReadOnly: () => void;
 }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -225,15 +295,7 @@ function MobileMenu({
       </button>
       {open && (
         <div style={styles.menuDropdown}>
-          <label
-            style={styles.menuItem}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.background = '#f1f5f9';
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.background = 'transparent';
-            }}
-          >
+          <label style={styles.menuItem} {...hoverHandlers}>
             <input
               type="file"
               accept=".docx"
@@ -251,12 +313,7 @@ function MobileMenu({
               onNew();
               setOpen(false);
             }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.background = '#f1f5f9';
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.background = 'transparent';
-            }}
+            {...hoverHandlers}
           >
             New
           </button>
@@ -266,14 +323,19 @@ function MobileMenu({
               onSave();
               setOpen(false);
             }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.background = '#f1f5f9';
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.background = 'transparent';
-            }}
+            {...hoverHandlers}
           >
             Save
+          </button>
+          <button
+            style={styles.menuItem}
+            onClick={() => {
+              onToggleReadOnly();
+              setOpen(false);
+            }}
+            {...hoverHandlers}
+          >
+            {readOnly ? 'Switch to Editing' : 'Switch to Read Only'}
           </button>
           {status && (
             <div style={{ padding: '6px 12px', fontSize: '12px', color: '#64748b' }}>{status}</div>
@@ -285,19 +347,24 @@ function MobileMenu({
 }
 
 export function App() {
+  const randomAuthor = useMemo(
+    () => `Docx Editor User ${Math.floor(Math.random() * 900) + 100}`,
+    []
+  );
   const editorRef = useRef<DocxEditorRef>(null);
   const [currentDocument, setCurrentDocument] = useState<Document | null>(null);
   const [documentBuffer, setDocumentBuffer] = useState<ArrayBuffer | null>(null);
-  const [fileName, setFileName] = useState<string>('sample.docx');
+  const [fileName, setFileName] = useState<string>('docx-editor-demo.docx');
   const [status, setStatus] = useState<string>('');
+  const [readOnly, setReadOnly] = useState(false);
   const { zoom: autoZoom, isMobile } = useResponsiveLayout();
 
   useEffect(() => {
-    fetch('/sample.docx')
+    fetch('/docx-editor-demo.docx')
       .then((res) => res.arrayBuffer())
       .then((buffer) => {
         setDocumentBuffer(buffer);
-        setFileName('sample.docx');
+        setFileName('docx-editor-demo.docx');
       })
       .catch(() => {
         setCurrentDocument(createEmptyDocument());
@@ -382,6 +449,8 @@ export function App() {
               onNew={handleNewDocument}
               onSave={handleSave}
               status={status}
+              readOnly={readOnly}
+              onToggleReadOnly={() => setReadOnly((v) => !v)}
             />
           </div>
         </header>
@@ -393,6 +462,7 @@ export function App() {
           </div>
           <div style={styles.headerCenter}>
             {fileName && <span style={styles.fileName}>{fileName}</span>}
+            <ToggleSwitch checked={!readOnly} onChange={() => setReadOnly((v) => !v)} />
           </div>
           <div style={styles.headerRight}>
             <label style={styles.fileInputLabel}>
@@ -420,6 +490,7 @@ export function App() {
           ref={editorRef}
           document={documentBuffer ? undefined : currentDocument}
           documentBuffer={documentBuffer}
+          author={randomAuthor}
           onChange={handleDocumentChange}
           onError={handleError}
           onFontsLoaded={handleFontsLoaded}
@@ -428,6 +499,7 @@ export function App() {
           showZoomControl={true}
           showPageNumbers={false}
           initialZoom={autoZoom}
+          readOnly={readOnly}
         />
       </main>
     </div>

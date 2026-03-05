@@ -34,6 +34,12 @@ export interface SelectionContext {
   listType?: 'bullet' | 'numbered';
   /** List level (0-8) */
   listLevel?: number;
+  /** Active comment IDs at cursor position */
+  activeCommentIds: number[];
+  /** Whether cursor is inside a tracked insertion */
+  inInsertion: boolean;
+  /** Whether cursor is inside a tracked deletion */
+  inDeletion: boolean;
 }
 
 /**
@@ -59,6 +65,7 @@ export function extractSelectionContext(state: EditorState): SelectionContext {
   let endParagraphIndex = 0;
 
   doc.forEach((_node, offset, index) => {
+    if (offset > to) return false; // early-exit once past selection
     if (offset <= from) {
       startParagraphIndex = index;
     }
@@ -108,6 +115,24 @@ export function extractSelectionContext(state: EditorState): SelectionContext {
   const listType = numPr?.numId === 1 ? 'bullet' : numPr?.numId ? 'numbered' : undefined;
   const listLevel = numPr?.ilvl;
 
+  // Comment and tracked change detection
+  const allMarks = state.storedMarks || (empty ? $from.marks() : []);
+  const activeCommentIds: number[] = [];
+  let inInsertion = false;
+  let inDeletion = false;
+
+  for (const mark of allMarks) {
+    if (mark.type.name === 'comment' && mark.attrs.commentId) {
+      activeCommentIds.push(mark.attrs.commentId);
+    }
+    if (mark.type.name === 'insertion') {
+      inInsertion = true;
+    }
+    if (mark.type.name === 'deletion') {
+      inDeletion = true;
+    }
+  }
+
   return {
     hasSelection: !empty,
     isMultiParagraph: startParagraphIndex !== endParagraphIndex,
@@ -118,6 +143,9 @@ export function extractSelectionContext(state: EditorState): SelectionContext {
     inList,
     listType,
     listLevel,
+    activeCommentIds,
+    inInsertion,
+    inDeletion,
   };
 }
 
@@ -219,19 +247,29 @@ export function createSelectionTrackerPlugin(onSelectionChange?: SelectionChange
     view() {
       return {
         update(view: EditorView, prevState: EditorState) {
+          if (!onSelectionChange) return;
           // Only emit on selection/doc changes
           if (view.state.selection.eq(prevState.selection) && view.state.doc.eq(prevState.doc)) {
             return;
           }
-
-          const context = extractSelectionContext(view.state);
-          if (onSelectionChange) {
+          // Reuse context already computed in state.apply() — avoid double doc walk
+          const context = selectionTrackerKey.getState(view.state);
+          if (context) {
             onSelectionChange(context);
           }
         },
       };
     },
   });
+}
+
+function arraysEqual(a: number[] | undefined, b: number[] | undefined): boolean {
+  if (a === b) return true;
+  if (!a || !b || a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i++) {
+    if (a[i] !== b[i]) return false;
+  }
+  return true;
 }
 
 /**
@@ -246,6 +284,9 @@ function contextsEqual(a: SelectionContext, b: SelectionContext): boolean {
     a.inList === b.inList &&
     a.listType === b.listType &&
     a.listLevel === b.listLevel &&
+    a.inInsertion === b.inInsertion &&
+    a.inDeletion === b.inDeletion &&
+    arraysEqual(a.activeCommentIds, b.activeCommentIds) &&
     JSON.stringify(a.textFormatting) === JSON.stringify(b.textFormatting) &&
     JSON.stringify(a.paragraphFormatting) === JSON.stringify(b.paragraphFormatting)
   );
