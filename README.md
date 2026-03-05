@@ -15,35 +15,44 @@
 
 Open-source WYSIWYG DOCX editor. Open, edit, and save `.docx` files entirely in the browser — no server required. [Try the live demo.](https://docx-js-editor.vercel.app/)
 
-## Packages
-
-This is a monorepo with three packages:
-
-| Package                                      | Description                                                               | npm                                                                                                                                                        |
-| -------------------------------------------- | ------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| [`@eigenpal/docx-core`](packages/core)       | Framework-agnostic core — DOCX parsing, ProseMirror schema, layout engine | [![npm](https://img.shields.io/npm/v/@eigenpal/docx-core.svg?style=flat-square&color=00C853)](https://www.npmjs.com/package/@eigenpal/docx-core)           |
-| [`@eigenpal/docx-js-editor`](packages/react) | React UI — toolbar, paged editor, plugin host                             | [![npm](https://img.shields.io/npm/v/@eigenpal/docx-js-editor.svg?style=flat-square&color=00C853)](https://www.npmjs.com/package/@eigenpal/docx-js-editor) |
-| [`@eigenpal/docx-editor-vue`](packages/vue)  | Vue.js UI (scaffold — community contribution welcome)                     | —                                                                                                                                                          |
-
-For most users, install `@eigenpal/docx-js-editor` — it includes everything. Use `@eigenpal/docx-core` directly for headless/server-side use or to build a custom UI in any framework.
-
 <p align="center">
   <a href="https://docx-js-editor.vercel.app/">
     <img src="./assets/editor.png" alt="DOCX JS Editor screenshot" width="700" />
   </a>
 </p>
 
-We built it for ourselves in [eigenpal.com](https://eigenpal.com) in order to have an editor for `.docx` files, which serve as AI document workflow output templates for our clients.
+## Features
 
-### Framework Examples
+- Full WYSIWYG editing with Microsoft Word fidelity
+- **Track Changes (Suggestion Mode)** — edits become tracked insertions/deletions with author attribution, accept/reject per change or all at once
+- **Comments & Replies** — add comments anchored to text selections, reply threads, resolve/reopen, sidebar with scroll-to-highlight
+- Text and paragraph formatting (bold, italic, fonts, colors, alignment, spacing)
+- Tables, images, hyperlinks
+- Extensible plugin architecture
+- Undo/redo, find & replace, keyboard shortcuts
+- Print preview
+- Zero server dependencies
 
-| Framework                                                                                                           | Example                                                                       |
-| ------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
-| <img src="https://vite.dev/logo.svg" width="14" /> Vite + React                                                     | [`examples/vite`](examples/vite) ([demo](https://docx-js-editor.vercel.app/)) |
-| <img src="https://assets.vercel.com/image/upload/v1662130559/nextjs/Icon_dark_background.png" width="14" /> Next.js | [`examples/nextjs`](examples/nextjs)                                          |
-| <img src="https://remix.run/favicon-192.png" width="14" /> Remix                                                    | [`examples/remix`](examples/remix)                                            |
-| <img src="https://astro.build/favicon.svg" width="14" /> Astro                                                      | [`examples/astro`](examples/astro)                                            |
-| <img src="https://vuejs.org/logo.svg" width="14" /> Vue.js (scaffold)                                               | [`examples/vue`](examples/vue)                                                |
+### Track Changes
+
+Toggle **Suggestion Mode** from the toolbar (or `Ctrl+Shift+E`) to enter tracked editing. While active:
+
+- Typed text is marked as an **insertion** (green underline)
+- Deleted text is NOT removed — it's marked as a **deletion** (red strikethrough)
+- Each change is attributed to the `author` prop and timestamped
+- Consecutive edits by the same author are grouped into a single change
+- Own insertions can be retracted (backspace removes them instead of marking as deletion)
+
+Accept or reject individual changes from the sidebar, or accept/reject all at once.
+
+### Comments
+
+Click the comment button (or select text and press `Ctrl+Alt+M`) to add a comment anchored to a text range. Comments appear in the sidebar with:
+
+- Author name and timestamp
+- Reply threads
+- Resolve / reopen actions
+- Click-to-scroll: clicking a comment scrolls to and highlights the anchored text
 
 ## Installation
 
@@ -79,7 +88,40 @@ function Editor({ file }: { file: ArrayBuffer }) {
 
 > **Next.js / SSR:** The editor requires the DOM. Use a dynamic import or lazy `useEffect` load to avoid server-side rendering issues.
 
-## Props
+## Packages
+
+| Package                                      | Description                                                               | npm                                                                                                                                                        |
+| -------------------------------------------- | ------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [`@eigenpal/docx-core`](packages/core)       | Framework-agnostic core — DOCX parsing, ProseMirror schema, layout engine | [![npm](https://img.shields.io/npm/v/@eigenpal/docx-core.svg?style=flat-square&color=00C853)](https://www.npmjs.com/package/@eigenpal/docx-core)           |
+| [`@eigenpal/docx-js-editor`](packages/react) | React UI — toolbar, paged editor, plugin host                             | [![npm](https://img.shields.io/npm/v/@eigenpal/docx-js-editor.svg?style=flat-square&color=00C853)](https://www.npmjs.com/package/@eigenpal/docx-js-editor) |
+| [`@eigenpal/docx-editor-vue`](packages/vue)  | Vue.js UI (scaffold — community contribution welcome)                     | —                                                                                                                                                          |
+
+For most users, install `@eigenpal/docx-js-editor` — it includes everything. Use `@eigenpal/docx-core` directly for headless/server-side use or to build a custom UI in any framework.
+
+## Plugins
+
+Extend the editor with the plugin system. Wrap `DocxEditor` in a `PluginHost` and pass plugins that can contribute ProseMirror plugins, side panels, document overlays, and custom CSS:
+
+```tsx
+import { DocxEditor, PluginHost, templatePlugin } from '@eigenpal/docx-js-editor';
+
+function Editor({ file }: { file: ArrayBuffer }) {
+  return (
+    <PluginHost plugins={[templatePlugin]}>
+      <DocxEditor documentBuffer={file} />
+    </PluginHost>
+  );
+}
+```
+
+| Plugin                                                | Description                                                                                  |
+| ----------------------------------------------------- | -------------------------------------------------------------------------------------------- |
+| [Docxtemplater](packages/react/src/plugins/template/) | Syntax highlighting and annotation panel for [docxtemplater](https://docxtemplater.com) tags |
+
+See [docs/PLUGINS.md](docs/PLUGINS.md) for the full plugin API, including how to create custom plugins with panels, overlays, and ProseMirror integrations.
+
+<details>
+<summary><strong>Props</strong></summary>
 
 | Prop                   | Type                                        | Default           | Description                                       |
 | ---------------------- | ------------------------------------------- | ----------------- | ------------------------------------------------- |
@@ -115,7 +157,10 @@ function Editor({ file }: { file: ArrayBuffer }) {
 | `onCut`                | `() => void`                                | —                 | Called when content is cut                        |
 | `onPaste`              | `() => void`                                | —                 | Called when content is pasted                     |
 
-## Ref Methods
+</details>
+
+<details>
+<summary><strong>Ref Methods</strong></summary>
 
 ```tsx
 const ref = useRef<DocxEditorRef>(null);
@@ -128,7 +173,10 @@ ref.current.scrollToPage(3); // Scroll to page 3
 ref.current.print(); // Print the document
 ```
 
-## Read-Only Preview
+</details>
+
+<details>
+<summary><strong>Read-Only Preview</strong></summary>
 
 Use `readOnly` for a preview-only viewer. This disables editing, caret, and selection UI.
 
@@ -136,60 +184,20 @@ Use `readOnly` for a preview-only viewer. This disables editing, caret, and sele
 <DocxEditor documentBuffer={file} readOnly />
 ```
 
-## Plugins
+</details>
 
-Extend the editor with the plugin system. Wrap `DocxEditor` in a `PluginHost` and pass plugins that can contribute ProseMirror plugins, side panels, document overlays, and custom CSS:
+<details>
+<summary><strong>Framework Examples</strong></summary>
 
-```tsx
-import { DocxEditor, PluginHost, templatePlugin } from '@eigenpal/docx-js-editor';
+| Framework                                                                                                           | Example                                                                       |
+| ------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
+| <img src="https://vite.dev/logo.svg" width="14" /> Vite + React                                                     | [`examples/vite`](examples/vite) ([demo](https://docx-js-editor.vercel.app/)) |
+| <img src="https://assets.vercel.com/image/upload/v1662130559/nextjs/Icon_dark_background.png" width="14" /> Next.js | [`examples/nextjs`](examples/nextjs)                                          |
+| <img src="https://remix.run/favicon-192.png" width="14" /> Remix                                                    | [`examples/remix`](examples/remix)                                            |
+| <img src="https://astro.build/favicon.svg" width="14" /> Astro                                                      | [`examples/astro`](examples/astro)                                            |
+| <img src="https://vuejs.org/logo.svg" width="14" /> Vue.js (scaffold)                                               | [`examples/vue`](examples/vue)                                                |
 
-function Editor({ file }: { file: ArrayBuffer }) {
-  return (
-    <PluginHost plugins={[templatePlugin]}>
-      <DocxEditor documentBuffer={file} />
-    </PluginHost>
-  );
-}
-```
-
-| Plugin                                                | Description                                                                                  |
-| ----------------------------------------------------- | -------------------------------------------------------------------------------------------- |
-| [Docxtemplater](packages/react/src/plugins/template/) | Syntax highlighting and annotation panel for [docxtemplater](https://docxtemplater.com) tags |
-
-See [docs/PLUGINS.md](docs/PLUGINS.md) for the full plugin API, including how to create custom plugins with panels, overlays, and ProseMirror integrations.
-
-## Features
-
-- Full WYSIWYG editing with Microsoft Word fidelity
-- **Track Changes (Suggestion Mode)** — edits become tracked insertions/deletions with author attribution, accept/reject per change or all at once
-- **Comments & Replies** — add comments anchored to text selections, reply threads, resolve/reopen, sidebar with scroll-to-highlight
-- Text and paragraph formatting (bold, italic, fonts, colors, alignment, spacing)
-- Tables, images, hyperlinks
-- Extensible plugin architecture
-- Undo/redo, find & replace, keyboard shortcuts
-- Print preview
-- Zero server dependencies
-
-### Track Changes
-
-Toggle **Suggestion Mode** from the toolbar (or `Ctrl+Shift+E`) to enter tracked editing. While active:
-
-- Typed text is marked as an **insertion** (green underline)
-- Deleted text is NOT removed — it's marked as a **deletion** (red strikethrough)
-- Each change is attributed to the `author` prop and timestamped
-- Consecutive edits by the same author are grouped into a single change
-- Own insertions can be retracted (backspace removes them instead of marking as deletion)
-
-Accept or reject individual changes from the sidebar, or accept/reject all at once.
-
-### Comments
-
-Click the comment button (or select text and press `Ctrl+Alt+M`) to add a comment anchored to a text range. Comments appear in the sidebar with:
-
-- Author name and timestamp
-- Reply threads
-- Resolve / reopen actions
-- Click-to-scroll: clicking a comment scrolls to and highlights the anchored text
+</details>
 
 ## Development
 
@@ -201,7 +209,8 @@ bun run dev:remix    # Remix example on localhost:3001
 bun run dev:astro    # Astro example on localhost:4321
 ```
 
-### Monorepo Structure
+<details>
+<summary><strong>Monorepo Structure</strong></summary>
 
 ```
 packages/
@@ -215,6 +224,8 @@ examples/
   remix/    — Remix example
   astro/    — Astro example
 ```
+
+</details>
 
 ### Building
 
