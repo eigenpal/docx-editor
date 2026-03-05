@@ -161,12 +161,35 @@ See [docs/PLUGINS.md](docs/PLUGINS.md) for the full plugin API, including how to
 ## Features
 
 - Full WYSIWYG editing with Microsoft Word fidelity
+- **Track Changes (Suggestion Mode)** — edits become tracked insertions/deletions with author attribution, accept/reject per change or all at once
+- **Comments & Replies** — add comments anchored to text selections, reply threads, resolve/reopen, sidebar with scroll-to-highlight
 - Text and paragraph formatting (bold, italic, fonts, colors, alignment, spacing)
 - Tables, images, hyperlinks
 - Extensible plugin architecture
 - Undo/redo, find & replace, keyboard shortcuts
 - Print preview
 - Zero server dependencies
+
+### Track Changes
+
+Toggle **Suggestion Mode** from the toolbar (or `Ctrl+Shift+E`) to enter tracked editing. While active:
+
+- Typed text is marked as an **insertion** (green underline)
+- Deleted text is NOT removed — it's marked as a **deletion** (red strikethrough)
+- Each change is attributed to the `author` prop and timestamped
+- Consecutive edits by the same author are grouped into a single change
+- Own insertions can be retracted (backspace removes them instead of marking as deletion)
+
+Accept or reject individual changes from the sidebar, or accept/reject all at once.
+
+### Comments
+
+Click the comment button (or select text and press `Ctrl+Alt+M`) to add a comment anchored to a text range. Comments appear in the sidebar with:
+
+- Author name and timestamp
+- Reply threads
+- Resolve / reopen actions
+- Click-to-scroll: clicking a comment scrolls to and highlights the anchored text
 
 ## Development
 

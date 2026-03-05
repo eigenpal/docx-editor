@@ -5,15 +5,7 @@
  */
 
 import type { Comment, Paragraph, Run } from '../../types/content';
-
-function escapeXml(text: string): string {
-  return text
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&apos;');
-}
+import { escapeXml } from './xmlUtils';
 
 function serializeRunContent(run: Run): string {
   let xml = '<w:r>';

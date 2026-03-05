@@ -350,9 +350,11 @@ interface EditorState {
 // MAIN COMPONENT
 // ============================================================================
 
+let nextCommentId = Date.now();
+
 function createComment(text: string, authorName: string, parentId?: number): Comment {
   return {
-    id: Date.now(),
+    id: nextCommentId++,
     author: authorName,
     date: new Date().toISOString(),
     content: [
@@ -456,6 +458,9 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
   } | null>(null);
   const [addCommentYPosition, setAddCommentYPosition] = useState<number | null>(null);
   const [editingMode, setEditingMode] = useState<'editing' | 'suggesting'>('editing');
+
+  // Debounce timer for extractTrackedChanges (avoid full doc walk on every keystroke)
+  const extractTrackedChangesTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Extract tracked changes from ProseMirror state
   const extractTrackedChanges = useCallback(() => {
@@ -754,8 +759,12 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
           setHeadingInfos(collectHeadings(view.state.doc));
         }
       }
-      // Re-extract tracked changes after document change
-      requestAnimationFrame(() => extractTrackedChanges());
+      // Re-extract tracked changes after document change (debounced to avoid
+      // full-document walk on every keystroke in suggestion mode)
+      if (extractTrackedChangesTimerRef.current) {
+        clearTimeout(extractTrackedChangesTimerRef.current);
+      }
+      extractTrackedChangesTimerRef.current = setTimeout(extractTrackedChanges, 300);
     },
     [onChange, pushDocument, extractTrackedChanges]
   );

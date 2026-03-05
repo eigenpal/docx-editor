@@ -261,6 +261,15 @@ export function createSelectionTrackerPlugin(onSelectionChange?: SelectionChange
   });
 }
 
+function arraysEqual(a: number[] | undefined, b: number[] | undefined): boolean {
+  if (a === b) return true;
+  if (!a || !b || a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i++) {
+    if (a[i] !== b[i]) return false;
+  }
+  return true;
+}
+
 /**
  * Compare two selection contexts for equality
  */
@@ -275,7 +284,7 @@ function contextsEqual(a: SelectionContext, b: SelectionContext): boolean {
     a.listLevel === b.listLevel &&
     a.inInsertion === b.inInsertion &&
     a.inDeletion === b.inDeletion &&
-    JSON.stringify(a.activeCommentIds) === JSON.stringify(b.activeCommentIds) &&
+    arraysEqual(a.activeCommentIds, b.activeCommentIds) &&
     JSON.stringify(a.textFormatting) === JSON.stringify(b.textFormatting) &&
     JSON.stringify(a.paragraphFormatting) === JSON.stringify(b.paragraphFormatting)
   );

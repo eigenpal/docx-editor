@@ -35,9 +35,11 @@ interface MarkAttrs {
   date: string;
 }
 
+let nextRevisionId = Date.now();
+
 function makeMarkAttrs(pluginState: SuggestionModeState): MarkAttrs {
   return {
-    revisionId: Date.now(),
+    revisionId: nextRevisionId++,
     author: pluginState.author,
     date: new Date().toISOString(),
   };

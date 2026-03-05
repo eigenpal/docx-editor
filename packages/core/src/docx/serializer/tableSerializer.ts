@@ -37,22 +37,7 @@ import type {
 } from '../../types/document';
 
 import { serializeParagraph } from './paragraphSerializer';
-
-// ============================================================================
-// XML ESCAPING
-// ============================================================================
-
-/**
- * Escape special XML characters
- */
-function escapeXml(text: string): string {
-  return text
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&apos;');
-}
+import { escapeXml } from './xmlUtils';
 
 function normalizeTrackedChangeInfo(info: { id: number; author: string; date?: string }): {
   id: number;
