@@ -1,7 +1,7 @@
 /**
  * Main entry point for the DOCX editor application
  */
-import React, { useState, useCallback, useRef, useMemo } from 'react';
+import React, { useState, useCallback, useRef, useMemo, useEffect } from 'react';
 import { createRoot } from 'react-dom/client';
 import { DocxEditor } from '@eigenpal/docx-js-editor';
 import './index.css';
@@ -17,6 +17,19 @@ function App() {
   const [documentBuffer, setDocumentBuffer] = useState<ArrayBuffer | null>(null);
   const [fileName, setFileName] = useState<string>('');
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Load demo document on mount
+  useEffect(() => {
+    fetch('/docx-editor-demo.docx')
+      .then((res) => (res.ok ? res.arrayBuffer() : null))
+      .then((buf) => {
+        if (buf) {
+          setDocumentBuffer(buf);
+          setFileName('docx-editor-demo.docx');
+        }
+      })
+      .catch(() => {});
+  }, []);
 
   // Handle file selection
   const handleFileChange = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
