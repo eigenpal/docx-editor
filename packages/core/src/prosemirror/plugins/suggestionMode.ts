@@ -22,6 +22,7 @@ import type { EditorView } from 'prosemirror-view';
 import type { Node as PMNode, MarkType } from 'prosemirror-model';
 
 export const suggestionModeKey = new PluginKey<SuggestionModeState>('suggestionMode');
+const SUGGESTION_META = 'suggestionModeApplied';
 
 interface SuggestionModeState {
   active: boolean;
@@ -143,7 +144,7 @@ function handleSuggestionDelete(
   if (!dispatch) return true;
 
   const tr = state.tr;
-  tr.setMeta('suggestionModeApplied', true);
+  tr.setMeta(SUGGESTION_META, true);
 
   // --- Selection delete ---
   if (!empty) {
@@ -240,7 +241,7 @@ export function createSuggestionModePlugin(initialActive = false, author = 'User
         if (!insertionType) return false;
 
         const tr = view.state.tr;
-        tr.setMeta('suggestionModeApplied', true);
+        tr.setMeta(SUGGESTION_META, true);
 
         // Reuse adjacent insertion's revisionId so consecutive typing groups together
         const insertAttrs =
@@ -280,9 +281,7 @@ export function createSuggestionModePlugin(initialActive = false, author = 'User
       const pluginState = suggestionModeKey.getState(newState);
       if (!pluginState?.active) return null;
 
-      const userTr = transactions.find(
-        (tr) => tr.docChanged && !tr.getMeta('suggestionModeApplied')
-      );
+      const userTr = transactions.find((tr) => tr.docChanged && !tr.getMeta(SUGGESTION_META));
       if (!userTr) return null;
 
       const insertionType = newState.schema.marks.insertion;
@@ -291,7 +290,7 @@ export function createSuggestionModePlugin(initialActive = false, author = 'User
       const markAttrs = makeMarkAttrs(pluginState);
 
       const tr = newState.tr;
-      tr.setMeta('suggestionModeApplied', true);
+      tr.setMeta(SUGGESTION_META, true);
 
       userTr.steps.forEach((step) => {
         const stepMap = step.getMap();

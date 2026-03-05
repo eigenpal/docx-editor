@@ -39,6 +39,28 @@ import { RELATIONSHIP_TYPES } from './relsParser';
 import { type RawDocxContent } from './unzip';
 
 // ============================================================================
+// COMMENTS SERIALIZATION
+// ============================================================================
+
+async function serializeCommentsToZip(
+  doc: Document,
+  zip: JSZip,
+  compressionLevel: number
+): Promise<void> {
+  const comments = doc.package.document.comments;
+  if (!comments || comments.length === 0) return;
+
+  const commentsXml = serializeComments(comments);
+  zip.file('word/comments.xml', commentsXml, {
+    compression: 'DEFLATE',
+    compressionOptions: { level: compressionLevel },
+  });
+
+  await ensureCommentsContentType(zip, compressionLevel);
+  await ensureCommentsRelationship(zip, compressionLevel);
+}
+
+// ============================================================================
 // NEW IMAGE HANDLING
 // ============================================================================
 
@@ -273,21 +295,8 @@ export async function repackDocx(doc: Document, options: RepackOptions = {}): Pr
   // Serialize and update modified headers/footers
   serializeHeadersFootersToZip(exportDocument, newZip, compressionLevel);
 
-  // Serialize and update comments.xml if comments exist
-  const comments = exportDocument.package.document.comments;
-  if (comments && comments.length > 0) {
-    const commentsXml = serializeComments(comments);
-    newZip.file('word/comments.xml', commentsXml, {
-      compression: 'DEFLATE',
-      compressionOptions: { level: compressionLevel },
-    });
-
-    // Ensure [Content_Types].xml has an override for comments.xml
-    await ensureCommentsContentType(newZip, compressionLevel);
-
-    // Ensure word/_rels/document.xml.rels has a relationship for comments.xml
-    await ensureCommentsRelationship(newZip, compressionLevel);
-  }
+  // Serialize comments
+  await serializeCommentsToZip(exportDocument, newZip, compressionLevel);
 
   // Optionally update modification date in docProps/core.xml
   if (updateModifiedDate) {
@@ -368,21 +377,8 @@ export async function repackDocxFromRaw(
   // Serialize and update modified headers/footers
   serializeHeadersFootersToZip(exportDocument, newZip, compressionLevel);
 
-  // Serialize and update comments.xml if comments exist
-  const rawComments = exportDocument.package.document.comments;
-  if (rawComments && rawComments.length > 0) {
-    const commentsXml = serializeComments(rawComments);
-    newZip.file('word/comments.xml', commentsXml, {
-      compression: 'DEFLATE',
-      compressionOptions: { level: compressionLevel },
-    });
-
-    // Ensure [Content_Types].xml has an override for comments.xml
-    await ensureCommentsContentType(newZip, compressionLevel);
-
-    // Ensure word/_rels/document.xml.rels has a relationship for comments.xml
-    await ensureCommentsRelationship(newZip, compressionLevel);
-  }
+  // Serialize comments
+  await serializeCommentsToZip(exportDocument, newZip, compressionLevel);
 
   // Optionally update core properties
   if (updateModifiedDate && rawContent.corePropsXml) {

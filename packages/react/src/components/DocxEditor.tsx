@@ -350,6 +350,22 @@ interface EditorState {
 // MAIN COMPONENT
 // ============================================================================
 
+function createComment(text: string, authorName: string, parentId?: number): Comment {
+  return {
+    id: Date.now(),
+    author: authorName,
+    date: new Date().toISOString(),
+    content: [
+      {
+        type: 'paragraph',
+        formatting: {},
+        content: [{ type: 'run', formatting: {}, content: [{ type: 'text', text }] }],
+      },
+    ],
+    ...(parentId !== undefined && { parentId }),
+  };
+}
+
 /**
  * DocxEditor - Complete DOCX editor component
  */
@@ -2528,83 +2544,33 @@ body { background: white; }
                               );
                             }}
                             onCommentReply={(id, text) => {
-                              const newReply: Comment = {
-                                id: Date.now(),
-                                author: author,
-                                date: new Date().toISOString(),
-                                content: [
-                                  {
-                                    type: 'paragraph',
-                                    formatting: {},
-                                    content: [
-                                      {
-                                        type: 'run',
-                                        formatting: {},
-                                        content: [{ type: 'text', text }],
-                                      },
-                                    ],
-                                  },
-                                ],
-                                parentId: id,
-                              };
-                              setComments((prev) => [...prev, newReply]);
+                              setComments((prev) => [...prev, createComment(text, author, id)]);
                             }}
                             onAddComment={(addText) => {
-                              const commentId = Date.now();
-                              const newComment: Comment = {
-                                id: commentId,
-                                author: author,
-                                date: new Date().toISOString(),
-                                content: [
-                                  {
-                                    type: 'paragraph',
-                                    formatting: {},
-                                    content: [
-                                      {
-                                        type: 'run',
-                                        formatting: {},
-                                        content: [{ type: 'text', text: addText }],
-                                      },
-                                    ],
-                                  },
-                                ],
-                              };
+                              const comment = createComment(addText, author);
                               // Apply comment mark to the captured selection range
                               const view = pagedEditorRef.current?.getView();
                               if (view && commentSelectionRange) {
                                 const { from, to } = commentSelectionRange;
-                                const commentMark = view.state.schema.marks.comment.create({
-                                  commentId,
-                                });
-                                const tr = view.state.tr.addMark(from, to, commentMark);
+                                const tr = view.state.tr.addMark(
+                                  from,
+                                  to,
+                                  view.state.schema.marks.comment.create({
+                                    commentId: comment.id,
+                                  })
+                                );
                                 view.dispatch(tr);
                               }
-                              setComments((prev) => [...prev, newComment]);
+                              setComments((prev) => [...prev, comment]);
                               setIsAddingComment(false);
                               setCommentSelectionRange(null);
                               setAddCommentYPosition(null);
                             }}
                             onTrackedChangeReply={(revisionId, text) => {
-                              const newReply: Comment = {
-                                id: Date.now(),
-                                author: author,
-                                date: new Date().toISOString(),
-                                content: [
-                                  {
-                                    type: 'paragraph',
-                                    formatting: {},
-                                    content: [
-                                      {
-                                        type: 'run',
-                                        formatting: {},
-                                        content: [{ type: 'text', text }],
-                                      },
-                                    ],
-                                  },
-                                ],
-                                parentId: revisionId,
-                              };
-                              setComments((prev) => [...prev, newReply]);
+                              setComments((prev) => [
+                                ...prev,
+                                createComment(text, author, revisionId),
+                              ]);
                             }}
                             onCancelAddComment={() => {
                               setIsAddingComment(false);

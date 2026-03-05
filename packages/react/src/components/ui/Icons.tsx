@@ -703,22 +703,6 @@ export function IconClose(props: IconProps) {
   );
 }
 
-export function IconCheckCircle(props: IconProps) {
-  return (
-    <SvgIcon {...props}>
-      <path d="m424-296 282-282-56-56-226 226-114-114-56 56 170 170Zm56 216q-83 0-156-31.5T197-197q-54-54-85.5-127T80-480q0-83 31.5-156T197-763q54-54 127-85.5T480-880q83 0 156 31.5T763-763q54 54 85.5 127T880-480q0 83-31.5 156T763-197q-54 54-127 85.5T480-80Zm0-80q134 0 227-93t93-227q0-134-93-227t-227-93q-134 0-227 93t-93 227q0 134 93 227t227 93Zm0-320Z" />
-    </SvgIcon>
-  );
-}
-
-export function IconMoreVertDots(props: IconProps) {
-  return (
-    <SvgIcon {...props}>
-      <path d="M480-160q-33 0-56.5-23.5T400-240q0-33 23.5-56.5T480-320q33 0 56.5 23.5T560-240q0 33-23.5 56.5T480-160Zm0-240q-33 0-56.5-23.5T400-480q0-33 23.5-56.5T480-560q33 0 56.5 23.5T560-480q0 33-23.5 56.5T480-400Zm0-240q-33 0-56.5-23.5T400-720q0-33 23.5-56.5T480-800q33 0 56.5 23.5T560-720q0 33-23.5 56.5T480-640Z" />
-    </SvgIcon>
-  );
-}
-
 export function IconAddComment(props: IconProps) {
   return (
     <SvgIcon {...props}>
@@ -836,7 +820,6 @@ const iconMap: Record<string, React.ComponentType<IconProps>> = {
   // Comments sidebar
   check: IconCheck,
   close: IconClose,
-  check_circle: IconCheckCircle,
   add_comment: IconAddComment,
   comment: IconComment,
   edit_note: IconEditNote,
