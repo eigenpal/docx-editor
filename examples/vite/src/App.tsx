@@ -1,4 +1,4 @@
-import React, { useState, useRef, useCallback, useEffect } from 'react';
+import React, { useState, useRef, useCallback, useEffect, useMemo } from 'react';
 import {
   DocxEditor,
   type DocxEditorRef,
@@ -285,19 +285,23 @@ function MobileMenu({
 }
 
 export function App() {
+  const randomAuthor = useMemo(
+    () => `Docx Editor User ${Math.floor(Math.random() * 900) + 100}`,
+    []
+  );
   const editorRef = useRef<DocxEditorRef>(null);
   const [currentDocument, setCurrentDocument] = useState<Document | null>(null);
   const [documentBuffer, setDocumentBuffer] = useState<ArrayBuffer | null>(null);
-  const [fileName, setFileName] = useState<string>('sample.docx');
+  const [fileName, setFileName] = useState<string>('docx-editor-demo.docx');
   const [status, setStatus] = useState<string>('');
   const { zoom: autoZoom, isMobile } = useResponsiveLayout();
 
   useEffect(() => {
-    fetch('/sample.docx')
+    fetch('/docx-editor-demo.docx')
       .then((res) => res.arrayBuffer())
       .then((buffer) => {
         setDocumentBuffer(buffer);
-        setFileName('sample.docx');
+        setFileName('docx-editor-demo.docx');
       })
       .catch(() => {
         setCurrentDocument(createEmptyDocument());
@@ -420,6 +424,7 @@ export function App() {
           ref={editorRef}
           document={documentBuffer ? undefined : currentDocument}
           documentBuffer={documentBuffer}
+          author={randomAuthor}
           onChange={handleDocumentChange}
           onError={handleError}
           onFontsLoaded={handleFontsLoaded}
