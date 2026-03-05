@@ -208,32 +208,41 @@ export const CommentsSidebar: React.FC<CommentsSidebarProps> = ({
 
     const handleDocClick = (e: MouseEvent) => {
       const target = e.target as HTMLElement;
-      // Only respond to clicks inside the pages area, not sidebar
-      if (!pagesEl.contains(target)) return;
 
-      // Check for comment highlight click
-      const commentEl = target.closest('[data-comment-id]') as HTMLElement | null;
-      if (commentEl?.dataset.commentId) {
-        setExpandedCard(`comment-${commentEl.dataset.commentId}`);
-        onCommentClick?.(Number(commentEl.dataset.commentId));
-        return;
-      }
+      // Clicks inside the sidebar itself are handled by card onClick — ignore here
+      if (sidebarRef.current?.contains(target)) return;
 
-      // Check for tracked change click
-      const insertionEl = target.closest('.docx-insertion') as HTMLElement | null;
-      const deletionEl = target.closest('.docx-deletion') as HTMLElement | null;
-      const changeEl = insertionEl || deletionEl;
-      if (changeEl) {
-        const author = changeEl.dataset.changeAuthor || '';
-        const text = changeEl.textContent || '';
-        const type = insertionEl ? 'insertion' : 'deletion';
-        const idx = trackedChanges.findIndex(
-          (tc) => tc.type === type && tc.author === author && text.includes(tc.text.slice(0, 20))
-        );
-        if (idx >= 0) {
-          setExpandedCard(`tc-${trackedChanges[idx].revisionId}-${idx}`);
+      // Clicks inside the pages area — check for comment/change highlights
+      if (pagesEl.contains(target)) {
+        // Check for comment highlight click
+        const commentEl = target.closest('[data-comment-id]') as HTMLElement | null;
+        if (commentEl?.dataset.commentId) {
+          setExpandedCard(`comment-${commentEl.dataset.commentId}`);
+          onCommentClick?.(Number(commentEl.dataset.commentId));
+          return;
+        }
+
+        // Check for tracked change click
+        const insertionEl = target.closest('.docx-insertion') as HTMLElement | null;
+        const deletionEl = target.closest('.docx-deletion') as HTMLElement | null;
+        const changeEl = insertionEl || deletionEl;
+        if (changeEl) {
+          const author = changeEl.dataset.changeAuthor || '';
+          const text = changeEl.textContent || '';
+          const type = insertionEl ? 'insertion' : 'deletion';
+          const idx = trackedChanges.findIndex(
+            (tc) => tc.type === type && tc.author === author && text.includes(tc.text.slice(0, 20))
+          );
+          if (idx >= 0) {
+            setExpandedCard(`tc-${trackedChanges[idx].revisionId}-${idx}`);
+            return;
+          }
         }
       }
+
+      // Click on grey area or anywhere else outside sidebar/highlights → collapse
+      setExpandedCard(null);
+      setMenuOpenFor(null);
     };
 
     container.addEventListener('click', handleDocClick);
