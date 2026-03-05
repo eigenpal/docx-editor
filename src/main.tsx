@@ -1,7 +1,7 @@
 /**
  * Main entry point for the DOCX editor application
  */
-import React, { useState, useCallback, useRef } from 'react';
+import React, { useState, useCallback, useRef, useMemo } from 'react';
 import { createRoot } from 'react-dom/client';
 import { DocxEditor } from '@eigenpal/docx-js-editor';
 import './index.css';
@@ -10,6 +10,10 @@ import './index.css';
  * Main App component that provides file loading and editor functionality.
  */
 function App() {
+  const randomAuthor = useMemo(
+    () => `Docx Editor User ${Math.floor(Math.random() * 900) + 100}`,
+    []
+  );
   const [documentBuffer, setDocumentBuffer] = useState<ArrayBuffer | null>(null);
   const [fileName, setFileName] = useState<string>('');
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -78,6 +82,7 @@ function App() {
       <div style={{ flex: 1, overflow: 'hidden' }}>
         <DocxEditor
           documentBuffer={documentBuffer}
+          author={randomAuthor}
           showToolbar={true}
           showZoomControl={true}
           showPageNumbers={true}
