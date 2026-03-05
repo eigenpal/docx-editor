@@ -955,13 +955,14 @@ export const CommentsSidebar: React.FC<CommentsSidebarProps> = ({
                       setNewCommentText('');
                     }}
                     style={{
-                      padding: '4px 12px',
-                      fontSize: 12,
+                      padding: '6px 16px',
+                      fontSize: 14,
                       border: 'none',
                       background: 'none',
-                      color: '#5f6368',
+                      color: '#1a73e8',
                       cursor: 'pointer',
-                      borderRadius: 4,
+                      fontWeight: 500,
+                      fontFamily: 'inherit',
                     }}
                   >
                     Cancel
@@ -970,13 +971,15 @@ export const CommentsSidebar: React.FC<CommentsSidebarProps> = ({
                     onClick={handleNewCommentSubmit}
                     disabled={!newCommentText.trim()}
                     style={{
-                      padding: '4px 12px',
-                      fontSize: 12,
+                      padding: '6px 16px',
+                      fontSize: 14,
                       border: 'none',
-                      borderRadius: 4,
-                      background: newCommentText.trim() ? '#1a73e8' : '#e8eaed',
+                      borderRadius: 20,
+                      background: newCommentText.trim() ? '#1a73e8' : '#f1f3f4',
                       color: newCommentText.trim() ? '#fff' : '#80868b',
                       cursor: newCommentText.trim() ? 'pointer' : 'default',
+                      fontWeight: 500,
+                      fontFamily: 'inherit',
                     }}
                   >
                     Comment

@@ -2362,15 +2362,19 @@ body { background: white; }
                               setCommentSelectionRange({ from, to });
                             }
                           }
-                          // Compute Y position of selection relative to scroll container
+                          // Compute Y position from the visible selection overlay on the pages
+                          // (NOT window.getSelection which returns coords from the hidden PM editor)
                           const container = scrollContainerRef.current;
-                          const sel = window.getSelection();
-                          if (container && sel && sel.rangeCount > 0) {
-                            const range = sel.getRangeAt(0);
-                            const rangeRect = range.getBoundingClientRect();
-                            const containerRect = container.getBoundingClientRect();
-                            const y = rangeRect.top - containerRect.top + container.scrollTop;
-                            setAddCommentYPosition(y);
+                          if (container) {
+                            const selOverlay = container.querySelector(
+                              '[data-testid="selection-overlay"]'
+                            );
+                            if (selOverlay) {
+                              const overlayRect = selOverlay.getBoundingClientRect();
+                              const containerRect = container.getBoundingClientRect();
+                              const y = overlayRect.top - containerRect.top + container.scrollTop;
+                              setAddCommentYPosition(y);
+                            }
                           }
                           if (!showCommentsSidebar) setShowCommentsSidebar(true);
                           setIsAddingComment(true);
