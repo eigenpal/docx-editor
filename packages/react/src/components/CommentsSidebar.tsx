@@ -322,12 +322,11 @@ export const CommentsSidebar: React.FC<CommentsSidebarProps> = ({
     };
   }, [updateCardPositions, editorContainerRef]);
 
-  // Recalculate positions after a card expand/collapse so cards below push down
+  // Recalculate positions after a card expand/collapse or add-comment toggle
   useEffect(() => {
-    // Wait one frame for DOM to reflect expanded/collapsed card height
     const raf = requestAnimationFrame(updateCardPositions);
     return () => cancelAnimationFrame(raf);
-  }, [expandedCard, updateCardPositions]);
+  }, [expandedCard, isAddingComment, updateCardPositions]);
 
   const handleNewCommentSubmit = () => {
     if (newCommentText.trim()) {
@@ -782,13 +781,21 @@ export const CommentsSidebar: React.FC<CommentsSidebarProps> = ({
               else cardRefs.current.delete('new-comment-input');
             }}
             style={{
-              ...(hasPositions && cardPositions.get('new-comment-input') !== undefined
-                ? {
-                    position: 'absolute',
-                    top: cardPositions.get('new-comment-input'),
-                    left: 0,
-                    right: 0,
-                  }
+              ...(hasPositions
+                ? cardPositions.get('new-comment-input') !== undefined
+                  ? {
+                      position: 'absolute',
+                      top: cardPositions.get('new-comment-input'),
+                      left: 0,
+                      right: 0,
+                    }
+                  : {
+                      position: 'absolute',
+                      top: 0,
+                      left: 0,
+                      right: 0,
+                      visibility: 'hidden' as const,
+                    }
                 : { marginBottom: 8 }),
               padding: 12,
               borderRadius: 8,
