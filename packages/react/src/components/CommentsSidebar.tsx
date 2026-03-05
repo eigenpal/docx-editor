@@ -68,6 +68,7 @@ export interface CommentsSidebarProps {
   onCancelAddComment?: () => void;
   onAcceptChange?: (from: number, to: number) => void;
   onRejectChange?: (from: number, to: number) => void;
+  onTrackedChangeReply?: (revisionId: number, text: string) => void;
   topOffset?: number;
   showResolved?: boolean;
   isAddingComment?: boolean;
@@ -96,6 +97,7 @@ export const CommentsSidebar: React.FC<CommentsSidebarProps> = ({
   onCancelAddComment,
   onAcceptChange,
   onRejectChange,
+  onTrackedChangeReply,
   topOffset = 0,
   showResolved: showResolvedProp = false,
   isAddingComment = false,
@@ -541,6 +543,9 @@ export const CommentsSidebar: React.FC<CommentsSidebarProps> = ({
     );
   };
 
+  const getTrackedChangeReplies = (revisionId: number) =>
+    comments.filter((c) => c.parentId === revisionId);
+
   const renderTrackedChangeCard = (change: TrackedChangeEntry, idx: number) => {
     const authorName = change.author || 'Unknown';
     const initials = getInitials(authorName);
@@ -548,6 +553,7 @@ export const CommentsSidebar: React.FC<CommentsSidebarProps> = ({
     const cardId = `tc-${change.revisionId}-${idx}`;
     const isExpanded = expandedCard === cardId;
     const yPos = cardPositions.get(cardId);
+    const tcReplies = getTrackedChangeReplies(change.revisionId);
 
     return (
       <div
@@ -648,8 +654,57 @@ export const CommentsSidebar: React.FC<CommentsSidebarProps> = ({
           </span>
         </div>
 
+        {/* Replies */}
+        {isExpanded && tcReplies.length > 0 && (
+          <div style={{ marginTop: 12 }}>
+            {tcReplies.map((reply) => (
+              <div
+                key={reply.id}
+                style={{ marginBottom: 12, paddingTop: 12, borderTop: '1px solid #e8eaed' }}
+              >
+                <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
+                  <div
+                    style={{
+                      width: 32,
+                      height: 32,
+                      borderRadius: '50%',
+                      backgroundColor: '#5f6368',
+                      color: '#fff',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      fontSize: 13,
+                      fontWeight: 500,
+                      flexShrink: 0,
+                    }}
+                  >
+                    {getInitials(reply.author || 'U')}
+                  </div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <span style={{ fontSize: 14, fontWeight: 500, color: '#202124' }}>
+                      {reply.author || 'Unknown'}
+                    </span>
+                    <div style={{ fontSize: 12, color: '#5f6368' }}>{formatDate(reply.date)}</div>
+                  </div>
+                </div>
+                <div
+                  style={{
+                    fontSize: 14,
+                    color: '#202124',
+                    lineHeight: '20px',
+                    marginTop: 4,
+                    paddingLeft: 42,
+                  }}
+                >
+                  {getCommentText(reply.content)}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
         {/* Reply input */}
-        {isExpanded && renderReplySection(change.revisionId, cardId)}
+        {isExpanded && renderReplySection(change.revisionId, cardId, onTrackedChangeReply)}
       </div>
     );
   };

@@ -504,7 +504,7 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
       setComments(bodyComments);
       setShowCommentsSidebar(true);
     }
-  }, [history.state]);  
+  }, [history.state]);
 
   // Extension manager — built once, provides schema + plugins + commands
   const extensionManager = useMemo(() => {
@@ -2547,6 +2547,28 @@ body { background: white; }
                               };
                               setComments((prev) => [...prev, newComment]);
                               setIsAddingComment(false);
+                            }}
+                            onTrackedChangeReply={(revisionId, text) => {
+                              const newReply: Comment = {
+                                id: Date.now(),
+                                author: 'User',
+                                date: new Date().toISOString(),
+                                content: [
+                                  {
+                                    type: 'paragraph',
+                                    formatting: {},
+                                    content: [
+                                      {
+                                        type: 'run',
+                                        formatting: {},
+                                        content: [{ type: 'text', text }],
+                                      },
+                                    ],
+                                  },
+                                ],
+                                parentId: revisionId,
+                              };
+                              setComments((prev) => [...prev, newReply]);
                             }}
                             onCancelAddComment={() => setIsAddingComment(false)}
                             onAcceptChange={(from, to) => {
