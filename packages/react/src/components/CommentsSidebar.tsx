@@ -80,7 +80,7 @@ export interface CommentsSidebarProps {
   editorContainerRef?: React.RefObject<HTMLDivElement | null>;
 }
 
-export const SIDEBAR_WIDTH = 280;
+export const SIDEBAR_WIDTH = 340;
 
 // Minimum gap between stacked cards to avoid overlap
 const MIN_CARD_GAP = 8;
