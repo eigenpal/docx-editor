@@ -86,6 +86,7 @@ const FootnotePropertiesDialog = lazy(() =>
   }))
 );
 import { MaterialSymbol } from './ui/Icons';
+import { Tooltip } from './ui/Tooltip';
 import { getBuiltinTableStyle, type TableStylePreset } from './ui/TableStyleGallery';
 import { DocumentAgent } from '@eigenpal/docx-core/agent/DocumentAgent';
 import { DefaultLoadingIndicator, DefaultPlaceholder, ParseError } from './DocxEditorHelpers';
@@ -2569,55 +2570,6 @@ body { background: white; }
                       {/* Comment & Track Changes buttons */}
                       <ToolbarSeparator />
                       <ToolbarButton
-                        onClick={() => {
-                          // Capture the current PM selection range and apply pending highlight
-                          const view = pagedEditorRef.current?.getView();
-                          let selFrom = 0;
-                          if (view) {
-                            const { from, to } = view.state.selection;
-                            selFrom = from;
-                            if (from !== to) {
-                              setCommentSelectionRange({ from, to });
-                              const pendingMark = view.state.schema.marks.comment.create({
-                                commentId: PENDING_COMMENT_ID,
-                              });
-                              const tr = view.state.tr.addMark(from, to, pendingMark);
-                              tr.setSelection(TextSelection.create(tr.doc, to));
-                              view.dispatch(tr);
-                            }
-                          }
-                          // Compute Y position by finding the visible painted span at the PM
-                          // selection start. Spans have data-pm-start/data-pm-end attributes.
-                          const container = scrollContainerRef.current;
-                          if (container && view) {
-                            const pagesEl = container.querySelector('.paged-editor__pages');
-                            if (pagesEl) {
-                              const spans = pagesEl.querySelectorAll('span[data-pm-start]');
-                              for (const span of spans) {
-                                const el = span as HTMLElement;
-                                const pmStart = Number(el.dataset.pmStart);
-                                const pmEnd = Number(el.dataset.pmEnd);
-                                if (selFrom >= pmStart && selFrom <= pmEnd) {
-                                  const rect = el.getBoundingClientRect();
-                                  const containerRect = container.getBoundingClientRect();
-                                  setAddCommentYPosition(
-                                    rect.top - containerRect.top + container.scrollTop
-                                  );
-                                  break;
-                                }
-                              }
-                            }
-                          }
-                          if (!showCommentsSidebar) setShowCommentsSidebar(true);
-                          setIsAddingComment(true);
-                        }}
-                        disabled={readOnly}
-                        title="Add comment (Ctrl+Alt+M)"
-                        ariaLabel="Add comment"
-                      >
-                        <MaterialSymbol name="add_comment" size={20} />
-                      </ToolbarButton>
-                      <ToolbarButton
                         onClick={() => setShowCommentsSidebar(!showCommentsSidebar)}
                         active={showCommentsSidebar}
                         title="Toggle comments sidebar"
@@ -2826,63 +2778,64 @@ body { background: white; }
 
                     {/* Floating "add comment" button — appears on right edge of page at selection */}
                     {floatingCommentBtn != null && !isAddingComment && !readOnly && (
-                      <button
-                        type="button"
-                        onMouseDown={(e) => {
-                          e.preventDefault();
-                          e.stopPropagation();
-                          const view = pagedEditorRef.current?.getView();
-                          if (view) {
-                            const { from, to } = view.state.selection;
-                            if (from !== to) {
-                              setCommentSelectionRange({ from, to });
-                              // Apply pending comment mark (yellow highlight) and collapse selection
-                              const pendingMark = view.state.schema.marks.comment.create({
-                                commentId: PENDING_COMMENT_ID,
-                              });
-                              const tr = view.state.tr.addMark(from, to, pendingMark);
-                              tr.setSelection(TextSelection.create(tr.doc, to));
-                              view.dispatch(tr);
+                      <Tooltip content="Add comment" side="bottom" delayMs={300}>
+                        <button
+                          type="button"
+                          onMouseDown={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            const view = pagedEditorRef.current?.getView();
+                            if (view) {
+                              const { from, to } = view.state.selection;
+                              if (from !== to) {
+                                setCommentSelectionRange({ from, to });
+                                const pendingMark = view.state.schema.marks.comment.create({
+                                  commentId: PENDING_COMMENT_ID,
+                                });
+                                const tr = view.state.tr.addMark(from, to, pendingMark);
+                                tr.setSelection(TextSelection.create(tr.doc, to));
+                                view.dispatch(tr);
+                              }
                             }
-                          }
-                          setAddCommentYPosition(floatingCommentBtn.top);
-                          if (!showCommentsSidebar) setShowCommentsSidebar(true);
-                          setIsAddingComment(true);
-                          setFloatingCommentBtn(null);
-                        }}
-                        title="Add comment"
-                        style={{
-                          position: 'absolute',
-                          top: floatingCommentBtn.top,
-                          left: floatingCommentBtn.left,
-                          transform: 'translate(-50%, -50%)',
-                          zIndex: 50,
-                          width: 32,
-                          height: 32,
-                          borderRadius: '50%',
-                          border: 'none',
-                          backgroundColor: 'rgba(26, 115, 232, 0.12)',
-                          color: '#1a73e8',
-                          cursor: 'pointer',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          transition: 'background-color 0.15s ease, opacity 0.15s ease',
-                          opacity: 0.7,
-                        }}
-                        onMouseOver={(e) => {
-                          (e.currentTarget as HTMLButtonElement).style.opacity = '1';
-                          (e.currentTarget as HTMLButtonElement).style.backgroundColor =
-                            'rgba(26, 115, 232, 0.2)';
-                        }}
-                        onMouseOut={(e) => {
-                          (e.currentTarget as HTMLButtonElement).style.opacity = '0.7';
-                          (e.currentTarget as HTMLButtonElement).style.backgroundColor =
-                            'rgba(26, 115, 232, 0.12)';
-                        }}
-                      >
-                        <MaterialSymbol name="add_comment" size={18} />
-                      </button>
+                            setAddCommentYPosition(floatingCommentBtn.top);
+                            if (!showCommentsSidebar) setShowCommentsSidebar(true);
+                            setIsAddingComment(true);
+                            setFloatingCommentBtn(null);
+                          }}
+                          style={{
+                            position: 'absolute',
+                            top: floatingCommentBtn.top,
+                            left: floatingCommentBtn.left,
+                            transform: 'translate(-50%, -50%)',
+                            zIndex: 50,
+                            width: 28,
+                            height: 28,
+                            borderRadius: 6,
+                            border: '1px solid rgba(26, 115, 232, 0.3)',
+                            backgroundColor: '#fff',
+                            color: '#1a73e8',
+                            cursor: 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            boxShadow: '0 1px 3px rgba(60,64,67,0.2)',
+                            transition: 'background-color 0.15s ease, box-shadow 0.15s ease',
+                          }}
+                          onMouseOver={(e) => {
+                            (e.currentTarget as HTMLButtonElement).style.backgroundColor =
+                              'rgba(26, 115, 232, 0.08)';
+                            (e.currentTarget as HTMLButtonElement).style.boxShadow =
+                              '0 1px 4px rgba(26, 115, 232, 0.3)';
+                          }}
+                          onMouseOut={(e) => {
+                            (e.currentTarget as HTMLButtonElement).style.backgroundColor = '#fff';
+                            (e.currentTarget as HTMLButtonElement).style.boxShadow =
+                              '0 1px 3px rgba(60,64,67,0.2)';
+                          }}
+                        >
+                          <MaterialSymbol name="add_comment" size={16} />
+                        </button>
+                      </Tooltip>
                     )}
 
                     {/* Page navigation / indicator */}
