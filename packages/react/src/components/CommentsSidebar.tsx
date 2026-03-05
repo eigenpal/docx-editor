@@ -434,7 +434,7 @@ export const CommentsSidebar: React.FC<CommentsSidebarProps> = ({
             : { marginBottom: 6 }),
           padding: isExpanded ? '10px 12px' : '8px 10px',
           borderRadius: 8,
-          backgroundColor: isExpanded ? '#fff' : '#f0f6ff',
+          backgroundColor: '#fff',
           cursor: 'pointer',
           opacity: hasPositions && yPos === undefined ? 0 : comment.done ? 0.6 : 1,
           boxShadow: isExpanded
@@ -708,7 +708,7 @@ export const CommentsSidebar: React.FC<CommentsSidebarProps> = ({
             : { marginBottom: 6 }),
           padding: isExpanded ? '10px 12px' : '8px 10px',
           borderRadius: 8,
-          backgroundColor: isExpanded ? '#fff' : '#f0f6ff',
+          backgroundColor: '#fff',
           cursor: 'pointer',
           boxShadow: isExpanded
             ? '0 1px 3px rgba(60,64,67,0.3), 0 4px 8px 3px rgba(60,64,67,0.15)'
