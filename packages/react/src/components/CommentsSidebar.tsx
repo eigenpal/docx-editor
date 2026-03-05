@@ -972,13 +972,17 @@ export const CommentsSidebar: React.FC<CommentsSidebarProps> = ({
                   placeholder="Add a comment..."
                   style={{
                     width: '100%',
-                    border: 'none',
+                    border: '1px solid #1a73e8',
+                    borderRadius: 20,
                     outline: 'none',
                     resize: 'none',
-                    fontSize: 13,
-                    lineHeight: '18px',
+                    fontSize: 14,
+                    lineHeight: '20px',
+                    padding: '8px 16px',
                     fontFamily: 'inherit',
                     minHeight: 40,
+                    boxSizing: 'border-box',
+                    color: '#202124',
                   }}
                 />
                 <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 8 }}>
