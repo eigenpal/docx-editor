@@ -19,6 +19,7 @@ import {
   type Transaction,
 } from 'prosemirror-state';
 import type { EditorView } from 'prosemirror-view';
+import type { Node as PMNode } from 'prosemirror-model';
 
 export const suggestionModeKey = new PluginKey<SuggestionModeState>('suggestionMode');
 
@@ -27,12 +28,51 @@ interface SuggestionModeState {
   author: string;
 }
 
-function makeMarkAttrs(pluginState: SuggestionModeState) {
+interface MarkAttrs {
+  revisionId: number;
+  author: string;
+  date: string;
+}
+
+function makeMarkAttrs(pluginState: SuggestionModeState): MarkAttrs {
   return {
     revisionId: Date.now(),
     author: pluginState.author,
     date: new Date().toISOString(),
   };
+}
+
+/**
+ * Find an adjacent mark of the same type by the same author.
+ * Reuses its revisionId so consecutive edits group into one change.
+ */
+function findAdjacentRevision(
+  doc: PMNode,
+  pos: number,
+  markTypeName: string,
+  author: string
+): MarkAttrs | null {
+  if (pos > 0) {
+    const $pos = doc.resolve(pos);
+    const before = $pos.nodeBefore;
+    if (before?.isText) {
+      const mark = before.marks.find(
+        (m) => m.type.name === markTypeName && m.attrs.author === author
+      );
+      if (mark) return mark.attrs as MarkAttrs;
+    }
+  }
+  if (pos < doc.content.size) {
+    const $pos = doc.resolve(pos);
+    const after = $pos.nodeAfter;
+    if (after?.isText) {
+      const mark = after.marks.find(
+        (m) => m.type.name === markTypeName && m.attrs.author === author
+      );
+      if (mark) return mark.attrs as MarkAttrs;
+    }
+  }
+  return null;
 }
 
 /**
@@ -72,6 +112,11 @@ function handleSuggestionDelete(
       ranges.push({ from: start, to: end, isOwnInsert: hasOwnInsertion });
     });
 
+    // Reuse adjacent deletion revisionId so consecutive deletes group together
+    const delAttrs =
+      findAdjacentRevision(state.doc, $from.pos, 'deletion', pluginState.author) ||
+      makeMarkAttrs(pluginState);
+
     // Process in reverse to preserve positions
     for (let i = ranges.length - 1; i >= 0; i--) {
       const range = ranges[i];
@@ -80,7 +125,7 @@ function handleSuggestionDelete(
         tr.delete(range.from, range.to);
       } else {
         // Mark as deletion
-        tr.addMark(range.from, range.to, deletionType.create(makeMarkAttrs(pluginState)));
+        tr.addMark(range.from, range.to, deletionType.create(delAttrs));
       }
     }
 
@@ -129,8 +174,11 @@ function handleSuggestionDelete(
     // Retract own insertion — actually delete the character
     tr.delete(deletePos, deleteEnd);
   } else {
-    // Mark as deletion instead of removing
-    tr.addMark(deletePos, deleteEnd, deletionType.create(makeMarkAttrs(pluginState)));
+    // Mark as deletion instead of removing — reuse adjacent deletion's revisionId
+    const singleDelAttrs =
+      findAdjacentRevision(state.doc, deletePos, 'deletion', pluginState.author) ||
+      makeMarkAttrs(pluginState);
+    tr.addMark(deletePos, deleteEnd, deletionType.create(singleDelAttrs));
     // Move cursor past the deletion mark
     if (isBackward) {
       tr.setSelection(TextSelection.near(tr.doc.resolve(deletePos)));
@@ -190,7 +238,10 @@ export function createSuggestionModePlugin(initialActive = false, author = 'User
         const tr = view.state.tr;
         tr.setMeta('suggestionModeApplied', true);
 
-        const markAttrs = makeMarkAttrs(pluginState);
+        // Reuse adjacent insertion's revisionId so consecutive typing groups together
+        const markAttrs =
+          findAdjacentRevision(view.state.doc, from, 'insertion', pluginState.author) ||
+          makeMarkAttrs(pluginState);
 
         // If replacing a selection, mark the replaced content as deletion first
         if (from !== to) {
@@ -208,13 +259,17 @@ export function createSuggestionModePlugin(initialActive = false, author = 'User
               ranges.push({ from: start, to: end, isOwnInsert: hasOwnInsertion });
             });
 
+            const delAttrs =
+              findAdjacentRevision(view.state.doc, from, 'deletion', pluginState.author) ||
+              makeMarkAttrs(pluginState);
+
             // Process own insertions — delete them; others — mark as deleted
             for (let i = ranges.length - 1; i >= 0; i--) {
               const range = ranges[i];
               if (range.isOwnInsert) {
                 tr.delete(range.from, range.to);
               } else {
-                tr.addMark(range.from, range.to, deletionType.create(markAttrs));
+                tr.addMark(range.from, range.to, deletionType.create(delAttrs));
               }
             }
           }

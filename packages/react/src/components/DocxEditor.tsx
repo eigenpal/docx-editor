@@ -450,12 +450,12 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
     const deletionType = schema.marks.deletion;
     if (!insertionType && !deletionType) return;
 
-    const changes: TrackedChangeEntry[] = [];
+    const raw: TrackedChangeEntry[] = [];
     doc.descendants((node, pos) => {
       if (!node.isText) return;
       for (const mark of node.marks) {
         if (mark.type === insertionType || mark.type === deletionType) {
-          changes.push({
+          raw.push({
             type: mark.type === insertionType ? 'insertion' : 'deletion',
             text: node.text || '',
             author: (mark.attrs.author as string) || '',
@@ -467,7 +467,24 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
         }
       }
     });
-    setTrackedChanges(changes);
+
+    // Merge adjacent entries with the same revisionId and type into one
+    const merged: TrackedChangeEntry[] = [];
+    for (const entry of raw) {
+      const last = merged[merged.length - 1];
+      if (
+        last &&
+        last.revisionId === entry.revisionId &&
+        last.type === entry.type &&
+        last.to === entry.from
+      ) {
+        last.text += entry.text;
+        last.to = entry.to;
+      } else {
+        merged.push({ ...entry });
+      }
+    }
+    setTrackedChanges(merged);
   }, []);
 
   // Sync outline visibility when prop changes
