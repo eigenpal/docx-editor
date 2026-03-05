@@ -112,6 +112,7 @@ export const CommentsSidebar: React.FC<CommentsSidebarProps> = ({
   const [replyText, setReplyText] = useState('');
   const [newCommentText, setNewCommentText] = useState('');
   const [expandedCard, setExpandedCard] = useState<string | null>(null);
+  const [menuOpenFor, setMenuOpenFor] = useState<string | null>(null);
   const [cardPositions, setCardPositions] = useState<Map<string, number>>(new Map());
   const [initialPositionsDone, setInitialPositionsDone] = useState(false);
   const sidebarRef = useRef<HTMLDivElement>(null);
@@ -263,6 +264,7 @@ export const CommentsSidebar: React.FC<CommentsSidebarProps> = ({
 
   const handleCardClick = (cardId: string, commentId?: number) => {
     setExpandedCard(expandedCard === cardId ? null : cardId);
+    setMenuOpenFor(null);
     if (commentId !== undefined) {
       onCommentClick?.(commentId);
     }
@@ -444,7 +446,7 @@ export const CommentsSidebar: React.FC<CommentsSidebarProps> = ({
             <div style={{ fontSize: 12, color: '#5f6368' }}>{formatDate(comment.date)}</div>
           </div>
           {isExpanded && (
-            <div style={{ display: 'flex', gap: 4, marginTop: 2 }}>
+            <div style={{ display: 'flex', gap: 4, marginTop: 2, position: 'relative' }}>
               <button
                 onClick={(e) => {
                   e.stopPropagation();
@@ -466,9 +468,9 @@ export const CommentsSidebar: React.FC<CommentsSidebarProps> = ({
               <button
                 onClick={(e) => {
                   e.stopPropagation();
-                  onCommentDelete?.(comment.id);
+                  setMenuOpenFor(menuOpenFor === cardId ? null : cardId);
                 }}
-                title="Delete"
+                title="More options"
                 style={{
                   background: 'none',
                   border: 'none',
@@ -479,8 +481,78 @@ export const CommentsSidebar: React.FC<CommentsSidebarProps> = ({
                   borderRadius: '50%',
                 }}
               >
-                <MaterialSymbol name="close" size={20} />
+                <MaterialSymbol name="more_vert" size={20} />
               </button>
+              {menuOpenFor === cardId && (
+                <div
+                  onClick={(e) => e.stopPropagation()}
+                  onMouseDown={(e) => e.stopPropagation()}
+                  style={{
+                    position: 'absolute',
+                    top: 32,
+                    right: 0,
+                    background: '#fff',
+                    borderRadius: 8,
+                    boxShadow: '0 2px 6px rgba(60,64,67,0.3), 0 1px 2px rgba(60,64,67,0.15)',
+                    zIndex: 100,
+                    minWidth: 120,
+                    padding: '4px 0',
+                  }}
+                >
+                  <button
+                    onClick={() => {
+                      setMenuOpenFor(null);
+                      // TODO: edit comment
+                    }}
+                    style={{
+                      display: 'block',
+                      width: '100%',
+                      padding: '8px 16px',
+                      border: 'none',
+                      background: 'none',
+                      textAlign: 'left',
+                      fontSize: 14,
+                      color: '#202124',
+                      cursor: 'pointer',
+                      fontFamily: 'inherit',
+                    }}
+                    onMouseOver={(e) => {
+                      (e.target as HTMLElement).style.backgroundColor = '#f1f3f4';
+                    }}
+                    onMouseOut={(e) => {
+                      (e.target as HTMLElement).style.backgroundColor = 'transparent';
+                    }}
+                  >
+                    Edit
+                  </button>
+                  <button
+                    onClick={() => {
+                      setMenuOpenFor(null);
+                      onCommentDelete?.(comment.id);
+                    }}
+                    style={{
+                      display: 'block',
+                      width: '100%',
+                      padding: '8px 16px',
+                      border: 'none',
+                      background: 'none',
+                      textAlign: 'left',
+                      fontSize: 14,
+                      color: '#202124',
+                      cursor: 'pointer',
+                      fontFamily: 'inherit',
+                    }}
+                    onMouseOver={(e) => {
+                      (e.target as HTMLElement).style.backgroundColor = '#f1f3f4';
+                    }}
+                    onMouseOut={(e) => {
+                      (e.target as HTMLElement).style.backgroundColor = 'transparent';
+                    }}
+                  >
+                    Delete
+                  </button>
+                </div>
+              )}
             </div>
           )}
         </div>
