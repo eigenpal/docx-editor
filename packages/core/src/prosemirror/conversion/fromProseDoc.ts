@@ -196,6 +196,15 @@ function insertCommentRanges(content: ParagraphContent[], paragraph: PMNode): Pa
       }
     }
 
+    // Close comments that are no longer active BEFORE pushing current content,
+    // so commentRangeEnd lands after the last marked node, not after the first unmarked one
+    for (const cid of [...openedComments]) {
+      if (!nodeCommentIds.has(cid)) {
+        result.push({ type: 'commentRangeEnd', id: cid });
+        openedComments.delete(cid);
+      }
+    }
+
     // Open new comments
     for (const cid of nodeCommentIds) {
       if (!openedComments.has(cid)) {
@@ -207,14 +216,6 @@ function insertCommentRanges(content: ParagraphContent[], paragraph: PMNode): Pa
     // Push the actual content item
     if (nodeIndex < content.length) {
       result.push(content[nodeIndex]);
-    }
-
-    // Close comments that are no longer active
-    for (const cid of openedComments) {
-      if (!nodeCommentIds.has(cid)) {
-        result.push({ type: 'commentRangeEnd', id: cid });
-        openedComments.delete(cid);
-      }
     }
 
     nodeIndex++;
