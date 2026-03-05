@@ -6,7 +6,7 @@
  * Clicking a card expands it to show reply input and action buttons.
  */
 
-import React, { useEffect, useState, useRef, useCallback } from 'react';
+import React, { useEffect, useState, useRef, useCallback, useMemo } from 'react';
 import type { Comment, Paragraph } from '@eigenpal/docx-core/types/content';
 import { MaterialSymbol } from './ui/Icons';
 
@@ -135,13 +135,30 @@ export const CommentsSidebar: React.FC<CommentsSidebarProps> = ({
   const sidebarRef = useRef<HTMLDivElement>(null);
   const cardRefs = useRef<Map<string, HTMLDivElement>>(new Map());
 
-  const visibleComments = comments.filter((c) => {
-    if (c.parentId != null) return false;
-    if (c.done && !showResolved) return false;
-    return true;
-  });
+  const visibleComments = useMemo(
+    () =>
+      comments.filter((c) => {
+        if (c.parentId != null) return false;
+        if (c.done && !showResolved) return false;
+        return true;
+      }),
+    [comments, showResolved]
+  );
 
-  const getReplies = (commentId: number) => comments.filter((c) => c.parentId === commentId);
+  // Pre-group replies by parentId for O(1) lookup instead of O(n) per card
+  const repliesByParent = useMemo(() => {
+    const map = new Map<number, Comment[]>();
+    for (const c of comments) {
+      if (c.parentId != null) {
+        const arr = map.get(c.parentId);
+        if (arr) arr.push(c);
+        else map.set(c.parentId, [c]);
+      }
+    }
+    return map;
+  }, [comments]);
+
+  const getReplies = (commentId: number) => repliesByParent.get(commentId) ?? [];
 
   // Find DOM Y positions for comment/change anchors
   // IMPORTANT: queries must be scoped to .paged-editor__pages to avoid
@@ -170,25 +187,17 @@ export const CommentsSidebar: React.FC<CommentsSidebarProps> = ({
       }
     }
 
-    // Find tracked change elements (inside pages only)
+    // Find tracked change elements by revision ID (inside pages only)
     trackedChanges.forEach((change, idx) => {
       const cardId = `tc-${change.revisionId}-${idx}`;
-      const selector = change.type === 'insertion' ? '.docx-insertion' : '.docx-deletion';
-      const els = pagesEl.querySelectorAll(selector);
-      for (const el of els) {
-        const htmlEl = el as HTMLElement;
-        if (
-          htmlEl.dataset.changeAuthor === change.author &&
-          htmlEl.textContent?.includes(change.text.slice(0, 20))
-        ) {
-          const rect = el.getBoundingClientRect();
-          positions.push({
-            id: cardId,
-            targetY: rect.top - containerRect.top + scrollTop,
-            height: cardRefs.current.get(cardId)?.offsetHeight || 80,
-          });
-          break;
-        }
+      const el = pagesEl.querySelector(`[data-revision-id="${change.revisionId}"]`);
+      if (el) {
+        const rect = el.getBoundingClientRect();
+        positions.push({
+          id: cardId,
+          targetY: rect.top - containerRect.top + scrollTop,
+          height: cardRefs.current.get(cardId)?.offsetHeight || 80,
+        });
       }
     });
 
@@ -239,17 +248,13 @@ export const CommentsSidebar: React.FC<CommentsSidebarProps> = ({
           return;
         }
 
-        // Check for tracked change click
-        const insertionEl = target.closest('.docx-insertion') as HTMLElement | null;
-        const deletionEl = target.closest('.docx-deletion') as HTMLElement | null;
-        const changeEl = insertionEl || deletionEl;
-        if (changeEl) {
-          const author = changeEl.dataset.changeAuthor || '';
-          const text = changeEl.textContent || '';
-          const type = insertionEl ? 'insertion' : 'deletion';
-          const idx = trackedChanges.findIndex(
-            (tc) => tc.type === type && tc.author === author && text.includes(tc.text.slice(0, 20))
-          );
+        // Check for tracked change click (match by revision ID)
+        const changeEl =
+          (target.closest('.docx-insertion') as HTMLElement | null) ||
+          (target.closest('.docx-deletion') as HTMLElement | null);
+        if (changeEl?.dataset.revisionId) {
+          const revId = Number(changeEl.dataset.revisionId);
+          const idx = trackedChanges.findIndex((tc) => tc.revisionId === revId);
           if (idx >= 0) {
             setExpandedCard(`tc-${trackedChanges[idx].revisionId}-${idx}`);
             return;
@@ -637,8 +642,7 @@ export const CommentsSidebar: React.FC<CommentsSidebarProps> = ({
     );
   };
 
-  const getTrackedChangeReplies = (revisionId: number) =>
-    comments.filter((c) => c.parentId === revisionId);
+  const getTrackedChangeReplies = (revisionId: number) => repliesByParent.get(revisionId) ?? [];
 
   const renderTrackedChangeCard = (change: TrackedChangeEntry, idx: number) => {
     const authorName = change.author || 'Unknown';

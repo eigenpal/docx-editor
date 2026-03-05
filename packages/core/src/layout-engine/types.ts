@@ -46,6 +46,8 @@ export type RunFormatting = {
   changeAuthor?: string;
   /** Date of the tracked change */
   changeDate?: string;
+  /** Revision ID of the tracked change (for sidebar matching) */
+  changeRevisionId?: number;
 };
 
 /**
