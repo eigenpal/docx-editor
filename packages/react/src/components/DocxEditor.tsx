@@ -627,6 +627,8 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
   } | null>(null);
   const [addCommentYPosition, setAddCommentYPosition] = useState<number | null>(null);
   const [editingMode, setEditingMode] = useState<'editing' | 'suggesting'>('editing');
+  // Floating "add comment" button position (Y relative to scroll container, null = hidden)
+  const [floatingCommentBtnY, setFloatingCommentBtnY] = useState<number | null>(null);
 
   // Debounce timer for extractTrackedChanges (avoid full doc walk on every keystroke)
   const extractTrackedChangesTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -990,6 +992,7 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
       }
 
       if (!selectionState) {
+        setFloatingCommentBtnY(null);
         setState((prev) => ({
           ...prev,
           selectionFormatting: {},
@@ -1048,10 +1051,35 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
         pmImageContext: pmImageCtx,
       }));
 
+      // Update floating comment button position
+      if (view && selectionState.hasSelection && !isAddingComment && !readOnly) {
+        const container = scrollContainerRef.current;
+        if (container) {
+          const { from: selFrom } = view.state.selection;
+          const pagesEl = container.querySelector('.paged-editor__pages');
+          if (pagesEl) {
+            const spans = pagesEl.querySelectorAll('span[data-pm-start]');
+            for (const span of spans) {
+              const el = span as HTMLElement;
+              const pmStart = Number(el.dataset.pmStart);
+              const pmEnd = Number(el.dataset.pmEnd);
+              if (selFrom >= pmStart && selFrom <= pmEnd) {
+                const rect = el.getBoundingClientRect();
+                const containerRect = container.getBoundingClientRect();
+                setFloatingCommentBtnY(rect.top - containerRect.top + container.scrollTop);
+                break;
+              }
+            }
+          }
+        }
+      } else {
+        setFloatingCommentBtnY(null);
+      }
+
       // Notify parent
       onSelectionChange?.(selectionState);
     },
-    [onSelectionChange]
+    [onSelectionChange, isAddingComment, readOnly]
   );
 
   // Table selection hook
@@ -2766,6 +2794,65 @@ body { background: white; }
                         ) : undefined
                       }
                     />
+
+                    {/* Floating "add comment" button — appears on right edge of page at selection */}
+                    {floatingCommentBtnY != null && !isAddingComment && !readOnly && (
+                      <button
+                        type="button"
+                        onMouseDown={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          // Trigger the same add-comment flow as the toolbar button
+                          const view = pagedEditorRef.current?.getView();
+                          if (view) {
+                            const { from, to } = view.state.selection;
+                            if (from !== to) {
+                              setCommentSelectionRange({ from, to });
+                            }
+                          }
+                          setAddCommentYPosition(floatingCommentBtnY);
+                          if (!showCommentsSidebar) setShowCommentsSidebar(true);
+                          setIsAddingComment(true);
+                          setFloatingCommentBtnY(null);
+                        }}
+                        title="Add comment"
+                        style={{
+                          position: 'absolute',
+                          top: floatingCommentBtnY,
+                          left: '50%',
+                          marginLeft: (() => {
+                            const sp = history.state?.package?.document?.finalSectionProperties;
+                            const pageWidthPx = sp?.pageWidth ? Math.round(sp.pageWidth / 15) : 816;
+                            return pageWidthPx / 2 + 8;
+                          })(),
+                          zIndex: 20,
+                          width: 32,
+                          height: 32,
+                          borderRadius: '50%',
+                          border: 'none',
+                          backgroundColor: 'rgba(26, 115, 232, 0.12)',
+                          color: '#1a73e8',
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          transition: 'background-color 0.15s ease, opacity 0.15s ease',
+                          opacity: 0.7,
+                        }}
+                        onMouseOver={(e) => {
+                          (e.currentTarget as HTMLButtonElement).style.opacity = '1';
+                          (e.currentTarget as HTMLButtonElement).style.backgroundColor =
+                            'rgba(26, 115, 232, 0.2)';
+                        }}
+                        onMouseOut={(e) => {
+                          (e.currentTarget as HTMLButtonElement).style.opacity = '0.7';
+                          (e.currentTarget as HTMLButtonElement).style.backgroundColor =
+                            'rgba(26, 115, 232, 0.12)';
+                        }}
+                      >
+                        <MaterialSymbol name="add_comment" size={18} />
+                      </button>
+                    )}
 
                     {/* Page navigation / indicator */}
                     {showPageNumbers &&
