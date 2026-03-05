@@ -520,6 +520,7 @@ function EditingModeDropdown({
 // ============================================================================
 
 let nextCommentId = Date.now();
+const PENDING_COMMENT_ID = -1;
 
 function createComment(text: string, authorName: string, parentId?: number): Comment {
   return {
@@ -2569,19 +2570,26 @@ body { background: white; }
                       <ToolbarSeparator />
                       <ToolbarButton
                         onClick={() => {
-                          // Capture the current PM selection range for the comment anchor
+                          // Capture the current PM selection range and apply pending highlight
                           const view = pagedEditorRef.current?.getView();
+                          let selFrom = 0;
                           if (view) {
                             const { from, to } = view.state.selection;
+                            selFrom = from;
                             if (from !== to) {
                               setCommentSelectionRange({ from, to });
+                              const pendingMark = view.state.schema.marks.comment.create({
+                                commentId: PENDING_COMMENT_ID,
+                              });
+                              const tr = view.state.tr.addMark(from, to, pendingMark);
+                              tr.setSelection(TextSelection.create(tr.doc, to));
+                              view.dispatch(tr);
                             }
                           }
                           // Compute Y position by finding the visible painted span at the PM
                           // selection start. Spans have data-pm-start/data-pm-end attributes.
                           const container = scrollContainerRef.current;
                           if (container && view) {
-                            const { from: selFrom } = view.state.selection;
                             const pagesEl = container.querySelector('.paged-editor__pages');
                             if (pagesEl) {
                               const spans = pagesEl.querySelectorAll('span[data-pm-start]');
@@ -2754,17 +2762,19 @@ body { background: white; }
                             }}
                             onAddComment={(addText) => {
                               const comment = createComment(addText, author);
-                              // Apply comment mark to the captured selection range
+                              // Replace pending comment mark with the real comment ID
                               const view = pagedEditorRef.current?.getView();
                               if (view && commentSelectionRange) {
                                 const { from, to } = commentSelectionRange;
-                                const tr = view.state.tr.addMark(
-                                  from,
-                                  to,
-                                  view.state.schema.marks.comment.create({
-                                    commentId: comment.id,
-                                  })
-                                );
+                                const pendingMark = view.state.schema.marks.comment.create({
+                                  commentId: PENDING_COMMENT_ID,
+                                });
+                                const realMark = view.state.schema.marks.comment.create({
+                                  commentId: comment.id,
+                                });
+                                const tr = view.state.tr
+                                  .removeMark(from, to, pendingMark)
+                                  .addMark(from, to, realMark);
                                 view.dispatch(tr);
                               }
                               setComments((prev) => [...prev, comment]);
@@ -2779,6 +2789,15 @@ body { background: white; }
                               ]);
                             }}
                             onCancelAddComment={() => {
+                              // Remove pending comment highlight
+                              const view = pagedEditorRef.current?.getView();
+                              if (view && commentSelectionRange) {
+                                const { from, to } = commentSelectionRange;
+                                const pendingMark = view.state.schema.marks.comment.create({
+                                  commentId: PENDING_COMMENT_ID,
+                                });
+                                view.dispatch(view.state.tr.removeMark(from, to, pendingMark));
+                              }
                               setIsAddingComment(false);
                               setCommentSelectionRange(null);
                               setAddCommentYPosition(null);
@@ -2817,6 +2836,13 @@ body { background: white; }
                             const { from, to } = view.state.selection;
                             if (from !== to) {
                               setCommentSelectionRange({ from, to });
+                              // Apply pending comment mark (yellow highlight) and collapse selection
+                              const pendingMark = view.state.schema.marks.comment.create({
+                                commentId: PENDING_COMMENT_ID,
+                              });
+                              const tr = view.state.tr.addMark(from, to, pendingMark);
+                              tr.setSelection(TextSelection.create(tr.doc, to));
+                              view.dispatch(tr);
                             }
                           }
                           setAddCommentYPosition(floatingCommentBtn.top);
@@ -2830,7 +2856,7 @@ body { background: white; }
                           top: floatingCommentBtn.top,
                           left: floatingCommentBtn.left,
                           transform: 'translate(-50%, -50%)',
-                          zIndex: 20,
+                          zIndex: 50,
                           width: 32,
                           height: 32,
                           borderRadius: '50%',
