@@ -627,8 +627,11 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
   } | null>(null);
   const [addCommentYPosition, setAddCommentYPosition] = useState<number | null>(null);
   const [editingMode, setEditingMode] = useState<'editing' | 'suggesting'>('editing');
-  // Floating "add comment" button position (Y relative to scroll container, null = hidden)
-  const [floatingCommentBtnY, setFloatingCommentBtnY] = useState<number | null>(null);
+  // Floating "add comment" button position (relative to scroll container, null = hidden)
+  const [floatingCommentBtn, setFloatingCommentBtn] = useState<{
+    top: number;
+    left: number;
+  } | null>(null);
 
   // Debounce timer for extractTrackedChanges (avoid full doc walk on every keystroke)
   const extractTrackedChangesTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -992,7 +995,7 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
       }
 
       if (!selectionState) {
-        setFloatingCommentBtnY(null);
+        setFloatingCommentBtn(null);
         setState((prev) => ({
           ...prev,
           selectionFormatting: {},
@@ -1058,6 +1061,8 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
           const { from: selFrom } = view.state.selection;
           const pagesEl = container.querySelector('.paged-editor__pages');
           if (pagesEl) {
+            // Find the page element containing the selection to get its right edge
+            const pageEl = pagesEl.querySelector('.paged-editor__page') as HTMLElement | null;
             const spans = pagesEl.querySelectorAll('span[data-pm-start]');
             for (const span of spans) {
               const el = span as HTMLElement;
@@ -1066,14 +1071,19 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
               if (selFrom >= pmStart && selFrom <= pmEnd) {
                 const rect = el.getBoundingClientRect();
                 const containerRect = container.getBoundingClientRect();
-                setFloatingCommentBtnY(rect.top - containerRect.top + container.scrollTop);
+                const top = rect.top - containerRect.top + container.scrollTop;
+                // Position at the right edge of the page element
+                const left = pageEl
+                  ? pageEl.getBoundingClientRect().right - containerRect.left + 6
+                  : containerRect.width / 2 + 416;
+                setFloatingCommentBtn({ top, left });
                 break;
               }
             }
           }
         }
       } else {
-        setFloatingCommentBtnY(null);
+        setFloatingCommentBtn(null);
       }
 
       // Notify parent
@@ -2796,13 +2806,12 @@ body { background: white; }
                     />
 
                     {/* Floating "add comment" button — appears on right edge of page at selection */}
-                    {floatingCommentBtnY != null && !isAddingComment && !readOnly && (
+                    {floatingCommentBtn != null && !isAddingComment && !readOnly && (
                       <button
                         type="button"
                         onMouseDown={(e) => {
                           e.preventDefault();
                           e.stopPropagation();
-                          // Trigger the same add-comment flow as the toolbar button
                           const view = pagedEditorRef.current?.getView();
                           if (view) {
                             const { from, to } = view.state.selection;
@@ -2810,21 +2819,16 @@ body { background: white; }
                               setCommentSelectionRange({ from, to });
                             }
                           }
-                          setAddCommentYPosition(floatingCommentBtnY);
+                          setAddCommentYPosition(floatingCommentBtn.top);
                           if (!showCommentsSidebar) setShowCommentsSidebar(true);
                           setIsAddingComment(true);
-                          setFloatingCommentBtnY(null);
+                          setFloatingCommentBtn(null);
                         }}
                         title="Add comment"
                         style={{
                           position: 'absolute',
-                          top: floatingCommentBtnY,
-                          left: '50%',
-                          marginLeft: (() => {
-                            const sp = history.state?.package?.document?.finalSectionProperties;
-                            const pageWidthPx = sp?.pageWidth ? Math.round(sp.pageWidth / 15) : 816;
-                            return pageWidthPx / 2 + 8;
-                          })(),
+                          top: floatingCommentBtn.top,
+                          left: floatingCommentBtn.left,
                           zIndex: 20,
                           width: 32,
                           height: 32,
