@@ -154,6 +154,8 @@ export const CommentsSidebar: React.FC<CommentsSidebarProps> = ({
   const [menuOpenFor, setMenuOpenFor] = useState<string | null>(null);
   const [cardPositions, setCardPositions] = useState<Map<string, number>>(new Map());
   const [initialPositionsDone, setInitialPositionsDone] = useState(false);
+  // Track which cards have had at least one positioned render (to avoid "fall from top" animation)
+  const knownCardsRef = useRef<Set<string>>(new Set());
   const sidebarRef = useRef<HTMLDivElement>(null);
   const cardRefs = useRef<Map<string, HTMLDivElement>>(new Map());
 
@@ -368,23 +370,38 @@ export const CommentsSidebar: React.FC<CommentsSidebarProps> = ({
   });
 
   const cardContainerStyle = (
+    cardId: string,
     isExpanded: boolean,
     yPos: number | undefined
-  ): React.CSSProperties => ({
-    ...(hasPositions
-      ? yPos !== undefined
-        ? { position: 'absolute', top: yPos, left: 0, right: 0 }
-        : { position: 'absolute', top: -9999, left: 0, right: 0, opacity: 0 }
-      : { marginBottom: 6 }),
-    padding: isExpanded ? '10px 12px' : '8px 10px',
-    borderRadius: 8,
-    backgroundColor: isExpanded ? '#fff' : '#f8fbff',
-    cursor: 'pointer',
-    boxShadow: isExpanded
-      ? '0 1px 3px rgba(60,64,67,0.3), 0 4px 8px 3px rgba(60,64,67,0.15)'
-      : '0 1px 3px rgba(60,64,67,0.2), 0 2px 6px rgba(60,64,67,0.08)',
-    transition: initialPositionsDone ? 'box-shadow 0.2s ease, top 0.15s ease' : 'none',
-  });
+  ): React.CSSProperties => {
+    const isKnown = knownCardsRef.current.has(cardId);
+    // Mark card as known once it has a valid position
+    if (yPos !== undefined) {
+      knownCardsRef.current.add(cardId);
+    }
+    // New cards (first render with position): fade in, no top transition
+    // Known cards: transition top smoothly
+    const isNewCard = !isKnown && yPos !== undefined;
+    return {
+      ...(hasPositions
+        ? yPos !== undefined
+          ? { position: 'absolute', top: yPos, left: 0, right: 0, opacity: 1 }
+          : { position: 'absolute', top: -9999, left: 0, right: 0, opacity: 0 }
+        : { marginBottom: 6 }),
+      padding: isExpanded ? '10px 12px' : '8px 10px',
+      borderRadius: 8,
+      backgroundColor: isExpanded ? '#fff' : '#f8fbff',
+      cursor: 'pointer',
+      boxShadow: isExpanded
+        ? '0 1px 3px rgba(60,64,67,0.3), 0 4px 8px 3px rgba(60,64,67,0.15)'
+        : '0 1px 3px rgba(60,64,67,0.2), 0 2px 6px rgba(60,64,67,0.08)',
+      transition: isNewCard
+        ? 'opacity 0.2s ease, box-shadow 0.2s ease'
+        : initialPositionsDone
+          ? 'opacity 0.2s ease, box-shadow 0.2s ease, top 0.15s ease'
+          : 'none',
+    };
+  };
 
   // Shared reply thread renderer (used by both comment and tracked change cards)
   const renderReplies = (replies: Comment[], isExpanded: boolean) => {
@@ -547,7 +564,7 @@ export const CommentsSidebar: React.FC<CommentsSidebarProps> = ({
         onClick={() => handleCardClick(cardId, comment.id)}
         onMouseDown={(e) => e.stopPropagation()}
         style={{
-          ...cardContainerStyle(isExpanded, yPos),
+          ...cardContainerStyle(cardId, isExpanded, yPos),
           opacity: hasPositions && yPos === undefined ? 0 : comment.done ? 0.6 : 1,
         }}
       >
@@ -662,7 +679,7 @@ export const CommentsSidebar: React.FC<CommentsSidebarProps> = ({
         className="docx-tracked-change-card"
         onClick={() => handleCardClick(cardId)}
         onMouseDown={(e) => e.stopPropagation()}
-        style={cardContainerStyle(isExpanded, yPos)}
+        style={cardContainerStyle(cardId, isExpanded, yPos)}
       >
         {/* Header: avatar + name/date + actions */}
         <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
