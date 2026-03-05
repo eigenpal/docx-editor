@@ -44,6 +44,30 @@ function getInitials(name: string): string {
     .slice(0, 2);
 }
 
+// Kibana-style avatar colors — deterministic per author name
+const AVATAR_COLORS = [
+  '#6DCCB1', // teal
+  '#79AAD9', // blue
+  '#EE789D', // pink
+  '#A987D1', // purple
+  '#E6A85F', // orange
+  '#F2CC8F', // gold
+  '#68B3A2', // seafoam
+  '#B07AA1', // mauve
+  '#59A14F', // green
+  '#FF9DA7', // salmon
+  '#E15759', // red
+  '#76B7B2', // cyan
+];
+
+function getAvatarColor(name: string): string {
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) {
+    hash = name.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  return AVATAR_COLORS[Math.abs(hash) % AVATAR_COLORS.length];
+}
+
 export interface TrackedChangeEntry {
   type: 'insertion' | 'deletion';
   text: string;
@@ -439,7 +463,7 @@ export const CommentsSidebar: React.FC<CommentsSidebarProps> = ({
           opacity: hasPositions && yPos === undefined ? 0 : comment.done ? 0.6 : 1,
           boxShadow: isExpanded
             ? '0 1px 3px rgba(60,64,67,0.3), 0 4px 8px 3px rgba(60,64,67,0.15)'
-            : '0 1px 2px rgba(60,64,67,0.15)',
+            : '0 1px 3px rgba(60,64,67,0.2), 0 2px 6px rgba(60,64,67,0.08)',
           transition: initialPositionsDone ? 'box-shadow 0.2s ease, top 0.15s ease' : 'none',
         }}
       >
@@ -450,8 +474,8 @@ export const CommentsSidebar: React.FC<CommentsSidebarProps> = ({
               width: 32,
               height: 32,
               borderRadius: '50%',
-              backgroundColor: '#dadce0',
-              color: '#5f6368',
+              backgroundColor: getAvatarColor(comment.author || 'U'),
+              color: '#fff',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
@@ -610,7 +634,7 @@ export const CommentsSidebar: React.FC<CommentsSidebarProps> = ({
                       width: 28,
                       height: 28,
                       borderRadius: '50%',
-                      backgroundColor: '#5f6368',
+                      backgroundColor: getAvatarColor(reply.author || 'U'),
                       color: '#fff',
                       display: 'flex',
                       alignItems: 'center',
@@ -712,7 +736,7 @@ export const CommentsSidebar: React.FC<CommentsSidebarProps> = ({
           cursor: 'pointer',
           boxShadow: isExpanded
             ? '0 1px 3px rgba(60,64,67,0.3), 0 4px 8px 3px rgba(60,64,67,0.15)'
-            : '0 1px 2px rgba(60,64,67,0.15)',
+            : '0 1px 3px rgba(60,64,67,0.2), 0 2px 6px rgba(60,64,67,0.08)',
           transition: initialPositionsDone ? 'box-shadow 0.2s ease, top 0.15s ease' : 'none',
         }}
       >
@@ -723,8 +747,8 @@ export const CommentsSidebar: React.FC<CommentsSidebarProps> = ({
               width: 32,
               height: 32,
               borderRadius: '50%',
-              backgroundColor: '#dadce0',
-              color: '#5f6368',
+              backgroundColor: getAvatarColor(authorName),
+              color: '#fff',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
@@ -816,7 +840,7 @@ export const CommentsSidebar: React.FC<CommentsSidebarProps> = ({
                       width: 28,
                       height: 28,
                       borderRadius: '50%',
-                      backgroundColor: '#5f6368',
+                      backgroundColor: getAvatarColor(reply.author || 'U'),
                       color: '#fff',
                       display: 'flex',
                       alignItems: 'center',
