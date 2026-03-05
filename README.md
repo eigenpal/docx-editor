@@ -77,7 +77,7 @@ bun run typecheck
 
 Examples: [Vite](examples/vite) | [Next.js](examples/nextjs) | [Remix](examples/remix) | [Astro](examples/astro) | [Vue](examples/vue)
 
-**[Props & Ref Methods](docs/PROPS.md)** | **[Plugins](docs/PLUGINS.md)** | **[Architecture](docs/ARCHITECTURE.md)** | **[Extensions](docs/EXTENSIONS.md)**
+**[Props & Ref Methods](docs/PROPS.md)** | **[Plugins](docs/PLUGINS.md)** | **[Architecture](docs/ARCHITECTURE.md)**
 
 ## License
 
