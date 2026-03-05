@@ -88,7 +88,7 @@ const MIN_CARD_GAP = 8;
 export const CommentsSidebar: React.FC<CommentsSidebarProps> = ({
   comments,
   trackedChanges,
-  activeCommentId,
+  activeCommentId: _activeCommentId,
   onClose: _onClose,
   onCommentClick,
   onCommentReply,
@@ -385,9 +385,8 @@ export const CommentsSidebar: React.FC<CommentsSidebarProps> = ({
 
   const renderCommentCard = (comment: Comment, _idx: number) => {
     const replies = getReplies(comment.id);
-    const isActive = activeCommentId === comment.id;
     const cardId = `comment-${comment.id}`;
-    const isExpanded = expandedCard === cardId || isActive;
+    const isExpanded = expandedCard === cardId;
     const authorInitials = getInitials(comment.author || 'U');
     const yPos = cardPositions.get(cardId);
 
