@@ -508,6 +508,15 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
     setTrackedChanges(merged);
   }, []);
 
+  // Clean up debounce timer on unmount
+  useEffect(() => {
+    return () => {
+      if (extractTrackedChangesTimerRef.current) {
+        clearTimeout(extractTrackedChangesTimerRef.current);
+      }
+    };
+  }, []);
+
   // Sync outline visibility when prop changes
   useEffect(() => {
     setShowOutline(showOutlineProp);

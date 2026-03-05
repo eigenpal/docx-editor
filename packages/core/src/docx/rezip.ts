@@ -37,6 +37,19 @@ import { serializeHeaderFooter } from './serializer/headerFooterSerializer';
 import { serializeComments } from './serializer/commentSerializer';
 import { RELATIONSHIP_TYPES } from './relsParser';
 import { type RawDocxContent } from './unzip';
+import { escapeXml } from './serializer/xmlUtils';
+
+/**
+ * Find the highest rId number in a relationships XML string.
+ */
+function findMaxRId(relsXml: string): number {
+  let maxId = 0;
+  for (const match of relsXml.matchAll(/Id="rId(\d+)"/g)) {
+    const id = parseInt(match[1], 10);
+    if (id > maxId) maxId = id;
+  }
+  return maxId;
+}
 
 // ============================================================================
 // COMMENTS SERIALIZATION
@@ -56,8 +69,10 @@ async function serializeCommentsToZip(
     compressionOptions: { level: compressionLevel },
   });
 
-  await ensureCommentsContentType(zip, compressionLevel);
-  await ensureCommentsRelationship(zip, compressionLevel);
+  await Promise.all([
+    ensureCommentsContentType(zip, compressionLevel),
+    ensureCommentsRelationship(zip, compressionLevel),
+  ]);
 }
 
 // ============================================================================
@@ -144,11 +159,7 @@ async function processNewImages(
   let relsXml = await relsFile.async('text');
 
   // Find highest existing rId
-  let maxId = 0;
-  for (const match of relsXml.matchAll(/Id="rId(\d+)"/g)) {
-    const id = parseInt(match[1], 10);
-    if (id > maxId) maxId = id;
-  }
+  let maxId = findMaxRId(relsXml);
 
   // Find highest existing image number in word/media/
   let maxImageNum = 0;
@@ -446,13 +457,8 @@ async function ensureCommentsRelationship(zip: JSZip, compressionLevel: number):
   let relsXml = await relsFile.async('text');
   if (relsXml.includes('comments.xml')) return;
 
-  // Generate a unique rId by finding the highest existing rId
-  const rIdMatches = relsXml.matchAll(/Id="rId(\d+)"/g);
-  let maxId = 0;
-  for (const m of rIdMatches) {
-    maxId = Math.max(maxId, parseInt(m[1], 10));
-  }
-  const newRId = `rId${maxId + 1}`;
+  // Generate a unique rId
+  const newRId = `rId${findMaxRId(relsXml) + 1}`;
 
   relsXml = relsXml.replace(
     '</Relationships>',
@@ -593,21 +599,13 @@ export async function addRelationship(
 
   const relsXml = await relsFile.async('text');
 
-  // Find highest existing rId
-  const rIdMatches = relsXml.matchAll(/Id="rId(\d+)"/g);
-  let maxId = 0;
-  for (const match of rIdMatches) {
-    const id = parseInt(match[1], 10);
-    if (id > maxId) maxId = id;
-  }
-
   // Generate new rId
-  const newRId = `rId${maxId + 1}`;
+  const newRId = `rId${findMaxRId(relsXml) + 1}`;
 
   // Build new relationship element
   const targetModeAttr = relationship.targetMode === 'External' ? ' TargetMode="External"' : '';
 
-  const newRelElement = `<Relationship Id="${newRId}" Type="${relationship.type}" Target="${escapeXmlAttr(relationship.target)}"${targetModeAttr}/>`;
+  const newRelElement = `<Relationship Id="${newRId}" Type="${relationship.type}" Target="${escapeXml(relationship.target)}"${targetModeAttr}/>`;
 
   // Insert before closing tag
   const updatedRelsXml = relsXml.replace('</Relationships>', `${newRelElement}</Relationships>`);
@@ -772,37 +770,18 @@ function updateCoreProperties(
     if (result.includes('<cp:lastModifiedBy')) {
       result = result.replace(
         /<cp:lastModifiedBy>[^<]*<\/cp:lastModifiedBy>/,
-        `<cp:lastModifiedBy>${escapeXmlText(options.modifiedBy)}</cp:lastModifiedBy>`
+        `<cp:lastModifiedBy>${escapeXml(options.modifiedBy)}</cp:lastModifiedBy>`
       );
     } else {
       // Add lastModifiedBy if not present
       result = result.replace(
         '</cp:coreProperties>',
-        `<cp:lastModifiedBy>${escapeXmlText(options.modifiedBy)}</cp:lastModifiedBy></cp:coreProperties>`
+        `<cp:lastModifiedBy>${escapeXml(options.modifiedBy)}</cp:lastModifiedBy></cp:coreProperties>`
       );
     }
   }
 
   return result;
-}
-
-/**
- * Escape special XML characters in text content
- */
-function escapeXmlText(text: string): string {
-  return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-}
-
-/**
- * Escape special XML characters in attribute values
- */
-function escapeXmlAttr(text: string): string {
-  return text
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&apos;');
 }
 
 /**

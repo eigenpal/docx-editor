@@ -317,7 +317,7 @@ function extractParagraphContent(
   documentCounts?: TrackedChangeCounts
 ): ParagraphContent[] {
   const content: ParagraphContent[] = [];
-  const trackedChangeCounts = documentCounts ?? collectTrackedChangeCounts(paragraph);
+  const trackedChangeCounts = documentCounts ?? buildDocumentTrackedChangeCounts(paragraph);
 
   // Track current run being built
   let currentRun: Run | null = null;
@@ -557,35 +557,6 @@ function buildDocumentTrackedChangeCounts(pmDoc: PMNode): TrackedChangeCounts {
   });
 
   return { insertionById, deletionById };
-}
-
-function collectTrackedChangeCounts(paragraph: PMNode): TrackedChangeCounts {
-  const insertionById = new Map<number, number>();
-  const deletionById = new Map<number, number>();
-
-  paragraph.forEach((node) => {
-    const insertionMark = node.marks.find((mark) => mark.type.name === 'insertion');
-    const deletionMark = node.marks.find((mark) => mark.type.name === 'deletion');
-
-    if (insertionMark) {
-      const revisionId = Number(insertionMark.attrs.revisionId);
-      if (Number.isFinite(revisionId)) {
-        insertionById.set(revisionId, (insertionById.get(revisionId) ?? 0) + 1);
-      }
-    }
-
-    if (deletionMark) {
-      const revisionId = Number(deletionMark.attrs.revisionId);
-      if (Number.isFinite(revisionId)) {
-        deletionById.set(revisionId, (deletionById.get(revisionId) ?? 0) + 1);
-      }
-    }
-  });
-
-  return {
-    insertionById,
-    deletionById,
-  };
 }
 
 /**

@@ -55,33 +55,18 @@ function findAdjacentRevision(
   markTypeName: string,
   author: string
 ): MarkAttrs | null {
-  if (pos > 0) {
-    try {
-      const $pos = doc.resolve(pos);
-      const before = $pos.nodeBefore;
-      if (before?.isText) {
-        const mark = before.marks.find(
+  try {
+    const $pos = doc.resolve(pos);
+    for (const node of [$pos.nodeBefore, $pos.nodeAfter]) {
+      if (node?.isText) {
+        const mark = node.marks.find(
           (m) => m.type.name === markTypeName && m.attrs.author === author
         );
         if (mark) return mark.attrs as MarkAttrs;
       }
-    } catch {
-      /* position out of range */
     }
-  }
-  if (pos < doc.content.size) {
-    try {
-      const $pos = doc.resolve(pos);
-      const after = $pos.nodeAfter;
-      if (after?.isText) {
-        const mark = after.marks.find(
-          (m) => m.type.name === markTypeName && m.attrs.author === author
-        );
-        if (mark) return mark.attrs as MarkAttrs;
-      }
-    } catch {
-      /* position out of range */
-    }
+  } catch {
+    /* position out of range */
   }
   return null;
 }

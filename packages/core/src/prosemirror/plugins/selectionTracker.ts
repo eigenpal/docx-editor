@@ -65,6 +65,7 @@ export function extractSelectionContext(state: EditorState): SelectionContext {
   let endParagraphIndex = 0;
 
   doc.forEach((_node, offset, index) => {
+    if (offset > to) return false; // early-exit once past selection
     if (offset <= from) {
       startParagraphIndex = index;
     }
@@ -246,13 +247,14 @@ export function createSelectionTrackerPlugin(onSelectionChange?: SelectionChange
     view() {
       return {
         update(view: EditorView, prevState: EditorState) {
+          if (!onSelectionChange) return;
           // Only emit on selection/doc changes
           if (view.state.selection.eq(prevState.selection) && view.state.doc.eq(prevState.doc)) {
             return;
           }
-
-          const context = extractSelectionContext(view.state);
-          if (onSelectionChange) {
+          // Reuse context already computed in state.apply() — avoid double doc walk
+          const context = selectionTrackerKey.getState(view.state);
+          if (context) {
             onSelectionChange(context);
           }
         },

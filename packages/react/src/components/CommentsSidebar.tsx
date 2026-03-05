@@ -106,6 +106,28 @@ export const SIDEBAR_WIDTH = 340;
 // Minimum gap between stacked cards to avoid overlap
 const MIN_CARD_GAP = 8;
 
+// Static styles hoisted out of component to avoid recreating on each render
+const ICON_BUTTON_STYLE: React.CSSProperties = {
+  background: 'none',
+  border: 'none',
+  cursor: 'pointer',
+  padding: 4,
+  color: '#5f6368',
+  display: 'flex',
+  borderRadius: '50%',
+};
+
+const CANCEL_BUTTON_STYLE: React.CSSProperties = {
+  padding: '6px 16px',
+  fontSize: 14,
+  border: 'none',
+  background: 'none',
+  color: '#1a73e8',
+  cursor: 'pointer',
+  fontWeight: 500,
+  fontFamily: 'inherit',
+};
+
 export const CommentsSidebar: React.FC<CommentsSidebarProps> = ({
   comments,
   trackedChanges,
@@ -333,27 +355,6 @@ export const CommentsSidebar: React.FC<CommentsSidebarProps> = ({
     flexShrink: 0,
   });
 
-  const iconButtonStyle: React.CSSProperties = {
-    background: 'none',
-    border: 'none',
-    cursor: 'pointer',
-    padding: 4,
-    color: '#5f6368',
-    display: 'flex',
-    borderRadius: '50%',
-  };
-
-  const cancelButtonStyle: React.CSSProperties = {
-    padding: '6px 16px',
-    fontSize: 14,
-    border: 'none',
-    background: 'none',
-    color: '#1a73e8',
-    cursor: 'pointer',
-    fontWeight: 500,
-    fontFamily: 'inherit',
-  };
-
   const submitButtonStyle = (enabled: boolean): React.CSSProperties => ({
     padding: '6px 16px',
     fontSize: 14,
@@ -483,7 +484,7 @@ export const CommentsSidebar: React.FC<CommentsSidebarProps> = ({
                 setReplyingTo(null);
                 setReplyText('');
               }}
-              style={cancelButtonStyle}
+              style={CANCEL_BUTTON_STYLE}
             >
               Cancel
             </button>
@@ -567,7 +568,7 @@ export const CommentsSidebar: React.FC<CommentsSidebarProps> = ({
                   onCommentResolve?.(comment.id);
                 }}
                 title="Resolve"
-                style={iconButtonStyle}
+                style={ICON_BUTTON_STYLE}
               >
                 <MaterialSymbol name="check" size={20} />
               </button>
@@ -577,7 +578,7 @@ export const CommentsSidebar: React.FC<CommentsSidebarProps> = ({
                   setMenuOpenFor(menuOpenFor === cardId ? null : cardId);
                 }}
                 title="More options"
-                style={iconButtonStyle}
+                style={ICON_BUTTON_STYLE}
               >
                 <MaterialSymbol name="more_vert" size={20} />
               </button>
@@ -680,7 +681,7 @@ export const CommentsSidebar: React.FC<CommentsSidebarProps> = ({
                   onAcceptChange?.(change.from, change.to);
                 }}
                 title="Accept"
-                style={iconButtonStyle}
+                style={ICON_BUTTON_STYLE}
               >
                 <MaterialSymbol name="check" size={20} />
               </button>
@@ -690,7 +691,7 @@ export const CommentsSidebar: React.FC<CommentsSidebarProps> = ({
                   onRejectChange?.(change.from, change.to);
                 }}
                 title="Reject"
-                style={iconButtonStyle}
+                style={ICON_BUTTON_STYLE}
               >
                 <MaterialSymbol name="close" size={20} />
               </button>
@@ -801,7 +802,7 @@ export const CommentsSidebar: React.FC<CommentsSidebarProps> = ({
                   onCancelAddComment?.();
                   setNewCommentText('');
                 }}
-                style={cancelButtonStyle}
+                style={CANCEL_BUTTON_STYLE}
               >
                 Cancel
               </button>

@@ -81,9 +81,12 @@ function serializeComment(comment: Comment): string {
 export function serializeComments(comments: Comment[]): string {
   if (!comments || comments.length === 0) return '';
 
-  // Separate top-level comments and replies
-  const topLevel = comments.filter((c) => c.parentId == null);
-  const replies = comments.filter((c) => c.parentId != null);
+  // Separate top-level comments and replies in a single pass
+  const topLevel: Comment[] = [];
+  const replies: Comment[] = [];
+  for (const c of comments) {
+    (c.parentId == null ? topLevel : replies).push(c);
+  }
 
   let xml =
     '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n' +
