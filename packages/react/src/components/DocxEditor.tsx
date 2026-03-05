@@ -2362,18 +2362,27 @@ body { background: white; }
                               setCommentSelectionRange({ from, to });
                             }
                           }
-                          // Compute Y position from the visible selection overlay on the pages
-                          // (NOT window.getSelection which returns coords from the hidden PM editor)
+                          // Compute Y position by finding the visible painted span at the PM
+                          // selection start. Spans have data-pm-start/data-pm-end attributes.
                           const container = scrollContainerRef.current;
-                          if (container) {
-                            const selOverlay = container.querySelector(
-                              '[data-testid="selection-overlay"]'
-                            );
-                            if (selOverlay) {
-                              const overlayRect = selOverlay.getBoundingClientRect();
-                              const containerRect = container.getBoundingClientRect();
-                              const y = overlayRect.top - containerRect.top + container.scrollTop;
-                              setAddCommentYPosition(y);
+                          if (container && view) {
+                            const { from: selFrom } = view.state.selection;
+                            const pagesEl = container.querySelector('.paged-editor__pages');
+                            if (pagesEl) {
+                              const spans = pagesEl.querySelectorAll('span[data-pm-start]');
+                              for (const span of spans) {
+                                const el = span as HTMLElement;
+                                const pmStart = Number(el.dataset.pmStart);
+                                const pmEnd = Number(el.dataset.pmEnd);
+                                if (selFrom >= pmStart && selFrom <= pmEnd) {
+                                  const rect = el.getBoundingClientRect();
+                                  const containerRect = container.getBoundingClientRect();
+                                  setAddCommentYPosition(
+                                    rect.top - containerRect.top + container.scrollTop
+                                  );
+                                  break;
+                                }
+                              }
                             }
                           }
                           if (!showCommentsSidebar) setShowCommentsSidebar(true);
