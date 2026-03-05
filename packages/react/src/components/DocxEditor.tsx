@@ -476,10 +476,7 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
       }
     });
     setTrackedChanges(changes);
-    if (changes.length > 0 && !showCommentsSidebar) {
-      setShowCommentsSidebar(true);
-    }
-  }, [showCommentsSidebar]);
+  }, []);
 
   // Sync outline visibility when prop changes
   useEffect(() => {
@@ -499,14 +496,17 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
     enableKeyboardShortcuts: true,
   });
 
-  // Extract comments from document model, auto-open sidebar
+  // Extract comments from document model on initial load
+  const commentsLoadedRef = useRef(false);
   useEffect(() => {
+    if (commentsLoadedRef.current) return;
     const doc = history.state;
     if (!doc) return;
     const bodyComments = doc.package?.document?.comments;
     if (bodyComments && bodyComments.length > 0) {
       setComments(bodyComments);
       setShowCommentsSidebar(true);
+      commentsLoadedRef.current = true;
     }
   }, [history.state]);
 
@@ -708,10 +708,21 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
   }, [history.state]);
 
   // Extract tracked changes once PM view is ready (after loading completes)
+  const trackedChangesLoadedRef = useRef(false);
   useEffect(() => {
     if (!state.isLoading && history.state) {
-      // Delay to ensure PM view has been mounted
-      const timer = setTimeout(() => extractTrackedChanges(), 200);
+      const timer = setTimeout(() => {
+        extractTrackedChanges();
+        // Auto-open sidebar once on initial load
+        if (!trackedChangesLoadedRef.current) {
+          trackedChangesLoadedRef.current = true;
+          // Check if we just populated tracked changes
+          setTrackedChanges((prev) => {
+            if (prev.length > 0) setShowCommentsSidebar(true);
+            return prev;
+          });
+        }
+      }, 200);
       return () => clearTimeout(timer);
     }
   }, [state.isLoading, history.state, extractTrackedChanges]);

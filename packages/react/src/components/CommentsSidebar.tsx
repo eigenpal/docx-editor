@@ -407,14 +407,16 @@ export const CommentsSidebar: React.FC<CommentsSidebarProps> = ({
         onClick={() => handleCardClick(cardId, comment.id)}
         onMouseDown={(e) => e.stopPropagation()}
         style={{
-          ...(hasPositions && yPos !== undefined
-            ? { position: 'absolute', top: yPos, left: 0, right: 0 }
+          ...(hasPositions
+            ? yPos !== undefined
+              ? { position: 'absolute', top: yPos, left: 0, right: 0 }
+              : { position: 'absolute', top: -9999, left: 0, right: 0, opacity: 0 }
             : { marginBottom: 6 }),
           padding: isExpanded ? '14px 16px' : '10px 12px',
           borderRadius: 8,
           backgroundColor: isExpanded ? '#fff' : '#f0f6ff',
           cursor: 'pointer',
-          opacity: comment.done ? 0.6 : 1,
+          opacity: hasPositions && yPos === undefined ? 0 : comment.done ? 0.6 : 1,
           boxShadow: isExpanded
             ? '0 1px 3px rgba(60,64,67,0.3), 0 4px 8px 3px rgba(60,64,67,0.15)'
             : '0 1px 2px rgba(60,64,67,0.15)',
@@ -493,26 +495,30 @@ export const CommentsSidebar: React.FC<CommentsSidebarProps> = ({
           {getCommentText(comment.content)}
         </div>
 
-        {/* Replies */}
-        {isExpanded && replies.length > 0 && (
+        {/* Replies — collapsed: show truncated preview; expanded: show full thread */}
+        {replies.length > 0 && (
           <div style={{ marginTop: 12 }}>
-            {replies.map((reply) => (
+            {(isExpanded ? replies : replies.slice(-1)).map((reply) => (
               <div
                 key={reply.id}
-                style={{ marginBottom: 12, paddingTop: 12, borderTop: '1px solid #e8eaed' }}
+                style={{
+                  marginBottom: isExpanded ? 12 : 0,
+                  paddingTop: 12,
+                  borderTop: '1px solid #e8eaed',
+                }}
               >
                 <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
                   <div
                     style={{
-                      width: 32,
-                      height: 32,
+                      width: isExpanded ? 32 : 24,
+                      height: isExpanded ? 32 : 24,
                       borderRadius: '50%',
                       backgroundColor: '#5f6368',
                       color: '#fff',
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
-                      fontSize: 13,
+                      fontSize: isExpanded ? 13 : 11,
                       fontWeight: 500,
                       flexShrink: 0,
                     }}
@@ -520,38 +526,57 @@ export const CommentsSidebar: React.FC<CommentsSidebarProps> = ({
                     {getInitials(reply.author || 'U')}
                   </div>
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <span style={{ fontSize: 14, fontWeight: 500, color: '#202124' }}>
+                    <span
+                      style={{ fontSize: isExpanded ? 14 : 13, fontWeight: 500, color: '#202124' }}
+                    >
                       {reply.author || 'Unknown'}
                     </span>
-                    <div style={{ fontSize: 12, color: '#5f6368' }}>{formatDate(reply.date)}</div>
+                    {isExpanded && (
+                      <div style={{ fontSize: 12, color: '#5f6368' }}>{formatDate(reply.date)}</div>
+                    )}
                   </div>
-                  <button
-                    onClick={(e) => e.stopPropagation()}
-                    style={{
-                      background: 'none',
-                      border: 'none',
-                      cursor: 'pointer',
-                      padding: 4,
-                      color: '#5f6368',
-                      display: 'flex',
-                    }}
-                  >
-                    <MaterialSymbol name="more_vert" size={20} />
-                  </button>
+                  {isExpanded && (
+                    <button
+                      onClick={(e) => e.stopPropagation()}
+                      style={{
+                        background: 'none',
+                        border: 'none',
+                        cursor: 'pointer',
+                        padding: 4,
+                        color: '#5f6368',
+                        display: 'flex',
+                      }}
+                    >
+                      <MaterialSymbol name="more_vert" size={20} />
+                    </button>
+                  )}
                 </div>
                 <div
                   style={{
-                    fontSize: 14,
+                    fontSize: isExpanded ? 14 : 13,
                     color: '#202124',
                     lineHeight: '20px',
                     marginTop: 4,
-                    paddingLeft: 42,
+                    paddingLeft: isExpanded ? 42 : 34,
+                    ...(!isExpanded
+                      ? {
+                          overflow: 'hidden',
+                          display: '-webkit-box',
+                          WebkitLineClamp: 2,
+                          WebkitBoxOrient: 'vertical' as const,
+                        }
+                      : {}),
                   }}
                 >
                   {getCommentText(reply.content)}
                 </div>
               </div>
             ))}
+            {!isExpanded && replies.length > 1 && (
+              <div style={{ fontSize: 12, color: '#5f6368', marginTop: 4 }}>
+                {replies.length - 1} more {replies.length - 1 === 1 ? 'reply' : 'replies'}
+              </div>
+            )}
           </div>
         )}
 
@@ -584,8 +609,10 @@ export const CommentsSidebar: React.FC<CommentsSidebarProps> = ({
         onClick={() => handleCardClick(cardId)}
         onMouseDown={(e) => e.stopPropagation()}
         style={{
-          ...(hasPositions && yPos !== undefined
-            ? { position: 'absolute', top: yPos, left: 0, right: 0 }
+          ...(hasPositions
+            ? yPos !== undefined
+              ? { position: 'absolute', top: yPos, left: 0, right: 0 }
+              : { position: 'absolute', top: -9999, left: 0, right: 0, opacity: 0 }
             : { marginBottom: 6 }),
           padding: isExpanded ? '14px 16px' : '10px 12px',
           borderRadius: 8,
@@ -672,26 +699,30 @@ export const CommentsSidebar: React.FC<CommentsSidebarProps> = ({
           </span>
         </div>
 
-        {/* Replies */}
-        {isExpanded && tcReplies.length > 0 && (
+        {/* Replies — collapsed: show truncated preview; expanded: show full thread */}
+        {tcReplies.length > 0 && (
           <div style={{ marginTop: 12 }}>
-            {tcReplies.map((reply) => (
+            {(isExpanded ? tcReplies : tcReplies.slice(-1)).map((reply) => (
               <div
                 key={reply.id}
-                style={{ marginBottom: 12, paddingTop: 12, borderTop: '1px solid #e8eaed' }}
+                style={{
+                  marginBottom: isExpanded ? 12 : 0,
+                  paddingTop: 12,
+                  borderTop: '1px solid #e8eaed',
+                }}
               >
                 <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
                   <div
                     style={{
-                      width: 32,
-                      height: 32,
+                      width: isExpanded ? 32 : 24,
+                      height: isExpanded ? 32 : 24,
                       borderRadius: '50%',
                       backgroundColor: '#5f6368',
                       color: '#fff',
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
-                      fontSize: 13,
+                      fontSize: isExpanded ? 13 : 11,
                       fontWeight: 500,
                       flexShrink: 0,
                     }}
@@ -699,25 +730,42 @@ export const CommentsSidebar: React.FC<CommentsSidebarProps> = ({
                     {getInitials(reply.author || 'U')}
                   </div>
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <span style={{ fontSize: 14, fontWeight: 500, color: '#202124' }}>
+                    <span
+                      style={{ fontSize: isExpanded ? 14 : 13, fontWeight: 500, color: '#202124' }}
+                    >
                       {reply.author || 'Unknown'}
                     </span>
-                    <div style={{ fontSize: 12, color: '#5f6368' }}>{formatDate(reply.date)}</div>
+                    {isExpanded && (
+                      <div style={{ fontSize: 12, color: '#5f6368' }}>{formatDate(reply.date)}</div>
+                    )}
                   </div>
                 </div>
                 <div
                   style={{
-                    fontSize: 14,
+                    fontSize: isExpanded ? 14 : 13,
                     color: '#202124',
                     lineHeight: '20px',
                     marginTop: 4,
-                    paddingLeft: 42,
+                    paddingLeft: isExpanded ? 42 : 34,
+                    ...(!isExpanded
+                      ? {
+                          overflow: 'hidden',
+                          display: '-webkit-box',
+                          WebkitLineClamp: 2,
+                          WebkitBoxOrient: 'vertical' as const,
+                        }
+                      : {}),
                   }}
                 >
                   {getCommentText(reply.content)}
                 </div>
               </div>
             ))}
+            {!isExpanded && tcReplies.length > 1 && (
+              <div style={{ fontSize: 12, color: '#5f6368', marginTop: 4 }}>
+                {tcReplies.length - 1} more {tcReplies.length - 1 === 1 ? 'reply' : 'replies'}
+              </div>
+            )}
           </div>
         )}
 
