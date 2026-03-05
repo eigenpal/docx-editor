@@ -330,7 +330,7 @@ export const CommentsSidebar: React.FC<CommentsSidebarProps> = ({
       {replyingTo === replyKey ? (
         <div>
           <input
-            ref={(el) => el?.focus()}
+            ref={(el) => el?.focus({ preventScroll: true })}
             type="text"
             value={replyText}
             onChange={(e) => setReplyText(e.target.value)}
@@ -954,7 +954,7 @@ export const CommentsSidebar: React.FC<CommentsSidebarProps> = ({
                 }}
               >
                 <textarea
-                  ref={(el) => el?.focus()}
+                  ref={(el) => el?.focus({ preventScroll: true })}
                   value={newCommentText}
                   onChange={(e) => setNewCommentText(e.target.value)}
                   onMouseDown={(e) => e.stopPropagation()}
