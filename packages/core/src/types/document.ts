@@ -215,20 +215,4 @@ export interface Document {
   templateVariables?: string[];
   /** Parsing warnings/errors */
   warnings?: string[];
-  /** Immutable baseline used for export-time change tracking */
-  baselineDocument?: DocumentSnapshot;
-}
-
-/**
- * Immutable baseline document snapshot used for tracked export diffs.
- */
-export interface DocumentSnapshot {
-  /** DOCX package with all parsed content */
-  package: DocxPackage;
-  /** Original ArrayBuffer for round-trip */
-  originalBuffer?: ArrayBuffer;
-  /** Detected template variables ({{...}}) */
-  templateVariables?: string[];
-  /** Parsing warnings/errors */
-  warnings?: string[];
 }

@@ -85,6 +85,7 @@ function Editor({ file }: { file: ArrayBuffer }) {
 | ---------------------- | ------------------------------------------- | ----------------- | ------------------------------------------------- |
 | `documentBuffer`       | `ArrayBuffer \| Uint8Array \| Blob \| File` | —                 | `.docx` file contents to load                     |
 | `document`             | `Document`                                  | —                 | Pre-parsed document (alternative to buffer)       |
+| `author`               | `string`                                    | `'User'`          | Author name for comments and track changes        |
 | `readOnly`             | `boolean`                                   | `false`           | Read-only preview (hides toolbar, rulers, panel)  |
 | `showToolbar`          | `boolean`                                   | `true`            | Show formatting toolbar                           |
 | `showRuler`            | `boolean`                                   | `false`           | Show horizontal & vertical rulers                 |

@@ -21,16 +21,7 @@ import {
   Suspense,
 } from 'react';
 import type { CSSProperties, ReactNode } from 'react';
-import type {
-  Document,
-  DocumentSnapshot,
-  Theme,
-  HeaderFooter,
-} from '@eigenpal/docx-core/types/document';
-import {
-  withBaselineDocument,
-  createBaselineSnapshot,
-} from '@eigenpal/docx-core/docx/revisions/baseline';
+import type { Document, Theme, HeaderFooter } from '@eigenpal/docx-core/types/document';
 
 import {
   Toolbar,
@@ -96,11 +87,7 @@ const FootnotePropertiesDialog = lazy(() =>
 );
 import { MaterialSymbol } from './ui/Icons';
 import { getBuiltinTableStyle, type TableStylePreset } from './ui/TableStyleGallery';
-import {
-  DocumentAgent,
-  type TrackChangesExportOptions,
-  type SaveDocxOptions,
-} from '@eigenpal/docx-core/agent/DocumentAgent';
+import { DocumentAgent } from '@eigenpal/docx-core/agent/DocumentAgent';
 import { DefaultLoadingIndicator, DefaultPlaceholder, ParseError } from './DocxEditorHelpers';
 import { parseDocx } from '@eigenpal/docx-core/docx/parser';
 import { type DocxInput } from '@eigenpal/docx-core/utils/docxInput';
@@ -214,8 +201,8 @@ export interface DocxEditorProps {
   document?: Document | null;
   /** Callback when document is saved */
   onSave?: (buffer: ArrayBuffer) => void;
-  /** Default tracked export configuration used by save() */
-  trackChanges?: TrackChangesExportOptions;
+  /** Author name used for comments and track changes */
+  author?: string;
   /** Callback when document changes */
   onChange?: (document: Document) => void;
   /** Callback when selection changes */
@@ -367,7 +354,7 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
     documentBuffer,
     document: initialDocument,
     onSave,
-    trackChanges,
+    author = 'User',
     onChange,
     onSelectionChange,
     onError,
@@ -535,13 +522,6 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
   // Keep history.state accessible in stable callbacks without stale closures
   const historyStateRef = useRef(history.state);
   historyStateRef.current = history.state;
-  // Preserve immutable baseline snapshot for export-time diffing
-  const baselineSnapshotRef = useRef<DocumentSnapshot | undefined>(
-    initialDocument?.baselineDocument
-  );
-  // Track originalBuffer identity so we can distinguish a truly-new document (different buffer)
-  // from a controlled echo (same buffer, onChange stripped baseline before parent state update).
-  const prevOriginalBufferRef = useRef<ArrayBuffer | undefined>(undefined);
   // Track current border color/width for border presets (like Google Docs)
   const borderSpecRef = useRef({ style: 'single', size: 4, color: { rgb: '000000' } });
 
@@ -617,17 +597,9 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
   useEffect(() => {
     if (!documentBuffer) {
       if (initialDocument) {
-        const isNewDocument = prevOriginalBufferRef.current !== initialDocument.originalBuffer;
-        prevOriginalBufferRef.current = initialDocument.originalBuffer;
-        const fallback = isNewDocument ? undefined : baselineSnapshotRef.current;
-        const doc = trackChanges?.enabled
-          ? withBaselineDocument(initialDocument, fallback)
-          : initialDocument;
-        baselineSnapshotRef.current = doc.baselineDocument;
-        history.reset(doc);
+        history.reset(initialDocument);
         setState((prev) => ({ ...prev, isLoading: false }));
-        // Load fonts for initial document
-        loadDocumentFonts(doc).catch((err) => {
+        loadDocumentFonts(initialDocument).catch((err) => {
           console.warn('Failed to load document fonts:', err);
         });
       }
@@ -639,18 +611,14 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
     const parseDocument = async () => {
       try {
         const doc = await parseDocx(documentBuffer);
-        const docForHistory = trackChanges?.enabled ? withBaselineDocument(doc) : doc;
-        baselineSnapshotRef.current = docForHistory.baselineDocument;
-        // Reset history with parsed document (clears undo/redo stacks)
-        history.reset(docForHistory);
+        history.reset(doc);
         setState((prev) => ({
           ...prev,
           isLoading: false,
           parseError: null,
         }));
 
-        // Load fonts used in the document from Google Fonts
-        loadDocumentFonts(docForHistory).catch((err) => {
+        loadDocumentFonts(doc).catch((err) => {
           console.warn('Failed to load document fonts:', err);
         });
       } catch (error) {
@@ -670,34 +638,9 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
   // Update document when initialDocument changes
   useEffect(() => {
     if (initialDocument && !documentBuffer) {
-      const isNewDocument = prevOriginalBufferRef.current !== initialDocument.originalBuffer;
-      prevOriginalBufferRef.current = initialDocument.originalBuffer;
-      const fallback = isNewDocument ? undefined : baselineSnapshotRef.current;
-      const doc = trackChanges?.enabled
-        ? withBaselineDocument(initialDocument, fallback)
-        : initialDocument;
-      baselineSnapshotRef.current = doc.baselineDocument;
-      history.reset(doc);
+      history.reset(initialDocument);
     }
   }, [initialDocument, documentBuffer]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  // React to track-changes enablement transitions:
-  // - enabled → create baseline from current state so the first edit is tracked
-  // - disabled → clear baseline ref and strip baseline from current state
-  useEffect(() => {
-    if (trackChanges?.enabled) {
-      if (!baselineSnapshotRef.current && history.state) {
-        baselineSnapshotRef.current = createBaselineSnapshot(history.state);
-      }
-    } else {
-      baselineSnapshotRef.current = undefined;
-      history.transformAll((doc) => {
-        if (!doc?.baselineDocument) return doc;
-        const { baselineDocument: _, ...stripped } = doc;
-        return stripped as Document;
-      });
-    }
-  }, [trackChanges?.enabled]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Create/update agent when document changes
   useEffect(() => {
@@ -736,26 +679,19 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
     return cleanup;
   }, [onFontsLoadedCallback]);
 
-  const pushDocumentWithBaseline = useCallback(
+  const pushDocument = useCallback(
     (document: Document) => {
-      const doc = trackChanges?.enabled
-        ? withBaselineDocument(document, baselineSnapshotRef.current)
-        : document;
-      baselineSnapshotRef.current = doc.baselineDocument;
-      history.push(doc);
-      return doc;
+      history.push(document);
+      return document;
     },
-    [history, trackChanges?.enabled]
+    [history]
   );
 
   // Handle document change
   const handleDocumentChange = useCallback(
     (newDocument: Document) => {
-      const documentWithBaseline = pushDocumentWithBaseline(newDocument);
-      if (onChange) {
-        const { baselineDocument: _baseline, ...publicDocument } = documentWithBaseline;
-        onChange(publicDocument as Document);
-      }
+      pushDocument(newDocument);
+      onChange?.(newDocument);
       // Update outline headings if sidebar is open
       if (showOutlineRef.current) {
         const view = pagedEditorRef.current?.getView();
@@ -766,7 +702,7 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
       // Re-extract tracked changes after document change
       requestAnimationFrame(() => extractTrackedChanges());
     },
-    [onChange, pushDocumentWithBaseline, extractTrackedChanges]
+    [onChange, pushDocument, extractTrackedChanges]
   );
 
   // Handle selection changes from ProseMirror
@@ -1256,7 +1192,7 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
           endnotePr,
         },
       };
-      pushDocumentWithBaseline({
+      pushDocument({
         ...history.state,
         package: {
           ...history.state.package,
@@ -1264,7 +1200,7 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
         },
       });
     },
-    [history, pushDocumentWithBaseline]
+    [history, pushDocument]
   );
 
   // Handle table action from Toolbar - use ProseMirror commands
@@ -1757,15 +1693,14 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
       // Sync React comments state (including new replies) back to the document model
       agentDoc.package.document.comments = comments;
 
-      const saveOptions: SaveDocxOptions = { trackChanges };
-      const buffer = await agentRef.current.toBuffer(saveOptions);
+      const buffer = await agentRef.current.toBuffer();
       onSave?.(buffer);
       return buffer;
     } catch (error) {
       onError?.(error instanceof Error ? error : new Error('Failed to save document'));
       return null;
     }
-  }, [onSave, onError, trackChanges, comments]);
+  }, [onSave, onError, comments]);
 
   // Handle error from editor
   const handleEditorError = useCallback(
@@ -2108,10 +2043,10 @@ body { background: white; }
             : pkg.document,
         },
       };
-      pushDocumentWithBaseline(newDoc);
+      pushDocument(newDoc);
       setHfEditPosition(position);
     },
-    [headerContent, footerContent, history, pushDocumentWithBaseline]
+    [headerContent, footerContent, history, pushDocument]
   );
 
   // Handle header/footer save — update document package with edited content
@@ -2155,12 +2090,12 @@ body { background: white; }
             [mapKey]: newMap,
           },
         };
-        pushDocumentWithBaseline(newDoc);
+        pushDocument(newDoc);
       }
 
       setHfEditPosition(null);
     },
-    [hfEditPosition, history, pushDocumentWithBaseline]
+    [hfEditPosition, history, pushDocument]
   );
 
   // Handle body click while in HF editing mode — save + close
@@ -2212,11 +2147,11 @@ body { background: white; }
             : pkg.document,
         },
       };
-      pushDocumentWithBaseline(newDoc);
+      pushDocument(newDoc);
     }
 
     setHfEditPosition(null);
-  }, [hfEditPosition, history, pushDocumentWithBaseline]);
+  }, [hfEditPosition, history, pushDocument]);
 
   // Get the DOM element for the header/footer area on the first page
   const getHfTargetElement = useCallback((pos: 'header' | 'footer'): HTMLElement | null => {
@@ -2554,7 +2489,7 @@ body { background: white; }
                             onCommentReply={(id, text) => {
                               const newReply: Comment = {
                                 id: Date.now(),
-                                author: trackChanges?.author || 'User',
+                                author: author,
                                 date: new Date().toISOString(),
                                 content: [
                                   {
@@ -2577,7 +2512,7 @@ body { background: white; }
                               const commentId = Date.now();
                               const newComment: Comment = {
                                 id: commentId,
-                                author: trackChanges?.author || 'User',
+                                author: author,
                                 date: new Date().toISOString(),
                                 content: [
                                   {
@@ -2611,7 +2546,7 @@ body { background: white; }
                             onTrackedChangeReply={(revisionId, text) => {
                               const newReply: Comment = {
                                 id: Date.now(),
-                                author: trackChanges?.author || 'User',
+                                author: author,
                                 date: new Date().toISOString(),
                                 content: [
                                   {
