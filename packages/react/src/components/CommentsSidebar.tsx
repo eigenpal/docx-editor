@@ -218,7 +218,7 @@ export const CommentsSidebar: React.FC<CommentsSidebarProps> = ({
     return () => container.removeEventListener('click', handleDocClick);
   }, [editorContainerRef, trackedChanges, onCommentClick]);
 
-  // Update positions once after mount and on resize (NOT on scroll or mutations)
+  // Update positions on mount, resize, and when comments/changes update
   useEffect(() => {
     const container = editorContainerRef?.current;
     if (!container) return;
@@ -234,9 +234,27 @@ export const CommentsSidebar: React.FC<CommentsSidebarProps> = ({
     });
     resizeObserver.observe(container);
 
+    // Debounced MutationObserver to pick up new comment marks in the page DOM.
+    // Only observe the pages container (not the sidebar) to avoid infinite loops.
+    let mutationTimer: ReturnType<typeof setTimeout> | null = null;
+    const pagesEl = container.querySelector('.paged-editor__pages');
+    let mutationObserver: MutationObserver | undefined;
+    if (pagesEl) {
+      mutationObserver = new MutationObserver(() => {
+        if (mutationTimer) clearTimeout(mutationTimer);
+        mutationTimer = setTimeout(updateCardPositions, 150);
+      });
+      mutationObserver.observe(pagesEl, {
+        childList: true,
+        subtree: true,
+      });
+    }
+
     return () => {
       clearTimeout(timer);
+      if (mutationTimer) clearTimeout(mutationTimer);
       resizeObserver.disconnect();
+      mutationObserver?.disconnect();
     };
   }, [updateCardPositions, editorContainerRef]);
 
