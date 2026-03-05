@@ -2507,7 +2507,7 @@ body { background: white; }
                             onCommentReply={(id, text) => {
                               const newReply: Comment = {
                                 id: Date.now(),
-                                author: 'User',
+                                author: trackChanges?.author || 'User',
                                 date: new Date().toISOString(),
                                 content: [
                                   {
@@ -2529,7 +2529,7 @@ body { background: white; }
                             onAddComment={(addText) => {
                               const newComment: Comment = {
                                 id: Date.now(),
-                                author: 'User',
+                                author: trackChanges?.author || 'User',
                                 date: new Date().toISOString(),
                                 content: [
                                   {
@@ -2551,7 +2551,7 @@ body { background: white; }
                             onTrackedChangeReply={(revisionId, text) => {
                               const newReply: Comment = {
                                 id: Date.now(),
-                                author: 'User',
+                                author: trackChanges?.author || 'User',
                                 date: new Date().toISOString(),
                                 content: [
                                   {

@@ -115,7 +115,7 @@ export const CommentsSidebar: React.FC<CommentsSidebarProps> = ({
   const cardRefs = useRef<Map<string, HTMLDivElement>>(new Map());
 
   const visibleComments = comments.filter((c) => {
-    if (c.parentId) return false;
+    if (c.parentId != null) return false;
     if (c.done && !showResolved) return false;
     return true;
   });
