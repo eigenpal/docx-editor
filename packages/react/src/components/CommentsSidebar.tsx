@@ -304,9 +304,7 @@ export const CommentsSidebar: React.FC<CommentsSidebarProps> = ({
 
     // Calculate positions after a short delay to let the layout-painter render.
     // Run twice: once quickly for existing elements, once delayed for new marks.
-    const timerQuick = setTimeout(() => {
-      updateCardPositions();
-    }, 50);
+    const timerQuick = setTimeout(updateCardPositions, 50);
     const timerFull = setTimeout(() => {
       updateCardPositions();
       setInitialPositionsDone(true);
@@ -323,6 +321,13 @@ export const CommentsSidebar: React.FC<CommentsSidebarProps> = ({
       resizeObserver.disconnect();
     };
   }, [updateCardPositions, editorContainerRef]);
+
+  // Recalculate positions after a card expand/collapse so cards below push down
+  useEffect(() => {
+    // Wait one frame for DOM to reflect expanded/collapsed card height
+    const raf = requestAnimationFrame(updateCardPositions);
+    return () => cancelAnimationFrame(raf);
+  }, [expandedCard, updateCardPositions]);
 
   const handleNewCommentSubmit = () => {
     if (newCommentText.trim()) {
