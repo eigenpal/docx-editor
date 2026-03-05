@@ -99,6 +99,10 @@ import { useDocumentHistory } from '../hooks/useHistory';
 // Extension system
 import { createStarterKit } from '@eigenpal/docx-core/prosemirror/extensions/StarterKit';
 import { ExtensionManager } from '@eigenpal/docx-core/prosemirror/extensions/ExtensionManager';
+import {
+  createSuggestionModePlugin,
+  setSuggestionMode,
+} from '@eigenpal/docx-core/prosemirror/plugins/suggestionMode';
 
 // Conversion (for HF inline editor save)
 import { proseDocToBlocks } from '@eigenpal/docx-core/prosemirror/conversion/fromProseDoc';
@@ -506,6 +510,16 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
     return mgr;
   }, []);
 
+  // Suggestion mode plugin — merged with external plugins
+  const suggestionPlugin = useMemo(
+    () => createSuggestionModePlugin(false, author),
+    [] // eslint-disable-line react-hooks/exhaustive-deps
+  );
+  const allExternalPlugins = useMemo(
+    () => [suggestionPlugin, ...(externalPlugins ?? [])],
+    [suggestionPlugin, externalPlugins]
+  );
+
   // Refs
   const pagedEditorRef = useRef<PagedEditorRef>(null);
   const hfEditorRef = useRef<InlineHeaderFooterEditorRef>(null);
@@ -678,6 +692,14 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
     });
     return cleanup;
   }, [onFontsLoadedCallback]);
+
+  // Sync editing mode to ProseMirror suggestion mode plugin
+  useEffect(() => {
+    const view = pagedEditorRef.current?.getView();
+    if (view) {
+      setSuggestionMode(editingMode === 'suggesting', view.state, view.dispatch, author);
+    }
+  }, [editingMode, author]);
 
   const pushDocument = useCallback(
     (document: Document) => {
@@ -2339,9 +2361,11 @@ body { background: white; }
                       </ToolbarButton>
                       <ToolbarSeparator />
                       <ToolbarButton
-                        onClick={() =>
-                          setEditingMode(editingMode === 'editing' ? 'suggesting' : 'editing')
-                        }
+                        onClick={() => {
+                          const next = editingMode === 'editing' ? 'suggesting' : 'editing';
+                          setEditingMode(next);
+                          if (next === 'suggesting') setShowCommentsSidebar(true);
+                        }}
                         active={editingMode === 'suggesting'}
                         title={`Mode: ${editingMode === 'editing' ? 'Editing' : 'Suggesting'} (Ctrl+Shift+E)`}
                         ariaLabel="Toggle suggestion mode"
@@ -2458,7 +2482,7 @@ body { background: white; }
                           handleSelectionChange(null);
                         }
                       }}
-                      externalPlugins={externalPlugins}
+                      externalPlugins={allExternalPlugins}
                       onReady={(ref) => {
                         onEditorViewReady?.(ref.getView()!);
                       }}
