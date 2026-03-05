@@ -296,6 +296,12 @@ export async function repackDocx(doc: Document, options: RepackOptions = {}): Pr
       compression: 'DEFLATE',
       compressionOptions: { level: compressionLevel },
     });
+
+    // Ensure [Content_Types].xml has an override for comments.xml
+    await ensureCommentsContentType(newZip, compressionLevel);
+
+    // Ensure word/_rels/document.xml.rels has a relationship for comments.xml
+    await ensureCommentsRelationship(newZip, compressionLevel);
   }
 
   // Optionally update modification date in docProps/core.xml
@@ -385,6 +391,12 @@ export async function repackDocxFromRaw(
       compression: 'DEFLATE',
       compressionOptions: { level: compressionLevel },
     });
+
+    // Ensure [Content_Types].xml has an override for comments.xml
+    await ensureCommentsContentType(newZip, compressionLevel);
+
+    // Ensure word/_rels/document.xml.rels has a relationship for comments.xml
+    await ensureCommentsRelationship(newZip, compressionLevel);
   }
 
   // Optionally update core properties
@@ -438,6 +450,67 @@ function getDocumentForSerialization(doc: Document, options: RepackOptions): Doc
       author: options.trackChanges.author,
       date: options.trackChanges.date,
     },
+  });
+}
+
+// ============================================================================
+// COMMENT PACKAGING HELPERS
+// ============================================================================
+
+const COMMENTS_CONTENT_TYPE =
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.comments+xml';
+const COMMENTS_RELATIONSHIP_TYPE =
+  'http://schemas.openxmlformats.org/officeDocument/2006/relationships/comments';
+
+/**
+ * Ensure [Content_Types].xml contains an Override for word/comments.xml.
+ * If the document already had comments, this is a no-op.
+ */
+async function ensureCommentsContentType(zip: JSZip, compressionLevel: number): Promise<void> {
+  const ctFile = zip.file('[Content_Types].xml');
+  if (!ctFile) return;
+
+  let ctXml = await ctFile.async('text');
+  if (ctXml.includes('/word/comments.xml')) return;
+
+  // Insert before closing </Types>
+  ctXml = ctXml.replace(
+    '</Types>',
+    `<Override PartName="/word/comments.xml" ContentType="${COMMENTS_CONTENT_TYPE}"/></Types>`
+  );
+  zip.file('[Content_Types].xml', ctXml, {
+    compression: 'DEFLATE',
+    compressionOptions: { level: compressionLevel },
+  });
+}
+
+/**
+ * Ensure word/_rels/document.xml.rels contains a Relationship for comments.xml.
+ * If the document already had comments, this is a no-op.
+ */
+async function ensureCommentsRelationship(zip: JSZip, compressionLevel: number): Promise<void> {
+  const relsPath = 'word/_rels/document.xml.rels';
+  const relsFile = zip.file(relsPath);
+  if (!relsFile) return;
+
+  let relsXml = await relsFile.async('text');
+  if (relsXml.includes('comments.xml')) return;
+
+  // Generate a unique rId by finding the highest existing rId
+  const rIdMatches = relsXml.matchAll(/Id="rId(\d+)"/g);
+  let maxId = 0;
+  for (const m of rIdMatches) {
+    maxId = Math.max(maxId, parseInt(m[1], 10));
+  }
+  const newRId = `rId${maxId + 1}`;
+
+  relsXml = relsXml.replace(
+    '</Relationships>',
+    `<Relationship Id="${newRId}" Type="${COMMENTS_RELATIONSHIP_TYPE}" Target="comments.xml"/></Relationships>`
+  );
+  zip.file(relsPath, relsXml, {
+    compression: 'DEFLATE',
+    compressionOptions: { level: compressionLevel },
   });
 }
 

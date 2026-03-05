@@ -1743,11 +1743,19 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
     if (!agentRef.current) return null;
 
     try {
-      // Sync React comments state (including new replies) back to the document model
-      const doc = agentRef.current.getDocument();
-      if (doc.package?.document) {
-        doc.package.document.comments = comments;
+      const agentDoc = agentRef.current.getDocument();
+
+      // Get the document from the PM editor state — this runs fromProseDoc which
+      // converts PM comment marks into commentRangeStart/End in the document body.
+      // The agent's internal document has the original parsed content and won't
+      // include markers for newly added comments.
+      const pmDoc = pagedEditorRef.current?.getDocument();
+      if (pmDoc?.package?.document) {
+        agentDoc.package.document.content = pmDoc.package.document.content;
       }
+
+      // Sync React comments state (including new replies) back to the document model
+      agentDoc.package.document.comments = comments;
 
       const saveOptions: SaveDocxOptions = { trackChanges };
       const buffer = await agentRef.current.toBuffer(saveOptions);

@@ -48,6 +48,19 @@ function serializeParagraph(p: Paragraph): string {
   return xml;
 }
 
+/** Serialize a paragraph, prepending an annotationRef run (required by Word in first paragraph of a comment) */
+function serializeParagraphWithAnnotationRef(p: Paragraph): string {
+  let xml = '<w:p>';
+  xml += '<w:r><w:rPr><w:rStyle w:val="CommentReference"/></w:rPr><w:annotationRef/></w:r>';
+  for (const item of p.content) {
+    if (item.type === 'run') {
+      xml += serializeRunContent(item);
+    }
+  }
+  xml += '</w:p>';
+  return xml;
+}
+
 function serializeComment(comment: Comment): string {
   const attrs: string[] = [`w:id="${comment.id}"`];
   if (comment.author) attrs.push(`w:author="${escapeXml(comment.author)}"`);
@@ -55,10 +68,16 @@ function serializeComment(comment: Comment): string {
   if (comment.date) attrs.push(`w:date="${escapeXml(comment.date)}"`);
 
   let xml = `<w:comment ${attrs.join(' ')}>`;
-  if (comment.content) {
-    for (const p of comment.content) {
-      xml += serializeParagraph(p);
+  if (comment.content && comment.content.length > 0) {
+    // First paragraph must contain an annotationRef run for Word to link the comment
+    xml += serializeParagraphWithAnnotationRef(comment.content[0]);
+    for (let i = 1; i < comment.content.length; i++) {
+      xml += serializeParagraph(comment.content[i]);
     }
+  } else {
+    // Empty comment — still needs a paragraph with annotationRef
+    xml +=
+      '<w:p><w:r><w:rPr><w:rStyle w:val="CommentReference"/></w:rPr><w:annotationRef/></w:r></w:p>';
   }
   xml += '</w:comment>';
   return xml;
@@ -71,8 +90,8 @@ export function serializeComments(comments: Comment[]): string {
   if (!comments || comments.length === 0) return '';
 
   // Separate top-level comments and replies
-  const topLevel = comments.filter((c) => !c.parentId);
-  const replies = comments.filter((c) => c.parentId);
+  const topLevel = comments.filter((c) => c.parentId == null);
+  const replies = comments.filter((c) => c.parentId != null);
 
   let xml =
     '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n' +
