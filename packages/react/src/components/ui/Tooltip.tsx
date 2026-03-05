@@ -69,7 +69,7 @@ export function Tooltip({ content, children, side = 'bottom', delayMs = 400 }: T
         <div
           className={cn(
             'fixed z-50 px-2 py-1 text-xs font-medium text-white bg-slate-900 rounded-md shadow-lg',
-            'animate-in fade-in-0 zoom-in-95 duration-150',
+            'animate-in fade-in-0 duration-100',
             side === 'top' && '-translate-x-1/2 -translate-y-full',
             side === 'bottom' && '-translate-x-1/2'
           )}
