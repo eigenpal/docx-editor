@@ -441,7 +441,7 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
   const [showCommentsSidebar, setShowCommentsSidebar] = useState(false);
   const [comments, setComments] = useState<Comment[]>([]);
   const [trackedChanges, setTrackedChanges] = useState<TrackedChangeEntry[]>([]);
-  const [activeCommentId, setActiveCommentId] = useState<number | null>(null);
+
   const [isAddingComment, setIsAddingComment] = useState(false);
   const [commentSelectionRange, setCommentSelectionRange] = useState<{
     from: number;
@@ -2541,17 +2541,9 @@ body { background: white; }
                               return sp?.pageWidth ? Math.round(sp.pageWidth / 15) : 816;
                             })()}
                             editorContainerRef={scrollContainerRef}
-                            activeCommentId={activeCommentId}
-                            onClose={() => setShowCommentsSidebar(false)}
-                            onCommentClick={(id) => setActiveCommentId(id)}
                             onCommentResolve={(id) => {
                               setComments((prev) =>
                                 prev.map((c) => (c.id === id ? { ...c, done: true } : c))
-                              );
-                            }}
-                            onCommentReopen={(id) => {
-                              setComments((prev) =>
-                                prev.map((c) => (c.id === id ? { ...c, done: false } : c))
                               );
                             }}
                             onCommentDelete={(id) => {
