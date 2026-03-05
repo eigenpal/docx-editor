@@ -322,10 +322,20 @@ export const CommentsSidebar: React.FC<CommentsSidebarProps> = ({
     };
   }, [updateCardPositions, editorContainerRef]);
 
-  // Recalculate positions after a card expand/collapse or add-comment toggle
+  // Recalculate positions after a card expand/collapse or add-comment toggle.
+  // Double rAF ensures the DOM has painted the new card height before measuring.
+  // A delayed follow-up catches late layout shifts (e.g. textarea auto-resize).
   useEffect(() => {
-    const raf = requestAnimationFrame(updateCardPositions);
-    return () => cancelAnimationFrame(raf);
+    let innerRaf: number;
+    const outerRaf = requestAnimationFrame(() => {
+      innerRaf = requestAnimationFrame(updateCardPositions);
+    });
+    const timer = setTimeout(updateCardPositions, 150);
+    return () => {
+      cancelAnimationFrame(outerRaf);
+      cancelAnimationFrame(innerRaf);
+      clearTimeout(timer);
+    };
   }, [expandedCard, isAddingComment, updateCardPositions]);
 
   const handleNewCommentSubmit = () => {
