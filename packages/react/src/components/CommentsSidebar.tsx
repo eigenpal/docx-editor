@@ -323,20 +323,34 @@ export const CommentsSidebar: React.FC<CommentsSidebarProps> = ({
   }, [updateCardPositions, editorContainerRef]);
 
   // Recalculate positions after a card expand/collapse or add-comment toggle.
-  // Double rAF ensures the DOM has painted the new card height before measuring.
-  // A delayed follow-up catches late layout shifts (e.g. textarea auto-resize).
   useEffect(() => {
-    let innerRaf: number;
-    const outerRaf = requestAnimationFrame(() => {
-      innerRaf = requestAnimationFrame(updateCardPositions);
-    });
-    const timer = setTimeout(updateCardPositions, 150);
-    return () => {
-      cancelAnimationFrame(outerRaf);
-      cancelAnimationFrame(innerRaf);
-      clearTimeout(timer);
-    };
+    const raf = requestAnimationFrame(updateCardPositions);
+    return () => cancelAnimationFrame(raf);
   }, [expandedCard, isAddingComment, updateCardPositions]);
+
+  // Watch the expanded card for size changes (reply textarea appearing, text wrapping, etc.)
+  // and the add-comment input for the same. Fires when their actual rendered size changes.
+  useEffect(() => {
+    const targets: HTMLElement[] = [];
+    if (expandedCard) {
+      const el = cardRefs.current.get(expandedCard);
+      if (el) targets.push(el);
+    }
+    const addEl = cardRefs.current.get('new-comment-input');
+    if (addEl) targets.push(addEl);
+    if (targets.length === 0) return;
+
+    let rafId: number;
+    const observer = new ResizeObserver(() => {
+      cancelAnimationFrame(rafId);
+      rafId = requestAnimationFrame(updateCardPositions);
+    });
+    for (const el of targets) observer.observe(el);
+    return () => {
+      cancelAnimationFrame(rafId);
+      observer.disconnect();
+    };
+  }, [expandedCard, updateCardPositions]);
 
   const handleNewCommentSubmit = () => {
     if (newCommentText.trim()) {
