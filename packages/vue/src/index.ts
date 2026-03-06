@@ -4,7 +4,15 @@
 // This package provides Vue 3 components wrapping @eigenpal/docx-core.
 // Contributions welcome! See the repository README for guidelines.
 
-// renderAsync stub
+// Components
+export { default as DocxEditorVue } from './components/DocxEditorVue.vue';
+export { default as BasicToolbar } from './components/BasicToolbar.vue';
+
+// Composables
+export { useDocxEditor } from './composables/useDocxEditor';
+export type { UseDocxEditorOptions } from './composables/useDocxEditor';
+
+// renderAsync
 export { renderAsync } from './renderAsync';
 export type { VueRenderAsyncOptions } from './renderAsync';
 
