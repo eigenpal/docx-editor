@@ -31,7 +31,7 @@
 
 import JSZip from 'jszip';
 import type { Document } from '../types/document';
-import type { BlockContent, Image } from '../types/content';
+import type { BlockContent, Image, Hyperlink } from '../types/content';
 import { serializeDocument } from './serializer/documentSerializer';
 import { serializeHeaderFooter } from './serializer/headerFooterSerializer';
 import { serializeComments } from './serializer/commentSerializer';
@@ -232,6 +232,76 @@ async function processNewImages(
 }
 
 // ============================================================================
+// NEW HYPERLINK HANDLING
+// ============================================================================
+
+/**
+ * Collect all hyperlinks that have an href but no rId from block content.
+ * These are newly created hyperlinks that need relationship entries.
+ */
+function collectHyperlinksWithoutRId(blocks: BlockContent[]): Hyperlink[] {
+  const hyperlinks: Hyperlink[] = [];
+
+  for (const block of blocks) {
+    if (block.type === 'paragraph') {
+      for (const item of block.content) {
+        if (item.type === 'hyperlink' && item.href && !item.rId && !item.anchor) {
+          hyperlinks.push(item);
+        }
+      }
+    } else if (block.type === 'table') {
+      for (const row of block.rows) {
+        for (const cell of row.cells) {
+          hyperlinks.push(...collectHyperlinksWithoutRId(cell.content));
+        }
+      }
+    }
+  }
+
+  return hyperlinks;
+}
+
+/**
+ * Process newly created hyperlinks: assign rIds and add relationship entries.
+ * Mutates the hyperlinks' rId fields in-place.
+ */
+async function processNewHyperlinks(
+  newHyperlinks: Hyperlink[],
+  zip: JSZip,
+  compressionLevel: number
+): Promise<void> {
+  if (newHyperlinks.length === 0) return;
+
+  const relsPath = 'word/_rels/document.xml.rels';
+  const relsFile = zip.file(relsPath);
+  if (!relsFile) return;
+  let relsXml = await relsFile.async('text');
+
+  let maxId = findMaxRId(relsXml);
+  const relEntries: string[] = [];
+
+  for (const hyperlink of newHyperlinks) {
+    maxId++;
+    const newRId = `rId${maxId}`;
+
+    relEntries.push(
+      `<Relationship Id="${newRId}" Type="${RELATIONSHIP_TYPES.hyperlink}" Target="${escapeXml(hyperlink.href!)}" TargetMode="External"/>`
+    );
+
+    // Rewrite the hyperlink's rId so the serializer outputs the correct reference
+    hyperlink.rId = newRId;
+  }
+
+  if (relEntries.length > 0) {
+    relsXml = relsXml.replace('</Relationships>', relEntries.join('') + '</Relationships>');
+    zip.file(relsPath, relsXml, {
+      compression: 'DEFLATE',
+      compressionOptions: { level: compressionLevel },
+    });
+  }
+}
+
+// ============================================================================
 // MAIN REPACKER
 // ============================================================================
 
@@ -296,7 +366,12 @@ export async function repackDocx(doc: Document, options: RepackOptions = {}): Pr
   const newImages = collectNewImages(exportDocument.package.document.content);
   await processNewImages(newImages, newZip, compressionLevel);
 
-  // Serialize and update document.xml (after image rIds have been rewritten)
+  // Process newly created hyperlinks (assign rIds + add relationship entries).
+  // This mutates hyperlink rIds in-place so the serializer outputs correct references.
+  const newHyperlinks = collectHyperlinksWithoutRId(exportDocument.package.document.content);
+  await processNewHyperlinks(newHyperlinks, newZip, compressionLevel);
+
+  // Serialize and update document.xml (after image/hyperlink rIds have been rewritten)
   const documentXml = serializeDocument(exportDocument);
   newZip.file('word/document.xml', documentXml, {
     compression: 'DEFLATE',
@@ -378,6 +453,9 @@ export async function repackDocxFromRaw(
   // Serialize and update document.xml
   const newImages = collectNewImages(exportDocument.package.document.content);
   await processNewImages(newImages, newZip, compressionLevel);
+
+  const newHyperlinks = collectHyperlinksWithoutRId(exportDocument.package.document.content);
+  await processNewHyperlinks(newHyperlinks, newZip, compressionLevel);
 
   const documentXml = serializeDocument(exportDocument);
   newZip.file('word/document.xml', documentXml, {
