@@ -41,7 +41,6 @@
         "docx-editor-mcp": "./dist/mcp-cli.js",
       },
       "dependencies": {
-        "clsx": "^2.1.0",
         "docxtemplater": "^3.50.0",
         "jszip": "^3.10.1",
         "pizzip": "^3.1.7",
@@ -58,7 +57,7 @@
     },
     "packages/react": {
       "name": "@eigenpal/docx-js-editor",
-      "version": "0.0.16",
+      "version": "0.0.17",
       "dependencies": {
         "@eigenpal/docx-core": "workspace:*",
         "@radix-ui/react-select": "^2.2.6",
