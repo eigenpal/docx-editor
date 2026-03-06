@@ -1,10 +1,17 @@
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+const __configDir = path.dirname(fileURLToPath(import.meta.url));
+
 /** @type {import('tailwindcss').Config} */
 export default {
   darkMode: ['class'],
   // Scope all utilities under .ep-root to avoid clashing with host app CSS
   important: '.ep-root',
   // Only scan library source files, not demo
-  content: ['./packages/react/src/**/*.{ts,tsx}'],
+  // Must use absolute paths because build:css runs from packages/react/
+  // but this config lives at the repo root
+  content: [path.join(__configDir, 'packages/react/src/**/*.{ts,tsx}')],
   theme: {
     extend: {
       colors: {
