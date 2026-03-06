@@ -48,11 +48,10 @@ function Editor({ file }: { file: ArrayBuffer }) {
 
 ## Packages
 
-| Package                                      | Description                                                      |
-| -------------------------------------------- | ---------------------------------------------------------------- |
-| [`@eigenpal/docx-js-editor`](packages/react) | React UI — toolbar, paged editor, plugins. **Install this one.** |
-| [`@eigenpal/docx-core`](packages/core)       | Framework-agnostic core — parsing, ProseMirror, layout engine    |
-| [`@eigenpal/docx-editor-vue`](packages/vue)  | Vue.js scaffold — contributions welcome                          |
+| Package                                      | Description                                                  |
+| -------------------------------------------- | ------------------------------------------------------------ |
+| [`@eigenpal/docx-js-editor`](packages/react) | React UI — toolbar, paged editor, plugins. **Install this.** |
+| [`@eigenpal/docx-editor-vue`](packages/vue)  | Vue.js scaffold — contributions welcome                      |
 
 ## Plugins
 

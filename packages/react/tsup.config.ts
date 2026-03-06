@@ -22,10 +22,6 @@ export default defineConfig({
   external: [
     'react',
     'react-dom',
-    '@eigenpal/docx-core',
-    '@eigenpal/docx-core/headless',
-    '@eigenpal/docx-core/core-plugins',
-    '@eigenpal/docx-core/mcp',
     'prosemirror-commands',
     'prosemirror-dropcursor',
     'prosemirror-history',
