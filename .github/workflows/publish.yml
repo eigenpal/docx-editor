@@ -46,12 +46,14 @@ jobs:
 
       - name: Publish (dry run)
         if: ${{ github.event.inputs.dry-run == 'true' }}
+        working-directory: packages/react
         run: npm publish --dry-run
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
       - name: Publish
         if: ${{ github.event.inputs.dry-run != 'true' }}
+        working-directory: packages/react
         run: npm publish --provenance --access public
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
