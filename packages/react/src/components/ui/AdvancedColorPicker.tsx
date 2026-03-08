@@ -1,4 +1,4 @@
-import { useState, useCallback, useMemo } from 'react';
+import { useState, useCallback, useMemo, useEffect } from 'react';
 import type { CSSProperties } from 'react';
 import type { ColorValue, Theme, ThemeColorScheme } from '@eigenpal/docx-core/types/document';
 import {
@@ -314,6 +314,14 @@ export function AdvancedColorPicker({
   const [isOpen, setIsOpen] = useState(false);
   const [isHovered, setIsHovered] = useState(false);
   const [customHex, setCustomHex] = useState('');
+
+  // Sync custom hex input with the current value
+  useEffect(() => {
+    const hex = resolveCurrentColor(value, mode, theme).replace(/^#/, '');
+    if (/^[0-9A-Fa-f]{6}$/.test(hex)) {
+      setCustomHex(hex.toUpperCase());
+    }
+  }, [value, mode, theme]);
 
   const onClose = useCallback(() => setIsOpen(false), []);
   const { containerRef, dropdownRef, dropdownStyle } = useFixedDropdown({
