@@ -29,10 +29,10 @@ import {
 
 import { DEFAULT_SINGLE_LINE_RATIO } from '../../utils/fontResolver';
 
-// Default values - match Word 2007+ defaults and renderPage.ts
+// Default values - match OOXML spec defaults
 const DEFAULT_FONT_SIZE = 11; // 11pt (Word 2007+ default)
 const DEFAULT_FONT_FAMILY = 'Calibri';
-const DEFAULT_LINE_HEIGHT_MULTIPLIER = 1.15; // Word single spacing
+const DEFAULT_LINE_HEIGHT_MULTIPLIER = 1.0; // OOXML spec default: single spacing (line=240)
 
 // Floating-point tolerance for line breaking (0.5px)
 // Prevents premature line breaks due to measurement rounding
@@ -153,9 +153,10 @@ function calculateTypographyMetrics(
     // Pixel value
     lineHeight = spacing.line;
   } else {
-    // No explicit spacing — Word 2007+ default is line=276 (1.15x of single-line height).
-    // Most paragraphs get lineSpacing from the style resolver, so this branch
-    // is a fallback for paragraphs with no style and no direct formatting.
+    // No explicit spacing — OOXML spec default is line=240 (1.0x = single spacing).
+    // Documents wanting 1.15x set w:line=276 explicitly in styles, which flows
+    // through the multiplier branch above. This fallback is for paragraphs with
+    // no style and no direct formatting.
     lineHeight = singleLineBase * DEFAULT_LINE_HEIGHT_MULTIPLIER;
   }
 

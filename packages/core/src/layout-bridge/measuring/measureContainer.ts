@@ -8,7 +8,7 @@
  * - ascent ≈ fontSize * 0.8 (baseline to top)
  * - descent ≈ fontSize * 0.2 (baseline to bottom)
  * - lineHeight from font metrics (fontBoundingBoxAscent + fontBoundingBoxDescent),
- *   falling back to fontSize * 1.15 (Word 2007+ "single" line spacing)
+ *   falling back to fontSize * 1.0 (OOXML spec default single spacing)
  */
 
 import { resolveFontFamily } from '../../utils/fontResolver';
@@ -21,7 +21,7 @@ const TWIPS_PER_PX = TWIPS_PER_INCH / PX_PER_INCH; // 15 twips per pixel
 // Default typography values
 const DEFAULT_FONT_SIZE = 11; // 11pt (Word 2007+ default)
 const DEFAULT_FONT_FAMILY = 'Calibri';
-const DEFAULT_LINE_HEIGHT_MULTIPLIER = 1.15; // Word single spacing
+const DEFAULT_LINE_HEIGHT_MULTIPLIER = 1.0; // OOXML spec default: single spacing (line=240)
 const DEFAULT_ASCENT_RATIO = 0.8;
 const DEFAULT_DESCENT_RATIO = 0.2;
 
@@ -198,8 +198,8 @@ export function getFontMetrics(style: FontStyle): FontMetrics {
     // When Google Font substitutes are used (e.g., EB Garamond for Garamond),
     // their fontBoundingBox metrics are significantly larger than the original font's
     // OS/2 metrics that Word uses (e.g., EB Garamond 12pt: 21px vs Garamond: 18px).
-    // Using fontSize * 1.15 as the base provides a better approximation of Word's
-    // single-line spacing across all fonts, including substitutes.
+    // Using fontSize * 1.0 (OOXML spec default) as the base provides correct
+    // single-line spacing when no explicit line spacing is specified.
   } catch {
     // Use fallback ratio-based values
   }
