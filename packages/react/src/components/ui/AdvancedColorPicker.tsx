@@ -197,6 +197,17 @@ function resolveCurrentColor(
   return resolveColor(value, theme);
 }
 
+/** Returns true if the hex color (e.g. "#F8FAFC") is very light and needs a border to be visible. */
+function isLightColor(hex: string): boolean {
+  const h = hex.replace(/^#/, '');
+  if (h.length !== 6) return false;
+  const r = parseInt(h.slice(0, 2), 16);
+  const g = parseInt(h.slice(2, 4), 16);
+  const b = parseInt(h.slice(4, 6), 16);
+  // Perceived luminance — threshold at ~90% white
+  return (r * 299 + g * 587 + b * 114) / 1000 > 230;
+}
+
 function isSelectedCell(
   value: ColorValue | string | undefined,
   cellHex: string,
@@ -445,7 +456,10 @@ export function AdvancedColorPicker({
             style={{
               ...S_COLOR_BAR,
               backgroundColor: resolvedColor === 'transparent' ? '#fff' : resolvedColor,
-              border: resolvedColor === 'transparent' ? '1px solid #ccc' : 'none',
+              border:
+                resolvedColor === 'transparent' || isLightColor(resolvedColor)
+                  ? '1px solid #ccc'
+                  : 'none',
             }}
           />
         </div>
