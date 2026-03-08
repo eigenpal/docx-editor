@@ -456,10 +456,9 @@ export function AdvancedColorPicker({
             style={{
               ...S_COLOR_BAR,
               backgroundColor: resolvedColor === 'transparent' ? '#fff' : resolvedColor,
-              boxSizing: 'border-box',
-              border:
+              outline:
                 resolvedColor === 'transparent' || isLightColor(resolvedColor)
-                  ? '1px solid #999'
+                  ? '1px solid #bbb'
                   : 'none',
             }}
           />
