@@ -93,6 +93,7 @@ import { DefaultLoadingIndicator, DefaultPlaceholder, ParseError } from './DocxE
 import { parseDocx } from '@eigenpal/docx-core/docx/parser';
 import { type DocxInput } from '@eigenpal/docx-core/utils/docxInput';
 import { onFontsLoaded, loadDocumentFonts } from '@eigenpal/docx-core/utils/fontLoader';
+import { resolveColor } from '@eigenpal/docx-core/utils/colorResolver';
 import { executeCommand } from '@eigenpal/docx-core/agent/executor';
 import { useTableSelection } from '../hooks/useTableSelection';
 import { useDocumentHistory } from '../hooks/useHistory';
@@ -974,6 +975,21 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
         }
       }
 
+      // Sync borderSpecRef with the current cell's actual border color
+      if (pmTableCtx?.cellBorderColor) {
+        const colorVal = pmTableCtx.cellBorderColor;
+        // Resolve theme/auto colors to hex
+        let rgb = colorVal.rgb;
+        if (!rgb || rgb === 'auto') {
+          const resolved = resolveColor(colorVal, theme);
+          rgb = resolved.replace(/^#/, '');
+        }
+        borderSpecRef.current = {
+          ...borderSpecRef.current,
+          color: { rgb },
+        };
+      }
+
       // Check if cursor is on an image (NodeSelection)
       let pmImageCtx: typeof state.pmImageContext = null;
       if (view) {
@@ -1544,16 +1560,16 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
           break;
         // Per-side border actions (use current border spec)
         case 'borderTop':
-          setCellBorder('top', borderSpecRef.current)(view.state, view.dispatch);
+          setCellBorder('top', borderSpecRef.current, true)(view.state, view.dispatch);
           break;
         case 'borderBottom':
-          setCellBorder('bottom', borderSpecRef.current)(view.state, view.dispatch);
+          setCellBorder('bottom', borderSpecRef.current, true)(view.state, view.dispatch);
           break;
         case 'borderLeft':
-          setCellBorder('left', borderSpecRef.current)(view.state, view.dispatch);
+          setCellBorder('left', borderSpecRef.current, true)(view.state, view.dispatch);
           break;
         case 'borderRight':
-          setCellBorder('right', borderSpecRef.current)(view.state, view.dispatch);
+          setCellBorder('right', borderSpecRef.current, true)(view.state, view.dispatch);
           break;
         default:
           // Handle complex actions (with parameters)

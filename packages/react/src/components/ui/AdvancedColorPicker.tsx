@@ -1,4 +1,4 @@
-import { useState, useCallback, useMemo } from 'react';
+import { useState, useCallback, useMemo, useEffect } from 'react';
 import type { CSSProperties } from 'react';
 import type { ColorValue, Theme, ThemeColorScheme } from '@eigenpal/docx-core/types/document';
 import {
@@ -25,6 +25,10 @@ export interface AdvancedColorPickerProps {
   className?: string;
   style?: CSSProperties;
   title?: string;
+  /** Override the default icon for the mode */
+  icon?: string;
+  /** Override the auto/no-color button label */
+  autoLabel?: string;
 }
 
 // ============================================================================
@@ -162,9 +166,9 @@ const S_APPLY_BTN: CSSProperties = {
 };
 
 const S_COLOR_BAR: CSSProperties = {
-  width: '14px',
-  height: '3px',
-  borderRadius: '0',
+  width: '16px',
+  height: '4px',
+  borderRadius: '1px',
   marginTop: '-2px',
 };
 
@@ -191,6 +195,17 @@ function resolveCurrentColor(
     return value.startsWith('#') ? value : `#${value}`;
   }
   return resolveColor(value, theme);
+}
+
+/** Returns true if the hex color (e.g. "#F8FAFC") is very light and needs a border to be visible. */
+function isLightColor(hex: string): boolean {
+  const h = hex.replace(/^#/, '');
+  if (h.length !== 6) return false;
+  const r = parseInt(h.slice(0, 2), 16);
+  const g = parseInt(h.slice(2, 4), 16);
+  const b = parseInt(h.slice(4, 6), 16);
+  // Perceived luminance — threshold at ~90% white
+  return (r * 299 + g * 587 + b * 114) / 1000 > 230;
 }
 
 function isSelectedCell(
@@ -304,10 +319,20 @@ export function AdvancedColorPicker({
   className,
   style,
   title,
+  icon: iconOverride,
+  autoLabel,
 }: AdvancedColorPickerProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [isHovered, setIsHovered] = useState(false);
   const [customHex, setCustomHex] = useState('');
+
+  // Sync custom hex input with the current value
+  useEffect(() => {
+    const hex = resolveCurrentColor(value, mode, theme).replace(/^#/, '');
+    if (/^[0-9A-Fa-f]{6}$/.test(hex)) {
+      setCustomHex(hex.toUpperCase());
+    }
+  }, [value, mode, theme]);
 
   const onClose = useCallback(() => setIsOpen(false), []);
   const { containerRef, dropdownRef, dropdownStyle } = useFixedDropdown({
@@ -398,11 +423,12 @@ export function AdvancedColorPicker({
     mode === 'text' ? 'Font Color' : mode === 'highlight' ? 'Text Highlight Color' : 'Border Color';
 
   const iconName =
-    mode === 'text'
+    iconOverride ??
+    (mode === 'text'
       ? 'format_color_text'
       : mode === 'highlight'
         ? 'ink_highlighter'
-        : 'border_color';
+        : 'border_color');
 
   return (
     <div
@@ -430,7 +456,10 @@ export function AdvancedColorPicker({
             style={{
               ...S_COLOR_BAR,
               backgroundColor: resolvedColor === 'transparent' ? '#fff' : resolvedColor,
-              border: resolvedColor === 'transparent' ? '1px solid #ccc' : 'none',
+              outline:
+                resolvedColor === 'transparent' || isLightColor(resolvedColor)
+                  ? '1px solid #bbb'
+                  : 'none',
             }}
           />
         </div>
@@ -494,7 +523,7 @@ export function AdvancedColorPicker({
                   }}
                 />
               )}
-              {mode === 'highlight' ? 'No Color' : 'Automatic'}
+              {autoLabel ?? (mode === 'highlight' ? 'No Color' : 'Automatic')}
             </button>
             <div style={S_DIVIDER} />
             <div style={S_SECTION_LABEL}>Theme Colors</div>

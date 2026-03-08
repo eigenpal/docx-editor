@@ -17,6 +17,7 @@ import type {
   Style,
   Theme,
 } from '@eigenpal/docx-core/types/document';
+import { resolveColor } from '@eigenpal/docx-core/utils/colorResolver';
 import { FontPicker } from './ui/FontPicker';
 import { FontSizePicker, halfPointsToPoints } from './ui/FontSizePicker';
 import { AdvancedColorPicker } from './ui/AdvancedColorPicker';
@@ -204,6 +205,8 @@ export interface ToolbarProps {
     columnCount?: number;
     canSplitCell?: boolean;
     hasMultiCellSelection?: boolean;
+    cellBorderColor?: ColorValue;
+    cellBackgroundColor?: string;
   } | null;
   /** Callback when a table action is triggered */
   onTableAction?: (action: TableAction) => void;
@@ -989,9 +992,23 @@ export function Toolbar({
       {tableContext?.isInTable && onTableAction && (
         <ToolbarGroup label="Table">
           <TableBorderPicker onAction={handleTableAction} disabled={disabled} />
-          <TableBorderColorPicker onAction={handleTableAction} disabled={disabled} theme={theme} />
+          <TableBorderColorPicker
+            onAction={handleTableAction}
+            disabled={disabled}
+            theme={theme}
+            value={
+              tableContext?.cellBorderColor
+                ? resolveColor(tableContext.cellBorderColor, theme).replace(/^#/, '')
+                : undefined
+            }
+          />
           <TableBorderWidthPicker onAction={handleTableAction} disabled={disabled} />
-          <TableCellFillPicker onAction={handleTableAction} disabled={disabled} />
+          <TableCellFillPicker
+            onAction={handleTableAction}
+            disabled={disabled}
+            theme={theme}
+            value={tableContext?.cellBackgroundColor}
+          />
           <TableMoreDropdown
             onAction={handleTableAction}
             disabled={disabled}

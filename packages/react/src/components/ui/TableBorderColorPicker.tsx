@@ -15,12 +15,15 @@ export interface TableBorderColorPickerProps {
   onAction: (action: TableAction) => void;
   disabled?: boolean;
   theme?: Theme | null;
+  /** Current border color (RGB hex without #) */
+  value?: string;
 }
 
 export function TableBorderColorPicker({
   onAction,
   disabled = false,
   theme,
+  value,
 }: TableBorderColorPickerProps) {
   const handleChange = useCallback(
     (color: ColorValue | string) => {
@@ -38,6 +41,7 @@ export function TableBorderColorPicker({
   return (
     <AdvancedColorPicker
       mode="border"
+      value={value}
       onChange={handleChange}
       theme={theme}
       disabled={disabled}

@@ -1,182 +1,54 @@
 /**
- * TableCellFillPicker - Paint bucket icon with color dropdown
+ * TableCellFillPicker - Wrapper around AdvancedColorPicker for table cell fill/shading.
  *
- * Reuses the color grid pattern for cell shading color selection.
+ * Translates AdvancedColorPicker's output to the TableAction format
+ * expected by the toolbar's table action handler.
  */
 
-import { useState, useCallback } from 'react';
-import type { CSSProperties } from 'react';
-import { Button } from './Button';
-import { Tooltip } from './Tooltip';
-import { MaterialSymbol } from './MaterialSymbol';
-import { cn } from '../../lib/utils';
+import { useCallback } from 'react';
+import type { ColorValue, Theme } from '@eigenpal/docx-core/types/document';
 import type { TableAction } from './TableToolbar';
-import { useFixedDropdown } from './useFixedDropdown';
+import { AdvancedColorPicker } from './AdvancedColorPicker';
 
 export interface TableCellFillPickerProps {
   onAction: (action: TableAction) => void;
   disabled?: boolean;
+  theme?: Theme | null;
+  /** Current fill color (RGB hex without #) */
+  value?: string;
 }
 
-const QUICK_COLORS = [
-  '#000000',
-  '#434343',
-  '#666666',
-  '#999999',
-  '#b7b7b7',
-  '#cccccc',
-  '#d9d9d9',
-  '#efefef',
-  '#f3f3f3',
-  '#ffffff',
-  '#980000',
-  '#ff0000',
-  '#ff9900',
-  '#ffff00',
-  '#00ff00',
-  '#00ffff',
-  '#4a86e8',
-  '#0000ff',
-  '#9900ff',
-  '#ff00ff',
-];
-
-const swatchStyle: CSSProperties = {
-  width: 18,
-  height: 18,
-  borderRadius: 2,
-  border: '1px solid var(--doc-border)',
-  cursor: 'pointer',
-  padding: 0,
-  backgroundColor: 'transparent',
-};
-
-export function TableCellFillPicker({ onAction, disabled = false }: TableCellFillPickerProps) {
-  const [isOpen, setIsOpen] = useState(false);
-  const [currentColor, setCurrentColor] = useState<string | null>(null);
-  const close = useCallback(() => setIsOpen(false), []);
-  const { containerRef, dropdownRef, dropdownStyle, handleMouseDown } = useFixedDropdown({
-    isOpen,
-    onClose: close,
-  });
-
-  const handleColorSelect = useCallback(
-    (color: string) => {
-      setCurrentColor(color);
-      onAction({ type: 'cellFillColor', color });
-      setIsOpen(false);
+export function TableCellFillPicker({
+  onAction,
+  disabled = false,
+  theme,
+  value,
+}: TableCellFillPickerProps) {
+  const handleChange = useCallback(
+    (color: ColorValue | string) => {
+      // highlight mode emits hex strings or 'none'
+      if (typeof color === 'string') {
+        if (color === 'none') {
+          onAction({ type: 'cellFillColor', color: null });
+        } else {
+          onAction({ type: 'cellFillColor', color: color.replace(/^#/, '') });
+        }
+      }
     },
     [onAction]
   );
 
-  const handleNoColor = useCallback(() => {
-    setCurrentColor(null);
-    onAction({ type: 'cellFillColor', color: null });
-    setIsOpen(false);
-  }, [onAction]);
-
-  const button = (
-    <Button
-      variant="ghost"
-      size="icon-sm"
-      className={cn(
-        'text-slate-500 hover:text-slate-900 hover:bg-slate-100/80 flex-col gap-0 !p-0.5',
-        isOpen && 'bg-slate-100',
-        disabled && 'opacity-30 cursor-not-allowed'
-      )}
-      onMouseDown={handleMouseDown}
-      onClick={() => !disabled && setIsOpen((prev) => !prev)}
-      disabled={disabled}
-      aria-label="Cell fill color"
-      aria-expanded={isOpen}
-      aria-haspopup="true"
-      data-testid="toolbar-table-cell-fill"
-    >
-      <MaterialSymbol name="format_color_fill" size={18} />
-      <div
-        style={{
-          width: 16,
-          height: 3,
-          backgroundColor: currentColor || 'transparent',
-          borderRadius: 0,
-          marginTop: -2,
-          border: currentColor ? 'none' : '1px solid var(--doc-border)',
-        }}
-      />
-    </Button>
-  );
-
   return (
-    <div ref={containerRef} style={{ position: 'relative', display: 'inline-block' }}>
-      {!isOpen ? <Tooltip content="Cell fill color">{button}</Tooltip> : button}
-
-      {isOpen && !disabled && (
-        <div
-          ref={dropdownRef}
-          style={{
-            ...dropdownStyle,
-            backgroundColor: 'white',
-            border: '1px solid var(--doc-border)',
-            borderRadius: 8,
-            boxShadow: '0 4px 16px rgba(0, 0, 0, 0.12)',
-            padding: 8,
-          }}
-          onMouseDown={(e) => e.stopPropagation()}
-        >
-          <div
-            style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(10, 1fr)',
-              gap: 2,
-            }}
-          >
-            {QUICK_COLORS.map((color) => (
-              <button
-                key={color}
-                type="button"
-                style={{
-                  ...swatchStyle,
-                  backgroundColor: color,
-                  outline: currentColor === color ? '2px solid var(--doc-primary)' : 'none',
-                  outlineOffset: 1,
-                }}
-                title={color}
-                onMouseDown={(e) => e.preventDefault()}
-                onClick={() => handleColorSelect(color)}
-              />
-            ))}
-          </div>
-          <button
-            type="button"
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: 6,
-              marginTop: 6,
-              padding: '4px 8px',
-              width: '100%',
-              border: 'none',
-              backgroundColor: 'transparent',
-              cursor: 'pointer',
-              fontSize: 12,
-              color: 'var(--doc-text-muted)',
-              borderRadius: 4,
-            }}
-            onMouseDown={(e) => e.preventDefault()}
-            onMouseEnter={(e) => {
-              (e.currentTarget as HTMLButtonElement).style.backgroundColor = 'var(--doc-bg-hover)';
-            }}
-            onMouseLeave={(e) => {
-              (e.currentTarget as HTMLButtonElement).style.backgroundColor = 'transparent';
-            }}
-            onClick={handleNoColor}
-          >
-            <MaterialSymbol name="format_color_reset" size={14} />
-            <span>No fill</span>
-          </button>
-        </div>
-      )}
-    </div>
+    <AdvancedColorPicker
+      mode="highlight"
+      value={value}
+      onChange={handleChange}
+      theme={theme}
+      disabled={disabled}
+      title="Cell Fill Color"
+      icon="format_color_fill"
+      autoLabel="No fill"
+    />
   );
 }
 
