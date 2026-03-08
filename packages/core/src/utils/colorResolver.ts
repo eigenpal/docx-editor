@@ -657,6 +657,146 @@ export function blendColors(
   return `#${rgbToHex(blended.r, blended.g, blended.b)}`;
 }
 
+// ============================================================================
+// HEX UTILITIES
+// ============================================================================
+
+/**
+ * Ensure a hex color string has a '#' prefix.
+ */
+export function ensureHexPrefix(hex: string): string {
+  return hex.startsWith('#') ? hex : `#${hex}`;
+}
+
+/**
+ * Resolve a highlight color value to a CSS-ready string.
+ * Tries OOXML named highlight first, then ensures hex prefix.
+ */
+export function resolveHighlightToCss(value: string): string {
+  return resolveHighlightColor(value) || ensureHexPrefix(value);
+}
+
+// ============================================================================
+// THEME COLOR MATRIX FOR ADVANCED COLOR PICKER
+// ============================================================================
+
+/**
+ * Theme color matrix cell
+ */
+export interface ThemeMatrixCell {
+  /** Resolved hex color (6 chars, no #) */
+  hex: string;
+  /** Theme color slot */
+  themeSlot: ThemeColorSlot;
+  /** Tint hex modifier if applicable (e.g., "CC") */
+  tint?: string;
+  /** Shade hex modifier if applicable (e.g., "BF") */
+  shade?: string;
+  /** Human-readable label (e.g., "Accent 1, Lighter 60%") */
+  label: string;
+}
+
+/**
+ * Theme color column order matching Word's color picker:
+ * Background 1 (lt1), Text 1 (dk1), Background 2 (lt2), Text 2 (dk2), Accent 1-6
+ */
+const THEME_MATRIX_COLUMNS: Array<{ slot: ThemeColorSlot; name: string }> = [
+  { slot: 'lt1', name: 'Background 1' },
+  { slot: 'dk1', name: 'Text 1' },
+  { slot: 'lt2', name: 'Background 2' },
+  { slot: 'dk2', name: 'Text 2' },
+  { slot: 'accent1', name: 'Accent 1' },
+  { slot: 'accent2', name: 'Accent 2' },
+  { slot: 'accent3', name: 'Accent 3' },
+  { slot: 'accent4', name: 'Accent 4' },
+  { slot: 'accent5', name: 'Accent 5' },
+  { slot: 'accent6', name: 'Accent 6' },
+];
+
+/**
+ * Tint/shade row definitions matching Word's picker.
+ * Row 0 = base, rows 1-3 = tints (lighter), rows 4-5 = shades (darker).
+ */
+const THEME_MATRIX_ROWS: Array<{
+  type: 'base' | 'tint' | 'shade';
+  value: number; // fraction 0-1
+  hexValue: string; // OOXML hex modifier
+  labelSuffix: string;
+}> = [
+  { type: 'base', value: 0, hexValue: '', labelSuffix: '' },
+  { type: 'tint', value: 0.8, hexValue: 'CC', labelSuffix: ', Lighter 80%' },
+  { type: 'tint', value: 0.6, hexValue: '99', labelSuffix: ', Lighter 60%' },
+  { type: 'tint', value: 0.4, hexValue: '66', labelSuffix: ', Lighter 40%' },
+  { type: 'shade', value: 0.75, hexValue: 'BF', labelSuffix: ', Darker 25%' },
+  { type: 'shade', value: 0.5, hexValue: '80', labelSuffix: ', Darker 50%' },
+];
+
+/**
+ * Compute a single tinted or shaded hex color from a base color.
+ *
+ * @param baseHex - 6-character hex color (no #)
+ * @param type - 'tint' to lighten, 'shade' to darken
+ * @param fraction - Amount (0-1). For tint: 0=no change, 1=white. For shade: 0=black, 1=no change.
+ * @returns 6-character hex color (no #)
+ */
+export function getThemeTintShadeHex(
+  baseHex: string,
+  type: 'tint' | 'shade',
+  fraction: number
+): string {
+  if (type === 'tint') {
+    return applyTint(baseHex, fraction);
+  }
+  return applyShade(baseHex, fraction);
+}
+
+/**
+ * Generate the 10×6 theme color matrix for an advanced color picker.
+ *
+ * Columns: lt1, dk1, lt2, dk2, accent1-6 (matches Word's order)
+ * Rows: base, 80% tint, 60% tint, 40% tint, 25% shade, 50% shade
+ *
+ * @param colorScheme - Theme color scheme (falls back to Office 2016 defaults)
+ * @returns 6 rows × 10 columns of ThemeMatrixCell
+ */
+export function generateThemeTintShadeMatrix(
+  colorScheme?: ThemeColorScheme | null
+): ThemeMatrixCell[][] {
+  const scheme = colorScheme ?? DEFAULT_THEME_COLORS;
+
+  return THEME_MATRIX_ROWS.map((row) => {
+    return THEME_MATRIX_COLUMNS.map((col) => {
+      const baseHex =
+        scheme[col.slot as keyof ThemeColorScheme] ??
+        DEFAULT_THEME_COLORS[col.slot as keyof ThemeColorScheme] ??
+        '000000';
+
+      let hex: string;
+      if (row.type === 'base') {
+        hex = baseHex.toUpperCase();
+      } else if (row.type === 'tint') {
+        hex = applyTint(baseHex, row.value);
+      } else {
+        hex = applyShade(baseHex, row.value);
+      }
+
+      const cell: ThemeMatrixCell = {
+        hex,
+        themeSlot: col.slot,
+        label: `${col.name}${row.labelSuffix}`,
+      };
+
+      if (row.type === 'tint' && row.hexValue) {
+        cell.tint = row.hexValue;
+      } else if (row.type === 'shade' && row.hexValue) {
+        cell.shade = row.hexValue;
+      }
+
+      return cell;
+    });
+  });
+}
+
 /**
  * Check if two colors are equal
  *

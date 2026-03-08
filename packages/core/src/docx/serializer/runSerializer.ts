@@ -312,6 +312,12 @@ export function serializeTextFormatting(formatting: TextFormatting | undefined):
       if (formatting.underline.color.themeColor) {
         uAttrs.push(`w:themeColor="${formatting.underline.color.themeColor}"`);
       }
+      if (formatting.underline.color.themeTint) {
+        uAttrs.push(`w:themeTint="${formatting.underline.color.themeTint}"`);
+      }
+      if (formatting.underline.color.themeShade) {
+        uAttrs.push(`w:themeShade="${formatting.underline.color.themeShade}"`);
+      }
     }
     parts.push(`<w:u ${uAttrs.join(' ')}/>`);
   }

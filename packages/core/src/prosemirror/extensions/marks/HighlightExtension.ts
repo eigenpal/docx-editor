@@ -5,7 +5,7 @@
 import { createMarkExtension } from '../create';
 import { setMark, removeMark } from './markUtils';
 import type { ExtensionContext, ExtensionRuntime } from '../types';
-import { resolveHighlightColor } from '../../../utils/colorResolver';
+import { resolveHighlightToCss } from '../../../utils/colorResolver';
 
 export const HighlightExtension = createMarkExtension({
   name: 'highlight',
@@ -31,8 +31,7 @@ export const HighlightExtension = createMarkExtension({
     toDOM(mark) {
       const color = mark.attrs.color as string;
       // Resolve OOXML named highlight color (e.g., 'yellow' → '#FFFF00')
-      const cssColor =
-        resolveHighlightColor(color) || (color.startsWith('#') ? color : `#${color}`);
+      const cssColor = resolveHighlightToCss(color);
       return ['mark', { style: `background-color: ${cssColor}` }, 0];
     },
   },

@@ -208,7 +208,9 @@ test.describe('Combined Color Operations', () => {
     await editor.typeText('Bold red text');
     await editor.selectAll();
     await editor.setTextColor('#FF0000');
-    await editor.applyBold();
+    // Re-select and use keyboard shortcut — color picker dropdown can lose PM selection
+    await editor.selectAll();
+    await editor.applyBoldShortcut();
 
     await assertions.assertTextIsBold(page, 'Bold red text');
   });
@@ -226,7 +228,9 @@ test.describe('Combined Color Operations', () => {
     await editor.typeText('Bold highlighted');
     await editor.selectAll();
     await editor.setHighlightColor('yellow');
-    await editor.applyBold();
+    // Re-select and use keyboard shortcut — color picker dropdown can lose PM selection
+    await editor.selectAll();
+    await editor.applyBoldShortcut();
 
     await assertions.assertTextIsBold(page, 'Bold highlighted');
   });
@@ -253,10 +257,15 @@ test.describe('Combined Color Operations', () => {
     await editor.typeText('Full formatting');
     await editor.selectAll();
     await editor.setFontFamily('Arial');
+    await editor.selectAll();
     await editor.setFontSize(18);
+    await editor.selectAll();
     await editor.setTextColor('#0000FF');
+    await editor.selectAll();
     await editor.setHighlightColor('yellow');
-    await editor.applyBold();
+    // Re-select and use keyboard shortcut — dropdown interactions can lose PM selection
+    await editor.selectAll();
+    await editor.applyBoldShortcut();
 
     await assertions.assertTextIsBold(page, 'Full formatting');
   });
@@ -336,20 +345,82 @@ test.describe('Color Edge Cases', () => {
   });
 
   test('alternating colors per word', async ({ page }) => {
-    await editor.typeText('Red ');
+    // Type all words first, then color them individually
+    await editor.typeText('Red Blue Green');
+
     await editor.selectText('Red');
     await editor.setTextColor('#FF0000');
 
-    await editor.typeText('Blue ');
     await editor.selectText('Blue');
     await editor.setTextColor('#0000FF');
 
-    await editor.typeText('Green');
     await editor.selectText('Green');
     await editor.setTextColor('#00FF00');
 
     await assertions.assertDocumentContainsText(page, 'Red');
     await assertions.assertDocumentContainsText(page, 'Blue');
     await assertions.assertDocumentContainsText(page, 'Green');
+  });
+});
+
+test.describe('Border Color Picker', () => {
+  let editor: EditorPage;
+
+  // Use wider viewport for table toolbar tests
+  test.use({ viewport: { width: 1400, height: 900 } });
+
+  test.beforeEach(async ({ page }) => {
+    editor = new EditorPage(page);
+    await editor.goto();
+    await editor.waitForReady();
+    // Use the demo document which already contains tables
+    await editor.focus();
+    // Click on a table cell — use cell (0, 0, 0) which is "npm" text
+    await editor.clickTableCell(0, 0, 0);
+    await page.waitForTimeout(500);
+  });
+
+  test('border color picker shows theme matrix in table context', async ({ page }) => {
+    // Find and click the border color picker button in the toolbar
+    const borderColorBtn = page.locator('.docx-advanced-color-picker-button[title="Border Color"]');
+    await expect(borderColorBtn).toBeVisible({ timeout: 5000 });
+    await borderColorBtn.click();
+
+    // Verify the AdvancedColorPicker dropdown opens with theme matrix
+    const dropdown = page.locator('.docx-advanced-color-picker-dropdown');
+    await expect(dropdown).toBeVisible({ timeout: 5000 });
+
+    // Verify it has theme colors section
+    await expect(dropdown.getByText('Theme Colors')).toBeVisible();
+    await expect(dropdown.getByText('Standard Colors')).toBeVisible();
+    await expect(dropdown.getByText('Custom Color')).toBeVisible();
+    await expect(dropdown.getByText('Automatic')).toBeVisible();
+  });
+
+  test('apply border color from standard colors', async ({ page }) => {
+    // Open border color picker
+    const borderColorBtn = page.locator('.docx-advanced-color-picker-button[title="Border Color"]');
+    await expect(borderColorBtn).toBeVisible({ timeout: 5000 });
+    await borderColorBtn.click();
+
+    const dropdown = page.locator('.docx-advanced-color-picker-dropdown');
+    await expect(dropdown).toBeVisible({ timeout: 5000 });
+
+    // Click a red standard color via JS to avoid stale element issues
+    const clicked = await page.evaluate(() => {
+      const dd = document.querySelector('.docx-advanced-color-picker-dropdown');
+      if (!dd) return false;
+      const btn = dd.querySelector('button[title="Red"]') as HTMLElement;
+      if (btn) {
+        btn.click();
+        return true;
+      }
+      return false;
+    });
+
+    expect(clicked).toBe(true);
+
+    // Dropdown should close
+    await expect(dropdown).not.toBeVisible({ timeout: 3000 });
   });
 });

@@ -122,11 +122,17 @@ export function applyFormattingAction(
       case 'fontSize':
         newFormatting.fontSize = pointsToHalfPoints(action.value);
         return newFormatting;
-      case 'textColor':
-        newFormatting.color = {
-          rgb: action.value.replace(/^#/, '').toUpperCase(),
-        };
+      case 'textColor': {
+        const val = action.value;
+        if (typeof val === 'string') {
+          newFormatting.color = { rgb: val.replace(/^#/, '').toUpperCase() };
+        } else if (val.auto) {
+          newFormatting.color = undefined;
+        } else {
+          newFormatting.color = val;
+        }
         return newFormatting;
+      }
       case 'highlightColor':
         if (action.value === '' || action.value === 'none') {
           newFormatting.highlight = 'none';

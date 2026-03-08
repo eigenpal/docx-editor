@@ -546,11 +546,18 @@ export class EditorPage {
    * Set font family
    */
   async setFontFamily(fontFamily: string): Promise<void> {
-    // Native <select> — use selectOption for reliable interaction
-    const fontPicker = this.toolbar.locator('select[aria-label="Select font family"]');
-    await fontPicker.selectOption({ label: fontFamily });
+    // FontPicker uses a custom Select combobox, not a native <select>
+    const trigger = this.toolbar.locator('[aria-label="Select font family"]');
+    await trigger.click();
+
+    // Wait for the dropdown content to appear and click the matching option
+    const option = this.page.getByRole('option', { name: fontFamily, exact: true });
+    await option.waitFor({ state: 'visible', timeout: 5000 });
+    await option.click();
+
     // Refocus editor after selecting from dropdown
     await this.focus();
+    await this.page.waitForTimeout(50);
   }
 
   /**
@@ -567,91 +574,99 @@ export class EditorPage {
   }
 
   /**
-   * Set text color
+   * Shared helper: pick a color from an AdvancedColorPicker dropdown.
+   * Opens the picker, finds/clicks a matching color button, or falls back to custom hex input.
    */
-  async setTextColor(color: string): Promise<void> {
-    // ColorPicker component uses .docx-color-picker-text class
-    const colorPicker = this.toolbar.locator('.docx-color-picker-text');
-    await colorPicker.click();
+  private async pickColorFromDropdown(buttonTitle: string, hexColor: string): Promise<void> {
+    const picker = this.toolbar.locator(`[title="${buttonTitle}"]`);
+    await picker.click();
 
-    // Wait for dropdown to be visible
-    await this.page.waitForSelector('.docx-color-picker-dropdown', {
+    await this.page.waitForSelector('.docx-advanced-color-picker-dropdown', {
       state: 'visible',
       timeout: 5000,
     });
 
-    // Normalize color (remove # if present)
-    const hexColor = color.replace(/^#/, '').toUpperCase();
-
-    // First, try to find a matching color button in the grid
-    const colorButton = this.page.locator(`.docx-color-grid button[aria-selected="false"]`).filter({
-      has: this.page.locator(`[style*="background-color: rgb"]`),
-    });
-
-    // Try to click a color by looking at the color grid buttons
-    // The colors are stored with backgroundColor style like "background-color: rgb(...)"
-    // Convert hex to RGB for matching
-    const r = parseInt(hexColor.slice(0, 2), 16);
-    const g = parseInt(hexColor.slice(2, 4), 16);
-    const b = parseInt(hexColor.slice(4, 6), 16);
-
-    // Find button with matching color or use custom input
-    const buttons = await this.page.locator('.docx-color-grid button').all();
-    let found = false;
-    for (const button of buttons) {
-      const style = await button.getAttribute('style');
-      if (style && style.includes(`rgb(${r}, ${g}, ${b})`)) {
-        await button.click();
-        found = true;
-        break;
+    // Try to click a matching color button, fall back to custom hex input.
+    // Uses page.evaluate to avoid ProseMirror focus-steal issues.
+    const clicked = await this.page.evaluate((hex) => {
+      const dropdown = document.querySelector('.docx-advanced-color-picker-dropdown');
+      if (!dropdown) return false;
+      // Match by computed rgb() style (browsers normalize backgroundColor to rgb)
+      const r = parseInt(hex.slice(0, 2), 16);
+      const g = parseInt(hex.slice(2, 4), 16);
+      const b = parseInt(hex.slice(4, 6), 16);
+      const rgbStr = `rgb(${r}, ${g}, ${b})`;
+      for (const btn of dropdown.querySelectorAll('button')) {
+        if (btn.style.backgroundColor === rgbStr) {
+          btn.click();
+          return true;
+        }
       }
-    }
-
-    // If not found in grid, use custom hex input
-    if (!found) {
-      const hexInput = this.page.locator('[aria-label="Custom hex color"]');
-      if (await hexInput.isVisible()) {
-        await hexInput.fill(hexColor);
-        await hexInput.press('Enter');
+      // Fall back to custom hex input
+      const input = dropdown.querySelector(
+        'input[aria-label="Custom hex color"]'
+      ) as HTMLInputElement;
+      if (input) {
+        const setter = Object.getOwnPropertyDescriptor(
+          window.HTMLInputElement.prototype,
+          'value'
+        )?.set;
+        setter?.call(input, hex);
+        input.dispatchEvent(new Event('input', { bubbles: true }));
+        input.dispatchEvent(new Event('change', { bubbles: true }));
+        input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+        return true;
       }
+      return false;
+    }, hexColor);
+
+    // Wait for dropdown to close and React to re-render
+    if (clicked) {
+      await this.page
+        .waitForSelector('.docx-advanced-color-picker-dropdown', {
+          state: 'detached',
+          timeout: 3000,
+        })
+        .catch(() => {});
     }
-    // Refocus editor after selecting from dropdown
+    await this.page.waitForTimeout(150);
     await this.focus();
+    await this.page.waitForTimeout(50);
+  }
+
+  /**
+   * Set text color
+   */
+  async setTextColor(color: string): Promise<void> {
+    const hexColor = color.replace(/^#/, '').toUpperCase();
+    await this.pickColorFromDropdown('Font Color', hexColor);
   }
 
   /**
    * Set highlight color
    */
   async setHighlightColor(color: string): Promise<void> {
-    // ColorPicker component uses .docx-color-picker-highlight class
-    const highlightPicker = this.toolbar.locator('.docx-color-picker-highlight');
-    await highlightPicker.click();
-
-    // Wait for dropdown to be visible
-    await this.page.waitForSelector('.docx-color-picker-dropdown', {
-      state: 'visible',
-      timeout: 5000,
-    });
-
-    // Highlight colors have aria-label with the color name (capitalized)
-    // e.g., "Yellow", "Cyan", "Magenta", "Green", "Blue", "Red"
-    const capitalizedColor = color.charAt(0).toUpperCase() + color.slice(1).toLowerCase();
-
-    // Find the button with matching aria-label in the color grid
-    const colorButton = this.page.locator(
-      `.docx-color-grid button[aria-label="${capitalizedColor}"]`
-    );
-    if (await colorButton.isVisible()) {
-      await colorButton.click();
-    } else {
-      // Fallback: try the exact color name as provided
-      const fallbackButton = this.page.locator(`.docx-color-grid button[aria-label="${color}"]`);
-      if (await fallbackButton.isVisible()) {
-        await fallbackButton.click();
-      }
-    }
-    // Refocus editor after selecting from dropdown
-    await this.focus();
+    // OOXML highlight name → hex mapping (mirrors HIGHLIGHT_COLORS in colorResolver.ts)
+    const highlightHexMap: Record<string, string> = {
+      yellow: 'FFFF00',
+      green: '00FF00',
+      cyan: '00FFFF',
+      magenta: 'FF00FF',
+      blue: '0000FF',
+      red: 'FF0000',
+      darkBlue: '00008B',
+      darkCyan: '008B8B',
+      darkGreen: '006400',
+      darkMagenta: '8B008B',
+      darkRed: '8B0000',
+      darkYellow: '808000',
+      lightGray: 'D3D3D3',
+      darkGray: 'A9A9A9',
+      black: '000000',
+      white: 'FFFFFF',
+    };
+    const hex = highlightHexMap[color] || color.replace(/^#/, '').toUpperCase();
+    await this.pickColorFromDropdown('Text Highlight Color', hex);
   }
 
   // ============================================================================

@@ -659,7 +659,11 @@ export function renderLine(
   // All line breaking is done during measurement. 'pre' ensures multiple spaces
   // are rendered visually (unlike 'nowrap' which collapses them).
   lineEl.style.whiteSpace = 'pre';
-  lineEl.style.overflow = 'visible'; // Allow text to render fully (don't clip descenders)
+
+  // Check if any run in this line has a highlight. If so, we need overflow:hidden
+  // to prevent the padding-extended background from bleeding into adjacent lines.
+  const hasHighlight = runsForLine.some((r) => isTextRun(r) && r.highlight);
+  lineEl.style.overflow = hasHighlight ? 'hidden' : 'visible';
 
   // NOTE: Per-line floating image margins are NOT applied here because:
   // 1. Text was already measured and line-broken at full paragraph width
@@ -733,6 +737,22 @@ export function renderLine(
       currentX += tabResult.width;
     } else if (isTextRun(run)) {
       const runEl = renderTextRun(run, doc);
+
+      // For highlighted runs, extend background to fill the full line height.
+      // Inline elements' background only covers the content area (font ascent+descent),
+      // which differs by font size. Vertical padding on inline elements extends the
+      // background without affecting line box calculations.
+      if (run.highlight) {
+        const fontSizePx = run.fontSize ? (run.fontSize * 96) / 72 : 14.67;
+        const contentHeight = fontSizePx * 1.2; // approximate content area
+        const gap = Math.max(0, line.lineHeight - contentHeight);
+        if (gap > 0) {
+          const pad = gap / 2;
+          runEl.style.paddingTop = `${pad}px`;
+          runEl.style.paddingBottom = `${pad}px`;
+        }
+      }
+
       lineEl.appendChild(runEl);
 
       // Measure text width for accurate tab position tracking

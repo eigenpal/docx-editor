@@ -33,7 +33,7 @@ import type {
   FontFamilyAttrs,
 } from '../prosemirror/schema/marks';
 import type { Theme } from '../types/document';
-import { resolveColor } from '../utils/colorResolver';
+import { resolveColor, resolveHighlightToCss } from '../utils/colorResolver';
 
 /**
  * Options for the conversion.
@@ -154,7 +154,7 @@ function extractRunFormatting(marks: readonly Mark[], theme?: Theme | null): Run
       }
 
       case 'highlight':
-        formatting.highlight = mark.attrs.color as string;
+        formatting.highlight = resolveHighlightToCss(mark.attrs.color as string);
         break;
 
       case 'fontSize': {

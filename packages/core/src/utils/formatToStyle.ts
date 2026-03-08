@@ -22,7 +22,7 @@ import type {
   ShadingProperties,
   Theme,
 } from '../types/document';
-import { resolveColor, resolveHighlightColor, resolveShadingColor } from './colorResolver';
+import { resolveColor, resolveHighlightToCss, resolveShadingColor } from './colorResolver';
 import { resolveFontFamily, resolveThemeFont } from './fontResolver';
 import {
   halfPointsToPixels,
@@ -108,10 +108,7 @@ export function textToStyle(
 
   // Highlight (w:highlight)
   if (formatting.highlight && formatting.highlight !== 'none') {
-    const highlightColor = resolveHighlightColor(formatting.highlight);
-    if (highlightColor) {
-      style.backgroundColor = highlightColor;
-    }
+    style.backgroundColor = resolveHighlightToCss(formatting.highlight);
   }
 
   // Character shading (w:shd)

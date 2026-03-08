@@ -96,6 +96,11 @@ export {
   isBlack,
   isWhite,
   colorsEqual,
+  generateThemeTintShadeMatrix,
+  getThemeTintShadeHex,
+  ensureHexPrefix,
+  resolveHighlightToCss,
+  type ThemeMatrixCell,
 } from './utils/colorResolver';
 
 export {
