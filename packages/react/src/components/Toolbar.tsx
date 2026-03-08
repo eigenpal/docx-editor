@@ -204,6 +204,8 @@ export interface ToolbarProps {
     columnCount?: number;
     canSplitCell?: boolean;
     hasMultiCellSelection?: boolean;
+    cellBorderColor?: string;
+    cellBackgroundColor?: string;
   } | null;
   /** Callback when a table action is triggered */
   onTableAction?: (action: TableAction) => void;
@@ -989,9 +991,19 @@ export function Toolbar({
       {tableContext?.isInTable && onTableAction && (
         <ToolbarGroup label="Table">
           <TableBorderPicker onAction={handleTableAction} disabled={disabled} />
-          <TableBorderColorPicker onAction={handleTableAction} disabled={disabled} theme={theme} />
+          <TableBorderColorPicker
+            onAction={handleTableAction}
+            disabled={disabled}
+            theme={theme}
+            value={tableContext?.cellBorderColor}
+          />
           <TableBorderWidthPicker onAction={handleTableAction} disabled={disabled} />
-          <TableCellFillPicker onAction={handleTableAction} disabled={disabled} theme={theme} />
+          <TableCellFillPicker
+            onAction={handleTableAction}
+            disabled={disabled}
+            theme={theme}
+            value={tableContext?.cellBackgroundColor}
+          />
           <TableMoreDropdown
             onAction={handleTableAction}
             disabled={disabled}

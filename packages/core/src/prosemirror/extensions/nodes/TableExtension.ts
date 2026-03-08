@@ -382,6 +382,10 @@ export interface TableContextInfo {
   columnCount?: number;
   hasMultiCellSelection?: boolean;
   canSplitCell?: boolean;
+  /** Current cell's dominant border color (RGB hex without #), if any */
+  cellBorderColor?: string;
+  /** Current cell's background/fill color (RGB hex without #), if any */
+  cellBackgroundColor?: string;
 }
 
 function getTableContext(state: EditorState): TableContextInfo {
@@ -450,6 +454,29 @@ function getTableContext(state: EditorState): TableContextInfo {
   const canSplitCell =
     cellNode && ((cellNode.attrs.colspan || 1) > 1 || (cellNode.attrs.rowspan || 1) > 1);
 
+  // Extract border color and background color from current cell
+  let cellBorderColor: string | undefined;
+  let cellBackgroundColor: string | undefined;
+  if (cellNode) {
+    const attrs = cellNode.attrs as Record<string, unknown>;
+    if (attrs.backgroundColor && typeof attrs.backgroundColor === 'string') {
+      cellBackgroundColor = attrs.backgroundColor;
+    }
+    const borders = attrs.borders as
+      | Record<string, { color?: { rgb?: string } } | undefined>
+      | undefined;
+    if (borders) {
+      // Pick the first available border color (prefer top → right → bottom → left)
+      for (const side of ['top', 'right', 'bottom', 'left'] as const) {
+        const rgb = borders[side]?.color?.rgb;
+        if (rgb) {
+          cellBorderColor = rgb;
+          break;
+        }
+      }
+    }
+  }
+
   return {
     isInTable: true,
     table,
@@ -460,6 +487,8 @@ function getTableContext(state: EditorState): TableContextInfo {
     columnCount,
     hasMultiCellSelection: isCellSel,
     canSplitCell: !!canSplitCell,
+    cellBorderColor,
+    cellBackgroundColor,
   };
 }
 

@@ -14,12 +14,15 @@ export interface TableCellFillPickerProps {
   onAction: (action: TableAction) => void;
   disabled?: boolean;
   theme?: Theme | null;
+  /** Current fill color (RGB hex without #) */
+  value?: string;
 }
 
 export function TableCellFillPicker({
   onAction,
   disabled = false,
   theme,
+  value,
 }: TableCellFillPickerProps) {
   const handleChange = useCallback(
     (color: ColorValue | string) => {
@@ -38,6 +41,7 @@ export function TableCellFillPicker({
   return (
     <AdvancedColorPicker
       mode="highlight"
+      value={value}
       onChange={handleChange}
       theme={theme}
       disabled={disabled}

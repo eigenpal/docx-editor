@@ -974,6 +974,14 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
         }
       }
 
+      // Sync borderSpecRef with the current cell's actual border color
+      if (pmTableCtx?.cellBorderColor) {
+        borderSpecRef.current = {
+          ...borderSpecRef.current,
+          color: { rgb: pmTableCtx.cellBorderColor },
+        };
+      }
+
       // Check if cursor is on an image (NodeSelection)
       let pmImageCtx: typeof state.pmImageContext = null;
       if (view) {
