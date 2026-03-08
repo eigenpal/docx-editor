@@ -122,7 +122,9 @@ export {
   serializeDocumentBody,
   serializeSectionProperties,
 } from './docx/serializer/documentSerializer';
-export { repackDocx, createDocx } from './docx/rezip';
+export { repackDocx, createDocx, updateMultipleFiles } from './docx/rezip';
+export { attemptSelectiveSave } from './docx/selectiveSave';
+export { buildPatchedDocumentXml, validatePatchSafety } from './docx/selectiveXmlPatch';
 
 // ============================================================================
 // TEMPLATE PROCESSING

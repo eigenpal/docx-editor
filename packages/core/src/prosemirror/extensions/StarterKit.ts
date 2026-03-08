@@ -62,6 +62,7 @@ import { BaseKeymapExtension } from './features/BaseKeymapExtension';
 import { SelectionTrackerExtension } from './features/SelectionTrackerExtension';
 import { ImageDragExtension } from './features/ImageDragExtension';
 import { DropCursorExtension } from './features/DropCursorExtension';
+import { ParagraphChangeTrackerExtension } from './features/ParagraphChangeTrackerExtension';
 
 export interface StarterKitOptions {
   /** Extensions to disable by name */
@@ -153,6 +154,7 @@ export function createStarterKit(options: StarterKitOptions = {}): AnyExtension[
       onSelectionChange: options.onSelectionChange,
     })
   );
+  add('paragraphChangeTracker', ParagraphChangeTrackerExtension());
 
   return extensions;
 }
