@@ -93,6 +93,7 @@ import { DefaultLoadingIndicator, DefaultPlaceholder, ParseError } from './DocxE
 import { parseDocx } from '@eigenpal/docx-core/docx/parser';
 import { type DocxInput } from '@eigenpal/docx-core/utils/docxInput';
 import { onFontsLoaded, loadDocumentFonts } from '@eigenpal/docx-core/utils/fontLoader';
+import { resolveColor } from '@eigenpal/docx-core/utils/colorResolver';
 import { executeCommand } from '@eigenpal/docx-core/agent/executor';
 import { useTableSelection } from '../hooks/useTableSelection';
 import { useDocumentHistory } from '../hooks/useHistory';
@@ -976,9 +977,16 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
 
       // Sync borderSpecRef with the current cell's actual border color
       if (pmTableCtx?.cellBorderColor) {
+        const colorVal = pmTableCtx.cellBorderColor;
+        // Resolve theme/auto colors to hex
+        let rgb = colorVal.rgb;
+        if (!rgb || rgb === 'auto') {
+          const resolved = resolveColor(colorVal, theme);
+          rgb = resolved.replace(/^#/, '');
+        }
         borderSpecRef.current = {
           ...borderSpecRef.current,
-          color: { rgb: pmTableCtx.cellBorderColor },
+          color: { rgb },
         };
       }
 

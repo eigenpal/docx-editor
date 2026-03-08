@@ -25,6 +25,7 @@ import {
 import { createNodeExtension, createExtension } from '../create';
 import type { ExtensionContext, ExtensionRuntime, AnyExtension } from '../types';
 import type { TableAttrs, TableRowAttrs, TableCellAttrs } from '../../schema/nodes';
+import type { ColorValue } from '../../../types/colors';
 
 // ============================================================================
 // TABLE NODE SPECS
@@ -382,8 +383,8 @@ export interface TableContextInfo {
   columnCount?: number;
   hasMultiCellSelection?: boolean;
   canSplitCell?: boolean;
-  /** Current cell's dominant border color (RGB hex without #), if any */
-  cellBorderColor?: string;
+  /** Current cell's dominant border color, if any */
+  cellBorderColor?: ColorValue;
   /** Current cell's background/fill color (RGB hex without #), if any */
   cellBackgroundColor?: string;
 }
@@ -455,7 +456,7 @@ function getTableContext(state: EditorState): TableContextInfo {
     cellNode && ((cellNode.attrs.colspan || 1) > 1 || (cellNode.attrs.rowspan || 1) > 1);
 
   // Extract border color and background color from current cell
-  let cellBorderColor: string | undefined;
+  let cellBorderColor: TableContextInfo['cellBorderColor'];
   let cellBackgroundColor: string | undefined;
   if (cellNode) {
     const attrs = cellNode.attrs as Record<string, unknown>;
@@ -463,14 +464,14 @@ function getTableContext(state: EditorState): TableContextInfo {
       cellBackgroundColor = attrs.backgroundColor;
     }
     const borders = attrs.borders as
-      | Record<string, { color?: { rgb?: string } } | undefined>
+      | Record<string, { style?: string; color?: ColorValue } | undefined>
       | undefined;
     if (borders) {
-      // Pick the first available border color (prefer top → right → bottom → left)
+      // Pick the first non-none border's color (prefer top → right → bottom → left)
       for (const side of ['top', 'right', 'bottom', 'left'] as const) {
-        const rgb = borders[side]?.color?.rgb;
-        if (rgb) {
-          cellBorderColor = rgb;
+        const border = borders[side];
+        if (border?.color && border.style && border.style !== 'none' && border.style !== 'nil') {
+          cellBorderColor = border.color;
           break;
         }
       }

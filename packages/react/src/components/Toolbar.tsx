@@ -17,6 +17,7 @@ import type {
   Style,
   Theme,
 } from '@eigenpal/docx-core/types/document';
+import { resolveColor } from '@eigenpal/docx-core/utils/colorResolver';
 import { FontPicker } from './ui/FontPicker';
 import { FontSizePicker, halfPointsToPoints } from './ui/FontSizePicker';
 import { AdvancedColorPicker } from './ui/AdvancedColorPicker';
@@ -204,7 +205,7 @@ export interface ToolbarProps {
     columnCount?: number;
     canSplitCell?: boolean;
     hasMultiCellSelection?: boolean;
-    cellBorderColor?: string;
+    cellBorderColor?: ColorValue;
     cellBackgroundColor?: string;
   } | null;
   /** Callback when a table action is triggered */
@@ -995,7 +996,11 @@ export function Toolbar({
             onAction={handleTableAction}
             disabled={disabled}
             theme={theme}
-            value={tableContext?.cellBorderColor}
+            value={
+              tableContext?.cellBorderColor
+                ? resolveColor(tableContext.cellBorderColor, theme).replace(/^#/, '')
+                : undefined
+            }
           />
           <TableBorderWidthPicker onAction={handleTableAction} disabled={disabled} />
           <TableCellFillPicker
