@@ -991,7 +991,7 @@ export function Toolbar({
           <TableBorderPicker onAction={handleTableAction} disabled={disabled} />
           <TableBorderColorPicker onAction={handleTableAction} disabled={disabled} theme={theme} />
           <TableBorderWidthPicker onAction={handleTableAction} disabled={disabled} />
-          <TableCellFillPicker onAction={handleTableAction} disabled={disabled} />
+          <TableCellFillPicker onAction={handleTableAction} disabled={disabled} theme={theme} />
           <TableMoreDropdown
             onAction={handleTableAction}
             disabled={disabled}

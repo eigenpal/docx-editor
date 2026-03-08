@@ -40,30 +40,6 @@ export interface TableOptionsDropdownProps {
 // CONSTANTS
 // ============================================================================
 
-// Common colors for quick selection
-const QUICK_COLORS = [
-  '#000000',
-  '#434343',
-  '#666666',
-  '#999999',
-  '#b7b7b7',
-  '#cccccc',
-  '#d9d9d9',
-  '#efefef',
-  '#f3f3f3',
-  '#ffffff',
-  '#980000',
-  '#ff0000',
-  '#ff9900',
-  '#ffff00',
-  '#00ff00',
-  '#00ffff',
-  '#4a86e8',
-  '#0000ff',
-  '#9900ff',
-  '#ff00ff',
-];
-
 type SimpleAction =
   | 'selectRow'
   | 'selectColumn'
@@ -175,21 +151,6 @@ const separatorStyles: CSSProperties = {
   margin: '4px 0',
 };
 
-const colorSwatchStyles: CSSProperties = {
-  width: 18,
-  height: 18,
-  borderRadius: 2,
-  border: '1px solid var(--doc-border)',
-  cursor: 'pointer',
-};
-
-const colorGridStyles: CSSProperties = {
-  display: 'grid',
-  gridTemplateColumns: 'repeat(10, 1fr)',
-  gap: 2,
-  padding: '8px 12px',
-};
-
 const alignmentRowStyles: CSSProperties = {
   display: 'flex',
   alignItems: 'center',
@@ -208,106 +169,6 @@ const alignmentButtonStyles: CSSProperties = {
   backgroundColor: 'transparent',
   cursor: 'pointer',
 };
-
-// ============================================================================
-// COLOR PICKER SUBCOMPONENT
-// ============================================================================
-
-interface ColorPickerRowProps {
-  label: string;
-  icon: string;
-  currentColor?: string;
-  onColorSelect: (color: string) => void;
-  onNoColor?: () => void;
-}
-
-function ColorPickerRow({
-  label,
-  icon,
-  currentColor,
-  onColorSelect,
-  onNoColor,
-}: ColorPickerRowProps) {
-  const [isExpanded, setIsExpanded] = useState(false);
-  const [hoveredItem, setHoveredItem] = useState<string | null>(null);
-
-  return (
-    <div>
-      <button
-        type="button"
-        style={{
-          ...menuItemStyles,
-          backgroundColor: hoveredItem === 'main' ? 'var(--doc-bg-hover)' : 'transparent',
-        }}
-        onMouseEnter={() => setHoveredItem('main')}
-        onMouseLeave={() => setHoveredItem(null)}
-        onClick={() => setIsExpanded(!isExpanded)}
-      >
-        <MaterialSymbol name={icon} size={18} />
-        <span style={{ flex: 1 }}>{label}</span>
-        {currentColor && (
-          <div
-            style={{
-              ...colorSwatchStyles,
-              backgroundColor: currentColor,
-            }}
-          />
-        )}
-        <MaterialSymbol name={isExpanded ? 'expand_less' : 'expand_more'} size={18} />
-      </button>
-
-      {isExpanded && (
-        <div
-          style={{
-            backgroundColor: 'var(--doc-bg-muted)',
-            borderTop: '1px solid var(--doc-border)',
-            borderBottom: '1px solid var(--doc-border)',
-          }}
-        >
-          <div style={colorGridStyles}>
-            {QUICK_COLORS.map((color) => (
-              <div
-                key={color}
-                style={{
-                  ...colorSwatchStyles,
-                  backgroundColor: color,
-                  outline: currentColor === color ? '2px solid var(--doc-primary)' : 'none',
-                  outlineOffset: 1,
-                }}
-                onClick={() => {
-                  onColorSelect(color);
-                  setIsExpanded(false);
-                }}
-                title={color}
-              />
-            ))}
-          </div>
-          {onNoColor && (
-            <button
-              type="button"
-              style={{
-                ...menuItemStyles,
-                padding: '6px 12px',
-                fontSize: 12,
-                color: 'var(--doc-text-muted)',
-                backgroundColor: hoveredItem === 'nocolor' ? 'var(--doc-bg-hover)' : 'transparent',
-              }}
-              onMouseEnter={() => setHoveredItem('nocolor')}
-              onMouseLeave={() => setHoveredItem(null)}
-              onClick={() => {
-                onNoColor();
-                setIsExpanded(false);
-              }}
-            >
-              <MaterialSymbol name="format_color_reset" size={16} />
-              <span>No color</span>
-            </button>
-          )}
-        </div>
-      )}
-    </div>
-  );
-}
 
 // ============================================================================
 // VERTICAL ALIGNMENT SUBCOMPONENT
@@ -878,20 +739,6 @@ export function TableOptionsDropdown({
     [onAction]
   );
 
-  const handleBorderColor = useCallback(
-    (color: string) => {
-      onAction?.({ type: 'borderColor', color });
-    },
-    [onAction]
-  );
-
-  const handleCellFillColor = useCallback(
-    (color: string | null) => {
-      onAction?.({ type: 'cellFillColor', color });
-    },
-    [onAction]
-  );
-
   const button = (
     <Button
       variant="ghost"
@@ -976,22 +823,6 @@ export function TableOptionsDropdown({
               </React.Fragment>
             );
           })}
-
-          {/* Color pickers section */}
-          <div style={separatorStyles} role="separator" />
-
-          <ColorPickerRow
-            label="Border color"
-            icon="border_color"
-            onColorSelect={handleBorderColor}
-          />
-
-          <ColorPickerRow
-            label="Cell fill color"
-            icon="format_color_fill"
-            onColorSelect={(color) => handleCellFillColor(color)}
-            onNoColor={() => handleCellFillColor(null)}
-          />
 
           {/* Vertical alignment section */}
           <div style={separatorStyles} role="separator" />

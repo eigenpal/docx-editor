@@ -25,6 +25,10 @@ export interface AdvancedColorPickerProps {
   className?: string;
   style?: CSSProperties;
   title?: string;
+  /** Override the default icon for the mode */
+  icon?: string;
+  /** Override the auto/no-color button label */
+  autoLabel?: string;
 }
 
 // ============================================================================
@@ -304,6 +308,8 @@ export function AdvancedColorPicker({
   className,
   style,
   title,
+  icon: iconOverride,
+  autoLabel,
 }: AdvancedColorPickerProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [isHovered, setIsHovered] = useState(false);
@@ -398,11 +404,12 @@ export function AdvancedColorPicker({
     mode === 'text' ? 'Font Color' : mode === 'highlight' ? 'Text Highlight Color' : 'Border Color';
 
   const iconName =
-    mode === 'text'
+    iconOverride ??
+    (mode === 'text'
       ? 'format_color_text'
       : mode === 'highlight'
         ? 'ink_highlighter'
-        : 'border_color';
+        : 'border_color');
 
   return (
     <div
@@ -494,7 +501,7 @@ export function AdvancedColorPicker({
                   }}
                 />
               )}
-              {mode === 'highlight' ? 'No Color' : 'Automatic'}
+              {autoLabel ?? (mode === 'highlight' ? 'No Color' : 'Automatic')}
             </button>
             <div style={S_DIVIDER} />
             <div style={S_SECTION_LABEL}>Theme Colors</div>

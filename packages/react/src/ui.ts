@@ -157,19 +157,6 @@ export {
 } from './components/ui/TableInsertButtons';
 export { TableMoreDropdown, type TableMoreDropdownProps } from './components/ui/TableMoreDropdown';
 export {
-  CellBackgroundPicker,
-  type CellBackgroundPickerProps,
-  type CellColorOption,
-  getDefaultCellColors,
-  createCellColorOption,
-  isDefaultCellColor,
-  getCellColorName,
-  createShadingFromColor,
-  getColorFromShading,
-  getContrastingTextColor,
-  DEFAULT_CELL_COLORS,
-} from './components/ui/CellBackgroundPicker';
-export {
   UnsavedIndicator,
   type UnsavedIndicatorProps,
   type IndicatorVariant,

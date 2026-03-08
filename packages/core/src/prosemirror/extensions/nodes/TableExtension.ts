@@ -1468,7 +1468,8 @@ export const TablePluginExtension = createExtension({
 
     function setCellBorder(
       side: 'top' | 'bottom' | 'left' | 'right' | 'all',
-      spec: { style: string; size?: number; color?: { rgb: string } } | null
+      spec: { style: string; size?: number; color?: { rgb: string } } | null,
+      clearOthers?: boolean
     ): Command {
       return (state, dispatch) => {
         const context = getTableContext(state);
@@ -1478,6 +1479,8 @@ export const TablePluginExtension = createExtension({
           const tr = state.tr;
           const cells = getTargetCellPositions(state);
           const borderValue = spec || { style: 'none' };
+          const noBorder = { style: 'none' as const };
+          const allSides = ['top', 'bottom', 'left', 'right'] as const;
           const { cellByPos, cellByRC } = buildTableGrid(context.table, context.tablePos);
 
           const modified = new Map<number, Record<string, unknown>>();
@@ -1497,13 +1500,20 @@ export const TablePluginExtension = createExtension({
             const attrs = getAttrs(pos, node);
             const currentBorders = (attrs.borders as Record<string, unknown>) || {};
 
-            const sides = side === 'all' ? ['top', 'bottom', 'left', 'right'] : [side];
-            const newBorders = { ...currentBorders };
+            const sides = side === 'all' ? allSides : [side];
+            // When clearOthers is true, start with all sides cleared (preset behavior)
+            const newBorders: Record<string, unknown> = clearOthers
+              ? { top: noBorder, bottom: noBorder, left: noBorder, right: noBorder }
+              : { ...currentBorders };
             for (const s of sides) {
               newBorders[s] = borderValue;
+            }
 
-              // Sync adjacent cell's matching edge
-              if (info) {
+            // Sync adjacent cells — for all sides that changed
+            if (info) {
+              const sidesToSync = clearOthers ? allSides : sides;
+              for (const s of sidesToSync) {
+                const syncValue = (newBorders as Record<string, unknown>)[s];
                 const adj = adjacentMap[s];
                 const adjColIdx =
                   s === 'right' ? info.colIdx + info.colspan : info.colIdx + adj.dCol;
@@ -1514,7 +1524,7 @@ export const TablePluginExtension = createExtension({
                   const adjBorders = (adjAttrs.borders as Record<string, unknown>) || {};
                   setAttrs(adjPos, {
                     ...adjAttrs,
-                    borders: { ...adjBorders, [adj.adjSide]: borderValue },
+                    borders: { ...adjBorders, [adj.adjSide]: syncValue },
                   });
                 }
               }
@@ -2207,8 +2217,9 @@ export const TablePluginExtension = createExtension({
         splitCell: () => pmSplitCell,
         setCellBorder: (
           side: 'top' | 'bottom' | 'left' | 'right' | 'all',
-          spec: { style: string; size?: number; color?: { rgb: string } } | null
-        ) => setCellBorder(side, spec),
+          spec: { style: string; size?: number; color?: { rgb: string } } | null,
+          clearOthers?: boolean
+        ) => setCellBorder(side, spec, clearOthers),
         setTableBorders: (
           preset: BorderPreset,
           borderSpec?: { style: string; size: number; color: { rgb: string } }

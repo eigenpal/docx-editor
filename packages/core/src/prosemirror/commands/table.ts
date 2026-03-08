@@ -76,9 +76,10 @@ export function splitCell(state: EditorState, dispatch?: (tr: Transaction) => vo
 // Per-cell border editing
 export function setCellBorder(
   side: 'top' | 'bottom' | 'left' | 'right' | 'all',
-  spec: { style: string; size?: number; color?: { rgb: string } } | null
+  spec: { style: string; size?: number; color?: { rgb: string } } | null,
+  clearOthers?: boolean
 ): (state: EditorState, dispatch?: (tr: Transaction) => void) => boolean {
-  return cmds.setCellBorder(side, spec);
+  return cmds.setCellBorder(side, spec, clearOthers);
 }
 
 // Borders

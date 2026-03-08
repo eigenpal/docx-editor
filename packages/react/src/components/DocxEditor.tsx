@@ -1544,16 +1544,16 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
           break;
         // Per-side border actions (use current border spec)
         case 'borderTop':
-          setCellBorder('top', borderSpecRef.current)(view.state, view.dispatch);
+          setCellBorder('top', borderSpecRef.current, true)(view.state, view.dispatch);
           break;
         case 'borderBottom':
-          setCellBorder('bottom', borderSpecRef.current)(view.state, view.dispatch);
+          setCellBorder('bottom', borderSpecRef.current, true)(view.state, view.dispatch);
           break;
         case 'borderLeft':
-          setCellBorder('left', borderSpecRef.current)(view.state, view.dispatch);
+          setCellBorder('left', borderSpecRef.current, true)(view.state, view.dispatch);
           break;
         case 'borderRight':
-          setCellBorder('right', borderSpecRef.current)(view.state, view.dispatch);
+          setCellBorder('right', borderSpecRef.current, true)(view.state, view.dispatch);
           break;
         default:
           // Handle complex actions (with parameters)
