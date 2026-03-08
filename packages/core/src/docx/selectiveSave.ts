@@ -14,11 +14,11 @@ import { buildPatchedDocumentXml } from './selectiveXmlPatch';
 import { updateMultipleFiles } from './rezip';
 
 /**
- * Check if document content has truly NEW images (data URLs without existing rIds).
- * Images parsed from the original DOCX have both data: src AND rId — those are fine.
- * Only images inserted by the user have data: URLs with no rId.
+ * Check if document content has new images (data: URL without rId) or
+ * new hyperlinks (href without rId). Combined into a single traversal
+ * to avoid walking the block tree twice.
  */
-function hasNewImages(blocks: BlockContent[]): boolean {
+function hasNewImagesOrHyperlinks(blocks: BlockContent[]): boolean {
   for (const block of blocks) {
     if (block.type === 'paragraph') {
       for (const item of block.content) {
@@ -28,34 +28,14 @@ function hasNewImages(blocks: BlockContent[]): boolean {
               return true;
             }
           }
-        }
-      }
-    } else if (block.type === 'table') {
-      for (const row of block.rows) {
-        for (const cell of row.cells) {
-          if (hasNewImages(cell.content)) return true;
-        }
-      }
-    }
-  }
-  return false;
-}
-
-/**
- * Check if document content has new hyperlinks (href without rId).
- */
-function hasNewHyperlinks(blocks: BlockContent[]): boolean {
-  for (const block of blocks) {
-    if (block.type === 'paragraph') {
-      for (const item of block.content) {
-        if (item.type === 'hyperlink' && item.href && !item.rId && !item.anchor) {
+        } else if (item.type === 'hyperlink' && item.href && !item.rId && !item.anchor) {
           return true;
         }
       }
     } else if (block.type === 'table') {
       for (const row of block.rows) {
         for (const cell of row.cells) {
-          if (hasNewHyperlinks(cell.content)) return true;
+          if (hasNewImagesOrHyperlinks(cell.content)) return true;
         }
       }
     }
@@ -92,8 +72,7 @@ export async function attemptSelectiveSave(
 
   // Check for new images/hyperlinks that need relationship management
   const content = doc.package.document.content;
-  if (hasNewImages(content)) return null;
-  if (hasNewHyperlinks(content)) return null;
+  if (hasNewImagesOrHyperlinks(content)) return null;
 
   // If no changes, just return the original buffer as-is
   if (changedParaIds.size === 0) {

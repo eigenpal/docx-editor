@@ -21,14 +21,8 @@ export interface ParagraphChangeTrackerState {
   structuralChange: boolean;
   /** Whether any edited paragraph lacked a paraId */
   hasUntrackedChanges: boolean;
-}
-
-function createInitialState(): ParagraphChangeTrackerState {
-  return {
-    changedParaIds: new Set(),
-    structuralChange: false,
-    hasUntrackedChanges: false,
-  };
+  /** Cached paragraph count to avoid full doc traversal on every transaction */
+  paragraphCount: number;
 }
 
 /**
@@ -73,11 +67,23 @@ function createParagraphChangeTrackerPlugin(): Plugin<ParagraphChangeTrackerStat
   return new Plugin<ParagraphChangeTrackerState>({
     key: paragraphChangeTrackerKey,
     state: {
-      init: createInitialState,
+      init(_config, state): ParagraphChangeTrackerState {
+        return {
+          changedParaIds: new Set(),
+          structuralChange: false,
+          hasUntrackedChanges: false,
+          paragraphCount: countParagraphs(state.doc),
+        };
+      },
       apply(tr: Transaction, prevState: ParagraphChangeTrackerState): ParagraphChangeTrackerState {
         // Check for explicit clear meta
         if (tr.getMeta(paragraphChangeTrackerKey) === 'clear') {
-          return createInitialState();
+          return {
+            changedParaIds: new Set(),
+            structuralChange: false,
+            hasUntrackedChanges: false,
+            paragraphCount: prevState.paragraphCount,
+          };
         }
 
         // If no doc changes, keep previous state
@@ -85,17 +91,19 @@ function createParagraphChangeTrackerPlugin(): Plugin<ParagraphChangeTrackerStat
           return prevState;
         }
 
+        // Count paragraphs in new doc only (use cached count for old doc)
+        const newCount = countParagraphs(tr.doc);
+
         // Clone previous state
         const newState: ParagraphChangeTrackerState = {
           changedParaIds: new Set(prevState.changedParaIds),
           structuralChange: prevState.structuralChange,
           hasUntrackedChanges: prevState.hasUntrackedChanges,
+          paragraphCount: newCount,
         };
 
         // Check for structural changes (paragraph count changed)
-        const oldCount = countParagraphs(tr.before);
-        const newCount = countParagraphs(tr.doc);
-        if (oldCount !== newCount) {
+        if (prevState.paragraphCount !== newCount) {
           newState.structuralChange = true;
         }
 

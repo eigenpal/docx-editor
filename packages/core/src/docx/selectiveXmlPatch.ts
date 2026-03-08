@@ -19,22 +19,16 @@ export function findParagraphOffsets(
   xml: string,
   paraId: string
 ): { start: number; end: number } | null {
-  // Find all <w:p elements that contain this paraId
-  // We search for the opening tag pattern with this specific paraId
-  const pattern = new RegExp(`<w:p[\\s>][^>]*w14:paraId="${escapeRegExp(paraId)}"`, 'g');
+  // Find all <w:p elements that contain this paraId.
+  // Pattern matches <w:p followed by whitespace or >, then any attrs, then the paraId.
+  // This covers all attribute orderings since [^>]* matches any attributes before paraId.
+  const escaped = escapeRegExp(paraId);
+  const pattern = new RegExp(`<w:p[\\s][^>]*w14:paraId="${escaped}"`, 'g');
 
   const matches: number[] = [];
   let match: RegExpExecArray | null;
   while ((match = pattern.exec(xml)) !== null) {
     matches.push(match.index);
-  }
-
-  // Also check the alternative attribute order (paraId before other attrs)
-  const pattern2 = new RegExp(`<w:p\\s+w14:paraId="${escapeRegExp(paraId)}"`, 'g');
-  while ((match = pattern2.exec(xml)) !== null) {
-    if (!matches.includes(match.index)) {
-      matches.push(match.index);
-    }
   }
 
   if (matches.length === 0) {
