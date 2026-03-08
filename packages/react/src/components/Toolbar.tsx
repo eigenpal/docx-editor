@@ -11,10 +11,15 @@
 
 import React, { useCallback, useEffect, useRef } from 'react';
 import type { CSSProperties, ReactNode } from 'react';
-import type { ParagraphAlignment, Style, Theme } from '@eigenpal/docx-core/types/document';
+import type {
+  ColorValue,
+  ParagraphAlignment,
+  Style,
+  Theme,
+} from '@eigenpal/docx-core/types/document';
 import { FontPicker } from './ui/FontPicker';
 import { FontSizePicker, halfPointsToPoints } from './ui/FontSizePicker';
-import { TextColorPicker, HighlightColorPicker } from './ui/ColorPicker';
+import { AdvancedColorPicker } from './ui/AdvancedColorPicker';
 import { AlignmentButtons } from './ui/AlignmentButtons';
 import { ListButtons, type ListState, createDefaultListState } from './ui/ListButtons';
 import { LineSpacingPicker } from './ui/LineSpacingPicker';
@@ -94,7 +99,7 @@ export type FormattingAction =
   | 'insertLink'
   | { type: 'fontFamily'; value: string }
   | { type: 'fontSize'; value: number }
-  | { type: 'textColor'; value: string }
+  | { type: 'textColor'; value: ColorValue | string }
   | { type: 'highlightColor'; value: string }
   | { type: 'alignment'; value: ParagraphAlignment }
   | { type: 'lineSpacing'; value: number }
@@ -443,7 +448,7 @@ export function Toolbar({
    * Handle text color change
    */
   const handleTextColorChange = useCallback(
-    (color: string) => {
+    (color: ColorValue | string) => {
       if (!disabled && onFormat) {
         onFormat({ type: 'textColor', value: color });
         // Refocus editor after color picker selection
@@ -457,9 +462,11 @@ export function Toolbar({
    * Handle highlight color change
    */
   const handleHighlightColorChange = useCallback(
-    (color: string) => {
+    (color: ColorValue | string) => {
       if (!disabled && onFormat) {
-        onFormat({ type: 'highlightColor', value: color });
+        // Highlight mode only emits strings (OOXML names like "yellow")
+        const highlightValue = typeof color === 'string' ? color : '';
+        onFormat({ type: 'highlightColor', value: highlightValue });
         // Refocus editor after color picker selection
         requestAnimationFrame(() => onRefocusEditor?.());
       }
@@ -868,17 +875,21 @@ export function Toolbar({
           <MaterialSymbol name="strikethrough_s" size={ICON_SIZE} />
         </ToolbarButton>
         {showTextColorPicker && (
-          <TextColorPicker
+          <AdvancedColorPicker
+            mode="text"
             value={currentFormatting.color?.replace(/^#/, '')}
             onChange={handleTextColorChange}
+            theme={theme}
             disabled={disabled}
             title="Font Color"
           />
         )}
         {showHighlightColorPicker && (
-          <HighlightColorPicker
+          <AdvancedColorPicker
+            mode="highlight"
             value={currentFormatting.highlight}
             onChange={handleHighlightColorChange}
+            theme={theme}
             disabled={disabled}
             title="Text Highlight Color"
           />
@@ -978,7 +989,7 @@ export function Toolbar({
       {tableContext?.isInTable && onTableAction && (
         <ToolbarGroup label="Table">
           <TableBorderPicker onAction={handleTableAction} disabled={disabled} />
-          <TableBorderColorPicker onAction={handleTableAction} disabled={disabled} />
+          <TableBorderColorPicker onAction={handleTableAction} disabled={disabled} theme={theme} />
           <TableBorderWidthPicker onAction={handleTableAction} disabled={disabled} />
           <TableCellFillPicker onAction={handleTableAction} disabled={disabled} />
           <TableMoreDropdown

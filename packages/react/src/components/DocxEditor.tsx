@@ -120,6 +120,7 @@ import {
   toggleSuperscript,
   toggleSubscript,
   setTextColor,
+  clearTextColor,
   setHighlight,
   setFontSize,
   setFontFamily,
@@ -1778,10 +1779,19 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
           case 'alignment':
             setAlignment(action.value)(view.state, view.dispatch);
             break;
-          case 'textColor':
-            // action.value can be a string like "#FF0000" or a color name
-            setTextColor({ rgb: action.value.replace('#', '') })(view.state, view.dispatch);
+          case 'textColor': {
+            // action.value can be a ColorValue object or a string like "#FF0000"
+            const colorVal = action.value;
+            if (typeof colorVal === 'string') {
+              setTextColor({ rgb: colorVal.replace('#', '') })(view.state, view.dispatch);
+            } else if (colorVal.auto) {
+              // "Automatic" — remove text color
+              clearTextColor(view.state, view.dispatch);
+            } else {
+              setTextColor(colorVal)(view.state, view.dispatch);
+            }
             break;
+          }
           case 'highlightColor': {
             // Convert hex to OOXML named highlight value (e.g., 'FFFF00' → 'yellow')
             const highlightName = action.value ? mapHexToHighlightName(action.value) : '';
