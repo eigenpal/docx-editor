@@ -166,9 +166,9 @@ const S_APPLY_BTN: CSSProperties = {
 };
 
 const S_COLOR_BAR: CSSProperties = {
-  width: '14px',
-  height: '3px',
-  borderRadius: '0',
+  width: '16px',
+  height: '4px',
+  borderRadius: '1px',
   marginTop: '-2px',
 };
 
@@ -456,9 +456,10 @@ export function AdvancedColorPicker({
             style={{
               ...S_COLOR_BAR,
               backgroundColor: resolvedColor === 'transparent' ? '#fff' : resolvedColor,
+              boxSizing: 'border-box',
               border:
                 resolvedColor === 'transparent' || isLightColor(resolvedColor)
-                  ? '1px solid #ccc'
+                  ? '1px solid #999'
                   : 'none',
             }}
           />
