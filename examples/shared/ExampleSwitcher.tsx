@@ -50,15 +50,15 @@ const codeButtonStyle: React.CSSProperties = {
   display: 'flex',
   alignItems: 'center',
   justifyContent: 'center',
-  padding: '4px 10px',
+  padding: '5px 10px',
   fontSize: '13px',
   fontWeight: 500,
-  color: '#64748b',
-  background: '#f1f5f9',
-  border: 'none',
-  borderRadius: '6px',
+  color: '#57606a',
+  background: '#fff',
+  border: '1px solid #e2e8f0',
+  borderRadius: '8px',
   cursor: 'pointer',
-  transition: 'all 0.15s',
+  transition: 'box-shadow 0.2s, border-color 0.2s',
   whiteSpace: 'nowrap',
 };
 
@@ -90,9 +90,9 @@ const dropdownItemStyle: React.CSSProperties = {
   whiteSpace: 'nowrap',
 };
 
-// Code bracket icon: </>
-const codeIcon =
-  '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>';
+// Caret-down chevron icon
+const caretDownIcon =
+  '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>';
 
 declare const __ENABLE_FRAMEWORK_SWITCHER__: boolean;
 
@@ -145,16 +145,18 @@ export function ExampleSwitcher({ current }: ExampleSwitcherProps) {
         style={codeButtonStyle}
         onClick={() => setOpen(!open)}
         onMouseEnter={(e) => {
-          e.currentTarget.style.background = '#e2e8f0';
+          e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,0.08)';
+          e.currentTarget.style.borderColor = '#cbd5e1';
         }}
         onMouseLeave={(e) => {
-          e.currentTarget.style.background = 'transparent';
+          e.currentTarget.style.boxShadow = '';
+          e.currentTarget.style.borderColor = '#e2e8f0';
         }}
         title="View example source code"
       >
         <span
           style={{ display: 'flex', alignItems: 'center' }}
-          dangerouslySetInnerHTML={{ __html: codeIcon }}
+          dangerouslySetInnerHTML={{ __html: caretDownIcon }}
         />
       </button>
       {open && (
