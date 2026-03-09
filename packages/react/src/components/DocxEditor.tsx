@@ -187,6 +187,12 @@ import {
 } from '@eigenpal/docx-core/prosemirror';
 import { acceptChange, rejectChange } from '@eigenpal/docx-core/prosemirror/commands/comments';
 import { collectHeadings } from '@eigenpal/docx-core/utils/headingCollector';
+import {
+  getChangedParagraphIds,
+  hasStructuralChanges,
+  hasUntrackedChanges,
+  clearTrackedChanges,
+} from '@eigenpal/docx-core/prosemirror/extensions/features/ParagraphChangeTrackerExtension';
 
 // Paginated editor
 import { PagedEditor, type PagedEditorRef } from '../paged-editor/PagedEditor';
@@ -294,8 +300,8 @@ export interface DocxEditorRef {
   getDocument: () => Document | null;
   /** Get the editor ref */
   getEditorRef: () => PagedEditorRef | null;
-  /** Save the document to buffer */
-  save: () => Promise<ArrayBuffer | null>;
+  /** Save the document to buffer. Pass { selective: false } to force full repack. */
+  save: (options?: { selective?: boolean }) => Promise<ArrayBuffer | null>;
   /** Set zoom level */
   setZoom: (zoom: number) => void;
   /** Get current zoom level */
@@ -1983,32 +1989,57 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
   }, []);
 
   // Handle save
-  const handleSave = useCallback(async (): Promise<ArrayBuffer | null> => {
-    if (!agentRef.current) return null;
+  const handleSave = useCallback(
+    async (options?: { selective?: boolean }): Promise<ArrayBuffer | null> => {
+      if (!agentRef.current) return null;
 
-    try {
-      const agentDoc = agentRef.current.getDocument();
+      try {
+        const agentDoc = agentRef.current.getDocument();
 
-      // Get the document from the PM editor state — this runs fromProseDoc which
-      // converts PM comment marks into commentRangeStart/End in the document body.
-      // The agent's internal document has the original parsed content and won't
-      // include markers for newly added comments.
-      const pmDoc = pagedEditorRef.current?.getDocument();
-      if (pmDoc?.package?.document) {
-        agentDoc.package.document.content = pmDoc.package.document.content;
+        // Get the document from the PM editor state — this runs fromProseDoc which
+        // converts PM comment marks into commentRangeStart/End in the document body.
+        // The agent's internal document has the original parsed content and won't
+        // include markers for newly added comments.
+        const pmDoc = pagedEditorRef.current?.getDocument();
+        if (pmDoc?.package?.document) {
+          agentDoc.package.document.content = pmDoc.package.document.content;
+        }
+
+        // Sync React comments state (including new replies) back to the document model
+        agentDoc.package.document.comments = comments;
+
+        // Build selective save options from change tracker state
+        const useSelective = options?.selective !== false;
+        const view = pagedEditorRef.current?.getView();
+        let selectiveOptions: Parameters<typeof agentRef.current.toBuffer>[0] = undefined;
+
+        if (useSelective && view) {
+          const editorState = view.state;
+          selectiveOptions = {
+            selective: {
+              changedParaIds: getChangedParagraphIds(editorState),
+              structuralChange: hasStructuralChanges(editorState),
+              hasUntrackedChanges: hasUntrackedChanges(editorState),
+            },
+          };
+        }
+
+        const buffer = await agentRef.current.toBuffer(selectiveOptions);
+
+        // Clear change tracker after successful save
+        if (view) {
+          view.dispatch(clearTrackedChanges(view.state));
+        }
+
+        onSave?.(buffer);
+        return buffer;
+      } catch (error) {
+        onError?.(error instanceof Error ? error : new Error('Failed to save document'));
+        return null;
       }
-
-      // Sync React comments state (including new replies) back to the document model
-      agentDoc.package.document.comments = comments;
-
-      const buffer = await agentRef.current.toBuffer();
-      onSave?.(buffer);
-      return buffer;
-    } catch (error) {
-      onError?.(error instanceof Error ? error : new Error('Failed to save document'));
-      return null;
-    }
-  }, [onSave, onError, comments]);
+    },
+    [onSave, onError, comments]
+  );
 
   // Handle error from editor
   const handleEditorError = useCallback(
