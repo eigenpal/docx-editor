@@ -88,6 +88,7 @@ const FootnotePropertiesDialog = lazy(() =>
 import { MaterialSymbol } from './ui/Icons';
 import { Tooltip } from './ui/Tooltip';
 import { HyperlinkPopup, type HyperlinkPopupData } from './ui/HyperlinkPopup';
+import { Toaster, toast } from 'sonner';
 import { getBuiltinTableStyle, type TableStylePreset } from './ui/TableStyleGallery';
 import { DocumentAgent } from '@eigenpal/docx-core/agent/DocumentAgent';
 import { DefaultLoadingIndicator, DefaultPlaceholder, ParseError } from './DocxEditorHelpers';
@@ -2022,6 +2023,7 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
   const handleHyperlinkPopupRemove = useCallback(() => {
     doRemoveHyperlink();
     setHyperlinkPopupData(null);
+    toast.success('Link removed');
   }, [doRemoveHyperlink]);
 
   const handleHyperlinkPopupClose = useCallback(() => {
@@ -3132,6 +3134,9 @@ body { background: white; }
             onClose={handleHyperlinkPopupClose}
             readOnly={readOnly}
           />
+
+          {/* Toast notifications */}
+          <Toaster position="bottom-center" richColors />
 
           {/* Lazy-loaded dialogs — only fetched when first opened */}
           <Suspense fallback={null}>

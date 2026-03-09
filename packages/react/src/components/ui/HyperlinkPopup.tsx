@@ -8,6 +8,7 @@
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import type { CSSProperties } from 'react';
+import { toast } from 'sonner';
 
 // ============================================================================
 // TYPES
@@ -144,21 +145,6 @@ const APPLY_BUTTON_STYLE: CSSProperties = {
   flexShrink: 0,
 };
 
-const CURRENT_URL_ROW_STYLE: CSSProperties = {
-  display: 'flex',
-  alignItems: 'center',
-  gap: '8px',
-  color: '#5f6368',
-  fontSize: '13px',
-  overflow: 'hidden',
-};
-
-const CURRENT_URL_TEXT_STYLE: CSSProperties = {
-  overflow: 'hidden',
-  textOverflow: 'ellipsis',
-  whiteSpace: 'nowrap',
-};
-
 // ============================================================================
 // SVG ICONS
 // ============================================================================
@@ -276,7 +262,6 @@ export function HyperlinkPopup({
   const [mode, setMode] = useState<'view' | 'edit'>('view');
   const [editText, setEditText] = useState('');
   const [editUrl, setEditUrl] = useState('');
-  const [copied, setCopied] = useState(false);
   const popupRef = useRef<HTMLDivElement>(null);
   const textInputRef = useRef<HTMLInputElement>(null);
 
@@ -286,7 +271,6 @@ export function HyperlinkPopup({
       setMode('view');
       setEditText(data.displayText);
       setEditUrl(data.href);
-      setCopied(false);
     }
   }, [data]);
 
@@ -344,8 +328,7 @@ export function HyperlinkPopup({
   const handleCopy = useCallback(() => {
     if (!data) return;
     onCopy(data.href);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+    toast.success('Link copied to clipboard');
   }, [data, onCopy]);
 
   const handleEditClick = useCallback(() => {
@@ -410,7 +393,7 @@ export function HyperlinkPopup({
         </div>
 
         {/* URL field + Apply */}
-        <div style={EDIT_ROW_STYLE}>
+        <div style={{ ...EDIT_ROW_STYLE, marginBottom: 0 }}>
           <span style={ICON_STYLE}>
             <LinkIcon />
           </span>
@@ -436,16 +419,6 @@ export function HyperlinkPopup({
           >
             Apply
           </button>
-        </div>
-
-        {/* Current URL display */}
-        <div style={CURRENT_URL_ROW_STYLE}>
-          <span style={ICON_STYLE}>
-            <LinkIcon />
-          </span>
-          <span style={CURRENT_URL_TEXT_STYLE} title={data.href}>
-            {data.href}
-          </span>
         </div>
       </div>
     );
@@ -486,7 +459,7 @@ export function HyperlinkPopup({
       <span style={SEPARATOR_STYLE} />
 
       {/* Copy button */}
-      <PopupIconButton title={copied ? 'Copied!' : 'Copy link'} onClick={handleCopy}>
+      <PopupIconButton title="Copy link" onClick={handleCopy}>
         <CopyIcon />
       </PopupIconButton>
 
