@@ -19,6 +19,43 @@ export interface VisualLineNavigationOptions {
   pagesContainerRef: React.RefObject<HTMLDivElement | null>;
 }
 
+/**
+ * Find the nearest ancestor that actually scrolls (overflow auto/scroll
+ * and scrollHeight > clientHeight).
+ */
+function findScrollParent(el: HTMLElement): HTMLElement | null {
+  let parent = el.parentElement;
+  while (parent && parent !== document.documentElement) {
+    const { overflowY } = getComputedStyle(parent);
+    if (
+      (overflowY === 'auto' || overflowY === 'scroll') &&
+      parent.scrollHeight > parent.clientHeight
+    ) {
+      return parent;
+    }
+    parent = parent.parentElement;
+  }
+  return null;
+}
+
+/**
+ * Scroll the nearest scrollable ancestor so that the target element is visible.
+ * Uses manual scroll math because `scrollIntoView` misbehaves when the
+ * content is inside a CSS `transform: scale()` viewport.
+ */
+function scrollIntoViewIfNeeded(el: HTMLElement): void {
+  const container = findScrollParent(el);
+  if (!container) return;
+  const elRect = el.getBoundingClientRect();
+  const containerRect = container.getBoundingClientRect();
+  const margin = 40; // extra breathing room in px
+  if (elRect.bottom > containerRect.bottom - margin) {
+    container.scrollTop += elRect.bottom - containerRect.bottom + margin;
+  } else if (elRect.top < containerRect.top + margin) {
+    container.scrollTop -= containerRect.top - elRect.top + margin;
+  }
+}
+
 export function useVisualLineNavigation({ pagesContainerRef }: VisualLineNavigationOptions) {
   const stickyXRef = useRef<number | null>(null);
   const lastVisualLineIndexRef = useRef<number>(-1);
@@ -291,6 +328,9 @@ export function useVisualLineNavigation({ pagesContainerRef }: VisualLineNavigat
           : TextSelection.near($newPos);
         dispatch(state.tr.setSelection(sel));
       }
+
+      // Scroll the target line into view so the cursor stays visible across pages
+      scrollIntoViewIfNeeded(targetLine);
 
       return true;
     },
