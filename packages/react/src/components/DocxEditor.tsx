@@ -2021,10 +2021,80 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
   );
 
   const handleHyperlinkPopupRemove = useCallback(() => {
-    doRemoveHyperlink();
+    const view = getActiveEditorView();
+    if (!view) return;
+
+    const hlType = view.state.schema.marks.hyperlink;
+    if (!hlType) return;
+
+    const { $from } = view.state.selection;
+
+    // Try $from.marks() first, then check the node after the cursor
+    // (ProseMirror may not report marks at boundary positions)
+    let linkMark = $from.marks().find((m) => m.type === hlType);
+    if (!linkMark && $from.nodeAfter) {
+      linkMark = $from.nodeAfter.marks.find((m) => m.type === hlType);
+    }
+    if (!linkMark && $from.nodeBefore) {
+      linkMark = $from.nodeBefore.marks.find((m) => m.type === hlType);
+    }
+
+    // Fall back to searching by href from popup data
+    if (!linkMark && hyperlinkPopupData) {
+      const parent = $from.parent;
+      parent.forEach((node) => {
+        if (!linkMark && node.isText) {
+          const m = node.marks.find(
+            (mk) => mk.type === hlType && mk.attrs.href === hyperlinkPopupData.href
+          );
+          if (m) linkMark = m;
+        }
+      });
+    }
+
+    if (!linkMark) return;
+
+    // Find contiguous range of nodes with matching hyperlink mark
+    const parent = $from.parent;
+    const parentStart = $from.start();
+    type Range = { start: number; end: number };
+    const ranges: Range[] = [];
+    let currentRange: Range | null = null;
+
+    parent.forEach((node, offset) => {
+      const nodeStart = parentStart + offset;
+      const nodeEnd = nodeStart + node.nodeSize;
+      const hlMark = node.isText
+        ? node.marks.find((m) => m.type === hlType && m.attrs.href === linkMark!.attrs.href)
+        : null;
+
+      if (hlMark) {
+        if (currentRange) {
+          currentRange.end = nodeEnd;
+        } else {
+          currentRange = { start: nodeStart, end: nodeEnd };
+        }
+      } else {
+        if (currentRange) {
+          ranges.push(currentRange);
+          currentRange = null;
+        }
+      }
+    });
+    if (currentRange) ranges.push(currentRange);
+
+    const cursorPos = $from.pos;
+    const targetRange = ranges.find((r) => r.start <= cursorPos && cursorPos <= r.end);
+    if (!targetRange) return;
+
+    const tr = view.state.tr;
+    tr.removeMark(targetRange.start, targetRange.end, hlType);
+    view.dispatch(tr.scrollIntoView());
+
     setHyperlinkPopupData(null);
+    focusActiveEditor();
     toast('Link removed');
-  }, [doRemoveHyperlink]);
+  }, [getActiveEditorView, focusActiveEditor, hyperlinkPopupData]);
 
   const handleHyperlinkPopupClose = useCallback(() => {
     setHyperlinkPopupData(null);
