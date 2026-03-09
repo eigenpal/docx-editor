@@ -12,7 +12,7 @@
         <p>Vue editor component coming soon.</p>
         <p>
           See
-          <a href="https://github.com/eigenpal/docx-js-editor" target="_blank" rel="noopener">
+          <a href="https://github.com/eigenpal/docx-editor" target="_blank" rel="noopener">
             the repository
           </a>
           for contribution guidelines.
