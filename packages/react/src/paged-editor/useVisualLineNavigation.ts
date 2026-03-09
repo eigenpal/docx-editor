@@ -15,6 +15,9 @@ import { useCallback, useRef } from 'react';
 import { TextSelection } from 'prosemirror-state';
 import type { EditorView } from 'prosemirror-view';
 
+/** Only match lines inside page body content, skipping header/footer lines. */
+const CONTENT_LINE_SELECTOR = '.layout-page-content .layout-line';
+
 export interface VisualLineNavigationOptions {
   pagesContainerRef: React.RefObject<HTMLDivElement | null>;
 }
@@ -116,7 +119,7 @@ export function useVisualLineNavigation({ pagesContainerRef }: VisualLineNavigat
     (pmPos: number): HTMLElement | null => {
       if (!pagesContainerRef.current) return null;
 
-      const allLines = pagesContainerRef.current.querySelectorAll('.layout-line');
+      const allLines = pagesContainerRef.current.querySelectorAll(CONTENT_LINE_SELECTOR);
 
       // First pass: check span ranges (most precise)
       for (const line of Array.from(allLines)) {
@@ -273,7 +276,9 @@ export function useVisualLineNavigation({ pagesContainerRef }: VisualLineNavigat
 
       if (!pagesContainerRef.current) return false;
 
-      const allLines = Array.from(pagesContainerRef.current.querySelectorAll('.layout-line'));
+      const allLines = Array.from(
+        pagesContainerRef.current.querySelectorAll(CONTENT_LINE_SELECTOR)
+      );
       if (allLines.length === 0) return false;
 
       const { from, anchor } = view.state.selection;
