@@ -3,7 +3,7 @@ import { lazy, Suspense, useEffect, useState } from 'react';
 
 export const meta: MetaFunction = () => {
   return [
-    { title: 'docx-js-editor — Remix Example' },
+    { title: 'docx-editor — Remix Example' },
     { name: 'description', content: 'DOCX editor powered by Remix' },
   ];
 };

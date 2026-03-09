@@ -264,7 +264,7 @@ export function App() {
       <header style={styles.header}>
         <div style={styles.headerLeft}>
           <a
-            href="https://github.com/eigenpal/docx-js-editor"
+            href="https://github.com/eigenpal/docx-editor"
             target="_blank"
             rel="noopener noreferrer"
             style={styles.titleLink}
