@@ -278,6 +278,10 @@ export interface DocxEditorProps {
   onCut?: () => void;
   /** Callback when content is pasted */
   onPaste?: () => void;
+  /** Editor mode: 'editing' (direct edits), 'suggesting' (track changes), or 'viewing' (read-only). Default: 'editing' */
+  mode?: EditorMode;
+  /** Callback when the editing mode changes */
+  onModeChange?: (mode: EditorMode) => void;
   /**
    * Callback when rendered DOM context is ready (for plugin overlays).
    * Used by PluginHost to get access to the rendered page DOM for positioning.
@@ -359,27 +363,35 @@ interface EditorState {
 // EDITING MODE DROPDOWN (Google Docs-style)
 // ============================================================================
 
-const EDITING_MODES = [
+export type EditorMode = 'editing' | 'suggesting' | 'viewing';
+
+const EDITING_MODES: readonly { value: EditorMode; label: string; icon: string; desc: string }[] = [
   {
-    value: 'editing' as const,
+    value: 'editing',
     label: 'Editing',
     icon: 'edit_note',
     desc: 'Edit document directly',
   },
   {
-    value: 'suggesting' as const,
+    value: 'suggesting',
     label: 'Suggesting',
-    icon: 'edit_note',
+    icon: 'rate_review',
     desc: 'Edits become suggestions',
   },
-] as const;
+  {
+    value: 'viewing',
+    label: 'Viewing',
+    icon: 'visibility',
+    desc: 'Read-only, no edits',
+  },
+];
 
 function EditingModeDropdown({
   mode,
   onModeChange,
 }: {
-  mode: 'editing' | 'suggesting';
-  onModeChange: (mode: 'editing' | 'suggesting') => void;
+  mode: EditorMode;
+  onModeChange: (mode: EditorMode) => void;
 }) {
   const [isOpen, setIsOpen] = useState(false);
   const [compact, setCompact] = useState(false);
@@ -572,7 +584,7 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
     showRuler = false,
     rulerUnit = 'inch',
     initialZoom = 1.0,
-    readOnly = false,
+    readOnly: readOnlyProp = false,
     toolbarExtra,
     className = '',
     style,
@@ -585,6 +597,8 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
     onCopy: _onCopy,
     onCut: _onCut,
     onPaste: _onPaste,
+    mode: modeProp,
+    onModeChange,
     externalPlugins,
     onEditorViewReady,
     onRenderedDomContextReady,
@@ -636,7 +650,14 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
     to: number;
   } | null>(null);
   const [addCommentYPosition, setAddCommentYPosition] = useState<number | null>(null);
-  const [editingMode, setEditingMode] = useState<'editing' | 'suggesting'>('editing');
+  const [editingModeInternal, setEditingModeInternal] = useState<EditorMode>(modeProp ?? 'editing');
+  const editingMode = modeProp ?? editingModeInternal;
+  const setEditingMode = (mode: EditorMode) => {
+    if (!modeProp) setEditingModeInternal(mode);
+    onModeChange?.(mode);
+  };
+  // 'viewing' mode acts as read-only
+  const readOnly = readOnlyProp || editingMode === 'viewing';
   // Floating "add comment" button position (relative to scroll container, null = hidden)
   const [floatingCommentBtn, setFloatingCommentBtn] = useState<{
     top: number;
@@ -2590,8 +2611,8 @@ body { background: white; }
               {/* Editor container - this is the scroll container */}
               <div style={editorContainerStyle}>
                 {/* Toolbar - sticky at top of scroll container */}
-                {/* Hide toolbar in read-only mode unless explicitly requested */}
-                {showToolbar && !readOnly && (
+                {/* Hide toolbar only when readOnly prop is explicitly set (not from viewing mode) */}
+                {showToolbar && !readOnlyProp && (
                   <div
                     ref={toolbarRefCallback}
                     className="sticky top-0 z-50 flex flex-col gap-0 bg-white shadow-sm"
@@ -2692,8 +2713,8 @@ body { background: white; }
                       }
                     }}
                   >
-                    {/* Vertical Ruler - fixed on left edge (hidden in read-only mode) */}
-                    {showRuler && !readOnly && (
+                    {/* Vertical Ruler - fixed on left edge (hidden when readOnly prop is set) */}
+                    {showRuler && !readOnlyProp && (
                       <div
                         style={{
                           position: 'absolute',

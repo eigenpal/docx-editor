@@ -30,7 +30,12 @@ export const VERSION = '0.0.2';
 // MAIN COMPONENT
 // ============================================================================
 
-export { DocxEditor, type DocxEditorProps, type DocxEditorRef } from './components/DocxEditor';
+export {
+  DocxEditor,
+  type DocxEditorProps,
+  type DocxEditorRef,
+  type EditorMode,
+} from './components/DocxEditor';
 export { renderAsync, type RenderAsyncOptions, type DocxEditorHandle } from './renderAsync';
 export { type DocxInput, toArrayBuffer } from '@eigenpal/docx-core/utils/docxInput';
 
