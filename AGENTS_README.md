@@ -1282,7 +1282,7 @@ The editor's CSS is scoped under `.ep-root`. If your app's Tailwind styles leak 
 ## Links
 
 - [npm package](https://www.npmjs.com/package/@eigenpal/docx-js-editor)
-- [GitHub repository](https://github.com/eigenpal/docx-js-editor)
+- [GitHub repository](https://github.com/eigenpal/docx-editor)
 - [Live demo](https://docx-js-editor.vercel.app/)
 - [Props & Ref Methods](docs/PROPS.md)
 - [Plugin System](docs/PLUGINS.md)
