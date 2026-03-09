@@ -2089,6 +2089,11 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
 
     const tr = view.state.tr;
     tr.removeMark(targetRange.start, targetRange.end, hlType);
+    // Also remove hyperlink-associated color and underline so text reverts to normal
+    const colorType = view.state.schema.marks.textColor;
+    const underlineType = view.state.schema.marks.underline;
+    if (colorType) tr.removeMark(targetRange.start, targetRange.end, colorType);
+    if (underlineType) tr.removeMark(targetRange.start, targetRange.end, underlineType);
     view.dispatch(tr.scrollIntoView());
 
     setHyperlinkPopupData(null);
