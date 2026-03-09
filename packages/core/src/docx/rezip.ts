@@ -42,7 +42,7 @@ import { escapeXml } from './serializer/xmlUtils';
 /**
  * Find the highest rId number in a relationships XML string.
  */
-function findMaxRId(relsXml: string): number {
+export function findMaxRId(relsXml: string): number {
   let maxId = 0;
   for (const match of relsXml.matchAll(/Id="rId(\d+)"/g)) {
     const id = parseInt(match[1], 10);
@@ -496,10 +496,8 @@ export async function repackDocxFromRaw(
 // COMMENT PACKAGING HELPERS
 // ============================================================================
 
-const COMMENTS_CONTENT_TYPE =
+export const COMMENTS_CONTENT_TYPE =
   'application/vnd.openxmlformats-officedocument.wordprocessingml.comments+xml';
-const COMMENTS_RELATIONSHIP_TYPE =
-  'http://schemas.openxmlformats.org/officeDocument/2006/relationships/comments';
 
 /**
  * Ensure [Content_Types].xml contains an Override for word/comments.xml.
@@ -540,7 +538,7 @@ async function ensureCommentsRelationship(zip: JSZip, compressionLevel: number):
 
   relsXml = relsXml.replace(
     '</Relationships>',
-    `<Relationship Id="${newRId}" Type="${COMMENTS_RELATIONSHIP_TYPE}" Target="comments.xml"/></Relationships>`
+    `<Relationship Id="${newRId}" Type="${RELATIONSHIP_TYPES.comments}" Target="comments.xml"/></Relationships>`
   );
   zip.file(relsPath, relsXml, {
     compression: 'DEFLATE',
@@ -628,9 +626,20 @@ export async function updateMultipleFiles(
   updates: Map<string, string | ArrayBuffer>,
   options: RepackOptions = {}
 ): Promise<ArrayBuffer> {
-  const { compressionLevel = 6 } = options;
-
   const zip = await JSZip.loadAsync(originalBuffer);
+  return applyUpdatesToZip(zip, updates, options);
+}
+
+/**
+ * Apply file updates to an already-loaded JSZip instance and generate the output.
+ * Use this when the zip is already loaded to avoid a redundant decompression pass.
+ */
+export async function applyUpdatesToZip(
+  zip: JSZip,
+  updates: Map<string, string | ArrayBuffer>,
+  options: RepackOptions = {}
+): Promise<ArrayBuffer> {
+  const { compressionLevel = 6 } = options;
 
   for (const [path, content] of updates) {
     zip.file(path, content, {
@@ -776,39 +785,43 @@ export async function addMedia(
 // ============================================================================
 
 /**
- * Serialize modified headers and footers into the ZIP
- *
- * Maps rId → filename via relationships, then serializes each
- * HeaderFooter object to its corresponding word/header*.xml or word/footer*.xml
+ * Collect serialized header/footer XML updates from the document model.
+ * Uses the relationship map to resolve rId → filename.
  */
-function serializeHeadersFootersToZip(doc: Document, zip: JSZip, compressionLevel: number): void {
+export function collectHeaderFooterUpdates(doc: Document): Map<string, string> {
+  const updates = new Map<string, string>();
   const rels = doc.package.relationships;
-  if (!rels) return;
+  if (!rels) return updates;
 
-  const compressionOptions = { level: compressionLevel };
+  const parts: Array<{
+    map: Map<string, import('../types/content').HeaderFooter> | undefined;
+    type: string;
+  }> = [
+    { map: doc.package.headers, type: RELATIONSHIP_TYPES.header },
+    { map: doc.package.footers, type: RELATIONSHIP_TYPES.footer },
+  ];
 
-  // Serialize headers
-  if (doc.package.headers) {
-    for (const [rId, headerFooter] of doc.package.headers.entries()) {
+  for (const { map, type } of parts) {
+    if (!map) continue;
+    for (const [rId, headerFooter] of map.entries()) {
       const rel = rels.get(rId);
-      if (rel && rel.type === RELATIONSHIP_TYPES.header && rel.target) {
+      if (rel && rel.type === type && rel.target) {
         const filename = rel.target.startsWith('/') ? rel.target.slice(1) : `word/${rel.target}`;
-        const xml = serializeHeaderFooter(headerFooter);
-        zip.file(filename, xml, { compression: 'DEFLATE', compressionOptions });
+        updates.set(filename, serializeHeaderFooter(headerFooter));
       }
     }
   }
 
-  // Serialize footers
-  if (doc.package.footers) {
-    for (const [rId, headerFooter] of doc.package.footers.entries()) {
-      const rel = rels.get(rId);
-      if (rel && rel.type === RELATIONSHIP_TYPES.footer && rel.target) {
-        const filename = rel.target.startsWith('/') ? rel.target.slice(1) : `word/${rel.target}`;
-        const xml = serializeHeaderFooter(headerFooter);
-        zip.file(filename, xml, { compression: 'DEFLATE', compressionOptions });
-      }
-    }
+  return updates;
+}
+
+/**
+ * Serialize modified headers and footers into the ZIP
+ */
+function serializeHeadersFootersToZip(doc: Document, zip: JSZip, compressionLevel: number): void {
+  const compressionOptions = { level: compressionLevel };
+  for (const [filename, xml] of collectHeaderFooterUpdates(doc)) {
+    zip.file(filename, xml, { compression: 'DEFLATE', compressionOptions });
   }
 }
 
@@ -819,7 +832,7 @@ function serializeHeadersFootersToZip(doc: Document, zip: JSZip, compressionLeve
 /**
  * Update core properties XML with new modification date
  */
-function updateCoreProperties(
+export function updateCoreProperties(
   corePropsXml: string,
   options: { updateModifiedDate?: boolean; modifiedBy?: string }
 ): string {

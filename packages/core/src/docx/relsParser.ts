@@ -53,6 +53,7 @@ export const RELATIONSHIP_TYPES = {
   customProperties:
     'http://schemas.openxmlformats.org/officeDocument/2006/relationships/custom-properties',
   customXml: 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/customXml',
+  comments: 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/comments',
 } as const;
 
 /**

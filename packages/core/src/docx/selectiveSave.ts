@@ -3,7 +3,7 @@
  *
  * Orchestrates selective XML patching for the save flow.
  * Serializes full document.xml, validates patch safety, builds patched XML,
- * and calls updateMultipleFiles() to produce the final DOCX.
+ * and calls applyUpdatesToZip() to produce the final DOCX.
  *
  * Returns null on any failure, signaling the caller to fall back to full repack.
  */
@@ -11,15 +11,15 @@
 import type { Document, BlockContent } from '../types/document';
 import { serializeDocument } from './serializer/documentSerializer';
 import { serializeComments } from './serializer/commentSerializer';
-import { serializeHeaderFooter } from './serializer/headerFooterSerializer';
 import { buildPatchedDocumentXml } from './selectiveXmlPatch';
-import { updateMultipleFiles } from './rezip';
+import {
+  applyUpdatesToZip,
+  findMaxRId,
+  updateCoreProperties,
+  collectHeaderFooterUpdates,
+  COMMENTS_CONTENT_TYPE,
+} from './rezip';
 import { RELATIONSHIP_TYPES } from './relsParser';
-
-const COMMENTS_CONTENT_TYPE =
-  'application/vnd.openxmlformats-officedocument.wordprocessingml.comments+xml';
-const COMMENTS_RELATIONSHIP_TYPE =
-  'http://schemas.openxmlformats.org/officeDocument/2006/relationships/comments';
 
 /**
  * Check if document content has new images (data: URL without rId) or
@@ -139,7 +139,7 @@ export async function attemptSelectiveSave(
             relsPath,
             relsXml.replace(
               '</Relationships>',
-              `<Relationship Id="rId${maxId + 1}" Type="${COMMENTS_RELATIONSHIP_TYPE}" Target="comments.xml"/></Relationships>`
+              `<Relationship Id="rId${maxId + 1}" Type="${RELATIONSHIP_TYPES.comments}" Target="comments.xml"/></Relationships>`
             )
           );
         }
@@ -155,77 +155,16 @@ export async function attemptSelectiveSave(
     const corePropsFile = zip.file('docProps/core.xml');
     if (corePropsFile) {
       const corePropsXml = await corePropsFile.async('text');
-      updates.set('docProps/core.xml', updateModifiedDate(corePropsXml));
+      updates.set(
+        'docProps/core.xml',
+        updateCoreProperties(corePropsXml, { updateModifiedDate: true })
+      );
     }
 
-    if (updates.size === 0) {
-      return originalBuffer;
-    }
-
-    return await updateMultipleFiles(originalBuffer, updates);
+    // Use the already-loaded zip to avoid a redundant decompression pass
+    return await applyUpdatesToZip(zip, updates);
   } catch {
     // Any error — fall back to full repack
     return null;
   }
-}
-
-/**
- * Collect serialized header/footer XML updates from the document model.
- * Uses the relationship map to resolve rId → filename.
- */
-function collectHeaderFooterUpdates(doc: Document): Map<string, string> {
-  const updates = new Map<string, string>();
-  const rels = doc.package.relationships;
-  if (!rels) return updates;
-
-  if (doc.package.headers) {
-    for (const [rId, headerFooter] of doc.package.headers.entries()) {
-      const rel = rels.get(rId);
-      if (rel && rel.type === RELATIONSHIP_TYPES.header && rel.target) {
-        const filename = rel.target.startsWith('/') ? rel.target.slice(1) : `word/${rel.target}`;
-        updates.set(filename, serializeHeaderFooter(headerFooter));
-      }
-    }
-  }
-
-  if (doc.package.footers) {
-    for (const [rId, headerFooter] of doc.package.footers.entries()) {
-      const rel = rels.get(rId);
-      if (rel && rel.type === RELATIONSHIP_TYPES.footer && rel.target) {
-        const filename = rel.target.startsWith('/') ? rel.target.slice(1) : `word/${rel.target}`;
-        updates.set(filename, serializeHeaderFooter(headerFooter));
-      }
-    }
-  }
-
-  return updates;
-}
-
-/**
- * Find the highest rId number in a relationships XML string.
- */
-function findMaxRId(relsXml: string): number {
-  let maxId = 0;
-  for (const match of relsXml.matchAll(/Id="rId(\d+)"/g)) {
-    const id = parseInt(match[1], 10);
-    if (id > maxId) maxId = id;
-  }
-  return maxId;
-}
-
-/**
- * Update the dcterms:modified timestamp in core properties XML.
- */
-function updateModifiedDate(corePropsXml: string): string {
-  const now = new Date().toISOString();
-  if (corePropsXml.includes('<dcterms:modified')) {
-    return corePropsXml.replace(
-      /<dcterms:modified[^>]*>[^<]*<\/dcterms:modified>/,
-      `<dcterms:modified xsi:type="dcterms:W3CDTF">${now}</dcterms:modified>`
-    );
-  }
-  return corePropsXml.replace(
-    '</cp:coreProperties>',
-    `<dcterms:modified xsi:type="dcterms:W3CDTF">${now}</dcterms:modified></cp:coreProperties>`
-  );
 }
