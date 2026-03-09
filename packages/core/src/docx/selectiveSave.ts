@@ -10,8 +10,16 @@
 
 import type { Document, BlockContent } from '../types/document';
 import { serializeDocument } from './serializer/documentSerializer';
+import { serializeComments } from './serializer/commentSerializer';
+import { serializeHeaderFooter } from './serializer/headerFooterSerializer';
 import { buildPatchedDocumentXml } from './selectiveXmlPatch';
 import { updateMultipleFiles } from './rezip';
+import { RELATIONSHIP_TYPES } from './relsParser';
+
+const COMMENTS_CONTENT_TYPE =
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.comments+xml';
+const COMMENTS_RELATIONSHIP_TYPE =
+  'http://schemas.openxmlformats.org/officeDocument/2006/relationships/comments';
 
 /**
  * Check if document content has new images (data: URL without rId) or
@@ -54,6 +62,8 @@ export interface SelectiveSaveOptions {
 
 /**
  * Attempt a selective save — patch only changed paragraphs in document.xml.
+ * Also updates comments, headers/footers, and core properties so that
+ * all document parts stay in sync even when only paragraphs are patched.
  *
  * Returns the saved ArrayBuffer, or null if selective save is not possible
  * (caller should fall back to full repack).
@@ -74,33 +84,148 @@ export async function attemptSelectiveSave(
   const content = doc.package.document.content;
   if (hasNewImagesOrHyperlinks(content)) return null;
 
-  // If no changes, just return the original buffer as-is
-  if (changedParaIds.size === 0) {
-    return originalBuffer;
-  }
+  const comments = doc.package.document.comments;
+  const hasComments = comments && comments.length > 0;
+  const headerFooterUpdates = collectHeaderFooterUpdates(doc);
 
   try {
-    // Get the original document.xml from the ZIP
     const JSZip = (await import('jszip')).default;
     const zip = await JSZip.loadAsync(originalBuffer);
-    const docXmlFile = zip.file('word/document.xml');
-    if (!docXmlFile) return null;
-    const originalDocXml = await docXmlFile.async('text');
-
-    // Serialize the full document.xml from the current document model
-    const serializedDocXml = serializeDocument(doc);
-
-    // Build the patched document.xml
-    const patchedDocXml = buildPatchedDocumentXml(originalDocXml, serializedDocXml, changedParaIds);
-    if (!patchedDocXml) return null;
-
-    // Apply the patch using updateMultipleFiles
     const updates = new Map<string, string>();
-    updates.set('word/document.xml', patchedDocXml);
+
+    // Patch document.xml if paragraphs changed
+    if (changedParaIds.size > 0) {
+      const docXmlFile = zip.file('word/document.xml');
+      if (!docXmlFile) return null;
+      const originalDocXml = await docXmlFile.async('text');
+
+      const serializedDocXml = serializeDocument(doc);
+      const patchedDocXml = buildPatchedDocumentXml(
+        originalDocXml,
+        serializedDocXml,
+        changedParaIds
+      );
+      if (!patchedDocXml) return null;
+      updates.set('word/document.xml', patchedDocXml);
+    }
+
+    // Always serialize comments.xml when the document has comments
+    if (hasComments) {
+      updates.set('word/comments.xml', serializeComments(comments));
+
+      // Ensure [Content_Types].xml has an Override for comments.xml
+      const ctFile = zip.file('[Content_Types].xml');
+      if (ctFile) {
+        const ctXml = await ctFile.async('text');
+        if (!ctXml.includes('/word/comments.xml')) {
+          updates.set(
+            '[Content_Types].xml',
+            ctXml.replace(
+              '</Types>',
+              `<Override PartName="/word/comments.xml" ContentType="${COMMENTS_CONTENT_TYPE}"/></Types>`
+            )
+          );
+        }
+      }
+
+      // Ensure word/_rels/document.xml.rels has a Relationship for comments.xml
+      const relsPath = 'word/_rels/document.xml.rels';
+      const relsFile = zip.file(relsPath);
+      if (relsFile) {
+        const relsXml = await relsFile.async('text');
+        if (!relsXml.includes('comments.xml')) {
+          const maxId = findMaxRId(relsXml);
+          updates.set(
+            relsPath,
+            relsXml.replace(
+              '</Relationships>',
+              `<Relationship Id="rId${maxId + 1}" Type="${COMMENTS_RELATIONSHIP_TYPE}" Target="comments.xml"/></Relationships>`
+            )
+          );
+        }
+      }
+    }
+
+    // Serialize modified headers/footers
+    for (const [path, xml] of headerFooterUpdates) {
+      updates.set(path, xml);
+    }
+
+    // Update modification date in docProps/core.xml
+    const corePropsFile = zip.file('docProps/core.xml');
+    if (corePropsFile) {
+      const corePropsXml = await corePropsFile.async('text');
+      updates.set('docProps/core.xml', updateModifiedDate(corePropsXml));
+    }
+
+    if (updates.size === 0) {
+      return originalBuffer;
+    }
 
     return await updateMultipleFiles(originalBuffer, updates);
   } catch {
     // Any error — fall back to full repack
     return null;
   }
+}
+
+/**
+ * Collect serialized header/footer XML updates from the document model.
+ * Uses the relationship map to resolve rId → filename.
+ */
+function collectHeaderFooterUpdates(doc: Document): Map<string, string> {
+  const updates = new Map<string, string>();
+  const rels = doc.package.relationships;
+  if (!rels) return updates;
+
+  if (doc.package.headers) {
+    for (const [rId, headerFooter] of doc.package.headers.entries()) {
+      const rel = rels.get(rId);
+      if (rel && rel.type === RELATIONSHIP_TYPES.header && rel.target) {
+        const filename = rel.target.startsWith('/') ? rel.target.slice(1) : `word/${rel.target}`;
+        updates.set(filename, serializeHeaderFooter(headerFooter));
+      }
+    }
+  }
+
+  if (doc.package.footers) {
+    for (const [rId, headerFooter] of doc.package.footers.entries()) {
+      const rel = rels.get(rId);
+      if (rel && rel.type === RELATIONSHIP_TYPES.footer && rel.target) {
+        const filename = rel.target.startsWith('/') ? rel.target.slice(1) : `word/${rel.target}`;
+        updates.set(filename, serializeHeaderFooter(headerFooter));
+      }
+    }
+  }
+
+  return updates;
+}
+
+/**
+ * Find the highest rId number in a relationships XML string.
+ */
+function findMaxRId(relsXml: string): number {
+  let maxId = 0;
+  for (const match of relsXml.matchAll(/Id="rId(\d+)"/g)) {
+    const id = parseInt(match[1], 10);
+    if (id > maxId) maxId = id;
+  }
+  return maxId;
+}
+
+/**
+ * Update the dcterms:modified timestamp in core properties XML.
+ */
+function updateModifiedDate(corePropsXml: string): string {
+  const now = new Date().toISOString();
+  if (corePropsXml.includes('<dcterms:modified')) {
+    return corePropsXml.replace(
+      /<dcterms:modified[^>]*>[^<]*<\/dcterms:modified>/,
+      `<dcterms:modified xsi:type="dcterms:W3CDTF">${now}</dcterms:modified>`
+    );
+  }
+  return corePropsXml.replace(
+    '</cp:coreProperties>',
+    `<dcterms:modified xsi:type="dcterms:W3CDTF">${now}</dcterms:modified></cp:coreProperties>`
+  );
 }

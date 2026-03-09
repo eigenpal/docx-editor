@@ -118,7 +118,7 @@ describe('attemptSelectiveSave', () => {
     expect(result).toBeNull();
   });
 
-  test('returns original buffer when no changes', async () => {
+  test('returns valid buffer when no content changes (still updates metadata)', async () => {
     const buffer = await loadFixture('example-with-image.docx');
     const doc = await parseDocx(buffer, { preloadFonts: false });
 
@@ -128,9 +128,21 @@ describe('attemptSelectiveSave', () => {
       hasUntrackedChanges: false,
     });
 
-    // Should return the original buffer (no-op)
+    // Should return a valid DOCX (may differ due to core properties update)
     expect(result).not.toBeNull();
-    expect(result!.byteLength).toBe(buffer.byteLength);
+    expect(result!.byteLength).toBeGreaterThan(0);
+
+    // Verify document.xml is unchanged
+    const originalXml = await getDocumentXml(buffer);
+    const resultXml = await getDocumentXml(result!);
+    expect(resultXml).toBe(originalXml);
+
+    // Verify core properties were updated with new modification date
+    const zip = await JSZip.loadAsync(result!);
+    const coreProps = await zip.file('docProps/core.xml')?.async('text');
+    if (coreProps) {
+      expect(coreProps).toContain('dcterms:modified');
+    }
   });
 
   test('selectively patches a single paragraph edit', async () => {
@@ -401,6 +413,312 @@ describe('buildPatchedDocumentXml with real DOCX XML', () => {
 // ============================================================================
 // Edge cases
 // ============================================================================
+
+// ============================================================================
+// Comments handling in selective save
+// ============================================================================
+
+describe('Selective save with comments', () => {
+  test('includes comments.xml when document has comments', async () => {
+    const buffer = await loadFixture('example-with-image.docx');
+    const doc = await parseDocx(buffer, { preloadFonts: false });
+
+    // Add a comment to the document model
+    doc.package.document.comments = [
+      {
+        id: 1,
+        author: 'Test User',
+        date: '2024-01-01T00:00:00Z',
+        content: [
+          {
+            type: 'paragraph',
+            formatting: {},
+            content: [
+              { type: 'run', formatting: {}, content: [{ type: 'text', text: 'Test comment' }] },
+            ],
+          },
+        ],
+      },
+    ];
+
+    // Even with no paragraph changes, comments should be saved
+    const result = await attemptSelectiveSave(doc, buffer, {
+      changedParaIds: new Set(),
+      structuralChange: false,
+      hasUntrackedChanges: false,
+    });
+
+    expect(result).not.toBeNull();
+    // Result should NOT be the original buffer (it has comments now)
+    expect(result!.byteLength).not.toBe(buffer.byteLength);
+
+    // Verify comments.xml exists and contains the comment
+    const zip = await JSZip.loadAsync(result!);
+    const commentsFile = zip.file('word/comments.xml');
+    expect(commentsFile).not.toBeNull();
+    const commentsXml = await commentsFile!.async('text');
+    expect(commentsXml).toContain('Test comment');
+    expect(commentsXml).toContain('w:id="1"');
+    expect(commentsXml).toContain('Test User');
+  });
+
+  test('ensures content type and relationship entries for new comments', async () => {
+    const buffer = await loadFixture('example-with-image.docx');
+    const doc = await parseDocx(buffer, { preloadFonts: false });
+
+    // Check if original has comments entries (it probably doesn't)
+    const originalZip = await JSZip.loadAsync(buffer);
+    const originalCt = await originalZip.file('[Content_Types].xml')?.async('text');
+    const hadCommentsEntry = originalCt?.includes('/word/comments.xml') ?? false;
+
+    // Add a comment
+    doc.package.document.comments = [
+      {
+        id: 42,
+        author: 'Author',
+        content: [
+          {
+            type: 'paragraph',
+            formatting: {},
+            content: [
+              { type: 'run', formatting: {}, content: [{ type: 'text', text: 'New comment' }] },
+            ],
+          },
+        ],
+      },
+    ];
+
+    const result = await attemptSelectiveSave(doc, buffer, {
+      changedParaIds: new Set(),
+      structuralChange: false,
+      hasUntrackedChanges: false,
+    });
+
+    expect(result).not.toBeNull();
+    const resultZip = await JSZip.loadAsync(result!);
+
+    // Content type should be present
+    const ctXml = await resultZip.file('[Content_Types].xml')?.async('text');
+    expect(ctXml).toContain('/word/comments.xml');
+
+    // Relationship should be present
+    const relsXml = await resultZip.file('word/_rels/document.xml.rels')?.async('text');
+    expect(relsXml).toContain('comments.xml');
+
+    // If the original didn't have comments, verify the entries were added
+    if (!hadCommentsEntry) {
+      expect(ctXml).toContain(
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.comments+xml'
+      );
+    }
+  });
+
+  test('preserves existing comments and adds new ones', async () => {
+    const buffer = await loadFixture('example-with-image.docx');
+    const doc = await parseDocx(buffer, { preloadFonts: false });
+
+    // Simulate having both an original comment and a new one
+    doc.package.document.comments = [
+      {
+        id: 1,
+        author: 'Original Author',
+        content: [
+          {
+            type: 'paragraph',
+            formatting: {},
+            content: [
+              {
+                type: 'run',
+                formatting: {},
+                content: [{ type: 'text', text: 'Original comment' }],
+              },
+            ],
+          },
+        ],
+      },
+      {
+        id: 999,
+        author: 'New Author',
+        content: [
+          {
+            type: 'paragraph',
+            formatting: {},
+            content: [
+              { type: 'run', formatting: {}, content: [{ type: 'text', text: 'New comment' }] },
+            ],
+          },
+        ],
+      },
+    ];
+
+    const result = await attemptSelectiveSave(doc, buffer, {
+      changedParaIds: new Set(),
+      structuralChange: false,
+      hasUntrackedChanges: false,
+    });
+
+    expect(result).not.toBeNull();
+    const zip = await JSZip.loadAsync(result!);
+    const commentsXml = await zip.file('word/comments.xml')!.async('text');
+
+    // Both comments should be present
+    expect(commentsXml).toContain('Original comment');
+    expect(commentsXml).toContain('New comment');
+    expect(commentsXml).toContain('w:id="1"');
+    expect(commentsXml).toContain('w:id="999"');
+  });
+
+  test('comments saved alongside paragraph changes', async () => {
+    const buffer = await loadFixture('example-with-image.docx');
+    const doc = await parseDocx(buffer, { preloadFonts: false });
+
+    // Add a comment
+    doc.package.document.comments = [
+      {
+        id: 5,
+        author: 'Commenter',
+        content: [
+          {
+            type: 'paragraph',
+            formatting: {},
+            content: [
+              { type: 'run', formatting: {}, content: [{ type: 'text', text: 'Comment text' }] },
+            ],
+          },
+        ],
+      },
+    ];
+
+    // Also modify a paragraph
+    const paragraphs = doc.package.document.content.filter(
+      (b): b is Paragraph => b.type === 'paragraph' && !!b.paraId
+    );
+    const target = paragraphs.find((p) =>
+      p.content.some(
+        (i) => i.type === 'run' && i.content.some((c) => c.type === 'text' && c.text.length > 0)
+      )
+    );
+
+    if (!target?.paraId) {
+      console.log('No suitable paragraph, skipping');
+      return;
+    }
+
+    for (const item of target.content) {
+      if (item.type === 'run') {
+        for (const c of item.content) {
+          if (c.type === 'text' && c.text.length > 0) {
+            c.text = c.text + ' [WITH_COMMENT]';
+            break;
+          }
+        }
+        break;
+      }
+    }
+
+    const result = await attemptSelectiveSave(doc, buffer, {
+      changedParaIds: new Set([target.paraId]),
+      structuralChange: false,
+      hasUntrackedChanges: false,
+    });
+
+    if (result) {
+      const zip = await JSZip.loadAsync(result);
+
+      // Verify document.xml has the paragraph change
+      const docXml = await zip.file('word/document.xml')!.async('text');
+      expect(docXml).toContain('[WITH_COMMENT]');
+
+      // Verify comments.xml exists with the comment
+      const commentsXml = await zip.file('word/comments.xml')!.async('text');
+      expect(commentsXml).toContain('Comment text');
+    }
+  });
+});
+
+// ============================================================================
+// Headers/footers and core properties in selective save
+// ============================================================================
+
+describe('Selective save with headers/footers', () => {
+  test('serializes headers/footers into the saved output', async () => {
+    const buffer = await loadFixture('EP_ZMVZ_MULTI_v4.docx');
+    const doc = await parseDocx(buffer, { preloadFonts: false });
+
+    // Check if document has headers or footers
+    const hasHeaders = doc.package.headers && doc.package.headers.size > 0;
+    const hasFooters = doc.package.footers && doc.package.footers.size > 0;
+    if (!hasHeaders && !hasFooters) {
+      console.log('No headers/footers in fixture, skipping');
+      return;
+    }
+
+    // Modify a header/footer content
+    const map = hasHeaders ? doc.package.headers! : doc.package.footers!;
+    for (const [, hf] of map.entries()) {
+      if (hf.content && hf.content.length > 0) {
+        const para = hf.content.find((b) => b.type === 'paragraph');
+        if (para && para.type === 'paragraph') {
+          para.content.push({
+            type: 'run',
+            formatting: {},
+            content: [{ type: 'text', text: ' [HF_MODIFIED]' }],
+          });
+          break;
+        }
+      }
+    }
+
+    const result = await attemptSelectiveSave(doc, buffer, {
+      changedParaIds: new Set(),
+      structuralChange: false,
+      hasUntrackedChanges: false,
+    });
+
+    expect(result).not.toBeNull();
+
+    // Verify that the header/footer file was updated
+    const zip = await JSZip.loadAsync(result!);
+    let found = false;
+    for (const [path, file] of Object.entries(zip.files)) {
+      if (path.match(/word\/(header|footer)\d*\.xml/)) {
+        const xml = await file.async('text');
+        if (xml.includes('[HF_MODIFIED]')) {
+          found = true;
+          break;
+        }
+      }
+    }
+    expect(found).toBe(true);
+  });
+});
+
+describe('Selective save updates core properties', () => {
+  test('updates modification date on save', async () => {
+    const buffer = await loadFixture('example-with-image.docx');
+    const doc = await parseDocx(buffer, { preloadFonts: false });
+
+    // Get original modification date
+    const originalZip = await JSZip.loadAsync(buffer);
+    const originalCoreProps = await originalZip.file('docProps/core.xml')?.async('text');
+
+    const result = await attemptSelectiveSave(doc, buffer, {
+      changedParaIds: new Set(),
+      structuralChange: false,
+      hasUntrackedChanges: false,
+    });
+
+    expect(result).not.toBeNull();
+    const resultZip = await JSZip.loadAsync(result!);
+    const resultCoreProps = await resultZip.file('docProps/core.xml')?.async('text');
+
+    if (originalCoreProps && resultCoreProps) {
+      // The modification date should have been updated
+      expect(resultCoreProps).not.toBe(originalCoreProps);
+      expect(resultCoreProps).toContain('dcterms:modified');
+    }
+  });
+});
 
 describe('Selective save edge cases', () => {
   test('handles document with tables', async () => {
