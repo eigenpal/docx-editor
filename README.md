@@ -15,6 +15,8 @@
 
 Open-source WYSIWYG DOCX editor for the browser. No server required. **[Live demo](https://docx-js-editor.vercel.app/)**
 
+> **AI agents (Claude Code, Cursor, Copilot, etc.):** See the [full Agent Reference](https://raw.githubusercontent.com/eigenpal/docx-js-editor/main/AGENTS_README.md) for comprehensive API docs, code examples, and integration patterns.
+
 <p align="center">
   <a href="https://docx-js-editor.vercel.app/">
     <img src="./assets/editor.png" alt="DOCX JS Editor screenshot" width="700" />
@@ -76,7 +78,7 @@ bun run typecheck
 
 Examples: [Vite](examples/vite) | [Next.js](examples/nextjs) | [Remix](examples/remix) | [Astro](examples/astro) | [Vue](examples/vue)
 
-**[Props & Ref Methods](docs/PROPS.md)** | **[Plugins](docs/PLUGINS.md)** | **[Architecture](docs/ARCHITECTURE.md)** | **[Agent Reference](AGENTS_README.md)**
+**[Props & Ref Methods](docs/PROPS.md)** | **[Plugins](docs/PLUGINS.md)** | **[Architecture](docs/ARCHITECTURE.md)**
 
 ## License
 
