@@ -681,10 +681,16 @@ export class DocumentAgent {
           this._document.originalBuffer,
           options.selective
         );
-        if (result) return result;
+        if (result) {
+          // Update originalBuffer so subsequent saves patch against the latest state
+          this._document.originalBuffer = result;
+          return result;
+        }
       }
       // Fall back to full repack
-      return repackDocx(this._document);
+      const repacked = await repackDocx(this._document);
+      this._document.originalBuffer = repacked;
+      return repacked;
     }
     return createDocx(this._document);
   }
