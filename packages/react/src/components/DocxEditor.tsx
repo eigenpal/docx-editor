@@ -87,6 +87,7 @@ const FootnotePropertiesDialog = lazy(() =>
 );
 import { MaterialSymbol } from './ui/Icons';
 import { Tooltip } from './ui/Tooltip';
+import { HyperlinkPopup, type HyperlinkPopupData } from './ui/HyperlinkPopup';
 import { getBuiltinTableStyle, type TableStylePreset } from './ui/TableStyleGallery';
 import { DocumentAgent } from '@eigenpal/docx-core/agent/DocumentAgent';
 import { DefaultLoadingIndicator, DefaultPlaceholder, ParseError } from './DocxEditorHelpers';
@@ -858,6 +859,9 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
 
   // Hyperlink dialog hook
   const hyperlinkDialog = useHyperlinkDialog();
+
+  // Hyperlink popup state (Google Docs-style floating popup on link click)
+  const [hyperlinkPopupData, setHyperlinkPopupData] = useState<HyperlinkPopupData | null>(null);
 
   // Parse document buffer
   useEffect(() => {
@@ -1911,15 +1915,118 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
     [hyperlinkDialog, getActiveEditorView, focusActiveEditor]
   );
 
-  // Handle hyperlink removal
-  const handleHyperlinkRemove = useCallback(() => {
+  // Shared: remove hyperlink mark and refocus editor
+  const doRemoveHyperlink = useCallback(() => {
     const view = getActiveEditorView();
     if (!view) return;
-
     removeHyperlink(view.state, view.dispatch);
-    hyperlinkDialog.close();
     focusActiveEditor();
-  }, [hyperlinkDialog, getActiveEditorView, focusActiveEditor]);
+  }, [getActiveEditorView, focusActiveEditor]);
+
+  // Handle hyperlink removal (from dialog)
+  const handleHyperlinkRemove = useCallback(() => {
+    doRemoveHyperlink();
+    hyperlinkDialog.close();
+  }, [hyperlinkDialog, doRemoveHyperlink]);
+
+  // Handle hyperlink popup (Google Docs-style)
+  const handleHyperlinkClick = useCallback(
+    (data: HyperlinkPopupData) => setHyperlinkPopupData(data),
+    []
+  );
+
+  const handleHyperlinkPopupNavigate = useCallback((href: string) => {
+    window.open(href, '_blank', 'noopener,noreferrer');
+  }, []);
+
+  const handleHyperlinkPopupCopy = useCallback((href: string) => {
+    navigator.clipboard.writeText(href).catch(() => {
+      // Fallback for older browsers
+      const textarea = document.createElement('textarea');
+      textarea.value = href;
+      textarea.style.position = 'fixed';
+      textarea.style.opacity = '0';
+      document.body.appendChild(textarea);
+      textarea.select();
+      document.execCommand('copy');
+      document.body.removeChild(textarea);
+    });
+  }, []);
+
+  const handleHyperlinkPopupEdit = useCallback(
+    (displayText: string, href: string) => {
+      const view = getActiveEditorView();
+      if (!view) return;
+
+      // Find the full hyperlink mark range at current cursor position
+      const hlType = view.state.schema.marks.hyperlink;
+      if (!hlType) return;
+
+      const { $from } = view.state.selection;
+      const linkMark = $from.marks().find((m) => m.type === hlType);
+
+      if (linkMark) {
+        // Collect all contiguous text nodes with the same hyperlink mark
+        const parent = $from.parent;
+        const parentStart = $from.start();
+
+        // Build ranges of consecutive hyperlink-marked nodes
+        type Range = { start: number; end: number };
+        const ranges: Range[] = [];
+        let currentRange: Range | null = null;
+
+        parent.forEach((node, offset) => {
+          const nodeStart = parentStart + offset;
+          const nodeEnd = nodeStart + node.nodeSize;
+          const hlMark = node.isText
+            ? node.marks.find((m) => m.type === hlType && m.attrs.href === linkMark.attrs.href)
+            : null;
+
+          if (hlMark) {
+            if (currentRange) {
+              currentRange.end = nodeEnd;
+            } else {
+              currentRange = { start: nodeStart, end: nodeEnd };
+            }
+          } else {
+            if (currentRange) {
+              ranges.push(currentRange);
+              currentRange = null;
+            }
+          }
+        });
+        if (currentRange) ranges.push(currentRange);
+
+        // Find the range that contains the cursor
+        const cursorPos = $from.pos;
+        const targetRange = ranges.find((r) => r.start <= cursorPos && cursorPos <= r.end);
+        if (!targetRange) return;
+
+        // Replace the text and mark
+        const tr = view.state.tr;
+        const newMark = hlType.create({ href, tooltip: linkMark.attrs.tooltip });
+        const textNode = view.state.schema.text(displayText, [
+          ...$from.marks().filter((m) => m.type !== hlType),
+          newMark,
+        ]);
+        tr.replaceWith(targetRange.start, targetRange.end, textNode);
+        view.dispatch(tr.scrollIntoView());
+      }
+
+      setHyperlinkPopupData(null);
+      focusActiveEditor();
+    },
+    [getActiveEditorView, focusActiveEditor]
+  );
+
+  const handleHyperlinkPopupRemove = useCallback(() => {
+    doRemoveHyperlink();
+    setHyperlinkPopupData(null);
+  }, [doRemoveHyperlink]);
+
+  const handleHyperlinkPopupClose = useCallback(() => {
+    setHyperlinkPopupData(null);
+  }, []);
 
   // Handle margin changes from rulers
   const createMarginHandler = useCallback(
@@ -2765,6 +2872,7 @@ body { background: white; }
                       }}
                       onRenderedDomContextReady={onRenderedDomContextReady}
                       pluginOverlays={pluginOverlays}
+                      onHyperlinkClick={handleHyperlinkClick}
                       commentsSidebarOpen={showCommentsSidebar}
                       scrollContainerRef={scrollContainerRef}
                       sidebarOverlay={
@@ -3013,6 +3121,17 @@ body { background: white; }
             </div>
             {/* end wrapper for scroll container + outline */}
           </div>
+
+          {/* Hyperlink popup (Google Docs-style) */}
+          <HyperlinkPopup
+            data={hyperlinkPopupData}
+            onNavigate={handleHyperlinkPopupNavigate}
+            onCopy={handleHyperlinkPopupCopy}
+            onEdit={handleHyperlinkPopupEdit}
+            onRemove={handleHyperlinkPopupRemove}
+            onClose={handleHyperlinkPopupClose}
+            readOnly={readOnly}
+          />
 
           {/* Lazy-loaded dialogs — only fetched when first opened */}
           <Suspense fallback={null}>

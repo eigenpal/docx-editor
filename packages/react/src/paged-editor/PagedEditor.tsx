@@ -163,6 +163,13 @@ export interface PagedEditorProps {
   sidebarOverlay?: React.ReactNode;
   /** Ref callback for the scroll container element. */
   scrollContainerRef?: React.Ref<HTMLDivElement>;
+  /** Callback when a hyperlink is clicked (for showing popup). */
+  onHyperlinkClick?: (data: {
+    href: string;
+    displayText: string;
+    tooltip?: string;
+    anchorRect: DOMRect;
+  }) => void;
 }
 
 export interface PagedEditorRef {
@@ -1192,6 +1199,7 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
       commentsSidebarOpen = false,
       sidebarOverlay,
       scrollContainerRef: scrollContainerRefProp,
+      onHyperlinkClick,
     } = props;
 
     // Refs
@@ -2101,13 +2109,31 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
       (e: React.MouseEvent) => {
         if (!hiddenPMRef.current || e.button !== 0) return; // Only handle left click
 
-        // Intercept internal anchor link clicks (TOC entries, cross-references)
+        // Intercept all hyperlink clicks — single DOM walk
         // Must be before readOnly check so links work in read-only mode
-        const anchorEl = (e.target as HTMLElement).closest('a[href^="#"]');
+        const anchorEl = (e.target as HTMLElement).closest('a[href]') as HTMLAnchorElement | null;
         if (anchorEl) {
           e.preventDefault();
           e.stopPropagation();
-          return; // Let handlePagesClick handle the navigation
+          const href = anchorEl.getAttribute('href') || '';
+          if (href.startsWith('#')) {
+            return; // Internal bookmark — let handlePagesClick handle navigation
+          }
+          // External hyperlink — show popup instead of navigating
+          if (onHyperlinkClick) {
+            const displayText = anchorEl.textContent || '';
+            const tooltip = anchorEl.getAttribute('title') || undefined;
+            const anchorRect = anchorEl.getBoundingClientRect();
+            onHyperlinkClick({ href, displayText, tooltip, anchorRect });
+          }
+          // Still place the cursor at the click position
+          const pmPos = getPositionFromMouse(e.clientX, e.clientY);
+          if (pmPos !== null) {
+            hiddenPMRef.current.setSelection(pmPos);
+            hiddenPMRef.current.focus();
+            setIsFocused(true);
+          }
+          return;
         }
 
         if (readOnly) return;
@@ -2324,7 +2350,15 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
         hiddenPMRef.current.focus();
         setIsFocused(true);
       },
-      [getPositionFromMouse, findCellPosFromPmPos, readOnly, hfEditMode, onBodyClick, zoom]
+      [
+        getPositionFromMouse,
+        findCellPosFromPmPos,
+        readOnly,
+        hfEditMode,
+        onBodyClick,
+        zoom,
+        onHyperlinkClick,
+      ]
     );
 
     /**
@@ -2643,36 +2677,39 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
      */
     const handlePagesClick = useCallback(
       (e: React.MouseEvent) => {
-        // Intercept internal anchor link clicks (TOC entries, cross-references)
-        const anchorEl = (e.target as HTMLElement).closest('a[href^="#"]');
+        // Intercept all hyperlink clicks — single DOM walk
+        const anchorEl = (e.target as HTMLElement).closest('a[href]') as HTMLAnchorElement | null;
         if (anchorEl) {
           e.preventDefault();
           e.stopPropagation();
-          const bookmarkName = anchorEl.getAttribute('href')?.substring(1);
-          if (bookmarkName && hiddenPMRef.current) {
-            const view = hiddenPMRef.current.getView();
-            if (view) {
-              // Walk PM doc to find the paragraph with matching bookmark
-              let targetPos: number | null = null;
-              view.state.doc.descendants((node, pos) => {
-                if (targetPos !== null) return false; // stop once found
-                if (node.type.name === 'paragraph') {
-                  const bookmarks = node.attrs.bookmarks as
-                    | Array<{ id: number; name: string }>
-                    | undefined;
-                  if (bookmarks?.some((b) => b.name === bookmarkName)) {
-                    targetPos = pos;
-                    return false;
+          const href = anchorEl.getAttribute('href') || '';
+          if (href.startsWith('#')) {
+            // Internal bookmark — navigate within document
+            const bookmarkName = href.substring(1);
+            if (bookmarkName && hiddenPMRef.current) {
+              const view = hiddenPMRef.current.getView();
+              if (view) {
+                let targetPos: number | null = null;
+                view.state.doc.descendants((node, pos) => {
+                  if (targetPos !== null) return false;
+                  if (node.type.name === 'paragraph') {
+                    const bookmarks = node.attrs.bookmarks as
+                      | Array<{ id: number; name: string }>
+                      | undefined;
+                    if (bookmarks?.some((b) => b.name === bookmarkName)) {
+                      targetPos = pos;
+                      return false;
+                    }
                   }
+                });
+                if (targetPos !== null) {
+                  scrollToPositionImpl(targetPos);
+                  hiddenPMRef.current.setSelection(targetPos + 1);
                 }
-              });
-              if (targetPos !== null) {
-                scrollToPositionImpl(targetPos);
-                // Also move selection to the heading
-                hiddenPMRef.current.setSelection(targetPos + 1);
               }
             }
           }
+          // External links: already handled by mousedown, just prevent default
           return;
         }
 
