@@ -571,3 +571,8 @@
   padding-top: 2px;
   pointer-events: none;
 }
+
+/* Hyperlink popup icon button hover */
+.ep-hyperlink-popup__icon-btn:hover {
+  background: #f1f3f4;
+}
