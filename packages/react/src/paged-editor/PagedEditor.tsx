@@ -50,10 +50,14 @@ import type {
   Run,
   RunFormatting,
   ParagraphAttrs,
+  ParagraphBorders,
 } from '@eigenpal/docx-core/layout-engine/types';
 
 // Layout bridge
-import { toFlowBlocks } from '@eigenpal/docx-core/layout-bridge/toFlowBlocks';
+import {
+  toFlowBlocks,
+  convertBorderSpecToLayout,
+} from '@eigenpal/docx-core/layout-bridge/toFlowBlocks';
 import {
   measureParagraph,
   resetCanvasContext,
@@ -1027,6 +1031,30 @@ function convertHeaderFooterToContent(
           else if (['left', 'center', 'right', 'justify'].includes(align)) {
             attrs.alignment = align as 'left' | 'center' | 'right' | 'justify';
           }
+        }
+        // Convert paragraph borders (e.g., header bottom line, footer top line)
+        if (formatting.borders) {
+          const borders = formatting.borders as Record<string, unknown>;
+          const converted: ParagraphBorders = {};
+          for (const side of ['top', 'bottom', 'left', 'right', 'between'] as const) {
+            const b = borders[side] as
+              | { style?: string; size?: number; color?: Record<string, string> }
+              | undefined;
+            if (b) {
+              const layoutBorder = convertBorderSpecToLayout(b);
+              if (layoutBorder) converted[side] = layoutBorder;
+            }
+          }
+          if (Object.keys(converted).length > 0) {
+            attrs.borders = converted;
+          }
+        }
+        // Convert spacing
+        if (formatting.spaceAfter != null || formatting.spaceBefore != null) {
+          attrs.spacing = {
+            before: formatting.spaceBefore as number | undefined,
+            after: formatting.spaceAfter as number | undefined,
+          };
         }
       }
 

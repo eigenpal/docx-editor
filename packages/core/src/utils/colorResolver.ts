@@ -386,8 +386,8 @@ export function resolveColor(
       hexColor = applyShade(hexColor, shadeValue);
     }
   } else if (color.rgb) {
-    // Direct RGB value
-    hexColor = color.rgb;
+    // "auto" in OOXML means automatic color (typically black)
+    hexColor = color.rgb === 'auto' ? defaultColor : color.rgb;
   } else {
     // No color specified
     hexColor = defaultColor;

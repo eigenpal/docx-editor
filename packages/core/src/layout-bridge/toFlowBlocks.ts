@@ -13,7 +13,6 @@ import type {
   TableRow,
   TableCell,
   CellBorders,
-  CellBorderSpec,
   ImageBlock,
   PageBreakBlock,
   Run,
@@ -397,7 +396,7 @@ function paragraphToRuns(node: PMNode, startPos: number, _options: ToFlowBlocksO
 /**
  * Convert PM paragraph attrs to layout engine paragraph attrs.
  */
-function convertParagraphAttrs(pmAttrs: PMParagraphAttrs): ParagraphAttrs {
+function convertParagraphAttrs(pmAttrs: PMParagraphAttrs, theme?: Theme | null): ParagraphAttrs {
   const attrs: ParagraphAttrs = {};
 
   // Alignment - map DOCX values to CSS-compatible values
@@ -488,24 +487,8 @@ function convertParagraphAttrs(pmAttrs: PMParagraphAttrs): ParagraphAttrs {
     const borders = pmAttrs.borders;
     attrs.borders = {};
 
-    const convertBorder = (border: typeof borders.top) => {
-      if (!border || border.style === 'none' || border.style === 'nil') {
-        return undefined;
-      }
-      // Convert size from eighths of a point to pixels
-      // 1 point = 1.333px at 96 DPI, size is in eighths of a point
-      const widthPx = border.size ? Math.max(1, Math.round((border.size / 8) * 1.333)) : 1;
-      // Convert color
-      let color = '#000000';
-      if (border.color?.rgb) {
-        color = `#${border.color.rgb}`;
-      }
-      return {
-        style: border.style || 'single',
-        width: widthPx,
-        color,
-      };
-    };
+    const convertBorder = (border: typeof borders.top) =>
+      border ? convertBorderSpecToLayout(border, theme) : undefined;
 
     if (borders.top) attrs.borders.top = convertBorder(borders.top);
     if (borders.bottom) attrs.borders.bottom = convertBorder(borders.bottom);
@@ -625,7 +608,7 @@ function convertParagraph(
 ): ParagraphBlock {
   const pmAttrs = node.attrs as PMParagraphAttrs;
   const runs = paragraphToRuns(node, startPos, options);
-  const attrs = convertParagraphAttrs(pmAttrs);
+  const attrs = convertParagraphAttrs(pmAttrs, options.theme);
 
   return {
     kind: 'paragraph',
@@ -667,13 +650,44 @@ const OOXML_TO_CSS_BORDER: Record<string, string> = {
 };
 
 /**
+ * Convert an OOXML BorderSpec to a layout-engine BorderStyle.
+ * Shared by paragraph borders, cell borders, and header/footer borders.
+ */
+export function convertBorderSpecToLayout(
+  border: {
+    style?: string;
+    size?: number;
+    color?: { rgb?: string; themeColor?: string; themeTint?: string; themeShade?: string };
+  },
+  theme?: Theme | null
+): { style: string; width: number; color: string } | undefined {
+  if (!border || !border.style || border.style === 'none' || border.style === 'nil') {
+    return undefined;
+  }
+  return {
+    style: OOXML_TO_CSS_BORDER[border.style] || 'solid',
+    width: borderWidthToPixels(border.size ?? 0),
+    color: border.color
+      ? resolveColor(border.color as Parameters<typeof resolveColor>[0], theme)
+      : '#000000',
+  };
+}
+
+/**
  * Extract cell borders from ProseMirror attributes.
  * Borders are full BorderSpec objects with style/size/color.
  */
-function extractCellBorders(attrs: Record<string, unknown>): CellBorders | undefined {
+function extractCellBorders(
+  attrs: Record<string, unknown>,
+  theme?: Theme | null
+): CellBorders | undefined {
   const borders = attrs.borders as Record<
     string,
-    { style?: string; size?: number; color?: { rgb?: string } }
+    {
+      style?: string;
+      size?: number;
+      color?: { rgb?: string; themeColor?: string; themeTint?: string; themeShade?: string };
+    }
   > | null;
 
   if (!borders) {
@@ -685,21 +699,8 @@ function extractCellBorders(attrs: Record<string, unknown>): CellBorders | undef
 
   for (const side of sides) {
     const border = borders[side];
-    if (!border || !border.style || border.style === 'none' || border.style === 'nil') {
-      result[side] = { width: 0, style: 'none' };
-      continue;
-    }
-
-    const spec: CellBorderSpec = {
-      style: OOXML_TO_CSS_BORDER[border.style] || 'solid',
-    };
-    if (border.color?.rgb) {
-      spec.color = `#${border.color.rgb}`;
-    }
-    if (border.size) {
-      spec.width = borderWidthToPixels(border.size);
-    }
-    result[side] = spec;
+    const converted = border ? convertBorderSpecToLayout(border, theme) : undefined;
+    result[side] = converted ?? { width: 0, style: 'none' };
   }
 
   return Object.keys(result).length > 0 ? result : undefined;
@@ -744,7 +745,7 @@ function convertTableCell(node: PMNode, startPos: number, options: ToFlowBlocksO
     width: attrs.width ? twipsToPixels(attrs.width as number) : undefined,
     verticalAlign: attrs.verticalAlign as 'top' | 'center' | 'bottom' | undefined,
     background: attrs.backgroundColor ? `#${attrs.backgroundColor}` : undefined,
-    borders: extractCellBorders(attrs as Record<string, unknown>),
+    borders: extractCellBorders(attrs as Record<string, unknown>, options.theme),
     padding,
   };
 }
