@@ -328,7 +328,7 @@ export function HyperlinkPopup({
   const handleCopy = useCallback(() => {
     if (!data) return;
     onCopy(data.href);
-    toast.success('Link copied to clipboard');
+    toast('Link copied to clipboard');
   }, [data, onCopy]);
 
   const handleEditClick = useCallback(() => {

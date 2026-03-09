@@ -2023,7 +2023,7 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
   const handleHyperlinkPopupRemove = useCallback(() => {
     doRemoveHyperlink();
     setHyperlinkPopupData(null);
-    toast.success('Link removed');
+    toast('Link removed');
   }, [doRemoveHyperlink]);
 
   const handleHyperlinkPopupClose = useCallback(() => {
@@ -3136,7 +3136,7 @@ body { background: white; }
           />
 
           {/* Toast notifications */}
-          <Toaster position="bottom-center" richColors />
+          <Toaster position="bottom-right" />
 
           {/* Lazy-loaded dialogs — only fetched when first opened */}
           <Suspense fallback={null}>
