@@ -715,13 +715,27 @@ export function Toolbar({
       onMouseUp={handleToolbarMouseUp}
     >
       {/* File Menu */}
-      {showPrintButton && onPrint && (
+      {(showPrintButton && onPrint) || onPageSetup ? (
         <MenuDropdown
           label="File"
           disabled={disabled}
-          items={[{ icon: 'print', label: 'Print', shortcut: 'Ctrl+P', onClick: onPrint }]}
+          items={[
+            ...(showPrintButton && onPrint
+              ? [
+                  {
+                    icon: 'print',
+                    label: 'Print',
+                    shortcut: 'Ctrl+P',
+                    onClick: onPrint,
+                  } as MenuEntry,
+                ]
+              : []),
+            ...(onPageSetup
+              ? [{ icon: 'settings', label: 'Page setup', onClick: onPageSetup } as MenuEntry]
+              : []),
+          ]}
         />
-      )}
+      ) : null}
 
       {/* Insert Menu */}
       <MenuDropdown
@@ -764,21 +778,6 @@ export function Toolbar({
           },
         ]}
       />
-
-      {/* Format Menu */}
-      {onPageSetup && (
-        <MenuDropdown
-          label="Format"
-          disabled={disabled}
-          items={[
-            {
-              icon: 'description',
-              label: 'Page setup',
-              onClick: onPageSetup,
-            },
-          ]}
-        />
-      )}
 
       {/* Undo/Redo Group */}
       <ToolbarGroup label="History">
