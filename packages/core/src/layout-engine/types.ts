@@ -230,6 +230,8 @@ export type ParagraphAttrs = {
   pageBreakBefore?: boolean;
   styleId?: string;
   contextualSpacing?: boolean;
+  /** Right-to-left paragraph direction */
+  bidi?: boolean;
   borders?: ParagraphBorders;
   shading?: string; // CSS background color
   tabs?: TabStop[]; // Custom tab stops

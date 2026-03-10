@@ -535,6 +535,9 @@ function convertParagraphAttrs(pmAttrs: PMParagraphAttrs, theme?: Theme | null):
   if (pmAttrs.contextualSpacing) {
     attrs.contextualSpacing = true;
   }
+  if (pmAttrs.bidi) {
+    attrs.bidi = true;
+  }
   if (pmAttrs.styleId) {
     attrs.styleId = pmAttrs.styleId;
   }

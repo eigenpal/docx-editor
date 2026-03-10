@@ -913,18 +913,30 @@ export function renderParagraphFragment(
     fragmentEl.dataset.styleId = block.attrs.styleId;
   }
 
+  // Apply RTL direction
+  const isBidi = block.attrs?.bidi;
+  if (isBidi) {
+    fragmentEl.dir = 'rtl';
+  }
+
   // Apply text alignment at paragraph level
   // For justify: use text-align: left and apply word-spacing per line
+  // For RTL paragraphs, default alignment is right
   if (alignment) {
     if (alignment === 'center') {
       fragmentEl.style.textAlign = 'center';
     } else if (alignment === 'right') {
       fragmentEl.style.textAlign = 'right';
-    } else {
-      // Both 'justify' and 'left' use text-align: left
-      // Justify is implemented via word-spacing on individual lines
+    } else if (alignment === 'left') {
       fragmentEl.style.textAlign = 'left';
+    } else {
+      // 'justify' uses text-align: left (or right for RTL)
+      // Justify is implemented via word-spacing on individual lines
+      fragmentEl.style.textAlign = isBidi ? 'right' : 'left';
     }
+  } else if (isBidi) {
+    // No explicit alignment on RTL paragraph — default to right
+    fragmentEl.style.textAlign = 'right';
   }
 
   // Track indentation for line-level application
@@ -935,11 +947,13 @@ export function renderParagraphFragment(
 
   if (indent) {
     // Track indent values for line-level application
-    if (indent.left && indent.left > 0) {
-      indentLeft = indent.left;
-    }
-    if (indent.right && indent.right > 0) {
-      indentRight = indent.right;
+    // For RTL paragraphs, swap left/right indentation
+    if (isBidi) {
+      if (indent.left && indent.left > 0) indentRight = indent.left;
+      if (indent.right && indent.right > 0) indentLeft = indent.right;
+    } else {
+      if (indent.left && indent.left > 0) indentLeft = indent.left;
+      if (indent.right && indent.right > 0) indentRight = indent.right;
     }
   }
 
