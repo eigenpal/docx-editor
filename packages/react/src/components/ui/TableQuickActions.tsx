@@ -92,6 +92,31 @@ const buttonStyles: CSSProperties = {
   transition: 'background-color 0.15s, color 0.15s',
 };
 
+/** Google Docs-style circular add button */
+const addButtonBase: CSSProperties = {
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  border: '1px solid #dadce0',
+  borderRadius: '50%',
+  backgroundColor: 'white',
+  color: '#5f6368',
+  cursor: 'pointer',
+  transition: 'background-color 0.15s, color 0.15s',
+  padding: 0,
+};
+
+function getAddButtonStyle(hovered: boolean, disabled: boolean, size: number): CSSProperties {
+  return {
+    ...addButtonBase,
+    width: `${size}px`,
+    height: `${size}px`,
+    backgroundColor: hovered && !disabled ? '#f1f3f4' : 'white',
+    color: disabled ? '#dadce0' : '#5f6368',
+    cursor: disabled ? 'not-allowed' : 'pointer',
+  };
+}
+
 // ============================================================================
 // COMPONENT
 // ============================================================================
@@ -175,7 +200,10 @@ export function TableQuickActions({
       {showAddButtons && (
         <button
           type="button"
-          style={getButtonStyle('add')}
+          style={{
+            ...getAddButtonStyle(hoveredButton === 'add', disabled, 22),
+            marginLeft: '2px',
+          }}
           onMouseEnter={() => setHoveredButton('add')}
           onMouseLeave={() => setHoveredButton(null)}
           onClick={() =>
@@ -197,7 +225,7 @@ export function TableQuickActions({
           }
           aria-label="Add row or column"
         >
-          <MaterialSymbol name="add" size={16} />
+          <MaterialSymbol name="add" size={14} />
         </button>
       )}
     </div>
@@ -238,31 +266,25 @@ export function RowQuickActions({
     }
   };
 
-  const getButtonStyle = (buttonId: string): CSSProperties => ({
-    ...buttonStyles,
-    backgroundColor:
-      hoveredButton === buttonId && !disabled ? 'var(--doc-bg-hover)' : 'transparent',
-    color: disabled ? 'var(--doc-border)' : 'var(--doc-text-muted)',
-    cursor: disabled ? 'not-allowed' : 'pointer',
-  });
-
   return (
     <div
       className={cn('docx-row-quick-actions', className)}
       style={{
-        ...containerStyles.base,
         position: 'absolute',
         left: '-36px',
         top: `${top}px`,
         transform: 'translateY(-50%)',
-        flexDirection: 'column',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        zIndex: 100,
       }}
       role="toolbar"
       aria-label="Row quick actions"
     >
       <button
         type="button"
-        style={getButtonStyle('addAbove')}
+        style={getAddButtonStyle(hoveredButton === 'addAbove', disabled, 20)}
         onMouseEnter={() => setHoveredButton('addAbove')}
         onMouseLeave={() => setHoveredButton(null)}
         onClick={() => handleAction('addRowAbove')}
@@ -312,30 +334,25 @@ export function ColumnQuickActions({
     }
   };
 
-  const getButtonStyle = (buttonId: string): CSSProperties => ({
-    ...buttonStyles,
-    backgroundColor:
-      hoveredButton === buttonId && !disabled ? 'var(--doc-bg-hover)' : 'transparent',
-    color: disabled ? 'var(--doc-border)' : 'var(--doc-text-muted)',
-    cursor: disabled ? 'not-allowed' : 'pointer',
-  });
-
   return (
     <div
       className={cn('docx-column-quick-actions', className)}
       style={{
-        ...containerStyles.base,
         position: 'absolute',
         top: '-28px',
         left: `${left}px`,
         transform: 'translateX(-50%)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        zIndex: 100,
       }}
       role="toolbar"
       aria-label="Column quick actions"
     >
       <button
         type="button"
-        style={getButtonStyle('addLeft')}
+        style={getAddButtonStyle(hoveredButton === 'addLeft', disabled, 20)}
         onMouseEnter={() => setHoveredButton('addLeft')}
         onMouseLeave={() => setHoveredButton(null)}
         onClick={() => handleAction('addColumnLeft')}
