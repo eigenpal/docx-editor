@@ -25,7 +25,7 @@ import React, {
   memo,
 } from 'react';
 import type { CSSProperties } from 'react';
-import { NodeSelection } from 'prosemirror-state';
+import { NodeSelection, TextSelection } from 'prosemirror-state';
 import type { EditorState, Transaction, Plugin } from 'prosemirror-state';
 import { CellSelection } from 'prosemirror-tables';
 import type { EditorView } from 'prosemirror-view';
@@ -52,6 +52,9 @@ import type {
   ParagraphAttrs,
   ParagraphBorders,
 } from '@eigenpal/docx-core/layout-engine/types';
+
+// Table commands (for quick-action insert buttons)
+import { addRowBelow, addColumnRight } from '@eigenpal/docx-core/prosemirror';
 
 // Layout bridge
 import {
@@ -218,6 +221,13 @@ const DEFAULT_MARGINS: PageMargins = {
 };
 
 const DEFAULT_PAGE_GAP = 24;
+
+/** Distance in px from a row/column boundary that triggers the insert button */
+const TABLE_INSERT_BOUNDARY_THRESHOLD = 8;
+/** Distance in px from the table edge where boundary detection is active */
+const TABLE_INSERT_EDGE_PROXIMITY = 30;
+/** Delay in ms before hiding the insert button when cursor moves away */
+const TABLE_INSERT_HIDE_DELAY = 200;
 
 // Stable empty array to avoid re-creating on each render
 const EMPTY_PLUGINS: Plugin[] = [];
@@ -1287,6 +1297,34 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
     const cellDragOverflowXRef = useRef<number | null>(null);
     const CELL_SELECT_OVERFLOW_PX = 5; // px of continued drag after text selection maxes out
 
+    // Table quick action insert button state
+    type TableInsertButtonState = {
+      type: 'row' | 'column';
+      /** Pixel position relative to viewport container */
+      x: number;
+      y: number;
+      /** Width/height of the line indicator */
+      lineLength: number;
+      /** PM position inside target cell (to set selection before dispatching) */
+      cellPmPos: number;
+    };
+    const [tableInsertButton, setTableInsertButton] = useState<TableInsertButtonState | null>(null);
+    const tableInsertHideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+    const clearTableInsertTimer = useCallback(() => {
+      if (tableInsertHideTimerRef.current) {
+        clearTimeout(tableInsertHideTimerRef.current);
+        tableInsertHideTimerRef.current = null;
+      }
+    }, []);
+
+    // Cleanup timer on unmount
+    useEffect(() => {
+      return () => {
+        if (tableInsertHideTimerRef.current) clearTimeout(tableInsertHideTimerRef.current);
+      };
+    }, []);
+
     // Selection gate - ensures selection renders only when layout is current
     const syncCoordinator = useMemo(() => new LayoutSelectionGate(), []);
 
@@ -2118,6 +2156,10 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
       (e: React.MouseEvent) => {
         if (!hiddenPMRef.current || e.button !== 0) return; // Only handle left click
 
+        // Hide table insert button on any mousedown
+        setTableInsertButton(null);
+        clearTableInsertTimer();
+
         // Prevent default browser navigation for hyperlink clicks,
         // but let the rest of the handler run for cursor placement and drag selection.
         // The popup is shown in handlePagesClick (on mouseup) instead.
@@ -2340,7 +2382,7 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
         hiddenPMRef.current.focus();
         setIsFocused(true);
       },
-      [getPositionFromMouse, findCellPosFromPmPos, readOnly, hfEditMode, onBodyClick, zoom]
+      [getPositionFromMouse, findCellPosFromPmPos, readOnly, hfEditMode, onBodyClick, zoom, clearTableInsertTimer]
     );
 
     /**
@@ -2653,6 +2695,173 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
         window.removeEventListener('mouseup', handleMouseUp);
       };
     }, [handleMouseMove, handleMouseUp]);
+
+    /**
+     * Handle mousemove on pages to show table row/column insert buttons.
+     * Detects proximity to table row/column boundaries and shows a floating "+" button.
+     */
+    const handlePagesMouseMove = useCallback(
+      (e: React.MouseEvent) => {
+        // Skip during drags / resizes
+        if (
+          readOnly ||
+          isDraggingRef.current ||
+          isResizingColumnRef.current ||
+          isResizingRowRef.current ||
+          isResizingRightEdgeRef.current ||
+          isCellDraggingRef.current
+        )
+          return;
+
+        const pagesEl = pagesContainerRef.current;
+        if (!pagesEl) return;
+
+        const tableEl = (e.target as HTMLElement).closest('.layout-table') as HTMLElement | null;
+        if (!tableEl) {
+          setTableInsertButton(null);
+          return;
+        }
+
+        const tableRect = tableEl.getBoundingClientRect();
+        const mouseX = e.clientX;
+        const mouseY = e.clientY;
+
+        const nearLeftEdge =
+          mouseX < tableRect.left + TABLE_INSERT_EDGE_PROXIMITY &&
+          mouseX >= tableRect.left - TABLE_INSERT_EDGE_PROXIMITY;
+        const nearTopEdge =
+          mouseY < tableRect.top + TABLE_INSERT_EDGE_PROXIMITY &&
+          mouseY >= tableRect.top - TABLE_INSERT_EDGE_PROXIMITY;
+
+        if (!nearLeftEdge && !nearTopEdge) {
+          setTableInsertButton(null);
+          return;
+        }
+
+        const rows = tableEl.querySelectorAll(':scope > .layout-table-row');
+        if (rows.length === 0) {
+          setTableInsertButton(null);
+          return;
+        }
+
+        const viewportEl = pagesEl.parentElement;
+        if (!viewportEl) return;
+        const viewportRect = viewportEl.getBoundingClientRect();
+
+        /** Extract PM position from a cell element */
+        const getCellPmPos = (el: HTMLElement | null): number =>
+          el ? Number(el.dataset.pmStart) || 0 : 0;
+
+        /** Show a row insert button at the given Y boundary */
+        const showRowButton = (boundaryY: number, cellEl: HTMLElement | null): boolean => {
+          const pmPos = getCellPmPos(cellEl);
+          if (!pmPos) return false;
+          setTableInsertButton({
+            type: 'row',
+            x: tableRect.left - viewportRect.left - 18,
+            y: boundaryY - viewportRect.top - 10,
+            lineLength: tableRect.width,
+            cellPmPos: pmPos,
+          });
+          clearTableInsertTimer();
+          return true;
+        };
+
+        /** Show a column insert button at the given X boundary */
+        const showColButton = (boundaryX: number, cellEl: HTMLElement | null): boolean => {
+          const pmPos = getCellPmPos(cellEl);
+          if (!pmPos) return false;
+          setTableInsertButton({
+            type: 'column',
+            x: boundaryX - viewportRect.left - 10,
+            y: tableRect.top - viewportRect.top - 18,
+            lineLength: tableRect.height,
+            cellPmPos: pmPos,
+          });
+          clearTableInsertTimer();
+          return true;
+        };
+
+        // Check row boundaries (for horizontal insert line on left edge)
+        if (nearLeftEdge) {
+          for (let i = 1; i < rows.length; i++) {
+            const boundary = rows[i].getBoundingClientRect().top;
+            if (Math.abs(mouseY - boundary) < TABLE_INSERT_BOUNDARY_THRESHOLD) {
+              const cell = rows[i - 1].querySelector('.layout-table-cell') as HTMLElement | null;
+              if (showRowButton(boundary, cell)) return;
+              break;
+            }
+          }
+          // Check bottom of last row
+          const lastRowBottom = rows[rows.length - 1].getBoundingClientRect().bottom;
+          if (Math.abs(mouseY - lastRowBottom) < TABLE_INSERT_BOUNDARY_THRESHOLD) {
+            const cell = rows[rows.length - 1].querySelector(
+              '.layout-table-cell'
+            ) as HTMLElement | null;
+            if (showRowButton(lastRowBottom, cell)) return;
+          }
+        }
+
+        // Check column boundaries (for vertical insert line on top edge)
+        if (nearTopEdge) {
+          const cells = rows[0].querySelectorAll(':scope > .layout-table-cell');
+          for (let i = 1; i < cells.length; i++) {
+            const boundary = cells[i].getBoundingClientRect().left;
+            if (Math.abs(mouseX - boundary) < TABLE_INSERT_BOUNDARY_THRESHOLD) {
+              if (showColButton(boundary, cells[i - 1] as HTMLElement)) return;
+              break;
+            }
+          }
+          // Check right edge of last cell
+          if (cells.length > 0) {
+            const lastCellRight = cells[cells.length - 1].getBoundingClientRect().right;
+            if (Math.abs(mouseX - lastCellRight) < TABLE_INSERT_BOUNDARY_THRESHOLD) {
+              if (showColButton(lastCellRight, cells[cells.length - 1] as HTMLElement)) return;
+            }
+          }
+        }
+
+        // Not near any boundary — schedule hide with a small delay
+        if (!tableInsertHideTimerRef.current) {
+          tableInsertHideTimerRef.current = setTimeout(() => {
+            setTableInsertButton(null);
+            tableInsertHideTimerRef.current = null;
+          }, TABLE_INSERT_HIDE_DELAY);
+        }
+      },
+      [readOnly, clearTableInsertTimer]
+    );
+
+    /**
+     * Handle table insert button click — set selection to target cell, then insert.
+     */
+    const handleTableInsertClick = useCallback(
+      (e: React.MouseEvent) => {
+        e.preventDefault();
+        e.stopPropagation();
+        if (!tableInsertButton || !hiddenPMRef.current) return;
+
+        const view = hiddenPMRef.current.getView();
+        if (!view) return;
+
+        const { type, cellPmPos } = tableInsertButton;
+
+        // Set selection inside the target cell
+        const tr = view.state.tr.setSelection(TextSelection.create(view.state.doc, cellPmPos + 1));
+        view.dispatch(tr);
+
+        // Dispatch the appropriate insert command
+        if (type === 'row') {
+          addRowBelow(view.state, view.dispatch);
+        } else {
+          addColumnRight(view.state, view.dispatch);
+        }
+
+        setTableInsertButton(null);
+        hiddenPMRef.current.focus();
+      },
+      [tableInsertButton]
+    );
 
     /**
      * Handle click on pages container (for double-click word selection).
@@ -3267,6 +3476,7 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
             className={`paged-editor__pages${readOnly ? ' paged-editor--readonly' : ''}${hfEditMode ? ` paged-editor--hf-editing paged-editor--editing-${hfEditMode}` : ''}`}
             style={pagesContainerStyles}
             onMouseDown={handlePagesMouseDown}
+            onMouseMove={handlePagesMouseMove}
             onClick={handlePagesClick}
             aria-hidden="true" // Visual only, PM provides semantic content
           />
@@ -3292,6 +3502,63 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
             onDragStart={handleImageDragStart}
             onDragEnd={handleImageDragEnd}
           />
+
+          {/* Table quick action insert button */}
+          {tableInsertButton && (
+            <button
+              type="button"
+              onMouseDown={handleTableInsertClick}
+              onMouseEnter={clearTableInsertTimer}
+              onMouseLeave={() => setTableInsertButton(null)}
+              style={{
+                position: 'absolute',
+                left: tableInsertButton.x,
+                top: tableInsertButton.y,
+                width: 20,
+                height: 20,
+                borderRadius: '50%',
+                border: '1.5px solid #1a73e8',
+                backgroundColor: 'white',
+                color: '#1a73e8',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                cursor: 'pointer',
+                fontSize: 16,
+                fontWeight: 700,
+                lineHeight: 1,
+                zIndex: 200,
+                padding: 0,
+                boxShadow: '0 1px 3px rgba(0,0,0,0.12)',
+              }}
+              title={tableInsertButton.type === 'row' ? 'Insert row' : 'Insert column'}
+              aria-label={tableInsertButton.type === 'row' ? 'Insert row' : 'Insert column'}
+            >
+              +{/* Line indicator */}
+              <span
+                style={{
+                  position: 'absolute',
+                  backgroundColor: '#1a73e8',
+                  pointerEvents: 'none',
+                  ...(tableInsertButton.type === 'row'
+                    ? {
+                        left: 20,
+                        top: '50%',
+                        height: 1.5,
+                        width: tableInsertButton.lineLength,
+                        transform: 'translateY(-50%)',
+                      }
+                    : {
+                        top: 20,
+                        left: '50%',
+                        width: 1.5,
+                        height: tableInsertButton.lineLength,
+                        transform: 'translateX(-50%)',
+                      }),
+                }}
+              />
+            </button>
+          )}
 
           {/* Plugin overlays (highlights, annotations) */}
           {pluginOverlays && (
