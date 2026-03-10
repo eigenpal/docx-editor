@@ -3516,20 +3516,20 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
                 top: tableInsertButton.y,
                 width: 20,
                 height: 20,
-                borderRadius: '50%',
-                border: '1.5px solid #1a73e8',
-                backgroundColor: 'white',
-                color: '#1a73e8',
+                borderRadius: '4px',
+                border: '1px solid #dadce0',
+                backgroundColor: '#f8f9fa',
+                color: '#5f6368',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
                 cursor: 'pointer',
                 fontSize: 16,
-                fontWeight: 700,
+                fontWeight: 400,
                 lineHeight: 1,
                 zIndex: 200,
                 padding: 0,
-                boxShadow: '0 1px 3px rgba(0,0,0,0.12)',
+                boxShadow: 'none',
               }}
               title={tableInsertButton.type === 'row' ? 'Insert row' : 'Insert column'}
               aria-label={tableInsertButton.type === 'row' ? 'Insert row' : 'Insert column'}
@@ -3538,7 +3538,7 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
               <span
                 style={{
                   position: 'absolute',
-                  backgroundColor: '#1a73e8',
+                  backgroundColor: '#dadce0',
                   pointerEvents: 'none',
                   ...(tableInsertButton.type === 'row'
                     ? {
