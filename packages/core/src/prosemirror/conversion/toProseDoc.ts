@@ -1340,6 +1340,7 @@ function convertImage(image: Image): PMNode {
     borderColor: borderColor,
     borderStyle: borderStyle,
     wrapText: wrapText,
+    hlinkHref: image.hlinkHref,
   });
 }
 

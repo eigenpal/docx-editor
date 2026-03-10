@@ -879,6 +879,11 @@ function createImageRun(node: PMNode): Run {
     };
   }
 
+  // Round-trip image hyperlink
+  if (attrs.hlinkHref) {
+    image.hlinkHref = attrs.hlinkHref;
+  }
+
   const drawingContent: DrawingContent = {
     type: 'drawing',
     image,

@@ -290,26 +290,33 @@ function backspaceExitList(): Command {
 
 function increaseListIndent(): Command {
   return (state, dispatch) => {
-    const { $from } = state.selection;
-    const paragraph = $from.parent;
+    const { $from, $to } = state.selection;
 
-    if (paragraph.type.name !== 'paragraph') return false;
+    // Collect all list paragraphs in the selection range
+    const positions: { pos: number; attrs: Record<string, unknown> }[] = [];
+    state.doc.nodesBetween($from.pos, $to.pos, (node, pos) => {
+      if (node.type.name === 'paragraph' && node.attrs.numPr) {
+        const currentLevel = (node.attrs.numPr as { ilvl?: number }).ilvl ?? 0;
+        if (currentLevel < 8) {
+          positions.push({ pos, attrs: node.attrs as Record<string, unknown> });
+        }
+      }
+    });
 
-    const numPr = paragraph.attrs.numPr;
-    if (!numPr) return false;
-
-    const currentLevel = numPr.ilvl ?? 0;
-    if (currentLevel >= 8) return false;
+    if (positions.length === 0) return false;
 
     if (dispatch) {
-      const tr = state.tr.setNodeMarkup($from.before(), undefined, {
-        ...paragraph.attrs,
-        numPr: { ...numPr, ilvl: currentLevel + 1 },
-        // Clear explicit indentation so layout engine computes from new level
-        indentLeft: null,
-        indentFirstLine: null,
-        hangingIndent: null,
-      });
+      let tr = state.tr;
+      for (const { pos, attrs } of positions) {
+        const numPr = attrs.numPr as { ilvl?: number; numId?: number };
+        tr = tr.setNodeMarkup(pos, undefined, {
+          ...attrs,
+          numPr: { ...numPr, ilvl: (numPr.ilvl ?? 0) + 1 },
+          indentLeft: null,
+          indentFirstLine: null,
+          hangingIndent: null,
+        });
+      }
       dispatch(tr);
     }
     return true;
@@ -318,42 +325,44 @@ function increaseListIndent(): Command {
 
 function decreaseListIndent(): Command {
   return (state, dispatch) => {
-    const { $from } = state.selection;
-    const paragraph = $from.parent;
+    const { $from, $to } = state.selection;
 
-    if (paragraph.type.name !== 'paragraph') return false;
-
-    const numPr = paragraph.attrs.numPr;
-    if (!numPr) return false;
-
-    const currentLevel = numPr.ilvl ?? 0;
-    if (currentLevel <= 0) {
-      if (dispatch) {
-        const tr = state.tr.setNodeMarkup($from.before(), undefined, {
-          ...paragraph.attrs,
-          numPr: null,
-          listIsBullet: null,
-          listNumFmt: null,
-          listMarker: null,
-          // Clear list-specific indentation when removing list
-          indentLeft: null,
-          indentFirstLine: null,
-          hangingIndent: null,
-        });
-        dispatch(tr);
+    // Collect all list paragraphs in the selection range
+    const positions: { pos: number; attrs: Record<string, unknown> }[] = [];
+    state.doc.nodesBetween($from.pos, $to.pos, (node, pos) => {
+      if (node.type.name === 'paragraph' && node.attrs.numPr) {
+        positions.push({ pos, attrs: node.attrs as Record<string, unknown> });
       }
-      return true;
-    }
+    });
+
+    if (positions.length === 0) return false;
 
     if (dispatch) {
-      const tr = state.tr.setNodeMarkup($from.before(), undefined, {
-        ...paragraph.attrs,
-        numPr: { ...numPr, ilvl: currentLevel - 1 },
-        // Clear explicit indentation so layout engine computes from new level
-        indentLeft: null,
-        indentFirstLine: null,
-        hangingIndent: null,
-      });
+      let tr = state.tr;
+      for (const { pos, attrs } of positions) {
+        const numPr = attrs.numPr as { ilvl?: number; numId?: number };
+        const currentLevel = numPr.ilvl ?? 0;
+        if (currentLevel <= 0) {
+          tr = tr.setNodeMarkup(pos, undefined, {
+            ...attrs,
+            numPr: null,
+            listIsBullet: null,
+            listNumFmt: null,
+            listMarker: null,
+            indentLeft: null,
+            indentFirstLine: null,
+            hangingIndent: null,
+          });
+        } else {
+          tr = tr.setNodeMarkup(pos, undefined, {
+            ...attrs,
+            numPr: { ...numPr, ilvl: currentLevel - 1 },
+            indentLeft: null,
+            indentFirstLine: null,
+            hangingIndent: null,
+          });
+        }
+      }
       dispatch(tr);
     }
     return true;

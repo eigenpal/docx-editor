@@ -423,6 +423,8 @@ export interface Image {
   padding?: ImagePadding;
   /** Whether this is a decorative image */
   decorative?: boolean;
+  /** Hyperlink URL for clickable image */
+  hlinkHref?: string;
   /** Image outline/border */
   outline?: ShapeOutline;
   /** Image effects */

@@ -495,6 +495,7 @@ function convertParagraphAttrs(pmAttrs: PMParagraphAttrs, theme?: Theme | null):
     if (borders.left) attrs.borders.left = convertBorder(borders.left);
     if (borders.right) attrs.borders.right = convertBorder(borders.right);
     if (borders.between) attrs.borders.between = convertBorder(borders.between);
+    if (borders.bar) attrs.borders.bar = convertBorder(borders.bar);
 
     // Only include if at least one border is set
     if (
@@ -502,7 +503,8 @@ function convertParagraphAttrs(pmAttrs: PMParagraphAttrs, theme?: Theme | null):
       !attrs.borders.bottom &&
       !attrs.borders.left &&
       !attrs.borders.right &&
-      !attrs.borders.between
+      !attrs.borders.between &&
+      !attrs.borders.bar
     ) {
       delete attrs.borders;
     }
@@ -518,7 +520,14 @@ function convertParagraphAttrs(pmAttrs: PMParagraphAttrs, theme?: Theme | null):
     attrs.tabs = pmAttrs.tabs.map((tab) => ({
       val: mapTabAlignment(tab.alignment),
       pos: tab.position,
-      leader: tab.leader as 'none' | 'dot' | 'hyphen' | 'underscore' | undefined,
+      leader: tab.leader as
+        | 'none'
+        | 'dot'
+        | 'hyphen'
+        | 'underscore'
+        | 'heavy'
+        | 'middleDot'
+        | undefined,
     }));
   }
 
@@ -892,6 +901,7 @@ function convertImage(node: PMNode, startPos: number, pageContentHeight?: number
           behindDoc: wrapType === 'behind',
         }
       : undefined,
+    hlinkHref: attrs.hlinkHref as string | undefined,
     pmStart: startPos,
     pmEnd: startPos + node.nodeSize,
   };

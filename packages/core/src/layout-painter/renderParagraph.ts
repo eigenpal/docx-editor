@@ -311,6 +311,8 @@ function getLeaderChar(leader: string): string | null {
       return '_';
     case 'middleDot':
       return '·';
+    case 'heavy':
+      return '_';
     default:
       return null;
   }
@@ -1003,6 +1005,19 @@ export function renderParagraphFragment(
     }
     if (borders.right) {
       fragmentEl.style.borderRight = borderToCss(borders.right);
+    }
+
+    // Bar border — vertical decorative bar on the left side (ECMA-376 §17.3.1.4)
+    // Rendered independently of the regular left border
+    if (borders.bar) {
+      const barEl = doc.createElement('div');
+      barEl.style.position = 'absolute';
+      barEl.style.left = '-8px';
+      barEl.style.top = '0';
+      barEl.style.bottom = '0';
+      barEl.style.borderLeft = borderToCss(borders.bar);
+      fragmentEl.style.position = 'relative';
+      fragmentEl.appendChild(barEl);
     }
 
     // Add small padding inside borders for text not to touch the border

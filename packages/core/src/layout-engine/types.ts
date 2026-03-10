@@ -187,7 +187,7 @@ export type TabStop = {
   /** Position in twips from left margin */
   pos: number;
   /** Optional leader character */
-  leader?: 'none' | 'dot' | 'hyphen' | 'underscore';
+  leader?: 'none' | 'dot' | 'hyphen' | 'underscore' | 'heavy' | 'middleDot';
 };
 
 /**
@@ -208,6 +208,7 @@ export type ParagraphBorders = {
   left?: BorderStyle;
   right?: BorderStyle;
   between?: BorderStyle;
+  bar?: BorderStyle;
 };
 
 /**
@@ -356,6 +357,8 @@ export type ImageBlock = {
     offsetV?: number;
     behindDoc?: boolean;
   };
+  /** Hyperlink URL for clickable image */
+  hlinkHref?: string;
   pmStart?: number;
   pmEnd?: number;
 };
