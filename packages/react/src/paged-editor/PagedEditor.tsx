@@ -1817,9 +1817,18 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
                   continue;
                 }
 
-                if (span.firstChild?.nodeType !== Node.TEXT_NODE) continue;
-
-                const textNode = span.firstChild as Text;
+                // Find the text node — may be a direct child or inside an <a> for hyperlinks
+                let textNode: Text | null = null;
+                if (span.firstChild?.nodeType === Node.TEXT_NODE) {
+                  textNode = span.firstChild as Text;
+                } else if (
+                  span.firstChild?.nodeType === Node.ELEMENT_NODE &&
+                  (span.firstChild as HTMLElement).tagName === 'A' &&
+                  span.firstChild.firstChild?.nodeType === Node.TEXT_NODE
+                ) {
+                  textNode = span.firstChild.firstChild as Text;
+                }
+                if (!textNode) continue;
                 const ownerDoc = spanEl.ownerDocument;
                 if (!ownerDoc) continue;
 
