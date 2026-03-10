@@ -2340,15 +2340,7 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
         hiddenPMRef.current.focus();
         setIsFocused(true);
       },
-      [
-        getPositionFromMouse,
-        findCellPosFromPmPos,
-        readOnly,
-        hfEditMode,
-        onBodyClick,
-        zoom,
-        onHyperlinkClick,
-      ]
+      [getPositionFromMouse, findCellPosFromPmPos, readOnly, hfEditMode, onBodyClick, zoom]
     );
 
     /**
