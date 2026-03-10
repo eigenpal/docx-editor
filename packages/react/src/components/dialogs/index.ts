@@ -60,6 +60,9 @@ export {
   isPasteSpecialShortcut,
 } from './PasteSpecialDialog';
 
+// Page Setup dialog for page size, orientation, and margins
+export { PageSetupDialog, type PageSetupDialogProps } from './PageSetupDialog';
+
 // Keyboard Shortcuts dialog for showing all shortcuts
 export {
   KeyboardShortcutsDialog,

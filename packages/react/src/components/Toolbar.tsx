@@ -198,6 +198,8 @@ export interface ToolbarProps {
   onImageTransform?: (action: 'rotateCW' | 'rotateCCW' | 'flipH' | 'flipV') => void;
   /** Callback to open image properties dialog (alt text + border) */
   onOpenImageProperties?: () => void;
+  /** Callback to open page setup dialog */
+  onPageSetup?: () => void;
   /** Table context when cursor is in a table */
   tableContext?: {
     isInTable: boolean;
@@ -384,6 +386,7 @@ export function Toolbar({
   onImageWrapType,
   onImageTransform,
   onOpenImageProperties,
+  onPageSetup,
   tableContext,
   onTableAction,
 }: ToolbarProps) {
@@ -712,13 +715,27 @@ export function Toolbar({
       onMouseUp={handleToolbarMouseUp}
     >
       {/* File Menu */}
-      {showPrintButton && onPrint && (
+      {(showPrintButton && onPrint) || onPageSetup ? (
         <MenuDropdown
           label="File"
           disabled={disabled}
-          items={[{ icon: 'print', label: 'Print', shortcut: 'Ctrl+P', onClick: onPrint }]}
+          items={[
+            ...(showPrintButton && onPrint
+              ? [
+                  {
+                    icon: 'print',
+                    label: 'Print',
+                    shortcut: 'Ctrl+P',
+                    onClick: onPrint,
+                  } as MenuEntry,
+                ]
+              : []),
+            ...(onPageSetup
+              ? [{ icon: 'settings', label: 'Page setup', onClick: onPageSetup } as MenuEntry]
+              : []),
+          ]}
         />
-      )}
+      ) : null}
 
       {/* Insert Menu */}
       <MenuDropdown
