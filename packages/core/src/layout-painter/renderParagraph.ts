@@ -255,9 +255,12 @@ function renderTextRun(run: TextRun, doc: Document): HTMLElement {
       anchor.title = run.hyperlink.tooltip;
     }
     anchor.textContent = run.text;
-    // Style hyperlink
-    anchor.style.color = run.color || '#0563c1'; // Default Word hyperlink color
+    // Style hyperlink — default Word hyperlink color is blue (#0563c1)
+    const hyperlinkColor = run.color || '#0563c1';
+    anchor.style.color = hyperlinkColor;
     anchor.style.textDecoration = 'underline';
+    // Override span color to match anchor (prevents color mismatch in selection)
+    span.style.color = hyperlinkColor;
     span.appendChild(anchor);
   } else {
     // Set text content
