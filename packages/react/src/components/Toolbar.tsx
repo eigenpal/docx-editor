@@ -198,6 +198,8 @@ export interface ToolbarProps {
   onImageTransform?: (action: 'rotateCW' | 'rotateCCW' | 'flipH' | 'flipV') => void;
   /** Callback to open image properties dialog (alt text + border) */
   onOpenImageProperties?: () => void;
+  /** Callback to open page setup dialog */
+  onPageSetup?: () => void;
   /** Table context when cursor is in a table */
   tableContext?: {
     isInTable: boolean;
@@ -384,6 +386,7 @@ export function Toolbar({
   onImageWrapType,
   onImageTransform,
   onOpenImageProperties,
+  onPageSetup,
   tableContext,
   onTableAction,
 }: ToolbarProps) {
@@ -761,6 +764,21 @@ export function Toolbar({
           },
         ]}
       />
+
+      {/* Format Menu */}
+      {onPageSetup && (
+        <MenuDropdown
+          label="Format"
+          disabled={disabled}
+          items={[
+            {
+              icon: 'description',
+              label: 'Page setup',
+              onClick: onPageSetup,
+            },
+          ]}
+        />
+      )}
 
       {/* Undo/Redo Group */}
       <ToolbarGroup label="History">
