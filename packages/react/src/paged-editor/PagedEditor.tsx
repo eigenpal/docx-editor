@@ -51,7 +51,9 @@ import type {
   RunFormatting,
   ParagraphAttrs,
   ParagraphBorders,
+  TextBoxBlock,
 } from '@eigenpal/docx-core/layout-engine/types';
+import { DEFAULT_TEXTBOX_MARGINS } from '@eigenpal/docx-core/layout-engine/types';
 
 // Layout bridge
 import {
@@ -686,6 +688,21 @@ function measureBlock(
         kind: 'image',
         width: imageBlock.width ?? 100,
         height: imageBlock.height ?? 100,
+      };
+    }
+
+    case 'textBox': {
+      const tb = block as TextBoxBlock;
+      const margins = tb.margins ?? DEFAULT_TEXTBOX_MARGINS;
+      const innerWidth = (tb.width ?? 200) - margins.left - margins.right;
+      const innerMeasures = tb.content.map((p) => measureParagraph(p, innerWidth));
+      const contentHeight = innerMeasures.reduce((sum, m) => sum + m.totalHeight, 0);
+      const totalHeight = tb.height ?? contentHeight + margins.top + margins.bottom;
+      return {
+        kind: 'textBox' as const,
+        width: tb.width ?? 200,
+        height: totalHeight,
+        innerMeasures,
       };
     }
 

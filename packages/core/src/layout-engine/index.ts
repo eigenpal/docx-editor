@@ -19,6 +19,9 @@ import type {
   ImageBlock,
   ImageMeasure,
   ImageFragment,
+  TextBoxBlock,
+  TextBoxMeasure,
+  TextBoxFragment,
 } from './types';
 
 import { createPaginator } from './paginator';
@@ -203,6 +206,10 @@ export function layoutDocument(
 
       case 'image':
         layoutImage(block, measure as ImageMeasure, paginator);
+        break;
+
+      case 'textBox':
+        layoutTextBox(block as TextBoxBlock, measure as TextBoxMeasure, paginator);
         break;
 
       case 'pageBreak':
@@ -584,6 +591,35 @@ function layoutAnchoredImage(
 
   // Add directly to page without affecting cursor
   state.page.fragments.push(fragment);
+}
+
+/**
+ * Layout a text box block onto pages.
+ */
+function layoutTextBox(
+  block: TextBoxBlock,
+  measure: TextBoxMeasure,
+  paginator: ReturnType<typeof createPaginator>
+): void {
+  if (measure.kind !== 'textBox') {
+    throw new Error(`layoutTextBox: expected textBox measure`);
+  }
+
+  const state = paginator.ensureFits(measure.height);
+
+  const fragment: TextBoxFragment = {
+    kind: 'textBox',
+    blockId: block.id,
+    x: paginator.getColumnX(state.columnIndex),
+    y: 0,
+    width: measure.width,
+    height: measure.height,
+    pmStart: block.pmStart,
+    pmEnd: block.pmEnd,
+  };
+
+  const result = paginator.addFragment(fragment, measure.height, 0, 0);
+  fragment.y = result.y;
 }
 
 /**

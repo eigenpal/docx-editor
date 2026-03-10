@@ -14,6 +14,7 @@ import type {
   TableCell,
   CellBorders,
   ImageBlock,
+  TextBoxBlock,
   PageBreakBlock,
   Run,
   TextRun,
@@ -24,6 +25,7 @@ import type {
   RunFormatting,
   ParagraphAttrs,
 } from '../layout-engine/types';
+import { DEFAULT_TEXTBOX_MARGINS } from '../layout-engine/types';
 import type { ParagraphAttrs as PMParagraphAttrs } from '../prosemirror/schema/nodes';
 import type {
   TextColorAttrs,
@@ -898,6 +900,46 @@ function convertImage(node: PMNode, startPos: number, pageContentHeight?: number
 }
 
 /**
+ * Convert a textBox PM node to a TextBoxBlock.
+ */
+function convertTextBoxNode(
+  node: PMNode,
+  startPos: number,
+  opts: ToFlowBlocksOptions
+): TextBoxBlock {
+  const attrs = node.attrs;
+  const contentBlocks: ParagraphBlock[] = [];
+
+  // Convert child paragraphs inside the text box
+  node.forEach((child, offset) => {
+    if (child.type.name === 'paragraph') {
+      const block = convertParagraph(child, startPos + 1 + offset, opts);
+      contentBlocks.push(block);
+    }
+  });
+
+  return {
+    kind: 'textBox',
+    id: nextBlockId(),
+    width: (attrs.width as number) || 200,
+    height: (attrs.height as number) || undefined,
+    fillColor: attrs.fillColor as string | undefined,
+    outlineWidth: attrs.outlineWidth as number | undefined,
+    outlineColor: attrs.outlineColor as string | undefined,
+    outlineStyle: attrs.outlineStyle as string | undefined,
+    margins: {
+      top: (attrs.marginTop as number) ?? DEFAULT_TEXTBOX_MARGINS.top,
+      bottom: (attrs.marginBottom as number) ?? DEFAULT_TEXTBOX_MARGINS.bottom,
+      left: (attrs.marginLeft as number) ?? DEFAULT_TEXTBOX_MARGINS.left,
+      right: (attrs.marginRight as number) ?? DEFAULT_TEXTBOX_MARGINS.right,
+    },
+    content: contentBlocks,
+    pmStart: startPos,
+    pmEnd: startPos + node.nodeSize,
+  };
+}
+
+/**
  * Convert a ProseMirror document to FlowBlock array.
  *
  * Walks the document tree, converting each node to the appropriate block type.
@@ -954,6 +996,10 @@ export function toFlowBlocks(doc: PMNode, options: ToFlowBlocksOptions = {}): Fl
       case 'image':
         // Standalone image block (if not inline)
         blocks.push(convertImage(node, pos, opts.pageContentHeight));
+        break;
+
+      case 'textBox':
+        blocks.push(convertTextBoxNode(node, pos, opts));
         break;
 
       case 'horizontalRule':

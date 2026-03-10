@@ -392,6 +392,35 @@ export type ColumnBreakBlock = {
   pmEnd?: number;
 };
 
+/** Default internal margins for text boxes (OOXML defaults in pixels) */
+export const DEFAULT_TEXTBOX_MARGINS = { top: 4, bottom: 4, left: 7, right: 7 };
+
+/**
+ * Text box block — positioned container with paragraph content.
+ */
+export type TextBoxBlock = {
+  kind: 'textBox';
+  id: BlockId;
+  /** Width in pixels */
+  width: number;
+  /** Height in pixels (may be auto-calculated) */
+  height?: number;
+  /** Fill/background color */
+  fillColor?: string;
+  /** Border width in pixels */
+  outlineWidth?: number;
+  /** Border color */
+  outlineColor?: string;
+  /** Border style */
+  outlineStyle?: string;
+  /** Internal padding */
+  margins?: { top: number; bottom: number; left: number; right: number };
+  /** Paragraph blocks inside the text box */
+  content: ParagraphBlock[];
+  pmStart?: number;
+  pmEnd?: number;
+};
+
 /**
  * Union of all flow block types (input to layout engine).
  */
@@ -399,6 +428,7 @@ export type FlowBlock =
   | ParagraphBlock
   | TableBlock
   | ImageBlock
+  | TextBoxBlock
   | SectionBreakBlock
   | PageBreakBlock
   | ColumnBreakBlock;
@@ -503,12 +533,24 @@ export type ColumnBreakMeasure = {
 };
 
 /**
+ * Measurement result for a text box block.
+ */
+export type TextBoxMeasure = {
+  kind: 'textBox';
+  width: number;
+  height: number;
+  /** Pre-measured inner paragraph measures (avoids re-measuring during render) */
+  innerMeasures: ParagraphMeasure[];
+};
+
+/**
  * Union of all measurement types.
  */
 export type Measure =
   | ParagraphMeasure
   | ImageMeasure
   | TableMeasure
+  | TextBoxMeasure
   | SectionBreakMeasure
   | PageBreakMeasure
   | ColumnBreakMeasure;
@@ -587,9 +629,18 @@ export type ImageFragment = FragmentBase & {
 };
 
 /**
+ * A text box fragment positioned on a page.
+ */
+export type TextBoxFragment = FragmentBase & {
+  kind: 'textBox';
+  /** Height of the text box. */
+  height: number;
+};
+
+/**
  * Union of all fragment types.
  */
-export type Fragment = ParagraphFragment | TableFragment | ImageFragment;
+export type Fragment = ParagraphFragment | TableFragment | ImageFragment | TextBoxFragment;
 
 // =============================================================================
 // PAGES AND LAYOUT - Output of layout engine

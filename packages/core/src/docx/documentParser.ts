@@ -18,16 +18,31 @@ import type {
   Paragraph,
   Table,
   SectionProperties,
+  Shape,
+  ShapeContent,
   Theme,
   RelationshipMap,
   MediaFile,
 } from '../types/document';
 import type { StyleMap } from './styleParser';
 import type { NumberingMap } from './numberingParser';
-import { parseXml, findChild, getChildElements, type XmlElement } from './xmlParser';
+import {
+  parseXml,
+  findChild,
+  findDeep,
+  getChildElements,
+  getLocalName,
+  type XmlElement,
+} from './xmlParser';
 import { parseParagraph, getParagraphText } from './paragraphParser';
 import { parseTable } from './tableParser';
 import { parseSectionProperties, getDefaultSectionProperties } from './sectionParser';
+import {
+  isTextBoxDrawing,
+  parseTextBox,
+  getTextBoxContentElement,
+  parseTextBoxContent,
+} from './textBoxParser';
 
 // ============================================================================
 // LIST MARKER COMPUTATION
@@ -325,6 +340,93 @@ function extractTableVariables(table: Table): string[] {
 }
 
 // ============================================================================
+// TEXT BOX ENRICHMENT
+// ============================================================================
+
+/**
+ * Enrich a parsed paragraph with text box content from its raw XML.
+ *
+ * During initial parsing, w:drawing elements containing text boxes (wps:wsp with wps:txbx)
+ * are skipped because parseImage returns null for non-image drawings. This function does
+ * a second pass over the raw XML to find text box drawings, parse them with their content,
+ * and inject ShapeContent into the paragraph's runs.
+ */
+function enrichParagraphTextBoxes(
+  paragraph: Paragraph,
+  paraXml: XmlElement,
+  styles: StyleMap | null,
+  theme: Theme | null,
+  numbering: NumberingMap | null,
+  rels: RelationshipMap | null,
+  media: Map<string, MediaFile> | null
+): void {
+  const xmlChildren = getChildElements(paraXml);
+
+  // Track which run we're on (to match XML runs with parsed runs)
+  let runIndex = 0;
+
+  for (const xmlChild of xmlChildren) {
+    if (getLocalName(xmlChild.name ?? '') !== 'r') continue;
+
+    // Find w:drawing children in this run
+    const runElements = getChildElements(xmlChild);
+    for (const runEl of runElements) {
+      if (getLocalName(runEl.name ?? '') === 'drawing' && isTextBoxDrawing(runEl)) {
+        // Parse the text box structure
+        const textBox = parseTextBox(runEl);
+        if (textBox) {
+          // Navigate to wps:wsp to get the txbxContent element
+          const wsp = findDeep(runEl, 'wps', 'wsp');
+          if (wsp) {
+            const txbxContentEl = getTextBoxContentElement(wsp);
+            if (txbxContentEl) {
+              textBox.content = parseTextBoxContent(
+                txbxContentEl,
+                parseParagraph,
+                null, // table parser not needed for most text boxes
+                styles,
+                theme,
+                numbering,
+                rels ?? undefined,
+                media ?? undefined
+              );
+            }
+          }
+
+          // Convert to Shape with textBody and inject as ShapeContent
+          const shape: Shape = {
+            type: 'shape',
+            shapeType: 'rect',
+            size: textBox.size,
+            position: textBox.position,
+            wrap: textBox.wrap,
+            fill: textBox.fill,
+            outline: textBox.outline,
+            textBody: {
+              content: textBox.content,
+              margins: textBox.margins,
+            },
+          };
+          if (textBox.id) shape.id = textBox.id;
+
+          const shapeContent: ShapeContent = { type: 'shape', shape };
+
+          // Find the matching parsed run and inject the ShapeContent
+          if (runIndex < paragraph.content.length) {
+            const parsedContent = paragraph.content[runIndex];
+            if (parsedContent.type === 'run') {
+              parsedContent.content.push(shapeContent);
+            }
+          }
+        }
+      }
+    }
+
+    runIndex++;
+  }
+}
+
+// ============================================================================
 // CONTENT PARSING
 // ============================================================================
 
@@ -360,6 +462,8 @@ function parseBlockContent(
     // Paragraph (w:p)
     if (name === 'w:p' || name.endsWith(':p')) {
       const paragraph = parseParagraph(child, styles, theme, numbering, rels, media);
+      // Enrich with text box content (parsed in a second pass to avoid circular deps)
+      enrichParagraphTextBoxes(paragraph, child, styles, theme, numbering, rels, media);
       // Compute list marker if this is a list item
       computeListMarker(paragraph, numbering, listCounters);
       content.push(paragraph);

@@ -20,12 +20,16 @@ import type {
   ImageBlock,
   ImageMeasure,
   ImageFragment,
+  TextBoxBlock,
+  TextBoxMeasure,
+  TextBoxFragment,
 } from '../layout-engine/types';
 import { renderPage, renderPages, type RenderContext } from './renderPage';
 import { renderParagraphFragment, sliceRunsForLine, renderLine } from './renderParagraph';
 import { renderFragment, FRAGMENT_CLASS_NAMES } from './renderFragment';
 import { renderTableFragment, TABLE_CLASS_NAMES } from './renderTable';
 import { renderImageFragment, IMAGE_CLASS_NAMES } from './renderImage';
+import { renderTextBoxFragment, TEXTBOX_CLASS_NAMES } from './renderTextBox';
 
 // Re-export render functions
 export {
@@ -40,6 +44,8 @@ export {
   FRAGMENT_CLASS_NAMES,
   TABLE_CLASS_NAMES,
   IMAGE_CLASS_NAMES,
+  renderTextBoxFragment,
+  TEXTBOX_CLASS_NAMES,
   type RenderContext,
 };
 
@@ -245,6 +251,14 @@ export class LayoutPainter {
       const block = lookup.block as ImageBlock;
       const measure = lookup.measure as ImageMeasure;
       return renderImageFragment(fragment as ImageFragment, block, measure, context, {
+        document: this.doc,
+      });
+    }
+
+    if (fragment.kind === 'textBox' && lookup) {
+      const block = lookup.block as TextBoxBlock;
+      const measure = lookup.measure as TextBoxMeasure;
+      return renderTextBoxFragment(fragment as TextBoxFragment, block, measure, context, {
         document: this.doc,
       });
     }
