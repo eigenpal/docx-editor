@@ -25,7 +25,7 @@ import React, {
   memo,
 } from 'react';
 import type { CSSProperties } from 'react';
-import { NodeSelection } from 'prosemirror-state';
+import { NodeSelection, TextSelection } from 'prosemirror-state';
 import type { EditorState, Transaction, Plugin } from 'prosemirror-state';
 import { CellSelection } from 'prosemirror-tables';
 import type { EditorView } from 'prosemirror-view';
@@ -52,6 +52,9 @@ import type {
   ParagraphAttrs,
   ParagraphBorders,
 } from '@eigenpal/docx-core/layout-engine/types';
+
+// Table commands (for quick-action insert buttons)
+import { addRowBelow, addColumnRight } from '@eigenpal/docx-core/prosemirror';
 
 // Layout bridge
 import {
@@ -218,6 +221,12 @@ const DEFAULT_MARGINS: PageMargins = {
 };
 
 const DEFAULT_PAGE_GAP = 24;
+
+/** Distance in px from a row/column boundary that triggers the insert button */
+/** Distance in px from the table edge where boundary detection is active */
+const TABLE_INSERT_EDGE_PROXIMITY = 30;
+/** Delay in ms before hiding the insert button when cursor moves away */
+const TABLE_INSERT_HIDE_DELAY = 200;
 
 // Stable empty array to avoid re-creating on each render
 const EMPTY_PLUGINS: Plugin[] = [];
@@ -1287,6 +1296,32 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
     const cellDragOverflowXRef = useRef<number | null>(null);
     const CELL_SELECT_OVERFLOW_PX = 5; // px of continued drag after text selection maxes out
 
+    // Table quick action insert button state
+    type TableInsertButtonState = {
+      type: 'row' | 'column';
+      /** Pixel position relative to viewport container */
+      x: number;
+      y: number;
+      /** PM position inside target cell (to set selection before dispatching) */
+      cellPmPos: number;
+    };
+    const [tableInsertButton, setTableInsertButton] = useState<TableInsertButtonState | null>(null);
+    const tableInsertHideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+    const clearTableInsertTimer = useCallback(() => {
+      if (tableInsertHideTimerRef.current) {
+        clearTimeout(tableInsertHideTimerRef.current);
+        tableInsertHideTimerRef.current = null;
+      }
+    }, []);
+
+    // Cleanup timer on unmount
+    useEffect(() => {
+      return () => {
+        if (tableInsertHideTimerRef.current) clearTimeout(tableInsertHideTimerRef.current);
+      };
+    }, []);
+
     // Selection gate - ensures selection renders only when layout is current
     const syncCoordinator = useMemo(() => new LayoutSelectionGate(), []);
 
@@ -1817,9 +1852,18 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
                   continue;
                 }
 
-                if (span.firstChild?.nodeType !== Node.TEXT_NODE) continue;
-
-                const textNode = span.firstChild as Text;
+                // Find the text node — may be a direct child or inside an <a> for hyperlinks
+                let textNode: Text | null = null;
+                if (span.firstChild?.nodeType === Node.TEXT_NODE) {
+                  textNode = span.firstChild as Text;
+                } else if (
+                  span.firstChild?.nodeType === Node.ELEMENT_NODE &&
+                  (span.firstChild as HTMLElement).tagName === 'A' &&
+                  span.firstChild.firstChild?.nodeType === Node.TEXT_NODE
+                ) {
+                  textNode = span.firstChild.firstChild as Text;
+                }
+                if (!textNode) continue;
                 const ownerDoc = spanEl.ownerDocument;
                 if (!ownerDoc) continue;
 
@@ -2109,31 +2153,16 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
       (e: React.MouseEvent) => {
         if (!hiddenPMRef.current || e.button !== 0) return; // Only handle left click
 
-        // Intercept all hyperlink clicks — single DOM walk
-        // Must be before readOnly check so links work in read-only mode
+        // Hide table insert button on any mousedown
+        setTableInsertButton(null);
+        clearTableInsertTimer();
+
+        // Prevent default browser navigation for hyperlink clicks,
+        // but let the rest of the handler run for cursor placement and drag selection.
+        // The popup is shown in handlePagesClick (on mouseup) instead.
         const anchorEl = (e.target as HTMLElement).closest('a[href]') as HTMLAnchorElement | null;
         if (anchorEl) {
-          e.preventDefault();
-          e.stopPropagation();
-          const href = anchorEl.getAttribute('href') || '';
-          if (href.startsWith('#')) {
-            return; // Internal bookmark — let handlePagesClick handle navigation
-          }
-          // External hyperlink — show popup instead of navigating
-          if (onHyperlinkClick) {
-            const displayText = anchorEl.textContent || '';
-            const tooltip = anchorEl.getAttribute('title') || undefined;
-            const anchorRect = anchorEl.getBoundingClientRect();
-            onHyperlinkClick({ href, displayText, tooltip, anchorRect });
-          }
-          // Still place the cursor at the click position
-          const pmPos = getPositionFromMouse(e.clientX, e.clientY);
-          if (pmPos !== null) {
-            hiddenPMRef.current.setSelection(pmPos);
-            hiddenPMRef.current.focus();
-            setIsFocused(true);
-          }
-          return;
+          e.preventDefault(); // Prevent navigation only
         }
 
         if (readOnly) return;
@@ -2358,6 +2387,7 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
         onBodyClick,
         zoom,
         onHyperlinkClick,
+        clearTableInsertTimer,
       ]
     );
 
@@ -2673,15 +2703,172 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
     }, [handleMouseMove, handleMouseUp]);
 
     /**
+     * Handle mousemove on pages to show table row/column insert buttons.
+     * Detects proximity to table row/column boundaries and shows a floating "+" button.
+     */
+    const handlePagesMouseMove = useCallback(
+      (e: React.MouseEvent) => {
+        // Skip during drags / resizes
+        if (
+          readOnly ||
+          isDraggingRef.current ||
+          isResizingColumnRef.current ||
+          isResizingRowRef.current ||
+          isResizingRightEdgeRef.current ||
+          isCellDraggingRef.current
+        )
+          return;
+
+        const pagesEl = pagesContainerRef.current;
+        if (!pagesEl) return;
+
+        const mouseX = e.clientX;
+        const mouseY = e.clientY;
+
+        // Find the table — either directly under the cursor or nearby (for edge hover)
+        let tableEl = (e.target as HTMLElement).closest('.layout-table') as HTMLElement | null;
+        if (!tableEl) {
+          // Mouse may be in the margin area near a table — check all tables
+          const tables = pagesEl.querySelectorAll('.layout-table');
+          for (const t of Array.from(tables)) {
+            const r = t.getBoundingClientRect();
+            const nearLeft = mouseX >= r.left - TABLE_INSERT_EDGE_PROXIMITY && mouseX < r.left;
+            const nearTop = mouseY >= r.top - TABLE_INSERT_EDGE_PROXIMITY && mouseY < r.top;
+            const withinX = mouseX >= r.left - TABLE_INSERT_EDGE_PROXIMITY && mouseX <= r.right;
+            const withinY = mouseY >= r.top - TABLE_INSERT_EDGE_PROXIMITY && mouseY <= r.bottom;
+            if ((nearLeft && withinY) || (nearTop && withinX)) {
+              tableEl = t as HTMLElement;
+              break;
+            }
+          }
+        }
+
+        if (!tableEl) {
+          setTableInsertButton(null);
+          return;
+        }
+
+        const tableRect = tableEl.getBoundingClientRect();
+
+        const nearLeftEdge =
+          mouseX < tableRect.left + TABLE_INSERT_EDGE_PROXIMITY &&
+          mouseX >= tableRect.left - TABLE_INSERT_EDGE_PROXIMITY;
+        const nearTopEdge =
+          mouseY < tableRect.top + TABLE_INSERT_EDGE_PROXIMITY &&
+          mouseY >= tableRect.top - TABLE_INSERT_EDGE_PROXIMITY;
+
+        if (!nearLeftEdge && !nearTopEdge) {
+          setTableInsertButton(null);
+          return;
+        }
+
+        const rows = tableEl.querySelectorAll(':scope > .layout-table-row');
+        if (rows.length === 0) {
+          setTableInsertButton(null);
+          return;
+        }
+
+        const viewportEl = pagesEl.parentElement;
+        if (!viewportEl) return;
+        const viewportRect = viewportEl.getBoundingClientRect();
+
+        /** Extract PM position from a cell element */
+        const getCellPmPos = (el: HTMLElement | null): number =>
+          el ? Number(el.dataset.pmStart) || 0 : 0;
+
+        // Show button centered on the hovered row (left edge hover)
+        if (nearLeftEdge) {
+          for (let i = 0; i < rows.length; i++) {
+            const rowRect = rows[i].getBoundingClientRect();
+            if (mouseY >= rowRect.top && mouseY <= rowRect.bottom) {
+              const cell = rows[i].querySelector('.layout-table-cell') as HTMLElement | null;
+              const pmPos = getCellPmPos(cell);
+              if (!pmPos) break;
+              const rowCenterY = rowRect.top + rowRect.height / 2;
+              setTableInsertButton({
+                type: 'row',
+                x: tableRect.left - viewportRect.left - 24,
+                y: rowCenterY - viewportRect.top - 10,
+                cellPmPos: pmPos,
+              });
+              clearTableInsertTimer();
+              return;
+            }
+          }
+        }
+
+        // Show button centered on the hovered column (top edge hover)
+        if (nearTopEdge) {
+          const cells = rows[0].querySelectorAll(':scope > .layout-table-cell');
+          for (let i = 0; i < cells.length; i++) {
+            const cellRect = cells[i].getBoundingClientRect();
+            if (mouseX >= cellRect.left && mouseX <= cellRect.right) {
+              const pmPos = getCellPmPos(cells[i] as HTMLElement);
+              if (!pmPos) break;
+              const cellCenterX = cellRect.left + cellRect.width / 2;
+              setTableInsertButton({
+                type: 'column',
+                x: cellCenterX - viewportRect.left - 10,
+                y: tableRect.top - viewportRect.top - 24,
+                cellPmPos: pmPos,
+              });
+              clearTableInsertTimer();
+              return;
+            }
+          }
+        }
+
+        // Not over any row/column — schedule hide with a small delay
+        if (!tableInsertHideTimerRef.current) {
+          tableInsertHideTimerRef.current = setTimeout(() => {
+            setTableInsertButton(null);
+            tableInsertHideTimerRef.current = null;
+          }, TABLE_INSERT_HIDE_DELAY);
+        }
+      },
+      [readOnly, clearTableInsertTimer]
+    );
+
+    /**
+     * Handle table insert button click — set selection to target cell, then insert.
+     */
+    const handleTableInsertClick = useCallback(
+      (e: React.MouseEvent) => {
+        e.preventDefault();
+        e.stopPropagation();
+        if (!tableInsertButton || !hiddenPMRef.current) return;
+
+        const view = hiddenPMRef.current.getView();
+        if (!view) return;
+
+        const { type, cellPmPos } = tableInsertButton;
+
+        // Set selection inside the target cell
+        const tr = view.state.tr.setSelection(TextSelection.create(view.state.doc, cellPmPos + 1));
+        view.dispatch(tr);
+
+        // Dispatch the appropriate insert command
+        if (type === 'row') {
+          addRowBelow(view.state, view.dispatch);
+        } else {
+          addColumnRight(view.state, view.dispatch);
+        }
+
+        setTableInsertButton(null);
+        hiddenPMRef.current.focus();
+      },
+      [tableInsertButton]
+    );
+
+    /**
      * Handle click on pages container (for double-click word selection).
      */
     const handlePagesClick = useCallback(
       (e: React.MouseEvent) => {
-        // Intercept all hyperlink clicks — single DOM walk
+        // Handle hyperlink clicks (single-click only, not drag-to-select)
         const anchorEl = (e.target as HTMLElement).closest('a[href]') as HTMLAnchorElement | null;
         if (anchorEl) {
           e.preventDefault();
-          e.stopPropagation();
           const href = anchorEl.getAttribute('href') || '';
           if (href.startsWith('#')) {
             // Internal bookmark — navigate within document
@@ -2707,6 +2894,16 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
                   hiddenPMRef.current.setSelection(targetPos + 1);
                 }
               }
+            }
+          } else if (onHyperlinkClick) {
+            // External hyperlink — show popup only if not a drag-to-select
+            const view = hiddenPMRef.current?.getView();
+            const hasRangeSelection = view && view.state.selection.from !== view.state.selection.to;
+            if (!hasRangeSelection) {
+              const displayText = anchorEl.textContent || '';
+              const tooltip = anchorEl.getAttribute('title') || undefined;
+              const anchorRect = anchorEl.getBoundingClientRect();
+              onHyperlinkClick({ href, displayText, tooltip, anchorRect });
             }
           }
           // External links: already handled by mousedown, just prevent default
@@ -2797,7 +2994,7 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
           }
         }
       },
-      [getPositionFromMouse, onHeaderFooterDoubleClick]
+      [getPositionFromMouse, onHeaderFooterDoubleClick, onHyperlinkClick]
     );
 
     /**
@@ -3277,6 +3474,7 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
             className={`paged-editor__pages${readOnly ? ' paged-editor--readonly' : ''}${hfEditMode ? ` paged-editor--hf-editing paged-editor--editing-${hfEditMode}` : ''}`}
             style={pagesContainerStyles}
             onMouseDown={handlePagesMouseDown}
+            onMouseMove={handlePagesMouseMove}
             onClick={handlePagesClick}
             aria-hidden="true" // Visual only, PM provides semantic content
           />
@@ -3302,6 +3500,49 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
             onDragStart={handleImageDragStart}
             onDragEnd={handleImageDragEnd}
           />
+
+          {/* Table quick action insert button */}
+          {tableInsertButton && (
+            <button
+              type="button"
+              onMouseDown={handleTableInsertClick}
+              onMouseEnter={clearTableInsertTimer}
+              onMouseLeave={() => setTableInsertButton(null)}
+              style={{
+                position: 'absolute',
+                left: tableInsertButton.x,
+                top: tableInsertButton.y,
+                width: 20,
+                height: 20,
+                borderRadius: '4px',
+                border: '1px solid #dadce0',
+                backgroundColor: '#f8f9fa',
+                color: '#5f6368',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                cursor: 'pointer',
+                zIndex: 200,
+                padding: 0,
+                boxShadow: 'none',
+              }}
+              title={
+                tableInsertButton.type === 'row' ? 'Insert row below' : 'Insert column to the right'
+              }
+              aria-label={
+                tableInsertButton.type === 'row' ? 'Insert row below' : 'Insert column to the right'
+              }
+            >
+              <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+                <path
+                  d="M6 1v10M1 6h10"
+                  stroke="currentColor"
+                  strokeWidth="1.5"
+                  strokeLinecap="round"
+                />
+              </svg>
+            </button>
+          )}
 
           {/* Plugin overlays (highlights, annotations) */}
           {pluginOverlays && (

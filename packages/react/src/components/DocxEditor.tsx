@@ -21,7 +21,12 @@ import {
   Suspense,
 } from 'react';
 import type { CSSProperties, ReactNode } from 'react';
-import type { Document, Theme, HeaderFooter } from '@eigenpal/docx-core/types/document';
+import type {
+  Document,
+  Theme,
+  HeaderFooter,
+  SectionProperties,
+} from '@eigenpal/docx-core/types/document';
 
 import {
   Toolbar,
@@ -84,6 +89,9 @@ const FootnotePropertiesDialog = lazy(() =>
   import('./dialogs/FootnotePropertiesDialog').then((m) => ({
     default: m.FootnotePropertiesDialog,
   }))
+);
+const PageSetupDialog = lazy(() =>
+  import('./dialogs/PageSetupDialog').then((m) => ({ default: m.PageSetupDialog }))
 );
 import { MaterialSymbol } from './ui/Icons';
 import { Tooltip } from './ui/Tooltip';
@@ -148,6 +156,9 @@ import {
   setHyperlink,
   removeHyperlink,
   insertHyperlink,
+  // Text direction commands
+  setRtl,
+  setLtr,
   // Page break command
   insertPageBreak,
   // Table of Contents command
@@ -861,6 +872,10 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
   // Hyperlink dialog hook
   const hyperlinkDialog = useHyperlinkDialog();
 
+  // Page setup dialog state
+  const [showPageSetup, setShowPageSetup] = useState(false);
+  const handleOpenPageSetup = useCallback(() => setShowPageSetup(true), []);
+
   // Hyperlink popup state (Google Docs-style floating popup on link click)
   const [hyperlinkPopupData, setHyperlinkPopupData] = useState<HyperlinkPopupData | null>(null);
 
@@ -1092,6 +1107,7 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
         listState,
         styleId: selectionState.styleId ?? undefined,
         indentLeft: paragraphFormatting.indentLeft,
+        bidi: !!paragraphFormatting.bidi,
       };
       setState((prev) => ({
         ...prev,
@@ -1804,6 +1820,14 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
         clearFormatting(view.state, view.dispatch);
         return;
       }
+      if (action === 'setRtl') {
+        setRtl(view.state, view.dispatch);
+        return;
+      }
+      if (action === 'setLtr') {
+        setLtr(view.state, view.dispatch);
+        return;
+      }
       if (action === 'insertLink') {
         // Get the selected text for the hyperlink dialog
         const selectedText = getSelectedText(view.state);
@@ -2138,6 +2162,28 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
   const handleBottomMarginChange = useMemo(
     () => createMarginHandler('marginBottom'),
     [createMarginHandler]
+  );
+
+  // Page setup apply handler
+  const handlePageSetupApply = useCallback(
+    (props: Partial<SectionProperties>) => {
+      if (!history.state || readOnly) return;
+      const newDoc = {
+        ...history.state,
+        package: {
+          ...history.state.package,
+          document: {
+            ...history.state.package.document,
+            finalSectionProperties: {
+              ...history.state.package.document.finalSectionProperties,
+              ...props,
+            },
+          },
+        },
+      };
+      handleDocumentChange(newDoc);
+    },
+    [history.state, readOnly, handleDocumentChange]
   );
 
   // Paragraph indent handlers (for ruler)
@@ -2821,6 +2867,7 @@ body { background: white; }
                       onImageWrapType={handleImageWrapType}
                       onImageTransform={handleImageTransform}
                       onOpenImageProperties={handleOpenImageProperties}
+                      onPageSetup={handleOpenPageSetup}
                       tableContext={state.pmTableContext}
                       onTableAction={handleTableAction}
                     >
@@ -3272,6 +3319,14 @@ body { background: white; }
                       }
                     : undefined
                 }
+              />
+            )}
+            {showPageSetup && (
+              <PageSetupDialog
+                isOpen={showPageSetup}
+                onClose={() => setShowPageSetup(false)}
+                onApply={handlePageSetupApply}
+                currentProps={history.state?.package.document?.finalSectionProperties}
               />
             )}
             {footnotePropsOpen && (

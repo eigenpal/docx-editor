@@ -61,11 +61,14 @@ export {
   setSpaceBefore,
   setSpaceAfter,
   getParagraphAlignment,
+  getParagraphBidi,
   isInList,
   getListInfo,
   applyStyle,
   clearStyle,
   getStyleId,
+  setRtl,
+  setLtr,
 } from './paragraph';
 export type { ResolvedStyleAttrs } from './paragraph';
 
