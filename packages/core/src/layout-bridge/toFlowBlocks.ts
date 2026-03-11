@@ -13,6 +13,7 @@ import type {
   TableRow,
   TableCell,
   CellBorders,
+  BorderStyle,
   ImageBlock,
   PageBreakBlock,
   Run,
@@ -33,6 +34,7 @@ import type {
 } from '../prosemirror/schema/marks';
 import type { Theme } from '../types/document';
 import { resolveColor, resolveHighlightToCss } from '../utils/colorResolver';
+import { pointsToPixels } from '../utils/units';
 
 /**
  * Options for the conversion.
@@ -673,20 +675,19 @@ export function convertBorderSpecToLayout(
     color?: { rgb?: string; themeColor?: string; themeTint?: string; themeShade?: string };
   },
   theme?: Theme | null
-): { style: string; width: number; color: string; space?: number } | undefined {
+): BorderStyle | undefined {
   if (!border || !border.style || border.style === 'none' || border.style === 'nil') {
     return undefined;
   }
-  const result: { style: string; width: number; color: string; space?: number } = {
+  const result: BorderStyle = {
     style: OOXML_TO_CSS_BORDER[border.style] || 'solid',
     width: borderWidthToPixels(border.size ?? 0),
     color: border.color
       ? resolveColor(border.color as Parameters<typeof resolveColor>[0], theme)
       : '#000000',
   };
-  // Convert space from points to pixels (1pt = 96/72 px)
   if (border.space !== undefined) {
-    result.space = border.space * (96 / 72);
+    result.space = pointsToPixels(border.space);
   }
   return result;
 }
