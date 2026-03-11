@@ -41,41 +41,25 @@ import {
   getChildElements,
   getAttribute,
   parseNumericAttribute,
+  findByFullName,
   type XmlElement,
 } from './xmlParser';
 import { resolveTarget } from './relsParser';
 import { isTextBoxDrawing } from './textBoxParser';
+import { emuToPixels } from '../utils/units';
+import {
+  parsePositionH,
+  parsePositionV,
+  WRAP_ELEMENT_NAMES as WRAP_ELEMENTS,
+  parseWrapElement,
+} from './drawingUtils';
+
+// Re-export for backwards compatibility
+export { emuToPixels, pixelsToEmu } from '../utils/units';
 
 // ============================================================================
-// EMU CONVERSIONS
+// ROTATION CONVERSION
 // ============================================================================
-
-/** EMUs per inch */
-const EMU_PER_INCH = 914400;
-
-/** CSS pixels per inch (standard) */
-const PIXELS_PER_INCH = 96;
-
-/**
- * Convert EMU to pixels
- *
- * @param emu - Value in EMUs
- * @returns Value in CSS pixels
- */
-export function emuToPixels(emu: number | undefined | null): number {
-  if (emu == null || isNaN(emu)) return 0;
-  return Math.round((emu * PIXELS_PER_INCH) / EMU_PER_INCH);
-}
-
-/**
- * Convert pixels to EMU
- *
- * @param px - Value in pixels
- * @returns Value in EMUs
- */
-export function pixelsToEmu(px: number): number {
-  return Math.round((px * EMU_PER_INCH) / PIXELS_PER_INCH);
-}
 
 /**
  * Convert rotation value (1/60000 of a degree) to degrees
@@ -93,19 +77,6 @@ function rotToDegrees(rot: string | null | undefined): number | undefined {
 // ============================================================================
 // ELEMENT FINDERS
 // ============================================================================
-
-/**
- * Find element by full name with namespace prefix
- */
-function findByFullName(parent: XmlElement, fullName: string): XmlElement | null {
-  const children = getChildElements(parent);
-  for (const child of children) {
-    if (child.name === fullName) {
-      return child;
-    }
-  }
-  return null;
-}
 
 /**
  * Find any of the specified elements
@@ -208,171 +179,6 @@ function parseDocProps(docPr: XmlElement | null): {
     decorative: decorative || undefined,
     hlinkRId,
   };
-}
-
-// ============================================================================
-// POSITION PARSING (for anchored images)
-// ============================================================================
-
-/**
- * Parse horizontal position (wp:positionH)
- */
-function parsePositionH(posH: XmlElement | null): ImagePosition['horizontal'] | undefined {
-  if (!posH) return undefined;
-
-  const relativeTo = getAttribute(posH, null, 'relativeFrom') ?? 'column';
-
-  // Check for alignment child
-  const alignEl = findByFullName(posH, 'wp:align');
-  if (alignEl) {
-    const alignment = alignEl.elements?.[0]?.text ?? null;
-    return {
-      relativeTo: relativeTo as ImagePosition['horizontal']['relativeTo'],
-      alignment: alignment as ImagePosition['horizontal']['alignment'],
-    };
-  }
-
-  // Check for posOffset child
-  const posOffsetEl = findByFullName(posH, 'wp:posOffset');
-  if (posOffsetEl) {
-    const offsetText = String(posOffsetEl.elements?.[0]?.text ?? '0');
-    const posOffset = parseInt(offsetText, 10);
-    return {
-      relativeTo: relativeTo as ImagePosition['horizontal']['relativeTo'],
-      posOffset: isNaN(posOffset) ? 0 : posOffset,
-    };
-  }
-
-  return {
-    relativeTo: relativeTo as ImagePosition['horizontal']['relativeTo'],
-  };
-}
-
-/**
- * Parse vertical position (wp:positionV)
- */
-function parsePositionV(posV: XmlElement | null): ImagePosition['vertical'] | undefined {
-  if (!posV) return undefined;
-
-  const relativeTo = getAttribute(posV, null, 'relativeFrom') ?? 'paragraph';
-
-  // Check for alignment child
-  const alignEl = findByFullName(posV, 'wp:align');
-  if (alignEl) {
-    const alignment = alignEl.elements?.[0]?.text ?? null;
-    return {
-      relativeTo: relativeTo as ImagePosition['vertical']['relativeTo'],
-      alignment: alignment as ImagePosition['vertical']['alignment'],
-    };
-  }
-
-  // Check for posOffset child
-  const posOffsetEl = findByFullName(posV, 'wp:posOffset');
-  if (posOffsetEl) {
-    const offsetText = String(posOffsetEl.elements?.[0]?.text ?? '0');
-    const posOffset = parseInt(offsetText, 10);
-    return {
-      relativeTo: relativeTo as ImagePosition['vertical']['relativeTo'],
-      posOffset: isNaN(posOffset) ? 0 : posOffset,
-    };
-  }
-
-  return {
-    relativeTo: relativeTo as ImagePosition['vertical']['relativeTo'],
-  };
-}
-
-// ============================================================================
-// WRAP PARSING (for anchored images)
-// ============================================================================
-
-/**
- * Wrap element names
- */
-const WRAP_ELEMENTS = [
-  'wp:wrapNone',
-  'wp:wrapSquare',
-  'wp:wrapTight',
-  'wp:wrapThrough',
-  'wp:wrapTopAndBottom',
-];
-
-/**
- * Parse wrap element to ImageWrap.
- *
- * Distance attributes (distT/distB/distL/distR) can appear on both
- * the wp:anchor element and the wrap child element. The wrap child
- * element values take priority; anchor-level values are used as fallbacks.
- */
-function parseWrapElement(
-  wrapEl: XmlElement | null,
-  behindDoc: boolean,
-  anchorDistances?: { distT?: number; distB?: number; distL?: number; distR?: number }
-): ImageWrap {
-  if (!wrapEl) {
-    // No wrap element = wrapNone
-    const wrap: ImageWrap = {
-      type: behindDoc ? 'behind' : 'inFront',
-    };
-    // Use anchor-level distances as fallback
-    if (anchorDistances?.distT !== undefined) wrap.distT = anchorDistances.distT;
-    if (anchorDistances?.distB !== undefined) wrap.distB = anchorDistances.distB;
-    if (anchorDistances?.distL !== undefined) wrap.distL = anchorDistances.distL;
-    if (anchorDistances?.distR !== undefined) wrap.distR = anchorDistances.distR;
-    return wrap;
-  }
-
-  const wrapName = wrapEl.name || '';
-  const wrapType = wrapName.replace('wp:', '');
-
-  // Parse distance attributes from the wrap child element
-  const wrapDistT = parseNumericAttribute(wrapEl, null, 'distT') ?? undefined;
-  const wrapDistB = parseNumericAttribute(wrapEl, null, 'distB') ?? undefined;
-  const wrapDistL = parseNumericAttribute(wrapEl, null, 'distL') ?? undefined;
-  const wrapDistR = parseNumericAttribute(wrapEl, null, 'distR') ?? undefined;
-
-  // Wrap child values take priority, then anchor-level values
-  const distT = wrapDistT ?? anchorDistances?.distT;
-  const distB = wrapDistB ?? anchorDistances?.distB;
-  const distL = wrapDistL ?? anchorDistances?.distL;
-  const distR = wrapDistR ?? anchorDistances?.distR;
-
-  // Parse wrapText attribute
-  const wrapText = getAttribute(wrapEl, null, 'wrapText') ?? undefined;
-
-  let type: ImageWrap['type'];
-  switch (wrapType) {
-    case 'wrapNone':
-      type = behindDoc ? 'behind' : 'inFront';
-      break;
-    case 'wrapSquare':
-      type = 'square';
-      break;
-    case 'wrapTight':
-      type = 'tight';
-      break;
-    case 'wrapThrough':
-      type = 'through';
-      break;
-    case 'wrapTopAndBottom':
-      type = 'topAndBottom';
-      break;
-    default:
-      type = 'square'; // Default fallback
-  }
-
-  const wrap: ImageWrap = { type };
-
-  if (wrapText) {
-    wrap.wrapText = wrapText as ImageWrap['wrapText'];
-  }
-
-  if (distT !== undefined) wrap.distT = distT;
-  if (distB !== undefined) wrap.distB = distB;
-  if (distL !== undefined) wrap.distL = distL;
-  if (distR !== undefined) wrap.distR = distR;
-
-  return wrap;
 }
 
 // ============================================================================

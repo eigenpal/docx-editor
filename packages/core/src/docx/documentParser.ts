@@ -360,6 +360,9 @@ function enrichParagraphTextBoxes(
   rels: RelationshipMap | null,
   media: Map<string, MediaFile> | null
 ): void {
+  // Early exit: skip paragraphs with no runs (most paragraphs have no text boxes)
+  if (paragraph.content.length === 0) return;
+
   const xmlChildren = getChildElements(paraXml);
 
   // Track which run we're on (to match XML runs with parsed runs)

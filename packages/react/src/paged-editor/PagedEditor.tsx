@@ -53,7 +53,10 @@ import type {
   ParagraphBorders,
   TextBoxBlock,
 } from '@eigenpal/docx-core/layout-engine/types';
-import { DEFAULT_TEXTBOX_MARGINS } from '@eigenpal/docx-core/layout-engine/types';
+import {
+  DEFAULT_TEXTBOX_MARGINS,
+  DEFAULT_TEXTBOX_WIDTH,
+} from '@eigenpal/docx-core/layout-engine/types';
 
 // Table commands (for quick-action insert buttons)
 import { addRowBelow, addColumnRight } from '@eigenpal/docx-core/prosemirror';
@@ -703,13 +706,13 @@ function measureBlock(
     case 'textBox': {
       const tb = block as TextBoxBlock;
       const margins = tb.margins ?? DEFAULT_TEXTBOX_MARGINS;
-      const innerWidth = (tb.width ?? 200) - margins.left - margins.right;
+      const innerWidth = (tb.width ?? DEFAULT_TEXTBOX_WIDTH) - margins.left - margins.right;
       const innerMeasures = tb.content.map((p) => measureParagraph(p, innerWidth));
       const contentHeight = innerMeasures.reduce((sum, m) => sum + m.totalHeight, 0);
       const totalHeight = tb.height ?? contentHeight + margins.top + margins.bottom;
       return {
         kind: 'textBox' as const,
-        width: tb.width ?? 200,
+        width: tb.width ?? DEFAULT_TEXTBOX_WIDTH,
         height: totalHeight,
         innerMeasures,
       };

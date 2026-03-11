@@ -65,9 +65,11 @@ export function pixelsToTwips(px: number): number {
  * Convert EMUs to pixels (at 96 DPI)
  *
  * 1 inch = 914400 EMUs = 96 pixels
+ * Returns 0 for null/undefined/NaN inputs.
  */
-export function emuToPixels(emu: number): number {
-  return (emu / EMUS_PER_INCH) * PIXELS_PER_INCH;
+export function emuToPixels(emu: number | undefined | null): number {
+  if (emu == null || isNaN(emu)) return 0;
+  return Math.round((emu * PIXELS_PER_INCH) / EMUS_PER_INCH);
 }
 
 /**

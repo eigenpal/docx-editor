@@ -31,8 +31,6 @@ import type {
   ShapeOutline,
   ShapeTextBody,
   ImageSize,
-  ImagePosition,
-  ImageWrap,
   ImageTransform,
   ColorValue,
   Paragraph,
@@ -41,35 +39,21 @@ import {
   getChildElements,
   getAttribute,
   parseNumericAttribute,
-  getTextContent,
+  findByFullName,
+  findChildrenByLocalName,
   type XmlElement,
 } from './xmlParser';
+import {
+  parseColorElement,
+  parseFill as parseSpPrFill,
+  parseAnchorPosition,
+  parseAnchorWrap,
+  resolveColorValueToHex,
+} from './drawingUtils';
+import { emuToPixels } from '../utils/units';
 
-// Import paragraph parser for text box content
-// Note: This creates a circular dependency that we handle by lazy importing
-// or by having textbox parsing as a separate step
-
-// ============================================================================
-// CONSTANTS
-// ============================================================================
-
-/** EMUs per inch */
-const EMU_PER_INCH = 914400;
-
-/** CSS pixels per inch (standard) */
-const PIXELS_PER_INCH = 96;
-
-// ============================================================================
-// EMU CONVERSIONS
-// ============================================================================
-
-/**
- * Convert EMU to pixels
- */
-export function emuToPixels(emu: number | undefined | null): number {
-  if (emu == null || isNaN(emu)) return 0;
-  return Math.round((emu * PIXELS_PER_INCH) / EMU_PER_INCH);
-}
+// Re-export emuToPixels for backwards compatibility
+export { emuToPixels } from '../utils/units';
 
 /**
  * Convert rotation value (1/60000 of a degree) to degrees
@@ -82,210 +66,45 @@ function rotToDegrees(rot: string | null | undefined): number | undefined {
 }
 
 // ============================================================================
-// ELEMENT FINDERS
-// ============================================================================
-
-/**
- * Find element by full name with namespace prefix
- */
-function findByFullName(parent: XmlElement, fullName: string): XmlElement | null {
-  const children = getChildElements(parent);
-  for (const child of children) {
-    if (child.name === fullName) {
-      return child;
-    }
-  }
-  return null;
-}
-
-/**
- * Find all elements by local name
- */
-function findAllByLocalName(parent: XmlElement, localName: string): XmlElement[] {
-  const children = getChildElements(parent);
-  const result: XmlElement[] = [];
-  for (const child of children) {
-    const name = child.name || '';
-    const colonIdx = name.indexOf(':');
-    const childLocalName = colonIdx >= 0 ? name.substring(colonIdx + 1) : name;
-    if (childLocalName === localName) {
-      result.push(child);
-    }
-  }
-  return result;
-}
-
-// ============================================================================
-// COLOR PARSING
-// ============================================================================
-
-/**
- * Parse a color value from a DrawingML element
- * Handles: a:srgbClr, a:schemeClr, a:sysClr, a:prstClr
- */
-function parseColorElement(element: XmlElement | null): ColorValue | undefined {
-  if (!element) return undefined;
-
-  const children = getChildElements(element);
-
-  // Check for sRGB color: a:srgbClr[@val]
-  const srgbClr = children.find((el) => el.name === 'a:srgbClr');
-  if (srgbClr) {
-    const val = getAttribute(srgbClr, null, 'val');
-    if (val) {
-      return applyColorModifiers({ rgb: val }, srgbClr);
-    }
-  }
-
-  // Check for scheme color (theme): a:schemeClr[@val]
-  const schemeClr = children.find((el) => el.name === 'a:schemeClr');
-  if (schemeClr) {
-    const val = getAttribute(schemeClr, null, 'val');
-    if (val) {
-      // Map scheme name to theme color slot
-      const themeColorMap: Record<string, ColorValue['themeColor']> = {
-        accent1: 'accent1',
-        accent2: 'accent2',
-        accent3: 'accent3',
-        accent4: 'accent4',
-        accent5: 'accent5',
-        accent6: 'accent6',
-        dk1: 'dk1',
-        lt1: 'lt1',
-        dk2: 'dk2',
-        lt2: 'lt2',
-        tx1: 'text1',
-        tx2: 'text2',
-        bg1: 'background1',
-        bg2: 'background2',
-        hlink: 'hlink',
-        folHlink: 'folHlink',
-      };
-
-      const color: ColorValue = {
-        themeColor: themeColorMap[val] ?? 'dk1',
-      };
-
-      return applyColorModifiers(color, schemeClr);
-    }
-  }
-
-  // Check for system color: a:sysClr[@val][@lastClr]
-  const sysClr = children.find((el) => el.name === 'a:sysClr');
-  if (sysClr) {
-    const lastClr = getAttribute(sysClr, null, 'lastClr');
-    if (lastClr) {
-      return { rgb: lastClr };
-    }
-    // Fall back to windowText = black
-    return { rgb: '000000' };
-  }
-
-  // Check for preset color: a:prstClr[@val]
-  const prstClr = children.find((el) => el.name === 'a:prstClr');
-  if (prstClr) {
-    const val = getAttribute(prstClr, null, 'val');
-    // Map preset colors to RGB (common ones)
-    const presetColors: Record<string, string> = {
-      black: '000000',
-      white: 'FFFFFF',
-      red: 'FF0000',
-      green: '00FF00',
-      blue: '0000FF',
-      yellow: 'FFFF00',
-      cyan: '00FFFF',
-      magenta: 'FF00FF',
-    };
-    if (val && presetColors[val]) {
-      return { rgb: presetColors[val] };
-    }
-  }
-
-  return undefined;
-}
-
-/**
- * Apply color modifiers (shade, tint, alpha, lumMod, lumOff)
- */
-function applyColorModifiers(color: ColorValue, element: XmlElement): ColorValue {
-  const children = getChildElements(element);
-
-  // Check for shade modifier
-  const shade = children.find((el) => el.name === 'a:shade');
-  if (shade) {
-    const val = getAttribute(shade, null, 'val');
-    if (val) {
-      // val is in 100000ths, convert to 255 scale hex
-      const shadeVal = Math.round((parseInt(val, 10) / 100000) * 255)
-        .toString(16)
-        .padStart(2, '0')
-        .toUpperCase();
-      color.themeShade = shadeVal;
-    }
-  }
-
-  // Check for tint modifier
-  const tint = children.find((el) => el.name === 'a:tint');
-  if (tint) {
-    const val = getAttribute(tint, null, 'val');
-    if (val) {
-      const tintVal = Math.round((parseInt(val, 10) / 100000) * 255)
-        .toString(16)
-        .padStart(2, '0')
-        .toUpperCase();
-      color.themeTint = tintVal;
-    }
-  }
-
-  return color;
-}
-
-// ============================================================================
 // FILL PARSING
 // ============================================================================
 
 /**
- * Parse shape fill from spPr element
+ * Parse shape fill from spPr element, with style reference fallback.
+ *
+ * Extends the shared parseFill (which handles spPr-level fills) with
+ * style reference lookup (a:fillRef) when no fill is found on spPr directly,
+ * plus gradient stop details, pattern fills, and picture fills.
  */
 function parseFill(spPr: XmlElement | null, style: XmlElement | null): ShapeFill | undefined {
-  if (!spPr) {
-    return undefined;
+  // First try the shared fill parser for spPr-level fills
+  const spPrResult = parseSpPrFill(spPr);
+  if (spPrResult) {
+    // The shared parser returns a simple { type: 'gradient' } without stops,
+    // so re-parse gradients locally for full fidelity
+    if (spPrResult.type === 'gradient' && spPr) {
+      const children = getChildElements(spPr);
+      const gradFill = children.find((el) => el.name === 'a:gradFill');
+      if (gradFill) {
+        return parseGradientFill(gradFill);
+      }
+    }
+    return spPrResult;
   }
 
-  const children = getChildElements(spPr);
+  // Check for pattern fill and blip fill (not covered by shared parser)
+  if (spPr) {
+    const children = getChildElements(spPr);
 
-  // Check for no fill
-  const noFill = children.find((el) => el.name === 'a:noFill');
-  if (noFill) {
-    return { type: 'none' };
-  }
+    const pattFill = children.find((el) => el.name === 'a:pattFill');
+    if (pattFill) {
+      return { type: 'pattern' };
+    }
 
-  // Check for solid fill
-  const solidFill = children.find((el) => el.name === 'a:solidFill');
-  if (solidFill) {
-    const color = parseColorElement(solidFill);
-    return {
-      type: 'solid',
-      color,
-    };
-  }
-
-  // Check for gradient fill
-  const gradFill = children.find((el) => el.name === 'a:gradFill');
-  if (gradFill) {
-    return parseGradientFill(gradFill);
-  }
-
-  // Check for pattern fill
-  const pattFill = children.find((el) => el.name === 'a:pattFill');
-  if (pattFill) {
-    return { type: 'pattern' };
-  }
-
-  // Check for blip fill (picture)
-  const blipFill = children.find((el) => el.name === 'a:blipFill');
-  if (blipFill) {
-    return { type: 'picture' };
+    const blipFill = children.find((el) => el.name === 'a:blipFill');
+    if (blipFill) {
+      return { type: 'picture' };
+    }
   }
 
   // Check style reference for fill
@@ -347,7 +166,7 @@ function parseGradientFill(gradFill: XmlElement): ShapeFill {
   const stops: Array<{ position: number; color: ColorValue }> = [];
 
   if (gsLst) {
-    const gsElements = findAllByLocalName(gsLst, 'gs');
+    const gsElements = findChildrenByLocalName(gsLst, 'gs');
     for (const gs of gsElements) {
       const pos = getAttribute(gs, null, 'pos');
       const position = pos ? parseInt(pos, 10) : 0;
@@ -373,7 +192,10 @@ function parseGradientFill(gradFill: XmlElement): ShapeFill {
 // ============================================================================
 
 /**
- * Parse shape outline/stroke from a:ln element
+ * Parse shape outline/stroke from a:ln element, with style reference fallback.
+ *
+ * Extends the shared parseOutline with style reference lookup (a:lnRef),
+ * cap/join parsing, and arrow head/tail support.
  */
 function parseOutline(spPr: XmlElement | null, style: XmlElement | null): ShapeOutline | undefined {
   const ln = spPr ? findByFullName(spPr, 'a:ln') : null;
@@ -663,7 +485,7 @@ function parseTextBoxContent(txbxContent: XmlElement | null): Paragraph[] {
   // handle this by parsing text box content separately.
   const paragraphs: Paragraph[] = [];
 
-  const pElements = findAllByLocalName(txbxContent, 'p');
+  const pElements = findChildrenByLocalName(txbxContent, 'p');
   for (const _p of pElements) {
     // Create placeholder paragraph - will be filled by document parser
     paragraphs.push({
@@ -804,7 +626,7 @@ export function parseShapeFromDrawing(drawingEl: XmlElement): Shape | null {
       shape.position = position;
     }
 
-    const wrap = parseWrap(container);
+    const wrap = parseAnchorWrap(container);
     if (wrap) {
       shape.wrap = wrap;
     }
@@ -820,165 +642,6 @@ export function parseShapeFromDrawing(drawingEl: XmlElement): Shape | null {
   }
 
   return shape;
-}
-
-/**
- * Parse anchor position
- */
-function parseAnchorPosition(anchor: XmlElement): ImagePosition | undefined {
-  const positionH = findByFullName(anchor, 'wp:positionH');
-  const positionV = findByFullName(anchor, 'wp:positionV');
-
-  if (!positionH && !positionV) {
-    return undefined;
-  }
-
-  const horizontal = parsePositionH(positionH);
-  const vertical = parsePositionV(positionV);
-
-  return {
-    horizontal: horizontal ?? { relativeTo: 'column' },
-    vertical: vertical ?? { relativeTo: 'paragraph' },
-  };
-}
-
-/**
- * Parse horizontal position
- */
-function parsePositionH(posH: XmlElement | null): ImagePosition['horizontal'] | undefined {
-  if (!posH) return undefined;
-
-  const relativeTo = getAttribute(posH, null, 'relativeFrom') ?? 'column';
-
-  // Check for alignment
-  const alignEl = findByFullName(posH, 'wp:align');
-  if (alignEl) {
-    const text = getTextContent(alignEl);
-    return {
-      relativeTo: relativeTo as ImagePosition['horizontal']['relativeTo'],
-      alignment: text as ImagePosition['horizontal']['alignment'],
-    };
-  }
-
-  // Check for posOffset
-  const posOffsetEl = findByFullName(posH, 'wp:posOffset');
-  if (posOffsetEl) {
-    const text = getTextContent(posOffsetEl);
-    const posOffset = parseInt(text, 10);
-    return {
-      relativeTo: relativeTo as ImagePosition['horizontal']['relativeTo'],
-      posOffset: isNaN(posOffset) ? 0 : posOffset,
-    };
-  }
-
-  return {
-    relativeTo: relativeTo as ImagePosition['horizontal']['relativeTo'],
-  };
-}
-
-/**
- * Parse vertical position
- */
-function parsePositionV(posV: XmlElement | null): ImagePosition['vertical'] | undefined {
-  if (!posV) return undefined;
-
-  const relativeTo = getAttribute(posV, null, 'relativeFrom') ?? 'paragraph';
-
-  // Check for alignment
-  const alignEl = findByFullName(posV, 'wp:align');
-  if (alignEl) {
-    const text = getTextContent(alignEl);
-    return {
-      relativeTo: relativeTo as ImagePosition['vertical']['relativeTo'],
-      alignment: text as ImagePosition['vertical']['alignment'],
-    };
-  }
-
-  // Check for posOffset
-  const posOffsetEl = findByFullName(posV, 'wp:posOffset');
-  if (posOffsetEl) {
-    const text = getTextContent(posOffsetEl);
-    const posOffset = parseInt(text, 10);
-    return {
-      relativeTo: relativeTo as ImagePosition['vertical']['relativeTo'],
-      posOffset: isNaN(posOffset) ? 0 : posOffset,
-    };
-  }
-
-  return {
-    relativeTo: relativeTo as ImagePosition['vertical']['relativeTo'],
-  };
-}
-
-/**
- * Parse wrap settings
- */
-function parseWrap(anchor: XmlElement): ImageWrap | undefined {
-  const children = getChildElements(anchor);
-
-  const behindDoc = getAttribute(anchor, null, 'behindDoc') === '1';
-
-  // Check for wrap elements
-  const wrapElements = [
-    'wp:wrapNone',
-    'wp:wrapSquare',
-    'wp:wrapTight',
-    'wp:wrapThrough',
-    'wp:wrapTopAndBottom',
-  ];
-
-  const wrapEl = children.find((el) => wrapElements.includes(el.name ?? ''));
-
-  if (!wrapEl) {
-    return {
-      type: behindDoc ? 'behind' : 'inFront',
-    };
-  }
-
-  const wrapName = wrapEl.name || '';
-  const wrapType = wrapName.replace('wp:', '');
-
-  let type: ImageWrap['type'];
-  switch (wrapType) {
-    case 'wrapNone':
-      type = behindDoc ? 'behind' : 'inFront';
-      break;
-    case 'wrapSquare':
-      type = 'square';
-      break;
-    case 'wrapTight':
-      type = 'tight';
-      break;
-    case 'wrapThrough':
-      type = 'through';
-      break;
-    case 'wrapTopAndBottom':
-      type = 'topAndBottom';
-      break;
-    default:
-      type = 'square';
-  }
-
-  const wrap: ImageWrap = { type };
-
-  // Parse wrap text attribute
-  const wrapText = getAttribute(wrapEl, null, 'wrapText');
-  if (wrapText) {
-    wrap.wrapText = wrapText as ImageWrap['wrapText'];
-  }
-
-  // Parse distances
-  const distT = parseNumericAttribute(wrapEl, null, 'distT');
-  const distB = parseNumericAttribute(wrapEl, null, 'distB');
-  const distL = parseNumericAttribute(wrapEl, null, 'distL');
-  const distR = parseNumericAttribute(wrapEl, null, 'distR');
-
-  if (distT !== undefined) wrap.distT = distT;
-  if (distB !== undefined) wrap.distB = distB;
-  if (distL !== undefined) wrap.distL = distL;
-  if (distR !== undefined) wrap.distR = distR;
-
-  return wrap;
 }
 
 // ============================================================================
@@ -1098,78 +761,14 @@ export function getOutlineWidthPx(shape: Shape): number {
  * Resolve fill color to CSS color string
  */
 export function resolveFillColor(shape: Shape): string | undefined {
-  if (!shape.fill || shape.fill.type !== 'solid') {
-    return undefined;
-  }
-
-  const color = shape.fill.color;
-  if (!color) return undefined;
-
-  if (color.rgb) {
-    return `#${color.rgb}`;
-  }
-
-  if (color.themeColor) {
-    // Map theme color slot to default color
-    const themeColorMap: Record<string, string> = {
-      accent1: '5B9BD5',
-      accent2: 'ED7D31',
-      accent3: 'A5A5A5',
-      accent4: 'FFC000',
-      accent5: '4472C4',
-      accent6: '70AD47',
-      dk1: '000000',
-      lt1: 'FFFFFF',
-      dk2: '1F497D',
-      lt2: 'EEECE1',
-      text1: '000000',
-      text2: '1F497D',
-      background1: 'FFFFFF',
-      background2: 'EEECE1',
-      hlink: '0563C1',
-      folHlink: '954F72',
-    };
-    return `#${themeColorMap[color.themeColor] ?? '000000'}`;
-  }
-
-  return undefined;
+  if (!shape.fill || shape.fill.type !== 'solid') return undefined;
+  return resolveColorValueToHex(shape.fill.color);
 }
 
 /**
  * Resolve outline color to CSS color string
  */
 export function resolveOutlineColor(shape: Shape): string | undefined {
-  if (!shape.outline?.color) {
-    return undefined;
-  }
-
-  const color = shape.outline.color;
-
-  if (color.rgb) {
-    return `#${color.rgb}`;
-  }
-
-  if (color.themeColor) {
-    const themeColorMap: Record<string, string> = {
-      accent1: '5B9BD5',
-      accent2: 'ED7D31',
-      accent3: 'A5A5A5',
-      accent4: 'FFC000',
-      accent5: '4472C4',
-      accent6: '70AD47',
-      dk1: '000000',
-      lt1: 'FFFFFF',
-      dk2: '1F497D',
-      lt2: 'EEECE1',
-      text1: '000000',
-      text2: '1F497D',
-      background1: 'FFFFFF',
-      background2: 'EEECE1',
-      hlink: '0563C1',
-      folHlink: '954F72',
-    };
-    return `#${themeColorMap[color.themeColor] ?? '000000'}`;
-  }
-
-  return undefined;
+  if (!shape.outline?.color) return undefined;
+  return resolveColorValueToHex(shape.outline.color);
 }

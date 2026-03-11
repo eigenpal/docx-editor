@@ -26,7 +26,7 @@ import type {
   RunFormatting,
   ParagraphAttrs,
 } from '../layout-engine/types';
-import { DEFAULT_TEXTBOX_MARGINS } from '../layout-engine/types';
+import { DEFAULT_TEXTBOX_MARGINS, DEFAULT_TEXTBOX_WIDTH } from '../layout-engine/types';
 import type { ParagraphAttrs as PMParagraphAttrs } from '../prosemirror/schema/nodes';
 import type {
   TextColorAttrs,
@@ -941,7 +941,7 @@ function convertTextBoxNode(
   return {
     kind: 'textBox',
     id: nextBlockId(),
-    width: (attrs.width as number) ?? 200,
+    width: (attrs.width as number) ?? DEFAULT_TEXTBOX_WIDTH,
     height: (attrs.height as number) ?? undefined,
     fillColor: attrs.fillColor as string | undefined,
     outlineWidth: attrs.outlineWidth as number | undefined,
