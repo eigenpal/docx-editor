@@ -8,17 +8,17 @@
   <a href="https://www.npmjs.com/package/@eigenpal/docx-js-editor"><img src="https://img.shields.io/npm/v/@eigenpal/docx-js-editor.svg?style=flat-square&color=00C853" alt="npm version" /></a>
   <a href="https://www.npmjs.com/package/@eigenpal/docx-js-editor"><img src="https://img.shields.io/npm/dm/@eigenpal/docx-js-editor.svg?style=flat-square&color=00C853" alt="npm downloads" /></a>
   <a href="https://github.com/eigenpal/docx-js-editor/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg?style=flat-square&color=00C853" alt="license" /></a>
-  <a href="https://docx-js-editor.vercel.app/"><img src="https://img.shields.io/badge/Live_Demo-00C853?style=flat-square&logo=vercel&logoColor=white" alt="Live Demo" /></a>
+  <a href="https://demo.docx-editor.dev/"><img src="https://img.shields.io/badge/Live_Demo-00C853?style=flat-square&logo=vercel&logoColor=white" alt="Live Demo" /></a>
 </p>
 
 # @eigenpal/docx-js-editor
 
-Open-source WYSIWYG DOCX editor for the browser. No server required. **[Live demo](https://docx-js-editor.vercel.app/)**
+Open-source WYSIWYG DOCX editor for the browser. No server required. **[Live demo](https://demo.docx-editor.dev/)**
 
 For AI agents: see the [Agent Reference](https://raw.githubusercontent.com/eigenpal/docx-editor/main/AGENTS_README.md) for comprehensive API docs, code examples, and integration patterns.
 
 <p align="center">
-  <a href="https://docx-js-editor.vercel.app/">
+  <a href="https://demo.docx-editor.dev/">
     <img src="./assets/editor.png" alt="DOCX JS Editor screenshot" width="700" />
   </a>
 </p>
