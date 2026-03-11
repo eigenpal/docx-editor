@@ -13,6 +13,7 @@ import type {
   TableRow,
   TableCell,
   CellBorders,
+  BorderStyle,
   ImageBlock,
   TextBoxBlock,
   PageBreakBlock,
@@ -35,6 +36,7 @@ import type {
 } from '../prosemirror/schema/marks';
 import type { Theme } from '../types/document';
 import { resolveColor, resolveHighlightToCss } from '../utils/colorResolver';
+import { pointsToPixels } from '../utils/units';
 
 /**
  * Options for the conversion.
@@ -497,6 +499,7 @@ function convertParagraphAttrs(pmAttrs: PMParagraphAttrs, theme?: Theme | null):
     if (borders.left) attrs.borders.left = convertBorder(borders.left);
     if (borders.right) attrs.borders.right = convertBorder(borders.right);
     if (borders.between) attrs.borders.between = convertBorder(borders.between);
+    if (borders.bar) attrs.borders.bar = convertBorder(borders.bar);
 
     // Only include if at least one border is set
     if (
@@ -504,7 +507,8 @@ function convertParagraphAttrs(pmAttrs: PMParagraphAttrs, theme?: Theme | null):
       !attrs.borders.bottom &&
       !attrs.borders.left &&
       !attrs.borders.right &&
-      !attrs.borders.between
+      !attrs.borders.between &&
+      !attrs.borders.bar
     ) {
       delete attrs.borders;
     }
@@ -520,7 +524,14 @@ function convertParagraphAttrs(pmAttrs: PMParagraphAttrs, theme?: Theme | null):
     attrs.tabs = pmAttrs.tabs.map((tab) => ({
       val: mapTabAlignment(tab.alignment),
       pos: tab.position,
-      leader: tab.leader as 'none' | 'dot' | 'hyphen' | 'underscore' | undefined,
+      leader: tab.leader as
+        | 'none'
+        | 'dot'
+        | 'hyphen'
+        | 'underscore'
+        | 'heavy'
+        | 'middleDot'
+        | undefined,
     }));
   }
 
@@ -536,6 +547,9 @@ function convertParagraphAttrs(pmAttrs: PMParagraphAttrs, theme?: Theme | null):
   }
   if (pmAttrs.contextualSpacing) {
     attrs.contextualSpacing = true;
+  }
+  if (pmAttrs.bidi) {
+    attrs.bidi = true;
   }
   if (pmAttrs.styleId) {
     attrs.styleId = pmAttrs.styleId;
@@ -659,20 +673,25 @@ export function convertBorderSpecToLayout(
   border: {
     style?: string;
     size?: number;
+    space?: number;
     color?: { rgb?: string; themeColor?: string; themeTint?: string; themeShade?: string };
   },
   theme?: Theme | null
-): { style: string; width: number; color: string } | undefined {
+): BorderStyle | undefined {
   if (!border || !border.style || border.style === 'none' || border.style === 'nil') {
     return undefined;
   }
-  return {
+  const result: BorderStyle = {
     style: OOXML_TO_CSS_BORDER[border.style] || 'solid',
     width: borderWidthToPixels(border.size ?? 0),
     color: border.color
       ? resolveColor(border.color as Parameters<typeof resolveColor>[0], theme)
       : '#000000',
   };
+  if (border.space !== undefined) {
+    result.space = pointsToPixels(border.space);
+  }
+  return result;
 }
 
 /**
@@ -894,6 +913,7 @@ function convertImage(node: PMNode, startPos: number, pageContentHeight?: number
           behindDoc: wrapType === 'behind',
         }
       : undefined,
+    hlinkHref: attrs.hlinkHref as string | undefined,
     pmStart: startPos,
     pmEnd: startPos + node.nodeSize,
   };

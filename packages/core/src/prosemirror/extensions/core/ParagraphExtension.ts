@@ -125,6 +125,7 @@ const paragraphNodeSpec: NodeSpec = {
     contextualSpacing: { default: null },
     defaultTextFormatting: { default: null },
     sectionBreakType: { default: null },
+    bidi: { default: null },
     outlineLevel: { default: null },
     bookmarks: { default: null },
     _originalFormatting: { default: null },
@@ -173,6 +174,10 @@ const paragraphNodeSpec: NodeSpec = {
 
     if (attrs.listMarker) {
       domAttrs['data-list-marker'] = attrs.listMarker;
+    }
+
+    if (attrs.bidi) {
+      domAttrs.dir = 'rtl';
     }
 
     if (attrs.sectionBreakType) {
@@ -463,6 +468,14 @@ export function getStyleId(state: EditorState): string | null {
   return paragraph.attrs.styleId || null;
 }
 
+export function getParagraphBidi(state: EditorState): boolean {
+  const { $from } = state.selection;
+  const paragraph = $from.parent;
+
+  if (paragraph.type.name !== 'paragraph') return false;
+  return !!paragraph.attrs.bidi;
+}
+
 // ============================================================================
 // EXTENSION
 // ============================================================================
@@ -578,6 +591,20 @@ export const ParagraphExtension = createNodeExtension({
             return true;
           };
         },
+        toggleBidi: () => {
+          return (
+            state: EditorState,
+            dispatch?: (tr: import('prosemirror-state').Transaction) => void
+          ) => {
+            const { $from } = state.selection;
+            const paragraph = $from.parent;
+            if (paragraph.type.name !== 'paragraph') return false;
+            const currentBidi = paragraph.attrs.bidi || false;
+            return setParagraphAttr('bidi', currentBidi ? null : true)(state, dispatch);
+          };
+        },
+        setRtl: () => setParagraphAttr('bidi', true),
+        setLtr: () => setParagraphAttr('bidi', null),
         setTabs: (tabs: TabStop[]) => setParagraphAttr('tabs', tabs.length > 0 ? tabs : null),
         addTabStop: (
           position: number,

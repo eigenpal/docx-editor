@@ -187,7 +187,7 @@ export type TabStop = {
   /** Position in twips from left margin */
   pos: number;
   /** Optional leader character */
-  leader?: 'none' | 'dot' | 'hyphen' | 'underscore';
+  leader?: 'none' | 'dot' | 'hyphen' | 'underscore' | 'heavy' | 'middleDot';
 };
 
 /**
@@ -197,6 +197,7 @@ export type BorderStyle = {
   style?: string;
   width?: number; // in pixels
   color?: string; // CSS color
+  space?: number; // spacing from text in pixels (from w:space, converted from pt)
 };
 
 /**
@@ -208,6 +209,7 @@ export type ParagraphBorders = {
   left?: BorderStyle;
   right?: BorderStyle;
   between?: BorderStyle;
+  bar?: BorderStyle;
 };
 
 /**
@@ -230,6 +232,8 @@ export type ParagraphAttrs = {
   pageBreakBefore?: boolean;
   styleId?: string;
   contextualSpacing?: boolean;
+  /** Right-to-left paragraph direction */
+  bidi?: boolean;
   borders?: ParagraphBorders;
   shading?: string; // CSS background color
   tabs?: TabStop[]; // Custom tab stops
@@ -356,6 +360,8 @@ export type ImageBlock = {
     offsetV?: number;
     behindDoc?: boolean;
   };
+  /** Hyperlink URL for clickable image */
+  hlinkHref?: string;
   pmStart?: number;
   pmEnd?: number;
 };

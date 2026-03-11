@@ -37,11 +37,13 @@ import type {
   MediaFile,
 } from '../types/document';
 import {
+  findChild,
   getChildElements,
   getAttribute,
   parseNumericAttribute,
   type XmlElement,
 } from './xmlParser';
+import { resolveTarget } from './relsParser';
 
 // ============================================================================
 // EMU CONVERSIONS
@@ -180,6 +182,7 @@ function parseDocProps(docPr: XmlElement | null): {
   alt?: string;
   title?: string;
   decorative?: boolean;
+  hlinkRId?: string;
 } {
   if (!docPr) return {};
 
@@ -192,12 +195,17 @@ function parseDocProps(docPr: XmlElement | null): {
   // In newer OOXML, this is indicated by a:decorative element or attribute
   const decorative = getAttribute(docPr, null, 'decorative') === '1';
 
+  // Check for hyperlink (a:hlinkClick) — clickable image
+  const hlinkClickEl = findChild(docPr, 'a', 'hlinkClick');
+  const hlinkRId = hlinkClickEl ? (getAttribute(hlinkClickEl, 'r', 'id') ?? undefined) : undefined;
+
   return {
     id,
     name,
     alt: descr,
     title,
     decorative: decorative || undefined,
+    hlinkRId,
   };
 }
 
@@ -672,6 +680,12 @@ function parseInline(
   if (padding) image.padding = padding;
   if (transform) image.transform = transform;
 
+  // Resolve image hyperlink (a:hlinkClick)
+  if (props.hlinkRId && rels) {
+    const href = resolveTarget(rels, props.hlinkRId);
+    if (href) image.hlinkHref = href;
+  }
+
   return image;
 }
 
@@ -758,6 +772,12 @@ function parseAnchor(
   if (position) image.position = position;
   if (padding) image.padding = padding;
   if (transform) image.transform = transform;
+
+  // Resolve image hyperlink (a:hlinkClick)
+  if (props.hlinkRId && rels) {
+    const href = resolveTarget(rels, props.hlinkRId);
+    if (href) image.hlinkHref = href;
+  }
 
   return image;
 }

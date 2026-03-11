@@ -97,7 +97,20 @@ export function renderImageFragment(
   // Prevent dragging
   imgEl.draggable = false;
 
-  containerEl.appendChild(imgEl);
+  // Wrap in hyperlink if image has a link
+  if (block.hlinkHref) {
+    const linkEl = doc.createElement('a');
+    linkEl.href = block.hlinkHref;
+    linkEl.target = '_blank';
+    linkEl.rel = 'noopener noreferrer';
+    linkEl.style.display = 'block';
+    linkEl.style.width = '100%';
+    linkEl.style.height = '100%';
+    linkEl.appendChild(imgEl);
+    containerEl.appendChild(linkEl);
+  } else {
+    containerEl.appendChild(imgEl);
+  }
 
   return containerEl;
 }

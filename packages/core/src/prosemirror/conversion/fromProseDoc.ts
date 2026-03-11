@@ -260,6 +260,9 @@ function paragraphAttrsToFormatting(attrs: ParagraphAttrs): ParagraphFormatting 
     if (attrs.pageBreakBefore !== (orig.pageBreakBefore || undefined)) {
       result.pageBreakBefore = attrs.pageBreakBefore || undefined;
     }
+    if (attrs.bidi !== (orig.bidi || undefined)) {
+      result.bidi = attrs.bidi || undefined;
+    }
 
     return result;
   }
@@ -280,7 +283,8 @@ function paragraphAttrsToFormatting(attrs: ParagraphAttrs): ParagraphFormatting 
     attrs.shading ||
     attrs.tabs ||
     attrs.outlineLevel != null ||
-    attrs.contextualSpacing;
+    attrs.contextualSpacing ||
+    attrs.bidi;
 
   if (!hasFormatting) {
     return undefined;
@@ -303,6 +307,7 @@ function paragraphAttrsToFormatting(attrs: ParagraphAttrs): ParagraphFormatting 
     tabs: attrs.tabs || undefined,
     outlineLevel: attrs.outlineLevel ?? undefined,
     contextualSpacing: attrs.contextualSpacing || undefined,
+    bidi: attrs.bidi || undefined,
   };
 }
 
@@ -877,6 +882,11 @@ function createImageRun(node: PMNode): Run {
           ] as import('../../types/content').ShapeOutline['style']) || 'solid'
         : 'solid',
     };
+  }
+
+  // Round-trip image hyperlink
+  if (attrs.hlinkHref) {
+    image.hlinkHref = attrs.hlinkHref;
   }
 
   const drawingContent: DrawingContent = {

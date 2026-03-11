@@ -934,10 +934,8 @@ export const TablePluginExtension = createExtension({
                   colspan: 1,
                   rowspan: 1,
                 });
-                if (rowIndex === 0) {
-                  cellAttrs.width = newColWidthPercent;
-                  cellAttrs.widthType = 'pct';
-                }
+                cellAttrs.width = newColWidthPercent;
+                cellAttrs.widthType = 'pct';
                 const newCell = schema.nodes.tableCell.create(cellAttrs, paragraph);
                 tr = tr.insert(cellPos, newCell);
               }
@@ -951,10 +949,8 @@ export const TablePluginExtension = createExtension({
                 row.child(row.childCount - 1) ?? null,
                 { colspan: 1, rowspan: 1 }
               );
-              if (rowIndex === 0) {
-                cellAttrs.width = newColWidthPercent;
-                cellAttrs.widthType = 'pct';
-              }
+              cellAttrs.width = newColWidthPercent;
+              cellAttrs.widthType = 'pct';
               const newCell = schema.nodes.tableCell.create(cellAttrs, paragraph);
               tr = tr.insert(cellPos, newCell);
             }
@@ -1030,10 +1026,8 @@ export const TablePluginExtension = createExtension({
                   colspan: 1,
                   rowspan: 1,
                 });
-                if (rowIndex === 0) {
-                  cellAttrs.width = newColWidthPercent;
-                  cellAttrs.widthType = 'pct';
-                }
+                cellAttrs.width = newColWidthPercent;
+                cellAttrs.widthType = 'pct';
                 const newCell = schema.nodes.tableCell.create(cellAttrs, paragraph);
                 tr = tr.insert(cellPos, newCell);
                 inserted = true;
@@ -1046,10 +1040,8 @@ export const TablePluginExtension = createExtension({
                 row.child(row.childCount - 1) ?? null,
                 { colspan: 1, rowspan: 1 }
               );
-              if (rowIndex === 0) {
-                cellAttrs.width = newColWidthPercent;
-                cellAttrs.widthType = 'pct';
-              }
+              cellAttrs.width = newColWidthPercent;
+              cellAttrs.widthType = 'pct';
               const newCell = schema.nodes.tableCell.create(cellAttrs, paragraph);
               tr = tr.insert(cellPos, newCell);
             }

@@ -158,6 +158,9 @@ export function extractSelectionState(state: EditorState): SelectionState | null
     if (paragraph.attrs.tabs) {
       paragraphFormatting.tabs = paragraph.attrs.tabs;
     }
+    if (paragraph.attrs.bidi) {
+      paragraphFormatting.bidi = true;
+    }
     if (paragraph.attrs.styleId) {
       styleId = paragraph.attrs.styleId;
     }

@@ -105,7 +105,14 @@ export const HyperlinkExtension = createMarkExtension({
 
         if (dispatch) {
           const mark = hlType.create({ href, tooltip: tooltip || null });
-          dispatch(state.tr.addMark(from, to, mark).scrollIntoView());
+          let tr = state.tr.addMark(from, to, mark);
+          // Remove any explicit text color so the default hyperlink blue (#0563c1)
+          // shows through, matching MS Word behavior
+          const textColorType = state.schema.marks.textColor;
+          if (textColorType) {
+            tr = tr.removeMark(from, to, textColorType);
+          }
+          dispatch(tr.scrollIntoView());
         }
 
         return true;

@@ -307,6 +307,9 @@ function paragraphFormattingToAttrs(
     // Outline level (for TOC)
     attrs.outlineLevel = formatting?.outlineLevel ?? stylePpr?.outlineLevel;
 
+    // Text direction
+    attrs.bidi = formatting?.bidi ?? stylePpr?.bidi;
+
     // Default run properties (pPr/rPr)
     const resolvedRunProps = resolveTextFormatting(formatting?.runProperties, styleResolver);
     attrs.defaultTextFormatting = mergeTextFormatting(styleRpr, resolvedRunProps);
@@ -346,6 +349,9 @@ function paragraphFormattingToAttrs(
 
     // Outline level
     attrs.outlineLevel = formatting?.outlineLevel;
+
+    // Text direction
+    attrs.bidi = formatting?.bidi;
 
     // Default run properties (pPr/rPr)
     attrs.defaultTextFormatting = resolveTextFormatting(formatting?.runProperties, styleResolver);
@@ -1344,6 +1350,7 @@ function convertImage(image: Image): PMNode {
     borderColor: borderColor,
     borderStyle: borderStyle,
     wrapText: wrapText,
+    hlinkHref: image.hlinkHref,
   });
 }
 
