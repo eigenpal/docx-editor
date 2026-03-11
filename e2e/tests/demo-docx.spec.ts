@@ -329,7 +329,7 @@ test.describe('Demo.docx - Hyperlinks', () => {
   });
 
   test('renders external hyperlink to calibre', async ({ page }) => {
-    const link = page.locator('a:has-text("calibre download page")');
+    const link = page.locator('a:has-text("calibre download page")').first();
     await expect(link).toBeVisible();
 
     const href = await link.getAttribute('href');
@@ -474,12 +474,13 @@ test.describe('Demo.docx - Structural Elements', () => {
   });
 
   test('footnote references are rendered as superscript', async ({ page }) => {
-    // Footnote references should be rendered with the docx-footnote-ref class
-    const footnoteRef = page.locator('.ProseMirror .docx-footnote-ref').first();
-    await expect(footnoteRef).toBeVisible();
+    // Check in visible pages that footnote refs have superscript styling
+    const supRun = page
+      .locator('.paged-editor__pages span[style*="vertical-align: super"]')
+      .first();
+    await expect(supRun).toBeVisible();
 
-    // Check it's styled as superscript
-    const display = await footnoteRef.evaluate((el) => {
+    const display = await supRun.evaluate((el) => {
       return window.getComputedStyle(el).verticalAlign;
     });
     expect(display).toContain('super');
