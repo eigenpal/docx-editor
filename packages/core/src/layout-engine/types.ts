@@ -197,6 +197,7 @@ export type BorderStyle = {
   style?: string;
   width?: number; // in pixels
   color?: string; // CSS color
+  space?: number; // spacing from text in pixels (from w:space, converted from pt)
 };
 
 /**

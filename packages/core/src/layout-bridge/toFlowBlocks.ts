@@ -669,20 +669,26 @@ export function convertBorderSpecToLayout(
   border: {
     style?: string;
     size?: number;
+    space?: number;
     color?: { rgb?: string; themeColor?: string; themeTint?: string; themeShade?: string };
   },
   theme?: Theme | null
-): { style: string; width: number; color: string } | undefined {
+): { style: string; width: number; color: string; space?: number } | undefined {
   if (!border || !border.style || border.style === 'none' || border.style === 'nil') {
     return undefined;
   }
-  return {
+  const result: { style: string; width: number; color: string; space?: number } = {
     style: OOXML_TO_CSS_BORDER[border.style] || 'solid',
     width: borderWidthToPixels(border.size ?? 0),
     color: border.color
       ? resolveColor(border.color as Parameters<typeof resolveColor>[0], theme)
       : '#000000',
   };
+  // Convert space from points to pixels (1pt = 96/72 px)
+  if (border.space !== undefined) {
+    result.space = border.space * (96 / 72);
+  }
+  return result;
 }
 
 /**

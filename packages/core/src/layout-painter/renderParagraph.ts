@@ -1037,17 +1037,18 @@ export function renderParagraphFragment(
       fragmentEl.appendChild(barEl);
     }
 
-    // Add small padding inside borders for text not to touch the border
-    // This is standard Word behavior
-    // Bottom padding needs to be larger to clear text descenders
+    // Add padding inside borders using w:space values (ECMA-376 §17.3.1.24).
+    // The space attribute specifies the distance between text and border in points,
+    // converted to pixels during layout bridge conversion.
+    // Fallback to sensible defaults when space is not specified.
     const hasBorder =
       borders.top || borders.bottom || borders.left || borders.right || borders.between;
     if (hasBorder) {
-      fragmentEl.style.paddingLeft = borders.left ? '4px' : '0';
-      fragmentEl.style.paddingRight = borders.right ? '4px' : '0';
-      fragmentEl.style.paddingTop = borders.top || borders.between ? '2px' : '0';
-      // Use larger bottom padding to ensure border is below text descenders
-      fragmentEl.style.paddingBottom = borders.bottom ? '6px' : '0';
+      const topBorder = borders.top || borders.between;
+      fragmentEl.style.paddingLeft = borders.left ? `${borders.left.space ?? 4}px` : '0';
+      fragmentEl.style.paddingRight = borders.right ? `${borders.right.space ?? 4}px` : '0';
+      fragmentEl.style.paddingTop = topBorder ? `${topBorder.space ?? 2}px` : '0';
+      fragmentEl.style.paddingBottom = borders.bottom ? `${borders.bottom.space ?? 6}px` : '0';
     }
   }
 
