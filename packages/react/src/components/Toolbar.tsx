@@ -80,6 +80,8 @@ export interface SelectionFormatting {
   styleId?: string;
   /** Paragraph left indentation in twips */
   indentLeft?: number;
+  /** Whether the paragraph is RTL (bidi) */
+  bidi?: boolean;
 }
 
 /**
@@ -98,6 +100,8 @@ export type FormattingAction =
   | 'indent'
   | 'outdent'
   | 'insertLink'
+  | 'setRtl'
+  | 'setLtr'
   | { type: 'fontFamily'; value: string }
   | { type: 'fontSize'; value: number }
   | { type: 'textColor'; value: ColorValue | string }
@@ -317,7 +321,7 @@ export function ToolbarGroup({ label, children, className }: ToolbarGroupProps) 
   return (
     <div
       className={cn(
-        'flex items-center gap-0.5 px-1 border-r border-slate-200/50 last:border-r-0',
+        'flex items-center gap-px px-1.5 border-r border-slate-200/50 last:border-r-0 first:pl-0',
         className
       )}
       role="group"
@@ -339,7 +343,7 @@ export function ToolbarSeparator() {
 // ICON SIZE CONSTANT
 // ============================================================================
 
-const ICON_SIZE = 20;
+const ICON_SIZE = 18;
 
 // ============================================================================
 // MAIN COMPONENT
@@ -704,7 +708,7 @@ export function Toolbar({
     <div
       ref={toolbarRef}
       className={cn(
-        'flex items-center gap-0 px-2 py-2 bg-white border-b border-slate-100 min-h-[44px] overflow-x-auto',
+        'flex items-center px-1 py-1 bg-white border-b border-slate-100 min-h-[36px] overflow-x-auto',
         className
       )}
       style={style}
@@ -736,6 +740,24 @@ export function Toolbar({
           ]}
         />
       ) : null}
+
+      {/* Format Menu */}
+      <MenuDropdown
+        label="Format"
+        disabled={disabled}
+        items={[
+          {
+            icon: 'format_textdirection_l_to_r',
+            label: 'Left-to-right text',
+            onClick: () => handleFormat('setLtr'),
+          } as MenuEntry,
+          {
+            icon: 'format_textdirection_r_to_l',
+            label: 'Right-to-left text',
+            onClick: () => handleFormat('setRtl'),
+          } as MenuEntry,
+        ]}
+      />
 
       {/* Insert Menu */}
       <MenuDropdown
@@ -823,7 +845,7 @@ export function Toolbar({
             styles={documentStyles}
             theme={theme}
             disabled={disabled}
-            width={150}
+            width={120}
           />
         </ToolbarGroup>
       )}
@@ -836,7 +858,7 @@ export function Toolbar({
               value={currentFormatting.fontFamily || 'Arial'}
               onChange={handleFontFamilyChange}
               disabled={disabled}
-              width={70}
+              width={60}
               placeholder="Arial"
             />
           )}
@@ -849,7 +871,7 @@ export function Toolbar({
               }
               onChange={handleFontSizeChange}
               disabled={disabled}
-              width={50}
+              width={42}
               placeholder="11"
             />
           )}
@@ -948,11 +970,13 @@ export function Toolbar({
 
       {/* Alignment Dropdown */}
       {showAlignmentButtons && (
-        <AlignmentButtons
-          value={currentFormatting.alignment || 'left'}
-          onChange={handleAlignmentChange}
-          disabled={disabled}
-        />
+        <ToolbarGroup label="Alignment">
+          <AlignmentButtons
+            value={currentFormatting.alignment || 'left'}
+            onChange={handleAlignmentChange}
+            disabled={disabled}
+          />
+        </ToolbarGroup>
       )}
 
       {/* List Buttons and Line Spacing */}

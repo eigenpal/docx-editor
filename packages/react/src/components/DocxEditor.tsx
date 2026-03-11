@@ -156,6 +156,9 @@ import {
   setHyperlink,
   removeHyperlink,
   insertHyperlink,
+  // Text direction commands
+  setRtl,
+  setLtr,
   // Page break command
   insertPageBreak,
   // Table of Contents command
@@ -1104,6 +1107,7 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
         listState,
         styleId: selectionState.styleId ?? undefined,
         indentLeft: paragraphFormatting.indentLeft,
+        bidi: !!paragraphFormatting.bidi,
       };
       setState((prev) => ({
         ...prev,
@@ -1814,6 +1818,14 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
       }
       if (action === 'clearFormatting') {
         clearFormatting(view.state, view.dispatch);
+        return;
+      }
+      if (action === 'setRtl') {
+        setRtl(view.state, view.dispatch);
+        return;
+      }
+      if (action === 'setLtr') {
+        setLtr(view.state, view.dispatch);
         return;
       }
       if (action === 'insertLink') {
