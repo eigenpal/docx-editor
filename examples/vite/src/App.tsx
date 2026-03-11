@@ -497,7 +497,6 @@ export function App() {
           showToolbar={true}
           showRuler={!isMobile}
           showZoomControl={true}
-          showPageNumbers={false}
           initialZoom={autoZoom}
           readOnly={readOnly}
         />
