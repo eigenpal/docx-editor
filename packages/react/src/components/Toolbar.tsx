@@ -321,7 +321,7 @@ export function ToolbarGroup({ label, children, className }: ToolbarGroupProps) 
   return (
     <div
       className={cn(
-        'flex items-center gap-0 px-0.5 border-r border-slate-200/50 last:border-r-0',
+        'flex items-center gap-px px-0.5 border-r border-slate-200/50 last:border-r-0',
         className
       )}
       role="group"
@@ -845,7 +845,7 @@ export function Toolbar({
             styles={documentStyles}
             theme={theme}
             disabled={disabled}
-            width={150}
+            width={120}
           />
         </ToolbarGroup>
       )}
@@ -858,7 +858,7 @@ export function Toolbar({
               value={currentFormatting.fontFamily || 'Arial'}
               onChange={handleFontFamilyChange}
               disabled={disabled}
-              width={70}
+              width={60}
               placeholder="Arial"
             />
           )}
@@ -871,7 +871,7 @@ export function Toolbar({
               }
               onChange={handleFontSizeChange}
               disabled={disabled}
-              width={50}
+              width={42}
               placeholder="11"
             />
           )}
