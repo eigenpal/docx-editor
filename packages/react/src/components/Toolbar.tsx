@@ -321,7 +321,7 @@ export function ToolbarGroup({ label, children, className }: ToolbarGroupProps) 
   return (
     <div
       className={cn(
-        'flex items-center gap-0.5 px-1 border-r border-slate-200/50 last:border-r-0',
+        'flex items-center gap-0 px-0.5 border-r border-slate-200/50 last:border-r-0',
         className
       )}
       role="group"
@@ -343,7 +343,7 @@ export function ToolbarSeparator() {
 // ICON SIZE CONSTANT
 // ============================================================================
 
-const ICON_SIZE = 20;
+const ICON_SIZE = 18;
 
 // ============================================================================
 // MAIN COMPONENT
@@ -708,7 +708,7 @@ export function Toolbar({
     <div
       ref={toolbarRef}
       className={cn(
-        'flex items-center gap-0 px-2 py-2 bg-white border-b border-slate-100 min-h-[44px] overflow-x-auto',
+        'flex items-center gap-0 px-1 py-1 bg-white border-b border-slate-100 min-h-[36px] overflow-x-auto',
         className
       )}
       style={style}
