@@ -941,8 +941,8 @@ function convertTextBoxNode(
   return {
     kind: 'textBox',
     id: nextBlockId(),
-    width: (attrs.width as number) || 200,
-    height: (attrs.height as number) || undefined,
+    width: (attrs.width as number) ?? 200,
+    height: (attrs.height as number) ?? undefined,
     fillColor: attrs.fillColor as string | undefined,
     outlineWidth: attrs.outlineWidth as number | undefined,
     outlineColor: attrs.outlineColor as string | undefined,

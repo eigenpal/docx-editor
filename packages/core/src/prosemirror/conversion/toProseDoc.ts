@@ -68,18 +68,8 @@ export function toProseDoc(document: Document, options?: ToProseDocOptions): PMN
 
   for (const block of paragraphs) {
     if (block.type === 'paragraph') {
-      // Extract text boxes from paragraph runs before converting
-      const textBoxes = extractTextBoxesFromParagraph(block);
-      const pmParagraph = convertParagraph(block, styleResolver);
-      // Skip empty paragraphs that only contained text box drawings
-      const isEmptyAfterExtraction = textBoxes.length > 0 && pmParagraph.content.size === 0;
-      if (!isEmptyAfterExtraction) {
-        nodes.push(pmParagraph);
-      }
-      // Append any text box nodes after the paragraph
-      for (const tb of textBoxes) {
-        nodes.push(convertTextBox(tb, styleResolver));
-      }
+      // Convert paragraph and extract text boxes as sibling nodes
+      nodes.push(...convertParagraphWithTextBoxes(block, styleResolver));
       // If any run in this paragraph contains a page break, emit a pageBreak node after
       if (paragraphHasPageBreak(block)) {
         nodes.push(schema.node('pageBreak'));
@@ -1630,6 +1620,27 @@ function convertShape(shape: Shape): PMNode {
 // ============================================================================
 
 /**
+ * Convert a paragraph block to PM nodes, extracting text boxes as sibling nodes.
+ * Skips ghost empty paragraphs that only contained text box drawings.
+ */
+function convertParagraphWithTextBoxes(
+  block: Paragraph,
+  styleResolver: StyleResolver | null
+): PMNode[] {
+  const textBoxes = extractTextBoxesFromParagraph(block);
+  const pmParagraph = convertParagraph(block, styleResolver);
+  const nodes: PMNode[] = [];
+  const isEmptyAfterExtraction = textBoxes.length > 0 && pmParagraph.content.size === 0;
+  if (!isEmptyAfterExtraction) {
+    nodes.push(pmParagraph);
+  }
+  for (const tb of textBoxes) {
+    nodes.push(convertTextBox(tb, styleResolver));
+  }
+  return nodes;
+}
+
+/**
  * Extract text boxes from paragraph runs.
  * Text boxes appear as ShapeContent where the shape has textBody,
  * or as DrawingContent that contains a text box instead of an image.
@@ -1736,15 +1747,7 @@ export function headerFooterToProseDoc(
 
   for (const block of content) {
     if (block.type === 'paragraph') {
-      const textBoxes = extractTextBoxesFromParagraph(block);
-      const pmParagraph = convertParagraph(block, styleResolver);
-      const isEmptyAfterExtraction = textBoxes.length > 0 && pmParagraph.content.size === 0;
-      if (!isEmptyAfterExtraction) {
-        nodes.push(pmParagraph);
-      }
-      for (const tb of textBoxes) {
-        nodes.push(convertTextBox(tb, styleResolver));
-      }
+      nodes.push(...convertParagraphWithTextBoxes(block, styleResolver));
     } else if (block.type === 'table') {
       nodes.push(convertTable(block, styleResolver));
     }
