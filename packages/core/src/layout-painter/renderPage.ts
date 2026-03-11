@@ -21,11 +21,15 @@ import type {
   ImageMeasure,
   ImageFragment,
   ImageRun,
+  TextBoxBlock,
+  TextBoxMeasure,
+  TextBoxFragment,
 } from '../layout-engine/types';
 import { renderFragment } from './renderFragment';
 import { renderParagraphFragment, type FloatingImageInfo } from './renderParagraph';
 import { renderTableFragment } from './renderTable';
 import { renderImageFragment } from './renderImage';
+import { renderTextBoxFragment } from './renderTextBox';
 import type { BlockLookup } from './index';
 import type { BorderSpec } from '../types/document';
 import { borderToStyle } from '../utils/formatToStyle';
@@ -852,6 +856,19 @@ export function renderPage(
           fragment as ImageFragment,
           blockData.block as ImageBlock,
           blockData.measure as ImageMeasure,
+          fragmentContext,
+          { document: doc }
+        );
+        prevParagraphBorders = undefined;
+      } else if (
+        fragment.kind === 'textBox' &&
+        blockData?.block.kind === 'textBox' &&
+        blockData?.measure.kind === 'textBox'
+      ) {
+        fragmentEl = renderTextBoxFragment(
+          fragment as TextBoxFragment,
+          blockData.block as TextBoxBlock,
+          blockData.measure as TextBoxMeasure,
           fragmentContext,
           { document: doc }
         );

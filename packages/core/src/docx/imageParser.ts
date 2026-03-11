@@ -782,16 +782,31 @@ export function parseDrawing(
   for (const child of children) {
     const name = child.name || '';
 
-    if (name === 'wp:inline') {
-      return parseInline(child, rels, media);
-    }
+    if (name === 'wp:inline' || name === 'wp:anchor') {
+      // Skip text box shapes — they are handled by textBoxParser, not as images
+      if (containsTextBoxShape(child)) return null;
 
-    if (name === 'wp:anchor') {
-      return parseAnchor(child, rels, media);
+      return name === 'wp:inline'
+        ? parseInline(child, rels, media)
+        : parseAnchor(child, rels, media);
     }
   }
 
   return null;
+}
+
+/**
+ * Check if a wp:inline or wp:anchor element contains a text box shape (wps:wsp with wps:txbx).
+ * These should be parsed by textBoxParser, not treated as images.
+ */
+function containsTextBoxShape(container: XmlElement): boolean {
+  const graphic = findByFullName(container, 'a:graphic');
+  if (!graphic) return false;
+  const graphicData = findByFullName(graphic, 'a:graphicData');
+  if (!graphicData) return false;
+  const wsp = findByFullName(graphicData, 'wps:wsp');
+  if (!wsp) return false;
+  return findByFullName(wsp, 'wps:txbx') !== null;
 }
 
 /**

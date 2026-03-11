@@ -71,7 +71,11 @@ export function toProseDoc(document: Document, options?: ToProseDocOptions): PMN
       // Extract text boxes from paragraph runs before converting
       const textBoxes = extractTextBoxesFromParagraph(block);
       const pmParagraph = convertParagraph(block, styleResolver);
-      nodes.push(pmParagraph);
+      // Skip empty paragraphs that only contained text box drawings
+      const isEmptyAfterExtraction = textBoxes.length > 0 && pmParagraph.content.size === 0;
+      if (!isEmptyAfterExtraction) {
+        nodes.push(pmParagraph);
+      }
       // Append any text box nodes after the paragraph
       for (const tb of textBoxes) {
         nodes.push(convertTextBox(tb, styleResolver));
@@ -1726,7 +1730,11 @@ export function headerFooterToProseDoc(
   for (const block of content) {
     if (block.type === 'paragraph') {
       const textBoxes = extractTextBoxesFromParagraph(block);
-      nodes.push(convertParagraph(block, styleResolver));
+      const pmParagraph = convertParagraph(block, styleResolver);
+      const isEmptyAfterExtraction = textBoxes.length > 0 && pmParagraph.content.size === 0;
+      if (!isEmptyAfterExtraction) {
+        nodes.push(pmParagraph);
+      }
       for (const tb of textBoxes) {
         nodes.push(convertTextBox(tb, styleResolver));
       }
