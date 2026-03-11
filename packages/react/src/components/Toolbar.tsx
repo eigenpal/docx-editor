@@ -80,6 +80,8 @@ export interface SelectionFormatting {
   styleId?: string;
   /** Paragraph left indentation in twips */
   indentLeft?: number;
+  /** Whether the paragraph is RTL (bidi) */
+  bidi?: boolean;
 }
 
 /**
@@ -98,6 +100,8 @@ export type FormattingAction =
   | 'indent'
   | 'outdent'
   | 'insertLink'
+  | 'setRtl'
+  | 'setLtr'
   | { type: 'fontFamily'; value: string }
   | { type: 'fontSize'; value: number }
   | { type: 'textColor'; value: ColorValue | string }
@@ -980,6 +984,28 @@ export function Toolbar({
           )}
         </ToolbarGroup>
       )}
+
+      {/* Text Direction Buttons */}
+      <ToolbarGroup label="Text direction">
+        <ToolbarButton
+          onClick={() => handleFormat('setLtr')}
+          active={!currentFormatting.bidi}
+          disabled={disabled}
+          title="Left-to-right text direction"
+          ariaLabel="Left-to-right text direction"
+        >
+          <MaterialSymbol name="format_textdirection_l_to_r" size={ICON_SIZE} />
+        </ToolbarButton>
+        <ToolbarButton
+          onClick={() => handleFormat('setRtl')}
+          active={!!currentFormatting.bidi}
+          disabled={disabled}
+          title="Right-to-left text direction"
+          ariaLabel="Right-to-left text direction"
+        >
+          <MaterialSymbol name="format_textdirection_r_to_l" size={ICON_SIZE} />
+        </ToolbarButton>
+      </ToolbarGroup>
 
       {/* Image controls - shown when image is selected */}
       {imageContext && onImageWrapType && (

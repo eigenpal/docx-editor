@@ -743,6 +743,23 @@ export function IconVisibility(props: IconProps) {
   );
 }
 
+// Text direction icons
+export function IconTextDirectionLtr(props: IconProps) {
+  return (
+    <SvgIcon {...props}>
+      <path d="M400-160v-200q-73 0-126.5-50T220-534q0-74 53.5-130T400-720h280v80h-80v480h-80v-480h-80v480h-40Zm0-560q-42 0-71 28t-29 66q0 38 29 62t71 24v-180Z" />
+    </SvgIcon>
+  );
+}
+
+export function IconTextDirectionRtl(props: IconProps) {
+  return (
+    <SvgIcon {...props}>
+      <path d="M360-160v-200q-73 0-126.5-50T180-534q0-74 53.5-130T360-720h280v80h-80v480h-80v-480h-80v480h-40Zm0-560q-42 0-71 28t-29 66q0 38 29 62t71 24v-180ZM80-280v-80h160v80H80Z" />
+    </SvgIcon>
+  );
+}
+
 // ============================================================================
 // ICON MAP - for MaterialSymbol compatibility
 // ============================================================================
@@ -841,6 +858,9 @@ const iconMap: Record<string, React.ComponentType<IconProps>> = {
   edit_note: IconEditNote,
   rate_review: IconRateReview,
   visibility: IconVisibility,
+  // Text direction
+  format_textdirection_l_to_r: IconTextDirectionLtr,
+  format_textdirection_r_to_l: IconTextDirectionRtl,
 };
 
 /**

@@ -468,6 +468,14 @@ export function getStyleId(state: EditorState): string | null {
   return paragraph.attrs.styleId || null;
 }
 
+export function getParagraphBidi(state: EditorState): boolean {
+  const { $from } = state.selection;
+  const paragraph = $from.parent;
+
+  if (paragraph.type.name !== 'paragraph') return false;
+  return !!paragraph.attrs.bidi;
+}
+
 // ============================================================================
 // EXTENSION
 // ============================================================================
@@ -595,6 +603,8 @@ export const ParagraphExtension = createNodeExtension({
             return setParagraphAttr('bidi', currentBidi ? null : true)(state, dispatch);
           };
         },
+        setRtl: () => setParagraphAttr('bidi', true),
+        setLtr: () => setParagraphAttr('bidi', null),
         setTabs: (tabs: TabStop[]) => setParagraphAttr('tabs', tabs.length > 0 ? tabs : null),
         addTabStop: (
           position: number,
