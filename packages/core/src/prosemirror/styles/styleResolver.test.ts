@@ -58,7 +58,7 @@ describe('StyleResolver', () => {
   });
 
   describe('resolveParagraphStyle', () => {
-    test('returns docDefaults when no styleId provided', () => {
+    test('returns docDefaults merged with built-in Normal when no styleId provided', () => {
       const docDefaults: DocDefaults = {
         pPr: { lineSpacing: 240, spaceAfter: 160 },
         rPr: { fontSize: 22 },
@@ -72,7 +72,8 @@ describe('StyleResolver', () => {
       const resolver = createStyleResolver(styleDefinitions);
       const result = resolver.resolveParagraphStyle(null);
 
-      expect(result.paragraphFormatting?.lineSpacing).toBe(240);
+      // Built-in Normal style overrides docDefaults for lineSpacing (259) and spaceAfter (160)
+      expect(result.paragraphFormatting?.lineSpacing).toBe(259);
       expect(result.paragraphFormatting?.spaceAfter).toBe(160);
       expect(result.runFormatting?.fontSize).toBe(22);
     });
@@ -274,7 +275,7 @@ describe('StyleResolver', () => {
   });
 
   describe('edge cases', () => {
-    test('handles empty styles array', () => {
+    test('handles empty styles array with built-in Normal fallback', () => {
       const styleDefinitions: StyleDefinitions = {
         styles: [],
       };
@@ -282,7 +283,9 @@ describe('StyleResolver', () => {
       const resolver = createStyleResolver(styleDefinitions);
       const result = resolver.resolveParagraphStyle('Normal');
 
-      expect(result.paragraphFormatting).toBeUndefined();
+      // Built-in Normal style provides defaults when no Normal style is defined
+      expect(result.paragraphFormatting?.spaceAfter).toBe(160);
+      expect(result.paragraphFormatting?.lineSpacing).toBe(259);
     });
 
     test('handles style without pPr or rPr', () => {
