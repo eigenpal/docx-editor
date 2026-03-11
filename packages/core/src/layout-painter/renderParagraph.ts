@@ -255,9 +255,12 @@ function renderTextRun(run: TextRun, doc: Document): HTMLElement {
       anchor.title = run.hyperlink.tooltip;
     }
     anchor.textContent = run.text;
-    // Style hyperlink
-    anchor.style.color = run.color || '#0563c1'; // Default Word hyperlink color
+    // Style hyperlink — default Word hyperlink color is blue (#0563c1)
+    const hyperlinkColor = run.color || '#0563c1';
+    anchor.style.color = hyperlinkColor;
     anchor.style.textDecoration = 'underline';
+    // Override span color to match anchor (prevents color mismatch in selection)
+    span.style.color = hyperlinkColor;
     span.appendChild(anchor);
   } else {
     // Set text content
@@ -311,6 +314,8 @@ function getLeaderChar(leader: string): string | null {
       return '_';
     case 'middleDot':
       return '·';
+    case 'heavy':
+      return '_';
     default:
       return null;
   }
@@ -913,18 +918,30 @@ export function renderParagraphFragment(
     fragmentEl.dataset.styleId = block.attrs.styleId;
   }
 
+  // Apply RTL direction
+  const isBidi = block.attrs?.bidi;
+  if (isBidi) {
+    fragmentEl.dir = 'rtl';
+  }
+
   // Apply text alignment at paragraph level
   // For justify: use text-align: left and apply word-spacing per line
+  // For RTL paragraphs, default alignment is right
   if (alignment) {
     if (alignment === 'center') {
       fragmentEl.style.textAlign = 'center';
     } else if (alignment === 'right') {
       fragmentEl.style.textAlign = 'right';
-    } else {
-      // Both 'justify' and 'left' use text-align: left
-      // Justify is implemented via word-spacing on individual lines
+    } else if (alignment === 'left') {
       fragmentEl.style.textAlign = 'left';
+    } else {
+      // 'justify' uses text-align: left (or right for RTL)
+      // Justify is implemented via word-spacing on individual lines
+      fragmentEl.style.textAlign = isBidi ? 'right' : 'left';
     }
+  } else if (isBidi) {
+    // No explicit alignment on RTL paragraph — default to right
+    fragmentEl.style.textAlign = 'right';
   }
 
   // Track indentation for line-level application
@@ -935,11 +952,13 @@ export function renderParagraphFragment(
 
   if (indent) {
     // Track indent values for line-level application
-    if (indent.left && indent.left > 0) {
-      indentLeft = indent.left;
-    }
-    if (indent.right && indent.right > 0) {
-      indentRight = indent.right;
+    // For RTL paragraphs, swap left/right indentation
+    if (isBidi) {
+      if (indent.left && indent.left > 0) indentRight = indent.left;
+      if (indent.right && indent.right > 0) indentLeft = indent.right;
+    } else {
+      if (indent.left && indent.left > 0) indentLeft = indent.left;
+      if (indent.right && indent.right > 0) indentRight = indent.right;
     }
   }
 
@@ -1005,17 +1024,31 @@ export function renderParagraphFragment(
       fragmentEl.style.borderRight = borderToCss(borders.right);
     }
 
-    // Add small padding inside borders for text not to touch the border
-    // This is standard Word behavior
-    // Bottom padding needs to be larger to clear text descenders
+    // Bar border — vertical decorative bar on the left side (ECMA-376 §17.3.1.4)
+    // Rendered independently of the regular left border
+    if (borders.bar) {
+      const barEl = doc.createElement('div');
+      barEl.style.position = 'absolute';
+      barEl.style.left = '-8px';
+      barEl.style.top = '0';
+      barEl.style.bottom = '0';
+      barEl.style.borderLeft = borderToCss(borders.bar);
+      fragmentEl.style.position = 'relative';
+      fragmentEl.appendChild(barEl);
+    }
+
+    // Add padding inside borders using w:space values (ECMA-376 §17.3.1.24).
+    // The space attribute specifies the distance between text and border in points,
+    // converted to pixels during layout bridge conversion.
+    // Fallback to sensible defaults when space is not specified.
     const hasBorder =
       borders.top || borders.bottom || borders.left || borders.right || borders.between;
     if (hasBorder) {
-      fragmentEl.style.paddingLeft = borders.left ? '4px' : '0';
-      fragmentEl.style.paddingRight = borders.right ? '4px' : '0';
-      fragmentEl.style.paddingTop = borders.top || borders.between ? '2px' : '0';
-      // Use larger bottom padding to ensure border is below text descenders
-      fragmentEl.style.paddingBottom = borders.bottom ? '6px' : '0';
+      const topBorder = borders.top || borders.between;
+      fragmentEl.style.paddingLeft = borders.left ? `${borders.left.space ?? 4}px` : '0';
+      fragmentEl.style.paddingRight = borders.right ? `${borders.right.space ?? 4}px` : '0';
+      fragmentEl.style.paddingTop = topBorder ? `${topBorder.space ?? 2}px` : '0';
+      fragmentEl.style.paddingBottom = borders.bottom ? `${borders.bottom.space ?? 6}px` : '0';
     }
   }
 

@@ -89,6 +89,9 @@ export interface ParagraphAttrs {
   // Section break type — marks end of a section
   sectionBreakType?: 'nextPage' | 'continuous' | 'oddPage' | 'evenPage';
 
+  // Text direction
+  bidi?: boolean;
+
   // Outline level for TOC (0-9)
   outlineLevel?: number;
 
@@ -154,6 +157,8 @@ export interface ImageAttrs {
   borderStyle?: string;
   /** Wrap text setting from DOCX (left, right, bothSides, largest) for round-trip */
   wrapText?: string;
+  /** Hyperlink URL for clickable image */
+  hlinkHref?: string;
 }
 
 /**

@@ -13,7 +13,9 @@ import type {
   TableRow,
   TableCell,
   CellBorders,
+  BorderStyle,
   ImageBlock,
+  TextBoxBlock,
   PageBreakBlock,
   Run,
   TextRun,
@@ -24,6 +26,7 @@ import type {
   RunFormatting,
   ParagraphAttrs,
 } from '../layout-engine/types';
+import { DEFAULT_TEXTBOX_MARGINS, DEFAULT_TEXTBOX_WIDTH } from '../layout-engine/types';
 import type { ParagraphAttrs as PMParagraphAttrs } from '../prosemirror/schema/nodes';
 import type {
   TextColorAttrs,
@@ -33,6 +36,7 @@ import type {
 } from '../prosemirror/schema/marks';
 import type { Theme } from '../types/document';
 import { resolveColor, resolveHighlightToCss } from '../utils/colorResolver';
+import { pointsToPixels } from '../utils/units';
 
 /**
  * Options for the conversion.
@@ -495,6 +499,7 @@ function convertParagraphAttrs(pmAttrs: PMParagraphAttrs, theme?: Theme | null):
     if (borders.left) attrs.borders.left = convertBorder(borders.left);
     if (borders.right) attrs.borders.right = convertBorder(borders.right);
     if (borders.between) attrs.borders.between = convertBorder(borders.between);
+    if (borders.bar) attrs.borders.bar = convertBorder(borders.bar);
 
     // Only include if at least one border is set
     if (
@@ -502,7 +507,8 @@ function convertParagraphAttrs(pmAttrs: PMParagraphAttrs, theme?: Theme | null):
       !attrs.borders.bottom &&
       !attrs.borders.left &&
       !attrs.borders.right &&
-      !attrs.borders.between
+      !attrs.borders.between &&
+      !attrs.borders.bar
     ) {
       delete attrs.borders;
     }
@@ -518,7 +524,14 @@ function convertParagraphAttrs(pmAttrs: PMParagraphAttrs, theme?: Theme | null):
     attrs.tabs = pmAttrs.tabs.map((tab) => ({
       val: mapTabAlignment(tab.alignment),
       pos: tab.position,
-      leader: tab.leader as 'none' | 'dot' | 'hyphen' | 'underscore' | undefined,
+      leader: tab.leader as
+        | 'none'
+        | 'dot'
+        | 'hyphen'
+        | 'underscore'
+        | 'heavy'
+        | 'middleDot'
+        | undefined,
     }));
   }
 
@@ -534,6 +547,9 @@ function convertParagraphAttrs(pmAttrs: PMParagraphAttrs, theme?: Theme | null):
   }
   if (pmAttrs.contextualSpacing) {
     attrs.contextualSpacing = true;
+  }
+  if (pmAttrs.bidi) {
+    attrs.bidi = true;
   }
   if (pmAttrs.styleId) {
     attrs.styleId = pmAttrs.styleId;
@@ -657,20 +673,25 @@ export function convertBorderSpecToLayout(
   border: {
     style?: string;
     size?: number;
+    space?: number;
     color?: { rgb?: string; themeColor?: string; themeTint?: string; themeShade?: string };
   },
   theme?: Theme | null
-): { style: string; width: number; color: string } | undefined {
+): BorderStyle | undefined {
   if (!border || !border.style || border.style === 'none' || border.style === 'nil') {
     return undefined;
   }
-  return {
+  const result: BorderStyle = {
     style: OOXML_TO_CSS_BORDER[border.style] || 'solid',
     width: borderWidthToPixels(border.size ?? 0),
     color: border.color
       ? resolveColor(border.color as Parameters<typeof resolveColor>[0], theme)
       : '#000000',
   };
+  if (border.space !== undefined) {
+    result.space = pointsToPixels(border.space);
+  }
+  return result;
 }
 
 /**
@@ -892,6 +913,47 @@ function convertImage(node: PMNode, startPos: number, pageContentHeight?: number
           behindDoc: wrapType === 'behind',
         }
       : undefined,
+    hlinkHref: attrs.hlinkHref as string | undefined,
+    pmStart: startPos,
+    pmEnd: startPos + node.nodeSize,
+  };
+}
+
+/**
+ * Convert a textBox PM node to a TextBoxBlock.
+ */
+function convertTextBoxNode(
+  node: PMNode,
+  startPos: number,
+  opts: ToFlowBlocksOptions
+): TextBoxBlock {
+  const attrs = node.attrs;
+  const contentBlocks: ParagraphBlock[] = [];
+
+  // Convert child paragraphs inside the text box
+  node.forEach((child, offset) => {
+    if (child.type.name === 'paragraph') {
+      const block = convertParagraph(child, startPos + 1 + offset, opts);
+      contentBlocks.push(block);
+    }
+  });
+
+  return {
+    kind: 'textBox',
+    id: nextBlockId(),
+    width: (attrs.width as number) ?? DEFAULT_TEXTBOX_WIDTH,
+    height: (attrs.height as number) ?? undefined,
+    fillColor: attrs.fillColor as string | undefined,
+    outlineWidth: attrs.outlineWidth as number | undefined,
+    outlineColor: attrs.outlineColor as string | undefined,
+    outlineStyle: attrs.outlineStyle as string | undefined,
+    margins: {
+      top: (attrs.marginTop as number) ?? DEFAULT_TEXTBOX_MARGINS.top,
+      bottom: (attrs.marginBottom as number) ?? DEFAULT_TEXTBOX_MARGINS.bottom,
+      left: (attrs.marginLeft as number) ?? DEFAULT_TEXTBOX_MARGINS.left,
+      right: (attrs.marginRight as number) ?? DEFAULT_TEXTBOX_MARGINS.right,
+    },
+    content: contentBlocks,
     pmStart: startPos,
     pmEnd: startPos + node.nodeSize,
   };
@@ -954,6 +1016,10 @@ export function toFlowBlocks(doc: PMNode, options: ToFlowBlocksOptions = {}): Fl
       case 'image':
         // Standalone image block (if not inline)
         blocks.push(convertImage(node, pos, opts.pageContentHeight));
+        break;
+
+      case 'textBox':
+        blocks.push(convertTextBoxNode(node, pos, opts));
         break;
 
       case 'horizontalRule':

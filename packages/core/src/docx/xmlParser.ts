@@ -260,6 +260,27 @@ export function findChildrenByLocalName(
 }
 
 /**
+ * Find first child element by full name (including namespace prefix)
+ *
+ * @param parent - Parent element
+ * @param fullName - Full element name with namespace prefix (e.g., 'wp:extent')
+ * @returns First matching child or null
+ */
+export function findByFullName(
+  parent: XmlElement | null | undefined,
+  fullName: string
+): XmlElement | null {
+  if (!parent || !parent.elements) return null;
+
+  for (const child of parent.elements) {
+    if (child.type !== 'element') continue;
+    if (child.name === fullName) return child;
+  }
+
+  return null;
+}
+
+/**
  * Get all child elements (excludes text nodes, etc.)
  *
  * @param parent - Parent element

@@ -115,6 +115,8 @@ export interface ToolbarProps {
   onImageTransform?: (action: 'rotateCW' | 'rotateCCW' | 'flipH' | 'flipV') => void;
   /** Callback to open image properties dialog (alt text + border) */
   onOpenImageProperties?: () => void;
+  /** Callback to open page setup dialog */
+  onPageSetup?: () => void;
   /** Table context when cursor is in a table */
   tableContext?: {
     isInTable: boolean;
@@ -232,7 +234,7 @@ export function ToolbarGroup({ label, children, className }: ToolbarGroupProps) 
   return (
     <div
       className={cn(
-        'flex items-center gap-0.5 px-1 border-r border-slate-200/50 last:border-r-0',
+        'flex items-center gap-px px-1.5 border-r border-slate-200/50 last:border-r-0 first:pl-0',
         className
       )}
       role="group"
@@ -295,6 +297,7 @@ export function Toolbar({
   onImageWrapType,
   onImageTransform,
   onOpenImageProperties,
+  onPageSetup,
   tableContext,
   onTableAction,
 }: ToolbarProps) {
@@ -311,6 +314,7 @@ export function Toolbar({
     onUndo,
     onRedo,
     onPrint,
+    onPageSetup,
     showPrintButton,
     showFontPicker,
     showFontSizePicker,
@@ -454,7 +458,7 @@ export function Toolbar({
     <div
       ref={toolbarRef}
       className={cn(
-        'flex items-center gap-0 px-2 py-2 bg-white border-b border-slate-100 min-h-[44px] overflow-x-auto',
+        'flex items-center px-1 py-1 bg-white border-b border-slate-100 min-h-[36px] overflow-x-auto',
         className
       )}
       style={style}

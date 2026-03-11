@@ -22,6 +22,7 @@ export {
   getParagraphAlignment,
   getStyleId,
   getParagraphTabs,
+  getParagraphBidi,
 } from '../extensions/core/ParagraphExtension';
 export { isInList, getListInfo } from '../extensions/features/ListExtension';
 
@@ -108,6 +109,10 @@ export function addTabStop(
 export function removeTabStop(position: number): Command {
   return cmds.removeTabStop(position);
 }
+
+// Text direction
+export const setRtl: Command = cmds.setRtl();
+export const setLtr: Command = cmds.setLtr();
 
 // Table of Contents
 export const generateTOC: Command = cmds.generateTOC();

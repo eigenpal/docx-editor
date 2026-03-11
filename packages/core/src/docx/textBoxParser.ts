@@ -29,12 +29,9 @@ import type {
   TextBox,
   Paragraph,
   Table,
-  ShapeFill,
-  ShapeOutline,
   ImageSize,
   ImagePosition,
   ImageWrap,
-  ColorValue,
   Theme,
   RelationshipMap,
   MediaFile,
@@ -45,371 +42,28 @@ import {
   getChildElements,
   getAttribute,
   parseNumericAttribute,
-  getTextContent,
+  findByFullName,
+  findChildrenByLocalName,
   type XmlElement,
 } from './xmlParser';
+import {
+  parseFill,
+  parseOutline,
+  parseAnchorPosition,
+  parseAnchorWrap,
+  resolveColorValueToHex,
+} from './drawingUtils';
+import { emuToPixels } from '../utils/units';
+
+// Re-export emuToPixels for backwards compatibility
+export { emuToPixels } from '../utils/units';
 
 // ============================================================================
 // CONSTANTS
 // ============================================================================
 
-/** EMUs per inch */
-const EMU_PER_INCH = 914400;
-
-/** CSS pixels per inch (standard) */
-const PIXELS_PER_INCH = 96;
-
 /** Default text box margins in EMUs (0.1 inch) */
 const DEFAULT_MARGIN_EMU = 91440;
-
-// ============================================================================
-// UNIT CONVERSIONS
-// ============================================================================
-
-/**
- * Convert EMU to pixels
- */
-export function emuToPixels(emu: number | undefined | null): number {
-  if (emu == null || isNaN(emu)) return 0;
-  return Math.round((emu * PIXELS_PER_INCH) / EMU_PER_INCH);
-}
-
-// ============================================================================
-// ELEMENT FINDERS
-// ============================================================================
-
-/**
- * Find element by full name with namespace prefix
- */
-function findByFullName(parent: XmlElement, fullName: string): XmlElement | null {
-  const children = getChildElements(parent);
-  for (const child of children) {
-    if (child.name === fullName) {
-      return child;
-    }
-  }
-  return null;
-}
-
-/**
- * Find all elements by local name
- */
-function findAllByLocalName(parent: XmlElement, localName: string): XmlElement[] {
-  const children = getChildElements(parent);
-  const result: XmlElement[] = [];
-  for (const child of children) {
-    const name = child.name || '';
-    const colonIdx = name.indexOf(':');
-    const childLocalName = colonIdx >= 0 ? name.substring(colonIdx + 1) : name;
-    if (childLocalName === localName) {
-      result.push(child);
-    }
-  }
-  return result;
-}
-
-// ============================================================================
-// COLOR PARSING
-// ============================================================================
-
-/**
- * Parse a color value from a DrawingML element
- */
-function parseColorElement(element: XmlElement | null): ColorValue | undefined {
-  if (!element) return undefined;
-
-  const children = getChildElements(element);
-
-  // Check for sRGB color: a:srgbClr[@val]
-  const srgbClr = children.find((el) => el.name === 'a:srgbClr');
-  if (srgbClr) {
-    const val = getAttribute(srgbClr, null, 'val');
-    if (val) {
-      return { rgb: val };
-    }
-  }
-
-  // Check for scheme color (theme): a:schemeClr[@val]
-  const schemeClr = children.find((el) => el.name === 'a:schemeClr');
-  if (schemeClr) {
-    const val = getAttribute(schemeClr, null, 'val');
-    if (val) {
-      const themeColorMap: Record<string, ColorValue['themeColor']> = {
-        accent1: 'accent1',
-        accent2: 'accent2',
-        accent3: 'accent3',
-        accent4: 'accent4',
-        accent5: 'accent5',
-        accent6: 'accent6',
-        dk1: 'dk1',
-        lt1: 'lt1',
-        dk2: 'dk2',
-        lt2: 'lt2',
-        tx1: 'text1',
-        tx2: 'text2',
-        bg1: 'background1',
-        bg2: 'background2',
-        hlink: 'hlink',
-        folHlink: 'folHlink',
-      };
-      return { themeColor: themeColorMap[val] ?? 'dk1' };
-    }
-  }
-
-  // Check for system color: a:sysClr[@lastClr]
-  const sysClr = children.find((el) => el.name === 'a:sysClr');
-  if (sysClr) {
-    const lastClr = getAttribute(sysClr, null, 'lastClr');
-    if (lastClr) {
-      return { rgb: lastClr };
-    }
-    return { rgb: '000000' };
-  }
-
-  return undefined;
-}
-
-// ============================================================================
-// FILL PARSING
-// ============================================================================
-
-/**
- * Parse fill from shape properties
- */
-function parseFill(spPr: XmlElement | null): ShapeFill | undefined {
-  if (!spPr) return undefined;
-
-  const children = getChildElements(spPr);
-
-  // Check for no fill
-  const noFill = children.find((el) => el.name === 'a:noFill');
-  if (noFill) {
-    return { type: 'none' };
-  }
-
-  // Check for solid fill
-  const solidFill = children.find((el) => el.name === 'a:solidFill');
-  if (solidFill) {
-    const color = parseColorElement(solidFill);
-    return { type: 'solid', color };
-  }
-
-  // Check for gradient fill
-  const gradFill = children.find((el) => el.name === 'a:gradFill');
-  if (gradFill) {
-    return { type: 'gradient' };
-  }
-
-  return undefined;
-}
-
-// ============================================================================
-// OUTLINE PARSING
-// ============================================================================
-
-/**
- * Parse outline from shape properties
- */
-function parseOutline(spPr: XmlElement | null): ShapeOutline | undefined {
-  const ln = spPr ? findByFullName(spPr, 'a:ln') : null;
-  if (!ln) return undefined;
-
-  const children = getChildElements(ln);
-
-  // Check for no line
-  const noFill = children.find((el) => el.name === 'a:noFill');
-  if (noFill) {
-    return undefined;
-  }
-
-  const outline: ShapeOutline = {};
-
-  // Width in EMUs
-  const w = getAttribute(ln, null, 'w');
-  if (w) {
-    outline.width = parseInt(w, 10);
-  }
-
-  // Line color
-  const solidFill = children.find((el) => el.name === 'a:solidFill');
-  if (solidFill) {
-    outline.color = parseColorElement(solidFill);
-  }
-
-  // Line dash style
-  const prstDash = children.find((el) => el.name === 'a:prstDash');
-  if (prstDash) {
-    const val = getAttribute(prstDash, null, 'val');
-    if (val) {
-      outline.style = val as ShapeOutline['style'];
-    }
-  }
-
-  return outline;
-}
-
-// ============================================================================
-// POSITION PARSING
-// ============================================================================
-
-/**
- * Parse horizontal position from wp:positionH
- */
-function parsePositionH(posH: XmlElement | null): ImagePosition['horizontal'] | undefined {
-  if (!posH) return undefined;
-
-  const relativeTo = getAttribute(posH, null, 'relativeFrom') ?? 'column';
-
-  // Check for alignment
-  const alignEl = findByFullName(posH, 'wp:align');
-  if (alignEl) {
-    const text = getTextContent(alignEl);
-    return {
-      relativeTo: relativeTo as ImagePosition['horizontal']['relativeTo'],
-      alignment: text as ImagePosition['horizontal']['alignment'],
-    };
-  }
-
-  // Check for posOffset
-  const posOffsetEl = findByFullName(posH, 'wp:posOffset');
-  if (posOffsetEl) {
-    const text = getTextContent(posOffsetEl);
-    const posOffset = parseInt(text, 10);
-    return {
-      relativeTo: relativeTo as ImagePosition['horizontal']['relativeTo'],
-      posOffset: isNaN(posOffset) ? 0 : posOffset,
-    };
-  }
-
-  return {
-    relativeTo: relativeTo as ImagePosition['horizontal']['relativeTo'],
-  };
-}
-
-/**
- * Parse vertical position from wp:positionV
- */
-function parsePositionV(posV: XmlElement | null): ImagePosition['vertical'] | undefined {
-  if (!posV) return undefined;
-
-  const relativeTo = getAttribute(posV, null, 'relativeFrom') ?? 'paragraph';
-
-  // Check for alignment
-  const alignEl = findByFullName(posV, 'wp:align');
-  if (alignEl) {
-    const text = getTextContent(alignEl);
-    return {
-      relativeTo: relativeTo as ImagePosition['vertical']['relativeTo'],
-      alignment: text as ImagePosition['vertical']['alignment'],
-    };
-  }
-
-  // Check for posOffset
-  const posOffsetEl = findByFullName(posV, 'wp:posOffset');
-  if (posOffsetEl) {
-    const text = getTextContent(posOffsetEl);
-    const posOffset = parseInt(text, 10);
-    return {
-      relativeTo: relativeTo as ImagePosition['vertical']['relativeTo'],
-      posOffset: isNaN(posOffset) ? 0 : posOffset,
-    };
-  }
-
-  return {
-    relativeTo: relativeTo as ImagePosition['vertical']['relativeTo'],
-  };
-}
-
-/**
- * Parse position for anchored text boxes
- */
-function parseAnchorPosition(anchor: XmlElement): ImagePosition | undefined {
-  const positionH = findByFullName(anchor, 'wp:positionH');
-  const positionV = findByFullName(anchor, 'wp:positionV');
-
-  if (!positionH && !positionV) {
-    return undefined;
-  }
-
-  const horizontal = parsePositionH(positionH);
-  const vertical = parsePositionV(positionV);
-
-  return {
-    horizontal: horizontal ?? { relativeTo: 'column' },
-    vertical: vertical ?? { relativeTo: 'paragraph' },
-  };
-}
-
-// ============================================================================
-// WRAP PARSING
-// ============================================================================
-
-/**
- * Parse wrap settings from anchor element
- */
-function parseWrap(anchor: XmlElement): ImageWrap | undefined {
-  const children = getChildElements(anchor);
-  const behindDoc = getAttribute(anchor, null, 'behindDoc') === '1';
-
-  const wrapElements = [
-    'wp:wrapNone',
-    'wp:wrapSquare',
-    'wp:wrapTight',
-    'wp:wrapThrough',
-    'wp:wrapTopAndBottom',
-  ];
-
-  const wrapEl = children.find((el) => wrapElements.includes(el.name ?? ''));
-
-  if (!wrapEl) {
-    return { type: behindDoc ? 'behind' : 'inFront' };
-  }
-
-  const wrapName = wrapEl.name || '';
-  const wrapType = wrapName.replace('wp:', '');
-
-  let type: ImageWrap['type'];
-  switch (wrapType) {
-    case 'wrapNone':
-      type = behindDoc ? 'behind' : 'inFront';
-      break;
-    case 'wrapSquare':
-      type = 'square';
-      break;
-    case 'wrapTight':
-      type = 'tight';
-      break;
-    case 'wrapThrough':
-      type = 'through';
-      break;
-    case 'wrapTopAndBottom':
-      type = 'topAndBottom';
-      break;
-    default:
-      type = 'square';
-  }
-
-  const wrap: ImageWrap = { type };
-
-  // Parse wrap text attribute
-  const wrapText = getAttribute(wrapEl, null, 'wrapText');
-  if (wrapText) {
-    wrap.wrapText = wrapText as ImageWrap['wrapText'];
-  }
-
-  // Parse distances
-  const distT = parseNumericAttribute(wrapEl, null, 'distT');
-  const distB = parseNumericAttribute(wrapEl, null, 'distB');
-  const distL = parseNumericAttribute(wrapEl, null, 'distL');
-  const distR = parseNumericAttribute(wrapEl, null, 'distR');
-
-  if (distT !== undefined) wrap.distT = distT;
-  if (distB !== undefined) wrap.distB = distB;
-  if (distL !== undefined) wrap.distL = distL;
-  if (distR !== undefined) wrap.distR = distR;
-
-  return wrap;
-}
 
 // ============================================================================
 // BODY PROPERTIES PARSING
@@ -462,8 +116,8 @@ export function extractTextBoxContentElements(txbxContent: XmlElement | null): {
     return { paragraphElements: [], tableElements: [] };
   }
 
-  const paragraphElements = findAllByLocalName(txbxContent, 'p');
-  const tableElements = findAllByLocalName(txbxContent, 'tbl');
+  const paragraphElements = findChildrenByLocalName(txbxContent, 'p');
+  const tableElements = findChildrenByLocalName(txbxContent, 'tbl');
 
   return { paragraphElements, tableElements };
 }
@@ -655,7 +309,7 @@ export function parseTextBox(drawingEl: XmlElement): TextBox | null {
       textBox.position = position;
     }
 
-    const wrap = parseWrap(container);
+    const wrap = parseAnchorWrap(container);
     if (wrap) {
       textBox.wrap = wrap;
     }
@@ -830,79 +484,16 @@ export function getTextBoxText(textBox: TextBox): string {
  * Resolve fill color to CSS color string
  */
 export function resolveTextBoxFillColor(textBox: TextBox): string | undefined {
-  if (!textBox.fill || textBox.fill.type !== 'solid') {
-    return undefined;
-  }
-
-  const color = textBox.fill.color;
-  if (!color) return undefined;
-
-  if (color.rgb) {
-    return `#${color.rgb}`;
-  }
-
-  if (color.themeColor) {
-    const themeColorMap: Record<string, string> = {
-      accent1: '5B9BD5',
-      accent2: 'ED7D31',
-      accent3: 'A5A5A5',
-      accent4: 'FFC000',
-      accent5: '4472C4',
-      accent6: '70AD47',
-      dk1: '000000',
-      lt1: 'FFFFFF',
-      dk2: '1F497D',
-      lt2: 'EEECE1',
-      text1: '000000',
-      text2: '1F497D',
-      background1: 'FFFFFF',
-      background2: 'EEECE1',
-      hlink: '0563C1',
-      folHlink: '954F72',
-    };
-    return `#${themeColorMap[color.themeColor] ?? '000000'}`;
-  }
-
-  return undefined;
+  if (!textBox.fill || textBox.fill.type !== 'solid') return undefined;
+  return resolveColorValueToHex(textBox.fill.color);
 }
 
 /**
  * Resolve outline color to CSS color string
  */
 export function resolveTextBoxOutlineColor(textBox: TextBox): string | undefined {
-  if (!textBox.outline?.color) {
-    return undefined;
-  }
-
-  const color = textBox.outline.color;
-
-  if (color.rgb) {
-    return `#${color.rgb}`;
-  }
-
-  if (color.themeColor) {
-    const themeColorMap: Record<string, string> = {
-      accent1: '5B9BD5',
-      accent2: 'ED7D31',
-      accent3: 'A5A5A5',
-      accent4: 'FFC000',
-      accent5: '4472C4',
-      accent6: '70AD47',
-      dk1: '000000',
-      lt1: 'FFFFFF',
-      dk2: '1F497D',
-      lt2: 'EEECE1',
-      text1: '000000',
-      text2: '1F497D',
-      background1: 'FFFFFF',
-      background2: 'EEECE1',
-      hlink: '0563C1',
-      folHlink: '954F72',
-    };
-    return `#${themeColorMap[color.themeColor] ?? '000000'}`;
-  }
-
-  return undefined;
+  if (!textBox.outline?.color) return undefined;
+  return resolveColorValueToHex(textBox.outline.color);
 }
 
 /**

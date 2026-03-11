@@ -19,6 +19,7 @@ export interface RibbonProps {
   onRedo?: () => void;
   onFind?: () => void;
   onReplace?: () => void;
+  onPageSetup?: () => void;
   onInsertTable?: (rows: number, columns: number) => void;
   onInsertImage?: () => void;
   onInsertPageBreak?: () => void;
@@ -124,6 +125,7 @@ export function Ribbon({
   onRedo,
   onFind,
   onReplace,
+  onPageSetup,
   onInsertTable,
   onInsertImage,
   onInsertPageBreak,
@@ -167,6 +169,7 @@ export function Ribbon({
     onRedo,
     onFind,
     onReplace,
+    onPageSetup,
     onInsertTable,
     onInsertImage,
     onInsertPageBreak,

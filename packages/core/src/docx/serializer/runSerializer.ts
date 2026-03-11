@@ -39,6 +39,30 @@ import { serializeParagraph } from './paragraphSerializer';
 import { escapeXml } from './xmlUtils';
 
 // ============================================================================
+// CONSTANTS
+// ============================================================================
+
+/** Valid OOXML highlight color names (ECMA-376 §17.18.40) */
+const VALID_HIGHLIGHT_COLORS = new Set([
+  'black',
+  'blue',
+  'cyan',
+  'darkBlue',
+  'darkCyan',
+  'darkGray',
+  'darkGreen',
+  'darkMagenta',
+  'darkRed',
+  'darkYellow',
+  'green',
+  'lightGray',
+  'magenta',
+  'red',
+  'white',
+  'yellow',
+]);
+
+// ============================================================================
 // COLOR SERIALIZATION
 // ============================================================================
 
@@ -277,28 +301,18 @@ export function serializeTextFormatting(formatting: TextFormatting | undefined):
     parts.push(`<w:szCs w:val="${formatting.fontSizeCs}"/>`);
   }
 
-  // Highlight — only emit valid OOXML named colors (not CSS values)
+  // Highlight — emit valid OOXML named colors via w:highlight,
+  // fall back to w:shd for custom hex colors
   if (formatting.highlight && formatting.highlight !== 'none') {
-    const validHighlightColors = new Set([
-      'black',
-      'blue',
-      'cyan',
-      'darkBlue',
-      'darkCyan',
-      'darkGray',
-      'darkGreen',
-      'darkMagenta',
-      'darkRed',
-      'darkYellow',
-      'green',
-      'lightGray',
-      'magenta',
-      'red',
-      'white',
-      'yellow',
-    ]);
-    if (validHighlightColors.has(formatting.highlight)) {
+    if (VALID_HIGHLIGHT_COLORS.has(formatting.highlight)) {
       parts.push(`<w:highlight w:val="${formatting.highlight}"/>`);
+    } else if (!formatting.shading) {
+      // Custom color not in OOXML predefined set — use w:shd as fallback.
+      // Only emit if value looks like a valid hex color.
+      const hex = formatting.highlight.replace(/^#/, '');
+      if (/^[0-9a-fA-F]{6}$/.test(hex)) {
+        parts.push(`<w:shd w:val="clear" w:color="auto" w:fill="${hex}"/>`);
+      }
     }
   }
 

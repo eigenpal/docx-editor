@@ -35,6 +35,8 @@ export interface SelectionFormatting {
   styleId?: string;
   /** Paragraph left indentation in twips */
   indentLeft?: number;
+  /** Whether the paragraph is RTL (bidi) */
+  bidi?: boolean;
 }
 
 /**
@@ -53,6 +55,8 @@ export type FormattingAction =
   | 'indent'
   | 'outdent'
   | 'insertLink'
+  | 'setRtl'
+  | 'setLtr'
   | { type: 'fontFamily'; value: string }
   | { type: 'fontSize'; value: number }
   | { type: 'textColor'; value: ColorValue | string }

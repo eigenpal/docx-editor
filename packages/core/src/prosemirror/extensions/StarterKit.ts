@@ -63,6 +63,7 @@ import { SelectionTrackerExtension } from './features/SelectionTrackerExtension'
 import { ImageDragExtension } from './features/ImageDragExtension';
 import { DropCursorExtension } from './features/DropCursorExtension';
 import { ParagraphChangeTrackerExtension } from './features/ParagraphChangeTrackerExtension';
+import { BidiShortcutExtension } from './features/BidiShortcutExtension';
 
 export interface StarterKitOptions {
   /** Extensions to disable by name */
@@ -155,6 +156,7 @@ export function createStarterKit(options: StarterKitOptions = {}): AnyExtension[
     })
   );
   add('paragraphChangeTracker', ParagraphChangeTrackerExtension());
+  add('bidiShortcut', BidiShortcutExtension());
 
   return extensions;
 }

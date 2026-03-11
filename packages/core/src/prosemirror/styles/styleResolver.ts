@@ -30,6 +30,23 @@ export interface ResolvedParagraphStyle {
 }
 
 /**
+ * Word's built-in Normal style defaults, used when the document
+ * doesn't define its own Normal style. Per ECMA-376, Word applies
+ * these defaults: 8pt (160 twips) after spacing, 1.08x line spacing.
+ */
+const BUILTIN_NORMAL_STYLE: Style = {
+  styleId: 'Normal',
+  type: 'paragraph',
+  name: 'Normal',
+  default: true,
+  pPr: {
+    spaceAfter: 160,
+    lineSpacing: 259,
+    lineSpacingRule: 'auto',
+  },
+};
+
+/**
  * StyleResolver provides efficient access to resolved style properties
  */
 export class StyleResolver {
@@ -217,7 +234,7 @@ export class StyleResolver {
     }
     // Fall back to "Normal" for paragraph styles
     if (type === 'paragraph') {
-      return this.stylesById.get('Normal');
+      return this.stylesById.get('Normal') ?? BUILTIN_NORMAL_STYLE;
     }
     return undefined;
   }

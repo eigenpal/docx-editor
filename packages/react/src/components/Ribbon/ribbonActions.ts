@@ -10,6 +10,7 @@ export interface RibbonActionContext {
   onRedo?: () => void;
   onFind?: () => void;
   onReplace?: () => void;
+  onPageSetup?: () => void;
   onInsertPageBreak?: () => void;
   onInsertImage?: () => void;
   onInsertTOC?: () => void;
@@ -62,6 +63,8 @@ export const ribbonActions: Record<string, (ctx: RibbonActionContext) => void> =
   superscript: (ctx) => ctx.onFormat?.('superscript'),
   subscript: (ctx) => ctx.onFormat?.('subscript'),
   clearFormatting: (ctx) => ctx.onFormat?.('clearFormatting'),
+  setLtr: (ctx) => ctx.onFormat?.('setLtr'),
+  setRtl: (ctx) => ctx.onFormat?.('setRtl'),
   fontGrow: (ctx) => {
     const next = getCurrentFontSize(ctx.selectionFormatting) + 1;
     ctx.onFormat?.({ type: 'fontSize', value: next });
@@ -73,6 +76,7 @@ export const ribbonActions: Record<string, (ctx: RibbonActionContext) => void> =
   insertLink: (ctx) => ctx.onFormat?.('insertLink'),
   find: (ctx) => ctx.onFind?.(),
   replace: (ctx) => ctx.onReplace?.(),
+  pageSetup: (ctx) => ctx.onPageSetup?.(),
   pageBreak: (ctx) => ctx.onInsertPageBreak?.(),
   insertImage: (ctx) => ctx.onInsertImage?.(),
   insertTOC: (ctx) => ctx.onInsertTOC?.(),

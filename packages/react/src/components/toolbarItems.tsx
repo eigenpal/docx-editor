@@ -137,6 +137,7 @@ export interface UseToolbarItemsOptions {
   onInsertTable?: (rows: number, columns: number) => void;
   onInsertImage?: () => void;
   onInsertPageBreak?: () => void;
+  onPageSetup?: () => void;
   onInsertTOC?: () => void;
   onToggleCommentsSidebar?: () => void;
   editingMode?: EditorMode;
@@ -208,6 +209,7 @@ export function useToolbarItems(options: UseToolbarItemsOptions): {
     onInsertTable,
     onInsertImage,
     onInsertPageBreak,
+    onPageSetup,
     onInsertTOC,
     onToggleCommentsSidebar,
     editingMode,
@@ -438,18 +440,49 @@ export function useToolbarItems(options: UseToolbarItemsOptions): {
 
   const compactEntries: CompactEntry[] = [];
 
-  if (showPrintButton && onPrint) {
+  if ((showPrintButton && onPrint) || onPageSetup) {
     compactEntries.push(
       compactComponent(
         'fileMenu',
         <MenuDropdown
           label="File"
           disabled={disabled}
-          items={[{ icon: 'print', label: 'Print', shortcut: 'Ctrl+P', onClick: onPrint }]}
+          items={[
+            ...(showPrintButton && onPrint
+              ? [{ icon: 'print', label: 'Print', shortcut: 'Ctrl+P', onClick: onPrint } as MenuEntry]
+              : []),
+            ...(onPageSetup
+              ? [{ icon: 'settings', label: 'Page setup', onClick: onPageSetup } as MenuEntry]
+              : []),
+          ]}
         />
       )
     );
   }
+
+  compactEntries.push(
+    compactComponent(
+      'formatMenu',
+      <MenuDropdown
+        label="Format"
+        disabled={disabled}
+        items={[
+          {
+            icon: 'format_textdirection_l_to_r',
+            label: 'Left-to-right text',
+            onClick: () => formatAction('setLtr'),
+            disabled: disabled || !onFormat,
+          },
+          {
+            icon: 'format_textdirection_r_to_l',
+            label: 'Right-to-left text',
+            onClick: () => formatAction('setRtl'),
+            disabled: disabled || !onFormat,
+          },
+        ]}
+      />
+    )
+  );
 
   const insertMenuItems: MenuEntry[] = [
     ...(onInsertImage
@@ -891,6 +924,7 @@ export function useToolbarItems(options: UseToolbarItemsOptions): {
       onFind,
       onReplace,
       onInsertPageBreak,
+      onPageSetup,
       onInsertImage,
       onInsertTOC,
       onToggleComments: onToggleCommentsSidebar,
@@ -924,6 +958,7 @@ export function useToolbarItems(options: UseToolbarItemsOptions): {
       onFind,
       onReplace,
       onInsertPageBreak,
+      onPageSetup,
       onInsertImage,
       onInsertTOC,
       onToggleCommentsSidebar,

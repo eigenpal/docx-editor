@@ -136,6 +136,8 @@ export const ribbonConfig: { tabs: RibbonTab[] } = {
             button('showMarks', 'Show/Hide Marks', 'showMarks', 'showMarks'),
             component('alignmentButtons', 'alignmentButtons'),
             component('lineSpacing', 'lineSpacing'),
+            button('ltrText', 'Left-to-Right', 'ltr', 'setLtr'),
+            button('rtlText', 'Right-to-Left', 'rtl', 'setRtl'),
             button('borders', 'Borders', 'borders', 'borders'),
           ],
         },
@@ -212,6 +214,7 @@ export const ribbonConfig: { tabs: RibbonTab[] } = {
           id: 'pageSetup',
           label: 'Page Setup',
           items: [
+            button('pageSetup', 'Page Setup', 'pageSetup', 'pageSetup'),
             button('margins', 'Margins', 'margins', 'margins'),
             button('orientation', 'Orientation', 'orientation', 'orientation'),
             button('size', 'Size', 'size', 'size'),
