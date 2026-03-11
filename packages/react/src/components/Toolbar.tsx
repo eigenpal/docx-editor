@@ -741,6 +741,24 @@ export function Toolbar({
         />
       ) : null}
 
+      {/* Format Menu */}
+      <MenuDropdown
+        label="Format"
+        disabled={disabled}
+        items={[
+          {
+            icon: 'format_textdirection_l_to_r',
+            label: 'Left-to-right text',
+            onClick: () => handleFormat('setLtr'),
+          } as MenuEntry,
+          {
+            icon: 'format_textdirection_r_to_l',
+            label: 'Right-to-left text',
+            onClick: () => handleFormat('setRtl'),
+          } as MenuEntry,
+        ]}
+      />
+
       {/* Insert Menu */}
       <MenuDropdown
         label="Insert"
@@ -984,28 +1002,6 @@ export function Toolbar({
           )}
         </ToolbarGroup>
       )}
-
-      {/* Text Direction Buttons */}
-      <ToolbarGroup label="Text direction">
-        <ToolbarButton
-          onClick={() => handleFormat('setLtr')}
-          active={!currentFormatting.bidi}
-          disabled={disabled}
-          title="Left-to-right text direction"
-          ariaLabel="Left-to-right text direction"
-        >
-          <MaterialSymbol name="format_textdirection_l_to_r" size={ICON_SIZE} />
-        </ToolbarButton>
-        <ToolbarButton
-          onClick={() => handleFormat('setRtl')}
-          active={!!currentFormatting.bidi}
-          disabled={disabled}
-          title="Right-to-left text direction"
-          ariaLabel="Right-to-left text direction"
-        >
-          <MaterialSymbol name="format_textdirection_r_to_l" size={ICON_SIZE} />
-        </ToolbarButton>
-      </ToolbarGroup>
 
       {/* Image controls - shown when image is selected */}
       {imageContext && onImageWrapType && (
