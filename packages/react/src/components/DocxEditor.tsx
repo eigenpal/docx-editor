@@ -43,16 +43,6 @@ import type { Comment } from '@eigenpal/docx-core/types/content';
 import { ErrorBoundary, ErrorProvider } from './ErrorBoundary';
 import type { TableAction } from './ui/TableToolbar';
 import { mapHexToHighlightName } from './toolbarUtils';
-import {
-  PageNumberIndicator,
-  type PageIndicatorPosition,
-  type PageIndicatorVariant,
-} from './ui/PageNumberIndicator';
-import {
-  PageNavigator,
-  type PageNavigatorPosition,
-  type PageNavigatorVariant,
-} from './ui/PageNavigator';
 import { HorizontalRuler } from './ui/HorizontalRuler';
 import { VerticalRuler } from './ui/VerticalRuler';
 import { type PrintOptions } from './ui/PrintPreview';
@@ -247,14 +237,6 @@ export interface DocxEditorProps {
   showToolbar?: boolean;
   /** Whether to show zoom control (default: true) */
   showZoomControl?: boolean;
-  /** Whether to show page number indicator (default: true) */
-  showPageNumbers?: boolean;
-  /** Whether to enable interactive page navigation (default: true) */
-  enablePageNavigation?: boolean;
-  /** Position of page number indicator (default: 'bottom-center') */
-  pageNumberPosition?: PageIndicatorPosition | PageNavigatorPosition;
-  /** Variant of page number indicator (default: 'default') */
-  pageNumberVariant?: PageIndicatorVariant | PageNavigatorVariant;
   /** Whether to show page margin guides/boundaries (default: false) */
   showMarginGuides?: boolean;
   /** Color for margin guides (default: '#c0c0c0') */
@@ -346,10 +328,6 @@ interface EditorState {
   zoom: number;
   /** Current selection formatting for toolbar */
   selectionFormatting: SelectionFormatting;
-  /** Current page number (1-indexed) */
-  currentPage: number;
-  /** Total page count */
-  totalPages: number;
   /** Paragraph indent data for ruler */
   paragraphIndentLeft: number;
   paragraphIndentRight: number;
@@ -588,10 +566,6 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
     theme,
     showToolbar = true,
     showZoomControl = true,
-    showPageNumbers = true,
-    enablePageNavigation = true,
-    pageNumberPosition = 'bottom-center',
-    pageNumberVariant = 'default',
     showMarginGuides: _showMarginGuides = false,
     marginGuideColor: _marginGuideColor,
     showRuler = false,
@@ -625,8 +599,6 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
     parseError: null,
     zoom: initialZoom,
     selectionFormatting: {},
-    currentPage: 1,
-    totalPages: 1,
     paragraphIndentLeft: 0,
     paragraphIndentRight: 0,
     paragraphFirstLineIndent: 0,
@@ -803,6 +775,14 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
   historyStateRef.current = history.state;
   // Track current border color/width for border presets (like Google Docs)
   const borderSpecRef = useRef({ style: 'single', size: 4, color: { rgb: '000000' } });
+
+  // Scroll-based page indicator (Google Docs style)
+  const [scrollPageInfo, setScrollPageInfo] = useState<{
+    currentPage: number;
+    totalPages: number;
+    visible: boolean;
+  }>({ currentPage: 1, totalPages: 1, visible: false });
+  const scrollFadeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Measure toolbar height for positioning the outline panel below it
   const toolbarRefCallback = useCallback((el: HTMLDivElement | null) => {
@@ -2228,11 +2208,58 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
     [getActiveEditorView]
   );
 
-  // Handle page navigation (from PageNavigator)
-  // TODO: Implement page navigation in ProseMirror
-  const handlePageNavigate = useCallback((_pageNumber: number) => {
-    // Page navigation not yet implemented for ProseMirror
-  }, []);
+  // Scroll-based page tracking: calculate current page from scroll position.
+  // Re-attaches when the scroll container mounts (after loading completes).
+  const scrollContainerEl = scrollContainerRef.current;
+  useEffect(() => {
+    if (!scrollContainerEl) return;
+
+    const handleScroll = () => {
+      const layout = pagedEditorRef.current?.getLayout();
+      if (!layout || layout.pages.length === 0) return;
+
+      const scrollTop = scrollContainerEl.scrollTop;
+      const totalPages = layout.pages.length;
+      const pageGap = 24; // DEFAULT_PAGE_GAP from PagedEditor
+      const paddingTop = 24; // top padding in paged-editor__pages
+
+      // Calculate which page is visible at the viewport center
+      const viewportCenter = scrollTop + scrollContainerEl.clientHeight / 2;
+      let accumulatedY = paddingTop;
+      let currentPage = 1;
+
+      for (let i = 0; i < layout.pages.length; i++) {
+        const pageHeight = layout.pages[i].size.h;
+        const pageEnd = accumulatedY + pageHeight;
+        if (viewportCenter < pageEnd) {
+          currentPage = i + 1;
+          break;
+        }
+        accumulatedY = pageEnd + pageGap;
+        currentPage = i + 2; // next page
+      }
+      currentPage = Math.min(currentPage, totalPages);
+
+      setScrollPageInfo({ currentPage, totalPages, visible: true });
+
+      // Clear existing fade timer
+      if (scrollFadeTimerRef.current) {
+        clearTimeout(scrollFadeTimerRef.current);
+      }
+      // Hide after 1.5s of no scrolling
+      scrollFadeTimerRef.current = setTimeout(() => {
+        setScrollPageInfo((prev) => ({ ...prev, visible: false }));
+      }, 1500);
+    };
+
+    scrollContainerEl.addEventListener('scroll', handleScroll, { passive: true });
+    return () => {
+      scrollContainerEl.removeEventListener('scroll', handleScroll);
+      if (scrollFadeTimerRef.current) {
+        clearTimeout(scrollFadeTimerRef.current);
+      }
+    };
+  }, [scrollContainerEl]);
 
   // Handle save
   const handleSave = useCallback(
@@ -2534,15 +2561,15 @@ body { background: white; }
       focus: () => {
         pagedEditorRef.current?.focus();
       },
-      getCurrentPage: () => state.currentPage,
-      getTotalPages: () => state.totalPages,
+      getCurrentPage: () => scrollPageInfo.currentPage,
+      getTotalPages: () => scrollPageInfo.totalPages,
       scrollToPage: (_pageNumber: number) => {
         // TODO: Implement page navigation in ProseMirror
       },
       openPrintPreview: handleDirectPrint,
       print: handleDirectPrint,
     }),
-    [history.state, state.zoom, state.currentPage, state.totalPages, handleSave, handleDirectPrint]
+    [history.state, state.zoom, scrollPageInfo, handleSave, handleDirectPrint]
   );
 
   // Get header and footer content from document
@@ -2768,7 +2795,7 @@ body { background: white; }
     flex: 1,
     minHeight: 0,
     minWidth: 0, // Allow flex item to shrink below content width on narrow viewports
-    overflow: 'auto', // This is the scroll container - sticky toolbar will stick to this
+    overflow: 'auto', // Sole scroll container — PagedEditor sizes to content
     position: 'relative',
   };
 
@@ -2822,7 +2849,7 @@ body { background: white; }
         >
           {/* Main content area */}
           <div style={mainContentStyle}>
-            {/* Wrapper for scroll container + outline overlay */}
+            {/* Wrapper for toolbar + scroll container + outline overlay */}
             <div
               style={{
                 position: 'relative',
@@ -2833,97 +2860,97 @@ body { background: white; }
                 flexDirection: 'column',
               }}
             >
-              {/* Editor container - this is the scroll container */}
-              <div style={editorContainerStyle}>
-                {/* Toolbar - sticky at top of scroll container */}
-                {/* Hide toolbar only when readOnly prop is explicitly set (not from viewing mode) */}
-                {showToolbar && !readOnlyProp && (
-                  <div
-                    ref={toolbarRefCallback}
-                    className="sticky top-0 z-50 flex flex-col gap-0 bg-white shadow-sm"
+              {/* Toolbar - above the scroll container so scrollbar doesn't extend behind it */}
+              {/* Hide toolbar only when readOnly prop is explicitly set (not from viewing mode) */}
+              {showToolbar && !readOnlyProp && (
+                <div
+                  ref={toolbarRefCallback}
+                  className="z-50 flex flex-col gap-0 bg-white shadow-sm flex-shrink-0"
+                >
+                  <Toolbar
+                    currentFormatting={state.selectionFormatting}
+                    onFormat={handleFormat}
+                    onUndo={undoActiveEditor}
+                    onRedo={redoActiveEditor}
+                    canUndo={true}
+                    canRedo={true}
+                    disabled={readOnly}
+                    documentStyles={history.state?.package.styles?.styles}
+                    theme={history.state?.package.theme || theme}
+                    showPrintButton={showPrintButton}
+                    onPrint={handleDirectPrint}
+                    showZoomControl={showZoomControl}
+                    zoom={state.zoom}
+                    onZoomChange={handleZoomChange}
+                    onRefocusEditor={focusActiveEditor}
+                    onInsertTable={handleInsertTable}
+                    showTableInsert={true}
+                    onInsertImage={handleInsertImageClick}
+                    onInsertPageBreak={handleInsertPageBreak}
+                    onInsertTOC={handleInsertTOC}
+                    imageContext={state.pmImageContext}
+                    onImageWrapType={handleImageWrapType}
+                    onImageTransform={handleImageTransform}
+                    onOpenImageProperties={handleOpenImageProperties}
+                    onPageSetup={handleOpenPageSetup}
+                    tableContext={state.pmTableContext}
+                    onTableAction={handleTableAction}
                   >
-                    <Toolbar
-                      currentFormatting={state.selectionFormatting}
-                      onFormat={handleFormat}
-                      onUndo={undoActiveEditor}
-                      onRedo={redoActiveEditor}
-                      canUndo={true}
-                      canRedo={true}
-                      disabled={readOnly}
-                      documentStyles={history.state?.package.styles?.styles}
-                      theme={history.state?.package.theme || theme}
-                      showPrintButton={showPrintButton}
-                      onPrint={handleDirectPrint}
-                      showZoomControl={showZoomControl}
-                      zoom={state.zoom}
-                      onZoomChange={handleZoomChange}
-                      onRefocusEditor={focusActiveEditor}
-                      onInsertTable={handleInsertTable}
-                      showTableInsert={true}
-                      onInsertImage={handleInsertImageClick}
-                      onInsertPageBreak={handleInsertPageBreak}
-                      onInsertTOC={handleInsertTOC}
-                      imageContext={state.pmImageContext}
-                      onImageWrapType={handleImageWrapType}
-                      onImageTransform={handleImageTransform}
-                      onOpenImageProperties={handleOpenImageProperties}
-                      onPageSetup={handleOpenPageSetup}
-                      tableContext={state.pmTableContext}
-                      onTableAction={handleTableAction}
+                    {/* Comment & Track Changes buttons */}
+                    <ToolbarSeparator />
+                    <ToolbarButton
+                      onClick={() => setShowCommentsSidebar(!showCommentsSidebar)}
+                      active={showCommentsSidebar}
+                      title="Toggle comments sidebar"
+                      ariaLabel="Toggle comments sidebar"
                     >
-                      {/* Comment & Track Changes buttons */}
-                      <ToolbarSeparator />
-                      <ToolbarButton
-                        onClick={() => setShowCommentsSidebar(!showCommentsSidebar)}
-                        active={showCommentsSidebar}
-                        title="Toggle comments sidebar"
-                        ariaLabel="Toggle comments sidebar"
-                      >
-                        <MaterialSymbol name="comment" size={20} />
-                      </ToolbarButton>
-                      <ToolbarSeparator />
-                      <EditingModeDropdown
-                        mode={editingMode}
-                        onModeChange={(mode) => {
-                          setEditingMode(mode);
-                          if (mode === 'suggesting') setShowCommentsSidebar(true);
-                        }}
+                      <MaterialSymbol name="comment" size={20} />
+                    </ToolbarButton>
+                    <ToolbarSeparator />
+                    <EditingModeDropdown
+                      mode={editingMode}
+                      onModeChange={(mode) => {
+                        setEditingMode(mode);
+                        if (mode === 'suggesting') setShowCommentsSidebar(true);
+                      }}
+                    />
+                    {toolbarExtra}
+                  </Toolbar>
+
+                  {/* Horizontal Ruler - sticky with toolbar */}
+                  {showRuler && (
+                    <div
+                      className="flex justify-center px-5 py-1 overflow-x-auto flex-shrink-0 bg-doc-bg"
+                      style={{
+                        paddingRight: showCommentsSidebar ? 'calc(20px + 240px)' : undefined,
+                        transition: 'padding 0.2s ease',
+                      }}
+                    >
+                      <HorizontalRuler
+                        sectionProps={history.state?.package.document?.finalSectionProperties}
+                        zoom={state.zoom}
+                        unit={rulerUnit}
+                        editable={!readOnly}
+                        onLeftMarginChange={handleLeftMarginChange}
+                        onRightMarginChange={handleRightMarginChange}
+                        indentLeft={state.paragraphIndentLeft}
+                        indentRight={state.paragraphIndentRight}
+                        onIndentLeftChange={handleIndentLeftChange}
+                        onIndentRightChange={handleIndentRightChange}
+                        showFirstLineIndent={true}
+                        firstLineIndent={state.paragraphFirstLineIndent}
+                        hangingIndent={state.paragraphHangingIndent}
+                        onFirstLineIndentChange={handleFirstLineIndentChange}
+                        tabStops={state.paragraphTabs}
+                        onTabStopRemove={handleTabStopRemove}
                       />
-                      {toolbarExtra}
-                    </Toolbar>
+                    </div>
+                  )}
+                </div>
+              )}
 
-                    {/* Horizontal Ruler - sticky with toolbar */}
-                    {showRuler && (
-                      <div
-                        className="flex justify-center px-5 py-1 overflow-x-auto flex-shrink-0 bg-doc-bg"
-                        style={{
-                          paddingRight: showCommentsSidebar ? 'calc(20px + 240px)' : undefined,
-                          transition: 'padding 0.2s ease',
-                        }}
-                      >
-                        <HorizontalRuler
-                          sectionProps={history.state?.package.document?.finalSectionProperties}
-                          zoom={state.zoom}
-                          unit={rulerUnit}
-                          editable={!readOnly}
-                          onLeftMarginChange={handleLeftMarginChange}
-                          onRightMarginChange={handleRightMarginChange}
-                          indentLeft={state.paragraphIndentLeft}
-                          indentRight={state.paragraphIndentRight}
-                          onIndentLeftChange={handleIndentLeftChange}
-                          onIndentRightChange={handleIndentRightChange}
-                          showFirstLineIndent={true}
-                          firstLineIndent={state.paragraphFirstLineIndent}
-                          hangingIndent={state.paragraphHangingIndent}
-                          onFirstLineIndentChange={handleFirstLineIndentChange}
-                          tabStops={state.paragraphTabs}
-                          onTabStopRemove={handleTabStopRemove}
-                        />
-                      </div>
-                    )}
-                  </div>
-                )}
-
+              {/* Editor container - this is the scroll container (toolbar is above, not inside) */}
+              <div ref={scrollContainerRef} style={editorContainerStyle}>
                 {/* Editor content wrapper */}
                 <div style={{ display: 'flex', flex: 1, minHeight: 0, position: 'relative' }}>
                   {/* Editor content area */}
@@ -3143,28 +3170,6 @@ body { background: white; }
                       </Tooltip>
                     )}
 
-                    {/* Page navigation / indicator */}
-                    {showPageNumbers &&
-                      state.totalPages > 0 &&
-                      (enablePageNavigation ? (
-                        <PageNavigator
-                          currentPage={state.currentPage}
-                          totalPages={state.totalPages}
-                          onNavigate={handlePageNavigate}
-                          position={pageNumberPosition as PageNavigatorPosition}
-                          variant={pageNumberVariant as PageNavigatorVariant}
-                          floating
-                        />
-                      ) : (
-                        <PageNumberIndicator
-                          currentPage={state.currentPage}
-                          totalPages={state.totalPages}
-                          position={pageNumberPosition as PageIndicatorPosition}
-                          variant={pageNumberVariant as PageIndicatorVariant}
-                          floating
-                        />
-                      ))}
-
                     {/* Inline Header/Footer Editor — positioned over the target area */}
                     {hfEditPosition &&
                       (hfEditPosition === 'header' ? headerContent : footerContent) &&
@@ -3196,6 +3201,35 @@ body { background: white; }
                 {/* end editor flex wrapper */}
               </div>
               {/* end scroll container */}
+
+              {/* Page indicator — Google Docs style, next to scrollbar while scrolling */}
+              {scrollPageInfo.totalPages > 1 && (
+                <div
+                  style={{
+                    position: 'absolute',
+                    right: 24,
+                    top: '50%',
+                    transform: 'translateY(-50%)',
+                    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+                    color: 'white',
+                    padding: '6px 12px',
+                    borderRadius: '4px',
+                    fontSize: '12px',
+                    fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+                    fontWeight: 500,
+                    whiteSpace: 'nowrap',
+                    pointerEvents: 'none',
+                    zIndex: 1000,
+                    opacity: scrollPageInfo.visible ? 1 : 0,
+                    transition: 'opacity 0.3s ease',
+                    userSelect: 'none',
+                  }}
+                  aria-live="polite"
+                  role="status"
+                >
+                  {scrollPageInfo.currentPage} of {scrollPageInfo.totalPages}
+                </div>
+              )}
 
               {/* Document outline sidebar — absolutely positioned, doesn't scroll */}
               {showOutline && (

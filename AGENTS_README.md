@@ -151,7 +151,6 @@ function App() {
           showToolbar={true}
           showRuler={true}
           showZoomControl={true}
-          showPageNumbers={false}
           initialZoom={1.0}
         />
       </main>
@@ -169,39 +168,36 @@ function App() {
 
 ### Props
 
-| Prop                   | Type                                        | Default           | Description                                        |
-| ---------------------- | ------------------------------------------- | ----------------- | -------------------------------------------------- |
-| `documentBuffer`       | `ArrayBuffer \| Uint8Array \| Blob \| File` | —                 | `.docx` file contents to load                      |
-| `document`             | `Document`                                  | —                 | Pre-parsed document object (alternative to buffer) |
-| `author`               | `string`                                    | `'User'`          | Author name for comments and track changes         |
-| `readOnly`             | `boolean`                                   | `false`           | Disable editing, hide toolbar/rulers               |
-| `showToolbar`          | `boolean`                                   | `true`            | Show the formatting toolbar                        |
-| `showRuler`            | `boolean`                                   | `false`           | Show horizontal and vertical rulers                |
-| `rulerUnit`            | `'inch' \| 'cm'`                            | `'inch'`          | Unit for ruler display                             |
-| `showZoomControl`      | `boolean`                                   | `true`            | Show zoom controls in toolbar                      |
-| `showPrintButton`      | `boolean`                                   | `true`            | Show print button in toolbar                       |
-| `showPageNumbers`      | `boolean`                                   | `true`            | Show page number indicator                         |
-| `enablePageNavigation` | `boolean`                                   | `true`            | Enable interactive page navigation                 |
-| `pageNumberPosition`   | `string`                                    | `'bottom-center'` | Position of page number indicator                  |
-| `showOutline`          | `boolean`                                   | `false`           | Show document outline sidebar                      |
-| `showMarginGuides`     | `boolean`                                   | `false`           | Show page margin boundaries                        |
-| `marginGuideColor`     | `string`                                    | `'#c0c0c0'`       | Color for margin guides                            |
-| `initialZoom`          | `number`                                    | `1.0`             | Initial zoom level (1.0 = 100%)                    |
-| `theme`                | `Theme \| null`                             | —                 | Theme override for colors/fonts                    |
-| `toolbarExtra`         | `ReactNode`                                 | —                 | Custom items appended to toolbar                   |
-| `placeholder`          | `ReactNode`                                 | —                 | Placeholder when no document loaded                |
-| `loadingIndicator`     | `ReactNode`                                 | —                 | Custom loading indicator                           |
-| `className`            | `string`                                    | —                 | Additional CSS class                               |
-| `style`                | `CSSProperties`                             | —                 | Additional inline styles                           |
-| `onChange`             | `(doc: Document) => void`                   | —                 | Called on document change                          |
-| `onSave`               | `(buffer: ArrayBuffer) => void`             | —                 | Called on save                                     |
-| `onError`              | `(error: Error) => void`                    | —                 | Called on error                                    |
-| `onSelectionChange`    | `(state: SelectionState \| null) => void`   | —                 | Called on selection change                         |
-| `onFontsLoaded`        | `() => void`                                | —                 | Called when fonts finish loading                   |
-| `onPrint`              | `() => void`                                | —                 | Called when print is triggered                     |
-| `onCopy`               | `() => void`                                | —                 | Called when content is copied                      |
-| `onCut`                | `() => void`                                | —                 | Called when content is cut                         |
-| `onPaste`              | `() => void`                                | —                 | Called when content is pasted                      |
+| Prop                | Type                                        | Default     | Description                                        |
+| ------------------- | ------------------------------------------- | ----------- | -------------------------------------------------- |
+| `documentBuffer`    | `ArrayBuffer \| Uint8Array \| Blob \| File` | —           | `.docx` file contents to load                      |
+| `document`          | `Document`                                  | —           | Pre-parsed document object (alternative to buffer) |
+| `author`            | `string`                                    | `'User'`    | Author name for comments and track changes         |
+| `readOnly`          | `boolean`                                   | `false`     | Disable editing, hide toolbar/rulers               |
+| `showToolbar`       | `boolean`                                   | `true`      | Show the formatting toolbar                        |
+| `showRuler`         | `boolean`                                   | `false`     | Show horizontal and vertical rulers                |
+| `rulerUnit`         | `'inch' \| 'cm'`                            | `'inch'`    | Unit for ruler display                             |
+| `showZoomControl`   | `boolean`                                   | `true`      | Show zoom controls in toolbar                      |
+| `showPrintButton`   | `boolean`                                   | `true`      | Show print button in toolbar                       |
+| `showOutline`       | `boolean`                                   | `false`     | Show document outline sidebar                      |
+| `showMarginGuides`  | `boolean`                                   | `false`     | Show page margin boundaries                        |
+| `marginGuideColor`  | `string`                                    | `'#c0c0c0'` | Color for margin guides                            |
+| `initialZoom`       | `number`                                    | `1.0`       | Initial zoom level (1.0 = 100%)                    |
+| `theme`             | `Theme \| null`                             | —           | Theme override for colors/fonts                    |
+| `toolbarExtra`      | `ReactNode`                                 | —           | Custom items appended to toolbar                   |
+| `placeholder`       | `ReactNode`                                 | —           | Placeholder when no document loaded                |
+| `loadingIndicator`  | `ReactNode`                                 | —           | Custom loading indicator                           |
+| `className`         | `string`                                    | —           | Additional CSS class                               |
+| `style`             | `CSSProperties`                             | —           | Additional inline styles                           |
+| `onChange`          | `(doc: Document) => void`                   | —           | Called on document change                          |
+| `onSave`            | `(buffer: ArrayBuffer) => void`             | —           | Called on save                                     |
+| `onError`           | `(error: Error) => void`                    | —           | Called on error                                    |
+| `onSelectionChange` | `(state: SelectionState \| null) => void`   | —           | Called on selection change                         |
+| `onFontsLoaded`     | `() => void`                                | —           | Called when fonts finish loading                   |
+| `onPrint`           | `() => void`                                | —           | Called when print is triggered                     |
+| `onCopy`            | `() => void`                                | —           | Called when content is copied                      |
+| `onCut`             | `() => void`                                | —           | Called when content is cut                         |
+| `onPaste`           | `() => void`                                | —           | Called when content is pasted                      |
 
 ### Ref Methods
 

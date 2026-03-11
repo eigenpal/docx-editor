@@ -309,7 +309,6 @@ export function App() {
             showToolbar={true}
             showRuler={true}
             showZoomControl={true}
-            showPageNumbers={false}
             initialZoom={1.0}
           />
         </PluginHost>

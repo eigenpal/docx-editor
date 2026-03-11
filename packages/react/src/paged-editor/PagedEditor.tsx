@@ -243,8 +243,8 @@ const EMPTY_PLUGINS: Plugin[] = [];
 const containerStyles: CSSProperties = {
   position: 'relative',
   width: '100%',
-  height: '100%',
-  overflow: 'auto',
+  minHeight: '100%',
+  overflow: 'visible',
   backgroundColor: 'var(--doc-bg, #f8f9fa)',
 };
 
@@ -1230,6 +1230,14 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
       scrollContainerRef: scrollContainerRefProp,
       onHyperlinkClick,
     } = props;
+
+    // Resolve the scroll container: prefer parent-provided ref, fallback to own container
+    const getScrollContainer = useCallback((): HTMLDivElement | null => {
+      if (scrollContainerRefProp && typeof scrollContainerRefProp === 'object') {
+        return (scrollContainerRefProp as React.RefObject<HTMLDivElement | null>).current;
+      }
+      return containerRef.current;
+    }, [scrollContainerRefProp]);
 
     // Refs
     const containerRef = useRef<HTMLDivElement>(null);
@@ -3219,19 +3227,17 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
 
         // Cmd/Ctrl+Home - scroll to top and move cursor to start
         if (e.key === 'Home' && (e.metaKey || e.ctrlKey)) {
-          if (containerRef.current) {
-            containerRef.current.scrollTop = 0;
-          }
+          const sc = getScrollContainer();
+          if (sc) sc.scrollTop = 0;
         }
 
         // Cmd/Ctrl+End - scroll to bottom and move cursor to end
         if (e.key === 'End' && (e.metaKey || e.ctrlKey)) {
-          if (containerRef.current) {
-            containerRef.current.scrollTop = containerRef.current.scrollHeight;
-          }
+          const sc = getScrollContainer();
+          if (sc) sc.scrollTop = sc.scrollHeight;
         }
       },
-      [readOnly]
+      [readOnly, getScrollContainer]
     );
 
     /**
@@ -3443,13 +3449,7 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
 
     return (
       <div
-        ref={(el) => {
-          (containerRef as React.MutableRefObject<HTMLDivElement | null>).current = el;
-          if (typeof scrollContainerRefProp === 'function') scrollContainerRefProp(el);
-          else if (scrollContainerRefProp && typeof scrollContainerRefProp === 'object') {
-            (scrollContainerRefProp as React.MutableRefObject<HTMLDivElement | null>).current = el;
-          }
-        }}
+        ref={containerRef}
         className={`ep-root paged-editor ${className ?? ''}`}
         style={{ ...containerStyles, ...style }}
         tabIndex={0}
