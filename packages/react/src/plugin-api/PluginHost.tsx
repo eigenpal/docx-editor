@@ -184,9 +184,9 @@ const PLUGIN_HOST_STYLES = `
   pointer-events: none;
 }
 
-.plugin-overlay > * {
-  pointer-events: auto;
-}
+/* Individual overlay children manage their own pointer-events.
+   Do NOT set pointer-events: auto here — it overrides overlay containers
+   that need pointer-events: none to let clicks pass through to the editor. */
 `;
 
 /**
