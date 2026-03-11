@@ -166,9 +166,11 @@ export function FontSizePicker({
   // Handle input blur - commit change
   const handleInputBlur = useCallback(() => {
     setIsEditing(false);
-    const size = parseInt(inputValue, 10);
+    const size = parseFloat(inputValue);
     if (!isNaN(size) && size >= minSize && size <= maxSize) {
-      onChange?.(size);
+      // Round to nearest 0.5 to match Word's font size granularity
+      const rounded = Math.round(size * 2) / 2;
+      onChange?.(rounded);
     }
   }, [inputValue, minSize, maxSize, onChange]);
 
