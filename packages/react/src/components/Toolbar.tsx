@@ -7,9 +7,12 @@
  * - Superscript, Subscript buttons
  * - Shows active state for current selection formatting
  * - Applies formatting to selection
+ *
+ * Classic single-row layout: menus (File, Format, Insert) + formatting icons.
+ * Uses FormattingBar internally for the icon toolbar.
  */
 
-import React, { useCallback, useEffect, useRef } from 'react';
+import React, { useCallback, useRef } from 'react';
 import type { CSSProperties, ReactNode } from 'react';
 import type {
   ColorValue,
@@ -17,30 +20,15 @@ import type {
   Style,
   Theme,
 } from '@eigenpal/docx-core/types/document';
-import { resolveColor } from '@eigenpal/docx-core/utils/colorResolver';
-import { FontPicker } from './ui/FontPicker';
-import { FontSizePicker, halfPointsToPoints } from './ui/FontSizePicker';
-import { AdvancedColorPicker } from './ui/AdvancedColorPicker';
-import { AlignmentButtons } from './ui/AlignmentButtons';
-import { ListButtons, type ListState, createDefaultListState } from './ui/ListButtons';
-import { LineSpacingPicker } from './ui/LineSpacingPicker';
-import { StylePicker } from './ui/StylePicker';
-import { MaterialSymbol } from './ui/MaterialSymbol';
-import { ZoomControl } from './ui/ZoomControl';
 import { Button } from './ui/Button';
 import { Tooltip } from './ui/Tooltip';
-import { TableGridInline } from './ui/TableGridInline';
-import { TableBorderPicker } from './ui/TableBorderPicker';
-import { TableBorderColorPicker } from './ui/TableBorderColorPicker';
-import { TableBorderWidthPicker } from './ui/TableBorderWidthPicker';
-import { TableCellFillPicker } from './ui/TableCellFillPicker';
-import { TableMoreDropdown } from './ui/TableMoreDropdown';
 import { MenuDropdown } from './ui/MenuDropdown';
 import type { MenuEntry } from './ui/MenuDropdown';
-import { ImageWrapDropdown } from './ui/ImageWrapDropdown';
-import { ImageTransformDropdown } from './ui/ImageTransformDropdown';
+import { TableGridInline } from './ui/TableGridInline';
 import type { TableAction } from './ui/TableToolbar';
+import type { ListState } from './ui/ListButtons';
 import { cn } from '../lib/utils';
+import { FormattingBar } from './FormattingBar';
 
 // ============================================================================
 // TYPES
@@ -251,12 +239,6 @@ export interface ToolbarGroupProps {
 }
 
 // ============================================================================
-// STYLES
-// ============================================================================
-
-// Toolbar uses Tailwind classes now - see the component JSX for styling
-
-// ============================================================================
 // SUBCOMPONENTS
 // ============================================================================
 
@@ -272,7 +254,6 @@ export function ToolbarButton({
   className,
   ariaLabel,
 }: ToolbarButtonProps) {
-  // Generate testid from ariaLabel or title
   const testId =
     ariaLabel?.toLowerCase().replace(/\s+/g, '-') ||
     title
@@ -281,7 +262,6 @@ export function ToolbarButton({
       .replace(/\([^)]*\)/g, '')
       .trim();
 
-  // Prevent mousedown from stealing focus from the editor selection
   const handleMouseDown = (e: React.MouseEvent) => {
     e.preventDefault();
   };
@@ -340,65 +320,32 @@ export function ToolbarSeparator() {
 }
 
 // ============================================================================
-// ICON SIZE CONSTANT
-// ============================================================================
-
-const ICON_SIZE = 18;
-
-// ============================================================================
 // MAIN COMPONENT
 // ============================================================================
 
 /**
- * Formatting toolbar with all controls
+ * Classic single-row formatting toolbar: menus + formatting icons.
+ * Uses FormattingBar internally with inline mode so everything stays in one flex row.
  */
 export function Toolbar({
-  currentFormatting = {},
-  onFormat,
-  onUndo,
-  onRedo,
-  canUndo = false,
-  canRedo = false,
-  disabled = false,
+  children,
   className,
   style,
-  enableShortcuts = true,
-  editorRef,
-  children,
-  showFontPicker = true,
-  showFontSizePicker = true,
-  showTextColorPicker = true,
-  showHighlightColorPicker = true,
-  showAlignmentButtons = true,
-  showListButtons = true,
-  showLineSpacingPicker = true,
-  showStylePicker = true,
-  documentStyles,
-  theme,
+  disabled = false,
+  onFormat,
   onPrint,
   showPrintButton = true,
-  showZoomControl = true,
-  zoom,
-  onZoomChange,
-  onRefocusEditor,
+  onPageSetup,
+  onInsertImage,
   onInsertTable,
   showTableInsert = true,
-  onInsertImage,
   onInsertPageBreak,
   onInsertTOC,
-  imageContext,
-  onImageWrapType,
-  onImageTransform,
-  onOpenImageProperties,
-  onPageSetup,
-  tableContext,
-  onTableAction,
+  onRefocusEditor,
+  ...restProps
 }: ToolbarProps) {
   const toolbarRef = useRef<HTMLDivElement>(null);
 
-  /**
-   * Handle formatting action
-   */
   const handleFormat = useCallback(
     (action: FormattingAction) => {
       if (!disabled && onFormat) {
@@ -408,266 +355,17 @@ export function Toolbar({
     [disabled, onFormat]
   );
 
-  /**
-   * Handle undo
-   */
-  const handleUndo = useCallback(() => {
-    if (!disabled && canUndo && onUndo) {
-      onUndo();
-    }
-  }, [disabled, canUndo, onUndo]);
-
-  /**
-   * Handle redo
-   */
-  const handleRedo = useCallback(() => {
-    if (!disabled && canRedo && onRedo) {
-      onRedo();
-    }
-  }, [disabled, canRedo, onRedo]);
-
-  /**
-   * Handle font family change
-   */
-  const handleFontFamilyChange = useCallback(
-    (fontFamily: string) => {
-      if (!disabled && onFormat) {
-        onFormat({ type: 'fontFamily', value: fontFamily });
-        // Refocus editor after dropdown selection
-        requestAnimationFrame(() => onRefocusEditor?.());
-      }
-    },
-    [disabled, onFormat, onRefocusEditor]
-  );
-
-  /**
-   * Handle font size change
-   */
-  const handleFontSizeChange = useCallback(
-    (sizeInPoints: number) => {
-      if (!disabled && onFormat) {
-        onFormat({ type: 'fontSize', value: sizeInPoints });
-        // Refocus editor after dropdown selection
-        requestAnimationFrame(() => onRefocusEditor?.());
-      }
-    },
-    [disabled, onFormat, onRefocusEditor]
-  );
-
-  /**
-   * Handle text color change
-   */
-  const handleTextColorChange = useCallback(
-    (color: ColorValue | string) => {
-      if (!disabled && onFormat) {
-        onFormat({ type: 'textColor', value: color });
-        // Refocus editor after color picker selection
-        requestAnimationFrame(() => onRefocusEditor?.());
-      }
-    },
-    [disabled, onFormat, onRefocusEditor]
-  );
-
-  /**
-   * Handle highlight color change
-   */
-  const handleHighlightColorChange = useCallback(
-    (color: ColorValue | string) => {
-      if (!disabled && onFormat) {
-        // Highlight mode only emits strings (OOXML names like "yellow")
-        const highlightValue = typeof color === 'string' ? color : '';
-        onFormat({ type: 'highlightColor', value: highlightValue });
-        // Refocus editor after color picker selection
-        requestAnimationFrame(() => onRefocusEditor?.());
-      }
-    },
-    [disabled, onFormat, onRefocusEditor]
-  );
-
-  /**
-   * Handle alignment change
-   */
-  const handleAlignmentChange = useCallback(
-    (alignment: ParagraphAlignment) => {
-      if (!disabled && onFormat) {
-        onFormat({ type: 'alignment', value: alignment });
-      }
-    },
-    [disabled, onFormat]
-  );
-
-  /**
-   * Handle bullet list toggle
-   */
-  const handleBulletList = useCallback(() => {
-    if (!disabled && onFormat) {
-      onFormat('bulletList');
-    }
-  }, [disabled, onFormat]);
-
-  /**
-   * Handle numbered list toggle
-   */
-  const handleNumberedList = useCallback(() => {
-    if (!disabled && onFormat) {
-      onFormat('numberedList');
-    }
-  }, [disabled, onFormat]);
-
-  /**
-   * Handle indent (increase paragraph indent or list level)
-   */
-  const handleIndent = useCallback(() => {
-    if (!disabled && onFormat) {
-      onFormat('indent');
-    }
-  }, [disabled, onFormat]);
-
-  /**
-   * Handle outdent (decrease paragraph indent or list level)
-   */
-  const handleOutdent = useCallback(() => {
-    if (!disabled && onFormat) {
-      onFormat('outdent');
-    }
-  }, [disabled, onFormat]);
-
-  /**
-   * Handle line spacing change
-   */
-  const handleLineSpacingChange = useCallback(
-    (twipsValue: number) => {
-      if (!disabled && onFormat) {
-        onFormat({ type: 'lineSpacing', value: twipsValue });
-        // Refocus editor after dropdown selection
-        requestAnimationFrame(() => onRefocusEditor?.());
-      }
-    },
-    [disabled, onFormat, onRefocusEditor]
-  );
-
-  /**
-   * Handle style change
-   */
-  const handleStyleChange = useCallback(
-    (styleId: string) => {
-      if (!disabled && onFormat) {
-        onFormat({ type: 'applyStyle', value: styleId });
-        // Refocus editor after dropdown selection
-        requestAnimationFrame(() => onRefocusEditor?.());
-      }
-    },
-    [disabled, onFormat, onRefocusEditor]
-  );
-
-  /**
-   * Handle table insert
-   */
   const handleTableInsert = useCallback(
     (rows: number, columns: number) => {
       if (!disabled && onInsertTable) {
         onInsertTable(rows, columns);
-        // Refocus editor after table insert
         requestAnimationFrame(() => onRefocusEditor?.());
       }
     },
     [disabled, onInsertTable, onRefocusEditor]
   );
 
-  /**
-   * Handle table action
-   */
-  const handleTableAction = useCallback(
-    (action: TableAction) => {
-      if (!disabled && onTableAction) {
-        onTableAction(action);
-        // Refocus editor after table action
-        requestAnimationFrame(() => onRefocusEditor?.());
-      }
-    },
-    [disabled, onTableAction, onRefocusEditor]
-  );
-
-  /**
-   * Keyboard shortcuts handler
-   */
-  useEffect(() => {
-    if (!enableShortcuts) return;
-
-    const handleKeyDown = (event: KeyboardEvent) => {
-      // Only process if editor has focus or toolbar has focus
-      const target = event.target as HTMLElement;
-      const editorContainer = editorRef?.current;
-      const toolbarContainer = toolbarRef.current;
-
-      const isInEditor = editorContainer?.contains(target);
-      const isInToolbar = toolbarContainer?.contains(target);
-
-      if (!isInEditor && !isInToolbar) return;
-
-      const isCtrl = event.ctrlKey || event.metaKey;
-
-      if (isCtrl && !event.altKey) {
-        switch (event.key.toLowerCase()) {
-          case 'b':
-            event.preventDefault();
-            handleFormat('bold');
-            break;
-          case 'i':
-            event.preventDefault();
-            handleFormat('italic');
-            break;
-          case 'u':
-            event.preventDefault();
-            handleFormat('underline');
-            break;
-          case '=':
-            // Ctrl+= for subscript (common shortcut)
-            if (event.shiftKey) {
-              event.preventDefault();
-              handleFormat('superscript');
-            } else {
-              event.preventDefault();
-              handleFormat('subscript');
-            }
-            break;
-          // Alignment shortcuts
-          case 'l':
-            event.preventDefault();
-            handleAlignmentChange('left');
-            break;
-          case 'e':
-            event.preventDefault();
-            handleAlignmentChange('center');
-            break;
-          case 'r':
-            event.preventDefault();
-            handleAlignmentChange('right');
-            break;
-          case 'j':
-            event.preventDefault();
-            handleAlignmentChange('both');
-            break;
-          case 'k':
-            event.preventDefault();
-            handleFormat('insertLink');
-            break;
-          // Undo/Redo handled by useHistory hook
-        }
-      }
-    };
-
-    // Add listener to document
-    document.addEventListener('keydown', handleKeyDown);
-
-    return () => {
-      document.removeEventListener('keydown', handleKeyDown);
-    };
-  }, [enableShortcuts, handleFormat, editorRef]);
-
-  // Prevent toolbar clicks from stealing focus and refocus editor
   const handleToolbarMouseDown = useCallback((e: React.MouseEvent) => {
-    // Allow clicks on input/select elements to work normally
     const target = e.target as HTMLElement;
     const isInteractive =
       target.tagName === 'INPUT' ||
@@ -676,15 +374,12 @@ export function Toolbar({
       target.tagName === 'OPTION';
 
     if (!isInteractive) {
-      // Prevent the mousedown from stealing focus
       e.preventDefault();
     }
   }, []);
 
-  // Refocus editor after toolbar click (called on mouseup)
   const handleToolbarMouseUp = useCallback(
     (e: React.MouseEvent) => {
-      // Don't refocus if user is interacting with a select/input
       const target = e.target as HTMLElement;
       const activeEl = document.activeElement as HTMLElement;
       const isSelectActive =
@@ -692,11 +387,8 @@ export function Toolbar({
         target.tagName === 'OPTION' ||
         activeEl?.tagName === 'SELECT';
 
-      if (isSelectActive) {
-        return; // Let the select keep focus
-      }
+      if (isSelectActive) return;
 
-      // Use requestAnimationFrame to ensure the click action completes first
       requestAnimationFrame(() => {
         onRefocusEditor?.();
       });
@@ -801,275 +493,24 @@ export function Toolbar({
         ]}
       />
 
-      {/* Undo/Redo Group */}
-      <ToolbarGroup label="History">
-        <ToolbarButton
-          onClick={handleUndo}
-          disabled={disabled || !canUndo}
-          title="Undo (Ctrl+Z)"
-          ariaLabel="Undo"
-        >
-          <MaterialSymbol name="undo" size={ICON_SIZE} />
-        </ToolbarButton>
-        <ToolbarButton
-          onClick={handleRedo}
-          disabled={disabled || !canRedo}
-          title="Redo (Ctrl+Y)"
-          ariaLabel="Redo"
-        >
-          <MaterialSymbol name="redo" size={ICON_SIZE} />
-        </ToolbarButton>
-      </ToolbarGroup>
-
-      {/* Zoom Control */}
-      {showZoomControl && (
-        <ToolbarGroup label="Zoom">
-          <ZoomControl
-            value={zoom}
-            onChange={onZoomChange}
-            minZoom={0.5}
-            maxZoom={2}
-            disabled={disabled}
-            compact
-            showButtons={false}
-          />
-        </ToolbarGroup>
-      )}
-
-      {/* Style Picker */}
-      {showStylePicker && (
-        <ToolbarGroup label="Styles">
-          <StylePicker
-            value={currentFormatting.styleId || 'Normal'}
-            onChange={handleStyleChange}
-            styles={documentStyles}
-            theme={theme}
-            disabled={disabled}
-            width={120}
-          />
-        </ToolbarGroup>
-      )}
-
-      {/* Font Family and Size Pickers */}
-      {(showFontPicker || showFontSizePicker) && (
-        <ToolbarGroup label="Font">
-          {showFontPicker && (
-            <FontPicker
-              value={currentFormatting.fontFamily || 'Arial'}
-              onChange={handleFontFamilyChange}
-              disabled={disabled}
-              width={60}
-              placeholder="Arial"
-            />
-          )}
-          {showFontSizePicker && (
-            <FontSizePicker
-              value={
-                currentFormatting.fontSize !== undefined
-                  ? halfPointsToPoints(currentFormatting.fontSize)
-                  : 11
-              }
-              onChange={handleFontSizeChange}
-              disabled={disabled}
-              width={42}
-              placeholder="11"
-            />
-          )}
-        </ToolbarGroup>
-      )}
-
-      {/* Text Formatting Group */}
-      <ToolbarGroup label="Text formatting">
-        <ToolbarButton
-          onClick={() => handleFormat('bold')}
-          active={currentFormatting.bold}
-          disabled={disabled}
-          title="Bold (Ctrl+B)"
-          ariaLabel="Bold"
-        >
-          <MaterialSymbol name="format_bold" size={ICON_SIZE} />
-        </ToolbarButton>
-        <ToolbarButton
-          onClick={() => handleFormat('italic')}
-          active={currentFormatting.italic}
-          disabled={disabled}
-          title="Italic (Ctrl+I)"
-          ariaLabel="Italic"
-        >
-          <MaterialSymbol name="format_italic" size={ICON_SIZE} />
-        </ToolbarButton>
-        <ToolbarButton
-          onClick={() => handleFormat('underline')}
-          active={currentFormatting.underline}
-          disabled={disabled}
-          title="Underline (Ctrl+U)"
-          ariaLabel="Underline"
-        >
-          <MaterialSymbol name="format_underlined" size={ICON_SIZE} />
-        </ToolbarButton>
-        <ToolbarButton
-          onClick={() => handleFormat('strikethrough')}
-          active={currentFormatting.strike}
-          disabled={disabled}
-          title="Strikethrough"
-          ariaLabel="Strikethrough"
-        >
-          <MaterialSymbol name="strikethrough_s" size={ICON_SIZE} />
-        </ToolbarButton>
-        {showTextColorPicker && (
-          <AdvancedColorPicker
-            mode="text"
-            value={currentFormatting.color?.replace(/^#/, '')}
-            onChange={handleTextColorChange}
-            theme={theme}
-            disabled={disabled}
-            title="Font Color"
-          />
-        )}
-        {showHighlightColorPicker && (
-          <AdvancedColorPicker
-            mode="highlight"
-            value={currentFormatting.highlight}
-            onChange={handleHighlightColorChange}
-            theme={theme}
-            disabled={disabled}
-            title="Text Highlight Color"
-          />
-        )}
-        <ToolbarButton
-          onClick={() => handleFormat('insertLink')}
-          disabled={disabled}
-          title="Insert link (Ctrl+K)"
-          ariaLabel="Insert link"
-        >
-          <MaterialSymbol name="link" size={ICON_SIZE} />
-        </ToolbarButton>
-      </ToolbarGroup>
-
-      {/* Superscript/Subscript Group */}
-      <ToolbarGroup label="Script">
-        <ToolbarButton
-          onClick={() => handleFormat('superscript')}
-          active={currentFormatting.superscript}
-          disabled={disabled}
-          title="Superscript (Ctrl+Shift+=)"
-          ariaLabel="Superscript"
-        >
-          <MaterialSymbol name="superscript" size={ICON_SIZE} />
-        </ToolbarButton>
-        <ToolbarButton
-          onClick={() => handleFormat('subscript')}
-          active={currentFormatting.subscript}
-          disabled={disabled}
-          title="Subscript (Ctrl+=)"
-          ariaLabel="Subscript"
-        >
-          <MaterialSymbol name="subscript" size={ICON_SIZE} />
-        </ToolbarButton>
-      </ToolbarGroup>
-
-      {/* Alignment Dropdown */}
-      {showAlignmentButtons && (
-        <ToolbarGroup label="Alignment">
-          <AlignmentButtons
-            value={currentFormatting.alignment || 'left'}
-            onChange={handleAlignmentChange}
-            disabled={disabled}
-          />
-        </ToolbarGroup>
-      )}
-
-      {/* List Buttons and Line Spacing */}
-      {(showListButtons || showLineSpacingPicker) && (
-        <ToolbarGroup label="List formatting">
-          {showListButtons && (
-            <ListButtons
-              listState={currentFormatting.listState || createDefaultListState()}
-              onBulletList={handleBulletList}
-              onNumberedList={handleNumberedList}
-              onIndent={handleIndent}
-              onOutdent={handleOutdent}
-              disabled={disabled}
-              showIndentButtons={true}
-              compact
-              hasIndent={(currentFormatting.indentLeft ?? 0) > 0}
-            />
-          )}
-          {showLineSpacingPicker && (
-            <LineSpacingPicker
-              value={currentFormatting.lineSpacing}
-              onChange={handleLineSpacingChange}
-              disabled={disabled}
-            />
-          )}
-        </ToolbarGroup>
-      )}
-
-      {/* Image controls - shown when image is selected */}
-      {imageContext && onImageWrapType && (
-        <ToolbarGroup label="Image">
-          <ImageWrapDropdown
-            imageContext={imageContext}
-            onChange={onImageWrapType}
-            disabled={disabled}
-          />
-          {onImageTransform && (
-            <ImageTransformDropdown onTransform={onImageTransform} disabled={disabled} />
-          )}
-          {onOpenImageProperties && (
-            <ToolbarButton
-              onClick={onOpenImageProperties}
-              disabled={disabled}
-              title="Image properties (alt text, border)..."
-              ariaLabel="Image properties"
-            >
-              <MaterialSymbol name="tune" size={ICON_SIZE} />
-            </ToolbarButton>
-          )}
-        </ToolbarGroup>
-      )}
-
-      {/* Table Options - shown when cursor is in a table */}
-      {tableContext?.isInTable && onTableAction && (
-        <ToolbarGroup label="Table">
-          <TableBorderPicker onAction={handleTableAction} disabled={disabled} />
-          <TableBorderColorPicker
-            onAction={handleTableAction}
-            disabled={disabled}
-            theme={theme}
-            value={
-              tableContext?.cellBorderColor
-                ? resolveColor(tableContext.cellBorderColor, theme).replace(/^#/, '')
-                : undefined
-            }
-          />
-          <TableBorderWidthPicker onAction={handleTableAction} disabled={disabled} />
-          <TableCellFillPicker
-            onAction={handleTableAction}
-            disabled={disabled}
-            theme={theme}
-            value={tableContext?.cellBackgroundColor}
-          />
-          <TableMoreDropdown
-            onAction={handleTableAction}
-            disabled={disabled}
-            tableContext={tableContext}
-          />
-        </ToolbarGroup>
-      )}
-
-      {/* Clear Formatting */}
-      <ToolbarButton
-        onClick={() => handleFormat('clearFormatting')}
+      {/* Formatting icons — rendered inline (display:contents) */}
+      <FormattingBar
+        {...restProps}
         disabled={disabled}
-        title="Clear formatting"
-        ariaLabel="Clear formatting"
+        onFormat={onFormat}
+        onRefocusEditor={onRefocusEditor}
+        onInsertTable={onInsertTable}
+        showTableInsert={showTableInsert}
+        onInsertImage={onInsertImage}
+        onInsertPageBreak={onInsertPageBreak}
+        onInsertTOC={onInsertTOC}
+        onPrint={onPrint}
+        showPrintButton={showPrintButton}
+        onPageSetup={onPageSetup}
+        inline
       >
-        <MaterialSymbol name="format_clear" size={ICON_SIZE} />
-      </ToolbarButton>
-
-      {/* Custom toolbar items */}
-      {children}
+        {children}
+      </FormattingBar>
     </div>
   );
 }

@@ -54,7 +54,7 @@ const TWIPS_PER_CM = 567;
 const RULER_HEIGHT = 22;
 const RULER_TEXT_COLOR = 'var(--doc-text-muted)';
 const RULER_TICK_COLOR = 'var(--doc-text-subtle)';
-const MARGIN_ZONE_COLOR = 'rgba(0, 0, 0, 0.06)';
+const MARGIN_ZONE_COLOR = 'rgba(0, 0, 0, 0.02)';
 const INDENT_COLOR = '#4285f4';
 const INDENT_HOVER_COLOR = '#3367d6';
 const INDENT_ACTIVE_COLOR = '#2a56c6';
@@ -240,7 +240,7 @@ export function HorizontalRuler({
           width: formatPx(leftMarginPx),
           height: RULER_HEIGHT,
           backgroundColor: MARGIN_ZONE_COLOR,
-          borderRight: '1px solid rgba(0,0,0,0.12)',
+          borderRight: '1px solid rgba(0,0,0,0.06)',
           cursor: editable ? 'ew-resize' : 'default',
           zIndex: 1,
         }}
@@ -256,7 +256,7 @@ export function HorizontalRuler({
           width: formatPx(rightMarginPx),
           height: RULER_HEIGHT,
           backgroundColor: MARGIN_ZONE_COLOR,
-          borderLeft: '1px solid rgba(0,0,0,0.12)',
+          borderLeft: '1px solid rgba(0,0,0,0.06)',
           cursor: editable ? 'ew-resize' : 'default',
           zIndex: 1,
         }}
