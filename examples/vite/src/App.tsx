@@ -214,7 +214,6 @@ export function App() {
           showRuler={!isMobile}
           showZoomControl={true}
           initialZoom={autoZoom}
-          toolbarLayout="google-docs"
           renderLogo={renderLogo}
           documentName={fileName}
           onDocumentNameChange={setFileName}

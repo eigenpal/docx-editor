@@ -2,14 +2,9 @@
 
 ## Overview
 
-The editor supports two toolbar layouts:
+The editor uses a two-level composable toolbar with a title bar and a formatting bar.
 
-- **`classic`** (default) — Single-row toolbar with menus and formatting icons side by side
-- **`google-docs`** — Two-level composable toolbar with a title bar and a formatting bar
-
-Both layouts are fully functional — they share the same formatting engine and keyboard shortcuts.
-
-### Two-Level Layout Structure
+### Layout Structure
 
 ```
 ┌──────────┬────────────────────────────────┬──────────────────────┐
@@ -27,16 +22,16 @@ Both layouts are fully functional — they share the same formatting engine and 
 - **Formatting Bar**: Rendered inside a rounded pill with a subtle gray background
 - Every slot is customizable — pass your own logo, action buttons, or extra toolbar items
 
-There are **two ways** to use the two-level toolbar:
+There are **two ways** to customize the toolbar:
 
-1. **DocxEditor props** — Quick setup using `toolbarLayout="google-docs"` with render props
+1. **DocxEditor props** — Quick setup with render props
 2. **Compound components** — Full control using `EditorToolbar` and its sub-components
 
 ---
 
 ## Quick Setup (DocxEditor Props)
 
-The simplest way to get the two-level toolbar:
+The simplest way to customize the toolbar:
 
 ```tsx
 import { DocxEditor } from '@eigenpal/docx-js-editor';
@@ -47,7 +42,6 @@ function App() {
   return (
     <DocxEditor
       documentBuffer={buffer}
-      toolbarLayout="google-docs"
       renderLogo={() => <img src="/logo.svg" alt="Logo" />}
       documentName={fileName}
       onDocumentNameChange={setFileName}
@@ -63,15 +57,14 @@ function App() {
 
 ### DocxEditor Toolbar Props
 
-| Prop                   | Type                         | Default     | Description                                               |
-| ---------------------- | ---------------------------- | ----------- | --------------------------------------------------------- |
-| `toolbarLayout`        | `'classic' \| 'google-docs'` | `'classic'` | Toolbar layout style                                      |
-| `renderLogo`           | `() => ReactNode`            | —           | Custom logo/icon in the title bar (two-level layout only) |
-| `documentName`         | `string`                     | —           | Editable document name displayed in the title bar         |
-| `onDocumentNameChange` | `(name: string) => void`     | —           | Called when the user edits the document name              |
-| `renderTitleBarRight`  | `() => ReactNode`            | —           | Custom actions on the right side of the title bar         |
+| Prop                   | Type                     | Default | Description                                       |
+| ---------------------- | ------------------------ | ------- | ------------------------------------------------- |
+| `renderLogo`           | `() => ReactNode`        | —       | Custom logo/icon in the title bar                 |
+| `documentName`         | `string`                 | —       | Editable document name displayed in the title bar |
+| `onDocumentNameChange` | `(name: string) => void` | —       | Called when the user edits the document name      |
+| `renderTitleBarRight`  | `() => ReactNode`        | —       | Custom actions on the right side of the title bar |
 
-All existing toolbar props (`showToolbar`, `showZoomControl`, `showRuler`, `toolbarExtra`, etc.) continue to work with both layouts.
+All existing toolbar props (`showToolbar`, `showZoomControl`, `showRuler`, `toolbarExtra`, etc.) continue to work.
 
 ---
 
@@ -173,56 +166,12 @@ The icon formatting toolbar (undo/redo, zoom, fonts, bold/italic/underline, colo
 
 ---
 
-## Migration Guide
-
-### Before: Classic layout with custom header
-
-```tsx
-function App() {
-  return (
-    <div>
-      {/* Custom header above the editor */}
-      <header>
-        <img src="/logo.svg" />
-        <span>{fileName}</span>
-        <button onClick={handleSave}>Save</button>
-      </header>
-
-      <DocxEditor documentBuffer={buffer} showToolbar={true} />
-    </div>
-  );
-}
-```
-
-### After: Two-level layout with integrated title bar
-
-```tsx
-function App() {
-  return (
-    <DocxEditor
-      documentBuffer={buffer}
-      showToolbar={true}
-      toolbarLayout="google-docs"
-      renderLogo={() => <img src="/logo.svg" />}
-      documentName={fileName}
-      onDocumentNameChange={setFileName}
-      renderTitleBarRight={() => <button onClick={handleSave}>Save</button>}
-    />
-  );
-}
-```
-
-The custom header is no longer needed — logo, document name, and action buttons are all integrated into the toolbar's title bar row.
-
----
-
 ## Customization Patterns
 
 ### Custom logo with branding
 
 ```tsx
 <DocxEditor
-  toolbarLayout="google-docs"
   renderLogo={() => (
     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
       <img src="/logo.svg" width={24} height={24} />
@@ -236,7 +185,6 @@ The custom header is no longer needed — logo, document name, and action button
 
 ```tsx
 <DocxEditor
-  toolbarLayout="google-docs"
   renderTitleBarRight={() => (
     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
       <span style={{ fontSize: 12, color: '#666' }}>Saved</span>
@@ -253,7 +201,6 @@ Use `toolbarExtra` to append custom buttons to the formatting bar:
 
 ```tsx
 <DocxEditor
-  toolbarLayout="google-docs"
   toolbarExtra={
     <>
       <button onClick={handleSpellCheck}>Spell Check</button>

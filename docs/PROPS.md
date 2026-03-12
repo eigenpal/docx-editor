@@ -34,8 +34,7 @@
 | `onCopy`               | `() => void`                                | —           | Called when content is copied                                                          |
 | `onCut`                | `() => void`                                | —           | Called when content is cut                                                             |
 | `onPaste`              | `() => void`                                | —           | Called when content is pasted                                                          |
-| `toolbarLayout`        | `'classic' \| 'google-docs'`                | `'classic'` | Toolbar layout style (see [TOOLBAR.md](./TOOLBAR.md))                                  |
-| `renderLogo`           | `() => ReactNode`                           | —           | Custom logo in the title bar (two-level layout only)                                   |
+| `renderLogo`           | `() => ReactNode`                           | —           | Custom logo in the title bar                                                           |
 | `documentName`         | `string`                                    | —           | Editable document name in the title bar                                                |
 | `onDocumentNameChange` | `(name: string) => void`                    | —           | Called when the user edits the document name                                           |
 | `renderTitleBarRight`  | `() => ReactNode`                           | —           | Custom right-side actions in the title bar                                             |
