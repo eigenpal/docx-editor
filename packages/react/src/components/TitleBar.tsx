@@ -287,7 +287,7 @@ export function TitleBar({ children }: TitleBarProps) {
 
   return (
     <div
-      className="flex items-stretch bg-white pt-2"
+      className="flex items-stretch bg-white pt-2 pb-1"
       onMouseDown={handleMouseDown}
       data-testid="title-bar"
     >
