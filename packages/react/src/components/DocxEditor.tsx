@@ -296,6 +296,8 @@ export interface DocxEditorProps {
   documentName?: string;
   /** Callback when document name changes (google-docs layout only) */
   onDocumentNameChange?: (name: string) => void;
+  /** Whether the document name is editable (google-docs layout only, default: true) */
+  documentNameEditable?: boolean;
   /** Custom right-side actions for the title bar (google-docs layout only) */
   renderTitleBarRight?: () => ReactNode;
 }
@@ -605,6 +607,7 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
     renderLogo,
     documentName,
     onDocumentNameChange,
+    documentNameEditable = true,
     renderTitleBarRight,
   },
   ref
@@ -2938,10 +2941,11 @@ body { background: white; }
                     >
                       <EditorToolbar.TitleBar>
                         {renderLogo && <EditorToolbar.Logo>{renderLogo()}</EditorToolbar.Logo>}
-                        {documentName !== undefined && onDocumentNameChange && (
+                        {documentName !== undefined && (
                           <EditorToolbar.DocumentName
                             value={documentName}
                             onChange={onDocumentNameChange}
+                            editable={documentNameEditable}
                           />
                         )}
                         {renderTitleBarRight && (

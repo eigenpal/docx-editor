@@ -17,6 +17,25 @@ import { useEditorToolbar } from './EditorToolbarContext';
 import type { FormattingAction } from './Toolbar';
 
 // ============================================================================
+// Default Doc Icon (shown when no Logo is provided)
+// ============================================================================
+
+function DefaultDocIcon() {
+  return (
+    <svg width="32" height="40" viewBox="0 0 32 40" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <path
+        d="M2 0C0.9 0 0 0.9 0 2V38C0 39.1 0.9 40 2 40H30C31.1 40 32 39.1 32 38V10L22 0H2Z"
+        fill="#cbd5e1"
+      />
+      <path d="M22 0L32 10H24C22.9 10 22 9.1 22 8V0Z" fill="#94a3b8" />
+      <rect x="7" y="18" width="18" height="2" rx="1" fill="#fff" />
+      <rect x="7" y="23" width="18" height="2" rx="1" fill="#fff" />
+      <rect x="7" y="28" width="12" height="2" rx="1" fill="#fff" />
+    </svg>
+  );
+}
+
+// ============================================================================
 // Logo
 // ============================================================================
 
@@ -34,16 +53,38 @@ export function Logo({ children }: LogoProps) {
 
 export interface DocumentNameProps {
   value: string;
-  onChange: (value: string) => void;
+  onChange?: (value: string) => void;
   placeholder?: string;
+  editable?: boolean;
 }
 
-export function DocumentName({ value, onChange, placeholder = 'Untitled' }: DocumentNameProps) {
+function stripExtension(name: string): string {
+  return name.replace(/\.docx$/i, '');
+}
+
+export function DocumentName({
+  value,
+  onChange,
+  placeholder = 'Untitled',
+  editable = true,
+}: DocumentNameProps) {
+  const displayName = stripExtension(value);
+
+  if (!editable) {
+    return (
+      <span className="text-base font-normal text-slate-800 px-2 py-0 min-w-[100px] max-w-[300px] truncate leading-tight">
+        {displayName || placeholder}
+      </span>
+    );
+  }
   return (
     <input
       type="text"
-      value={value}
-      onChange={(e) => onChange(e.target.value)}
+      value={displayName}
+      onChange={(e) => {
+        const raw = e.target.value;
+        onChange?.(raw.endsWith('.docx') ? raw : raw + '.docx');
+      }}
       placeholder={placeholder}
       className="text-base font-normal text-slate-800 bg-transparent border-0 outline-none px-2 py-0 rounded hover:bg-slate-50 focus:bg-white focus:ring-1 focus:ring-slate-300 min-w-[100px] max-w-[300px] truncate leading-tight"
       aria-label="Document name"
@@ -250,8 +291,8 @@ export function TitleBar({ children }: TitleBarProps) {
       onMouseDown={handleMouseDown}
       data-testid="title-bar"
     >
-      {/* Left: Logo spanning full height */}
-      {logoItem && <div className="flex items-center flex-shrink-0 px-3">{logoItem}</div>}
+      {/* Left: Logo spanning full height (default doc icon if none provided) */}
+      <div className="flex items-center flex-shrink-0 px-3">{logoItem || <DefaultDocIcon />}</div>
 
       {/* Center: doc name on top, menus below */}
       <div className="flex flex-col justify-center flex-1 min-w-0 py-1">
