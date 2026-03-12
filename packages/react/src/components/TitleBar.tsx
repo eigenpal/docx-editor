@@ -292,7 +292,9 @@ export function TitleBar({ children }: TitleBarProps) {
       data-testid="title-bar"
     >
       {/* Left: Logo spanning full height (default doc icon if none provided) */}
-      <div className="flex items-center flex-shrink-0 px-3">{logoItem || <DefaultDocIcon />}</div>
+      <div className="flex items-center flex-shrink-0 pl-3 pr-1">
+        {logoItem || <DefaultDocIcon />}
+      </div>
 
       {/* Center: doc name on top, menus below */}
       <div className="flex flex-col justify-center flex-1 min-w-0 py-1">
