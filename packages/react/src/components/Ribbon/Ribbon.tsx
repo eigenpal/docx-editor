@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { Style, Theme } from '@eigenpal/docx-core/types/document';
+import type { Style, Theme, SectionProperties } from '@eigenpal/docx-core/types/document';
+import type { ImageSizeDialogFocusTarget } from '../dialogs/ImageSizeDialog';
 import type { TableContextInfo } from '@eigenpal/docx-core/prosemirror';
 
 import type { FormattingAction, SelectionFormatting } from '../toolbarTypes';
 import type { EditorMode } from '../ui/EditingModeDropdown';
 import type { TableAction } from '../ui/TableToolbar';
+import type { SectionBreakType } from '../ui/BreaksDropdown';
 import { MaterialSymbol } from '../ui/MaterialSymbol';
 import { useToolbarItems, type RibbonItemModel } from '../toolbarItems';
 import { ribbonIcons } from './ribbonIcons';
@@ -20,10 +22,20 @@ export interface RibbonProps {
   onFind?: () => void;
   onReplace?: () => void;
   onPageSetup?: () => void;
+  onApplyPageSetup?: (props: Partial<SectionProperties>) => void;
+  sectionProperties?: SectionProperties | null;
   onInsertTable?: (rows: number, columns: number) => void;
   onInsertImage?: () => void;
   onInsertPageBreak?: () => void;
+  onInsertSectionBreak?: (breakType: SectionBreakType) => void;
   onInsertTOC?: () => void;
+  onUpdateTOC?: () => void;
+  onAcceptAllChanges?: () => void;
+  onRejectAllChanges?: () => void;
+  onSetIndentLeft?: (twips: number) => void;
+  onSetIndentRight?: (twips: number) => void;
+  onSetSpaceBefore?: (twips: number) => void;
+  onSetSpaceAfter?: (twips: number) => void;
   onToggleCommentsSidebar?: () => void;
   editingMode?: EditorMode;
   onSetEditingMode?: (mode: EditorMode) => void;
@@ -55,6 +67,9 @@ export interface RibbonProps {
   onCloseHeaderFooter?: () => void;
   hfEditPosition?: 'header' | 'footer' | null;
   onOpenImageProperties?: () => void;
+  onOpenImageSize?: (focus?: ImageSizeDialogFocusTarget) => void;
+  onNewComment?: () => void;
+  onDeleteComment?: () => void;
   onRefocusEditor?: () => void;
 }
 
@@ -126,10 +141,20 @@ export function Ribbon({
   onFind,
   onReplace,
   onPageSetup,
+  onApplyPageSetup,
+  sectionProperties,
   onInsertTable,
   onInsertImage,
   onInsertPageBreak,
+  onInsertSectionBreak,
   onInsertTOC,
+  onUpdateTOC,
+  onAcceptAllChanges,
+  onRejectAllChanges,
+  onSetIndentLeft,
+  onSetIndentRight,
+  onSetSpaceBefore,
+  onSetSpaceAfter,
   onToggleCommentsSidebar,
   editingMode,
   onSetEditingMode,
@@ -157,6 +182,9 @@ export function Ribbon({
   onCloseHeaderFooter,
   hfEditPosition,
   onOpenImageProperties,
+  onOpenImageSize,
+  onNewComment,
+  onDeleteComment,
   onRefocusEditor,
 }: RibbonProps) {
   const { ribbon, renderRibbonComponent } = useToolbarItems({
@@ -170,10 +198,20 @@ export function Ribbon({
     onFind,
     onReplace,
     onPageSetup,
+    onApplyPageSetup,
+    sectionProperties,
     onInsertTable,
     onInsertImage,
     onInsertPageBreak,
+    onInsertSectionBreak,
     onInsertTOC,
+    onUpdateTOC,
+    onAcceptAllChanges,
+    onRejectAllChanges,
+    onSetIndentLeft,
+    onSetIndentRight,
+    onSetSpaceBefore,
+    onSetSpaceAfter,
     onToggleCommentsSidebar,
     editingMode,
     onSetEditingMode,
@@ -201,6 +239,9 @@ export function Ribbon({
     onCloseHeaderFooter,
     hfEditPosition,
     onOpenImageProperties,
+    onOpenImageSize,
+    onNewComment,
+    onDeleteComment,
     onRefocusEditor,
   });
 

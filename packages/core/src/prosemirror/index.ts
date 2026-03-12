@@ -85,6 +85,8 @@ export {
   setIndentLeft,
   setIndentRight,
   setIndentFirstLine,
+  setSpaceBefore,
+  setSpaceAfter,
   toggleParagraphBottomBorder,
   addTabStop,
   removeTabStop,
@@ -102,6 +104,7 @@ export {
   getStyleId,
   setRtl,
   setLtr,
+  insertSectionBreak,
   // Table operations
   isInTable,
   getTableContext,

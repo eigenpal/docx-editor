@@ -15,6 +15,7 @@ export interface MenuItem {
   shortcut?: string;
   onClick?: () => void;
   disabled?: boolean;
+  checked?: boolean;
   /** Custom content to render instead of a simple menu item */
   customContent?: ReactNode;
   /** Submenu content that appears to the right on hover */
@@ -35,6 +36,11 @@ interface MenuDropdownProps {
   label: string;
   items: MenuEntry[];
   disabled?: boolean;
+  triggerContent?: ReactNode;
+  triggerClassName?: string;
+  testId?: string;
+  menuWidth?: number;
+  showCaret?: boolean;
 }
 
 const triggerStyle: CSSProperties = {
@@ -92,6 +98,13 @@ const shortcutStyle: CSSProperties = {
   color: 'var(--doc-text-muted, #9ca3af)',
 };
 
+const checkSlotStyle: CSSProperties = {
+  width: 16,
+  display: 'inline-flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+};
+
 const submenuPanelStyle: CSSProperties = {
   position: 'absolute',
   left: '100%',
@@ -105,7 +118,16 @@ const submenuPanelStyle: CSSProperties = {
   zIndex: 1001,
 };
 
-export function MenuDropdown({ label, items, disabled }: MenuDropdownProps) {
+export function MenuDropdown({
+  label,
+  items,
+  disabled,
+  triggerContent,
+  triggerClassName,
+  testId,
+  menuWidth,
+  showCaret = true,
+}: MenuDropdownProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [hoveredSubmenu, setHoveredSubmenu] = useState<string | null>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
@@ -177,14 +199,17 @@ export function MenuDropdown({ label, items, disabled }: MenuDropdownProps) {
         onMouseDown={(e) => e.preventDefault()}
         disabled={disabled}
         style={isOpen ? triggerOpenStyle : triggerStyle}
+        className={triggerClassName}
+        data-testid={testId}
       >
-        {label}
-        <MaterialSymbol name="arrow_drop_down" size={16} />
+        {triggerContent ?? <span>{label}</span>}
+        {showCaret && <MaterialSymbol name="arrow_drop_down" size={16} />}
       </button>
 
       {isOpen && (
         <div
           ref={dropdownRef}
+          role="menu"
           style={{
             position: 'fixed',
             top: dropdownPos.top,
@@ -195,7 +220,7 @@ export function MenuDropdown({ label, items, disabled }: MenuDropdownProps) {
             boxShadow: '0 4px 12px rgba(0, 0, 0, 0.12)',
             padding: '4px 0',
             zIndex: 10000,
-            minWidth: 200,
+            minWidth: menuWidth ?? 200,
           }}
           onMouseDown={(e) => e.preventDefault()}
         >
@@ -227,6 +252,8 @@ export function MenuDropdown({ label, items, disabled }: MenuDropdownProps) {
                   style={item.disabled ? menuItemDisabledStyle : menuItemStyle}
                   onClick={() => handleItemClick(item)}
                   onMouseDown={(e) => e.preventDefault()}
+                  role="menuitem"
+                  data-checked={item.checked ? 'true' : 'false'}
                   onMouseOver={(e) => {
                     if (!item.disabled) {
                       (e.currentTarget as HTMLButtonElement).style.backgroundColor =
@@ -238,6 +265,9 @@ export function MenuDropdown({ label, items, disabled }: MenuDropdownProps) {
                   }}
                   disabled={item.disabled}
                 >
+                  <span style={checkSlotStyle} aria-hidden="true">
+                    {item.checked ? <MaterialSymbol name="check" size={16} /> : null}
+                  </span>
                   {item.icon && <MaterialSymbol name={item.icon} size={18} />}
                   <span>{item.label}</span>
                   {item.shortcut && <span style={shortcutStyle}>{item.shortcut}</span>}

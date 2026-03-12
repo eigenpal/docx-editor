@@ -26,6 +26,7 @@ import type {
   Theme,
   HeaderFooter,
   SectionProperties,
+  ColorValue,
 } from '@eigenpal/docx-core/types/document';
 
 import { Toolbar, ToolbarButton, ToolbarSeparator } from './Toolbar';
@@ -34,6 +35,7 @@ import { RibbonToolbar } from './Ribbon';
 import { pointsToHalfPoints } from './ui/FontSizePicker';
 import { DocumentOutline } from './DocumentOutline';
 import { CommentsSidebar, type TrackedChangeEntry } from './CommentsSidebar';
+import { ColorHistoryProvider } from './ColorHistoryContext';
 import type { HeadingInfo } from '@eigenpal/docx-core/utils/headingCollector';
 import type { Comment } from '@eigenpal/docx-core/types/content';
 import { ErrorBoundary, ErrorProvider } from './ErrorBoundary';
@@ -65,6 +67,7 @@ import {
 import { useHyperlinkDialog, type HyperlinkData } from './dialogs/HyperlinkDialog';
 import type { ImagePositionData } from './dialogs/ImagePositionDialog';
 import type { ImagePropertiesData } from './dialogs/ImagePropertiesDialog';
+import type { ImageSizeDialogFocusTarget } from './dialogs/ImageSizeDialog';
 import {
   InlineHeaderFooterEditor,
   type InlineHeaderFooterEditorRef,
@@ -81,6 +84,9 @@ const ImagePositionDialog = lazy(() =>
 );
 const ImagePropertiesDialog = lazy(() =>
   import('./dialogs/ImagePropertiesDialog').then((m) => ({ default: m.ImagePropertiesDialog }))
+);
+const ImageSizeDialog = lazy(() =>
+  import('./dialogs/ImageSizeDialog').then((m) => ({ default: m.ImageSizeDialog }))
 );
 const FootnotePropertiesDialog = lazy(() =>
   import('./dialogs/FootnotePropertiesDialog').then((m) => ({
@@ -143,6 +149,8 @@ import {
   setIndentLeft,
   setIndentRight,
   setIndentFirstLine,
+  setSpaceBefore,
+  setSpaceAfter,
   toggleParagraphBottomBorder,
   removeTabStop,
   increaseListLevel,
@@ -161,6 +169,7 @@ import {
   setLtr,
   // Page break command
   insertPageBreak,
+  insertSectionBreak,
   // Table of Contents command
   generateTOC,
   // Table commands
@@ -198,7 +207,13 @@ import {
   setTableBorderWidth,
   type TableContextInfo,
 } from '@eigenpal/docx-core/prosemirror';
-import { acceptChange, rejectChange } from '@eigenpal/docx-core/prosemirror/commands/comments';
+import {
+  acceptChange,
+  acceptAllChanges,
+  rejectChange,
+  rejectAllChanges,
+  removeCommentMark,
+} from '@eigenpal/docx-core/prosemirror/commands/comments';
 import { collectHeadings } from '@eigenpal/docx-core/utils/headingCollector';
 import {
   getChangedParagraphIds,
@@ -374,6 +389,8 @@ interface EditorState {
     borderColor: string | null;
     borderStyle: string | null;
   } | null;
+  /** Comment IDs in the current selection */
+  commentSelectionIds: number[];
 }
 
 export type { EditorMode } from './ui/EditingModeDropdown';
@@ -384,6 +401,7 @@ export type { EditorMode } from './ui/EditingModeDropdown';
 
 let nextCommentId = Date.now();
 const PENDING_COMMENT_ID = -1;
+const ZERO_WIDTH_SPACE = '\u200b';
 
 function createComment(text: string, authorName: string, parentId?: number): Comment {
   return {
@@ -465,7 +483,14 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
     paragraphTabs: null,
     pmTableContext: null,
     pmImageContext: null,
+    commentSelectionIds: [],
   });
+  const [lastTextColor, setLastTextColor] = useState<ColorValue | string>({ auto: true });
+  const [lastHighlightColor, setLastHighlightColor] = useState<string>('none');
+  const colorHistoryValue = useMemo(
+    () => ({ lastTextColor, lastHighlightColor, setLastTextColor, setLastHighlightColor }),
+    [lastTextColor, lastHighlightColor]
+  );
 
   // Table properties dialog state
   const [tablePropsOpen, setTablePropsOpen] = useState(false);
@@ -473,6 +498,15 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
   const [imagePositionOpen, setImagePositionOpen] = useState(false);
   // Image properties dialog state
   const [imagePropsOpen, setImagePropsOpen] = useState(false);
+  // Image size dialog state
+  const [imageSizeOpen, setImageSizeOpen] = useState(false);
+  const [imageSizeDefaults, setImageSizeDefaults] = useState<{
+    width: number;
+    height: number;
+    lock: boolean;
+  }>({ width: 0, height: 0, lock: true });
+  const [imageSizeAutoFocus, setImageSizeAutoFocus] =
+    useState<ImageSizeDialogFocusTarget | null>(null);
   // Footnote properties dialog state
   const [footnotePropsOpen, setFootnotePropsOpen] = useState(false);
   // Header/footer editing state
@@ -509,6 +543,7 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
     to: number;
   } | null>(null);
   const [addCommentYPosition, setAddCommentYPosition] = useState<number | null>(null);
+  const pendingCommentInsertedRef = useRef(false);
   const [editingModeInternal, setEditingModeInternal] = useState<EditorMode>(modeProp ?? 'editing');
   const editingMode = modeProp ?? editingModeInternal;
   const setEditingMode = (mode: EditorMode) => {
@@ -738,6 +773,114 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
   const handleToggleCommentsSidebar = useCallback(() => {
     setShowCommentsSidebar((prev) => !prev);
   }, []);
+
+  const handleAddComment = useCallback(
+    (addText: string) => {
+      const comment = createComment(addText, author);
+      const view = pagedEditorRef.current?.getView();
+      if (view && commentSelectionRange) {
+        const { from, to } = commentSelectionRange;
+        const pendingMark = view.state.schema.marks.comment.create({
+          commentId: PENDING_COMMENT_ID,
+        });
+        const realMark = view.state.schema.marks.comment.create({ commentId: comment.id });
+        const tr = view.state.tr.removeMark(from, to, pendingMark).addMark(from, to, realMark);
+        view.dispatch(tr);
+      }
+      setComments((prev) => [...prev, comment]);
+      setIsAddingComment(false);
+      setCommentSelectionRange(null);
+      setAddCommentYPosition(null);
+      pendingCommentInsertedRef.current = false;
+    },
+    [author, commentSelectionRange]
+  );
+
+  const handleCancelAddComment = useCallback(() => {
+    const view = pagedEditorRef.current?.getView();
+    if (view && commentSelectionRange) {
+      const { from, to } = commentSelectionRange;
+      const pendingMark = view.state.schema.marks.comment.create({
+        commentId: PENDING_COMMENT_ID,
+      });
+      let tr = view.state.tr.removeMark(from, to, pendingMark);
+      if (pendingCommentInsertedRef.current && from < to) {
+        tr = tr.delete(from, to);
+      }
+      view.dispatch(tr);
+    }
+    setIsAddingComment(false);
+    setCommentSelectionRange(null);
+    setAddCommentYPosition(null);
+    pendingCommentInsertedRef.current = false;
+  }, [commentSelectionRange]);
+
+  const handleNewComment = useCallback(() => {
+    if (readOnly) return;
+    const view = pagedEditorRef.current?.getView();
+    if (!view) return;
+    if (isAddingComment) return;
+
+    const { from, to, empty } = view.state.selection;
+    const container = scrollContainerRef.current;
+    const parentEl = editorContentRef.current;
+    let anchorY: number | null = null;
+
+    if (container && parentEl) {
+      try {
+        const coords = view.coordsAtPos(from);
+        const parentRect = parentEl.getBoundingClientRect();
+        anchorY = coords.top - parentRect.top + container.scrollTop;
+      } catch {
+        anchorY = null;
+      }
+    }
+
+    const pendingMark = view.state.schema.marks.comment?.create({
+      commentId: PENDING_COMMENT_ID,
+    });
+    if (!pendingMark) return;
+
+    if (empty) {
+      const markFrom = from;
+      const markTo = from + ZERO_WIDTH_SPACE.length;
+      const tr = view.state.tr.insertText(ZERO_WIDTH_SPACE, from, to);
+      tr.addMark(markFrom, markTo, pendingMark);
+      tr.setSelection(TextSelection.create(tr.doc, markTo));
+      view.dispatch(tr);
+      setCommentSelectionRange({ from: markFrom, to: markTo });
+      pendingCommentInsertedRef.current = true;
+    } else {
+      const tr = view.state.tr.addMark(from, to, pendingMark);
+      tr.setSelection(TextSelection.create(tr.doc, to));
+      view.dispatch(tr);
+      setCommentSelectionRange({ from, to });
+      pendingCommentInsertedRef.current = false;
+    }
+
+    setAddCommentYPosition(anchorY ?? (container ? container.scrollTop : 0));
+    if (!showCommentsSidebar) setShowCommentsSidebar(true);
+    setIsAddingComment(true);
+    setFloatingCommentBtn(null);
+  }, [isAddingComment, readOnly, showCommentsSidebar]);
+
+  const handleDeleteComment = useCallback(() => {
+    if (readOnly) return;
+    const view = pagedEditorRef.current?.getView();
+    if (!view) return;
+    if (state.commentSelectionIds.length === 0) return;
+
+    state.commentSelectionIds.forEach((commentId) => {
+      removeCommentMark(commentId)(view.state, view.dispatch);
+    });
+    setComments((prev) =>
+      prev.filter(
+        (comment) =>
+          !state.commentSelectionIds.includes(comment.id) &&
+          (comment.parentId == null || !state.commentSelectionIds.includes(comment.parentId))
+      )
+    );
+  }, [readOnly, state.commentSelectionIds]);
 
   const captureLocalClipboard = useCallback(() => {
     const selection = window.getSelection();
@@ -1022,12 +1165,35 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
         }
       }
 
+      // Collect comment IDs for the current selection (range only)
+      let commentSelectionIds: number[] = [];
+      if (view) {
+        const { state: pmState } = view;
+        const commentMark = pmState.schema.marks.comment;
+        if (commentMark) {
+          const { from, to } = pmState.selection;
+          if (from !== to) {
+            const ids = new Set<number>();
+            pmState.doc.nodesBetween(from, to, (node) => {
+              for (const mark of node.marks ?? []) {
+                if (mark.type === commentMark) {
+                  const id = mark.attrs.commentId;
+                  if (typeof id === 'number') ids.add(id);
+                }
+              }
+            });
+            commentSelectionIds = Array.from(ids);
+          }
+        }
+      }
+
       if (!selectionState) {
         setFloatingCommentBtn(null);
         setState((prev) => ({
           ...prev,
           pmTableContext: pmTableCtx,
           pmImageContext: pmImageCtx,
+          commentSelectionIds,
         }));
         return;
       }
@@ -1068,6 +1234,9 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
         listState,
         styleId: selectionState.styleId ?? undefined,
         indentLeft: paragraphFormatting.indentLeft,
+        indentRight: paragraphFormatting.indentRight,
+        spaceBefore: paragraphFormatting.spaceBefore,
+        spaceAfter: paragraphFormatting.spaceAfter,
         bidi: !!paragraphFormatting.bidi,
       };
       setState((prev) => ({
@@ -1080,6 +1249,7 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
         paragraphTabs: paragraphFormatting.tabs ?? null,
         pmTableContext: pmTableCtx,
         pmImageContext: pmImageCtx,
+        commentSelectionIds,
       }));
 
       // Update floating comment button position
@@ -1227,6 +1397,16 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
     focusActiveEditor();
   }, [getActiveEditorView, focusActiveEditor]);
 
+  const handleInsertSectionBreak = useCallback(
+    (breakType: 'nextPage' | 'continuous' | 'oddPage' | 'evenPage') => {
+      const view = getActiveEditorView();
+      if (!view) return;
+      insertSectionBreak(breakType)(view.state, view.dispatch);
+      focusActiveEditor();
+    },
+    [getActiveEditorView, focusActiveEditor]
+  );
+
   // Insert a table of contents at cursor
   const handleInsertTOC = useCallback(() => {
     const view = getActiveEditorView();
@@ -1234,6 +1414,28 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
     generateTOC(view.state, view.dispatch);
     focusActiveEditor();
   }, [getActiveEditorView, focusActiveEditor]);
+
+  // Update an existing table of contents (currently regenerates)
+  const handleUpdateTOC = useCallback(() => {
+    const view = getActiveEditorView();
+    if (!view) return;
+    generateTOC(view.state, view.dispatch);
+    focusActiveEditor();
+  }, [getActiveEditorView, focusActiveEditor]);
+
+  const handleAcceptAllChanges = useCallback(() => {
+    const view = getActiveEditorView();
+    if (!view) return;
+    acceptAllChanges()(view.state, view.dispatch);
+    extractTrackedChanges();
+  }, [getActiveEditorView, extractTrackedChanges]);
+
+  const handleRejectAllChanges = useCallback(() => {
+    const view = getActiveEditorView();
+    if (!view) return;
+    rejectAllChanges()(view.state, view.dispatch);
+    extractTrackedChanges();
+  }, [getActiveEditorView, extractTrackedChanges]);
 
   // Toggle document outline sidebar
   const handleToggleOutline = useCallback(() => {
@@ -1456,6 +1658,40 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
     setImagePropsOpen(true);
   }, []);
 
+  const handleOpenImageSize = useCallback((focusTarget?: ImageSizeDialogFocusTarget) => {
+    const view = getActiveEditorView();
+    if (!view || !state.pmImageContext) return;
+
+    const pos = state.pmImageContext.pos;
+    const node = view.state.doc.nodeAt(pos);
+    if (!node || node.type.name !== 'image') return;
+
+    const widthAttr = Number(node.attrs.width);
+    const heightAttr = Number(node.attrs.height);
+    let width = Number.isFinite(widthAttr) ? widthAttr : 0;
+    let height = Number.isFinite(heightAttr) ? heightAttr : 0;
+
+    if (!width || !height) {
+      const pagesEl = scrollContainerRef.current?.querySelector('.paged-editor__pages');
+      const nodeEl = pagesEl?.querySelector(`[data-pm-start="${pos}"]`) as HTMLElement | null;
+      const imgEl =
+        nodeEl?.tagName === 'IMG' ? (nodeEl as HTMLImageElement) : nodeEl?.querySelector('img');
+      if (imgEl) {
+        const rect = imgEl.getBoundingClientRect();
+        width = Math.round(rect.width / state.zoom);
+        height = Math.round(rect.height / state.zoom);
+      }
+    }
+
+    setImageSizeDefaults({
+      width,
+      height,
+      lock: true,
+    });
+    setImageSizeAutoFocus(focusTarget ?? null);
+    setImageSizeOpen(true);
+  }, [getActiveEditorView, state.pmImageContext, state.zoom]);
+
   // Apply image properties (alt text + border)
   const handleApplyImageProperties = useCallback(
     (data: ImagePropertiesData) => {
@@ -1478,6 +1714,33 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
     },
     [getActiveEditorView, focusActiveEditor, state.pmImageContext]
   );
+
+  const handleApplyImageSize = useCallback(
+    (size: { width: number; height: number }) => {
+      const view = getActiveEditorView();
+      if (!view || !state.pmImageContext) return;
+
+      const pos = state.pmImageContext.pos;
+      const node = view.state.doc.nodeAt(pos);
+      if (!node || node.type.name !== 'image') return;
+
+      const tr = view.state.tr.setNodeMarkup(pos, undefined, {
+        ...node.attrs,
+        width: size.width,
+        height: size.height,
+      });
+      view.dispatch(tr.scrollIntoView());
+      focusActiveEditor();
+      setImageSizeOpen(false);
+      setImageSizeAutoFocus(null);
+    },
+    [getActiveEditorView, focusActiveEditor, state.pmImageContext]
+  );
+
+  const handleCloseImageSizeDialog = useCallback(() => {
+    setImageSizeOpen(false);
+    setImageSizeAutoFocus(null);
+  }, []);
 
   // Handle footnote/endnote properties update
   const handleApplyFootnoteProperties = useCallback(
@@ -2251,6 +2514,24 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
     [getActiveEditorView]
   );
 
+  const handleSpaceBeforeChange = useCallback(
+    (twips: number) => {
+      const view = getActiveEditorView();
+      if (!view) return;
+      setSpaceBefore(twips)(view.state, view.dispatch);
+    },
+    [getActiveEditorView]
+  );
+
+  const handleSpaceAfterChange = useCallback(
+    (twips: number) => {
+      const view = getActiveEditorView();
+      if (!view) return;
+      setSpaceAfter(twips)(view.state, view.dispatch);
+    },
+    [getActiveEditorView]
+  );
+
   const handleFirstLineIndentChange = useCallback(
     (twips: number) => {
       const view = getActiveEditorView();
@@ -2860,9 +3141,10 @@ body { background: white; }
   return (
     <ErrorProvider>
       <ErrorBoundary onError={handleEditorError}>
-        <div
-          ref={containerRef}
-          className={`ep-root docx-editor ${showMarksEnabled ? 'docx-show-marks' : ''} ${layoutMode === 'web' ? 'docx-layout-web' : ''} ${className}`}
+        <ColorHistoryProvider value={colorHistoryValue}>
+          <div
+            ref={containerRef}
+            className={`ep-root docx-editor ${showMarksEnabled ? 'docx-show-marks' : ''} ${layoutMode === 'web' ? 'docx-layout-web' : ''} ${className}`}
           style={containerStyle}
           data-testid="docx-editor"
           data-comments-open={showCommentsSidebar ? 'true' : 'false'}
@@ -2897,8 +3179,12 @@ body { background: white; }
                       onInsertTable={handleInsertTable}
                       onInsertImage={handleInsertImageClick}
                       onInsertPageBreak={handleInsertPageBreak}
+                      onInsertSectionBreak={handleInsertSectionBreak}
                       onInsertTOC={handleInsertTOC}
+                      onUpdateTOC={handleUpdateTOC}
                       onPageSetup={handleOpenPageSetup}
+                      onApplyPageSetup={handlePageSetupApply}
+                      sectionProperties={history.state?.package.document?.finalSectionProperties}
                       onCopy={handleCopy}
                       onCut={handleCut}
                       onPaste={handlePaste}
@@ -2916,6 +3202,14 @@ body { background: white; }
                       onToggleCommentsSidebar={handleToggleCommentsSidebar}
                       editingMode={editingMode}
                       onSetEditingMode={setEditingMode}
+                      onAcceptAllChanges={handleAcceptAllChanges}
+                      onRejectAllChanges={handleRejectAllChanges}
+                      onNewComment={handleNewComment}
+                      onDeleteComment={handleDeleteComment}
+                      onSetIndentLeft={handleIndentLeftChange}
+                      onSetIndentRight={handleIndentRightChange}
+                      onSetSpaceBefore={handleSpaceBeforeChange}
+                      onSetSpaceAfter={handleSpaceAfterChange}
                       zoom={state.zoom}
                       onZoomChange={handleZoomChange}
                       onToggleOutline={handleToggleOutline}
@@ -2926,6 +3220,7 @@ body { background: white; }
                       onCloseHeaderFooter={handleBodyClick}
                       hfEditPosition={hfEditPosition}
                       onOpenImageProperties={handleOpenImageProperties}
+                      onOpenImageSize={state.pmImageContext ? handleOpenImageSize : undefined}
                       onRefocusEditor={focusActiveEditor}
                       documentStyles={history.state?.package.styles?.styles}
                       theme={history.state?.package.theme || theme}
@@ -3112,48 +3407,14 @@ body { background: white; }
                             onCommentReply={(id, text) => {
                               setComments((prev) => [...prev, createComment(text, author, id)]);
                             }}
-                            onAddComment={(addText) => {
-                              const comment = createComment(addText, author);
-                              // Replace pending comment mark with the real comment ID
-                              const view = pagedEditorRef.current?.getView();
-                              if (view && commentSelectionRange) {
-                                const { from, to } = commentSelectionRange;
-                                const pendingMark = view.state.schema.marks.comment.create({
-                                  commentId: PENDING_COMMENT_ID,
-                                });
-                                const realMark = view.state.schema.marks.comment.create({
-                                  commentId: comment.id,
-                                });
-                                const tr = view.state.tr
-                                  .removeMark(from, to, pendingMark)
-                                  .addMark(from, to, realMark);
-                                view.dispatch(tr);
-                              }
-                              setComments((prev) => [...prev, comment]);
-                              setIsAddingComment(false);
-                              setCommentSelectionRange(null);
-                              setAddCommentYPosition(null);
-                            }}
+                            onAddComment={handleAddComment}
                             onTrackedChangeReply={(revisionId, text) => {
                               setComments((prev) => [
                                 ...prev,
                                 createComment(text, author, revisionId),
                               ]);
                             }}
-                            onCancelAddComment={() => {
-                              // Remove pending comment highlight
-                              const view = pagedEditorRef.current?.getView();
-                              if (view && commentSelectionRange) {
-                                const { from, to } = commentSelectionRange;
-                                const pendingMark = view.state.schema.marks.comment.create({
-                                  commentId: PENDING_COMMENT_ID,
-                                });
-                                view.dispatch(view.state.tr.removeMark(from, to, pendingMark));
-                              }
-                              setIsAddingComment(false);
-                              setCommentSelectionRange(null);
-                              setAddCommentYPosition(null);
-                            }}
+                            onCancelAddComment={handleCancelAddComment}
                             onAcceptChange={(from, to) => {
                               const view = pagedEditorRef.current?.getView();
                               if (view) {
@@ -3416,6 +3677,17 @@ body { background: white; }
                 }
               />
             )}
+            {imageSizeOpen && (
+              <ImageSizeDialog
+                isOpen={imageSizeOpen}
+                onClose={handleCloseImageSizeDialog}
+                onApply={handleApplyImageSize}
+                initialWidth={imageSizeDefaults.width}
+                initialHeight={imageSizeDefaults.height}
+                initialLock={imageSizeDefaults.lock}
+                autoFocus={imageSizeAutoFocus ?? undefined}
+              />
+            )}
             {showPageSetup && (
               <PageSetupDialog
                 isOpen={showPageSetup}
@@ -3444,6 +3716,7 @@ body { background: white; }
             onChange={handleImageFileChange}
           />
         </div>
+        </ColorHistoryProvider>
       </ErrorBoundary>
     </ErrorProvider>
   );

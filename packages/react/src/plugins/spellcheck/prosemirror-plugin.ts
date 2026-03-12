@@ -428,6 +428,7 @@ export function createSpellcheckProseMirrorPlugin(
       handleDOMEvents: {
         contextmenu(view, event) {
           if (!controller) return false;
+          if (event.defaultPrevented) return false;
           const coords = { left: event.clientX, top: event.clientY };
           const pos = view.posAtCoords(coords)?.pos;
           if (!pos) return false;

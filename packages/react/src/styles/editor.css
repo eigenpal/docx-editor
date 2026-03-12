@@ -655,6 +655,7 @@
   width: 100%;
   border-top: 1px solid var(--doc-border-light, #dadce0);
   letter-spacing: 0.2px;
+  pointer-events: none;
 }
 
 .ep-root .ribbon__button {
@@ -670,6 +671,16 @@
   color: var(--doc-text, #202124);
   font-size: clamp(11px, 1.1vw, 12px);
   white-space: nowrap;
+}
+
+.ep-root .ribbon__button--menu {
+  gap: 4px;
+}
+
+.ep-root .ribbon__button-content {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
 }
 
 .ep-root .ribbon__button--icon {

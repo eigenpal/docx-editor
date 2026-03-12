@@ -208,9 +208,27 @@ const hoverHandlers = {
   },
 };
 
-function ToggleSwitch({ checked, onChange }: { checked: boolean; onChange: () => void }) {
+function ToggleSwitch({
+  checked,
+  onChange,
+  leftLabel,
+  rightLabel,
+  ariaLabel,
+  testId,
+}: {
+  checked: boolean;
+  onChange: () => void;
+  leftLabel: string;
+  rightLabel: string;
+  ariaLabel: string;
+  testId?: string;
+}) {
   return (
     <div
+      role="switch"
+      aria-checked={checked}
+      aria-label={ariaLabel}
+      data-testid={testId}
       style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer' }}
       onClick={onChange}
     >
@@ -222,7 +240,7 @@ function ToggleSwitch({ checked, onChange }: { checked: boolean; onChange: () =>
           whiteSpace: 'nowrap',
         }}
       >
-        Viewing
+        {leftLabel}
       </span>
       <div
         style={{
@@ -257,7 +275,7 @@ function ToggleSwitch({ checked, onChange }: { checked: boolean; onChange: () =>
           whiteSpace: 'nowrap',
         }}
       >
-        Editing
+        {rightLabel}
       </span>
     </div>
   );
@@ -270,6 +288,8 @@ function MobileMenu({
   status,
   readOnly,
   onToggleReadOnly,
+  toolbarMode,
+  onToggleToolbar,
 }: {
   onFileSelect: (e: React.ChangeEvent<HTMLInputElement>) => void;
   onNew: () => void;
@@ -277,6 +297,8 @@ function MobileMenu({
   status: string;
   readOnly: boolean;
   onToggleReadOnly: () => void;
+  toolbarMode: 'compact' | 'ribbon';
+  onToggleToolbar: () => void;
 }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -339,6 +361,16 @@ function MobileMenu({
           >
             {readOnly ? 'Switch to Editing' : 'Switch to Read Only'}
           </button>
+          <button
+            style={styles.menuItem}
+            onClick={() => {
+              onToggleToolbar();
+              setOpen(false);
+            }}
+            {...hoverHandlers}
+          >
+            {toolbarMode === 'ribbon' ? 'Switch to Compact' : 'Switch to Ribbon'}
+          </button>
           {status && (
             <div style={{ padding: '6px 12px', fontSize: '12px', color: '#64748b' }}>{status}</div>
           )}
@@ -351,8 +383,7 @@ function MobileMenu({
 export function App() {
   const queryParams = useMemo(() => new URLSearchParams(window.location.search), []);
   const toolbarParam = queryParams.get('toolbar');
-  const toolbar =
-    toolbarParam === 'compact' || toolbarParam === 'ribbon' ? toolbarParam : undefined;
+  const initialToolbarMode: 'compact' | 'ribbon' = toolbarParam === 'ribbon' ? 'ribbon' : 'compact';
   const readOnlyFromQuery =
     queryParams.get('readOnly') === '1' || queryParams.get('readOnly') === 'true';
   const showToolbarWhenReadOnly =
@@ -385,6 +416,7 @@ export function App() {
   const [fileName, setFileName] = useState<string>('docx-editor-demo.docx');
   const [status, setStatus] = useState<string>('');
   const [readOnly, setReadOnly] = useState(readOnlyFromQuery);
+  const [toolbarMode, setToolbarMode] = useState<'compact' | 'ribbon'>(initialToolbarMode);
   const { zoom: autoZoom, isMobile } = useResponsiveLayout();
 
   useEffect(() => {
@@ -398,6 +430,16 @@ export function App() {
         setCurrentDocument(createEmptyDocument());
         setFileName('Untitled.docx');
       });
+  }, []);
+
+  const updateQueryParam = useCallback((key: string, value: string) => {
+    const params = new URLSearchParams(window.location.search);
+    params.set(key, value);
+    const search = params.toString();
+    const url = search
+      ? `${window.location.pathname}?${search}${window.location.hash}`
+      : `${window.location.pathname}${window.location.hash}`;
+    window.history.replaceState({}, '', url);
   }, []);
 
   const handleNewDocument = useCallback(() => {
@@ -462,6 +504,14 @@ export function App() {
     console.log('Fonts loaded');
   }, []);
 
+  const handleToggleToolbar = useCallback(() => {
+    setToolbarMode((current) => {
+      const next = current === 'compact' ? 'ribbon' : 'compact';
+      updateQueryParam('toolbar', next);
+      return next;
+    });
+  }, [updateQueryParam]);
+
   return (
     <div style={styles.container}>
       {isMobile ? (
@@ -479,6 +529,8 @@ export function App() {
               status={status}
               readOnly={readOnly}
               onToggleReadOnly={() => setReadOnly((v) => !v)}
+              toolbarMode={toolbarMode}
+              onToggleToolbar={handleToggleToolbar}
             />
           </div>
         </header>
@@ -490,7 +542,21 @@ export function App() {
           </div>
           <div style={styles.headerCenter}>
             {fileName && <span style={styles.fileName}>{fileName}</span>}
-            <ToggleSwitch checked={!readOnly} onChange={() => setReadOnly((v) => !v)} />
+            <ToggleSwitch
+              checked={!readOnly}
+              onChange={() => setReadOnly((v) => !v)}
+              leftLabel="Viewing"
+              rightLabel="Editing"
+              ariaLabel="Editing mode"
+            />
+            <ToggleSwitch
+              checked={toolbarMode === 'ribbon'}
+              onChange={handleToggleToolbar}
+              leftLabel="Compact"
+              rightLabel="Ribbon"
+              ariaLabel="Toolbar mode"
+              testId="toolbar-mode-toggle"
+            />
           </div>
           <div style={styles.headerRight}>
             <label style={styles.fileInputLabel}>
@@ -523,7 +589,7 @@ export function App() {
             onChange={handleDocumentChange}
             onError={handleError}
             onFontsLoaded={handleFontsLoaded}
-            toolbar={toolbar}
+            toolbar={toolbarMode}
             showToolbarWhenReadOnly={showToolbarWhenReadOnly}
             showRuler={!isMobile}
             showZoomControl={true}

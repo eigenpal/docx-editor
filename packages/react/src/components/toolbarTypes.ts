@@ -35,6 +35,12 @@ export interface SelectionFormatting {
   styleId?: string;
   /** Paragraph left indentation in twips */
   indentLeft?: number;
+  /** Paragraph right indentation in twips */
+  indentRight?: number;
+  /** Paragraph spacing before in twips */
+  spaceBefore?: number;
+  /** Paragraph spacing after in twips */
+  spaceAfter?: number;
   /** Whether the paragraph is RTL (bidi) */
   bidi?: boolean;
 }

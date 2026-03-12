@@ -31,7 +31,13 @@ export type RibbonComponentId =
   | 'tableCellFill'
   | 'tableStyleGallery'
   | 'zoomControl'
-  | 'editingMode';
+  | 'editingMode'
+  | 'breaksDropdown'
+  | 'paragraphIndent'
+  | 'paragraphSpacing'
+  | 'pageMargins'
+  | 'pageOrientation'
+  | 'pageSize';
 
 export type RibbonComponentItem = {
   id: string;
@@ -215,21 +221,19 @@ export const ribbonConfig: { tabs: RibbonTab[] } = {
           label: 'Page Setup',
           items: [
             button('pageSetup', 'Page Setup', 'pageSetup', 'pageSetup'),
-            button('margins', 'Margins', 'margins', 'margins'),
-            button('orientation', 'Orientation', 'orientation', 'orientation'),
-            button('size', 'Size', 'size', 'size'),
+            component('margins', 'pageMargins'),
+            component('orientation', 'pageOrientation'),
+            component('size', 'pageSize'),
             button('columns', 'Columns', 'columns', 'columns'),
-            button('breaks', 'Breaks', 'breaks', 'breaks'),
+            component('breaks', 'breaksDropdown'),
           ],
         },
         {
           id: 'layoutParagraph',
           label: 'Paragraph',
           items: [
-            button('indentLeft', 'Indent Left', 'indentLeft', 'indentLeft'),
-            button('indentRight', 'Indent Right', 'indentRight', 'indentRight'),
-            button('spacingBefore', 'Spacing Before', 'spacingBefore', 'spacingBefore'),
-            button('spacingAfter', 'Spacing After', 'spacingAfter', 'spacingAfter'),
+            component('paragraphIndent', 'paragraphIndent', { size: 'large' }),
+            component('paragraphSpacing', 'paragraphSpacing', { size: 'large' }),
           ],
         },
       ],

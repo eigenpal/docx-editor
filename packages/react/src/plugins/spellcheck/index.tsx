@@ -56,7 +56,6 @@ export function createSpellcheckPlugin(
     renderOverlay: (_context, state, editorView) => {
       if (!renderOverlay) return null;
       const misspellings = state?.misspellings ?? [];
-      const menu = state?.menu ?? null;
 
       return (
         <>
@@ -64,7 +63,6 @@ export function createSpellcheckPlugin(
             context={_context}
             editorView={editorView}
             misspellings={misspellings}
-            menu={menu}
           />
         </>
       );

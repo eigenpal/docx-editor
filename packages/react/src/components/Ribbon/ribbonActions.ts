@@ -2,6 +2,7 @@ import type { FormattingAction, SelectionFormatting } from '../toolbarTypes';
 import type { EditorMode } from '../ui/EditingModeDropdown';
 import type { TableAction } from '../ui/TableToolbar';
 import { halfPointsToPoints } from '../ui/FontSizePicker';
+import type { ImageSizeDialogFocusTarget } from '../dialogs/ImageSizeDialog';
 
 export interface RibbonActionContext {
   selectionFormatting?: SelectionFormatting;
@@ -14,6 +15,14 @@ export interface RibbonActionContext {
   onInsertPageBreak?: () => void;
   onInsertImage?: () => void;
   onInsertTOC?: () => void;
+  onUpdateTOC?: () => void;
+  onAcceptAllChanges?: () => void;
+  onRejectAllChanges?: () => void;
+  onInsertSectionBreak?: (breakType: 'nextPage' | 'continuous' | 'oddPage' | 'evenPage') => void;
+  onSetIndentLeft?: (twips: number) => void;
+  onSetIndentRight?: (twips: number) => void;
+  onSetSpaceBefore?: (twips: number) => void;
+  onSetSpaceAfter?: (twips: number) => void;
   onToggleComments?: () => void;
   editingMode?: EditorMode;
   onSetEditingMode?: (mode: EditorMode) => void;
@@ -24,6 +33,9 @@ export interface RibbonActionContext {
   onOpenHeaderFooter?: (position: 'header' | 'footer') => void;
   onCloseHeaderFooter?: () => void;
   onOpenImageProperties?: () => void;
+  onOpenImageSize?: (focus?: ImageSizeDialogFocusTarget) => void;
+  onNewComment?: () => void;
+  onDeleteComment?: () => void;
   onCopy?: () => void;
   onCut?: () => void;
   onPaste?: () => void;
@@ -80,6 +92,17 @@ export const ribbonActions: Record<string, (ctx: RibbonActionContext) => void> =
   pageBreak: (ctx) => ctx.onInsertPageBreak?.(),
   insertImage: (ctx) => ctx.onInsertImage?.(),
   insertTOC: (ctx) => ctx.onInsertTOC?.(),
+  updateTOC: (ctx) => ctx.onUpdateTOC?.(),
+  acceptAllChanges: (ctx) => ctx.onAcceptAllChanges?.(),
+  rejectAllChanges: (ctx) => ctx.onRejectAllChanges?.(),
+  margins: (ctx) => ctx.onPageSetup?.(),
+  orientation: (ctx) => ctx.onPageSetup?.(),
+  size: (ctx) => ctx.onPageSetup?.(),
+  imageWidth: (ctx) => ctx.onOpenImageSize?.('width'),
+  imageHeight: (ctx) => ctx.onOpenImageSize?.('height'),
+  aspectRatio: (ctx) => ctx.onOpenImageSize?.('lock'),
+  newComment: (ctx) => ctx.onNewComment?.(),
+  deleteComment: (ctx) => ctx.onDeleteComment?.(),
   toggleComments: (ctx) => ctx.onToggleComments?.(),
   trackChanges: (ctx) => {
     if (!ctx.onSetEditingMode) return;

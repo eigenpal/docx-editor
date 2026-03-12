@@ -22,6 +22,8 @@ export type TextContextAction =
   | 'pasteAsPlainText'
   | 'selectAll'
   | 'delete'
+  | 'textColor'
+  | 'highlightColor'
   | 'separator'
   | 'spellcheckSuggestions'
   | 'spellcheckReplace'
@@ -47,6 +49,20 @@ export interface TextContextMenuItem {
   dividerAfter?: boolean;
   /** Submenu items */
   submenu?: TextContextMenuItem[];
+  /** Render as split item (apply + submenu) */
+  split?: boolean;
+  /** Submenu rendering variant */
+  submenuVariant?: 'list' | 'colorGrid';
+  /** Optional swatch color (for color grid items) */
+  swatch?: string;
+  /** Whether this item opens a color picker */
+  isColorPicker?: boolean;
+  /** Optional icon override */
+  icon?: React.ReactNode;
+  /** Optional data-testid prefix for split buttons */
+  testIdPrefix?: string;
+  /** Optional data-testid for menu item */
+  testId?: string;
 }
 
 /**
@@ -57,6 +73,8 @@ export interface TextContextMenuProps {
   isOpen: boolean;
   /** Menu position */
   position: { x: number; y: number };
+  /** Minimum viewport Y position (prevents overlapping toolbars) */
+  minY?: number;
   /** Whether there's a selection (enables copy/cut) */
   hasSelection: boolean;
   /** Whether the editor is editable (enables paste/cut/delete) */
@@ -220,8 +238,10 @@ function getActionIcon(action: TextContextAction): React.ReactNode {
 interface MenuItemComponentProps {
   item: TextContextMenuItem;
   onClick: () => void;
+  onOpenSubmenu?: () => void;
   isHighlighted: boolean;
   onMouseEnter: () => void;
+  onArrowMouseEnter?: () => void;
   buttonRef?: (el: HTMLButtonElement | null) => void;
   showSubmenuIndicator?: boolean;
 }
@@ -229,8 +249,10 @@ interface MenuItemComponentProps {
 const MenuItemComponent: React.FC<MenuItemComponentProps> = ({
   item,
   onClick,
+  onOpenSubmenu,
   isHighlighted,
   onMouseEnter,
+  onArrowMouseEnter,
   buttonRef,
   showSubmenuIndicator = false,
 }) => {
@@ -247,6 +269,112 @@ const MenuItemComponent: React.FC<MenuItemComponentProps> = ({
     );
   }
 
+  const iconNode = item.icon ?? getActionIcon(item.action);
+  const rowBackground =
+    isHighlighted && !item.disabled
+      ? 'var(--doc-context-menu-hover, rgba(15, 23, 42, 0.08))'
+      : 'transparent';
+
+  if (item.split && showSubmenuIndicator) {
+    return (
+      <>
+        <div style={{ display: 'flex', alignItems: 'stretch', width: '100%' }}>
+          <button
+            type="button"
+            className={`docx-text-context-menu-item ${isHighlighted ? 'docx-text-context-menu-item-highlighted' : ''} ${item.disabled ? 'docx-text-context-menu-item-disabled' : ''}`}
+            onClick={onClick}
+            onMouseEnter={onMouseEnter}
+            disabled={item.disabled}
+            role="menuitem"
+            aria-disabled={item.disabled}
+            ref={buttonRef}
+            data-testid={item.testIdPrefix ? `${item.testIdPrefix}-apply` : undefined}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '10px',
+              flex: 1,
+              padding: '8px 12px',
+              border: 'none',
+              background: rowBackground,
+              cursor: item.disabled ? 'not-allowed' : 'pointer',
+              fontSize: '13px',
+              color: item.disabled ? 'var(--doc-text-subtle)' : 'var(--doc-text)',
+              textAlign: 'left',
+              opacity: item.disabled ? 0.6 : 1,
+              borderTopRightRadius: 0,
+              borderBottomRightRadius: 0,
+            }}
+          >
+            <span
+              style={{
+                display: 'flex',
+                color: item.disabled ? 'var(--doc-border)' : 'var(--doc-text-muted)',
+                width: 16,
+                height: 16,
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+            >
+              {iconNode}
+            </span>
+            <span style={{ flex: 1 }}>{item.label}</span>
+            {item.shortcut && (
+              <span
+                style={{
+                  fontSize: '11px',
+                  color: 'var(--doc-text-subtle)',
+                  fontFamily: 'monospace',
+                }}
+              >
+                {item.shortcut}
+              </span>
+            )}
+          </button>
+          <button
+            type="button"
+            className={`docx-text-context-menu-item ${isHighlighted ? 'docx-text-context-menu-item-highlighted' : ''} ${item.disabled ? 'docx-text-context-menu-item-disabled' : ''}`}
+            onClick={onOpenSubmenu}
+            onMouseEnter={onArrowMouseEnter}
+            disabled={item.disabled}
+            role="menuitem"
+            aria-disabled={item.disabled}
+            aria-haspopup="menu"
+            aria-expanded={isHighlighted}
+            data-testid={item.testIdPrefix ? `${item.testIdPrefix}-arrow` : undefined}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              width: 28,
+              border: 'none',
+              background: rowBackground,
+              cursor: item.disabled ? 'not-allowed' : 'pointer',
+              fontSize: '12px',
+              color: 'var(--doc-text-subtle)',
+              opacity: item.disabled ? 0.6 : 1,
+              borderTopLeftRadius: 0,
+              borderBottomLeftRadius: 0,
+              borderLeft: '1px solid var(--doc-border, rgba(15, 23, 42, 0.12))',
+            }}
+          >
+            ›
+          </button>
+        </div>
+        {item.dividerAfter && (
+          <div
+            className="docx-text-context-menu-separator"
+            style={{
+              height: '1px',
+              backgroundColor: 'var(--doc-border, rgba(15, 23, 42, 0.12))',
+              margin: '4px 12px',
+            }}
+          />
+        )}
+      </>
+    );
+  }
+
   return (
     <>
       <button
@@ -260,6 +388,7 @@ const MenuItemComponent: React.FC<MenuItemComponentProps> = ({
         aria-haspopup={showSubmenuIndicator ? 'menu' : undefined}
         aria-expanded={showSubmenuIndicator ? isHighlighted : undefined}
         ref={buttonRef}
+        data-testid={item.testId}
         style={{
           display: 'flex',
           alignItems: 'center',
@@ -267,10 +396,7 @@ const MenuItemComponent: React.FC<MenuItemComponentProps> = ({
           width: '100%',
           padding: '8px 12px',
           border: 'none',
-          background:
-            isHighlighted && !item.disabled
-              ? 'var(--doc-context-menu-hover, rgba(15, 23, 42, 0.08))'
-              : 'transparent',
+          background: rowBackground,
           cursor: item.disabled ? 'not-allowed' : 'pointer',
           fontSize: '13px',
           color: item.disabled ? 'var(--doc-text-subtle)' : 'var(--doc-text)',
@@ -288,7 +414,7 @@ const MenuItemComponent: React.FC<MenuItemComponentProps> = ({
             justifyContent: 'center',
           }}
         >
-          {getActionIcon(item.action)}
+          {iconNode}
         </span>
         <span style={{ flex: 1 }}>{item.label}</span>
         {item.shortcut && (
@@ -329,6 +455,8 @@ const MenuItemComponent: React.FC<MenuItemComponentProps> = ({
   );
 };
 
+const SUBMENU_OFFSET = 1;
+
 // ============================================================================
 // TEXT CONTEXT MENU COMPONENT
 // ============================================================================
@@ -336,6 +464,7 @@ const MenuItemComponent: React.FC<MenuItemComponentProps> = ({
 export const TextContextMenu: React.FC<TextContextMenuProps> = ({
   isOpen,
   position,
+  minY,
   hasSelection,
   isEditable,
   hasClipboardContent = true,
@@ -356,6 +485,7 @@ export const TextContextMenu: React.FC<TextContextMenuProps> = ({
   } | null>(null);
   const [submenuPosition, setSubmenuPosition] = useState<{ x: number; y: number } | null>(null);
   const [submenuHighlightedIndex, setSubmenuHighlightedIndex] = useState(0);
+  const [isColorPickerActive, setIsColorPickerActive] = useState(false);
 
   // Build menu items with disabled states
   const menuItems = (items || DEFAULT_MENU_ITEMS).map((item) => {
@@ -369,6 +499,9 @@ export const TextContextMenu: React.FC<TextContextMenuProps> = ({
         case 'paste':
         case 'pasteAsPlainText':
           return !isEditable || !hasClipboardContent;
+        case 'textColor':
+        case 'highlightColor':
+          return !isEditable;
         default:
           return false;
       }
@@ -385,6 +518,7 @@ export const TextContextMenu: React.FC<TextContextMenuProps> = ({
     if (!isOpen) return;
 
     const handleClickOutside = (e: MouseEvent) => {
+      if (isColorPickerActive) return;
       const targetNode = e.target as Node;
       if (
         menuRef.current &&
@@ -404,13 +538,14 @@ export const TextContextMenu: React.FC<TextContextMenuProps> = ({
       clearTimeout(timer);
       document.removeEventListener('mousedown', handleClickOutside);
     };
-  }, [isOpen, onClose]);
+  }, [isOpen, isColorPickerActive, onClose]);
 
   useEffect(() => {
     if (!isOpen) {
       setSubmenuState(null);
       setSubmenuPosition(null);
       setSubmenuHighlightedIndex(0);
+      setIsColorPickerActive(false);
     }
   }, [isOpen]);
 
@@ -456,7 +591,7 @@ export const TextContextMenu: React.FC<TextContextMenuProps> = ({
           e.preventDefault();
           const item = navigableItems[highlightedIndex];
           if (item && !item.disabled) {
-            if (item.submenu && item.submenu.length > 0) {
+            if (item.submenu && item.submenu.length > 0 && !item.split) {
               const menuIndex = menuItems.findIndex((menuItem) => menuItem === item);
               if (menuIndex >= 0) {
                 const anchor = itemRefs.current[menuIndex];
@@ -464,7 +599,7 @@ export const TextContextMenu: React.FC<TextContextMenuProps> = ({
                   const rect = anchor.getBoundingClientRect();
                   setSubmenuState({
                     parentIndex: menuIndex,
-                    position: { x: rect.right + 2, y: rect.top - 2 },
+                    position: { x: rect.right + SUBMENU_OFFSET, y: rect.top - SUBMENU_OFFSET },
                     anchorRect: rect,
                   });
                 }
@@ -475,6 +610,24 @@ export const TextContextMenu: React.FC<TextContextMenuProps> = ({
             onClose();
           }
           break;
+        case 'ArrowRight': {
+          const arrowItem = navigableItems[highlightedIndex];
+          if (arrowItem && !arrowItem.disabled && arrowItem.submenu?.length) {
+            const menuIndex = menuItems.findIndex((menuItem) => menuItem === arrowItem);
+            if (menuIndex >= 0) {
+              const anchor = itemRefs.current[menuIndex];
+                if (anchor) {
+                  const rect = anchor.getBoundingClientRect();
+                  setSubmenuState({
+                    parentIndex: menuIndex,
+                    position: { x: rect.right + SUBMENU_OFFSET, y: rect.top - SUBMENU_OFFSET },
+                    anchorRect: rect,
+                  });
+                }
+            }
+          }
+          break;
+        }
       }
     };
 
@@ -499,6 +652,8 @@ export const TextContextMenu: React.FC<TextContextMenuProps> = ({
     const padding = 8;
     let x = position.x;
     let y = position.y;
+    const minTop = Math.max(padding, minY ?? padding);
+    const maxTop = Math.max(minTop, window.innerHeight - rect.height - padding);
 
     if (x + rect.width > window.innerWidth - padding) {
       x = window.innerWidth - rect.width - padding;
@@ -507,12 +662,13 @@ export const TextContextMenu: React.FC<TextContextMenuProps> = ({
       y = window.innerHeight - rect.height - padding;
     }
     if (x < padding) x = padding;
-    if (y < padding) y = padding;
+    if (y < minTop) y = minTop;
+    if (y > maxTop) y = maxTop;
 
     if (x !== adjustedPosition.x || y !== adjustedPosition.y) {
       setAdjustedPosition({ x, y });
     }
-  }, [isOpen, position.x, position.y, adjustedPosition.x, adjustedPosition.y]);
+  }, [isOpen, position.x, position.y, adjustedPosition.x, adjustedPosition.y, minY]);
 
   useEffect(() => {
     if (submenuState) {
@@ -527,20 +683,23 @@ export const TextContextMenu: React.FC<TextContextMenuProps> = ({
     const padding = 8;
     let x = submenuState.position.x;
     let y = submenuState.position.y;
+    const minTop = Math.max(padding, minY ?? padding);
+    const maxTop = Math.max(minTop, window.innerHeight - rect.height - padding);
 
     if (x + rect.width > window.innerWidth - padding) {
-      x = submenuState.anchorRect.left - rect.width - 2;
+      x = submenuState.anchorRect.left - rect.width - SUBMENU_OFFSET;
     }
     if (x < padding) x = padding;
     if (y + rect.height > window.innerHeight - padding) {
       y = window.innerHeight - rect.height - padding;
     }
-    if (y < padding) y = padding;
+    if (y < minTop) y = minTop;
+    if (y > maxTop) y = maxTop;
 
     if (!submenuPosition || submenuPosition.x !== x || submenuPosition.y !== y) {
       setSubmenuPosition({ x, y });
     }
-  }, [submenuState, submenuPosition]);
+  }, [submenuState, submenuPosition, minY]);
 
   const getMenuStyle = useCallback((): React.CSSProperties => {
     return {
@@ -579,17 +738,21 @@ export const TextContextMenu: React.FC<TextContextMenuProps> = ({
     };
   }, [submenuPosition, submenuState?.position]);
 
+  const openSubmenuAtIndex = (index: number) => {
+    const anchor = itemRefs.current[index];
+    if (!anchor) return;
+    const rect = anchor.getBoundingClientRect();
+    setSubmenuState({
+      parentIndex: index,
+      position: { x: rect.right + SUBMENU_OFFSET, y: rect.top - SUBMENU_OFFSET },
+      anchorRect: rect,
+    });
+  };
+
   const handleItemClick = (item: TextContextMenuItem, index: number) => {
     if (item.disabled) return;
-    if (item.submenu && item.submenu.length > 0) {
-      const anchor = itemRefs.current[index];
-      if (!anchor) return;
-      const rect = anchor.getBoundingClientRect();
-      setSubmenuState({
-        parentIndex: index,
-        position: { x: rect.right + 2, y: rect.top - 2 },
-        anchorRect: rect,
-      });
+    if (item.submenu && item.submenu.length > 0 && !item.split) {
+      openSubmenuAtIndex(index);
       return;
     }
     onAction(item.action, item.value);
@@ -598,7 +761,156 @@ export const TextContextMenu: React.FC<TextContextMenuProps> = ({
 
   if (!isOpen) return null;
 
-  const submenuItems = submenuState ? (menuItems[submenuState.parentIndex]?.submenu ?? []) : [];
+  const submenuParentItem = submenuState ? menuItems[submenuState.parentIndex] : null;
+  const submenuItems = submenuParentItem?.submenu ?? [];
+  const submenuVariant = submenuParentItem?.submenuVariant ?? 'list';
+  const isColorGrid = submenuVariant === 'colorGrid';
+  const colorGridItems = isColorGrid
+    ? submenuItems.filter((item) => item.action !== 'separator')
+    : submenuItems;
+
+  const renderColorGrid = () => (
+    <div
+      className="docx-text-context-menu-color-grid"
+      style={{
+        display: 'grid',
+        gridTemplateColumns: 'repeat(6, 20px)',
+        gap: 8,
+        padding: '8px 10px',
+      }}
+    >
+      {colorGridItems.map((item, index) => {
+        const isHighlighted = index === submenuHighlightedIndex;
+        const isDisabled = item.disabled;
+        const swatchColor = item.swatch ?? item.value ?? 'transparent';
+        const isPicker = item.isColorPicker;
+
+        if (isPicker) {
+          const pickerValue =
+            typeof item.value === 'string' && /^#?[0-9A-Fa-f]{6}$/.test(item.value)
+              ? item.value.startsWith('#')
+                ? item.value
+                : `#${item.value}`
+              : '#000000';
+          return (
+            <label
+              key={`submenu-picker-${index}`}
+              style={{
+                position: 'relative',
+                width: 20,
+                height: 20,
+                borderRadius: 4,
+                border: `1px solid ${isHighlighted ? 'var(--doc-primary, #2563eb)' : 'var(--doc-border, rgba(15, 23, 42, 0.18))'}`,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                cursor: isDisabled ? 'not-allowed' : 'pointer',
+                background: 'linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%)',
+                boxShadow: isHighlighted ? '0 0 0 2px rgba(37, 99, 235, 0.2)' : 'none',
+                opacity: isDisabled ? 0.5 : 1,
+              }}
+              aria-label={item.label}
+              data-testid={item.testId}
+              onMouseDown={(event) => event.stopPropagation()}
+              onClick={(event) => event.stopPropagation()}
+            >
+              <span style={{ fontSize: 12, color: 'var(--doc-text-muted)' }}>＋</span>
+              <input
+                type="color"
+                aria-label={item.label}
+                disabled={isDisabled}
+                data-testid={item.testId ? `${item.testId}-input` : undefined}
+                defaultValue={pickerValue}
+                data-last-value={pickerValue}
+                onMouseDown={(event) => event.stopPropagation()}
+                onClick={(event) => event.stopPropagation()}
+                style={{
+                  position: 'absolute',
+                  inset: 0,
+                  opacity: 0,
+                  cursor: isDisabled ? 'not-allowed' : 'pointer',
+                }}
+                onFocus={(event) => {
+                  if (isDisabled) return;
+                  event.currentTarget.dataset.openValue = event.currentTarget.value;
+                  setIsColorPickerActive(true);
+                }}
+                onBlur={(event) => {
+                  if (isDisabled) return;
+                  setIsColorPickerActive(false);
+                  const openValue =
+                    event.currentTarget.dataset.openValue ??
+                    event.currentTarget.dataset.lastValue ??
+                    '';
+                  const nextValue = event.currentTarget.value;
+                  event.currentTarget.dataset.openValue = '';
+                  if (openValue && openValue.toLowerCase() !== nextValue.toLowerCase()) {
+                    event.currentTarget.dataset.lastValue = nextValue;
+                    onAction(item.action, nextValue);
+                    onClose();
+                  }
+                }}
+                onMouseEnter={() => {
+                  if (!isDisabled) setSubmenuHighlightedIndex(index);
+                }}
+              />
+            </label>
+          );
+        }
+
+        return (
+          <button
+            key={`submenu-swatch-${item.action}-${index}`}
+            type="button"
+            role="menuitem"
+            aria-label={item.label}
+            disabled={isDisabled}
+            data-testid={item.testId}
+            onClick={() => {
+              if (isDisabled) return;
+              onAction(item.action, item.value);
+              onClose();
+            }}
+            onMouseEnter={() => {
+              if (!isDisabled) setSubmenuHighlightedIndex(index);
+            }}
+            style={{
+              width: 20,
+              height: 20,
+              borderRadius: 4,
+              border: `1px solid ${
+                isHighlighted ? 'var(--doc-primary, #2563eb)' : 'var(--doc-border, rgba(15, 23, 42, 0.18))'
+              }`,
+              backgroundColor:
+                swatchColor === 'auto' || swatchColor === 'none' ? '#ffffff' : swatchColor,
+              position: 'relative',
+              cursor: isDisabled ? 'not-allowed' : 'pointer',
+              opacity: isDisabled ? 0.5 : 1,
+              boxShadow: isHighlighted ? '0 0 0 2px rgba(37, 99, 235, 0.2)' : 'none',
+            }}
+          >
+            {(swatchColor === 'auto' || swatchColor === 'none') && (
+              <span
+                style={{
+                  position: 'absolute',
+                  inset: 0,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  fontSize: 10,
+                  color: 'var(--doc-text-subtle)',
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.02em',
+                }}
+              >
+                {swatchColor === 'auto' ? 'A' : '×'}
+              </span>
+            )}
+          </button>
+        );
+      })}
+    </div>
+  );
 
   const menuContent = (
     <>
@@ -621,24 +933,25 @@ export const TextContextMenu: React.FC<TextContextMenuProps> = ({
               key={`${item.action}-${index}`}
               item={item}
               onClick={() => handleItemClick(item, index)}
+              onOpenSubmenu={
+                showSubmenuIndicator && item.split ? () => openSubmenuAtIndex(index) : undefined
+              }
               isHighlighted={isHighlighted}
               onMouseEnter={() => {
                 if (navigableIndex >= 0 && !item.disabled) {
                   setHighlightedIndex(navigableIndex);
                 }
-                if (showSubmenuIndicator) {
-                  const anchor = itemRefs.current[index];
-                  if (!anchor) return;
-                  const rect = anchor.getBoundingClientRect();
-                  setSubmenuState({
-                    parentIndex: index,
-                    position: { x: rect.right + 2, y: rect.top - 2 },
-                    anchorRect: rect,
-                  });
-                } else if (submenuState) {
+                if (showSubmenuIndicator && !item.split) {
+                  openSubmenuAtIndex(index);
+                  return;
+                }
+                if (submenuState) {
                   setSubmenuState(null);
                 }
               }}
+              onArrowMouseEnter={
+                showSubmenuIndicator && item.split ? () => openSubmenuAtIndex(index) : undefined
+              }
               buttonRef={(el) => {
                 itemRefs.current[index] = el;
               }}
@@ -650,42 +963,46 @@ export const TextContextMenu: React.FC<TextContextMenuProps> = ({
       {submenuState && submenuItems.length > 0 && (
         <div
           ref={submenuRef}
-          className="docx-text-context-menu docx-text-context-menu-submenu"
+          className={`docx-text-context-menu docx-text-context-menu-submenu${
+            isColorGrid ? ' docx-text-context-menu-submenu--colors' : ''
+          }`}
           style={getSubmenuStyle()}
           role="menu"
-          aria-label="Spellcheck suggestions"
+          aria-label={submenuParentItem?.label ?? 'Context submenu'}
         >
-          {submenuItems.map((item, index) => {
-            const isHighlighted = index === submenuHighlightedIndex;
-            if (item.action === 'separator') {
-              return (
-                <div
-                  key={`submenu-separator-${index}`}
-                  className="docx-text-context-menu-separator"
-                  style={{
-                    height: '1px',
-                    backgroundColor: 'var(--doc-border, rgba(15, 23, 42, 0.12))',
-                    margin: '4px 12px',
-                  }}
-                />
-              );
-            }
-            return (
-              <MenuItemComponent
-                key={`submenu-${item.action}-${index}`}
-                item={item}
-                onClick={() => {
-                  if (item.disabled) return;
-                  onAction(item.action, item.value);
-                  onClose();
-                }}
-                isHighlighted={isHighlighted}
-                onMouseEnter={() => {
-                  setSubmenuHighlightedIndex(index);
-                }}
-              />
-            );
-          })}
+          {isColorGrid
+            ? renderColorGrid()
+            : submenuItems.map((item, index) => {
+                const isHighlighted = index === submenuHighlightedIndex;
+                if (item.action === 'separator') {
+                  return (
+                    <div
+                      key={`submenu-separator-${index}`}
+                      className="docx-text-context-menu-separator"
+                      style={{
+                        height: '1px',
+                        backgroundColor: 'var(--doc-border, rgba(15, 23, 42, 0.12))',
+                        margin: '4px 12px',
+                      }}
+                    />
+                  );
+                }
+                return (
+                  <MenuItemComponent
+                    key={`submenu-${item.action}-${index}`}
+                    item={item}
+                    onClick={() => {
+                      if (item.disabled) return;
+                      onAction(item.action, item.value);
+                      onClose();
+                    }}
+                    isHighlighted={isHighlighted}
+                    onMouseEnter={() => {
+                      setSubmenuHighlightedIndex(index);
+                    }}
+                  />
+                );
+              })}
         </div>
       )}
     </>
@@ -792,6 +1109,8 @@ export function useTextContextMenu(
         case 'selectAll':
           document.execCommand('selectAll');
           break;
+        case 'textColor':
+        case 'highlightColor':
         case 'spellcheckReplace':
         case 'spellcheckSuggestions':
         case 'spellcheckIgnore':
@@ -856,6 +1175,8 @@ export function getTextActionLabel(action: TextContextAction): string {
     pasteAsPlainText: 'Paste as Plain Text',
     selectAll: 'Select All',
     delete: 'Delete',
+    textColor: 'Text Color',
+    highlightColor: 'Highlight Color',
     separator: '',
     spellcheckSuggestions: 'Suggestions',
     spellcheckReplace: 'Replace',
@@ -877,6 +1198,8 @@ export function getTextActionShortcut(action: TextContextAction): string {
     pasteAsPlainText: 'Ctrl+Shift+V',
     selectAll: 'Ctrl+A',
     delete: 'Del',
+    textColor: '',
+    highlightColor: '',
     separator: '',
     spellcheckSuggestions: '',
     spellcheckReplace: '',

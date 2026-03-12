@@ -51,6 +51,8 @@ export {
   setIndentLeft,
   setIndentRight,
   setIndentFirstLine,
+  insertSectionBreak,
+  removeSectionBreak,
   addTabStop,
   removeTabStop,
   toggleBulletList,

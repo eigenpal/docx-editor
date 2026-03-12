@@ -5,6 +5,7 @@ import type {
   ParagraphAlignment,
   Style,
   Theme,
+  SectionProperties,
 } from '@eigenpal/docx-core/types/document';
 import { resolveColor } from '@eigenpal/docx-core/utils/colorResolver';
 import type { TableContextInfo } from '@eigenpal/docx-core/prosemirror';
@@ -31,12 +32,19 @@ import { ImageWrapDropdown } from './ui/ImageWrapDropdown';
 import { ImageTransformDropdown } from './ui/ImageTransformDropdown';
 import { ZoomControl } from './ui/ZoomControl';
 import { MenuDropdown, type MenuEntry } from './ui/MenuDropdown';
+import { BreaksDropdown, type SectionBreakType } from './ui/BreaksDropdown';
+import { ParagraphNumberGroup } from './ui/ParagraphNumberGroup';
 import { EditingModeDropdown } from './ui/EditingModeDropdown';
+import { PageSetupDropdown } from './ui/PageSetupDropdown';
 import { MaterialSymbol } from './ui/MaterialSymbol';
 import { ribbonConfig, type RibbonComponentId, type RibbonItemSize } from './Ribbon/ribbonConfig';
 import { ribbonActions, type RibbonActionContext } from './Ribbon/ribbonActions';
+import type { ImageSizeDialogFocusTarget } from './dialogs/ImageSizeDialog';
+import { useColorHistory } from './ColorHistoryContext';
 
 const ICON_SIZE = 20;
+const TWIPS_PER_INCH = 1440;
+const TWIPS_PER_POINT = 20;
 
 export type CompactButtonItem = {
   kind: 'button';
@@ -137,8 +145,18 @@ export interface UseToolbarItemsOptions {
   onInsertTable?: (rows: number, columns: number) => void;
   onInsertImage?: () => void;
   onInsertPageBreak?: () => void;
+  onInsertSectionBreak?: (breakType: SectionBreakType) => void;
   onPageSetup?: () => void;
+  onApplyPageSetup?: (props: Partial<SectionProperties>) => void;
+  sectionProperties?: SectionProperties | null;
   onInsertTOC?: () => void;
+  onUpdateTOC?: () => void;
+  onAcceptAllChanges?: () => void;
+  onRejectAllChanges?: () => void;
+  onSetIndentLeft?: (twips: number) => void;
+  onSetIndentRight?: (twips: number) => void;
+  onSetSpaceBefore?: (twips: number) => void;
+  onSetSpaceAfter?: (twips: number) => void;
   onToggleCommentsSidebar?: () => void;
   editingMode?: EditorMode;
   onSetEditingMode?: (mode: EditorMode) => void;
@@ -170,6 +188,9 @@ export interface UseToolbarItemsOptions {
   onCloseHeaderFooter?: () => void;
   hfEditPosition?: 'header' | 'footer' | null;
   onOpenImageProperties?: () => void;
+  onOpenImageSize?: (focus?: ImageSizeDialogFocusTarget) => void;
+  onNewComment?: () => void;
+  onDeleteComment?: () => void;
   onRefocusEditor?: () => void;
   showFontPicker?: boolean;
   showFontSizePicker?: boolean;
@@ -209,8 +230,18 @@ export function useToolbarItems(options: UseToolbarItemsOptions): {
     onInsertTable,
     onInsertImage,
     onInsertPageBreak,
+    onInsertSectionBreak,
     onPageSetup,
+    onApplyPageSetup,
+    sectionProperties,
     onInsertTOC,
+    onUpdateTOC,
+    onAcceptAllChanges,
+    onRejectAllChanges,
+    onSetIndentLeft,
+    onSetIndentRight,
+    onSetSpaceBefore,
+    onSetSpaceAfter,
     onToggleCommentsSidebar,
     editingMode,
     onSetEditingMode,
@@ -238,6 +269,9 @@ export function useToolbarItems(options: UseToolbarItemsOptions): {
     onCloseHeaderFooter,
     hfEditPosition,
     onOpenImageProperties,
+    onOpenImageSize,
+    onNewComment,
+    onDeleteComment,
     onRefocusEditor,
     showFontPicker = true,
     showFontSizePicker = true,
@@ -256,6 +290,12 @@ export function useToolbarItems(options: UseToolbarItemsOptions): {
   } = options;
 
   const isReadOnly = readOnly || editingMode === 'viewing';
+  const {
+    lastTextColor,
+    lastHighlightColor,
+    setLastTextColor,
+    setLastHighlightColor,
+  } = useColorHistory();
   const [formattingOverrides, setFormattingOverrides] = useState<
     Pick<
       SelectionFormatting,
@@ -357,21 +397,35 @@ export function useToolbarItems(options: UseToolbarItemsOptions): {
   const textColorChange = useCallback(
     (color: ColorValue | string) => {
       if (disabled || !onFormat) return;
+      setLastTextColor(color);
       onFormat({ type: 'textColor', value: color });
       refocusEditor();
     },
-    [disabled, onFormat, refocusEditor]
+    [disabled, onFormat, refocusEditor, setLastTextColor]
   );
 
   const highlightColorChange = useCallback(
     (color: ColorValue | string) => {
       if (disabled || !onFormat) return;
       const highlightValue = typeof color === 'string' ? color : '';
+      setLastHighlightColor(highlightValue);
       onFormat({ type: 'highlightColor', value: highlightValue });
       refocusEditor();
     },
-    [disabled, onFormat, refocusEditor]
+    [disabled, onFormat, refocusEditor, setLastHighlightColor]
   );
+
+  const applyLastTextColor = useCallback(() => {
+    if (disabled || !onFormat) return;
+    onFormat({ type: 'textColor', value: lastTextColor });
+    refocusEditor();
+  }, [disabled, onFormat, lastTextColor, refocusEditor]);
+
+  const applyLastHighlightColor = useCallback(() => {
+    if (disabled || !onFormat) return;
+    onFormat({ type: 'highlightColor', value: lastHighlightColor });
+    refocusEditor();
+  }, [disabled, onFormat, lastHighlightColor, refocusEditor]);
 
   const lineSpacingChange = useCallback(
     (twipsValue: number) => {
@@ -692,10 +746,14 @@ export function useToolbarItems(options: UseToolbarItemsOptions): {
         <AdvancedColorPicker
           mode="text"
           value={currentFormatting.color?.replace(/^#/, '')}
+          displayValue={lastTextColor}
+          split
+          onApply={applyLastTextColor}
           onChange={textColorChange}
           theme={theme}
           disabled={disabled}
           title="Font Color"
+          dataTestIdPrefix="toolbar-textColor"
         />
       )
     );
@@ -708,10 +766,14 @@ export function useToolbarItems(options: UseToolbarItemsOptions): {
         <AdvancedColorPicker
           mode="highlight"
           value={currentFormatting.highlight}
+          displayValue={lastHighlightColor}
+          split
+          onApply={applyLastHighlightColor}
           onChange={highlightColorChange}
           theme={theme}
           disabled={disabled}
           title="Text Highlight Color"
+          dataTestIdPrefix="toolbar-highlightColor"
         />
       )
     );
@@ -931,9 +993,17 @@ export function useToolbarItems(options: UseToolbarItemsOptions): {
       onFind,
       onReplace,
       onInsertPageBreak,
+      onInsertSectionBreak,
       onPageSetup,
       onInsertImage,
       onInsertTOC,
+      onUpdateTOC,
+      onAcceptAllChanges,
+      onRejectAllChanges,
+      onSetIndentLeft,
+      onSetIndentRight,
+      onSetSpaceBefore,
+      onSetSpaceAfter,
       onToggleComments: onToggleCommentsSidebar,
       editingMode,
       onSetEditingMode,
@@ -956,6 +1026,9 @@ export function useToolbarItems(options: UseToolbarItemsOptions): {
       onOpenHeaderFooter,
       onCloseHeaderFooter,
       onOpenImageProperties,
+      onOpenImageSize,
+      onNewComment,
+      onDeleteComment,
     }),
     [
       currentFormatting,
@@ -965,9 +1038,17 @@ export function useToolbarItems(options: UseToolbarItemsOptions): {
       onFind,
       onReplace,
       onInsertPageBreak,
+      onInsertSectionBreak,
       onPageSetup,
       onInsertImage,
       onInsertTOC,
+      onUpdateTOC,
+      onAcceptAllChanges,
+      onRejectAllChanges,
+      onSetIndentLeft,
+      onSetIndentRight,
+      onSetSpaceBefore,
+      onSetSpaceAfter,
       onToggleCommentsSidebar,
       editingMode,
       onSetEditingMode,
@@ -990,6 +1071,9 @@ export function useToolbarItems(options: UseToolbarItemsOptions): {
       onOpenHeaderFooter,
       onCloseHeaderFooter,
       onOpenImageProperties,
+      onOpenImageSize,
+      onNewComment,
+      onDeleteComment,
     ]
   );
 
@@ -1180,10 +1264,14 @@ export function useToolbarItems(options: UseToolbarItemsOptions): {
               key={key}
               mode="text"
               value={currentFormatting.color?.replace(/^#/, '')}
+              displayValue={lastTextColor}
+              split
+              onApply={applyLastTextColor}
               onChange={textColorChange}
               theme={theme}
               disabled={isReadOnly}
               title="Font Color"
+              dataTestIdPrefix="ribbon-textColor"
             />
           );
         case 'highlightColor':
@@ -1192,10 +1280,14 @@ export function useToolbarItems(options: UseToolbarItemsOptions): {
               key={key}
               mode="highlight"
               value={currentFormatting.highlight}
+              displayValue={lastHighlightColor}
+              split
+              onApply={applyLastHighlightColor}
               onChange={highlightColorChange}
               theme={theme}
               disabled={isReadOnly}
               title="Text Highlight Color"
+              dataTestIdPrefix="ribbon-highlightColor"
             />
           );
         case 'stylePicker':
@@ -1295,6 +1387,121 @@ export function useToolbarItems(options: UseToolbarItemsOptions): {
           );
         case 'zoomControl':
           return null;
+        case 'paragraphIndent': {
+          const indentLeft = Math.max(0, currentFormatting.indentLeft ?? 0) / TWIPS_PER_INCH;
+          const indentRight = Math.max(0, currentFormatting.indentRight ?? 0) / TWIPS_PER_INCH;
+          return (
+            <ParagraphNumberGroup
+              key={key}
+              title="Indent"
+              disabled={isReadOnly}
+              rows={[
+                {
+                  id: 'indentLeft',
+                  label: 'Left',
+                  ariaLabel: 'Indent Left',
+                  value: indentLeft,
+                  unit: 'in',
+                  step: 0.1,
+                  min: 0,
+                  disabled: !onSetIndentLeft,
+                  onChange: (next) => onSetIndentLeft?.(Math.round(next * TWIPS_PER_INCH)),
+                },
+                {
+                  id: 'indentRight',
+                  label: 'Right',
+                  ariaLabel: 'Indent Right',
+                  value: indentRight,
+                  unit: 'in',
+                  step: 0.1,
+                  min: 0,
+                  disabled: !onSetIndentRight,
+                  onChange: (next) => onSetIndentRight?.(Math.round(next * TWIPS_PER_INCH)),
+                },
+              ]}
+            />
+          );
+        }
+        case 'paragraphSpacing': {
+          const spacingBefore = Math.max(0, currentFormatting.spaceBefore ?? 0) / TWIPS_PER_POINT;
+          const spacingAfter = Math.max(0, currentFormatting.spaceAfter ?? 0) / TWIPS_PER_POINT;
+          return (
+            <ParagraphNumberGroup
+              key={key}
+              title="Spacing"
+              disabled={isReadOnly}
+              rows={[
+                {
+                  id: 'spacingBefore',
+                  label: 'Before',
+                  ariaLabel: 'Spacing Before',
+                  value: spacingBefore,
+                  unit: 'pt',
+                  step: 6,
+                  min: 0,
+                  disabled: !onSetSpaceBefore,
+                  onChange: (next) => onSetSpaceBefore?.(Math.round(next * TWIPS_PER_POINT)),
+                },
+                {
+                  id: 'spacingAfter',
+                  label: 'After',
+                  ariaLabel: 'Spacing After',
+                  value: spacingAfter,
+                  unit: 'pt',
+                  step: 6,
+                  min: 0,
+                  disabled: !onSetSpaceAfter,
+                  onChange: (next) => onSetSpaceAfter?.(Math.round(next * TWIPS_PER_POINT)),
+                },
+              ]}
+            />
+          );
+        }
+        case 'breaksDropdown':
+          return (
+            <BreaksDropdown
+              key={key}
+              disabled={isReadOnly}
+              onPageBreak={onInsertPageBreak}
+              onSectionBreak={onInsertSectionBreak}
+            />
+          );
+        case 'pageMargins':
+          return (
+            <PageSetupDropdown
+              key={key}
+              kind="margins"
+              sectionProperties={sectionProperties}
+              onApply={onApplyPageSetup}
+              onOpenDialog={onPageSetup}
+              disabled={isReadOnly}
+              testId={`ribbon-${key}`}
+            />
+          );
+        case 'pageOrientation':
+          return (
+            <PageSetupDropdown
+              key={key}
+              kind="orientation"
+              sectionProperties={sectionProperties}
+              onApply={onApplyPageSetup}
+              onOpenDialog={onPageSetup}
+              disabled={isReadOnly}
+              testId={`ribbon-${key}`}
+            />
+          );
+        case 'pageSize':
+          return (
+            <PageSetupDropdown
+              key={key}
+              kind="size"
+              sectionProperties={sectionProperties}
+              onApply={onApplyPageSetup}
+              onOpenDialog={onPageSetup}
+              disabled={isReadOnly}
+              testId={`ribbon-${key}`}
+            />
+          );
         case 'editingMode':
           return (
             <EditingModeDropdown
@@ -1319,11 +1526,20 @@ export function useToolbarItems(options: UseToolbarItemsOptions): {
       highlightColorChange,
       isReadOnly,
       lineSpacingChange,
+      onApplyPageSetup,
+      onInsertPageBreak,
+      onInsertSectionBreak,
       onInsertTable,
+      onPageSetup,
+      onSetIndentLeft,
+      onSetIndentRight,
+      onSetSpaceBefore,
+      onSetSpaceAfter,
       onSetEditingMode,
       onTableAction,
       readOnly,
       styleChange,
+      sectionProperties,
       tableAction,
       tableContext,
       textColorChange,
