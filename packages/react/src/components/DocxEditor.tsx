@@ -35,6 +35,7 @@ import {
   type SelectionFormatting,
   type FormattingAction,
 } from './Toolbar';
+import { EditorToolbar } from './EditorToolbar';
 import { pointsToHalfPoints } from './ui/FontSizePicker';
 import { DocumentOutline } from './DocumentOutline';
 import { CommentsSidebar, type TrackedChangeEntry } from './CommentsSidebar';
@@ -287,6 +288,16 @@ export interface DocxEditorProps {
    * Passed from PluginHost to render plugin-specific overlays.
    */
   pluginOverlays?: ReactNode;
+  /** Toolbar layout: 'classic' (single row, default) or 'google-docs' (2-level with title bar) */
+  toolbarLayout?: 'classic' | 'google-docs';
+  /** Custom logo/icon for the title bar (google-docs layout only) */
+  renderLogo?: () => ReactNode;
+  /** Document name shown in the title bar (google-docs layout only) */
+  documentName?: string;
+  /** Callback when document name changes (google-docs layout only) */
+  onDocumentNameChange?: (name: string) => void;
+  /** Custom right-side actions for the title bar (google-docs layout only) */
+  renderTitleBarRight?: () => ReactNode;
 }
 
 /**
@@ -590,6 +601,11 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
     onEditorViewReady,
     onRenderedDomContextReady,
     pluginOverlays,
+    toolbarLayout = 'classic',
+    renderLogo,
+    documentName,
+    onDocumentNameChange,
+    renderTitleBarRight,
   },
   ref
 ) {
@@ -2246,10 +2262,10 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
       if (scrollFadeTimerRef.current) {
         clearTimeout(scrollFadeTimerRef.current);
       }
-      // Hide after 1.5s of no scrolling
+      // Hide after 0.6s of no scrolling
       scrollFadeTimerRef.current = setTimeout(() => {
         setScrollPageInfo((prev) => ({ ...prev, visible: false }));
-      }, 1500);
+      }, 600);
     };
 
     scrollContainerEl.addEventListener('scroll', handleScroll, { passive: true });
@@ -2838,6 +2854,29 @@ body { background: white; }
     );
   }
 
+  const toolbarChildren = (
+    <>
+      <ToolbarSeparator />
+      <ToolbarButton
+        onClick={() => setShowCommentsSidebar(!showCommentsSidebar)}
+        active={showCommentsSidebar}
+        title="Toggle comments sidebar"
+        ariaLabel="Toggle comments sidebar"
+      >
+        <MaterialSymbol name="comment" size={20} />
+      </ToolbarButton>
+      <ToolbarSeparator />
+      <EditingModeDropdown
+        mode={editingMode}
+        onModeChange={(mode) => {
+          setEditingMode(mode);
+          if (mode === 'suggesting') setShowCommentsSidebar(true);
+        }}
+      />
+      {toolbarExtra}
+    </>
+  );
+
   return (
     <ErrorProvider>
       <ErrorBoundary onError={handleEditorError}>
@@ -2867,55 +2906,86 @@ body { background: white; }
                   ref={toolbarRefCallback}
                   className="z-50 flex flex-col gap-0 bg-white shadow-sm flex-shrink-0"
                 >
-                  <Toolbar
-                    currentFormatting={state.selectionFormatting}
-                    onFormat={handleFormat}
-                    onUndo={undoActiveEditor}
-                    onRedo={redoActiveEditor}
-                    canUndo={true}
-                    canRedo={true}
-                    disabled={readOnly}
-                    documentStyles={history.state?.package.styles?.styles}
-                    theme={history.state?.package.theme || theme}
-                    showPrintButton={showPrintButton}
-                    onPrint={handleDirectPrint}
-                    showZoomControl={showZoomControl}
-                    zoom={state.zoom}
-                    onZoomChange={handleZoomChange}
-                    onRefocusEditor={focusActiveEditor}
-                    onInsertTable={handleInsertTable}
-                    showTableInsert={true}
-                    onInsertImage={handleInsertImageClick}
-                    onInsertPageBreak={handleInsertPageBreak}
-                    onInsertTOC={handleInsertTOC}
-                    imageContext={state.pmImageContext}
-                    onImageWrapType={handleImageWrapType}
-                    onImageTransform={handleImageTransform}
-                    onOpenImageProperties={handleOpenImageProperties}
-                    onPageSetup={handleOpenPageSetup}
-                    tableContext={state.pmTableContext}
-                    onTableAction={handleTableAction}
-                  >
-                    {/* Comment & Track Changes buttons */}
-                    <ToolbarSeparator />
-                    <ToolbarButton
-                      onClick={() => setShowCommentsSidebar(!showCommentsSidebar)}
-                      active={showCommentsSidebar}
-                      title="Toggle comments sidebar"
-                      ariaLabel="Toggle comments sidebar"
+                  {toolbarLayout === 'google-docs' ? (
+                    <EditorToolbar
+                      currentFormatting={state.selectionFormatting}
+                      onFormat={handleFormat}
+                      onUndo={undoActiveEditor}
+                      onRedo={redoActiveEditor}
+                      canUndo={true}
+                      canRedo={true}
+                      disabled={readOnly}
+                      documentStyles={history.state?.package.styles?.styles}
+                      theme={history.state?.package.theme || theme}
+                      showPrintButton={showPrintButton}
+                      onPrint={handleDirectPrint}
+                      showZoomControl={showZoomControl}
+                      zoom={state.zoom}
+                      onZoomChange={handleZoomChange}
+                      onRefocusEditor={focusActiveEditor}
+                      onInsertTable={handleInsertTable}
+                      showTableInsert={true}
+                      onInsertImage={handleInsertImageClick}
+                      onInsertPageBreak={handleInsertPageBreak}
+                      onInsertTOC={handleInsertTOC}
+                      imageContext={state.pmImageContext}
+                      onImageWrapType={handleImageWrapType}
+                      onImageTransform={handleImageTransform}
+                      onOpenImageProperties={handleOpenImageProperties}
+                      onPageSetup={handleOpenPageSetup}
+                      tableContext={state.pmTableContext}
+                      onTableAction={handleTableAction}
                     >
-                      <MaterialSymbol name="comment" size={20} />
-                    </ToolbarButton>
-                    <ToolbarSeparator />
-                    <EditingModeDropdown
-                      mode={editingMode}
-                      onModeChange={(mode) => {
-                        setEditingMode(mode);
-                        if (mode === 'suggesting') setShowCommentsSidebar(true);
-                      }}
-                    />
-                    {toolbarExtra}
-                  </Toolbar>
+                      <EditorToolbar.TitleBar>
+                        {renderLogo && <EditorToolbar.Logo>{renderLogo()}</EditorToolbar.Logo>}
+                        {documentName !== undefined && onDocumentNameChange && (
+                          <EditorToolbar.DocumentName
+                            value={documentName}
+                            onChange={onDocumentNameChange}
+                          />
+                        )}
+                        {renderTitleBarRight && (
+                          <EditorToolbar.TitleBarRight>
+                            {renderTitleBarRight()}
+                          </EditorToolbar.TitleBarRight>
+                        )}
+                        <EditorToolbar.MenuBar />
+                      </EditorToolbar.TitleBar>
+                      <EditorToolbar.FormattingBar>{toolbarChildren}</EditorToolbar.FormattingBar>
+                    </EditorToolbar>
+                  ) : (
+                    <Toolbar
+                      currentFormatting={state.selectionFormatting}
+                      onFormat={handleFormat}
+                      onUndo={undoActiveEditor}
+                      onRedo={redoActiveEditor}
+                      canUndo={true}
+                      canRedo={true}
+                      disabled={readOnly}
+                      documentStyles={history.state?.package.styles?.styles}
+                      theme={history.state?.package.theme || theme}
+                      showPrintButton={showPrintButton}
+                      onPrint={handleDirectPrint}
+                      showZoomControl={showZoomControl}
+                      zoom={state.zoom}
+                      onZoomChange={handleZoomChange}
+                      onRefocusEditor={focusActiveEditor}
+                      onInsertTable={handleInsertTable}
+                      showTableInsert={true}
+                      onInsertImage={handleInsertImageClick}
+                      onInsertPageBreak={handleInsertPageBreak}
+                      onInsertTOC={handleInsertTOC}
+                      imageContext={state.pmImageContext}
+                      onImageWrapType={handleImageWrapType}
+                      onImageTransform={handleImageTransform}
+                      onOpenImageProperties={handleOpenImageProperties}
+                      onPageSetup={handleOpenPageSetup}
+                      tableContext={state.pmTableContext}
+                      onTableAction={handleTableAction}
+                    >
+                      {toolbarChildren}
+                    </Toolbar>
+                  )}
 
                   {/* Horizontal Ruler - sticky with toolbar */}
                   {showRuler && (

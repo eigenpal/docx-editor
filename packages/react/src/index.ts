@@ -115,6 +115,16 @@ export {
   ToolbarSeparator,
 } from './components/Toolbar';
 export {
+  EditorToolbar,
+  type EditorToolbarProps,
+  type TitleBarProps,
+  type LogoProps,
+  type DocumentNameProps,
+  type TitleBarRightProps,
+  type FormattingBarProps,
+} from './components/EditorToolbar';
+export { FormattingBar } from './components/FormattingBar';
+export {
   ContextMenu,
   type ContextMenuProps,
   useContextMenu,
