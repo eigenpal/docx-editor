@@ -182,7 +182,6 @@ export function Editor() {
           showRuler={true}
           showZoomControl={true}
           initialZoom={1.0}
-          toolbarLayout="google-docs"
           renderLogo={renderLogo}
           documentName={fileName}
           onDocumentNameChange={setFileName}

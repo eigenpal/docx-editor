@@ -29,7 +29,6 @@ import type {
 } from '@eigenpal/docx-core/types/document';
 
 import {
-  Toolbar,
   ToolbarButton,
   ToolbarSeparator,
   type SelectionFormatting,
@@ -288,17 +287,15 @@ export interface DocxEditorProps {
    * Passed from PluginHost to render plugin-specific overlays.
    */
   pluginOverlays?: ReactNode;
-  /** Toolbar layout: 'classic' (single row, default) or 'google-docs' (2-level with title bar) */
-  toolbarLayout?: 'classic' | 'google-docs';
-  /** Custom logo/icon for the title bar (google-docs layout only) */
+  /** Custom logo/icon for the title bar */
   renderLogo?: () => ReactNode;
-  /** Document name shown in the title bar (google-docs layout only) */
+  /** Document name shown in the title bar */
   documentName?: string;
-  /** Callback when document name changes (google-docs layout only) */
+  /** Callback when document name changes */
   onDocumentNameChange?: (name: string) => void;
-  /** Whether the document name is editable (google-docs layout only, default: true) */
+  /** Whether the document name is editable (default: true) */
   documentNameEditable?: boolean;
-  /** Custom right-side actions for the title bar (google-docs layout only) */
+  /** Custom right-side actions for the title bar */
   renderTitleBarRight?: () => ReactNode;
 }
 
@@ -603,7 +600,6 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
     onEditorViewReady,
     onRenderedDomContextReady,
     pluginOverlays,
-    toolbarLayout = 'classic',
     renderLogo,
     documentName,
     onDocumentNameChange,
@@ -2909,87 +2905,53 @@ body { background: white; }
                   ref={toolbarRefCallback}
                   className="z-50 flex flex-col gap-0 bg-white shadow-sm flex-shrink-0"
                 >
-                  {toolbarLayout === 'google-docs' ? (
-                    <EditorToolbar
-                      currentFormatting={state.selectionFormatting}
-                      onFormat={handleFormat}
-                      onUndo={undoActiveEditor}
-                      onRedo={redoActiveEditor}
-                      canUndo={true}
-                      canRedo={true}
-                      disabled={readOnly}
-                      documentStyles={history.state?.package.styles?.styles}
-                      theme={history.state?.package.theme || theme}
-                      showPrintButton={showPrintButton}
-                      onPrint={handleDirectPrint}
-                      showZoomControl={showZoomControl}
-                      zoom={state.zoom}
-                      onZoomChange={handleZoomChange}
-                      onRefocusEditor={focusActiveEditor}
-                      onInsertTable={handleInsertTable}
-                      showTableInsert={true}
-                      onInsertImage={handleInsertImageClick}
-                      onInsertPageBreak={handleInsertPageBreak}
-                      onInsertTOC={handleInsertTOC}
-                      imageContext={state.pmImageContext}
-                      onImageWrapType={handleImageWrapType}
-                      onImageTransform={handleImageTransform}
-                      onOpenImageProperties={handleOpenImageProperties}
-                      onPageSetup={handleOpenPageSetup}
-                      tableContext={state.pmTableContext}
-                      onTableAction={handleTableAction}
-                    >
-                      <EditorToolbar.TitleBar>
-                        {renderLogo && <EditorToolbar.Logo>{renderLogo()}</EditorToolbar.Logo>}
-                        {documentName !== undefined && (
-                          <EditorToolbar.DocumentName
-                            value={documentName}
-                            onChange={onDocumentNameChange}
-                            editable={documentNameEditable}
-                          />
-                        )}
-                        {renderTitleBarRight && (
-                          <EditorToolbar.TitleBarRight>
-                            {renderTitleBarRight()}
-                          </EditorToolbar.TitleBarRight>
-                        )}
-                        <EditorToolbar.MenuBar />
-                      </EditorToolbar.TitleBar>
-                      <EditorToolbar.FormattingBar>{toolbarChildren}</EditorToolbar.FormattingBar>
-                    </EditorToolbar>
-                  ) : (
-                    <Toolbar
-                      currentFormatting={state.selectionFormatting}
-                      onFormat={handleFormat}
-                      onUndo={undoActiveEditor}
-                      onRedo={redoActiveEditor}
-                      canUndo={true}
-                      canRedo={true}
-                      disabled={readOnly}
-                      documentStyles={history.state?.package.styles?.styles}
-                      theme={history.state?.package.theme || theme}
-                      showPrintButton={showPrintButton}
-                      onPrint={handleDirectPrint}
-                      showZoomControl={showZoomControl}
-                      zoom={state.zoom}
-                      onZoomChange={handleZoomChange}
-                      onRefocusEditor={focusActiveEditor}
-                      onInsertTable={handleInsertTable}
-                      showTableInsert={true}
-                      onInsertImage={handleInsertImageClick}
-                      onInsertPageBreak={handleInsertPageBreak}
-                      onInsertTOC={handleInsertTOC}
-                      imageContext={state.pmImageContext}
-                      onImageWrapType={handleImageWrapType}
-                      onImageTransform={handleImageTransform}
-                      onOpenImageProperties={handleOpenImageProperties}
-                      onPageSetup={handleOpenPageSetup}
-                      tableContext={state.pmTableContext}
-                      onTableAction={handleTableAction}
-                    >
-                      {toolbarChildren}
-                    </Toolbar>
-                  )}
+                  <EditorToolbar
+                    currentFormatting={state.selectionFormatting}
+                    onFormat={handleFormat}
+                    onUndo={undoActiveEditor}
+                    onRedo={redoActiveEditor}
+                    canUndo={true}
+                    canRedo={true}
+                    disabled={readOnly}
+                    documentStyles={history.state?.package.styles?.styles}
+                    theme={history.state?.package.theme || theme}
+                    showPrintButton={showPrintButton}
+                    onPrint={handleDirectPrint}
+                    showZoomControl={showZoomControl}
+                    zoom={state.zoom}
+                    onZoomChange={handleZoomChange}
+                    onRefocusEditor={focusActiveEditor}
+                    onInsertTable={handleInsertTable}
+                    showTableInsert={true}
+                    onInsertImage={handleInsertImageClick}
+                    onInsertPageBreak={handleInsertPageBreak}
+                    onInsertTOC={handleInsertTOC}
+                    imageContext={state.pmImageContext}
+                    onImageWrapType={handleImageWrapType}
+                    onImageTransform={handleImageTransform}
+                    onOpenImageProperties={handleOpenImageProperties}
+                    onPageSetup={handleOpenPageSetup}
+                    tableContext={state.pmTableContext}
+                    onTableAction={handleTableAction}
+                  >
+                    <EditorToolbar.TitleBar>
+                      {renderLogo && <EditorToolbar.Logo>{renderLogo()}</EditorToolbar.Logo>}
+                      {documentName !== undefined && (
+                        <EditorToolbar.DocumentName
+                          value={documentName}
+                          onChange={onDocumentNameChange}
+                          editable={documentNameEditable}
+                        />
+                      )}
+                      {renderTitleBarRight && (
+                        <EditorToolbar.TitleBarRight>
+                          {renderTitleBarRight()}
+                        </EditorToolbar.TitleBarRight>
+                      )}
+                      <EditorToolbar.MenuBar />
+                    </EditorToolbar.TitleBar>
+                    <EditorToolbar.FormattingBar>{toolbarChildren}</EditorToolbar.FormattingBar>
+                  </EditorToolbar>
 
                   {/* Horizontal Ruler - sticky with toolbar */}
                   {showRuler && (
