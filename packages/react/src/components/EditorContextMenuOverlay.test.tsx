@@ -1,5 +1,4 @@
 import { describe, it, expect } from 'bun:test';
-import React from 'react';
 import { renderToString } from 'react-dom/server';
 import { EditorContextMenuOverlay } from './EditorContextMenuOverlay';
 

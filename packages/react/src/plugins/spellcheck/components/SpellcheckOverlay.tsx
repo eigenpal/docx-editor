@@ -1,4 +1,4 @@
-import React, { useEffect, useLayoutEffect, useRef, useCallback, useState } from 'react';
+import React, { useEffect, useRef, useCallback, useState } from 'react';
 import type { EditorView } from 'prosemirror-view';
 import type { RenderedDomContext } from '../../../plugin-api/types';
 import type { SpellcheckMisspelling } from '../prosemirror-plugin';
