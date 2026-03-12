@@ -1,6 +1,6 @@
 {
   "name": "@eigenpal/docx-js-editor",
-  "version": "0.0.25",
+  "version": "0.0.26",
   "description": "A browser-based DOCX template editor with variable insertion support",
   "type": "module",
   "main": "./dist/index.cjs",
@@ -75,7 +75,7 @@
   "scripts": {
     "build": "tsup && bun run build:css",
     "build:css": "tailwindcss -c ../../tailwind.config.lib.js -i ./src/styles/editor.css -o ./dist/styles.css --minify",
-    "prepublishOnly": "sed -e 's|\\./assets/|https://raw.githubusercontent.com/eigenpal/docx-js-editor/main/assets/|g' -e 's|(packages/|(https://github.com/eigenpal/docx-js-editor/tree/main/packages/|g' -e 's|(docs/|(https://github.com/eigenpal/docx-js-editor/blob/main/docs/|g' -e 's|(examples/|(https://github.com/eigenpal/docx-js-editor/tree/main/examples/|g' ../../README.md > README.md",
+    "prepublishOnly": "bun run build && sed -e 's|\\./assets/|https://raw.githubusercontent.com/eigenpal/docx-js-editor/main/assets/|g' -e 's|(packages/|(https://github.com/eigenpal/docx-js-editor/tree/main/packages/|g' -e 's|(docs/|(https://github.com/eigenpal/docx-js-editor/blob/main/docs/|g' -e 's|(examples/|(https://github.com/eigenpal/docx-js-editor/tree/main/examples/|g' ../../README.md > README.md",
     "typecheck": "tsc --noEmit"
   },
   "peerDependencies": {
