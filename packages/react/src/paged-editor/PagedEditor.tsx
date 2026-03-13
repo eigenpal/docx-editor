@@ -37,6 +37,7 @@ import { ImageSelectionOverlay, type ImageSelectionInfo } from './ImageSelection
 
 // Layout engine
 import { layoutDocument } from '@eigenpal/docx-core/layout-engine';
+import type { ColumnLayout } from '@eigenpal/docx-core/layout-engine';
 import type {
   Layout,
   FlowBlock,
@@ -320,6 +321,18 @@ function getMargins(sectionProps: SectionProperties | null | undefined): PageMar
     header: sectionProps?.headerDistance ? twipsToPixels(sectionProps.headerDistance) : 48,
     footer: sectionProps?.footerDistance ? twipsToPixels(sectionProps.footerDistance) : 48,
   };
+}
+
+/**
+ * Extract column layout from section properties.
+ * Returns undefined for single-column (default) to avoid unnecessary paginator overhead.
+ */
+function getColumns(sectionProps: SectionProperties | null | undefined): ColumnLayout | undefined {
+  const count = sectionProps?.columnCount ?? 1;
+  if (count <= 1) return undefined;
+  // Default column spacing: 720 twips (0.5 inch) per OOXML spec
+  const gap = twipsToPixels(sectionProps?.columnSpace ?? 720);
+  return { count, gap, equalWidth: sectionProps?.equalWidth ?? true };
 }
 
 /**
@@ -1356,7 +1369,12 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
     // Compute page size and margins
     const pageSize = useMemo(() => getPageSize(sectionProperties), [sectionProperties]);
     const margins = useMemo(() => getMargins(sectionProperties), [sectionProperties]);
+    const columns = useMemo(() => getColumns(sectionProperties), [sectionProperties]);
     const contentWidth = pageSize.w - margins.left - margins.right;
+    // For multi-column layouts, blocks must be measured at column width, not full content width
+    const measureWidth = columns
+      ? Math.floor((contentWidth - (columns.count - 1) * columns.gap) / columns.count)
+      : contentWidth;
 
     // Initialize painter using useMemo to ensure it's ready before first render callbacks
     const painter = useMemo(() => {
@@ -1411,7 +1429,7 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
           // floating tables/images create exclusion zones that affect
           // neighboring paragraphs' line widths.
           stepStart = performance.now();
-          const newMeasures = measureBlocks(newBlocks, contentWidth);
+          const newMeasures = measureBlocks(newBlocks, measureWidth);
           stepTime = performance.now() - stepStart;
           if (stepTime > 1000) {
             console.warn(
@@ -1463,6 +1481,7 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
             const pass1Layout = layoutDocument(newBlocks, newMeasures, {
               pageSize,
               margins: effectiveMargins,
+              columns,
             });
 
             // Map footnote refs to pages
@@ -1486,6 +1505,7 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
               newLayout = layoutDocument(newBlocks, newMeasures, {
                 pageSize,
                 margins: effectiveMargins,
+                columns,
                 footnoteReservedHeights,
               });
 
@@ -1507,6 +1527,7 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
             newLayout = layoutDocument(newBlocks, newMeasures, {
               pageSize,
               margins: effectiveMargins,
+              columns,
             });
           }
 
