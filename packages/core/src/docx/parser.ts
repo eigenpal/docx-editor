@@ -41,6 +41,7 @@ import { parseFootnotes, parseEndnotes } from './footnoteParser';
 import { parseComments } from './commentParser';
 import { loadFontsWithMapping } from '../utils/fontLoader';
 import { type DocxInput, toArrayBuffer } from '../utils/docxInput';
+import { isTiffMimeType, convertTiffToPngDataUrl } from '../utils/tiffConverter';
 
 // ============================================================================
 // PROGRESS CALLBACK
@@ -318,19 +319,32 @@ function buildMediaMap(raw: RawDocxContent, _rels: RelationshipMap): Map<string,
     const filename = path.split('/').pop() || path;
     const mimeType = getMediaMimeType(path);
 
-    // Create a data URL for the image
-    const bytes = new Uint8Array(data);
-    let binary = '';
-    for (let i = 0; i < bytes.length; i++) {
-      binary += String.fromCharCode(bytes[i]);
+    // Convert TIFF to PNG for browser display (browsers don't support TIFF in <img>)
+    let dataUrl: string | undefined;
+    let displayMimeType = mimeType;
+
+    if (isTiffMimeType(mimeType)) {
+      const pngDataUrl = convertTiffToPngDataUrl(data);
+      if (pngDataUrl) {
+        dataUrl = pngDataUrl;
+        displayMimeType = 'image/png';
+      }
     }
-    const base64 = btoa(binary);
-    const dataUrl = `data:${mimeType};base64,${base64}`;
+
+    // Fallback: encode as base64 data URL with original MIME type
+    if (!dataUrl) {
+      const bytes = new Uint8Array(data);
+      let binary = '';
+      for (let i = 0; i < bytes.length; i++) {
+        binary += String.fromCharCode(bytes[i]);
+      }
+      dataUrl = `data:${mimeType};base64,${btoa(binary)}`;
+    }
 
     const mediaFile: MediaFile = {
       path,
       filename,
-      mimeType,
+      mimeType: displayMimeType,
       data,
       dataUrl,
     };
