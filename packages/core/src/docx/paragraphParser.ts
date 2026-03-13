@@ -1241,7 +1241,7 @@ export function parseParagraph(
           marker: level.lvlText,
           isBullet: level.numFmt === 'bullet',
           numFmt: level.numFmt,
-          markerHidden: level.rPr?.hidden === true ? true : undefined,
+          markerHidden: level.rPr?.hidden || undefined,
         };
 
         // Apply level's paragraph properties (indentation) as defaults.
