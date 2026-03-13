@@ -21,6 +21,11 @@ import type { EditorView } from 'prosemirror-view';
 import type { Plugin as ProseMirrorPlugin } from 'prosemirror-state';
 import { PluginLifecycleManager, injectStyles as coreInjectStyles } from '@eigenpal/docx-core';
 import type { ReactEditorPlugin, PluginHostProps, PluginHostRef, PanelConfig } from './types';
+import { EditorContextMenuOverlay } from '../components/EditorContextMenuOverlay';
+import type {
+  SpellcheckMenuState,
+  SpellcheckMisspelling,
+} from '../plugins/spellcheck/prosemirror-plugin';
 // Backwards-compatible alias
 type EditorPlugin = ReactEditorPlugin;
 
@@ -471,6 +476,9 @@ export const PluginHost = forwardRef<PluginHostRef, PluginHostProps>(function Pl
   // Right panels are rendered inside the viewport so they scroll with the content
   const pluginOverlays = useMemo(() => {
     const overlays: React.ReactNode[] = [];
+    const spellcheckState = lifecycleSnapshot.states.get('spellcheck') as
+      | { misspellings: SpellcheckMisspelling[]; menu: SpellcheckMenuState | null }
+      | undefined;
 
     // Add renderOverlay content
     if (renderedDomContext) {
@@ -485,6 +493,16 @@ export const PluginHost = forwardRef<PluginHostRef, PluginHostProps>(function Pl
         }
       }
     }
+
+    overlays.push(
+      <div key="overlay-context-menu" className="plugin-overlay" data-plugin-id="context-menu">
+        <EditorContextMenuOverlay
+          renderedDomContext={renderedDomContext}
+          editorView={editorView}
+          spellcheckState={spellcheckState}
+        />
+      </div>
+    );
 
     // Add right panel content (rendered inside viewport to scroll with content)
     for (const plugin of plugins) {

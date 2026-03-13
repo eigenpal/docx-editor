@@ -34,6 +34,7 @@ import type { EditorView } from 'prosemirror-view';
 import { HiddenProseMirror, type HiddenProseMirrorRef } from './HiddenProseMirror';
 import { SelectionOverlay } from './SelectionOverlay';
 import { ImageSelectionOverlay, type ImageSelectionInfo } from './ImageSelectionOverlay';
+import { PERF_ENABLED } from '../utils/perfFlags';
 
 // Layout engine
 import { layoutDocument } from '@eigenpal/docx-core/layout-engine';
@@ -98,6 +99,8 @@ import { LayoutSelectionGate } from './LayoutSelectionGate';
 
 // Visual line navigation hook
 import { useVisualLineNavigation } from './useVisualLineNavigation';
+import { createDocumentChangePipeline } from './documentChangePipeline';
+import { mapDirtyRangesToTopLevelIndices } from './dirtyRangeMapper';
 
 // Types
 import type {
@@ -121,6 +124,29 @@ import { createRenderedDomContext } from '../plugin-api/RenderedDomContext';
 // =============================================================================
 // TYPES
 // =============================================================================
+
+type LayoutPerfEntry = {
+  ts: number;
+  totalMs: number;
+  toFlowBlocksMs: number;
+  measureBlocksMs: number;
+  layoutDocumentMs: number;
+  renderPagesMs: number;
+  blocks: number;
+  pages: number;
+  docSize: number;
+  layoutSeq: number;
+};
+
+type SelectionPerfEntry = {
+  ts: number;
+  totalMs: number;
+  cellHighlightMs: number;
+  caretDomMs: number;
+  from: number;
+  to: number;
+  layoutReady: boolean;
+};
 
 export interface PagedEditorProps {
   /** The document to edit. */
@@ -805,13 +831,19 @@ function measureBlocks(blocks: FlowBlock[], contentWidth: number): Measure[] {
     const zones = activeZones.length > 0 ? activeZones : undefined;
 
     try {
-      const blockStart = performance.now();
-      const measure = measureBlock(block, contentWidth, zones, cumulativeY);
-      const blockTime = performance.now() - blockStart;
-      if (blockTime > 500) {
-        console.warn(
-          `[measureBlocks] Block ${blockIndex} (${block.kind}) took ${Math.round(blockTime)}ms`
-        );
+      let measure: Measure;
+
+      if (PERF_ENABLED) {
+        const blockStart = performance.now();
+        measure = measureBlock(block, contentWidth, zones, cumulativeY);
+        const blockTime = performance.now() - blockStart;
+        if (blockTime > 500) {
+          console.warn(
+            `[measureBlocks] Block ${blockIndex} (${block.kind}) took ${Math.round(blockTime)}ms`
+          );
+        }
+      } else {
+        measure = measureBlock(block, contentWidth, zones, cumulativeY);
       }
 
       // Update cumulative Y for next block
@@ -1254,12 +1286,55 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
     const onDocumentChangeRef = useRef(onDocumentChange);
     const onReadyRef = useRef(onReady);
     const onRenderedDomContextReadyRef = useRef(onRenderedDomContextReady);
+    const documentChangePipelineRef = useRef<ReturnType<
+      typeof createDocumentChangePipeline
+    > | null>(null);
+    const lastDocChangeAtRef = useRef<number | null>(null);
 
     // Keep refs in sync with latest props
     onSelectionChangeRef.current = onSelectionChange;
     onDocumentChangeRef.current = onDocumentChange;
     onReadyRef.current = onReady;
     onRenderedDomContextReadyRef.current = onRenderedDomContextReady;
+
+    useEffect(() => {
+      const win =
+        typeof window === 'undefined'
+          ? null
+          : (window as Window & {
+              __DOCX_DISABLE_WORKER__?: boolean;
+              __DOCX_WORKER_ENABLED__?: boolean;
+              __DOCX_ONCHANGE_PROBE__?: boolean;
+              __DOCX_ONCHANGE_EVENTS__?: number[];
+            });
+      const workerEnabled = win ? !win.__DOCX_DISABLE_WORKER__ : true;
+      if (win) {
+        win.__DOCX_WORKER_ENABLED__ = workerEnabled;
+      }
+
+      documentChangePipelineRef.current = createDocumentChangePipeline({
+        baseDocument: document ?? null,
+        enabledWorker: workerEnabled,
+        onEmit: (doc) => {
+          if (PERF_ENABLED && win?.__DOCX_ONCHANGE_PROBE__) {
+            if (!win.__DOCX_ONCHANGE_EVENTS__) {
+              win.__DOCX_ONCHANGE_EVENTS__ = [];
+            }
+            win.__DOCX_ONCHANGE_EVENTS__.push(performance.now());
+          }
+          onDocumentChangeRef.current?.(doc);
+        },
+      });
+
+      return () => {
+        documentChangePipelineRef.current?.dispose();
+        documentChangePipelineRef.current = null;
+      };
+    }, []);
+
+    useEffect(() => {
+      documentChangePipelineRef.current?.setBaseDocument(document ?? null);
+    }, [document]);
 
     // State
     const [layout, setLayout] = useState<Layout | null>(null);
@@ -1374,6 +1449,35 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
     // Layout Pipeline
     // =========================================================================
 
+    const recordLayoutPerf = useCallback((entry: LayoutPerfEntry) => {
+      if (!PERF_ENABLED) return;
+      if (typeof window === 'undefined') return;
+      const win = window as Window & {
+        __DOCX_LAYOUT_PROBE__?: boolean;
+        __DOCX_LAYOUT_PERF_LOG__?: LayoutPerfEntry[];
+        __DOCX_SELECTION_PERF_LOG__?: SelectionPerfEntry[];
+      };
+      if (!win.__DOCX_LAYOUT_PROBE__) return;
+      if (!win.__DOCX_LAYOUT_PERF_LOG__) {
+        win.__DOCX_LAYOUT_PERF_LOG__ = [];
+      }
+      win.__DOCX_LAYOUT_PERF_LOG__.push(entry);
+    }, []);
+
+    const recordSelectionPerf = useCallback((entry: SelectionPerfEntry) => {
+      if (!PERF_ENABLED) return;
+      if (typeof window === 'undefined') return;
+      const win = window as Window & {
+        __DOCX_LAYOUT_PROBE__?: boolean;
+        __DOCX_SELECTION_PERF_LOG__?: SelectionPerfEntry[];
+      };
+      if (!win.__DOCX_LAYOUT_PROBE__) return;
+      if (!win.__DOCX_SELECTION_PERF_LOG__) {
+        win.__DOCX_SELECTION_PERF_LOG__ = [];
+      }
+      win.__DOCX_SELECTION_PERF_LOG__.push(entry);
+    }, []);
+
     /**
      * Run the full layout pipeline:
      * 1. Convert PM doc to blocks
@@ -1383,7 +1487,12 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
      */
     const runLayoutPipeline = useCallback(
       (state: EditorState) => {
-        const pipelineStart = performance.now();
+        const perfEnabled = PERF_ENABLED;
+        const pipelineStart = perfEnabled ? performance.now() : 0;
+        let toFlowBlocksMs = 0;
+        let measureBlocksMs = 0;
+        let layoutDocumentMs = 0;
+        let renderPagesMs = 0;
 
         // Capture current state sequence for this layout run
         const currentEpoch = syncCoordinator.getStateSeq();
@@ -1393,14 +1502,17 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
 
         try {
           // Step 1: Convert PM doc to flow blocks
-          let stepStart = performance.now();
+          let stepStart = perfEnabled ? performance.now() : 0;
           const pageContentHeight = pageSize.h - margins.top - margins.bottom;
           const newBlocks = toFlowBlocks(state.doc, { theme: _theme, pageContentHeight });
-          let stepTime = performance.now() - stepStart;
-          if (stepTime > 500) {
-            console.warn(
-              `[PagedEditor] toFlowBlocks took ${Math.round(stepTime)}ms (${newBlocks.length} blocks)`
-            );
+          let stepTime = perfEnabled ? performance.now() - stepStart : 0;
+          if (perfEnabled) {
+            toFlowBlocksMs = stepTime;
+            if (stepTime > 500) {
+              console.warn(
+                `[PagedEditor] toFlowBlocks took ${Math.round(stepTime)}ms (${newBlocks.length} blocks)`
+              );
+            }
           }
           setBlocks(newBlocks);
 
@@ -1410,13 +1522,16 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
           // block measurements cannot be cached by PM node identity since
           // floating tables/images create exclusion zones that affect
           // neighboring paragraphs' line widths.
-          stepStart = performance.now();
+          stepStart = perfEnabled ? performance.now() : 0;
           const newMeasures = measureBlocks(newBlocks, contentWidth);
-          stepTime = performance.now() - stepStart;
-          if (stepTime > 1000) {
-            console.warn(
-              `[PagedEditor] measureBlocks took ${Math.round(stepTime)}ms (${newBlocks.length} blocks)`
-            );
+          stepTime = perfEnabled ? performance.now() - stepStart : 0;
+          if (perfEnabled) {
+            measureBlocksMs = stepTime;
+            if (stepTime > 1000) {
+              console.warn(
+                `[PagedEditor] measureBlocks took ${Math.round(stepTime)}ms (${newBlocks.length} blocks)`
+              );
+            }
           }
           setMeasures(newMeasures);
 
@@ -1453,7 +1568,7 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
           }
 
           // Step 3: Layout blocks onto pages (two-pass if footnotes exist)
-          stepStart = performance.now();
+          stepStart = perfEnabled ? performance.now() : 0;
           let newLayout: Layout;
           let pageFootnoteMap = new Map<number, number[]>();
           let footnoteContentMap = new Map<number, { displayNumber: number; height: number }>();
@@ -1510,17 +1625,20 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
             });
           }
 
-          stepTime = performance.now() - stepStart;
-          if (stepTime > 500) {
-            console.warn(
-              `[PagedEditor] layoutDocument took ${Math.round(stepTime)}ms (${newLayout.pages.length} pages)`
-            );
+          stepTime = perfEnabled ? performance.now() - stepStart : 0;
+          if (perfEnabled) {
+            layoutDocumentMs = stepTime;
+            if (stepTime > 500) {
+              console.warn(
+                `[PagedEditor] layoutDocument took ${Math.round(stepTime)}ms (${newLayout.pages.length} pages)`
+              );
+            }
           }
           setLayout(newLayout);
 
           // Step 4: Paint to DOM
           if (pagesContainerRef.current && painterRef.current) {
-            stepStart = performance.now();
+            stepStart = perfEnabled ? performance.now() : 0;
 
             // Build block lookup
             const blockLookup: BlockLookup = new Map();
@@ -1561,9 +1679,12 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
               footnotesByPage?: Map<number, FootnoteRenderItem[]>;
             });
 
-            stepTime = performance.now() - stepStart;
-            if (stepTime > 500) {
-              console.warn(`[PagedEditor] renderPages took ${Math.round(stepTime)}ms`);
+            stepTime = perfEnabled ? performance.now() - stepStart : 0;
+            if (perfEnabled) {
+              renderPagesMs = stepTime;
+              if (stepTime > 500) {
+                console.warn(`[PagedEditor] renderPages took ${Math.round(stepTime)}ms`);
+              }
             }
 
             // Create and expose RenderedDomContext after DOM is painted
@@ -1573,12 +1694,26 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
             }
           }
 
-          const totalTime = performance.now() - pipelineStart;
-          if (totalTime > 2000) {
-            console.warn(
-              `[PagedEditor] Layout pipeline took ${Math.round(totalTime)}ms total ` +
-                `(${newBlocks.length} blocks, ${newMeasures.length} measures)`
-            );
+          if (perfEnabled) {
+            const totalTime = performance.now() - pipelineStart;
+            recordLayoutPerf({
+              ts: performance.now(),
+              totalMs: totalTime,
+              toFlowBlocksMs,
+              measureBlocksMs,
+              layoutDocumentMs,
+              renderPagesMs,
+              blocks: newBlocks.length,
+              pages: newLayout.pages.length,
+              docSize: state.doc.content.size,
+              layoutSeq: currentEpoch,
+            });
+            if (totalTime > 2000) {
+              console.warn(
+                `[PagedEditor] Layout pipeline took ${Math.round(totalTime)}ms total ` +
+                  `(${newBlocks.length} blocks, ${newMeasures.length} measures)`
+              );
+            }
           }
         } catch (error) {
           console.error('[PagedEditor] Layout pipeline error:', error);
@@ -1599,6 +1734,7 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
         sectionProperties,
         onRenderedDomContextReady,
         document,
+        recordLayoutPerf,
       ]
     );
 
@@ -1762,6 +1898,10 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
     const updateSelectionOverlay = useCallback(
       (state: EditorState) => {
         const { from, to } = state.selection;
+        const perfEnabled = PERF_ENABLED;
+        const selectionStart = perfEnabled ? performance.now() : 0;
+        let cellHighlightMs = 0;
+        let caretDomMs = 0;
 
         // Always notify selection change (for toolbar sync) even if layout not ready
         // Use ref to avoid infinite loops when callback is unstable
@@ -1769,6 +1909,7 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
 
         // Update visual cell selection highlighting on visible layout table cells
         if (pagesContainerRef.current) {
+          const cellStart = perfEnabled ? performance.now() : 0;
           // Clear previous cell highlighting
           const prevSelected = pagesContainerRef.current.querySelectorAll(
             '.layout-table-cell-selected'
@@ -1804,14 +1945,34 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
               }
             }
           }
+          if (perfEnabled) {
+            cellHighlightMs = performance.now() - cellStart;
+          }
         }
 
-        if (!layout || blocks.length === 0) return;
+        if (!layout || blocks.length === 0) {
+          if (perfEnabled) {
+            recordSelectionPerf({
+              ts: performance.now(),
+              totalMs: performance.now() - selectionStart,
+              cellHighlightMs,
+              caretDomMs,
+              from,
+              to,
+              layoutReady: false,
+            });
+          }
+          return;
+        }
 
         // Collapsed selection - show caret
         if (from === to) {
           // Use DOM-based caret positioning for accuracy
+          const caretStart = perfEnabled ? performance.now() : 0;
           const domCaret = getCaretFromDom(from, zoom);
+          if (perfEnabled) {
+            caretDomMs = performance.now() - caretStart;
+          }
           if (domCaret) {
             setCaretPosition(domCaret);
           } else {
@@ -1950,14 +2111,37 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
           }
           setCaretPosition(null);
         }
+
+        if (perfEnabled) {
+          recordSelectionPerf({
+            ts: performance.now(),
+            totalMs: performance.now() - selectionStart,
+            cellHighlightMs,
+            caretDomMs,
+            from,
+            to,
+            layoutReady: true,
+          });
+        }
       },
-      [layout, blocks, measures, getCaretFromDom, zoom]
+      [layout, blocks, measures, getCaretFromDom, zoom, recordSelectionPerf]
       // NOTE: onSelectionChange removed from dependencies - accessed via ref to prevent infinite loops
     );
 
     // =========================================================================
     // Event Handlers
     // =========================================================================
+
+    const collectDirtyRanges = useCallback((transaction: Transaction) => {
+      const ranges: Array<{ from: number; to: number }> = [];
+      const maps = transaction.mapping?.maps ?? [];
+      for (const map of maps) {
+        map.forEach((_from, _to, newFrom, newTo) => {
+          ranges.push({ from: newFrom, to: newTo });
+        });
+      }
+      return ranges;
+    }, []);
 
     /**
      * Handle PM transaction - re-layout on content/selection change.
@@ -1971,10 +2155,40 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
           // Content changed - schedule layout (coalesced via rAF)
           scheduleLayout(newState);
 
-          // Notify document change - use ref to avoid infinite loops
-          const newDoc = hiddenPMRef.current?.getDocument();
-          if (newDoc) {
-            onDocumentChangeRef.current?.(newDoc);
+          const now = performance.now();
+          const last = lastDocChangeAtRef.current;
+          lastDocChangeAtRef.current = now;
+          const lastKeyInterval = last ? now - last : 0;
+
+          const ranges = collectDirtyRanges(transaction);
+          let dirtyIndices: number[] | undefined;
+          if (ranges.length > 0) {
+            const indices = mapDirtyRangesToTopLevelIndices(newState.doc, ranges);
+            const indicesArray = Array.from(indices);
+            const allParagraphs = indicesArray.every(
+              (index) => newState.doc.child(index).type.name === 'paragraph'
+            );
+            if (allParagraphs) {
+              dirtyIndices = indicesArray;
+            }
+          }
+
+          const pipeline = documentChangePipelineRef.current;
+          if (pipeline) {
+            pipeline.enqueue({
+              pmDocJson: newState.doc.toJSON(),
+              docSize: newState.doc.content.size,
+              blockCount: blocks.length,
+              lastKeyInterval,
+              expectedBlockCount: newState.doc.childCount,
+              dirtyIndices,
+            });
+          } else {
+            // Fallback to immediate conversion if pipeline isn't ready
+            const newDoc = hiddenPMRef.current?.getDocument();
+            if (newDoc) {
+              onDocumentChangeRef.current?.(newDoc);
+            }
           }
         }
 
@@ -1989,7 +2203,7 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
           updateSelectionOverlay(newState);
         }
       },
-      [scheduleLayout, updateSelectionOverlay, syncCoordinator]
+      [scheduleLayout, updateSelectionOverlay, syncCoordinator, blocks.length, collectDirtyRanges]
       // NOTE: onDocumentChange removed from dependencies - accessed via ref to prevent infinite loops
     );
 

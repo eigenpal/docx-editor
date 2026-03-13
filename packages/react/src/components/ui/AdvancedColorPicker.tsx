@@ -29,6 +29,14 @@ export interface AdvancedColorPickerProps {
   icon?: string;
   /** Override the auto/no-color button label */
   autoLabel?: string;
+  /** Render as split button (apply last color + dropdown arrow) */
+  split?: boolean;
+  /** Apply the last-used color when split main button is clicked */
+  onApply?: () => void;
+  /** Display this value in the color bar (e.g., last-used color) */
+  displayValue?: ColorValue | string;
+  /** Optional data-testid prefix for split buttons */
+  dataTestIdPrefix?: string;
 }
 
 // ============================================================================
@@ -170,6 +178,25 @@ const S_COLOR_BAR: CSSProperties = {
   height: '4px',
   borderRadius: '1px',
   marginTop: '-2px',
+};
+
+const S_SPLIT_CONTAINER: CSSProperties = {
+  display: 'inline-flex',
+  alignItems: 'center',
+};
+
+const S_SPLIT_MAIN: CSSProperties = {
+  width: '32px',
+  borderTopRightRadius: 0,
+  borderBottomRightRadius: 0,
+};
+
+const S_SPLIT_ARROW: CSSProperties = {
+  width: '18px',
+  padding: '2px 4px',
+  borderTopLeftRadius: 0,
+  borderBottomLeftRadius: 0,
+  borderLeft: '1px solid var(--doc-border, rgba(15, 23, 42, 0.12))',
 };
 
 // ============================================================================
@@ -321,6 +348,10 @@ export function AdvancedColorPicker({
   title,
   icon: iconOverride,
   autoLabel,
+  split = false,
+  onApply,
+  displayValue,
+  dataTestIdPrefix,
 }: AdvancedColorPickerProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [isHovered, setIsHovered] = useState(false);
@@ -344,8 +375,8 @@ export function AdvancedColorPicker({
   const matrix = useMemo(() => generateThemeTintShadeMatrix(colorScheme), [colorScheme]);
 
   const resolvedColor = useMemo(
-    () => resolveCurrentColor(value, mode, theme),
-    [value, mode, theme]
+    () => resolveCurrentColor(displayValue ?? value, mode, theme),
+    [displayValue, value, mode, theme]
   );
 
   const toggleDropdown = useCallback(() => {
@@ -436,35 +467,84 @@ export function AdvancedColorPicker({
       className={`docx-advanced-color-picker ${className || ''}`}
       style={{ ...S_CONTAINER, ...style }}
     >
-      <button
-        type="button"
-        className="docx-advanced-color-picker-button"
-        style={buttonStyle}
-        onClick={toggleDropdown}
-        onMouseDown={(e) => e.preventDefault()}
-        onMouseEnter={() => setIsHovered(true)}
-        onMouseLeave={() => setIsHovered(false)}
-        disabled={disabled}
-        title={title || defaultTitle}
-        aria-label={title || defaultTitle}
-        aria-haspopup="true"
-        aria-expanded={isOpen}
-      >
-        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 0 }}>
-          <MaterialSymbol name={iconName} size={18} />
-          <div
-            style={{
-              ...S_COLOR_BAR,
-              backgroundColor: resolvedColor === 'transparent' ? '#fff' : resolvedColor,
-              outline:
-                resolvedColor === 'transparent' || isLightColor(resolvedColor)
-                  ? '1px solid #bbb'
-                  : 'none',
-            }}
-          />
+      {split ? (
+        <div style={S_SPLIT_CONTAINER}>
+          <button
+            type="button"
+            className="docx-advanced-color-picker-button"
+            style={{ ...buttonStyle, ...S_SPLIT_MAIN }}
+            onClick={onApply}
+            onMouseDown={(e) => e.preventDefault()}
+            onMouseEnter={() => setIsHovered(true)}
+            onMouseLeave={() => setIsHovered(false)}
+            disabled={disabled}
+            title={title || defaultTitle}
+            aria-label={title || defaultTitle}
+            data-testid={dataTestIdPrefix ? `${dataTestIdPrefix}-apply` : undefined}
+          >
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 0 }}>
+              <MaterialSymbol name={iconName} size={18} />
+              <div
+                style={{
+                  ...S_COLOR_BAR,
+                  backgroundColor: resolvedColor === 'transparent' ? '#fff' : resolvedColor,
+                  outline:
+                    resolvedColor === 'transparent' || isLightColor(resolvedColor)
+                      ? '1px solid #bbb'
+                      : 'none',
+                }}
+              />
+            </div>
+          </button>
+          <button
+            type="button"
+            className="docx-advanced-color-picker-button"
+            style={{ ...buttonStyle, ...S_SPLIT_ARROW }}
+            onClick={toggleDropdown}
+            onMouseDown={(e) => e.preventDefault()}
+            onMouseEnter={() => setIsHovered(true)}
+            onMouseLeave={() => setIsHovered(false)}
+            disabled={disabled}
+            title={title || defaultTitle}
+            aria-label={title || defaultTitle}
+            aria-haspopup="true"
+            aria-expanded={isOpen}
+            data-testid={dataTestIdPrefix ? `${dataTestIdPrefix}-arrow` : undefined}
+          >
+            <MaterialSymbol name="arrow_drop_down" size={14} />
+          </button>
         </div>
-        <MaterialSymbol name="arrow_drop_down" size={14} />
-      </button>
+      ) : (
+        <button
+          type="button"
+          className="docx-advanced-color-picker-button"
+          style={buttonStyle}
+          onClick={toggleDropdown}
+          onMouseDown={(e) => e.preventDefault()}
+          onMouseEnter={() => setIsHovered(true)}
+          onMouseLeave={() => setIsHovered(false)}
+          disabled={disabled}
+          title={title || defaultTitle}
+          aria-label={title || defaultTitle}
+          aria-haspopup="true"
+          aria-expanded={isOpen}
+        >
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 0 }}>
+            <MaterialSymbol name={iconName} size={18} />
+            <div
+              style={{
+                ...S_COLOR_BAR,
+                backgroundColor: resolvedColor === 'transparent' ? '#fff' : resolvedColor,
+                outline:
+                  resolvedColor === 'transparent' || isLightColor(resolvedColor)
+                    ? '1px solid #bbb'
+                    : 'none',
+              }}
+            />
+          </div>
+          <MaterialSymbol name="arrow_drop_down" size={14} />
+        </button>
+      )}
 
       {isOpen && (
         <div

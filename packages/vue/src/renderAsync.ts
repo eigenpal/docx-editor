@@ -10,7 +10,8 @@ import type { EditorHandle } from '@eigenpal/docx-core';
 /** Options for the Vue renderAsync (to be defined by implementor). */
 export interface VueRenderAsyncOptions {
   readOnly?: boolean;
-  showToolbar?: boolean;
+  toolbar?: 'compact' | 'ribbon';
+  showToolbarWhenReadOnly?: boolean;
 }
 
 /**

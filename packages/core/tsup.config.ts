@@ -1,6 +1,7 @@
 import { defineConfig } from 'tsup';
 
 const isProd = process.env.NODE_ENV === 'production';
+const perfDefine = process.env.DOCX_PERF ?? (isProd ? 'false' : 'true');
 
 export default defineConfig([
   {
@@ -17,6 +18,9 @@ export default defineConfig([
     clean: true,
     treeshake: true,
     minify: true,
+    define: {
+      __DOCX_PERF__: perfDefine,
+    },
     external: [
       'prosemirror-commands',
       'prosemirror-dropcursor',
@@ -41,6 +45,9 @@ export default defineConfig([
     clean: false,
     treeshake: true,
     minify: true,
+    define: {
+      __DOCX_PERF__: perfDefine,
+    },
     injectStyle: false,
     banner: {
       js: '#!/usr/bin/env node',

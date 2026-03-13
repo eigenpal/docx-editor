@@ -54,6 +54,7 @@ export class EditorPage {
   // Main locators
   readonly editor: Locator;
   readonly toolbar: Locator;
+  readonly ribbon: Locator;
   readonly variablePanel: Locator;
   readonly zoomControl: Locator;
 
@@ -76,6 +77,7 @@ export class EditorPage {
     // Main component locators
     this.editor = page.locator('[data-testid="docx-editor"]');
     this.toolbar = page.locator('[data-testid="toolbar"]');
+    this.ribbon = page.locator('[data-testid="ribbon"]');
     this.variablePanel = page.locator('.variable-panel');
     this.zoomControl = page.locator('.zoom-control');
 
@@ -101,7 +103,7 @@ export class EditorPage {
    * Navigate to the editor page
    */
   async goto(): Promise<void> {
-    await this.page.goto('/');
+    await this.page.goto('/?toolbar=compact', { waitUntil: 'domcontentloaded', timeout: 30000 });
   }
 
   /**
@@ -129,6 +131,56 @@ export class EditorPage {
 
     // Wait for document to load
     await this.waitForReady();
+  }
+
+  // ============================================================================
+  // RIBBON
+  // ============================================================================
+
+  /**
+   * Click a ribbon button by its id (data-testid="ribbon-{id}")
+   */
+  async clickRibbonButton(id: string): Promise<void> {
+    await this.page.getByTestId(`ribbon-${id}`).click();
+    await this.page.waitForTimeout(100);
+  }
+
+  /**
+   * Toggle Local Clipboard in the ribbon
+   */
+  async toggleLocalClipboard(): Promise<void> {
+    await this.clickRibbonButton('localClipboard');
+  }
+
+  /**
+   * Paste via ribbon
+   */
+  async pasteViaRibbon(): Promise<void> {
+    await this.clickRibbonButton('paste');
+  }
+
+  /**
+   * Copy via ribbon
+   */
+  async copyViaRibbon(): Promise<void> {
+    await this.clickRibbonButton('copy');
+  }
+
+  /**
+   * Cut via ribbon
+   */
+  async cutViaRibbon(): Promise<void> {
+    await this.clickRibbonButton('cut');
+  }
+
+  async applyLastTextColorRibbon(): Promise<void> {
+    await this.ribbon.locator('[data-testid="ribbon-textColor-apply"]').click();
+    await this.focus();
+  }
+
+  async applyLastHighlightColorRibbon(): Promise<void> {
+    await this.ribbon.locator('[data-testid="ribbon-highlightColor-apply"]').click();
+    await this.focus();
   }
 
   // ============================================================================
@@ -257,7 +309,14 @@ export class EditorPage {
       range.setStart(firstTextNode, 0);
       range.setEnd(lastTextNode, lastTextNode.textContent?.length || 0);
       selection.addRange(range);
+
+      // Focus and dispatch selection change so ProseMirror syncs the selection
+      if (contentArea instanceof HTMLElement) {
+        contentArea.focus();
+      }
+      document.dispatchEvent(new Event('selectionchange'));
     });
+    await this.page.waitForTimeout(100);
   }
 
   /**
@@ -577,9 +636,24 @@ export class EditorPage {
    * Shared helper: pick a color from an AdvancedColorPicker dropdown.
    * Opens the picker, finds/clicks a matching color button, or falls back to custom hex input.
    */
-  private async pickColorFromDropdown(buttonTitle: string, hexColor: string): Promise<void> {
-    const picker = this.toolbar.locator(`[title="${buttonTitle}"]`);
-    await picker.click();
+  private async pickColorFromDropdown(
+    buttonTitle: string,
+    hexColor: string,
+    testIds?: string | string[]
+  ): Promise<void> {
+    const ids = Array.isArray(testIds) ? testIds : testIds ? [testIds] : [];
+    let hasClickedTrigger = false;
+    for (const id of ids) {
+      const pickerByTestId = this.page.locator(`[data-testid="${id}"]`);
+      if (await pickerByTestId.count()) {
+        await pickerByTestId.first().click();
+        hasClickedTrigger = true;
+        break;
+      }
+    }
+    if (!hasClickedTrigger) {
+      await this.page.locator(`[title="${buttonTitle}"]`).first().click();
+    }
 
     await this.page.waitForSelector('.docx-advanced-color-picker-dropdown', {
       state: 'visible',
@@ -639,7 +713,10 @@ export class EditorPage {
    */
   async setTextColor(color: string): Promise<void> {
     const hexColor = color.replace(/^#/, '').toUpperCase();
-    await this.pickColorFromDropdown('Font Color', hexColor);
+    await this.pickColorFromDropdown('Font Color', hexColor, [
+      'toolbar-textColor-arrow',
+      'ribbon-textColor-arrow',
+    ]);
   }
 
   /**
@@ -666,7 +743,98 @@ export class EditorPage {
       white: 'FFFFFF',
     };
     const hex = highlightHexMap[color] || color.replace(/^#/, '').toUpperCase();
-    await this.pickColorFromDropdown('Text Highlight Color', hex);
+    await this.pickColorFromDropdown(
+      'Text Highlight Color',
+      hex,
+      ['toolbar-highlightColor-arrow', 'ribbon-highlightColor-arrow']
+    );
+  }
+
+  /**
+   * Apply last used text color via split main button
+   */
+  async applyLastTextColor(): Promise<void> {
+    await this.toolbar.locator('[data-testid="toolbar-textColor-apply"]').click();
+    await this.focus();
+  }
+
+  /**
+   * Apply last used highlight color via split main button
+   */
+  async applyLastHighlightColor(): Promise<void> {
+    await this.toolbar.locator('[data-testid="toolbar-highlightColor-apply"]').click();
+    await this.focus();
+  }
+
+  async openContextMenu(): Promise<void> {
+    const pages = this.page.locator('.paged-editor__pages').first();
+    const hasPages = (await pages.count()) > 0;
+    const area = hasPages ? pages : this.getContentArea();
+    await area.scrollIntoViewIfNeeded();
+    const box = await area.boundingBox();
+    if (box) {
+      await this.page.mouse.click(box.x + box.width / 2, box.y + box.height / 2, {
+        button: 'right',
+      });
+    } else {
+      await area.click({ button: 'right' });
+    }
+    await this.page.waitForSelector('.docx-text-context-menu', { state: 'visible' });
+  }
+
+  async contextMenuApplyTextColor(): Promise<void> {
+    await this.page.locator('[data-testid="context-textColor-apply"]').click();
+  }
+
+  private slugifyColorLabel(label: string): string {
+    return label
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/(^-|-$)/g, '');
+  }
+
+  async contextMenuOpenTextColorSubmenu(): Promise<void> {
+    await this.page.locator('[data-testid="context-textColor-arrow"]').click();
+  }
+
+  async contextMenuOpenHighlightSubmenu(): Promise<void> {
+    await this.page.locator('[data-testid="context-highlightColor-arrow"]').click();
+  }
+
+  async contextMenuPickHighlight(colorLabel: string): Promise<void> {
+    const slug = this.slugifyColorLabel(colorLabel);
+    await this.page.locator(`[data-testid=\"context-highlightColor-swatch-${slug}\"]`).click();
+  }
+
+  async contextMenuPickCustomTextColor(hex: string): Promise<void> {
+    await this.page.evaluate((value) => {
+      const input = document.querySelector(
+        '[data-testid="context-textColor-picker-input"]'
+      ) as HTMLInputElement | null;
+      if (!input) {
+        throw new Error('Text color picker input not found');
+      }
+      input.focus();
+      input.dispatchEvent(new FocusEvent('focusin', { bubbles: true }));
+      input.value = value as string;
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+      input.blur();
+      input.dispatchEvent(new FocusEvent('focusout', { bubbles: true }));
+    }, hex);
+  }
+
+  async contextMenuPreviewCustomTextColor(hex: string): Promise<void> {
+    await this.page.evaluate((value) => {
+      const input = document.querySelector(
+        '[data-testid="context-textColor-picker-input"]'
+      ) as HTMLInputElement | null;
+      if (!input) {
+        throw new Error('Text color picker input not found');
+      }
+      input.focus();
+      input.value = value as string;
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+    }, hex);
   }
 
   // ============================================================================
@@ -805,10 +973,22 @@ export class EditorPage {
    * Set paragraph style
    */
   async setParagraphStyle(style: string): Promise<void> {
-    // Native <select> — use selectOption for reliable interaction
-    const stylePicker = this.toolbar.locator('select[aria-label="Select paragraph style"]');
-    await stylePicker.selectOption({ label: style });
-    // Refocus editor after selecting style
+    // Prefer native <select> in toolbar (compact view)
+    const toolbarPicker = this.toolbar.locator('select[aria-label="Select paragraph style"]');
+    if (await toolbarPicker.isVisible()) {
+      await toolbarPicker.selectOption({ label: style });
+      await this.focus();
+      return;
+    }
+
+    // Fallback to ribbon (Radix Select trigger)
+    const ribbonPicker = this.ribbon.locator('[aria-label="Select paragraph style"]');
+    if (!(await ribbonPicker.isVisible())) {
+      await this.page.getByRole('tab', { name: 'Home' }).click();
+    }
+    await ribbonPicker.waitFor({ state: 'visible' });
+    await ribbonPicker.click();
+    await this.page.getByRole('option', { name: style, exact: true }).click();
     await this.focus();
   }
 

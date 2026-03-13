@@ -1,5 +1,8 @@
 import { defineConfig } from 'tsup';
 
+const isProd = process.env.NODE_ENV === 'production';
+const perfDefine = process.env.DOCX_PERF ?? (isProd ? 'false' : 'true');
+
 export default defineConfig({
   entry: {
     index: 'src/index.ts',
@@ -17,6 +20,9 @@ export default defineConfig({
   clean: true,
   treeshake: true,
   minify: true,
+  define: {
+    __DOCX_PERF__: perfDefine,
+  },
   external: [
     'react',
     'react-dom',
@@ -29,5 +35,12 @@ export default defineConfig({
     'prosemirror-tables',
     'prosemirror-view',
   ],
+  esbuildOptions(options) {
+    options.loader = {
+      ...options.loader,
+      '.aff': 'text',
+      '.dic': 'text',
+    };
+  },
   injectStyle: false,
 });

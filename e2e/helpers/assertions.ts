@@ -313,6 +313,47 @@ export async function assertTextHasColor(
 }
 
 /**
+ * Assert text has a specific background color
+ */
+export async function assertTextHasBackgroundColor(
+  page: Page,
+  searchText: string,
+  expectedColor: string
+): Promise<void> {
+  const actualColor = await page.evaluate((text) => {
+    const contentArea =
+      document.querySelector('.ProseMirror') ||
+      document.querySelector('.docx-editor-pages') ||
+      document.querySelector('.docx-ai-editor');
+    if (!contentArea) return '';
+
+    const walker = document.createTreeWalker(contentArea, NodeFilter.SHOW_TEXT, null);
+
+    let node: Text | null;
+    while ((node = walker.nextNode() as Text | null)) {
+      if (node.textContent?.includes(text)) {
+        let element = node.parentElement;
+        while (element && element !== contentArea) {
+          const style = window.getComputedStyle(element);
+          const bg = style.backgroundColor;
+          if (bg && bg !== 'rgba(0, 0, 0, 0)' && bg !== 'transparent') {
+            return bg;
+          }
+          element = element.parentElement;
+        }
+        return window.getComputedStyle(node.parentElement as Element).backgroundColor;
+      }
+    }
+    return '';
+  }, searchText);
+
+  expect(
+    actualColor.toLowerCase(),
+    `Expected "${searchText}" to have background color "${expectedColor}"`
+  ).toContain(expectedColor.toLowerCase());
+}
+
+/**
  * Assert paragraph has specific alignment
  */
 export async function assertParagraphAlignment(

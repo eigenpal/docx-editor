@@ -56,35 +56,54 @@
   /* Primary action color (Google blue) */
   --doc-primary: #1a73e8;
   --doc-primary-hover: #1557b0;
-  --doc-primary-light: #e8f0fe; /* selected/active backgrounds */
+  --doc-primary-light: #e8f0fe;
+  /* selected/active backgrounds */
 
   /* Text colors */
-  --doc-text: #202124; /* primary text */
-  --doc-text-muted: #5f6368; /* secondary text */
-  --doc-text-subtle: #9aa0a6; /* tertiary/disabled text */
-  --doc-text-placeholder: #999; /* placeholder text */
+  --doc-text: #202124;
+  /* primary text */
+  --doc-text-muted: #5f6368;
+  /* secondary text */
+  --doc-text-subtle: #9aa0a6;
+  /* tertiary/disabled text */
+  --doc-text-placeholder: #999;
+  /* placeholder text */
 
   /* Border colors */
-  --doc-border: #e0e0e0; /* standard borders */
-  --doc-border-light: #dadce0; /* lighter borders */
-  --doc-border-dark: #d0d0d0; /* darker borders (tables) */
-  --doc-border-input: #ccc; /* input borders */
+  --doc-border: #e0e0e0;
+  /* standard borders */
+  --doc-border-light: #dadce0;
+  /* lighter borders */
+  --doc-border-dark: #d0d0d0;
+  /* darker borders (tables) */
+  --doc-border-input: #ccc;
+  /* input borders */
 
   /* Background colors */
-  --doc-bg-subtle: #f5f5f5; /* subtle backgrounds */
-  --doc-bg-hover: #f1f3f4; /* hover states */
-  --doc-bg-input: #f8f9fa; /* input backgrounds */
+  --doc-bg-subtle: #f5f5f5;
+  /* subtle backgrounds */
+  --doc-bg-hover: #f1f3f4;
+  /* hover states */
+  --doc-bg-input: #f8f9fa;
+  /* input backgrounds */
 
   /* Status colors */
-  --doc-error: #c5221f; /* error states */
-  --doc-error-bg: #fce8e6; /* error backgrounds */
-  --doc-success: #34a853; /* success states */
-  --doc-success-bg: #e8f5e9; /* success backgrounds */
-  --doc-warning: #f9a825; /* warning states */
-  --doc-warning-bg: #fff8e1; /* warning backgrounds */
+  --doc-error: #c5221f;
+  /* error states */
+  --doc-error-bg: #fce8e6;
+  /* error backgrounds */
+  --doc-success: #34a853;
+  /* success states */
+  --doc-success-bg: #e8f5e9;
+  /* success backgrounds */
+  --doc-warning: #f9a825;
+  /* warning states */
+  --doc-warning-bg: #fff8e1;
+  /* warning backgrounds */
 
   /* Link color */
-  --doc-link: #0563c1; /* hyperlinks */
+  --doc-link: #0563c1;
+  /* hyperlinks */
 }
 
 /* ============================================================================
@@ -344,6 +363,362 @@
   cursor: text;
 }
 
+/* Web layout mode - continuous canvas look without reflow */
+.docx-editor.docx-layout-web .layout-page {
+  box-shadow: none !important;
+  border: none !important;
+  background: transparent !important;
+  margin: 0 0 12px 0;
+}
+
+/* ============================================================================
+ * RIBBON
+ * ============================================================================ */
+
+.ep-root .ribbon {
+  height: 158px;
+  background: var(--doc-bg-input, #f8f9fa);
+  border-bottom: 1px solid var(--doc-border-light, #dadce0);
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.ep-root .ribbon__tabs {
+  height: 48px;
+  display: flex;
+  align-items: stretch;
+  position: relative;
+  background: var(--doc-bg, #ffffff);
+  border-bottom: none;
+  box-sizing: border-box;
+  overflow: visible;
+  --ribbon-scroll-pad-left: 0px;
+  --ribbon-scroll-pad-right: 0px;
+}
+
+.ep-root .ribbon__tabs::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 1px;
+  background: var(--doc-border-light, #dadce0);
+  z-index: 0;
+}
+
+.ep-root .ribbon__tabs[data-scroll-left='true'] {
+  --ribbon-scroll-pad-left: 26px;
+}
+
+.ep-root .ribbon__tabs[data-scroll-right='true'] {
+  --ribbon-scroll-pad-right: 26px;
+}
+
+.ep-root .ribbon__tabs-viewport {
+  flex: 1;
+  overflow: hidden;
+}
+
+.ep-root .ribbon__tabs-inner {
+  height: 100%;
+  display: flex;
+  align-items: flex-end;
+  gap: 2px;
+  padding-left: calc(clamp(6px, 1vw, 10px) + var(--ribbon-scroll-pad-left));
+  padding-right: calc(clamp(6px, 1vw, 10px) + var(--ribbon-scroll-pad-right));
+  overflow-x: auto;
+  overflow-y: hidden;
+  flex-wrap: nowrap;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  position: relative;
+  z-index: 1;
+}
+
+.ep-root .ribbon__tabs-inner::-webkit-scrollbar {
+  height: 0;
+}
+
+.ep-root .ribbon__tab {
+  height: 36px;
+  padding: 0 clamp(10px, 1.6vw, 16px);
+  border: 1px solid transparent;
+  border-bottom: 1px solid transparent;
+  background: transparent;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  position: relative;
+  color: var(--doc-text-muted, #5f6368);
+  border-radius: 6px 6px 0 0;
+  margin-bottom: -1px;
+  flex: 0 0 auto;
+  z-index: 1;
+}
+
+.ep-root .ribbon__tab-text {
+  font-size: 13px;
+  font-weight: 500;
+  text-transform: none;
+  line-height: 20px;
+  letter-spacing: 0.1px;
+}
+
+.ep-root .ribbon__tab--active {
+  color: var(--doc-text, #202124);
+  background: var(--doc-bg, #ffffff);
+  border-color: var(--doc-border-light, #dadce0);
+  border-bottom-color: transparent;
+  font-weight: 600;
+  box-shadow: 0 1px 0 var(--doc-bg, #ffffff);
+  z-index: 2;
+}
+
+.ep-root .ribbon__tab--active::after {
+  content: '';
+  position: absolute;
+  left: -1px;
+  right: -1px;
+  bottom: -2px;
+  height: 3px;
+  background: var(--doc-bg, #ffffff);
+  z-index: 2;
+}
+
+.ep-root .ribbon__tab:hover:not(.ribbon__tab--active) {
+  background: var(--doc-bg-hover, #f1f3f4);
+  color: var(--doc-text, #202124);
+}
+
+.ep-root .ribbon__tab:focus-visible {
+  outline: 2px solid var(--doc-primary, #1a73e8);
+  outline-offset: -2px;
+}
+
+.ep-root .ribbon__groups {
+  flex: 1;
+  display: flex;
+  align-items: stretch;
+  gap: 0;
+  padding: 0;
+  height: 110px;
+  background: var(--doc-bg, #ffffff);
+  position: relative;
+  overflow: hidden;
+  --ribbon-scroll-pad-left: 0px;
+  --ribbon-scroll-pad-right: 0px;
+}
+
+.ep-root .ribbon__groups[data-scroll-left='true'] {
+  --ribbon-scroll-pad-left: 24px;
+}
+
+.ep-root .ribbon__groups[data-scroll-right='true'] {
+  --ribbon-scroll-pad-right: 24px;
+}
+
+.ep-root .ribbon__groups-viewport {
+  flex: 1;
+  overflow: hidden;
+}
+
+.ep-root .ribbon__groups-inner {
+  height: 100%;
+  display: flex;
+  align-items: stretch;
+  gap: 0;
+  padding-left: var(--ribbon-scroll-pad-left);
+  padding-right: var(--ribbon-scroll-pad-right);
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.ep-root .ribbon__groups-inner::-webkit-scrollbar {
+  height: 0;
+}
+
+.ep-root .ribbon__scroll-btn {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 24px;
+  border: none;
+  background: var(--doc-bg, #ffffff);
+  color: var(--doc-text-muted, #5f6368);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  box-shadow: none;
+  transition:
+    opacity 0.15s ease,
+    color 0.15s ease;
+  z-index: 2;
+}
+
+.ep-root .ribbon__scroll-btn:hover:not(:disabled) {
+  color: var(--doc-text, #202124);
+}
+
+.ep-root .ribbon__scroll-btn--left {
+  left: 0;
+  border-right: 1px solid var(--doc-border-light, #dadce0);
+}
+
+.ep-root .ribbon__scroll-btn--right {
+  right: 0;
+  border-left: 1px solid var(--doc-border-light, #dadce0);
+}
+
+.ep-root .ribbon__scroll-btn:disabled {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.ep-root .ribbon__scroll[data-scroll-left='false'] .ribbon__scroll-btn--left,
+.ep-root .ribbon__scroll[data-scroll-right='false'] .ribbon__scroll-btn--right {
+  display: none;
+}
+
+.ep-root .ribbon__group {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+  align-items: flex-start;
+  padding: 6px 0;
+  min-width: clamp(96px, 10vw, 120px);
+  min-height: 110px;
+  height: 100%;
+  border-right: 1px solid var(--doc-border-light, #dadce0);
+  box-sizing: border-box;
+  flex: 0 0 auto;
+}
+
+.ep-root .ribbon__group-content {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(34px, max-content);
+  grid-template-rows: repeat(2, 34px);
+  row-gap: clamp(4px, 0.8vw, 6px);
+  column-gap: clamp(4px, 0.8vw, 8px);
+  align-content: start;
+  align-items: stretch;
+  justify-content: start;
+  justify-items: start;
+  padding: 0 clamp(4px, 1vw, 8px);
+  flex: 1;
+}
+
+.ep-root .ribbon__item {
+  display: inline-flex;
+  align-items: stretch;
+  justify-content: flex-start;
+  height: 100%;
+}
+
+.ep-root .ribbon__item--large {
+  grid-row: 1 / span 2;
+}
+
+.ep-root .ribbon__item > * {
+  height: 100%;
+}
+
+.ep-root .ribbon__item--large .ribbon__button {
+  height: 100%;
+  padding: 6px 8px;
+  flex-direction: column;
+  justify-content: center;
+  gap: 4px;
+  min-width: 56px;
+}
+
+.ep-root .ribbon__item--large .ribbon__icon {
+  font-size: 18px;
+  line-height: 18px;
+}
+
+.ep-root .ribbon__group-label {
+  font-size: 10px;
+  line-height: 16px;
+  padding: 2px 6px 6px;
+  color: var(--doc-text-muted, #5f6368);
+  margin: 0;
+  margin-top: auto;
+  text-align: center;
+  width: 100%;
+  border-top: 1px solid var(--doc-border-light, #dadce0);
+  letter-spacing: 0.2px;
+  pointer-events: none;
+}
+
+.ep-root .ribbon__button {
+  height: 34px;
+  border-radius: 4px;
+  border: none;
+  background: transparent;
+  padding: 0 6px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  color: var(--doc-text, #202124);
+  font-size: clamp(11px, 1.1vw, 12px);
+  white-space: nowrap;
+}
+
+.ep-root .ribbon__button--menu {
+  gap: 4px;
+}
+
+.ep-root .ribbon__button-content {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.ep-root .ribbon__button--icon {
+  width: 30px;
+  padding: 0;
+  justify-content: center;
+}
+
+.ep-root .ribbon__icon {
+  font-size: 16px;
+  line-height: 16px;
+  color: var(--doc-text-muted, #5f6368);
+}
+
+.ep-root .ribbon__button:hover:not(:disabled) {
+  background: var(--doc-bg-hover, #f1f3f4);
+}
+
+.ep-root .ribbon__button--active {
+  background: var(--doc-primary-light, #e8f0fe);
+  color: var(--doc-text, #202124);
+}
+
+.ep-root .ribbon__button--active .ribbon__icon {
+  color: var(--doc-primary, #1a73e8);
+}
+
+.ep-root .ribbon__button:focus-visible {
+  outline: 2px solid var(--doc-primary, #1a73e8);
+  outline-offset: 2px;
+}
+
+.ep-root .ribbon__button:disabled,
+.ep-root .ribbon__button--disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
 /* Non-editable elements within editor */
 .docx-list-marker,
 .docx-bookmark-start,
@@ -484,10 +859,12 @@
   cursor: pointer;
   transition: background-color 0.15s ease;
 }
+
 .layout-page-header:hover,
 .layout-page-footer:hover {
   background-color: rgba(37, 99, 235, 0.06);
 }
+
 /* Show "Double-click to edit" hint on hover when area is empty */
 .layout-page-header:empty:hover::after {
   content: 'Double-click to add header';
@@ -497,6 +874,7 @@
   font-size: 11px;
   padding: 4px 0;
 }
+
 .layout-page-footer:empty:hover::after {
   content: 'Double-click to add footer';
   display: block;
@@ -512,9 +890,11 @@
   min-height: 40px;
   padding: 4px;
 }
+
 .hf-editor-pm .ProseMirror:focus {
   outline: none;
 }
+
 .hf-editor-pm .ProseMirror p {
   display: block;
   margin: 0;
@@ -546,6 +926,7 @@
 .paged-editor--editing-header .layout-page-header > * {
   visibility: hidden;
 }
+
 .paged-editor--editing-footer .layout-page-footer > * {
   visibility: hidden;
 }
@@ -560,7 +941,76 @@
 .docx-section-break {
   position: relative;
 }
-.docx-section-break::after {
+
+.docx-editor .docx-section-break::after {
+  content: none;
+  display: none;
+}
+
+.docx-run-hidden {
+  display: none;
+}
+
+.docx-show-marks .docx-run-hidden {
+  display: inline;
+  color: var(--doc-text-subtle, #9aa0a6);
+}
+
+.docx-show-marks .docx-bookmark-start,
+.docx-show-marks .docx-bookmark-end {
+  position: relative;
+  display: inline-block;
+  color: var(--doc-text-subtle, #9aa0a6);
+  font-size: 10px;
+  line-height: 1;
+}
+
+.docx-show-marks .docx-bookmark-start::before {
+  content: '⟦' attr(data-bookmark-id) '⟧';
+  letter-spacing: 0.2px;
+}
+
+.docx-show-marks .docx-bookmark-end::before {
+  content: '⟦/' attr(data-bookmark-id) '⟧';
+  letter-spacing: 0.2px;
+}
+
+.docx-show-marks .docx-tab {
+  position: relative;
+  display: inline-block;
+  min-width: 1ch;
+}
+
+.docx-show-marks .docx-tab::after {
+  content: '→';
+  position: absolute;
+  left: 0;
+  top: 0;
+  color: var(--doc-text-subtle, #9aa0a6);
+  font-size: 10px;
+  line-height: 1;
+  pointer-events: none;
+}
+
+.docx-show-marks .docx-soft-hyphen {
+  position: relative;
+  display: inline-block;
+}
+
+.docx-show-marks .docx-soft-hyphen::after {
+  content: '¬';
+  color: var(--doc-text-subtle, #9aa0a6);
+  font-size: 10px;
+  line-height: 1;
+  pointer-events: none;
+}
+
+.docx-show-marks .docx-field {
+  outline: 1px dashed var(--doc-border-dark, #d0d0d0);
+  outline-offset: 1px;
+}
+
+.docx-editor.docx-show-marks .docx-section-break::after {
   content: 'Section Break (' attr(data-section-break) ')';
   display: block;
   text-align: center;

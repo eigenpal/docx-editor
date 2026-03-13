@@ -16,7 +16,7 @@ const getModifier = () => (process.platform === 'darwin' ? 'Meta' : 'Control');
 
 test.describe('Hyperlinks', () => {
   test.beforeEach(async ({ page }) => {
-    await page.goto('/');
+    await page.goto('/?toolbar=compact');
     // Wait for editor to be ready
     await page.waitForSelector('[data-testid="docx-editor"]');
     await page.waitForTimeout(500);

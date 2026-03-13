@@ -18,10 +18,35 @@ const styles: Record<string, React.CSSProperties> = {
     overflow: 'hidden',
     background: '#f8fafc',
   },
-  main: {
+  header: {
+    display: 'flex',
+    alignItems: 'center',
+    padding: '12px 20px',
+    background: '#fff',
+    borderBottom: '1px solid #e2e8f0',
+  },
+  headerLeft: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '12px',
+  },
+  headerCenter: {
     flex: 1,
     display: 'flex',
-    overflow: 'hidden',
+    justifyContent: 'center',
+  },
+  headerRight: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '8px',
+  },
+
+  fileName: {
+    fontSize: '13px',
+    color: '#64748b',
+    padding: '4px 10px',
+    background: '#f1f5f9',
+    borderRadius: '6px',
   },
   fileInputLabel: {
     padding: '8px 14px',
@@ -32,6 +57,9 @@ const styles: Record<string, React.CSSProperties> = {
     fontSize: '13px',
     fontWeight: 500,
     transition: 'background 0.15s',
+  },
+  fileInputHidden: {
+    display: 'none',
   },
   button: {
     padding: '8px 14px',
@@ -61,6 +89,11 @@ const styles: Record<string, React.CSSProperties> = {
     padding: '4px 8px',
     background: '#f1f5f9',
     borderRadius: '4px',
+  },
+  main: {
+    flex: 1,
+    display: 'flex',
+    overflow: 'hidden',
   },
 };
 
@@ -133,59 +166,52 @@ export function Editor() {
     }
   }, [fileName]);
 
-  const renderLogo = useCallback(
-    () => (
-      <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-        <GitHubBadge />
-        <ExampleSwitcher current="Next.js" />
-      </div>
-    ),
-    []
-  );
-
-  const renderTitleBarRight = useCallback(
-    () => (
-      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-        <label style={styles.fileInputLabel} onMouseDown={(e) => e.stopPropagation()}>
-          <input
-            type="file"
-            accept=".docx"
-            onChange={handleFileSelect}
-            style={{ display: 'none' }}
-          />
-          Open DOCX
-        </label>
-        <button style={styles.newButton} onClick={handleNewDocument}>
-          New
-        </button>
-        <button style={styles.button} onClick={handleSave}>
-          Save
-        </button>
-        {status && <span style={styles.status}>{status}</span>}
-      </div>
-    ),
-    [handleFileSelect, handleNewDocument, handleSave, status]
-  );
-
   return (
     <div style={styles.container}>
+      <header style={styles.header}>
+        <div style={styles.headerLeft}>
+          <GitHubBadge />
+          <ExampleSwitcher current="Next.js" />
+        </div>
+        <div style={styles.headerCenter}>
+          {fileName && <span style={styles.fileName}>{fileName}</span>}
+        </div>
+        <div style={styles.headerRight}>
+          <label style={styles.fileInputLabel}>
+            <input
+              type="file"
+              accept=".docx"
+              onChange={handleFileSelect}
+              style={styles.fileInputHidden}
+            />
+            Open DOCX
+          </label>
+          <button style={styles.newButton} onClick={handleNewDocument}>
+            New
+          </button>
+          <button style={styles.button} onClick={handleSave}>
+            Save
+          </button>
+          {status && <span style={styles.status}>{status}</span>}
+        </div>
+      </header>
+
       <main style={styles.main}>
         <DocxEditor
           ref={editorRef}
           document={documentBuffer ? undefined : currentDocument}
           documentBuffer={documentBuffer}
+          onChange={() => {}}
           onError={(error: Error) => {
             console.error('Editor error:', error);
             setStatus(`Error: ${error.message}`);
           }}
-          showToolbar={true}
+          onFontsLoaded={() => console.log('Fonts loaded')}
+          toolbar="compact"
           showRuler={true}
           showZoomControl={true}
+          showPageNumbers={false}
           initialZoom={1.0}
-          renderLogo={renderLogo}
-          documentName={fileName}
-          onDocumentNameChange={setFileName}
-          renderTitleBarRight={renderTitleBarRight}
         />
       </main>
     </div>

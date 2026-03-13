@@ -34,6 +34,7 @@ import { toProseDoc, createEmptyDoc } from '@eigenpal/docx-core/prosemirror/conv
 import { fromProseDoc } from '@eigenpal/docx-core/prosemirror/conversion/fromProseDoc';
 import type { ExtensionManager } from '@eigenpal/docx-core/prosemirror/extensions/ExtensionManager';
 import type { Document, Theme, StyleDefinitions } from '@eigenpal/docx-core/types/document';
+import { PERF_ENABLED } from '../utils/perfFlags';
 
 // Import ProseMirror CSS
 import 'prosemirror-view/style/prosemirror.css';
@@ -42,6 +43,17 @@ import '@eigenpal/docx-core/prosemirror/editor.css';
 // ============================================================================
 // TYPES
 // ============================================================================
+
+type PMPerfEntry = {
+  ts: number;
+  totalMs: number;
+  applyMs: number;
+  updateStateMs: number;
+  onTransactionMs: number;
+  onSelectionMs: number;
+  docChanged: boolean;
+  selectionSet: boolean;
+};
 
 export interface HiddenProseMirrorProps {
   /** The document to edit */
@@ -235,22 +247,79 @@ const HiddenProseMirrorComponent = forwardRef<HiddenProseMirrorRef, HiddenProseM
 
       const initialState = createInitialState(document, styles, extensionManager, externalPlugins);
 
+      const recordPMPerf = (entry: PMPerfEntry) => {
+        if (!PERF_ENABLED) return;
+        if (typeof window === 'undefined') return;
+        const win = window as Window & {
+          __DOCX_LAYOUT_PROBE__?: boolean;
+          __DOCX_PM_PERF_LOG__?: PMPerfEntry[];
+        };
+        if (!win.__DOCX_LAYOUT_PROBE__) return;
+        if (!win.__DOCX_PM_PERF_LOG__) {
+          win.__DOCX_PM_PERF_LOG__ = [];
+        }
+        win.__DOCX_PM_PERF_LOG__.push(entry);
+      };
+
       const editorProps: DirectEditorProps = {
         state: initialState,
         editable: () => !readOnly,
         dispatchTransaction: (transaction: Transaction) => {
           if (!viewRef.current || isDestroyingRef.current) return;
 
-          const newState = viewRef.current.state.apply(transaction);
-          viewRef.current.updateState(newState);
+          const perfEnabled =
+            PERF_ENABLED &&
+            typeof window !== 'undefined' &&
+            (window as Window & { __DOCX_LAYOUT_PROBE__?: boolean }).__DOCX_LAYOUT_PROBE__;
 
-          // Notify about transaction (use ref to avoid dependency issues)
-          onTransactionRef.current?.(transaction, newState);
+          if (!perfEnabled) {
+            const newState = viewRef.current.state.apply(transaction);
+            viewRef.current.updateState(newState);
 
-          // Notify about selection changes (use ref to avoid dependency issues)
-          if (transaction.selectionSet || transaction.docChanged) {
-            onSelectionChangeRef.current?.(newState);
+            // Notify about transaction (use ref to avoid dependency issues)
+            onTransactionRef.current?.(transaction, newState);
+
+            // Notify about selection changes (use ref to avoid dependency issues)
+            if (transaction.selectionSet || transaction.docChanged) {
+              onSelectionChangeRef.current?.(newState);
+            }
+            return;
           }
+
+          const perfStart = performance.now();
+          let applyMs = 0;
+          let updateStateMs = 0;
+          let onTransactionMs = 0;
+          let onSelectionMs = 0;
+
+          let stepStart = performance.now();
+          const newState = viewRef.current.state.apply(transaction);
+          applyMs = performance.now() - stepStart;
+
+          stepStart = performance.now();
+          viewRef.current.updateState(newState);
+          updateStateMs = performance.now() - stepStart;
+
+          stepStart = performance.now();
+          onTransactionRef.current?.(transaction, newState);
+          onTransactionMs = performance.now() - stepStart;
+
+          if (transaction.selectionSet || transaction.docChanged) {
+            stepStart = performance.now();
+            onSelectionChangeRef.current?.(newState);
+            onSelectionMs = performance.now() - stepStart;
+          }
+
+          recordPMPerf({
+            ts: performance.now(),
+            totalMs: performance.now() - perfStart,
+            applyMs,
+            updateStateMs,
+            onTransactionMs,
+            onSelectionMs,
+            docChanged: transaction.docChanged,
+            selectionSet: transaction.selectionSet,
+          });
         },
         // Intercept key events before ProseMirror processes them
         handleKeyDown: (view: EditorView, event: KeyboardEvent): boolean => {

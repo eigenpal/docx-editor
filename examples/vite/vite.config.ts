@@ -3,6 +3,7 @@ import react from '@vitejs/plugin-react';
 import tailwindcss from 'tailwindcss';
 import autoprefixer from 'autoprefixer';
 import path from 'path';
+import fs from 'fs';
 
 const monorepoRoot = path.resolve(__dirname, '../..');
 
@@ -17,8 +18,20 @@ async function fetchGitHubStars(): Promise<number | null> {
 
 export default defineConfig(async () => {
   const stars = await fetchGitHubStars();
+  const dictionaryRawPlugin = () => ({
+    name: 'spellcheck-dictionary-raw',
+    enforce: 'pre' as const,
+    load(id: string) {
+      const [filePath] = id.split('?');
+      if (filePath.endsWith('.aff') || filePath.endsWith('.dic')) {
+        const content = fs.readFileSync(filePath, 'utf8');
+        return `export default ${JSON.stringify(content)};`;
+      }
+      return null;
+    },
+  });
   return {
-    plugins: [react()],
+    plugins: [dictionaryRawPlugin(), react()],
     root: __dirname,
     resolve: {
       alias: [

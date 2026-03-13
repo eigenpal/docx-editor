@@ -27,6 +27,18 @@ npm install && npm run dev    # http://localhost:5174
 
 Source: [`examples/plugins/docxtemplater/`](../../examples/plugins/docxtemplater/)
 
+### Spellcheck (Word-like)
+
+Client-side spellcheck with red squiggles and right-click suggestions.
+
+```tsx
+import { DocxEditor, PluginHost, spellcheckPlugin } from '@eigenpal/docx-js-editor';
+
+<PluginHost plugins={[spellcheckPlugin]}>
+  <DocxEditor documentBuffer={file} />
+</PluginHost>;
+```
+
 ## Patterns
 
 ### Combining EditorPlugin + CorePlugin

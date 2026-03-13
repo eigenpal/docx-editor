@@ -708,6 +708,17 @@ export {
   type TagType,
 } from './plugins/template';
 
+// Spellcheck Plugin
+export {
+  spellcheckPlugin,
+  createSpellcheckPlugin,
+  SPELLCHECK_DECORATION_STYLES,
+  type SpellcheckPluginOptions,
+  type SpellcheckMenuState,
+  type SpellcheckStatus,
+  type SpellcheckPluginState,
+} from './plugins/spellcheck';
+
 // ============================================================================
 // CORE PLUGIN SYSTEM
 // ============================================================================

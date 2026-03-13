@@ -55,7 +55,7 @@ export function App() {
             ref={editorRef}
             document={documentBuffer ? undefined : createEmptyDocument()}
             documentBuffer={documentBuffer ?? undefined}
-            showToolbar
+            toolbar="compact"
             showRuler
           />
         </PluginHost>

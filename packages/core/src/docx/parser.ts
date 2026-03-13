@@ -41,6 +41,7 @@ import { parseFootnotes, parseEndnotes } from './footnoteParser';
 import { parseComments } from './commentParser';
 import { loadFontsWithMapping } from '../utils/fontLoader';
 import { type DocxInput, toArrayBuffer } from '../utils/docxInput';
+import { PERF_ENABLED } from '../utils/perfFlags';
 
 // ============================================================================
 // PROGRESS CALLBACK
@@ -93,10 +94,13 @@ export async function parseDocx(input: DocxInput, options: ParseOptions = {}): P
   const warnings: string[] = [];
 
   try {
-    const parseStart = performance.now();
+    const parseStart = PERF_ENABLED ? performance.now() : 0;
     const stageTimings: Array<{ stage: string; ms: number }> = [];
 
     function timeStage<T>(name: string, fn: () => T): T {
+      if (!PERF_ENABLED) {
+        return fn();
+      }
       const start = performance.now();
       const result = fn();
       const elapsed = performance.now() - start;
@@ -108,6 +112,9 @@ export async function parseDocx(input: DocxInput, options: ParseOptions = {}): P
     }
 
     async function timeStageAsync<T>(name: string, fn: () => Promise<T>): Promise<T> {
+      if (!PERF_ENABLED) {
+        return fn();
+      }
       const start = performance.now();
       const result = await fn();
       const elapsed = performance.now() - start;
@@ -283,15 +290,17 @@ export async function parseDocx(input: DocxInput, options: ParseOptions = {}): P
       warnings: warnings.length > 0 ? warnings : undefined,
     };
 
-    const totalTime = performance.now() - parseStart;
-    if (totalTime > 2000) {
-      const breakdown = stageTimings
-        .filter((s) => s.ms > 100)
-        .map((s) => `${s.stage}: ${Math.round(s.ms)}ms`)
-        .join(', ');
-      console.warn(
-        `[parseDocx] Total: ${Math.round(totalTime)}ms` + (breakdown ? ` (${breakdown})` : '')
-      );
+    if (PERF_ENABLED) {
+      const totalTime = performance.now() - parseStart;
+      if (totalTime > 2000) {
+        const breakdown = stageTimings
+          .filter((s) => s.ms > 100)
+          .map((s) => `${s.stage}: ${Math.round(s.ms)}ms`)
+          .join(', ');
+        console.warn(
+          `[parseDocx] Total: ${Math.round(totalTime)}ms` + (breakdown ? ` (${breakdown})` : '')
+        );
+      }
     }
 
     onProgress('Complete', 100);

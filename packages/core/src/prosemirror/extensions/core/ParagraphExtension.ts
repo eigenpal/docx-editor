@@ -17,6 +17,7 @@ import type {
   TabStop,
   TabStopAlignment,
   TabLeader,
+  BorderSpec,
 } from '../../../types/document';
 import { paragraphToStyle } from '../../../utils/formatToStyle';
 import { collectHeadings } from '../../../utils/headingCollector';
@@ -234,6 +235,55 @@ function setParagraphAttrsCmd(attrs: Record<string, unknown>): Command {
           ...attrs,
         });
       }
+    });
+
+    dispatch(tr.scrollIntoView());
+    return true;
+  };
+}
+
+const DEFAULT_PARAGRAPH_BORDER: BorderSpec = {
+  style: 'single',
+  size: 4,
+  color: { rgb: '000000' },
+};
+
+function hasVisibleBorder(border?: BorderSpec | null): boolean {
+  return !!border && border.style !== 'none' && border.style !== 'nil';
+}
+
+function toggleParagraphBottomBorder(): Command {
+  return (state, dispatch) => {
+    const { $from, $to } = state.selection;
+
+    if (!dispatch) return true;
+
+    let tr = state.tr;
+    const seen = new Set<number>();
+
+    state.doc.nodesBetween($from.pos, $to.pos, (node, pos) => {
+      if (node.type.name !== 'paragraph' || seen.has(pos)) return;
+      seen.add(pos);
+
+      const currentBorders = (node.attrs.borders ?? {}) as NonNullable<
+        ParagraphFormatting['borders']
+      >;
+      const hasBottom = hasVisibleBorder(currentBorders.bottom);
+      const nextBorders: NonNullable<ParagraphFormatting['borders']> = { ...currentBorders };
+
+      if (hasBottom) {
+        delete nextBorders.bottom;
+      } else {
+        nextBorders.bottom = DEFAULT_PARAGRAPH_BORDER;
+      }
+
+      const hasAnyBorder = Object.values(nextBorders).some((value) => value !== undefined);
+      const bordersValue = hasAnyBorder ? nextBorders : null;
+
+      tr = tr.setNodeMarkup(pos, undefined, {
+        ...node.attrs,
+        borders: bordersValue,
+      });
     });
 
     dispatch(tr.scrollIntoView());
@@ -500,6 +550,7 @@ export const ParagraphExtension = createNodeExtension({
         doubleSpacing: () => makeSetLineSpacing(480),
         setSpaceBefore: (twips: number) => setParagraphAttr('spaceBefore', twips),
         setSpaceAfter: (twips: number) => setParagraphAttr('spaceAfter', twips),
+        toggleParagraphBottomBorder: () => toggleParagraphBottomBorder(),
         increaseIndent: (amount?: number) => makeIncreaseIndent(amount),
         decreaseIndent: (amount?: number) => makeDecreaseIndent(amount),
         setIndentLeft: (twips: number) => setParagraphAttr('indentLeft', twips > 0 ? twips : null),
