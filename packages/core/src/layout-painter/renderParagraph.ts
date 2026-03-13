@@ -57,11 +57,9 @@ export interface FloatingImageInfo {
   bottomY: number;
 }
 
-// NOTE: Per-line floating margin calculation has been disabled.
-// Text wrapping around floating images requires passing exclusion zones
-// to the MEASUREMENT phase so lines can be broken at reduced widths.
-// Currently, floating images render at page level and text flows under them.
-// TODO: Implement measurement-time floating image support for proper text wrapping.
+// Text wrapping around floating images is handled in the measurement phase:
+// measureParagraph() receives FloatingImageZone[] and adjusts per-line widths.
+// The rendering phase reads line.leftOffset/rightOffset and applies CSS margins.
 
 /**
  * Options for rendering a paragraph
