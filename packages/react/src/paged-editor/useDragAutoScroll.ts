@@ -45,6 +45,15 @@ export function useDragAutoScroll({
   const rafIdRef = useRef<number | null>(null);
   const lastMouseRef = useRef({ x: 0, y: 0 });
   const activeRef = useRef(false);
+  const scrollParentRef = useRef<HTMLElement | null>(null);
+
+  const getScrollParent = useCallback((): HTMLElement | null => {
+    if (scrollParentRef.current) return scrollParentRef.current;
+    const pages = pagesContainerRef.current;
+    if (!pages) return null;
+    scrollParentRef.current = findScrollParent(pages);
+    return scrollParentRef.current;
+  }, [pagesContainerRef]);
 
   const stopAutoScroll = useCallback(() => {
     activeRef.current = false;
@@ -57,9 +66,7 @@ export function useDragAutoScroll({
   const tick = useCallback(() => {
     if (!activeRef.current) return;
 
-    const pages = pagesContainerRef.current;
-    if (!pages) return;
-    const container = findScrollParent(pages);
+    const container = getScrollParent();
     if (!container) return;
 
     const rect = container.getBoundingClientRect();
@@ -84,7 +91,7 @@ export function useDragAutoScroll({
     }
 
     rafIdRef.current = requestAnimationFrame(tick);
-  }, [pagesContainerRef, onScrollExtendSelection]);
+  }, [getScrollParent, onScrollExtendSelection]);
 
   const startAutoScroll = useCallback(() => {
     if (activeRef.current) return;
@@ -100,10 +107,7 @@ export function useDragAutoScroll({
     (clientX: number, clientY: number) => {
       lastMouseRef.current = { x: clientX, y: clientY };
       if (!activeRef.current) {
-        // Check if we should start
-        const pages = pagesContainerRef.current;
-        if (!pages) return;
-        const container = findScrollParent(pages);
+        const container = getScrollParent();
         if (!container) return;
         const rect = container.getBoundingClientRect();
         if (clientY < rect.top + EDGE_ZONE || clientY > rect.bottom - EDGE_ZONE) {
@@ -111,7 +115,7 @@ export function useDragAutoScroll({
         }
       }
     },
-    [pagesContainerRef, startAutoScroll]
+    [getScrollParent, startAutoScroll]
   );
 
   return { updateMousePosition, stopAutoScroll };
