@@ -9,11 +9,12 @@
   <a href="https://www.npmjs.com/package/@eigenpal/docx-js-editor"><img src="https://img.shields.io/npm/dm/@eigenpal/docx-js-editor.svg?style=flat-square&color=00C853" alt="npm downloads" /></a>
   <a href="https://github.com/eigenpal/docx-js-editor/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg?style=flat-square&color=00C853" alt="license" /></a>
   <a href="https://demo.docx-editor.dev/"><img src="https://img.shields.io/badge/Live_Demo-00C853?style=flat-square&logo=vercel&logoColor=white" alt="Live Demo" /></a>
+  <a href="https://www.docx-editor.dev/docs"><img src="https://img.shields.io/badge/Docs-00C853?style=flat-square&logo=readthedocs&logoColor=white" alt="Documentation" /></a>
 </p>
 
 # @eigenpal/docx-js-editor
 
-Open-source WYSIWYG DOCX editor for the browser. No server required. **[Live demo](https://demo.docx-editor.dev/)**
+Open-source WYSIWYG DOCX editor for the browser. No server required. **[Live demo](https://demo.docx-editor.dev/)** | **[Documentation](https://www.docx-editor.dev/docs)**
 
 For AI agents: see the [Agent Reference](https://raw.githubusercontent.com/eigenpal/docx-editor/main/AGENTS_README.md) for comprehensive API docs, code examples, and integration patterns.
 
@@ -65,7 +66,7 @@ import { DocxEditor, PluginHost, templatePlugin } from '@eigenpal/docx-js-editor
 </PluginHost>;
 ```
 
-See [docs/PLUGINS.md](docs/PLUGINS.md) for the full plugin API.
+See the [plugin documentation](https://www.docx-editor.dev/docs/plugins) for the full plugin API.
 
 ## Development
 
@@ -78,7 +79,7 @@ bun run typecheck
 
 Examples: [Vite](examples/vite) | [Next.js](examples/nextjs) | [Remix](examples/remix) | [Astro](examples/astro) | [Vue](examples/vue)
 
-**[Props & Ref Methods](docs/PROPS.md)** | **[Plugins](docs/PLUGINS.md)** | **[Architecture](docs/ARCHITECTURE.md)**
+**[Documentation](https://www.docx-editor.dev/docs)** | **[Props & Ref Methods](https://www.docx-editor.dev/docs/props)** | **[Plugins](https://www.docx-editor.dev/docs/plugins)** | **[Architecture](https://www.docx-editor.dev/docs/architecture)**
 
 ## License
 
