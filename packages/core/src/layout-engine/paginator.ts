@@ -99,6 +99,7 @@ export function createPaginator(options: PaginatorOptions) {
       margins: { ...margins },
       size: { ...pageSize },
       footnoteReservedHeight: footnoteHeight > 0 ? footnoteHeight : undefined,
+      columns: columns.count > 1 ? columns : undefined,
     };
 
     const state: PageState = {

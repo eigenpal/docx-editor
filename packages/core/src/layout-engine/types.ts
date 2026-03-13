@@ -698,6 +698,8 @@ export type Page = {
   footnoteIds?: number[];
   /** Height reserved for the footnote area at page bottom (pixels). */
   footnoteReservedHeight?: number;
+  /** Column layout for this page (when multi-column). */
+  columns?: ColumnLayout;
 };
 
 /**
@@ -707,6 +709,8 @@ export type ColumnLayout = {
   count: number;
   gap: number;
   equalWidth?: boolean;
+  /** Whether to draw a vertical separator line between columns (w:sep) */
+  separator?: boolean;
 };
 
 /**

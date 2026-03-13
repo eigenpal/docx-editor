@@ -332,7 +332,12 @@ function getColumns(sectionProps: SectionProperties | null | undefined): ColumnL
   if (count <= 1) return undefined;
   // Default column spacing: 720 twips (0.5 inch) per OOXML spec
   const gap = twipsToPixels(sectionProps?.columnSpace ?? 720);
-  return { count, gap, equalWidth: sectionProps?.equalWidth ?? true };
+  return {
+    count,
+    gap,
+    equalWidth: sectionProps?.equalWidth ?? true,
+    separator: sectionProps?.separator || undefined,
+  };
 }
 
 /**

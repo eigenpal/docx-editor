@@ -888,6 +888,29 @@ export function renderPage(
     contentEl.appendChild(fragmentEl);
   }
 
+  // Render column separator lines when multi-column with w:sep enabled
+  if (page.columns && page.columns.separator && page.columns.count > 1) {
+    const colCount = page.columns.count;
+    const colGap = page.columns.gap;
+    const colWidth = (contentWidth - (colCount - 1) * colGap) / colCount;
+    const contentHeight = page.size.h - page.margins.top - page.margins.bottom;
+
+    for (let col = 0; col < colCount - 1; col++) {
+      // Position the line at the center of the gap between column `col` and `col + 1`
+      const lineX = (col + 1) * colWidth + col * colGap + colGap / 2;
+
+      const line = doc.createElement('div');
+      line.style.position = 'absolute';
+      line.style.left = `${lineX}px`;
+      line.style.top = '0';
+      line.style.height = `${contentHeight}px`;
+      line.style.width = '0.5px';
+      line.style.backgroundColor = '#000';
+      line.style.pointerEvents = 'none';
+      contentEl.appendChild(line);
+    }
+  }
+
   // Render footnote area at the bottom of the content area (above footer)
   if (options.footnoteArea && options.footnoteArea.length > 0) {
     const fnAreaEl = renderFootnoteArea(options.footnoteArea, contentWidth, doc);
