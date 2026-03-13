@@ -98,6 +98,7 @@ import { LayoutSelectionGate } from './LayoutSelectionGate';
 
 // Visual line navigation hook
 import { useVisualLineNavigation } from './useVisualLineNavigation';
+import { useDragAutoScroll } from './useDragAutoScroll';
 
 // Types
 import type {
@@ -1092,6 +1093,35 @@ function convertHeaderFooterToContent(
             after: formatting.spaceAfter as number | undefined,
           };
         }
+        // Convert tab stops (needed for center/right tab alignment in headers/footers)
+        if (Array.isArray(formatting.tabs) && formatting.tabs.length > 0) {
+          attrs.tabs = (
+            formatting.tabs as Array<{
+              position: number;
+              alignment: string;
+              leader?: string;
+            }>
+          ).map((tab) => {
+            const align =
+              tab.alignment === 'left'
+                ? 'start'
+                : tab.alignment === 'right'
+                  ? 'end'
+                  : tab.alignment;
+            return {
+              val: align as 'start' | 'end' | 'center' | 'decimal' | 'bar' | 'clear',
+              pos: tab.position,
+              leader: tab.leader as
+                | 'none'
+                | 'dot'
+                | 'hyphen'
+                | 'underscore'
+                | 'heavy'
+                | 'middleDot'
+                | undefined,
+            };
+          });
+        }
       }
 
       const runs = convertDocumentRunsToFlowRuns(itemObj.content as unknown[]);
@@ -1247,6 +1277,9 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
 
     // Visual line navigation (ArrowUp/ArrowDown with sticky X)
     const { handlePMKeyDown } = useVisualLineNavigation({ pagesContainerRef });
+
+    // Stable ref for drag-extend callback (avoids circular deps with getPositionFromMouse)
+    const dragExtendRef = useRef<(cx: number, cy: number) => void>(() => {});
 
     // Store callbacks in refs to avoid infinite re-render loops
     // when parent passes unstable callback references
@@ -2419,6 +2452,25 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
       ]
     );
 
+    // Drag auto-scroll: scrolls when dragging near viewport edges
+    const dragAutoScrollCallbackRef = useCallback((cx: number, cy: number) => {
+      dragExtendRef.current(cx, cy);
+    }, []);
+    const { updateMousePosition: updateDragScroll, stopAutoScroll: stopDragAutoScroll } =
+      useDragAutoScroll({
+        pagesContainerRef,
+        onScrollExtendSelection: dragAutoScrollCallbackRef,
+      });
+
+    // Wire up the drag-extend callback after getPositionFromMouse is available
+    dragExtendRef.current = (cx: number, cy: number) => {
+      if (!isDraggingRef.current || dragAnchorRef.current === null) return;
+      if (!hiddenPMRef.current) return;
+      const pmPos = getPositionFromMouse(cx, cy);
+      if (pmPos === null) return;
+      hiddenPMRef.current.setSelection(dragAnchorRef.current, pmPos);
+    };
+
     /**
      * Handle mousemove - extend selection during drag.
      */
@@ -2489,6 +2541,9 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
         if (!isDraggingRef.current || dragAnchorRef.current === null) return;
         if (!hiddenPMRef.current || !pagesContainerRef.current) return;
 
+        // Auto-scroll when dragging near viewport edges
+        updateDragScroll(e.clientX, e.clientY);
+
         const pmPos = getPositionFromMouse(e.clientX, e.clientY);
         if (pmPos === null) return;
 
@@ -2540,7 +2595,7 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
         const anchor = dragAnchorRef.current;
         hiddenPMRef.current.setSelection(anchor, pmPos);
       },
-      [getPositionFromMouse, findCellPosFromPmPos]
+      [getPositionFromMouse, findCellPosFromPmPos, updateDragScroll]
     );
 
     /**
@@ -2716,8 +2771,9 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
       isCellDraggingRef.current = false;
       cellDragLastPmPosRef.current = null;
       cellDragOverflowXRef.current = null;
+      stopDragAutoScroll();
       // Keep dragAnchorRef for potential shift-click extension
-    }, []);
+    }, [stopDragAutoScroll]);
 
     // Add global mouse event listeners for drag selection
     useEffect(() => {

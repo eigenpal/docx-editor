@@ -39,7 +39,12 @@ export interface FontSizeAttrs {
 export interface FontFamilyAttrs {
   ascii?: string;
   hAnsi?: string;
+  eastAsia?: string;
+  cs?: string;
   asciiTheme?: string;
+  hAnsiTheme?: string;
+  eastAsiaTheme?: string;
+  csTheme?: string;
 }
 
 /**
