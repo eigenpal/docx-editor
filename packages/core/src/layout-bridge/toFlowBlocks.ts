@@ -568,6 +568,9 @@ function convertParagraphAttrs(pmAttrs: PMParagraphAttrs, theme?: Theme | null):
   if (pmAttrs.listIsBullet != null) {
     attrs.listIsBullet = pmAttrs.listIsBullet;
   }
+  if (pmAttrs.listMarkerHidden) {
+    attrs.listMarkerHidden = true;
+  }
 
   // Default font for empty paragraph measurement (from style's rPr / pPr/rPr)
   const dtf = pmAttrs.defaultTextFormatting as

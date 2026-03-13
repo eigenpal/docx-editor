@@ -160,6 +160,8 @@ export interface ListRendering {
   isBullet: boolean;
   /** Number format type (decimal, lowerRoman, upperRoman, etc.) */
   numFmt?: NumberFormat;
+  /** Whether the list marker is hidden (w:vanish on level rPr) */
+  markerHidden?: boolean;
 }
 
 /**

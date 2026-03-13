@@ -545,6 +545,12 @@ function parseLevelRunProps(rPr: XmlElement): TextFormatting {
     formatting.italic = parseBooleanElement(iEl);
   }
 
+  // Parse vanish / hidden (w:vanish) — hides the list indicator
+  const vanishEl = findChild(rPr, 'w', 'vanish');
+  if (vanishEl) {
+    formatting.hidden = parseBooleanElement(vanishEl);
+  }
+
   return formatting;
 }
 
