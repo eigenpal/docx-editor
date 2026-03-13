@@ -1465,7 +1465,12 @@ function textFormattingToMarks(
       schema.mark('fontFamily', {
         ascii: formatting.fontFamily.ascii,
         hAnsi: formatting.fontFamily.hAnsi,
+        eastAsia: formatting.fontFamily.eastAsia,
+        cs: formatting.fontFamily.cs,
         asciiTheme: formatting.fontFamily.asciiTheme,
+        hAnsiTheme: formatting.fontFamily.hAnsiTheme,
+        eastAsiaTheme: formatting.fontFamily.eastAsiaTheme,
+        csTheme: formatting.fontFamily.csTheme,
       })
     );
   }

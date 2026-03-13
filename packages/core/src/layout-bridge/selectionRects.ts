@@ -404,8 +404,17 @@ export function selectionToRects(
         const tableMeasure = measure as TableMeasure;
         const tableFragment = fragment as TableFragment;
 
-        // Walk through visible rows
-        let rowY = 0;
+        // Account for repeated header rows in continuation fragments
+        const hdrCount = tableFragment.headerRowCount ?? 0;
+        let headerOffset = 0;
+        if (hdrCount > 0 && tableFragment.continuesFromPrev) {
+          for (let h = 0; h < hdrCount && h < tableMeasure.rows.length; h++) {
+            headerOffset += tableMeasure.rows[h].height;
+          }
+        }
+
+        // Walk through visible rows (start after header offset)
+        let rowY = headerOffset;
         for (
           let rowIndex = tableFragment.fromRow;
           rowIndex < tableFragment.toRow && rowIndex < tableBlock.rows.length;

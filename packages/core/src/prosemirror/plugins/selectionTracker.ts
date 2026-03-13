@@ -107,6 +107,9 @@ export function extractSelectionContext(state: EditorState): SelectionContext {
     if (paragraph.attrs.numPr) {
       paragraphFormatting.numPr = paragraph.attrs.numPr;
     }
+    if (paragraph.attrs.styleId) {
+      paragraphFormatting.styleId = paragraph.attrs.styleId;
+    }
   }
 
   // List detection

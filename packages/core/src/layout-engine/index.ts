@@ -349,6 +349,33 @@ function layoutParagraph(
 }
 
 /**
+ * Count consecutive header rows at the start of a table.
+ * Header rows are marked with isHeader: true in the block data.
+ */
+function countHeaderRows(block: TableBlock): number {
+  let count = 0;
+  for (const row of block.rows) {
+    if (row.isHeader) {
+      count++;
+    } else {
+      break;
+    }
+  }
+  return count;
+}
+
+/**
+ * Calculate total height of header rows from their measures.
+ */
+function getHeaderRowsHeight(measure: TableMeasure, headerRowCount: number): number {
+  let height = 0;
+  for (let i = 0; i < headerRowCount && i < measure.rows.length; i++) {
+    height += measure.rows[i].height;
+  }
+  return height;
+}
+
+/**
  * Layout a table block onto pages.
  */
 function layoutTable(
@@ -365,38 +392,50 @@ function layoutTable(
     return;
   }
 
+  // Detect header rows (consecutive rows at start with isHeader: true)
+  const headerRowCount = countHeaderRows(block);
+  const headerRowsHeight = getHeaderRowsHeight(measure, headerRowCount);
+
   let currentRowIndex = 0;
 
   while (currentRowIndex < rows.length) {
     const state = paginator.getCurrentState();
     const availableHeight = paginator.getAvailableHeight();
+    const isFirstFragment = currentRowIndex === 0;
 
-    // Calculate how many rows fit
+    // For continuation fragments, we need space for header rows + at least one content row
+    const headerOverhead = !isFirstFragment && headerRowCount > 0 ? headerRowsHeight : 0;
+
+    // Calculate how many rows fit (excluding header rows which are prepended separately)
     let rowsHeight = 0;
     let fittingRows = 0;
 
     for (let j = currentRowIndex; j < rows.length; j++) {
       const rowHeight = rows[j].height;
-      const totalWithRow = rowsHeight + rowHeight;
+      const totalWithRow = rowsHeight + rowHeight + headerOverhead;
 
       if (totalWithRow <= availableHeight || fittingRows === 0) {
-        rowsHeight = totalWithRow;
+        rowsHeight += rowHeight;
         fittingRows++;
       } else {
         break;
       }
     }
 
+    // Total fragment height includes header rows for continuation fragments
+    const fragmentHeight = rowsHeight + headerOverhead;
+
     // Create fragment for these rows
-    const isFirstFragment = currentRowIndex === 0;
     const isLastFragment = currentRowIndex + fittingRows >= rows.length;
 
-    // Calculate x position based on table justification
+    // Calculate x position based on table justification and indent
     let desiredX = paginator.getColumnX(state.columnIndex);
     if (block.justification === 'center') {
       desiredX = desiredX + (paginator.columnWidth - measure.totalWidth) / 2;
     } else if (block.justification === 'right') {
       desiredX = desiredX + paginator.columnWidth - measure.totalWidth;
+    } else if (block.indent) {
+      desiredX += block.indent;
     }
 
     const fragment: TableFragment = {
@@ -405,16 +444,17 @@ function layoutTable(
       x: desiredX,
       y: 0, // Will be set by addFragment
       width: measure.totalWidth,
-      height: rowsHeight,
+      height: fragmentHeight,
       fromRow: currentRowIndex,
       toRow: currentRowIndex + fittingRows,
       pmStart: block.pmStart,
       pmEnd: block.pmEnd,
       continuesFromPrev: !isFirstFragment,
       continuesOnNext: !isLastFragment,
+      headerRowCount: !isFirstFragment && headerRowCount > 0 ? headerRowCount : undefined,
     };
 
-    const result = paginator.addFragment(fragment, rowsHeight, 0, 0);
+    const result = paginator.addFragment(fragment, fragmentHeight, 0, 0);
     fragment.y = result.y;
     fragment.x = desiredX;
 
@@ -422,7 +462,10 @@ function layoutTable(
 
     // If more rows remain, advance to next column/page
     if (currentRowIndex < rows.length) {
-      paginator.ensureFits(rows[currentRowIndex].height);
+      // Need space for at least one content row plus repeated header rows
+      const nextRowHeight =
+        rows[currentRowIndex].height + (headerRowCount > 0 ? headerRowsHeight : 0);
+      paginator.ensureFits(nextRowHeight);
     }
   }
 }
