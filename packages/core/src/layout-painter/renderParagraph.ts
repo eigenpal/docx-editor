@@ -1173,7 +1173,7 @@ export function renderParagraphFragment(
     // - Marker starts at (indentLeft - hanging)
     // - Text starts at indentLeft
     // - The marker box fills the hanging space
-    if (isFirstLine && block.attrs?.listMarker) {
+    if (isFirstLine && block.attrs?.listMarker && !block.attrs?.listMarkerHidden) {
       // Override padding for list first lines
       // Marker position = indentLeft - hanging (where first line content starts)
       const markerPos = Math.max(0, indentLeft - (indent?.hanging ?? 0));

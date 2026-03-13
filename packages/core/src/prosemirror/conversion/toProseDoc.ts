@@ -264,6 +264,7 @@ function paragraphFormattingToAttrs(
     listNumFmt: paragraph.listRendering?.numFmt,
     listIsBullet: paragraph.listRendering?.isBullet,
     listMarker: paragraph.listRendering?.marker,
+    listMarkerHidden: paragraph.listRendering?.markerHidden || undefined,
     // Store original inline formatting for lossless serialization round-trip
     _originalFormatting: formatting || undefined,
   };
