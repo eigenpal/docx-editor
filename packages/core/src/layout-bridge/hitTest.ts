@@ -19,6 +19,7 @@ import type {
   TableMeasure,
   BlockId,
 } from '../layout-engine/types';
+import { getHeaderRowsHeight } from '../layout-engine/index';
 
 // =============================================================================
 // TYPES
@@ -355,12 +356,10 @@ export function hitTestTableCell(
 
     // Account for repeated header rows in continuation fragments
     const headerRowCount = tableFragment.headerRowCount ?? 0;
-    let headerHeight = 0;
-    if (headerRowCount > 0 && tableFragment.continuesFromPrev) {
-      for (let h = 0; h < headerRowCount && h < tableMeasure.rows.length; h++) {
-        headerHeight += tableMeasure.rows[h].height;
-      }
-    }
+    const headerHeight =
+      headerRowCount > 0 && tableFragment.continuesFromPrev
+        ? getHeaderRowsHeight(tableMeasure, headerRowCount)
+        : 0;
 
     // Find row at localY
     let rowY = 0;

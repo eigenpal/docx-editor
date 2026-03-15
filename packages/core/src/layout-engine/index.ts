@@ -367,7 +367,7 @@ function countHeaderRows(block: TableBlock): number {
 /**
  * Calculate total height of header rows from their measures.
  */
-function getHeaderRowsHeight(measure: TableMeasure, headerRowCount: number): number {
+export function getHeaderRowsHeight(measure: TableMeasure, headerRowCount: number): number {
   let height = 0;
   for (let i = 0; i < headerRowCount && i < measure.rows.length; i++) {
     height += measure.rows[i].height;
