@@ -116,6 +116,8 @@ const paragraphNodeSpec: NodeSpec = {
     listIsBullet: { default: null },
     listMarker: { default: null },
     listMarkerHidden: { default: null },
+    listMarkerFontFamily: { default: null },
+    listMarkerFontSize: { default: null },
     styleId: { default: null },
     borders: { default: null },
     shading: { default: null },

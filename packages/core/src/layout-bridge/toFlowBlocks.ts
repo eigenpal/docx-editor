@@ -571,6 +571,12 @@ function convertParagraphAttrs(pmAttrs: PMParagraphAttrs, theme?: Theme | null):
   if (pmAttrs.listMarkerHidden) {
     attrs.listMarkerHidden = true;
   }
+  if (pmAttrs.listMarkerFontFamily) {
+    attrs.listMarkerFontFamily = pmAttrs.listMarkerFontFamily;
+  }
+  if (pmAttrs.listMarkerFontSize) {
+    attrs.listMarkerFontSize = pmAttrs.listMarkerFontSize;
+  }
 
   // Default font for empty paragraph measurement (from style's rPr / pPr/rPr)
   const dtf = pmAttrs.defaultTextFormatting as

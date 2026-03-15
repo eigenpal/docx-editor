@@ -242,6 +242,8 @@ export type ParagraphAttrs = {
   listMarker?: string; // Pre-computed marker text (e.g., "1.", "•", "a)")
   listIsBullet?: boolean;
   listMarkerHidden?: boolean; // w:vanish on numbering level rPr
+  listMarkerFontFamily?: string; // from numbering level rPr (w:rFonts)
+  listMarkerFontSize?: number; // from numbering level rPr, in points
   // Default font for empty paragraphs (from style's rPr / pPr/rPr)
   defaultFontSize?: number; // in points
   defaultFontFamily?: string;

@@ -1180,18 +1180,26 @@ export function renderParagraphFragment(
       lineEl.style.paddingLeft = `${markerPos}px`;
       lineEl.style.textIndent = '0'; // Don't use textIndent for lists
 
-      // Resolve marker font: prefer first text run's font, fall back to paragraph defaults
-      // MeasuredLine has fromRun/toRun indices into block.runs
+      // Resolve marker font per ECMA-376 §17.9.6:
+      // 1. Numbering level rPr (explicit marker font)
+      // 2. First text run's font (paragraph content)
+      // 3. Paragraph default font (from style)
       let firstTextRun: TextRun | undefined;
-      for (let ri = line.fromRun; ri <= line.toRun; ri++) {
-        const r = block.runs[ri];
-        if (r && r.kind === 'text') {
-          firstTextRun = r;
-          break;
+      if (!block.attrs.listMarkerFontFamily || !block.attrs.listMarkerFontSize) {
+        for (let ri = line.fromRun; ri <= line.toRun; ri++) {
+          const r = block.runs[ri];
+          if (r && r.kind === 'text') {
+            firstTextRun = r;
+            break;
+          }
         }
       }
-      const markerFontFamily = firstTextRun?.fontFamily ?? block.attrs.defaultFontFamily;
-      const markerFontSize = firstTextRun?.fontSize ?? block.attrs.defaultFontSize;
+      const markerFontFamily =
+        block.attrs.listMarkerFontFamily ??
+        firstTextRun?.fontFamily ??
+        block.attrs.defaultFontFamily;
+      const markerFontSize =
+        block.attrs.listMarkerFontSize ?? firstTextRun?.fontSize ?? block.attrs.defaultFontSize;
 
       const marker = renderListMarker(
         block.attrs.listMarker,
