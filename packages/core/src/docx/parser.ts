@@ -41,6 +41,7 @@ import { parseFootnotes, parseEndnotes } from './footnoteParser';
 import { parseComments } from './commentParser';
 import { loadFontsWithMapping } from '../utils/fontLoader';
 import { type DocxInput, toArrayBuffer } from '../utils/docxInput';
+import { isTiffMimeType, convertTiffToPngDataUrl } from '../utils/tiffConverter';
 
 // ============================================================================
 // PROGRESS CALLBACK
@@ -307,6 +308,16 @@ export async function parseDocx(input: DocxInput, options: ParseOptions = {}): P
 // HELPER FUNCTIONS
 // ============================================================================
 
+/** Encode an ArrayBuffer as a base64 data URL with the given MIME type. */
+function arrayBufferToDataUrl(buffer: ArrayBuffer, mimeType: string): string {
+  const bytes = new Uint8Array(buffer);
+  let binary = '';
+  for (let i = 0; i < bytes.length; i++) {
+    binary += String.fromCharCode(bytes[i]);
+  }
+  return `data:${mimeType};base64,${btoa(binary)}`;
+}
+
 /**
  * Build media file map from raw content and relationships
  */
@@ -318,19 +329,27 @@ function buildMediaMap(raw: RawDocxContent, _rels: RelationshipMap): Map<string,
     const filename = path.split('/').pop() || path;
     const mimeType = getMediaMimeType(path);
 
-    // Create a data URL for the image
-    const bytes = new Uint8Array(data);
-    let binary = '';
-    for (let i = 0; i < bytes.length; i++) {
-      binary += String.fromCharCode(bytes[i]);
+    // Convert TIFF to PNG for browser display (browsers don't support TIFF in <img>).
+    // On re-save, the image will be written as PNG (not original TIFF).
+    let dataUrl: string;
+    let effectiveMimeType = mimeType;
+
+    if (isTiffMimeType(mimeType)) {
+      const pngDataUrl = convertTiffToPngDataUrl(data);
+      if (pngDataUrl) {
+        dataUrl = pngDataUrl;
+        effectiveMimeType = 'image/png';
+      } else {
+        dataUrl = arrayBufferToDataUrl(data, mimeType);
+      }
+    } else {
+      dataUrl = arrayBufferToDataUrl(data, mimeType);
     }
-    const base64 = btoa(binary);
-    const dataUrl = `data:${mimeType};base64,${base64}`;
 
     const mediaFile: MediaFile = {
       path,
       filename,
-      mimeType,
+      mimeType: effectiveMimeType,
       data,
       dataUrl,
     };
