@@ -3266,8 +3266,10 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
           setIsFocused(true);
         }
 
-        // Prevent space from scrolling the container - let PM handle it as text input
-        if (e.key === ' ' && !e.ctrlKey && !e.metaKey) {
+        // Prevent space from scrolling the container - let PM handle it as text input.
+        // During IME composition, let the browser handle space natively to avoid
+        // duplicating the final composed character (e.g., Korean Hangul).
+        if (e.key === ' ' && !e.ctrlKey && !e.metaKey && !e.nativeEvent.isComposing) {
           e.preventDefault();
           const view = hiddenPMRef.current?.getView();
           if (view) {
