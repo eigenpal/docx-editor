@@ -23,6 +23,7 @@ import type {
   TabRun,
   BlockId,
 } from '../layout-engine/types';
+import { getHeaderRowsHeight } from '../layout-engine/index';
 
 import { measureRun, type FontStyle } from './measuring/measureContainer';
 
@@ -404,8 +405,15 @@ export function selectionToRects(
         const tableMeasure = measure as TableMeasure;
         const tableFragment = fragment as TableFragment;
 
-        // Walk through visible rows
-        let rowY = 0;
+        // Account for repeated header rows in continuation fragments
+        const hdrCount = tableFragment.headerRowCount ?? 0;
+        const headerOffset =
+          hdrCount > 0 && tableFragment.continuesFromPrev
+            ? getHeaderRowsHeight(tableMeasure, hdrCount)
+            : 0;
+
+        // Walk through visible rows (start after header offset)
+        let rowY = headerOffset;
         for (
           let rowIndex = tableFragment.fromRow;
           rowIndex < tableFragment.toRow && rowIndex < tableBlock.rows.length;

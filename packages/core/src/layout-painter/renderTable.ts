@@ -132,6 +132,8 @@ function renderNestedTable(
     tableEl.style.marginRight = 'auto';
   } else if (block.justification === 'right') {
     tableEl.style.marginLeft = 'auto';
+  } else if (block.indent) {
+    tableEl.style.marginLeft = `${block.indent}px`;
   }
 
   // Store metadata
@@ -522,15 +524,46 @@ export function renderTableFragment(
   // Track spanning cells across rows
   const spanningCells = new Map<string, SpanningCell>();
 
-  // Render rows from fragment.fromRow to fragment.toRow
+  // Render repeated header rows for continuation fragments
+  const headerRowCount = fragment.headerRowCount ?? 0;
   let y = 0;
+  if (headerRowCount > 0 && fragment.continuesFromPrev) {
+    for (let hdrIdx = 0; hdrIdx < headerRowCount; hdrIdx++) {
+      const hdrRow = block.rows[hdrIdx];
+      const hdrRowMeasure = measure.rows[hdrIdx];
+      if (!hdrRow || !hdrRowMeasure) continue;
+
+      const rowEl = renderTableRow(
+        hdrRow,
+        hdrRowMeasure,
+        hdrIdx,
+        y,
+        measure.columnWidths,
+        block.rows.length,
+        context,
+        doc,
+        spanningCells,
+        rowYPositions,
+        hdrIdx === 0 // first header row draws top border
+      );
+      rowEl.dataset.repeatedHeader = 'true';
+      tableEl.appendChild(rowEl);
+      y += hdrRowMeasure.height;
+    }
+  }
+
+  // Render content rows from fragment.fromRow to fragment.toRow
   for (let rowIndex = fragment.fromRow; rowIndex < fragment.toRow; rowIndex++) {
     const row = block.rows[rowIndex];
     const rowMeasure = measure.rows[rowIndex];
 
     if (!row || !rowMeasure) continue;
 
-    const isFirstRowInFragment = fragment.continuesFromPrev && rowIndex === fragment.fromRow;
+    // First content row in a continuation fragment with headers should draw top border
+    const isFirstRowInFragment =
+      headerRowCount > 0 && fragment.continuesFromPrev
+        ? false // header rows already drawn, content rows are not "first"
+        : fragment.continuesFromPrev && rowIndex === fragment.fromRow;
 
     const rowEl = renderTableRow(
       row,

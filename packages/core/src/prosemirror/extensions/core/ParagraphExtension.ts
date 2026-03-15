@@ -93,6 +93,154 @@ function getListClass(
 }
 
 // ============================================================================
+// CSS-TO-TWIPS HELPERS (for paste from external apps like Google Docs)
+// ============================================================================
+
+/**
+ * Parse a CSS length value to twips.
+ * Supports pt, px, in, cm, mm units. Returns undefined for unparseable values.
+ *
+ * Conversion factors (1 inch = 1440 twips):
+ * - 1pt = 20 twips (1440/72)
+ * - 1px = 15 twips (1440/96)
+ * - 1cm = 567 twips (1440/2.54, rounded)
+ * - 1mm = 56.7 twips (1440/25.4)
+ */
+function cssLengthToTwips(value: string): number | undefined {
+  if (!value) return undefined;
+  const trimmed = value.trim();
+  const num = parseFloat(trimmed);
+  if (isNaN(num) || num === 0) return undefined;
+
+  if (trimmed.endsWith('pt')) return Math.round(num * 20);
+  if (trimmed.endsWith('px')) return Math.round(num * 15);
+  if (trimmed.endsWith('in')) return Math.round(num * 1440);
+  if (trimmed.endsWith('mm')) return Math.round(num * (1440 / 25.4));
+  if (trimmed.endsWith('cm')) return Math.round(num * (1440 / 2.54));
+  // Bare number — treat as pixels (browser computed style default)
+  if (/^[\d.]+$/.test(trimmed)) return Math.round(num * 15);
+  return undefined;
+}
+
+/**
+ * Map CSS text-align value to ParagraphAlignment.
+ */
+function cssTextAlignToAlignment(value: string): ParagraphAlignment | undefined {
+  switch (value.trim().toLowerCase()) {
+    case 'left':
+    case 'start':
+      return 'left';
+    case 'center':
+      return 'center';
+    case 'right':
+    case 'end':
+      return 'right';
+    case 'justify':
+      return 'both';
+    default:
+      return undefined;
+  }
+}
+
+/**
+ * Parse CSS line-height to twips.
+ * - Unitless multiplier (e.g. "1.5"): 240 twips * multiplier (single=240)
+ * - Percentage (e.g. "150%"): 240 twips * (pct/100)
+ * - Absolute length (e.g. "18pt"): converted to twips directly with 'exact' rule
+ *
+ * Returns { lineSpacing, lineSpacingRule } or undefined.
+ */
+function cssLineHeightToSpacing(
+  value: string
+): { lineSpacing: number; lineSpacingRule: LineSpacingRule } | undefined {
+  if (!value || value === 'normal') return undefined;
+  const trimmed = value.trim();
+
+  // Percentage (e.g. "150%")
+  if (trimmed.endsWith('%')) {
+    const pct = parseFloat(trimmed);
+    if (isNaN(pct) || pct === 0) return undefined;
+    return { lineSpacing: Math.round(240 * (pct / 100)), lineSpacingRule: 'auto' };
+  }
+
+  // Absolute length (has a unit like pt, px, etc.)
+  if (/[a-z]/i.test(trimmed)) {
+    const twips = cssLengthToTwips(trimmed);
+    if (twips == null) return undefined;
+    return { lineSpacing: twips, lineSpacingRule: 'exact' };
+  }
+
+  // Unitless multiplier (e.g. "1.5", "2")
+  const multiplier = parseFloat(trimmed);
+  if (isNaN(multiplier) || multiplier === 0) return undefined;
+  return { lineSpacing: Math.round(240 * multiplier), lineSpacingRule: 'auto' };
+}
+
+/**
+ * Extract paragraph-level attributes from a pasted HTML <p> element's inline styles.
+ * Used by parseDOM to preserve formatting from external apps (Google Docs, Word Online, etc.).
+ */
+function extractParagraphAttrsFromStyle(element: HTMLElement): Partial<ParagraphAttrs> {
+  const style = element.style;
+  const attrs: Partial<ParagraphAttrs> = {};
+
+  // Alignment — text-align CSS property
+  if (style.textAlign) {
+    const alignment = cssTextAlignToAlignment(style.textAlign);
+    if (alignment) attrs.alignment = alignment;
+  }
+
+  // Left indentation — margin-left or padding-left (Google Docs uses margin-left)
+  const marginLeft = style.marginLeft || style.paddingLeft;
+  if (marginLeft) {
+    const twips = cssLengthToTwips(marginLeft);
+    if (twips != null) attrs.indentLeft = twips;
+  }
+
+  // Right indentation — margin-right or padding-right
+  const marginRight = style.marginRight || style.paddingRight;
+  if (marginRight) {
+    const twips = cssLengthToTwips(marginRight);
+    if (twips != null) attrs.indentRight = twips;
+  }
+
+  // First-line indent — text-indent CSS property
+  if (style.textIndent) {
+    const twips = cssLengthToTwips(style.textIndent);
+    if (twips != null) {
+      if (twips < 0) {
+        // Negative text-indent means hanging indent
+        attrs.indentFirstLine = Math.abs(twips);
+        attrs.hangingIndent = true;
+      } else {
+        attrs.indentFirstLine = twips;
+      }
+    }
+  }
+
+  // Line spacing — line-height CSS property
+  if (style.lineHeight) {
+    const spacing = cssLineHeightToSpacing(style.lineHeight);
+    if (spacing) {
+      attrs.lineSpacing = spacing.lineSpacing;
+      attrs.lineSpacingRule = spacing.lineSpacingRule;
+    }
+  }
+
+  // Space before/after — margin-top/margin-bottom
+  if (style.marginTop) {
+    const twips = cssLengthToTwips(style.marginTop);
+    if (twips != null) attrs.spaceBefore = twips;
+  }
+  if (style.marginBottom) {
+    const twips = cssLengthToTwips(style.marginBottom);
+    if (twips != null) attrs.spaceAfter = twips;
+  }
+
+  return attrs;
+}
+
+// ============================================================================
 // PARAGRAPH NODE SPEC
 // ============================================================================
 
@@ -138,15 +286,44 @@ const paragraphNodeSpec: NodeSpec = {
       tag: 'p',
       getAttrs(dom): ParagraphAttrs {
         const element = dom as HTMLElement;
-        return {
+
+        // Start with data-attribute values (from our own editor's copy/paste)
+        const attrs: ParagraphAttrs = {
           paraId: element.dataset.paraId || undefined,
           alignment: element.dataset.alignment as ParagraphAlignment | undefined,
           styleId: element.dataset.styleId || undefined,
           sectionBreakType:
             (element.dataset.sectionBreak as ParagraphAttrs['sectionBreakType']) || undefined,
         };
+
+        // Extract paragraph formatting from inline CSS styles
+        // (covers paste from Google Docs, Word Online, and other external apps)
+        const styleAttrs = extractParagraphAttrsFromStyle(element);
+
+        // Merge: data-attributes take precedence over CSS-extracted values
+        return {
+          ...styleAttrs,
+          ...attrs,
+          // For alignment, prefer data-attribute if present, otherwise use CSS
+          alignment: attrs.alignment || styleAttrs.alignment || undefined,
+        };
       },
     },
+    // Heading tags (h1-h6) — pasted from Google Docs, Word Online, etc.
+    // Map to paragraphs with appropriate styleId and formatting extracted from CSS.
+    ...(['h1', 'h2', 'h3', 'h4', 'h5', 'h6'] as const).map((tag) => ({
+      tag,
+      getAttrs(dom: HTMLElement): ParagraphAttrs {
+        const level = parseInt(tag.charAt(1));
+        const styleAttrs = extractParagraphAttrsFromStyle(dom);
+
+        return {
+          ...styleAttrs,
+          styleId: `Heading${level}`,
+          outlineLevel: level - 1,
+        };
+      },
+    })),
   ],
   toDOM(node) {
     const attrs = node.attrs as ParagraphAttrs;

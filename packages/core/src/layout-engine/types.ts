@@ -339,6 +339,8 @@ export type TableBlock = {
   widthType?: string;
   /** Table horizontal alignment */
   justification?: 'left' | 'center' | 'right';
+  /** Table indent from left margin (in pixels, from w:tblInd) */
+  indent?: number;
   /** Floating table properties (pixel values). */
   floating?: FloatingTablePosition;
   pmStart?: number;
@@ -625,6 +627,8 @@ export type TableFragment = FragmentBase & {
   continuesFromPrev?: boolean;
   /** True if this continues onto the next page. */
   continuesOnNext?: boolean;
+  /** Number of header rows prepended to this continuation fragment (0 or undefined for first fragment). */
+  headerRowCount?: number;
 };
 
 /**

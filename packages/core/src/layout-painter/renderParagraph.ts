@@ -279,6 +279,7 @@ function renderTabRun(run: TabRun, doc: Document, width: number, leader?: string
 
   span.style.display = 'inline-block';
   span.style.width = `${width}px`;
+  span.style.overflow = 'hidden';
 
   applyPmPositions(span, run.pmStart, run.pmEnd);
 

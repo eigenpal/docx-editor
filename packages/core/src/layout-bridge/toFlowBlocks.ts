@@ -838,6 +838,15 @@ function convertTable(node: PMNode, startPos: number, options: ToFlowBlocksOptio
   // Extract justification
   const justification = node.attrs.justification as 'left' | 'center' | 'right' | undefined;
 
+  // Extract table indent from _originalFormatting (w:tblInd)
+  const originalFormatting = node.attrs._originalFormatting as
+    | { indent?: { value: number; type: string } }
+    | undefined;
+  const indentPx =
+    originalFormatting?.indent?.value && originalFormatting.indent.type === 'dxa'
+      ? twipsToPixels(originalFormatting.indent.value)
+      : undefined;
+
   const floating = node.attrs.floating as
     | {
         horzAnchor?: 'margin' | 'page' | 'text';
@@ -882,6 +891,7 @@ function convertTable(node: PMNode, startPos: number, options: ToFlowBlocksOptio
     width,
     widthType,
     justification,
+    indent: indentPx,
     floating: floatingPx,
     pmStart: startPos,
     pmEnd: startPos + node.nodeSize,
