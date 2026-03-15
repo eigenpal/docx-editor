@@ -1477,11 +1477,19 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
             footerContentHeight > availableFooterSpace
           ) {
             effectiveMargins = { ...margins };
+            // Gap between header/footer content and body to prevent overlap
+            const headerBodyGap = 8;
             if (headerContentHeight > availableHeaderSpace) {
-              effectiveMargins.top = headerDistance + headerContentHeight;
+              effectiveMargins.top = Math.max(
+                margins.top,
+                headerDistance + headerContentHeight + headerBodyGap
+              );
             }
             if (footerContentHeight > availableFooterSpace) {
-              effectiveMargins.bottom = footerDistance + footerContentHeight;
+              effectiveMargins.bottom = Math.max(
+                margins.bottom,
+                footerDistance + footerContentHeight + headerBodyGap
+              );
             }
           }
 

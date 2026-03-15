@@ -306,6 +306,21 @@ const paragraphNodeSpec: NodeSpec = {
         };
       },
     },
+    // Heading tags (h1-h6) — pasted from Google Docs, Word Online, etc.
+    // Map to paragraphs with appropriate styleId and formatting extracted from CSS.
+    ...(['h1', 'h2', 'h3', 'h4', 'h5', 'h6'] as const).map((tag) => ({
+      tag,
+      getAttrs(dom: HTMLElement): ParagraphAttrs {
+        const level = parseInt(tag.charAt(1));
+        const styleAttrs = extractParagraphAttrsFromStyle(dom);
+
+        return {
+          ...styleAttrs,
+          styleId: `Heading${level}`,
+          outlineLevel: level - 1,
+        };
+      },
+    })),
   ],
   toDOM(node) {
     const attrs = node.attrs as ParagraphAttrs;

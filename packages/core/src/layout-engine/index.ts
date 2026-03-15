@@ -400,8 +400,15 @@ function layoutTable(
 
   while (currentRowIndex < rows.length) {
     const state = paginator.getCurrentState();
-    const availableHeight = paginator.getAvailableHeight();
+    const rawAvailableHeight = paginator.getAvailableHeight();
     const isFirstFragment = currentRowIndex === 0;
+
+    // Account for trailing spacing from previous block that addFragment will consume.
+    // addFragment computes effectiveSpaceBefore = max(spaceBefore, trailingSpacing)
+    // and adds it to the fragment height before calling ensureFits.
+    // We pass spaceBefore=0 for tables, so the overhead is just trailingSpacing.
+    const pendingSpacing = isFirstFragment ? state.trailingSpacing : 0;
+    const availableHeight = rawAvailableHeight - pendingSpacing;
 
     // For continuation fragments, we need space for header rows + at least one content row
     const headerOverhead = !isFirstFragment && headerRowCount > 0 ? headerRowsHeight : 0;
