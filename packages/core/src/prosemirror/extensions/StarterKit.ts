@@ -65,6 +65,7 @@ import { ImagePasteExtension } from './features/ImagePasteExtension';
 import { DropCursorExtension } from './features/DropCursorExtension';
 import { ParagraphChangeTrackerExtension } from './features/ParagraphChangeTrackerExtension';
 import { BidiShortcutExtension } from './features/BidiShortcutExtension';
+import { PasteStyleInlinerExtension } from './features/PasteStyleInlinerExtension';
 
 export interface StarterKitOptions {
   /** Extensions to disable by name */
@@ -149,6 +150,7 @@ export function createStarterKit(options: StarterKitOptions = {}): AnyExtension[
   }
 
   // Features
+  add('pasteStyleInliner', PasteStyleInlinerExtension());
   add('list', ListExtension());
   add('baseKeymap', BaseKeymapExtension());
   add(

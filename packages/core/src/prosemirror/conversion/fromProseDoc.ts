@@ -1032,8 +1032,9 @@ function marksToTextFormatting(marks: readonly Mark[]): TextFormatting {
         formatting.fontFamily = {
           ascii: attrs.ascii,
           hAnsi: attrs.hAnsi,
-          // Set cs to match ascii for Complex Script compatibility
-          cs: attrs.ascii || undefined,
+          eastAsia: attrs.eastAsia || undefined,
+          // Use stored cs value, falling back to ascii for Complex Script compatibility
+          cs: attrs.cs || attrs.ascii || undefined,
           // asciiTheme needs to be cast to the proper type or undefined
           asciiTheme: attrs.asciiTheme as
             | 'majorAscii'
@@ -1045,6 +1046,9 @@ function marksToTextFormatting(marks: readonly Mark[]): TextFormatting {
             | 'minorEastAsia'
             | 'minorBidi'
             | undefined,
+          hAnsiTheme: attrs.hAnsiTheme || undefined,
+          eastAsiaTheme: attrs.eastAsiaTheme || undefined,
+          csTheme: attrs.csTheme || undefined,
         };
         break;
       }

@@ -19,6 +19,7 @@ import type {
   TableMeasure,
   BlockId,
 } from '../layout-engine/types';
+import { getHeaderRowsHeight } from '../layout-engine/index';
 
 // =============================================================================
 // TYPES
@@ -353,23 +354,46 @@ export function hitTestTableCell(
     const localX = pagePoint.x - tableFragment.x;
     const localY = pagePoint.y - tableFragment.y;
 
+    // Account for repeated header rows in continuation fragments
+    const headerRowCount = tableFragment.headerRowCount ?? 0;
+    const headerHeight =
+      headerRowCount > 0 && tableFragment.continuesFromPrev
+        ? getHeaderRowsHeight(tableMeasure, headerRowCount)
+        : 0;
+
     // Find row at localY
     let rowY = 0;
     let rowIndex = -1;
 
     if (tableMeasure.rows.length === 0 || tableBlock.rows.length === 0) continue;
 
-    for (
-      let r = tableFragment.fromRow;
-      r < tableFragment.toRow && r < tableMeasure.rows.length;
-      r++
-    ) {
-      const rowMeasure = tableMeasure.rows[r];
-      if (localY >= rowY && localY < rowY + rowMeasure.height) {
-        rowIndex = r;
-        break;
+    // If click is within the repeated header area, map to the original header rows
+    if (headerHeight > 0 && localY < headerHeight) {
+      let hdrY = 0;
+      for (let h = 0; h < headerRowCount && h < tableMeasure.rows.length; h++) {
+        const hdrRowMeasure = tableMeasure.rows[h];
+        if (localY >= hdrY && localY < hdrY + hdrRowMeasure.height) {
+          rowIndex = h;
+          break;
+        }
+        hdrY += hdrRowMeasure.height;
       }
-      rowY += rowMeasure.height;
+      if (rowIndex === -1) rowIndex = 0;
+    } else {
+      // Adjust localY to skip past repeated header rows
+      const adjustedLocalY = localY - headerHeight;
+      for (
+        let r = tableFragment.fromRow;
+        r < tableFragment.toRow && r < tableMeasure.rows.length;
+        r++
+      ) {
+        const rowMeasure = tableMeasure.rows[r];
+        if (adjustedLocalY >= rowY && adjustedLocalY < rowY + rowMeasure.height) {
+          rowIndex = r;
+          break;
+        }
+        rowY += rowMeasure.height;
+      }
     }
 
     // If no row found, use last row
@@ -408,9 +432,20 @@ export function hitTestTableCell(
     if (!cellMeasure || !cell) continue;
 
     // Find the cumulative row Y for the found row
+    // If the click is on a content row (not a repeated header), account for header offset
     let rowTop = 0;
-    for (let r = tableFragment.fromRow; r < rowIndex; r++) {
-      rowTop += tableMeasure.rows[r]?.height ?? 0;
+    const isClickOnHeader = headerHeight > 0 && rowIndex < headerRowCount;
+    if (isClickOnHeader) {
+      // Click on a repeated header row — rowTop is within the header area
+      for (let r = 0; r < rowIndex; r++) {
+        rowTop += tableMeasure.rows[r]?.height ?? 0;
+      }
+    } else {
+      // Click on a content row — add header offset, then accumulate from fromRow
+      rowTop = headerHeight;
+      for (let r = tableFragment.fromRow; r < rowIndex; r++) {
+        rowTop += tableMeasure.rows[r]?.height ?? 0;
+      }
     }
 
     // Find the cumulative column X for the found column

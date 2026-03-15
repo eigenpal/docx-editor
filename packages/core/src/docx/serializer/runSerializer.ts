@@ -42,6 +42,29 @@ import { escapeXml } from './xmlUtils';
 // CONSTANTS
 // ============================================================================
 
+/**
+ * Auto-incrementing counter for generating unique image/shape IDs.
+ * Used as a fallback when `image.id` or `shape.id` is undefined (e.g., pasted images).
+ * Starts high (100000) to avoid collisions with IDs parsed from existing DOCX content.
+ */
+let nextAutoId = 100000;
+
+/**
+ * Reset the auto-incrementing ID counter. Call before each serialization pass
+ * to keep IDs deterministic across saves.
+ */
+export function resetAutoIdCounter(): void {
+  nextAutoId = 100000;
+}
+
+/** Get a unique positive integer ID, using the provided value or generating one */
+function getUniqueId(id: string | number | undefined): string {
+  if (id !== undefined && id !== null && id !== '' && id !== 0) {
+    return String(id);
+  }
+  return String(nextAutoId++);
+}
+
 /** Valid OOXML highlight color names (ECMA-376 §17.18.40) */
 const VALID_HIGHLIGHT_COLORS = new Set([
   'black',
@@ -643,11 +666,11 @@ function serializeWrap(wrap: ImageWrap): string {
 }
 
 /** Build the common a:graphic > pic:pic element for images */
-function serializePicGraphic(image: Image): string {
+function serializePicGraphic(image: Image, sharedId: string): string {
   const cx = image.size.width;
   const cy = image.size.height;
   const rId = image.rId || 'rId1';
-  const id = image.id || '0';
+  const id = sharedId;
   const name = image.filename || `image${id}`;
 
   let xfrmAttrs = '';
@@ -695,10 +718,10 @@ function serializeDrawingContent(content: DrawingContent): string {
   const distB = image.padding?.bottom ?? image.wrap.distB ?? 0;
   const distL = image.padding?.left ?? image.wrap.distL ?? 0;
   const distR = image.padding?.right ?? image.wrap.distR ?? 0;
-  const docPrId = image.id || '1';
+  const docPrId = getUniqueId(image.id);
   const docPrName = image.title || image.filename || `Picture ${docPrId}`;
 
-  const graphic = serializePicGraphic(image);
+  const graphic = serializePicGraphic(image, docPrId);
 
   if (!isFloating) {
     // Inline image
@@ -756,7 +779,7 @@ function serializeShapeContent(content: ShapeContent): string {
   const distB = shape.wrap?.distB ?? 0;
   const distL = shape.wrap?.distL ?? 0;
   const distR = shape.wrap?.distR ?? 0;
-  const docPrId = shape.id || '1';
+  const docPrId = getUniqueId(shape.id);
   const docPrName = shape.name || (isTextBox ? `TextBox ${docPrId}` : `Shape ${docPrId}`);
 
   // Build xfrm

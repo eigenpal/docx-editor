@@ -790,6 +790,23 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
   historyStateRef.current = history.state;
   // Track current border color/width for border presets (like Google Docs)
   const borderSpecRef = useRef({ style: 'single', size: 4, color: { rgb: '000000' } });
+  // Cache style resolver to avoid recreating on every selection change
+  const styleResolverCacheRef = useRef<{
+    styles: unknown;
+    resolver: ReturnType<typeof createStyleResolver>;
+  } | null>(null);
+  const getCachedStyleResolver = useCallback(
+    (styles: Parameters<typeof createStyleResolver>[0]) => {
+      const cached = styleResolverCacheRef.current;
+      if (cached && cached.styles === styles) {
+        return cached.resolver;
+      }
+      const resolver = createStyleResolver(styles);
+      styleResolverCacheRef.current = { styles, resolver };
+      return resolver;
+    },
+    []
+  );
 
   // Scroll-based page indicator (Google Docs style)
   const [scrollPageInfo, setScrollPageInfo] = useState<{
@@ -1070,7 +1087,25 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
       const { textFormatting, paragraphFormatting } = selectionState;
 
       // Extract font family (prefer ascii, fall back to hAnsi)
-      const fontFamily = textFormatting.fontFamily?.ascii || textFormatting.fontFamily?.hAnsi;
+      let fontFamily = textFormatting.fontFamily?.ascii || textFormatting.fontFamily?.hAnsi;
+      let fontSize = textFormatting.fontSize;
+
+      // If no explicit font/size marks, resolve from paragraph style or document defaults
+      if (!fontFamily || !fontSize) {
+        const currentDoc = historyStateRef.current;
+        const paraStyleId = paragraphFormatting.styleId;
+        if (currentDoc?.package.styles && paraStyleId) {
+          const resolver = getCachedStyleResolver(currentDoc.package.styles);
+          const resolved = resolver.resolveParagraphStyle(paraStyleId);
+          if (!fontFamily && resolved.runFormatting?.fontFamily) {
+            fontFamily =
+              resolved.runFormatting.fontFamily.ascii || resolved.runFormatting.fontFamily.hAnsi;
+          }
+          if (!fontSize && resolved.runFormatting?.fontSize) {
+            fontSize = resolved.runFormatting.fontSize;
+          }
+        }
+      }
 
       // Extract text color as hex string
       const textColor = textFormatting.color?.rgb ? `#${textFormatting.color.rgb}` : undefined;
@@ -1094,7 +1129,7 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
         superscript: textFormatting.vertAlign === 'superscript',
         subscript: textFormatting.vertAlign === 'subscript',
         fontFamily,
-        fontSize: textFormatting.fontSize,
+        fontSize,
         color: textColor,
         highlight: textFormatting.highlight,
         alignment: paragraphFormatting.alignment,
@@ -1657,7 +1692,7 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
               let preset: TableStylePreset | undefined = getBuiltinTableStyle(action.styleId);
               const currentDocForTable = historyStateRef.current;
               if (!preset && currentDocForTable?.package.styles) {
-                const styleResolver = createStyleResolver(currentDocForTable.package.styles);
+                const styleResolver = getCachedStyleResolver(currentDocForTable.package.styles);
                 const docStyle = styleResolver.getStyle(action.styleId);
                 if (docStyle) {
                   // Convert to preset inline (same as documentStyleToPreset)
@@ -1880,7 +1915,7 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
             // Use ref to avoid stale closure (handleFormat has [] deps)
             const currentDoc = historyStateRef.current;
             const styleResolver = currentDoc?.package.styles
-              ? createStyleResolver(currentDoc.package.styles)
+              ? getCachedStyleResolver(currentDoc.package.styles)
               : null;
 
             if (styleResolver) {
