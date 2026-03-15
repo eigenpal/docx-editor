@@ -1180,7 +1180,26 @@ export function renderParagraphFragment(
       lineEl.style.paddingLeft = `${markerPos}px`;
       lineEl.style.textIndent = '0'; // Don't use textIndent for lists
 
-      const marker = renderListMarker(block.attrs.listMarker, indent, doc);
+      // Resolve marker font: prefer first text run's font, fall back to paragraph defaults
+      // MeasuredLine has fromRun/toRun indices into block.runs
+      let firstTextRun: TextRun | undefined;
+      for (let ri = line.fromRun; ri <= line.toRun; ri++) {
+        const r = block.runs[ri];
+        if (r && r.kind === 'text') {
+          firstTextRun = r;
+          break;
+        }
+      }
+      const markerFontFamily = firstTextRun?.fontFamily ?? block.attrs.defaultFontFamily;
+      const markerFontSize = firstTextRun?.fontSize ?? block.attrs.defaultFontSize;
+
+      const marker = renderListMarker(
+        block.attrs.listMarker,
+        indent,
+        doc,
+        markerFontFamily,
+        markerFontSize
+      );
       lineEl.insertBefore(marker, lineEl.firstChild);
     }
 
@@ -1201,11 +1220,25 @@ export function renderParagraphFragment(
 function renderListMarker(
   marker: string,
   indent: ParagraphIndent | undefined,
-  doc: Document
+  doc: Document,
+  fontFamily?: string,
+  fontSize?: number
 ): HTMLElement {
   const span = doc.createElement('span');
   span.className = 'layout-list-marker';
   span.style.display = 'inline-block';
+
+  // Apply font styling so the marker matches the paragraph text
+  // Per ECMA-376 §17.9.6, marker formatting comes from level rPr,
+  // then paragraph defaults, then document defaults.
+  if (fontFamily) {
+    span.style.fontFamily = resolveFontFamily(fontFamily).cssFallback;
+  }
+  if (fontSize) {
+    // Convert points to pixels: 1pt = 96/72 px
+    const fontSizePx = (fontSize * 96) / 72;
+    span.style.fontSize = `${fontSizePx}px`;
+  }
 
   // In Word, the marker character is followed by a tab that extends to the
   // text indent position. We emulate this by left-aligning the marker within
