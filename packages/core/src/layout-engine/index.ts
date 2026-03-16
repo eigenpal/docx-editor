@@ -152,17 +152,16 @@ export function layoutDocument(
   // Section 1 → columns from sectionBreak[1]
   // ...
   // Final section → options.columns (body-level)
-  const sectionBreakIndices: number[] = [];
+  const defaultColumns: ColumnLayout = { count: 1, gap: 0 };
   const sectionColumnConfigs: ColumnLayout[] = [];
   for (let i = 0; i < blocks.length; i++) {
     if (blocks[i].kind === 'sectionBreak') {
-      sectionBreakIndices.push(i);
       const sb = blocks[i] as SectionBreakBlock;
-      sectionColumnConfigs.push(sb.columns ?? { count: 1, gap: 0 });
+      sectionColumnConfigs.push(sb.columns ?? defaultColumns);
     }
   }
   // Final section uses body-level columns
-  sectionColumnConfigs.push(options.columns ?? { count: 1, gap: 0 });
+  sectionColumnConfigs.push(options.columns ?? defaultColumns);
 
   // First section's columns
   const initialColumns =
@@ -185,7 +184,8 @@ export function layoutDocument(
   const keepNextChains = computeKeepNextChains(blocks);
   const midChainIndices = getMidChainIndices(keepNextChains);
 
-  // Process each block
+  // Process each block, tracking section break index with a counter (O(1) per break)
+  let sectionIdx = 0;
   for (let i = 0; i < blocks.length; i++) {
     const block = blocks[i];
     const measure = measures[i];
@@ -245,17 +245,15 @@ export function layoutDocument(
         paginator.forceColumnBreak();
         break;
 
-      case 'sectionBreak': {
-        // Handle section break - may force page break and update column layout
-        // Look up which section break this is to get the NEXT section's columns
-        const breakIdx = sectionBreakIndices.indexOf(i);
-        const nextSectionColumns =
-          breakIdx >= 0
-            ? sectionColumnConfigs[breakIdx + 1]
-            : (options.columns ?? { count: 1, gap: 0 });
-        handleSectionBreak(block as SectionBreakBlock, paginator, nextSectionColumns);
+      case 'sectionBreak':
+        // Update paginator to the NEXT section's columns
+        handleSectionBreak(
+          block as SectionBreakBlock,
+          paginator,
+          sectionColumnConfigs[sectionIdx + 1] ?? defaultColumns
+        );
+        sectionIdx++;
         break;
-      }
     }
   }
 

@@ -352,8 +352,7 @@ function getColumns(sectionProps: SectionProperties | null | undefined): ColumnL
 function computePerBlockWidths(
   blocks: FlowBlock[],
   defaultContentWidth: number,
-  defaultColumns: ColumnLayout | undefined,
-  _pageSize: { w: number; h: number }
+  defaultColumns: ColumnLayout | undefined
 ): number[] {
   function colWidth(cw: number, cols: ColumnLayout): number {
     if (cols.count <= 1) return cw;
@@ -1485,7 +1484,7 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
           // neighboring paragraphs' line widths.
           stepStart = performance.now();
           // Compute per-block widths accounting for section breaks with different column configs
-          const blockWidths = computePerBlockWidths(newBlocks, contentWidth, columns, pageSize);
+          const blockWidths = computePerBlockWidths(newBlocks, contentWidth, columns);
           const newMeasures = measureBlocks(newBlocks, blockWidths);
           stepTime = performance.now() - stepStart;
           if (stepTime > 1000) {

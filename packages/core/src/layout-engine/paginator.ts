@@ -106,6 +106,7 @@ export function createPaginator(options: PaginatorOptions) {
       margins: { ...margins },
       size: { ...pageSize },
       footnoteReservedHeight: footnoteHeight > 0 ? footnoteHeight : undefined,
+      // Set initial columns; may be overwritten by updateColumns() for continuous section breaks
       columns: columns.count > 1 ? { ...columns } : undefined,
     };
 
@@ -286,9 +287,9 @@ export function createPaginator(options: PaginatorOptions) {
     get columnWidth() {
       return columnWidth;
     },
-    /** Get current column layout. */
+    /** Get current column layout (returns copy to prevent external mutation). */
     get columns() {
-      return columns;
+      return { ...columns };
     },
     /** Get current state. */
     getCurrentState,
