@@ -772,8 +772,9 @@ export function renderLine(
     } else if (isImageRun(run)) {
       // Skip floating images - they're rendered separately at page level.
       // Exception: inside table cells, floating images must render in-flow
-      // because page-level extraction doesn't reach into cell paragraphs.
-      if (isFloatingImageRun(run) && !options?.context?.insideTableCell) {
+      // Floating images are rendered in dedicated floating layers (page-level
+      // or cell-level), not inline. Skip them here to avoid double rendering.
+      if (isFloatingImageRun(run)) {
         continue;
       }
       const imageKey = getInlineImageRunKey(run);
