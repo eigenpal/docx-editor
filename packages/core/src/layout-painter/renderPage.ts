@@ -26,7 +26,7 @@ import type {
   TextBoxFragment,
 } from '../layout-engine/types';
 import { renderFragment } from './renderFragment';
-import { renderParagraphFragment, type FloatingImageInfo } from './renderParagraph';
+import { renderParagraphFragment } from './renderParagraph';
 import { renderTableFragment } from './renderTable';
 import { renderImageFragment } from './renderImage';
 import { renderTextBoxFragment } from './renderTextBox';
@@ -34,6 +34,7 @@ import type { BlockLookup } from './index';
 import type { BorderSpec } from '../types/document';
 import { borderToStyle } from '../utils/formatToStyle';
 import type { Theme } from '../types/document';
+import { measureParagraph, type FloatingImageZone } from '../layout-bridge/measuring';
 
 /**
  * Page-level floating image that has been extracted from paragraphs.
@@ -382,48 +383,30 @@ function extractFloatingImagesFromParagraph(
 }
 
 /**
- * Calculate exclusion zones for floating images on a page.
- * Used to determine which paragraphs need margin adjustments.
+ * Convert floating exclusion rectangles to per-image FloatingImageZone[]
+ * for the measurement system. Each rect becomes its own zone so
+ * lines at different Y positions get independently correct widths.
  */
-function calculateExclusionZones(
+function rectsToFloatingZones(
   rects: FloatingExclusionRect[],
   contentWidth: number
-): FloatingImageInfo[] {
-  const result: FloatingImageInfo[] = [];
-
-  // Track the max extent on each side
-  let leftExtent = 0;
-  let rightExtent = 0;
-  let topBound = Infinity;
-  let bottomBound = 0;
-
-  for (const rect of rects) {
-    const rectLeft = rect.x - rect.distLeft;
+): FloatingImageZone[] {
+  return rects.map((rect) => {
     const rectRight = rect.x + rect.width + rect.distRight;
     const rectTop = rect.y - rect.distTop;
     const rectBottom = rect.y + rect.height + rect.distBottom;
 
+    let leftMargin = 0;
+    let rightMargin = 0;
+
     if (rect.side === 'left') {
-      leftExtent = Math.max(leftExtent, rectRight);
+      leftMargin = rectRight;
     } else {
-      rightExtent = Math.max(rightExtent, contentWidth - rectLeft);
+      rightMargin = contentWidth - (rect.x - rect.distLeft);
     }
 
-    topBound = Math.min(topBound, rectTop);
-    bottomBound = Math.max(bottomBound, rectBottom);
-  }
-
-  // Create a single exclusion zone that covers all floating images
-  if (leftExtent > 0 || rightExtent > 0) {
-    result.push({
-      leftMargin: leftExtent,
-      rightMargin: rightExtent,
-      topY: topBound === Infinity ? 0 : topBound,
-      bottomY: bottomBound,
-    });
-  }
-
-  return result;
+    return { leftMargin, rightMargin, topY: rectTop, bottomY: rectBottom };
+  });
 }
 
 /**
@@ -772,8 +755,9 @@ export function renderPage(
     }
   }
 
-  // PHASE 2: Calculate exclusion zones from floating objects
-  const exclusionZones = calculateExclusionZones(floatingRects, contentWidth);
+  // PHASE 2: Convert floating rects to per-image measurement zones
+  const floatingZones: FloatingImageZone[] =
+    floatingRects.length > 0 ? rectsToFloatingZones(floatingRects, contentWidth) : [];
 
   // PHASE 3: Render floating images in a page-level layer
   if (allFloatingImages.length > 0) {
@@ -821,14 +805,22 @@ export function renderPage(
           renderedInlineImageKeysByBlock.set(blockKey, renderedInlineImageKeys);
         }
 
+        // Re-measure paragraph with floating zones for text wrapping
+        let paragraphMeasure = blockData.measure as ParagraphMeasure;
+        if (floatingZones.length > 0) {
+          paragraphMeasure = measureParagraph(paragraphBlock, contentWidth, {
+            floatingZones,
+            paragraphYOffset: fragmentContentY,
+          });
+        }
+
         fragmentEl = renderParagraphFragment(
           fragment as ParagraphFragment,
           paragraphBlock,
-          blockData.measure as ParagraphMeasure,
+          paragraphMeasure,
           fragmentContext,
           {
             document: doc,
-            floatingImageInfo: exclusionZones.length > 0 ? exclusionZones : undefined,
             fragmentContentY: fragmentContentY,
             prevBorders: prevParagraphBorders,
             nextBorders,

@@ -17,9 +17,12 @@ import type {
   ParagraphBlock,
   ParagraphMeasure,
   ParagraphFragment,
+  ImageRun,
 } from '../layout-engine/types';
 import type { RenderContext } from './renderPage';
+import { isFloatingImageRun } from './renderPage';
 import { renderParagraphFragment } from './renderParagraph';
+import { measureParagraph, type FloatingImageZone } from '../layout-bridge/measuring';
 
 /**
  * CSS class names for table elements
@@ -43,6 +46,116 @@ export interface RenderTableFragmentOptions {
 }
 
 /**
+ * EMU to pixels conversion for floating image positioning
+ */
+function emuToPixels(emu: number | undefined): number {
+  if (emu === undefined) return 0;
+  return Math.round((emu * 96) / 914400);
+}
+
+/** Info about a floating image extracted from a cell paragraph */
+interface CellFloatingImage {
+  src: string;
+  width: number;
+  height: number;
+  alt?: string;
+  transform?: string;
+  x: number;
+  y: number;
+  side: 'left' | 'right';
+  distTop: number;
+  distBottom: number;
+  distLeft: number;
+  distRight: number;
+  pmStart?: number;
+  pmEnd?: number;
+}
+
+/**
+ * Extract floating images from cell paragraphs and compute their positions
+ * relative to the cell content area.
+ */
+function extractCellFloatingImages(cell: TableCell, contentWidth: number): CellFloatingImage[] {
+  const result: CellFloatingImage[] = [];
+  let paragraphY = 0;
+
+  for (const block of cell.blocks) {
+    if (block.kind !== 'paragraph') continue;
+    const pBlock = block as ParagraphBlock;
+
+    for (const run of pBlock.runs) {
+      if (run.kind !== 'image') continue;
+      const imgRun = run as ImageRun;
+      if (!isFloatingImageRun(imgRun)) continue;
+
+      const position = imgRun.position;
+      const distTop = imgRun.distTop ?? 0;
+      const distBottom = imgRun.distBottom ?? 0;
+      const distLeft = imgRun.distLeft ?? 12;
+      const distRight = imgRun.distRight ?? 12;
+
+      // Horizontal position within cell
+      let side: 'left' | 'right' = 'left';
+      let x = 0;
+
+      if (position?.horizontal) {
+        const h = position.horizontal;
+        if (h.align === 'right') {
+          side = 'right';
+          x = contentWidth - imgRun.width;
+        } else if (h.align === 'left') {
+          x = 0;
+        } else if (h.align === 'center') {
+          x = (contentWidth - imgRun.width) / 2;
+        } else if (h.posOffset !== undefined) {
+          x = emuToPixels(h.posOffset);
+          side = x > contentWidth / 2 ? 'right' : 'left';
+        }
+      } else if (imgRun.cssFloat === 'right') {
+        side = 'right';
+        x = contentWidth - imgRun.width;
+      }
+
+      // Vertical position within cell
+      let y = paragraphY;
+      if (position?.vertical) {
+        const v = position.vertical;
+        if (v.posOffset !== undefined) {
+          y = paragraphY + emuToPixels(v.posOffset);
+        } else if (v.align === 'top') {
+          y = 0;
+        }
+      }
+
+      // Clamp within cell bounds
+      x = Math.max(0, Math.min(x, contentWidth - imgRun.width));
+
+      result.push({
+        src: imgRun.src,
+        width: imgRun.width,
+        height: imgRun.height,
+        alt: imgRun.alt,
+        transform: imgRun.transform,
+        x,
+        y,
+        side,
+        distTop,
+        distBottom,
+        distLeft,
+        distRight,
+        pmStart: imgRun.pmStart,
+        pmEnd: imgRun.pmEnd,
+      });
+    }
+
+    // Advance paragraph Y for next block (rough estimate — use existing measure if available)
+    paragraphY += 20; // Will be overridden by actual measurement during rendering
+  }
+
+  return result;
+}
+
+/**
  * Render cell content (paragraphs and nested tables)
  */
 function renderCellContent(
@@ -62,13 +175,79 @@ function renderCellContent(
   const contentWidth = Math.max(0, cellMeasure.width - padLeft - padRight);
   contentEl.style.width = `${contentWidth}px`;
 
+  // Extract floating images from cell paragraphs
+  const cellFloatingImages = extractCellFloatingImages(cell, contentWidth);
+
+  // Build floating zones for measurement and render floating layer
+  let floatingZones: FloatingImageZone[] | undefined;
+  if (cellFloatingImages.length > 0) {
+    floatingZones = cellFloatingImages.map((img) => {
+      const rectRight = img.x + img.width + img.distRight;
+      const rectTop = img.y - img.distTop;
+      const rectBottom = img.y + img.height + img.distBottom;
+
+      let leftMargin = 0;
+      let rightMargin = 0;
+      if (img.side === 'left') {
+        leftMargin = rectRight;
+      } else {
+        rightMargin = contentWidth - (img.x - img.distLeft);
+      }
+      return { leftMargin, rightMargin, topY: rectTop, bottomY: rectBottom };
+    });
+
+    // Render floating image layer within the cell
+    const floatingLayer = doc.createElement('div');
+    floatingLayer.className = 'layout-cell-floating-images-layer';
+    floatingLayer.style.position = 'absolute';
+    floatingLayer.style.top = '0';
+    floatingLayer.style.left = '0';
+    floatingLayer.style.width = '100%';
+    floatingLayer.style.height = '100%';
+    floatingLayer.style.pointerEvents = 'none';
+    floatingLayer.style.zIndex = '10';
+    floatingLayer.style.overflow = 'hidden';
+
+    for (const img of cellFloatingImages) {
+      const imgContainer = doc.createElement('div');
+      imgContainer.className = 'layout-cell-floating-image';
+      imgContainer.style.position = 'absolute';
+      imgContainer.style.left = `${img.x}px`;
+      imgContainer.style.top = `${img.y}px`;
+      imgContainer.style.pointerEvents = 'auto';
+      if (img.pmStart !== undefined) imgContainer.dataset.pmStart = String(img.pmStart);
+      if (img.pmEnd !== undefined) imgContainer.dataset.pmEnd = String(img.pmEnd);
+
+      const imgEl = doc.createElement('img');
+      imgEl.src = img.src;
+      imgEl.style.width = `${img.width}px`;
+      imgEl.style.height = `${img.height}px`;
+      imgEl.style.display = 'block';
+      if (img.alt) imgEl.alt = img.alt;
+      if (img.transform) imgEl.style.transform = img.transform;
+      imgContainer.appendChild(imgEl);
+      floatingLayer.appendChild(imgContainer);
+    }
+
+    contentEl.appendChild(floatingLayer);
+  }
+
+  let cumulativeY = 0;
   for (let i = 0; i < cell.blocks.length; i++) {
     const block = cell.blocks[i];
     const measure = cellMeasure.blocks[i];
 
     if (block?.kind === 'paragraph' && measure?.kind === 'paragraph') {
       const paragraphBlock = block as ParagraphBlock;
-      const paragraphMeasure = measure as ParagraphMeasure;
+      let paragraphMeasure = measure as ParagraphMeasure;
+
+      // Re-measure with floating zones if floating images exist in this cell
+      if (floatingZones && floatingZones.length > 0) {
+        paragraphMeasure = measureParagraph(paragraphBlock, contentWidth, {
+          floatingZones,
+          paragraphYOffset: cumulativeY,
+        });
+      }
 
       // Create synthetic fragment for the paragraph
       const syntheticFragment: ParagraphFragment = {
@@ -95,6 +274,7 @@ function renderCellContent(
 
       fragEl.style.position = 'relative';
       contentEl.appendChild(fragEl);
+      cumulativeY += paragraphMeasure.totalHeight;
     } else if (block?.kind === 'table' && measure?.kind === 'table') {
       // Nested table - render in normal document flow.
       // Avoid cumulative marginTop offsets here: cell content already flows vertically,
@@ -105,6 +285,7 @@ function renderCellContent(
       const nestedTableEl = renderNestedTable(tableBlock, tableMeasure, context, doc);
       nestedTableEl.style.position = 'relative';
       contentEl.appendChild(nestedTableEl);
+      cumulativeY += (measure as TableMeasure).totalHeight ?? 0;
     }
   }
 

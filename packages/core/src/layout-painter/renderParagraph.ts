@@ -57,11 +57,9 @@ export interface FloatingImageInfo {
   bottomY: number;
 }
 
-// NOTE: Per-line floating margin calculation has been disabled.
-// Text wrapping around floating images requires passing exclusion zones
-// to the MEASUREMENT phase so lines can be broken at reduced widths.
-// Currently, floating images render at page level and text flows under them.
-// TODO: Implement measurement-time floating image support for proper text wrapping.
+// Text wrapping around floating images is implemented via measurement-time
+// per-line leftOffset/rightOffset. renderPage.ts re-measures paragraphs with
+// FloatingImageZone[] when floating images are present on the page.
 
 /**
  * Options for rendering a paragraph
@@ -69,8 +67,6 @@ export interface FloatingImageInfo {
 export interface RenderParagraphOptions {
   /** Document to create elements in */
   document?: Document;
-  /** Page-level floating image info for text wrapping (exclusion zones) */
-  floatingImageInfo?: FloatingImageInfo[];
   /** Fragment's Y position relative to content area (for per-line margin calculation) */
   fragmentContentY?: number;
   /** Borders from the previous adjacent paragraph (for border grouping) */
@@ -688,17 +684,8 @@ export function renderLine(
   const hasHighlight = runsForLine.some((r) => isTextRun(r) && r.highlight);
   lineEl.style.overflow = hasHighlight ? 'hidden' : 'visible';
 
-  // NOTE: Per-line floating image margins are NOT applied here because:
-  // 1. Text was already measured and line-broken at full paragraph width
-  // 2. Applying margins at render time would push content without re-wrapping
-  // 3. This causes text overflow and paragraph overlapping
-  //
-  // Proper text wrapping around floating images requires:
-  // - Passing floating image info to measureParagraph
-  // - Re-calculating line widths based on vertical overlap
-  // - This is a significant architectural change (TODO)
-  //
-  // For now, floating images render at page level and text flows under them.
+  // Per-line floating margins (leftOffset/rightOffset) are now applied by
+  // renderParagraphFragment via MeasuredLine offsets from re-measurement.
 
   // Build tab context if we have tab runs - also create for text measurement
   const hasTabRuns = runsForLine.some(isTabRun);
