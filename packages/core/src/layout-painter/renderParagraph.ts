@@ -1091,7 +1091,6 @@ export function renderParagraphFragment(
       const constrainedWidth = lineAvailableWidth - lineLeftOffset - lineRightOffset;
       if (constrainedWidth > 0) {
         lineEl.style.width = `${constrainedWidth}px`;
-        lineEl.style.overflow = 'hidden';
       }
     }
 
