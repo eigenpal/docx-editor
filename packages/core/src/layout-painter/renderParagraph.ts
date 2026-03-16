@@ -1093,11 +1093,20 @@ export function renderParagraphFragment(
     });
 
     // Apply left offset from floating images (lines start after the floating image)
-    if (lineLeftOffset > 0) {
-      lineEl.style.marginLeft = `${lineLeftOffset}px`;
-    }
-    if (lineRightOffset > 0) {
-      lineEl.style.marginRight = `${lineRightOffset}px`;
+    // Also constrain width so text doesn't overflow into the image area
+    if (lineLeftOffset > 0 || lineRightOffset > 0) {
+      if (lineLeftOffset > 0) {
+        lineEl.style.marginLeft = `${lineLeftOffset}px`;
+      }
+      if (lineRightOffset > 0) {
+        lineEl.style.marginRight = `${lineRightOffset}px`;
+      }
+      // Constrain line width to prevent text from extending into floating image area
+      const constrainedWidth = lineAvailableWidth - lineLeftOffset - lineRightOffset;
+      if (constrainedWidth > 0) {
+        lineEl.style.width = `${constrainedWidth}px`;
+        lineEl.style.overflow = 'hidden';
+      }
     }
 
     // Update cumulative Y for next line

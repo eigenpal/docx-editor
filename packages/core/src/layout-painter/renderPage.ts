@@ -430,11 +430,7 @@ function rectsToFloatingZones(
 
     const wt = rect.wrapText ?? 'bothSides';
 
-    if (rect.wrapType === 'topAndBottom') {
-      // No text beside the image — full width exclusion forces line skip
-      leftMargin = contentWidth;
-      rightMargin = 0;
-    } else if (wt === 'right') {
+    if (wt === 'right') {
       // Text flows on RIGHT only → image blocks the left side
       leftMargin = rectRight;
     } else if (wt === 'left') {
@@ -747,29 +743,8 @@ export function renderPage(
         );
         allFloatingImages.push(...extracted);
 
-        // Also collect topAndBottom images as exclusion zones (they're block images
-        // handled by measureParagraph, but need cross-paragraph exclusion zones)
-        for (const run of paragraphBlock.runs) {
-          if (run.kind !== 'image') continue;
-          const imgRun = run as ImageRun;
-          if (imgRun.wrapType !== 'topAndBottom') continue;
-          const imgX = imgRun.position?.horizontal?.posOffset
-            ? emuToPixels(imgRun.position.horizontal.posOffset)
-            : 0;
-          const imgY = contentRelativeY;
-          floatingRects.push({
-            side: 'left',
-            x: imgX,
-            y: imgY,
-            width: imgRun.width,
-            height: imgRun.height,
-            distTop: imgRun.distTop ?? 0,
-            distBottom: imgRun.distBottom ?? 0,
-            distLeft: imgRun.distLeft ?? 0,
-            distRight: imgRun.distRight ?? 0,
-            wrapType: 'topAndBottom',
-          });
-        }
+        // Note: topAndBottom images are handled by measureParagraph as block images
+        // (they get their own line). No exclusion zones needed for them.
       }
     }
   }
