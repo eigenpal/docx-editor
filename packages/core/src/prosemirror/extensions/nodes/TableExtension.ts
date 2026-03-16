@@ -154,6 +154,25 @@ function parseCssColorToHex(cssColor: string): string | undefined {
   return parseCssColorToColorValue(cssColor)?.rgb;
 }
 
+/** Shared parseDOM getAttrs for td/th — extracts borders, padding, alignment from CSS. */
+function parseCellAttrsFromDOM(element: HTMLTableCellElement): TableCellAttrs {
+  const style = element.style;
+  const borders = extractCellBordersFromCSS(style);
+  const margins = extractCellMarginsFromCSS(style);
+  return {
+    colspan: element.colSpan || 1,
+    rowspan: element.rowSpan || 1,
+    verticalAlign:
+      (element.dataset.valign as TableCellAttrs['verticalAlign']) ||
+      mapCssVerticalAlign(style.verticalAlign) ||
+      undefined,
+    backgroundColor:
+      element.dataset.bgcolor || parseCssColorToHex(style.backgroundColor) || undefined,
+    borders: borders || undefined,
+    margins: margins || undefined,
+  };
+}
+
 // ============================================================================
 // TABLE NODE SPECS
 // ============================================================================
@@ -383,24 +402,7 @@ const tableCellSpec: NodeSpec = {
   parseDOM: [
     {
       tag: 'td',
-      getAttrs(dom): TableCellAttrs {
-        const element = dom as HTMLTableCellElement;
-        const style = element.style;
-        const borders = extractCellBordersFromCSS(style);
-        const margins = extractCellMarginsFromCSS(style);
-        return {
-          colspan: element.colSpan || 1,
-          rowspan: element.rowSpan || 1,
-          verticalAlign:
-            (element.dataset.valign as TableCellAttrs['verticalAlign']) ||
-            mapCssVerticalAlign(style.verticalAlign) ||
-            undefined,
-          backgroundColor:
-            element.dataset.bgcolor || parseCssColorToHex(style.backgroundColor) || undefined,
-          borders: borders || undefined,
-          margins: margins || undefined,
-        };
-      },
+      getAttrs: (dom) => parseCellAttrsFromDOM(dom as HTMLTableCellElement),
     },
   ],
   toDOM(node) {
@@ -458,24 +460,7 @@ const tableHeaderSpec: NodeSpec = {
   parseDOM: [
     {
       tag: 'th',
-      getAttrs(dom): TableCellAttrs {
-        const element = dom as HTMLTableCellElement;
-        const style = element.style;
-        const borders = extractCellBordersFromCSS(style);
-        const margins = extractCellMarginsFromCSS(style);
-        return {
-          colspan: element.colSpan || 1,
-          rowspan: element.rowSpan || 1,
-          verticalAlign:
-            (element.dataset.valign as TableCellAttrs['verticalAlign']) ||
-            mapCssVerticalAlign(style.verticalAlign) ||
-            undefined,
-          backgroundColor:
-            element.dataset.bgcolor || parseCssColorToHex(style.backgroundColor) || undefined,
-          borders: borders || undefined,
-          margins: margins || undefined,
-        };
-      },
+      getAttrs: (dom) => parseCellAttrsFromDOM(dom as HTMLTableCellElement),
     },
   ],
   toDOM(node) {
