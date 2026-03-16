@@ -54,7 +54,7 @@
     "tailwindcss-animate": "^1.0.7",
     "tsup": "^8.0.1",
     "typescript": "^5.3.3",
-    "vite": "^7.3.1"
+    "vite": "^8.0.0"
   },
   "keywords": [
     "docx",
