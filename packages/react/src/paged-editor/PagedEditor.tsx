@@ -1532,13 +1532,23 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
           let pageFootnoteMap = new Map<number, number[]>();
           let footnoteContentMap = new Map<number, { displayNumber: number; height: number }>();
 
+          // Common layout options for all passes
+          const bodyBreakType = sectionProperties?.sectionStart as
+            | 'continuous'
+            | 'nextPage'
+            | 'evenPage'
+            | 'oddPage'
+            | undefined;
+          const layoutOpts = {
+            pageSize,
+            margins: effectiveMargins,
+            columns,
+            bodyBreakType,
+          };
+
           if (hasFootnotes) {
             // Pass 1: Layout without footnote space to determine page assignments
-            const pass1Layout = layoutDocument(newBlocks, newMeasures, {
-              pageSize,
-              margins: effectiveMargins,
-              columns,
-            });
+            const pass1Layout = layoutDocument(newBlocks, newMeasures, layoutOpts);
 
             // Map footnote refs to pages
             pageFootnoteMap = mapFootnotesToPages(pass1Layout.pages, footnoteRefs);
@@ -1559,9 +1569,7 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
             // Pass 2: Layout with reserved heights
             if (footnoteReservedHeights.size > 0) {
               newLayout = layoutDocument(newBlocks, newMeasures, {
-                pageSize,
-                margins: effectiveMargins,
-                columns,
+                ...layoutOpts,
                 footnoteReservedHeights,
               });
 
@@ -1580,11 +1588,7 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
             }
           } else {
             // No footnotes — single pass
-            newLayout = layoutDocument(newBlocks, newMeasures, {
-              pageSize,
-              margins: effectiveMargins,
-              columns,
-            });
+            newLayout = layoutDocument(newBlocks, newMeasures, layoutOpts);
           }
 
           stepTime = performance.now() - stepStart;

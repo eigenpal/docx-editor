@@ -145,23 +145,25 @@ export function layoutDocument(
     throw new Error('layoutDocument: page size and margins yield no content area');
   }
 
-  // Pre-scan blocks to build section column configs.
-  // Each section break carries the CURRENT section's properties.
-  // We need to map this into: what columns apply to blocks in each section.
-  // Section 0 → columns from sectionBreak[0]
-  // Section 1 → columns from sectionBreak[1]
-  // ...
-  // Final section → options.columns (body-level)
+  // Pre-scan blocks to build per-section configs.
+  // Each section break carries the CURRENT section's properties (columns, type).
+  // ECMA-376 §17.6.22: w:type specifies how the CURRENT section starts relative
+  // to the previous one. So for the transition at break[N], we need:
+  //   - columns: from break[N+1] (what the next section uses)
+  //   - type: from break[N+1] (how the next section starts)
   const defaultColumns: ColumnLayout = { count: 1, gap: 0 };
   const sectionColumnConfigs: ColumnLayout[] = [];
+  const sectionBreakTypes: (SectionBreakBlock['type'] | undefined)[] = [];
   for (let i = 0; i < blocks.length; i++) {
     if (blocks[i].kind === 'sectionBreak') {
       const sb = blocks[i] as SectionBreakBlock;
       sectionColumnConfigs.push(sb.columns ?? defaultColumns);
+      sectionBreakTypes.push(sb.type);
     }
   }
-  // Final section uses body-level columns
+  // Final section uses body-level columns; its type comes from options
   sectionColumnConfigs.push(options.columns ?? defaultColumns);
+  sectionBreakTypes.push(options.bodyBreakType);
 
   // First section's columns
   const initialColumns =
@@ -246,11 +248,12 @@ export function layoutDocument(
         break;
 
       case 'sectionBreak':
-        // Update paginator to the NEXT section's columns
+        // Use the NEXT section's type and columns for the transition
         handleSectionBreak(
           block as SectionBreakBlock,
           paginator,
-          sectionColumnConfigs[sectionIdx + 1] ?? defaultColumns
+          sectionColumnConfigs[sectionIdx + 1] ?? defaultColumns,
+          sectionBreakTypes[sectionIdx + 1]
         );
         sectionIdx++;
         break;
@@ -654,17 +657,20 @@ function layoutTextBox(
 
 /**
  * Handle a section break block.
- * @param block - The section break block
+ * @param block - The section break block (current section's properties)
  * @param paginator - The paginator instance
- * @param nextSectionColumns - Column layout for the NEXT section (after this break)
+ * @param nextSectionColumns - Column layout for the NEXT section
+ * @param nextSectionType - Break type of the NEXT section (how it starts relative to current)
  */
 function handleSectionBreak(
-  block: SectionBreakBlock,
+  _block: SectionBreakBlock,
   paginator: ReturnType<typeof createPaginator>,
-  nextSectionColumns: ColumnLayout
+  nextSectionColumns: ColumnLayout,
+  nextSectionType?: SectionBreakBlock['type']
 ): void {
-  // ECMA-376 §17.6.22: default section type is 'nextPage' when w:type is absent
-  const breakType = block.type ?? 'nextPage';
+  // ECMA-376 §17.6.22: w:type specifies how the NEXT section starts relative to this one.
+  // Default is 'nextPage' when w:type is absent.
+  const breakType = nextSectionType ?? 'nextPage';
 
   switch (breakType) {
     case 'nextPage':
