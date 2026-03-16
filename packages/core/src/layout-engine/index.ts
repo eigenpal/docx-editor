@@ -247,16 +247,19 @@ export function layoutDocument(
         paginator.forceColumnBreak();
         break;
 
-      case 'sectionBreak':
-        // Use the NEXT section's type and columns for the transition
+      case 'sectionBreak': {
+        // Use the NEXT section's columns; for break type, prefer next section's
+        // type but fall back to current break's type (preserves explicit 'continuous')
+        const nextType = sectionBreakTypes[sectionIdx + 1] ?? sectionBreakTypes[sectionIdx];
         handleSectionBreak(
           block as SectionBreakBlock,
           paginator,
           sectionColumnConfigs[sectionIdx + 1] ?? defaultColumns,
-          sectionBreakTypes[sectionIdx + 1]
+          nextType
         );
         sectionIdx++;
         break;
+      }
     }
   }
 
