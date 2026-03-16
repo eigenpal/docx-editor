@@ -61,13 +61,17 @@ interface PageFloatingImage {
   pmStart?: number;
   /** ProseMirror end position */
   pmEnd?: number;
+  /** OOXML wrapText: which side(s) TEXT flows on */
+  wrapText?: 'bothSides' | 'left' | 'right' | 'largest';
+  /** Wrap type (square, tight, through, topAndBottom) */
+  wrapType?: string;
 }
 
 /**
  * Floating object exclusion rectangle used for text wrapping.
  */
 interface FloatingExclusionRect {
-  /** Which side: 'left' for left margin, 'right' for right margin */
+  /** Which side the IMAGE is on (for rendering): 'left' or 'right' */
   side: 'left' | 'right';
   /** X position relative to content area (0 = left edge of content) */
   x: number;
@@ -81,6 +85,10 @@ interface FloatingExclusionRect {
   distBottom: number;
   distLeft: number;
   distRight: number;
+  /** OOXML wrapText: which side(s) TEXT flows on */
+  wrapText?: 'bothSides' | 'left' | 'right' | 'largest';
+  /** Wrap type from DOCX (square, tight, through, topAndBottom) */
+  wrapType?: string;
 }
 
 /**
@@ -273,7 +281,7 @@ export function isFloatingImageRun(run: ImageRun): boolean {
     return true;
   }
 
-  // Or explicit float display mode
+  // Or explicit float display mode (but not topAndBottom — those are block images)
   if (displayMode === 'float') {
     return true;
   }
@@ -361,6 +369,17 @@ function extractFloatingImagesFromParagraph(
       y = fragmentY;
     }
 
+    // Derive wrapText from cssFloat:
+    // cssFloat='left' → image floats left → text on right → wrapText='right'
+    // cssFloat='right' → image floats right → text on left → wrapText='left'
+    // cssFloat='none' or undefined → wrapText='bothSides' (default)
+    let wrapText: 'bothSides' | 'left' | 'right' | 'largest' = 'bothSides';
+    if (imgRun.cssFloat === 'left') {
+      wrapText = 'right';
+    } else if (imgRun.cssFloat === 'right') {
+      wrapText = 'left';
+    }
+
     floatingImages.push({
       src: imgRun.src,
       width: imgRun.width,
@@ -376,6 +395,8 @@ function extractFloatingImagesFromParagraph(
       distRight,
       pmStart: imgRun.pmStart,
       pmEnd: imgRun.pmEnd,
+      wrapText,
+      wrapType: imgRun.wrapType,
     });
   }
 
@@ -386,6 +407,14 @@ function extractFloatingImagesFromParagraph(
  * Convert floating exclusion rectangles to per-image FloatingImageZone[]
  * for the measurement system. Each rect becomes its own zone so
  * lines at different Y positions get independently correct widths.
+ *
+ * wrapText controls which side(s) TEXT flows on:
+ *   'right'    → text only on right → image blocks left side (leftMargin)
+ *   'left'     → text only on left  → image blocks right side (rightMargin)
+ *   'bothSides'→ text on right of left-side images, left of right-side images
+ *   'largest'  → same as bothSides (simplified)
+ *
+ * topAndBottom → full-width exclusion (leftMargin = contentWidth → forces line skip)
  */
 function rectsToFloatingZones(
   rects: FloatingExclusionRect[],
@@ -399,10 +428,25 @@ function rectsToFloatingZones(
     let leftMargin = 0;
     let rightMargin = 0;
 
-    if (rect.side === 'left') {
+    const wt = rect.wrapText ?? 'bothSides';
+
+    if (rect.wrapType === 'topAndBottom') {
+      // No text beside the image — full width exclusion forces line skip
+      leftMargin = contentWidth;
+      rightMargin = 0;
+    } else if (wt === 'right') {
+      // Text flows on RIGHT only → image blocks the left side
       leftMargin = rectRight;
-    } else {
+    } else if (wt === 'left') {
+      // Text flows on LEFT only → image blocks the right side
       rightMargin = contentWidth - (rect.x - rect.distLeft);
+    } else {
+      // bothSides / largest: use image position to determine which side it blocks
+      if (rect.side === 'left') {
+        leftMargin = rectRight;
+      } else {
+        rightMargin = contentWidth - (rect.x - rect.distLeft);
+      }
     }
 
     return { leftMargin, rightMargin, topY: rectTop, bottomY: rectBottom };
@@ -702,6 +746,30 @@ export function renderPage(
           contentWidth
         );
         allFloatingImages.push(...extracted);
+
+        // Also collect topAndBottom images as exclusion zones (they're block images
+        // handled by measureParagraph, but need cross-paragraph exclusion zones)
+        for (const run of paragraphBlock.runs) {
+          if (run.kind !== 'image') continue;
+          const imgRun = run as ImageRun;
+          if (imgRun.wrapType !== 'topAndBottom') continue;
+          const imgX = imgRun.position?.horizontal?.posOffset
+            ? emuToPixels(imgRun.position.horizontal.posOffset)
+            : 0;
+          const imgY = contentRelativeY;
+          floatingRects.push({
+            side: 'left',
+            x: imgX,
+            y: imgY,
+            width: imgRun.width,
+            height: imgRun.height,
+            distTop: imgRun.distTop ?? 0,
+            distBottom: imgRun.distBottom ?? 0,
+            distLeft: imgRun.distLeft ?? 0,
+            distRight: imgRun.distRight ?? 0,
+            wrapType: 'topAndBottom',
+          });
+        }
       }
     }
   }
@@ -718,6 +786,8 @@ export function renderPage(
       distBottom: img.distBottom,
       distLeft: img.distLeft,
       distRight: img.distRight,
+      wrapText: img.wrapText,
+      wrapType: img.wrapType,
     });
   }
 
