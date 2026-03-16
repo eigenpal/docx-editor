@@ -42,21 +42,6 @@ export const PARAGRAPH_CLASS_NAMES = {
   lineBreak: 'layout-run-linebreak',
 };
 
-/**
- * Info about page-level floating images that affect text layout.
- * Passed from renderPage to renderParagraph to apply proper margins.
- */
-export interface FloatingImageInfo {
-  /** Left margin to reserve for floating images (pixels) */
-  leftMargin: number;
-  /** Right margin to reserve for floating images (pixels) */
-  rightMargin: number;
-  /** Top Y position where this zone starts (content-relative) */
-  topY: number;
-  /** Bottom Y position where this zone ends (content-relative) */
-  bottomY: number;
-}
-
 // Text wrapping around floating images is implemented via measurement-time
 // per-line leftOffset/rightOffset. renderPage.ts re-measures paragraphs with
 // FloatingImageZone[] when floating images are present on the page.

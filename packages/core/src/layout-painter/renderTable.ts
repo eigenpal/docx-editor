@@ -20,7 +20,7 @@ import type {
   ImageRun,
 } from '../layout-engine/types';
 import type { RenderContext } from './renderPage';
-import { isFloatingImageRun } from './renderPage';
+import { isFloatingImageRun, emuToPixels } from './renderPage';
 import { renderParagraphFragment } from './renderParagraph';
 import { measureParagraph, type FloatingImageZone } from '../layout-bridge/measuring';
 
@@ -45,14 +45,6 @@ export interface RenderTableFragmentOptions {
   document?: Document;
 }
 
-/**
- * EMU to pixels conversion for floating image positioning
- */
-function emuToPixels(emu: number | undefined): number {
-  if (emu === undefined) return 0;
-  return Math.round((emu * 96) / 914400);
-}
-
 /** Info about a floating image extracted from a cell paragraph */
 interface CellFloatingImage {
   src: string;
@@ -67,6 +59,8 @@ interface CellFloatingImage {
   distBottom: number;
   distLeft: number;
   distRight: number;
+  /** OOXML wrapText: which side(s) TEXT flows on */
+  wrapText?: 'bothSides' | 'left' | 'right' | 'largest';
   pmStart?: number;
   pmEnd?: number;
 }
@@ -74,13 +68,29 @@ interface CellFloatingImage {
 /**
  * Extract floating images from cell paragraphs and compute their positions
  * relative to the cell content area.
+ *
+ * NOTE: The horizontal/vertical position logic here mirrors
+ * extractFloatingImagesFromParagraph() in renderPage.ts. Kept separate
+ * because the coordinate systems differ (cell-relative vs page-relative).
  */
-function extractCellFloatingImages(cell: TableCell, contentWidth: number): CellFloatingImage[] {
+function extractCellFloatingImages(
+  cell: TableCell,
+  cellMeasure: TableCellMeasure,
+  contentWidth: number
+): CellFloatingImage[] {
   const result: CellFloatingImage[] = [];
   let paragraphY = 0;
 
-  for (const block of cell.blocks) {
-    if (block.kind !== 'paragraph') continue;
+  for (let blockIndex = 0; blockIndex < cell.blocks.length; blockIndex++) {
+    const block = cell.blocks[blockIndex];
+    if (block?.kind !== 'paragraph') {
+      // Use actual measured height for Y tracking
+      const blockMeasure = cellMeasure.blocks[blockIndex];
+      if (blockMeasure && blockMeasure.kind === 'table') {
+        paragraphY += (blockMeasure as TableMeasure).totalHeight ?? 0;
+      }
+      continue;
+    }
     const pBlock = block as ParagraphBlock;
 
     for (const run of pBlock.runs) {
@@ -130,6 +140,16 @@ function extractCellFloatingImages(cell: TableCell, contentWidth: number): CellF
       // Clamp within cell bounds
       x = Math.max(0, Math.min(x, contentWidth - imgRun.width));
 
+      // Derive wrapText from cssFloat (same pattern as page-level):
+      // cssFloat='left' → image floats left → text on right → wrapText='right'
+      // cssFloat='right' → image floats right → text on left → wrapText='left'
+      let wrapText: 'bothSides' | 'left' | 'right' | 'largest' = 'bothSides';
+      if (imgRun.cssFloat === 'left') {
+        wrapText = 'right';
+      } else if (imgRun.cssFloat === 'right') {
+        wrapText = 'left';
+      }
+
       result.push({
         src: imgRun.src,
         width: imgRun.width,
@@ -143,13 +163,17 @@ function extractCellFloatingImages(cell: TableCell, contentWidth: number): CellF
         distBottom,
         distLeft,
         distRight,
+        wrapText,
         pmStart: imgRun.pmStart,
         pmEnd: imgRun.pmEnd,
       });
     }
 
-    // Advance paragraph Y for next block (rough estimate — use existing measure if available)
-    paragraphY += 20; // Will be overridden by actual measurement during rendering
+    // Use actual measured height for Y tracking
+    const blockMeasure = cellMeasure.blocks[blockIndex];
+    if (blockMeasure && blockMeasure.kind === 'paragraph') {
+      paragraphY += (blockMeasure as ParagraphMeasure).totalHeight;
+    }
   }
 
   return result;
@@ -176,7 +200,7 @@ function renderCellContent(
   contentEl.style.width = `${contentWidth}px`;
 
   // Extract floating images from cell paragraphs
-  const cellFloatingImages = extractCellFloatingImages(cell, contentWidth);
+  const cellFloatingImages = extractCellFloatingImages(cell, cellMeasure, contentWidth);
 
   // Build floating zones for measurement and render floating layer
   let floatingZones: FloatingImageZone[] | undefined;
@@ -188,10 +212,21 @@ function renderCellContent(
 
       let leftMargin = 0;
       let rightMargin = 0;
-      if (img.side === 'left') {
+      // Use wrapText to determine which side text flows on (same as rectsToFloatingZones in renderPage.ts)
+      const wt = img.wrapText ?? 'bothSides';
+      if (wt === 'right') {
+        // Text flows on RIGHT only -> image blocks the left side
         leftMargin = rectRight;
-      } else {
+      } else if (wt === 'left') {
+        // Text flows on LEFT only -> image blocks the right side
         rightMargin = contentWidth - (img.x - img.distLeft);
+      } else {
+        // bothSides / largest: use image position to determine which side it blocks
+        if (img.side === 'left') {
+          leftMargin = rectRight;
+        } else {
+          rightMargin = contentWidth - (img.x - img.distLeft);
+        }
       }
       return { leftMargin, rightMargin, topY: rectTop, bottomY: rectBottom };
     });

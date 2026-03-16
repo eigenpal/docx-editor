@@ -264,7 +264,7 @@ function applyFragmentStyles(
 /**
  * EMU to pixels conversion for floating image positioning
  */
-function emuToPixels(emu: number | undefined): number {
+export function emuToPixels(emu: number | undefined): number {
   if (emu === undefined) return 0;
   return Math.round((emu * 96) / 914400);
 }
