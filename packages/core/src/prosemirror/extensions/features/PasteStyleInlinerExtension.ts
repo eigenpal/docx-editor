@@ -134,27 +134,54 @@ function inlineStylesFromStyleBlocks(doc: Document): void {
 }
 
 /**
- * Transform pasted HTML by inlining class-based CSS from <style> blocks.
+ * Google Docs wraps ALL clipboard content in a structural <b> tag:
+ *   <b id="docs-internal-guid-XXXXX" style="font-weight:normal;">...content...</b>
+ *
+ * This is NOT a bold formatting tag — it is a container for Google Docs' internal
+ * tracking GUID. The actual bold status is on <span> elements via font-weight CSS.
+ *
+ * This function detects such wrappers and replaces them with their child nodes,
+ * preventing ProseMirror's BoldExtension parseDOM from applying bold to all content.
+ */
+function unwrapGoogleDocsStructuralB(doc: Document): void {
+  const structuralBs = doc.body.querySelectorAll('b[id^="docs-internal-guid-"]');
+  for (const b of structuralBs) {
+    const parent = b.parentNode;
+    if (!parent) continue;
+    while (b.firstChild) {
+      parent.insertBefore(b.firstChild, b);
+    }
+    parent.removeChild(b);
+  }
+}
+
+/**
+ * Transform pasted HTML by inlining class-based CSS and unwrapping Google Docs wrappers.
  */
 function transformPastedHTML(html: string): string {
-  // Quick check: if there's no <style> block, no work needed
-  if (!html.includes('<style')) return html;
+  const hasStyleBlock = html.includes('<style');
+  const hasGoogleDocsWrapper = html.includes('docs-internal-guid-');
+
+  if (!hasStyleBlock && !hasGoogleDocsWrapper) return html;
 
   try {
     const parser = new DOMParser();
     const doc = parser.parseFromString(html, 'text/html');
 
-    inlineStylesFromStyleBlocks(doc);
+    if (hasStyleBlock) {
+      inlineStylesFromStyleBlocks(doc);
+      const styleElements = doc.querySelectorAll('style');
+      for (const el of styleElements) {
+        el.remove();
+      }
+    }
 
-    // Remove the <style> elements to keep the HTML clean
-    const styleElements = doc.querySelectorAll('style');
-    for (const el of styleElements) {
-      el.remove();
+    if (hasGoogleDocsWrapper) {
+      unwrapGoogleDocsStructuralB(doc);
     }
 
     return doc.body.innerHTML;
   } catch {
-    // If parsing fails, return the original HTML unchanged
     return html;
   }
 }
