@@ -21,7 +21,7 @@ import type {
   FieldRun,
   TabStop,
 } from '../layout-engine/types';
-import type { RenderContext } from './renderPage';
+import { isFloatingImageRun, type RenderContext } from './renderPage';
 import {
   calculateTabWidth,
   type TabContext,
@@ -387,14 +387,11 @@ function renderBlockImage(run: ImageRun, doc: Document): HTMLElement {
  * not through this function. If they reach here, render as block.
  */
 function renderImageRun(run: ImageRun, doc: Document): HTMLElement {
-  const displayMode = run.displayMode;
-  const wrapType = run.wrapType;
-
   // Floating images should be handled at paragraph level, not here
-  // If they reach here (e.g., during line rendering), render as block
-  if (displayMode === 'float' || (wrapType && ['square', 'tight', 'through'].includes(wrapType))) {
+  // If they reach here (e.g., inside table cells), render as block
+  if (isFloatingImageRun(run)) {
     return renderBlockImage(run, doc);
-  } else if (displayMode === 'block' || wrapType === 'topAndBottom') {
+  } else if (run.displayMode === 'block' || run.wrapType === 'topAndBottom') {
     return renderBlockImage(run, doc);
   } else {
     // Default: inline
@@ -786,11 +783,10 @@ export function renderLine(
       const fontFamily = run.fontFamily || 'Calibri';
       currentX += measureText(run.text, fontSize, fontFamily);
     } else if (isImageRun(run)) {
-      // Skip floating images - they're rendered separately at paragraph level
-      const isFloating =
-        run.displayMode === 'float' ||
-        (run.wrapType && ['square', 'tight', 'through'].includes(run.wrapType));
-      if (isFloating) {
+      // Skip floating images - they're rendered separately at page level.
+      // Exception: inside table cells, floating images must render in-flow
+      // because page-level extraction doesn't reach into cell paragraphs.
+      if (isFloatingImageRun(run) && !options?.context?.insideTableCell) {
         continue;
       }
       const imageKey = getInlineImageRunKey(run);
@@ -894,21 +890,9 @@ export function renderParagraphFragment(
   // Text wrapping around floating images is handled at measurement time via
   // per-line leftOffset/rightOffset in MeasuredLine. Floating images themselves
   // skip inline rendering - they're rendered at page level.
-  for (const run of block.runs) {
-    if (isImageRun(run)) {
-      const isFloating =
-        run.displayMode === 'float' ||
-        (run.wrapType && ['square', 'tight', 'through'].includes(run.wrapType));
-      if (isFloating) {
-        // Skip floating images - they're rendered at page level
-        continue;
-      }
-    }
-  }
-
-  // NOTE: Floating images are no longer rendered here - they're rendered
-  // at page level in renderPage.ts for proper cross-paragraph positioning
-  // Per-line margins are calculated below during line rendering
+  // NOTE: Floating images are rendered at page level in renderPage.ts for
+  // cross-paragraph positioning. Inside table cells, they render in-flow
+  // since page-level extraction doesn't reach into cell paragraphs.
 
   // Get the lines for this fragment
   const lines = measure.lines.slice(fragment.fromLine, fragment.toLine);

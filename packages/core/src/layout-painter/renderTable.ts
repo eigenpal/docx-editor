@@ -84,11 +84,12 @@ function renderCellContent(
         pmEnd: paragraphBlock.pmEnd,
       };
 
+      const cellContext = { ...context, insideTableCell: true as const };
       const fragEl = renderParagraphFragment(
         syntheticFragment,
         paragraphBlock,
         paragraphMeasure,
-        context,
+        cellContext,
         { document: doc }
       );
 

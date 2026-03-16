@@ -104,6 +104,8 @@ export interface RenderContext {
   section: 'body' | 'header' | 'footer';
   /** Content width in pixels (page width minus margins) - used for justify */
   contentWidth?: number;
+  /** When true, floating images render in-flow instead of being skipped (for table cells) */
+  insideTableCell?: boolean;
 }
 
 /**
@@ -261,7 +263,7 @@ function emuToPixels(emu: number | undefined): number {
 /**
  * Check if an image run is a floating image (should be positioned at page level)
  */
-function isFloatingImageRun(run: ImageRun): boolean {
+export function isFloatingImageRun(run: ImageRun): boolean {
   const wrapType = run.wrapType;
   const displayMode = run.displayMode;
 
