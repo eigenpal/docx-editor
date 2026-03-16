@@ -478,8 +478,9 @@ function renderFloatingImagesLayer(
 
     const img = doc.createElement('img');
     img.src = floatImg.src;
-    img.width = floatImg.width;
-    img.height = floatImg.height;
+    img.style.width = `${floatImg.width}px`;
+    img.style.height = `${floatImg.height}px`;
+    img.style.display = 'block';
     if (floatImg.alt) img.alt = floatImg.alt;
     if (floatImg.transform) img.style.transform = floatImg.transform;
 
