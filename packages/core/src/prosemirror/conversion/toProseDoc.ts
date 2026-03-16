@@ -304,14 +304,6 @@ function paragraphFormattingToAttrs(
     const resolvedRunProps = resolveTextFormatting(formatting?.runProperties, styleResolver);
     attrs.defaultTextFormatting = mergeTextFormatting(styleRpr, resolvedRunProps);
 
-    // Section break type from paragraph-level section properties
-    if (paragraph.sectionProperties?.sectionStart) {
-      const st = paragraph.sectionProperties.sectionStart;
-      if (st === 'nextPage' || st === 'continuous' || st === 'oddPage' || st === 'evenPage') {
-        attrs.sectionBreakType = st;
-      }
-    }
-
     // If style defines numPr but inline doesn't, use style's numPr
     // numId === 0 means "no numbering" per OOXML spec — skip it
     if (!formatting?.numPr && stylePpr?.numPr && stylePpr.numPr.numId !== 0) {
@@ -347,8 +339,9 @@ function paragraphFormattingToAttrs(
     attrs.defaultTextFormatting = resolveTextFormatting(formatting?.runProperties, styleResolver);
   }
 
-  // Section break type from paragraph-level section properties
-  if (paragraph.sectionProperties?.sectionStart) {
+  // Section break type and full section properties for layout + round-trip
+  if (paragraph.sectionProperties) {
+    attrs._sectionProperties = paragraph.sectionProperties;
     const st = paragraph.sectionProperties.sectionStart;
     if (st === 'nextPage' || st === 'continuous' || st === 'oddPage' || st === 'evenPage') {
       attrs.sectionBreakType = st;

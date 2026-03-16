@@ -59,7 +59,8 @@ function calculateColumnWidth(
  * Creates a paginator for managing page layout state.
  */
 export function createPaginator(options: PaginatorOptions) {
-  const { pageSize, margins, columns = { count: 1, gap: 0 } } = options;
+  const { pageSize, margins } = options;
+  let columns: ColumnLayout = options.columns ?? { count: 1, gap: 0 };
 
   const pages: Page[] = [];
   const states: PageState[] = [];
@@ -74,7 +75,13 @@ export function createPaginator(options: PaginatorOptions) {
   }
 
   // Calculate column width
-  const columnWidth = calculateColumnWidth(pageSize.w, margins.left, margins.right, columns);
+  let columnWidth = calculateColumnWidth(pageSize.w, margins.left, margins.right, columns);
+
+  // Track where column content starts on the current page.
+  // Defaults to topMargin but gets updated when columns change mid-page
+  // (continuous section break). When advanceColumn moves to the next column,
+  // it resets cursorY to this value instead of topMargin.
+  let columnRegionTop = topMargin;
 
   /**
    * Get X position for a given column index.
@@ -99,6 +106,7 @@ export function createPaginator(options: PaginatorOptions) {
       margins: { ...margins },
       size: { ...pageSize },
       footnoteReservedHeight: footnoteHeight > 0 ? footnoteHeight : undefined,
+      columns: columns.count > 1 ? { ...columns } : undefined,
     };
 
     const state: PageState = {
@@ -112,6 +120,9 @@ export function createPaginator(options: PaginatorOptions) {
 
     pages.push(page);
     states.push(state);
+
+    // Reset column region to page top on new page
+    columnRegionTop = topMargin;
 
     if (options.onNewPage) {
       options.onNewPage(state);
@@ -152,7 +163,7 @@ export function createPaginator(options: PaginatorOptions) {
     // Check if there are more columns on this page
     if (state.columnIndex < columns.count - 1) {
       state.columnIndex += 1;
-      state.cursorY = state.topMargin;
+      state.cursorY = columnRegionTop;
       state.trailingSpacing = 0;
       return state;
     }
@@ -243,13 +254,42 @@ export function createPaginator(options: PaginatorOptions) {
     return advanceColumn(state);
   }
 
+  /**
+   * Update column configuration mid-document (for section breaks).
+   * Recalculates column width based on current page/margin dimensions.
+   * Sets columnRegionTop to the current cursor position so that
+   * column advancement stays below existing content (for continuous breaks).
+   */
+  function updateColumns(newColumns: ColumnLayout): void {
+    columns = newColumns;
+    columnWidth = calculateColumnWidth(pageSize.w, margins.left, margins.right, columns);
+
+    // Update current page's column info for rendering
+    const state = getCurrentState();
+    state.page.columns = columns.count > 1 ? { ...columns } : undefined;
+
+    // Set column region top to current cursor position.
+    // This ensures that when advancing columns, new columns start
+    // at the same Y as where the multi-column content began (not page top).
+    columnRegionTop = state.cursorY;
+
+    // Reset to column 0 for the new column layout
+    state.columnIndex = 0;
+  }
+
   return {
     /** All pages created so far. */
     pages,
     /** All page states. */
     states,
-    /** Column width in pixels. */
-    columnWidth,
+    /** Column width in pixels (use getColumnWidth() for current value after updates). */
+    get columnWidth() {
+      return columnWidth;
+    },
+    /** Get current column layout. */
+    get columns() {
+      return columns;
+    },
     /** Get current state. */
     getCurrentState,
     /** Get available height in current column. */
@@ -266,7 +306,9 @@ export function createPaginator(options: PaginatorOptions) {
     forceColumnBreak,
     /** Get X position for column. */
     getColumnX,
-  } as const;
+    /** Update column layout (for section breaks). */
+    updateColumns,
+  };
 }
 
 export type Paginator = ReturnType<typeof createPaginator>;

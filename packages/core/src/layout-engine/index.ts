@@ -10,6 +10,7 @@ import type {
   Layout,
   LayoutOptions,
   PageMargins,
+  ColumnLayout,
   ParagraphBlock,
   ParagraphMeasure,
   ParagraphFragment,
@@ -22,6 +23,7 @@ import type {
   TextBoxBlock,
   TextBoxMeasure,
   TextBoxFragment,
+  SectionBreakBlock,
 } from './types';
 
 import { createPaginator } from './paginator';
@@ -143,11 +145,34 @@ export function layoutDocument(
     throw new Error('layoutDocument: page size and margins yield no content area');
   }
 
-  // Create paginator with effective margins
+  // Pre-scan blocks to build section column configs.
+  // Each section break carries the CURRENT section's properties.
+  // We need to map this into: what columns apply to blocks in each section.
+  // Section 0 → columns from sectionBreak[0]
+  // Section 1 → columns from sectionBreak[1]
+  // ...
+  // Final section → options.columns (body-level)
+  const sectionBreakIndices: number[] = [];
+  const sectionColumnConfigs: ColumnLayout[] = [];
+  for (let i = 0; i < blocks.length; i++) {
+    if (blocks[i].kind === 'sectionBreak') {
+      sectionBreakIndices.push(i);
+      const sb = blocks[i] as SectionBreakBlock;
+      sectionColumnConfigs.push(sb.columns ?? { count: 1, gap: 0 });
+    }
+  }
+  // Final section uses body-level columns
+  sectionColumnConfigs.push(options.columns ?? { count: 1, gap: 0 });
+
+  // First section's columns
+  const initialColumns =
+    sectionColumnConfigs.length > 0 ? sectionColumnConfigs[0] : options.columns;
+
+  // Create paginator with first section's columns
   const paginator = createPaginator({
     pageSize,
     margins,
-    columns: options.columns,
+    columns: initialColumns,
     footnoteReservedHeights: options.footnoteReservedHeights,
   });
 
@@ -220,10 +245,17 @@ export function layoutDocument(
         paginator.forceColumnBreak();
         break;
 
-      case 'sectionBreak':
-        // Handle section break - may force page break depending on type
-        handleSectionBreak(block, paginator);
+      case 'sectionBreak': {
+        // Handle section break - may force page break and update column layout
+        // Look up which section break this is to get the NEXT section's columns
+        const breakIdx = sectionBreakIndices.indexOf(i);
+        const nextSectionColumns =
+          breakIdx >= 0
+            ? sectionColumnConfigs[breakIdx + 1]
+            : (options.columns ?? { count: 1, gap: 0 });
+        handleSectionBreak(block as SectionBreakBlock, paginator, nextSectionColumns);
         break;
+      }
     }
   }
 
@@ -624,12 +656,17 @@ function layoutTextBox(
 
 /**
  * Handle a section break block.
+ * @param block - The section break block
+ * @param paginator - The paginator instance
+ * @param nextSectionColumns - Column layout for the NEXT section (after this break)
  */
 function handleSectionBreak(
-  block: { type?: 'continuous' | 'nextPage' | 'evenPage' | 'oddPage' },
-  paginator: ReturnType<typeof createPaginator>
+  block: SectionBreakBlock,
+  paginator: ReturnType<typeof createPaginator>,
+  nextSectionColumns: ColumnLayout
 ): void {
-  const breakType = block.type ?? 'continuous';
+  // ECMA-376 §17.6.22: default section type is 'nextPage' when w:type is absent
+  const breakType = block.type ?? 'nextPage';
 
   switch (breakType) {
     case 'nextPage':
@@ -658,6 +695,9 @@ function handleSectionBreak(
       // No page break, content continues
       break;
   }
+
+  // Update column layout for the next section
+  paginator.updateColumns(nextSectionColumns);
 }
 
 // Re-export types

@@ -18,6 +18,7 @@ import type {
   TableFormatting,
   TableRowFormatting,
   TableCellFormatting,
+  SectionProperties,
 } from '../../types/document';
 import type { FloatingTableProperties, TableLook } from '../../types';
 
@@ -101,6 +102,10 @@ export interface ParagraphAttrs {
   /** Original inline paragraph formatting from DOCX (pre-style-resolution).
    *  Used by fromProseDoc for lossless round-trip serialization. */
   _originalFormatting?: ParagraphFormatting;
+
+  /** Full section properties for paragraphs that end a section.
+   *  Used by layout engine for per-section column/page config and round-trip. */
+  _sectionProperties?: SectionProperties;
 }
 
 /**

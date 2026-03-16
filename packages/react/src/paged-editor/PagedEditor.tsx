@@ -53,6 +53,7 @@ import type {
   ParagraphAttrs,
   ParagraphBorders,
   TextBoxBlock,
+  SectionBreakBlock,
 } from '@eigenpal/docx-core/layout-engine/types';
 import {
   DEFAULT_TEXTBOX_MARGINS,
@@ -332,7 +333,61 @@ function getColumns(sectionProps: SectionProperties | null | undefined): ColumnL
   if (count <= 1) return undefined;
   // Default column spacing: 720 twips (0.5 inch) per OOXML spec
   const gap = twipsToPixels(sectionProps?.columnSpace ?? 720);
-  return { count, gap, equalWidth: sectionProps?.equalWidth ?? true };
+  return {
+    count,
+    gap,
+    equalWidth: sectionProps?.equalWidth ?? true,
+    separator: sectionProps?.separator,
+  };
+}
+
+/**
+ * Compute per-block measurement widths by scanning for section breaks.
+ * Blocks in multi-column sections must be measured at column width, not full content width.
+ *
+ * OOXML note: Each section break carries the CURRENT section's properties.
+ * Section N's blocks use config from sectionBreak[N].
+ * The final section (after all breaks) uses defaultColumns (body-level).
+ */
+function computePerBlockWidths(
+  blocks: FlowBlock[],
+  defaultContentWidth: number,
+  defaultColumns: ColumnLayout | undefined,
+  _pageSize: { w: number; h: number }
+): number[] {
+  function colWidth(cw: number, cols: ColumnLayout): number {
+    if (cols.count <= 1) return cw;
+    return Math.floor((cw - (cols.count - 1) * cols.gap) / cols.count);
+  }
+
+  // Collect section break indices and their column configs
+  const breakIndices: number[] = [];
+  const sectionConfigs: ColumnLayout[] = [];
+  for (let i = 0; i < blocks.length; i++) {
+    if (blocks[i].kind === 'sectionBreak') {
+      breakIndices.push(i);
+      const sb = blocks[i] as SectionBreakBlock;
+      sectionConfigs.push(sb.columns ?? { count: 1, gap: 0 });
+    }
+  }
+  // Final section uses body-level columns
+  sectionConfigs.push(defaultColumns ?? { count: 1, gap: 0 });
+
+  // Assign widths: section N's blocks use sectionConfigs[N]
+  let sectionIdx = 0;
+  const widths: number[] = [];
+
+  for (let i = 0; i < blocks.length; i++) {
+    const cols = sectionConfigs[sectionIdx];
+    widths.push(colWidth(defaultContentWidth, cols));
+
+    // After this section break, move to next section
+    if (sectionIdx < breakIndices.length && i === breakIndices[sectionIdx]) {
+      sectionIdx++;
+    }
+  }
+
+  return widths;
 }
 
 /**
@@ -757,9 +812,10 @@ function measureBlock(
  * Then measures each block, passing the zones so paragraphs can calculate
  * per-line widths based on vertical overlap with floating images.
  */
-function measureBlocks(blocks: FlowBlock[], contentWidth: number): Measure[] {
+function measureBlocks(blocks: FlowBlock[], contentWidth: number | number[]): Measure[] {
+  const defaultWidth = Array.isArray(contentWidth) ? (contentWidth[0] ?? 0) : contentWidth;
   // Pre-extract floating image exclusion zones with anchor block indices
-  const floatingZonesWithAnchors = extractFloatingZones(blocks, contentWidth);
+  const floatingZonesWithAnchors = extractFloatingZones(blocks, defaultWidth);
 
   // Margin-relative zones (positioned relative to page/margin) on the same vertical
   // position are likely on the same page. Group them and activate all from the earliest
@@ -819,7 +875,10 @@ function measureBlocks(blocks: FlowBlock[], contentWidth: number): Measure[] {
 
     try {
       const blockStart = performance.now();
-      const measure = measureBlock(block, contentWidth, zones, cumulativeY);
+      const blockWidth = Array.isArray(contentWidth)
+        ? (contentWidth[blockIndex] ?? defaultWidth)
+        : contentWidth;
+      const measure = measureBlock(block, blockWidth, zones, cumulativeY);
       const blockTime = performance.now() - blockStart;
       if (blockTime > 500) {
         console.warn(
@@ -1371,10 +1430,6 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
     const margins = useMemo(() => getMargins(sectionProperties), [sectionProperties]);
     const columns = useMemo(() => getColumns(sectionProperties), [sectionProperties]);
     const contentWidth = pageSize.w - margins.left - margins.right;
-    // For multi-column layouts, blocks must be measured at column width, not full content width
-    const measureWidth = columns
-      ? Math.floor((contentWidth - (columns.count - 1) * columns.gap) / columns.count)
-      : contentWidth;
 
     // Initialize painter using useMemo to ensure it's ready before first render callbacks
     const painter = useMemo(() => {
@@ -1429,7 +1484,9 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
           // floating tables/images create exclusion zones that affect
           // neighboring paragraphs' line widths.
           stepStart = performance.now();
-          const newMeasures = measureBlocks(newBlocks, measureWidth);
+          // Compute per-block widths accounting for section breaks with different column configs
+          const blockWidths = computePerBlockWidths(newBlocks, contentWidth, columns, pageSize);
+          const newMeasures = measureBlocks(newBlocks, blockWidths);
           stepTime = performance.now() - stepStart;
           if (stepTime > 1000) {
             console.warn(
@@ -1610,6 +1667,7 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
       },
       [
         contentWidth,
+        columns,
         pageSize,
         margins,
         pageGap,

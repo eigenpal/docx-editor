@@ -129,6 +129,7 @@ const paragraphNodeSpec: NodeSpec = {
     outlineLevel: { default: null },
     bookmarks: { default: null },
     _originalFormatting: { default: null },
+    _sectionProperties: { default: null },
   },
   parseDOM: [
     {

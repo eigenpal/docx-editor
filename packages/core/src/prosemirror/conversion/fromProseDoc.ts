@@ -152,8 +152,11 @@ function convertPMParagraph(node: PMNode, documentCounts?: TrackedChangeCounts):
     content,
   };
 
-  // Restore section break type
-  if (attrs.sectionBreakType) {
+  // Restore full section properties (round-trip) or fallback to break type only
+  if (attrs._sectionProperties) {
+    paragraph.sectionProperties =
+      attrs._sectionProperties as import('../../types/content').SectionProperties;
+  } else if (attrs.sectionBreakType) {
     paragraph.sectionProperties = {
       sectionStart: attrs.sectionBreakType as import('../../types/content').SectionStart,
     };

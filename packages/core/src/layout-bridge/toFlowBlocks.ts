@@ -17,6 +17,8 @@ import type {
   ImageBlock,
   TextBoxBlock,
   PageBreakBlock,
+  SectionBreakBlock,
+  ColumnLayout,
   Run,
   TextRun,
   TabRun,
@@ -34,7 +36,7 @@ import type {
   FontSizeAttrs,
   FontFamilyAttrs,
 } from '../prosemirror/schema/marks';
-import type { Theme } from '../types/document';
+import type { Theme, SectionProperties } from '../types/document';
 import { resolveColor, resolveHighlightToCss } from '../utils/colorResolver';
 import { pointsToPixels } from '../utils/units';
 
@@ -1006,6 +1008,49 @@ export function toFlowBlocks(doc: PMNode, options: ToFlowBlocksOptions = {}): Fl
           }
 
           blocks.push(block);
+
+          // Emit section break block if this paragraph ends a section
+          const secProps = pmAttrs._sectionProperties as SectionProperties | undefined;
+          if (secProps || pmAttrs.sectionBreakType) {
+            const sectionBreak: SectionBreakBlock = {
+              kind: 'sectionBreak',
+              id: nextBlockId(),
+              type: (secProps?.sectionStart ??
+                pmAttrs.sectionBreakType) as SectionBreakBlock['type'],
+            };
+
+            if (secProps) {
+              // Populate page size
+              if (secProps.pageWidth || secProps.pageHeight) {
+                sectionBreak.pageSize = {
+                  w: twipsToPixels(secProps.pageWidth ?? 12240),
+                  h: twipsToPixels(secProps.pageHeight ?? 15840),
+                };
+              }
+              // Populate margins
+              if (secProps.marginTop !== undefined || secProps.marginLeft !== undefined) {
+                sectionBreak.margins = {
+                  top: twipsToPixels(secProps.marginTop ?? 1440),
+                  bottom: twipsToPixels(secProps.marginBottom ?? 1440),
+                  left: twipsToPixels(secProps.marginLeft ?? 1440),
+                  right: twipsToPixels(secProps.marginRight ?? 1440),
+                };
+              }
+              // Populate columns
+              const colCount = secProps.columnCount ?? 1;
+              if (colCount > 1) {
+                const cols: ColumnLayout = {
+                  count: colCount,
+                  gap: twipsToPixels(secProps.columnSpace ?? 720),
+                  equalWidth: secProps.equalWidth ?? true,
+                  separator: secProps.separator,
+                };
+                sectionBreak.columns = cols;
+              }
+            }
+
+            blocks.push(sectionBreak);
+          }
         }
         break;
 

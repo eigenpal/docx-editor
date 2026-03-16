@@ -337,6 +337,11 @@ export function parseSectionProperties(
 
         props.columns.push(column);
       }
+
+      // Infer column count from w:col entries when w:num is absent
+      if (props.columnCount === undefined) {
+        props.columnCount = colElements.length;
+      }
     }
   }
 
