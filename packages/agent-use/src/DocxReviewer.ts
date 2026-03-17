@@ -1,12 +1,14 @@
 /**
  * DocxReviewer — Word-like API for AI document review.
  *
- * Usage:
- *   const reviewer = await DocxReviewer.fromBuffer(buffer, 'AI Reviewer');
- *   const text = reviewer.getContentAsText();
- *   reviewer.addComment(5, 'Fix this paragraph.');
- *   reviewer.replace(5, '$50k', '$500k');
- *   const output = await reviewer.toBuffer();
+ * @example
+ * ```ts
+ * const reviewer = await DocxReviewer.fromBuffer(buffer, 'AI Reviewer');
+ * const text = reviewer.getContentAsText();
+ * reviewer.addComment(5, 'Fix this paragraph.');
+ * reviewer.replace(5, '$50k', '$500k');
+ * const output = await reviewer.toBuffer();
+ * ```
  */
 
 import type { Document, DocumentBody } from '@eigenpal/docx-core/headless';
@@ -42,8 +44,15 @@ import { applyReview as applyReviewImpl } from './batch';
 
 export class DocxReviewer {
   private doc: Document;
+  /** Default author for comments and tracked changes. Set once, used everywhere. */
   readonly author: string;
 
+  /**
+   * Create a reviewer from a parsed Document.
+   * @param document - Parsed Document from @eigenpal/docx-core
+   * @param author - Default author name for comments and changes. (default: 'AI')
+   * @param originalBuffer - Original DOCX buffer, needed for toBuffer()
+   */
   constructor(document: Document, author = 'AI', originalBuffer?: ArrayBuffer) {
     this.doc = structuredClone(document);
     this.author = author;
@@ -54,6 +63,11 @@ export class DocxReviewer {
     }
   }
 
+  /**
+   * Create a reviewer from a DOCX file buffer.
+   * @param buffer - ArrayBuffer of the DOCX file
+   * @param author - Default author name for comments and changes. (default: 'AI')
+   */
   static async fromBuffer(buffer: ArrayBuffer, author = 'AI'): Promise<DocxReviewer> {
     const doc = await parseDocx(buffer);
     return new DocxReviewer(doc, author, buffer);
@@ -71,11 +85,17 @@ export class DocxReviewer {
   // READ
   // ==========================================================================
 
+  /** Get document content as structured blocks (headings, paragraphs, tables, lists). */
   getContent(options?: GetContentOptions): ContentBlock[] {
     return getContentImpl(this.body, options);
   }
 
-  /** Plain text for LLM prompts. Each paragraph prefixed with [index]. */
+  /**
+   * Get document content as plain text for LLM prompts.
+   * Each paragraph is prefixed with its index: `[0] text`, `[1] text`, etc.
+   * Table cells include position: `[5] (table, row 1, col 2) cell text`.
+   * Avoids JSON quote-escaping issues — LLMs can copy text verbatim.
+   */
   getContentAsText(options?: GetContentOptions): string {
     return formatContentForLLM(getContentImpl(this.body, options));
   }
@@ -84,21 +104,32 @@ export class DocxReviewer {
   // DISCOVER
   // ==========================================================================
 
+  /** Get all tracked changes in the document. */
   getChanges(filter?: ChangeFilter): ReviewChange[] {
     return getChangesImpl(this.body, filter);
   }
 
+  /** Get all comments with their replies. */
   getComments(filter?: CommentFilter): ReviewComment[] {
     return getCommentsImpl(this.body, filter);
   }
 
   // ==========================================================================
-  // COMMENT — like Word: paragraph.addComment("text")
+  // COMMENT
   // ==========================================================================
 
-  /** Add a comment on a paragraph. */
+  /**
+   * Add a comment on a paragraph.
+   * @param paragraphIndex - Index of the paragraph to comment on
+   * @param text - Comment text
+   * @returns The new comment ID
+   */
   addComment(paragraphIndex: number, text: string): number;
-  /** Add a comment with full options. */
+  /**
+   * Add a comment with full options (custom author, anchored to specific text).
+   * @param options - Comment options
+   * @returns The new comment ID
+   */
   addComment(options: AddCommentOptions): number;
   addComment(indexOrOptions: number | AddCommentOptions, text?: string): number {
     const opts =
@@ -108,7 +139,14 @@ export class DocxReviewer {
     return addCommentImpl(this.body, opts as AddCommentOptions & { author: string });
   }
 
+  /**
+   * Reply to an existing comment.
+   * @param commentId - ID of the comment to reply to
+   * @param text - Reply text
+   * @returns The new reply comment ID
+   */
   replyTo(commentId: number, text: string): number;
+  /** Reply to an existing comment with full options. */
   replyTo(commentId: number, options: ReplyOptions): number;
   replyTo(commentId: number, textOrOptions: string | ReplyOptions): number {
     const opts =
@@ -119,12 +157,17 @@ export class DocxReviewer {
   }
 
   // ==========================================================================
-  // PROPOSE CHANGES — like Word: range.find("old").replace("new")
+  // PROPOSE CHANGES
   // ==========================================================================
 
-  /** Replace text in a paragraph (creates tracked change). */
+  /**
+   * Replace text in a paragraph. Creates a tracked change (deletion + insertion).
+   * @param paragraphIndex - Index of the paragraph
+   * @param search - Short phrase to find within the paragraph
+   * @param replaceWith - Replacement text
+   */
   replace(paragraphIndex: number, search: string, replaceWith: string): void;
-  /** Replace with full options. */
+  /** Replace text with full options. */
   replace(options: ProposeReplacementOptions): void;
   replace(
     indexOrOptions: number | ProposeReplacementOptions,
@@ -148,6 +191,7 @@ export class DocxReviewer {
     this.replace(options);
   }
 
+  /** Insert text as a tracked change. */
   proposeInsertion(options: ProposeInsertionOptions): void {
     proposeInsertionImpl(this.body, {
       ...options,
@@ -155,6 +199,7 @@ export class DocxReviewer {
     } as ProposeInsertionOptions & { author: string });
   }
 
+  /** Delete text as a tracked change. */
   proposeDeletion(options: ProposeDeletionOptions): void {
     proposeDeletionImpl(this.body, {
       ...options,
@@ -166,26 +211,34 @@ export class DocxReviewer {
   // RESOLVE
   // ==========================================================================
 
+  /** Accept a tracked change by its revision ID. */
   acceptChange(id: number): void {
     acceptChangeImpl(this.body, id);
   }
 
+  /** Reject a tracked change by its revision ID. */
   rejectChange(id: number): void {
     rejectChangeImpl(this.body, id);
   }
 
+  /** Accept all tracked changes. Returns count accepted. */
   acceptAll(): number {
     return acceptAllImpl(this.body);
   }
 
+  /** Reject all tracked changes. Returns count rejected. */
   rejectAll(): number {
     return rejectAllImpl(this.body);
   }
 
   // ==========================================================================
-  // BATCH — apply LLM response in one call
+  // BATCH
   // ==========================================================================
 
+  /**
+   * Apply multiple review operations in one call.
+   * Uses the reviewer's default author. Individual failures are collected, not thrown.
+   */
   applyReview(ops: BatchReviewOptions): BatchResult {
     return applyReviewImpl(this.body, ops, this.author);
   }
@@ -194,10 +247,12 @@ export class DocxReviewer {
   // EXPORT
   // ==========================================================================
 
+  /** Get the modified Document model. */
   toDocument(): Document {
     return this.doc;
   }
 
+  /** Serialize back to a DOCX buffer. Requires the original buffer. */
   async toBuffer(): Promise<ArrayBuffer> {
     if (!this.doc.originalBuffer) {
       throw new Error(
