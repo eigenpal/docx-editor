@@ -212,14 +212,23 @@ export function proposeDeletion(body: DocumentBody, options: ProposeDeletionOpti
 // HELPERS
 // ============================================================================
 
+/** Cached max revision ID per body — avoids O(N) scan on every proposal. */
+const revisionIdCache = new WeakMap<DocumentBody, number>();
+
 function nextRevisionId(body: DocumentBody): number {
-  let maxId = 0;
-  forEachParagraph(body, (para) => {
-    for (const item of para.content) {
-      if (isTrackedChange(item)) {
-        maxId = Math.max(maxId, item.info.id);
+  let maxId = revisionIdCache.get(body);
+  if (maxId === undefined) {
+    maxId = 0;
+    forEachParagraph(body, (para) => {
+      for (const item of para.content) {
+        if (isTrackedChange(item)) {
+          maxId = Math.max(maxId!, item.info.id);
+        }
       }
-    }
-  });
-  return maxId + 1;
+    });
+  }
+  const next = maxId + 1;
+  // Reserve both next and next+1 (replacement uses two IDs)
+  revisionIdCache.set(body, next + 1);
+  return next;
 }

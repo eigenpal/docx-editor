@@ -26,20 +26,23 @@ export async function POST(request: NextRequest) {
     messages: [
       {
         role: 'system',
-        content: `You are a brutally honest document reviewer with a sharp wit. Roast the document — point out issues, weak phrasing, and suggest improvements while being entertaining.
+        content: `You are a stand-up comedian who moonlights as a document reviewer. You've been hired to roast this document ON STAGE. Every comment should land like a punchline — sharp, surprising, and genuinely hilarious. Think John Mulaney reviewing a legal contract, or Anthony Jeselnik editing a corporate memo.
 
 Return JSON:
 {
-  "comments": [{ "paragraphIndex": <number>, "text": "<your comment>" }],
+  "summary": "<your opening bit — a devastating 1-2 sentence roast of the whole document, like an opening joke at a roast>",
+  "comments": [{ "paragraphIndex": <number>, "text": "<your joke/roast>", "search": "<the specific phrase you're targeting>" }],
   "replacements": [{ "paragraphIndex": <number>, "search": "<short phrase to find>", "replaceWith": "<better text>" }]
 }
 
 Rules:
+- "summary" is your OPENING BIT — set the tone, make the audience laugh
 - At least 4 comments and 2 replacements, spread across the document
 - paragraphIndex must match a [number] from the document
-- Comments anchor to the whole paragraph — just specify the index
-- For replacements, "search" is a SHORT phrase (3-8 words) from that paragraph. Do NOT copy entire sentences.
-- Be funny AND constructive${existingChanges.length > 0 ? '\n- Comment on at least one existing tracked change' : ''}`,
+- ALWAYS use "search" on comments to target a SPECIFIC phrase (3-8 words) — roast the weakest words, not the whole paragraph
+- For replacements, "search" is a SHORT phrase (3-8 words). Do NOT copy entire sentences.
+- Every comment is a JOKE FIRST, feedback second. Use callbacks, misdirection, escalation, analogies, pop culture. No dry corporate feedback.
+- Imagine the document author is in the front row — roast with love${existingChanges.length > 0 ? '\n- At least one joke about the tracked changes' : ''}`,
       },
       {
         role: 'user',
@@ -58,7 +61,8 @@ Rules:
 
   const text = response.choices[0]?.message?.content || '';
   let actions: {
-    comments?: { paragraphIndex: number; text: string }[];
+    summary?: string;
+    comments?: { paragraphIndex: number; text: string; search?: string }[];
     replacements?: { paragraphIndex: number; search: string; replaceWith: string }[];
   };
   try {
@@ -67,10 +71,27 @@ Rules:
     return NextResponse.json({ error: 'Failed to parse AI response', raw: text }, { status: 500 });
   }
 
-  // Apply — author is already set on the reviewer, no need to repeat it
+  // Validate LLM output before applying — reject malformed entries
+  const validComments = (actions.comments ?? []).filter(
+    (c): c is { paragraphIndex: number; text: string; search?: string } =>
+      typeof c.paragraphIndex === 'number' && typeof c.text === 'string'
+  );
+  const validReplacements = (actions.replacements ?? []).filter(
+    (r): r is { paragraphIndex: number; search: string; replaceWith: string } =>
+      typeof r.paragraphIndex === 'number' &&
+      typeof r.search === 'string' &&
+      typeof r.replaceWith === 'string'
+  );
+
+  // Add high-level summary roast as the first comment on paragraph 0
+  const allComments = [
+    ...(actions.summary ? [{ paragraphIndex: 0, text: actions.summary }] : []),
+    ...validComments,
+  ];
+
   const result = reviewer.applyReview({
-    comments: actions.comments,
-    proposals: actions.replacements,
+    comments: allComments,
+    proposals: validReplacements,
   });
 
   if (result.errors.length > 0) {
@@ -81,7 +102,7 @@ Rules:
   return new NextResponse(output, {
     headers: {
       'Content-Type': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-      'Content-Disposition': `attachment; filename="roasted-${file.name}"`,
+      'Content-Disposition': `attachment; filename="roasted-${file.name.replace(/["\n\r]/g, '_')}"`,
       'X-Roast-Stats': JSON.stringify({
         commentsAdded: result.commentsAdded,
         proposalsAdded: result.proposalsAdded,
