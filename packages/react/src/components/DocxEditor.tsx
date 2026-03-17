@@ -85,12 +85,12 @@ const PageSetupDialog = lazy(() =>
 );
 import { MaterialSymbol } from './ui/Icons';
 import { Tooltip } from './ui/Tooltip';
-import { HyperlinkPopup, type HyperlinkPopupData } from './ui/HyperlinkPopup';
 import {
   TextContextMenu,
   type TextContextAction,
   type TextContextMenuItem,
 } from './TextContextMenu';
+import { HyperlinkPopup, type HyperlinkPopupData } from './ui/HyperlinkPopup';
 import { Toaster, toast } from 'sonner';
 import { getBuiltinTableStyle, type TableStylePreset } from './ui/TableStyleGallery';
 import { DocumentAgent } from '@eigenpal/docx-core/agent/DocumentAgent';
@@ -550,6 +550,32 @@ function EditingModeDropdown({
 let nextCommentId = Date.now();
 const PENDING_COMMENT_ID = -1;
 
+/**
+ * Find the Y position (relative to parentEl) of the element containing the given PM position.
+ * Used by both the floating comment button and the context menu comment action.
+ * Queries all elements with data-pm-start (spans, divs, imgs) — not just spans,
+ * since table cell content may use div fragments.
+ */
+function findSelectionYPosition(
+  scrollContainer: HTMLElement | null,
+  parentEl: HTMLElement | null,
+  pmPos: number
+): number | null {
+  if (!scrollContainer || !parentEl) return null;
+  const pagesEl = scrollContainer.querySelector('.paged-editor__pages');
+  if (!pagesEl) return null;
+  const elements = pagesEl.querySelectorAll('[data-pm-start]');
+  for (const node of elements) {
+    const el = node as HTMLElement;
+    const pmStart = Number(el.dataset.pmStart);
+    const pmEnd = Number(el.dataset.pmEnd);
+    if (pmPos >= pmStart && pmPos <= pmEnd) {
+      return el.getBoundingClientRect().top - parentEl.getBoundingClientRect().top;
+    }
+  }
+  return null;
+}
+
 function createComment(text: string, authorName: string, parentId?: number): Comment {
   return {
     id: nextCommentId++,
@@ -670,7 +696,7 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
     left: number;
   } | null>(null);
 
-  // Context menu state
+  // Right-click context menu state
   const [contextMenu, setContextMenu] = useState<{
     isOpen: boolean;
     position: { x: number; y: number };
@@ -1107,7 +1133,7 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
       // If no explicit font/size marks, resolve from paragraph style or document defaults
       if (!fontFamily || !fontSize) {
         const currentDoc = historyStateRef.current;
-        const paraStyleId = paragraphFormatting.styleId;
+        const paraStyleId = selectionState.styleId;
         if (currentDoc?.package.styles && paraStyleId) {
           const resolver = getCachedStyleResolver(currentDoc.package.styles);
           const resolved = resolver.resolveParagraphStyle(paraStyleId);
@@ -1169,29 +1195,15 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
       if (view && selectionState.hasSelection && !isAddingComment && !readOnly) {
         const container = scrollContainerRef.current;
         const parentEl = editorContentRef.current;
-        if (container && parentEl) {
-          const { from: selFrom } = view.state.selection;
+        const { from: selFrom } = view.state.selection;
+        const top = findSelectionYPosition(container, parentEl, selFrom);
+        if (top != null && container && parentEl) {
           const pagesEl = container.querySelector('.paged-editor__pages');
-          if (pagesEl) {
-            const pageEl = pagesEl.querySelector('.layout-page') as HTMLElement | null;
-            const spans = pagesEl.querySelectorAll('span[data-pm-start]');
-            for (const span of spans) {
-              const el = span as HTMLElement;
-              const pmStart = Number(el.dataset.pmStart);
-              const pmEnd = Number(el.dataset.pmEnd);
-              if (selFrom >= pmStart && selFrom <= pmEnd) {
-                const rect = el.getBoundingClientRect();
-                const parentRect = parentEl.getBoundingClientRect();
-                const top = rect.top - parentRect.top;
-                // Position at the right edge of the page (relative to editorContentRef)
-                const left = pageEl
-                  ? pageEl.getBoundingClientRect().right - parentRect.left
-                  : parentRect.width / 2 + 408;
-                setFloatingCommentBtn({ top, left });
-                break;
-              }
-            }
-          }
+          const pageEl = pagesEl?.querySelector('.layout-page') as HTMLElement | null;
+          const left = pageEl
+            ? pageEl.getBoundingClientRect().right - parentEl.getBoundingClientRect().left
+            : parentEl.getBoundingClientRect().width / 2 + 408;
+          setFloatingCommentBtn({ top, left });
         }
       } else {
         setFloatingCommentBtn(null);
@@ -1796,159 +1808,6 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
     });
   }, []);
 
-  const contextMenuItems = useMemo((): TextContextMenuItem[] => {
-    const isMac = typeof navigator !== 'undefined' && /Mac/.test(navigator.platform);
-    const mod = isMac ? '⌘' : 'Ctrl';
-    const items: TextContextMenuItem[] = [
-      { action: 'cut', label: 'Cut', shortcut: `${mod}+X` },
-      { action: 'copy', label: 'Copy', shortcut: `${mod}+C` },
-      { action: 'paste', label: 'Paste', shortcut: `${mod}+V` },
-      {
-        action: 'pasteAsPlainText',
-        label: 'Paste as Plain Text',
-        shortcut: `${mod}+Shift+V`,
-        dividerAfter: true,
-      },
-      {
-        action: 'delete',
-        label: 'Delete',
-        shortcut: 'Del',
-        dividerAfter: !contextMenu.hasSelection && !contextMenu.cursorInTable,
-      },
-    ];
-    // Add comment option when text is selected
-    if (contextMenu.hasSelection) {
-      items.push({
-        action: 'addComment',
-        label: 'Comment',
-        dividerAfter: !contextMenu.cursorInTable,
-      });
-    }
-    // Table operations when cursor is in a table
-    if (contextMenu.cursorInTable) {
-      items.push(
-        { action: 'addRowAbove', label: 'Insert row above' },
-        { action: 'addRowBelow', label: 'Insert row below' },
-        { action: 'deleteRow', label: 'Delete row', dividerAfter: true },
-        { action: 'addColumnLeft', label: 'Insert column left' },
-        { action: 'addColumnRight', label: 'Insert column right' },
-        { action: 'deleteColumn', label: 'Delete column', dividerAfter: true }
-      );
-    }
-    items.push({ action: 'selectAll', label: 'Select All', shortcut: `${mod}+A` });
-    return items;
-  }, [contextMenu.hasSelection, contextMenu.cursorInTable]);
-
-  const handleContextMenuAction = useCallback(
-    async (action: TextContextAction) => {
-      setContextMenu((prev) => ({ ...prev, isOpen: false }));
-      const view = pagedEditorRef.current?.getView();
-      if (!view) return;
-
-      switch (action) {
-        case 'cut':
-          document.execCommand('cut');
-          break;
-        case 'copy':
-          document.execCommand('copy');
-          break;
-        case 'paste': {
-          // Use Clipboard API since document.execCommand('paste') is blocked in modern browsers
-          view.focus();
-          try {
-            const items = await navigator.clipboard.read();
-            let html = '';
-            let text = '';
-            for (const item of items) {
-              if (item.types.includes('text/html')) {
-                html = await (await item.getType('text/html')).text();
-              }
-              if (item.types.includes('text/plain')) {
-                text = await (await item.getType('text/plain')).text();
-              }
-            }
-            // Create a synthetic paste event so ProseMirror's paste handling processes it
-            const dt = new DataTransfer();
-            if (html) dt.items.add(html, 'text/html');
-            if (text) dt.items.add(text, 'text/plain');
-            const pasteEvent = new ClipboardEvent('paste', {
-              clipboardData: dt,
-              bubbles: true,
-              cancelable: true,
-            });
-            view.dom.dispatchEvent(pasteEvent);
-          } catch {
-            try {
-              const text = await navigator.clipboard.readText();
-              if (text) {
-                view.dispatch(view.state.tr.insertText(text));
-              }
-            } catch {
-              // Clipboard access denied
-            }
-          }
-          break;
-        }
-        case 'pasteAsPlainText': {
-          view.focus();
-          try {
-            const text = await navigator.clipboard.readText();
-            if (text) {
-              view.dispatch(view.state.tr.insertText(text));
-            }
-          } catch {
-            // Clipboard access denied
-          }
-          break;
-        }
-        case 'delete':
-          document.execCommand('delete');
-          break;
-        case 'selectAll':
-          document.execCommand('selectAll');
-          break;
-        // Table operations
-        case 'addRowAbove':
-          addRowAbove(view.state, view.dispatch);
-          break;
-        case 'addRowBelow':
-          addRowBelow(view.state, view.dispatch);
-          break;
-        case 'deleteRow':
-          pmDeleteRow(view.state, view.dispatch);
-          break;
-        case 'addColumnLeft':
-          addColumnLeft(view.state, view.dispatch);
-          break;
-        case 'addColumnRight':
-          addColumnRight(view.state, view.dispatch);
-          break;
-        case 'deleteColumn':
-          pmDeleteColumn(view.state, view.dispatch);
-          break;
-        // Comment
-        case 'addComment': {
-          const { from, to } = view.state.selection;
-          if (from === to) break;
-          setCommentSelectionRange({ from, to });
-          const pendingMark = view.state.schema.marks.comment.create({
-            commentId: PENDING_COMMENT_ID,
-          });
-          const tr = view.state.tr.addMark(from, to, pendingMark);
-          tr.setSelection(TextSelection.create(tr.doc, to));
-          view.dispatch(tr);
-          setAddCommentYPosition(null); // Will be computed by CommentsSidebar
-          if (!showCommentsSidebar) setShowCommentsSidebar(true);
-          setIsAddingComment(true);
-          setFloatingCommentBtn(null);
-          break;
-        }
-      }
-      focusActiveEditor();
-    },
-    [focusActiveEditor, showCommentsSidebar]
-  );
-
   // Handle formatting action from toolbar
   const handleFormat = useCallback(
     (action: FormattingAction) => {
@@ -2336,6 +2195,187 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
   const handleHyperlinkPopupClose = useCallback(() => {
     setHyperlinkPopupData(null);
   }, []);
+
+  // Right-click context menu handlers
+  const handleContextMenu = useCallback((data: { x: number; y: number; hasSelection: boolean }) => {
+    const view = pagedEditorRef.current?.getView();
+    const inTable = view ? isInTable(view.state) : false;
+    setContextMenu({
+      isOpen: true,
+      position: data,
+      hasSelection: data.hasSelection,
+      cursorInTable: inTable,
+    });
+  }, []);
+
+  const handleContextMenuClose = useCallback(() => {
+    setContextMenu({
+      isOpen: false,
+      position: { x: 0, y: 0 },
+      hasSelection: false,
+      cursorInTable: false,
+    });
+  }, []);
+
+  const contextMenuItems = useMemo((): TextContextMenuItem[] => {
+    const isMac = typeof navigator !== 'undefined' && /Mac/.test(navigator.platform);
+    const mod = isMac ? '⌘' : 'Ctrl';
+    const items: TextContextMenuItem[] = [
+      { action: 'cut', label: 'Cut', shortcut: `${mod}+X` },
+      { action: 'copy', label: 'Copy', shortcut: `${mod}+C` },
+      { action: 'paste', label: 'Paste', shortcut: `${mod}+V` },
+      {
+        action: 'pasteAsPlainText',
+        label: 'Paste as Plain Text',
+        shortcut: `${mod}+Shift+V`,
+        dividerAfter: true,
+      },
+      {
+        action: 'delete',
+        label: 'Delete',
+        shortcut: 'Del',
+        dividerAfter: !contextMenu.hasSelection && !contextMenu.cursorInTable,
+      },
+    ];
+    if (contextMenu.hasSelection) {
+      items.push({
+        action: 'addComment',
+        label: 'Comment',
+        dividerAfter: !contextMenu.cursorInTable,
+      });
+    }
+    if (contextMenu.cursorInTable) {
+      items.push(
+        { action: 'addRowAbove', label: 'Insert row above' },
+        { action: 'addRowBelow', label: 'Insert row below' },
+        { action: 'deleteRow', label: 'Delete row', dividerAfter: true },
+        { action: 'addColumnLeft', label: 'Insert column left' },
+        { action: 'addColumnRight', label: 'Insert column right' },
+        { action: 'deleteColumn', label: 'Delete column', dividerAfter: true }
+      );
+    }
+    items.push({ action: 'selectAll', label: 'Select All', shortcut: `${mod}+A` });
+    return items;
+  }, [contextMenu.hasSelection, contextMenu.cursorInTable]);
+
+  const handleContextMenuAction = useCallback(
+    async (action: TextContextAction) => {
+      const view = getActiveEditorView();
+      if (!view) return;
+
+      // Focus the hidden PM so execCommand targets the right element
+      focusActiveEditor();
+
+      switch (action) {
+        case 'cut':
+          document.execCommand('cut');
+          break;
+        case 'copy':
+          document.execCommand('copy');
+          break;
+        case 'paste': {
+          // Use Clipboard API — document.execCommand('paste') is blocked in modern browsers
+          try {
+            const items = await navigator.clipboard.read();
+            let html = '';
+            let text = '';
+            for (const item of items) {
+              if (item.types.includes('text/html')) {
+                html = await (await item.getType('text/html')).text();
+              }
+              if (item.types.includes('text/plain')) {
+                text = await (await item.getType('text/plain')).text();
+              }
+            }
+            const dt = new DataTransfer();
+            if (html) dt.items.add(html, 'text/html');
+            if (text) dt.items.add(text, 'text/plain');
+            const pasteEvent = new ClipboardEvent('paste', {
+              clipboardData: dt,
+              bubbles: true,
+              cancelable: true,
+            });
+            view.dom.dispatchEvent(pasteEvent);
+          } catch {
+            try {
+              const text = await navigator.clipboard.readText();
+              if (text) view.dispatch(view.state.tr.insertText(text));
+            } catch {
+              // Clipboard access denied
+            }
+          }
+          break;
+        }
+        case 'pasteAsPlainText':
+          try {
+            const text = await navigator.clipboard.readText();
+            if (text) view.dispatch(view.state.tr.insertText(text));
+          } catch {
+            // Clipboard access denied
+          }
+          break;
+        case 'delete': {
+          const { from, to } = view.state.selection;
+          if (from !== to) {
+            view.dispatch(view.state.tr.deleteRange(from, to));
+          }
+          break;
+        }
+        case 'selectAll':
+          view.dispatch(
+            view.state.tr.setSelection(
+              TextSelection.create(view.state.doc, 0, view.state.doc.content.size)
+            )
+          );
+          break;
+        // Table operations
+        case 'addRowAbove':
+          addRowAbove(view.state, view.dispatch);
+          break;
+        case 'addRowBelow':
+          addRowBelow(view.state, view.dispatch);
+          break;
+        case 'deleteRow':
+          pmDeleteRow(view.state, view.dispatch);
+          break;
+        case 'addColumnLeft':
+          addColumnLeft(view.state, view.dispatch);
+          break;
+        case 'addColumnRight':
+          addColumnRight(view.state, view.dispatch);
+          break;
+        case 'deleteColumn':
+          pmDeleteColumn(view.state, view.dispatch);
+          break;
+        // Comment — same flow as floating comment button
+        case 'addComment': {
+          const { from, to } = view.state.selection;
+          if (from === to) break;
+          // Compute Y position BEFORE dispatching — dispatch triggers re-layout
+          // which rebuilds page DOM and invalidates the old span elements
+          const yPos = findSelectionYPosition(
+            scrollContainerRef.current,
+            editorContentRef.current,
+            from
+          );
+          setCommentSelectionRange({ from, to });
+          const pendingMark = view.state.schema.marks.comment.create({
+            commentId: PENDING_COMMENT_ID,
+          });
+          const tr = view.state.tr.addMark(from, to, pendingMark);
+          tr.setSelection(TextSelection.create(tr.doc, to));
+          view.dispatch(tr);
+          setAddCommentYPosition(yPos);
+          setShowCommentsSidebar(true);
+          setIsAddingComment(true);
+          setFloatingCommentBtn(null);
+          break;
+        }
+      }
+      // TextContextMenu calls onClose after onAction, so no need to close here
+    },
+    [getActiveEditorView, focusActiveEditor]
+  );
 
   // Handle margin changes from rulers
   const createMarginHandler = useCallback(
@@ -3274,7 +3314,7 @@ body { background: white; }
                       onRenderedDomContextReady={onRenderedDomContextReady}
                       pluginOverlays={pluginOverlays}
                       onHyperlinkClick={handleHyperlinkClick}
-                      onContextMenu={handleEditorContextMenu}
+                      onContextMenu={handleContextMenu}
                       commentsSidebarOpen={showCommentsSidebar}
                       scrollContainerRef={scrollContainerRef}
                       sidebarOverlay={
@@ -3386,7 +3426,7 @@ body { background: white; }
                               }
                             }
                             setAddCommentYPosition(floatingCommentBtn.top);
-                            if (!showCommentsSidebar) setShowCommentsSidebar(true);
+                            setShowCommentsSidebar(true);
                             setIsAddingComment(true);
                             setFloatingCommentBtn(null);
                           }}
@@ -3551,6 +3591,17 @@ body { background: white; }
             onRemove={handleHyperlinkPopupRemove}
             onClose={handleHyperlinkPopupClose}
             readOnly={readOnly}
+          />
+
+          {/* Right-click context menu */}
+          <TextContextMenu
+            isOpen={contextMenu.isOpen}
+            position={contextMenu.position}
+            hasSelection={contextMenu.hasSelection}
+            isEditable={!readOnly}
+            items={contextMenuItems}
+            onAction={handleContextMenuAction}
+            onClose={handleContextMenuClose}
           />
 
           {/* Toast notifications */}

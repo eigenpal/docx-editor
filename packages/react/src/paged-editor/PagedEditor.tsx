@@ -181,8 +181,8 @@ export interface PagedEditorProps {
     tooltip?: string;
     anchorRect: DOMRect;
   }) => void;
-  /** Callback for right-click context menu on pages. */
-  onContextMenu?: (e: React.MouseEvent) => void;
+  /** Callback when user right-clicks on the pages (for context menu). */
+  onContextMenu?: (data: { x: number; y: number; hasSelection: boolean }) => void;
 }
 
 export interface PagedEditorRef {
@@ -1332,7 +1332,7 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
       sidebarOverlay,
       scrollContainerRef: scrollContainerRefProp,
       onHyperlinkClick,
-      onContextMenu: onContextMenuProp,
+      onContextMenu,
     } = props;
 
     // Resolve the scroll container: prefer parent-provided ref, fallback to own container
@@ -2305,7 +2305,16 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
      */
     const handlePagesMouseDown = useCallback(
       (e: React.MouseEvent) => {
-        if (!hiddenPMRef.current || e.button !== 0) return; // Only handle left click
+        if (!hiddenPMRef.current) return;
+
+        // Right-click: prevent default to stop Firefox from resetting selection,
+        // but don't process our selection logic
+        if (e.button === 2) {
+          e.preventDefault();
+          return;
+        }
+
+        if (e.button !== 0) return; // Only handle left click
 
         // Hide table insert button on any mousedown
         setTableInsertButton(null);
@@ -3175,6 +3184,40 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
     );
 
     /**
+     * Handle right-click on pages — set/preserve selection and show context menu.
+     */
+    const handlePagesContextMenu = useCallback(
+      (e: React.MouseEvent) => {
+        if (!onContextMenu) return; // No handler, let browser default
+
+        e.preventDefault();
+
+        const view = hiddenPMRef.current?.getView();
+        if (!view) return;
+
+        const { from, to } = view.state.selection;
+        const pmPos = getPositionFromMouse(e.clientX, e.clientY);
+
+        // If the right-click is within the existing selection, keep it
+        // Otherwise, move cursor to the right-click position
+        if (pmPos !== null && (from === to || pmPos < from || pmPos > to)) {
+          hiddenPMRef.current?.setSelection(pmPos);
+          hiddenPMRef.current?.focus();
+          setIsFocused(true);
+        }
+
+        // Read updated selection state after potential change
+        const updatedState = hiddenPMRef.current?.getState();
+        const hasSelection = updatedState
+          ? updatedState.selection.from !== updatedState.selection.to
+          : false;
+
+        onContextMenu({ x: e.clientX, y: e.clientY, hasSelection });
+      },
+      [onContextMenu, getPositionFromMouse]
+    );
+
+    /**
      * Handle focus on container - redirect to hidden PM.
      */
     const handleContainerFocus = useCallback(
@@ -3197,6 +3240,14 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
       const relatedTarget = e.relatedTarget as HTMLElement | null;
       if (relatedTarget && containerRef.current?.contains(relatedTarget)) {
         return; // Focus staying within editor
+      }
+      // Keep selection visible when focus moves to toolbar or dropdown portals
+      if (
+        relatedTarget?.closest(
+          '[role="toolbar"], [data-radix-popper-content-wrapper], [data-radix-select-content], .docx-table-options-dropdown'
+        )
+      ) {
+        return;
       }
       setIsFocused(false);
     }, []);
@@ -3647,7 +3698,7 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
             onMouseDown={handlePagesMouseDown}
             onMouseMove={handlePagesMouseMove}
             onClick={handlePagesClick}
-            onContextMenu={onContextMenuProp}
+            onContextMenu={handlePagesContextMenu}
             aria-hidden="true" // Visual only, PM provides semantic content
           />
 
