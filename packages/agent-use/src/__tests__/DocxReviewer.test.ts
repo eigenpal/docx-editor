@@ -579,36 +579,19 @@ describe('textSearch', () => {
     expect(reviewer.getComments()).toHaveLength(1);
   });
 
-  test('handles multi-line search spanning paragraphs (extracts matching line)', () => {
+  test('matches with normalized quotes and whitespace', () => {
     const para: Paragraph = {
       type: 'paragraph',
-      content: [makeRun('"Malicious / injected content",')] as ParagraphContent[],
+      content: [makeRun('The \u201Cliability cap\u201D is $50k.')] as ParagraphContent[],
       formatting: {},
     } as Paragraph;
     const reviewer = makeReviewer([para]);
-    // AI sent a search spanning multiple paragraphs with \n and \t
+    // LLM sends straight quotes — normalized matching handles it
     reviewer.addComment({
       paragraphIndex: 0,
       author: 'AI',
       text: 'note',
-      search: '\t"Malicious / injected content",\n\t"security_validation",\n\t"Reject"',
-    });
-    expect(reviewer.getComments()).toHaveLength(1);
-  });
-
-  test('handles reverse containment (search longer than paragraph)', () => {
-    const para: Paragraph = {
-      type: 'paragraph',
-      content: [makeRun('The cap is $50k.')] as ParagraphContent[],
-      formatting: {},
-    } as Paragraph;
-    const reviewer = makeReviewer([para]);
-    // AI over-selected across paragraph boundaries
-    reviewer.addComment({
-      paragraphIndex: 0,
-      author: 'AI',
-      text: 'note',
-      search: 'The cap is $50k. This seems reasonable given the circumstances.',
+      search: '"liability cap"',
     });
     expect(reviewer.getComments()).toHaveLength(1);
   });

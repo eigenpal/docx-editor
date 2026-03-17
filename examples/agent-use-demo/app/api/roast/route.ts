@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import OpenAI from 'openai';
-import { DocxReviewer, formatContentForLLM } from '@eigenpal/docx-editor-agents';
+import { DocxReviewer } from '@eigenpal/docx-editor-agents';
 
 const openai = new OpenAI();
 const model = process.env.OPENAI_MODEL || 'gpt-4o';
@@ -17,11 +17,10 @@ export async function POST(request: NextRequest) {
   const reviewer = await DocxReviewer.fromBuffer(buffer);
 
   // Step 1: Read document as plain text (no JSON escaping = no quote issues)
-  const content = reviewer.getContent({
+  const contentText = reviewer.getContentAsText({
     includeTrackedChanges: false,
     includeCommentAnchors: false,
   });
-  const contentText = formatContentForLLM(content);
   const existingChanges = reviewer.getChanges();
   const existingComments = reviewer.getComments();
 

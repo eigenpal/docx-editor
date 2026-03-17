@@ -8,30 +8,23 @@ import { TextNotFoundError } from './errors';
 import { getRunText, isTrackedChange } from './utils';
 
 export interface TextSearchResult {
-  /** Index of the run where the match starts */
   startRunIndex: number;
-  /** Character offset within the start run */
   startOffset: number;
-  /** Index of the run where the match ends */
   endRunIndex: number;
   /** Character offset within the end run (exclusive) */
   endOffset: number;
 }
 
 interface FlattenedRun {
-  /** Index in the paragraph's content array */
   contentIndex: number;
-  /** Index within a tracked change's content array, or -1 if top-level */
   innerIndex: number;
   run: Run;
   text: string;
-  /** Cumulative start offset in the concatenated paragraph text */
   startPos: number;
 }
 
 /**
- * Flatten a paragraph's content into a list of runs with their positions,
- * walking into tracked change wrappers (Insertion, Deletion, etc.).
+ * Flatten paragraph content into runs with cumulative positions.
  */
 function flattenRuns(paragraph: Paragraph): FlattenedRun[] {
   const result: FlattenedRun[] = [];
@@ -76,17 +69,14 @@ function flattenRuns(paragraph: Paragraph): FlattenedRun[] {
   return result;
 }
 
-/**
- * Get the full plain text of a paragraph (including tracked change content).
- */
 export function getParagraphPlainText(paragraph: Paragraph): string {
-  const runs = flattenRuns(paragraph);
-  return runs.map((r) => r.text).join('');
+  return flattenRuns(paragraph)
+    .map((r) => r.text)
+    .join('');
 }
 
 /**
- * Find text within a paragraph. Returns the run indices and offsets.
- * Throws TextNotFoundError if not found.
+ * Find text within a paragraph. Throws TextNotFoundError if not found.
  */
 export function findTextInParagraph(
   paragraph: Paragraph,
@@ -96,32 +86,25 @@ export function findTextInParagraph(
   const runs = flattenRuns(paragraph);
   const fullText = runs.map((r) => r.text).join('');
 
-  const match = fuzzyFind(fullText, search);
-  if (match === null) {
-    throw new TextNotFoundError(search, paragraphIndex);
-  }
-  const matchStart = match.start;
-  const matchEnd = match.end;
+  const match = findMatch(fullText, search);
+  if (!match) throw new TextNotFoundError(search, paragraphIndex);
 
-  // Find start run
   let startRunIdx = -1;
   let startOffset = 0;
   for (let i = 0; i < runs.length; i++) {
-    const runEnd = runs[i].startPos + runs[i].text.length;
-    if (matchStart < runEnd) {
+    if (match.start < runs[i].startPos + runs[i].text.length) {
       startRunIdx = i;
-      startOffset = matchStart - runs[i].startPos;
+      startOffset = match.start - runs[i].startPos;
       break;
     }
   }
 
-  // Find end run
   let endRunIdx = -1;
   let endOffset = 0;
   for (let i = runs.length - 1; i >= 0; i--) {
-    if (matchEnd > runs[i].startPos) {
+    if (match.end > runs[i].startPos) {
       endRunIdx = i;
-      endOffset = matchEnd - runs[i].startPos;
+      endOffset = match.end - runs[i].startPos;
       break;
     }
   }
@@ -139,10 +122,8 @@ export function findTextInParagraph(
 }
 
 /**
- * Split paragraph content so the matched text is isolated into its own run(s).
- * Returns the content index range of the isolated matched runs.
- *
- * This mutates the paragraph's content array by splitting runs at match boundaries.
+ * Isolate matched text into its own runs by splitting at boundaries.
+ * Mutates paragraph.content.
  */
 export function isolateMatchedText(
   paragraph: Paragraph,
@@ -153,19 +134,17 @@ export function isolateMatchedText(
   let { startRunIndex, endRunIndex } = result;
   const { startOffset, endOffset } = result;
 
-  // Split the end run first (so indices don't shift for start)
+  // Split end run first (so indices don't shift for start)
   const endItem = paragraph.content[endRunIndex];
   if (endItem.type === 'run') {
     const endText = getRunText(endItem);
     if (endOffset < endText.length) {
-      // Need to split: [matched...endOffset][rest]
       const afterRun = makeRunWithText(endText.slice(endOffset), endItem);
       setRunText(endItem, endText.slice(0, endOffset));
       paragraph.content.splice(endRunIndex + 1, 0, afterRun as Run);
     }
   }
 
-  // Split the start run
   const startItem = paragraph.content[startRunIndex];
   if (startItem.type === 'run' && startOffset > 0) {
     const startText = getRunText(startItem);
@@ -195,65 +174,52 @@ function setRunText(run: Run, text: string): void {
 }
 
 // ============================================================================
-// NORMALIZED MATCHING -- handles LLM text mangling (quotes, dashes, unicode)
+// MATCHING — exact, then normalized (case + quotes + whitespace)
 // ============================================================================
 
-interface NormalizedText {
-  text: string;
-  /** posMap[i] = index in original string that normalized char i came from */
-  posMap: number[];
-}
-
-const ZERO_WIDTH = new Set([
-  '\u200B', // zero-width space
-  '\u200C', // zero-width non-joiner
-  '\u200D', // zero-width joiner
-  '\uFEFF', // BOM / zero-width no-break space
-  '\u00AD', // soft hyphen
-]);
-
 /**
- * Build normalized text with position map back to original.
- * Normalizes: smart quotes, dashes, ellipsis, whitespace, zero-width chars, case.
+ * Normalize text for matching: lowercase, collapse whitespace,
+ * straighten smart quotes/dashes, strip zero-width chars.
  */
-function buildNormalized(original: string): NormalizedText {
+function normalize(original: string): { text: string; posMap: number[] } {
   const chars: string[] = [];
   const posMap: number[] = [];
-  let prevWasSpace = true;
+  let prevSpace = true;
 
   for (let i = 0; i < original.length; i++) {
     let ch = original[i];
 
-    if (ZERO_WIDTH.has(ch)) continue;
+    // Skip zero-width chars
+    if ('\u200B\u200C\u200D\uFEFF\u00AD'.includes(ch)) continue;
 
-    // Smart quotes -> straight
-    if (ch === '\u201C' || ch === '\u201D' || ch === '\u201E' || ch === '\u201F') ch = '"';
-    if (ch === '\u2018' || ch === '\u2019' || ch === '\u201A' || ch === '\u201B') ch = "'";
+    // Smart quotes → straight
+    if ('\u201C\u201D\u201E\u201F'.includes(ch)) ch = '"';
+    if ('\u2018\u2019\u201A\u201B'.includes(ch)) ch = "'";
 
-    // Dashes -> hyphen
-    if (ch === '\u2013' || ch === '\u2014' || ch === '\u2012' || ch === '\u2015') ch = '-';
+    // Dashes → hyphen
+    if ('\u2013\u2014\u2012\u2015'.includes(ch)) ch = '-';
 
-    // Ellipsis -> three dots
+    // Ellipsis → dots
     if (ch === '\u2026') {
       chars.push('.', '.', '.');
       posMap.push(i, i, i);
-      prevWasSpace = false;
+      prevSpace = false;
       continue;
     }
 
-    // Collapse whitespace (including non-breaking space)
+    // Collapse all whitespace (including \n, \t, non-breaking space)
     if (/\s/.test(ch) || ch === '\u00A0') {
-      if (!prevWasSpace) {
+      if (!prevSpace) {
         chars.push(' ');
         posMap.push(i);
-        prevWasSpace = true;
+        prevSpace = true;
       }
       continue;
     }
 
     chars.push(ch.toLowerCase());
     posMap.push(i);
-    prevWasSpace = false;
+    prevSpace = false;
   }
 
   // Trim trailing space
@@ -265,101 +231,30 @@ function buildNormalized(original: string): NormalizedText {
   return { text: chars.join(''), posMap };
 }
 
-function mapToOriginal(
-  norm: NormalizedText,
-  normStart: number,
-  normLen: number,
-  original: string
-): { start: number; end: number } {
-  const origStart = norm.posMap[normStart];
-  let origEnd = norm.posMap[normStart + normLen - 1] + 1;
-  while (origEnd < original.length && ZERO_WIDTH.has(original[origEnd])) {
-    origEnd++;
-  }
-  return { start: origStart, end: origEnd };
-}
-
 /**
- * Find search in text. Returns { start, end } in the ORIGINAL text, or null.
- *
- * 1. Exact match (fast path)
- * 2. Full normalized match (quotes, dashes, whitespace, case, unicode)
- * 3. Drop words from start/end (LLM copied extra context or truncated)
- * 4. Multi-line: if search contains newlines, try each line independently
- * 5. Reverse containment: if search is longer than text, check if text is inside search
+ * Find search text within paragraph text.
+ * 1. Exact match
+ * 2. Normalized match (case-insensitive, smart quotes, collapsed whitespace)
  */
-function fuzzyFind(text: string, search: string): { start: number; end: number } | null {
+function findMatch(text: string, search: string): { start: number; end: number } | null {
   if (!search || !text) return null;
 
   // 1. Exact
   const exact = text.indexOf(search);
-  if (exact !== -1) {
-    return { start: exact, end: exact + search.length };
-  }
+  if (exact !== -1) return { start: exact, end: exact + search.length };
 
   // 2. Normalized
-  const normText = buildNormalized(text);
-  const normSearch = buildNormalized(search);
-  if (normSearch.text.length === 0) return null;
+  const normText = normalize(text);
+  const normSearch = normalize(search);
+  if (!normSearch.text) return null;
 
-  const normIdx = normText.text.indexOf(normSearch.text);
-  if (normIdx !== -1) {
-    return mapToOriginal(normText, normIdx, normSearch.text.length, text);
-  }
-
-  // 3. Drop words from boundaries
-  const words = normSearch.text.split(' ');
-  if (words.length >= 3) {
-    const maxDrop = Math.min(3, words.length - 2);
-
-    for (let drop = 1; drop <= maxDrop; drop++) {
-      const sub = words.slice(drop).join(' ');
-      const idx = normText.text.indexOf(sub);
-      if (idx !== -1) return mapToOriginal(normText, idx, sub.length, text);
-    }
-
-    for (let drop = 1; drop <= maxDrop; drop++) {
-      const sub = words.slice(0, -drop).join(' ');
-      const idx = normText.text.indexOf(sub);
-      if (idx !== -1) return mapToOriginal(normText, idx, sub.length, text);
-    }
-
-    for (let ds = 1; ds <= Math.min(2, words.length - 2); ds++) {
-      for (let de = 1; de <= Math.min(2, words.length - ds - 1); de++) {
-        const sub = words.slice(ds, -de).join(' ');
-        if (sub.length < 10) continue;
-        const idx = normText.text.indexOf(sub);
-        if (idx !== -1) return mapToOriginal(normText, idx, sub.length, text);
-      }
-    }
-  }
-
-  // 4. Multi-line: LLM search spans multiple paragraphs — try each line
-  if (/[\n\r]/.test(search)) {
-    const lines = search
-      .split(/[\n\r]+/)
-      .map((l) => l.trim())
-      .filter((l) => l.length > 0);
-    // Try longest lines first (more likely to be unique)
-    const sortedLines = [...lines].sort((a, b) => b.length - a.length);
-    for (const line of sortedLines) {
-      const normLine = buildNormalized(line);
-      if (normLine.text.length < 5) continue;
-      const lineIdx = normText.text.indexOf(normLine.text);
-      if (lineIdx !== -1) {
-        return mapToOriginal(normText, lineIdx, normLine.text.length, text);
-      }
-    }
-  }
-
-  // 5. Reverse containment: search is longer than paragraph text
-  //    (LLM copied across paragraph boundaries). Check if paragraph text
-  //    appears inside the search — if so, match the full paragraph.
-  if (normSearch.text.length > normText.text.length && normText.text.length >= 10) {
-    const trimmedText = normText.text.trim();
-    if (trimmedText.length >= 10 && normSearch.text.includes(trimmedText)) {
-      return { start: 0, end: text.length };
-    }
+  const idx = normText.text.indexOf(normSearch.text);
+  if (idx !== -1) {
+    const start = normText.posMap[idx];
+    let end = normText.posMap[idx + normSearch.text.length - 1] + 1;
+    // Skip trailing zero-width chars
+    while (end < text.length && '\u200B\u200C\u200D\uFEFF\u00AD'.includes(text[end])) end++;
+    return { start, end };
   }
 
   return null;

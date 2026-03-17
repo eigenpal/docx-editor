@@ -23,9 +23,6 @@
 // Main class
 export { DocxReviewer } from './DocxReviewer';
 
-// Utilities
-export { formatContentForLLM } from './content';
-
 // Types
 export type {
   ContentBlock,
