@@ -182,12 +182,7 @@ export interface PagedEditorProps {
     anchorRect: DOMRect;
   }) => void;
   /** Callback when user right-clicks on the pages (for context menu). */
-  onContextMenu?: (data: {
-    x: number;
-    y: number;
-    hasSelection: boolean;
-    isEditable: boolean;
-  }) => void;
+  onContextMenu?: (data: { x: number; y: number; hasSelection: boolean }) => void;
 }
 
 export interface PagedEditorRef {
@@ -3208,14 +3203,9 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
           ? updatedState.selection.from !== updatedState.selection.to
           : false;
 
-        onContextMenu({
-          x: e.clientX,
-          y: e.clientY,
-          hasSelection,
-          isEditable: !readOnly,
-        });
+        onContextMenu({ x: e.clientX, y: e.clientY, hasSelection });
       },
-      [onContextMenu, getPositionFromMouse, readOnly]
+      [onContextMenu, getPositionFromMouse]
     );
 
     /**

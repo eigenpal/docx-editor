@@ -2163,19 +2163,12 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
   }, []);
 
   // Right-click context menu handlers
-  const handleContextMenu = useCallback(
-    (data: { x: number; y: number; hasSelection: boolean; isEditable: boolean }) => {
-      setContextMenu({
-        isOpen: true,
-        position: { x: data.x, y: data.y },
-        hasSelection: data.hasSelection,
-      });
-    },
-    []
-  );
+  const handleContextMenu = useCallback((data: { x: number; y: number; hasSelection: boolean }) => {
+    setContextMenu({ isOpen: true, position: data, hasSelection: data.hasSelection });
+  }, []);
 
   const handleContextMenuClose = useCallback(() => {
-    setContextMenu((prev) => ({ ...prev, isOpen: false }));
+    setContextMenu({ isOpen: false, position: { x: 0, y: 0 }, hasSelection: false });
   }, []);
 
   const handleContextMenuAction = useCallback(
@@ -2201,8 +2194,7 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
             .readText?.()
             .then((text) => {
               if (text && view) {
-                const tr = view.state.tr.insertText(text);
-                view.dispatch(tr);
+                view.dispatch(view.state.tr.insertText(text));
               }
             })
             .catch(() => {
@@ -2212,21 +2204,19 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
         case 'delete': {
           const { from, to } = view.state.selection;
           if (from !== to) {
-            const tr = view.state.tr.deleteRange(from, to);
-            view.dispatch(tr);
+            view.dispatch(view.state.tr.deleteRange(from, to));
           }
           break;
         }
-        case 'selectAll': {
-          const tr = view.state.tr.setSelection(
-            TextSelection.create(view.state.doc, 0, view.state.doc.content.size)
+        case 'selectAll':
+          view.dispatch(
+            view.state.tr.setSelection(
+              TextSelection.create(view.state.doc, 0, view.state.doc.content.size)
+            )
           );
-          view.dispatch(tr);
           break;
-        }
       }
-
-      setContextMenu((prev) => ({ ...prev, isOpen: false }));
+      // TextContextMenu calls onClose after onAction, so no need to close here
     },
     [getActiveEditorView, focusActiveEditor]
   );
