@@ -68,6 +68,11 @@ export async function loadFont(
     styles?: ('normal' | 'italic')[];
   }
 ): Promise<boolean> {
+  // Skip font loading in non-browser environments (Node.js, SSR)
+  if (typeof document === 'undefined') {
+    return false;
+  }
+
   // Normalize font family name
   const normalizedFamily = fontFamily.trim();
 
