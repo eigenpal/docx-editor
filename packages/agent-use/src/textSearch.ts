@@ -285,6 +285,8 @@ function mapToOriginal(
  * 1. Exact match (fast path)
  * 2. Full normalized match (quotes, dashes, whitespace, case, unicode)
  * 3. Drop words from start/end (LLM copied extra context or truncated)
+ * 4. Multi-line: if search contains newlines, try each line independently
+ * 5. Reverse containment: if search is longer than text, check if text is inside search
  */
 function fuzzyFind(text: string, search: string): { start: number; end: number } | null {
   if (!search || !text) return null;
@@ -329,6 +331,34 @@ function fuzzyFind(text: string, search: string): { start: number; end: number }
         const idx = normText.text.indexOf(sub);
         if (idx !== -1) return mapToOriginal(normText, idx, sub.length, text);
       }
+    }
+  }
+
+  // 4. Multi-line: LLM search spans multiple paragraphs — try each line
+  if (/[\n\r]/.test(search)) {
+    const lines = search
+      .split(/[\n\r]+/)
+      .map((l) => l.trim())
+      .filter((l) => l.length > 0);
+    // Try longest lines first (more likely to be unique)
+    const sortedLines = [...lines].sort((a, b) => b.length - a.length);
+    for (const line of sortedLines) {
+      const normLine = buildNormalized(line);
+      if (normLine.text.length < 5) continue;
+      const lineIdx = normText.text.indexOf(normLine.text);
+      if (lineIdx !== -1) {
+        return mapToOriginal(normText, lineIdx, normLine.text.length, text);
+      }
+    }
+  }
+
+  // 5. Reverse containment: search is longer than paragraph text
+  //    (LLM copied across paragraph boundaries). Check if paragraph text
+  //    appears inside the search — if so, match the full paragraph.
+  if (normSearch.text.length > normText.text.length && normText.text.length >= 10) {
+    const trimmedText = normText.text.trim();
+    if (trimmedText.length >= 10 && normSearch.text.includes(trimmedText)) {
+      return { start: 0, end: text.length };
     }
   }
 

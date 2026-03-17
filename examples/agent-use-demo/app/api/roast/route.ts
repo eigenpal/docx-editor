@@ -49,6 +49,8 @@ HARD REQUIREMENTS — you MUST meet ALL of these minimums:
 - You MUST suggest at least 2 text replacements (tracked changes). Pick weak phrasing, vague language, or clunky sentences and rewrite them.
 - paragraphIndex must match an index from the document content
 - search must be an EXACT substring from that paragraph's text — copy it character-for-character, including punctuation and whitespace
+- search MUST come from a SINGLE paragraph. NEVER include newlines, tabs, or text from adjacent paragraphs. Each paragraph is a separate block with its own index.
+- Keep search strings short (1-2 sentences max). Prefer targeting a specific phrase rather than copying an entire paragraph.
 - If the document has existing tracked changes, comment on at least one of them (e.g. "This change makes it worse, not better" or "Finally, someone with taste")
 - Be funny AND constructive — each comment should make the reader laugh AND learn something
 - Vary your tone: mix savage burns with backhanded compliments and genuine advice`,
