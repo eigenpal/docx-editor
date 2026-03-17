@@ -2181,7 +2181,12 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
   }, []);
 
   const handleContextMenuClose = useCallback(() => {
-    setContextMenu({ isOpen: false, position: { x: 0, y: 0 }, hasSelection: false, cursorInTable: false });
+    setContextMenu({
+      isOpen: false,
+      position: { x: 0, y: 0 },
+      hasSelection: false,
+      cursorInTable: false,
+    });
   }, []);
 
   const contextMenuItems = useMemo((): TextContextMenuItem[] => {
@@ -2314,7 +2319,7 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
         case 'deleteColumn':
           pmDeleteColumn(view.state, view.dispatch);
           break;
-        // Comment
+        // Comment — matches floating comment button logic
         case 'addComment': {
           const { from, to } = view.state.selection;
           if (from === to) break;
@@ -2325,7 +2330,26 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
           const tr = view.state.tr.addMark(from, to, pendingMark);
           tr.setSelection(TextSelection.create(tr.doc, to));
           view.dispatch(tr);
-          setAddCommentYPosition(null);
+          // Compute Y position from the selection span (same as floating button)
+          let yPos: number | null = null;
+          const container = scrollContainerRef.current;
+          const parentEl = editorContentRef.current;
+          if (container && parentEl) {
+            const pagesEl = container.querySelector('.paged-editor__pages');
+            if (pagesEl) {
+              const spans = pagesEl.querySelectorAll('span[data-pm-start]');
+              for (const span of spans) {
+                const el = span as HTMLElement;
+                const pmStart = Number(el.dataset.pmStart);
+                const pmEnd = Number(el.dataset.pmEnd);
+                if (from >= pmStart && from <= pmEnd) {
+                  yPos = el.getBoundingClientRect().top - parentEl.getBoundingClientRect().top;
+                  break;
+                }
+              }
+            }
+          }
+          setAddCommentYPosition(yPos);
           if (!showCommentsSidebar) setShowCommentsSidebar(true);
           setIsAddingComment(true);
           setFloatingCommentBtn(null);

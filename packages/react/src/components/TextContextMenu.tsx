@@ -202,7 +202,16 @@ const AddRowBelowIcon = () => (
 const DeleteRowIcon = () => (
   <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
     <rect x="2" y="2" width="12" height="4" rx="0.5" stroke="currentColor" strokeWidth="1.2" />
-    <rect x="2" y="6" width="12" height="4" rx="0.5" stroke="currentColor" strokeWidth="1.2" opacity="0.3" />
+    <rect
+      x="2"
+      y="6"
+      width="12"
+      height="4"
+      rx="0.5"
+      stroke="currentColor"
+      strokeWidth="1.2"
+      opacity="0.3"
+    />
     <rect x="2" y="10" width="12" height="4" rx="0.5" stroke="currentColor" strokeWidth="1.2" />
     <path d="M5 8h6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
   </svg>
@@ -227,7 +236,16 @@ const AddColumnRightIcon = () => (
 const DeleteColumnIcon = () => (
   <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
     <rect x="2" y="2" width="4" height="12" rx="0.5" stroke="currentColor" strokeWidth="1.2" />
-    <rect x="6" y="2" width="4" height="12" rx="0.5" stroke="currentColor" strokeWidth="1.2" opacity="0.3" />
+    <rect
+      x="6"
+      y="2"
+      width="4"
+      height="12"
+      rx="0.5"
+      stroke="currentColor"
+      strokeWidth="1.2"
+      opacity="0.3"
+    />
     <rect x="10" y="2" width="4" height="12" rx="0.5" stroke="currentColor" strokeWidth="1.2" />
     <path d="M8 5v6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
   </svg>
