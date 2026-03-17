@@ -550,6 +550,30 @@ function EditingModeDropdown({
 let nextCommentId = Date.now();
 const PENDING_COMMENT_ID = -1;
 
+/**
+ * Find the Y position (relative to parentEl) of the span containing the given PM position.
+ * Used by both the floating comment button and the context menu comment action.
+ */
+function findSelectionYPosition(
+  scrollContainer: HTMLElement | null,
+  parentEl: HTMLElement | null,
+  pmPos: number
+): number | null {
+  if (!scrollContainer || !parentEl) return null;
+  const pagesEl = scrollContainer.querySelector('.paged-editor__pages');
+  if (!pagesEl) return null;
+  const spans = pagesEl.querySelectorAll('span[data-pm-start]');
+  for (const span of spans) {
+    const el = span as HTMLElement;
+    const pmStart = Number(el.dataset.pmStart);
+    const pmEnd = Number(el.dataset.pmEnd);
+    if (pmPos >= pmStart && pmPos <= pmEnd) {
+      return el.getBoundingClientRect().top - parentEl.getBoundingClientRect().top;
+    }
+  }
+  return null;
+}
+
 function createComment(text: string, authorName: string, parentId?: number): Comment {
   return {
     id: nextCommentId++,
@@ -1169,29 +1193,15 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
       if (view && selectionState.hasSelection && !isAddingComment && !readOnly) {
         const container = scrollContainerRef.current;
         const parentEl = editorContentRef.current;
-        if (container && parentEl) {
-          const { from: selFrom } = view.state.selection;
+        const { from: selFrom } = view.state.selection;
+        const top = findSelectionYPosition(container, parentEl, selFrom);
+        if (top != null && container && parentEl) {
           const pagesEl = container.querySelector('.paged-editor__pages');
-          if (pagesEl) {
-            const pageEl = pagesEl.querySelector('.layout-page') as HTMLElement | null;
-            const spans = pagesEl.querySelectorAll('span[data-pm-start]');
-            for (const span of spans) {
-              const el = span as HTMLElement;
-              const pmStart = Number(el.dataset.pmStart);
-              const pmEnd = Number(el.dataset.pmEnd);
-              if (selFrom >= pmStart && selFrom <= pmEnd) {
-                const rect = el.getBoundingClientRect();
-                const parentRect = parentEl.getBoundingClientRect();
-                const top = rect.top - parentRect.top;
-                // Position at the right edge of the page (relative to editorContentRef)
-                const left = pageEl
-                  ? pageEl.getBoundingClientRect().right - parentRect.left
-                  : parentRect.width / 2 + 408;
-                setFloatingCommentBtn({ top, left });
-                break;
-              }
-            }
-          }
+          const pageEl = pagesEl?.querySelector('.layout-page') as HTMLElement | null;
+          const left = pageEl
+            ? pageEl.getBoundingClientRect().right - parentEl.getBoundingClientRect().left
+            : parentEl.getBoundingClientRect().width / 2 + 408;
+          setFloatingCommentBtn({ top, left });
         }
       } else {
         setFloatingCommentBtn(null);
@@ -2319,7 +2329,7 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
         case 'deleteColumn':
           pmDeleteColumn(view.state, view.dispatch);
           break;
-        // Comment — matches floating comment button logic
+        // Comment — same flow as floating comment button
         case 'addComment': {
           const { from, to } = view.state.selection;
           if (from === to) break;
@@ -2330,27 +2340,10 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
           const tr = view.state.tr.addMark(from, to, pendingMark);
           tr.setSelection(TextSelection.create(tr.doc, to));
           view.dispatch(tr);
-          // Compute Y position from the selection span (same as floating button)
-          let yPos: number | null = null;
-          const container = scrollContainerRef.current;
-          const parentEl = editorContentRef.current;
-          if (container && parentEl) {
-            const pagesEl = container.querySelector('.paged-editor__pages');
-            if (pagesEl) {
-              const spans = pagesEl.querySelectorAll('span[data-pm-start]');
-              for (const span of spans) {
-                const el = span as HTMLElement;
-                const pmStart = Number(el.dataset.pmStart);
-                const pmEnd = Number(el.dataset.pmEnd);
-                if (from >= pmStart && from <= pmEnd) {
-                  yPos = el.getBoundingClientRect().top - parentEl.getBoundingClientRect().top;
-                  break;
-                }
-              }
-            }
-          }
-          setAddCommentYPosition(yPos);
-          if (!showCommentsSidebar) setShowCommentsSidebar(true);
+          setAddCommentYPosition(
+            findSelectionYPosition(scrollContainerRef.current, editorContentRef.current, from)
+          );
+          setShowCommentsSidebar(true);
           setIsAddingComment(true);
           setFloatingCommentBtn(null);
           break;
@@ -2358,7 +2351,7 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
       }
       // TextContextMenu calls onClose after onAction, so no need to close here
     },
-    [getActiveEditorView, focusActiveEditor, showCommentsSidebar]
+    [getActiveEditorView, focusActiveEditor]
   );
 
   // Handle margin changes from rulers
@@ -3409,7 +3402,7 @@ body { background: white; }
                               }
                             }
                             setAddCommentYPosition(floatingCommentBtn.top);
-                            if (!showCommentsSidebar) setShowCommentsSidebar(true);
+                            setShowCommentsSidebar(true);
                             setIsAddingComment(true);
                             setFloatingCommentBtn(null);
                           }}
