@@ -40,13 +40,14 @@ You MUST return a JSON object with this exact structure:
   ]
 }
 
-Rules:
+HARD REQUIREMENTS — you MUST meet ALL of these minimums:
+- You MUST add at least 4 comments. More is better. Spread them across different parts of the document.
+- You MUST suggest at least 2 text replacements (tracked changes). Pick weak phrasing, vague language, or clunky sentences and rewrite them.
 - paragraphIndex must match an index from the document content
-- search must be an EXACT substring from that paragraph's text — copy it character-for-character
-- Add 3-8 comments on different parts of the document
-- Suggest 1-3 text replacements where the writing could genuinely be stronger
-- Be funny but constructive — the goal is to help, not just mock
-- Each comment should be witty AND actionable`,
+- search must be an EXACT substring from that paragraph's text — copy it character-for-character, including punctuation and whitespace
+- If the document has existing tracked changes, comment on at least one of them (e.g. "This change makes it worse, not better" or "Finally, someone with taste")
+- Be funny AND constructive — each comment should make the reader laugh AND learn something
+- Vary your tone: mix savage burns with backhanded compliments and genuine advice`,
       },
       {
         role: 'user',

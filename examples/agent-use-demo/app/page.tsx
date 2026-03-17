@@ -139,7 +139,7 @@ export default function Home() {
         <div style={styles.resultHeader}>
           <div style={styles.resultHeaderLeft}>
             <span style={{ fontSize: 24 }}>&#128293;</span>
-            <span style={styles.resultTitle}>Roast Complete</span>
+            <span style={styles.resultTitle}>Roast Complete — {file?.name}</span>
             {stats && (
               <span style={styles.resultStats}>
                 {stats.commentsAdded} comments &middot; {stats.proposalsAdded} suggestions
@@ -163,7 +163,7 @@ export default function Home() {
             showToolbar={false}
             showRuler={false}
             showZoomControl={false}
-            documentName="Roasted Document"
+            documentName={file ? `roasted-${file.name}` : 'roasted-document.docx'}
           />
         </div>
       </div>
