@@ -255,6 +255,7 @@ export type {
   DocumentBody,
   BlockContent,
   Paragraph,
+  ParagraphContent,
   Run,
   RunContent,
   TextContent,
@@ -274,6 +275,16 @@ export type {
   ListLevel,
   NumberingDefinitions,
   Relationship,
+  // Track changes & comments
+  Comment,
+  CommentRangeStart,
+  CommentRangeEnd,
+  TrackedChangeInfo,
+  TrackedRunChange,
+  Insertion,
+  Deletion,
+  MoveFrom,
+  MoveTo,
 } from './types/document';
 
 // Agent API types

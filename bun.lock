@@ -34,6 +34,13 @@
         "vite": "^7.3.1",
       },
     },
+    "packages/agent-use": {
+      "name": "@eigenpal/docx-editor-agent-use",
+      "version": "0.0.1",
+      "peerDependencies": {
+        "@eigenpal/docx-core": ">=0.0.1",
+      },
+    },
     "packages/core": {
       "name": "@eigenpal/docx-core",
       "version": "0.0.1",
@@ -57,7 +64,7 @@
     },
     "packages/react": {
       "name": "@eigenpal/docx-js-editor",
-      "version": "0.0.22",
+      "version": "0.0.27",
       "dependencies": {
         "@radix-ui/react-select": "^2.2.6",
         "clsx": "^2.1.0",
@@ -135,6 +142,8 @@
     "@babel/types": ["@babel/types@7.29.0", "", { "dependencies": { "@babel/helper-string-parser": "^7.27.1", "@babel/helper-validator-identifier": "^7.28.5" } }, ""],
 
     "@eigenpal/docx-core": ["@eigenpal/docx-core@workspace:packages/core"],
+
+    "@eigenpal/docx-editor-agent-use": ["@eigenpal/docx-editor-agent-use@workspace:packages/agent-use"],
 
     "@eigenpal/docx-editor-vue": ["@eigenpal/docx-editor-vue@workspace:packages/vue"],
 

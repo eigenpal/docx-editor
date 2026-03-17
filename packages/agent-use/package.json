@@ -1,0 +1,59 @@
+{
+  "name": "@eigenpal/docx-editor-agent-use",
+  "version": "0.0.1",
+  "description": "Agent-friendly API for DOCX document review — read, comment, propose changes, accept/reject tracked changes",
+  "type": "module",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    },
+    "./bridge": {
+      "types": "./dist/bridge.d.ts",
+      "import": "./dist/bridge.js",
+      "require": "./dist/bridge.cjs"
+    }
+  },
+  "typesVersions": {
+    "*": {
+      "bridge": [
+        "./dist/bridge.d.ts"
+      ]
+    }
+  },
+  "files": [
+    "dist",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "typecheck": "tsc --noEmit"
+  },
+  "peerDependencies": {
+    "@eigenpal/docx-core": ">=0.0.1"
+  },
+  "keywords": [
+    "docx",
+    "ai",
+    "agent",
+    "review",
+    "track-changes",
+    "comments",
+    "legal",
+    "contract"
+  ],
+  "author": "EigenPal",
+  "license": "BUSL-1.1",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/eigenpal/docx-js-editor.git",
+    "directory": "packages/agent-use"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}
