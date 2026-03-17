@@ -1168,7 +1168,7 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
               if (selFrom >= pmStart && selFrom <= pmEnd) {
                 const rect = el.getBoundingClientRect();
                 const parentRect = parentEl.getBoundingClientRect();
-                const top = rect.top - parentRect.top + container.scrollTop;
+                const top = rect.top - parentRect.top;
                 // Position at the right edge of the page (relative to editorContentRef)
                 const left = pageEl
                   ? pageEl.getBoundingClientRect().right - parentRect.left
