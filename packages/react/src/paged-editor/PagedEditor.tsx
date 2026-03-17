@@ -3195,6 +3195,14 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
       if (relatedTarget && containerRef.current?.contains(relatedTarget)) {
         return; // Focus staying within editor
       }
+      // Keep selection visible when focus moves to toolbar or dropdown portals
+      if (
+        relatedTarget?.closest(
+          '[role="toolbar"], [data-radix-popper-content-wrapper], [data-radix-select-content], .docx-table-options-dropdown'
+        )
+      ) {
+        return;
+      }
       setIsFocused(false);
     }, []);
 
