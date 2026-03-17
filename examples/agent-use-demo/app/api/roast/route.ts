@@ -17,7 +17,11 @@ export async function POST(request: NextRequest) {
   const reviewer = await DocxReviewer.fromBuffer(buffer);
 
   // Step 1: Read the document
-  const content = reviewer.getContent();
+  // Plain text (no annotations) — so the AI's search strings match actual paragraph text
+  const content = reviewer.getContent({
+    includeTrackedChanges: false,
+    includeCommentAnchors: false,
+  });
   const existingChanges = reviewer.getChanges();
   const existingComments = reviewer.getComments();
 
@@ -93,6 +97,10 @@ ${existingComments.length > 0 ? `\nExisting comments:\n${JSON.stringify(existing
       replaceWith: r.replaceWith,
     })),
   });
+
+  if (result.errors.length > 0) {
+    console.warn('Roast errors:', JSON.stringify(result.errors, null, 2));
+  }
 
   // Step 4: Export the roasted document
   const output = await reviewer.toBuffer();
