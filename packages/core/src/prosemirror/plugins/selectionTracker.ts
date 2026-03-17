@@ -161,19 +161,7 @@ function extractTextFormatting(state: EditorState): TextFormatting {
 
   // Get marks: stored marks take precedence, then marks at cursor
   const marks = state.storedMarks || (empty ? $from.marks() : []);
-  let formatting: TextFormatting = {};
-
-  // For empty paragraphs with no marks, use defaultTextFormatting from paragraph attrs
-  const paragraph = $from.parent;
-  const isEmptyParagraph =
-    paragraph.type.name === 'paragraph' && paragraph.textContent.length === 0;
-  const defaultTextFormatting = paragraph.attrs?.defaultTextFormatting as
-    | TextFormatting
-    | undefined;
-
-  if (isEmptyParagraph && marks.length === 0 && defaultTextFormatting) {
-    formatting = { ...defaultTextFormatting };
-  }
+  const formatting: TextFormatting = {};
 
   for (const mark of marks) {
     switch (mark.type.name) {
