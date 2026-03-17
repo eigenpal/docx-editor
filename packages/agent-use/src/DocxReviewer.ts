@@ -21,7 +21,7 @@ import type {
   BatchReviewOptions,
   BatchResult,
 } from './types';
-import { getContent as getContentImpl } from './content';
+import { getContent as getContentImpl, formatContentForLLM } from './content';
 import { getChanges as getChangesImpl, getComments as getCommentsImpl } from './discovery';
 import { addComment as addCommentImpl, replyTo as replyToImpl } from './comments';
 import {
@@ -79,6 +79,15 @@ export class DocxReviewer {
    */
   getContent(options?: GetContentOptions): ContentBlock[] {
     return getContentImpl(this.body, options);
+  }
+
+  /**
+   * Get document content as plain text for LLM prompts.
+   * Avoids JSON quote-escaping issues — LLMs can copy text verbatim.
+   * Each paragraph is prefixed with its index: [0] text, [1] text, etc.
+   */
+  getContentAsText(options?: GetContentOptions): string {
+    return formatContentForLLM(getContentImpl(this.body, options));
   }
 
   // ==========================================================================

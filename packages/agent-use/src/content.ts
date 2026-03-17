@@ -1,5 +1,6 @@
 /**
  * getContent() — renders document as structured ContentBlock array for LLM consumption.
+ * formatContentForLLM() — converts blocks to plain text (avoids JSON quote-escaping issues).
  */
 
 import type { DocumentBody, Paragraph, Table } from '@eigenpal/docx-core/headless';
@@ -113,6 +114,44 @@ function buildTableBlock(
     rows.push(cells);
   }
   return { type: 'table', index, rows };
+}
+
+/**
+ * Format content blocks as plain text for LLM prompts.
+ * Avoids JSON.stringify quote-escaping issues — LLMs can copy text verbatim.
+ *
+ * Output format:
+ *   [0] (h1) Chapter Title
+ *   [1] Paragraph text here.
+ *   [2] • Bullet item
+ *   [3] (table)
+ *     | Cell 1 | Cell 2 |
+ */
+export function formatContentForLLM(blocks: ContentBlock[]): string {
+  const lines: string[] = [];
+  for (const block of blocks) {
+    switch (block.type) {
+      case 'heading':
+        lines.push(`[${block.index}] (h${block.level}) ${block.text}`);
+        break;
+      case 'paragraph':
+        lines.push(`[${block.index}] ${block.text}`);
+        break;
+      case 'list-item': {
+        const indent = '  '.repeat(block.listLevel);
+        const bullet = block.listType === 'bullet' ? '\u2022' : '-';
+        lines.push(`[${block.index}] ${indent}${bullet} ${block.text}`);
+        break;
+      }
+      case 'table':
+        lines.push(`[${block.index}] (table)`);
+        for (const row of block.rows) {
+          lines.push(`  | ${row.join(' | ')} |`);
+        }
+        break;
+    }
+  }
+  return lines.join('\n');
 }
 
 /**

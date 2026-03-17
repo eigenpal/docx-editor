@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import OpenAI from 'openai';
-import { DocxReviewer } from '@eigenpal/docx-editor-agents';
+import { DocxReviewer, formatContentForLLM } from '@eigenpal/docx-editor-agents';
 
 const openai = new OpenAI();
 const model = process.env.OPENAI_MODEL || 'gpt-4o';
@@ -16,12 +16,12 @@ export async function POST(request: NextRequest) {
   const buffer = await file.arrayBuffer();
   const reviewer = await DocxReviewer.fromBuffer(buffer);
 
-  // Step 1: Read the document
-  // Plain text (no annotations) — so the AI's search strings match actual paragraph text
+  // Step 1: Read document as plain text (no JSON escaping = no quote issues)
   const content = reviewer.getContent({
     includeTrackedChanges: false,
     includeCommentAnchors: false,
   });
+  const contentText = formatContentForLLM(content);
   const existingChanges = reviewer.getChanges();
   const existingComments = reviewer.getComments();
 
@@ -32,37 +32,36 @@ export async function POST(request: NextRequest) {
     messages: [
       {
         role: 'system',
-        content: `You are a brutally honest document reviewer with a sharp sense of humor. Your job is to "roast" documents — point out issues, bad phrasing, weak arguments, and suggest improvements, all while being entertaining.
+        content: `You are a brutally honest document reviewer with a sharp wit. Roast the document — point out issues, weak phrasing, and suggest improvements while being entertaining.
 
-You MUST return a JSON object with this exact structure:
+Return JSON:
 {
   "comments": [
-    { "paragraphIndex": <number>, "text": "<your roast comment>", "search": "<optional: specific text to target within that paragraph>" }
+    { "paragraphIndex": <number>, "text": "<your comment>" }
   ],
   "replacements": [
-    { "paragraphIndex": <number>, "search": "<exact text to replace — copy precisely from the document>", "replaceWith": "<better text>" }
+    { "paragraphIndex": <number>, "search": "<short phrase to find>", "replaceWith": "<better text>" }
   ]
 }
 
-HARD REQUIREMENTS — you MUST meet ALL of these minimums:
-- You MUST add at least 4 comments. More is better. Spread them across different parts of the document.
-- You MUST suggest at least 2 text replacements (tracked changes). Pick weak phrasing, vague language, or clunky sentences and rewrite them.
-- paragraphIndex must match an index from the document content
-- search must be an EXACT substring from that paragraph's text — copy it character-for-character, including punctuation and whitespace
-- search MUST come from a SINGLE paragraph. NEVER include newlines, tabs, or text from adjacent paragraphs. Each paragraph is a separate block with its own index.
-- Keep search strings short (1-2 sentences max). Prefer targeting a specific phrase rather than copying an entire paragraph.
-- If the document has existing tracked changes, comment on at least one of them (e.g. "This change makes it worse, not better" or "Finally, someone with taste")
-- Be funny AND constructive — each comment should make the reader laugh AND learn something
-- Vary your tone: mix savage burns with backhanded compliments and genuine advice`,
+Rules:
+- At least 4 comments and 2 replacements, spread across the document
+- paragraphIndex must match a [number] from the document
+- Comments anchor to the whole paragraph — just specify the index
+- For replacements, "search" is a SHORT phrase (3-8 words) that uniquely identifies the text to replace within that paragraph. Do NOT copy entire sentences.
+- Be funny AND constructive${existingChanges.length > 0 ? '\n- Comment on at least one existing tracked change' : ''}`,
       },
       {
         role: 'user',
-        content: `Roast this document:
-
-${JSON.stringify(content, null, 2)}
-
-${existingChanges.length > 0 ? `\nExisting tracked changes:\n${JSON.stringify(existingChanges, null, 2)}` : ''}
-${existingComments.length > 0 ? `\nExisting comments:\n${JSON.stringify(existingComments, null, 2)}` : ''}`,
+        content: `Roast this document:\n\n${contentText}${
+          existingChanges.length > 0
+            ? `\n\nExisting tracked changes:\n${existingChanges.map((c) => `  [${c.paragraphIndex}] ${c.type}: "${c.text}" by ${c.author}`).join('\n')}`
+            : ''
+        }${
+          existingComments.length > 0
+            ? `\n\nExisting comments:\n${existingComments.map((c) => `  [${c.paragraphIndex}] ${c.author}: "${c.text}"`).join('\n')}`
+            : ''
+        }`,
       },
     ],
   });
@@ -70,7 +69,7 @@ ${existingComments.length > 0 ? `\nExisting comments:\n${JSON.stringify(existing
   const text = response.choices[0]?.message?.content || '';
 
   let actions: {
-    comments?: { paragraphIndex: number; text: string; search?: string }[];
+    comments?: { paragraphIndex: number; text: string }[];
     replacements?: {
       paragraphIndex: number;
       search: string;
@@ -90,7 +89,6 @@ ${existingComments.length > 0 ? `\nExisting comments:\n${JSON.stringify(existing
       paragraphIndex: c.paragraphIndex,
       author: 'Document Roaster',
       text: c.text,
-      search: c.search,
     })),
     proposals: (actions.replacements ?? []).map((r) => ({
       paragraphIndex: r.paragraphIndex,

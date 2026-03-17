@@ -635,6 +635,30 @@ describe('textSearch', () => {
 });
 
 // ============================================================================
+// getContentAsText
+// ============================================================================
+
+describe('getContentAsText', () => {
+  test('formats paragraphs as plain text with indices', () => {
+    const reviewer = makeReviewer([
+      makeParagraph('First paragraph.'),
+      makeParagraph('Second paragraph.'),
+    ]);
+    const text = reviewer.getContentAsText();
+    expect(text).toContain('[0] First paragraph.');
+    expect(text).toContain('[1] Second paragraph.');
+  });
+
+  test('preserves smart quotes without JSON escaping', () => {
+    const reviewer = makeReviewer([makeParagraph('The \u201Cliability cap\u201D is too low.')]);
+    const text = reviewer.getContentAsText();
+    // Plain text — no \" or \u201C escaping
+    expect(text).toContain('\u201Cliability cap\u201D');
+    expect(text).not.toContain('\\u201C');
+  });
+});
+
+// ============================================================================
 // toDocument
 // ============================================================================
 
