@@ -2333,6 +2333,13 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
         case 'addComment': {
           const { from, to } = view.state.selection;
           if (from === to) break;
+          // Compute Y position BEFORE dispatching — dispatch triggers re-layout
+          // which rebuilds page DOM and invalidates the old span elements
+          const yPos = findSelectionYPosition(
+            scrollContainerRef.current,
+            editorContentRef.current,
+            from
+          );
           setCommentSelectionRange({ from, to });
           const pendingMark = view.state.schema.marks.comment.create({
             commentId: PENDING_COMMENT_ID,
@@ -2340,9 +2347,7 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
           const tr = view.state.tr.addMark(from, to, pendingMark);
           tr.setSelection(TextSelection.create(tr.doc, to));
           view.dispatch(tr);
-          setAddCommentYPosition(
-            findSelectionYPosition(scrollContainerRef.current, editorContentRef.current, from)
-          );
+          setAddCommentYPosition(yPos);
           setShowCommentsSidebar(true);
           setIsAddingComment(true);
           setFloatingCommentBtn(null);
