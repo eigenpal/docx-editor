@@ -181,6 +181,8 @@ export interface PagedEditorProps {
     tooltip?: string;
     anchorRect: DOMRect;
   }) => void;
+  /** Callback for right-click context menu on pages. */
+  onContextMenu?: (e: React.MouseEvent) => void;
 }
 
 export interface PagedEditorRef {
@@ -1330,6 +1332,7 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
       sidebarOverlay,
       scrollContainerRef: scrollContainerRefProp,
       onHyperlinkClick,
+      onContextMenu: onContextMenuProp,
     } = props;
 
     // Resolve the scroll container: prefer parent-provided ref, fallback to own container
@@ -3644,6 +3647,7 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
             onMouseDown={handlePagesMouseDown}
             onMouseMove={handlePagesMouseMove}
             onClick={handlePagesClick}
+            onContextMenu={onContextMenuProp}
             aria-hidden="true" // Visual only, PM provides semantic content
           />
 

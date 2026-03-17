@@ -3274,6 +3274,7 @@ body { background: white; }
                       onRenderedDomContextReady={onRenderedDomContextReady}
                       pluginOverlays={pluginOverlays}
                       onHyperlinkClick={handleHyperlinkClick}
+                      onContextMenu={handleEditorContextMenu}
                       commentsSidebarOpen={showCommentsSidebar}
                       scrollContainerRef={scrollContainerRef}
                       sidebarOverlay={
