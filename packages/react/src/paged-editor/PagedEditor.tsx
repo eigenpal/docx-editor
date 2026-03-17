@@ -2302,7 +2302,16 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
      */
     const handlePagesMouseDown = useCallback(
       (e: React.MouseEvent) => {
-        if (!hiddenPMRef.current || e.button !== 0) return; // Only handle left click
+        if (!hiddenPMRef.current) return;
+
+        // Right-click: prevent default to stop Firefox from resetting selection,
+        // but don't process our selection logic
+        if (e.button === 2) {
+          e.preventDefault();
+          return;
+        }
+
+        if (e.button !== 0) return; // Only handle left click
 
         // Hide table insert button on any mousedown
         setTableInsertButton(null);
