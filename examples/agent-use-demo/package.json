@@ -1,5 +1,5 @@
 {
-  "name": "roast-my-doc",
+  "name": "agent-use-demo",
   "private": true,
   "scripts": {
     "dev": "next dev --port 3001",

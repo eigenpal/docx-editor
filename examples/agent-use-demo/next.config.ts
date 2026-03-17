@@ -1,7 +1,7 @@
 import type { NextConfig } from 'next';
 
 const nextConfig: NextConfig = {
-  serverExternalPackages: ['@eigenpal/docx-core', '@eigenpal/docx-editor-agent-use'],
+  transpilePackages: ['@eigenpal/docx-js-editor', '@eigenpal/docx-core'],
 };
 
 export default nextConfig;
