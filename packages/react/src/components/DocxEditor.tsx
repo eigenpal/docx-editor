@@ -86,6 +86,11 @@ const PageSetupDialog = lazy(() =>
 import { MaterialSymbol } from './ui/Icons';
 import { Tooltip } from './ui/Tooltip';
 import { HyperlinkPopup, type HyperlinkPopupData } from './ui/HyperlinkPopup';
+import {
+  TextContextMenu,
+  type TextContextAction,
+  type TextContextMenuItem,
+} from './TextContextMenu';
 import { Toaster, toast } from 'sonner';
 import { getBuiltinTableStyle, type TableStylePreset } from './ui/TableStyleGallery';
 import { DocumentAgent } from '@eigenpal/docx-core/agent/DocumentAgent';
@@ -154,6 +159,7 @@ import {
   // Table of Contents command
   generateTOC,
   // Table commands
+  isInTable,
   getTableContext,
   insertTable,
   addRowAbove,
@@ -663,6 +669,14 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
     top: number;
     left: number;
   } | null>(null);
+
+  // Context menu state
+  const [contextMenu, setContextMenu] = useState<{
+    isOpen: boolean;
+    position: { x: number; y: number };
+    hasSelection: boolean;
+    cursorInTable: boolean;
+  }>({ isOpen: false, position: { x: 0, y: 0 }, hasSelection: false, cursorInTable: false });
 
   // Debounce timer for extractTrackedChanges (avoid full doc walk on every keystroke)
   const extractTrackedChangesTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -1764,6 +1778,175 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
       focusActiveEditor();
     },
     [tableSelection, getActiveEditorView, focusActiveEditor]
+  );
+
+  // Context menu handler
+  const handleEditorContextMenu = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const view = pagedEditorRef.current?.getView();
+    const inTable = view ? isInTable(view.state) : false;
+    const { from, to } = view?.state.selection ?? { from: 0, to: 0 };
+    const hasSel = from !== to;
+    setContextMenu({
+      isOpen: true,
+      position: { x: e.clientX, y: e.clientY },
+      hasSelection: hasSel,
+      cursorInTable: inTable,
+    });
+  }, []);
+
+  const contextMenuItems = useMemo((): TextContextMenuItem[] => {
+    const isMac = typeof navigator !== 'undefined' && /Mac/.test(navigator.platform);
+    const mod = isMac ? '⌘' : 'Ctrl';
+    const items: TextContextMenuItem[] = [
+      { action: 'cut', label: 'Cut', shortcut: `${mod}+X` },
+      { action: 'copy', label: 'Copy', shortcut: `${mod}+C` },
+      { action: 'paste', label: 'Paste', shortcut: `${mod}+V` },
+      {
+        action: 'pasteAsPlainText',
+        label: 'Paste as Plain Text',
+        shortcut: `${mod}+Shift+V`,
+        dividerAfter: true,
+      },
+      {
+        action: 'delete',
+        label: 'Delete',
+        shortcut: 'Del',
+        dividerAfter: !contextMenu.hasSelection && !contextMenu.cursorInTable,
+      },
+    ];
+    // Add comment option when text is selected
+    if (contextMenu.hasSelection) {
+      items.push({
+        action: 'addComment',
+        label: 'Comment',
+        dividerAfter: !contextMenu.cursorInTable,
+      });
+    }
+    // Table operations when cursor is in a table
+    if (contextMenu.cursorInTable) {
+      items.push(
+        { action: 'addRowAbove', label: 'Insert row above' },
+        { action: 'addRowBelow', label: 'Insert row below' },
+        { action: 'deleteRow', label: 'Delete row', dividerAfter: true },
+        { action: 'addColumnLeft', label: 'Insert column left' },
+        { action: 'addColumnRight', label: 'Insert column right' },
+        { action: 'deleteColumn', label: 'Delete column', dividerAfter: true }
+      );
+    }
+    items.push({ action: 'selectAll', label: 'Select All', shortcut: `${mod}+A` });
+    return items;
+  }, [contextMenu.hasSelection, contextMenu.cursorInTable]);
+
+  const handleContextMenuAction = useCallback(
+    async (action: TextContextAction) => {
+      setContextMenu((prev) => ({ ...prev, isOpen: false }));
+      const view = pagedEditorRef.current?.getView();
+      if (!view) return;
+
+      switch (action) {
+        case 'cut':
+          document.execCommand('cut');
+          break;
+        case 'copy':
+          document.execCommand('copy');
+          break;
+        case 'paste': {
+          // Use Clipboard API since document.execCommand('paste') is blocked in modern browsers
+          view.focus();
+          try {
+            const items = await navigator.clipboard.read();
+            let html = '';
+            let text = '';
+            for (const item of items) {
+              if (item.types.includes('text/html')) {
+                html = await (await item.getType('text/html')).text();
+              }
+              if (item.types.includes('text/plain')) {
+                text = await (await item.getType('text/plain')).text();
+              }
+            }
+            // Create a synthetic paste event so ProseMirror's paste handling processes it
+            const dt = new DataTransfer();
+            if (html) dt.items.add(html, 'text/html');
+            if (text) dt.items.add(text, 'text/plain');
+            const pasteEvent = new ClipboardEvent('paste', {
+              clipboardData: dt,
+              bubbles: true,
+              cancelable: true,
+            });
+            view.dom.dispatchEvent(pasteEvent);
+          } catch {
+            try {
+              const text = await navigator.clipboard.readText();
+              if (text) {
+                view.dispatch(view.state.tr.insertText(text));
+              }
+            } catch {
+              // Clipboard access denied
+            }
+          }
+          break;
+        }
+        case 'pasteAsPlainText': {
+          view.focus();
+          try {
+            const text = await navigator.clipboard.readText();
+            if (text) {
+              view.dispatch(view.state.tr.insertText(text));
+            }
+          } catch {
+            // Clipboard access denied
+          }
+          break;
+        }
+        case 'delete':
+          document.execCommand('delete');
+          break;
+        case 'selectAll':
+          document.execCommand('selectAll');
+          break;
+        // Table operations
+        case 'addRowAbove':
+          addRowAbove(view.state, view.dispatch);
+          break;
+        case 'addRowBelow':
+          addRowBelow(view.state, view.dispatch);
+          break;
+        case 'deleteRow':
+          pmDeleteRow(view.state, view.dispatch);
+          break;
+        case 'addColumnLeft':
+          addColumnLeft(view.state, view.dispatch);
+          break;
+        case 'addColumnRight':
+          addColumnRight(view.state, view.dispatch);
+          break;
+        case 'deleteColumn':
+          pmDeleteColumn(view.state, view.dispatch);
+          break;
+        // Comment
+        case 'addComment': {
+          const { from, to } = view.state.selection;
+          if (from === to) break;
+          setCommentSelectionRange({ from, to });
+          const pendingMark = view.state.schema.marks.comment.create({
+            commentId: PENDING_COMMENT_ID,
+          });
+          const tr = view.state.tr.addMark(from, to, pendingMark);
+          tr.setSelection(TextSelection.create(tr.doc, to));
+          view.dispatch(tr);
+          setAddCommentYPosition(null); // Will be computed by CommentsSidebar
+          if (!showCommentsSidebar) setShowCommentsSidebar(true);
+          setIsAddingComment(true);
+          setFloatingCommentBtn(null);
+          break;
+        }
+      }
+      focusActiveEditor();
+    },
+    [focusActiveEditor, showCommentsSidebar]
   );
 
   // Handle formatting action from toolbar
@@ -3036,6 +3219,7 @@ body { background: white; }
                         pagedEditorRef.current?.focus();
                       }
                     }}
+                    onContextMenu={handleEditorContextMenu}
                   >
                     {/* Vertical Ruler - fixed on left edge (hidden when readOnly prop is set) */}
                     {showRuler && !readOnlyProp && (
@@ -3240,6 +3424,17 @@ body { background: white; }
                         </button>
                       </Tooltip>
                     )}
+
+                    {/* Right-click context menu */}
+                    <TextContextMenu
+                      isOpen={contextMenu.isOpen}
+                      position={contextMenu.position}
+                      hasSelection={contextMenu.hasSelection}
+                      isEditable={!readOnly}
+                      items={contextMenuItems}
+                      onAction={handleContextMenuAction}
+                      onClose={() => setContextMenu((prev) => ({ ...prev, isOpen: false }))}
+                    />
 
                     {/* Inline Header/Footer Editor — positioned over the target area */}
                     {hfEditPosition &&

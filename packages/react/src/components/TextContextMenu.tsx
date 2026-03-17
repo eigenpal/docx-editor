@@ -21,7 +21,14 @@ export type TextContextAction =
   | 'pasteAsPlainText'
   | 'selectAll'
   | 'delete'
-  | 'separator';
+  | 'separator'
+  | 'addRowAbove'
+  | 'addRowBelow'
+  | 'deleteRow'
+  | 'addColumnLeft'
+  | 'addColumnRight'
+  | 'deleteColumn'
+  | 'addComment';
 
 /**
  * Menu item configuration
@@ -176,6 +183,85 @@ const SelectAllIcon = () => (
   </svg>
 );
 
+const AddRowAboveIcon = () => (
+  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <rect x="2" y="6" width="12" height="4" rx="0.5" stroke="currentColor" strokeWidth="1.2" />
+    <rect x="2" y="10" width="12" height="4" rx="0.5" stroke="currentColor" strokeWidth="1.2" />
+    <path d="M8 1v3M6.5 2.5h3" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
+  </svg>
+);
+
+const AddRowBelowIcon = () => (
+  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <rect x="2" y="2" width="12" height="4" rx="0.5" stroke="currentColor" strokeWidth="1.2" />
+    <rect x="2" y="6" width="12" height="4" rx="0.5" stroke="currentColor" strokeWidth="1.2" />
+    <path d="M8 12v3M6.5 13.5h3" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
+  </svg>
+);
+
+const DeleteRowIcon = () => (
+  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <rect x="2" y="2" width="12" height="4" rx="0.5" stroke="currentColor" strokeWidth="1.2" />
+    <rect
+      x="2"
+      y="6"
+      width="12"
+      height="4"
+      rx="0.5"
+      stroke="currentColor"
+      strokeWidth="1.2"
+      opacity="0.3"
+    />
+    <rect x="2" y="10" width="12" height="4" rx="0.5" stroke="currentColor" strokeWidth="1.2" />
+    <path d="M5 8h6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+  </svg>
+);
+
+const AddColumnLeftIcon = () => (
+  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <rect x="6" y="2" width="4" height="12" rx="0.5" stroke="currentColor" strokeWidth="1.2" />
+    <rect x="10" y="2" width="4" height="12" rx="0.5" stroke="currentColor" strokeWidth="1.2" />
+    <path d="M3 8H0.5M1.75 6.5v3" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
+  </svg>
+);
+
+const AddColumnRightIcon = () => (
+  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <rect x="2" y="2" width="4" height="12" rx="0.5" stroke="currentColor" strokeWidth="1.2" />
+    <rect x="6" y="2" width="4" height="12" rx="0.5" stroke="currentColor" strokeWidth="1.2" />
+    <path d="M13 8h2.5M14.25 6.5v3" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
+  </svg>
+);
+
+const DeleteColumnIcon = () => (
+  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <rect x="2" y="2" width="4" height="12" rx="0.5" stroke="currentColor" strokeWidth="1.2" />
+    <rect
+      x="6"
+      y="2"
+      width="4"
+      height="12"
+      rx="0.5"
+      stroke="currentColor"
+      strokeWidth="1.2"
+      opacity="0.3"
+    />
+    <rect x="10" y="2" width="4" height="12" rx="0.5" stroke="currentColor" strokeWidth="1.2" />
+    <path d="M8 5v6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+  </svg>
+);
+
+const CommentIcon = () => (
+  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <path
+      d="M3 3h10a1 1 0 011 1v6a1 1 0 01-1 1H6l-3 2.5V11H3a1 1 0 01-1-1V4a1 1 0 011-1z"
+      stroke="currentColor"
+      strokeWidth="1.3"
+    />
+    <path d="M5 6h6M5 8.5h4" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
+  </svg>
+);
+
 /**
  * Get icon for action
  */
@@ -192,6 +278,20 @@ function getActionIcon(action: TextContextAction): React.ReactNode {
       return <DeleteIcon />;
     case 'selectAll':
       return <SelectAllIcon />;
+    case 'addRowAbove':
+      return <AddRowAboveIcon />;
+    case 'addRowBelow':
+      return <AddRowBelowIcon />;
+    case 'deleteRow':
+      return <DeleteRowIcon />;
+    case 'addColumnLeft':
+      return <AddColumnLeftIcon />;
+    case 'addColumnRight':
+      return <AddColumnRightIcon />;
+    case 'deleteColumn':
+      return <DeleteColumnIcon />;
+    case 'addComment':
+      return <CommentIcon />;
     default:
       return null;
   }
@@ -627,6 +727,13 @@ export function getTextActionLabel(action: TextContextAction): string {
     selectAll: 'Select All',
     delete: 'Delete',
     separator: '',
+    addRowAbove: 'Insert row above',
+    addRowBelow: 'Insert row below',
+    deleteRow: 'Delete row',
+    addColumnLeft: 'Insert column left',
+    addColumnRight: 'Insert column right',
+    deleteColumn: 'Delete column',
+    addComment: 'Comment',
   };
   return labels[action];
 }
@@ -643,6 +750,13 @@ export function getTextActionShortcut(action: TextContextAction): string {
     selectAll: 'Ctrl+A',
     delete: 'Del',
     separator: '',
+    addRowAbove: '',
+    addRowBelow: '',
+    deleteRow: '',
+    addColumnLeft: '',
+    addColumnRight: '',
+    deleteColumn: '',
+    addComment: '',
   };
   return shortcuts[action];
 }
@@ -670,6 +784,8 @@ export function isTextActionAvailable(
     case 'paste':
     case 'pasteAsPlainText':
       return isEditable;
+    case 'addComment':
+      return hasSelection;
     case 'selectAll':
       return true;
     default:
