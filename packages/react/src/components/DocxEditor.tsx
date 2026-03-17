@@ -1093,7 +1093,7 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
       // If no explicit font/size marks, resolve from paragraph style or document defaults
       if (!fontFamily || !fontSize) {
         const currentDoc = historyStateRef.current;
-        const paraStyleId = paragraphFormatting.styleId;
+        const paraStyleId = selectionState.styleId;
         if (currentDoc?.package.styles && paraStyleId) {
           const resolver = getCachedStyleResolver(currentDoc.package.styles);
           const resolved = resolver.resolveParagraphStyle(paraStyleId);
