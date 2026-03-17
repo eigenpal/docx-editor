@@ -118,14 +118,14 @@ function buildTableBlock(
 
 /**
  * Format content blocks as plain text for LLM prompts.
- * Avoids JSON.stringify quote-escaping issues — LLMs can copy text verbatim.
+ * Every paragraph (including inside tables) gets its own [index].
  *
- * Output format:
+ * Output:
  *   [0] (h1) Chapter Title
  *   [1] Paragraph text here.
  *   [2] • Bullet item
- *   [3] (table)
- *     | Cell 1 | Cell 2 |
+ *   [3] (table, row 1, col 1) First cell
+ *   [4] (table, row 1, col 2) Second cell
  */
 export function formatContentForLLM(blocks: ContentBlock[]): string {
   const lines: string[] = [];
@@ -143,12 +143,21 @@ export function formatContentForLLM(blocks: ContentBlock[]): string {
         lines.push(`[${block.index}] ${indent}${bullet} ${block.text}`);
         break;
       }
-      case 'table':
-        lines.push(`[${block.index}] (table)`);
-        for (const row of block.rows) {
-          lines.push(`  | ${row.join(' | ')} |`);
+      case 'table': {
+        let idx = block.index;
+        for (let r = 0; r < block.rows.length; r++) {
+          for (let c = 0; c < block.rows[r].length; c++) {
+            const cellText = block.rows[r][c];
+            // A cell can have multiple paragraphs (joined by \n in buildTableBlock)
+            const paras = cellText.split('\n');
+            for (const para of paras) {
+              lines.push(`[${idx}] (table, row ${r + 1}, col ${c + 1}) ${para}`);
+              idx++;
+            }
+          }
         }
         break;
+      }
     }
   }
   return lines.join('\n');

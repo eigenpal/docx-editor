@@ -632,6 +632,43 @@ describe('getContentAsText', () => {
     expect(text).toContain('[1] Second paragraph.');
   });
 
+  test('shows table cell paragraphs with indices', () => {
+    const doc = makeDoc([]);
+    doc.package.document.content = [
+      makeParagraph('Before table.'),
+      makeTable([
+        ['Cell A', 'Cell B'],
+        ['Cell C', 'Cell D'],
+      ]),
+      makeParagraph('After table.'),
+    ];
+    const reviewer = new DocxReviewer(doc);
+    const text = reviewer.getContentAsText();
+    expect(text).toContain('[0] Before table.');
+    expect(text).toContain('[1] (table, row 1, col 1) Cell A');
+    expect(text).toContain('[2] (table, row 1, col 2) Cell B');
+    expect(text).toContain('[3] (table, row 2, col 1) Cell C');
+    expect(text).toContain('[4] (table, row 2, col 2) Cell D');
+    expect(text).toContain('[5] After table.');
+  });
+
+  test('can comment on table cell paragraph by index', () => {
+    const doc = makeDoc([]);
+    doc.package.document.content = [
+      makeParagraph('Before.'),
+      makeTable([
+        ['Cell A', 'Cell B'],
+        ['Cell C', 'Cell D'],
+      ]),
+    ];
+    const reviewer = new DocxReviewer(doc);
+    // Comment on Cell C (row 2, col 1 = index 3)
+    reviewer.addComment(3, 'Fix this cell.');
+    const comments = reviewer.getComments();
+    expect(comments).toHaveLength(1);
+    expect(comments[0].paragraphIndex).toBe(3);
+  });
+
   test('preserves smart quotes without JSON escaping', () => {
     const reviewer = makeReviewer([makeParagraph('The \u201Cliability cap\u201D is too low.')]);
     const text = reviewer.getContentAsText();
