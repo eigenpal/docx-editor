@@ -577,16 +577,26 @@ function makeApplyStyle(schema: Schema) {
             styleId,
           };
 
-          if (resolvedAttrs?.paragraphFormatting) {
+          if (resolvedAttrs) {
+            // When applying a style, explicitly reset all style-controlled
+            // paragraph attrs to the new style's values (or null to clear).
+            // This prevents old style properties (e.g. heading line spacing)
+            // from persisting when switching to a different style.
             const ppr = resolvedAttrs.paragraphFormatting;
-            if (ppr.alignment !== undefined) newAttrs.alignment = ppr.alignment;
-            if (ppr.spaceBefore !== undefined) newAttrs.spaceBefore = ppr.spaceBefore;
-            if (ppr.spaceAfter !== undefined) newAttrs.spaceAfter = ppr.spaceAfter;
-            if (ppr.lineSpacing !== undefined) newAttrs.lineSpacing = ppr.lineSpacing;
-            if (ppr.lineSpacingRule !== undefined) newAttrs.lineSpacingRule = ppr.lineSpacingRule;
-            if (ppr.indentLeft !== undefined) newAttrs.indentLeft = ppr.indentLeft;
-            if (ppr.indentRight !== undefined) newAttrs.indentRight = ppr.indentRight;
-            if (ppr.indentFirstLine !== undefined) newAttrs.indentFirstLine = ppr.indentFirstLine;
+            newAttrs.alignment = ppr?.alignment ?? null;
+            newAttrs.spaceBefore = ppr?.spaceBefore ?? null;
+            newAttrs.spaceAfter = ppr?.spaceAfter ?? null;
+            newAttrs.lineSpacing = ppr?.lineSpacing ?? null;
+            newAttrs.lineSpacingRule = ppr?.lineSpacingRule ?? null;
+            newAttrs.indentLeft = ppr?.indentLeft ?? null;
+            newAttrs.indentRight = ppr?.indentRight ?? null;
+            newAttrs.indentFirstLine = ppr?.indentFirstLine ?? null;
+            newAttrs.hangingIndent = ppr?.hangingIndent ?? null;
+            newAttrs.contextualSpacing = ppr?.contextualSpacing ?? null;
+            newAttrs.keepNext = ppr?.keepNext ?? null;
+            newAttrs.keepLines = ppr?.keepLines ?? null;
+            newAttrs.pageBreakBefore = ppr?.pageBreakBefore ?? null;
+            newAttrs.outlineLevel = ppr?.outlineLevel ?? null;
           }
 
           tr = tr.setNodeMarkup(pos, undefined, newAttrs);
