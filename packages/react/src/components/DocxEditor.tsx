@@ -551,8 +551,10 @@ let nextCommentId = Date.now();
 const PENDING_COMMENT_ID = -1;
 
 /**
- * Find the Y position (relative to parentEl) of the span containing the given PM position.
+ * Find the Y position (relative to parentEl) of the element containing the given PM position.
  * Used by both the floating comment button and the context menu comment action.
+ * Queries all elements with data-pm-start (spans, divs, imgs) — not just spans,
+ * since table cell content may use div fragments.
  */
 function findSelectionYPosition(
   scrollContainer: HTMLElement | null,
@@ -562,9 +564,9 @@ function findSelectionYPosition(
   if (!scrollContainer || !parentEl) return null;
   const pagesEl = scrollContainer.querySelector('.paged-editor__pages');
   if (!pagesEl) return null;
-  const spans = pagesEl.querySelectorAll('span[data-pm-start]');
-  for (const span of spans) {
-    const el = span as HTMLElement;
+  const elements = pagesEl.querySelectorAll('[data-pm-start]');
+  for (const node of elements) {
+    const el = node as HTMLElement;
     const pmStart = Number(el.dataset.pmStart);
     const pmEnd = Number(el.dataset.pmEnd);
     if (pmPos >= pmStart && pmPos <= pmEnd) {
