@@ -1,12 +1,12 @@
 /**
- * @eigenpal/docx-editor-agent-use
+ * @eigenpal/docx-editor-agents
  *
  * Agent-friendly API for DOCX document review.
  * Headless — no DOM or React dependencies.
  *
  * @example
  * ```ts
- * import { DocxReviewer } from '@eigenpal/docx-editor-agent-use';
+ * import { DocxReviewer } from '@eigenpal/docx-editor-agents';
  *
  * const reviewer = await DocxReviewer.fromBuffer(buffer);
  * const content = reviewer.getContent();

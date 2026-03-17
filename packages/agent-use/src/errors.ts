@@ -1,5 +1,5 @@
 /**
- * Error classes for @eigenpal/docx-editor-agent-use
+ * Error classes for @eigenpal/docx-editor-agents
  */
 
 export class TextNotFoundError extends Error {

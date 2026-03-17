@@ -229,11 +229,8 @@ export default function Home() {
 
         <div style={styles.footer}>
           Powered by{' '}
-          <a
-            href="https://www.npmjs.com/package/@eigenpal/docx-editor-agent-use"
-            style={styles.link}
-          >
-            @eigenpal/docx-editor-agent-use
+          <a href="https://www.npmjs.com/package/@eigenpal/docx-editor-agents" style={styles.link}>
+            @eigenpal/docx-editor-agents
           </a>
           {' + '}
           <a href="https://platform.openai.com" style={styles.link}>

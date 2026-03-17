@@ -2,7 +2,7 @@
 
 The editor has complete OOXML support for track changes and comments (types, parsers, serializers, ProseMirror marks/commands). Missing: a high-level API that works with paragraph indices and IDs instead of ProseMirror positions.
 
-Monorepo: `packages/core` (`@eigenpal/docx-core`, MIT), `packages/react`, `packages/vue`. Root workspace `"packages/*"`. Build: tsup. New package: `packages/agent-use` → `@eigenpal/docx-editor-agent-use` (BSL-1.1).
+Monorepo: `packages/core` (`@eigenpal/docx-core`, MIT), `packages/react`, `packages/vue`. Root workspace `"packages/*"`. Build: tsup. New package: `packages/agent-use` → `@eigenpal/docx-editor-agents` (BSL-1.1).
 
 ## Goals / Non-Goals
 

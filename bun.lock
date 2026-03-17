@@ -38,7 +38,7 @@
       "name": "agent-use-demo",
       "dependencies": {
         "@eigenpal/docx-core": "workspace:*",
-        "@eigenpal/docx-editor-agent-use": "workspace:*",
+        "@eigenpal/docx-editor-agents": "workspace:*",
         "@eigenpal/docx-js-editor": "workspace:*",
         "next": "^15.3.3",
         "openai": "^4.78.0",
@@ -53,7 +53,7 @@
       },
     },
     "packages/agent-use": {
-      "name": "@eigenpal/docx-editor-agent-use",
+      "name": "@eigenpal/docx-editor-agents",
       "version": "0.0.1",
       "peerDependencies": {
         "@eigenpal/docx-core": ">=0.0.1",
@@ -161,7 +161,7 @@
 
     "@eigenpal/docx-core": ["@eigenpal/docx-core@workspace:packages/core"],
 
-    "@eigenpal/docx-editor-agent-use": ["@eigenpal/docx-editor-agent-use@workspace:packages/agent-use"],
+    "@eigenpal/docx-editor-agents": ["@eigenpal/docx-editor-agents@workspace:packages/agent-use"],
 
     "@eigenpal/docx-editor-vue": ["@eigenpal/docx-editor-vue@workspace:packages/vue"],
 

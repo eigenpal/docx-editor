@@ -1,6 +1,6 @@
 ## 1. Package Scaffold
 
-- [x] 1.1 Create `packages/agent-use/` with `package.json` (`@eigenpal/docx-editor-agent-use`, BSL-1.1, peer dep on `@eigenpal/docx-core`), `tsconfig.json`, `tsup.config.ts` with two entry points (`src/index.ts`, `src/bridge.ts`)
+- [x] 1.1 Create `packages/agent-use/` with `package.json` (`@eigenpal/docx-editor-agents`, BSL-1.1, peer dep on `@eigenpal/docx-core`), `tsconfig.json`, `tsup.config.ts` with two entry points (`src/index.ts`, `src/bridge.ts`)
 - [x] 1.2 Add BSL-1.1 `LICENSE` file (licensor: EigenPal, 4-year change date, MIT change license) — deferred, will add later
 - [x] 1.3 Create source files: `src/index.ts`, `src/types.ts`, `src/errors.ts`, `src/DocxReviewer.ts`, `src/content.ts`, `src/discovery.ts`, `src/comments.ts`, `src/changes.ts`, `src/textSearch.ts`, `src/batch.ts`, `src/bridge.ts`
 - [x] 1.4 Define types in `types.ts`: `ContentBlock`, `ReviewChange`, `ReviewComment`, `BatchResult`, `BatchError`, `GetContentOptions`, `ChangeFilter`, `CommentFilter`

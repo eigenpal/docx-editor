@@ -1,5 +1,5 @@
 {
-  "name": "@eigenpal/docx-editor-agent-use",
+  "name": "@eigenpal/docx-editor-agents",
   "version": "0.0.1",
   "description": "Agent-friendly API for DOCX document review — read, comment, propose changes, accept/reject tracked changes",
   "type": "module",
