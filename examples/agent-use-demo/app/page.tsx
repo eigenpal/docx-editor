@@ -157,7 +157,14 @@ export default function Home() {
           </div>
         </div>
         <div style={styles.editorWrap}>
-          <DocxEditor ref={editorRef} documentBuffer={roastedBuffer} />
+          <DocxEditor
+            ref={editorRef}
+            documentBuffer={roastedBuffer}
+            showToolbar={false}
+            showRuler={false}
+            showZoomControl={false}
+            documentName="Roasted Document"
+          />
         </div>
       </div>
     );
