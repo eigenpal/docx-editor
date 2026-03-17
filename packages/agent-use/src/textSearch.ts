@@ -96,11 +96,12 @@ export function findTextInParagraph(
   const runs = flattenRuns(paragraph);
   const fullText = runs.map((r) => r.text).join('');
 
-  const matchStart = fullText.indexOf(search);
-  if (matchStart === -1) {
+  const match = fuzzyFind(fullText, search);
+  if (match === null) {
     throw new TextNotFoundError(search, paragraphIndex);
   }
-  const matchEnd = matchStart + search.length;
+  const matchStart = match.start;
+  const matchEnd = match.end;
 
   // Find start run
   let startRunIdx = -1;
@@ -191,4 +192,145 @@ function setRunText(run: Run, text: string): void {
   if (textContent) {
     (textContent as { type: 'text'; text: string }).text = text;
   }
+}
+
+// ============================================================================
+// NORMALIZED MATCHING -- handles LLM text mangling (quotes, dashes, unicode)
+// ============================================================================
+
+interface NormalizedText {
+  text: string;
+  /** posMap[i] = index in original string that normalized char i came from */
+  posMap: number[];
+}
+
+const ZERO_WIDTH = new Set([
+  '\u200B', // zero-width space
+  '\u200C', // zero-width non-joiner
+  '\u200D', // zero-width joiner
+  '\uFEFF', // BOM / zero-width no-break space
+  '\u00AD', // soft hyphen
+]);
+
+/**
+ * Build normalized text with position map back to original.
+ * Normalizes: smart quotes, dashes, ellipsis, whitespace, zero-width chars, case.
+ */
+function buildNormalized(original: string): NormalizedText {
+  const chars: string[] = [];
+  const posMap: number[] = [];
+  let prevWasSpace = true;
+
+  for (let i = 0; i < original.length; i++) {
+    let ch = original[i];
+
+    if (ZERO_WIDTH.has(ch)) continue;
+
+    // Smart quotes -> straight
+    if (ch === '\u201C' || ch === '\u201D' || ch === '\u201E' || ch === '\u201F') ch = '"';
+    if (ch === '\u2018' || ch === '\u2019' || ch === '\u201A' || ch === '\u201B') ch = "'";
+
+    // Dashes -> hyphen
+    if (ch === '\u2013' || ch === '\u2014' || ch === '\u2012' || ch === '\u2015') ch = '-';
+
+    // Ellipsis -> three dots
+    if (ch === '\u2026') {
+      chars.push('.', '.', '.');
+      posMap.push(i, i, i);
+      prevWasSpace = false;
+      continue;
+    }
+
+    // Collapse whitespace (including non-breaking space)
+    if (/\s/.test(ch) || ch === '\u00A0') {
+      if (!prevWasSpace) {
+        chars.push(' ');
+        posMap.push(i);
+        prevWasSpace = true;
+      }
+      continue;
+    }
+
+    chars.push(ch.toLowerCase());
+    posMap.push(i);
+    prevWasSpace = false;
+  }
+
+  // Trim trailing space
+  if (chars.length > 0 && chars[chars.length - 1] === ' ') {
+    chars.pop();
+    posMap.pop();
+  }
+
+  return { text: chars.join(''), posMap };
+}
+
+function mapToOriginal(
+  norm: NormalizedText,
+  normStart: number,
+  normLen: number,
+  original: string
+): { start: number; end: number } {
+  const origStart = norm.posMap[normStart];
+  let origEnd = norm.posMap[normStart + normLen - 1] + 1;
+  while (origEnd < original.length && ZERO_WIDTH.has(original[origEnd])) {
+    origEnd++;
+  }
+  return { start: origStart, end: origEnd };
+}
+
+/**
+ * Find search in text. Returns { start, end } in the ORIGINAL text, or null.
+ *
+ * 1. Exact match (fast path)
+ * 2. Full normalized match (quotes, dashes, whitespace, case, unicode)
+ * 3. Drop words from start/end (LLM copied extra context or truncated)
+ */
+function fuzzyFind(text: string, search: string): { start: number; end: number } | null {
+  if (!search || !text) return null;
+
+  // 1. Exact
+  const exact = text.indexOf(search);
+  if (exact !== -1) {
+    return { start: exact, end: exact + search.length };
+  }
+
+  // 2. Normalized
+  const normText = buildNormalized(text);
+  const normSearch = buildNormalized(search);
+  if (normSearch.text.length === 0) return null;
+
+  const normIdx = normText.text.indexOf(normSearch.text);
+  if (normIdx !== -1) {
+    return mapToOriginal(normText, normIdx, normSearch.text.length, text);
+  }
+
+  // 3. Drop words from boundaries
+  const words = normSearch.text.split(' ');
+  if (words.length >= 3) {
+    const maxDrop = Math.min(3, words.length - 2);
+
+    for (let drop = 1; drop <= maxDrop; drop++) {
+      const sub = words.slice(drop).join(' ');
+      const idx = normText.text.indexOf(sub);
+      if (idx !== -1) return mapToOriginal(normText, idx, sub.length, text);
+    }
+
+    for (let drop = 1; drop <= maxDrop; drop++) {
+      const sub = words.slice(0, -drop).join(' ');
+      const idx = normText.text.indexOf(sub);
+      if (idx !== -1) return mapToOriginal(normText, idx, sub.length, text);
+    }
+
+    for (let ds = 1; ds <= Math.min(2, words.length - 2); ds++) {
+      for (let de = 1; de <= Math.min(2, words.length - ds - 1); de++) {
+        const sub = words.slice(ds, -de).join(' ');
+        if (sub.length < 10) continue;
+        const idx = normText.text.indexOf(sub);
+        if (idx !== -1) return mapToOriginal(normText, idx, sub.length, text);
+      }
+    }
+  }
+
+  return null;
 }

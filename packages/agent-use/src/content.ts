@@ -39,7 +39,16 @@ export function getContent(body: DocumentBody, options: GetContentOptions = {}):
       if (isInRange(index, fromIndex, toIndex)) {
         blocks.push(buildTableBlock(block, index, includeTrackedChanges, includeCommentAnchors));
       }
-      index++;
+      // Advance by number of cell paragraphs (matching getParagraphAtIndex counting)
+      for (const row of block.rows) {
+        for (const cell of row.cells) {
+          for (const cellBlock of cell.content) {
+            if (cellBlock.type === 'paragraph') {
+              index++;
+            }
+          }
+        }
+      }
     } else {
       index++;
     }
