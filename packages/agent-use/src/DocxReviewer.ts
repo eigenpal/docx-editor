@@ -1,7 +1,12 @@
 /**
- * DocxReviewer — main class for agent-friendly document review.
+ * DocxReviewer — Word-like API for AI document review.
  *
- * 14-method API: read, discover, comment, propose, resolve, batch, export.
+ * Usage:
+ *   const reviewer = await DocxReviewer.fromBuffer(buffer, 'AI Reviewer');
+ *   const text = reviewer.getContentAsText();
+ *   reviewer.addComment(5, 'Fix this paragraph.');
+ *   reviewer.replace(5, '$50k', '$500k');
+ *   const output = await reviewer.toBuffer();
  */
 
 import type { Document, DocumentBody } from '@eigenpal/docx-core/headless';
@@ -37,18 +42,11 @@ import { applyReview as applyReviewImpl } from './batch';
 
 export class DocxReviewer {
   private doc: Document;
+  readonly author: string;
 
-  /**
-   * Create a reviewer from a parsed Document.
-   * The document is deep-cloned — the original is never modified.
-   *
-   * @param document - Parsed Document from @eigenpal/docx-core
-   * @param originalBuffer - Original DOCX buffer, needed for toBuffer()
-   */
-  constructor(document: Document, originalBuffer?: ArrayBuffer) {
-    // Deep clone so we don't mutate the caller's document
+  constructor(document: Document, author = 'AI', originalBuffer?: ArrayBuffer) {
     this.doc = structuredClone(document);
-    // Preserve original buffer for repacking (structuredClone can't clone ArrayBuffer correctly in all envs)
+    this.author = author;
     if (originalBuffer) {
       this.doc.originalBuffer = originalBuffer;
     } else if (document.originalBuffer) {
@@ -56,36 +54,28 @@ export class DocxReviewer {
     }
   }
 
-  /**
-   * Create a reviewer from a DOCX buffer.
-   */
-  static async fromBuffer(buffer: ArrayBuffer): Promise<DocxReviewer> {
+  static async fromBuffer(buffer: ArrayBuffer, author = 'AI'): Promise<DocxReviewer> {
     const doc = await parseDocx(buffer);
-    return new DocxReviewer(doc, buffer);
+    return new DocxReviewer(doc, author, buffer);
   }
 
   private get body(): DocumentBody {
     return this.doc.package.document;
   }
 
+  private resolveAuthor(author?: string): string {
+    return author ?? this.author;
+  }
+
   // ==========================================================================
   // READ
   // ==========================================================================
 
-  /**
-   * Get document content as structured blocks for LLM consumption.
-   * Supports chunked reading via fromIndex/toIndex.
-   * Tracked changes and comments are annotated inline by default.
-   */
   getContent(options?: GetContentOptions): ContentBlock[] {
     return getContentImpl(this.body, options);
   }
 
-  /**
-   * Get document content as plain text for LLM prompts.
-   * Avoids JSON quote-escaping issues — LLMs can copy text verbatim.
-   * Each paragraph is prefixed with its index: [0] text, [1] text, etc.
-   */
+  /** Plain text for LLM prompts. Each paragraph prefixed with [index]. */
   getContentAsText(options?: GetContentOptions): string {
     return formatContentForLLM(getContentImpl(this.body, options));
   }
@@ -94,123 +84,120 @@ export class DocxReviewer {
   // DISCOVER
   // ==========================================================================
 
-  /**
-   * Get all tracked changes, optionally filtered.
-   */
   getChanges(filter?: ChangeFilter): ReviewChange[] {
     return getChangesImpl(this.body, filter);
   }
 
-  /**
-   * Get all comments with replies, optionally filtered.
-   */
   getComments(filter?: CommentFilter): ReviewComment[] {
     return getCommentsImpl(this.body, filter);
   }
 
   // ==========================================================================
-  // COMMENT
+  // COMMENT — like Word: paragraph.addComment("text")
   // ==========================================================================
 
-  /**
-   * Add a comment anchored to a paragraph (or specific text within it).
-   * Returns the new comment ID.
-   */
-  addComment(options: AddCommentOptions): number {
-    return addCommentImpl(this.body, options);
+  /** Add a comment on a paragraph. */
+  addComment(paragraphIndex: number, text: string): number;
+  /** Add a comment with full options. */
+  addComment(options: AddCommentOptions): number;
+  addComment(indexOrOptions: number | AddCommentOptions, text?: string): number {
+    const opts =
+      typeof indexOrOptions === 'number'
+        ? { paragraphIndex: indexOrOptions, text: text!, author: this.author }
+        : { ...indexOrOptions, author: this.resolveAuthor(indexOrOptions.author) };
+    return addCommentImpl(this.body, opts as AddCommentOptions & { author: string });
   }
 
-  /**
-   * Reply to an existing comment. Returns the reply comment ID.
-   */
-  replyTo(commentId: number, options: ReplyOptions): number {
-    return replyToImpl(this.body, commentId, options);
+  replyTo(commentId: number, text: string): number;
+  replyTo(commentId: number, options: ReplyOptions): number;
+  replyTo(commentId: number, textOrOptions: string | ReplyOptions): number {
+    const opts =
+      typeof textOrOptions === 'string'
+        ? { text: textOrOptions, author: this.author }
+        : { ...textOrOptions, author: this.resolveAuthor(textOrOptions.author) };
+    return replyToImpl(this.body, commentId, opts as ReplyOptions & { author: string });
   }
 
   // ==========================================================================
-  // PROPOSE CHANGES
+  // PROPOSE CHANGES — like Word: range.find("old").replace("new")
   // ==========================================================================
 
-  /**
-   * Propose a text replacement as tracked changes (deletion + insertion).
-   */
+  /** Replace text in a paragraph (creates tracked change). */
+  replace(paragraphIndex: number, search: string, replaceWith: string): void;
+  /** Replace with full options. */
+  replace(options: ProposeReplacementOptions): void;
+  replace(
+    indexOrOptions: number | ProposeReplacementOptions,
+    search?: string,
+    replaceWith?: string
+  ): void {
+    const opts =
+      typeof indexOrOptions === 'number'
+        ? {
+            paragraphIndex: indexOrOptions,
+            search: search!,
+            replaceWith: replaceWith!,
+            author: this.author,
+          }
+        : { ...indexOrOptions, author: this.resolveAuthor(indexOrOptions.author) };
+    proposeReplacementImpl(this.body, opts as ProposeReplacementOptions & { author: string });
+  }
+
+  /** @deprecated Use replace() instead. */
   proposeReplacement(options: ProposeReplacementOptions): void {
-    proposeReplacementImpl(this.body, options);
+    this.replace(options);
   }
 
-  /**
-   * Propose an insertion as a tracked change.
-   */
   proposeInsertion(options: ProposeInsertionOptions): void {
-    proposeInsertionImpl(this.body, options);
+    proposeInsertionImpl(this.body, {
+      ...options,
+      author: this.resolveAuthor(options.author),
+    } as ProposeInsertionOptions & { author: string });
   }
 
-  /**
-   * Propose a deletion as a tracked change.
-   */
   proposeDeletion(options: ProposeDeletionOptions): void {
-    proposeDeletionImpl(this.body, options);
+    proposeDeletionImpl(this.body, {
+      ...options,
+      author: this.resolveAuthor(options.author),
+    } as ProposeDeletionOptions & { author: string });
   }
 
   // ==========================================================================
   // RESOLVE
   // ==========================================================================
 
-  /**
-   * Accept a tracked change by revision ID.
-   */
   acceptChange(id: number): void {
     acceptChangeImpl(this.body, id);
   }
 
-  /**
-   * Reject a tracked change by revision ID.
-   */
   rejectChange(id: number): void {
     rejectChangeImpl(this.body, id);
   }
 
-  /**
-   * Accept all tracked changes. Returns count of changes accepted.
-   */
   acceptAll(): number {
     return acceptAllImpl(this.body);
   }
 
-  /**
-   * Reject all tracked changes. Returns count of changes rejected.
-   */
   rejectAll(): number {
     return rejectAllImpl(this.body);
   }
 
   // ==========================================================================
-  // BATCH
+  // BATCH — apply LLM response in one call
   // ==========================================================================
 
-  /**
-   * Apply multiple review operations in a single call.
-   * Individual failures are collected in errors, not thrown.
-   */
   applyReview(ops: BatchReviewOptions): BatchResult {
-    return applyReviewImpl(this.body, ops);
+    return applyReviewImpl(this.body, ops, this.author);
   }
 
   // ==========================================================================
   // EXPORT
   // ==========================================================================
 
-  /**
-   * Get the modified Document model.
-   */
   toDocument(): Document {
     return this.doc;
   }
 
-  /**
-   * Serialize and repack as a DOCX buffer.
-   * Requires originalBuffer to have been provided at construction.
-   */
   async toBuffer(): Promise<ArrayBuffer> {
     if (!this.doc.originalBuffer) {
       throw new Error(

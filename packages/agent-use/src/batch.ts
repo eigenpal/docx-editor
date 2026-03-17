@@ -11,8 +11,13 @@ import { addComment, replyTo } from './comments';
  * Apply multiple review operations in a single call.
  * Order: accept/reject → comments → replies → proposals.
  * Individual failures are collected, not thrown.
+ * defaultAuthor is used when individual items don't specify an author.
  */
-export function applyReview(body: DocumentBody, ops: BatchReviewOptions): BatchResult {
+export function applyReview(
+  body: DocumentBody,
+  ops: BatchReviewOptions,
+  defaultAuthor = 'AI'
+): BatchResult {
   const errors: BatchError[] = [];
   let accepted = 0;
   let rejected = 0;
@@ -20,7 +25,6 @@ export function applyReview(body: DocumentBody, ops: BatchReviewOptions): BatchR
   let repliesAdded = 0;
   let proposalsAdded = 0;
 
-  // Accept
   for (const id of ops.accept ?? []) {
     try {
       acceptChange(body, id);
@@ -30,7 +34,6 @@ export function applyReview(body: DocumentBody, ops: BatchReviewOptions): BatchR
     }
   }
 
-  // Reject
   for (const id of ops.reject ?? []) {
     try {
       rejectChange(body, id);
@@ -40,30 +43,27 @@ export function applyReview(body: DocumentBody, ops: BatchReviewOptions): BatchR
     }
   }
 
-  // Comments
   for (const opts of ops.comments ?? []) {
     try {
-      addComment(body, opts);
+      addComment(body, { ...opts, author: opts.author ?? defaultAuthor });
       commentsAdded++;
     } catch (e) {
       errors.push({ operation: 'comment', search: opts.search, error: (e as Error).message });
     }
   }
 
-  // Replies
   for (const opts of ops.replies ?? []) {
     try {
-      replyTo(body, opts.commentId, { author: opts.author, text: opts.text });
+      replyTo(body, opts.commentId, { author: opts.author ?? defaultAuthor, text: opts.text });
       repliesAdded++;
     } catch (e) {
       errors.push({ operation: 'reply', id: opts.commentId, error: (e as Error).message });
     }
   }
 
-  // Proposals
   for (const opts of ops.proposals ?? []) {
     try {
-      proposeReplacement(body, opts);
+      proposeReplacement(body, { ...opts, author: opts.author ?? defaultAuthor });
       proposalsAdded++;
     } catch (e) {
       errors.push({ operation: 'proposal', search: opts.search, error: (e as Error).message });

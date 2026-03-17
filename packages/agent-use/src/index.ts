@@ -1,50 +1,44 @@
 /**
  * @eigenpal/docx-editor-agents
  *
- * Agent-friendly API for DOCX document review.
- * Headless — no DOM or React dependencies.
+ * Word-like API for AI document review.
  *
  * @example
  * ```ts
- * import { DocxReviewer } from '@eigenpal/docx-editor-agents';
+ * const reviewer = await DocxReviewer.fromBuffer(buffer, 'AI Reviewer');
  *
- * const reviewer = await DocxReviewer.fromBuffer(buffer);
- * const content = reviewer.getContent();
- * const changes = reviewer.getChanges();
+ * // Read
+ * const text = reviewer.getContentAsText();
  *
- * reviewer.addComment({ paragraphIndex: 5, author: 'AI', text: 'Liability cap too low.' });
- * reviewer.proposeReplacement({ paragraphIndex: 5, search: '$50,000', author: 'AI', replaceWith: '$500,000' });
- * reviewer.acceptChange(1);
+ * // Comment on a paragraph
+ * reviewer.addComment(5, 'Liability cap seems too low.');
+ *
+ * // Replace text (creates tracked change)
+ * reviewer.replace(5, '$50k', '$500k');
+ *
+ * // Or batch from LLM JSON response
+ * reviewer.applyReview({
+ *   comments: [{ paragraphIndex: 5, text: 'Too low.' }],
+ *   proposals: [{ paragraphIndex: 5, search: '$50k', replaceWith: '$500k' }],
+ * });
  *
  * const output = await reviewer.toBuffer();
  * ```
  */
 
-// Main class
 export { DocxReviewer } from './DocxReviewer';
 
-// Types
 export type {
+  // Content
   ContentBlock,
-  HeadingBlock,
-  ParagraphBlock,
-  TableBlock,
-  ListItemBlock,
   GetContentOptions,
+  // Discovery
   ReviewChange,
   ReviewComment,
-  ReviewCommentReply,
-  ChangeFilter,
-  CommentFilter,
-  AddCommentOptions,
-  ReplyOptions,
-  ProposeReplacementOptions,
-  ProposeInsertionOptions,
-  ProposeDeletionOptions,
+  // Batch (main LLM interface)
   BatchReviewOptions,
   BatchResult,
   BatchError,
 } from './types';
 
-// Errors
 export { TextNotFoundError, ChangeNotFoundError, CommentNotFoundError } from './errors';

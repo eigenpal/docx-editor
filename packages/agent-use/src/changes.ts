@@ -131,7 +131,7 @@ function applyChangeAtIndex(
  * Propose a text replacement as a tracked change (deletion + insertion).
  */
 export function proposeReplacement(body: DocumentBody, options: ProposeReplacementOptions): void {
-  const { paragraphIndex, search, author, replaceWith } = options;
+  const { paragraphIndex, search, author = 'AI', replaceWith } = options;
   const para = getParagraphAtIndex(body, paragraphIndex);
 
   const { startIndex, endIndex } = isolateMatchedText(para, search, paragraphIndex);
@@ -160,7 +160,7 @@ export function proposeReplacement(body: DocumentBody, options: ProposeReplaceme
  * Propose an insertion as a tracked change.
  */
 export function proposeInsertion(body: DocumentBody, options: ProposeInsertionOptions): void {
-  const { paragraphIndex, author, insertText, position = 'after', search } = options;
+  const { paragraphIndex, author = 'AI', insertText, position = 'after', search } = options;
   const para = getParagraphAtIndex(body, paragraphIndex);
 
   const now = new Date().toISOString();
@@ -189,7 +189,7 @@ export function proposeInsertion(body: DocumentBody, options: ProposeInsertionOp
  * Propose a deletion as a tracked change.
  */
 export function proposeDeletion(body: DocumentBody, options: ProposeDeletionOptions): void {
-  const { paragraphIndex, search, author } = options;
+  const { paragraphIndex, search, author = 'AI' } = options;
   const para = getParagraphAtIndex(body, paragraphIndex);
 
   const { startIndex, endIndex } = isolateMatchedText(para, search, paragraphIndex);

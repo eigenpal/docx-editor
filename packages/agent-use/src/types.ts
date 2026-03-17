@@ -36,13 +36,11 @@ export interface ListItemBlock {
 export type ContentBlock = HeadingBlock | ParagraphBlock | TableBlock | ListItemBlock;
 
 export interface GetContentOptions {
-  /** Start index (inclusive). Omit to start from beginning. */
   fromIndex?: number;
-  /** End index (inclusive). Omit to read to end. */
   toIndex?: number;
-  /** Annotate tracked changes inline as [+text+]{by:author} / [-text-]{by:author}. Default: true */
+  /** Annotate tracked changes inline. Default: true */
   includeTrackedChanges?: boolean;
-  /** Annotate comments inline as [comment:id]text[/comment]. Default: true */
+  /** Annotate comments inline. Default: true */
   includeCommentAnchors?: boolean;
 }
 
@@ -51,16 +49,12 @@ export interface GetContentOptions {
 // ============================================================================
 
 export interface ReviewChange {
-  /** OOXML revision ID */
   id: number;
   type: 'insertion' | 'deletion' | 'moveFrom' | 'moveTo';
   author: string;
   date: string | null;
-  /** The affected text content */
   text: string;
-  /** Full paragraph plain text for context */
   context: string;
-  /** Index of the containing paragraph */
   paragraphIndex: number;
 }
 
@@ -75,11 +69,8 @@ export interface ReviewComment {
   id: number;
   author: string;
   date: string | null;
-  /** Comment body as plain text */
   text: string;
-  /** Document text the comment is attached to */
   anchoredText: string;
-  /** Index of the paragraph containing the anchor */
   paragraphIndex: number;
   replies: ReviewCommentReply[];
   done: boolean;
@@ -96,47 +87,45 @@ export interface CommentFilter {
 }
 
 // ============================================================================
-// ACTION OPTIONS
+// ACTION OPTIONS — author is optional (falls back to reviewer default)
 // ============================================================================
 
 export interface AddCommentOptions {
   paragraphIndex: number;
-  author: string;
   text: string;
-  /** Optional: anchor to specific text within the paragraph. Omit to anchor whole paragraph. */
+  author?: string;
+  /** Optional: anchor to specific text. Omit to anchor whole paragraph. */
   search?: string;
 }
 
 export interface ReplyOptions {
-  author: string;
   text: string;
+  author?: string;
 }
 
 export interface ProposeReplacementOptions {
   paragraphIndex: number;
   search: string;
-  author: string;
   replaceWith: string;
+  author?: string;
 }
 
 export interface ProposeInsertionOptions {
   paragraphIndex: number;
-  author: string;
   insertText: string;
-  /** Insert before or after. Default: 'after' */
+  author?: string;
   position?: 'before' | 'after';
-  /** Optional: insert adjacent to this text within the paragraph */
   search?: string;
 }
 
 export interface ProposeDeletionOptions {
   paragraphIndex: number;
   search: string;
-  author: string;
+  author?: string;
 }
 
 // ============================================================================
-// BATCH
+// BATCH — the main LLM-facing interface
 // ============================================================================
 
 export interface BatchReviewOptions {

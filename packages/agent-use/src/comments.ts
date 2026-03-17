@@ -12,7 +12,7 @@ import { getParagraphAtIndex } from './utils';
  * Add a comment to a paragraph. Returns the new comment ID.
  */
 export function addComment(body: DocumentBody, options: AddCommentOptions): number {
-  const { paragraphIndex, author, text, search } = options;
+  const { paragraphIndex, author = 'AI', text, search } = options;
   const para = getParagraphAtIndex(body, paragraphIndex);
 
   const existingIds = (body.comments ?? []).map((c) => c.id);
@@ -64,7 +64,7 @@ export function replyTo(body: DocumentBody, commentId: number, options: ReplyOpt
 
   const reply: Comment = {
     id: newId,
-    author: options.author,
+    author: options.author ?? 'AI',
     date: new Date().toISOString(),
     parentId: commentId,
     content: [

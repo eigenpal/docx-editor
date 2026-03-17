@@ -642,13 +642,44 @@ describe('getContentAsText', () => {
 });
 
 // ============================================================================
+// Simplified API
+// ============================================================================
+
+describe('simplified API', () => {
+  test('addComment(index, text) — Word-like shorthand', () => {
+    const reviewer = new DocxReviewer(makeDoc([makeParagraph('Hello world')]), 'Reviewer');
+    reviewer.addComment(0, 'Nice paragraph.');
+    const comments = reviewer.getComments();
+    expect(comments).toHaveLength(1);
+    expect(comments[0].author).toBe('Reviewer');
+    expect(comments[0].text).toBe('Nice paragraph.');
+  });
+
+  test('replace(index, search, replaceWith) — Word-like shorthand', () => {
+    const reviewer = new DocxReviewer(makeDoc([makeParagraph('The cap is $50k.')]), 'Reviewer');
+    reviewer.replace(0, '$50k', '$500k');
+    const changes = reviewer.getChanges();
+    expect(changes.some((c) => c.type === 'deletion' && c.text === '$50k')).toBe(true);
+    expect(changes.some((c) => c.type === 'insertion' && c.text === '$500k')).toBe(true);
+  });
+
+  test('default author used in applyReview batch', () => {
+    const reviewer = new DocxReviewer(makeDoc([makeParagraph('Hello world')]), 'Bot');
+    reviewer.applyReview({
+      comments: [{ paragraphIndex: 0, text: 'Test' }],
+    });
+    expect(reviewer.getComments()[0].author).toBe('Bot');
+  });
+});
+
+// ============================================================================
 // toDocument
 // ============================================================================
 
 describe('toDocument', () => {
   test('returns modified document', () => {
     const reviewer = makeReviewer([makeParagraph('Original')]);
-    reviewer.addComment({ paragraphIndex: 0, author: 'AI', text: 'Comment' });
+    reviewer.addComment(0, 'Comment');
     const doc = reviewer.toDocument();
     expect(doc.package.document.comments).toHaveLength(1);
   });
@@ -656,7 +687,7 @@ describe('toDocument', () => {
   test('does not mutate original document', () => {
     const original = makeDoc([makeParagraph('Original')]);
     const reviewer = new DocxReviewer(original);
-    reviewer.addComment({ paragraphIndex: 0, author: 'AI', text: 'Comment' });
+    reviewer.addComment(0, 'Comment');
     // Original should be untouched
     expect(original.package.document.comments).toBeUndefined();
   });
