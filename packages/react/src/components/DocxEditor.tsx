@@ -85,6 +85,7 @@ const PageSetupDialog = lazy(() =>
 );
 import { MaterialSymbol } from './ui/Icons';
 import { Tooltip } from './ui/Tooltip';
+import { TextContextMenu, type TextContextAction } from './TextContextMenu';
 import { HyperlinkPopup, type HyperlinkPopupData } from './ui/HyperlinkPopup';
 import { Toaster, toast } from 'sonner';
 import { getBuiltinTableStyle, type TableStylePreset } from './ui/TableStyleGallery';
@@ -663,6 +664,13 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
     top: number;
     left: number;
   } | null>(null);
+
+  // Right-click context menu state
+  const [contextMenu, setContextMenu] = useState<{
+    isOpen: boolean;
+    position: { x: number; y: number };
+    hasSelection: boolean;
+  }>({ isOpen: false, position: { x: 0, y: 0 }, hasSelection: false });
 
   // Debounce timer for extractTrackedChanges (avoid full doc walk on every keystroke)
   const extractTrackedChangesTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -2154,6 +2162,75 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
     setHyperlinkPopupData(null);
   }, []);
 
+  // Right-click context menu handlers
+  const handleContextMenu = useCallback(
+    (data: { x: number; y: number; hasSelection: boolean; isEditable: boolean }) => {
+      setContextMenu({
+        isOpen: true,
+        position: { x: data.x, y: data.y },
+        hasSelection: data.hasSelection,
+      });
+    },
+    []
+  );
+
+  const handleContextMenuClose = useCallback(() => {
+    setContextMenu((prev) => ({ ...prev, isOpen: false }));
+  }, []);
+
+  const handleContextMenuAction = useCallback(
+    (action: TextContextAction) => {
+      const view = getActiveEditorView();
+      if (!view) return;
+
+      // Focus the hidden PM so execCommand targets the right element
+      focusActiveEditor();
+
+      switch (action) {
+        case 'cut':
+          document.execCommand('cut');
+          break;
+        case 'copy':
+          document.execCommand('copy');
+          break;
+        case 'paste':
+          document.execCommand('paste');
+          break;
+        case 'pasteAsPlainText':
+          navigator.clipboard
+            .readText?.()
+            .then((text) => {
+              if (text && view) {
+                const tr = view.state.tr.insertText(text);
+                view.dispatch(tr);
+              }
+            })
+            .catch(() => {
+              document.execCommand('paste');
+            });
+          break;
+        case 'delete': {
+          const { from, to } = view.state.selection;
+          if (from !== to) {
+            const tr = view.state.tr.deleteRange(from, to);
+            view.dispatch(tr);
+          }
+          break;
+        }
+        case 'selectAll': {
+          const tr = view.state.tr.setSelection(
+            TextSelection.create(view.state.doc, 0, view.state.doc.content.size)
+          );
+          view.dispatch(tr);
+          break;
+        }
+      }
+
+      setContextMenu((prev) => ({ ...prev, isOpen: false }));
+    },
+    [getActiveEditorView, focusActiveEditor]
+  );
+
   // Handle margin changes from rulers
   const createMarginHandler = useCallback(
     (property: 'marginLeft' | 'marginRight' | 'marginTop' | 'marginBottom') =>
@@ -3090,6 +3167,7 @@ body { background: white; }
                       onRenderedDomContextReady={onRenderedDomContextReady}
                       pluginOverlays={pluginOverlays}
                       onHyperlinkClick={handleHyperlinkClick}
+                      onContextMenu={handleContextMenu}
                       commentsSidebarOpen={showCommentsSidebar}
                       scrollContainerRef={scrollContainerRef}
                       sidebarOverlay={
@@ -3355,6 +3433,16 @@ body { background: white; }
             onRemove={handleHyperlinkPopupRemove}
             onClose={handleHyperlinkPopupClose}
             readOnly={readOnly}
+          />
+
+          {/* Right-click context menu */}
+          <TextContextMenu
+            isOpen={contextMenu.isOpen}
+            position={contextMenu.position}
+            hasSelection={contextMenu.hasSelection}
+            isEditable={!readOnly}
+            onAction={handleContextMenuAction}
+            onClose={handleContextMenuClose}
           />
 
           {/* Toast notifications */}
