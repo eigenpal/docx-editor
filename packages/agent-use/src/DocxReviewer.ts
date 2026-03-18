@@ -69,7 +69,7 @@ export class DocxReviewer {
    * @param author - Default author name for comments and changes. (default: 'AI')
    */
   static async fromBuffer(buffer: ArrayBuffer, author = 'AI'): Promise<DocxReviewer> {
-    const doc = await parseDocx(buffer);
+    const doc = await parseDocx(buffer, { preloadFonts: false });
     return new DocxReviewer(doc, author, buffer);
   }
 
