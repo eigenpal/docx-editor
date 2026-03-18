@@ -935,6 +935,9 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
   // Hyperlink popup state (Google Docs-style floating popup on link click)
   const [hyperlinkPopupData, setHyperlinkPopupData] = useState<HyperlinkPopupData | null>(null);
 
+  // Monotonically increasing generation counter to discard stale async loads
+  const loadGenerationRef = useRef(0);
+
   // Reset internal state when loading a new document (clears stale refs, comments, tracked changes, etc.)
   const resetForNewDocument = useCallback(() => {
     commentsLoadedRef.current = false;
@@ -953,7 +956,7 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
       clearTimeout(extractTrackedChangesTimerRef.current);
       extractTrackedChangesTimerRef.current = null;
     }
-  }, [findReplace]);
+  }, [findReplace.setMatches]);
 
   // Load a pre-parsed document (used by ref method and internally)
   const loadParsedDocument = useCallback(
@@ -971,20 +974,16 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
   // Load a DOCX buffer (used by ref method and internally)
   const loadBuffer = useCallback(
     async (buffer: DocxInput) => {
+      const generation = ++loadGenerationRef.current;
       resetForNewDocument();
       setState((prev) => ({ ...prev, isLoading: true, parseError: null }));
       try {
         const doc = await parseDocx(buffer);
-        history.reset(doc);
-        setState((prev) => ({
-          ...prev,
-          isLoading: false,
-          parseError: null,
-        }));
-        loadDocumentFonts(doc).catch((err) => {
-          console.warn('Failed to load document fonts:', err);
-        });
+        // Discard result if a newer load was started while we were parsing
+        if (loadGenerationRef.current !== generation) return;
+        loadParsedDocument(doc);
       } catch (error) {
+        if (loadGenerationRef.current !== generation) return;
         const message = error instanceof Error ? error.message : 'Failed to parse document';
         setState((prev) => ({
           ...prev,
@@ -994,10 +993,10 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
         onError?.(error instanceof Error ? error : new Error(message));
       }
     },
-    [resetForNewDocument, history, onError]
+    [resetForNewDocument, loadParsedDocument, onError]
   );
 
-  // Parse document buffer
+  // React to document/documentBuffer prop changes
   useEffect(() => {
     if (!documentBuffer) {
       if (initialDocument) {
