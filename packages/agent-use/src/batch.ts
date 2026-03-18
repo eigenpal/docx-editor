@@ -47,8 +47,18 @@ export function applyReview(
     try {
       addComment(body, { ...opts, author: opts.author ?? defaultAuthor });
       commentsAdded++;
-    } catch (e) {
-      errors.push({ operation: 'comment', search: opts.search, error: (e as Error).message });
+    } catch {
+      // Search failed — fall back to whole-paragraph comment (drop search)
+      try {
+        addComment(body, {
+          paragraphIndex: opts.paragraphIndex,
+          text: opts.text,
+          author: opts.author ?? defaultAuthor,
+        });
+        commentsAdded++;
+      } catch (e2) {
+        errors.push({ operation: 'comment', search: opts.search, error: (e2 as Error).message });
+      }
     }
   }
 
@@ -65,8 +75,18 @@ export function applyReview(
     try {
       proposeReplacement(body, { ...opts, author: opts.author ?? defaultAuthor });
       proposalsAdded++;
-    } catch (e) {
-      errors.push({ operation: 'proposal', search: opts.search, error: (e as Error).message });
+    } catch {
+      // Search failed — fall back to a comment instead of losing the feedback
+      try {
+        addComment(body, {
+          paragraphIndex: opts.paragraphIndex,
+          text: `Suggested change: "${opts.search}" → "${opts.replaceWith}"`,
+          author: opts.author ?? defaultAuthor,
+        });
+        commentsAdded++;
+      } catch (e2) {
+        errors.push({ operation: 'proposal', search: opts.search, error: (e2 as Error).message });
+      }
     }
   }
 
