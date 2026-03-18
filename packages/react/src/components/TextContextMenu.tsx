@@ -784,6 +784,8 @@ export function isTextActionAvailable(
     case 'paste':
     case 'pasteAsPlainText':
       return isEditable;
+    case 'addComment':
+      return hasSelection;
     case 'selectAll':
       return true;
     default:

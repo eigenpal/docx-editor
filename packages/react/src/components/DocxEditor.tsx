@@ -1792,6 +1792,22 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
     [tableSelection, getActiveEditorView, focusActiveEditor]
   );
 
+  // Context menu handler
+  const handleEditorContextMenu = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const view = pagedEditorRef.current?.getView();
+    const inTable = view ? isInTable(view.state) : false;
+    const { from, to } = view?.state.selection ?? { from: 0, to: 0 };
+    const hasSel = from !== to;
+    setContextMenu({
+      isOpen: true,
+      position: { x: e.clientX, y: e.clientY },
+      hasSelection: hasSel,
+      cursorInTable: inTable,
+    });
+  }, []);
+
   // Handle formatting action from toolbar
   const handleFormat = useCallback(
     (action: FormattingAction) => {
@@ -3243,6 +3259,7 @@ body { background: white; }
                         pagedEditorRef.current?.focus();
                       }
                     }}
+                    onContextMenu={handleEditorContextMenu}
                   >
                     {/* Vertical Ruler - fixed on left edge (hidden when readOnly prop is set) */}
                     {showRuler && !readOnlyProp && (
@@ -3448,6 +3465,17 @@ body { background: white; }
                         </button>
                       </Tooltip>
                     )}
+
+                    {/* Right-click context menu */}
+                    <TextContextMenu
+                      isOpen={contextMenu.isOpen}
+                      position={contextMenu.position}
+                      hasSelection={contextMenu.hasSelection}
+                      isEditable={!readOnly}
+                      items={contextMenuItems}
+                      onAction={handleContextMenuAction}
+                      onClose={() => setContextMenu((prev) => ({ ...prev, isOpen: false }))}
+                    />
 
                     {/* Inline Header/Footer Editor — positioned over the target area */}
                     {hfEditPosition &&
