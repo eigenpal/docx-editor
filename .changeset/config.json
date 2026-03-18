@@ -7,5 +7,5 @@
   "access": "public",
   "baseBranch": "main",
   "updateInternalDependencies": "patch",
-  "ignore": ["@eigenpal/docx-core", "@eigenpal/docx-editor-vue", "agent-use-demo"]
+  "ignore": ["@eigenpal/docx-editor-vue"]
 }
