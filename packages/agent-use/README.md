@@ -1,6 +1,6 @@
 # @eigenpal/docx-editor-agents
 
-[![License: BUSL-1.1](https://img.shields.io/badge/License-BUSL--1.1-blue.svg)](./LICENSE)
+[![License: AGPL-3.0](https://img.shields.io/badge/License-AGPL--3.0-blue.svg)](./LICENSE)
 
 Word-like API for AI document review. Add comments, suggest replacements, accept/reject tracked changes — all headless, no DOM required.
 
@@ -38,4 +38,4 @@ const output = await reviewer.toBuffer();
 
 ## License
 
-[Business Source License 1.1](./LICENSE) — free for non-commercial use. Commercial use requires a license from [EigenPal Inc.](mailto:hello@eigenpal.com)
+[AGPL-3.0](./LICENSE) — free to use and modify, but you must open-source your code. For commercial licensing without AGPL obligations, contact [founders@eigenpal.com](mailto:founders@eigenpal.com).
