@@ -59,7 +59,9 @@ Rules:
     ],
   });
 
-  const text = response.choices[0]?.message?.content || '';
+  const text = response.choices[0]?.message?.content;
+  if (!text) return NextResponse.json({ error: 'Empty AI response' }, { status: 502 });
+
   let actions: {
     summary?: string;
     comments?: { paragraphIndex: number; text: string; search?: string }[];

@@ -89,7 +89,6 @@ function processAllChanges(body: DocumentBody, mode: 'accept' | 'reject'): numbe
 function processChangeById(body: DocumentBody, id: number, mode: 'accept' | 'reject'): boolean {
   let found = false;
   forEachParagraph(body, (para) => {
-    // Iterate backward so splicing doesn't shift unprocessed indices
     for (let i = para.content.length - 1; i >= 0; i--) {
       const item = para.content[i];
       if (isTrackedChange(item) && item.info.id === id) {
@@ -97,6 +96,8 @@ function processChangeById(body: DocumentBody, id: number, mode: 'accept' | 'rej
         found = true;
       }
     }
+    // Stop traversal once we've found and processed the change
+    if (found) return false;
   });
   return found;
 }

@@ -54,13 +54,12 @@ export class DocxReviewer {
    * @param originalBuffer - Original DOCX buffer, needed for toBuffer()
    */
   constructor(document: Document, author = 'AI', originalBuffer?: ArrayBuffer) {
-    this.doc = structuredClone(document);
+    // Strip originalBuffer before cloning to avoid deep-copying potentially large ArrayBuffer
+    const savedBuffer = originalBuffer ?? document.originalBuffer;
+    const { originalBuffer: _discard, ...rest } = document;
+    this.doc = structuredClone(rest) as Document;
+    if (savedBuffer) this.doc.originalBuffer = savedBuffer;
     this.author = author;
-    if (originalBuffer) {
-      this.doc.originalBuffer = originalBuffer;
-    } else if (document.originalBuffer) {
-      this.doc.originalBuffer = document.originalBuffer;
-    }
   }
 
   /**
@@ -136,7 +135,7 @@ export class DocxReviewer {
       typeof indexOrOptions === 'number'
         ? { paragraphIndex: indexOrOptions, text: text!, author: this.author }
         : { ...indexOrOptions, author: this.resolveAuthor(indexOrOptions.author) };
-    return addCommentImpl(this.body, opts as AddCommentOptions & { author: string });
+    return addCommentImpl(this.body, opts);
   }
 
   /**
@@ -153,7 +152,7 @@ export class DocxReviewer {
       typeof textOrOptions === 'string'
         ? { text: textOrOptions, author: this.author }
         : { ...textOrOptions, author: this.resolveAuthor(textOrOptions.author) };
-    return replyToImpl(this.body, commentId, opts as ReplyOptions & { author: string });
+    return replyToImpl(this.body, commentId, opts);
   }
 
   // ==========================================================================
@@ -183,7 +182,7 @@ export class DocxReviewer {
             author: this.author,
           }
         : { ...indexOrOptions, author: this.resolveAuthor(indexOrOptions.author) };
-    proposeReplacementImpl(this.body, opts as ProposeReplacementOptions & { author: string });
+    proposeReplacementImpl(this.body, opts);
   }
 
   /** @deprecated Use replace() instead. */
@@ -196,7 +195,7 @@ export class DocxReviewer {
     proposeInsertionImpl(this.body, {
       ...options,
       author: this.resolveAuthor(options.author),
-    } as ProposeInsertionOptions & { author: string });
+    });
   }
 
   /** Delete text as a tracked change. */
@@ -204,7 +203,7 @@ export class DocxReviewer {
     proposeDeletionImpl(this.body, {
       ...options,
       author: this.resolveAuthor(options.author),
-    } as ProposeDeletionOptions & { author: string });
+    });
   }
 
   // ==========================================================================
