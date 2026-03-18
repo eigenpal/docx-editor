@@ -17,7 +17,6 @@ export interface TextSearchResult {
 
 interface FlattenedRun {
   contentIndex: number;
-  innerIndex: number;
   run: Run;
   text: string;
   startPos: number;
@@ -35,14 +34,14 @@ function flattenRuns(paragraph: Paragraph): FlattenedRun[] {
 
     if (item.type === 'run') {
       const text = getRunText(item);
-      result.push({ contentIndex: ci, innerIndex: -1, run: item, text, startPos: pos });
+      result.push({ contentIndex: ci, run: item, text, startPos: pos });
       pos += text.length;
     } else if (item.type === 'hyperlink') {
       for (let hi = 0; hi < item.children.length; hi++) {
         const child = item.children[hi];
         if (child.type === 'run') {
           const text = getRunText(child);
-          result.push({ contentIndex: ci, innerIndex: hi, run: child, text, startPos: pos });
+          result.push({ contentIndex: ci, run: child, text, startPos: pos });
           pos += text.length;
         }
       }
@@ -51,13 +50,13 @@ function flattenRuns(paragraph: Paragraph): FlattenedRun[] {
         const child = item.content[ri];
         if (child.type === 'run') {
           const text = getRunText(child);
-          result.push({ contentIndex: ci, innerIndex: ri, run: child, text, startPos: pos });
+          result.push({ contentIndex: ci, run: child, text, startPos: pos });
           pos += text.length;
         } else if (child.type === 'hyperlink') {
           for (const hc of child.children) {
             if (hc.type === 'run') {
               const text = getRunText(hc);
-              result.push({ contentIndex: ci, innerIndex: ri, run: hc, text, startPos: pos });
+              result.push({ contentIndex: ci, run: hc, text, startPos: pos });
               pos += text.length;
             }
           }
@@ -232,9 +231,25 @@ function normalize(original: string): { text: string; posMap: number[] } {
 }
 
 /**
+ * Map a normalized-space match back to original string positions.
+ */
+function mapBack(
+  norm: { posMap: number[] },
+  idx: number,
+  len: number,
+  original: string
+): { start: number; end: number } {
+  const start = norm.posMap[idx];
+  let end = norm.posMap[idx + len - 1] + 1;
+  while (end < original.length && '\u200B\u200C\u200D\uFEFF\u00AD'.includes(original[end])) end++;
+  return { start, end };
+}
+
+/**
  * Find search text within paragraph text.
  * 1. Exact match
  * 2. Normalized match (case-insensitive, smart quotes, collapsed whitespace)
+ * 3. Trim trailing partial words (LLMs truncate mid-sentence)
  */
 function findMatch(text: string, search: string): { start: number; end: number } | null {
   if (!search || !text) return null;
@@ -249,12 +264,16 @@ function findMatch(text: string, search: string): { start: number; end: number }
   if (!normSearch.text) return null;
 
   const idx = normText.text.indexOf(normSearch.text);
-  if (idx !== -1) {
-    const start = normText.posMap[idx];
-    let end = normText.posMap[idx + normSearch.text.length - 1] + 1;
-    // Skip trailing zero-width chars
-    while (end < text.length && '\u200B\u200C\u200D\uFEFF\u00AD'.includes(text[end])) end++;
-    return { start, end };
+  if (idx !== -1) return mapBack(normText, idx, normSearch.text.length, text);
+
+  // 3. Trim trailing partial words (LLM truncation: "return HTTP 422. e." → "return HTTP 422")
+  const words = normSearch.text.split(' ');
+  if (words.length >= 3) {
+    for (let drop = 1; drop <= Math.min(2, words.length - 2); drop++) {
+      const trimmed = words.slice(0, -drop).join(' ');
+      const trimIdx = normText.text.indexOf(trimmed);
+      if (trimIdx !== -1) return mapBack(normText, trimIdx, trimmed.length, text);
+    }
   }
 
   return null;

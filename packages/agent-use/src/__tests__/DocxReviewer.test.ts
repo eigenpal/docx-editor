@@ -596,6 +596,25 @@ describe('textSearch', () => {
     expect(reviewer.getComments()).toHaveLength(1);
   });
 
+  test('handles LLM truncation (trailing partial words)', () => {
+    const para: Paragraph = {
+      type: 'paragraph',
+      content: [
+        makeRun('Requests with invalid types return HTTP 422. Each request is logged.'),
+      ] as ParagraphContent[],
+      formatting: {},
+    } as Paragraph;
+    const reviewer = makeReviewer([para]);
+    // LLM truncated: "return HTTP 422. e." instead of full text
+    reviewer.addComment({
+      paragraphIndex: 0,
+      author: 'AI',
+      text: 'note',
+      search: 'return HTTP 422. e.',
+    });
+    expect(reviewer.getComments()).toHaveLength(1);
+  });
+
   test('finds text inside tracked change wrappers', () => {
     const para: Paragraph = {
       type: 'paragraph',
