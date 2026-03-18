@@ -1,6 +1,7 @@
 {
   "name": "@eigenpal/docx-editor-vue",
   "version": "0.0.1",
+  "private": true,
   "description": "Vue.js wrapper for the DOCX editor - community contributed",
   "type": "module",
   "main": "./dist/index.cjs",
