@@ -127,6 +127,10 @@ export interface HeaderFooterContent {
   measures: Measure[];
   /** Total height of the content. */
   height: number;
+  /** Top-most visual extent relative to the nominal flow origin. */
+  visualTop?: number;
+  /** Bottom-most visual extent relative to the nominal flow origin. */
+  visualBottom?: number;
 }
 
 /**
@@ -175,6 +179,20 @@ export interface RenderPageOptions {
   theme?: Theme | null;
   /** Footnotes to render at the bottom of this page. */
   footnoteArea?: FootnoteRenderItem[];
+}
+
+interface HeaderFooterLayoutInfo {
+  flowTop: number;
+  flowLeft: number;
+  contentWidth: number;
+  pageWidth: number;
+  pageHeight: number;
+  margins: {
+    top: number;
+    right: number;
+    bottom: number;
+    left: number;
+  };
 }
 
 /**
@@ -237,6 +255,123 @@ function applyContentAreaStyles(element: HTMLElement, page: Page): void {
   element.style.right = `${margins.right}px`;
   element.style.bottom = `${margins.bottom}px`;
   element.style.overflow = 'visible';
+}
+
+function getPositionAlignment(
+  position: { align?: string; alignment?: string } | undefined
+): string | undefined {
+  return position?.align ?? position?.alignment;
+}
+
+function resolveHeaderFooterFloatTop(
+  floatImg: {
+    height: number;
+    paragraphY: number;
+    position: {
+      vertical?: { relativeTo?: string; posOffset?: number; align?: string; alignment?: string };
+    };
+  },
+  layout: HeaderFooterLayoutInfo
+): number {
+  const v = floatImg.position.vertical;
+  if (!v) {
+    return floatImg.paragraphY;
+  }
+
+  const align = getPositionAlignment(v);
+  const offsetPx = v.posOffset !== undefined ? emuToPixels(v.posOffset) : undefined;
+
+  if (v.relativeTo === 'page') {
+    if (offsetPx !== undefined) {
+      return offsetPx - layout.flowTop;
+    }
+    if (align === 'top') {
+      return -layout.flowTop;
+    }
+    if (align === 'bottom') {
+      return layout.pageHeight - floatImg.height - layout.flowTop;
+    }
+    if (align === 'center') {
+      return (layout.pageHeight - floatImg.height) / 2 - layout.flowTop;
+    }
+  }
+
+  if (v.relativeTo === 'margin') {
+    const marginTop = layout.margins.top;
+    const marginHeight = layout.pageHeight - layout.margins.top - layout.margins.bottom;
+    if (offsetPx !== undefined) {
+      return marginTop + offsetPx - layout.flowTop;
+    }
+    if (align === 'top') {
+      return marginTop - layout.flowTop;
+    }
+    if (align === 'bottom') {
+      return marginTop + marginHeight - floatImg.height - layout.flowTop;
+    }
+    if (align === 'center') {
+      return marginTop + (marginHeight - floatImg.height) / 2 - layout.flowTop;
+    }
+  }
+
+  if (offsetPx !== undefined) {
+    return floatImg.paragraphY + offsetPx;
+  }
+
+  return floatImg.paragraphY;
+}
+
+function applyHeaderFooterFloatHorizontalPosition(
+  img: HTMLImageElement,
+  floatImg: {
+    width: number;
+    position: {
+      horizontal?: { relativeTo?: string; posOffset?: number; align?: string; alignment?: string };
+    };
+  },
+  layout: HeaderFooterLayoutInfo
+): void {
+  const h = floatImg.position.horizontal;
+  if (!h) {
+    img.style.left = '0';
+    return;
+  }
+
+  const align = getPositionAlignment(h);
+
+  if (h.relativeTo === 'page') {
+    if (h.posOffset !== undefined) {
+      img.style.left = `${emuToPixels(h.posOffset) - layout.flowLeft}px`;
+      return;
+    }
+    if (align === 'right') {
+      img.style.left = `${layout.pageWidth - floatImg.width - layout.flowLeft}px`;
+      return;
+    }
+    if (align === 'center') {
+      img.style.left = `${(layout.pageWidth - floatImg.width) / 2 - layout.flowLeft}px`;
+      return;
+    }
+    if (align === 'left') {
+      img.style.left = `${-layout.flowLeft}px`;
+      return;
+    }
+  }
+
+  if (h.posOffset !== undefined) {
+    img.style.left = `${emuToPixels(h.posOffset)}px`;
+    return;
+  }
+
+  if (align === 'right') {
+    img.style.left = `${layout.contentWidth - floatImg.width}px`;
+    return;
+  }
+  if (align === 'center') {
+    img.style.left = `${(layout.contentWidth - floatImg.width) / 2}px`;
+    return;
+  }
+
+  img.style.left = '0';
 }
 
 /**
@@ -497,7 +632,8 @@ function renderFloatingImagesLayer(
 function renderHeaderFooterContent(
   content: HeaderFooterContent,
   context: RenderContext,
-  options: RenderPageOptions
+  options: RenderPageOptions,
+  layout: HeaderFooterLayoutInfo
 ): HTMLElement {
   const doc = options.document ?? document;
   const containerEl = doc.createElement('div');
@@ -514,8 +650,18 @@ function renderHeaderFooterContent(
     alt?: string;
     paragraphY: number; // Y position of the containing paragraph
     position: {
-      horizontal?: { relativeTo?: string; posOffset?: number; align?: string };
-      vertical?: { relativeTo?: string; posOffset?: number; align?: string };
+      horizontal?: {
+        relativeTo?: string;
+        posOffset?: number;
+        align?: string;
+        alignment?: string;
+      };
+      vertical?: {
+        relativeTo?: string;
+        posOffset?: number;
+        align?: string;
+        alignment?: string;
+      };
     };
   }> = [];
 
@@ -543,8 +689,18 @@ function renderHeaderFooterContent(
             height: number;
             alt?: string;
             position: {
-              horizontal?: { relativeTo?: string; posOffset?: number; align?: string };
-              vertical?: { relativeTo?: string; posOffset?: number; align?: string };
+              horizontal?: {
+                relativeTo?: string;
+                posOffset?: number;
+                align?: string;
+                alignment?: string;
+              };
+              vertical?: {
+                relativeTo?: string;
+                posOffset?: number;
+                align?: string;
+                alignment?: string;
+              };
             };
           };
           floatingImages.push({
@@ -606,44 +762,17 @@ function renderHeaderFooterContent(
     if (floatImg.alt) img.alt = floatImg.alt;
 
     img.style.position = 'absolute';
+    img.style.display = 'block';
+    // Header/footer images can intentionally extend beyond the text area.
+    // Override global img resets (for example max-width: 100%) so the DOCX
+    // anchor extent is honored instead of shrinking to the header/footer box.
+    img.style.width = `${floatImg.width}px`;
+    img.style.height = `${floatImg.height}px`;
+    img.style.maxWidth = 'none';
+    img.style.maxHeight = 'none';
 
-    // Horizontal positioning
-    const h = floatImg.position.horizontal;
-    if (h) {
-      if (h.align === 'right') {
-        img.style.right = '0';
-      } else if (h.align === 'center') {
-        img.style.left = '50%';
-        img.style.transform = 'translateX(-50%)';
-      } else if (h.posOffset !== undefined) {
-        // posOffset is in EMUs, convert to pixels
-        img.style.left = `${emuToPixels(h.posOffset)}px`;
-      } else {
-        img.style.left = '0';
-      }
-    }
-
-    // Vertical positioning - relative to containing paragraph
-    const v = floatImg.position.vertical;
-    if (v) {
-      // Calculate base Y from paragraph position (for relativeFrom="paragraph")
-      const baseY = floatImg.paragraphY;
-
-      if (v.align === 'bottom') {
-        img.style.bottom = '0';
-      } else if (v.align === 'center') {
-        img.style.top = '50%';
-        img.style.transform = (img.style.transform || '') + ' translateY(-50%)';
-      } else if (v.posOffset !== undefined) {
-        // Add offset to paragraph's Y position
-        img.style.top = `${baseY + emuToPixels(v.posOffset)}px`;
-      } else {
-        img.style.top = `${baseY}px`;
-      }
-    } else {
-      // No vertical positioning - place at paragraph start
-      img.style.top = `${floatImg.paragraphY}px`;
-    }
+    applyHeaderFooterFloatHorizontalPosition(img, floatImg, layout);
+    img.style.top = `${resolveHeaderFooterFloatTop(floatImg, layout)}px`;
 
     containerEl.appendChild(img);
   }
@@ -971,28 +1100,40 @@ export function renderPage(
     const headerDistance = options.headerDistance ?? page.margins.header ?? defaultHeaderDistance;
     const headerContentWidth = page.size.w - page.margins.left - page.margins.right;
     const availableHeaderHeight = Math.max(page.margins.top - headerDistance, 48);
-    const actualHeaderHeight = options.headerContent?.height ?? 0;
+    const headerVisualTop = options.headerContent?.visualTop ?? 0;
+    const headerVisualBottom =
+      options.headerContent?.visualBottom ?? options.headerContent?.height ?? 0;
+    const actualHeaderHeight = Math.max(headerVisualBottom - headerVisualTop, 24);
     // If header content fits in the original space, clip overflow; otherwise
     // margins.top was already expanded so let content show fully.
-    const headerOverflows = actualHeaderHeight > availableHeaderHeight;
+    const headerOverflows = headerVisualBottom > availableHeaderHeight;
 
     const headerEl = doc.createElement('div');
     headerEl.className = PAGE_CLASS_NAMES.header;
     headerEl.style.position = 'absolute';
-    headerEl.style.top = `${headerDistance}px`;
+    headerEl.style.top = `${headerDistance + headerVisualTop}px`;
     headerEl.style.left = `${page.margins.left}px`;
     headerEl.style.right = `${page.margins.right}px`;
     headerEl.style.width = `${headerContentWidth}px`;
-    // Minimum height so empty areas are clickable
-    headerEl.style.minHeight = '24px';
+    headerEl.style.height = `${actualHeaderHeight}px`;
+    headerEl.style.minHeight = `${actualHeaderHeight}px`;
 
     let shouldClipHeader = !headerOverflows;
     if (options.headerContent && options.headerContent.blocks.length > 0) {
       const headerContentEl = renderHeaderFooterContent(
         options.headerContent,
         { ...context, section: 'header', contentWidth: headerContentWidth },
-        options
+        options,
+        {
+          flowTop: headerDistance,
+          flowLeft: page.margins.left,
+          contentWidth: headerContentWidth,
+          pageWidth: page.size.w,
+          pageHeight: page.size.h,
+          margins: page.margins,
+        }
       );
+      headerContentEl.style.top = `${-headerVisualTop}px`;
       // Do not clip header containers that include media. Their measured content
       // height can exclude absolutely positioned runs, which causes visible cut-off.
       if (headerContentEl.querySelector('img')) {
@@ -1013,25 +1154,38 @@ export function renderPage(
     const footerDistance = options.footerDistance ?? page.margins.footer ?? defaultFooterDistance;
     const footerContentWidth = page.size.w - page.margins.left - page.margins.right;
     const availableFooterHeight = Math.max(page.margins.bottom - footerDistance, 48);
-    const actualFooterHeight = options.footerContent?.height ?? 0;
+    const footerVisualTop = options.footerContent?.visualTop ?? 0;
+    const footerVisualBottom =
+      options.footerContent?.visualBottom ?? options.footerContent?.height ?? 0;
+    const actualFooterHeight = Math.max(footerVisualBottom - footerVisualTop, 24);
     const footerOverflows = actualFooterHeight > availableFooterHeight;
 
     const footerEl = doc.createElement('div');
     footerEl.className = PAGE_CLASS_NAMES.footer;
     footerEl.style.position = 'absolute';
-    footerEl.style.bottom = `${footerDistance}px`;
+    footerEl.style.top = `${page.size.h - footerDistance - actualFooterHeight}px`;
     footerEl.style.left = `${page.margins.left}px`;
     footerEl.style.right = `${page.margins.right}px`;
     footerEl.style.width = `${footerContentWidth}px`;
-    footerEl.style.minHeight = '24px';
+    footerEl.style.height = `${actualFooterHeight}px`;
+    footerEl.style.minHeight = `${actualFooterHeight}px`;
 
     let shouldClipFooter = !footerOverflows;
     if (options.footerContent && options.footerContent.blocks.length > 0) {
       const footerContentEl = renderHeaderFooterContent(
         options.footerContent,
         { ...context, section: 'footer', contentWidth: footerContentWidth },
-        options
+        options,
+        {
+          flowTop: page.size.h - footerDistance - (options.footerContent?.height ?? 0),
+          flowLeft: page.margins.left,
+          contentWidth: footerContentWidth,
+          pageWidth: page.size.w,
+          pageHeight: page.size.h,
+          margins: page.margins,
+        }
       );
+      footerContentEl.style.top = `${-footerVisualTop}px`;
       if (footerContentEl.querySelector('img')) {
         shouldClipFooter = false;
       }
@@ -1147,10 +1301,18 @@ function computeOptionsHash(options: RenderPageOptions): string {
 
   // Header/footer content changes affect all pages
   if (options.headerContent) {
-    parts.push(`hdr:${options.headerContent.blocks.length},${options.headerContent.height}`);
+    parts.push(
+      `hdr:${options.headerContent.blocks.length},${options.headerContent.height},${
+        options.headerContent.visualTop ?? 0
+      },${options.headerContent.visualBottom ?? options.headerContent.height}`
+    );
   }
   if (options.footerContent) {
-    parts.push(`ftr:${options.footerContent.blocks.length},${options.footerContent.height}`);
+    parts.push(
+      `ftr:${options.footerContent.blocks.length},${options.footerContent.height},${
+        options.footerContent.visualTop ?? 0
+      },${options.footerContent.visualBottom ?? options.footerContent.height}`
+    );
   }
 
   // Theme changes

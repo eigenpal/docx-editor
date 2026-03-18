@@ -1104,6 +1104,102 @@ function convertDocumentRunsToFlowRuns(content: unknown[]): Run[] {
   return runs;
 }
 
+type HeaderFooterMetrics = {
+  section: 'header' | 'footer';
+  pageSize: { w: number; h: number };
+  margins: PageMargins;
+};
+
+type PositionedAxis = {
+  relativeTo?: string;
+  posOffset?: number;
+  align?: string;
+  alignment?: string;
+};
+
+function getPositionAlignment(axis: PositionedAxis | undefined): string | undefined {
+  return axis?.align ?? axis?.alignment;
+}
+
+function resolveHeaderFooterVisualTop(
+  run: ImageRun,
+  paragraphY: number,
+  flowHeight: number,
+  metrics: HeaderFooterMetrics
+): number {
+  const flowTop =
+    metrics.section === 'header'
+      ? (metrics.margins.header ?? 48)
+      : metrics.pageSize.h - (metrics.margins.footer ?? 48) - flowHeight;
+  const vertical = run.position?.vertical;
+
+  if (!vertical) {
+    return paragraphY;
+  }
+
+  const align = getPositionAlignment(vertical);
+  const offsetPx = vertical.posOffset !== undefined ? emuToPixels(vertical.posOffset) : undefined;
+
+  if (vertical.relativeTo === 'page') {
+    if (offsetPx !== undefined) return offsetPx - flowTop;
+    if (align === 'top') return -flowTop;
+    if (align === 'bottom') return metrics.pageSize.h - run.height - flowTop;
+    if (align === 'center') return (metrics.pageSize.h - run.height) / 2 - flowTop;
+  }
+
+  if (vertical.relativeTo === 'margin') {
+    const marginTop = metrics.margins.top;
+    const marginHeight = metrics.pageSize.h - metrics.margins.top - metrics.margins.bottom;
+    if (offsetPx !== undefined) return marginTop + offsetPx - flowTop;
+    if (align === 'top') return marginTop - flowTop;
+    if (align === 'bottom') return marginTop + marginHeight - run.height - flowTop;
+    if (align === 'center') return marginTop + (marginHeight - run.height) / 2 - flowTop;
+  }
+
+  if (offsetPx !== undefined) {
+    return paragraphY + offsetPx;
+  }
+
+  return paragraphY;
+}
+
+function calculateHeaderFooterVisualBounds(
+  blocks: FlowBlock[],
+  measures: Measure[],
+  flowHeight: number,
+  metrics: HeaderFooterMetrics
+): { visualTop: number; visualBottom: number } {
+  let visualTop = 0;
+  let visualBottom = flowHeight;
+  let cursorY = 0;
+
+  for (let i = 0; i < blocks.length; i++) {
+    const block = blocks[i];
+    const measure = measures[i];
+    if (block?.kind !== 'paragraph' || measure?.kind !== 'paragraph') {
+      continue;
+    }
+
+    const paragraphBlock = block as ParagraphBlock;
+    const paragraphStartY = cursorY;
+    const paragraphBottomY = paragraphStartY + measure.totalHeight;
+    visualTop = Math.min(visualTop, paragraphStartY);
+    visualBottom = Math.max(visualBottom, paragraphBottomY);
+
+    for (const run of paragraphBlock.runs) {
+      if (run.kind !== 'image' || !run.position) continue;
+      const imageRun = run as ImageRun;
+      const runTop = resolveHeaderFooterVisualTop(imageRun, paragraphStartY, flowHeight, metrics);
+      visualTop = Math.min(visualTop, runTop);
+      visualBottom = Math.max(visualBottom, runTop + imageRun.height);
+    }
+
+    cursorY = paragraphBottomY;
+  }
+
+  return { visualTop, visualBottom };
+}
+
 /**
  * Convert HeaderFooter (document type) to HeaderFooterContent (render type).
  *
@@ -1118,7 +1214,8 @@ function convertDocumentRunsToFlowRuns(content: unknown[]): Run[] {
  */
 function convertHeaderFooterToContent(
   headerFooter: HeaderFooter | null | undefined,
-  contentWidth: number
+  contentWidth: number,
+  metrics: HeaderFooterMetrics
 ): HeaderFooterContent | undefined {
   if (!headerFooter || !headerFooter.content || headerFooter.content.length === 0) {
     return undefined;
@@ -1242,11 +1339,19 @@ function convertHeaderFooterToContent(
     }
     return h;
   }, 0);
+  const { visualTop, visualBottom } = calculateHeaderFooterVisualBounds(
+    blocks,
+    measures,
+    totalHeight,
+    metrics
+  );
 
   return {
     blocks,
     measures,
     height: totalHeight,
+    visualTop,
+    visualBottom,
   };
 }
 
@@ -1536,8 +1641,16 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
 
           // Step 2.75: Prepare header/footer content for rendering (needed before layout
           // to compute effective margins when header content exceeds available space)
-          const headerContentForRender = convertHeaderFooterToContent(headerContent, contentWidth);
-          const footerContentForRender = convertHeaderFooterToContent(footerContent, contentWidth);
+          const headerContentForRender = convertHeaderFooterToContent(headerContent, contentWidth, {
+            section: 'header',
+            pageSize,
+            margins,
+          });
+          const footerContentForRender = convertHeaderFooterToContent(footerContent, contentWidth, {
+            section: 'footer',
+            pageSize,
+            margins,
+          });
 
           // Adjust margins if header/footer content exceeds available space
           // (Word and Google Docs push body content down when header grows)
@@ -1545,8 +1658,15 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
           const footerDistance = margins.footer ?? 48;
           const availableHeaderSpace = margins.top - headerDistance;
           const availableFooterSpace = margins.bottom - footerDistance;
-          const headerContentHeight = headerContentForRender?.height ?? 0;
-          const footerContentHeight = footerContentForRender?.height ?? 0;
+          const headerContentHeight =
+            headerContentForRender?.visualBottom ?? headerContentForRender?.height ?? 0;
+          const footerContentHeight = footerContentForRender
+            ? Math.max(
+                (footerContentForRender.visualBottom ?? footerContentForRender.height) -
+                  (footerContentForRender.visualTop ?? 0),
+                footerContentForRender.height
+              )
+            : 0;
 
           let effectiveMargins = margins;
           if (
