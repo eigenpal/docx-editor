@@ -1,6 +1,6 @@
 {
   "name": "docx-editor-monorepo",
-  "version": "0.0.21",
+  "version": "0.0.27",
   "private": true,
   "workspaces": [
     "packages/*",
@@ -26,9 +26,14 @@
     "format": "prettier --write \"packages/*/src/**/*.{ts,tsx,js,jsx,json,css}\"",
     "format:check": "prettier --check \"packages/*/src/**/*.{ts,tsx,js,jsx,json,css}\"",
     "size": "size-limit",
+    "changeset": "changeset",
+    "version-packages": "changeset version",
+    "release": "bun run build && changeset publish",
     "prepare": "husky"
   },
   "devDependencies": {
+    "@changesets/changelog-github": "^0.6.0",
+    "@changesets/cli": "^2.30.0",
     "@happy-dom/global-registrator": "^20.8.3",
     "@playwright/test": "^1.58.1",
     "@size-limit/file": "^12.0.0",
