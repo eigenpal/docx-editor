@@ -333,6 +333,10 @@ export interface DocxEditorRef {
   openPrintPreview: () => void;
   /** Print the document directly */
   print: () => void;
+  /** Load a pre-parsed document programmatically */
+  loadDocument: (doc: Document) => void;
+  /** Load a DOCX buffer programmatically (ArrayBuffer, Uint8Array, Blob, or File) */
+  loadDocumentBuffer: (buffer: DocxInput) => Promise<void>;
 }
 
 /**
@@ -931,35 +935,55 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
   // Hyperlink popup state (Google Docs-style floating popup on link click)
   const [hyperlinkPopupData, setHyperlinkPopupData] = useState<HyperlinkPopupData | null>(null);
 
-  // Parse document buffer
-  useEffect(() => {
-    if (!documentBuffer) {
-      if (initialDocument) {
-        history.reset(initialDocument);
-        setState((prev) => ({ ...prev, isLoading: false }));
-        loadDocumentFonts(initialDocument).catch((err) => {
-          console.warn('Failed to load document fonts:', err);
-        });
-      }
-      return;
+  // Monotonically increasing generation counter to discard stale async loads
+  const loadGenerationRef = useRef(0);
+
+  // Reset internal state when loading a new document (clears stale refs, comments, tracked changes, etc.)
+  const resetForNewDocument = useCallback(() => {
+    commentsLoadedRef.current = false;
+    trackedChangesLoadedRef.current = false;
+    setComments([]);
+    setTrackedChanges([]);
+    setHeadingInfos([]);
+    setShowCommentsSidebar(false);
+    setIsAddingComment(false);
+    setCommentSelectionRange(null);
+    setAddCommentYPosition(null);
+    setFloatingCommentBtn(null);
+    setHfEditPosition(null);
+    findReplace.setMatches([], 0);
+    if (extractTrackedChangesTimerRef.current) {
+      clearTimeout(extractTrackedChangesTimerRef.current);
+      extractTrackedChangesTimerRef.current = null;
     }
+  }, [findReplace.setMatches]);
 
-    setState((prev) => ({ ...prev, isLoading: true, parseError: null }));
+  // Load a pre-parsed document (used by ref method and internally)
+  const loadParsedDocument = useCallback(
+    (doc: Document) => {
+      resetForNewDocument();
+      history.reset(doc);
+      setState((prev) => ({ ...prev, isLoading: false, parseError: null }));
+      loadDocumentFonts(doc).catch((err) => {
+        console.warn('Failed to load document fonts:', err);
+      });
+    },
+    [resetForNewDocument, history]
+  );
 
-    const parseDocument = async () => {
+  // Load a DOCX buffer (used by ref method and internally)
+  const loadBuffer = useCallback(
+    async (buffer: DocxInput) => {
+      const generation = ++loadGenerationRef.current;
+      resetForNewDocument();
+      setState((prev) => ({ ...prev, isLoading: true, parseError: null }));
       try {
-        const doc = await parseDocx(documentBuffer);
-        history.reset(doc);
-        setState((prev) => ({
-          ...prev,
-          isLoading: false,
-          parseError: null,
-        }));
-
-        loadDocumentFonts(doc).catch((err) => {
-          console.warn('Failed to load document fonts:', err);
-        });
+        const doc = await parseDocx(buffer);
+        // Discard result if a newer load was started while we were parsing
+        if (loadGenerationRef.current !== generation) return;
+        loadParsedDocument(doc);
       } catch (error) {
+        if (loadGenerationRef.current !== generation) return;
         const message = error instanceof Error ? error.message : 'Failed to parse document';
         setState((prev) => ({
           ...prev,
@@ -968,17 +992,21 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
         }));
         onError?.(error instanceof Error ? error : new Error(message));
       }
-    };
+    },
+    [resetForNewDocument, loadParsedDocument, onError]
+  );
 
-    parseDocument();
-  }, [documentBuffer, initialDocument, onError]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  // Update document when initialDocument changes
+  // React to document/documentBuffer prop changes
   useEffect(() => {
-    if (initialDocument && !documentBuffer) {
-      history.reset(initialDocument);
+    if (!documentBuffer) {
+      if (initialDocument) {
+        loadParsedDocument(initialDocument);
+      }
+      return;
     }
-  }, [initialDocument, documentBuffer]); // eslint-disable-line react-hooks/exhaustive-deps
+
+    loadBuffer(documentBuffer);
+  }, [documentBuffer, initialDocument]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Create/update agent when document changes
   useEffect(() => {
@@ -2841,8 +2869,18 @@ body { background: white; }
       },
       openPrintPreview: handleDirectPrint,
       print: handleDirectPrint,
+      loadDocument: loadParsedDocument,
+      loadDocumentBuffer: loadBuffer,
     }),
-    [history.state, state.zoom, scrollPageInfo, handleSave, handleDirectPrint]
+    [
+      history.state,
+      state.zoom,
+      scrollPageInfo,
+      handleSave,
+      handleDirectPrint,
+      loadParsedDocument,
+      loadBuffer,
+    ]
   );
 
   // Get header and footer content from document
