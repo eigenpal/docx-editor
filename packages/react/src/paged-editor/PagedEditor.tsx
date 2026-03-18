@@ -183,6 +183,8 @@ export interface PagedEditorProps {
   }) => void;
   /** Callback when user right-clicks on the pages (for context menu). */
   onContextMenu?: (data: { x: number; y: number; hasSelection: boolean }) => void;
+  /** Callback with pre-computed Y positions for comment/tracked-change anchors (for sidebar positioning without DOM queries). */
+  onAnchorPositionsChange?: (positions: Map<string, number>) => void;
 }
 
 export interface PagedEditorRef {
@@ -1333,6 +1335,7 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
       scrollContainerRef: scrollContainerRefProp,
       onHyperlinkClick,
       onContextMenu,
+      onAnchorPositionsChange,
     } = props;
 
     // Resolve the scroll container: prefer parent-provided ref, fallback to own container
@@ -1696,6 +1699,42 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
               const domContext = createRenderedDomContext(pagesContainerRef.current, zoom);
               onRenderedDomContextReady(domContext);
             }
+          }
+
+          // Compute anchor Y positions for comments sidebar (works without DOM queries)
+          const pmView = hiddenPMRef.current?.getView();
+          if (onAnchorPositionsChange && pmView?.state) {
+            const positions = new Map<string, number>();
+            const pmDoc = pmView.state.doc;
+            const { schema } = pmView.state;
+            const commentType = schema.marks.comment;
+            const insertionType = schema.marks.insertion;
+            const deletionType = schema.marks.deletion;
+            const seen = new Set<string>();
+
+            pmDoc.descendants((node, pos) => {
+              if (!node.isText) return;
+              for (const mark of node.marks) {
+                let key: string | null = null;
+                if (commentType && mark.type === commentType) {
+                  key = `comment-${mark.attrs.commentId}`;
+                } else if (
+                  (insertionType && mark.type === insertionType) ||
+                  (deletionType && mark.type === deletionType)
+                ) {
+                  key = `revision-${mark.attrs.revisionId}`;
+                }
+                if (key && !seen.has(key)) {
+                  seen.add(key);
+                  const caret = getCaretPosition(newLayout, newBlocks, newMeasures, pos);
+                  if (caret) {
+                    positions.set(key, caret.y);
+                  }
+                }
+              }
+            });
+
+            onAnchorPositionsChange(positions);
           }
 
           const totalTime = performance.now() - pipelineStart;
