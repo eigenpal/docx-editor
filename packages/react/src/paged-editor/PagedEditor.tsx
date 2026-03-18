@@ -76,7 +76,11 @@ import {
   setCachedParagraphMeasure,
   type FloatingImageZone,
 } from '@eigenpal/docx-core/layout-bridge/measuring';
-import { hitTestFragment, hitTestTableCell } from '@eigenpal/docx-core/layout-bridge/hitTest';
+import {
+  hitTestFragment,
+  hitTestTableCell,
+  getPageTop,
+} from '@eigenpal/docx-core/layout-bridge/hitTest';
 import { clickToPosition } from '@eigenpal/docx-core/layout-bridge/clickToPosition';
 import { clickToPositionDom } from '@eigenpal/docx-core/layout-bridge/clickToPositionDom';
 import {
@@ -1701,9 +1705,15 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
             }
           }
 
-          // Compute anchor Y positions for comments sidebar (works without DOM queries)
+          // Compute anchor Y positions for comments sidebar (works without DOM queries).
+          // Uses getCaretPosition for paragraphs/images; for table content, falls back
+          // to finding the containing table fragment and using its Y position.
+          //
+          // IMPORTANT: getPageTop() uses layout.pageGap which may be 0 (not set in
+          // layoutOpts). The rendered pages have CSS gap=pageGap AND padding=pageGap.
+          // We compute page tops ourselves using the actual pageGap value.
           const pmView = hiddenPMRef.current?.getView();
-          if (onAnchorPositionsChange && pmView?.state) {
+          if (pmView?.state) {
             const positions = new Map<string, number>();
             const pmDoc = pmView.state.doc;
             const { schema } = pmView.state;
@@ -1711,6 +1721,18 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
             const insertionType = schema.marks.insertion;
             const deletionType = schema.marks.deletion;
             const seen = new Set<string>();
+
+            // Pre-compute page top Y values matching actual rendered positions.
+            // Rendered: viewport paddingTop(24) + pages container padding(pageGap)
+            //           + sum of previous page heights + gaps between pages.
+            const CONTENT_TOP = 24 + pageGap; // viewport padding + container padding
+            const pageTops: number[] = [];
+            let cumulativeY = CONTENT_TOP;
+            for (let i = 0; i < newLayout.pages.length; i++) {
+              pageTops.push(cumulativeY);
+              const ph = newLayout.pages[i].size?.h ?? pageSize.h;
+              cumulativeY += ph + pageGap;
+            }
 
             pmDoc.descendants((node, pos) => {
               if (!node.isText) return;
@@ -1726,15 +1748,63 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
                 }
                 if (key && !seen.has(key)) {
                   seen.add(key);
+                  let scrollY: number | null = null;
+                  // Try exact position via getCaretPosition (paragraphs/images)
                   const caret = getCaretPosition(newLayout, newBlocks, newMeasures, pos);
                   if (caret) {
-                    positions.set(key, caret.y);
+                    // caret.y = fragment.y + getPageTop(layout, pageIndex)
+                    // Subtract getPageTop (which uses layout.pageGap=0) and add our corrected pageTop
+                    const layoutPageTop = getPageTop(newLayout, caret.pageIndex);
+                    scrollY = caret.y - layoutPageTop + pageTops[caret.pageIndex];
+                  } else {
+                    // Fallback: find containing fragment (tables, etc.) by PM position.
+                    // For tables, drill into rows to find the exact row Y offset.
+                    for (let pi = 0; pi < newLayout.pages.length; pi++) {
+                      const page = newLayout.pages[pi];
+                      for (const frag of page.fragments) {
+                        const fStart = frag.pmStart ?? 0;
+                        const fEnd = (frag as { pmEnd?: number }).pmEnd ?? fStart;
+                        if (pos >= fStart && pos <= fEnd) {
+                          let rowOffsetY = 0;
+                          if (frag.kind === 'table') {
+                            // Find the matching TableBlock to walk rows
+                            const blockIdx = newBlocks.findIndex((b) => b.id === frag.blockId);
+                            if (blockIdx !== -1) {
+                              const tBlock = newBlocks[blockIdx];
+                              const tMeasure = newMeasures[blockIdx];
+                              if (tBlock.kind === 'table' && tMeasure.kind === 'table') {
+                                for (let ri = frag.fromRow; ri < frag.toRow; ri++) {
+                                  const row = tBlock.rows[ri];
+                                  if (!row) break;
+                                  // Check if PM pos is inside any cell of this row
+                                  const posInRow = row.cells.some((cell) =>
+                                    cell.blocks.some((b) => {
+                                      const s = (b as { pmStart?: number }).pmStart ?? 0;
+                                      const e = (b as { pmEnd?: number }).pmEnd ?? s;
+                                      return pos >= s && pos <= e;
+                                    })
+                                  );
+                                  if (posInRow) break;
+                                  rowOffsetY += tMeasure.rows[ri]?.height ?? 0;
+                                }
+                              }
+                            }
+                          }
+                          scrollY = frag.y + rowOffsetY + pageTops[pi];
+                          break;
+                        }
+                      }
+                      if (scrollY !== null) break;
+                    }
+                  }
+                  if (scrollY !== null) {
+                    positions.set(key, scrollY);
                   }
                 }
               }
             });
 
-            onAnchorPositionsChange(positions);
+            onAnchorPositionsChange?.(positions);
           }
 
           const totalTime = performance.now() - pipelineStart;
