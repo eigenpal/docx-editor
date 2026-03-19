@@ -13,9 +13,16 @@ const GENERIC_FIXTURE = 'fixtures/generic-render-regression.docx';
 
 interface RenderAnomalies {
   bodyImagePmKeyCount: number;
-  potentialClippedHeaderImages: number;
+  anchoredHeaderContainers: number;
   duplicateBodyPmImages: Array<{ key: string; count: number }>;
-  clippedHeaderImages: Array<{ top: number; bottom: number; headerBottom: number }>;
+  clippedHeaderImages: Array<{
+    top: number;
+    bottom: number;
+    pageTop: number;
+    pageBottom: number;
+    headerTop: number;
+    headerStyleTop: number;
+  }>;
 }
 
 async function collectRenderAnomalies(page: Page): Promise<RenderAnomalies> {
@@ -39,32 +46,46 @@ async function collectRenderAnomalies(page: Page): Promise<RenderAnomalies> {
       .filter(([, count]) => count > 1)
       .map(([key, count]) => ({ key, count }));
 
-    let potentialClippedHeaderImages = 0;
-    const clippedHeaderImages: Array<{ top: number; bottom: number; headerBottom: number }> = [];
+    let anchoredHeaderContainers = 0;
+    const clippedHeaderImages: Array<{
+      top: number;
+      bottom: number;
+      pageTop: number;
+      pageBottom: number;
+      headerTop: number;
+      headerStyleTop: number;
+    }> = [];
     const headerEls = Array.from(document.querySelectorAll<HTMLElement>('.layout-page-header'));
 
     for (const headerEl of headerEls) {
-      const overflow = window.getComputedStyle(headerEl).overflowY;
+      const headerStyleTop = Number.parseFloat(headerEl.style.top || '0');
       const headerRect = headerEl.getBoundingClientRect();
+      const pageRect = headerEl.closest<HTMLElement>('.layout-page')?.getBoundingClientRect();
       const images = Array.from(headerEl.querySelectorAll('img'));
+      if (images.length > 0 && headerStyleTop < 44) {
+        anchoredHeaderContainers += 1;
+      }
       for (const img of images) {
         const imgRect = img.getBoundingClientRect();
-        if (imgRect.bottom > headerRect.bottom + 0.5) {
-          potentialClippedHeaderImages += 1;
-          if (overflow === 'hidden' || overflow === 'clip') {
-            clippedHeaderImages.push({
-              top: Math.round(imgRect.top),
-              bottom: Math.round(imgRect.bottom),
-              headerBottom: Math.round(headerRect.bottom),
-            });
-          }
+        if (
+          pageRect &&
+          (imgRect.top < pageRect.top - 0.5 || imgRect.bottom > pageRect.bottom + 0.5)
+        ) {
+          clippedHeaderImages.push({
+            top: Math.round(imgRect.top),
+            bottom: Math.round(imgRect.bottom),
+            pageTop: Math.round(pageRect.top),
+            pageBottom: Math.round(pageRect.bottom),
+            headerTop: Math.round(headerRect.top),
+            headerStyleTop: Math.round(headerStyleTop),
+          });
         }
       }
     }
 
     return {
       bodyImagePmKeyCount: duplicateCounter.size,
-      potentialClippedHeaderImages,
+      anchoredHeaderContainers,
       duplicateBodyPmImages,
       clippedHeaderImages,
     };
@@ -88,7 +109,7 @@ test.describe('Generic Rendering Regression', () => {
 
     // Guardrails: ensure this fixture still exercises both paths.
     expect(anomalies.bodyImagePmKeyCount).toBeGreaterThan(0);
-    expect(anomalies.potentialClippedHeaderImages).toBeGreaterThan(0);
+    expect(anomalies.anchoredHeaderContainers).toBeGreaterThan(0);
 
     // Regression checks.
     expect(anomalies.duplicateBodyPmImages).toEqual([]);
