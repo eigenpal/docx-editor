@@ -8,7 +8,6 @@ const isMonorepo = fs.existsSync(path.join(monorepoRoot, 'src/index.ts'));
 
 const nextConfig: NextConfig = {
   outputFileTracingRoot: monorepoRoot,
-  transpilePackages: ['@eigenpal/docx-js-editor'],
   webpack: (config, { webpack }) => {
     if (isMonorepo) {
       config.resolve.alias['@eigenpal/docx-js-editor'] = path.join(monorepoRoot, 'src/index.ts');

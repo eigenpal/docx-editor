@@ -3,35 +3,34 @@
   "version": "0.0.28",
   "private": true,
   "description": "Framework-agnostic core for DOCX parsing, editing, and rendering",
-  "type": "module",
-  "main": "./dist/core.cjs",
-  "module": "./dist/core.js",
+  "main": "./dist/core.js",
+  "module": "./dist/core.mjs",
   "types": "./dist/core.d.ts",
   "exports": {
     ".": {
       "types": "./dist/core.d.ts",
-      "import": "./dist/core.js",
-      "require": "./dist/core.cjs"
+      "import": "./dist/core.mjs",
+      "require": "./dist/core.js"
     },
     "./headless": {
       "types": "./dist/headless.d.ts",
-      "import": "./dist/headless.js",
-      "require": "./dist/headless.cjs"
+      "import": "./dist/headless.mjs",
+      "require": "./dist/headless.js"
     },
     "./core-plugins": {
       "types": "./dist/core-plugins.d.ts",
-      "import": "./dist/core-plugins.js",
-      "require": "./dist/core-plugins.cjs"
+      "import": "./dist/core-plugins.mjs",
+      "require": "./dist/core-plugins.js"
     },
     "./mcp": {
       "types": "./dist/mcp.d.ts",
-      "import": "./dist/mcp.js",
-      "require": "./dist/mcp.cjs"
+      "import": "./dist/mcp.mjs",
+      "require": "./dist/mcp.js"
     },
     "./*": {
       "types": "./dist/*.d.ts",
-      "import": "./dist/*.js",
-      "require": "./dist/*.cjs"
+      "import": "./dist/*.mjs",
+      "require": "./dist/*.js"
     }
   },
   "typesVersions": {
@@ -48,7 +47,7 @@
     }
   },
   "bin": {
-    "docx-editor-mcp": "./dist/mcp-cli.js"
+    "docx-editor-mcp": "./dist/mcp-cli.mjs"
   },
   "files": [
     "dist"

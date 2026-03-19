@@ -2,20 +2,19 @@
   "name": "@eigenpal/docx-editor-agents",
   "version": "0.0.28",
   "description": "Agent-friendly API for DOCX document review — read, comment, propose changes, accept/reject tracked changes",
-  "type": "module",
-  "main": "./dist/index.cjs",
-  "module": "./dist/index.js",
+  "main": "./dist/index.js",
+  "module": "./dist/index.mjs",
   "types": "./dist/index.d.ts",
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
-      "import": "./dist/index.js",
-      "require": "./dist/index.cjs"
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.js"
     },
     "./bridge": {
       "types": "./dist/bridge.d.ts",
-      "import": "./dist/bridge.js",
-      "require": "./dist/bridge.cjs"
+      "import": "./dist/bridge.mjs",
+      "require": "./dist/bridge.js"
     }
   },
   "typesVersions": {
