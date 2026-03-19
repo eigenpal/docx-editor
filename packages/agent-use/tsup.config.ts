@@ -11,5 +11,5 @@ export default defineConfig({
   sourcemap: true,
   clean: true,
   treeshake: true,
-  external: ['prosemirror-model', 'prosemirror-state', 'prosemirror-view'],
+  external: ['prosemirror-model', 'prosemirror-state', 'prosemirror-view', 'react'],
 });

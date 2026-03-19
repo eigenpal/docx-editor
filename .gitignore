@@ -53,6 +53,10 @@ screenshots/
 # npm lock file (using bun.lock)
 package-lock.json
 
+# Build info
+*.tsbuildinfo
+next-env.d.ts
+
 # Examples framework artifacts
 examples/*/node_modules/
 examples/plugins/*/node_modules/

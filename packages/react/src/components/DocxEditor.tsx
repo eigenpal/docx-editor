@@ -337,6 +337,28 @@ export interface DocxEditorRef {
   loadDocument: (doc: Document) => void;
   /** Load a DOCX buffer programmatically (ArrayBuffer, Uint8Array, Blob, or File) */
   loadDocumentBuffer: (buffer: DocxInput) => Promise<void>;
+  /** Add a comment programmatically. Returns the comment ID. */
+  addComment: (options: {
+    paragraphIndex: number;
+    text: string;
+    author: string;
+    search?: string;
+  }) => number | null;
+  /** Reply to an existing comment. Returns the reply comment ID. */
+  replyToComment: (commentId: number, text: string, author: string) => number | null;
+  /** Resolve (mark as done) a comment. */
+  resolveComment: (commentId: number) => void;
+  /** Create a tracked change (replacement). */
+  proposeReplacement: (options: {
+    paragraphIndex: number;
+    search: string;
+    replaceWith: string;
+    author: string;
+  }) => boolean;
+  /** Scroll to a paragraph by its document-wide index. */
+  scrollToIndex: (paragraphIndex: number) => void;
+  /** Get all comments. */
+  getComments: () => Comment[];
 }
 
 /**
@@ -595,6 +617,89 @@ function createComment(text: string, authorName: string, parentId?: number): Com
     ],
     ...(parentId !== undefined && { parentId }),
   };
+}
+
+/**
+ * Find the ProseMirror document position range for a paragraph at the given index.
+ * Counting matches forEachParagraph: paragraphs (including inside tables) and
+ * non-paragraph top-level blocks (sections) each increment the counter.
+ */
+function findParagraphPmRange(
+  doc: import('prosemirror-model').Node,
+  paragraphIndex: number
+): { from: number; to: number } | null {
+  let index = 0;
+  let result: { from: number; to: number } | null = null;
+
+  doc.descendants((node, pos) => {
+    if (result) return false;
+    if (node.type.name === 'paragraph') {
+      if (index === paragraphIndex) {
+        result = { from: pos, to: pos + node.nodeSize };
+        return false;
+      }
+      index++;
+      return false; // don't descend into paragraph children
+    }
+    // Descend into container nodes to find nested paragraphs
+    if (
+      node.type.name === 'table' ||
+      node.type.name === 'table_row' ||
+      node.type.name === 'table_cell' ||
+      node.type.name === 'doc'
+    ) {
+      return true;
+    }
+    // Other block nodes (sections, etc.) count as a paragraph index
+    if (node.isBlock && node.type.name !== 'doc') {
+      index++;
+    }
+    return false;
+  });
+
+  return result;
+}
+
+/**
+ * Find a text string within a ProseMirror paragraph node range and return its positions.
+ */
+function findTextInPmParagraph(
+  doc: import('prosemirror-model').Node,
+  paragraphFrom: number,
+  paragraphTo: number,
+  searchText: string
+): { from: number; to: number } | null {
+  let fullText = '';
+  const textPositions: { pos: number; len: number }[] = [];
+
+  doc.nodesBetween(paragraphFrom, paragraphTo, (node, pos) => {
+    if (node.isText && node.text) {
+      textPositions.push({ pos, len: node.text.length });
+      fullText += node.text;
+    }
+  });
+
+  const matchIndex = fullText.indexOf(searchText);
+  if (matchIndex === -1) return null;
+
+  // Map string offset to PM position
+  let charOffset = 0;
+  let fromPos = paragraphFrom;
+  let toPos = paragraphFrom;
+
+  for (const tp of textPositions) {
+    const segEnd = charOffset + tp.len;
+    if (charOffset <= matchIndex && matchIndex < segEnd) {
+      fromPos = tp.pos + (matchIndex - charOffset);
+    }
+    if (charOffset <= matchIndex + searchText.length && matchIndex + searchText.length <= segEnd) {
+      toPos = tp.pos + (matchIndex + searchText.length - charOffset);
+      break;
+    }
+    charOffset = segEnd;
+  }
+
+  return { from: fromPos, to: toPos };
 }
 
 /**
@@ -2875,6 +2980,98 @@ body { background: white; }
       print: handleDirectPrint,
       loadDocument: loadParsedDocument,
       loadDocumentBuffer: loadBuffer,
+
+      addComment: (options) => {
+        const view = pagedEditorRef.current?.getView();
+        if (!view) return null;
+        const range = findParagraphPmRange(view.state.doc, options.paragraphIndex);
+        if (!range) return null;
+
+        let from = range.from;
+        let to = range.to;
+
+        if (options.search) {
+          const textRange = findTextInPmParagraph(
+            view.state.doc,
+            range.from,
+            range.to,
+            options.search
+          );
+          if (!textRange) return null;
+          from = textRange.from;
+          to = textRange.to;
+        }
+
+        const comment = createComment(options.text, options.author);
+        const commentMark = view.state.schema.marks.comment.create({ commentId: comment.id });
+        view.dispatch(view.state.tr.addMark(from, to, commentMark));
+        setComments((prev) => [...prev, comment]);
+        setShowCommentsSidebar(true);
+        return comment.id;
+      },
+
+      replyToComment: (commentId, text, authorName) => {
+        if (!comments.some((c) => c.id === commentId)) return null;
+        const reply = createComment(text, authorName, commentId);
+        setComments((prev) => [...prev, reply]);
+        return reply.id;
+      },
+
+      resolveComment: (commentId) => {
+        setComments((prev) => prev.map((c) => (c.id === commentId ? { ...c, done: true } : c)));
+      },
+
+      proposeReplacement: (options) => {
+        const view = pagedEditorRef.current?.getView();
+        if (!view) return false;
+        const range = findParagraphPmRange(view.state.doc, options.paragraphIndex);
+        if (!range) return false;
+
+        const textRange = findTextInPmParagraph(
+          view.state.doc,
+          range.from,
+          range.to,
+          options.search
+        );
+        if (!textRange) return false;
+
+        const revisionId = Date.now();
+        const date = new Date().toISOString();
+        const { schema } = view.state;
+
+        const deletionMark = schema.marks.deletion.create({
+          revisionId,
+          author: options.author,
+          date,
+        });
+        const insertionMark = schema.marks.insertion.create({
+          revisionId,
+          author: options.author,
+          date,
+        });
+
+        const insertedNode = schema.text(options.replaceWith, [insertionMark]);
+        const tr = view.state.tr
+          .addMark(textRange.from, textRange.to, deletionMark)
+          .insert(textRange.to, insertedNode);
+        view.dispatch(tr);
+
+        extractTrackedChanges();
+        setShowCommentsSidebar(true);
+        return true;
+      },
+
+      scrollToIndex: (paragraphIndex) => {
+        const view = pagedEditorRef.current?.getView();
+        if (!view) return;
+        const range = findParagraphPmRange(view.state.doc, paragraphIndex);
+        if (!range) return;
+
+        const tr = view.state.tr.setSelection(TextSelection.create(view.state.doc, range.from));
+        view.dispatch(tr.scrollIntoView());
+      },
+
+      getComments: () => comments,
     }),
     [
       history.state,
@@ -2884,6 +3081,8 @@ body { background: white; }
       handleDirectPrint,
       loadParsedDocument,
       loadBuffer,
+      comments,
+      extractTrackedChanges,
     ]
   );
 
