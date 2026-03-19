@@ -1,6 +1,6 @@
 {
   "name": "@eigenpal/docx-js-editor",
-  "version": "0.0.28",
+  "version": "0.0.30",
   "description": "A browser-based DOCX template editor with variable insertion support",
   "main": "./dist/index.js",
   "module": "./dist/index.mjs",
