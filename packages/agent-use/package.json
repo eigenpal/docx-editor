@@ -1,6 +1,6 @@
 {
   "name": "@eigenpal/docx-editor-agents",
-  "version": "0.0.28",
+  "version": "0.0.29",
   "description": "Agent-friendly API for DOCX document review — read, comment, propose changes, accept/reject tracked changes",
   "main": "./dist/index.js",
   "module": "./dist/index.mjs",
@@ -33,7 +33,10 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@eigenpal/docx-core": "workspace:*"
+    "docxtemplater": "^3.50.0",
+    "jszip": "^3.10.1",
+    "pizzip": "^3.1.7",
+    "xml-js": "^1.6.11"
   },
   "keywords": [
     "docx",
