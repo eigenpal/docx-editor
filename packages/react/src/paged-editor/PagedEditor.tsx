@@ -76,7 +76,11 @@ import {
   setCachedParagraphMeasure,
   type FloatingImageZone,
 } from '@eigenpal/docx-core/layout-bridge/measuring';
-import { hitTestFragment, hitTestTableCell } from '@eigenpal/docx-core/layout-bridge/hitTest';
+import {
+  hitTestFragment,
+  hitTestTableCell,
+  getPageTop,
+} from '@eigenpal/docx-core/layout-bridge/hitTest';
 import { clickToPosition } from '@eigenpal/docx-core/layout-bridge/clickToPosition';
 import { clickToPositionDom } from '@eigenpal/docx-core/layout-bridge/clickToPositionDom';
 import {
@@ -183,6 +187,8 @@ export interface PagedEditorProps {
   }) => void;
   /** Callback when user right-clicks on the pages (for context menu). */
   onContextMenu?: (data: { x: number; y: number; hasSelection: boolean }) => void;
+  /** Callback with pre-computed Y positions for comment/tracked-change anchors (for sidebar positioning without DOM queries). */
+  onAnchorPositionsChange?: (positions: Map<string, number>) => void;
 }
 
 export interface PagedEditorRef {
@@ -253,12 +259,15 @@ const containerStyles: CSSProperties = {
   backgroundColor: 'var(--doc-bg, #f8f9fa)',
 };
 
+/** Padding above page content in the viewport div. */
+const VIEWPORT_PADDING_TOP = 24;
+
 const viewportStyles: CSSProperties = {
   position: 'relative',
   display: 'flex',
   flexDirection: 'column',
   alignItems: 'center',
-  paddingTop: 24,
+  paddingTop: VIEWPORT_PADDING_TOP,
   paddingBottom: 24,
 };
 
@@ -283,6 +292,111 @@ const pluginOverlaysStyles: CSSProperties = {
 // =============================================================================
 // HELPER FUNCTIONS
 // =============================================================================
+
+/**
+ * Compute anchor Y positions for comments/tracked-changes sidebar.
+ * Uses getCaretPosition for paragraphs/images; for table content, finds
+ * the containing fragment and drills into rows for exact Y offset.
+ * Returns a Map of "comment-{id}" / "revision-{revisionId}" → scroll-container Y.
+ */
+function computeAnchorPositions(
+  pmView: import('prosemirror-view').EditorView | null,
+  layout: Layout,
+  blocks: FlowBlock[],
+  measures: Measure[],
+  renderedPageGap: number
+): Map<string, number> {
+  const positions = new Map<string, number>();
+  if (!pmView?.state) return positions;
+
+  const { doc: pmDoc, schema } = pmView.state;
+  const commentType = schema.marks.comment;
+  const insertionType = schema.marks.insertion;
+  const deletionType = schema.marks.deletion;
+  if (!commentType && !insertionType && !deletionType) return positions;
+
+  const seen = new Set<string>();
+  // Offset from layout coords to scroll-container coords:
+  // viewport paddingTop + pages container padding (CSS padding = pageGap)
+  const contentOffset = VIEWPORT_PADDING_TOP + renderedPageGap;
+
+  pmDoc.descendants((node, pos) => {
+    if (!node.isText) return;
+    for (const mark of node.marks) {
+      let key: string | null = null;
+      if (commentType && mark.type === commentType) {
+        key = `comment-${mark.attrs.commentId}`;
+      } else if (
+        (insertionType && mark.type === insertionType) ||
+        (deletionType && mark.type === deletionType)
+      ) {
+        key = `revision-${mark.attrs.revisionId}`;
+      }
+      if (!key || seen.has(key)) continue;
+      seen.add(key);
+
+      // Try exact position (paragraphs/images)
+      const caret = getCaretPosition(layout, blocks, measures, pos);
+      if (caret) {
+        positions.set(key, caret.y + contentOffset);
+        continue;
+      }
+
+      // Fallback: find containing fragment (tables, etc.) by PM position
+      for (let pi = 0; pi < layout.pages.length; pi++) {
+        const page = layout.pages[pi];
+        let found = false;
+        for (const frag of page.fragments) {
+          const fStart = frag.pmStart ?? 0;
+          const fEnd = (frag as { pmEnd?: number }).pmEnd ?? fStart;
+          if (pos < fStart || pos > fEnd) continue;
+
+          const rowOffsetY =
+            frag.kind === 'table' ? getTableRowOffset(blocks, measures, frag, pos) : 0;
+          positions.set(key, frag.y + rowOffsetY + getPageTop(layout, pi) + contentOffset);
+          found = true;
+          break;
+        }
+        if (found) break;
+      }
+    }
+  });
+
+  return positions;
+}
+
+/**
+ * Find the Y offset within a table fragment to the row containing a PM position.
+ * Sums row heights until finding the row that contains the given position.
+ */
+function getTableRowOffset(
+  blocks: FlowBlock[],
+  measures: Measure[],
+  frag: { blockId: string | number; fromRow: number; toRow: number },
+  pmPos: number
+): number {
+  const blockIdx = blocks.findIndex((b) => b.id === frag.blockId);
+  if (blockIdx === -1) return 0;
+  const tBlock = blocks[blockIdx];
+  const tMeasure = measures[blockIdx];
+  if (tBlock.kind !== 'table' || tMeasure.kind !== 'table') return 0;
+
+  let offsetY = 0;
+  for (let ri = frag.fromRow; ri < frag.toRow; ri++) {
+    const row = (tBlock as TableBlock).rows[ri];
+    if (!row) break;
+    const posInRow = row.cells.some((cell) =>
+      cell.blocks.some((b) => {
+        const s = (b as { pmStart?: number }).pmStart ?? 0;
+        const e = (b as { pmEnd?: number }).pmEnd ?? s;
+        return pmPos >= s && pmPos <= e;
+      })
+    );
+    if (posInRow) break;
+    offsetY += (tMeasure as TableMeasure).rows[ri]?.height ?? 0;
+  }
+  return offsetY;
+}
 
 /**
  * Convert twips to pixels (1 twip = 1/20 point, 96 pixels per inch).
@@ -1333,6 +1447,7 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
       scrollContainerRef: scrollContainerRefProp,
       onHyperlinkClick,
       onContextMenu,
+      onAnchorPositionsChange,
     } = props;
 
     // Resolve the scroll container: prefer parent-provided ref, fallback to own container
@@ -1588,6 +1703,7 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
             margins: effectiveMargins,
             columns,
             bodyBreakType,
+            pageGap,
           };
 
           if (hasFootnotes) {
@@ -1696,6 +1812,19 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
               const domContext = createRenderedDomContext(pagesContainerRef.current, zoom);
               onRenderedDomContextReady(domContext);
             }
+          }
+
+          // Compute anchor Y positions for comments sidebar (works without DOM queries).
+          // Only runs when the sidebar callback is registered.
+          if (onAnchorPositionsChange) {
+            const positions = computeAnchorPositions(
+              hiddenPMRef.current?.getView() ?? null,
+              newLayout,
+              newBlocks,
+              newMeasures,
+              pageGap
+            );
+            onAnchorPositionsChange(positions);
           }
 
           const totalTime = performance.now() - pipelineStart;

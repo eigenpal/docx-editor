@@ -99,6 +99,8 @@ export interface CommentsSidebarProps {
   pageWidth?: number;
   /** Ref to the editor scroll container for DOM position queries */
   editorContainerRef?: React.RefObject<HTMLDivElement | null>;
+  /** Pre-computed Y positions from layout engine (keys: "comment-{id}" or "revision-{revisionId}") */
+  anchorPositions?: Map<string, number>;
 }
 
 export const SIDEBAR_WIDTH = 340;
@@ -146,6 +148,7 @@ export const CommentsSidebar: React.FC<CommentsSidebarProps> = ({
   addCommentYPosition = null,
   pageWidth = 816,
   editorContainerRef,
+  anchorPositions,
 }) => {
   const [replyingTo, setReplyingTo] = useState<number | null>(null);
   const [replyText, setReplyText] = useState('');
@@ -184,9 +187,10 @@ export const CommentsSidebar: React.FC<CommentsSidebarProps> = ({
 
   const getReplies = (commentId: number) => repliesByParent.get(commentId) ?? [];
 
-  // Find DOM Y positions for comment/change anchors
-  // IMPORTANT: queries must be scoped to .paged-editor__pages to avoid
-  // matching sidebar card elements (which also have data-comment-id).
+  // Find Y positions for comment/change anchors.
+  // Uses pre-computed layout positions (anchorPositions) as primary source —
+  // these work even for virtualized pages that haven't rendered to DOM.
+  // Falls back to DOM queries for rendered elements (e.g., when anchorPositions unavailable).
   const updateCardPositions = useCallback(() => {
     const container = editorContainerRef?.current;
     if (!container) return;
@@ -198,30 +202,50 @@ export const CommentsSidebar: React.FC<CommentsSidebarProps> = ({
     const scrollTop = container.scrollTop;
     const positions: { id: string; targetY: number; height: number }[] = [];
 
-    // Find comment highlight elements (inside pages only, not sidebar)
+    // Find comment positions — prefer layout-computed positions, fall back to DOM
     for (const comment of visibleComments) {
-      const el = pagesEl.querySelector(`[data-comment-id="${comment.id}"]`);
-      if (el) {
-        const rect = el.getBoundingClientRect();
+      const cardId = `comment-${comment.id}`;
+      const layoutY = anchorPositions?.get(cardId);
+      if (layoutY != null) {
         positions.push({
-          id: `comment-${comment.id}`,
-          targetY: rect.top - containerRect.top + scrollTop,
-          height: cardRefs.current.get(`comment-${comment.id}`)?.offsetHeight || 80,
+          id: cardId,
+          targetY: layoutY,
+          height: cardRefs.current.get(cardId)?.offsetHeight || 80,
         });
+      } else {
+        // Fallback: query DOM (only works for rendered/non-virtualized pages)
+        const el = pagesEl.querySelector(`[data-comment-id="${comment.id}"]`);
+        if (el) {
+          const rect = el.getBoundingClientRect();
+          positions.push({
+            id: cardId,
+            targetY: rect.top - containerRect.top + scrollTop,
+            height: cardRefs.current.get(cardId)?.offsetHeight || 80,
+          });
+        }
       }
     }
 
-    // Find tracked change elements by revision ID (inside pages only)
+    // Find tracked change positions — prefer layout-computed positions, fall back to DOM
     trackedChanges.forEach((change, idx) => {
       const cardId = `tc-${change.revisionId}-${idx}`;
-      const el = pagesEl.querySelector(`[data-revision-id="${change.revisionId}"]`);
-      if (el) {
-        const rect = el.getBoundingClientRect();
+      const layoutY = anchorPositions?.get(`revision-${change.revisionId}`);
+      if (layoutY != null) {
         positions.push({
           id: cardId,
-          targetY: rect.top - containerRect.top + scrollTop,
+          targetY: layoutY,
           height: cardRefs.current.get(cardId)?.offsetHeight || 80,
         });
+      } else {
+        const el = pagesEl.querySelector(`[data-revision-id="${change.revisionId}"]`);
+        if (el) {
+          const rect = el.getBoundingClientRect();
+          positions.push({
+            id: cardId,
+            targetY: rect.top - containerRect.top + scrollTop,
+            height: cardRefs.current.get(cardId)?.offsetHeight || 80,
+          });
+        }
       }
     });
 
@@ -246,7 +270,14 @@ export const CommentsSidebar: React.FC<CommentsSidebarProps> = ({
     }
 
     setCardPositions(resolvedPositions);
-  }, [visibleComments, trackedChanges, editorContainerRef, isAddingComment, addCommentYPosition]);
+  }, [
+    visibleComments,
+    trackedChanges,
+    editorContainerRef,
+    isAddingComment,
+    addCommentYPosition,
+    anchorPositions,
+  ]);
 
   // Listen for clicks on comment/change elements in the document body → expand the sidebar card
   useEffect(() => {
