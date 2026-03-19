@@ -2,45 +2,44 @@
   "name": "@eigenpal/docx-js-editor",
   "version": "0.0.28",
   "description": "A browser-based DOCX template editor with variable insertion support",
-  "type": "module",
-  "main": "./dist/index.cjs",
-  "module": "./dist/index.js",
+  "main": "./dist/index.js",
+  "module": "./dist/index.mjs",
   "types": "./dist/index.d.ts",
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
-      "import": "./dist/index.js",
-      "require": "./dist/index.cjs"
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.js"
     },
     "./react": {
       "types": "./dist/react.d.ts",
-      "import": "./dist/react.js",
-      "require": "./dist/react.cjs"
+      "import": "./dist/react.mjs",
+      "require": "./dist/react.js"
     },
     "./ui": {
       "types": "./dist/ui.d.ts",
-      "import": "./dist/ui.js",
-      "require": "./dist/ui.cjs"
+      "import": "./dist/ui.mjs",
+      "require": "./dist/ui.js"
     },
     "./core": {
       "types": "./dist/core-reexport.d.ts",
-      "import": "./dist/core-reexport.js",
-      "require": "./dist/core-reexport.cjs"
+      "import": "./dist/core-reexport.mjs",
+      "require": "./dist/core-reexport.js"
     },
     "./headless": {
       "types": "./dist/headless-reexport.d.ts",
-      "import": "./dist/headless-reexport.js",
-      "require": "./dist/headless-reexport.cjs"
+      "import": "./dist/headless-reexport.mjs",
+      "require": "./dist/headless-reexport.js"
     },
     "./core-plugins": {
       "types": "./dist/core-plugins-reexport.d.ts",
-      "import": "./dist/core-plugins-reexport.js",
-      "require": "./dist/core-plugins-reexport.cjs"
+      "import": "./dist/core-plugins-reexport.mjs",
+      "require": "./dist/core-plugins-reexport.js"
     },
     "./mcp": {
       "types": "./dist/mcp-reexport.d.ts",
-      "import": "./dist/mcp-reexport.js",
-      "require": "./dist/mcp-reexport.cjs"
+      "import": "./dist/mcp-reexport.mjs",
+      "require": "./dist/mcp-reexport.js"
     },
     "./styles.css": "./dist/styles.css"
   },
