@@ -259,12 +259,15 @@ const containerStyles: CSSProperties = {
   backgroundColor: 'var(--doc-bg, #f8f9fa)',
 };
 
+/** Padding above page content in the viewport div. */
+const VIEWPORT_PADDING_TOP = 24;
+
 const viewportStyles: CSSProperties = {
   position: 'relative',
   display: 'flex',
   flexDirection: 'column',
   alignItems: 'center',
-  paddingTop: 24,
+  paddingTop: VIEWPORT_PADDING_TOP,
   paddingBottom: 24,
 };
 
@@ -289,6 +292,111 @@ const pluginOverlaysStyles: CSSProperties = {
 // =============================================================================
 // HELPER FUNCTIONS
 // =============================================================================
+
+/**
+ * Compute anchor Y positions for comments/tracked-changes sidebar.
+ * Uses getCaretPosition for paragraphs/images; for table content, finds
+ * the containing fragment and drills into rows for exact Y offset.
+ * Returns a Map of "comment-{id}" / "revision-{revisionId}" → scroll-container Y.
+ */
+function computeAnchorPositions(
+  pmView: import('prosemirror-view').EditorView | null,
+  layout: Layout,
+  blocks: FlowBlock[],
+  measures: Measure[],
+  renderedPageGap: number
+): Map<string, number> {
+  const positions = new Map<string, number>();
+  if (!pmView?.state) return positions;
+
+  const { doc: pmDoc, schema } = pmView.state;
+  const commentType = schema.marks.comment;
+  const insertionType = schema.marks.insertion;
+  const deletionType = schema.marks.deletion;
+  if (!commentType && !insertionType && !deletionType) return positions;
+
+  const seen = new Set<string>();
+  // Offset from layout coords to scroll-container coords:
+  // viewport paddingTop + pages container padding (CSS padding = pageGap)
+  const contentOffset = VIEWPORT_PADDING_TOP + renderedPageGap;
+
+  pmDoc.descendants((node, pos) => {
+    if (!node.isText) return;
+    for (const mark of node.marks) {
+      let key: string | null = null;
+      if (commentType && mark.type === commentType) {
+        key = `comment-${mark.attrs.commentId}`;
+      } else if (
+        (insertionType && mark.type === insertionType) ||
+        (deletionType && mark.type === deletionType)
+      ) {
+        key = `revision-${mark.attrs.revisionId}`;
+      }
+      if (!key || seen.has(key)) continue;
+      seen.add(key);
+
+      // Try exact position (paragraphs/images)
+      const caret = getCaretPosition(layout, blocks, measures, pos);
+      if (caret) {
+        positions.set(key, caret.y + contentOffset);
+        continue;
+      }
+
+      // Fallback: find containing fragment (tables, etc.) by PM position
+      for (let pi = 0; pi < layout.pages.length; pi++) {
+        const page = layout.pages[pi];
+        let found = false;
+        for (const frag of page.fragments) {
+          const fStart = frag.pmStart ?? 0;
+          const fEnd = (frag as { pmEnd?: number }).pmEnd ?? fStart;
+          if (pos < fStart || pos > fEnd) continue;
+
+          const rowOffsetY =
+            frag.kind === 'table' ? getTableRowOffset(blocks, measures, frag, pos) : 0;
+          positions.set(key, frag.y + rowOffsetY + getPageTop(layout, pi) + contentOffset);
+          found = true;
+          break;
+        }
+        if (found) break;
+      }
+    }
+  });
+
+  return positions;
+}
+
+/**
+ * Find the Y offset within a table fragment to the row containing a PM position.
+ * Sums row heights until finding the row that contains the given position.
+ */
+function getTableRowOffset(
+  blocks: FlowBlock[],
+  measures: Measure[],
+  frag: { blockId: string | number; fromRow: number; toRow: number },
+  pmPos: number
+): number {
+  const blockIdx = blocks.findIndex((b) => b.id === frag.blockId);
+  if (blockIdx === -1) return 0;
+  const tBlock = blocks[blockIdx];
+  const tMeasure = measures[blockIdx];
+  if (tBlock.kind !== 'table' || tMeasure.kind !== 'table') return 0;
+
+  let offsetY = 0;
+  for (let ri = frag.fromRow; ri < frag.toRow; ri++) {
+    const row = (tBlock as TableBlock).rows[ri];
+    if (!row) break;
+    const posInRow = row.cells.some((cell) =>
+      cell.blocks.some((b) => {
+        const s = (b as { pmStart?: number }).pmStart ?? 0;
+        const e = (b as { pmEnd?: number }).pmEnd ?? s;
+        return pmPos >= s && pmPos <= e;
+      })
+    );
+    if (posInRow) break;
+    offsetY += (tMeasure as TableMeasure).rows[ri]?.height ?? 0;
+  }
+  return offsetY;
+}
 
 /**
  * Convert twips to pixels (1 twip = 1/20 point, 96 pixels per inch).
@@ -1595,6 +1703,7 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
             margins: effectiveMargins,
             columns,
             bodyBreakType,
+            pageGap,
           };
 
           if (hasFootnotes) {
@@ -1706,105 +1815,16 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
           }
 
           // Compute anchor Y positions for comments sidebar (works without DOM queries).
-          // Uses getCaretPosition for paragraphs/images; for table content, falls back
-          // to finding the containing table fragment and using its Y position.
-          //
-          // IMPORTANT: getPageTop() uses layout.pageGap which may be 0 (not set in
-          // layoutOpts). The rendered pages have CSS gap=pageGap AND padding=pageGap.
-          // We compute page tops ourselves using the actual pageGap value.
-          const pmView = hiddenPMRef.current?.getView();
-          if (pmView?.state) {
-            const positions = new Map<string, number>();
-            const pmDoc = pmView.state.doc;
-            const { schema } = pmView.state;
-            const commentType = schema.marks.comment;
-            const insertionType = schema.marks.insertion;
-            const deletionType = schema.marks.deletion;
-            const seen = new Set<string>();
-
-            // Pre-compute page top Y values matching actual rendered positions.
-            // Rendered: viewport paddingTop(24) + pages container padding(pageGap)
-            //           + sum of previous page heights + gaps between pages.
-            const CONTENT_TOP = 24 + pageGap; // viewport padding + container padding
-            const pageTops: number[] = [];
-            let cumulativeY = CONTENT_TOP;
-            for (let i = 0; i < newLayout.pages.length; i++) {
-              pageTops.push(cumulativeY);
-              const ph = newLayout.pages[i].size?.h ?? pageSize.h;
-              cumulativeY += ph + pageGap;
-            }
-
-            pmDoc.descendants((node, pos) => {
-              if (!node.isText) return;
-              for (const mark of node.marks) {
-                let key: string | null = null;
-                if (commentType && mark.type === commentType) {
-                  key = `comment-${mark.attrs.commentId}`;
-                } else if (
-                  (insertionType && mark.type === insertionType) ||
-                  (deletionType && mark.type === deletionType)
-                ) {
-                  key = `revision-${mark.attrs.revisionId}`;
-                }
-                if (key && !seen.has(key)) {
-                  seen.add(key);
-                  let scrollY: number | null = null;
-                  // Try exact position via getCaretPosition (paragraphs/images)
-                  const caret = getCaretPosition(newLayout, newBlocks, newMeasures, pos);
-                  if (caret) {
-                    // caret.y = fragment.y + getPageTop(layout, pageIndex)
-                    // Subtract getPageTop (which uses layout.pageGap=0) and add our corrected pageTop
-                    const layoutPageTop = getPageTop(newLayout, caret.pageIndex);
-                    scrollY = caret.y - layoutPageTop + pageTops[caret.pageIndex];
-                  } else {
-                    // Fallback: find containing fragment (tables, etc.) by PM position.
-                    // For tables, drill into rows to find the exact row Y offset.
-                    for (let pi = 0; pi < newLayout.pages.length; pi++) {
-                      const page = newLayout.pages[pi];
-                      for (const frag of page.fragments) {
-                        const fStart = frag.pmStart ?? 0;
-                        const fEnd = (frag as { pmEnd?: number }).pmEnd ?? fStart;
-                        if (pos >= fStart && pos <= fEnd) {
-                          let rowOffsetY = 0;
-                          if (frag.kind === 'table') {
-                            // Find the matching TableBlock to walk rows
-                            const blockIdx = newBlocks.findIndex((b) => b.id === frag.blockId);
-                            if (blockIdx !== -1) {
-                              const tBlock = newBlocks[blockIdx];
-                              const tMeasure = newMeasures[blockIdx];
-                              if (tBlock.kind === 'table' && tMeasure.kind === 'table') {
-                                for (let ri = frag.fromRow; ri < frag.toRow; ri++) {
-                                  const row = tBlock.rows[ri];
-                                  if (!row) break;
-                                  // Check if PM pos is inside any cell of this row
-                                  const posInRow = row.cells.some((cell) =>
-                                    cell.blocks.some((b) => {
-                                      const s = (b as { pmStart?: number }).pmStart ?? 0;
-                                      const e = (b as { pmEnd?: number }).pmEnd ?? s;
-                                      return pos >= s && pos <= e;
-                                    })
-                                  );
-                                  if (posInRow) break;
-                                  rowOffsetY += tMeasure.rows[ri]?.height ?? 0;
-                                }
-                              }
-                            }
-                          }
-                          scrollY = frag.y + rowOffsetY + pageTops[pi];
-                          break;
-                        }
-                      }
-                      if (scrollY !== null) break;
-                    }
-                  }
-                  if (scrollY !== null) {
-                    positions.set(key, scrollY);
-                  }
-                }
-              }
-            });
-
-            onAnchorPositionsChange?.(positions);
+          // Only runs when the sidebar callback is registered.
+          if (onAnchorPositionsChange) {
+            const positions = computeAnchorPositions(
+              hiddenPMRef.current?.getView() ?? null,
+              newLayout,
+              newBlocks,
+              newMeasures,
+              pageGap
+            );
+            onAnchorPositionsChange(positions);
           }
 
           const totalTime = performance.now() - pipelineStart;

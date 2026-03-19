@@ -553,6 +553,7 @@ function EditingModeDropdown({
 
 let nextCommentId = Date.now();
 const PENDING_COMMENT_ID = -1;
+const EMPTY_ANCHOR_POSITIONS = new Map<string, number>();
 
 /**
  * Find the Y position (relative to parentEl) of the element containing the given PM position.
@@ -679,7 +680,8 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
   const [showCommentsSidebar, setShowCommentsSidebar] = useState(false);
   const [comments, setComments] = useState<Comment[]>([]);
   const [trackedChanges, setTrackedChanges] = useState<TrackedChangeEntry[]>([]);
-  const [anchorPositions, setAnchorPositions] = useState<Map<string, number>>(new Map());
+  const [anchorPositions, setAnchorPositions] =
+    useState<Map<string, number>>(EMPTY_ANCHOR_POSITIONS);
 
   const [isAddingComment, setIsAddingComment] = useState(false);
   const [commentSelectionRange, setCommentSelectionRange] = useState<{
@@ -952,7 +954,7 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
     setAddCommentYPosition(null);
     setFloatingCommentBtn(null);
     setHfEditPosition(null);
-    setAnchorPositions(new Map());
+    setAnchorPositions(EMPTY_ANCHOR_POSITIONS);
     findReplace.setMatches([], 0);
     if (extractTrackedChangesTimerRef.current) {
       clearTimeout(extractTrackedChangesTimerRef.current);
