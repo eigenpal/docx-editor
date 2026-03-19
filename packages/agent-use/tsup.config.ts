@@ -8,9 +8,12 @@ export default defineConfig({
   format: ['cjs', 'esm'],
   dts: true,
   splitting: true,
-  sourcemap: true,
+  sourcemap: false,
   clean: true,
-  treeshake: true,
+  treeshake: {
+    preset: 'smallest',
+  },
+  minify: true,
   noExternal: ['@eigenpal/docx-core'],
   external: ['prosemirror-model', 'prosemirror-state', 'prosemirror-view'],
 });
