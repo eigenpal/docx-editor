@@ -670,6 +670,7 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
   const [footnotePropsOpen, setFootnotePropsOpen] = useState(false);
   // Header/footer editing state
   const [hfEditPosition, setHfEditPosition] = useState<'header' | 'footer' | null>(null);
+  const [hfEditIsFirstPage, setHfEditIsFirstPage] = useState(false);
   // Document outline sidebar state
   const [showOutline, setShowOutline] = useState(showOutlineProp);
   const showOutlineRef = useRef(false);
@@ -2888,12 +2889,19 @@ body { background: white; }
   );
 
   // Get header and footer content from document
-  const { headerContent, footerContent } = useMemo<{
+  const { headerContent, footerContent, firstPageHeaderContent, firstPageFooterContent } = useMemo<{
     headerContent: HeaderFooter | null;
     footerContent: HeaderFooter | null;
+    firstPageHeaderContent: HeaderFooter | null;
+    firstPageFooterContent: HeaderFooter | null;
   }>(() => {
     if (!history.state?.package) {
-      return { headerContent: null, footerContent: null };
+      return {
+        headerContent: null,
+        footerContent: null,
+        firstPageHeaderContent: null,
+        firstPageFooterContent: null,
+      };
     }
 
     const pkg = history.state.package;
@@ -2903,31 +2911,59 @@ body { background: white; }
 
     let header: HeaderFooter | null = null;
     let footer: HeaderFooter | null = null;
+    let firstHeader: HeaderFooter | null = null;
+    let firstFooter: HeaderFooter | null = null;
 
-    // Get default header from section references
     if (headers && sectionProps?.headerReferences) {
       const defaultRef = sectionProps.headerReferences.find((r) => r.type === 'default');
       if (defaultRef?.rId) {
         header = headers.get(defaultRef.rId) ?? null;
       }
+      const firstRef = sectionProps.headerReferences.find((r) => r.type === 'first');
+      if (firstRef?.rId) {
+        firstHeader = headers.get(firstRef.rId) ?? null;
+      }
     }
 
-    // Get default footer from section references
     if (footers && sectionProps?.footerReferences) {
       const defaultRef = sectionProps.footerReferences.find((r) => r.type === 'default');
       if (defaultRef?.rId) {
         footer = footers.get(defaultRef.rId) ?? null;
       }
+      const firstRef = sectionProps.footerReferences.find((r) => r.type === 'first');
+      if (firstRef?.rId) {
+        firstFooter = footers.get(firstRef.rId) ?? null;
+      }
     }
 
-    return { headerContent: header, footerContent: footer };
+    // When titlePg is not set but only 'first' headers exist, use them as default
+    if (!sectionProps?.titlePg) {
+      if (!header && firstHeader) header = firstHeader;
+      if (!footer && firstFooter) footer = firstFooter;
+    }
+
+    return {
+      headerContent: header,
+      footerContent: footer,
+      firstPageHeaderContent: firstHeader,
+      firstPageFooterContent: firstFooter,
+    };
   }, [history.state]);
 
   // Handle header/footer double-click — open editing overlay
   // If no header/footer exists, create an empty one so the user can add content
   const handleHeaderFooterDoubleClick = useCallback(
-    (position: 'header' | 'footer') => {
-      const hf = position === 'header' ? headerContent : footerContent;
+    (position: 'header' | 'footer', pageNumber?: number) => {
+      const sectProps = history.state?.package?.document?.finalSectionProperties;
+      const isFirstPage = sectProps?.titlePg === true && (pageNumber ?? 1) === 1;
+      const hf = isFirstPage
+        ? position === 'header'
+          ? firstPageHeaderContent
+          : firstPageFooterContent
+        : position === 'header'
+          ? headerContent
+          : footerContent;
+      setHfEditIsFirstPage(isFirstPage);
       if (hf) {
         setHfEditPosition(position);
         return;
@@ -2939,10 +2975,11 @@ body { background: white; }
       const sectionProps = pkg.document?.finalSectionProperties;
       if (!sectionProps) return;
 
-      const rId = `rId_new_${position}`;
+      const hdrFtrType = isFirstPage ? 'first' : 'default';
+      const rId = `rId_new_${position}_${hdrFtrType}`;
       const emptyHf: HeaderFooter = {
         type: position === 'header' ? 'header' : 'footer',
-        hdrFtrType: 'default',
+        hdrFtrType,
         content: [{ type: 'paragraph', content: [] }],
       };
 
@@ -2952,7 +2989,7 @@ body { background: white; }
 
       const refKey = position === 'header' ? 'headerReferences' : 'footerReferences';
       const existingRefs = sectionProps[refKey] ?? [];
-      const newRef = { type: 'default' as const, rId };
+      const newRef = { type: hdrFtrType as 'default' | 'first', rId };
 
       const newDoc: Document = {
         ...history.state,
@@ -2973,7 +3010,14 @@ body { background: white; }
       pushDocument(newDoc);
       setHfEditPosition(position);
     },
-    [headerContent, footerContent, history, pushDocument]
+    [
+      headerContent,
+      footerContent,
+      firstPageHeaderContent,
+      firstPageFooterContent,
+      history,
+      pushDocument,
+    ]
   );
 
   // Handle header/footer save — update document package with edited content
@@ -2995,20 +3039,25 @@ body { background: white; }
         hfEditPosition === 'header'
           ? sectionProps?.headerReferences
           : sectionProps?.footerReferences;
-      const defaultRef = refs?.find((r) => r.type === 'default');
+      const targetType = hfEditIsFirstPage ? 'first' : 'default';
+      const activeRef =
+        refs?.find((r) => r.type === targetType) ??
+        refs?.find((r) => r.type === 'default') ??
+        refs?.find((r) => r.type === 'first') ??
+        refs?.[0];
       const mapKey = hfEditPosition === 'header' ? 'headers' : 'footers';
       const map = pkg[mapKey];
 
-      if (defaultRef?.rId && map) {
-        const existing = map.get(defaultRef.rId);
+      if (activeRef?.rId && map) {
+        const existing = map.get(activeRef.rId);
         const updated: HeaderFooter = {
           type: hfEditPosition,
-          hdrFtrType: 'default',
+          hdrFtrType: activeRef.type as 'default' | 'first' | 'even',
           ...existing,
           content,
         };
         const newMap = new Map(map);
-        newMap.set(defaultRef.rId, updated);
+        newMap.set(activeRef.rId, updated);
 
         const newDoc: Document = {
           ...history.state,
@@ -3050,13 +3099,18 @@ body { background: white; }
     const refKey = hfEditPosition === 'header' ? 'headerReferences' : 'footerReferences';
     const mapKey = hfEditPosition === 'header' ? 'headers' : 'footers';
     const refs = sectionProps?.[refKey];
-    const defaultRef = refs?.find((r) => r.type === 'default');
+    const delTargetType = hfEditIsFirstPage ? 'first' : 'default';
+    const activeRef =
+      refs?.find((r) => r.type === delTargetType) ??
+      refs?.find((r) => r.type === 'default') ??
+      refs?.find((r) => r.type === 'first') ??
+      refs?.[0];
 
-    if (defaultRef?.rId) {
+    if (activeRef?.rId) {
       const newMap = new Map(pkg[mapKey] ?? []);
-      newMap.delete(defaultRef.rId);
+      newMap.delete(activeRef.rId);
 
-      const newRefs = (refs ?? []).filter((r) => r.rId !== defaultRef.rId);
+      const newRefs = (refs ?? []).filter((r) => r.rId !== activeRef.rId);
 
       const newDoc: Document = {
         ...history.state,
@@ -3332,6 +3386,8 @@ body { background: white; }
                       sectionProperties={history.state?.package.document?.finalSectionProperties}
                       headerContent={headerContent}
                       footerContent={footerContent}
+                      firstPageHeaderContent={firstPageHeaderContent}
+                      firstPageFooterContent={firstPageFooterContent}
                       onHeaderFooterDoubleClick={handleHeaderFooterDoubleClick}
                       hfEditMode={hfEditPosition}
                       onBodyClick={handleBodyClick}
@@ -3523,19 +3579,22 @@ body { background: white; }
 
                     {/* Inline Header/Footer Editor — positioned over the target area */}
                     {hfEditPosition &&
-                      (hfEditPosition === 'header' ? headerContent : footerContent) &&
                       (() => {
+                        const activeHf = hfEditIsFirstPage
+                          ? hfEditPosition === 'header'
+                            ? firstPageHeaderContent
+                            : firstPageFooterContent
+                          : hfEditPosition === 'header'
+                            ? headerContent
+                            : footerContent;
+                        if (!activeHf) return null;
                         const targetEl = getHfTargetElement(hfEditPosition);
                         const parentEl = editorContentRef.current;
                         if (!targetEl || !parentEl) return null;
                         return (
                           <InlineHeaderFooterEditor
                             ref={hfEditorRef}
-                            headerFooter={
-                              (hfEditPosition === 'header'
-                                ? headerContent
-                                : footerContent) as HeaderFooter
-                            }
+                            headerFooter={activeHf}
                             position={hfEditPosition}
                             styles={history.state?.package.styles}
                             targetElement={targetEl}
