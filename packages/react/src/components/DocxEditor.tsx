@@ -37,7 +37,11 @@ import {
 import { EditorToolbar } from './EditorToolbar';
 import { pointsToHalfPoints } from './ui/FontSizePicker';
 import { DocumentOutline } from './DocumentOutline';
-import { CommentsSidebar, type TrackedChangeEntry } from './CommentsSidebar';
+import {
+  CommentsSidebar,
+  SIDEBAR_DOCUMENT_SHIFT,
+  type TrackedChangeEntry,
+} from './CommentsSidebar';
 import type { HeadingInfo } from '@eigenpal/docx-core/utils/headingCollector';
 import type { Comment } from '@eigenpal/docx-core/types/content';
 import { ErrorBoundary, ErrorProvider } from './ErrorBoundary';
@@ -3312,7 +3316,9 @@ body { background: white; }
                     <div
                       className="flex justify-center px-5 py-1 overflow-x-auto flex-shrink-0 bg-doc-bg"
                       style={{
-                        paddingRight: showCommentsSidebar ? 'calc(20px + 240px)' : undefined,
+                        paddingRight: showCommentsSidebar
+                          ? `calc(20px + ${SIDEBAR_DOCUMENT_SHIFT * 2}px)`
+                          : undefined,
                         transition: 'padding 0.2s ease',
                       }}
                     >
@@ -3426,6 +3432,7 @@ body { background: white; }
                               const sp = history.state?.package?.document?.finalSectionProperties;
                               return sp?.pageWidth ? Math.round(sp.pageWidth / 15) : 816;
                             })()}
+                            zoom={state.zoom}
                             editorContainerRef={scrollContainerRef}
                             onCommentResolve={(id) => {
                               setComments((prev) =>
