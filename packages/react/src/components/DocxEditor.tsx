@@ -2975,10 +2975,11 @@ body { background: white; }
       const sectionProps = pkg.document?.finalSectionProperties;
       if (!sectionProps) return;
 
-      const rId = `rId_new_${position}`;
+      const hdrFtrType = isFirstPage ? 'first' : 'default';
+      const rId = `rId_new_${position}_${hdrFtrType}`;
       const emptyHf: HeaderFooter = {
         type: position === 'header' ? 'header' : 'footer',
-        hdrFtrType: 'default',
+        hdrFtrType,
         content: [{ type: 'paragraph', content: [] }],
       };
 
@@ -2988,7 +2989,7 @@ body { background: white; }
 
       const refKey = position === 'header' ? 'headerReferences' : 'footerReferences';
       const existingRefs = sectionProps[refKey] ?? [];
-      const newRef = { type: 'default' as const, rId };
+      const newRef = { type: hdrFtrType as 'default' | 'first', rId };
 
       const newDoc: Document = {
         ...history.state,
