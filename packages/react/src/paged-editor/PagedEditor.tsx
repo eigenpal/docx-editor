@@ -138,10 +138,14 @@ export interface PagedEditorProps {
   theme?: Theme | null;
   /** Section properties (page size, margins). */
   sectionProperties?: SectionProperties | null;
-  /** Header content for all pages. */
+  /** Header content for all pages (or pages 2+ when titlePg is set). */
   headerContent?: HeaderFooter | null;
-  /** Footer content for all pages. */
+  /** Footer content for all pages (or pages 2+ when titlePg is set). */
   footerContent?: HeaderFooter | null;
+  /** Header content for first page only (when titlePg is set). */
+  firstPageHeaderContent?: HeaderFooter | null;
+  /** Footer content for first page only (when titlePg is set). */
+  firstPageFooterContent?: HeaderFooter | null;
   /** Whether the editor is read-only. */
   readOnly?: boolean;
   /** Gap between pages in pixels. */
@@ -163,7 +167,7 @@ export interface PagedEditorProps {
   /** Plugin overlays to render inside the viewport. */
   pluginOverlays?: React.ReactNode;
   /** Callback when header or footer is double-clicked for editing. */
-  onHeaderFooterDoubleClick?: (position: 'header' | 'footer') => void;
+  onHeaderFooterDoubleClick?: (position: 'header' | 'footer', pageNumber?: number) => void;
   /** Active header/footer editing mode (dims body, intercepts body clicks). */
   hfEditMode?: 'header' | 'footer' | null;
   /** Called when user clicks the body area while in HF editing mode. */
@@ -1532,6 +1536,8 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
       sectionProperties,
       headerContent,
       footerContent,
+      firstPageHeaderContent,
+      firstPageFooterContent,
       readOnly = false,
       pageGap = DEFAULT_PAGE_GAP,
       zoom = 1,
@@ -1756,32 +1762,45 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
 
           // Step 2.75: Prepare header/footer content for rendering (needed before layout
           // to compute effective margins when header content exceeds available space)
-          const headerContentForRender = convertHeaderFooterToContent(headerContent, contentWidth, {
-            section: 'header',
-            pageSize,
-            margins,
-          });
-          const footerContentForRender = convertHeaderFooterToContent(footerContent, contentWidth, {
-            section: 'footer',
-            pageSize,
-            margins,
-          });
+          const hfMetricsHeader = { section: 'header' as const, pageSize, margins };
+          const hfMetricsFooter = { section: 'footer' as const, pageSize, margins };
+          const headerContentForRender = convertHeaderFooterToContent(
+            headerContent,
+            contentWidth,
+            hfMetricsHeader
+          );
+          const footerContentForRender = convertHeaderFooterToContent(
+            footerContent,
+            contentWidth,
+            hfMetricsFooter
+          );
+          const hasTitlePg = sectionProperties?.titlePg === true;
+          const firstPageHeaderForRender = hasTitlePg
+            ? convertHeaderFooterToContent(firstPageHeaderContent, contentWidth, hfMetricsHeader)
+            : undefined;
+          const firstPageFooterForRender = hasTitlePg
+            ? convertHeaderFooterToContent(firstPageFooterContent, contentWidth, hfMetricsFooter)
+            : undefined;
 
           // Adjust margins if header/footer content exceeds available space
           // (Word and Google Docs push body content down when header grows)
+          // Use the tallest header/footer across all variants for margin computation
           const headerDistance = margins.header ?? 48;
           const footerDistance = margins.footer ?? 48;
           const availableHeaderSpace = margins.top - headerDistance;
           const availableFooterSpace = margins.bottom - footerDistance;
-          const headerContentHeight =
-            headerContentForRender?.visualBottom ?? headerContentForRender?.height ?? 0;
-          const footerContentHeight = footerContentForRender
-            ? Math.max(
-                (footerContentForRender.visualBottom ?? footerContentForRender.height) -
-                  (footerContentForRender.visualTop ?? 0),
-                footerContentForRender.height
-              )
-            : 0;
+          const hfHeight = (hf: HeaderFooterContent | undefined) =>
+            hf ? (hf.visualBottom ?? hf.height) : 0;
+          const hfFooterHeight = (hf: HeaderFooterContent | undefined) =>
+            hf ? Math.max((hf.visualBottom ?? hf.height) - (hf.visualTop ?? 0), hf.height) : 0;
+          const headerContentHeight = Math.max(
+            hfHeight(headerContentForRender),
+            hfHeight(firstPageHeaderForRender)
+          );
+          const footerContentHeight = Math.max(
+            hfFooterHeight(footerContentForRender),
+            hfFooterHeight(firstPageFooterForRender)
+          );
 
           let effectiveMargins = margins;
           if (
@@ -1907,6 +1926,9 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
               blockLookup,
               headerContent: headerContentForRender,
               footerContent: footerContentForRender,
+              firstPageHeaderContent: firstPageHeaderForRender,
+              firstPageFooterContent: firstPageFooterForRender,
+              titlePg: hasTitlePg,
               headerDistance: sectionProperties?.headerDistance
                 ? twipsToPixels(sectionProperties.headerDistance)
                 : undefined,
@@ -1971,6 +1993,8 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
         syncCoordinator,
         headerContent,
         footerContent,
+        firstPageHeaderContent,
+        firstPageFooterContent,
         sectionProperties,
         onRenderedDomContextReady,
         document,
@@ -3350,17 +3374,21 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
           const target = e.target as HTMLElement;
           const headerEl = target.closest('.layout-page-header');
           const footerEl = target.closest('.layout-page-footer');
-          if (headerEl) {
-            e.preventDefault();
-            e.stopPropagation();
-            onHeaderFooterDoubleClick('header');
-            return;
-          }
-          if (footerEl) {
-            e.preventDefault();
-            e.stopPropagation();
-            onHeaderFooterDoubleClick('footer');
-            return;
+          if (headerEl || footerEl) {
+            const pageEl = target.closest('[data-page-number]') as HTMLElement | null;
+            const pageNum = pageEl ? Number(pageEl.dataset.pageNumber) : 1;
+            if (headerEl) {
+              e.preventDefault();
+              e.stopPropagation();
+              onHeaderFooterDoubleClick('header', pageNum);
+              return;
+            }
+            if (footerEl) {
+              e.preventDefault();
+              e.stopPropagation();
+              onHeaderFooterDoubleClick('footer', pageNum);
+              return;
+            }
           }
         }
 
@@ -3769,7 +3797,13 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
       if (view) {
         runLayoutPipeline(view.state);
       }
-    }, [headerContent, footerContent, runLayoutPipeline]);
+    }, [
+      headerContent,
+      footerContent,
+      firstPageHeaderContent,
+      firstPageFooterContent,
+      runLayoutPipeline,
+    ]);
 
     // Re-compute selection overlay when the container resizes.
     // Page elements shift during window resize (centering, scrollbar changes),

@@ -659,6 +659,24 @@ function parseRunContents(
         contents.push({ type: 'break', breakType: 'textWrapping' } as BreakContent);
         break;
 
+      case 'AlternateContent': {
+        // mc:AlternateContent — prefer mc:Choice over mc:Fallback
+        const choiceEl = getChildElements(child).find((el) => getLocalName(el.name) === 'Choice');
+        const targetEl =
+          choiceEl ?? getChildElements(child).find((el) => getLocalName(el.name) === 'Fallback');
+        if (targetEl) {
+          for (const innerChild of getChildElements(targetEl)) {
+            const innerName = getLocalName(innerChild.name);
+            if (innerName === 'drawing') {
+              const innerDrawing = parseDrawingContent(innerChild, rels, media);
+              // Only include drawings that have actual image data (skip shapes/connectors)
+              if (innerDrawing?.image?.src) contents.push(innerDrawing);
+            }
+          }
+        }
+        break;
+      }
+
       case 'footnoteRef':
       case 'endnoteRef':
         // These are the actual footnote/endnote content markers (different from Reference)
