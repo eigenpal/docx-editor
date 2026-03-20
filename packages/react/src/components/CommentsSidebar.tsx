@@ -97,6 +97,8 @@ export interface CommentsSidebarProps {
   addCommentYPosition?: number | null;
   /** Page width in pixels — used to position sidebar next to page edge */
   pageWidth?: number;
+  /** Current zoom level (default 1.0) — adjusts sidebar positioning to match scaled page */
+  zoom?: number;
   /** Ref to the editor scroll container for DOM position queries */
   editorContainerRef?: React.RefObject<HTMLDivElement | null>;
   /** Pre-computed Y positions from layout engine (keys: "comment-{id}" or "revision-{revisionId}") */
@@ -104,6 +106,12 @@ export interface CommentsSidebarProps {
 }
 
 export const SIDEBAR_WIDTH = 340;
+
+/** How far left the document viewport shifts when the sidebar is open (px). */
+export const SIDEBAR_DOCUMENT_SHIFT = 120;
+
+/** Gap between the page's right edge and the sidebar (px). */
+export const SIDEBAR_PAGE_GAP = 12;
 
 // Minimum gap between stacked cards to avoid overlap
 const MIN_CARD_GAP = 8;
@@ -147,6 +155,7 @@ export const CommentsSidebar: React.FC<CommentsSidebarProps> = ({
   isAddingComment = false,
   addCommentYPosition = null,
   pageWidth = 816,
+  zoom = 1,
   editorContainerRef,
   anchorPositions,
 }) => {
@@ -203,17 +212,19 @@ export const CommentsSidebar: React.FC<CommentsSidebarProps> = ({
     const positions: { id: string; targetY: number; height: number }[] = [];
 
     // Find comment positions — prefer layout-computed positions, fall back to DOM
+    // Layout positions are in unscaled coordinates; scale by zoom since the viewport is CSS-scaled
     for (const comment of visibleComments) {
       const cardId = `comment-${comment.id}`;
       const layoutY = anchorPositions?.get(cardId);
       if (layoutY != null) {
         positions.push({
           id: cardId,
-          targetY: layoutY,
+          targetY: layoutY * zoom,
           height: cardRefs.current.get(cardId)?.offsetHeight || 80,
         });
       } else {
-        // Fallback: query DOM (only works for rendered/non-virtualized pages)
+        // Fallback: query DOM (only works for rendered/non-virtualized pages).
+        // getBoundingClientRect already includes CSS transforms, so no zoom scaling needed.
         const el = pagesEl.querySelector(`[data-comment-id="${comment.id}"]`);
         if (el) {
           const rect = el.getBoundingClientRect();
@@ -233,10 +244,11 @@ export const CommentsSidebar: React.FC<CommentsSidebarProps> = ({
       if (layoutY != null) {
         positions.push({
           id: cardId,
-          targetY: layoutY,
+          targetY: layoutY * zoom,
           height: cardRefs.current.get(cardId)?.offsetHeight || 80,
         });
       } else {
+        // getBoundingClientRect already includes CSS transforms, so no zoom scaling needed.
         const el = pagesEl.querySelector(`[data-revision-id="${change.revisionId}"]`);
         if (el) {
           const rect = el.getBoundingClientRect();
@@ -253,7 +265,7 @@ export const CommentsSidebar: React.FC<CommentsSidebarProps> = ({
     if (isAddingComment && addCommentYPosition != null) {
       positions.push({
         id: 'new-comment-input',
-        targetY: addCommentYPosition,
+        targetY: addCommentYPosition * zoom,
         height: cardRefs.current.get('new-comment-input')?.offsetHeight || 120,
       });
     }
@@ -277,6 +289,7 @@ export const CommentsSidebar: React.FC<CommentsSidebarProps> = ({
     isAddingComment,
     addCommentYPosition,
     anchorPositions,
+    zoom,
   ]);
 
   // Listen for clicks on comment/change elements in the document body → expand the sidebar card
@@ -813,7 +826,7 @@ export const CommentsSidebar: React.FC<CommentsSidebarProps> = ({
       style={{
         position: 'absolute',
         top: topOffset,
-        left: `calc(50% - 120px + ${pageWidth / 2 + 12}px)`,
+        left: `calc(50% - ${SIDEBAR_DOCUMENT_SHIFT}px + ${pageWidth / 2 + SIDEBAR_PAGE_GAP}px)`,
         bottom: 0,
         width: SIDEBAR_WIDTH,
         fontFamily: "'Google Sans', Roboto, Arial, sans-serif",

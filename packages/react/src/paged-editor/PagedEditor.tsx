@@ -106,6 +106,9 @@ import { LayoutSelectionGate } from './LayoutSelectionGate';
 import { useVisualLineNavigation } from './useVisualLineNavigation';
 import { useDragAutoScroll } from './useDragAutoScroll';
 
+// Sidebar constants
+import { SIDEBAR_DOCUMENT_SHIFT } from '../components/CommentsSidebar';
+
 // Types
 import type {
   Document,
@@ -3931,7 +3934,11 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
             minHeight: totalHeight,
             transform: (() => {
               const parts: string[] = [];
-              if (commentsSidebarOpen) parts.push('translateX(-120px)');
+              if (commentsSidebarOpen) {
+                // Shift left more at higher zoom to keep page edge aligned with sidebar
+                const extraShift = (pageSize.w * (zoom - 1)) / 2;
+                parts.push(`translateX(-${SIDEBAR_DOCUMENT_SHIFT + extraShift}px)`);
+              }
               if (zoom !== 1) parts.push(`scale(${zoom})`);
               return parts.length > 0 ? parts.join(' ') : undefined;
             })(),

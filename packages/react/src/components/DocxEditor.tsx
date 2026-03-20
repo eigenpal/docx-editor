@@ -3370,6 +3370,7 @@ body { background: white; }
                               const sp = history.state?.package?.document?.finalSectionProperties;
                               return sp?.pageWidth ? Math.round(sp.pageWidth / 15) : 816;
                             })()}
+                            zoom={state.zoom}
                             editorContainerRef={scrollContainerRef}
                             onCommentResolve={(id) => {
                               setComments((prev) =>
