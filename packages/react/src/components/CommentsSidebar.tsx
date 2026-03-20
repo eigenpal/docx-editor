@@ -827,7 +827,6 @@ export const CommentsSidebar: React.FC<CommentsSidebarProps> = ({
         position: 'absolute',
         top: topOffset,
         left: `calc(50% - ${SIDEBAR_DOCUMENT_SHIFT}px + ${(pageWidth * zoom) / 2 + SIDEBAR_PAGE_GAP}px)`,
-        bottom: 0,
         width: SIDEBAR_WIDTH,
         fontFamily: "'Google Sans', Roboto, Arial, sans-serif",
         zIndex: 40,
