@@ -4043,7 +4043,7 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
               right: 0,
               height: totalHeight * zoom,
               pointerEvents: 'none',
-              overflow: 'visible',
+              overflow: 'hidden',
             }}
           >
             <div style={{ pointerEvents: 'auto' }}>{sidebarOverlay}</div>
