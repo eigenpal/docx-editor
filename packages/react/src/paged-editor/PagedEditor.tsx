@@ -3932,12 +3932,14 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
           style={{
             ...viewportStyles,
             minHeight: totalHeight,
+            // Negative margin at zoom<1 shrinks scroll area to match visual height;
+            // positive margin at zoom>1 grows it so content isn't clipped.
+            marginBottom: zoom !== 1 ? totalHeight * (zoom - 1) : undefined,
             transform: (() => {
               const parts: string[] = [];
               if (commentsSidebarOpen) {
-                // Shift left more at higher zoom to keep page edge aligned with sidebar
-                const extraShift = (pageSize.w * (zoom - 1)) / 2;
-                parts.push(`translateX(-${SIDEBAR_DOCUMENT_SHIFT + extraShift}px)`);
+                // Center page + sidebar as a unit within the container
+                parts.push(`translateX(-${SIDEBAR_DOCUMENT_SHIFT}px)`);
               }
               if (zoom !== 1) parts.push(`scale(${zoom})`);
               return parts.length > 0 ? parts.join(' ') : undefined;

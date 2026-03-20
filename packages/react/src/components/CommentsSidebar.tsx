@@ -107,11 +107,11 @@ export interface CommentsSidebarProps {
 
 export const SIDEBAR_WIDTH = 340;
 
-/** How far left the document viewport shifts when the sidebar is open (px). */
-export const SIDEBAR_DOCUMENT_SHIFT = 120;
-
 /** Gap between the page's right edge and the sidebar (px). */
 export const SIDEBAR_PAGE_GAP = 12;
+
+/** How far left the viewport shifts to center doc + sidebar as a unit. */
+export const SIDEBAR_DOCUMENT_SHIFT = (SIDEBAR_PAGE_GAP + SIDEBAR_WIDTH) / 2;
 
 // Minimum gap between stacked cards to avoid overlap
 const MIN_CARD_GAP = 8;
@@ -826,7 +826,7 @@ export const CommentsSidebar: React.FC<CommentsSidebarProps> = ({
       style={{
         position: 'absolute',
         top: topOffset,
-        left: `calc(50% - ${SIDEBAR_DOCUMENT_SHIFT}px + ${pageWidth / 2 + SIDEBAR_PAGE_GAP}px)`,
+        left: `calc(50% - ${SIDEBAR_DOCUMENT_SHIFT}px + ${(pageWidth * zoom) / 2 + SIDEBAR_PAGE_GAP}px)`,
         bottom: 0,
         width: SIDEBAR_WIDTH,
         fontFamily: "'Google Sans', Roboto, Arial, sans-serif",
