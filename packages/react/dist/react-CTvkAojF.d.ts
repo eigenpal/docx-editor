@@ -452,7 +452,7 @@ interface DocxEditorRef {
   /** Get the editor ref */
   getEditorRef: () => PagedEditorRef | null;
   /** Save the document to buffer. Pass { selective: false } to force full repack. */
-  save: (options?: { selective?: boolean }) => Promise<ArrayBuffer | null>;
+  save: (options?: { selective?: boolean; clearTracked?: boolean }) => Promise<ArrayBuffer | null>;
   /** Set zoom level */
   setZoom: (zoom: number) => void;
   /** Get current zoom level */

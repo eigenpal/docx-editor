@@ -316,7 +316,7 @@ export interface DocxEditorRef {
   /** Get the editor ref */
   getEditorRef: () => PagedEditorRef | null;
   /** Save the document to buffer. Pass { selective: false } to force full repack. */
-  save: (options?: { selective?: boolean }) => Promise<ArrayBuffer | null>;
+  save: (options?: { selective?: boolean; clearTracked?: boolean }) => Promise<ArrayBuffer | null>;
   /** Set zoom level */
   setZoom: (zoom: number) => void;
   /** Get current zoom level */
@@ -2570,7 +2570,10 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
 
   // Handle save
   const handleSave = useCallback(
-    async (options?: { selective?: boolean }): Promise<ArrayBuffer | null> => {
+    async (options?: {
+      selective?: boolean;
+      clearTracked?: boolean;
+    }): Promise<ArrayBuffer | null> => {
       if (!agentRef.current) return null;
 
       try {
@@ -2606,8 +2609,8 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
 
         const buffer = await agentRef.current.toBuffer(selectiveOptions);
 
-        // Clear change tracker after successful save
-        if (view) {
+        // Clear change tracker after successful save (unless explicitly disabled)
+        if (view && options?.clearTracked !== false) {
           view.dispatch(clearTrackedChanges(view.state));
         }
 

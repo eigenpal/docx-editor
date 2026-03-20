@@ -18081,7 +18081,7 @@ var of = rf.forwardRef(function (
             };
           }
           let J = await Vt.current.toBuffer(te);
-          return (X && X.dispatch(tu(X.state)), o?.(J), J);
+          return (X && y?.clearTracked !== !1 && X.dispatch(tu(X.state)), o?.(J), J);
         } catch (h) {
           return (s?.(h instanceof Error ? h : new Error('Failed to save document')), null);
         }

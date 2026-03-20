@@ -1,5 +1,5 @@
 'use strict';
-var chunkKEXZ6SYZ_js = require('./chunk-KEXZ6SYZ.js');
+var chunkDEBWH6QT_js = require('./chunk-DEBWH6QT.js');
 (require('./chunk-QQ63M65M.js'),
   require('./chunk-EOTZWQND.js'),
   require('./chunk-CTYOM6BE.js'),
@@ -19,157 +19,157 @@ var chunkZ2UPNKQW_js = require('./chunk-Z2UPNKQW.js');
 Object.defineProperty(exports, 'DocxEditor', {
   enumerable: true,
   get: function () {
-    return chunkKEXZ6SYZ_js.j;
+    return chunkDEBWH6QT_js.j;
   },
 });
 Object.defineProperty(exports, 'ErrorBoundary', {
   enumerable: true,
   get: function () {
-    return chunkKEXZ6SYZ_js.d;
+    return chunkDEBWH6QT_js.d;
   },
 });
 Object.defineProperty(exports, 'ErrorProvider', {
   enumerable: true,
   get: function () {
-    return chunkKEXZ6SYZ_js.c;
+    return chunkDEBWH6QT_js.c;
   },
 });
 Object.defineProperty(exports, 'PLUGIN_HOST_STYLES', {
   enumerable: true,
   get: function () {
-    return chunkKEXZ6SYZ_js.U;
+    return chunkDEBWH6QT_js.U;
   },
 });
 Object.defineProperty(exports, 'ParseErrorDisplay', {
   enumerable: true,
   get: function () {
-    return chunkKEXZ6SYZ_js.e;
+    return chunkDEBWH6QT_js.e;
   },
 });
 Object.defineProperty(exports, 'PluginHost', {
   enumerable: true,
   get: function () {
-    return chunkKEXZ6SYZ_js.V;
+    return chunkDEBWH6QT_js.V;
   },
 });
 Object.defineProperty(exports, 'UnsupportedFeatureWarning', {
   enumerable: true,
   get: function () {
-    return chunkKEXZ6SYZ_js.f;
+    return chunkDEBWH6QT_js.f;
   },
 });
 Object.defineProperty(exports, 'ZOOM_PRESETS', {
   enumerable: true,
   get: function () {
-    return chunkKEXZ6SYZ_js.m;
+    return chunkDEBWH6QT_js.m;
   },
 });
 Object.defineProperty(exports, 'clampZoom', {
   enumerable: true,
   get: function () {
-    return chunkKEXZ6SYZ_js.v;
+    return chunkDEBWH6QT_js.v;
   },
 });
 Object.defineProperty(exports, 'findNearestZoomPreset', {
   enumerable: true,
   get: function () {
-    return chunkKEXZ6SYZ_js.p;
+    return chunkDEBWH6QT_js.p;
   },
 });
 Object.defineProperty(exports, 'formatZoom', {
   enumerable: true,
   get: function () {
-    return chunkKEXZ6SYZ_js.s;
+    return chunkDEBWH6QT_js.s;
   },
 });
 Object.defineProperty(exports, 'generateOverlayElements', {
   enumerable: true,
   get: function () {
-    return chunkKEXZ6SYZ_js.S;
+    return chunkDEBWH6QT_js.S;
   },
 });
 Object.defineProperty(exports, 'getNextZoomPreset', {
   enumerable: true,
   get: function () {
-    return chunkKEXZ6SYZ_js.q;
+    return chunkDEBWH6QT_js.q;
   },
 });
 Object.defineProperty(exports, 'getPreviousZoomPreset', {
   enumerable: true,
   get: function () {
-    return chunkKEXZ6SYZ_js.r;
+    return chunkDEBWH6QT_js.r;
   },
 });
 Object.defineProperty(exports, 'getUserFriendlyMessage', {
   enumerable: true,
   get: function () {
-    return chunkKEXZ6SYZ_js.h;
+    return chunkDEBWH6QT_js.h;
   },
 });
 Object.defineProperty(exports, 'getZoomPresets', {
   enumerable: true,
   get: function () {
-    return chunkKEXZ6SYZ_js.o;
+    return chunkDEBWH6QT_js.o;
   },
 });
 Object.defineProperty(exports, 'isParseError', {
   enumerable: true,
   get: function () {
-    return chunkKEXZ6SYZ_js.g;
+    return chunkDEBWH6QT_js.g;
   },
 });
 Object.defineProperty(exports, 'isZoomPreset', {
   enumerable: true,
   get: function () {
-    return chunkKEXZ6SYZ_js.u;
+    return chunkDEBWH6QT_js.u;
   },
 });
 Object.defineProperty(exports, 'parseZoom', {
   enumerable: true,
   get: function () {
-    return chunkKEXZ6SYZ_js.t;
+    return chunkDEBWH6QT_js.t;
   },
 });
 Object.defineProperty(exports, 'renderAsync', {
   enumerable: true,
   get: function () {
-    return chunkKEXZ6SYZ_js.k;
+    return chunkDEBWH6QT_js.k;
   },
 });
 Object.defineProperty(exports, 'useAutoSave', {
   enumerable: true,
   get: function () {
-    return chunkKEXZ6SYZ_js.l;
+    return chunkDEBWH6QT_js.l;
   },
 });
 Object.defineProperty(exports, 'useClipboard', {
   enumerable: true,
   get: function () {
-    return chunkKEXZ6SYZ_js.T;
+    return chunkDEBWH6QT_js.T;
   },
 });
 Object.defineProperty(exports, 'useErrorNotifications', {
   enumerable: true,
   get: function () {
-    return chunkKEXZ6SYZ_js.b;
+    return chunkDEBWH6QT_js.b;
   },
 });
 Object.defineProperty(exports, 'useSelectionHighlight', {
   enumerable: true,
   get: function () {
-    return chunkKEXZ6SYZ_js.R;
+    return chunkDEBWH6QT_js.R;
   },
 });
 Object.defineProperty(exports, 'useTableSelection', {
   enumerable: true,
   get: function () {
-    return chunkKEXZ6SYZ_js.i;
+    return chunkDEBWH6QT_js.i;
   },
 });
 Object.defineProperty(exports, 'useWheelZoom', {
   enumerable: true,
   get: function () {
-    return chunkKEXZ6SYZ_js.n;
+    return chunkDEBWH6QT_js.n;
   },
 });
 Object.defineProperty(exports, 'TABLE_DATA_ATTRIBUTES', {

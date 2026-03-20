@@ -425,6 +425,7 @@ interface DocxEditorRef {
     /** Save the document to buffer. Pass { selective: false } to force full repack. */
     save: (options?: {
         selective?: boolean;
+        clearTracked?: boolean;
     }) => Promise<ArrayBuffer | null>;
     /** Set zoom level */
     setZoom: (zoom: number) => void;
