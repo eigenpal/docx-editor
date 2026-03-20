@@ -4033,8 +4033,22 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
           )}
         </div>
 
-        {/* Sidebar overlay — inside scroll container, scrolls with document */}
-        {sidebarOverlay}
+        {/* Sidebar overlay — height-constrained to match visual document height */}
+        {sidebarOverlay && (
+          <div
+            style={{
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              right: 0,
+              height: totalHeight * zoom,
+              pointerEvents: 'none',
+              overflow: 'visible',
+            }}
+          >
+            <div style={{ pointerEvents: 'auto' }}>{sidebarOverlay}</div>
+          </div>
+        )}
       </div>
     );
   }
