@@ -1,0 +1,569 @@
+'use strict';
+var chunkR2CVPAO4_js = require('./chunk-R2CVPAO4.js'),
+  chunkZ2UPNKQW_js = require('./chunk-Z2UPNKQW.js');
+function H(e) {
+  return g(e).variables;
+}
+function g(e) {
+  let t = [],
+    n = { body: [], headers: [], footers: [], footnotes: [], endnotes: [], textBoxes: [] };
+  if (e.package?.document) {
+    let r = $(e.package.document);
+    (r.forEach((o) => {
+      t.push({ name: o, location: 'body' });
+    }),
+      (n.body = Array.from(new Set(r)).sort()));
+  }
+  if (
+    (e.package?.document?.sections &&
+      e.package.document.sections.forEach((r, o) => {
+        r.properties.headerReferences && r.properties.headerReferences.forEach((i) => {});
+      }),
+    e.package?.footnotes)
+  ) {
+    let r = D(e.package.footnotes);
+    (r.forEach((o) => {
+      t.push({ name: o, location: 'footnote' });
+    }),
+      (n.footnotes = Array.from(new Set(r)).sort()));
+  }
+  if (e.package?.endnotes) {
+    let r = D(e.package.endnotes);
+    (r.forEach((o) => {
+      t.push({ name: o, location: 'endnote' });
+    }),
+      (n.endnotes = Array.from(new Set(r)).sort()));
+  }
+  e.templateVariables &&
+    e.templateVariables.forEach((r) => {
+      t.some((o) => o.name === r) || t.push({ name: r, location: 'body' });
+    });
+  let a = new Set();
+  return (
+    t.forEach((r) => a.add(r.name)),
+    { variables: Array.from(a).sort(), totalOccurrences: t.length, byLocation: n, occurrences: t }
+  );
+}
+function $(e) {
+  let t = [];
+  if ((e.content && t.push(...R(e.content)), e.sections))
+    for (let n of e.sections) n.content && t.push(...R(n.content));
+  return t;
+}
+function R(e) {
+  let t = [];
+  for (let n of e) n.type === 'paragraph' ? t.push(...b(n)) : n.type === 'table' && t.push(...P(n));
+  return t;
+}
+function b(e) {
+  let t = [];
+  if (!e.content) return t;
+  for (let n of e.content)
+    n.type === 'run'
+      ? t.push(...d(n))
+      : n.type === 'hyperlink'
+        ? t.push(...J(n))
+        : n.type === 'simpleField'
+          ? t.push(...L(n))
+          : n.type === 'complexField' && t.push(...F(n));
+  return t;
+}
+function d(e) {
+  let t = [];
+  if (!e.content) return t;
+  for (let n of e.content) n.type === 'text' && n.text && t.push(...E(n.text));
+  return t;
+}
+function J(e) {
+  let t = [];
+  if (!e.children) return t;
+  for (let n of e.children) n.type === 'run' && t.push(...d(n));
+  return t;
+}
+function L(e) {
+  let t = [];
+  if ((e.instruction && t.push(...E(e.instruction)), e.content))
+    for (let n of e.content) n.type === 'run' && t.push(...d(n));
+  return t;
+}
+function F(e) {
+  let t = [];
+  if (e.fieldCode) for (let n of e.fieldCode) n.type === 'run' && t.push(...d(n));
+  if (e.fieldResult) for (let n of e.fieldResult) n.type === 'run' && t.push(...d(n));
+  return t;
+}
+function P(e) {
+  let t = [];
+  if (!e.rows) return t;
+  for (let n of e.rows) if (n.cells) for (let a of n.cells) t.push(...B(a));
+  return t;
+}
+function B(e) {
+  let t = [];
+  if (!e.content) return t;
+  for (let n of e.content)
+    n.type === 'paragraph' ? t.push(...b(n)) : n.type === 'table' && t.push(...P(n));
+  return t;
+}
+function D(e) {
+  let t = [];
+  for (let n of e) if (n.content) for (let a of n.content) t.push(...b(a));
+  return t;
+}
+var k = /\{([a-zA-Z_][a-zA-Z0-9_\-\.]*)\}/g,
+  M = /\{(.+?)\}/g;
+function E(e) {
+  if (!e) return [];
+  let t = [],
+    n = new RegExp(k),
+    a;
+  for (; (a = n.exec(e)) !== null; ) t.push(a[1]);
+  return t;
+}
+function q(e) {
+  return k.test(e);
+}
+function U(e) {
+  return !(
+    !e ||
+    typeof e != 'string' ||
+    e.length === 0 ||
+    e.length > 100 ||
+    !/^[a-zA-Z_]/.test(e) ||
+    !/^[a-zA-Z_][a-zA-Z0-9_\-\.]*$/.test(e)
+  );
+}
+function X(e) {
+  if (!e) return '';
+  let t = e.replace(/\s+/g, '_');
+  return (
+    (t = t.replace(/[^a-zA-Z0-9_\-\.]/g, '')),
+    t && !/^[a-zA-Z_]/.test(t) && (t = '_' + t),
+    t.substring(0, 100)
+  );
+}
+function G(e) {
+  return `{${e}}`;
+}
+function K(e) {
+  let t = e.match(/^\{(.+?)\}$/);
+  return t ? t[1] : null;
+}
+function Q(e, t) {
+  return (
+    e &&
+    e.replace(M, (n, a) => {
+      let r = a.trim();
+      return r in t ? t[r] : n;
+    })
+  );
+}
+function Y(e, t = '') {
+  return e && e.replace(M, t);
+}
+function ee(e) {
+  return H(e).length > 0;
+}
+function Z(e) {
+  return typeof e == 'object' && e !== null && ('_def' in e || 'parse' in e || 'safeParse' in e);
+}
+function h(e, t) {
+  let n = t,
+    { position: a, variableName: r } = n,
+    o = JSON.parse(JSON.stringify(e)),
+    s = o.package.document.content.filter((u) => u.type === 'paragraph');
+  if (a.paragraphIndex >= s.length)
+    throw new Error(`Paragraph index ${a.paragraphIndex} out of bounds`);
+  let c = s[a.paragraphIndex],
+    l = `{${r}}`;
+  return (
+    S(c, a.offset, l),
+    o.templateVariables || (o.templateVariables = []),
+    o.templateVariables.includes(r) || o.templateVariables.push(r),
+    o
+  );
+}
+function y(e, t) {
+  let n = t,
+    { range: a, variableName: r } = n,
+    o = JSON.parse(JSON.stringify(e)),
+    s = o.package.document.content.filter((u) => u.type === 'paragraph');
+  if (a.start.paragraphIndex !== a.end.paragraphIndex)
+    throw new Error('Template variable replacement cannot span multiple paragraphs');
+  if (a.start.paragraphIndex >= s.length)
+    throw new Error(`Paragraph index ${a.start.paragraphIndex} out of bounds`);
+  let c = s[a.start.paragraphIndex];
+  z(c, a.start.offset, a.end.offset);
+  let l = `{${r}}`;
+  return (
+    S(c, a.start.offset, l),
+    o.templateVariables || (o.templateVariables = []),
+    o.templateVariables.includes(r) || o.templateVariables.push(r),
+    o
+  );
+}
+function S(e, t, n) {
+  let a = 0,
+    r = false;
+  for (let o = 0; o < e.content.length; o++) {
+    let i = e.content[o];
+    if (i.type === 'run') {
+      let s = x(i),
+        c = a,
+        l = a + s.length;
+      if (!r && t >= c && t <= l) {
+        let u = t - c,
+          v = s.slice(0, u),
+          V = s.slice(u),
+          m = [];
+        for (let p = 0; p < o; p++) m.push(e.content[p]);
+        (v &&
+          m.push({ type: 'run', formatting: i.formatting, content: [{ type: 'text', text: v }] }),
+          m.push({ type: 'run', formatting: i.formatting, content: [{ type: 'text', text: n }] }),
+          V &&
+            m.push({
+              type: 'run',
+              formatting: i.formatting,
+              content: [{ type: 'text', text: V }],
+            }));
+        for (let p = o + 1; p < e.content.length; p++) m.push(e.content[p]);
+        ((e.content = m), (r = true));
+        break;
+      }
+      a = l;
+    } else if (i.type === 'hyperlink')
+      for (let s of i.children) s.type === 'run' && (a += x(s).length);
+  }
+  r || e.content.push({ type: 'run', content: [{ type: 'text', text: n }] });
+}
+function z(e, t, n) {
+  let a = [],
+    r = 0;
+  for (let o of e.content)
+    if (o.type === 'run') {
+      let i = x(o),
+        s = r,
+        c = r + i.length;
+      if (c <= t || s >= n) a.push(o);
+      else {
+        let l = '';
+        (s < t && (l += i.slice(0, t - s)),
+          c > n && (l += i.slice(n - s)),
+          l.length > 0 &&
+            a.push({
+              type: 'run',
+              formatting: o.formatting,
+              content: [{ type: 'text', text: l }],
+            }));
+      }
+      r = c;
+    } else a.push(o);
+  e.content = a;
+}
+function x(e) {
+  return e.content
+    .filter((t) => t.type === 'text')
+    .map((t) => t.text)
+    .join('');
+}
+var f = { type: 'string', description: 'Document ID from a previous docx_load call' },
+  j = {
+    type: 'object',
+    properties: {
+      paragraphIndex: { type: 'number', description: 'Index of the paragraph (0-indexed)' },
+      offset: { type: 'number', description: 'Character offset within the paragraph' },
+    },
+    required: ['paragraphIndex', 'offset'],
+  },
+  _ = {
+    name: 'docx_get_variables',
+    description: `List all template variables ({name} format) found in the document.
+Returns variable names without braces, along with their locations (body, headers, footers, etc.).
+Use this to discover what data fields a template document expects.`,
+    inputSchema: { type: 'object', properties: { documentId: f }, required: ['documentId'] },
+    handler: async (e, t) => {
+      let { documentId: n } = e,
+        a = t.session.documents.get(n);
+      if (!a)
+        return { isError: true, content: [{ type: 'text', text: `Document not found: ${n}` }] };
+      try {
+        let r = g(a.document);
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(
+                {
+                  variables: r.variables,
+                  count: r.variables.length,
+                  totalOccurrences: r.totalOccurrences,
+                  byLocation: r.byLocation,
+                },
+                null,
+                2
+              ),
+            },
+          ],
+        };
+      } catch (r) {
+        return {
+          isError: true,
+          content: [{ type: 'text', text: `Failed to detect variables: ${r.message}` }],
+        };
+      }
+    },
+    annotations: {
+      category: 'template',
+      readOnly: true,
+      complexity: 'low',
+      examples: [
+        {
+          description: 'Get all variables from a loaded document',
+          input: { documentId: 'doc_123' },
+          output: '{"variables": ["customer_name", "invoice_date"], "count": 2}',
+        },
+      ],
+    },
+  },
+  A = {
+    name: 'docx_insert_variable',
+    description: `Insert a template variable placeholder ({name}) at a specific position in the document.
+The variable can later be substituted with actual values using docx_apply_template.
+Variable names should follow the pattern: letters, numbers, underscores, starting with a letter.`,
+    inputSchema: {
+      type: 'object',
+      properties: {
+        documentId: f,
+        position: j,
+        variableName: {
+          type: 'string',
+          description:
+            'Variable name without braces (e.g., "customer_name"). Will be inserted as {customer_name}',
+          pattern: '^[a-zA-Z_][a-zA-Z0-9_]*$',
+        },
+      },
+      required: ['documentId', 'position', 'variableName'],
+    },
+    handler: async (e, t) => {
+      let { documentId: n, position: a, variableName: r } = e,
+        o = t.session.documents.get(n);
+      if (!o)
+        return { isError: true, content: [{ type: 'text', text: `Document not found: ${n}` }] };
+      if (!/^[a-zA-Z_][a-zA-Z0-9_\-.]*$/.test(r))
+        return {
+          isError: true,
+          content: [
+            {
+              type: 'text',
+              text: `Invalid variable name: ${r}. Must start with letter/underscore and contain only alphanumeric, underscore, hyphen, or dot.`,
+            },
+          ],
+        };
+      try {
+        let { executeCommand: i } = await import('./executor-L2MVKMXO.js'),
+          s = i(o.document, { type: 'insertText', position: a, text: `{${r}}` });
+        return (
+          (o.document = s),
+          (o.lastModified = Date.now()),
+          s.templateVariables || (s.templateVariables = []),
+          s.templateVariables.includes(r) || s.templateVariables.push(r),
+          {
+            content: [
+              {
+                type: 'text',
+                text: JSON.stringify({
+                  success: !0,
+                  variable: r,
+                  insertedAs: `{${r}}`,
+                  position: a,
+                }),
+              },
+            ],
+          }
+        );
+      } catch (i) {
+        return {
+          isError: true,
+          content: [{ type: 'text', text: `Failed to insert variable: ${i.message}` }],
+        };
+      }
+    },
+    annotations: {
+      category: 'template',
+      readOnly: false,
+      complexity: 'low',
+      examples: [
+        {
+          description: 'Insert customer name variable at start of first paragraph',
+          input: {
+            documentId: 'doc_123',
+            position: { paragraphIndex: 0, offset: 0 },
+            variableName: 'customer_name',
+          },
+        },
+      ],
+    },
+  },
+  O = {
+    name: 'docx_apply_template',
+    description: `Substitute template variables with actual values in the document.
+Replaces all {variable} placeholders with the corresponding values provided.
+Preserves all formatting (fonts, styles, colors, tables).
+Use docx_get_variables first to discover what variables exist in the document.`,
+    inputSchema: {
+      type: 'object',
+      properties: {
+        documentId: f,
+        variables: {
+          type: 'object',
+          description:
+            'Map of variable names to values (e.g., {"customer_name": "John Doe", "date": "2024-01-15"})',
+          additionalProperties: { type: 'string' },
+        },
+        keepUnmatchedVariables: {
+          type: 'boolean',
+          description:
+            'If true, keep {variable} placeholders for variables not in the map. If false, replace with empty string. Default: true',
+          default: true,
+        },
+      },
+      required: ['documentId', 'variables'],
+    },
+    handler: async (e, t) => {
+      let { documentId: n, variables: a, keepUnmatchedVariables: r = true } = e,
+        o = t.session.documents.get(n);
+      if (!o)
+        return { isError: true, content: [{ type: 'text', text: `Document not found: ${n}` }] };
+      if (!o.buffer)
+        return {
+          isError: true,
+          content: [
+            {
+              type: 'text',
+              text: 'Cannot apply template: document was not loaded from a DOCX buffer',
+            },
+          ],
+        };
+      try {
+        let i = chunkR2CVPAO4_js.b(o.buffer, a, { nullGetter: r ? 'keep' : 'empty' }),
+          s = await chunkZ2UPNKQW_js.n(i.buffer);
+        return (
+          (o.document = s),
+          (o.buffer = i.buffer),
+          (o.lastModified = Date.now()),
+          {
+            content: [
+              {
+                type: 'text',
+                text: JSON.stringify({
+                  success: !0,
+                  replacedVariables: i.replacedVariables,
+                  unreplacedVariables: i.unreplacedVariables,
+                  warnings: i.warnings,
+                }),
+              },
+            ],
+          }
+        );
+      } catch (i) {
+        return {
+          isError: true,
+          content: [{ type: 'text', text: `Failed to apply template: ${i.message}` }],
+        };
+      }
+    },
+    annotations: {
+      category: 'template',
+      readOnly: false,
+      complexity: 'medium',
+      examples: [
+        {
+          description: 'Fill in customer and date values',
+          input: {
+            documentId: 'doc_123',
+            variables: {
+              customer_name: 'Jane Smith',
+              invoice_date: '2024-02-15',
+              amount: '$1,234.56',
+            },
+          },
+        },
+      ],
+    },
+  },
+  N = {
+    name: 'docx_validate_template',
+    description: `Validate that a document is a valid docxtemplater template.
+Checks for syntax errors like unclosed braces, invalid tag names, etc.
+Returns validation result with any errors found and list of valid tags.`,
+    inputSchema: { type: 'object', properties: { documentId: f }, required: ['documentId'] },
+    handler: async (e, t) => {
+      let { documentId: n } = e,
+        a = t.session.documents.get(n);
+      if (!a)
+        return { isError: true, content: [{ type: 'text', text: `Document not found: ${n}` }] };
+      if (!a.buffer)
+        return {
+          isError: true,
+          content: [
+            {
+              type: 'text',
+              text: 'Cannot validate template: document was not loaded from a DOCX buffer',
+            },
+          ],
+        };
+      try {
+        let r = chunkR2CVPAO4_js.f(a.buffer);
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(
+                {
+                  valid: r.valid,
+                  tags: r.tags,
+                  errors: r.errors.map((o) => ({
+                    message: o.message,
+                    variable: o.variable,
+                    type: o.type,
+                  })),
+                },
+                null,
+                2
+              ),
+            },
+          ],
+        };
+      } catch (r) {
+        return {
+          isError: true,
+          content: [{ type: 'text', text: `Failed to validate template: ${r.message}` }],
+        };
+      }
+    },
+    annotations: { category: 'template', readOnly: true, complexity: 'low' },
+  },
+  T = [_, A, O, N];
+var W = {
+  id: 'docxtemplater',
+  name: 'Docxtemplater',
+  version: '1.0.0',
+  description: 'Template variable support using standard docxtemplater syntax ({variable})',
+  commandHandlers: { insertTemplateVariable: h, replaceWithTemplateVariable: y },
+  mcpTools: T,
+};
+exports.a = H;
+exports.b = g;
+exports.c = $;
+exports.d = b;
+exports.e = E;
+exports.f = q;
+exports.g = U;
+exports.h = X;
+exports.i = G;
+exports.j = K;
+exports.k = Q;
+exports.l = Y;
+exports.m = ee;
+exports.n = Z;
+exports.o = W;

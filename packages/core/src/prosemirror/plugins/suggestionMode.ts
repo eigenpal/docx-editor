@@ -204,9 +204,12 @@ function handleSuggestionDelete(
     // Retract own insertion — actually delete the character
     tr.delete(deletePos, deleteEnd);
   } else {
-    // Mark as deletion instead of removing
+    // Mark as deletion instead of removing.
+    // Check both sides of the character range for an adjacent deletion mark
+    // so that consecutive backspace/delete presses group into one revision.
     const delAttrs =
       findAdjacentRevision(state.doc, deletePos, 'deletion', pluginState.author) ||
+      findAdjacentRevision(state.doc, deleteEnd, 'deletion', pluginState.author) ||
       makeMarkAttrs(pluginState);
     tr.addMark(deletePos, deleteEnd, deletionType.create(delAttrs));
     // Move cursor past the deletion mark

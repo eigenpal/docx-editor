@@ -1,0 +1,602 @@
+'use strict';
+var chunk6L7HNODA_js = require('./chunk-6L7HNODA.js'),
+  chunk65V65RRX_js = require('./chunk-65V65RRX.js'),
+  chunk4FIPZCBR_js = require('./chunk-4FIPZCBR.js'),
+  chunkAZGNVGHV_js = require('./chunk-AZGNVGHV.js');
+require('./chunk-5XGN7UAV.js');
+var u = { type: 'string', description: 'Document ID returned from docx_load' },
+  h = {
+    type: 'object',
+    properties: {
+      paragraphIndex: {
+        type: 'number',
+        description: 'Index of the paragraph (0-indexed)',
+        minimum: 0,
+      },
+      offset: { type: 'number', description: 'Character offset within the paragraph', minimum: 0 },
+    },
+    required: ['paragraphIndex', 'offset'],
+  },
+  T = { type: 'object', properties: { start: h, end: h }, required: ['start', 'end'] },
+  D = {
+    name: 'docx_load',
+    description: `Load a DOCX document from base64-encoded content.
+Returns a document ID that can be used with other tools.
+The document remains in session memory until closed.`,
+    inputSchema: {
+      type: 'object',
+      properties: {
+        content: { type: 'string', description: 'Base64-encoded DOCX file content' },
+        source: {
+          type: 'string',
+          description: 'Optional source filename or identifier for reference',
+        },
+      },
+      required: ['content'],
+    },
+    handler: async (r, s) => {
+      let { content: e, source: c } = r;
+      try {
+        let t = atob(e),
+          n = new Uint8Array(t.length);
+        for (let l = 0; l < t.length; l++) n[l] = t.charCodeAt(l);
+        let o = n.buffer,
+          a = await chunk65V65RRX_js.u(o),
+          d = `doc_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+        s.session.documents.set(d, {
+          id: d,
+          document: a,
+          buffer: o,
+          source: c,
+          lastModified: Date.now(),
+        });
+        let p = a.package.document.content.filter((l) => l.type === 'paragraph').length;
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify({
+                documentId: d,
+                source: c,
+                paragraphCount: p,
+                message: 'Document loaded successfully',
+              }),
+            },
+          ],
+        };
+      } catch (t) {
+        return {
+          isError: true,
+          content: [{ type: 'text', text: `Failed to load document: ${t.message}` }],
+        };
+      }
+    },
+    annotations: { category: 'core', readOnly: false, complexity: 'low' },
+  },
+  C = {
+    name: 'docx_save',
+    description: `Export the document to base64-encoded DOCX format.
+Returns the document as a base64 string that can be saved to a file.`,
+    inputSchema: { type: 'object', properties: { documentId: u }, required: ['documentId'] },
+    handler: async (r, s) => {
+      let { documentId: e } = r,
+        c = s.session.documents.get(e);
+      if (!c)
+        return { isError: true, content: [{ type: 'text', text: `Document not found: ${e}` }] };
+      try {
+        let t;
+        c.buffer
+          ? (t = await chunk6L7HNODA_js.f(c.document))
+          : (t = await chunk6L7HNODA_js.l(c.document));
+        let n = new Uint8Array(t),
+          o = '';
+        for (let d = 0; d < n.length; d++) o += String.fromCharCode(n[d]);
+        let a = btoa(o);
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify({
+                documentId: e,
+                base64: a,
+                size: t.byteLength,
+                message: 'Document exported successfully',
+              }),
+            },
+          ],
+        };
+      } catch (t) {
+        return {
+          isError: true,
+          content: [{ type: 'text', text: `Failed to save document: ${t.message}` }],
+        };
+      }
+    },
+    annotations: { category: 'core', readOnly: true, complexity: 'low' },
+  },
+  R = {
+    name: 'docx_close',
+    description: `Close a document and free its memory.
+Use this when done working with a document.`,
+    inputSchema: { type: 'object', properties: { documentId: u }, required: ['documentId'] },
+    handler: async (r, s) => {
+      let { documentId: e } = r;
+      return s.session.documents.has(e)
+        ? (s.session.documents.delete(e),
+          {
+            content: [
+              { type: 'text', text: JSON.stringify({ documentId: e, message: 'Document closed' }) },
+            ],
+          })
+        : { isError: true, content: [{ type: 'text', text: `Document not found: ${e}` }] };
+    },
+    annotations: { category: 'core', readOnly: false, complexity: 'low' },
+  },
+  k = {
+    name: 'docx_get_info',
+    description: `Get metadata and statistics about a document.
+Returns paragraph count, word count, table count, and other useful info.`,
+    inputSchema: { type: 'object', properties: { documentId: u }, required: ['documentId'] },
+    handler: async (r, s) => {
+      let { documentId: e } = r,
+        c = s.session.documents.get(e);
+      if (!c)
+        return { isError: true, content: [{ type: 'text', text: `Document not found: ${e}` }] };
+      let t = c.document,
+        n = t.package.document,
+        o = n.content.filter((p) => p.type === 'paragraph'),
+        a = n.content.filter((p) => p.type === 'table'),
+        d = 0;
+      for (let p of o)
+        if (p.type === 'paragraph') {
+          let l = P(p);
+          d += l.split(/\s+/).filter((x) => x.length > 0).length;
+        }
+      return {
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify({
+              documentId: e,
+              paragraphCount: o.length,
+              tableCount: a.length,
+              wordCount: d,
+              hasStyles: !!t.package.styles,
+              hasTheme: !!t.package.theme,
+              source: c.source,
+              lastModified: c.lastModified,
+            }),
+          },
+        ],
+      };
+    },
+    annotations: { category: 'core', readOnly: true, complexity: 'low' },
+  },
+  $ = {
+    name: 'docx_get_text',
+    description: `Get the plain text content of the document.
+Returns all text concatenated with paragraph breaks.
+Useful for understanding document content before making edits.`,
+    inputSchema: {
+      type: 'object',
+      properties: {
+        documentId: u,
+        maxLength: {
+          type: 'number',
+          description: 'Maximum characters to return (default: 10000)',
+          default: 1e4,
+        },
+      },
+      required: ['documentId'],
+    },
+    handler: async (r, s) => {
+      let { documentId: e, maxLength: c = 1e4 } = r,
+        t = s.session.documents.get(e);
+      if (!t)
+        return { isError: true, content: [{ type: 'text', text: `Document not found: ${e}` }] };
+      let n = t.document.package.document,
+        o = [];
+      for (let p of n.content)
+        p.type === 'paragraph' ? o.push(P(p)) : p.type === 'table' && o.push('[TABLE]');
+      let a = o.join(`
+`),
+        d = a.length > c;
+      return (
+        d && (a = a.slice(0, c) + '...'),
+        {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify({
+                documentId: e,
+                text: a,
+                truncated: d,
+                totalLength: d
+                  ? o.join(`
+`).length
+                  : a.length,
+              }),
+            },
+          ],
+        }
+      );
+    },
+    annotations: { category: 'core', readOnly: true, complexity: 'low' },
+  },
+  J = {
+    name: 'docx_insert_text',
+    description: `Insert text at a specific position in the document.
+Position is specified by paragraph index (0-indexed) and character offset.`,
+    inputSchema: {
+      type: 'object',
+      properties: {
+        documentId: u,
+        position: h,
+        text: { type: 'string', description: 'Text to insert' },
+      },
+      required: ['documentId', 'position', 'text'],
+    },
+    handler: async (r, s) => {
+      let { documentId: e, position: c, text: t } = r,
+        n = s.session.documents.get(e);
+      if (!n)
+        return { isError: true, content: [{ type: 'text', text: `Document not found: ${e}` }] };
+      try {
+        let o = chunk4FIPZCBR_js.a(n.document, { type: 'insertText', position: c, text: t });
+        return (
+          (n.document = o),
+          (n.lastModified = Date.now()),
+          {
+            content: [
+              {
+                type: 'text',
+                text: JSON.stringify({ success: !0, insertedLength: t.length, position: c }),
+              },
+            ],
+          }
+        );
+      } catch (o) {
+        return {
+          isError: true,
+          content: [{ type: 'text', text: `Failed to insert text: ${o.message}` }],
+        };
+      }
+    },
+    annotations: { category: 'core', readOnly: false, complexity: 'low' },
+  },
+  v = {
+    name: 'docx_replace_text',
+    description: `Replace text in a range with new text.
+Specify start and end positions to define the range to replace.`,
+    inputSchema: {
+      type: 'object',
+      properties: {
+        documentId: u,
+        range: T,
+        text: { type: 'string', description: 'Replacement text' },
+      },
+      required: ['documentId', 'range', 'text'],
+    },
+    handler: async (r, s) => {
+      let { documentId: e, range: c, text: t } = r,
+        n = s.session.documents.get(e);
+      if (!n)
+        return { isError: true, content: [{ type: 'text', text: `Document not found: ${e}` }] };
+      try {
+        let o = chunk4FIPZCBR_js.a(n.document, { type: 'replaceText', range: c, text: t });
+        return (
+          (n.document = o),
+          (n.lastModified = Date.now()),
+          {
+            content: [
+              {
+                type: 'text',
+                text: JSON.stringify({ success: !0, replacedRange: c, newTextLength: t.length }),
+              },
+            ],
+          }
+        );
+      } catch (o) {
+        return {
+          isError: true,
+          content: [{ type: 'text', text: `Failed to replace text: ${o.message}` }],
+        };
+      }
+    },
+    annotations: { category: 'core', readOnly: false, complexity: 'low' },
+  },
+  j = {
+    name: 'docx_delete_text',
+    description: `Delete text in a range.
+Specify start and end positions to define the range to delete.`,
+    inputSchema: {
+      type: 'object',
+      properties: { documentId: u, range: T },
+      required: ['documentId', 'range'],
+    },
+    handler: async (r, s) => {
+      let { documentId: e, range: c } = r,
+        t = s.session.documents.get(e);
+      if (!t)
+        return { isError: true, content: [{ type: 'text', text: `Document not found: ${e}` }] };
+      try {
+        let n = chunk4FIPZCBR_js.a(t.document, { type: 'deleteText', range: c });
+        return (
+          (t.document = n),
+          (t.lastModified = Date.now()),
+          { content: [{ type: 'text', text: JSON.stringify({ success: !0, deletedRange: c }) }] }
+        );
+      } catch (n) {
+        return {
+          isError: true,
+          content: [{ type: 'text', text: `Failed to delete text: ${n.message}` }],
+        };
+      }
+    },
+    annotations: { category: 'core', readOnly: false, complexity: 'low' },
+  },
+  E = {
+    name: 'docx_format_text',
+    description: `Apply formatting to text in a range.
+Supports bold, italic, underline, font size, font family, color, and highlight.`,
+    inputSchema: {
+      type: 'object',
+      properties: {
+        documentId: u,
+        range: T,
+        formatting: {
+          type: 'object',
+          description: 'Formatting options to apply',
+          properties: {
+            bold: { type: 'boolean' },
+            italic: { type: 'boolean' },
+            underline: { type: 'boolean' },
+            strikethrough: { type: 'boolean' },
+            fontSize: { type: 'number', description: 'Font size in points' },
+            fontFamily: { type: 'string' },
+            color: { type: 'string', description: 'Hex color (e.g., "#FF0000")' },
+            highlight: { type: 'string', description: 'Highlight color name' },
+          },
+        },
+      },
+      required: ['documentId', 'range', 'formatting'],
+    },
+    handler: async (r, s) => {
+      let { documentId: e, range: c, formatting: t } = r,
+        n = s.session.documents.get(e);
+      if (!n)
+        return { isError: true, content: [{ type: 'text', text: `Document not found: ${e}` }] };
+      try {
+        let o = chunk4FIPZCBR_js.a(n.document, { type: 'formatText', range: c, formatting: t });
+        return (
+          (n.document = o),
+          (n.lastModified = Date.now()),
+          {
+            content: [
+              {
+                type: 'text',
+                text: JSON.stringify({ success: !0, range: c, appliedFormatting: t }),
+              },
+            ],
+          }
+        );
+      } catch (o) {
+        return {
+          isError: true,
+          content: [{ type: 'text', text: `Failed to format text: ${o.message}` }],
+        };
+      }
+    },
+    annotations: { category: 'core', readOnly: false, complexity: 'medium' },
+  },
+  O = {
+    name: 'docx_apply_style',
+    description: `Apply a named style to a paragraph.
+Use document styles like "Heading1", "Heading2", "Normal", etc.`,
+    inputSchema: {
+      type: 'object',
+      properties: {
+        documentId: u,
+        paragraphIndex: {
+          type: 'number',
+          description: 'Index of the paragraph (0-indexed)',
+          minimum: 0,
+        },
+        styleId: { type: 'string', description: 'Style ID (e.g., "Heading1", "Normal")' },
+      },
+      required: ['documentId', 'paragraphIndex', 'styleId'],
+    },
+    handler: async (r, s) => {
+      let { documentId: e, paragraphIndex: c, styleId: t } = r,
+        n = s.session.documents.get(e);
+      if (!n)
+        return { isError: true, content: [{ type: 'text', text: `Document not found: ${e}` }] };
+      try {
+        let o = chunk4FIPZCBR_js.a(n.document, {
+          type: 'applyStyle',
+          paragraphIndex: c,
+          styleId: t,
+        });
+        return (
+          (n.document = o),
+          (n.lastModified = Date.now()),
+          {
+            content: [
+              {
+                type: 'text',
+                text: JSON.stringify({ success: !0, paragraphIndex: c, styleId: t }),
+              },
+            ],
+          }
+        );
+      } catch (o) {
+        return {
+          isError: true,
+          content: [{ type: 'text', text: `Failed to apply style: ${o.message}` }],
+        };
+      }
+    },
+    annotations: { category: 'core', readOnly: false, complexity: 'low' },
+  };
+function P(r) {
+  let s = [];
+  for (let e of r.content) e.type === 'run' ? s.push(_(e)) : e.type === 'hyperlink' && s.push(A(e));
+  return s.join('');
+}
+function _(r) {
+  return r.content
+    .filter((s) => s.type === 'text')
+    .map((s) => s.text)
+    .join('');
+}
+function A(r) {
+  let s = [];
+  for (let e of r.children) e.type === 'run' && s.push(_(e));
+  return s.join('');
+}
+var y = [D, C, R, k, $, J, v, j, E, O];
+function q(r = {}) {
+  let {
+      name: s = 'docx-editor',
+      version: e = '0.1.0',
+      includeCoreTools: c = true,
+      debug: t = false,
+      additionalTools: n = [],
+    } = r,
+    o = new Map(),
+    a = {
+      id: `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+      documents: new Map(),
+      data: new Map(),
+    };
+  if (c)
+    for (let i of y) (o.set(i.name, i), t && console.log(`[MCP] Registered core tool: ${i.name}`));
+  let d = chunkAZGNVGHV_js.b.getMcpTools();
+  for (let i of d)
+    (o.has(i.name) && console.warn(`[MCP] Tool '${i.name}' from plugin overrides existing tool`),
+      o.set(i.name, i),
+      t && console.log(`[MCP] Registered plugin tool: ${i.name}`));
+  for (let i of n)
+    (o.set(i.name, i), t && console.log(`[MCP] Registered additional tool: ${i.name}`));
+  let p = t
+    ? (i, f) => {
+        console.log(`[MCP] ${i}`, f ?? '');
+      }
+    : () => {};
+  async function l(i, f) {
+    let M = o.get(i);
+    if (!M) throw new Error(`Unknown tool: ${i}`);
+    p(`Calling tool: ${i}`, f);
+    let N = { session: a, log: p };
+    try {
+      let g = await M.handler(f, N);
+      return (p(`Tool ${i} completed`, g), g);
+    } catch (g) {
+      throw (p(`Tool ${i} failed`, g), g);
+    }
+  }
+  function x() {
+    return Array.from(o.values()).map((i) => ({
+      name: i.name,
+      description: i.description,
+      inputSchema: z(i.inputSchema),
+      category: i.annotations?.category,
+    }));
+  }
+  function L() {
+    return { name: s, version: e, toolCount: o.size };
+  }
+  return { tools: o, session: a, handleToolCall: l, listTools: x, getInfo: L };
+}
+async function F(r, s) {
+  let { id: e, method: c, params: t } = s;
+  try {
+    switch (c) {
+      case 'initialize':
+        return {
+          jsonrpc: '2.0',
+          id: e,
+          result: {
+            protocolVersion: '2024-11-05',
+            capabilities: { tools: {} },
+            serverInfo: r.getInfo(),
+          },
+        };
+      case 'tools/list': {
+        let n = r.listTools();
+        return {
+          jsonrpc: '2.0',
+          id: e,
+          result: {
+            tools: n.map((o) => ({
+              name: o.name,
+              description: o.description,
+              inputSchema: o.inputSchema,
+            })),
+          },
+        };
+      }
+      case 'tools/call': {
+        let { name: n, arguments: o } = t,
+          a = await r.handleToolCall(n, o);
+        return { jsonrpc: '2.0', id: e, result: a };
+      }
+      default:
+        return {
+          jsonrpc: '2.0',
+          id: e,
+          error: { code: -32601, message: `Method not found: ${c}` },
+        };
+    }
+  } catch (n) {
+    return { jsonrpc: '2.0', id: e, error: { code: -32e3, message: n.message } };
+  }
+}
+async function H(r = {}) {
+  let s = q(r);
+  r.debug &&
+    (console.error(`[MCP] Server started: ${s.getInfo().name} v${s.getInfo().version}`),
+    console.error(`[MCP] Tools registered: ${s.tools.size}`));
+  let c = (await import('readline')).createInterface({
+      input: process.stdin,
+      output: process.stdout,
+      terminal: false,
+    }),
+    t = '';
+  (c.on('line', async (n) => {
+    t += n;
+    try {
+      let o = JSON.parse(t);
+      t = '';
+      let a = await F(s, o);
+      process.stdout.write(
+        JSON.stringify(a) +
+          `
+`
+      );
+    } catch {}
+  }),
+    c.on('close', () => {
+      (r.debug && console.error('[MCP] Server closed'), process.exit(0));
+    }));
+}
+function z(r) {
+  return typeof r == 'object' && r !== null && ('type' in r || 'properties' in r)
+    ? r
+    : { type: 'object', properties: {} };
+}
+exports.applyStyleTool = O;
+exports.closeDocumentTool = R;
+exports.coreMcpTools = y;
+exports.createMcpServer = q;
+exports.deleteTextTool = j;
+exports.formatTextTool = E;
+exports.getDocumentInfoTool = k;
+exports.getDocumentTextTool = $;
+exports.handleJsonRpcRequest = F;
+exports.insertTextTool = J;
+exports.loadDocumentTool = D;
+exports.replaceTextTool = v;
+exports.saveDocumentTool = C;
+exports.startStdioServer = H; //# sourceMappingURL=mcp.js.map
+//# sourceMappingURL=mcp.js.map

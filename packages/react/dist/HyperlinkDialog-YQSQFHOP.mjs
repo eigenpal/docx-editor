@@ -1,0 +1,1 @@
+export{d as HyperlinkDialog,f as createBookmarkLinkData,e as createHyperlinkData,n as default,j as emailToMailto,l as extractBookmarksForDialog,i as getDisplayText,c as getUrlType,h as isBookmarkHyperlinkData,g as isExternalHyperlinkData,a as isValidUrl,b as normalizeUrl,k as phoneToTel,m as useHyperlinkDialog}from'./chunk-AZRYS2WF.mjs';import'./chunk-TAUMSKRE.mjs';

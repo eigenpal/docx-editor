@@ -1049,13 +1049,15 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
     return cleanup;
   }, [onFontsLoadedCallback]);
 
-  // Sync editing mode to ProseMirror suggestion mode plugin
+  // Sync editing mode to ProseMirror suggestion mode plugin.
+  // Depends on state.isLoading so it re-fires once the ProseMirror view
+  // is ready (document parsing is async, so the view is null on first render).
   useEffect(() => {
     const view = pagedEditorRef.current?.getView();
     if (view) {
       setSuggestionMode(editingMode === 'suggesting', view.state, view.dispatch, author);
     }
-  }, [editingMode, author]);
+  }, [editingMode, author, state.isLoading]);
 
   const pushDocument = useCallback(
     (document: Document) => {

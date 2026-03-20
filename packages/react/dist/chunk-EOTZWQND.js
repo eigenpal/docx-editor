@@ -1,0 +1,5898 @@
+'use strict';
+var chunk4VUZBV2S_js = require('./chunk-4VUZBV2S.js'),
+  chunkSE5EN2QL_js = require('./chunk-SE5EN2QL.js'),
+  J = require('react'),
+  E = require('@radix-ui/react-select'),
+  clsx = require('clsx'),
+  jsxRuntime = require('react/jsx-runtime');
+function _interopNamespace(e) {
+  if (e && e.__esModule) return e;
+  var n = Object.create(null);
+  if (e) {
+    Object.keys(e).forEach(function (k) {
+      if (k !== 'default') {
+        var d = Object.getOwnPropertyDescriptor(e, k);
+        Object.defineProperty(
+          n,
+          k,
+          d.get
+            ? d
+            : {
+                enumerable: true,
+                get: function () {
+                  return e[k];
+                },
+              }
+        );
+      }
+    });
+  }
+  n.default = e;
+  return Object.freeze(n);
+}
+var J__namespace = /*#__PURE__*/ _interopNamespace(J);
+var E__namespace = /*#__PURE__*/ _interopNamespace(E);
+function k(...e) {
+  return clsx.clsx(e);
+}
+var Se = E__namespace.Root,
+  De = E__namespace.Group,
+  nt = E__namespace.Value;
+function we({ className: e, children: t, onMouseDown: o, ...n }) {
+  return jsxRuntime.jsxs(E__namespace.Trigger, {
+    className: k(
+      'flex h-8 items-center justify-between gap-1 rounded px-2 py-1',
+      'text-sm text-slate-700 bg-transparent',
+      'hover:bg-slate-100/80 focus:outline-none focus:bg-slate-100/80',
+      'disabled:cursor-not-allowed disabled:opacity-50',
+      'transition-colors duration-150',
+      '[&>span]:truncate',
+      e
+    ),
+    onMouseDown: (r) => {
+      (r.preventDefault(), o?.(r));
+    },
+    ...n,
+    children: [
+      t,
+      jsxRuntime.jsx(E__namespace.Icon, {
+        asChild: true,
+        children: jsxRuntime.jsx(gn, { className: 'h-4 w-4 text-slate-400 shrink-0' }),
+      }),
+    ],
+  });
+}
+function Ie({ className: e, children: t, position: o = 'popper', onCloseAutoFocus: n, ...r }) {
+  return jsxRuntime.jsx(E__namespace.Portal, {
+    children: jsxRuntime.jsx('div', {
+      className: 'ep-root',
+      children: jsxRuntime.jsx(E__namespace.Content, {
+        className: k(
+          'relative z-50 max-h-72 min-w-[8rem] overflow-hidden',
+          'rounded-lg border border-slate-200 bg-white shadow-lg',
+          'data-[state=open]:animate-in data-[state=closed]:animate-out',
+          'data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0',
+          'data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95',
+          'data-[side=bottom]:slide-in-from-top-2 data-[side=top]:slide-in-from-bottom-2',
+          o === 'popper' && 'data-[side=bottom]:translate-y-1 data-[side=top]:-translate-y-1',
+          e
+        ),
+        position: o,
+        onCloseAutoFocus: (a) => {
+          (a.preventDefault(), n?.(a));
+        },
+        ...r,
+        children: jsxRuntime.jsx(E__namespace.Viewport, {
+          className: k(
+            'p-1',
+            o === 'popper' &&
+              'h-[var(--radix-select-trigger-height)] w-full min-w-[var(--radix-select-trigger-width)]'
+          ),
+          onMouseDown: (a) => a.preventDefault(),
+          children: t,
+        }),
+      }),
+    }),
+  });
+}
+function Ne({ className: e, ...t }) {
+  return jsxRuntime.jsx(E__namespace.Label, {
+    className: k('px-2 py-1.5 text-xs font-medium text-slate-500', e),
+    ...t,
+  });
+}
+function de({ className: e, children: t, onMouseDown: o, ...n }) {
+  return jsxRuntime.jsxs(E__namespace.Item, {
+    className: k(
+      'relative flex w-full cursor-pointer select-none items-center',
+      'rounded px-2 py-1.5 text-sm text-slate-700 outline-none',
+      'hover:bg-slate-100 focus:bg-slate-100',
+      'data-[disabled]:pointer-events-none data-[disabled]:opacity-50',
+      e
+    ),
+    onMouseDown: (r) => {
+      (r.preventDefault(), o?.(r));
+    },
+    ...n,
+    children: [
+      jsxRuntime.jsx(E__namespace.ItemText, { children: t }),
+      jsxRuntime.jsx('span', {
+        className: 'absolute right-2 flex h-3.5 w-3.5 items-center justify-center',
+        children: jsxRuntime.jsx(E__namespace.ItemIndicator, {
+          children: jsxRuntime.jsx(bn, { className: 'h-4 w-4' }),
+        }),
+      }),
+    ],
+  });
+}
+function Ye({ className: e, ...t }) {
+  return jsxRuntime.jsx(E__namespace.Separator, {
+    className: k('-mx-1 my-1 h-px bg-slate-100', e),
+    ...t,
+  });
+}
+function gn({ className: e }) {
+  return jsxRuntime.jsx('svg', {
+    className: e,
+    xmlns: 'http://www.w3.org/2000/svg',
+    viewBox: '0 0 20 20',
+    fill: 'currentColor',
+    children: jsxRuntime.jsx('path', {
+      fillRule: 'evenodd',
+      d: 'M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z',
+      clipRule: 'evenodd',
+    }),
+  });
+}
+function bn({ className: e }) {
+  return jsxRuntime.jsx('svg', {
+    className: e,
+    xmlns: 'http://www.w3.org/2000/svg',
+    viewBox: '0 0 20 20',
+    fill: 'currentColor',
+    children: jsxRuntime.jsx('path', {
+      fillRule: 'evenodd',
+      d: 'M16.704 4.153a.75.75 0 01.143 1.052l-8 10.5a.75.75 0 01-1.127.075l-4.5-4.5a.75.75 0 011.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 011.05-.143z',
+      clipRule: 'evenodd',
+    }),
+  });
+}
+var xn = [
+  { name: 'Arial', fontFamily: 'Arial, Helvetica, sans-serif', category: 'sans-serif' },
+  { name: 'Calibri', fontFamily: '"Calibri", Arial, sans-serif', category: 'sans-serif' },
+  { name: 'Helvetica', fontFamily: 'Helvetica, Arial, sans-serif', category: 'sans-serif' },
+  { name: 'Verdana', fontFamily: 'Verdana, Geneva, sans-serif', category: 'sans-serif' },
+  { name: 'Open Sans', fontFamily: '"Open Sans", sans-serif', category: 'sans-serif' },
+  { name: 'Roboto', fontFamily: 'Roboto, sans-serif', category: 'sans-serif' },
+  { name: 'Times New Roman', fontFamily: '"Times New Roman", Times, serif', category: 'serif' },
+  { name: 'Georgia', fontFamily: 'Georgia, serif', category: 'serif' },
+  { name: 'Cambria', fontFamily: 'Cambria, Georgia, serif', category: 'serif' },
+  { name: 'Garamond', fontFamily: 'Garamond, serif', category: 'serif' },
+  { name: 'Courier New', fontFamily: '"Courier New", Courier, monospace', category: 'monospace' },
+  { name: 'Consolas', fontFamily: 'Consolas, monospace', category: 'monospace' },
+];
+function no({
+  value: e,
+  onChange: t,
+  fonts: o = xn,
+  disabled: n = false,
+  className: r,
+  placeholder: a = 'Arial',
+  width: u = 120,
+  showPreview: m = true,
+}) {
+  let s = J__namespace.useMemo(
+      () =>
+        e
+          ? o.find((h) => h.fontFamily === e || h.name.toLowerCase() === e.toLowerCase())?.name || e
+          : a,
+      [e, o, a]
+    ),
+    c = J__namespace.useCallback(
+      (i) => {
+        let h = o.find((p) => p.name === i);
+        h && t?.(h.fontFamily);
+      },
+      [t, o]
+    ),
+    d = J__namespace.useMemo(() => {
+      let i = { 'sans-serif': [], serif: [], monospace: [], other: [] };
+      return (
+        o.forEach((h) => {
+          let p = h.category || 'other';
+          i[p].push(h);
+        }),
+        i
+      );
+    }, [o]);
+  return jsxRuntime.jsxs(Se, {
+    value: s,
+    onValueChange: c,
+    disabled: n,
+    children: [
+      jsxRuntime.jsx(we, {
+        className: k('h-8 text-sm', r),
+        style: { minWidth: typeof u == 'number' ? `${u}px` : u },
+        'aria-label': 'Select font family',
+        children: jsxRuntime.jsx(nt, { placeholder: a, children: s }),
+      }),
+      jsxRuntime.jsxs(Ie, {
+        className: 'max-h-[300px]',
+        children: [
+          d['sans-serif'].length > 0 &&
+            jsxRuntime.jsxs(De, {
+              children: [
+                jsxRuntime.jsx(Ne, { children: 'Sans Serif' }),
+                d['sans-serif'].map((i) =>
+                  jsxRuntime.jsx(
+                    de,
+                    {
+                      value: i.name,
+                      style: m ? { fontFamily: i.fontFamily } : void 0,
+                      children: i.name,
+                    },
+                    i.name
+                  )
+                ),
+              ],
+            }),
+          d.serif.length > 0 &&
+            jsxRuntime.jsxs(jsxRuntime.Fragment, {
+              children: [
+                jsxRuntime.jsx(Ye, {}),
+                jsxRuntime.jsxs(De, {
+                  children: [
+                    jsxRuntime.jsx(Ne, { children: 'Serif' }),
+                    d.serif.map((i) =>
+                      jsxRuntime.jsx(
+                        de,
+                        {
+                          value: i.name,
+                          style: m ? { fontFamily: i.fontFamily } : void 0,
+                          children: i.name,
+                        },
+                        i.name
+                      )
+                    ),
+                  ],
+                }),
+              ],
+            }),
+          d.monospace.length > 0 &&
+            jsxRuntime.jsxs(jsxRuntime.Fragment, {
+              children: [
+                jsxRuntime.jsx(Ye, {}),
+                jsxRuntime.jsxs(De, {
+                  children: [
+                    jsxRuntime.jsx(Ne, { children: 'Monospace' }),
+                    d.monospace.map((i) =>
+                      jsxRuntime.jsx(
+                        de,
+                        {
+                          value: i.name,
+                          style: m ? { fontFamily: i.fontFamily } : void 0,
+                          children: i.name,
+                        },
+                        i.name
+                      )
+                    ),
+                  ],
+                }),
+              ],
+            }),
+        ],
+      }),
+    ],
+  });
+}
+var ro = (e) => (typeof e == 'boolean' ? `${e}` : e === 0 ? '0' : e),
+  io = clsx.clsx,
+  ao = (e, t) => (o) => {
+    var n;
+    if (t?.variants == null) return io(e, o?.class, o?.className);
+    let { variants: r, defaultVariants: a } = t,
+      u = Object.keys(r).map((c) => {
+        let d = o?.[c],
+          i = a?.[c];
+        if (d === null) return null;
+        let h = ro(d) || ro(i);
+        return r[c][h];
+      }),
+      m =
+        o &&
+        Object.entries(o).reduce((c, d) => {
+          let [i, h] = d;
+          return (h === void 0 || (c[i] = h), c);
+        }, {}),
+      s =
+        t == null || (n = t.compoundVariants) === null || n === void 0
+          ? void 0
+          : n.reduce((c, d) => {
+              let { class: i, className: h, ...p } = d;
+              return Object.entries(p).every((g) => {
+                let [b, f] = g;
+                return Array.isArray(f) ? f.includes({ ...a, ...m }[b]) : { ...a, ...m }[b] === f;
+              })
+                ? [...c, i, h]
+                : c;
+            }, []);
+    return io(e, u, s, o?.class, o?.className);
+  };
+var yn = ao(
+    'inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50',
+    {
+      variants: {
+        variant: {
+          default: 'bg-primary text-primary-foreground hover:bg-primary/90',
+          destructive: 'bg-destructive text-destructive-foreground hover:bg-destructive/90',
+          outline: 'border border-input bg-background hover:bg-accent hover:text-accent-foreground',
+          secondary: 'bg-secondary text-secondary-foreground hover:bg-secondary/80',
+          ghost: 'hover:bg-accent hover:text-accent-foreground',
+          link: 'text-primary underline-offset-4 hover:underline',
+        },
+        size: {
+          default: 'h-10 px-4 py-2',
+          sm: 'h-9 rounded-md px-3',
+          lg: 'h-11 rounded-md px-8',
+          icon: 'h-9 w-9',
+          'icon-sm': 'h-7 w-7',
+        },
+      },
+      defaultVariants: { variant: 'default', size: 'default' },
+    }
+  ),
+  $ = J__namespace.forwardRef(({ className: e, variant: t, size: o, ...n }, r) =>
+    jsxRuntime.jsx('button', {
+      className: k(yn({ variant: t, size: o, className: e })),
+      ref: r,
+      ...n,
+    })
+  );
+$.displayName = 'Button';
+function v({ size: e = 20, className: t = '', style: o, children: n }) {
+  return jsxRuntime.jsx('svg', {
+    xmlns: 'http://www.w3.org/2000/svg',
+    width: e,
+    height: e,
+    viewBox: '0 -960 960 960',
+    fill: 'currentColor',
+    className: t,
+    style: { display: 'inline-flex', flexShrink: 0, ...o },
+    'aria-hidden': 'true',
+    children: n,
+  });
+}
+function Sn(e) {
+  return jsxRuntime.jsx(v, {
+    ...e,
+    children: jsxRuntime.jsx('path', {
+      d: 'M280-200v-80h284q63 0 109.5-40T720-420q0-60-46.5-100T564-560H312l104 104-56 56-200-200 200-200 56 56-104 104h252q97 0 166.5 63T800-420q0 94-69.5 157T564-200H280Z',
+    }),
+  });
+}
+function wn(e) {
+  return jsxRuntime.jsx(v, {
+    ...e,
+    children: jsxRuntime.jsx('path', {
+      d: 'M396-200q-97 0-166.5-63T160-420q0-94 69.5-157T396-640h252L544-744l56-56 200 200-200 200-56-56 104-104H396q-63 0-109.5 40T240-420q0 60 46.5 100T396-280h284v80H396Z',
+    }),
+  });
+}
+function In(e) {
+  return jsxRuntime.jsx(v, {
+    ...e,
+    children: jsxRuntime.jsx('path', {
+      d: 'M640-640v-120H320v120h-80v-200h480v200h-80Zm-480 80h640-640Zm560 100q17 0 28.5-11.5T760-500q0-17-11.5-28.5T720-540q-17 0-28.5 11.5T680-500q0 17 11.5 28.5T720-460Zm-80 260v-160H320v160h320Zm80 80H240v-160H80v-240q0-51 35-85.5t85-34.5h560q51 0 85.5 34.5T880-520v240H720v160Zm80-240v-160q0-17-11.5-28.5T760-560H200q-17 0-28.5 11.5T160-520v160h80v-80h480v80h80Z',
+    }),
+  });
+}
+function Mn(e) {
+  return jsxRuntime.jsx(v, {
+    ...e,
+    children: jsxRuntime.jsx('path', {
+      d: 'M272-200v-560h221q65 0 120 40t55 111q0 51-23 78.5T602-491q25 11 55.5 41t30.5 90q0 89-65 124.5T501-200H272Zm121-112h104q48 0 58.5-24.5T566-372q0-11-10.5-35.5T494-432H393v120Zm0-228h93q33 0 48-17t15-38q0-24-17-39t-44-15h-95v109Z',
+    }),
+  });
+}
+function Pn(e) {
+  return jsxRuntime.jsx(v, {
+    ...e,
+    children: jsxRuntime.jsx('path', {
+      d: 'M200-200v-100h160l120-360H320v-100h400v100H580L460-300h140v100H200Z',
+    }),
+  });
+}
+function kn(e) {
+  return jsxRuntime.jsx(v, {
+    ...e,
+    children: jsxRuntime.jsx('path', {
+      d: 'M200-120v-80h560v80H200Zm123-223q-56-63-56-167v-330h103v336q0 56 28 91t82 35q54 0 82-35t28-91v-336h103v330q0 104-56 167t-157 63q-101 0-157-63Z',
+    }),
+  });
+}
+function Rn(e) {
+  return jsxRuntime.jsx(v, {
+    ...e,
+    children: jsxRuntime.jsx('path', {
+      d: 'M486-160q-76 0-135-45t-85-123l88-38q14 48 48.5 79t85.5 31q42 0 76-20t34-64q0-18-7-33t-19-27h112q5 14 7.5 28.5T694-340q0 86-61.5 133T486-160ZM80-480v-80h800v80H80Zm402-326q66 0 115.5 32.5T674-674l-88 39q-9-29-33.5-52T484-710q-41 0-68 18.5T386-640h-96q2-69 54.5-117.5T482-806Z',
+    }),
+  });
+}
+function Zn(e) {
+  return jsxRuntime.jsx(v, {
+    ...e,
+    children: jsxRuntime.jsx('path', {
+      d: 'M760-600v-80q0-17 11.5-28.5T800-720h80v-40H760v-40h120q17 0 28.5 11.5T920-760v40q0 17-11.5 28.5T880-680h-80v40h120v40H760ZM235-160l185-291-172-269h106l124 200h4l123-200h107L539-451l186 291H618L482-377h-4L342-160H235Z',
+    }),
+  });
+}
+function Ln(e) {
+  return jsxRuntime.jsx(v, {
+    ...e,
+    children: jsxRuntime.jsx('path', {
+      d: 'M760-160v-80q0-17 11.5-28.5T800-280h80v-40H760v-40h120q17 0 28.5 11.5T920-320v40q0 17-11.5 28.5T880-240h-80v40h120v40H760Zm-525-80 185-291-172-269h106l124 200h4l123-200h107L539-531l186 291H618L482-457h-4L342-240H235Z',
+    }),
+  });
+}
+function Hn(e) {
+  return jsxRuntime.jsx(v, {
+    ...e,
+    children: jsxRuntime.jsx('path', {
+      d: 'M440-280H280q-83 0-141.5-58.5T80-480q0-83 58.5-141.5T280-680h160v80H280q-50 0-85 35t-35 85q0 50 35 85t85 35h160v80ZM320-440v-80h320v80H320Zm200 160v-80h160q50 0 85-35t35-85q0-50-35-85t-85-35H520v-80h160q83 0 141.5 58.5T880-480q0 83-58.5 141.5T680-280H520Z',
+    }),
+  });
+}
+function En(e) {
+  return jsxRuntime.jsx(v, {
+    ...e,
+    children: jsxRuntime.jsx('path', {
+      d: 'm528-546-93-93-121-121h486v120H568l-40 94ZM792-56 460-388l-80 188H249l119-280L56-792l56-56 736 736-56 56Z',
+    }),
+  });
+}
+function An(e) {
+  return jsxRuntime.jsx(v, {
+    ...e,
+    children: jsxRuntime.jsx('path', {
+      d: 'M120-120v-80h720v80H120Zm0-160v-80h480v80H120Zm0-160v-80h720v80H120Zm0-160v-80h480v80H120Zm0-160v-80h720v80H120Z',
+    }),
+  });
+}
+function _n(e) {
+  return jsxRuntime.jsx(v, {
+    ...e,
+    children: jsxRuntime.jsx('path', {
+      d: 'M120-120v-80h720v80H120Zm160-160v-80h400v80H280ZM120-440v-80h720v80H120Zm160-160v-80h400v80H280ZM120-760v-80h720v80H120Z',
+    }),
+  });
+}
+function qn(e) {
+  return jsxRuntime.jsx(v, {
+    ...e,
+    children: jsxRuntime.jsx('path', {
+      d: 'M120-760v-80h720v80H120Zm240 160v-80h480v80H360ZM120-440v-80h720v80H120Zm240 160v-80h480v80H360ZM120-120v-80h720v80H120Z',
+    }),
+  });
+}
+function Dn(e) {
+  return jsxRuntime.jsx(v, {
+    ...e,
+    children: jsxRuntime.jsx('path', {
+      d: 'M120-120v-80h720v80H120Zm0-160v-80h720v80H120Zm0-160v-80h720v80H120Zm0-160v-80h720v80H120Zm0-160v-80h720v80H120Z',
+    }),
+  });
+}
+function Zt(e) {
+  return jsxRuntime.jsx(v, {
+    ...e,
+    children: jsxRuntime.jsx('path', {
+      d: 'M240-160 80-320l56-56 64 62v-332l-64 62-56-56 160-160 160 160-56 56-64-62v332l64-62 56 56-160 160Zm240-40v-80h400v80H480Zm0-240v-80h400v80H480Zm0-240v-80h400v80H480Z',
+    }),
+  });
+}
+function Nn(e) {
+  return jsxRuntime.jsx(v, {
+    ...e,
+    children: jsxRuntime.jsx('path', {
+      d: 'M360-200v-80h480v80H360Zm0-240v-80h480v80H360Zm0-240v-80h480v80H360ZM200-160q-33 0-56.5-23.5T120-240q0-33 23.5-56.5T200-320q33 0 56.5 23.5T280-240q0 33-23.5 56.5T200-160Zm0-240q-33 0-56.5-23.5T120-480q0-33 23.5-56.5T200-560q33 0 56.5 23.5T280-480q0 33-23.5 56.5T200-400Zm-56.5-263.5Q120-687 120-720t23.5-56.5Q167-800 200-800t56.5 23.5Q280-753 280-720t-23.5 56.5Q233-640 200-640t-56.5-23.5Z',
+    }),
+  });
+}
+function Fn(e) {
+  return jsxRuntime.jsx(v, {
+    ...e,
+    children: jsxRuntime.jsx('path', {
+      d: 'M120-80v-60h100v-30h-60v-60h60v-30H120v-60h120q17 0 28.5 11.5T280-280v40q0 17-11.5 28.5T240-200q17 0 28.5 11.5T280-160v40q0 17-11.5 28.5T240-80H120Zm0-280v-110q0-17 11.5-28.5T160-510h60v-30H120v-60h120q17 0 28.5 11.5T280-560v70q0 17-11.5 28.5T240-450h-60v30h100v60H120Zm60-280v-180h-60v-60h120v240h-60Zm180 440v-80h480v80H360Zm0-240v-80h480v80H360Zm0-240v-80h480v80H360Z',
+    }),
+  });
+}
+function Bn(e) {
+  return jsxRuntime.jsx(v, {
+    ...e,
+    children: jsxRuntime.jsx('path', {
+      d: 'M120-120v-80h720v80H120Zm320-160v-80h400v80H440Zm0-160v-80h400v80H440Zm0-160v-80h400v80H440ZM120-760v-80h720v80H120Zm0 440v-320l160 160-160 160Z',
+    }),
+  });
+}
+function On(e) {
+  return jsxRuntime.jsx(v, {
+    ...e,
+    children: jsxRuntime.jsx('path', {
+      d: 'M120-120v-80h720v80H120Zm320-160v-80h400v80H440Zm0-160v-80h400v80H440Zm0-160v-80h400v80H440ZM120-760v-80h720v80H120Zm160 440L120-480l160-160v320Z',
+    }),
+  });
+}
+function zn(e) {
+  return jsxRuntime.jsx(v, {
+    ...e,
+    children: jsxRuntime.jsx('path', {
+      d: 'M80 0v-160h800V0H80Zm140-280 210-560h100l210 560h-96l-50-144H368l-52 144h-96Zm176-224h168l-82-232h-4l-82 232Z',
+    }),
+  });
+}
+function Wn(e) {
+  return jsxRuntime.jsx(v, {
+    ...e,
+    children: jsxRuntime.jsx('path', {
+      d: 'M544-400 440-504 240-304l104 104 200-200Zm-47-161 104 104 199-199-104-104-199 199Zm-84-28 216 216-229 229q-24 24-56 24t-56-24l-2-2-26 26H60l126-126-2-2q-24-24-24-56t24-56l229-229Zm0 0 227-227q24-24 56-24t56 24l104 104q24 24 24 56t-24 56L629-373 413-589Z',
+    }),
+  });
+}
+function Vn(e) {
+  return jsxRuntime.jsx(v, {
+    ...e,
+    children: jsxRuntime.jsx('path', {
+      d: 'M800-436q0 36-8 69t-22 63l-62-60q6-17 9-34.5t3-37.5q0-47-17.5-89T650-600L480-768l-88 86-56-56 144-142 226 222q44 42 69 99.5T800-436Zm-8 380L668-180q-41 29-88 44.5T480-120q-133 0-226.5-92.5T160-436q0-51 16-98t48-90L56-792l56-56 736 736-56 56ZM480-200q36 0 68.5-10t61.5-28L280-566q-21 32-30.5 64t-9.5 66q0 98 70 167t170 69Zm-37-204Zm110-116Z',
+    }),
+  });
+}
+function $n(e) {
+  return jsxRuntime.jsx(v, {
+    ...e,
+    children: jsxRuntime.jsx('path', { d: 'M480-360 280-560h400L480-360Z' }),
+  });
+}
+function Un(e) {
+  return jsxRuntime.jsx(v, {
+    ...e,
+    children: jsxRuntime.jsx('path', {
+      d: 'M200-120q-33 0-56.5-23.5T120-200v-560q0-33 23.5-56.5T200-840h560q33 0 56.5 23.5T840-760v560q0 33-23.5 56.5T760-120H200Zm240-240H200v160h240v-160Zm80 0v160h240v-160H520Zm-80-80v-160H200v160h240Zm80 0h240v-160H520v160ZM200-680h560v-80H200v80Z',
+    }),
+  });
+}
+function Gn(e) {
+  return jsxRuntime.jsx(v, {
+    ...e,
+    children: jsxRuntime.jsx('path', {
+      d: 'M760-120H200q-33 0-56.5-23.5T120-200v-560q0-33 23.5-56.5T200-840h560q33 0 56.5 23.5T840-760v560q0 33-23.5 56.5T760-120ZM200-640h560v-120H200v120Zm100 80H200v360h100v-360Zm360 0v360h100v-360H660Zm-80 0H380v360h200v-360Z',
+    }),
+  });
+}
+function Kn(e) {
+  return jsxRuntime.jsx(v, {
+    ...e,
+    children: jsxRuntime.jsx('path', {
+      d: 'M200-120q-33 0-56.5-23.5T120-200v-560q0-33 23.5-56.5T200-840h560q33 0 56.5 23.5T840-760v560q0 33-23.5 56.5T760-120H200Zm0-80h133v-133H200v133Zm213 0h134v-133H413v133Zm214 0h133v-133H627v133ZM200-413h133v-134H200v134Zm213 0h134v-134H413v134Zm214 0h133v-134H627v134ZM200-627h133v-133H200v133Zm213 0h134v-133H413v133Zm214 0h133v-133H627v133Z',
+    }),
+  });
+}
+function Yn(e) {
+  return jsxRuntime.jsx(v, {
+    ...e,
+    children: jsxRuntime.jsx('path', {
+      d: 'M760-200v-120H200v120h560Zm0-200v-160H200v160h560Zm0-240v-120H200v120h560ZM200-120q-33 0-56.5-23.5T120-200v-560q0-33 23.5-56.5T200-840h560q33 0 56.5 23.5T840-760v560q0 33-23.5 56.5T760-120H200Z',
+    }),
+  });
+}
+function Xn(e) {
+  return jsxRuntime.jsx(v, {
+    ...e,
+    children: jsxRuntime.jsx('path', {
+      d: 'M121-280v-400q0-33 23.5-56.5T201-760h559q33 0 56.5 23.5T840-680v400q0 33-23.5 56.5T760-200H201q-33 0-56.5-23.5T121-280Zm79 0h133v-400H200v400Zm213 0h133v-400H413v400Zm213 0h133v-400H626v400Z',
+    }),
+  });
+}
+function jn(e) {
+  return jsxRuntime.jsx(v, {
+    ...e,
+    children: jsxRuntime.jsx('path', {
+      d: 'M120-120v-720h720v720H120Zm640-80v-240H520v240h240Zm0-560H520v240h240v-240Zm-560 0v240h240v-240H200Zm0 560h240v-240H200v240Z',
+    }),
+  });
+}
+function Jn(e) {
+  return jsxRuntime.jsx(v, {
+    ...e,
+    children: jsxRuntime.jsx('path', {
+      d: 'M200-200h560v-560H200v560Zm-80 80v-720h720v720H120Zm160-320v-80h80v80h-80Zm160 160v-80h80v80h-80Zm0-160v-80h80v80h-80Zm0-160v-80h80v80h-80Zm160 160v-80h80v80h-80Z',
+    }),
+  });
+}
+function Qn(e) {
+  return jsxRuntime.jsx(v, {
+    ...e,
+    children: jsxRuntime.jsx('path', {
+      d: 'M120-120v-80h80v80h-80Zm0-160v-80h80v80h-80Zm0-320v-80h80v80h-80Zm0-160v-80h80v80h-80Zm160 640v-80h80v80h-80Zm0-640v-80h80v80h-80Zm320 640v-80h80v80h-80Zm160 0v-80h80v80h-80Zm0-160v-80h80v80h-80Zm0-320v-80h80v80h-80Zm0-160v-80h80v80h-80Zm-160 0v-80h80v80h-80ZM440-120v-320H120v-80h320v-320h80v320h320v80H520v320h-80Z',
+    }),
+  });
+}
+function er(e) {
+  return jsxRuntime.jsx(v, {
+    ...e,
+    children: jsxRuntime.jsx('path', {
+      d: 'M120-120v-80h80v80h-80Zm0-160v-80h80v80h-80Zm0-160v-80h80v80h-80Zm0-160v-80h80v80h-80Zm0-160v-80h80v80h-80Zm160 640v-80h80v80h-80Zm0-320v-80h80v80h-80Zm0-320v-80h80v80h-80Zm160 640v-80h80v80h-80Zm0-160v-80h80v80h-80Zm0-160v-80h80v80h-80Zm0-160v-80h80v80h-80Zm0-160v-80h80v80h-80Zm160 640v-80h80v80h-80Zm0-320v-80h80v80h-80Zm0-320v-80h80v80h-80Zm160 640v-80h80v80h-80Zm0-160v-80h80v80h-80Zm0-160v-80h80v80h-80Zm0-160v-80h80v80h-80Zm0-160v-80h80v80h-80Z',
+    }),
+  });
+}
+function tr(e) {
+  return jsxRuntime.jsx(v, {
+    ...e,
+    children: jsxRuntime.jsx('path', {
+      d: 'M440-440H200v-80h240v-240h80v240h240v80H520v240h-80v-240Z',
+    }),
+  });
+}
+function or(e) {
+  return jsxRuntime.jsx(v, {
+    ...e,
+    children: jsxRuntime.jsx('path', { d: 'M200-440v-80h560v80H200Z' }),
+  });
+}
+function nr(e) {
+  return jsxRuntime.jsx(v, {
+    ...e,
+    children: jsxRuntime.jsx('path', {
+      d: 'M280-120q-33 0-56.5-23.5T200-200v-520h-40v-80h200v-40h240v40h200v80h-40v520q0 33-23.5 56.5T680-120H280Zm400-600H280v520h400v-520ZM360-280h80v-360h-80v360Zm160 0h80v-360h-80v360ZM280-720v520-520Z',
+    }),
+  });
+}
+function rr(e) {
+  return jsxRuntime.jsx(v, {
+    ...e,
+    children: jsxRuntime.jsx('path', {
+      d: 'M600-240v-80h160v80H600Zm0-320v-80h280v80H600Zm0 160v-80h240v80H600ZM120-640H80v-80h160v-60h160v60h160v80h-40v360q0 33-23.5 56.5T440-200H200q-33 0-56.5-23.5T120-280v-360Zm80 0v360h240v-360H200Zm0 0v360-360Z',
+    }),
+  });
+}
+function ir(e) {
+  return jsxRuntime.jsx(v, {
+    ...e,
+    children: jsxRuntime.jsx('path', {
+      d: 'm296-160-56-56 200-200v-269L337-582l-57-57 200-200 201 201-57 57-104-104v301L296-160Zm368 1L536-286l57-57 127 128-56 56Z',
+    }),
+  });
+}
+function ar(e) {
+  return jsxRuntime.jsx(v, {
+    ...e,
+    children: jsxRuntime.jsx('path', {
+      d: 'M440-160v-304L240-664v104h-80v-240h240v80H296l224 224v336h-80Zm154-376-58-58 128-126H560v-80h240v240h-80v-104L594-536Z',
+    }),
+  });
+}
+function lr(e) {
+  return jsxRuntime.jsx(v, {
+    ...e,
+    children: jsxRuntime.jsx('path', {
+      d: 'M360-160q-33 0-56.5-23.5T280-240q0-33 23.5-56.5T360-320q33 0 56.5 23.5T440-240q0 33-23.5 56.5T360-160Zm240 0q-33 0-56.5-23.5T520-240q0-33 23.5-56.5T600-320q33 0 56.5 23.5T680-240q0 33-23.5 56.5T600-160ZM360-400q-33 0-56.5-23.5T280-480q0-33 23.5-56.5T360-560q33 0 56.5 23.5T440-480q0 33-23.5 56.5T360-400Zm240 0q-33 0-56.5-23.5T520-480q0-33 23.5-56.5T600-560q33 0 56.5 23.5T680-480q0 33-23.5 56.5T600-400ZM360-640q-33 0-56.5-23.5T280-720q0-33 23.5-56.5T360-800q33 0 56.5 23.5T440-720q0 33-23.5 56.5T360-640Zm240 0q-33 0-56.5-23.5T520-720q0-33 23.5-56.5T600-800q33 0 56.5 23.5T680-720q0 33-23.5 56.5T600-640Z',
+    }),
+  });
+}
+function sr(e) {
+  return jsxRuntime.jsx(v, {
+    ...e,
+    children: jsxRuntime.jsx('path', {
+      d: 'M200-120q-33 0-56.5-23.5T120-200v-560q0-33 23.5-56.5T200-840h560q33 0 56.5 23.5T840-760v560q0 33-23.5 56.5T760-120H200Zm0-80h560v-560H200v560Zm40-80h480L570-480 450-320l-90-120-120 160Zm-40 80v-560 560Z',
+    }),
+  });
+}
+function cr(e) {
+  return jsxRuntime.jsx(v, {
+    ...e,
+    children: jsxRuntime.jsx('path', {
+      d: 'M120-280v-400h400v400H120Zm80-80h240v-240H200v240Zm-80-400v-80h720v80H120Zm480 160v-80h240v80H600Zm0 160v-80h240v80H600Zm0 160v-80h240v80H600ZM120-120v-80h720v80H120Z',
+    }),
+  });
+}
+function ur(e) {
+  return jsxRuntime.jsx(v, {
+    ...e,
+    children: jsxRuntime.jsx('path', {
+      d: 'M440-280v-400h400v400H440Zm80-80h240v-240H520v240ZM120-120v-80h720v80H120Zm0-160v-80h240v80H120Zm0-160v-80h240v80H120Zm0-160v-80h240v80H120Zm0-160v-80h720v80H120Z',
+    }),
+  });
+}
+function dr(e) {
+  return jsxRuntime.jsx(v, {
+    ...e,
+    children: jsxRuntime.jsx('path', { d: 'M160-440v-80h640v80H160Z' }),
+  });
+}
+function pr(e) {
+  return jsxRuntime.jsx(v, {
+    ...e,
+    children: jsxRuntime.jsx('path', {
+      d: 'M200-120q-33 0-56.5-23.5T120-200v-480h80v480h480v80H200Zm160-240v80q-33 0-56.5-23.5T280-360h80Zm-80-80v-80h80v80h-80Zm0-160v-80h80v80h-80Zm80-160h-80q0-33 23.5-56.5T360-840v80Zm80 480v-80h80v80h-80Zm0-480v-80h80v80h-80Zm160 0v-80h80v80h-80Zm0 480v-80h80v80h-80Zm160-480v-80q33 0 56.5 23.5T840-760h-80Zm0 400h80q0 33-23.5 56.5T760-280v-80Zm0-80v-80h80v80h-80Zm0-160v-80h80v80h-80Z',
+    }),
+  });
+}
+function mr(e) {
+  return jsxRuntime.jsx(v, {
+    ...e,
+    children: jsxRuntime.jsx('path', {
+      d: 'M360-280q-33 0-56.5-23.5T280-360v-400q0-33 23.5-56.5T360-840h400q33 0 56.5 23.5T840-760v400q0 33-23.5 56.5T760-280H360Zm0-80h400v-400H360v400ZM200-200v80q-33 0-56.5-23.5T120-200h80Zm-80-80v-80h80v80h-80Zm0-160v-80h80v80h-80Zm0-160v-80h80v80h-80Zm160 480v-80h80v80h-80Zm160 0v-80h80v80h-80Zm160 0v-80h80v80h-80Z',
+    }),
+  });
+}
+function hr(e) {
+  return jsxRuntime.jsx(v, {
+    ...e,
+    children: jsxRuntime.jsx('path', {
+      d: 'M480-80 310-250l57-57 73 73v-166h80v165l72-73 58 58L480-80ZM250-310 80-480l169-169 57 57-72 72h166v80H235l73 72-58 58Zm460 0-57-57 73-73H560v-80h165l-73-72 58-58 170 170-170 170ZM440-560v-166l-73 73-57-57 170-170 170 170-57 57-73-73v166h-80Z',
+    }),
+  });
+}
+function fr(e) {
+  return jsxRuntime.jsx(v, {
+    ...e,
+    children: jsxRuntime.jsx('path', {
+      d: 'M440-120v-240h80v80h320v80H520v80h-80Zm-320-80v-80h240v80H120Zm160-160v-80H120v-80h160v-80h80v240h-80Zm160-80v-80h400v80H440Zm160-160v-240h80v80h160v80H680v80h-80Zm-480-80v-80h400v80H120Z',
+    }),
+  });
+}
+function vr(e) {
+  return jsxRuntime.jsx(v, {
+    ...e,
+    children: jsxRuntime.jsx('path', {
+      d: 'M522-80v-82q34-5 66.5-18t61.5-34l56 58q-42 32-88 51.5T522-80Zm-80 0Q304-98 213-199.5T122-438q0-75 28.5-140.5t77-114q48.5-48.5 114-77T482-798h6l-62-62 56-58 160 160-160 160-56-56 64-64h-8q-117 0-198.5 81.5T202-438q0 104 68 182.5T442-162v82Zm322-134-58-56q21-29 34-61.5t18-66.5h82q-5 50-24.5 96T764-214Zm76-264h-82q-5-34-18-66.5T706-606l58-56q32 39 51 86t25 98Z',
+    }),
+  });
+}
+function gr(e) {
+  return jsxRuntime.jsx(v, {
+    ...e,
+    children: jsxRuntime.jsx('path', {
+      d: 'M440-80q-50-5-96-24.5T256-156l56-58q29 21 61.5 34t66.5 18v82Zm80 0v-82q104-15 172-93.5T760-438q0-117-81.5-198.5T480-718h-8l64 64-56 56-160-160 160-160 56 58-62 62h6q75 0 140.5 28.5t114 77q48.5 48.5 77 114T840-438q0 137-91 238.5T520-80ZM198-214q-32-42-51.5-88T122-398h82q5 34 18 66.5t34 61.5l-58 56Zm-76-264q6-51 25-98t51-86l58 56q-21 29-34 61.5T204-478h-82Z',
+    }),
+  });
+}
+function br(e) {
+  return jsxRuntime.jsx(v, {
+    ...e,
+    children: jsxRuntime.jsx('path', {
+      d: 'M280-160 80-360l200-200 56 57-103 103h287v80H233l103 103-56 57Zm400-240-56-57 103-103H440v-80h287L624-743l56-57 200 200-200 200Z',
+    }),
+  });
+}
+function xr(e) {
+  return jsxRuntime.jsx(v, {
+    ...e,
+    children: jsxRuntime.jsx('path', {
+      d: 'M320-440v-287L217-624l-57-56 200-200 200 200-57 56-103-103v287h-80ZM600-80 400-280l57-56 103 103v-287h80v287l103-103 57 56L600-80Z',
+    }),
+  });
+}
+function Cr(e) {
+  return jsxRuntime.jsx(v, {
+    ...e,
+    children: jsxRuntime.jsx('path', {
+      d: 'M600-360ZM320-242q10 1 19.5 1.5t20.5.5q11 0 20.5-.5T400-242v82h400v-400h-82q1-10 1.5-19.5t.5-20.5q0-11-.5-20.5T718-640h82q33 0 56.5 23.5T880-560v400q0 33-23.5 56.5T800-80H400q-33 0-56.5-23.5T320-160v-82Zm40-78q-117 0-198.5-81.5T80-600q0-117 81.5-198.5T360-880q117 0 198.5 81.5T640-600q0 117-81.5 198.5T360-320Zm0-80q83 0 141.5-58.5T560-600q0-83-58.5-141.5T360-800q-83 0-141.5 58.5T160-600q0 83 58.5 141.5T360-400Zm0-200Z',
+    }),
+  });
+}
+function yr(e) {
+  return jsxRuntime.jsx(v, {
+    ...e,
+    children: jsxRuntime.jsx('path', {
+      d: 'M440-80q-33 0-56.5-23.5T360-160v-160H240q-33 0-56.5-23.5T160-400v-280q0-66 47-113t113-47h480v440q0 33-23.5 56.5T720-320H600v160q0 33-23.5 56.5T520-80h-80ZM240-560h480v-200h-40v160h-80v-160h-40v80h-80v-80H320q-33 0-56.5 23.5T240-680v120Zm0 160h480v-80H240v80Zm0 0v-80 80Z',
+    }),
+  });
+}
+function Tr(e) {
+  return jsxRuntime.jsx(v, {
+    ...e,
+    children: jsxRuntime.jsx('path', {
+      d: 'M480-345 240-585l56-56 184 184 184-184 56 56-240 240Z',
+    }),
+  });
+}
+function Sr(e) {
+  return jsxRuntime.jsx(v, {
+    ...e,
+    children: jsxRuntime.jsx('path', {
+      d: 'm296-345-56-56 240-240 240 240-56 56-184-184-184 184Z',
+    }),
+  });
+}
+function wr(e) {
+  return jsxRuntime.jsx(v, {
+    ...e,
+    children: jsxRuntime.jsx('path', {
+      d: 'M120-120v-80h80v80h-80Zm0-160v-80h80v80h-80Zm0-160v-80h80v80h-80Zm0-160v-80h80v80h-80Zm0-160v-80h720v80H120Zm160 640v-80h80v80h-80Zm0-320v-80h80v80h-80Zm160 320v-80h80v80h-80Zm0-160v-80h80v80h-80Zm0-160v-80h80v80h-80Zm0-160v-80h80v80h-80Zm160 480v-80h80v80h-80Zm0-320v-80h80v80h-80Zm160 320v-80h80v80h-80Zm0-160v-80h80v80h-80Zm0-160v-80h80v80h-80Zm0-160v-80h80v80h-80Z',
+    }),
+  });
+}
+function Ir(e) {
+  return jsxRuntime.jsx(v, {
+    ...e,
+    children: jsxRuntime.jsx('path', {
+      d: 'M120-120v-80h720v80H120Zm0-160v-80h80v80h-80Zm0-160v-80h80v80h-80Zm0-160v-80h80v80h-80Zm0-160v-80h80v80h-80Zm160 320v-80h80v80h-80Zm0-320v-80h80v80h-80Zm160 480v-80h80v80h-80Zm0-160v-80h80v80h-80Zm0-160v-80h80v80h-80Zm0-160v-80h80v80h-80Zm160 320v-80h80v80h-80Zm0-320v-80h80v80h-80Zm160 480v-80h80v80h-80Zm0-160v-80h80v80h-80Zm0-160v-80h80v80h-80Zm0-160v-80h80v80h-80Z',
+    }),
+  });
+}
+function Mr(e) {
+  return jsxRuntime.jsx(v, {
+    ...e,
+    children: jsxRuntime.jsx('path', {
+      d: 'M120-120v-720h80v720h-80Zm160 0v-80h80v80h-80Zm0-320v-80h80v80h-80Zm0-320v-80h80v80h-80Zm160 640v-80h80v80h-80Zm0-160v-80h80v80h-80Zm0-160v-80h80v80h-80Zm0-160v-80h80v80h-80Zm0-160v-80h80v80h-80Zm160 640v-80h80v80h-80Zm0-320v-80h80v80h-80Zm0-320v-80h80v80h-80Zm160 640v-80h80v80h-80Zm0-160v-80h80v80h-80Zm0-160v-80h80v80h-80Zm0-160v-80h80v80h-80Zm0-160v-80h80v80h-80Z',
+    }),
+  });
+}
+function Pr(e) {
+  return jsxRuntime.jsx(v, {
+    ...e,
+    children: jsxRuntime.jsx('path', {
+      d: 'M120-120v-80h80v80h-80Zm0-160v-80h80v80h-80Zm0-160v-80h80v80h-80Zm0-160v-80h80v80h-80Zm160 640v-80h80v80h-80Zm0-320v-80h80v80h-80Zm0-320v-80h80v80h-80Zm160 640v-80h80v80h-80Zm0-160v-80h80v80h-80Zm0-160v-80h80v80h-80Zm0-160v-80h80v80h-80Zm0-160v-80h80v80h-80Zm160 640v-80h80v80h-80Zm0-320v-80h80v80h-80Zm0-320v-80h80v80h-80Zm160 640v-720h80v720h-80Z',
+    }),
+  });
+}
+function kr(e) {
+  return jsxRuntime.jsx(v, {
+    ...e,
+    children: jsxRuntime.jsx('path', {
+      d: 'M320-600q17 0 28.5-11.5T360-640q0-17-11.5-28.5T320-680q-17 0-28.5 11.5T280-640q0 17 11.5 28.5T320-600Zm160 0q17 0 28.5-11.5T520-640q0-17-11.5-28.5T480-680q-17 0-28.5 11.5T440-640q0 17 11.5 28.5T480-600Zm160 0q17 0 28.5-11.5T680-640q0-17-11.5-28.5T640-680q-17 0-28.5 11.5T600-640q0 17 11.5 28.5T640-600ZM200-120q-33 0-56.5-23.5T120-200v-560q0-33 23.5-56.5T200-840h560q33 0 56.5 23.5T840-760v560q0 33-23.5 56.5T760-120H200Zm0-80h560v-560H200v560Zm0-560v560-560Z',
+    }),
+  });
+}
+function Rr(e) {
+  return jsxRuntime.jsx(v, {
+    ...e,
+    children: jsxRuntime.jsx('path', {
+      d: 'M160-200v-80h528l-42-42 56-56 138 138-138 138-56-56 42-42H160Zm116-200 164-440h80l164 440h-76l-38-112H392l-40 112h-76Zm138-176h132l-64-182h-4l-64 182Z',
+    }),
+  });
+}
+function Zr(e) {
+  return jsxRuntime.jsx(v, {
+    ...e,
+    children: jsxRuntime.jsx('path', {
+      d: 'M588-132 440-280l148-148 56 58-50 50h96q29 0 49.5-20.5T760-390q0-29-20.5-49.5T690-460H160v-80h530q63 0 106.5 43.5T840-390q0 63-43.5 106.5T690-240h-96l50 50-56 58ZM160-240v-80h200v80H160Zm0-440v-80h640v80H160Z',
+    }),
+  });
+}
+function Lr(e) {
+  return jsxRuntime.jsx(v, {
+    ...e,
+    children: jsxRuntime.jsx('path', {
+      d: 'M480-120 320-280l56-56 64 63v-414l-64 63-56-56 160-160 160 160-56 57-64-64v414l64-63 56 56-160 160Z',
+    }),
+  });
+}
+function Hr(e) {
+  return jsxRuntime.jsx(v, {
+    ...e,
+    children: jsxRuntime.jsx('path', {
+      d: 'M120-120v-720h80v720h-80Zm640 0v-720h80v720h-80ZM280-440v-80h80v80h-80Zm160 0v-80h80v80h-80Zm160 0v-80h80v80h-80Z',
+    }),
+  });
+}
+function Er(e) {
+  return jsxRuntime.jsx(v, {
+    ...e,
+    children: jsxRuntime.jsx('path', {
+      d: 'm370-80-16-128q-13-5-24.5-12T307-235l-119 50L78-375l103-78q-1-7-1-13.5v-27q0-6.5 1-13.5L78-585l110-190 119 50q11-8 23-15t24-12l16-128h220l16 128q13 5 24.5 12t22.5 15l119-50 110 190-103 78q1 7 1 13.5v27q0 6.5-2 13.5l103 78-110 190-118-50q-11 8-23 15t-24 12L590-80H370Zm70-80h79l14-106q31-8 57.5-23.5T639-327l99 41 39-68-86-65q5-14 7-29.5t2-31.5q0-16-2-31.5t-7-29.5l86-65-39-68-99 42q-22-23-48.5-38.5T533-694l-13-106h-79l-14 106q-31 8-57.5 23.5T321-633l-99-41-39 68 86 64q-5 15-7 30t-2 32q0 16 2 31t7 30l-86 65 39 68 99-42q22 23 48.5 38.5T427-266l13 106Zm42-180q58 0 99-41t41-99q0-58-41-99t-99-41q-59 0-99.5 41T342-480q0 58 40.5 99t99.5 41Zm-2-140Z',
+    }),
+  });
+}
+function Ar(e) {
+  return jsxRuntime.jsx(v, {
+    ...e,
+    children: jsxRuntime.jsx('path', {
+      d: 'M80 0v-160h800V0H80Zm160-320h56l312-311-29-29-28-28-311 312v56Zm-80 80v-170l448-447q11-11 25.5-17t30.5-6q16 0 31 6t27 18l55 56q12 11 17.5 26t5.5 31q0 15-5.5 29.5T777-687L330-240H160Zm560-504-56-56 56 56ZM608-631l-29-29-28-28 57 57Z',
+    }),
+  });
+}
+function _r(e) {
+  return jsxRuntime.jsx(v, {
+    ...e,
+    children: jsxRuntime.jsx('path', {
+      d: 'm247-904 57-56 343 343q23 23 23 57t-23 57L457-313q-23 23-57 23t-57-23L153-503q-23-23-23-57t23-57l190-191-96-96Zm153 153L209-560h382L400-751Zm360 471q-33 0-56.5-23.5T680-360q0-21 12.5-45t27.5-45q9-12 19-25t21-25q11 12 21 25t19 25q15 21 27.5 45t12.5 45q0 33-23.5 56.5T760-280ZM80 0v-160h800V0H80Z',
+    }),
+  });
+}
+function qr(e) {
+  return jsxRuntime.jsx(v, {
+    ...e,
+    children: jsxRuntime.jsx('path', {
+      d: 'M160-760v-80h640v80H160Zm280 640v-408L336-424l-56-56 200-200 200 200-56 56-104-104v408h-80Z',
+    }),
+  });
+}
+function Dr(e) {
+  return jsxRuntime.jsx(v, {
+    ...e,
+    children: jsxRuntime.jsx('path', {
+      d: 'M440-80v-168l-64 64-56-56 160-160 160 160-56 56-64-64v168h-80ZM160-440v-80h640v80H160Zm320-120L320-720l56-56 64 64v-168h80v168l64-64 56 56-160 160Z',
+    }),
+  });
+}
+function Nr(e) {
+  return jsxRuntime.jsx(v, {
+    ...e,
+    children: jsxRuntime.jsx('path', {
+      d: 'M160-120v-80h640v80H160Zm320-160L280-480l56-56 104 104v-408h80v408l104-104 56 56-200 200Z',
+    }),
+  });
+}
+function Fr(e) {
+  return jsxRuntime.jsx(v, {
+    ...e,
+    children: jsxRuntime.jsx('path', {
+      d: 'M120-160v-40h720v40H120Zm0-120v-80h720v80H120Zm0-160v-120h720v120H120Zm0-200v-160h720v160H120Z',
+    }),
+  });
+}
+function Br(e) {
+  return jsxRuntime.jsx(v, {
+    ...e,
+    children: jsxRuntime.jsx('path', {
+      d: 'M480-528 296-344l-56-56 240-240 240 240-56 56-184-184Z',
+    }),
+  });
+}
+function Or(e) {
+  return jsxRuntime.jsx(v, {
+    ...e,
+    children: jsxRuntime.jsx('path', {
+      d: 'M480-344 240-584l56-56 184 184 184-184 56 56-240 240Z',
+    }),
+  });
+}
+function zr(e) {
+  return jsxRuntime.jsx(v, {
+    ...e,
+    children: jsxRuntime.jsx('path', {
+      d: 'M560-240 320-480l240-240 56 56-184 184 184 184-56 56Z',
+    }),
+  });
+}
+function Wr(e) {
+  return jsxRuntime.jsx(v, {
+    ...e,
+    children: jsxRuntime.jsx('path', {
+      d: 'M504-480 320-664l56-56 240 240-240 240-56-56 184-184Z',
+    }),
+  });
+}
+function Vr(e) {
+  return jsxRuntime.jsx(v, {
+    ...e,
+    children: jsxRuntime.jsx('path', {
+      d: 'M480-160q-33 0-56.5-23.5T400-240q0-33 23.5-56.5T480-320q33 0 56.5 23.5T560-240q0 33-23.5 56.5T480-160Zm0-240q-33 0-56.5-23.5T400-480q0-33 23.5-56.5T480-560q33 0 56.5 23.5T560-480q0 33-23.5 56.5T480-400Zm0-240q-33 0-56.5-23.5T400-720q0-33 23.5-56.5T480-800q33 0 56.5 23.5T560-720q0 33-23.5 56.5T480-640Z',
+    }),
+  });
+}
+function $r(e) {
+  return jsxRuntime.jsx(v, {
+    ...e,
+    children: jsxRuntime.jsx('path', {
+      d: 'M120-440v-80h160v80H120Zm200 0v-80h160v80H320Zm200 0v-80h160v80H520Zm200 0v-80h120v80H720ZM240-120q-33 0-56.5-23.5T160-200v-120h80v120h480v-120h80v120q0 33-23.5 56.5T720-120H240Zm-80-520v-120q0-33 23.5-56.5T240-840h480q33 0 56.5 23.5T800-760v120h-80v-120H240v120h-80Z',
+    }),
+  });
+}
+function Ur(e) {
+  return jsxRuntime.jsx(v, {
+    ...e,
+    children: jsxRuntime.jsx('path', {
+      d: 'M313-440l224 224-57 56-320-320 320-320 57 56-224 224h487v80H313Z',
+    }),
+  });
+}
+function Gr(e) {
+  return jsxRuntime.jsx(v, {
+    ...e,
+    children: jsxRuntime.jsx('path', {
+      d: 'M382-240 154-468l57-57 171 171 367-367 57 57-424 424Z',
+    }),
+  });
+}
+function Kr(e) {
+  return jsxRuntime.jsx(v, {
+    ...e,
+    children: jsxRuntime.jsx('path', {
+      d: 'm256-200-56-56 224-224-224-224 56-56 224 224 224-224 56 56-224 224 224 224-56 56-224-224-224 224Z',
+    }),
+  });
+}
+function Yr(e) {
+  return jsxRuntime.jsx(v, {
+    ...e,
+    children: jsxRuntime.jsx('path', {
+      d: 'M440-400h80v-120h120v-80H520v-120h-80v120H320v80h120v120ZM80-80v-720q0-33 23.5-56.5T160-880h640q33 0 56.5 23.5T880-800v480q0 33-23.5 56.5T800-240H240L80-80Zm126-240h594v-480H160v525l46-45Zm-46 0v-480 480Z',
+    }),
+  });
+}
+function Xr(e) {
+  return jsxRuntime.jsx(v, {
+    ...e,
+    children: jsxRuntime.jsx('path', {
+      d: 'M240-400h480v-80H240v80Zm0-120h480v-80H240v80Zm0-120h480v-80H240v80ZM80-80v-720q0-33 23.5-56.5T160-880h640q33 0 56.5 23.5T880-800v480q0 33-23.5 56.5T800-240H240L80-80Zm126-240h594v-480H160v525l46-45Zm-46 0v-480 480Z',
+    }),
+  });
+}
+function jr(e) {
+  return jsxRuntime.jsx(v, {
+    ...e,
+    children: jsxRuntime.jsx('path', {
+      d: 'M160-400h280v-80H160v80Zm0-160h440v-80H160v80Zm0-160h440v-80H160v80Zm360 360v-123l221-220q9-9 20-13t22-4q12 0 23 4.5t20 13.5l37 37q8 9 12.5 20t4.5 22q0 11-4 22.5T863-380L643-160H520Zm300-263-37-37 37 37ZM580-220h38l121-122-18-19-19-18-122 121v38Zm141-141-19-18 37 37-18-19Z',
+    }),
+  });
+}
+function Jr(e) {
+  return jsxRuntime.jsx(v, {
+    ...e,
+    children: jsxRuntime.jsx('path', {
+      d: 'M240-400h122l200-200q9-9 13.5-20.5T580-643q0-11-5-21.5T562-684l-36-38q-9-9-20-13.5t-23-4.5q-11 0-22.5 4.5T440-722L240-522v122Zm280-243-37-37 37 37ZM300-460v-38l101-101 20 18 18 20-101 101h-38Zm121-121 18 20-38-38 20 18Zm26 181h273v-80H527l-80 80ZM80-80v-720q0-33 23.5-56.5T160-880h640q33 0 56.5 23.5T880-800v480q0 33-23.5 56.5T800-240H240L80-80Zm126-240h594v-480H160v525l46-45Zm-46 0v-480 480Z',
+    }),
+  });
+}
+function Qr(e) {
+  return jsxRuntime.jsx(v, {
+    ...e,
+    children: jsxRuntime.jsx('path', {
+      d: 'M480-320q75 0 127.5-52.5T660-500q0-75-52.5-127.5T480-680q-75 0-127.5 52.5T300-500q0 75 52.5 127.5T480-320Zm0-72q-45 0-76.5-31.5T372-500q0-45 31.5-76.5T480-608q45 0 76.5 31.5T588-500q0 45-31.5 76.5T480-392Zm0 192q-146 0-266-81.5T40-500q54-137 174-218.5T480-800q146 0 266 81.5T920-500q-54 137-174 218.5T480-200Zm0-300Zm0 220q113 0 207.5-59.5T832-500q-50-101-144.5-160.5T480-720q-113 0-207.5 59.5T128-500q50 101 144.5 160.5T480-280Z',
+    }),
+  });
+}
+function ei(e) {
+  return jsxRuntime.jsx(v, {
+    ...e,
+    children: jsxRuntime.jsx('path', {
+      d: 'M360-360v-200q-66 0-113-47t-47-113q0-66 47-113t113-47h320v80h-80v440h-80v-440h-80v440h-80Zm0-280v-160q-33 0-56.5 23.5T280-720q0 33 23.5 56.5T360-640Zm0-80ZM680-80l-56-56 64-64H120v-80h568l-64-64 56-56 160 160L680-80Z',
+    }),
+  });
+}
+function ti(e) {
+  return jsxRuntime.jsx(v, {
+    ...e,
+    children: jsxRuntime.jsx('path', {
+      d: 'M360-360v-200q-66 0-113-47t-47-113q0-66 47-113t113-47h320v80h-80v440h-80v-440h-80v440h-80Zm-88 160 64 64-56 56-160-160 160-160 56 56-64 64h568v80H272Zm88-440v-160q-33 0-56.5 23.5T280-720q0 33 23.5 56.5T360-640Zm0-80Z',
+    }),
+  });
+}
+var oi = {
+  undo: Sn,
+  redo: wn,
+  print: In,
+  format_bold: Mn,
+  format_italic: Pn,
+  format_underlined: kn,
+  strikethrough_s: Rn,
+  superscript: Zn,
+  subscript: Ln,
+  link: Hn,
+  format_clear: En,
+  format_align_left: An,
+  format_align_center: _n,
+  format_align_right: qn,
+  format_align_justify: Dn,
+  format_line_spacing: Zt,
+  format_list_bulleted: Nn,
+  format_list_numbered: Fn,
+  format_indent_increase: Bn,
+  format_indent_decrease: On,
+  format_color_text: zn,
+  ink_highlighter: Wn,
+  format_color_reset: Vn,
+  arrow_drop_down: $n,
+  table: Un,
+  table_chart: Gn,
+  grid_on: Kn,
+  table_rows: Yn,
+  view_column: Xn,
+  border_all: jn,
+  border_outer: Jn,
+  border_inner: Qn,
+  border_clear: er,
+  add: tr,
+  remove: or,
+  delete: nr,
+  delete_sweep: rr,
+  call_merge: ir,
+  call_split: ar,
+  drag_indicator: lr,
+  image: sr,
+  format_image_left: cr,
+  format_image_right: ur,
+  horizontal_rule: dr,
+  flip_to_back: pr,
+  flip_to_front: mr,
+  open_with: hr,
+  tune: fr,
+  rotate_right: vr,
+  rotate_left: gr,
+  swap_horiz: br,
+  swap_vert: xr,
+  shapes: Cr,
+  format_paint: yr,
+  expand_more: Tr,
+  expand_less: Sr,
+  border_top: wr,
+  border_bottom: Ir,
+  border_left: Mr,
+  border_right: Pr,
+  padding: kr,
+  text_rotation_none: Rr,
+  wrap_text: Zr,
+  height: Lr,
+  fit_width: Hr,
+  settings: Er,
+  border_color: Ar,
+  format_color_fill: _r,
+  vertical_align_top: qr,
+  vertical_align_center: Dr,
+  vertical_align_bottom: Nr,
+  line_weight: Fr,
+  keyboard_arrow_up: Br,
+  keyboard_arrow_down: Or,
+  keyboard_arrow_left: zr,
+  keyboard_arrow_right: Wr,
+  more_vert: Vr,
+  page_break: $r,
+  arrow_back: Ur,
+  check: Gr,
+  close: Kr,
+  add_comment: Yr,
+  comment: Xr,
+  edit_note: jr,
+  rate_review: Jr,
+  visibility: Qr,
+  format_textdirection_l_to_r: ei,
+  format_textdirection_r_to_l: ti,
+};
+function x({ name: e, size: t = 20, className: o = '', style: n }) {
+  let r = oi[e];
+  return r
+    ? jsxRuntime.jsx(r, { size: t, className: o, style: n })
+    : (console.warn(`Icon not found: ${e}`),
+      jsxRuntime.jsx('span', {
+        className: o,
+        style: { fontSize: t, width: t, height: t, ...n },
+        children: e,
+      }));
+}
+function G({ isOpen: e, onClose: t, align: o = 'left' }) {
+  let n = J.useRef(null),
+    r = J.useRef(null),
+    [a, u] = J.useState({ top: 0, left: 0 });
+  (J.useEffect(() => {
+    if (!e || !n.current) return;
+    let c = n.current.getBoundingClientRect();
+    o === 'right'
+      ? requestAnimationFrame(() => {
+          if (r.current) {
+            let d = r.current.getBoundingClientRect();
+            u({ top: c.bottom + 4, left: c.right - d.width });
+          } else u({ top: c.bottom + 4, left: c.left });
+        })
+      : u({ top: c.bottom + 4, left: c.left });
+  }, [e, o]),
+    J.useEffect(() => {
+      if (!e) return;
+      let c = (h) => {
+          let p = h.target;
+          n.current && !n.current.contains(p) && r.current && !r.current.contains(p) && t();
+        },
+        d = (h) => {
+          h.key === 'Escape' && t();
+        },
+        i = () => t();
+      return (
+        document.addEventListener('mousedown', c),
+        document.addEventListener('keydown', d),
+        window.addEventListener('scroll', i, true),
+        () => {
+          (document.removeEventListener('mousedown', c),
+            document.removeEventListener('keydown', d),
+            window.removeEventListener('scroll', i, true));
+        }
+      );
+    }, [e, t]));
+  let m = J.useCallback((c) => {
+      (c.preventDefault(), c.stopPropagation());
+    }, []),
+    s = { position: 'fixed', top: a.top, left: a.left, zIndex: 1e4 };
+  return { containerRef: n, dropdownRef: r, dropdownStyle: s, handleMouseDown: m };
+}
+var ai = [8, 9, 10, 11, 12, 14, 16, 18, 20, 24, 28, 36, 48, 72],
+  li = 1,
+  si = 400;
+function mo(e) {
+  return e / 2;
+}
+function t0(e) {
+  return e * 2;
+}
+function uo(e, t, o) {
+  for (let n of t) if (n > e) return n;
+  return Math.min(e + 1, o);
+}
+function po(e, t, o) {
+  for (let n = t.length - 1; n >= 0; n--) if (t[n] < e) return t[n];
+  return Math.max(e - 1, o);
+}
+function ho({
+  value: e,
+  onChange: t,
+  sizes: o = ai,
+  disabled: n = false,
+  className: r,
+  placeholder: a = '11',
+  minSize: u = li,
+  maxSize: m = si,
+}) {
+  let [s, c] = J.useState(false),
+    [d, i] = J.useState(''),
+    [h, p] = J.useState(false),
+    g = J.useRef(null),
+    b = J.useCallback(() => {
+      (p(false), c(false));
+    }, []),
+    { containerRef: f, dropdownRef: y, dropdownStyle: C } = G({ isOpen: h, onClose: b }),
+    S = e ?? (parseInt(a, 10) || 11),
+    M = e !== void 0 ? e.toString() : a,
+    R = J.useCallback(
+      (w) => {
+        if ((w.preventDefault(), n)) return;
+        let D = po(S, o, u);
+        t?.(D);
+      },
+      [S, o, u, n, t]
+    ),
+    z = J.useCallback(
+      (w) => {
+        if ((w.preventDefault(), n)) return;
+        let D = uo(S, o, m);
+        t?.(D);
+      },
+      [S, o, m, n, t]
+    ),
+    F = J.useCallback(
+      (w) => {
+        (w.preventDefault(),
+          !n &&
+            (c(true),
+            i(M),
+            p(true),
+            requestAnimationFrame(() => {
+              (g.current?.focus(), g.current?.select());
+            })));
+      },
+      [n, M]
+    ),
+    Te = J.useCallback((w) => {
+      i(w.target.value);
+    }, []),
+    le = J.useCallback(() => {
+      c(false);
+      let w = parseFloat(d);
+      if (!isNaN(w) && w >= u && w <= m) {
+        let D = Math.round(w * 2) / 2;
+        t?.(D);
+      }
+    }, [d, u, m, t]),
+    fe = J.useCallback(
+      (w) => {
+        if (w.key === 'Enter') (w.preventDefault(), le(), p(false));
+        else if (w.key === 'Escape') (c(false), p(false));
+        else if (w.key === 'ArrowUp') {
+          w.preventDefault();
+          let D = uo(S, o, m);
+          (i(D.toString()), t?.(D));
+        } else if (w.key === 'ArrowDown') {
+          w.preventDefault();
+          let D = po(S, o, u);
+          (i(D.toString()), t?.(D));
+        }
+      },
+      [le, S, o, m, u, t]
+    ),
+    Z = J.useCallback(
+      (w) => {
+        (t?.(w), p(false), c(false));
+      },
+      [t]
+    ),
+    Y = J.useCallback((w) => {
+      w.target.tagName !== 'INPUT' && w.preventDefault();
+    }, []);
+  return jsxRuntime.jsxs('div', {
+    ref: f,
+    className: k('flex items-center', r),
+    onMouseDown: Y,
+    children: [
+      jsxRuntime.jsx($, {
+        variant: 'ghost',
+        size: 'icon-sm',
+        className: k(
+          'h-7 w-7 text-slate-500 hover:text-slate-900 hover:bg-slate-100/80 rounded-r-none',
+          n && 'opacity-30 cursor-not-allowed'
+        ),
+        onMouseDown: R,
+        disabled: n || S <= u,
+        'aria-label': 'Decrease font size',
+        'data-testid': 'font-size-decrease',
+        children: jsxRuntime.jsx(x, { name: 'remove', size: 18 }),
+      }),
+      jsxRuntime.jsx('div', {
+        className: 'relative',
+        children: s
+          ? jsxRuntime.jsx('input', {
+              ref: g,
+              type: 'text',
+              value: d,
+              onChange: Te,
+              onBlur: le,
+              onKeyDown: fe,
+              className: k(
+                'h-7 w-10 text-center text-sm border border-slate-300 bg-white',
+                'focus:outline-none focus:ring-1 focus:ring-slate-400',
+                'rounded-none'
+              ),
+              'aria-label': 'Font size',
+              'data-testid': 'font-size-input',
+            })
+          : jsxRuntime.jsx('button', {
+              type: 'button',
+              onClick: F,
+              className: k(
+                'h-7 w-10 text-center text-sm border border-slate-200 bg-white',
+                'hover:border-slate-300 hover:bg-slate-50',
+                'focus:outline-none focus:ring-1 focus:ring-slate-400',
+                'rounded-none',
+                n && 'opacity-50 cursor-not-allowed'
+              ),
+              disabled: n,
+              'aria-label': 'Font size',
+              'aria-haspopup': 'listbox',
+              'aria-expanded': h,
+              'data-testid': 'font-size-display',
+              children: M,
+            }),
+      }),
+      h &&
+        jsxRuntime.jsx('div', {
+          ref: y,
+          style: {
+            ...C,
+            backgroundColor: 'white',
+            border: '1px solid #e2e8f0',
+            borderRadius: 6,
+            boxShadow: '0 4px 12px rgba(0, 0, 0, 0.12)',
+            maxHeight: 240,
+            overflowY: 'auto',
+            minWidth: 60,
+          },
+          role: 'listbox',
+          'aria-label': 'Font sizes',
+          children: o.map((w) =>
+            jsxRuntime.jsx(
+              'button',
+              {
+                type: 'button',
+                onClick: () => Z(w),
+                className: k(
+                  'w-full px-3 py-1.5 text-sm text-left',
+                  'hover:bg-slate-100',
+                  w === S && 'bg-slate-100 font-medium'
+                ),
+                role: 'option',
+                'aria-selected': w === S,
+                children: w,
+              },
+              w
+            )
+          ),
+        }),
+      jsxRuntime.jsx($, {
+        variant: 'ghost',
+        size: 'icon-sm',
+        className: k(
+          'h-7 w-7 text-slate-500 hover:text-slate-900 hover:bg-slate-100/80 rounded-l-none',
+          n && 'opacity-30 cursor-not-allowed'
+        ),
+        onMouseDown: z,
+        disabled: n || S >= m,
+        'aria-label': 'Increase font size',
+        'data-testid': 'font-size-increase',
+        children: jsxRuntime.jsx(x, { name: 'add', size: 18 }),
+      }),
+    ],
+  });
+}
+var di = [
+    { name: 'Dark Red', hex: 'C00000' },
+    { name: 'Red', hex: 'FF0000' },
+    { name: 'Orange', hex: 'FFC000' },
+    { name: 'Yellow', hex: 'FFFF00' },
+    { name: 'Light Green', hex: '92D050' },
+    { name: 'Green', hex: '00B050' },
+    { name: 'Light Blue', hex: '00B0F0' },
+    { name: 'Blue', hex: '0070C0' },
+    { name: 'Dark Blue', hex: '002060' },
+    { name: 'Purple', hex: '7030A0' },
+  ],
+  rt = 18,
+  pi = 2,
+  mi = { position: 'relative', display: 'inline-block' },
+  hi = {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '40px',
+    height: '32px',
+    padding: '2px 6px',
+    border: 'none',
+    borderRadius: '4px',
+    backgroundColor: 'transparent',
+    cursor: 'pointer',
+    transition: 'background-color 0.1s',
+    color: 'var(--doc-text-muted)',
+  },
+  fi = {
+    padding: '10px',
+    backgroundColor: '#fff',
+    border: '1px solid #d0d0d0',
+    borderRadius: '6px',
+    boxShadow: '0 4px 16px rgba(0, 0, 0, 0.15)',
+    width: 'auto',
+  },
+  Ht = { fontSize: '11px', color: '#666', marginBottom: '4px', fontWeight: 500 },
+  Et = { height: '1px', backgroundColor: '#e0e0e0', margin: '8px 0' },
+  go = { display: 'grid', gap: `${pi}px` },
+  it = {
+    width: `${rt}px`,
+    height: `${rt}px`,
+    border: '1px solid #c0c0c0',
+    borderRadius: '2px',
+    cursor: 'pointer',
+    padding: 0,
+    transition: 'transform 0.1s, border-color 0.1s',
+  },
+  bo = { ...it, transform: 'scale(1.15)', borderColor: '#333', zIndex: 1 },
+  xo = { ...it, borderWidth: '2px', borderColor: '#0066cc', boxShadow: '0 0 0 1px #0066cc' },
+  vi = {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '8px',
+    width: '100%',
+    padding: '5px 8px',
+    border: '1px solid #d0d0d0',
+    borderRadius: '4px',
+    backgroundColor: '#fff',
+    cursor: 'pointer',
+    fontSize: '12px',
+    color: '#333',
+  },
+  gi = { display: 'flex', alignItems: 'center', gap: '6px' },
+  bi = {
+    width: '70px',
+    height: '24px',
+    padding: '2px 6px',
+    border: '1px solid #ccc',
+    borderRadius: '3px',
+    fontSize: '12px',
+  },
+  xi = {
+    height: '24px',
+    padding: '0 10px',
+    border: '1px solid #ccc',
+    borderRadius: '3px',
+    backgroundColor: '#f5f5f5',
+    fontSize: '12px',
+    cursor: 'pointer',
+  },
+  Ci = { width: '16px', height: '4px', borderRadius: '1px', marginTop: '-2px' };
+function vo(e, t, o) {
+  if (!e) return t === 'text' || t === 'border' ? '#000000' : 'transparent';
+  if (typeof e == 'string') {
+    if (t === 'highlight') {
+      let n = chunk4VUZBV2S_js.b(e);
+      return n || (e === 'none' ? 'transparent' : e.startsWith('#') ? e : `#${e}`);
+    }
+    return e.startsWith('#') ? e : `#${e}`;
+  }
+  return chunk4VUZBV2S_js.a(e, o);
+}
+function yi(e) {
+  let t = e.replace(/^#/, '');
+  if (t.length !== 6) return false;
+  let o = parseInt(t.slice(0, 2), 16),
+    n = parseInt(t.slice(2, 4), 16),
+    r = parseInt(t.slice(4, 6), 16);
+  return (o * 299 + n * 587 + r * 114) / 1e3 > 230;
+}
+function Co(e, t, o) {
+  return e
+    ? (typeof e == 'string'
+        ? e.replace(/^#/, '').toUpperCase()
+        : chunk4VUZBV2S_js.a(e, o).replace(/^#/, '').toUpperCase()) === t.toUpperCase()
+    : false;
+}
+function Ti({ matrix: e, selectedColor: t, theme: o, onSelect: n }) {
+  let [r, a] = J.useState(null);
+  return jsxRuntime.jsx('div', {
+    style: { ...go, gridTemplateColumns: `repeat(10, ${rt}px)` },
+    children: e.flatMap((u, m) =>
+      u.map((s, c) => {
+        let d = `${m}-${c}`,
+          i = r === d,
+          h = Co(t, s.hex, o);
+        return jsxRuntime.jsx(
+          'button',
+          {
+            type: 'button',
+            style: { ...(h ? xo : i ? bo : it), backgroundColor: `#${s.hex}` },
+            title: s.label,
+            'aria-label': s.label,
+            'aria-selected': h,
+            onClick: () => n(s),
+            onMouseDown: (p) => p.preventDefault(),
+            onMouseEnter: () => a(d),
+            onMouseLeave: () => a(null),
+          },
+          d
+        );
+      })
+    ),
+  });
+}
+function Si({ selectedColor: e, theme: t, onSelect: o }) {
+  let [n, r] = J.useState(null);
+  return jsxRuntime.jsx('div', {
+    style: { ...go, gridTemplateColumns: `repeat(10, ${rt}px)` },
+    children: di.map((a, u) => {
+      let m = n === u,
+        s = Co(e, a.hex, t);
+      return jsxRuntime.jsx(
+        'button',
+        {
+          type: 'button',
+          style: { ...(s ? xo : m ? bo : it), backgroundColor: `#${a.hex}` },
+          title: a.name,
+          'aria-label': a.name,
+          'aria-selected': s,
+          onClick: () => o(a.hex),
+          onMouseDown: (c) => c.preventDefault(),
+          onMouseEnter: () => r(u),
+          onMouseLeave: () => r(null),
+        },
+        a.hex
+      );
+    }),
+  });
+}
+function Ee({
+  mode: e,
+  value: t,
+  onChange: o,
+  theme: n,
+  disabled: r = false,
+  className: a,
+  style: u,
+  title: m,
+  icon: s,
+  autoLabel: c,
+}) {
+  let [d, i] = J.useState(false),
+    [h, p] = J.useState(false),
+    [g, b] = J.useState('');
+  J.useEffect(() => {
+    let P = vo(t, e, n).replace(/^#/, '');
+    /^[0-9A-Fa-f]{6}$/.test(P) && b(P.toUpperCase());
+  }, [t, e, n]);
+  let f = J.useCallback(() => i(false), []),
+    { containerRef: y, dropdownRef: C, dropdownStyle: S } = G({ isOpen: d, onClose: f }),
+    M = n?.colorScheme ?? null,
+    R = J.useMemo(() => chunk4VUZBV2S_js.p(M), [M]),
+    z = J.useMemo(() => vo(t, e, n), [t, e, n]),
+    F = J.useCallback(() => {
+      r || i((P) => !P);
+    }, [r]),
+    Te = J.useCallback(
+      (P) => {
+        if (e === 'highlight') o?.(P.hex);
+        else {
+          let X = { themeColor: P.themeSlot, rgb: P.hex };
+          (P.tint && (X.themeTint = P.tint), P.shade && (X.themeShade = P.shade), o?.(X));
+        }
+        i(false);
+      },
+      [e, o]
+    ),
+    le = J.useCallback(
+      (P) => {
+        (o?.(e === 'highlight' ? P : { rgb: P }), i(false));
+      },
+      [e, o]
+    ),
+    fe = J.useCallback(() => {
+      (o?.(e === 'highlight' ? 'none' : { auto: true }), i(false));
+    }, [e, o]),
+    Z = J.useCallback(() => {
+      let P = g.replace(/^#/, '').toUpperCase();
+      /^[0-9A-F]{6}$/i.test(P) && (o?.(e === 'highlight' ? P : { rgb: P }), i(false), b(''));
+    }, [e, g, o]),
+    Y = {
+      ...hi,
+      ...(r
+        ? { cursor: 'default', opacity: 0.38 }
+        : d
+          ? { backgroundColor: 'var(--doc-primary-light)', color: 'var(--doc-primary)' }
+          : h
+            ? { backgroundColor: 'var(--doc-bg-hover)' }
+            : {}),
+    },
+    w = e === 'text' ? 'Font Color' : e === 'highlight' ? 'Text Highlight Color' : 'Border Color',
+    D =
+      s ??
+      (e === 'text' ? 'format_color_text' : e === 'highlight' ? 'ink_highlighter' : 'border_color');
+  return jsxRuntime.jsxs('div', {
+    ref: y,
+    className: `docx-advanced-color-picker ${a || ''}`,
+    style: { ...mi, ...u },
+    children: [
+      jsxRuntime.jsxs('button', {
+        type: 'button',
+        className: 'docx-advanced-color-picker-button',
+        style: Y,
+        onClick: F,
+        onMouseDown: (P) => P.preventDefault(),
+        onMouseEnter: () => p(true),
+        onMouseLeave: () => p(false),
+        disabled: r,
+        title: m || w,
+        'aria-label': m || w,
+        'aria-haspopup': 'true',
+        'aria-expanded': d,
+        children: [
+          jsxRuntime.jsxs('div', {
+            style: { display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 0 },
+            children: [
+              jsxRuntime.jsx(x, { name: D, size: 18 }),
+              jsxRuntime.jsx('div', {
+                style: {
+                  ...Ci,
+                  backgroundColor: z === 'transparent' ? '#fff' : z,
+                  outline: z === 'transparent' || yi(z) ? '1px solid #bbb' : 'none',
+                },
+              }),
+            ],
+          }),
+          jsxRuntime.jsx(x, { name: 'arrow_drop_down', size: 14 }),
+        ],
+      }),
+      d &&
+        jsxRuntime.jsx('div', {
+          ref: C,
+          className: 'docx-advanced-color-picker-dropdown',
+          style: { ...S, ...fi },
+          role: 'dialog',
+          'aria-label': `${w} picker`,
+          onMouseDown: (P) => {
+            P.target.tagName !== 'INPUT' && P.preventDefault();
+          },
+          children: jsxRuntime.jsxs(jsxRuntime.Fragment, {
+            children: [
+              jsxRuntime.jsxs('button', {
+                type: 'button',
+                style: vi,
+                onClick: fe,
+                onMouseDown: (P) => P.preventDefault(),
+                children: [
+                  e === 'highlight'
+                    ? jsxRuntime.jsx('span', {
+                        style: {
+                          display: 'inline-block',
+                          width: '16px',
+                          height: '16px',
+                          border: '1px solid #ccc',
+                          borderRadius: '2px',
+                          position: 'relative',
+                          backgroundColor: '#fff',
+                        },
+                        children: jsxRuntime.jsx('span', {
+                          style: {
+                            position: 'absolute',
+                            top: '50%',
+                            left: '-1px',
+                            right: '-1px',
+                            height: '2px',
+                            backgroundColor: '#ff0000',
+                            transform: 'rotate(-45deg)',
+                          },
+                        }),
+                      })
+                    : jsxRuntime.jsx('span', {
+                        style: {
+                          display: 'inline-block',
+                          width: '16px',
+                          height: '16px',
+                          backgroundColor: '#000',
+                          borderRadius: '2px',
+                        },
+                      }),
+                  c ?? (e === 'highlight' ? 'No Color' : 'Automatic'),
+                ],
+              }),
+              jsxRuntime.jsx('div', { style: Et }),
+              jsxRuntime.jsx('div', { style: Ht, children: 'Theme Colors' }),
+              jsxRuntime.jsx(Ti, { matrix: R, selectedColor: t, theme: n, onSelect: Te }),
+              jsxRuntime.jsx('div', { style: Et }),
+              jsxRuntime.jsx('div', { style: Ht, children: 'Standard Colors' }),
+              jsxRuntime.jsx(Si, { selectedColor: t, theme: n, onSelect: le }),
+              jsxRuntime.jsx('div', { style: Et }),
+              jsxRuntime.jsx('div', { style: Ht, children: 'Custom Color' }),
+              jsxRuntime.jsxs('div', {
+                style: gi,
+                children: [
+                  jsxRuntime.jsx('span', {
+                    style: { fontSize: '12px', color: '#666' },
+                    children: '#',
+                  }),
+                  jsxRuntime.jsx('input', {
+                    type: 'text',
+                    style: bi,
+                    value: g,
+                    onChange: (P) => b(P.target.value.replace(/[^0-9A-Fa-f]/g, '').slice(0, 6)),
+                    onKeyDown: (P) => {
+                      P.key === 'Enter' && Z();
+                    },
+                    onMouseDown: (P) => {
+                      P.stopPropagation();
+                    },
+                    placeholder: 'FF0000',
+                    maxLength: 6,
+                    'aria-label': 'Custom hex color',
+                  }),
+                  jsxRuntime.jsx('button', {
+                    type: 'button',
+                    style: {
+                      ...xi,
+                      opacity: /^[0-9A-Fa-f]{6}$/.test(g) ? 1 : 0.4,
+                      cursor: /^[0-9A-Fa-f]{6}$/.test(g) ? 'pointer' : 'default',
+                    },
+                    onClick: Z,
+                    onMouseDown: (P) => P.preventDefault(),
+                    disabled: !/^[0-9A-Fa-f]{6}$/.test(g),
+                    children: 'Apply',
+                  }),
+                ],
+              }),
+            ],
+          }),
+        }),
+    ],
+  });
+}
+function ee({ content: e, children: t, side: o = 'bottom', delayMs: n = 400 }) {
+  let [r, a] = J__namespace.useState(false),
+    [u, m] = J__namespace.useState({ x: 0, y: 0 }),
+    s = J__namespace.useRef(null),
+    c = J__namespace.useRef(null),
+    d = J__namespace.useCallback(() => {
+      c.current = setTimeout(() => {
+        if (s.current) {
+          let g = s.current.getBoundingClientRect(),
+            b = g.left + g.width / 2,
+            f = o === 'top' ? g.top - 8 : g.bottom + 8;
+          m({ x: b, y: f });
+        }
+        a(true);
+      }, n);
+    }, [n, o]),
+    i = J__namespace.useCallback(() => {
+      (c.current && (clearTimeout(c.current), (c.current = null)), a(false));
+    }, []);
+  J__namespace.useEffect(
+    () => () => {
+      c.current && clearTimeout(c.current);
+    },
+    []
+  );
+  let h = t.props,
+    p = J__namespace.cloneElement(t, {
+      ref: s,
+      onMouseEnter: (g) => {
+        (d(), h.onMouseEnter?.(g));
+      },
+      onMouseLeave: (g) => {
+        (i(), h.onMouseLeave?.(g));
+      },
+    });
+  return jsxRuntime.jsxs(jsxRuntime.Fragment, {
+    children: [
+      p,
+      r &&
+        jsxRuntime.jsx('div', {
+          className:
+            'fixed z-50 px-2 py-1 text-xs font-medium text-white bg-slate-900 rounded-md shadow-lg',
+          style: {
+            left: u.x,
+            top: u.y,
+            transform:
+              o === 'top'
+                ? 'translate(-50%, -100%)'
+                : o === 'bottom'
+                  ? 'translate(-50%, 0)'
+                  : void 0,
+          },
+          children: e,
+        }),
+    ],
+  });
+}
+var Je = 20,
+  At = [
+    {
+      value: 'left',
+      label: 'Align Left',
+      icon: jsxRuntime.jsx(x, { name: 'format_align_left', size: Je }),
+      iconName: 'format_align_left',
+      shortcut: 'Ctrl+L',
+    },
+    {
+      value: 'center',
+      label: 'Center',
+      icon: jsxRuntime.jsx(x, { name: 'format_align_center', size: Je }),
+      iconName: 'format_align_center',
+      shortcut: 'Ctrl+E',
+    },
+    {
+      value: 'right',
+      label: 'Align Right',
+      icon: jsxRuntime.jsx(x, { name: 'format_align_right', size: Je }),
+      iconName: 'format_align_right',
+      shortcut: 'Ctrl+R',
+    },
+    {
+      value: 'both',
+      label: 'Justify',
+      icon: jsxRuntime.jsx(x, { name: 'format_align_justify', size: Je }),
+      iconName: 'format_align_justify',
+      shortcut: 'Ctrl+J',
+    },
+  ];
+function So({ value: e = 'left', onChange: t, disabled: o = false }) {
+  let [n, r] = J.useState(false),
+    a = J.useCallback(() => r(false), []),
+    {
+      containerRef: u,
+      dropdownRef: m,
+      dropdownStyle: s,
+      handleMouseDown: c,
+    } = G({ isOpen: n, onClose: a }),
+    d = J.useCallback(
+      (p) => {
+        (o || t?.(p), r(false));
+      },
+      [o, t]
+    ),
+    i = At.find((p) => p.value === e) || At[0],
+    h = jsxRuntime.jsxs($, {
+      variant: 'ghost',
+      size: 'icon-sm',
+      className: k(
+        'text-slate-500 hover:text-slate-900 hover:bg-slate-100/80',
+        n && 'bg-slate-100',
+        o && 'opacity-30 cursor-not-allowed'
+      ),
+      onMouseDown: c,
+      onClick: () => !o && r((p) => !p),
+      disabled: o,
+      'aria-label': `${i.label}${i.shortcut ? ` (${i.shortcut})` : ''}`,
+      'aria-expanded': n,
+      'aria-haspopup': 'true',
+      'data-testid': 'toolbar-alignment',
+      children: [
+        jsxRuntime.jsx(x, { name: i.iconName, size: Je }),
+        jsxRuntime.jsx(x, { name: 'arrow_drop_down', size: 14, className: '-ml-1' }),
+      ],
+    });
+  return jsxRuntime.jsxs('div', {
+    ref: u,
+    style: { position: 'relative', display: 'inline-block' },
+    children: [
+      n
+        ? h
+        : jsxRuntime.jsx(ee, {
+            content: `${i.label}${i.shortcut ? ` (${i.shortcut})` : ''}`,
+            children: h,
+          }),
+      n &&
+        !o &&
+        jsxRuntime.jsx('div', {
+          ref: m,
+          style: {
+            ...s,
+            backgroundColor: 'white',
+            border: '1px solid var(--doc-border)',
+            borderRadius: 8,
+            boxShadow: '0 4px 16px rgba(0, 0, 0, 0.12)',
+            padding: 6,
+          },
+          onMouseDown: (p) => p.stopPropagation(),
+          children: jsxRuntime.jsx('div', {
+            style: { display: 'flex', gap: 2 },
+            children: At.map((p) => {
+              let g = e === p.value;
+              return jsxRuntime.jsx(
+                'button',
+                {
+                  type: 'button',
+                  title: `${p.label}${p.shortcut ? ` (${p.shortcut})` : ''}`,
+                  'data-testid': `alignment-${p.value}`,
+                  style: {
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    width: 32,
+                    height: 32,
+                    border: '1px solid transparent',
+                    borderRadius: 4,
+                    backgroundColor: g ? 'var(--doc-primary-light)' : 'transparent',
+                    cursor: 'pointer',
+                    color: g ? 'var(--doc-primary)' : 'var(--doc-text)',
+                  },
+                  onMouseDown: (b) => b.preventDefault(),
+                  onMouseEnter: (b) => {
+                    g || (b.currentTarget.style.backgroundColor = 'var(--doc-bg-hover)');
+                  },
+                  onMouseLeave: (b) => {
+                    b.currentTarget.style.backgroundColor = g
+                      ? 'var(--doc-primary-light)'
+                      : 'transparent';
+                  },
+                  onClick: () => d(p.value),
+                  children: jsxRuntime.jsx(x, { name: p.iconName, size: 18 }),
+                },
+                p.value
+              );
+            }),
+          }),
+        }),
+    ],
+  });
+}
+var Li = { display: 'inline-flex', alignItems: 'center', gap: '4px' },
+  wo = { display: 'inline-flex', alignItems: 'center', gap: '4px' },
+  ct = {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '32px',
+    height: '32px',
+    padding: '4px',
+    border: 'none',
+    borderRadius: '4px',
+    backgroundColor: 'transparent',
+    cursor: 'pointer',
+    transition: 'background-color 0.1s',
+    color: 'var(--doc-text-muted)',
+  },
+  Hi = { ...ct, backgroundColor: 'var(--doc-bg-hover)' },
+  Ei = { ...ct, backgroundColor: 'var(--doc-primary-light)', color: 'var(--doc-primary)' },
+  Ai = { ...ct, cursor: 'default', opacity: 0.38 },
+  _i = { width: '28px', height: '28px', padding: '2px' },
+  qi = { width: '1px', height: '20px', backgroundColor: 'var(--doc-border)', margin: '0 6px' },
+  at = 20;
+function lt({
+  active: e = false,
+  disabled: t = false,
+  title: o,
+  onClick: n,
+  children: r,
+  className: a,
+  style: u,
+}) {
+  let [m, s] = J.useState(false),
+    c = { ...(t ? Ai : e ? Ei : m ? Hi : ct), ...u },
+    d = (i) => {
+      i.preventDefault();
+    };
+  return jsxRuntime.jsx('button', {
+    type: 'button',
+    className: `docx-list-button ${e ? 'docx-list-button-active' : ''} ${t ? 'docx-list-button-disabled' : ''} ${a || ''}`,
+    style: c,
+    onMouseDown: d,
+    onClick: t ? void 0 : n,
+    onMouseEnter: () => s(true),
+    onMouseLeave: () => s(false),
+    disabled: t,
+    title: o,
+    'aria-label': o,
+    'aria-pressed': e,
+    role: 'button',
+    children: r,
+  });
+}
+function Io({
+  listState: e,
+  onBulletList: t,
+  onNumberedList: o,
+  onIndent: n,
+  onOutdent: r,
+  disabled: a = false,
+  className: u,
+  style: m,
+  showIndentButtons: s = true,
+  compact: c = false,
+  hasIndent: d = false,
+}) {
+  let i = J.useCallback(() => (c ? { ..._i } : {}), [c]),
+    h = e?.type === 'bullet',
+    p = e?.type === 'numbered',
+    b = ((e?.isInList || h || p) && (e?.level ?? 0) > 0) || d;
+  return jsxRuntime.jsxs('div', {
+    className: `docx-list-buttons ${u || ''}`,
+    style: { ...Li, ...m },
+    role: 'group',
+    'aria-label': 'List formatting',
+    children: [
+      jsxRuntime.jsxs('div', {
+        style: wo,
+        role: 'group',
+        'aria-label': 'List type',
+        children: [
+          jsxRuntime.jsx(lt, {
+            active: h,
+            disabled: a,
+            title: 'Bullet List',
+            onClick: t,
+            style: i(),
+            children: jsxRuntime.jsx(x, { name: 'format_list_bulleted', size: at }),
+          }),
+          jsxRuntime.jsx(lt, {
+            active: p,
+            disabled: a,
+            title: 'Numbered List',
+            onClick: o,
+            style: i(),
+            children: jsxRuntime.jsx(x, { name: 'format_list_numbered', size: at }),
+          }),
+        ],
+      }),
+      s &&
+        jsxRuntime.jsxs(jsxRuntime.Fragment, {
+          children: [
+            jsxRuntime.jsx('div', { style: qi, role: 'separator' }),
+            jsxRuntime.jsxs('div', {
+              style: wo,
+              role: 'group',
+              'aria-label': 'List indentation',
+              children: [
+                jsxRuntime.jsx(lt, {
+                  active: false,
+                  disabled: a || !b,
+                  title: 'Decrease Indent',
+                  onClick: r,
+                  style: i(),
+                  children: jsxRuntime.jsx(x, { name: 'format_indent_decrease', size: at }),
+                }),
+                jsxRuntime.jsx(lt, {
+                  active: false,
+                  disabled: a,
+                  title: 'Increase Indent',
+                  onClick: n,
+                  style: i(),
+                  children: jsxRuntime.jsx(x, { name: 'format_indent_increase', size: at }),
+                }),
+              ],
+            }),
+          ],
+        }),
+    ],
+  });
+}
+function Mo() {
+  return { type: 'none', level: 0, isInList: false };
+}
+var Ni = [
+  { label: 'Single', value: 1, twipsValue: 240 },
+  { label: '1.15', value: 1.15, twipsValue: 276 },
+  { label: '1.5', value: 1.5, twipsValue: 360 },
+  { label: 'Double', value: 2, twipsValue: 480 },
+];
+function ko({ value: e, onChange: t, options: o = Ni, disabled: n = false, className: r }) {
+  let a = J__namespace.useMemo(
+      () => (e === void 0 ? o[0] : o.find((m) => m.twipsValue === e) || o[0]),
+      [e, o]
+    ),
+    u = J__namespace.useCallback(
+      (m) => {
+        let s = parseInt(m, 10);
+        isNaN(s) || t?.(s);
+      },
+      [t]
+    );
+  return jsxRuntime.jsxs(Se, {
+    value: a.twipsValue.toString(),
+    onValueChange: u,
+    disabled: n,
+    children: [
+      jsxRuntime.jsx(we, {
+        className: k('h-8 text-sm gap-0.5 px-2', r),
+        style: { width: 'auto' },
+        title: `Line spacing: ${a.label}`,
+        children: jsxRuntime.jsx(Zt, { className: 'h-5 w-5 shrink-0' }),
+      }),
+      jsxRuntime.jsxs(Ie, {
+        children: [
+          o.map((m) =>
+            jsxRuntime.jsx(de, { value: m.twipsValue.toString(), children: m.label }, m.twipsValue)
+          ),
+          jsxRuntime.jsx(Ye, {}),
+          jsxRuntime.jsx(De, { children: jsxRuntime.jsx(Ne, { children: 'Paragraph spacing' }) }),
+        ],
+      }),
+    ],
+  });
+}
+var Ro = [
+    {
+      styleId: 'Normal',
+      name: 'Normal text',
+      type: 'paragraph',
+      isDefault: true,
+      priority: 0,
+      qFormat: true,
+      fontSize: 22,
+    },
+    {
+      styleId: 'Title',
+      name: 'Title',
+      type: 'paragraph',
+      priority: 1,
+      qFormat: true,
+      fontSize: 52,
+      bold: true,
+    },
+    {
+      styleId: 'Subtitle',
+      name: 'Subtitle',
+      type: 'paragraph',
+      priority: 2,
+      qFormat: true,
+      fontSize: 30,
+      color: '666666',
+    },
+    {
+      styleId: 'Heading1',
+      name: 'Heading 1',
+      type: 'paragraph',
+      priority: 3,
+      qFormat: true,
+      fontSize: 40,
+      bold: true,
+    },
+    {
+      styleId: 'Heading2',
+      name: 'Heading 2',
+      type: 'paragraph',
+      priority: 4,
+      qFormat: true,
+      fontSize: 32,
+      bold: true,
+    },
+    {
+      styleId: 'Heading3',
+      name: 'Heading 3',
+      type: 'paragraph',
+      priority: 5,
+      qFormat: true,
+      fontSize: 28,
+      bold: true,
+    },
+  ],
+  Fi = '#4a6c8c',
+  Bi = {
+    Title: 26,
+    Subtitle: 18,
+    Heading1: 24,
+    Heading2: 18,
+    Heading3: 16,
+    Heading4: 14,
+    Heading5: 13,
+    Heading6: 13,
+    Normal: 14,
+  };
+function Oi(e) {
+  let t = {},
+    o = Bi[e.styleId];
+  if (o) t.fontSize = `${o}px`;
+  else {
+    let n = e.fontSize ? e.fontSize / 2 : 11,
+      r = Math.min(Math.max(n, 11), 20);
+    t.fontSize = `${r}px`;
+  }
+  return (
+    (t.lineHeight = '1.3'),
+    e.bold && (t.fontWeight = 'bold'),
+    e.italic && (t.fontStyle = 'italic'),
+    e.color ? (t.color = `#${e.color}`) : e.styleId.startsWith('Heading') && (t.color = Fi),
+    t
+  );
+}
+function Zo({
+  value: e,
+  onChange: t,
+  styles: o,
+  disabled: n = false,
+  className: r,
+  width: a = 120,
+}) {
+  let u = J__namespace.useMemo(
+      () =>
+        !o || o.length === 0
+          ? Ro
+          : o
+              .filter((i) => i.type === 'paragraph')
+              .filter((i) => (i.qFormat ? true : !(i.hidden || i.semiHidden)))
+              .map((i) => {
+                let h = Ro.find((p) => p.styleId === i.styleId);
+                return {
+                  styleId: i.styleId,
+                  name: i.name || i.styleId,
+                  type: i.type,
+                  isDefault: i.default,
+                  qFormat: i.qFormat,
+                  priority: i.uiPriority ?? 99,
+                  fontSize: i.rPr?.fontSize ?? h?.fontSize,
+                  bold: i.rPr?.bold ?? h?.bold,
+                  italic: i.rPr?.italic ?? h?.italic,
+                  color: i.rPr?.color?.rgb ?? h?.color,
+                };
+              })
+              .sort((i, h) => (i.priority ?? 99) - (h.priority ?? 99)),
+      [o]
+    ),
+    m = J__namespace.useCallback(
+      (d) => {
+        t?.(d);
+      },
+      [t]
+    ),
+    s = e || 'Normal',
+    c = u.find((d) => d.styleId === s)?.name || s;
+  return jsxRuntime.jsxs(Se, {
+    value: s,
+    onValueChange: m,
+    disabled: n,
+    children: [
+      jsxRuntime.jsx(we, {
+        className: k('h-8 text-sm', r),
+        style: { width: typeof a == 'number' ? `${a}px` : a },
+        'aria-label': 'Select paragraph style',
+        children: jsxRuntime.jsx('span', { className: 'truncate', children: c }),
+      }),
+      jsxRuntime.jsx(Ie, {
+        className: 'min-w-[260px] max-h-[400px]',
+        children: u.map((d) =>
+          jsxRuntime.jsx(
+            de,
+            {
+              value: d.styleId,
+              className: 'py-2.5 px-3',
+              children: jsxRuntime.jsx('span', { style: Oi(d), children: d.name }),
+            },
+            d.styleId
+          )
+        ),
+      }),
+    ],
+  });
+}
+var Wi = [
+  { value: 0.5, label: '50%' },
+  { value: 0.75, label: '75%' },
+  { value: 1, label: '100%' },
+  { value: 1.25, label: '125%' },
+  { value: 1.5, label: '150%' },
+  { value: 2, label: '200%' },
+];
+function Lo({
+  value: e = 1,
+  onChange: t,
+  levels: o = Wi,
+  disabled: n = false,
+  className: r,
+  compact: a = false,
+}) {
+  let u = J__namespace.useMemo(() => {
+      let s = o.find((c) => Math.abs(c.value - e) < 0.001);
+      return s ? s.label : `${Math.round(e * 100)}%`;
+    }, [o, e]),
+    m = J__namespace.useCallback(
+      (s) => {
+        let c = parseFloat(s);
+        isNaN(c) || t?.(c);
+      },
+      [t]
+    );
+  return jsxRuntime.jsxs(Se, {
+    value: e.toString(),
+    onValueChange: m,
+    disabled: n,
+    children: [
+      jsxRuntime.jsx(we, {
+        className: k(a ? 'h-7 min-w-[55px] text-xs' : 'h-8 min-w-[70px] text-sm', r),
+        'aria-label': `Zoom: ${u}`,
+        children: jsxRuntime.jsx(nt, { placeholder: '100%', children: u }),
+      }),
+      jsxRuntime.jsx(Ie, {
+        children: o.map((s) =>
+          jsxRuntime.jsx(de, { value: s.value.toString(), children: s.label }, s.value)
+        ),
+      }),
+    ],
+  });
+}
+var Ui = [
+  { action: 'borderAll', icon: 'border_all', label: 'All borders' },
+  { action: 'borderOutside', icon: 'border_outer', label: 'Outside borders' },
+  { action: 'borderInside', icon: 'border_inner', label: 'Inside borders' },
+  { action: 'borderTop', icon: 'border_top', label: 'Top border' },
+  { action: 'borderBottom', icon: 'border_bottom', label: 'Bottom border' },
+  { action: 'borderLeft', icon: 'border_left', label: 'Left border' },
+  { action: 'borderRight', icon: 'border_right', label: 'Right border' },
+  { action: 'borderNone', icon: 'border_clear', label: 'No borders' },
+];
+function Ao({ onAction: e, disabled: t = false }) {
+  let [o, n] = J.useState(false),
+    r = J.useCallback(() => n(false), []),
+    {
+      containerRef: a,
+      dropdownRef: u,
+      dropdownStyle: m,
+      handleMouseDown: s,
+    } = G({ isOpen: o, onClose: r }),
+    c = J.useCallback(
+      (i) => {
+        (e(i), n(false));
+      },
+      [e]
+    ),
+    d = jsxRuntime.jsxs($, {
+      variant: 'ghost',
+      size: 'icon-sm',
+      className: k(
+        'text-slate-500 hover:text-slate-900 hover:bg-slate-100/80',
+        o && 'bg-slate-100',
+        t && 'opacity-30 cursor-not-allowed'
+      ),
+      onMouseDown: s,
+      onClick: () => !t && n((i) => !i),
+      disabled: t,
+      'aria-label': 'Border style',
+      'aria-expanded': o,
+      'aria-haspopup': 'true',
+      'data-testid': 'toolbar-table-borders',
+      children: [
+        jsxRuntime.jsx(x, { name: 'border_all', size: 20 }),
+        jsxRuntime.jsx(x, { name: 'arrow_drop_down', size: 14, className: '-ml-1' }),
+      ],
+    });
+  return jsxRuntime.jsxs('div', {
+    ref: a,
+    style: { position: 'relative', display: 'inline-block' },
+    children: [
+      o ? d : jsxRuntime.jsx(ee, { content: 'Borders', children: d }),
+      o &&
+        !t &&
+        jsxRuntime.jsx('div', {
+          ref: u,
+          style: {
+            ...m,
+            backgroundColor: 'white',
+            border: '1px solid var(--doc-border)',
+            borderRadius: 8,
+            boxShadow: '0 4px 16px rgba(0, 0, 0, 0.12)',
+            padding: 6,
+          },
+          onMouseDown: (i) => i.stopPropagation(),
+          children: jsxRuntime.jsx('div', {
+            style: { display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 2 },
+            children: Ui.map(({ action: i, icon: h, label: p }) =>
+              jsxRuntime.jsx(
+                'button',
+                {
+                  type: 'button',
+                  title: p,
+                  style: {
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    width: 32,
+                    height: 32,
+                    border: '1px solid transparent',
+                    borderRadius: 4,
+                    backgroundColor: 'transparent',
+                    cursor: 'pointer',
+                    color: 'var(--doc-text)',
+                  },
+                  onMouseDown: (g) => g.preventDefault(),
+                  onMouseEnter: (g) => {
+                    g.currentTarget.style.backgroundColor = 'var(--doc-bg-hover)';
+                  },
+                  onMouseLeave: (g) => {
+                    g.currentTarget.style.backgroundColor = 'transparent';
+                  },
+                  onClick: () => c(i),
+                  children: jsxRuntime.jsx(x, { name: h, size: 18 }),
+                },
+                typeof i == 'string' ? i : i.type
+              )
+            ),
+          }),
+        }),
+    ],
+  });
+}
+function _o({ onAction: e, disabled: t = false, theme: o, value: n }) {
+  let r = J.useCallback(
+    (a) => {
+      typeof a == 'string'
+        ? e({ type: 'borderColor', color: a.replace(/^#/, '') })
+        : a.rgb
+          ? e({ type: 'borderColor', color: a.rgb.replace(/^#/, '') })
+          : a.auto && e({ type: 'borderColor', color: '000000' });
+    },
+    [e]
+  );
+  return jsxRuntime.jsx(Ee, {
+    mode: 'border',
+    value: n,
+    onChange: r,
+    theme: o,
+    disabled: t,
+    title: 'Border Color',
+  });
+}
+var Xi = [
+  { size: 4, label: '0.5 pt', thickness: 0.5 },
+  { size: 8, label: '1 pt', thickness: 1 },
+  { size: 12, label: '1.5 pt', thickness: 1.5 },
+  { size: 16, label: '2 pt', thickness: 2 },
+  { size: 24, label: '3 pt', thickness: 3 },
+];
+function Do({ onAction: e, disabled: t = false }) {
+  let [o, n] = J.useState(false),
+    r = J.useCallback(() => n(false), []),
+    {
+      containerRef: a,
+      dropdownRef: u,
+      dropdownStyle: m,
+      handleMouseDown: s,
+    } = G({ isOpen: o, onClose: r }),
+    c = J.useCallback(
+      (i) => {
+        (e({ type: 'borderWidth', size: i }), n(false));
+      },
+      [e]
+    ),
+    d = jsxRuntime.jsxs($, {
+      variant: 'ghost',
+      size: 'icon-sm',
+      className: k(
+        'text-slate-500 hover:text-slate-900 hover:bg-slate-100/80',
+        o && 'bg-slate-100',
+        t && 'opacity-30 cursor-not-allowed'
+      ),
+      onMouseDown: s,
+      onClick: () => !t && n((i) => !i),
+      disabled: t,
+      'aria-label': 'Border width',
+      'aria-expanded': o,
+      'aria-haspopup': 'true',
+      'data-testid': 'toolbar-table-border-width',
+      children: [
+        jsxRuntime.jsx(x, { name: 'line_weight', size: 20 }),
+        jsxRuntime.jsx(x, { name: 'arrow_drop_down', size: 14, className: '-ml-1' }),
+      ],
+    });
+  return jsxRuntime.jsxs('div', {
+    ref: a,
+    style: { position: 'relative', display: 'inline-block' },
+    children: [
+      o ? d : jsxRuntime.jsx(ee, { content: 'Border width', children: d }),
+      o &&
+        !t &&
+        jsxRuntime.jsx('div', {
+          ref: u,
+          style: {
+            ...m,
+            backgroundColor: 'white',
+            border: '1px solid var(--doc-border)',
+            borderRadius: 8,
+            boxShadow: '0 4px 16px rgba(0, 0, 0, 0.12)',
+            padding: '4px 0',
+            minWidth: 120,
+          },
+          onMouseDown: (i) => i.stopPropagation(),
+          children: Xi.map(({ size: i, label: h, thickness: p }) =>
+            jsxRuntime.jsxs(
+              'button',
+              {
+                type: 'button',
+                style: {
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 10,
+                  padding: '6px 12px',
+                  width: '100%',
+                  border: 'none',
+                  backgroundColor: 'transparent',
+                  cursor: 'pointer',
+                  fontSize: 12,
+                  color: 'var(--doc-text)',
+                },
+                onMouseDown: (g) => g.preventDefault(),
+                onMouseEnter: (g) => {
+                  g.currentTarget.style.backgroundColor = 'var(--doc-bg-hover)';
+                },
+                onMouseLeave: (g) => {
+                  g.currentTarget.style.backgroundColor = 'transparent';
+                },
+                onClick: () => c(i),
+                children: [
+                  jsxRuntime.jsx('div', {
+                    style: {
+                      width: 50,
+                      height: Math.max(p, 1),
+                      backgroundColor: '#000',
+                      borderRadius: p > 2 ? 1 : 0,
+                    },
+                  }),
+                  jsxRuntime.jsx('span', { children: h }),
+                ],
+              },
+              i
+            )
+          ),
+        }),
+    ],
+  });
+}
+function No({ onAction: e, disabled: t = false, theme: o, value: n }) {
+  let r = J.useCallback(
+    (a) => {
+      typeof a == 'string' &&
+        e(
+          a === 'none'
+            ? { type: 'cellFillColor', color: null }
+            : { type: 'cellFillColor', color: a.replace(/^#/, '') }
+        );
+    },
+    [e]
+  );
+  return jsxRuntime.jsx(Ee, {
+    mode: 'highlight',
+    value: n,
+    onChange: r,
+    theme: o,
+    disabled: t,
+    title: 'Cell Fill Color',
+    icon: 'format_color_fill',
+    autoLabel: 'No fill',
+  });
+}
+var Qi = {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 10,
+    padding: '7px 14px',
+    fontSize: 13,
+    color: 'var(--doc-text)',
+    cursor: 'pointer',
+    border: 'none',
+    backgroundColor: 'transparent',
+    width: '100%',
+    textAlign: 'left',
+  },
+  We = { height: 1, backgroundColor: 'var(--doc-border)', margin: '4px 0' },
+  Oo = { padding: '6px 14px 2px', fontSize: 11, color: 'var(--doc-text-muted)', fontWeight: 500 };
+function zo({ onAction: e, disabled: t = false, tableContext: o }) {
+  let [n, r] = J.useState(false),
+    [a, u] = J.useState(null),
+    m = J.useCallback(() => r(false), []),
+    {
+      containerRef: s,
+      dropdownRef: c,
+      dropdownStyle: d,
+      handleMouseDown: i,
+    } = G({ isOpen: n, onClose: m, align: 'right' }),
+    h = o?.table?.attrs?.justification ?? 'left',
+    p = J.useCallback(
+      (f) => {
+        (e(f), r(false));
+      },
+      [e]
+    ),
+    g = (f, y, C, S, M) => {
+      let R = t || M?.itemDisabled;
+      return jsxRuntime.jsxs(
+        'button',
+        {
+          type: 'button',
+          role: 'menuitem',
+          style: {
+            ...Qi,
+            backgroundColor: a === f && !R ? 'var(--doc-bg-hover)' : 'transparent',
+            color: R ? 'var(--doc-text-muted)' : M?.danger ? 'var(--doc-error)' : 'var(--doc-text)',
+            cursor: R ? 'not-allowed' : 'pointer',
+          },
+          onClick: () => !R && p(S),
+          onMouseEnter: () => u(f),
+          onMouseLeave: () => u(null),
+          disabled: R,
+          children: [
+            jsxRuntime.jsx(x, {
+              name: y,
+              size: 16,
+              className: M?.danger && !R ? 'text-red-600' : '',
+            }),
+            jsxRuntime.jsx('span', { style: { flex: 1 }, children: C }),
+          ],
+        },
+        f
+      );
+    },
+    b = jsxRuntime.jsx($, {
+      variant: 'ghost',
+      size: 'icon-sm',
+      className: k(
+        'text-slate-500 hover:text-slate-900 hover:bg-slate-100/80',
+        n && 'bg-slate-100',
+        t && 'opacity-30 cursor-not-allowed'
+      ),
+      onMouseDown: i,
+      onClick: () => !t && r((f) => !f),
+      disabled: t,
+      'aria-label': 'More table options',
+      'aria-expanded': n,
+      'aria-haspopup': 'menu',
+      'data-testid': 'toolbar-table-more',
+      children: jsxRuntime.jsx(x, { name: 'more_vert', size: 20 }),
+    });
+  return jsxRuntime.jsxs('div', {
+    ref: s,
+    style: { position: 'relative', display: 'inline-block' },
+    children: [
+      n ? b : jsxRuntime.jsx(ee, { content: 'More table options', children: b }),
+      n &&
+        !t &&
+        jsxRuntime.jsxs('div', {
+          ref: c,
+          style: {
+            ...d,
+            backgroundColor: 'white',
+            border: '1px solid var(--doc-border)',
+            borderRadius: 8,
+            boxShadow: '0 4px 16px rgba(0, 0, 0, 0.12)',
+            padding: '4px 0',
+            minWidth: 200,
+            maxHeight: '70vh',
+            overflowY: 'auto',
+          },
+          role: 'menu',
+          onMouseDown: (f) => f.stopPropagation(),
+          children: [
+            g('addRowAbove', 'add', 'Insert row above', 'addRowAbove'),
+            g('addRowBelow', 'add', 'Insert row below', 'addRowBelow'),
+            g('addColumnLeft', 'add', 'Insert column left', 'addColumnLeft'),
+            g('addColumnRight', 'add', 'Insert column right', 'addColumnRight'),
+            jsxRuntime.jsx('div', { style: We, role: 'separator' }),
+            g('mergeCells', 'call_merge', 'Merge cells', 'mergeCells', {
+              itemDisabled: !o?.hasMultiCellSelection,
+            }),
+            g('splitCell', 'call_split', 'Split cell', 'splitCell', {
+              itemDisabled: !o?.canSplitCell,
+            }),
+            jsxRuntime.jsx('div', { style: We, role: 'separator' }),
+            g('deleteRow', 'delete', 'Delete row', 'deleteRow', {
+              danger: true,
+              itemDisabled: (o?.rowCount ?? 0) <= 1,
+            }),
+            g('deleteColumn', 'delete', 'Delete column', 'deleteColumn', {
+              danger: true,
+              itemDisabled: (o?.columnCount ?? 0) <= 1,
+            }),
+            g('deleteTable', 'delete', 'Delete table', 'deleteTable', { danger: true }),
+            jsxRuntime.jsx('div', { style: We, role: 'separator' }),
+            jsxRuntime.jsx('div', { style: Oo, children: 'Vertical alignment' }),
+            jsxRuntime.jsx('div', {
+              style: { display: 'flex', gap: 4, padding: '4px 14px' },
+              children: ['top', 'center', 'bottom'].map((f) => {
+                let y = {
+                  top: 'vertical_align_top',
+                  center: 'vertical_align_center',
+                  bottom: 'vertical_align_bottom',
+                };
+                return jsxRuntime.jsx(
+                  'button',
+                  {
+                    type: 'button',
+                    title: { top: 'Top', center: 'Middle', bottom: 'Bottom' }[f],
+                    style: {
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      width: 32,
+                      height: 28,
+                      border: '1px solid var(--doc-border)',
+                      borderRadius: 4,
+                      backgroundColor: 'transparent',
+                      cursor: 'pointer',
+                    },
+                    onMouseDown: (S) => S.preventDefault(),
+                    onMouseEnter: (S) => {
+                      S.currentTarget.style.backgroundColor = 'var(--doc-bg-hover)';
+                    },
+                    onMouseLeave: (S) => {
+                      S.currentTarget.style.backgroundColor = 'transparent';
+                    },
+                    onClick: () => p({ type: 'cellVerticalAlign', align: f }),
+                    children: jsxRuntime.jsx(x, { name: y[f], size: 16 }),
+                  },
+                  f
+                );
+              }),
+            }),
+            jsxRuntime.jsx('div', { style: We, role: 'separator' }),
+            jsxRuntime.jsx('div', { style: Oo, children: 'Table alignment' }),
+            jsxRuntime.jsx('div', {
+              style: { display: 'flex', gap: 4, padding: '4px 14px' },
+              children: ['left', 'center', 'right'].map((f) => {
+                let y = {
+                    left: 'format_align_left',
+                    center: 'format_align_center',
+                    right: 'format_align_right',
+                  },
+                  C = h === f;
+                return jsxRuntime.jsx(
+                  'button',
+                  {
+                    type: 'button',
+                    title: `Align table ${f}`,
+                    style: {
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      width: 32,
+                      height: 28,
+                      border: '1px solid var(--doc-border)',
+                      borderRadius: 4,
+                      backgroundColor: C ? 'var(--doc-primary-light)' : 'transparent',
+                      borderColor: C ? 'var(--doc-primary)' : 'var(--doc-border)',
+                      color: C ? 'var(--doc-primary)' : 'var(--doc-text)',
+                      cursor: 'pointer',
+                    },
+                    onMouseDown: (S) => S.preventDefault(),
+                    onClick: () => p({ type: 'tableProperties', props: { justification: f } }),
+                    children: jsxRuntime.jsx(x, { name: y[f], size: 16 }),
+                  },
+                  f
+                );
+              }),
+            }),
+            jsxRuntime.jsx('div', { style: We, role: 'separator' }),
+            g('headerRow', 'table_rows', 'Toggle header row', { type: 'toggleHeaderRow' }),
+            g('distribute', 'view_column', 'Distribute columns evenly', {
+              type: 'distributeColumns',
+            }),
+            g('autoFit', 'fit_width', 'Auto-fit to contents', { type: 'autoFitContents' }),
+            g('noWrap', 'wrap_text', 'Toggle no-wrap', { type: 'toggleNoWrap' }),
+            jsxRuntime.jsx('div', { style: We, role: 'separator' }),
+            g('properties', 'settings', 'Table properties...', { type: 'openTableProperties' }),
+          ],
+        }),
+    ],
+  });
+}
+var ta = 20;
+function ht({
+  options: e,
+  activeValue: t,
+  triggerIcon: o,
+  tooltipContent: n,
+  onSelect: r,
+  disabled: a = false,
+  ariaLabel: u,
+  testId: m,
+}) {
+  let [s, c] = J.useState(false),
+    d = J.useCallback(() => c(false), []),
+    {
+      containerRef: i,
+      dropdownRef: h,
+      dropdownStyle: p,
+      handleMouseDown: g,
+    } = G({ isOpen: s, onClose: d }),
+    b = J.useCallback(
+      (y) => {
+        (a || r(y), c(false));
+      },
+      [a, r]
+    ),
+    f = jsxRuntime.jsxs($, {
+      variant: 'ghost',
+      size: 'icon-sm',
+      className: k(
+        'text-slate-500 hover:text-slate-900 hover:bg-slate-100/80',
+        s && 'bg-slate-100',
+        a && 'opacity-30 cursor-not-allowed'
+      ),
+      onMouseDown: g,
+      onClick: () => !a && c((y) => !y),
+      disabled: a,
+      'aria-label': u ?? n,
+      'aria-expanded': s,
+      'aria-haspopup': 'true',
+      'data-testid': m,
+      children: [
+        jsxRuntime.jsx(x, { name: o, size: ta }),
+        jsxRuntime.jsx(x, { name: 'arrow_drop_down', size: 14, className: '-ml-1' }),
+      ],
+    });
+  return jsxRuntime.jsxs('div', {
+    ref: i,
+    style: { position: 'relative', display: 'inline-block' },
+    children: [
+      s ? f : jsxRuntime.jsx(ee, { content: n, children: f }),
+      s &&
+        !a &&
+        jsxRuntime.jsx('div', {
+          ref: h,
+          style: {
+            ...p,
+            backgroundColor: 'white',
+            border: '1px solid var(--doc-border)',
+            borderRadius: 8,
+            boxShadow: '0 4px 16px rgba(0, 0, 0, 0.12)',
+            padding: 6,
+          },
+          onMouseDown: (y) => y.stopPropagation(),
+          children: jsxRuntime.jsx('div', {
+            style: { display: 'flex', gap: 2 },
+            children: e.map((y) => {
+              let C = t === y.value;
+              return jsxRuntime.jsx(
+                'button',
+                {
+                  type: 'button',
+                  title: y.label,
+                  'data-testid': m ? `${m}-${y.value}` : void 0,
+                  style: {
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    width: 32,
+                    height: 32,
+                    border: '1px solid transparent',
+                    borderRadius: 4,
+                    backgroundColor: C ? 'var(--doc-primary-light)' : 'transparent',
+                    cursor: 'pointer',
+                    color: C ? 'var(--doc-primary)' : 'var(--doc-text)',
+                  },
+                  onMouseDown: (S) => S.preventDefault(),
+                  onMouseEnter: (S) => {
+                    C || (S.currentTarget.style.backgroundColor = 'var(--doc-bg-hover)');
+                  },
+                  onMouseLeave: (S) => {
+                    S.currentTarget.style.backgroundColor = C
+                      ? 'var(--doc-primary-light)'
+                      : 'transparent';
+                  },
+                  onClick: () => b(y.value),
+                  children: jsxRuntime.jsx(x, { name: y.iconName, size: 18 }),
+                },
+                y.value
+              );
+            }),
+          }),
+        }),
+    ],
+  });
+}
+var Dt = [
+  { value: 'inline', label: 'Inline with text', iconName: 'format_image_left' },
+  { value: 'wrapRight', label: 'Float left (wrap right)', iconName: 'format_image_right' },
+  { value: 'wrapLeft', label: 'Float right (wrap left)', iconName: 'format_image_left' },
+  { value: 'topAndBottom', label: 'Top and bottom', iconName: 'horizontal_rule' },
+  { value: 'behind', label: 'Behind text', iconName: 'flip_to_back' },
+  { value: 'inFront', label: 'In front of text', iconName: 'flip_to_front' },
+];
+function oa(e) {
+  return e.displayMode === 'float' && e.cssFloat === 'left'
+    ? 'wrapRight'
+    : e.displayMode === 'float' && e.cssFloat === 'right'
+      ? 'wrapLeft'
+      : e.wrapType;
+}
+function $o({ imageContext: e, onChange: t, disabled: o = false }) {
+  let n = oa(e),
+    r = Dt.find((a) => a.value === n) || Dt[0];
+  return jsxRuntime.jsx(ht, {
+    options: Dt,
+    activeValue: n,
+    triggerIcon: r.iconName,
+    tooltipContent: `Wrap: ${r.label}`,
+    onSelect: t,
+    disabled: o,
+    testId: 'toolbar-image-wrap',
+  });
+}
+var ra = [
+  { value: 'rotateCW', label: 'Rotate clockwise', iconName: 'rotate_right' },
+  { value: 'rotateCCW', label: 'Rotate counter-clockwise', iconName: 'rotate_left' },
+  { value: 'flipH', label: 'Flip horizontal', iconName: 'swap_horiz' },
+  { value: 'flipV', label: 'Flip vertical', iconName: 'swap_vert' },
+];
+function Uo({ onTransform: e, disabled: t = false }) {
+  return jsxRuntime.jsx(ht, {
+    options: ra,
+    triggerIcon: 'rotate_right',
+    tooltipContent: 'Transform',
+    onSelect: e,
+    disabled: t,
+    testId: 'toolbar-image-transform',
+  });
+}
+function la(e) {
+  return 'type' in e && e.type === 'separator';
+}
+var Yo = {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 2,
+    padding: '2px 8px',
+    border: 'none',
+    background: 'transparent',
+    borderRadius: 4,
+    cursor: 'pointer',
+    fontSize: 13,
+    fontWeight: 400,
+    color: 'var(--doc-text, #374151)',
+    whiteSpace: 'nowrap',
+    height: 28,
+    lineHeight: '28px',
+  },
+  sa = { ...Yo, background: 'var(--doc-hover, #f3f4f6)' },
+  Xo = {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 8,
+    padding: '6px 12px',
+    border: 'none',
+    background: 'transparent',
+    cursor: 'pointer',
+    fontSize: 13,
+    color: 'var(--doc-text, #374151)',
+    width: '100%',
+    textAlign: 'left',
+    whiteSpace: 'nowrap',
+  },
+  ca = { ...Xo, opacity: 0.4, cursor: 'default' },
+  ua = { height: 1, backgroundColor: 'var(--doc-border, #e5e7eb)', margin: '4px 0' },
+  da = { marginLeft: 'auto', fontSize: 12, color: 'var(--doc-text-muted, #9ca3af)' },
+  pa = {
+    position: 'absolute',
+    left: '100%',
+    top: -4,
+    marginLeft: 2,
+    backgroundColor: 'white',
+    border: '1px solid var(--doc-border, #d1d5db)',
+    borderRadius: 6,
+    boxShadow: '0 4px 12px rgba(0, 0, 0, 0.12)',
+    padding: 8,
+    zIndex: 1001,
+  };
+function vt({ label: e, items: t, disabled: o }) {
+  let [n, r] = J.useState(false),
+    [a, u] = J.useState(null),
+    m = J.useRef(null),
+    s = J.useRef(null),
+    [c, d] = J.useState({ top: 0, left: 0 }),
+    i = J.useCallback(() => {
+      (r(false), u(null));
+    }, []);
+  (J.useEffect(() => {
+    if (!n || !m.current) return;
+    let p = m.current.getBoundingClientRect();
+    d({ top: p.bottom + 2, left: p.left });
+  }, [n]),
+    J.useEffect(() => {
+      if (!n) return;
+      function p(f) {
+        let y = f.target;
+        m.current && !m.current.contains(y) && s.current && !s.current.contains(y) && i();
+      }
+      function g(f) {
+        f.key === 'Escape' && i();
+      }
+      function b() {
+        i();
+      }
+      return (
+        document.addEventListener('mousedown', p),
+        document.addEventListener('keydown', g),
+        window.addEventListener('scroll', b, true),
+        () => {
+          (document.removeEventListener('mousedown', p),
+            document.removeEventListener('keydown', g),
+            window.removeEventListener('scroll', b, true));
+        }
+      );
+    }, [n, i]));
+  let h = (p) => {
+    p.disabled || p.submenuContent || (p.onClick && (p.onClick(), i()));
+  };
+  return jsxRuntime.jsxs('div', {
+    style: { position: 'relative' },
+    children: [
+      jsxRuntime.jsxs('button', {
+        ref: m,
+        type: 'button',
+        onClick: () => !o && r(!n),
+        onMouseDown: (p) => p.preventDefault(),
+        disabled: o,
+        style: n ? sa : Yo,
+        children: [e, jsxRuntime.jsx(x, { name: 'arrow_drop_down', size: 16 })],
+      }),
+      n &&
+        jsxRuntime.jsx('div', {
+          ref: s,
+          style: {
+            position: 'fixed',
+            top: c.top,
+            left: c.left,
+            backgroundColor: 'white',
+            border: '1px solid var(--doc-border, #d1d5db)',
+            borderRadius: 6,
+            boxShadow: '0 4px 12px rgba(0, 0, 0, 0.12)',
+            padding: '4px 0',
+            zIndex: 1e4,
+            minWidth: 200,
+          },
+          onMouseDown: (p) => p.preventDefault(),
+          children: t.map((p, g) => {
+            if (la(p)) return jsxRuntime.jsx('div', { style: ua }, `sep-${g}`);
+            let b = p;
+            if (b.customContent)
+              return jsxRuntime.jsx(
+                'div',
+                { onMouseDown: (C) => C.preventDefault(), children: b.customContent },
+                b.label
+              );
+            let f = !!b.submenuContent,
+              y = a === b.label;
+            return jsxRuntime.jsxs(
+              'div',
+              {
+                style: { position: 'relative' },
+                onMouseEnter: () => f && u(b.label),
+                onMouseLeave: () => f && u(null),
+                children: [
+                  jsxRuntime.jsxs('button', {
+                    type: 'button',
+                    style: b.disabled ? ca : Xo,
+                    onClick: () => h(b),
+                    onMouseDown: (C) => C.preventDefault(),
+                    onMouseOver: (C) => {
+                      b.disabled ||
+                        (C.currentTarget.style.backgroundColor = 'var(--doc-hover, #f3f4f6)');
+                    },
+                    onMouseOut: (C) => {
+                      C.currentTarget.style.backgroundColor = 'transparent';
+                    },
+                    disabled: b.disabled,
+                    children: [
+                      b.icon && jsxRuntime.jsx(x, { name: b.icon, size: 18 }),
+                      jsxRuntime.jsx('span', { children: b.label }),
+                      b.shortcut && jsxRuntime.jsx('span', { style: da, children: b.shortcut }),
+                      f &&
+                        jsxRuntime.jsx('span', {
+                          style: { marginLeft: 'auto' },
+                          children: jsxRuntime.jsx(x, { name: 'keyboard_arrow_right', size: 16 }),
+                        }),
+                    ],
+                  }),
+                  f &&
+                    y &&
+                    jsxRuntime.jsx('div', {
+                      style: pa,
+                      onMouseDown: (C) => C.preventDefault(),
+                      children: b.submenuContent(i),
+                    }),
+                ],
+              },
+              b.label
+            );
+          }),
+        }),
+    ],
+  });
+}
+var Bt = 18,
+  ha = 2,
+  Jo = {
+    width: Bt,
+    height: Bt,
+    backgroundColor: 'white',
+    border: '1px solid var(--doc-border, #d1d5db)',
+    borderRadius: 2,
+    transition: 'background-color 0.1s, border-color 0.1s',
+    cursor: 'pointer',
+  },
+  fa = {
+    ...Jo,
+    backgroundColor: 'var(--doc-primary, #3b82f6)',
+    border: '1px solid var(--doc-primary, #3b82f6)',
+  },
+  va = {
+    marginTop: 6,
+    fontSize: 11,
+    fontWeight: 500,
+    color: 'var(--doc-text, #374151)',
+    textAlign: 'center',
+  };
+function Qo({ onInsert: e, gridRows: t = 6, gridColumns: o = 6 }) {
+  let [n, r] = J.useState(0),
+    [a, u] = J.useState(0),
+    m = J.useCallback(() => {
+      n > 0 && a > 0 && e(n, a);
+    }, [n, a, e]),
+    s = [];
+  for (let d = 1; d <= t; d++)
+    for (let i = 1; i <= o; i++) {
+      let h = d <= n && i <= a;
+      s.push(
+        jsxRuntime.jsx(
+          'div',
+          {
+            style: h ? fa : Jo,
+            onMouseEnter: () => {
+              (r(d), u(i));
+            },
+            onClick: m,
+            role: 'gridcell',
+            'aria-selected': h,
+          },
+          `${d}-${i}`
+        )
+      );
+    }
+  let c = n > 0 && a > 0 ? `${a} \xD7 ${n}` : 'Select size';
+  return jsxRuntime.jsxs('div', {
+    children: [
+      jsxRuntime.jsx('div', {
+        style: { display: 'grid', gap: ha, gridTemplateColumns: `repeat(${o}, ${Bt}px)` },
+        onMouseLeave: () => {
+          (r(0), u(0));
+        },
+        role: 'grid',
+        'aria-label': 'Table size selector',
+        children: s,
+      }),
+      jsxRuntime.jsx('div', { style: va, children: c }),
+    ],
+  });
+}
+var ba = {
+  FFFF00: 'yellow',
+  '00FF00': 'green',
+  '00FFFF': 'cyan',
+  FF00FF: 'magenta',
+  '0000FF': 'blue',
+  FF0000: 'red',
+  '00008B': 'darkBlue',
+  '008080': 'darkCyan',
+  '008000': 'darkGreen',
+  800080: 'darkMagenta',
+  '8B0000': 'darkRed',
+  808e3: 'darkYellow',
+  808080: 'darkGray',
+  C0C0C0: 'lightGray',
+  '000000': 'black',
+  FFFFFF: 'white',
+};
+function Ns(e) {
+  let t = e.replace(/^#/, '').toUpperCase();
+  return ba[t] || null;
+}
+function te({
+  active: e = false,
+  disabled: t = false,
+  title: o,
+  onClick: n,
+  children: r,
+  className: a,
+  ariaLabel: u,
+}) {
+  let m =
+      u?.toLowerCase().replace(/\s+/g, '-') ||
+      o
+        ?.toLowerCase()
+        .replace(/\s+/g, '-')
+        .replace(/\([^)]*\)/g, '')
+        .trim(),
+    s = (d) => {
+      d.preventDefault();
+    },
+    c = jsxRuntime.jsx($, {
+      variant: 'ghost',
+      size: 'icon-sm',
+      className: k(
+        'text-slate-500 hover:text-slate-900 hover:bg-slate-100/80',
+        e && 'bg-slate-900 text-white hover:bg-slate-800 hover:text-white',
+        t && 'opacity-30 cursor-not-allowed',
+        a
+      ),
+      onMouseDown: s,
+      onClick: t ? void 0 : n,
+      disabled: t,
+      'aria-pressed': e,
+      'aria-label': u || o,
+      'data-testid': m ? `toolbar-${m}` : void 0,
+      children: r,
+    });
+  return o ? jsxRuntime.jsx(ee, { content: o, children: c }) : c;
+}
+function re({ label: e, children: t, className: o }) {
+  return jsxRuntime.jsx('div', {
+    className: k(
+      'flex items-center gap-px px-1.5 border-r border-slate-200/50 last:border-r-0 first:pl-0',
+      o
+    ),
+    role: 'group',
+    'aria-label': e,
+    children: t,
+  });
+}
+function Ks() {
+  return jsxRuntime.jsx('div', { className: 'w-px h-6 bg-slate-200 mx-1.5', role: 'separator' });
+}
+function Ys({
+  children: e,
+  className: t,
+  style: o,
+  disabled: n = false,
+  onFormat: r,
+  onPrint: a,
+  showPrintButton: u = true,
+  onPageSetup: m,
+  onInsertImage: s,
+  onInsertTable: c,
+  showTableInsert: d = true,
+  onInsertPageBreak: i,
+  onInsertTOC: h,
+  onRefocusEditor: p,
+  ...g
+}) {
+  let b = J.useRef(null),
+    f = J.useCallback(
+      (M) => {
+        !n && r && r(M);
+      },
+      [n, r]
+    ),
+    y = J.useCallback(
+      (M, R) => {
+        !n && c && (c(M, R), requestAnimationFrame(() => p?.()));
+      },
+      [n, c, p]
+    ),
+    C = J.useCallback((M) => {
+      let R = M.target;
+      R.tagName === 'INPUT' ||
+        R.tagName === 'TEXTAREA' ||
+        R.tagName === 'SELECT' ||
+        R.tagName === 'OPTION' ||
+        M.preventDefault();
+    }, []),
+    S = J.useCallback(
+      (M) => {
+        let R = M.target,
+          z = document.activeElement;
+        R.tagName === 'SELECT' ||
+          R.tagName === 'OPTION' ||
+          z?.tagName === 'SELECT' ||
+          requestAnimationFrame(() => {
+            p?.();
+          });
+      },
+      [p]
+    );
+  return jsxRuntime.jsxs('div', {
+    ref: b,
+    className: k(
+      'flex items-center px-1 py-1 bg-white border-b border-slate-100 min-h-[36px] overflow-x-auto',
+      t
+    ),
+    style: o,
+    role: 'toolbar',
+    'aria-label': 'Formatting toolbar',
+    'data-testid': 'toolbar',
+    onMouseDown: C,
+    onMouseUp: S,
+    children: [
+      (u && a) || m
+        ? jsxRuntime.jsx(vt, {
+            label: 'File',
+            disabled: n,
+            items: [
+              ...(u && a
+                ? [{ icon: 'print', label: 'Print', shortcut: 'Ctrl+P', onClick: a }]
+                : []),
+              ...(m ? [{ icon: 'settings', label: 'Page setup', onClick: m }] : []),
+            ],
+          })
+        : null,
+      jsxRuntime.jsx(vt, {
+        label: 'Format',
+        disabled: n,
+        items: [
+          {
+            icon: 'format_textdirection_l_to_r',
+            label: 'Left-to-right text',
+            onClick: () => f('setLtr'),
+          },
+          {
+            icon: 'format_textdirection_r_to_l',
+            label: 'Right-to-left text',
+            onClick: () => f('setRtl'),
+          },
+        ],
+      }),
+      jsxRuntime.jsx(vt, {
+        label: 'Insert',
+        disabled: n,
+        items: [
+          ...(s ? [{ icon: 'image', label: 'Image', onClick: s }] : []),
+          ...(d && c
+            ? [
+                {
+                  icon: 'grid_on',
+                  label: 'Table',
+                  submenuContent: (M) =>
+                    jsxRuntime.jsx(Qo, {
+                      onInsert: (R, z) => {
+                        (y(R, z), M());
+                      },
+                    }),
+                },
+              ]
+            : []),
+          ...(s || (d && c) ? [{ type: 'separator' }] : []),
+          { icon: 'page_break', label: 'Page break', onClick: i, disabled: !i },
+          { icon: 'format_list_numbered', label: 'Table of contents', onClick: h, disabled: !h },
+        ],
+      }),
+      jsxRuntime.jsx(en, {
+        ...g,
+        disabled: n,
+        onFormat: r,
+        onRefocusEditor: p,
+        onInsertTable: c,
+        showTableInsert: d,
+        onInsertImage: s,
+        onInsertPageBreak: i,
+        onInsertTOC: h,
+        onPrint: a,
+        showPrintButton: u,
+        onPageSetup: m,
+        inline: true,
+        children: e,
+      }),
+    ],
+  });
+}
+var Ot = J.createContext(null);
+function Qs() {
+  let e = J.useContext(Ot);
+  if (!e) throw new Error('useEditorToolbar must be used within an <EditorToolbar> component');
+  return e;
+}
+var ie = 18;
+function Ma(e) {
+  let t = J__namespace.default.useContext(Ot);
+  return t ? { ...t, ...Pa(e) } : e;
+}
+function Pa(e) {
+  let t = {};
+  for (let o of Object.keys(e)) e[o] !== void 0 && (t[o] = e[o]);
+  return t;
+}
+function en(e) {
+  let t = Ma(e),
+    {
+      currentFormatting: o = {},
+      onFormat: n,
+      onUndo: r,
+      onRedo: a,
+      canUndo: u = false,
+      canRedo: m = false,
+      disabled: s = false,
+      className: c,
+      style: d,
+      enableShortcuts: i = true,
+      editorRef: h,
+      children: p,
+      showFontPicker: g = true,
+      showFontSizePicker: b = true,
+      showTextColorPicker: f = true,
+      showHighlightColorPicker: y = true,
+      showAlignmentButtons: C = true,
+      showListButtons: S = true,
+      showLineSpacingPicker: M = true,
+      showStylePicker: R = true,
+      documentStyles: z,
+      theme: F,
+      showZoomControl: Te = true,
+      zoom: le,
+      onZoomChange: fe,
+      onRefocusEditor: Z,
+      imageContext: Y,
+      onImageWrapType: w,
+      onImageTransform: D,
+      onOpenImageProperties: P,
+      tableContext: X,
+      onTableAction: Pe,
+      inline: se = false,
+    } = t,
+    et = J.useRef(null),
+    B = J.useCallback(
+      (H) => {
+        !s && n && n(H);
+      },
+      [s, n]
+    ),
+    It = J.useCallback(() => {
+      !s && u && r && r();
+    }, [s, u, r]),
+    Mt = J.useCallback(() => {
+      !s && m && a && a();
+    }, [s, m, a]),
+    Pt = J.useCallback(
+      (H) => {
+        !s && n && (n({ type: 'fontFamily', value: H }), requestAnimationFrame(() => Z?.()));
+      },
+      [s, n, Z]
+    ),
+    kt = J.useCallback(
+      (H) => {
+        !s && n && (n({ type: 'fontSize', value: H }), requestAnimationFrame(() => Z?.()));
+      },
+      [s, n, Z]
+    ),
+    ke = J.useCallback(
+      (H) => {
+        !s && n && (n({ type: 'textColor', value: H }), requestAnimationFrame(() => Z?.()));
+      },
+      [s, n, Z]
+    ),
+    Ue = J.useCallback(
+      (H) => {
+        !s &&
+          n &&
+          (n({ type: 'highlightColor', value: typeof H == 'string' ? H : '' }),
+          requestAnimationFrame(() => Z?.()));
+      },
+      [s, n, Z]
+    ),
+    ce = J.useCallback(
+      (H) => {
+        !s && n && n({ type: 'alignment', value: H });
+      },
+      [s, n]
+    ),
+    Rt = J.useCallback(() => {
+      !s && n && n('bulletList');
+    }, [s, n]),
+    _ = J.useCallback(() => {
+      !s && n && n('numberedList');
+    }, [s, n]),
+    Re = J.useCallback(() => {
+      !s && n && n('indent');
+    }, [s, n]),
+    tt = J.useCallback(() => {
+      !s && n && n('outdent');
+    }, [s, n]),
+    Ze = J.useCallback(
+      (H) => {
+        !s && n && (n({ type: 'lineSpacing', value: H }), requestAnimationFrame(() => Z?.()));
+      },
+      [s, n, Z]
+    ),
+    ue = J.useCallback(
+      (H) => {
+        !s && n && (n({ type: 'applyStyle', value: H }), requestAnimationFrame(() => Z?.()));
+      },
+      [s, n, Z]
+    ),
+    W = J.useCallback(
+      (H) => {
+        !s && Pe && (Pe(H), requestAnimationFrame(() => Z?.()));
+      },
+      [s, Pe, Z]
+    );
+  J.useEffect(() => {
+    if (!i) return;
+    let H = (A) => {
+      let Ge = A.target,
+        Jt = h?.current,
+        mn = et.current,
+        hn = Jt?.contains(Ge),
+        fn = mn?.contains(Ge);
+      if (!hn && !fn) return;
+      if ((A.ctrlKey || A.metaKey) && !A.altKey)
+        switch (A.key.toLowerCase()) {
+          case 'b':
+            (A.preventDefault(), B('bold'));
+            break;
+          case 'i':
+            (A.preventDefault(), B('italic'));
+            break;
+          case 'u':
+            (A.preventDefault(), B('underline'));
+            break;
+          case '=':
+            A.shiftKey
+              ? (A.preventDefault(), B('superscript'))
+              : (A.preventDefault(), B('subscript'));
+            break;
+          case 'l':
+            (A.preventDefault(), ce('left'));
+            break;
+          case 'e':
+            (A.preventDefault(), ce('center'));
+            break;
+          case 'r':
+            (A.preventDefault(), ce('right'));
+            break;
+          case 'j':
+            (A.preventDefault(), ce('both'));
+            break;
+          case 'k':
+            (A.preventDefault(), B('insertLink'));
+            break;
+        }
+    };
+    return (
+      document.addEventListener('keydown', H),
+      () => {
+        document.removeEventListener('keydown', H);
+      }
+    );
+  }, [i, B, ce, h]);
+  let oe = J.useCallback((H) => {
+      let A = H.target;
+      A.tagName === 'INPUT' ||
+        A.tagName === 'TEXTAREA' ||
+        A.tagName === 'SELECT' ||
+        A.tagName === 'OPTION' ||
+        H.preventDefault();
+    }, []),
+    Le = J.useCallback(
+      (H) => {
+        let A = H.target,
+          Ge = document.activeElement;
+        A.tagName === 'SELECT' ||
+          A.tagName === 'OPTION' ||
+          Ge?.tagName === 'SELECT' ||
+          requestAnimationFrame(() => {
+            Z?.();
+          });
+      },
+      [Z]
+    );
+  return jsxRuntime.jsxs('div', {
+    ref: et,
+    className: k(
+      !se &&
+        'flex items-center px-2 py-1 bg-[#f1f5f9] rounded-full min-h-[36px] overflow-x-auto mx-2 mb-1',
+      c
+    ),
+    style: se ? { display: 'contents', ...d } : d,
+    role: se ? void 0 : 'toolbar',
+    'aria-label': se ? void 0 : 'Formatting toolbar',
+    'data-testid': se ? void 0 : 'formatting-bar',
+    onMouseDown: se ? void 0 : oe,
+    onMouseUp: se ? void 0 : Le,
+    children: [
+      jsxRuntime.jsxs(re, {
+        label: 'History',
+        children: [
+          jsxRuntime.jsx(te, {
+            onClick: It,
+            disabled: s || !u,
+            title: 'Undo (Ctrl+Z)',
+            ariaLabel: 'Undo',
+            children: jsxRuntime.jsx(x, { name: 'undo', size: ie }),
+          }),
+          jsxRuntime.jsx(te, {
+            onClick: Mt,
+            disabled: s || !m,
+            title: 'Redo (Ctrl+Y)',
+            ariaLabel: 'Redo',
+            children: jsxRuntime.jsx(x, { name: 'redo', size: ie }),
+          }),
+        ],
+      }),
+      Te &&
+        jsxRuntime.jsx(re, {
+          label: 'Zoom',
+          children: jsxRuntime.jsx(Lo, {
+            value: le,
+            onChange: fe,
+            minZoom: 0.5,
+            maxZoom: 2,
+            disabled: s,
+            compact: true,
+            showButtons: false,
+          }),
+        }),
+      R &&
+        jsxRuntime.jsx(re, {
+          label: 'Styles',
+          children: jsxRuntime.jsx(Zo, {
+            value: o.styleId || 'Normal',
+            onChange: ue,
+            styles: z,
+            theme: F,
+            disabled: s,
+            width: 120,
+          }),
+        }),
+      (g || b) &&
+        jsxRuntime.jsxs(re, {
+          label: 'Font',
+          children: [
+            g &&
+              jsxRuntime.jsx(no, {
+                value: o.fontFamily || 'Arial',
+                onChange: Pt,
+                disabled: s,
+                width: 60,
+                placeholder: 'Arial',
+              }),
+            b &&
+              jsxRuntime.jsx(ho, {
+                value: o.fontSize !== void 0 ? mo(o.fontSize) : 11,
+                onChange: kt,
+                disabled: s,
+                width: 42,
+                placeholder: '11',
+              }),
+          ],
+        }),
+      jsxRuntime.jsxs(re, {
+        label: 'Text formatting',
+        children: [
+          jsxRuntime.jsx(te, {
+            onClick: () => B('bold'),
+            active: o.bold,
+            disabled: s,
+            title: 'Bold (Ctrl+B)',
+            ariaLabel: 'Bold',
+            children: jsxRuntime.jsx(x, { name: 'format_bold', size: ie }),
+          }),
+          jsxRuntime.jsx(te, {
+            onClick: () => B('italic'),
+            active: o.italic,
+            disabled: s,
+            title: 'Italic (Ctrl+I)',
+            ariaLabel: 'Italic',
+            children: jsxRuntime.jsx(x, { name: 'format_italic', size: ie }),
+          }),
+          jsxRuntime.jsx(te, {
+            onClick: () => B('underline'),
+            active: o.underline,
+            disabled: s,
+            title: 'Underline (Ctrl+U)',
+            ariaLabel: 'Underline',
+            children: jsxRuntime.jsx(x, { name: 'format_underlined', size: ie }),
+          }),
+          jsxRuntime.jsx(te, {
+            onClick: () => B('strikethrough'),
+            active: o.strike,
+            disabled: s,
+            title: 'Strikethrough',
+            ariaLabel: 'Strikethrough',
+            children: jsxRuntime.jsx(x, { name: 'strikethrough_s', size: ie }),
+          }),
+          f &&
+            jsxRuntime.jsx(Ee, {
+              mode: 'text',
+              value: o.color?.replace(/^#/, ''),
+              onChange: ke,
+              theme: F,
+              disabled: s,
+              title: 'Font Color',
+            }),
+          y &&
+            jsxRuntime.jsx(Ee, {
+              mode: 'highlight',
+              value: o.highlight,
+              onChange: Ue,
+              theme: F,
+              disabled: s,
+              title: 'Text Highlight Color',
+            }),
+          jsxRuntime.jsx(te, {
+            onClick: () => B('insertLink'),
+            disabled: s,
+            title: 'Insert link (Ctrl+K)',
+            ariaLabel: 'Insert link',
+            children: jsxRuntime.jsx(x, { name: 'link', size: ie }),
+          }),
+        ],
+      }),
+      jsxRuntime.jsxs(re, {
+        label: 'Script',
+        children: [
+          jsxRuntime.jsx(te, {
+            onClick: () => B('superscript'),
+            active: o.superscript,
+            disabled: s,
+            title: 'Superscript (Ctrl+Shift+=)',
+            ariaLabel: 'Superscript',
+            children: jsxRuntime.jsx(x, { name: 'superscript', size: ie }),
+          }),
+          jsxRuntime.jsx(te, {
+            onClick: () => B('subscript'),
+            active: o.subscript,
+            disabled: s,
+            title: 'Subscript (Ctrl+=)',
+            ariaLabel: 'Subscript',
+            children: jsxRuntime.jsx(x, { name: 'subscript', size: ie }),
+          }),
+        ],
+      }),
+      C &&
+        jsxRuntime.jsx(re, {
+          label: 'Alignment',
+          children: jsxRuntime.jsx(So, { value: o.alignment || 'left', onChange: ce, disabled: s }),
+        }),
+      (S || M) &&
+        jsxRuntime.jsxs(re, {
+          label: 'List formatting',
+          children: [
+            S &&
+              jsxRuntime.jsx(Io, {
+                listState: o.listState || Mo(),
+                onBulletList: Rt,
+                onNumberedList: _,
+                onIndent: Re,
+                onOutdent: tt,
+                disabled: s,
+                showIndentButtons: true,
+                compact: true,
+                hasIndent: (o.indentLeft ?? 0) > 0,
+              }),
+            M && jsxRuntime.jsx(ko, { value: o.lineSpacing, onChange: Ze, disabled: s }),
+          ],
+        }),
+      Y &&
+        w &&
+        jsxRuntime.jsxs(re, {
+          label: 'Image',
+          children: [
+            jsxRuntime.jsx($o, { imageContext: Y, onChange: w, disabled: s }),
+            D && jsxRuntime.jsx(Uo, { onTransform: D, disabled: s }),
+            P &&
+              jsxRuntime.jsx(te, {
+                onClick: P,
+                disabled: s,
+                title: 'Image properties (alt text, border)...',
+                ariaLabel: 'Image properties',
+                children: jsxRuntime.jsx(x, { name: 'tune', size: ie }),
+              }),
+          ],
+        }),
+      X?.isInTable &&
+        Pe &&
+        jsxRuntime.jsxs(re, {
+          label: 'Table',
+          children: [
+            jsxRuntime.jsx(Ao, { onAction: W, disabled: s }),
+            jsxRuntime.jsx(_o, {
+              onAction: W,
+              disabled: s,
+              theme: F,
+              value: X?.cellBorderColor
+                ? chunk4VUZBV2S_js.a(X.cellBorderColor, F).replace(/^#/, '')
+                : void 0,
+            }),
+            jsxRuntime.jsx(Do, { onAction: W, disabled: s }),
+            jsxRuntime.jsx(No, {
+              onAction: W,
+              disabled: s,
+              theme: F,
+              value: X?.cellBackgroundColor,
+            }),
+            jsxRuntime.jsx(zo, { onAction: W, disabled: s, tableContext: X }),
+          ],
+        }),
+      jsxRuntime.jsx(te, {
+        onClick: () => B('clearFormatting'),
+        disabled: s,
+        title: 'Clear formatting',
+        ariaLabel: 'Clear formatting',
+        children: jsxRuntime.jsx(x, { name: 'format_clear', size: ie }),
+      }),
+      p,
+    ],
+  });
+}
+var on = 12240,
+  xt = 1440,
+  Ct = 1440,
+  yt = 567,
+  Wt = 22,
+  Za = 'var(--doc-text-muted)',
+  La = 'var(--doc-text-subtle)',
+  tn = 'rgba(0, 0, 0, 0.02)',
+  Ha = '#4285f4',
+  Ea = '#3367d6',
+  Aa = '#2a56c6',
+  qe = 5;
+function _a(e, t) {
+  return t === 'inch' ? (e / Ct).toFixed(2) + '"' : (e / yt).toFixed(1) + ' cm';
+}
+function Pc({
+  sectionProps: e,
+  zoom: t = 1,
+  editable: o = false,
+  onLeftMarginChange: n,
+  onRightMarginChange: r,
+  onFirstLineIndentChange: a,
+  showFirstLineIndent: u = false,
+  firstLineIndent: m = 0,
+  hangingIndent: s = false,
+  indentLeft: c = 0,
+  indentRight: d = 0,
+  onIndentLeftChange: i,
+  onIndentRightChange: h,
+  unit: p = 'inch',
+  className: g = '',
+  style: b,
+  tabStops: f,
+  onTabStopRemove: y,
+}) {
+  let [C, S] = J.useState(null),
+    [M, R] = J.useState(null),
+    [z, F] = J.useState(null),
+    [Te, le] = J.useState(null),
+    fe = J.useRef(null),
+    Z = e?.pageWidth ?? on,
+    Y = e?.marginLeft ?? xt,
+    w = e?.marginRight ?? xt,
+    D = Z - Y - w,
+    P = chunkSE5EN2QL_js.a(Z) * t,
+    X = chunkSE5EN2QL_js.a(Y) * t,
+    Pe = chunkSE5EN2QL_js.a(w) * t,
+    se = chunkSE5EN2QL_js.a(c) * t,
+    et = chunkSE5EN2QL_js.a(d) * t,
+    B = s ? -m : m,
+    It = chunkSE5EN2QL_js.a(B) * t,
+    Mt = X + se,
+    Pt = P - Pe - et,
+    kt = X + se + It,
+    ke = J.useCallback(
+      (_, Re) => {
+        o && (_.preventDefault(), _.stopPropagation(), S(Re));
+      },
+      [o]
+    ),
+    Ue = J.useCallback(
+      (_) => {
+        if (!C || !fe.current) return;
+        let Re = fe.current.getBoundingClientRect(),
+          tt = _.clientX - Re.left;
+        le(tt);
+        let Ze = chunkSE5EN2QL_js.b(tt / t);
+        if (C === 'leftMargin') {
+          let ue = Z - w - 720,
+            W = Math.round(Math.max(0, Math.min(Ze, ue)));
+          (F(W), n?.(W));
+        } else if (C === 'rightMargin') {
+          let ue = Z - Ze,
+            W = Z - Y - 720,
+            oe = Math.round(Math.max(0, Math.min(ue, W)));
+          (F(oe), r?.(oe));
+        } else if (C === 'firstLineIndent') {
+          let ue = Y + c,
+            W = Ze - ue,
+            oe = D - c - d - 720,
+            Le = Math.round(Math.max(-c, Math.min(W, oe)));
+          (F(Le), a?.(Le));
+        } else if (C === 'leftIndent') {
+          let ue = Ze - Y,
+            W = D - d - 720,
+            oe = Math.round(Math.max(0, Math.min(ue, W)));
+          (F(oe), i?.(oe));
+        } else if (C === 'rightIndent') {
+          let W = Z - w - Ze,
+            oe = D - c - 720,
+            Le = Math.round(Math.max(0, Math.min(W, oe)));
+          (F(Le), h?.(Le));
+        }
+      },
+      [C, t, Z, Y, w, D, c, d, n, r, a, i, h]
+    ),
+    ce = J.useCallback(() => {
+      (S(null), F(null), le(null));
+    }, []);
+  J.useEffect(() => {
+    if (C)
+      return (
+        document.addEventListener('mousemove', Ue),
+        document.addEventListener('mouseup', ce),
+        () => {
+          (document.removeEventListener('mousemove', Ue),
+            document.removeEventListener('mouseup', ce));
+        }
+      );
+  }, [C, Ue, ce]);
+  let Rt = Ba(Z, t, p);
+  return jsxRuntime.jsxs('div', {
+    ref: fe,
+    className: `docx-horizontal-ruler ${g}`,
+    style: {
+      position: 'relative',
+      width: chunkSE5EN2QL_js.k(P),
+      height: Wt,
+      backgroundColor: 'transparent',
+      overflow: 'visible',
+      userSelect: 'none',
+      cursor: C ? 'ew-resize' : 'default',
+      ...b,
+    },
+    role: 'slider',
+    'aria-label': 'Horizontal ruler',
+    'aria-valuemin': 0,
+    'aria-valuemax': Z,
+    children: [
+      jsxRuntime.jsx('div', {
+        style: {
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          width: chunkSE5EN2QL_js.k(X),
+          height: Wt,
+          backgroundColor: tn,
+          borderRight: '1px solid rgba(0,0,0,0.06)',
+          cursor: o ? 'ew-resize' : 'default',
+          zIndex: 1,
+        },
+        onMouseDown: o && n ? (_) => ke(_, 'leftMargin') : void 0,
+      }),
+      jsxRuntime.jsx('div', {
+        style: {
+          position: 'absolute',
+          top: 0,
+          right: 0,
+          width: chunkSE5EN2QL_js.k(Pe),
+          height: Wt,
+          backgroundColor: tn,
+          borderLeft: '1px solid rgba(0,0,0,0.06)',
+          cursor: o ? 'ew-resize' : 'default',
+          zIndex: 1,
+        },
+        onMouseDown: o && r ? (_) => ke(_, 'rightMargin') : void 0,
+      }),
+      jsxRuntime.jsx('div', {
+        style: { position: 'absolute', inset: 0, pointerEvents: 'none' },
+        children: Rt.map((_, Re) => jsxRuntime.jsx(qa, { tick: _ }, Re)),
+      }),
+      u &&
+        jsxRuntime.jsx(Vt, {
+          direction: 'down',
+          positionPx: kt,
+          editable: o,
+          isDragging: C === 'firstLineIndent',
+          isHovered: M === 'firstLineIndent',
+          onMouseEnter: () => R('firstLineIndent'),
+          onMouseLeave: () => R(null),
+          onMouseDown: (_) => ke(_, 'firstLineIndent'),
+          label: 'First line indent',
+        }),
+      o &&
+        i &&
+        jsxRuntime.jsx(Vt, {
+          direction: 'up',
+          positionPx: Mt,
+          editable: o,
+          isDragging: C === 'leftIndent',
+          isHovered: M === 'leftIndent',
+          onMouseEnter: () => R('leftIndent'),
+          onMouseLeave: () => R(null),
+          onMouseDown: (_) => ke(_, 'leftIndent'),
+          label: 'Left indent',
+        }),
+      o &&
+        h &&
+        jsxRuntime.jsx(Vt, {
+          direction: 'down',
+          positionPx: Pt,
+          editable: o,
+          isDragging: C === 'rightIndent',
+          isHovered: M === 'rightIndent',
+          onMouseEnter: () => R('rightIndent'),
+          onMouseLeave: () => R(null),
+          onMouseDown: (_) => ke(_, 'rightIndent'),
+          label: 'Right indent',
+        }),
+      f?.map((_) =>
+        jsxRuntime.jsx(
+          Fa,
+          {
+            tabStop: _,
+            positionPx: chunkSE5EN2QL_js.a(_.position) * t,
+            onDoubleClick: () => y?.(_.position),
+          },
+          _.position
+        )
+      ),
+      C && z !== null && Te !== null && jsxRuntime.jsx(Da, { value: _a(z, p), positionPx: Te }),
+    ],
+  });
+}
+function qa({ tick: e }) {
+  return jsxRuntime.jsxs(jsxRuntime.Fragment, {
+    children: [
+      jsxRuntime.jsx('div', {
+        style: {
+          position: 'absolute',
+          left: chunkSE5EN2QL_js.k(e.position),
+          bottom: 0,
+          width: 1,
+          height: e.height,
+          backgroundColor: La,
+        },
+      }),
+      e.label &&
+        jsxRuntime.jsx('div', {
+          style: {
+            position: 'absolute',
+            left: chunkSE5EN2QL_js.k(e.position),
+            top: 3,
+            transform: 'translateX(-50%)',
+            fontSize: '9px',
+            color: Za,
+            fontFamily: 'sans-serif',
+            whiteSpace: 'nowrap',
+          },
+          children: e.label,
+        }),
+    ],
+  });
+}
+function Vt({
+  direction: e,
+  positionPx: t,
+  editable: o,
+  isDragging: n,
+  isHovered: r,
+  onMouseEnter: a,
+  onMouseLeave: u,
+  onMouseDown: m,
+  label: s,
+}) {
+  let c = n ? Aa : r ? Ea : Ha,
+    d = Math.round(qe * 1.6),
+    i = {
+      position: 'absolute',
+      left: chunkSE5EN2QL_js.k(t - qe),
+      width: qe * 2,
+      height: d + 2,
+      cursor: o ? 'ew-resize' : 'default',
+      zIndex: n ? 10 : 4,
+      ...(e === 'down' ? { top: 0 } : { bottom: 0 }),
+    },
+    h =
+      e === 'down'
+        ? {
+            position: 'absolute',
+            top: 1,
+            left: 0,
+            width: 0,
+            height: 0,
+            borderLeft: `${qe}px solid transparent`,
+            borderRight: `${qe}px solid transparent`,
+            borderTop: `${d}px solid ${c}`,
+            transition: 'border-top-color 0.1s',
+          }
+        : {
+            position: 'absolute',
+            bottom: 1,
+            left: 0,
+            width: 0,
+            height: 0,
+            borderLeft: `${qe}px solid transparent`,
+            borderRight: `${qe}px solid transparent`,
+            borderBottom: `${d}px solid ${c}`,
+            transition: 'border-bottom-color 0.1s',
+          };
+  return jsxRuntime.jsx('div', {
+    className: 'docx-ruler-indent',
+    style: i,
+    onMouseEnter: a,
+    onMouseLeave: u,
+    onMouseDown: m,
+    role: 'slider',
+    'aria-label': s,
+    'aria-orientation': 'horizontal',
+    tabIndex: o ? 0 : -1,
+    children: jsxRuntime.jsx('div', { style: h }),
+  });
+}
+function Da({ value: e, positionPx: t }) {
+  return jsxRuntime.jsx('div', {
+    style: {
+      position: 'absolute',
+      left: chunkSE5EN2QL_js.k(t),
+      top: -22,
+      transform: 'translateX(-50%)',
+      backgroundColor: '#333',
+      color: '#fff',
+      fontSize: '10px',
+      fontFamily: 'sans-serif',
+      padding: '2px 6px',
+      borderRadius: 3,
+      whiteSpace: 'nowrap',
+      pointerEvents: 'none',
+      zIndex: 20,
+    },
+    children: e,
+  });
+}
+var Na = { left: 'L', center: 'C', right: 'R', decimal: 'D', bar: '|' };
+function Fa({ tabStop: e, positionPx: t, onDoubleClick: o }) {
+  return jsxRuntime.jsx('div', {
+    style: {
+      position: 'absolute',
+      left: chunkSE5EN2QL_js.k(t - 5),
+      bottom: 0,
+      width: 10,
+      height: 12,
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      fontSize: 8,
+      fontWeight: 700,
+      color: '#555',
+      cursor: 'pointer',
+      userSelect: 'none',
+    },
+    onDoubleClick: (n) => {
+      (n.stopPropagation(), o());
+    },
+    title: `${e.alignment} tab at ${(e.position / 1440).toFixed(2)}"`,
+    children: Na[e.alignment] || 'L',
+  });
+}
+function Ba(e, t, o) {
+  let n = [];
+  if (o === 'inch') {
+    let r = Ct / 8,
+      a = Math.ceil(e / r);
+    for (let u = 0; u <= a; u++) {
+      let m = u * r;
+      if (m > e) break;
+      let s = chunkSE5EN2QL_js.a(m) * t;
+      u % 8 === 0
+        ? n.push({ position: s, height: 10, label: u / 8 > 0 ? String(u / 8) : void 0 })
+        : u % 4 === 0
+          ? n.push({ position: s, height: 6 })
+          : u % 2 === 0
+            ? n.push({ position: s, height: 4 })
+            : n.push({ position: s, height: 2 });
+    }
+  } else {
+    let r = yt / 10,
+      a = Math.ceil(e / r);
+    for (let u = 0; u <= a; u++) {
+      let m = u * r;
+      if (m > e) break;
+      let s = chunkSE5EN2QL_js.a(m) * t;
+      u % 10 === 0
+        ? n.push({ position: s, height: 10, label: u / 10 > 0 ? String(u / 10) : void 0 })
+        : u % 5 === 0
+          ? n.push({ position: s, height: 6 })
+          : n.push({ position: s, height: 3 });
+    }
+  }
+  return n;
+}
+function kc(e, t, o, n) {
+  let r = chunkSE5EN2QL_js.b(e / n);
+  return t === 'left' ? Math.max(0, r) : Math.max(0, chunkSE5EN2QL_js.b(o / n) - r);
+}
+function Rc(e, t = 1) {
+  let o = e?.pageWidth ?? on,
+    n = e?.marginLeft ?? xt,
+    r = e?.marginRight ?? xt,
+    a = chunkSE5EN2QL_js.a(o) * t,
+    u = chunkSE5EN2QL_js.a(n) * t,
+    m = chunkSE5EN2QL_js.a(r) * t;
+  return { width: a, leftMargin: u, rightMargin: m, contentWidth: a - u - m };
+}
+function Zc(e, t) {
+  return t === 'inch' ? (e / Ct).toFixed(2) + '"' : (e / yt).toFixed(1) + ' cm';
+}
+function Lc(e, t) {
+  let o = parseFloat(e.replace(/[^\d.]/g, ''));
+  return isNaN(o) ? null : Math.round(o * (t === 'inch' ? Ct : yt));
+}
+var Ac = 'application/x-docx-editor',
+  K = { HTML: 'text/html', PLAIN: 'text/plain' };
+function _c(e) {
+  if (!e) return [];
+  let t = () => {
+      if (!e.items || e.items.length === 0) return [];
+      let c = [];
+      for (let d of Array.from(e.items)) {
+        if (d.kind !== 'file' || !d.type.startsWith('image/')) continue;
+        let i = d.getAsFile();
+        i && c.push(i);
+      }
+      return c;
+    },
+    o = () =>
+      !e.files || e.files.length === 0
+        ? []
+        : Array.from(e.files).filter((c) => c.type.startsWith('image/')),
+    n = t(),
+    r = n.length ? n : o();
+  if (r.length <= 1) return r;
+  let a = [
+      'image/png',
+      'image/jpeg',
+      'image/webp',
+      'image/gif',
+      'image/svg+xml',
+      'image/bmp',
+      'image/tiff',
+    ],
+    u = (c) => {
+      let d = c[0],
+        i = a.indexOf(d.type);
+      i < 0 && (i = Number.MAX_SAFE_INTEGER);
+      for (let h of c.slice(1)) {
+        let p = a.indexOf(h.type);
+        if ((p < 0 && (p = Number.MAX_SAFE_INTEGER), p < i)) {
+          ((d = h), (i = p));
+          continue;
+        }
+        p === i && h.size > d.size && (d = h);
+      }
+      return d;
+    },
+    m = new Map();
+  for (let c of r) {
+    let d = c.name?.trim() ?? '',
+      h = (d ? d.replace(/\.[^/.]+$/, '').toLowerCase() : '') || `size:${c.size}`,
+      p = m.get(h);
+    p ? p.push(c) : m.set(h, [c]);
+  }
+  let s = [];
+  for (let c of m.values()) s.push(u(c));
+  return s;
+}
+async function rn(e, t = {}) {
+  let { includeFormatting: o = true, onError: n } = t;
+  try {
+    let r = $t(e, o);
+    return await Tt(r);
+  } catch (r) {
+    return (n?.(r), false);
+  }
+}
+async function qc(e, t = {}) {
+  let { includeFormatting: o = true, onError: n } = t;
+  try {
+    let r = za(e, o);
+    return await Tt(r);
+  } catch (r) {
+    return (n?.(r), false);
+  }
+}
+function $t(e, t = true) {
+  let o = e.map(Kt).join(''),
+    n = t ? un(e) : Yt(o),
+    r = JSON.stringify(e);
+  return { plainText: o, html: n, internal: r };
+}
+function za(e, t = true) {
+  let o = e.map(Xa).join(`
+`),
+    n = t ? ja(e) : Yt(o),
+    r = JSON.stringify(e);
+  return { plainText: o, html: n, internal: r };
+}
+async function Tt(e) {
+  try {
+    if (navigator.clipboard && navigator.clipboard.write) {
+      let t = [
+        new ClipboardItem({
+          [K.PLAIN]: new Blob([e.plainText], { type: K.PLAIN }),
+          [K.HTML]: new Blob([e.html], { type: K.HTML }),
+        }),
+      ];
+      return (await navigator.clipboard.write(t), !0);
+    }
+    return an(e);
+  } catch {
+    return an(e);
+  }
+}
+function an(e) {
+  let t = document.createElement('div');
+  ((t.innerHTML = e.html),
+    (t.style.position = 'fixed'),
+    (t.style.left = '-9999px'),
+    document.body.appendChild(t));
+  try {
+    let o = window.getSelection();
+    if (!o) return !1;
+    let n = document.createRange();
+    (n.selectNodeContents(t), o.removeAllRanges(), o.addRange(n));
+    let r = document.execCommand('copy');
+    return (o.removeAllRanges(), r);
+  } finally {
+    document.body.removeChild(t);
+  }
+}
+async function Dc(e = {}) {
+  let { cleanWordFormatting: t = true, onError: o } = e;
+  try {
+    if (navigator.clipboard && navigator.clipboard.read) {
+      let n = await navigator.clipboard.read();
+      return await Wa(n, t);
+    }
+    return null;
+  } catch (n) {
+    return (o?.(n), null);
+  }
+}
+async function Wa(e, t) {
+  let o = '',
+    n = '';
+  for (let r of e)
+    (r.types.includes(K.HTML) && (o = await (await r.getType(K.HTML)).text()),
+      r.types.includes(K.PLAIN) && (n = await (await r.getType(K.PLAIN)).text()));
+  return cn(o, n, t);
+}
+function Va(e, t = {}) {
+  let { cleanWordFormatting: o = true } = t,
+    n = e.clipboardData;
+  if (!n) return null;
+  let r = n.getData(K.HTML),
+    a = n.getData(K.PLAIN);
+  return cn(r, a, o);
+}
+function cn(e, t, o = true) {
+  let n = $a(e),
+    r = Ua(e);
+  if (r) {
+    let m = e.match(/data-docx-editor-content="([^"]+)"/);
+    if (m)
+      try {
+        return {
+          runs: JSON.parse(decodeURIComponent(m[1])),
+          fromWord: !1,
+          fromEditor: !0,
+          plainText: t,
+        };
+      } catch {}
+  }
+  let a = e;
+  return (n && o && (a = Ga(e)), { runs: Ka(a, t), fromWord: n, fromEditor: r, plainText: t });
+}
+function $a(e) {
+  return (
+    e.includes('urn:schemas-microsoft-com:office') ||
+    e.includes('mso-') ||
+    e.includes('MsoNormal') ||
+    e.includes('class="Mso') ||
+    e.includes('<!--[if gte mso')
+  );
+}
+function Ua(e) {
+  return e.includes('data-docx-editor') || e.includes('docx-run') || e.includes('docx-paragraph');
+}
+function Ga(e) {
+  let t = e;
+  return (
+    (t = t.replace(/<!--\[if[\s\S]*?<!\[endif\]-->/gi, '')),
+    (t = t.replace(/<!--[\s\S]*?-->/g, '')),
+    (t = t.replace(/<\?xml[^>]*>/gi, '')),
+    (t = t.replace(/<o:[^>]*>[\s\S]*?<\/o:[^>]*>/gi, '')),
+    (t = t.replace(/<o:[^>]*\/>/gi, '')),
+    (t = t.replace(/<w:[^>]*>[\s\S]*?<\/w:[^>]*>/gi, '')),
+    (t = t.replace(/<w:[^>]*\/>/gi, '')),
+    (t = t.replace(/\s*mso-[^:;]+:[^;]+;?/gi, '')),
+    (t = t.replace(/\s*style="\s*"/gi, '')),
+    (t = t.replace(/\s*class="[^"]*Mso[^"]*"/gi, '')),
+    (t = t.replace(/<span[^>]*>\s*<\/span>/gi, '')),
+    (t = t.replace(/<\/?font[^>]*>/gi, '')),
+    (t = t.replace(/\s+/g, ' ').trim()),
+    t
+  );
+}
+function Ka(e, t) {
+  if (!e || e.trim() === '') return t ? [Gt(t)] : [];
+  let o = document.createElement('div');
+  o.innerHTML = e;
+  let n = [];
+  return (Ut(o, n, {}), n.length === 0 && t ? [Gt(t)] : n);
+}
+function Ut(e, t, o) {
+  if (e.nodeType === Node.TEXT_NODE) {
+    let u = e.textContent || '';
+    (u.trim() || u.includes(' ')) && t.push(Gt(u, o));
+    return;
+  }
+  if (e.nodeType !== Node.ELEMENT_NODE) return;
+  let n = e,
+    r = n.tagName.toLowerCase(),
+    a = { ...o, ...Ya(n) };
+  switch (r) {
+    case 'br':
+      t.push(sn(a));
+      return;
+    case 'p':
+    case 'div':
+      for (let u of n.childNodes) Ut(u, t, a);
+      n.nextSibling && t.push(sn(a));
+      return;
+    case 'b':
+    case 'strong':
+      a.bold = true;
+      break;
+    case 'i':
+    case 'em':
+      a.italic = true;
+      break;
+    case 'u':
+      a.underline = { style: 'single' };
+      break;
+    case 's':
+    case 'strike':
+    case 'del':
+      a.strike = true;
+      break;
+    case 'sup':
+      a.vertAlign = 'superscript';
+      break;
+    case 'sub':
+      a.vertAlign = 'subscript';
+      break;
+    case 'code':
+    case 'pre':
+      a.fontFamily = { ascii: 'Courier New' };
+      break;
+  }
+  for (let u of n.childNodes) Ut(u, t, a);
+}
+function Ya(e) {
+  let t = {},
+    o = e.style;
+  ((o.fontWeight === 'bold' || parseInt(o.fontWeight) >= 700) && (t.bold = true),
+    o.fontStyle === 'italic' && (t.italic = true));
+  let n = o.textDecoration || o.textDecorationLine;
+  if (
+    (n &&
+      (n.includes('underline') && (t.underline = { style: 'single' }),
+      n.includes('line-through') && (t.strike = true)),
+    o.fontSize)
+  ) {
+    let r = parseFloat(o.fontSize);
+    isNaN(r) || (t.fontSize = Math.round((r / 1.333) * 2));
+  }
+  if (o.fontFamily) {
+    let r = o.fontFamily.replace(/["']/g, '').split(',')[0].trim();
+    r && (t.fontFamily = { ascii: r });
+  }
+  if (o.color) {
+    let r = ln(o.color);
+    r && (t.color = { rgb: r });
+  }
+  if (o.backgroundColor && o.backgroundColor !== 'transparent') {
+    let r = ln(o.backgroundColor);
+    r && (t.shading = { fill: { rgb: r } });
+  }
+  return t;
+}
+function ln(e) {
+  if (!e || e === 'transparent' || e === 'inherit') return null;
+  if (e.startsWith('#')) return e.slice(1).toUpperCase();
+  let t = e.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)/);
+  if (t) {
+    let o = parseInt(t[1]).toString(16).padStart(2, '0'),
+      n = parseInt(t[2]).toString(16).padStart(2, '0'),
+      r = parseInt(t[3]).toString(16).padStart(2, '0');
+    return (o + n + r).toUpperCase();
+  }
+  return null;
+}
+function Kt(e) {
+  return e.content
+    .map((t) =>
+      t.type === 'text'
+        ? t.text
+        : t.type === 'tab'
+          ? '	'
+          : t.type === 'break' && t.breakType === 'textWrapping'
+            ? `
+`
+            : ''
+    )
+    .join('');
+}
+function Xa(e) {
+  return (e.content || []).map((t) => (t.type === 'run' ? Kt(t) : '')).join('');
+}
+function un(e) {
+  return e.map(Ja).join('');
+}
+function ja(e) {
+  return e.map((t) => `<p>${un(t.content?.filter((o) => o.type === 'run') || [])}</p>`).join('');
+}
+function Ja(e) {
+  let t = Kt(e);
+  if (!t) return '';
+  let o = Yt(t),
+    n = e.formatting;
+  if (!n) return o;
+  (n.bold && (o = `<strong>${o}</strong>`),
+    n.italic && (o = `<em>${o}</em>`),
+    n.underline && (o = `<u>${o}</u>`),
+    n.strike && (o = `<s>${o}</s>`),
+    n.vertAlign === 'superscript' && (o = `<sup>${o}</sup>`),
+    n.vertAlign === 'subscript' && (o = `<sub>${o}</sub>`));
+  let r = [];
+  if (n.fontSize) {
+    let a = n.fontSize / 2;
+    r.push(`font-size: ${a}pt`);
+  }
+  return (
+    n.fontFamily?.ascii && r.push(`font-family: "${n.fontFamily.ascii}"`),
+    n.color?.rgb && r.push(`color: #${n.color.rgb}`),
+    n.shading?.fill?.rgb && r.push(`background-color: #${n.shading.fill.rgb}`),
+    r.length > 0 && (o = `<span style="${r.join('; ')}">${o}</span>`),
+    o
+  );
+}
+function Yt(e) {
+  return e
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+function Gt(e, t) {
+  return { type: 'run', formatting: t, content: [{ type: 'text', text: e }] };
+}
+function sn(e) {
+  return { type: 'run', formatting: e, content: [{ type: 'break', breakType: 'textWrapping' }] };
+}
+function Nc(e) {
+  let { onCopy: t, onCut: o, onPaste: n, clipboardOptions: r = {} } = e;
+  return {
+    handleCopy: async (c) => {
+      if (!t) return;
+      let d = t();
+      if (!d) return;
+      c.preventDefault();
+      let i = $t(d.runs);
+      c.clipboardData
+        ? (c.clipboardData.setData(K.PLAIN, i.plainText), c.clipboardData.setData(K.HTML, i.html))
+        : await Tt(i);
+    },
+    handleCut: async (c) => {
+      if (!o) return;
+      let d = o();
+      if (!d) return;
+      c.preventDefault();
+      let i = $t(d.runs);
+      c.clipboardData
+        ? (c.clipboardData.setData(K.PLAIN, i.plainText), c.clipboardData.setData(K.HTML, i.html))
+        : await Tt(i);
+    },
+    handlePaste: (c) => {
+      if (!n) return;
+      c.preventDefault();
+      let d = Va(c, r);
+      d && n(d);
+    },
+    handleKeyDown: async (c) => {
+      let d = c.ctrlKey || c.metaKey;
+      if (d && c.key === 'c' && !c.shiftKey && t) {
+        let i = t();
+        i && (await rn(i.runs, r));
+      }
+      if (d && c.key === 'x' && !c.shiftKey && o) {
+        let i = o();
+        i && (await rn(i.runs, r));
+      }
+    },
+  };
+}
+var dn = [
+    { action: 'cut', label: 'Cut', shortcut: 'Ctrl+X' },
+    { action: 'copy', label: 'Copy', shortcut: 'Ctrl+C' },
+    { action: 'paste', label: 'Paste', shortcut: 'Ctrl+V' },
+    {
+      action: 'pasteAsPlainText',
+      label: 'Paste as Plain Text',
+      shortcut: 'Ctrl+Shift+V',
+      dividerAfter: true,
+    },
+    { action: 'delete', label: 'Delete', shortcut: 'Del', dividerAfter: true },
+    { action: 'selectAll', label: 'Select All', shortcut: 'Ctrl+A' },
+  ],
+  el = () =>
+    jsxRuntime.jsxs('svg', {
+      width: '16',
+      height: '16',
+      viewBox: '0 0 16 16',
+      fill: 'none',
+      xmlns: 'http://www.w3.org/2000/svg',
+      children: [
+        jsxRuntime.jsx('circle', {
+          cx: '4',
+          cy: '12',
+          r: '2',
+          stroke: 'currentColor',
+          strokeWidth: '1.5',
+        }),
+        jsxRuntime.jsx('circle', {
+          cx: '12',
+          cy: '12',
+          r: '2',
+          stroke: 'currentColor',
+          strokeWidth: '1.5',
+        }),
+        jsxRuntime.jsx('path', {
+          d: 'M5.5 10.5L10.5 3M10.5 10.5L5.5 3',
+          stroke: 'currentColor',
+          strokeWidth: '1.5',
+          strokeLinecap: 'round',
+        }),
+      ],
+    }),
+  tl = () =>
+    jsxRuntime.jsxs('svg', {
+      width: '16',
+      height: '16',
+      viewBox: '0 0 16 16',
+      fill: 'none',
+      xmlns: 'http://www.w3.org/2000/svg',
+      children: [
+        jsxRuntime.jsx('rect', {
+          x: '5',
+          y: '5',
+          width: '8',
+          height: '9',
+          rx: '1',
+          stroke: 'currentColor',
+          strokeWidth: '1.5',
+        }),
+        jsxRuntime.jsx('path', {
+          d: 'M11 5V3a1 1 0 00-1-1H4a1 1 0 00-1 1v8a1 1 0 001 1h2',
+          stroke: 'currentColor',
+          strokeWidth: '1.5',
+        }),
+      ],
+    }),
+  ol = () =>
+    jsxRuntime.jsxs('svg', {
+      width: '16',
+      height: '16',
+      viewBox: '0 0 16 16',
+      fill: 'none',
+      xmlns: 'http://www.w3.org/2000/svg',
+      children: [
+        jsxRuntime.jsx('rect', {
+          x: '3',
+          y: '3',
+          width: '10',
+          height: '11',
+          rx: '1',
+          stroke: 'currentColor',
+          strokeWidth: '1.5',
+        }),
+        jsxRuntime.jsx('path', {
+          d: 'M6 3V2a1 1 0 011-1h2a1 1 0 011 1v1',
+          stroke: 'currentColor',
+          strokeWidth: '1.5',
+        }),
+        jsxRuntime.jsx('path', {
+          d: 'M6 8h4M6 11h4',
+          stroke: 'currentColor',
+          strokeWidth: '1.5',
+          strokeLinecap: 'round',
+        }),
+      ],
+    }),
+  nl = () =>
+    jsxRuntime.jsx('svg', {
+      width: '16',
+      height: '16',
+      viewBox: '0 0 16 16',
+      fill: 'none',
+      xmlns: 'http://www.w3.org/2000/svg',
+      children: jsxRuntime.jsx('path', {
+        d: 'M4 4l8 8M12 4l-8 8',
+        stroke: 'currentColor',
+        strokeWidth: '1.5',
+        strokeLinecap: 'round',
+      }),
+    }),
+  rl = () =>
+    jsxRuntime.jsxs('svg', {
+      width: '16',
+      height: '16',
+      viewBox: '0 0 16 16',
+      fill: 'none',
+      xmlns: 'http://www.w3.org/2000/svg',
+      children: [
+        jsxRuntime.jsx('rect', {
+          x: '2',
+          y: '2',
+          width: '12',
+          height: '12',
+          rx: '1',
+          stroke: 'currentColor',
+          strokeWidth: '1.5',
+          strokeDasharray: '2 2',
+        }),
+        jsxRuntime.jsx('rect', {
+          x: '4',
+          y: '4',
+          width: '8',
+          height: '8',
+          fill: 'currentColor',
+          opacity: '0.3',
+        }),
+      ],
+    }),
+  il = () =>
+    jsxRuntime.jsxs('svg', {
+      width: '16',
+      height: '16',
+      viewBox: '0 0 16 16',
+      fill: 'none',
+      xmlns: 'http://www.w3.org/2000/svg',
+      children: [
+        jsxRuntime.jsx('rect', {
+          x: '2',
+          y: '6',
+          width: '12',
+          height: '4',
+          rx: '0.5',
+          stroke: 'currentColor',
+          strokeWidth: '1.2',
+        }),
+        jsxRuntime.jsx('rect', {
+          x: '2',
+          y: '10',
+          width: '12',
+          height: '4',
+          rx: '0.5',
+          stroke: 'currentColor',
+          strokeWidth: '1.2',
+        }),
+        jsxRuntime.jsx('path', {
+          d: 'M8 1v3M6.5 2.5h3',
+          stroke: 'currentColor',
+          strokeWidth: '1.2',
+          strokeLinecap: 'round',
+        }),
+      ],
+    }),
+  al = () =>
+    jsxRuntime.jsxs('svg', {
+      width: '16',
+      height: '16',
+      viewBox: '0 0 16 16',
+      fill: 'none',
+      xmlns: 'http://www.w3.org/2000/svg',
+      children: [
+        jsxRuntime.jsx('rect', {
+          x: '2',
+          y: '2',
+          width: '12',
+          height: '4',
+          rx: '0.5',
+          stroke: 'currentColor',
+          strokeWidth: '1.2',
+        }),
+        jsxRuntime.jsx('rect', {
+          x: '2',
+          y: '6',
+          width: '12',
+          height: '4',
+          rx: '0.5',
+          stroke: 'currentColor',
+          strokeWidth: '1.2',
+        }),
+        jsxRuntime.jsx('path', {
+          d: 'M8 12v3M6.5 13.5h3',
+          stroke: 'currentColor',
+          strokeWidth: '1.2',
+          strokeLinecap: 'round',
+        }),
+      ],
+    }),
+  ll = () =>
+    jsxRuntime.jsxs('svg', {
+      width: '16',
+      height: '16',
+      viewBox: '0 0 16 16',
+      fill: 'none',
+      xmlns: 'http://www.w3.org/2000/svg',
+      children: [
+        jsxRuntime.jsx('rect', {
+          x: '2',
+          y: '2',
+          width: '12',
+          height: '4',
+          rx: '0.5',
+          stroke: 'currentColor',
+          strokeWidth: '1.2',
+        }),
+        jsxRuntime.jsx('rect', {
+          x: '2',
+          y: '6',
+          width: '12',
+          height: '4',
+          rx: '0.5',
+          stroke: 'currentColor',
+          strokeWidth: '1.2',
+          opacity: '0.3',
+        }),
+        jsxRuntime.jsx('rect', {
+          x: '2',
+          y: '10',
+          width: '12',
+          height: '4',
+          rx: '0.5',
+          stroke: 'currentColor',
+          strokeWidth: '1.2',
+        }),
+        jsxRuntime.jsx('path', {
+          d: 'M5 8h6',
+          stroke: 'currentColor',
+          strokeWidth: '1.5',
+          strokeLinecap: 'round',
+        }),
+      ],
+    }),
+  sl = () =>
+    jsxRuntime.jsxs('svg', {
+      width: '16',
+      height: '16',
+      viewBox: '0 0 16 16',
+      fill: 'none',
+      xmlns: 'http://www.w3.org/2000/svg',
+      children: [
+        jsxRuntime.jsx('rect', {
+          x: '6',
+          y: '2',
+          width: '4',
+          height: '12',
+          rx: '0.5',
+          stroke: 'currentColor',
+          strokeWidth: '1.2',
+        }),
+        jsxRuntime.jsx('rect', {
+          x: '10',
+          y: '2',
+          width: '4',
+          height: '12',
+          rx: '0.5',
+          stroke: 'currentColor',
+          strokeWidth: '1.2',
+        }),
+        jsxRuntime.jsx('path', {
+          d: 'M3 8H0.5M1.75 6.5v3',
+          stroke: 'currentColor',
+          strokeWidth: '1.2',
+          strokeLinecap: 'round',
+        }),
+      ],
+    }),
+  cl = () =>
+    jsxRuntime.jsxs('svg', {
+      width: '16',
+      height: '16',
+      viewBox: '0 0 16 16',
+      fill: 'none',
+      xmlns: 'http://www.w3.org/2000/svg',
+      children: [
+        jsxRuntime.jsx('rect', {
+          x: '2',
+          y: '2',
+          width: '4',
+          height: '12',
+          rx: '0.5',
+          stroke: 'currentColor',
+          strokeWidth: '1.2',
+        }),
+        jsxRuntime.jsx('rect', {
+          x: '6',
+          y: '2',
+          width: '4',
+          height: '12',
+          rx: '0.5',
+          stroke: 'currentColor',
+          strokeWidth: '1.2',
+        }),
+        jsxRuntime.jsx('path', {
+          d: 'M13 8h2.5M14.25 6.5v3',
+          stroke: 'currentColor',
+          strokeWidth: '1.2',
+          strokeLinecap: 'round',
+        }),
+      ],
+    }),
+  ul = () =>
+    jsxRuntime.jsxs('svg', {
+      width: '16',
+      height: '16',
+      viewBox: '0 0 16 16',
+      fill: 'none',
+      xmlns: 'http://www.w3.org/2000/svg',
+      children: [
+        jsxRuntime.jsx('rect', {
+          x: '2',
+          y: '2',
+          width: '4',
+          height: '12',
+          rx: '0.5',
+          stroke: 'currentColor',
+          strokeWidth: '1.2',
+        }),
+        jsxRuntime.jsx('rect', {
+          x: '6',
+          y: '2',
+          width: '4',
+          height: '12',
+          rx: '0.5',
+          stroke: 'currentColor',
+          strokeWidth: '1.2',
+          opacity: '0.3',
+        }),
+        jsxRuntime.jsx('rect', {
+          x: '10',
+          y: '2',
+          width: '4',
+          height: '12',
+          rx: '0.5',
+          stroke: 'currentColor',
+          strokeWidth: '1.2',
+        }),
+        jsxRuntime.jsx('path', {
+          d: 'M8 5v6',
+          stroke: 'currentColor',
+          strokeWidth: '1.5',
+          strokeLinecap: 'round',
+        }),
+      ],
+    }),
+  dl = () =>
+    jsxRuntime.jsxs('svg', {
+      width: '16',
+      height: '16',
+      viewBox: '0 0 16 16',
+      fill: 'none',
+      xmlns: 'http://www.w3.org/2000/svg',
+      children: [
+        jsxRuntime.jsx('path', {
+          d: 'M3 3h10a1 1 0 011 1v6a1 1 0 01-1 1H6l-3 2.5V11H3a1 1 0 01-1-1V4a1 1 0 011-1z',
+          stroke: 'currentColor',
+          strokeWidth: '1.3',
+        }),
+        jsxRuntime.jsx('path', {
+          d: 'M5 6h6M5 8.5h4',
+          stroke: 'currentColor',
+          strokeWidth: '1.2',
+          strokeLinecap: 'round',
+        }),
+      ],
+    });
+function pl(e) {
+  switch (e) {
+    case 'cut':
+      return jsxRuntime.jsx(el, {});
+    case 'copy':
+      return jsxRuntime.jsx(tl, {});
+    case 'paste':
+    case 'pasteAsPlainText':
+      return jsxRuntime.jsx(ol, {});
+    case 'delete':
+      return jsxRuntime.jsx(nl, {});
+    case 'selectAll':
+      return jsxRuntime.jsx(rl, {});
+    case 'addRowAbove':
+      return jsxRuntime.jsx(il, {});
+    case 'addRowBelow':
+      return jsxRuntime.jsx(al, {});
+    case 'deleteRow':
+      return jsxRuntime.jsx(ll, {});
+    case 'addColumnLeft':
+      return jsxRuntime.jsx(sl, {});
+    case 'addColumnRight':
+      return jsxRuntime.jsx(cl, {});
+    case 'deleteColumn':
+      return jsxRuntime.jsx(ul, {});
+    case 'addComment':
+      return jsxRuntime.jsx(dl, {});
+    default:
+      return null;
+  }
+}
+var ml = ({ item: e, onClick: t, isHighlighted: o, onMouseEnter: n }) =>
+    e.action === 'separator'
+      ? jsxRuntime.jsx('div', {
+          className: 'docx-text-context-menu-separator',
+          style: { height: '1px', backgroundColor: 'var(--doc-border)', margin: '4px 12px' },
+        })
+      : jsxRuntime.jsxs(jsxRuntime.Fragment, {
+          children: [
+            jsxRuntime.jsxs('button', {
+              type: 'button',
+              className: `docx-text-context-menu-item ${o ? 'docx-text-context-menu-item-highlighted' : ''} ${e.disabled ? 'docx-text-context-menu-item-disabled' : ''}`,
+              onClick: t,
+              onMouseEnter: n,
+              disabled: e.disabled,
+              role: 'menuitem',
+              'aria-disabled': e.disabled,
+              style: {
+                display: 'flex',
+                alignItems: 'center',
+                gap: '10px',
+                width: '100%',
+                padding: '8px 12px',
+                border: 'none',
+                background: o && !e.disabled ? 'var(--doc-primary-light)' : 'transparent',
+                cursor: e.disabled ? 'not-allowed' : 'pointer',
+                fontSize: '13px',
+                color: e.disabled ? 'var(--doc-text-subtle)' : 'var(--doc-text)',
+                textAlign: 'left',
+                opacity: e.disabled ? 0.6 : 1,
+              },
+              children: [
+                jsxRuntime.jsx('span', {
+                  style: {
+                    display: 'flex',
+                    color: e.disabled ? 'var(--doc-border)' : 'var(--doc-text-muted)',
+                  },
+                  children: pl(e.action),
+                }),
+                jsxRuntime.jsx('span', { style: { flex: 1 }, children: e.label }),
+                e.shortcut &&
+                  jsxRuntime.jsx('span', {
+                    style: {
+                      fontSize: '11px',
+                      color: 'var(--doc-text-subtle)',
+                      fontFamily: 'monospace',
+                    },
+                    children: e.shortcut,
+                  }),
+              ],
+            }),
+            e.dividerAfter &&
+              jsxRuntime.jsx('div', {
+                className: 'docx-text-context-menu-separator',
+                style: { height: '1px', backgroundColor: 'var(--doc-border)', margin: '4px 12px' },
+              }),
+          ],
+        }),
+  zc = ({
+    isOpen: e,
+    position: t,
+    hasSelection: o,
+    isEditable: n,
+    hasClipboardContent: r = true,
+    onAction: a,
+    onClose: u,
+    items: m,
+    className: s = '',
+  }) => {
+    let c = J.useRef(null),
+      [d, i] = J.useState(0),
+      h = (m || dn).map((f) => {
+        let y = (() => {
+          if (f.disabled !== void 0) return f.disabled;
+          switch (f.action) {
+            case 'cut':
+            case 'copy':
+            case 'delete':
+              return !o;
+            case 'paste':
+            case 'pasteAsPlainText':
+              return !n || !r;
+            default:
+              return false;
+          }
+        })();
+        return { ...f, disabled: y };
+      }),
+      p = h.filter((f) => f.action !== 'separator');
+    (J.useEffect(() => {
+      if (!e) return;
+      let f = (C) => {
+          c.current && !c.current.contains(C.target) && u();
+        },
+        y = setTimeout(() => {
+          document.addEventListener('mousedown', f);
+        }, 0);
+      return () => {
+        (clearTimeout(y), document.removeEventListener('mousedown', f));
+      };
+    }, [e, u]),
+      J.useEffect(() => {
+        if (!e) return;
+        let f = (y) => {
+          switch (y.key) {
+            case 'Escape':
+              (y.preventDefault(), u());
+              break;
+            case 'ArrowDown':
+              (y.preventDefault(),
+                i((S) => {
+                  let M = (S + 1) % p.length;
+                  for (; p[M]?.disabled && M !== S; ) M = (M + 1) % p.length;
+                  return M;
+                }));
+              break;
+            case 'ArrowUp':
+              (y.preventDefault(),
+                i((S) => {
+                  let M = (S - 1 + p.length) % p.length;
+                  for (; p[M]?.disabled && M !== S; ) M = (M - 1 + p.length) % p.length;
+                  return M;
+                }));
+              break;
+            case 'Enter':
+              y.preventDefault();
+              let C = p[d];
+              C && !C.disabled && (a(C.action), u());
+              break;
+          }
+        };
+        return (
+          document.addEventListener('keydown', f),
+          () => document.removeEventListener('keydown', f)
+        );
+      }, [e, d, p, a, u]),
+      J.useEffect(() => {
+        e && i(0);
+      }, [e]));
+    let g = J.useCallback(() => {
+        let y = h.length * 36 + 16,
+          C = t.x,
+          S = t.y;
+        return (
+          typeof window < 'u' &&
+            (C + 220 > window.innerWidth && (C = window.innerWidth - 220 - 10),
+            S + y > window.innerHeight && (S = window.innerHeight - y - 10),
+            C < 10 && (C = 10),
+            S < 10 && (S = 10)),
+          {
+            position: 'fixed',
+            top: S,
+            left: C,
+            minWidth: 220,
+            background: 'white',
+            border: '1px solid var(--doc-border-light)',
+            borderRadius: '8px',
+            boxShadow: '0 2px 10px rgba(0, 0, 0, 0.15)',
+            zIndex: 1e4,
+            padding: '4px 0',
+            overflow: 'hidden',
+          }
+        );
+      }, [t, h.length]),
+      b = (f) => {
+        f.disabled || (a(f.action), u());
+      };
+    return e
+      ? jsxRuntime.jsx('div', {
+          ref: c,
+          className: `docx-text-context-menu ${s}`,
+          style: g(),
+          role: 'menu',
+          'aria-label': 'Text editing menu',
+          children: h.map((f, y) => {
+            let C = p.findIndex((S) => S === f);
+            return jsxRuntime.jsx(
+              ml,
+              {
+                item: f,
+                onClick: () => b(f),
+                isHighlighted: C === d,
+                onMouseEnter: () => {
+                  C >= 0 && !f.disabled && i(C);
+                },
+              },
+              `${f.action}-${y}`
+            );
+          }),
+        })
+      : null;
+  };
+function Wc(e = {}) {
+  let { enabled: t = true, isEditable: o = true, containerRef: n, onAction: r } = e,
+    [a, u] = J.useState(false),
+    [m, s] = J.useState({ x: 0, y: 0 }),
+    [c, d] = J.useState(false),
+    i = J.useCallback(() => {
+      let f = window.getSelection(),
+        y = f && !f.isCollapsed && f.toString().length > 0;
+      return (d(!!y), !!y);
+    }, []),
+    h = J.useCallback(
+      (f) => {
+        t &&
+          (f.preventDefault(),
+          f.stopPropagation(),
+          i(),
+          s({ x: f.clientX, y: f.clientY }),
+          u(true));
+      },
+      [t, i]
+    ),
+    p = J.useCallback(() => {
+      u(false);
+    }, []),
+    g = J.useCallback(
+      (f) => {
+        switch ((p(), f)) {
+          case 'cut':
+            document.execCommand('cut');
+            break;
+          case 'copy':
+            document.execCommand('copy');
+            break;
+          case 'paste':
+            document.execCommand('paste');
+            break;
+          case 'pasteAsPlainText':
+            navigator.clipboard
+              .readText?.()
+              .then((y) => {
+                document.execCommand('insertText', false, y);
+              })
+              .catch(() => {
+                document.execCommand('paste');
+              });
+            break;
+          case 'delete':
+            document.execCommand('delete');
+            break;
+          case 'selectAll':
+            document.execCommand('selectAll');
+            break;
+        }
+        r?.(f);
+      },
+      [p, r]
+    ),
+    b = J.useCallback(
+      (f) => {
+        h(f);
+      },
+      [h]
+    );
+  return (
+    J.useEffect(() => {
+      if (!a) return;
+      let f = (y) => {
+        y.key === 'Escape' && p();
+      };
+      return (
+        document.addEventListener('keydown', f),
+        () => document.removeEventListener('keydown', f)
+      );
+    }, [a, p]),
+    {
+      isOpen: a,
+      position: m,
+      hasSelection: c,
+      openMenu: h,
+      closeMenu: p,
+      handleAction: g,
+      onContextMenu: b,
+    }
+  );
+}
+function Vc(e) {
+  return {
+    cut: 'Cut',
+    copy: 'Copy',
+    paste: 'Paste',
+    pasteAsPlainText: 'Paste as Plain Text',
+    selectAll: 'Select All',
+    delete: 'Delete',
+    separator: '',
+    addRowAbove: 'Insert row above',
+    addRowBelow: 'Insert row below',
+    deleteRow: 'Delete row',
+    addColumnLeft: 'Insert column left',
+    addColumnRight: 'Insert column right',
+    deleteColumn: 'Delete column',
+    addComment: 'Comment',
+  }[e];
+}
+function $c(e) {
+  return {
+    cut: 'Ctrl+X',
+    copy: 'Ctrl+C',
+    paste: 'Ctrl+V',
+    pasteAsPlainText: 'Ctrl+Shift+V',
+    selectAll: 'Ctrl+A',
+    delete: 'Del',
+    separator: '',
+    addRowAbove: '',
+    addRowBelow: '',
+    deleteRow: '',
+    addColumnLeft: '',
+    addColumnRight: '',
+    deleteColumn: '',
+    addComment: '',
+  }[e];
+}
+function Uc() {
+  return [...dn];
+}
+function Gc(e, t, o) {
+  switch (e) {
+    case 'cut':
+    case 'copy':
+    case 'delete':
+      return t;
+    case 'paste':
+    case 'pasteAsPlainText':
+      return o;
+    case 'addComment':
+      return t;
+    case 'selectAll':
+      return true;
+    default:
+      return true;
+  }
+}
+var ye = 16;
+function vl() {
+  return jsxRuntime.jsx(x, { name: 'table_rows', size: ye, style: { transform: 'scaleY(-1)' } });
+}
+function gl() {
+  return jsxRuntime.jsx(x, { name: 'table_rows', size: ye });
+}
+function bl() {
+  return jsxRuntime.jsx(x, { name: 'view_column', size: ye, style: { transform: 'scaleX(-1)' } });
+}
+function xl() {
+  return jsxRuntime.jsx(x, { name: 'view_column', size: ye });
+}
+function Cl() {
+  return jsxRuntime.jsx(x, { name: 'delete_sweep', size: ye });
+}
+function yl() {
+  return jsxRuntime.jsx(x, {
+    name: 'delete_sweep',
+    size: ye,
+    style: { transform: 'rotate(90deg)' },
+  });
+}
+function Tl() {
+  return jsxRuntime.jsx(x, { name: 'call_merge', size: ye });
+}
+function Sl() {
+  return jsxRuntime.jsx(x, { name: 'call_split', size: ye });
+}
+function wl() {
+  return jsxRuntime.jsx(x, { name: 'delete', size: ye, className: 'text-red-600' });
+}
+var ae = {
+  container: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '4px',
+    padding: '4px 8px',
+    backgroundColor: 'var(--doc-bg-subtle)',
+    borderRadius: '4px',
+    border: '1px solid var(--doc-border)',
+    fontSize: '12px',
+  },
+  containerCompact: { padding: '2px 4px', gap: '2px' },
+  containerFloating: {
+    position: 'absolute',
+    zIndex: 1e3,
+    boxShadow: '0 2px 8px rgba(0, 0, 0, 0.15)',
+  },
+  group: { display: 'flex', alignItems: 'center', gap: '2px' },
+  separator: {
+    width: '1px',
+    height: '20px',
+    backgroundColor: 'var(--doc-border-dark)',
+    margin: '0 4px',
+  },
+  button: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: '4px',
+    padding: '4px 8px',
+    border: 'none',
+    borderRadius: '3px',
+    backgroundColor: 'transparent',
+    color: 'var(--doc-text)',
+    cursor: 'pointer',
+    fontSize: '12px',
+    lineHeight: '1',
+    transition: 'background-color 0.15s, color 0.15s',
+  },
+  buttonCompact: { padding: '3px 5px' },
+  buttonHover: { backgroundColor: 'var(--doc-border)' },
+  buttonDisabled: { color: 'var(--doc-text-subtle)', cursor: 'not-allowed' },
+  buttonDelete: { color: 'var(--doc-error)' },
+  label: {
+    fontSize: '11px',
+    fontWeight: 500,
+    color: 'var(--doc-text-muted)',
+    marginRight: '8px',
+    whiteSpace: 'nowrap',
+  },
+};
+function Ce({
+  action: e,
+  label: t,
+  icon: o,
+  disabled: n = false,
+  onClick: r,
+  showLabel: a = false,
+  compact: u = false,
+  shortcut: m,
+}) {
+  let [s, c] = J__namespace.default.useState(false),
+    d = typeof e == 'string' && e.startsWith('delete'),
+    i = {
+      ...ae.button,
+      ...(u ? ae.buttonCompact : {}),
+      ...(s && !n ? ae.buttonHover : {}),
+      ...(n ? ae.buttonDisabled : {}),
+      ...(d && !n ? ae.buttonDelete : {}),
+    },
+    h = m ? `${t} (${m})` : t;
+  return jsxRuntime.jsxs('button', {
+    type: 'button',
+    className: `docx-table-toolbar-button docx-table-toolbar-${typeof e == 'string' ? e : e.type}`,
+    style: i,
+    disabled: n,
+    onClick: r,
+    onMouseEnter: () => c(true),
+    onMouseLeave: () => c(false),
+    title: h,
+    'aria-label': t,
+    children: [o, a && jsxRuntime.jsx('span', { children: t })],
+  });
+}
+function Xt({ children: e, showSeparator: t = true }) {
+  return jsxRuntime.jsxs(jsxRuntime.Fragment, {
+    children: [
+      jsxRuntime.jsx('div', { style: ae.group, children: e }),
+      t && jsxRuntime.jsx('div', { style: ae.separator }),
+    ],
+  });
+}
+function Jc({
+  context: e,
+  onAction: t,
+  disabled: o = false,
+  className: n,
+  style: r,
+  showLabels: a = false,
+  compact: u = false,
+  position: m = 'top',
+  children: s,
+}) {
+  if (!e) return null;
+  let c = (f) => {
+      !o && t && e && t(f, e);
+    },
+    d = e.rowCount > 1,
+    i = e.columnCount > 1,
+    h = e.hasMultiCellSelection,
+    p = e.canSplitCell,
+    g = {
+      ...ae.container,
+      ...(u ? ae.containerCompact : {}),
+      ...(m === 'floating' ? ae.containerFloating : {}),
+      ...r,
+    },
+    b = ['docx-table-toolbar'];
+  return (
+    n && b.push(n),
+    u && b.push('docx-table-toolbar-compact'),
+    m === 'floating' && b.push('docx-table-toolbar-floating'),
+    jsxRuntime.jsxs('div', {
+      className: b.join(' '),
+      style: g,
+      role: 'toolbar',
+      'aria-label': 'Table editing tools',
+      children: [
+        jsxRuntime.jsx('span', { style: ae.label, children: 'Table:' }),
+        jsxRuntime.jsxs(Xt, {
+          children: [
+            jsxRuntime.jsx(Ce, {
+              action: 'addRowAbove',
+              label: 'Insert Row Above',
+              icon: jsxRuntime.jsx(vl, {}),
+              disabled: o,
+              onClick: () => c('addRowAbove'),
+              showLabel: a,
+              compact: u,
+            }),
+            jsxRuntime.jsx(Ce, {
+              action: 'addRowBelow',
+              label: 'Insert Row Below',
+              icon: jsxRuntime.jsx(gl, {}),
+              disabled: o,
+              onClick: () => c('addRowBelow'),
+              showLabel: a,
+              compact: u,
+            }),
+            jsxRuntime.jsx(Ce, {
+              action: 'deleteRow',
+              label: 'Delete Row',
+              icon: jsxRuntime.jsx(Cl, {}),
+              disabled: o || !d,
+              onClick: () => c('deleteRow'),
+              showLabel: a,
+              compact: u,
+            }),
+          ],
+        }),
+        jsxRuntime.jsxs(Xt, {
+          children: [
+            jsxRuntime.jsx(Ce, {
+              action: 'addColumnLeft',
+              label: 'Insert Column Left',
+              icon: jsxRuntime.jsx(bl, {}),
+              disabled: o,
+              onClick: () => c('addColumnLeft'),
+              showLabel: a,
+              compact: u,
+            }),
+            jsxRuntime.jsx(Ce, {
+              action: 'addColumnRight',
+              label: 'Insert Column Right',
+              icon: jsxRuntime.jsx(xl, {}),
+              disabled: o,
+              onClick: () => c('addColumnRight'),
+              showLabel: a,
+              compact: u,
+            }),
+            jsxRuntime.jsx(Ce, {
+              action: 'deleteColumn',
+              label: 'Delete Column',
+              icon: jsxRuntime.jsx(yl, {}),
+              disabled: o || !i,
+              onClick: () => c('deleteColumn'),
+              showLabel: a,
+              compact: u,
+            }),
+          ],
+        }),
+        jsxRuntime.jsxs(Xt, {
+          showSeparator: false,
+          children: [
+            jsxRuntime.jsx(Ce, {
+              action: 'mergeCells',
+              label: 'Merge Cells',
+              icon: jsxRuntime.jsx(Tl, {}),
+              disabled: o || !h,
+              onClick: () => c('mergeCells'),
+              showLabel: a,
+              compact: u,
+            }),
+            jsxRuntime.jsx(Ce, {
+              action: 'splitCell',
+              label: 'Split Cell',
+              icon: jsxRuntime.jsx(Sl, {}),
+              disabled: o || !p,
+              onClick: () => c('splitCell'),
+              showLabel: a,
+              compact: u,
+            }),
+            jsxRuntime.jsx(Ce, {
+              action: 'deleteTable',
+              label: 'Delete Table',
+              icon: jsxRuntime.jsx(wl, {}),
+              disabled: o,
+              onClick: () => c('deleteTable'),
+              showLabel: a,
+              compact: u,
+            }),
+          ],
+        }),
+        s,
+      ],
+    })
+  );
+}
+function Qc(e, t) {
+  let o = e.rows.length,
+    n = jt(e),
+    r = !!(
+      t.selectedCells &&
+      (t.selectedCells.startRow !== t.selectedCells.endRow ||
+        t.selectedCells.startCol !== t.selectedCells.endCol)
+    ),
+    a = pn(e, t.rowIndex, t.columnIndex),
+    u = !!(a && ((a.formatting?.gridSpan ?? 1) > 1 || a.formatting?.vMerge === 'restart'));
+  return {
+    table: e,
+    selection: t,
+    hasMultiCellSelection: r,
+    canSplitCell: u,
+    rowCount: o,
+    columnCount: n,
+  };
+}
+function jt(e) {
+  if (!e.rows.length) return 0;
+  let t = 0;
+  for (let o of e.rows) {
+    let n = 0;
+    for (let r of o.cells) n += r.formatting?.gridSpan ?? 1;
+    t = Math.max(t, n);
+  }
+  return t;
+}
+function pn(e, t, o) {
+  let n = e.rows[t];
+  if (!n) return null;
+  let r = 0;
+  for (let a of n.cells) {
+    let u = a.formatting?.gridSpan ?? 1;
+    if (o >= r && o < r + u) return a;
+    r += u;
+  }
+  return null;
+}
+function Il(e, t) {
+  let o = [],
+    n = 0;
+  for (let r of e.cells) {
+    let a = r.formatting?.gridSpan ?? 1;
+    (o.push({
+      type: 'tableCell',
+      content: [{ type: 'paragraph', content: [], formatting: {} }],
+      formatting: { ...r.formatting, vMerge: void 0 },
+    }),
+      (n += a));
+  }
+  for (; n < t; )
+    (o.push({
+      type: 'tableCell',
+      content: [{ type: 'paragraph', content: [], formatting: {} }],
+      formatting: {},
+    }),
+      n++);
+  return { type: 'tableRow', cells: o, formatting: { ...e.formatting, header: false } };
+}
+function Ml() {
+  return {
+    type: 'tableCell',
+    content: [{ type: 'paragraph', content: [], formatting: {} }],
+    formatting: {},
+  };
+}
+function eu(e, t, o = 'after') {
+  let n = [...e.rows],
+    r = o === 'before' ? t : t + 1,
+    a = e.rows[t] || e.rows[0],
+    u = jt(e),
+    m = Il(a, u);
+  return (n.splice(r, 0, m), { ...e, rows: n });
+}
+function tu(e, t) {
+  if (e.rows.length <= 1) return e;
+  let o = e.rows.filter((n, r) => r !== t);
+  return { ...e, rows: o };
+}
+function ou(e, t, o = 'after') {
+  let n = o === 'before' ? t : t + 1,
+    r = e.rows.map((u) => {
+      let m = [...u.cells],
+        s = 0,
+        c = 0;
+      for (let d = 0; d < u.cells.length; d++) {
+        let h = u.cells[d].formatting?.gridSpan ?? 1;
+        if (n <= s + h) {
+          c = o === 'before' ? d : d + 1;
+          break;
+        }
+        ((s += h), (c = d + 1));
+      }
+      return (m.splice(c, 0, Ml()), { ...u, cells: m });
+    }),
+    a = e.columnWidths;
+  if (e.columnWidths && e.columnWidths.length > 0) {
+    a = [...e.columnWidths];
+    let u = e.columnWidths[t] || e.columnWidths[0] || 1440;
+    a.splice(n, 0, u);
+  }
+  return { ...e, rows: r, columnWidths: a };
+}
+function nu(e, t) {
+  if (jt(e) <= 1) return e;
+  let n = e.rows.map((a) => {
+      let u = 0,
+        m = [];
+      for (let s of a.cells) {
+        let c = s.formatting?.gridSpan ?? 1;
+        (t >= u && t < u + c
+          ? c > 1 && m.push({ ...s, formatting: { ...s.formatting, gridSpan: c - 1 } })
+          : m.push(s),
+          (u += c));
+      }
+      return { ...a, cells: m };
+    }),
+    r = e.columnWidths;
+  return (
+    e.columnWidths && e.columnWidths.length > t && (r = e.columnWidths.filter((a, u) => u !== t)),
+    { ...e, rows: n, columnWidths: r }
+  );
+}
+function ru(e, t) {
+  if (!t.selectedCells) return e;
+  let { startRow: o, startCol: n, endRow: r, endCol: a } = t.selectedCells,
+    u = r - o + 1,
+    m = a - n + 1,
+    s = e.rows.map((c, d) => {
+      if (d < o || d > r) return c;
+      let i = [],
+        h = 0;
+      for (let p of c.cells) {
+        let g = p.formatting?.gridSpan ?? 1,
+          b = h + g - 1;
+        (h <= a && b >= n
+          ? d === o && h === n
+            ? i.push({
+                ...p,
+                formatting: { ...p.formatting, gridSpan: m, vMerge: u > 1 ? 'restart' : void 0 },
+              })
+            : d > o &&
+              h === n &&
+              i.push({ ...p, formatting: { ...p.formatting, gridSpan: m, vMerge: 'continue' } })
+          : i.push(p),
+          (h += g));
+      }
+      return { ...c, cells: i };
+    });
+  return { ...e, rows: s };
+}
+function iu(e, t, o) {
+  let n = pn(e, t, o);
+  if (!n) return e;
+  let r = n.formatting?.gridSpan ?? 1,
+    a = n.formatting?.vMerge === 'restart';
+  if (r <= 1 && !a) return e;
+  let u = e.rows.map((m, s) => {
+    if (s !== t && !a) return m;
+    let c = [],
+      d = 0;
+    for (let i of m.cells) {
+      let h = i.formatting?.gridSpan ?? 1;
+      if (d === o || (d <= o && o < d + h))
+        if (r > 1)
+          for (let p = 0; p < r; p++)
+            c.push({
+              type: 'tableCell',
+              content: p === 0 ? i.content : [{ type: 'paragraph', content: [], formatting: {} }],
+              formatting: { ...i.formatting, gridSpan: void 0, vMerge: void 0 },
+            });
+        else
+          a && s === t
+            ? c.push({ ...i, formatting: { ...i.formatting, vMerge: void 0 } })
+            : i.formatting?.vMerge === 'continue'
+              ? c.push({
+                  type: 'tableCell',
+                  content: [{ type: 'paragraph', content: [], formatting: {} }],
+                  formatting: { ...i.formatting, vMerge: void 0 },
+                })
+              : c.push(i);
+      else c.push(i);
+      d += h;
+    }
+    return { ...m, cells: c };
+  });
+  return { ...e, rows: u };
+}
+exports.$ = Vc;
+exports.A = te;
+exports.B = re;
+exports.C = Ks;
+exports.D = Ys;
+exports.E = Pc;
+exports.F = kc;
+exports.G = Rc;
+exports.H = Zc;
+exports.I = Lc;
+exports.J = Ac;
+exports.K = K;
+exports.L = _c;
+exports.M = rn;
+exports.N = qc;
+exports.O = $t;
+exports.P = za;
+exports.Q = Tt;
+exports.R = Dc;
+exports.S = Va;
+exports.T = cn;
+exports.U = $a;
+exports.V = Ua;
+exports.W = Ga;
+exports.X = Ka;
+exports.Y = Nc;
+exports.Z = zc;
+exports._ = Wc;
+exports.a = k;
+exports.aa = $c;
+exports.b = $;
+exports.ba = Uc;
+exports.c = ee;
+exports.ca = Gc;
+exports.d = x;
+exports.da = Jc;
+exports.e = vt;
+exports.ea = Qc;
+exports.f = Qo;
+exports.fa = jt;
+exports.g = no;
+exports.ga = pn;
+exports.h = G;
+exports.ha = eu;
+exports.i = t0;
+exports.ia = tu;
+exports.j = ho;
+exports.ja = ou;
+exports.k = Ee;
+exports.ka = nu;
+exports.l = So;
+exports.la = ru;
+exports.m = Io;
+exports.ma = iu;
+exports.n = Mo;
+exports.o = ko;
+exports.p = Zo;
+exports.q = Lo;
+exports.r = Ao;
+exports.s = _o;
+exports.t = Do;
+exports.u = No;
+exports.v = zo;
+exports.w = Ot;
+exports.x = Qs;
+exports.y = en;
+exports.z = Ns;

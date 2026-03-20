@@ -1,0 +1,473 @@
+.prosemirror-editor-wrapper {
+  min-height: 100%;
+}
+.prosemirror-editor {
+  width: var(--page-width, 8.5in);
+}
+.prosemirror-editor .ProseMirror {
+  background: #fff;
+  box-shadow: 0 2px 8px #00000026;
+  width: var(--page-width, 8.5in);
+  min-height: var(--page-height, 11in);
+  padding-top: var(--margin-top, 72px);
+  padding-bottom: var(--margin-bottom, 72px);
+  padding-left: var(--margin-left, 72px);
+  padding-right: var(--margin-right, 72px);
+  outline: none;
+  font-family: Calibri, Arial, sans-serif;
+  font-size: 11pt;
+  color: #000;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  -o-tab-size: 48;
+  tab-size: 48;
+  -moz-tab-size: 48;
+  box-sizing: border-box;
+  position: relative;
+}
+.prosemirror-editor .ProseMirror .docx-page-break {
+  display: block;
+  position: relative;
+  height: 40px;
+  margin: 0 calc(-1 * var(--margin-left, 72px));
+  margin-right: calc(-1 * var(--margin-right, 72px));
+  background: var(--doc-bg);
+  border: none;
+  pointer-events: none;
+}
+.prosemirror-editor .ProseMirror .docx-page-break:before {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 8px;
+  background: linear-gradient(to bottom, transparent, rgba(0, 0, 0, 0.08));
+}
+.prosemirror-editor .ProseMirror .docx-page-break:after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 8px;
+  background: linear-gradient(to top, transparent, rgba(0, 0, 0, 0.08));
+}
+.prosemirror-editor .ProseMirror [data-page-break-before='true'] {
+  -moz-column-break-before: page;
+  break-before: page;
+}
+.prosemirror-editor .ProseMirror .docx-page-break-line {
+  display: block;
+  position: relative;
+  height: 1px;
+  margin: 20px calc(-1 * var(--margin-left, 72px));
+  margin-right: calc(-1 * var(--margin-right, 72px));
+  border-top: 1px dashed var(--doc-border);
+}
+.prosemirror-editor .ProseMirror .docx-page-break-line:before {
+  content: 'Page Break';
+  position: absolute;
+  top: -10px;
+  left: 50%;
+  transform: translate(-50%);
+  background: var(--doc-bg);
+  padding: 0 8px;
+  font-size: 10px;
+  color: var(--doc-text-muted);
+  white-space: nowrap;
+}
+.prosemirror-editor .ProseMirror:focus {
+  outline: none;
+}
+.prosemirror-editor .ProseMirror p {
+  display: block;
+  margin: 0;
+  padding: 0;
+  min-height: 1em;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  line-height: normal;
+}
+.prosemirror-editor .ProseMirror p:empty:before {
+  content: '\a0';
+}
+.prosemirror-editor .ProseMirror span {
+  display: inline;
+  white-space: pre-wrap;
+}
+.prosemirror-editor .ProseMirror .docx-list-bullet,
+.prosemirror-editor .ProseMirror .docx-list-numbered {
+  position: relative;
+  padding-left: 48px;
+}
+.prosemirror-editor .ProseMirror [data-list-marker]:before {
+  content: attr(data-list-marker);
+  position: absolute;
+  left: 0;
+  width: 44px;
+  text-align: right;
+  white-space: nowrap;
+}
+.prosemirror-editor .ProseMirror .docx-list-bullet:not([data-list-marker]):before {
+  content: '\2022';
+  position: absolute;
+  left: 0;
+  width: 44px;
+  text-align: right;
+}
+.prosemirror-editor .ProseMirror .docx-list-numbered:not([data-list-marker]) {
+  counter-increment: list-counter;
+}
+.prosemirror-editor .ProseMirror .docx-list-decimal:not([data-list-marker]):before {
+  content: counter(list-counter) '.';
+  position: absolute;
+  left: 0;
+  width: 44px;
+  text-align: right;
+}
+.prosemirror-editor .ProseMirror .docx-list-lower-roman:not([data-list-marker]):before {
+  content: counter(list-counter, lower-roman) '.';
+  position: absolute;
+  left: 0;
+  width: 44px;
+  text-align: right;
+}
+.prosemirror-editor .ProseMirror .docx-list-upper-roman:not([data-list-marker]):before {
+  content: counter(list-counter, upper-roman) '.';
+  position: absolute;
+  left: 0;
+  width: 44px;
+  text-align: right;
+}
+.prosemirror-editor .ProseMirror .docx-list-lower-alpha:not([data-list-marker]):before {
+  content: counter(list-counter, lower-alpha) '.';
+  position: absolute;
+  left: 0;
+  width: 44px;
+  text-align: right;
+}
+.prosemirror-editor .ProseMirror .docx-list-upper-alpha:not([data-list-marker]):before {
+  content: counter(list-counter, upper-alpha) '.';
+  position: absolute;
+  left: 0;
+  width: 44px;
+  text-align: right;
+}
+.prosemirror-editor .ProseMirror .docx-list-level-0:not([data-list-marker]):first-of-type {
+  counter-reset: list-counter;
+}
+.prosemirror-editor .ProseMirror .docx-list-level-1 {
+  margin-left: 0.5in;
+}
+.prosemirror-editor .ProseMirror .docx-list-level-2 {
+  margin-left: 1in;
+}
+.prosemirror-editor .ProseMirror .docx-list-level-3 {
+  margin-left: 1.5in;
+}
+.prosemirror-editor .ProseMirror .docx-list-level-4 {
+  margin-left: 2in;
+}
+.prosemirror-editor .ProseMirror .docx-list-level-5 {
+  margin-left: 2.5in;
+}
+.prosemirror-editor .ProseMirror .docx-list-level-6 {
+  margin-left: 3in;
+}
+.prosemirror-editor .ProseMirror .docx-list-level-7 {
+  margin-left: 3.5in;
+}
+.prosemirror-editor .ProseMirror .docx-list-level-8 {
+  margin-left: 4in;
+}
+.prosemirror-editor .ProseMirror ::-moz-selection {
+  background: #4285f44d;
+}
+.prosemirror-editor .ProseMirror ::selection {
+  background: #4285f44d;
+}
+.prosemirror-editor[data-placeholder]:before {
+  content: attr(data-placeholder);
+  color: #aaa;
+  position: absolute;
+  pointer-events: none;
+}
+.prosemirror-editor .ProseMirror img.docx-image {
+  display: inline;
+  max-width: 100%;
+  -o-object-fit: contain;
+  object-fit: contain;
+  vertical-align: baseline;
+  outline: none;
+}
+.prosemirror-editor .ProseMirror img.docx-image-float-left {
+  clear: left;
+}
+.prosemirror-editor .ProseMirror img.docx-image-float-right {
+  clear: right;
+}
+.prosemirror-editor .ProseMirror img.docx-image-block {
+  clear: both;
+}
+.prosemirror-editor .ProseMirror p:has(> img.docx-image-block:only-child) {
+  text-indent: 0 !important;
+  text-align: center;
+}
+.prosemirror-editor .ProseMirror p:has(img.docx-image-float):after {
+  content: '';
+  display: table;
+  clear: both;
+}
+.prosemirror-editor .ProseMirror img.docx-image.ProseMirror-selectednode {
+  outline: 2px solid var(--doc-primary, #4285f4);
+  outline-offset: 2px;
+  cursor: grab;
+}
+.prosemirror-editor .ProseMirror.pm-image-dragging img.docx-image.ProseMirror-selectednode {
+  opacity: 0.4;
+  outline: 2px dashed var(--doc-primary, #4285f4);
+  cursor: grabbing;
+}
+.prosemirror-editor .ProseMirror img:not(.docx-image) {
+  max-width: 100%;
+  height: auto;
+}
+.prosemirror-editor .ProseMirror .docx-shape {
+  display: inline-block;
+  vertical-align: middle;
+  line-height: 0;
+  cursor: pointer;
+}
+.prosemirror-editor .ProseMirror .docx-shape.ProseMirror-selectednode {
+  outline: 2px solid var(--doc-primary, #4285f4);
+  outline-offset: 2px;
+}
+.prosemirror-editor .ProseMirror .docx-textbox {
+  border-radius: 2px;
+  margin: 4px 0;
+  cursor: text;
+}
+.prosemirror-editor .ProseMirror .docx-textbox.ProseMirror-selectednode {
+  outline: 2px solid var(--doc-primary, #4285f4);
+  outline-offset: 2px;
+}
+.prosemirror-editor .ProseMirror a {
+  color: var(--doc-link);
+  text-decoration: underline;
+}
+.prosemirror-editor .ProseMirror a:hover {
+  color: var(--doc-primary-hover);
+}
+.prosemirror-editor .ProseMirror .docx-footnote-ref,
+.prosemirror-editor .ProseMirror .docx-endnote-ref {
+  color: var(--doc-link, #0066cc);
+  cursor: pointer;
+  vertical-align: super;
+  font-size: smaller;
+}
+.prosemirror-editor .ProseMirror .docx-footnote-ref:hover,
+.prosemirror-editor .ProseMirror .docx-endnote-ref:hover {
+  text-decoration: underline;
+}
+.prosemirror-editor .ProseMirror hr {
+  border: none;
+  border-top: 1px solid #000;
+  margin: 12pt 0;
+  height: 0;
+}
+.prosemirror-editor .ProseMirror table.docx-table {
+  border-collapse: collapse;
+  margin: 12pt 0;
+  max-width: 100%;
+}
+.prosemirror-editor .ProseMirror td.docx-table-cell,
+.prosemirror-editor .ProseMirror th.docx-table-header {
+  padding: 4px 8px;
+  vertical-align: top;
+  min-width: 30px;
+}
+.prosemirror-editor .ProseMirror th.docx-table-header {
+  font-weight: 700;
+  text-align: left;
+}
+.prosemirror-editor .ProseMirror td p,
+.prosemirror-editor .ProseMirror th p {
+  margin: 0;
+  padding: 0;
+  min-height: auto;
+}
+.prosemirror-editor .ProseMirror td p:first-child,
+.prosemirror-editor .ProseMirror th p:first-child {
+  margin-top: 0;
+}
+.prosemirror-editor .ProseMirror td p:last-child,
+.prosemirror-editor .ProseMirror th p:last-child {
+  margin-bottom: 0;
+}
+.prosemirror-editor .ProseMirror .activeCell {
+  outline: 2px solid rgba(66, 133, 244, 0.5);
+  outline-offset: -2px;
+}
+.prosemirror-editor .ProseMirror .selectedCell {
+  background-color: #4285f426;
+}
+.prosemirror-editor .ProseMirror .selectedCell:after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: #4285f41a;
+  pointer-events: none;
+}
+.prosemirror-editor .ProseMirror table table {
+  margin: 4px 0;
+}
+.prosemirror-editor .ProseMirror .column-resize-handle {
+  position: absolute;
+  right: -2px;
+  top: 0;
+  bottom: 0;
+  width: 4px;
+  background-color: #4285f480;
+  cursor: col-resize;
+  z-index: 20;
+}
+.prosemirror-editor .ProseMirror td.docx-table-cell,
+.prosemirror-editor .ProseMirror th.docx-table-header {
+  position: relative;
+}
+.prosemirror-editor .ProseMirror.resize-cursor {
+  cursor: col-resize;
+}
+.prosemirror-editor .ProseMirror table:not(:hover) .column-resize-handle {
+  background-color: transparent;
+}
+.prosemirror-editor .ProseMirror table:hover .column-resize-handle {
+  background-color: #4285f44d;
+}
+.prosemirror-editor .ProseMirror .column-resize-handle:hover {
+  background-color: #4285f4b3;
+}
+.prosemirror-editor .ProseMirror span.docx-tab {
+  display: inline-block;
+  min-width: 48px;
+  white-space: pre;
+  background: transparent;
+}
+.prosemirror-editor .ProseMirror span.docx-tab[data-leader='dot']:before {
+  content: '...........';
+  position: absolute;
+  color: inherit;
+  white-space: nowrap;
+  overflow: hidden;
+}
+.prosemirror-editor .ProseMirror span.docx-tab[data-leader='hyphen']:before {
+  content: '-----------';
+  position: absolute;
+  color: inherit;
+  white-space: nowrap;
+  overflow: hidden;
+}
+.prosemirror-editor .ProseMirror span.docx-tab[data-leader='underscore']:before {
+  content: '___________';
+  position: absolute;
+  color: inherit;
+  white-space: nowrap;
+  overflow: hidden;
+}
+.prosemirror-editor .ProseMirror .docx-run-all-caps {
+  text-transform: uppercase;
+}
+.prosemirror-editor .ProseMirror .docx-run-small-caps {
+  font-variant: small-caps;
+}
+.docx-section-break {
+  position: relative;
+}
+.docx-section-break:after {
+  content: 'Section Break (' attr(data-section-break) ')';
+  display: block;
+  text-align: center;
+  font-size: 9px;
+  color: var(--doc-text-muted, #9ca3af);
+  border-top: 1px dashed var(--doc-border, #d1d5db);
+  margin-top: 4px;
+  padding-top: 2px;
+  pointer-events: none;
+}
+.prosemirror-editor .ProseMirror .pm-drop-indicator {
+  position: absolute;
+  width: 2px;
+  background: var(--doc-primary, #4285f4);
+  pointer-events: none;
+  z-index: 50;
+}
+.prosemirror-editor .ProseMirror .ProseMirror-dropcursor {
+  z-index: 50;
+}
+.layout-page-content {
+  cursor: text;
+}
+.layout-page-header,
+.layout-page-footer {
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+}
+.layout-page-header:hover,
+.layout-page-footer:hover {
+  background-color: #2563eb0f;
+}
+.layout-page-header:empty:hover:after {
+  content: 'Double-click to add header';
+  display: block;
+  text-align: center;
+  color: #9ca3af;
+  font-size: 11px;
+  padding: 4px 0;
+}
+.layout-page-footer:empty:hover:after {
+  content: 'Double-click to add footer';
+  display: block;
+  text-align: center;
+  color: #9ca3af;
+  font-size: 11px;
+  padding: 4px 0;
+}
+.hf-editor-pm .ProseMirror {
+  outline: none;
+  min-height: 40px;
+  padding: 4px;
+}
+.hf-editor-pm .ProseMirror:focus {
+  outline: none;
+}
+.hf-editor-pm .ProseMirror p {
+  display: block;
+  margin: 0;
+  padding: 0;
+  min-height: 1em;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  line-height: normal;
+}
+.paged-editor--hf-editing .layout-page-content {
+  opacity: 0.4;
+  pointer-events: none;
+  transition: opacity 0.15s ease;
+}
+.paged-editor--editing-header .layout-page-header {
+  border-bottom: 1px dotted #4285f4;
+}
+.paged-editor--editing-footer .layout-page-footer {
+  border-top: 1px dotted #4285f4;
+}
+.paged-editor--editing-header .layout-page-header > * {
+  visibility: hidden;
+}
+.paged-editor--editing-footer .layout-page-footer > * {
+  visibility: hidden;
+}
+.paged-editor--hf-editing .layout-page-header:hover,
+.paged-editor--hf-editing .layout-page-footer:hover {
+  background-color: transparent;
+}

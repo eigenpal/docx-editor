@@ -65,3 +65,5 @@ examples/plugins/*/package-lock.json
 
 # Reference documentation (large files - can be re-downloaded)
 reference/ecma-376/*.zip
+!packages/react/dist/
+!packages/core/dist/

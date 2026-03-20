@@ -1,0 +1,4638 @@
+'use strict';
+var Fn = require('jszip'),
+  xmlJs = require('xml-js');
+function _interopDefault(e) {
+  return e && e.__esModule ? e : { default: e };
+}
+var Fn__default = /*#__PURE__*/ _interopDefault(Fn);
+function fr(e) {
+  return (e / 1440) * 96;
+}
+function dr(e) {
+  return (e / 96) * 1440;
+}
+function se(e) {
+  return e == null || isNaN(e) ? 0 : Math.round((e * 96) / 914400);
+}
+function gn(e) {
+  return (e / 96) * 914400;
+}
+function pr(e) {
+  return (e / 914400) * 1440;
+}
+function mr(e) {
+  return (e / 1440) * 914400;
+}
+function gr(e) {
+  return (e / 72) * 96;
+}
+function hr(e) {
+  return (e / 144) * 96;
+}
+function hn(e, t = 2) {
+  let n = Math.pow(10, t);
+  return Math.round(e * n) / n;
+}
+function wr(e) {
+  return `${hn(e)}px`;
+}
+var J = new Set(),
+  le = new Map(),
+  Ce = new Set(),
+  Se = false;
+function wn(e, t = [400, 700], n = ['normal', 'italic']) {
+  let o = encodeURIComponent(e),
+    r = [];
+  for (let a of n) {
+    let u = a === 'italic' ? 1 : 0;
+    for (let c of t) r.push(`${u},${c}`);
+  }
+  r.sort();
+  let i = r.join(';');
+  return `https://fonts.googleapis.com/css2?family=${o}:ital,wght@${i}&display=swap`;
+}
+async function ke(e, t) {
+  if (typeof document > 'u') return false;
+  let n = e.trim();
+  if (J.has(n)) return true;
+  let o = le.get(n);
+  if (o) return o;
+  let r = (async () => {
+    Se = true;
+    try {
+      let i = wn(n, t?.weights, t?.styles),
+        a = document.createElement('link');
+      return (
+        (a.rel = 'stylesheet'),
+        (a.href = i),
+        (await new Promise((c) => {
+          ((a.onload = () => c(!0)),
+            (a.onerror = () => c(!1)),
+            document.head.appendChild(a),
+            setTimeout(() => c(!1), 5e3));
+        }))
+          ? (await _e(n, 3e3), J.add(n), Ve([n]), !0)
+          : !1
+      );
+    } catch (i) {
+      return (console.warn(`Failed to load font "${n}":`, i), false);
+    } finally {
+      (le.delete(n), le.size === 0 && (Se = false));
+    }
+  })();
+  return (le.set(n, r), r);
+}
+async function bn(e, t) {
+  let n = e.filter((o) => !J.has(o.trim()));
+  n.length !== 0 && (await Promise.all(n.map((o) => ke(o, t))));
+}
+function yr(e) {
+  return J.has(e.trim());
+}
+function xr() {
+  return Se;
+}
+function Tr() {
+  return Array.from(J);
+}
+function Fr(e) {
+  return (
+    Ce.add(e),
+    () => {
+      Ce.delete(e);
+    }
+  );
+}
+function Ve(e) {
+  for (let t of Ce)
+    try {
+      t(e);
+    } catch (n) {
+      console.warn('Font load callback error:', n);
+    }
+}
+async function _e(e, t) {
+  if ('fonts' in document)
+    try {
+      let n = `400 16px "${e}"`;
+      return (
+        await Promise.race([document.fonts.load(n), new Promise((o) => setTimeout(o, t))]),
+        document.fonts.check(n)
+      );
+    } catch {}
+  return (await new Promise((n) => setTimeout(n, 100)), true);
+}
+function Cr(e, t = 'sans-serif') {
+  if (typeof document > 'u') return false;
+  let n = (r, i) => {
+    let u = document.createElement('canvas').getContext('2d');
+    if (!u) return false;
+    u.textBaseline = 'top';
+    let c = 'abcdefghijklmnopqrstuvwxyz0123456789';
+    u.font = `72px ${i}`;
+    let f = u.measureText(c).width;
+    return ((u.font = `72px "${r}", ${i}`), u.measureText(c).width !== f);
+  };
+  return n(e, t) ? true : n(e, t === 'sans-serif' ? 'serif' : 'sans-serif');
+}
+async function Sr(e, t, n) {
+  let o = e.trim();
+  if (J.has(o)) return true;
+  try {
+    let r = new Blob([t], { type: 'font/ttf' }),
+      i = URL.createObjectURL(r),
+      a = document.createElement('style');
+    return (
+      (a.textContent = `
+      @font-face {
+        font-family: "${o}";
+        src: url(${i}) format('truetype');
+        font-weight: ${n?.weight ?? 'normal'};
+        font-style: ${n?.style ?? 'normal'};
+        font-display: swap;
+      }
+    `),
+      document.head.appendChild(a),
+      await _e(o, 3e3),
+      J.add(o),
+      Ve([o]),
+      !0
+    );
+  } catch (r) {
+    return (console.warn(`Failed to load font "${o}" from buffer:`, r), false);
+  }
+}
+var yn = {
+  Calibri: 'Carlito',
+  Cambria: 'Caladea',
+  Arial: 'Arimo',
+  'Times New Roman': 'Tinos',
+  'Courier New': 'Cousine',
+  Garamond: 'EB Garamond',
+  'Book Antiqua': 'EB Garamond',
+  Georgia: 'Tinos',
+  Verdana: 'Open Sans',
+  Tahoma: 'Open Sans',
+  'Trebuchet MS': 'Source Sans Pro',
+  'Century Gothic': 'Poppins',
+  'Franklin Gothic': 'Libre Franklin',
+  Palatino: 'EB Garamond',
+  'Palatino Linotype': 'EB Garamond',
+  'Lucida Sans': 'Open Sans',
+  'Segoe UI': 'Open Sans',
+  Impact: 'Anton',
+  'Comic Sans MS': 'Comic Neue',
+  Consolas: 'Inconsolata',
+  'Lucida Console': 'Inconsolata',
+  Monaco: 'Fira Code',
+};
+function xn(e) {
+  let t = e.trim();
+  return yn[t] || t;
+}
+async function Tn(e) {
+  let t = e.trim(),
+    n = xn(t);
+  if (n !== t) {
+    let o = await ke(n);
+    return (o && J.add(t), o);
+  }
+  return ke(n);
+}
+async function ze(e) {
+  let t = [...new Set(e.map((n) => n.trim()))];
+  await Promise.all(t.map((n) => Tn(n)));
+}
+async function kr() {
+  await bn(['Carlito', 'Caladea', 'Arimo', 'Tinos', 'Cousine', 'EB Garamond']);
+}
+async function Ue(e) {
+  if (e instanceof ArrayBuffer) return e;
+  if (e instanceof Uint8Array) {
+    let t = new ArrayBuffer(e.byteLength);
+    return (new Uint8Array(t).set(e), t);
+  }
+  if (e instanceof Blob) return e.arrayBuffer();
+  throw new TypeError(`Unsupported DocxInput type: ${typeof e}`);
+}
+async function $e(e) {
+  let t = await Fn__default.default.loadAsync(e),
+    n = {
+      documentXml: null,
+      stylesXml: null,
+      themeXml: null,
+      numberingXml: null,
+      fontTableXml: null,
+      settingsXml: null,
+      webSettingsXml: null,
+      headers: new Map(),
+      footers: new Map(),
+      footnotesXml: null,
+      endnotesXml: null,
+      commentsXml: null,
+      commentsExtensibleXml: null,
+      documentRels: null,
+      packageRels: null,
+      contentTypesXml: null,
+      corePropsXml: null,
+      appPropsXml: null,
+      customPropsXml: null,
+      media: new Map(),
+      fonts: new Map(),
+      allXml: new Map(),
+      originalZip: t,
+      originalBuffer: e,
+    };
+  for (let [o, r] of Object.entries(t.files)) {
+    if (r.dir) continue;
+    let i = o.toLowerCase();
+    if (i.endsWith('.xml') || i.endsWith('.rels')) {
+      let a = await r.async('text');
+      if ((n.allXml.set(o, a), i === 'word/document.xml')) n.documentXml = a;
+      else if (i === 'word/styles.xml') n.stylesXml = a;
+      else if (i === 'word/theme/theme1.xml') n.themeXml = a;
+      else if (i === 'word/numbering.xml') n.numberingXml = a;
+      else if (i === 'word/fonttable.xml') n.fontTableXml = a;
+      else if (i === 'word/settings.xml') n.settingsXml = a;
+      else if (i === 'word/websettings.xml') n.webSettingsXml = a;
+      else if (i === 'word/footnotes.xml') n.footnotesXml = a;
+      else if (i === 'word/endnotes.xml') n.endnotesXml = a;
+      else if (i === 'word/comments.xml') n.commentsXml = a;
+      else if (i === 'word/commentsextensible.xml' || i === 'word/commentsextended.xml')
+        n.commentsExtensibleXml || (n.commentsExtensibleXml = a);
+      else if (i === 'word/_rels/document.xml.rels') n.documentRels = a;
+      else if (i === '_rels/.rels') n.packageRels = a;
+      else if (i === '[content_types].xml') n.contentTypesXml = a;
+      else if (i === 'docprops/core.xml') n.corePropsXml = a;
+      else if (i === 'docprops/app.xml') n.appPropsXml = a;
+      else if (i === 'docprops/custom.xml') n.customPropsXml = a;
+      else if (i.match(/^word\/header\d+\.xml$/)) {
+        let u = o.split('/').pop() || o;
+        n.headers.set(u, a);
+      } else if (i.match(/^word\/footer\d+\.xml$/)) {
+        let u = o.split('/').pop() || o;
+        n.footers.set(u, a);
+      }
+    } else if (i.startsWith('word/media/')) {
+      let a = await r.async('arraybuffer');
+      n.media.set(o, a);
+    } else if (i.startsWith('word/fonts/')) {
+      let a = await r.async('arraybuffer');
+      n.fonts.set(o, a);
+    }
+  }
+  return n;
+}
+function Ge(e) {
+  switch (e.toLowerCase().split('.').pop()) {
+    case 'png':
+      return 'image/png';
+    case 'jpg':
+    case 'jpeg':
+      return 'image/jpeg';
+    case 'gif':
+      return 'image/gif';
+    case 'bmp':
+      return 'image/bmp';
+    case 'tif':
+    case 'tiff':
+      return 'image/tiff';
+    case 'wmf':
+      return 'image/x-wmf';
+    case 'emf':
+      return 'image/x-emf';
+    case 'svg':
+      return 'image/svg+xml';
+    case 'webp':
+      return 'image/webp';
+    default:
+      return 'application/octet-stream';
+  }
+}
+function j(e) {
+  return xmlJs.xml2js(e, {
+    compact: false,
+    ignoreComment: true,
+    ignoreInstruction: true,
+    ignoreDoctype: true,
+    alwaysArray: false,
+    trim: false,
+    captureSpacesBetweenElements: true,
+    attributesKey: 'attributes',
+    textKey: 'text',
+  });
+}
+function qe(e) {
+  return xmlJs.js2xml({ elements: [e] }, { compact: false, spaces: 0 });
+}
+function G(e) {
+  try {
+    let t = j(e);
+    return t.elements && t.elements.length > 0
+      ? (t.elements.find((n) => n.type === 'element') ?? null)
+      : t;
+  } catch (t) {
+    return (console.warn('Failed to parse XML:', t), null);
+  }
+}
+function Q(e) {
+  let t = e.indexOf(':');
+  return t >= 0 ? e.substring(t + 1) : e;
+}
+function kn(e, t, n) {
+  if (!e.name) return false;
+  let o = `${t}:${n}`;
+  return e.name === o || Q(e.name) === n;
+}
+function l(e, t, n) {
+  if (!e || !e.elements) return null;
+  let o = `${t}:${n}`;
+  for (let r of e.elements)
+    if (r.type === 'element' && (r.name === o || Q(r.name || '') === n)) return r;
+  return null;
+}
+function A(e, t, n) {
+  if (!e || !e.elements) return [];
+  let o = `${t}:${n}`,
+    r = [];
+  for (let i of e.elements)
+    i.type === 'element' && (i.name === o || Q(i.name || '') === n) && r.push(i);
+  return r;
+}
+function B(e, t) {
+  if (!e || !e.elements) return null;
+  for (let n of e.elements) if (n.type === 'element' && n.name === t) return n;
+  return null;
+}
+function X(e) {
+  return !e || !e.elements ? [] : e.elements.filter((t) => t.type === 'element');
+}
+function s(e, t, n) {
+  if (!e || !e.attributes) return null;
+  let o = e.attributes;
+  if (t) {
+    let r = `${t}:${n}`;
+    if (r in o) return o[r];
+  }
+  return n in o ? o[n] : null;
+}
+function q(e) {
+  if (!e) return '';
+  if ('text' in e && typeof e.text == 'string') return e.text;
+  if (!e.elements) return '';
+  let t = '';
+  for (let n of e.elements)
+    n.type === 'text' && 'text' in n ? (t += n.text ?? '') : n.type === 'element' && (t += q(n));
+  return t;
+}
+function g(e, t, n, o = 1) {
+  let r = s(e, t, n);
+  if (r === null) return;
+  let i = parseInt(r, 10);
+  if (!isNaN(i)) return i * o;
+}
+function F(e, t = 'w') {
+  if (!e) return false;
+  let n = s(e, t, 'val');
+  return n === null ? true : !(n === '0' || n === 'false' || n === 'off');
+}
+function Ee(e, t, n) {
+  if (!e) return null;
+  if (kn(e, t, n)) return e;
+  if (e.elements)
+    for (let o of e.elements) {
+      if (o.type !== 'element') continue;
+      let r = Ee(o, t, n);
+      if (r) return r;
+    }
+  return null;
+}
+var ue = {
+  image: 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/image',
+  hyperlink: 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink',
+  header: 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/header',
+  footer: 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/footer',
+  footnotes: 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/footnotes',
+  endnotes: 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/endnotes',
+  styles: 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles',
+  numbering: 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/numbering',
+  fontTable: 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/fontTable',
+  theme: 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/theme',
+  settings: 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/settings',
+  webSettings: 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/webSettings',
+  oleObject: 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/oleObject',
+  chart: 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/chart',
+  diagramData: 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/diagramData',
+  officeDocument:
+    'http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument',
+  coreProperties:
+    'http://schemas.openxmlformats.org/package/2006/relationships/metadata/core-properties',
+  extendedProperties:
+    'http://schemas.openxmlformats.org/officeDocument/2006/relationships/extended-properties',
+  customProperties:
+    'http://schemas.openxmlformats.org/officeDocument/2006/relationships/custom-properties',
+  customXml: 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/customXml',
+  comments: 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/comments',
+};
+function ce(e) {
+  let t = new Map();
+  if (!e || e.trim().length === 0) return t;
+  let n = G(e);
+  if (!n) return (console.warn('Failed to parse relationships XML'), t);
+  let o = X(n);
+  for (let r of o) {
+    let i = r.name || '';
+    if (!i.endsWith('Relationship') && !i.includes(':Relationship')) continue;
+    let a = s(r, null, 'Id'),
+      u = s(r, null, 'Type'),
+      c = s(r, null, 'Target'),
+      f = s(r, null, 'TargetMode');
+    if (!a || !u || !c) {
+      console.warn('Relationship missing required attributes:', { id: a, type: u, target: c });
+      continue;
+    }
+    let m = { id: a, type: u, target: c };
+    (f === 'External'
+      ? (m.targetMode = 'External')
+      : f === 'Internal' && (m.targetMode = 'Internal'),
+      t.set(a, m));
+  }
+  return t;
+}
+function Ze(e) {
+  return e.type === ue.hyperlink && e.targetMode === 'External';
+}
+function Me(e, t) {
+  return e.get(t)?.target;
+}
+var Je = {
+    dk1: '000000',
+    lt1: 'FFFFFF',
+    dk2: '44546A',
+    lt2: 'E7E6E6',
+    accent1: '4472C4',
+    accent2: 'ED7D31',
+    accent3: 'A5A5A5',
+    accent4: 'FFC000',
+    accent5: '5B9BD5',
+    accent6: '70AD47',
+    hlink: '0563C1',
+    folHlink: '954F72',
+  },
+  fe = {
+    majorFont: { latin: 'Calibri Light', ea: '', cs: '', fonts: {} },
+    minorFont: { latin: 'Calibri', ea: '', cs: '', fonts: {} },
+  },
+  Pe = { name: 'Office Theme', colorScheme: Je, fontScheme: fe },
+  En = [
+    'dk1',
+    'lt1',
+    'dk2',
+    'lt2',
+    'accent1',
+    'accent2',
+    'accent3',
+    'accent4',
+    'accent5',
+    'accent6',
+    'hlink',
+    'folHlink',
+  ];
+function Mn(e) {
+  if (!e) return null;
+  switch (Q(e.name || '')) {
+    case 'srgbClr':
+      return s(e, 'a', 'val') ?? s(e, null, 'val') ?? null;
+    case 'sysClr': {
+      let n = s(e, 'a', 'lastClr') ?? s(e, null, 'lastClr');
+      if (n) return n;
+      switch (s(e, 'a', 'val') ?? s(e, null, 'val')) {
+        case 'windowText':
+        case 'menuText':
+        case 'captionText':
+        case 'btnText':
+          return '000000';
+        case 'window':
+        case 'menu':
+        case 'btnFace':
+        case 'btnHighlight':
+          return 'FFFFFF';
+        case 'highlight':
+          return '0078D7';
+        case 'highlightText':
+          return 'FFFFFF';
+        case 'grayText':
+          return '808080';
+        default:
+          return null;
+      }
+    }
+    case 'schemeClr': {
+      s(e, 'a', 'val') ?? s(e, null, 'val');
+      return null;
+    }
+    default:
+      return null;
+  }
+}
+function Pn(e) {
+  let t = { ...Je };
+  if (!e) return t;
+  for (let n of En) {
+    let o = l(e, 'a', n);
+    if (o) {
+      let r = X(o);
+      if (r.length > 0) {
+        let i = Mn(r[0]);
+        i && (t[n] = i);
+      }
+    }
+  }
+  return t;
+}
+function Ye(e) {
+  let t = { latin: '', ea: '', cs: '', fonts: {} };
+  if (!e) return t;
+  let n = l(e, 'a', 'latin');
+  n && (t.latin = s(n, 'a', 'typeface') ?? s(n, null, 'typeface') ?? '');
+  let o = l(e, 'a', 'ea');
+  o && (t.ea = s(o, 'a', 'typeface') ?? s(o, null, 'typeface') ?? '');
+  let r = l(e, 'a', 'cs');
+  r && (t.cs = s(r, 'a', 'typeface') ?? s(r, null, 'typeface') ?? '');
+  let i = A(e, 'a', 'font');
+  for (let a of i) {
+    let u = s(a, 'a', 'script') ?? s(a, null, 'script'),
+      c = s(a, 'a', 'typeface') ?? s(a, null, 'typeface');
+    u && c && ((t.fonts = t.fonts || {}), (t.fonts[u] = c));
+  }
+  return t;
+}
+function vn(e) {
+  let t = { ...fe };
+  if (!e) return t;
+  let n = l(e, 'a', 'majorFont');
+  n && (t.majorFont = Ye(n));
+  let o = l(e, 'a', 'minorFont');
+  return (o && (t.minorFont = Ye(o)), t);
+}
+function Qe(e) {
+  if (!e) return { ...Pe };
+  try {
+    let t = G(e);
+    if (!t) return { ...Pe };
+    let n = s(t, 'a', 'name') ?? s(t, null, 'name') ?? 'Office Theme',
+      o = l(t, 'a', 'themeElements'),
+      r = l(o, 'a', 'clrScheme'),
+      i = Pn(r),
+      a = l(o, 'a', 'fontScheme'),
+      u = vn(a);
+    return { name: n, colorScheme: i, fontScheme: u };
+  } catch (t) {
+    return (console.warn('Failed to parse theme:', t), { ...Pe });
+  }
+}
+function Rn(e, t = 'latin') {
+  if (!e?.fontScheme?.majorFont) return fe.majorFont?.latin ?? 'Calibri Light';
+  let n = e.fontScheme.majorFont;
+  return t === 'latin'
+    ? n.latin || 'Calibri Light'
+    : t === 'ea'
+      ? n.ea || ''
+      : t === 'cs'
+        ? n.cs || ''
+        : n.fonts?.[t]
+          ? n.fonts[t]
+          : n.latin || 'Calibri Light';
+}
+function Ke(e, t = 'latin') {
+  if (!e?.fontScheme?.minorFont) return fe.minorFont?.latin ?? 'Calibri';
+  let n = e.fontScheme.minorFont;
+  return t === 'latin'
+    ? n.latin || 'Calibri'
+    : t === 'ea'
+      ? n.ea || ''
+      : t === 'cs'
+        ? n.cs || ''
+        : n.fonts?.[t]
+          ? n.fonts[t]
+          : n.latin || 'Calibri';
+}
+function $(e, t) {
+  if (!t) return 'Calibri';
+  let n = t.toLowerCase().includes('major'),
+    o = t.toLowerCase().includes('minor'),
+    r = 'latin',
+    i = t.toLowerCase();
+  return (
+    i.includes('eastasia') ? (r = 'ea') : (i.includes('bidi') || i.includes('cs')) && (r = 'cs'),
+    n ? Rn(e, r) : o ? Ke(e, r) : Ke(e, 'latin')
+  );
+}
+function de(e, t) {
+  if (!e) return;
+  let n = {},
+    o = l(e, 'w', 'b');
+  o && (n.bold = F(o));
+  let r = l(e, 'w', 'bCs');
+  r && (n.boldCs = F(r));
+  let i = l(e, 'w', 'i');
+  i && (n.italic = F(i));
+  let a = l(e, 'w', 'iCs');
+  a && (n.italicCs = F(a));
+  let u = l(e, 'w', 'u');
+  if (u) {
+    let v = s(u, 'w', 'val');
+    if (v) {
+      n.underline = { style: v };
+      let P = s(u, 'w', 'color'),
+        D = s(u, 'w', 'themeColor');
+      (P || D) && (n.underline.color = ve(P, D, s(u, 'w', 'themeTint'), s(u, 'w', 'themeShade')));
+    }
+  }
+  let c = l(e, 'w', 'strike');
+  c && (n.strike = F(c));
+  let f = l(e, 'w', 'dstrike');
+  f && (n.doubleStrike = F(f));
+  let m = l(e, 'w', 'vertAlign');
+  if (m) {
+    let v = s(m, 'w', 'val');
+    (v === 'superscript' || v === 'subscript' || v === 'baseline') && (n.vertAlign = v);
+  }
+  let d = l(e, 'w', 'smallCaps');
+  d && (n.smallCaps = F(d));
+  let h = l(e, 'w', 'caps');
+  h && (n.allCaps = F(h));
+  let x = l(e, 'w', 'vanish');
+  x && (n.hidden = F(x));
+  let p = l(e, 'w', 'color');
+  p &&
+    (n.color = ve(
+      s(p, 'w', 'val'),
+      s(p, 'w', 'themeColor'),
+      s(p, 'w', 'themeTint'),
+      s(p, 'w', 'themeShade')
+    ));
+  let T = l(e, 'w', 'highlight');
+  if (T) {
+    let v = s(T, 'w', 'val');
+    v && (n.highlight = v);
+  }
+  let C = l(e, 'w', 'shd');
+  C && (n.shading = pe(C));
+  let I = l(e, 'w', 'sz');
+  if (I) {
+    let v = g(I, 'w', 'val');
+    v !== void 0 && (n.fontSize = v);
+  }
+  let M = l(e, 'w', 'szCs');
+  if (M) {
+    let v = g(M, 'w', 'val');
+    v !== void 0 && (n.fontSizeCs = v);
+  }
+  let S = l(e, 'w', 'rFonts');
+  if (S) {
+    n.fontFamily = {
+      ascii: s(S, 'w', 'ascii') ?? void 0,
+      hAnsi: s(S, 'w', 'hAnsi') ?? void 0,
+      eastAsia: s(S, 'w', 'eastAsia') ?? void 0,
+      cs: s(S, 'w', 'cs') ?? void 0,
+    };
+    let v = s(S, 'w', 'asciiTheme');
+    v &&
+      ((n.fontFamily.asciiTheme = v), t && !n.fontFamily.ascii && (n.fontFamily.ascii = $(t, v)));
+    let P = s(S, 'w', 'hAnsiTheme');
+    P &&
+      ((n.fontFamily.hAnsiTheme = P), t && !n.fontFamily.hAnsi && (n.fontFamily.hAnsi = $(t, P)));
+    let D = s(S, 'w', 'eastAsiaTheme');
+    D &&
+      ((n.fontFamily.eastAsiaTheme = D),
+      t && !n.fontFamily.eastAsia && (n.fontFamily.eastAsia = $(t, D)));
+    let U = s(S, 'w', 'cstheme');
+    U && ((n.fontFamily.csTheme = U), t && !n.fontFamily.cs && (n.fontFamily.cs = $(t, U)));
+  }
+  let w = l(e, 'w', 'spacing');
+  if (w) {
+    let v = g(w, 'w', 'val');
+    v !== void 0 && (n.spacing = v);
+  }
+  let b = l(e, 'w', 'position');
+  if (b) {
+    let v = g(b, 'w', 'val');
+    v !== void 0 && (n.position = v);
+  }
+  let k = l(e, 'w', 'w');
+  if (k) {
+    let v = g(k, 'w', 'val');
+    v !== void 0 && (n.scale = v);
+  }
+  let y = l(e, 'w', 'kern');
+  if (y) {
+    let v = g(y, 'w', 'val');
+    v !== void 0 && (n.kerning = v);
+  }
+  let E = l(e, 'w', 'effect');
+  if (E) {
+    let v = s(E, 'w', 'val');
+    v && (n.effect = v);
+  }
+  let R = l(e, 'w', 'em');
+  if (R) {
+    let v = s(R, 'w', 'val');
+    v && (n.emphasisMark = v);
+  }
+  let N = l(e, 'w', 'emboss');
+  N && (n.emboss = F(N));
+  let L = l(e, 'w', 'imprint');
+  L && (n.imprint = F(L));
+  let O = l(e, 'w', 'outline');
+  O && (n.outline = F(O));
+  let z = l(e, 'w', 'shadow');
+  z && (n.shadow = F(z));
+  let K = l(e, 'w', 'rtl');
+  K && (n.rtl = F(K));
+  let H = l(e, 'w', 'cs');
+  H && (n.cs = F(H));
+  let W = l(e, 'w', 'rStyle');
+  if (W) {
+    let v = s(W, 'w', 'val');
+    v && (n.styleId = v);
+  }
+  return Object.keys(n).length > 0 ? n : void 0;
+}
+function ve(e, t, n, o) {
+  let r = {};
+  return (
+    e && e !== 'auto' ? (r.rgb = e) : e === 'auto' && (r.auto = true),
+    t && (r.themeColor = t),
+    n && (r.themeTint = n),
+    o && (r.themeShade = o),
+    r
+  );
+}
+function pe(e) {
+  if (!e) return;
+  let t = {},
+    n = s(e, 'w', 'color');
+  n && n !== 'auto' && (t.color = { rgb: n });
+  let o = s(e, 'w', 'fill');
+  o && o !== 'auto' && (t.fill = { rgb: o });
+  let r = s(e, 'w', 'themeFill');
+  r && ((t.fill = t.fill || {}), (t.fill.themeColor = r));
+  let i = s(e, 'w', 'themeFillTint');
+  i && t.fill && (t.fill.themeTint = i);
+  let a = s(e, 'w', 'themeFillShade');
+  a && t.fill && (t.fill.themeShade = a);
+  let u = s(e, 'w', 'val');
+  return (u && (t.pattern = u), Object.keys(t).length > 0 ? t : void 0);
+}
+function V(e) {
+  if (!e) return;
+  let t = s(e, 'w', 'val');
+  if (!t) return;
+  let n = { style: t },
+    o = s(e, 'w', 'color'),
+    r = s(e, 'w', 'themeColor');
+  (o || r) && (n.color = ve(o, r, s(e, 'w', 'themeTint'), s(e, 'w', 'themeShade')));
+  let i = g(e, 'w', 'sz');
+  i !== void 0 && (n.size = i);
+  let a = g(e, 'w', 'space');
+  a !== void 0 && (n.space = a);
+  let u = s(e, 'w', 'shadow');
+  u && (n.shadow = u === '1' || u === 'true');
+  let c = s(e, 'w', 'frame');
+  return (c && (n.frame = c === '1' || c === 'true'), n);
+}
+function In(e) {
+  if (!e) return;
+  let t = A(e, 'w', 'tab');
+  if (t.length === 0) return;
+  let n = [];
+  for (let o of t) {
+    let r = g(o, 'w', 'pos'),
+      i = s(o, 'w', 'val');
+    if (r !== void 0 && i) {
+      let a = { position: r, alignment: i },
+        u = s(o, 'w', 'leader');
+      (u && (a.leader = u), n.push(a));
+    }
+  }
+  return n.length > 0 ? n : void 0;
+}
+function Re(e, t) {
+  if (!e) return;
+  let n = {},
+    o = l(e, 'w', 'jc');
+  if (o) {
+    let b = s(o, 'w', 'val');
+    b && (n.alignment = b);
+  }
+  let r = l(e, 'w', 'bidi');
+  r && (n.bidi = F(r));
+  let i = l(e, 'w', 'spacing');
+  if (i) {
+    let b = g(i, 'w', 'before');
+    b !== void 0 && (n.spaceBefore = b);
+    let k = g(i, 'w', 'after');
+    k !== void 0 && (n.spaceAfter = k);
+    let y = g(i, 'w', 'line');
+    y !== void 0 && (n.lineSpacing = y);
+    let E = s(i, 'w', 'lineRule');
+    E && (n.lineSpacingRule = E);
+    let R = s(i, 'w', 'beforeAutospacing');
+    R && (n.beforeAutospacing = R === '1' || R === 'true');
+    let N = s(i, 'w', 'afterAutospacing');
+    N && (n.afterAutospacing = N === '1' || N === 'true');
+  }
+  let a = l(e, 'w', 'ind');
+  if (a) {
+    let b = g(a, 'w', 'left');
+    b !== void 0 && (n.indentLeft = b);
+    let k = g(a, 'w', 'right');
+    k !== void 0 && (n.indentRight = k);
+    let y = g(a, 'w', 'firstLine');
+    y !== void 0 && (n.indentFirstLine = y);
+    let E = g(a, 'w', 'hanging');
+    E !== void 0 && ((n.indentFirstLine = -E), (n.hangingIndent = true));
+  }
+  let u = l(e, 'w', 'pBdr');
+  if (u) {
+    let b = {},
+      k = V(l(u, 'w', 'top'));
+    k && (b.top = k);
+    let y = V(l(u, 'w', 'bottom'));
+    y && (b.bottom = y);
+    let E = V(l(u, 'w', 'left'));
+    E && (b.left = E);
+    let R = V(l(u, 'w', 'right'));
+    R && (b.right = R);
+    let N = V(l(u, 'w', 'between'));
+    N && (b.between = N);
+    let L = V(l(u, 'w', 'bar'));
+    (L && (b.bar = L), Object.keys(b).length > 0 && (n.borders = b));
+  }
+  let c = l(e, 'w', 'shd');
+  c && (n.shading = pe(c));
+  let f = l(e, 'w', 'tabs');
+  f && (n.tabs = In(f));
+  let m = l(e, 'w', 'keepNext');
+  m && (n.keepNext = F(m));
+  let d = l(e, 'w', 'keepLines');
+  d && (n.keepLines = F(d));
+  let h = l(e, 'w', 'widowControl');
+  h && (n.widowControl = F(h));
+  let x = l(e, 'w', 'pageBreakBefore');
+  x && (n.pageBreakBefore = F(x));
+  let p = l(e, 'w', 'contextualSpacing');
+  p && (n.contextualSpacing = F(p));
+  let T = l(e, 'w', 'numPr');
+  if (T) {
+    let b = l(T, 'w', 'numId'),
+      k = l(T, 'w', 'ilvl');
+    if (b || k) {
+      if (((n.numPr = {}), b)) {
+        let y = g(b, 'w', 'val');
+        y !== void 0 && (n.numPr.numId = y);
+      }
+      if (k) {
+        let y = g(k, 'w', 'val');
+        y !== void 0 && (n.numPr.ilvl = y);
+      }
+    }
+  }
+  let C = l(e, 'w', 'outlineLvl');
+  if (C) {
+    let b = g(C, 'w', 'val');
+    b !== void 0 && (n.outlineLevel = b);
+  }
+  let I = l(e, 'w', 'pStyle');
+  if (I) {
+    let b = s(I, 'w', 'val');
+    b && (n.styleId = b);
+  }
+  let M = l(e, 'w', 'suppressLineNumbers');
+  M && (n.suppressLineNumbers = F(M));
+  let S = l(e, 'w', 'suppressAutoHyphens');
+  S && (n.suppressAutoHyphens = F(S));
+  let w = l(e, 'w', 'rPr');
+  return (w && (n.runProperties = de(w, t)), Object.keys(n).length > 0 ? n : void 0);
+}
+function Z(e) {
+  if (!e) return;
+  let t = g(e, 'w', 'w'),
+    n = s(e, 'w', 'type');
+  if (t !== void 0 && n) return { value: t, type: n };
+}
+function ot(e) {
+  if (!e) return;
+  let t = {},
+    n = V(l(e, 'w', 'top'));
+  n && (t.top = n);
+  let o = V(l(e, 'w', 'bottom'));
+  o && (t.bottom = o);
+  let r = V(l(e, 'w', 'left'));
+  r && (t.left = r);
+  let i = V(l(e, 'w', 'right'));
+  i && (t.right = i);
+  let a = V(l(e, 'w', 'insideH'));
+  a && (t.insideH = a);
+  let u = V(l(e, 'w', 'insideV'));
+  return (u && (t.insideV = u), Object.keys(t).length > 0 ? t : void 0);
+}
+function rt(e) {
+  if (!e) return;
+  let t = {},
+    n = Z(l(e, 'w', 'top'));
+  n && (t.top = n);
+  let o = Z(l(e, 'w', 'bottom'));
+  o && (t.bottom = o);
+  let r = Z(l(e, 'w', 'left'));
+  r && (t.left = r);
+  let i = Z(l(e, 'w', 'right'));
+  return (i && (t.right = i), Object.keys(t).length > 0 ? t : void 0);
+}
+function Bn(e) {
+  if (!e) return;
+  let t = {},
+    n = s(e, 'w', 'val');
+  if (n) {
+    let f = parseInt(n, 16);
+    isNaN(f) ||
+      ((t.firstRow = (f & 32) !== 0),
+      (t.lastRow = (f & 64) !== 0),
+      (t.firstColumn = (f & 128) !== 0),
+      (t.lastColumn = (f & 256) !== 0),
+      (t.noHBand = (f & 512) !== 0),
+      (t.noVBand = (f & 1024) !== 0));
+  }
+  let o = s(e, 'w', 'firstColumn');
+  o && (t.firstColumn = o === '1');
+  let r = s(e, 'w', 'firstRow');
+  r && (t.firstRow = r === '1');
+  let i = s(e, 'w', 'lastColumn');
+  i && (t.lastColumn = i === '1');
+  let a = s(e, 'w', 'lastRow');
+  a && (t.lastRow = a === '1');
+  let u = s(e, 'w', 'noHBand');
+  u && (t.noHBand = u === '1');
+  let c = s(e, 'w', 'noVBand');
+  return (c && (t.noVBand = c === '1'), Object.keys(t).length > 0 ? t : void 0);
+}
+function et(e, t) {
+  if (!e) return;
+  let n = {},
+    o = l(e, 'w', 'tblW');
+  o && (n.width = Z(o));
+  let r = l(e, 'w', 'jc');
+  if (r) {
+    let p = s(r, 'w', 'val');
+    (p === 'left' || p === 'center' || p === 'right') && (n.justification = p);
+  }
+  let i = l(e, 'w', 'tblCellSpacing');
+  i && (n.cellSpacing = Z(i));
+  let a = l(e, 'w', 'tblInd');
+  a && (n.indent = Z(a));
+  let u = l(e, 'w', 'tblBorders');
+  u && (n.borders = ot(u));
+  let c = l(e, 'w', 'tblCellMar');
+  c && (n.cellMargins = rt(c));
+  let f = l(e, 'w', 'tblLayout');
+  if (f) {
+    let p = s(f, 'w', 'type');
+    (p === 'fixed' || p === 'autofit') && (n.layout = p);
+  }
+  let m = l(e, 'w', 'tblStyle');
+  if (m) {
+    let p = s(m, 'w', 'val');
+    p && (n.styleId = p);
+  }
+  let d = l(e, 'w', 'tblLook');
+  d && (n.look = Bn(d));
+  let h = l(e, 'w', 'shd');
+  h && (n.shading = pe(h));
+  let x = l(e, 'w', 'bidiVisual');
+  return (x && (n.bidi = F(x)), Object.keys(n).length > 0 ? n : void 0);
+}
+function tt(e) {
+  if (!e) return;
+  let t = {},
+    n = l(e, 'w', 'trHeight');
+  if (n) {
+    t.height = Z(n);
+    let u = s(n, 'w', 'hRule');
+    u && (t.heightRule = u);
+  }
+  let o = l(e, 'w', 'tblHeader');
+  o && (t.header = F(o));
+  let r = l(e, 'w', 'cantSplit');
+  r && (t.cantSplit = F(r));
+  let i = l(e, 'w', 'jc');
+  if (i) {
+    let u = s(i, 'w', 'val');
+    (u === 'left' || u === 'center' || u === 'right') && (t.justification = u);
+  }
+  let a = l(e, 'w', 'hidden');
+  return (a && (t.hidden = F(a)), Object.keys(t).length > 0 ? t : void 0);
+}
+function nt(e, t) {
+  if (!e) return;
+  let n = {},
+    o = l(e, 'w', 'tcW');
+  o && (n.width = Z(o));
+  let r = l(e, 'w', 'tcBorders');
+  r && (n.borders = ot(r));
+  let i = l(e, 'w', 'tcMar');
+  i && (n.margins = rt(i));
+  let a = l(e, 'w', 'shd');
+  a && (n.shading = pe(a));
+  let u = l(e, 'w', 'vAlign');
+  if (u) {
+    let p = s(u, 'w', 'val');
+    (p === 'top' || p === 'center' || p === 'bottom') && (n.verticalAlign = p);
+  }
+  let c = l(e, 'w', 'textDirection');
+  if (c) {
+    let p = s(c, 'w', 'val');
+    p && (n.textDirection = p);
+  }
+  let f = l(e, 'w', 'gridSpan');
+  if (f) {
+    let p = g(f, 'w', 'val');
+    p !== void 0 && (n.gridSpan = p);
+  }
+  let m = l(e, 'w', 'vMerge');
+  if (m) {
+    let p = s(m, 'w', 'val');
+    n.vMerge = p === 'restart' ? 'restart' : 'continue';
+  }
+  let d = l(e, 'w', 'tcFitText');
+  d && (n.fitText = F(d));
+  let h = l(e, 'w', 'noWrap');
+  h && (n.noWrap = F(h));
+  let x = l(e, 'w', 'hideMark');
+  return (x && (n.hideMark = F(x)), Object.keys(n).length > 0 ? n : void 0);
+}
+function Nn(e, t) {
+  let n = { styleId: s(e, 'w', 'styleId') ?? '', type: s(e, 'w', 'type') ?? 'paragraph' },
+    o = s(e, 'w', 'default');
+  o && (n.default = o === '1' || o === 'true');
+  let r = l(e, 'w', 'name');
+  r && (n.name = s(r, 'w', 'val') ?? void 0);
+  let i = l(e, 'w', 'basedOn');
+  i && (n.basedOn = s(i, 'w', 'val') ?? void 0);
+  let a = l(e, 'w', 'next');
+  a && (n.next = s(a, 'w', 'val') ?? void 0);
+  let u = l(e, 'w', 'link');
+  u && (n.link = s(u, 'w', 'val') ?? void 0);
+  let c = l(e, 'w', 'uiPriority');
+  if (c) {
+    let w = g(c, 'w', 'val');
+    w !== void 0 && (n.uiPriority = w);
+  }
+  let f = l(e, 'w', 'hidden');
+  f && (n.hidden = F(f));
+  let m = l(e, 'w', 'semiHidden');
+  m && (n.semiHidden = F(m));
+  let d = l(e, 'w', 'unhideWhenUsed');
+  d && (n.unhideWhenUsed = F(d));
+  let h = l(e, 'w', 'qFormat');
+  h && (n.qFormat = F(h));
+  let x = l(e, 'w', 'personal');
+  x && (n.personal = F(x));
+  let p = l(e, 'w', 'pPr');
+  p && (n.pPr = Re(p, t));
+  let T = l(e, 'w', 'rPr');
+  T && (n.rPr = de(T, t));
+  let C = l(e, 'w', 'tblPr');
+  C && (n.tblPr = et(C));
+  let I = l(e, 'w', 'trPr');
+  I && (n.trPr = tt(I));
+  let M = l(e, 'w', 'tcPr');
+  M && (n.tcPr = nt(M));
+  let S = A(e, 'w', 'tblStylePr');
+  if (S.length > 0) {
+    n.tblStylePr = [];
+    for (let w of S) {
+      let b = s(w, 'w', 'type');
+      if (b) {
+        let k = { type: b },
+          y = l(w, 'w', 'pPr');
+        y && (k.pPr = Re(y, t));
+        let E = l(w, 'w', 'rPr');
+        E && (k.rPr = de(E, t));
+        let R = l(w, 'w', 'tblPr');
+        R && (k.tblPr = et(R));
+        let N = l(w, 'w', 'trPr');
+        N && (k.trPr = tt(N));
+        let L = l(w, 'w', 'tcPr');
+        (L && (k.tcPr = nt(L)), n.tblStylePr.push(k));
+      }
+    }
+  }
+  return n;
+}
+function An(e, t) {
+  if (!e) return;
+  let n = {},
+    o = l(e, 'w', 'rPrDefault');
+  if (o) {
+    let i = l(o, 'w', 'rPr');
+    i && (n.rPr = de(i, t));
+  }
+  let r = l(e, 'w', 'pPrDefault');
+  if (r) {
+    let i = l(r, 'w', 'pPr');
+    i && (n.pPr = Re(i, t));
+  }
+  return n.rPr || n.pPr ? n : void 0;
+}
+function it(e, t) {
+  if (!t) return e;
+  if (!e) return t ? { ...t } : void 0;
+  let n = { ...e };
+  for (let o of Object.keys(t)) {
+    let r = t[o];
+    r !== void 0 && (n[o] = typeof r == 'object' && r !== null ? { ...(n[o] || {}), ...r } : r);
+  }
+  return n;
+}
+function Xn(e, t) {
+  if (!t) return e;
+  if (!e) return t ? { ...t } : void 0;
+  let n = { ...e };
+  for (let o of Object.keys(t)) {
+    let r = t[o];
+    if (r !== void 0)
+      if (o === 'runProperties') n.runProperties = it(n.runProperties, t.runProperties);
+      else if (o === 'borders' || o === 'numPr' || o === 'frame') {
+        let i = n[o],
+          a = r;
+        n[o] = { ...(i || {}), ...(a || {}) };
+      } else o === 'tabs' && Array.isArray(r) ? (n.tabs = [...r]) : (n[o] = r);
+  }
+  return n;
+}
+function at(e, t, n, o = new Set()) {
+  if (o.has(e.styleId) || (o.add(e.styleId), !e.basedOn)) return e;
+  let r = t.get(e.basedOn);
+  if (!r) return e;
+  let i = at(r, t, n, o),
+    a = { ...e, pPr: Xn(i.pPr, e.pPr), rPr: it(i.rPr, e.rPr) };
+  return (
+    e.type === 'table' &&
+      ((i.tblPr || e.tblPr) && (a.tblPr = { ...(i.tblPr || {}), ...(e.tblPr || {}) }),
+      (i.trPr || e.trPr) && (a.trPr = { ...(i.trPr || {}), ...(e.trPr || {}) }),
+      (i.tcPr || e.tcPr) && (a.tcPr = { ...(i.tcPr || {}), ...(e.tcPr || {}) })),
+    a
+  );
+}
+function Ie(e, t) {
+  let n = new Map();
+  try {
+    let o = G(e);
+    if (!o) return n;
+    let r = A(o, 'w', 'style');
+    for (let i of r) {
+      let a = Nn(i, t);
+      a.styleId && n.set(a.styleId, a);
+    }
+    for (let [i, a] of n) {
+      let u = at(a, n, t);
+      n.set(i, u);
+    }
+  } catch (o) {
+    console.warn('Failed to parse styles:', o);
+  }
+  return n;
+}
+function st(e, t) {
+  let n = { styles: [] };
+  try {
+    let o = G(e);
+    if (!o) return n;
+    let r = l(o, 'w', 'docDefaults');
+    n.docDefaults = An(r, t);
+    let i = l(o, 'w', 'latentStyles');
+    i &&
+      (n.latentStyles = {
+        defLockedState: s(i, 'w', 'defLockedState') === '1',
+        defUIPriority: g(i, 'w', 'defUIPriority'),
+        defSemiHidden: s(i, 'w', 'defSemiHidden') === '1',
+        defUnhideWhenUsed: s(i, 'w', 'defUnhideWhenUsed') === '1',
+        defQFormat: s(i, 'w', 'defQFormat') === '1',
+        count: g(i, 'w', 'count'),
+      });
+    let a = Ie(e, t);
+    n.styles = Array.from(a.values());
+  } catch (o) {
+    console.warn('Failed to parse style definitions:', o);
+  }
+  return n;
+}
+function lt(e) {
+  let t = { abstractNums: [], nums: [] };
+  if (!e) return Be(t);
+  let n = G(e);
+  if (!n) return Be(t);
+  let o = A(n, 'w', 'abstractNum');
+  for (let i of o) {
+    let a = Ln(i);
+    a && t.abstractNums.push(a);
+  }
+  let r = A(n, 'w', 'num');
+  for (let i of r) {
+    let a = Dn(i);
+    a && t.nums.push(a);
+  }
+  return Be(t);
+}
+function Ln(e) {
+  let t = s(e, 'w', 'abstractNumId');
+  if (t === null) return null;
+  let n = parseInt(t, 10);
+  if (isNaN(n)) return null;
+  let o = { abstractNumId: n, levels: [] },
+    r = l(e, 'w', 'multiLevelType');
+  if (r) {
+    let f = s(r, 'w', 'val');
+    (f === 'hybridMultilevel' || f === 'multilevel' || f === 'singleLevel') &&
+      (o.multiLevelType = f);
+  }
+  let i = l(e, 'w', 'name');
+  i && (o.name = s(i, 'w', 'val') ?? void 0);
+  let a = l(e, 'w', 'numStyleLink');
+  a && (o.numStyleLink = s(a, 'w', 'val') ?? void 0);
+  let u = l(e, 'w', 'styleLink');
+  u && (o.styleLink = s(u, 'w', 'val') ?? void 0);
+  let c = A(e, 'w', 'lvl');
+  for (let f of c) {
+    let m = ut(f);
+    m && o.levels.push(m);
+  }
+  return (o.levels.sort((f, m) => f.ilvl - m.ilvl), o);
+}
+function Dn(e) {
+  let t = s(e, 'w', 'numId');
+  if (t === null) return null;
+  let n = parseInt(t, 10);
+  if (isNaN(n)) return null;
+  let o = l(e, 'w', 'abstractNumId');
+  if (!o) return null;
+  let r = s(o, 'w', 'val');
+  if (r === null) return null;
+  let i = parseInt(r, 10);
+  if (isNaN(i)) return null;
+  let a = { numId: n, abstractNumId: i },
+    u = A(e, 'w', 'lvlOverride');
+  if (u.length > 0) {
+    a.levelOverrides = [];
+    for (let c of u) {
+      let f = s(c, 'w', 'ilvl');
+      if (f === null) continue;
+      let m = parseInt(f, 10);
+      if (isNaN(m)) continue;
+      let d = { ilvl: m },
+        h = l(c, 'w', 'startOverride');
+      if (h) {
+        let p = s(h, 'w', 'val');
+        if (p !== null) {
+          let T = parseInt(p, 10);
+          isNaN(T) || (d.startOverride = T);
+        }
+      }
+      let x = l(c, 'w', 'lvl');
+      (x && (d.lvl = ut(x) ?? void 0), a.levelOverrides.push(d));
+    }
+  }
+  return a;
+}
+function ut(e) {
+  let t = s(e, 'w', 'ilvl');
+  if (t === null) return null;
+  let n = parseInt(t, 10);
+  if (isNaN(n) || n < 0 || n > 8) return null;
+  let o = { ilvl: n, numFmt: 'decimal', lvlText: '' },
+    r = l(e, 'w', 'start');
+  if (r) {
+    let p = s(r, 'w', 'val');
+    if (p !== null) {
+      let T = parseInt(p, 10);
+      isNaN(T) || (o.start = T);
+    }
+  }
+  let i = l(e, 'w', 'numFmt');
+  if (i) {
+    let p = s(i, 'w', 'val');
+    p && (o.numFmt = Hn(p));
+  }
+  let a = l(e, 'w', 'lvlText');
+  a && (o.lvlText = s(a, 'w', 'val') ?? '');
+  let u = l(e, 'w', 'lvlJc');
+  if (u) {
+    let p = s(u, 'w', 'val');
+    (p === 'left' || p === 'center' || p === 'right') && (o.lvlJc = p);
+  }
+  let c = l(e, 'w', 'suff');
+  if (c) {
+    let p = s(c, 'w', 'val');
+    (p === 'tab' || p === 'space' || p === 'nothing') && (o.suffix = p);
+  }
+  let f = l(e, 'w', 'isLgl');
+  f && (o.isLgl = F(f));
+  let m = l(e, 'w', 'lvlRestart');
+  if (m) {
+    let p = s(m, 'w', 'val');
+    if (p !== null) {
+      let T = parseInt(p, 10);
+      isNaN(T) || (o.lvlRestart = T);
+    }
+  }
+  let d = l(e, 'w', 'legacy');
+  d &&
+    (o.legacy = {
+      legacy: F(d),
+      legacySpace: g(d, 'w', 'legacySpace'),
+      legacyIndent: g(d, 'w', 'legacyIndent'),
+    });
+  let h = l(e, 'w', 'pPr');
+  h && (o.pPr = On(h));
+  let x = l(e, 'w', 'rPr');
+  return (x && (o.rPr = Vn(x)), o);
+}
+function Hn(e) {
+  return (
+    {
+      decimal: 'decimal',
+      upperRoman: 'upperRoman',
+      lowerRoman: 'lowerRoman',
+      upperLetter: 'upperLetter',
+      lowerLetter: 'lowerLetter',
+      ordinal: 'ordinal',
+      cardinalText: 'cardinalText',
+      ordinalText: 'ordinalText',
+      hex: 'hex',
+      chicago: 'chicago',
+      bullet: 'bullet',
+      none: 'none',
+      decimalZero: 'decimalZero',
+      ganada: 'ganada',
+      chosung: 'chosung',
+      ideographDigital: 'ideographDigital',
+      japaneseCounting: 'japaneseCounting',
+      aiueo: 'aiueo',
+      iroha: 'iroha',
+      decimalFullWidth: 'decimalFullWidth',
+      decimalHalfWidth: 'decimalHalfWidth',
+      japaneseLegal: 'japaneseLegal',
+      japaneseDigitalTenThousand: 'japaneseDigitalTenThousand',
+      decimalEnclosedCircle: 'decimalEnclosedCircle',
+      decimalFullWidth2: 'decimalFullWidth2',
+      aiueoFullWidth: 'aiueoFullWidth',
+      irohaFullWidth: 'irohaFullWidth',
+      decimalEnclosedFullstop: 'decimalEnclosedFullstop',
+      decimalEnclosedParen: 'decimalEnclosedParen',
+      decimalEnclosedCircleChinese: 'decimalEnclosedCircleChinese',
+      ideographEnclosedCircle: 'ideographEnclosedCircle',
+      ideographTraditional: 'ideographTraditional',
+      ideographZodiac: 'ideographZodiac',
+      ideographZodiacTraditional: 'ideographZodiacTraditional',
+      taiwaneseCounting: 'taiwaneseCounting',
+      ideographLegalTraditional: 'ideographLegalTraditional',
+      taiwaneseCountingThousand: 'taiwaneseCountingThousand',
+      taiwaneseDigital: 'taiwaneseDigital',
+      chineseCounting: 'chineseCounting',
+      chineseLegalSimplified: 'chineseLegalSimplified',
+      chineseCountingThousand: 'chineseCountingThousand',
+      koreanDigital: 'koreanDigital',
+      koreanCounting: 'koreanCounting',
+      koreanLegal: 'koreanLegal',
+      koreanDigital2: 'koreanDigital2',
+      vietnameseCounting: 'vietnameseCounting',
+      russianLower: 'russianLower',
+      russianUpper: 'russianUpper',
+      numberInDash: 'numberInDash',
+      hebrew1: 'hebrew1',
+      hebrew2: 'hebrew2',
+      arabicAlpha: 'arabicAlpha',
+      arabicAbjad: 'arabicAbjad',
+      hindiVowels: 'hindiVowels',
+      hindiConsonants: 'hindiConsonants',
+      hindiNumbers: 'hindiNumbers',
+      hindiCounting: 'hindiCounting',
+      thaiLetters: 'thaiLetters',
+      thaiNumbers: 'thaiNumbers',
+      thaiCounting: 'thaiCounting',
+    }[e] ?? 'decimal'
+  );
+}
+function On(e) {
+  let t = {},
+    n = l(e, 'w', 'ind');
+  if (n) {
+    let r = g(n, 'w', 'left'),
+      i = g(n, 'w', 'right'),
+      a = g(n, 'w', 'firstLine'),
+      u = g(n, 'w', 'hanging');
+    (r !== void 0 && (t.indentLeft = r),
+      i !== void 0 && (t.indentRight = i),
+      u !== void 0
+        ? ((t.indentFirstLine = -u), (t.hangingIndent = true))
+        : a !== void 0 && (t.indentFirstLine = a));
+  }
+  let o = l(e, 'w', 'tabs');
+  if (o) {
+    t.tabs = [];
+    let r = A(o, 'w', 'tab');
+    for (let i of r) {
+      let a = g(i, 'w', 'pos'),
+        u = s(i, 'w', 'val'),
+        c = s(i, 'w', 'leader');
+      a !== void 0 && u && t.tabs.push({ position: a, alignment: Wn(u), leader: jn(c) });
+    }
+  }
+  return t;
+}
+function Wn(e) {
+  switch (e) {
+    case 'left':
+      return 'left';
+    case 'center':
+      return 'center';
+    case 'right':
+      return 'right';
+    case 'decimal':
+      return 'decimal';
+    case 'bar':
+      return 'bar';
+    case 'clear':
+      return 'clear';
+    case 'num':
+      return 'num';
+    default:
+      return 'left';
+  }
+}
+function jn(e) {
+  if (e)
+    switch (e) {
+      case 'none':
+        return 'none';
+      case 'dot':
+        return 'dot';
+      case 'hyphen':
+        return 'hyphen';
+      case 'underscore':
+        return 'underscore';
+      case 'heavy':
+        return 'heavy';
+      case 'middleDot':
+        return 'middleDot';
+      default:
+        return;
+    }
+}
+function Vn(e) {
+  let t = {},
+    n = l(e, 'w', 'rFonts');
+  n &&
+    (t.fontFamily = {
+      ascii: s(n, 'w', 'ascii') ?? void 0,
+      hAnsi: s(n, 'w', 'hAnsi') ?? void 0,
+      eastAsia: s(n, 'w', 'eastAsia') ?? void 0,
+      cs: s(n, 'w', 'cs') ?? void 0,
+    });
+  let o = l(e, 'w', 'sz');
+  if (o) {
+    let c = g(o, 'w', 'val');
+    c !== void 0 && (t.fontSize = c);
+  }
+  let r = l(e, 'w', 'color');
+  if (r) {
+    let c = s(r, 'w', 'val'),
+      f = s(r, 'w', 'themeColor');
+    c === 'auto'
+      ? (t.color = { auto: true })
+      : f
+        ? (t.color = {
+            themeColor: f,
+            themeTint: s(r, 'w', 'themeTint') ?? void 0,
+            themeShade: s(r, 'w', 'themeShade') ?? void 0,
+          })
+        : c && (t.color = { rgb: c });
+  }
+  let i = l(e, 'w', 'b');
+  i && (t.bold = F(i));
+  let a = l(e, 'w', 'i');
+  a && (t.italic = F(a));
+  let u = l(e, 'w', 'vanish');
+  return (u && (t.hidden = F(u)), t);
+}
+function Be(e) {
+  let t = new Map();
+  for (let o of e.abstractNums) t.set(o.abstractNumId, o);
+  let n = new Map();
+  for (let o of e.nums) n.set(o.numId, o);
+  return {
+    definitions: e,
+    getLevel(o, r) {
+      let i = n.get(o);
+      if (!i) return null;
+      if (i.levelOverrides) {
+        let u = i.levelOverrides.find((c) => c.ilvl === r);
+        if (u) {
+          if (u.lvl) return u.lvl;
+          let c = t.get(i.abstractNumId);
+          if (c) {
+            let f = c.levels.find((m) => m.ilvl === r);
+            if (f && u.startOverride !== void 0) return { ...f, start: u.startOverride };
+          }
+        }
+      }
+      let a = t.get(i.abstractNumId);
+      if (!a) return null;
+      if (a.numStyleLink && a.levels.length === 0) {
+        for (let u of t.values())
+          if (u.styleLink === a.numStyleLink && u.levels.length > 0) {
+            a = u;
+            break;
+          }
+      }
+      return a.levels.find((u) => u.ilvl === r) ?? null;
+    },
+    getAbstract(o) {
+      return t.get(o) ?? null;
+    },
+    hasNumbering(o) {
+      return n.has(o);
+    },
+  };
+}
+var _n = {
+    accent1: 'accent1',
+    accent2: 'accent2',
+    accent3: 'accent3',
+    accent4: 'accent4',
+    accent5: 'accent5',
+    accent6: 'accent6',
+    dk1: 'dk1',
+    lt1: 'lt1',
+    dk2: 'dk2',
+    lt2: 'lt2',
+    tx1: 'text1',
+    tx2: 'text2',
+    bg1: 'background1',
+    bg2: 'background2',
+    hlink: 'hlink',
+    folHlink: 'folHlink',
+  },
+  ct = {
+    black: '000000',
+    white: 'FFFFFF',
+    red: 'FF0000',
+    green: '00FF00',
+    blue: '0000FF',
+    yellow: 'FFFF00',
+    cyan: '00FFFF',
+    magenta: 'FF00FF',
+  };
+function ft(e, t) {
+  let n = X(t),
+    o = n.find((i) => i.name === 'a:shade');
+  if (o) {
+    let i = s(o, null, 'val');
+    i &&
+      (e.themeShade = Math.round((parseInt(i, 10) / 1e5) * 255)
+        .toString(16)
+        .padStart(2, '0')
+        .toUpperCase());
+  }
+  let r = n.find((i) => i.name === 'a:tint');
+  if (r) {
+    let i = s(r, null, 'val');
+    i &&
+      (e.themeTint = Math.round((parseInt(i, 10) / 1e5) * 255)
+        .toString(16)
+        .padStart(2, '0')
+        .toUpperCase());
+  }
+  return e;
+}
+function dt(e) {
+  if (!e) return;
+  let t = X(e),
+    n = t.find((a) => a.name === 'a:srgbClr');
+  if (n) {
+    let a = s(n, null, 'val');
+    if (a) return ft({ rgb: a }, n);
+  }
+  let o = t.find((a) => a.name === 'a:schemeClr');
+  if (o) {
+    let a = s(o, null, 'val');
+    if (a) {
+      let u = { themeColor: _n[a] ?? 'dk1' };
+      return ft(u, o);
+    }
+  }
+  let r = t.find((a) => a.name === 'a:sysClr');
+  if (r) return { rgb: s(r, null, 'lastClr') ?? '000000' };
+  let i = t.find((a) => a.name === 'a:prstClr');
+  if (i) {
+    let a = s(i, null, 'val');
+    if (a && ct[a]) return { rgb: ct[a] };
+  }
+}
+function pt(e) {
+  if (!e) return;
+  let t = X(e);
+  if (t.find((o) => o.name === 'a:noFill')) return { type: 'none' };
+  let n = t.find((o) => o.name === 'a:solidFill');
+  if (n) return { type: 'solid', color: dt(n) };
+  if (t.find((o) => o.name === 'a:gradFill')) return { type: 'gradient' };
+}
+function mt(e) {
+  let t = e ? B(e, 'a:ln') : null;
+  if (!t) return;
+  let n = X(t);
+  if (n.find((u) => u.name === 'a:noFill')) return;
+  let o = {},
+    r = s(t, null, 'w');
+  r && (o.width = parseInt(r, 10));
+  let i = n.find((u) => u.name === 'a:solidFill');
+  i && (o.color = dt(i));
+  let a = n.find((u) => u.name === 'a:prstDash');
+  if (a) {
+    let u = s(a, null, 'val');
+    u && (o.style = u);
+  }
+  return o;
+}
+function Ne(e) {
+  if (!e) return;
+  let t = s(e, null, 'relativeFrom') ?? 'column',
+    n = B(e, 'wp:align');
+  if (n) {
+    let r = q(n);
+    return { relativeTo: t, alignment: r };
+  }
+  let o = B(e, 'wp:posOffset');
+  if (o) {
+    let r = q(o),
+      i = parseInt(r, 10);
+    return { relativeTo: t, posOffset: isNaN(i) ? 0 : i };
+  }
+  return { relativeTo: t };
+}
+function Ae(e) {
+  if (!e) return;
+  let t = s(e, null, 'relativeFrom') ?? 'paragraph',
+    n = B(e, 'wp:align');
+  if (n) {
+    let r = q(n);
+    return { relativeTo: t, alignment: r };
+  }
+  let o = B(e, 'wp:posOffset');
+  if (o) {
+    let r = q(o),
+      i = parseInt(r, 10);
+    return { relativeTo: t, posOffset: isNaN(i) ? 0 : i };
+  }
+  return { relativeTo: t };
+}
+function gt(e) {
+  let t = B(e, 'wp:positionH'),
+    n = B(e, 'wp:positionV');
+  if (!(!t && !n))
+    return {
+      horizontal: Ne(t) ?? { relativeTo: 'column' },
+      vertical: Ae(n) ?? { relativeTo: 'paragraph' },
+    };
+}
+var Xe = ['wp:wrapNone', 'wp:wrapSquare', 'wp:wrapTight', 'wp:wrapThrough', 'wp:wrapTopAndBottom'];
+function Le(e, t, n) {
+  if (!e) {
+    let h = { type: t ? 'behind' : 'inFront' };
+    return (
+      n?.distT !== void 0 && (h.distT = n.distT),
+      n?.distB !== void 0 && (h.distB = n.distB),
+      n?.distL !== void 0 && (h.distL = n.distL),
+      n?.distR !== void 0 && (h.distR = n.distR),
+      h
+    );
+  }
+  let r = (e.name || '').replace('wp:', ''),
+    i;
+  switch (r) {
+    case 'wrapNone':
+      i = t ? 'behind' : 'inFront';
+      break;
+    case 'wrapSquare':
+      i = 'square';
+      break;
+    case 'wrapTight':
+      i = 'tight';
+      break;
+    case 'wrapThrough':
+      i = 'through';
+      break;
+    case 'wrapTopAndBottom':
+      i = 'topAndBottom';
+      break;
+    default:
+      i = 'square';
+  }
+  let a = { type: i },
+    u = s(e, null, 'wrapText');
+  u && (a.wrapText = u);
+  let c = g(e, null, 'distT') ?? n?.distT,
+    f = g(e, null, 'distB') ?? n?.distB,
+    m = g(e, null, 'distL') ?? n?.distL,
+    d = g(e, null, 'distR') ?? n?.distR;
+  return (
+    c !== void 0 && (a.distT = c),
+    f !== void 0 && (a.distB = f),
+    m !== void 0 && (a.distL = m),
+    d !== void 0 && (a.distR = d),
+    a
+  );
+}
+function ht(e) {
+  let t = X(e),
+    n = s(e, null, 'behindDoc') === '1',
+    o = t.find((i) => Xe.includes(i.name ?? '')),
+    r = {
+      distT: g(e, null, 'distT') ?? void 0,
+      distB: g(e, null, 'distB') ?? void 0,
+      distL: g(e, null, 'distL') ?? void 0,
+      distR: g(e, null, 'distR') ?? void 0,
+    };
+  return Le(o ?? null, n, r);
+}
+function zn(e) {
+  if (!e) return {};
+  let t = {},
+    n = g(e, null, 'lIns'),
+    o = g(e, null, 'rIns'),
+    r = g(e, null, 'tIns'),
+    i = g(e, null, 'bIns');
+  return (
+    (n !== void 0 || o !== void 0 || r !== void 0 || i !== void 0) &&
+      (t.margins = { left: n, right: o, top: r, bottom: i }),
+    t
+  );
+}
+function wt(e, t, n, o, r, i, a, u) {
+  if (!e) return [];
+  let c = [],
+    f = X(e);
+  for (let m of f) {
+    let d = m.name || '',
+      h = d.indexOf(':'),
+      x = h >= 0 ? d.substring(h + 1) : d;
+    if (x === 'p') {
+      let p = t(m, o, r, i, a);
+      c.push(p);
+    }
+  }
+  return c;
+}
+function me(e) {
+  let n = X(e).find((u) => u.name === 'wp:inline' || u.name === 'wp:anchor');
+  if (!n) return false;
+  let o = B(n, 'a:graphic');
+  if (!o) return false;
+  let r = B(o, 'a:graphicData');
+  if (!r) return false;
+  let i = B(r, 'wps:wsp');
+  return i ? B(i, 'wps:txbx') !== null : false;
+}
+function bt(e) {
+  let n = X(e).find((b) => b.name === 'wp:inline' || b.name === 'wp:anchor');
+  if (!n) return null;
+  let o = n.name === 'wp:anchor',
+    r = B(n, 'a:graphic');
+  if (!r) return null;
+  let i = B(r, 'a:graphicData');
+  if (!i) return null;
+  let a = B(i, 'wps:wsp');
+  if (!a || !B(a, 'wps:txbx')) return null;
+  let c = X(a),
+    f = c.find((b) => b.name === 'wps:spPr'),
+    m = c.find((b) => b.name === 'wps:bodyPr'),
+    d = B(n, 'wp:extent'),
+    h = g(d, null, 'cx') ?? 0,
+    x = g(d, null, 'cy') ?? 0,
+    p = { width: h, height: x },
+    T = B(n, 'wp:docPr'),
+    C = T ? (s(T, null, 'id') ?? void 0) : void 0,
+    I = pt(f ?? null),
+    M = mt(f ?? null),
+    S = zn(m ?? null),
+    w = { type: 'textBox', size: p, content: [] };
+  if (
+    (C && (w.id = C),
+    I && (w.fill = I),
+    M && (w.outline = M),
+    S.margins && (w.margins = S.margins),
+    o)
+  ) {
+    let b = gt(n);
+    b && (w.position = b);
+    let k = ht(n);
+    k && (w.wrap = k);
+  }
+  return w;
+}
+function yt(e) {
+  let t = B(e, 'wps:txbx');
+  return t ? B(t, 'w:txbxContent') : null;
+}
+function Un(e) {
+  if (!e) return;
+  let t = parseInt(e, 10);
+  if (!isNaN(t)) return t / 6e4;
+}
+function $n(e, t) {
+  let n = X(e);
+  for (let o of n) if (t.includes(o.name || '')) return o;
+  return null;
+}
+function xt(e) {
+  if (!e) return { width: 0, height: 0 };
+  let t = g(e, null, 'cx') ?? 0,
+    n = g(e, null, 'cy') ?? 0;
+  return { width: t, height: n };
+}
+function Tt(e) {
+  if (!e) return;
+  let t = g(e, null, 'l') ?? 0,
+    n = g(e, null, 't') ?? 0,
+    o = g(e, null, 'r') ?? 0,
+    r = g(e, null, 'b') ?? 0;
+  if (!(t === 0 && n === 0 && o === 0 && r === 0)) return { left: t, top: n, right: o, bottom: r };
+}
+function Ft(e) {
+  if (!e) return {};
+  let t = s(e, null, 'id') ?? void 0,
+    n = s(e, null, 'name') ?? void 0,
+    o = s(e, null, 'descr') ?? void 0,
+    r = s(e, null, 'title') ?? void 0,
+    i = s(e, null, 'decorative') === '1',
+    a = l(e, 'a', 'hlinkClick'),
+    u = a ? (s(a, 'r', 'id') ?? void 0) : void 0;
+  return { id: t, name: n, alt: o, title: r, decorative: i || void 0, hlinkRId: u };
+}
+function Ct(e) {
+  if (!e) return;
+  let t = s(e, null, 'rot'),
+    n = s(e, null, 'flipH') === '1',
+    o = s(e, null, 'flipV') === '1',
+    r = Un(t);
+  if (r === void 0 && !n && !o) return;
+  let i = {};
+  return (r !== void 0 && (i.rotation = r), n && (i.flipH = true), o && (i.flipV = true), i);
+}
+function St(e) {
+  let t = B(e, 'a:graphic');
+  if (!t) return null;
+  let n = B(t, 'a:graphicData');
+  if (!n) return null;
+  let o = B(n, 'pic:pic');
+  if (!o) return null;
+  let r = B(o, 'pic:blipFill');
+  return r ? B(r, 'a:blip') : null;
+}
+function kt(e) {
+  if (!e) return '';
+  let t = s(e, 'r', 'embed');
+  if (t) return t;
+  let n = s(e, null, 'embed');
+  if (n) return n;
+  let o = s(e, 'r', 'link');
+  return o || '';
+}
+function Et(e) {
+  let t = B(e, 'a:graphic');
+  if (!t) return null;
+  let n = B(t, 'a:graphicData');
+  if (!n) return null;
+  let o = B(n, 'pic:pic');
+  if (!o) return null;
+  let r = B(o, 'pic:spPr');
+  return r ? B(r, 'a:xfrm') : null;
+}
+function Gn(e) {
+  if (!e) return e;
+  let t = e.replace(/^\/+/, '');
+  return (
+    t.startsWith('media/') ? (t = `word/${t}`) : t.startsWith('word/') || (t = `word/${t}`),
+    t
+  );
+}
+function qn(e) {
+  let t = e.split('.').pop()?.toLowerCase() ?? '';
+  return (
+    {
+      png: 'image/png',
+      jpg: 'image/jpeg',
+      jpeg: 'image/jpeg',
+      gif: 'image/gif',
+      bmp: 'image/bmp',
+      tiff: 'image/tiff',
+      tif: 'image/tiff',
+      webp: 'image/webp',
+      svg: 'image/svg+xml',
+      emf: 'image/x-emf',
+      wmf: 'image/x-wmf',
+    }[t] ?? 'application/octet-stream'
+  );
+}
+function Mt(e, t, n) {
+  if (!e || !t) return {};
+  let o = t.get(e);
+  if (!o) return {};
+  let r = o.target;
+  if (!r) return {};
+  let i = Gn(r),
+    a = r.split('/').pop(),
+    u = (c, f) => {
+      let m = f.toLowerCase();
+      for (let [d, h] of c.entries()) if (d.toLowerCase() === m) return h;
+    };
+  if (n) {
+    let c = u(n, i);
+    if (c) return { src: c.dataUrl || c.base64, mimeType: c.mimeType, filename: a };
+    let f = r.replace(/^\/+/, ''),
+      m = u(n, f);
+    if (m) return { src: m.dataUrl || m.base64, mimeType: m.mimeType, filename: a };
+    let d = `word/${f}`,
+      h = u(n, d);
+    if (h) return { src: h.dataUrl || h.base64, mimeType: h.mimeType, filename: a };
+  }
+  return { mimeType: qn(r), filename: a };
+}
+function Zn(e, t, n) {
+  let o = B(e, 'wp:extent'),
+    r = xt(o),
+    i = B(e, 'wp:effectExtent'),
+    a = Tt(i),
+    u = B(e, 'wp:docPr'),
+    c = Ft(u),
+    f = St(e),
+    m = kt(f),
+    d = Mt(m, t, n),
+    h = Et(e),
+    x = Ct(h),
+    p = g(e, null, 'distT') ?? void 0,
+    T = g(e, null, 'distB') ?? void 0,
+    C = g(e, null, 'distL') ?? void 0,
+    I = g(e, null, 'distR') ?? void 0,
+    M = { type: 'inline' };
+  (p !== void 0 && (M.distT = p),
+    T !== void 0 && (M.distB = T),
+    C !== void 0 && (M.distL = C),
+    I !== void 0 && (M.distR = I));
+  let S = { type: 'image', rId: m, size: r, wrap: M };
+  if (
+    (c.id && (S.id = c.id),
+    c.alt && (S.alt = c.alt),
+    c.title && (S.title = c.title),
+    c.decorative && (S.decorative = true),
+    d.src && (S.src = d.src),
+    d.mimeType && (S.mimeType = d.mimeType),
+    d.filename && (S.filename = d.filename),
+    a && (S.padding = a),
+    x && (S.transform = x),
+    c.hlinkRId && t)
+  ) {
+    let w = Me(t, c.hlinkRId);
+    w && (S.hlinkHref = w);
+  }
+  return S;
+}
+function Yn(e, t, n) {
+  let o = B(e, 'wp:extent'),
+    r = xt(o),
+    i = B(e, 'wp:effectExtent'),
+    a = Tt(i),
+    u = B(e, 'wp:docPr'),
+    c = Ft(u),
+    f = s(e, null, 'behindDoc') === '1',
+    m = {
+      distT: g(e, null, 'distT') ?? void 0,
+      distB: g(e, null, 'distB') ?? void 0,
+      distL: g(e, null, 'distL') ?? void 0,
+      distR: g(e, null, 'distR') ?? void 0,
+    },
+    d = $n(e, Xe),
+    h = Le(d, f, m),
+    x = B(e, 'wp:positionH'),
+    p = B(e, 'wp:positionV'),
+    T = Ne(x),
+    C = Ae(p),
+    I;
+  (T || C) &&
+    (I = { horizontal: T ?? { relativeTo: 'column' }, vertical: C ?? { relativeTo: 'paragraph' } });
+  let M = St(e),
+    S = kt(M),
+    w = Mt(S, t, n),
+    b = Et(e),
+    k = Ct(b),
+    y = { type: 'image', rId: S, size: r, wrap: h };
+  if (
+    (c.id && (y.id = c.id),
+    c.alt && (y.alt = c.alt),
+    c.title && (y.title = c.title),
+    c.decorative && (y.decorative = true),
+    w.src && (y.src = w.src),
+    w.mimeType && (y.mimeType = w.mimeType),
+    w.filename && (y.filename = w.filename),
+    I && (y.position = I),
+    a && (y.padding = a),
+    k && (y.transform = k),
+    c.hlinkRId && t)
+  ) {
+    let E = Me(t, c.hlinkRId);
+    E && (y.hlinkHref = E);
+  }
+  return y;
+}
+function Kn(e, t, n) {
+  if (me(e)) return null;
+  let o = X(e);
+  for (let r of o) {
+    let i = r.name || '';
+    if (i === 'wp:inline' || i === 'wp:anchor')
+      return i === 'wp:inline' ? Zn(r, t, n) : Yn(r, t, n);
+  }
+  return null;
+}
+function Pt(e, t, n) {
+  return Kn(e, t, n);
+}
+function vt(e, t, n, o) {
+  let r = {};
+  return (
+    e && e !== 'auto' ? (r.rgb = e) : e === 'auto' && (r.auto = true),
+    t && (r.themeColor = t),
+    n && (r.themeTint = n),
+    o && (r.themeShade = o),
+    r
+  );
+}
+function Jn(e) {
+  if (!e) return;
+  let t = {},
+    n = s(e, 'w', 'color');
+  n && n !== 'auto' && (t.color = { rgb: n });
+  let o = s(e, 'w', 'fill');
+  o && o !== 'auto' && (t.fill = { rgb: o });
+  let r = s(e, 'w', 'themeFill');
+  r && ((t.fill = t.fill || {}), (t.fill.themeColor = r));
+  let i = s(e, 'w', 'themeFillTint');
+  i && t.fill && (t.fill.themeTint = i);
+  let a = s(e, 'w', 'themeFillShade');
+  a && t.fill && (t.fill.themeShade = a);
+  let u = s(e, 'w', 'val');
+  return (u && (t.pattern = u), Object.keys(t).length > 0 ? t : void 0);
+}
+function ge(e, t, n) {
+  if (!e) return;
+  let o = {},
+    r = l(e, 'w', 'b');
+  r && (o.bold = F(r));
+  let i = l(e, 'w', 'bCs');
+  i && (o.boldCs = F(i));
+  let a = l(e, 'w', 'i');
+  a && (o.italic = F(a));
+  let u = l(e, 'w', 'iCs');
+  u && (o.italicCs = F(u));
+  let c = l(e, 'w', 'u');
+  if (c) {
+    let P = s(c, 'w', 'val');
+    if (P) {
+      o.underline = { style: P };
+      let D = s(c, 'w', 'color'),
+        U = s(c, 'w', 'themeColor');
+      (D || U) && (o.underline.color = vt(D, U, s(c, 'w', 'themeTint'), s(c, 'w', 'themeShade')));
+    }
+  }
+  let f = l(e, 'w', 'strike');
+  f && (o.strike = F(f));
+  let m = l(e, 'w', 'dstrike');
+  m && (o.doubleStrike = F(m));
+  let d = l(e, 'w', 'vertAlign');
+  if (d) {
+    let P = s(d, 'w', 'val');
+    (P === 'superscript' || P === 'subscript' || P === 'baseline') && (o.vertAlign = P);
+  }
+  let h = l(e, 'w', 'smallCaps');
+  h && (o.smallCaps = F(h));
+  let x = l(e, 'w', 'caps');
+  x && (o.allCaps = F(x));
+  let p = l(e, 'w', 'vanish');
+  p && (o.hidden = F(p));
+  let T = l(e, 'w', 'color');
+  T &&
+    (o.color = vt(
+      s(T, 'w', 'val'),
+      s(T, 'w', 'themeColor'),
+      s(T, 'w', 'themeTint'),
+      s(T, 'w', 'themeShade')
+    ));
+  let C = l(e, 'w', 'highlight');
+  if (C) {
+    let P = s(C, 'w', 'val');
+    P && (o.highlight = P);
+  }
+  let I = l(e, 'w', 'shd');
+  I && (o.shading = Jn(I));
+  let M = l(e, 'w', 'sz');
+  if (M) {
+    let P = g(M, 'w', 'val');
+    P !== void 0 && (o.fontSize = P);
+  }
+  let S = l(e, 'w', 'szCs');
+  if (S) {
+    let P = g(S, 'w', 'val');
+    P !== void 0 && (o.fontSizeCs = P);
+  }
+  let w = l(e, 'w', 'rFonts');
+  if (w) {
+    o.fontFamily = {
+      ascii: s(w, 'w', 'ascii') ?? void 0,
+      hAnsi: s(w, 'w', 'hAnsi') ?? void 0,
+      eastAsia: s(w, 'w', 'eastAsia') ?? void 0,
+      cs: s(w, 'w', 'cs') ?? void 0,
+    };
+    let P = s(w, 'w', 'asciiTheme');
+    P &&
+      ((o.fontFamily.asciiTheme = P), t && !o.fontFamily.ascii && (o.fontFamily.ascii = $(t, P)));
+    let D = s(w, 'w', 'hAnsiTheme');
+    D &&
+      ((o.fontFamily.hAnsiTheme = D), t && !o.fontFamily.hAnsi && (o.fontFamily.hAnsi = $(t, D)));
+    let U = s(w, 'w', 'eastAsiaTheme');
+    U &&
+      ((o.fontFamily.eastAsiaTheme = U),
+      t && !o.fontFamily.eastAsia && (o.fontFamily.eastAsia = $(t, U)));
+    let Fe = s(w, 'w', 'cstheme');
+    Fe && ((o.fontFamily.csTheme = Fe), t && !o.fontFamily.cs && (o.fontFamily.cs = $(t, Fe)));
+  }
+  let b = l(e, 'w', 'spacing');
+  if (b) {
+    let P = g(b, 'w', 'val');
+    P !== void 0 && (o.spacing = P);
+  }
+  let k = l(e, 'w', 'position');
+  if (k) {
+    let P = g(k, 'w', 'val');
+    P !== void 0 && (o.position = P);
+  }
+  let y = l(e, 'w', 'w');
+  if (y) {
+    let P = g(y, 'w', 'val');
+    P !== void 0 && (o.scale = P);
+  }
+  let E = l(e, 'w', 'kern');
+  if (E) {
+    let P = g(E, 'w', 'val');
+    P !== void 0 && (o.kerning = P);
+  }
+  let R = l(e, 'w', 'effect');
+  if (R) {
+    let P = s(R, 'w', 'val');
+    P && (o.effect = P);
+  }
+  let N = l(e, 'w', 'em');
+  if (N) {
+    let P = s(N, 'w', 'val');
+    P && (o.emphasisMark = P);
+  }
+  let L = l(e, 'w', 'emboss');
+  L && (o.emboss = F(L));
+  let O = l(e, 'w', 'imprint');
+  O && (o.imprint = F(O));
+  let z = l(e, 'w', 'outline');
+  z && (o.outline = F(z));
+  let K = l(e, 'w', 'shadow');
+  K && (o.shadow = F(K));
+  let H = l(e, 'w', 'rtl');
+  H && (o.rtl = F(H));
+  let W = l(e, 'w', 'cs');
+  W && (o.cs = F(W));
+  let v = l(e, 'w', 'rStyle');
+  if (v) {
+    let P = s(v, 'w', 'val');
+    P && (o.styleId = P);
+  }
+  return Object.keys(o).length > 0 ? o : void 0;
+}
+function Qn(e) {
+  let t = s(e, 'w', 'id'),
+    n = t ? parseInt(t, 10) : 0,
+    o = (s(e, 'w', 'author') ?? '').trim(),
+    r = (s(e, 'w', 'date') ?? '').trim(),
+    i = (s(e, 'w', 'rsid') ?? '').trim();
+  return {
+    id: Number.isInteger(n) && n >= 0 ? n : 0,
+    author: o.length > 0 ? o : 'Unknown',
+    date: r.length > 0 ? r : void 0,
+    rsid: i.length > 0 ? i : void 0,
+  };
+}
+function eo(e, t, n, o) {
+  if (!e) return;
+  let r = A(e, 'w', 'rPrChange')
+    .map((i) => {
+      let a = l(i, 'w', 'rPr');
+      return {
+        type: 'runPropertyChange',
+        info: Qn(i),
+        previousFormatting: ge(a, t),
+        currentFormatting: o,
+      };
+    })
+    .filter((i) => i.previousFormatting || i.currentFormatting);
+  return r.length > 0 ? r : void 0;
+}
+function to(e) {
+  let t = q(e),
+    n = s(e, 'xml', 'space') === 'preserve';
+  return { type: 'text', text: t, preserveSpace: n || void 0 };
+}
+function no() {
+  return { type: 'tab' };
+}
+function oo(e) {
+  let t = s(e, 'w', 'type'),
+    n = s(e, 'w', 'clear'),
+    o = { type: 'break' };
+  return (
+    (t === 'page' || t === 'column' || t === 'textWrapping') && (o.breakType = t),
+    (n === 'none' || n === 'left' || n === 'right' || n === 'all') && (o.clear = n),
+    o
+  );
+}
+function ro(e) {
+  let t = s(e, 'w', 'font') ?? '',
+    n = s(e, 'w', 'char') ?? '';
+  return { type: 'symbol', font: t, char: n };
+}
+function io(e) {
+  return { type: 'footnoteRef', id: g(e, 'w', 'id') ?? 0 };
+}
+function ao(e) {
+  return { type: 'endnoteRef', id: g(e, 'w', 'id') ?? 0 };
+}
+function so(e) {
+  let t = s(e, 'w', 'fldCharType'),
+    n = s(e, 'w', 'fldLock') === 'true' || s(e, 'w', 'fldLock') === '1',
+    o = s(e, 'w', 'dirty') === 'true' || s(e, 'w', 'dirty') === '1',
+    r = 'begin';
+  return (
+    t === 'separate' ? (r = 'separate') : t === 'end' && (r = 'end'),
+    { type: 'fieldChar', charType: r, fldLock: n || void 0, dirty: o || void 0 }
+  );
+}
+function lo(e) {
+  return { type: 'instrText', text: q(e) };
+}
+function uo(e, t, n) {
+  let o = Pt(e, t ?? void 0, n ?? void 0);
+  return o ? { type: 'drawing', image: o } : null;
+}
+function co(e) {
+  if (!e) return '';
+  let t = e.indexOf(':');
+  return t >= 0 ? e.substring(t + 1) : e;
+}
+function fo(e, t, n) {
+  let o = [],
+    r = X(e);
+  for (let i of r)
+    switch (co(i.name)) {
+      case 't':
+        o.push(to(i));
+        break;
+      case 'tab':
+        o.push(no());
+        break;
+      case 'br':
+        o.push(oo(i));
+        break;
+      case 'sym':
+        o.push(ro(i));
+        break;
+      case 'footnoteReference':
+        o.push(io(i));
+        break;
+      case 'endnoteReference':
+        o.push(ao(i));
+        break;
+      case 'fldChar':
+        o.push(so(i));
+        break;
+      case 'instrText':
+        o.push(lo(i));
+        break;
+      case 'softHyphen':
+        o.push({ type: 'softHyphen' });
+        break;
+      case 'noBreakHyphen':
+        o.push({ type: 'noBreakHyphen' });
+        break;
+      case 'drawing':
+        let u = uo(i, t, n);
+        u && o.push(u);
+        break;
+      case 'pict':
+      case 'object':
+        break;
+      case 'rPr':
+        break;
+      case 'lastRenderedPageBreak':
+        break;
+      case 'cr':
+        o.push({ type: 'break', breakType: 'textWrapping' });
+        break;
+    }
+  return o;
+}
+function re(e, t, n, o = null, r = null) {
+  let i = { type: 'run', content: [] },
+    a = l(e, 'w', 'rPr');
+  return (
+    a && ((i.formatting = ge(a, n)), (i.propertyChanges = eo(a, n, t, i.formatting))),
+    (i.content = fo(e, o, r)),
+    i
+  );
+}
+function po(e) {
+  if (!e) return '';
+  let t = e.indexOf(':');
+  return t >= 0 ? e.substring(t + 1) : e;
+}
+function mo(e) {
+  let t = g(e, 'w', 'id') ?? 0,
+    n = s(e, 'w', 'name') ?? '',
+    o = { type: 'bookmarkStart', id: t, name: n },
+    r = g(e, 'w', 'colFirst');
+  r !== void 0 && (o.colFirst = r);
+  let i = g(e, 'w', 'colLast');
+  return (i !== void 0 && (o.colLast = i), o);
+}
+function go(e) {
+  return { type: 'bookmarkEnd', id: g(e, 'w', 'id') ?? 0 };
+}
+function Rt(e, t, n = null, o = null, r = null) {
+  let i = { type: 'hyperlink', children: [] },
+    a = s(e, 'r', 'id');
+  if (a && ((i.rId = a), t)) {
+    let x = t.get(a);
+    x && (Ze(x), (i.href = x.target));
+  }
+  let u = s(e, 'w', 'anchor');
+  u && ((i.anchor = u), i.href || (i.href = `#${u}`));
+  let c = s(e, 'w', 'tooltip');
+  c && (i.tooltip = c);
+  let f = s(e, 'w', 'tgtFrame');
+  f && (i.target = f);
+  let m = s(e, 'w', 'history');
+  (m === '1' || m === 'true') && (i.history = true);
+  let d = s(e, 'w', 'docLocation');
+  d && (i.docLocation = d);
+  let h = X(e);
+  for (let x of h)
+    switch (po(x.name)) {
+      case 'r':
+        i.children.push(re(x, n, o, t, r));
+        break;
+      case 'bookmarkStart':
+        i.children.push(mo(x));
+        break;
+      case 'bookmarkEnd':
+        i.children.push(go(x));
+        break;
+    }
+  return i;
+}
+function It(e) {
+  let t = g(e, 'w', 'id') ?? 0,
+    n = s(e, 'w', 'name') ?? '',
+    o = { type: 'bookmarkStart', id: t, name: n },
+    r = g(e, 'w', 'colFirst');
+  r !== void 0 && (o.colFirst = r);
+  let i = g(e, 'w', 'colLast');
+  return (i !== void 0 && (o.colLast = i), o);
+}
+function Bt(e) {
+  return { type: 'bookmarkEnd', id: g(e, 'w', 'id') ?? 0 };
+}
+function ho(e) {
+  if (!e) return;
+  let t = g(e, 'w', 'w') ?? 0,
+    n = s(e, 'w', 'type') ?? 'dxa',
+    o = 'dxa';
+  return (
+    (n === 'auto' || n === 'dxa' || n === 'nil' || n === 'pct') && (o = n),
+    { value: t, type: o }
+  );
+}
+function Y(e) {
+  return ho(e);
+}
+function te(e) {
+  let t = s(e, 'w', 'id'),
+    n = t ? parseInt(t, 10) : 0,
+    o = (s(e, 'w', 'author') ?? '').trim(),
+    r = (s(e, 'w', 'date') ?? '').trim();
+  return {
+    id: Number.isInteger(n) && n >= 0 ? n : 0,
+    author: o.length > 0 ? o : 'Unknown',
+    date: r.length > 0 ? r : void 0,
+  };
+}
+function De(e) {
+  let t = te(e),
+    n = (s(e, 'w', 'rsid') ?? '').trim();
+  return n.length > 0 ? { ...t, rsid: n } : t;
+}
+function ee(e) {
+  if (!e) return;
+  let o = { style: s(e, 'w', 'val') ?? 'none' },
+    r = g(e, 'w', 'sz');
+  r !== void 0 && (o.size = r);
+  let i = g(e, 'w', 'space');
+  i !== void 0 && (o.space = i);
+  let a = s(e, 'w', 'color'),
+    u = s(e, 'w', 'themeColor'),
+    c = s(e, 'w', 'themeTint'),
+    f = s(e, 'w', 'themeShade');
+  (a || u || c || f) &&
+    (o.color = {
+      rgb: a ?? void 0,
+      themeColor: u,
+      themeTint: c ?? void 0,
+      themeShade: f ?? void 0,
+    });
+  let m = s(e, 'w', 'shadow');
+  (m === '1' || m === 'true') && (o.shadow = true);
+  let d = s(e, 'w', 'frame');
+  return ((d === '1' || d === 'true') && (o.frame = true), o);
+}
+function Nt(e) {
+  if (!e) return;
+  let t = {},
+    n = ee(l(e, 'w', 'top'));
+  n && (t.top = n);
+  let o = ee(l(e, 'w', 'bottom'));
+  o && (t.bottom = o);
+  let r = ee(l(e, 'w', 'left') ?? l(e, 'w', 'start'));
+  r && (t.left = r);
+  let i = ee(l(e, 'w', 'right') ?? l(e, 'w', 'end'));
+  i && (t.right = i);
+  let a = ee(l(e, 'w', 'insideH'));
+  a && (t.insideH = a);
+  let u = ee(l(e, 'w', 'insideV'));
+  if ((u && (t.insideV = u), Object.keys(t).length !== 0)) return t;
+}
+function At(e) {
+  if (!e) return;
+  let t = {},
+    n = Y(l(e, 'w', 'top'));
+  n && (t.top = n);
+  let o = Y(l(e, 'w', 'bottom'));
+  o && (t.bottom = o);
+  let r = Y(l(e, 'w', 'left') ?? l(e, 'w', 'start'));
+  r && (t.left = r);
+  let i = Y(l(e, 'w', 'right') ?? l(e, 'w', 'end'));
+  if ((i && (t.right = i), Object.keys(t).length !== 0)) return t;
+}
+function Xt(e) {
+  if (!e) return;
+  let t = {},
+    n = s(e, 'w', 'fill');
+  n && n !== 'auto' && (t.fill = { rgb: n });
+  let o = s(e, 'w', 'themeFill');
+  if (o) {
+    t.fill = { themeColor: o };
+    let a = s(e, 'w', 'themeFillTint');
+    a && t.fill && (t.fill.themeTint = a);
+    let u = s(e, 'w', 'themeFillShade');
+    u && t.fill && (t.fill.themeShade = u);
+  }
+  let r = s(e, 'w', 'color');
+  r && r !== 'auto' && (t.color = { rgb: r });
+  let i = s(e, 'w', 'val');
+  if ((i && (t.pattern = i), Object.keys(t).length !== 0)) return t;
+}
+function wo(e) {
+  if (!e) return;
+  let t = {},
+    n = s(e, 'w', 'firstRow');
+  (n === '1' || n === 'true') && (t.firstRow = true);
+  let o = s(e, 'w', 'lastRow');
+  (o === '1' || o === 'true') && (t.lastRow = true);
+  let r = s(e, 'w', 'firstColumn');
+  (r === '1' || r === 'true') && (t.firstColumn = true);
+  let i = s(e, 'w', 'lastColumn');
+  (i === '1' || i === 'true') && (t.lastColumn = true);
+  let a = s(e, 'w', 'noHBand');
+  (a === '1' || a === 'true') && (t.noHBand = true);
+  let u = s(e, 'w', 'noVBand');
+  (u === '1' || u === 'true') && (t.noVBand = true);
+  let c = s(e, 'w', 'val');
+  if (c) {
+    let f = parseInt(c, 16);
+    isNaN(f) ||
+      (f & 32 && (t.firstRow = true),
+      f & 64 && (t.lastRow = true),
+      f & 128 && (t.firstColumn = true),
+      f & 256 && (t.lastColumn = true),
+      f & 512 && (t.noHBand = true),
+      f & 1024 && (t.noVBand = true));
+  }
+  if (Object.keys(t).length !== 0) return t;
+}
+function bo(e) {
+  if (!e) return;
+  let t = {},
+    n = s(e, 'w', 'horzAnchor');
+  (n === 'margin' || n === 'page' || n === 'text') && (t.horzAnchor = n);
+  let o = s(e, 'w', 'vertAnchor');
+  (o === 'margin' || o === 'page' || o === 'text') && (t.vertAnchor = o);
+  let r = g(e, 'w', 'tblpX');
+  r !== void 0 && (t.tblpX = r);
+  let i = s(e, 'w', 'tblpXSpec');
+  i && (t.tblpXSpec = i);
+  let a = g(e, 'w', 'tblpY');
+  a !== void 0 && (t.tblpY = a);
+  let u = s(e, 'w', 'tblpYSpec');
+  u && (t.tblpYSpec = u);
+  let c = g(e, 'w', 'topFromText');
+  c !== void 0 && (t.topFromText = c);
+  let f = g(e, 'w', 'bottomFromText');
+  f !== void 0 && (t.bottomFromText = f);
+  let m = g(e, 'w', 'leftFromText');
+  m !== void 0 && (t.leftFromText = m);
+  let d = g(e, 'w', 'rightFromText');
+  if ((d !== void 0 && (t.rightFromText = d), Object.keys(t).length !== 0)) return t;
+}
+function Lt(e) {
+  if (!e) return;
+  let t = {},
+    n = Y(l(e, 'w', 'tblW'));
+  n && (t.width = n);
+  let o = l(e, 'w', 'jc');
+  if (o) {
+    let T = s(o, 'w', 'val');
+    (T === 'left' || T === 'center' || T === 'right' || T === 'start') &&
+      (t.justification = T === 'start' ? 'left' : T);
+  }
+  let r = Y(l(e, 'w', 'tblCellSpacing'));
+  r && (t.cellSpacing = r);
+  let i = Y(l(e, 'w', 'tblInd'));
+  i && (t.indent = i);
+  let a = Nt(l(e, 'w', 'tblBorders'));
+  a && (t.borders = a);
+  let u = At(l(e, 'w', 'tblCellMar'));
+  u && (t.cellMargins = u);
+  let c = l(e, 'w', 'tblLayout');
+  if (c) {
+    let T = s(c, 'w', 'type');
+    (T === 'fixed' || T === 'autofit') && (t.layout = T);
+  }
+  let f = l(e, 'w', 'tblStyle');
+  if (f) {
+    let T = s(f, 'w', 'val');
+    T && (t.styleId = T);
+  }
+  let m = wo(l(e, 'w', 'tblLook'));
+  m && (t.look = m);
+  let d = Xt(l(e, 'w', 'shd'));
+  d && (t.shading = d);
+  let h = l(e, 'w', 'tblOverlap');
+  if (h) {
+    let T = s(h, 'w', 'val');
+    (T === 'never' || T === 'overlap') && (t.overlap = T);
+  }
+  let x = bo(l(e, 'w', 'tblpPr'));
+  if (
+    (x && (t.floating = x),
+    F(l(e, 'w', 'bidiVisual')) && (t.bidi = true),
+    Object.keys(t).length !== 0)
+  )
+    return t;
+}
+function yo(e, t) {
+  if (!e) return;
+  let n = A(e, 'w', 'tblPrChange')
+    .map((o) => {
+      let r = l(o, 'w', 'tblPr');
+      return {
+        type: 'tablePropertyChange',
+        info: De(o),
+        previousFormatting: Lt(r),
+        currentFormatting: t,
+      };
+    })
+    .filter((o) => o.previousFormatting || o.currentFormatting);
+  return n.length > 0 ? n : void 0;
+}
+function xo(e, t) {
+  if (!e) return;
+  let n = A(e, 'w', 'trPrChange')
+    .map((o) => {
+      let r = l(o, 'w', 'trPr');
+      return {
+        type: 'tableRowPropertyChange',
+        info: De(o),
+        previousFormatting: Dt(r),
+        currentFormatting: t,
+      };
+    })
+    .filter((o) => o.previousFormatting || o.currentFormatting);
+  return n.length > 0 ? n : void 0;
+}
+function To(e, t) {
+  if (!e) return;
+  let n = A(e, 'w', 'tcPrChange')
+    .map((o) => {
+      let r = l(o, 'w', 'tcPr');
+      return {
+        type: 'tableCellPropertyChange',
+        info: De(o),
+        previousFormatting: Ot(r),
+        currentFormatting: t,
+      };
+    })
+    .filter((o) => o.previousFormatting || o.currentFormatting);
+  return n.length > 0 ? n : void 0;
+}
+function Fo(e) {
+  if (!e) return;
+  let t = l(e, 'w', 'ins');
+  if (t) return { type: 'tableRowInsertion', info: te(t) };
+  let n = l(e, 'w', 'del');
+  if (n) return { type: 'tableRowDeletion', info: te(n) };
+}
+function Co(e) {
+  if (!e) return;
+  let t = l(e, 'w', 'cellIns');
+  if (t) return { type: 'tableCellInsertion', info: te(t) };
+  let n = l(e, 'w', 'cellDel');
+  if (n) return { type: 'tableCellDeletion', info: te(n) };
+  let o = l(e, 'w', 'cellMerge');
+  if (o) return { type: 'tableCellMerge', info: te(o) };
+}
+function Dt(e) {
+  if (!e) return;
+  let t = {},
+    n = l(e, 'w', 'trHeight');
+  if (n) {
+    let c = Y(n);
+    c && (t.height = c);
+    let f = s(n, 'w', 'hRule');
+    (f === 'auto' || f === 'atLeast' || f === 'exact') && (t.heightRule = f);
+  }
+  (F(l(e, 'w', 'tblHeader')) && (t.header = true),
+    F(l(e, 'w', 'cantSplit')) && (t.cantSplit = true));
+  let i = l(e, 'w', 'jc');
+  if (i) {
+    let c = s(i, 'w', 'val');
+    (c === 'left' || c === 'center' || c === 'right') && (t.justification = c);
+  }
+  F(l(e, 'w', 'hidden')) && (t.hidden = true);
+  let u = Ht(l(e, 'w', 'cnfStyle'));
+  if ((u && (t.conditionalFormat = u), Object.keys(t).length !== 0)) return t;
+}
+function Ht(e) {
+  if (!e) return;
+  let t = {},
+    n = s(e, 'w', 'firstRow');
+  (n === '1' || n === 'true') && (t.firstRow = true);
+  let o = s(e, 'w', 'lastRow');
+  (o === '1' || o === 'true') && (t.lastRow = true);
+  let r = s(e, 'w', 'firstColumn');
+  (r === '1' || r === 'true') && (t.firstColumn = true);
+  let i = s(e, 'w', 'lastColumn');
+  (i === '1' || i === 'true') && (t.lastColumn = true);
+  let a = s(e, 'w', 'oddHBand');
+  (a === '1' || a === 'true') && (t.oddHBand = true);
+  let u = s(e, 'w', 'evenHBand');
+  (u === '1' || u === 'true') && (t.evenHBand = true);
+  let c = s(e, 'w', 'oddVBand');
+  (c === '1' || c === 'true') && (t.oddVBand = true);
+  let f = s(e, 'w', 'evenVBand');
+  (f === '1' || f === 'true') && (t.evenVBand = true);
+  let m = s(e, 'w', 'firstRowFirstColumn');
+  (m === '1' || m === 'true') && (t.nwCell = true);
+  let d = s(e, 'w', 'firstRowLastColumn');
+  (d === '1' || d === 'true') && (t.neCell = true);
+  let h = s(e, 'w', 'lastRowFirstColumn');
+  (h === '1' || h === 'true') && (t.swCell = true);
+  let x = s(e, 'w', 'lastRowLastColumn');
+  (x === '1' || x === 'true') && (t.seCell = true);
+  let p = s(e, 'w', 'val');
+  if (
+    (p &&
+      p.length === 12 &&
+      (p[0] === '1' && (t.firstRow = true),
+      p[1] === '1' && (t.lastRow = true),
+      p[2] === '1' && (t.firstColumn = true),
+      p[3] === '1' && (t.lastColumn = true),
+      p[4] === '1' && (t.oddVBand = true),
+      p[5] === '1' && (t.evenVBand = true),
+      p[6] === '1' && (t.oddHBand = true),
+      p[7] === '1' && (t.evenHBand = true),
+      p[8] === '1' && (t.nwCell = true),
+      p[9] === '1' && (t.neCell = true),
+      p[10] === '1' && (t.swCell = true),
+      p[11] === '1' && (t.seCell = true)),
+    Object.keys(t).length !== 0)
+  )
+    return t;
+}
+function Ot(e) {
+  if (!e) return;
+  let t = {},
+    n = Y(l(e, 'w', 'tcW'));
+  n && (t.width = n);
+  let o = Nt(l(e, 'w', 'tcBorders'));
+  o && (t.borders = o);
+  let r = At(l(e, 'w', 'tcMar'));
+  r && (t.margins = r);
+  let i = Xt(l(e, 'w', 'shd'));
+  i && (t.shading = i);
+  let a = l(e, 'w', 'vAlign');
+  if (a) {
+    let p = s(a, 'w', 'val');
+    (p === 'top' || p === 'center' || p === 'bottom') && (t.verticalAlign = p);
+  }
+  let u = l(e, 'w', 'textDirection');
+  if (u) {
+    let p = s(u, 'w', 'val');
+    p && (t.textDirection = p);
+  }
+  let c = l(e, 'w', 'gridSpan');
+  if (c) {
+    let p = g(c, 'w', 'val');
+    p !== void 0 && p > 1 && (t.gridSpan = p);
+  }
+  let f = l(e, 'w', 'vMerge');
+  (f && (s(f, 'w', 'val') === 'restart' ? (t.vMerge = 'restart') : (t.vMerge = 'continue')),
+    F(l(e, 'w', 'tcFitText')) && (t.fitText = true),
+    F(l(e, 'w', 'noWrap')) && (t.noWrap = true),
+    F(l(e, 'w', 'hideMark')) && (t.hideMark = true));
+  let x = Ht(l(e, 'w', 'cnfStyle'));
+  if ((x && (t.conditionalFormat = x), Object.keys(t).length !== 0)) return t;
+}
+function So(e, t, n, o, r, i) {
+  let a = [],
+    u = e.elements || [];
+  for (let c of u) {
+    if (!c.name) continue;
+    let f = c.name.split(':').pop();
+    if (f === 'p') {
+      let m = _(c, t, n, o, r, i);
+      a.push(m);
+    } else if (f === 'tbl') {
+      let m = ie(c, t, n, o, r, i);
+      a.push(m);
+    }
+  }
+  return (a.length === 0 && a.push({ type: 'paragraph', content: [] }), a);
+}
+function ko(e, t, n, o, r, i) {
+  let a = { type: 'tableCell', content: [] },
+    u = l(e, 'w', 'tcPr'),
+    c = Ot(u);
+  return (
+    c && (a.formatting = c),
+    (a.propertyChanges = To(u, c)),
+    (a.structuralChange = Co(u)),
+    (a.content = So(e, t, n, o, r, i)),
+    a
+  );
+}
+function Eo(e, t, n, o, r, i) {
+  let a = { type: 'tableRow', cells: [] },
+    u = l(e, 'w', 'trPr'),
+    c = Dt(u);
+  (c && (a.formatting = c), (a.propertyChanges = xo(u, c)), (a.structuralChange = Fo(u)));
+  let f = A(e, 'w', 'tc');
+  for (let m of f) {
+    let d = ko(m, t, n, o, r, i);
+    a.cells.push(d);
+  }
+  return a;
+}
+function Mo(e) {
+  if (!e) return;
+  let t = [],
+    n = A(e, 'w', 'gridCol');
+  for (let o of n) {
+    let r = g(o, 'w', 'w') ?? 0;
+    t.push(r);
+  }
+  return t.length > 0 ? t : void 0;
+}
+function ie(e, t, n, o, r, i) {
+  let a = { type: 'table', rows: [] },
+    u = l(e, 'w', 'tblPr'),
+    c = Lt(u);
+  (c && (a.formatting = c), (a.propertyChanges = yo(u, c)));
+  let f = Mo(l(e, 'w', 'tblGrid'));
+  f && (a.columnWidths = f);
+  let m = A(e, 'w', 'tr');
+  for (let d of m) {
+    let h = Eo(d, t, n, o, r, i);
+    a.rows.push(h);
+  }
+  return a;
+}
+function Wt(e) {
+  switch (e) {
+    case 'first':
+      return 'first';
+    case 'even':
+      return 'even';
+    default:
+      return 'default';
+  }
+}
+function jt(e) {
+  let t = s(e, 'w', 'type'),
+    n = s(e, 'r', 'id') ?? '';
+  return { type: Wt(t), rId: n };
+}
+function Vt(e) {
+  let t = s(e, 'w', 'type'),
+    n = s(e, 'r', 'id') ?? '';
+  return { type: Wt(t), rId: n };
+}
+function He(e, t, n, o, r, i) {
+  let a = [],
+    u = e.elements ?? [];
+  for (let c of u) {
+    if (c.type !== 'element') continue;
+    let f = c.name ?? '';
+    if (f === 'w:p' || f.endsWith(':p')) {
+      let m = _(c, t, n, o, r, i);
+      a.push(m);
+    } else if (f === 'w:tbl' || f.endsWith(':tbl')) {
+      let m = ie(c, t, n, o, r, i);
+      a.push(m);
+    } else if (f === 'w:sdt' || f.endsWith(':sdt')) {
+      let m = (c.elements ?? []).find(
+        (d) =>
+          d.type === 'element' && (d.name === 'w:sdtContent' || d.name?.endsWith(':sdtContent'))
+      );
+      if (m) {
+        let d = He(m, t, n, o, r, i);
+        a.push(...d);
+      }
+    }
+  }
+  return a;
+}
+function _t(e, t = 'default', n = null, o = null, r = null, i = null, a = null) {
+  let u = { type: 'header', hdrFtrType: t, content: [] };
+  if (!e) return u;
+  let c = j(e);
+  if (!c) return u;
+  let f = c.elements?.find(
+    (m) => m.type === 'element' && (m.name === 'w:hdr' || m.name?.endsWith(':hdr'))
+  );
+  return (f && (u.content = He(f, n, o, r, i, a)), u);
+}
+function zt(e, t = 'default', n = null, o = null, r = null, i = null, a = null) {
+  let u = { type: 'footer', hdrFtrType: t, content: [] };
+  if (!e) return u;
+  let c = j(e);
+  if (!c) return u;
+  let f = c.elements?.find(
+    (m) => m.type === 'element' && (m.name === 'w:ftr' || m.name?.endsWith(':ftr'))
+  );
+  return (f && (u.content = He(f, n, o, r, i, a)), u);
+}
+function Ut(e) {
+  switch (e) {
+    case 'separator':
+      return 'separator';
+    case 'continuationSeparator':
+      return 'continuationSeparator';
+    case 'continuationNotice':
+      return 'continuationNotice';
+    default:
+      return 'normal';
+  }
+}
+function Po(e, t, n, o, r, i) {
+  let a = g(e, 'w', 'id') ?? 0,
+    u = s(e, 'w', 'type'),
+    c = Ut(u),
+    m = A(e, 'w', 'p').map((d) => _(d, t, n, o, r));
+  return { type: 'footnote', id: a, noteType: c, content: m };
+}
+function $t(e, t = null, n = null, o = null, r = null, i = null) {
+  let a = new Map(),
+    u = [];
+  if (!e) return he(a, u);
+  let c = j(e);
+  if (!c) return he(a, u);
+  let f = c.elements?.find(
+    (d) => d.type === 'element' && (d.name === 'w:footnotes' || d.name?.endsWith(':footnotes'))
+  );
+  if (!f) return he(a, u);
+  let m = A(f, 'w', 'footnote');
+  for (let d of m) {
+    let h = Po(d, t, n, o, r);
+    (a.set(h.id, h), u.push(h));
+  }
+  return he(a, u);
+}
+function he(e, t) {
+  return {
+    byId: e,
+    footnotes: t,
+    getFootnote(n) {
+      return e.get(n);
+    },
+    hasFootnote(n) {
+      return e.has(n);
+    },
+    getNormalFootnotes() {
+      return t.filter((n) => n.noteType === 'normal');
+    },
+    getSeparator() {
+      return t.find((n) => n.noteType === 'separator');
+    },
+    getContinuationSeparator() {
+      return t.find((n) => n.noteType === 'continuationSeparator');
+    },
+  };
+}
+function vo(e, t, n, o, r, i) {
+  let a = g(e, 'w', 'id') ?? 0,
+    u = s(e, 'w', 'type'),
+    c = Ut(u),
+    m = A(e, 'w', 'p').map((d) => _(d, t, n, o, r));
+  return { type: 'endnote', id: a, noteType: c, content: m };
+}
+function Gt(e, t = null, n = null, o = null, r = null, i = null) {
+  let a = new Map(),
+    u = [];
+  if (!e) return we(a, u);
+  let c = j(e);
+  if (!c) return we(a, u);
+  let f = c.elements?.find(
+    (d) => d.type === 'element' && (d.name === 'w:endnotes' || d.name?.endsWith(':endnotes'))
+  );
+  if (!f) return we(a, u);
+  let m = A(f, 'w', 'endnote');
+  for (let d of m) {
+    let h = vo(d, t, n, o, r);
+    (a.set(h.id, h), u.push(h));
+  }
+  return we(a, u);
+}
+function we(e, t) {
+  return {
+    byId: e,
+    endnotes: t,
+    getEndnote(n) {
+      return e.get(n);
+    },
+    hasEndnote(n) {
+      return e.has(n);
+    },
+    getNormalEndnotes() {
+      return t.filter((n) => n.noteType === 'normal');
+    },
+    getSeparator() {
+      return t.find((n) => n.noteType === 'separator');
+    },
+    getContinuationSeparator() {
+      return t.find((n) => n.noteType === 'continuationSeparator');
+    },
+  };
+}
+function qt(e) {
+  return e
+    ? {
+        decimal: 'decimal',
+        upperRoman: 'upperRoman',
+        lowerRoman: 'lowerRoman',
+        upperLetter: 'upperLetter',
+        lowerLetter: 'lowerLetter',
+        ordinal: 'ordinal',
+        cardinalText: 'cardinalText',
+        ordinalText: 'ordinalText',
+        bullet: 'bullet',
+        chicago: 'chicago',
+        none: 'none',
+      }[e]
+    : void 0;
+}
+function Ro(e) {
+  switch (e) {
+    case 'pageBottom':
+      return 'pageBottom';
+    case 'beneathText':
+      return 'beneathText';
+    case 'sectEnd':
+      return 'sectEnd';
+    case 'docEnd':
+      return 'docEnd';
+    default:
+      return;
+  }
+}
+function Io(e) {
+  switch (e) {
+    case 'sectEnd':
+      return 'sectEnd';
+    case 'docEnd':
+      return 'docEnd';
+    default:
+      return;
+  }
+}
+function Zt(e) {
+  switch (e) {
+    case 'continuous':
+      return 'continuous';
+    case 'eachSect':
+      return 'eachSect';
+    case 'eachPage':
+      return 'eachPage';
+    default:
+      return;
+  }
+}
+function Yt(e) {
+  let t = {};
+  if (!e) return t;
+  let n = l(e, 'w', 'pos');
+  if (n) {
+    let a = s(n, 'w', 'val');
+    t.position = Ro(a);
+  }
+  let o = l(e, 'w', 'numFmt');
+  if (o) {
+    let a = s(o, 'w', 'val');
+    t.numFmt = qt(a);
+  }
+  let r = l(e, 'w', 'numStart');
+  r && (t.numStart = g(r, 'w', 'val') ?? void 0);
+  let i = l(e, 'w', 'numRestart');
+  if (i) {
+    let a = s(i, 'w', 'val');
+    t.numRestart = Zt(a);
+  }
+  return t;
+}
+function Kt(e) {
+  let t = {};
+  if (!e) return t;
+  let n = l(e, 'w', 'pos');
+  if (n) {
+    let a = s(n, 'w', 'val');
+    t.position = Io(a);
+  }
+  let o = l(e, 'w', 'numFmt');
+  if (o) {
+    let a = s(o, 'w', 'val');
+    t.numFmt = qt(a);
+  }
+  let r = l(e, 'w', 'numStart');
+  r && (t.numStart = g(r, 'w', 'val') ?? void 0);
+  let i = l(e, 'w', 'numRestart');
+  if (i) {
+    let a = s(i, 'w', 'val');
+    t.numRestart = Zt(a);
+  }
+  return t;
+}
+function Bo(e, t, n, o) {
+  if (!e && !t) return;
+  let r = {};
+  return (
+    e && e !== 'auto' ? (r.rgb = e) : e === 'auto' && (r.auto = true),
+    t && (r.themeColor = t),
+    n && (r.themeTint = n),
+    o && (r.themeShade = o),
+    Object.keys(r).length > 0 ? r : void 0
+  );
+}
+function be(e) {
+  if (!e) return;
+  let o = { style: s(e, 'w', 'val') ?? 'none' },
+    r = g(e, 'w', 'sz');
+  r !== void 0 && (o.size = r);
+  let i = g(e, 'w', 'space');
+  i !== void 0 && (o.space = i);
+  let a = s(e, 'w', 'color'),
+    u = s(e, 'w', 'themeColor'),
+    c = s(e, 'w', 'themeTint'),
+    f = s(e, 'w', 'themeShade'),
+    m = Bo(a, u, c, f);
+  m && (o.color = m);
+  let d = s(e, 'w', 'shadow');
+  (d === '1' || d === 'true') && (o.shadow = true);
+  let h = s(e, 'w', 'frame');
+  return ((h === '1' || h === 'true') && (o.frame = true), o);
+}
+function No(e) {
+  switch (e) {
+    case 'landscape':
+      return 'landscape';
+    case 'portrait':
+      return 'portrait';
+    default:
+      return;
+  }
+}
+function Ao(e) {
+  switch (e) {
+    case 'continuous':
+      return 'continuous';
+    case 'nextPage':
+      return 'nextPage';
+    case 'oddPage':
+      return 'oddPage';
+    case 'evenPage':
+      return 'evenPage';
+    case 'nextColumn':
+      return 'nextColumn';
+    default:
+      return;
+  }
+}
+function Xo(e) {
+  switch (e) {
+    case 'top':
+      return 'top';
+    case 'center':
+      return 'center';
+    case 'both':
+      return 'both';
+    case 'bottom':
+      return 'bottom';
+    default:
+      return;
+  }
+}
+function Lo(e) {
+  switch (e) {
+    case 'continuous':
+      return 'continuous';
+    case 'newPage':
+      return 'newPage';
+    case 'newSection':
+      return 'newSection';
+    default:
+      return;
+  }
+}
+function ye(e, t) {
+  let n = {};
+  if (!e) return n;
+  let o = l(e, 'w', 'pgSz');
+  if (o) {
+    let w = g(o, 'w', 'w');
+    w !== void 0 && (n.pageWidth = w);
+    let b = g(o, 'w', 'h');
+    b !== void 0 && (n.pageHeight = b);
+    let k = s(o, 'w', 'orient'),
+      y = No(k);
+    y && (n.orientation = y);
+  }
+  let r = l(e, 'w', 'pgMar');
+  if (r) {
+    let w = g(r, 'w', 'top');
+    w !== void 0 && (n.marginTop = w);
+    let b = g(r, 'w', 'bottom');
+    b !== void 0 && (n.marginBottom = b);
+    let k = g(r, 'w', 'left');
+    k !== void 0 && (n.marginLeft = k);
+    let y = g(r, 'w', 'right');
+    y !== void 0 && (n.marginRight = y);
+    let E = g(r, 'w', 'header');
+    E !== void 0 && (n.headerDistance = E);
+    let R = g(r, 'w', 'footer');
+    R !== void 0 && (n.footerDistance = R);
+    let N = g(r, 'w', 'gutter');
+    N !== void 0 && (n.gutter = N);
+  }
+  let i = l(e, 'w', 'cols');
+  if (i) {
+    let w = g(i, 'w', 'num');
+    w !== void 0 && (n.columnCount = w);
+    let b = g(i, 'w', 'space');
+    b !== void 0 && (n.columnSpace = b);
+    let k = s(i, 'w', 'equalWidth');
+    k === '1' || k === 'true'
+      ? (n.equalWidth = true)
+      : (k === '0' || k === 'false') && (n.equalWidth = false);
+    let y = s(i, 'w', 'sep');
+    (y === '1' || y === 'true') && (n.separator = true);
+    let E = A(i, 'w', 'col');
+    if (E.length > 0) {
+      n.columns = [];
+      for (let R of E) {
+        let N = {},
+          L = g(R, 'w', 'w');
+        L !== void 0 && (N.width = L);
+        let O = g(R, 'w', 'space');
+        (O !== void 0 && (N.space = O), n.columns.push(N));
+      }
+      n.columnCount === void 0 && (n.columnCount = E.length);
+    }
+  }
+  let a = l(e, 'w', 'type');
+  if (a) {
+    let w = s(a, 'w', 'val'),
+      b = Ao(w);
+    b && (n.sectionStart = b);
+  }
+  let u = l(e, 'w', 'vAlign');
+  if (u) {
+    let w = s(u, 'w', 'val'),
+      b = Xo(w);
+    b && (n.verticalAlign = b);
+  }
+  let c = l(e, 'w', 'bidi');
+  c && (n.bidi = F(c));
+  let f = A(e, 'w', 'headerReference');
+  f.length > 0 && (n.headerReferences = f.map((w) => jt(w)));
+  let m = A(e, 'w', 'footerReference');
+  m.length > 0 && (n.footerReferences = m.map((w) => Vt(w)));
+  let d = l(e, 'w', 'titlePg');
+  d && (n.titlePg = F(d));
+  let h = l(e, 'w', 'evenAndOddHeaders');
+  h && (n.evenAndOddHeaders = F(h));
+  let x = l(e, 'w', 'lnNumType');
+  if (x) {
+    n.lineNumbers = {};
+    let w = g(x, 'w', 'start');
+    w !== void 0 && (n.lineNumbers.start = w);
+    let b = g(x, 'w', 'countBy');
+    b !== void 0 && (n.lineNumbers.countBy = b);
+    let k = g(x, 'w', 'distance');
+    k !== void 0 && (n.lineNumbers.distance = k);
+    let y = s(x, 'w', 'restart'),
+      E = Lo(y);
+    E && (n.lineNumbers.restart = E);
+  }
+  let p = l(e, 'w', 'pgBorders');
+  if (p) {
+    n.pageBorders = {};
+    let w = be(l(p, 'w', 'top'));
+    w && (n.pageBorders.top = w);
+    let b = be(l(p, 'w', 'bottom'));
+    b && (n.pageBorders.bottom = b);
+    let k = be(l(p, 'w', 'left'));
+    k && (n.pageBorders.left = k);
+    let y = be(l(p, 'w', 'right'));
+    y && (n.pageBorders.right = y);
+    let E = s(p, 'w', 'display');
+    (E === 'allPages' || E === 'firstPage' || E === 'notFirstPage') && (n.pageBorders.display = E);
+    let R = s(p, 'w', 'offsetFrom');
+    (R === 'page' || R === 'text') && (n.pageBorders.offsetFrom = R);
+    let N = s(p, 'w', 'zOrder');
+    (N === 'front' || N === 'back') && (n.pageBorders.zOrder = N);
+  }
+  let T = l(e, 'w', 'background');
+  if (T) {
+    n.background = {};
+    let w = s(T, 'w', 'color');
+    w && w !== 'auto' && (n.background.color = { rgb: w });
+    let b = s(T, 'w', 'themeColor');
+    b && (n.background.themeColor = b);
+    let k = s(T, 'w', 'themeTint');
+    k && (n.background.themeTint = k);
+    let y = s(T, 'w', 'themeShade');
+    y && (n.background.themeShade = y);
+  }
+  let C = l(e, 'w', 'footnotePr');
+  if (C) {
+    let w = Yt(C);
+    Object.keys(w).length > 0 && (n.footnotePr = w);
+  }
+  let I = l(e, 'w', 'endnotePr');
+  if (I) {
+    let w = Kt(I);
+    Object.keys(w).length > 0 && (n.endnotePr = w);
+  }
+  let M = l(e, 'w', 'docGrid');
+  if (M) {
+    n.docGrid = {};
+    let w = s(M, 'w', 'type');
+    (w === 'default' || w === 'lines' || w === 'linesAndChars' || w === 'snapToChars') &&
+      (n.docGrid.type = w);
+    let b = g(M, 'w', 'linePitch');
+    b !== void 0 && (n.docGrid.linePitch = b);
+    let k = g(M, 'w', 'charSpace');
+    k !== void 0 && (n.docGrid.charSpace = k);
+  }
+  let S = l(e, 'w', 'paperSrc');
+  if (S) {
+    let w = g(S, 'w', 'first');
+    w !== void 0 && (n.paperSrcFirst = w);
+    let b = g(S, 'w', 'other');
+    b !== void 0 && (n.paperSrcOther = b);
+  }
+  return n;
+}
+function Jt() {
+  return {
+    pageWidth: 12240,
+    pageHeight: 15840,
+    orientation: 'portrait',
+    marginTop: 1440,
+    marginBottom: 1440,
+    marginLeft: 1440,
+    marginRight: 1440,
+    headerDistance: 720,
+    footerDistance: 720,
+    gutter: 0,
+    columnCount: 1,
+    columnSpace: 720,
+    equalWidth: true,
+    sectionStart: 'nextPage',
+    verticalAlign: 'top',
+  };
+}
+function Do(e, t) {
+  return !e && !t
+    ? true
+    : !(
+        !e ||
+        !t ||
+        e.bold !== t.bold ||
+        e.boldCs !== t.boldCs ||
+        e.italic !== t.italic ||
+        e.italicCs !== t.italicCs ||
+        e.strike !== t.strike ||
+        e.doubleStrike !== t.doubleStrike ||
+        e.smallCaps !== t.smallCaps ||
+        e.allCaps !== t.allCaps ||
+        e.hidden !== t.hidden ||
+        e.emboss !== t.emboss ||
+        e.imprint !== t.imprint ||
+        e.outline !== t.outline ||
+        e.shadow !== t.shadow ||
+        e.rtl !== t.rtl ||
+        e.cs !== t.cs ||
+        e.fontSize !== t.fontSize ||
+        e.fontSizeCs !== t.fontSizeCs ||
+        e.spacing !== t.spacing ||
+        e.position !== t.position ||
+        e.scale !== t.scale ||
+        e.kerning !== t.kerning ||
+        e.vertAlign !== t.vertAlign ||
+        e.highlight !== t.highlight ||
+        e.effect !== t.effect ||
+        e.emphasisMark !== t.emphasisMark ||
+        e.styleId !== t.styleId ||
+        !Ho(e.underline, t.underline) ||
+        !xe(e.color, t.color) ||
+        !Oo(e.shading, t.shading) ||
+        !Wo(e.fontFamily, t.fontFamily)
+      );
+}
+function Ho(e, t) {
+  return !e && !t ? true : !e || !t || e.style !== t.style ? false : xe(e.color, t.color);
+}
+function xe(e, t) {
+  return !e && !t
+    ? true
+    : !e || !t
+      ? false
+      : e.rgb === t.rgb &&
+        e.auto === t.auto &&
+        e.themeColor === t.themeColor &&
+        e.themeTint === t.themeTint &&
+        e.themeShade === t.themeShade;
+}
+function Oo(e, t) {
+  return !e && !t
+    ? true
+    : !(!e || !t || e.pattern !== t.pattern || !xe(e.color, t.color) || !xe(e.fill, t.fill));
+}
+function Wo(e, t) {
+  return !e && !t
+    ? true
+    : !e || !t
+      ? false
+      : e.ascii === t.ascii &&
+        e.hAnsi === t.hAnsi &&
+        e.eastAsia === t.eastAsia &&
+        e.cs === t.cs &&
+        e.asciiTheme === t.asciiTheme &&
+        e.hAnsiTheme === t.hAnsiTheme &&
+        e.eastAsiaTheme === t.eastAsiaTheme &&
+        e.csTheme === t.csTheme;
+}
+function jo(e) {
+  return e.type === 'text' || e.type === 'softHyphen' || e.type === 'noBreakHyphen';
+}
+function Qt(e) {
+  return e.content.length === 0 ? true : e.content.every(jo);
+}
+function Vo(e, t) {
+  let n = [];
+  for (let o of e) n.push(o);
+  if (n.length > 0 && t.length > 0 && n[n.length - 1].type === 'text' && t[0].type === 'text') {
+    let o = n[n.length - 1],
+      r = t[0];
+    n[n.length - 1] = {
+      type: 'text',
+      text: o.text + r.text,
+      preserveSpace: o.preserveSpace || r.preserveSpace || void 0,
+    };
+    for (let i = 1; i < t.length; i++) n.push(t[i]);
+  } else for (let o of t) n.push(o);
+  return n;
+}
+function _o(e) {
+  if (e.length <= 1) return e;
+  let t = [],
+    n = null;
+  for (let o of e)
+    if (o.content.length !== 0) {
+      if (n === null) {
+        n = { ...o, content: [...o.content] };
+        continue;
+      }
+      Qt(n) && Qt(o) && Do(n.formatting, o.formatting)
+        ? (n = { type: 'run', formatting: n.formatting, content: Vo(n.content, o.content) })
+        : (t.push(n), (n = { ...o, content: [...o.content] }));
+    }
+  return (n !== null && t.push(n), t);
+}
+function Oe(e) {
+  if (e.length <= 1) return e;
+  let t = [],
+    n = [];
+  function o() {
+    if (n.length > 0) {
+      let r = _o(n);
+      (t.push(...r), (n.length = 0));
+    }
+  }
+  for (let r of e)
+    if (r.type === 'run') n.push(r);
+    else if ((o(), r.type === 'hyperlink')) {
+      let i = { ...r, children: Oe(r.children) };
+      t.push(i);
+    } else t.push(r);
+  return (o(), t);
+}
+function zo(e) {
+  let t = { sdtType: 'richText' };
+  if (!e || !e.elements) return t;
+  for (let n of e.elements) {
+    if (n.type !== 'element') continue;
+    switch (n.name?.replace(/^w:/, '') ?? '') {
+      case 'alias':
+        t.alias = s(n, 'w', 'val') ?? void 0;
+        break;
+      case 'tag':
+        t.tag = s(n, 'w', 'val') ?? void 0;
+        break;
+      case 'lock':
+        t.lock = s(n, 'w', 'val') ?? 'unlocked';
+        break;
+      case 'placeholder': {
+        let r = l(n, 'w', 'docPart');
+        if (r) {
+          let i = l(r, 'w', 'val');
+          t.placeholder = i ? (s(i, 'w', 'val') ?? void 0) : void 0;
+        }
+        break;
+      }
+      case 'showingPlcHdr':
+        t.showingPlaceholder = true;
+        break;
+      case 'text':
+        t.sdtType = 'plainText';
+        break;
+      case 'date':
+        ((t.sdtType = 'date'), (t.dateFormat = s(n, 'w', 'fullDate') ?? void 0));
+        break;
+      case 'dropDownList':
+        ((t.sdtType = 'dropdown'), (t.listItems = en(n)));
+        break;
+      case 'comboBox':
+        ((t.sdtType = 'comboBox'), (t.listItems = en(n)));
+        break;
+      case 'checkbox': {
+        t.sdtType = 'checkbox';
+        let r = l(n, 'w14', 'checked') ?? l(n, 'w', 'checked');
+        t.checked = r ? s(r, 'w14', 'val') === '1' || s(r, 'w', 'val') === '1' : false;
+        break;
+      }
+      case 'picture':
+        t.sdtType = 'picture';
+        break;
+      case 'docPartObj':
+        t.sdtType = 'buildingBlockGallery';
+        break;
+      case 'group':
+        t.sdtType = 'group';
+        break;
+    }
+  }
+  return t;
+}
+function en(e) {
+  let t = [];
+  for (let n of e.elements ?? [])
+    n.type === 'element' &&
+      (n.name === 'w:listItem' || n.name?.endsWith(':listItem')) &&
+      t.push({ displayText: s(n, 'w', 'displayText') ?? '', value: s(n, 'w', 'value') ?? '' });
+  return t;
+}
+function nn(e) {
+  let t = '';
+  if (e.type === 'text' && typeof e.text == 'string') return e.text;
+  if (e.elements)
+    for (let n of e.elements)
+      if ((n.name?.replace(/^.*:/, '') ?? '') === 't' && n.elements)
+        for (let r of n.elements) r.type === 'text' && typeof r.text == 'string' && (t += r.text);
+      else t += nn(n);
+  return t;
+}
+function Uo(e, t, n, o) {
+  let r = {};
+  return (
+    e && e !== 'auto' ? (r.rgb = e) : e === 'auto' && (r.auto = true),
+    t && (r.themeColor = t),
+    n && (r.themeTint = n),
+    o && (r.themeShade = o),
+    r
+  );
+}
+function $o(e) {
+  if (!e) return;
+  let t = {},
+    n = s(e, 'w', 'color');
+  n && n !== 'auto' && (t.color = { rgb: n });
+  let o = s(e, 'w', 'fill');
+  o && o !== 'auto' && (t.fill = { rgb: o });
+  let r = s(e, 'w', 'themeFill');
+  r && ((t.fill = t.fill || {}), (t.fill.themeColor = r));
+  let i = s(e, 'w', 'themeFillTint');
+  i && t.fill && (t.fill.themeTint = i);
+  let a = s(e, 'w', 'themeFillShade');
+  a && t.fill && (t.fill.themeShade = a);
+  let u = s(e, 'w', 'val');
+  return (u && (t.pattern = u), Object.keys(t).length > 0 ? t : void 0);
+}
+function ne(e) {
+  if (!e) return;
+  let t = s(e, 'w', 'val');
+  if (!t) return;
+  let n = { style: t },
+    o = s(e, 'w', 'color'),
+    r = s(e, 'w', 'themeColor');
+  (o || r) && (n.color = Uo(o, r, s(e, 'w', 'themeTint'), s(e, 'w', 'themeShade')));
+  let i = g(e, 'w', 'sz');
+  i !== void 0 && (n.size = i);
+  let a = g(e, 'w', 'space');
+  a !== void 0 && (n.space = a);
+  let u = s(e, 'w', 'shadow');
+  u && (n.shadow = u === '1' || u === 'true');
+  let c = s(e, 'w', 'frame');
+  return (c && (n.frame = c === '1' || c === 'true'), n);
+}
+function Go(e) {
+  if (!e) return;
+  let t = A(e, 'w', 'tab');
+  if (t.length === 0) return;
+  let n = [];
+  for (let o of t) {
+    let r = g(o, 'w', 'pos'),
+      i = s(o, 'w', 'val');
+    if (r !== void 0 && i) {
+      let a = { position: r, alignment: i },
+        u = s(o, 'w', 'leader');
+      (u && (a.leader = u), n.push(a));
+    }
+  }
+  return n.length > 0 ? n : void 0;
+}
+function qo(e) {
+  if (!e) return;
+  let t = {},
+    n = g(e, 'w', 'w');
+  n !== void 0 && (t.width = n);
+  let o = g(e, 'w', 'h');
+  o !== void 0 && (t.height = o);
+  let r = s(e, 'w', 'hAnchor');
+  (r === 'text' || r === 'margin' || r === 'page') && (t.hAnchor = r);
+  let i = s(e, 'w', 'vAnchor');
+  (i === 'text' || i === 'margin' || i === 'page') && (t.vAnchor = i);
+  let a = g(e, 'w', 'x');
+  a !== void 0 && (t.x = a);
+  let u = g(e, 'w', 'y');
+  u !== void 0 && (t.y = u);
+  let c = s(e, 'w', 'xAlign');
+  c && (t.xAlign = c);
+  let f = s(e, 'w', 'yAlign');
+  f && (t.yAlign = f);
+  let m = s(e, 'w', 'wrap');
+  return (m && (t.wrap = m), Object.keys(t).length > 0 ? t : void 0);
+}
+function on(e, t, n) {
+  if (!e) return;
+  let o = {},
+    r = l(e, 'w', 'jc');
+  if (r) {
+    let y = s(r, 'w', 'val');
+    y && (o.alignment = y);
+  }
+  let i = l(e, 'w', 'bidi');
+  i && (o.bidi = F(i));
+  let a = l(e, 'w', 'spacing');
+  if (a) {
+    let y = g(a, 'w', 'before');
+    y !== void 0 && (o.spaceBefore = y);
+    let E = g(a, 'w', 'after');
+    E !== void 0 && (o.spaceAfter = E);
+    let R = g(a, 'w', 'line');
+    R !== void 0 && (o.lineSpacing = R);
+    let N = s(a, 'w', 'lineRule');
+    N && (o.lineSpacingRule = N);
+    let L = s(a, 'w', 'beforeAutospacing');
+    L && (o.beforeAutospacing = L === '1' || L === 'true');
+    let O = s(a, 'w', 'afterAutospacing');
+    O && (o.afterAutospacing = O === '1' || O === 'true');
+  }
+  let u = l(e, 'w', 'ind');
+  if (u) {
+    let y = g(u, 'w', 'left');
+    y !== void 0 && (o.indentLeft = y);
+    let E = g(u, 'w', 'right');
+    E !== void 0 && (o.indentRight = E);
+    let R = g(u, 'w', 'firstLine');
+    R !== void 0 && (o.indentFirstLine = R);
+    let N = g(u, 'w', 'hanging');
+    N !== void 0 && ((o.indentFirstLine = -N), (o.hangingIndent = true));
+    let L = g(u, 'w', 'start');
+    L !== void 0 && o.indentLeft === void 0 && (o.indentLeft = L);
+    let O = g(u, 'w', 'end');
+    O !== void 0 && o.indentRight === void 0 && (o.indentRight = O);
+  }
+  let c = l(e, 'w', 'pBdr');
+  if (c) {
+    let y = {},
+      E = ne(l(c, 'w', 'top'));
+    E && (y.top = E);
+    let R = ne(l(c, 'w', 'bottom'));
+    R && (y.bottom = R);
+    let N = ne(l(c, 'w', 'left'));
+    N && (y.left = N);
+    let L = ne(l(c, 'w', 'right'));
+    L && (y.right = L);
+    let O = ne(l(c, 'w', 'between'));
+    O && (y.between = O);
+    let z = ne(l(c, 'w', 'bar'));
+    (z && (y.bar = z), Object.keys(y).length > 0 && (o.borders = y));
+  }
+  let f = l(e, 'w', 'shd');
+  f && (o.shading = $o(f));
+  let m = l(e, 'w', 'tabs');
+  m && (o.tabs = Go(m));
+  let d = l(e, 'w', 'keepNext');
+  d && (o.keepNext = F(d));
+  let h = l(e, 'w', 'keepLines');
+  h && (o.keepLines = F(h));
+  let x = l(e, 'w', 'widowControl');
+  x && (o.widowControl = F(x));
+  let p = l(e, 'w', 'pageBreakBefore');
+  p && (o.pageBreakBefore = F(p));
+  let T = l(e, 'w', 'contextualSpacing');
+  T && (o.contextualSpacing = F(T));
+  let C = l(e, 'w', 'numPr');
+  if (C) {
+    let y = l(C, 'w', 'numId'),
+      E = l(C, 'w', 'ilvl');
+    if (y || E) {
+      if (((o.numPr = {}), y)) {
+        let R = g(y, 'w', 'val');
+        R !== void 0 && (o.numPr.numId = R);
+      }
+      if (E) {
+        let R = g(E, 'w', 'val');
+        R !== void 0 && (o.numPr.ilvl = R);
+      }
+    }
+  }
+  let I = l(e, 'w', 'outlineLvl');
+  if (I) {
+    let y = g(I, 'w', 'val');
+    y !== void 0 && (o.outlineLevel = y);
+  }
+  let M = l(e, 'w', 'pStyle');
+  if (M) {
+    let y = s(M, 'w', 'val');
+    y && (o.styleId = y);
+  }
+  let S = l(e, 'w', 'framePr');
+  S && (o.frame = qo(S));
+  let w = l(e, 'w', 'suppressLineNumbers');
+  w && (o.suppressLineNumbers = F(w));
+  let b = l(e, 'w', 'suppressAutoHyphens');
+  b && (o.suppressAutoHyphens = F(b));
+  let k = l(e, 'w', 'rPr');
+  return (k && (o.runProperties = ge(k, t)), Object.keys(o).length > 0 ? o : void 0);
+}
+function We(e) {
+  if (!e) return '';
+  let t = e.indexOf(':');
+  return t >= 0 ? e.substring(t + 1) : e;
+}
+function tn(e, t) {
+  if (!e) return `w:${t}`;
+  let n = e.indexOf(':');
+  return n < 0 ? t : `${e.substring(0, n + 1)}${t}`;
+}
+function rn(e) {
+  if (e.type !== 'element') return e;
+  let t = We(e.name),
+    n = e.name;
+  return (
+    t === 'delText' ? (n = tn(e.name, 't')) : t === 'delInstrText' && (n = tn(e.name, 'instrText')),
+    { ...e, name: n, elements: e.elements?.map(rn) }
+  );
+}
+function ae(e) {
+  let t = s(e, 'w', 'id'),
+    n = t ? parseInt(t, 10) : 0,
+    o = s(e, 'w', 'author'),
+    r = s(e, 'w', 'date'),
+    i = o?.trim() ?? '',
+    a = r?.trim() ?? '';
+  return {
+    id: Number.isInteger(n) && n >= 0 ? n : 0,
+    author: i.length > 0 ? i : 'Unknown',
+    date: a.length > 0 ? a : void 0,
+  };
+}
+function Zo(e) {
+  let t = ae(e),
+    n = (s(e, 'w', 'rsid') ?? '').trim();
+  return n.length > 0 ? { ...t, rsid: n } : t;
+}
+function Yo(e, t, n, o) {
+  if (!e) return;
+  let r = A(e, 'w', 'pPrChange')
+    .map((i) => {
+      let a = l(i, 'w', 'pPr');
+      return {
+        type: 'paragraphPropertyChange',
+        info: Zo(i),
+        previousFormatting: on(a, t),
+        currentFormatting: o,
+      };
+    })
+    .filter((i) => i.previousFormatting || i.currentFormatting);
+  return r.length > 0 ? r : void 0;
+}
+function Ko(e, t, n, o, r) {
+  return Rt(e, t, n, o, r);
+}
+function Jo(e) {
+  return It(e);
+}
+function Qo(e) {
+  return Bt(e);
+}
+function an(e) {
+  let t = e.trim().match(/^\\?([A-Z]+)/i);
+  if (!t) return 'UNKNOWN';
+  let n = t[1].toUpperCase();
+  return [
+    'PAGE',
+    'NUMPAGES',
+    'NUMWORDS',
+    'NUMCHARS',
+    'DATE',
+    'TIME',
+    'CREATEDATE',
+    'SAVEDATE',
+    'PRINTDATE',
+    'AUTHOR',
+    'TITLE',
+    'SUBJECT',
+    'KEYWORDS',
+    'COMMENTS',
+    'FILENAME',
+    'FILESIZE',
+    'TEMPLATE',
+    'DOCPROPERTY',
+    'DOCVARIABLE',
+    'REF',
+    'PAGEREF',
+    'NOTEREF',
+    'HYPERLINK',
+    'TOC',
+    'TOA',
+    'INDEX',
+    'SEQ',
+    'STYLEREF',
+    'AUTONUM',
+    'AUTONUMLGL',
+    'AUTONUMOUT',
+    'IF',
+    'MERGEFIELD',
+    'NEXT',
+    'NEXTIF',
+    'ASK',
+    'SET',
+    'QUOTE',
+    'INCLUDETEXT',
+    'INCLUDEPICTURE',
+    'SYMBOL',
+    'ADVANCE',
+    'EDITTIME',
+    'REVNUM',
+    'SECTION',
+    'SECTIONPAGES',
+    'USERADDRESS',
+    'USERNAME',
+    'USERINITIALS',
+  ].includes(n)
+    ? n
+    : 'UNKNOWN';
+}
+function er(e, t, n, o, r) {
+  let i = s(e, 'w', 'instr') ?? '',
+    a = an(i),
+    u = { type: 'simpleField', instruction: i, fieldType: a, content: [] },
+    c = s(e, 'w', 'fldLock');
+  (c === '1' || c === 'true') && (u.fldLock = true);
+  let f = s(e, 'w', 'dirty');
+  (f === '1' || f === 'true') && (u.dirty = true);
+  let m = X(e);
+  for (let d of m) We(d.name) === 'r' && u.content.push(re(d, t, n, o, r));
+  return u;
+}
+function oe(e, t, n, o, r, i, a = 'default') {
+  let u = [],
+    c = X(e),
+    f = false,
+    m = '',
+    d = [],
+    h = [],
+    x = false,
+    p = false,
+    T = false;
+  for (let C of c) {
+    let I = We(C.name);
+    switch (I) {
+      case 'r': {
+        let M = a === 'deletion' ? rn(C) : C,
+          S = re(M, t, n, r, i),
+          w = false,
+          b = false,
+          k = false,
+          y = '';
+        for (let E of S.content)
+          E.type === 'fieldChar'
+            ? E.charType === 'begin'
+              ? ((w = true), E.fldLock && (p = true), E.dirty && (T = true))
+              : E.charType === 'separate'
+                ? (b = true)
+                : E.charType === 'end' && (k = true)
+            : E.type === 'instrText' && (y += E.text);
+        if (
+          (w && ((f = true), (x = false), (m = ''), (d = []), (h = []), (p = false), (T = false)),
+          f)
+        ) {
+          if (
+            (y && (m += y), b && (x = true), x && !k ? b || h.push(S) : !x && !w && d.push(S), k)
+          ) {
+            let E = {
+              type: 'complexField',
+              instruction: m.trim(),
+              fieldType: an(m),
+              fieldCode: d,
+              fieldResult: h,
+            };
+            (p && (E.fldLock = true), T && (E.dirty = true), u.push(E), (f = false));
+          }
+        } else u.push(S);
+        break;
+      }
+      case 'hyperlink':
+        u.push(Ko(C, r, t, n, i));
+        break;
+      case 'bookmarkStart':
+        u.push(Jo(C));
+        break;
+      case 'bookmarkEnd':
+        u.push(Qo(C));
+        break;
+      case 'fldSimple':
+        u.push(er(C, t, n, r, i));
+        break;
+      case 'pPr':
+        break;
+      case 'proofErr':
+      case 'permStart':
+      case 'permEnd':
+      case 'customXml':
+        break;
+      case 'sdt': {
+        let M = (C.elements ?? []).find(
+            (w) => w.type === 'element' && (w.name === 'w:sdtPr' || w.name?.endsWith(':sdtPr'))
+          ),
+          S = (C.elements ?? []).find(
+            (w) =>
+              w.type === 'element' && (w.name === 'w:sdtContent' || w.name?.endsWith(':sdtContent'))
+          );
+        if (S) {
+          let w = oe(S, t, n, null, r, i, a),
+            k = {
+              type: 'inlineSdt',
+              properties: zo(M ?? null),
+              content: w.filter((y) => y.type === 'run' || y.type === 'hyperlink'),
+            };
+          u.push(k);
+        }
+        break;
+      }
+      case 'ins': {
+        let M = ae(C),
+          S = oe(C, t, n, null, r, i),
+          w = {
+            type: 'insertion',
+            info: M,
+            content: S.filter((b) => b.type === 'run' || b.type === 'hyperlink'),
+          };
+        u.push(w);
+        break;
+      }
+      case 'del': {
+        let M = ae(C),
+          S = oe(C, t, n, null, r, i, 'deletion'),
+          w = {
+            type: 'deletion',
+            info: M,
+            content: S.filter((b) => b.type === 'run' || b.type === 'hyperlink'),
+          };
+        u.push(w);
+        break;
+      }
+      case 'moveFrom': {
+        let M = ae(C),
+          S = oe(C, t, n, null, r, i, 'deletion'),
+          w = {
+            type: 'moveFrom',
+            info: M,
+            content: S.filter((b) => b.type === 'run' || b.type === 'hyperlink'),
+          };
+        u.push(w);
+        break;
+      }
+      case 'moveTo': {
+        let M = ae(C),
+          S = oe(C, t, n, null, r, i),
+          w = {
+            type: 'moveTo',
+            info: M,
+            content: S.filter((b) => b.type === 'run' || b.type === 'hyperlink'),
+          };
+        u.push(w);
+        break;
+      }
+      case 'smartTag':
+        break;
+      case 'moveFromRangeStart': {
+        let M = parseInt(s(C, 'w', 'id') ?? '0', 10),
+          S = s(C, 'w', 'name') ?? '';
+        u.push({ type: 'moveFromRangeStart', id: M, name: S });
+        break;
+      }
+      case 'moveFromRangeEnd': {
+        let M = parseInt(s(C, 'w', 'id') ?? '0', 10);
+        u.push({ type: 'moveFromRangeEnd', id: M });
+        break;
+      }
+      case 'moveToRangeStart': {
+        let M = parseInt(s(C, 'w', 'id') ?? '0', 10),
+          S = s(C, 'w', 'name') ?? '';
+        u.push({ type: 'moveToRangeStart', id: M, name: S });
+        break;
+      }
+      case 'moveToRangeEnd': {
+        let M = parseInt(s(C, 'w', 'id') ?? '0', 10);
+        u.push({ type: 'moveToRangeEnd', id: M });
+        break;
+      }
+      case 'commentRangeStart': {
+        let M = parseInt(s(C, 'w', 'id') ?? '0', 10);
+        u.push({ type: 'commentRangeStart', id: M });
+        break;
+      }
+      case 'commentRangeEnd': {
+        let M = parseInt(s(C, 'w', 'id') ?? '0', 10);
+        u.push({ type: 'commentRangeEnd', id: M });
+        break;
+      }
+      case 'oMath':
+      case 'oMathPara': {
+        let M = I === 'oMathPara',
+          S = qe(C),
+          w = nn(C),
+          b = {
+            type: 'mathEquation',
+            display: M ? 'block' : 'inline',
+            ommlXml: S,
+            plainText: w || void 0,
+          };
+        u.push(b);
+        break;
+      }
+    }
+  }
+  return u;
+}
+function _(e, t, n, o, r = null, i = null) {
+  let a = { type: 'paragraph', content: [] },
+    u = s(e, 'w14', 'paraId') ?? s(e, 'w', 'paraId');
+  u && (a.paraId = u);
+  let c = s(e, 'w14', 'textId') ?? s(e, 'w', 'textId');
+  c && (a.textId = c);
+  let f = l(e, 'w', 'pPr');
+  if (f) {
+    ((a.formatting = on(f, n)), (a.propertyChanges = Yo(f, n, t, a.formatting)));
+    let h = l(f, 'w', 'sectPr');
+    h && (a.sectionProperties = ye(h));
+  }
+  let m = oe(e, t, n, o, r, i);
+  a.content = Oe(m);
+  let d = a.formatting?.numPr;
+  if (!d && a.formatting?.styleId && t) {
+    let h = t.get(a.formatting.styleId);
+    h?.pPr?.numPr &&
+      ((d = h.pPr.numPr), a.formatting || (a.formatting = {}), (a.formatting.numPr = d));
+  }
+  if (d && o) {
+    let { numId: h, ilvl: x = 0 } = d;
+    if (h !== void 0 && h !== 0) {
+      let p = o.getLevel(h, x);
+      if (
+        p &&
+        ((a.listRendering = {
+          level: x,
+          numId: h,
+          marker: p.lvlText,
+          isBullet: p.numFmt === 'bullet',
+          numFmt: p.numFmt,
+          markerHidden: p.rPr?.hidden || void 0,
+          markerFontFamily: p.rPr?.fontFamily?.ascii || p.rPr?.fontFamily?.hAnsi || void 0,
+          markerFontSize: p.rPr?.fontSize ? p.rPr.fontSize / 2 : void 0,
+        }),
+        p.pPr)
+      ) {
+        a.formatting || (a.formatting = {});
+        let T = f ? l(f, 'w', 'ind') : null,
+          C = T != null && (s(T, 'w', 'left') !== null || s(T, 'w', 'start') !== null),
+          I = T != null && (s(T, 'w', 'firstLine') !== null || s(T, 'w', 'hanging') !== null);
+        (!C && p.pPr.indentLeft !== void 0 && (a.formatting.indentLeft = p.pPr.indentLeft),
+          I ||
+            (p.pPr.indentFirstLine !== void 0 &&
+              (a.formatting.indentFirstLine = p.pPr.indentFirstLine),
+            p.pPr.hangingIndent !== void 0 && (a.formatting.hangingIndent = p.pPr.hangingIndent)));
+      }
+    }
+  }
+  return a;
+}
+function je(e) {
+  let t = '';
+  for (let n of e.content)
+    if (n.type === 'run')
+      for (let o of n.content)
+        o.type === 'text'
+          ? (t += o.text)
+          : o.type === 'tab'
+            ? (t += '	')
+            : o.type === 'break' &&
+              (o.breakType === 'page'
+                ? (t += '\f')
+                : (t += `
+`));
+    else if (n.type === 'hyperlink') {
+      for (let o of n.children)
+        if (o.type === 'run') for (let r of o.content) r.type === 'text' && (t += r.text);
+    } else if (n.type === 'simpleField') {
+      for (let o of n.content)
+        if (o.type === 'run') for (let r of o.content) r.type === 'text' && (t += r.text);
+    } else if (n.type === 'complexField')
+      for (let o of n.fieldResult) for (let r of o.content) r.type === 'text' && (t += r.text);
+  return t;
+}
+function tr(e) {
+  if (!e || e.trim() === '') return '\u2022';
+  let t = e.charCodeAt(0),
+    n = {
+      183: '\u2022',
+      111: '\u25CB',
+      167: '\u25A0',
+      252: '\u2713',
+      110: '\u25A0',
+      113: '\u25CB',
+      117: '\u25C6',
+      118: '\u2756',
+      168: '\u2713',
+      251: '\u2713',
+      254: '\u2713',
+      61623: '\u2022',
+      61550: '\u25A0',
+      61551: '\u25CB',
+      61607: '\u25A0',
+      61692: '\u2713',
+      8226: '\u2022',
+      9679: '\u25CF',
+      9675: '\u25CB',
+      9632: '\u25A0',
+      9633: '\u25A1',
+      9670: '\u25C6',
+      9671: '\u25C7',
+      8211: '\u2013',
+      8212: '\u2014',
+      62: '>',
+      45: '-',
+    };
+  return n[t] ? n[t] : (t >= 57344 && t <= 63743) || t < 32 || (t >= 127 && t < 160) ? '\u2022' : e;
+}
+function nr(e, t, n) {
+  let o = e.listRendering;
+  if (!o || !t) return;
+  let { numId: r, level: i } = o;
+  if (r === void 0 || r === 0) return;
+  n.has(r) || n.set(r, new Array(9).fill(0));
+  let a = n.get(r);
+  a[i] = (a[i] || 0) + 1;
+  for (let f = i + 1; f < a.length; f++) a[f] = 0;
+  let u = o.marker;
+  if (o.isBullet) {
+    let f = u || '';
+    o.marker = tr(f);
+    return;
+  }
+  let c = u;
+  for (let f = 0; f <= i; f++) {
+    let m = `%${f + 1}`;
+    if (c.includes(m)) {
+      let d = a[f],
+        h = t.getLevel(r, f),
+        x = or(d, h?.numFmt || 'decimal');
+      c = c.replace(m, x);
+    }
+  }
+  o.marker = c;
+}
+function or(e, t) {
+  switch (t) {
+    case 'decimal':
+    case 'decimalZero':
+      return String(e);
+    case 'lowerLetter':
+      return String.fromCharCode(96 + ((e - 1) % 26) + 1);
+    case 'upperLetter':
+      return String.fromCharCode(64 + ((e - 1) % 26) + 1);
+    case 'lowerRoman':
+      return sn(e).toLowerCase();
+    case 'upperRoman':
+      return sn(e);
+    case 'bullet':
+      return '\u2022';
+    default:
+      return String(e);
+  }
+}
+function sn(e) {
+  let t = [
+      [1e3, 'M'],
+      [900, 'CM'],
+      [500, 'D'],
+      [400, 'CD'],
+      [100, 'C'],
+      [90, 'XC'],
+      [50, 'L'],
+      [40, 'XL'],
+      [10, 'X'],
+      [9, 'IX'],
+      [5, 'V'],
+      [4, 'IV'],
+      [1, 'I'],
+    ],
+    n = '';
+  for (let [o, r] of t) for (; e >= o; ) ((n += r), (e -= o));
+  return n;
+}
+var ln = /\{([a-zA-Z_][a-zA-Z0-9_\-\.]*)\}/g;
+function un(e) {
+  let t = [],
+    n;
+  for (ln.lastIndex = 0; (n = ln.exec(e)) !== null; ) {
+    let o = n[1].trim();
+    o && !t.includes(o) && t.push(o);
+  }
+  return t;
+}
+function cn(e) {
+  let t = [];
+  for (let n of e)
+    if (n.type === 'paragraph') {
+      let o = je(n),
+        r = un(o);
+      for (let i of r) t.includes(i) || t.push(i);
+    } else if (n.type === 'table') {
+      let o = fn(n);
+      for (let r of o) t.includes(r) || t.push(r);
+    }
+  return t;
+}
+function fn(e) {
+  let t = [];
+  for (let n of e.rows)
+    for (let o of n.cells)
+      for (let r of o.content)
+        if (r.type === 'paragraph') {
+          let i = je(r),
+            a = un(i);
+          for (let u of a) t.includes(u) || t.push(u);
+        } else if (r.type === 'table') {
+          let i = fn(r);
+          for (let a of i) t.includes(a) || t.push(a);
+        }
+  return t;
+}
+function rr(e, t, n, o, r, i, a) {
+  if (e.content.length === 0) return;
+  let u = X(t),
+    c = 0;
+  for (let f of u) {
+    if (Q(f.name ?? '') !== 'r') continue;
+    let m = X(f);
+    for (let d of m)
+      if (Q(d.name ?? '') === 'drawing' && me(d)) {
+        let h = bt(d);
+        if (h) {
+          let x = Ee(d, 'wps', 'wsp');
+          if (x) {
+            let C = yt(x);
+            C && (h.content = wt(C, _, null, n, o, r, i ?? void 0));
+          }
+          let p = {
+            type: 'shape',
+            shapeType: 'rect',
+            size: h.size,
+            position: h.position,
+            wrap: h.wrap,
+            fill: h.fill,
+            outline: h.outline,
+            textBody: { content: h.content, margins: h.margins },
+          };
+          h.id && (p.id = h.id);
+          let T = { type: 'shape', shape: p };
+          if (c < e.content.length) {
+            let C = e.content[c];
+            C.type === 'run' && C.content.push(T);
+          }
+        }
+      }
+    c++;
+  }
+}
+function dn(e, t, n, o, r, i) {
+  let a = [],
+    u = X(e),
+    c = new Map();
+  for (let f of u) {
+    let m = f.name ?? '';
+    if (m === 'w:p' || m.endsWith(':p')) {
+      let d = _(f, t, n, o, r, i);
+      (rr(d, f, t, n, o, r), nr(d, o, c), a.push(d));
+    } else if (m === 'w:tbl' || m.endsWith(':tbl')) {
+      let d = ie(f, t, n, o, r, i);
+      a.push(d);
+    } else if (m === 'w:sdt' || m.endsWith(':sdt')) {
+      let d = (f.elements ?? []).find(
+        (h) =>
+          h.type === 'element' && (h.name === 'w:sdtContent' || h.name?.endsWith(':sdtContent'))
+      );
+      if (d) {
+        let h = dn(d, t, n, o, r, i);
+        a.push(...h);
+      }
+    }
+  }
+  return a;
+}
+function ir(e, t) {
+  let n = [],
+    o = [];
+  for (let r of e)
+    (o.push(r),
+      r.type === 'paragraph' &&
+        r.sectionProperties &&
+        (n.push({ properties: r.sectionProperties, content: o }), (o = [])));
+  return ((o.length > 0 || n.length === 0) && n.push({ properties: t ?? Jt(), content: o }), n);
+}
+function pn(e, t = null, n = null, o = null, r = null, i = null) {
+  let a = { content: [] };
+  if (!e) return a;
+  let u = j(e);
+  if (!u) return a;
+  let c = (u.elements ?? []).find(
+    (d) => d.type === 'element' && (d.name === 'w:document' || d.name?.endsWith(':document'))
+  );
+  if (!c) return a;
+  let f = l(c, 'w', 'body');
+  if (!f) return a;
+  a.content = dn(f, t, n, o, r, i);
+  let m = l(f, 'w', 'sectPr');
+  return (
+    m && (a.finalSectionProperties = ye(m)),
+    (a.sections = ir(a.content, a.finalSectionProperties)),
+    a
+  );
+}
+function ar(e) {
+  let t = new Map(),
+    n = j(e);
+  if (!n) return t;
+  let o = l(n, 'w16cex', 'commentsExtensible') ?? n;
+  for (let r of X(o)) {
+    if ((r.name?.replace(/^.*:/, '') ?? '') !== 'comment') continue;
+    let a =
+        s(r, 'w16cex', 'paraId') ??
+        s(r, 'w15', 'paraId') ??
+        r.attributes?.['w16cex:paraId'] ??
+        r.attributes?.['w15:paraId'],
+      u =
+        s(r, 'w16cex', 'dateUtc') ??
+        s(r, 'w15', 'dateUtc') ??
+        r.attributes?.['w16cex:dateUtc'] ??
+        r.attributes?.['w15:dateUtc'];
+    a && u && t.set(String(a).toUpperCase(), String(u));
+  }
+  return t;
+}
+function mn(e, t, n, o, r, i) {
+  if (!e) return [];
+  let a = j(e);
+  if (!a) return [];
+  let u = i ? ar(i) : new Map(),
+    c = l(a, 'w', 'comments') ?? a,
+    f = X(c),
+    m = [];
+  for (let d of f) {
+    if ((d.name?.replace(/^.*:/, '') ?? '') !== 'comment') continue;
+    let x = parseInt(s(d, 'w', 'id') ?? '0', 10),
+      p = s(d, 'w', 'author') ?? 'Unknown',
+      T = s(d, 'w', 'initials'),
+      C = T != null ? String(T) : void 0,
+      I = s(d, 'w', 'date'),
+      M = I != null ? String(I) : void 0,
+      S = s(d, 'w14', 'paraId') ?? d.attributes?.['w14:paraId'] ?? s(d, 'w', 'paraId'),
+      b = (S ? u.get(String(S).toUpperCase()) : void 0) ?? M,
+      k = [];
+    for (let y of X(d))
+      if ((y.name?.replace(/^.*:/, '') ?? '') === 'p') {
+        let R = _(y, t, n, null, o, r);
+        k.push(R);
+      }
+    m.push({ id: x, author: p, initials: C, date: b, content: k });
+  }
+  return m;
+}
+async function ta(e, t = {}) {
+  let n = e instanceof ArrayBuffer ? e : await Ue(e),
+    {
+      onProgress: o = () => {},
+      preloadFonts: r = true,
+      parseHeadersFooters: i = true,
+      parseNotes: a = true,
+      detectVariables: u = true,
+    } = t,
+    c = [];
+  try {
+    let h = function (H, W) {
+      let v = performance.now(),
+        P = W(),
+        D = performance.now() - v;
+      return (
+        d.push({ stage: H, ms: D }),
+        D > 1e3 && console.warn(`[parseDocx] ${H} took ${Math.round(D)}ms`),
+        P
+      );
+    };
+    var f = h;
+    let m = performance.now(),
+      d = [];
+    async function x(H, W) {
+      let v = performance.now(),
+        P = await W(),
+        D = performance.now() - v;
+      return (
+        d.push({ stage: H, ms: D }),
+        D > 1e3 && console.warn(`[parseDocx] ${H} took ${Math.round(D)}ms`),
+        P
+      );
+    }
+    o('Extracting DOCX...', 0);
+    let p = await x('unzip', () => $e(n));
+    (o('Extracted DOCX', 10), o('Parsing relationships...', 10));
+    let T = h('relationships', () => (p.documentRels ? ce(p.documentRels) : new Map()));
+    (o('Parsed relationships', 15), o('Parsing theme...', 15));
+    let C = h('theme', () => Qe(p.themeXml));
+    (o('Parsed theme', 20), o('Parsing styles...', 20));
+    let I = null,
+      M;
+    (h('styles', () => {
+      p.stylesXml && ((I = Ie(p.stylesXml, C)), (M = st(p.stylesXml, C)));
+    }),
+      o('Parsed styles', 30),
+      o('Parsing numbering...', 30));
+    let S = h('numbering', () => lt(p.numberingXml));
+    (o('Parsed numbering', 35), o('Processing media files...', 35));
+    let w = h('media', () => sr(p, T));
+    (o('Processed media', 40), o('Parsing document body...', 40));
+    let b = { content: [] };
+    (h('documentBody', () => {
+      p.documentXml
+        ? (b = pn(p.documentXml, I, C, S, T, w))
+        : c.push('No document.xml found in DOCX');
+    }),
+      o('Parsed document body', 55));
+    let k, y;
+    if (i) {
+      o('Parsing headers/footers...', 55);
+      let H = h('headersFooters', () => lr(p, I, C, S, T, w));
+      ((k = H.headers), (y = H.footers), o('Parsed headers/footers', 65));
+    } else o('Skipping headers/footers', 65);
+    let E, R;
+    if (a) {
+      o('Parsing footnotes/endnotes...', 65);
+      let H = h('footnotesEndnotes', () => ur(p, I, C, S, T, w));
+      ((E = H.footnotes), (R = H.endnotes), o('Parsed footnotes/endnotes', 75));
+    } else o('Skipping footnotes/endnotes', 75);
+    o('Parsing comments...', 75);
+    let N = h('comments', () => mn(p.commentsXml, I, C, T, w, p.commentsExtensibleXml));
+    N.length > 0 && (b.comments = N);
+    let L;
+    (u
+      ? (o('Detecting template variables...', 75),
+        (L = h('variables', () => cn(b.content))),
+        o('Detected variables', 80))
+      : o('Skipping variable detection', 80),
+      r
+        ? (o('Loading fonts...', 80), await x('fonts', () => cr(C, M, b)), o('Loaded fonts', 95))
+        : o('Skipping font loading', 95),
+      o('Assembling document...', 95));
+    let z = {
+        package: {
+          document: b,
+          styles: M,
+          theme: C,
+          numbering: S.definitions,
+          headers: k,
+          footers: y,
+          footnotes: E,
+          endnotes: R,
+          relationships: T,
+          media: w,
+        },
+        originalBuffer: n,
+        templateVariables: L,
+        warnings: c.length > 0 ? c : void 0,
+      },
+      K = performance.now() - m;
+    if (K > 2e3) {
+      let H = d
+        .filter((W) => W.ms > 100)
+        .map((W) => `${W.stage}: ${Math.round(W.ms)}ms`)
+        .join(', ');
+      console.warn(`[parseDocx] Total: ${Math.round(K)}ms` + (H ? ` (${H})` : ''));
+    }
+    return (o('Complete', 100), z);
+  } catch (m) {
+    let d = m instanceof Error ? m.message : String(m);
+    throw (
+      console.error('[parseDocx] Failed to parse DOCX:', d, m),
+      new Error(`Failed to parse DOCX: ${d}`)
+    );
+  }
+}
+function sr(e, t) {
+  let n = new Map();
+  for (let [o, r] of e.media.entries()) {
+    let i = o.split('/').pop() || o,
+      a = Ge(o),
+      u = new Uint8Array(r),
+      c = '';
+    for (let x = 0; x < u.length; x++) c += String.fromCharCode(u[x]);
+    let f = btoa(c),
+      m = `data:${a};base64,${f}`,
+      d = { path: o, filename: i, mimeType: a, data: r, dataUrl: m };
+    n.set(o, d);
+    let h = o.replace(/^word\//, '');
+    h !== o && n.set(h, d);
+  }
+  return n;
+}
+function Te(e, t) {
+  let n = t.toLowerCase();
+  for (let [o, r] of e.entries()) if (o.toLowerCase() === n) return r;
+}
+function lr(e, t, n, o, r, i) {
+  let a = new Map(),
+    u = new Map();
+  for (let [c, f] of r.entries())
+    if (f.type === ue.header && f.target) {
+      let m = f.target.split('/').pop() || f.target,
+        d = Te(e.headers, m);
+      if (d) {
+        let h = `word/_rels/${m}.rels`,
+          x = Te(e.allXml, h),
+          p = x ? ce(x) : r,
+          T = _t(d, 'default', t, n, o, p, i);
+        a.set(c, T);
+      }
+    } else if (f.type === ue.footer && f.target) {
+      let m = f.target.split('/').pop() || f.target,
+        d = Te(e.footers, m);
+      if (d) {
+        let h = `word/_rels/${m}.rels`,
+          x = Te(e.allXml, h),
+          p = x ? ce(x) : r,
+          T = zt(d, 'default', t, n, o, p, i);
+        u.set(c, T);
+      }
+    }
+  return { headers: a, footers: u };
+}
+function ur(e, t, n, o, r, i) {
+  let a = $t(e.footnotesXml, t, n, o, r, i),
+    u = Gt(e.endnotesXml, t, n, o, r, i);
+  return { footnotes: a.getNormalFootnotes(), endnotes: u.getNormalEndnotes() };
+}
+async function cr(e, t, n) {
+  let o = new Set();
+  if (e?.fontScheme) {
+    let { majorFont: r, minorFont: i } = e.fontScheme;
+    (r?.latin && o.add(r.latin), i?.latin && o.add(i.latin));
+  }
+  if (
+    (t?.docDefaults?.rPr?.fontFamily?.ascii && o.add(t.docDefaults.rPr.fontFamily.ascii), t?.styles)
+  )
+    for (let r of t.styles)
+      (r.rPr?.fontFamily?.ascii && o.add(r.rPr.fontFamily.ascii),
+        r.rPr?.fontFamily?.hAnsi && o.add(r.rPr.fontFamily.hAnsi));
+  if (n.content) {
+    for (let r of n.content)
+      if (r.type === 'paragraph')
+        for (let i of r.content)
+          i.type === 'run' &&
+            i.formatting?.fontFamily &&
+            (i.formatting.fontFamily.ascii && o.add(i.formatting.fontFamily.ascii),
+            i.formatting.fontFamily.hAnsi && o.add(i.formatting.fontFamily.hAnsi));
+  }
+  if (o.size > 0)
+    try {
+      await ze(Array.from(o));
+    } catch (r) {
+      console.warn('Failed to load some fonts:', r);
+    }
+}
+exports.a = ue;
+exports.b = fr;
+exports.c = dr;
+exports.d = se;
+exports.e = gn;
+exports.f = pr;
+exports.g = mr;
+exports.h = gr;
+exports.i = hr;
+exports.j = wr;
+exports.k = ke;
+exports.l = bn;
+exports.m = yr;
+exports.n = xr;
+exports.o = Tr;
+exports.p = Fr;
+exports.q = Cr;
+exports.r = Sr;
+exports.s = kr;
+exports.t = Ue;
+exports.u = ta; //# sourceMappingURL=chunk-65V65RRX.js.map
+//# sourceMappingURL=chunk-65V65RRX.js.map
