@@ -20,7 +20,13 @@ import { TextSelection } from 'prosemirror-state';
 import type { EditorView } from 'prosemirror-view';
 import type { Plugin as ProseMirrorPlugin } from 'prosemirror-state';
 import { PluginLifecycleManager, injectStyles as coreInjectStyles } from '@eigenpal/docx-core';
-import type { ReactEditorPlugin, PluginHostProps, PluginHostRef, PanelConfig } from './types';
+import type {
+  ReactEditorPlugin,
+  ReactSidebarItem,
+  PluginHostProps,
+  PluginHostRef,
+  PanelConfig,
+} from './types';
 // Backwards-compatible alias
 type EditorPlugin = ReactEditorPlugin;
 
@@ -549,6 +555,24 @@ export const PluginHost = forwardRef<PluginHostRef, PluginHostProps>(function Pl
     panelLeftPosition,
   ]);
 
+  // Collect sidebar items from plugins that implement getSidebarItems
+  const pluginSidebarItems = useMemo((): ReactSidebarItem[] => {
+    const items: ReactSidebarItem[] = [];
+    for (const plugin of plugins) {
+      if (!plugin.getSidebarItems) continue;
+      const pluginState = lifecycleSnapshot.states.get(plugin.id);
+      const context = {
+        editorView,
+        renderedDomContext,
+        anchorPositions: new Map<string, number>(), // will be merged by DocxEditor
+        zoom: renderedDomContext?.zoom ?? 1,
+      };
+      const pluginItems = plugin.getSidebarItems(pluginState, context);
+      items.push(...pluginItems);
+    }
+    return items;
+  }, [plugins, lifecycleSnapshot.version, editorView, renderedDomContext]);
+
   // Callback to receive rendered DOM context from editor
   // Uses ref to avoid infinite loops when child has unstable callbacks
   const handleRenderedDomContextReady = useCallback(
@@ -570,6 +594,8 @@ export const PluginHost = forwardRef<PluginHostRef, PluginHostProps>(function Pl
   type InjectedEditorProps = {
     externalPlugins?: ProseMirrorPlugin[];
     pluginOverlays?: React.ReactNode;
+    pluginSidebarItems?: ReactSidebarItem[];
+    pluginRenderedDomContext?: import('./types').RenderedDomContext | null;
     onRenderedDomContextReady?: (context: import('./types').RenderedDomContext) => void;
     onEditorViewReady?: (view: EditorView) => void;
   };
@@ -578,6 +604,8 @@ export const PluginHost = forwardRef<PluginHostRef, PluginHostProps>(function Pl
     return cloneElement(children as React.ReactElement<InjectedEditorProps>, {
       externalPlugins: externalProseMirrorPlugins,
       pluginOverlays,
+      pluginSidebarItems,
+      pluginRenderedDomContext: renderedDomContext,
       onRenderedDomContextReady: handleRenderedDomContextReady,
       onEditorViewReady: (view: EditorView) => {
         setEditorView(view);
@@ -589,7 +617,14 @@ export const PluginHost = forwardRef<PluginHostRef, PluginHostProps>(function Pl
         }
       },
     });
-  }, [children, externalProseMirrorPlugins, pluginOverlays, handleRenderedDomContextReady]);
+  }, [
+    children,
+    externalProseMirrorPlugins,
+    pluginOverlays,
+    pluginSidebarItems,
+    renderedDomContext,
+    handleRenderedDomContextReady,
+  ]);
 
   // Group plugins by panel position
   const pluginsByPosition = useMemo(() => {

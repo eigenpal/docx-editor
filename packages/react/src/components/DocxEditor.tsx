@@ -37,11 +37,11 @@ import {
 import { EditorToolbar } from './EditorToolbar';
 import { pointsToHalfPoints } from './ui/FontSizePicker';
 import { DocumentOutline } from './DocumentOutline';
-import {
-  CommentsSidebar,
-  SIDEBAR_DOCUMENT_SHIFT,
-  type TrackedChangeEntry,
-} from './CommentsSidebar';
+import { SIDEBAR_DOCUMENT_SHIFT } from './sidebar/constants';
+import { type TrackedChangeEntry } from './sidebar/cardUtils';
+import { UnifiedSidebar } from './UnifiedSidebar';
+import { useCommentSidebarItems, type CommentCallbacks } from '../hooks/useCommentSidebarItems';
+import type { ReactSidebarItem } from '../plugin-api/types';
 import type { HeadingInfo } from '@eigenpal/docx-core/utils/headingCollector';
 import type { Comment } from '@eigenpal/docx-core/types/content';
 import { ErrorBoundary, ErrorProvider } from './ErrorBoundary';
@@ -297,6 +297,10 @@ export interface DocxEditorProps {
    * Passed from PluginHost to render plugin-specific overlays.
    */
   pluginOverlays?: ReactNode;
+  /** Sidebar items from plugins (passed from PluginHost). */
+  pluginSidebarItems?: ReactSidebarItem[];
+  /** Rendered DOM context from PluginHost (for sidebar position resolution). */
+  pluginRenderedDomContext?: RenderedDomContext | null;
   /** Custom logo/icon for the title bar */
   renderLogo?: () => ReactNode;
   /** Document name shown in the title bar */
@@ -641,6 +645,8 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
     onEditorViewReady,
     onRenderedDomContextReady,
     pluginOverlays,
+    pluginSidebarItems,
+    pluginRenderedDomContext,
     renderLogo,
     documentName,
     onDocumentNameChange,
@@ -687,6 +693,7 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
   const [trackedChanges, setTrackedChanges] = useState<TrackedChangeEntry[]>([]);
   const [anchorPositions, setAnchorPositions] =
     useState<Map<string, number>>(EMPTY_ANCHOR_POSITIONS);
+  // No separate state needed — pluginRenderedDomContext comes from PluginHost
 
   const [isAddingComment, setIsAddingComment] = useState(false);
   const [commentSelectionRange, setCommentSelectionRange] = useState<{
@@ -3164,6 +3171,104 @@ body { background: white; }
     flexDirection: 'row',
   };
 
+  // --- Unified sidebar items ---
+  const commentCallbacksRef = useRef<CommentCallbacks>({});
+  commentCallbacksRef.current = {
+    onCommentClick: undefined,
+    onCommentReply: (id, text) => {
+      setComments((prev) => [...prev, createComment(text, author, id)]);
+    },
+    onCommentResolve: (id) => {
+      setComments((prev) => prev.map((c) => (c.id === id ? { ...c, done: true } : c)));
+    },
+    onCommentDelete: (id) => {
+      setComments((prev) => prev.filter((c) => c.id !== id && c.parentId !== id));
+    },
+    onAddComment: (addText) => {
+      const comment = createComment(addText, author);
+      const view = pagedEditorRef.current?.getView();
+      if (view && commentSelectionRange) {
+        const { from, to } = commentSelectionRange;
+        const pendingMark = view.state.schema.marks.comment.create({
+          commentId: PENDING_COMMENT_ID,
+        });
+        const realMark = view.state.schema.marks.comment.create({
+          commentId: comment.id,
+        });
+        const tr = view.state.tr.removeMark(from, to, pendingMark).addMark(from, to, realMark);
+        view.dispatch(tr);
+      }
+      setComments((prev) => [...prev, comment]);
+      setIsAddingComment(false);
+      setCommentSelectionRange(null);
+      setAddCommentYPosition(null);
+    },
+    onCancelAddComment: () => {
+      const view = pagedEditorRef.current?.getView();
+      if (view && commentSelectionRange) {
+        const { from, to } = commentSelectionRange;
+        const pendingMark = view.state.schema.marks.comment.create({
+          commentId: PENDING_COMMENT_ID,
+        });
+        view.dispatch(view.state.tr.removeMark(from, to, pendingMark));
+      }
+      setIsAddingComment(false);
+      setCommentSelectionRange(null);
+      setAddCommentYPosition(null);
+    },
+    onAcceptChange: (from, to) => {
+      const view = pagedEditorRef.current?.getView();
+      if (view) {
+        acceptChange(from, to)(view.state, view.dispatch);
+        extractTrackedChanges();
+      }
+    },
+    onRejectChange: (from, to) => {
+      const view = pagedEditorRef.current?.getView();
+      if (view) {
+        rejectChange(from, to)(view.state, view.dispatch);
+        extractTrackedChanges();
+      }
+    },
+    onTrackedChangeReply: (revisionId, text) => {
+      setComments((prev) => [...prev, createComment(text, author, revisionId)]);
+    },
+  };
+
+  // Stable callbacks wrapper that delegates to ref (avoids recreating items on every render)
+  const stableCallbacks = useMemo<CommentCallbacks>(
+    () => ({
+      onCommentClick: (...args) => commentCallbacksRef.current.onCommentClick?.(...args),
+      onCommentReply: (...args) => commentCallbacksRef.current.onCommentReply?.(...args),
+      onCommentResolve: (...args) => commentCallbacksRef.current.onCommentResolve?.(...args),
+      onCommentDelete: (...args) => commentCallbacksRef.current.onCommentDelete?.(...args),
+      onAddComment: (...args) => commentCallbacksRef.current.onAddComment?.(...args),
+      onCancelAddComment: (...args) => commentCallbacksRef.current.onCancelAddComment?.(...args),
+      onAcceptChange: (...args) => commentCallbacksRef.current.onAcceptChange?.(...args),
+      onRejectChange: (...args) => commentCallbacksRef.current.onRejectChange?.(...args),
+      onTrackedChangeReply: (...args) =>
+        commentCallbacksRef.current.onTrackedChangeReply?.(...args),
+    }),
+    []
+  );
+
+  const commentSidebarItems = useCommentSidebarItems({
+    comments,
+    trackedChanges,
+    callbacks: stableCallbacks,
+    isAddingComment: showCommentsSidebar ? isAddingComment : false,
+    addCommentYPosition,
+  });
+
+  const allSidebarItems = useMemo(() => {
+    const items: ReactSidebarItem[] = [];
+    if (showCommentsSidebar) items.push(...commentSidebarItems);
+    if (pluginSidebarItems) items.push(...pluginSidebarItems);
+    return items;
+  }, [showCommentsSidebar, commentSidebarItems, pluginSidebarItems]);
+
+  const sidebarOpen = allSidebarItems.length > 0;
+
   const editorContainerStyle: CSSProperties = {
     flex: 1,
     minHeight: 0,
@@ -3316,7 +3421,7 @@ body { background: white; }
                     <div
                       className="flex justify-center px-5 py-1 overflow-x-auto flex-shrink-0 bg-doc-bg"
                       style={{
-                        paddingRight: showCommentsSidebar
+                        paddingRight: sidebarOpen
                           ? `calc(20px + ${SIDEBAR_DOCUMENT_SHIFT * 2}px)`
                           : undefined,
                         transition: 'padding 0.2s ease',
@@ -3419,93 +3524,21 @@ body { background: white; }
                       pluginOverlays={pluginOverlays}
                       onHyperlinkClick={handleHyperlinkClick}
                       onContextMenu={handleContextMenu}
-                      commentsSidebarOpen={showCommentsSidebar}
+                      commentsSidebarOpen={sidebarOpen}
                       onAnchorPositionsChange={setAnchorPositions}
                       scrollContainerRef={scrollContainerRef}
                       sidebarOverlay={
-                        showCommentsSidebar ? (
-                          <CommentsSidebar
-                            comments={comments}
-                            trackedChanges={trackedChanges}
+                        allSidebarItems.length > 0 ? (
+                          <UnifiedSidebar
+                            items={allSidebarItems}
                             anchorPositions={anchorPositions}
+                            renderedDomContext={pluginRenderedDomContext ?? null}
                             pageWidth={(() => {
                               const sp = history.state?.package?.document?.finalSectionProperties;
                               return sp?.pageWidth ? Math.round(sp.pageWidth / 15) : 816;
                             })()}
                             zoom={state.zoom}
                             editorContainerRef={scrollContainerRef}
-                            onCommentResolve={(id) => {
-                              setComments((prev) =>
-                                prev.map((c) => (c.id === id ? { ...c, done: true } : c))
-                              );
-                            }}
-                            onCommentDelete={(id) => {
-                              setComments((prev) =>
-                                prev.filter((c) => c.id !== id && c.parentId !== id)
-                              );
-                            }}
-                            onCommentReply={(id, text) => {
-                              setComments((prev) => [...prev, createComment(text, author, id)]);
-                            }}
-                            onAddComment={(addText) => {
-                              const comment = createComment(addText, author);
-                              // Replace pending comment mark with the real comment ID
-                              const view = pagedEditorRef.current?.getView();
-                              if (view && commentSelectionRange) {
-                                const { from, to } = commentSelectionRange;
-                                const pendingMark = view.state.schema.marks.comment.create({
-                                  commentId: PENDING_COMMENT_ID,
-                                });
-                                const realMark = view.state.schema.marks.comment.create({
-                                  commentId: comment.id,
-                                });
-                                const tr = view.state.tr
-                                  .removeMark(from, to, pendingMark)
-                                  .addMark(from, to, realMark);
-                                view.dispatch(tr);
-                              }
-                              setComments((prev) => [...prev, comment]);
-                              setIsAddingComment(false);
-                              setCommentSelectionRange(null);
-                              setAddCommentYPosition(null);
-                            }}
-                            onTrackedChangeReply={(revisionId, text) => {
-                              setComments((prev) => [
-                                ...prev,
-                                createComment(text, author, revisionId),
-                              ]);
-                            }}
-                            onCancelAddComment={() => {
-                              // Remove pending comment highlight
-                              const view = pagedEditorRef.current?.getView();
-                              if (view && commentSelectionRange) {
-                                const { from, to } = commentSelectionRange;
-                                const pendingMark = view.state.schema.marks.comment.create({
-                                  commentId: PENDING_COMMENT_ID,
-                                });
-                                view.dispatch(view.state.tr.removeMark(from, to, pendingMark));
-                              }
-                              setIsAddingComment(false);
-                              setCommentSelectionRange(null);
-                              setAddCommentYPosition(null);
-                            }}
-                            onAcceptChange={(from, to) => {
-                              const view = pagedEditorRef.current?.getView();
-                              if (view) {
-                                acceptChange(from, to)(view.state, view.dispatch);
-                                extractTrackedChanges();
-                              }
-                            }}
-                            onRejectChange={(from, to) => {
-                              const view = pagedEditorRef.current?.getView();
-                              if (view) {
-                                rejectChange(from, to)(view.state, view.dispatch);
-                                extractTrackedChanges();
-                              }
-                            }}
-                            isAddingComment={isAddingComment}
-                            addCommentYPosition={addCommentYPosition}
-                            topOffset={0}
                           />
                         ) : undefined
                       }
@@ -3658,7 +3691,7 @@ body { background: white; }
                 />
               )}
 
-              {/* Comments sidebar is now rendered inside PagedEditor via sidebarOverlay prop */}
+              {/* Unified sidebar (comments + plugin items) rendered inside PagedEditor via sidebarOverlay prop */}
 
               {/* Outline toggle button — absolutely positioned below toolbar */}
               {!showOutline && (

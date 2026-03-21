@@ -30,6 +30,10 @@ export type {
   PluginHostRef,
   RenderedDomContext,
   PositionCoordinates,
+  SidebarItem,
+  SidebarItemContext,
+  ReactSidebarItem,
+  SidebarItemRenderProps,
 } from './types';
 
 // Components

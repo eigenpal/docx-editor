@@ -5,7 +5,7 @@
  *
  * Features:
  * - Full docxtemplater syntax detection (variables, loops, conditionals)
- * - Schema annotation panel showing template structure
+ * - Sidebar annotation chips showing template structure (via getSidebarItems)
  * - Differentiated visual highlighting by element type
  *
  * @example
@@ -25,7 +25,12 @@
 
 import React from 'react';
 import { TextSelection } from 'prosemirror-state';
-import type { ReactEditorPlugin, RenderedDomContext } from '../../plugin-api/types';
+import type {
+  ReactEditorPlugin,
+  ReactSidebarItem,
+  RenderedDomContext,
+  SidebarItemContext,
+} from '../../plugin-api/types';
 import type { EditorView } from 'prosemirror-view';
 import type { TemplateTag } from './prosemirror-plugin';
 import {
@@ -35,39 +40,11 @@ import {
   setSelectedElement,
   TEMPLATE_DECORATION_STYLES,
 } from './prosemirror-plugin';
-import { AnnotationPanel, ANNOTATION_PANEL_STYLES } from './components/AnnotationPanel';
-import type { AnnotationPanelProps } from './components/AnnotationPanel';
 import {
   TemplateHighlightOverlay,
   TEMPLATE_HIGHLIGHT_OVERLAY_STYLES,
 } from './components/TemplateHighlightOverlay';
-
-/**
- * Memoized AnnotationPanel that only re-renders when tag structure
- * or hover/selected state changes — not on every keystroke position shift.
- */
-const MemoizedAnnotationPanel = React.memo<AnnotationPanelProps>(AnnotationPanel, (prev, next) => {
-  const prevState = prev.pluginState;
-  const nextState = next.pluginState;
-
-  // Re-render if hover/selected changed
-  if (prevState?.hoveredId !== nextState?.hoveredId) return false;
-  if (prevState?.selectedId !== nextState?.selectedId) return false;
-
-  // Re-render if tag structure changed (different count or IDs)
-  const prevTags = prevState?.tags ?? [];
-  const nextTags = nextState?.tags ?? [];
-  if (prevTags.length !== nextTags.length) return false;
-  for (let i = 0; i < prevTags.length; i++) {
-    if (prevTags[i].id !== nextTags[i].id) return false;
-  }
-
-  // Re-render if rendered DOM context changed (initial load)
-  if (prev.renderedDomContext !== next.renderedDomContext) return false;
-
-  // Otherwise skip re-render (positions shifted but structure is the same)
-  return true;
-});
+import { TemplateChip, TEMPLATE_CHIP_STYLES } from './components/TemplateChip';
 
 /**
  * Plugin state interface
@@ -80,22 +57,17 @@ interface TemplatePluginState {
 
 /**
  * Create the template plugin instance.
- *
- * @param options - Plugin configuration options
  */
 export function createPlugin(
-  options: {
-    /** Initial panel collapsed state */
+  _options: {
+    /** @deprecated — panel is no longer used; template chips render in the unified sidebar */
     defaultCollapsed?: boolean;
-
-    /** Panel position */
+    /** @deprecated */
     panelPosition?: 'left' | 'right';
-
-    /** Panel default width */
+    /** @deprecated */
     panelWidth?: number;
   } = {}
 ): ReactEditorPlugin<TemplatePluginState> {
-  // Create the ProseMirror plugin
   const pmPlugin = createTemplatePlugin();
 
   return {
@@ -104,22 +76,9 @@ export function createPlugin(
 
     proseMirrorPlugins: [pmPlugin],
 
-    Panel: MemoizedAnnotationPanel,
-
-    panelConfig: {
-      position: options.panelPosition ?? 'right',
-      defaultSize: options.panelWidth ?? 280,
-      minSize: 200,
-      maxSize: 400,
-      resizable: true,
-      collapsible: true,
-      defaultCollapsed: options.defaultCollapsed ?? false,
-    },
-
     onStateChange: (view: EditorView): TemplatePluginState | undefined => {
       const pluginState = templatePluginKey.getState(view.state);
       if (!pluginState) return undefined;
-
       return {
         tags: pluginState.tags,
         hoveredId: pluginState.hoveredId,
@@ -128,9 +87,45 @@ export function createPlugin(
     },
 
     initialize: (_view: EditorView | null): TemplatePluginState => {
-      return {
-        tags: [],
-      };
+      return { tags: [] };
+    },
+
+    getSidebarItems: (
+      state: TemplatePluginState | undefined,
+      context: SidebarItemContext
+    ): ReactSidebarItem[] => {
+      if (!state || state.tags.length === 0) return [];
+
+      const visibleTags = state.tags.filter((t) => t.type !== 'sectionEnd' && !t.insideSection);
+
+      return visibleTags.map((tag) => ({
+        id: `template-${tag.id}`,
+        anchorPos: tag.from,
+        priority: 10, // lower priority than comments (appear after at same Y)
+        estimatedHeight: 32,
+        render: (props) =>
+          React.createElement(TemplateChip, {
+            ...props,
+            tag,
+            isHovered: tag.id === state.hoveredId,
+            onHover: (id: string | undefined) => {
+              if (context.editorView) setHoveredElement(context.editorView, id);
+            },
+            onSelect: (id: string) => {
+              if (context.editorView) {
+                setSelectedElement(context.editorView, id);
+                const matchedTag = state.tags.find((t) => t.id === id);
+                if (matchedTag) {
+                  const tr = context.editorView.state.tr.setSelection(
+                    TextSelection.near(context.editorView.state.doc.resolve(matchedTag.from))
+                  );
+                  context.editorView.dispatch(tr);
+                  context.editorView.focus();
+                }
+              }
+            },
+          }),
+      }));
     },
 
     renderOverlay: (
@@ -138,9 +133,7 @@ export function createPlugin(
       state: TemplatePluginState | undefined,
       editorView: EditorView | null
     ): React.ReactNode => {
-      if (!state || state.tags.length === 0) {
-        return null;
-      }
+      if (!state || state.tags.length === 0) return null;
 
       return React.createElement(TemplateHighlightOverlay, {
         context,
@@ -153,7 +146,6 @@ export function createPlugin(
         onSelect: (id: string) => {
           if (editorView) {
             setSelectedElement(editorView, id);
-            // Find the tag and scroll to it
             const tag = state.tags.find((t) => t.id === id);
             if (tag) {
               const tr = editorView.state.tr.setSelection(
@@ -169,7 +161,7 @@ export function createPlugin(
 
     styles: `
 ${TEMPLATE_DECORATION_STYLES}
-${ANNOTATION_PANEL_STYLES}
+${TEMPLATE_CHIP_STYLES}
 ${TEMPLATE_HIGHLIGHT_OVERLAY_STYLES}
 `,
   };
@@ -177,11 +169,10 @@ ${TEMPLATE_HIGHLIGHT_OVERLAY_STYLES}
 
 /**
  * Default template plugin instance.
- * Use this for quick setup without custom configuration.
  */
 export const templatePlugin = createPlugin();
 
-// Re-export types and utilities from prosemirror-plugin
+// Re-export types and utilities
 export type { TemplateTag, TagType } from './prosemirror-plugin';
 export {
   createTemplatePlugin,
@@ -191,5 +182,3 @@ export {
   setSelectedElement,
   TEMPLATE_DECORATION_STYLES,
 } from './prosemirror-plugin';
-
-export { AnnotationPanel, ANNOTATION_PANEL_STYLES } from './components/AnnotationPanel';

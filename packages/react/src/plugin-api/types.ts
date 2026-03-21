@@ -15,12 +15,16 @@ export type {
   PanelConfig,
   RenderedDomContext,
   PositionCoordinates,
+  SidebarItem,
+  SidebarItemContext,
 } from '@eigenpal/docx-core/plugin-api/types';
 
 import type {
   EditorPluginCore,
   PluginPanelProps,
   RenderedDomContext,
+  SidebarItem,
+  SidebarItemContext,
 } from '@eigenpal/docx-core/plugin-api/types';
 
 /**
@@ -30,6 +34,28 @@ import type {
  * - Panel: React component for rendering in the annotation panel
  * - renderOverlay: Function returning ReactNode for overlay rendering
  */
+/**
+ * Render props passed to each sidebar item.
+ */
+export interface SidebarItemRenderProps {
+  /** Whether this item is currently expanded/active. */
+  isExpanded: boolean;
+  /** Toggle expand/collapse for this item. */
+  onToggleExpand: () => void;
+  /** Ref callback to measure the rendered card height. */
+  measureRef: (el: HTMLDivElement | null) => void;
+}
+
+/**
+ * A sidebar item with React rendering, anchored to a document position.
+ */
+export interface ReactSidebarItem extends SidebarItem {
+  /** Render the card content. */
+  render: (props: SidebarItemRenderProps) => ReactNode;
+  /** Estimated height in pixels (for pre-layout before measurement). Default: 40. */
+  estimatedHeight?: number;
+}
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export interface ReactEditorPlugin<TState = any> extends EditorPluginCore<TState> {
   /**
@@ -42,17 +68,19 @@ export interface ReactEditorPlugin<TState = any> extends EditorPluginCore<TState
    * Render an overlay on top of the rendered pages.
    * Use this for highlights, annotations, or other visual elements
    * that need to be positioned relative to the document content.
-   *
-   * @param context - The rendered DOM context for position lookup
-   * @param state - Current plugin state
-   * @param editorView - The editor view for dispatching transactions
-   * @returns React node to render as overlay, or null
    */
   renderOverlay?: (
     context: RenderedDomContext,
     state: TState,
     editorView: EditorView | null
   ) => ReactNode;
+
+  /**
+   * Provide sidebar items anchored to document positions.
+   * Called whenever plugin state changes.
+   * Items from all plugins are merged and laid out together in a unified sidebar.
+   */
+  getSidebarItems?: (state: TState, context: SidebarItemContext) => ReactSidebarItem[];
 }
 
 /**
