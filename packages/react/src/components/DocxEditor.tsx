@@ -3174,7 +3174,6 @@ body { background: white; }
   // --- Unified sidebar items ---
   const commentCallbacksRef = useRef<CommentCallbacks>({});
   commentCallbacksRef.current = {
-    onCommentClick: undefined,
     onCommentReply: (id, text) => {
       setComments((prev) => [...prev, createComment(text, author, id)]);
     },
@@ -3238,7 +3237,6 @@ body { background: white; }
   // Stable callbacks wrapper that delegates to ref (avoids recreating items on every render)
   const stableCallbacks = useMemo<CommentCallbacks>(
     () => ({
-      onCommentClick: (...args) => commentCallbacksRef.current.onCommentClick?.(...args),
       onCommentReply: (...args) => commentCallbacksRef.current.onCommentReply?.(...args),
       onCommentResolve: (...args) => commentCallbacksRef.current.onCommentResolve?.(...args),
       onCommentDelete: (...args) => commentCallbacksRef.current.onCommentDelete?.(...args),

@@ -36,11 +36,11 @@ export function UnifiedSidebar({
   const knownCardsRef = useRef<Set<string>>(new Set());
   const sidebarRef = useRef<HTMLDivElement>(null);
   const cardElsRef = useRef<Map<string, HTMLDivElement>>(new Map());
+  // Stable ref callbacks per item ID — avoids creating new closures on every render
+  const measureRefsRef = useRef<Map<string, (el: HTMLDivElement | null) => void>>(new Map());
 
-  // Force re-render trigger for position updates
   const [positionVersion, setPositionVersion] = useState(0);
 
-  // Resolve all item positions with collision avoidance
   const resolved = useMemo(
     () =>
       resolveItemPositions(
@@ -57,10 +57,22 @@ export function UnifiedSidebar({
 
   const hasPositions = resolved.length > 0;
 
-  // Build a Set of resolved item IDs for quick lookup
-  const resolvedIds = useMemo(() => new Set(resolved.map((r) => r.item.id)), [resolved]);
+  // Build position map for O(1) lookup by item ID
+  const positionMap = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const r of resolved) {
+      map.set(r.item.id, r.y);
+    }
+    return map;
+  }, [resolved]);
 
-  // Update positions on mount and when dependencies change
+  // Track newly positioned cards in an effect (not during render)
+  useEffect(() => {
+    for (const r of resolved) {
+      knownCardsRef.current.add(r.item.id);
+    }
+  }, [resolved]);
+
   useEffect(() => {
     const timerQuick = setTimeout(() => setPositionVersion((v) => v + 1), 50);
     const timerFull = setTimeout(() => {
@@ -74,7 +86,6 @@ export function UnifiedSidebar({
     };
   }, [items.length]);
 
-  // ResizeObserver on container
   useEffect(() => {
     const container = editorContainerRef?.current;
     if (!container) return;
@@ -86,34 +97,28 @@ export function UnifiedSidebar({
     return () => observer.disconnect();
   }, [editorContainerRef]);
 
-  // Recalculate when expanded card changes
+  // Watch expanded card for size changes (covers both initial expand and resize)
   useEffect(() => {
-    const raf = requestAnimationFrame(() => setPositionVersion((v) => v + 1));
-    return () => cancelAnimationFrame(raf);
-  }, [expandedItem]);
-
-  // Watch expanded card for size changes
-  useEffect(() => {
-    const targets: HTMLElement[] = [];
-    if (expandedItem) {
-      const el = cardElsRef.current.get(expandedItem);
-      if (el) targets.push(el);
+    if (!expandedItem) return;
+    const el = cardElsRef.current.get(expandedItem);
+    if (!el) {
+      // Card just expanded but element not measured yet — trigger one recalc
+      const raf = requestAnimationFrame(() => setPositionVersion((v) => v + 1));
+      return () => cancelAnimationFrame(raf);
     }
-    if (targets.length === 0) return;
 
     let rafId: number;
     const observer = new ResizeObserver(() => {
       cancelAnimationFrame(rafId);
       rafId = requestAnimationFrame(() => setPositionVersion((v) => v + 1));
     });
-    for (const el of targets) observer.observe(el);
+    observer.observe(el);
     return () => {
       cancelAnimationFrame(rafId);
       observer.disconnect();
     };
   }, [expandedItem]);
 
-  // Listen for clicks on comment/change highlights in the document
   useEffect(() => {
     const container = editorContainerRef?.current;
     if (!container) return;
@@ -135,8 +140,7 @@ export function UnifiedSidebar({
           (target.closest('.docx-insertion') as HTMLElement | null) ||
           (target.closest('.docx-deletion') as HTMLElement | null);
         if (changeEl?.dataset.revisionId) {
-          // Find matching item
-          const prefix = `tc-${changeEl.dataset.revisionId}`;
+          const prefix = `tc-${changeEl.dataset.revisionId}-`;
           const match = items.find((i) => i.id.startsWith(prefix));
           if (match) {
             setExpandedItem(match.id);
@@ -152,31 +156,26 @@ export function UnifiedSidebar({
     return () => container.removeEventListener('click', handleDocClick);
   }, [editorContainerRef, items]);
 
-  const createMeasureRef = useCallback(
-    (itemId: string) => (el: HTMLDivElement | null) => {
-      if (el) {
-        cardElsRef.current.set(itemId, el);
-        cardHeightsRef.current.set(itemId, el.offsetHeight);
-      } else {
-        cardElsRef.current.delete(itemId);
-        cardHeightsRef.current.delete(itemId);
-      }
-    },
-    []
-  );
+  const getMeasureRef = useCallback((itemId: string): ((el: HTMLDivElement | null) => void) => {
+    let fn = measureRefsRef.current.get(itemId);
+    if (!fn) {
+      fn = (el: HTMLDivElement | null) => {
+        if (el) {
+          cardElsRef.current.set(itemId, el);
+          cardHeightsRef.current.set(itemId, el.offsetHeight);
+        } else {
+          cardElsRef.current.delete(itemId);
+          cardHeightsRef.current.delete(itemId);
+        }
+      };
+      measureRefsRef.current.set(itemId, fn);
+    }
+    return fn;
+  }, []);
 
   const toggleExpand = useCallback((itemId: string) => {
     setExpandedItem((prev) => (prev === itemId ? null : itemId));
   }, []);
-
-  // Build a map from item ID to resolved Y for quick lookup
-  const positionMap = useMemo(() => {
-    const map = new Map<string, number>();
-    for (const r of resolved) {
-      map.set(r.item.id, r.y);
-    }
-    return map;
-  }, [resolved]);
 
   if (items.length === 0) return null;
 
@@ -206,13 +205,8 @@ export function UnifiedSidebar({
           const yPos = positionMap.get(item.id);
           const isExpanded = expandedItem === item.id;
           const isKnown = knownCardsRef.current.has(item.id);
-
-          if (yPos !== undefined) {
-            knownCardsRef.current.add(item.id);
-          }
-
           const isNewCard = !isKnown && yPos !== undefined;
-          const noPosition = hasPositions && !resolvedIds.has(item.id);
+          const noPosition = hasPositions && !positionMap.has(item.id);
 
           const style: React.CSSProperties = hasPositions
             ? yPos !== undefined
@@ -240,7 +234,7 @@ export function UnifiedSidebar({
               {item.render({
                 isExpanded,
                 onToggleExpand: () => toggleExpand(item.id),
-                measureRef: createMeasureRef(item.id),
+                measureRef: getMeasureRef(item.id),
               })}
             </div>
           );

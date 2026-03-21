@@ -49,6 +49,17 @@ import { TemplateChip, TEMPLATE_CHIP_STYLES } from './components/TemplateChip';
 /**
  * Plugin state interface
  */
+function selectTag(view: EditorView | null, tags: TemplateTag[], id: string) {
+  if (!view) return;
+  setSelectedElement(view, id);
+  const tag = tags.find((t) => t.id === id);
+  if (tag) {
+    const tr = view.state.tr.setSelection(TextSelection.near(view.state.doc.resolve(tag.from)));
+    view.dispatch(tr);
+    view.focus();
+  }
+}
+
 interface TemplatePluginState {
   tags: TemplateTag[];
   hoveredId?: string;
@@ -101,7 +112,7 @@ export function createPlugin(
       return visibleTags.map((tag) => ({
         id: `template-${tag.id}`,
         anchorPos: tag.from,
-        priority: 10, // lower priority than comments (appear after at same Y)
+        priority: 10,
         estimatedHeight: 32,
         render: (props) =>
           React.createElement(TemplateChip, {
@@ -111,19 +122,7 @@ export function createPlugin(
             onHover: (id: string | undefined) => {
               if (context.editorView) setHoveredElement(context.editorView, id);
             },
-            onSelect: (id: string) => {
-              if (context.editorView) {
-                setSelectedElement(context.editorView, id);
-                const matchedTag = state.tags.find((t) => t.id === id);
-                if (matchedTag) {
-                  const tr = context.editorView.state.tr.setSelection(
-                    TextSelection.near(context.editorView.state.doc.resolve(matchedTag.from))
-                  );
-                  context.editorView.dispatch(tr);
-                  context.editorView.focus();
-                }
-              }
-            },
+            onSelect: (id: string) => selectTag(context.editorView, state.tags, id),
           }),
       }));
     },
@@ -143,19 +142,7 @@ export function createPlugin(
         onHover: (id: string | undefined) => {
           if (editorView) setHoveredElement(editorView, id);
         },
-        onSelect: (id: string) => {
-          if (editorView) {
-            setSelectedElement(editorView, id);
-            const tag = state.tags.find((t) => t.id === id);
-            if (tag) {
-              const tr = editorView.state.tr.setSelection(
-                TextSelection.near(editorView.state.doc.resolve(tag.from))
-              );
-              editorView.dispatch(tr);
-              editorView.focus();
-            }
-          }
-        },
+        onSelect: (id: string) => selectTag(editorView, state.tags, id),
       });
     },
 

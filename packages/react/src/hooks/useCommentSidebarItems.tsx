@@ -7,7 +7,6 @@ import { TrackedChangeCard } from '../components/sidebar/TrackedChangeCard';
 import { AddCommentCard } from '../components/sidebar/AddCommentCard';
 
 export interface CommentCallbacks {
-  onCommentClick?: (commentId: number) => void;
   onCommentReply?: (commentId: number, text: string) => void;
   onCommentResolve?: (commentId: number) => void;
   onCommentDelete?: (commentId: number) => void;
@@ -98,7 +97,6 @@ export function useCommentSidebarItems({
             onReply={callbacks.onCommentReply}
             onResolve={callbacks.onCommentResolve}
             onDelete={callbacks.onCommentDelete}
-            onClick={callbacks.onCommentClick}
           />
         ),
       });
