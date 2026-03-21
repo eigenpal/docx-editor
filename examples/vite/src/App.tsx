@@ -102,11 +102,11 @@ export function App() {
   const { zoom: autoZoom, isMobile } = useResponsiveLayout();
 
   useEffect(() => {
-    fetch('/comments-and-templates.docx')
+    fetch('/docx-editor-demo.docx')
       .then((res) => res.arrayBuffer())
       .then((buffer) => {
         setDocumentBuffer(buffer);
-        setFileName('comments-and-templates.docx');
+        setFileName('docx-editor-demo.docx');
       })
       .catch(() => {
         setCurrentDocument(createEmptyDocument());
