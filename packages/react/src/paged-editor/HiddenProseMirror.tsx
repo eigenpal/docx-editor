@@ -77,6 +77,8 @@ export interface HiddenProseMirrorRef {
   getView(): EditorView | null;
   /** Get the current Document from PM state */
   getDocument(): Document | null;
+  /** Replace the editor content with a new document without full re-initialization */
+  replaceContent(doc: Document, styles?: StyleDefinitions | null): void;
   /** Focus the hidden editor */
   focus(): void;
   /** Blur the hidden editor */
@@ -368,6 +370,19 @@ const HiddenProseMirrorComponent = forwardRef<HiddenProseMirrorRef, HiddenProseM
         getDocument() {
           if (!viewRef.current) return null;
           return stateToDocument(viewRef.current.state, documentRef.current);
+        },
+
+        replaceContent(newDoc: Document, newStyles?: StyleDefinitions | null) {
+          if (!viewRef.current) return;
+          documentRef.current = newDoc;
+          const newState = createInitialState(
+            newDoc,
+            newStyles ?? styles,
+            extensionManager,
+            externalPlugins
+          );
+          viewRef.current.updateState(newState);
+          lastDocumentIdRef.current = ''; // reset identity so future prop changes work
         },
 
         focus() {

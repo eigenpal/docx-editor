@@ -198,6 +198,8 @@ export interface PagedEditorRef {
   getState(): EditorState | null;
   /** Get the ProseMirror EditorView. */
   getView(): EditorView | null;
+  /** Replace editor content without full re-initialization. */
+  replaceContent(doc: Document, styles?: StyleDefinitions | null): void;
   /** Focus the editor. */
   focus(): void;
   /** Blur the editor. */
@@ -3799,6 +3801,9 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
         getDocument() {
           return hiddenPMRef.current?.getDocument() ?? null;
         },
+        replaceContent(doc: Document, styles?: StyleDefinitions | null) {
+          hiddenPMRef.current?.replaceContent(doc, styles);
+        },
         getState() {
           return hiddenPMRef.current?.getState() ?? null;
         },
@@ -3859,6 +3864,8 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
       if (onReadyRef.current && hiddenPMRef.current) {
         onReadyRef.current({
           getDocument: () => hiddenPMRef.current?.getDocument() ?? null,
+          replaceContent: (doc: Document, styles?: StyleDefinitions | null) =>
+            hiddenPMRef.current?.replaceContent(doc, styles),
           getState: () => hiddenPMRef.current?.getState() ?? null,
           getView: () => hiddenPMRef.current?.getView() ?? null,
           focus: () => {
