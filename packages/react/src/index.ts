@@ -686,6 +686,10 @@ export {
   type PluginHostRef,
   type RenderedDomContext,
   type PositionCoordinates,
+  type ReactSidebarItem,
+  type SidebarItemRenderProps,
+  type SidebarItemContext,
+  type SidebarItem,
 } from './plugin-api';
 
 // ============================================================================
@@ -702,8 +706,6 @@ export {
   setHoveredElement,
   setSelectedElement,
   TEMPLATE_DECORATION_STYLES,
-  AnnotationPanel,
-  ANNOTATION_PANEL_STYLES,
   type TemplateTag,
   type TagType,
 } from './plugins/template';

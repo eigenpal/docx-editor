@@ -1,5 +1,11 @@
 import React, { useState, useRef, useCallback, useEffect, useMemo } from 'react';
-import { DocxEditor, type DocxEditorRef, createEmptyDocument } from '@eigenpal/docx-js-editor';
+import {
+  DocxEditor,
+  type DocxEditorRef,
+  createEmptyDocument,
+  templatePlugin,
+  PluginHost,
+} from '@eigenpal/docx-js-editor';
 import { ExampleSwitcher } from '../../shared/ExampleSwitcher';
 import { GitHubBadge } from '../../shared/GitHubBadge';
 
@@ -96,11 +102,11 @@ export function App() {
   const { zoom: autoZoom, isMobile } = useResponsiveLayout();
 
   useEffect(() => {
-    fetch('/docx-editor-demo.docx')
+    fetch('/comments-and-templates.docx')
       .then((res) => res.arrayBuffer())
       .then((buffer) => {
         setDocumentBuffer(buffer);
-        setFileName('docx-editor-demo.docx');
+        setFileName('comments-and-templates.docx');
       })
       .catch(() => {
         setCurrentDocument(createEmptyDocument());
@@ -203,22 +209,24 @@ export function App() {
   return (
     <div style={styles.container}>
       <main style={styles.main}>
-        <DocxEditor
-          ref={editorRef}
-          document={documentBuffer ? undefined : currentDocument}
-          documentBuffer={documentBuffer}
-          author={randomAuthor}
-          onError={handleError}
-          onFontsLoaded={handleFontsLoaded}
-          showToolbar={true}
-          showRuler={!isMobile}
-          showZoomControl={true}
-          initialZoom={autoZoom}
-          renderLogo={renderLogo}
-          documentName={fileName}
-          onDocumentNameChange={setFileName}
-          renderTitleBarRight={renderTitleBarRight}
-        />
+        <PluginHost plugins={[templatePlugin]}>
+          <DocxEditor
+            ref={editorRef}
+            document={documentBuffer ? undefined : currentDocument}
+            documentBuffer={documentBuffer}
+            author={randomAuthor}
+            onError={handleError}
+            onFontsLoaded={handleFontsLoaded}
+            showToolbar={true}
+            showRuler={!isMobile}
+            showZoomControl={true}
+            initialZoom={autoZoom}
+            renderLogo={renderLogo}
+            documentName={fileName}
+            onDocumentNameChange={setFileName}
+            renderTitleBarRight={renderTitleBarRight}
+          />
+        </PluginHost>
       </main>
     </div>
   );
