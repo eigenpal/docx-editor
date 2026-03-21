@@ -1,4 +1,4 @@
-import { R as ReactEditorPlugin } from './react-CTvkAojF.js';
+import { R as ReactEditorPlugin } from './react-FGw_xTCf.js';
 export {
   D as DEFAULT_SELECTION_STYLE,
   a as DocxEditor,
@@ -75,7 +75,7 @@ export {
   aj as useSelectionHighlight,
   ak as useTableSelection,
   al as useWheelZoom,
-} from './react-CTvkAojF.js';
+} from './react-FGw_xTCf.js';
 export {
   D as DocumentAgent,
   g as DocxInput,

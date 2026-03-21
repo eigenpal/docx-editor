@@ -4,7 +4,7 @@ import * as prosemirror_view from 'prosemirror-view';
 import { EditorView } from 'prosemirror-view';
 import * as prosemirror_state from 'prosemirror-state';
 import { EditorState, Transaction } from 'prosemirror-state';
-import { T as TextFormatting, K as ParagraphFormatting, D as Document, a3 as Theme, e as Table } from './agentApi-BVHzyk2l.mjs';
+import { T as TextFormatting, K as ParagraphFormatting, D as Document, Z as StyleDefinitions, a3 as Theme, e as Table } from './agentApi-BVHzyk2l.mjs';
 import { e as PrintOptions, g as TableContext, T as TableAction, P as ParsedClipboardContent } from './clipboard-BkM7Zvgs.mjs';
 import { g as DocxInput, D as DocumentAgent } from './DocumentAgent-BqA9EJ3F.mjs';
 import { g as EditorPluginCore, k as PluginPanelProps, R as RenderedDomContext, f as EditorHandle, h as ErrorNotification, m as SavedDocumentData, d as AutoSaveStatus, e as ClipboardSelection } from './ClipboardManager-t936d0KD.mjs';
@@ -299,6 +299,8 @@ interface PagedEditorRef {
     getState(): EditorState | null;
     /** Get the ProseMirror EditorView. */
     getView(): EditorView | null;
+    /** Replace editor content without full re-initialization. */
+    replaceContent(doc: Document, styles?: StyleDefinitions | null): void;
     /** Focus the editor. */
     focus(): void;
     /** Blur the editor. */
@@ -447,6 +449,17 @@ interface DocxEditorRef {
     loadDocument: (doc: Document) => void;
     /** Load a DOCX buffer programmatically (ArrayBuffer, Uint8Array, Blob, or File) */
     loadDocumentBuffer: (buffer: DocxInput) => Promise<void>;
+    /** Replace editor content in-place without full re-initialization (no loading flash) */
+    replaceDocumentBuffer: (buffer: DocxInput) => Promise<void>;
+    /**
+     * Merge incoming DOCX buffer with the current editor content.
+     * Direct edits from the incoming version are applied.
+     * The user's tracked changes (insertion/deletion marks) are preserved.
+     */
+    mergeIncomingBuffer: (buffer: DocxInput) => Promise<{
+        saved: number;
+        restored: number;
+    } | null>;
 }
 type EditorMode = 'editing' | 'suggesting' | 'viewing';
 /**

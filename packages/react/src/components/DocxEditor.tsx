@@ -97,6 +97,12 @@ import { DocumentAgent } from '@eigenpal/docx-core/agent/DocumentAgent';
 import { DefaultLoadingIndicator, DefaultPlaceholder, ParseError } from './DocxEditorHelpers';
 import { parseDocx } from '@eigenpal/docx-core/docx/parser';
 import { type DocxInput } from '@eigenpal/docx-core/utils/docxInput';
+import {
+  findModifiedParagraphs,
+  reapplyParagraphs,
+  captureBaseSnapshot,
+  hasModifiedParagraphs,
+} from '../utils/mergeDoc';
 import { onFontsLoaded, loadDocumentFonts } from '@eigenpal/docx-core/utils/fontLoader';
 import { resolveColor } from '@eigenpal/docx-core/utils/colorResolver';
 import { executeCommand } from '@eigenpal/docx-core/agent/executor';
@@ -337,6 +343,14 @@ export interface DocxEditorRef {
   loadDocument: (doc: Document) => void;
   /** Load a DOCX buffer programmatically (ArrayBuffer, Uint8Array, Blob, or File) */
   loadDocumentBuffer: (buffer: DocxInput) => Promise<void>;
+  /** Replace editor content in-place without full re-initialization (no loading flash) */
+  replaceDocumentBuffer: (buffer: DocxInput) => Promise<void>;
+  /**
+   * Merge incoming DOCX buffer with the current editor content.
+   * Direct edits from the incoming version are applied.
+   * The user's tracked changes (insertion/deletion marks) are preserved.
+   */
+  mergeIncomingBuffer: (buffer: DocxInput) => Promise<{ saved: number; restored: number } | null>;
 }
 
 /**
@@ -676,6 +690,13 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
   showOutlineRef.current = showOutline;
   const [outlineHeadings, setHeadingInfos] = useState<HeadingInfo[]>([]);
 
+  // Base doc snapshot — captured when the editor first renders a document.
+  // Used by mergeIncomingBuffer to identify which paragraphs the user changed.
+  const baseDocNodesRef = useRef<any[] | null>(null);
+  // Publish baseline — captured on load and after push. NOT updated on merge
+  // (merged doc still has unpublished local changes). Used by hasUnpublishedChanges().
+  const publishBaseRef = useRef<any[] | null>(null);
+
   // Comments sidebar state
   const [showCommentsSidebar, setShowCommentsSidebar] = useState(false);
   const [comments, setComments] = useState<Comment[]>([]);
@@ -945,6 +966,9 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
   const resetForNewDocument = useCallback(() => {
     commentsLoadedRef.current = false;
     trackedChangesLoadedRef.current = false;
+    // Reset baselines — they'll be recaptured by onReady when the new doc loads
+    baseDocNodesRef.current = null;
+    publishBaseRef.current = null;
     setComments([]);
     setTrackedChanges([]);
     setHeadingInfos([]);
@@ -2586,6 +2610,18 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
         const pmDoc = pagedEditorRef.current?.getDocument();
         if (pmDoc?.package?.document) {
           agentDoc.package.document.content = pmDoc.package.document.content;
+          // DEBUG: check if content has tracked changes
+          const contentStr = JSON.stringify(pmDoc.package.document.content);
+          const hasIns = contentStr.includes('"insertion"');
+          const hasDel = contentStr.includes('"deletion"');
+          console.log(
+            '[DocxEditor.save] content has insertion:',
+            hasIns,
+            'deletion:',
+            hasDel,
+            'sections:',
+            pmDoc.package.document.content.length
+          );
         }
 
         // Sync React comments state (including new replies) back to the document model
@@ -2880,6 +2916,165 @@ body { background: white; }
       print: handleDirectPrint,
       loadDocument: loadParsedDocument,
       loadDocumentBuffer: loadBuffer,
+      replaceDocumentBuffer: async (buffer: DocxInput) => {
+        const doc = await parseDocx(buffer);
+        if (agentRef.current) {
+          agentRef.current.getDocument().package.document.content = doc.package.document.content;
+          agentRef.current.getDocument().originalBuffer = doc.originalBuffer;
+        }
+        history.reset(doc);
+        pagedEditorRef.current?.replaceContent(doc, doc.package?.styles ?? undefined);
+        // Update base snapshots — this is a fresh load, so both merge and publish baselines reset
+        const view = pagedEditorRef.current?.getView();
+        if (view) {
+          const snapshot = captureBaseSnapshot(view.state.doc);
+          baseDocNodesRef.current = snapshot;
+          publishBaseRef.current = snapshot;
+        }
+        // Re-extract comments from the new document
+        const newComments = doc.package?.document?.comments;
+        if (newComments && newComments.length > 0) {
+          setComments(newComments);
+        } else {
+          setComments([]);
+        }
+        setState((prev) => ({ ...prev, isLoading: false }));
+      },
+      mergeIncomingBuffer: async (
+        buffer: DocxInput
+      ): Promise<{ saved: number; restored: number } | null> => {
+        const view = pagedEditorRef.current?.getView();
+        if (!view) return null;
+
+        // 1. Capture base snapshot if not yet captured (first merge after load)
+        if (baseDocNodesRef.current === null) {
+          const snapshot = captureBaseSnapshot(view.state.doc);
+          baseDocNodesRef.current = snapshot;
+          if (publishBaseRef.current === null) {
+            publishBaseRef.current = snapshot;
+          }
+        }
+
+        // 2. Find all paragraphs the user modified (direct edits, suggestions, comments — everything)
+        const savedParagraphs = findModifiedParagraphs(view.state.doc, baseDocNodesRef.current);
+        console.log(
+          '[mergeIncoming] base:',
+          baseDocNodesRef.current.length,
+          'nodes | current:',
+          view.state.doc.childCount,
+          'nodes | modified:',
+          savedParagraphs.length
+        );
+        if (savedParagraphs.length > 0) {
+          console.log(
+            '[mergeIncoming] modified paragraphs:',
+            savedParagraphs.map((p) => `idx:${p.index} type:${p.nodeJSON.type}`).join(', ')
+          );
+        }
+
+        // 3. Load the incoming version
+        const incomingDoc = await parseDocx(buffer);
+        if (agentRef.current) {
+          agentRef.current.getDocument().package.document.content =
+            incomingDoc.package.document.content;
+          agentRef.current.getDocument().originalBuffer = incomingDoc.originalBuffer;
+        }
+        history.reset(incomingDoc);
+        pagedEditorRef.current?.replaceContent(
+          incomingDoc,
+          incomingDoc.package?.styles ?? undefined
+        );
+
+        // 4. Re-apply user's modified paragraphs on top of incoming
+        let restored = 0;
+        if (savedParagraphs.length > 0) {
+          const newView = pagedEditorRef.current?.getView();
+          if (newView) {
+            // Filter: only re-apply paragraphs that actually differ from the incoming version
+            const incomingNodes: any[] = [];
+            newView.state.doc.forEach((node: any) => {
+              incomingNodes.push(node.toJSON());
+            });
+
+            const trulyModified = savedParagraphs.filter((saved) => {
+              const incomingNode = incomingNodes[saved.index];
+              if (!incomingNode) return true;
+              return JSON.stringify(saved.nodeJSON) !== JSON.stringify(incomingNode);
+            });
+
+            console.log(
+              '[mergeIncoming] truly modified vs incoming:',
+              trulyModified.length,
+              'of',
+              savedParagraphs.length
+            );
+
+            if (trulyModified.length > 0) {
+              const result = reapplyParagraphs(newView.state, trulyModified);
+              restored = result.replacements;
+              console.log(
+                '[mergeIncoming] restored:',
+                restored,
+                'paragraphs, steps:',
+                result.tr.steps.length
+              );
+              if (result.tr.steps.length > 0) {
+                newView.dispatch(result.tr);
+              }
+            }
+          }
+        }
+
+        // 5. Update base snapshot — the merged doc is the new baseline
+        const afterView = pagedEditorRef.current?.getView();
+        if (afterView) {
+          baseDocNodesRef.current = captureBaseSnapshot(afterView.state.doc);
+        }
+
+        // 6. Re-extract comments from the incoming document
+        const incomingComments = incomingDoc.package?.document?.comments;
+        if (incomingComments && incomingComments.length > 0) {
+          setComments((prev) => {
+            // Merge: keep local comments not in incoming, add incoming ones
+            const incomingIds = new Set(incomingComments.map((c: any) => c.id));
+            const localOnly = prev.filter((c) => !incomingIds.has(c.id));
+            return [...localOnly, ...incomingComments];
+          });
+        }
+
+        setState((prev) => ({ ...prev, isLoading: false }));
+        return { saved: savedParagraphs.length, restored };
+      },
+      /**
+       * Check if the current doc has unpublished changes (differs from publish baseline).
+       * The publish baseline is set on initial load and after resetPublishBaseline().
+       * Merge does NOT reset it — merged doc still has unpublished local changes.
+       */
+      hasUnpublishedChanges: (): boolean => {
+        const view = pagedEditorRef.current?.getView();
+        if (!view) return false;
+        // Lazily capture both baselines on first call — the loaded doc is the published version
+        if (!publishBaseRef.current) {
+          const snapshot = captureBaseSnapshot(view.state.doc);
+          publishBaseRef.current = snapshot;
+          // Also set merge baseline so mergeIncomingBuffer can detect changes later
+          if (!baseDocNodesRef.current) {
+            baseDocNodesRef.current = snapshot;
+          }
+          return false;
+        }
+        return hasModifiedParagraphs(view.state.doc, publishBaseRef.current);
+      },
+      /**
+       * Reset the publish baseline to the current doc state.
+       * Call this after a successful push — the current content is now "published."
+       */
+      resetPublishBaseline: () => {
+        const view = pagedEditorRef.current?.getView();
+        if (view) {
+          publishBaseRef.current = captureBaseSnapshot(view.state.doc);
+        }
+      },
     }),
     [
       history.state,
@@ -3356,7 +3551,14 @@ body { background: white; }
                       }}
                       externalPlugins={allExternalPlugins}
                       onReady={(ref) => {
-                        onEditorViewReady?.(ref.getView()!);
+                        // Capture merge baseline when the PM view is first created.
+                        // Doc content at this point is identical to post-plugin-init
+                        // (plugins only change meta/state, not doc content).
+                        const view = ref.getView();
+                        if (view && !baseDocNodesRef.current) {
+                          baseDocNodesRef.current = captureBaseSnapshot(view.state.doc);
+                        }
+                        onEditorViewReady?.(view!);
                       }}
                       onRenderedDomContextReady={onRenderedDomContextReady}
                       pluginOverlays={pluginOverlays}
@@ -3380,11 +3582,51 @@ body { background: white; }
                               setComments((prev) =>
                                 prev.map((c) => (c.id === id ? { ...c, done: true } : c))
                               );
+                              // Remove the comment mark from the PM document
+                              const view = pagedEditorRef.current?.getView();
+                              if (view) {
+                                const { state, dispatch } = view;
+                                const commentMarkType = state.schema.marks.comment;
+                                if (commentMarkType) {
+                                  const tr = state.tr;
+                                  state.doc.descendants((node, pos) => {
+                                    if (!node.isText) return;
+                                    const mark = node.marks.find(
+                                      (m: any) =>
+                                        m.type === commentMarkType && m.attrs.commentId === id
+                                    );
+                                    if (mark) {
+                                      tr.removeMark(pos, pos + node.nodeSize, mark);
+                                    }
+                                  });
+                                  if (tr.steps.length > 0) dispatch(tr);
+                                }
+                              }
                             }}
                             onCommentDelete={(id) => {
                               setComments((prev) =>
                                 prev.filter((c) => c.id !== id && c.parentId !== id)
                               );
+                              // Remove the comment mark from the PM document
+                              const view = pagedEditorRef.current?.getView();
+                              if (view) {
+                                const { state, dispatch } = view;
+                                const commentMarkType = state.schema.marks.comment;
+                                if (commentMarkType) {
+                                  const tr = state.tr;
+                                  state.doc.descendants((node, pos) => {
+                                    if (!node.isText) return;
+                                    const mark = node.marks.find(
+                                      (m: any) =>
+                                        m.type === commentMarkType && m.attrs.commentId === id
+                                    );
+                                    if (mark) {
+                                      tr.removeMark(pos, pos + node.nodeSize, mark);
+                                    }
+                                  });
+                                  if (tr.steps.length > 0) dispatch(tr);
+                                }
+                              }
                             }}
                             onCommentReply={(id, text) => {
                               setComments((prev) => [...prev, createComment(text, author, id)]);
