@@ -287,6 +287,14 @@ export interface DocxEditorProps {
   mode?: EditorMode;
   /** Callback when the editing mode changes */
   onModeChange?: (mode: EditorMode) => void;
+  /** Callback when a comment is added via the UI */
+  onCommentAdd?: (comment: Comment) => void;
+  /** Callback when a comment is resolved via the UI */
+  onCommentResolve?: (comment: Comment) => void;
+  /** Callback when a comment is deleted via the UI */
+  onCommentDelete?: (comment: Comment) => void;
+  /** Callback when a reply is added to a comment via the UI */
+  onCommentReply?: (reply: Comment, parent: Comment) => void;
   /**
    * Callback when rendered DOM context is ready (for plugin overlays).
    * Used by PluginHost to get access to the rendered page DOM for positioning.
@@ -641,6 +649,10 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
     onPaste: _onPaste,
     mode: modeProp,
     onModeChange,
+    onCommentAdd,
+    onCommentResolve,
+    onCommentDelete,
+    onCommentReply,
     externalPlugins,
     onEditorViewReady,
     onRenderedDomContextReady,
@@ -3175,13 +3187,20 @@ body { background: white; }
   const commentCallbacksRef = useRef<CommentCallbacks>({});
   commentCallbacksRef.current = {
     onCommentReply: (id, text) => {
-      setComments((prev) => [...prev, createComment(text, author, id)]);
+      const reply = createComment(text, author, id);
+      const parent = comments.find((c) => c.id === id);
+      setComments((prev) => [...prev, reply]);
+      if (parent) onCommentReply?.(reply, parent);
     },
     onCommentResolve: (id) => {
+      const target = comments.find((c) => c.id === id);
       setComments((prev) => prev.map((c) => (c.id === id ? { ...c, done: true } : c)));
+      if (target) onCommentResolve?.({ ...target, done: true });
     },
     onCommentDelete: (id) => {
+      const target = comments.find((c) => c.id === id);
       setComments((prev) => prev.filter((c) => c.id !== id && c.parentId !== id));
+      if (target) onCommentDelete?.(target);
     },
     onAddComment: (addText) => {
       const comment = createComment(addText, author);
@@ -3201,6 +3220,7 @@ body { background: white; }
       setIsAddingComment(false);
       setCommentSelectionRange(null);
       setAddCommentYPosition(null);
+      onCommentAdd?.(comment);
     },
     onCancelAddComment: () => {
       const view = pagedEditorRef.current?.getView();

@@ -434,6 +434,7 @@ export type {
   ListLevel,
   NumberingDefinitions,
   Relationship,
+  Comment,
 } from '@eigenpal/docx-core/types/document';
 
 // Agent API types
