@@ -1,5 +1,11 @@
 # @eigenpal/docx-editor-agents
 
+## 0.0.31
+
+### Patch Changes
+
+- [`d77716f`](https://github.com/eigenpal/docx-editor/commit/d77716f3abc8580ca48d9e2280f6564ce17df443) Thanks [@jedrazb](https://github.com/jedrazb)! - Bump
+
 ## 0.0.30
 
 ### Patch Changes
