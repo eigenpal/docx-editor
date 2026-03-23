@@ -271,6 +271,8 @@ export interface DocxEditorProps {
   loadingIndicator?: ReactNode;
   /** Whether to show the document outline sidebar (default: false) */
   showOutline?: boolean;
+  /** Whether to show the floating outline toggle button (default: true) */
+  showOutlineButton?: boolean;
   /** Whether to show print button in toolbar (default: true) */
   showPrintButton?: boolean;
   /** Print options for print preview */
@@ -641,6 +643,7 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
     placeholder,
     loadingIndicator,
     showOutline: showOutlineProp = false,
+    showOutlineButton = true,
     showPrintButton = true,
     printOptions: _printOptions,
     onPrint,
@@ -3712,7 +3715,7 @@ body { background: white; }
               {/* Unified sidebar (comments + plugin items) rendered inside PagedEditor via sidebarOverlay prop */}
 
               {/* Outline toggle button — absolutely positioned below toolbar */}
-              {!showOutline && (
+              {showOutlineButton && !showOutline && (
                 <button
                   className="docx-outline-nav"
                   onClick={handleToggleOutline}
