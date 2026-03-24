@@ -643,10 +643,13 @@ export function parseTableRowProperties(
   const formatting: TableRowFormatting = {};
 
   // Row height (w:trHeight)
+  // Note: w:trHeight uses w:val (not w:w) for the height value in twips.
   const heightElement = findChild(trPrElement, 'w', 'trHeight');
   if (heightElement) {
-    const height = parseWidth(heightElement);
-    if (height) formatting.height = height;
+    const heightVal = parseNumericAttribute(heightElement, 'w', 'val');
+    if (heightVal !== undefined && heightVal > 0) {
+      formatting.height = { value: heightVal, type: 'dxa' as const };
+    }
 
     const hRule = getAttribute(heightElement, 'w', 'hRule');
     if (hRule === 'auto' || hRule === 'atLeast' || hRule === 'exact') {
