@@ -129,7 +129,7 @@ function calculateTypographyMetrics(
   //   line=240 → 1.0x (single), line=276 → 1.15x (Word default), line=480 → 2.0x
   //
   // The multiplier base is the font's "single line" height per OOXML spec (§17.3.1.33):
-  //   singleLine = (usWinAscent + usWinDescent + externalLeading) / unitsPerEm × fontSizePx
+  //   singleLine = (usWinAscent + usWinDescent) / unitsPerEm × fontSizePx
   // This ratio is font-specific (1.07–1.27 for common fonts). We use a hardcoded
   // lookup table of OS/2 metrics since Canvas fontBoundingBox is unreliable
   // cross-platform (Mac uses hhea, not usWin) and Google Font substitutes
