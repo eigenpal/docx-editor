@@ -489,11 +489,40 @@ export function measureParagraph(
     }
 
     if (isTabRun(run)) {
-      // Handle tab run
+      // Handle tab run — compute width from paragraph tab stops
       const style = runToFontStyle(run);
       updateMaxFont(style);
 
-      const tabWidth = run.width ?? DEFAULT_TAB_WIDTH;
+      // Compute tab width by finding the next tab stop position.
+      // A tab advances to the next stop, not by a fixed amount.
+      const tabStops = attrs?.tabs;
+      const currentPos = currentLine.width + (currentLine.leftOffset ?? 0);
+      let tabWidth = 1; // minimum 1px to always advance
+
+      if (tabStops && tabStops.length > 0) {
+        // Use custom tab stops from the paragraph
+        let found = false;
+        for (const stop of tabStops) {
+          const stopPx = (stop.pos / 1440) * 96; // twips to px
+          if (stopPx > currentPos + 0.5) {
+            tabWidth = stopPx - currentPos;
+            found = true;
+            break;
+          }
+        }
+        if (!found) {
+          // Past all defined stops — advance to next default interval
+          const remainder = currentPos % DEFAULT_TAB_WIDTH;
+          tabWidth = remainder < 0.5 ? DEFAULT_TAB_WIDTH : DEFAULT_TAB_WIDTH - remainder;
+        }
+      } else {
+        // No custom stops — advance to next default tab interval (every 48px)
+        const remainder = currentPos % DEFAULT_TAB_WIDTH;
+        tabWidth = remainder < 0.5 ? DEFAULT_TAB_WIDTH : DEFAULT_TAB_WIDTH - remainder;
+      }
+
+      // Ensure minimum tab width of 1px
+      tabWidth = Math.max(1, tabWidth);
 
       if (currentLine.width + tabWidth > currentLine.availableWidth + WIDTH_TOLERANCE) {
         // Tab doesn't fit, start new line
@@ -625,34 +654,53 @@ export function measureParagraph(
         const wordWidth = measureTextWidth(word, style);
 
         // If the word itself is longer than a line, hard-break by characters.
+        // Use substring measurement (not char-by-char accumulation) to preserve
+        // kerning accuracy. Char-by-char accumulation overestimates width by
+        // ~1-2px per line due to lost kerning, causing extra wraps in narrow cells.
         if (wordWidth > currentLine.availableWidth + WIDTH_TOLERANCE) {
-          // Move to a new line if we already have content.
-          if (currentLine.width > 0) {
-            startNewLine(runIndex, charIndex);
-            updateMaxFont(style);
-          }
-
-          const { charWidths } = measureRun(word, style);
+          // Long word that needs hard-breaking. DON'T start a new line first —
+          // fill the remaining space on the current line with as many characters
+          // as possible. This prevents wasting a full line when a small run
+          // (like "{" at 10pt) precedes a long word (like a variable at 5.5pt).
           let chunkStart = 0;
 
           while (chunkStart < word.length) {
-            let chunkWidth = 0;
-            let chunkEnd = chunkStart;
+            // How much space is available on the current line?
+            const spaceLeft = currentLine.availableWidth - currentLine.width + WIDTH_TOLERANCE;
 
-            while (chunkEnd < word.length) {
-              const w = charWidths[chunkEnd] ?? 0;
-              if (chunkWidth + w > currentLine.availableWidth + WIDTH_TOLERANCE) {
-                break;
+            // Binary search for how many characters fit
+            const remaining = word.slice(chunkStart);
+            let lo = 1;
+            let hi = remaining.length;
+            let bestEnd = 0; // 0 = nothing fits on current line
+
+            while (lo <= hi) {
+              const mid = (lo + hi) >>> 1;
+              const substr = remaining.slice(0, mid);
+              const w = measureTextWidth(substr, style);
+              if (w <= spaceLeft) {
+                bestEnd = mid;
+                lo = mid + 1;
+              } else {
+                hi = mid - 1;
               }
-              chunkWidth += w;
-              chunkEnd += 1;
             }
 
-            // If a single character doesn't fit (very narrow width), force it.
-            if (chunkEnd === chunkStart) {
-              chunkEnd = Math.min(word.length, chunkStart + 1);
-              chunkWidth = charWidths[chunkStart] ?? 0;
+            // If nothing fits on the current line and there IS existing content,
+            // start a new line and retry
+            if (bestEnd === 0) {
+              if (currentLine.width > 0) {
+                startNewLine(runIndex, charIndex + chunkStart);
+                updateMaxFont(style);
+                continue; // retry on the fresh line
+              }
+              // Empty line but still doesn't fit — force at least 1 char
+              bestEnd = 1;
             }
+
+            const chunkEnd = chunkStart + bestEnd;
+            const chunk = word.slice(chunkStart, chunkEnd);
+            const chunkWidth = measureTextWidth(chunk, style);
 
             currentLine.width += chunkWidth;
             currentLine.toRun = runIndex;
