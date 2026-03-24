@@ -704,6 +704,7 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
 
   // Comments sidebar state
   const [showCommentsSidebar, setShowCommentsSidebar] = useState(false);
+  const [showResolvedComments, setShowResolvedComments] = useState(false);
   const [comments, setComments] = useState<Comment[]>([]);
   const [trackedChanges, setTrackedChanges] = useState<TrackedChangeEntry[]>([]);
   const [anchorPositions, setAnchorPositions] =
@@ -3277,6 +3278,7 @@ body { background: white; }
     comments,
     trackedChanges,
     callbacks: stableCallbacks,
+    showResolved: showResolvedComments,
     isAddingComment: showCommentsSidebar ? isAddingComment : false,
     addCommentYPosition,
   });
@@ -3289,6 +3291,11 @@ body { background: white; }
   }, [showCommentsSidebar, commentSidebarItems, pluginSidebarItems]);
 
   const sidebarOpen = allSidebarItems.length > 0;
+
+  const hasResolvedComments = useMemo(
+    () => comments.some((c) => c.done && c.parentId == null),
+    [comments]
+  );
 
   const editorContainerStyle: CSSProperties = {
     flex: 1,
@@ -3560,6 +3567,9 @@ body { background: white; }
                             })()}
                             zoom={state.zoom}
                             editorContainerRef={scrollContainerRef}
+                            showResolved={showResolvedComments}
+                            onToggleShowResolved={() => setShowResolvedComments((prev) => !prev)}
+                            hasResolvedComments={hasResolvedComments}
                           />
                         ) : undefined
                       }

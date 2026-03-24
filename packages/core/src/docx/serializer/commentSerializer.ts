@@ -58,6 +58,8 @@ function serializeComment(comment: Comment): string {
   if (comment.author) attrs.push(`w:author="${escapeXml(comment.author)}"`);
   if (comment.initials) attrs.push(`w:initials="${escapeXml(comment.initials)}"`);
   if (comment.date) attrs.push(`w:date="${escapeXml(comment.date)}"`);
+  if (comment.done) attrs.push('w:done="1"');
+  if (comment.parentId != null) attrs.push(`w16cid:parentId="${comment.parentId}"`);
 
   let xml = `<w:comment ${attrs.join(' ')}>`;
   if (comment.content && comment.content.length > 0) {
@@ -104,7 +106,8 @@ export function serializeComments(comments: Comment[]): string {
     'xmlns:wpi="http://schemas.microsoft.com/office/word/2010/wordprocessingInk" ' +
     'xmlns:wne="http://schemas.microsoft.com/office/word/2006/wordml" ' +
     'xmlns:wps="http://schemas.microsoft.com/office/word/2010/wordprocessingShape" ' +
-    'mc:Ignorable="w14 wp14">';
+    'xmlns:w16cid="http://schemas.microsoft.com/office/word/2016/wordml/cid" ' +
+    'mc:Ignorable="w14 wp14 w16cid">';
 
   // Serialize top-level comments first, then replies
   for (const comment of topLevel) {
