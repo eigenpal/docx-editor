@@ -23,6 +23,7 @@ import {
   measureRun,
   getFontMetrics,
   ptToPx,
+  twipsToPx,
   type FontStyle,
   type FontMetrics,
 } from './measureContainer';
@@ -37,6 +38,51 @@ const DEFAULT_LINE_HEIGHT_MULTIPLIER = 1.0; // OOXML spec default: single spacin
 // Floating-point tolerance for line breaking (0.5px)
 // Prevents premature line breaks due to measurement rounding
 const WIDTH_TOLERANCE = 0.5;
+
+/**
+ * Compute the width a tab character should advance to reach the next tab stop.
+ */
+function computeTabWidth(
+  currentPos: number,
+  tabStops: { pos: number; val: string }[] | undefined
+): number {
+  if (tabStops && tabStops.length > 0) {
+    for (const stop of tabStops) {
+      const stopPx = twipsToPx(stop.pos);
+      if (stopPx > currentPos + 0.5) {
+        return Math.max(1, stopPx - currentPos);
+      }
+    }
+  }
+  // No matching stop — advance to next default interval
+  const remainder = currentPos % DEFAULT_TAB_WIDTH;
+  return Math.max(1, remainder < 0.5 ? DEFAULT_TAB_WIDTH : DEFAULT_TAB_WIDTH - remainder);
+}
+
+/**
+ * Find the longest prefix of `text` that fits within `maxWidth` pixels.
+ * Returns the number of characters that fit (at least 1 if `forceMin` is true).
+ */
+function findMaxFittingLength(
+  text: string,
+  style: FontStyle,
+  maxWidth: number,
+  forceMin: boolean = false
+): number {
+  let lo = 1;
+  let hi = text.length;
+  let best = 0;
+  while (lo <= hi) {
+    const mid = (lo + hi) >>> 1;
+    if (measureTextWidth(text.slice(0, mid), style) <= maxWidth) {
+      best = mid;
+      lo = mid + 1;
+    } else {
+      hi = mid - 1;
+    }
+  }
+  return forceMin && best === 0 ? 1 : best;
+}
 
 /**
  * Floating image exclusion zone - describes an area where text cannot flow.
@@ -493,36 +539,10 @@ export function measureParagraph(
       const style = runToFontStyle(run);
       updateMaxFont(style);
 
-      // Compute tab width by finding the next tab stop position.
-      // A tab advances to the next stop, not by a fixed amount.
+      // Compute tab width: advance to the next tab stop position.
       const tabStops = attrs?.tabs;
       const currentPos = currentLine.width + (currentLine.leftOffset ?? 0);
-      let tabWidth = 1; // minimum 1px to always advance
-
-      if (tabStops && tabStops.length > 0) {
-        // Use custom tab stops from the paragraph
-        let found = false;
-        for (const stop of tabStops) {
-          const stopPx = (stop.pos / 1440) * 96; // twips to px
-          if (stopPx > currentPos + 0.5) {
-            tabWidth = stopPx - currentPos;
-            found = true;
-            break;
-          }
-        }
-        if (!found) {
-          // Past all defined stops — advance to next default interval
-          const remainder = currentPos % DEFAULT_TAB_WIDTH;
-          tabWidth = remainder < 0.5 ? DEFAULT_TAB_WIDTH : DEFAULT_TAB_WIDTH - remainder;
-        }
-      } else {
-        // No custom stops — advance to next default tab interval (every 48px)
-        const remainder = currentPos % DEFAULT_TAB_WIDTH;
-        tabWidth = remainder < 0.5 ? DEFAULT_TAB_WIDTH : DEFAULT_TAB_WIDTH - remainder;
-      }
-
-      // Ensure minimum tab width of 1px
-      tabWidth = Math.max(1, tabWidth);
+      const tabWidth = computeTabWidth(currentPos, tabStops);
 
       if (currentLine.width + tabWidth > currentLine.availableWidth + WIDTH_TOLERANCE) {
         // Tab doesn't fit, start new line
@@ -665,36 +685,17 @@ export function measureParagraph(
           let chunkStart = 0;
 
           while (chunkStart < word.length) {
-            // How much space is available on the current line?
             const spaceLeft = currentLine.availableWidth - currentLine.width + WIDTH_TOLERANCE;
-
-            // Binary search for how many characters fit
             const remaining = word.slice(chunkStart);
-            let lo = 1;
-            let hi = remaining.length;
-            let bestEnd = 0; // 0 = nothing fits on current line
+            let bestEnd = findMaxFittingLength(remaining, style, spaceLeft);
 
-            while (lo <= hi) {
-              const mid = (lo + hi) >>> 1;
-              const substr = remaining.slice(0, mid);
-              const w = measureTextWidth(substr, style);
-              if (w <= spaceLeft) {
-                bestEnd = mid;
-                lo = mid + 1;
-              } else {
-                hi = mid - 1;
-              }
-            }
-
-            // If nothing fits on the current line and there IS existing content,
-            // start a new line and retry
+            // Nothing fits → start a new line and retry (or force 1 char on empty line)
             if (bestEnd === 0) {
               if (currentLine.width > 0) {
                 startNewLine(runIndex, charIndex + chunkStart);
                 updateMaxFont(style);
-                continue; // retry on the fresh line
+                continue;
               }
-              // Empty line but still doesn't fit — force at least 1 char
               bestEnd = 1;
             }
 

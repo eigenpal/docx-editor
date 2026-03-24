@@ -560,11 +560,6 @@ function resolveTableWidthPx(
 function measureTableBlock(tableBlock: TableBlock, contentWidth: number): TableMeasure {
   const DEFAULT_CELL_PADDING_X = 7; // Word default: 108 twips ≈ 7px
   const DEFAULT_CELL_PADDING_Y = 0; // OOXML/TableNormal default: top=0, bottom=0
-  // No artificial minimum: content height (from cell paragraphs + padding)
-  // already provides the correct row height. Empty paragraphs still have line
-  // height based on the font, so rows are never truly zero-height.
-  // A previous hardcoded value of 24px inflated rows with small fonts or
-  // explicit auto heights (trHeight with hRule=auto), causing early page breaks.
 
   // columnWidths are already in pixels (converted in toFlowBlocks)
   let columnWidths = tableBlock.columnWidths ?? [];

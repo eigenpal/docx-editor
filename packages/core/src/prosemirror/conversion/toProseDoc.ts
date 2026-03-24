@@ -584,14 +584,10 @@ function convertTable(table: Table, styleResolver: StyleResolver | null): PMNode
       dataRowIndex++;
     }
 
-    // Cell node type (tableHeader vs tableCell) uses firstRow styling flag
-    // to preserve ProseMirror table module behavior for first-row cells.
-    const useHeaderCellType = isFirstRowStyled;
-
     return convertTableRow(
       row,
       styleResolver,
-      useHeaderCellType,
+      isFirstRowStyled,
       columnWidths,
       totalWidth,
       conditionalStyles,
