@@ -54,7 +54,7 @@ export const RELATIONSHIP_TYPES = {
     'http://schemas.openxmlformats.org/officeDocument/2006/relationships/custom-properties',
   customXml: 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/customXml',
   comments: 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/comments',
-  commentsExtended: 'http://schemas.microsoft.com/office/word/2012/wordml/commentsExtended',
+  commentsExtended: 'http://schemas.microsoft.com/office/2011/relationships/commentsExtended',
 } as const;
 
 /**
