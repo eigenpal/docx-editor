@@ -103,7 +103,19 @@ export function UnifiedSidebar({
     return () => observer.disconnect();
   }, [editorContainerRef]);
 
-  // Watch expanded card for size changes (covers both initial expand and resize)
+  // Re-measure ALL card heights after expand/collapse so collision avoidance
+  // uses up-to-date sizes (the ref callback only fires on mount, not resize).
+  useEffect(() => {
+    const raf = requestAnimationFrame(() => {
+      for (const [id, el] of cardElsRef.current) {
+        cardHeightsRef.current.set(id, el.offsetHeight);
+      }
+      setPositionVersion((v) => v + 1);
+    });
+    return () => cancelAnimationFrame(raf);
+  }, [expandedItem]);
+
+  // Watch expanded card for ongoing size changes (e.g. typing in reply input)
   useEffect(() => {
     if (!expandedItem) return;
     const el = cardElsRef.current.get(expandedItem);
@@ -116,7 +128,10 @@ export function UnifiedSidebar({
     let rafId: number;
     const observer = new ResizeObserver(() => {
       cancelAnimationFrame(rafId);
-      rafId = requestAnimationFrame(() => setPositionVersion((v) => v + 1));
+      rafId = requestAnimationFrame(() => {
+        cardHeightsRef.current.set(expandedItem, el.offsetHeight);
+        setPositionVersion((v) => v + 1);
+      });
     });
     observer.observe(el);
     return () => {
@@ -206,32 +221,35 @@ export function UnifiedSidebar({
       }}
       onMouseDown={(e) => e.stopPropagation()}
     >
-      {hasResolvedComments && onToggleShowResolved && (
-        <button
-          type="button"
-          onClick={onToggleShowResolved}
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 6,
-            padding: '4px 10px',
-            marginBottom: 6,
-            fontSize: 12,
-            color: showResolved ? '#1a73e8' : '#5f6368',
-            backgroundColor: showResolved ? 'rgba(26, 115, 232, 0.08)' : 'transparent',
-            border: '1px solid',
-            borderColor: showResolved ? 'rgba(26, 115, 232, 0.3)' : '#dadce0',
-            borderRadius: 16,
-            cursor: 'pointer',
-            fontFamily: 'inherit',
-            lineHeight: '18px',
-            whiteSpace: 'nowrap',
-          }}
-        >
-          {showResolved ? 'Hide resolved' : 'Show resolved'}
-        </button>
-      )}
       <div style={{ position: 'relative' }}>
+        {hasResolvedComments && onToggleShowResolved && resolved.length > 0 && (
+          <button
+            type="button"
+            onClick={onToggleShowResolved}
+            style={{
+              position: 'absolute',
+              top: resolved[0].y - 30,
+              left: 0,
+              display: 'flex',
+              alignItems: 'center',
+              gap: 6,
+              padding: '4px 10px',
+              fontSize: 12,
+              color: showResolved ? '#1a73e8' : '#5f6368',
+              backgroundColor: showResolved ? 'rgba(26, 115, 232, 0.08)' : '#fff',
+              border: '1px solid',
+              borderColor: showResolved ? 'rgba(26, 115, 232, 0.3)' : '#dadce0',
+              borderRadius: 16,
+              cursor: 'pointer',
+              fontFamily: 'inherit',
+              lineHeight: '18px',
+              whiteSpace: 'nowrap',
+              zIndex: 1,
+            }}
+          >
+            {showResolved ? 'Hide resolved' : 'Show resolved'}
+          </button>
+        )}
         {items.map((item) => {
           const yPos = positionMap.get(item.id);
           const isExpanded = expandedItem === item.id;
