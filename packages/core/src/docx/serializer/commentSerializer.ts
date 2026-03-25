@@ -218,3 +218,28 @@ export function serializeCommentsExtended(paraInfos: CommentParaInfo[]): string 
   xml += '</w15:commentsEx>';
   return xml;
 }
+
+/**
+ * Serialize commentsIds.xml (w16cid:commentsIds) for stable comment IDs.
+ *
+ * Word Online needs this to associate replies with parent comments.
+ * Each comment gets a durableId derived from its paraId.
+ */
+export function serializeCommentsIds(paraInfos: CommentParaInfo[]): string {
+  if (paraInfos.length === 0) return '';
+
+  let xml =
+    '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n' +
+    '<w16cid:commentsIds xmlns:w16cid="http://schemas.microsoft.com/office/word/2016/wordml/cid" ' +
+    'xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" ' +
+    'mc:Ignorable="w16cid">';
+
+  for (const info of paraInfos) {
+    // Generate a stable durableId from the paraId (8-char hex)
+    const durableId = info.lastParaId;
+    xml += `<w16cid:commentId w16cid:paraId="${info.lastParaId}" w16cid:durableId="${durableId}"/>`;
+  }
+
+  xml += '</w16cid:commentsIds>';
+  return xml;
+}

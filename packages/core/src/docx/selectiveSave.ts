@@ -13,6 +13,7 @@ import { serializeDocument } from './serializer/documentSerializer';
 import {
   serializeCommentsWithInfo,
   serializeCommentsExtended,
+  serializeCommentsIds,
 } from './serializer/commentSerializer';
 import { buildPatchedDocumentXml } from './selectiveXmlPatch';
 import {
@@ -22,6 +23,7 @@ import {
   collectHeaderFooterUpdates,
   COMMENTS_CONTENT_TYPE,
   COMMENTS_EXTENDED_CONTENT_TYPE,
+  COMMENTS_IDS_CONTENT_TYPE,
 } from './rezip';
 import { RELATIONSHIP_TYPES } from './relsParser';
 
@@ -124,49 +126,54 @@ export async function attemptSelectiveSave(
         updates.set('word/commentsExtended.xml', extendedXml);
       }
 
-      // Ensure [Content_Types].xml has Overrides for both comment parts
+      // Write commentsIds.xml for stable IDs (Word Online needs this for replies)
+      const idsXml = serializeCommentsIds(paraInfos);
+      if (idsXml) {
+        updates.set('word/commentsIds.xml', idsXml);
+      }
+
+      // Ensure [Content_Types].xml has Overrides for all comment parts
       const ctFile = zip.file('[Content_Types].xml');
       if (ctFile) {
         let ctXml = updates.get('[Content_Types].xml') ?? (await ctFile.async('text'));
         let ctChanged = false;
-        if (!ctXml.includes('/word/comments.xml')) {
-          ctXml = ctXml.replace(
-            '</Types>',
-            `<Override PartName="/word/comments.xml" ContentType="${COMMENTS_CONTENT_TYPE}"/></Types>`
-          );
-          ctChanged = true;
-        }
-        if (!ctXml.includes('/word/commentsExtended.xml')) {
-          ctXml = ctXml.replace(
-            '</Types>',
-            `<Override PartName="/word/commentsExtended.xml" ContentType="${COMMENTS_EXTENDED_CONTENT_TYPE}"/></Types>`
-          );
-          ctChanged = true;
+        const ctEntries: [string, string][] = [
+          ['/word/comments.xml', COMMENTS_CONTENT_TYPE],
+          ['/word/commentsExtended.xml', COMMENTS_EXTENDED_CONTENT_TYPE],
+          ['/word/commentsIds.xml', COMMENTS_IDS_CONTENT_TYPE],
+        ];
+        for (const [partName, contentType] of ctEntries) {
+          if (!ctXml.includes(partName)) {
+            ctXml = ctXml.replace(
+              '</Types>',
+              `<Override PartName="${partName}" ContentType="${contentType}"/></Types>`
+            );
+            ctChanged = true;
+          }
         }
         if (ctChanged) updates.set('[Content_Types].xml', ctXml);
       }
 
-      // Ensure word/_rels/document.xml.rels has Relationships for both
+      // Ensure word/_rels/document.xml.rels has Relationships for all
       const relsPath = 'word/_rels/document.xml.rels';
       const relsFile = zip.file(relsPath);
       if (relsFile) {
         let relsXml = updates.get(relsPath) ?? (await relsFile.async('text'));
         let relsChanged = false;
-        if (!relsXml.includes('comments.xml')) {
-          const maxId = findMaxRId(relsXml);
-          relsXml = relsXml.replace(
-            '</Relationships>',
-            `<Relationship Id="rId${maxId + 1}" Type="${RELATIONSHIP_TYPES.comments}" Target="comments.xml"/></Relationships>`
-          );
-          relsChanged = true;
-        }
-        if (!relsXml.includes('commentsExtended.xml')) {
-          const maxId = findMaxRId(relsXml);
-          relsXml = relsXml.replace(
-            '</Relationships>',
-            `<Relationship Id="rId${maxId + 1}" Type="${RELATIONSHIP_TYPES.commentsExtended}" Target="commentsExtended.xml"/></Relationships>`
-          );
-          relsChanged = true;
+        const relEntries: [string, string][] = [
+          ['comments.xml', RELATIONSHIP_TYPES.comments],
+          ['commentsExtended.xml', RELATIONSHIP_TYPES.commentsExtended],
+          ['commentsIds.xml', RELATIONSHIP_TYPES.commentsIds],
+        ];
+        for (const [target, type] of relEntries) {
+          if (!relsXml.includes(target)) {
+            const maxId = findMaxRId(relsXml);
+            relsXml = relsXml.replace(
+              '</Relationships>',
+              `<Relationship Id="rId${maxId + 1}" Type="${type}" Target="${target}"/></Relationships>`
+            );
+            relsChanged = true;
+          }
         }
         if (relsChanged) updates.set(relsPath, relsXml);
       }

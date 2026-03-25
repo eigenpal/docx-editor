@@ -37,6 +37,7 @@ import { serializeHeaderFooter } from './serializer/headerFooterSerializer';
 import {
   serializeCommentsWithInfo,
   serializeCommentsExtended,
+  serializeCommentsIds,
 } from './serializer/commentSerializer';
 import { RELATIONSHIP_TYPES } from './relsParser';
 import { type RawDocxContent } from './unzip';
@@ -81,11 +82,22 @@ async function serializeCommentsToZip(
     });
   }
 
+  // Write commentsIds.xml for stable IDs (Word Online needs this for replies)
+  const idsXml = serializeCommentsIds(paraInfos);
+  if (idsXml) {
+    zip.file('word/commentsIds.xml', idsXml, {
+      compression: 'DEFLATE',
+      compressionOptions: { level: compressionLevel },
+    });
+  }
+
   await Promise.all([
     ensureCommentsContentType(zip, compressionLevel),
     ensureCommentsRelationship(zip, compressionLevel),
     ensureCommentsExtendedContentType(zip, compressionLevel),
     ensureCommentsExtendedRelationship(zip, compressionLevel),
+    ensureCommentsIdsContentType(zip, compressionLevel),
+    ensureCommentsIdsRelationship(zip, compressionLevel),
   ]);
 }
 
@@ -516,6 +528,9 @@ export const COMMENTS_CONTENT_TYPE =
 export const COMMENTS_EXTENDED_CONTENT_TYPE =
   'application/vnd.openxmlformats-officedocument.wordprocessingml.commentsExtended+xml';
 
+export const COMMENTS_IDS_CONTENT_TYPE =
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.commentsIds+xml';
+
 /**
  * Ensure [Content_Types].xml contains an Override for word/comments.xml.
  * If the document already had comments, this is a no-op.
@@ -605,6 +620,49 @@ async function ensureCommentsExtendedRelationship(
   relsXml = relsXml.replace(
     '</Relationships>',
     `<Relationship Id="${newRId}" Type="${RELATIONSHIP_TYPES.commentsExtended}" Target="commentsExtended.xml"/></Relationships>`
+  );
+  zip.file(relsPath, relsXml, {
+    compression: 'DEFLATE',
+    compressionOptions: { level: compressionLevel },
+  });
+}
+
+/**
+ * Ensure [Content_Types].xml contains an Override for word/commentsIds.xml.
+ */
+async function ensureCommentsIdsContentType(zip: JSZip, compressionLevel: number): Promise<void> {
+  const ctFile = zip.file('[Content_Types].xml');
+  if (!ctFile) return;
+
+  let ctXml = await ctFile.async('text');
+  if (ctXml.includes('/word/commentsIds.xml')) return;
+
+  ctXml = ctXml.replace(
+    '</Types>',
+    `<Override PartName="/word/commentsIds.xml" ContentType="${COMMENTS_IDS_CONTENT_TYPE}"/></Types>`
+  );
+  zip.file('[Content_Types].xml', ctXml, {
+    compression: 'DEFLATE',
+    compressionOptions: { level: compressionLevel },
+  });
+}
+
+/**
+ * Ensure word/_rels/document.xml.rels contains a Relationship for commentsIds.xml.
+ */
+async function ensureCommentsIdsRelationship(zip: JSZip, compressionLevel: number): Promise<void> {
+  const relsPath = 'word/_rels/document.xml.rels';
+  const relsFile = zip.file(relsPath);
+  if (!relsFile) return;
+
+  let relsXml = await relsFile.async('text');
+  if (relsXml.includes('commentsIds.xml')) return;
+
+  const newRId = `rId${findMaxRId(relsXml) + 1}`;
+
+  relsXml = relsXml.replace(
+    '</Relationships>',
+    `<Relationship Id="${newRId}" Type="${RELATIONSHIP_TYPES.commentsIds}" Target="commentsIds.xml"/></Relationships>`
   );
   zip.file(relsPath, relsXml, {
     compression: 'DEFLATE',
