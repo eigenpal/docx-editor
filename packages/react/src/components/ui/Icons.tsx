@@ -687,6 +687,14 @@ export function IconArrowBack(props: IconProps) {
   );
 }
 
+export function IconDoneAll(props: IconProps) {
+  return (
+    <SvgIcon {...props}>
+      <path d="M268-240 42-466l57-56 170 170 56 56-57 56Zm226 0L268-466l56-57 170 170 368-368 57 57-425 424Zm0-226-57-56 198-198 57 56-198 198Z" />
+    </SvgIcon>
+  );
+}
+
 export function IconCheck(props: IconProps) {
   return (
     <SvgIcon {...props}>
@@ -851,6 +859,7 @@ const iconMap: Record<string, React.ComponentType<IconProps>> = {
   // Navigation
   arrow_back: IconArrowBack,
   // Comments sidebar
+  done_all: IconDoneAll,
   check: IconCheck,
   close: IconClose,
   add_comment: IconAddComment,
