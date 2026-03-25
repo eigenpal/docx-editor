@@ -7,6 +7,12 @@
  */
 
 import { Plugin, PluginKey, type EditorState, type Transaction } from 'prosemirror-state';
+import {
+  AddMarkStep,
+  AddNodeMarkStep,
+  RemoveMarkStep,
+  RemoveNodeMarkStep,
+} from 'prosemirror-transform';
 import { createExtension } from '../create';
 import type { ExtensionRuntime } from '../types';
 
@@ -63,6 +69,42 @@ function collectAffectedParaIds(
   return { ids, hasUntracked };
 }
 
+/**
+ * AddMarkStep / RemoveMarkStep inherit Step.getMap() → StepMap.empty, so we use
+ * their from/to to find affected paragraphs.
+ * Node mark steps use a single position before the target node.
+ */
+function collectAffectedParaIdsFromMarkLikeStep(
+  doc: EditorState['doc'],
+  from: number,
+  to: number
+): { ids: Set<string>; hasUntracked: boolean } {
+  const lo = Math.min(from, to);
+  const hi = Math.max(from, to);
+  const end = hi > lo ? hi : lo + 1;
+  const primary = collectAffectedParaIds(doc, lo, end);
+  if (primary.ids.size > 0 || primary.hasUntracked) {
+    return primary;
+  }
+  // Collapsed range (e.g. empty paragraph): walk up to enclosing paragraph
+  try {
+    const $p = doc.resolve(lo);
+    for (let d = $p.depth; d >= 0; d--) {
+      const n = $p.node(d);
+      if (n.type.name === 'paragraph') {
+        const paraId = n.attrs.paraId as string | undefined | null;
+        if (paraId) {
+          return { ids: new Set([paraId]), hasUntracked: false };
+        }
+        return { ids: new Set(), hasUntracked: true };
+      }
+    }
+  } catch {
+    // ignore
+  }
+  return { ids: new Set(), hasUntracked: false };
+}
+
 function createParagraphChangeTrackerPlugin(): Plugin<ParagraphChangeTrackerState> {
   return new Plugin<ParagraphChangeTrackerState>({
     key: paragraphChangeTrackerKey,
@@ -109,9 +151,37 @@ function createParagraphChangeTrackerPlugin(): Plugin<ParagraphChangeTrackerStat
 
         // Track which paragraphs were affected by each step
         for (const step of tr.steps) {
+          if (step instanceof AddMarkStep || step instanceof RemoveMarkStep) {
+            const { ids, hasUntracked } = collectAffectedParaIdsFromMarkLikeStep(
+              tr.doc,
+              step.from,
+              step.to
+            );
+            for (const id of ids) {
+              newState.changedParaIds.add(id);
+            }
+            if (hasUntracked) {
+              newState.hasUntrackedChanges = true;
+            }
+            continue;
+          }
+
+          if (step instanceof AddNodeMarkStep || step instanceof RemoveNodeMarkStep) {
+            const pos = step.pos;
+            const node = tr.doc.nodeAt(pos);
+            const end = node ? pos + node.nodeSize : pos + 1;
+            const { ids, hasUntracked } = collectAffectedParaIds(tr.doc, pos, end);
+            for (const id of ids) {
+              newState.changedParaIds.add(id);
+            }
+            if (hasUntracked) {
+              newState.hasUntrackedChanges = true;
+            }
+            continue;
+          }
+
           const stepMap = step.getMap();
           stepMap.forEach((_oldStart, _oldEnd, newStart, newEnd) => {
-            // Collect paraIds from the NEW document in the affected range
             const { ids, hasUntracked } = collectAffectedParaIds(tr.doc, newStart, newEnd);
             for (const id of ids) {
               newState.changedParaIds.add(id);

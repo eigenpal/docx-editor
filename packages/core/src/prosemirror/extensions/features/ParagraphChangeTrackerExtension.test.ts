@@ -5,6 +5,7 @@
 import { describe, test, expect } from 'bun:test';
 import { Schema } from 'prosemirror-model';
 import { EditorState, TextSelection } from 'prosemirror-state';
+import { AddMarkStep, RemoveMarkStep } from 'prosemirror-transform';
 import {
   getChangedParagraphIds,
   hasStructuralChanges,
@@ -28,7 +29,14 @@ const schema = new Schema({
     },
     text: { group: 'inline' },
   },
-  marks: {},
+  marks: {
+    bold: {
+      parseDOM: [{ tag: 'strong' }],
+      toDOM() {
+        return ['strong', 0];
+      },
+    },
+  },
 });
 
 // Get the plugin from the extension
@@ -72,6 +80,35 @@ function setSelection(state: EditorState, pos: number): EditorState {
 // ============================================================================
 
 describe('ParagraphChangeTrackerExtension', () => {
+  describe('mark-only edits (selective save)', () => {
+    test('tracks paraId when bold is added (AddMarkStep has empty step map)', () => {
+      let state = createState([
+        { text: 'Hello', paraId: 'P1' },
+        { text: 'World', paraId: 'P2' },
+      ]);
+
+      const bold = schema.marks.bold.create();
+      const tr = state.tr.step(new AddMarkStep(1, 6, bold));
+      state = state.apply(tr);
+
+      const changed = getChangedParagraphIds(state);
+      expect(changed.has('P1')).toBe(true);
+      expect(changed.has('P2')).toBe(false);
+    });
+
+    test('tracks paraId when bold is removed (RemoveMarkStep)', () => {
+      let state = createState([{ text: 'Hello', paraId: 'P1' }]);
+      const bold = schema.marks.bold.create();
+      state = state.apply(state.tr.step(new AddMarkStep(1, 6, bold)));
+      expect(state.doc.textBetween(1, 6)).toBe('Hello');
+
+      const tr = state.tr.step(new RemoveMarkStep(1, 6, bold));
+      state = state.apply(tr);
+
+      expect(getChangedParagraphIds(state).has('P1')).toBe(true);
+    });
+  });
+
   describe('single paragraph edit', () => {
     test('tracks changed paraId when text is inserted', () => {
       let state = createState([
