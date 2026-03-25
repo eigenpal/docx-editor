@@ -2007,6 +2007,7 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
         sectionProperties,
         onRenderedDomContextReady,
         document,
+        resolvedCommentIds,
       ]
     );
 
