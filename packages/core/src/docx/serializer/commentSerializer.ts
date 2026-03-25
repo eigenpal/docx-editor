@@ -16,8 +16,8 @@ import { escapeXml } from './xmlUtils';
 /** Generate an 8-char uppercase hex paraId */
 let paraIdCounter = 0;
 function generateParaId(): string {
-  // Use a counter + random seed to avoid collisions
-  const id = ((Date.now() & 0xffff) << 16) | (++paraIdCounter & 0xffff);
+  // Use unsigned 32-bit: high 16 bits from time, low 16 bits from counter
+  const id = (((Date.now() & 0xffff) << 16) | (++paraIdCounter & 0xffff)) >>> 0;
   return id.toString(16).toUpperCase().padStart(8, '0');
 }
 
