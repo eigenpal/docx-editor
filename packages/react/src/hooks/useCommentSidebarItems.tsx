@@ -9,6 +9,7 @@ import { AddCommentCard } from '../components/sidebar/AddCommentCard';
 export interface CommentCallbacks {
   onCommentReply?: (commentId: number, text: string) => void;
   onCommentResolve?: (commentId: number) => void;
+  onCommentUnresolve?: (commentId: number) => void;
   onCommentDelete?: (commentId: number) => void;
   onAddComment?: (text: string) => void;
   onCancelAddComment?: () => void;
@@ -96,6 +97,7 @@ export function useCommentSidebarItems({
             replies={replies}
             onReply={callbacks.onCommentReply}
             onResolve={callbacks.onCommentResolve}
+            onUnresolve={callbacks.onCommentUnresolve}
             onDelete={callbacks.onCommentDelete}
           />
         ),

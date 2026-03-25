@@ -3201,6 +3201,9 @@ body { background: white; }
       setComments((prev) => prev.map((c) => (c.id === id ? { ...c, done: true } : c)));
       if (target) onCommentResolve?.({ ...target, done: true });
     },
+    onCommentUnresolve: (id) => {
+      setComments((prev) => prev.map((c) => (c.id === id ? { ...c, done: undefined } : c)));
+    },
     onCommentDelete: (id) => {
       const target = comments.find((c) => c.id === id);
       setComments((prev) => prev.filter((c) => c.id !== id && c.parentId !== id));
@@ -3263,6 +3266,7 @@ body { background: white; }
     () => ({
       onCommentReply: (...args) => commentCallbacksRef.current.onCommentReply?.(...args),
       onCommentResolve: (...args) => commentCallbacksRef.current.onCommentResolve?.(...args),
+      onCommentUnresolve: (...args) => commentCallbacksRef.current.onCommentUnresolve?.(...args),
       onCommentDelete: (...args) => commentCallbacksRef.current.onCommentDelete?.(...args),
       onAddComment: (...args) => commentCallbacksRef.current.onAddComment?.(...args),
       onCancelAddComment: (...args) => commentCallbacksRef.current.onCancelAddComment?.(...args),

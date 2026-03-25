@@ -18,6 +18,7 @@ export interface CommentCardProps extends SidebarItemRenderProps {
   replies: Comment[];
   onReply?: (commentId: number, text: string) => void;
   onResolve?: (commentId: number) => void;
+  onUnresolve?: (commentId: number) => void;
   onDelete?: (commentId: number) => void;
 }
 
@@ -29,6 +30,7 @@ export function CommentCard({
   measureRef,
   onReply,
   onResolve,
+  onUnresolve,
   onDelete,
 }: CommentCardProps) {
   const [menuOpen, setMenuOpen] = useState(false);
@@ -58,12 +60,16 @@ export function CommentCard({
             <button
               onClick={(e) => {
                 e.stopPropagation();
-                onResolve?.(comment.id);
+                if (comment.done) {
+                  onUnresolve?.(comment.id);
+                } else {
+                  onResolve?.(comment.id);
+                }
               }}
-              title="Resolve"
+              title={comment.done ? 'Reopen' : 'Resolve'}
               style={ICON_BUTTON_STYLE}
             >
-              <MaterialSymbol name="check" size={20} />
+              <MaterialSymbol name={comment.done ? 'undo' : 'check'} size={20} />
             </button>
             <button
               onClick={(e) => {
