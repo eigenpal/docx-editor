@@ -195,4 +195,65 @@ describe('commentParser', () => {
       expect(comments[0].date).toBe('2024-02-10T14:30:00Z');
     });
   });
+
+  describe('w:done (resolved state) — #216', () => {
+    test('parses w:done="1" as done: true', () => {
+      const xml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:comments xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+  <w:comment w:id="1" w:author="Alice" w:done="1">
+    <w:p><w:r><w:t>Resolved</w:t></w:r></w:p>
+  </w:comment>
+</w:comments>`;
+      const comments = parseComments(xml, emptyStyles, emptyTheme, emptyRels, emptyMedia);
+      expect(comments[0].done).toBe(true);
+    });
+
+    test('parses w:done="true" as done: true', () => {
+      const xml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:comments xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+  <w:comment w:id="1" w:author="Alice" w:done="true">
+    <w:p><w:r><w:t>Resolved</w:t></w:r></w:p>
+  </w:comment>
+</w:comments>`;
+      const comments = parseComments(xml, emptyStyles, emptyTheme, emptyRels, emptyMedia);
+      expect(comments[0].done).toBe(true);
+    });
+
+    test('omits done when w:done is absent', () => {
+      const comments = parseComments(COMMENTS_XML, emptyStyles, emptyTheme, emptyRels, emptyMedia);
+      expect(comments[0].done).toBeUndefined();
+    });
+  });
+
+  describe('parentId (reply threading) — #217', () => {
+    test('parses w:parentId attribute', () => {
+      const xml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:comments xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+  <w:comment w:id="1" w:author="Alice">
+    <w:p><w:r><w:t>Parent</w:t></w:r></w:p>
+  </w:comment>
+  <w:comment w:id="2" w:author="Bob" w:parentId="1">
+    <w:p><w:r><w:t>Reply</w:t></w:r></w:p>
+  </w:comment>
+</w:comments>`;
+      const comments = parseComments(xml, emptyStyles, emptyTheme, emptyRels, emptyMedia);
+      expect(comments[0].parentId).toBeUndefined();
+      expect(comments[1].parentId).toBe(1);
+    });
+
+    test('parses w16cid:parentId attribute', () => {
+      const xml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:comments xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"
+            xmlns:w16cid="http://schemas.microsoft.com/office/word/2016/wordml/cid">
+  <w:comment w:id="1" w:author="Alice">
+    <w:p><w:r><w:t>Parent</w:t></w:r></w:p>
+  </w:comment>
+  <w:comment w:id="2" w:author="Bob" w16cid:parentId="1">
+    <w:p><w:r><w:t>Reply</w:t></w:r></w:p>
+  </w:comment>
+</w:comments>`;
+      const comments = parseComments(xml, emptyStyles, emptyTheme, emptyRels, emptyMedia);
+      expect(comments[1].parentId).toBe(1);
+    });
+  });
 });

@@ -110,6 +110,18 @@ export function parseComments(
     // Prefer UTC date over ambiguous local date
     const date = dateUtc ?? localDate;
 
+    // Parse w:done attribute (resolved/done state)
+    const rawDone = getAttribute(child, 'w', 'done') ?? child.attributes?.['w:done'];
+    const done = rawDone === '1' || rawDone === 'true' ? true : undefined;
+
+    // Parse parent comment ID for replies
+    const rawParentId =
+      getAttribute(child, 'w16cid', 'parentId') ??
+      getAttribute(child, 'w', 'parentId') ??
+      child.attributes?.['w16cid:parentId'] ??
+      child.attributes?.['w:parentId'];
+    const parentId = rawParentId != null ? parseInt(String(rawParentId), 10) : undefined;
+
     // Parse comment content (paragraphs)
     const paragraphs: Paragraph[] = [];
     for (const contentChild of getChildElements(child)) {
@@ -126,6 +138,8 @@ export function parseComments(
       initials,
       date,
       content: paragraphs,
+      ...(done != null ? { done } : {}),
+      ...(parentId != null && !isNaN(parentId) ? { parentId } : {}),
     });
   }
 
