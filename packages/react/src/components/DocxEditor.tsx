@@ -3296,11 +3296,6 @@ body { background: white; }
 
   const sidebarOpen = allSidebarItems.length > 0;
 
-  const hasResolvedComments = useMemo(
-    () => comments.some((c) => c.done && c.parentId == null),
-    [comments]
-  );
-
   const resolvedCommentIds = useMemo(() => {
     const ids = new Set<number>();
     for (const c of comments) {
@@ -3308,6 +3303,8 @@ body { background: white; }
     }
     return ids;
   }, [comments]);
+
+  const hasResolvedComments = resolvedCommentIds.size > 0;
 
   const editorContainerStyle: CSSProperties = {
     flex: 1,

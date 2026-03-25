@@ -13,17 +13,14 @@
 import type { Comment, Paragraph, Run } from '../../types/content';
 import { escapeXml } from './xmlUtils';
 
-/** Generate an 8-char uppercase hex paraId */
-let paraIdCounter = 0;
-function generateParaId(): string {
-  // Use unsigned 32-bit: high 16 bits from time, low 16 bits from counter
-  const id = (((Date.now() & 0xffff) << 16) | (++paraIdCounter & 0xffff)) >>> 0;
-  return id.toString(16).toUpperCase().padStart(8, '0');
-}
-
-/** Reset counter (for testing) */
-export function _resetParaIdCounter(): void {
-  paraIdCounter = 0;
+/** Create a per-invocation paraId generator (avoids shared mutable module state) */
+function createParaIdGenerator(): () => string {
+  let counter = 0;
+  const timeSeed = Date.now() & 0xffff;
+  return () => {
+    const id = ((timeSeed << 16) | (++counter & 0xffff)) >>> 0;
+    return id.toString(16).toUpperCase().padStart(8, '0');
+  };
 }
 
 function serializeRunContent(run: Run): string {
@@ -79,7 +76,11 @@ interface CommentParaInfo {
   done?: boolean;
 }
 
-function serializeComment(comment: Comment, paraInfos: CommentParaInfo[]): string {
+function serializeComment(
+  comment: Comment,
+  paraInfos: CommentParaInfo[],
+  generateParaId: () => string
+): string {
   const attrs: string[] = [`w:id="${comment.id}"`];
   if (comment.author) attrs.push(`w:author="${escapeXml(comment.author)}"`);
   if (comment.initials) attrs.push(`w:initials="${escapeXml(comment.initials)}"`);
@@ -129,6 +130,8 @@ export function serializeCommentsWithInfo(comments: Comment[]): {
 } {
   if (!comments || comments.length === 0) return { xml: '', paraInfos: [] };
 
+  const generateParaId = createParaIdGenerator();
+
   // Separate top-level comments and replies in a single pass
   const topLevel: Comment[] = [];
   const replies: Comment[] = [];
@@ -160,10 +163,10 @@ export function serializeCommentsWithInfo(comments: Comment[]): {
 
   // Serialize top-level comments first, then replies
   for (const comment of topLevel) {
-    xml += serializeComment(comment, paraInfos);
+    xml += serializeComment(comment, paraInfos, generateParaId);
   }
   for (const reply of replies) {
-    xml += serializeComment(reply, paraInfos);
+    xml += serializeComment(reply, paraInfos, generateParaId);
   }
 
   xml += '</w:comments>';
