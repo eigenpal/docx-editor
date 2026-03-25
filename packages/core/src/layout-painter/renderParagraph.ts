@@ -100,7 +100,11 @@ function isFieldRun(run: Run): run is FieldRun {
 /**
  * Apply text run styles to an element
  */
-function applyRunStyles(element: HTMLElement, run: TextRun | TabRun): void {
+function applyRunStyles(
+  element: HTMLElement,
+  run: TextRun | TabRun,
+  resolvedCommentIds?: Set<number>
+): void {
   // Font properties
   if (run.fontFamily) {
     // Use the font resolver for category-appropriate fallback stacks,
@@ -155,11 +159,16 @@ function applyRunStyles(element: HTMLElement, run: TextRun | TabRun): void {
     decorations.push('line-through');
   }
 
-  // Comment highlight
+  // Comment highlight (skip for resolved comments)
   if (run.commentIds && run.commentIds.length > 0) {
-    element.style.backgroundColor = 'rgba(255, 212, 0, 0.25)';
-    element.style.borderBottom = '2px solid rgba(255, 212, 0, 0.6)';
-    element.dataset.commentId = String(run.commentIds[0]);
+    const activeCommentId = run.commentIds.find(
+      (id) => !resolvedCommentIds || !resolvedCommentIds.has(id)
+    );
+    if (activeCommentId != null) {
+      element.style.backgroundColor = 'rgba(255, 212, 0, 0.25)';
+      element.style.borderBottom = '2px solid rgba(255, 212, 0, 0.6)';
+      element.dataset.commentId = String(activeCommentId);
+    }
   }
 
   // Tracked insertion styling — light green background with dashed border
@@ -215,11 +224,11 @@ function applyPmPositions(element: HTMLElement, pmStart?: number, pmEnd?: number
 /**
  * Render a text run
  */
-function renderTextRun(run: TextRun, doc: Document): HTMLElement {
+function renderTextRun(run: TextRun, doc: Document, resolvedCommentIds?: Set<number>): HTMLElement {
   const span = doc.createElement('span');
   span.className = `${PARAGRAPH_CLASS_NAMES.run} ${PARAGRAPH_CLASS_NAMES.text}`;
 
-  applyRunStyles(span, run);
+  applyRunStyles(span, run, resolvedCommentIds);
   applyPmPositions(span, run.pmStart, run.pmEnd);
 
   // Handle hyperlinks
@@ -431,7 +440,7 @@ function renderFieldRun(run: FieldRun, doc: Document, context: RenderContext): H
     pmEnd: run.pmEnd,
   };
 
-  return renderTextRun(resolvedRun, doc);
+  return renderTextRun(resolvedRun, doc, context?.resolvedCommentIds);
 }
 
 /**
@@ -439,7 +448,7 @@ function renderFieldRun(run: FieldRun, doc: Document, context: RenderContext): H
  */
 function renderRun(run: Run, doc: Document, context?: RenderContext): HTMLElement {
   if (isTextRun(run)) {
-    return renderTextRun(run, doc);
+    return renderTextRun(run, doc, context?.resolvedCommentIds);
   }
   if (isTabRun(run)) {
     // Tab runs should be handled by renderLine with proper width calculation
@@ -731,7 +740,7 @@ export function renderLine(
       // Update X position
       currentX += tabResult.width;
     } else if (isTextRun(run)) {
-      const runEl = renderTextRun(run, doc);
+      const runEl = renderTextRun(run, doc, options?.context?.resolvedCommentIds);
 
       // For highlighted runs, extend background to fill the full line height.
       // Inline elements' background only covers the content area (font ascent+descent),

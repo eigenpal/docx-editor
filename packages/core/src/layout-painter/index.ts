@@ -101,6 +101,7 @@ export class LayoutPainter {
   private totalPages = 0;
   private options: PainterOptions;
   private doc: Document;
+  resolvedCommentIds: Set<number> = new Set();
 
   constructor(options: PainterOptions = {}) {
     this.options = options;
@@ -172,6 +173,7 @@ export class LayoutPainter {
         pageNumber: page.number,
         totalPages: this.totalPages,
         section: 'body',
+        resolvedCommentIds: this.resolvedCommentIds,
       };
 
       const pageEl = this.renderPageWithLookup(page, context);

@@ -115,6 +115,8 @@ export interface RenderContext {
   contentWidth?: number;
   /** When true, floating images render in-flow instead of being skipped (for table cells) */
   insideTableCell?: boolean;
+  /** Comment IDs that are resolved — skip highlight for these */
+  resolvedCommentIds?: Set<number>;
 }
 
 /**
@@ -185,6 +187,8 @@ export interface RenderPageOptions {
   theme?: Theme | null;
   /** Footnotes to render at the bottom of this page. */
   footnoteArea?: FootnoteRenderItem[];
+  /** Comment IDs that are resolved — skip highlight for these */
+  resolvedCommentIds?: Set<number>;
 }
 
 interface HeaderFooterLayoutInfo {
@@ -1225,6 +1229,7 @@ function buildPageRenderArgs(
     pageNumber: page.number,
     totalPages,
     section: 'body',
+    resolvedCommentIds: options.resolvedCommentIds,
   };
   const pageOptions: RenderPageOptions = { ...options };
   // Per-page header/footer selection when titlePg is enabled

@@ -3301,6 +3301,14 @@ body { background: white; }
     [comments]
   );
 
+  const resolvedCommentIds = useMemo(() => {
+    const ids = new Set<number>();
+    for (const c of comments) {
+      if (c.done && c.parentId == null) ids.add(c.id);
+    }
+    return ids;
+  }, [comments]);
+
   const editorContainerStyle: CSSProperties = {
     flex: 1,
     minHeight: 0,
@@ -3568,6 +3576,7 @@ body { background: white; }
                       onContextMenu={handleContextMenu}
                       commentsSidebarOpen={sidebarOpen}
                       onAnchorPositionsChange={setAnchorPositions}
+                      resolvedCommentIds={resolvedCommentIds}
                       scrollContainerRef={scrollContainerRef}
                       sidebarOverlay={
                         allSidebarItems.length > 0 ? (
