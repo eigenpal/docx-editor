@@ -3355,6 +3355,16 @@ body { background: white; }
       >
         <MaterialSymbol name="comment" size={20} />
       </ToolbarButton>
+      {showCommentsSidebar && hasResolvedComments && (
+        <ToolbarButton
+          onClick={() => setShowResolvedComments((prev) => !prev)}
+          active={showResolvedComments}
+          title={showResolvedComments ? 'Hide resolved comments' : 'Show resolved comments'}
+          ariaLabel={showResolvedComments ? 'Hide resolved comments' : 'Show resolved comments'}
+        >
+          <MaterialSymbol name="done_all" size={20} />
+        </ToolbarButton>
+      )}
       <ToolbarSeparator />
       <EditingModeDropdown
         mode={editingMode}
@@ -3567,9 +3577,6 @@ body { background: white; }
                             })()}
                             zoom={state.zoom}
                             editorContainerRef={scrollContainerRef}
-                            showResolved={showResolvedComments}
-                            onToggleShowResolved={() => setShowResolvedComments((prev) => !prev)}
-                            hasResolvedComments={hasResolvedComments}
                           />
                         ) : undefined
                       }

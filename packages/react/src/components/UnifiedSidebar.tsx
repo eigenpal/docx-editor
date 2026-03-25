@@ -19,9 +19,6 @@ export interface UnifiedSidebarProps {
   pageWidth: number;
   zoom: number;
   editorContainerRef: React.RefObject<HTMLDivElement | null>;
-  showResolved?: boolean;
-  onToggleShowResolved?: () => void;
-  hasResolvedComments?: boolean;
 }
 
 export function UnifiedSidebar({
@@ -31,9 +28,6 @@ export function UnifiedSidebar({
   pageWidth,
   zoom,
   editorContainerRef,
-  showResolved,
-  onToggleShowResolved,
-  hasResolvedComments,
 }: UnifiedSidebarProps) {
   const [expandedItem, setExpandedItem] = useState<string | null>(null);
   const [initialPositionsDone, setInitialPositionsDone] = useState(false);
@@ -222,34 +216,6 @@ export function UnifiedSidebar({
       onMouseDown={(e) => e.stopPropagation()}
     >
       <div style={{ position: 'relative' }}>
-        {hasResolvedComments && onToggleShowResolved && resolved.length > 0 && (
-          <button
-            type="button"
-            onClick={onToggleShowResolved}
-            style={{
-              position: 'absolute',
-              top: resolved[0].y - 30,
-              left: 0,
-              display: 'flex',
-              alignItems: 'center',
-              gap: 6,
-              padding: '4px 10px',
-              fontSize: 12,
-              color: showResolved ? '#1a73e8' : '#5f6368',
-              backgroundColor: showResolved ? 'rgba(26, 115, 232, 0.08)' : '#fff',
-              border: '1px solid',
-              borderColor: showResolved ? 'rgba(26, 115, 232, 0.3)' : '#dadce0',
-              borderRadius: 16,
-              cursor: 'pointer',
-              fontFamily: 'inherit',
-              lineHeight: '18px',
-              whiteSpace: 'nowrap',
-              zIndex: 1,
-            }}
-          >
-            {showResolved ? 'Hide resolved' : 'Show resolved'}
-          </button>
-        )}
         {items.map((item) => {
           const yPos = positionMap.get(item.id);
           const isExpanded = expandedItem === item.id;
