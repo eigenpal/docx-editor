@@ -111,11 +111,10 @@ export function parseComments(
     const date = dateUtc ?? localDate;
 
     // Parse w:done attribute (resolved/done state)
-    const rawDone = getAttribute(child, 'w', 'done');
-    const done = rawDone === '1' || rawDone === 'true' || undefined;
+    const rawDone = getAttribute(child, 'w', 'done') ?? child.attributes?.['w:done'];
+    const done = rawDone === '1' || rawDone === 'true' ? true : undefined;
 
-    // Parse parent comment ID for replies (w16cid:paraId is used in commentsExtended,
-    // but w:parentId is the standard attribute on w:comment for reply threading)
+    // Parse parent comment ID for replies
     const rawParentId =
       getAttribute(child, 'w16cid', 'parentId') ??
       getAttribute(child, 'w', 'parentId') ??
@@ -139,7 +138,7 @@ export function parseComments(
       initials,
       date,
       content: paragraphs,
-      ...(done ? { done } : {}),
+      ...(done != null ? { done } : {}),
       ...(parentId != null && !isNaN(parentId) ? { parentId } : {}),
     });
   }
