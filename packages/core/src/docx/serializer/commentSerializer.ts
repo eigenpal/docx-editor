@@ -1,11 +1,30 @@
 /**
  * Comment Serializer
  *
- * Serializes Comment[] to OOXML comments.xml format.
+ * Serializes Comment[] to OOXML comments.xml and commentsExtended.xml.
+ *
+ * comments.xml: the main comment content (w:comment elements)
+ * commentsExtended.xml: reply threading via w15:commentEx with paraId/paraIdParent
+ *
+ * Each comment paragraph gets a w14:paraId. The last paragraph's paraId is used
+ * in commentsExtended.xml to link replies to parents via w15:paraIdParent.
  */
 
 import type { Comment, Paragraph, Run } from '../../types/content';
 import { escapeXml } from './xmlUtils';
+
+/** Generate an 8-char uppercase hex paraId */
+let paraIdCounter = 0;
+function generateParaId(): string {
+  // Use a counter + random seed to avoid collisions
+  const id = ((Date.now() & 0xffff) << 16) | (++paraIdCounter & 0xffff);
+  return id.toString(16).toUpperCase().padStart(8, '0');
+}
+
+/** Reset counter (for testing) */
+export function _resetParaIdCounter(): void {
+  paraIdCounter = 0;
+}
 
 function serializeRunContent(run: Run): string {
   let xml = '<w:r>';
@@ -29,8 +48,8 @@ function serializeRunContent(run: Run): string {
   return xml;
 }
 
-function serializeParagraph(p: Paragraph): string {
-  let xml = '<w:p>';
+function serializeParagraph(p: Paragraph, paraId: string): string {
+  let xml = `<w:p w14:paraId="${paraId}" w14:textId="77777777">`;
   for (const item of p.content) {
     if (item.type === 'run') {
       xml += serializeRunContent(item);
@@ -41,8 +60,8 @@ function serializeParagraph(p: Paragraph): string {
 }
 
 /** Serialize a paragraph, prepending an annotationRef run (required by Word in first paragraph of a comment) */
-function serializeParagraphWithAnnotationRef(p: Paragraph): string {
-  let xml = '<w:p>';
+function serializeParagraphWithAnnotationRef(p: Paragraph, paraId: string): string {
+  let xml = `<w:p w14:paraId="${paraId}" w14:textId="77777777">`;
   xml += '<w:r><w:rPr><w:rStyle w:val="CommentReference"/></w:rPr><w:annotationRef/></w:r>';
   for (const item of p.content) {
     if (item.type === 'run') {
@@ -53,7 +72,14 @@ function serializeParagraphWithAnnotationRef(p: Paragraph): string {
   return xml;
 }
 
-function serializeComment(comment: Comment): string {
+interface CommentParaInfo {
+  commentId: number;
+  lastParaId: string;
+  parentId?: number;
+  done?: boolean;
+}
+
+function serializeComment(comment: Comment, paraInfos: CommentParaInfo[]): string {
   const attrs: string[] = [`w:id="${comment.id}"`];
   if (comment.author) attrs.push(`w:author="${escapeXml(comment.author)}"`);
   if (comment.initials) attrs.push(`w:initials="${escapeXml(comment.initials)}"`);
@@ -62,26 +88,46 @@ function serializeComment(comment: Comment): string {
   if (comment.parentId != null) attrs.push(`w16cid:parentId="${comment.parentId}"`);
 
   let xml = `<w:comment ${attrs.join(' ')}>`;
+  let lastParaId = '';
+
   if (comment.content && comment.content.length > 0) {
     // First paragraph must contain an annotationRef run for Word to link the comment
-    xml += serializeParagraphWithAnnotationRef(comment.content[0]);
+    const firstParaId = comment.content[0].paraId || generateParaId();
+    xml += serializeParagraphWithAnnotationRef(comment.content[0], firstParaId);
+    lastParaId = firstParaId;
+
     for (let i = 1; i < comment.content.length; i++) {
-      xml += serializeParagraph(comment.content[i]);
+      const pid = comment.content[i].paraId || generateParaId();
+      xml += serializeParagraph(comment.content[i], pid);
+      lastParaId = pid;
     }
   } else {
     // Empty comment — still needs a paragraph with annotationRef
-    xml +=
-      '<w:p><w:r><w:rPr><w:rStyle w:val="CommentReference"/></w:rPr><w:annotationRef/></w:r></w:p>';
+    lastParaId = generateParaId();
+    xml += `<w:p w14:paraId="${lastParaId}" w14:textId="77777777"><w:r><w:rPr><w:rStyle w:val="CommentReference"/></w:rPr><w:annotationRef/></w:r></w:p>`;
   }
   xml += '</w:comment>';
+
+  // Track para info for commentsExtended.xml
+  paraInfos.push({
+    commentId: comment.id,
+    lastParaId,
+    parentId: comment.parentId,
+    done: comment.done,
+  });
+
   return xml;
 }
 
 /**
- * Serialize comments array to comments.xml content
+ * Serialize comments array to comments.xml content.
+ * Also returns para info needed for commentsExtended.xml.
  */
-export function serializeComments(comments: Comment[]): string {
-  if (!comments || comments.length === 0) return '';
+export function serializeCommentsWithInfo(comments: Comment[]): {
+  xml: string;
+  paraInfos: CommentParaInfo[];
+} {
+  if (!comments || comments.length === 0) return { xml: '', paraInfos: [] };
 
   // Separate top-level comments and replies in a single pass
   const topLevel: Comment[] = [];
@@ -89,6 +135,8 @@ export function serializeComments(comments: Comment[]): string {
   for (const c of comments) {
     (c.parentId == null ? topLevel : replies).push(c);
   }
+
+  const paraInfos: CommentParaInfo[] = [];
 
   let xml =
     '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n' +
@@ -102,21 +150,71 @@ export function serializeComments(comments: Comment[]): string {
     'xmlns:w10="urn:schemas-microsoft-com:office:word" ' +
     'xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" ' +
     'xmlns:w14="http://schemas.microsoft.com/office/word/2010/wordml" ' +
+    'xmlns:w15="http://schemas.microsoft.com/office/word/2012/wordml" ' +
     'xmlns:wpg="http://schemas.microsoft.com/office/word/2010/wordprocessingGroup" ' +
     'xmlns:wpi="http://schemas.microsoft.com/office/word/2010/wordprocessingInk" ' +
     'xmlns:wne="http://schemas.microsoft.com/office/word/2006/wordml" ' +
     'xmlns:wps="http://schemas.microsoft.com/office/word/2010/wordprocessingShape" ' +
     'xmlns:w16cid="http://schemas.microsoft.com/office/word/2016/wordml/cid" ' +
-    'mc:Ignorable="w14 wp14 w16cid">';
+    'mc:Ignorable="w14 w15 wp14 w16cid">';
 
   // Serialize top-level comments first, then replies
   for (const comment of topLevel) {
-    xml += serializeComment(comment);
+    xml += serializeComment(comment, paraInfos);
   }
   for (const reply of replies) {
-    xml += serializeComment(reply);
+    xml += serializeComment(reply, paraInfos);
   }
 
   xml += '</w:comments>';
+  return { xml, paraInfos };
+}
+
+/**
+ * Serialize comments array to comments.xml content (backwards-compatible wrapper)
+ */
+export function serializeComments(comments: Comment[]): string {
+  return serializeCommentsWithInfo(comments).xml;
+}
+
+/**
+ * Serialize commentsExtended.xml (w15:commentsEx) for reply threading.
+ *
+ * This file tells Word/Google Docs which comments are replies (via paraIdParent)
+ * and which are resolved (via done). Without it, replies show as separate comments.
+ */
+export function serializeCommentsExtended(paraInfos: CommentParaInfo[]): string {
+  if (paraInfos.length === 0) return '';
+
+  // Build a lookup: commentId → lastParaId (for resolving parentId → paraIdParent)
+  const paraIdByCommentId = new Map<number, string>();
+  for (const info of paraInfos) {
+    paraIdByCommentId.set(info.commentId, info.lastParaId);
+  }
+
+  let xml =
+    '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n' +
+    '<w15:commentsEx xmlns:w15="http://schemas.microsoft.com/office/word/2012/wordml" ' +
+    'xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" ' +
+    'mc:Ignorable="w15">';
+
+  for (const info of paraInfos) {
+    const attrs: string[] = [`w15:paraId="${info.lastParaId}"`];
+
+    // Link reply to parent via paraIdParent
+    if (info.parentId != null) {
+      const parentParaId = paraIdByCommentId.get(info.parentId);
+      if (parentParaId) {
+        attrs.push(`w15:paraIdParent="${parentParaId}"`);
+      }
+    }
+
+    // Resolved state
+    attrs.push(`w15:done="${info.done ? '1' : '0'}"`);
+
+    xml += `<w15:commentEx ${attrs.join(' ')}/>`;
+  }
+
+  xml += '</w15:commentsEx>';
   return xml;
 }

@@ -34,7 +34,10 @@ import type { Document } from '../types/document';
 import type { BlockContent, Image, Hyperlink } from '../types/content';
 import { serializeDocument } from './serializer/documentSerializer';
 import { serializeHeaderFooter } from './serializer/headerFooterSerializer';
-import { serializeComments } from './serializer/commentSerializer';
+import {
+  serializeCommentsWithInfo,
+  serializeCommentsExtended,
+} from './serializer/commentSerializer';
 import { RELATIONSHIP_TYPES } from './relsParser';
 import { type RawDocxContent } from './unzip';
 import { escapeXml } from './serializer/xmlUtils';
@@ -63,15 +66,26 @@ async function serializeCommentsToZip(
   const comments = doc.package.document.comments;
   if (!comments || comments.length === 0) return;
 
-  const commentsXml = serializeComments(comments);
+  const { xml: commentsXml, paraInfos } = serializeCommentsWithInfo(comments);
   zip.file('word/comments.xml', commentsXml, {
     compression: 'DEFLATE',
     compressionOptions: { level: compressionLevel },
   });
 
+  // Write commentsExtended.xml for reply threading (Word/Google Docs interop)
+  const extendedXml = serializeCommentsExtended(paraInfos);
+  if (extendedXml) {
+    zip.file('word/commentsExtended.xml', extendedXml, {
+      compression: 'DEFLATE',
+      compressionOptions: { level: compressionLevel },
+    });
+  }
+
   await Promise.all([
     ensureCommentsContentType(zip, compressionLevel),
     ensureCommentsRelationship(zip, compressionLevel),
+    ensureCommentsExtendedContentType(zip, compressionLevel),
+    ensureCommentsExtendedRelationship(zip, compressionLevel),
   ]);
 }
 
@@ -499,6 +513,9 @@ export async function repackDocxFromRaw(
 export const COMMENTS_CONTENT_TYPE =
   'application/vnd.openxmlformats-officedocument.wordprocessingml.comments+xml';
 
+export const COMMENTS_EXTENDED_CONTENT_TYPE =
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.commentsExtended+xml';
+
 /**
  * Ensure [Content_Types].xml contains an Override for word/comments.xml.
  * If the document already had comments, this is a no-op.
@@ -539,6 +556,55 @@ async function ensureCommentsRelationship(zip: JSZip, compressionLevel: number):
   relsXml = relsXml.replace(
     '</Relationships>',
     `<Relationship Id="${newRId}" Type="${RELATIONSHIP_TYPES.comments}" Target="comments.xml"/></Relationships>`
+  );
+  zip.file(relsPath, relsXml, {
+    compression: 'DEFLATE',
+    compressionOptions: { level: compressionLevel },
+  });
+}
+
+/**
+ * Ensure [Content_Types].xml contains an Override for word/commentsExtended.xml.
+ */
+async function ensureCommentsExtendedContentType(
+  zip: JSZip,
+  compressionLevel: number
+): Promise<void> {
+  const ctFile = zip.file('[Content_Types].xml');
+  if (!ctFile) return;
+
+  let ctXml = await ctFile.async('text');
+  if (ctXml.includes('/word/commentsExtended.xml')) return;
+
+  ctXml = ctXml.replace(
+    '</Types>',
+    `<Override PartName="/word/commentsExtended.xml" ContentType="${COMMENTS_EXTENDED_CONTENT_TYPE}"/></Types>`
+  );
+  zip.file('[Content_Types].xml', ctXml, {
+    compression: 'DEFLATE',
+    compressionOptions: { level: compressionLevel },
+  });
+}
+
+/**
+ * Ensure word/_rels/document.xml.rels contains a Relationship for commentsExtended.xml.
+ */
+async function ensureCommentsExtendedRelationship(
+  zip: JSZip,
+  compressionLevel: number
+): Promise<void> {
+  const relsPath = 'word/_rels/document.xml.rels';
+  const relsFile = zip.file(relsPath);
+  if (!relsFile) return;
+
+  let relsXml = await relsFile.async('text');
+  if (relsXml.includes('commentsExtended.xml')) return;
+
+  const newRId = `rId${findMaxRId(relsXml) + 1}`;
+
+  relsXml = relsXml.replace(
+    '</Relationships>',
+    `<Relationship Id="${newRId}" Type="${RELATIONSHIP_TYPES.commentsExtended}" Target="commentsExtended.xml"/></Relationships>`
   );
   zip.file(relsPath, relsXml, {
     compression: 'DEFLATE',
