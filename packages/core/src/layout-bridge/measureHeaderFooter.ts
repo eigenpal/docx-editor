@@ -8,7 +8,7 @@
 
 import type { Paragraph, Table, HeaderFooter, HeaderFooterType, Run } from '../types/document';
 import type { FlowBlock, Measure, ParagraphBlock, ParagraphMeasure } from '../layout-engine/types';
-import { measureParagraph } from './measuring';
+import { measureParagraph, twipsToPx } from './measuring';
 
 // =============================================================================
 // TYPES
@@ -138,19 +138,44 @@ function paragraphToFlowBlock(para: Paragraph): ParagraphBlock {
     attrs: {
       alignment: mapAlignment(fmt?.alignment),
       spacing: fmt
-        ? {
-            before: fmt.spaceBefore,
-            after: fmt.spaceAfter,
-            line: fmt.lineSpacing,
-            lineRule: fmt.lineSpacingRule,
-          }
+        ? (() => {
+            const s: {
+              before?: number;
+              after?: number;
+              line?: number;
+              lineUnit?: 'px' | 'multiplier';
+              lineRule?: 'auto' | 'exact' | 'atLeast';
+            } = {};
+            if (fmt.spaceBefore != null) s.before = twipsToPx(fmt.spaceBefore);
+            if (fmt.spaceAfter != null) s.after = twipsToPx(fmt.spaceAfter);
+            if (fmt.lineSpacing != null) {
+              if (fmt.lineSpacingRule === 'exact' || fmt.lineSpacingRule === 'atLeast') {
+                s.line = twipsToPx(fmt.lineSpacing);
+                s.lineUnit = 'px';
+                s.lineRule = fmt.lineSpacingRule;
+              } else {
+                s.line = fmt.lineSpacing / 240;
+                s.lineUnit = 'multiplier';
+                s.lineRule = 'auto';
+              }
+            }
+            return Object.keys(s).length > 0 ? s : undefined;
+          })()
         : undefined,
       indent: fmt
         ? {
-            left: fmt.indentLeft,
-            right: fmt.indentRight,
-            firstLine: fmt.hangingIndent ? undefined : fmt.indentFirstLine,
-            hanging: fmt.hangingIndent ? fmt.indentFirstLine : undefined,
+            left: fmt.indentLeft != null ? twipsToPx(fmt.indentLeft) : undefined,
+            right: fmt.indentRight != null ? twipsToPx(fmt.indentRight) : undefined,
+            firstLine: fmt.hangingIndent
+              ? undefined
+              : fmt.indentFirstLine != null
+                ? twipsToPx(fmt.indentFirstLine)
+                : undefined,
+            hanging: fmt.hangingIndent
+              ? fmt.indentFirstLine != null
+                ? Math.abs(twipsToPx(fmt.indentFirstLine))
+                : undefined
+              : undefined,
           }
         : undefined,
     },

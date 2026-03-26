@@ -52,6 +52,7 @@ import type {
   RunFormatting,
   ParagraphAttrs,
   ParagraphBorders,
+  ParagraphSpacing,
   TextBoxBlock,
   SectionBreakBlock,
 } from '@eigenpal/docx-core/layout-engine/types';
@@ -1381,12 +1382,33 @@ function convertHeaderFooterToContent(
             attrs.borders = converted;
           }
         }
-        // Convert spacing
-        if (formatting.spaceAfter != null || formatting.spaceBefore != null) {
-          attrs.spacing = {
-            before: formatting.spaceBefore as number | undefined,
-            after: formatting.spaceAfter as number | undefined,
-          };
+        // Convert spacing (spaceBefore/spaceAfter are in twips, must convert to px)
+        if (
+          formatting.spaceAfter != null ||
+          formatting.spaceBefore != null ||
+          formatting.lineSpacing != null
+        ) {
+          const spacingAttrs: ParagraphSpacing = {};
+          if (formatting.spaceBefore != null) {
+            spacingAttrs.before = twipsToPixels(formatting.spaceBefore as number);
+          }
+          if (formatting.spaceAfter != null) {
+            spacingAttrs.after = twipsToPixels(formatting.spaceAfter as number);
+          }
+          if (formatting.lineSpacing != null) {
+            const rule = formatting.lineSpacingRule as string | undefined;
+            if (rule === 'exact' || rule === 'atLeast') {
+              spacingAttrs.line = twipsToPixels(formatting.lineSpacing as number);
+              spacingAttrs.lineUnit = 'px';
+              spacingAttrs.lineRule = rule;
+            } else {
+              // Auto — line spacing is in 240ths of a line
+              spacingAttrs.line = (formatting.lineSpacing as number) / 240;
+              spacingAttrs.lineUnit = 'multiplier';
+              spacingAttrs.lineRule = 'auto';
+            }
+          }
+          attrs.spacing = spacingAttrs;
         }
         // Convert tab stops (needed for center/right tab alignment in headers/footers)
         if (Array.isArray(formatting.tabs) && formatting.tabs.length > 0) {
@@ -1405,7 +1427,7 @@ function convertHeaderFooterToContent(
                   : tab.alignment;
             return {
               val: align as 'start' | 'end' | 'center' | 'decimal' | 'bar' | 'clear',
-              pos: tab.position,
+              pos: twipsToPixels(tab.position),
               leader: tab.leader as
                 | 'none'
                 | 'dot'
@@ -1421,16 +1443,17 @@ function convertHeaderFooterToContent(
 
       const runs = convertDocumentRunsToFlowRuns(itemObj.content as unknown[]);
 
-      // Only add paragraph if it has content
-      if (runs.length > 0) {
-        const paragraphBlock: ParagraphBlock = {
-          kind: 'paragraph',
-          id: String(blocks.length),
-          runs,
-          attrs: Object.keys(attrs).length > 0 ? attrs : undefined,
-        };
-        blocks.push(paragraphBlock);
+      // Empty paragraphs (blank lines) should still measure — add empty text run
+      if (runs.length === 0) {
+        runs.push({ kind: 'text' as const, text: '' });
       }
+      const paragraphBlock: ParagraphBlock = {
+        kind: 'paragraph',
+        id: String(blocks.length),
+        runs,
+        attrs: Object.keys(attrs).length > 0 ? attrs : undefined,
+      };
+      blocks.push(paragraphBlock);
     }
   }
 
@@ -1817,7 +1840,7 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
           ) {
             effectiveMargins = { ...margins };
             // Gap between header/footer content and body to prevent overlap
-            const headerBodyGap = 8;
+            const headerBodyGap = 0;
             if (headerContentHeight > availableHeaderSpace) {
               effectiveMargins.top = Math.max(
                 margins.top,
