@@ -29,7 +29,7 @@ import type {
   ColorValue,
 } from '@eigenpal/docx-core/types/document';
 
-import { Toolbar, ToolbarButton, ToolbarGroup, ToolbarSeparator } from './Toolbar';
+import { Toolbar, ToolbarButton, ToolbarGroup } from './Toolbar';
 import type { SelectionFormatting, FormattingAction } from './toolbarTypes';
 import { RibbonToolbar } from './Ribbon';
 import { EditorToolbar } from './EditorToolbar';
@@ -41,7 +41,7 @@ import { UnifiedSidebar } from './UnifiedSidebar';
 import { CommentMarginMarkers } from './CommentMarginMarkers';
 import { useCommentSidebarItems, type CommentCallbacks } from '../hooks/useCommentSidebarItems';
 import type { ReactSidebarItem } from '../plugin-api/types';
-import { CommentsSidebar } from './CommentsSidebar';
+
 import { ColorHistoryProvider } from './ColorHistoryContext';
 import { createEmptyEndnote, createEmptyFootnote, getNextNoteId } from './footnoteUtils';
 import type { HeadingInfo } from '@eigenpal/docx-core/utils/headingCollector';
@@ -1088,7 +1088,6 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
   const toolbarWrapperRef = useRef<HTMLDivElement>(null);
   const toolbarRoRef = useRef<ResizeObserver | null>(null);
   const [toolbarHeight, setToolbarHeight] = useState(0);
-  const parseSeqRef = useRef(0);
   // Keep history.state accessible in stable callbacks without stale closures
   const historyStateRef = useRef(history.state);
   historyStateRef.current = history.state;
@@ -1230,47 +1229,6 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
   const handleToggleCommentsSidebar = useCallback(() => {
     setShowCommentsSidebar((prev) => !prev);
   }, []);
-
-  const handleAddComment = useCallback(
-    (addText: string) => {
-      const comment = createComment(addText, author);
-      const view = pagedEditorRef.current?.getView();
-      if (view && commentSelectionRange) {
-        const { from, to } = commentSelectionRange;
-        const pendingMark = view.state.schema.marks.comment.create({
-          commentId: PENDING_COMMENT_ID,
-        });
-        const realMark = view.state.schema.marks.comment.create({ commentId: comment.id });
-        const tr = view.state.tr.removeMark(from, to, pendingMark).addMark(from, to, realMark);
-        view.dispatch(tr);
-      }
-      setComments((prev) => [...prev, comment]);
-      setIsAddingComment(false);
-      setCommentSelectionRange(null);
-      setAddCommentYPosition(null);
-      pendingCommentInsertedRef.current = false;
-    },
-    [author, commentSelectionRange]
-  );
-
-  const handleCancelAddComment = useCallback(() => {
-    const view = pagedEditorRef.current?.getView();
-    if (view && commentSelectionRange) {
-      const { from, to } = commentSelectionRange;
-      const pendingMark = view.state.schema.marks.comment.create({
-        commentId: PENDING_COMMENT_ID,
-      });
-      let tr = view.state.tr.removeMark(from, to, pendingMark);
-      if (pendingCommentInsertedRef.current && from < to) {
-        tr = tr.delete(from, to);
-      }
-      view.dispatch(tr);
-    }
-    setIsAddingComment(false);
-    setCommentSelectionRange(null);
-    setAddCommentYPosition(null);
-    pendingCommentInsertedRef.current = false;
-  }, [commentSelectionRange]);
 
   const handleNewComment = useCallback(() => {
     if (readOnly) return;
@@ -3716,7 +3674,6 @@ body { background: white; }
       state.zoom,
       state.currentPage,
       state.totalPages,
-      scrollPageInfo,
       handleSave,
       handleDirectPrint,
       loadParsedDocument,
@@ -4141,27 +4098,6 @@ body { background: white; }
     overflow: 'auto', // This is the scroll container - sticky toolbar will stick to this
     position: 'relative',
   };
-
-  const toolbarChildren = (
-    <>
-      <ToolbarSeparator />
-      <ToolbarButton
-        onClick={handleToggleCommentsSidebar}
-        active={showCommentsSidebar}
-        title="Toggle comments sidebar"
-        ariaLabel="Toggle comments sidebar"
-      >
-        <MaterialSymbol name="comment" size={20} />
-      </ToolbarButton>
-      <ToolbarSeparator />
-      <EditingModeDropdown
-        mode={editingMode}
-        onModeChange={setEditingMode}
-        disabled={readOnlyProp}
-      />
-      {toolbarExtra}
-    </>
-  );
 
   // Render loading state
   if (state.isLoading) {
