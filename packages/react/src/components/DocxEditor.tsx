@@ -606,14 +606,14 @@ function injectReplyRangeMarkers(content: BlockContent[], comments: Comment[]): 
               }
             }
           } else if (item.type === 'commentRangeEnd') {
-            // Add reply range ends right before parent's end
+            // Parent's rangeEnd first, then reply rangeEnds (parallel, not nested)
+            newItems.push(item);
             const replyIds = replyIdsByParent.get(item.id);
             if (replyIds) {
               for (const rid of replyIds) {
                 newItems.push({ type: 'commentRangeEnd', id: rid });
               }
             }
-            newItems.push(item);
           } else {
             newItems.push(item);
           }
