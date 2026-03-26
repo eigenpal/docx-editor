@@ -569,8 +569,8 @@ function EditingModeDropdown({
 // MAIN COMPONENT
 // ============================================================================
 
-// Simple sequential IDs starting at 100 (matching Word/SuperDoc pattern)
-let nextCommentId = 100;
+// Simple sequential IDs (matching Word pattern)
+let nextCommentId = 0;
 const PENDING_COMMENT_ID = -1;
 const EMPTY_ANCHOR_POSITIONS = new Map<string, number>();
 

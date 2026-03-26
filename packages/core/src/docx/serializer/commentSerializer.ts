@@ -54,6 +54,14 @@ const OOXML_NAMESPACES =
 
 const MC_IGNORABLE = 'mc:Ignorable="w14 w15 w16se w16cid w16 w16cex w16sdtdh w16sdtfl w16du wp14"';
 
+/** Generate a random 8-char hex durableId (independent of paraId sequence) */
+function generateDurableId(): string {
+  return Math.floor(Math.random() * 0x7fffffff)
+    .toString(16)
+    .toUpperCase()
+    .padStart(8, '0');
+}
+
 /** Create a per-invocation paraId generator (avoids shared mutable module state) */
 function createParaIdGenerator(): () => string {
   let counter = 0;
@@ -86,8 +94,8 @@ function serializeRunContent(run: Run): string {
   return xml;
 }
 
-function serializeParagraph(p: Paragraph, paraId: string): string {
-  let xml = `<w:p w14:paraId="${paraId}" w14:textId="77777777">`;
+function serializeParagraph(p: Paragraph, paraId?: string): string {
+  let xml = paraId ? `<w:p w14:paraId="${paraId}">` : '<w:p>';
   for (const item of p.content) {
     if (item.type === 'run') {
       xml += serializeRunContent(item);
@@ -98,8 +106,8 @@ function serializeParagraph(p: Paragraph, paraId: string): string {
 }
 
 /** Serialize a paragraph, prepending an annotationRef run (required by Word in first paragraph of a comment) */
-function serializeParagraphWithAnnotationRef(p: Paragraph, paraId: string): string {
-  let xml = `<w:p w14:paraId="${paraId}" w14:textId="77777777">`;
+function serializeParagraphWithAnnotationRef(p: Paragraph, paraId?: string): string {
+  let xml = paraId ? `<w:p w14:paraId="${paraId}">` : '<w:p>';
   xml += '<w:r><w:rPr><w:rStyle w:val="CommentReference"/></w:rPr><w:annotationRef/></w:r>';
   for (const item of p.content) {
     if (item.type === 'run') {
@@ -141,27 +149,26 @@ function serializeComment(
 
   if (comment.content && comment.content.length > 0) {
     if (comment.content.length === 1) {
-      // Single paragraph — use commentParaId so w:comment, w14:paraId, and commentsExtended all match
+      // Single paragraph — paraId on this (last) paragraph
       xml += serializeParagraphWithAnnotationRef(comment.content[0], commentParaId);
     } else {
-      // Multiple paragraphs — first gets a unique id, LAST gets commentParaId
-      const firstParaId = generateParaId();
-      xml += serializeParagraphWithAnnotationRef(comment.content[0], firstParaId);
+      // Multiple paragraphs — paraId ONLY on the last one
+      xml += serializeParagraphWithAnnotationRef(comment.content[0]);
       for (let i = 1; i < comment.content.length - 1; i++) {
-        xml += serializeParagraph(comment.content[i], generateParaId());
+        xml += serializeParagraph(comment.content[i]);
       }
       xml += serializeParagraph(comment.content[comment.content.length - 1], commentParaId);
     }
   } else {
-    // Empty comment — still needs a paragraph with annotationRef using commentParaId
-    xml += `<w:p w14:paraId="${commentParaId}" w14:textId="77777777"><w:r><w:rPr><w:rStyle w:val="CommentReference"/></w:rPr><w:annotationRef/></w:r></w:p>`;
+    // Empty comment — paraId on the sole paragraph
+    xml += `<w:p w14:paraId="${commentParaId}"><w:r><w:rPr><w:rStyle w:val="CommentReference"/></w:rPr><w:annotationRef/></w:r></w:p>`;
   }
   xml += '</w:comment>';
 
   paraInfos.push({
     commentId: comment.id,
     lastParaId: commentParaId,
-    durableId: generateParaId(),
+    durableId: generateDurableId(),
     parentId: comment.parentId,
     done: comment.done,
   });
