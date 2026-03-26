@@ -3685,6 +3685,10 @@ body { background: white; }
                         />
                       </div>
                     )}
+                    {/* Brighten text highlight for the focused/expanded comment */}
+                    {expandedSidebarItem && expandedSidebarItem.startsWith('comment-') && (
+                      <style>{`[data-comment-id="${expandedSidebarItem.replace('comment-', '')}"] { background-color: rgba(255, 212, 0, 0.35) !important; border-bottom: 2px solid rgba(255, 212, 0, 0.7) !important; }`}</style>
+                    )}
                     <PagedEditor
                       ref={pagedEditorRef}
                       document={history.state}
