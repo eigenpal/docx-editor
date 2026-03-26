@@ -636,6 +636,72 @@ function injectReplyRangeMarkers(content: BlockContent[], comments: Comment[]): 
 
   walkBlocks(content);
 }
+
+/**
+ * Inject commentRangeStart/End for comments that reply to tracked changes.
+ * TC replies' parents are insertion/deletion nodes (not comments), so
+ * injectReplyRangeMarkers can't find them. This function finds the TC
+ * content nodes and wraps them with comment range markers.
+ */
+function injectTCReplyRangeMarkers(content: BlockContent[], comments: Comment[]): void {
+  // Find replies whose parentId is a tracked change (not a real comment)
+  const commentIds = new Set(comments.map((c) => c.id));
+  const tcReplies = comments.filter((c) => c.parentId != null && !commentIds.has(c.parentId));
+  if (tcReplies.length === 0) return;
+
+  // Build revisionId → reply comment IDs
+  const replyIdsByRevision = new Map<number, number[]>();
+  for (const r of tcReplies) {
+    const arr = replyIdsByRevision.get(r.parentId!);
+    if (arr) arr.push(r.id);
+    else replyIdsByRevision.set(r.parentId!, [r.id]);
+  }
+
+  function walkBlocks(blocks: BlockContent[]): void {
+    for (const block of blocks) {
+      if (block.type === 'paragraph') {
+        // Check if any insertion/deletion in this paragraph matches a TC reply
+        const hasTC = block.content.some(
+          (item) =>
+            (item.type === 'insertion' || item.type === 'deletion') &&
+            replyIdsByRevision.has(item.info.id)
+        );
+        if (!hasTC) continue;
+
+        const newItems: ParagraphContent[] = [];
+        for (const item of block.content) {
+          if (
+            (item.type === 'insertion' || item.type === 'deletion') &&
+            replyIdsByRevision.has(item.info.id)
+          ) {
+            const replyIds = replyIdsByRevision.get(item.info.id)!;
+            // Add commentRangeStart for each reply BEFORE the TC content
+            for (const rid of replyIds) {
+              newItems.push({ type: 'commentRangeStart', id: rid });
+            }
+            newItems.push(item);
+            // Add commentRangeEnd for each reply AFTER the TC content
+            for (const rid of replyIds) {
+              newItems.push({ type: 'commentRangeEnd', id: rid });
+            }
+          } else {
+            newItems.push(item);
+          }
+        }
+        block.content = newItems;
+      } else if (block.type === 'table') {
+        for (const row of block.rows) {
+          for (const cell of row.cells) {
+            walkBlocks(cell.content);
+          }
+        }
+      }
+    }
+  }
+
+  walkBlocks(content);
+}
+
 const EMPTY_ANCHOR_POSITIONS = new Map<string, number>();
 
 /**
@@ -2685,6 +2751,8 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
         // Inject commentRangeStart/End for reply comments that share the parent's range.
         // Pages/Word require every comment (including replies) to have range markers in document.xml.
         injectReplyRangeMarkers(agentDoc.package.document.content, comments);
+        // Also inject range markers for comments that reply to tracked changes.
+        injectTCReplyRangeMarkers(agentDoc.package.document.content, comments);
 
         // Build selective save options from change tracker state
         const useSelective = options?.selective !== false;
