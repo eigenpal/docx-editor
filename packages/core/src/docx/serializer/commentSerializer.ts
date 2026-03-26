@@ -62,13 +62,11 @@ function generateDurableId(): string {
     .padStart(8, '0');
 }
 
-/** Create a per-invocation paraId generator (avoids shared mutable module state) */
+/** Create a paraId generator using random values (matches OOXML spec) */
 function createParaIdGenerator(): () => string {
-  let counter = 0;
-  const timeSeed = Date.now() & 0xffff;
   return () => {
-    const id = ((timeSeed << 16) | (++counter & 0xffff)) >>> 0;
-    return id.toString(16).toUpperCase().padStart(8, '0');
+    const value = Math.floor(Math.random() * 0x7fffffff);
+    return value.toString(16).toUpperCase().padStart(8, '0');
   };
 }
 
@@ -143,7 +141,8 @@ function serializeComment(
     const cleanDate = comment.date.replace(/\.\d{3}Z$/, 'Z');
     attrs.push(`w:date="${escapeXml(cleanDate)}"`);
   }
-  if (comment.done) attrs.push('w:done="1"');
+  // Note: w:done is NOT emitted on w:comment — resolved state goes
+  // exclusively in commentsExtended.xml as w15:done
 
   let xml = `<w:comment ${attrs.join(' ')}>`;
 

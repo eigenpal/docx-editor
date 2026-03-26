@@ -39,19 +39,21 @@ function makeMultiParagraphComment(overrides: Partial<Comment> = {}): Comment {
 
 describe('commentSerializer', () => {
   describe('w:done (resolved state)', () => {
-    test('serializes w:done="1" when comment is resolved', () => {
+    test('does NOT put w:done on w:comment (resolved state is in commentsExtended only)', () => {
       const xml = serializeComments([makeComment({ done: true })]);
-      expect(xml).toContain('w:done="1"');
-    });
-
-    test('omits w:done when comment is not resolved', () => {
-      const xml = serializeComments([makeComment({ done: false })]);
       expect(xml).not.toContain('w:done');
     });
 
-    test('omits w:done when done is undefined', () => {
-      const xml = serializeComments([makeComment()]);
-      expect(xml).not.toContain('w:done');
+    test('resolved state appears in commentsExtended.xml as w15:done="1"', () => {
+      const { paraInfos } = serializeCommentsWithInfo([makeComment({ done: true })]);
+      const extXml = serializeCommentsExtended(paraInfos);
+      expect(extXml).toContain('w15:done="1"');
+    });
+
+    test('unresolved state appears in commentsExtended.xml as w15:done="0"', () => {
+      const { paraInfos } = serializeCommentsWithInfo([makeComment({ done: false })]);
+      const extXml = serializeCommentsExtended(paraInfos);
+      expect(extXml).toContain('w15:done="0"');
     });
   });
 
