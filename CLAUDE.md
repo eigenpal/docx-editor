@@ -172,6 +172,7 @@ Extensions live in `src/prosemirror/extensions/`:
 
 ### Common Pitfalls
 
+- **Toolbar icons must be SVG imports**: Icons use inline SVGs in `components/ui/Icons.tsx`, NOT a font. `<MaterialSymbol name="foo">` looks up the icon in `iconMap`. If you use a name that's not in the map, it renders as raw text. **Always add new icons as SVG path components** (source: https://fonts.google.com/icons) and register them in `iconMap`.
 - **Tailwind CSS conflicts**: Library CSS is scoped via `.ep-root` but layout-painter output isn't always protected. Use explicit inline styles on painted elements.
 - **ProseMirror focus stealing**: Any mousedown that propagates to the PM view will move the cursor. Dropdown/dialog elements need `onMouseDown` with `stopPropagation()`.
 - **Never use `require()`** in extension files — Vite/ESM only.

@@ -5,10 +5,12 @@ import type { TrackedChangeEntry } from '../components/sidebar/cardUtils';
 import { CommentCard } from '../components/sidebar/CommentCard';
 import { TrackedChangeCard } from '../components/sidebar/TrackedChangeCard';
 import { AddCommentCard } from '../components/sidebar/AddCommentCard';
+import { ResolvedCommentMarker } from '../components/sidebar/ResolvedCommentMarker';
 
 export interface CommentCallbacks {
   onCommentReply?: (commentId: number, text: string) => void;
   onCommentResolve?: (commentId: number) => void;
+  onCommentUnresolve?: (commentId: number) => void;
   onCommentDelete?: (commentId: number) => void;
   onAddComment?: (text: string) => void;
   onCancelAddComment?: () => void;
@@ -21,6 +23,7 @@ export interface UseCommentSidebarItemsProps {
   comments: Comment[];
   trackedChanges: TrackedChangeEntry[];
   callbacks: CommentCallbacks;
+  /** When sidebar is open, include resolved comments */
   showResolved?: boolean;
   isAddingComment?: boolean;
   addCommentYPosition?: number | null;
@@ -34,7 +37,7 @@ export function useCommentSidebarItems({
   isAddingComment = false,
   addCommentYPosition = null,
 }: UseCommentSidebarItemsProps): ReactSidebarItem[] {
-  // Filter visible comments (no replies, no resolved unless showResolved)
+  // Active comments always, resolved only when showResolved
   const visibleComments = useMemo(
     () =>
       comments.filter((c) => {
@@ -80,25 +83,29 @@ export function useCommentSidebarItems({
       });
     }
 
-    // Comment cards
+    // Comment cards — resolved render as icon when collapsed, full card when expanded
     for (const comment of visibleComments) {
       const replies = repliesByParent.get(comment.id) ?? [];
       items.push({
         id: `comment-${comment.id}`,
-        anchorPos: 0, // resolved via anchorKey
+        anchorPos: 0,
         anchorKey: `comment-${comment.id}`,
         priority: 0,
-        estimatedHeight: 80,
-        render: (props) => (
-          <CommentCard
-            {...props}
-            comment={comment}
-            replies={replies}
-            onReply={callbacks.onCommentReply}
-            onResolve={callbacks.onCommentResolve}
-            onDelete={callbacks.onCommentDelete}
-          />
-        ),
+        estimatedHeight: comment.done ? 28 : 80,
+        render: (props) =>
+          comment.done && !props.isExpanded ? (
+            <ResolvedCommentMarker {...props} comment={comment} />
+          ) : (
+            <CommentCard
+              {...props}
+              comment={comment}
+              replies={replies}
+              onReply={callbacks.onCommentReply}
+              onResolve={callbacks.onCommentResolve}
+              onUnresolve={callbacks.onCommentUnresolve}
+              onDelete={callbacks.onCommentDelete}
+            />
+          ),
       });
     }
 

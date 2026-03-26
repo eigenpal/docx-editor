@@ -40,10 +40,11 @@ import { DocumentOutline } from './DocumentOutline';
 import { SIDEBAR_DOCUMENT_SHIFT } from './sidebar/constants';
 import { type TrackedChangeEntry } from './sidebar/cardUtils';
 import { UnifiedSidebar } from './UnifiedSidebar';
+import { CommentMarginMarkers } from './CommentMarginMarkers';
 import { useCommentSidebarItems, type CommentCallbacks } from '../hooks/useCommentSidebarItems';
 import type { ReactSidebarItem } from '../plugin-api/types';
 import type { HeadingInfo } from '@eigenpal/docx-core/utils/headingCollector';
-import type { Comment } from '@eigenpal/docx-core/types/content';
+import type { Comment, BlockContent, ParagraphContent } from '@eigenpal/docx-core/types/content';
 import { ErrorBoundary, ErrorProvider } from './ErrorBoundary';
 import type { TableAction } from './ui/TableToolbar';
 import { mapHexToHighlightName } from './toolbarUtils';
@@ -569,8 +570,139 @@ function EditingModeDropdown({
 // MAIN COMPONENT
 // ============================================================================
 
-let nextCommentId = Date.now();
+// Bumped on document load to be above all existing comment + tracked change IDs
+let nextCommentId = 1;
 const PENDING_COMMENT_ID = -1;
+
+/**
+ * Inject commentRangeStart/End/Reference for reply comments.
+ * Replies share the parent comment's text range in document.xml.
+ * Without these markers, Pages/Word can't find the reply.
+ */
+function injectReplyRangeMarkers(content: BlockContent[], comments: Comment[]): void {
+  const replies = comments.filter((c) => c.parentId != null);
+  if (replies.length === 0) return;
+
+  // Build parentId → reply IDs map
+  const replyIdsByParent = new Map<number, number[]>();
+  for (const r of replies) {
+    const arr = replyIdsByParent.get(r.parentId!);
+    if (arr) arr.push(r.id);
+    else replyIdsByParent.set(r.parentId!, [r.id]);
+  }
+
+  // Walk document content and find parent commentRangeStart/End locations
+  function walkBlocks(blocks: BlockContent[]): void {
+    for (const block of blocks) {
+      if (block.type === 'paragraph') {
+        // Skip paragraphs without any comment range markers
+        if (
+          !block.content.some((i) => i.type === 'commentRangeStart' || i.type === 'commentRangeEnd')
+        )
+          continue;
+        const newItems: ParagraphContent[] = [];
+        for (const item of block.content) {
+          if (item.type === 'commentRangeStart') {
+            newItems.push(item);
+            // Add reply range starts right after parent's start
+            const replyIds = replyIdsByParent.get(item.id);
+            if (replyIds) {
+              for (const rid of replyIds) {
+                newItems.push({ type: 'commentRangeStart', id: rid });
+              }
+            }
+          } else if (item.type === 'commentRangeEnd') {
+            // Parent's rangeEnd first, then reply rangeEnds (parallel, not nested)
+            newItems.push(item);
+            const replyIds = replyIdsByParent.get(item.id);
+            if (replyIds) {
+              for (const rid of replyIds) {
+                newItems.push({ type: 'commentRangeEnd', id: rid });
+              }
+            }
+          } else {
+            newItems.push(item);
+          }
+        }
+        block.content = newItems;
+      } else if (block.type === 'table') {
+        for (const row of block.rows) {
+          for (const cell of row.cells) {
+            walkBlocks(cell.content);
+          }
+        }
+      }
+    }
+  }
+
+  walkBlocks(content);
+}
+
+/**
+ * Inject commentRangeStart/End for comments that reply to tracked changes.
+ * TC replies' parents are insertion/deletion nodes (not comments), so
+ * injectReplyRangeMarkers can't find them. This function finds the TC
+ * content nodes and wraps them with comment range markers.
+ */
+function injectTCReplyRangeMarkers(content: BlockContent[], comments: Comment[]): void {
+  // Find replies whose parentId is a tracked change (not a real comment)
+  const commentIds = new Set(comments.map((c) => c.id));
+  const tcReplies = comments.filter((c) => c.parentId != null && !commentIds.has(c.parentId));
+  if (tcReplies.length === 0) return;
+
+  // Build revisionId → reply comment IDs
+  const replyIdsByRevision = new Map<number, number[]>();
+  for (const r of tcReplies) {
+    const arr = replyIdsByRevision.get(r.parentId!);
+    if (arr) arr.push(r.id);
+    else replyIdsByRevision.set(r.parentId!, [r.id]);
+  }
+
+  function walkBlocks(blocks: BlockContent[]): void {
+    for (const block of blocks) {
+      if (block.type === 'paragraph') {
+        // Check if any insertion/deletion in this paragraph matches a TC reply
+        const hasTC = block.content.some(
+          (item) =>
+            (item.type === 'insertion' || item.type === 'deletion') &&
+            replyIdsByRevision.has(item.info.id)
+        );
+        if (!hasTC) continue;
+
+        const newItems: ParagraphContent[] = [];
+        for (const item of block.content) {
+          if (
+            (item.type === 'insertion' || item.type === 'deletion') &&
+            replyIdsByRevision.has(item.info.id)
+          ) {
+            const replyIds = replyIdsByRevision.get(item.info.id)!;
+            // Add commentRangeStart for each reply BEFORE the TC content
+            for (const rid of replyIds) {
+              newItems.push({ type: 'commentRangeStart', id: rid });
+            }
+            newItems.push(item);
+            // Add commentRangeEnd for each reply AFTER the TC content
+            for (const rid of replyIds) {
+              newItems.push({ type: 'commentRangeEnd', id: rid });
+            }
+          } else {
+            newItems.push(item);
+          }
+        }
+        block.content = newItems;
+      } else if (block.type === 'table') {
+        for (const row of block.rows) {
+          for (const cell of row.cells) {
+            walkBlocks(cell.content);
+          }
+        }
+      }
+    }
+  }
+
+  walkBlocks(content);
+}
+
 const EMPTY_ANCHOR_POSITIONS = new Map<string, number>();
 
 /**
@@ -704,6 +836,7 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
 
   // Comments sidebar state
   const [showCommentsSidebar, setShowCommentsSidebar] = useState(false);
+  const [expandedSidebarItem, setExpandedSidebarItem] = useState<string | null>(null);
   const [comments, setComments] = useState<Comment[]>([]);
   const [trackedChanges, setTrackedChanges] = useState<TrackedChangeEntry[]>([]);
   const [anchorPositions, setAnchorPositions] =
@@ -825,6 +958,21 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
       setComments(bodyComments);
       setShowCommentsSidebar(true);
       commentsLoadedRef.current = true;
+      // Ensure nextCommentId is above all loaded comment IDs AND tracked change
+      // revisionIds to avoid collisions (they share the same ID space in OOXML)
+      let maxId = bodyComments.reduce((max, c) => Math.max(max, c.id), 0);
+      // Also check tracked change revisionIds from the PM document
+      const view = pagedEditorRef.current?.getView();
+      if (view) {
+        view.state.doc.descendants((node) => {
+          for (const mark of node.marks) {
+            if (mark.attrs.revisionId != null) {
+              maxId = Math.max(maxId, mark.attrs.revisionId as number);
+            }
+          }
+        });
+      }
+      if (maxId >= nextCommentId) nextCommentId = maxId + 1;
     }
   }, [history.state]);
 
@@ -2613,6 +2761,12 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
         // Sync React comments state (including new replies) back to the document model
         agentDoc.package.document.comments = comments;
 
+        // Inject commentRangeStart/End for reply comments that share the parent's range.
+        // Pages/Word require every comment (including replies) to have range markers in document.xml.
+        injectReplyRangeMarkers(agentDoc.package.document.content, comments);
+        // Also inject range markers for comments that reply to tracked changes.
+        injectTCReplyRangeMarkers(agentDoc.package.document.content, comments);
+
         // Build selective save options from change tracker state
         const useSelective = options?.selective !== false;
         const view = pagedEditorRef.current?.getView();
@@ -2620,10 +2774,15 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
 
         if (useSelective && view) {
           const editorState = view.state;
+          // Force full repack if we injected reply range markers (selective save uses original XML)
+          const commentIdSet = new Set(comments.map((c) => c.id));
+          const hasInjectedReplies = comments.some(
+            (c) => c.parentId != null && commentIdSet.has(c.parentId)
+          );
           selectiveOptions = {
             selective: {
               changedParaIds: getChangedParagraphIds(editorState),
-              structuralChange: hasStructuralChanges(editorState),
+              structuralChange: hasStructuralChanges(editorState) || hasInjectedReplies,
               hasUntrackedChanges: hasUntrackedChanges(editorState),
             },
           };
@@ -3200,9 +3359,21 @@ body { background: white; }
       setComments((prev) => prev.map((c) => (c.id === id ? { ...c, done: true } : c)));
       if (target) onCommentResolve?.({ ...target, done: true });
     },
+    onCommentUnresolve: (id) => {
+      setComments((prev) => prev.map((c) => (c.id === id ? { ...c, done: undefined } : c)));
+    },
     onCommentDelete: (id) => {
       const target = comments.find((c) => c.id === id);
       setComments((prev) => prev.filter((c) => c.id !== id && c.parentId !== id));
+      // Remove the comment mark from PM to clear the yellow highlight
+      const view = pagedEditorRef.current?.getView();
+      if (view) {
+        const mark = view.state.schema.marks.comment?.create({ commentId: id });
+        if (mark) {
+          const tr = view.state.tr.removeMark(0, view.state.doc.content.size, mark);
+          if (tr.docChanged) view.dispatch(tr);
+        }
+      }
       if (target) onCommentDelete?.(target);
     },
     onAddComment: (addText) => {
@@ -3262,6 +3433,7 @@ body { background: white; }
     () => ({
       onCommentReply: (...args) => commentCallbacksRef.current.onCommentReply?.(...args),
       onCommentResolve: (...args) => commentCallbacksRef.current.onCommentResolve?.(...args),
+      onCommentUnresolve: (...args) => commentCallbacksRef.current.onCommentUnresolve?.(...args),
       onCommentDelete: (...args) => commentCallbacksRef.current.onCommentDelete?.(...args),
       onAddComment: (...args) => commentCallbacksRef.current.onAddComment?.(...args),
       onCancelAddComment: (...args) => commentCallbacksRef.current.onCancelAddComment?.(...args),
@@ -3277,6 +3449,7 @@ body { background: white; }
     comments,
     trackedChanges,
     callbacks: stableCallbacks,
+    showResolved: showCommentsSidebar,
     isAddingComment: showCommentsSidebar ? isAddingComment : false,
     addCommentYPosition,
   });
@@ -3289,6 +3462,24 @@ body { background: white; }
   }, [showCommentsSidebar, commentSidebarItems, pluginSidebarItems]);
 
   const sidebarOpen = allSidebarItems.length > 0;
+
+  const resolvedCommentIds = useMemo(() => {
+    const ids = new Set<number>();
+    for (const c of comments) {
+      if (c.done && c.parentId == null) ids.add(c.id);
+    }
+    return ids;
+  }, [comments]);
+
+  // Exclude expanded resolved comment from hide-set so its text gets highlighted
+  const resolvedIdsForRender = useMemo(() => {
+    if (!expandedSidebarItem?.startsWith('comment-')) return resolvedCommentIds;
+    const expandedId = parseInt(expandedSidebarItem.slice(8), 10);
+    if (isNaN(expandedId) || !resolvedCommentIds.has(expandedId)) return resolvedCommentIds;
+    const ids = new Set(resolvedCommentIds);
+    ids.delete(expandedId);
+    return ids;
+  }, [resolvedCommentIds, expandedSidebarItem]);
 
   const editorContainerStyle: CSSProperties = {
     flex: 1,
@@ -3348,6 +3539,7 @@ body { background: white; }
       >
         <MaterialSymbol name="comment" size={20} />
       </ToolbarButton>
+      {/* Resolved comments use margin markers instead of toolbar toggle */}
       <ToolbarSeparator />
       <EditingModeDropdown
         mode={editingMode}
@@ -3510,6 +3702,16 @@ body { background: white; }
                         />
                       </div>
                     )}
+                    {/* Brighten highlight for the focused/expanded sidebar item */}
+                    {expandedSidebarItem && expandedSidebarItem.startsWith('comment-') && (
+                      <style>{`.paged-editor__pages [data-comment-id="${expandedSidebarItem.replace('comment-', '')}"] { background-color: rgba(255, 212, 0, 0.35) !important; border-bottom: 2px solid rgba(255, 212, 0, 0.7) !important; }`}</style>
+                    )}
+                    {expandedSidebarItem?.startsWith('tc-') && (
+                      <style>{`
+                          .paged-editor__pages .docx-insertion[data-revision-id="${expandedSidebarItem.split('-')[1]}"] { background-color: rgba(52, 168, 83, 0.2) !important; border-bottom: 2px solid #2e7d32 !important; }
+                          .paged-editor__pages .docx-deletion[data-revision-id="${expandedSidebarItem.split('-')[1]}"] { background-color: rgba(211, 47, 47, 0.2) !important; text-decoration-thickness: 2px !important; }
+                        `}</style>
+                    )}
                     <PagedEditor
                       ref={pagedEditorRef}
                       document={history.state}
@@ -3547,21 +3749,39 @@ body { background: white; }
                       onContextMenu={handleContextMenu}
                       commentsSidebarOpen={sidebarOpen}
                       onAnchorPositionsChange={setAnchorPositions}
+                      resolvedCommentIds={resolvedIdsForRender}
                       scrollContainerRef={scrollContainerRef}
                       sidebarOverlay={
-                        allSidebarItems.length > 0 ? (
-                          <UnifiedSidebar
-                            items={allSidebarItems}
+                        <>
+                          {allSidebarItems.length > 0 && (
+                            <UnifiedSidebar
+                              items={allSidebarItems}
+                              anchorPositions={anchorPositions}
+                              renderedDomContext={pluginRenderedDomContext ?? null}
+                              pageWidth={(() => {
+                                const sp = history.state?.package?.document?.finalSectionProperties;
+                                return sp?.pageWidth ? Math.round(sp.pageWidth / 15) : 816;
+                              })()}
+                              zoom={state.zoom}
+                              editorContainerRef={scrollContainerRef}
+                              onExpandedItemChange={setExpandedSidebarItem}
+                            />
+                          )}
+                          <CommentMarginMarkers
+                            comments={comments}
                             anchorPositions={anchorPositions}
-                            renderedDomContext={pluginRenderedDomContext ?? null}
+                            zoom={state.zoom}
                             pageWidth={(() => {
                               const sp = history.state?.package?.document?.finalSectionProperties;
                               return sp?.pageWidth ? Math.round(sp.pageWidth / 15) : 816;
                             })()}
-                            zoom={state.zoom}
-                            editorContainerRef={scrollContainerRef}
+                            sidebarOpen={sidebarOpen}
+                            resolvedCommentIds={resolvedCommentIds}
+                            onMarkerClick={() => {
+                              setShowCommentsSidebar(true);
+                            }}
                           />
-                        ) : undefined
+                        </>
                       }
                     />
 

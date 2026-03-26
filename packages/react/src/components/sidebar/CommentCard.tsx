@@ -18,6 +18,7 @@ export interface CommentCardProps extends SidebarItemRenderProps {
   replies: Comment[];
   onReply?: (commentId: number, text: string) => void;
   onResolve?: (commentId: number) => void;
+  onUnresolve?: (commentId: number) => void;
   onDelete?: (commentId: number) => void;
 }
 
@@ -29,6 +30,7 @@ export function CommentCard({
   measureRef,
   onReply,
   onResolve,
+  onUnresolve,
   onDelete,
 }: CommentCardProps) {
   const [menuOpen, setMenuOpen] = useState(false);
@@ -42,9 +44,27 @@ export function CommentCard({
       onMouseDown={(e) => e.stopPropagation()}
       style={{
         ...(isExpanded ? CARD_STYLE_EXPANDED : CARD_STYLE_COLLAPSED),
-        opacity: comment.done ? 0.6 : 1,
       }}
     >
+      {comment.done && (
+        <div
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: 4,
+            padding: '2px 8px',
+            marginBottom: 8,
+            fontSize: 11,
+            fontWeight: 500,
+            color: '#188038',
+            backgroundColor: '#e6f4ea',
+            borderRadius: 10,
+          }}
+        >
+          <MaterialSymbol name="check" size={12} />
+          Resolved
+        </div>
+      )}
       <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
         <div style={avatarStyle(comment.author || 'U')}>{getInitials(comment.author || 'U')}</div>
         <div style={{ flex: 1, minWidth: 0 }}>
@@ -58,12 +78,16 @@ export function CommentCard({
             <button
               onClick={(e) => {
                 e.stopPropagation();
-                onResolve?.(comment.id);
+                if (comment.done) {
+                  onUnresolve?.(comment.id);
+                } else {
+                  onResolve?.(comment.id);
+                }
               }}
-              title="Resolve"
+              title={comment.done ? 'Reopen' : 'Resolve'}
               style={ICON_BUTTON_STYLE}
             >
-              <MaterialSymbol name="check" size={20} />
+              <MaterialSymbol name={comment.done ? 'undo' : 'check'} size={20} />
             </button>
             <button
               onClick={(e) => {

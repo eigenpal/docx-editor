@@ -687,6 +687,41 @@ export function IconArrowBack(props: IconProps) {
   );
 }
 
+export function IconDoneAll(props: IconProps) {
+  return (
+    <SvgIcon {...props}>
+      <path d="M268-240 42-466l57-56 170 170 56 56-57 56Zm226 0L268-466l56-57 170 170 368-368 57 57-425 424Zm0-226-57-56 198-198 57 56-198 198Z" />
+    </SvgIcon>
+  );
+}
+
+export function IconCheckCircle(props: IconProps) {
+  return (
+    <SvgIcon {...props}>
+      <path d="m424-296 282-282-56-56-226 226-114-114-56 56 170 170Zm56 216q-83 0-156-31.5T197-197q-54-54-85.5-127T80-480q0-83 31.5-156T197-763q54-54 127-85.5T480-880q83 0 156 31.5T763-763q54 54 85.5 127T880-480q0 83-31.5 156T763-197q-54 54-127 85.5T480-80Z" />
+    </SvgIcon>
+  );
+}
+
+/** Plain speech bubble outline (no lines inside) */
+export function IconChatBubbleOutline(props: IconProps) {
+  return (
+    <SvgIcon {...props}>
+      <path d="M80-80v-720q0-33 23.5-56.5T160-880h640q33 0 56.5 23.5T880-800v480q0 33-23.5 56.5T800-240H240L80-80Zm126-240h594v-480H160v525l46-45Zm-46 0v-480 480Z" />
+    </SvgIcon>
+  );
+}
+
+/** Speech bubble with green checkmark (bubble inherits color, check is green) */
+export function IconChatBubbleCheck(props: IconProps) {
+  return (
+    <SvgIcon {...props}>
+      <path d="M80-80v-720q0-33 23.5-56.5T160-880h640q33 0 56.5 23.5T880-800v480q0 33-23.5 56.5T800-240H240L80-80Zm126-240h594v-480H160v525l46-45Zm-46 0v-480 480Z" />
+      <path fill="#188038" d="m421-380 227-227-45-45-182 182-92-91-45 45 137 136Z" />
+    </SvgIcon>
+  );
+}
+
 export function IconCheck(props: IconProps) {
   return (
     <SvgIcon {...props}>
@@ -851,6 +886,10 @@ const iconMap: Record<string, React.ComponentType<IconProps>> = {
   // Navigation
   arrow_back: IconArrowBack,
   // Comments sidebar
+  done_all: IconDoneAll,
+  check_circle: IconCheckCircle,
+  chat_bubble_outline: IconChatBubbleOutline,
+  chat_bubble_check: IconChatBubbleCheck,
   check: IconCheck,
   close: IconClose,
   add_comment: IconAddComment,

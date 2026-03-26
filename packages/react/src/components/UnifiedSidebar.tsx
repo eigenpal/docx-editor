@@ -19,6 +19,7 @@ export interface UnifiedSidebarProps {
   pageWidth: number;
   zoom: number;
   editorContainerRef: React.RefObject<HTMLDivElement | null>;
+  onExpandedItemChange?: (itemId: string | null) => void;
 }
 
 export function UnifiedSidebar({
@@ -28,8 +29,15 @@ export function UnifiedSidebar({
   pageWidth,
   zoom,
   editorContainerRef,
+  onExpandedItemChange,
 }: UnifiedSidebarProps) {
   const [expandedItem, setExpandedItem] = useState<string | null>(null);
+
+  // Notify parent when expanded item changes (via effect, not in setState updater)
+  useEffect(() => {
+    onExpandedItemChange?.(expandedItem);
+  }, [expandedItem, onExpandedItemChange]);
+
   const [initialPositionsDone, setInitialPositionsDone] = useState(false);
   const cardHeightsRef = useRef<Map<string, number>>(new Map());
   const lastKnownRef = useRef<Map<string, number>>(new Map());
@@ -97,7 +105,19 @@ export function UnifiedSidebar({
     return () => observer.disconnect();
   }, [editorContainerRef]);
 
-  // Watch expanded card for size changes (covers both initial expand and resize)
+  // Re-measure ALL card heights after expand/collapse so collision avoidance
+  // uses up-to-date sizes (the ref callback only fires on mount, not resize).
+  useEffect(() => {
+    const raf = requestAnimationFrame(() => {
+      for (const [id, el] of cardElsRef.current) {
+        cardHeightsRef.current.set(id, el.offsetHeight);
+      }
+      setPositionVersion((v) => v + 1);
+    });
+    return () => cancelAnimationFrame(raf);
+  }, [expandedItem]);
+
+  // Watch expanded card for ongoing size changes (e.g. typing in reply input)
   useEffect(() => {
     if (!expandedItem) return;
     const el = cardElsRef.current.get(expandedItem);
@@ -110,7 +130,10 @@ export function UnifiedSidebar({
     let rafId: number;
     const observer = new ResizeObserver(() => {
       cancelAnimationFrame(rafId);
-      rafId = requestAnimationFrame(() => setPositionVersion((v) => v + 1));
+      rafId = requestAnimationFrame(() => {
+        cardHeightsRef.current.set(expandedItem, el.offsetHeight);
+        setPositionVersion((v) => v + 1);
+      });
     });
     observer.observe(el);
     return () => {

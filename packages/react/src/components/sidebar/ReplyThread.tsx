@@ -8,9 +8,26 @@ export interface ReplyThreadProps {
 
 export function ReplyThread({ replies, isExpanded }: ReplyThreadProps) {
   if (replies.length === 0) return null;
+  const visibleReplies = isExpanded ? replies : replies.slice(-1);
+  const hiddenCount = isExpanded ? 0 : replies.length - 1;
+
   return (
     <div style={{ marginTop: 8 }}>
-      {(isExpanded ? replies : replies.slice(-1)).map((reply) => (
+      {hiddenCount > 0 && (
+        <div
+          style={{
+            fontSize: 12,
+            fontWeight: 500,
+            color: '#1a73e8',
+            paddingTop: 6,
+            paddingBottom: 6,
+            borderTop: '1px solid #e8eaed',
+          }}
+        >
+          {hiddenCount} more {hiddenCount === 1 ? 'reply' : 'replies'}
+        </div>
+      )}
+      {visibleReplies.map((reply) => (
         <div
           key={reply.id}
           style={{
@@ -50,11 +67,6 @@ export function ReplyThread({ replies, isExpanded }: ReplyThreadProps) {
           </div>
         </div>
       ))}
-      {!isExpanded && replies.length > 1 && (
-        <div style={{ fontSize: 12, color: '#5f6368', marginTop: 4 }}>
-          {replies.length - 1} more {replies.length - 1 === 1 ? 'reply' : 'replies'}
-        </div>
-      )}
     </div>
   );
 }
