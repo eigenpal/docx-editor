@@ -72,6 +72,7 @@ function serializeParagraphWithAnnotationRef(p: Paragraph, paraId: string): stri
 interface CommentParaInfo {
   commentId: number;
   lastParaId: string;
+  durableId: string;
   parentId?: number;
   done?: boolean;
 }
@@ -81,16 +82,21 @@ function serializeComment(
   paraInfos: CommentParaInfo[],
   generateParaId: () => string
 ): string {
+  // Generate the comment-level paraId upfront — used on w:comment AND as lastParaId
+  // for commentsExtended.xml threading
+  const commentParaId = generateParaId();
+
   const attrs: string[] = [`w:id="${comment.id}"`];
   if (comment.author) attrs.push(`w:author="${escapeXml(comment.author)}"`);
   if (comment.initials) attrs.push(`w:initials="${escapeXml(comment.initials)}"`);
+  else attrs.push('w:initials=""');
   if (comment.date) attrs.push(`w:date="${escapeXml(comment.date)}"`);
   if (comment.done) attrs.push('w:done="1"');
-  // Note: reply threading is handled via commentsExtended.xml (w15:paraIdParent),
-  // NOT via w16cid:parentId on w:comment. Word Online/Pages ignore or reject the latter.
+  // w15:paraId on w:comment — Pages/SuperDoc use this for threading identification
+  attrs.push(`w15:paraId="${commentParaId}"`);
 
   let xml = `<w:comment ${attrs.join(' ')}>`;
-  let lastParaId = '';
+  let lastParaId = commentParaId;
 
   if (comment.content && comment.content.length > 0) {
     // First paragraph must contain an annotationRef run for Word to link the comment
@@ -110,10 +116,10 @@ function serializeComment(
   }
   xml += '</w:comment>';
 
-  // Track para info for commentsExtended.xml
   paraInfos.push({
     commentId: comment.id,
     lastParaId,
+    durableId: generateParaId(),
     parentId: comment.parentId,
     done: comment.done,
   });
@@ -159,8 +165,9 @@ export function serializeCommentsWithInfo(comments: Comment[]): {
     'xmlns:wpi="http://schemas.microsoft.com/office/word/2010/wordprocessingInk" ' +
     'xmlns:wne="http://schemas.microsoft.com/office/word/2006/wordml" ' +
     'xmlns:wps="http://schemas.microsoft.com/office/word/2010/wordprocessingShape" ' +
+    'xmlns:w16cex="http://schemas.microsoft.com/office/word/2018/wordml/cex" ' +
     'xmlns:w16cid="http://schemas.microsoft.com/office/word/2016/wordml/cid" ' +
-    'mc:Ignorable="w14 w15 wp14 w16cid">';
+    'mc:Ignorable="w14 w15 wp14 w16cid w16cex">';
 
   // Serialize top-level comments first, then replies
   for (const comment of topLevel) {
@@ -234,8 +241,7 @@ export function serializeCommentsIds(paraInfos: CommentParaInfo[]): string {
     'xmlns:w16cid="http://schemas.microsoft.com/office/word/2016/wordml/cid">';
 
   for (const info of paraInfos) {
-    // Word uses durableId == paraId for most comments
-    xml += `<w16cid:commentId w16cid:paraId="${info.lastParaId}" w16cid:durableId="${info.lastParaId}" />`;
+    xml += `<w16cid:commentId w16cid:paraId="${info.lastParaId}" w16cid:durableId="${info.durableId}" />`;
   }
 
   xml += '</w16cid:commentsIds>';
@@ -267,7 +273,7 @@ export function serializeCommentsExtensible(
     const comment = commentById.get(info.commentId);
     if (!comment?.date) continue;
 
-    const durableId = info.lastParaId;
+    const durableId = info.durableId;
 
     // Ensure UTC format
     const dateUtc = comment.date.endsWith('Z') ? comment.date : comment.date + 'Z';
