@@ -19,6 +19,7 @@ export interface UnifiedSidebarProps {
   pageWidth: number;
   zoom: number;
   editorContainerRef: React.RefObject<HTMLDivElement | null>;
+  onExpandedItemChange?: (itemId: string | null) => void;
 }
 
 export function UnifiedSidebar({
@@ -28,8 +29,21 @@ export function UnifiedSidebar({
   pageWidth,
   zoom,
   editorContainerRef,
+  onExpandedItemChange,
 }: UnifiedSidebarProps) {
   const [expandedItem, setExpandedItem] = useState<string | null>(null);
+
+  // Notify parent when expanded item changes
+  const setExpandedAndNotify = useCallback(
+    (value: string | null | ((prev: string | null) => string | null)) => {
+      setExpandedItem((prev) => {
+        const next = typeof value === 'function' ? value(prev) : value;
+        if (next !== prev) onExpandedItemChange?.(next);
+        return next;
+      });
+    },
+    [onExpandedItemChange]
+  );
   const [initialPositionsDone, setInitialPositionsDone] = useState(false);
   const cardHeightsRef = useRef<Map<string, number>>(new Map());
   const lastKnownRef = useRef<Map<string, number>>(new Map());
@@ -148,7 +162,7 @@ export function UnifiedSidebar({
       if (pagesEl.contains(target)) {
         const commentEl = target.closest('[data-comment-id]') as HTMLElement | null;
         if (commentEl?.dataset.commentId) {
-          setExpandedItem(`comment-${commentEl.dataset.commentId}`);
+          setExpandedAndNotify(`comment-${commentEl.dataset.commentId}`);
           return;
         }
         const changeEl =
@@ -158,13 +172,13 @@ export function UnifiedSidebar({
           const prefix = `tc-${changeEl.dataset.revisionId}-`;
           const match = items.find((i) => i.id.startsWith(prefix));
           if (match) {
-            setExpandedItem(match.id);
+            setExpandedAndNotify(match.id);
             return;
           }
         }
       }
 
-      setExpandedItem(null);
+      setExpandedAndNotify(null);
     };
 
     container.addEventListener('click', handleDocClick);
@@ -189,7 +203,7 @@ export function UnifiedSidebar({
   }, []);
 
   const toggleExpand = useCallback((itemId: string) => {
-    setExpandedItem((prev) => (prev === itemId ? null : itemId));
+    setExpandedAndNotify((prev) => (prev === itemId ? null : itemId));
   }, []);
 
   if (items.length === 0) return null;

@@ -836,6 +836,7 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
 
   // Comments sidebar state
   const [showCommentsSidebar, setShowCommentsSidebar] = useState(false);
+  const [expandedSidebarItem, setExpandedSidebarItem] = useState<string | null>(null);
   const [comments, setComments] = useState<Comment[]>([]);
   const [trackedChanges, setTrackedChanges] = useState<TrackedChangeEntry[]>([]);
   const [anchorPositions, setAnchorPositions] =
@@ -3453,6 +3454,16 @@ body { background: white; }
     return ids;
   }, [comments]);
 
+  // Exclude expanded resolved comment from hide-set so its text gets highlighted
+  const resolvedIdsForRender = useMemo(() => {
+    if (!expandedSidebarItem) return resolvedCommentIds;
+    const expandedId = parseInt(expandedSidebarItem.replace('comment-', ''), 10);
+    if (!resolvedCommentIds.has(expandedId)) return resolvedCommentIds;
+    const ids = new Set(resolvedCommentIds);
+    ids.delete(expandedId);
+    return ids;
+  }, [resolvedCommentIds, expandedSidebarItem]);
+
   const editorContainerStyle: CSSProperties = {
     flex: 1,
     minHeight: 0,
@@ -3711,7 +3722,7 @@ body { background: white; }
                       onContextMenu={handleContextMenu}
                       commentsSidebarOpen={sidebarOpen}
                       onAnchorPositionsChange={setAnchorPositions}
-                      resolvedCommentIds={resolvedCommentIds}
+                      resolvedCommentIds={resolvedIdsForRender}
                       scrollContainerRef={scrollContainerRef}
                       sidebarOverlay={
                         <>
@@ -3726,6 +3737,7 @@ body { background: white; }
                               })()}
                               zoom={state.zoom}
                               editorContainerRef={scrollContainerRef}
+                              onExpandedItemChange={setExpandedSidebarItem}
                             />
                           )}
                           <CommentMarginMarkers
