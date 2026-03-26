@@ -569,8 +569,8 @@ function EditingModeDropdown({
 // MAIN COMPONENT
 // ============================================================================
 
-// Keep IDs within 32-bit signed int range (Pages/Word truncate larger values)
-let nextCommentId = (Date.now() & 0x7fffffff) >>> 0;
+// Simple sequential IDs starting at 100 (matching Word/SuperDoc pattern)
+let nextCommentId = 100;
 const PENDING_COMMENT_ID = -1;
 const EMPTY_ANCHOR_POSITIONS = new Map<string, number>();
 
@@ -827,6 +827,9 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
       setComments(bodyComments);
       setShowCommentsSidebar(true);
       commentsLoadedRef.current = true;
+      // Ensure nextCommentId is above all loaded IDs to avoid collisions
+      const maxId = bodyComments.reduce((max, c) => Math.max(max, c.id), 0);
+      if (maxId >= nextCommentId) nextCommentId = maxId + 1;
     }
   }, [history.state]);
 
