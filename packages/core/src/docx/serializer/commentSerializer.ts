@@ -238,8 +238,9 @@ export function serializeCommentsIds(paraInfos: CommentParaInfo[]): string {
     'mc:Ignorable="w16cid">';
 
   for (const info of paraInfos) {
-    // Generate a stable durableId from the paraId (8-char hex)
-    const durableId = info.lastParaId;
+    // durableId must differ from paraId — XOR with a constant to derive a distinct stable ID
+    const paraNum = parseInt(info.lastParaId, 16) >>> 0;
+    const durableId = ((paraNum ^ 0x5a5a5a5a) >>> 0).toString(16).toUpperCase().padStart(8, '0');
     xml += `<w16cid:commentId w16cid:paraId="${info.lastParaId}" w16cid:durableId="${durableId}"/>`;
   }
 
