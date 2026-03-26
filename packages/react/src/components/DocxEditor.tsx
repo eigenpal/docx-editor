@@ -3347,6 +3347,15 @@ body { background: white; }
     onCommentDelete: (id) => {
       const target = comments.find((c) => c.id === id);
       setComments((prev) => prev.filter((c) => c.id !== id && c.parentId !== id));
+      // Remove the comment mark from PM to clear the yellow highlight
+      const view = pagedEditorRef.current?.getView();
+      if (view) {
+        const mark = view.state.schema.marks.comment?.create({ commentId: id });
+        if (mark) {
+          const tr = view.state.tr.removeMark(0, view.state.doc.content.size, mark);
+          if (tr.docChanged) view.dispatch(tr);
+        }
+      }
       if (target) onCommentDelete?.(target);
     },
     onAddComment: (addText) => {
