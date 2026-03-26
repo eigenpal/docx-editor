@@ -13,6 +13,31 @@
 import type { Comment, Paragraph, Run } from '../../types/content';
 import { escapeXml } from './xmlUtils';
 
+/** Full OOXML namespace block — used by all comment extension XML files */
+const OOXML_NAMESPACES =
+  'xmlns:wpc="http://schemas.microsoft.com/office/word/2010/wordprocessingCanvas" ' +
+  'xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" ' +
+  'xmlns:o="urn:schemas-microsoft-com:office:office" ' +
+  'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" ' +
+  'xmlns:m="http://schemas.openxmlformats.org/officeDocument/2006/math" ' +
+  'xmlns:v="urn:schemas-microsoft-com:vml" ' +
+  'xmlns:wp14="http://schemas.microsoft.com/office/word/2010/wordprocessingDrawing" ' +
+  'xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing" ' +
+  'xmlns:w10="urn:schemas-microsoft-com:office:word" ' +
+  'xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" ' +
+  'xmlns:w14="http://schemas.microsoft.com/office/word/2010/wordml" ' +
+  'xmlns:w15="http://schemas.microsoft.com/office/word/2012/wordml" ' +
+  'xmlns:w16cex="http://schemas.microsoft.com/office/word/2018/wordml/cex" ' +
+  'xmlns:w16cid="http://schemas.microsoft.com/office/word/2016/wordml/cid" ' +
+  'xmlns:w16="http://schemas.microsoft.com/office/word/2018/wordml" ' +
+  'xmlns:w16se="http://schemas.microsoft.com/office/word/2015/wordml/symex" ' +
+  'xmlns:wpg="http://schemas.microsoft.com/office/word/2010/wordprocessingGroup" ' +
+  'xmlns:wpi="http://schemas.microsoft.com/office/word/2010/wordprocessingInk" ' +
+  'xmlns:wne="http://schemas.microsoft.com/office/word/2006/wordml" ' +
+  'xmlns:wps="http://schemas.microsoft.com/office/word/2010/wordprocessingShape"';
+
+const MC_IGNORABLE = 'mc:Ignorable="w14 w15 w16se w16cid w16 w16cex wp14"';
+
 /** Create a per-invocation paraId generator (avoids shared mutable module state) */
 function createParaIdGenerator(): () => string {
   let counter = 0;
@@ -82,8 +107,7 @@ function serializeComment(
   paraInfos: CommentParaInfo[],
   generateParaId: () => string
 ): string {
-  // Generate the comment-level paraId upfront — used on w:comment AND as lastParaId
-  // for commentsExtended.xml threading
+  // Generate paraId used on the last paragraph and in commentsExtended.xml
   const commentParaId = generateParaId();
 
   const attrs: string[] = [`w:id="${comment.id}"`];
@@ -92,8 +116,6 @@ function serializeComment(
   else attrs.push('w:initials=""');
   if (comment.date) attrs.push(`w:date="${escapeXml(comment.date)}"`);
   if (comment.done) attrs.push('w:done="1"');
-  // w15:paraId on w:comment — Pages/SuperDoc use this for threading identification
-  attrs.push(`w15:paraId="${commentParaId}"`);
 
   let xml = `<w:comment ${attrs.join(' ')}>`;
 
@@ -167,7 +189,7 @@ export function serializeCommentsWithInfo(comments: Comment[]): {
     'xmlns:wps="http://schemas.microsoft.com/office/word/2010/wordprocessingShape" ' +
     'xmlns:w16cex="http://schemas.microsoft.com/office/word/2018/wordml/cex" ' +
     'xmlns:w16cid="http://schemas.microsoft.com/office/word/2016/wordml/cid" ' +
-    'mc:Ignorable="w14 w15 wp14 w16cid w16cex">';
+    'mc:Ignorable="w14 w15 w16se w16cid w16 w16cex wp14">';
 
   // Serialize top-level comments first, then replies
   for (const comment of topLevel) {
@@ -204,9 +226,8 @@ export function serializeCommentsExtended(paraInfos: CommentParaInfo[]): string 
   }
 
   let xml =
-    '<w15:commentsEx mc:Ignorable="w15" ' +
-    'xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" ' +
-    'xmlns:w15="http://schemas.microsoft.com/office/word/2012/wordml">';
+    '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+    `<w15:commentsEx ${OOXML_NAMESPACES} ${MC_IGNORABLE}>`;
 
   for (const info of paraInfos) {
     let attrs = `w15:done="${info.done ? '1' : '0'}" w15:paraId="${info.lastParaId}"`;
@@ -236,9 +257,8 @@ export function serializeCommentsIds(paraInfos: CommentParaInfo[]): string {
   if (paraInfos.length === 0) return '';
 
   let xml =
-    '<w16cid:commentsIds mc:Ignorable="w16cid" ' +
-    'xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" ' +
-    'xmlns:w16cid="http://schemas.microsoft.com/office/word/2016/wordml/cid">';
+    '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+    `<w16cid:commentsIds ${OOXML_NAMESPACES} ${MC_IGNORABLE}>`;
 
   for (const info of paraInfos) {
     xml += `<w16cid:commentId w16cid:paraId="${info.lastParaId}" w16cid:durableId="${info.durableId}" />`;
@@ -265,9 +285,8 @@ export function serializeCommentsExtensible(
   for (const c of comments) commentById.set(c.id, c);
 
   let xml =
-    '<w16cex:commentsExtensible xmlns:w16cex="http://schemas.microsoft.com/office/word/2018/wordml/cex" ' +
-    'xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" ' +
-    'mc:Ignorable="w16cex">';
+    '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+    `<w16cex:commentsExtensible ${OOXML_NAMESPACES} ${MC_IGNORABLE}>`;
 
   for (const info of paraInfos) {
     const comment = commentById.get(info.commentId);
