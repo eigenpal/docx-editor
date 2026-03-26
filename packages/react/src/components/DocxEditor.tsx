@@ -570,8 +570,8 @@ function EditingModeDropdown({
 // MAIN COMPONENT
 // ============================================================================
 
-// Simple sequential IDs (matching Word pattern)
-let nextCommentId = 0;
+// Start at 200 to avoid collision with tracked change revisionIds
+let nextCommentId = 200;
 const PENDING_COMMENT_ID = -1;
 
 /**
