@@ -17,6 +17,7 @@ export interface CommentMarginMarkersProps {
   pageWidth: number;
   sidebarOpen: boolean;
   resolvedCommentIds: Set<number>;
+  expandedResolvedId?: number | null;
   onMarkerClick: (commentId: number) => void;
 }
 
@@ -27,6 +28,7 @@ export function CommentMarginMarkers({
   pageWidth,
   sidebarOpen,
   resolvedCommentIds,
+  expandedResolvedId,
   onMarkerClick,
 }: CommentMarginMarkersProps) {
   // Only root comments (no parentId) get markers
@@ -35,8 +37,10 @@ export function CommentMarginMarkers({
   const markers = rootComments
     .map((comment) => {
       const isResolved = resolvedCommentIds.has(comment.id);
-      // Active: hide when sidebar is open (card visible). Resolved: always show marker.
+      // Active: hide when sidebar is open (card visible)
       if (!isResolved && sidebarOpen) return null;
+      // Resolved: hide when its card is expanded (card replaces icon)
+      if (isResolved && expandedResolvedId === comment.id) return null;
 
       const y = anchorPositions.get(`comment-${comment.id}`);
       if (y == null) return null;

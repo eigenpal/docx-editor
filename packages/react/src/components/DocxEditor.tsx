@@ -3761,6 +3761,7 @@ body { background: white; }
                             })()}
                             sidebarOpen={sidebarOpen}
                             resolvedCommentIds={resolvedCommentIds}
+                            expandedResolvedId={expandedResolvedId}
                             onMarkerClick={(commentId) => {
                               const isResolved = resolvedCommentIds.has(commentId);
                               if (isResolved) {

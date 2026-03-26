@@ -44,9 +44,27 @@ export function CommentCard({
       onMouseDown={(e) => e.stopPropagation()}
       style={{
         ...(isExpanded ? CARD_STYLE_EXPANDED : CARD_STYLE_COLLAPSED),
-        opacity: comment.done && !isExpanded ? 0.6 : 1,
       }}
     >
+      {comment.done && (
+        <div
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: 4,
+            padding: '2px 8px',
+            marginBottom: 8,
+            fontSize: 11,
+            fontWeight: 500,
+            color: '#188038',
+            backgroundColor: '#e6f4ea',
+            borderRadius: 10,
+          }}
+        >
+          <MaterialSymbol name="check" size={12} />
+          Resolved
+        </div>
+      )}
       <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
         <div style={avatarStyle(comment.author || 'U')}>{getInitials(comment.author || 'U')}</div>
         <div style={{ flex: 1, minWidth: 0 }}>
