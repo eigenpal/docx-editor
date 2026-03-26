@@ -40,6 +40,7 @@ import { DocumentOutline } from './DocumentOutline';
 import { SIDEBAR_DOCUMENT_SHIFT } from './sidebar/constants';
 import { type TrackedChangeEntry } from './sidebar/cardUtils';
 import { UnifiedSidebar } from './UnifiedSidebar';
+import { CommentMarginMarkers } from './CommentMarginMarkers';
 import { useCommentSidebarItems, type CommentCallbacks } from '../hooks/useCommentSidebarItems';
 import type { ReactSidebarItem } from '../plugin-api/types';
 import type { HeadingInfo } from '@eigenpal/docx-core/utils/headingCollector';
@@ -835,7 +836,6 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
 
   // Comments sidebar state
   const [showCommentsSidebar, setShowCommentsSidebar] = useState(false);
-  const [showResolvedComments, setShowResolvedComments] = useState(false);
   const [comments, setComments] = useState<Comment[]>([]);
   const [trackedChanges, setTrackedChanges] = useState<TrackedChangeEntry[]>([]);
   const [anchorPositions, setAnchorPositions] =
@@ -3431,7 +3431,7 @@ body { background: white; }
     comments,
     trackedChanges,
     callbacks: stableCallbacks,
-    showResolved: showResolvedComments,
+    showResolved: showCommentsSidebar,
     isAddingComment: showCommentsSidebar ? isAddingComment : false,
     addCommentYPosition,
   });
@@ -3452,8 +3452,6 @@ body { background: white; }
     }
     return ids;
   }, [comments]);
-
-  const hasResolvedComments = resolvedCommentIds.size > 0;
 
   const editorContainerStyle: CSSProperties = {
     flex: 1,
@@ -3513,16 +3511,7 @@ body { background: white; }
       >
         <MaterialSymbol name="comment" size={20} />
       </ToolbarButton>
-      {showCommentsSidebar && hasResolvedComments && (
-        <ToolbarButton
-          onClick={() => setShowResolvedComments((prev) => !prev)}
-          active={showResolvedComments}
-          title={showResolvedComments ? 'Hide resolved comments' : 'Show resolved comments'}
-          ariaLabel={showResolvedComments ? 'Hide resolved comments' : 'Show resolved comments'}
-        >
-          <MaterialSymbol name="done_all" size={20} />
-        </ToolbarButton>
-      )}
+      {/* Resolved comments use margin markers instead of toolbar toggle */}
       <ToolbarSeparator />
       <EditingModeDropdown
         mode={editingMode}
@@ -3725,19 +3714,35 @@ body { background: white; }
                       resolvedCommentIds={resolvedCommentIds}
                       scrollContainerRef={scrollContainerRef}
                       sidebarOverlay={
-                        allSidebarItems.length > 0 ? (
-                          <UnifiedSidebar
-                            items={allSidebarItems}
+                        <>
+                          {allSidebarItems.length > 0 && (
+                            <UnifiedSidebar
+                              items={allSidebarItems}
+                              anchorPositions={anchorPositions}
+                              renderedDomContext={pluginRenderedDomContext ?? null}
+                              pageWidth={(() => {
+                                const sp = history.state?.package?.document?.finalSectionProperties;
+                                return sp?.pageWidth ? Math.round(sp.pageWidth / 15) : 816;
+                              })()}
+                              zoom={state.zoom}
+                              editorContainerRef={scrollContainerRef}
+                            />
+                          )}
+                          <CommentMarginMarkers
+                            comments={comments}
                             anchorPositions={anchorPositions}
-                            renderedDomContext={pluginRenderedDomContext ?? null}
+                            zoom={state.zoom}
                             pageWidth={(() => {
                               const sp = history.state?.package?.document?.finalSectionProperties;
                               return sp?.pageWidth ? Math.round(sp.pageWidth / 15) : 816;
                             })()}
-                            zoom={state.zoom}
-                            editorContainerRef={scrollContainerRef}
+                            sidebarOpen={sidebarOpen}
+                            resolvedCommentIds={resolvedCommentIds}
+                            onMarkerClick={() => {
+                              setShowCommentsSidebar(true);
+                            }}
                           />
-                        ) : undefined
+                        </>
                       }
                     />
 
