@@ -837,6 +837,24 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
   // Comments sidebar state
   const [showCommentsSidebar, setShowCommentsSidebar] = useState(false);
   const [expandedResolvedId, setExpandedResolvedId] = useState<number | null>(null);
+
+  // Click anywhere outside clears the temporarily expanded resolved comment
+  useEffect(() => {
+    if (expandedResolvedId == null) return;
+    const handleClick = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      // Don't clear if clicking on the resolved comment card or margin marker
+      if (target.closest('.docx-comment-card') || target.closest('.docx-comment-margin-markers'))
+        return;
+      setExpandedResolvedId(null);
+    };
+    // Use setTimeout to avoid catching the same click that opened it
+    const timer = setTimeout(() => document.addEventListener('click', handleClick), 0);
+    return () => {
+      clearTimeout(timer);
+      document.removeEventListener('click', handleClick);
+    };
+  }, [expandedResolvedId]);
   const [comments, setComments] = useState<Comment[]>([]);
   const [trackedChanges, setTrackedChanges] = useState<TrackedChangeEntry[]>([]);
   const [anchorPositions, setAnchorPositions] =
