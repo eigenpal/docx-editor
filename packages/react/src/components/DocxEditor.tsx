@@ -986,7 +986,7 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
 
   // Suggestion mode plugin — merged with external plugins
   const suggestionPlugin = useMemo(
-    () => createSuggestionModePlugin(false, author),
+    () => createSuggestionModePlugin(editingMode === 'suggesting', author),
     [] // eslint-disable-line react-hooks/exhaustive-deps
   );
   const allExternalPlugins = useMemo(
