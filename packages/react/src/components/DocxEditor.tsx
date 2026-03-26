@@ -570,8 +570,8 @@ function EditingModeDropdown({
 // MAIN COMPONENT
 // ============================================================================
 
-// Start at 200 to avoid collision with tracked change revisionIds
-let nextCommentId = 200;
+// Bumped on document load to be above all existing comment + tracked change IDs
+let nextCommentId = 100;
 const PENDING_COMMENT_ID = -1;
 
 /**
@@ -958,8 +958,20 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
       setComments(bodyComments);
       setShowCommentsSidebar(true);
       commentsLoadedRef.current = true;
-      // Ensure nextCommentId is above all loaded IDs to avoid collisions
-      const maxId = bodyComments.reduce((max, c) => Math.max(max, c.id), 0);
+      // Ensure nextCommentId is above all loaded comment IDs AND tracked change
+      // revisionIds to avoid collisions (they share the same ID space in OOXML)
+      let maxId = bodyComments.reduce((max, c) => Math.max(max, c.id), 0);
+      // Also check tracked change revisionIds from the PM document
+      const view = pagedEditorRef.current?.getView();
+      if (view) {
+        view.state.doc.descendants((node) => {
+          for (const mark of node.marks) {
+            if (mark.attrs.revisionId != null) {
+              maxId = Math.max(maxId, mark.attrs.revisionId as number);
+            }
+          }
+        });
+      }
       if (maxId >= nextCommentId) nextCommentId = maxId + 1;
     }
   }, [history.state]);
