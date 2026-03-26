@@ -35,8 +35,8 @@ export function CommentMarginMarkers({
   const markers = rootComments
     .map((comment) => {
       const isResolved = resolvedCommentIds.has(comment.id);
-      // Active comments only show markers when sidebar is closed
-      if (!isResolved && sidebarOpen) return null;
+      // Hide all markers when sidebar is open (cards are visible instead)
+      if (sidebarOpen) return null;
 
       const y = anchorPositions.get(`comment-${comment.id}`);
       if (y == null) return null;

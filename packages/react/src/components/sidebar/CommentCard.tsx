@@ -44,7 +44,7 @@ export function CommentCard({
       onMouseDown={(e) => e.stopPropagation()}
       style={{
         ...(isExpanded ? CARD_STYLE_EXPANDED : CARD_STYLE_COLLAPSED),
-        opacity: comment.done ? 0.6 : 1,
+        opacity: comment.done && !isExpanded ? 0.6 : 1,
       }}
     >
       <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
