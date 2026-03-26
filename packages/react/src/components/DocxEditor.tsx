@@ -876,6 +876,10 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
   const cleanOrphanedCommentsTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const commentsRef = useRef(comments);
   commentsRef.current = comments;
+  const isAddingCommentRef = useRef(isAddingComment);
+  isAddingCommentRef.current = isAddingComment;
+  const onCommentDeleteRef = useRef(onCommentDelete);
+  onCommentDeleteRef.current = onCommentDelete;
 
   // Extract tracked changes from ProseMirror state
   const extractTrackedChanges = useCallback(() => {
@@ -925,7 +929,7 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
 
   // Remove comments whose marks no longer exist in the document
   const cleanOrphanedComments = useCallback(() => {
-    if (isAddingComment) return;
+    if (isAddingCommentRef.current) return;
     const view = pagedEditorRef.current?.getView();
     if (!view) return;
     const { doc, schema } = view.state;
@@ -952,12 +956,12 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
     if (orphanedIds.size === 0) return;
 
     for (const c of currentComments) {
-      if (orphanedIds.has(c.id)) onCommentDelete?.(c);
+      if (orphanedIds.has(c.id)) onCommentDeleteRef.current?.(c);
     }
     setComments((prev) =>
       prev.filter((c) => !orphanedIds.has(c.id) && !orphanedIds.has(c.parentId!))
     );
-  }, [isAddingComment, onCommentDelete]);
+  }, []);
 
   // Clean up debounce timers on unmount
   useEffect(() => {
