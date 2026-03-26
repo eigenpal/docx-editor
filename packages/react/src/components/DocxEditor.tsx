@@ -3469,20 +3469,21 @@ body { background: white; }
 
   const allSidebarItems = useMemo(() => {
     const items: ReactSidebarItem[] = [];
-    if (showCommentsSidebar) items.push(...commentSidebarItems);
-    if (pluginSidebarItems) items.push(...pluginSidebarItems);
-    // Always include resolved comment markers (they're compact icons, not full cards)
-    const resolvedItems = commentSidebarItems.filter((item) => {
+    // Always include resolved markers
+    for (const item of commentSidebarItems) {
       const cid = parseInt(item.id.replace('comment-', ''), 10);
-      return resolvedCommentIds.has(cid);
-    });
-    if (!showCommentsSidebar) items.push(...resolvedItems);
+      if (resolvedCommentIds.has(cid)) {
+        items.push(item);
+      } else if (showCommentsSidebar) {
+        // Active comments only when sidebar is open
+        items.push(item);
+      }
+    }
+    if (pluginSidebarItems) items.push(...pluginSidebarItems);
     return items;
   }, [showCommentsSidebar, commentSidebarItems, pluginSidebarItems, resolvedCommentIds]);
 
-  const sidebarOpen = allSidebarItems.some(
-    (item) => !resolvedCommentIds.has(parseInt(item.id.replace('comment-', ''), 10))
-  );
+  const sidebarOpen = showCommentsSidebar && commentSidebarItems.length > 0;
 
   const editorContainerStyle: CSSProperties = {
     flex: 1,
