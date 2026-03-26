@@ -3450,6 +3450,7 @@ body { background: white; }
     comments,
     trackedChanges,
     callbacks: stableCallbacks,
+    expandedResolvedId,
     isAddingComment: showCommentsSidebar ? isAddingComment : false,
     addCommentYPosition,
   });
@@ -3767,23 +3768,15 @@ body { background: white; }
                             })()}
                             sidebarOpen={sidebarOpen}
                             resolvedCommentIds={resolvedCommentIds}
-                            expandedResolvedId={expandedResolvedId}
                             onMarkerClick={(commentId) => {
                               const isResolved = resolvedCommentIds.has(commentId);
                               if (isResolved) {
+                                // Toggle resolved comment in sidebar
                                 setExpandedResolvedId((prev) =>
                                   prev === commentId ? null : commentId
                                 );
-                              } else {
-                                setShowCommentsSidebar(true);
                               }
-                            }}
-                            onUnresolve={(id) =>
-                              commentCallbacksRef.current.onCommentUnresolve?.(id)
-                            }
-                            onDelete={(id) => {
-                              commentCallbacksRef.current.onCommentDelete?.(id);
-                              setExpandedResolvedId(null);
+                              setShowCommentsSidebar(true);
                             }}
                           />
                         </>

@@ -22,6 +22,8 @@ export interface UseCommentSidebarItemsProps {
   comments: Comment[];
   trackedChanges: TrackedChangeEntry[];
   callbacks: CommentCallbacks;
+  /** When set, this resolved comment appears in the sidebar */
+  expandedResolvedId?: number | null;
   isAddingComment?: boolean;
   addCommentYPosition?: number | null;
 }
@@ -30,18 +32,19 @@ export function useCommentSidebarItems({
   comments,
   trackedChanges,
   callbacks,
+  expandedResolvedId = null,
   isAddingComment = false,
   addCommentYPosition = null,
 }: UseCommentSidebarItemsProps): ReactSidebarItem[] {
-  // Only active (non-resolved) root comments in sidebar. Resolved use margin popup.
+  // Active root comments + the one expanded resolved comment (if any)
   const visibleComments = useMemo(
     () =>
       comments.filter((c) => {
         if (c.parentId != null) return false;
-        if (c.done) return false;
+        if (c.done && c.id !== expandedResolvedId) return false;
         return true;
       }),
-    [comments]
+    [comments, expandedResolvedId]
   );
 
   // Pre-group replies by parentId
