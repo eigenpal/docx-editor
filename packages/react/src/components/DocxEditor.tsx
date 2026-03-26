@@ -43,7 +43,7 @@ import { UnifiedSidebar } from './UnifiedSidebar';
 import { useCommentSidebarItems, type CommentCallbacks } from '../hooks/useCommentSidebarItems';
 import type { ReactSidebarItem } from '../plugin-api/types';
 import type { HeadingInfo } from '@eigenpal/docx-core/utils/headingCollector';
-import type { Comment } from '@eigenpal/docx-core/types/content';
+import type { Comment, BlockContent, ParagraphContent } from '@eigenpal/docx-core/types/content';
 import { ErrorBoundary, ErrorProvider } from './ErrorBoundary';
 import type { TableAction } from './ui/TableToolbar';
 import { mapHexToHighlightName } from './toolbarUtils';
@@ -572,6 +572,65 @@ function EditingModeDropdown({
 // Simple sequential IDs (matching Word pattern)
 let nextCommentId = 0;
 const PENDING_COMMENT_ID = -1;
+
+/**
+ * Inject commentRangeStart/End/Reference for reply comments.
+ * Replies share the parent comment's text range in document.xml.
+ * Without these markers, Pages/Word can't find the reply.
+ */
+function injectReplyRangeMarkers(content: BlockContent[], comments: Comment[]): void {
+  const replies = comments.filter((c) => c.parentId != null);
+  if (replies.length === 0) return;
+
+  // Build parentId → reply IDs map
+  const replyIdsByParent = new Map<number, number[]>();
+  for (const r of replies) {
+    const arr = replyIdsByParent.get(r.parentId!);
+    if (arr) arr.push(r.id);
+    else replyIdsByParent.set(r.parentId!, [r.id]);
+  }
+
+  // Walk document content and find parent commentRangeStart/End locations
+  function walkBlocks(blocks: BlockContent[]): void {
+    for (const block of blocks) {
+      if (block.type === 'paragraph') {
+        const newItems: ParagraphContent[] = [];
+        for (const item of block.content) {
+          if (item.type === 'commentRangeStart') {
+            newItems.push(item);
+            // Add reply range starts right after parent's start
+            const replyIds = replyIdsByParent.get(item.id);
+            if (replyIds) {
+              for (const rid of replyIds) {
+                newItems.push({ type: 'commentRangeStart', id: rid });
+              }
+            }
+          } else if (item.type === 'commentRangeEnd') {
+            // Add reply range ends right before parent's end
+            const replyIds = replyIdsByParent.get(item.id);
+            if (replyIds) {
+              for (const rid of replyIds) {
+                newItems.push({ type: 'commentRangeEnd', id: rid });
+              }
+            }
+            newItems.push(item);
+          } else {
+            newItems.push(item);
+          }
+        }
+        block.content = newItems;
+      } else if (block.type === 'table') {
+        for (const row of block.rows) {
+          for (const cell of row.cells) {
+            walkBlocks(cell.content);
+          }
+        }
+      }
+    }
+  }
+
+  walkBlocks(content);
+}
 const EMPTY_ANCHOR_POSITIONS = new Map<string, number>();
 
 /**
@@ -2617,6 +2676,10 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
 
         // Sync React comments state (including new replies) back to the document model
         agentDoc.package.document.comments = comments;
+
+        // Inject commentRangeStart/End for reply comments that share the parent's range.
+        // Pages/Word require every comment (including replies) to have range markers in document.xml.
+        injectReplyRangeMarkers(agentDoc.package.document.content, comments);
 
         // Build selective save options from change tracker state
         const useSelective = options?.selective !== false;
