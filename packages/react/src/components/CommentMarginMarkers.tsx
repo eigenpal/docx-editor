@@ -77,24 +77,23 @@ export function CommentMarginMarkers({
             background: 'transparent',
             cursor: 'pointer',
             pointerEvents: 'auto',
-            color: isResolved ? '#9aa0a6' : '#5f6368',
-            opacity: isResolved ? 0.7 : 0.9,
+            color: '#5f6368',
             padding: 0,
             fontFamily: 'inherit',
           }}
           onMouseOver={(e) => {
-            (e.currentTarget as HTMLElement).style.color = isResolved ? '#5f6368' : '#1a73e8';
-            (e.currentTarget as HTMLElement).style.opacity = '1';
+            (e.currentTarget as HTMLElement).style.opacity = '0.7';
           }}
           onMouseOut={(e) => {
-            (e.currentTarget as HTMLElement).style.color = isResolved ? '#9aa0a6' : '#5f6368';
-            (e.currentTarget as HTMLElement).style.opacity = isResolved ? '0.7' : '0.9';
+            (e.currentTarget as HTMLElement).style.opacity = '1';
           }}
         >
-          <MaterialSymbol
-            name={isResolved ? 'chat_bubble_check' : 'chat_bubble_outline'}
-            size={18}
-          />
+          <MaterialSymbol name="chat_bubble_outline" size={18} />
+          {isResolved && (
+            <span style={{ position: 'absolute', left: 5, top: 4, color: '#188038' }}>
+              <MaterialSymbol name="check" size={10} />
+            </span>
+          )}
         </button>
       ))}
     </div>
