@@ -38,6 +38,7 @@ import {
   serializeCommentsWithInfo,
   serializeCommentsExtended,
   serializeCommentsIds,
+  serializeCommentsExtensible,
 } from './serializer/commentSerializer';
 import { RELATIONSHIP_TYPES } from './relsParser';
 import { type RawDocxContent } from './unzip';
@@ -86,6 +87,15 @@ async function serializeCommentsToZip(
   const idsXml = serializeCommentsIds(paraInfos);
   if (idsXml) {
     zip.file('word/commentsIds.xml', idsXml, {
+      compression: 'DEFLATE',
+      compressionOptions: { level: compressionLevel },
+    });
+  }
+
+  // Write commentsExtensible.xml for UTC dates (Pages, Word 2016+)
+  const extensibleXml = serializeCommentsExtensible(paraInfos, comments);
+  if (extensibleXml) {
+    zip.file('word/commentsExtensible.xml', extensibleXml, {
       compression: 'DEFLATE',
       compressionOptions: { level: compressionLevel },
     });
@@ -524,6 +534,9 @@ export const COMMENTS_EXTENDED_CONTENT_TYPE =
 export const COMMENTS_IDS_CONTENT_TYPE =
   'application/vnd.openxmlformats-officedocument.wordprocessingml.commentsIds+xml';
 
+export const COMMENTS_EXTENSIBLE_CONTENT_TYPE =
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.commentsExtensible+xml';
+
 /**
  * Ensure content types and relationships exist for all comment parts.
  * Reads each shared file once, applies all modifications, writes once.
@@ -547,6 +560,12 @@ async function ensureAllCommentParts(zip: JSZip, compressionLevel: number): Prom
       contentType: COMMENTS_IDS_CONTENT_TYPE,
       target: 'commentsIds.xml',
       relType: RELATIONSHIP_TYPES.commentsIds,
+    },
+    {
+      partName: '/word/commentsExtensible.xml',
+      contentType: COMMENTS_EXTENSIBLE_CONTENT_TYPE,
+      target: 'commentsExtensible.xml',
+      relType: RELATIONSHIP_TYPES.commentsExtensible,
     },
   ];
 

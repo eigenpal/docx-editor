@@ -14,6 +14,7 @@ import {
   serializeCommentsWithInfo,
   serializeCommentsExtended,
   serializeCommentsIds,
+  serializeCommentsExtensible,
 } from './serializer/commentSerializer';
 import { buildPatchedDocumentXml } from './selectiveXmlPatch';
 import {
@@ -24,6 +25,7 @@ import {
   COMMENTS_CONTENT_TYPE,
   COMMENTS_EXTENDED_CONTENT_TYPE,
   COMMENTS_IDS_CONTENT_TYPE,
+  COMMENTS_EXTENSIBLE_CONTENT_TYPE,
 } from './rezip';
 import { RELATIONSHIP_TYPES } from './relsParser';
 
@@ -132,6 +134,12 @@ export async function attemptSelectiveSave(
         updates.set('word/commentsIds.xml', idsXml);
       }
 
+      // Write commentsExtensible.xml for UTC dates (Pages, Word 2016+)
+      const extensibleXml = serializeCommentsExtensible(paraInfos, comments);
+      if (extensibleXml) {
+        updates.set('word/commentsExtensible.xml', extensibleXml);
+      }
+
       // Ensure [Content_Types].xml has Overrides for all comment parts
       const ctFile = zip.file('[Content_Types].xml');
       if (ctFile) {
@@ -141,6 +149,7 @@ export async function attemptSelectiveSave(
           ['/word/comments.xml', COMMENTS_CONTENT_TYPE],
           ['/word/commentsExtended.xml', COMMENTS_EXTENDED_CONTENT_TYPE],
           ['/word/commentsIds.xml', COMMENTS_IDS_CONTENT_TYPE],
+          ['/word/commentsExtensible.xml', COMMENTS_EXTENSIBLE_CONTENT_TYPE],
         ];
         for (const [partName, contentType] of ctEntries) {
           if (!ctXml.includes(partName)) {
@@ -164,6 +173,7 @@ export async function attemptSelectiveSave(
           ['comments.xml', RELATIONSHIP_TYPES.comments],
           ['commentsExtended.xml', RELATIONSHIP_TYPES.commentsExtended],
           ['commentsIds.xml', RELATIONSHIP_TYPES.commentsIds],
+          ['commentsExtensible.xml', RELATIONSHIP_TYPES.commentsExtensible],
         ];
         for (const [target, type] of relEntries) {
           if (!relsXml.includes(target)) {

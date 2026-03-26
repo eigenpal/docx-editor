@@ -247,3 +247,43 @@ export function serializeCommentsIds(paraInfos: CommentParaInfo[]): string {
   xml += '</w16cid:commentsIds>';
   return xml;
 }
+
+/**
+ * Serialize commentsExtensible.xml (w16cex:commentsExtensible) with UTC dates.
+ *
+ * Word Online and Pages use this for precise timestamps on comments.
+ * Each entry links a durableId to a UTC date.
+ */
+export function serializeCommentsExtensible(
+  paraInfos: CommentParaInfo[],
+  comments: Comment[]
+): string {
+  if (paraInfos.length === 0) return '';
+
+  // Build commentId → comment lookup for dates
+  const commentById = new Map<number, Comment>();
+  for (const c of comments) commentById.set(c.id, c);
+
+  let xml =
+    '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n' +
+    '<w16cex:commentsExtensible xmlns:w16cex="http://schemas.microsoft.com/office/word/2018/wordml/cex" ' +
+    'xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" ' +
+    'mc:Ignorable="w16cex">';
+
+  for (const info of paraInfos) {
+    const comment = commentById.get(info.commentId);
+    if (!comment?.date) continue;
+
+    // Derive durableId (same XOR as commentsIds.xml)
+    const paraNum = parseInt(info.lastParaId, 16) >>> 0;
+    const durableId = ((paraNum ^ 0x5a5a5a5a) >>> 0).toString(16).toUpperCase().padStart(8, '0');
+
+    // Ensure UTC format
+    const dateUtc = comment.date.endsWith('Z') ? comment.date : comment.date + 'Z';
+
+    xml += `<w16cex:commentExtensible w16cex:durableId="${durableId}" w16cex:dateUtc="${dateUtc}"/>`;
+  }
+
+  xml += '</w16cex:commentsExtensible>';
+  return xml;
+}
