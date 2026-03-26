@@ -8,7 +8,7 @@
 
 import type { Comment } from '@eigenpal/docx-core/types/content';
 import { MaterialSymbol } from './ui/Icons';
-import { SIDEBAR_PAGE_GAP, SIDEBAR_DOCUMENT_SHIFT } from './sidebar/constants';
+import { SIDEBAR_DOCUMENT_SHIFT } from './sidebar/constants';
 
 export interface CommentMarginMarkersProps {
   comments: Comment[];
@@ -53,7 +53,7 @@ export function CommentMarginMarkers({
       style={{
         position: 'absolute',
         top: 0,
-        left: `calc(50% - ${SIDEBAR_DOCUMENT_SHIFT}px + ${(pageWidth * zoom) / 2 + SIDEBAR_PAGE_GAP - 28}px)`,
+        left: `calc(50% - ${sidebarOpen ? SIDEBAR_DOCUMENT_SHIFT : 0}px + ${(pageWidth * zoom) / 2 + 4}px)`,
         zIndex: 30,
         pointerEvents: 'none',
       }}
@@ -93,7 +93,10 @@ export function CommentMarginMarkers({
             (e.currentTarget as HTMLElement).style.opacity = isResolved ? '0.7' : '0.9';
           }}
         >
-          <MaterialSymbol name={isResolved ? 'check_circle' : 'comment'} size={18} />
+          <MaterialSymbol
+            name={isResolved ? 'chat_bubble_check' : 'chat_bubble_outline'}
+            size={18}
+          />
         </button>
       ))}
     </div>

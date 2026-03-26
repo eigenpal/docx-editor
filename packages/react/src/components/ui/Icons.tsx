@@ -703,6 +703,25 @@ export function IconCheckCircle(props: IconProps) {
   );
 }
 
+/** Speech bubble outline (for active comment markers) */
+export function IconChatBubbleOutline(props: IconProps) {
+  return (
+    <SvgIcon {...props}>
+      <path d="M240-400h480v-80H240v80Zm0-120h480v-80H240v80Zm0-120h480v-80H240v80ZM80-80v-720q0-33 23.5-56.5T160-880h640q33 0 56.5 23.5T880-800v480q0 33-23.5 56.5T800-240H240L80-80Zm126-240h594v-480H160v525l46-45Zm-46 0v-480 480Z" />
+    </SvgIcon>
+  );
+}
+
+/** Speech bubble with checkmark (for resolved comment markers) */
+export function IconChatBubbleCheck(props: IconProps) {
+  return (
+    <SvgIcon {...props}>
+      <path d="M80-80v-720q0-33 23.5-56.5T160-880h640q33 0 56.5 23.5T880-800v480q0 33-23.5 56.5T800-240H240L80-80Zm126-240h594v-480H160v525l46-45Zm-46 0v-480 480Z" />
+      <path d="m421-380 227-227-45-45-182 182-92-91-45 45 137 136Z" />
+    </SvgIcon>
+  );
+}
+
 export function IconCheck(props: IconProps) {
   return (
     <SvgIcon {...props}>
@@ -869,6 +888,8 @@ const iconMap: Record<string, React.ComponentType<IconProps>> = {
   // Comments sidebar
   done_all: IconDoneAll,
   check_circle: IconCheckCircle,
+  chat_bubble_outline: IconChatBubbleOutline,
+  chat_bubble_check: IconChatBubbleCheck,
   check: IconCheck,
   close: IconClose,
   add_comment: IconAddComment,
