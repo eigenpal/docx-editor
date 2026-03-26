@@ -230,7 +230,7 @@ export function serializeCommentsExtended(paraInfos: CommentParaInfo[]): string 
     `<w15:commentsEx ${OOXML_NAMESPACES} ${MC_IGNORABLE}>`;
 
   for (const info of paraInfos) {
-    let attrs = `w15:done="${info.done ? '1' : '0'}" w15:paraId="${info.lastParaId}"`;
+    let attrs = `w15:paraId="${info.lastParaId}" w15:done="${info.done ? '1' : '0'}"`;
 
     // Link reply to parent via paraIdParent
     if (info.parentId != null) {
