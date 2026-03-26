@@ -30,13 +30,7 @@ export type WorkerClientOptions = {
 
 export function createWorkerClient(options: WorkerClientOptions) {
   const enabled = options.enabled ?? false;
-  const workerFactory =
-    options.workerFactory ??
-    (() => {
-      // Default worker factory disabled — the .ts worker file isn't available
-      // from the published package. Consumers can provide their own factory.
-      throw new Error('No workerFactory provided and default worker is unavailable');
-    });
+  const workerFactory = options.workerFactory ?? null;
 
   let worker: WorkerLike | null = null;
   let seq = 0;
@@ -45,6 +39,7 @@ export function createWorkerClient(options: WorkerClientOptions) {
 
   const ensureWorker = () => {
     if (worker) return;
+    if (!workerFactory) return;
     const nextWorker = workerFactory();
     worker = nextWorker;
     nextWorker.onmessage = (event: { data: any }) => {
