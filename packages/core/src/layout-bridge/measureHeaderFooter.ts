@@ -124,6 +124,38 @@ function processRun(run: Run, output: ParagraphBlock['runs']): void {
 }
 
 /**
+ * Convert paragraph formatting spacing (twips) to layout-engine ParagraphSpacing (pixels).
+ */
+function buildSpacing(fmt: {
+  spaceBefore?: number;
+  spaceAfter?: number;
+  lineSpacing?: number;
+  lineSpacingRule?: string;
+}) {
+  const s: {
+    before?: number;
+    after?: number;
+    line?: number;
+    lineUnit?: 'px' | 'multiplier';
+    lineRule?: 'auto' | 'exact' | 'atLeast';
+  } = {};
+  if (fmt.spaceBefore != null) s.before = twipsToPx(fmt.spaceBefore);
+  if (fmt.spaceAfter != null) s.after = twipsToPx(fmt.spaceAfter);
+  if (fmt.lineSpacing != null) {
+    if (fmt.lineSpacingRule === 'exact' || fmt.lineSpacingRule === 'atLeast') {
+      s.line = twipsToPx(fmt.lineSpacing);
+      s.lineUnit = 'px';
+      s.lineRule = fmt.lineSpacingRule;
+    } else {
+      s.line = fmt.lineSpacing / 240;
+      s.lineUnit = 'multiplier';
+      s.lineRule = 'auto';
+    }
+  }
+  return Object.keys(s).length > 0 ? s : undefined;
+}
+
+/**
  * Convert a Document Paragraph to a FlowBlock.
  */
 function paragraphToFlowBlock(para: Paragraph): ParagraphBlock {
@@ -137,31 +169,7 @@ function paragraphToFlowBlock(para: Paragraph): ParagraphBlock {
     runs: [],
     attrs: {
       alignment: mapAlignment(fmt?.alignment),
-      spacing: fmt
-        ? (() => {
-            const s: {
-              before?: number;
-              after?: number;
-              line?: number;
-              lineUnit?: 'px' | 'multiplier';
-              lineRule?: 'auto' | 'exact' | 'atLeast';
-            } = {};
-            if (fmt.spaceBefore != null) s.before = twipsToPx(fmt.spaceBefore);
-            if (fmt.spaceAfter != null) s.after = twipsToPx(fmt.spaceAfter);
-            if (fmt.lineSpacing != null) {
-              if (fmt.lineSpacingRule === 'exact' || fmt.lineSpacingRule === 'atLeast') {
-                s.line = twipsToPx(fmt.lineSpacing);
-                s.lineUnit = 'px';
-                s.lineRule = fmt.lineSpacingRule;
-              } else {
-                s.line = fmt.lineSpacing / 240;
-                s.lineUnit = 'multiplier';
-                s.lineRule = 'auto';
-              }
-            }
-            return Object.keys(s).length > 0 ? s : undefined;
-          })()
-        : undefined,
+      spacing: fmt ? buildSpacing(fmt) : undefined,
       indent: fmt
         ? {
             left: fmt.indentLeft != null ? twipsToPx(fmt.indentLeft) : undefined,
