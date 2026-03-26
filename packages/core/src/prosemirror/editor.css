@@ -649,12 +649,17 @@
 }
 .hf-editor-pm .ProseMirror p {
   display: block;
-  margin: 0;
+  /* !important overrides inline margin-bottom from style-resolved spaceAfter.
+     The layout painter doesn't apply style-resolved spacing to headers/footers,
+     so the editor must match by stripping paragraph margins. */
+  margin: 0 !important;
   padding: 0;
   min-height: 1em;
   white-space: pre-wrap;
   word-wrap: break-word;
-  line-height: normal;
+  /* Override inline line-height from style-resolved lineSpacing to match
+     the layout painter's rendering of header/footer content */
+  line-height: normal !important;
 }
 
 /* ============================================================================
