@@ -871,8 +871,11 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
     cursorInTable: boolean;
   }>({ isOpen: false, position: { x: 0, y: 0 }, hasSelection: false, cursorInTable: false });
 
-  // Debounce timer for extractTrackedChanges (avoid full doc walk on every keystroke)
+  // Debounce timers (avoid full doc walk on every keystroke)
   const extractTrackedChangesTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const cleanOrphanedCommentsTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const commentsRef = useRef(comments);
+  commentsRef.current = comments;
 
   // Extract tracked changes from ProseMirror state
   const extractTrackedChanges = useCallback(() => {
@@ -920,11 +923,50 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
     setTrackedChanges(merged);
   }, []);
 
-  // Clean up debounce timer on unmount
+  // Remove comments whose marks no longer exist in the document
+  const cleanOrphanedComments = useCallback(() => {
+    if (isAddingComment) return;
+    const view = pagedEditorRef.current?.getView();
+    if (!view) return;
+    const { doc, schema } = view.state;
+    const commentMarkType = schema.marks.comment;
+    if (!commentMarkType) return;
+
+    const liveIds = new Set<number>();
+    doc.descendants((node) => {
+      for (const mark of node.marks) {
+        if (mark.type === commentMarkType) {
+          const id = mark.attrs.commentId as number;
+          if (id !== PENDING_COMMENT_ID) liveIds.add(id);
+        }
+      }
+    });
+
+    const currentComments = commentsRef.current;
+    const orphanedIds = new Set<number>();
+    for (const c of currentComments) {
+      if (c.parentId == null && !liveIds.has(c.id)) {
+        orphanedIds.add(c.id);
+      }
+    }
+    if (orphanedIds.size === 0) return;
+
+    for (const c of currentComments) {
+      if (orphanedIds.has(c.id)) onCommentDelete?.(c);
+    }
+    setComments((prev) =>
+      prev.filter((c) => !orphanedIds.has(c.id) && !orphanedIds.has(c.parentId!))
+    );
+  }, [isAddingComment, onCommentDelete]);
+
+  // Clean up debounce timers on unmount
   useEffect(() => {
     return () => {
       if (extractTrackedChangesTimerRef.current) {
         clearTimeout(extractTrackedChangesTimerRef.current);
+      }
+      if (cleanOrphanedCommentsTimerRef.current) {
+        clearTimeout(cleanOrphanedCommentsTimerRef.current);
       }
     };
   }, []);
@@ -1135,6 +1177,10 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
       clearTimeout(extractTrackedChangesTimerRef.current);
       extractTrackedChangesTimerRef.current = null;
     }
+    if (cleanOrphanedCommentsTimerRef.current) {
+      clearTimeout(cleanOrphanedCommentsTimerRef.current);
+      cleanOrphanedCommentsTimerRef.current = null;
+    }
   }, [findReplace.setMatches]);
 
   // Load a pre-parsed document (used by ref method and internally)
@@ -1258,8 +1304,13 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
         clearTimeout(extractTrackedChangesTimerRef.current);
       }
       extractTrackedChangesTimerRef.current = setTimeout(extractTrackedChanges, 300);
+      // Clean up orphaned comments (debounced)
+      if (cleanOrphanedCommentsTimerRef.current) {
+        clearTimeout(cleanOrphanedCommentsTimerRef.current);
+      }
+      cleanOrphanedCommentsTimerRef.current = setTimeout(cleanOrphanedComments, 300);
     },
-    [onChange, pushDocument, extractTrackedChanges]
+    [onChange, pushDocument, extractTrackedChanges, cleanOrphanedComments]
   );
 
   // Handle selection changes from ProseMirror
