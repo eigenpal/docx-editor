@@ -32,20 +32,10 @@ describe('commentSerializer', () => {
     });
   });
 
-  describe('w16cid:parentId (reply threading) — #217', () => {
-    test('serializes parentId for replies', () => {
+  describe('reply threading via commentsExtended.xml — #217', () => {
+    test('does NOT put w16cid:parentId on w:comment (threading is via commentsExtended.xml)', () => {
       const xml = serializeComments([makeComment({ id: 1 }), makeComment({ id: 2, parentId: 1 })]);
-      expect(xml).toContain('w16cid:parentId="1"');
-    });
-
-    test('omits parentId for top-level comments', () => {
-      const xml = serializeComments([makeComment({ id: 1 })]);
-      expect(xml).not.toContain('parentId');
-    });
-
-    test('includes w16cid namespace declaration', () => {
-      const xml = serializeComments([makeComment({ id: 1 }), makeComment({ id: 2, parentId: 1 })]);
-      expect(xml).toContain('xmlns:w16cid=');
+      expect(xml).not.toContain('w16cid:parentId');
     });
 
     test('serializes top-level comments before replies', () => {
@@ -53,6 +43,19 @@ describe('commentSerializer', () => {
       const topPos = xml.indexOf('w:id="1"');
       const replyPos = xml.indexOf('w:id="2"');
       expect(topPos).toBeLessThan(replyPos);
+    });
+
+    test('commentsExtended.xml links reply to parent via paraIdParent', () => {
+      const {
+        serializeCommentsWithInfo,
+        serializeCommentsExtended,
+      } = require('./commentSerializer');
+      const { paraInfos } = serializeCommentsWithInfo([
+        makeComment({ id: 1 }),
+        makeComment({ id: 2, parentId: 1 }),
+      ]);
+      const extXml = serializeCommentsExtended(paraInfos);
+      expect(extXml).toContain('w15:paraIdParent=');
     });
   });
 });

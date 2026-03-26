@@ -86,7 +86,8 @@ function serializeComment(
   if (comment.initials) attrs.push(`w:initials="${escapeXml(comment.initials)}"`);
   if (comment.date) attrs.push(`w:date="${escapeXml(comment.date)}"`);
   if (comment.done) attrs.push('w:done="1"');
-  if (comment.parentId != null) attrs.push(`w16cid:parentId="${comment.parentId}"`);
+  // Note: reply threading is handled via commentsExtended.xml (w15:paraIdParent),
+  // NOT via w16cid:parentId on w:comment. Word Online/Pages ignore or reject the latter.
 
   let xml = `<w:comment ${attrs.join(' ')}>`;
   let lastParaId = '';
