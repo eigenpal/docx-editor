@@ -3685,10 +3685,21 @@ body { background: white; }
                         />
                       </div>
                     )}
-                    {/* Brighten text highlight for the focused/expanded comment (only in page content, not sidebar) */}
+                    {/* Brighten highlight for the focused/expanded sidebar item */}
                     {expandedSidebarItem && expandedSidebarItem.startsWith('comment-') && (
                       <style>{`.paged-editor__pages [data-comment-id="${expandedSidebarItem.replace('comment-', '')}"] { background-color: rgba(255, 212, 0, 0.35) !important; border-bottom: 2px solid rgba(255, 212, 0, 0.7) !important; }`}</style>
                     )}
+                    {expandedSidebarItem &&
+                      expandedSidebarItem.startsWith('tc-') &&
+                      (() => {
+                        const revId = expandedSidebarItem.split('-')[1];
+                        return (
+                          <style>{`
+                          .paged-editor__pages .docx-insertion[data-revision-id="${revId}"] { background-color: rgba(52, 168, 83, 0.2) !important; border-bottom: 2px solid #2e7d32 !important; }
+                          .paged-editor__pages .docx-deletion[data-revision-id="${revId}"] { background-color: rgba(211, 47, 47, 0.2) !important; text-decoration-thickness: 2px !important; }
+                        `}</style>
+                        );
+                      })()}
                     <PagedEditor
                       ref={pagedEditorRef}
                       document={history.state}
