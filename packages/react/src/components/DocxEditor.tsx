@@ -3450,8 +3450,6 @@ body { background: white; }
     comments,
     trackedChanges,
     callbacks: stableCallbacks,
-    showResolved: false,
-    expandedResolvedId,
     isAddingComment: showCommentsSidebar ? isAddingComment : false,
     addCommentYPosition,
   });
