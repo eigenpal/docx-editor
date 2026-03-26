@@ -40,7 +40,6 @@ import { DocumentOutline } from './DocumentOutline';
 import { SIDEBAR_DOCUMENT_SHIFT } from './sidebar/constants';
 import { type TrackedChangeEntry } from './sidebar/cardUtils';
 import { UnifiedSidebar } from './UnifiedSidebar';
-import { CommentMarginMarkers } from './CommentMarginMarkers';
 import { useCommentSidebarItems, type CommentCallbacks } from '../hooks/useCommentSidebarItems';
 import type { ReactSidebarItem } from '../plugin-api/types';
 import type { HeadingInfo } from '@eigenpal/docx-core/utils/headingCollector';
@@ -3427,6 +3426,9 @@ body { background: white; }
     onTrackedChangeReply: (revisionId, text) => {
       setComments((prev) => [...prev, createComment(text, author, revisionId)]);
     },
+    onResolvedMarkerClick: (commentId) => {
+      setExpandedResolvedId((prev) => (prev === commentId ? null : commentId));
+    },
   };
 
   // Stable callbacks wrapper that delegates to ref (avoids recreating items on every render)
@@ -3442,15 +3444,24 @@ body { background: white; }
       onRejectChange: (...args) => commentCallbacksRef.current.onRejectChange?.(...args),
       onTrackedChangeReply: (...args) =>
         commentCallbacksRef.current.onTrackedChangeReply?.(...args),
+      onResolvedMarkerClick: (...args) =>
+        commentCallbacksRef.current.onResolvedMarkerClick?.(...args),
     }),
     []
   );
+
+  const resolvedCommentIds = useMemo(() => {
+    const ids = new Set<number>();
+    for (const c of comments) {
+      if (c.done && c.parentId == null) ids.add(c.id);
+    }
+    return ids;
+  }, [comments]);
 
   const commentSidebarItems = useCommentSidebarItems({
     comments,
     trackedChanges,
     callbacks: stableCallbacks,
-    showResolved: false,
     expandedResolvedId,
     isAddingComment: showCommentsSidebar ? isAddingComment : false,
     addCommentYPosition,
@@ -3460,18 +3471,18 @@ body { background: white; }
     const items: ReactSidebarItem[] = [];
     if (showCommentsSidebar) items.push(...commentSidebarItems);
     if (pluginSidebarItems) items.push(...pluginSidebarItems);
+    // Always include resolved comment markers (they're compact icons, not full cards)
+    const resolvedItems = commentSidebarItems.filter((item) => {
+      const cid = parseInt(item.id.replace('comment-', ''), 10);
+      return resolvedCommentIds.has(cid);
+    });
+    if (!showCommentsSidebar) items.push(...resolvedItems);
     return items;
-  }, [showCommentsSidebar, commentSidebarItems, pluginSidebarItems]);
+  }, [showCommentsSidebar, commentSidebarItems, pluginSidebarItems, resolvedCommentIds]);
 
-  const sidebarOpen = allSidebarItems.length > 0;
-
-  const resolvedCommentIds = useMemo(() => {
-    const ids = new Set<number>();
-    for (const c of comments) {
-      if (c.done && c.parentId == null) ids.add(c.id);
-    }
-    return ids;
-  }, [comments]);
+  const sidebarOpen = allSidebarItems.some(
+    (item) => !resolvedCommentIds.has(parseInt(item.id.replace('comment-', ''), 10))
+  );
 
   const editorContainerStyle: CSSProperties = {
     flex: 1,
@@ -3751,30 +3762,6 @@ body { background: white; }
                               editorContainerRef={scrollContainerRef}
                             />
                           )}
-                          <CommentMarginMarkers
-                            comments={comments}
-                            anchorPositions={anchorPositions}
-                            zoom={state.zoom}
-                            pageWidth={(() => {
-                              const sp = history.state?.package?.document?.finalSectionProperties;
-                              return sp?.pageWidth ? Math.round(sp.pageWidth / 15) : 816;
-                            })()}
-                            sidebarOpen={sidebarOpen}
-                            resolvedCommentIds={resolvedCommentIds}
-                            expandedResolvedId={expandedResolvedId}
-                            onMarkerClick={(commentId) => {
-                              const isResolved = resolvedCommentIds.has(commentId);
-                              if (isResolved) {
-                                // Toggle: click again to hide
-                                if (expandedResolvedId === commentId) {
-                                  setExpandedResolvedId(null);
-                                  return;
-                                }
-                                setExpandedResolvedId(commentId);
-                              }
-                              setShowCommentsSidebar(true);
-                            }}
-                          />
                         </>
                       }
                     />

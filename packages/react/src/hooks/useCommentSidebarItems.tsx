@@ -5,6 +5,7 @@ import type { TrackedChangeEntry } from '../components/sidebar/cardUtils';
 import { CommentCard } from '../components/sidebar/CommentCard';
 import { TrackedChangeCard } from '../components/sidebar/TrackedChangeCard';
 import { AddCommentCard } from '../components/sidebar/AddCommentCard';
+import { ResolvedCommentMarker } from '../components/sidebar/ResolvedCommentMarker';
 
 export interface CommentCallbacks {
   onCommentReply?: (commentId: number, text: string) => void;
@@ -16,13 +17,13 @@ export interface CommentCallbacks {
   onAcceptChange?: (from: number, to: number) => void;
   onRejectChange?: (from: number, to: number) => void;
   onTrackedChangeReply?: (revisionId: number, text: string) => void;
+  onResolvedMarkerClick?: (commentId: number) => void;
 }
 
 export interface UseCommentSidebarItemsProps {
   comments: Comment[];
   trackedChanges: TrackedChangeEntry[];
   callbacks: CommentCallbacks;
-  showResolved?: boolean;
   /** Show this specific resolved comment temporarily (for margin marker click) */
   expandedResolvedId?: number | null;
   isAddingComment?: boolean;
@@ -33,20 +34,20 @@ export function useCommentSidebarItems({
   comments,
   trackedChanges,
   callbacks,
-  showResolved = false,
   expandedResolvedId = null,
   isAddingComment = false,
   addCommentYPosition = null,
 }: UseCommentSidebarItemsProps): ReactSidebarItem[] {
-  // Filter visible comments (no replies, no resolved unless showResolved or specifically expanded)
-  const visibleComments = useMemo(
-    () =>
-      comments.filter((c) => {
-        if (c.parentId != null) return false;
-        if (c.done && !showResolved && c.id !== expandedResolvedId) return false;
-        return true;
-      }),
-    [comments, showResolved, expandedResolvedId]
+  // Active root comments (always visible in sidebar)
+  const activeComments = useMemo(
+    () => comments.filter((c) => c.parentId == null && !c.done),
+    [comments]
+  );
+
+  // Resolved root comments (shown as compact markers or expanded card)
+  const resolvedComments = useMemo(
+    () => comments.filter((c) => c.parentId == null && c.done),
+    [comments]
   );
 
   // Pre-group replies by parentId
@@ -84,12 +85,12 @@ export function useCommentSidebarItems({
       });
     }
 
-    // Comment cards
-    for (const comment of visibleComments) {
+    // Active comment cards
+    for (const comment of activeComments) {
       const replies = repliesByParent.get(comment.id) ?? [];
       items.push({
         id: `comment-${comment.id}`,
-        anchorPos: 0, // resolved via anchorKey
+        anchorPos: 0,
         anchorKey: `comment-${comment.id}`,
         priority: 0,
         estimatedHeight: 80,
@@ -104,6 +105,37 @@ export function useCommentSidebarItems({
             onDelete={callbacks.onCommentDelete}
           />
         ),
+      });
+    }
+
+    // Resolved comments — compact marker or expanded card
+    for (const comment of resolvedComments) {
+      const isExpanded = expandedResolvedId === comment.id;
+      const replies = repliesByParent.get(comment.id) ?? [];
+      items.push({
+        id: `comment-${comment.id}`,
+        anchorPos: 0,
+        anchorKey: `comment-${comment.id}`,
+        priority: 0,
+        estimatedHeight: isExpanded ? 80 : 28,
+        render: (props) =>
+          isExpanded ? (
+            <CommentCard
+              {...props}
+              comment={comment}
+              replies={replies}
+              onReply={callbacks.onCommentReply}
+              onResolve={callbacks.onCommentResolve}
+              onUnresolve={callbacks.onCommentUnresolve}
+              onDelete={callbacks.onCommentDelete}
+            />
+          ) : (
+            <ResolvedCommentMarker
+              {...props}
+              comment={comment}
+              onClick={() => callbacks.onResolvedMarkerClick?.(comment.id)}
+            />
+          ),
       });
     }
 
@@ -131,7 +163,9 @@ export function useCommentSidebarItems({
 
     return items;
   }, [
-    visibleComments,
+    activeComments,
+    resolvedComments,
+    expandedResolvedId,
     trackedChanges,
     repliesByParent,
     callbacks,
