@@ -1382,31 +1382,24 @@ function convertHeaderFooterToContent(
             attrs.borders = converted;
           }
         }
-        // Convert spacing (spaceBefore/spaceAfter are in twips, must convert to px)
-        if (
-          formatting.spaceAfter != null ||
-          formatting.spaceBefore != null ||
-          formatting.lineSpacing != null
-        ) {
+        // Convert spacing for measurement.
+        // NOTE: Only convert lineSpacing (affects line height). Skip spaceBefore/
+        // spaceAfter — these are typically style-resolved artifacts (e.g., from
+        // Normal style) inlined during the PM→document round-trip, not intentional
+        // header/footer formatting. The layout painter renders header/footer
+        // paragraphs without inter-paragraph margins, so measurement must match.
+        if (formatting.lineSpacing != null) {
           const spacingAttrs: ParagraphSpacing = {};
-          if (formatting.spaceBefore != null) {
-            spacingAttrs.before = twipsToPixels(formatting.spaceBefore as number);
-          }
-          if (formatting.spaceAfter != null) {
-            spacingAttrs.after = twipsToPixels(formatting.spaceAfter as number);
-          }
-          if (formatting.lineSpacing != null) {
-            const rule = formatting.lineSpacingRule as string | undefined;
-            if (rule === 'exact' || rule === 'atLeast') {
-              spacingAttrs.line = twipsToPixels(formatting.lineSpacing as number);
-              spacingAttrs.lineUnit = 'px';
-              spacingAttrs.lineRule = rule;
-            } else {
-              // Auto — line spacing is in 240ths of a line
-              spacingAttrs.line = (formatting.lineSpacing as number) / 240;
-              spacingAttrs.lineUnit = 'multiplier';
-              spacingAttrs.lineRule = 'auto';
-            }
+          const rule = formatting.lineSpacingRule as string | undefined;
+          if (rule === 'exact' || rule === 'atLeast') {
+            spacingAttrs.line = twipsToPixels(formatting.lineSpacing as number);
+            spacingAttrs.lineUnit = 'px';
+            spacingAttrs.lineRule = rule;
+          } else {
+            // Auto — line spacing is in 240ths of a line
+            spacingAttrs.line = (formatting.lineSpacing as number) / 240;
+            spacingAttrs.lineUnit = 'multiplier';
+            spacingAttrs.lineRule = 'auto';
           }
           attrs.spacing = spacingAttrs;
         }
