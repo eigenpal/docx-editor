@@ -712,12 +712,12 @@ export function IconChatBubbleOutline(props: IconProps) {
   );
 }
 
-/** Speech bubble with checkmark (for resolved comment markers) */
+/** Speech bubble with green checkmark (bubble inherits color, check is green) */
 export function IconChatBubbleCheck(props: IconProps) {
   return (
     <SvgIcon {...props}>
       <path d="M80-80v-720q0-33 23.5-56.5T160-880h640q33 0 56.5 23.5T880-800v480q0 33-23.5 56.5T800-240H240L80-80Zm126-240h594v-480H160v525l46-45Zm-46 0v-480 480Z" />
-      <path d="m421-380 227-227-45-45-182 182-92-91-45 45 137 136Z" />
+      <path fill="#188038" d="m421-380 227-227-45-45-182 182-92-91-45 45 137 136Z" />
     </SvgIcon>
   );
 }

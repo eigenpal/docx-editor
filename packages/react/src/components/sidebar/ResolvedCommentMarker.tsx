@@ -16,8 +16,8 @@ export function ResolvedCommentMarker({ measureRef, onToggleExpand }: ResolvedCo
         display: 'inline-flex',
         alignItems: 'center',
         cursor: 'pointer',
+        color: '#5f6368',
         padding: 2,
-        position: 'relative',
       }}
       onMouseOver={(e) => {
         (e.currentTarget as HTMLElement).style.opacity = '0.7';
@@ -26,12 +26,7 @@ export function ResolvedCommentMarker({ measureRef, onToggleExpand }: ResolvedCo
         (e.currentTarget as HTMLElement).style.opacity = '1';
       }}
     >
-      <span style={{ color: '#5f6368' }}>
-        <MaterialSymbol name="chat_bubble_outline" size={20} />
-      </span>
-      <span style={{ position: 'absolute', left: 5, top: 4, color: '#188038' }}>
-        <MaterialSymbol name="check" size={12} />
-      </span>
+      <MaterialSymbol name="chat_bubble_check" size={20} />
     </div>
   );
 }

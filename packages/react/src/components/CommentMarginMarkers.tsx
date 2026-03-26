@@ -88,12 +88,10 @@ export function CommentMarginMarkers({
             (e.currentTarget as HTMLElement).style.opacity = '1';
           }}
         >
-          <MaterialSymbol name="chat_bubble_outline" size={18} />
-          {isResolved && (
-            <span style={{ position: 'absolute', left: 5, top: 4, color: '#188038' }}>
-              <MaterialSymbol name="check" size={10} />
-            </span>
-          )}
+          <MaterialSymbol
+            name={isResolved ? 'chat_bubble_check' : 'chat_bubble_outline'}
+            size={18}
+          />
         </button>
       ))}
     </div>
