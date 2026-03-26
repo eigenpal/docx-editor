@@ -836,25 +836,6 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
 
   // Comments sidebar state
   const [showCommentsSidebar, setShowCommentsSidebar] = useState(false);
-  const [expandedResolvedId, setExpandedResolvedId] = useState<number | null>(null);
-
-  // Click anywhere outside clears the temporarily expanded resolved comment
-  useEffect(() => {
-    if (expandedResolvedId == null) return;
-    const handleClick = (e: MouseEvent) => {
-      const target = e.target as HTMLElement;
-      // Don't clear if clicking on the resolved comment card or margin marker
-      if (target.closest('.docx-comment-card') || target.closest('.docx-comment-margin-markers'))
-        return;
-      setExpandedResolvedId(null);
-    };
-    // Use setTimeout to avoid catching the same click that opened it
-    const timer = setTimeout(() => document.addEventListener('click', handleClick), 0);
-    return () => {
-      clearTimeout(timer);
-      document.removeEventListener('click', handleClick);
-    };
-  }, [expandedResolvedId]);
   const [comments, setComments] = useState<Comment[]>([]);
   const [trackedChanges, setTrackedChanges] = useState<TrackedChangeEntry[]>([]);
   const [anchorPositions, setAnchorPositions] =
@@ -3450,7 +3431,7 @@ body { background: white; }
     comments,
     trackedChanges,
     callbacks: stableCallbacks,
-    expandedResolvedId,
+    showResolved: showCommentsSidebar,
     isAddingComment: showCommentsSidebar ? isAddingComment : false,
     addCommentYPosition,
   });
@@ -3471,14 +3452,6 @@ body { background: white; }
     }
     return ids;
   }, [comments]);
-
-  // For rendering: exclude the expanded resolved comment so its text gets highlighted
-  const resolvedIdsForRender = useMemo(() => {
-    if (expandedResolvedId == null) return resolvedCommentIds;
-    const ids = new Set(resolvedCommentIds);
-    ids.delete(expandedResolvedId);
-    return ids;
-  }, [resolvedCommentIds, expandedResolvedId]);
 
   const editorContainerStyle: CSSProperties = {
     flex: 1,
@@ -3531,10 +3504,7 @@ body { background: white; }
     <>
       <ToolbarSeparator />
       <ToolbarButton
-        onClick={() => {
-          setShowCommentsSidebar(!showCommentsSidebar);
-          setExpandedResolvedId(null);
-        }}
+        onClick={() => setShowCommentsSidebar(!showCommentsSidebar)}
         active={showCommentsSidebar}
         title="Toggle comments sidebar"
         ariaLabel="Toggle comments sidebar"
@@ -3741,7 +3711,7 @@ body { background: white; }
                       onContextMenu={handleContextMenu}
                       commentsSidebarOpen={sidebarOpen}
                       onAnchorPositionsChange={setAnchorPositions}
-                      resolvedCommentIds={resolvedIdsForRender}
+                      resolvedCommentIds={resolvedCommentIds}
                       scrollContainerRef={scrollContainerRef}
                       sidebarOverlay={
                         <>
@@ -3768,14 +3738,7 @@ body { background: white; }
                             })()}
                             sidebarOpen={sidebarOpen}
                             resolvedCommentIds={resolvedCommentIds}
-                            onMarkerClick={(commentId) => {
-                              const isResolved = resolvedCommentIds.has(commentId);
-                              if (isResolved) {
-                                // Toggle resolved comment in sidebar
-                                setExpandedResolvedId((prev) =>
-                                  prev === commentId ? null : commentId
-                                );
-                              }
+                            onMarkerClick={() => {
                               setShowCommentsSidebar(true);
                             }}
                           />
