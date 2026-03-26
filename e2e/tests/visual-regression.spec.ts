@@ -254,7 +254,7 @@ test.describe('Visual Regression - Responsive', () => {
 test.describe('Visual Regression - Error States', () => {
   test('loading state', async ({ page }) => {
     // Navigate without waiting for ready
-    await page.goto('/');
+    await page.goto('/?toolbar=compact');
 
     // Capture loading state quickly
     await expect(page).toHaveScreenshot('loading-state.png', {

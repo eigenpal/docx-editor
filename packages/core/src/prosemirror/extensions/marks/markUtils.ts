@@ -4,6 +4,7 @@
  * setMark, removeMark, isMarkActive, getMarkAttr, marksToTextFormatting, textFormattingToMarks, clearFormatting
  */
 
+import { toggleMark as pmToggleMark } from 'prosemirror-commands';
 import type { Command, EditorState, Transaction } from 'prosemirror-state';
 import type { MarkType, Mark, Schema } from 'prosemirror-model';
 import type { TextFormatting } from '../../../types/document';
@@ -318,4 +319,26 @@ export function createSetMarkCommand(markType: MarkType, attrs?: Record<string, 
  */
 export function createRemoveMarkCommand(markType: MarkType): Command {
   return removeMark(markType);
+}
+
+/**
+ * Toggle a mark, ensuring empty-paragraph defaults are updated.
+ */
+export function toggleMarkWithStoredMarks(
+  markType: MarkType,
+  attrs: MarkAttrs = {}
+): Command {
+  return (state, dispatch, view) => {
+    const { empty } = state.selection;
+
+    if (empty) {
+      const marks = state.storedMarks || state.selection.$from.marks();
+      if (markType.isInSet(marks)) {
+        return removeMark(markType)(state, dispatch, view);
+      }
+      return setMark(markType, attrs)(state, dispatch, view);
+    }
+
+    return pmToggleMark(markType, attrs)(state, dispatch, view);
+  };
 }

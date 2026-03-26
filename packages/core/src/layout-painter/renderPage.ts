@@ -35,6 +35,7 @@ import type { BorderSpec } from '../types/document';
 import { borderToStyle } from '../utils/formatToStyle';
 import type { Theme } from '../types/document';
 import { measureParagraph, type FloatingImageZone } from '../layout-bridge/measuring';
+import { PERF_ENABLED } from '../utils/perfFlags';
 
 /**
  * Page-level floating image that has been extracted from paragraphs.
@@ -100,6 +101,29 @@ export const PAGE_CLASS_NAMES = {
   header: 'layout-page-header',
   footer: 'layout-page-footer',
 };
+
+interface RenderPerfEntry {
+  ts: number;
+  totalMs: number;
+  path: 'incremental' | 'full';
+  useVirtualization: boolean;
+  totalPages: number;
+  optionsMatch: boolean;
+}
+
+function recordRenderPerf(entry: RenderPerfEntry): void {
+  if (!PERF_ENABLED) return;
+  if (typeof window === 'undefined') return;
+  const win = window as Window & {
+    __DOCX_LAYOUT_PROBE__?: boolean;
+    __DOCX_RENDER_PERF_LOG__?: RenderPerfEntry[];
+  };
+  if (!win.__DOCX_LAYOUT_PROBE__) return;
+  if (!win.__DOCX_RENDER_PERF_LOG__) {
+    win.__DOCX_RENDER_PERF_LOG__ = [];
+  }
+  win.__DOCX_RENDER_PERF_LOG__.push(entry);
+}
 
 /**
  * Context passed to fragment renderers
@@ -1402,16 +1426,18 @@ export function renderPages(
     footnotesByPage?: Map<number, FootnoteRenderItem[]>;
   } = {}
 ): void {
+  const perfStart = PERF_ENABLED ? performance.now() : 0;
   const totalPages = pages.length;
   const pageGap = options.pageGap ?? 24;
   const pc = container as PageContainer;
   const prevState = pc.__pageRenderState;
+  const prevVirtualized = Boolean(pc.__pageObserver);
   const currentOptionsHash = computeOptionsHash(options);
   const useVirtualization = totalPages >= VIRTUALIZATION_THRESHOLD;
+  const optionsMatch = Boolean(prevState && prevState.optionsHash === currentOptionsHash);
 
   // Determine if we can do an incremental update
-  const canIncremental =
-    prevState && prevState.optionsHash === currentOptionsHash && useVirtualization;
+  const canIncremental = prevState && optionsMatch && prevVirtualized === useVirtualization;
 
   if (canIncremental) {
     // --- INCREMENTAL UPDATE PATH ---
@@ -1513,6 +1539,17 @@ export function renderPages(
     prevState.totalPages = totalPages;
     prevState.currentOptions = options;
 
+    if (PERF_ENABLED) {
+      recordRenderPerf({
+        ts: performance.now(),
+        totalMs: performance.now() - perfStart,
+        path: 'incremental',
+        useVirtualization,
+        totalPages,
+        optionsMatch,
+      });
+    }
+
     return;
   }
 
@@ -1561,6 +1598,29 @@ export function renderPages(
   if (!useVirtualization) {
     // Store state for potential future incremental updates (won't be used
     // since small docs skip the incremental path, but keeps data consistent)
+    const pageDataMap = new Map<HTMLElement, { page: Page; index: number; rendered: boolean }>();
+    for (let i = 0; i < pages.length; i++) {
+      pageDataMap.set(pageShells[i], { page: pages[i], index: i, rendered: true });
+    }
+
+    pc.__pageRenderState = {
+      pageStates: pageShells.map((el, i) => ({ element: el, fingerprint: fingerprints[i] })),
+      totalPages,
+      optionsHash: currentOptionsHash,
+      pageDataMap,
+      currentOptions: options,
+    };
+
+    if (PERF_ENABLED) {
+      recordRenderPerf({
+        ts: performance.now(),
+        totalMs: performance.now() - perfStart,
+        path: 'full',
+        useVirtualization,
+        totalPages,
+        optionsMatch,
+      });
+    }
     return;
   }
 
@@ -1666,6 +1726,17 @@ export function renderPages(
   const initialRenderCount = Math.min(pages.length, VIRTUALIZATION_BUFFER + 3);
   for (let i = 0; i < initialRenderCount; i++) {
     populatePageShell(pageShells[i], pageDataMap, totalPages, options);
+  }
+
+  if (PERF_ENABLED) {
+    recordRenderPerf({
+      ts: performance.now(),
+      totalMs: performance.now() - perfStart,
+      path: 'full',
+      useVirtualization,
+      totalPages,
+      optionsMatch,
+    });
   }
 }
 

@@ -72,7 +72,18 @@ export function extractSelectionState(state: EditorState): SelectionState | null
 
   // For empty selection (cursor), use stored marks or marks at cursor position
   // For non-empty selection, check marks at the start of selection
-  const marks = state.storedMarks || selection.$from.marks();
+  let marks = state.storedMarks || selection.$from.marks();
+
+  // If cursor is at a formatting boundary, fall back to the next/previous text node
+  if (empty && marks.length === 0) {
+    const after = selection.$from.nodeAfter;
+    const before = selection.$from.nodeBefore;
+    if (after?.isText) {
+      marks = after.marks;
+    } else if (before?.isText) {
+      marks = before.marks;
+    }
+  }
 
   // If in empty paragraph with no marks but has defaultTextFormatting, use that
   if (isEmptyParagraph && marks.length === 0 && paragraphDefaultFormatting) {

@@ -541,10 +541,9 @@ test.describe('Style Detection at Cursor', () => {
     await page.waitForTimeout(100);
 
     // Check if style picker shows Heading 1
-    const stylePicker = page.locator('select[aria-label="Select paragraph style"]');
-    const styleValue = await stylePicker.inputValue();
+    const stylePicker = page.getByRole('combobox', { name: 'Select paragraph style' });
     // Should contain 'Heading' or 'H1' or similar
-    expect(styleValue?.toLowerCase()).toMatch(/heading|h1/i);
+    await expect(stylePicker).toContainText(/heading|h1/i);
   });
 
   test('cursor in normal paragraph shows normal style', async ({ page }) => {
@@ -578,9 +577,8 @@ test.describe('Style Detection at Cursor', () => {
 
     await page.waitForTimeout(100);
 
-    const stylePicker = page.locator('select[aria-label="Select paragraph style"]');
-    const styleValue = await stylePicker.inputValue();
-    expect(styleValue?.toLowerCase()).toMatch(/normal|body|paragraph/i);
+    const stylePicker = page.getByRole('combobox', { name: 'Select paragraph style' });
+    await expect(stylePicker).toContainText(/normal|body|paragraph/i);
   });
 });
 
@@ -840,9 +838,8 @@ test.describe('Font Detection at Cursor', () => {
     await page.waitForTimeout(100);
 
     // Check font picker shows Georgia
-    const fontPicker = page.locator('select[aria-label="Select font family"]');
-    const fontValue = await fontPicker.inputValue();
-    expect(fontValue?.toLowerCase()).toContain('georgia');
+    const fontPicker = page.getByRole('combobox', { name: 'Select font family' });
+    await expect(fontPicker).toContainText(/georgia/i);
   });
 });
 

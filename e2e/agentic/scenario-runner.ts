@@ -257,6 +257,14 @@ export class ScenarioRunner {
         await this.editor.setFontSize(args.size as number);
         break;
 
+      case 'setLineSpacing':
+        await this.editor.setLineSpacing(args.spacing as string);
+        break;
+
+      case 'setParagraphStyle':
+        await this.editor.setParagraphStyle(args.style as string);
+        break;
+
       case 'setTextColor':
         await this.editor.setTextColor(args.color as string);
         break;

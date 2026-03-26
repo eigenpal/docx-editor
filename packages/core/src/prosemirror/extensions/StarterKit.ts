@@ -60,6 +60,7 @@ import { createTableExtensions } from './nodes/TableExtension';
 import { ListExtension } from './features/ListExtension';
 import { BaseKeymapExtension } from './features/BaseKeymapExtension';
 import { SelectionTrackerExtension } from './features/SelectionTrackerExtension';
+import { StoredMarksSyncExtension } from './features/StoredMarksSyncExtension';
 import { ImageDragExtension } from './features/ImageDragExtension';
 import { ImagePasteExtension } from './features/ImagePasteExtension';
 import { DropCursorExtension } from './features/DropCursorExtension';
@@ -159,6 +160,7 @@ export function createStarterKit(options: StarterKitOptions = {}): AnyExtension[
       onSelectionChange: options.onSelectionChange,
     })
   );
+  add('storedMarksSync', StoredMarksSyncExtension());
   add('paragraphChangeTracker', ParagraphChangeTrackerExtension());
   add('bidiShortcut', BidiShortcutExtension());
 

@@ -9,31 +9,44 @@
  * - Hyperlink dialog validation
  */
 
-import { test, expect } from '@playwright/test';
+import { test, expect, Page } from '@playwright/test';
 
 // Helper to get the modifier key for the current platform
 const getModifier = () => (process.platform === 'darwin' ? 'Meta' : 'Control');
 
+const focusEditor = async (page: Page) => {
+  await page.evaluate(() => {
+    const editor = document.querySelector('.ProseMirror');
+    if (editor instanceof HTMLElement) {
+      editor.focus();
+    }
+  });
+  await page.waitForTimeout(50);
+};
+
+const selectAllText = async (page: Page) => {
+  await page.keyboard.press(`${getModifier()}+a`);
+};
+
 test.describe('Hyperlinks', () => {
   test.beforeEach(async ({ page }) => {
-    await page.goto('/');
+    await page.goto('/?toolbar=compact&demo=0');
     // Wait for editor to be ready
     await page.waitForSelector('[data-testid="docx-editor"]');
     await page.waitForTimeout(500);
   });
 
   test('should open hyperlink dialog with Cmd+K', async ({ page }) => {
-    // Click in editor to focus
-    const editor = page.locator('.prosemirror-editor-content');
-    await editor.click();
+    // Focus editor
+    await focusEditor(page);
     await page.waitForTimeout(200);
 
     // Type some text
     await page.keyboard.type('Click here', { delay: 50 });
     await page.waitForTimeout(100);
 
-    // Select the text using triple-click (more reliable than Ctrl+A)
-    await editor.click({ clickCount: 3 });
+    // Select all text
+    await selectAllText(page);
     await page.waitForTimeout(100);
 
     // Open hyperlink dialog with Cmd/Ctrl+K
@@ -51,17 +64,16 @@ test.describe('Hyperlinks', () => {
   });
 
   test('should open hyperlink dialog via toolbar button', async ({ page }) => {
-    // Click in editor to focus
-    const editor = page.locator('.prosemirror-editor-content');
-    await editor.click();
+    // Focus editor
+    await focusEditor(page);
     await page.waitForTimeout(200);
 
     // Type some text
     await page.keyboard.type('Click here', { delay: 50 });
     await page.waitForTimeout(100);
 
-    // Select the text using triple-click
-    await editor.click({ clickCount: 3 });
+    // Select all text
+    await selectAllText(page);
     await page.waitForTimeout(100);
 
     // Click the link button in toolbar
@@ -74,17 +86,17 @@ test.describe('Hyperlinks', () => {
   });
 
   test('should insert hyperlink with URL', async ({ page }) => {
-    // Click in editor to focus
-    const editor = page.locator('.prosemirror-editor-content');
-    await editor.click();
+    const editor = page.locator('.ProseMirror');
+    // Focus editor
+    await focusEditor(page);
     await page.waitForTimeout(200);
 
     // Type some text
     await page.keyboard.type('Visit Google', { delay: 50 });
     await page.waitForTimeout(100);
 
-    // Select the text using triple-click
-    await editor.click({ clickCount: 3 });
+    // Select all text
+    await selectAllText(page);
     await page.waitForTimeout(100);
 
     // Open hyperlink dialog via toolbar button
@@ -113,17 +125,16 @@ test.describe('Hyperlinks', () => {
   });
 
   test('should require URL to submit', async ({ page }) => {
-    // Click in editor to focus
-    const editor = page.locator('.prosemirror-editor-content');
-    await editor.click();
+    // Focus editor
+    await focusEditor(page);
     await page.waitForTimeout(200);
 
     // Type some text
     await page.keyboard.type('Click here', { delay: 50 });
     await page.waitForTimeout(100);
 
-    // Select the text using triple-click
-    await editor.click({ clickCount: 3 });
+    // Select all text
+    await selectAllText(page);
     await page.waitForTimeout(100);
 
     // Open hyperlink dialog via toolbar button
@@ -144,15 +155,14 @@ test.describe('Hyperlinks', () => {
   });
 
   test('should close dialog on Cancel', async ({ page }) => {
-    // Click in editor to focus
-    const editor = page.locator('.prosemirror-editor-content');
-    await editor.click();
+    // Focus editor
+    await focusEditor(page);
     await page.waitForTimeout(200);
 
     // Type and select text
     await page.keyboard.type('Click here', { delay: 50 });
     await page.waitForTimeout(100);
-    await editor.click({ clickCount: 3 });
+    await selectAllText(page);
     await page.waitForTimeout(100);
 
     // Open hyperlink dialog via toolbar button
@@ -172,15 +182,14 @@ test.describe('Hyperlinks', () => {
   });
 
   test('should close dialog on Escape', async ({ page }) => {
-    // Click in editor to focus
-    const editor = page.locator('.prosemirror-editor-content');
-    await editor.click();
+    // Focus editor
+    await focusEditor(page);
     await page.waitForTimeout(200);
 
     // Type and select text
     await page.keyboard.type('Click here', { delay: 50 });
     await page.waitForTimeout(100);
-    await editor.click({ clickCount: 3 });
+    await selectAllText(page);
     await page.waitForTimeout(100);
 
     // Open hyperlink dialog via toolbar button
@@ -204,17 +213,17 @@ test.describe('Hyperlinks', () => {
   });
 
   test('should auto-add https:// if protocol missing', async ({ page }) => {
-    // Click in editor to focus
-    const editor = page.locator('.prosemirror-editor-content');
-    await editor.click();
+    const editor = page.locator('.ProseMirror');
+    // Focus editor
+    await focusEditor(page);
     await page.waitForTimeout(200);
 
     // Type some text
     await page.keyboard.type('Google', { delay: 50 });
     await page.waitForTimeout(100);
 
-    // Select the text using triple-click
-    await editor.click({ clickCount: 3 });
+    // Select all text
+    await selectAllText(page);
     await page.waitForTimeout(100);
 
     // Open hyperlink dialog via toolbar button
@@ -239,17 +248,17 @@ test.describe('Hyperlinks', () => {
   });
 
   test('should support mailto: links', async ({ page }) => {
-    // Click in editor to focus
-    const editor = page.locator('.prosemirror-editor-content');
-    await editor.click();
+    const editor = page.locator('.ProseMirror');
+    // Focus editor
+    await focusEditor(page);
     await page.waitForTimeout(200);
 
     // Type some text
     await page.keyboard.type('Email us', { delay: 50 });
     await page.waitForTimeout(100);
 
-    // Select the text using triple-click
-    await editor.click({ clickCount: 3 });
+    // Select all text
+    await selectAllText(page);
     await page.waitForTimeout(100);
 
     // Open hyperlink dialog via toolbar button
@@ -274,17 +283,17 @@ test.describe('Hyperlinks', () => {
   });
 
   test('should open links in new tab', async ({ page }) => {
-    // Click in editor to focus
-    const editor = page.locator('.prosemirror-editor-content');
-    await editor.click();
+    // Focus editor
+    const editor = page.locator('.ProseMirror');
+    await focusEditor(page);
     await page.waitForTimeout(200);
 
     // Type some text
     await page.keyboard.type('External', { delay: 50 });
     await page.waitForTimeout(100);
 
-    // Select the text using triple-click
-    await editor.click({ clickCount: 3 });
+    // Select all text
+    await selectAllText(page);
     await page.waitForTimeout(100);
 
     // Open hyperlink dialog via toolbar button
@@ -310,17 +319,17 @@ test.describe('Hyperlinks', () => {
   });
 
   test('should insert hyperlink with tooltip', async ({ page }) => {
-    // Click in editor to focus
-    const editor = page.locator('.prosemirror-editor-content');
-    await editor.click();
+    // Focus editor
+    const editor = page.locator('.ProseMirror');
+    await focusEditor(page);
     await page.waitForTimeout(200);
 
     // Type some text
     await page.keyboard.type('Hover me', { delay: 50 });
     await page.waitForTimeout(100);
 
-    // Select the text using triple-click
-    await editor.click({ clickCount: 3 });
+    // Select all text
+    await selectAllText(page);
     await page.waitForTimeout(100);
 
     // Open hyperlink dialog via toolbar button

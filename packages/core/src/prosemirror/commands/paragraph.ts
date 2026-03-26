@@ -81,6 +81,9 @@ export function setSpaceAfter(twips: number): Command {
   return cmds.setSpaceAfter(twips);
 }
 
+// Paragraph borders
+export const toggleParagraphBottomBorder: Command = cmds.toggleParagraphBottomBorder();
+
 // Paragraph styles
 export function applyStyle(styleId: string, resolvedAttrs?: ResolvedStyleAttrs): Command {
   return cmds.applyStyle(styleId, resolvedAttrs);

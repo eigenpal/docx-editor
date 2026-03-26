@@ -69,6 +69,10 @@ export interface InlineHeaderFooterEditorRef {
   undo(): boolean;
   /** Redo */
   redo(): boolean;
+  /** Whether undo is available */
+  canUndo(): boolean;
+  /** Whether redo is available */
+  canRedo(): boolean;
 }
 
 // ============================================================================
@@ -291,6 +295,16 @@ export const InlineHeaderFooterEditor = forwardRef<
       const view = viewRef.current;
       if (!view) return false;
       return redo(view.state, view.dispatch);
+    },
+    canUndo: () => {
+      const view = viewRef.current;
+      if (!view) return false;
+      return undo(view.state);
+    },
+    canRedo: () => {
+      const view = viewRef.current;
+      if (!view) return false;
+      return redo(view.state);
     },
   }));
 

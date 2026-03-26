@@ -119,7 +119,16 @@ export function extractSelectionContext(state: EditorState): SelectionContext {
   const listLevel = numPr?.ilvl;
 
   // Comment and tracked change detection
-  const allMarks = state.storedMarks || (empty ? $from.marks() : []);
+  let allMarks = state.storedMarks || (empty ? $from.marks() : []);
+  if (empty && allMarks.length === 0) {
+    const after = $from.nodeAfter;
+    const before = $from.nodeBefore;
+    if (after?.isText) {
+      allMarks = after.marks;
+    } else if (before?.isText) {
+      allMarks = before.marks;
+    }
+  }
   const activeCommentIds: number[] = [];
   let inInsertion = false;
   let inDeletion = false;
@@ -160,7 +169,16 @@ function extractTextFormatting(state: EditorState): TextFormatting {
   const { empty, $from } = selection;
 
   // Get marks: stored marks take precedence, then marks at cursor
-  const marks = state.storedMarks || (empty ? $from.marks() : []);
+  let marks = state.storedMarks || (empty ? $from.marks() : []);
+  if (empty && marks.length === 0) {
+    const after = $from.nodeAfter;
+    const before = $from.nodeBefore;
+    if (after?.isText) {
+      marks = after.marks;
+    } else if (before?.isText) {
+      marks = before.marks;
+    }
+  }
   const formatting: TextFormatting = {};
 
   for (const mark of marks) {

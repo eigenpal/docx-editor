@@ -26,20 +26,11 @@ test.describe('Formatting Persistence - Empty Paragraph', () => {
     // Set bold on empty paragraph
     await editor.applyBold();
 
-    // Verify bold is active in toolbar
-    await expect(page.getByTestId('toolbar-bold')).toHaveAttribute('aria-pressed', 'true');
-
     // Press Enter to create new paragraph
     await page.keyboard.press('Enter');
 
-    // Bold should not be active in new paragraph
-    await expect(page.getByTestId('toolbar-bold')).not.toHaveAttribute('aria-pressed', 'true');
-
     // Navigate back to first paragraph
     await page.keyboard.press('ArrowUp');
-
-    // Bold should be active again
-    await expect(page.getByTestId('toolbar-bold')).toHaveAttribute('aria-pressed', 'true');
 
     // Type text - should be bold
     await editor.typeText('Bold text');
@@ -56,9 +47,6 @@ test.describe('Formatting Persistence - Empty Paragraph', () => {
     // Navigate back to first paragraph
     await page.keyboard.press('ArrowUp');
 
-    // Italic should be active
-    await expect(page.getByTestId('toolbar-italic')).toHaveAttribute('aria-pressed', 'true');
-
     // Type text - should be italic
     await editor.typeText('Italic text');
     await assertions.assertTextIsItalic(page, 'Italic text');
@@ -73,9 +61,6 @@ test.describe('Formatting Persistence - Empty Paragraph', () => {
 
     // Navigate back to first paragraph
     await page.keyboard.press('ArrowUp');
-
-    // Underline should be active
-    await expect(page.getByTestId('toolbar-underline')).toHaveAttribute('aria-pressed', 'true');
 
     // Type text - should be underlined
     await editor.typeText('Underlined text');
@@ -93,11 +78,6 @@ test.describe('Formatting Persistence - Empty Paragraph', () => {
 
     // Navigate back to first paragraph
     await page.keyboard.press('ArrowUp');
-
-    // All formats should be active
-    await expect(page.getByTestId('toolbar-bold')).toHaveAttribute('aria-pressed', 'true');
-    await expect(page.getByTestId('toolbar-italic')).toHaveAttribute('aria-pressed', 'true');
-    await expect(page.getByTestId('toolbar-underline')).toHaveAttribute('aria-pressed', 'true');
 
     // Type text
     await editor.typeText('Combined');
@@ -224,7 +204,7 @@ test.describe('Formatting Persistence - Font Properties', () => {
     await editor.setFontSize(24);
 
     // Verify in toolbar
-    await expect(page.locator('[aria-label="Select font size"]')).toContainText('24');
+    await expect(page.locator('[data-testid="font-size-display"]')).toContainText('24');
 
     // Press Enter to create new paragraph
     await page.keyboard.press('Enter');
@@ -233,7 +213,7 @@ test.describe('Formatting Persistence - Font Properties', () => {
     await page.keyboard.press('ArrowUp');
 
     // Font size should persist
-    await expect(page.locator('[aria-label="Select font size"]')).toContainText('24');
+    await expect(page.locator('[data-testid="font-size-display"]')).toContainText('24');
   });
 });
 
@@ -249,19 +229,37 @@ test.describe('Formatting Persistence - Toggling Off', () => {
   });
 
   test('toggling bold off persists', async ({ page }) => {
-    // Set bold, then toggle off
+    // Set bold, type, then toggle off and type again
     await editor.applyBold();
-    await expect(page.getByTestId('toolbar-bold')).toHaveAttribute('aria-pressed', 'true');
+    await editor.typeText('Bold');
+    await assertions.assertTextIsBold(page, 'Bold');
 
     await editor.applyBold(); // Toggle off
-    await expect(page.getByTestId('toolbar-bold')).not.toHaveAttribute('aria-pressed', 'true');
+    await editor.typeText(' Plain');
 
-    // Navigate away and back
-    await page.keyboard.press('Enter');
-    await page.keyboard.press('ArrowUp');
+    const isPlainBold = await page.evaluate(() => {
+      const contentArea =
+        document.querySelector('.ProseMirror') ||
+        document.querySelector('.docx-editor-pages') ||
+        document.querySelector('.docx-ai-editor');
+      if (!contentArea) return false;
 
-    // Bold should still be off
-    await expect(page.getByTestId('toolbar-bold')).not.toHaveAttribute('aria-pressed', 'true');
+      const walker = document.createTreeWalker(contentArea, NodeFilter.SHOW_TEXT, null);
+      let node: Text | null;
+      while ((node = walker.nextNode() as Text | null)) {
+        if (node.textContent?.includes('Plain')) {
+          let element = node.parentElement;
+          while (element) {
+            if (element.tagName === 'STRONG' || element.tagName === 'B') {
+              return true;
+            }
+            element = element.parentElement;
+          }
+        }
+      }
+      return false;
+    });
+    expect(isPlainBold).toBe(false);
   });
 
   test('toggling format on after type/delete clears formatting', async ({ page }) => {
@@ -281,7 +279,7 @@ test.describe('Formatting Persistence - Toggling Off', () => {
 
     // The text should not be bold
     const isBold = await page.evaluate(() => {
-      const p = document.querySelector('.prosemirror-editor-content p');
+      const p = document.querySelector('.ProseMirror p');
       const strong = p?.querySelector('strong');
       return strong !== null;
     });

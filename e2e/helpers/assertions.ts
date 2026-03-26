@@ -313,6 +313,47 @@ export async function assertTextHasColor(
 }
 
 /**
+ * Assert text has a specific background color
+ */
+export async function assertTextHasBackgroundColor(
+  page: Page,
+  searchText: string,
+  expectedColor: string
+): Promise<void> {
+  const actualColor = await page.evaluate((text) => {
+    const contentArea =
+      document.querySelector('.ProseMirror') ||
+      document.querySelector('.docx-editor-pages') ||
+      document.querySelector('.docx-ai-editor');
+    if (!contentArea) return '';
+
+    const walker = document.createTreeWalker(contentArea, NodeFilter.SHOW_TEXT, null);
+
+    let node: Text | null;
+    while ((node = walker.nextNode() as Text | null)) {
+      if (node.textContent?.includes(text)) {
+        let element = node.parentElement;
+        while (element && element !== contentArea) {
+          const style = window.getComputedStyle(element);
+          const bg = style.backgroundColor;
+          if (bg && bg !== 'rgba(0, 0, 0, 0)' && bg !== 'transparent') {
+            return bg;
+          }
+          element = element.parentElement;
+        }
+        return window.getComputedStyle(node.parentElement as Element).backgroundColor;
+      }
+    }
+    return '';
+  }, searchText);
+
+  expect(
+    actualColor.toLowerCase(),
+    `Expected "${searchText}" to have background color "${expectedColor}"`
+  ).toContain(expectedColor.toLowerCase());
+}
+
+/**
  * Assert paragraph has specific alignment
  */
 export async function assertParagraphAlignment(
@@ -320,17 +361,52 @@ export async function assertParagraphAlignment(
   paragraphIndex: number,
   expectedAlignment: 'left' | 'center' | 'right' | 'justify'
 ): Promise<void> {
-  const alignment = await page.evaluate((pIndex) => {
-    const paragraph = document.querySelector(`[data-paragraph-index="${pIndex}"]`);
-    if (!paragraph) return '';
-    const style = window.getComputedStyle(paragraph);
-    return style.textAlign;
-  }, paragraphIndex);
+  await expect
+    .poll(
+      async () =>
+        await page.evaluate((pIndex) => {
+          const candidates: Element[] = [];
 
-  expect(
-    alignment,
-    `Expected paragraph ${paragraphIndex} to have alignment "${expectedAlignment}"`
-  ).toBe(expectedAlignment);
+          const proseMirror = document.querySelector('.ProseMirror');
+          if (proseMirror) {
+            const proseByData = proseMirror.querySelector(`[data-paragraph-index="${pIndex}"]`);
+            if (proseByData) candidates.push(proseByData);
+
+            const proseParagraphs = proseMirror.querySelectorAll('p');
+            if (proseParagraphs[pIndex]) candidates.push(proseParagraphs[pIndex]);
+          }
+
+          const byData = document.querySelector(`[data-paragraph-index="${pIndex}"]`);
+          if (byData) candidates.push(byData);
+
+          if (candidates.length === 0) return '';
+
+          const visible =
+            candidates.find((candidate) => candidate.getClientRects().length > 0) || candidates[0];
+
+          const readAlign = (element: Element | null): string => {
+            let current: Element | null = element;
+            while (current) {
+              const align = window.getComputedStyle(current).textAlign;
+              if (align) return align;
+              current = current.parentElement;
+            }
+            return '';
+          };
+
+          const rawAlign = readAlign(visible);
+          if (rawAlign === 'start') return 'left';
+          if (rawAlign === 'end') return 'right';
+          return rawAlign;
+        }, paragraphIndex),
+      {
+        timeout: 2000,
+      }
+    )
+    .toBe(
+      expectedAlignment,
+      `Expected paragraph ${paragraphIndex} to have alignment "${expectedAlignment}"`
+    );
 }
 
 /**
@@ -343,29 +419,56 @@ export async function assertParagraphIsList(
 ): Promise<void> {
   const isList = await page.evaluate(
     ({ pIndex, type }) => {
-      const paragraph = document.querySelector(`p[data-paragraph-index="${pIndex}"]`);
-      if (!paragraph) return false;
+      const bulletMarker = /^[•○▪◦▸●‣–-]$/;
+      const numberedMarker = /^(?:\d+|[ivxlcdm]+|[a-z]+)[.)]?$/i;
 
-      // Check for our editor's list classes
-      if (type === 'bullet' && paragraph.classList.contains('docx-list-bullet')) return true;
-      if (type === 'numbered' && paragraph.classList.contains('docx-list-numbered')) return true;
+      const matchesMarker = (markerText: string): boolean => {
+        const text = markerText.trim();
+        if (!text) return false;
+        return type === 'bullet' ? bulletMarker.test(text) : numberedMarker.test(text);
+      };
 
-      // Also check for generic list-item class with list marker check
-      if (paragraph.classList.contains('docx-list-item')) {
-        // Look for list marker
-        const marker = paragraph.querySelector('.docx-list-marker');
-        if (marker) {
-          const markerText = marker.textContent || '';
-          if (type === 'bullet' && /^[•○▪◦▸]$/.test(markerText)) return true;
-          if (type === 'numbered' && /^\d+\.$/.test(markerText)) return true;
+      const candidates: Element[] = [];
+
+      // Prefer ProseMirror paragraph elements when available (source of truth).
+      const proseParagraph = document.querySelector(`.ProseMirror p[data-paragraph-index="${pIndex}"]`);
+      if (proseParagraph) candidates.push(proseParagraph);
+
+      const proseParagraphs = document.querySelectorAll('.ProseMirror p');
+      if (proseParagraphs[pIndex]) candidates.push(proseParagraphs[pIndex]);
+
+      // Fallback to any element with data-paragraph-index (layout or editor)
+      const paragraphByIndex = document.querySelector(`[data-paragraph-index="${pIndex}"]`);
+      if (paragraphByIndex) candidates.push(paragraphByIndex);
+
+      if (candidates.length === 0) return false;
+
+      for (const paragraph of candidates) {
+        // Check for our editor's list classes
+        if (type === 'bullet' && paragraph.classList.contains('docx-list-bullet')) return true;
+        if (type === 'numbered' && paragraph.classList.contains('docx-list-numbered')) return true;
+
+        // Attribute-based marker (ProseMirror)
+        const markerAttr = paragraph.getAttribute('data-list-marker');
+        if (markerAttr && matchesMarker(markerAttr)) return true;
+
+        // Marker elements inside the paragraph (layout or editor)
+        const markerEl = paragraph.querySelector('.docx-list-marker, .layout-list-marker');
+        if (markerEl && matchesMarker(markerEl.textContent || '')) return true;
+
+        // Marker in nearest layout paragraph
+        const layoutParagraph = paragraph.closest('.layout-paragraph');
+        if (layoutParagraph) {
+          const layoutMarker = layoutParagraph.querySelector('.layout-list-marker');
+          if (layoutMarker && matchesMarker(layoutMarker.textContent || '')) return true;
         }
-      }
 
-      // Fallback: Check for ul/ol parent (for standard HTML lists)
-      const parent = paragraph.closest('ul, ol');
-      if (parent) {
-        if (type === 'bullet' && parent.tagName === 'UL') return true;
-        if (type === 'numbered' && parent.tagName === 'OL') return true;
+        // Fallback: Check for ul/ol parent (for standard HTML lists)
+        const parent = paragraph.closest('ul, ol');
+        if (parent) {
+          if (type === 'bullet' && parent.tagName === 'UL') return true;
+          if (type === 'numbered' && parent.tagName === 'OL') return true;
+        }
       }
 
       return false;
@@ -425,21 +528,22 @@ function normalizeWhitespace(text: string): string {
  * Assert document contains specific text (checks editor content area only)
  */
 export async function assertDocumentContainsText(page: Page, expectedText: string): Promise<void> {
-  // Get text only from the editor content area
-  const rawText = await page.evaluate(() => {
-    const contentArea =
-      document.querySelector('.ProseMirror') ||
-      document.querySelector('.docx-editor-pages') ||
-      document.querySelector('.docx-ai-editor');
-    return contentArea?.textContent || '';
-  });
-  // Normalize whitespace for comparison (contentEditable uses &nbsp; instead of regular spaces)
-  const fullText = normalizeWhitespace(rawText);
   const normalizedExpected = normalizeWhitespace(expectedText);
-  expect(
-    fullText.includes(normalizedExpected),
-    `Expected document to contain "${expectedText}" but found: "${fullText}"`
-  ).toBe(true);
+  await expect
+    .poll(
+      async () => {
+        const rawText = await page.evaluate(() => {
+          const contentArea =
+            document.querySelector('.ProseMirror') ||
+            document.querySelector('.docx-editor-pages') ||
+            document.querySelector('.docx-ai-editor');
+          return contentArea?.textContent || '';
+        });
+        return normalizeWhitespace(rawText);
+      },
+      { timeout: 5000 }
+    )
+    .toContain(normalizedExpected);
 }
 
 /**
@@ -449,21 +553,22 @@ export async function assertDocumentNotContainsText(
   page: Page,
   expectedText: string
 ): Promise<void> {
-  // Get text only from the editor content area
-  const rawText = await page.evaluate(() => {
-    const contentArea =
-      document.querySelector('.ProseMirror') ||
-      document.querySelector('.docx-editor-pages') ||
-      document.querySelector('.docx-ai-editor');
-    return contentArea?.textContent || '';
-  });
-  // Normalize whitespace for comparison
-  const fullText = normalizeWhitespace(rawText);
   const normalizedExpected = normalizeWhitespace(expectedText);
-  expect(
-    !fullText.includes(normalizedExpected),
-    `Expected document to NOT contain "${expectedText}" but found: "${fullText}"`
-  ).toBe(true);
+  await expect
+    .poll(
+      async () => {
+        const rawText = await page.evaluate(() => {
+          const contentArea =
+            document.querySelector('.ProseMirror') ||
+            document.querySelector('.docx-editor-pages') ||
+            document.querySelector('.docx-ai-editor');
+          return contentArea?.textContent || '';
+        });
+        return normalizeWhitespace(rawText);
+      },
+      { timeout: 5000 }
+    )
+    .not.toContain(normalizedExpected);
 }
 
 /**

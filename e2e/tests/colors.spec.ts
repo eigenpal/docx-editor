@@ -105,6 +105,19 @@ test.describe('Text Color', () => {
 
     await assertions.assertDocumentContainsText(page, 'Redo color test');
   });
+
+  test('compact split main applies last used text color', async ({ page }) => {
+    await editor.typeText('Red text');
+    await editor.selectAll();
+    await editor.setTextColor('#FF0000');
+
+    await editor.pressEnter();
+    await editor.typeText('Reapply red');
+    await editor.selectText('Reapply red');
+    await editor.applyLastTextColor();
+
+    await assertions.assertTextHasColor(page, 'Reapply red', 'rgb(255, 0, 0)');
+  });
 });
 
 test.describe('Highlight Color', () => {
@@ -181,6 +194,19 @@ test.describe('Highlight Color', () => {
     await editor.undo();
 
     await assertions.assertDocumentContainsText(page, 'Undo highlight test');
+  });
+
+  test('compact split main applies last used highlight color', async ({ page }) => {
+    await editor.typeText('Yellow highlight');
+    await editor.selectAll();
+    await editor.setHighlightColor('yellow');
+
+    await editor.pressEnter();
+    await editor.typeText('Reapply yellow');
+    await editor.selectText('Reapply yellow');
+    await editor.applyLastHighlightColor();
+
+    await assertions.assertTextHasBackgroundColor(page, 'Reapply yellow', 'rgb(255, 255, 0)');
   });
 });
 

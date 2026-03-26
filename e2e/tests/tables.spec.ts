@@ -497,12 +497,31 @@ test.describe('Table Navigation', () => {
     await editor.clickTableCell(0, 0, 0);
     await editor.typeText('Hello World');
 
-    // Move to start with Home key (more reliable than counting arrow presses)
-    await page.keyboard.press('Home');
-    // Move right 5 chars to position after "Hello"
-    for (let i = 0; i < 5; i++) {
-      await page.keyboard.press('ArrowRight');
-    }
+    // Place cursor after "Hello" using a DOM range inside the first cell
+    await page.evaluate(() => {
+      const table = document.querySelector('.ProseMirror table');
+      const cell = table?.querySelector('tr td, tr th');
+      if (!cell) return;
+
+      const walker = document.createTreeWalker(cell, NodeFilter.SHOW_TEXT, null);
+      const node = walker.nextNode() as Text | null;
+      if (!node || !node.textContent) return;
+
+      const range = document.createRange();
+      const offset = Math.min(5, node.textContent.length);
+      range.setStart(node, offset);
+      range.collapse(true);
+
+      const selection = window.getSelection();
+      selection?.removeAllRanges();
+      selection?.addRange(range);
+
+      if (cell instanceof HTMLElement) {
+        cell.focus();
+      }
+      document.dispatchEvent(new Event('selectionchange'));
+    });
+    await page.waitForTimeout(100);
     await editor.typeText('!');
 
     const content = await editor.getTableCellContent(0, 0, 0);

@@ -10,7 +10,7 @@
  *
  * const editor = await renderAsync(docxBlob, document.getElementById('container'), {
  *   readOnly: false,
- *   showToolbar: true,
+ *   toolbar: 'compact',
  * });
  *
  * // Save the edited document

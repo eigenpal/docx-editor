@@ -54,5 +54,5 @@ export default defineConfig({
   },
 
   /* Output directory for screenshots */
-  outputDir: './screenshots/test-results',
+  outputDir: process.env.PW_OUTPUT_DIR ?? './screenshots/test-results-heap',
 });

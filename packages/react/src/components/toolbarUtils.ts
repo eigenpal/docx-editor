@@ -8,7 +8,7 @@
 import type { TextFormatting, ParagraphFormatting } from '@eigenpal/docx-core/types/document';
 import { pointsToHalfPoints } from './ui/FontSizePicker';
 import { createDefaultListState } from './ui/ListButtons';
-import type { SelectionFormatting, FormattingAction } from './Toolbar';
+import type { SelectionFormatting, FormattingAction } from './toolbarTypes';
 
 // ============================================================================
 // HIGHLIGHT COLOR MAPPING

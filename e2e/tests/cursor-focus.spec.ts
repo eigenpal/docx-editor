@@ -84,8 +84,9 @@ test.describe('Cursor Focus - Toolbar Interactions', () => {
   test('cursor stays visible after clicking alignment buttons', async ({ page }) => {
     await editor.typeText('Test text');
 
-    // Click Center alignment
-    await page.getByRole('button', { name: 'Center (Ctrl+E)' }).click();
+    // Click Center alignment via dropdown
+    await page.getByTestId('toolbar-alignment').click();
+    await page.getByTestId('alignment-center').click();
 
     // Verify focus is maintained
     const editorHasFocus = await page.evaluate(() => {
@@ -94,8 +95,9 @@ test.describe('Cursor Focus - Toolbar Interactions', () => {
     });
     expect(editorHasFocus).toBe(true);
 
-    // Click Right alignment
-    await page.getByRole('button', { name: 'Align Right (Ctrl+R)' }).click();
+    // Click Right alignment via dropdown
+    await page.getByTestId('toolbar-alignment').click();
+    await page.getByTestId('alignment-right').click();
 
     // Verify focus is still maintained
     const stillHasFocus = await page.evaluate(() => {

@@ -2,8 +2,8 @@
  * Strikethrough Mark Extension
  */
 
-import { toggleMark } from 'prosemirror-commands';
 import { createMarkExtension } from '../create';
+import { toggleMarkWithStoredMarks } from './markUtils';
 import type { ExtensionContext, ExtensionRuntime } from '../types';
 
 export const StrikeExtension = createMarkExtension({
@@ -29,7 +29,7 @@ export const StrikeExtension = createMarkExtension({
   onSchemaReady(ctx: ExtensionContext): ExtensionRuntime {
     return {
       commands: {
-        toggleStrike: () => toggleMark(ctx.schema.marks.strike),
+        toggleStrike: () => toggleMarkWithStoredMarks(ctx.schema.marks.strike),
       },
     };
   },

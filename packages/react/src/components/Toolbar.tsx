@@ -7,96 +7,21 @@
  * - Superscript, Subscript buttons
  * - Shows active state for current selection formatting
  * - Applies formatting to selection
- *
- * Classic single-row layout: menus (File, Format, Insert) + formatting icons.
- * Uses FormattingBar internally for the icon toolbar.
  */
 
-import React, { useCallback, useRef } from 'react';
+import React, { Fragment, useEffect, useRef } from 'react';
 import type { CSSProperties, ReactNode } from 'react';
-import type {
-  ColorValue,
-  ParagraphAlignment,
-  Style,
-  Theme,
-} from '@eigenpal/docx-core/types/document';
+import type { ColorValue, Style, Theme } from '@eigenpal/docx-core/types/document';
+import type { FormattingAction, SelectionFormatting } from './toolbarTypes';
+import { useToolbarItems } from './toolbarItems';
 import { Button } from './ui/Button';
 import { Tooltip } from './ui/Tooltip';
-import { MenuDropdown } from './ui/MenuDropdown';
-import type { MenuEntry } from './ui/MenuDropdown';
-import { TableGridInline } from './ui/TableGridInline';
 import type { TableAction } from './ui/TableToolbar';
-import type { ListState } from './ui/ListButtons';
 import { cn } from '../lib/utils';
-import { FormattingBar } from './FormattingBar';
 
 // ============================================================================
 // TYPES
 // ============================================================================
-
-/**
- * Current formatting state of the selection
- */
-export interface SelectionFormatting {
-  /** Whether selected text is bold */
-  bold?: boolean;
-  /** Whether selected text is italic */
-  italic?: boolean;
-  /** Whether selected text is underlined */
-  underline?: boolean;
-  /** Whether selected text has strikethrough */
-  strike?: boolean;
-  /** Whether selected text is superscript */
-  superscript?: boolean;
-  /** Whether selected text is subscript */
-  subscript?: boolean;
-  /** Font family of selected text */
-  fontFamily?: string;
-  /** Font size of selected text (in half-points) */
-  fontSize?: number;
-  /** Text color */
-  color?: string;
-  /** Highlight color */
-  highlight?: string;
-  /** Paragraph alignment */
-  alignment?: ParagraphAlignment;
-  /** List state of the current paragraph */
-  listState?: ListState;
-  /** Line spacing in twips (OOXML value, 240 = single spacing) */
-  lineSpacing?: number;
-  /** Paragraph style ID */
-  styleId?: string;
-  /** Paragraph left indentation in twips */
-  indentLeft?: number;
-  /** Whether the paragraph is RTL (bidi) */
-  bidi?: boolean;
-}
-
-/**
- * Formatting action types
- */
-export type FormattingAction =
-  | 'bold'
-  | 'italic'
-  | 'underline'
-  | 'strikethrough'
-  | 'superscript'
-  | 'subscript'
-  | 'clearFormatting'
-  | 'bulletList'
-  | 'numberedList'
-  | 'indent'
-  | 'outdent'
-  | 'insertLink'
-  | 'setRtl'
-  | 'setLtr'
-  | { type: 'fontFamily'; value: string }
-  | { type: 'fontSize'; value: number }
-  | { type: 'textColor'; value: ColorValue | string }
-  | { type: 'highlightColor'; value: string }
-  | { type: 'alignment'; value: ParagraphAlignment }
-  | { type: 'lineSpacing'; value: number }
-  | { type: 'applyStyle'; value: string };
 
 /**
  * Props for the Toolbar component
@@ -239,6 +164,12 @@ export interface ToolbarGroupProps {
 }
 
 // ============================================================================
+// STYLES
+// ============================================================================
+
+// Toolbar uses Tailwind classes now - see the component JSX for styling
+
+// ============================================================================
 // SUBCOMPONENTS
 // ============================================================================
 
@@ -254,6 +185,7 @@ export function ToolbarButton({
   className,
   ariaLabel,
 }: ToolbarButtonProps) {
+  // Generate testid from ariaLabel or title
   const testId =
     ariaLabel?.toLowerCase().replace(/\s+/g, '-') ||
     title
@@ -262,6 +194,7 @@ export function ToolbarButton({
       .replace(/\([^)]*\)/g, '')
       .trim();
 
+  // Prevent mousedown from stealing focus from the editor selection
   const handleMouseDown = (e: React.MouseEvent) => {
     e.preventDefault();
   };
@@ -324,48 +257,172 @@ export function ToolbarSeparator() {
 // ============================================================================
 
 /**
- * Classic single-row formatting toolbar: menus + formatting icons.
- * Uses FormattingBar internally with inline mode so everything stays in one flex row.
+ * Formatting toolbar with all controls
  */
 export function Toolbar({
-  children,
+  currentFormatting = {},
+  onFormat,
+  onUndo,
+  onRedo,
+  canUndo = false,
+  canRedo = false,
+  disabled = false,
   className,
   style,
-  disabled = false,
-  onFormat,
+  enableShortcuts = true,
+  editorRef,
+  children,
+  showFontPicker = true,
+  showFontSizePicker = true,
+  showTextColorPicker = true,
+  showHighlightColorPicker = true,
+  showAlignmentButtons = true,
+  showListButtons = true,
+  showLineSpacingPicker = true,
+  showStylePicker = true,
+  documentStyles,
+  theme,
   onPrint,
   showPrintButton = true,
-  onPageSetup,
-  onInsertImage,
+  showZoomControl = true,
+  zoom,
+  onZoomChange,
+  onRefocusEditor,
   onInsertTable,
   showTableInsert = true,
+  onInsertImage,
   onInsertPageBreak,
   onInsertTOC,
-  onRefocusEditor,
-  ...restProps
+  imageContext,
+  onImageWrapType,
+  onImageTransform,
+  onOpenImageProperties,
+  onPageSetup,
+  tableContext,
+  onTableAction,
 }: ToolbarProps) {
   const toolbarRef = useRef<HTMLDivElement>(null);
 
-  const handleFormat = useCallback(
-    (action: FormattingAction) => {
-      if (!disabled && onFormat) {
-        onFormat(action);
-      }
-    },
-    [disabled, onFormat]
-  );
+  const { compact, actions } = useToolbarItems({
+    currentFormatting,
+    documentStyles,
+    theme,
+    disabled,
+    canUndo,
+    canRedo,
+    onFormat,
+    onUndo,
+    onRedo,
+    onPrint,
+    onPageSetup,
+    showPrintButton,
+    showFontPicker,
+    showFontSizePicker,
+    showTextColorPicker,
+    showHighlightColorPicker,
+    showAlignmentButtons,
+    showListButtons,
+    showLineSpacingPicker,
+    showStylePicker,
+    showZoomControl,
+    zoom,
+    onZoomChange,
+    onRefocusEditor,
+    onInsertTable,
+    showTableInsert,
+    onInsertImage,
+    onInsertPageBreak,
+    onInsertTOC,
+    imageContext,
+    onImageWrapType,
+    onImageTransform,
+    onOpenImageProperties,
+    tableContext,
+    onTableAction,
+  });
 
-  const handleTableInsert = useCallback(
-    (rows: number, columns: number) => {
-      if (!disabled && onInsertTable) {
-        onInsertTable(rows, columns);
-        requestAnimationFrame(() => onRefocusEditor?.());
-      }
-    },
-    [disabled, onInsertTable, onRefocusEditor]
-  );
+  const { format, align } = actions;
 
-  const handleToolbarMouseDown = useCallback((e: React.MouseEvent) => {
+  /**
+   * Keyboard shortcuts handler
+   */
+  useEffect(() => {
+    if (!enableShortcuts) return;
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      // Only process if editor has focus or toolbar has focus
+      const target = event.target as HTMLElement;
+      const editorContainer = editorRef?.current;
+      const toolbarContainer = toolbarRef.current;
+
+      const isInEditor = editorContainer?.contains(target);
+      const isInToolbar = toolbarContainer?.contains(target);
+
+      if (!isInEditor && !isInToolbar) return;
+
+      const isCtrl = event.ctrlKey || event.metaKey;
+
+      if (isCtrl && !event.altKey) {
+        switch (event.key.toLowerCase()) {
+          case 'b':
+            event.preventDefault();
+            format('bold');
+            break;
+          case 'i':
+            event.preventDefault();
+            format('italic');
+            break;
+          case 'u':
+            event.preventDefault();
+            format('underline');
+            break;
+          case '=':
+            // Ctrl+= for subscript (common shortcut)
+            if (event.shiftKey) {
+              event.preventDefault();
+              format('superscript');
+            } else {
+              event.preventDefault();
+              format('subscript');
+            }
+            break;
+          // Alignment shortcuts
+          case 'l':
+            event.preventDefault();
+            align('left');
+            break;
+          case 'e':
+            event.preventDefault();
+            align('center');
+            break;
+          case 'r':
+            event.preventDefault();
+            align('right');
+            break;
+          case 'j':
+            event.preventDefault();
+            align('both');
+            break;
+          case 'k':
+            event.preventDefault();
+            format('insertLink');
+            break;
+          // Undo/Redo handled by useHistory hook
+        }
+      }
+    };
+
+    // Add listener to document
+    document.addEventListener('keydown', handleKeyDown);
+
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [enableShortcuts, format, align, editorRef]);
+
+  // Prevent toolbar clicks from stealing focus and refocus editor
+  const handleToolbarMouseDown = (e: React.MouseEvent) => {
+    // Allow clicks on input/select elements to work normally
     const target = e.target as HTMLElement;
     const isInteractive =
       target.tagName === 'INPUT' ||
@@ -374,27 +431,28 @@ export function Toolbar({
       target.tagName === 'OPTION';
 
     if (!isInteractive) {
+      // Prevent the mousedown from stealing focus
       e.preventDefault();
     }
-  }, []);
+  };
 
-  const handleToolbarMouseUp = useCallback(
-    (e: React.MouseEvent) => {
-      const target = e.target as HTMLElement;
-      const activeEl = document.activeElement as HTMLElement;
-      const isSelectActive =
-        target.tagName === 'SELECT' ||
-        target.tagName === 'OPTION' ||
-        activeEl?.tagName === 'SELECT';
+  // Refocus editor after toolbar click (called on mouseup)
+  const handleToolbarMouseUp = (e: React.MouseEvent) => {
+    // Don't refocus if user is interacting with a select/input
+    const target = e.target as HTMLElement;
+    const activeEl = document.activeElement as HTMLElement;
+    const isSelectActive =
+      target.tagName === 'SELECT' || target.tagName === 'OPTION' || activeEl?.tagName === 'SELECT';
 
-      if (isSelectActive) return;
+    if (isSelectActive) {
+      return; // Let the select keep focus
+    }
 
-      requestAnimationFrame(() => {
-        onRefocusEditor?.();
-      });
-    },
-    [onRefocusEditor]
-  );
+    // Use requestAnimationFrame to ensure the click action completes first
+    requestAnimationFrame(() => {
+      onRefocusEditor?.();
+    });
+  };
 
   return (
     <div
@@ -410,110 +468,54 @@ export function Toolbar({
       onMouseDown={handleToolbarMouseDown}
       onMouseUp={handleToolbarMouseUp}
     >
-      {/* File Menu */}
-      {(showPrintButton && onPrint) || onPageSetup ? (
-        <MenuDropdown
-          label="File"
-          disabled={disabled}
-          items={[
-            ...(showPrintButton && onPrint
-              ? [
-                  {
-                    icon: 'print',
-                    label: 'Print',
-                    shortcut: 'Ctrl+P',
-                    onClick: onPrint,
-                  } as MenuEntry,
-                ]
-              : []),
-            ...(onPageSetup
-              ? [{ icon: 'settings', label: 'Page setup', onClick: onPageSetup } as MenuEntry]
-              : []),
-          ]}
-        />
-      ) : null}
+      {compact.map((entry) => {
+        if (entry.kind === 'group') {
+          return (
+            <ToolbarGroup key={entry.id} label={entry.label}>
+              {entry.items.map((item) =>
+                item.kind === 'button' ? (
+                  <ToolbarButton
+                    key={item.id}
+                    onClick={item.onClick}
+                    active={item.isActive}
+                    disabled={item.disabled}
+                    title={item.title}
+                    ariaLabel={item.ariaLabel}
+                  >
+                    {item.icon}
+                  </ToolbarButton>
+                ) : (
+                  <Fragment key={item.id}>{item.node}</Fragment>
+                )
+              )}
+            </ToolbarGroup>
+          );
+        }
 
-      {/* Format Menu */}
-      <MenuDropdown
-        label="Format"
-        disabled={disabled}
-        items={[
-          {
-            icon: 'format_textdirection_l_to_r',
-            label: 'Left-to-right text',
-            onClick: () => handleFormat('setLtr'),
-          } as MenuEntry,
-          {
-            icon: 'format_textdirection_r_to_l',
-            label: 'Right-to-left text',
-            onClick: () => handleFormat('setRtl'),
-          } as MenuEntry,
-        ]}
-      />
+        if (entry.kind === 'button') {
+          return (
+            <ToolbarButton
+              key={entry.id}
+              onClick={entry.onClick}
+              active={entry.isActive}
+              disabled={entry.disabled}
+              title={entry.title}
+              ariaLabel={entry.ariaLabel}
+            >
+              {entry.icon}
+            </ToolbarButton>
+          );
+        }
 
-      {/* Insert Menu */}
-      <MenuDropdown
-        label="Insert"
-        disabled={disabled}
-        items={[
-          ...(onInsertImage
-            ? [{ icon: 'image', label: 'Image', onClick: onInsertImage } as MenuEntry]
-            : []),
-          ...(showTableInsert && onInsertTable
-            ? [
-                {
-                  icon: 'grid_on',
-                  label: 'Table',
-                  submenuContent: (closeMenu: () => void) => (
-                    <TableGridInline
-                      onInsert={(rows: number, cols: number) => {
-                        handleTableInsert(rows, cols);
-                        closeMenu();
-                      }}
-                    />
-                  ),
-                } as MenuEntry,
-              ]
-            : []),
-          ...(onInsertImage || (showTableInsert && onInsertTable)
-            ? [{ type: 'separator' as const } as MenuEntry]
-            : []),
-          {
-            icon: 'page_break',
-            label: 'Page break',
-            onClick: onInsertPageBreak,
-            disabled: !onInsertPageBreak,
-          },
-          {
-            icon: 'format_list_numbered',
-            label: 'Table of contents',
-            onClick: onInsertTOC,
-            disabled: !onInsertTOC,
-          },
-        ]}
-      />
+        return <Fragment key={entry.id}>{entry.node}</Fragment>;
+      })}
 
-      {/* Formatting icons — rendered inline (display:contents) */}
-      <FormattingBar
-        {...restProps}
-        disabled={disabled}
-        onFormat={onFormat}
-        onRefocusEditor={onRefocusEditor}
-        onInsertTable={onInsertTable}
-        showTableInsert={showTableInsert}
-        onInsertImage={onInsertImage}
-        onInsertPageBreak={onInsertPageBreak}
-        onInsertTOC={onInsertTOC}
-        onPrint={onPrint}
-        showPrintButton={showPrintButton}
-        onPageSetup={onPageSetup}
-        inline
-      >
-        {children}
-      </FormattingBar>
+      {children}
     </div>
   );
 }
+
+export type { SelectionFormatting, FormattingAction } from './toolbarTypes';
 
 // ============================================================================
 // RE-EXPORTED UTILITIES (from toolbarUtils.ts)

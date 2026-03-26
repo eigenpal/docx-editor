@@ -322,6 +322,12 @@ function renderInlineImageRun(run: ImageRun, doc: Document): HTMLElement {
   img.src = run.src;
   img.width = run.width;
   img.height = run.height;
+  if (Number.isFinite(run.width) && run.width > 0) {
+    img.style.width = `${run.width}px`;
+  }
+  if (Number.isFinite(run.height) && run.height > 0) {
+    img.style.height = `${run.height}px`;
+  }
   if (run.alt) {
     img.alt = run.alt;
   }
@@ -353,6 +359,12 @@ function renderBlockImage(run: ImageRun, doc: Document): HTMLElement {
   img.src = run.src;
   img.width = run.width;
   img.height = run.height;
+  if (Number.isFinite(run.width) && run.width > 0) {
+    img.style.width = `${run.width}px`;
+  }
+  if (Number.isFinite(run.height) && run.height > 0) {
+    img.style.height = `${run.height}px`;
+  }
   // Global CSS reset (Tailwind preflight) sets img { display: block },
   // which makes text-align: center on the container ineffective.
   // Use margin: auto on the img itself to center it.

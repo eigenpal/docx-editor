@@ -86,6 +86,30 @@ export function fromProseDoc(pmDoc: PMNode, baseDocument?: Document): Document {
   };
 }
 
+export function buildTrackedChangeCounts(pmDoc: PMNode): TrackedChangeCounts {
+  return buildDocumentTrackedChangeCounts(pmDoc);
+}
+
+export function convertTopLevelNode(
+  node: PMNode,
+  documentCounts?: TrackedChangeCounts
+): Paragraph | Table {
+  if (node.type.name === 'paragraph') {
+    return convertPMParagraph(node, documentCounts);
+  }
+  if (node.type.name === 'table') {
+    return convertPMTable(node, documentCounts);
+  }
+  if (node.type.name === 'textBox') {
+    return convertPMTextBox(node);
+  }
+  if (node.type.name === 'pageBreak') {
+    return createPageBreakParagraph();
+  }
+
+  throw new Error(`Unsupported top-level node type: ${node.type.name}`);
+}
+
 /**
  * Extract blocks (paragraphs and tables) from ProseMirror document
  */
