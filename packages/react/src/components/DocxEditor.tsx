@@ -3746,6 +3746,11 @@ body { background: white; }
                             onMarkerClick={(commentId) => {
                               const isResolved = resolvedCommentIds.has(commentId);
                               if (isResolved) {
+                                // Toggle: click again to hide
+                                if (expandedResolvedId === commentId) {
+                                  setExpandedResolvedId(null);
+                                  return;
+                                }
                                 setExpandedResolvedId(commentId);
                               }
                               setShowCommentsSidebar(true);
