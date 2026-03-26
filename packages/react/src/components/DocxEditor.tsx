@@ -594,6 +594,11 @@ function injectReplyRangeMarkers(content: BlockContent[], comments: Comment[]): 
   function walkBlocks(blocks: BlockContent[]): void {
     for (const block of blocks) {
       if (block.type === 'paragraph') {
+        // Skip paragraphs without any comment range markers
+        if (
+          !block.content.some((i) => i.type === 'commentRangeStart' || i.type === 'commentRangeEnd')
+        )
+          continue;
         const newItems: ParagraphContent[] = [];
         for (const item of block.content) {
           if (item.type === 'commentRangeStart') {

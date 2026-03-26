@@ -13,7 +13,6 @@
 import type { Comment, Paragraph, Run } from '../../types/content';
 import { escapeXml } from './xmlUtils';
 
-/** Full OOXML namespace block — used by all comment extension XML files */
 /** Full OOXML namespace block matching Word/working implementations */
 const OOXML_NAMESPACES =
   'xmlns:wpc="http://schemas.microsoft.com/office/word/2010/wordprocessingCanvas" ' +
@@ -54,20 +53,12 @@ const OOXML_NAMESPACES =
 
 const MC_IGNORABLE = 'mc:Ignorable="w14 w15 w16se w16cid w16 w16cex w16sdtdh w16sdtfl w16du wp14"';
 
-/** Generate a random 8-char hex durableId (independent of paraId sequence) */
-function generateDurableId(): string {
+/** Generate a random 8-char uppercase hex ID (used for paraId and durableId) */
+function generateHexId(): string {
   return Math.floor(Math.random() * 0x7fffffff)
     .toString(16)
     .toUpperCase()
     .padStart(8, '0');
-}
-
-/** Create a paraId generator using random values (matches OOXML spec) */
-function createParaIdGenerator(): () => string {
-  return () => {
-    const value = Math.floor(Math.random() * 0x7fffffff);
-    return value.toString(16).toUpperCase().padStart(8, '0');
-  };
 }
 
 function serializeRunContent(run: Run): string {
@@ -124,13 +115,8 @@ interface CommentParaInfo {
   done?: boolean;
 }
 
-function serializeComment(
-  comment: Comment,
-  paraInfos: CommentParaInfo[],
-  generateParaId: () => string
-): string {
-  // Generate paraId used on the last paragraph and in commentsExtended.xml
-  const commentParaId = generateParaId();
+function serializeComment(comment: Comment, paraInfos: CommentParaInfo[]): string {
+  const commentParaId = generateHexId();
 
   const attrs: string[] = [`w:id="${comment.id}"`];
   if (comment.author) attrs.push(`w:author="${escapeXml(comment.author)}"`);
@@ -167,7 +153,7 @@ function serializeComment(
   paraInfos.push({
     commentId: comment.id,
     lastParaId: commentParaId,
-    durableId: generateDurableId(),
+    durableId: generateHexId(),
     parentId: comment.parentId,
     done: comment.done,
   });
@@ -185,8 +171,6 @@ export function serializeCommentsWithInfo(comments: Comment[]): {
 } {
   if (!comments || comments.length === 0) return { xml: '', paraInfos: [] };
 
-  const generateParaId = createParaIdGenerator();
-
   // Separate top-level comments and replies in a single pass
   const topLevel: Comment[] = [];
   const replies: Comment[] = [];
@@ -202,10 +186,10 @@ export function serializeCommentsWithInfo(comments: Comment[]): {
 
   // Serialize top-level comments first, then replies
   for (const comment of topLevel) {
-    xml += serializeComment(comment, paraInfos, generateParaId);
+    xml += serializeComment(comment, paraInfos);
   }
   for (const reply of replies) {
-    xml += serializeComment(reply, paraInfos, generateParaId);
+    xml += serializeComment(reply, paraInfos);
   }
 
   xml += '</w:comments>';
