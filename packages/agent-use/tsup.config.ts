@@ -15,5 +15,5 @@ export default defineConfig({
   },
   minify: true,
   noExternal: ['@eigenpal/docx-core'],
-  external: ['prosemirror-model', 'prosemirror-state', 'prosemirror-view'],
+  external: ['prosemirror-model', 'prosemirror-state', 'prosemirror-view', 'react'],
 });

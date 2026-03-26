@@ -42,3 +42,7 @@ export type {
 } from './types';
 
 export { TextNotFoundError, ChangeNotFoundError, CommentNotFoundError } from './errors';
+
+// Tools — reusable tool definitions for AI agents (OpenAI function calling format)
+export { agentTools, executeToolCall, getToolSchemas } from './tools';
+export type { AgentToolDefinition, AgentToolResult } from './tools';
