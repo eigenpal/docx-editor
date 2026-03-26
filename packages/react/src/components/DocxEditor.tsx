@@ -3473,6 +3473,14 @@ body { background: white; }
     return ids;
   }, [comments]);
 
+  // For rendering: exclude the expanded resolved comment so its text gets highlighted
+  const resolvedIdsForRender = useMemo(() => {
+    if (expandedResolvedId == null) return resolvedCommentIds;
+    const ids = new Set(resolvedCommentIds);
+    ids.delete(expandedResolvedId);
+    return ids;
+  }, [resolvedCommentIds, expandedResolvedId]);
+
   const editorContainerStyle: CSSProperties = {
     flex: 1,
     minHeight: 0,
@@ -3734,7 +3742,7 @@ body { background: white; }
                       onContextMenu={handleContextMenu}
                       commentsSidebarOpen={sidebarOpen}
                       onAnchorPositionsChange={setAnchorPositions}
-                      resolvedCommentIds={resolvedCommentIds}
+                      resolvedCommentIds={resolvedIdsForRender}
                       scrollContainerRef={scrollContainerRef}
                       sidebarOverlay={
                         <>

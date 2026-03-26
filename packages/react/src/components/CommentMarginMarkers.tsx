@@ -10,7 +10,6 @@ import type { Comment } from '@eigenpal/docx-core/types/content';
 import { MaterialSymbol } from './ui/Icons';
 import { SIDEBAR_DOCUMENT_SHIFT, SIDEBAR_WIDTH } from './sidebar/constants';
 import { getCommentText, formatDate, getInitials, avatarStyle } from './sidebar/cardUtils';
-import { CARD_STYLE_EXPANDED } from './sidebar/cardStyles';
 
 export interface CommentMarginMarkersProps {
   comments: Comment[];
@@ -115,32 +114,92 @@ export function CommentMarginMarkers({
         <div
           className="docx-comment-card"
           style={{
-            ...CARD_STYLE_EXPANDED,
             position: 'absolute',
-            top: expandedY * zoom,
-            left: 0,
+            top: expandedY * zoom - 8,
+            left: 28,
             width: SIDEBAR_WIDTH,
             pointerEvents: 'auto',
             zIndex: 50,
+            background: '#fff',
+            borderRadius: 8,
+            boxShadow: '0 4px 12px rgba(60,64,67,0.25), 0 1px 4px rgba(60,64,67,0.15)',
+            padding: '12px 14px',
+            fontFamily: "'Google Sans', Roboto, Arial, sans-serif",
           }}
           onMouseDown={(e) => e.stopPropagation()}
         >
           <div
             style={{
-              display: 'inline-flex',
+              display: 'flex',
               alignItems: 'center',
-              gap: 4,
-              padding: '2px 8px',
-              marginBottom: 8,
-              fontSize: 11,
-              fontWeight: 500,
-              color: '#188038',
-              backgroundColor: '#e6f4ea',
-              borderRadius: 10,
+              justifyContent: 'space-between',
+              marginBottom: 10,
             }}
           >
-            <MaterialSymbol name="check" size={12} />
-            Resolved
+            <div
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 4,
+                padding: '3px 10px',
+                fontSize: 11,
+                fontWeight: 500,
+                color: '#188038',
+                backgroundColor: '#e6f4ea',
+                borderRadius: 10,
+              }}
+            >
+              <MaterialSymbol name="check" size={12} />
+              Resolved
+            </div>
+            <div style={{ display: 'flex', gap: 2 }}>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onUnresolve?.(expandedComment.id);
+                }}
+                title="Reopen"
+                style={{
+                  border: 'none',
+                  background: 'none',
+                  cursor: 'pointer',
+                  padding: 4,
+                  color: '#5f6368',
+                  borderRadius: 4,
+                }}
+                onMouseOver={(e) => {
+                  (e.currentTarget as HTMLElement).style.backgroundColor = '#f1f3f4';
+                }}
+                onMouseOut={(e) => {
+                  (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent';
+                }}
+              >
+                <MaterialSymbol name="undo" size={16} />
+              </button>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onDelete?.(expandedComment.id);
+                }}
+                title="Delete"
+                style={{
+                  border: 'none',
+                  background: 'none',
+                  cursor: 'pointer',
+                  padding: 4,
+                  color: '#5f6368',
+                  borderRadius: 4,
+                }}
+                onMouseOver={(e) => {
+                  (e.currentTarget as HTMLElement).style.backgroundColor = '#f1f3f4';
+                }}
+                onMouseOut={(e) => {
+                  (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent';
+                }}
+              >
+                <MaterialSymbol name="delete" size={16} />
+              </button>
+            </div>
           </div>
           <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
             <div style={avatarStyle(expandedComment.author || 'U')}>
@@ -153,42 +212,6 @@ export function CommentMarginMarkers({
               <div style={{ fontSize: 11, color: '#5f6368' }}>
                 {formatDate(expandedComment.date)}
               </div>
-            </div>
-            <div style={{ display: 'flex', gap: 4 }}>
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onUnresolve?.(expandedComment.id);
-                }}
-                title="Reopen"
-                style={{
-                  border: 'none',
-                  background: 'none',
-                  cursor: 'pointer',
-                  padding: 2,
-                  color: '#5f6368',
-                  borderRadius: 4,
-                }}
-              >
-                <MaterialSymbol name="undo" size={18} />
-              </button>
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onDelete?.(expandedComment.id);
-                }}
-                title="Delete"
-                style={{
-                  border: 'none',
-                  background: 'none',
-                  cursor: 'pointer',
-                  padding: 2,
-                  color: '#5f6368',
-                  borderRadius: 4,
-                }}
-              >
-                <MaterialSymbol name="delete" size={18} />
-              </button>
             </div>
           </div>
           <div style={{ fontSize: 13, color: '#202124', lineHeight: '20px', marginTop: 6 }}>
