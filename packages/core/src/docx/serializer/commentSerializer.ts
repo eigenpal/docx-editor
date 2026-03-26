@@ -126,7 +126,9 @@ function serializeComment(
   // Generate paraId used on the last paragraph and in commentsExtended.xml
   const commentParaId = generateParaId();
 
-  const attrs: string[] = [`w:id="${comment.id}"`];
+  // Ensure w:id fits in 32-bit int (Pages/Word truncate larger values)
+  const safeId = comment.id > 0x7fffffff ? comment.id & 0x7fffffff : comment.id;
+  const attrs: string[] = [`w:id="${safeId}"`];
   if (comment.author) attrs.push(`w:author="${escapeXml(comment.author)}"`);
   if (comment.initials) attrs.push(`w:initials="${escapeXml(comment.initials)}"`);
   else attrs.push('w:initials=""');

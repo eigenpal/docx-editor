@@ -811,13 +811,18 @@ function serializeParagraphContent(content: ParagraphContent): string {
       return serializeComplexField(content);
     case 'inlineSdt':
       return serializeInlineSdt(content);
-    case 'commentRangeStart':
-      return `<w:commentRangeStart w:id="${content.id}"/>`;
-    case 'commentRangeEnd':
+    case 'commentRangeStart': {
+      // Ensure w:id fits in 32-bit int (Pages/Word truncate larger values)
+      const startId = content.id > 0x7fffffff ? content.id & 0x7fffffff : content.id;
+      return `<w:commentRangeStart w:id="${startId}"/>`;
+    }
+    case 'commentRangeEnd': {
+      const endId = content.id > 0x7fffffff ? content.id & 0x7fffffff : content.id;
       return (
-        `<w:commentRangeEnd w:id="${content.id}"/>` +
-        `<w:r><w:rPr><w:rStyle w:val="CommentReference"/></w:rPr><w:commentReference w:id="${content.id}"/></w:r>`
+        `<w:commentRangeEnd w:id="${endId}"/>` +
+        `<w:r><w:rPr><w:rStyle w:val="CommentReference"/></w:rPr><w:commentReference w:id="${endId}"/></w:r>`
       );
+    }
     case 'insertion':
       return serializeTrackedChange('ins', content);
     case 'deletion':

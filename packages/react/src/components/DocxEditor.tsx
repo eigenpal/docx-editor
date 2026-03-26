@@ -569,7 +569,8 @@ function EditingModeDropdown({
 // MAIN COMPONENT
 // ============================================================================
 
-let nextCommentId = Date.now();
+// Keep IDs within 32-bit signed int range (Pages/Word truncate larger values)
+let nextCommentId = (Date.now() & 0x7fffffff) >>> 0;
 const PENDING_COMMENT_ID = -1;
 const EMPTY_ANCHOR_POSITIONS = new Map<string, number>();
 
