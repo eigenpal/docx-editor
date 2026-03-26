@@ -23,6 +23,8 @@ export interface UseCommentSidebarItemsProps {
   trackedChanges: TrackedChangeEntry[];
   callbacks: CommentCallbacks;
   showResolved?: boolean;
+  /** Show this specific resolved comment temporarily (for margin marker click) */
+  expandedResolvedId?: number | null;
   isAddingComment?: boolean;
   addCommentYPosition?: number | null;
 }
@@ -32,18 +34,19 @@ export function useCommentSidebarItems({
   trackedChanges,
   callbacks,
   showResolved = false,
+  expandedResolvedId = null,
   isAddingComment = false,
   addCommentYPosition = null,
 }: UseCommentSidebarItemsProps): ReactSidebarItem[] {
-  // Filter visible comments (no replies, no resolved unless showResolved)
+  // Filter visible comments (no replies, no resolved unless showResolved or specifically expanded)
   const visibleComments = useMemo(
     () =>
       comments.filter((c) => {
         if (c.parentId != null) return false;
-        if (c.done && !showResolved) return false;
+        if (c.done && !showResolved && c.id !== expandedResolvedId) return false;
         return true;
       }),
-    [comments, showResolved]
+    [comments, showResolved, expandedResolvedId]
   );
 
   // Pre-group replies by parentId

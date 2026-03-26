@@ -836,6 +836,7 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
 
   // Comments sidebar state
   const [showCommentsSidebar, setShowCommentsSidebar] = useState(false);
+  const [expandedResolvedId, setExpandedResolvedId] = useState<number | null>(null);
   const [comments, setComments] = useState<Comment[]>([]);
   const [trackedChanges, setTrackedChanges] = useState<TrackedChangeEntry[]>([]);
   const [anchorPositions, setAnchorPositions] =
@@ -3432,6 +3433,7 @@ body { background: white; }
     trackedChanges,
     callbacks: stableCallbacks,
     showResolved: false,
+    expandedResolvedId,
     isAddingComment: showCommentsSidebar ? isAddingComment : false,
     addCommentYPosition,
   });
@@ -3504,7 +3506,10 @@ body { background: white; }
     <>
       <ToolbarSeparator />
       <ToolbarButton
-        onClick={() => setShowCommentsSidebar(!showCommentsSidebar)}
+        onClick={() => {
+          setShowCommentsSidebar(!showCommentsSidebar);
+          setExpandedResolvedId(null);
+        }}
         active={showCommentsSidebar}
         title="Toggle comments sidebar"
         ariaLabel="Toggle comments sidebar"
@@ -3738,7 +3743,11 @@ body { background: white; }
                             })()}
                             sidebarOpen={sidebarOpen}
                             resolvedCommentIds={resolvedCommentIds}
-                            onMarkerClick={() => {
+                            onMarkerClick={(commentId) => {
+                              const isResolved = resolvedCommentIds.has(commentId);
+                              if (isResolved) {
+                                setExpandedResolvedId(commentId);
+                              }
                               setShowCommentsSidebar(true);
                             }}
                           />
