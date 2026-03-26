@@ -197,26 +197,22 @@ export function serializeCommentsExtended(paraInfos: CommentParaInfo[]): string 
   }
 
   let xml =
-    '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n' +
-    '<w15:commentsEx xmlns:w15="http://schemas.microsoft.com/office/word/2012/wordml" ' +
+    '<w15:commentsEx mc:Ignorable="w15" ' +
     'xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" ' +
-    'mc:Ignorable="w15">';
+    'xmlns:w15="http://schemas.microsoft.com/office/word/2012/wordml">';
 
   for (const info of paraInfos) {
-    const attrs: string[] = [`w15:paraId="${info.lastParaId}"`];
+    let attrs = `w15:done="${info.done ? '1' : '0'}" w15:paraId="${info.lastParaId}"`;
 
     // Link reply to parent via paraIdParent
     if (info.parentId != null) {
       const parentParaId = paraIdByCommentId.get(info.parentId);
       if (parentParaId) {
-        attrs.push(`w15:paraIdParent="${parentParaId}"`);
+        attrs += ` w15:paraIdParent="${parentParaId}"`;
       }
     }
 
-    // Resolved state
-    attrs.push(`w15:done="${info.done ? '1' : '0'}"`);
-
-    xml += `<w15:commentEx ${attrs.join(' ')}/>`;
+    xml += `<w15:commentEx ${attrs} />`;
   }
 
   xml += '</w15:commentsEx>';
@@ -233,16 +229,13 @@ export function serializeCommentsIds(paraInfos: CommentParaInfo[]): string {
   if (paraInfos.length === 0) return '';
 
   let xml =
-    '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n' +
-    '<w16cid:commentsIds xmlns:w16cid="http://schemas.microsoft.com/office/word/2016/wordml/cid" ' +
+    '<w16cid:commentsIds mc:Ignorable="w16cid" ' +
     'xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" ' +
-    'mc:Ignorable="w16cid">';
+    'xmlns:w16cid="http://schemas.microsoft.com/office/word/2016/wordml/cid">';
 
   for (const info of paraInfos) {
-    // durableId must differ from paraId — XOR with a constant to derive a distinct stable ID
-    const paraNum = parseInt(info.lastParaId, 16) >>> 0;
-    const durableId = ((paraNum ^ 0x5a5a5a5a) >>> 0).toString(16).toUpperCase().padStart(8, '0');
-    xml += `<w16cid:commentId w16cid:paraId="${info.lastParaId}" w16cid:durableId="${durableId}"/>`;
+    // Word uses durableId == paraId for most comments
+    xml += `<w16cid:commentId w16cid:paraId="${info.lastParaId}" w16cid:durableId="${info.lastParaId}" />`;
   }
 
   xml += '</w16cid:commentsIds>';
@@ -266,7 +259,6 @@ export function serializeCommentsExtensible(
   for (const c of comments) commentById.set(c.id, c);
 
   let xml =
-    '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n' +
     '<w16cex:commentsExtensible xmlns:w16cex="http://schemas.microsoft.com/office/word/2018/wordml/cex" ' +
     'xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" ' +
     'mc:Ignorable="w16cex">';
@@ -275,9 +267,7 @@ export function serializeCommentsExtensible(
     const comment = commentById.get(info.commentId);
     if (!comment?.date) continue;
 
-    // Derive durableId (same XOR as commentsIds.xml)
-    const paraNum = parseInt(info.lastParaId, 16) >>> 0;
-    const durableId = ((paraNum ^ 0x5a5a5a5a) >>> 0).toString(16).toUpperCase().padStart(8, '0');
+    const durableId = info.lastParaId;
 
     // Ensure UTC format
     const dateUtc = comment.date.endsWith('Z') ? comment.date : comment.date + 'Z';
