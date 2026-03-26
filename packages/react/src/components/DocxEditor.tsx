@@ -571,7 +571,7 @@ function EditingModeDropdown({
 // ============================================================================
 
 // Bumped on document load to be above all existing comment + tracked change IDs
-let nextCommentId = 100;
+let nextCommentId = 1;
 const PENDING_COMMENT_ID = -1;
 
 /**
@@ -2775,8 +2775,9 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
         if (useSelective && view) {
           const editorState = view.state;
           // Force full repack if we injected reply range markers (selective save uses original XML)
+          const commentIdSet = new Set(comments.map((c) => c.id));
           const hasInjectedReplies = comments.some(
-            (c) => c.parentId != null && comments.some((p) => p.id === c.parentId)
+            (c) => c.parentId != null && commentIdSet.has(c.parentId)
           );
           selectiveOptions = {
             selective: {
@@ -3472,9 +3473,9 @@ body { background: white; }
 
   // Exclude expanded resolved comment from hide-set so its text gets highlighted
   const resolvedIdsForRender = useMemo(() => {
-    if (!expandedSidebarItem) return resolvedCommentIds;
-    const expandedId = parseInt(expandedSidebarItem.replace('comment-', ''), 10);
-    if (!resolvedCommentIds.has(expandedId)) return resolvedCommentIds;
+    if (!expandedSidebarItem?.startsWith('comment-')) return resolvedCommentIds;
+    const expandedId = parseInt(expandedSidebarItem.slice(8), 10);
+    if (isNaN(expandedId) || !resolvedCommentIds.has(expandedId)) return resolvedCommentIds;
     const ids = new Set(resolvedCommentIds);
     ids.delete(expandedId);
     return ids;
@@ -3705,17 +3706,12 @@ body { background: white; }
                     {expandedSidebarItem && expandedSidebarItem.startsWith('comment-') && (
                       <style>{`.paged-editor__pages [data-comment-id="${expandedSidebarItem.replace('comment-', '')}"] { background-color: rgba(255, 212, 0, 0.35) !important; border-bottom: 2px solid rgba(255, 212, 0, 0.7) !important; }`}</style>
                     )}
-                    {expandedSidebarItem &&
-                      expandedSidebarItem.startsWith('tc-') &&
-                      (() => {
-                        const revId = expandedSidebarItem.split('-')[1];
-                        return (
-                          <style>{`
-                          .paged-editor__pages .docx-insertion[data-revision-id="${revId}"] { background-color: rgba(52, 168, 83, 0.2) !important; border-bottom: 2px solid #2e7d32 !important; }
-                          .paged-editor__pages .docx-deletion[data-revision-id="${revId}"] { background-color: rgba(211, 47, 47, 0.2) !important; text-decoration-thickness: 2px !important; }
+                    {expandedSidebarItem?.startsWith('tc-') && (
+                      <style>{`
+                          .paged-editor__pages .docx-insertion[data-revision-id="${expandedSidebarItem.split('-')[1]}"] { background-color: rgba(52, 168, 83, 0.2) !important; border-bottom: 2px solid #2e7d32 !important; }
+                          .paged-editor__pages .docx-deletion[data-revision-id="${expandedSidebarItem.split('-')[1]}"] { background-color: rgba(211, 47, 47, 0.2) !important; text-decoration-thickness: 2px !important; }
                         `}</style>
-                        );
-                      })()}
+                    )}
                     <PagedEditor
                       ref={pagedEditorRef}
                       document={history.state}
