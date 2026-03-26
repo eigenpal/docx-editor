@@ -14,10 +14,23 @@ import type { Comment, Paragraph, Run } from '../../types/content';
 import { escapeXml } from './xmlUtils';
 
 /** Full OOXML namespace block — used by all comment extension XML files */
+/** Full OOXML namespace block matching Word/working implementations */
 const OOXML_NAMESPACES =
   'xmlns:wpc="http://schemas.microsoft.com/office/word/2010/wordprocessingCanvas" ' +
+  'xmlns:cx="http://schemas.microsoft.com/office/drawing/2014/chartex" ' +
+  'xmlns:cx1="http://schemas.microsoft.com/office/drawing/2015/9/8/chartex" ' +
+  'xmlns:cx2="http://schemas.microsoft.com/office/drawing/2015/10/21/chartex" ' +
+  'xmlns:cx3="http://schemas.microsoft.com/office/drawing/2016/5/9/chartex" ' +
+  'xmlns:cx4="http://schemas.microsoft.com/office/drawing/2016/5/10/chartex" ' +
+  'xmlns:cx5="http://schemas.microsoft.com/office/drawing/2016/5/11/chartex" ' +
+  'xmlns:cx6="http://schemas.microsoft.com/office/drawing/2016/5/12/chartex" ' +
+  'xmlns:cx7="http://schemas.microsoft.com/office/drawing/2016/5/13/chartex" ' +
+  'xmlns:cx8="http://schemas.microsoft.com/office/drawing/2016/5/14/chartex" ' +
   'xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" ' +
+  'xmlns:aink="http://schemas.microsoft.com/office/drawing/2016/ink" ' +
+  'xmlns:am3d="http://schemas.microsoft.com/office/drawing/2017/model3d" ' +
   'xmlns:o="urn:schemas-microsoft-com:office:office" ' +
+  'xmlns:oel="http://schemas.microsoft.com/office/2019/extlst" ' +
   'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" ' +
   'xmlns:m="http://schemas.openxmlformats.org/officeDocument/2006/math" ' +
   'xmlns:v="urn:schemas-microsoft-com:vml" ' +
@@ -30,13 +43,16 @@ const OOXML_NAMESPACES =
   'xmlns:w16cex="http://schemas.microsoft.com/office/word/2018/wordml/cex" ' +
   'xmlns:w16cid="http://schemas.microsoft.com/office/word/2016/wordml/cid" ' +
   'xmlns:w16="http://schemas.microsoft.com/office/word/2018/wordml" ' +
+  'xmlns:w16du="http://schemas.microsoft.com/office/word/2023/wordml/word16du" ' +
+  'xmlns:w16sdtdh="http://schemas.microsoft.com/office/word/2020/wordml/sdtdatahash" ' +
+  'xmlns:w16sdtfl="http://schemas.microsoft.com/office/word/2024/wordml/sdtformatlock" ' +
   'xmlns:w16se="http://schemas.microsoft.com/office/word/2015/wordml/symex" ' +
   'xmlns:wpg="http://schemas.microsoft.com/office/word/2010/wordprocessingGroup" ' +
   'xmlns:wpi="http://schemas.microsoft.com/office/word/2010/wordprocessingInk" ' +
   'xmlns:wne="http://schemas.microsoft.com/office/word/2006/wordml" ' +
   'xmlns:wps="http://schemas.microsoft.com/office/word/2010/wordprocessingShape"';
 
-const MC_IGNORABLE = 'mc:Ignorable="w14 w15 w16se w16cid w16 w16cex wp14"';
+const MC_IGNORABLE = 'mc:Ignorable="w14 w15 w16se w16cid w16 w16cex w16sdtdh w16sdtfl w16du wp14"';
 
 /** Create a per-invocation paraId generator (avoids shared mutable module state) */
 function createParaIdGenerator(): () => string {
@@ -114,7 +130,11 @@ function serializeComment(
   if (comment.author) attrs.push(`w:author="${escapeXml(comment.author)}"`);
   if (comment.initials) attrs.push(`w:initials="${escapeXml(comment.initials)}"`);
   else attrs.push('w:initials=""');
-  if (comment.date) attrs.push(`w:date="${escapeXml(comment.date)}"`);
+  if (comment.date) {
+    // Strip milliseconds — Word/Pages expect ISO without fractional seconds
+    const cleanDate = comment.date.replace(/\.\d{3}Z$/, 'Z');
+    attrs.push(`w:date="${escapeXml(cleanDate)}"`);
+  }
   if (comment.done) attrs.push('w:done="1"');
 
   let xml = `<w:comment ${attrs.join(' ')}>`;
@@ -171,25 +191,8 @@ export function serializeCommentsWithInfo(comments: Comment[]): {
   const paraInfos: CommentParaInfo[] = [];
 
   let xml =
-    '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n' +
-    '<w:comments xmlns:wpc="http://schemas.microsoft.com/office/word/2010/wordprocessingCanvas" ' +
-    'xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" ' +
-    'xmlns:o="urn:schemas-microsoft-com:office:office" ' +
-    'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" ' +
-    'xmlns:m="http://schemas.openxmlformats.org/officeDocument/2006/math" ' +
-    'xmlns:v="urn:schemas-microsoft-com:vml" ' +
-    'xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing" ' +
-    'xmlns:w10="urn:schemas-microsoft-com:office:word" ' +
-    'xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" ' +
-    'xmlns:w14="http://schemas.microsoft.com/office/word/2010/wordml" ' +
-    'xmlns:w15="http://schemas.microsoft.com/office/word/2012/wordml" ' +
-    'xmlns:wpg="http://schemas.microsoft.com/office/word/2010/wordprocessingGroup" ' +
-    'xmlns:wpi="http://schemas.microsoft.com/office/word/2010/wordprocessingInk" ' +
-    'xmlns:wne="http://schemas.microsoft.com/office/word/2006/wordml" ' +
-    'xmlns:wps="http://schemas.microsoft.com/office/word/2010/wordprocessingShape" ' +
-    'xmlns:w16cex="http://schemas.microsoft.com/office/word/2018/wordml/cex" ' +
-    'xmlns:w16cid="http://schemas.microsoft.com/office/word/2016/wordml/cid" ' +
-    'mc:Ignorable="w14 w15 w16se w16cid w16 w16cex wp14">';
+    '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+    `<w:comments ${OOXML_NAMESPACES} ${MC_IGNORABLE}>`;
 
   // Serialize top-level comments first, then replies
   for (const comment of topLevel) {
@@ -295,7 +298,11 @@ export function serializeCommentsExtensible(
     const durableId = info.durableId;
 
     // Ensure UTC format
-    const dateUtc = comment.date.endsWith('Z') ? comment.date : comment.date + 'Z';
+    // Strip milliseconds and ensure Z suffix
+    const dateUtc = (comment.date.endsWith('Z') ? comment.date : comment.date + 'Z').replace(
+      /\.\d{3}Z$/,
+      'Z'
+    );
 
     xml += `<w16cex:commentExtensible w16cex:durableId="${durableId}" w16cex:dateUtc="${dateUtc}"/>`;
   }
