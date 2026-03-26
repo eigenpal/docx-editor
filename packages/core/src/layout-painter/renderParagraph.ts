@@ -165,8 +165,8 @@ function applyRunStyles(
       (id) => !resolvedCommentIds || !resolvedCommentIds.has(id)
     );
     if (activeCommentId != null) {
-      element.style.backgroundColor = 'rgba(255, 212, 0, 0.25)';
-      element.style.borderBottom = '2px solid rgba(255, 212, 0, 0.6)';
+      element.style.backgroundColor = 'rgba(255, 212, 0, 0.15)';
+      element.style.borderBottom = '1px solid rgba(255, 212, 0, 0.4)';
       element.dataset.commentId = String(activeCommentId);
     }
   }
