@@ -96,29 +96,29 @@ function serializeComment(
   attrs.push(`w15:paraId="${commentParaId}"`);
 
   let xml = `<w:comment ${attrs.join(' ')}>`;
-  let lastParaId = commentParaId;
 
   if (comment.content && comment.content.length > 0) {
-    // First paragraph must contain an annotationRef run for Word to link the comment
-    const firstParaId = comment.content[0].paraId || generateParaId();
-    xml += serializeParagraphWithAnnotationRef(comment.content[0], firstParaId);
-    lastParaId = firstParaId;
-
-    for (let i = 1; i < comment.content.length; i++) {
-      const pid = comment.content[i].paraId || generateParaId();
-      xml += serializeParagraph(comment.content[i], pid);
-      lastParaId = pid;
+    if (comment.content.length === 1) {
+      // Single paragraph — use commentParaId so w:comment, w14:paraId, and commentsExtended all match
+      xml += serializeParagraphWithAnnotationRef(comment.content[0], commentParaId);
+    } else {
+      // Multiple paragraphs — first gets a unique id, LAST gets commentParaId
+      const firstParaId = generateParaId();
+      xml += serializeParagraphWithAnnotationRef(comment.content[0], firstParaId);
+      for (let i = 1; i < comment.content.length - 1; i++) {
+        xml += serializeParagraph(comment.content[i], generateParaId());
+      }
+      xml += serializeParagraph(comment.content[comment.content.length - 1], commentParaId);
     }
   } else {
-    // Empty comment — still needs a paragraph with annotationRef
-    lastParaId = generateParaId();
-    xml += `<w:p w14:paraId="${lastParaId}" w14:textId="77777777"><w:r><w:rPr><w:rStyle w:val="CommentReference"/></w:rPr><w:annotationRef/></w:r></w:p>`;
+    // Empty comment — still needs a paragraph with annotationRef using commentParaId
+    xml += `<w:p w14:paraId="${commentParaId}" w14:textId="77777777"><w:r><w:rPr><w:rStyle w:val="CommentReference"/></w:rPr><w:annotationRef/></w:r></w:p>`;
   }
   xml += '</w:comment>';
 
   paraInfos.push({
     commentId: comment.id,
-    lastParaId,
+    lastParaId: commentParaId,
     durableId: generateParaId(),
     parentId: comment.parentId,
     done: comment.done,
