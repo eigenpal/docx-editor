@@ -3685,9 +3685,9 @@ body { background: white; }
                         />
                       </div>
                     )}
-                    {/* Brighten text highlight for the focused/expanded comment */}
+                    {/* Brighten text highlight for the focused/expanded comment (only in page content, not sidebar) */}
                     {expandedSidebarItem && expandedSidebarItem.startsWith('comment-') && (
-                      <style>{`[data-comment-id="${expandedSidebarItem.replace('comment-', '')}"] { background-color: rgba(255, 212, 0, 0.35) !important; border-bottom: 2px solid rgba(255, 212, 0, 0.7) !important; }`}</style>
+                      <style>{`.paged-editor__pages [data-comment-id="${expandedSidebarItem.replace('comment-', '')}"] { background-color: rgba(255, 212, 0, 0.35) !important; border-bottom: 2px solid rgba(255, 212, 0, 0.7) !important; }`}</style>
                     )}
                     <PagedEditor
                       ref={pagedEditorRef}
