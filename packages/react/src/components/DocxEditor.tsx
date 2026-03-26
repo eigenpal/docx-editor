@@ -3765,14 +3765,19 @@ body { background: white; }
                             onMarkerClick={(commentId) => {
                               const isResolved = resolvedCommentIds.has(commentId);
                               if (isResolved) {
-                                // Toggle: click again to hide
-                                if (expandedResolvedId === commentId) {
-                                  setExpandedResolvedId(null);
-                                  return;
-                                }
-                                setExpandedResolvedId(commentId);
+                                setExpandedResolvedId((prev) =>
+                                  prev === commentId ? null : commentId
+                                );
+                              } else {
+                                setShowCommentsSidebar(true);
                               }
-                              setShowCommentsSidebar(true);
+                            }}
+                            onUnresolve={(id) =>
+                              commentCallbacksRef.current.onCommentUnresolve?.(id)
+                            }
+                            onDelete={(id) => {
+                              commentCallbacksRef.current.onCommentDelete?.(id);
+                              setExpandedResolvedId(null);
                             }}
                           />
                         </>
