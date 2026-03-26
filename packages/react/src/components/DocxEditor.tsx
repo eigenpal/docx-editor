@@ -2762,10 +2762,14 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
 
         if (useSelective && view) {
           const editorState = view.state;
+          // Force full repack if we injected reply range markers (selective save uses original XML)
+          const hasInjectedReplies = comments.some(
+            (c) => c.parentId != null && comments.some((p) => p.id === c.parentId)
+          );
           selectiveOptions = {
             selective: {
               changedParaIds: getChangedParagraphIds(editorState),
-              structuralChange: hasStructuralChanges(editorState),
+              structuralChange: hasStructuralChanges(editorState) || hasInjectedReplies,
               hasUntrackedChanges: hasUntrackedChanges(editorState),
             },
           };
