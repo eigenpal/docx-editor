@@ -3431,7 +3431,7 @@ body { background: white; }
     comments,
     trackedChanges,
     callbacks: stableCallbacks,
-    showResolved: showCommentsSidebar,
+    showResolved: false,
     isAddingComment: showCommentsSidebar ? isAddingComment : false,
     addCommentYPosition,
   });
