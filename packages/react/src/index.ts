@@ -400,7 +400,6 @@ export {
 export {
   LocaleProvider,
   useTranslation,
-  getMissingTranslations,
   type LocaleProviderProps,
   type LocaleStrings,
   type PartialLocaleStrings,
