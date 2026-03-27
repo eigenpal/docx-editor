@@ -324,6 +324,10 @@ export interface DocxEditorProps {
   printOptions?: PrintOptions;
   /** Callback when print is triggered */
   onPrint?: () => void;
+  /** Callback for "Save as DOCX" in the File menu */
+  onSaveAsDocx?: () => void;
+  /** Callback for "Save as PDF" in the File menu */
+  onSaveAsPdf?: () => void;
   /** Callback when content is copied */
   onCopy?: () => void;
   /** Callback when content is cut */

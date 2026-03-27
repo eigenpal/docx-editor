@@ -189,7 +189,7 @@ export function StylePicker({
         return {
           styleId: s.styleId,
           name: s.name || s.styleId,
-          type: s.type,
+          type: s.type as StyleType,
           isDefault: s.default,
           qFormat: s.qFormat,
           priority: s.uiPriority ?? 99,
@@ -200,6 +200,15 @@ export function StylePicker({
           color: s.rPr?.color?.rgb ?? defaultStyle?.color,
         };
       });
+
+    // Ensure built-in styles (Title, Heading 1-3, etc.) are always present
+    // even if the document's styles.xml doesn't define them
+    const docStyleIds = new Set(docStyles.map((s) => s.styleId));
+    for (const def of DEFAULT_STYLES) {
+      if (!docStyleIds.has(def.styleId)) {
+        docStyles.push(def as (typeof docStyles)[number]);
+      }
+    }
 
     // Sort by priority
     return docStyles.sort((a, b) => (a.priority ?? 99) - (b.priority ?? 99));

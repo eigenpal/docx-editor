@@ -75,6 +75,10 @@ export interface ToolbarProps {
   onPrint?: () => void;
   /** Whether to show print button (default: true) */
   showPrintButton?: boolean;
+  /** Callback for "Save as DOCX" in the File menu */
+  onSaveAsDocx?: () => void;
+  /** Callback for "Save as PDF" in the File menu */
+  onSaveAsPdf?: () => void;
   /** Whether to show zoom control (default: true) */
   showZoomControl?: boolean;
   /** Current zoom level (1.0 = 100%) */
