@@ -73,39 +73,16 @@ function localeEqual(
 }
 
 /**
- * Basic CLDR-style plural category selection.
- * Covers the most common plural rules. Languages with more complex rules
- * (e.g., Arabic with 6 forms) can override via the `other` fallback.
+ * Get CLDR plural category using the browser's built-in Intl.PluralRules.
+ * Supports all languages correctly — no hand-rolled rules needed.
  */
-function getPluralCategory(
-  count: number,
-  lang?: string
-): 'zero' | 'one' | 'two' | 'few' | 'many' | 'other' {
-  const abs = Math.abs(count);
-  const prefix = lang?.split('-')[0];
-
-  // Languages with zero form
-  if (abs === 0 && (prefix === 'ar' || prefix === 'lv')) return 'zero';
-
-  if (abs === 1) return 'one';
-  if (abs === 2 && prefix === 'ar') return 'two';
-
-  // Slavic plural rules (Polish, Russian, Ukrainian, etc.)
-  if (
-    prefix === 'pl' ||
-    prefix === 'ru' ||
-    prefix === 'uk' ||
-    prefix === 'hr' ||
-    prefix === 'sr' ||
-    prefix === 'bs'
-  ) {
-    const mod10 = abs % 10;
-    const mod100 = abs % 100;
-    if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) return 'few';
-    if (mod10 === 0 || (mod10 >= 5 && mod10 <= 9) || (mod100 >= 11 && mod100 <= 14)) return 'many';
+function getPluralCategory(count: number, lang?: string): Intl.LDMLPluralRule {
+  try {
+    return new Intl.PluralRules(lang || 'en').select(count);
+  } catch {
+    // Fallback for invalid lang tags
+    return count === 1 ? 'one' : 'other';
   }
-
-  return 'other';
 }
 
 /**
