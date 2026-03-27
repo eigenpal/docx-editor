@@ -20,7 +20,6 @@ function deepMerge<T extends Record<string, unknown>>(
   for (const key of Object.keys(override)) {
     const baseVal = (base as Record<string, unknown>)[key];
     const overVal = override[key];
-    // null means "not yet translated" — keep base value
     if (overVal === null) continue;
     if (
       baseVal &&
@@ -51,18 +50,60 @@ function getNestedValue(obj: Record<string, unknown>, path: string): string | un
   return typeof current === 'string' ? current : undefined;
 }
 
-function interpolate(template: string, vars?: Record<string, string | number>): string {
+/**
+ * Process ICU MessageFormat plurals and simple {variable} interpolation.
+ *
+ * Supports:
+ *   - Simple interpolation: "Hello {name}" → "Hello World"
+ *   - ICU plural: "{count, plural, one {# item} other {# items}}" → "5 items"
+ *   - # inside plural branches is replaced with the count value
+ *
+ * This is the same subset that next-intl uses for basic plural support.
+ */
+function formatMessage(
+  template: string,
+  vars?: Record<string, string | number>,
+  lang?: string
+): string {
   if (!vars) return template;
-  return template.replace(/\{(\w+)\}/g, (_, key) => {
+
+  // Process ICU plural blocks: {varName, plural, one {text} other {text}}
+  const result = template.replace(
+    /\{(\w+),\s*plural,\s*((?:[^{}]|\{[^{}]*\})*)\}/g,
+    (_, varName, branches) => {
+      const count = Number(vars[varName]);
+      if (isNaN(count)) return _;
+
+      // Parse branches: "one {# item} other {# items}"
+      const parsed: Record<string, string> = {};
+      const branchRegex = /(\w+)\s*\{([^}]*)\}/g;
+      let match;
+      while ((match = branchRegex.exec(branches)) !== null) {
+        parsed[match[1]] = match[2];
+      }
+
+      // Select category via Intl.PluralRules
+      let category: string;
+      try {
+        category = new Intl.PluralRules(lang || 'en').select(count);
+      } catch {
+        category = count === 1 ? 'one' : 'other';
+      }
+
+      const text = parsed[category] ?? parsed['other'] ?? '';
+      // Replace # with the actual count
+      return text.replace(/#/g, String(count));
+    }
+  );
+
+  // Process simple {variable} interpolation
+  return result.replace(/\{(\w+)\}/g, (_, key) => {
     const val = vars[key];
     return val !== undefined ? String(val) : `{${key}}`;
   });
 }
 
-/**
- * Simple deep equality check for locale objects.
- * Compares JSON serializations — fast enough for locale-sized objects (~5-10KB).
- */
+/** Simple deep equality check for locale objects. */
 function localeEqual(
   a: Record<string, unknown> | undefined,
   b: Record<string, unknown> | undefined
@@ -70,19 +111,6 @@ function localeEqual(
   if (a === b) return true;
   if (!a || !b) return false;
   return JSON.stringify(a) === JSON.stringify(b);
-}
-
-/**
- * Get CLDR plural category using the browser's built-in Intl.PluralRules.
- * Supports all languages correctly — no hand-rolled rules needed.
- */
-function getPluralCategory(count: number, lang?: string): Intl.LDMLPluralRule {
-  try {
-    return new Intl.PluralRules(lang || 'en').select(count);
-  } catch {
-    // Fallback for invalid lang tags
-    return count === 1 ? 'one' : 'other';
-  }
 }
 
 /**
@@ -137,37 +165,11 @@ export function useTranslation() {
   const t = useCallback(
     (key: TranslationKey, vars?: Record<string, string | number>): string => {
       const value = getNestedValue(strings as unknown as Record<string, unknown>, key);
-      return interpolate(value ?? key, vars);
-    },
-    [strings]
-  );
-
-  /**
-   * Pluralized translation. Looks up `${key}.one`, `${key}.few`, `${key}.many`, `${key}.other`
-   * based on CLDR plural rules for the current language.
-   *
-   * @example
-   * // en.json: { "comments": { "replies": { "one": "{count} reply", "other": "{count} replies" } } }
-   * tPlural('comments.replies', 3) // → "3 replies"
-   * tPlural('comments.replies', 1) // → "1 reply"
-   */
-  const tPlural = useCallback(
-    (key: string, count: number, vars?: Record<string, string | number>): string => {
-      const category = getPluralCategory(count, lang);
-      const allVars = { count, ...vars };
-      const stringsObj = strings as unknown as Record<string, unknown>;
-
-      // Try category-specific key, then fall back to 'other', then the key itself
-      const value =
-        getNestedValue(stringsObj, `${key}.${category}`) ??
-        getNestedValue(stringsObj, `${key}.other`) ??
-        key;
-      return interpolate(value, allVars);
+      return formatMessage(value ?? key, vars, lang);
     },
     [strings, lang]
   );
-
-  return { t, tPlural };
+  return { t };
 }
 
 /**
