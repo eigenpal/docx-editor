@@ -971,6 +971,43 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
       }
     }
     setTrackedChanges(final);
+
+    // Detect comments whose range overlaps with tracked changes and thread them.
+    // When a comment mark covers the same text as a tracked change mark,
+    // the comment is a reply to the tracked change.
+    const commentType = schema.marks.comment;
+    if (commentType && final.length > 0) {
+      // Build a map: commentId → overlapping revisionId
+      const commentToRevision = new Map<number, number>();
+      doc.descendants((node) => {
+        if (!node.isText) return;
+        const commentMark = node.marks.find((m) => m.type === commentType);
+        const tcMark = node.marks.find((m) => m.type === insertionType || m.type === deletionType);
+        if (commentMark && tcMark) {
+          const cid = commentMark.attrs.commentId as number;
+          const rid = tcMark.attrs.revisionId as number;
+          if (!commentToRevision.has(cid)) {
+            commentToRevision.set(cid, rid);
+          }
+        }
+      });
+
+      if (commentToRevision.size > 0) {
+        setComments((prev) => {
+          let changed = false;
+          const updated = prev.map((c) => {
+            if (c.parentId != null) return c; // already threaded
+            const rid = commentToRevision.get(c.id);
+            if (rid != null) {
+              changed = true;
+              return { ...c, parentId: rid };
+            }
+            return c;
+          });
+          return changed ? updated : prev;
+        });
+      }
+    }
   }, []);
 
   // Remove comments whose marks no longer exist in the document

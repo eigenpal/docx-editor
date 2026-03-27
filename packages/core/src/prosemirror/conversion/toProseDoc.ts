@@ -142,36 +142,48 @@ function convertParagraph(
       const sdtNode = convertInlineSdt(content, mergedStyleRunFormatting, styleResolver);
       if (sdtNode) inlineNodes.push(sdtNode);
     } else if (content.type === 'insertion') {
-      const insNodes = convertTrackedChange(
+      let insNodes = convertTrackedChange(
         content,
         'insertion',
         mergedStyleRunFormatting,
         styleResolver
       );
+      if (commentIds.size > 0) {
+        insNodes = applyCommentMarks(insNodes, commentIds);
+      }
       inlineNodes.push(...insNodes);
     } else if (content.type === 'deletion') {
-      const delNodes = convertTrackedChange(
+      let delNodes = convertTrackedChange(
         content,
         'deletion',
         mergedStyleRunFormatting,
         styleResolver
       );
+      if (commentIds.size > 0) {
+        delNodes = applyCommentMarks(delNodes, commentIds);
+      }
       inlineNodes.push(...delNodes);
     } else if (content.type === 'moveFrom') {
-      const moveFromNodes = convertTrackedChange(
+      let moveFromNodes = convertTrackedChange(
         content,
         'deletion',
         mergedStyleRunFormatting,
         styleResolver
       );
+      if (commentIds.size > 0) {
+        moveFromNodes = applyCommentMarks(moveFromNodes, commentIds);
+      }
       inlineNodes.push(...moveFromNodes);
     } else if (content.type === 'moveTo') {
-      const moveToNodes = convertTrackedChange(
+      let moveToNodes = convertTrackedChange(
         content,
         'insertion',
         mergedStyleRunFormatting,
         styleResolver
       );
+      if (commentIds.size > 0) {
+        moveToNodes = applyCommentMarks(moveToNodes, commentIds);
+      }
       inlineNodes.push(...moveToNodes);
     } else if (content.type === 'mathEquation') {
       const mathNode = convertMathEquation(content);
