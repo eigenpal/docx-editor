@@ -924,7 +924,37 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
         merged.push({ ...entry });
       }
     }
-    setTrackedChanges(merged);
+
+    // Detect replacement pairs: adjacent deletion + insertion from the same author/date
+    // Word assigns different w:id values but same author+date for a single replace operation
+    const final: TrackedChangeEntry[] = [];
+    for (let i = 0; i < merged.length; i++) {
+      const curr = merged[i];
+      const next = merged[i + 1];
+      if (
+        curr.type === 'deletion' &&
+        next &&
+        next.type === 'insertion' &&
+        curr.author === next.author &&
+        curr.date === next.date &&
+        curr.to === next.from
+      ) {
+        final.push({
+          type: 'replacement',
+          text: next.text,
+          deletedText: curr.text,
+          author: curr.author,
+          date: curr.date,
+          from: curr.from,
+          to: next.to,
+          revisionId: curr.revisionId,
+        });
+        i++; // skip the insertion entry
+      } else {
+        final.push(curr);
+      }
+    }
+    setTrackedChanges(final);
   }, []);
 
   // Remove comments whose marks no longer exist in the document
