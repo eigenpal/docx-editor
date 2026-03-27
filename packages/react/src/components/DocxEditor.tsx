@@ -670,18 +670,34 @@ function injectTCReplyRangeMarkers(content: BlockContent[], comments: Comment[])
         if (!hasTC) continue;
 
         const newItems: ParagraphContent[] = [];
-        for (const item of block.content) {
+        const items = block.content;
+        for (let i = 0; i < items.length; i++) {
+          const item = items[i];
           if (
             (item.type === 'insertion' || item.type === 'deletion') &&
             replyIdsByRevision.has(item.info.id)
           ) {
             const replyIds = replyIdsByRevision.get(item.info.id)!;
-            // Add commentRangeStart for each reply BEFORE the TC content
+            // Add commentRangeStart BEFORE the TC content
             for (const rid of replyIds) {
               newItems.push({ type: 'commentRangeStart', id: rid });
             }
             newItems.push(item);
-            // Add commentRangeEnd for each reply AFTER the TC content
+            // Check if the next item is the other half of a replacement pair
+            // (adjacent del+ins with same author+date). If so, include it inside
+            // the comment range so we don't break del-ins adjacency.
+            const next = items[i + 1];
+            if (
+              next &&
+              (next.type === 'insertion' || next.type === 'deletion') &&
+              next.type !== item.type &&
+              next.info.author === item.info.author &&
+              next.info.date === item.info.date
+            ) {
+              newItems.push(next);
+              i++; // skip the paired item
+            }
+            // Add commentRangeEnd AFTER both TC items
             for (const rid of replyIds) {
               newItems.push({ type: 'commentRangeEnd', id: rid });
             }
