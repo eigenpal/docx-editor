@@ -2,6 +2,10 @@
   "name": "@eigenpal/docx-collab",
   "version": "0.0.1",
   "description": "Real-time collaborative editing for docx-js-editor via Yjs + Hocuspocus",
+  "files": [
+    "dist",
+    "src/collab.css"
+  ],
   "main": "./dist/index.js",
   "module": "./dist/index.mjs",
   "types": "./dist/index.d.ts",
