@@ -16,6 +16,7 @@ import { Tooltip } from './Tooltip';
 import { cn } from '../../lib/utils';
 import { useFixedDropdown } from './useFixedDropdown';
 import { useTranslation } from '../../i18n';
+import type { TranslationKey } from '../../i18n';
 
 // ============================================================================
 // TYPES
@@ -36,9 +37,9 @@ export interface AlignmentOption {
   /** Keyboard shortcut hint */
   shortcut?: string;
   /** Translation key for label */
-  labelKey: string;
+  labelKey: TranslationKey;
   /** Translation key for shortcut */
-  shortcutKey?: string;
+  shortcutKey?: TranslationKey;
 }
 
 /**
@@ -164,10 +165,8 @@ export function AlignmentButtons({
   const currentOption =
     ALIGNMENT_OPTIONS.find((opt) => opt.value === value) || ALIGNMENT_OPTIONS[0];
 
-  const currentLabel = t(currentOption.labelKey as any);
-  const currentShortcut = currentOption.shortcutKey
-    ? t(currentOption.shortcutKey as any)
-    : undefined;
+  const currentLabel = t(currentOption.labelKey);
+  const currentShortcut = currentOption.shortcutKey ? t(currentOption.shortcutKey) : undefined;
   const ariaText = `${currentLabel}${currentShortcut ? ` (${currentShortcut})` : ''}`;
 
   const triggerButton = (
@@ -212,8 +211,8 @@ export function AlignmentButtons({
           <div style={{ display: 'flex', gap: 2 }}>
             {ALIGNMENT_OPTIONS.map((option) => {
               const isActive = value === option.value;
-              const optLabel = t(option.labelKey as any);
-              const optShortcut = option.shortcutKey ? t(option.shortcutKey as any) : undefined;
+              const optLabel = t(option.labelKey);
+              const optShortcut = option.shortcutKey ? t(option.shortcutKey) : undefined;
               return (
                 <button
                   key={option.value}

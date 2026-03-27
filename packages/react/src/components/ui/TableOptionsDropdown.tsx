@@ -19,6 +19,7 @@ import { cn } from '../../lib/utils';
 import type { TableAction } from './TableToolbar';
 import type { TableContextInfo } from '@eigenpal/docx-core/prosemirror/extensions/nodes/TableExtension';
 import { useTranslation } from '../../i18n';
+import type { TranslationKey } from '../../i18n';
 
 // ============================================================================
 // TYPES
@@ -64,7 +65,7 @@ type SimpleAction =
 
 interface MenuItem {
   action: SimpleAction;
-  labelKey: string;
+  labelKey: TranslationKey;
   icon: string;
   shortcut?: string;
   danger?: boolean;
@@ -818,7 +819,7 @@ export function TableOptionsDropdown({
                     size={18}
                     className={item.danger && !isDisabled ? 'text-red-600' : ''}
                   />
-                  <span style={{ flex: 1 }}>{t(item.labelKey as any)}</span>
+                  <span style={{ flex: 1 }}>{t(item.labelKey)}</span>
                   {item.shortcut && (
                     <span style={{ fontSize: 12, color: 'var(--doc-text-muted)' }}>
                       {item.shortcut}

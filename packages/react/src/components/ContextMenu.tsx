@@ -11,7 +11,7 @@ import { getActionDescription, DEFAULT_AI_ACTIONS } from '@eigenpal/docx-core/ty
 import { useTranslation } from '../i18n';
 import type { TranslationKey } from '../i18n';
 
-const AI_ACTION_KEY_MAP: Record<AIAction, string> = {
+const AI_ACTION_KEY_MAP: Record<AIAction, TranslationKey> = {
   askAI: 'contextMenu.aiActions.askAi',
   rewrite: 'contextMenu.aiActions.rewrite',
   expand: 'contextMenu.aiActions.expand',
@@ -219,7 +219,7 @@ function getActionIcon(action: AIAction): React.ReactNode {
 
 const MenuItem: React.FC<MenuItemProps> = ({ action, onClick, isHighlighted, onMouseEnter }) => {
   const { t } = useTranslation();
-  const label = t(AI_ACTION_KEY_MAP[action] as TranslationKey);
+  const label = t(AI_ACTION_KEY_MAP[action]);
   const description = getActionDescription(action);
   const icon = getActionIcon(action);
 

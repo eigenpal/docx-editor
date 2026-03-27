@@ -8,7 +8,7 @@ export interface ReplyThreadProps {
 }
 
 export function ReplyThread({ replies, isExpanded }: ReplyThreadProps) {
-  const { t } = useTranslation();
+  const { t, tPlural } = useTranslation();
   if (replies.length === 0) return null;
   const visibleReplies = isExpanded ? replies : replies.slice(-1);
   const hiddenCount = isExpanded ? 0 : replies.length - 1;
@@ -26,9 +26,7 @@ export function ReplyThread({ replies, isExpanded }: ReplyThreadProps) {
             borderTop: '1px solid #e8eaed',
           }}
         >
-          {hiddenCount === 1
-            ? t('comments.replyCount', { count: hiddenCount })
-            : t('comments.replyCountPlural', { count: hiddenCount })}
+          {tPlural('comments.replies', hiddenCount)}
         </div>
       )}
       {visibleReplies.map((reply) => (

@@ -430,8 +430,10 @@
     "unknown": "Unknown",
     "addComment": "Add a comment...",
     "replyPlaceholder": "Reply or add others with @",
-    "replyCount": "{count} reply",
-    "replyCountPlural": "{count} replies"
+    "replies": {
+      "one": "{count} reply",
+      "other": "{count} replies"
+    }
   },
   "trackedChanges": {
     "unknown": "Unknown",

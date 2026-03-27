@@ -58,12 +58,18 @@ function setNestedValue(obj, path, value) {
 
 function deleteNestedValue(obj, path) {
   const parts = path.split('.');
-  let current = obj;
+  const stack = [obj];
   for (let i = 0; i < parts.length - 1; i++) {
-    if (!current[parts[i]] || typeof current[parts[i]] !== 'object') return;
-    current = current[parts[i]];
+    if (!stack[i][parts[i]] || typeof stack[i][parts[i]] !== 'object') return;
+    stack.push(stack[i][parts[i]]);
   }
-  delete current[parts[parts.length - 1]];
+  delete stack[stack.length - 1][parts[parts.length - 1]];
+  // Clean up empty parent objects
+  for (let i = stack.length - 1; i > 0; i--) {
+    if (Object.keys(stack[i]).length === 0) {
+      delete stack[i - 1][parts[i - 1]];
+    } else break;
+  }
 }
 
 /** Build a skeleton object mirroring en.json structure with all leaves set to null */
@@ -108,7 +114,14 @@ function cmdValidate(fix) {
 
   for (const file of localeFiles) {
     const filePath = join(I18N_DIR, file);
-    const locale = JSON.parse(readFileSync(filePath, 'utf-8'));
+    let locale;
+    try {
+      locale = JSON.parse(readFileSync(filePath, 'utf-8'));
+    } catch (e) {
+      console.error(`✗ ${file}: invalid JSON — ${e.message}`);
+      hasErrors = true;
+      continue;
+    }
     const localePaths = getLeafPaths(locale);
 
     const missing = enPaths.filter((p) => !localePaths.includes(p));
@@ -156,10 +169,10 @@ function cmdNew(lang) {
     process.exit(1);
   }
 
-  // Validate lang tag (basic check)
-  if (!/^[a-z]{2,3}(-[A-Z][a-zA-Z]{1,7})?$/.test(lang)) {
+  // Validate lang tag (BCP 47: language, language-Script, language-Region, language-Script-Region)
+  if (!/^[a-z]{2,3}(-[a-zA-Z0-9]{2,8})*$/.test(lang)) {
     console.error(
-      `Invalid language tag: "${lang}". Use BCP 47 format (e.g., de, fr, pt-BR, zh-Hans).`,
+      `Invalid language tag: "${lang}". Use BCP 47 format (e.g., de, fr, pt-BR, zh-Hans, zh-Hant-TW).`,
     );
     process.exit(1);
   }

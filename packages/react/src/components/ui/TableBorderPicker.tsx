@@ -13,13 +13,14 @@ import { cn } from '../../lib/utils';
 import type { TableAction } from './TableToolbar';
 import { useFixedDropdown } from './useFixedDropdown';
 import { useTranslation } from '../../i18n';
+import type { TranslationKey } from '../../i18n';
 
 export interface TableBorderPickerProps {
   onAction: (action: TableAction) => void;
   disabled?: boolean;
 }
 
-const BORDER_PRESETS: { action: TableAction; icon: string; labelKey: string }[] = [
+const BORDER_PRESETS: { action: TableAction; icon: string; labelKey: TranslationKey }[] = [
   { action: 'borderAll', icon: 'border_all', labelKey: 'table.borders.all' },
   { action: 'borderOutside', icon: 'border_outer', labelKey: 'table.borders.outside' },
   { action: 'borderInside', icon: 'border_inner', labelKey: 'table.borders.inside' },
@@ -97,7 +98,7 @@ export function TableBorderPicker({ onAction, disabled = false }: TableBorderPic
               <button
                 key={typeof action === 'string' ? action : action.type}
                 type="button"
-                title={t(labelKey as any)}
+                title={t(labelKey)}
                 style={{
                   display: 'flex',
                   alignItems: 'center',

@@ -5,7 +5,7 @@ export type LocaleStrings = typeof en;
 
 /** Recursively makes all properties optional */
 export type DeepPartial<T> = {
-  [K in keyof T]?: T[K] extends object ? DeepPartial<T[K]> : T[K];
+  [K in keyof T]?: T[K] extends object ? DeepPartial<T[K]> : T[K] | null;
 };
 
 export type PartialLocaleStrings = DeepPartial<LocaleStrings>;

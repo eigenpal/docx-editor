@@ -12,6 +12,7 @@ import type { Style } from '@eigenpal/docx-core/types/document';
 import type { TableAction } from './TableToolbar';
 import { MaterialSymbol } from './MaterialSymbol';
 import { useTranslation } from '../../i18n';
+import type { TranslationKey } from '../../i18n';
 
 // ============================================================================
 // PREDEFINED TABLE STYLES
@@ -373,7 +374,7 @@ interface TableStyleGalleryProps {
 }
 
 /** Map from built-in style ID to en.json key */
-const STYLE_NAME_KEYS: Record<string, string> = {
+const STYLE_NAME_KEYS: Record<string, TranslationKey> = {
   TableNormal: 'table.styles.normalTable',
   TableGrid: 'table.styles.tableGrid',
   TableGridLight: 'table.styles.gridTableLight',
@@ -481,7 +482,7 @@ export function TableStyleGallery({
         >
           {allPresets.map((preset) => {
             const nameKey = STYLE_NAME_KEYS[preset.id];
-            const translatedPreset = nameKey ? { ...preset, name: t(nameKey as any) } : preset;
+            const translatedPreset = nameKey ? { ...preset, name: t(nameKey) } : preset;
             return (
               <StylePreview
                 key={preset.id}

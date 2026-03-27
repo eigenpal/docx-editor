@@ -15,6 +15,7 @@ import type {
   NumberFormat,
 } from '@eigenpal/docx-core/types/document';
 import { useTranslation } from '../../i18n';
+import type { TranslationKey } from '../../i18n';
 
 // ============================================================================
 // TYPES
@@ -113,7 +114,7 @@ const primaryButtonStyle: CSSProperties = {
 // NUMBER FORMAT OPTIONS
 // ============================================================================
 
-const numberFormatOptions: { value: NumberFormat; labelKey: string }[] = [
+const numberFormatOptions: { value: NumberFormat; labelKey: TranslationKey }[] = [
   { value: 'decimal', labelKey: 'dialogs.footnoteProperties.formats.decimal' },
   { value: 'lowerRoman', labelKey: 'dialogs.footnoteProperties.formats.lowerRoman' },
   { value: 'upperRoman', labelKey: 'dialogs.footnoteProperties.formats.upperRoman' },
@@ -206,7 +207,7 @@ export function FootnotePropertiesDialog({
           >
             {numberFormatOptions.map((o) => (
               <option key={o.value} value={o.value}>
-                {t(o.labelKey as Parameters<typeof t>[0])}
+                {t(o.labelKey)}
               </option>
             ))}
           </select>
@@ -271,7 +272,7 @@ export function FootnotePropertiesDialog({
           >
             {numberFormatOptions.map((o) => (
               <option key={o.value} value={o.value}>
-                {t(o.labelKey as Parameters<typeof t>[0])}
+                {t(o.labelKey)}
               </option>
             ))}
           </select>

@@ -1,4 +1,4 @@
-import { createContext, useContext, useMemo, useCallback } from 'react';
+import { createContext, useContext, useMemo, useCallback, useRef } from 'react';
 import type { ReactNode } from 'react';
 import en from '../../i18n/en.json';
 import type { LocaleStrings, PartialLocaleStrings, TranslationKey } from './types';
@@ -60,6 +60,55 @@ function interpolate(template: string, vars?: Record<string, string | number>): 
 }
 
 /**
+ * Simple deep equality check for locale objects.
+ * Compares JSON serializations — fast enough for locale-sized objects (~5-10KB).
+ */
+function localeEqual(
+  a: Record<string, unknown> | undefined,
+  b: Record<string, unknown> | undefined
+): boolean {
+  if (a === b) return true;
+  if (!a || !b) return false;
+  return JSON.stringify(a) === JSON.stringify(b);
+}
+
+/**
+ * Basic CLDR-style plural category selection.
+ * Covers the most common plural rules. Languages with more complex rules
+ * (e.g., Arabic with 6 forms) can override via the `other` fallback.
+ */
+function getPluralCategory(
+  count: number,
+  lang?: string
+): 'zero' | 'one' | 'two' | 'few' | 'many' | 'other' {
+  const abs = Math.abs(count);
+  const prefix = lang?.split('-')[0];
+
+  // Languages with zero form
+  if (abs === 0 && (prefix === 'ar' || prefix === 'lv')) return 'zero';
+
+  if (abs === 1) return 'one';
+  if (abs === 2 && prefix === 'ar') return 'two';
+
+  // Slavic plural rules (Polish, Russian, Ukrainian, etc.)
+  if (
+    prefix === 'pl' ||
+    prefix === 'ru' ||
+    prefix === 'uk' ||
+    prefix === 'hr' ||
+    prefix === 'sr' ||
+    prefix === 'bs'
+  ) {
+    const mod10 = abs % 10;
+    const mod100 = abs % 100;
+    if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) return 'few';
+    if (mod10 === 0 || (mod10 >= 5 && mod10 <= 9) || (mod100 >= 11 && mod100 <= 14)) return 'many';
+  }
+
+  return 'other';
+}
+
+/**
  * Collect all null-valued leaf keys from a locale object (untranslated strings).
  */
 function findNullKeys(obj: Record<string, unknown>, prefix = ''): string[] {
@@ -77,19 +126,37 @@ function findNullKeys(obj: Record<string, unknown>, prefix = ''): string[] {
 
 export interface LocaleProviderProps {
   locale?: PartialLocaleStrings;
+  /** BCP 47 language tag (e.g., "pl", "de", "ar"). Used for plural rules. */
+  lang?: string;
   children: ReactNode;
 }
 
-export function LocaleProvider({ locale, children }: LocaleProviderProps) {
+const LangContext = createContext<string | undefined>(undefined);
+
+export function LocaleProvider({ locale, lang, children }: LocaleProviderProps) {
+  // Deep-compare locale to avoid re-renders when consumers pass inline objects
+  const localeRef = useRef(locale);
+  if (
+    !localeEqual(locale as Record<string, unknown>, localeRef.current as Record<string, unknown>)
+  ) {
+    localeRef.current = locale;
+  }
+  const stableLocale = localeRef.current;
+
   const merged = useMemo(
-    () => deepMerge(defaultLocale, locale as Record<string, unknown> | undefined),
-    [locale]
+    () => deepMerge(defaultLocale, stableLocale as Record<string, unknown> | undefined),
+    [stableLocale]
   );
-  return <LocaleContext.Provider value={merged}>{children}</LocaleContext.Provider>;
+  return (
+    <LangContext.Provider value={lang}>
+      <LocaleContext.Provider value={merged}>{children}</LocaleContext.Provider>
+    </LangContext.Provider>
+  );
 }
 
 export function useTranslation() {
   const strings = useContext(LocaleContext);
+  const lang = useContext(LangContext);
   const t = useCallback(
     (key: TranslationKey, vars?: Record<string, string | number>): string => {
       const value = getNestedValue(strings as unknown as Record<string, unknown>, key);
@@ -97,7 +164,33 @@ export function useTranslation() {
     },
     [strings]
   );
-  return { t };
+
+  /**
+   * Pluralized translation. Looks up `${key}.one`, `${key}.few`, `${key}.many`, `${key}.other`
+   * based on CLDR plural rules for the current language.
+   *
+   * @example
+   * // en.json: { "comments": { "replies": { "one": "{count} reply", "other": "{count} replies" } } }
+   * tPlural('comments.replies', 3) // → "3 replies"
+   * tPlural('comments.replies', 1) // → "1 reply"
+   */
+  const tPlural = useCallback(
+    (key: string, count: number, vars?: Record<string, string | number>): string => {
+      const category = getPluralCategory(count, lang);
+      const allVars = { count, ...vars };
+      const stringsObj = strings as unknown as Record<string, unknown>;
+
+      // Try category-specific key, then fall back to 'other', then the key itself
+      const value =
+        getNestedValue(stringsObj, `${key}.${category}`) ??
+        getNestedValue(stringsObj, `${key}.other`) ??
+        key;
+      return interpolate(value, allVars);
+    },
+    [strings, lang]
+  );
+
+  return { t, tPlural };
 }
 
 /**

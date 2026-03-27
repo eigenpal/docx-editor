@@ -10,6 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger } from './Select';
 import { cn } from '../../lib/utils';
 import type { Style, StyleType, Theme } from '@eigenpal/docx-core/types/document';
 import { useTranslation } from '../../i18n';
+import type { TranslationKey } from '../../i18n';
 
 // ============================================================================
 // TYPES
@@ -18,7 +19,7 @@ import { useTranslation } from '../../i18n';
 export interface StyleOption {
   styleId: string;
   name: string;
-  nameKey?: string;
+  nameKey?: TranslationKey;
   type: StyleType;
   isDefault?: boolean;
   qFormat?: boolean;
@@ -222,8 +223,7 @@ export function StylePicker({
     [onChange]
   );
 
-  const getStyleName = (style: StyleOption) =>
-    style.nameKey ? t(style.nameKey as any) : style.name;
+  const getStyleName = (style: StyleOption) => (style.nameKey ? t(style.nameKey) : style.name);
 
   const currentValue = value || 'Normal';
   const currentStyle = styleOptions.find((s) => s.styleId === currentValue);

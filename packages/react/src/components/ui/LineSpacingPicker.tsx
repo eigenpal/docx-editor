@@ -18,6 +18,7 @@ import {
 import { cn } from '../../lib/utils';
 import { IconLineSpacing } from './Icons';
 import { useTranslation } from '../../i18n';
+import type { TranslationKey } from '../../i18n';
 
 // ============================================================================
 // TYPES
@@ -25,7 +26,7 @@ import { useTranslation } from '../../i18n';
 
 export interface LineSpacingOption {
   label: string;
-  labelKey?: string;
+  labelKey?: TranslationKey;
   value: number;
   twipsValue: number;
 }
@@ -84,7 +85,7 @@ export function LineSpacingPicker({
   );
 
   const getOptionLabel = (option: LineSpacingOption) =>
-    option.labelKey ? t(option.labelKey as any) : option.label;
+    option.labelKey ? t(option.labelKey) : option.label;
 
   return (
     <Select

@@ -11,13 +11,19 @@ import { Tooltip } from './Tooltip';
 import { cn } from '../../lib/utils';
 import type { TableAction } from './TableToolbar';
 import { useTranslation } from '../../i18n';
+import type { TranslationKey } from '../../i18n';
 
 export interface TableInsertButtonsProps {
   onAction: (action: TableAction) => void;
   disabled?: boolean;
 }
 
-const INSERT_ACTIONS: { action: TableAction; icon: string; labelKey: string; testId: string }[] = [
+const INSERT_ACTIONS: {
+  action: TableAction;
+  icon: string;
+  labelKey: TranslationKey;
+  testId: string;
+}[] = [
   {
     action: 'addRowAbove',
     icon: 'keyboard_arrow_up',
@@ -54,7 +60,7 @@ export function TableInsertButtons({ onAction, disabled = false }: TableInsertBu
   return (
     <>
       {INSERT_ACTIONS.map(({ action, icon, labelKey, testId }) => {
-        const label = t(labelKey as any);
+        const label = t(labelKey);
         return (
           <Tooltip key={typeof action === 'string' ? action : action.type} content={label}>
             <Button

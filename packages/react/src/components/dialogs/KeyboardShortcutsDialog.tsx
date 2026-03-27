@@ -11,6 +11,7 @@
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from '../../i18n';
+import type { TranslationKey } from '../../i18n';
 
 // ============================================================================
 // TYPES
@@ -35,9 +36,9 @@ export interface KeyboardShortcut {
   /** Whether this is a common/frequently used shortcut */
   common?: boolean;
   /** Translation key for display name (used internally) */
-  nameKey?: string;
+  nameKey?: TranslationKey;
   /** Translation key for description (used internally) */
-  descriptionKey?: string;
+  descriptionKey?: TranslationKey;
 }
 
 /**
@@ -102,7 +103,7 @@ export interface UseKeyboardShortcutsDialogReturn {
 /**
  * Category label translation keys
  */
-const CATEGORY_LABEL_KEYS: Record<ShortcutCategory, string> = {
+const CATEGORY_LABEL_KEYS: Record<ShortcutCategory, TranslationKey> = {
   editing: 'dialogs.keyboardShortcuts.categories.editing',
   formatting: 'dialogs.keyboardShortcuts.categories.formatting',
   navigation: 'dialogs.keyboardShortcuts.categories.navigation',
@@ -671,10 +672,8 @@ export const KeyboardShortcutsDialog: React.FC<KeyboardShortcutsDialogProps> = (
 
     const query = searchQuery.toLowerCase();
     return allShortcuts.filter((s) => {
-      const name = s.nameKey ? t(s.nameKey as Parameters<typeof t>[0]) : s.name;
-      const description = s.descriptionKey
-        ? t(s.descriptionKey as Parameters<typeof t>[0])
-        : s.description;
+      const name = s.nameKey ? t(s.nameKey) : s.name;
+      const description = s.descriptionKey ? t(s.descriptionKey) : s.description;
       return (
         name.toLowerCase().includes(query) ||
         description.toLowerCase().includes(query) ||
@@ -883,22 +882,16 @@ export const KeyboardShortcutsDialog: React.FC<KeyboardShortcutsDialogProps> = (
                     letterSpacing: '0.5px',
                   }}
                 >
-                  {t(CATEGORY_LABEL_KEYS[category] as Parameters<typeof t>[0])}
+                  {t(CATEGORY_LABEL_KEYS[category])}
                 </h3>
                 <div>
                   {shortcuts.map((shortcut) => (
                     <ShortcutItem
                       key={shortcut.id}
                       shortcut={shortcut}
-                      translatedName={
-                        shortcut.nameKey
-                          ? t(shortcut.nameKey as Parameters<typeof t>[0])
-                          : shortcut.name
-                      }
+                      translatedName={shortcut.nameKey ? t(shortcut.nameKey) : shortcut.name}
                       translatedDescription={
-                        shortcut.descriptionKey
-                          ? t(shortcut.descriptionKey as Parameters<typeof t>[0])
-                          : shortcut.description
+                        shortcut.descriptionKey ? t(shortcut.descriptionKey) : shortcut.description
                       }
                     />
                   ))}

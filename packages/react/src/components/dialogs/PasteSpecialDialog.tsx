@@ -12,6 +12,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import type { ParsedClipboardContent } from '@eigenpal/docx-core/utils/clipboard';
 import { readFromClipboard } from '@eigenpal/docx-core/utils/clipboard';
 import { useTranslation } from '../../i18n';
+import type { TranslationKey } from '../../i18n';
 
 // ============================================================================
 // TYPES
@@ -53,9 +54,9 @@ interface PasteOptionItem {
  */
 interface PasteOptionDef {
   id: PasteOption;
-  labelKey: string;
-  descriptionKey: string;
-  shortcutKey: string;
+  labelKey: TranslationKey;
+  descriptionKey: TranslationKey;
+  shortcutKey: TranslationKey;
 }
 
 /**
@@ -247,9 +248,9 @@ export const PasteSpecialDialog: React.FC<PasteSpecialDialogProps> = ({
   // Translate paste options at render time
   const pasteOptions: PasteOptionItem[] = PASTE_OPTION_DEFS.map((def) => ({
     id: def.id,
-    label: t(def.labelKey as Parameters<typeof t>[0]),
-    description: t(def.descriptionKey as Parameters<typeof t>[0]),
-    shortcut: t(def.shortcutKey as Parameters<typeof t>[0]),
+    label: t(def.labelKey),
+    description: t(def.descriptionKey),
+    shortcut: t(def.shortcutKey),
   }));
 
   // Read clipboard content when dialog opens

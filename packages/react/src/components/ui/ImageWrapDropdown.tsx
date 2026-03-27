@@ -4,8 +4,9 @@
 
 import { IconGridDropdown, type IconGridOption } from './IconGridDropdown';
 import { useTranslation } from '../../i18n';
+import type { TranslationKey } from '../../i18n';
 
-const WRAP_OPTIONS: (Omit<IconGridOption, 'label'> & { labelKey: string })[] = [
+const WRAP_OPTIONS: (Omit<IconGridOption, 'label'> & { labelKey: TranslationKey })[] = [
   { value: 'inline', labelKey: 'imageWrap.inline', iconName: 'format_image_left' },
   { value: 'wrapRight', labelKey: 'imageWrap.floatLeft', iconName: 'format_image_right' },
   { value: 'wrapLeft', labelKey: 'imageWrap.floatRight', iconName: 'format_image_left' },
@@ -38,7 +39,7 @@ export function ImageWrapDropdown({
   const { t } = useTranslation();
   const translatedOptions: IconGridOption[] = WRAP_OPTIONS.map((opt) => ({
     ...opt,
-    label: t(opt.labelKey as any),
+    label: t(opt.labelKey),
   }));
 
   const activeValue = getActiveWrapValue(imageContext);

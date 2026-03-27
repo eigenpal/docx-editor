@@ -326,6 +326,8 @@ export interface DocxEditorProps {
   renderTitleBarRight?: () => ReactNode;
   /** Locale overrides for i18n. Deep-merged with English defaults. */
   locale?: PartialLocaleStrings;
+  /** BCP 47 language tag (e.g., "pl", "de"). Used for plural rules in translations. */
+  lang?: string;
 }
 
 /**
@@ -820,6 +822,7 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
     documentNameEditable = true,
     renderTitleBarRight,
     locale,
+    lang,
   },
   ref
 ) {
@@ -3696,7 +3699,7 @@ body { background: white; }
   );
 
   return (
-    <LocaleProvider locale={locale}>
+    <LocaleProvider locale={locale} lang={lang}>
       <ErrorProvider>
         <ErrorBoundary onError={handleEditorError}>
           <div
