@@ -10,6 +10,7 @@ import type { ColorValue } from '@eigenpal/docx-core/types/document';
 import type { Theme } from '@eigenpal/docx-core/types/document';
 import type { TableAction } from './TableToolbar';
 import { AdvancedColorPicker } from './AdvancedColorPicker';
+import { useTranslation } from '../../i18n';
 
 export interface TableBorderColorPickerProps {
   onAction: (action: TableAction) => void;
@@ -25,6 +26,7 @@ export function TableBorderColorPicker({
   theme,
   value,
 }: TableBorderColorPickerProps) {
+  const { t } = useTranslation();
   const handleChange = useCallback(
     (color: ColorValue | string) => {
       if (typeof color === 'string') {
@@ -45,7 +47,7 @@ export function TableBorderColorPicker({
       onChange={handleChange}
       theme={theme}
       disabled={disabled}
-      title="Border Color"
+      title={t('table.borderColor')}
     />
   );
 }

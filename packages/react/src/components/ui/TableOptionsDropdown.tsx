@@ -182,24 +182,29 @@ const alignmentButtonStyles: CSSProperties = {
 // VERTICAL ALIGNMENT SUBCOMPONENT
 // ============================================================================
 
-const VALIGN_OPTIONS: { value: 'top' | 'center' | 'bottom'; icon: string; label: string }[] = [
-  { value: 'top', icon: 'vertical_align_top', label: 'Top' },
-  { value: 'center', icon: 'vertical_align_center', label: 'Middle' },
-  { value: 'bottom', icon: 'vertical_align_bottom', label: 'Bottom' },
+const VALIGN_OPTIONS: {
+  value: 'top' | 'center' | 'bottom';
+  icon: string;
+  labelKey: 'tableAdvanced.top' | 'tableAdvanced.middle' | 'tableAdvanced.bottom';
+}[] = [
+  { value: 'top', icon: 'vertical_align_top', labelKey: 'tableAdvanced.top' },
+  { value: 'center', icon: 'vertical_align_center', labelKey: 'tableAdvanced.middle' },
+  { value: 'bottom', icon: 'vertical_align_bottom', labelKey: 'tableAdvanced.bottom' },
 ];
 
 function VerticalAlignRow({ onAction }: { onAction: (action: TableAction) => void }) {
+  const { t } = useTranslation();
   return (
     <div style={{ padding: '6px 12px' }}>
       <div style={{ fontSize: 12, color: 'var(--doc-text-muted)', marginBottom: 4 }}>
-        Vertical alignment
+        {t('tableAdvanced.verticalAlignment')}
       </div>
       <div style={{ display: 'flex', gap: 4 }}>
         {VALIGN_OPTIONS.map((opt) => (
           <button
             key={opt.value}
             type="button"
-            title={opt.label}
+            title={t(opt.labelKey)}
             style={{
               display: 'flex',
               alignItems: 'center',
@@ -226,6 +231,7 @@ function VerticalAlignRow({ onAction }: { onAction: (action: TableAction) => voi
 // ============================================================================
 
 function CellMarginsRow({ onAction }: { onAction: (action: TableAction) => void }) {
+  const { t } = useTranslation();
   const [isExpanded, setIsExpanded] = useState(false);
   const [hoveredItem, setHoveredItem] = useState<string | null>(null);
   const [marginValues, setMarginValues] = useState({ top: 0, bottom: 0, left: 108, right: 108 });
@@ -248,7 +254,7 @@ function CellMarginsRow({ onAction }: { onAction: (action: TableAction) => void 
         onClick={() => setIsExpanded(!isExpanded)}
       >
         <MaterialSymbol name="padding" size={18} />
-        <span style={{ flex: 1 }}>Cell margins</span>
+        <span style={{ flex: 1 }}>{t('tableAdvanced.cellMargins')}</span>
         <MaterialSymbol name={isExpanded ? 'expand_less' : 'expand_more'} size={18} />
       </button>
 
@@ -307,7 +313,7 @@ function CellMarginsRow({ onAction }: { onAction: (action: TableAction) => void 
             }}
             onClick={handleApply}
           >
-            Apply
+            {t('common.apply')}
           </button>
         </div>
       )}
@@ -319,13 +325,20 @@ function CellMarginsRow({ onAction }: { onAction: (action: TableAction) => void 
 // TEXT DIRECTION SUBCOMPONENT
 // ============================================================================
 
-const TEXT_DIR_OPTIONS: { value: string | null; label: string }[] = [
-  { value: null, label: 'Horizontal (LR)' },
-  { value: 'tbRl', label: 'Vertical (top-bottom, RL)' },
-  { value: 'btLr', label: 'Vertical (bottom-top, LR)' },
+const TEXT_DIR_OPTIONS: {
+  value: string | null;
+  labelKey:
+    | 'tableAdvanced.textDirections.horizontal'
+    | 'tableAdvanced.textDirections.verticalRL'
+    | 'tableAdvanced.textDirections.verticalLR';
+}[] = [
+  { value: null, labelKey: 'tableAdvanced.textDirections.horizontal' },
+  { value: 'tbRl', labelKey: 'tableAdvanced.textDirections.verticalRL' },
+  { value: 'btLr', labelKey: 'tableAdvanced.textDirections.verticalLR' },
 ];
 
 function TextDirectionRow({ onAction }: { onAction: (action: TableAction) => void }) {
+  const { t } = useTranslation();
   const [isExpanded, setIsExpanded] = useState(false);
   const [hoveredItem, setHoveredItem] = useState<string | null>(null);
 
@@ -342,7 +355,7 @@ function TextDirectionRow({ onAction }: { onAction: (action: TableAction) => voi
         onClick={() => setIsExpanded(!isExpanded)}
       >
         <MaterialSymbol name="text_rotation_none" size={18} />
-        <span style={{ flex: 1 }}>Text direction</span>
+        <span style={{ flex: 1 }}>{t('tableAdvanced.textDirection')}</span>
         <MaterialSymbol name={isExpanded ? 'expand_less' : 'expand_more'} size={18} />
       </button>
 
@@ -373,7 +386,7 @@ function TextDirectionRow({ onAction }: { onAction: (action: TableAction) => voi
                 setIsExpanded(false);
               }}
             >
-              {opt.label}
+              {t(opt.labelKey)}
             </button>
           ))}
         </div>
@@ -387,6 +400,7 @@ function TextDirectionRow({ onAction }: { onAction: (action: TableAction) => voi
 // ============================================================================
 
 function NoWrapRow({ onAction }: { onAction: (action: TableAction) => void }) {
+  const { t } = useTranslation();
   const [hoveredItem, setHoveredItem] = useState<string | null>(null);
 
   return (
@@ -401,7 +415,7 @@ function NoWrapRow({ onAction }: { onAction: (action: TableAction) => void }) {
       onClick={() => onAction({ type: 'toggleNoWrap' })}
     >
       <MaterialSymbol name="wrap_text" size={18} />
-      <span style={{ flex: 1 }}>Toggle no-wrap</span>
+      <span style={{ flex: 1 }}>{t('tableAdvanced.toggleNoWrap')}</span>
     </button>
   );
 }
@@ -410,13 +424,20 @@ function NoWrapRow({ onAction }: { onAction: (action: TableAction) => void }) {
 // ROW HEIGHT SUBCOMPONENT
 // ============================================================================
 
-const HEIGHT_RULE_OPTIONS: { value: 'auto' | 'atLeast' | 'exact'; label: string }[] = [
-  { value: 'auto', label: 'Auto' },
-  { value: 'atLeast', label: 'At least' },
-  { value: 'exact', label: 'Exact' },
+const HEIGHT_RULE_OPTIONS: {
+  value: 'auto' | 'atLeast' | 'exact';
+  labelKey:
+    | 'tableAdvanced.heightRules.auto'
+    | 'tableAdvanced.heightRules.atLeast'
+    | 'tableAdvanced.heightRules.exact';
+}[] = [
+  { value: 'auto', labelKey: 'tableAdvanced.heightRules.auto' },
+  { value: 'atLeast', labelKey: 'tableAdvanced.heightRules.atLeast' },
+  { value: 'exact', labelKey: 'tableAdvanced.heightRules.exact' },
 ];
 
 function RowHeightRow({ onAction }: { onAction: (action: TableAction) => void }) {
+  const { t } = useTranslation();
   const [isExpanded, setIsExpanded] = useState(false);
   const [hoveredItem, setHoveredItem] = useState<string | null>(null);
   const [heightValue, setHeightValue] = useState(0);
@@ -444,7 +465,7 @@ function RowHeightRow({ onAction }: { onAction: (action: TableAction) => void })
         onClick={() => setIsExpanded(!isExpanded)}
       >
         <MaterialSymbol name="height" size={18} />
-        <span style={{ flex: 1 }}>Row height</span>
+        <span style={{ flex: 1 }}>{t('tableAdvanced.rowHeight')}</span>
         <MaterialSymbol name={isExpanded ? 'expand_less' : 'expand_more'} size={18} />
       </button>
 
@@ -458,7 +479,9 @@ function RowHeightRow({ onAction }: { onAction: (action: TableAction) => void })
           }}
         >
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
-            <label style={{ fontSize: 12, color: 'var(--doc-text-muted)', width: 40 }}>Rule</label>
+            <label style={{ fontSize: 12, color: 'var(--doc-text-muted)', width: 40 }}>
+              {t('tableAdvanced.rule')}
+            </label>
             <select
               value={heightRule}
               onChange={(e) => setHeightRule(e.target.value as typeof heightRule)}
@@ -472,7 +495,7 @@ function RowHeightRow({ onAction }: { onAction: (action: TableAction) => void })
             >
               {HEIGHT_RULE_OPTIONS.map((opt) => (
                 <option key={opt.value} value={opt.value}>
-                  {opt.label}
+                  {t(opt.labelKey)}
                 </option>
               ))}
             </select>
@@ -480,7 +503,7 @@ function RowHeightRow({ onAction }: { onAction: (action: TableAction) => void })
           {heightRule !== 'auto' && (
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
               <label style={{ fontSize: 12, color: 'var(--doc-text-muted)', width: 40 }}>
-                Height
+                {t('tableAdvanced.height')}
               </label>
               <input
                 type="number"
@@ -513,7 +536,7 @@ function RowHeightRow({ onAction }: { onAction: (action: TableAction) => void })
             }}
             onClick={handleApply}
           >
-            Apply
+            {t('common.apply')}
           </button>
         </div>
       )}
@@ -526,6 +549,7 @@ function RowHeightRow({ onAction }: { onAction: (action: TableAction) => void })
 // ============================================================================
 
 function HeaderRowRow({ onAction }: { onAction: (action: TableAction) => void }) {
+  const { t } = useTranslation();
   const [hoveredItem, setHoveredItem] = useState<string | null>(null);
 
   return (
@@ -540,7 +564,7 @@ function HeaderRowRow({ onAction }: { onAction: (action: TableAction) => void })
       onClick={() => onAction({ type: 'toggleHeaderRow' })}
     >
       <MaterialSymbol name="table_rows" size={18} />
-      <span style={{ flex: 1 }}>Toggle header row</span>
+      <span style={{ flex: 1 }}>{t('tableAdvanced.toggleHeaderRow')}</span>
     </button>
   );
 }
@@ -550,6 +574,7 @@ function HeaderRowRow({ onAction }: { onAction: (action: TableAction) => void })
 // ============================================================================
 
 function DistributeColumnsRow({ onAction }: { onAction: (action: TableAction) => void }) {
+  const { t } = useTranslation();
   const [hoveredItem, setHoveredItem] = useState<string | null>(null);
 
   return (
@@ -564,12 +589,13 @@ function DistributeColumnsRow({ onAction }: { onAction: (action: TableAction) =>
       onClick={() => onAction({ type: 'distributeColumns' })}
     >
       <MaterialSymbol name="view_column" size={18} />
-      <span style={{ flex: 1 }}>Distribute columns evenly</span>
+      <span style={{ flex: 1 }}>{t('tableAdvanced.distributeColumns')}</span>
     </button>
   );
 }
 
 function AutoFitRow({ onAction }: { onAction: (action: TableAction) => void }) {
+  const { t } = useTranslation();
   const [hoveredItem, setHoveredItem] = useState<string | null>(null);
 
   return (
@@ -584,7 +610,7 @@ function AutoFitRow({ onAction }: { onAction: (action: TableAction) => void }) {
       onClick={() => onAction({ type: 'autoFitContents' })}
     >
       <MaterialSymbol name="fit_width" size={18} />
-      <span style={{ flex: 1 }}>Auto-fit to contents</span>
+      <span style={{ flex: 1 }}>{t('tableAdvanced.autoFit')}</span>
     </button>
   );
 }
@@ -594,6 +620,7 @@ function AutoFitRow({ onAction }: { onAction: (action: TableAction) => void }) {
 // ============================================================================
 
 function TablePropertiesRow({ onAction }: { onAction: (action: TableAction) => void }) {
+  const { t } = useTranslation();
   const [hoveredItem, setHoveredItem] = useState<string | null>(null);
 
   return (
@@ -610,7 +637,7 @@ function TablePropertiesRow({ onAction }: { onAction: (action: TableAction) => v
         onClick={() => onAction({ type: 'openTableProperties' })}
       >
         <MaterialSymbol name="settings" size={18} />
-        <span style={{ flex: 1 }}>Table properties...</span>
+        <span style={{ flex: 1 }}>{t('tableAdvanced.tableProperties')}</span>
       </button>
     </>
   );
@@ -627,6 +654,7 @@ function TableAlignmentRow({
   onAction: (action: TableAction) => void;
   justification: 'left' | 'center' | 'right';
 }) {
+  const { t } = useTranslation();
   const makeButton = (value: 'left' | 'center' | 'right', icon: string, label: string) => {
     const isActive = justification === value;
     return (
@@ -652,11 +680,11 @@ function TableAlignmentRow({
       <div style={separatorStyles} role="separator" />
       <div style={alignmentRowStyles}>
         <span style={{ fontSize: 13, color: 'var(--doc-text-muted)', flex: 1 }}>
-          Table alignment
+          {t('tableAdvanced.tableAlignment')}
         </span>
-        {makeButton('left', 'format_align_left', 'Align table left')}
-        {makeButton('center', 'format_align_center', 'Align table center')}
-        {makeButton('right', 'format_align_right', 'Align table right')}
+        {makeButton('left', 'format_align_left', t('tableAdvanced.alignTableLeft'))}
+        {makeButton('center', 'format_align_center', t('tableAdvanced.alignTableCenter'))}
+        {makeButton('right', 'format_align_right', t('tableAdvanced.alignTableRight'))}
       </div>
     </>
   );
@@ -671,7 +699,7 @@ export function TableOptionsDropdown({
   disabled = false,
   tableContext,
   className,
-  tooltip = 'Table options',
+  tooltip,
 }: TableOptionsDropdownProps): React.ReactElement {
   const { t } = useTranslation();
   const [isOpen, setIsOpen] = useState(false);
@@ -761,7 +789,7 @@ export function TableOptionsDropdown({
       onMouseDown={handleMouseDown}
       onClick={handleClick}
       disabled={disabled}
-      aria-label={tooltip}
+      aria-label={tooltip ?? t('tableAdvanced.tableOptions')}
       aria-expanded={isOpen}
       aria-haspopup="menu"
       data-testid="toolbar-table-options"
@@ -771,9 +799,11 @@ export function TableOptionsDropdown({
     </Button>
   );
 
+  const resolvedTooltip = tooltip ?? t('tableAdvanced.tableOptions');
+
   return (
     <div ref={containerRef} style={{ position: 'relative', display: 'inline-block' }}>
-      {tooltip && !isOpen ? <Tooltip content={tooltip}>{button}</Tooltip> : button}
+      {resolvedTooltip && !isOpen ? <Tooltip content={resolvedTooltip}>{button}</Tooltip> : button}
 
       {isOpen && !disabled && (
         <div
@@ -781,7 +811,7 @@ export function TableOptionsDropdown({
           className="docx-table-options-dropdown"
           style={{ ...baseDropdownStyles, top: dropdownPos.top, left: dropdownPos.left }}
           role="menu"
-          aria-label="Table options menu"
+          aria-label={t('tableAdvanced.tableOptionsMenu')}
           onMouseDown={(e) => {
             // Prevent ProseMirror from reclaiming focus when interacting
             // with form inputs (row height, cell margins, etc.) inside the dropdown

@@ -391,13 +391,13 @@ export function InsertImageDialog({
     (file: File) => {
       // Validate file type
       if (!file.type.startsWith('image/')) {
-        setError('Please select a valid image file');
+        setError(t('dialogs.insertImage.invalidFile'));
         return;
       }
 
       // Validate file size (max 10MB)
       if (file.size > 10 * 1024 * 1024) {
-        setError('Image file is too large (max 10MB)');
+        setError(t('dialogs.insertImage.fileTooLarge'));
         return;
       }
 

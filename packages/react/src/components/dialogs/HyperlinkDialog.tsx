@@ -394,14 +394,14 @@ export function HyperlinkDialog({
   const validateUrl = useCallback(() => {
     if (linkType === 'url' && url.trim()) {
       if (!isValidUrl(url)) {
-        setUrlError('Please enter a valid URL');
+        setUrlError(t('dialogs.hyperlink.invalidUrl'));
       } else {
         setUrlError('');
       }
     } else {
       setUrlError('');
     }
-  }, [linkType, url]);
+  }, [linkType, url, t]);
 
   /**
    * Handle form submission
@@ -413,12 +413,12 @@ export function HyperlinkDialog({
       // Validate
       if (linkType === 'url') {
         if (!url.trim()) {
-          setUrlError('URL is required');
+          setUrlError(t('dialogs.hyperlink.urlRequired'));
           setTouched(true);
           return;
         }
         if (!isValidUrl(url)) {
-          setUrlError('Please enter a valid URL');
+          setUrlError(t('dialogs.hyperlink.invalidUrl'));
           setTouched(true);
           return;
         }

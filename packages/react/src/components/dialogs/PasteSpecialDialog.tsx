@@ -270,10 +270,10 @@ export const PasteSpecialDialog: React.FC<PasteSpecialDialogProps> = ({
         const content = await readFromClipboard({ cleanWordFormatting: true });
         setClipboardContent(content);
         if (!content) {
-          setError('No content available to paste');
+          setError(t('dialogs.pasteSpecial.noContent'));
         }
       } catch {
-        setError('Unable to read clipboard. Please use Ctrl+V to paste.');
+        setError(t('dialogs.pasteSpecial.clipboardError'));
       } finally {
         setIsLoading(false);
       }
@@ -330,7 +330,7 @@ export const PasteSpecialDialog: React.FC<PasteSpecialDialogProps> = ({
   const handlePaste = useCallback(
     (option: PasteOption) => {
       if (!clipboardContent) {
-        setError('No content available to paste');
+        setError(t('dialogs.pasteSpecial.noContent'));
         return;
       }
 

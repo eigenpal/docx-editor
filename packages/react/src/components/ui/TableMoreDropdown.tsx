@@ -197,7 +197,7 @@ export function TableMoreDropdown({
           <div style={separatorStyles} role="separator" />
 
           {/* Vertical alignment */}
-          <div style={sectionLabelStyles}>Vertical alignment</div>
+          <div style={sectionLabelStyles}>{t('tableAdvanced.verticalAlignment')}</div>
           <div style={{ display: 'flex', gap: 4, padding: '4px 14px' }}>
             {(['top', 'center', 'bottom'] as const).map((align) => {
               const icons = {
@@ -205,12 +205,16 @@ export function TableMoreDropdown({
                 center: 'vertical_align_center',
                 bottom: 'vertical_align_bottom',
               };
-              const labels = { top: 'Top', center: 'Middle', bottom: 'Bottom' };
+              const labelKeys = {
+                top: 'tableAdvanced.top' as const,
+                center: 'tableAdvanced.middle' as const,
+                bottom: 'tableAdvanced.bottom' as const,
+              };
               return (
                 <button
                   key={align}
                   type="button"
-                  title={labels[align]}
+                  title={t(labelKeys[align])}
                   style={{
                     display: 'flex',
                     alignItems: 'center',
@@ -241,7 +245,7 @@ export function TableMoreDropdown({
           <div style={separatorStyles} role="separator" />
 
           {/* Table alignment */}
-          <div style={sectionLabelStyles}>Table alignment</div>
+          <div style={sectionLabelStyles}>{t('tableAdvanced.tableAlignment')}</div>
           <div style={{ display: 'flex', gap: 4, padding: '4px 14px' }}>
             {(['left', 'center', 'right'] as const).map((align) => {
               const icons = {
@@ -254,7 +258,13 @@ export function TableMoreDropdown({
                 <button
                   key={align}
                   type="button"
-                  title={`Align table ${align}`}
+                  title={t(
+                    {
+                      left: 'tableAdvanced.alignTableLeft' as const,
+                      center: 'tableAdvanced.alignTableCenter' as const,
+                      right: 'tableAdvanced.alignTableRight' as const,
+                    }[align]
+                  )}
                   style={{
                     display: 'flex',
                     alignItems: 'center',
@@ -282,16 +292,22 @@ export function TableMoreDropdown({
           <div style={separatorStyles} role="separator" />
 
           {/* Other options */}
-          {menuItem('headerRow', 'table_rows', 'Toggle header row', { type: 'toggleHeaderRow' })}
-          {menuItem('distribute', 'view_column', 'Distribute columns evenly', {
+          {menuItem('headerRow', 'table_rows', t('tableAdvanced.toggleHeaderRow'), {
+            type: 'toggleHeaderRow',
+          })}
+          {menuItem('distribute', 'view_column', t('tableAdvanced.distributeColumns'), {
             type: 'distributeColumns',
           })}
-          {menuItem('autoFit', 'fit_width', 'Auto-fit to contents', { type: 'autoFitContents' })}
-          {menuItem('noWrap', 'wrap_text', 'Toggle no-wrap', { type: 'toggleNoWrap' })}
+          {menuItem('autoFit', 'fit_width', t('tableAdvanced.autoFit'), {
+            type: 'autoFitContents',
+          })}
+          {menuItem('noWrap', 'wrap_text', t('tableAdvanced.toggleNoWrap'), {
+            type: 'toggleNoWrap',
+          })}
 
           <div style={separatorStyles} role="separator" />
 
-          {menuItem('properties', 'settings', 'Table properties...', {
+          {menuItem('properties', 'settings', t('tableAdvanced.tableProperties'), {
             type: 'openTableProperties',
           })}
         </div>

@@ -10,6 +10,7 @@
 
 import React from 'react';
 import type { CSSProperties } from 'react';
+import { useTranslation } from '../../i18n';
 
 // ============================================================================
 // TYPES
@@ -79,12 +80,14 @@ const DEFAULT_PRINT_OPTIONS: PrintOptions = {
 export function PrintButton({
   onPrint,
   disabled = false,
-  label = 'Print',
+  label: labelProp,
   className = '',
   style,
   showIcon = true,
   compact = false,
 }: PrintButtonProps): React.ReactElement {
+  const { t } = useTranslation();
+  const label = labelProp ?? t('print.label');
   const buttonStyle: CSSProperties = {
     display: 'flex',
     alignItems: 'center',

@@ -14,6 +14,7 @@ import React, { useState, useRef, useCallback, useEffect } from 'react';
 import type { CSSProperties } from 'react';
 import type { SectionProperties, TabStop } from '@eigenpal/docx-core/types/document';
 import { twipsToPixels, pixelsToTwips, formatPx } from '@eigenpal/docx-core/utils/units';
+import { useTranslation } from '../../i18n';
 
 // ============================================================================
 // TYPES
@@ -96,6 +97,7 @@ export function HorizontalRuler({
   tabStops,
   onTabStopRemove,
 }: HorizontalRulerProps): React.ReactElement {
+  const { t } = useTranslation();
   const [dragging, setDragging] = useState<MarkerType | null>(null);
   const [hoveredMarker, setHoveredMarker] = useState<MarkerType | null>(null);
   const [dragValue, setDragValue] = useState<number | null>(null);
@@ -227,7 +229,7 @@ export function HorizontalRuler({
         ...style,
       }}
       role="slider"
-      aria-label="Horizontal ruler"
+      aria-label={t('ruler.horizontal')}
       aria-valuemin={0}
       aria-valuemax={pageWidthTwips}
     >
@@ -285,7 +287,7 @@ export function HorizontalRuler({
           onMouseEnter={() => setHoveredMarker('firstLineIndent')}
           onMouseLeave={() => setHoveredMarker(null)}
           onMouseDown={(e) => handleDragStart(e, 'firstLineIndent')}
-          label="First line indent"
+          label={t('ruler.firstLineIndent')}
         />
       )}
 
@@ -300,7 +302,7 @@ export function HorizontalRuler({
           onMouseEnter={() => setHoveredMarker('leftIndent')}
           onMouseLeave={() => setHoveredMarker(null)}
           onMouseDown={(e) => handleDragStart(e, 'leftIndent')}
-          label="Left indent"
+          label={t('ruler.leftIndent')}
         />
       )}
 
@@ -315,7 +317,7 @@ export function HorizontalRuler({
           onMouseEnter={() => setHoveredMarker('rightIndent')}
           onMouseLeave={() => setHoveredMarker(null)}
           onMouseDown={(e) => handleDragStart(e, 'rightIndent')}
-          label="Right indent"
+          label={t('ruler.rightIndent')}
         />
       )}
 

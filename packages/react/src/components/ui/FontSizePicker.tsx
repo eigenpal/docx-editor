@@ -15,6 +15,7 @@ import { Button } from './Button';
 import { MaterialSymbol } from './MaterialSymbol';
 import { cn } from '../../lib/utils';
 import { useFixedDropdown } from './useFixedDropdown';
+import { useTranslation } from '../../i18n';
 
 // ============================================================================
 // TYPES
@@ -98,6 +99,7 @@ export function FontSizePicker({
   minSize = DEFAULT_MIN_SIZE,
   maxSize = DEFAULT_MAX_SIZE,
 }: FontSizePickerProps) {
+  const { t } = useTranslation();
   const [isEditing, setIsEditing] = useState(false);
   const [inputValue, setInputValue] = useState('');
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
@@ -233,7 +235,7 @@ export function FontSizePicker({
         )}
         onMouseDown={handleDecrease}
         disabled={disabled || currentValue <= minSize}
-        aria-label="Decrease font size"
+        aria-label={t('fontSize.decrease')}
         data-testid="font-size-decrease"
       >
         <MaterialSymbol name="remove" size={18} />
@@ -254,7 +256,7 @@ export function FontSizePicker({
               'focus:outline-none focus:ring-1 focus:ring-slate-400',
               'rounded-none'
             )}
-            aria-label="Font size"
+            aria-label={t('fontSize.label')}
             data-testid="font-size-input"
           />
         ) : (
@@ -269,7 +271,7 @@ export function FontSizePicker({
               disabled && 'opacity-50 cursor-not-allowed'
             )}
             disabled={disabled}
-            aria-label="Font size"
+            aria-label={t('fontSize.label')}
             aria-haspopup="listbox"
             aria-expanded={isDropdownOpen}
             data-testid="font-size-display"
@@ -294,7 +296,7 @@ export function FontSizePicker({
             minWidth: 60,
           }}
           role="listbox"
-          aria-label="Font sizes"
+          aria-label={t('fontSize.listLabel')}
         >
           {sizes.map((size) => (
             <button
@@ -325,7 +327,7 @@ export function FontSizePicker({
         )}
         onMouseDown={handleIncrease}
         disabled={disabled || currentValue >= maxSize}
-        aria-label="Increase font size"
+        aria-label={t('fontSize.increase')}
         data-testid="font-size-increase"
       >
         <MaterialSymbol name="add" size={18} />

@@ -111,8 +111,68 @@
     "serif": "Serif",
     "monospace": "Monospace"
   },
+  "fontSize": {
+    "decrease": "Decrease font size",
+    "increase": "Increase font size",
+    "label": "Font size",
+    "listLabel": "Font sizes"
+  },
   "zoom": {
     "ariaLabel": "Zoom: {label}"
+  },
+  "colorPicker": {
+    "ariaLabel": "{type} color picker",
+    "highlightColors": "Highlight Colors",
+    "customColor": "Custom Color",
+    "noColor": "No Color",
+    "automatic": "Automatic",
+    "themeColors": "Theme Colors",
+    "standardColors": "Standard Colors",
+    "colors": {
+      "black": "Black",
+      "darkRed": "Dark Red",
+      "red": "Red",
+      "orange": "Orange",
+      "yellow": "Yellow",
+      "darkYellow": "Dark Yellow",
+      "green": "Green",
+      "darkGreen": "Dark Green",
+      "teal": "Teal",
+      "darkTeal": "Dark Teal",
+      "blue": "Blue",
+      "darkBlue": "Dark Blue",
+      "purple": "Purple",
+      "darkPurple": "Dark Purple",
+      "brown": "Brown",
+      "grey50": "Grey 50%",
+      "grey25": "Grey 25%",
+      "grey10": "Grey 10%",
+      "white": "White",
+      "lightRed": "Light Red",
+      "lightOrange": "Light Orange",
+      "lightYellow": "Light Yellow",
+      "lightGreen": "Light Green",
+      "lightBlue": "Light Blue",
+      "lightPurple": "Light Purple",
+      "pink": "Pink",
+      "rose": "Rose",
+      "gold": "Gold",
+      "aqua": "Aqua",
+      "lavender": "Lavender",
+      "silver": "Silver",
+      "darkOrange": "Dark Orange",
+      "darkGray": "Dark Gray",
+      "gray": "Gray",
+      "cyan": "Cyan",
+      "magenta": "Magenta",
+      "paleGreen": "Pale Green",
+      "lightCyan": "Light Cyan",
+      "skyBlue": "Sky Blue",
+      "lightBlue2": "Light Blue 2",
+      "lightMagenta": "Light Magenta",
+      "brightGreen": "Bright Green",
+      "violet": "Violet"
+    }
   },
   "dialogs": {
     "findReplace": {
@@ -153,7 +213,9 @@
       "displayTextHint": "Leave empty to use the selected text",
       "tooltipLabel": "Tooltip (optional)",
       "tooltipPlaceholder": "Text shown on hover",
-      "removeLink": "Remove Link"
+      "removeLink": "Remove Link",
+      "invalidUrl": "Please enter a valid URL",
+      "urlRequired": "URL is required"
     },
     "insertTable": {
       "title": "Insert Table",
@@ -162,7 +224,8 @@
       "orSpecifySize": "or specify size",
       "rowsLabel": "Rows:",
       "columnsLabel": "Columns:",
-      "insertButton": "Insert Table"
+      "insertButton": "Insert Table",
+      "sizeSelector": "Table size selector"
     },
     "insertImage": {
       "title": "Insert Image",
@@ -176,7 +239,12 @@
       "aspectRatioUnlocked": "Aspect ratio unlocked",
       "altTextLabel": "Alt Text (optional)",
       "altTextPlaceholder": "Describe the image for accessibility",
-      "insertButton": "Insert Image"
+      "insertButton": "Insert Image",
+      "invalidFile": "Please select a valid image file",
+      "fileTooLarge": "Image file is too large (max 10MB)",
+      "readFailed": "Failed to read image file",
+      "loadFailed": "Failed to load image",
+      "preview": "Preview"
     },
     "insertSymbol": {
       "title": "Insert Symbol",
@@ -293,7 +361,9 @@
       "plainTextDescription": "Paste without any formatting",
       "plainTextShortcut": "Ctrl+Shift+V",
       "readingClipboard": "Reading clipboard...",
-      "preview": "Preview:"
+      "preview": "Preview:",
+      "noContent": "No content available to paste",
+      "clipboardError": "Unable to read clipboard. Please use Ctrl+V to paste."
     },
     "footnoteProperties": {
       "title": "Footnote & Endnote Properties",
@@ -419,7 +489,8 @@
         "keyboardShortcutsDescription": "Show this help dialog"
       },
       "noResults": "No shortcuts found matching \"{query}\"",
-      "pressEscToClose": "Press {key} to close"
+      "pressEscToClose": "Press {key} to close",
+      "or": "or"
     }
   },
   "comments": {
@@ -455,6 +526,7 @@
     "deleteShortcut": "Del",
     "selectAll": "Select All",
     "selectAllShortcut": "Ctrl+A",
+    "selected": "Selected:",
     "aiActions": {
       "askAi": "Ask AI",
       "rewrite": "Rewrite",
@@ -507,6 +579,12 @@
     "deleteTable": "Delete table",
     "mergeCells": "Merge cells",
     "splitCell": "Split cell",
+    "editingTools": "Table editing tools",
+    "label": "Table:",
+    "cellFillColor": "Cell Fill Color",
+    "borderColor": "Border Color",
+    "borderWidth": "Border width",
+    "unknownAction": "Unknown Action",
     "borders": {
       "all": "All borders",
       "outside": "Outside borders",
@@ -540,6 +618,38 @@
       "gridTable4Accent6": "Grid Table 4 Accent 6"
     }
   },
+  "tableAdvanced": {
+    "verticalAlignment": "Vertical alignment",
+    "top": "Top",
+    "middle": "Middle",
+    "bottom": "Bottom",
+    "cellMargins": "Cell margins",
+    "textDirection": "Text direction",
+    "textDirections": {
+      "horizontal": "Horizontal (LR)",
+      "verticalRL": "Vertical (top-bottom, RL)",
+      "verticalLR": "Vertical (bottom-top, LR)"
+    },
+    "toggleNoWrap": "Toggle no-wrap",
+    "rowHeight": "Row height",
+    "heightRules": {
+      "auto": "Auto",
+      "atLeast": "At least",
+      "exact": "Exact"
+    },
+    "rule": "Rule",
+    "height": "Height",
+    "toggleHeaderRow": "Toggle header row",
+    "distributeColumns": "Distribute columns evenly",
+    "autoFit": "Auto-fit to contents",
+    "tableProperties": "Table properties...",
+    "tableAlignment": "Table alignment",
+    "alignTableLeft": "Align table left",
+    "alignTableCenter": "Align table center",
+    "alignTableRight": "Align table right",
+    "tableOptionsMenu": "Table options menu",
+    "tableOptions": "Table options"
+  },
   "imageTransform": {
     "tooltip": "Transform",
     "rotateClockwise": "Rotate clockwise",
@@ -553,7 +663,8 @@
     "floatRight": "Float right (wrap left)",
     "topAndBottom": "Top and bottom",
     "behindText": "Behind text",
-    "inFrontOfText": "In front of text"
+    "inFrontOfText": "In front of text",
+    "tooltipPrefix": "Wrap: {label}"
   },
   "responsePreview": {
     "loading": "{action}...",
@@ -571,7 +682,17 @@
   },
   "editor": {
     "toggleCommentsSidebar": "Toggle comments sidebar",
-    "showDocumentOutline": "Show document outline"
+    "showDocumentOutline": "Show document outline",
+    "editing": "Editing",
+    "editingDescription": "Edit document directly",
+    "suggesting": "Suggesting",
+    "suggestingDescription": "Edits become suggestions",
+    "viewing": "Viewing",
+    "viewingDescription": "Read-only, no edits",
+    "failedToParse": "Failed to parse document",
+    "linkRemoved": "Link removed",
+    "linkCopied": "Link copied to clipboard",
+    "failedToSave": "Failed to save document"
   },
   "hyperlinkPopup": {
     "displayTextPlaceholder": "Display text",
@@ -591,6 +712,33 @@
   },
   "image": {
     "placeholder": "Image placeholder",
-    "placeholderText": "[Image]"
+    "placeholderText": "[Image]",
+    "editableAriaLabel": "Editable image"
+  },
+  "ruler": {
+    "horizontal": "Horizontal ruler",
+    "vertical": "Vertical ruler",
+    "firstLineIndent": "First line indent",
+    "leftIndent": "Left indent",
+    "rightIndent": "Right indent",
+    "topMargin": "Top margin",
+    "bottomMargin": "Bottom margin"
+  },
+  "print": {
+    "label": "Print",
+    "allPages": "All ({totalPages} pages)",
+    "singlePage": "Page {start}",
+    "pageRange": "Pages {start}-{end}"
+  },
+  "unsaved": {
+    "unsaved": "Unsaved",
+    "saved": "Saved",
+    "unsavedTitle": "Document has unsaved changes",
+    "savedTitle": "All changes saved",
+    "unsavedAriaLabel": "Unsaved changes",
+    "savedAriaLabel": "All changes saved"
+  },
+  "loading": {
+    "label": "Loading"
   }
 }

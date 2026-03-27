@@ -242,8 +242,8 @@ export const UnsavedIndicator: React.FC<UnsavedIndicatorProps> = ({
   variant = 'dot',
   position = 'inline',
   showPulse = true,
-  label = 'Unsaved',
-  savedLabel = 'Saved',
+  label: labelProp,
+  savedLabel: savedLabelProp,
   showWhenSaved = false,
   unsavedColor = DEFAULT_UNSAVED_COLOR,
   savedColor = DEFAULT_SAVED_COLOR,
@@ -253,6 +253,10 @@ export const UnsavedIndicator: React.FC<UnsavedIndicatorProps> = ({
   onClick,
   title,
 }) => {
+  const { t } = useTranslation();
+  const label = labelProp ?? t('unsaved.unsaved');
+  const savedLabel = savedLabelProp ?? t('unsaved.saved');
+
   // Inject keyframes if pulse is enabled - must be before early return
   useEffect(() => {
     if (!showPulse || !hasUnsavedChanges) return;
@@ -287,7 +291,7 @@ export const UnsavedIndicator: React.FC<UnsavedIndicatorProps> = ({
     cursor: onClick ? 'pointer' : undefined,
   };
 
-  const defaultTitle = hasUnsavedChanges ? 'Document has unsaved changes' : 'All changes saved';
+  const defaultTitle = hasUnsavedChanges ? t('unsaved.unsavedTitle') : t('unsaved.savedTitle');
 
   const renderContent = () => {
     switch (variant) {
@@ -315,7 +319,7 @@ export const UnsavedIndicator: React.FC<UnsavedIndicatorProps> = ({
       onClick={onClick}
       title={title ?? defaultTitle}
       role={onClick ? 'button' : 'status'}
-      aria-label={hasUnsavedChanges ? 'Unsaved changes' : 'All changes saved'}
+      aria-label={hasUnsavedChanges ? t('unsaved.unsavedAriaLabel') : t('unsaved.savedAriaLabel')}
     >
       {renderContent()}
     </span>

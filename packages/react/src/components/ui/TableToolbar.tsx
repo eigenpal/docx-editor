@@ -15,6 +15,7 @@ import React from 'react';
 import type { CSSProperties, ReactNode } from 'react';
 import type { Table, TableCell, TableRow } from '@eigenpal/docx-core/types/document';
 import { MaterialSymbol } from './MaterialSymbol';
+import { useTranslation } from '../../i18n';
 
 // ============================================================================
 // TYPES
@@ -372,6 +373,8 @@ export function TableToolbar({
   position = 'top',
   children,
 }: TableToolbarProps): React.ReactElement | null {
+  const { t } = useTranslation();
+
   // Don't render if not in a table
   if (!context) {
     return null;
@@ -412,15 +415,15 @@ export function TableToolbar({
       className={classNames.join(' ')}
       style={containerStyle}
       role="toolbar"
-      aria-label="Table editing tools"
+      aria-label={t('table.editingTools')}
     >
-      <span style={TOOLBAR_STYLES.label}>Table:</span>
+      <span style={TOOLBAR_STYLES.label}>{t('table.label')}</span>
 
       {/* Row operations */}
       <ToolbarGroup>
         <TableToolbarButton
           action="addRowAbove"
-          label="Insert Row Above"
+          label={t('table.insertRowAbove')}
           icon={<AddRowAboveIcon />}
           disabled={disabled}
           onClick={() => handleAction('addRowAbove')}
@@ -429,7 +432,7 @@ export function TableToolbar({
         />
         <TableToolbarButton
           action="addRowBelow"
-          label="Insert Row Below"
+          label={t('table.insertRowBelow')}
           icon={<AddRowBelowIcon />}
           disabled={disabled}
           onClick={() => handleAction('addRowBelow')}
@@ -438,7 +441,7 @@ export function TableToolbar({
         />
         <TableToolbarButton
           action="deleteRow"
-          label="Delete Row"
+          label={t('table.deleteRow')}
           icon={<DeleteRowIcon />}
           disabled={disabled || !canDeleteRow}
           onClick={() => handleAction('deleteRow')}
@@ -451,7 +454,7 @@ export function TableToolbar({
       <ToolbarGroup>
         <TableToolbarButton
           action="addColumnLeft"
-          label="Insert Column Left"
+          label={t('table.insertColumnLeft')}
           icon={<AddColumnLeftIcon />}
           disabled={disabled}
           onClick={() => handleAction('addColumnLeft')}
@@ -460,7 +463,7 @@ export function TableToolbar({
         />
         <TableToolbarButton
           action="addColumnRight"
-          label="Insert Column Right"
+          label={t('table.insertColumnRight')}
           icon={<AddColumnRightIcon />}
           disabled={disabled}
           onClick={() => handleAction('addColumnRight')}
@@ -469,7 +472,7 @@ export function TableToolbar({
         />
         <TableToolbarButton
           action="deleteColumn"
-          label="Delete Column"
+          label={t('table.deleteColumn')}
           icon={<DeleteColumnIcon />}
           disabled={disabled || !canDeleteColumn}
           onClick={() => handleAction('deleteColumn')}
@@ -482,7 +485,7 @@ export function TableToolbar({
       <ToolbarGroup showSeparator={false}>
         <TableToolbarButton
           action="mergeCells"
-          label="Merge Cells"
+          label={t('table.mergeCells')}
           icon={<MergeCellsIcon />}
           disabled={disabled || !canMerge}
           onClick={() => handleAction('mergeCells')}
@@ -491,7 +494,7 @@ export function TableToolbar({
         />
         <TableToolbarButton
           action="splitCell"
-          label="Split Cell"
+          label={t('table.splitCell')}
           icon={<SplitCellIcon />}
           disabled={disabled || !canSplit}
           onClick={() => handleAction('splitCell')}
@@ -500,7 +503,7 @@ export function TableToolbar({
         />
         <TableToolbarButton
           action="deleteTable"
-          label="Delete Table"
+          label={t('table.deleteTable')}
           icon={<DeleteTableIcon />}
           disabled={disabled}
           onClick={() => handleAction('deleteTable')}
