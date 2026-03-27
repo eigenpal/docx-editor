@@ -2859,11 +2859,11 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
 
         if (useSelective && view) {
           const editorState = view.state;
-          // Force full repack if we injected reply range markers (selective save uses original XML)
-          const commentIdSet = new Set(comments.map((c) => c.id));
-          const hasInjectedReplies = comments.some(
-            (c) => c.parentId != null && commentIdSet.has(c.parentId)
-          );
+          // Force full repack if any reply comments exist (both comment replies and
+          // tracked-change replies need range markers injected into document.xml,
+          // which selective save can't handle since the affected paragraphs may not
+          // be in changedParaIds)
+          const hasInjectedReplies = comments.some((c) => c.parentId != null);
           selectiveOptions = {
             selective: {
               changedParaIds: getChangedParagraphIds(editorState),
