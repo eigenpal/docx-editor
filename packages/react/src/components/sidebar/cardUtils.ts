@@ -110,9 +110,16 @@ export function submitButtonStyle(enabled: boolean): CSSProperties {
   };
 }
 
+/** Truncate text to maxLength characters with ellipsis. */
+export function truncateText(text: string, maxLength = 50): string {
+  return text.length > maxLength ? text.slice(0, maxLength) + '...' : text;
+}
+
 export interface TrackedChangeEntry {
-  type: 'insertion' | 'deletion';
+  type: 'insertion' | 'deletion' | 'replacement';
   text: string;
+  /** For replacements: the deleted text that was replaced */
+  deletedText?: string;
   author: string;
   date?: string;
   from: number;

@@ -670,18 +670,34 @@ function injectTCReplyRangeMarkers(content: BlockContent[], comments: Comment[])
         if (!hasTC) continue;
 
         const newItems: ParagraphContent[] = [];
-        for (const item of block.content) {
+        const items = block.content;
+        for (let i = 0; i < items.length; i++) {
+          const item = items[i];
           if (
             (item.type === 'insertion' || item.type === 'deletion') &&
             replyIdsByRevision.has(item.info.id)
           ) {
             const replyIds = replyIdsByRevision.get(item.info.id)!;
-            // Add commentRangeStart for each reply BEFORE the TC content
+            // Add commentRangeStart BEFORE the TC content
             for (const rid of replyIds) {
               newItems.push({ type: 'commentRangeStart', id: rid });
             }
             newItems.push(item);
-            // Add commentRangeEnd for each reply AFTER the TC content
+            // Check if the next item is the other half of a replacement pair
+            // (adjacent del+ins with same author+date). If so, include it inside
+            // the comment range so we don't break del-ins adjacency.
+            const next = items[i + 1];
+            if (
+              next &&
+              (next.type === 'insertion' || next.type === 'deletion') &&
+              next.type !== item.type &&
+              next.info.author === item.info.author &&
+              next.info.date === item.info.date
+            ) {
+              newItems.push(next);
+              i++; // skip the paired item
+            }
+            // Add commentRangeEnd AFTER both TC items
             for (const rid of replyIds) {
               newItems.push({ type: 'commentRangeEnd', id: rid });
             }
@@ -924,7 +940,74 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
         merged.push({ ...entry });
       }
     }
-    setTrackedChanges(merged);
+
+    // Detect replacement pairs: adjacent deletion + insertion from the same author/date
+    // Word assigns different w:id values but same author+date for a single replace operation
+    const final: TrackedChangeEntry[] = [];
+    for (let i = 0; i < merged.length; i++) {
+      const curr = merged[i];
+      const next = merged[i + 1];
+      if (
+        curr.type === 'deletion' &&
+        next &&
+        next.type === 'insertion' &&
+        curr.author === next.author &&
+        curr.date === next.date &&
+        curr.to === next.from
+      ) {
+        final.push({
+          type: 'replacement',
+          text: next.text,
+          deletedText: curr.text,
+          author: curr.author,
+          date: curr.date,
+          from: curr.from,
+          to: next.to,
+          revisionId: curr.revisionId,
+        });
+        i++; // skip the insertion entry
+      } else {
+        final.push(curr);
+      }
+    }
+    setTrackedChanges(final);
+
+    // Detect comments whose range overlaps with tracked changes and thread them.
+    // When a comment mark covers the same text as a tracked change mark,
+    // the comment is a reply to the tracked change.
+    const commentType = schema.marks.comment;
+    if (commentType && final.length > 0) {
+      // Build a map: commentId → overlapping revisionId
+      const commentToRevision = new Map<number, number>();
+      doc.descendants((node) => {
+        if (!node.isText) return;
+        const commentMark = node.marks.find((m) => m.type === commentType);
+        const tcMark = node.marks.find((m) => m.type === insertionType || m.type === deletionType);
+        if (commentMark && tcMark) {
+          const cid = commentMark.attrs.commentId as number;
+          const rid = tcMark.attrs.revisionId as number;
+          if (!commentToRevision.has(cid)) {
+            commentToRevision.set(cid, rid);
+          }
+        }
+      });
+
+      if (commentToRevision.size > 0) {
+        setComments((prev) => {
+          let changed = false;
+          const updated = prev.map((c) => {
+            if (c.parentId != null) return c; // already threaded
+            const rid = commentToRevision.get(c.id);
+            if (rid != null) {
+              changed = true;
+              return { ...c, parentId: rid };
+            }
+            return c;
+          });
+          return changed ? updated : prev;
+        });
+      }
+    }
   }, []);
 
   // Remove comments whose marks no longer exist in the document
@@ -2829,11 +2912,11 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
 
         if (useSelective && view) {
           const editorState = view.state;
-          // Force full repack if we injected reply range markers (selective save uses original XML)
-          const commentIdSet = new Set(comments.map((c) => c.id));
-          const hasInjectedReplies = comments.some(
-            (c) => c.parentId != null && commentIdSet.has(c.parentId)
-          );
+          // Force full repack if any reply comments exist (both comment replies and
+          // tracked-change replies need range markers injected into document.xml,
+          // which selective save can't handle since the affected paragraphs may not
+          // be in changedParaIds)
+          const hasInjectedReplies = comments.some((c) => c.parentId != null);
           selectiveOptions = {
             selective: {
               changedParaIds: getChangedParagraphIds(editorState),
