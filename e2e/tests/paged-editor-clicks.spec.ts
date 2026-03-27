@@ -197,7 +197,7 @@ test.describe('Paged Editor - Double/Triple Click Selection', () => {
     await editor.typeText('Hello beautiful World');
 
     // Get the text span containing "beautiful"
-    const textSpan = page.locator('span:has-text("beautiful")').first();
+    const textSpan = page.locator('.layout-page span:has-text("beautiful")').first();
     const boundingBox = await textSpan.boundingBox();
 
     if (boundingBox) {
@@ -226,7 +226,7 @@ test.describe('Paged Editor - Double/Triple Click Selection', () => {
     await editor.typeText('Hello World');
 
     // Get the text span containing "World" - which is reliably at the end
-    const textSpan = page.locator('span:has-text("World")').first();
+    const textSpan = page.locator('.layout-page span:has-text("World")').first();
     const boundingBox = await textSpan.boundingBox();
 
     if (boundingBox) {
@@ -245,6 +245,29 @@ test.describe('Paged Editor - Double/Triple Click Selection', () => {
 
       // Should select "World"
       expect(selectedText.trim()).toBe('World');
+    }
+  });
+
+  test('double-click selects Unicode word with diacritics', async ({ page }) => {
+    await editor.typeText('PROTOKÓŁ test');
+
+    const textSpan = page.locator('.layout-page span:has-text("PROTOKÓŁ")').first();
+    const boundingBox = await textSpan.boundingBox();
+
+    if (boundingBox) {
+      await page.mouse.dblclick(
+        boundingBox.x + boundingBox.width / 2,
+        boundingBox.y + boundingBox.height / 2
+      );
+
+      await page.waitForTimeout(100);
+
+      const selectedText = await page.evaluate(() => {
+        const selection = window.getSelection();
+        return selection?.toString() || '';
+      });
+
+      expect(selectedText.trim()).toBe('PROTOKÓŁ');
     }
   });
 

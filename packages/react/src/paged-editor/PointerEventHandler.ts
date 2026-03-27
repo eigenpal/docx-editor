@@ -6,6 +6,7 @@
  */
 
 import type { ClickPositionResolver } from './ClickPositionResolver';
+import { findWordBoundaries } from '@eigenpal/docx-core/utils/textSelection';
 
 /**
  * Interface for the editor that the handler controls.
@@ -244,19 +245,7 @@ export class PointerEventHandler {
     const pmStart = Number(element.dataset.pmStart) || 0;
     const offset = pos - pmStart;
 
-    // Find word boundaries
-    let start = offset;
-    let end = offset;
-
-    // Go back to start of word
-    while (start > 0 && /\w/.test(text[start - 1])) {
-      start--;
-    }
-
-    // Go forward to end of word
-    while (end < text.length && /\w/.test(text[end])) {
-      end++;
-    }
+    const [start, end] = findWordBoundaries(text, offset);
 
     // Convert back to PM positions
     const from = pmStart + start;

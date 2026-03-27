@@ -397,12 +397,13 @@ export async function selectWordAtCursor(page: Page): Promise<void> {
     if (node.nodeType !== Node.TEXT_NODE) return;
 
     const text = node.textContent || '';
+    const isWordCharacter = (char: string) => /[\p{L}\p{N}'-]/u.test(char);
     let start = range.startOffset;
     let end = range.startOffset;
 
     // Find word boundaries
-    while (start > 0 && /\w/.test(text[start - 1])) start--;
-    while (end < text.length && /\w/.test(text[end])) end++;
+    while (start > 0 && isWordCharacter(text[start - 1])) start--;
+    while (end < text.length && isWordCharacter(text[end])) end++;
 
     const newRange = document.createRange();
     newRange.setStart(node, start);
