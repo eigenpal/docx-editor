@@ -51,14 +51,53 @@ function getNestedValue(obj: Record<string, unknown>, path: string): string | un
 }
 
 /**
- * Process ICU MessageFormat plurals and simple {variable} interpolation.
+ * Parse ICU plural/selectordinal branches: "=0 {none} one {# item} other {# items}"
+ * Supports both exact matches (=0, =1) and CLDR categories (zero, one, two, few, many, other).
+ */
+function parseBranches(branchStr: string): Record<string, string> {
+  const parsed: Record<string, string> = {};
+  const regex = /(=\d+|\w+)\s*\{([^}]*)\}/g;
+  let match;
+  while ((match = regex.exec(branchStr)) !== null) {
+    parsed[match[1]] = match[2];
+  }
+  return parsed;
+}
+
+/**
+ * Select the best branch for a count value.
+ * Priority: exact match (=N) > CLDR category > "other" fallback.
+ */
+function selectBranch(
+  parsed: Record<string, string>,
+  count: number,
+  type: 'cardinal' | 'ordinal',
+  lang: string
+): string {
+  // 1. Exact match (=0, =1, =2, etc.)
+  const exact = parsed[`=${count}`];
+  if (exact !== undefined) return exact;
+
+  // 2. CLDR plural category via Intl.PluralRules
+  let category: string;
+  try {
+    category = new Intl.PluralRules(lang, { type }).select(count);
+  } catch {
+    category = count === 1 ? 'one' : 'other';
+  }
+
+  return parsed[category] ?? parsed['other'] ?? '';
+}
+
+/**
+ * Process ICU MessageFormat and simple {variable} interpolation.
  *
- * Supports:
- *   - Simple interpolation: "Hello {name}" → "Hello World"
- *   - ICU plural: "{count, plural, one {# item} other {# items}}" → "5 items"
- *   - # inside plural branches is replaced with the count value
- *
- * This is the same subset that next-intl uses for basic plural support.
+ * Supports (same subset as next-intl):
+ *   - Interpolation: "Hello {name}" → "Hello World"
+ *   - Cardinal plural: "{count, plural, =0 {none} one {# item} other {# items}}"
+ *   - Ordinal plural: "{year, selectordinal, one {#st} two {#nd} few {#rd} other {#th}}"
+ *   - Exact matches: =0, =1, =2 etc. take priority over CLDR categories
+ *   - # inside branches is replaced with the count value
  */
 function formatMessage(
   template: string,
@@ -67,31 +106,16 @@ function formatMessage(
 ): string {
   if (!vars) return template;
 
-  // Process ICU plural blocks: {varName, plural, one {text} other {text}}
+  // Process ICU plural/selectordinal blocks
   const result = template.replace(
-    /\{(\w+),\s*plural,\s*((?:[^{}]|\{[^{}]*\})*)\}/g,
-    (_, varName, branches) => {
+    /\{(\w+),\s*(plural|selectordinal),\s*((?:[^{}]|\{[^{}]*\})*)\}/g,
+    (full, varName, type, branchStr) => {
       const count = Number(vars[varName]);
-      if (isNaN(count)) return _;
+      if (isNaN(count)) return full;
 
-      // Parse branches: "one {# item} other {# items}"
-      const parsed: Record<string, string> = {};
-      const branchRegex = /(\w+)\s*\{([^}]*)\}/g;
-      let match;
-      while ((match = branchRegex.exec(branches)) !== null) {
-        parsed[match[1]] = match[2];
-      }
-
-      // Select category via Intl.PluralRules
-      let category: string;
-      try {
-        category = new Intl.PluralRules(lang || 'en').select(count);
-      } catch {
-        category = count === 1 ? 'one' : 'other';
-      }
-
-      const text = parsed[category] ?? parsed['other'] ?? '';
-      // Replace # with the actual count
+      const parsed = parseBranches(branchStr);
+      const pluralType = type === 'selectordinal' ? 'ordinal' : 'cardinal';
+      const text = selectBranch(parsed, count, pluralType, lang || 'en');
       return text.replace(/#/g, String(count));
     }
   );
