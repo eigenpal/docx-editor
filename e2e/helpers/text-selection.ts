@@ -397,7 +397,7 @@ export async function selectWordAtCursor(page: Page): Promise<void> {
     if (node.nodeType !== Node.TEXT_NODE) return;
 
     const text = node.textContent || '';
-    const isWordCharacter = (char: string) => /[\p{L}\p{N}'-]/u.test(char);
+    const isWordCharacter = (char: string) => /[\p{L}\p{N}\p{M}_'-]/u.test(char);
     let start = range.startOffset;
     let end = range.startOffset;
 
