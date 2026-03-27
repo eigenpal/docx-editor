@@ -16,8 +16,6 @@
 
 Open-source WYSIWYG DOCX editor for the browser. No server required. **[Live demo](https://docx-editor.dev/editor)** | **[Documentation](https://www.docx-editor.dev/docs)**
 
-For AI agents: see the [Agent Reference](https://raw.githubusercontent.com/eigenpal/docx-editor/main/AGENTS_README.md) for comprehensive API docs, code examples, and integration patterns.
-
 <p align="center">
   <a href="https://docx-editor.dev/editor">
     <img src="./assets/editor.png" alt="DOCX JS Editor screenshot" width="700" />
@@ -27,6 +25,7 @@ For AI agents: see the [Agent Reference](https://raw.githubusercontent.com/eigen
 - WYSIWYG editing with Word fidelity — formatting, tables, images, hyperlinks
 - Track changes (suggestion mode) with accept/reject
 - Comments with replies, resolve/reopen, scroll-to-highlight
+- **Internationalization (i18n)** — [`locale` prop](docs/i18n.md) for full UI translation, [community-contributed translations welcome](docs/i18n.md#contributing-a-new-locale)
 - Plugin system, undo/redo, find & replace, print preview
 - Client-side only, zero server dependencies
 
@@ -80,6 +79,15 @@ bun run typecheck
 Examples: [Vite](examples/vite) | [Next.js](examples/nextjs) | [Remix](examples/remix) | [Astro](examples/astro) | [Vue](examples/vue)
 
 **[Documentation](https://www.docx-editor.dev/docs)** | **[Props & Ref Methods](https://www.docx-editor.dev/docs/props)** | **[Plugins](https://www.docx-editor.dev/docs/plugins)** | **[Architecture](https://www.docx-editor.dev/docs/architecture)**
+
+## Translations
+
+Help translate the editor into your language! See the full **[i18n contribution guide](docs/i18n.md)**.
+
+```bash
+bun run i18n:new de      # scaffold German locale
+bun run i18n:status      # check translation coverage
+```
 
 ## License
 

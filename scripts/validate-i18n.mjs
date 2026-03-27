@@ -1,27 +1,31 @@
 #!/usr/bin/env node
 /**
- * Validates that all i18n locale files have the same key structure as en.json.
+ * i18n CLI — manage locale files for the docx-editor.
  *
- * Rules:
- * - Every key in en.json MUST exist in every locale file
- * - Missing keys should be set to null (untranslated, falls back to English)
- * - Extra keys not in en.json are flagged as errors
+ * Commands:
+ *   node scripts/validate-i18n.mjs validate       Check all locale files are in sync with en.json
+ *   node scripts/validate-i18n.mjs validate --fix  Auto-repair: add missing keys as null, remove extras
+ *   node scripts/validate-i18n.mjs new <lang>      Scaffold a new locale file (e.g., `new de`)
+ *   node scripts/validate-i18n.mjs status          Show translation coverage for all locales
  *
- * Usage:
- *   node scripts/validate-i18n.mjs          # validate all locale files
- *   node scripts/validate-i18n.mjs --fix    # add missing keys as null, remove extra keys
+ * Shorthand (no subcommand = validate):
+ *   node scripts/validate-i18n.mjs                 Same as `validate`
+ *   node scripts/validate-i18n.mjs --fix           Same as `validate --fix`
  *
  * Exit codes:
- *   0 = all locale files are in sync
- *   1 = keys are out of sync (use --fix to auto-repair)
+ *   0 = success
+ *   1 = validation error or bad usage
  */
 
-import { readFileSync, writeFileSync, readdirSync } from 'fs';
-import { join, basename } from 'path';
+import { readFileSync, writeFileSync, readdirSync, existsSync } from 'fs';
+import { join } from 'path';
 
 const I18N_DIR = join(import.meta.dirname, '..', 'packages', 'react', 'i18n');
 const EN_PATH = join(I18N_DIR, 'en.json');
-const fix = process.argv.includes('--fix');
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
 
 function getLeafPaths(obj, prefix = '') {
   const paths = [];
@@ -36,15 +40,15 @@ function getLeafPaths(obj, prefix = '') {
   return paths.sort();
 }
 
-function getNestedValue(obj, path) {
-  return path.split('.').reduce((o, k) => (o && typeof o === 'object' ? o[k] : undefined), obj);
-}
-
 function setNestedValue(obj, path, value) {
   const parts = path.split('.');
   let current = obj;
   for (let i = 0; i < parts.length - 1; i++) {
-    if (!(parts[i] in current) || typeof current[parts[i]] !== 'object' || current[parts[i]] === null) {
+    if (
+      !(parts[i] in current) ||
+      typeof current[parts[i]] !== 'object' ||
+      current[parts[i]] === null
+    ) {
       current[parts[i]] = {};
     }
     current = current[parts[i]];
@@ -62,65 +66,210 @@ function deleteNestedValue(obj, path) {
   delete current[parts[parts.length - 1]];
 }
 
-// Load English source of truth
-const en = JSON.parse(readFileSync(EN_PATH, 'utf-8'));
-const enPaths = getLeafPaths(en);
-
-// Find all locale files except en.json
-const localeFiles = readdirSync(I18N_DIR)
-  .filter((f) => f.endsWith('.json') && f !== 'en.json')
-  .sort();
-
-if (localeFiles.length === 0) {
-  console.log('No community locale files found — nothing to validate.');
-  process.exit(0);
+/** Build a skeleton object mirroring en.json structure with all leaves set to null */
+function buildSkeleton(obj) {
+  const result = {};
+  for (const [k, v] of Object.entries(obj)) {
+    if (v !== null && typeof v === 'object' && !Array.isArray(v)) {
+      result[k] = buildSkeleton(v);
+    } else {
+      result[k] = null;
+    }
+  }
+  return result;
 }
 
-let hasErrors = false;
+function getLocaleFiles() {
+  return readdirSync(I18N_DIR)
+    .filter((f) => f.endsWith('.json') && f !== 'en.json')
+    .sort();
+}
 
-for (const file of localeFiles) {
-  const filePath = join(I18N_DIR, file);
-  const locale = JSON.parse(readFileSync(filePath, 'utf-8'));
-  const localePaths = getLeafPaths(locale);
+function pct(n, total) {
+  if (total === 0) return '0%';
+  return `${Math.round((n / total) * 100)}%`;
+}
 
-  const missing = enPaths.filter((p) => !localePaths.includes(p));
-  const extra = localePaths.filter((p) => !enPaths.includes(p));
+// ---------------------------------------------------------------------------
+// Commands
+// ---------------------------------------------------------------------------
 
-  if (missing.length === 0 && extra.length === 0) {
-    console.log(`✓ ${file} — all ${enPaths.length} keys in sync`);
-    continue;
+function cmdValidate(fix) {
+  const en = JSON.parse(readFileSync(EN_PATH, 'utf-8'));
+  const enPaths = getLeafPaths(en);
+  const localeFiles = getLocaleFiles();
+
+  if (localeFiles.length === 0) {
+    console.log('No community locale files found — nothing to validate.');
+    return;
   }
 
-  if (fix) {
-    // Add missing keys as null
-    for (const path of missing) {
-      setNestedValue(locale, path, null);
+  let hasErrors = false;
+
+  for (const file of localeFiles) {
+    const filePath = join(I18N_DIR, file);
+    const locale = JSON.parse(readFileSync(filePath, 'utf-8'));
+    const localePaths = getLeafPaths(locale);
+
+    const missing = enPaths.filter((p) => !localePaths.includes(p));
+    const extra = localePaths.filter((p) => !enPaths.includes(p));
+
+    if (missing.length === 0 && extra.length === 0) {
+      console.log(`✓ ${file} — all ${enPaths.length} keys in sync`);
+      continue;
     }
-    // Remove extra keys
-    for (const path of extra) {
-      deleteNestedValue(locale, path);
+
+    if (fix) {
+      for (const path of missing) setNestedValue(locale, path, null);
+      for (const path of extra) deleteNestedValue(locale, path);
+      writeFileSync(filePath, JSON.stringify(locale, null, 2) + '\n', 'utf-8');
+      console.log(
+        `✓ ${file} — fixed: added ${missing.length} missing keys as null, removed ${extra.length} extra keys`,
+      );
+    } else {
+      hasErrors = true;
+      console.error(`✗ ${file}:`);
+      if (missing.length) {
+        console.error(`  Missing ${missing.length} keys (should be null):`);
+        for (const p of missing.slice(0, 10)) console.error(`    - ${p}`);
+        if (missing.length > 10) console.error(`    ... and ${missing.length - 10} more`);
+      }
+      if (extra.length) {
+        console.error(`  Extra ${extra.length} keys (not in en.json):`);
+        for (const p of extra.slice(0, 10)) console.error(`    - ${p}`);
+        if (extra.length > 10) console.error(`    ... and ${extra.length - 10} more`);
+      }
     }
-    writeFileSync(filePath, JSON.stringify(locale, null, 2) + '\n', 'utf-8');
-    console.log(
-      `✓ ${file} — fixed: added ${missing.length} missing keys as null, removed ${extra.length} extra keys`
+  }
+
+  if (hasErrors) {
+    console.error('\nRun `bun run i18n:fix` to auto-repair locale files.');
+    process.exit(1);
+  }
+}
+
+function cmdNew(lang) {
+  if (!lang) {
+    console.error('Usage: bun run i18n:new <lang>');
+    console.error('Example: bun run i18n:new de');
+    console.error('         bun run i18n:new pt-BR');
+    process.exit(1);
+  }
+
+  // Validate lang tag (basic check)
+  if (!/^[a-z]{2,3}(-[A-Z][a-zA-Z]{1,7})?$/.test(lang)) {
+    console.error(
+      `Invalid language tag: "${lang}". Use BCP 47 format (e.g., de, fr, pt-BR, zh-Hans).`,
     );
-  } else {
-    hasErrors = true;
-    console.error(`✗ ${file}:`);
-    if (missing.length) {
-      console.error(`  Missing ${missing.length} keys (should be null):`);
-      for (const p of missing.slice(0, 10)) console.error(`    - ${p}`);
-      if (missing.length > 10) console.error(`    ... and ${missing.length - 10} more`);
+    process.exit(1);
+  }
+
+  const filePath = join(I18N_DIR, `${lang}.json`);
+  if (existsSync(filePath)) {
+    console.error(`${lang}.json already exists. To sync it, run: bun run i18n:fix`);
+    process.exit(1);
+  }
+
+  const en = JSON.parse(readFileSync(EN_PATH, 'utf-8'));
+  const skeleton = buildSkeleton(en);
+  const leafCount = getLeafPaths(en).length;
+
+  writeFileSync(filePath, JSON.stringify(skeleton, null, 2) + '\n', 'utf-8');
+
+  console.log(`Created ${lang}.json with ${leafCount} keys (all set to null).`);
+  console.log('');
+  console.log('Next steps:');
+  console.log(`  1. Open packages/react/i18n/${lang}.json`);
+  console.log('  2. Replace null values with translations');
+  console.log('     (partial is fine — null keys fall back to English)');
+  console.log('  3. Run: bun run i18n:status');
+  console.log('  4. Commit and open a PR!');
+}
+
+function cmdStatus() {
+  const en = JSON.parse(readFileSync(EN_PATH, 'utf-8'));
+  const enPaths = getLeafPaths(en);
+  const total = enPaths.length;
+  const localeFiles = getLocaleFiles();
+
+  console.log(`Source: en.json (${total} keys)\n`);
+
+  if (localeFiles.length === 0) {
+    console.log('No community locale files yet.');
+    console.log('Run `bun run i18n:new <lang>` to start a translation!');
+    return;
+  }
+
+  // Table header
+  const langCol = 12;
+  const numCol = 12;
+  console.log(
+    'Locale'.padEnd(langCol) +
+      'Translated'.padEnd(numCol) +
+      'Untranslated'.padEnd(numCol) +
+      'Coverage',
+  );
+  console.log('-'.repeat(langCol + numCol * 2 + 8));
+
+  for (const file of localeFiles) {
+    const lang = file.replace('.json', '');
+    const filePath = join(I18N_DIR, file);
+    const locale = JSON.parse(readFileSync(filePath, 'utf-8'));
+    const localePaths = getLeafPaths(locale);
+
+    let translated = 0;
+    let untranslated = 0;
+    for (const p of localePaths) {
+      const parts = p.split('.');
+      let val = locale;
+      for (const part of parts) val = val?.[part];
+      if (val === null) untranslated++;
+      else translated++;
     }
-    if (extra.length) {
-      console.error(`  Extra ${extra.length} keys (not in en.json):`);
-      for (const p of extra.slice(0, 10)) console.error(`    - ${p}`);
-      if (extra.length > 10) console.error(`    ... and ${extra.length - 10} more`);
-    }
+
+    const outOfSync = enPaths.filter((p) => !localePaths.includes(p)).length;
+    const coverage = pct(translated, total);
+    const bar = makeBar(translated, total, 20);
+
+    let line =
+      lang.padEnd(langCol) +
+      String(translated).padEnd(numCol) +
+      String(untranslated + outOfSync).padEnd(numCol) +
+      `${coverage} ${bar}`;
+    if (outOfSync > 0) line += ` (${outOfSync} missing — run i18n:fix)`;
+
+    console.log(line);
   }
 }
 
-if (hasErrors) {
-  console.error('\nRun `node scripts/validate-i18n.mjs --fix` to auto-repair locale files.');
-  process.exit(1);
+function makeBar(filled, total, width) {
+  const n = total > 0 ? Math.round((filled / total) * width) : 0;
+  return '█'.repeat(n) + '░'.repeat(width - n);
+}
+
+// ---------------------------------------------------------------------------
+// CLI Router
+// ---------------------------------------------------------------------------
+
+const args = process.argv.slice(2);
+const command = args.find((a) => !a.startsWith('-')) || 'validate';
+const flags = args.filter((a) => a.startsWith('-'));
+const positionalArgs = args.filter((a) => !a.startsWith('-'));
+
+switch (command) {
+  case 'validate':
+    cmdValidate(flags.includes('--fix'));
+    break;
+  case 'new': {
+    const lang = positionalArgs[1]; // positionalArgs[0] is "new"
+    cmdNew(lang);
+    break;
+  }
+  case 'status':
+    cmdStatus();
+    break;
+  default:
+    console.error(`Unknown command: ${command}`);
+    console.error('Available: validate, new <lang>, status');
+    process.exit(1);
 }

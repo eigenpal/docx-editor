@@ -281,12 +281,18 @@ t('dialogs.findReplace.matchCount', { current: 3, total: 15 })
 | `null`      | Not yet translated | Falls back to English                 |
 | _(missing)_ | Out of sync        | **CI fails** — run `bun run i18n:fix` |
 
-### Validation
+### i18n CLI
 
 ```bash
-bun run i18n:validate   # check all locale files in sync
-bun run i18n:fix         # auto-add missing keys as null, remove extras
+bun run i18n:new <lang>   # scaffold new locale (e.g., bun run i18n:new de)
+bun run i18n:status        # show translation coverage for all locales
+bun run i18n:validate      # check all locale files in sync with en.json
+bun run i18n:fix           # auto-add missing keys as null, remove extras
 ```
+
+### When adding UI strings
+
+**Always** use `t()` for user-facing text. Never hardcode English strings in components. After adding new keys to `en.json`, run `bun run i18n:fix` to sync all community locale files.
 
 Full contribution guide: `docs/i18n.md`
 
