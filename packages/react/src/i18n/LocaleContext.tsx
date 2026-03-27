@@ -155,14 +155,10 @@ function findNullKeys(obj: Record<string, unknown>, prefix = ''): string[] {
 
 export interface LocaleProviderProps {
   locale?: PartialLocaleStrings;
-  /** BCP 47 language tag (e.g., "pl", "de", "ar"). Used for plural rules. */
-  lang?: string;
   children: ReactNode;
 }
 
-const LangContext = createContext<string | undefined>(undefined);
-
-export function LocaleProvider({ locale, lang, children }: LocaleProviderProps) {
+export function LocaleProvider({ locale, children }: LocaleProviderProps) {
   // Deep-compare locale to avoid re-renders when consumers pass inline objects
   const localeRef = useRef(locale);
   if (
@@ -176,16 +172,13 @@ export function LocaleProvider({ locale, lang, children }: LocaleProviderProps) 
     () => deepMerge(defaultLocale, stableLocale as Record<string, unknown> | undefined),
     [stableLocale]
   );
-  return (
-    <LangContext.Provider value={lang}>
-      <LocaleContext.Provider value={merged}>{children}</LocaleContext.Provider>
-    </LangContext.Provider>
-  );
+  return <LocaleContext.Provider value={merged}>{children}</LocaleContext.Provider>;
 }
 
 export function useTranslation() {
   const strings = useContext(LocaleContext);
-  const lang = useContext(LangContext);
+  // Read _lang from the locale file for plural rules
+  const lang = (strings as unknown as Record<string, unknown>)['_lang'] as string | undefined;
   const t = useCallback(
     (key: TranslationKey, vars?: Record<string, string | number>): string => {
       const value = getNestedValue(strings as unknown as Record<string, unknown>, key);
