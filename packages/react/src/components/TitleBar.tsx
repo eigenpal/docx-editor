@@ -68,7 +68,7 @@ export function DocumentName({
   placeholder = 'Untitled',
   editable = true,
 }: DocumentNameProps) {
-  const displayName = stripExtension(value);
+  const displayName = stripExtension(value) ?? '';
 
   if (!editable) {
     return (
