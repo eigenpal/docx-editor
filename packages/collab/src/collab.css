@@ -1,0 +1,38 @@
+/* Collaborative cursor styles for y-prosemirror */
+
+/* Remote user cursor (thin colored line) */
+.yRemoteSelection {
+  background-color: var(--user-color, rgba(26, 115, 232, 0.3));
+  border-left: 2px solid var(--user-color, #1a73e8);
+  margin-left: -1px;
+  pointer-events: none;
+}
+
+/* Remote user cursor caret (top of the line) */
+.yRemoteSelectionHead {
+  position: absolute;
+  border-left: 2px solid var(--user-color, #1a73e8);
+  border-top: 2px solid var(--user-color, #1a73e8);
+  height: 0;
+  box-sizing: border-box;
+}
+
+/* Remote user cursor label (name floating above cursor) */
+.yRemoteSelectionHead::after {
+  content: attr(data-user);
+  position: absolute;
+  top: -1.4em;
+  left: -1px;
+  font-size: 11px;
+  font-family: system-ui, sans-serif;
+  font-weight: 500;
+  line-height: 1;
+  white-space: nowrap;
+  color: #fff;
+  background-color: var(--user-color, #1a73e8);
+  padding: 1px 6px;
+  border-radius: 3px;
+  pointer-events: none;
+  user-select: none;
+  opacity: 0.9;
+}
