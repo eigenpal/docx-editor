@@ -9,6 +9,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import type { CSSProperties } from 'react';
 import { toast } from 'sonner';
+import { useTranslation } from '../../i18n';
 
 // ============================================================================
 // TYPES
@@ -259,6 +260,7 @@ export function HyperlinkPopup({
   onClose,
   readOnly,
 }: HyperlinkPopupProps): React.ReactElement | null {
+  const { t } = useTranslation();
   const [mode, setMode] = useState<'view' | 'edit'>('view');
   const [editText, setEditText] = useState('');
   const [editUrl, setEditUrl] = useState('');
@@ -386,7 +388,7 @@ export function HyperlinkPopup({
             value={editText}
             onChange={(e) => setEditText(e.target.value)}
             onKeyDown={handleEditKeyDown}
-            placeholder="Display text"
+            placeholder={t('hyperlinkPopup.displayTextPlaceholder')}
             onFocus={(e) => (e.target.style.borderColor = '#1a73e8')}
             onBlur={(e) => (e.target.style.borderColor = '#dadce0')}
           />
@@ -403,7 +405,7 @@ export function HyperlinkPopup({
             value={editUrl}
             onChange={(e) => setEditUrl(e.target.value)}
             onKeyDown={handleEditKeyDown}
-            placeholder="https://example.com"
+            placeholder={t('hyperlinkPopup.urlPlaceholder')}
             onFocus={(e) => (e.target.style.borderColor = '#1a73e8')}
             onBlur={(e) => (e.target.style.borderColor = '#dadce0')}
           />
@@ -417,7 +419,7 @@ export function HyperlinkPopup({
             onClick={handleApply}
             disabled={!editUrl.trim()}
           >
-            Apply
+            {t('common.apply')}
           </button>
         </div>
       </div>
@@ -459,17 +461,17 @@ export function HyperlinkPopup({
       <span style={SEPARATOR_STYLE} />
 
       {/* Copy button */}
-      <PopupIconButton title="Copy link" onClick={handleCopy}>
+      <PopupIconButton title={t('hyperlinkPopup.copyLink')} onClick={handleCopy}>
         <CopyIcon />
       </PopupIconButton>
 
       {!readOnly && (
         <>
-          <PopupIconButton title="Edit link" onClick={handleEditClick}>
+          <PopupIconButton title={t('hyperlinkPopup.editLink')} onClick={handleEditClick}>
             <EditIcon />
           </PopupIconButton>
 
-          <PopupIconButton title="Remove link" onClick={onRemove}>
+          <PopupIconButton title={t('hyperlinkPopup.removeLink')} onClick={onRemove}>
             <UnlinkIcon />
           </PopupIconButton>
         </>

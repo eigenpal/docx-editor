@@ -5,7 +5,9 @@
  * Shows Cut, Copy, Paste, and other text editing options.
  */
 
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState, useMemo } from 'react';
+import { useTranslation } from '../i18n';
+import type { TranslationKey } from '../i18n';
 
 // ============================================================================
 // TYPES
@@ -109,20 +111,36 @@ export interface UseTextContextMenuReturn {
 // ============================================================================
 
 /**
- * Default menu items
+ * Default menu item definitions (use translation keys for label/shortcut)
  */
-const DEFAULT_MENU_ITEMS: TextContextMenuItem[] = [
-  { action: 'cut', label: 'Cut', shortcut: 'Ctrl+X' },
-  { action: 'copy', label: 'Copy', shortcut: 'Ctrl+C' },
-  { action: 'paste', label: 'Paste', shortcut: 'Ctrl+V' },
+interface DefaultMenuItemDef {
+  action: TextContextAction;
+  labelKey: TranslationKey;
+  shortcutKey?: TranslationKey;
+  dividerAfter?: boolean;
+}
+
+const DEFAULT_MENU_ITEM_DEFS: DefaultMenuItemDef[] = [
+  { action: 'cut', labelKey: 'contextMenu.cut', shortcutKey: 'contextMenu.cutShortcut' },
+  { action: 'copy', labelKey: 'contextMenu.copy', shortcutKey: 'contextMenu.copyShortcut' },
+  { action: 'paste', labelKey: 'contextMenu.paste', shortcutKey: 'contextMenu.pasteShortcut' },
   {
     action: 'pasteAsPlainText',
-    label: 'Paste as Plain Text',
-    shortcut: 'Ctrl+Shift+V',
+    labelKey: 'contextMenu.pastePlainText',
+    shortcutKey: 'contextMenu.pastePlainTextShortcut',
     dividerAfter: true,
   },
-  { action: 'delete', label: 'Delete', shortcut: 'Del', dividerAfter: true },
-  { action: 'selectAll', label: 'Select All', shortcut: 'Ctrl+A' },
+  {
+    action: 'delete',
+    labelKey: 'contextMenu.delete',
+    shortcutKey: 'contextMenu.deleteShortcut',
+    dividerAfter: true,
+  },
+  {
+    action: 'selectAll',
+    labelKey: 'contextMenu.selectAll',
+    shortcutKey: 'contextMenu.selectAllShortcut',
+  },
 ];
 
 // ============================================================================
@@ -404,9 +422,22 @@ export const TextContextMenu: React.FC<TextContextMenuProps> = ({
 }) => {
   const menuRef = useRef<HTMLDivElement>(null);
   const [highlightedIndex, setHighlightedIndex] = useState(0);
+  const { t } = useTranslation();
+
+  // Translate default menu items from definitions
+  const translatedDefaults: TextContextMenuItem[] = useMemo(
+    () =>
+      DEFAULT_MENU_ITEM_DEFS.map((def) => ({
+        action: def.action,
+        label: t(def.labelKey),
+        shortcut: def.shortcutKey ? t(def.shortcutKey) : undefined,
+        dividerAfter: def.dividerAfter,
+      })),
+    [t]
+  );
 
   // Build menu items with disabled states
-  const menuItems = (items || DEFAULT_MENU_ITEMS).map((item) => {
+  const menuItems = (items || translatedDefaults).map((item) => {
     const disabled = (() => {
       if (item.disabled !== undefined) return item.disabled;
       switch (item.action) {
@@ -551,7 +582,7 @@ export const TextContextMenu: React.FC<TextContextMenuProps> = ({
       className={`docx-text-context-menu ${className}`}
       style={getMenuStyle()}
       role="menu"
-      aria-label="Text editing menu"
+      aria-label={t('contextMenu.textMenuAriaLabel')}
     >
       {menuItems.map((item, index) => {
         // Find the index in navigable items for highlighting
@@ -762,10 +793,15 @@ export function getTextActionShortcut(action: TextContextAction): string {
 }
 
 /**
- * Get default menu items
+ * Get default menu item definitions (untranslated, use translation keys)
  */
 export function getDefaultTextContextMenuItems(): TextContextMenuItem[] {
-  return [...DEFAULT_MENU_ITEMS];
+  return DEFAULT_MENU_ITEM_DEFS.map((def) => ({
+    action: def.action,
+    label: def.labelKey,
+    shortcut: def.shortcutKey,
+    dividerAfter: def.dividerAfter,
+  }));
 }
 
 /**

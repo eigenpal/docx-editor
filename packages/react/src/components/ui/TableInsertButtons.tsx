@@ -10,40 +10,42 @@ import { Button } from './Button';
 import { Tooltip } from './Tooltip';
 import { cn } from '../../lib/utils';
 import type { TableAction } from './TableToolbar';
+import { useTranslation } from '../../i18n';
 
 export interface TableInsertButtonsProps {
   onAction: (action: TableAction) => void;
   disabled?: boolean;
 }
 
-const INSERT_ACTIONS: { action: TableAction; icon: string; label: string; testId: string }[] = [
+const INSERT_ACTIONS: { action: TableAction; icon: string; labelKey: string; testId: string }[] = [
   {
     action: 'addRowAbove',
     icon: 'keyboard_arrow_up',
-    label: 'Insert row above',
+    labelKey: 'table.insertRowAbove',
     testId: 'toolbar-table-add-row-above',
   },
   {
     action: 'addRowBelow',
     icon: 'keyboard_arrow_down',
-    label: 'Insert row below',
+    labelKey: 'table.insertRowBelow',
     testId: 'toolbar-table-add-row-below',
   },
   {
     action: 'addColumnLeft',
     icon: 'keyboard_arrow_left',
-    label: 'Insert column left',
+    labelKey: 'table.insertColumnLeft',
     testId: 'toolbar-table-add-col-left',
   },
   {
     action: 'addColumnRight',
     icon: 'keyboard_arrow_right',
-    label: 'Insert column right',
+    labelKey: 'table.insertColumnRight',
     testId: 'toolbar-table-add-col-right',
   },
 ];
 
 export function TableInsertButtons({ onAction, disabled = false }: TableInsertButtonsProps) {
+  const { t } = useTranslation();
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
@@ -51,25 +53,28 @@ export function TableInsertButtons({ onAction, disabled = false }: TableInsertBu
 
   return (
     <>
-      {INSERT_ACTIONS.map(({ action, icon, label, testId }) => (
-        <Tooltip key={typeof action === 'string' ? action : action.type} content={label}>
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            className={cn(
-              'text-slate-500 hover:text-slate-900 hover:bg-slate-100/80',
-              disabled && 'opacity-30 cursor-not-allowed'
-            )}
-            onMouseDown={handleMouseDown}
-            onClick={() => !disabled && onAction(action)}
-            disabled={disabled}
-            aria-label={label}
-            data-testid={testId}
-          >
-            <MaterialSymbol name={icon} size={20} />
-          </Button>
-        </Tooltip>
-      ))}
+      {INSERT_ACTIONS.map(({ action, icon, labelKey, testId }) => {
+        const label = t(labelKey as any);
+        return (
+          <Tooltip key={typeof action === 'string' ? action : action.type} content={label}>
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              className={cn(
+                'text-slate-500 hover:text-slate-900 hover:bg-slate-100/80',
+                disabled && 'opacity-30 cursor-not-allowed'
+              )}
+              onMouseDown={handleMouseDown}
+              onClick={() => !disabled && onAction(action)}
+              disabled={disabled}
+              aria-label={label}
+              data-testid={testId}
+            >
+              <MaterialSymbol name={icon} size={20} />
+            </Button>
+          </Tooltip>
+        );
+      })}
     </>
   );
 }

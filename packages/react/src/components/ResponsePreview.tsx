@@ -8,6 +8,7 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import type { AIAction, AgentResponse } from '@eigenpal/docx-core/types/agentApi';
 import { getActionLabel } from '@eigenpal/docx-core/types/agentApi';
+import { useTranslation } from '../i18n';
 
 // ============================================================================
 // TYPES
@@ -266,6 +267,7 @@ export const ResponsePreview: React.FC<ResponsePreviewProps> = ({
   className = '',
   position,
 }) => {
+  const { t } = useTranslation();
   const [isEditing, setIsEditing] = useState(false);
   const [editedText, setEditedText] = useState('');
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -362,7 +364,7 @@ export const ResponsePreview: React.FC<ResponsePreviewProps> = ({
         >
           <LoadingSpinner />
           <div style={{ color: 'var(--doc-text-muted)', fontSize: '14px' }}>
-            {getActionLabel(action)}...
+            {t('responsePreview.loading', { action: getActionLabel(action) })}
           </div>
         </div>
       </div>
@@ -408,7 +410,7 @@ export const ResponsePreview: React.FC<ResponsePreviewProps> = ({
                 }}
               >
                 <RefreshIcon />
-                Retry
+                {t('common.retry')}
               </button>
             )}
             <button
@@ -423,7 +425,7 @@ export const ResponsePreview: React.FC<ResponsePreviewProps> = ({
                 fontSize: '13px',
               }}
             >
-              Close
+              {t('common.close')}
             </button>
           </div>
         </div>
@@ -449,7 +451,7 @@ export const ResponsePreview: React.FC<ResponsePreviewProps> = ({
         }}
       >
         <div style={{ fontWeight: 500, fontSize: '14px', color: 'var(--doc-text)' }}>
-          {getActionLabel(action)} Result
+          {t('responsePreview.result', { action: getActionLabel(action) })}
         </div>
         <button
           type="button"
@@ -462,7 +464,7 @@ export const ResponsePreview: React.FC<ResponsePreviewProps> = ({
             cursor: 'pointer',
             color: 'var(--doc-text-muted)',
           }}
-          title="Close (Esc)"
+          title={t('responsePreview.closeEsc')}
         >
           <XIcon />
         </button>
@@ -479,7 +481,7 @@ export const ResponsePreview: React.FC<ResponsePreviewProps> = ({
         {isEditing ? (
           <div>
             <div style={{ marginBottom: '8px', fontSize: '12px', color: 'var(--doc-text-muted)' }}>
-              Edit the result before accepting:
+              {t('responsePreview.editPrompt')}
             </div>
             <textarea
               ref={textareaRef}
@@ -501,14 +503,14 @@ export const ResponsePreview: React.FC<ResponsePreviewProps> = ({
         ) : showDiff ? (
           <div>
             <div style={{ marginBottom: '8px', fontSize: '12px', color: 'var(--doc-text-muted)' }}>
-              Changes:
+              {t('responsePreview.changes')}
             </div>
             <DiffView original={originalText} modified={newText} />
           </div>
         ) : (
           <div>
             <div style={{ marginBottom: '8px', fontSize: '12px', color: 'var(--doc-text-muted)' }}>
-              Original:
+              {t('responsePreview.original')}
             </div>
             <div
               style={{
@@ -524,7 +526,7 @@ export const ResponsePreview: React.FC<ResponsePreviewProps> = ({
               {originalText}
             </div>
             <div style={{ marginBottom: '8px', fontSize: '12px', color: 'var(--doc-text-muted)' }}>
-              New:
+              {t('responsePreview.new')}
             </div>
             <div
               style={{
@@ -588,7 +590,7 @@ export const ResponsePreview: React.FC<ResponsePreviewProps> = ({
               }}
             >
               <EditIcon />
-              Edit
+              {t('common.edit')}
             </button>
           )}
           {isEditing && (
@@ -605,7 +607,7 @@ export const ResponsePreview: React.FC<ResponsePreviewProps> = ({
                 color: 'var(--doc-text-muted)',
               }}
             >
-              Cancel Edit
+              {t('responsePreview.cancelEdit')}
             </button>
           )}
         </div>
@@ -627,7 +629,7 @@ export const ResponsePreview: React.FC<ResponsePreviewProps> = ({
             }}
           >
             <XIcon />
-            Reject
+            {t('common.reject')}
           </button>
           <button
             type="button"
@@ -646,7 +648,7 @@ export const ResponsePreview: React.FC<ResponsePreviewProps> = ({
             }}
           >
             <CheckIcon />
-            Accept
+            {t('common.accept')}
           </button>
         </div>
       </div>

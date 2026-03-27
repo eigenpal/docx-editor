@@ -13,6 +13,7 @@
 
 import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import type { CSSProperties, KeyboardEvent } from 'react';
+import { useTranslation } from '../../i18n';
 
 // ============================================================================
 // TYPES
@@ -614,6 +615,8 @@ export function InsertSymbolDialog({
   className,
   style,
 }: InsertSymbolDialogProps): React.ReactElement | null {
+  const { t } = useTranslation();
+
   // State
   const [selectedCategory, setSelectedCategory] = useState('common');
   const [selectedSymbol, setSelectedSymbol] = useState<string | null>(null);
@@ -733,9 +736,20 @@ export function InsertSymbolDialog({
   const canInsert = selectedSymbol !== null;
 
   // Categories including recent
+  const categoryLabelMap: Record<string, string> = {
+    common: t('dialogs.insertSymbol.categories.common'),
+    arrows: t('dialogs.insertSymbol.categories.arrows'),
+    math: t('dialogs.insertSymbol.categories.math'),
+    greek: t('dialogs.insertSymbol.categories.greek'),
+    shapes: t('dialogs.insertSymbol.categories.shapes'),
+    punctuation: t('dialogs.insertSymbol.categories.punctuation'),
+    currency: t('dialogs.insertSymbol.categories.currency'),
+    music: t('dialogs.insertSymbol.categories.music'),
+    emoji: t('dialogs.insertSymbol.categories.emoji'),
+  };
   const categories = [
     ...(recentSymbols.length > 0 ? [{ name: 'recent', label: 'Recent' }] : []),
-    ...SYMBOL_CATEGORIES.map((c) => ({ name: c.name, label: c.label })),
+    ...SYMBOL_CATEGORIES.map((c) => ({ name: c.name, label: categoryLabelMap[c.name] || c.label })),
   ];
 
   return (
@@ -752,14 +766,14 @@ export function InsertSymbolDialog({
         {/* Header */}
         <div className="docx-insert-symbol-dialog-header" style={DIALOG_HEADER_STYLE}>
           <h2 id="insert-symbol-dialog-title" style={DIALOG_TITLE_STYLE}>
-            Insert Symbol
+            {t('dialogs.insertSymbol.title')}
           </h2>
           <button
             type="button"
             className="docx-insert-symbol-dialog-close"
             style={CLOSE_BUTTON_STYLE}
             onClick={onClose}
-            aria-label="Close dialog"
+            aria-label={t('common.closeDialog')}
           >
             &times;
           </button>
@@ -771,7 +785,7 @@ export function InsertSymbolDialog({
           <input
             ref={searchInputRef}
             type="text"
-            placeholder="Search symbols (character or Unicode)..."
+            placeholder={t('dialogs.insertSymbol.searchPlaceholder')}
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             style={SEARCH_INPUT_STYLE}
@@ -824,7 +838,7 @@ export function InsertSymbolDialog({
           {/* No results */}
           {filteredSymbols.length === 0 && (
             <div style={{ textAlign: 'center', padding: '20px', color: 'var(--doc-text-muted)' }}>
-              No symbols found for "{searchQuery}"
+              {t('dialogs.insertSymbol.noResults', { query: searchQuery })}
             </div>
           )}
 
@@ -837,7 +851,7 @@ export function InsertSymbolDialog({
                   {symbolInfo.codePoint}
                 </div>
                 <div style={{ fontSize: '12px', color: 'var(--doc-text-muted)' }}>
-                  Decimal: {symbolInfo.decimal}
+                  {t('dialogs.insertSymbol.decimal', { value: symbolInfo.decimal })}
                 </div>
               </div>
             </div>
@@ -852,7 +866,7 @@ export function InsertSymbolDialog({
             style={SECONDARY_BUTTON_STYLE}
             onClick={onClose}
           >
-            Cancel
+            {t('common.cancel')}
           </button>
           <button
             type="button"
@@ -861,7 +875,7 @@ export function InsertSymbolDialog({
             onClick={handleInsert}
             disabled={!canInsert}
           >
-            Insert
+            {t('common.insert')}
           </button>
         </div>
       </div>

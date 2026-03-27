@@ -18,6 +18,7 @@ import React, {
 } from 'react';
 import type { CSSProperties } from 'react';
 import { EditorState } from 'prosemirror-state';
+import { useTranslation } from '../i18n';
 import { EditorView } from 'prosemirror-view';
 import { undo, redo } from 'prosemirror-history';
 
@@ -306,7 +307,8 @@ export const InlineHeaderFooterEditor = forwardRef<
     },
   }));
 
-  const label = position === 'header' ? 'Header' : 'Footer';
+  const { t } = useTranslation();
+  const label = position === 'header' ? t('headerFooter.header') : t('headerFooter.footer');
 
   if (!overlayPos) return null;
 
@@ -394,6 +396,7 @@ function OptionsMenu({
   onClose: () => void;
   viewRef: React.RefObject<EditorView | null>;
 }) {
+  const { t } = useTranslation();
   const insertField = (fieldType: 'PAGE' | 'NUMPAGES') => {
     const view = viewRef.current;
     if (!view) return;
@@ -422,7 +425,7 @@ function OptionsMenu({
         }}
         onMouseDown={(e) => e.stopPropagation()}
       >
-        Options ▾
+        {t('headerFooter.options')} ▾
       </button>
       {showOptions && (
         <div style={dropdownStyle}>
@@ -440,7 +443,7 @@ function OptionsMenu({
               (e.target as HTMLElement).style.backgroundColor = 'transparent';
             }}
           >
-            Insert current page number
+            {t('headerFooter.insertPageNumber')}
           </button>
           <button
             type="button"
@@ -456,7 +459,7 @@ function OptionsMenu({
               (e.target as HTMLElement).style.backgroundColor = 'transparent';
             }}
           >
-            Insert total page count
+            {t('headerFooter.insertTotalPages')}
           </button>
           <div style={{ borderTop: '1px solid #e8eaed', margin: '4px 0' }} />
           {onRemove && (
@@ -474,7 +477,7 @@ function OptionsMenu({
                 (e.target as HTMLElement).style.backgroundColor = 'transparent';
               }}
             >
-              Remove {label.toLowerCase()}
+              {t('headerFooter.remove', { label: label.toLowerCase() })}
             </button>
           )}
           <button
@@ -491,7 +494,7 @@ function OptionsMenu({
               (e.target as HTMLElement).style.backgroundColor = 'transparent';
             }}
           >
-            Close {label.toLowerCase()} editing
+            {t('headerFooter.closeEditing', { label: label.toLowerCase() })}
           </button>
         </div>
       )}

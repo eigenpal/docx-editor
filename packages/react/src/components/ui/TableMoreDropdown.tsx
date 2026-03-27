@@ -14,6 +14,7 @@ import { MaterialSymbol } from './MaterialSymbol';
 import { cn } from '../../lib/utils';
 import type { TableAction } from './TableToolbar';
 import { useFixedDropdown } from './useFixedDropdown';
+import { useTranslation } from '../../i18n';
 
 export interface TableMoreDropdownProps {
   onAction: (action: TableAction) => void;
@@ -60,6 +61,7 @@ export function TableMoreDropdown({
   disabled = false,
   tableContext,
 }: TableMoreDropdownProps) {
+  const { t } = useTranslation();
   const [isOpen, setIsOpen] = useState(false);
   const [hoveredItem, setHoveredItem] = useState<string | null>(null);
   const close = useCallback(() => setIsOpen(false), []);
@@ -131,7 +133,7 @@ export function TableMoreDropdown({
       onMouseDown={handleMouseDown}
       onClick={() => !disabled && setIsOpen((prev) => !prev)}
       disabled={disabled}
-      aria-label="More table options"
+      aria-label={t('table.moreOptions')}
       aria-expanded={isOpen}
       aria-haspopup="menu"
       data-testid="toolbar-table-more"
@@ -142,7 +144,7 @@ export function TableMoreDropdown({
 
   return (
     <div ref={containerRef} style={{ position: 'relative', display: 'inline-block' }}>
-      {!isOpen ? <Tooltip content="More table options">{button}</Tooltip> : button}
+      {!isOpen ? <Tooltip content={t('table.moreOptions')}>{button}</Tooltip> : button}
 
       {isOpen && !disabled && (
         <div
@@ -162,33 +164,35 @@ export function TableMoreDropdown({
           onMouseDown={(e) => e.stopPropagation()}
         >
           {/* Insert actions */}
-          {menuItem('addRowAbove', 'add', 'Insert row above', 'addRowAbove')}
-          {menuItem('addRowBelow', 'add', 'Insert row below', 'addRowBelow')}
-          {menuItem('addColumnLeft', 'add', 'Insert column left', 'addColumnLeft')}
-          {menuItem('addColumnRight', 'add', 'Insert column right', 'addColumnRight')}
+          {menuItem('addRowAbove', 'add', t('table.insertRowAbove'), 'addRowAbove')}
+          {menuItem('addRowBelow', 'add', t('table.insertRowBelow'), 'addRowBelow')}
+          {menuItem('addColumnLeft', 'add', t('table.insertColumnLeft'), 'addColumnLeft')}
+          {menuItem('addColumnRight', 'add', t('table.insertColumnRight'), 'addColumnRight')}
 
           <div style={separatorStyles} role="separator" />
 
           {/* Merge/Split */}
-          {menuItem('mergeCells', 'call_merge', 'Merge cells', 'mergeCells', {
+          {menuItem('mergeCells', 'call_merge', t('table.mergeCells'), 'mergeCells', {
             itemDisabled: !tableContext?.hasMultiCellSelection,
           })}
-          {menuItem('splitCell', 'call_split', 'Split cell', 'splitCell', {
+          {menuItem('splitCell', 'call_split', t('table.splitCell'), 'splitCell', {
             itemDisabled: !tableContext?.canSplitCell,
           })}
 
           <div style={separatorStyles} role="separator" />
 
           {/* Delete actions */}
-          {menuItem('deleteRow', 'delete', 'Delete row', 'deleteRow', {
+          {menuItem('deleteRow', 'delete', t('table.deleteRow'), 'deleteRow', {
             danger: true,
             itemDisabled: (tableContext?.rowCount ?? 0) <= 1,
           })}
-          {menuItem('deleteColumn', 'delete', 'Delete column', 'deleteColumn', {
+          {menuItem('deleteColumn', 'delete', t('table.deleteColumn'), 'deleteColumn', {
             danger: true,
             itemDisabled: (tableContext?.columnCount ?? 0) <= 1,
           })}
-          {menuItem('deleteTable', 'delete', 'Delete table', 'deleteTable', { danger: true })}
+          {menuItem('deleteTable', 'delete', t('table.deleteTable'), 'deleteTable', {
+            danger: true,
+          })}
 
           <div style={separatorStyles} role="separator" />
 

@@ -6,6 +6,7 @@
  */
 
 import React, { useCallback, useEffect, useRef } from 'react';
+import { useTranslation } from '../i18n';
 import type { ReactNode } from 'react';
 import type { ColorValue, ParagraphAlignment } from '@eigenpal/docx-core/types/document';
 import { resolveColor } from '@eigenpal/docx-core/utils/colorResolver';
@@ -68,6 +69,7 @@ function stripUndefined<T extends object>(obj: T): Partial<T> {
  * bold/italic/underline, colors, alignment, lists, table/image context, clear formatting.
  */
 export function FormattingBar(explicitProps: FormattingBarProps) {
+  const { t } = useTranslation();
   const props = useFormattingBarProps(explicitProps);
   const {
     currentFormatting = {},
@@ -349,26 +351,26 @@ export function FormattingBar(explicitProps: FormattingBarProps) {
       )}
       style={inline ? { display: 'contents', ...style } : style}
       role={inline ? undefined : 'toolbar'}
-      aria-label={inline ? undefined : 'Formatting toolbar'}
+      aria-label={inline ? undefined : t('toolbar.ariaLabel')}
       data-testid={inline ? undefined : 'formatting-bar'}
       onMouseDown={inline ? undefined : handleBarMouseDown}
       onMouseUp={inline ? undefined : handleBarMouseUp}
     >
       {/* Undo/Redo Group */}
-      <ToolbarGroup label="History">
+      <ToolbarGroup label={t('formattingBar.groups.history')}>
         <ToolbarButton
           onClick={handleUndo}
           disabled={disabled || !canUndo}
-          title="Undo (Ctrl+Z)"
-          ariaLabel="Undo"
+          title={t('formattingBar.undoShortcut')}
+          ariaLabel={t('formattingBar.undo')}
         >
           <MaterialSymbol name="undo" size={ICON_SIZE} />
         </ToolbarButton>
         <ToolbarButton
           onClick={handleRedo}
           disabled={disabled || !canRedo}
-          title="Redo (Ctrl+Y)"
-          ariaLabel="Redo"
+          title={t('formattingBar.redoShortcut')}
+          ariaLabel={t('formattingBar.redo')}
         >
           <MaterialSymbol name="redo" size={ICON_SIZE} />
         </ToolbarButton>
@@ -376,7 +378,7 @@ export function FormattingBar(explicitProps: FormattingBarProps) {
 
       {/* Zoom Control */}
       {showZoomControl && (
-        <ToolbarGroup label="Zoom">
+        <ToolbarGroup label={t('formattingBar.groups.zoom')}>
           <ZoomControl
             value={zoom}
             onChange={onZoomChange}
@@ -391,7 +393,7 @@ export function FormattingBar(explicitProps: FormattingBarProps) {
 
       {/* Style Picker */}
       {showStylePicker && (
-        <ToolbarGroup label="Styles">
+        <ToolbarGroup label={t('formattingBar.groups.styles')}>
           <StylePicker
             value={currentFormatting.styleId || 'Normal'}
             onChange={handleStyleChange}
@@ -405,7 +407,7 @@ export function FormattingBar(explicitProps: FormattingBarProps) {
 
       {/* Font Family and Size Pickers */}
       {(showFontPicker || showFontSizePicker) && (
-        <ToolbarGroup label="Font">
+        <ToolbarGroup label={t('formattingBar.groups.font')}>
           {showFontPicker && (
             <FontPicker
               value={currentFormatting.fontFamily || 'Arial'}
@@ -432,13 +434,13 @@ export function FormattingBar(explicitProps: FormattingBarProps) {
       )}
 
       {/* Text Formatting Group */}
-      <ToolbarGroup label="Text formatting">
+      <ToolbarGroup label={t('formattingBar.groups.textFormatting')}>
         <ToolbarButton
           onClick={() => handleFormat('bold')}
           active={currentFormatting.bold}
           disabled={disabled}
-          title="Bold (Ctrl+B)"
-          ariaLabel="Bold"
+          title={t('formattingBar.boldShortcut')}
+          ariaLabel={t('formattingBar.bold')}
         >
           <MaterialSymbol name="format_bold" size={ICON_SIZE} />
         </ToolbarButton>
@@ -446,8 +448,8 @@ export function FormattingBar(explicitProps: FormattingBarProps) {
           onClick={() => handleFormat('italic')}
           active={currentFormatting.italic}
           disabled={disabled}
-          title="Italic (Ctrl+I)"
-          ariaLabel="Italic"
+          title={t('formattingBar.italicShortcut')}
+          ariaLabel={t('formattingBar.italic')}
         >
           <MaterialSymbol name="format_italic" size={ICON_SIZE} />
         </ToolbarButton>
@@ -455,8 +457,8 @@ export function FormattingBar(explicitProps: FormattingBarProps) {
           onClick={() => handleFormat('underline')}
           active={currentFormatting.underline}
           disabled={disabled}
-          title="Underline (Ctrl+U)"
-          ariaLabel="Underline"
+          title={t('formattingBar.underlineShortcut')}
+          ariaLabel={t('formattingBar.underline')}
         >
           <MaterialSymbol name="format_underlined" size={ICON_SIZE} />
         </ToolbarButton>
@@ -464,8 +466,8 @@ export function FormattingBar(explicitProps: FormattingBarProps) {
           onClick={() => handleFormat('strikethrough')}
           active={currentFormatting.strike}
           disabled={disabled}
-          title="Strikethrough"
-          ariaLabel="Strikethrough"
+          title={t('formattingBar.strikethrough')}
+          ariaLabel={t('formattingBar.strikethrough')}
         >
           <MaterialSymbol name="strikethrough_s" size={ICON_SIZE} />
         </ToolbarButton>
@@ -476,7 +478,7 @@ export function FormattingBar(explicitProps: FormattingBarProps) {
             onChange={handleTextColorChange}
             theme={theme}
             disabled={disabled}
-            title="Font Color"
+            title={t('formattingBar.fontColor')}
           />
         )}
         {showHighlightColorPicker && (
@@ -486,27 +488,27 @@ export function FormattingBar(explicitProps: FormattingBarProps) {
             onChange={handleHighlightColorChange}
             theme={theme}
             disabled={disabled}
-            title="Text Highlight Color"
+            title={t('formattingBar.highlightColor')}
           />
         )}
         <ToolbarButton
           onClick={() => handleFormat('insertLink')}
           disabled={disabled}
-          title="Insert link (Ctrl+K)"
-          ariaLabel="Insert link"
+          title={t('formattingBar.insertLinkShortcut')}
+          ariaLabel={t('formattingBar.insertLink')}
         >
           <MaterialSymbol name="link" size={ICON_SIZE} />
         </ToolbarButton>
       </ToolbarGroup>
 
       {/* Superscript/Subscript Group */}
-      <ToolbarGroup label="Script">
+      <ToolbarGroup label={t('formattingBar.groups.script')}>
         <ToolbarButton
           onClick={() => handleFormat('superscript')}
           active={currentFormatting.superscript}
           disabled={disabled}
-          title="Superscript (Ctrl+Shift+=)"
-          ariaLabel="Superscript"
+          title={t('formattingBar.superscriptShortcut')}
+          ariaLabel={t('formattingBar.superscript')}
         >
           <MaterialSymbol name="superscript" size={ICON_SIZE} />
         </ToolbarButton>
@@ -514,8 +516,8 @@ export function FormattingBar(explicitProps: FormattingBarProps) {
           onClick={() => handleFormat('subscript')}
           active={currentFormatting.subscript}
           disabled={disabled}
-          title="Subscript (Ctrl+=)"
-          ariaLabel="Subscript"
+          title={t('formattingBar.subscriptShortcut')}
+          ariaLabel={t('formattingBar.subscript')}
         >
           <MaterialSymbol name="subscript" size={ICON_SIZE} />
         </ToolbarButton>
@@ -523,7 +525,7 @@ export function FormattingBar(explicitProps: FormattingBarProps) {
 
       {/* Alignment Dropdown */}
       {showAlignmentButtons && (
-        <ToolbarGroup label="Alignment">
+        <ToolbarGroup label={t('formattingBar.groups.alignment')}>
           <AlignmentButtons
             value={currentFormatting.alignment || 'left'}
             onChange={handleAlignmentChange}
@@ -534,7 +536,7 @@ export function FormattingBar(explicitProps: FormattingBarProps) {
 
       {/* List Buttons and Line Spacing */}
       {(showListButtons || showLineSpacingPicker) && (
-        <ToolbarGroup label="List formatting">
+        <ToolbarGroup label={t('formattingBar.groups.listFormatting')}>
           {showListButtons && (
             <ListButtons
               listState={currentFormatting.listState || createDefaultListState()}
@@ -560,7 +562,7 @@ export function FormattingBar(explicitProps: FormattingBarProps) {
 
       {/* Image controls - shown when image is selected */}
       {imageContext && onImageWrapType && (
-        <ToolbarGroup label="Image">
+        <ToolbarGroup label={t('formattingBar.groups.image')}>
           <ImageWrapDropdown
             imageContext={imageContext}
             onChange={onImageWrapType}
@@ -573,8 +575,8 @@ export function FormattingBar(explicitProps: FormattingBarProps) {
             <ToolbarButton
               onClick={onOpenImageProperties}
               disabled={disabled}
-              title="Image properties (alt text, border)..."
-              ariaLabel="Image properties"
+              title={t('formattingBar.imagePropertiesShortcut')}
+              ariaLabel={t('formattingBar.imageProperties')}
             >
               <MaterialSymbol name="tune" size={ICON_SIZE} />
             </ToolbarButton>
@@ -584,7 +586,7 @@ export function FormattingBar(explicitProps: FormattingBarProps) {
 
       {/* Table Options - shown when cursor is in a table */}
       {tableContext?.isInTable && onTableAction && (
-        <ToolbarGroup label="Table">
+        <ToolbarGroup label={t('formattingBar.groups.table')}>
           <TableBorderPicker onAction={handleTableAction} disabled={disabled} />
           <TableBorderColorPicker
             onAction={handleTableAction}
@@ -615,8 +617,8 @@ export function FormattingBar(explicitProps: FormattingBarProps) {
       <ToolbarButton
         onClick={() => handleFormat('clearFormatting')}
         disabled={disabled}
-        title="Clear formatting"
-        ariaLabel="Clear formatting"
+        title={t('formattingBar.clearFormatting')}
+        ariaLabel={t('formattingBar.clearFormatting')}
       >
         <MaterialSymbol name="format_clear" size={ICON_SIZE} />
       </ToolbarButton>

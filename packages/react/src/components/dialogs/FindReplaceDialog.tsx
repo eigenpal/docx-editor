@@ -11,6 +11,7 @@
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import type { CSSProperties, KeyboardEvent, ChangeEvent } from 'react';
+import { useTranslation } from '../../i18n';
 
 // Re-export types and utilities so existing imports still work
 export type { FindMatch, FindOptions, FindResult, HighlightOptions } from './findReplaceUtils';
@@ -299,6 +300,8 @@ export function FindReplaceDialog({
   className,
   style,
 }: FindReplaceDialogProps): React.ReactElement | null {
+  const { t } = useTranslation();
+
   // State
   const [searchText, setSearchText] = useState('');
   const [replaceText, setReplaceText] = useState('');
@@ -538,14 +541,16 @@ export function FindReplaceDialog({
         {/* Header */}
         <div className="docx-find-replace-dialog-header" style={DIALOG_HEADER_STYLE}>
           <h2 id="find-replace-dialog-title" style={DIALOG_TITLE_STYLE}>
-            {showReplace ? 'Find and Replace' : 'Find'}
+            {showReplace
+              ? t('dialogs.findReplace.titleFindReplace')
+              : t('dialogs.findReplace.titleFind')}
           </h2>
           <button
             type="button"
             className="docx-find-replace-dialog-close"
             style={CLOSE_BUTTON_STYLE}
             onClick={onClose}
-            aria-label="Close dialog"
+            aria-label={t('common.closeDialog')}
           >
             &times;
           </button>
@@ -556,7 +561,7 @@ export function FindReplaceDialog({
           {/* Find row */}
           <div className="docx-find-replace-dialog-row" style={ROW_STYLE}>
             <label htmlFor="find-text" style={LABEL_STYLE}>
-              Find:
+              {t('dialogs.findReplace.findLabel')}
             </label>
             <input
               ref={searchInputRef}
@@ -574,8 +579,8 @@ export function FindReplaceDialog({
                   performSearch();
                 }
               }}
-              placeholder="Enter text to find..."
-              aria-label="Find text"
+              placeholder={t('dialogs.findReplace.findPlaceholder')}
+              aria-label={t('dialogs.findReplace.findAriaLabel')}
             />
             <div style={{ display: 'flex', gap: '4px' }}>
               <button
@@ -584,8 +589,8 @@ export function FindReplaceDialog({
                 style={hasMatches ? NAV_BUTTON_STYLE : NAV_BUTTON_DISABLED_STYLE}
                 onClick={handleFindPrevious}
                 disabled={!hasMatches}
-                aria-label="Find previous"
-                title="Find Previous (Shift+Enter)"
+                aria-label={t('dialogs.findReplace.findPrevious')}
+                title={t('dialogs.findReplace.findPreviousTitle')}
               >
                 <ChevronUpIcon />
               </button>
@@ -595,8 +600,8 @@ export function FindReplaceDialog({
                 style={hasMatches ? NAV_BUTTON_STYLE : NAV_BUTTON_DISABLED_STYLE}
                 onClick={handleFindNext}
                 disabled={!hasMatches}
-                aria-label="Find next"
-                title="Find Next (Enter)"
+                aria-label={t('dialogs.findReplace.findNext')}
+                title={t('dialogs.findReplace.findNextTitle')}
               >
                 <ChevronDownIcon />
               </button>
@@ -606,12 +611,15 @@ export function FindReplaceDialog({
           {/* Status line */}
           {hasMatches && (
             <div className="docx-find-replace-dialog-status" style={STATUS_STYLE}>
-              {result.currentIndex + 1} of {result.totalCount} matches
+              {t('dialogs.findReplace.matchCount', {
+                current: result.currentIndex + 1,
+                total: result.totalCount,
+              })}
             </div>
           )}
           {noMatches && (
             <div className="docx-find-replace-dialog-status" style={NO_RESULTS_STYLE}>
-              No results found
+              {t('dialogs.findReplace.noResults')}
             </div>
           )}
 
@@ -620,7 +628,7 @@ export function FindReplaceDialog({
             <>
               <div className="docx-find-replace-dialog-row" style={ROW_STYLE}>
                 <label htmlFor="replace-text" style={LABEL_STYLE}>
-                  Replace:
+                  {t('dialogs.findReplace.replaceLabel')}
                 </label>
                 <input
                   ref={replaceInputRef}
@@ -633,8 +641,8 @@ export function FindReplaceDialog({
                   onKeyDown={handleReplaceKeyDown}
                   onFocus={() => setReplaceFocused(true)}
                   onBlur={() => setReplaceFocused(false)}
-                  placeholder="Enter replacement text..."
-                  aria-label="Replace text"
+                  placeholder={t('dialogs.findReplace.replacePlaceholder')}
+                  aria-label={t('dialogs.findReplace.replaceAriaLabel')}
                 />
                 <div style={BUTTON_CONTAINER_STYLE}>
                   <button
@@ -643,9 +651,9 @@ export function FindReplaceDialog({
                     style={hasMatches ? BUTTON_BASE_STYLE : BUTTON_DISABLED_STYLE}
                     onClick={handleReplace}
                     disabled={!hasMatches}
-                    title="Replace current match"
+                    title={t('dialogs.findReplace.replaceCurrentTitle')}
                   >
-                    Replace
+                    {t('dialogs.findReplace.replaceButton')}
                   </button>
                   <button
                     type="button"
@@ -653,9 +661,9 @@ export function FindReplaceDialog({
                     style={hasMatches ? BUTTON_BASE_STYLE : BUTTON_DISABLED_STYLE}
                     onClick={handleReplaceAll}
                     disabled={!hasMatches}
-                    title="Replace all matches"
+                    title={t('dialogs.findReplace.replaceAllTitle')}
                   >
-                    Replace All
+                    {t('dialogs.findReplace.replaceAllButton')}
                   </button>
                 </div>
               </div>
@@ -671,7 +679,7 @@ export function FindReplaceDialog({
                 checked={matchCase}
                 onChange={(e) => setMatchCase(e.target.checked)}
               />
-              Match case
+              {t('dialogs.findReplace.matchCase')}
             </label>
             <label className="docx-find-replace-dialog-option" style={CHECKBOX_LABEL_STYLE}>
               <input
@@ -680,7 +688,7 @@ export function FindReplaceDialog({
                 checked={matchWholeWord}
                 onChange={(e) => setMatchWholeWord(e.target.checked)}
               />
-              Whole words
+              {t('dialogs.findReplace.wholeWords')}
             </label>
             {!showReplace && (
               <button
@@ -695,7 +703,7 @@ export function FindReplaceDialog({
                 }}
                 onClick={toggleReplaceMode}
               >
-                + Replace
+                {t('dialogs.findReplace.toggleReplace')}
               </button>
             )}
           </div>

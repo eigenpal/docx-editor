@@ -11,16 +11,17 @@ import React, { useState, useCallback, useEffect } from 'react';
 import type { CSSProperties } from 'react';
 import type { SectionProperties } from '@eigenpal/docx-core/types/document';
 import { TWIPS_PER_INCH } from '@eigenpal/docx-core/utils/units';
+import { useTranslation } from '../../i18n';
 
 /** Common page sizes in twips (width x height in portrait orientation) */
 const PAGE_SIZES = [
-  { label: 'Letter (8.5" × 11")', width: 12240, height: 15840 },
-  { label: 'A4 (8.27" × 11.69")', width: 11906, height: 16838 },
-  { label: 'Legal (8.5" × 14")', width: 12240, height: 20160 },
-  { label: 'A3 (11.69" × 16.54")', width: 16838, height: 23811 },
-  { label: 'A5 (5.83" × 8.27")', width: 8391, height: 11906 },
-  { label: 'B5 (6.93" × 9.84")', width: 9979, height: 14175 },
-  { label: 'Executive (7.25" × 10.5")', width: 10440, height: 15120 },
+  { labelKey: 'dialogs.pageSetup.pageSizes.letter' as const, width: 12240, height: 15840 },
+  { labelKey: 'dialogs.pageSetup.pageSizes.a4' as const, width: 11906, height: 16838 },
+  { labelKey: 'dialogs.pageSetup.pageSizes.legal' as const, width: 12240, height: 20160 },
+  { labelKey: 'dialogs.pageSetup.pageSizes.a3' as const, width: 16838, height: 23811 },
+  { labelKey: 'dialogs.pageSetup.pageSizes.a5' as const, width: 8391, height: 11906 },
+  { labelKey: 'dialogs.pageSetup.pageSizes.b5' as const, width: 9979, height: 14175 },
+  { labelKey: 'dialogs.pageSetup.pageSizes.executive' as const, width: 10440, height: 15120 },
 ] as const;
 
 // ============================================================================
@@ -164,6 +165,7 @@ export function PageSetupDialog({
   onApply,
   currentProps,
 }: PageSetupDialogProps): React.ReactElement | null {
+  const { t } = useTranslation();
   const [pageWidth, setPageWidth] = useState(DEFAULT_WIDTH);
   const [pageHeight, setPageHeight] = useState(DEFAULT_HEIGHT);
   const [orientation, setOrientation] = useState<'portrait' | 'landscape'>('portrait');
@@ -254,47 +256,47 @@ export function PageSetupDialog({
         onClick={(e) => e.stopPropagation()}
         onMouseDown={(e) => e.stopPropagation()}
         role="dialog"
-        aria-label="Page setup"
+        aria-label={t('dialogs.pageSetup.title')}
       >
-        <div style={headerStyle}>Page Setup</div>
+        <div style={headerStyle}>{t('dialogs.pageSetup.title')}</div>
 
         <div style={bodyStyle}>
           {/* Page size section */}
-          <div style={sectionLabelStyle}>Page Size</div>
+          <div style={sectionLabelStyle}>{t('dialogs.pageSetup.pageSize')}</div>
 
           <div style={rowStyle}>
-            <label style={labelStyle}>Size</label>
+            <label style={labelStyle}>{t('dialogs.pageSetup.sizeLabel')}</label>
             <select
               style={selectStyle}
               value={sizeIndex}
               onChange={(e) => handlePageSizeChange(Number(e.target.value))}
             >
               {PAGE_SIZES.map((size, i) => (
-                <option key={size.label} value={i}>
-                  {size.label}
+                <option key={size.labelKey} value={i}>
+                  {t(size.labelKey)}
                 </option>
               ))}
-              {sizeIndex < 0 && <option value={-1}>Custom</option>}
+              {sizeIndex < 0 && <option value={-1}>{t('dialogs.pageSetup.custom')}</option>}
             </select>
           </div>
 
           <div style={rowStyle}>
-            <label style={labelStyle}>Orientation</label>
+            <label style={labelStyle}>{t('dialogs.pageSetup.orientation')}</label>
             <select
               style={selectStyle}
               value={orientation}
               onChange={(e) => handleOrientationChange(e.target.value as 'portrait' | 'landscape')}
             >
-              <option value="portrait">Portrait</option>
-              <option value="landscape">Landscape</option>
+              <option value="portrait">{t('dialogs.pageSetup.portrait')}</option>
+              <option value="landscape">{t('dialogs.pageSetup.landscape')}</option>
             </select>
           </div>
 
           {/* Margins section */}
-          <div style={{ ...sectionLabelStyle, marginTop: 4 }}>Margins</div>
+          <div style={{ ...sectionLabelStyle, marginTop: 4 }}>{t('dialogs.pageSetup.margins')}</div>
 
           <div style={rowStyle}>
-            <label style={labelStyle}>Top</label>
+            <label style={labelStyle}>{t('dialogs.pageSetup.top')}</label>
             <input
               type="number"
               style={inputStyle}
@@ -308,7 +310,7 @@ export function PageSetupDialog({
           </div>
 
           <div style={rowStyle}>
-            <label style={labelStyle}>Bottom</label>
+            <label style={labelStyle}>{t('dialogs.pageSetup.bottom')}</label>
             <input
               type="number"
               style={inputStyle}
@@ -322,7 +324,7 @@ export function PageSetupDialog({
           </div>
 
           <div style={rowStyle}>
-            <label style={labelStyle}>Left</label>
+            <label style={labelStyle}>{t('dialogs.pageSetup.left')}</label>
             <input
               type="number"
               style={inputStyle}
@@ -336,7 +338,7 @@ export function PageSetupDialog({
           </div>
 
           <div style={rowStyle}>
-            <label style={labelStyle}>Right</label>
+            <label style={labelStyle}>{t('dialogs.pageSetup.right')}</label>
             <input
               type="number"
               style={inputStyle}
@@ -352,7 +354,7 @@ export function PageSetupDialog({
 
         <div style={footerStyle}>
           <button type="button" style={btnStyle} onClick={onClose}>
-            Cancel
+            {t('common.cancel')}
           </button>
           <button
             type="button"
@@ -364,7 +366,7 @@ export function PageSetupDialog({
             }}
             onClick={handleApply}
           >
-            Apply
+            {t('common.apply')}
           </button>
         </div>
       </div>

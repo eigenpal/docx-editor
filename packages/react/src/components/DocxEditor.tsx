@@ -48,6 +48,8 @@ import type { Comment, BlockContent, ParagraphContent } from '@eigenpal/docx-cor
 import { ErrorBoundary, ErrorProvider } from './ErrorBoundary';
 import type { TableAction } from './ui/TableToolbar';
 import { mapHexToHighlightName } from './toolbarUtils';
+import { LocaleProvider } from '../i18n';
+import type { PartialLocaleStrings } from '../i18n';
 import { HorizontalRuler } from './ui/HorizontalRuler';
 import { VerticalRuler } from './ui/VerticalRuler';
 import { type PrintOptions } from './ui/PrintPreview';
@@ -322,6 +324,8 @@ export interface DocxEditorProps {
   documentNameEditable?: boolean;
   /** Custom right-side actions for the title bar */
   renderTitleBarRight?: () => ReactNode;
+  /** Locale overrides for i18n. Deep-merged with English defaults. */
+  locale?: PartialLocaleStrings;
 }
 
 /**
@@ -815,6 +819,7 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
     onDocumentNameChange,
     documentNameEditable = true,
     renderTitleBarRight,
+    locale,
   },
   ref
 ) {
@@ -3691,540 +3696,544 @@ body { background: white; }
   );
 
   return (
-    <ErrorProvider>
-      <ErrorBoundary onError={handleEditorError}>
-        <div
-          ref={containerRef}
-          className={`ep-root docx-editor ${className}`}
-          style={containerStyle}
-          data-testid="docx-editor"
-        >
-          {/* Main content area */}
-          <div style={mainContentStyle}>
-            {/* Wrapper for toolbar + scroll container + outline overlay */}
-            <div
-              style={{
-                position: 'relative',
-                flex: 1,
-                minHeight: 0,
-                minWidth: 0,
-                display: 'flex',
-                flexDirection: 'column',
-              }}
-            >
-              {/* Toolbar - above the scroll container so scrollbar doesn't extend behind it */}
-              {/* Hide toolbar only when readOnly prop is explicitly set (not from viewing mode) */}
-              {showToolbar && !readOnlyProp && (
-                <div
-                  ref={toolbarRefCallback}
-                  className="z-50 flex flex-col gap-0 bg-white shadow-sm flex-shrink-0"
-                >
-                  <EditorToolbar
-                    currentFormatting={state.selectionFormatting}
-                    onFormat={handleFormat}
-                    onUndo={undoActiveEditor}
-                    onRedo={redoActiveEditor}
-                    canUndo={true}
-                    canRedo={true}
-                    disabled={readOnly}
-                    documentStyles={history.state?.package.styles?.styles}
-                    theme={history.state?.package.theme || theme}
-                    showPrintButton={showPrintButton}
-                    onPrint={handleDirectPrint}
-                    showZoomControl={showZoomControl}
-                    zoom={state.zoom}
-                    onZoomChange={handleZoomChange}
-                    onRefocusEditor={focusActiveEditor}
-                    onInsertTable={handleInsertTable}
-                    showTableInsert={true}
-                    onInsertImage={handleInsertImageClick}
-                    onInsertPageBreak={handleInsertPageBreak}
-                    onInsertTOC={handleInsertTOC}
-                    imageContext={state.pmImageContext}
-                    onImageWrapType={handleImageWrapType}
-                    onImageTransform={handleImageTransform}
-                    onOpenImageProperties={handleOpenImageProperties}
-                    onPageSetup={handleOpenPageSetup}
-                    tableContext={state.pmTableContext}
-                    onTableAction={handleTableAction}
-                  >
-                    <EditorToolbar.TitleBar>
-                      {renderLogo && <EditorToolbar.Logo>{renderLogo()}</EditorToolbar.Logo>}
-                      {documentName !== undefined && (
-                        <EditorToolbar.DocumentName
-                          value={documentName}
-                          onChange={onDocumentNameChange}
-                          editable={documentNameEditable}
-                        />
-                      )}
-                      {renderTitleBarRight && (
-                        <EditorToolbar.TitleBarRight>
-                          {renderTitleBarRight()}
-                        </EditorToolbar.TitleBarRight>
-                      )}
-                      <EditorToolbar.MenuBar />
-                    </EditorToolbar.TitleBar>
-                    <EditorToolbar.FormattingBar>{toolbarChildren}</EditorToolbar.FormattingBar>
-                  </EditorToolbar>
-
-                  {/* Horizontal Ruler - sticky with toolbar */}
-                  {showRuler && (
-                    <div
-                      className="flex justify-center px-5 py-1 overflow-x-auto flex-shrink-0 bg-doc-bg"
-                      style={{
-                        paddingRight: sidebarOpen
-                          ? `calc(20px + ${SIDEBAR_DOCUMENT_SHIFT * 2}px)`
-                          : undefined,
-                        transition: 'padding 0.2s ease',
-                      }}
-                    >
-                      <HorizontalRuler
-                        sectionProps={history.state?.package.document?.finalSectionProperties}
-                        zoom={state.zoom}
-                        unit={rulerUnit}
-                        editable={!readOnly}
-                        onLeftMarginChange={handleLeftMarginChange}
-                        onRightMarginChange={handleRightMarginChange}
-                        indentLeft={state.paragraphIndentLeft}
-                        indentRight={state.paragraphIndentRight}
-                        onIndentLeftChange={handleIndentLeftChange}
-                        onIndentRightChange={handleIndentRightChange}
-                        showFirstLineIndent={true}
-                        firstLineIndent={state.paragraphFirstLineIndent}
-                        hangingIndent={state.paragraphHangingIndent}
-                        onFirstLineIndentChange={handleFirstLineIndentChange}
-                        tabStops={state.paragraphTabs}
-                        onTabStopRemove={handleTabStopRemove}
-                      />
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {/* Editor container - this is the scroll container (toolbar is above, not inside) */}
-              <div ref={scrollContainerRef} style={editorContainerStyle}>
-                {/* Editor content wrapper */}
-                <div style={{ display: 'flex', flex: 1, minHeight: 0, position: 'relative' }}>
-                  {/* Editor content area */}
+    <LocaleProvider locale={locale}>
+      <ErrorProvider>
+        <ErrorBoundary onError={handleEditorError}>
+          <div
+            ref={containerRef}
+            className={`ep-root docx-editor ${className}`}
+            style={containerStyle}
+            data-testid="docx-editor"
+          >
+            {/* Main content area */}
+            <div style={mainContentStyle}>
+              {/* Wrapper for toolbar + scroll container + outline overlay */}
+              <div
+                style={{
+                  position: 'relative',
+                  flex: 1,
+                  minHeight: 0,
+                  minWidth: 0,
+                  display: 'flex',
+                  flexDirection: 'column',
+                }}
+              >
+                {/* Toolbar - above the scroll container so scrollbar doesn't extend behind it */}
+                {/* Hide toolbar only when readOnly prop is explicitly set (not from viewing mode) */}
+                {showToolbar && !readOnlyProp && (
                   <div
-                    ref={editorContentRef}
-                    style={{ position: 'relative', flex: 1, minWidth: 0 }}
-                    onMouseDown={(e) => {
-                      // Focus editor when clicking on the background area (not the editor itself)
-                      // Using mouseDown for immediate response before focus can be lost
-                      if (e.target === e.currentTarget) {
-                        e.preventDefault();
-                        pagedEditorRef.current?.focus();
-                      }
-                    }}
-                    onContextMenu={handleEditorContextMenu}
+                    ref={toolbarRefCallback}
+                    className="z-50 flex flex-col gap-0 bg-white shadow-sm flex-shrink-0"
                   >
-                    {/* Vertical Ruler - fixed on left edge (hidden when readOnly prop is set) */}
-                    {showRuler && !readOnlyProp && (
+                    <EditorToolbar
+                      currentFormatting={state.selectionFormatting}
+                      onFormat={handleFormat}
+                      onUndo={undoActiveEditor}
+                      onRedo={redoActiveEditor}
+                      canUndo={true}
+                      canRedo={true}
+                      disabled={readOnly}
+                      documentStyles={history.state?.package.styles?.styles}
+                      theme={history.state?.package.theme || theme}
+                      showPrintButton={showPrintButton}
+                      onPrint={handleDirectPrint}
+                      showZoomControl={showZoomControl}
+                      zoom={state.zoom}
+                      onZoomChange={handleZoomChange}
+                      onRefocusEditor={focusActiveEditor}
+                      onInsertTable={handleInsertTable}
+                      showTableInsert={true}
+                      onInsertImage={handleInsertImageClick}
+                      onInsertPageBreak={handleInsertPageBreak}
+                      onInsertTOC={handleInsertTOC}
+                      imageContext={state.pmImageContext}
+                      onImageWrapType={handleImageWrapType}
+                      onImageTransform={handleImageTransform}
+                      onOpenImageProperties={handleOpenImageProperties}
+                      onPageSetup={handleOpenPageSetup}
+                      tableContext={state.pmTableContext}
+                      onTableAction={handleTableAction}
+                    >
+                      <EditorToolbar.TitleBar>
+                        {renderLogo && <EditorToolbar.Logo>{renderLogo()}</EditorToolbar.Logo>}
+                        {documentName !== undefined && (
+                          <EditorToolbar.DocumentName
+                            value={documentName}
+                            onChange={onDocumentNameChange}
+                            editable={documentNameEditable}
+                          />
+                        )}
+                        {renderTitleBarRight && (
+                          <EditorToolbar.TitleBarRight>
+                            {renderTitleBarRight()}
+                          </EditorToolbar.TitleBarRight>
+                        )}
+                        <EditorToolbar.MenuBar />
+                      </EditorToolbar.TitleBar>
+                      <EditorToolbar.FormattingBar>{toolbarChildren}</EditorToolbar.FormattingBar>
+                    </EditorToolbar>
+
+                    {/* Horizontal Ruler - sticky with toolbar */}
+                    {showRuler && (
                       <div
+                        className="flex justify-center px-5 py-1 overflow-x-auto flex-shrink-0 bg-doc-bg"
                         style={{
-                          position: 'absolute',
-                          left: 0,
-                          top: 0,
-                          zIndex: 10,
-                          paddingTop: 48, // paged-editor__pages and layout padding-top
+                          paddingRight: sidebarOpen
+                            ? `calc(20px + ${SIDEBAR_DOCUMENT_SHIFT * 2}px)`
+                            : undefined,
+                          transition: 'padding 0.2s ease',
                         }}
                       >
-                        <VerticalRuler
+                        <HorizontalRuler
                           sectionProps={history.state?.package.document?.finalSectionProperties}
                           zoom={state.zoom}
                           unit={rulerUnit}
                           editable={!readOnly}
-                          onTopMarginChange={handleTopMarginChange}
-                          onBottomMarginChange={handleBottomMarginChange}
+                          onLeftMarginChange={handleLeftMarginChange}
+                          onRightMarginChange={handleRightMarginChange}
+                          indentLeft={state.paragraphIndentLeft}
+                          indentRight={state.paragraphIndentRight}
+                          onIndentLeftChange={handleIndentLeftChange}
+                          onIndentRightChange={handleIndentRightChange}
+                          showFirstLineIndent={true}
+                          firstLineIndent={state.paragraphFirstLineIndent}
+                          hangingIndent={state.paragraphHangingIndent}
+                          onFirstLineIndentChange={handleFirstLineIndentChange}
+                          tabStops={state.paragraphTabs}
+                          onTabStopRemove={handleTabStopRemove}
                         />
                       </div>
                     )}
-                    {/* Brighten highlight for the focused/expanded sidebar item */}
-                    {expandedSidebarItem && expandedSidebarItem.startsWith('comment-') && (
-                      <style>{`.paged-editor__pages [data-comment-id="${expandedSidebarItem.replace('comment-', '')}"] { background-color: rgba(255, 212, 0, 0.35) !important; border-bottom: 2px solid rgba(255, 212, 0, 0.7) !important; }`}</style>
-                    )}
-                    {expandedSidebarItem?.startsWith('tc-') && (
-                      <style>{`
+                  </div>
+                )}
+
+                {/* Editor container - this is the scroll container (toolbar is above, not inside) */}
+                <div ref={scrollContainerRef} style={editorContainerStyle}>
+                  {/* Editor content wrapper */}
+                  <div style={{ display: 'flex', flex: 1, minHeight: 0, position: 'relative' }}>
+                    {/* Editor content area */}
+                    <div
+                      ref={editorContentRef}
+                      style={{ position: 'relative', flex: 1, minWidth: 0 }}
+                      onMouseDown={(e) => {
+                        // Focus editor when clicking on the background area (not the editor itself)
+                        // Using mouseDown for immediate response before focus can be lost
+                        if (e.target === e.currentTarget) {
+                          e.preventDefault();
+                          pagedEditorRef.current?.focus();
+                        }
+                      }}
+                      onContextMenu={handleEditorContextMenu}
+                    >
+                      {/* Vertical Ruler - fixed on left edge (hidden when readOnly prop is set) */}
+                      {showRuler && !readOnlyProp && (
+                        <div
+                          style={{
+                            position: 'absolute',
+                            left: 0,
+                            top: 0,
+                            zIndex: 10,
+                            paddingTop: 48, // paged-editor__pages and layout padding-top
+                          }}
+                        >
+                          <VerticalRuler
+                            sectionProps={history.state?.package.document?.finalSectionProperties}
+                            zoom={state.zoom}
+                            unit={rulerUnit}
+                            editable={!readOnly}
+                            onTopMarginChange={handleTopMarginChange}
+                            onBottomMarginChange={handleBottomMarginChange}
+                          />
+                        </div>
+                      )}
+                      {/* Brighten highlight for the focused/expanded sidebar item */}
+                      {expandedSidebarItem && expandedSidebarItem.startsWith('comment-') && (
+                        <style>{`.paged-editor__pages [data-comment-id="${expandedSidebarItem.replace('comment-', '')}"] { background-color: rgba(255, 212, 0, 0.35) !important; border-bottom: 2px solid rgba(255, 212, 0, 0.7) !important; }`}</style>
+                      )}
+                      {expandedSidebarItem?.startsWith('tc-') && (
+                        <style>{`
                           .paged-editor__pages .docx-insertion[data-revision-id="${expandedSidebarItem.split('-')[1]}"] { background-color: rgba(52, 168, 83, 0.2) !important; border-bottom: 2px solid #2e7d32 !important; }
                           .paged-editor__pages .docx-deletion[data-revision-id="${expandedSidebarItem.split('-')[1]}"] { background-color: rgba(211, 47, 47, 0.2) !important; text-decoration-thickness: 2px !important; }
                         `}</style>
-                    )}
-                    <PagedEditor
-                      ref={pagedEditorRef}
-                      document={history.state}
-                      styles={history.state?.package.styles}
-                      theme={history.state?.package.theme || theme}
-                      sectionProperties={history.state?.package.document?.finalSectionProperties}
-                      headerContent={headerContent}
-                      footerContent={footerContent}
-                      firstPageHeaderContent={firstPageHeaderContent}
-                      firstPageFooterContent={firstPageFooterContent}
-                      onHeaderFooterDoubleClick={handleHeaderFooterDoubleClick}
-                      hfEditMode={hfEditPosition}
-                      onBodyClick={handleBodyClick}
-                      zoom={state.zoom}
-                      readOnly={readOnly}
-                      extensionManager={extensionManager}
-                      onDocumentChange={handleDocumentChange}
-                      onSelectionChange={(_from, _to) => {
-                        // Extract full selection state from PM and use the standard handler
-                        const view = pagedEditorRef.current?.getView();
-                        if (view) {
-                          const selectionState = extractSelectionState(view.state);
-                          handleSelectionChange(selectionState);
-                        } else {
-                          handleSelectionChange(null);
-                        }
-                      }}
-                      externalPlugins={allExternalPlugins}
-                      onReady={(ref) => {
-                        onEditorViewReady?.(ref.getView()!);
-                      }}
-                      onRenderedDomContextReady={onRenderedDomContextReady}
-                      pluginOverlays={pluginOverlays}
-                      onHyperlinkClick={handleHyperlinkClick}
-                      onContextMenu={handleContextMenu}
-                      commentsSidebarOpen={sidebarOpen}
-                      onAnchorPositionsChange={setAnchorPositions}
-                      resolvedCommentIds={resolvedIdsForRender}
-                      scrollContainerRef={scrollContainerRef}
-                      sidebarOverlay={
-                        <>
-                          {allSidebarItems.length > 0 && (
-                            <UnifiedSidebar
-                              items={allSidebarItems}
+                      )}
+                      <PagedEditor
+                        ref={pagedEditorRef}
+                        document={history.state}
+                        styles={history.state?.package.styles}
+                        theme={history.state?.package.theme || theme}
+                        sectionProperties={history.state?.package.document?.finalSectionProperties}
+                        headerContent={headerContent}
+                        footerContent={footerContent}
+                        firstPageHeaderContent={firstPageHeaderContent}
+                        firstPageFooterContent={firstPageFooterContent}
+                        onHeaderFooterDoubleClick={handleHeaderFooterDoubleClick}
+                        hfEditMode={hfEditPosition}
+                        onBodyClick={handleBodyClick}
+                        zoom={state.zoom}
+                        readOnly={readOnly}
+                        extensionManager={extensionManager}
+                        onDocumentChange={handleDocumentChange}
+                        onSelectionChange={(_from, _to) => {
+                          // Extract full selection state from PM and use the standard handler
+                          const view = pagedEditorRef.current?.getView();
+                          if (view) {
+                            const selectionState = extractSelectionState(view.state);
+                            handleSelectionChange(selectionState);
+                          } else {
+                            handleSelectionChange(null);
+                          }
+                        }}
+                        externalPlugins={allExternalPlugins}
+                        onReady={(ref) => {
+                          onEditorViewReady?.(ref.getView()!);
+                        }}
+                        onRenderedDomContextReady={onRenderedDomContextReady}
+                        pluginOverlays={pluginOverlays}
+                        onHyperlinkClick={handleHyperlinkClick}
+                        onContextMenu={handleContextMenu}
+                        commentsSidebarOpen={sidebarOpen}
+                        onAnchorPositionsChange={setAnchorPositions}
+                        resolvedCommentIds={resolvedIdsForRender}
+                        scrollContainerRef={scrollContainerRef}
+                        sidebarOverlay={
+                          <>
+                            {allSidebarItems.length > 0 && (
+                              <UnifiedSidebar
+                                items={allSidebarItems}
+                                anchorPositions={anchorPositions}
+                                renderedDomContext={pluginRenderedDomContext ?? null}
+                                pageWidth={(() => {
+                                  const sp =
+                                    history.state?.package?.document?.finalSectionProperties;
+                                  return sp?.pageWidth ? Math.round(sp.pageWidth / 15) : 816;
+                                })()}
+                                zoom={state.zoom}
+                                editorContainerRef={scrollContainerRef}
+                                onExpandedItemChange={setExpandedSidebarItem}
+                              />
+                            )}
+                            <CommentMarginMarkers
+                              comments={comments}
                               anchorPositions={anchorPositions}
-                              renderedDomContext={pluginRenderedDomContext ?? null}
+                              zoom={state.zoom}
                               pageWidth={(() => {
                                 const sp = history.state?.package?.document?.finalSectionProperties;
                                 return sp?.pageWidth ? Math.round(sp.pageWidth / 15) : 816;
                               })()}
-                              zoom={state.zoom}
-                              editorContainerRef={scrollContainerRef}
-                              onExpandedItemChange={setExpandedSidebarItem}
+                              sidebarOpen={sidebarOpen}
+                              resolvedCommentIds={resolvedCommentIds}
+                              onMarkerClick={() => {
+                                setShowCommentsSidebar(true);
+                              }}
                             />
-                          )}
-                          <CommentMarginMarkers
-                            comments={comments}
-                            anchorPositions={anchorPositions}
-                            zoom={state.zoom}
-                            pageWidth={(() => {
-                              const sp = history.state?.package?.document?.finalSectionProperties;
-                              return sp?.pageWidth ? Math.round(sp.pageWidth / 15) : 816;
-                            })()}
-                            sidebarOpen={sidebarOpen}
-                            resolvedCommentIds={resolvedCommentIds}
-                            onMarkerClick={() => {
-                              setShowCommentsSidebar(true);
-                            }}
-                          />
-                        </>
-                      }
-                    />
+                          </>
+                        }
+                      />
 
-                    {/* Floating "add comment" button — appears on right edge of page at selection */}
-                    {floatingCommentBtn != null && !isAddingComment && !readOnly && (
-                      <Tooltip content="Add comment" side="bottom" delayMs={300}>
-                        <button
-                          type="button"
-                          onMouseDown={(e) => {
-                            e.preventDefault();
-                            e.stopPropagation();
-                            const view = pagedEditorRef.current?.getView();
-                            if (view) {
-                              const { from, to } = view.state.selection;
-                              if (from !== to) {
-                                setCommentSelectionRange({ from, to });
-                                const pendingMark = view.state.schema.marks.comment.create({
-                                  commentId: PENDING_COMMENT_ID,
-                                });
-                                const tr = view.state.tr.addMark(from, to, pendingMark);
-                                tr.setSelection(TextSelection.create(tr.doc, to));
-                                view.dispatch(tr);
+                      {/* Floating "add comment" button — appears on right edge of page at selection */}
+                      {floatingCommentBtn != null && !isAddingComment && !readOnly && (
+                        <Tooltip content="Add comment" side="bottom" delayMs={300}>
+                          <button
+                            type="button"
+                            onMouseDown={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              const view = pagedEditorRef.current?.getView();
+                              if (view) {
+                                const { from, to } = view.state.selection;
+                                if (from !== to) {
+                                  setCommentSelectionRange({ from, to });
+                                  const pendingMark = view.state.schema.marks.comment.create({
+                                    commentId: PENDING_COMMENT_ID,
+                                  });
+                                  const tr = view.state.tr.addMark(from, to, pendingMark);
+                                  tr.setSelection(TextSelection.create(tr.doc, to));
+                                  view.dispatch(tr);
+                                }
                               }
-                            }
-                            setAddCommentYPosition(floatingCommentBtn.top);
-                            setShowCommentsSidebar(true);
-                            setIsAddingComment(true);
-                            setFloatingCommentBtn(null);
-                          }}
-                          style={{
-                            position: 'absolute',
-                            top: floatingCommentBtn.top,
-                            left: floatingCommentBtn.left,
-                            transform: 'translate(-50%, -50%)',
-                            zIndex: 50,
-                            width: 28,
-                            height: 28,
-                            borderRadius: 6,
-                            border: '1px solid rgba(26, 115, 232, 0.3)',
-                            backgroundColor: '#fff',
-                            color: '#1a73e8',
-                            cursor: 'pointer',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            boxShadow: '0 1px 3px rgba(60,64,67,0.2)',
-                            transition: 'background-color 0.15s ease, box-shadow 0.15s ease',
-                          }}
-                          onMouseOver={(e) => {
-                            (e.currentTarget as HTMLButtonElement).style.backgroundColor =
-                              'rgba(26, 115, 232, 0.08)';
-                            (e.currentTarget as HTMLButtonElement).style.boxShadow =
-                              '0 1px 4px rgba(26, 115, 232, 0.3)';
-                          }}
-                          onMouseOut={(e) => {
-                            (e.currentTarget as HTMLButtonElement).style.backgroundColor = '#fff';
-                            (e.currentTarget as HTMLButtonElement).style.boxShadow =
-                              '0 1px 3px rgba(60,64,67,0.2)';
-                          }}
-                        >
-                          <MaterialSymbol name="add_comment" size={16} />
-                        </button>
-                      </Tooltip>
-                    )}
+                              setAddCommentYPosition(floatingCommentBtn.top);
+                              setShowCommentsSidebar(true);
+                              setIsAddingComment(true);
+                              setFloatingCommentBtn(null);
+                            }}
+                            style={{
+                              position: 'absolute',
+                              top: floatingCommentBtn.top,
+                              left: floatingCommentBtn.left,
+                              transform: 'translate(-50%, -50%)',
+                              zIndex: 50,
+                              width: 28,
+                              height: 28,
+                              borderRadius: 6,
+                              border: '1px solid rgba(26, 115, 232, 0.3)',
+                              backgroundColor: '#fff',
+                              color: '#1a73e8',
+                              cursor: 'pointer',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              boxShadow: '0 1px 3px rgba(60,64,67,0.2)',
+                              transition: 'background-color 0.15s ease, box-shadow 0.15s ease',
+                            }}
+                            onMouseOver={(e) => {
+                              (e.currentTarget as HTMLButtonElement).style.backgroundColor =
+                                'rgba(26, 115, 232, 0.08)';
+                              (e.currentTarget as HTMLButtonElement).style.boxShadow =
+                                '0 1px 4px rgba(26, 115, 232, 0.3)';
+                            }}
+                            onMouseOut={(e) => {
+                              (e.currentTarget as HTMLButtonElement).style.backgroundColor = '#fff';
+                              (e.currentTarget as HTMLButtonElement).style.boxShadow =
+                                '0 1px 3px rgba(60,64,67,0.2)';
+                            }}
+                          >
+                            <MaterialSymbol name="add_comment" size={16} />
+                          </button>
+                        </Tooltip>
+                      )}
 
-                    {/* Right-click context menu */}
-                    <TextContextMenu
-                      isOpen={contextMenu.isOpen}
-                      position={contextMenu.position}
-                      hasSelection={contextMenu.hasSelection}
-                      isEditable={!readOnly}
-                      items={contextMenuItems}
-                      onAction={handleContextMenuAction}
-                      onClose={() => setContextMenu((prev) => ({ ...prev, isOpen: false }))}
-                    />
+                      {/* Right-click context menu */}
+                      <TextContextMenu
+                        isOpen={contextMenu.isOpen}
+                        position={contextMenu.position}
+                        hasSelection={contextMenu.hasSelection}
+                        isEditable={!readOnly}
+                        items={contextMenuItems}
+                        onAction={handleContextMenuAction}
+                        onClose={() => setContextMenu((prev) => ({ ...prev, isOpen: false }))}
+                      />
 
-                    {/* Inline Header/Footer Editor — positioned over the target area */}
-                    {hfEditPosition &&
-                      (() => {
-                        const activeHf = hfEditIsFirstPage
-                          ? hfEditPosition === 'header'
-                            ? firstPageHeaderContent
-                            : firstPageFooterContent
-                          : hfEditPosition === 'header'
-                            ? headerContent
-                            : footerContent;
-                        if (!activeHf) return null;
-                        const targetEl = getHfTargetElement(hfEditPosition);
-                        const parentEl = editorContentRef.current;
-                        if (!targetEl || !parentEl) return null;
-                        return (
-                          <InlineHeaderFooterEditor
-                            ref={hfEditorRef}
-                            headerFooter={activeHf}
-                            position={hfEditPosition}
-                            styles={history.state?.package.styles}
-                            targetElement={targetEl}
-                            parentElement={parentEl}
-                            onSave={handleHeaderFooterSave}
-                            onClose={() => setHfEditPosition(null)}
-                            onSelectionChange={handleSelectionChange}
-                            onRemove={handleRemoveHeaderFooter}
-                          />
-                        );
-                      })()}
+                      {/* Inline Header/Footer Editor — positioned over the target area */}
+                      {hfEditPosition &&
+                        (() => {
+                          const activeHf = hfEditIsFirstPage
+                            ? hfEditPosition === 'header'
+                              ? firstPageHeaderContent
+                              : firstPageFooterContent
+                            : hfEditPosition === 'header'
+                              ? headerContent
+                              : footerContent;
+                          if (!activeHf) return null;
+                          const targetEl = getHfTargetElement(hfEditPosition);
+                          const parentEl = editorContentRef.current;
+                          if (!targetEl || !parentEl) return null;
+                          return (
+                            <InlineHeaderFooterEditor
+                              ref={hfEditorRef}
+                              headerFooter={activeHf}
+                              position={hfEditPosition}
+                              styles={history.state?.package.styles}
+                              targetElement={targetEl}
+                              parentElement={parentEl}
+                              onSave={handleHeaderFooterSave}
+                              onClose={() => setHfEditPosition(null)}
+                              onSelectionChange={handleSelectionChange}
+                              onRemove={handleRemoveHeaderFooter}
+                            />
+                          );
+                        })()}
+                    </div>
                   </div>
+                  {/* end editor flex wrapper */}
                 </div>
-                {/* end editor flex wrapper */}
+                {/* end scroll container */}
+
+                {/* Page indicator — Google Docs style, next to scrollbar while scrolling */}
+                {scrollPageInfo.totalPages > 1 && (
+                  <div
+                    style={{
+                      position: 'absolute',
+                      right: 24,
+                      top: '50%',
+                      transform: 'translateY(-50%)',
+                      backgroundColor: 'rgba(0, 0, 0, 0.7)',
+                      color: 'white',
+                      padding: '6px 12px',
+                      borderRadius: '4px',
+                      fontSize: '12px',
+                      fontFamily:
+                        '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+                      fontWeight: 500,
+                      whiteSpace: 'nowrap',
+                      pointerEvents: 'none',
+                      zIndex: 1000,
+                      opacity: scrollPageInfo.visible ? 1 : 0,
+                      transition: 'opacity 0.3s ease',
+                      userSelect: 'none',
+                    }}
+                    aria-live="polite"
+                    role="status"
+                  >
+                    {scrollPageInfo.currentPage} of {scrollPageInfo.totalPages}
+                  </div>
+                )}
+
+                {/* Document outline sidebar — absolutely positioned, doesn't scroll */}
+                {showOutline && (
+                  <DocumentOutline
+                    headings={outlineHeadings}
+                    onHeadingClick={handleHeadingInfoClick}
+                    onClose={() => setShowOutline(false)}
+                    topOffset={toolbarHeight}
+                  />
+                )}
+
+                {/* Unified sidebar (comments + plugin items) rendered inside PagedEditor via sidebarOverlay prop */}
+
+                {/* Outline toggle button — absolutely positioned below toolbar */}
+                {showOutlineButton && !showOutline && (
+                  <button
+                    className="docx-outline-nav"
+                    onClick={handleToggleOutline}
+                    onMouseDown={(e) => e.stopPropagation()}
+                    title="Show document outline"
+                    style={{
+                      position: 'absolute',
+                      left: 48,
+                      top: toolbarHeight + 12,
+                      zIndex: 20,
+                      background: 'transparent',
+                      border: 'none',
+                      borderRadius: '50%',
+                      padding: 6,
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                    }}
+                  >
+                    <MaterialSymbol
+                      name="format_list_bulleted"
+                      size={20}
+                      style={{ color: '#444746' }}
+                    />
+                  </button>
+                )}
               </div>
-              {/* end scroll container */}
+              {/* end wrapper for scroll container + outline */}
+            </div>
 
-              {/* Page indicator — Google Docs style, next to scrollbar while scrolling */}
-              {scrollPageInfo.totalPages > 1 && (
-                <div
-                  style={{
-                    position: 'absolute',
-                    right: 24,
-                    top: '50%',
-                    transform: 'translateY(-50%)',
-                    backgroundColor: 'rgba(0, 0, 0, 0.7)',
-                    color: 'white',
-                    padding: '6px 12px',
-                    borderRadius: '4px',
-                    fontSize: '12px',
-                    fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
-                    fontWeight: 500,
-                    whiteSpace: 'nowrap',
-                    pointerEvents: 'none',
-                    zIndex: 1000,
-                    opacity: scrollPageInfo.visible ? 1 : 0,
-                    transition: 'opacity 0.3s ease',
-                    userSelect: 'none',
-                  }}
-                  aria-live="polite"
-                  role="status"
-                >
-                  {scrollPageInfo.currentPage} of {scrollPageInfo.totalPages}
-                </div>
-              )}
+            {/* Hyperlink popup (Google Docs-style) */}
+            <HyperlinkPopup
+              data={hyperlinkPopupData}
+              onNavigate={handleHyperlinkPopupNavigate}
+              onCopy={handleHyperlinkPopupCopy}
+              onEdit={handleHyperlinkPopupEdit}
+              onRemove={handleHyperlinkPopupRemove}
+              onClose={handleHyperlinkPopupClose}
+              readOnly={readOnly}
+            />
 
-              {/* Document outline sidebar — absolutely positioned, doesn't scroll */}
-              {showOutline && (
-                <DocumentOutline
-                  headings={outlineHeadings}
-                  onHeadingClick={handleHeadingInfoClick}
-                  onClose={() => setShowOutline(false)}
-                  topOffset={toolbarHeight}
+            {/* Right-click context menu */}
+            <TextContextMenu
+              isOpen={contextMenu.isOpen}
+              position={contextMenu.position}
+              hasSelection={contextMenu.hasSelection}
+              isEditable={!readOnly}
+              items={contextMenuItems}
+              onAction={handleContextMenuAction}
+              onClose={handleContextMenuClose}
+            />
+
+            {/* Toast notifications */}
+            <Toaster position="bottom-right" />
+
+            {/* Lazy-loaded dialogs — only fetched when first opened */}
+            <Suspense fallback={null}>
+              {findReplace.state.isOpen && (
+                <FindReplaceDialog
+                  isOpen={findReplace.state.isOpen}
+                  onClose={findReplace.close}
+                  onFind={handleFind}
+                  onFindNext={handleFindNext}
+                  onFindPrevious={handleFindPrevious}
+                  onReplace={handleReplace}
+                  onReplaceAll={handleReplaceAll}
+                  initialSearchText={findReplace.state.searchText}
+                  replaceMode={findReplace.state.replaceMode}
+                  currentResult={findResultRef.current}
                 />
               )}
-
-              {/* Unified sidebar (comments + plugin items) rendered inside PagedEditor via sidebarOverlay prop */}
-
-              {/* Outline toggle button — absolutely positioned below toolbar */}
-              {showOutlineButton && !showOutline && (
-                <button
-                  className="docx-outline-nav"
-                  onClick={handleToggleOutline}
-                  onMouseDown={(e) => e.stopPropagation()}
-                  title="Show document outline"
-                  style={{
-                    position: 'absolute',
-                    left: 48,
-                    top: toolbarHeight + 12,
-                    zIndex: 20,
-                    background: 'transparent',
-                    border: 'none',
-                    borderRadius: '50%',
-                    padding: 6,
-                    cursor: 'pointer',
-                    display: 'flex',
-                    alignItems: 'center',
-                  }}
-                >
-                  <MaterialSymbol
-                    name="format_list_bulleted"
-                    size={20}
-                    style={{ color: '#444746' }}
-                  />
-                </button>
+              {hyperlinkDialog.state.isOpen && (
+                <HyperlinkDialog
+                  isOpen={hyperlinkDialog.state.isOpen}
+                  onClose={hyperlinkDialog.close}
+                  onSubmit={handleHyperlinkSubmit}
+                  onRemove={hyperlinkDialog.state.isEditing ? handleHyperlinkRemove : undefined}
+                  initialData={hyperlinkDialog.state.initialData}
+                  selectedText={hyperlinkDialog.state.selectedText}
+                  isEditing={hyperlinkDialog.state.isEditing}
+                />
               )}
-            </div>
-            {/* end wrapper for scroll container + outline */}
-          </div>
-
-          {/* Hyperlink popup (Google Docs-style) */}
-          <HyperlinkPopup
-            data={hyperlinkPopupData}
-            onNavigate={handleHyperlinkPopupNavigate}
-            onCopy={handleHyperlinkPopupCopy}
-            onEdit={handleHyperlinkPopupEdit}
-            onRemove={handleHyperlinkPopupRemove}
-            onClose={handleHyperlinkPopupClose}
-            readOnly={readOnly}
-          />
-
-          {/* Right-click context menu */}
-          <TextContextMenu
-            isOpen={contextMenu.isOpen}
-            position={contextMenu.position}
-            hasSelection={contextMenu.hasSelection}
-            isEditable={!readOnly}
-            items={contextMenuItems}
-            onAction={handleContextMenuAction}
-            onClose={handleContextMenuClose}
-          />
-
-          {/* Toast notifications */}
-          <Toaster position="bottom-right" />
-
-          {/* Lazy-loaded dialogs — only fetched when first opened */}
-          <Suspense fallback={null}>
-            {findReplace.state.isOpen && (
-              <FindReplaceDialog
-                isOpen={findReplace.state.isOpen}
-                onClose={findReplace.close}
-                onFind={handleFind}
-                onFindNext={handleFindNext}
-                onFindPrevious={handleFindPrevious}
-                onReplace={handleReplace}
-                onReplaceAll={handleReplaceAll}
-                initialSearchText={findReplace.state.searchText}
-                replaceMode={findReplace.state.replaceMode}
-                currentResult={findResultRef.current}
-              />
-            )}
-            {hyperlinkDialog.state.isOpen && (
-              <HyperlinkDialog
-                isOpen={hyperlinkDialog.state.isOpen}
-                onClose={hyperlinkDialog.close}
-                onSubmit={handleHyperlinkSubmit}
-                onRemove={hyperlinkDialog.state.isEditing ? handleHyperlinkRemove : undefined}
-                initialData={hyperlinkDialog.state.initialData}
-                selectedText={hyperlinkDialog.state.selectedText}
-                isEditing={hyperlinkDialog.state.isEditing}
-              />
-            )}
-            {tablePropsOpen && (
-              <TablePropertiesDialog
-                isOpen={tablePropsOpen}
-                onClose={() => setTablePropsOpen(false)}
-                onApply={(props) => {
-                  const view = getActiveEditorView();
-                  if (view) {
-                    setTableProperties(props)(view.state, view.dispatch);
+              {tablePropsOpen && (
+                <TablePropertiesDialog
+                  isOpen={tablePropsOpen}
+                  onClose={() => setTablePropsOpen(false)}
+                  onApply={(props) => {
+                    const view = getActiveEditorView();
+                    if (view) {
+                      setTableProperties(props)(view.state, view.dispatch);
+                    }
+                  }}
+                  currentProps={
+                    state.pmTableContext?.table?.attrs as Record<string, unknown> | undefined
                   }
-                }}
-                currentProps={
-                  state.pmTableContext?.table?.attrs as Record<string, unknown> | undefined
-                }
-              />
-            )}
-            {imagePositionOpen && (
-              <ImagePositionDialog
-                isOpen={imagePositionOpen}
-                onClose={() => setImagePositionOpen(false)}
-                onApply={handleApplyImagePosition}
-              />
-            )}
-            {imagePropsOpen && (
-              <ImagePropertiesDialog
-                isOpen={imagePropsOpen}
-                onClose={() => setImagePropsOpen(false)}
-                onApply={handleApplyImageProperties}
-                currentData={
-                  state.pmImageContext
-                    ? {
-                        alt: state.pmImageContext.alt ?? undefined,
-                        borderWidth: state.pmImageContext.borderWidth ?? undefined,
-                        borderColor: state.pmImageContext.borderColor ?? undefined,
-                        borderStyle: state.pmImageContext.borderStyle ?? undefined,
-                      }
-                    : undefined
-                }
-              />
-            )}
-            {showPageSetup && (
-              <PageSetupDialog
-                isOpen={showPageSetup}
-                onClose={() => setShowPageSetup(false)}
-                onApply={handlePageSetupApply}
-                currentProps={history.state?.package.document?.finalSectionProperties}
-              />
-            )}
-            {footnotePropsOpen && (
-              <FootnotePropertiesDialog
-                isOpen={footnotePropsOpen}
-                onClose={() => setFootnotePropsOpen(false)}
-                onApply={handleApplyFootnoteProperties}
-                footnotePr={history.state?.package.document?.finalSectionProperties?.footnotePr}
-                endnotePr={history.state?.package.document?.finalSectionProperties?.endnotePr}
-              />
-            )}
-          </Suspense>
-          {/* InlineHeaderFooterEditor is rendered inside the editor content area (position:relative div) */}
-          {/* Hidden file input for image insertion */}
-          <input
-            ref={imageInputRef}
-            type="file"
-            accept="image/*"
-            style={{ display: 'none' }}
-            onChange={handleImageFileChange}
-          />
-        </div>
-      </ErrorBoundary>
-    </ErrorProvider>
+                />
+              )}
+              {imagePositionOpen && (
+                <ImagePositionDialog
+                  isOpen={imagePositionOpen}
+                  onClose={() => setImagePositionOpen(false)}
+                  onApply={handleApplyImagePosition}
+                />
+              )}
+              {imagePropsOpen && (
+                <ImagePropertiesDialog
+                  isOpen={imagePropsOpen}
+                  onClose={() => setImagePropsOpen(false)}
+                  onApply={handleApplyImageProperties}
+                  currentData={
+                    state.pmImageContext
+                      ? {
+                          alt: state.pmImageContext.alt ?? undefined,
+                          borderWidth: state.pmImageContext.borderWidth ?? undefined,
+                          borderColor: state.pmImageContext.borderColor ?? undefined,
+                          borderStyle: state.pmImageContext.borderStyle ?? undefined,
+                        }
+                      : undefined
+                  }
+                />
+              )}
+              {showPageSetup && (
+                <PageSetupDialog
+                  isOpen={showPageSetup}
+                  onClose={() => setShowPageSetup(false)}
+                  onApply={handlePageSetupApply}
+                  currentProps={history.state?.package.document?.finalSectionProperties}
+                />
+              )}
+              {footnotePropsOpen && (
+                <FootnotePropertiesDialog
+                  isOpen={footnotePropsOpen}
+                  onClose={() => setFootnotePropsOpen(false)}
+                  onApply={handleApplyFootnoteProperties}
+                  footnotePr={history.state?.package.document?.finalSectionProperties?.footnotePr}
+                  endnotePr={history.state?.package.document?.finalSectionProperties?.endnotePr}
+                />
+              )}
+            </Suspense>
+            {/* InlineHeaderFooterEditor is rendered inside the editor content area (position:relative div) */}
+            {/* Hidden file input for image insertion */}
+            <input
+              ref={imageInputRef}
+              type="file"
+              accept="image/*"
+              style={{ display: 'none' }}
+              onChange={handleImageFileChange}
+            />
+          </div>
+        </ErrorBoundary>
+      </ErrorProvider>
+    </LocaleProvider>
   );
 });
 

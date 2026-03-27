@@ -8,6 +8,7 @@
 
 import React, { useState, useCallback, useEffect } from 'react';
 import type { CSSProperties } from 'react';
+import { useTranslation } from '../../i18n';
 
 // ============================================================================
 // TYPES
@@ -137,6 +138,7 @@ export function ImagePropertiesDialog({
   onApply,
   currentData,
 }: ImagePropertiesDialogProps): React.ReactElement | null {
+  const { t } = useTranslation();
   const [alt, setAlt] = useState('');
   const [borderWidth, setBorderWidth] = useState(0);
   const [borderColor, setBorderColor] = useState('#000000');
@@ -176,27 +178,27 @@ export function ImagePropertiesDialog({
         style={dialogStyle}
         onClick={(e) => e.stopPropagation()}
         role="dialog"
-        aria-label="Image properties"
+        aria-label={t('dialogs.imageProperties.title')}
       >
-        <div style={headerStyle}>Image Properties</div>
+        <div style={headerStyle}>{t('dialogs.imageProperties.title')}</div>
 
         <div style={bodyStyle}>
           {/* Alt Text */}
           <div style={sectionStyle}>
-            <div style={sectionLabelStyle}>Alt Text</div>
+            <div style={sectionLabelStyle}>{t('dialogs.imageProperties.altText')}</div>
             <textarea
               style={textareaStyle}
               value={alt}
               onChange={(e) => setAlt(e.target.value)}
-              placeholder="Describe this image for accessibility..."
+              placeholder={t('dialogs.imageProperties.altTextPlaceholder')}
             />
           </div>
 
           {/* Border / Outline */}
           <div style={sectionStyle}>
-            <div style={sectionLabelStyle}>Border</div>
+            <div style={sectionLabelStyle}>{t('dialogs.imageProperties.border')}</div>
             <div style={rowStyle}>
-              <label style={labelStyle}>Width</label>
+              <label style={labelStyle}>{t('dialogs.imageProperties.width')}</label>
               <input
                 type="number"
                 style={{ ...inputStyle, maxWidth: 80 }}
@@ -206,27 +208,27 @@ export function ImagePropertiesDialog({
                 value={borderWidth}
                 onChange={(e) => setBorderWidth(Number(e.target.value) || 0)}
               />
-              <span style={{ fontSize: 12, color: 'var(--doc-text-muted)' }}>px</span>
+              <span style={{ fontSize: 12, color: 'var(--doc-text-muted)' }}>{t('common.px')}</span>
             </div>
             <div style={rowStyle}>
-              <label style={labelStyle}>Style</label>
+              <label style={labelStyle}>{t('dialogs.imageProperties.style')}</label>
               <select
                 style={selectStyle}
                 value={borderStyle}
                 onChange={(e) => setBorderStyle(e.target.value)}
               >
-                <option value="solid">Solid</option>
-                <option value="dashed">Dashed</option>
-                <option value="dotted">Dotted</option>
-                <option value="double">Double</option>
-                <option value="groove">Groove</option>
-                <option value="ridge">Ridge</option>
-                <option value="inset">Inset</option>
-                <option value="outset">Outset</option>
+                <option value="solid">{t('dialogs.imageProperties.borderStyles.solid')}</option>
+                <option value="dashed">{t('dialogs.imageProperties.borderStyles.dashed')}</option>
+                <option value="dotted">{t('dialogs.imageProperties.borderStyles.dotted')}</option>
+                <option value="double">{t('dialogs.imageProperties.borderStyles.double')}</option>
+                <option value="groove">{t('dialogs.imageProperties.borderStyles.groove')}</option>
+                <option value="ridge">{t('dialogs.imageProperties.borderStyles.ridge')}</option>
+                <option value="inset">{t('dialogs.imageProperties.borderStyles.inset')}</option>
+                <option value="outset">{t('dialogs.imageProperties.borderStyles.outset')}</option>
               </select>
             </div>
             <div style={rowStyle}>
-              <label style={labelStyle}>Color</label>
+              <label style={labelStyle}>{t('dialogs.imageProperties.color')}</label>
               <input
                 type="color"
                 value={borderColor}
@@ -259,7 +261,7 @@ export function ImagePropertiesDialog({
                   textAlign: 'center',
                 }}
               >
-                Preview
+                {t('dialogs.imageProperties.preview')}
               </div>
             )}
           </div>
@@ -267,7 +269,7 @@ export function ImagePropertiesDialog({
 
         <div style={footerStyle}>
           <button type="button" style={btnStyle} onClick={onClose}>
-            Cancel
+            {t('common.cancel')}
           </button>
           <button
             type="button"
@@ -279,7 +281,7 @@ export function ImagePropertiesDialog({
             }}
             onClick={handleApply}
           >
-            Apply
+            {t('common.apply')}
           </button>
         </div>
       </div>

@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import type { SidebarItemRenderProps } from '../../plugin-api/types';
 import { submitButtonStyle, CANCEL_BUTTON_STYLE } from './cardUtils';
+import { useTranslation } from '../../i18n';
 
 export interface AddCommentCardProps extends SidebarItemRenderProps {
   onSubmit?: (text: string) => void;
@@ -9,6 +10,7 @@ export interface AddCommentCardProps extends SidebarItemRenderProps {
 
 export function AddCommentCard({ measureRef, onSubmit, onCancel }: AddCommentCardProps) {
   const [text, setText] = useState('');
+  const { t } = useTranslation();
 
   const handleSubmit = () => {
     if (text.trim()) {
@@ -45,7 +47,7 @@ export function AddCommentCard({ measureRef, onSubmit, onCancel }: AddCommentCar
             setText('');
           }
         }}
-        placeholder="Add a comment..."
+        placeholder={t('comments.addComment')}
         style={{
           width: '100%',
           border: '1px solid #1a73e8',
@@ -69,14 +71,14 @@ export function AddCommentCard({ measureRef, onSubmit, onCancel }: AddCommentCar
           }}
           style={CANCEL_BUTTON_STYLE}
         >
-          Cancel
+          {t('common.cancel')}
         </button>
         <button
           onClick={handleSubmit}
           disabled={!text.trim()}
           style={submitButtonStyle(!!text.trim())}
         >
-          Comment
+          {t('common.comment')}
         </button>
       </div>
     </div>

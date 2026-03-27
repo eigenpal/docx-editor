@@ -7,6 +7,7 @@
 import * as React from 'react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './Select';
 import { cn } from '../../lib/utils';
+import { useTranslation } from '../../i18n';
 
 // ============================================================================
 // TYPES
@@ -56,6 +57,7 @@ export function ZoomControl({
   className,
   compact = false,
 }: ZoomControlProps) {
+  const { t } = useTranslation();
   const displayLabel = React.useMemo(() => {
     const matchingLevel = levels.find((level) => Math.abs(level.value - value) < 0.001);
     if (matchingLevel) return matchingLevel.label;
@@ -76,7 +78,7 @@ export function ZoomControl({
     <Select value={value.toString()} onValueChange={handleValueChange} disabled={disabled}>
       <SelectTrigger
         className={cn(compact ? 'h-7 min-w-[55px] text-xs' : 'h-8 min-w-[70px] text-sm', className)}
-        aria-label={`Zoom: ${displayLabel}`}
+        aria-label={t('zoom.ariaLabel', { label: displayLabel })}
       >
         <SelectValue placeholder="100%">{displayLabel}</SelectValue>
       </SelectTrigger>

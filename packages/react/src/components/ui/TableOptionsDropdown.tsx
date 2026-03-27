@@ -18,6 +18,7 @@ import { MaterialSymbol } from './MaterialSymbol';
 import { cn } from '../../lib/utils';
 import type { TableAction } from './TableToolbar';
 import type { TableContextInfo } from '@eigenpal/docx-core/prosemirror/extensions/nodes/TableExtension';
+import { useTranslation } from '../../i18n';
 
 // ============================================================================
 // TYPES
@@ -63,7 +64,7 @@ type SimpleAction =
 
 interface MenuItem {
   action: SimpleAction;
-  label: string;
+  labelKey: string;
   icon: string;
   shortcut?: string;
   danger?: boolean;
@@ -72,42 +73,48 @@ interface MenuItem {
 }
 
 const MENU_ITEMS: MenuItem[] = [
-  { action: 'addRowAbove', label: 'Insert row above', icon: 'add' },
-  { action: 'addRowBelow', label: 'Insert row below', icon: 'add' },
-  { action: 'addColumnLeft', label: 'Insert column left', icon: 'add' },
-  { action: 'addColumnRight', label: 'Insert column right', icon: 'add', separator: true },
+  { action: 'addRowAbove', labelKey: 'table.insertRowAbove', icon: 'add' },
+  { action: 'addRowBelow', labelKey: 'table.insertRowBelow', icon: 'add' },
+  { action: 'addColumnLeft', labelKey: 'table.insertColumnLeft', icon: 'add' },
+  { action: 'addColumnRight', labelKey: 'table.insertColumnRight', icon: 'add', separator: true },
   {
     action: 'deleteRow',
-    label: 'Delete row',
+    labelKey: 'table.deleteRow',
     icon: 'delete',
     danger: true,
     disabled: (ctx) => (ctx?.rowCount ?? 0) <= 1,
   },
   {
     action: 'deleteColumn',
-    label: 'Delete column',
+    labelKey: 'table.deleteColumn',
     icon: 'delete',
     danger: true,
     disabled: (ctx) => (ctx?.columnCount ?? 0) <= 1,
   },
-  { action: 'deleteTable', label: 'Delete table', icon: 'delete', danger: true, separator: true },
-  { action: 'borderAll', label: 'All borders', icon: 'border_all' },
-  { action: 'borderOutside', label: 'Outside borders', icon: 'border_outer' },
-  { action: 'borderInside', label: 'Inside borders', icon: 'border_inner' },
-  { action: 'borderNone', label: 'Remove borders', icon: 'border_clear' },
-  { action: 'borderTop', label: 'Top border', icon: 'border_top' },
-  { action: 'borderBottom', label: 'Bottom border', icon: 'border_bottom' },
-  { action: 'borderLeft', label: 'Left border', icon: 'border_left' },
-  { action: 'borderRight', label: 'Right border', icon: 'border_right', separator: true },
+  {
+    action: 'deleteTable',
+    labelKey: 'table.deleteTable',
+    icon: 'delete',
+    danger: true,
+    separator: true,
+  },
+  { action: 'borderAll', labelKey: 'table.borders.all', icon: 'border_all' },
+  { action: 'borderOutside', labelKey: 'table.borders.outside', icon: 'border_outer' },
+  { action: 'borderInside', labelKey: 'table.borders.inside', icon: 'border_inner' },
+  { action: 'borderNone', labelKey: 'table.borders.remove', icon: 'border_clear' },
+  { action: 'borderTop', labelKey: 'table.borders.top', icon: 'border_top' },
+  { action: 'borderBottom', labelKey: 'table.borders.bottom', icon: 'border_bottom' },
+  { action: 'borderLeft', labelKey: 'table.borders.left', icon: 'border_left' },
+  { action: 'borderRight', labelKey: 'table.borders.right', icon: 'border_right', separator: true },
   {
     action: 'mergeCells',
-    label: 'Merge cells',
+    labelKey: 'table.mergeCells',
     icon: 'call_merge',
     disabled: (ctx) => !ctx?.hasMultiCellSelection,
   },
   {
     action: 'splitCell',
-    label: 'Split cell',
+    labelKey: 'table.splitCell',
     icon: 'call_split',
     disabled: (ctx) => !ctx?.canSplitCell,
   },
@@ -665,6 +672,7 @@ export function TableOptionsDropdown({
   className,
   tooltip = 'Table options',
 }: TableOptionsDropdownProps): React.ReactElement {
+  const { t } = useTranslation();
   const [isOpen, setIsOpen] = useState(false);
   const [hoveredItem, setHoveredItem] = useState<string | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -810,7 +818,7 @@ export function TableOptionsDropdown({
                     size={18}
                     className={item.danger && !isDisabled ? 'text-red-600' : ''}
                   />
-                  <span style={{ flex: 1 }}>{item.label}</span>
+                  <span style={{ flex: 1 }}>{t(item.labelKey as any)}</span>
                   {item.shortcut && (
                     <span style={{ fontSize: 12, color: 'var(--doc-text-muted)' }}>
                       {item.shortcut}

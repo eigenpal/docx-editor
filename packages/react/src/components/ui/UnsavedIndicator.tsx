@@ -11,6 +11,7 @@
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import type { Document } from '@eigenpal/docx-core/types/document';
+import { useTranslation } from '../../i18n';
 
 // ============================================================================
 // TYPES
@@ -100,7 +101,6 @@ export interface UseUnsavedChangesReturn {
 
 const DEFAULT_UNSAVED_COLOR = 'var(--doc-error)'; // Unsaved state
 const DEFAULT_SAVED_COLOR = 'var(--doc-success)'; // Saved state
-const DEFAULT_WARNING_MESSAGE = 'You have unsaved changes. Are you sure you want to leave?';
 
 // ============================================================================
 // ICONS
@@ -330,10 +330,11 @@ export const UnsavedIndicator: React.FC<UnsavedIndicatorProps> = ({
  * Hook to track unsaved changes in a document
  */
 export function useUnsavedChanges(options: UseUnsavedChangesOptions = {}): UseUnsavedChangesReturn {
+  const { t } = useTranslation();
   const {
     document: currentDocument,
     warnBeforeLeave = true,
-    warningMessage = DEFAULT_WARNING_MESSAGE,
+    warningMessage = t('errors.unsavedChanges'),
     enabled = true,
     onChangeStatusChange,
   } = options;

@@ -8,6 +8,7 @@ import { Button } from './Button';
 import { Tooltip } from './Tooltip';
 import { cn } from '../../lib/utils';
 import type { TableAction } from './TableToolbar';
+import { useTranslation } from '../../i18n';
 
 export interface TableMergeButtonProps {
   onAction: (action: TableAction) => void;
@@ -22,6 +23,7 @@ export function TableMergeButton({
   canMerge = false,
   canSplit = false,
 }: TableMergeButtonProps) {
+  const { t } = useTranslation();
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
@@ -36,7 +38,7 @@ export function TableMergeButton({
   }, [onAction, canSplit]);
 
   const mergeButton = (
-    <Tooltip content="Merge cells">
+    <Tooltip content={t('table.mergeCells')}>
       <Button
         variant="ghost"
         size="icon-sm"
@@ -47,7 +49,7 @@ export function TableMergeButton({
         onMouseDown={handleMouseDown}
         onClick={handleMerge}
         disabled={disabled || !canMerge}
-        aria-label="Merge cells"
+        aria-label={t('table.mergeCells')}
         data-testid="toolbar-table-merge"
       >
         <MaterialSymbol name="call_merge" size={20} />
@@ -56,7 +58,7 @@ export function TableMergeButton({
   );
 
   const splitButton = (
-    <Tooltip content="Split cell">
+    <Tooltip content={t('table.splitCell')}>
       <Button
         variant="ghost"
         size="icon-sm"
@@ -67,7 +69,7 @@ export function TableMergeButton({
         onMouseDown={handleMouseDown}
         onClick={handleSplit}
         disabled={disabled || !canSplit}
-        aria-label="Split cell"
+        aria-label={t('table.splitCell')}
         data-testid="toolbar-table-split"
       >
         <MaterialSymbol name="call_split" size={20} />

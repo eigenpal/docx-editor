@@ -3,14 +3,15 @@
  */
 
 import { IconGridDropdown, type IconGridOption } from './IconGridDropdown';
+import { useTranslation } from '../../i18n';
 
-const WRAP_OPTIONS: IconGridOption[] = [
-  { value: 'inline', label: 'Inline with text', iconName: 'format_image_left' },
-  { value: 'wrapRight', label: 'Float left (wrap right)', iconName: 'format_image_right' },
-  { value: 'wrapLeft', label: 'Float right (wrap left)', iconName: 'format_image_left' },
-  { value: 'topAndBottom', label: 'Top and bottom', iconName: 'horizontal_rule' },
-  { value: 'behind', label: 'Behind text', iconName: 'flip_to_back' },
-  { value: 'inFront', label: 'In front of text', iconName: 'flip_to_front' },
+const WRAP_OPTIONS: (Omit<IconGridOption, 'label'> & { labelKey: string })[] = [
+  { value: 'inline', labelKey: 'imageWrap.inline', iconName: 'format_image_left' },
+  { value: 'wrapRight', labelKey: 'imageWrap.floatLeft', iconName: 'format_image_right' },
+  { value: 'wrapLeft', labelKey: 'imageWrap.floatRight', iconName: 'format_image_left' },
+  { value: 'topAndBottom', labelKey: 'imageWrap.topAndBottom', iconName: 'horizontal_rule' },
+  { value: 'behind', labelKey: 'imageWrap.behindText', iconName: 'flip_to_back' },
+  { value: 'inFront', labelKey: 'imageWrap.inFrontOfText', iconName: 'flip_to_front' },
 ];
 
 export interface ImageWrapDropdownProps {
@@ -34,12 +35,19 @@ export function ImageWrapDropdown({
   onChange,
   disabled = false,
 }: ImageWrapDropdownProps) {
+  const { t } = useTranslation();
+  const translatedOptions: IconGridOption[] = WRAP_OPTIONS.map((opt) => ({
+    ...opt,
+    label: t(opt.labelKey as any),
+  }));
+
   const activeValue = getActiveWrapValue(imageContext);
-  const currentOption = WRAP_OPTIONS.find((o) => o.value === activeValue) || WRAP_OPTIONS[0];
+  const currentOption =
+    translatedOptions.find((o) => o.value === activeValue) || translatedOptions[0];
 
   return (
     <IconGridDropdown
-      options={WRAP_OPTIONS}
+      options={translatedOptions}
       activeValue={activeValue}
       triggerIcon={currentOption.iconName}
       tooltipContent={`Wrap: ${currentOption.label}`}

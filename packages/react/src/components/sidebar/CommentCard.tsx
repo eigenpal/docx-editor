@@ -12,6 +12,7 @@ import {
 import { ReplyThread } from './ReplyThread';
 import { ReplyInput } from './ReplyInput';
 import { CARD_STYLE_COLLAPSED, CARD_STYLE_EXPANDED } from './cardStyles';
+import { useTranslation } from '../../i18n';
 
 export interface CommentCardProps extends SidebarItemRenderProps {
   comment: Comment;
@@ -34,6 +35,7 @@ export function CommentCard({
   onDelete,
 }: CommentCardProps) {
   const [menuOpen, setMenuOpen] = useState(false);
+  const { t } = useTranslation();
 
   return (
     <div
@@ -62,14 +64,14 @@ export function CommentCard({
           }}
         >
           <MaterialSymbol name="check" size={12} />
-          Resolved
+          {t('comments.resolved')}
         </div>
       )}
       <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
         <div style={avatarStyle(comment.author || 'U')}>{getInitials(comment.author || 'U')}</div>
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ fontSize: 13, fontWeight: 600, color: '#202124' }}>
-            {comment.author || 'Unknown'}
+            {comment.author || t('comments.unknown')}
           </div>
           <div style={{ fontSize: 11, color: '#5f6368' }}>{formatDate(comment.date)}</div>
         </div>
@@ -84,7 +86,7 @@ export function CommentCard({
                   onResolve?.(comment.id);
                 }
               }}
-              title={comment.done ? 'Reopen' : 'Resolve'}
+              title={comment.done ? t('comments.reopen') : t('comments.resolve')}
               style={ICON_BUTTON_STYLE}
             >
               <MaterialSymbol name={comment.done ? 'undo' : 'check'} size={20} />
@@ -94,7 +96,7 @@ export function CommentCard({
                 e.stopPropagation();
                 setMenuOpen(!menuOpen);
               }}
-              title="More options"
+              title={t('comments.moreOptions')}
               style={ICON_BUTTON_STYLE}
             >
               <MaterialSymbol name="more_vert" size={20} />
@@ -139,7 +141,7 @@ export function CommentCard({
                     (e.target as HTMLElement).style.backgroundColor = 'transparent';
                   }}
                 >
-                  Delete
+                  {t('common.delete')}
                 </button>
               </div>
             )}

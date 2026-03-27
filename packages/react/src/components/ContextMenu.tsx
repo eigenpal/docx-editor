@@ -7,11 +7,22 @@
 
 import React, { useEffect, useRef, useCallback, useState } from 'react';
 import type { AIAction, SelectionContext } from '@eigenpal/docx-core/types/agentApi';
-import {
-  getActionLabel,
-  getActionDescription,
-  DEFAULT_AI_ACTIONS,
-} from '@eigenpal/docx-core/types/agentApi';
+import { getActionDescription, DEFAULT_AI_ACTIONS } from '@eigenpal/docx-core/types/agentApi';
+import { useTranslation } from '../i18n';
+import type { TranslationKey } from '../i18n';
+
+const AI_ACTION_KEY_MAP: Record<AIAction, string> = {
+  askAI: 'contextMenu.aiActions.askAi',
+  rewrite: 'contextMenu.aiActions.rewrite',
+  expand: 'contextMenu.aiActions.expand',
+  summarize: 'contextMenu.aiActions.summarize',
+  translate: 'contextMenu.aiActions.translate',
+  explain: 'contextMenu.aiActions.explain',
+  fixGrammar: 'contextMenu.aiActions.fixGrammar',
+  makeFormal: 'contextMenu.aiActions.makeFormal',
+  makeCasual: 'contextMenu.aiActions.makeCasual',
+  custom: 'contextMenu.aiActions.custom',
+};
 
 // ============================================================================
 // TYPES
@@ -207,7 +218,8 @@ function getActionIcon(action: AIAction): React.ReactNode {
 // ============================================================================
 
 const MenuItem: React.FC<MenuItemProps> = ({ action, onClick, isHighlighted, onMouseEnter }) => {
-  const label = getActionLabel(action);
+  const { t } = useTranslation();
+  const label = t(AI_ACTION_KEY_MAP[action] as TranslationKey);
   const description = getActionDescription(action);
   const icon = getActionIcon(action);
 
@@ -251,6 +263,7 @@ const CustomPromptDialog: React.FC<CustomPromptDialogProps> = ({
 }) => {
   const [prompt, setPrompt] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
+  const { t } = useTranslation();
 
   useEffect(() => {
     if (isOpen && inputRef.current) {
@@ -298,7 +311,7 @@ const CustomPromptDialog: React.FC<CustomPromptDialogProps> = ({
           value={prompt}
           onChange={(e) => setPrompt(e.target.value)}
           onKeyDown={handleKeyDown}
-          placeholder="Enter custom prompt..."
+          placeholder={t('contextMenu.customPromptPlaceholder')}
           style={{
             width: '100%',
             padding: '8px',
@@ -320,7 +333,7 @@ const CustomPromptDialog: React.FC<CustomPromptDialogProps> = ({
               fontSize: '12px',
             }}
           >
-            Cancel
+            {t('common.cancel')}
           </button>
           <button
             type="submit"
@@ -335,7 +348,7 @@ const CustomPromptDialog: React.FC<CustomPromptDialogProps> = ({
               fontSize: '12px',
             }}
           >
-            Send
+            {t('common.send')}
           </button>
         </div>
       </form>
@@ -361,6 +374,7 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
   const menuRef = useRef<HTMLDivElement>(null);
   const [highlightedIndex, setHighlightedIndex] = useState(0);
   const [showPromptDialog, setShowPromptDialog] = useState(false);
+  const { t } = useTranslation();
 
   // All available actions including custom
   const allActions = showCustomPrompt ? [...actions, 'custom' as AIAction] : actions;
@@ -482,7 +496,7 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
       className={`docx-context-menu ${className}`}
       style={getMenuStyle()}
       role="menu"
-      aria-label="AI actions menu"
+      aria-label={t('contextMenu.ariaLabel')}
     >
       {/* Header showing selected text preview */}
       <div

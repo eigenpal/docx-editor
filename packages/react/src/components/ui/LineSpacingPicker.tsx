@@ -17,6 +17,7 @@ import {
 } from './Select';
 import { cn } from '../../lib/utils';
 import { IconLineSpacing } from './Icons';
+import { useTranslation } from '../../i18n';
 
 // ============================================================================
 // TYPES
@@ -24,6 +25,7 @@ import { IconLineSpacing } from './Icons';
 
 export interface LineSpacingOption {
   label: string;
+  labelKey?: string;
   value: number;
   twipsValue: number;
 }
@@ -47,10 +49,10 @@ export interface LineSpacingPickerProps {
  * 240 twips = 1.0 line spacing (single)
  */
 const DEFAULT_OPTIONS: LineSpacingOption[] = [
-  { label: 'Single', value: 1.0, twipsValue: 240 },
+  { label: 'Single', labelKey: 'lineSpacing.single', value: 1.0, twipsValue: 240 },
   { label: '1.15', value: 1.15, twipsValue: 276 },
   { label: '1.5', value: 1.5, twipsValue: 360 },
-  { label: 'Double', value: 2.0, twipsValue: 480 },
+  { label: 'Double', labelKey: 'lineSpacing.double', value: 2.0, twipsValue: 480 },
 ];
 
 // ============================================================================
@@ -64,6 +66,7 @@ export function LineSpacingPicker({
   disabled = false,
   className,
 }: LineSpacingPickerProps) {
+  const { t } = useTranslation();
   // Find current option by twips value
   const currentOption = React.useMemo(() => {
     if (value === undefined) return options[0]; // Default to Single
@@ -80,6 +83,9 @@ export function LineSpacingPicker({
     [onChange]
   );
 
+  const getOptionLabel = (option: LineSpacingOption) =>
+    option.labelKey ? t(option.labelKey as any) : option.label;
+
   return (
     <Select
       value={currentOption.twipsValue.toString()}
@@ -89,19 +95,19 @@ export function LineSpacingPicker({
       <SelectTrigger
         className={cn('h-8 text-sm gap-0.5 px-2', className)}
         style={{ width: 'auto' }}
-        title={`Line spacing: ${currentOption.label}`}
+        title={t('lineSpacing.lineSpacingTitle', { label: getOptionLabel(currentOption) })}
       >
         <IconLineSpacing className="h-5 w-5 shrink-0" />
       </SelectTrigger>
       <SelectContent>
         {options.map((option) => (
           <SelectItem key={option.twipsValue} value={option.twipsValue.toString()}>
-            {option.label}
+            {getOptionLabel(option)}
           </SelectItem>
         ))}
         <SelectSeparator />
         <SelectGroup>
-          <SelectLabel>Paragraph spacing</SelectLabel>
+          <SelectLabel>{t('lineSpacing.paragraphSpacing')}</SelectLabel>
         </SelectGroup>
       </SelectContent>
     </Select>

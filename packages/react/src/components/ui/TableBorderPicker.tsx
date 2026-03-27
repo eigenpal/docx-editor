@@ -12,24 +12,26 @@ import { MaterialSymbol } from './MaterialSymbol';
 import { cn } from '../../lib/utils';
 import type { TableAction } from './TableToolbar';
 import { useFixedDropdown } from './useFixedDropdown';
+import { useTranslation } from '../../i18n';
 
 export interface TableBorderPickerProps {
   onAction: (action: TableAction) => void;
   disabled?: boolean;
 }
 
-const BORDER_PRESETS: { action: TableAction; icon: string; label: string }[] = [
-  { action: 'borderAll', icon: 'border_all', label: 'All borders' },
-  { action: 'borderOutside', icon: 'border_outer', label: 'Outside borders' },
-  { action: 'borderInside', icon: 'border_inner', label: 'Inside borders' },
-  { action: 'borderTop', icon: 'border_top', label: 'Top border' },
-  { action: 'borderBottom', icon: 'border_bottom', label: 'Bottom border' },
-  { action: 'borderLeft', icon: 'border_left', label: 'Left border' },
-  { action: 'borderRight', icon: 'border_right', label: 'Right border' },
-  { action: 'borderNone', icon: 'border_clear', label: 'No borders' },
+const BORDER_PRESETS: { action: TableAction; icon: string; labelKey: string }[] = [
+  { action: 'borderAll', icon: 'border_all', labelKey: 'table.borders.all' },
+  { action: 'borderOutside', icon: 'border_outer', labelKey: 'table.borders.outside' },
+  { action: 'borderInside', icon: 'border_inner', labelKey: 'table.borders.inside' },
+  { action: 'borderTop', icon: 'border_top', labelKey: 'table.borders.top' },
+  { action: 'borderBottom', icon: 'border_bottom', labelKey: 'table.borders.bottom' },
+  { action: 'borderLeft', icon: 'border_left', labelKey: 'table.borders.left' },
+  { action: 'borderRight', icon: 'border_right', labelKey: 'table.borders.right' },
+  { action: 'borderNone', icon: 'border_clear', labelKey: 'table.borders.none' },
 ];
 
 export function TableBorderPicker({ onAction, disabled = false }: TableBorderPickerProps) {
+  const { t } = useTranslation();
   const [isOpen, setIsOpen] = useState(false);
   const close = useCallback(() => setIsOpen(false), []);
   const { containerRef, dropdownRef, dropdownStyle, handleMouseDown } = useFixedDropdown({
@@ -57,7 +59,7 @@ export function TableBorderPicker({ onAction, disabled = false }: TableBorderPic
       onMouseDown={handleMouseDown}
       onClick={() => !disabled && setIsOpen((prev) => !prev)}
       disabled={disabled}
-      aria-label="Border style"
+      aria-label={t('table.borders.styleAriaLabel')}
       aria-expanded={isOpen}
       aria-haspopup="true"
       data-testid="toolbar-table-borders"
@@ -69,7 +71,7 @@ export function TableBorderPicker({ onAction, disabled = false }: TableBorderPic
 
   return (
     <div ref={containerRef} style={{ position: 'relative', display: 'inline-block' }}>
-      {!isOpen ? <Tooltip content="Borders">{button}</Tooltip> : button}
+      {!isOpen ? <Tooltip content={t('table.borders.tooltip')}>{button}</Tooltip> : button}
 
       {isOpen && !disabled && (
         <div
@@ -91,11 +93,11 @@ export function TableBorderPicker({ onAction, disabled = false }: TableBorderPic
               gap: 2,
             }}
           >
-            {BORDER_PRESETS.map(({ action, icon, label }) => (
+            {BORDER_PRESETS.map(({ action, icon, labelKey }) => (
               <button
                 key={typeof action === 'string' ? action : action.type}
                 type="button"
-                title={label}
+                title={t(labelKey as any)}
                 style={{
                   display: 'flex',
                   alignItems: 'center',

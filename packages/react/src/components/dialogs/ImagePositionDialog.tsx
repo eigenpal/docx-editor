@@ -9,6 +9,7 @@
 
 import React, { useState, useCallback, useEffect } from 'react';
 import type { CSSProperties } from 'react';
+import { useTranslation } from '../../i18n';
 
 // ============================================================================
 // TYPES
@@ -141,6 +142,7 @@ export function ImagePositionDialog({
   onApply,
   currentData,
 }: ImagePositionDialogProps): React.ReactElement | null {
+  const { t } = useTranslation();
   const [hMode, setHMode] = useState<'align' | 'offset'>('align');
   const [hAlign, setHAlign] = useState('center');
   const [hRelativeTo, setHRelativeTo] = useState('column');
@@ -233,41 +235,41 @@ export function ImagePositionDialog({
         style={dialogStyle}
         onClick={(e) => e.stopPropagation()}
         role="dialog"
-        aria-label="Image position"
+        aria-label={t('dialogs.imagePosition.title')}
       >
-        <div style={headerStyle}>Image Position</div>
+        <div style={headerStyle}>{t('dialogs.imagePosition.title')}</div>
 
         <div style={bodyStyle}>
           {/* Horizontal positioning */}
           <div style={sectionStyle}>
-            <div style={sectionLabelStyle}>Horizontal</div>
+            <div style={sectionLabelStyle}>{t('dialogs.imagePosition.horizontal')}</div>
             <div style={rowStyle}>
-              <label style={labelStyle}>Position</label>
+              <label style={labelStyle}>{t('dialogs.imagePosition.position')}</label>
               <select
                 style={selectStyle}
                 value={hMode}
                 onChange={(e) => setHMode(e.target.value as 'align' | 'offset')}
               >
-                <option value="align">Alignment</option>
-                <option value="offset">Offset</option>
+                <option value="align">{t('dialogs.imagePosition.alignment')}</option>
+                <option value="offset">{t('dialogs.imagePosition.offset')}</option>
               </select>
             </div>
             {hMode === 'align' ? (
               <div style={rowStyle}>
-                <label style={labelStyle}>Align</label>
+                <label style={labelStyle}>{t('dialogs.imagePosition.align')}</label>
                 <select
                   style={selectStyle}
                   value={hAlign}
                   onChange={(e) => setHAlign(e.target.value)}
                 >
-                  <option value="left">Left</option>
-                  <option value="center">Center</option>
-                  <option value="right">Right</option>
+                  <option value="left">{t('dialogs.imagePosition.alignOptions.left')}</option>
+                  <option value="center">{t('dialogs.imagePosition.alignOptions.center')}</option>
+                  <option value="right">{t('dialogs.imagePosition.alignOptions.right')}</option>
                 </select>
               </div>
             ) : (
               <div style={rowStyle}>
-                <label style={labelStyle}>Offset (px)</label>
+                <label style={labelStyle}>{t('dialogs.imagePosition.offsetPx')}</label>
                 <input
                   type="number"
                   style={inputStyle}
@@ -277,50 +279,52 @@ export function ImagePositionDialog({
               </div>
             )}
             <div style={rowStyle}>
-              <label style={labelStyle}>Relative to</label>
+              <label style={labelStyle}>{t('dialogs.imagePosition.relativeTo')}</label>
               <select
                 style={selectStyle}
                 value={hRelativeTo}
                 onChange={(e) => setHRelativeTo(e.target.value)}
               >
-                <option value="page">Page</option>
-                <option value="column">Column</option>
-                <option value="margin">Margin</option>
-                <option value="character">Character</option>
+                <option value="page">{t('dialogs.imagePosition.relativeOptions.page')}</option>
+                <option value="column">{t('dialogs.imagePosition.relativeOptions.column')}</option>
+                <option value="margin">{t('dialogs.imagePosition.relativeOptions.margin')}</option>
+                <option value="character">
+                  {t('dialogs.imagePosition.relativeOptions.character')}
+                </option>
               </select>
             </div>
           </div>
 
           {/* Vertical positioning */}
           <div style={sectionStyle}>
-            <div style={sectionLabelStyle}>Vertical</div>
+            <div style={sectionLabelStyle}>{t('dialogs.imagePosition.vertical')}</div>
             <div style={rowStyle}>
-              <label style={labelStyle}>Position</label>
+              <label style={labelStyle}>{t('dialogs.imagePosition.position')}</label>
               <select
                 style={selectStyle}
                 value={vMode}
                 onChange={(e) => setVMode(e.target.value as 'align' | 'offset')}
               >
-                <option value="align">Alignment</option>
-                <option value="offset">Offset</option>
+                <option value="align">{t('dialogs.imagePosition.alignment')}</option>
+                <option value="offset">{t('dialogs.imagePosition.offset')}</option>
               </select>
             </div>
             {vMode === 'align' ? (
               <div style={rowStyle}>
-                <label style={labelStyle}>Align</label>
+                <label style={labelStyle}>{t('dialogs.imagePosition.align')}</label>
                 <select
                   style={selectStyle}
                   value={vAlign}
                   onChange={(e) => setVAlign(e.target.value)}
                 >
-                  <option value="top">Top</option>
-                  <option value="center">Center</option>
-                  <option value="bottom">Bottom</option>
+                  <option value="top">{t('dialogs.imagePosition.alignOptions.top')}</option>
+                  <option value="center">{t('dialogs.imagePosition.alignOptions.center')}</option>
+                  <option value="bottom">{t('dialogs.imagePosition.alignOptions.bottom')}</option>
                 </select>
               </div>
             ) : (
               <div style={rowStyle}>
-                <label style={labelStyle}>Offset (px)</label>
+                <label style={labelStyle}>{t('dialogs.imagePosition.offsetPx')}</label>
                 <input
                   type="number"
                   style={inputStyle}
@@ -330,16 +334,18 @@ export function ImagePositionDialog({
               </div>
             )}
             <div style={rowStyle}>
-              <label style={labelStyle}>Relative to</label>
+              <label style={labelStyle}>{t('dialogs.imagePosition.relativeTo')}</label>
               <select
                 style={selectStyle}
                 value={vRelativeTo}
                 onChange={(e) => setVRelativeTo(e.target.value)}
               >
-                <option value="page">Page</option>
-                <option value="margin">Margin</option>
-                <option value="paragraph">Paragraph</option>
-                <option value="line">Line</option>
+                <option value="page">{t('dialogs.imagePosition.relativeOptions.page')}</option>
+                <option value="margin">{t('dialogs.imagePosition.relativeOptions.margin')}</option>
+                <option value="paragraph">
+                  {t('dialogs.imagePosition.relativeOptions.paragraph')}
+                </option>
+                <option value="line">{t('dialogs.imagePosition.relativeOptions.line')}</option>
               </select>
             </div>
           </div>
@@ -349,7 +355,9 @@ export function ImagePositionDialog({
             <div style={sectionLabelStyle}>Distance from text (px)</div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
               <div style={rowStyle}>
-                <label style={{ ...labelStyle, width: 45 }}>Top</label>
+                <label style={{ ...labelStyle, width: 45 }}>
+                  {t('dialogs.imagePosition.alignOptions.top')}
+                </label>
                 <input
                   type="number"
                   style={inputStyle}
@@ -359,7 +367,9 @@ export function ImagePositionDialog({
                 />
               </div>
               <div style={rowStyle}>
-                <label style={{ ...labelStyle, width: 45 }}>Bottom</label>
+                <label style={{ ...labelStyle, width: 45 }}>
+                  {t('dialogs.imagePosition.alignOptions.bottom')}
+                </label>
                 <input
                   type="number"
                   style={inputStyle}
@@ -369,7 +379,9 @@ export function ImagePositionDialog({
                 />
               </div>
               <div style={rowStyle}>
-                <label style={{ ...labelStyle, width: 45 }}>Left</label>
+                <label style={{ ...labelStyle, width: 45 }}>
+                  {t('dialogs.imagePosition.alignOptions.left')}
+                </label>
                 <input
                   type="number"
                   style={inputStyle}
@@ -379,7 +391,9 @@ export function ImagePositionDialog({
                 />
               </div>
               <div style={rowStyle}>
-                <label style={{ ...labelStyle, width: 45 }}>Right</label>
+                <label style={{ ...labelStyle, width: 45 }}>
+                  {t('dialogs.imagePosition.alignOptions.right')}
+                </label>
                 <input
                   type="number"
                   style={inputStyle}
@@ -394,7 +408,7 @@ export function ImagePositionDialog({
 
         <div style={footerStyle}>
           <button type="button" style={btnStyle} onClick={onClose}>
-            Cancel
+            {t('common.cancel')}
           </button>
           <button
             type="button"
@@ -406,7 +420,7 @@ export function ImagePositionDialog({
             }}
             onClick={handleApply}
           >
-            Apply
+            {t('common.apply')}
           </button>
         </div>
       </div>

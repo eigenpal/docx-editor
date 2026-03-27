@@ -3,15 +3,21 @@
  */
 
 import { IconGridDropdown, type IconGridOption } from './IconGridDropdown';
+import { useTranslation } from '../../i18n';
 
 type TransformAction = 'rotateCW' | 'rotateCCW' | 'flipH' | 'flipV';
 
-const TRANSFORM_OPTIONS: IconGridOption<TransformAction>[] = [
-  { value: 'rotateCW', label: 'Rotate clockwise', iconName: 'rotate_right' },
-  { value: 'rotateCCW', label: 'Rotate counter-clockwise', iconName: 'rotate_left' },
-  { value: 'flipH', label: 'Flip horizontal', iconName: 'swap_horiz' },
-  { value: 'flipV', label: 'Flip vertical', iconName: 'swap_vert' },
-];
+const TRANSFORM_OPTIONS: (Omit<IconGridOption<TransformAction>, 'label'> & { labelKey: string })[] =
+  [
+    { value: 'rotateCW', labelKey: 'imageTransform.rotateClockwise', iconName: 'rotate_right' },
+    {
+      value: 'rotateCCW',
+      labelKey: 'imageTransform.rotateCounterClockwise',
+      iconName: 'rotate_left',
+    },
+    { value: 'flipH', labelKey: 'imageTransform.flipHorizontal', iconName: 'swap_horiz' },
+    { value: 'flipV', labelKey: 'imageTransform.flipVertical', iconName: 'swap_vert' },
+  ];
 
 export interface ImageTransformDropdownProps {
   onTransform: (action: TransformAction) => void;
@@ -22,11 +28,17 @@ export function ImageTransformDropdown({
   onTransform,
   disabled = false,
 }: ImageTransformDropdownProps) {
+  const { t } = useTranslation();
+  const translatedOptions: IconGridOption<TransformAction>[] = TRANSFORM_OPTIONS.map((opt) => ({
+    ...opt,
+    label: t(opt.labelKey as any),
+  }));
+
   return (
     <IconGridDropdown<TransformAction>
-      options={TRANSFORM_OPTIONS}
+      options={translatedOptions}
       triggerIcon="rotate_right"
-      tooltipContent="Transform"
+      tooltipContent={t('imageTransform.tooltip')}
       onSelect={onTransform}
       disabled={disabled}
       testId="toolbar-image-transform"

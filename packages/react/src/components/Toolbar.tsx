@@ -13,6 +13,7 @@
  */
 
 import React, { useCallback, useRef } from 'react';
+import { useTranslation } from '../i18n';
 import type { CSSProperties, ReactNode } from 'react';
 import type {
   ColorValue,
@@ -344,6 +345,7 @@ export function Toolbar({
   onRefocusEditor,
   ...restProps
 }: ToolbarProps) {
+  const { t } = useTranslation();
   const toolbarRef = useRef<HTMLDivElement>(null);
 
   const handleFormat = useCallback(
@@ -405,7 +407,7 @@ export function Toolbar({
       )}
       style={style}
       role="toolbar"
-      aria-label="Formatting toolbar"
+      aria-label={t('toolbar.ariaLabel')}
       data-testid="toolbar"
       onMouseDown={handleToolbarMouseDown}
       onMouseUp={handleToolbarMouseUp}
@@ -413,21 +415,27 @@ export function Toolbar({
       {/* File Menu */}
       {(showPrintButton && onPrint) || onPageSetup ? (
         <MenuDropdown
-          label="File"
+          label={t('toolbar.file')}
           disabled={disabled}
           items={[
             ...(showPrintButton && onPrint
               ? [
                   {
                     icon: 'print',
-                    label: 'Print',
-                    shortcut: 'Ctrl+P',
+                    label: t('toolbar.print'),
+                    shortcut: t('toolbar.printShortcut'),
                     onClick: onPrint,
                   } as MenuEntry,
                 ]
               : []),
             ...(onPageSetup
-              ? [{ icon: 'settings', label: 'Page setup', onClick: onPageSetup } as MenuEntry]
+              ? [
+                  {
+                    icon: 'settings',
+                    label: t('toolbar.pageSetup'),
+                    onClick: onPageSetup,
+                  } as MenuEntry,
+                ]
               : []),
           ]}
         />
@@ -435,17 +443,17 @@ export function Toolbar({
 
       {/* Format Menu */}
       <MenuDropdown
-        label="Format"
+        label={t('toolbar.format')}
         disabled={disabled}
         items={[
           {
             icon: 'format_textdirection_l_to_r',
-            label: 'Left-to-right text',
+            label: t('toolbar.leftToRight'),
             onClick: () => handleFormat('setLtr'),
           } as MenuEntry,
           {
             icon: 'format_textdirection_r_to_l',
-            label: 'Right-to-left text',
+            label: t('toolbar.rightToLeft'),
             onClick: () => handleFormat('setRtl'),
           } as MenuEntry,
         ]}
@@ -453,17 +461,17 @@ export function Toolbar({
 
       {/* Insert Menu */}
       <MenuDropdown
-        label="Insert"
+        label={t('toolbar.insert')}
         disabled={disabled}
         items={[
           ...(onInsertImage
-            ? [{ icon: 'image', label: 'Image', onClick: onInsertImage } as MenuEntry]
+            ? [{ icon: 'image', label: t('toolbar.image'), onClick: onInsertImage } as MenuEntry]
             : []),
           ...(showTableInsert && onInsertTable
             ? [
                 {
                   icon: 'grid_on',
-                  label: 'Table',
+                  label: t('toolbar.table'),
                   submenuContent: (closeMenu: () => void) => (
                     <TableGridInline
                       onInsert={(rows: number, cols: number) => {
@@ -480,13 +488,13 @@ export function Toolbar({
             : []),
           {
             icon: 'page_break',
-            label: 'Page break',
+            label: t('toolbar.pageBreak'),
             onClick: onInsertPageBreak,
             disabled: !onInsertPageBreak,
           },
           {
             icon: 'format_list_numbered',
-            label: 'Table of contents',
+            label: t('toolbar.tableOfContents'),
             onClick: onInsertTOC,
             disabled: !onInsertTOC,
           },

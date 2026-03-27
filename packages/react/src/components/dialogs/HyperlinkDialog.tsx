@@ -15,6 +15,7 @@
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import type { CSSProperties, FormEvent, KeyboardEvent } from 'react';
+import { useTranslation } from '../../i18n';
 
 // ============================================================================
 // TYPES
@@ -332,6 +333,8 @@ export function HyperlinkDialog({
   className,
   style,
 }: HyperlinkDialogProps): React.ReactElement | null {
+  const { t } = useTranslation();
+
   // State
   const [linkType, setLinkType] = useState<LinkType>('url');
   const [url, setUrl] = useState('');
@@ -496,14 +499,14 @@ export function HyperlinkDialog({
         {/* Header */}
         <div className="docx-hyperlink-dialog-header" style={DIALOG_HEADER_STYLE}>
           <h2 id="hyperlink-dialog-title" style={DIALOG_TITLE_STYLE}>
-            {isEditing ? 'Edit Hyperlink' : 'Insert Hyperlink'}
+            {isEditing ? t('dialogs.hyperlink.titleEdit') : t('dialogs.hyperlink.titleInsert')}
           </h2>
           <button
             type="button"
             className="docx-hyperlink-dialog-close"
             style={CLOSE_BUTTON_STYLE}
             onClick={onClose}
-            aria-label="Close dialog"
+            aria-label={t('common.closeDialog')}
           >
             &times;
           </button>
@@ -525,7 +528,7 @@ export function HyperlinkDialog({
                 onClick={() => setLinkType('url')}
                 aria-selected={linkType === 'url'}
               >
-                Web Address
+                {t('dialogs.hyperlink.tabWebAddress')}
               </button>
               <button
                 type="button"
@@ -534,7 +537,7 @@ export function HyperlinkDialog({
                 onClick={() => setLinkType('bookmark')}
                 aria-selected={linkType === 'bookmark'}
               >
-                Bookmark
+                {t('dialogs.hyperlink.tabBookmark')}
               </button>
             </div>
           )}
@@ -543,7 +546,7 @@ export function HyperlinkDialog({
           {linkType === 'url' && (
             <div className="docx-hyperlink-dialog-field" style={FORM_GROUP_STYLE}>
               <label htmlFor="hyperlink-url" style={LABEL_STYLE}>
-                URL
+                {t('dialogs.hyperlink.urlLabel')}
               </label>
               <input
                 ref={urlInputRef}
@@ -560,7 +563,7 @@ export function HyperlinkDialog({
                   setTouched(true);
                   validateUrl();
                 }}
-                placeholder="https://example.com"
+                placeholder={t('dialogs.hyperlink.urlPlaceholder')}
                 aria-invalid={!!urlError}
                 aria-describedby={urlError ? 'url-error' : 'url-hint'}
               />
@@ -571,7 +574,7 @@ export function HyperlinkDialog({
               )}
               {!urlError && (
                 <div id="url-hint" style={HINT_TEXT_STYLE}>
-                  Enter a web address, email (mailto:), or phone (tel:)
+                  {t('dialogs.hyperlink.urlHint')}
                 </div>
               )}
             </div>
@@ -581,7 +584,7 @@ export function HyperlinkDialog({
           {linkType === 'bookmark' && (
             <div className="docx-hyperlink-dialog-field" style={FORM_GROUP_STYLE}>
               <label htmlFor="hyperlink-bookmark" style={LABEL_STYLE}>
-                Bookmark
+                {t('dialogs.hyperlink.bookmarkLabel')}
               </label>
               <select
                 ref={bookmarkSelectRef}
@@ -591,7 +594,7 @@ export function HyperlinkDialog({
                 value={bookmark}
                 onChange={(e) => setBookmark(e.target.value)}
               >
-                <option value="">Select a bookmark...</option>
+                <option value="">{t('dialogs.hyperlink.bookmarkPlaceholder')}</option>
                 {bookmarks.map((bm) => (
                   <option key={bm.name} value={bm.name}>
                     {bm.label || bm.name}
@@ -604,7 +607,7 @@ export function HyperlinkDialog({
           {/* Display text */}
           <div className="docx-hyperlink-dialog-field" style={FORM_GROUP_STYLE}>
             <label htmlFor="hyperlink-display-text" style={LABEL_STYLE}>
-              Display Text
+              {t('dialogs.hyperlink.displayTextLabel')}
             </label>
             <input
               id="hyperlink-display-text"
@@ -613,15 +616,15 @@ export function HyperlinkDialog({
               style={INPUT_STYLE}
               value={displayText}
               onChange={(e) => setDisplayText(e.target.value)}
-              placeholder="Text to display (optional)"
+              placeholder={t('dialogs.hyperlink.displayTextPlaceholder')}
             />
-            <div style={HINT_TEXT_STYLE}>Leave empty to use the selected text</div>
+            <div style={HINT_TEXT_STYLE}>{t('dialogs.hyperlink.displayTextHint')}</div>
           </div>
 
           {/* Tooltip */}
           <div className="docx-hyperlink-dialog-field" style={FORM_GROUP_STYLE}>
             <label htmlFor="hyperlink-tooltip" style={LABEL_STYLE}>
-              Tooltip (optional)
+              {t('dialogs.hyperlink.tooltipLabel')}
             </label>
             <input
               id="hyperlink-tooltip"
@@ -630,7 +633,7 @@ export function HyperlinkDialog({
               style={INPUT_STYLE}
               value={tooltip}
               onChange={(e) => setTooltip(e.target.value)}
-              placeholder="Text shown on hover"
+              placeholder={t('dialogs.hyperlink.tooltipPlaceholder')}
             />
           </div>
         </form>
@@ -644,7 +647,7 @@ export function HyperlinkDialog({
               style={DANGER_BUTTON_STYLE}
               onClick={onRemove}
             >
-              Remove Link
+              {t('dialogs.hyperlink.removeLink')}
             </button>
           )}
           <div style={{ flex: 1 }} />
@@ -654,7 +657,7 @@ export function HyperlinkDialog({
             style={SECONDARY_BUTTON_STYLE}
             onClick={onClose}
           >
-            Cancel
+            {t('common.cancel')}
           </button>
           <button
             type="submit"
@@ -663,7 +666,7 @@ export function HyperlinkDialog({
             onClick={handleSubmit}
             disabled={!canSubmit}
           >
-            {isEditing ? 'Update' : 'Insert'}
+            {isEditing ? t('common.update') : t('common.insert')}
           </button>
         </div>
       </div>

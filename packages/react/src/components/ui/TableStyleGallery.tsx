@@ -11,6 +11,7 @@ import type { CSSProperties } from 'react';
 import type { Style } from '@eigenpal/docx-core/types/document';
 import type { TableAction } from './TableToolbar';
 import { MaterialSymbol } from './MaterialSymbol';
+import { useTranslation } from '../../i18n';
 
 // ============================================================================
 // PREDEFINED TABLE STYLES
@@ -371,11 +372,30 @@ interface TableStyleGalleryProps {
   onAction: (action: TableAction) => void;
 }
 
+/** Map from built-in style ID to en.json key */
+const STYLE_NAME_KEYS: Record<string, string> = {
+  TableNormal: 'table.styles.normalTable',
+  TableGrid: 'table.styles.tableGrid',
+  TableGridLight: 'table.styles.gridTableLight',
+  PlainTable1: 'table.styles.plainTable1',
+  PlainTable2: 'table.styles.plainTable2',
+  PlainTable3: 'table.styles.plainTable3',
+  PlainTable4: 'table.styles.plainTable4',
+  'GridTable1Light-Accent1': 'table.styles.gridTable1Light',
+  'GridTable4-Accent1': 'table.styles.gridTable4Accent1',
+  'GridTable5Dark-Accent1': 'table.styles.gridTable5Dark',
+  'ListTable3-Accent2': 'table.styles.listTable3Accent2',
+  'ListTable4-Accent3': 'table.styles.listTable4Accent3',
+  'GridTable4-Accent5': 'table.styles.gridTable4Accent5',
+  'GridTable4-Accent6': 'table.styles.gridTable4Accent6',
+};
+
 export function TableStyleGallery({
   currentStyleId,
   documentStyles,
   onAction,
 }: TableStyleGalleryProps) {
+  const { t } = useTranslation();
   const [isOpen, setIsOpen] = useState(false);
   const [hoveredBtn, setHoveredBtn] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -420,7 +440,7 @@ export function TableStyleGallery({
         onClick={() => setIsOpen(!isOpen)}
         onMouseEnter={() => setHoveredBtn(true)}
         onMouseLeave={() => setHoveredBtn(false)}
-        title="Table Styles"
+        title={t('table.styles.title')}
         style={{
           display: 'flex',
           alignItems: 'center',
@@ -435,7 +455,7 @@ export function TableStyleGallery({
         }}
       >
         <MaterialSymbol name="format_paint" size={16} />
-        <span>Styles</span>
+        <span>{t('table.styles.label')}</span>
         <MaterialSymbol name="expand_more" size={14} />
       </button>
 
@@ -459,14 +479,18 @@ export function TableStyleGallery({
             overflowY: 'auto',
           }}
         >
-          {allPresets.map((preset) => (
-            <StylePreview
-              key={preset.id}
-              preset={preset}
-              isSelected={currentStyleId === preset.id}
-              onClick={() => handleApply(preset.id)}
-            />
-          ))}
+          {allPresets.map((preset) => {
+            const nameKey = STYLE_NAME_KEYS[preset.id];
+            const translatedPreset = nameKey ? { ...preset, name: t(nameKey as any) } : preset;
+            return (
+              <StylePreview
+                key={preset.id}
+                preset={translatedPreset}
+                isSelected={currentStyleId === preset.id}
+                onClick={() => handleApply(preset.id)}
+              />
+            );
+          })}
         </div>
       )}
     </div>

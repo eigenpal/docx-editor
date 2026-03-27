@@ -14,6 +14,7 @@
 
 import React, { useState, useCallback, useRef, useEffect } from 'react';
 import type { CSSProperties, DragEvent, ChangeEvent } from 'react';
+import { useTranslation } from '../../i18n';
 
 // ============================================================================
 // TYPES
@@ -353,6 +354,8 @@ export function InsertImageDialog({
   className,
   style,
 }: InsertImageDialogProps): React.ReactElement | null {
+  const { t } = useTranslation();
+
   // State
   const [imageData, setImageData] = useState<ImageData | null>(null);
   const [isDragging, setIsDragging] = useState(false);
@@ -612,14 +615,14 @@ export function InsertImageDialog({
         {/* Header */}
         <div className="docx-insert-image-dialog-header" style={DIALOG_HEADER_STYLE}>
           <h2 id="insert-image-dialog-title" style={DIALOG_TITLE_STYLE}>
-            Insert Image
+            {t('dialogs.insertImage.title')}
           </h2>
           <button
             type="button"
             className="docx-insert-image-dialog-close"
             style={CLOSE_BUTTON_STYLE}
             onClick={onClose}
-            aria-label="Close dialog"
+            aria-label={t('common.closeDialog')}
           >
             &times;
           </button>
@@ -646,7 +649,7 @@ export function InsertImageDialog({
             onDrop={handleDrop}
             role="button"
             tabIndex={0}
-            aria-label="Click or drag to upload image"
+            aria-label={t('dialogs.insertImage.uploadAriaLabel')}
           >
             {imageData ? (
               <div style={PREVIEW_CONTAINER_STYLE}>
@@ -657,8 +660,8 @@ export function InsertImageDialog({
                 <div style={DROP_ZONE_ICON_STYLE}>
                   <ImageIcon />
                 </div>
-                <div style={DROP_ZONE_TEXT_STYLE}>Click to select or drag and drop an image</div>
-                <div style={DROP_ZONE_SUBTEXT_STYLE}>PNG, JPG, GIF up to 10MB</div>
+                <div style={DROP_ZONE_TEXT_STYLE}>{t('dialogs.insertImage.uploadText')}</div>
+                <div style={DROP_ZONE_SUBTEXT_STYLE}>{t('dialogs.insertImage.uploadSubtext')}</div>
               </>
             )}
           </div>
@@ -682,7 +685,7 @@ export function InsertImageDialog({
                   fontSize: '12px',
                 }}
               >
-                Change
+                {t('common.change')}
               </button>
             </div>
           )}
@@ -705,9 +708,11 @@ export function InsertImageDialog({
           {imageData && (
             <>
               <div style={FORM_GROUP_STYLE}>
-                <label style={LABEL_STYLE}>Dimensions</label>
+                <label style={LABEL_STYLE}>{t('dialogs.insertImage.dimensions')}</label>
                 <div style={SIZE_ROW_STYLE}>
-                  <span style={{ fontSize: '14px', color: 'var(--doc-text-muted)' }}>Width:</span>
+                  <span style={{ fontSize: '14px', color: 'var(--doc-text-muted)' }}>
+                    {t('dialogs.insertImage.widthLabel')}
+                  </span>
                   <input
                     type="number"
                     value={width}
@@ -716,16 +721,24 @@ export function InsertImageDialog({
                     max={maxWidth}
                     style={SIZE_INPUT_STYLE}
                   />
-                  <span style={{ fontSize: '14px', color: 'var(--doc-text-muted)' }}>px</span>
+                  <span style={{ fontSize: '14px', color: 'var(--doc-text-muted)' }}>
+                    {t('common.px')}
+                  </span>
                   <button
                     type="button"
                     onClick={() => setAspectLocked(!aspectLocked)}
                     style={aspectLocked ? LOCK_BUTTON_ACTIVE_STYLE : LOCK_BUTTON_STYLE}
-                    title={aspectLocked ? 'Aspect ratio locked' : 'Aspect ratio unlocked'}
+                    title={
+                      aspectLocked
+                        ? t('dialogs.insertImage.aspectRatioLocked')
+                        : t('dialogs.insertImage.aspectRatioUnlocked')
+                    }
                   >
                     <LockIcon locked={aspectLocked} />
                   </button>
-                  <span style={{ fontSize: '14px', color: 'var(--doc-text-muted)' }}>Height:</span>
+                  <span style={{ fontSize: '14px', color: 'var(--doc-text-muted)' }}>
+                    {t('dialogs.insertImage.heightLabel')}
+                  </span>
                   <input
                     type="number"
                     value={height}
@@ -734,20 +747,22 @@ export function InsertImageDialog({
                     max={maxHeight}
                     style={SIZE_INPUT_STYLE}
                   />
-                  <span style={{ fontSize: '14px', color: 'var(--doc-text-muted)' }}>px</span>
+                  <span style={{ fontSize: '14px', color: 'var(--doc-text-muted)' }}>
+                    {t('common.px')}
+                  </span>
                 </div>
               </div>
 
               <div style={FORM_GROUP_STYLE}>
                 <label htmlFor="insert-image-alt" style={LABEL_STYLE}>
-                  Alt Text (optional)
+                  {t('dialogs.insertImage.altTextLabel')}
                 </label>
                 <input
                   id="insert-image-alt"
                   type="text"
                   value={altText}
                   onChange={(e) => setAltText(e.target.value)}
-                  placeholder="Describe the image for accessibility"
+                  placeholder={t('dialogs.insertImage.altTextPlaceholder')}
                   style={INPUT_STYLE}
                 />
               </div>
@@ -763,7 +778,7 @@ export function InsertImageDialog({
             style={SECONDARY_BUTTON_STYLE}
             onClick={onClose}
           >
-            Cancel
+            {t('common.cancel')}
           </button>
           <button
             type="button"
@@ -772,7 +787,7 @@ export function InsertImageDialog({
             onClick={handleInsert}
             disabled={!canInsert}
           >
-            Insert Image
+            {t('dialogs.insertImage.insertButton')}
           </button>
         </div>
       </div>

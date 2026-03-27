@@ -13,6 +13,7 @@
 
 import React, { useState, useCallback, useRef, useEffect } from 'react';
 import type { CSSProperties, KeyboardEvent } from 'react';
+import { useTranslation } from '../../i18n';
 
 // ============================================================================
 // TYPES
@@ -267,6 +268,8 @@ export function InsertTableDialog({
   className,
   style,
 }: InsertTableDialogProps): React.ReactElement | null {
+  const { t } = useTranslation();
+
   // State for grid hover selection
   const [hoverRows, setHoverRows] = useState(0);
   const [hoverCols, setHoverCols] = useState(0);
@@ -403,7 +406,9 @@ export function InsertTableDialog({
 
   const canInsert = inputRows >= 1 && inputCols >= 1;
   const gridLabel =
-    hoverRows > 0 && hoverCols > 0 ? `${hoverCols} x ${hoverRows} Table` : 'Hover to select size';
+    hoverRows > 0 && hoverCols > 0
+      ? t('dialogs.insertTable.tableSize', { cols: hoverCols, rows: hoverRows })
+      : t('dialogs.insertTable.hoverToSelect');
 
   return (
     <div
@@ -426,7 +431,7 @@ export function InsertTableDialog({
           <h2 id="insert-table-dialog-title" style={DIALOG_TITLE_STYLE}>
             <span style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
               <TableIcon />
-              Insert Table
+              {t('dialogs.insertTable.title')}
             </span>
           </h2>
           <button
@@ -434,7 +439,7 @@ export function InsertTableDialog({
             className="docx-insert-table-dialog-close"
             style={CLOSE_BUTTON_STYLE}
             onClick={onClose}
-            aria-label="Close dialog"
+            aria-label={t('common.closeDialog')}
           >
             &times;
           </button>
@@ -467,7 +472,7 @@ export function InsertTableDialog({
           {/* Separator */}
           <div className="docx-insert-table-separator" style={SEPARATOR_STYLE}>
             <div style={SEPARATOR_LINE_STYLE} />
-            <span>or specify size</span>
+            <span>{t('dialogs.insertTable.orSpecifySize')}</span>
             <div style={SEPARATOR_LINE_STYLE} />
           </div>
 
@@ -475,7 +480,7 @@ export function InsertTableDialog({
           <div className="docx-insert-table-inputs">
             <div style={INPUT_ROW_STYLE}>
               <label htmlFor="insert-table-rows" style={LABEL_STYLE}>
-                Rows:
+                {t('dialogs.insertTable.rowsLabel')}
               </label>
               <input
                 id="insert-table-rows"
@@ -489,7 +494,7 @@ export function InsertTableDialog({
             </div>
             <div style={INPUT_ROW_STYLE}>
               <label htmlFor="insert-table-cols" style={LABEL_STYLE}>
-                Columns:
+                {t('dialogs.insertTable.columnsLabel')}
               </label>
               <input
                 id="insert-table-cols"
@@ -512,7 +517,7 @@ export function InsertTableDialog({
             style={SECONDARY_BUTTON_STYLE}
             onClick={onClose}
           >
-            Cancel
+            {t('common.cancel')}
           </button>
           <button
             type="button"
@@ -521,7 +526,7 @@ export function InsertTableDialog({
             onClick={handleManualInsert}
             disabled={!canInsert}
           >
-            Insert Table
+            {t('dialogs.insertTable.insertButton')}
           </button>
         </div>
       </div>

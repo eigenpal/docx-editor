@@ -9,6 +9,7 @@ import React, { useState, useRef, useCallback, useEffect, useMemo } from 'react'
 import type { ReactSidebarItem, RenderedDomContext } from '../plugin-api/types';
 import { SIDEBAR_WIDTH, SIDEBAR_PAGE_GAP, SIDEBAR_DOCUMENT_SHIFT } from './sidebar/constants';
 import { resolveItemPositions } from './sidebar/resolveItemPositions';
+import { useTranslation } from '../i18n';
 
 export { SIDEBAR_WIDTH, SIDEBAR_PAGE_GAP, SIDEBAR_DOCUMENT_SHIFT } from './sidebar/constants';
 
@@ -31,6 +32,7 @@ export function UnifiedSidebar({
   editorContainerRef,
   onExpandedItemChange,
 }: UnifiedSidebarProps) {
+  const { t } = useTranslation();
   const [expandedItem, setExpandedItem] = useState<string | null>(null);
 
   // Notify parent when expanded item changes (via effect, not in setState updater)
@@ -207,7 +209,7 @@ export function UnifiedSidebar({
       ref={sidebarRef}
       className="docx-unified-sidebar"
       role="complementary"
-      aria-label="Annotations sidebar"
+      aria-label={t('sidebar.ariaLabel')}
       style={{
         position: 'absolute',
         top: 0,

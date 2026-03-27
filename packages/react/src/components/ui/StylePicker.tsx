@@ -9,6 +9,7 @@ import * as React from 'react';
 import { Select, SelectContent, SelectItem, SelectTrigger } from './Select';
 import { cn } from '../../lib/utils';
 import type { Style, StyleType, Theme } from '@eigenpal/docx-core/types/document';
+import { useTranslation } from '../../i18n';
 
 // ============================================================================
 // TYPES
@@ -17,6 +18,7 @@ import type { Style, StyleType, Theme } from '@eigenpal/docx-core/types/document
 export interface StyleOption {
   styleId: string;
   name: string;
+  nameKey?: string;
   type: StyleType;
   isDefault?: boolean;
   qFormat?: boolean;
@@ -49,6 +51,7 @@ const DEFAULT_STYLES: StyleOption[] = [
   {
     styleId: 'Normal',
     name: 'Normal text',
+    nameKey: 'styles.normalText',
     type: 'paragraph',
     isDefault: true,
     priority: 0,
@@ -58,6 +61,7 @@ const DEFAULT_STYLES: StyleOption[] = [
   {
     styleId: 'Title',
     name: 'Title',
+    nameKey: 'styles.title',
     type: 'paragraph',
     priority: 1,
     qFormat: true,
@@ -67,6 +71,7 @@ const DEFAULT_STYLES: StyleOption[] = [
   {
     styleId: 'Subtitle',
     name: 'Subtitle',
+    nameKey: 'styles.subtitle',
     type: 'paragraph',
     priority: 2,
     qFormat: true,
@@ -76,6 +81,7 @@ const DEFAULT_STYLES: StyleOption[] = [
   {
     styleId: 'Heading1',
     name: 'Heading 1',
+    nameKey: 'styles.heading1',
     type: 'paragraph',
     priority: 3,
     qFormat: true,
@@ -85,6 +91,7 @@ const DEFAULT_STYLES: StyleOption[] = [
   {
     styleId: 'Heading2',
     name: 'Heading 2',
+    nameKey: 'styles.heading2',
     type: 'paragraph',
     priority: 4,
     qFormat: true,
@@ -94,6 +101,7 @@ const DEFAULT_STYLES: StyleOption[] = [
   {
     styleId: 'Heading3',
     name: 'Heading 3',
+    nameKey: 'styles.heading3',
     type: 'paragraph',
     priority: 5,
     qFormat: true,
@@ -168,6 +176,7 @@ export function StylePicker({
   className,
   width = 120,
 }: StylePickerProps) {
+  const { t } = useTranslation();
   // Convert document styles to options with visual info
   const styleOptions = React.useMemo(() => {
     if (!styles || styles.length === 0) {
@@ -189,6 +198,7 @@ export function StylePicker({
         return {
           styleId: s.styleId,
           name: s.name || s.styleId,
+          nameKey: defaultStyle?.nameKey,
           type: s.type,
           isDefault: s.default,
           qFormat: s.qFormat,
@@ -212,22 +222,26 @@ export function StylePicker({
     [onChange]
   );
 
+  const getStyleName = (style: StyleOption) =>
+    style.nameKey ? t(style.nameKey as any) : style.name;
+
   const currentValue = value || 'Normal';
-  const displayName = styleOptions.find((s) => s.styleId === currentValue)?.name || currentValue;
+  const currentStyle = styleOptions.find((s) => s.styleId === currentValue);
+  const displayName = currentStyle ? getStyleName(currentStyle) : currentValue;
 
   return (
     <Select value={currentValue} onValueChange={handleValueChange} disabled={disabled}>
       <SelectTrigger
         className={cn('h-8 text-sm', className)}
         style={{ width: typeof width === 'number' ? `${width}px` : width }}
-        aria-label="Select paragraph style"
+        aria-label={t('styles.selectAriaLabel')}
       >
         <span className="truncate">{displayName}</span>
       </SelectTrigger>
       <SelectContent className="min-w-[260px] max-h-[400px]">
         {styleOptions.map((style) => (
           <SelectItem key={style.styleId} value={style.styleId} className="py-2.5 px-3">
-            <span style={getStylePreviewCSS(style)}>{style.name}</span>
+            <span style={getStylePreviewCSS(style)}>{getStyleName(style)}</span>
           </SelectItem>
         ))}
       </SelectContent>
