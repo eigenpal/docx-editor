@@ -5,7 +5,16 @@ import type { LocaleStrings, PartialLocaleStrings, TranslationKey } from './type
 
 const defaultLocale: LocaleStrings = en;
 
+/** i18n configuration: translation overrides + optional locale for plural rules */
+export interface I18nConfig {
+  /** Translation strings. Deep-merged with English defaults. Null values fall back to English. */
+  translations: PartialLocaleStrings;
+  /** BCP 47 language tag (e.g., "pl", "ar"). Only needed for languages with complex plural rules. Defaults to "en". */
+  locale?: string;
+}
+
 const LocaleContext = createContext<LocaleStrings>(defaultLocale);
+const LangContext = createContext<string>('en');
 
 /**
  * Deep merge locale objects. Null values in the override are treated as
@@ -111,21 +120,26 @@ function formatMessage(
 }
 
 export interface LocaleProviderProps {
-  locale?: PartialLocaleStrings;
+  i18n?: I18nConfig;
   children: ReactNode;
 }
 
-export function LocaleProvider({ locale, children }: LocaleProviderProps) {
+export function LocaleProvider({ i18n, children }: LocaleProviderProps) {
+  const lang = i18n?.locale ?? 'en';
   const merged = useMemo(
-    () => deepMerge(defaultLocale, locale as Record<string, unknown> | undefined),
-    [locale]
+    () => deepMerge(defaultLocale, i18n?.translations as Record<string, unknown> | undefined),
+    [i18n?.translations]
   );
-  return <LocaleContext.Provider value={merged}>{children}</LocaleContext.Provider>;
+  return (
+    <LangContext.Provider value={lang}>
+      <LocaleContext.Provider value={merged}>{children}</LocaleContext.Provider>
+    </LangContext.Provider>
+  );
 }
 
 export function useTranslation() {
   const strings = useContext(LocaleContext);
-  const lang = (strings as unknown as Record<string, unknown>)['_lang'] as string | undefined;
+  const lang = useContext(LangContext);
   const t = useCallback(
     (key: TranslationKey, vars?: Record<string, string | number>): string => {
       const value = getNestedValue(strings as unknown as Record<string, unknown>, key);

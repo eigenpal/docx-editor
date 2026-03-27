@@ -25,7 +25,7 @@ Open-source WYSIWYG DOCX editor for the browser. No server required. **[Live dem
 - WYSIWYG editing with Word fidelity — formatting, tables, images, hyperlinks
 - Track changes (suggestion mode) with accept/reject
 - Comments with replies, resolve/reopen, scroll-to-highlight
-- **Internationalization (i18n)** — [`locale` prop](docs/i18n.md) for full UI translation, [community-contributed translations welcome](docs/i18n.md#contributing-a-new-locale)
+- **Internationalization (i18n)** — [`i18n` prop](docs/i18n.md) for full UI translation, [community-contributed translations welcome](docs/i18n.md#contributing-a-new-locale)
 - Plugin system, undo/redo, find & replace, print preview
 - Client-side only, zero server dependencies
 

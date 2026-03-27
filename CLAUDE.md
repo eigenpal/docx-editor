@@ -249,7 +249,7 @@ All user-facing strings are translatable via a lightweight i18n system (no exter
 
 - `LocaleStrings` type is auto-derived from `en.json` via `typeof import` — no manual interface
 - `TranslationKey` is a union of all valid dot-paths (e.g., `"toolbar.bold" | "dialogs.findReplace.title" | ...`)
-- `<DocxEditor locale={de} />` deep-merges with English defaults (null keys fall back to English)
+- `<DocxEditor i18n={{ translations: de }} />` deep-merges with English defaults (null keys fall back to English)
 - `useTranslation()` hook returns `t(key, vars?)` for string lookup with `{variable}` interpolation
 
 ### Using t() in Components

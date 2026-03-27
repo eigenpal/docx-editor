@@ -49,7 +49,7 @@ import { ErrorBoundary, ErrorProvider } from './ErrorBoundary';
 import type { TableAction } from './ui/TableToolbar';
 import { mapHexToHighlightName } from './toolbarUtils';
 import { LocaleProvider } from '../i18n';
-import type { PartialLocaleStrings } from '../i18n';
+import type { I18nConfig } from '../i18n';
 import { HorizontalRuler } from './ui/HorizontalRuler';
 import { VerticalRuler } from './ui/VerticalRuler';
 import { type PrintOptions } from './ui/PrintPreview';
@@ -324,8 +324,8 @@ export interface DocxEditorProps {
   documentNameEditable?: boolean;
   /** Custom right-side actions for the title bar */
   renderTitleBarRight?: () => ReactNode;
-  /** Locale overrides for i18n. Deep-merged with English defaults. */
-  locale?: PartialLocaleStrings;
+  /** i18n configuration: locale tag + translation overrides. */
+  i18n?: I18nConfig;
 }
 
 /**
@@ -819,7 +819,7 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
     onDocumentNameChange,
     documentNameEditable = true,
     renderTitleBarRight,
-    locale,
+    i18n,
   },
   ref
 ) {
@@ -3696,7 +3696,7 @@ body { background: white; }
   );
 
   return (
-    <LocaleProvider locale={locale}>
+    <LocaleProvider i18n={i18n}>
       <ErrorProvider>
         <ErrorBoundary onError={handleEditorError}>
           <div

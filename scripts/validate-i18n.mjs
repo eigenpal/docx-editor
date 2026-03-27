@@ -185,8 +185,6 @@ function cmdNew(lang) {
 
   const en = JSON.parse(readFileSync(EN_PATH, 'utf-8'));
   const skeleton = buildSkeleton(en);
-  // Set _lang to the target language (not null)
-  skeleton._lang = lang;
   const leafCount = getLeafPaths(en).length;
 
   writeFileSync(filePath, JSON.stringify(skeleton, null, 2) + '\n', 'utf-8');
