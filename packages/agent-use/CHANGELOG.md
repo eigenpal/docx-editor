@@ -1,5 +1,11 @@
 # @eigenpal/docx-editor-agents
 
+## 0.0.32
+
+### Patch Changes
+
+- Fixes with comments and tracked changes
+
 ## 0.0.31
 
 ### Patch Changes
