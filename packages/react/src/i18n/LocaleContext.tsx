@@ -5,12 +5,98 @@ import type { LocaleStrings, PartialLocaleStrings, TranslationKey } from './type
 
 const defaultLocale: LocaleStrings = en;
 
+/**
+ * Common BCP 47 locale tags with autocomplete.
+ * Accepts any valid string via the (string & {}) escape hatch.
+ */
+export type Locale =
+  | 'af'
+  | 'am'
+  | 'ar'
+  | 'az'
+  | 'be'
+  | 'bg'
+  | 'bn'
+  | 'bs'
+  | 'ca'
+  | 'cs'
+  | 'cy'
+  | 'da'
+  | 'de'
+  | 'el'
+  | 'en'
+  | 'es'
+  | 'et'
+  | 'eu'
+  | 'fa'
+  | 'fi'
+  | 'fil'
+  | 'fr'
+  | 'ga'
+  | 'gl'
+  | 'gu'
+  | 'he'
+  | 'hi'
+  | 'hr'
+  | 'hu'
+  | 'hy'
+  | 'id'
+  | 'is'
+  | 'it'
+  | 'ja'
+  | 'ka'
+  | 'kk'
+  | 'km'
+  | 'kn'
+  | 'ko'
+  | 'ky'
+  | 'lo'
+  | 'lt'
+  | 'lv'
+  | 'mk'
+  | 'ml'
+  | 'mn'
+  | 'mr'
+  | 'ms'
+  | 'my'
+  | 'nb'
+  | 'ne'
+  | 'nl'
+  | 'nn'
+  | 'no'
+  | 'pa'
+  | 'pl'
+  | 'pt'
+  | 'pt-BR'
+  | 'ro'
+  | 'ru'
+  | 'si'
+  | 'sk'
+  | 'sl'
+  | 'sq'
+  | 'sr'
+  | 'sv'
+  | 'sw'
+  | 'ta'
+  | 'te'
+  | 'th'
+  | 'tk'
+  | 'tr'
+  | 'uk'
+  | 'ur'
+  | 'uz'
+  | 'vi'
+  | 'zh'
+  | 'zh-Hans'
+  | 'zh-Hant'
+  | (string & Record<never, never>);
+
 /** i18n configuration: translation overrides + optional locale for plural rules */
 export interface I18nConfig {
   /** Translation strings. Deep-merged with English defaults. Null values fall back to English. */
   translations: PartialLocaleStrings;
   /** BCP 47 language tag (e.g., "pl", "ar"). Only needed for languages with complex plural rules. Defaults to "en". */
-  locale?: string;
+  locale?: Locale;
 }
 
 const LocaleContext = createContext<LocaleStrings>(defaultLocale);
