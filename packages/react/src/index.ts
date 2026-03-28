@@ -402,6 +402,7 @@ export {
   useTranslation,
   type LocaleProviderProps,
   type LocaleStrings,
+  type Translations,
   type PartialLocaleStrings,
   type TranslationKey,
 } from './i18n';

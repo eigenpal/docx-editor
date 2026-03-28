@@ -1,7 +1,7 @@
 import { createContext, useContext, useMemo, useCallback } from 'react';
 import type { ReactNode } from 'react';
 import en from '../../i18n/en.json';
-import type { LocaleStrings, PartialLocaleStrings, TranslationKey } from './types';
+import type { LocaleStrings, Translations, TranslationKey } from './types';
 
 const defaultLocale: LocaleStrings = en;
 
@@ -112,7 +112,7 @@ function formatMessage(
 }
 
 export interface LocaleProviderProps {
-  i18n?: PartialLocaleStrings;
+  i18n?: Translations;
   children: ReactNode;
 }
 

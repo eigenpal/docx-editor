@@ -10,6 +10,9 @@ export type DeepPartial<T> = {
 
 export type PartialLocaleStrings = DeepPartial<LocaleStrings>;
 
+/** Consumer-facing type for the i18n prop. */
+export type Translations = PartialLocaleStrings;
+
 /** Generates a union of all valid dot-notation paths through a nested object type */
 type DotPath<T, Prefix extends string = ''> = {
   [K in keyof T & string]: T[K] extends Record<string, unknown>
