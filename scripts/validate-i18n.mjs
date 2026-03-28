@@ -27,9 +27,13 @@ const EN_PATH = join(I18N_DIR, 'en.json');
 // Helpers
 // ---------------------------------------------------------------------------
 
+/** Keys that are metadata, not translatable strings */
+const METADATA_KEYS = new Set(['_lang']);
+
 function getLeafPaths(obj, prefix = '') {
   const paths = [];
   for (const [k, v] of Object.entries(obj)) {
+    if (!prefix && METADATA_KEYS.has(k)) continue; // skip top-level metadata
     const path = prefix ? `${prefix}.${k}` : k;
     if (v !== null && typeof v === 'object' && !Array.isArray(v)) {
       paths.push(...getLeafPaths(v, path));
