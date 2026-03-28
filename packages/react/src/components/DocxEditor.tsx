@@ -49,7 +49,7 @@ import { ErrorBoundary, ErrorProvider } from './ErrorBoundary';
 import type { TableAction } from './ui/TableToolbar';
 import { mapHexToHighlightName } from './toolbarUtils';
 import { LocaleProvider } from '../i18n';
-import type { I18nConfig } from '../i18n';
+import type { PartialLocaleStrings } from '../i18n';
 import { HorizontalRuler } from './ui/HorizontalRuler';
 import { VerticalRuler } from './ui/VerticalRuler';
 import { type PrintOptions } from './ui/PrintPreview';
@@ -324,8 +324,8 @@ export interface DocxEditorProps {
   documentNameEditable?: boolean;
   /** Custom right-side actions for the title bar */
   renderTitleBarRight?: () => ReactNode;
-  /** i18n configuration: locale tag + translation overrides. */
-  i18n?: I18nConfig;
+  /** Translation overrides. Import a locale JSON file and pass it directly. */
+  i18n?: PartialLocaleStrings;
 }
 
 /**

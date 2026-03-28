@@ -5,20 +5,6 @@ import type { LocaleStrings, PartialLocaleStrings, TranslationKey } from './type
 
 const defaultLocale: LocaleStrings = en;
 
-/**
- * Supported locale tags. Expand this union as new translations are added.
- * Accepts any valid BCP 47 string for languages not yet in the list.
- */
-export type Locale = 'en' | (string & Record<never, never>);
-
-/** i18n configuration: translation overrides + optional locale for plural rules */
-export interface I18nConfig {
-  /** Translation strings. Deep-merged with English defaults. Null values fall back to English. */
-  translations: PartialLocaleStrings;
-  /** BCP 47 language tag (e.g., "pl", "ar"). Only needed for languages with complex plural rules. Defaults to "en". */
-  locale?: Locale;
-}
-
 const LocaleContext = createContext<LocaleStrings>(defaultLocale);
 const LangContext = createContext<string>('en');
 
@@ -126,16 +112,14 @@ function formatMessage(
 }
 
 export interface LocaleProviderProps {
-  i18n?: I18nConfig;
+  i18n?: PartialLocaleStrings;
   children: ReactNode;
 }
 
 export function LocaleProvider({ i18n, children }: LocaleProviderProps) {
-  const lang = i18n?.locale ?? 'en';
-  const merged = useMemo(
-    () => deepMerge(defaultLocale, i18n?.translations as Record<string, unknown> | undefined),
-    [i18n?.translations]
-  );
+  const localeObj = i18n as Record<string, unknown> | undefined;
+  const lang = (typeof localeObj?._lang === 'string' ? localeObj._lang : 'en') as string;
+  const merged = useMemo(() => deepMerge(defaultLocale, localeObj), [localeObj]);
   return (
     <LangContext.Provider value={lang}>
       <LocaleContext.Provider value={merged}>{children}</LocaleContext.Provider>

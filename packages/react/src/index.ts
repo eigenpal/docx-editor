@@ -401,7 +401,6 @@ export {
   LocaleProvider,
   useTranslation,
   type LocaleProviderProps,
-  type I18nConfig,
   type LocaleStrings,
   type PartialLocaleStrings,
   type TranslationKey,
