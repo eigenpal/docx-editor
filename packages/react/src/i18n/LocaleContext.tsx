@@ -118,7 +118,7 @@ export interface LocaleProviderProps {
 
 export function LocaleProvider({ i18n, children }: LocaleProviderProps) {
   const localeObj = i18n as Record<string, unknown> | undefined;
-  const lang = (typeof localeObj?._lang === 'string' ? localeObj._lang : 'en') as string;
+  const lang = typeof localeObj?._lang === 'string' ? localeObj._lang : 'en';
   const merged = useMemo(() => deepMerge(defaultLocale, localeObj), [localeObj]);
   return (
     <LangContext.Provider value={lang}>
