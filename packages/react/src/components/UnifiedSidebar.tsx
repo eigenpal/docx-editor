@@ -21,6 +21,8 @@ export interface UnifiedSidebarProps {
   zoom: number;
   editorContainerRef: React.RefObject<HTMLDivElement | null>;
   onExpandedItemChange?: (itemId: string | null) => void;
+  /** Maps alternate revision IDs to sidebar item IDs (e.g. insertion side of replacements). */
+  revisionIdAliases?: Map<string, string>;
 }
 
 export function UnifiedSidebar({
@@ -31,6 +33,7 @@ export function UnifiedSidebar({
   zoom,
   editorContainerRef,
   onExpandedItemChange,
+  revisionIdAliases,
 }: UnifiedSidebarProps) {
   const { t } = useTranslation();
   const [expandedItem, setExpandedItem] = useState<string | null>(null);
@@ -165,8 +168,17 @@ export function UnifiedSidebar({
           (target.closest('.docx-insertion') as HTMLElement | null) ||
           (target.closest('.docx-deletion') as HTMLElement | null);
         if (changeEl?.dataset.revisionId) {
-          const prefix = `tc-${changeEl.dataset.revisionId}-`;
-          const match = items.find((i) => i.id.startsWith(prefix));
+          const revId = changeEl.dataset.revisionId;
+          const prefix = `tc-${revId}-`;
+          let match = items.find((i) => i.id.startsWith(prefix));
+          // For replacement tracked changes, the insertion part has a different
+          // revisionId than the card. Look up the alias to find the correct card.
+          if (!match && revisionIdAliases) {
+            const aliasedItemId = revisionIdAliases.get(revId);
+            if (aliasedItemId) {
+              match = items.find((i) => i.id === aliasedItemId);
+            }
+          }
           if (match) {
             setExpandedItem(match.id);
             return;
@@ -179,7 +191,7 @@ export function UnifiedSidebar({
 
     container.addEventListener('click', handleDocClick);
     return () => container.removeEventListener('click', handleDocClick);
-  }, [editorContainerRef, items]);
+  }, [editorContainerRef, items, revisionIdAliases]);
 
   const getMeasureRef = useCallback((itemId: string): ((el: HTMLDivElement | null) => void) => {
     let fn = measureRefsRef.current.get(itemId);

@@ -125,4 +125,6 @@ export interface TrackedChangeEntry {
   from: number;
   to: number;
   revisionId: number;
+  /** For replacements: the insertion part's revisionId (different from the deletion's) */
+  insertionRevisionId?: number;
 }

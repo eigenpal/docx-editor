@@ -969,6 +969,7 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
           from: curr.from,
           to: next.to,
           revisionId: curr.revisionId,
+          insertionRevisionId: next.revisionId,
         });
         i++; // skip the insertion entry
       } else {
@@ -3604,6 +3605,18 @@ body { background: white; }
     return items;
   }, [showCommentsSidebar, commentSidebarItems, pluginSidebarItems]);
 
+  // Build a map from insertion revisionIds to sidebar item IDs for replacement tracked changes.
+  // This allows clicking the insertion part of a replacement to activate the same sidebar card.
+  const revisionIdAliases = useMemo(() => {
+    const map = new Map<string, string>();
+    trackedChanges.forEach((change, idx) => {
+      if (change.type === 'replacement' && change.insertionRevisionId != null) {
+        map.set(String(change.insertionRevisionId), `tc-${change.revisionId}-${idx}`);
+      }
+    });
+    return map;
+  }, [trackedChanges]);
+
   const sidebarOpen = allSidebarItems.length > 0;
 
   const resolvedCommentIds = useMemo(() => {
@@ -3850,12 +3863,18 @@ body { background: white; }
                       {expandedSidebarItem && expandedSidebarItem.startsWith('comment-') && (
                         <style>{`.paged-editor__pages [data-comment-id="${expandedSidebarItem.replace('comment-', '')}"] { background-color: rgba(255, 212, 0, 0.35) !important; border-bottom: 2px solid rgba(255, 212, 0, 0.7) !important; }`}</style>
                       )}
-                      {expandedSidebarItem?.startsWith('tc-') && (
-                        <style>{`
-                          .paged-editor__pages .docx-insertion[data-revision-id="${expandedSidebarItem.split('-')[1]}"] { background-color: rgba(52, 168, 83, 0.2) !important; border-bottom: 2px solid #2e7d32 !important; }
-                          .paged-editor__pages .docx-deletion[data-revision-id="${expandedSidebarItem.split('-')[1]}"] { background-color: rgba(211, 47, 47, 0.2) !important; text-decoration-thickness: 2px !important; }
-                        `}</style>
-                      )}
+                      {expandedSidebarItem?.startsWith('tc-') &&
+                        (() => {
+                          const revId = expandedSidebarItem.split('-')[1];
+                          const tc = trackedChanges.find((c) => String(c.revisionId) === revId);
+                          const insRevId = tc?.insertionRevisionId;
+                          return (
+                            <style>{`
+                            .paged-editor__pages .docx-insertion[data-revision-id="${insRevId ?? revId}"] { background-color: rgba(52, 168, 83, 0.2) !important; border-bottom: 2px solid #2e7d32 !important; }
+                            .paged-editor__pages .docx-deletion[data-revision-id="${revId}"] { background-color: rgba(211, 47, 47, 0.2) !important; text-decoration-thickness: 2px !important; }
+                          `}</style>
+                          );
+                        })()}
                       <PagedEditor
                         ref={pagedEditorRef}
                         document={history.state}
@@ -3910,6 +3929,7 @@ body { background: white; }
                                 zoom={state.zoom}
                                 editorContainerRef={scrollContainerRef}
                                 onExpandedItemChange={setExpandedSidebarItem}
+                                revisionIdAliases={revisionIdAliases}
                               />
                             )}
                             <CommentMarginMarkers
