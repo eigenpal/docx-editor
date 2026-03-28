@@ -8,45 +8,36 @@ const defaultLocale: LocaleStrings = en;
 const LocaleContext = createContext<LocaleStrings>(defaultLocale);
 const LangContext = createContext<string>('en');
 
+type AnyRecord = Record<string, unknown>;
+
+function isRecord(v: unknown): v is AnyRecord {
+  return v !== null && typeof v === 'object' && !Array.isArray(v);
+}
+
 /**
  * Deep merge locale objects. Null values in the override are treated as
  * "not yet translated" and fall back to the base (English) value.
  */
-function deepMerge<T extends Record<string, unknown>>(
-  base: T,
-  override: Record<string, unknown> | undefined
-): T {
+function deepMerge(base: AnyRecord, override: AnyRecord | undefined): AnyRecord {
   if (!override) return base;
-  const result = { ...base };
+  const result: AnyRecord = { ...base };
   for (const key of Object.keys(override)) {
-    const baseVal = (base as Record<string, unknown>)[key];
     const overVal = override[key];
     if (overVal === null) continue;
-    if (
-      baseVal &&
-      overVal &&
-      typeof baseVal === 'object' &&
-      typeof overVal === 'object' &&
-      !Array.isArray(baseVal) &&
-      !Array.isArray(overVal)
-    ) {
-      (result as Record<string, unknown>)[key] = deepMerge(
-        baseVal as Record<string, unknown>,
-        overVal as Record<string, unknown>
-      );
+    if (isRecord(base[key]) && isRecord(overVal)) {
+      result[key] = deepMerge(base[key], overVal);
     } else if (overVal !== undefined) {
-      (result as Record<string, unknown>)[key] = overVal;
+      result[key] = overVal;
     }
   }
   return result;
 }
 
-function getNestedValue(obj: Record<string, unknown>, path: string): string | undefined {
-  const parts = path.split('.');
+function getNestedValue(obj: AnyRecord, path: string): string | undefined {
   let current: unknown = obj;
-  for (const part of parts) {
-    if (current == null || typeof current !== 'object') return undefined;
-    current = (current as Record<string, unknown>)[part];
+  for (const part of path.split('.')) {
+    if (!isRecord(current)) return undefined;
+    current = current[part];
   }
   return typeof current === 'string' ? current : undefined;
 }
@@ -117,12 +108,12 @@ export interface LocaleProviderProps {
 }
 
 export function LocaleProvider({ i18n, children }: LocaleProviderProps) {
-  const localeObj = i18n as Record<string, unknown> | undefined;
-  const lang = typeof localeObj?._lang === 'string' ? localeObj._lang : 'en';
-  const merged = useMemo(() => deepMerge(defaultLocale, localeObj), [localeObj]);
+  const i18nRecord = i18n as AnyRecord | undefined;
+  const lang = typeof i18nRecord?._lang === 'string' ? i18nRecord._lang : 'en';
+  const merged = useMemo(() => deepMerge(defaultLocale, i18nRecord), [i18nRecord]);
   return (
     <LangContext.Provider value={lang}>
-      <LocaleContext.Provider value={merged}>{children}</LocaleContext.Provider>
+      <LocaleContext.Provider value={merged as LocaleStrings}>{children}</LocaleContext.Provider>
     </LangContext.Provider>
   );
 }
@@ -132,7 +123,7 @@ export function useTranslation() {
   const lang = useContext(LangContext);
   const t = useCallback(
     (key: TranslationKey, vars?: Record<string, string | number>): string => {
-      const value = getNestedValue(strings as unknown as Record<string, unknown>, key);
+      const value = getNestedValue(strings as AnyRecord, key);
       return formatMessage(value ?? key, vars, lang);
     },
     [strings, lang]
