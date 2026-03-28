@@ -14,7 +14,7 @@
  * Includes letters, numbers, combining marks, underscores, and
  * common word-internal punctuation (apostrophes, hyphens).
  */
-const WORD_CHAR_REGEX = /[\p{L}\p{N}\p{M}_'\-]/u;
+const WORD_CHAR_REGEX = /[\p{L}\p{N}\p{M}_''\-]/u;
 
 /**
  * Regular expression for whitespace characters
