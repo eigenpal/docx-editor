@@ -8,6 +8,7 @@
 
 import type { Comment } from '@eigenpal/docx-core/types/content';
 import { MaterialSymbol } from './ui/Icons';
+import { useTranslation } from '../i18n';
 
 export interface CommentMarginMarkersProps {
   comments: Comment[];
@@ -28,6 +29,7 @@ export function CommentMarginMarkers({
   resolvedCommentIds,
   onMarkerClick,
 }: CommentMarginMarkersProps) {
+  const { t } = useTranslation();
   const rootComments = comments.filter((c) => c.parentId == null);
 
   const markers = rootComments
@@ -62,7 +64,7 @@ export function CommentMarginMarkers({
         <button
           key={comment.id}
           onClick={() => onMarkerClick(comment.id)}
-          title={isResolved ? 'Resolved comment' : 'Comment'}
+          title={isResolved ? t('commentMarkers.resolvedComment') : t('commentMarkers.comment')}
           style={{
             position: 'absolute',
             top: y * zoom,

@@ -13,6 +13,8 @@ import type { CSSProperties, ReactNode } from 'react';
 import type { ColorValue, Theme } from '@eigenpal/docx-core/types/document';
 import { resolveHighlightColor } from '@eigenpal/docx-core/utils/colorResolver';
 import { useFixedDropdown } from './useFixedDropdown';
+import { useTranslation } from '../../i18n';
+import type { TranslationKey } from '../../i18n';
 
 // ============================================================================
 // TYPES
@@ -22,8 +24,10 @@ import { useFixedDropdown } from './useFixedDropdown';
  * Color option for the color grid
  */
 export interface ColorOption {
-  /** Display name for the color */
+  /** Display name for the color (used as fallback) */
   name: string;
+  /** i18n key for the color name (used with t() when available) */
+  nameKey?: TranslationKey;
   /** Hex value (without #) */
   hex: string;
   /** Is this a theme color? */
@@ -89,62 +93,62 @@ export interface ColorGridProps {
  */
 const TEXT_COLORS: ColorOption[] = [
   // Row 1: Theme colors (would be resolved from theme)
-  { name: 'Black', hex: '000000' },
-  { name: 'Dark Red', hex: '7F0000' },
-  { name: 'Dark Orange', hex: 'FF6600' },
-  { name: 'Dark Yellow', hex: '808000' },
-  { name: 'Dark Green', hex: '006400' },
-  { name: 'Dark Teal', hex: '008080' },
-  { name: 'Dark Blue', hex: '000080' },
-  { name: 'Dark Purple', hex: '4B0082' },
-  { name: 'Dark Gray', hex: '404040' },
-  { name: 'Gray', hex: '808080' },
+  { name: 'Black', nameKey: 'colorPicker.colors.black', hex: '000000' },
+  { name: 'Dark Red', nameKey: 'colorPicker.colors.darkRed', hex: '7F0000' },
+  { name: 'Dark Orange', nameKey: 'colorPicker.colors.darkOrange', hex: 'FF6600' },
+  { name: 'Dark Yellow', nameKey: 'colorPicker.colors.darkYellow', hex: '808000' },
+  { name: 'Dark Green', nameKey: 'colorPicker.colors.darkGreen', hex: '006400' },
+  { name: 'Dark Teal', nameKey: 'colorPicker.colors.darkTeal', hex: '008080' },
+  { name: 'Dark Blue', nameKey: 'colorPicker.colors.darkBlue', hex: '000080' },
+  { name: 'Dark Purple', nameKey: 'colorPicker.colors.darkPurple', hex: '4B0082' },
+  { name: 'Dark Gray', nameKey: 'colorPicker.colors.darkGray', hex: '404040' },
+  { name: 'Gray', nameKey: 'colorPicker.colors.gray', hex: '808080' },
 
   // Row 2: Standard colors
-  { name: 'Red', hex: 'FF0000' },
-  { name: 'Orange', hex: 'FF9900' },
-  { name: 'Yellow', hex: 'FFFF00' },
-  { name: 'Light Green', hex: '00FF00' },
-  { name: 'Cyan', hex: '00FFFF' },
-  { name: 'Light Blue', hex: '0066FF' },
-  { name: 'Blue', hex: '0000FF' },
-  { name: 'Purple', hex: '9900FF' },
-  { name: 'Magenta', hex: 'FF00FF' },
-  { name: 'Pink', hex: 'FF66FF' },
+  { name: 'Red', nameKey: 'colorPicker.colors.red', hex: 'FF0000' },
+  { name: 'Orange', nameKey: 'colorPicker.colors.orange', hex: 'FF9900' },
+  { name: 'Yellow', nameKey: 'colorPicker.colors.yellow', hex: 'FFFF00' },
+  { name: 'Light Green', nameKey: 'colorPicker.colors.lightGreen', hex: '00FF00' },
+  { name: 'Cyan', nameKey: 'colorPicker.colors.cyan', hex: '00FFFF' },
+  { name: 'Light Blue', nameKey: 'colorPicker.colors.lightBlue', hex: '0066FF' },
+  { name: 'Blue', nameKey: 'colorPicker.colors.blue', hex: '0000FF' },
+  { name: 'Purple', nameKey: 'colorPicker.colors.purple', hex: '9900FF' },
+  { name: 'Magenta', nameKey: 'colorPicker.colors.magenta', hex: 'FF00FF' },
+  { name: 'Pink', nameKey: 'colorPicker.colors.pink', hex: 'FF66FF' },
 
   // Row 3: Tints
-  { name: 'Light Red', hex: 'FFCCCC' },
-  { name: 'Light Orange', hex: 'FFE5CC' },
-  { name: 'Light Yellow', hex: 'FFFFCC' },
-  { name: 'Pale Green', hex: 'CCFFCC' },
-  { name: 'Light Cyan', hex: 'CCFFFF' },
-  { name: 'Sky Blue', hex: 'CCE5FF' },
-  { name: 'Light Blue 2', hex: 'CCCCFF' },
-  { name: 'Lavender', hex: 'E5CCFF' },
-  { name: 'Light Magenta', hex: 'FFCCFF' },
-  { name: 'White', hex: 'FFFFFF' },
+  { name: 'Light Red', nameKey: 'colorPicker.colors.lightRed', hex: 'FFCCCC' },
+  { name: 'Light Orange', nameKey: 'colorPicker.colors.lightOrange', hex: 'FFE5CC' },
+  { name: 'Light Yellow', nameKey: 'colorPicker.colors.lightYellow', hex: 'FFFFCC' },
+  { name: 'Pale Green', nameKey: 'colorPicker.colors.paleGreen', hex: 'CCFFCC' },
+  { name: 'Light Cyan', nameKey: 'colorPicker.colors.lightCyan', hex: 'CCFFFF' },
+  { name: 'Sky Blue', nameKey: 'colorPicker.colors.skyBlue', hex: 'CCE5FF' },
+  { name: 'Light Blue 2', nameKey: 'colorPicker.colors.lightBlue2', hex: 'CCCCFF' },
+  { name: 'Lavender', nameKey: 'colorPicker.colors.lavender', hex: 'E5CCFF' },
+  { name: 'Light Magenta', nameKey: 'colorPicker.colors.lightMagenta', hex: 'FFCCFF' },
+  { name: 'White', nameKey: 'colorPicker.colors.white', hex: 'FFFFFF' },
 ];
 
 /**
  * Standard Word highlight colors
  */
 const HIGHLIGHT_COLORS: ColorOption[] = [
-  { name: 'No Color', hex: '' },
-  { name: 'Yellow', hex: 'FFFF00' },
-  { name: 'Bright Green', hex: '00FF00' },
-  { name: 'Cyan', hex: '00FFFF' },
-  { name: 'Magenta', hex: 'FF00FF' },
-  { name: 'Blue', hex: '0000FF' },
-  { name: 'Red', hex: 'FF0000' },
-  { name: 'Dark Blue', hex: '00008B' },
-  { name: 'Teal', hex: '008080' },
-  { name: 'Green', hex: '008000' },
-  { name: 'Violet', hex: '800080' },
-  { name: 'Dark Red', hex: '8B0000' },
-  { name: 'Dark Yellow', hex: '808000' },
-  { name: 'Gray 50%', hex: '808080' },
-  { name: 'Gray 25%', hex: 'C0C0C0' },
-  { name: 'Black', hex: '000000' },
+  { name: 'No Color', nameKey: 'colorPicker.noColor', hex: '' },
+  { name: 'Yellow', nameKey: 'colorPicker.colors.yellow', hex: 'FFFF00' },
+  { name: 'Bright Green', nameKey: 'colorPicker.colors.brightGreen', hex: '00FF00' },
+  { name: 'Cyan', nameKey: 'colorPicker.colors.cyan', hex: '00FFFF' },
+  { name: 'Magenta', nameKey: 'colorPicker.colors.magenta', hex: 'FF00FF' },
+  { name: 'Blue', nameKey: 'colorPicker.colors.blue', hex: '0000FF' },
+  { name: 'Red', nameKey: 'colorPicker.colors.red', hex: 'FF0000' },
+  { name: 'Dark Blue', nameKey: 'colorPicker.colors.darkBlue', hex: '00008B' },
+  { name: 'Teal', nameKey: 'colorPicker.colors.teal', hex: '008080' },
+  { name: 'Green', nameKey: 'colorPicker.colors.green', hex: '008000' },
+  { name: 'Violet', nameKey: 'colorPicker.colors.violet', hex: '800080' },
+  { name: 'Dark Red', nameKey: 'colorPicker.colors.darkRed', hex: '8B0000' },
+  { name: 'Dark Yellow', nameKey: 'colorPicker.colors.darkYellow', hex: '808000' },
+  { name: 'Gray 50%', nameKey: 'colorPicker.colors.grey50', hex: '808080' },
+  { name: 'Gray 25%', nameKey: 'colorPicker.colors.grey25', hex: 'C0C0C0' },
+  { name: 'Black', nameKey: 'colorPicker.colors.black', hex: '000000' },
 ];
 
 // ============================================================================
@@ -313,6 +317,7 @@ export function ColorGrid({
   cellSize = 20,
 }: ColorGridProps) {
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
+  const { t } = useTranslation();
 
   const gridStyle: CSSProperties = {
     ...GRID_STYLE,
@@ -325,6 +330,7 @@ export function ColorGrid({
         const isSelected = selectedColor?.toUpperCase() === color.hex.toUpperCase();
         const isHovered = hoveredIndex === index;
         const isNoColor = color.hex === '';
+        const displayName = color.nameKey ? t(color.nameKey) : color.name;
 
         const cellStyle: CSSProperties = {
           ...(isSelected
@@ -349,9 +355,9 @@ export function ColorGrid({
             onMouseDown={(e) => e.preventDefault()} // Prevent focus stealing from editor
             onMouseEnter={() => setHoveredIndex(index)}
             onMouseLeave={() => setHoveredIndex(null)}
-            title={color.name}
+            title={displayName}
             role="gridcell"
-            aria-label={color.name}
+            aria-label={displayName}
             aria-selected={isSelected}
           >
             {isNoColor && <span style={NO_COLOR_LINE_STYLE} />}
@@ -387,6 +393,7 @@ export function ColorPicker({
   const [isOpen, setIsOpen] = useState(false);
   const [isHovered, setIsHovered] = useState(false);
   const [customHex, setCustomHex] = useState('');
+  const { t } = useTranslation();
 
   const onClose = useCallback(() => setIsOpen(false), []);
   const { containerRef, dropdownRef, dropdownStyle } = useFixedDropdown({
@@ -402,7 +409,7 @@ export function ColorPicker({
     const baseColors = [...TEXT_COLORS];
     if (showNoColor) {
       // Add "Automatic" option at the beginning for text color
-      baseColors.unshift({ name: 'Automatic', hex: '000000' });
+      baseColors.unshift({ name: 'Automatic', nameKey: 'colorPicker.automatic', hex: '000000' });
     }
     return baseColors;
   }, [type, showNoColor]);
@@ -468,7 +475,8 @@ export function ColorPicker({
         ? BUTTON_HOVER_STYLE
         : BUTTON_STYLE;
 
-  const defaultTitle = type === 'text' ? 'Font Color' : 'Text Highlight Color';
+  const defaultTitle =
+    type === 'text' ? t('formattingBar.fontColor') : t('formattingBar.highlightColor');
 
   return (
     <div
@@ -519,10 +527,12 @@ export function ColorPicker({
             width: dropdownWidth,
           }}
           role="dialog"
-          aria-label={`${type === 'text' ? 'Font' : 'Highlight'} color picker`}
+          aria-label={t('colorPicker.ariaLabel', { type: type === 'text' ? 'Font' : 'Highlight' })}
           onMouseDown={(e) => e.preventDefault()} // Prevent focus stealing from editor
         >
-          {type === 'highlight' && <div style={SECTION_LABEL_STYLE}>Highlight Colors</div>}
+          {type === 'highlight' && (
+            <div style={SECTION_LABEL_STYLE}>{t('colorPicker.highlightColors')}</div>
+          )}
 
           <ColorGrid
             colors={displayColors}
@@ -533,7 +543,7 @@ export function ColorPicker({
 
           {showMoreColors && type === 'text' && (
             <div style={CUSTOM_COLOR_SECTION_STYLE}>
-              <div style={SECTION_LABEL_STYLE}>Custom Color</div>
+              <div style={SECTION_LABEL_STYLE}>{t('colorPicker.customColor')}</div>
               <div style={CUSTOM_COLOR_INPUT_STYLE}>
                 <span style={{ fontSize: '12px', color: '#666' }}>#</span>
                 <input
@@ -558,7 +568,7 @@ export function ColorPicker({
                   onClick={handleCustomColorApply}
                   disabled={!/^[0-9A-Fa-f]{6}$/.test(customHex)}
                 >
-                  Apply
+                  {t('common.apply')}
                 </button>
               </div>
             </div>

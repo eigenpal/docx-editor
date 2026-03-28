@@ -41,7 +41,8 @@
       "import": "./dist/mcp-reexport.mjs",
       "require": "./dist/mcp-reexport.js"
     },
-    "./styles.css": "./dist/styles.css"
+    "./styles.css": "./dist/styles.css",
+    "./i18n/*.json": "./i18n/*.json"
   },
   "typesVersions": {
     "*": {
@@ -69,7 +70,8 @@
     "*.css"
   ],
   "files": [
-    "dist"
+    "dist",
+    "i18n"
   ],
   "scripts": {
     "build": "tsup && bun run build:css",

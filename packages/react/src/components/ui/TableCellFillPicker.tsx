@@ -9,6 +9,7 @@ import { useCallback } from 'react';
 import type { ColorValue, Theme } from '@eigenpal/docx-core/types/document';
 import type { TableAction } from './TableToolbar';
 import { AdvancedColorPicker } from './AdvancedColorPicker';
+import { useTranslation } from '../../i18n';
 
 export interface TableCellFillPickerProps {
   onAction: (action: TableAction) => void;
@@ -24,6 +25,7 @@ export function TableCellFillPicker({
   theme,
   value,
 }: TableCellFillPickerProps) {
+  const { t } = useTranslation();
   const handleChange = useCallback(
     (color: ColorValue | string) => {
       // highlight mode emits hex strings or 'none'
@@ -45,9 +47,9 @@ export function TableCellFillPicker({
       onChange={handleChange}
       theme={theme}
       disabled={disabled}
-      title="Cell Fill Color"
+      title={t('table.cellFillColor')}
       icon="format_color_fill"
-      autoLabel="No fill"
+      autoLabel={t('colorPicker.noColor')}
     />
   );
 }

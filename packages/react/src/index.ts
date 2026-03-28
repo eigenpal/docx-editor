@@ -394,6 +394,20 @@ export {
 } from './components/dialogs/KeyboardShortcutsDialog';
 
 // ============================================================================
+// I18N
+// ============================================================================
+
+export {
+  LocaleProvider,
+  useTranslation,
+  type LocaleProviderProps,
+  type LocaleStrings,
+  type Translations,
+  type PartialLocaleStrings,
+  type TranslationKey,
+} from './i18n';
+
+// ============================================================================
 // TYPES
 // ============================================================================
 

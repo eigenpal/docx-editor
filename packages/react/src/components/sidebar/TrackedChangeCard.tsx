@@ -6,6 +6,7 @@ import { formatDate, getInitials, avatarStyle, ICON_BUTTON_STYLE, truncateText }
 import { ReplyThread } from './ReplyThread';
 import { ReplyInput } from './ReplyInput';
 import { CARD_STYLE_COLLAPSED, CARD_STYLE_EXPANDED } from './cardStyles';
+import { useTranslation } from '../../i18n';
 
 export interface TrackedChangeCardProps extends SidebarItemRenderProps {
   change: TrackedChangeEntry;
@@ -25,7 +26,8 @@ export function TrackedChangeCard({
   onReject,
   onReply,
 }: TrackedChangeCardProps) {
-  const authorName = change.author || 'Unknown';
+  const { t } = useTranslation();
+  const authorName = change.author || t('trackedChanges.unknown');
 
   return (
     <div
@@ -50,7 +52,7 @@ export function TrackedChangeCard({
                 e.stopPropagation();
                 onAccept?.(change.from, change.to);
               }}
-              title="Accept"
+              title={t('common.accept')}
               style={ICON_BUTTON_STYLE}
             >
               <MaterialSymbol name="check" size={20} />
@@ -60,7 +62,7 @@ export function TrackedChangeCard({
                 e.stopPropagation();
                 onReject?.(change.from, change.to);
               }}
-              title="Reject"
+              title={t('common.reject')}
               style={ICON_BUTTON_STYLE}
             >
               <MaterialSymbol name="close" size={20} />
@@ -72,18 +74,18 @@ export function TrackedChangeCard({
       <div style={{ fontSize: 13, lineHeight: '20px', color: '#202124', marginTop: 6 }}>
         {change.type === 'replacement' ? (
           <>
-            Replaced{' '}
+            {t('trackedChanges.replaced')}{' '}
             <span style={{ color: '#c5221f', fontWeight: 500 }}>
               &quot;{truncateText(change.deletedText || '')}&quot;
             </span>{' '}
-            with{' '}
+            {t('trackedChanges.with')}{' '}
             <span style={{ color: '#137333', fontWeight: 500 }}>
               &quot;{truncateText(change.text)}&quot;
             </span>
           </>
         ) : (
           <>
-            {change.type === 'insertion' ? 'Added' : 'Deleted'}{' '}
+            {change.type === 'insertion' ? t('trackedChanges.added') : t('trackedChanges.deleted')}{' '}
             <span
               style={{
                 color: change.type === 'insertion' ? '#137333' : '#c5221f',

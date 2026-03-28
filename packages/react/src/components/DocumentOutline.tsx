@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import type { HeadingInfo } from '@eigenpal/docx-core/utils/headingCollector';
 import { MaterialSymbol } from './ui/Icons';
+import { useTranslation } from '../i18n';
 
 /** @deprecated Use HeadingInfo from utils/headingCollector instead */
 export type OutlineHeading = HeadingInfo;
@@ -18,6 +19,7 @@ export const DocumentOutline: React.FC<DocumentOutlineProps> = ({
   onClose,
   topOffset = 0,
 }) => {
+  const { t } = useTranslation();
   const [open, setOpen] = useState(false);
 
   useEffect(() => {
@@ -29,7 +31,7 @@ export const DocumentOutline: React.FC<DocumentOutlineProps> = ({
     <nav
       className="docx-outline-nav"
       role="navigation"
-      aria-label="Document outline"
+      aria-label={t('documentOutline.ariaLabel')}
       style={{
         position: 'absolute',
         top: topOffset,
@@ -58,7 +60,7 @@ export const DocumentOutline: React.FC<DocumentOutlineProps> = ({
       >
         <button
           onClick={onClose}
-          aria-label="Close outline"
+          aria-label={t('documentOutline.closeAriaLabel')}
           style={{
             background: 'none',
             border: 'none',
@@ -69,12 +71,12 @@ export const DocumentOutline: React.FC<DocumentOutlineProps> = ({
             alignItems: 'center',
             color: '#444746',
           }}
-          title="Close outline"
+          title={t('documentOutline.closeTitle')}
         >
           <MaterialSymbol name="arrow_back" size={20} />
         </button>
         <span style={{ fontWeight: 400, fontSize: 14, color: '#1f1f1f', letterSpacing: '0.01em' }}>
-          Outline
+          {t('documentOutline.title')}
         </span>
       </div>
 
@@ -82,7 +84,7 @@ export const DocumentOutline: React.FC<DocumentOutlineProps> = ({
       <div style={{ overflowY: 'auto', flex: 1, paddingLeft: 20 }}>
         {headings.length === 0 ? (
           <div style={{ padding: '8px 16px', color: '#80868b', fontSize: 13, lineHeight: '20px' }}>
-            No headings found. Add headings to your document to see them here.
+            {t('documentOutline.noHeadings')}
           </div>
         ) : (
           headings.map((heading, index) => (

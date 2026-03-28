@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { submitButtonStyle, CANCEL_BUTTON_STYLE } from './cardUtils';
+import { useTranslation } from '../../i18n';
 
 const ACTIVE_INPUT_STYLE: React.CSSProperties = {
   width: '100%',
@@ -34,6 +35,7 @@ export interface ReplyInputProps {
 export function ReplyInput({ onSubmit }: ReplyInputProps) {
   const [active, setActive] = useState(false);
   const [text, setText] = useState('');
+  const { t } = useTranslation();
 
   if (!active) {
     return (
@@ -45,7 +47,7 @@ export function ReplyInput({ onSubmit }: ReplyInputProps) {
             e.stopPropagation();
             setActive(true);
           }}
-          placeholder="Reply or add others with @"
+          placeholder={t('comments.replyPlaceholder')}
           style={INACTIVE_INPUT_STYLE}
         />
       </div>
@@ -75,7 +77,7 @@ export function ReplyInput({ onSubmit }: ReplyInputProps) {
             setText('');
           }
         }}
-        placeholder="Reply or add others with @"
+        placeholder={t('comments.replyPlaceholder')}
         style={ACTIVE_INPUT_STYLE}
       />
       <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 8 }}>
@@ -87,7 +89,7 @@ export function ReplyInput({ onSubmit }: ReplyInputProps) {
           }}
           style={CANCEL_BUTTON_STYLE}
         >
-          Cancel
+          {t('common.cancel')}
         </button>
         <button
           onClick={(e) => {
@@ -99,7 +101,7 @@ export function ReplyInput({ onSubmit }: ReplyInputProps) {
           disabled={!trimmed}
           style={submitButtonStyle(!!trimmed)}
         >
-          Reply
+          {t('common.reply')}
         </button>
       </div>
     </div>

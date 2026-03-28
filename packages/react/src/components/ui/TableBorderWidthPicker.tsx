@@ -11,6 +11,7 @@ import { MaterialSymbol } from './MaterialSymbol';
 import { cn } from '../../lib/utils';
 import type { TableAction } from './TableToolbar';
 import { useFixedDropdown } from './useFixedDropdown';
+import { useTranslation } from '../../i18n';
 
 export interface TableBorderWidthPickerProps {
   onAction: (action: TableAction) => void;
@@ -30,6 +31,7 @@ export function TableBorderWidthPicker({
   disabled = false,
 }: TableBorderWidthPickerProps) {
   const [isOpen, setIsOpen] = useState(false);
+  const { t } = useTranslation();
   const close = useCallback(() => setIsOpen(false), []);
   const { containerRef, dropdownRef, dropdownStyle, handleMouseDown } = useFixedDropdown({
     isOpen,
@@ -56,7 +58,7 @@ export function TableBorderWidthPicker({
       onMouseDown={handleMouseDown}
       onClick={() => !disabled && setIsOpen((prev) => !prev)}
       disabled={disabled}
-      aria-label="Border width"
+      aria-label={t('table.borderWidth')}
       aria-expanded={isOpen}
       aria-haspopup="true"
       data-testid="toolbar-table-border-width"
@@ -68,7 +70,7 @@ export function TableBorderWidthPicker({
 
   return (
     <div ref={containerRef} style={{ position: 'relative', display: 'inline-block' }}>
-      {!isOpen ? <Tooltip content="Border width">{button}</Tooltip> : button}
+      {!isOpen ? <Tooltip content={t('table.borderWidth')}>{button}</Tooltip> : button}
 
       {isOpen && !disabled && (
         <div

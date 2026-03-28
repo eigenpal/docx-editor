@@ -17,6 +17,7 @@ import React, {
 import type { ReactNode, ErrorInfo, CSSProperties } from 'react';
 import { ErrorManager } from '@eigenpal/docx-core';
 import type { ErrorSeverity, ErrorNotification } from '@eigenpal/docx-core';
+import { useTranslation } from '../i18n';
 
 // Re-export for backwards compat
 export type { ErrorSeverity, ErrorNotification };
@@ -208,6 +209,7 @@ interface NotificationToastProps {
 }
 
 function NotificationToast({ notification, onDismiss }: NotificationToastProps) {
+  const { t } = useTranslation();
   const [isExpanded, setIsExpanded] = useState(false);
 
   const getColors = (severity: ErrorSeverity) => {
@@ -372,13 +374,13 @@ function NotificationToast({ notification, onDismiss }: NotificationToastProps) 
                   padding: '2px 8px',
                 }}
               >
-                {isExpanded ? 'Hide details' : 'Show details'}
+                {isExpanded ? t('errors.hideDetails') : t('errors.showDetails')}
               </button>
               {isExpanded && <div style={detailsStyle}>{notification.details}</div>}
             </>
           )}
         </div>
-        <button type="button" onClick={onDismiss} style={buttonStyle} title="Dismiss">
+        <button type="button" onClick={onDismiss} style={buttonStyle} title={t('common.dismiss')}>
           <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
             <path
               d="M4 4l8 8M12 4l-8 8"
@@ -481,6 +483,7 @@ function DefaultErrorFallback({
   showDetails,
   onReset,
 }: DefaultErrorFallbackProps): React.ReactElement {
+  const { t } = useTranslation();
   const containerStyle: CSSProperties = {
     display: 'flex',
     flexDirection: 'column',
@@ -548,25 +551,22 @@ function DefaultErrorFallback({
           <path d="M24 14v12M24 30v2" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
         </svg>
       </div>
-      <h2 style={titleStyle}>Something went wrong</h2>
-      <p style={messageStyle}>
-        An error occurred while rendering this component. Please try again or contact support if the
-        problem persists.
-      </p>
+      <h2 style={titleStyle}>{t('errors.somethingWentWrong')}</h2>
+      <p style={messageStyle}>{t('errors.errorDescription')}</p>
       {showDetails && (
         <div style={detailsStyle}>
-          <strong>Error:</strong> {error.message}
+          <strong>{t('errors.errorLabel')}</strong> {error.message}
           {errorInfo && (
             <>
               {'\n\n'}
-              <strong>Component Stack:</strong>
+              <strong>{t('errors.componentStack')}</strong>
               {errorInfo.componentStack}
             </>
           )}
         </div>
       )}
       <button type="button" onClick={onReset} style={buttonStyle}>
-        Try Again
+        {t('errors.tryAgain')}
       </button>
     </div>
   );
@@ -594,6 +594,7 @@ export function ParseErrorDisplay({
   onRetry,
   className = '',
 }: ParseErrorDisplayProps): React.ReactElement {
+  const { t } = useTranslation();
   const containerStyle: CSSProperties = {
     display: 'flex',
     flexDirection: 'column',
@@ -660,12 +661,12 @@ export function ParseErrorDisplay({
           />
         </svg>
       </div>
-      <h3 style={titleStyle}>Unable to Parse Document</h3>
+      <h3 style={titleStyle}>{t('errors.unableToParse')}</h3>
       <p style={messageStyle}>{message}</p>
       {details && <div style={detailsStyle}>{details}</div>}
       {onRetry && (
         <button type="button" onClick={onRetry} style={buttonStyle}>
-          Try Again
+          {t('errors.tryAgain')}
         </button>
       )}
     </div>

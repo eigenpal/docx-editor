@@ -9,6 +9,8 @@ import {
 import type { ThemeMatrixCell } from '@eigenpal/docx-core/utils/colorResolver';
 import { useFixedDropdown } from './useFixedDropdown';
 import { MaterialSymbol } from './MaterialSymbol';
+import { useTranslation } from '../../i18n';
+import type { TranslationKey } from '../../i18n';
 
 // ============================================================================
 // TYPES
@@ -35,17 +37,17 @@ export interface AdvancedColorPickerProps {
 // CONSTANTS
 // ============================================================================
 
-const STANDARD_COLORS: Array<{ name: string; hex: string }> = [
-  { name: 'Dark Red', hex: 'C00000' },
-  { name: 'Red', hex: 'FF0000' },
-  { name: 'Orange', hex: 'FFC000' },
-  { name: 'Yellow', hex: 'FFFF00' },
-  { name: 'Light Green', hex: '92D050' },
-  { name: 'Green', hex: '00B050' },
-  { name: 'Light Blue', hex: '00B0F0' },
-  { name: 'Blue', hex: '0070C0' },
-  { name: 'Dark Blue', hex: '002060' },
-  { name: 'Purple', hex: '7030A0' },
+const STANDARD_COLORS: Array<{ name: string; nameKey: TranslationKey; hex: string }> = [
+  { name: 'Dark Red', nameKey: 'colorPicker.colors.darkRed', hex: 'C00000' },
+  { name: 'Red', nameKey: 'colorPicker.colors.red', hex: 'FF0000' },
+  { name: 'Orange', nameKey: 'colorPicker.colors.orange', hex: 'FFC000' },
+  { name: 'Yellow', nameKey: 'colorPicker.colors.yellow', hex: 'FFFF00' },
+  { name: 'Light Green', nameKey: 'colorPicker.colors.lightGreen', hex: '92D050' },
+  { name: 'Green', nameKey: 'colorPicker.colors.green', hex: '00B050' },
+  { name: 'Light Blue', nameKey: 'colorPicker.colors.lightBlue', hex: '00B0F0' },
+  { name: 'Blue', nameKey: 'colorPicker.colors.blue', hex: '0070C0' },
+  { name: 'Dark Blue', nameKey: 'colorPicker.colors.darkBlue', hex: '002060' },
+  { name: 'Purple', nameKey: 'colorPicker.colors.purple', hex: '7030A0' },
 ];
 
 const CELL_SIZE = 18;
@@ -278,12 +280,14 @@ function StandardColorRow({
   onSelect: (hex: string) => void;
 }) {
   const [hovered, setHovered] = useState<number | null>(null);
+  const { t } = useTranslation();
 
   return (
     <div style={{ ...S_GRID, gridTemplateColumns: `repeat(10, ${CELL_SIZE}px)` }}>
       {STANDARD_COLORS.map((c, i) => {
         const isHov = hovered === i;
         const isSel = isSelectedCell(selectedColor, c.hex, theme);
+        const displayName = t(c.nameKey);
         return (
           <button
             key={c.hex}
@@ -292,8 +296,8 @@ function StandardColorRow({
               ...(isSel ? S_CELL_SELECTED : isHov ? S_CELL_HOVER : S_CELL),
               backgroundColor: `#${c.hex}`,
             }}
-            title={c.name}
-            aria-label={c.name}
+            title={displayName}
+            aria-label={displayName}
             aria-selected={isSel}
             onClick={() => onSelect(c.hex)}
             onMouseDown={(e) => e.preventDefault()}
@@ -325,6 +329,7 @@ export function AdvancedColorPicker({
   const [isOpen, setIsOpen] = useState(false);
   const [isHovered, setIsHovered] = useState(false);
   const [customHex, setCustomHex] = useState('');
+  const { t } = useTranslation();
 
   // Sync custom hex input with the current value
   useEffect(() => {
@@ -420,7 +425,11 @@ export function AdvancedColorPicker({
   };
 
   const defaultTitle =
-    mode === 'text' ? 'Font Color' : mode === 'highlight' ? 'Text Highlight Color' : 'Border Color';
+    mode === 'text'
+      ? t('formattingBar.fontColor')
+      : mode === 'highlight'
+        ? t('formattingBar.highlightColor')
+        : t('table.borderColor');
 
   const iconName =
     iconOverride ??
@@ -523,10 +532,11 @@ export function AdvancedColorPicker({
                   }}
                 />
               )}
-              {autoLabel ?? (mode === 'highlight' ? 'No Color' : 'Automatic')}
+              {autoLabel ??
+                (mode === 'highlight' ? t('colorPicker.noColor') : t('colorPicker.automatic'))}
             </button>
             <div style={S_DIVIDER} />
-            <div style={S_SECTION_LABEL}>Theme Colors</div>
+            <div style={S_SECTION_LABEL}>{t('colorPicker.themeColors')}</div>
             <ThemeColorMatrix
               matrix={matrix}
               selectedColor={value}
@@ -534,14 +544,14 @@ export function AdvancedColorPicker({
               onSelect={handleThemeCellSelect}
             />
             <div style={S_DIVIDER} />
-            <div style={S_SECTION_LABEL}>Standard Colors</div>
+            <div style={S_SECTION_LABEL}>{t('colorPicker.standardColors')}</div>
             <StandardColorRow
               selectedColor={value}
               theme={theme}
               onSelect={handleStandardColorSelect}
             />
             <div style={S_DIVIDER} />
-            <div style={S_SECTION_LABEL}>Custom Color</div>
+            <div style={S_SECTION_LABEL}>{t('colorPicker.customColor')}</div>
             <div style={S_CUSTOM_ROW}>
               <span style={{ fontSize: '12px', color: '#666' }}>#</span>
               <input
@@ -572,7 +582,7 @@ export function AdvancedColorPicker({
                 onMouseDown={(e) => e.preventDefault()}
                 disabled={!/^[0-9A-Fa-f]{6}$/.test(customHex)}
               >
-                Apply
+                {t('common.apply')}
               </button>
             </div>
           </>

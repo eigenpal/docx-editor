@@ -14,6 +14,7 @@ import React, { useState, useRef, useCallback, useEffect } from 'react';
 import type { CSSProperties } from 'react';
 import type { SectionProperties } from '@eigenpal/docx-core/types/document';
 import { twipsToPixels, pixelsToTwips, formatPx } from '@eigenpal/docx-core/utils/units';
+import { useTranslation } from '../../i18n';
 
 // ============================================================================
 // TYPES
@@ -71,6 +72,7 @@ export function VerticalRuler({
   className = '',
   style,
 }: VerticalRulerProps): React.ReactElement {
+  const { t } = useTranslation();
   const [dragging, setDragging] = useState<MarkerType | null>(null);
   const [hoveredMarker, setHoveredMarker] = useState<MarkerType | null>(null);
   const rulerRef = useRef<HTMLDivElement>(null);
@@ -164,7 +166,7 @@ export function VerticalRuler({
       className={`docx-vertical-ruler ${className}`}
       style={rulerStyle}
       role="slider"
-      aria-label="Vertical ruler"
+      aria-label={t('ruler.vertical')}
       aria-orientation="vertical"
     >
       {/* Tick marks */}
@@ -270,6 +272,7 @@ function VerticalMarginMarker({
   onMouseLeave,
   onMouseDown,
 }: VerticalMarginMarkerProps): React.ReactElement {
+  const { t } = useTranslation();
   const color = isDragging ? MARKER_ACTIVE_COLOR : isHovered ? MARKER_HOVER_COLOR : MARKER_COLOR;
 
   const markerStyle: CSSProperties = {
@@ -303,7 +306,7 @@ function VerticalMarginMarker({
       onMouseLeave={onMouseLeave}
       onMouseDown={onMouseDown}
       role="slider"
-      aria-label={type === 'topMargin' ? 'Top margin' : 'Bottom margin'}
+      aria-label={type === 'topMargin' ? t('ruler.topMargin') : t('ruler.bottomMargin')}
       aria-orientation="vertical"
       tabIndex={editable ? 0 : -1}
     >

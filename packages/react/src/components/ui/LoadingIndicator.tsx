@@ -11,6 +11,7 @@
  */
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { useTranslation } from '../../i18n';
 
 // ============================================================================
 // TYPES
@@ -323,6 +324,7 @@ export const LoadingIndicator: React.FC<LoadingIndicatorProps> = ({
   className = '',
   style,
 }) => {
+  const { t } = useTranslation();
   const sizeConfig = SIZE_CONFIG[size];
 
   // Inject keyframes
@@ -417,7 +419,7 @@ export const LoadingIndicator: React.FC<LoadingIndicatorProps> = ({
         aria-valuemax={100}
         aria-valuenow={variant === 'progress' ? progress : undefined}
         aria-busy="true"
-        aria-label={message || 'Loading'}
+        aria-label={message || t('loading.label')}
       >
         {content}
       </div>

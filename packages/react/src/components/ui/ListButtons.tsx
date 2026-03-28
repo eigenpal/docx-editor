@@ -12,6 +12,7 @@ import React, { useState, useCallback } from 'react';
 import type { CSSProperties, ReactNode } from 'react';
 import type { NumberFormat } from '@eigenpal/docx-core/types/document';
 import { MaterialSymbol } from './MaterialSymbol';
+import { useTranslation } from '../../i18n';
 
 // ============================================================================
 // TYPES
@@ -227,6 +228,7 @@ export function ListButtons({
   compact = false,
   hasIndent = false,
 }: ListButtonsProps) {
+  const { t } = useTranslation();
   /**
    * Get button style with compact option
    */
@@ -246,14 +248,14 @@ export function ListButtons({
       className={`docx-list-buttons ${className || ''}`}
       style={{ ...CONTAINER_STYLE, ...style }}
       role="group"
-      aria-label="List formatting"
+      aria-label={t('lists.ariaLabel')}
     >
       {/* List type buttons */}
-      <div style={BUTTON_GROUP_STYLE} role="group" aria-label="List type">
+      <div style={BUTTON_GROUP_STYLE} role="group" aria-label={t('lists.typeAriaLabel')}>
         <ListButton
           active={isBulletList}
           disabled={disabled}
-          title="Bullet List"
+          title={t('lists.bulletList')}
           onClick={onBulletList}
           style={getButtonStyle()}
         >
@@ -263,7 +265,7 @@ export function ListButtons({
         <ListButton
           active={isNumberedList}
           disabled={disabled}
-          title="Numbered List"
+          title={t('lists.numberedList')}
           onClick={onNumberedList}
           style={getButtonStyle()}
         >
@@ -275,11 +277,11 @@ export function ListButtons({
       {showIndentButtons && (
         <>
           <div style={SEPARATOR_STYLE} role="separator" />
-          <div style={BUTTON_GROUP_STYLE} role="group" aria-label="List indentation">
+          <div style={BUTTON_GROUP_STYLE} role="group" aria-label={t('lists.indentationAriaLabel')}>
             <ListButton
               active={false}
               disabled={disabled || !canOutdent}
-              title="Decrease Indent"
+              title={t('lists.decreaseIndent')}
               onClick={onOutdent}
               style={getButtonStyle()}
             >
@@ -289,7 +291,7 @@ export function ListButtons({
             <ListButton
               active={false}
               disabled={disabled}
-              title="Increase Indent"
+              title={t('lists.increaseIndent')}
               onClick={onIndent}
               style={getButtonStyle()}
             >

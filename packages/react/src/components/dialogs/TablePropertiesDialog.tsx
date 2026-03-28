@@ -8,6 +8,7 @@
 
 import React, { useState, useCallback, useEffect } from 'react';
 import type { CSSProperties } from 'react';
+import { useTranslation } from '../../i18n';
 
 // ============================================================================
 // TYPES
@@ -121,6 +122,7 @@ export function TablePropertiesDialog({
   onApply,
   currentProps,
 }: TablePropertiesDialogProps): React.ReactElement | null {
+  const { t } = useTranslation();
   const [width, setWidth] = useState<number>(currentProps?.width || 0);
   const [widthType, setWidthType] = useState<string>(currentProps?.widthType || 'auto');
   const [justification, setJustification] = useState<string>(currentProps?.justification || 'left');
@@ -163,29 +165,29 @@ export function TablePropertiesDialog({
         style={dialogStyle}
         onClick={(e) => e.stopPropagation()}
         role="dialog"
-        aria-label="Table properties"
+        aria-label={t('dialogs.tableProperties.title')}
       >
-        <div style={headerStyle}>Table Properties</div>
+        <div style={headerStyle}>{t('dialogs.tableProperties.title')}</div>
 
         <div style={bodyStyle}>
           {/* Width type */}
           <div style={rowStyle}>
-            <label style={labelStyle}>Width type</label>
+            <label style={labelStyle}>{t('dialogs.tableProperties.widthType')}</label>
             <select
               style={selectStyle}
               value={widthType}
               onChange={(e) => setWidthType(e.target.value)}
             >
-              <option value="auto">Auto</option>
-              <option value="dxa">Fixed (twips)</option>
-              <option value="pct">Percentage</option>
+              <option value="auto">{t('dialogs.tableProperties.widthTypes.auto')}</option>
+              <option value="dxa">{t('dialogs.tableProperties.widthTypes.fixed')}</option>
+              <option value="pct">{t('dialogs.tableProperties.widthTypes.percentage')}</option>
             </select>
           </div>
 
           {/* Width value */}
           {widthType !== 'auto' && (
             <div style={rowStyle}>
-              <label style={labelStyle}>Width</label>
+              <label style={labelStyle}>{t('dialogs.tableProperties.widthLabel')}</label>
               <input
                 type="number"
                 style={inputStyle}
@@ -195,29 +197,31 @@ export function TablePropertiesDialog({
                 onChange={(e) => setWidth(Number(e.target.value) || 0)}
               />
               <span style={{ fontSize: 11, color: 'var(--doc-text-muted)' }}>
-                {widthType === 'pct' ? '(50ths of %)' : 'tw'}
+                {widthType === 'pct'
+                  ? t('dialogs.tableProperties.units.fiftiethsPercent')
+                  : t('dialogs.tableProperties.units.twips')}
               </span>
             </div>
           )}
 
           {/* Alignment */}
           <div style={rowStyle}>
-            <label style={labelStyle}>Alignment</label>
+            <label style={labelStyle}>{t('dialogs.tableProperties.alignmentLabel')}</label>
             <select
               style={selectStyle}
               value={justification}
               onChange={(e) => setJustification(e.target.value)}
             >
-              <option value="left">Left</option>
-              <option value="center">Center</option>
-              <option value="right">Right</option>
+              <option value="left">{t('dialogs.tableProperties.alignOptions.left')}</option>
+              <option value="center">{t('dialogs.tableProperties.alignOptions.center')}</option>
+              <option value="right">{t('dialogs.tableProperties.alignOptions.right')}</option>
             </select>
           </div>
         </div>
 
         <div style={footerStyle}>
           <button type="button" style={btnStyle} onClick={onClose}>
-            Cancel
+            {t('common.cancel')}
           </button>
           <button
             type="button"
@@ -229,7 +233,7 @@ export function TablePropertiesDialog({
             }}
             onClick={handleApply}
           >
-            Apply
+            {t('common.apply')}
           </button>
         </div>
       </div>

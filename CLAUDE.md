@@ -232,6 +232,72 @@ Before opening any PR, self-review the diff against **DRY, KISS, YAGNI**:
 
 ---
 
+## i18n (Internationalization)
+
+All user-facing strings are translatable via a lightweight i18n system (no external dependencies).
+
+### Key Files
+
+| What                    | Where                                       |
+| ----------------------- | ------------------------------------------- |
+| Default English strings | `packages/react/i18n/en.json`               |
+| Types (auto-derived)    | `packages/react/src/i18n/types.ts`          |
+| Context + hook          | `packages/react/src/i18n/LocaleContext.tsx` |
+| Barrel export           | `packages/react/src/i18n/index.ts`          |
+
+### How It Works
+
+- `LocaleStrings` type is auto-derived from `en.json` via `typeof import` — no manual interface
+- `TranslationKey` is a union of all valid dot-paths (e.g., `"toolbar.bold" | "dialogs.findReplace.title" | ...`)
+- `<DocxEditor i18n={de} />` deep-merges with English defaults (null keys fall back to English)
+- `useTranslation()` hook returns `t(key, vars?)` for string lookup with `{variable}` interpolation
+
+### Using t() in Components
+
+```typescript
+import { useTranslation } from '../i18n'; // adjust path
+
+function MyComponent() {
+  const { t } = useTranslation();
+  return <button title={t('toolbar.bold')}>{t('common.apply')}</button>;
+}
+
+// With interpolation:
+t('dialogs.findReplace.matchCount', { current: 3, total: 15 })
+// → "3 of 15 matches"
+```
+
+### Adding a New String
+
+1. Add the key + English value to `i18n/en.json` (nest by feature area)
+2. Use `t('your.new.key')` in the component — types update automatically
+3. Run `bun run i18n:fix` to sync community locale files (adds new keys as `null`)
+
+### Locale Key States
+
+| Value       | Meaning            | Behavior                              |
+| ----------- | ------------------ | ------------------------------------- |
+| `"Fett"`    | Translated         | Displayed to user                     |
+| `null`      | Not yet translated | Falls back to English                 |
+| _(missing)_ | Out of sync        | **CI fails** — run `bun run i18n:fix` |
+
+### i18n CLI
+
+```bash
+bun run i18n:new <lang>   # scaffold new locale (e.g., bun run i18n:new de)
+bun run i18n:status        # show translation coverage for all locales
+bun run i18n:validate      # check all locale files in sync with en.json
+bun run i18n:fix           # auto-add missing keys as null, remove extras
+```
+
+### When adding UI strings
+
+**Always** use `t()` for user-facing text. Never hardcode English strings in components. After adding new keys to `en.json`, run `bun run i18n:fix` to sync all community locale files.
+
+Full contribution guide: `docs/i18n.md`
+
+---
+
 ## Rules
 
 - Client-side only. No backend.

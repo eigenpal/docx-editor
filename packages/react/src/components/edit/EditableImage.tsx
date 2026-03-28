@@ -11,6 +11,7 @@
 
 import React, { useState, useRef, useCallback, useEffect } from 'react';
 import type { CSSProperties, KeyboardEvent, MouseEvent } from 'react';
+import { useTranslation } from '../../i18n';
 import type { Image as ImageType, ImageSize } from '@eigenpal/docx-core/types/document';
 import {
   getImageWidthPx,
@@ -232,6 +233,7 @@ export function EditableImage({
   className,
   style: additionalStyle,
 }: EditableImageProps): React.ReactElement {
+  const { t } = useTranslation();
   // Current dimensions (can be modified during resize)
   const [currentWidth, setCurrentWidth] = useState(() => getImageWidthPx(image));
   const [currentHeight, setCurrentHeight] = useState(() => getImageHeightPx(image));
@@ -551,7 +553,7 @@ export function EditableImage({
         onKeyDown={handleKeyDown}
         tabIndex={editable && selected ? 0 : -1}
         role="img"
-        aria-label="Image placeholder"
+        aria-label={t('image.placeholder')}
       >
         <span
           style={{
@@ -560,7 +562,7 @@ export function EditableImage({
             height: `${currentHeight}px`,
           }}
         >
-          [Image]
+          {t('image.placeholderText')}
           {image.filename && (
             <>
               <br />

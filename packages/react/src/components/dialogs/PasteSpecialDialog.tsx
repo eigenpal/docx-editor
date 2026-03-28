@@ -11,6 +11,8 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import type { ParsedClipboardContent } from '@eigenpal/docx-core/utils/clipboard';
 import { readFromClipboard } from '@eigenpal/docx-core/utils/clipboard';
+import { useTranslation } from '../../i18n';
+import type { TranslationKey } from '../../i18n';
 
 // ============================================================================
 // TYPES
@@ -38,13 +40,23 @@ export interface PasteSpecialDialogProps {
 }
 
 /**
- * Paste option item
+ * Paste option item (with translation keys for label/description/shortcut)
  */
 interface PasteOptionItem {
   id: PasteOption;
   label: string;
   description: string;
   shortcut: string;
+}
+
+/**
+ * Paste option definition with translation keys
+ */
+interface PasteOptionDef {
+  id: PasteOption;
+  labelKey: TranslationKey;
+  descriptionKey: TranslationKey;
+  shortcutKey: TranslationKey;
 }
 
 /**
@@ -78,20 +90,20 @@ export interface UsePasteSpecialOptions {
 // ============================================================================
 
 /**
- * Available paste options
+ * Available paste options (using translation keys)
  */
-const PASTE_OPTIONS: PasteOptionItem[] = [
+const PASTE_OPTION_DEFS: PasteOptionDef[] = [
   {
     id: 'formatted',
-    label: 'Keep Source Formatting',
-    description: 'Paste with original formatting',
-    shortcut: 'Ctrl+V',
+    labelKey: 'dialogs.pasteSpecial.keepFormatting',
+    descriptionKey: 'dialogs.pasteSpecial.keepFormattingDescription',
+    shortcutKey: 'dialogs.pasteSpecial.keepFormattingShortcut',
   },
   {
     id: 'plainText',
-    label: 'Paste as Plain Text',
-    description: 'Paste without any formatting',
-    shortcut: 'Ctrl+Shift+V',
+    labelKey: 'dialogs.pasteSpecial.plainText',
+    descriptionKey: 'dialogs.pasteSpecial.plainTextDescription',
+    shortcutKey: 'dialogs.pasteSpecial.plainTextShortcut',
   },
 ];
 
@@ -226,11 +238,20 @@ export const PasteSpecialDialog: React.FC<PasteSpecialDialogProps> = ({
   position,
   className = '',
 }) => {
+  const { t } = useTranslation();
   const dialogRef = useRef<HTMLDivElement>(null);
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [clipboardContent, setClipboardContent] = useState<ParsedClipboardContent | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Translate paste options at render time
+  const pasteOptions: PasteOptionItem[] = PASTE_OPTION_DEFS.map((def) => ({
+    id: def.id,
+    label: t(def.labelKey),
+    description: t(def.descriptionKey),
+    shortcut: t(def.shortcutKey),
+  }));
 
   // Read clipboard content when dialog opens
   useEffect(() => {
@@ -249,10 +270,10 @@ export const PasteSpecialDialog: React.FC<PasteSpecialDialogProps> = ({
         const content = await readFromClipboard({ cleanWordFormatting: true });
         setClipboardContent(content);
         if (!content) {
-          setError('No content available to paste');
+          setError(t('dialogs.pasteSpecial.noContent'));
         }
       } catch {
-        setError('Unable to read clipboard. Please use Ctrl+V to paste.');
+        setError(t('dialogs.pasteSpecial.clipboardError'));
       } finally {
         setIsLoading(false);
       }
@@ -287,15 +308,17 @@ export const PasteSpecialDialog: React.FC<PasteSpecialDialogProps> = ({
           break;
         case 'ArrowDown':
           e.preventDefault();
-          setSelectedIndex((prev) => (prev + 1) % PASTE_OPTIONS.length);
+          setSelectedIndex((prev) => (prev + 1) % PASTE_OPTION_DEFS.length);
           break;
         case 'ArrowUp':
           e.preventDefault();
-          setSelectedIndex((prev) => (prev - 1 + PASTE_OPTIONS.length) % PASTE_OPTIONS.length);
+          setSelectedIndex(
+            (prev) => (prev - 1 + PASTE_OPTION_DEFS.length) % PASTE_OPTION_DEFS.length
+          );
           break;
         case 'Enter':
           e.preventDefault();
-          handlePaste(PASTE_OPTIONS[selectedIndex].id);
+          handlePaste(PASTE_OPTION_DEFS[selectedIndex].id);
           break;
       }
     };
@@ -307,7 +330,7 @@ export const PasteSpecialDialog: React.FC<PasteSpecialDialogProps> = ({
   const handlePaste = useCallback(
     (option: PasteOption) => {
       if (!clipboardContent) {
-        setError('No content available to paste');
+        setError(t('dialogs.pasteSpecial.noContent'));
         return;
       }
 
@@ -364,7 +387,7 @@ export const PasteSpecialDialog: React.FC<PasteSpecialDialogProps> = ({
       className={`docx-paste-special-dialog ${className}`}
       style={getDialogStyle()}
       role="dialog"
-      aria-label="Paste Special"
+      aria-label={t('dialogs.pasteSpecial.title')}
     >
       {/* Header */}
       <div
@@ -383,12 +406,12 @@ export const PasteSpecialDialog: React.FC<PasteSpecialDialogProps> = ({
             color: 'var(--doc-text)',
           }}
         >
-          Paste Special
+          {t('dialogs.pasteSpecial.title')}
         </span>
         <button
           type="button"
           onClick={onClose}
-          aria-label="Close"
+          aria-label={t('common.closeDialog')}
           style={{
             display: 'flex',
             alignItems: 'center',
@@ -424,7 +447,7 @@ export const PasteSpecialDialog: React.FC<PasteSpecialDialogProps> = ({
               fontSize: '13px',
             }}
           >
-            Reading clipboard...
+            {t('dialogs.pasteSpecial.readingClipboard')}
           </div>
         ) : error ? (
           <div
@@ -439,7 +462,7 @@ export const PasteSpecialDialog: React.FC<PasteSpecialDialogProps> = ({
           </div>
         ) : (
           <div role="menu">
-            {PASTE_OPTIONS.map((option, index) => (
+            {pasteOptions.map((option, index) => (
               <PasteOptionButton
                 key={option.id}
                 option={option}
@@ -467,7 +490,7 @@ export const PasteSpecialDialog: React.FC<PasteSpecialDialogProps> = ({
               marginBottom: '4px',
             }}
           >
-            Preview:
+            {t('dialogs.pasteSpecial.preview')}
           </div>
           <div
             style={{
@@ -563,17 +586,17 @@ export function usePasteSpecial(options: UsePasteSpecialOptions = {}): UsePasteS
 // ============================================================================
 
 /**
- * Get paste option by id
+ * Get paste option definition by id
  */
-export function getPasteOption(id: PasteOption): PasteOptionItem | undefined {
-  return PASTE_OPTIONS.find((option) => option.id === id);
+export function getPasteOption(id: PasteOption): PasteOptionDef | undefined {
+  return PASTE_OPTION_DEFS.find((option) => option.id === id);
 }
 
 /**
- * Get all paste options
+ * Get all paste option definitions
  */
-export function getAllPasteOptions(): PasteOptionItem[] {
-  return [...PASTE_OPTIONS];
+export function getAllPasteOptions(): PasteOptionDef[] {
+  return [...PASTE_OPTION_DEFS];
 }
 
 /**

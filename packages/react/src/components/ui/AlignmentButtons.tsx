@@ -15,6 +15,8 @@ import { Button } from './Button';
 import { Tooltip } from './Tooltip';
 import { cn } from '../../lib/utils';
 import { useFixedDropdown } from './useFixedDropdown';
+import { useTranslation } from '../../i18n';
+import type { TranslationKey } from '../../i18n';
 
 // ============================================================================
 // TYPES
@@ -34,6 +36,10 @@ export interface AlignmentOption {
   iconName: string;
   /** Keyboard shortcut hint */
   shortcut?: string;
+  /** Translation key for label */
+  labelKey: TranslationKey;
+  /** Translation key for shortcut */
+  shortcutKey?: TranslationKey;
 }
 
 /**
@@ -90,6 +96,8 @@ const ALIGNMENT_OPTIONS: AlignmentOption[] = [
   {
     value: 'left',
     label: 'Align Left',
+    labelKey: 'alignment.alignLeft',
+    shortcutKey: 'alignment.alignLeftShortcut',
     icon: <MaterialSymbol name="format_align_left" size={ICON_SIZE} />,
     iconName: 'format_align_left',
     shortcut: 'Ctrl+L',
@@ -97,6 +105,8 @@ const ALIGNMENT_OPTIONS: AlignmentOption[] = [
   {
     value: 'center',
     label: 'Center',
+    labelKey: 'alignment.center',
+    shortcutKey: 'alignment.centerShortcut',
     icon: <MaterialSymbol name="format_align_center" size={ICON_SIZE} />,
     iconName: 'format_align_center',
     shortcut: 'Ctrl+E',
@@ -104,6 +114,8 @@ const ALIGNMENT_OPTIONS: AlignmentOption[] = [
   {
     value: 'right',
     label: 'Align Right',
+    labelKey: 'alignment.alignRight',
+    shortcutKey: 'alignment.alignRightShortcut',
     icon: <MaterialSymbol name="format_align_right" size={ICON_SIZE} />,
     iconName: 'format_align_right',
     shortcut: 'Ctrl+R',
@@ -111,6 +123,8 @@ const ALIGNMENT_OPTIONS: AlignmentOption[] = [
   {
     value: 'both',
     label: 'Justify',
+    labelKey: 'alignment.justify',
+    shortcutKey: 'alignment.justifyShortcut',
     icon: <MaterialSymbol name="format_align_justify" size={ICON_SIZE} />,
     iconName: 'format_align_justify',
     shortcut: 'Ctrl+J',
@@ -129,6 +143,7 @@ export function AlignmentButtons({
   onChange,
   disabled = false,
 }: AlignmentButtonsProps) {
+  const { t } = useTranslation();
   const [isOpen, setIsOpen] = useState(false);
   const onClose = useCallback(() => setIsOpen(false), []);
   const { containerRef, dropdownRef, dropdownStyle, handleMouseDown } = useFixedDropdown({
@@ -150,6 +165,10 @@ export function AlignmentButtons({
   const currentOption =
     ALIGNMENT_OPTIONS.find((opt) => opt.value === value) || ALIGNMENT_OPTIONS[0];
 
+  const currentLabel = t(currentOption.labelKey);
+  const currentShortcut = currentOption.shortcutKey ? t(currentOption.shortcutKey) : undefined;
+  const ariaText = `${currentLabel}${currentShortcut ? ` (${currentShortcut})` : ''}`;
+
   const triggerButton = (
     <Button
       variant="ghost"
@@ -162,7 +181,7 @@ export function AlignmentButtons({
       onMouseDown={handleMouseDown}
       onClick={() => !disabled && setIsOpen((prev) => !prev)}
       disabled={disabled}
-      aria-label={`${currentOption.label}${currentOption.shortcut ? ` (${currentOption.shortcut})` : ''}`}
+      aria-label={ariaText}
       aria-expanded={isOpen}
       aria-haspopup="true"
       data-testid="toolbar-alignment"
@@ -174,15 +193,7 @@ export function AlignmentButtons({
 
   return (
     <div ref={containerRef} style={{ position: 'relative', display: 'inline-block' }}>
-      {!isOpen ? (
-        <Tooltip
-          content={`${currentOption.label}${currentOption.shortcut ? ` (${currentOption.shortcut})` : ''}`}
-        >
-          {triggerButton}
-        </Tooltip>
-      ) : (
-        triggerButton
-      )}
+      {!isOpen ? <Tooltip content={ariaText}>{triggerButton}</Tooltip> : triggerButton}
 
       {isOpen && !disabled && (
         <div
@@ -200,11 +211,13 @@ export function AlignmentButtons({
           <div style={{ display: 'flex', gap: 2 }}>
             {ALIGNMENT_OPTIONS.map((option) => {
               const isActive = value === option.value;
+              const optLabel = t(option.labelKey);
+              const optShortcut = option.shortcutKey ? t(option.shortcutKey) : undefined;
               return (
                 <button
                   key={option.value}
                   type="button"
-                  title={`${option.label}${option.shortcut ? ` (${option.shortcut})` : ''}`}
+                  title={`${optLabel}${optShortcut ? ` (${optShortcut})` : ''}`}
                   data-testid={`alignment-${option.value}`}
                   style={{
                     display: 'flex',

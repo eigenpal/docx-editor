@@ -16,6 +16,7 @@ import {
   SelectValue,
 } from './Select';
 import { cn } from '../../lib/utils';
+import { useTranslation } from '../../i18n';
 
 // ============================================================================
 // TYPES
@@ -74,6 +75,7 @@ export function FontPicker({
   width = 120,
   showPreview = true,
 }: FontPickerProps) {
+  const { t } = useTranslation();
   // Find current font name for display
   const displayValue = React.useMemo(() => {
     if (!value) return placeholder;
@@ -113,14 +115,14 @@ export function FontPicker({
       <SelectTrigger
         className={cn('h-8 text-sm', className)}
         style={{ minWidth: typeof width === 'number' ? `${width}px` : width }}
-        aria-label="Select font family"
+        aria-label={t('font.selectAriaLabel')}
       >
         <SelectValue placeholder={placeholder}>{displayValue}</SelectValue>
       </SelectTrigger>
       <SelectContent className="max-h-[300px]">
         {groupedFonts['sans-serif'].length > 0 && (
           <SelectGroup>
-            <SelectLabel>Sans Serif</SelectLabel>
+            <SelectLabel>{t('font.sansSerif')}</SelectLabel>
             {groupedFonts['sans-serif'].map((font) => (
               <SelectItem
                 key={font.name}
@@ -136,7 +138,7 @@ export function FontPicker({
           <>
             <SelectSeparator />
             <SelectGroup>
-              <SelectLabel>Serif</SelectLabel>
+              <SelectLabel>{t('font.serif')}</SelectLabel>
               {groupedFonts['serif'].map((font) => (
                 <SelectItem
                   key={font.name}
@@ -153,7 +155,7 @@ export function FontPicker({
           <>
             <SelectSeparator />
             <SelectGroup>
-              <SelectLabel>Monospace</SelectLabel>
+              <SelectLabel>{t('font.monospace')}</SelectLabel>
               {groupedFonts['monospace'].map((font) => (
                 <SelectItem
                   key={font.name}
