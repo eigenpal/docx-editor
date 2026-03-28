@@ -42,7 +42,7 @@ export const InsertionExtension = createMarkExtension({
           'data-revision-id': String(mark.attrs.revisionId),
           'data-author': mark.attrs.author,
           ...(mark.attrs.date ? { 'data-date': mark.attrs.date } : {}),
-          style: 'color: #2e7d32; text-decoration: underline; text-decoration-color: #2e7d32;',
+          style: 'color: #2e7d32;',
         },
         0,
       ];
@@ -85,7 +85,7 @@ export const DeletionExtension = createMarkExtension({
           'data-revision-id': String(mark.attrs.revisionId),
           'data-author': mark.attrs.author,
           ...(mark.attrs.date ? { 'data-date': mark.attrs.date } : {}),
-          style: 'color: #c62828; text-decoration: line-through; text-decoration-color: #c62828;',
+          style: 'color: #c62828;',
         },
         0,
       ];
