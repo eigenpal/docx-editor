@@ -141,6 +141,17 @@ function applySuggestionInsert(
 
   const insertAt = tr.mapping.map(to);
   tr.insertText(text, insertAt, insertAt);
+
+  // insertText inherits marks from the cursor position. If the cursor was
+  // inside an existing tracked change (e.g. a deletion), the new text
+  // inherits that mark, causing visual artifacts (strikethrough on new
+  // insertions) and nested tracked changes. Strip any inherited tracked
+  // change marks before applying the correct insertion mark.
+  const deletionType = view.state.schema.marks.deletion;
+  if (deletionType) {
+    tr.removeMark(insertAt, insertAt + text.length, deletionType);
+  }
+  tr.removeMark(insertAt, insertAt + text.length, insertionType);
   tr.addMark(insertAt, insertAt + text.length, insertionType.create(insertAttrs));
 
   view.dispatch(tr.scrollIntoView());
