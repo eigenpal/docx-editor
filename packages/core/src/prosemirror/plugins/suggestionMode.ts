@@ -141,6 +141,18 @@ function applySuggestionInsert(
 
   const insertAt = tr.mapping.map(to);
   tr.insertText(text, insertAt, insertAt);
+
+  // Strip inherited deletion marks — new text must never be marked as deleted.
+  const deletionType = view.state.schema.marks.deletion;
+  if (deletionType) {
+    tr.removeMark(insertAt, insertAt + text.length, deletionType);
+  }
+
+  // Apply the correct insertion mark. If the cursor was inside an existing
+  // insertion by the same author, insertText already inherited that mark and
+  // insertAttrs will match — addMark is effectively a no-op that preserves
+  // the continuous mark span. We intentionally do NOT removeMark(insertionType)
+  // first, because that fragments the mark span and creates a nested change.
   tr.addMark(insertAt, insertAt + text.length, insertionType.create(insertAttrs));
 
   view.dispatch(tr.scrollIntoView());
