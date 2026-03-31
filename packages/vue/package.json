@@ -45,6 +45,7 @@
     "access": "public"
   },
   "devDependencies": {
+    "prosemirror-state": "^1.4.3",
     "prosemirror-view": "^1.41.6"
   }
 }
