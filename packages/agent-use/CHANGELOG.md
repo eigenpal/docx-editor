@@ -1,5 +1,11 @@
 # @eigenpal/docx-editor-agents
 
+## 0.0.33
+
+### Patch Changes
+
+- Add i18n
+
 ## 0.0.32
 
 ### Patch Changes

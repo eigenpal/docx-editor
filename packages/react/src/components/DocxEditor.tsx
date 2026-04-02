@@ -3898,6 +3898,51 @@ body { background: white; }
                           if (view) {
                             const selectionState = extractSelectionState(view.state);
                             handleSelectionChange(selectionState);
+
+                            // Detect comment/tracked-change marks at cursor to open sidebar card.
+                            // Collect marks from all sources — inclusive:false marks aren't
+                            // reported by $from.marks() at boundaries, and empty arrays are
+                            // truthy so an OR chain would short-circuit.
+                            const $from = view.state.selection.$from;
+                            const marks = [
+                              ...(view.state.storedMarks ?? []),
+                              ...($from.nodeAfter?.marks ?? []),
+                              ...($from.nodeBefore?.marks ?? []),
+                              ...$from.marks(),
+                            ];
+                            let cursorSidebarItem: string | null = null;
+                            for (const mark of marks) {
+                              if (mark.type.name === 'comment' && mark.attrs.commentId != null) {
+                                cursorSidebarItem = `comment-${mark.attrs.commentId}`;
+                                break;
+                              }
+                              if (
+                                (mark.type.name === 'insertion' || mark.type.name === 'deletion') &&
+                                mark.attrs.revisionId != null
+                              ) {
+                                const revId = String(mark.attrs.revisionId);
+                                const prefix = `tc-${revId}-`;
+                                let match = commentSidebarItems.find((i) =>
+                                  i.id.startsWith(prefix)
+                                );
+                                // Insertion side of a replacement has a different revisionId;
+                                // check alias map to find the correct sidebar card.
+                                if (!match && revisionIdAliases) {
+                                  const aliasedId = revisionIdAliases.get(revId);
+                                  if (aliasedId) {
+                                    match = commentSidebarItems.find((i) => i.id === aliasedId);
+                                  }
+                                }
+                                if (match) {
+                                  cursorSidebarItem = match.id;
+                                  break;
+                                }
+                              }
+                            }
+                            if (cursorSidebarItem) {
+                              setShowCommentsSidebar(true);
+                            }
+                            setExpandedSidebarItem(cursorSidebarItem);
                           } else {
                             handleSelectionChange(null);
                           }
@@ -3929,7 +3974,7 @@ body { background: white; }
                                 zoom={state.zoom}
                                 editorContainerRef={scrollContainerRef}
                                 onExpandedItemChange={setExpandedSidebarItem}
-                                revisionIdAliases={revisionIdAliases}
+                                activeItemId={expandedSidebarItem}
                               />
                             )}
                             <CommentMarginMarkers
