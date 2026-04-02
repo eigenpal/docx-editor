@@ -3903,6 +3903,8 @@ body { background: white; }
                             // These marks use inclusive:false, so $from.marks() misses them at
                             // boundaries. Collect marks from all sources (nodeAfter, nodeBefore,
                             // storedMarks) since the OR chain short-circuits on empty arrays.
+                            // Search commentSidebarItems (always populated) not allSidebarItems
+                            // (which is empty when sidebar is closed) so we can auto-open it.
                             const $from = view.state.selection.$from;
                             const marks = [
                               ...(view.state.storedMarks ?? []),
@@ -3919,11 +3921,13 @@ body { background: white; }
                               if (mark.type.name === 'insertion' && mark.attrs.revisionId != null) {
                                 const revId = String(mark.attrs.revisionId);
                                 const prefix = `tc-${revId}-`;
-                                let match = allSidebarItems.find((i) => i.id.startsWith(prefix));
+                                let match = commentSidebarItems.find((i) =>
+                                  i.id.startsWith(prefix)
+                                );
                                 if (!match && revisionIdAliases) {
                                   const aliasedId = revisionIdAliases.get(revId);
                                   if (aliasedId) {
-                                    match = allSidebarItems.find((i) => i.id === aliasedId);
+                                    match = commentSidebarItems.find((i) => i.id === aliasedId);
                                   }
                                 }
                                 if (match) {
@@ -3934,12 +3938,17 @@ body { background: white; }
                               if (mark.type.name === 'deletion' && mark.attrs.revisionId != null) {
                                 const revId = String(mark.attrs.revisionId);
                                 const prefix = `tc-${revId}-`;
-                                const match = allSidebarItems.find((i) => i.id.startsWith(prefix));
+                                const match = commentSidebarItems.find((i) =>
+                                  i.id.startsWith(prefix)
+                                );
                                 if (match) {
                                   cursorSidebarItem = match.id;
                                   break;
                                 }
                               }
+                            }
+                            if (cursorSidebarItem) {
+                              setShowCommentsSidebar(true);
                             }
                             setExpandedSidebarItem(cursorSidebarItem);
                           } else {
