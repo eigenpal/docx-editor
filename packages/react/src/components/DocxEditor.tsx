@@ -3900,11 +3900,9 @@ body { background: white; }
                             handleSelectionChange(selectionState);
 
                             // Detect comment/tracked-change marks at cursor to open sidebar card.
-                            // These marks use inclusive:false, so $from.marks() misses them at
-                            // boundaries. Collect marks from all sources (nodeAfter, nodeBefore,
-                            // storedMarks) since the OR chain short-circuits on empty arrays.
-                            // Search commentSidebarItems (always populated) not allSidebarItems
-                            // (which is empty when sidebar is closed) so we can auto-open it.
+                            // Collect marks from all sources — inclusive:false marks aren't
+                            // reported by $from.marks() at boundaries, and empty arrays are
+                            // truthy so an OR chain would short-circuit.
                             const $from = view.state.selection.$from;
                             const marks = [
                               ...(view.state.storedMarks ?? []),
@@ -3918,29 +3916,23 @@ body { background: white; }
                                 cursorSidebarItem = `comment-${mark.attrs.commentId}`;
                                 break;
                               }
-                              if (mark.type.name === 'insertion' && mark.attrs.revisionId != null) {
+                              if (
+                                (mark.type.name === 'insertion' || mark.type.name === 'deletion') &&
+                                mark.attrs.revisionId != null
+                              ) {
                                 const revId = String(mark.attrs.revisionId);
                                 const prefix = `tc-${revId}-`;
                                 let match = commentSidebarItems.find((i) =>
                                   i.id.startsWith(prefix)
                                 );
+                                // Insertion side of a replacement has a different revisionId;
+                                // check alias map to find the correct sidebar card.
                                 if (!match && revisionIdAliases) {
                                   const aliasedId = revisionIdAliases.get(revId);
                                   if (aliasedId) {
                                     match = commentSidebarItems.find((i) => i.id === aliasedId);
                                   }
                                 }
-                                if (match) {
-                                  cursorSidebarItem = match.id;
-                                  break;
-                                }
-                              }
-                              if (mark.type.name === 'deletion' && mark.attrs.revisionId != null) {
-                                const revId = String(mark.attrs.revisionId);
-                                const prefix = `tc-${revId}-`;
-                                const match = commentSidebarItems.find((i) =>
-                                  i.id.startsWith(prefix)
-                                );
                                 if (match) {
                                   cursorSidebarItem = match.id;
                                   break;

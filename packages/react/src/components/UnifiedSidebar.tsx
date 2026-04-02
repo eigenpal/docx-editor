@@ -38,6 +38,9 @@ export function UnifiedSidebar({
   const { t } = useTranslation();
   // Fully controlled: parent owns expansion state via activeItemId
   const expandedItem = activeItemId ?? null;
+  // Ref keeps toggleExpand stable so card children don't re-render on every cursor move
+  const expandedItemRef = useRef(expandedItem);
+  expandedItemRef.current = expandedItem;
 
   const [initialPositionsDone, setInitialPositionsDone] = useState(false);
   const cardHeightsRef = useRef<Map<string, number>>(new Map());
@@ -162,9 +165,9 @@ export function UnifiedSidebar({
 
   const toggleExpand = useCallback(
     (itemId: string) => {
-      onExpandedItemChange?.(expandedItem === itemId ? null : itemId);
+      onExpandedItemChange?.(expandedItemRef.current === itemId ? null : itemId);
     },
-    [expandedItem, onExpandedItemChange]
+    [onExpandedItemChange]
   );
 
   if (items.length === 0) return null;
