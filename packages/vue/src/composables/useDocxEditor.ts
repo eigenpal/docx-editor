@@ -176,6 +176,8 @@ export function useDocxEditor(options: UseDocxEditorOptions) {
   const editorView = shallowRef<EditorView | null>(null);
   const isReady = ref(false);
   const parseError = ref<string | null>(null);
+  /** Reactive snapshot of marks at cursor/selection-start, updated on every transaction */
+  const cursorMarks = ref<{ name: string; attrs: Record<string, any> }[]>([]);
 
   // Use the singleton extension manager — same schema used by toProseDoc/commands
   const mgr = singletonManager;
@@ -266,13 +268,42 @@ export function useDocxEditor(options: UseDocxEditorOptions) {
         const newState = view.state.apply(transaction);
         view.updateState(newState);
 
+        // Snapshot marks at cursor for reactive toolbar state.
+        // Must happen before any code that could throw.
+        // NOTE: $from.marks() at a text node boundary can return marks from the
+        // node BEFORE the selection start. For non-empty selections, read marks
+        // from the first text node inside the selection range instead.
+        let marks: readonly import('prosemirror-model').Mark[] = [];
+        if (newState.storedMarks) {
+          marks = newState.storedMarks;
+        } else {
+          const { from, to, empty } = newState.selection;
+          if (empty) {
+            marks = newState.selection.$from.marks();
+          } else {
+            // Read marks from first text node in selection range
+            newState.doc.nodesBetween(from, Math.min(from + 1, to), (node) => {
+              if (node.isText) {
+                marks = node.marks;
+                return false; // stop
+              }
+            });
+            if (!marks.length) marks = newState.selection.$from.marks();
+          }
+        }
+        cursorMarks.value = marks.map(m => ({ name: m.type.name, attrs: { ...m.attrs } }));
+
         // Re-layout on doc changes
         if (transaction.docChanged) {
           runLayoutPipeline(newState);
           // Notify parent about document change
-          if (document.value) {
-            const updatedDoc = fromProseDoc(newState.doc, document.value);
-            onChange?.(updatedDoc);
+          try {
+            if (document.value) {
+              const updatedDoc = fromProseDoc(newState.doc, document.value);
+              onChange?.(updatedDoc);
+            }
+          } catch (err) {
+            console.error('[useDocxEditor] fromProseDoc error:', err);
           }
         }
 
@@ -388,6 +419,7 @@ export function useDocxEditor(options: UseDocxEditorOptions) {
     editorView,
     isReady,
     parseError,
+    cursorMarks,
 
     // Actions
     loadBuffer,
@@ -397,5 +429,9 @@ export function useDocxEditor(options: UseDocxEditorOptions) {
     destroy,
     getDocument,
     getCommands,
+    /** Force a re-layout without a doc change (e.g. after page-setup changes). */
+    reLayout() {
+      if (editorView.value) runLayoutPipeline(editorView.value.state);
+    },
   };
 }
