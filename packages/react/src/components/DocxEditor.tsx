@@ -3898,6 +3898,42 @@ body { background: white; }
                           if (view) {
                             const selectionState = extractSelectionState(view.state);
                             handleSelectionChange(selectionState);
+
+                            // Detect comment/tracked-change marks at cursor to open sidebar card
+                            const marks =
+                              view.state.storedMarks || view.state.selection.$from.marks();
+                            let cursorSidebarItem: string | null = null;
+                            for (const mark of marks) {
+                              if (mark.type.name === 'comment' && mark.attrs.commentId != null) {
+                                cursorSidebarItem = `comment-${mark.attrs.commentId}`;
+                                break;
+                              }
+                              if (mark.type.name === 'insertion' && mark.attrs.revisionId != null) {
+                                const revId = String(mark.attrs.revisionId);
+                                const prefix = `tc-${revId}-`;
+                                let match = allSidebarItems.find((i) => i.id.startsWith(prefix));
+                                if (!match && revisionIdAliases) {
+                                  const aliasedId = revisionIdAliases.get(revId);
+                                  if (aliasedId) {
+                                    match = allSidebarItems.find((i) => i.id === aliasedId);
+                                  }
+                                }
+                                if (match) {
+                                  cursorSidebarItem = match.id;
+                                  break;
+                                }
+                              }
+                              if (mark.type.name === 'deletion' && mark.attrs.revisionId != null) {
+                                const revId = String(mark.attrs.revisionId);
+                                const prefix = `tc-${revId}-`;
+                                const match = allSidebarItems.find((i) => i.id.startsWith(prefix));
+                                if (match) {
+                                  cursorSidebarItem = match.id;
+                                  break;
+                                }
+                              }
+                            }
+                            setExpandedSidebarItem(cursorSidebarItem);
                           } else {
                             handleSelectionChange(null);
                           }
@@ -3929,7 +3965,7 @@ body { background: white; }
                                 zoom={state.zoom}
                                 editorContainerRef={scrollContainerRef}
                                 onExpandedItemChange={setExpandedSidebarItem}
-                                revisionIdAliases={revisionIdAliases}
+                                activeItemId={expandedSidebarItem}
                               />
                             )}
                             <CommentMarginMarkers
