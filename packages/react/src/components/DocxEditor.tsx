@@ -3901,13 +3901,15 @@ body { background: white; }
 
                             // Detect comment/tracked-change marks at cursor to open sidebar card.
                             // These marks use inclusive:false, so $from.marks() misses them at
-                            // boundaries. Check nodeAfter/nodeBefore marks for reliable detection.
+                            // boundaries. Collect marks from all sources (nodeAfter, nodeBefore,
+                            // storedMarks) since the OR chain short-circuits on empty arrays.
                             const $from = view.state.selection.$from;
-                            const marks =
-                              view.state.storedMarks ||
-                              $from.nodeAfter?.marks ||
-                              $from.nodeBefore?.marks ||
-                              $from.marks();
+                            const marks = [
+                              ...(view.state.storedMarks ?? []),
+                              ...($from.nodeAfter?.marks ?? []),
+                              ...($from.nodeBefore?.marks ?? []),
+                              ...$from.marks(),
+                            ];
                             let cursorSidebarItem: string | null = null;
                             for (const mark of marks) {
                               if (mark.type.name === 'comment' && mark.attrs.commentId != null) {
