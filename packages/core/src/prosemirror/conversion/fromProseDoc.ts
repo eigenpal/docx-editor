@@ -1141,15 +1141,131 @@ function inferTableBorders(rows: TableRow[]): TableBorders | undefined {
   return undefined;
 }
 
+interface PMTableCellAnchor {
+  row: number;
+  col: number;
+  rowspan: number;
+  colspan: number;
+  cell: TableCell;
+}
+
+function collectPMTableAnchors(
+  node: PMNode,
+  documentCounts?: TrackedChangeCounts
+): {
+  anchors: PMTableCellAnchor[];
+  totalCols: number;
+} {
+  const occupied: boolean[][] = [];
+  const anchors: PMTableCellAnchor[] = [];
+  let totalCols = 0;
+
+  for (let rowIndex = 0; rowIndex < node.childCount; rowIndex++) {
+    const rowNode = node.child(rowIndex);
+    let colIndex = 0;
+
+    rowNode.forEach((cellNode) => {
+      if (cellNode.type.name !== 'tableCell' && cellNode.type.name !== 'tableHeader') return;
+
+      while (occupied[rowIndex]?.[colIndex]) colIndex++;
+
+      const rowspan = (cellNode.attrs as TableCellAttrs).rowspan || 1;
+      const colspan = (cellNode.attrs as TableCellAttrs).colspan || 1;
+
+      anchors.push({
+        row: rowIndex,
+        col: colIndex,
+        rowspan,
+        colspan,
+        cell: convertPMTableCell(cellNode, documentCounts),
+      });
+
+      for (let r = rowIndex; r < rowIndex + rowspan; r++) {
+        const rowSlots = occupied[r] ?? [];
+        occupied[r] = rowSlots;
+        for (let c = colIndex; c < colIndex + colspan; c++) {
+          rowSlots[c] = true;
+        }
+      }
+
+      colIndex += colspan;
+      totalCols = Math.max(totalCols, colIndex);
+    });
+  }
+
+  return { anchors, totalCols };
+}
+
 function convertPMTable(node: PMNode, documentCounts?: TrackedChangeCounts): Table {
   const attrs = node.attrs as TableAttrs;
-  const rows: TableRow[] = [];
+  const { anchors, totalCols } = collectPMTableAnchors(node, documentCounts);
+  const anchorByStart = new Map<string, PMTableCellAnchor>();
+  const anchorByCoveredSlot = new Map<string, PMTableCellAnchor>();
 
-  node.forEach((rowNode) => {
-    if (rowNode.type.name === 'tableRow') {
-      rows.push(convertPMTableRow(rowNode, documentCounts));
+  for (const anchor of anchors) {
+    anchorByStart.set(`${anchor.row}-${anchor.col}`, anchor);
+    for (let row = anchor.row; row < anchor.row + anchor.rowspan; row++) {
+      for (let col = anchor.col; col < anchor.col + anchor.colspan; col++) {
+        anchorByCoveredSlot.set(`${row}-${col}`, anchor);
+      }
     }
-  });
+  }
+
+  const rows: TableRow[] = [];
+  for (let rowIndex = 0; rowIndex < node.childCount; rowIndex++) {
+    const rowNode = node.child(rowIndex);
+    const cells: TableCell[] = [];
+
+    for (let colIndex = 0; colIndex < totalCols; ) {
+      const anchor = anchorByStart.get(`${rowIndex}-${colIndex}`);
+      if (anchor) {
+        const formatting = { ...(anchor.cell.formatting ?? {}) };
+        if (anchor.colspan > 1) {
+          formatting.gridSpan = anchor.colspan;
+        } else {
+          delete formatting.gridSpan;
+        }
+        if (anchor.rowspan > 1) {
+          formatting.vMerge = 'restart';
+        } else {
+          delete formatting.vMerge;
+        }
+        cells.push({
+          ...anchor.cell,
+          formatting: Object.keys(formatting).length ? formatting : undefined,
+        });
+        colIndex += anchor.colspan;
+        continue;
+      }
+
+      const coveringAnchor = anchorByCoveredSlot.get(`${rowIndex}-${colIndex}`);
+      if (!coveringAnchor) {
+        colIndex++;
+        continue;
+      }
+
+      const formatting = { ...(coveringAnchor.cell.formatting ?? {}) };
+      if (coveringAnchor.colspan > 1) {
+        formatting.gridSpan = coveringAnchor.colspan;
+      } else {
+        delete formatting.gridSpan;
+      }
+      formatting.vMerge = 'continue';
+
+      cells.push({
+        ...coveringAnchor.cell,
+        content: [],
+        formatting,
+      });
+      colIndex += coveringAnchor.colspan;
+    }
+
+    rows.push({
+      type: 'tableRow',
+      formatting: tableRowAttrsToFormatting(rowNode.attrs as TableRowAttrs),
+      cells,
+    });
+  }
 
   const formatting = tableAttrsToFormatting(attrs) || undefined;
   if (!formatting?.borders) {
@@ -1293,26 +1409,6 @@ function tableAttrsToFormatting(attrs: TableAttrs): TableFormatting | undefined 
     floating: attrs.floating || undefined,
     cellMargins,
     look: attrs.look || undefined,
-  };
-}
-
-/**
- * Convert a ProseMirror table row node to our TableRow type
- */
-function convertPMTableRow(node: PMNode, documentCounts?: TrackedChangeCounts): TableRow {
-  const attrs = node.attrs as TableRowAttrs;
-  const cells: TableCell[] = [];
-
-  node.forEach((cellNode) => {
-    if (cellNode.type.name === 'tableCell' || cellNode.type.name === 'tableHeader') {
-      cells.push(convertPMTableCell(cellNode, documentCounts));
-    }
-  });
-
-  return {
-    type: 'tableRow',
-    formatting: tableRowAttrsToFormatting(attrs),
-    cells,
   };
 }
 

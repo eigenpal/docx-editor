@@ -3489,7 +3489,12 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
         // If the right-click is within the existing selection, keep it
         // Otherwise, move cursor to the right-click position
         if (pmPos !== null && (from === to || pmPos < from || pmPos > to)) {
-          hiddenPMRef.current?.setSelection(pmPos);
+          const cellPos = findCellPosFromPmPos(pmPos);
+          if (cellPos !== null) {
+            hiddenPMRef.current?.setSelection(cellPos + 1);
+          } else {
+            hiddenPMRef.current?.setSelection(pmPos);
+          }
           hiddenPMRef.current?.focus();
           setIsFocused(true);
         }

@@ -8,6 +8,7 @@
 import React, { useCallback, useEffect, useRef, useState, useMemo } from 'react';
 import { useTranslation } from '../i18n';
 import type { TranslationKey } from '../i18n';
+import defaultLocale from '../../i18n/en.json';
 
 // ============================================================================
 // TYPES
@@ -30,6 +31,8 @@ export type TextContextAction =
   | 'addColumnLeft'
   | 'addColumnRight'
   | 'deleteColumn'
+  | 'mergeCells'
+  | 'splitCell'
   | 'addComment';
 
 /**
@@ -269,6 +272,23 @@ const DeleteColumnIcon = () => (
   </svg>
 );
 
+const MergeCellsIcon = () => (
+  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <rect x="2" y="4" width="4" height="8" rx="0.5" stroke="currentColor" strokeWidth="1.2" />
+    <rect x="10" y="4" width="4" height="8" rx="0.5" stroke="currentColor" strokeWidth="1.2" />
+    <path d="M7 8h2" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+    <path d="M8 7l1 1-1 1" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
+  </svg>
+);
+
+const SplitCellIcon = () => (
+  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <rect x="2" y="4" width="12" height="8" rx="0.5" stroke="currentColor" strokeWidth="1.2" />
+    <path d="M8 4v8" stroke="currentColor" strokeWidth="1.2" strokeDasharray="2 1" />
+    <path d="M6.5 8h-1M9.5 8h1" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+  </svg>
+);
+
 const CommentIcon = () => (
   <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
     <path
@@ -308,6 +328,10 @@ function getActionIcon(action: TextContextAction): React.ReactNode {
       return <AddColumnRightIcon />;
     case 'deleteColumn':
       return <DeleteColumnIcon />;
+    case 'mergeCells':
+      return <MergeCellsIcon />;
+    case 'splitCell':
+      return <SplitCellIcon />;
     case 'addComment':
       return <CommentIcon />;
     default:
@@ -764,6 +788,8 @@ export function getTextActionLabel(action: TextContextAction): string {
     addColumnLeft: 'Insert column left',
     addColumnRight: 'Insert column right',
     deleteColumn: 'Delete column',
+    mergeCells: defaultLocale.table.mergeCells,
+    splitCell: defaultLocale.table.splitCell,
     addComment: 'Comment',
   };
   return labels[action];
@@ -787,6 +813,8 @@ export function getTextActionShortcut(action: TextContextAction): string {
     addColumnLeft: '',
     addColumnRight: '',
     deleteColumn: '',
+    mergeCells: '',
+    splitCell: '',
     addComment: '',
   };
   return shortcuts[action];

@@ -910,27 +910,27 @@ export class EditorPage {
    * Insert a table with specified dimensions using the grid selector
    */
   async insertTable(rows: number, cols: number): Promise<void> {
-    // Open table grid selector
-    await this.page.locator('[data-testid="toolbar-insert-table"]').click();
+    const inlinePicker = this.page.locator('[data-testid="toolbar-insert-table"]');
 
-    // Wait for grid to appear
-    await this.page.waitForSelector('.docx-table-grid', { state: 'visible', timeout: 5000 });
+    if (await inlinePicker.isVisible().catch(() => false)) {
+      await inlinePicker.click();
+    } else {
+      await this.page.getByRole('button', { name: /^Insert$/ }).click();
+      const tableMenuItem = this.page.getByRole('button', { name: /^Table$/ }).first();
+      await tableMenuItem.hover();
+    }
 
-    // Calculate grid cell index (row-major order, 5 columns per row)
-    // Grid uses 1-based indexing for rows and cols
-    const cellIndex = (rows - 1) * 5 + cols;
+    const grid = this.page.getByRole('grid', { name: 'Table size selector' });
+    await grid.waitFor({ state: 'visible', timeout: 5000 });
 
-    // Get the target cell - must HOVER first to set the hover state, then click
-    // The grid picker only inserts a table when hoverRows > 0 && hoverCols > 0
-    const targetCell = this.page.locator(`.docx-table-grid > div:nth-child(${cellIndex})`);
+    const gridCells = grid.getByRole('gridcell');
+    const totalCells = await gridCells.count();
+    const gridColumns = Math.max(1, Math.round(Math.sqrt(totalCells)));
+    const cellIndex = (rows - 1) * gridColumns + (cols - 1);
+    const targetCell = gridCells.nth(cellIndex);
 
-    // Hover over the cell to set the hover state
     await targetCell.hover();
-
-    // Small delay to ensure hover state is set
     await this.page.waitForTimeout(100);
-
-    // Click on the target grid cell
     await targetCell.click();
 
     // Wait for table to be inserted (use generic table selector since prosemirror-tables
@@ -948,6 +948,17 @@ export class EditorPage {
     const cell = table.locator('.layout-table-row').nth(row).locator('.layout-table-cell').nth(col);
     await cell.scrollIntoViewIfNeeded();
     await cell.click();
+  }
+
+  /**
+   * Right-click on a specific visual table cell to open the text context menu
+   */
+  async rightClickTableCell(tableIndex: number, row: number, col: number): Promise<void> {
+    const table = this.page.locator('.paged-editor__pages .layout-table').nth(tableIndex);
+    const cell = table.locator('.layout-table-row').nth(row).locator('.layout-table-cell').nth(col);
+    await cell.scrollIntoViewIfNeeded();
+    await cell.click({ button: 'right' });
+    await this.page.waitForSelector('[role="menu"]', { state: 'visible', timeout: 5000 });
   }
 
   /**

@@ -228,6 +228,15 @@
       "insertButton": "Tabelle einfügen",
       "sizeSelector": "Tabellengröße auswählen"
     },
+    "splitCell": {
+      "title": "Zelle teilen",
+      "description": "Legen Sie fest, in wie viele Zeilen und Spalten die ausgewählte Zelle geteilt werden soll.",
+      "rowsLabel": "Zeilen:",
+      "columnsLabel": "Spalten:",
+      "currentMinimum": "Minimum aus der aktuellen Spanne: {rows} Zeile(n) x {cols} Spalte(n)",
+      "minValue": "Verwenden Sie mindestens {rows} Zeile(n) und {cols} Spalte(n).",
+      "notOneByOne": "Wählen Sie mindestens zwei resultierende Zellen."
+    },
     "insertImage": {
       "title": "Grafik einfügen",
       "uploadAriaLabel": "Klicken oder ziehen, um ein Bild hochzuladen",

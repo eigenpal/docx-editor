@@ -525,6 +525,7 @@ function getTableContext(state: EditorState): TableContextInfo {
 
   // Detect CellSelection (multi-cell selection from prosemirror-tables)
   const isCellSel = selection instanceof CellSelection;
+  const hasMultiCellSelection = isCellSel && selection.$anchorCell.pos !== selection.$headCell.pos;
 
   let table: PMNode | undefined;
   let tablePos: number | undefined;
@@ -582,8 +583,7 @@ function getTableContext(state: EditorState): TableContextInfo {
     }
   });
 
-  const canSplitCell =
-    cellNode && ((cellNode.attrs.colspan || 1) > 1 || (cellNode.attrs.rowspan || 1) > 1);
+  const canSplitCell = !!cellNode && !hasMultiCellSelection;
 
   // Extract border color and background color from current cell
   let cellBorderColor: TableContextInfo['cellBorderColor'];
@@ -616,7 +616,7 @@ function getTableContext(state: EditorState): TableContextInfo {
     columnIndex,
     rowCount,
     columnCount,
-    hasMultiCellSelection: isCellSel,
+    hasMultiCellSelection,
     canSplitCell: !!canSplitCell,
     cellBorderColor,
     cellBackgroundColor,
@@ -1048,17 +1048,23 @@ export const TablePluginExtension = createExtension({
         let tr = state.tr;
         const newColumnCount = (context.columnCount || 1) + 1;
         const newColWidthPercent = Math.floor(100 / newColumnCount);
-
+        const rowStarts: number[] = [];
         let rowPos = context.tablePos + 1;
-        let rowIndex = 0;
 
         context.table.forEach((row) => {
+          rowStarts.push(rowPos);
+          rowPos += row.nodeSize;
+        });
+
+        context.table.forEach((row, _offset, rowIndex) => {
           if (row.type.name === 'tableRow') {
-            let cellPos = rowPos + 1;
+            const mappedRowPos = tr.mapping.map(rowStarts[rowIndex]);
+            let cellPos = mappedRowPos + 1;
             let colIdx = 0;
+            let inserted = false;
 
             row.forEach((cell) => {
-              if (colIdx === context.columnIndex) {
+              if (!inserted && colIdx === context.columnIndex) {
                 const paragraph = schema.nodes.paragraph.create();
                 const cellAttrs: any = buildCellAttrsFromTemplate(cell, {
                   colspan: 1,
@@ -1068,12 +1074,13 @@ export const TablePluginExtension = createExtension({
                 cellAttrs.widthType = 'pct';
                 const newCell = schema.nodes.tableCell.create(cellAttrs, paragraph);
                 tr = tr.insert(cellPos, newCell);
+                inserted = true;
               }
               cellPos += cell.nodeSize;
               colIdx += cell.attrs.colspan || 1;
             });
 
-            if (colIdx <= context.columnIndex!) {
+            if (!inserted && colIdx <= context.columnIndex!) {
               const paragraph = schema.nodes.paragraph.create();
               const cellAttrs: any = buildCellAttrsFromTemplate(
                 row.child(row.childCount - 1) ?? null,
@@ -1084,10 +1091,7 @@ export const TablePluginExtension = createExtension({
               const newCell = schema.nodes.tableCell.create(cellAttrs, paragraph);
               tr = tr.insert(cellPos, newCell);
             }
-
-            rowIndex++;
           }
-          rowPos += row.nodeSize;
         });
 
         const updatedTable = tr.doc.nodeAt(context.tablePos);
@@ -1136,13 +1140,18 @@ export const TablePluginExtension = createExtension({
         let tr = state.tr;
         const newColumnCount = (context.columnCount || 1) + 1;
         const newColWidthPercent = Math.floor(100 / newColumnCount);
-
+        const rowStarts: number[] = [];
         let rowPos = context.tablePos + 1;
-        let rowIndex = 0;
 
         context.table.forEach((row) => {
+          rowStarts.push(rowPos);
+          rowPos += row.nodeSize;
+        });
+
+        context.table.forEach((row, _offset, rowIndex) => {
           if (row.type.name === 'tableRow') {
-            let cellPos = rowPos + 1;
+            const mappedRowPos = tr.mapping.map(rowStarts[rowIndex]);
+            let cellPos = mappedRowPos + 1;
             let colIdx = 0;
             let inserted = false;
 
@@ -1175,10 +1184,7 @@ export const TablePluginExtension = createExtension({
               const newCell = schema.nodes.tableCell.create(cellAttrs, paragraph);
               tr = tr.insert(cellPos, newCell);
             }
-
-            rowIndex++;
           }
-          rowPos += row.nodeSize;
         });
 
         const updatedTable = tr.doc.nodeAt(context.tablePos);

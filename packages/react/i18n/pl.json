@@ -228,6 +228,15 @@
       "insertButton": "Wstaw tabelę",
       "sizeSelector": "Wybór rozmiaru tabeli"
     },
+    "splitCell": {
+      "title": "Podziel komórkę",
+      "description": "Ustaw, na ile wierszy i kolumn ma zostać podzielona wybrana komórka.",
+      "rowsLabel": "Wiersze:",
+      "columnsLabel": "Kolumny:",
+      "currentMinimum": "Minimum z bieżącego zakresu: {rows} wiersz(y) x {cols} kolumna(y)",
+      "minValue": "Użyj co najmniej {rows} wiersz(y) i {cols} kolumna(y).",
+      "notOneByOne": "Wybierz co najmniej dwie wynikowe komórki."
+    },
     "insertImage": {
       "title": "Wstaw obraz",
       "uploadAriaLabel": "Kliknij lub przeciągnij, aby przesłać obraz",
