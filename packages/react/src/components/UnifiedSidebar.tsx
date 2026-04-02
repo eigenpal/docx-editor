@@ -36,19 +36,8 @@ export function UnifiedSidebar({
   activeItemId,
 }: UnifiedSidebarProps) {
   const { t } = useTranslation();
-  const [expandedItem, setExpandedItem] = useState<string | null>(null);
-
-  // Sync internal state when cursor-driven activeItemId changes
-  useEffect(() => {
-    if (activeItemId !== undefined) {
-      setExpandedItem(activeItemId);
-    }
-  }, [activeItemId]);
-
-  // Notify parent when expanded item changes (via effect, not in setState updater)
-  useEffect(() => {
-    onExpandedItemChange?.(expandedItem);
-  }, [expandedItem, onExpandedItemChange]);
+  // Fully controlled: parent owns expansion state via activeItemId
+  const expandedItem = activeItemId ?? null;
 
   const [initialPositionsDone, setInitialPositionsDone] = useState(false);
   const cardHeightsRef = useRef<Map<string, number>>(new Map());
@@ -171,9 +160,12 @@ export function UnifiedSidebar({
     return fn;
   }, []);
 
-  const toggleExpand = useCallback((itemId: string) => {
-    setExpandedItem((prev) => (prev === itemId ? null : itemId));
-  }, []);
+  const toggleExpand = useCallback(
+    (itemId: string) => {
+      onExpandedItemChange?.(expandedItem === itemId ? null : itemId);
+    },
+    [expandedItem, onExpandedItemChange]
+  );
 
   if (items.length === 0) return null;
 
