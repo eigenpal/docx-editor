@@ -21,8 +21,8 @@ export interface UnifiedSidebarProps {
   zoom: number;
   editorContainerRef: React.RefObject<HTMLDivElement | null>;
   onExpandedItemChange?: (itemId: string | null) => void;
-  /** Maps alternate revision IDs to sidebar item IDs (e.g. insertion side of replacements). */
-  revisionIdAliases?: Map<string, string>;
+  /** Controlled: sidebar item to expand based on cursor position. */
+  activeItemId?: string | null;
 }
 
 export function UnifiedSidebar({
@@ -33,15 +33,14 @@ export function UnifiedSidebar({
   zoom,
   editorContainerRef,
   onExpandedItemChange,
-  revisionIdAliases,
+  activeItemId,
 }: UnifiedSidebarProps) {
   const { t } = useTranslation();
-  const [expandedItem, setExpandedItem] = useState<string | null>(null);
-
-  // Notify parent when expanded item changes (via effect, not in setState updater)
-  useEffect(() => {
-    onExpandedItemChange?.(expandedItem);
-  }, [expandedItem, onExpandedItemChange]);
+  // Fully controlled: parent owns expansion state via activeItemId
+  const expandedItem = activeItemId ?? null;
+  // Ref keeps toggleExpand stable so card children don't re-render on every cursor move
+  const expandedItemRef = useRef(expandedItem);
+  expandedItemRef.current = expandedItem;
 
   const [initialPositionsDone, setInitialPositionsDone] = useState(false);
   const cardHeightsRef = useRef<Map<string, number>>(new Map());
@@ -147,52 +146,6 @@ export function UnifiedSidebar({
     };
   }, [expandedItem]);
 
-  useEffect(() => {
-    const container = editorContainerRef?.current;
-    if (!container) return;
-
-    const pagesEl = container.querySelector('.paged-editor__pages');
-    if (!pagesEl) return;
-
-    const handleDocClick = (e: MouseEvent) => {
-      const target = e.target as HTMLElement;
-      if (sidebarRef.current?.contains(target)) return;
-
-      if (pagesEl.contains(target)) {
-        const commentEl = target.closest('[data-comment-id]') as HTMLElement | null;
-        if (commentEl?.dataset.commentId) {
-          setExpandedItem(`comment-${commentEl.dataset.commentId}`);
-          return;
-        }
-        const changeEl =
-          (target.closest('.docx-insertion') as HTMLElement | null) ||
-          (target.closest('.docx-deletion') as HTMLElement | null);
-        if (changeEl?.dataset.revisionId) {
-          const revId = changeEl.dataset.revisionId;
-          const prefix = `tc-${revId}-`;
-          let match = items.find((i) => i.id.startsWith(prefix));
-          // For replacement tracked changes, the insertion part has a different
-          // revisionId than the card. Look up the alias to find the correct card.
-          if (!match && revisionIdAliases) {
-            const aliasedItemId = revisionIdAliases.get(revId);
-            if (aliasedItemId) {
-              match = items.find((i) => i.id === aliasedItemId);
-            }
-          }
-          if (match) {
-            setExpandedItem(match.id);
-            return;
-          }
-        }
-      }
-
-      setExpandedItem(null);
-    };
-
-    container.addEventListener('click', handleDocClick);
-    return () => container.removeEventListener('click', handleDocClick);
-  }, [editorContainerRef, items, revisionIdAliases]);
-
   const getMeasureRef = useCallback((itemId: string): ((el: HTMLDivElement | null) => void) => {
     let fn = measureRefsRef.current.get(itemId);
     if (!fn) {
@@ -210,9 +163,12 @@ export function UnifiedSidebar({
     return fn;
   }, []);
 
-  const toggleExpand = useCallback((itemId: string) => {
-    setExpandedItem((prev) => (prev === itemId ? null : itemId));
-  }, []);
+  const toggleExpand = useCallback(
+    (itemId: string) => {
+      onExpandedItemChange?.(expandedItemRef.current === itemId ? null : itemId);
+    },
+    [onExpandedItemChange]
+  );
 
   if (items.length === 0) return null;
 

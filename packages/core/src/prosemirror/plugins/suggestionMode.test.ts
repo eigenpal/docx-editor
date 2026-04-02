@@ -4,7 +4,7 @@
 
 import { describe, test, expect } from 'bun:test';
 import { Schema } from 'prosemirror-model';
-import { EditorState, TextSelection } from 'prosemirror-state';
+import { EditorState, TextSelection, type Transaction } from 'prosemirror-state';
 import { createSuggestionModePlugin, suggestionModeKey, setSuggestionMode } from './suggestionMode';
 
 // Minimal schema with insertion/deletion marks
@@ -40,6 +40,13 @@ function createState(text: string, active = false): EditorState {
   return EditorState.create({ doc, plugins: [plugin] });
 }
 
+function createStateWithPlugin(text: string, active = false) {
+  const plugin = createSuggestionModePlugin(active, 'TestUser');
+  const doc = schema.node('doc', null, [schema.node('paragraph', null, [schema.text(text)])]);
+  const state = EditorState.create({ doc, plugins: [plugin] });
+  return { plugin, state };
+}
+
 function getPluginState(state: EditorState) {
   return suggestionModeKey.getState(state);
 }
@@ -63,6 +70,43 @@ function getMarks(state: EditorState): Array<{ text: string; marks: string[] }> 
     }
   });
   return result;
+}
+
+function getMarkedSegments(state: EditorState, markName: 'insertion' | 'deletion') {
+  const result: Array<{ text: string; revisionId: number; from: number; to: number }> = [];
+  state.doc.descendants((node, pos) => {
+    if (!node.isText) return;
+    const mark = node.marks.find((m) => m.type.name === markName);
+    if (!mark) return;
+    result.push({
+      text: node.text!,
+      revisionId: mark.attrs.revisionId as number,
+      from: pos,
+      to: pos + node.nodeSize,
+    });
+  });
+  return result;
+}
+
+function dispatchSuggestionKey(
+  plugin: ReturnType<typeof createSuggestionModePlugin>,
+  state: EditorState,
+  key: 'Backspace' | 'Delete'
+): EditorState {
+  let nextState = state;
+  const handled = plugin.props.handleKeyDown?.call(
+    plugin,
+    {
+      state,
+      dispatch: (tr: Transaction) => {
+        nextState = state.apply(tr);
+      },
+    } as never,
+    { key } as KeyboardEvent
+  );
+
+  expect(handled).toBe(true);
+  return nextState;
 }
 
 describe('SuggestionMode Plugin', () => {
@@ -179,6 +223,24 @@ describe('SuggestionMode Plugin', () => {
       const worldEntry = marks.find((m) => m.text.includes('World'));
       expect(worldEntry).toBeDefined();
       expect(worldEntry!.marks).toContain('deletion');
+    });
+  });
+
+  describe('single character delete grouping', () => {
+    test('consecutive backspaces reuse one deletion revision', () => {
+      const { plugin, state: initialState } = createStateWithPlugin('Hello', true);
+      let state = initialState.apply(
+        initialState.tr.setSelection(TextSelection.create(initialState.doc, 6))
+      );
+
+      state = dispatchSuggestionKey(plugin, state, 'Backspace');
+      state = dispatchSuggestionKey(plugin, state, 'Backspace');
+
+      expect(getText(state)).toBe('Hello');
+
+      const deletions = getMarkedSegments(state, 'deletion');
+      expect(deletions.map((segment) => segment.text).join('')).toBe('lo');
+      expect(new Set(deletions.map((segment) => segment.revisionId)).size).toBe(1);
     });
   });
 });
