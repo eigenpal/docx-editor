@@ -78,16 +78,18 @@
 
     <!-- Visible pages (rendered by layout-painter) -->
     <div
-      ref="pagesRef"
-      class="docx-editor-vue__pages"
+      ref="pagesViewportRef"
+      class="docx-editor-vue__pages-viewport"
       :style="{ transform: `scale(${zoom})`, transformOrigin: 'top center' }"
       @mousedown="handlePagesMouseDown"
       @contextmenu.prevent="handleContextMenu"
       @wheel="handleZoomWheel"
     >
+      <div ref="pagesRef" class="docx-editor-vue__pages" />
+
       <ImageEditOverlay
         :image-info="selectedImage"
-        :container="pagesRef"
+        :zoom="zoom"
         :view="editorView"
         @open-properties="showImageProperties = true"
         @deselect="selectedImage = null"
@@ -126,6 +128,7 @@
       :has-selection="contextMenu.hasSelection"
       :is-editable="!readOnly"
       :in-table="contextMenu.inTable"
+      :on-image="contextMenu.onImage"
       @action="handleContextMenuAction"
       @close="contextMenu.isOpen = false"
     />
@@ -169,7 +172,8 @@ import UnifiedSidebar from './sidebar/UnifiedSidebar.vue';
 import type { TrackedChangeEntry } from './sidebar/sidebarUtils';
 import { useDocxEditor } from '../composables/useDocxEditor';
 import { useZoom } from '../composables/useZoom';
-import { TextSelection } from 'prosemirror-state';
+import { TextSelection, NodeSelection } from 'prosemirror-state';
+import type { EditorView } from 'prosemirror-view';
 import type { Document, SectionProperties } from '@eigenpal/docx-core/types/document';
 import type { Comment } from '@eigenpal/docx-core/types/content';
 import { collectHeadings } from '@eigenpal/docx-core/utils/headingCollector';
@@ -207,6 +211,7 @@ const emit = defineEmits<{
 
 const hiddenPmRef = ref<HTMLElement | null>(null);
 const pagesRef = ref<HTMLElement | null>(null);
+const pagesViewportRef = ref<HTMLElement | null>(null);
 const stateTick = ref(0);
 const showFindReplace = ref(false);
 const showInsertTable = ref(false);
@@ -226,6 +231,7 @@ const contextMenu = ref({
   position: { x: 0, y: 0 },
   hasSelection: false,
   inTable: false,
+  onImage: false,
 });
 const outlineHeadings = ref<HeadingInfo[]>([]);
 const selectedImage = ref<ImageSelectionInfo | null>(null);
@@ -326,6 +332,9 @@ function updateSelectionOverlay() {
   if (!container || !view) return;
 
   clearOverlay();
+
+  // Skip text/caret overlay when an image is selected — ImageEditOverlay handles it
+  if (selectedImage.value) return;
 
   const { from, to, empty } = view.state.selection;
 
@@ -464,6 +473,30 @@ function setPmSelection(anchor: number, head?: number) {
   view.dispatch(view.state.tr.setSelection(sel));
 }
 
+const IMAGE_CONTAINER_CLASSES = [
+  'layout-block-image',
+  'layout-image',
+  'layout-page-floating-image',
+];
+
+function findImageElement(target: HTMLElement): HTMLElement | null {
+  const isImageContainer = (el: HTMLElement) =>
+    !!el.dataset.pmStart && IMAGE_CONTAINER_CLASSES.some((c) => el.classList.contains(c));
+
+  // Inline images: <img class="layout-run layout-run-image" data-pm-start="X">
+  if (target.tagName === 'IMG' && target.classList.contains('layout-run-image')) {
+    return target;
+  }
+  // Click on <img> or <a> inside a container div — walk up to find it
+  const container = target.closest(
+    IMAGE_CONTAINER_CLASSES.map((c) => `.${c}`).join(',')
+  ) as HTMLElement | null;
+  if (container && isImageContainer(container)) {
+    return container;
+  }
+  return null;
+}
+
 function handlePagesMouseDown(event: MouseEvent) {
   if (event.button !== 0) return;
   const view = editorView.value;
@@ -471,18 +504,27 @@ function handlePagesMouseDown(event: MouseEvent) {
 
   // Check if user clicked on an image
   const target = event.target as HTMLElement;
-  const imgEl = target.closest('.docx-image') as HTMLElement | null;
-  if (imgEl) {
+  const imageEl = findImageElement(target);
+  if (imageEl) {
     event.preventDefault();
     event.stopPropagation();
-    const pmStart = Number(imgEl.dataset.pmStart);
+    const pmStart = Number(imageEl.dataset.pmStart);
     if (!isNaN(pmStart)) {
+      // Set ProseMirror node selection on the image
+      try {
+        const sel = NodeSelection.create(view.state.doc, pmStart);
+        view.dispatch(view.state.tr.setSelection(sel));
+      } catch {
+        // Position may be invalid
+      }
       selectedImage.value = {
-        element: imgEl,
+        element: imageEl,
         pmPos: pmStart,
-        width: imgEl.offsetWidth,
-        height: imgEl.offsetHeight,
+        width: imageEl.offsetWidth,
+        height: imageEl.offsetHeight,
       };
+      // Clear text caret overlay so it doesn't show alongside the image selection
+      clearOverlay();
     }
     view.focus();
     return;
@@ -707,21 +749,195 @@ function handleToggleSidebar() {
 }
 
 // =========================================================================
+// Image clipboard & replace helpers
+// =========================================================================
+
+function copyImageToClipboard(view: EditorView, pmPos: number) {
+  const node = view.state.doc.nodeAt(pmPos);
+  if (!node || node.type.name !== 'image') return;
+
+  const src = node.attrs.src as string;
+  // Write both HTML (for pasting back as image node) and the image blob if possible
+  const imgHtml = `<img src="${src}" data-pm-image="true" data-width="${node.attrs.width ?? ''}" data-height="${node.attrs.height ?? ''}" data-wrap-type="${node.attrs.wrapType ?? ''}" data-display-mode="${node.attrs.displayMode ?? ''}" data-rid="${node.attrs.rId ?? ''}" />`;
+
+  const clipboardItem = new ClipboardItem({
+    'text/html': new Blob([imgHtml], { type: 'text/html' }),
+    'text/plain': new Blob(['[image]'], { type: 'text/plain' }),
+  });
+  navigator.clipboard.write([clipboardItem]).catch(() => {
+    // Fallback: at least copy as HTML
+    const ta = document.createElement('textarea');
+    ta.value = imgHtml;
+    document.body.appendChild(ta);
+    ta.select();
+    document.execCommand('copy');
+    document.body.removeChild(ta);
+  });
+}
+
+async function pasteFromClipboard(view: EditorView) {
+  try {
+    const items = await navigator.clipboard.read();
+    for (const item of items) {
+      // Check for image types first
+      const imageType = item.types.find(t => t.startsWith('image/'));
+      if (imageType) {
+        const blob = await item.getBlob(imageType);
+        const dataUrl = await blobToDataUrl(blob);
+        const dims = await loadImageDimensions(dataUrl);
+        const maxW = 612;
+        let w = dims.width, h = dims.height;
+        if (w > maxW) { h = Math.round(h * (maxW / w)); w = maxW; }
+        const imageNode = view.state.schema.nodes.image.create({
+          src: dataUrl,
+          width: w,
+          height: h,
+          rId: `rId_img_${Date.now()}`,
+          wrapType: 'inline',
+          displayMode: 'inline',
+        });
+        const { from } = view.state.selection;
+        view.dispatch(view.state.tr.replaceSelectionWith(imageNode));
+        return;
+      }
+
+      // Check for HTML with image
+      if (item.types.includes('text/html')) {
+        const htmlBlob = await item.getBlob('text/html');
+        const html = await htmlBlob.text();
+        const match = html.match(/<img[^>]+src="([^"]+)"[^>]*>/i);
+        if (match && match[1]) {
+          const src = match[1];
+          const widthMatch = html.match(/data-width="(\d+)"/);
+          const heightMatch = html.match(/data-height="(\d+)"/);
+          const w = widthMatch ? Number(widthMatch[1]) : 200;
+          const h = heightMatch ? Number(heightMatch[1]) : 200;
+          const imageNode = view.state.schema.nodes.image.create({
+            src,
+            width: w || 200,
+            height: h || 200,
+            rId: `rId_img_${Date.now()}`,
+            wrapType: 'inline',
+            displayMode: 'inline',
+          });
+          view.dispatch(view.state.tr.replaceSelectionWith(imageNode));
+          return;
+        }
+      }
+
+      // Fall back to text paste
+      if (item.types.includes('text/plain')) {
+        const textBlob = await item.getBlob('text/plain');
+        const text = await textBlob.text();
+        if (text && text !== '[image]') {
+          const { from } = view.state.selection;
+          view.dispatch(view.state.tr.insertText(text, from));
+        }
+        return;
+      }
+    }
+  } catch {
+    // Fallback for browsers without clipboard API
+    const text = await navigator.clipboard?.readText();
+    if (text) {
+      const { from } = view.state.selection;
+      view.dispatch(view.state.tr.insertText(text, from));
+    }
+  }
+}
+
+function blobToDataUrl(blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result as string);
+    reader.onerror = reject;
+    reader.readAsDataURL(blob);
+  });
+}
+
+function loadImageDimensions(src: string): Promise<{ width: number; height: number }> {
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.onload = () => resolve({ width: img.naturalWidth, height: img.naturalHeight });
+    img.onerror = () => resolve({ width: 200, height: 200 });
+    img.src = src;
+  });
+}
+
+function triggerReplaceImage(view: EditorView, pmPos: number) {
+  const node = view.state.doc.nodeAt(pmPos);
+  if (!node || node.type.name !== 'image') return;
+
+  const input = document.createElement('input');
+  input.type = 'file';
+  input.accept = 'image/*';
+  input.onchange = async () => {
+    const file = input.files?.[0];
+    if (!file) return;
+    const dataUrl = await blobToDataUrl(file);
+    const dims = await loadImageDimensions(dataUrl);
+
+    // Keep existing dimensions unless the aspect ratio is wildly different;
+    // scale the new image to fit within the old bounding box.
+    const oldW = (node.attrs.width as number) || dims.width;
+    const oldH = (node.attrs.height as number) || dims.height;
+    const scale = Math.min(oldW / dims.width, oldH / dims.height);
+    const newW = Math.round(dims.width * scale);
+    const newH = Math.round(dims.height * scale);
+
+    try {
+      const tr = view.state.tr.setNodeMarkup(pmPos, undefined, {
+        ...node.attrs,
+        src: dataUrl,
+        width: newW,
+        height: newH,
+        rId: `rId_img_${Date.now()}`,
+      });
+      view.dispatch(tr);
+    } catch {
+      // position may have changed
+    }
+  };
+  input.click();
+}
+
+// =========================================================================
 // Context menu
 // =========================================================================
 
 function handleContextMenu(event: MouseEvent) {
   const view = editorView.value;
   if (!view) return;
-  const { empty } = view.state.selection;
   const target = event.target as HTMLElement;
   const inTable = !!target.closest('.layout-table, table');
+
+  // Check if right-click is on an image
+  const imageEl = findImageElement(target);
+  if (imageEl) {
+    const pmStart = Number(imageEl.dataset.pmStart);
+    if (!isNaN(pmStart)) {
+      try {
+        const sel = NodeSelection.create(view.state.doc, pmStart);
+        view.dispatch(view.state.tr.setSelection(sel));
+      } catch { /* ignore */ }
+      selectedImage.value = {
+        element: imageEl,
+        pmPos: pmStart,
+        width: imageEl.offsetWidth,
+        height: imageEl.offsetHeight,
+      };
+      clearOverlay();
+    }
+  }
+
+  const { empty } = view.state.selection;
 
   contextMenu.value = {
     isOpen: true,
     position: { x: event.clientX, y: event.clientY },
     hasSelection: !empty,
     inTable,
+    onImage: !!imageEl,
   };
 }
 
@@ -732,18 +948,27 @@ function handleContextMenuAction(action: string) {
 
   switch (action) {
     case 'cut':
-      document.execCommand('cut');
+      if (selectedImage.value) {
+        copyImageToClipboard(view, selectedImage.value.pmPos);
+        const pos = selectedImage.value.pmPos;
+        const node = view.state.doc.nodeAt(pos);
+        if (node) {
+          view.dispatch(view.state.tr.delete(pos, pos + node.nodeSize));
+          selectedImage.value = null;
+        }
+      } else {
+        document.execCommand('cut');
+      }
       break;
     case 'copy':
-      document.execCommand('copy');
+      if (selectedImage.value) {
+        copyImageToClipboard(view, selectedImage.value.pmPos);
+      } else {
+        document.execCommand('copy');
+      }
       break;
     case 'paste':
-      navigator.clipboard?.readText().then(text => {
-        if (text) {
-          const { from } = view.state.selection;
-          view.dispatch(view.state.tr.insertText(text, from));
-        }
-      });
+      pasteFromClipboard(view);
       break;
     case 'delete': {
       const { from, to } = view.state.selection;
@@ -753,6 +978,27 @@ function handleContextMenuAction(action: string) {
     case 'selectAll': {
       const sel = TextSelection.create(view.state.doc, 0, view.state.doc.content.size);
       view.dispatch(view.state.tr.setSelection(sel));
+      break;
+    }
+    case 'imageProperties':
+      if (selectedImage.value) {
+        showImageProperties.value = true;
+      }
+      break;
+    case 'replaceImage':
+      if (selectedImage.value) {
+        triggerReplaceImage(view, selectedImage.value.pmPos);
+      }
+      break;
+    case 'deleteImage': {
+      if (selectedImage.value) {
+        const pos = selectedImage.value.pmPos;
+        const node = view.state.doc.nodeAt(pos);
+        if (node) {
+          view.dispatch(view.state.tr.delete(pos, pos + node.nodeSize));
+          selectedImage.value = null;
+        }
+      }
       break;
     }
     case 'addRowAbove':
@@ -1019,11 +1265,14 @@ defineExpose({ save, focus, destroy, getDocument });
   user-select: none;
   overflow-anchor: none;
 }
-.docx-editor-vue__pages {
+.docx-editor-vue__pages-viewport {
   flex: 1;
   overflow-y: auto;
   background: var(--doc-bg, #f8f9fa);
   cursor: text;
+  position: relative;
+}
+.docx-editor-vue__pages {
   position: relative;
 }
 .docx-editor-vue__loading {

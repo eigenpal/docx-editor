@@ -46,6 +46,7 @@ const props = defineProps<{
   hasSelection: boolean;
   isEditable: boolean;
   inTable?: boolean;
+  onImage?: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -68,6 +69,15 @@ const visibleItems = computed<ContextMenuItem[]>(() => {
     { id: 'delete', label: 'Delete', action: 'delete', shortcut: 'Del', disabled: !props.hasSelection || !props.isEditable },
     { id: 'selectAll', label: 'Select All', action: 'selectAll', shortcut: 'Ctrl+A' },
   ];
+
+  if (props.onImage && props.isEditable) {
+    items.push(
+      { id: 'div-img', label: '', action: '', divider: true },
+      { id: 'replaceImage', label: 'Replace image\u2026', action: 'replaceImage' },
+      { id: 'imageProperties', label: 'Image properties\u2026', action: 'imageProperties' },
+      { id: 'deleteImage', label: 'Delete image', action: 'deleteImage', shortcut: 'Del' },
+    );
+  }
 
   if (props.inTable && props.isEditable) {
     items.push(

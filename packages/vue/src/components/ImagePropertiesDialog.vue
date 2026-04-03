@@ -50,9 +50,13 @@
         <div class="field">
           <label class="field__label">Dimensions</label>
           <div class="field-row">
-            <label>Width: <input v-model.number="width" type="number" min="1" max="2000" class="field__input--small" />px</label>
-            <label>Height: <input v-model.number="height" type="number" min="1" max="2000" class="field__input--small" />px</label>
+            <label>Width: <input :value="width" type="number" min="1" max="2000" class="field__input--small" @input="onWidthInput" />px</label>
+            <label>Height: <input :value="height" type="number" min="1" max="2000" class="field__input--small" @input="onHeightInput" />px</label>
           </div>
+          <label class="field__checkbox">
+            <input v-model="lockRatio" type="checkbox" />
+            Lock aspect ratio
+          </label>
         </div>
 
         <div class="dialog__actions">
@@ -85,6 +89,8 @@ const borderStyle = ref('solid');
 const borderColor = ref('#000000');
 const width = ref(200);
 const height = ref(150);
+const lockRatio = ref(true);
+let aspectRatio = 1;
 
 // Load current image attrs when dialog opens
 watch(() => props.isOpen, (open) => {
@@ -98,6 +104,8 @@ watch(() => props.isOpen, (open) => {
       borderColor.value = node.attrs.borderColor || '#000000';
       width.value = node.attrs.width || 200;
       height.value = node.attrs.height || 150;
+      aspectRatio = width.value / (height.value || 1);
+      lockRatio.value = true;
 
       // Derive wrap type from attrs
       const dm = node.attrs.displayMode;
@@ -112,6 +120,24 @@ watch(() => props.isOpen, (open) => {
     }
   } catch { /* ignore */ }
 });
+
+function onWidthInput(e: Event) {
+  const val = Number((e.target as HTMLInputElement).value);
+  if (isNaN(val) || val < 1) return;
+  width.value = val;
+  if (lockRatio.value && aspectRatio > 0) {
+    height.value = Math.round(val / aspectRatio);
+  }
+}
+
+function onHeightInput(e: Event) {
+  const val = Number((e.target as HTMLInputElement).value);
+  if (isNaN(val) || val < 1) return;
+  height.value = val;
+  if (lockRatio.value && aspectRatio > 0) {
+    width.value = Math.round(val * aspectRatio);
+  }
+}
 
 function close() { emit('close'); }
 
@@ -178,4 +204,5 @@ function apply() {
 .field__input--small { width: 60px; padding: 4px 6px; border: 1px solid #d1d5db; border-radius: 4px; font-size: 12px; }
 .field__color { width: 32px; height: 26px; border: 1px solid #d1d5db; border-radius: 4px; padding: 1px; cursor: pointer; }
 .field-row { display: flex; align-items: center; gap: 12px; font-size: 12px; color: #4b5563; flex-wrap: wrap; }
+.field__checkbox { display: flex; align-items: center; gap: 6px; font-size: 12px; color: #4b5563; margin-top: 6px; cursor: pointer; }
 </style>

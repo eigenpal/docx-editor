@@ -1,5 +1,5 @@
 <template>
-  <div v-if="imageInfo" class="image-overlay" :style="overlayStyle">
+  <div ref="overlayRootRef" v-if="imageInfo" class="image-overlay" :style="overlayStyle" @mousedown.stop>
     <!-- Selection border -->
     <div class="image-overlay__border"></div>
 
@@ -14,19 +14,19 @@
 
     <!-- Dimension label during resize -->
     <div v-if="isResizing" class="image-overlay__dim">
-      {{ Math.round(currentWidth) }} × {{ Math.round(currentHeight) }}
+      {{ Math.round(currentWidth) }} &times; {{ Math.round(currentHeight) }}
     </div>
 
     <!-- Action buttons -->
     <div class="image-overlay__actions" v-if="!isResizing">
-      <button title="Image properties" @mousedown.prevent.stop="$emit('open-properties')">⚙</button>
-      <button title="Delete image" @mousedown.prevent.stop="deleteImage">🗑</button>
+      <button title="Image properties" @mousedown.prevent.stop="$emit('open-properties')">&#9881;</button>
+      <button title="Delete image" @mousedown.prevent.stop="deleteImage">&#128465;</button>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onBeforeUnmount } from 'vue';
+import { ref, computed, watch, onBeforeUnmount, nextTick } from 'vue';
 import type { EditorView } from 'prosemirror-view';
 
 export interface ImageSelectionInfo {
@@ -36,9 +36,11 @@ export interface ImageSelectionInfo {
   height: number;
 }
 
+type ResizeHandle = 'nw' | 'ne' | 'se' | 'sw';
+
 const props = defineProps<{
   imageInfo: ImageSelectionInfo | null;
-  container: HTMLElement | null;
+  zoom: number;
   view: EditorView | null;
 }>();
 
@@ -47,47 +49,106 @@ const emit = defineEmits<{
   (e: 'deselect'): void;
 }>();
 
+const overlayRootRef = ref<HTMLElement | null>(null);
 const isResizing = ref(false);
 const currentWidth = ref(0);
 const currentHeight = ref(0);
-let resizeHandle = '';
+
+// Tracked overlay rect (updated from element position)
+const overlayRect = ref<{ left: number; top: number; width: number; height: number } | null>(null);
+
+let resizeHandle: ResizeHandle = 'se';
 let startX = 0;
 let startY = 0;
 let startWidth = 0;
 let startHeight = 0;
-let aspectRatio = 1;
+let rafId: number | null = null;
 
-const handles = computed(() => {
-  const size = 10;
-  const half = size / 2;
-  const w = isResizing.value ? currentWidth.value : (props.imageInfo?.width || 0);
-  const h = isResizing.value ? currentHeight.value : (props.imageInfo?.height || 0);
-  return [
-    { pos: 'nw', style: { left: `-${half}px`, top: `-${half}px`, cursor: 'nw-resize' } },
-    { pos: 'ne', style: { left: `${w - half}px`, top: `-${half}px`, cursor: 'ne-resize' } },
-    { pos: 'se', style: { left: `${w - half}px`, top: `${h - half}px`, cursor: 'se-resize' } },
-    { pos: 'sw', style: { left: `-${half}px`, top: `${h - half}px`, cursor: 'sw-resize' } },
-  ];
-});
+// ---- Position calculation (matches React's approach) ----
+
+function updatePosition() {
+  if (!props.imageInfo || !overlayRootRef.value) {
+    overlayRect.value = null;
+    return;
+  }
+
+  const parent = overlayRootRef.value.offsetParent as HTMLElement | null;
+  if (!parent) {
+    overlayRect.value = null;
+    return;
+  }
+
+  const parentRect = parent.getBoundingClientRect();
+  const imageRect = props.imageInfo.element.getBoundingClientRect();
+  const z = props.zoom;
+
+  overlayRect.value = {
+    left: (imageRect.left - parentRect.left) / z,
+    top: (imageRect.top - parentRect.top) / z,
+    width: imageRect.width / z,
+    height: imageRect.height / z,
+  };
+}
+
+// Update when imageInfo changes
+watch(
+  () => props.imageInfo,
+  async () => {
+    await nextTick();
+    updatePosition();
+  },
+  { immediate: true }
+);
+
+// Update on scroll/resize
+watch(
+  () => props.imageInfo,
+  (_newVal, _oldVal, onCleanup) => {
+    if (!props.imageInfo) return;
+
+    const handleScrollOrResize = () => {
+      if (rafId) cancelAnimationFrame(rafId);
+      rafId = requestAnimationFrame(updatePosition);
+    };
+
+    const viewport = overlayRootRef.value?.closest('.docx-editor-vue__pages-viewport');
+    const scrollParent = viewport?.parentElement;
+
+    scrollParent?.addEventListener('scroll', handleScrollOrResize, { passive: true });
+    window.addEventListener('resize', handleScrollOrResize, { passive: true });
+
+    onCleanup(() => {
+      scrollParent?.removeEventListener('scroll', handleScrollOrResize);
+      window.removeEventListener('resize', handleScrollOrResize);
+      if (rafId) cancelAnimationFrame(rafId);
+    });
+  },
+  { immediate: true }
+);
+
+// ---- Computed styles ----
 
 const overlayStyle = computed(() => {
-  if (!props.imageInfo || !props.container) return { display: 'none' };
+  const r = overlayRect.value;
+  if (!r) {
+    // Use visibility:hidden instead of display:none so offsetParent remains
+    // available for position calculation on the next tick.
+    return {
+      position: 'absolute' as const,
+      top: '0px',
+      left: '0px',
+      visibility: 'hidden' as const,
+      pointerEvents: 'none' as const,
+    };
+  }
 
-  const containerRect = props.container.getBoundingClientRect();
-  const imgRect = props.imageInfo.element.getBoundingClientRect();
-
-  const scrollTop = props.container.scrollTop;
-  const scrollLeft = props.container.scrollLeft;
-
-  const x = imgRect.left - containerRect.left + scrollLeft;
-  const y = imgRect.top - containerRect.top + scrollTop;
-  const w = isResizing.value ? currentWidth.value : props.imageInfo.width;
-  const h = isResizing.value ? currentHeight.value : props.imageInfo.height;
+  const w = isResizing.value ? currentWidth.value : r.width;
+  const h = isResizing.value ? currentHeight.value : r.height;
 
   return {
     position: 'absolute' as const,
-    left: `${x}px`,
-    top: `${y}px`,
+    left: `${r.left}px`,
+    top: `${r.top}px`,
     width: `${w}px`,
     height: `${h}px`,
     zIndex: 15,
@@ -95,16 +156,55 @@ const overlayStyle = computed(() => {
   };
 });
 
+const handles = computed(() => {
+  const half = 5;
+  const w = isResizing.value ? currentWidth.value : (overlayRect.value?.width || 0);
+  const h = isResizing.value ? currentHeight.value : (overlayRect.value?.height || 0);
+  return [
+    { pos: 'nw' as ResizeHandle, style: { left: `-${half}px`, top: `-${half}px`, cursor: 'nw-resize' } },
+    { pos: 'ne' as ResizeHandle, style: { left: `${w - half}px`, top: `-${half}px`, cursor: 'ne-resize' } },
+    { pos: 'se' as ResizeHandle, style: { left: `${w - half}px`, top: `${h - half}px`, cursor: 'se-resize' } },
+    { pos: 'sw' as ResizeHandle, style: { left: `-${half}px`, top: `${h - half}px`, cursor: 'sw-resize' } },
+  ];
+});
+
+// ---- Resize logic ----
+
+function calculateNewDimensions(
+  handle: ResizeHandle,
+  deltaX: number,
+  deltaY: number,
+  sw: number,
+  sh: number,
+  lockAspect: boolean
+): { width: number; height: number } {
+  const signX = handle.includes('w') ? -1 : 1;
+  const signY = handle.includes('n') ? -1 : 1;
+
+  let newW = sw + deltaX * signX;
+  let newH = sh + deltaY * signY;
+
+  if (lockAspect) {
+    const scale = Math.max(newW / sw, newH / sh);
+    newW = sw * scale;
+    newH = sh * scale;
+  }
+
+  return {
+    width: Math.max(20, Math.min(2000, newW)),
+    height: Math.max(20, Math.min(2000, newH)),
+  };
+}
+
 function startResize(e: MouseEvent, handle: string) {
-  if (!props.imageInfo) return;
-  resizeHandle = handle;
+  if (!props.imageInfo || !overlayRect.value) return;
+  resizeHandle = handle as ResizeHandle;
   startX = e.clientX;
   startY = e.clientY;
-  startWidth = props.imageInfo.width;
-  startHeight = props.imageInfo.height;
-  aspectRatio = startWidth / startHeight;
-  currentWidth.value = startWidth;
-  currentHeight.value = startHeight;
+  startWidth = overlayRect.value.width;
+  startHeight = overlayRect.value.height;
+  currentWidth.value = Math.round(startWidth);
+  currentHeight.value = Math.round(startHeight);
   isResizing.value = true;
 
   document.addEventListener('mousemove', onResizeMove);
@@ -112,33 +212,14 @@ function startResize(e: MouseEvent, handle: string) {
 }
 
 function onResizeMove(e: MouseEvent) {
-  const dx = e.clientX - startX;
-  const dy = e.clientY - startY;
+  const z = props.zoom;
+  const deltaX = (e.clientX - startX) / z;
+  const deltaY = (e.clientY - startY) / z;
+  const lockAspect = !e.shiftKey;
 
-  let newW = startWidth;
-  let newH = startHeight;
-
-  if (resizeHandle.includes('e')) newW = startWidth + dx;
-  if (resizeHandle.includes('w')) newW = startWidth - dx;
-  if (resizeHandle.includes('s')) newH = startHeight + dy;
-  if (resizeHandle.includes('n')) newH = startHeight - dy;
-
-  // Maintain aspect ratio (default behavior)
-  if (!e.shiftKey) {
-    // Use the larger delta to determine scale
-    const scaleX = newW / startWidth;
-    const scaleY = newH / startHeight;
-    const scale = Math.abs(scaleX - 1) > Math.abs(scaleY - 1) ? scaleX : scaleY;
-    newW = startWidth * scale;
-    newH = startHeight * scale;
-  }
-
-  // Enforce minimum size
-  newW = Math.max(20, newW);
-  newH = Math.max(20, newH);
-
-  currentWidth.value = Math.round(newW);
-  currentHeight.value = Math.round(newH);
+  const dims = calculateNewDimensions(resizeHandle, deltaX, deltaY, startWidth, startHeight, lockAspect);
+  currentWidth.value = Math.round(dims.width);
+  currentHeight.value = Math.round(dims.height);
 }
 
 function onResizeEnd() {
@@ -146,7 +227,6 @@ function onResizeEnd() {
   document.removeEventListener('mouseup', onResizeEnd);
   isResizing.value = false;
 
-  // Dispatch the size change to ProseMirror
   const v = props.view;
   const info = props.imageInfo;
   if (!v || !info) return;
@@ -185,10 +265,14 @@ function deleteImage() {
 onBeforeUnmount(() => {
   document.removeEventListener('mousemove', onResizeMove);
   document.removeEventListener('mouseup', onResizeEnd);
+  if (rafId) cancelAnimationFrame(rafId);
 });
 </script>
 
 <style scoped>
+.image-overlay {
+  overflow: visible;
+}
 .image-overlay__border {
   position: absolute;
   inset: -2px;
@@ -200,8 +284,9 @@ onBeforeUnmount(() => {
   position: absolute;
   width: 10px;
   height: 10px;
-  background: #fff;
-  border: 2px solid #2563eb;
+  background: #2563eb;
+  border: 1px solid white;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
   border-radius: 2px;
   z-index: 16;
 }
