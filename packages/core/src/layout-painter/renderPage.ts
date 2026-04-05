@@ -5,36 +5,35 @@
  * Each page contains positioned fragments within a content area.
  */
 
+import { type FloatingImageZone, measureParagraph } from '../layout-bridge/measuring';
 import type {
-  Page,
-  Fragment,
   FlowBlock,
-  Measure,
-  ParagraphBlock,
-  ParagraphMeasure,
-  ParagraphFragment,
-  ParagraphBorders,
-  TableBlock,
-  TableMeasure,
-  TableFragment,
+  Fragment,
   ImageBlock,
-  ImageMeasure,
   ImageFragment,
+  ImageMeasure,
   ImageRun,
+  Measure,
+  Page,
+  ParagraphBlock,
+  ParagraphBorders,
+  ParagraphFragment,
+  ParagraphMeasure,
+  TableBlock,
+  TableFragment,
+  TableMeasure,
   TextBoxBlock,
-  TextBoxMeasure,
   TextBoxFragment,
+  TextBoxMeasure,
 } from '../layout-engine/types';
+import type { BorderSpec, Theme } from '../types/document';
+import { borderToStyle } from '../utils/formatToStyle';
+import type { BlockLookup } from './index';
 import { renderFragment } from './renderFragment';
+import { renderImageFragment } from './renderImage';
 import { renderParagraphFragment } from './renderParagraph';
 import { renderTableFragment } from './renderTable';
-import { renderImageFragment } from './renderImage';
 import { renderTextBoxFragment } from './renderTextBox';
-import type { BlockLookup } from './index';
-import type { BorderSpec } from '../types/document';
-import { borderToStyle } from '../utils/formatToStyle';
-import type { Theme } from '../types/document';
-import { measureParagraph, type FloatingImageZone } from '../layout-bridge/measuring';
 
 /**
  * Page-level floating image that has been extracted from paragraphs.
@@ -219,6 +218,10 @@ function applyPageStyles(
   element.style.height = `${height}px`;
   element.style.backgroundColor = options.backgroundColor ?? '#ffffff';
   element.style.overflow = 'hidden';
+
+  // CSS containment: let the browser skip layout/paint for off-screen pages
+  element.style.contentVisibility = 'auto';
+  element.style.containIntrinsicSize = `auto ${width}px ${height}px`;
 
   // Set default font styles (matches Word default: 11pt Calibri)
   // Individual runs will override these with their own font settings

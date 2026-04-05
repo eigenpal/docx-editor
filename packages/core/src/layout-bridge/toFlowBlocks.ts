@@ -5,38 +5,38 @@
  * Tracks pmStart/pmEnd positions for click-to-position mapping.
  */
 
-import type { Node as PMNode, Mark } from 'prosemirror-model';
+import type { Mark, Node as PMNode } from 'prosemirror-model';
 import type {
-  FlowBlock,
-  ParagraphBlock,
-  TableBlock,
-  TableRow,
-  TableCell,
-  CellBorders,
   BorderStyle,
-  ImageBlock,
-  TextBoxBlock,
-  PageBreakBlock,
-  SectionBreakBlock,
+  CellBorders,
   ColumnLayout,
-  Run,
-  TextRun,
-  TabRun,
+  FieldRun,
+  FlowBlock,
+  ImageBlock,
   ImageRun,
   LineBreakRun,
-  FieldRun,
-  RunFormatting,
+  PageBreakBlock,
   ParagraphAttrs,
+  ParagraphBlock,
+  Run,
+  RunFormatting,
+  SectionBreakBlock,
+  TableBlock,
+  TableCell,
+  TableRow,
+  TabRun,
+  TextBoxBlock,
+  TextRun,
 } from '../layout-engine/types';
 import { DEFAULT_TEXTBOX_MARGINS, DEFAULT_TEXTBOX_WIDTH } from '../layout-engine/types';
-import type { ParagraphAttrs as PMParagraphAttrs } from '../prosemirror/schema/nodes';
 import type {
+  FontFamilyAttrs,
+  FontSizeAttrs,
   TextColorAttrs,
   UnderlineAttrs,
-  FontSizeAttrs,
-  FontFamilyAttrs,
 } from '../prosemirror/schema/marks';
-import type { Theme, SectionProperties } from '../types/document';
+import type { ParagraphAttrs as PMParagraphAttrs } from '../prosemirror/schema/nodes';
+import type { SectionProperties, Theme } from '../types/document';
 import { resolveColor, resolveHighlightToCss } from '../utils/colorResolver';
 import { pointsToPixels } from '../utils/units';
 
@@ -980,6 +980,125 @@ function convertTextBoxNode(
 }
 
 /**
+ * Convert a single top-level ProseMirror node into FlowBlock(s).
+ *
+ * Handles all node types: paragraph, table, image, textBox, pageBreak, horizontalRule.
+ * A paragraph with section properties produces 2 blocks: [ParagraphBlock, SectionBreakBlock].
+ * Mutates `listCounters` for numbered list state tracking across nodes.
+ */
+export function convertTopLevelNode(
+  node: PMNode,
+  pos: number,
+  opts: ToFlowBlocksOptions,
+  listCounters: Map<number, number[]>
+): FlowBlock[] {
+  const result: FlowBlock[] = [];
+
+  switch (node.type.name) {
+    case 'paragraph':
+      {
+        const block = convertParagraph(node, pos, opts);
+        const pmAttrs = node.attrs as PMParagraphAttrs;
+
+        if (pmAttrs.numPr) {
+          if (!pmAttrs.listMarker) {
+            const numId = pmAttrs.numPr.numId;
+            // numId === 0 means "no numbering" per OOXML spec (ECMA-376)
+            if (numId == null || numId === 0) {
+              result.push(block);
+              break;
+            }
+            const level = pmAttrs.numPr.ilvl ?? 0;
+            const counters = listCounters.get(numId) ?? new Array(9).fill(0);
+
+            counters[level] = (counters[level] ?? 0) + 1;
+            for (let i = level + 1; i < counters.length; i += 1) {
+              counters[i] = 0;
+            }
+
+            listCounters.set(numId, counters);
+
+            const marker = pmAttrs.listIsBullet ? '•' : formatNumberedMarker(counters, level);
+            block.attrs = { ...block.attrs, listMarker: marker };
+          }
+        }
+
+        result.push(block);
+
+        // Emit section break block if this paragraph ends a section
+        const secProps = pmAttrs._sectionProperties as SectionProperties | undefined;
+        if (secProps || pmAttrs.sectionBreakType) {
+          const sectionBreak: SectionBreakBlock = {
+            kind: 'sectionBreak',
+            id: nextBlockId(),
+            type: (secProps?.sectionStart ?? pmAttrs.sectionBreakType) as SectionBreakBlock['type'],
+          };
+
+          if (secProps) {
+            // Populate page size
+            if (secProps.pageWidth || secProps.pageHeight) {
+              sectionBreak.pageSize = {
+                w: twipsToPixels(secProps.pageWidth ?? 12240),
+                h: twipsToPixels(secProps.pageHeight ?? 15840),
+              };
+            }
+            // Populate margins
+            if (secProps.marginTop !== undefined || secProps.marginLeft !== undefined) {
+              sectionBreak.margins = {
+                top: twipsToPixels(secProps.marginTop ?? 1440),
+                bottom: twipsToPixels(secProps.marginBottom ?? 1440),
+                left: twipsToPixels(secProps.marginLeft ?? 1440),
+                right: twipsToPixels(secProps.marginRight ?? 1440),
+              };
+            }
+            // Populate columns
+            const colCount = secProps.columnCount ?? 1;
+            if (colCount > 1) {
+              const cols: ColumnLayout = {
+                count: colCount,
+                gap: twipsToPixels(secProps.columnSpace ?? 720),
+                equalWidth: secProps.equalWidth ?? true,
+                separator: secProps.separator,
+              };
+              sectionBreak.columns = cols;
+            }
+          }
+
+          result.push(sectionBreak);
+        }
+      }
+      break;
+
+    case 'table':
+      result.push(convertTable(node, pos, opts));
+      break;
+
+    case 'image':
+      // Standalone image block (if not inline)
+      result.push(convertImage(node, pos, opts.pageContentHeight));
+      break;
+
+    case 'textBox':
+      result.push(convertTextBoxNode(node, pos, opts));
+      break;
+
+    case 'horizontalRule':
+    case 'pageBreak': {
+      const pb: PageBreakBlock = {
+        kind: 'pageBreak',
+        id: nextBlockId(),
+        pmStart: pos,
+        pmEnd: pos + node.nodeSize,
+      };
+      result.push(pb);
+      break;
+    }
+  }
+
+  return result;
+}
+
+/**
  * Convert a ProseMirror document to FlowBlock array.
  *
  * Walks the document tree, converting each node to the appropriate block type.
@@ -998,104 +1117,9 @@ export function toFlowBlocks(doc: PMNode, options: ToFlowBlocksOptions = {}): Fl
 
   doc.forEach((node, nodeOffset) => {
     const pos = offset + nodeOffset;
-
-    switch (node.type.name) {
-      case 'paragraph':
-        {
-          const block = convertParagraph(node, pos, opts);
-          const pmAttrs = node.attrs as PMParagraphAttrs;
-
-          if (pmAttrs.numPr) {
-            if (!pmAttrs.listMarker) {
-              const numId = pmAttrs.numPr.numId;
-              // numId === 0 means "no numbering" per OOXML spec (ECMA-376)
-              if (numId == null || numId === 0) break;
-              const level = pmAttrs.numPr.ilvl ?? 0;
-              const counters = listCounters.get(numId) ?? new Array(9).fill(0);
-
-              counters[level] = (counters[level] ?? 0) + 1;
-              for (let i = level + 1; i < counters.length; i += 1) {
-                counters[i] = 0;
-              }
-
-              listCounters.set(numId, counters);
-
-              const marker = pmAttrs.listIsBullet ? '•' : formatNumberedMarker(counters, level);
-              block.attrs = { ...block.attrs, listMarker: marker };
-            }
-          }
-
-          blocks.push(block);
-
-          // Emit section break block if this paragraph ends a section
-          const secProps = pmAttrs._sectionProperties as SectionProperties | undefined;
-          if (secProps || pmAttrs.sectionBreakType) {
-            const sectionBreak: SectionBreakBlock = {
-              kind: 'sectionBreak',
-              id: nextBlockId(),
-              type: (secProps?.sectionStart ??
-                pmAttrs.sectionBreakType) as SectionBreakBlock['type'],
-            };
-
-            if (secProps) {
-              // Populate page size
-              if (secProps.pageWidth || secProps.pageHeight) {
-                sectionBreak.pageSize = {
-                  w: twipsToPixels(secProps.pageWidth ?? 12240),
-                  h: twipsToPixels(secProps.pageHeight ?? 15840),
-                };
-              }
-              // Populate margins
-              if (secProps.marginTop !== undefined || secProps.marginLeft !== undefined) {
-                sectionBreak.margins = {
-                  top: twipsToPixels(secProps.marginTop ?? 1440),
-                  bottom: twipsToPixels(secProps.marginBottom ?? 1440),
-                  left: twipsToPixels(secProps.marginLeft ?? 1440),
-                  right: twipsToPixels(secProps.marginRight ?? 1440),
-                };
-              }
-              // Populate columns
-              const colCount = secProps.columnCount ?? 1;
-              if (colCount > 1) {
-                const cols: ColumnLayout = {
-                  count: colCount,
-                  gap: twipsToPixels(secProps.columnSpace ?? 720),
-                  equalWidth: secProps.equalWidth ?? true,
-                  separator: secProps.separator,
-                };
-                sectionBreak.columns = cols;
-              }
-            }
-
-            blocks.push(sectionBreak);
-          }
-        }
-        break;
-
-      case 'table':
-        blocks.push(convertTable(node, pos, opts));
-        break;
-
-      case 'image':
-        // Standalone image block (if not inline)
-        blocks.push(convertImage(node, pos, opts.pageContentHeight));
-        break;
-
-      case 'textBox':
-        blocks.push(convertTextBoxNode(node, pos, opts));
-        break;
-
-      case 'horizontalRule':
-      case 'pageBreak': {
-        const pb: PageBreakBlock = {
-          kind: 'pageBreak',
-          id: nextBlockId(),
-          pmStart: pos,
-          pmEnd: pos + node.nodeSize,
-        };
-        blocks.push(pb);
-        break;
-      }
+    const result = convertTopLevelNode(node, pos, opts, listCounters);
+    for (const b of result) {
+      blocks.push(b);
     }
   });
 

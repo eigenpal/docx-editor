@@ -5,7 +5,7 @@
  * Creates new pages when content doesn't fit.
  */
 
-import type { Page, PageMargins, Fragment, ColumnLayout } from './types';
+import type { ColumnLayout, Fragment, Page, PageMargins, PaginatorSnapshot } from './types';
 
 /**
  * Current state of a page being laid out.
@@ -39,6 +39,8 @@ export type PaginatorOptions = {
   footnoteReservedHeights?: Map<number, number>;
   /** Callback when a new page is created. */
   onNewPage?: (state: PageState) => void;
+  /** Restore from a previous snapshot for incremental layout. */
+  initialSnapshot?: PaginatorSnapshot;
 };
 
 /**
@@ -59,7 +61,7 @@ function calculateColumnWidth(
  * Creates a paginator for managing page layout state.
  */
 export function createPaginator(options: PaginatorOptions) {
-  const { pageSize, margins } = options;
+  const { pageSize, margins, initialSnapshot } = options;
   let columns: ColumnLayout = options.columns ?? { count: 1, gap: 0 };
 
   const pages: Page[] = [];
@@ -82,6 +84,15 @@ export function createPaginator(options: PaginatorOptions) {
   // (continuous section break). When advanceColumn moves to the next column,
   // it resets cursorY to this value instead of topMargin.
   let columnRegionTop = topMargin;
+
+  // Restore from snapshot if provided
+  if (initialSnapshot) {
+    pages.push(...initialSnapshot.pages);
+    states.push(...initialSnapshot.states);
+    columns = { ...initialSnapshot.columns };
+    columnWidth = initialSnapshot.columnWidth;
+    columnRegionTop = initialSnapshot.columnRegionTop;
+  }
 
   /**
    * Get X position for a given column index.
@@ -309,7 +320,64 @@ export function createPaginator(options: PaginatorOptions) {
     getColumnX,
     /** Update column layout (for section breaks). */
     updateColumns,
+    /** Create a deep-cloned snapshot of the current paginator state. */
+    snapshot(): PaginatorSnapshot {
+      const clonedPages = pages.map((p) => ({
+        ...p,
+        fragments: p.fragments.map((f) => ({ ...f })),
+        margins: { ...p.margins },
+        size: { ...p.size },
+        columns: p.columns ? { ...p.columns } : undefined,
+      }));
+
+      const clonedStates = states.map((s, idx) => ({
+        ...s,
+        page: clonedPages[idx],
+      }));
+
+      return {
+        pages: clonedPages,
+        states: clonedStates,
+        columns: { ...columns },
+        columnWidth,
+        columnRegionTop,
+      };
+    },
   };
+}
+
+/**
+ * Creates a paginator pre-loaded with snapshot state.
+ * The paginator is ready to continue adding fragments from where the snapshot left off.
+ */
+export function createPaginatorFromSnapshot(
+  snapshot: PaginatorSnapshot,
+  options: Omit<PaginatorOptions, 'initialSnapshot'>
+): Paginator {
+  // Deep-clone the snapshot so the caller's copy stays immutable
+  const clonedPages = snapshot.pages.map((p) => ({
+    ...p,
+    fragments: p.fragments.map((f) => ({ ...f })),
+    margins: { ...p.margins },
+    size: { ...p.size },
+    columns: p.columns ? { ...p.columns } : undefined,
+  }));
+
+  const clonedStates = snapshot.states.map((s, idx) => ({
+    ...s,
+    page: clonedPages[idx],
+  }));
+
+  return createPaginator({
+    ...options,
+    initialSnapshot: {
+      pages: clonedPages,
+      states: clonedStates,
+      columns: { ...snapshot.columns },
+      columnWidth: snapshot.columnWidth,
+      columnRegionTop: snapshot.columnRegionTop,
+    },
+  });
 }
 
 export type Paginator = ReturnType<typeof createPaginator>;

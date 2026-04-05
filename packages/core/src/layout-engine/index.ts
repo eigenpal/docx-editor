@@ -4,35 +4,37 @@
  * Converts blocks + measures into positioned fragments on pages.
  */
 
-import type {
-  FlowBlock,
-  Measure,
-  Layout,
-  LayoutOptions,
-  PageMargins,
-  ColumnLayout,
-  ParagraphBlock,
-  ParagraphMeasure,
-  ParagraphFragment,
-  TableBlock,
-  TableMeasure,
-  TableFragment,
-  ImageBlock,
-  ImageMeasure,
-  ImageFragment,
-  TextBoxBlock,
-  TextBoxMeasure,
-  TextBoxFragment,
-  SectionBreakBlock,
-} from './types';
-
-import { createPaginator } from './paginator';
 import {
-  computeKeepNextChains,
   calculateChainHeight,
+  computeKeepNextChains,
   getMidChainIndices,
   hasPageBreakBefore,
 } from './keep-together';
+import type { Paginator } from './paginator';
+import { createPaginator, createPaginatorFromSnapshot } from './paginator';
+import type {
+  ColumnLayout,
+  FlowBlock,
+  ImageBlock,
+  ImageFragment,
+  ImageMeasure,
+  Layout,
+  LayoutOptions,
+  Measure,
+  PageMargins,
+  PaginatorSnapshot,
+  PaginatorStateAtBlock,
+  ParagraphBlock,
+  ParagraphFragment,
+  ParagraphMeasure,
+  SectionBreakBlock,
+  TableBlock,
+  TableFragment,
+  TableMeasure,
+  TextBoxBlock,
+  TextBoxFragment,
+  TextBoxMeasure,
+} from './types';
 
 // Default page size (US Letter in pixels at 96 DPI)
 const DEFAULT_PAGE_SIZE = { w: 816, h: 1056 };
@@ -95,6 +97,67 @@ function applyContextualSpacing(blocks: FlowBlock[]): void {
     }
   }
 }
+
+/**
+ * Apply contextual spacing for a partial range of blocks.
+ * Only processes pairs where at least one block falls within [from, to).
+ */
+function applyContextualSpacingRange(blocks: FlowBlock[], from: number, to: number): void {
+  // Check pair before range start (previous block interacts with first dirty block)
+  const start = Math.max(0, from - 1);
+  const end = Math.min(blocks.length - 1, to);
+  for (let i = start; i < end; i++) {
+    const curr = blocks[i];
+    const next = blocks[i + 1];
+
+    if (curr.kind !== 'paragraph' || next.kind !== 'paragraph') continue;
+
+    const currAttrs = curr.attrs;
+    const nextAttrs = next.attrs;
+
+    if (
+      currAttrs?.contextualSpacing &&
+      nextAttrs?.contextualSpacing &&
+      currAttrs.styleId &&
+      currAttrs.styleId === nextAttrs.styleId
+    ) {
+      if (currAttrs.spacing) {
+        currAttrs.spacing = { ...currAttrs.spacing, after: 0 };
+      }
+      if (nextAttrs.spacing) {
+        nextAttrs.spacing = { ...nextAttrs.spacing, before: 0 };
+      }
+    }
+  }
+}
+
+/**
+ * Capture compact paginator state at current block boundary.
+ */
+function capturePaginatorState(paginator: Paginator): PaginatorStateAtBlock {
+  const state = paginator.getCurrentState();
+  return {
+    pageCount: paginator.pages.length,
+    cursorY: state.cursorY,
+    columnIndex: state.columnIndex,
+    trailingSpacing: state.trailingSpacing,
+  };
+}
+
+/**
+ * Check if two paginator states are identical (converged).
+ */
+function statesConverged(a: PaginatorStateAtBlock, b: PaginatorStateAtBlock): boolean {
+  return (
+    a.pageCount === b.pageCount &&
+    Math.abs(a.cursorY - b.cursorY) < 0.01 &&
+    a.columnIndex === b.columnIndex &&
+    Math.abs(a.trailingSpacing - b.trailingSpacing) < 0.01
+  );
+}
+
+/** Number of consecutive converged blocks required before early exit. */
+const CONVERGENCE_THRESHOLD = 2;
 
 /**
  * Layout a document: convert blocks + measures into pages with positioned fragments.
@@ -169,26 +232,72 @@ export function layoutDocument(
   const initialColumns =
     sectionColumnConfigs.length > 0 ? sectionColumnConfigs[0] : options.columns;
 
-  // Create paginator with first section's columns
-  const paginator = createPaginator({
-    pageSize,
-    margins,
-    columns: initialColumns,
-    footnoteReservedHeights: options.footnoteReservedHeights,
-  });
+  // Determine starting block and paginator based on resume options
+  const resume = options.resumeFrom;
+  let startBlock = 0;
+  let sectionIdx = 0;
+  let paginator: Paginator;
 
-  // Apply contextual spacing: suppress spaceBefore/spaceAfter between
-  // consecutive paragraphs that both have contextualSpacing=true and share
-  // the same styleId (OOXML spec 17.3.1.9 / ECMA-376 §17.3.1.9).
-  applyContextualSpacing(blocks);
+  if (resume && resume.resumeFromBlock > 0 && resume.resumeFromBlock < blocks.length) {
+    // Resume from snapshot — create paginator pre-loaded with previous state
+    paginator = createPaginatorFromSnapshot(resume.paginatorSnapshot, {
+      pageSize,
+      margins,
+      columns: initialColumns,
+      footnoteReservedHeights: options.footnoteReservedHeights,
+    });
+    startBlock = resume.resumeFromBlock;
+
+    // Only apply contextual spacing around the dirty range
+    applyContextualSpacingRange(blocks, startBlock, resume.dirtyTo);
+
+    // Count section breaks before startBlock to initialize sectionIdx
+    for (let i = 0; i < startBlock; i++) {
+      if (blocks[i].kind === 'sectionBreak') sectionIdx++;
+    }
+  } else {
+    // Full layout from scratch
+    paginator = createPaginator({
+      pageSize,
+      margins,
+      columns: initialColumns,
+      footnoteReservedHeights: options.footnoteReservedHeights,
+    });
+
+    // Apply contextual spacing for all blocks
+    applyContextualSpacing(blocks);
+  }
 
   // Pre-compute keepNext chains for pagination decisions
   const keepNextChains = computeKeepNextChains(blocks);
   const midChainIndices = getMidChainIndices(keepNextChains);
 
+  // Per-block paginator state tracking for convergence detection.
+  // Pre-fill with previous states up to startBlock so the array is dense (no undefined holes).
+  const statesAtBlock: PaginatorStateAtBlock[] = [];
+  if (resume?.prevStatesAtBlock) {
+    for (let i = 0; i < startBlock && i < resume.prevStatesAtBlock.length; i++) {
+      statesAtBlock[i] = resume.prevStatesAtBlock[i];
+    }
+  }
+
+  // Early exit tracking
+  const dirtyTo = resume?.dirtyTo ?? blocks.length;
+  const prevStates = resume?.prevStatesAtBlock;
+  let convergentCount = 0;
+
+  // Snapshot capture: take a paginator snapshot at the first block of each new page.
+  // These snapshots enable future incremental layout runs to resume from a page boundary.
+  const paginatorSnapshots = new Map<number, PaginatorSnapshot>();
+  let lastSnapshotPageCount = paginator.pages.length;
+
   // Process each block, tracking section break index with a counter (O(1) per break)
-  let sectionIdx = 0;
-  for (let i = 0; i < blocks.length; i++) {
+  for (let i = startBlock; i < blocks.length; i++) {
+    // Capture snapshot when a new page was created since last check
+    if (paginator.pages.length > lastSnapshotPageCount) {
+      paginatorSnapshots.set(i, paginator.snapshot());
+      lastSnapshotPageCount = paginator.pages.length;
+    }
     const block = blocks[i];
     const measure = measures[i];
 
@@ -261,6 +370,44 @@ export function layoutDocument(
         break;
       }
     }
+
+    // Capture paginator state after this block
+    const stateAfter = capturePaginatorState(paginator);
+    statesAtBlock[i] = stateAfter;
+
+    // Early exit: once past the dirty range, check for convergence with previous run
+    if (resume && i >= dirtyTo && prevStates && i < prevStates.length) {
+      if (statesConverged(stateAfter, prevStates[i])) {
+        convergentCount++;
+        if (convergentCount >= CONVERGENCE_THRESHOLD) {
+          // Layout has converged — splice remaining pages from previous run.
+          // The current paginator has pages up to the convergence point.
+          // Remaining pages (and their statesAtBlock) come from the previous run.
+          const earlyExitAt = i;
+
+          // Copy remaining statesAtBlock from previous run
+          if (prevStates) {
+            for (let j = earlyExitAt + 1; j < prevStates.length; j++) {
+              statesAtBlock[j] = prevStates[j];
+            }
+          }
+
+          // Splice remaining pages from previous layout.
+          // Find which page the convergence block landed on, then append
+          // all subsequent pages from prevPages.
+          if (resume.prevPages && resume.prevPages.length > 0) {
+            const currentPageCount = paginator.pages.length;
+            for (let p = currentPageCount; p < resume.prevPages.length; p++) {
+              paginator.pages.push(resume.prevPages[p]);
+            }
+          }
+
+          break;
+        }
+      } else {
+        convergentCount = 0;
+      }
+    }
   }
 
   // Ensure at least one page exists
@@ -268,11 +415,17 @@ export function layoutDocument(
     paginator.getCurrentState();
   }
 
+  const earlyExitBlock =
+    convergentCount >= CONVERGENCE_THRESHOLD ? statesAtBlock.length - 1 : undefined;
+
   return {
     pageSize,
     pages: paginator.pages,
     columns: options.columns,
     pageGap: options.pageGap,
+    statesAtBlock,
+    earlyExitBlock,
+    paginatorSnapshots,
   };
 }
 
@@ -757,24 +910,24 @@ function handleSectionBreak(
   paginator.updateColumns(nextSectionColumns);
 }
 
-// Re-export types
-export * from './types';
-export { createPaginator } from './paginator';
-export type { PageState, PaginatorOptions, Paginator } from './paginator';
+export type { KeepNextChain } from './keep-together';
 export {
-  computeKeepNextChains,
   calculateChainHeight,
+  computeKeepNextChains,
   getMidChainIndices,
   hasKeepLines,
   hasPageBreakBefore,
 } from './keep-together';
-export type { KeepNextChain } from './keep-together';
+export type { PageState, Paginator, PaginatorOptions } from './paginator';
+export { createPaginator, createPaginatorFromSnapshot } from './paginator';
+export type { BreakDecision, SectionState } from './section-breaks';
 export {
-  scheduleSectionBreak,
   applyPendingToActive,
   createInitialSectionState,
+  getEffectiveColumns,
   getEffectiveMargins,
   getEffectivePageSize,
-  getEffectiveColumns,
+  scheduleSectionBreak,
 } from './section-breaks';
-export type { SectionState, BreakDecision } from './section-breaks';
+// Re-export types
+export * from './types';

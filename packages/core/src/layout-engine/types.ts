@@ -745,6 +745,12 @@ export type Layout = {
   footers?: Record<string, HeaderFooterLayout>;
   /** Gap between pages in pixels (for rendering). */
   pageGap?: number;
+  /** Per-block paginator states (for incremental convergence detection). */
+  statesAtBlock?: PaginatorStateAtBlock[];
+  /** Block index where early exit occurred (undefined = full run completed). */
+  earlyExitBlock?: number;
+  /** Paginator snapshots at page boundaries (for incremental resume). */
+  paginatorSnapshots?: Map<number, PaginatorSnapshot>;
 };
 
 // =============================================================================
@@ -800,11 +806,56 @@ export type LayoutOptions = {
   footnoteReservedHeights?: Map<number, number>;
   /** Section break type for the body-level (final) section (for section transition logic). */
   bodyBreakType?: 'continuous' | 'nextPage' | 'evenPage' | 'oddPage';
+  /** Resume from a previous layout run (incremental layout). */
+  resumeFrom?: ResumeOptions;
 };
 
 // =============================================================================
 // UTILITY TYPES
 // =============================================================================
+
+/**
+ * Snapshot of paginator state for incremental layout resume.
+ * All fields are deep-cloned from the paginator's internal state.
+ */
+export type PaginatorSnapshot = {
+  pages: Page[];
+  states: import('./paginator').PageState[];
+  columns: ColumnLayout;
+  columnWidth: number;
+  columnRegionTop: number;
+};
+
+/**
+ * Compact paginator state at a block boundary, used for convergence detection.
+ * Two layouts have converged when their PaginatorStateAtBlock values match.
+ */
+export type PaginatorStateAtBlock = {
+  /** Number of pages so far. */
+  pageCount: number;
+  /** Cursor Y on the current page. */
+  cursorY: number;
+  /** Current column index. */
+  columnIndex: number;
+  /** Trailing spacing carried forward. */
+  trailingSpacing: number;
+};
+
+/**
+ * Options for resuming layout from a previous incremental run.
+ */
+export type ResumeOptions = {
+  /** Block index to resume layout from (skip blocks before this). */
+  resumeFromBlock: number;
+  /** Paginator snapshot captured at resumeFromBlock during the previous run. */
+  paginatorSnapshot: PaginatorSnapshot;
+  /** Block index where the dirty range ends (exclusive). Beyond this, convergence checking begins. */
+  dirtyTo: number;
+  /** Previous per-block paginator states for convergence detection. */
+  prevStatesAtBlock?: PaginatorStateAtBlock[];
+  /** Previous layout pages — used to splice remaining pages on early exit. */
+  prevPages?: Page[];
+};
 
 /**
  * Result of hit-testing a click position.
