@@ -12,7 +12,7 @@
   <a href="https://www.docx-editor.dev/docs"><img src="https://img.shields.io/badge/Docs-00C853?style=flat-square&logo=readthedocs&logoColor=white" alt="Documentation" /></a>
 </p>
 
-# @eigenpal/docx-js-editor
+# docx-editor
 
 Open-source WYSIWYG DOCX editor for the browser. No server required. **[Live demo](https://docx-editor.dev/editor)** | **[Documentation](https://www.docx-editor.dev/docs)**
 
