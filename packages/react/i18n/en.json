@@ -228,6 +228,15 @@
       "insertButton": "Insert Table",
       "sizeSelector": "Table size selector"
     },
+    "splitCell": {
+      "title": "Split Cell",
+      "description": "Set how many rows and columns to split the selected cell into.",
+      "rowsLabel": "Rows:",
+      "columnsLabel": "Columns:",
+      "currentMinimum": "Minimum from current span: {rows} row(s) x {cols} column(s)",
+      "minValue": "Use at least {rows} row(s) and {cols} column(s).",
+      "notOneByOne": "Choose at least two resulting cells."
+    },
     "insertImage": {
       "title": "Insert Image",
       "uploadAriaLabel": "Click or drag to upload image",

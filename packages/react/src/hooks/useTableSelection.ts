@@ -13,7 +13,12 @@ import {
   deleteTableFromDocument,
 } from '@eigenpal/docx-core';
 import type { Document, Table } from '@eigenpal/docx-core/types/document';
-import type { TableContext, TableSelection, TableAction } from '../components/ui/TableToolbar';
+import type {
+  TableContext,
+  TableSelection,
+  TableAction,
+  TableSplitConfig,
+} from '../components/ui/TableToolbar';
 import {
   createTableContext,
   addRow,
@@ -21,7 +26,8 @@ import {
   addColumn,
   deleteColumn,
   mergeCells,
-  splitCell,
+  getTableSplitCellDialogConfig,
+  splitTableCell,
   getColumnCount,
 } from '../components/ui/TableToolbar';
 
@@ -54,6 +60,8 @@ export interface UseTableSelectionReturn {
   state: TableSelectionState;
   handleCellClick: (tableIndex: number, rowIndex: number, columnIndex: number) => void;
   handleAction: (action: TableAction) => void;
+  getSplitCellConfig: () => TableSplitConfig | null;
+  applySplitCell: (rows: number, cols: number) => void;
   clearSelection: () => void;
   isCellSelected: (tableIndex: number, rowIndex: number, columnIndex: number) => boolean;
   tableContext: TableContext | null;
@@ -126,6 +134,49 @@ export function useTableSelection({
     onSelectionChange?.(null);
   }, [manager, onSelectionChange]);
 
+  const getSplitCellConfig = useCallback((): TableSplitConfig | null => {
+    if (!state.table || state.rowIndex === null || state.columnIndex === null) {
+      return null;
+    }
+
+    return getTableSplitCellDialogConfig(state.table, state.rowIndex, state.columnIndex);
+  }, [state.columnIndex, state.rowIndex, state.table]);
+
+  const applySplitCell = useCallback(
+    (rows: number, cols: number) => {
+      if (
+        !doc ||
+        !state.table ||
+        state.tableIndex === null ||
+        state.rowIndex === null ||
+        state.columnIndex === null
+      ) {
+        return;
+      }
+
+      const newTable = splitTableCell(state.table, state.rowIndex, state.columnIndex, rows, cols);
+      if (newTable === state.table) {
+        return;
+      }
+
+      const newDoc = updateTableInDocument(doc, state.tableIndex, newTable);
+      onChange?.(newDoc);
+
+      if (newDoc) {
+        handleCellClick(state.tableIndex, state.rowIndex, state.columnIndex);
+      }
+    },
+    [
+      doc,
+      handleCellClick,
+      onChange,
+      state.columnIndex,
+      state.rowIndex,
+      state.table,
+      state.tableIndex,
+    ]
+  );
+
   const handleAction = useCallback(
     (action: TableAction) => {
       if (
@@ -193,9 +244,7 @@ export function useTableSelection({
           break;
 
         case 'splitCell':
-          if (state.context.canSplitCell) {
-            newTable = splitCell(table, state.rowIndex, state.columnIndex);
-          }
+          // Split cell requires row/column input from the shared dialog.
           break;
 
         case 'deleteTable':
@@ -228,6 +277,8 @@ export function useTableSelection({
     state,
     handleCellClick,
     handleAction,
+    getSplitCellConfig,
+    applySplitCell,
     clearSelection,
     isCellSelected,
     tableContext: state.context,

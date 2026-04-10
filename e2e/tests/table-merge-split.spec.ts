@@ -1,8 +1,7 @@
 /**
  * Table Merge/Split Cell Tests
  *
- * Tests that prosemirror-tables merge/split commands are properly wired.
- * Verifies the commands exist and are integrated in TableExtension and commands/table.ts.
+ * Tests that merge and dialog-backed split commands are wired into the table UI.
  *
  * Note: Full E2E CellSelection tests are limited because prosemirror-tables
  * CellSelection requires specific mouse interactions in the browser.
@@ -56,7 +55,7 @@ test.describe('Table Cell Merge/Split', () => {
     }
   });
 
-  test('split cell button disabled when no merged cells', async ({ page }) => {
+  test('split cell button enabled with a single active cell', async ({ page }) => {
     await editor.insertTable(2, 2);
     await page.waitForTimeout(300);
 
@@ -64,7 +63,7 @@ test.describe('Table Cell Merge/Split', () => {
     await editor.clickTableCell(0, 0, 0);
     await page.waitForTimeout(300);
 
-    // Open More dropdown and check split cell menu item is disabled
+    // Open More dropdown and check split cell menu item is enabled
     await page.locator('[data-testid="toolbar-table-more"]').click();
     await page.waitForSelector('[role="menu"]', { state: 'visible', timeout: 5000 });
     const splitItem = page.getByRole('menuitem', { name: 'Split cell' });
@@ -72,7 +71,7 @@ test.describe('Table Cell Merge/Split', () => {
       const isDisabled = await splitItem.evaluate(
         (el: HTMLElement) => (el as HTMLButtonElement).disabled === true
       );
-      expect(isDisabled).toBe(true);
+      expect(isDisabled).toBe(false);
     }
   });
 

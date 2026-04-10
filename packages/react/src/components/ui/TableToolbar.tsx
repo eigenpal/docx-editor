@@ -14,6 +14,13 @@
 import React from 'react';
 import type { CSSProperties, ReactNode } from 'react';
 import type { Table, TableCell, TableRow } from '@eigenpal/docx-core/types/document';
+import {
+  type CellAnchor,
+  computeSplitLayout,
+  computeSplitDialogDefaults,
+  redistributeColumnWidths,
+  buildAnchorMaps,
+} from '@eigenpal/docx-core/utils/tableSplitAlgorithm';
 import { MaterialSymbol } from './MaterialSymbol';
 import { useTranslation } from '../../i18n';
 
@@ -125,6 +132,13 @@ export interface TableContext {
   rowCount: number;
   /** Total number of columns */
   columnCount: number;
+}
+
+export interface TableSplitConfig {
+  minRows: number;
+  minCols: number;
+  initialRows: number;
+  initialCols: number;
 }
 
 /**
@@ -536,12 +550,10 @@ export function createTableContext(table: Table, selection: TableSelection): Tab
       selection.selectedCells.startCol !== selection.selectedCells.endCol)
   );
 
-  // Check if current cell can be split (has gridSpan > 1 or vMerge)
   const currentCell = getCellAt(table, selection.rowIndex, selection.columnIndex);
-  const canSplitCell = !!(
-    currentCell &&
-    ((currentCell.formatting?.gridSpan ?? 1) > 1 || currentCell.formatting?.vMerge === 'restart')
-  );
+  // Split is available for a single active cell. The UI opens a dialog and
+  // applies the requested row/column split explicitly.
+  const canSplitCell = !!currentCell && !hasMultiCellSelection;
 
   return {
     table,
@@ -701,6 +713,197 @@ export function createEmptyCell(): TableCell {
       },
     ],
     formatting: {},
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Document-model table anchor collection
+// ---------------------------------------------------------------------------
+
+function getRowCellStartingAt(row: TableRow, targetCol: number): TableCell | null {
+  let currentCol = 0;
+  for (const cell of row.cells) {
+    const colspan = cell.formatting?.gridSpan ?? 1;
+    if (currentCol === targetCol) {
+      return cell;
+    }
+    currentCol += colspan;
+  }
+  return null;
+}
+
+function collectDocumentTableAnchors(table: Table): {
+  anchors: CellAnchor<TableCell>[];
+  totalCols: number;
+} {
+  const anchors: CellAnchor<TableCell>[] = [];
+  let totalCols = 0;
+
+  for (let rowIndex = 0; rowIndex < table.rows.length; rowIndex++) {
+    const row = table.rows[rowIndex];
+    let colIndex = 0;
+
+    for (const cell of row.cells) {
+      const colspan = cell.formatting?.gridSpan ?? 1;
+      if (cell.formatting?.vMerge !== 'continue') {
+        let rowspan = 1;
+        if (cell.formatting?.vMerge === 'restart') {
+          for (let nextRow = rowIndex + 1; nextRow < table.rows.length; nextRow++) {
+            const continuation = getRowCellStartingAt(table.rows[nextRow], colIndex);
+            if (!continuation || continuation.formatting?.vMerge !== 'continue') break;
+            rowspan += 1;
+          }
+        }
+
+        anchors.push({ data: cell, row: rowIndex, col: colIndex, rowspan, colspan });
+      }
+
+      colIndex += colspan;
+      totalCols = Math.max(totalCols, colIndex);
+    }
+  }
+
+  return { anchors, totalCols };
+}
+
+// ---------------------------------------------------------------------------
+// Document-model cell formatting helpers
+// ---------------------------------------------------------------------------
+
+function toAnchorCellFormatting(cell: TableCell, colspan: number, rowspan: number) {
+  const formatting = { ...(cell.formatting ?? {}) };
+  if (colspan > 1) formatting.gridSpan = colspan;
+  else delete formatting.gridSpan;
+  if (rowspan > 1) formatting.vMerge = 'restart';
+  else delete formatting.vMerge;
+  return Object.keys(formatting).length ? formatting : undefined;
+}
+
+function toContinuationFormatting(cell: TableCell, colspan: number) {
+  const formatting = { ...(cell.formatting ?? {}) };
+  if (colspan > 1) formatting.gridSpan = colspan;
+  else delete formatting.gridSpan;
+  formatting.vMerge = 'continue';
+  return formatting;
+}
+
+// ---------------------------------------------------------------------------
+// Dialog config + split — delegates to shared algorithm
+// ---------------------------------------------------------------------------
+
+export function getTableSplitCellDialogConfig(
+  table: Table,
+  rowIndex: number,
+  columnIndex: number
+): TableSplitConfig | null {
+  const { anchors } = collectDocumentTableAnchors(table);
+  const anchor = anchors.find(
+    (a) =>
+      rowIndex >= a.row &&
+      rowIndex < a.row + a.rowspan &&
+      columnIndex >= a.col &&
+      columnIndex < a.col + a.colspan
+  );
+  if (!anchor) return null;
+
+  return computeSplitDialogDefaults(anchor.rowspan, anchor.colspan);
+}
+
+export function splitTableCell(
+  table: Table,
+  rowIndex: number,
+  columnIndex: number,
+  rows: number,
+  cols: number
+): Table {
+  if (rows < 1 || cols < 1) return table;
+  const { anchors, totalCols } = collectDocumentTableAnchors(table);
+  const target = anchors.find(
+    (a) =>
+      rowIndex >= a.row &&
+      rowIndex < a.row + a.rowspan &&
+      columnIndex >= a.col &&
+      columnIndex < a.col + a.colspan
+  );
+  if (!target) return table;
+  if (rows < target.rowspan || cols < target.colspan) return table;
+  if (rows === 1 && cols === 1) return table;
+
+  const existing =
+    table.columnWidths && table.columnWidths.length > 0
+      ? [...table.columnWidths]
+      : Array.from({ length: totalCols }, () => 1440);
+  const newColumnWidths = redistributeColumnWidths(existing, target.col, target.colspan, cols);
+
+  const layout = computeSplitLayout(
+    anchors,
+    target,
+    rows,
+    cols,
+    table.rows.length,
+    (isOriginal) => {
+      if (isOriginal) {
+        return { ...target.data, formatting: toAnchorCellFormatting(target.data, 1, 1) };
+      }
+      return {
+        type: 'tableCell' as const,
+        content: [{ type: 'paragraph' as const, content: [], formatting: {} }],
+        formatting: toAnchorCellFormatting(target.data, 1, 1),
+      };
+    }
+  );
+
+  const { byStart, byCoveredSlot } = buildAnchorMaps(layout.anchors);
+
+  const targetRowEnd = target.row + target.rowspan;
+  const newColCount = totalCols + layout.deltaCols;
+  const newRows: TableRow[] = [];
+
+  for (let row = 0; row < layout.newRowCount; row++) {
+    const sourceRow =
+      row < targetRowEnd
+        ? table.rows[row]
+        : row < target.row + rows
+          ? table.rows[targetRowEnd - 1]
+          : table.rows[row - layout.deltaRows];
+
+    const cells: TableCell[] = [];
+    for (let col = 0; col < newColCount; ) {
+      const anchor = byStart.get(`${row}-${col}`);
+      if (anchor) {
+        cells.push({
+          ...anchor.data,
+          formatting: toAnchorCellFormatting(anchor.data, anchor.colspan, anchor.rowspan),
+        });
+        col += anchor.colspan;
+        continue;
+      }
+
+      const coveringAnchor = byCoveredSlot.get(`${row}-${col}`);
+      if (!coveringAnchor) {
+        col += 1;
+        continue;
+      }
+
+      cells.push({
+        ...coveringAnchor.data,
+        content: [],
+        formatting: toContinuationFormatting(coveringAnchor.data, coveringAnchor.colspan),
+      });
+      col += coveringAnchor.colspan;
+    }
+
+    newRows.push({
+      type: 'tableRow',
+      formatting: sourceRow?.formatting ? { ...sourceRow.formatting } : undefined,
+      cells,
+    });
+  }
+
+  return {
+    ...table,
+    rows: newRows,
+    columnWidths: newColumnWidths,
   };
 }
 
@@ -918,7 +1121,11 @@ export function mergeCells(table: Table, selection: TableSelection): Table {
 }
 
 /**
- * Split a merged cell
+ * Backward-compatible helper for callers that still use the older merged-cell
+ * split behavior directly.
+ *
+ * User-facing Split cell is now dialog-driven. For document-model tables, use
+ * `getTableSplitCellDialogConfig()` and `splitTableCell()` instead.
  */
 export function splitCell(table: Table, rowIndex: number, columnIndex: number): Table {
   const cell = getCellAt(table, rowIndex, columnIndex);
