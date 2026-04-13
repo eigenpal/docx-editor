@@ -1,5 +1,11 @@
 # @eigenpal/docx-editor-agents
 
+## 0.0.34
+
+### Patch Changes
+
+- ce89e70: Yjs collab
+
 ## 0.0.33
 
 ### Patch Changes
