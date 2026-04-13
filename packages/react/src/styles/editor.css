@@ -576,3 +576,48 @@
 .ep-hyperlink-popup__icon-btn:hover {
   background: #f1f3f4;
 }
+
+/* =============================================================================
+ * ProseMirror decoration forwarding overlay
+ *
+ * Generic surface for decorations published via PM plugins' `props.decorations`
+ * (the layout-painter doesn't render them itself — see `DecorationLayer.tsx`).
+ * Children are absolutely-positioned inside this container; pointer-events
+ * are off by default so editing isn't blocked. Plugins that need hover/click
+ * on a decoration (e.g. cursor name labels) opt in via inline styles.
+ *
+ * z-index: 11 — one above SelectionOverlay (10) so cursor name labels render
+ * above the local caret.
+ * ============================================================================= */
+.paged-editor__decoration-overlay {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 11;
+}
+
+/* Default styles for y-prosemirror remote cursor decorations. Consumers can
+ * override by providing their own `.ProseMirror-yjs-cursor` rules. */
+.ProseMirror-yjs-cursor {
+  position: relative;
+  margin-left: -1px;
+  margin-right: -1px;
+  border-left: 1px solid;
+  border-right: 1px solid;
+  word-break: normal;
+  pointer-events: none;
+}
+.ProseMirror-yjs-cursor > div {
+  position: absolute;
+  top: -1.05em;
+  left: -1px;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1;
+  color: #fff;
+  padding: 2px 4px;
+  border-radius: 3px 3px 3px 0;
+  white-space: nowrap;
+  user-select: none;
+  pointer-events: none;
+}

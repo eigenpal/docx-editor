@@ -171,11 +171,18 @@ function createDecorations(
     if (isSelected) classes.push('selected');
 
     decorations.push(
-      Decoration.inline(tag.from, tag.to, {
-        class: classes.join(' '),
-        'data-tag-id': tag.id,
-        style: `background-color: ${color}22; border-radius: 2px;`,
-      })
+      Decoration.inline(
+        tag.from,
+        tag.to,
+        {
+          class: classes.join(' '),
+          'data-tag-id': tag.id,
+          style: `background-color: ${color}22; border-radius: 2px;`,
+        },
+        // Skip generic decoration-forwarding; TemplateHighlightOverlay
+        // already paints these on the visible pages.
+        { noOverlay: true }
+      )
     );
   }
 

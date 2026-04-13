@@ -18,7 +18,7 @@ Open <http://localhost:5273>, then click **Share link** and paste the URL into a
 Four pieces:
 
 1. **`externalContent` prop** tells the editor to treat its `document` prop as a schema seed only and skip the mount-time content load. `ySyncPlugin` populates ProseMirror from the shared `Y.Doc` instead.
-2. **`externalPlugins`** receives `ySyncPlugin`, `yCursorPlugin(awareness)`, and `yUndoPlugin()` so Yjs owns the document state, remote cursors, and history. **Tracked changes sync automatically** through this — `insertion`/`deletion` mark attrs (author, date, revision id) ride along with the synced PM tree.
+2. **`externalPlugins`** receives `ySyncPlugin`, `yCursorPlugin(awareness)`, and `yUndoPlugin()` so Yjs owns the document state, remote cursors, and history. **Tracked changes sync automatically** through this — `insertion`/`deletion` mark attrs (author, date, revision id) ride along with the synced PM tree. **Remote cursors and selection-range highlights** also surface automatically via the editor's PM-decoration forwarding layer.
 3. **Awareness** (Yjs's ephemeral state channel) carries each user's name, color, and selection. The `AvatarStack` in the title bar reads `provider.awareness.getStates()` and renders connected users.
 4. **Controlled `comments` prop** + a `Y.Array<Comment>` on the same `Y.Doc`. PM only carries the comment range markers; the thread metadata (text, author, replies, resolved status) lives in the Y.Array, mirrored into React state and pushed back through `onCommentsChange`.
 
@@ -47,7 +47,6 @@ Four pieces:
 
 This is a **demo**, not a production-ready collab template. Known gaps:
 
-- **Remote cursors are invisible.** `yCursorPlugin` is wired and publishes selections through Yjs awareness, but the editor's dual-rendering architecture (hidden ProseMirror → visible layout-painter) means PM decorations only render off-screen. Tracked by [#256](https://github.com/eigenpal/docx-editor/issues/256). Avatars in the title bar are the only visible "who's here" signal today.
 - **Comments can lose data on concurrent edits.** The Y.Array sync is naive replace-all (`delete(0, length); push(next)` inside a transact). If two peers add a comment in the same instant, whichever transact lands second wipes the other's additions. For production, use `Y.Map<id, Comment>` keyed by comment id — single-key writes resolve concurrent edits cleanly.
 - **Comment IDs can collide between peers.** Comment IDs come from a module-level scalar starting at 1, and the demo seeds with an empty document so the load-time bump never fires. First comment from each peer gets `id: 1`. Tracked by [#257](https://github.com/eigenpal/docx-editor/issues/257).
 - **Tracked-change accept/reject races.** Two peers accepting/rejecting the same change at the same instant produce two PM transactions over overlapping ranges. Yjs picks an ordering and the loser's intent is silently dropped — no conflict UI.
