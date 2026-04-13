@@ -1,0 +1,50 @@
+/* Import editor styles
+   In standalone usage: @import '@eigenpal/docx-js-editor/styles.css'; */
+@import '../../../packages/react/src/styles/editor.css';
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Mobile responsive overrides */
+@media (max-width: 768px) {
+  /* Compact toolbar on mobile - horizontal scroll instead of wrapping */
+  .ep-root [role='toolbar'] {
+    padding: 4px 4px;
+    gap: 0;
+    overflow-x: auto;
+    overflow-y: hidden;
+    flex-wrap: nowrap !important;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    min-height: 36px;
+  }
+  .ep-root [role='toolbar']::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+/* y-prosemirror remote cursor decorations */
+.ProseMirror-yjs-cursor {
+  position: relative;
+  margin-left: -1px;
+  margin-right: -1px;
+  border-left: 1px solid;
+  border-right: 1px solid;
+  word-break: normal;
+  pointer-events: none;
+}
+.ProseMirror-yjs-cursor > div {
+  position: absolute;
+  top: -1.05em;
+  left: -1px;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1;
+  color: #fff;
+  padding: 2px 4px;
+  border-radius: 3px 3px 3px 0;
+  white-space: nowrap;
+  user-select: none;
+  pointer-events: none;
+}

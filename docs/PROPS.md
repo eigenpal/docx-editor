@@ -39,6 +39,8 @@
 | `documentName`         | `string`                                    | —           | Editable document name in the title bar                                                |
 | `onDocumentNameChange` | `(name: string) => void`                    | —           | Called when the user edits the document name                                           |
 | `renderTitleBarRight`  | `() => ReactNode`                           | —           | Custom right-side actions in the title bar                                             |
+| `comments`             | `Comment[]`                                 | —           | Controlled comments. Pair with `onCommentsChange` to sync over Yjs / Liveblocks / etc. |
+| `onCommentsChange`     | `(comments: Comment[]) => void`             | —           | Fires whenever the comments array changes (controlled mode)                            |
 
 Source: [`DocxEditorProps`](../packages/react/src/components/DocxEditor.tsx)
 
@@ -81,3 +83,46 @@ function CollaborativeEditor({ ydoc }) {
 ```
 
 **Why this is needed:** Without `externalContent`, DocxEditor's mount-time `useEffect` calls `loadDocument()`, which resets ProseMirror state. If `ySyncPlugin` has already populated ProseMirror with Y.Doc content, that reset wipes it — and then ySync syncs the empty state back into Y.Doc, corrupting the shared document for every connected client.
+
+## Controlled Comments
+
+Comment thread metadata (text, author, replies, resolved status) lives outside the ProseMirror document — only the comment range markers sync via `ySyncPlugin`. To make threads sync across collaborators, pass `comments` and `onCommentsChange` and bridge them to your collab backend (Yjs `Y.Array`, Liveblocks storage, Automerge document, anything keyed by id).
+
+```tsx
+import { useEffect, useState, useCallback } from 'react';
+import * as Y from 'yjs';
+import type { Comment } from '@eigenpal/docx-js-editor';
+
+function useSyncedComments(ydoc: Y.Doc): [Comment[], (next: Comment[]) => void] {
+  const yComments = ydoc.getArray<Comment>('comments');
+  const [comments, setComments] = useState<Comment[]>(() => yComments.toArray());
+
+  useEffect(() => {
+    const sync = () => setComments(yComments.toArray());
+    yComments.observeDeep(sync);
+    return () => yComments.unobserveDeep(sync);
+  }, [yComments]);
+
+  const setCommentsRemote = useCallback(
+    (next: Comment[]) => {
+      ydoc.transact(() => {
+        if (yComments.length > 0) yComments.delete(0, yComments.length);
+        if (next.length > 0) yComments.push(next);
+      });
+    },
+    [ydoc, yComments]
+  );
+
+  return [comments, setCommentsRemote];
+}
+
+// in the component:
+const [comments, setComments] = useSyncedComments(ydoc);
+return (
+  <DocxEditor document={...} comments={comments} onCommentsChange={setComments} />
+);
+```
+
+When `comments` is omitted, the editor falls back to internal state — existing usages need no changes.
+
+**Tracked changes** sync automatically without any extra props: their metadata (`author`, `date`, `revisionId`) lives in `insertion`/`deletion` mark attributes on the ProseMirror document, which `ySyncPlugin` syncs as part of the doc tree.

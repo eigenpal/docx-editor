@@ -39,10 +39,11 @@ import { EditorToolbar } from './EditorToolbar';
 import { pointsToHalfPoints } from './ui/FontSizePicker';
 import { DocumentOutline } from './DocumentOutline';
 import { SIDEBAR_DOCUMENT_SHIFT } from './sidebar/constants';
-import { type TrackedChangeEntry } from './sidebar/cardUtils';
 import { UnifiedSidebar } from './UnifiedSidebar';
 import { CommentMarginMarkers } from './CommentMarginMarkers';
 import { useCommentSidebarItems, type CommentCallbacks } from '../hooks/useCommentSidebarItems';
+import { useTrackedChanges } from '../hooks/useTrackedChanges';
+import type { EditorState as PMEditorState } from 'prosemirror-state';
 import type { ReactSidebarItem } from '../plugin-api/types';
 import type { HeadingInfo } from '@eigenpal/docx-core/utils/headingCollector';
 import type { Comment, BlockContent, ParagraphContent } from '@eigenpal/docx-core/types/content';
@@ -314,6 +315,23 @@ export interface DocxEditorProps {
   onCommentDelete?: (comment: Comment) => void;
   /** Callback when a reply is added to a comment via the UI */
   onCommentReply?: (reply: Comment, parent: Comment) => void;
+  /**
+   * Controlled comments array. When provided, the editor reads comment thread
+   * metadata (text, author, replies, resolved status) from this prop instead
+   * of internal state, and emits every change through `onCommentsChange`.
+   *
+   * Use this with collaboration backends (Yjs, Liveblocks, Automerge, …) so
+   * comment threads sync across peers — the PM document only carries the
+   * range markers; thread metadata lives outside the doc and needs its own
+   * sync channel.
+   *
+   * If omitted, the editor falls back to internal state (current behavior).
+   * The granular `onCommentAdd`/`onCommentResolve`/`onCommentDelete`/
+   * `onCommentReply` callbacks fire in both modes.
+   */
+  comments?: Comment[];
+  /** Fires whenever the comments array changes (controlled mode). */
+  onCommentsChange?: (comments: Comment[]) => void;
   /**
    * Callback when rendered DOM context is ready (for plugin overlays).
    * Used by PluginHost to get access to the rendered page DOM for positioning.
@@ -822,6 +840,8 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
     onCommentResolve,
     onCommentDelete,
     onCommentReply,
+    comments: commentsProp,
+    onCommentsChange,
     externalPlugins,
     externalContent = false,
     onEditorViewReady,
@@ -884,8 +904,19 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
   // Comments sidebar state
   const [showCommentsSidebar, setShowCommentsSidebar] = useState(false);
   const [expandedSidebarItem, setExpandedSidebarItem] = useState<string | null>(null);
-  const [comments, setComments] = useState<Comment[]>([]);
-  const [trackedChanges, setTrackedChanges] = useState<TrackedChangeEntry[]>([]);
+  // Comments live in internal state by default; if the consumer passes
+  // `comments` as a prop, we treat the editor as controlled — `setComments`
+  // routes mutations through `onCommentsChange` instead of touching internal
+  // state. Keeps the controlled/uncontrolled API symmetric with React inputs.
+  const [internalComments, setInternalComments] = useState<Comment[]>([]);
+  const isControlledComments = commentsProp !== undefined;
+  const comments = isControlledComments ? commentsProp : internalComments;
+  // Latest PM state — mirrored from the view on every doc-changing transaction.
+  // Drives `useTrackedChanges` so the sidebar derives its list directly from PM
+  // (the source of truth, including remote ySync updates) rather than a debounced
+  // copy in React state.
+  const [pmState, setPmState] = useState<PMEditorState | null>(null);
+  const { entries: trackedChanges, commentToRevision } = useTrackedChanges(pmState);
   const [anchorPositions, setAnchorPositions] =
     useState<Map<string, number>>(EMPTY_ANCHOR_POSITIONS);
   // No separate state needed — pluginRenderedDomContext comes from PluginHost
@@ -925,8 +956,8 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
     tableContext: null,
   });
 
-  // Debounce timers (avoid full doc walk on every keystroke)
-  const extractTrackedChangesTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Debounce timer for orphaned-comment cleanup (still needed: orphan detection
+  // requires a post-edit settle so the user doesn't see comments vanish mid-edit).
   const cleanOrphanedCommentsTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const commentsRef = useRef(comments);
   commentsRef.current = comments;
@@ -934,120 +965,44 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
   isAddingCommentRef.current = isAddingComment;
   const onCommentDeleteRef = useRef(onCommentDelete);
   onCommentDeleteRef.current = onCommentDelete;
+  const onCommentsChangeRef = useRef(onCommentsChange);
+  onCommentsChangeRef.current = onCommentsChange;
 
-  // Extract tracked changes from ProseMirror state
-  const extractTrackedChanges = useCallback(() => {
-    const view = pagedEditorRef.current?.getView();
-    if (!view) return;
-    const { doc, schema } = view.state;
-    const insertionType = schema.marks.insertion;
-    const deletionType = schema.marks.deletion;
-    if (!insertionType && !deletionType) return;
+  // Unified setter — routes to internal state in uncontrolled mode and/or to
+  // the parent's onCommentsChange callback in controlled mode. All existing
+  // setComments call sites use this; uncontrolled mode behavior is unchanged.
+  const setComments = useCallback(
+    (next: Comment[] | ((prev: Comment[]) => Comment[])) => {
+      const resolved =
+        typeof next === 'function'
+          ? (next as (prev: Comment[]) => Comment[])(commentsRef.current)
+          : next;
+      if (resolved === commentsRef.current) return;
+      if (!isControlledComments) setInternalComments(resolved);
+      onCommentsChangeRef.current?.(resolved);
+    },
+    [isControlledComments]
+  );
 
-    const raw: TrackedChangeEntry[] = [];
-    doc.descendants((node, pos) => {
-      if (!node.isText) return;
-      for (const mark of node.marks) {
-        if (mark.type === insertionType || mark.type === deletionType) {
-          raw.push({
-            type: mark.type === insertionType ? 'insertion' : 'deletion',
-            text: node.text || '',
-            author: (mark.attrs.author as string) || '',
-            date: mark.attrs.date as string | undefined,
-            from: pos,
-            to: pos + node.nodeSize,
-            revisionId: mark.attrs.revisionId as number,
-          });
+  // Thread comments under their overlapping tracked change (parentId = revisionId).
+  // The overlap map is computed in the same doc walk as `extractTrackedChanges`
+  // so we don't pay for a second descendants() pass per transaction.
+  useEffect(() => {
+    if (commentToRevision.size === 0) return;
+    setComments((prev) => {
+      let changed = false;
+      const updated = prev.map((c) => {
+        if (c.parentId != null) return c; // already threaded
+        const rid = commentToRevision.get(c.id);
+        if (rid != null) {
+          changed = true;
+          return { ...c, parentId: rid };
         }
-      }
-    });
-
-    // Merge adjacent entries with the same revisionId and type into one
-    const merged: TrackedChangeEntry[] = [];
-    for (const entry of raw) {
-      const last = merged[merged.length - 1];
-      if (
-        last &&
-        last.revisionId === entry.revisionId &&
-        last.type === entry.type &&
-        last.to === entry.from
-      ) {
-        last.text += entry.text;
-        last.to = entry.to;
-      } else {
-        merged.push({ ...entry });
-      }
-    }
-
-    // Detect replacement pairs: adjacent deletion + insertion from the same author/date
-    // Word assigns different w:id values but same author+date for a single replace operation
-    const final: TrackedChangeEntry[] = [];
-    for (let i = 0; i < merged.length; i++) {
-      const curr = merged[i];
-      const next = merged[i + 1];
-      if (
-        curr.type === 'deletion' &&
-        next &&
-        next.type === 'insertion' &&
-        curr.author === next.author &&
-        curr.date === next.date &&
-        curr.to === next.from
-      ) {
-        final.push({
-          type: 'replacement',
-          text: next.text,
-          deletedText: curr.text,
-          author: curr.author,
-          date: curr.date,
-          from: curr.from,
-          to: next.to,
-          revisionId: curr.revisionId,
-          insertionRevisionId: next.revisionId,
-        });
-        i++; // skip the insertion entry
-      } else {
-        final.push(curr);
-      }
-    }
-    setTrackedChanges(final);
-
-    // Detect comments whose range overlaps with tracked changes and thread them.
-    // When a comment mark covers the same text as a tracked change mark,
-    // the comment is a reply to the tracked change.
-    const commentType = schema.marks.comment;
-    if (commentType && final.length > 0) {
-      // Build a map: commentId → overlapping revisionId
-      const commentToRevision = new Map<number, number>();
-      doc.descendants((node) => {
-        if (!node.isText) return;
-        const commentMark = node.marks.find((m) => m.type === commentType);
-        const tcMark = node.marks.find((m) => m.type === insertionType || m.type === deletionType);
-        if (commentMark && tcMark) {
-          const cid = commentMark.attrs.commentId as number;
-          const rid = tcMark.attrs.revisionId as number;
-          if (!commentToRevision.has(cid)) {
-            commentToRevision.set(cid, rid);
-          }
-        }
+        return c;
       });
-
-      if (commentToRevision.size > 0) {
-        setComments((prev) => {
-          let changed = false;
-          const updated = prev.map((c) => {
-            if (c.parentId != null) return c; // already threaded
-            const rid = commentToRevision.get(c.id);
-            if (rid != null) {
-              changed = true;
-              return { ...c, parentId: rid };
-            }
-            return c;
-          });
-          return changed ? updated : prev;
-        });
-      }
-    }
-  }, []);
+      return changed ? updated : prev;
+    });
+  }, [commentToRevision, setComments]);
 
   // Remove comments whose marks no longer exist in the document
   const cleanOrphanedComments = useCallback(() => {
@@ -1088,9 +1043,6 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
   // Clean up debounce timers on unmount
   useEffect(() => {
     return () => {
-      if (extractTrackedChangesTimerRef.current) {
-        clearTimeout(extractTrackedChangesTimerRef.current);
-      }
       if (cleanOrphanedCommentsTimerRef.current) {
         clearTimeout(cleanOrphanedCommentsTimerRef.current);
       }
@@ -1289,7 +1241,6 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
     commentsLoadedRef.current = false;
     trackedChangesLoadedRef.current = false;
     setComments([]);
-    setTrackedChanges([]);
     setHeadingInfos([]);
     setShowCommentsSidebar(false);
     setIsAddingComment(false);
@@ -1299,15 +1250,11 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
     setHfEditPosition(null);
     setAnchorPositions(EMPTY_ANCHOR_POSITIONS);
     findReplace.setMatches([], 0);
-    if (extractTrackedChangesTimerRef.current) {
-      clearTimeout(extractTrackedChangesTimerRef.current);
-      extractTrackedChangesTimerRef.current = null;
-    }
     if (cleanOrphanedCommentsTimerRef.current) {
       clearTimeout(cleanOrphanedCommentsTimerRef.current);
       cleanOrphanedCommentsTimerRef.current = null;
     }
-  }, [findReplace.setMatches]);
+  }, [findReplace.setMatches, setComments]);
 
   // Load a pre-parsed document (used by ref method and internally)
   const loadParsedDocument = useCallback(
@@ -1371,25 +1318,26 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
     }
   }, [history.state]);
 
-  // Extract tracked changes once PM view is ready (after loading completes)
+  // Mirror PM state on each external document load (mount-time view creation
+  // is handled by PagedEditor's `onReady` below; this effect catches subsequent
+  // loads via `document`/`documentBuffer` prop changes, which go through
+  // OffscreenEditorHost's `updateState` and never fire `handleDocumentChange`).
+  // Effects run child-first, so `view.state` already reflects the new doc by
+  // the time this runs.
+  useEffect(() => {
+    if (state.isLoading || !history.state) return;
+    const view = pagedEditorRef.current?.getView();
+    if (view) setPmState(view.state);
+  }, [state.isLoading, history.state]);
+
+  // Auto-open the sidebar once if the loaded document already has tracked changes.
   const trackedChangesLoadedRef = useRef(false);
   useEffect(() => {
-    if (!state.isLoading && history.state) {
-      const timer = setTimeout(() => {
-        extractTrackedChanges();
-        // Auto-open sidebar once on initial load
-        if (!trackedChangesLoadedRef.current) {
-          trackedChangesLoadedRef.current = true;
-          // Check if we just populated tracked changes
-          setTrackedChanges((prev) => {
-            if (prev.length > 0) setShowCommentsSidebar(true);
-            return prev;
-          });
-        }
-      }, 200);
-      return () => clearTimeout(timer);
-    }
-  }, [state.isLoading, history.state, extractTrackedChanges]);
+    if (trackedChangesLoadedRef.current) return;
+    if (state.isLoading || !pmState) return;
+    trackedChangesLoadedRef.current = true;
+    if (trackedChanges.length > 0) setShowCommentsSidebar(true);
+  }, [pmState, state.isLoading, trackedChanges.length]);
 
   // Listen for font loading
   useEffect(() => {
@@ -1427,19 +1375,18 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
           setHeadingInfos(collectHeadings(view.state.doc));
         }
       }
-      // Re-extract tracked changes after document change (debounced to avoid
-      // full-document walk on every keystroke in suggestion mode)
-      if (extractTrackedChangesTimerRef.current) {
-        clearTimeout(extractTrackedChangesTimerRef.current);
-      }
-      extractTrackedChangesTimerRef.current = setTimeout(extractTrackedChanges, 300);
-      // Clean up orphaned comments (debounced)
+      // Mirror latest PM state so `useTrackedChanges` (and the threading effect)
+      // re-derive from the new doc — including for transactions that came in
+      // remotely via ySyncPlugin in collab mode.
+      const view = pagedEditorRef.current?.getView();
+      if (view) setPmState(view.state);
+      // Clean up orphaned comments (debounced — avoid yanking comments mid-edit)
       if (cleanOrphanedCommentsTimerRef.current) {
         clearTimeout(cleanOrphanedCommentsTimerRef.current);
       }
       cleanOrphanedCommentsTimerRef.current = setTimeout(cleanOrphanedComments, 300);
     },
-    [onChange, pushDocument, extractTrackedChanges, cleanOrphanedComments]
+    [onChange, pushDocument, cleanOrphanedComments]
   );
 
   // Handle selection changes from ProseMirror
@@ -3678,17 +3625,14 @@ body { background: white; }
     },
     onAcceptChange: (from, to) => {
       const view = pagedEditorRef.current?.getView();
-      if (view) {
-        acceptChange(from, to)(view.state, view.dispatch);
-        extractTrackedChanges();
-      }
+      if (view) acceptChange(from, to)(view.state, view.dispatch);
+      // No explicit re-extract: the dispatch fires `handleDocumentChange`,
+      // which mirrors the new PM state into `pmState` and `useTrackedChanges`
+      // re-derives.
     },
     onRejectChange: (from, to) => {
       const view = pagedEditorRef.current?.getView();
-      if (view) {
-        rejectChange(from, to)(view.state, view.dispatch);
-        extractTrackedChanges();
-      }
+      if (view) rejectChange(from, to)(view.state, view.dispatch);
     },
     onTrackedChangeReply: (revisionId, text) => {
       setComments((prev) => [...prev, createComment(text, author, revisionId)]);
@@ -4072,7 +4016,9 @@ body { background: white; }
                         }}
                         externalPlugins={allExternalPlugins}
                         onReady={(ref) => {
-                          onEditorViewReady?.(ref.getView()!);
+                          const view = ref.getView();
+                          if (view) setPmState(view.state);
+                          if (view) onEditorViewReady?.(view);
                         }}
                         onRenderedDomContextReady={onRenderedDomContextReady}
                         pluginOverlays={pluginOverlays}
