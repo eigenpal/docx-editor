@@ -246,6 +246,16 @@ export interface DocxEditorProps {
   onFontsLoaded?: () => void;
   /** External ProseMirror plugins (from PluginHost) */
   externalPlugins?: import('prosemirror-state').Plugin[];
+  /**
+   * When true, the editor treats the `document` prop as a schema seed only and
+   * does not load it into ProseMirror on mount. Content is expected to come from
+   * external sources — typically `externalPlugins` such as `ySyncPlugin` from
+   * `y-prosemirror`, but also any code that dispatches transactions directly.
+   *
+   * You must still pass a `document` prop (e.g., `createEmptyDocument()`) so the
+   * editor can build its schema and render the shell.
+   */
+  externalContent?: boolean;
   /** Callback when editor view is ready (for PluginHost) */
   onEditorViewReady?: (view: import('prosemirror-view').EditorView) => void;
   /** Theme for styling */
@@ -813,6 +823,7 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
     onCommentDelete,
     onCommentReply,
     externalPlugins,
+    externalContent = false,
     onEditorViewReady,
     onRenderedDomContextReady,
     pluginOverlays,
@@ -829,7 +840,7 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
 ) {
   // State
   const [state, setState] = useState<EditorState>({
-    isLoading: !!documentBuffer,
+    isLoading: !!documentBuffer && !externalContent,
     parseError: null,
     zoom: initialZoom,
     selectionFormatting: {},
@@ -1338,6 +1349,9 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
 
   // React to document/documentBuffer prop changes
   useEffect(() => {
+    // External content mode: caller (e.g. ySyncPlugin) populates PM directly — skip the load.
+    if (externalContent) return;
+
     if (!documentBuffer) {
       if (initialDocument) {
         loadParsedDocument(initialDocument);
@@ -1346,7 +1360,7 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
     }
 
     loadBuffer(documentBuffer);
-  }, [documentBuffer, initialDocument]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [documentBuffer, initialDocument, externalContent]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Create/update agent when document changes
   useEffect(() => {

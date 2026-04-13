@@ -10,6 +10,7 @@
 | `mode`                 | `'editing' \| 'suggesting' \| 'viewing'`    | `'editing'` | Editor mode — editing, suggesting (track changes), or viewing (read-only with toolbar) |
 | `onModeChange`         | `(mode: EditorMode) => void`                | —           | Called when the user changes the editing mode                                          |
 | `readOnly`             | `boolean`                                   | `false`     | Read-only preview (hides toolbar, rulers, panel)                                       |
+| `externalContent`      | `boolean`                                   | `false`     | Treat `document` as schema seed only — content is provided externally (e.g. Yjs)       |
 | `showToolbar`          | `boolean`                                   | `true`      | Show formatting toolbar                                                                |
 | `showRuler`            | `boolean`                                   | `false`     | Show horizontal & vertical rulers                                                      |
 | `rulerUnit`            | `'inch' \| 'cm'`                            | `'inch'`    | Unit for ruler display                                                                 |
@@ -61,3 +62,22 @@ Use `readOnly` for a preview-only viewer. This disables editing, caret, and sele
 ```tsx
 <DocxEditor documentBuffer={file} readOnly />
 ```
+
+## External Content (Yjs and other live sources)
+
+Set `externalContent` when something other than the `document` prop is the source of truth for the editor's content — for example, `ySyncPlugin` from `y-prosemirror`, which populates ProseMirror from a Y.Doc. The `document` prop is still required as a schema seed, but the editor will not load it on mount.
+
+```tsx
+import { useMemo } from 'react';
+import { DocxEditor, createEmptyDocument } from '@eigenpal/docx-js-editor';
+import { ySyncPlugin, yUndoPlugin } from 'y-prosemirror';
+
+function CollaborativeEditor({ ydoc }) {
+  const fragment = ydoc.getXmlFragment('prosemirror');
+  const plugins = useMemo(() => [ySyncPlugin(fragment), yUndoPlugin()], [fragment]);
+
+  return <DocxEditor document={createEmptyDocument()} externalPlugins={plugins} externalContent />;
+}
+```
+
+**Why this is needed:** Without `externalContent`, DocxEditor's mount-time `useEffect` calls `loadDocument()`, which resets ProseMirror state. If `ySyncPlugin` has already populated ProseMirror with Y.Doc content, that reset wipes it — and then ySync syncs the empty state back into Y.Doc, corrupting the shared document for every connected client.
