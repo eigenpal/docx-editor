@@ -30,7 +30,11 @@ import type {
 } from './types';
 import { getContent as getContentImpl, formatContentForLLM } from './content';
 import { getChanges as getChangesImpl, getComments as getCommentsImpl } from './discovery';
-import { addComment as addCommentImpl, replyTo as replyToImpl } from './comments';
+import {
+  addComment as addCommentImpl,
+  replyTo as replyToImpl,
+  removeComment as removeCommentImpl,
+} from './comments';
 import {
   acceptChange as acceptChangeImpl,
   rejectChange as rejectChangeImpl,
@@ -153,6 +157,16 @@ export class DocxReviewer {
         ? { text: textOrOptions, author: this.author }
         : { ...textOrOptions, author: this.resolveAuthor(textOrOptions.author) };
     return replyToImpl(this.body, commentId, opts);
+  }
+
+  /**
+   * Remove a comment by ID. Removing a top-level comment also removes its
+   * replies and the anchored range markers. Removing a reply only removes
+   * that reply.
+   * @param commentId - ID of the comment to remove
+   */
+  removeComment(commentId: number): void {
+    removeCommentImpl(this.body, commentId);
   }
 
   // ==========================================================================

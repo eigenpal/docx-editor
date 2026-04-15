@@ -1,12 +1,12 @@
 /**
- * Comment operations — addComment, replyTo
+ * Comment operations — addComment, replyTo, removeComment
  */
 
 import type { DocumentBody, Paragraph, Comment, Run } from '@eigenpal/docx-core/headless';
 import type { AddCommentOptions, ReplyOptions } from './types';
 import { CommentNotFoundError } from './errors';
 import { findTextInParagraph } from './textSearch';
-import { getParagraphAtIndex } from './utils';
+import { forEachParagraph, getParagraphAtIndex } from './utils';
 
 /**
  * Add a comment to a paragraph. Returns the new comment ID.
@@ -78,4 +78,41 @@ export function replyTo(body: DocumentBody, commentId: number, options: ReplyOpt
 
   comments.push(reply);
   return newId;
+}
+
+/**
+ * Remove a comment by ID. If the comment is a top-level thread,
+ * its replies and range markers are removed as well. If it is a reply,
+ * only that reply is removed.
+ */
+export function removeComment(body: DocumentBody, commentId: number): void {
+  const comments = body.comments ?? [];
+  const target = comments.find((c) => c.id === commentId);
+  if (!target) {
+    throw new CommentNotFoundError(commentId);
+  }
+
+  const isReply = target.parentId !== undefined;
+  const idsToRemove = new Set<number>([commentId]);
+  if (!isReply) {
+    for (const c of comments) {
+      if (c.parentId === commentId) idsToRemove.add(c.id);
+    }
+  }
+
+  body.comments = comments.filter((c) => !idsToRemove.has(c.id));
+
+  if (isReply) return;
+
+  forEachParagraph(body, (para) => {
+    for (let i = para.content.length - 1; i >= 0; i--) {
+      const item = para.content[i];
+      if (
+        (item.type === 'commentRangeStart' || item.type === 'commentRangeEnd') &&
+        item.id === commentId
+      ) {
+        para.content.splice(i, 1);
+      }
+    }
+  });
 }
