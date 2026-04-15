@@ -34,7 +34,9 @@
     "table": "Tabelle",
     "pageBreak": "Seitenumbruch",
     "tableOfContents": "Inhaltsverzeichnis",
-    "symbol": "Symbol"
+    "symbol": "Symbol",
+    "help": "Hilfe",
+    "reportIssue": "Problem melden"
   },
   "formattingBar": {
     "groups": {
