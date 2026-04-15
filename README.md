@@ -90,6 +90,7 @@ bun run i18n:new de      # scaffold German locale
 bun run i18n:status      # check translation coverage
 ```
 
-## License
+## Commercial Support
 
-MIT
+> [!TIP]
+> Questions or custom features? Email **[docx-editor@eigenpal.com](mailto:docx-editor@eigenpal.com)**.
