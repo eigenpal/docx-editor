@@ -30,19 +30,28 @@ bun run typecheck && npx playwright test --timeout=60000 --workers=4
 
 ### Test File Mapping
 
-| Feature Area          | Test File                      | Quick Verify Pattern    |
-| --------------------- | ------------------------------ | ----------------------- |
-| Bold/Italic/Underline | `formatting.spec.ts`           | `--grep "apply bold"`   |
-| Alignment             | `alignment.spec.ts`            | `--grep "align text"`   |
-| Lists                 | `lists.spec.ts`                | `--grep "bullet list"`  |
-| Colors                | `colors.spec.ts`               | `--grep "text color"`   |
-| Fonts                 | `fonts.spec.ts`                | `--grep "font family"`  |
-| Enter/Paragraphs      | `text-editing.spec.ts`         | `--grep "Enter"`        |
-| Undo/Redo             | `scenario-driven.spec.ts`      | `--grep "undo"`         |
-| Line spacing          | `line-spacing.spec.ts`         | `--grep "line spacing"` |
-| Paragraph styles      | `paragraph-styles.spec.ts`     | `--grep "Heading"`      |
-| Toolbar state         | `toolbar-state.spec.ts`        | `--grep "toolbar"`      |
-| Cursor-only ops       | `cursor-paragraph-ops.spec.ts` | `--grep "cursor only"`  |
+| Feature Area          | Test File                      | Quick Verify Pattern        |
+| --------------------- | ------------------------------ | --------------------------- |
+| Bold/Italic/Underline | `formatting.spec.ts`           | `--grep "apply bold"`       |
+| Alignment             | `alignment.spec.ts`            | `--grep "align text"`       |
+| Lists                 | `lists.spec.ts`                | `--grep "bullet list"`      |
+| Colors                | `colors.spec.ts`               | `--grep "text color"`       |
+| Fonts                 | `fonts.spec.ts`                | `--grep "font family"`      |
+| Enter/Paragraphs      | `text-editing.spec.ts`         | `--grep "Enter"`            |
+| Undo/Redo             | `scenario-driven.spec.ts`      | `--grep "undo"`             |
+| Line spacing          | `line-spacing.spec.ts`         | `--grep "line spacing"`     |
+| Paragraph styles      | `paragraph-styles.spec.ts`     | `--grep "Heading"`          |
+| Toolbar state         | `toolbar-state.spec.ts`        | `--grep "toolbar"`          |
+| Cursor-only ops       | `cursor-paragraph-ops.spec.ts` | `--grep "cursor only"`      |
+| Comments sidebar      | `comments-sidebar.spec.ts`     | `--grep "Comments sidebar"` |
+
+**When touching anything in these paths, run `comments-sidebar.spec.ts`:**
+
+- `packages/react/src/components/UnifiedSidebar.tsx`
+- `packages/react/src/components/sidebar/**`
+- `packages/react/src/hooks/useCommentSidebarItems.tsx`
+- `packages/react/src/paged-editor/PagedEditor.tsx` → `updateSelectionOverlay` / `onSelectionChange`
+- `packages/react/src/components/DocxEditor.tsx` → `onSelectionChange` handler, `expandedSidebarItem` state
 
 **Known flaky tests:** `formatting.spec.ts` (bold toggle/undo/redo), `text-editing.spec.ts` (clipboard ops).
 

@@ -22,10 +22,26 @@ async function findCommentButton(page: import('@playwright/test').Page) {
       const style = getComputedStyle(btn);
       if (style.position === 'absolute' && style.zIndex === '50') {
         const rect = btn.getBoundingClientRect();
-        return { top: rect.top, bottom: rect.bottom, centerY: rect.top + rect.height / 2 };
+        return {
+          top: rect.top,
+          bottom: rect.bottom,
+          left: rect.left,
+          right: rect.right,
+          centerX: rect.left + rect.width / 2,
+          centerY: rect.top + rect.height / 2,
+        };
       }
     }
     return null;
+  });
+}
+
+/** Right edge of the first visible page element, in viewport coordinates. */
+async function getPageRightEdge(page: import('@playwright/test').Page) {
+  return page.evaluate(() => {
+    const pageEl = document.querySelector('.layout-page') as HTMLElement | null;
+    if (!pageEl) return null;
+    return pageEl.getBoundingClientRect().right;
   });
 }
 
@@ -125,6 +141,68 @@ test.describe('Comment Button - Scroll Position (#185)', () => {
       // The difference between max and min drift should be small
       // Before the fix, this could be hundreds of pixels
       expect(maxDiff - minDiff).toBeLessThan(30);
+    }
+  });
+});
+
+test.describe('Comment Button - Geometry changes (#268 dedup)', () => {
+  // Regression guard for the state-identity dedup in
+  // PagedEditor.updateSelectionOverlay (#268). That fix stopped re-firing
+  // onSelectionChange on every overlay redraw, so geometry-driven callers
+  // like the floating comment button now subscribe to resize / zoom
+  // themselves. These tests verify they still track the selection.
+
+  let editor: EditorPage;
+
+  test.beforeEach(async ({ page }) => {
+    editor = new EditorPage(page);
+    await editor.goto();
+    await editor.waitForReady();
+    await editor.loadDocxFile(DEMO_DOCX_PATH);
+    await page.waitForSelector('.paged-editor__pages .layout-page', { timeout: 10000 });
+  });
+
+  test('floating button re-anchors to page right edge after window resize', async ({ page }) => {
+    // The button's left coord is computed from the page's right edge. Before
+    // the fix, resizing the window (which re-centers the page) left the button
+    // stranded at the OLD page edge while the page moved.
+    const selected = await editor.selectText('Demonstration');
+    expect(selected).toBe(true);
+    await page.waitForTimeout(300);
+
+    await page.setViewportSize({ width: 900, height: 700 });
+    await page.waitForTimeout(400);
+
+    const btn = await findCommentButton(page);
+    const pageRight = await getPageRightEdge(page);
+    expect(btn, 'button should still exist after resize').not.toBeNull();
+    expect(pageRight).not.toBeNull();
+
+    // Button is centered on the page right edge (transform: translate(-50%)).
+    // It must track within a few px of the current page right edge.
+    expect(
+      Math.abs(btn!.centerX - pageRight!),
+      `button centerX=${btn!.centerX} drifted from pageRight=${pageRight}`
+    ).toBeLessThan(20);
+  });
+
+  test('floating button tracks page right edge across multiple resize steps', async ({ page }) => {
+    const selected = await editor.selectText('Demonstration');
+    expect(selected).toBe(true);
+    await page.waitForTimeout(300);
+
+    for (const width of [1024, 800, 1400, 1100]) {
+      await page.setViewportSize({ width, height: 800 });
+      await page.waitForTimeout(300);
+
+      const btn = await findCommentButton(page);
+      const pageRight = await getPageRightEdge(page);
+      expect(btn, `button missing at width ${width}`).not.toBeNull();
+      expect(pageRight, `page right missing at width ${width}`).not.toBeNull();
+      expect(
+        Math.abs(btn!.centerX - pageRight!),
+        `button drifted from page edge at width ${width}: ${btn!.centerX} vs ${pageRight}`
+      ).toBeLessThan(20);
     }
   });
 });

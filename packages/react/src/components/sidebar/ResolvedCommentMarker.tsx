@@ -6,10 +6,16 @@ export interface ResolvedCommentMarkerProps extends SidebarItemRenderProps {
   comment: Comment;
 }
 
-export function ResolvedCommentMarker({ measureRef, onToggleExpand }: ResolvedCommentMarkerProps) {
+export function ResolvedCommentMarker({
+  comment,
+  measureRef,
+  onToggleExpand,
+}: ResolvedCommentMarkerProps) {
   return (
     <div
       ref={measureRef}
+      data-comment-id={comment.id}
+      data-comment-resolved="true"
       onClick={onToggleExpand}
       onMouseDown={(e) => e.stopPropagation()}
       style={{
