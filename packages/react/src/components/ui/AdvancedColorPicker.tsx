@@ -4,6 +4,7 @@ import type { ColorValue, Theme, ThemeColorScheme } from '@eigenpal/docx-core/ty
 import {
   generateThemeTintShadeMatrix,
   resolveColor,
+  resolveColorToHex,
   resolveHighlightColor,
 } from '@eigenpal/docx-core/utils/colorResolver';
 import type { ThemeMatrixCell } from '@eigenpal/docx-core/utils/colorResolver';
@@ -219,7 +220,7 @@ function isSelectedCell(
   const resolved =
     typeof value === 'string'
       ? value.replace(/^#/, '').toUpperCase()
-      : resolveColor(value, theme).replace(/^#/, '').toUpperCase();
+      : resolveColorToHex(value, theme);
   return resolved === cellHex.toUpperCase();
 }
 

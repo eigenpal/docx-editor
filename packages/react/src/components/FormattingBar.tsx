@@ -9,7 +9,7 @@ import React, { useCallback, useEffect, useRef } from 'react';
 import { useTranslation } from '../i18n';
 import type { ReactNode } from 'react';
 import type { ColorValue, ParagraphAlignment } from '@eigenpal/docx-core/types/document';
-import { resolveColor } from '@eigenpal/docx-core/utils/colorResolver';
+import { resolveColorToHex } from '@eigenpal/docx-core/utils/colorResolver';
 import { FontPicker } from './ui/FontPicker';
 import { FontSizePicker, halfPointsToPoints } from './ui/FontSizePicker';
 import { AdvancedColorPicker } from './ui/AdvancedColorPicker';
@@ -592,11 +592,7 @@ export function FormattingBar(explicitProps: FormattingBarProps) {
             onAction={handleTableAction}
             disabled={disabled}
             theme={theme}
-            value={
-              tableContext?.cellBorderColor
-                ? resolveColor(tableContext.cellBorderColor, theme).replace(/^#/, '')
-                : undefined
-            }
+            value={resolveColorToHex(tableContext?.cellBorderColor, theme)}
           />
           <TableBorderWidthPicker onAction={handleTableAction} disabled={disabled} />
           <TableCellFillPicker

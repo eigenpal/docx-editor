@@ -14,7 +14,7 @@ import {
   type ParsedClipboardContent,
 } from '@eigenpal/docx-core/utils/clipboard';
 import { getSelectionRuns, createSelectionFromDOM } from '@eigenpal/docx-core';
-import type { ClipboardSelection } from '@eigenpal/docx-core';
+import type { ClipboardSelection, Theme } from '@eigenpal/docx-core';
 
 // ============================================================================
 // RE-EXPORTS (backwards compat)
@@ -34,6 +34,8 @@ export interface UseClipboardOptions {
   cleanWordFormatting?: boolean;
   editable?: boolean;
   onError?: (error: Error) => void;
+  /** Document theme — used to resolve themed colors in the HTML clipboard payload. */
+  theme?: Theme | null;
 }
 
 export interface UseClipboardReturn {
@@ -53,7 +55,15 @@ export interface UseClipboardReturn {
 // ============================================================================
 
 export function useClipboard(options: UseClipboardOptions = {}): UseClipboardReturn {
-  const { onCopy, onCut, onPaste, cleanWordFormatting = true, editable = true, onError } = options;
+  const {
+    onCopy,
+    onCut,
+    onPaste,
+    cleanWordFormatting = true,
+    editable = true,
+    onError,
+    theme,
+  } = options;
 
   const isProcessingRef = useRef<boolean>(false);
   const lastPastedContentRef = useRef<ParsedClipboardContent | null>(null);
@@ -64,7 +74,7 @@ export function useClipboard(options: UseClipboardOptions = {}): UseClipboardRet
 
       isProcessingRef.current = true;
       try {
-        const success = await copyRuns(selection.runs, { onError });
+        const success = await copyRuns(selection.runs, { onError, theme });
         if (success) {
           onCopy?.(selection);
         }
@@ -73,7 +83,7 @@ export function useClipboard(options: UseClipboardOptions = {}): UseClipboardRet
         isProcessingRef.current = false;
       }
     },
-    [onCopy, onError]
+    [onCopy, onError, theme]
   );
 
   const cut = useCallback(
@@ -82,7 +92,7 @@ export function useClipboard(options: UseClipboardOptions = {}): UseClipboardRet
 
       isProcessingRef.current = true;
       try {
-        const success = await copyRuns(selection.runs, { onError });
+        const success = await copyRuns(selection.runs, { onError, theme });
         if (success) {
           onCut?.(selection);
         }
@@ -91,7 +101,7 @@ export function useClipboard(options: UseClipboardOptions = {}): UseClipboardRet
         isProcessingRef.current = false;
       }
     },
-    [onCut, editable, onError]
+    [onCut, editable, onError, theme]
   );
 
   const paste = useCallback(
@@ -144,7 +154,7 @@ export function useClipboard(options: UseClipboardOptions = {}): UseClipboardRet
 
       event.preventDefault();
 
-      const content = runsToClipboardContent(selection.runs);
+      const content = runsToClipboardContent(selection.runs, true, theme);
 
       if (event.clipboardData) {
         event.clipboardData.setData('text/plain', content.plainText);
@@ -156,7 +166,7 @@ export function useClipboard(options: UseClipboardOptions = {}): UseClipboardRet
 
       onCopy?.(selection);
     },
-    [onCopy]
+    [onCopy, theme]
   );
 
   const handleCut = useCallback(
@@ -168,7 +178,7 @@ export function useClipboard(options: UseClipboardOptions = {}): UseClipboardRet
 
       event.preventDefault();
 
-      const content = runsToClipboardContent(selection.runs);
+      const content = runsToClipboardContent(selection.runs, true, theme);
 
       if (event.clipboardData) {
         event.clipboardData.setData('text/plain', content.plainText);
@@ -180,7 +190,7 @@ export function useClipboard(options: UseClipboardOptions = {}): UseClipboardRet
 
       onCut?.(selection);
     },
-    [editable, onCut]
+    [editable, onCut, theme]
   );
 
   const handlePaste = useCallback(
