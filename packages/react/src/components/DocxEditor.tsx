@@ -3427,11 +3427,31 @@ body { background: white; }
       const existingRefs = sectionProps[refKey] ?? [];
       const newRef = { type: hdrFtrType as 'default' | 'first', rId };
 
+      // Register the rel so the serializer wires up content types + doc rels (#274).
+      const existingRels = pkg.relationships;
+      const usedTargets = new Set<string>();
+      for (const rel of existingRels?.values() ?? []) {
+        if (rel.target) usedTargets.add(rel.target);
+      }
+      let targetNum = 1;
+      while (usedTargets.has(`${position}${targetNum}.xml`)) targetNum++;
+      const relType =
+        position === 'header'
+          ? 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/header'
+          : 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/footer';
+      const newRelationships = new Map(existingRels);
+      newRelationships.set(rId, {
+        id: rId,
+        type: relType,
+        target: `${position}${targetNum}.xml`,
+      });
+
       const newDoc: Document = {
         ...history.state,
         package: {
           ...pkg,
           [mapKey]: newMap,
+          relationships: newRelationships,
           document: pkg.document
             ? {
                 ...pkg.document,

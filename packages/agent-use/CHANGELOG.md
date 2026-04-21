@@ -1,5 +1,11 @@
 # @eigenpal/docx-editor-agents
 
+## 0.0.35
+
+### Patch Changes
+
+- 4e20b77: Add `DocxReviewer.removeComment(id)` — removes a comment (and its replies when called on a top-level thread) along with its anchored range markers. Closes #252.
+
 ## 0.0.34
 
 ### Patch Changes
