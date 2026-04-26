@@ -384,6 +384,19 @@ export interface DocxEditorRef {
   getTotalPages: () => number;
   /** Scroll to a specific page */
   scrollToPage: (pageNumber: number) => void;
+  /**
+   * Scroll the paginated view to the paragraph with the given Word `w14:paraId`.
+   * @returns whether a matching paragraph exists in the ProseMirror document
+   * @example ref.current?.scrollToParaId('1A2B3C4D')
+   */
+  scrollToParaId: (paraId: string) => boolean;
+  /**
+   * Scroll the paginated view to a specific ProseMirror document position.
+   * Use this when you have a raw PM offset; for Word `w14:paraId` use
+   * `scrollToParaId` instead.
+   * @example ref.current?.scrollToPosition(42)
+   */
+  scrollToPosition: (pmPos: number) => void;
   /** Open print preview */
   openPrintPreview: () => void;
   /** Print the document directly */
@@ -3308,6 +3321,10 @@ body { background: white; }
       scrollToPage: (_pageNumber: number) => {
         // TODO: Implement page navigation in ProseMirror
       },
+      scrollToParaId: (paraId: string) => pagedEditorRef.current?.scrollToParaId(paraId) ?? false,
+      scrollToPosition: (pmPos: number) => {
+        pagedEditorRef.current?.scrollToPosition(pmPos);
+      },
       openPrintPreview: handleDirectPrint,
       print: handleDirectPrint,
       loadDocument: loadParsedDocument,
@@ -3774,6 +3791,7 @@ body { background: white; }
     minWidth: 0, // Allow flex item to shrink below content width on narrow viewports
     overflow: 'auto', // Sole scroll container — PagedEditor sizes to content
     position: 'relative',
+    overflowAnchor: 'none',
   };
 
   // Render loading state

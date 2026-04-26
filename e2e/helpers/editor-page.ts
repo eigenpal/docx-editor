@@ -101,7 +101,10 @@ export class EditorPage {
    * Navigate to the editor page
    */
   async goto(): Promise<void> {
-    await this.page.goto('/');
+    // ?e2e opts in to the window.__DOCX_EDITOR_E2E__ debug hooks (see
+    // examples/vite/src/App.tsx). Without it the hooks aren't installed,
+    // so production builds don't leak them.
+    await this.page.goto('/?e2e=1');
   }
 
   /**

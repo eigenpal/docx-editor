@@ -1,4 +1,5 @@
 import React, { useState, useRef, useCallback, useEffect, useMemo } from 'react';
+import { findStartPosForParaId } from '@eigenpal/docx-core';
 import { DocxEditor, type DocxEditorRef, createEmptyDocument } from '@eigenpal/docx-js-editor';
 import { ExampleSwitcher } from '../../shared/ExampleSwitcher';
 import { GitHubBadge } from '../../shared/GitHubBadge';
@@ -94,6 +95,57 @@ export function App() {
   const [status, setStatus] = useState<string>('');
 
   const { zoom: autoZoom, isMobile } = useResponsiveLayout();
+
+  useEffect(() => {
+    // Only expose Playwright/E2E hooks under an explicit opt-in. Otherwise
+    // this leaks an internal API into the public demo at docx-editor.dev.
+    // Opt-in: ?e2e=1 in URL, MODE=test, or VITE_DOCX_EDITOR_E2E=1.
+    if (typeof window === 'undefined') return;
+    const params = new URLSearchParams(window.location.search);
+    const env = import.meta.env;
+    const isE2E =
+      params.get('e2e') === '1' || env.MODE === 'test' || env.VITE_DOCX_EDITOR_E2E === '1';
+    if (!isE2E) return;
+    window.__DOCX_EDITOR_E2E__ = {
+      getPmStartForParaId: (paraId: string) => {
+        const state = editorRef.current?.getEditorRef()?.getState?.();
+        if (!state || !paraId) return null;
+        return findStartPosForParaId(state.doc, paraId);
+      },
+      getFirstTextblockParaId: () => {
+        const view = editorRef.current?.getEditorRef()?.getView?.();
+        if (!view) return null;
+        let found: string | null = null;
+        view.state.doc.descendants((node) => {
+          if (node.isTextblock && node.attrs?.paraId) {
+            found = String(node.attrs.paraId);
+            return false;
+          }
+          return true;
+        });
+        return found;
+      },
+      getLastTextblockParaId: () => {
+        const view = editorRef.current?.getEditorRef()?.getView?.();
+        if (!view) return null;
+        let found: string | null = null;
+        view.state.doc.descendants((node) => {
+          if (node.isTextblock && node.attrs?.paraId) {
+            found = String(node.attrs.paraId);
+          }
+          return true;
+        });
+        return found;
+      },
+      scrollToParaId: (paraId: string) => editorRef.current?.scrollToParaId(paraId) ?? false,
+      scrollToPosition: (pmPos: number) => {
+        editorRef.current?.scrollToPosition(pmPos);
+      },
+    };
+    return () => {
+      delete window.__DOCX_EDITOR_E2E__;
+    };
+  }, []);
 
   useEffect(() => {
     fetch('/docx-editor-demo.docx')
