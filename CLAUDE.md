@@ -316,6 +316,24 @@ Two packages publish in lockstep via a Changesets fixed group:
 
 `@eigenpal/docx-core` is private and never published; `@eigenpal/docx-editor-vue` is private/community and ignored by the release flow.
 
+### Every code-touching PR must include a changeset
+
+If a PR touches anything that ships in the published packages — features, fixes, perf, docs that go in npm, types, public API — **add a Changesets entry before opening it**. Test-only / docs-only / CI-only PRs may skip it.
+
+```bash
+bun changeset       # interactive: pick the bump (patch/minor/major) and write a short summary
+```
+
+This creates `.changeset/<random-name>.md` describing the change. Commit it with the rest of the PR. The release workflow consumes these on the next release. Without one, the change ships invisibly — no CHANGELOG entry, no version bump triggered.
+
+Bump rules (Changesets standard):
+
+- **patch** — bug fix, internal refactor, no public API change
+- **minor** — new feature or new public API (additive, backward compatible)
+- **major** — breaking change to existing public API
+
+When unsure, prefer the smaller bump and call out the reasoning in the changeset summary.
+
 ### How to cut a release
 
 GitHub → **Actions** → **Release** → **Run workflow**:

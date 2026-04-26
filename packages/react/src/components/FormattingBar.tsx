@@ -11,6 +11,7 @@ import type { ReactNode } from 'react';
 import type { ColorValue, ParagraphAlignment } from '@eigenpal/docx-core/types/document';
 import { resolveColorToHex } from '@eigenpal/docx-core/utils/colorResolver';
 import { FontPicker } from './ui/FontPicker';
+import { normalizeFontFamilies } from './ui/normalizeFontFamilies';
 import { FontSizePicker, halfPointsToPoints } from './ui/FontSizePicker';
 import { AdvancedColorPicker } from './ui/AdvancedColorPicker';
 import { AlignmentButtons } from './ui/AlignmentButtons';
@@ -85,6 +86,7 @@ export function FormattingBar(explicitProps: FormattingBarProps) {
     editorRef,
     children,
     showFontPicker = true,
+    fontFamilies,
     showFontSizePicker = true,
     showTextColorPicker = true,
     showHighlightColorPicker = true,
@@ -141,6 +143,8 @@ export function FormattingBar(explicitProps: FormattingBarProps) {
     },
     [disabled, onFormat, onRefocusEditor]
   );
+
+  const normalizedFonts = React.useMemo(() => normalizeFontFamilies(fontFamilies), [fontFamilies]);
 
   const handleFontSizeChange = useCallback(
     (sizeInPoints: number) => {
@@ -412,6 +416,7 @@ export function FormattingBar(explicitProps: FormattingBarProps) {
             <FontPicker
               value={currentFormatting.fontFamily || 'Arial'}
               onChange={handleFontFamilyChange}
+              fonts={normalizedFonts}
               disabled={disabled}
               width={60}
               placeholder="Arial"

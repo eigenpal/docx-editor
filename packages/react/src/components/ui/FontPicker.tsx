@@ -168,6 +168,22 @@ export function FontPicker({
             </SelectGroup>
           </>
         )}
+        {groupedFonts['other'].length > 0 && (
+          <>
+            <SelectSeparator />
+            <SelectGroup>
+              {groupedFonts['other'].map((font) => (
+                <SelectItem
+                  key={font.name}
+                  value={font.name}
+                  style={showPreview ? { fontFamily: font.fontFamily } : undefined}
+                >
+                  {font.name}
+                </SelectItem>
+              ))}
+            </SelectGroup>
+          </>
+        )}
       </SelectContent>
     </Select>
   );
