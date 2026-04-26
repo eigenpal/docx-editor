@@ -336,22 +336,21 @@ When in doubt, pick `patch`. `changeset version` will resolve to the highest bum
 
 ### How to cut a release
 
-The release workflow takes a `bump` input (default `patch`) plus an optional free-form `summary`. The operator's chosen bump generates an additional ad-hoc changeset; `changeset version` then drains that ad-hoc one **plus** every per-PR `.changeset/*.md` and consolidates them into the CHANGELOG. The final version bump is the highest level among all of them (operator-picked + per-PR).
+The release workflow takes a `bump` input (default `patch`). The operator's chosen bump generates an ad-hoc changeset with an **empty body** — its only purpose is to force a minimum bump level. `changeset version` then drains the ad-hoc one **plus** every per-PR `.changeset/*.md` and writes the CHANGELOG from the per-PR entries (the ad-hoc one contributes nothing because its body is empty). The final version bump is the highest level across all changesets.
 
 GitHub → **Actions** → **Release** → **Run workflow**:
 
-| Input     | Value                                                                         |
-| --------- | ----------------------------------------------------------------------------- |
-| Branch    | `main` (real publishes only run from `main`)                                  |
-| `bump`    | `patch` (default) / `minor` / `major` — the operator's intended baseline bump |
-| `summary` | one-line CHANGELOG entry for the operator-picked bump (defaults to `Release`) |
-| `dry-run` | `true` to validate the pipeline without publishing or pushing                 |
+| Input     | Value                                                               |
+| --------- | ------------------------------------------------------------------- |
+| Branch    | `main` (real publishes only run from `main`)                        |
+| `bump`    | `patch` (default) / `minor` / `major` — forces a minimum bump level |
+| `dry-run` | `true` to validate the pipeline without publishing or pushing       |
 
 The workflow:
 
 1. Typecheck + tests
-2. Generates an ad-hoc changeset for the fixed group (`scripts/create-release-changeset.mjs`) using the operator's `bump` + `summary`
-3. `changeset version` bumps both packages to `max(ad-hoc, per-PR changesets)` and writes CHANGELOGs from all entries
+2. Generates a body-less ad-hoc changeset for the fixed group (`scripts/create-release-changeset.mjs`) at the operator's `bump`
+3. `changeset version` bumps both packages to `max(ad-hoc, per-PR changesets)` and writes CHANGELOGs from the per-PR entries
 4. Commits `chore: release X.Y.Z (bump)` and pushes to `main`
 5. `changeset publish` publishes both packages to npm with provenance via OIDC Trusted Publishing (no `NPM_TOKEN` needed)
 6. Pushes git tags + creates a GitHub Release with the new CHANGELOG section
@@ -370,9 +369,9 @@ The workflow:
 Don't. Use the workflow. If you must, the underlying scripts are:
 
 ```bash
-bun run release:changeset patch "summary"  # generate operator changeset
-bun run version-packages                    # apply versions + CHANGELOG
-bun run release                             # build + changeset publish
+bun run release:changeset patch  # generate body-less ad-hoc changeset
+bun run version-packages         # apply versions + CHANGELOG
+bun run release                  # build + changeset publish
 ```
 
 ---

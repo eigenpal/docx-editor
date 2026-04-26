@@ -12,11 +12,6 @@ on:
           - patch
           - minor
           - major
-      summary:
-        description: 'Release summary (used in CHANGELOG)'
-        required: false
-        default: 'Release'
-        type: string
       dry-run:
         description: 'Dry run (no publish, no push)'
         required: false
@@ -79,8 +74,7 @@ jobs:
       - name: Generate release changeset
         env:
           BUMP: ${{ inputs.bump }}
-          SUMMARY: ${{ inputs.summary }}
-        run: bun run release:changeset "$BUMP" "$SUMMARY"
+        run: bun run release:changeset "$BUMP"
 
       - name: Apply versions
         run: bun run version-packages
