@@ -31,7 +31,6 @@
     "changeset": "changeset",
     "version-packages": "changeset version",
     "release": "bun run build && changeset publish",
-    "release:changeset": "node scripts/create-release-changeset.mjs",
     "prepare": "husky"
   },
   "devDependencies": {

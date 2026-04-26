@@ -1,22 +1,19 @@
 name: Release
 
+# Two triggers, single job:
+# 1. Every push to main → if there are pending changesets in `.changeset/`,
+#    open or update a "chore: release" PR with the version bumps and CHANGELOG
+#    entries applied. The PR sits there until a maintainer merges it.
+# 2. When that PR is merged → the same job runs again, sees no pending
+#    changesets (they were drained by `changeset version`), and instead
+#    publishes the new versions to npm.
+#
+# Manual workflow_dispatch is kept for the rare case of triggering a publish
+# without a fresh push (e.g. recovering from a failed publish step).
 on:
+  push:
+    branches: [main]
   workflow_dispatch:
-    inputs:
-      bump:
-        description: 'Version bump'
-        required: true
-        default: 'patch'
-        type: choice
-        options:
-          - patch
-          - minor
-          - major
-      dry-run:
-        description: 'Dry run (no publish, no push)'
-        required: false
-        default: false
-        type: boolean
 
 concurrency:
   group: release
@@ -24,13 +21,12 @@ concurrency:
 
 jobs:
   release:
-    name: Release ${{ inputs.bump }}
-    # Real publishes only from main; dry-runs allowed from any branch.
-    if: ${{ inputs.dry-run || github.ref == 'refs/heads/main' }}
+    name: Release
     runs-on: ubuntu-latest
     permissions:
-      contents: write
-      id-token: write
+      contents: write       # push tags, create GitHub Releases
+      pull-requests: write  # changesets/action opens / updates the release PR
+      id-token: write       # OIDC for npm Trusted Publishing
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -44,8 +40,6 @@ jobs:
           bun-version: '1.3.11'
 
       # Node 24 ships with npm 11.x; Trusted Publishing requires >=11.5.1.
-      # We print the version below to surface a mismatch early if a Node 24
-      # patch ever ships an older npm.
       - name: Setup Node.js
         uses: actions/setup-node@v6
         with:
@@ -71,155 +65,47 @@ jobs:
       - name: Run tests
         run: bun test
 
-      - name: Generate release changeset
-        env:
-          BUMP: ${{ inputs.bump }}
-        run: bun run release:changeset "$BUMP"
-
-      - name: Apply versions
-        run: bun run version-packages
-
-      - name: Capture new version
-        id: version
-        run: |
-          version=$(node -p "require('./packages/react/package.json').version")
-          echo "value=$version" >> "$GITHUB_OUTPUT"
-          echo "Releasing $version"
-
-      - name: Notify Slack — release started
-        if: ${{ env.SLACK_WEBHOOK_URL != '' }}
-        env:
-          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
-          VERSION: ${{ steps.version.outputs.value }}
-          BUMP: ${{ inputs.bump }}
-          DRY_RUN: ${{ inputs.dry-run }}
-          ACTOR: ${{ github.actor }}
-          SHA: ${{ github.sha }}
-          RUN_NUMBER: ${{ github.run_number }}
-          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-        run: |
-          short_sha="${SHA:0:12}"
-          title=":rocket: docx-editor release started"
-          if [ "$DRY_RUN" = "true" ]; then title="$title (dry-run)"; fi
-          payload=$(jq -n \
-            --arg title "$title" \
-            --arg version "$VERSION" \
-            --arg bump "$BUMP" \
-            --arg sha "$short_sha" \
-            --arg actor "$ACTOR" \
-            --arg run_n "$RUN_NUMBER" \
-            --arg run_url "$RUN_URL" \
-            '{
-              text: $title,
-              blocks: [
-                { type: "section", text: { type: "mrkdwn", text: "*\($title)*" } },
-                { type: "section", fields: [
-                  { type: "mrkdwn", text: "*Version*\n\($version) (`\($bump)`)" },
-                  { type: "mrkdwn", text: "*Commit*\n`\($sha)`" },
-                  { type: "mrkdwn", text: "*Triggered by*\n\($actor)" },
-                  { type: "mrkdwn", text: "*Run*\n<\($run_url)|#\($run_n)>" }
-                ] }
-              ]
-            }')
-          curl -sSf -X POST -H 'Content-Type: application/json' -d "$payload" "$SLACK_WEBHOOK_URL" >/dev/null
-
-      - name: Show diff
-        run: git --no-pager diff --stat
-
-      - name: Build (always, before publish or pack-dry-run)
+      - name: Build (always — the release PR's CI uses this and publish reuses the dist/)
         run: bun run build
 
-      - name: Pack dry-run (no publish)
-        if: ${{ inputs.dry-run }}
+      # The single step that does both PR-management and publishing.
+      # - If `.changeset/*.md` are pending: opens / updates a "chore: release X.Y.Z" PR
+      #   that runs `version` (drains changesets, bumps versions, writes CHANGELOG).
+      # - If no pending changesets and current package.json versions aren't on npm yet:
+      #   runs `publish` and creates per-package git tags.
+      - name: Release PR or Publish
+        id: changesets
+        uses: changesets/action@v1
+        with:
+          version: bun run version-packages
+          publish: bunx changeset publish
+          title: 'chore: release'
+          commit: 'chore: release'
         env:
-          VERSION: ${{ steps.version.outputs.value }}
-        run: |
-          echo "::group::Pack dry-run: @eigenpal/docx-js-editor"
-          (cd packages/react && npm pack --dry-run --ignore-scripts)
-          echo "::endgroup::"
-          echo "::group::Pack dry-run: @eigenpal/docx-editor-agents"
-          (cd packages/agent-use && npm pack --dry-run --ignore-scripts)
-          echo "::endgroup::"
-          echo ""
-          echo "✓ Dry run complete. Would publish at $VERSION:"
-          echo "  - @eigenpal/docx-js-editor@$VERSION"
-          echo "  - @eigenpal/docx-editor-agents@$VERSION"
-
-      - name: Commit version bump and tag
-        if: ${{ !inputs.dry-run }}
-        env:
-          BUMP: ${{ inputs.bump }}
-          VERSION: ${{ steps.version.outputs.value }}
-        run: |
-          git add -A
-          git commit -m "chore: release $VERSION ($BUMP)"
-          git tag -a "$VERSION" -m "Release $VERSION"
-
-      - name: Push version commit + tag
-        if: ${{ !inputs.dry-run }}
-        run: git push --follow-tags origin "HEAD:${{ github.ref_name }}"
-
-      # Skip the build inside `bun run release` (we already built above) by
-      # invoking changeset publish directly. Trusted Publishing handles auth
-      # via OIDC; no NPM_TOKEN needed.
-      - name: Publish to npm (Trusted Publishing via OIDC)
-        if: ${{ !inputs.dry-run }}
-        run: bunx changeset publish
-        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           NPM_CONFIG_PROVENANCE: 'true'
 
-      # Pushes the per-package tags that `changeset publish` creates locally
-      # (e.g. @eigenpal/docx-js-editor@0.0.36). !cancelled() so partial tags
-      # still ship if publish failed mid-flight.
-      - name: Push package tags
-        if: ${{ !inputs.dry-run && !cancelled() }}
-        run: git push origin --tags
-
-      - name: Create GitHub Release
-        if: ${{ success() && !inputs.dry-run }}
-        env:
-          VERSION: ${{ steps.version.outputs.value }}
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          notes_body=$(awk -v ver="$VERSION" '
-            $0 == "## " ver { found=1; next }
-            found && /^## [0-9]/ { exit }
-            found { print }
-          ' packages/react/CHANGELOG.md)
-          if [ -z "$notes_body" ]; then
-            notes_body="Release $VERSION"
-          fi
-          {
-            echo "**Packages**"
-            echo "- [\`@eigenpal/docx-js-editor@$VERSION\`](https://www.npmjs.com/package/@eigenpal/docx-js-editor/v/$VERSION)"
-            echo "- [\`@eigenpal/docx-editor-agents@$VERSION\`](https://www.npmjs.com/package/@eigenpal/docx-editor-agents/v/$VERSION)"
-            echo ""
-            echo "$notes_body"
-          } > release-notes.md
-          gh release create "$VERSION" \
-            --title "$VERSION" \
-            --notes-file release-notes.md
-
       - name: Notify Slack — release succeeded
-        if: ${{ success() && !inputs.dry-run && env.SLACK_WEBHOOK_URL != '' }}
+        if: ${{ steps.changesets.outputs.published == 'true' && env.SLACK_WEBHOOK_URL != '' }}
         env:
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
-          VERSION: ${{ steps.version.outputs.value }}
-          BUMP: ${{ inputs.bump }}
+          PUBLISHED_PACKAGES: ${{ steps.changesets.outputs.publishedPackages }}
           ACTOR: ${{ github.actor }}
           RUN_NUMBER: ${{ github.run_number }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-          RELEASE_URL: ${{ github.server_url }}/${{ github.repository }}/releases/tag/${{ steps.version.outputs.value }}
         run: |
-          editor_url="https://www.npmjs.com/package/@eigenpal/docx-js-editor/v/$VERSION"
-          agents_url="https://www.npmjs.com/package/@eigenpal/docx-editor-agents/v/$VERSION"
+          # publishedPackages is JSON like:
+          # [{"name":"@eigenpal/docx-js-editor","version":"0.1.0"}, ...]
+          version=$(echo "$PUBLISHED_PACKAGES" | jq -r '.[0].version')
+          editor_url="https://www.npmjs.com/package/@eigenpal/docx-js-editor/v/$version"
+          agents_url="https://www.npmjs.com/package/@eigenpal/docx-editor-agents/v/$version"
+          release_url="${{ github.server_url }}/${{ github.repository }}/releases/tag/v$version"
           payload=$(jq -n \
-            --arg version "$VERSION" \
-            --arg bump "$BUMP" \
+            --arg version "$version" \
             --arg actor "$ACTOR" \
             --arg run_n "$RUN_NUMBER" \
             --arg run_url "$RUN_URL" \
-            --arg release "$RELEASE_URL" \
+            --arg release "$release_url" \
             --arg editor "$editor_url" \
             --arg agents "$agents_url" \
             '{
@@ -227,7 +113,7 @@ jobs:
               blocks: [
                 { type: "section", text: { type: "mrkdwn", text: ":white_check_mark: *docx-editor \($version) released*" } },
                 { type: "section", fields: [
-                  { type: "mrkdwn", text: "*Version*\n<\($release)|\($version)> (`\($bump)`)" },
+                  { type: "mrkdwn", text: "*Version*\n<\($release)|\($version)>" },
                   { type: "mrkdwn", text: "*Triggered by*\n\($actor)" }
                 ] },
                 { type: "section", text: { type: "mrkdwn",
@@ -241,30 +127,19 @@ jobs:
         if: ${{ failure() && env.SLACK_WEBHOOK_URL != '' }}
         env:
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
-          VERSION: ${{ steps.version.outputs.value }}
-          BUMP: ${{ inputs.bump }}
-          DRY_RUN: ${{ inputs.dry-run }}
           ACTOR: ${{ github.actor }}
           RUN_NUMBER: ${{ github.run_number }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
-          title=":x: docx-editor release failed"
-          if [ "$DRY_RUN" = "true" ]; then title="$title (dry-run)"; fi
-          version_field="$VERSION"
-          if [ -z "$version_field" ]; then version_field="(not yet computed)"; fi
           payload=$(jq -n \
-            --arg title "$title" \
-            --arg version "$version_field" \
-            --arg bump "$BUMP" \
             --arg actor "$ACTOR" \
             --arg run_n "$RUN_NUMBER" \
             --arg run_url "$RUN_URL" \
             '{
-              text: $title,
+              text: ":x: docx-editor release failed",
               blocks: [
-                { type: "section", text: { type: "mrkdwn", text: "*\($title)*" } },
+                { type: "section", text: { type: "mrkdwn", text: "*:x: docx-editor release failed*" } },
                 { type: "section", fields: [
-                  { type: "mrkdwn", text: "*Version*\n\($version) (`\($bump)`)" },
                   { type: "mrkdwn", text: "*Triggered by*\n\($actor)" },
                   { type: "mrkdwn", text: "*Run*\n<\($run_url)|#\($run_n)>" }
                 ] }

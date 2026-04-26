@@ -336,25 +336,18 @@ When in doubt, pick `patch`. `changeset version` will resolve to the highest bum
 
 ### How to cut a release
 
-The release workflow takes a `bump` input (default `patch`). The operator's chosen bump generates an ad-hoc changeset with an **empty body** — its only purpose is to force a minimum bump level. `changeset version` then drains the ad-hoc one **plus** every per-PR `.changeset/*.md` and writes the CHANGELOG from the per-PR entries (the ad-hoc one contributes nothing because its body is empty). The final version bump is the highest level across all changesets.
+The release flow uses [`changesets/action@v1`](https://github.com/changesets/action). Bump levels and CHANGELOG entries come entirely from per-PR `.changeset/*.md` files. There's no operator-picked `bump` and no ad-hoc summary.
 
-GitHub → **Actions** → **Release** → **Run workflow**:
+Two-phase flow, both phases run by the same workflow on every push to `main`:
 
-| Input     | Value                                                               |
-| --------- | ------------------------------------------------------------------- |
-| Branch    | `main` (real publishes only run from `main`)                        |
-| `bump`    | `patch` (default) / `minor` / `major` — forces a minimum bump level |
-| `dry-run` | `true` to validate the pipeline without publishing or pushing       |
+1. **Release PR phase.** When pending changesets exist, the workflow opens (or updates) a PR titled `chore: release` containing the version bumps and CHANGELOG entries. Maintainer reviews and merges.
+2. **Publish phase.** When the release PR is merged, the workflow runs again. No pending changesets remain (they were drained by `changeset version` in the PR), so the action publishes the new versions to npm via OIDC Trusted Publishing and creates per-package git tags.
 
-The workflow:
+This pattern means the bot never force-pushes to `main` — it just opens PRs and publishes on merge. No branch-protection bypass needed.
 
-1. Typecheck + tests
-2. Generates a body-less ad-hoc changeset for the fixed group (`scripts/create-release-changeset.mjs`) at the operator's `bump`
-3. `changeset version` bumps both packages to `max(ad-hoc, per-PR changesets)` and writes CHANGELOGs from the per-PR entries
-4. Commits `chore: release X.Y.Z (bump)` and pushes to `main`
-5. `changeset publish` publishes both packages to npm with provenance via OIDC Trusted Publishing (no `NPM_TOKEN` needed)
-6. Pushes git tags + creates a GitHub Release with the new CHANGELOG section
-7. Posts Slack notifications (start / success-with-package-links / failure)
+GitHub → **Actions** → **Release** → **Run workflow** is a manual fallback (e.g. for re-trying a failed publish). The workflow normally runs automatically on every push to `main`.
+
+If anything goes wrong (e.g. publish step crashed mid-flight), re-running the workflow on `main` is safe — `changeset publish` is idempotent and only publishes versions that aren't on npm yet.
 
 ### First-time setup
 
@@ -369,9 +362,8 @@ The workflow:
 Don't. Use the workflow. If you must, the underlying scripts are:
 
 ```bash
-bun run release:changeset patch  # generate body-less ad-hoc changeset
-bun run version-packages         # apply versions + CHANGELOG
-bun run release                  # build + changeset publish
+bun run version-packages   # consume .changeset/*.md → bump versions + CHANGELOG
+bun run release            # build + changeset publish
 ```
 
 ---
