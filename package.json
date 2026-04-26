@@ -76,7 +76,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/eigenpal/docx-js-editor.git"
+    "url": "https://github.com/eigenpal/docx-editor.git"
   },
   "publishConfig": {
     "access": "public"
