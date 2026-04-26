@@ -336,23 +336,25 @@ When unsure, prefer the smaller bump and call out the reasoning in the changeset
 
 ### How to cut a release
 
+The bump level (patch/minor/major) and CHANGELOG entries come from the per-PR changesets that have accumulated since the last release. The workflow itself takes no version inputs — it just consumes whatever's in `.changeset/` and bumps to the highest level among them.
+
 GitHub → **Actions** → **Release** → **Run workflow**:
 
 | Input     | Value                                                         |
 | --------- | ------------------------------------------------------------- |
 | Branch    | `main` (real publishes only run from `main`)                  |
-| `bump`    | `patch` / `minor` / `major` (default `patch`)                 |
-| `summary` | one-line CHANGELOG entry (optional, defaults to `Release`)    |
 | `dry-run` | `true` to validate the pipeline without publishing or pushing |
+
+If no pending changesets are in `.changeset/`, the workflow fails fast with a clear error — there's nothing to release.
 
 The workflow:
 
 1. Typecheck + tests
-2. Generates an ad-hoc changeset for the fixed group (`scripts/create-release-changeset.mjs`)
-3. `changeset version` bumps both packages and updates CHANGELOGs
-4. Commits `chore: release vX.Y.Z (bump)` and pushes to `main`
+2. Verifies pending changesets exist (`.changeset/*.md` other than `README.md`)
+3. `changeset version` bumps both packages, drains the changeset queue, and writes CHANGELOGs from the per-PR entries
+4. Commits `chore: release X.Y.Z` and pushes to `main`
 5. `changeset publish` publishes both packages to npm with provenance via OIDC Trusted Publishing (no `NPM_TOKEN` needed)
-6. Pushes git tags
+6. Pushes git tags + creates a GitHub Release with the new CHANGELOG section
 7. Posts Slack notifications (start / success-with-package-links / failure)
 
 ### First-time setup
@@ -368,9 +370,8 @@ The workflow:
 Don't. Use the workflow. If you must, the underlying scripts are:
 
 ```bash
-bun run release:changeset patch "summary"   # generate changeset
-bun run version-packages                     # apply versions + CHANGELOG
-bun run release                              # build + changeset publish
+bun run version-packages   # consume .changeset/*.md → bump versions + CHANGELOG
+bun run release            # build + changeset publish
 ```
 
 ---
