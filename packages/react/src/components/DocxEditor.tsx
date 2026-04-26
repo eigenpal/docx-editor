@@ -51,8 +51,8 @@ import type { Comment, BlockContent, ParagraphContent } from '@eigenpal/docx-cor
 import { ErrorBoundary, ErrorProvider } from './ErrorBoundary';
 import type { TableAction } from './ui/TableToolbar';
 import { mapHexToHighlightName } from './toolbarUtils';
-import { LocaleProvider } from '../i18n';
-import type { Translations } from '../i18n';
+import { LocaleProvider, useTranslation } from '../i18n';
+import type { Translations, TranslationKey } from '../i18n';
 import { HorizontalRuler } from './ui/HorizontalRuler';
 import { VerticalRuler } from './ui/VerticalRuler';
 import { type PrintOptions } from './ui/PrintPreview';
@@ -463,26 +463,79 @@ interface EditorState {
 
 export type EditorMode = 'editing' | 'suggesting' | 'viewing';
 
-const EDITING_MODES: readonly { value: EditorMode; label: string; icon: string; desc: string }[] = [
+type EditingModeDef = {
+  value: EditorMode;
+  labelKey: TranslationKey;
+  icon: string;
+  descKey: TranslationKey;
+};
+
+const EDITING_MODES: readonly EditingModeDef[] = [
   {
     value: 'editing',
-    label: 'Editing',
+    labelKey: 'editor.editing',
     icon: 'edit_note',
-    desc: 'Edit document directly',
+    descKey: 'editor.editingDescription',
   },
   {
     value: 'suggesting',
-    label: 'Suggesting',
+    labelKey: 'editor.suggesting',
     icon: 'rate_review',
-    desc: 'Edits become suggestions',
+    descKey: 'editor.suggestingDescription',
   },
   {
     value: 'viewing',
-    label: 'Viewing',
+    labelKey: 'editor.viewing',
     icon: 'visibility',
-    desc: 'Read-only, no edits',
+    descKey: 'editor.viewingDescription',
   },
 ];
+
+/**
+ * Wrapper for the comments-sidebar toggle so the button title runs through
+ * `t()` — `useTranslation()` only works for components rendered *inside*
+ * `<LocaleProvider>`, which `DocxEditor`'s own body is not.
+ */
+function CommentsSidebarToggle({ active, onClick }: { active: boolean; onClick: () => void }) {
+  const { t } = useTranslation();
+  const title = t('editor.toggleCommentsSidebar');
+  return (
+    <ToolbarButton onClick={onClick} active={active} title={title} ariaLabel={title}>
+      <MaterialSymbol name="comment" size={20} />
+    </ToolbarButton>
+  );
+}
+
+/**
+ * Outline toggle — same reason as `CommentsSidebarToggle`: needs to render
+ * inside `<LocaleProvider>` to see the user's `i18n` prop.
+ */
+function OutlineToggleButton({ onClick, topPx }: { onClick: () => void; topPx: number }) {
+  const { t } = useTranslation();
+  return (
+    <button
+      className="docx-outline-nav"
+      onClick={onClick}
+      onMouseDown={(e) => e.stopPropagation()}
+      title={t('editor.showDocumentOutline')}
+      style={{
+        position: 'absolute',
+        left: 48,
+        top: topPx,
+        zIndex: 20,
+        background: 'transparent',
+        border: 'none',
+        borderRadius: '50%',
+        padding: 6,
+        cursor: 'pointer',
+        display: 'flex',
+        alignItems: 'center',
+      }}
+    >
+      <MaterialSymbol name="format_list_bulleted" size={20} style={{ color: '#444746' }} />
+    </button>
+  );
+}
 
 function EditingModeDropdown({
   mode,
@@ -491,6 +544,7 @@ function EditingModeDropdown({
   mode: EditorMode;
   onModeChange: (mode: EditorMode) => void;
 }) {
+  const { t } = useTranslation();
   const [isOpen, setIsOpen] = useState(false);
   const [compact, setCompact] = useState(false);
   const triggerRef = useRef<HTMLButtonElement>(null);
@@ -543,7 +597,7 @@ function EditingModeDropdown({
         type="button"
         onMouseDown={(e) => e.preventDefault()}
         onClick={() => setIsOpen(!isOpen)}
-        title={`${current.label} (Ctrl+Shift+E)`}
+        title={`${t(current.labelKey)} (Ctrl+Shift+E)`}
         style={{
           display: 'flex',
           alignItems: 'center',
@@ -561,7 +615,7 @@ function EditingModeDropdown({
         }}
       >
         <MaterialSymbol name={current.icon} size={18} />
-        {!compact && <span>{current.label}</span>}
+        {!compact && <span>{t(current.labelKey)}</span>}
         <MaterialSymbol name="arrow_drop_down" size={16} />
       </button>
 
@@ -614,9 +668,9 @@ function EditingModeDropdown({
             >
               <MaterialSymbol name={m.icon} size={20} />
               <span style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>
-                <span style={{ fontWeight: 500 }}>{m.label}</span>
+                <span style={{ fontWeight: 500 }}>{t(m.labelKey)}</span>
                 <span style={{ fontSize: 11, color: 'var(--doc-text-muted, #9ca3af)' }}>
-                  {m.desc}
+                  {t(m.descKey)}
                 </span>
               </span>
               {m.value === mode && (
@@ -3856,19 +3910,15 @@ body { background: white; }
   const toolbarChildren = (
     <>
       <ToolbarSeparator />
-      <ToolbarButton
+      <CommentsSidebarToggle
+        active={showCommentsSidebar}
         onClick={() => {
           // Also reset expansion so reshowing the sidebar lands on the default
           // collapsed state — resolved threads stay as checkmarks, not opened.
           setShowCommentsSidebar((v) => !v);
           setExpandedSidebarItem(null);
         }}
-        active={showCommentsSidebar}
-        title="Toggle comments sidebar"
-        ariaLabel="Toggle comments sidebar"
-      >
-        <MaterialSymbol name="comment" size={20} />
-      </ToolbarButton>
+      />
       {/* Resolved comments use margin markers instead of toolbar toggle */}
       <ToolbarSeparator />
       <EditingModeDropdown
@@ -4342,31 +4392,7 @@ body { background: white; }
 
                 {/* Outline toggle button — absolutely positioned below toolbar */}
                 {showOutlineButton && !showOutline && (
-                  <button
-                    className="docx-outline-nav"
-                    onClick={handleToggleOutline}
-                    onMouseDown={(e) => e.stopPropagation()}
-                    title="Show document outline"
-                    style={{
-                      position: 'absolute',
-                      left: 48,
-                      top: toolbarHeight + 12,
-                      zIndex: 20,
-                      background: 'transparent',
-                      border: 'none',
-                      borderRadius: '50%',
-                      padding: 6,
-                      cursor: 'pointer',
-                      display: 'flex',
-                      alignItems: 'center',
-                    }}
-                  >
-                    <MaterialSymbol
-                      name="format_list_bulleted"
-                      size={20}
-                      style={{ color: '#444746' }}
-                    />
-                  </button>
+                  <OutlineToggleButton onClick={handleToggleOutline} topPx={toolbarHeight + 12} />
                 )}
               </div>
               {/* end wrapper for scroll container + outline */}
