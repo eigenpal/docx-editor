@@ -307,6 +307,56 @@ Full contribution guide: `docs/i18n.md`
 
 ---
 
+## Releasing
+
+Two packages publish in lockstep via a Changesets fixed group:
+
+- `@eigenpal/docx-js-editor` (`packages/react`)
+- `@eigenpal/docx-editor-agents` (`packages/agent-use`)
+
+`@eigenpal/docx-core` is private and never published; `@eigenpal/docx-editor-vue` is private/community and ignored by the release flow.
+
+### How to cut a release
+
+GitHub → **Actions** → **Release** → **Run workflow**:
+
+| Input     | Value                                                         |
+| --------- | ------------------------------------------------------------- |
+| Branch    | `main` (real publishes only run from `main`)                  |
+| `bump`    | `patch` / `minor` / `major` (default `patch`)                 |
+| `summary` | one-line CHANGELOG entry (optional, defaults to `Release`)    |
+| `dry-run` | `true` to validate the pipeline without publishing or pushing |
+
+The workflow:
+
+1. Typecheck + tests
+2. Generates an ad-hoc changeset for the fixed group (`scripts/create-release-changeset.mjs`)
+3. `changeset version` bumps both packages and updates CHANGELOGs
+4. Commits `chore: release vX.Y.Z (bump)` and pushes to `main`
+5. `changeset publish` publishes both packages to npm with provenance via OIDC Trusted Publishing (no `NPM_TOKEN` needed)
+6. Pushes git tags
+7. Posts Slack notifications (start / success-with-package-links / failure)
+
+### First-time setup
+
+| Where          | What                                                                                                 |
+| -------------- | ---------------------------------------------------------------------------------------------------- |
+| npmjs.com      | Trusted Publisher configured for both packages → repo `eigenpal/docx-editor`, workflow `release.yml` |
+| GitHub secrets | `SLACK_WEBHOOK_URL` (optional — release notifications)                                               |
+| GitHub perms   | Settings → Actions → General → Workflow permissions = **Read and write**                             |
+
+### Manual / local releases
+
+Don't. Use the workflow. If you must, the underlying scripts are:
+
+```bash
+bun run release:changeset patch "summary"   # generate changeset
+bun run version-packages                     # apply versions + CHANGELOG
+bun run release                              # build + changeset publish
+```
+
+---
+
 ## Rules
 
 - Client-side only. No backend.
