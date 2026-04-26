@@ -7,6 +7,9 @@ declare global {
       getLastTextblockParaId: () => string | null;
       scrollToParaId: (paraId: string) => boolean;
       scrollToPosition: (pmPos: number) => void;
+      scrollToPage: (pageNumber: number) => void;
+      getTotalPages: () => number;
+      getCurrentPage: () => number;
     };
   }
 }

@@ -141,6 +141,11 @@ export function App() {
       scrollToPosition: (pmPos: number) => {
         editorRef.current?.scrollToPosition(pmPos);
       },
+      scrollToPage: (pageNumber: number) => {
+        editorRef.current?.scrollToPage(pageNumber);
+      },
+      getTotalPages: () => editorRef.current?.getTotalPages() ?? 0,
+      getCurrentPage: () => editorRef.current?.getCurrentPage() ?? 0,
     };
     return () => {
       delete window.__DOCX_EDITOR_E2E__;
