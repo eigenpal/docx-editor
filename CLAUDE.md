@@ -326,33 +326,33 @@ bun changeset       # interactive: pick the bump (patch/minor/major) and write a
 
 This creates `.changeset/<random-name>.md` describing the change. Commit it with the rest of the PR. The release workflow consumes these on the next release. Without one, the change ships invisibly — no CHANGELOG entry, no version bump triggered.
 
-Bump rules (Changesets standard):
+Bump rules:
 
-- **patch** — bug fix, internal refactor, no public API change
+- **patch** (default) — bug fix, internal refactor, no public API change. **Use this unless you have a clear reason not to.**
 - **minor** — new feature or new public API (additive, backward compatible)
 - **major** — breaking change to existing public API
 
-When unsure, prefer the smaller bump and call out the reasoning in the changeset summary.
+When in doubt, pick `patch`. `changeset version` will resolve to the highest bump level across all pending changesets at release time, so a single legitimate `minor` from another PR will still bump everything appropriately.
 
 ### How to cut a release
 
-The bump level (patch/minor/major) and CHANGELOG entries come from the per-PR changesets that have accumulated since the last release. The workflow itself takes no version inputs — it just consumes whatever's in `.changeset/` and bumps to the highest level among them.
+The release workflow takes a `bump` input (default `patch`) plus an optional free-form `summary`. The operator's chosen bump generates an additional ad-hoc changeset; `changeset version` then drains that ad-hoc one **plus** every per-PR `.changeset/*.md` and consolidates them into the CHANGELOG. The final version bump is the highest level among all of them (operator-picked + per-PR).
 
 GitHub → **Actions** → **Release** → **Run workflow**:
 
-| Input     | Value                                                         |
-| --------- | ------------------------------------------------------------- |
-| Branch    | `main` (real publishes only run from `main`)                  |
-| `dry-run` | `true` to validate the pipeline without publishing or pushing |
-
-If no pending changesets are in `.changeset/`, the workflow fails fast with a clear error — there's nothing to release.
+| Input     | Value                                                                         |
+| --------- | ----------------------------------------------------------------------------- |
+| Branch    | `main` (real publishes only run from `main`)                                  |
+| `bump`    | `patch` (default) / `minor` / `major` — the operator's intended baseline bump |
+| `summary` | one-line CHANGELOG entry for the operator-picked bump (defaults to `Release`) |
+| `dry-run` | `true` to validate the pipeline without publishing or pushing                 |
 
 The workflow:
 
 1. Typecheck + tests
-2. Verifies pending changesets exist (`.changeset/*.md` other than `README.md`)
-3. `changeset version` bumps both packages, drains the changeset queue, and writes CHANGELOGs from the per-PR entries
-4. Commits `chore: release X.Y.Z` and pushes to `main`
+2. Generates an ad-hoc changeset for the fixed group (`scripts/create-release-changeset.mjs`) using the operator's `bump` + `summary`
+3. `changeset version` bumps both packages to `max(ad-hoc, per-PR changesets)` and writes CHANGELOGs from all entries
+4. Commits `chore: release X.Y.Z (bump)` and pushes to `main`
 5. `changeset publish` publishes both packages to npm with provenance via OIDC Trusted Publishing (no `NPM_TOKEN` needed)
 6. Pushes git tags + creates a GitHub Release with the new CHANGELOG section
 7. Posts Slack notifications (start / success-with-package-links / failure)
@@ -370,8 +370,9 @@ The workflow:
 Don't. Use the workflow. If you must, the underlying scripts are:
 
 ```bash
-bun run version-packages   # consume .changeset/*.md → bump versions + CHANGELOG
-bun run release            # build + changeset publish
+bun run release:changeset patch "summary"  # generate operator changeset
+bun run version-packages                    # apply versions + CHANGELOG
+bun run release                             # build + changeset publish
 ```
 
 ---

@@ -3,6 +3,20 @@ name: Release
 on:
   workflow_dispatch:
     inputs:
+      bump:
+        description: 'Version bump'
+        required: true
+        default: 'patch'
+        type: choice
+        options:
+          - patch
+          - minor
+          - major
+      summary:
+        description: 'Release summary (used in CHANGELOG)'
+        required: false
+        default: 'Release'
+        type: string
       dry-run:
         description: 'Dry run (no publish, no push)'
         required: false
@@ -15,7 +29,7 @@ concurrency:
 
 jobs:
   release:
-    name: Release
+    name: Release ${{ inputs.bump }}
     # Real publishes only from main; dry-runs allowed from any branch.
     if: ${{ inputs.dry-run || github.ref == 'refs/heads/main' }}
     runs-on: ubuntu-latest
@@ -62,16 +76,11 @@ jobs:
       - name: Run tests
         run: bun test
 
-      # Each PR is expected to land a `.changeset/*.md` describing its change
-      # (see CLAUDE.md "Releasing"). Without one, there's nothing to release.
-      - name: Verify pending changesets
-        run: |
-          pending=$(find .changeset -maxdepth 1 -name '*.md' ! -name 'README.md' | wc -l | tr -d ' ')
-          if [ "$pending" -eq 0 ]; then
-            echo "::error::No pending changesets in .changeset/. Add changesets in PRs before triggering a release."
-            exit 1
-          fi
-          echo "Found $pending pending changeset(s)."
+      - name: Generate release changeset
+        env:
+          BUMP: ${{ inputs.bump }}
+          SUMMARY: ${{ inputs.summary }}
+        run: bun run release:changeset "$BUMP" "$SUMMARY"
 
       - name: Apply versions
         run: bun run version-packages
@@ -88,6 +97,7 @@ jobs:
         env:
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
           VERSION: ${{ steps.version.outputs.value }}
+          BUMP: ${{ inputs.bump }}
           DRY_RUN: ${{ inputs.dry-run }}
           ACTOR: ${{ github.actor }}
           SHA: ${{ github.sha }}
@@ -100,6 +110,7 @@ jobs:
           payload=$(jq -n \
             --arg title "$title" \
             --arg version "$VERSION" \
+            --arg bump "$BUMP" \
             --arg sha "$short_sha" \
             --arg actor "$ACTOR" \
             --arg run_n "$RUN_NUMBER" \
@@ -109,7 +120,7 @@ jobs:
               blocks: [
                 { type: "section", text: { type: "mrkdwn", text: "*\($title)*" } },
                 { type: "section", fields: [
-                  { type: "mrkdwn", text: "*Version*\n\($version)" },
+                  { type: "mrkdwn", text: "*Version*\n\($version) (`\($bump)`)" },
                   { type: "mrkdwn", text: "*Commit*\n`\($sha)`" },
                   { type: "mrkdwn", text: "*Triggered by*\n\($actor)" },
                   { type: "mrkdwn", text: "*Run*\n<\($run_url)|#\($run_n)>" }
@@ -143,10 +154,11 @@ jobs:
       - name: Commit version bump and tag
         if: ${{ !inputs.dry-run }}
         env:
+          BUMP: ${{ inputs.bump }}
           VERSION: ${{ steps.version.outputs.value }}
         run: |
           git add -A
-          git commit -m "chore: release $VERSION"
+          git commit -m "chore: release $VERSION ($BUMP)"
           git tag -a "$VERSION" -m "Release $VERSION"
 
       - name: Push version commit + tag
@@ -199,6 +211,7 @@ jobs:
         env:
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
           VERSION: ${{ steps.version.outputs.value }}
+          BUMP: ${{ inputs.bump }}
           ACTOR: ${{ github.actor }}
           RUN_NUMBER: ${{ github.run_number }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
@@ -208,6 +221,7 @@ jobs:
           agents_url="https://www.npmjs.com/package/@eigenpal/docx-editor-agents/v/$VERSION"
           payload=$(jq -n \
             --arg version "$VERSION" \
+            --arg bump "$BUMP" \
             --arg actor "$ACTOR" \
             --arg run_n "$RUN_NUMBER" \
             --arg run_url "$RUN_URL" \
@@ -219,7 +233,7 @@ jobs:
               blocks: [
                 { type: "section", text: { type: "mrkdwn", text: ":white_check_mark: *docx-editor \($version) released*" } },
                 { type: "section", fields: [
-                  { type: "mrkdwn", text: "*Version*\n<\($release)|\($version)>" },
+                  { type: "mrkdwn", text: "*Version*\n<\($release)|\($version)> (`\($bump)`)" },
                   { type: "mrkdwn", text: "*Triggered by*\n\($actor)" }
                 ] },
                 { type: "section", text: { type: "mrkdwn",
@@ -234,6 +248,7 @@ jobs:
         env:
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
           VERSION: ${{ steps.version.outputs.value }}
+          BUMP: ${{ inputs.bump }}
           DRY_RUN: ${{ inputs.dry-run }}
           ACTOR: ${{ github.actor }}
           RUN_NUMBER: ${{ github.run_number }}
@@ -246,6 +261,7 @@ jobs:
           payload=$(jq -n \
             --arg title "$title" \
             --arg version "$version_field" \
+            --arg bump "$BUMP" \
             --arg actor "$ACTOR" \
             --arg run_n "$RUN_NUMBER" \
             --arg run_url "$RUN_URL" \
@@ -254,7 +270,7 @@ jobs:
               blocks: [
                 { type: "section", text: { type: "mrkdwn", text: "*\($title)*" } },
                 { type: "section", fields: [
-                  { type: "mrkdwn", text: "*Version*\n\($version)" },
+                  { type: "mrkdwn", text: "*Version*\n\($version) (`\($bump)`)" },
                   { type: "mrkdwn", text: "*Triggered by*\n\($actor)" },
                   { type: "mrkdwn", text: "*Run*\n<\($run_url)|#\($run_n)>" }
                 ] }
