@@ -3,7 +3,9 @@
   "version": "0.0.21",
   "private": true,
   "workspaces": [
-    "packages/*"
+    "packages/*",
+    "examples/agent-use-demo",
+    "examples/agent-chat-demo"
   ],
   "type": "module",
   "scripts": {

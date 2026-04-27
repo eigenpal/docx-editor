@@ -4,6 +4,7 @@ export default defineConfig({
   entry: {
     index: 'src/index.ts',
     bridge: 'src/bridge.ts',
+    mcp: 'src/mcp/index.ts',
   },
   format: ['cjs', 'esm'],
   dts: true,
@@ -15,5 +16,5 @@ export default defineConfig({
   },
   minify: true,
   noExternal: ['@eigenpal/docx-core'],
-  external: ['prosemirror-model', 'prosemirror-state', 'prosemirror-view'],
+  external: ['prosemirror-model', 'prosemirror-state', 'prosemirror-view', 'react'],
 });

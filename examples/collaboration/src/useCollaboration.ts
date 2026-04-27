@@ -39,7 +39,6 @@ export function useCollaboration(
     const plugins = [ySyncPlugin(fragment), yCursorPlugin(provider.awareness), yUndoPlugin()];
     const yComments = ydoc.getArray<Comment>('comments');
     return { ydoc, provider, plugins, yComments };
-     
   }, [roomName]);
 
   const [users, setUsers] = useState<CollaborativeUser[]>([]);

@@ -9,6 +9,10 @@ interface RoastStats {
   commentsAdded: number;
   proposalsAdded: number;
   errors: number;
+  /** New: number of agent tool calls the model made during the roast loop. */
+  toolCalls?: number;
+  /** New: number of model turns. */
+  iterations?: number;
 }
 
 export default function Home() {
@@ -143,6 +147,8 @@ export default function Home() {
             {stats && (
               <span style={styles.resultStats}>
                 {stats.commentsAdded} comments &middot; {stats.proposalsAdded} suggestions
+                {stats.toolCalls != null ? ` \u00b7 ${stats.toolCalls} tool calls` : ''}
+                {stats.iterations != null ? ` \u00b7 ${stats.iterations} turns` : ''}
                 {stats.errors > 0 ? ` \u00b7 ${stats.errors} skipped` : ''}
               </span>
             )}

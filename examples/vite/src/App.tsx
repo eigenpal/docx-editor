@@ -158,6 +158,51 @@ export function App() {
       },
       getTotalPages: () => editorRef.current?.getTotalPages() ?? 0,
       getCurrentPage: () => editorRef.current?.getCurrentPage() ?? 0,
+      // Agent-bridge surface — drives the same paths the live agent uses.
+      agentAddComment: (opts: { paraId: string; text: string; author?: string; search?: string }) =>
+        editorRef.current?.addComment({
+          paraId: opts.paraId,
+          text: opts.text,
+          author: opts.author ?? 'E2E',
+          search: opts.search,
+        }) ?? null,
+      agentProposeChange: (opts: {
+        paraId: string;
+        search: string;
+        replaceWith: string;
+        author?: string;
+      }) =>
+        editorRef.current?.proposeChange({
+          paraId: opts.paraId,
+          search: opts.search,
+          replaceWith: opts.replaceWith,
+          author: opts.author ?? 'E2E',
+        }) ?? false,
+      agentReplyComment: (commentId: number, text: string, author = 'E2E') =>
+        editorRef.current?.replyToComment(commentId, text, author) ?? null,
+      agentResolveComment: (commentId: number) => editorRef.current?.resolveComment(commentId),
+      agentFind: (query: string) => editorRef.current?.findInDocument(query) ?? [],
+      agentSelection: () => editorRef.current?.getSelectionInfo() ?? null,
+      agentGetCommentCount: () => editorRef.current?.getComments().length ?? 0,
+      // Event subscriptions — count fires so tests can assert listeners are wired.
+      agentOnContentChangeCount: 0,
+      agentOnSelectionChangeCount: 0,
+      agentSubscribeContentChange: () => {
+        const hook = window.__DOCX_EDITOR_E2E__;
+        if (!hook) return () => undefined;
+        const unsub = editorRef.current?.onContentChange(() => {
+          hook.agentOnContentChangeCount = (hook.agentOnContentChangeCount ?? 0) + 1;
+        });
+        return unsub ?? (() => undefined);
+      },
+      agentSubscribeSelectionChange: () => {
+        const hook = window.__DOCX_EDITOR_E2E__;
+        if (!hook) return () => undefined;
+        const unsub = editorRef.current?.onSelectionChange(() => {
+          hook.agentOnSelectionChangeCount = (hook.agentOnSelectionChangeCount ?? 0) + 1;
+        });
+        return unsub ?? (() => undefined);
+      },
     };
     return () => {
       delete window.__DOCX_EDITOR_E2E__;

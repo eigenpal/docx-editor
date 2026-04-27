@@ -70,11 +70,13 @@ function buildParagraphBlock(
 ): ContentBlock {
   const text = buildParagraphText(para, includeTrackedChanges, includeCommentAnchors);
   const styleId = para.formatting?.styleId;
+  const paraId = para.paraId;
 
   if (isHeadingStyle(styleId)) {
     return {
       type: 'heading',
       index,
+      paraId,
       level: parseHeadingLevel(styleId) ?? 1,
       text,
     };
@@ -84,13 +86,14 @@ function buildParagraphBlock(
     return {
       type: 'list-item',
       index,
+      paraId,
       text,
       listLevel: para.listRendering.level ?? 0,
       listType: para.listRendering.isBullet ? 'bullet' : 'number',
     };
   }
 
-  return { type: 'paragraph', index, text };
+  return { type: 'paragraph', index, paraId, text };
 }
 
 function buildTableBlock(
@@ -100,25 +103,33 @@ function buildTableBlock(
   includeCommentAnchors: boolean
 ): ContentBlock {
   const rows: string[][] = [];
+  const cellParaIds: (string | undefined)[][] = [];
   for (const row of table.rows) {
     const cells: string[] = [];
+    const rowParaIds: (string | undefined)[] = [];
     for (const cell of row.cells) {
       const cellTexts: string[] = [];
+      let firstParaId: string | undefined;
       for (const block of cell.content) {
         if (block.type === 'paragraph') {
+          if (firstParaId === undefined) firstParaId = block.paraId;
           cellTexts.push(buildParagraphText(block, includeTrackedChanges, includeCommentAnchors));
         }
       }
       cells.push(cellTexts.join('\n'));
+      rowParaIds.push(firstParaId);
     }
     rows.push(cells);
+    cellParaIds.push(rowParaIds);
   }
-  return { type: 'table', index, rows };
+  return { type: 'table', index, rows, cellParaIds };
 }
 
 /**
  * Format content blocks as plain text for LLM prompts.
- * Every paragraph (including inside tables) gets its own [index].
+ *
+ * When a block has a `paraId`, it's used as the line anchor (preferred — stable
+ * across edits). Falls back to the ordinal index when paraId is absent.
  *
  * Output:
  *   [0] (h1) Chapter Title
@@ -129,18 +140,19 @@ function buildTableBlock(
  */
 export function formatContentForLLM(blocks: ContentBlock[]): string {
   const lines: string[] = [];
+  const tag = (b: { paraId?: string; index: number }) => (b.paraId ? b.paraId : String(b.index));
   for (const block of blocks) {
     switch (block.type) {
       case 'heading':
-        lines.push(`[${block.index}] (h${block.level}) ${block.text}`);
+        lines.push(`[${tag(block)}] (h${block.level}) ${block.text}`);
         break;
       case 'paragraph':
-        lines.push(`[${block.index}] ${block.text}`);
+        lines.push(`[${tag(block)}] ${block.text}`);
         break;
       case 'list-item': {
         const indent = '  '.repeat(block.listLevel);
         const bullet = block.listType === 'bullet' ? '\u2022' : '-';
-        lines.push(`[${block.index}] ${indent}${bullet} ${block.text}`);
+        lines.push(`[${tag(block)}] ${indent}${bullet} ${block.text}`);
         break;
       }
       case 'table': {
@@ -148,10 +160,11 @@ export function formatContentForLLM(blocks: ContentBlock[]): string {
         for (let r = 0; r < block.rows.length; r++) {
           for (let c = 0; c < block.rows[r].length; c++) {
             const cellText = block.rows[r][c];
-            // A cell can have multiple paragraphs (joined by \n in buildTableBlock)
             const paras = cellText.split('\n');
-            for (const para of paras) {
-              lines.push(`[${idx}] (table, row ${r + 1}, col ${c + 1}) ${para}`);
+            const cellParaId = block.cellParaIds?.[r]?.[c];
+            for (let p = 0; p < paras.length; p++) {
+              const anchor = p === 0 && cellParaId ? cellParaId : String(idx);
+              lines.push(`[${anchor}] (table, row ${r + 1}, col ${c + 1}) ${paras[p]}`);
               idx++;
             }
           }

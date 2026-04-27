@@ -15,12 +15,20 @@
       "types": "./dist/bridge.d.ts",
       "import": "./dist/bridge.mjs",
       "require": "./dist/bridge.js"
+    },
+    "./mcp": {
+      "types": "./dist/mcp.d.ts",
+      "import": "./dist/mcp.mjs",
+      "require": "./dist/mcp.js"
     }
   },
   "typesVersions": {
     "*": {
       "bridge": [
         "./dist/bridge.d.ts"
+      ],
+      "mcp": [
+        "./dist/mcp.d.ts"
       ]
     }
   },

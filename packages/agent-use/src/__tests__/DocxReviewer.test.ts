@@ -117,7 +117,7 @@ describe('getContent', () => {
     ]);
     const content = reviewer.getContent();
     expect(content).toHaveLength(2);
-    expect(content[1]).toEqual({
+    expect(content[1]).toMatchObject({
       type: 'table',
       index: 1,
       rows: [

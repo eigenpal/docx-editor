@@ -42,3 +42,14 @@ export type {
 } from './types';
 
 export { TextNotFoundError, ChangeNotFoundError, CommentNotFoundError } from './errors';
+
+// Tools — reusable tool definitions for AI agents (OpenAI function calling format)
+export { agentTools, executeToolCall, getToolSchemas } from './tools';
+export type { AgentToolDefinition, AgentToolResult } from './tools';
+
+// Reviewer bridge — wraps DocxReviewer in the EditorBridge interface so the
+// same agent tools / MCP server can operate on a static DOCX file.
+export { createReviewerBridge } from './reviewerBridge';
+
+// Word JS API parity contract (compile-time only — no runtime cost).
+export type { WordCompatBridge } from './wordCompat';
