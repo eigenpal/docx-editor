@@ -99,7 +99,11 @@ jobs:
           version=$(echo "$PUBLISHED_PACKAGES" | jq -r '.[0].version')
           editor_url="https://www.npmjs.com/package/@eigenpal/docx-js-editor/v/$version"
           agents_url="https://www.npmjs.com/package/@eigenpal/docx-editor-agents/v/$version"
-          release_url="${{ github.server_url }}/${{ github.repository }}/releases/tag/v$version"
+          # changesets/action with a fixed group creates per-package tags (e.g.
+          # `@eigenpal/docx-js-editor@0.1.0`), not a single `vX.Y.Z`. URL-encode
+          # the `@`/`/` so the link resolves to the actual GitHub Release.
+          release_tag=$(jq -rn --arg t "@eigenpal/docx-js-editor@$version" '$t|@uri')
+          release_url="${{ github.server_url }}/${{ github.repository }}/releases/tag/$release_tag"
           payload=$(jq -n \
             --arg version "$version" \
             --arg actor "$ACTOR" \
