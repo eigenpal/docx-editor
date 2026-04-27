@@ -382,12 +382,12 @@ test.describe('Border Color Picker', () => {
 
   test('border color picker shows theme matrix in table context', async ({ page }) => {
     // Find and click the border color picker button in the toolbar
-    const borderColorBtn = page.locator('.docx-advanced-color-picker-button[title="Border Color"]');
+    const borderColorBtn = page.locator('.docx-color-picker-button[title="Border Color"]');
     await expect(borderColorBtn).toBeVisible({ timeout: 5000 });
     await borderColorBtn.click();
 
     // Verify the AdvancedColorPicker dropdown opens with theme matrix
-    const dropdown = page.locator('.docx-advanced-color-picker-dropdown');
+    const dropdown = page.locator('.docx-color-picker-dropdown');
     await expect(dropdown).toBeVisible({ timeout: 5000 });
 
     // Verify it has theme colors section
@@ -399,16 +399,16 @@ test.describe('Border Color Picker', () => {
 
   test('apply border color from standard colors', async ({ page }) => {
     // Open border color picker
-    const borderColorBtn = page.locator('.docx-advanced-color-picker-button[title="Border Color"]');
+    const borderColorBtn = page.locator('.docx-color-picker-button[title="Border Color"]');
     await expect(borderColorBtn).toBeVisible({ timeout: 5000 });
     await borderColorBtn.click();
 
-    const dropdown = page.locator('.docx-advanced-color-picker-dropdown');
+    const dropdown = page.locator('.docx-color-picker-dropdown');
     await expect(dropdown).toBeVisible({ timeout: 5000 });
 
     // Click a red standard color via JS to avoid stale element issues
     const clicked = await page.evaluate(() => {
-      const dd = document.querySelector('.docx-advanced-color-picker-dropdown');
+      const dd = document.querySelector('.docx-color-picker-dropdown');
       if (!dd) return false;
       const btn = dd.querySelector('button[title="Red"]') as HTMLElement;
       if (btn) {

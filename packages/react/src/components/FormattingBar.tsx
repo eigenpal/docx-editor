@@ -13,7 +13,7 @@ import { resolveColorToHex } from '@eigenpal/docx-core/utils/colorResolver';
 import { FontPicker } from './ui/FontPicker';
 import { normalizeFontFamilies } from './ui/normalizeFontFamilies';
 import { FontSizePicker, halfPointsToPoints } from './ui/FontSizePicker';
-import { AdvancedColorPicker } from './ui/AdvancedColorPicker';
+import { ColorPicker } from './ui/ColorPicker';
 import { AlignmentButtons } from './ui/AlignmentButtons';
 import { ListButtons, createDefaultListState } from './ui/ListButtons';
 import { LineSpacingPicker } from './ui/LineSpacingPicker';
@@ -477,7 +477,7 @@ export function FormattingBar(explicitProps: FormattingBarProps) {
           <MaterialSymbol name="strikethrough_s" size={ICON_SIZE} />
         </ToolbarButton>
         {showTextColorPicker && (
-          <AdvancedColorPicker
+          <ColorPicker
             mode="text"
             value={currentFormatting.color?.replace(/^#/, '')}
             onChange={handleTextColorChange}
@@ -487,7 +487,7 @@ export function FormattingBar(explicitProps: FormattingBarProps) {
           />
         )}
         {showHighlightColorPicker && (
-          <AdvancedColorPicker
+          <ColorPicker
             mode="highlight"
             value={currentFormatting.highlight}
             onChange={handleHighlightColorChange}

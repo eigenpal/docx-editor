@@ -75,7 +75,10 @@ export class EditorPage {
 
     // Main component locators
     this.editor = page.locator('[data-testid="docx-editor"]');
-    this.toolbar = page.locator('[data-testid="toolbar"]');
+    // The demo renders FormattingBar (data-testid="formatting-bar"), not the
+    // legacy Toolbar component (data-testid="toolbar"). Match either so the
+    // helper works regardless of which is mounted.
+    this.toolbar = page.locator('[data-testid="toolbar"], [data-testid="formatting-bar"]');
     this.variablePanel = page.locator('.variable-panel');
     this.zoomControl = page.locator('.zoom-control');
 
@@ -581,10 +584,16 @@ export class EditorPage {
    * Opens the picker, finds/clicks a matching color button, or falls back to custom hex input.
    */
   private async pickColorFromDropdown(buttonTitle: string, hexColor: string): Promise<void> {
-    const picker = this.toolbar.locator(`[title="${buttonTitle}"]`);
-    await picker.click();
+    // Split-button picker (default): two buttons share the same title — apply
+    // half on the left, arrow half on the right (aria-haspopup="true"). Click
+    // the arrow to open the dropdown. Falls through to a single picker for
+    // legacy single-button mode (splitButton={false}).
+    const arrowOrSingle = this.toolbar
+      .locator(`[title="${buttonTitle}"][aria-haspopup="true"]`)
+      .first();
+    await arrowOrSingle.click();
 
-    await this.page.waitForSelector('.docx-advanced-color-picker-dropdown', {
+    await this.page.waitForSelector('.docx-color-picker-dropdown', {
       state: 'visible',
       timeout: 5000,
     });
@@ -592,7 +601,7 @@ export class EditorPage {
     // Try to click a matching color button, fall back to custom hex input.
     // Uses page.evaluate to avoid ProseMirror focus-steal issues.
     const clicked = await this.page.evaluate((hex) => {
-      const dropdown = document.querySelector('.docx-advanced-color-picker-dropdown');
+      const dropdown = document.querySelector('.docx-color-picker-dropdown');
       if (!dropdown) return false;
       // Match by computed rgb() style (browsers normalize backgroundColor to rgb)
       const r = parseInt(hex.slice(0, 2), 16);
@@ -626,7 +635,7 @@ export class EditorPage {
     // Wait for dropdown to close and React to re-render
     if (clicked) {
       await this.page
-        .waitForSelector('.docx-advanced-color-picker-dropdown', {
+        .waitForSelector('.docx-color-picker-dropdown', {
           state: 'detached',
           timeout: 3000,
         })
@@ -643,6 +652,34 @@ export class EditorPage {
   async setTextColor(color: string): Promise<void> {
     const hexColor = color.replace(/^#/, '').toUpperCase();
     await this.pickColorFromDropdown('Font Color', hexColor);
+  }
+
+  /**
+   * Click the apply half of a split color button — re-applies the picker's
+   * last picked color directly, no dropdown. Mirrors Word's split-button.
+   */
+  private async applyLastColor(buttonTitle: string): Promise<void> {
+    // Two elements share the title — the apply half is the one WITHOUT
+    // aria-haspopup. Use class selector to be unambiguous.
+    const cls =
+      buttonTitle === 'Font Color' || buttonTitle === 'Text Highlight Color'
+        ? '.docx-color-picker-apply'
+        : '.docx-color-picker-apply';
+    const apply = this.toolbar.locator(`${cls}[title="${buttonTitle}"]`).first();
+    await apply.click();
+    await this.page.waitForTimeout(50);
+    await this.focus();
+    await this.page.waitForTimeout(50);
+  }
+
+  /** Click the apply half of the text-color split button. */
+  async applyLastTextColor(): Promise<void> {
+    await this.applyLastColor('Font Color');
+  }
+
+  /** Click the apply half of the highlight-color split button. */
+  async applyLastHighlightColor(): Promise<void> {
+    await this.applyLastColor('Text Highlight Color');
   }
 
   /**

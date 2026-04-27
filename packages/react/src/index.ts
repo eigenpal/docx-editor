@@ -187,8 +187,11 @@ export {
   type LineSpacingPickerProps,
   type LineSpacingOption,
 } from './components/ui/LineSpacingPicker';
-export { ColorPicker, type ColorPickerProps, type ColorOption } from './components/ui/ColorPicker';
-export { AdvancedColorPicker } from './components/ui/AdvancedColorPicker';
+export {
+  ColorPicker,
+  type ColorPickerProps,
+  type ColorPickerMode,
+} from './components/ui/ColorPicker';
 export { StylePicker, type StylePickerProps, type StyleOption } from './components/ui/StylePicker';
 export { AlignmentButtons, type AlignmentButtonsProps } from './components/ui/AlignmentButtons';
 export {

@@ -1,14 +1,14 @@
 /**
- * TableCellFillPicker - Wrapper around AdvancedColorPicker for table cell fill/shading.
+ * TableCellFillPicker - Wrapper around ColorPicker for table cell fill/shading.
  *
- * Translates AdvancedColorPicker's output to the TableAction format
+ * Translates ColorPicker's output to the TableAction format
  * expected by the toolbar's table action handler.
  */
 
 import { useCallback } from 'react';
 import type { ColorValue, Theme } from '@eigenpal/docx-core/types/document';
 import type { TableAction } from './TableToolbar';
-import { AdvancedColorPicker } from './AdvancedColorPicker';
+import { ColorPicker } from './ColorPicker';
 import { useTranslation } from '../../i18n';
 
 export interface TableCellFillPickerProps {
@@ -41,7 +41,7 @@ export function TableCellFillPicker({
   );
 
   return (
-    <AdvancedColorPicker
+    <ColorPicker
       mode="highlight"
       value={value}
       onChange={handleChange}

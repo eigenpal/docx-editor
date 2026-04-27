@@ -1,7 +1,7 @@
 /**
- * TableBorderColorPicker - Wrapper around AdvancedColorPicker for table border colors.
+ * TableBorderColorPicker - Wrapper around ColorPicker for table border colors.
  *
- * Translates AdvancedColorPicker's ColorValue output to the TableAction format
+ * Translates ColorPicker's ColorValue output to the TableAction format
  * expected by the toolbar's table action handler.
  */
 
@@ -9,7 +9,7 @@ import { useCallback } from 'react';
 import type { ColorValue } from '@eigenpal/docx-core/types/document';
 import type { Theme } from '@eigenpal/docx-core/types/document';
 import type { TableAction } from './TableToolbar';
-import { AdvancedColorPicker } from './AdvancedColorPicker';
+import { ColorPicker } from './ColorPicker';
 import { useTranslation } from '../../i18n';
 
 export interface TableBorderColorPickerProps {
@@ -41,7 +41,7 @@ export function TableBorderColorPicker({
   );
 
   return (
-    <AdvancedColorPicker
+    <ColorPicker
       mode="border"
       value={value}
       onChange={handleChange}
