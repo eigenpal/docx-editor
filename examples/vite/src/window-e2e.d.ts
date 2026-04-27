@@ -3,6 +3,8 @@ declare global {
   interface Window {
     __DOCX_EDITOR_E2E__?: {
       getPmStartForParaId: (paraId: string) => number | null;
+      getSelectionAnchor: () => number | null;
+      getTextblockEndForParaId: (paraId: string) => number | null;
       getFirstTextblockParaId: () => string | null;
       getLastTextblockParaId: () => string | null;
       scrollToParaId: (paraId: string) => boolean;

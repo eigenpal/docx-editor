@@ -112,6 +112,18 @@ export function App() {
         if (!state || !paraId) return null;
         return findStartPosForParaId(state.doc, paraId);
       },
+      getSelectionAnchor: () => {
+        const state = editorRef.current?.getEditorRef()?.getState?.();
+        return state?.selection.anchor ?? null;
+      },
+      getTextblockEndForParaId: (paraId: string) => {
+        const state = editorRef.current?.getEditorRef()?.getState?.();
+        if (!state || !paraId) return null;
+        const start = findStartPosForParaId(state.doc, paraId);
+        if (start == null) return null;
+        const node = state.doc.nodeAt(start);
+        return node?.isTextblock === true ? start + 1 + node.content.size : null;
+      },
       getFirstTextblockParaId: () => {
         const view = editorRef.current?.getEditorRef()?.getView?.();
         if (!view) return null;

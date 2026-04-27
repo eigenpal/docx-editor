@@ -59,6 +59,29 @@ test.describe('Scroll to paragraph / position (E2E)', () => {
     await waitPaintedInViewport(page, start);
   });
 
+  test('scrollToParaId places the cursor at the end of the target paragraph', async ({ page }) => {
+    const firstId = await page.evaluate(
+      () => window.__DOCX_EDITOR_E2E__?.getFirstTextblockParaId() ?? null
+    );
+    test.skip(!firstId, 'Demo document has no paragraph paraIds');
+
+    const expectedEnd = await page.evaluate(
+      (id) => window.__DOCX_EDITOR_E2E__?.getTextblockEndForParaId(id) ?? null,
+      firstId
+    );
+    expect(expectedEnd).not.toBeNull();
+
+    await page.evaluate((id) => {
+      window.__DOCX_EDITOR_E2E__?.scrollToParaId(id);
+    }, firstId);
+
+    await page.waitForFunction(
+      (pos) => window.__DOCX_EDITOR_E2E__?.getSelectionAnchor() === pos,
+      expectedEnd,
+      { timeout: 20000 }
+    );
+  });
+
   test('long jump: scroll to last paraId after scrolling to first', async ({ page }) => {
     const firstId = await page.evaluate(
       () => window.__DOCX_EDITOR_E2E__?.getFirstTextblockParaId() ?? null
@@ -108,5 +131,17 @@ test.describe('Scroll to paragraph / position (E2E)', () => {
     }, pos);
 
     await waitPaintedInViewport(page, pos);
+  });
+
+  test('hidden ProseMirror is portaled outside the paged scroller', async ({ page }) => {
+    const isPortaled = await page.evaluate(() => {
+      const hiddenPm = document.querySelector('.paged-editor__hidden-pm');
+      const pages = document.querySelector('.paged-editor__pages');
+      return (
+        hiddenPm != null && hiddenPm.parentElement === document.body && !pages?.contains(hiddenPm)
+      );
+    });
+
+    expect(isPortaled).toBe(true);
   });
 });
