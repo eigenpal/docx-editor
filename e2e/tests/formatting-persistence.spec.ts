@@ -237,6 +237,79 @@ test.describe('Formatting Persistence - Font Properties', () => {
   });
 });
 
+test.describe('Formatting Persistence - Enter then Change Property in Empty Run', () => {
+  // Regression: setMark/removeMark in markUtils.ts used to call setStoredMarks
+  // BEFORE setNodeMarkup. ProseMirror's Transaction.addStep clears storedMarks
+  // on every step, so the stored marks were wiped before dispatch — typed text
+  // fell back to the editor default (Arial 11pt) instead of the chosen property.
+
+  let editor: EditorPage;
+
+  test.beforeEach(async ({ page }) => {
+    editor = new EditorPage(page);
+    await editor.goto();
+    await editor.waitForReady();
+    await editor.newDocument();
+    await editor.focus();
+  });
+
+  test('font family applied in empty run after Enter is used by typed text', async ({ page }) => {
+    await editor.typeText('First paragraph');
+    await page.keyboard.press('Enter');
+    // Cursor is now in an empty new paragraph.
+    await editor.setFontFamily('Georgia');
+    await editor.typeText('Georgia text');
+
+    await assertions.assertTextHasFontFamily(page, 'Georgia text', 'Georgia');
+  });
+
+  test('font size applied in empty run after Enter is used by typed text', async ({ page }) => {
+    await editor.typeText('First paragraph');
+    await page.keyboard.press('Enter');
+    await editor.setFontSize(24);
+    await editor.typeText('Big text');
+
+    await assertions.assertTextHasFontSize(page, 'Big text', '24pt');
+  });
+
+  test('text color applied in empty run after Enter is used by typed text', async ({ page }) => {
+    await editor.typeText('First paragraph');
+    await page.keyboard.press('Enter');
+    await editor.setTextColor('#FF0000');
+    await editor.typeText('Red text');
+
+    await assertions.assertTextHasColor(page, 'Red text', 'rgb(255, 0, 0)');
+  });
+
+  test('combined font family + size + color in empty run after Enter persists on typed text', async ({
+    page,
+  }) => {
+    await editor.typeText('First paragraph');
+    await page.keyboard.press('Enter');
+    await editor.setFontFamily('Verdana');
+    await editor.setFontSize(18);
+    await editor.setTextColor('#0000FF');
+    await editor.typeText('Styled text');
+
+    await assertions.assertTextHasFontFamily(page, 'Styled text', 'Verdana');
+    await assertions.assertTextHasFontSize(page, 'Styled text', '18pt');
+    await assertions.assertTextHasColor(page, 'Styled text', 'rgb(0, 0, 255)');
+  });
+
+  test('font change in empty run survives a second Enter and typing', async ({ page }) => {
+    // Mirrors user report: "still when hitting enter and starting a new run styles are lost".
+    await editor.typeText('First');
+    await page.keyboard.press('Enter');
+    await editor.setFontFamily('Georgia');
+    await editor.typeText('Second');
+    await page.keyboard.press('Enter');
+    await editor.typeText('Third');
+
+    await assertions.assertTextHasFontFamily(page, 'Second', 'Georgia');
+    await assertions.assertTextHasFontFamily(page, 'Third', 'Georgia');
+  });
+});
+
 test.describe('Formatting Persistence - Toggling Off', () => {
   let editor: EditorPage;
 
