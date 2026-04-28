@@ -6,19 +6,40 @@ import { useTranslation } from '../i18n';
 /** @deprecated Use HeadingInfo from utils/headingCollector instead */
 export type OutlineHeading = HeadingInfo;
 
+// Outline panel geometry (px). Only the *_RESERVED_SPACE values leak out —
+// the editor uses them to size the layout so the centered page never sits
+// under the panel or the toggle button.
+const OUTLINE_LEFT_OFFSET = 30;
+const OUTLINE_WIDTH = 240;
+const OUTLINE_PAGE_GAP = 16;
+// Matches PagedEditor's VIEWPORT_PADDING_TOP so the panel header lines up
+// with the page's top edge.
+const OUTLINE_TOP_PADDING = 24;
+export const OUTLINE_RESERVED_SPACE = OUTLINE_LEFT_OFFSET + OUTLINE_WIDTH + OUTLINE_PAGE_GAP;
+
+// Toggle-button geometry (when the panel is collapsed): button anchor + icon
+// box (~32px including padding) + gap before the page.
+export const OUTLINE_BUTTON_LEFT_OFFSET = 48;
+const OUTLINE_BUTTON_BOX = 32;
+export const OUTLINE_BUTTON_RESERVED_SPACE =
+  OUTLINE_BUTTON_LEFT_OFFSET + OUTLINE_BUTTON_BOX + OUTLINE_PAGE_GAP;
+
 interface DocumentOutlineProps {
   headings: HeadingInfo[];
   onHeadingClick: (pmPos: number) => void;
   onClose: () => void;
   topOffset?: number;
+  /** Horizontal scroll offset of the editor — outline slides left with the doc. */
+  scrollLeft?: number;
 }
 
-export const DocumentOutline: React.FC<DocumentOutlineProps> = ({
+export const DocumentOutline = React.memo(function DocumentOutline({
   headings,
   onHeadingClick,
   onClose,
   topOffset = 0,
-}) => {
+  scrollLeft = 0,
+}: DocumentOutlineProps) {
   const { t } = useTranslation();
   const [open, setOpen] = useState(false);
 
@@ -35,16 +56,22 @@ export const DocumentOutline: React.FC<DocumentOutlineProps> = ({
       style={{
         position: 'absolute',
         top: topOffset,
-        left: 30,
+        // Anchor to OUTLINE_LEFT_OFFSET, then slide left by the editor's
+        // horizontal scroll so the panel tracks the doc instead of staying
+        // pinned to the viewport.
+        left: OUTLINE_LEFT_OFFSET - scrollLeft,
         bottom: 0,
-        width: 240,
+        width: OUTLINE_WIDTH,
+        paddingTop: OUTLINE_TOP_PADDING,
         display: 'flex',
         flexDirection: 'column',
         overflow: 'hidden',
         fontFamily: "'Google Sans', Roboto, Arial, sans-serif",
         zIndex: 40,
-        // Slide-in animation
-        transform: open ? 'translateX(0)' : 'translateX(-270px)',
+        // Slide-in animation — translate fully off-screen left of its anchor.
+        // Only `transform` transitions; horizontal-scroll tracking via `left`
+        // is intentionally untransitioned so the panel keeps up with the doc.
+        transform: open ? 'translateX(0)' : `translateX(-${OUTLINE_LEFT_OFFSET + OUTLINE_WIDTH}px)`,
         transition: 'transform 0.15s ease-out',
       }}
       onMouseDown={(e) => e.stopPropagation()}
@@ -125,4 +152,4 @@ export const DocumentOutline: React.FC<DocumentOutlineProps> = ({
       </div>
     </nav>
   );
-};
+});

@@ -38,7 +38,12 @@ import {
 import type { FontOption } from './ui/FontPicker';
 import { EditorToolbar } from './EditorToolbar';
 import { pointsToHalfPoints } from './ui/FontSizePicker';
-import { DocumentOutline } from './DocumentOutline';
+import {
+  DocumentOutline,
+  OUTLINE_BUTTON_LEFT_OFFSET,
+  OUTLINE_BUTTON_RESERVED_SPACE,
+  OUTLINE_RESERVED_SPACE,
+} from './DocumentOutline';
 import { SIDEBAR_DOCUMENT_SHIFT } from './sidebar/constants';
 import { UnifiedSidebar } from './UnifiedSidebar';
 import { CommentMarginMarkers } from './CommentMarginMarkers';
@@ -554,7 +559,16 @@ function CommentsSidebarToggle({ active, onClick }: { active: boolean; onClick: 
  * Outline toggle — same reason as `CommentsSidebarToggle`: needs to render
  * inside `<LocaleProvider>` to see the user's `i18n` prop.
  */
-function OutlineToggleButton({ onClick, topPx }: { onClick: () => void; topPx: number }) {
+function OutlineToggleButton({
+  onClick,
+  topPx,
+  scrollLeft = 0,
+}: {
+  onClick: () => void;
+  topPx: number;
+  /** Horizontal scroll offset of the editor — button slides with the doc. */
+  scrollLeft?: number;
+}) {
   const { t } = useTranslation();
   return (
     <button
@@ -564,9 +578,11 @@ function OutlineToggleButton({ onClick, topPx }: { onClick: () => void; topPx: n
       title={t('editor.showDocumentOutline')}
       style={{
         position: 'absolute',
-        left: 48,
+        // Anchor at the page's top-left and track horizontal scroll so the
+        // button doesn't pin to the viewport and overlay the doc.
+        left: OUTLINE_BUTTON_LEFT_OFFSET - scrollLeft,
         top: topPx,
-        zIndex: 20,
+        zIndex: 50,
         background: 'transparent',
         border: 'none',
         borderRadius: '50%',
@@ -1347,6 +1363,12 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
   const toolbarWrapperRef = useRef<HTMLDivElement>(null);
   const toolbarRoRef = useRef<ResizeObserver | null>(null);
   const [toolbarHeight, setToolbarHeight] = useState(0);
+  // Horizontal scroll offset of the editor scroll container. Used to pin the
+  // vertical ruler to the viewport's left edge during horizontal scroll
+  // (`position: sticky` won't work — it only kicks in after scrolling past the
+  // element's natural position, but we want the ruler at left=0 from the
+  // start). The horizontal ruler scrolls natively via sticky-top.
+  const [editorScrollLeft, setEditorScrollLeft] = useState(0);
   // Keep history.state accessible in stable callbacks without stale closures
   const historyStateRef = useRef(history.state);
   historyStateRef.current = history.state;
@@ -1404,6 +1426,30 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
       toolbarRoRef.current?.disconnect();
     };
   }, []);
+
+  // Track horizontal scroll so the outline panel and toggle button slide
+  // with the doc instead of staying pinned. Re-runs after the loading state
+  // flips because the scroll container only mounts once the doc is ready.
+  // Updates are coalesced to one per frame — scroll events fire faster than
+  // React can re-render the whole editor tree.
+  useEffect(() => {
+    const el = scrollContainerRef.current;
+    if (!el) return;
+    let frame = 0;
+    const update = () => {
+      frame = 0;
+      setEditorScrollLeft(el.scrollLeft);
+    };
+    const onScroll = () => {
+      if (frame === 0) frame = requestAnimationFrame(update);
+    };
+    update();
+    el.addEventListener('scroll', onScroll, { passive: true });
+    return () => {
+      el.removeEventListener('scroll', onScroll);
+      if (frame !== 0) cancelAnimationFrame(frame);
+    };
+  }, [state.isLoading]);
 
   // Helper to get the active editor's view — returns HF editor view when in HF editing mode
   const getActiveEditorView = useCallback(() => {
@@ -4043,7 +4089,7 @@ body { background: white; }
     flexDirection: 'column',
     height: '100%',
     width: '100%',
-    backgroundColor: 'var(--doc-bg-subtle)',
+    backgroundColor: 'var(--doc-bg)',
     ...style,
   };
 
@@ -4188,6 +4234,15 @@ body { background: white; }
   }, [trackedChanges]);
 
   const sidebarOpen = allSidebarItems.length > 0;
+  // Reserve 2× the left-edge allowance so the centered page clears whatever
+  // outline UI is showing, without forcing a shift on wide viewports.
+  const outlineLeftAllowance = showOutline
+    ? OUTLINE_RESERVED_SPACE
+    : showOutlineButton
+      ? OUTLINE_BUTTON_RESERVED_SPACE
+      : 20;
+  const minLayoutWidth =
+    2 * outlineLeftAllowance + 816 + (sidebarOpen ? SIDEBAR_DOCUMENT_SHIFT * 2 : 0);
 
   const resolvedCommentIds = useMemo(() => {
     const ids = new Set<number>();
@@ -4358,38 +4413,6 @@ body { background: white; }
                       </EditorToolbar.TitleBar>
                       <EditorToolbar.FormattingBar>{toolbarChildren}</EditorToolbar.FormattingBar>
                     </EditorToolbar>
-
-                    {/* Horizontal Ruler - sticky with toolbar */}
-                    {showRuler && (
-                      <div
-                        className="flex justify-center px-5 py-1 overflow-x-auto flex-shrink-0 bg-doc-bg"
-                        style={{
-                          paddingRight: sidebarOpen
-                            ? `calc(20px + ${SIDEBAR_DOCUMENT_SHIFT * 2}px)`
-                            : undefined,
-                          transition: 'padding 0.2s ease',
-                        }}
-                      >
-                        <HorizontalRuler
-                          sectionProps={history.state?.package.document?.finalSectionProperties}
-                          zoom={state.zoom}
-                          unit={rulerUnit}
-                          editable={!readOnly}
-                          onLeftMarginChange={handleLeftMarginChange}
-                          onRightMarginChange={handleRightMarginChange}
-                          indentLeft={state.paragraphIndentLeft}
-                          indentRight={state.paragraphIndentRight}
-                          onIndentLeftChange={handleIndentLeftChange}
-                          onIndentRightChange={handleIndentRightChange}
-                          showFirstLineIndent={true}
-                          firstLineIndent={state.paragraphFirstLineIndent}
-                          hangingIndent={state.paragraphHangingIndent}
-                          onFirstLineIndentChange={handleFirstLineIndentChange}
-                          tabMarks={state.paragraphTabs}
-                          onTabMarkRemove={handleTabMarkRemove}
-                        />
-                      </div>
-                    )}
                   </div>
                 )}
 
@@ -4413,12 +4436,73 @@ body { background: white; }
                     setExpandedSidebarItem(null);
                   }}
                 >
-                  {/* Editor content wrapper */}
-                  <div style={{ display: 'flex', flex: 1, minHeight: 0, position: 'relative' }}>
+                  {/* Horizontal Ruler - inside the scroll container so it
+                      scrolls horizontally with the doc, sticky-top so it stays
+                      visible during vertical scroll. min-width keeps the ruler
+                      and the page area on the same horizontal axis when the
+                      viewport is too narrow to fit page + outline + sidebar. */}
+                  {showRuler && (
+                    <div
+                      className="flex justify-center py-1 flex-shrink-0 bg-doc-bg"
+                      style={{
+                        position: 'sticky',
+                        top: 0,
+                        zIndex: 9,
+                        // paddingRight biases the centered ruler so it tracks
+                        // the page when the comments sidebar (translateX)
+                        // shifts the page left. Outline doesn't bias here —
+                        // the page stays centered until minLayoutWidth forces
+                        // horizontal scroll, and the ruler centers with it.
+                        paddingLeft: 20,
+                        paddingRight: 20 + (sidebarOpen ? SIDEBAR_DOCUMENT_SHIFT * 2 : 0),
+                        minWidth: minLayoutWidth,
+                        transition: 'padding 0.2s ease',
+                      }}
+                    >
+                      <HorizontalRuler
+                        sectionProps={history.state?.package.document?.finalSectionProperties}
+                        zoom={state.zoom}
+                        unit={rulerUnit}
+                        editable={!readOnly}
+                        onLeftMarginChange={handleLeftMarginChange}
+                        onRightMarginChange={handleRightMarginChange}
+                        indentLeft={state.paragraphIndentLeft}
+                        indentRight={state.paragraphIndentRight}
+                        onIndentLeftChange={handleIndentLeftChange}
+                        onIndentRightChange={handleIndentRightChange}
+                        showFirstLineIndent={true}
+                        firstLineIndent={state.paragraphFirstLineIndent}
+                        hangingIndent={state.paragraphHangingIndent}
+                        onFirstLineIndentChange={handleFirstLineIndentChange}
+                        tabMarks={state.paragraphTabs}
+                        onTabMarkRemove={handleTabMarkRemove}
+                      />
+                    </div>
+                  )}
+                  {/* Editor content wrapper. min-width matches the ruler so
+                      the page and ruler scroll horizontally as a single unit
+                      when the viewport is too narrow to fit them. When the
+                      outline is open, min-width grows to keep the centered
+                      page clear of the panel — but on wide viewports the
+                      page stays put (centered, or translated left by the
+                      comments sidebar) instead of shifting. */}
+                  <div
+                    style={{
+                      display: 'flex',
+                      flex: 1,
+                      minHeight: 0,
+                      position: 'relative',
+                      minWidth: minLayoutWidth,
+                    }}
+                  >
                     {/* Editor content area */}
                     <div
                       ref={editorContentRef}
-                      style={{ position: 'relative', flex: 1, minWidth: 0 }}
+                      style={{
+                        position: 'relative',
+                        flex: 1,
+                        minWidth: 0,
+                      }}
                       onMouseDown={(e) => {
                         // Focus editor when clicking on the background area (not the editor itself)
                         // Using mouseDown for immediate response before focus can be lost
@@ -4429,7 +4513,10 @@ body { background: white; }
                       }}
                       onContextMenu={handleEditorContextMenu}
                     >
-                      {/* Vertical Ruler - fixed on left edge (hidden when readOnly prop is set) */}
+                      {/* Vertical Ruler - sits at the editor content's left
+                          edge so it scrolls horizontally with the page instead
+                          of pinning to the viewport (which would lay over the
+                          doc when the user scrolls right). */}
                       {showRuler && !readOnlyProp && (
                         <div
                           style={{
@@ -4437,7 +4524,10 @@ body { background: white; }
                             left: 0,
                             top: 0,
                             zIndex: 10,
-                            paddingTop: 48, // paged-editor__pages and layout padding-top
+                            // Must match `.paged-editor__pages` padding-top in
+                            // editor.css (24 viewport + 24 pages container);
+                            // update both together or the ruler misaligns.
+                            paddingTop: 48,
                           }}
                         >
                           <VerticalRuler
@@ -4733,6 +4823,7 @@ body { background: white; }
                     onHeadingClick={handleHeadingInfoClick}
                     onClose={() => setShowOutline(false)}
                     topOffset={toolbarHeight}
+                    scrollLeft={editorScrollLeft}
                   />
                 )}
 
@@ -4740,7 +4831,14 @@ body { background: white; }
 
                 {/* Outline toggle button — absolutely positioned below toolbar */}
                 {showOutlineButton && !showOutline && (
-                  <OutlineToggleButton onClick={handleToggleOutline} topPx={toolbarHeight + 12} />
+                  <OutlineToggleButton
+                    onClick={handleToggleOutline}
+                    // Aligns with the page top: toolbar + horizontal ruler row
+                    // (22 ruler + 8 py-1 padding) + PagedEditor viewport
+                    // padding-top (24) + pages container padding (24).
+                    topPx={toolbarHeight + (showRuler ? 30 : 0) + 48}
+                    scrollLeft={editorScrollLeft}
+                  />
                 )}
               </div>
               {/* end wrapper for scroll container + outline */}
