@@ -222,7 +222,7 @@ import {
 } from '@eigenpal/docx-core/prosemirror/extensions/features/ParagraphChangeTrackerExtension';
 
 // Paginated editor
-import { PagedEditor, type PagedEditorRef } from '../paged-editor/PagedEditor';
+import { PagedEditor, type PagedEditorRef, DEFAULT_PAGE_WIDTH } from '../paged-editor/PagedEditor';
 
 // Plugin API types
 import type { RenderedDomContext } from '../plugin-api/types';
@@ -4242,7 +4242,12 @@ body { background: white; }
       ? OUTLINE_BUTTON_RESERVED_SPACE
       : 20;
   const minLayoutWidth =
-    2 * outlineLeftAllowance + 816 + (sidebarOpen ? SIDEBAR_DOCUMENT_SHIFT * 2 : 0);
+    2 * outlineLeftAllowance + DEFAULT_PAGE_WIDTH + (sidebarOpen ? SIDEBAR_DOCUMENT_SHIFT * 2 : 0);
+
+  const sectionPropsPageWidth = history.state?.package?.document?.finalSectionProperties?.pageWidth;
+  const pageWidthPx = sectionPropsPageWidth
+    ? Math.round(sectionPropsPageWidth / 15)
+    : DEFAULT_PAGE_WIDTH;
 
   const resolvedCommentIds = useMemo(() => {
     const ids = new Set<number>();
@@ -4660,11 +4665,7 @@ body { background: white; }
                                 items={allSidebarItems}
                                 anchorPositions={anchorPositions}
                                 renderedDomContext={pluginRenderedDomContext ?? null}
-                                pageWidth={(() => {
-                                  const sp =
-                                    history.state?.package?.document?.finalSectionProperties;
-                                  return sp?.pageWidth ? Math.round(sp.pageWidth / 15) : 816;
-                                })()}
+                                pageWidth={pageWidthPx}
                                 zoom={state.zoom}
                                 editorContainerRef={scrollContainerRef}
                                 onExpandedItemChange={setExpandedSidebarItem}
@@ -4675,10 +4676,7 @@ body { background: white; }
                               comments={comments}
                               anchorPositions={anchorPositions}
                               zoom={state.zoom}
-                              pageWidth={(() => {
-                                const sp = history.state?.package?.document?.finalSectionProperties;
-                                return sp?.pageWidth ? Math.round(sp.pageWidth / 15) : 816;
-                              })()}
+                              pageWidth={pageWidthPx}
                               sidebarOpen={sidebarOpen}
                               resolvedCommentIds={resolvedCommentIds}
                               onMarkerClick={() => {
