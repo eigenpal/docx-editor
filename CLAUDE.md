@@ -332,6 +332,18 @@ git add .changeset/*.md
 
 Skip only for **test-only / docs-only / CI-only** PRs (no published-package code changed). When in doubt, add one — an extra patch entry is harmless; a missing entry ships invisibly.
 
+#### Package name in the changeset frontmatter (READ THIS — agents get it wrong)
+
+The frontmatter must use the **full npm package name**, not the repo name or a guess:
+
+```markdown
+---
+'@eigenpal/docx-js-editor': patch
+---
+```
+
+Only `@eigenpal/docx-js-editor` needs to be listed — the fixed group in `.changeset/config.json` auto-bumps `@eigenpal/docx-editor-agents` to match. Always run `bun changeset` rather than hand-writing the file; the interactive prompt picks valid names from the workspace. A wrong name (e.g. bare `docx-editor`) does not fail the PR's CI but **crashes the post-merge Release workflow** with `Found changeset X for package Y which is not in the workspace`, blocking all releases until someone edits the bad changeset.
+
 #### Bump levels (semver)
 
 - **patch** — bug fix, internal refactor, no public API change. **Default — use this unless you have a clear reason not to.**
@@ -389,6 +401,7 @@ The published-from-CI flow is preferred because it uses OIDC (no long-lived npm 
 - **Don't edit `CHANGELOG.md` by hand.** It's auto-generated from changesets; manual edits get clobbered on the next release.
 - **Don't edit the `version` field in `package.json` by hand.** `changeset version` owns it.
 - **Don't open changesets for `@eigenpal/docx-core` or `@eigenpal/docx-editor-vue`** — they're listed in `.changeset/config.json` `ignore`.
+- **Don't hand-write the package name in changeset frontmatter.** Use `bun changeset` so the package list comes from the workspace. A bare `docx-editor` (or any name not in `package.json`) crashes the Release workflow post-merge.
 
 ---
 

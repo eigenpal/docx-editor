@@ -127,23 +127,54 @@ jobs:
             }')
           curl -sSf -X POST -H 'Content-Type: application/json' -d "$payload" "$SLACK_WEBHOOK_URL" >/dev/null
 
-      - name: Notify Slack — release failed
+      # Distinguish three failure modes when notifying Slack:
+      #   - MODE=pre-release → an earlier step failed (typecheck, tests, build,
+      #     install) before the changesets step ever ran.
+      #   - MODE=release-pr  → changesets step failed AND pending changesets
+      #     exist, so the run was trying to open/update the "chore: release" PR
+      #     (no publish was attempted).
+      #   - MODE=publish     → changesets step failed AND no pending changesets,
+      #     so the run was trying to publish to npm and failed mid-publish.
+      # The pending-changeset check is inline (not a step output) so it works
+      # even when the changesets step itself crashed before producing outputs.
+      - name: Notify Slack — workflow failed
         if: ${{ failure() && env.SLACK_WEBHOOK_URL != '' }}
         env:
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
           ACTOR: ${{ github.actor }}
           RUN_NUMBER: ${{ github.run_number }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          CHANGESETS_OUTCOME: ${{ steps.changesets.outcome }}
         run: |
+          # Count pending changesets (exclude README.md / config.json).
+          pending=$(find .changeset -maxdepth 1 -name '*.md' ! -name 'README.md' 2>/dev/null | wc -l | tr -d ' ')
+          if [ "$CHANGESETS_OUTCOME" != "failure" ]; then
+            mode="pre-release"
+            title=":x: docx-editor — pre-release step failed"
+            detail="A step before the changesets action failed (install, typecheck, tests, or build). No release PR was updated and no publish was attempted. Check the run logs for the failing step."
+          elif [ "$pending" -gt 0 ]; then
+            mode="release-pr"
+            title=":warning: docx-editor — failed to update release PR"
+            detail="The Release workflow could not assemble the \`chore: release\` PR (\`$pending\` pending changeset(s)). No publish was attempted. Likely cause: a malformed changeset file (wrong package name, bad frontmatter)."
+          else
+            mode="publish"
+            title=":x: docx-editor — release publish failed"
+            detail="No pending changesets, so the workflow tried to publish to npm and failed mid-publish. The package may be in a partial state — check the run logs."
+          fi
           payload=$(jq -n \
+            --arg title "$title" \
+            --arg detail "$detail" \
+            --arg mode "$mode" \
             --arg actor "$ACTOR" \
             --arg run_n "$RUN_NUMBER" \
             --arg run_url "$RUN_URL" \
             '{
-              text: ":x: docx-editor release failed",
+              text: $title,
               blocks: [
-                { type: "section", text: { type: "mrkdwn", text: "*:x: docx-editor release failed*" } },
+                { type: "section", text: { type: "mrkdwn", text: "*\($title)*" } },
+                { type: "section", text: { type: "mrkdwn", text: $detail } },
                 { type: "section", fields: [
+                  { type: "mrkdwn", text: "*Mode*\n\($mode)" },
                   { type: "mrkdwn", text: "*Triggered by*\n\($actor)" },
                   { type: "mrkdwn", text: "*Run*\n<\($run_url)|#\($run_n)>" }
                 ] }
