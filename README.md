@@ -85,6 +85,13 @@ Examples: [Vite](examples/vite) | [Next.js](examples/nextjs) | [Remix](examples/
 
 ## Translations
 
+| Locale  | Language            | Coverage |
+| ------- | ------------------- | -------- |
+| `en`    | English             | 100%     |
+| `de`    | German              | 100%     |
+| `pl`    | Polish              | 100%     |
+| `pt-BR` | Portuguese (Brazil) | 100%     |
+
 Help translate the editor into your language! See the full **[i18n contribution guide](docs/i18n.md)**.
 
 ```bash
