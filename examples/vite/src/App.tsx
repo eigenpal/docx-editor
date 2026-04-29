@@ -1,6 +1,13 @@
 import React, { useState, useRef, useCallback, useEffect, useMemo } from 'react';
 import { findStartPosForParaId } from '@eigenpal/docx-core';
-import { DocxEditor, type DocxEditorRef, createEmptyDocument } from '@eigenpal/docx-js-editor';
+import {
+  DocxEditor,
+  type DocxEditorRef,
+  createEmptyDocument,
+  AgentChatLog,
+  type AgentMessage,
+} from '@eigenpal/docx-js-editor';
+import { getToolDisplayName } from '@eigenpal/docx-editor-agents/react';
 import { ExampleSwitcher } from '../../shared/ExampleSwitcher';
 import { GitHubBadge } from '../../shared/GitHubBadge';
 
@@ -203,6 +210,15 @@ export function App() {
         });
         return unsub ?? (() => undefined);
       },
+      agentApplyFormatting: (opts: {
+        paraId: string;
+        search?: string;
+        marks: Parameters<NonNullable<typeof editorRef.current>['applyFormatting']>[0]['marks'];
+      }) => editorRef.current?.applyFormatting(opts) ?? false,
+      agentSetParagraphStyle: (opts: { paraId: string; styleId: string }) =>
+        editorRef.current?.setParagraphStyle(opts) ?? false,
+      agentGetPageContent: (pageNumber: number) =>
+        editorRef.current?.getPageContent(pageNumber) ?? null,
     };
     return () => {
       delete window.__DOCX_EDITOR_E2E__;
@@ -314,6 +330,68 @@ export function App() {
     [handleFileSelect, handleNewDocument, handleSave, status]
   );
 
+  // Opt-in agent panel for E2E + manual smoke testing. Adds the right-hand
+  // panel + toolbar toggle when ?agentPanel=1 (or VITE_DOCX_EDITOR_AGENT_PANEL=1)
+  // is set, so the live demo at docx-editor.dev stays unchanged.
+  const showAgentPanel = (() => {
+    if (typeof window === 'undefined') return false;
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('agentPanel') === '1' || params.get('agentTimeline') === '1') return true;
+    return import.meta.env.VITE_DOCX_EDITOR_AGENT_PANEL === '1';
+  })();
+
+  // Fixture for the AgentTimeline e2e test. `?agentTimeline=streaming` boots
+  // with an in-flight turn (timeline expanded, spinner). `?agentTimeline=done`
+  // boots with a completed turn (timeline collapsed). `?agentTimeline=long`
+  // boots with 8 calls so the test can assert the "+N earlier steps" cap.
+  // Falls back to no fixture so other agent-panel tests are unaffected.
+  const agentTimelineFixture: AgentMessage[] | null = (() => {
+    if (typeof window === 'undefined') return null;
+    const mode = new URLSearchParams(window.location.search).get('agentTimeline');
+    if (!mode) return null;
+    const isStreaming = mode === 'streaming';
+    if (mode === 'long') {
+      const calls: NonNullable<AgentMessage['toolCalls']> = [
+        { id: 't1', name: 'read_document', status: 'done', result: '...' },
+        ...Array.from({ length: 7 }, (_, i) => ({
+          id: `t${i + 2}`,
+          name: 'add_comment',
+          status: 'done' as const,
+          result: `Comment ${i + 1} added.`,
+        })),
+      ];
+      return [
+        { id: 'u1', role: 'user', text: 'Roast everything.' },
+        {
+          id: 'a1',
+          role: 'assistant',
+          text: 'Done — 7 comments.',
+          status: 'done',
+          toolCalls: calls,
+        },
+      ];
+    }
+    return [
+      { id: 'u1', role: 'user', text: 'Roast my doc.' },
+      {
+        id: 'a1',
+        role: 'assistant',
+        text: isStreaming ? '' : 'Done — left 3 comments.',
+        status: isStreaming ? 'streaming' : 'done',
+        toolCalls: [
+          { id: 't1', name: 'read_document', status: 'done', result: '...' },
+          { id: 't2', name: 'add_comment', status: 'done', result: 'Comment 1 added.' },
+          {
+            id: 't3',
+            name: 'add_comment',
+            status: isStreaming ? 'running' : 'done',
+            result: isStreaming ? undefined : 'Comment 2 added.',
+          },
+        ],
+      },
+    ];
+  })();
+
   return (
     <div style={styles.container}>
       <main style={styles.main}>
@@ -332,6 +410,44 @@ export function App() {
           documentName={fileName}
           onDocumentNameChange={setFileName}
           renderTitleBarRight={renderTitleBarRight}
+          agentPanel={
+            showAgentPanel
+              ? {
+                  render: ({ close }) => (
+                    <div
+                      data-testid="agent-panel-content"
+                      style={{ flex: 1, padding: 16, overflow: 'auto' }}
+                    >
+                      {agentTimelineFixture && (
+                        <AgentChatLog
+                          messages={agentTimelineFixture}
+                          autoScroll={false}
+                          humanizeToolName={getToolDisplayName}
+                        />
+                      )}
+                      <p style={{ marginTop: 12, fontSize: 13, color: '#6b7280' }}>
+                        BYO chat goes here. This is the demo&apos;s placeholder content.
+                      </p>
+                      <button
+                        type="button"
+                        onClick={close}
+                        style={{
+                          marginTop: 8,
+                          padding: '6px 10px',
+                          fontSize: 12,
+                          background: '#f1f5f9',
+                          border: '1px solid #e2e8f0',
+                          borderRadius: 6,
+                          cursor: 'pointer',
+                        }}
+                      >
+                        Close from inside
+                      </button>
+                    </div>
+                  ),
+                }
+              : undefined
+          }
         />
       </main>
     </div>

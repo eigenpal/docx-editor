@@ -38,6 +38,19 @@ export {
 } from './components/DocxEditor';
 export { renderAsync, type RenderAsyncOptions, type DocxEditorHandle } from './renderAsync';
 export { type DocxInput, toArrayBuffer } from '@eigenpal/docx-core/utils/docxInput';
+export { AgentPanel, type AgentPanelProps } from './components/AgentPanel';
+export {
+  AgentChatLog,
+  AgentComposer,
+  AgentSuggestionChip,
+  AgentTimeline,
+  type AgentChatLogProps,
+  type AgentComposerProps,
+  type AgentSuggestionChipProps,
+  type AgentTimelineProps,
+  type AgentMessage,
+  type AgentToolCall,
+} from './components/AgentChat';
 
 // ============================================================================
 // AGENT API

@@ -795,6 +795,16 @@ export function IconTextDirectionRtl(props: IconProps) {
   );
 }
 
+// Material Symbol "auto_awesome" — official path from Google Fonts.
+// Source: https://fonts.gstatic.com/s/i/short-term/release/materialsymbolsoutlined/auto_awesome/default/24px.svg
+export function IconAgentSparkle(props: IconProps) {
+  return (
+    <SvgIcon {...props}>
+      <path d="m760-600-50-110-110-50 110-50 50-110 50 110 110 50-110 50-50 110Zm0 560-50-110-110-50 110-50 50-110 50 110 110 50-110 50-50 110ZM360-160 260-380 40-480l220-100 100-220 100 220 220 100-220 100-100 220Zm0-194 40-86 86-40-86-40-40-86-40 86-86 40 86 40 40 86Zm0-126Z" />
+    </SvgIcon>
+  );
+}
+
 // ============================================================================
 // ICON MAP - for MaterialSymbol compatibility
 // ============================================================================
@@ -900,6 +910,8 @@ const iconMap: Record<string, React.ComponentType<IconProps>> = {
   // Text direction
   format_textdirection_l_to_r: IconTextDirectionLtr,
   format_textdirection_r_to_l: IconTextDirectionRtl,
+  // Agent
+  'agent-sparkle': IconAgentSparkle,
 };
 
 /**

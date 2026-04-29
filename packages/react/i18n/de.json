@@ -750,5 +750,10 @@
   },
   "loading": {
     "label": "Wird geladen"
+  },
+  "agentPanel": {
+    "close": null,
+    "defaultTitle": null,
+    "toggle": null
   }
 }

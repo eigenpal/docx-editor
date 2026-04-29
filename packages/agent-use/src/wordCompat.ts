@@ -27,6 +27,14 @@
  * | `revisionCollection.getItems()`     | `getChanges(filter?)`                 |
  * | `Document.onContentChanged.add(...)`| `onContentChange(listener)`           |
  * | `Document.onSelectionChanged.add()` | `onSelectionChange(listener)`         |
+ * | `Range.font.bold` / `italic` / `color` / `size` / `name` | `applyFormatting({paraId, search?, marks})` |
+ * | `ParagraphFormat.style` / `applyStyle(...)` | `setParagraphStyle({paraId, styleId})` |
+ *
+ * ## Beyond Word's surface (paged-document affordances)
+ *
+ *  - `getPage(n)` / `getPages({from, to})` / `getTotalPages()` — Word's JS API
+ *    doesn't model pages as first-class addressable units. We do, because the
+ *    editor is paged. Backed by the layout-painter's page boundary state.
  *
  * ## Differences (intentional, documented)
  *
@@ -45,7 +53,6 @@
  *
  * ## Out of scope (gaps we deliberately don't implement)
  *
- *  - Formatting verbs (`Range.font.bold`, etc.). Out of scope for v1.
  *  - Paragraph creation (`body.insertParagraph`). Out of scope for v1.
  *  - Table mutation (insert row/col, delete cell). Read-only.
  *  - Headers / footers / sections.
@@ -70,6 +77,9 @@ import type {
   ProposeChangeOptions,
   FoundMatch,
   SelectionInfo,
+  ApplyFormattingOptions,
+  SetParagraphStyleOptions,
+  PageContent,
 } from './types';
 
 /**
@@ -118,6 +128,30 @@ export interface WordCompatBridge {
    *  - insertion:   search "",        replaceWith non-empty (paragraph end)
    */
   proposeChange(options: ProposeChangeOptions): boolean;
+
+  /**
+   * Word: `range.font.bold = true` / `range.font.italic = true` / etc.
+   * Applied to a paragraph or to a unique phrase within it. Direct edit,
+   * not a tracked change.
+   */
+  applyFormatting(options: ApplyFormattingOptions): boolean;
+
+  /** Word: `paragraph.styleBuiltIn = ...` / `paragraph.style = 'Heading 1'`. */
+  setParagraphStyle(options: SetParagraphStyleOptions): boolean;
+
+  // ── Paged document affordances (no Word equivalent) ─────────────────────
+
+  /**
+   * Read one rendered page (1-indexed). Word's JS API does not expose pages
+   * as first-class objects; we do because the editor is paged.
+   */
+  getPage(pageNumber: number): PageContent | null;
+
+  /** Read a range of rendered pages (1-indexed, inclusive). */
+  getPages(options: { from: number; to: number }): PageContent[];
+
+  /** Total number of pages currently rendered. */
+  getTotalPages(): number;
 
   // ── Navigate ─────────────────────────────────────────────────────────────
 

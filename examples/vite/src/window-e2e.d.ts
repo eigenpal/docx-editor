@@ -45,6 +45,26 @@ declare global {
       agentOnSelectionChangeCount: number;
       agentSubscribeContentChange: () => () => void;
       agentSubscribeSelectionChange: () => () => void;
+      agentApplyFormatting: (opts: {
+        paraId: string;
+        search?: string;
+        marks: {
+          bold?: boolean;
+          italic?: boolean;
+          underline?: boolean | { style?: string };
+          strike?: boolean;
+          color?: { rgb?: string; themeColor?: string };
+          highlight?: string;
+          fontSize?: number;
+          fontFamily?: { ascii?: string; hAnsi?: string };
+        };
+      }) => boolean;
+      agentSetParagraphStyle: (opts: { paraId: string; styleId: string }) => boolean;
+      agentGetPageContent: (pageNumber: number) => {
+        pageNumber: number;
+        text: string;
+        paragraphs: Array<{ paraId: string; text: string; styleId?: string }>;
+      } | null;
     };
   }
 }

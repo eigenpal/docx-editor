@@ -88,6 +88,43 @@ test.describe('Agent bridge — paraId-anchored mutations', () => {
     expect(hasMark).toBe(true);
   });
 
+  test('rapid sequential addComment calls all persist (regression: stale ref)', async ({
+    page,
+  }) => {
+    // Regression for the agent panel's roast-my-doc flow: when the model
+    // emits 5+ `add_comment` tool calls in a single turn, every call hits
+    // the bridge synchronously in the same React tick. The unified
+    // setComments setter previously read a stale `commentsRef.current` for
+    // every call, so only the last comment survived. Verify all stick.
+    const paraId = await getFirstParaId(page);
+    test.skip(!paraId, 'Fixture has no paraIds');
+
+    const beforeCount = await page.evaluate(
+      () => window.__DOCX_EDITOR_E2E__?.agentGetCommentCount() ?? 0
+    );
+
+    // Fire 5 addComment calls back-to-back inside a single page.evaluate so
+    // they execute synchronously in the same React tick.
+    const ids = await page.evaluate(
+      ([id]) => {
+        const hook = window.__DOCX_EDITOR_E2E__;
+        if (!hook) return [];
+        return Array.from({ length: 5 }, (_, i) =>
+          hook.agentAddComment({ paraId: id!, text: `Burst comment ${i + 1}` })
+        );
+      },
+      [paraId]
+    );
+
+    expect(ids.filter((x) => typeof x === 'number')).toHaveLength(5);
+
+    // After React commits, the comment count grew by 5 — not 1.
+    const afterCount = await page.evaluate(
+      () => window.__DOCX_EDITOR_E2E__?.agentGetCommentCount() ?? 0
+    );
+    expect(afterCount - beforeCount).toBe(5);
+  });
+
   test('proposeChange creates a tracked change visible in the editor', async ({ page }) => {
     await getFirstParaId(page);
 

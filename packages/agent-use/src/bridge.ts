@@ -34,6 +34,9 @@ import type {
   ProposeChangeOptions,
   FoundMatch,
   SelectionInfo,
+  ApplyFormattingOptions,
+  SetParagraphStyleOptions,
+  PageContent,
 } from './types';
 import { getContent, formatContentForLLM } from './content';
 import { getChanges, getComments } from './discovery';
@@ -75,6 +78,20 @@ export interface EditorRefLike {
     content: unknown[];
     done?: boolean;
   }>;
+  /** Apply character formatting to a paragraph or sub-range. Returns false on missing paraId / ambiguous search. */
+  applyFormatting(options: {
+    paraId: string;
+    search?: string;
+    marks: import('./types').CharacterFormatting;
+  }): boolean;
+  /** Apply a paragraph style by styleId. Returns false if paraId is unknown. */
+  setParagraphStyle(options: { paraId: string; styleId: string }): boolean;
+  /** Read a single page's paragraphs (1-indexed). Returns null if the page does not exist. */
+  getPageContent(pageNumber: number): PageContent | null;
+  /** Total number of pages currently rendered. */
+  getTotalPages(): number;
+  /** 1-indexed page the user's cursor / selection is on. 0 if unknown. */
+  getCurrentPage(): number;
   onContentChange(listener: (doc: unknown) => void): () => void;
   onSelectionChange(listener: (selection: unknown) => void): () => void;
 }
@@ -100,6 +117,25 @@ export interface EditorBridge {
   resolveComment(commentId: number): void;
   /** Suggest a tracked change. `replaceWith=''` deletes; `search=''` inserts at paragraph end. */
   proposeChange(options: ProposeChangeOptions): boolean;
+  /**
+   * Apply character formatting (bold / italic / color / size / font / etc.)
+   * to a paragraph, or to a unique phrase within it. This is a direct edit —
+   * not a tracked change.
+   */
+  applyFormatting(options: ApplyFormattingOptions): boolean;
+  /**
+   * Apply a paragraph style by styleId (e.g. `'Heading1'`, `'Quote'`).
+   * Direct edit, not a tracked change.
+   */
+  setParagraphStyle(options: SetParagraphStyleOptions): boolean;
+  /** Read a single page (1-indexed). Returns null if the page does not exist. */
+  getPage(pageNumber: number): PageContent | null;
+  /** Read a range of pages (1-indexed, inclusive). Out-of-range pages are skipped. */
+  getPages(options: { from: number; to: number }): PageContent[];
+  /** Total number of pages currently rendered in the editor. */
+  getTotalPages(): number;
+  /** 1-indexed page the user's cursor / selection is on. 0 if unknown. */
+  getCurrentPage(): number;
   /** Scroll the editor to a paragraph by paraId. */
   scrollTo(paraId: string): boolean;
   /** Subscribe to document content changes. Returns an unsubscribe function. */
@@ -266,6 +302,45 @@ export function createEditorBridge(editorRef: EditorRefLike, author = 'AI'): Edi
         replaceWith: options.replaceWith,
         author: resolveAuthor(options.author),
       });
+    },
+
+    applyFormatting(options: ApplyFormattingOptions): boolean {
+      return editorRef.applyFormatting({
+        paraId: options.paraId,
+        search: options.search,
+        marks: options.marks,
+      });
+    },
+
+    setParagraphStyle(options: SetParagraphStyleOptions): boolean {
+      return editorRef.setParagraphStyle({
+        paraId: options.paraId,
+        styleId: options.styleId,
+      });
+    },
+
+    getPage(pageNumber: number): PageContent | null {
+      return editorRef.getPageContent(pageNumber);
+    },
+
+    getPages(options: { from: number; to: number }): PageContent[] {
+      const total = editorRef.getTotalPages();
+      const from = Math.max(1, Math.min(options.from, total));
+      const to = Math.max(from, Math.min(options.to, total));
+      const pages: PageContent[] = [];
+      for (let n = from; n <= to; n++) {
+        const p = editorRef.getPageContent(n);
+        if (p) pages.push(p);
+      }
+      return pages;
+    },
+
+    getTotalPages(): number {
+      return editorRef.getTotalPages();
+    },
+
+    getCurrentPage(): number {
+      return editorRef.getCurrentPage();
     },
 
     scrollTo(paraId: string): boolean {

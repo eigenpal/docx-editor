@@ -41,12 +41,14 @@ interface EditorToolbarComponent {
 function EditorToolbarBase({
   children,
   className,
+  style,
   ...toolbarProps
-}: EditorToolbarProps & { children: ReactNode }) {
+}: EditorToolbarProps & { children: ReactNode; style?: React.CSSProperties }) {
   return (
     <EditorToolbarContext.Provider value={toolbarProps}>
       <div
         className={cn('flex flex-col bg-white shadow-sm flex-shrink-0', className)}
+        style={style}
         data-testid="editor-toolbar"
       >
         {children}

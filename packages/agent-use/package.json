@@ -16,10 +16,30 @@
       "import": "./dist/bridge.mjs",
       "require": "./dist/bridge.js"
     },
+    "./server": {
+      "types": "./dist/server.d.ts",
+      "import": "./dist/server.mjs",
+      "require": "./dist/server.js"
+    },
+    "./react": {
+      "types": "./dist/react.d.ts",
+      "import": "./dist/react.mjs",
+      "require": "./dist/react.js"
+    },
     "./mcp": {
       "types": "./dist/mcp.d.ts",
       "import": "./dist/mcp.mjs",
       "require": "./dist/mcp.js"
+    },
+    "./ai-sdk/server": {
+      "types": "./dist/ai-sdk/server.d.ts",
+      "import": "./dist/ai-sdk/server.mjs",
+      "require": "./dist/ai-sdk/server.js"
+    },
+    "./ai-sdk/react": {
+      "types": "./dist/ai-sdk/react.d.ts",
+      "import": "./dist/ai-sdk/react.mjs",
+      "require": "./dist/ai-sdk/react.js"
     }
   },
   "typesVersions": {
@@ -27,10 +47,33 @@
       "bridge": [
         "./dist/bridge.d.ts"
       ],
+      "server": [
+        "./dist/server.d.ts"
+      ],
+      "react": [
+        "./dist/react.d.ts"
+      ],
       "mcp": [
         "./dist/mcp.d.ts"
+      ],
+      "ai-sdk/server": [
+        "./dist/ai-sdk/server.d.ts"
+      ],
+      "ai-sdk/react": [
+        "./dist/ai-sdk/react.d.ts"
       ]
     }
+  },
+  "peerDependencies": {
+    "ai": "^5.0.0 || ^6.0.0"
+  },
+  "peerDependenciesMeta": {
+    "ai": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "ai": "^6.0.169"
   },
   "files": [
     "dist",

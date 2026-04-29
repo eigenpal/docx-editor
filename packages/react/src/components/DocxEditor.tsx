@@ -46,6 +46,7 @@ import {
 } from './DocumentOutline';
 import { SIDEBAR_DOCUMENT_SHIFT } from './sidebar/constants';
 import { UnifiedSidebar } from './UnifiedSidebar';
+import { AgentPanel } from './AgentPanel';
 import { CommentMarginMarkers } from './CommentMarginMarkers';
 import { useCommentSidebarItems, type CommentCallbacks } from '../hooks/useCommentSidebarItems';
 import { useTrackedChanges } from '../hooks/useTrackedChanges';
@@ -377,6 +378,43 @@ export interface DocxEditorProps {
   renderTitleBarRight?: () => ReactNode;
   /** Translation overrides. Import a locale JSON file and pass it directly. */
   i18n?: Translations;
+  /**
+   * Mount a controllable agent panel on the right side of the editor. The
+   * panel is the chrome (header, close button, drag-resize); the consumer
+   * supplies whatever content goes inside via `render` — typically a chat
+   * UI from `@ai-sdk/react`'s `useChat`, `assistant-ui`, or any other
+   * framework. We do not ship message bubbles, a composer, or a chat engine.
+   *
+   * Three control patterns:
+   *  - **Uncontrolled**: `agentPanel={{ render }}` — toolbar button + panel
+   *    close button toggle the panel. Width persists to localStorage.
+   *  - **Controlled**: `agentPanel={{ render, open, onOpenChange }}` — the
+   *    consumer owns open state (e.g. tied to a global menu).
+   *  - **Headless**: omit `agentPanel`, use the toolkit directly via
+   *    `useDocxAgentTools` — render the panel anywhere you want.
+   */
+  agentPanel?: {
+    /** Render-prop returning the panel content. Called only when open. */
+    render: (ctx: { close: () => void }) => ReactNode;
+    /** Controlled open state. Omit for uncontrolled. */
+    open?: boolean;
+    /** Fires when toolbar button or panel close button is clicked. */
+    onOpenChange?: (open: boolean) => void;
+    /** Show the toolbar toggle button. Default: true. */
+    showToolbarButton?: boolean;
+    /** Optional badge / dot on the toolbar button. */
+    toolbarBadge?: ReactNode;
+    /** Optional panel title. Default: t('agentPanel.defaultTitle'). */
+    title?: string;
+    /** Optional panel header icon. Default: sparkle. */
+    icon?: ReactNode;
+    /** Initial panel width in px (uncontrolled). Default: 360. */
+    defaultWidth?: number;
+    /** Min drag width. Default: 280. */
+    minWidth?: number;
+    /** Max drag width. Default: 600. */
+    maxWidth?: number;
+  };
 }
 
 /**
@@ -459,6 +497,40 @@ export interface DocxEditorRef {
     query: string,
     options?: { caseSensitive?: boolean; limit?: number }
   ) => Array<{ paraId: string; match: string; before: string; after: string }>;
+  /**
+   * Apply character formatting (bold / italic / color / size / font / etc.)
+   * to a paragraph or to a unique phrase within it. This is a direct edit,
+   * not a tracked change. Returns false on missing paraId or ambiguous search.
+   */
+  applyFormatting: (options: {
+    paraId: string;
+    search?: string;
+    marks: {
+      bold?: boolean;
+      italic?: boolean;
+      underline?: boolean | { style?: string };
+      strike?: boolean;
+      color?: { rgb?: string; themeColor?: string };
+      highlight?: string;
+      fontSize?: number;
+      fontFamily?: { ascii?: string; hAnsi?: string };
+    };
+  }) => boolean;
+  /**
+   * Apply a paragraph style by styleId (e.g. `'Heading1'`, `'Quote'`).
+   * Direct edit, not a tracked change. Returns false if paraId is unknown.
+   */
+  setParagraphStyle: (options: { paraId: string; styleId: string }) => boolean;
+  /**
+   * Read the contents of a single page. 1-indexed; returns null if the page
+   * does not exist. Each paragraph is returned with its stable paraId so the
+   * agent can comment on or modify it without an extra round-trip.
+   */
+  getPageContent: (pageNumber: number) => {
+    pageNumber: number;
+    text: string;
+    paragraphs: Array<{ paraId: string; text: string; styleId?: string }>;
+  } | null;
   /** Read the user's current cursor / selection — what's highlighted right now. */
   getSelectionInfo: () => {
     paraId: string | null;
@@ -551,6 +623,50 @@ function CommentsSidebarToggle({ active, onClick }: { active: boolean; onClick: 
   return (
     <ToolbarButton onClick={onClick} active={active} title={title} ariaLabel={title}>
       <MaterialSymbol name="comment" size={20} />
+    </ToolbarButton>
+  );
+}
+
+function AgentPanelToggle({
+  active,
+  onClick,
+  badge,
+}: {
+  active: boolean;
+  onClick: () => void;
+  badge?: ReactNode;
+}) {
+  const { t } = useTranslation();
+  const title = t('agentPanel.toggle');
+  return (
+    <ToolbarButton onClick={onClick} active={active} title={title} ariaLabel={title}>
+      <span style={{ position: 'relative', display: 'inline-flex' }}>
+        <MaterialSymbol name="agent-sparkle" size={20} />
+        {badge != null && (
+          <span
+            data-testid="agent-panel-toggle-badge"
+            style={{
+              position: 'absolute',
+              top: -4,
+              right: -6,
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              minWidth: 14,
+              height: 14,
+              padding: '0 3px',
+              borderRadius: 7,
+              fontSize: 10,
+              fontWeight: 600,
+              background: '#ef4444',
+              color: '#fff',
+              lineHeight: 1,
+            }}
+          >
+            {badge}
+          </span>
+        )}
+      </span>
     </ToolbarButton>
   );
 }
@@ -1083,6 +1199,7 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
     documentNameEditable = true,
     renderTitleBarRight,
     i18n,
+    agentPanel,
   },
   ref
 ) {
@@ -1163,6 +1280,23 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
   };
   // 'viewing' mode acts as read-only
   const readOnly = readOnlyProp || editingMode === 'viewing';
+
+  // Agent panel open state (uncontrolled fallback when `agentPanel.open` is undefined).
+  const [agentPanelInternalOpen, setAgentPanelInternalOpen] = useState(false);
+  const isAgentPanelControlled = agentPanel?.open !== undefined;
+  const agentPanelOpen = !agentPanel
+    ? false
+    : isAgentPanelControlled
+      ? !!agentPanel.open
+      : agentPanelInternalOpen;
+  const setAgentPanelOpen = useCallback(
+    (next: boolean) => {
+      agentPanel?.onOpenChange?.(next);
+      if (!isAgentPanelControlled) setAgentPanelInternalOpen(next);
+    },
+    [agentPanel, isAgentPanelControlled]
+  );
+
   // Accessed by the stable recomputeFloatingCommentBtn callback below.
   // Kept in sync below after that callback is declared.
   // Floating "add comment" button position (relative to scroll container, null = hidden)
@@ -1205,8 +1339,18 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
   onCommentsChangeRef.current = onCommentsChange;
 
   // Unified setter — routes to internal state in uncontrolled mode and/or to
-  // the parent's onCommentsChange callback in controlled mode. All existing
-  // setComments call sites use this; uncontrolled mode behavior is unchanged.
+  // the parent's onCommentsChange callback in controlled mode.
+  //
+  // In uncontrolled mode we mutate `commentsRef.current` synchronously
+  // *before* queuing the React update so rapid sequential calls in the
+  // same tick (e.g. an agent loop calling `addComment` 30 times back-to-
+  // back) see the latest accumulated state. Without this, every functional
+  // updater reads the same stale ref and only the last comment survives.
+  //
+  // In controlled mode the parent's prop is the source of truth — we don't
+  // mutate the ref here because the parent might transform / reject the
+  // value before echoing it back via `commentsProp`. The `commentsRef.current = comments`
+  // assignment one effect above keeps the ref in sync with the prop.
   const setComments = useCallback(
     (next: Comment[] | ((prev: Comment[]) => Comment[])) => {
       const resolved =
@@ -1214,7 +1358,10 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
           ? (next as (prev: Comment[]) => Comment[])(commentsRef.current)
           : next;
       if (resolved === commentsRef.current) return;
-      if (!isControlledComments) setInternalComments(resolved);
+      if (!isControlledComments) {
+        commentsRef.current = resolved;
+        setInternalComments(resolved);
+      }
       onCommentsChangeRef.current?.(resolved);
     },
     [isControlledComments]
@@ -3715,6 +3862,197 @@ body { background: white; }
         return true;
       },
 
+      applyFormatting: (options) => {
+        const view = pagedEditorRef.current?.getView();
+        if (!view) return false;
+        const { schema } = view.state;
+
+        const range = findParaIdRange(view.state.doc, options.paraId);
+        if (!range) return false;
+
+        // Default range: the paragraph's text content (skip open/close tokens).
+        let from = range.from + 1;
+        let to = range.to - 1;
+
+        if (options.search) {
+          const textRange = findTextInPmParagraph(
+            view.state.doc,
+            range.from,
+            range.to,
+            options.search
+          );
+          if (!textRange) return false;
+          from = textRange.from;
+          to = textRange.to;
+        }
+
+        if (from >= to) return true;
+
+        let tr = view.state.tr;
+        const m = options.marks;
+
+        if (m.bold !== undefined && schema.marks.bold) {
+          tr = m.bold
+            ? tr.addMark(from, to, schema.marks.bold.create())
+            : tr.removeMark(from, to, schema.marks.bold);
+        }
+        if (m.italic !== undefined && schema.marks.italic) {
+          tr = m.italic
+            ? tr.addMark(from, to, schema.marks.italic.create())
+            : tr.removeMark(from, to, schema.marks.italic);
+        }
+        if (m.underline !== undefined && schema.marks.underline) {
+          if (m.underline) {
+            const style = typeof m.underline === 'object' ? m.underline.style : undefined;
+            tr = tr.addMark(from, to, schema.marks.underline.create({ style: style ?? 'single' }));
+          } else {
+            tr = tr.removeMark(from, to, schema.marks.underline);
+          }
+        }
+        if (m.strike !== undefined && schema.marks.strike) {
+          tr = m.strike
+            ? tr.addMark(from, to, schema.marks.strike.create())
+            : tr.removeMark(from, to, schema.marks.strike);
+        }
+        if (m.color !== undefined && schema.marks.textColor) {
+          if (m.color && (m.color.rgb || m.color.themeColor)) {
+            tr = tr.addMark(
+              from,
+              to,
+              schema.marks.textColor.create({
+                rgb: m.color.rgb ?? null,
+                themeColor: m.color.themeColor ?? null,
+              })
+            );
+          } else {
+            tr = tr.removeMark(from, to, schema.marks.textColor);
+          }
+        }
+        if (m.highlight !== undefined && schema.marks.highlight) {
+          if (m.highlight) {
+            const name = mapHexToHighlightName(m.highlight);
+            tr = tr.addMark(
+              from,
+              to,
+              schema.marks.highlight.create({ color: name || m.highlight })
+            );
+          } else {
+            tr = tr.removeMark(from, to, schema.marks.highlight);
+          }
+        }
+        if (m.fontSize !== undefined && schema.marks.fontSize) {
+          if (m.fontSize > 0) {
+            tr = tr.addMark(
+              from,
+              to,
+              schema.marks.fontSize.create({ size: pointsToHalfPoints(m.fontSize) })
+            );
+          } else {
+            tr = tr.removeMark(from, to, schema.marks.fontSize);
+          }
+        }
+        if (m.fontFamily !== undefined && schema.marks.fontFamily) {
+          if (m.fontFamily && (m.fontFamily.ascii || m.fontFamily.hAnsi)) {
+            tr = tr.addMark(
+              from,
+              to,
+              schema.marks.fontFamily.create({
+                ascii: m.fontFamily.ascii ?? null,
+                hAnsi: m.fontFamily.hAnsi ?? m.fontFamily.ascii ?? null,
+              })
+            );
+          } else {
+            tr = tr.removeMark(from, to, schema.marks.fontFamily);
+          }
+        }
+
+        view.dispatch(tr);
+        return true;
+      },
+
+      setParagraphStyle: (options) => {
+        const view = pagedEditorRef.current?.getView();
+        if (!view) return false;
+
+        const range = findParaIdRange(view.state.doc, options.paraId);
+        if (!range) return false;
+
+        const currentDoc = historyStateRef.current;
+        const styleResolver = currentDoc?.package?.styles
+          ? getCachedStyleResolver(currentDoc.package.styles)
+          : null;
+
+        // Refuse unknown styleIds so the agent gets a clear error
+        // instead of silently writing `<w:pStyle w:val="NoSuchStyle"/>`.
+        // We only enforce this when we have a resolver — without one,
+        // we can't know which styles are defined, so fall through.
+        if (styleResolver && !styleResolver.hasParagraphStyle(options.styleId)) {
+          return false;
+        }
+
+        // Build a synthetic state with selection inside the target paragraph
+        // so applyStyle's cursor-driven walk lands on it. We restore the
+        // original selection on the dispatched transaction.
+        const $from = view.state.doc.resolve(range.from + 1);
+        const $to = view.state.doc.resolve(range.to - 1);
+        const paraSelection = TextSelection.between($from, $to);
+        const stateWithSel = view.state.apply(view.state.tr.setSelection(paraSelection));
+
+        const cmd = styleResolver
+          ? (() => {
+              const r = styleResolver.resolveParagraphStyle(options.styleId);
+              return applyStyle(options.styleId, {
+                paragraphFormatting: r.paragraphFormatting,
+                runFormatting: r.runFormatting,
+              });
+            })()
+          : applyStyle(options.styleId);
+
+        let didApply = false;
+        cmd(stateWithSel, (newTr) => {
+          didApply = true;
+          newTr.setSelection(view.state.selection.map(newTr.doc, newTr.mapping));
+          view.dispatch(newTr);
+        });
+
+        return didApply;
+      },
+
+      getPageContent: (pageNumber) => {
+        const layout = pagedEditorRef.current?.getLayout();
+        if (!layout) return null;
+        const page = layout.pages[pageNumber - 1];
+        if (!page) return null;
+        const view = pagedEditorRef.current?.getView();
+        if (!view) return null;
+        const doc = view.state.doc;
+
+        const seen = new Set<string>();
+        const paragraphs: Array<{ paraId: string; text: string; styleId?: string }> = [];
+
+        for (const frag of page.fragments) {
+          if (frag.kind !== 'paragraph') continue;
+          // `docFrom` is the position immediately before the paragraph node;
+          // `doc.nodeAt(docFrom)` resolves to the paragraph itself.
+          const docFrom = frag.docFrom;
+          if (docFrom == null) continue;
+          const node = doc.nodeAt(docFrom);
+          if (!node || !node.isTextblock) continue;
+
+          const paraId = node.attrs?.paraId as string | undefined;
+          if (!paraId || seen.has(paraId)) continue;
+          seen.add(paraId);
+          paragraphs.push({
+            paraId,
+            text: node.textContent,
+            styleId: (node.attrs?.styleId as string | undefined) ?? undefined,
+          });
+        }
+
+        const text = paragraphs.map((p) => `[${p.paraId}] ${p.text}`).join('\n');
+        return { pageNumber, text, paragraphs };
+      },
+
       scrollToParaId: (paraId) => pagedEditorRef.current?.scrollToParaId(paraId) ?? false,
 
       findInDocument: (query, opts) => {
@@ -4336,6 +4674,16 @@ body { background: white; }
           if (mode === 'suggesting') setShowCommentsSidebar(true);
         }}
       />
+      {agentPanel && agentPanel.showToolbarButton !== false && (
+        <>
+          <ToolbarSeparator />
+          <AgentPanelToggle
+            active={agentPanelOpen}
+            badge={agentPanel.toolbarBadge}
+            onClick={() => setAgentPanelOpen(!agentPanelOpen)}
+          />
+        </>
+      )}
       {toolbarExtra}
     </>
   );
@@ -4366,11 +4714,16 @@ body { background: white; }
                 {/* Toolbar - above the scroll container so scrollbar doesn't extend behind it */}
                 {/* Hide toolbar only when readOnly prop is explicitly set (not from viewing mode) */}
                 {showToolbar && !readOnlyProp && (
-                  <div
-                    ref={toolbarRefCallback}
-                    className="z-50 flex flex-col gap-0 bg-white shadow-sm flex-shrink-0"
-                  >
+                  <div ref={toolbarRefCallback} className="z-50 flex flex-col gap-0 flex-shrink-0">
                     <EditorToolbar
+                      // When the agent panel is open, round the toolbar's
+                      // bottom-right corner so it mirrors the panel's top-left.
+                      // The radius transition (inline style on the inner div)
+                      // makes opening / closing ease instead of snap.
+                      className={agentPanelOpen ? 'rounded-br-2xl' : undefined}
+                      style={{
+                        transition: 'border-radius 220ms cubic-bezier(0.4, 0, 0.2, 1)',
+                      }}
                       currentFormatting={state.selectionFormatting}
                       onFormat={handleFormat}
                       onUndo={undoActiveEditor}
@@ -4840,6 +5193,23 @@ body { background: white; }
                 )}
               </div>
               {/* end wrapper for scroll container + outline */}
+
+              {/* Agent panel (right-side dock) — always mounted when the
+                  prop is set so chat state survives close/reopen.
+                  `closed={!agentPanelOpen}` triggers the slide / fade. */}
+              {agentPanel && (
+                <AgentPanel
+                  title={agentPanel.title}
+                  icon={agentPanel.icon}
+                  defaultWidth={agentPanel.defaultWidth}
+                  minWidth={agentPanel.minWidth}
+                  maxWidth={agentPanel.maxWidth}
+                  onClose={() => setAgentPanelOpen(false)}
+                  closed={!agentPanelOpen}
+                >
+                  {agentPanel.render({ close: () => setAgentPanelOpen(false) })}
+                </AgentPanel>
+              )}
             </div>
 
             {/* Hyperlink popup (Google Docs-style) */}

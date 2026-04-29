@@ -1,663 +1,274 @@
 'use client';
 
-import { useState, useRef, useCallback, useEffect } from 'react';
-import { DocxEditor, type DocxEditorRef } from '@eigenpal/docx-js-editor';
-import { useAgentChat, type EditorRefLike } from '@eigenpal/docx-editor-agents/bridge';
-import type { ChatCompletionMessageParam } from 'openai/resources/chat/completions';
+/**
+ * Roast My Doc — the canonical "plug an agent into the editor" reference.
+ *
+ * Three pieces:
+ *  1. `<DocxEditor agentPanel={{ render }}>` mounts a controllable right-hand
+ *     panel. The toolbar gets an assistant button automatically.
+ *  2. `useDocxAgentTools` returns `{ tools, executeToolCall, getContext }` —
+ *     the hook owns the bridge to the live editor.
+ *  3. The chat UI inside `render` is ~40 lines of plain React. We do not
+ *     ship message bubbles or a composer; pick your favourite framework
+ *     (this example uses raw fetch + OpenAI for zero deps; AI SDK's
+ *     `useChat` works with one extra import).
+ *
+ * Swap the system prompt + tool subset to retarget the agent (legal
+ * redlining, writing assistant, summarizer — same plumbing).
+ */
 
-// ── Types ───────────────────────────────────────────────────────────────────
+import { useMemo, useRef, useState } from 'react';
+import dynamic from 'next/dynamic';
+import { useChat } from '@ai-sdk/react';
+import { DefaultChatTransport, lastAssistantMessageIsCompleteWithToolCalls } from 'ai';
+import {
+  type DocxEditorRef,
+  AgentChatLog,
+  AgentComposer,
+  AgentSuggestionChip,
+  createEmptyDocument,
+} from '@eigenpal/docx-js-editor';
+import {
+  useDocxAgentTools,
+  getToolDisplayName,
+  type EditorRefLike,
+} from '@eigenpal/docx-editor-agents/react';
+import { toAgentMessages } from '@eigenpal/docx-editor-agents/ai-sdk/react';
 
-interface ChatMessage {
-  id: string;
-  role: 'user' | 'assistant';
-  content: string;
-  toolCalls?: ToolCallLog[];
-}
+// SSR-disabled: the editor uses `useSyncExternalStore` which Next.js' SSR
+// pre-pass can't snapshot. Lazy-loading on the client sidesteps that.
+const DocxEditor = dynamic(
+  () => import('@eigenpal/docx-js-editor').then((m) => ({ default: m.DocxEditor })),
+  {
+    ssr: false,
+    loading: () => (
+      <div
+        style={{
+          flex: 1,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          color: '#6b7280',
+          fontSize: 13,
+        }}
+      >
+        Loading editor…
+      </div>
+    ),
+  }
+);
 
-interface ToolCallLog {
-  name: string;
-  input: Record<string, string | number | boolean | undefined>;
-  result: string;
-}
-
-// ── Helpers ─────────────────────────────────────────────────────────────────
-
-const TOOL_LABELS: Record<string, string> = {
-  read_document: 'Read document',
-  read_selection: 'Read selection',
-  find_text: 'Find',
-  read_comments: 'Read comments',
-  read_changes: 'Read tracked changes',
-  add_comment: 'Add comment',
-  suggest_change: 'Suggest change',
-  reply_comment: 'Reply',
-  resolve_comment: 'Resolve',
-  scroll: 'Scroll to',
-};
-
-const SYSTEM_PROMPT = `You are a helpful document assistant. The user has a DOCX document open and is chatting with you about it.
-
-Locate first, then mutate. Tools you have:
-- LOCATE: read_document, read_selection, find_text, read_comments, read_changes
-- MUTATE: add_comment, suggest_change, reply_comment, resolve_comment
-- NAVIGATE: scroll
-
-Anchor IDs: read_document and find_text return a "paraId" tag like [p_a3f] for each
-paragraph. Always pass that paraId to add_comment / suggest_change / scroll. paraIds
-are stable across edits — ordinal indices are NOT.
-
-suggest_change is one tool with three modes:
-- replacement → search non-empty, replaceWith non-empty
-- deletion    → search non-empty, replaceWith ""
-- insertion   → search "", replaceWith non-empty (inserts at end of paragraph)
-
-Guidelines:
-- If the user says "fix this" or "review what I have selected", call read_selection first.
-- Otherwise, call read_document once to see the document, then act.
-- For search: use a short unique phrase from the visible text (3-8 words).
-- Keep comments concise and actionable.
-- You can make multiple tool calls in a single turn.
-- After making changes, briefly tell the user what you did.`;
-
-// ── Main Component ──────────────────────────────────────────────────────────
-
-export default function Home() {
+export default function Page() {
+  // Boot directly into the editor with an empty doc — no upload screen.
   const [documentBuffer, setDocumentBuffer] = useState<ArrayBuffer | null>(null);
-  const [documentName, setDocumentName] = useState('');
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [documentName, setDocumentName] = useState('Untitled.docx');
   const [input, setInput] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [dragOver, setDragOver] = useState(false);
-  const [expandedTools, setExpandedTools] = useState<Set<string>>(new Set());
+  const [openError, setOpenError] = useState<string | null>(null);
+  const [panelOpen, setPanelOpen] = useState(true);
 
   const editorRef = useRef<DocxEditorRef>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const chatEndRef = useRef<HTMLDivElement>(null);
-  const openaiHistoryRef = useRef<ChatCompletionMessageParam[]>([]);
-  const msgIdRef = useRef(0);
-  const nextId = () => `msg-${++msgIdRef.current}`;
 
-  // Hook: wires agent tools to the live editor
-  const { executeToolCall, toolSchemas } = useAgentChat({
+  // Empty seed document — created once so React doesn't reload the editor on every render.
+  const emptyDoc = useMemo(() => createEmptyDocument(), []);
+
+  // Toolkit hook — gives us a tool executor + a context snapshot for the
+  // system prompt. This is the entire docx-agents wiring on the React side.
+  const { executeToolCall, getContext } = useDocxAgentTools({
     editorRef: editorRef as React.RefObject<EditorRefLike | null>,
-    author: 'Assistant',
+    author: 'Roastmaster',
   });
 
-  // Auto-scroll chat
-  useEffect(() => {
-    chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages, isLoading]);
+  // AI SDK does the streaming protocol, history, error handling, and
+  // tool-call lifecycle. We just hand it our `executeToolCall` for the
+  // `onToolCall` hook and inject `getContext()` into the request body.
+  // `chat` isn't defined yet inside `onToolCall`, so route the result back
+  // through a ref that we set after `useChat` returns.
+  const chatRef = useRef<{ addToolResult: (args: unknown) => Promise<void> } | null>(null);
+  const chat = useChat({
+    transport: new DefaultChatTransport({
+      api: '/api/chat',
+      prepareSendMessagesRequest: ({ messages: msgs }) => ({
+        body: { messages: msgs, context: getContext() },
+      }),
+    }),
+    // After we deliver a tool result via addToolResult, AI SDK won't
+    // automatically continue the agent loop. This re-sends the
+    // conversation so the model can read its own tool outputs and
+    // either call another tool or write the final reply.
+    sendAutomaticallyWhen: lastAssistantMessageIsCompleteWithToolCalls,
+    onToolCall: ({ toolCall }) => {
+      const result = executeToolCall(
+        toolCall.toolName,
+        (toolCall.input ?? {}) as Record<string, unknown>
+      );
+      const output =
+        typeof result.data === 'string'
+          ? result.data
+          : (result.error ?? JSON.stringify(result.data));
+      // Ship the result back to AI SDK so it commits to message history
+      // and the next stream turn can see it. AI SDK v5 changed onToolCall
+      // to fire-and-forget; we deliver via addToolResult.
+      void chatRef.current?.addToolResult({
+        tool: toolCall.toolName,
+        toolCallId: toolCall.toolCallId,
+        output,
+      });
+    },
+  });
+  chatRef.current = chat as unknown as typeof chatRef.current;
 
-  // ── File handling ─────────────────────────────────────────────────────────
+  const isLoading = chat.status === 'submitted' || chat.status === 'streaming';
+  const messages = useMemo(
+    () => toAgentMessages(chat.messages, chat.status),
+    [chat.messages, chat.status]
+  );
+  const error = openError ?? (chat.error ? chat.error.message : null);
 
-  const handleFile = useCallback((f: File) => {
+  function openFile(f: File) {
     if (!f.name.endsWith('.docx')) {
-      setError('Please upload a .docx file');
+      setOpenError('Please pick a .docx file');
       return;
     }
-    setError(null);
+    setOpenError(null);
     setDocumentName(f.name);
     f.arrayBuffer().then((buf) => {
       setDocumentBuffer(buf);
-      setMessages([]);
-      openaiHistoryRef.current = [];
+      chat.setMessages([]);
     });
-  }, []);
-
-  const handleDrop = useCallback(
-    (e: React.DragEvent) => {
-      e.preventDefault();
-      setDragOver(false);
-      const f = e.dataTransfer.files[0];
-      if (f) handleFile(f);
-    },
-    [handleFile]
-  );
-
-  // ── Chat with client-side tool execution ──────────────────────────────────
-
-  const sendMessage = async () => {
-    const text = input.trim();
-    if (!text || !editorRef.current || isLoading) return;
-
-    const userMsg: ChatMessage = { id: nextId(), role: 'user', content: text };
-    setMessages((prev) => [...prev, userMsg]);
-    setInput('');
-    setIsLoading(true);
-    setError(null);
-
-    try {
-      openaiHistoryRef.current.push({ role: 'user', content: text });
-      const allToolCalls: ToolCallLog[] = [];
-
-      // Tool-use loop — call API, execute tools locally, repeat
-      const MAX_ITERATIONS = 10;
-      for (let i = 0; i < MAX_ITERATIONS; i++) {
-        const response = await fetch('/api/chat', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            messages: [{ role: 'system', content: SYSTEM_PROMPT }, ...openaiHistoryRef.current],
-            tools: toolSchemas,
-          }),
-        });
-
-        if (!response.ok) {
-          const err = await response.json();
-          throw new Error(err.error || 'Request failed');
-        }
-
-        const data = await response.json();
-        const msg = data.message;
-
-        // No tool calls — we're done, show the text response
-        if (!msg.tool_calls || msg.tool_calls.length === 0) {
-          openaiHistoryRef.current.push({ role: 'assistant', content: msg.content || '' });
-          const assistantMsg: ChatMessage = {
-            id: nextId(),
-            role: 'assistant',
-            content: msg.content || '',
-            toolCalls: allToolCalls.length > 0 ? allToolCalls : undefined,
-          };
-          setMessages((prev) => [...prev, assistantMsg]);
-          break;
-        }
-
-        // Execute tool calls on the client via EditorBridge
-        openaiHistoryRef.current.push(msg);
-
-        for (const toolCall of msg.tool_calls) {
-          let args: Record<string, unknown>;
-          try {
-            args = JSON.parse(toolCall.function.arguments);
-          } catch {
-            args = {};
-          }
-          const result = executeToolCall(toolCall.function.name, args);
-
-          const resultStr =
-            typeof result.data === 'string'
-              ? result.data
-              : result.error || JSON.stringify(result.data);
-
-          allToolCalls.push({
-            name: toolCall.function.name,
-            input: args as Record<string, string | number | boolean | undefined>,
-            result: resultStr,
-          });
-
-          // Append tool result to persistent history
-          openaiHistoryRef.current.push({
-            role: 'tool',
-            tool_call_id: toolCall.id,
-            content: resultStr,
-          });
-        }
-      }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Something went wrong');
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      sendMessage();
-    }
-  };
-
-  const toggleToolExpand = (id: string) => {
-    setExpandedTools((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  };
-
-  // ── Upload screen ─────────────────────────────────────────────────────────
-
-  if (!documentBuffer) {
-    return (
-      <div style={styles.fullScreen}>
-        <div style={styles.uploadCard}>
-          <div style={{ fontSize: 48, marginBottom: 8 }}>&#128172;</div>
-          <h1 style={styles.title}>Chat with your Doc</h1>
-          <p style={styles.subtitle}>
-            Upload a DOCX file and have a conversation with AI about it. The assistant can read your
-            document, add comments, and suggest changes — all live in the editor, no reloads.
-          </p>
-
-          <div
-            style={{
-              ...styles.dropZone,
-              ...(dragOver ? styles.dropZoneActive : {}),
-            }}
-            onDragOver={(e) => {
-              e.preventDefault();
-              setDragOver(true);
-            }}
-            onDragLeave={() => setDragOver(false)}
-            onDrop={handleDrop}
-            onClick={() => fileInputRef.current?.click()}
-          >
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept=".docx"
-              style={{ display: 'none' }}
-              onChange={(e) => {
-                const f = e.target.files?.[0];
-                if (f) handleFile(f);
-              }}
-            />
-            <div style={{ fontSize: 40, marginBottom: 8 }}>&#128196;</div>
-            <div style={styles.dropText}>Drop your DOCX here</div>
-            <div style={styles.dropHint}>or click to browse</div>
-          </div>
-
-          {error && <div style={styles.errorBox}>{error}</div>}
-
-          <div style={styles.footer}>
-            Powered by{' '}
-            <a
-              href="https://www.npmjs.com/package/@eigenpal/docx-editor-agents"
-              style={styles.link}
-            >
-              @eigenpal/docx-editor-agents
-            </a>
-          </div>
-        </div>
-      </div>
-    );
   }
 
-  // ── Main layout: editor + chat ────────────────────────────────────────────
+  function sendMessage(overrideText?: string) {
+    const text = (overrideText ?? input).trim();
+    if (!text || isLoading) return;
+    chat.sendMessage({ text });
+    if (!overrideText) setInput('');
+  }
 
   return (
-    <div style={styles.layout}>
-      {/* Header */}
-      <div style={styles.header}>
-        <div style={styles.headerLeft}>
-          <span style={{ fontSize: 20 }}>&#128172;</span>
-          <span style={styles.headerTitle}>{documentName}</span>
-        </div>
-        <button
-          style={styles.newDocBtn}
-          onClick={() => {
-            setDocumentBuffer(null);
-            setDocumentName('');
-            setMessages([]);
-            openaiHistoryRef.current = [];
-            setError(null);
+    <div style={S.layout}>
+      <div style={S.editorWrap}>
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept=".docx"
+          style={{ display: 'none' }}
+          onChange={(e) => {
+            const f = e.target.files?.[0];
+            if (f) openFile(f);
+            e.target.value = '';
           }}
-        >
-          Open another
-        </button>
-      </div>
-
-      <div style={styles.main}>
-        {/* Editor */}
-        <div style={styles.editorPane}>
-          <DocxEditor
-            ref={editorRef}
-            documentBuffer={documentBuffer}
-            documentName={documentName}
-            showToolbar={false}
-            showRuler={false}
-            showZoomControl={false}
-          />
-        </div>
-
-        {/* Chat panel */}
-        <div style={styles.chatPane}>
-          {/* Messages */}
-          <div style={styles.messageList}>
-            {messages.length === 0 && (
-              <div style={styles.emptyChat}>
-                <div style={{ fontSize: 32, marginBottom: 8 }}>&#128172;</div>
-                <div>Ask anything about your document.</div>
-                <div style={{ fontSize: 13, color: '#94a3b8', marginTop: 4 }}>
-                  Try: &quot;Review this for grammar issues&quot; or &quot;Summarize the key
-                  points&quot;
-                </div>
-              </div>
-            )}
-
-            {messages.map((msg) => (
-              <div key={msg.id} style={styles.messageWrap}>
-                <div style={msg.role === 'user' ? styles.userBubble : styles.assistantBubble}>
-                  <div style={styles.messageText}>{msg.content}</div>
-                </div>
-
-                {msg.toolCalls && msg.toolCalls.length > 0 && (
-                  <div style={styles.toolCallsWrap}>
-                    {msg.toolCalls.map((tc, i) => {
-                      const tcId = `${msg.id}-tool-${i}`;
-                      const isExpanded = expandedTools.has(tcId);
-                      const isWrite = [
-                        'add_comment',
-                        'suggest_change',
-                        'reply_comment',
-                        'resolve_comment',
-                      ].includes(tc.name);
-                      return (
-                        <div key={tcId} style={styles.toolCallCard}>
-                          <div style={styles.toolCallHeader} onClick={() => toggleToolExpand(tcId)}>
-                            <span style={styles.toolCallIcon}>
-                              {isWrite ? '\u270E' : '\u{1F50D}'}
-                            </span>
-                            <span style={styles.toolCallName}>
-                              {TOOL_LABELS[tc.name] || tc.name}
-                            </span>
-                            {tc.name === 'add_comment' && tc.input.text && (
-                              <span style={styles.toolCallSummary}>
-                                {' '}
-                                &mdash; &quot;{String(tc.input.text).slice(0, 50)}
-                                {String(tc.input.text).length > 50 ? '...' : ''}&quot;
-                              </span>
-                            )}
-                            {tc.name === 'suggest_change' && (
-                              <span style={styles.toolCallSummary}>
-                                {' '}
-                                &mdash; &quot;{String(tc.input.search)}&quot; &rarr; &quot;
-                                {String(tc.input.replaceWith)}&quot;
-                              </span>
-                            )}
-                            <span style={styles.toolCallChevron}>
-                              {isExpanded ? '\u25B2' : '\u25BC'}
-                            </span>
-                          </div>
-                          {isExpanded && (
-                            <div style={styles.toolCallBody}>
-                              <div style={styles.toolCallSection}>
-                                <strong>Input:</strong>
-                                <pre style={styles.toolCallPre}>
-                                  {JSON.stringify(tc.input, null, 2)}
-                                </pre>
-                              </div>
-                              <div style={styles.toolCallSection}>
-                                <strong>Result:</strong>
-                                <pre style={styles.toolCallPre}>
-                                  {tc.result.length > 500
-                                    ? tc.result.slice(0, 500) + '...'
-                                    : tc.result}
-                                </pre>
-                              </div>
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
-            ))}
-
-            {isLoading && (
-              <div style={styles.messageWrap}>
-                <div style={styles.assistantBubble}>
-                  <div style={styles.loadingDots}>
-                    <span style={styles.dot} />
-                    <span style={{ ...styles.dot, animationDelay: '0.2s' }} />
-                    <span style={{ ...styles.dot, animationDelay: '0.4s' }} />
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {error && (
-              <div style={styles.messageWrap}>
-                <div style={styles.errorBubble}>{error}</div>
-              </div>
-            )}
-
-            <div ref={chatEndRef} />
-          </div>
-
-          {/* Input */}
-          <div style={styles.inputWrap}>
-            <textarea
-              style={styles.input}
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              onKeyDown={handleKeyDown}
-              placeholder="Ask about your document..."
-              rows={1}
-              disabled={isLoading}
-            />
-            <button
-              style={{
-                ...styles.sendBtn,
-                ...(input.trim() && !isLoading ? {} : styles.sendBtnDisabled),
-              }}
-              onClick={sendMessage}
-              disabled={!input.trim() || isLoading}
-            >
-              &#9650;
+        />
+        <DocxEditor
+          ref={editorRef}
+          // Uncontrolled: pass either the loaded buffer or the empty seed doc.
+          // `key` forces a remount when switching between the two so the
+          // editor reloads from scratch.
+          key={documentBuffer ? documentName : 'empty'}
+          documentBuffer={documentBuffer ?? undefined}
+          document={documentBuffer ? undefined : emptyDoc}
+          documentName={documentName}
+          onDocumentNameChange={setDocumentName}
+          showRuler={true}
+          showZoomControl={true}
+          renderTitleBarRight={() => (
+            <button style={S.ghostBtn} onClick={() => fileInputRef.current?.click()}>
+              Open .docx
             </button>
-          </div>
-        </div>
+          )}
+          agentPanel={{
+            open: panelOpen,
+            onOpenChange: setPanelOpen,
+            title: 'Roastmaster',
+            minWidth: 320,
+            defaultWidth: 380,
+            render: () => (
+              <>
+                <AgentChatLog
+                  messages={messages}
+                  loading={isLoading}
+                  error={error}
+                  humanizeToolName={getToolDisplayName}
+                  emptyState={
+                    <div style={S.welcomeCard}>
+                      <div style={S.welcomeTitle}>Hi, I&apos;m Roastmaster.</div>
+                      <p style={S.welcomeBody}>
+                        I read your document and leave a (constructive) roast on every paragraph
+                        that deserves one.
+                      </p>
+                      <div style={S.chipStack}>
+                        {SUGGESTIONS.map((s) => (
+                          <AgentSuggestionChip
+                            key={s}
+                            label={s}
+                            onClick={() => sendMessage(s)}
+                            disabled={isLoading}
+                          />
+                        ))}
+                      </div>
+                    </div>
+                  }
+                />
+                <AgentComposer
+                  value={input}
+                  onChange={setInput}
+                  onSubmit={() => sendMessage()}
+                  disabled={isLoading}
+                  placeholder="Ask the assistant…"
+                  footnote="Roastmaster only reads + comments. Won't edit text."
+                />
+              </>
+            ),
+          }}
+        />
       </div>
-
-      <style>{animationCSS}</style>
     </div>
   );
 }
 
-// ── Animations ──────────────────────────────────────────────────────────────
+const SUGGESTIONS = [
+  'Roast every paragraph that deserves it.',
+  'Find the worst sentence and explain why.',
+  'Where am I being too wordy?',
+];
 
-const animationCSS = `
-@keyframes dotPulse {
-  0%, 80%, 100% { opacity: 0.3; transform: scale(0.8); }
-  40% { opacity: 1; transform: scale(1); }
-}
-`;
-
-// ── Styles ──────────────────────────────────────────────────────────────────
-
-const styles: Record<string, React.CSSProperties> = {
-  fullScreen: {
-    minHeight: '100vh',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    background: 'linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #334155 100%)',
-    padding: 20,
-  },
-  uploadCard: {
-    background: '#fff',
-    borderRadius: 20,
-    padding: '48px 40px',
-    maxWidth: 500,
-    width: '100%',
-    textAlign: 'center' as const,
-    boxShadow: '0 25px 50px -12px rgba(0,0,0,0.25)',
-  },
-  title: { fontSize: 32, fontWeight: 900, margin: '0 0 8px', color: '#0f172a' },
-  subtitle: { fontSize: 15, color: '#64748b', margin: '0 0 32px', lineHeight: 1.6 },
-  dropZone: {
-    border: '2px dashed #cbd5e1',
-    borderRadius: 14,
-    padding: '40px 20px',
-    cursor: 'pointer',
-    transition: 'all 0.2s',
-    marginBottom: 24,
-  },
-  dropZoneActive: { borderColor: '#3b82f6', background: '#eff6ff' },
-  dropText: { fontSize: 16, fontWeight: 600, color: '#334155' },
-  dropHint: { fontSize: 13, color: '#94a3b8', marginTop: 4 },
-  errorBox: {
-    background: '#fef2f2',
-    color: '#dc2626',
-    padding: '12px 16px',
-    borderRadius: 8,
-    fontSize: 14,
-    marginBottom: 20,
-  },
-  footer: { fontSize: 13, color: '#94a3b8' },
-  link: { color: '#3b82f6', textDecoration: 'none' },
+// Page-level styles only — chat chrome (bubbles, composer, suggestion
+// chips) ships from `@eigenpal/docx-js-editor`. The welcome card matches
+// the panel's typography for a single visual surface.
+const S: Record<string, React.CSSProperties> = {
   layout: {
     display: 'flex',
-    flexDirection: 'column' as const,
+    flexDirection: 'column',
     height: '100vh',
     overflow: 'hidden',
-    background: '#f8fafc',
+    background: 'var(--doc-bg, #f8f9fa)',
   },
-  header: {
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    padding: '10px 20px',
-    background: '#fff',
-    borderBottom: '1px solid #e2e8f0',
-    flexShrink: 0,
-  },
-  headerLeft: { display: 'flex', alignItems: 'center', gap: 8 },
-  headerTitle: { fontSize: 15, fontWeight: 700, color: '#0f172a' },
-  newDocBtn: {
-    padding: '6px 14px',
+  editorWrap: { flex: 1, overflow: 'hidden', display: 'flex' },
+  ghostBtn: {
+    padding: '6px 12px',
     fontSize: 13,
-    fontWeight: 600,
-    color: '#334155',
-    background: '#f1f5f9',
-    border: '1px solid #e2e8f0',
-    borderRadius: 8,
-    cursor: 'pointer',
-  },
-  main: { flex: 1, display: 'flex', overflow: 'hidden' },
-  editorPane: { flex: 1, overflow: 'hidden', borderRight: '1px solid #e2e8f0' },
-  chatPane: {
-    width: 400,
-    flexShrink: 0,
-    display: 'flex',
-    flexDirection: 'column' as const,
+    fontWeight: 500,
+    color: '#1f1f1f',
     background: '#fff',
-  },
-  messageList: { flex: 1, overflow: 'auto', padding: '16px 16px 8px' },
-  emptyChat: {
-    textAlign: 'center' as const,
-    color: '#64748b',
-    marginTop: 60,
-    fontSize: 15,
-  },
-  messageWrap: { marginBottom: 12 },
-  userBubble: {
-    background: '#3b82f6',
-    color: '#fff',
-    padding: '10px 14px',
-    borderRadius: '16px 16px 4px 16px',
-    fontSize: 14,
-    lineHeight: 1.5,
-    marginLeft: 40,
-  },
-  assistantBubble: {
-    background: '#f1f5f9',
-    color: '#1e293b',
-    padding: '10px 14px',
-    borderRadius: '16px 16px 16px 4px',
-    fontSize: 14,
-    lineHeight: 1.5,
-    marginRight: 40,
-  },
-  messageText: { whiteSpace: 'pre-wrap' as const, wordBreak: 'break-word' as const },
-  errorBubble: {
-    background: '#fef2f2',
-    color: '#dc2626',
-    padding: '10px 14px',
-    borderRadius: 12,
-    fontSize: 13,
-    marginRight: 40,
-  },
-  toolCallsWrap: {
-    marginTop: 6,
-    marginRight: 40,
-    display: 'flex',
-    flexDirection: 'column' as const,
-    gap: 4,
-  },
-  toolCallCard: {
-    border: '1px solid #e2e8f0',
-    borderRadius: 8,
-    overflow: 'hidden',
-    fontSize: 12,
-  },
-  toolCallHeader: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: 6,
-    padding: '6px 10px',
-    background: '#f8fafc',
-    cursor: 'pointer',
-    userSelect: 'none' as const,
-  },
-  toolCallIcon: { fontSize: 12 },
-  toolCallName: { fontWeight: 600, color: '#334155' },
-  toolCallSummary: {
-    color: '#64748b',
-    flex: 1,
-    overflow: 'hidden',
-    textOverflow: 'ellipsis' as const,
-    whiteSpace: 'nowrap' as const,
-  },
-  toolCallChevron: { fontSize: 10, color: '#94a3b8' },
-  toolCallBody: { padding: '8px 10px', borderTop: '1px solid #e2e8f0' },
-  toolCallSection: { marginBottom: 6 },
-  toolCallPre: {
-    margin: '4px 0 0',
-    fontSize: 11,
-    background: '#f1f5f9',
-    padding: 8,
+    border: '1px solid #dadce0',
     borderRadius: 6,
-    overflow: 'auto',
-    maxHeight: 200,
-    whiteSpace: 'pre-wrap' as const,
-    wordBreak: 'break-word' as const,
-  },
-  loadingDots: { display: 'flex', gap: 4, padding: '4px 0' },
-  dot: {
-    width: 8,
-    height: 8,
-    borderRadius: '50%',
-    background: '#94a3b8',
-    animation: 'dotPulse 1.4s ease-in-out infinite',
-  },
-  inputWrap: {
-    display: 'flex',
-    alignItems: 'flex-end',
-    gap: 8,
-    padding: '12px 16px',
-    borderTop: '1px solid #e2e8f0',
-    background: '#fff',
-  },
-  input: {
-    flex: 1,
-    padding: '10px 14px',
-    fontSize: 14,
-    border: '1px solid #e2e8f0',
-    borderRadius: 12,
-    outline: 'none',
-    resize: 'none' as const,
-    fontFamily: 'inherit',
-    lineHeight: 1.5,
-    maxHeight: 120,
-  },
-  sendBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: '50%',
-    border: 'none',
-    background: '#3b82f6',
-    color: '#fff',
-    fontSize: 14,
     cursor: 'pointer',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexShrink: 0,
+    fontFamily: "'Google Sans', 'Google Sans Text', system-ui, sans-serif",
   },
-  sendBtnDisabled: { opacity: 0.3, cursor: 'not-allowed' },
+  welcomeCard: {
+    background: 'linear-gradient(180deg, #f7f9ff 0%, #fbf6ff 100%)',
+    border: '1px solid #e3e8f4',
+    borderRadius: 18,
+    padding: '18px 16px',
+    fontFamily: "'Google Sans', 'Google Sans Text', system-ui, sans-serif",
+    color: '#1f1f1f',
+  },
+  welcomeTitle: { fontSize: 14, fontWeight: 600, marginBottom: 6, color: '#1a1f36' },
+  welcomeBody: {
+    fontSize: 13,
+    color: '#444746',
+    lineHeight: 1.55,
+    margin: '0 0 14px',
+  },
+  chipStack: { display: 'flex', flexDirection: 'column', gap: 8 },
 };

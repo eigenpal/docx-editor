@@ -94,6 +94,11 @@ function makeMockRef(content: (Paragraph | Table)[]): EditorRefLike {
     findInDocument: () => [],
     getSelectionInfo: () => null,
     getComments: () => addedComments,
+    applyFormatting: () => true,
+    setParagraphStyle: () => true,
+    getPageContent: () => null,
+    getTotalPages: () => 0,
+    getCurrentPage: () => 0,
     onContentChange: (listener) => {
       contentListeners.add(listener);
       return () => contentListeners.delete(listener);
@@ -460,6 +465,11 @@ describe('createEditorBridge', () => {
       findInDocument: () => [],
       getSelectionInfo: () => null,
       getComments: () => [],
+      applyFormatting: () => false,
+      setParagraphStyle: () => false,
+      getPageContent: () => null,
+      getTotalPages: () => 0,
+      getCurrentPage: () => 0,
       onContentChange: () => () => undefined,
       onSelectionChange: () => () => undefined,
     };

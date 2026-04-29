@@ -186,6 +186,78 @@ export interface SelectionInfo {
   after: string;
 }
 
+/**
+ * Character formatting marks the agent can apply.
+ *
+ * Mirrors Word JS API `Range.font.*`. A `false` value clears that mark in the
+ * range; a missing key leaves it untouched. `color.themeColor` follows ECMA-376
+ * theme color values (e.g. `'accent1'`, `'text1'`) and resolves at render time.
+ */
+export interface CharacterFormatting {
+  bold?: boolean;
+  italic?: boolean;
+  underline?: boolean | { style?: string };
+  strike?: boolean;
+  color?: { rgb?: string; themeColor?: string };
+  highlight?: string;
+  fontSize?: number;
+  fontFamily?: { ascii?: string; hAnsi?: string };
+}
+
+/**
+ * Apply character formatting to a range. `paraId` is required; if `search`
+ * is provided, the formatting only applies to that phrase within the
+ * paragraph (must match exactly once). Otherwise it applies to the whole
+ * paragraph's text.
+ */
+export interface ApplyFormattingOptions {
+  paraId: string;
+  search?: string;
+  marks: CharacterFormatting;
+}
+
+/**
+ * Apply a paragraph style by `styleId` (e.g. `'Heading1'`, `'Title'`,
+ * `'Quote'`). The styleId must exist in the document's style definitions
+ * — unknown ids are no-ops.
+ */
+export interface SetParagraphStyleOptions {
+  paraId: string;
+  styleId: string;
+}
+
+/** A single paragraph anchored on a page (returned by `getPage` / `getPages`). */
+export interface PageParagraph {
+  paraId: string;
+  text: string;
+  /** True for headings, list items, and other styled blocks. */
+  styleId?: string;
+}
+
+/** What the agent sees when reading one or more pages. */
+export interface PageContent {
+  /** 1-indexed page number. */
+  pageNumber: number;
+  /** Plain text of the page, formatted as `[paraId] text` lines. */
+  text: string;
+  /** Paragraphs on the page, in document order. */
+  paragraphs: PageParagraph[];
+}
+
+/**
+ * Snapshot of what the user is looking at — pass this to your agent's system
+ * prompt so it knows the current selection / page without an extra
+ * `read_selection` round-trip.
+ */
+export interface AgentContextSnapshot {
+  /** User's current selection or cursor (null if editor isn't focused). */
+  selection: SelectionInfo | null;
+  /** 1-indexed page the cursor / selection is on. 0 if unknown. */
+  currentPage: number;
+  /** Total number of pages currently rendered. */
+  totalPages: number;
+}
+
 // ============================================================================
 // BATCH — the main LLM-facing interface
 // ============================================================================

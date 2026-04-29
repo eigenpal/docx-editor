@@ -16,6 +16,12 @@ function makeBridge(overrides: Partial<EditorBridge> = {}): EditorBridge {
     replyTo: () => 2,
     resolveComment: () => {},
     proposeChange: () => true,
+    applyFormatting: () => true,
+    setParagraphStyle: () => true,
+    getPage: () => null,
+    getPages: () => [],
+    getTotalPages: () => 0,
+    getCurrentPage: () => 0,
     scrollTo: () => true,
     onContentChange: () => () => undefined,
     onSelectionChange: () => () => undefined,
@@ -55,7 +61,7 @@ describe('McpServer.handle — tools/list', () => {
     const reply = server.handle({ jsonrpc: '2.0', id: 1, method: 'tools/list' });
     const result = (reply as JsonRpcSuccess).result as McpToolsListResult;
     expect(result.tools).toBeDefined();
-    expect(result.tools.length).toBe(10);
+    expect(result.tools.length).toBe(14);
     for (const tool of result.tools) {
       expect(typeof tool.name).toBe('string');
       expect(typeof tool.description).toBe('string');
@@ -65,14 +71,18 @@ describe('McpServer.handle — tools/list', () => {
     expect(names).toEqual(
       [
         'add_comment',
+        'apply_formatting',
         'find_text',
         'read_changes',
         'read_comments',
         'read_document',
+        'read_page',
+        'read_pages',
         'read_selection',
         'reply_comment',
         'resolve_comment',
         'scroll',
+        'set_paragraph_style',
         'suggest_change',
       ].sort()
     );

@@ -10,11 +10,14 @@
 export type { AgentToolDefinition, AgentToolResult } from './types';
 import type { AgentToolDefinition, AgentToolResult } from './types';
 import type { EditorBridge } from '../bridge';
+import { applyFormatting, setParagraphStyle } from './formatting';
+import { readPage, readPages } from './pages';
 
 // ── Locate tools ────────────────────────────────────────────────────────────
 
 const readDocument: AgentToolDefinition<{ fromIndex?: number; toIndex?: number }> = {
   name: 'read_document',
+  displayName: 'Reading document',
   description:
     'Read the document content. Returns lines tagged with a stable paragraph id, e.g. ' +
     '"[2A1F3B] First paragraph". Use the bracketed id as `paraId` when commenting or ' +
@@ -40,6 +43,7 @@ const readDocument: AgentToolDefinition<{ fromIndex?: number; toIndex?: number }
 
 const readSelection: AgentToolDefinition = {
   name: 'read_selection',
+  displayName: 'Reading selection',
   description:
     "Read the user's current cursor or selection. Returns the selected text, the " +
     "paragraph it lives in, and that paragraph's `paraId`. Use this when the user " +
@@ -58,6 +62,7 @@ const findText: AgentToolDefinition<{
   limit?: number;
 }> = {
   name: 'find_text',
+  displayName: 'Finding text',
   description:
     'Locate paragraphs containing `query`. Returns up to `limit` handles, each with ' +
     '`paraId`, the matched substring, and surrounding context. Pass any returned ' +
@@ -83,6 +88,7 @@ const findText: AgentToolDefinition<{
 
 const readComments: AgentToolDefinition = {
   name: 'read_comments',
+  displayName: 'Reading comments',
   description: 'List all comments in the document with their paragraph anchors.',
   inputSchema: { type: 'object', properties: {} },
   handler: (_input, bridge) => {
@@ -104,6 +110,7 @@ const readComments: AgentToolDefinition = {
 
 const readChanges: AgentToolDefinition = {
   name: 'read_changes',
+  displayName: 'Reading changes',
   description: 'List tracked changes (insertions / deletions) currently in the document.',
   inputSchema: { type: 'object', properties: {} },
   handler: (_input, bridge) => {
@@ -124,6 +131,7 @@ const addComment: AgentToolDefinition<{
   search?: string;
 }> = {
   name: 'add_comment',
+  displayName: 'Adding comment',
   description:
     'Attach a comment to a paragraph, optionally anchored to a unique phrase within ' +
     'it. The user sees it instantly in the comments sidebar.',
@@ -162,6 +170,7 @@ const suggestChange: AgentToolDefinition<{
   replaceWith: string;
 }> = {
   name: 'suggest_change',
+  displayName: 'Suggesting change',
   description:
     'Suggest a tracked change. Three modes: ' +
     '(1) replacement — `search` non-empty, `replaceWith` non-empty; ' +
@@ -210,6 +219,7 @@ const suggestChange: AgentToolDefinition<{
 
 const replyComment: AgentToolDefinition<{ commentId: number; text: string }> = {
   name: 'reply_comment',
+  displayName: 'Replying to comment',
   description: 'Reply to an existing comment by id. Threaded under the original.',
   inputSchema: {
     type: 'object',
@@ -228,6 +238,7 @@ const replyComment: AgentToolDefinition<{ commentId: number; text: string }> = {
 
 const resolveComment: AgentToolDefinition<{ commentId: number }> = {
   name: 'resolve_comment',
+  displayName: 'Resolving comment',
   description: 'Mark a comment as resolved (done).',
   inputSchema: {
     type: 'object',
@@ -246,6 +257,7 @@ const resolveComment: AgentToolDefinition<{ commentId: number }> = {
 
 const scroll: AgentToolDefinition<{ paraId: string }> = {
   name: 'scroll',
+  displayName: 'Scrolling',
   description: "Scroll the editor to a paragraph by paraId. Does not move the user's cursor.",
   inputSchema: {
     type: 'object',
@@ -268,11 +280,15 @@ const scroll: AgentToolDefinition<{ paraId: string }> = {
 export const agentTools: AgentToolDefinition<any>[] = [
   readDocument,
   readSelection,
+  readPage,
+  readPages,
   findText,
   readComments,
   readChanges,
   addComment,
   suggestChange,
+  applyFormatting,
+  setParagraphStyle,
   replyComment,
   resolveComment,
   scroll,
@@ -297,8 +313,26 @@ export function executeToolCall(
 }
 
 /**
- * Get tool schemas in OpenAI function calling format.
- * Works directly with OpenAI SDK; Anthropic and Vercel AI SDK both accept this shape.
+ * Friendly UI label for a tool — sourced from the registry's `displayName`,
+ * falling back to a sentence-case version of the snake_case name. Used by
+ * `<AgentTimeline>` and any other UI that lists running / completed tools.
+ *
+ * @example getToolDisplayName('add_comment') // → 'Adding comment'
+ * @example getToolDisplayName('fetch_clause_template') // → 'Fetch clause template'
+ */
+export function getToolDisplayName(name: string): string {
+  const def = agentTools.find((t) => t.name === name);
+  if (def?.displayName) return def.displayName;
+  const spaced = name.replace(/_/g, ' ');
+  return spaced.charAt(0).toUpperCase() + spaced.slice(1);
+}
+
+/**
+ * Get tool schemas in OpenAI function-calling format. Works directly
+ * with the OpenAI SDK and Anthropic's tools API. For Vercel AI SDK,
+ * LangChain, or other agent runtimes, transform this output to that
+ * runtime's required shape — see `examples/agent-chat-demo/` for a
+ * Vercel AI SDK example. The package stays runtime-agnostic.
  */
 export function getToolSchemas() {
   return agentTools.map((t) => ({

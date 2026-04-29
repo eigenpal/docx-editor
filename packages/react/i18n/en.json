@@ -750,5 +750,10 @@
   },
   "loading": {
     "label": "Loading"
+  },
+  "agentPanel": {
+    "defaultTitle": "Assistant",
+    "toggle": "Open assistant",
+    "close": "Close panel"
   }
 }

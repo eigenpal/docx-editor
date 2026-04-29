@@ -266,6 +266,44 @@ export function createReviewerBridge(reviewer: DocxReviewer): EditorBridge {
       return map().has(paraId);
     },
 
+    /**
+     * Headless mode: character formatting mutations on a parsed Document model
+     * are not yet implemented. The live editor bridge supports this — the
+     * static reviewer will gain it in a follow-up.
+     */
+    applyFormatting(): boolean {
+      return false;
+    },
+
+    /**
+     * Headless mode: paragraph style mutations on a parsed Document model
+     * are not yet implemented. The live editor bridge supports this — the
+     * static reviewer will gain it in a follow-up.
+     */
+    setParagraphStyle(): boolean {
+      return false;
+    },
+
+    /** Headless mode: pages are a layout concept; the static document has none. */
+    getPage(): null {
+      return null;
+    },
+
+    /** Headless mode: no layout, no pages. */
+    getPages(): never[] {
+      return [];
+    },
+
+    /** Headless mode: no layout, no pages. */
+    getTotalPages(): number {
+      return 0;
+    },
+
+    /** Headless mode: no cursor, no current page. */
+    getCurrentPage(): number {
+      return 0;
+    },
+
     onContentChange(listener) {
       contentListeners.add(listener);
       return () => {

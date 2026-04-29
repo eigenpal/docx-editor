@@ -23,6 +23,12 @@ function makeBridge(overrides: Partial<EditorBridge> = {}): EditorBridge {
     replyTo: () => 43,
     resolveComment: () => {},
     proposeChange: () => true,
+    applyFormatting: () => true,
+    setParagraphStyle: () => true,
+    getPage: () => null,
+    getPages: () => [],
+    getTotalPages: () => 0,
+    getCurrentPage: () => 0,
     scrollTo: () => true,
     onContentChange: () => () => undefined,
     onSelectionChange: () => () => undefined,
@@ -35,8 +41,8 @@ function makeBridge(overrides: Partial<EditorBridge> = {}): EditorBridge {
 // ============================================================================
 
 describe('agentTools', () => {
-  test('has 10 built-in tools', () => {
-    expect(agentTools).toHaveLength(10);
+  test('has 14 built-in tools', () => {
+    expect(agentTools).toHaveLength(14);
   });
 
   test('all tools have name, description, inputSchema, handler', () => {
@@ -58,14 +64,18 @@ describe('agentTools', () => {
     expect(names).toEqual(
       [
         'add_comment',
+        'apply_formatting',
         'find_text',
         'read_changes',
         'read_comments',
         'read_document',
+        'read_page',
+        'read_pages',
         'read_selection',
         'reply_comment',
         'resolve_comment',
         'scroll',
+        'set_paragraph_style',
         'suggest_change',
       ].sort()
     );
@@ -79,7 +89,7 @@ describe('agentTools', () => {
 describe('getToolSchemas', () => {
   test('returns OpenAI function calling format', () => {
     const schemas = getToolSchemas();
-    expect(schemas.length).toBe(10);
+    expect(schemas.length).toBe(14);
 
     for (const schema of schemas) {
       expect(schema.type).toBe('function');
@@ -384,6 +394,211 @@ describe('scroll', () => {
   test('errors when paraId missing', () => {
     const bridge = makeBridge({ scrollTo: () => false });
     const result = executeToolCall('scroll', { paraId: 'p_missing' }, bridge);
+    expect(result.success).toBe(false);
+  });
+});
+
+// ============================================================================
+// apply_formatting
+// ============================================================================
+
+describe('apply_formatting', () => {
+  test('passes paraId, search and marks through to bridge.applyFormatting', () => {
+    let captured: { paraId?: string; search?: string; marks?: unknown } | undefined;
+    const bridge = makeBridge({
+      applyFormatting: (opts) => {
+        captured = opts;
+        return true;
+      },
+    });
+    const result = executeToolCall(
+      'apply_formatting',
+      { paraId: 'p_a3f', search: 'world', marks: { bold: true, italic: true } },
+      bridge
+    );
+    expect(result.success).toBe(true);
+    expect(captured?.paraId).toBe('p_a3f');
+    expect(captured?.search).toBe('world');
+    expect(captured?.marks).toEqual({ bold: true, italic: true });
+  });
+
+  test('rejects empty marks object up-front (no bridge call)', () => {
+    let called = false;
+    const bridge = makeBridge({
+      applyFormatting: () => {
+        called = true;
+        return true;
+      },
+    });
+    const result = executeToolCall('apply_formatting', { paraId: 'p_a3f', marks: {} }, bridge);
+    expect(result.success).toBe(false);
+    expect(called).toBe(false);
+  });
+
+  test('returns error when bridge cannot apply (unknown paraId / ambiguous search)', () => {
+    const bridge = makeBridge({ applyFormatting: () => false });
+    const result = executeToolCall(
+      'apply_formatting',
+      { paraId: 'p_x', marks: { bold: true } },
+      bridge
+    );
+    expect(result.success).toBe(false);
+  });
+
+  test('rejects underline.style outside the ECMA-376 closed enum', () => {
+    let called = false;
+    const bridge = makeBridge({
+      applyFormatting: () => {
+        called = true;
+        return true;
+      },
+    });
+    const result = executeToolCall(
+      'apply_formatting',
+      { paraId: 'p_a3f', marks: { underline: { style: 'squiggly' } } },
+      bridge
+    );
+    expect(result.success).toBe(false);
+    expect(result.error).toContain('Invalid underline.style');
+    expect(called).toBe(false);
+  });
+
+  test('accepts known underline.style values', () => {
+    const bridge = makeBridge({ applyFormatting: () => true });
+    for (const style of ['single', 'double', 'wave', 'dashLongHeavy', 'none']) {
+      const result = executeToolCall(
+        'apply_formatting',
+        { paraId: 'p_a3f', marks: { underline: { style } } },
+        bridge
+      );
+      expect(result.success).toBe(true);
+    }
+  });
+
+  test('rejects highlight values outside ST_HighlightColor (e.g. raw hex)', () => {
+    let called = false;
+    const bridge = makeBridge({
+      applyFormatting: () => {
+        called = true;
+        return true;
+      },
+    });
+    const result = executeToolCall(
+      'apply_formatting',
+      { paraId: 'p_a3f', marks: { highlight: '#FFA500' } },
+      bridge
+    );
+    expect(result.success).toBe(false);
+    expect(result.error).toContain('Invalid highlight');
+    expect(called).toBe(false);
+  });
+
+  test('accepts known highlight color names', () => {
+    const bridge = makeBridge({ applyFormatting: () => true });
+    for (const name of ['yellow', 'green', 'darkBlue', 'lightGray', 'none']) {
+      const result = executeToolCall(
+        'apply_formatting',
+        { paraId: 'p_a3f', marks: { highlight: name } },
+        bridge
+      );
+      expect(result.success).toBe(true);
+    }
+  });
+});
+
+// ============================================================================
+// set_paragraph_style
+// ============================================================================
+
+describe('set_paragraph_style', () => {
+  test('forwards paraId + styleId to the bridge', () => {
+    let captured: { paraId?: string; styleId?: string } | undefined;
+    const bridge = makeBridge({
+      setParagraphStyle: (opts) => {
+        captured = opts;
+        return true;
+      },
+    });
+    const result = executeToolCall(
+      'set_paragraph_style',
+      { paraId: 'p_a3f', styleId: 'Heading1' },
+      bridge
+    );
+    expect(result.success).toBe(true);
+    expect(captured?.paraId).toBe('p_a3f');
+    expect(captured?.styleId).toBe('Heading1');
+  });
+
+  test('returns error on bridge failure', () => {
+    const bridge = makeBridge({ setParagraphStyle: () => false });
+    const result = executeToolCall(
+      'set_paragraph_style',
+      { paraId: 'p_x', styleId: 'NoSuchStyle' },
+      bridge
+    );
+    expect(result.success).toBe(false);
+  });
+});
+
+// ============================================================================
+// read_page / read_pages
+// ============================================================================
+
+describe('read_page', () => {
+  test('returns formatted page text on success', () => {
+    const bridge = makeBridge({
+      getPage: () => ({
+        pageNumber: 1,
+        text: '[p_a3f] Hello\n[p_b07] World',
+        paragraphs: [
+          { paraId: 'p_a3f', text: 'Hello' },
+          { paraId: 'p_b07', text: 'World' },
+        ],
+      }),
+      getTotalPages: () => 3,
+    });
+    const result = executeToolCall('read_page', { pageNumber: 1 }, bridge);
+    expect(result.success).toBe(true);
+    expect(result.data).toContain('[p_a3f]');
+    expect(result.data).toContain('Hello');
+  });
+
+  test('reports total pages when the requested page is out of range', () => {
+    const bridge = makeBridge({ getPage: () => null, getTotalPages: () => 3 });
+    const result = executeToolCall('read_page', { pageNumber: 99 }, bridge);
+    expect(result.success).toBe(false);
+    expect(result.error).toContain('99');
+    expect(result.error).toContain('3');
+  });
+
+  test('reports headless / empty when no pages exist at all', () => {
+    const bridge = makeBridge({ getPage: () => null, getTotalPages: () => 0 });
+    const result = executeToolCall('read_page', { pageNumber: 1 }, bridge);
+    expect(result.success).toBe(false);
+    expect(result.error?.toLowerCase()).toContain('headless');
+  });
+});
+
+describe('read_pages', () => {
+  test('joins multiple pages with separators', () => {
+    const bridge = makeBridge({
+      getPages: () => [
+        { pageNumber: 1, text: '[p_a3f] First page', paragraphs: [] },
+        { pageNumber: 2, text: '[p_b07] Second page', paragraphs: [] },
+      ],
+      getTotalPages: () => 2,
+    });
+    const result = executeToolCall('read_pages', { from: 1, to: 2 }, bridge);
+    expect(result.success).toBe(true);
+    expect(result.data).toContain('Page 1');
+    expect(result.data).toContain('Page 2');
+    expect(result.data).toContain('First page');
+    expect(result.data).toContain('Second page');
+  });
+
+  test('returns error for out-of-range range', () => {
+    const bridge = makeBridge({ getPages: () => [], getTotalPages: () => 2 });
+    const result = executeToolCall('read_pages', { from: 100, to: 200 }, bridge);
     expect(result.success).toBe(false);
   });
 });

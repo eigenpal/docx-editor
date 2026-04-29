@@ -47,6 +47,12 @@ function makeBridge(): EditorBridge {
     replyTo: () => 8,
     resolveComment: () => {},
     proposeChange: () => true,
+    applyFormatting: () => true,
+    setParagraphStyle: () => true,
+    getPage: () => null,
+    getPages: () => [],
+    getTotalPages: () => 0,
+    getCurrentPage: () => 0,
     scrollTo: () => true,
     onContentChange: () => () => undefined,
     onSelectionChange: () => () => undefined,
@@ -194,7 +200,7 @@ describe('runStdioServer — error & lifecycle', () => {
     input.emit('data', '{"jsonrpc":"2.0","id":1,"method":"tools/list"}\n');
     const reply = parseLine(output.lines()[0]) as JsonRpcSuccess;
     const result = reply.result as { tools: Array<{ name: string }> };
-    expect(result.tools.length).toBe(10);
+    expect(result.tools.length).toBe(14);
   });
 });
 

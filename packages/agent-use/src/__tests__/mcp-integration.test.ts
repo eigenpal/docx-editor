@@ -91,7 +91,7 @@ describe('Customer story: server-side MCP server using the published library', (
     // 4. Client lists tools.
     const list = server.handle({ jsonrpc: '2.0', id: 2, method: 'tools/list' });
     const tools = ((list as JsonRpcSuccess).result as McpToolsListResult).tools;
-    expect(tools.length).toBe(10);
+    expect(tools.length).toBe(14);
 
     // 5. Client reads the document.
     const read = server.handle({
