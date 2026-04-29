@@ -207,18 +207,14 @@ function buildParagraphText(
       parts.push(getHyperlinkText(item));
     } else if (isTrackedChange(item)) {
       const text = getTrackedChangeText(item.content);
+      // Vanilla view (includeTrackedChanges=false): insertions aren't in the
+      // doc yet so they're hidden; deletions still are, so they appear as
+      // plain text. Annotated view wraps both with [+...+] / [-...-] markers.
       if (item.type === 'insertion' || item.type === 'moveTo') {
-        if (includeTrackedChanges) {
-          parts.push(`[+${text}+]{by:${item.info.author}}`);
-        } else {
-          parts.push(text);
-        }
+        if (includeTrackedChanges) parts.push(`[+${text}+]{by:${item.info.author}}`);
       } else {
-        // deletion or moveFrom
-        if (includeTrackedChanges) {
-          parts.push(`[-${text}-]{by:${item.info.author}}`);
-        }
-        // When not annotating, hide deleted/moveFrom text
+        if (includeTrackedChanges) parts.push(`[-${text}-]{by:${item.info.author}}`);
+        else parts.push(text);
       }
     }
   }

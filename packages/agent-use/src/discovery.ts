@@ -136,6 +136,10 @@ function buildAnchoredTextMap(body: DocumentBody): Map<number, AnchorInfo> {
           open.parts.push(text);
         }
       } else if (isTrackedChange(item)) {
+        // Vanilla view: only deletion / moveFrom contribute to the anchored
+        // text. Insertion / moveTo aren't in the doc yet, so an agent reading
+        // the comment shouldn't see their text in the anchored snippet.
+        if (item.type === 'insertion' || item.type === 'moveTo') continue;
         const text = getTrackedChangeText(item.content);
         for (const open of openRanges.values()) {
           open.parts.push(text);

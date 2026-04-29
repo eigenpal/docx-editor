@@ -23,7 +23,14 @@ interface FlattenedRun {
 }
 
 /**
- * Flatten paragraph content into runs with cumulative positions.
+ * Flatten paragraph content into runs with cumulative positions, mirroring the
+ * vanilla view that the agent reads via `read_document`:
+ *
+ *   - plain `run` / `hyperlink` runs       → included
+ *   - `<w:del>` / `<w:moveFrom>` runs      → included (still in the doc until accepted)
+ *   - `<w:ins>` / `<w:moveTo>` runs        → excluded (not in the doc until accepted)
+ *
+ * This means anchor searches resolve against the same text the agent saw.
  */
 function flattenRuns(paragraph: Paragraph): FlattenedRun[] {
   const result: FlattenedRun[] = [];
@@ -46,6 +53,7 @@ function flattenRuns(paragraph: Paragraph): FlattenedRun[] {
         }
       }
     } else if (isTrackedChange(item)) {
+      if (item.type === 'insertion' || item.type === 'moveTo') continue;
       for (let ri = 0; ri < item.content.length; ri++) {
         const child = item.content[ri];
         if (child.type === 'run') {

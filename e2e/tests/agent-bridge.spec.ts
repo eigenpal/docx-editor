@@ -250,4 +250,169 @@ test.describe('Agent bridge — paraId-anchored mutations', () => {
     );
     expect(ok).toBe(false);
   });
+
+  // Vanilla view: the agent only sees the document as it exists right now,
+  // before any tracked-change suggestions are accepted. Deletion text is
+  // still in the doc → searchable. Insertion text isn't in the doc yet →
+  // not searchable. This test creates a redline via proposeChange, then
+  // verifies addComment's anchor search treats the two halves accordingly.
+  test('addComment search respects the vanilla view (deletion findable, insertion not)', async ({
+    page,
+  }) => {
+    await getFirstParaId(page);
+
+    const target = await pickUniqueMatch(page);
+    test.skip(!target, 'No paragraph with a uniquely-findable phrase');
+    const paraId = target!.paraId;
+    const match = target!.match;
+
+    // Stage a redline: replace `match` with `AGENT-INSERTED`. Now the
+    // paragraph contains <w:del>match</w:del><w:ins>AGENT-INSERTED</w:ins>.
+    const proposed = await page.evaluate(
+      ([id, search]) =>
+        window.__DOCX_EDITOR_E2E__?.agentProposeChange({
+          paraId: id,
+          search,
+          replaceWith: 'AGENT-INSERTED',
+        }) ?? false,
+      [paraId, match]
+    );
+    expect(proposed).toBe(true);
+
+    // The deletion text is still in the vanilla doc — addComment finds it.
+    const onDeletion = await page.evaluate(
+      ([id, search]) =>
+        window.__DOCX_EDITOR_E2E__?.agentAddComment({
+          paraId: id,
+          text: 'comment-on-deleted-text',
+          search,
+        }) ?? null,
+      [paraId, match]
+    );
+    expect(typeof onDeletion).toBe('number');
+
+    // The insertion text isn't in the vanilla doc — addComment can't find it.
+    const onInsertion = await page.evaluate(
+      ([id]) =>
+        window.__DOCX_EDITOR_E2E__?.agentAddComment({
+          paraId: id,
+          text: 'comment-on-inserted-text',
+          search: 'AGENT-INSERTED',
+        }) ?? null,
+      [paraId]
+    );
+    expect(onInsertion).toBeNull();
+  });
+
+  // After a redline, the agent's read_document → find_text → add_comment chain
+  // should still work end-to-end on the deletion text. This pins the alignment
+  // between findInDocument (live editor's find_text source) and addComment.
+  test('findInDocument still returns the deletion text after a redline', async ({ page }) => {
+    await getFirstParaId(page);
+
+    const target = await pickUniqueMatch(page);
+    test.skip(!target, 'No paragraph with a uniquely-findable phrase');
+    const paraId = target!.paraId;
+    const match = target!.match;
+
+    const proposed = await page.evaluate(
+      ([id, search]) =>
+        window.__DOCX_EDITOR_E2E__?.agentProposeChange({
+          paraId: id,
+          search,
+          replaceWith: 'AGENT-INSERTED-2',
+        }) ?? false,
+      [paraId, match]
+    );
+    expect(proposed).toBe(true);
+
+    // The deletion text is still in the vanilla doc — find_text returns it.
+    const found = await page.evaluate(
+      ([search]) => window.__DOCX_EDITOR_E2E__?.agentFind(search) ?? [],
+      [match]
+    );
+    expect(Array.isArray(found)).toBe(true);
+    expect(found.length).toBeGreaterThan(0);
+    expect(found[0].paraId).toBe(paraId);
+
+    // ...and the same handle anchors a comment.
+    const cid = await page.evaluate(
+      ([id, search]) =>
+        window.__DOCX_EDITOR_E2E__?.agentAddComment({
+          paraId: id,
+          text: 'find-then-anchor',
+          search,
+        }) ?? null,
+      [paraId, match]
+    );
+    expect(typeof cid).toBe('number');
+  });
+
+  // After staging an insertion, the inserted text must not appear in
+  // findInDocument (the source of `find_text`). Otherwise the agent could
+  // surface a phrase via find_text that it cannot anchor via add_comment.
+  test('findInDocument does not return inserted text after a redline', async ({ page }) => {
+    await getFirstParaId(page);
+
+    const target = await pickUniqueMatch(page);
+    test.skip(!target, 'No paragraph with a uniquely-findable phrase');
+    const paraId = target!.paraId;
+    const match = target!.match;
+
+    const proposed = await page.evaluate(
+      ([id, search]) =>
+        window.__DOCX_EDITOR_E2E__?.agentProposeChange({
+          paraId: id,
+          search,
+          replaceWith: 'AGENT-INSERTED-3',
+        }) ?? false,
+      [paraId, match]
+    );
+    expect(proposed).toBe(true);
+
+    const found = await page.evaluate(
+      () => window.__DOCX_EDITOR_E2E__?.agentFind('AGENT-INSERTED-3') ?? []
+    );
+    expect(found).toEqual([]);
+  });
+
+  // Phrase that exists in plain text AND inside an insertion. Pre-fix, the
+  // search would treat both as candidates and refuse for ambiguity. Post-fix,
+  // the insertion text is invisible so the anchor lands on the plain occurrence.
+  test('addComment resolves on the plain occurrence when the same phrase is also inside an insertion', async ({
+    page,
+  }) => {
+    await getFirstParaId(page);
+
+    const target = await pickUniqueMatch(page);
+    test.skip(!target, 'No paragraph with a uniquely-findable phrase');
+    const paraId = target!.paraId;
+    const match = target!.match;
+
+    // Insert (as a tracked change) text that happens to repeat `match`. The
+    // staged insertion now contains `match` once; the original paragraph
+    // still contains `match` once. Two candidates total — but only one is
+    // visible in the vanilla view.
+    const proposed = await page.evaluate(
+      ([id, replaceWith]) =>
+        window.__DOCX_EDITOR_E2E__?.agentProposeChange({
+          paraId: id,
+          search: '',
+          replaceWith,
+        }) ?? false,
+      [paraId, ` extra ${match} extra`]
+    );
+    expect(proposed).toBe(true);
+
+    const cid = await page.evaluate(
+      ([id, search]) =>
+        window.__DOCX_EDITOR_E2E__?.agentAddComment({
+          paraId: id,
+          text: 'plain-occurrence-anchor',
+          search,
+        }) ?? null,
+      [paraId, match]
+    );
+    expect(typeof cid).toBe('number');
+  });
 });

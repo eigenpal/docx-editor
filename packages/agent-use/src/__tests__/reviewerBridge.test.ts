@@ -6,6 +6,11 @@ import type {
   ParagraphContent,
   Run,
   Table,
+  Hyperlink,
+  Insertion,
+  Deletion,
+  MoveFrom,
+  MoveTo,
 } from '@eigenpal/docx-core/headless';
 import { DocxReviewer } from '../DocxReviewer';
 import { createReviewerBridge } from '../reviewerBridge';
@@ -41,6 +46,50 @@ function makeReviewer(content: (Paragraph | Table)[]): DocxReviewer {
     },
   } as Document;
   return new DocxReviewer(doc, 'TestAgent');
+}
+
+function makeInsertion(text: string, id: number): Insertion {
+  return {
+    type: 'insertion',
+    info: { id, author: 'A', date: '2024-01-01T00:00:00Z' },
+    content: [makeRun(text)],
+  };
+}
+
+function makeDeletion(text: string, id: number): Deletion {
+  return {
+    type: 'deletion',
+    info: { id, author: 'A', date: '2024-01-01T00:00:00Z' },
+    content: [makeRun(text)],
+  };
+}
+
+function makeMoveFrom(text: string, id: number): MoveFrom {
+  return {
+    type: 'moveFrom',
+    info: { id, author: 'A', date: '2024-01-01T00:00:00Z' },
+    content: [makeRun(text)],
+  };
+}
+
+function makeMoveTo(text: string, id: number): MoveTo {
+  return {
+    type: 'moveTo',
+    info: { id, author: 'A', date: '2024-01-01T00:00:00Z' },
+    content: [makeRun(text)],
+  };
+}
+
+function makeMixedParagraph(content: ParagraphContent[], paraId: string): Paragraph {
+  return { type: 'paragraph', content, formatting: {}, paraId } as Paragraph;
+}
+
+function makeHyperlink(text: string): Hyperlink {
+  return {
+    type: 'hyperlink',
+    href: 'https://example.com',
+    children: [makeRun(text)],
+  } as Hyperlink;
 }
 
 // ── Suite ──────────────────────────────────────────────────────────────────
@@ -120,6 +169,141 @@ describe('createReviewerBridge — findText', () => {
     const reviewer = makeReviewer([makeParagraph('whatever', 'p_a')]);
     const bridge = createReviewerBridge(reviewer);
     expect(bridge.findText('')).toEqual([]);
+  });
+});
+
+// ────────────────────────────────────────────────────────────────────────────
+// findText vanilla-view alignment
+//
+// findText must surface the same text the agent reads via read_document and
+// can anchor via addComment. Pre-fix, findText skipped ALL tracked changes
+// (both insertions and deletions). Post-fix, deletions/moveFrom are visible
+// and matchable so an agent that picks a phrase containing deletion text can
+// successfully locate it.
+// ────────────────────────────────────────────────────────────────────────────
+
+describe('createReviewerBridge — findText (vanilla view)', () => {
+  test('finds a phrase that includes deletion text', () => {
+    const reviewer = makeReviewer([
+      makeMixedParagraph(
+        [makeRun('cap is '), makeDeletion('$50k', 1), makeRun(' per year')],
+        'p_a'
+      ),
+    ]);
+    const bridge = createReviewerBridge(reviewer);
+    const matches = bridge.findText('cap is $50k per year');
+    expect(matches).toHaveLength(1);
+    expect(matches[0].paraId).toBe('p_a');
+  });
+
+  test('does not find a phrase that exists only inside an insertion', () => {
+    const reviewer = makeReviewer([
+      makeMixedParagraph(
+        [makeRun('cap is '), makeInsertion('$500k', 1), makeRun(' per year')],
+        'p_a'
+      ),
+    ]);
+    const bridge = createReviewerBridge(reviewer);
+    expect(bridge.findText('$500k')).toHaveLength(0);
+  });
+
+  test('does not find a phrase that straddles plain → insertion', () => {
+    // Vanilla haystack drops the insertion, so the phrase is broken.
+    const reviewer = makeReviewer([
+      makeMixedParagraph(
+        [makeRun('cap is '), makeInsertion('$500k', 1), makeRun(' per year')],
+        'p_a'
+      ),
+    ]);
+    const bridge = createReviewerBridge(reviewer);
+    expect(bridge.findText('cap is $500k')).toHaveLength(0);
+  });
+
+  test('finds a phrase entirely inside a deletion', () => {
+    const reviewer = makeReviewer([
+      makeMixedParagraph(
+        [makeRun('start '), makeDeletion('hidden gem text', 1), makeRun(' end')],
+        'p_a'
+      ),
+    ]);
+    const bridge = createReviewerBridge(reviewer);
+    const matches = bridge.findText('hidden gem');
+    expect(matches).toHaveLength(1);
+    expect(matches[0].paraId).toBe('p_a');
+  });
+
+  test('moveFrom text is findable (vanilla-visible)', () => {
+    const reviewer = makeReviewer([
+      makeMixedParagraph(
+        [makeRun('here is '), makeMoveFrom('movefrom payload', 1), makeRun(' end')],
+        'p_a'
+      ),
+    ]);
+    const bridge = createReviewerBridge(reviewer);
+    expect(bridge.findText('movefrom payload')).toHaveLength(1);
+  });
+
+  test('moveTo text is not findable (vanilla-hidden)', () => {
+    const reviewer = makeReviewer([
+      makeMixedParagraph(
+        [makeRun('here is '), makeMoveTo('moveto payload', 1), makeRun(' end')],
+        'p_a'
+      ),
+    ]);
+    const bridge = createReviewerBridge(reviewer);
+    expect(bridge.findText('moveto payload')).toHaveLength(0);
+  });
+
+  test('finds top-level hyperlink text', () => {
+    const reviewer = makeReviewer([
+      makeMixedParagraph([makeRun('see '), makeHyperlink('docs portal'), makeRun('.')], 'p_a'),
+    ]);
+    const bridge = createReviewerBridge(reviewer);
+    const matches = bridge.findText('docs portal');
+    expect(matches).toHaveLength(1);
+    expect(matches[0].paraId).toBe('p_a');
+  });
+
+  test('finds hyperlink text inside a deletion (vanilla-visible)', () => {
+    const deletionWithHyperlink: Deletion = {
+      type: 'deletion',
+      info: { id: 1, author: 'A', date: '2024-01-01T00:00:00Z' },
+      content: [makeHyperlink('removed link payload')],
+    };
+    const reviewer = makeReviewer([
+      makeMixedParagraph([makeRun('start '), deletionWithHyperlink, makeRun(' end')], 'p_a'),
+    ]);
+    const bridge = createReviewerBridge(reviewer);
+    expect(bridge.findText('removed link payload')).toHaveLength(1);
+  });
+
+  test('does not find hyperlink text inside an insertion (vanilla-hidden)', () => {
+    const insertionWithHyperlink: Insertion = {
+      type: 'insertion',
+      info: { id: 1, author: 'A', date: '2024-01-01T00:00:00Z' },
+      content: [makeHyperlink('inserted link payload')],
+    };
+    const reviewer = makeReviewer([
+      makeMixedParagraph([makeRun('start '), insertionWithHyperlink, makeRun(' end')], 'p_a'),
+    ]);
+    const bridge = createReviewerBridge(reviewer);
+    expect(bridge.findText('inserted link payload')).toHaveLength(0);
+  });
+
+  test('cross-cut: any phrase findText returns is anchorable via addComment', () => {
+    // Top-level invariant of the agent surface — keep find/anchor in sync.
+    const reviewer = makeReviewer([
+      makeMixedParagraph([makeRun('alpha '), makeDeletion('beta', 1), makeRun(' gamma')], 'p_a'),
+    ]);
+    const bridge = createReviewerBridge(reviewer);
+    const matches = bridge.findText('alpha beta gamma');
+    expect(matches).toHaveLength(1);
+    const id = bridge.addComment({
+      paraId: matches[0].paraId,
+      text: 'note',
+      search: matches[0].match,
+    });
+    expect(typeof id).toBe('number');
   });
 });
 

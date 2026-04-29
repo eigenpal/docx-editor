@@ -75,13 +75,36 @@ function buildParaIdMap(reviewer: DocxReviewer): Map<string, number> {
   return map;
 }
 
-/** Extract the plain text of a paragraph (runs only, no annotations). */
+/**
+ * Extract the vanilla plain text of a paragraph: plain runs + hyperlink runs +
+ * deletion / moveFrom content (still in the doc until accepted), with
+ * insertions / moveTo hidden. Matches the view the agent reads via
+ * `read_document`, so `findText` surfaces the same phrases that `addComment` /
+ * `proposeChange` can anchor.
+ */
 function getParagraphPlainText(p: Paragraph): string {
   const parts: string[] = [];
+  const pushRunText = (run: { content: Array<{ type: string; text?: string }> }) => {
+    for (const r of run.content) {
+      if (r.type === 'text') parts.push(r.text ?? '');
+    }
+  };
   for (const item of p.content) {
     if (item.type === 'run') {
-      for (const r of item.content) {
-        if (r.type === 'text') parts.push(r.text ?? '');
+      pushRunText(item);
+    } else if (item.type === 'hyperlink') {
+      for (const child of item.children) {
+        if (child.type === 'run') pushRunText(child);
+      }
+    } else if (item.type === 'deletion' || item.type === 'moveFrom') {
+      for (const child of item.content) {
+        if (child.type === 'run') {
+          pushRunText(child);
+        } else if (child.type === 'hyperlink') {
+          for (const hc of child.children) {
+            if (hc.type === 'run') pushRunText(hc);
+          }
+        }
       }
     }
   }

@@ -21,8 +21,11 @@ const readDocument: AgentToolDefinition<{ fromIndex?: number; toIndex?: number }
   description:
     'Read the document content. Returns lines tagged with a stable paragraph id, e.g. ' +
     '"[2A1F3B] First paragraph". Use the bracketed id as `paraId` when commenting or ' +
-    'suggesting changes — it survives edits, unlike ordinal indices. Tracked changes ' +
-    'and comment markers are stripped; use read_comments / read_changes to inspect them.',
+    'suggesting changes — it survives edits, unlike ordinal indices. ' +
+    'Returns the vanilla document (the doc as it exists right now, before any tracked ' +
+    'suggestions are accepted): pending insertions are HIDDEN, pending deletions are ' +
+    'shown as plain text (still part of the document until accepted), and comment ' +
+    'markers are stripped. Use read_changes / read_comments to inspect what is pending.',
   inputSchema: {
     type: 'object',
     properties: {
