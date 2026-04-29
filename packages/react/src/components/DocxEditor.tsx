@@ -284,6 +284,11 @@ export interface DocxEditorProps {
   initialZoom?: number;
   /** Whether the editor is read-only. When true, hides toolbar and rulers */
   readOnly?: boolean;
+  /**
+   * When true, the editor does not intercept Cmd/Ctrl+F or Cmd/Ctrl+H.
+   * This lets the browser or host app handle native find/history shortcuts.
+   */
+  disableFindReplaceShortcuts?: boolean;
   /** Custom toolbar actions */
   toolbarExtra?: ReactNode;
   /** Additional CSS class name */
@@ -1164,6 +1169,7 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
     rulerUnit = 'inch',
     initialZoom = 1.0,
     readOnly: readOnlyProp = false,
+    disableFindReplaceShortcuts = false,
     toolbarExtra,
     className = '',
     style,
@@ -2069,12 +2075,14 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
 
       if (cmdOrCtrl && !e.shiftKey && !e.altKey) {
         if (e.key.toLowerCase() === 'f') {
+          if (disableFindReplaceShortcuts) return;
           e.preventDefault();
           // Get selected text if any
           const selection = window.getSelection();
           const selectedText = selection && !selection.isCollapsed ? selection.toString() : '';
           findReplace.openFind(selectedText);
         } else if (e.key.toLowerCase() === 'h') {
+          if (disableFindReplaceShortcuts) return;
           e.preventDefault();
           // Get selected text if any
           const selection = window.getSelection();
@@ -2105,7 +2113,7 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
     return () => {
       document.removeEventListener('keydown', handleKeyDown);
     };
-  }, [findReplace, hyperlinkDialog, tableSelection]);
+  }, [disableFindReplaceShortcuts, findReplace, hyperlinkDialog, tableSelection]);
 
   // Handle table insert from toolbar
   const handleInsertTable = useCallback(
