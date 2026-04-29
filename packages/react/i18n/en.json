@@ -754,6 +754,15 @@
   "agentPanel": {
     "defaultTitle": "Assistant",
     "toggle": "Open assistant",
-    "close": "Close panel"
+    "close": "Close panel",
+    "resizeHandle": "Resize agent panel",
+    "thinking": "Assistant is thinking",
+    "composerPlaceholder": "Ask the assistant…",
+    "send": "Send",
+    "timeline": {
+      "working": "Working… {count, plural, one {# step} other {# steps}}",
+      "summary": "{count, plural, one {# step} other {# steps}}",
+      "earlier": "+ {count, plural, one {# earlier step} other {# earlier steps}}"
+    }
   }
 }

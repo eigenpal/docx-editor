@@ -216,7 +216,7 @@ export function AgentPanel({
       <div
         role="separator"
         aria-orientation="vertical"
-        aria-label="Resize agent panel"
+        aria-label={t('agentPanel.resizeHandle')}
         onPointerDown={onHandlePointerDown}
         style={{
           position: 'absolute',

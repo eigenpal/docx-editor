@@ -752,8 +752,17 @@
     "label": "Carregando"
   },
   "agentPanel": {
-    "close": null,
-    "defaultTitle": null,
-    "toggle": null
+    "close": "Fechar painel",
+    "composerPlaceholder": "Pergunte ao assistente…",
+    "defaultTitle": "Assistente",
+    "resizeHandle": "Redimensionar painel do assistente",
+    "send": "Enviar",
+    "thinking": "Assistente pensando",
+    "timeline": {
+      "earlier": "+ {count, plural, one {# etapa anterior} other {# etapas anteriores}}",
+      "summary": "{count, plural, one {# etapa} other {# etapas}}",
+      "working": "Trabalhando… {count, plural, one {# etapa} other {# etapas}}"
+    },
+    "toggle": "Abrir assistente"
   }
 }

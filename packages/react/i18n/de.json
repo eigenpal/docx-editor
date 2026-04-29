@@ -752,8 +752,17 @@
     "label": "Wird geladen"
   },
   "agentPanel": {
-    "close": null,
-    "defaultTitle": null,
-    "toggle": null
+    "close": "Bereich schließen",
+    "composerPlaceholder": "Den Assistenten fragen…",
+    "defaultTitle": "Assistent",
+    "resizeHandle": "Assistentenbereich skalieren",
+    "send": "Senden",
+    "thinking": "Assistent denkt nach",
+    "timeline": {
+      "earlier": "+ {count, plural, one {# vorheriger Schritt} other {# vorherige Schritte}}",
+      "summary": "{count, plural, one {# Schritt} other {# Schritte}}",
+      "working": "Arbeite… {count, plural, one {# Schritt} other {# Schritte}}"
+    },
+    "toggle": "Assistent öffnen"
   }
 }

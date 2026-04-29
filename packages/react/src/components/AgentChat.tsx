@@ -13,6 +13,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import type { CSSProperties, FormEvent, ReactNode } from 'react';
+import { useTranslation } from '../i18n';
 
 const KEYFRAMES_STYLE_ID = 'ep-agent-chat-keyframes';
 const KEYFRAMES = `
@@ -139,6 +140,7 @@ export function AgentTimeline({
   maxVisibleCalls = DEFAULT_VISIBLE_TOOL_CALLS,
   humanizeName = defaultHumanizeName,
 }: AgentTimelineProps) {
+  const { t } = useTranslation();
   // Once the user clicks the toggle we respect their choice; before that,
   // expanded mirrors `streaming`.
   const [userToggled, setUserToggled] = useState<boolean | null>(null);
@@ -146,10 +148,9 @@ export function AgentTimeline({
 
   if (toolCalls.length === 0) return null;
 
-  const stepWord = toolCalls.length === 1 ? 'step' : 'steps';
   const summary = streaming
-    ? `Working… ${toolCalls.length} ${stepWord}`
-    : `${toolCalls.length} ${stepWord}`;
+    ? t('agentPanel.timeline.working', { count: toolCalls.length })
+    : t('agentPanel.timeline.summary', { count: toolCalls.length });
 
   const visibleCalls = toolCalls.slice(-maxVisibleCalls);
   const hiddenEarlier = Math.max(0, toolCalls.length - visibleCalls.length);
@@ -181,7 +182,7 @@ export function AgentTimeline({
         <ol style={S.timelineList}>
           {hiddenEarlier > 0 && (
             <li style={S.timelineMore} data-testid="agent-timeline-earlier">
-              + {hiddenEarlier} earlier {hiddenEarlier === 1 ? 'step' : 'steps'}
+              {t('agentPanel.timeline.earlier', { count: hiddenEarlier })}
             </li>
           )}
           {visibleCalls.map((call) => (
@@ -261,6 +262,7 @@ export function AgentChatLog({
   className,
   style,
 }: AgentChatLogProps) {
+  const { t } = useTranslation();
   useKeyframes();
   const endRef = useRef<HTMLDivElement>(null);
   // Track tool-call growth on the in-flight assistant turn so the log
@@ -314,7 +316,7 @@ export function AgentChatLog({
         );
       })}
       {loading && (
-        <div style={S.thinkingBubble} aria-label="Assistant is thinking">
+        <div style={S.thinkingBubble} aria-label={t('agentPanel.thinking')}>
           <span style={{ ...S.dot, animationDelay: '0s' }} />
           <span style={{ ...S.dot, animationDelay: '0.15s' }} />
           <span style={{ ...S.dot, animationDelay: '0.3s' }} />
@@ -346,10 +348,12 @@ export function AgentComposer({
   onChange,
   onSubmit,
   disabled,
-  placeholder = 'Ask the assistant…',
+  placeholder,
   footnote,
   className,
 }: AgentComposerProps) {
+  const { t } = useTranslation();
+  const resolvedPlaceholder = placeholder ?? t('agentPanel.composerPlaceholder');
   const canSend = value.trim().length > 0 && !disabled;
   const handleSubmit = (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -367,12 +371,12 @@ export function AgentComposer({
           style={S.composerInput}
           value={value}
           onChange={(e) => onChange(e.target.value)}
-          placeholder={placeholder}
+          placeholder={resolvedPlaceholder}
           disabled={disabled}
         />
         <button
           type="submit"
-          aria-label="Send"
+          aria-label={t('agentPanel.send')}
           disabled={!canSend}
           style={{
             ...S.sendBtn,
