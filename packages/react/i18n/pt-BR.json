@@ -37,10 +37,10 @@
     "symbol": "Símbolo",
     "help": "Ajuda",
     "reportIssue": "Reportar problema",
-    "open": null,
-    "openShortcut": null,
-    "save": null,
-    "saveShortcut": null
+    "open": "Abrir",
+    "openShortcut": "Ctrl+O",
+    "save": "Salvar",
+    "saveShortcut": "Ctrl+S"
   },
   "formattingBar": {
     "groups": {
