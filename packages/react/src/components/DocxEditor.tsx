@@ -1511,6 +1511,7 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
   // Save the last known selection for restoring after toolbar interactions
   const lastSelectionRef = useRef<{ from: number; to: number } | null>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
+  const docxInputRef = useRef<HTMLInputElement>(null);
   const editorContentRef = useRef<HTMLDivElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const toolbarWrapperRef = useRef<HTMLDivElement>(null);
@@ -3569,6 +3570,42 @@ body { background: white; }
     onPrint?.();
   }, [onPrint]);
 
+  const handleDownloadDocument = useCallback(async () => {
+    const buffer = await handleSave();
+    if (!buffer) return;
+    const blob = new Blob([buffer], {
+      type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    });
+    const url = URL.createObjectURL(blob);
+    const a = window.document.createElement('a');
+    a.href = url;
+    a.download = `${(documentName?.trim() || 'document').replace(/\.docx$/i, '')}.docx`;
+    a.click();
+    // Defer revoke so Safari has time to start the download.
+    setTimeout(() => URL.revokeObjectURL(url), 0);
+  }, [handleSave, documentName]);
+
+  const handleOpenDocument = useCallback(() => {
+    docxInputRef.current?.click();
+  }, []);
+
+  const handleDocxFileChange = useCallback(
+    async (event: React.ChangeEvent<HTMLInputElement>) => {
+      const file = event.target.files?.[0];
+      // Reset so picking the same file twice still fires `change`.
+      event.target.value = '';
+      if (!file) return;
+      try {
+        const buffer = await file.arrayBuffer();
+        await loadBuffer(buffer);
+        onDocumentNameChange?.(file.name.replace(/\.docx$/i, ''));
+      } catch (error) {
+        onError?.(error instanceof Error ? error : new Error('Failed to open document'));
+      }
+    },
+    [loadBuffer, onDocumentNameChange, onError]
+  );
+
   // ============================================================================
   // FIND/REPLACE HANDLERS
   // ============================================================================
@@ -4744,6 +4781,8 @@ body { background: white; }
                       showPrintButton={showPrintButton}
                       fontFamilies={fontFamilies}
                       onPrint={handleDirectPrint}
+                      onOpen={handleOpenDocument}
+                      onSave={handleDownloadDocument}
                       showZoomControl={showZoomControl}
                       zoom={state.zoom}
                       onZoomChange={handleZoomChange}
@@ -5348,6 +5387,14 @@ body { background: white; }
               accept="image/*"
               style={{ display: 'none' }}
               onChange={handleImageFileChange}
+            />
+            {/* Hidden file input for File → Open */}
+            <input
+              ref={docxInputRef}
+              type="file"
+              accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+              style={{ display: 'none' }}
+              onChange={handleDocxFileChange}
             />
           </div>
         </ErrorBoundary>

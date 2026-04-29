@@ -36,7 +36,11 @@
     "tableOfContents": "Sumário",
     "symbol": "Símbolo",
     "help": "Ajuda",
-    "reportIssue": "Reportar problema"
+    "reportIssue": "Reportar problema",
+    "open": null,
+    "openShortcut": null,
+    "save": null,
+    "saveShortcut": null
   },
   "formattingBar": {
     "groups": {

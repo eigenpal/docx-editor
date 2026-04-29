@@ -36,7 +36,11 @@
     "tableOfContents": "Inhaltsverzeichnis",
     "symbol": "Symbol",
     "help": "Hilfe",
-    "reportIssue": "Problem melden"
+    "reportIssue": "Problem melden",
+    "open": null,
+    "openShortcut": null,
+    "save": null,
+    "saveShortcut": null
   },
   "formattingBar": {
     "groups": {

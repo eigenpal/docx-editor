@@ -159,6 +159,10 @@ export interface ToolbarProps {
   onPrint?: () => void;
   /** Whether to show print button (default: true) */
   showPrintButton?: boolean;
+  /** Callback to open/import a DOCX file (File → Open) */
+  onOpen?: () => void;
+  /** Callback to save/download the current DOCX (File → Save) */
+  onSave?: () => void;
   /** Whether to show zoom control (default: true) */
   showZoomControl?: boolean;
   /** Current zoom level (1.0 = 100%) */
@@ -344,6 +348,8 @@ export function Toolbar({
   onFormat,
   onPrint,
   showPrintButton = true,
+  onOpen,
+  onSave,
   onPageSetup,
   onInsertImage,
   onInsertTable,
@@ -421,33 +427,61 @@ export function Toolbar({
       onMouseUp={handleToolbarMouseUp}
     >
       {/* File Menu */}
-      {(showPrintButton && onPrint) || onPageSetup ? (
-        <MenuDropdown
-          label={t('toolbar.file')}
-          disabled={disabled}
-          items={[
-            ...(showPrintButton && onPrint
-              ? [
-                  {
-                    icon: 'print',
-                    label: t('toolbar.print'),
-                    shortcut: t('toolbar.printShortcut'),
-                    onClick: onPrint,
-                  } as MenuEntry,
-                ]
-              : []),
-            ...(onPageSetup
-              ? [
-                  {
-                    icon: 'settings',
-                    label: t('toolbar.pageSetup'),
-                    onClick: onPageSetup,
-                  } as MenuEntry,
-                ]
-              : []),
-          ]}
-        />
-      ) : null}
+      {(() => {
+        const hasPrintOrPageSetup = (showPrintButton && onPrint) || onPageSetup;
+        const hasFileMenu = hasPrintOrPageSetup || onOpen || onSave;
+        if (!hasFileMenu) return null;
+        return (
+          <MenuDropdown
+            label={t('toolbar.file')}
+            disabled={disabled}
+            items={[
+              ...(onOpen
+                ? [
+                    {
+                      icon: 'file_upload',
+                      label: t('toolbar.open'),
+                      shortcut: t('toolbar.openShortcut'),
+                      onClick: onOpen,
+                    } as MenuEntry,
+                  ]
+                : []),
+              ...(onSave
+                ? [
+                    {
+                      icon: 'file_download',
+                      label: t('toolbar.save'),
+                      shortcut: t('toolbar.saveShortcut'),
+                      onClick: onSave,
+                    } as MenuEntry,
+                  ]
+                : []),
+              ...((onOpen || onSave) && hasPrintOrPageSetup
+                ? [{ type: 'separator' as const } as MenuEntry]
+                : []),
+              ...(showPrintButton && onPrint
+                ? [
+                    {
+                      icon: 'print',
+                      label: t('toolbar.print'),
+                      shortcut: t('toolbar.printShortcut'),
+                      onClick: onPrint,
+                    } as MenuEntry,
+                  ]
+                : []),
+              ...(onPageSetup
+                ? [
+                    {
+                      icon: 'settings',
+                      label: t('toolbar.pageSetup'),
+                      onClick: onPageSetup,
+                    } as MenuEntry,
+                  ]
+                : []),
+            ]}
+          />
+        );
+      })()}
 
       {/* Format Menu */}
       <MenuDropdown

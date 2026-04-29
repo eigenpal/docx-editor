@@ -115,6 +115,8 @@ export function MenuBar() {
     onFormat,
     onPrint,
     showPrintButton = true,
+    onOpen,
+    onSave,
     onPageSetup,
     onInsertImage,
     onInsertTable,
@@ -143,7 +145,8 @@ export function MenuBar() {
     [disabled, onInsertTable, onRefocusEditor]
   );
 
-  const hasFileMenu = (showPrintButton && onPrint) || onPageSetup;
+  const hasPrintOrPageSetup = (showPrintButton && onPrint) || onPageSetup;
+  const hasFileMenu = hasPrintOrPageSetup || onOpen || onSave;
 
   return (
     <div className="flex items-center" role="menubar" aria-label={t('titleBar.menuBarAriaLabel')}>
@@ -153,6 +156,29 @@ export function MenuBar() {
           label={t('toolbar.file')}
           disabled={disabled}
           items={[
+            ...(onOpen
+              ? [
+                  {
+                    icon: 'file_upload',
+                    label: t('toolbar.open'),
+                    shortcut: t('toolbar.openShortcut'),
+                    onClick: onOpen,
+                  } as MenuEntry,
+                ]
+              : []),
+            ...(onSave
+              ? [
+                  {
+                    icon: 'file_download',
+                    label: t('toolbar.save'),
+                    shortcut: t('toolbar.saveShortcut'),
+                    onClick: onSave,
+                  } as MenuEntry,
+                ]
+              : []),
+            ...((onOpen || onSave) && hasPrintOrPageSetup
+              ? [{ type: 'separator' as const } as MenuEntry]
+              : []),
             ...(showPrintButton && onPrint
               ? [
                   {
