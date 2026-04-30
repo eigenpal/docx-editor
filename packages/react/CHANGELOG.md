@@ -1,5 +1,11 @@
 # @eigenpal/docx-js-editor
 
+## 0.3.1
+
+### Patch Changes
+
+- e92b349: Fix comments sidebar not repositioning when comments are added programmatically (e.g. via the agent `addComment` ref). Cards no longer overlap until you click one — heights are now re-measured whenever the items list changes, mirroring the existing re-measure pass that runs on expand/collapse.
+
 ## 0.3.0
 
 ### Minor Changes
