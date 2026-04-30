@@ -125,6 +125,87 @@ test.describe('Agent bridge — paraId-anchored mutations', () => {
     expect(afterCount - beforeCount).toBe(5);
   });
 
+  test('programmatic addComment lays out sidebar cards without overlap (no click required)', async ({
+    page,
+  }) => {
+    // Regression: adding comments via the agent ref previously did not trigger
+    // the sidebar to re-measure card heights, so multiple cards anchored to
+    // nearby paragraphs would overlap until the user clicked one — which fired
+    // the [expandedItem] re-measure effect and snapped the layout into place.
+
+    await page.waitForFunction(() => Boolean(window.__DOCX_EDITOR_E2E__), undefined, {
+      timeout: 15000,
+    });
+
+    // Pull paraIds from page 1 via the bridge. Need at least 3 distinct
+    // paragraphs so we can anchor each comment to its own paragraph.
+    const paraIds: string[] = await page.evaluate(() => {
+      const page = window.__DOCX_EDITOR_E2E__?.agentGetPageContent(1);
+      const ids = new Set<string>();
+      for (const p of page?.paragraphs ?? []) {
+        if (p.paraId) ids.add(p.paraId);
+        if (ids.size >= 3) break;
+      }
+      return Array.from(ids);
+    });
+    test.skip(paraIds.length < 3, 'Fixture lacks 3 paragraphs with paraIds');
+
+    // Long body text that wraps across multiple lines so the rendered card is
+    // taller than the 80px height estimate. Without a re-measure on add,
+    // collision avoidance under-estimates and stacked cards overlap the
+    // taller real cards above them.
+    const longText =
+      'This is a deliberately long comment body that wraps across several ' +
+      'lines so the rendered card is taller than the 80 pixel height ' +
+      'estimate used by collision avoidance before cards are measured.';
+
+    // Baseline: one comment fully rendered before streaming the rest.
+    const firstId = await page.evaluate(
+      ([id, body]) =>
+        window.__DOCX_EDITOR_E2E__?.agentAddComment({ paraId: id!, text: body! }) ?? null,
+      [paraIds[0], longText]
+    );
+    expect(typeof firstId).toBe('number');
+    await expect(page.locator('.docx-comment-card')).toHaveCount(1, { timeout: 5000 });
+    await page.waitForTimeout(500);
+
+    await page.evaluate(
+      ([ids, body]) => {
+        const hook = window.__DOCX_EDITOR_E2E__;
+        if (!hook) return;
+        for (let i = 1; i < ids.length; i++) {
+          hook.agentAddComment({ paraId: ids[i]!, text: `${body} (#${i + 1})` });
+        }
+      },
+      [paraIds, longText]
+    );
+
+    await expect(page.locator('.docx-comment-card')).toHaveCount(paraIds.length, {
+      timeout: 5000,
+    });
+    // Do NOT click any card — clicking triggers the [expandedItem] re-measure
+    // and would mask the bug. Wait for the [items.length] effect to settle.
+    await page.waitForTimeout(600);
+
+    const overlaps = await page.evaluate(() => {
+      const cards = Array.from(
+        document.querySelectorAll('.docx-unified-sidebar .docx-comment-card')
+      ) as HTMLElement[];
+      const rects = cards
+        .map((el) => el.getBoundingClientRect())
+        .filter((r) => r.height > 0 && r.width > 0)
+        .sort((a, b) => a.top - b.top);
+      const collisions: Array<{ a: number; b: number; gap: number }> = [];
+      for (let i = 1; i < rects.length; i++) {
+        const gap = rects[i].top - rects[i - 1].bottom;
+        if (gap < -0.5) collisions.push({ a: i - 1, b: i, gap });
+      }
+      return { count: rects.length, collisions };
+    });
+    expect(overlaps.count).toBe(paraIds.length);
+    expect(overlaps.collisions).toEqual([]);
+  });
+
   test('proposeChange creates a tracked change visible in the editor', async ({ page }) => {
     await getFirstParaId(page);
 

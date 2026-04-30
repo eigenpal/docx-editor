@@ -85,18 +85,35 @@ export function UnifiedSidebar({
     }
   }, [resolved]);
 
+  // Re-measure card heights and bump positionVersion only if anything
+  // changed, so the collision-avoidance useMemo re-runs with real sizes.
+  // Reads are batched in a single rAF to avoid forced sync layout.
+  const remeasureAll = useCallback(() => {
+    let changed = false;
+    for (const [id, el] of cardElsRef.current) {
+      const h = el.offsetHeight;
+      if (cardHeightsRef.current.get(id) !== h) {
+        cardHeightsRef.current.set(id, h);
+        changed = true;
+      }
+    }
+    if (changed) setPositionVersion((v) => v + 1);
+  }, []);
+
+  // Items added/removed (incl. programmatic add via agent ref). The ref
+  // callback captures heights only on mount, so re-measure once they've
+  // committed (rAF) and again after layout settles (400ms).
   useEffect(() => {
-    const timerQuick = setTimeout(() => setPositionVersion((v) => v + 1), 50);
+    const raf = requestAnimationFrame(remeasureAll);
     const timerFull = setTimeout(() => {
-      setPositionVersion((v) => v + 1);
+      remeasureAll();
       setInitialPositionsDone(true);
     }, 400);
-
     return () => {
-      clearTimeout(timerQuick);
+      cancelAnimationFrame(raf);
       clearTimeout(timerFull);
     };
-  }, [items.length]);
+  }, [items.length, remeasureAll]);
 
   useEffect(() => {
     const container = editorContainerRef?.current;
@@ -109,17 +126,11 @@ export function UnifiedSidebar({
     return () => observer.disconnect();
   }, [editorContainerRef]);
 
-  // Re-measure ALL card heights after expand/collapse so collision avoidance
-  // uses up-to-date sizes (the ref callback only fires on mount, not resize).
+  // Re-measure on expand/collapse so collision avoidance uses up-to-date sizes.
   useEffect(() => {
-    const raf = requestAnimationFrame(() => {
-      for (const [id, el] of cardElsRef.current) {
-        cardHeightsRef.current.set(id, el.offsetHeight);
-      }
-      setPositionVersion((v) => v + 1);
-    });
+    const raf = requestAnimationFrame(remeasureAll);
     return () => cancelAnimationFrame(raf);
-  }, [expandedItem]);
+  }, [expandedItem, remeasureAll]);
 
   // Watch expanded card for ongoing size changes (e.g. typing in reply input)
   useEffect(() => {
