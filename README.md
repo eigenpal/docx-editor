@@ -1,34 +1,18 @@
 <p align="center">
-  <a href="https://github.com/eigenpal/docx-js-editor">
-    <img src="./assets/logo.png" alt="DOCX JS Editor" width="600" />
+  <a href="https://www.docx-editor.dev/">
+    <img src="./assets/header.png" alt="DOCX Editor — .docx in, .docx out. Open source, agent ready, client-side." width="500" />
   </a>
 </p>
 
 <p align="center">
-  <a href="https://www.npmjs.com/package/@eigenpal/docx-js-editor"><img src="https://img.shields.io/npm/v/@eigenpal/docx-js-editor.svg?style=flat-square&color=00C853" alt="npm version" /></a>
-  <a href="https://www.npmjs.com/package/@eigenpal/docx-js-editor"><img src="https://img.shields.io/npm/dm/@eigenpal/docx-js-editor.svg?style=flat-square&color=00C853" alt="npm downloads" /></a>
-  <a href="https://github.com/eigenpal/docx-js-editor/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg?style=flat-square&color=00C853" alt="license" /></a>
-  <a href="https://docx-editor.dev/editor"><img src="https://img.shields.io/badge/Live_Demo-00C853?style=flat-square&logo=vercel&logoColor=white" alt="Live Demo" /></a>
-  <a href="https://www.docx-editor.dev/docs"><img src="https://img.shields.io/badge/Docs-00C853?style=flat-square&logo=readthedocs&logoColor=white" alt="Documentation" /></a>
+  <a href="https://www.npmjs.com/package/@eigenpal/docx-js-editor"><img src="https://img.shields.io/npm/v/@eigenpal/docx-js-editor.svg?style=flat-square&color=3B5BDB" alt="npm version" /></a>
+  <a href="https://www.npmjs.com/package/@eigenpal/docx-js-editor"><img src="https://img.shields.io/npm/dm/@eigenpal/docx-js-editor.svg?style=flat-square&color=3B5BDB" alt="npm downloads" /></a>
+  <a href="https://github.com/eigenpal/docx-js-editor/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg?style=flat-square&color=3B5BDB" alt="license" /></a>
+  <a href="https://docx-editor.dev/editor"><img src="https://img.shields.io/badge/Live_Demo-3B5BDB?style=flat-square&logo=vercel&logoColor=white" alt="Live Demo" /></a>
+  <a href="https://www.docx-editor.dev/docs"><img src="https://img.shields.io/badge/Docs-3B5BDB?style=flat-square&logo=readthedocs&logoColor=white" alt="Documentation" /></a>
 </p>
 
-# docx-editor
-
-Open-source WYSIWYG DOCX editor for the browser. No server required. **[Live demo](https://docx-editor.dev/editor)** | **[Documentation](https://www.docx-editor.dev/docs)**
-
-<p align="center">
-  <a href="https://docx-editor.dev/editor">
-    <img src="./assets/editor.png" alt="DOCX JS Editor screenshot" width="700" />
-  </a>
-</p>
-
-- WYSIWYG editing with Word fidelity — formatting, tables, images, hyperlinks
-- Track changes (suggestion mode) with accept/reject
-- Comments with replies, resolve/reopen, scroll-to-highlight
-- Realtime collaboration with Yjs
-- Internationalization (i18n) - [community-contributed translations welcome](docs/i18n.md#contributing-a-new-locale)
-- Plugin system
-- Client-side only, zero server dependencies
+Open-source WYSIWYG `.docx` editor for React with canonical OOXML, tracked changes, and real-time collaboration. Agent-ready. **[Live demo](https://docx-editor.dev/editor)** | **[Documentation](https://www.docx-editor.dev/docs)**
 
 ## Quick Start
 
@@ -48,6 +32,12 @@ function Editor({ file }: { file: ArrayBuffer }) {
 ```
 
 > **Next.js / SSR:** Use dynamic import — the editor requires the DOM.
+
+<p align="center">
+  <a href="https://docx-editor.dev/editor">
+    <img src="./assets/editor.png" alt="DOCX JS Editor screenshot" width="100%" />
+  </a>
+</p>
 
 ## Packages
 
