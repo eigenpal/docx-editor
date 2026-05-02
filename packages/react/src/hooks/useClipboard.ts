@@ -12,7 +12,7 @@ import {
   parseClipboardHtml,
   runsToClipboardContent,
   type ParsedClipboardContent,
-} from '@eigenpal/docx-core/utils/clipboard';
+} from '@eigenpal/docx-core/utils';
 import { getSelectionRuns, createSelectionFromDOM } from '@eigenpal/docx-core';
 import type { ClipboardSelection, Theme } from '@eigenpal/docx-core';
 

@@ -22,7 +22,7 @@ import {
   isInternalLink,
   getHyperlinkText,
   getHyperlinkUrl,
-} from '@eigenpal/docx-core/docx/hyperlinkParser';
+} from '@eigenpal/docx-core/docx';
 
 /**
  * Props for the Hyperlink component

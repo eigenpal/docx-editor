@@ -23,12 +23,8 @@ import type {
   Shape as ShapeType,
   TextBox as TextBoxType,
 } from '@eigenpal/docx-core/types/document';
-import {
-  paragraphToStyle,
-  textToStyle,
-  mergeStyles,
-} from '@eigenpal/docx-core/utils/formatToStyle';
-import { formatPx } from '@eigenpal/docx-core/utils/units';
+import { paragraphToStyle, textToStyle, mergeStyles } from '@eigenpal/docx-core/utils';
+import { formatPx } from '@eigenpal/docx-core/utils';
 import { Run } from './Run';
 import { Tab } from './Tab';
 import { Hyperlink } from './Hyperlink';

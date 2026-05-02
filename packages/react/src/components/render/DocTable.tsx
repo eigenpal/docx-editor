@@ -23,19 +23,15 @@ import type {
   Theme,
   Paragraph,
 } from '@eigenpal/docx-core/types/document';
-import {
-  tableCellToStyle,
-  borderToStyle,
-  resolveShadingFill,
-} from '@eigenpal/docx-core/utils/formatToStyle';
-import { twipsToPixels, formatPx } from '@eigenpal/docx-core/utils/units';
+import { tableCellToStyle, borderToStyle, resolveShadingFill } from '@eigenpal/docx-core/utils';
+import { twipsToPixels, formatPx } from '@eigenpal/docx-core/utils';
 import {
   getTableColumnCount,
   getTableRowCount,
   isCellMergeContinuation,
   isCellMergeStart,
   hasHeaderRow,
-} from '@eigenpal/docx-core/docx/tableParser';
+} from '@eigenpal/docx-core/docx';
 
 /**
  * Props for the DocTable component

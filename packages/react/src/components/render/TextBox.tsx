@@ -27,8 +27,8 @@ import {
   resolveTextBoxFillColor,
   resolveTextBoxOutlineColor,
   getTextBoxOutlineWidthPx,
-} from '@eigenpal/docx-core/docx/textBoxParser';
-import { emuToPixels } from '@eigenpal/docx-core/docx/imageParser';
+} from '@eigenpal/docx-core/docx';
+import { emuToPixels } from '@eigenpal/docx-core/docx';
 
 /**
  * Props for the TextBox component

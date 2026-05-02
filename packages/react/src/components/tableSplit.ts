@@ -6,4 +6,4 @@ export {
   type SplitCellDialogConfig,
   getSplitCellDialogConfig,
   splitActiveTableCell,
-} from '@eigenpal/docx-core/prosemirror/commands/tableSplit';
+} from '@eigenpal/docx-core/prosemirror/commands';

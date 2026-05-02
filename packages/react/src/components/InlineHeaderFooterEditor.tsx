@@ -22,12 +22,12 @@ import { useTranslation } from '../i18n';
 import { EditorView } from 'prosemirror-view';
 import { undo, redo } from 'prosemirror-history';
 
-import { schema } from '@eigenpal/docx-core/prosemirror/schema';
-import { headerFooterToProseDoc } from '@eigenpal/docx-core/prosemirror/conversion/toProseDoc';
-import { proseDocToBlocks } from '@eigenpal/docx-core/prosemirror/conversion/fromProseDoc';
+import { schema } from '@eigenpal/docx-core/prosemirror';
+import { headerFooterToProseDoc } from '@eigenpal/docx-core/prosemirror/conversion';
+import { proseDocToBlocks } from '@eigenpal/docx-core/prosemirror/conversion';
 import { extractSelectionState, type SelectionState } from '@eigenpal/docx-core/prosemirror';
-import { createStarterKit } from '@eigenpal/docx-core/prosemirror/extensions/StarterKit';
-import { ExtensionManager } from '@eigenpal/docx-core/prosemirror/extensions/ExtensionManager';
+import { createStarterKit } from '@eigenpal/docx-core/prosemirror/extensions';
+import { ExtensionManager } from '@eigenpal/docx-core/prosemirror/extensions';
 import { createStyleResolver } from '@eigenpal/docx-core/prosemirror';
 import type {
   HeaderFooter,

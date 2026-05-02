@@ -37,7 +37,7 @@ export {
   type EditorMode,
 } from './components/DocxEditor';
 export { renderAsync, type RenderAsyncOptions, type DocxEditorHandle } from './renderAsync';
-export { type DocxInput, toArrayBuffer } from '@eigenpal/docx-core/utils/docxInput';
+export { type DocxInput, toArrayBuffer } from '@eigenpal/docx-core/utils';
 export { AgentPanel, type AgentPanelProps } from './components/AgentPanel';
 export {
   AgentChatLog,
@@ -56,30 +56,30 @@ export {
 // AGENT API
 // ============================================================================
 
-export { DocumentAgent } from '@eigenpal/docx-core/agent/DocumentAgent';
-export { executeCommand, executeCommands } from '@eigenpal/docx-core/agent/executor';
+export { DocumentAgent } from '@eigenpal/docx-core/agent';
+export { executeCommand, executeCommands } from '@eigenpal/docx-core/agent';
 export {
   getAgentContext,
   getDocumentSummary,
   type AgentContextOptions,
-} from '@eigenpal/docx-core/agent/context';
+} from '@eigenpal/docx-core/agent';
 export {
   buildSelectionContext,
   buildExtendedSelectionContext,
   type SelectionContextOptions,
   type ExtendedSelectionContext,
-} from '@eigenpal/docx-core/agent/selectionContext';
+} from '@eigenpal/docx-core/agent';
 
 // ============================================================================
 // PARSER / SERIALIZER
 // ============================================================================
 
-export { parseDocx } from '@eigenpal/docx-core/docx/parser';
+export { parseDocx } from '@eigenpal/docx-core/docx';
 export {
   serializeDocument as serializeDocx,
   serializeDocumentBody,
   serializeSectionProperties,
-} from '@eigenpal/docx-core/docx/serializer/documentSerializer';
+} from '@eigenpal/docx-core/docx/serializer';
 export {
   processTemplate,
   processTemplateDetailed,
@@ -88,7 +88,7 @@ export {
   validateTemplate,
   type ProcessTemplateOptions,
   type ProcessTemplateResult,
-} from '@eigenpal/docx-core/utils/processTemplate';
+} from '@eigenpal/docx-core/utils';
 
 // ============================================================================
 // DOCUMENT CREATION
@@ -98,7 +98,7 @@ export {
   createEmptyDocument,
   createDocumentWithText,
   type CreateEmptyDocumentOptions,
-} from '@eigenpal/docx-core/utils/createDocument';
+} from '@eigenpal/docx-core/utils';
 
 // ============================================================================
 // FONT LOADER
@@ -114,7 +114,7 @@ export {
   onFontsLoaded,
   canRenderFont,
   preloadCommonFonts,
-} from '@eigenpal/docx-core/utils/fontLoader';
+} from '@eigenpal/docx-core/utils';
 
 // ============================================================================
 // UI COMPONENTS
@@ -547,7 +547,7 @@ export {
   pixelsToEmu,
   emuToTwips,
   twipsToEmu,
-} from '@eigenpal/docx-core/utils/units';
+} from '@eigenpal/docx-core/utils';
 export {
   resolveColor,
   resolveHighlightColor,
@@ -562,7 +562,7 @@ export {
   isBlack,
   isWhite,
   colorsEqual,
-} from '@eigenpal/docx-core/utils/colorResolver';
+} from '@eigenpal/docx-core/utils';
 export {
   createPageBreak,
   createColumnBreak,
@@ -581,7 +581,7 @@ export {
   findPageBreaks,
   removePageBreak,
   type InsertPosition,
-} from '@eigenpal/docx-core/utils/insertOperations';
+} from '@eigenpal/docx-core/utils';
 
 // Selection highlighting
 export {
@@ -617,7 +617,7 @@ export {
   type HighlightRect,
   type SelectionHighlightConfig,
   type SelectionRange,
-} from '@eigenpal/docx-core/utils/selectionHighlight';
+} from '@eigenpal/docx-core/utils';
 
 // Text selection utilities for word/paragraph selection
 export {
@@ -634,7 +634,7 @@ export {
   createDoubleClickWordSelector,
   createTripleClickParagraphSelector,
   type WordSelectionResult,
-} from '@eigenpal/docx-core/utils/textSelection';
+} from '@eigenpal/docx-core/utils';
 
 // Keyboard navigation
 export {
@@ -672,7 +672,7 @@ export {
   NAVIGATION_SHORTCUTS,
   describeShortcut,
   getNavigationShortcutDescriptions,
-} from '@eigenpal/docx-core/utils/keyboardNavigation';
+} from '@eigenpal/docx-core/utils';
 
 // Clipboard utilities
 export {
@@ -703,7 +703,7 @@ export {
   type ClipboardContent,
   type ParsedClipboardContent,
   type ClipboardOptions,
-} from '@eigenpal/docx-core/utils/clipboard';
+} from '@eigenpal/docx-core/utils';
 
 // ============================================================================
 // PLUGIN API

@@ -15,7 +15,7 @@
 import React from 'react';
 import type { CSSProperties, ReactNode } from 'react';
 import type { Run as RunType, RunContent, Theme } from '@eigenpal/docx-core/types/document';
-import { textToStyle, mergeStyles } from '@eigenpal/docx-core/utils/formatToStyle';
+import { textToStyle, mergeStyles } from '@eigenpal/docx-core/utils';
 
 /**
  * Props for the Run component

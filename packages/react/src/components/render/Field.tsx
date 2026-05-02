@@ -37,7 +37,7 @@ import {
   isMergeField,
   isTocField,
   parseFieldInstruction,
-} from '@eigenpal/docx-core/docx/fieldParser';
+} from '@eigenpal/docx-core/docx';
 
 /**
  * Props for the Field component

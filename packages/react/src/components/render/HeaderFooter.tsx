@@ -20,7 +20,7 @@ import type {
   Table,
   SectionProperties,
 } from '@eigenpal/docx-core/types/document';
-import { twipsToPixels, formatPx } from '@eigenpal/docx-core/utils/units';
+import { twipsToPixels, formatPx } from '@eigenpal/docx-core/utils';
 
 // ============================================================================
 // TYPES

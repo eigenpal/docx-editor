@@ -33,8 +33,8 @@ import {
   getOutlineWidthPx,
   resolveFillColor,
   resolveOutlineColor,
-} from '@eigenpal/docx-core/docx/shapeParser';
-import { emuToPixels } from '@eigenpal/docx-core/docx/imageParser';
+} from '@eigenpal/docx-core/docx';
+import { emuToPixels } from '@eigenpal/docx-core/docx';
 
 /**
  * Props for the Shape component

@@ -24,7 +24,7 @@
 import React from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { DocxEditor, type DocxEditorProps, type DocxEditorRef } from './components/DocxEditor';
-import type { DocxInput } from '@eigenpal/docx-core/utils/docxInput';
+import type { DocxInput } from '@eigenpal/docx-core/utils';
 import type { Document } from '@eigenpal/docx-core/types/document';
 import type { EditorHandle } from '@eigenpal/docx-core';
 

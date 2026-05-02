@@ -25,7 +25,7 @@ import {
   getImageHeightPx,
   getWrapDistancesPx,
   isDecorativeImage,
-} from '@eigenpal/docx-core/docx/imageParser';
+} from '@eigenpal/docx-core/docx';
 
 /**
  * Props for the DocImage component

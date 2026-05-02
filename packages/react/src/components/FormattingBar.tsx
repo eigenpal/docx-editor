@@ -9,7 +9,7 @@ import React, { useCallback, useEffect, useRef } from 'react';
 import { useTranslation } from '../i18n';
 import type { ReactNode } from 'react';
 import type { ColorValue, ParagraphAlignment } from '@eigenpal/docx-core/types/document';
-import { resolveColorToHex } from '@eigenpal/docx-core/utils/colorResolver';
+import { resolveColorToHex } from '@eigenpal/docx-core/utils';
 import { FontPicker } from './ui/FontPicker';
 import { normalizeFontFamilies } from './ui/normalizeFontFamilies';
 import { FontSizePicker, halfPointsToPoints } from './ui/FontSizePicker';

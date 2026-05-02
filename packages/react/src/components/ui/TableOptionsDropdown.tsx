@@ -17,7 +17,7 @@ import { Tooltip } from './Tooltip';
 import { MaterialSymbol } from './MaterialSymbol';
 import { cn } from '../../lib/utils';
 import type { TableAction } from './TableToolbar';
-import type { TableContextInfo } from '@eigenpal/docx-core/prosemirror/extensions/nodes/TableExtension';
+import type { TableContextInfo } from '@eigenpal/docx-core/prosemirror/extensions';
 import { useTranslation } from '../../i18n';
 import type { TranslationKey } from '../../i18n';
 

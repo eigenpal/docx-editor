@@ -52,7 +52,7 @@ import { useCommentSidebarItems, type CommentCallbacks } from '../hooks/useComme
 import { useTrackedChanges } from '../hooks/useTrackedChanges';
 import type { EditorState as PMEditorState } from 'prosemirror-state';
 import type { ReactSidebarItem } from '../plugin-api/types';
-import type { HeadingInfo } from '@eigenpal/docx-core/utils/headingCollector';
+import type { HeadingInfo } from '@eigenpal/docx-core/utils';
 import type { Comment, BlockContent, ParagraphContent } from '@eigenpal/docx-core/types/content';
 import { ErrorBoundary, ErrorProvider } from './ErrorBoundary';
 import type { TableAction } from './ui/TableToolbar';
@@ -110,30 +110,30 @@ import {
 import { HyperlinkPopup, type HyperlinkPopupData } from './ui/HyperlinkPopup';
 import { Toaster, toast } from 'sonner';
 import { getBuiltinTableStyle, type TableStylePreset } from './ui/TableStyleGallery';
-import { DocumentAgent } from '@eigenpal/docx-core/agent/DocumentAgent';
+import { DocumentAgent } from '@eigenpal/docx-core/agent';
 import { DefaultLoadingIndicator, DefaultPlaceholder, ParseError } from './DocxEditorHelpers';
-import { parseDocx } from '@eigenpal/docx-core/docx/parser';
-import { type DocxInput } from '@eigenpal/docx-core/utils/docxInput';
-import { onFontsLoaded, loadDocumentFonts } from '@eigenpal/docx-core/utils/fontLoader';
-import { resolveColorToHex } from '@eigenpal/docx-core/utils/colorResolver';
-import { executeCommand } from '@eigenpal/docx-core/agent/executor';
+import { parseDocx } from '@eigenpal/docx-core/docx';
+import { type DocxInput } from '@eigenpal/docx-core/utils';
+import { onFontsLoaded, loadDocumentFonts } from '@eigenpal/docx-core/utils';
+import { resolveColorToHex } from '@eigenpal/docx-core/utils';
+import { executeCommand } from '@eigenpal/docx-core/agent';
 import { useTableSelection } from '../hooks/useTableSelection';
 import { useDocumentHistory } from '../hooks/useHistory';
 import {
   getSplitCellDialogConfig,
   splitActiveTableCell,
-} from '@eigenpal/docx-core/prosemirror/commands/tableSplit';
+} from '@eigenpal/docx-core/prosemirror/commands';
 
 // Extension system
-import { createStarterKit } from '@eigenpal/docx-core/prosemirror/extensions/StarterKit';
-import { ExtensionManager } from '@eigenpal/docx-core/prosemirror/extensions/ExtensionManager';
+import { createStarterKit } from '@eigenpal/docx-core/prosemirror/extensions';
+import { ExtensionManager } from '@eigenpal/docx-core/prosemirror/extensions';
 import {
   createSuggestionModePlugin,
   setSuggestionMode,
-} from '@eigenpal/docx-core/prosemirror/plugins/suggestionMode';
+} from '@eigenpal/docx-core/prosemirror/plugins';
 
 // Conversion (for HF inline editor save)
-import { proseDocToBlocks } from '@eigenpal/docx-core/prosemirror/conversion/fromProseDoc';
+import { proseDocToBlocks } from '@eigenpal/docx-core/prosemirror/conversion';
 
 // ProseMirror editor
 import {
@@ -213,14 +213,14 @@ import {
   setTableBorderWidth,
   type TableContextInfo,
 } from '@eigenpal/docx-core/prosemirror';
-import { acceptChange, rejectChange } from '@eigenpal/docx-core/prosemirror/commands/comments';
-import { collectHeadings } from '@eigenpal/docx-core/utils/headingCollector';
+import { acceptChange, rejectChange } from '@eigenpal/docx-core/prosemirror/commands';
+import { collectHeadings } from '@eigenpal/docx-core/utils';
 import {
   getChangedParagraphIds,
   hasStructuralChanges,
   hasUntrackedChanges,
   clearTrackedChanges,
-} from '@eigenpal/docx-core/prosemirror/extensions/features/ParagraphChangeTrackerExtension';
+} from '@eigenpal/docx-core/prosemirror/extensions';
 
 // Paginated editor
 import { PagedEditor, type PagedEditorRef, DEFAULT_PAGE_WIDTH } from '../paged-editor/PagedEditor';

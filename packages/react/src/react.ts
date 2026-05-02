@@ -15,7 +15,7 @@
 
 export { DocxEditor, type DocxEditorProps, type DocxEditorRef } from './components/DocxEditor';
 export { renderAsync, type RenderAsyncOptions, type DocxEditorHandle } from './renderAsync';
-export { type DocxInput, toArrayBuffer } from '@eigenpal/docx-core/utils/docxInput';
+export { type DocxInput, toArrayBuffer } from '@eigenpal/docx-core/utils';
 
 // ============================================================================
 // ERROR HANDLING

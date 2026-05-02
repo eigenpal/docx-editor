@@ -22,8 +22,8 @@ import {
   isInFrontOfText,
   isDecorativeImage,
   getWrapDistancesPx,
-} from '@eigenpal/docx-core/docx/imageParser';
-import { pixelsToEmu } from '@eigenpal/docx-core/utils/units';
+} from '@eigenpal/docx-core/docx';
+import { pixelsToEmu } from '@eigenpal/docx-core/utils';
 
 // ============================================================================
 // TYPES

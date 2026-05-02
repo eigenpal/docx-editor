@@ -20,7 +20,7 @@ import {
   computeSplitDialogDefaults,
   redistributeColumnWidths,
   buildAnchorMaps,
-} from '@eigenpal/docx-core/utils/tableSplitAlgorithm';
+} from '@eigenpal/docx-core/utils';
 import { MaterialSymbol } from './MaterialSymbol';
 import { useTranslation } from '../../i18n';
 

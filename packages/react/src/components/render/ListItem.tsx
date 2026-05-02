@@ -21,9 +21,9 @@ import type {
   Shape as ShapeType,
   TextBox as TextBoxType,
 } from '@eigenpal/docx-core/types/document';
-import { textToStyle, mergeStyles } from '@eigenpal/docx-core/utils/formatToStyle';
-import { twipsToPixels, formatPx } from '@eigenpal/docx-core/utils/units';
-import { formatNumber, getBulletCharacter } from '@eigenpal/docx-core/docx/numberingParser';
+import { textToStyle, mergeStyles } from '@eigenpal/docx-core/utils';
+import { twipsToPixels, formatPx } from '@eigenpal/docx-core/utils';
+import { formatNumber, getBulletCharacter } from '@eigenpal/docx-core/docx';
 import { Paragraph } from './Paragraph';
 
 /**
@@ -449,7 +449,7 @@ export function getDefaultBullet(level: number): string {
  * Format a number according to its format type
  * Re-exported from numberingParser for convenience
  */
-export { formatNumber } from '@eigenpal/docx-core/docx/numberingParser';
+export { formatNumber } from '@eigenpal/docx-core/docx';
 
 /**
  * Format number to Roman numerals (uppercase)
