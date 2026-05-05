@@ -340,6 +340,175 @@ async function generateComplexStylesDocx(): Promise<void> {
 }
 
 /**
+ * Generate header-with-table-and-paragraphs.docx
+ *
+ * Stress fixture for HF height calc — paragraphs above AND below a header
+ * table so the header is taller than the default `availableHeaderSpace`.
+ * Body content must be pushed down so the header doesn't overlap it.
+ */
+async function generateHeaderWithTableAndParagraphsDocx(): Promise<void> {
+  const headerXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:hdr xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+  <w:p><w:r><w:t>HEADER PARA 1</w:t></w:r></w:p>
+  <w:p><w:r><w:t>HEADER PARA 2</w:t></w:r></w:p>
+  <w:tbl>
+    <w:tblPr>
+      <w:tblW w:w="9000" w:type="dxa"/>
+      <w:tblBorders>
+        <w:top w:val="single" w:sz="4" w:color="000000"/>
+        <w:left w:val="single" w:sz="4" w:color="000000"/>
+        <w:bottom w:val="single" w:sz="4" w:color="000000"/>
+        <w:right w:val="single" w:sz="4" w:color="000000"/>
+        <w:insideH w:val="single" w:sz="4" w:color="000000"/>
+        <w:insideV w:val="single" w:sz="4" w:color="000000"/>
+      </w:tblBorders>
+    </w:tblPr>
+    <w:tblGrid><w:gridCol w:w="3000"/><w:gridCol w:w="6000"/></w:tblGrid>
+    <w:tr>
+      <w:tc><w:tcPr><w:tcW w:w="3000" w:type="dxa"/></w:tcPr><w:p><w:r><w:t>R1C1</w:t></w:r></w:p></w:tc>
+      <w:tc><w:tcPr><w:tcW w:w="6000" w:type="dxa"/></w:tcPr><w:p><w:r><w:t>R1C2</w:t></w:r></w:p></w:tc>
+    </w:tr>
+    <w:tr>
+      <w:tc><w:tcPr><w:tcW w:w="3000" w:type="dxa"/></w:tcPr><w:p><w:r><w:t>R2C1</w:t></w:r></w:p></w:tc>
+      <w:tc><w:tcPr><w:tcW w:w="6000" w:type="dxa"/></w:tcPr><w:p><w:r><w:t>R2C2</w:t></w:r></w:p></w:tc>
+    </w:tr>
+    <w:tr>
+      <w:tc><w:tcPr><w:tcW w:w="3000" w:type="dxa"/></w:tcPr><w:p><w:r><w:t>R3C1</w:t></w:r></w:p></w:tc>
+      <w:tc><w:tcPr><w:tcW w:w="6000" w:type="dxa"/></w:tcPr><w:p><w:r><w:t>R3C2</w:t></w:r></w:p></w:tc>
+    </w:tr>
+  </w:tbl>
+  <w:p><w:r><w:t>HEADER PARA 3</w:t></w:r></w:p>
+  <w:p><w:r><w:t>HEADER PARA 4</w:t></w:r></w:p>
+</w:hdr>`;
+
+  const documentXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+  <w:body>
+    <w:p><w:r><w:t>BODY TITLE TEXT THAT MUST NOT BE OVERLAPPED BY HEADER</w:t></w:r></w:p>
+    <w:p><w:r><w:t>Body second paragraph.</w:t></w:r></w:p>
+    <w:sectPr>
+      <w:headerReference w:type="default" r:id="rId2"/>
+      <w:pgSz w:w="12240" w:h="15840"/>
+      <w:pgMar w:top="1440" w:right="1440" w:bottom="1440" w:left="1440" w:header="720" w:footer="720"/>
+    </w:sectPr>
+  </w:body>
+</w:document>`;
+
+  const contentTypes = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+  <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+  <Default Extension="xml" ContentType="application/xml"/>
+  <Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>
+  <Override PartName="/word/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/>
+  <Override PartName="/word/header1.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.header+xml"/>
+</Types>`;
+
+  const documentRels = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>
+  <Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/header" Target="header1.xml"/>
+</Relationships>`;
+
+  const zip = new JSZip();
+  zip.file('[Content_Types].xml', contentTypes);
+  zip.file('_rels/.rels', RELS_XML);
+  zip.file('word/_rels/document.xml.rels', documentRels);
+  zip.file('word/styles.xml', STYLES_XML);
+  zip.file('word/document.xml', documentXml);
+  zip.file('word/header1.xml', headerXml);
+
+  const buffer = await zip.generateAsync({ type: 'nodebuffer' });
+  const outputPath = path.join(FIXTURES_DIR, 'header-with-table-and-paragraphs.docx');
+  fs.writeFileSync(outputPath, buffer);
+  console.log(`Created: ${outputPath}`);
+}
+
+/**
+ * Generate header-with-table.docx
+ *
+ * A DOCX with a 2-column table in the header (canonical "logo left, text right"
+ * layout reported in #356). Body has a single short paragraph so the page
+ * renders quickly.
+ */
+async function generateHeaderWithTableDocx(): Promise<void> {
+  const headerXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:hdr xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+  <w:tbl>
+    <w:tblPr>
+      <w:tblW w:w="9000" w:type="dxa"/>
+      <w:tblBorders>
+        <w:top w:val="single" w:sz="4" w:color="000000"/>
+        <w:left w:val="single" w:sz="4" w:color="000000"/>
+        <w:bottom w:val="single" w:sz="4" w:color="000000"/>
+        <w:right w:val="single" w:sz="4" w:color="000000"/>
+        <w:insideH w:val="single" w:sz="4" w:color="000000"/>
+        <w:insideV w:val="single" w:sz="4" w:color="000000"/>
+      </w:tblBorders>
+    </w:tblPr>
+    <w:tblGrid>
+      <w:gridCol w:w="3000"/>
+      <w:gridCol w:w="6000"/>
+    </w:tblGrid>
+    <w:tr>
+      <w:tc>
+        <w:tcPr><w:tcW w:w="3000" w:type="dxa"/></w:tcPr>
+        <w:p><w:r><w:t>HEADER LOGO</w:t></w:r></w:p>
+      </w:tc>
+      <w:tc>
+        <w:tcPr><w:tcW w:w="6000" w:type="dxa"/></w:tcPr>
+        <w:p><w:r><w:t>HEADER TEXT</w:t></w:r></w:p>
+      </w:tc>
+    </w:tr>
+  </w:tbl>
+  <w:p/>
+</w:hdr>`;
+
+  const documentXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+  <w:body>
+    <w:p>
+      <w:r>
+        <w:t>BODY TEXT</w:t>
+      </w:r>
+    </w:p>
+    <w:sectPr>
+      <w:headerReference w:type="default" r:id="rId2"/>
+      <w:pgSz w:w="12240" w:h="15840"/>
+      <w:pgMar w:top="1440" w:right="1440" w:bottom="1440" w:left="1440" w:header="720" w:footer="720"/>
+    </w:sectPr>
+  </w:body>
+</w:document>`;
+
+  const contentTypes = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+  <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+  <Default Extension="xml" ContentType="application/xml"/>
+  <Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>
+  <Override PartName="/word/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/>
+  <Override PartName="/word/header1.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.header+xml"/>
+</Types>`;
+
+  const documentRels = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>
+  <Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/header" Target="header1.xml"/>
+</Relationships>`;
+
+  const zip = new JSZip();
+  zip.file('[Content_Types].xml', contentTypes);
+  zip.file('_rels/.rels', RELS_XML);
+  zip.file('word/_rels/document.xml.rels', documentRels);
+  zip.file('word/styles.xml', STYLES_XML);
+  zip.file('word/document.xml', documentXml);
+  zip.file('word/header1.xml', headerXml);
+
+  const buffer = await zip.generateAsync({ type: 'nodebuffer' });
+  const outputPath = path.join(FIXTURES_DIR, 'header-with-table.docx');
+  fs.writeFileSync(outputPath, buffer);
+  console.log(`Created: ${outputPath}`);
+}
+
+/**
  * Main function
  */
 async function main(): Promise<void> {
@@ -349,6 +518,8 @@ async function main(): Promise<void> {
   await generateStyledContentDocx();
   await generateWithTablesDocx();
   await generateComplexStylesDocx();
+  await generateHeaderWithTableDocx();
+  await generateHeaderWithTableAndParagraphsDocx();
 
   console.log('\nAll fixtures generated successfully!');
 }

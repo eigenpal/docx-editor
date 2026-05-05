@@ -22,6 +22,7 @@
         "eslint-plugin-react": "^7.37.5",
         "eslint-plugin-react-hooks": "^7.0.1",
         "husky": "^9.1.7",
+        "jszip": "^3.10.1",
         "lint-staged": "^16.2.7",
         "postcss": "^8.4.33",
         "prettier": "^3.8.1",
@@ -77,7 +78,7 @@
     },
     "packages/agent-use": {
       "name": "@eigenpal/docx-editor-agents",
-      "version": "0.3.1",
+      "version": "0.4.1",
       "dependencies": {
         "docxtemplater": "^3.50.0",
         "jszip": "^3.10.1",
@@ -131,7 +132,7 @@
     },
     "packages/react": {
       "name": "@eigenpal/docx-js-editor",
-      "version": "0.3.1",
+      "version": "0.4.1",
       "dependencies": {
         "@radix-ui/react-select": "^2.2.6",
         "clsx": "^2.1.0",
