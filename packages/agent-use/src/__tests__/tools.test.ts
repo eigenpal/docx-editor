@@ -98,6 +98,28 @@ describe('getToolSchemas', () => {
       expect(schema.function.parameters).toBeDefined();
     }
   });
+
+  // Gemini's GenerateContentRequest rejects enum members that are the empty
+  // string. Walk every tool schema and assert no enum slot contains "".
+  test('no enum member is the empty string (Gemini compatibility)', () => {
+    const offenders: string[] = [];
+    const visit = (path: string, node: unknown) => {
+      if (!node || typeof node !== 'object') return;
+      const obj = node as Record<string, unknown>;
+      if (Array.isArray(obj.enum)) {
+        for (let i = 0; i < obj.enum.length; i++) {
+          if (obj.enum[i] === '') offenders.push(`${path}.enum[${i}]`);
+        }
+      }
+      for (const [key, value] of Object.entries(obj)) {
+        visit(`${path}.${key}`, value);
+      }
+    };
+    for (const schema of getToolSchemas()) {
+      visit(schema.function.name, schema.function.parameters);
+    }
+    expect(offenders).toEqual([]);
+  });
 });
 
 // ============================================================================
@@ -503,6 +525,23 @@ describe('apply_formatting', () => {
       );
       expect(result.success).toBe(true);
     }
+  });
+
+  test('normalizes highlight "none" to "" before dispatch (clear sentinel)', () => {
+    let received: unknown;
+    const bridge = makeBridge({
+      applyFormatting: (opts) => {
+        received = opts.marks.highlight;
+        return true;
+      },
+    });
+    const result = executeToolCall(
+      'apply_formatting',
+      { paraId: 'p_a3f', marks: { highlight: 'none' } },
+      bridge
+    );
+    expect(result.success).toBe(true);
+    expect(received).toBe('');
   });
 });
 

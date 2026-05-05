@@ -105,11 +105,11 @@ export const applyFormatting: AgentToolDefinition<{
           },
           highlight: {
             type: 'string',
-            enum: [...HIGHLIGHT_COLORS, ''],
+            enum: [...HIGHLIGHT_COLORS],
             description:
               'Highlight color — must be one of the Word-supported names: ' +
               HIGHLIGHT_COLORS.join(', ') +
-              '. Pass empty string to clear. Hex values are rejected (Word does not accept hex for <w:highlight>).',
+              '. Pass "none" to clear. Hex values are rejected (Word does not accept hex for <w:highlight>).',
           },
           fontSize: { type: 'number', description: 'Size in points (e.g. 12, 14, 24).' },
           fontFamily: {
@@ -153,10 +153,14 @@ export const applyFormatting: AgentToolDefinition<{
       };
     }
 
+    // 'none' is the OOXML clear sentinel; the bridge treats falsy highlight as
+    // removeMark, so map both to an empty string before dispatching.
+    const marks = highlight === 'none' ? { ...input.marks, highlight: '' } : input.marks;
+
     const ok = bridge.applyFormatting({
       paraId: input.paraId,
       search: input.search,
-      marks: input.marks,
+      marks,
     });
     if (!ok) {
       return {
