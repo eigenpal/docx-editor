@@ -25,6 +25,7 @@ import { undo, redo } from 'prosemirror-history';
 import { schema } from '@eigenpal/docx-core/prosemirror';
 import { headerFooterToProseDoc } from '@eigenpal/docx-core/prosemirror/conversion';
 import { proseDocToBlocks } from '@eigenpal/docx-core/prosemirror/conversion';
+import { Z_INDEX } from '../styles/zIndex';
 import { extractSelectionState, type SelectionState } from '@eigenpal/docx-core/prosemirror';
 import { createStarterKit } from '@eigenpal/docx-core/prosemirror/extensions';
 import { ExtensionManager } from '@eigenpal/docx-core/prosemirror/extensions';
@@ -111,7 +112,7 @@ const dropdownStyle: CSSProperties = {
   border: '1px solid #dadce0',
   borderRadius: 4,
   boxShadow: '0 2px 6px rgba(0,0,0,0.15)',
-  zIndex: 100,
+  zIndex: Z_INDEX.dropdown,
   minWidth: 160,
   padding: '4px 0',
 };
@@ -152,6 +153,15 @@ export const InlineHeaderFooterEditor = forwardRef<
   const editorContainerRef = useRef<HTMLDivElement>(null);
   const viewRef = useRef<EditorView | null>(null);
   const [isDirty, setIsDirty] = useState(false);
+
+  // Keep the latest `onSelectionChange` in a ref so `dispatchTransaction`
+  // (closed over once when the HF EditorView is created) always calls the
+  // current callback. Without this, the parent's `handleSelectionChange`
+  // becomes stale as soon as its identity changes (e.g. when theme or
+  // hfEditPosition flips), so HF selection events stop landing on the
+  // up-to-date toolbar/state.
+  const onSelectionChangeRef = useRef(onSelectionChange);
+  onSelectionChangeRef.current = onSelectionChange;
 
   // Resolve default font size from document styles so the PM editor's
   // line-height calculations use the correct base (not browser-default 16px)
@@ -228,7 +238,7 @@ export const InlineHeaderFooterEditor = forwardRef<
         // Report selection changes for toolbar sync
         if (tr.selectionSet || tr.docChanged) {
           const selState = extractSelectionState(newState);
-          onSelectionChange?.(selState);
+          onSelectionChangeRef.current?.(selState);
         }
       },
     });
@@ -240,7 +250,7 @@ export const InlineHeaderFooterEditor = forwardRef<
       view.focus();
       // Report initial selection state
       const selState = extractSelectionState(view.state);
-      onSelectionChange?.(selState);
+      onSelectionChangeRef.current?.(selState);
     });
 
     return () => {
@@ -317,7 +327,7 @@ export const InlineHeaderFooterEditor = forwardRef<
     top: overlayPos.top,
     left: overlayPos.left,
     width: overlayPos.width,
-    zIndex: 10,
+    zIndex: Z_INDEX.hfInlineEditor,
   };
 
   return (

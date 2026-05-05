@@ -9,6 +9,7 @@ import React, { useCallback, useEffect, useRef, useState, useMemo } from 'react'
 import { useTranslation } from '../i18n';
 import type { TranslationKey } from '../i18n';
 import defaultLocale from '../../i18n/en.json';
+import { Z_INDEX } from '../styles/zIndex';
 
 // ============================================================================
 // TYPES
@@ -586,7 +587,7 @@ export const TextContextMenu: React.FC<TextContextMenuProps> = ({
       border: '1px solid var(--doc-border-light)',
       borderRadius: '8px',
       boxShadow: '0 2px 10px rgba(0, 0, 0, 0.15)',
-      zIndex: 10000,
+      zIndex: Z_INDEX.contextMenu,
       padding: '4px 0',
       overflow: 'hidden',
     };

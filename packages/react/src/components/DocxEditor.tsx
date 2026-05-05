@@ -61,6 +61,7 @@ import { LocaleProvider, useTranslation } from '../i18n';
 import type { Translations, TranslationKey } from '../i18n';
 import { HorizontalRuler } from './ui/HorizontalRuler';
 import { VerticalRuler } from './ui/VerticalRuler';
+import { Z_INDEX } from '../styles/zIndex';
 import { type PrintOptions } from './ui/PrintPreview';
 // Dialog hooks and utilities (static imports — lightweight, no UI)
 import {
@@ -2058,7 +2059,9 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
         }
       }
     },
-    [onSelectionChange, isAddingComment, readOnly]
+    // getActiveEditorView's return depends on hfEditPosition; theme drives
+    // color resolution. Both must be in deps to avoid stale-closure reads.
+    [onSelectionChange, isAddingComment, readOnly, getActiveEditorView, theme]
   );
 
   // Table selection hook
@@ -2663,26 +2666,33 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
     [tableSelection, getActiveEditorView, focusActiveEditor, openSplitCellDialog]
   );
 
-  // Context menu handler
-  const handleEditorContextMenu = useCallback((e: React.MouseEvent) => {
-    const target = e.target as HTMLElement | null;
-    if (target?.closest('.paged-editor__pages')) {
-      return;
-    }
-    e.preventDefault();
-    e.stopPropagation();
-    const view = pagedEditorRef.current?.getView();
-    const tableContext = view ? getTableContext(view.state) : { isInTable: false };
-    const { from, to } = view?.state.selection ?? { from: 0, to: 0 };
-    const hasSel = from !== to;
-    setContextMenu({
-      isOpen: true,
-      position: { x: e.clientX, y: e.clientY },
-      hasSelection: hasSel,
-      cursorInTable: tableContext.isInTable,
-      tableContext: tableContext.isInTable ? tableContext : null,
-    });
-  }, []);
+  // Context menu handler. Body content has its own context-menu plumbing
+  // wired through PagedEditor (handleContextMenu below), so we early-out
+  // when the right-click landed in the body's pages region — *unless* the
+  // inline HF editor is open, in which case we need to show the menu for
+  // the HF view since body's plumbing won't fire for HF clicks.
+  const handleEditorContextMenu = useCallback(
+    (e: React.MouseEvent) => {
+      const target = e.target as HTMLElement | null;
+      if (target?.closest('.paged-editor__pages') && !target.closest('.hf-inline-editor')) {
+        return;
+      }
+      e.preventDefault();
+      e.stopPropagation();
+      const view = getActiveEditorView();
+      const tableContext = view ? getTableContext(view.state) : { isInTable: false };
+      const { from, to } = view?.state.selection ?? { from: 0, to: 0 };
+      const hasSel = from !== to;
+      setContextMenu({
+        isOpen: true,
+        position: { x: e.clientX, y: e.clientY },
+        hasSelection: hasSel,
+        cursorInTable: tableContext.isInTable,
+        tableContext: tableContext.isInTable ? tableContext : null,
+      });
+    },
+    [getActiveEditorView]
+  );
 
   // Handle formatting action from toolbar
   const handleFormat = useCallback(
@@ -3112,18 +3122,22 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
     setHyperlinkPopupData(null);
   }, []);
 
-  // Right-click context menu handlers
-  const handleContextMenu = useCallback((data: { x: number; y: number; hasSelection: boolean }) => {
-    const view = pagedEditorRef.current?.getView();
-    const tableContext = view ? getTableContext(view.state) : { isInTable: false };
-    setContextMenu({
-      isOpen: true,
-      position: data,
-      hasSelection: data.hasSelection,
-      cursorInTable: tableContext.isInTable,
-      tableContext: tableContext.isInTable ? tableContext : null,
-    });
-  }, []);
+  // Right-click context menu handlers. Use the active view so the menu
+  // reflects HF state when the inline editor is open.
+  const handleContextMenu = useCallback(
+    (data: { x: number; y: number; hasSelection: boolean }) => {
+      const view = getActiveEditorView();
+      const tableContext = view ? getTableContext(view.state) : { isInTable: false };
+      setContextMenu({
+        isOpen: true,
+        position: data,
+        hasSelection: data.hasSelection,
+        cursorInTable: tableContext.isInTable,
+        tableContext: tableContext.isInTable ? tableContext : null,
+      });
+    },
+    [getActiveEditorView]
+  );
 
   const handleContextMenuClose = useCallback(() => {
     setContextMenu({
@@ -4897,7 +4911,10 @@ body { background: white; }
                       style={{
                         position: 'sticky',
                         top: 0,
-                        zIndex: 9,
+                        // Must sit above the inline header/footer editor
+                        // (Z_INDEX.hfInlineEditor) so the ruler stays readable
+                        // when the HF editor is active near the viewport top.
+                        zIndex: Z_INDEX.ruler,
                         // paddingRight biases the centered ruler so it tracks
                         // the page when the comments sidebar (translateX)
                         // shifts the page left. Outline doesn't bias here —
@@ -4973,7 +4990,9 @@ body { background: white; }
                             position: 'absolute',
                             left: 0,
                             top: 0,
-                            zIndex: 10,
+                            // Above the inline HF editor (Z_INDEX.hfInlineEditor)
+                            // so it stays readable on horizontal scroll.
+                            zIndex: Z_INDEX.ruler,
                             // Must match `.paged-editor__pages` padding-top in
                             // editor.css (24 viewport + 24 pages container);
                             // update both together or the ruler misaligns.
