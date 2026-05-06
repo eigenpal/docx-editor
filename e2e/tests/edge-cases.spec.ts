@@ -142,30 +142,15 @@ test.describe('Boundary Conditions', () => {
   });
 
   test('page font fallback matches measurement fallback (#334)', async ({ page }) => {
-    // Regression test for: when a run has no explicit fontFamily, it inherits
-    // from the page-level CSS default. If that default differs from the canvas
-    // fallback used by measureTextWidth, the line breaker computes line widths
-    // against one font but renders against another — causing visible overflow
-    // for unbreakable strings (e.g. "asdfasdf..." in a table cell).
-    //
-    // The fix: page-level fontFamily must use resolveFontFamily('Calibri'), the
-    // same chain textMetrics.ts uses. This test asserts they match.
-    const mismatch = await page.evaluate(() => {
-      const pageEl = document.querySelector('.layout-page');
-      if (!pageEl) return 'no page';
-      const pageFont = (pageEl as HTMLElement).style.fontFamily;
-      // Canvas measurement uses the same chain after resolving 'Calibri'. We
-      // can't import resolveFontFamily here, but we can check that the page
-      // chain contains "Carlito" — the Google Font that Calibri maps to.
-      // Without the fix, the page chain has "Segoe UI" and lacks "Carlito".
-      return {
-        pageFont,
-        hasCarlito: pageFont.toLowerCase().includes('carlito'),
-        hasSegoe: pageFont.toLowerCase().includes('segoe'),
-      };
+    // Page-level default chain must contain Carlito so it agrees with the
+    // canvas measurement chain (resolveFontFamily('Calibri')). Otherwise
+    // unbreakable runs without explicit fontFamily overflow the page margin.
+    const pageFont = await page.evaluate(() => {
+      const pageEl = document.querySelector('.layout-page') as HTMLElement | null;
+      return pageEl?.style.fontFamily ?? null;
     });
-    expect(mismatch).not.toBe('no page');
-    expect((mismatch as { hasCarlito: boolean }).hasCarlito).toBe(true);
+    expect(pageFont).not.toBeNull();
+    expect(pageFont!.toLowerCase()).toContain('carlito');
   });
 
   test('many empty paragraphs', async ({ page }) => {
