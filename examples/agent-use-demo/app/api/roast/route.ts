@@ -35,10 +35,12 @@ import {
   executeToolCall,
   getToolSchemas,
 } from '@eigenpal/docx-editor-agents';
-import type {
-  ChatCompletionMessageParam,
-  ChatCompletionTool,
-} from 'openai/resources/chat/completions';
+
+// SDK v5+ moved type subpaths around; access them via the OpenAI namespace
+// instead of `openai/resources/chat/completions` so the imports keep working
+// across minor versions.
+type ChatCompletionMessageParam = OpenAI.ChatCompletionMessageParam;
+type ChatCompletionTool = OpenAI.ChatCompletionTool;
 
 const openai = new OpenAI();
 const model = process.env.OPENAI_MODEL || 'gpt-4o';
@@ -151,6 +153,14 @@ export async function POST(request: NextRequest) {
       toolCallCount++;
       let args: Record<string, unknown>;
       let toolMessage: string;
+      // SDK v6 widened ChatCompletionMessageToolCall to also include a
+      // `custom` variant; we only support function calls here.
+      if (tc.type !== 'function') {
+        errorCount++;
+        toolMessage = `Unsupported tool call type "${tc.type}".`;
+        messages.push({ role: 'tool', tool_call_id: tc.id, content: toolMessage });
+        continue;
+      }
       try {
         args = JSON.parse(tc.function.arguments);
         const result = executeToolCall(tc.function.name, args, bridge);
