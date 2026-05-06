@@ -9,12 +9,35 @@ test.describe('issue #319 — section geometry & pagination', () => {
     await editor.loadDocxFile('fixtures/issue-319-sections.docx');
     await page.waitForTimeout(2000);
 
+    // Read the layout state directly so the assertion isn't affected by
+    // page virtualization (off-screen pages aren't painted but still
+    // carry their fragments).
     const pages = await page.evaluate(() => {
-      return Array.from(document.querySelectorAll('.layout-page')).map((p) => {
-        const r = (p as HTMLElement).getBoundingClientRect();
+      const container = document.querySelector('.layout-page')?.parentElement as
+        | (HTMLElement & {
+            __pageRenderState?: {
+              pageDataMap: Map<HTMLElement, { page: { fragments: unknown[] } }>;
+              pageCursors: { element: HTMLElement }[];
+            };
+          })
+        | null;
+      const state = container?.__pageRenderState;
+      if (!state) {
+        return Array.from(document.querySelectorAll('.layout-page')).map((p) => {
+          const r = (p as HTMLElement).getBoundingClientRect();
+          return {
+            orient: r.width > r.height ? 'landscape' : 'portrait',
+            empty: (p.textContent || '').replace(/\s+/g, '').length === 0,
+          };
+        });
+      }
+      return state.pageCursors.map((ps) => {
+        const data = state.pageDataMap.get(ps.element);
+        const fragmentCount = data?.page?.fragments?.length ?? 0;
+        const r = ps.element.getBoundingClientRect();
         return {
           orient: r.width > r.height ? 'landscape' : 'portrait',
-          empty: (p.textContent || '').replace(/\s+/g, '').length === 0,
+          empty: fragmentCount === 0,
         };
       });
     });
