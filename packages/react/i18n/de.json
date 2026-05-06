@@ -768,5 +768,8 @@
       "working": "Arbeite… {count, plural, one {# Schritt} other {# Schritte}}"
     },
     "toggle": "Assistent öffnen"
+  },
+  "viewer": {
+    "pageIndicator": "{current} von {total}"
   }
 }

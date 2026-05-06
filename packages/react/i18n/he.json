@@ -36,7 +36,11 @@
     "tableOfContents": "תוכן עניינים",
     "symbol": "סמל",
     "help": "עזרה",
-    "reportIssue": "דיווח בעיה"
+    "reportIssue": "דיווח בעיה",
+    "open": "פתיחה",
+    "openShortcut": "Ctrl+O",
+    "save": "שמירה",
+    "saveShortcut": "Ctrl+S"
   },
   "formattingBar": {
     "groups": {
@@ -764,5 +768,8 @@
       "summary": "{count, plural, one {# שלב} other {# שלבים}}",
       "earlier": "{count, plural, one {+ # שלב קודם} other {+ # שלבים קודמים}}"
     }
+  },
+  "viewer": {
+    "pageIndicator": "{current} מתוך {total}"
   }
 }

@@ -633,6 +633,51 @@ function CommentsSidebarToggle({ active, onClick }: { active: boolean; onClick: 
   );
 }
 
+/**
+ * Floating page indicator shown next to the scrollbar while the user
+ * scrolls a multi-page document. Wrapped so the `{current} of {total}`
+ * template runs through `t()`; `useTranslation()` only works inside
+ * `<LocaleProvider>`, which `DocxEditor`'s own body is not.
+ */
+function PageIndicator({
+  currentPage,
+  totalPages,
+  visible,
+}: {
+  currentPage: number;
+  totalPages: number;
+  visible: boolean;
+}) {
+  const { t } = useTranslation();
+  return (
+    <div
+      style={{
+        position: 'absolute',
+        right: 24,
+        top: '50%',
+        transform: 'translateY(-50%)',
+        backgroundColor: 'rgba(0, 0, 0, 0.7)',
+        color: 'white',
+        padding: '6px 12px',
+        borderRadius: '4px',
+        fontSize: '12px',
+        fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+        fontWeight: 500,
+        whiteSpace: 'nowrap',
+        pointerEvents: 'none',
+        zIndex: 1000,
+        opacity: visible ? 1 : 0,
+        transition: 'opacity 0.3s ease',
+        userSelect: 'none',
+      }}
+      aria-live="polite"
+      role="status"
+    >
+      {t('viewer.pageIndicator', { current: currentPage, total: totalPages })}
+    </div>
+  );
+}
+
 function AgentPanelToggle({
   active,
   onClick,
@@ -5262,34 +5307,13 @@ body { background: white; }
                 </div>
                 {/* end scroll container */}
 
-                {/* Page indicator — Google Docs style, next to scrollbar while scrolling */}
+                {/* Floating page indicator next to the scrollbar */}
                 {scrollPageInfo.totalPages > 1 && (
-                  <div
-                    style={{
-                      position: 'absolute',
-                      right: 24,
-                      top: '50%',
-                      transform: 'translateY(-50%)',
-                      backgroundColor: 'rgba(0, 0, 0, 0.7)',
-                      color: 'white',
-                      padding: '6px 12px',
-                      borderRadius: '4px',
-                      fontSize: '12px',
-                      fontFamily:
-                        '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
-                      fontWeight: 500,
-                      whiteSpace: 'nowrap',
-                      pointerEvents: 'none',
-                      zIndex: 1000,
-                      opacity: scrollPageInfo.visible ? 1 : 0,
-                      transition: 'opacity 0.3s ease',
-                      userSelect: 'none',
-                    }}
-                    aria-live="polite"
-                    role="status"
-                  >
-                    {scrollPageInfo.currentPage} of {scrollPageInfo.totalPages}
-                  </div>
+                  <PageIndicator
+                    currentPage={scrollPageInfo.currentPage}
+                    totalPages={scrollPageInfo.totalPages}
+                    visible={scrollPageInfo.visible}
+                  />
                 )}
 
                 {/* Document outline sidebar — absolutely positioned, doesn't scroll */}

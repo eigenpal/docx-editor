@@ -768,5 +768,8 @@
       "working": "Pracuję… {count, plural, one {# krok} few {# kroki} many {# kroków} other {# kroków}}"
     },
     "toggle": "Otwórz asystenta"
+  },
+  "viewer": {
+    "pageIndicator": "{current} z {total}"
   }
 }

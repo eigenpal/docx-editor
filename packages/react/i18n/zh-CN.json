@@ -768,5 +768,8 @@
       "summary": "{count, plural, one {# 步} other {# 步}}",
       "earlier": "+ {count, plural, one {# 个历史步骤} other {# 个历史步骤}}"
     }
+  },
+  "viewer": {
+    "pageIndicator": "第 {current} 页，共 {total} 页"
   }
 }
