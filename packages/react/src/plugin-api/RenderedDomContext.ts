@@ -6,6 +6,8 @@
  * selection overlay in PagedEditor.
  */
 
+import { findBodyEmptyRuns, collectBodySpans } from '@eigenpal/docx-core/layout-bridge';
+
 import type { RenderedDomContext, PositionCoordinates } from './types';
 
 /**
@@ -32,11 +34,9 @@ export class RenderedDomContextImpl implements RenderedDomContext {
   getCoordinatesForPosition(pmPos: number): PositionCoordinates | null {
     const containerRect = this.pagesContainer.getBoundingClientRect();
 
-    // Find spans with PM position data
-    const spans = this.pagesContainer.querySelectorAll('span[data-doc-from][data-doc-to]');
+    const spans = collectBodySpans(this.pagesContainer);
 
-    for (const span of Array.from(spans)) {
-      const spanEl = span as HTMLElement;
+    for (const spanEl of spans) {
       const docFrom = Number(spanEl.dataset.docFrom);
       const docTo = Number(spanEl.dataset.docTo);
 
@@ -57,8 +57,8 @@ export class RenderedDomContextImpl implements RenderedDomContext {
       }
 
       // For text runs, use inclusive range
-      if (pmPos >= docFrom && pmPos <= docTo && span.firstChild?.nodeType === Node.TEXT_NODE) {
-        const textNode = span.firstChild as Text;
+      if (pmPos >= docFrom && pmPos <= docTo && spanEl.firstChild?.nodeType === Node.TEXT_NODE) {
+        const textNode = spanEl.firstChild as Text;
         const charIndex = Math.min(pmPos - docFrom, textNode.length);
 
         // Create a range at the exact character position
@@ -82,8 +82,8 @@ export class RenderedDomContextImpl implements RenderedDomContext {
     }
 
     // Fallback: try to find position in empty paragraphs
-    const emptyRuns = this.pagesContainer.querySelectorAll('.layout-empty-run');
-    for (const emptyRun of Array.from(emptyRuns)) {
+    const emptyRuns = findBodyEmptyRuns(this.pagesContainer);
+    for (const emptyRun of emptyRuns) {
       const paragraph = emptyRun.closest('.layout-paragraph') as HTMLElement;
       if (!paragraph) continue;
 
@@ -111,10 +111,9 @@ export class RenderedDomContextImpl implements RenderedDomContext {
    */
   findElementsForRange(from: number, to: number): Element[] {
     const elements: Element[] = [];
-    const spans = this.pagesContainer.querySelectorAll('span[data-doc-from][data-doc-to]');
+    const spans = collectBodySpans(this.pagesContainer);
 
-    for (const span of Array.from(spans)) {
-      const spanEl = span as HTMLElement;
+    for (const spanEl of spans) {
       const docFrom = Number(spanEl.dataset.docFrom);
       const docTo = Number(spanEl.dataset.docTo);
 
@@ -138,10 +137,9 @@ export class RenderedDomContextImpl implements RenderedDomContext {
     const containerRect = this.pagesContainer.getBoundingClientRect();
     const rects: Array<{ x: number; y: number; width: number; height: number }> = [];
 
-    const spans = this.pagesContainer.querySelectorAll('span[data-doc-from][data-doc-to]');
+    const spans = collectBodySpans(this.pagesContainer);
 
-    for (const span of Array.from(spans)) {
-      const spanEl = span as HTMLElement;
+    for (const spanEl of spans) {
       const docFrom = Number(spanEl.dataset.docFrom);
       const docTo = Number(spanEl.dataset.docTo);
 
@@ -159,9 +157,9 @@ export class RenderedDomContextImpl implements RenderedDomContext {
           continue;
         }
 
-        if (span.firstChild?.nodeType !== Node.TEXT_NODE) continue;
+        if (spanEl.firstChild?.nodeType !== Node.TEXT_NODE) continue;
 
-        const textNode = span.firstChild as Text;
+        const textNode = spanEl.firstChild as Text;
         const ownerDoc = spanEl.ownerDocument;
         if (!ownerDoc) continue;
 

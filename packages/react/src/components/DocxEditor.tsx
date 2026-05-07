@@ -114,6 +114,7 @@ import { getBuiltinTableStyle, type TableStylePreset } from './ui/TableStyleGall
 import { DocumentAgent } from '@eigenpal/docx-core/agent';
 import { DefaultLoadingIndicator, DefaultPlaceholder, ParseError } from './DocxEditorHelpers';
 import { parseDocx } from '@eigenpal/docx-core/docx';
+import { findBodyPmAnchors } from '@eigenpal/docx-core/layout-bridge';
 import { type DocxInput } from '@eigenpal/docx-core/utils';
 import { onFontsLoaded, loadDocumentFonts } from '@eigenpal/docx-core/utils';
 import { resolveColorToHex } from '@eigenpal/docx-core/utils';
@@ -1084,9 +1085,7 @@ function findSelectionYPosition(
   if (!scrollContainer || !parentEl) return null;
   const pagesEl = scrollContainer.querySelector('.paged-editor__pages');
   if (!pagesEl) return null;
-  const elements = pagesEl.querySelectorAll('[data-doc-from]');
-  for (const node of elements) {
-    const el = node as HTMLElement;
+  for (const el of findBodyPmAnchors(pagesEl)) {
     const docFrom = Number(el.dataset.docFrom);
     const docTo = Number(el.dataset.docTo);
     if (pmPos >= docFrom && pmPos <= docTo) {
