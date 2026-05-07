@@ -76,6 +76,7 @@
   ],
   "author": "EigenPal",
   "license": "MIT",
+  "homepage": "https://docx-editor.dev/",
   "repository": {
     "type": "git",
     "url": "https://github.com/eigenpal/docx-editor.git"
