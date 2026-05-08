@@ -316,10 +316,18 @@ describe('createEditorBridge', () => {
     const bridge = createEditorBridge(ref, 'DefaultAgent');
 
     bridge.replyTo(7, { text: 'Sure thing' });
-    expect(captures.at(-1)).toEqual({ commentId: 7, text: 'Sure thing', author: 'DefaultAgent' });
+    expect(captures[captures.length - 1]).toEqual({
+      commentId: 7,
+      text: 'Sure thing',
+      author: 'DefaultAgent',
+    });
 
     bridge.replyTo(7, { text: 'Override', author: 'OtherAgent' });
-    expect(captures.at(-1)).toEqual({ commentId: 7, text: 'Override', author: 'OtherAgent' });
+    expect(captures[captures.length - 1]).toEqual({
+      commentId: 7,
+      text: 'Override',
+      author: 'OtherAgent',
+    });
   });
 
   test('replyTo returns null when the ref reports the parent missing', () => {
@@ -350,7 +358,7 @@ describe('createEditorBridge', () => {
     const bridge = createEditorBridge(ref, 'DefaultAgent');
 
     bridge.proposeChange({ paraId: 'p_a3f', search: 'Hello', replaceWith: 'Hi' });
-    expect(captures.at(-1)).toEqual({ paraId: 'p_a3f', author: 'DefaultAgent' });
+    expect(captures[captures.length - 1]).toEqual({ paraId: 'p_a3f', author: 'DefaultAgent' });
 
     bridge.proposeChange({
       paraId: 'p_a3f',
@@ -358,7 +366,7 @@ describe('createEditorBridge', () => {
       replaceWith: 'Hi',
       author: 'OverrideAgent',
     });
-    expect(captures.at(-1)).toEqual({ paraId: 'p_a3f', author: 'OverrideAgent' });
+    expect(captures[captures.length - 1]).toEqual({ paraId: 'p_a3f', author: 'OverrideAgent' });
   });
 
   test('proposeChange returns false when ref reports failure', () => {
