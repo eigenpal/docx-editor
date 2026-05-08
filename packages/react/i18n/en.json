@@ -675,13 +675,28 @@
     "flipVertical": "Flip vertical"
   },
   "imageWrap": {
-    "inline": "Inline with text",
-    "floatLeft": "Float left (wrap right)",
-    "floatRight": "Float right (wrap left)",
-    "topAndBottom": "Top and bottom",
-    "behindText": "Behind text",
-    "inFrontOfText": "In front of text",
-    "tooltipPrefix": "Wrap: {label}"
+    "inline": "In Line with Text",
+    "floatLeft": "Square Left",
+    "floatRight": "Square Right",
+    "topAndBottom": "Top and Bottom",
+    "behindText": "Behind Text",
+    "inFrontOfText": "In Front of Text",
+    "tooltipPrefix": "Wrap: {label}",
+    "menu": {
+      "inLineWithText": "In Line with Text",
+      "squareLeft": "Square Left",
+      "squareRight": "Square Right",
+      "behindText": "Behind Text",
+      "inFrontOfText": "In Front of Text",
+      "ariaLabel": "Image layout options"
+    },
+    "menuDesc": {
+      "inLineWithText": "Image flows in the line as a glyph",
+      "squareLeft": "Image floats left, text wraps on the right",
+      "squareRight": "Image floats right, text wraps on the left",
+      "behindText": "Image paints behind body text",
+      "inFrontOfText": "Image paints over body text"
+    }
   },
   "responsePreview": {
     "loading": "{action}...",

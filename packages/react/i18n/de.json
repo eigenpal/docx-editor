@@ -678,7 +678,22 @@
     "topAndBottom": "Oben und unten",
     "behindText": "Hinter den Text",
     "inFrontOfText": "Vor den Text",
-    "tooltipPrefix": "Textumbruch: {label}"
+    "tooltipPrefix": "Textumbruch: {label}",
+    "menu": {
+      "ariaLabel": "Bildlayoutoptionen",
+      "behindText": "Hinter den Text",
+      "inFrontOfText": "Vor den Text",
+      "inLineWithText": "Mit Text in Zeile",
+      "squareLeft": "Quadrat links",
+      "squareRight": "Quadrat rechts"
+    },
+    "menuDesc": {
+      "behindText": "Bild liegt hinter dem Text",
+      "inFrontOfText": "Bild liegt über dem Text",
+      "inLineWithText": "Bild fließt als Glyphe in der Zeile",
+      "squareLeft": "Bild links, Text fließt rechts",
+      "squareRight": "Bild rechts, Text fließt links"
+    }
   },
   "responsePreview": {
     "loading": "{action}...",

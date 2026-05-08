@@ -37,6 +37,12 @@ export interface IconGridDropdownProps<T extends string = string> {
   ariaLabel?: string;
   /** data-testid for the trigger button */
   testId?: string;
+  /**
+   * Render the dropdown as a vertical list of `[icon] [label]` rows instead of
+   * a horizontal icon-only grid. Useful when label text is needed for clarity
+   * (e.g. image wrap modes where the icons are visually similar).
+   */
+  showLabels?: boolean;
 }
 
 export function IconGridDropdown<T extends string = string>({
@@ -48,6 +54,7 @@ export function IconGridDropdown<T extends string = string>({
   disabled = false,
   ariaLabel,
   testId,
+  showLabels = false,
 }: IconGridDropdownProps<T>) {
   const [isOpen, setIsOpen] = useState(false);
   const onClose = useCallback(() => setIsOpen(false), []);
@@ -103,7 +110,14 @@ export function IconGridDropdown<T extends string = string>({
           }}
           onMouseDown={(e) => e.stopPropagation()}
         >
-          <div style={{ display: 'flex', gap: 2 }}>
+          <div
+            style={{
+              display: 'flex',
+              flexDirection: showLabels ? 'column' : 'row',
+              gap: showLabels ? 1 : 2,
+              minWidth: showLabels ? 200 : undefined,
+            }}
+          >
             {options.map((option) => {
               const isActive = activeValue === option.value;
               return (
@@ -115,14 +129,24 @@ export function IconGridDropdown<T extends string = string>({
                   style={{
                     display: 'flex',
                     alignItems: 'center',
-                    justifyContent: 'center',
-                    width: 32,
                     height: 32,
                     border: '1px solid transparent',
                     borderRadius: 4,
                     backgroundColor: isActive ? 'var(--doc-primary-light)' : 'transparent',
                     cursor: 'pointer',
                     color: isActive ? 'var(--doc-primary)' : 'var(--doc-text)',
+                    // Per-mode geometry: label rows fill the menu width with the
+                    // icon flush-left; icon-only stays a 32×32 square.
+                    ...(showLabels
+                      ? {
+                          width: '100%',
+                          gap: 10,
+                          padding: '0 10px',
+                          justifyContent: 'flex-start',
+                          fontSize: 13,
+                          textAlign: 'left' as const,
+                        }
+                      : { width: 32, justifyContent: 'center' }),
                   }}
                   onMouseDown={(e) => e.preventDefault()}
                   onMouseEnter={(e) => {
@@ -139,6 +163,7 @@ export function IconGridDropdown<T extends string = string>({
                   onClick={() => handleOptionClick(option.value)}
                 >
                   <MaterialSymbol name={option.iconName} size={18} />
+                  {showLabels && <span style={{ flex: 1 }}>{option.label}</span>}
                 </button>
               );
             })}

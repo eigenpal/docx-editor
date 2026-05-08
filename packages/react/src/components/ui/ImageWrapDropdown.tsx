@@ -6,11 +6,15 @@ import { IconGridDropdown, type IconGridOption } from './IconGridDropdown';
 import { useTranslation } from '../../i18n';
 import type { TranslationKey } from '../../i18n';
 
+// Mirrors Word's simplified Picture > Wrap Text dropdown — five options.
+// Top-and-bottom and tight/through live in the right-click image menu where
+// Word also surfaces the full set.
 const WRAP_OPTIONS: (Omit<IconGridOption, 'label'> & { labelKey: TranslationKey })[] = [
-  { value: 'inline', labelKey: 'imageWrap.inline', iconName: 'format_image_left' },
-  { value: 'wrapRight', labelKey: 'imageWrap.floatLeft', iconName: 'format_image_right' },
-  { value: 'wrapLeft', labelKey: 'imageWrap.floatRight', iconName: 'format_image_left' },
-  { value: 'topAndBottom', labelKey: 'imageWrap.topAndBottom', iconName: 'horizontal_rule' },
+  { value: 'inline', labelKey: 'imageWrap.inline', iconName: 'wrap_text' },
+  // Square Left = image anchored on the left, text wraps on the right.
+  { value: 'wrapRight', labelKey: 'imageWrap.floatLeft', iconName: 'format_image_left' },
+  // Square Right = image anchored on the right, text wraps on the left.
+  { value: 'wrapLeft', labelKey: 'imageWrap.floatRight', iconName: 'format_image_right' },
   { value: 'behind', labelKey: 'imageWrap.behindText', iconName: 'flip_to_back' },
   { value: 'inFront', labelKey: 'imageWrap.inFrontOfText', iconName: 'flip_to_front' },
 ];
@@ -55,6 +59,7 @@ export function ImageWrapDropdown({
       onSelect={onChange}
       disabled={disabled}
       testId="toolbar-image-wrap"
+      showLabels
     />
   );
 }

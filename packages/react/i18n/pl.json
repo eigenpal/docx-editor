@@ -678,7 +678,22 @@
     "topAndBottom": "Góra i dół",
     "behindText": "Za tekstem",
     "inFrontOfText": "Przed tekstem",
-    "tooltipPrefix": "Zawijanie: {label}"
+    "tooltipPrefix": "Zawijanie: {label}",
+    "menu": {
+      "ariaLabel": "Opcje układu obrazu",
+      "behindText": "Za tekstem",
+      "inFrontOfText": "Przed tekstem",
+      "inLineWithText": "Równo z tekstem",
+      "squareLeft": "Kwadrat z lewej",
+      "squareRight": "Kwadrat z prawej"
+    },
+    "menuDesc": {
+      "behindText": "Obraz za tekstem",
+      "inFrontOfText": "Obraz przed tekstem",
+      "inLineWithText": "Obraz przepływa w linii jako glif",
+      "squareLeft": "Obraz po lewej, tekst zawija się po prawej",
+      "squareRight": "Obraz po prawej, tekst zawija się po lewej"
+    }
   },
   "responsePreview": {
     "loading": "{action}...",

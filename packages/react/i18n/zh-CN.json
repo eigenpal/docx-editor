@@ -678,7 +678,22 @@
     "topAndBottom": "上下型环绕",
     "behindText": "衬于文字下方",
     "inFrontOfText": "浮于文字上方",
-    "tooltipPrefix": "环绕方式：{label}"
+    "tooltipPrefix": "环绕方式：{label}",
+    "menu": {
+      "ariaLabel": "图像布局选项",
+      "behindText": "衬于文字下方",
+      "inFrontOfText": "浮于文字上方",
+      "inLineWithText": "嵌入型",
+      "squareLeft": "四周型靠左",
+      "squareRight": "四周型靠右"
+    },
+    "menuDesc": {
+      "behindText": "图像绘制在正文下方",
+      "inFrontOfText": "图像绘制在正文上方",
+      "inLineWithText": "图像作为字形在行中流动",
+      "squareLeft": "图像靠左，文字环绕右侧",
+      "squareRight": "图像靠右，文字环绕左侧"
+    }
   },
   "responsePreview": {
     "loading": "正在{action}...",

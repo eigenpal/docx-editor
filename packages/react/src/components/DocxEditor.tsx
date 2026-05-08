@@ -108,6 +108,13 @@ import {
   type TextContextAction,
   type TextContextMenuItem,
 } from './TextContextMenu';
+import { ImageContextMenu, useImageContextMenu } from './ImageContextMenu';
+import { setImageWrapType, type ImageLayoutTarget } from '@eigenpal/docx-core/prosemirror/commands';
+import type { WrapType } from '@eigenpal/docx-core/docx/wrapTypes';
+import {
+  captureInlinePositionEmu,
+  toolbarValueToLayoutTarget,
+} from '@eigenpal/docx-core/layout-painter';
 import { HyperlinkPopup, type HyperlinkPopupData } from './ui/HyperlinkPopup';
 import { Toaster, toast } from 'sonner';
 import { getBuiltinTableStyle, type TableStylePreset } from './ui/TableStyleGallery';
@@ -1302,6 +1309,7 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
   },
   ref
 ) {
+  const { t } = useTranslation();
   // State
   const [state, setState] = useState<EditorState>({
     isLoading: !!documentBuffer && !externalContent,
@@ -2321,60 +2329,36 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
   // Handle shape insertion
   // Handle image wrap type change
   const handleImageWrapType = useCallback(
-    (wrapType: string) => {
+    (toolbarValue: string) => {
       const view = getActiveEditorView();
       if (!view || !state.pmImageContext) return;
-
       const pos = state.pmImageContext.pos;
       const node = view.state.doc.nodeAt(pos);
       if (!node || node.type.name !== 'image') return;
 
-      // Map wrap type to display mode + cssFloat
-      let displayMode = 'inline';
-      let cssFloat: string | null = null;
+      // Translate the toolbar's legacy vocabulary into the PM command's
+      // `ImageLayoutTarget` so the toolbar and the right-click menu share
+      // `setImageWrapType` and its `resolveAnchorAttrs` taxonomy. The mapping
+      // lives in core so the Vue adapter doesn't have to duplicate it.
+      const target = toolbarValueToLayoutTarget(toolbarValue);
+      if (!target) return;
 
-      switch (wrapType) {
-        case 'inline':
-          displayMode = 'inline';
-          cssFloat = null;
-          break;
-        case 'square':
-        case 'tight':
-        case 'through':
-          displayMode = 'float';
-          cssFloat = 'left';
-          break;
-        case 'topAndBottom':
-          displayMode = 'block';
-          cssFloat = null;
-          break;
-        case 'behind':
-        case 'inFront':
-          displayMode = 'float';
-          cssFloat = 'none';
-          break;
-        case 'wrapLeft':
-          displayMode = 'float';
-          cssFloat = 'right';
-          wrapType = 'square';
-          break;
-        case 'wrapRight':
-          displayMode = 'float';
-          cssFloat = 'left';
-          wrapType = 'square';
-          break;
+      // For inline → anchor, capture the inline glyph's rendered offset so
+      // the new float lands at the same X/Y (Word's behavior). The core
+      // helper handles the zoom + EMU conversion uniformly.
+      let opts: { initialPositionEmu?: { horizontalEmu: number; verticalEmu: number } } | undefined;
+      if (node.attrs.wrapType === 'inline' && target !== 'inline') {
+        const inlineEl = document.querySelector(
+          `.layout-run-image[data-doc-from="${pos}"]`
+        ) as HTMLElement | null;
+        const captured = inlineEl ? captureInlinePositionEmu(inlineEl, state.zoom) : undefined;
+        if (captured) opts = { initialPositionEmu: captured };
       }
 
-      const tr = view.state.tr.setNodeMarkup(pos, undefined, {
-        ...node.attrs,
-        wrapType,
-        displayMode,
-        cssFloat,
-      });
-      view.dispatch(tr.scrollIntoView());
+      setImageWrapType(pos, target, opts)(view.state, view.dispatch);
       focusActiveEditor();
     },
-    [getActiveEditorView, focusActiveEditor, state.pmImageContext]
+    [getActiveEditorView, focusActiveEditor, state.pmImageContext, state.zoom]
   );
 
   // Handle image transform (rotate/flip)
@@ -3173,10 +3157,35 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
     setHyperlinkPopupData(null);
   }, []);
 
+  // Image-specific right-click menu state.
+  const imageContextMenu = useImageContextMenu();
+
   // Right-click context menu handlers. Use the active view so the menu
   // reflects HF state when the inline editor is open.
   const handleContextMenu = useCallback(
-    (data: { x: number; y: number; hasSelection: boolean }) => {
+    (data: {
+      x: number;
+      y: number;
+      hasSelection: boolean;
+      image?: {
+        pos: number;
+        wrapType: WrapType;
+        cssFloat?: 'left' | 'right' | 'none' | null;
+        inlinePositionEmu?: { horizontalEmu: number; verticalEmu: number };
+      } | null;
+    }) => {
+      // Image right-click takes priority over the text context menu.
+      if (data.image) {
+        imageContextMenu.openForImage({
+          x: data.x,
+          y: data.y,
+          wrapType: data.image.wrapType,
+          cssFloat: data.image.cssFloat,
+          pos: data.image.pos,
+          inlinePositionEmu: data.image.inlinePositionEmu,
+        });
+        return;
+      }
       const view = getActiveEditorView();
       const tableContext = view ? getTableContext(view.state) : { isInTable: false };
       setContextMenu({
@@ -3187,7 +3196,51 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
         tableContext: tableContext.isInTable ? tableContext : null,
       });
     },
-    [getActiveEditorView]
+    [getActiveEditorView, imageContextMenu]
+  );
+
+  const handleImageWrapApply = useCallback(
+    (target: ImageLayoutTarget) => {
+      const view = getActiveEditorView();
+      if (!view || imageContextMenu.imagePos === null) return;
+      // For inline → anchor, hand the captured EMU offset to the command so
+      // the new float lands where the inline glyph used to sit.
+      const opts = imageContextMenu.inlinePositionEmu
+        ? { initialPositionEmu: imageContextMenu.inlinePositionEmu }
+        : undefined;
+      setImageWrapType(imageContextMenu.imagePos, target, opts)(view.state, view.dispatch);
+    },
+    [getActiveEditorView, imageContextMenu.imagePos, imageContextMenu.inlinePositionEmu]
+  );
+
+  // Text actions that ride along inside the image context menu — Word shows
+  // Cut / Copy / Paste / Delete underneath the layout choices, so users don't
+  // need to flip menus to do basic clipboard work on the selected image.
+  const imageContextMenuTextActions = useMemo(
+    () => [
+      {
+        action: 'cut' as TextContextAction,
+        label: t('contextMenu.cut'),
+        shortcut: t('contextMenu.cutShortcut'),
+      },
+      {
+        action: 'copy' as TextContextAction,
+        label: t('contextMenu.copy'),
+        shortcut: t('contextMenu.copyShortcut'),
+      },
+      {
+        action: 'paste' as TextContextAction,
+        label: t('contextMenu.paste'),
+        shortcut: t('contextMenu.pasteShortcut'),
+        dividerAfter: true,
+      },
+      {
+        action: 'delete' as TextContextAction,
+        label: t('contextMenu.delete'),
+        shortcut: t('contextMenu.deleteShortcut'),
+      },
+    ],
+    [t]
   );
 
   const handleContextMenuClose = useCallback(() => {
@@ -5380,6 +5433,18 @@ body { background: white; }
               items={contextMenuItems}
               onAction={handleContextMenuAction}
               onClose={handleContextMenuClose}
+            />
+
+            {/* Image-specific right-click menu — layout options + text actions */}
+            <ImageContextMenu
+              isOpen={imageContextMenu.isOpen}
+              position={imageContextMenu.position}
+              currentWrapType={imageContextMenu.currentWrapType}
+              currentCssFloat={imageContextMenu.currentCssFloat}
+              onApplyLayout={handleImageWrapApply}
+              textActions={imageContextMenuTextActions}
+              onTextAction={handleContextMenuAction}
+              onClose={imageContextMenu.closeMenu}
             />
 
             {/* Toast notifications */}

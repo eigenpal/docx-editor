@@ -678,7 +678,22 @@
     "topAndBottom": "מעל ומתחת",
     "behindText": "מאחורי הטקסט",
     "inFrontOfText": "מעל הטקסט",
-    "tooltipPrefix": "גלישה: {label}"
+    "tooltipPrefix": "גלישה: {label}",
+    "menu": {
+      "ariaLabel": "אפשרויות פריסת תמונה",
+      "behindText": "מאחורי הטקסט",
+      "inFrontOfText": "לפני הטקסט",
+      "inLineWithText": "בתוך שורת הטקסט",
+      "squareLeft": "ריבוע משמאל",
+      "squareRight": "ריבוע מימין"
+    },
+    "menuDesc": {
+      "behindText": "התמונה מאחורי הטקסט",
+      "inFrontOfText": "התמונה לפני הטקסט",
+      "inLineWithText": "התמונה זורמת בשורה כתו",
+      "squareLeft": "תמונה משמאל, טקסט גולש מימין",
+      "squareRight": "תמונה מימין, טקסט גולש משמאל"
+    }
   },
   "responsePreview": {
     "loading": "{action}...",

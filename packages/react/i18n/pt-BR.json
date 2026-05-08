@@ -678,7 +678,22 @@
     "topAndBottom": "Acima e abaixo",
     "behindText": "Atrás do texto",
     "inFrontOfText": "Na frente do texto",
-    "tooltipPrefix": "Quebra: {label}"
+    "tooltipPrefix": "Quebra: {label}",
+    "menu": {
+      "ariaLabel": "Opções de layout de imagem",
+      "behindText": "Atrás do texto",
+      "inFrontOfText": "Na frente do texto",
+      "inLineWithText": "Em linha com o texto",
+      "squareLeft": "Quadrado à esquerda",
+      "squareRight": "Quadrado à direita"
+    },
+    "menuDesc": {
+      "behindText": "A imagem fica atrás do texto",
+      "inFrontOfText": "A imagem fica na frente do texto",
+      "inLineWithText": "A imagem flui na linha como um glifo",
+      "squareLeft": "Imagem à esquerda, texto envolve à direita",
+      "squareRight": "Imagem à direita, texto envolve à esquerda"
+    }
   },
   "responsePreview": {
     "loading": "{action}...",
