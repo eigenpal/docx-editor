@@ -53,13 +53,17 @@ test.describe('Image Round-Trip (Issue #45)', () => {
     expect(docXml).toContain('a:blip');
     expect(docXml).toContain('r:embed');
 
-    // Image dimensions are EMU (>100000), not pixels (<1000)
-    const extMatch = docXml.match(/<a:ext cx="(\d+)" cy="(\d+)"/);
+    // Image dimensions are EMU (>100000), not pixels (<1000), and must be
+    // integers (Word rejects float EMU values, see issue #417).
+    expect(docXml).not.toMatch(/(?:cx|cy|distT|distB|distL|distR)="\d+\.\d+"/);
+    expect(docXml).not.toMatch(/<wp:posOffset>\d+\.\d+<\/wp:posOffset>/);
+
+    const extMatch = docXml.match(/<a:ext cx="(\d+)" cy="(\d+)"\/>/);
     expect(extMatch).not.toBeNull();
     expect(parseInt(extMatch![1], 10)).toBeGreaterThan(100000);
     expect(parseInt(extMatch![2], 10)).toBeGreaterThan(100000);
 
-    const wpExtent = docXml.match(/<wp:extent cx="(\d+)" cy="(\d+)"/);
+    const wpExtent = docXml.match(/<wp:extent cx="(\d+)" cy="(\d+)"\/>/);
     expect(wpExtent).not.toBeNull();
     expect(parseInt(wpExtent![1], 10)).toBeGreaterThan(100000);
     expect(parseInt(wpExtent![2], 10)).toBeGreaterThan(100000);
@@ -107,8 +111,9 @@ test.describe('Image Round-Trip (Issue #45)', () => {
     const ctXml = await zip.file('[Content_Types].xml')!.async('text');
     expect(ctXml).toContain('Extension="png"');
 
-    // Dimensions are EMU, not pixels
-    const extMatch = docXml.match(/<a:ext cx="(\d+)" cy="(\d+)"/);
+    // Dimensions are EMU integers, not pixels and not floats (issue #417).
+    expect(docXml).not.toMatch(/(?:cx|cy|distT|distB|distL|distR)="\d+\.\d+"/);
+    const extMatch = docXml.match(/<a:ext cx="(\d+)" cy="(\d+)"\/>/);
     expect(extMatch).not.toBeNull();
     expect(parseInt(extMatch![1], 10)).toBeGreaterThan(100000);
     expect(parseInt(extMatch![2], 10)).toBeGreaterThan(100000);
