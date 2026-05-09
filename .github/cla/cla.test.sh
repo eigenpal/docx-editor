@@ -129,53 +129,18 @@ assert_false "empty allowlist + empty org → no one skipped" \
                                                         cla_should_skip "anyone"          ""        ""
 
 echo
-echo "cla_render_unsigned_comment (single contributor — uses 'you'):"
-body=$(cla_render_unsigned_comment "https://e.x/CLA.md" "I sign" "<!-- m -->" \
-  '{"signed":[],"unsigned":["alice"]}')
-case "$body" in *"that you sign"*) ok=1 ;; *) ok=0 ;; esac
-assert_eq "uses singular 'you' for single contributor" "1" "$ok"
-case "$body" in *"that you all sign"*) ok=1 ;; *) ok=0 ;; esac
-assert_eq "does NOT use 'you all' for single contributor" "0" "$ok"
-case "$body" in *"committers have signed the CLA"*) ok=1 ;; *) ok=0 ;; esac
-assert_eq "does NOT show committer matrix for single contributor" "0" "$ok"
+echo "cla_render_unsigned_comment:"
+body=$(cla_render_unsigned_comment "https://e.x/CLA.md" "I sign" "<!-- m -->" "octocat")
+case "$body" in "@octocat "*) ok=1 ;; *) ok=0 ;; esac
+assert_eq "starts with @-mention of the PR author (notifies them)" "1" "$ok"
 case "$body" in *"https://e.x/CLA.md"*) ok=1 ;; *) ok=0 ;; esac
 assert_eq "includes CLA URL" "1" "$ok"
+case "$body" in *"I sign"*) ok=1 ;; *) ok=0 ;; esac
+assert_eq "includes the sign phrase" "1" "$ok"
 case "$body" in *"cla-recheck"*) ok=1 ;; *) ok=0 ;; esac
 assert_eq "mentions the cla-recheck keyword" "1" "$ok"
 case "$body" in *"<!-- m -->"*) ok=1 ;; *) ok=0 ;; esac
 assert_eq "includes sticky-comment marker" "1" "$ok"
-
-echo
-echo "cla_render_unsigned_comment (multiple contributors — uses 'you all' + matrix):"
-body=$(cla_render_unsigned_comment "https://e.x/CLA.md" "I sign" "<!-- m -->" \
-  '{"signed":["alice"],"unsigned":["bob","carol"]}')
-case "$body" in *"that you all sign"*) ok=1 ;; *) ok=0 ;; esac
-assert_eq "uses plural 'you all' for >1 contributor" "1" "$ok"
-case "$body" in *"**1** out of **3** committers have signed the CLA"*) ok=1 ;; *) ok=0 ;; esac
-assert_eq "shows '1 out of 3' summary" "1" "$ok"
-case "$body" in *":white_check_mark: [alice](https://github.com/alice)"*) ok=1 ;; *) ok=0 ;; esac
-assert_eq "alice (signed) shown with check + profile link" "1" "$ok"
-case "$body" in *":x: @bob"*":x: @carol"*) ok=1 ;; *) ok=0 ;; esac
-assert_eq "bob and carol (unsigned) shown with x" "1" "$ok"
-
-echo
-echo "cla_render_unsigned_comment (with unknown committer warning):"
-body=$(cla_render_unsigned_comment "https://e.x/CLA.md" "I sign" "<!-- m -->" \
-  '{"signed":[],"unsigned":["bob"],"unknown":[{"name":"Anonymous Coward","email":"anon@example.com"}]}')
-case "$body" in *"Anonymous Coward"*"seems not to be a GitHub user"*) ok=1 ;; *) ok=0 ;; esac
-assert_eq "names the unknown committer with the standard warning" "1" "$ok"
-case "$body" in *"add the email address used for this commit to your account"*) ok=1 ;; *) ok=0 ;; esac
-assert_eq "links to GitHub help on email linking" "1" "$ok"
-
-body=$(cla_render_unsigned_comment "https://e.x/CLA.md" "I sign" "<!-- m -->" \
-  '{"signed":[],"unsigned":["bob"],"unknown":[{"name":"X","email":"x@y"},{"name":"Y","email":"y@z"}]}')
-case "$body" in *"**X, Y** seem not to be a GitHub user"*) ok=1 ;; *) ok=0 ;; esac
-assert_eq "uses plural 'seem' for >1 unknown" "1" "$ok"
-
-body=$(cla_render_unsigned_comment "https://e.x/CLA.md" "I sign" "<!-- m -->" \
-  '{"signed":[],"unsigned":["bob"]}')
-case "$body" in *"not to be a GitHub user"*) ok=1 ;; *) ok=0 ;; esac
-assert_eq "no unknown section when status_json has no .unknown key" "0" "$ok"
 
 echo
 echo "cla_render_signed_comment:"
@@ -188,21 +153,52 @@ case "$body" in *"<!-- m -->"*) ok=1 ;; *) ok=0 ;; esac
 assert_eq "includes sticky-comment marker" "1" "$ok"
 
 echo
-echo "GraphQL author-extraction filters (regression guard):"
-# Sample response shaped exactly like the GraphQL query in cla_main returns.
-# This catches the bug where switching to (or away from) gh's REST shape would
-# silently drop every author and let unsigned PRs pass.
-gql_sample='{"nodes":[
-  {"commit":{"author":{"email":"alice@example.com","name":"Alice","user":{"login":"alice","databaseId":111}}}},
-  {"commit":{"author":{"email":"alice@example.com","name":"Alice","user":{"login":"alice","databaseId":111}}}},
-  {"commit":{"author":{"email":"throwaway@example.com","name":"Anon Coward","user":null}}}
-]}'
-linked=$(echo "$gql_sample" | jq -c '[.nodes[].commit.author | select(.user != null) | {login: .user.login, id: .user.databaseId}] | unique_by(.id)')
-assert_eq "linked authors are deduped by databaseId" \
-  '[{"login":"alice","id":111}]' "$linked"
-unknown=$(echo "$gql_sample" | jq -c '[.nodes[].commit.author | select(.user == null) | {name: .name, email: .email}] | unique_by("\(.name)<\(.email)>")')
-assert_eq "unknown author surfaces with name + email" \
-  '[{"name":"Anon Coward","email":"throwaway@example.com"}]' "$unknown"
+echo "GraphQL PR-author extraction (regression guard):"
+# Sample response shaped exactly like cla_main's GraphQL query returns.
+# This catches the bug where field renames would silently break extraction
+# and let unsigned PRs through.
+gql_normal='{"data":{"repository":{"pullRequest":{"headRefOid":"abc123","author":{"login":"leandrotcawork","databaseId":99999}}}}}'
+assert_eq "headRefOid extracts" "abc123" \
+  "$(echo "$gql_normal" | jq -r '.data.repository.pullRequest.headRefOid')"
+assert_eq "author login extracts" "leandrotcawork" \
+  "$(echo "$gql_normal" | jq -r '.data.repository.pullRequest.author.login // empty')"
+assert_eq "author databaseId extracts" "99999" \
+  "$(echo "$gql_normal" | jq -r '.data.repository.pullRequest.author.databaseId // empty')"
+
+# Edge case: PR from a deleted account (author is null in GraphQL).
+gql_deleted='{"data":{"repository":{"pullRequest":{"headRefOid":"def456","author":null}}}}'
+assert_eq "deleted-author login → empty" "" \
+  "$(echo "$gql_deleted" | jq -r '.data.repository.pullRequest.author.login // empty')"
+assert_eq "deleted-author id → empty" "" \
+  "$(echo "$gql_deleted" | jq -r '.data.repository.pullRequest.author.databaseId // empty')"
+
+# Bot-authored PR (Dependabot, Renovate, etc.). GraphQL returns Bot logins
+# without the "[bot]" suffix that REST/event payloads use, so cla_main has to
+# normalize. Verified against a real Dependabot PR (#308): GitHub returns
+# {"login":"dependabot","databaseId":49699333,"__typename":"Bot"}.
+gql_bot='{"data":{"repository":{"pullRequest":{"headRefOid":"bot789","author":{"__typename":"Bot","login":"dependabot","databaseId":49699333}}}}}'
+assert_eq "bot author __typename extracts" "Bot" \
+  "$(echo "$gql_bot" | jq -r '.data.repository.pullRequest.author.__typename // empty')"
+assert_eq "bot author bare login (pre-normalization) extracts" "dependabot" \
+  "$(echo "$gql_bot" | jq -r '.data.repository.pullRequest.author.login // empty')"
+assert_eq "bot author databaseId extracts" "49699333" \
+  "$(echo "$gql_bot" | jq -r '.data.repository.pullRequest.author.databaseId // empty')"
+
+# Bot-login normalization: append "[bot]" if missing so allowlist match works.
+normalize_bot_login() {
+  local type="$1" login="$2"
+  if [ "$type" = "Bot" ] && [[ "$login" != *"[bot]" ]]; then
+    echo "${login}[bot]"
+  else
+    echo "$login"
+  fi
+}
+assert_eq "Bot type without [bot] suffix → suffix appended" "dependabot[bot]" \
+  "$(normalize_bot_login Bot dependabot)"
+assert_eq "Bot type that already has [bot] → unchanged" "renovate[bot]" \
+  "$(normalize_bot_login Bot 'renovate[bot]')"
+assert_eq "User type → never modified" "octocat" \
+  "$(normalize_bot_login User octocat)"
 
 echo
 echo "cla_init_signatures:"

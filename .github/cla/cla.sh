@@ -52,51 +52,20 @@ cla_should_skip() {
   return 1
 }
 
-# Render the unsigned-contributors comment. Wording matches the templates from
-# contributor-assistant/github-action so the experience is familiar to anyone
-# who has signed a CLA at another OSS project.
-#
-# Usage: cla_render_unsigned_comment <cla_url> <sign_phrase> <marker> <status_json>
-#   status_json: {"signed":["alice"], "unsigned":["bob"], "unknown":[{"name":"X","email":"x@y"}]}
-# Note: allowlisted and org members are excluded from signed/unsigned by the caller.
-# Unknown = commits whose email isn't linked to any GitHub account; surfaced as a
-# warning per the original action, but doesn't gate the check.
+# Render the "please sign" comment shown to a PR author who hasn't signed yet.
+# The leading @-mention notifies the PR author on initial post; edits to the
+# sticky comment on subsequent workflow runs don't re-notify, so this is a
+# one-time ping per contributor.
 cla_render_unsigned_comment() {
-  local cla_url="$1" sign_phrase="$2" marker="$3" status_json="$4"
-  local signed_count unsigned_count unknown_count total you matrix="" unknown_section=""
-  signed_count=$(echo "$status_json" | jq '.signed | length')
-  unsigned_count=$(echo "$status_json" | jq '.unsigned | length')
-  unknown_count=$(echo "$status_json" | jq '(.unknown // []) | length')
-  total=$((signed_count + unsigned_count))
-  if [ "$total" -gt 1 ]; then
-    you="you all"
-    matrix=$(printf '\n\n**%d** out of **%d** committers have signed the CLA.' "$signed_count" "$total")
-    while IFS= read -r login; do
-      [ -z "$login" ] && continue
-      matrix+=$(printf '<br/>:white_check_mark: [%s](https://github.com/%s)' "$login" "$login")
-    done < <(echo "$status_json" | jq -r '.signed[]')
-    while IFS= read -r login; do
-      [ -z "$login" ] && continue
-      matrix+=$(printf '<br/>:x: @%s' "$login")
-    done < <(echo "$status_json" | jq -r '.unsigned[]')
-  else
-    you="you"
-  fi
-  if [ "$unknown_count" -gt 0 ]; then
-    local seem names
-    [ "$unknown_count" -gt 1 ] && seem="seem" || seem="seems"
-    names=$(echo "$status_json" | jq -r '(.unknown // []) | map(.name) | join(", ")')
-    unknown_section=$(printf '\n\n**%s** %s not to be a GitHub user. You need a GitHub account to be able to sign the CLA. If you have already a GitHub account, please [add the email address used for this commit to your account](https://help.github.com/articles/why-are-my-commits-linked-to-the-wrong-user/#commits-are-not-linked-to-any-user).' "$names" "$seem")
-  fi
+  local cla_url="$1" sign_phrase="$2" marker="$3" pr_author_login="$4"
   cat <<EOF
-Thank you for your submission, we really appreciate it. Like many open-source projects, we ask that ${you} sign our [Contributor License Agreement](${cla_url}) before we can accept your contribution. You can sign the CLA by just posting a Pull Request Comment same as the below format.
+@${pr_author_login} thank you for your submission, we really appreciate it. Like many open-source projects, we ask that you sign our [Contributor License Agreement](${cla_url}) before we can accept your contribution. You can sign the CLA by just posting a Pull Request Comment same as the below format.
 
 ---
 
 ${sign_phrase}
 
 ---
-${matrix}${unknown_section}
 
 <sub>You can retrigger this bot by commenting **cla-recheck** in this Pull Request.</sub>
 <sub>Posted by the CLA bot.</sub>
@@ -151,12 +120,16 @@ cla_main() {
     fi
   fi
 
-  # Fetch commit authors via GraphQL — `gh pr view --json commits` flattens
-  # author info and gives node IDs instead of numeric database IDs, which
-  # don't match the IDs we record in signatures.json. The GraphQL `databaseId`
-  # is the stable numeric user ID we need, and the nested `user` field
-  # correctly distinguishes linked from unlinked commit emails.
-  local pr_data commits_json authors_json unknown_json signed_logins unsigned_logins status_json head_sha
+  # The PR author is the signer of record. They're the GitHub identity
+  # submitting the contribution and accepting the CLA's representations
+  # (Section 4 covers their authority to license commits authored by
+  # tools/co-authors with unlinked emails). We do not check individual
+  # commit authors — git's commit.author field is local-config metadata,
+  # not legal personhood.
+  local pr_data pr_author_login pr_author_id head_sha
+  # GraphQL `author` is an Actor interface — User, Bot, Mannequin, etc. each
+  # expose `databaseId` separately, so we ask for it on every concrete type
+  # we expect to see authoring PRs (mostly User and Bot in practice).
   pr_data=$(gh api graphql \
     -F owner="${REPO%/*}" -F name="${REPO#*/}" -F number="$PR_NUMBER" \
     -f query='
@@ -164,53 +137,52 @@ cla_main() {
         repository(owner:$owner, name:$name) {
           pullRequest(number:$number) {
             headRefOid
-            commits(first:100) {
-              nodes { commit { author { email name user { login databaseId } } } }
+            author {
+              __typename
+              login
+              ... on User { databaseId }
+              ... on Bot { databaseId }
             }
           }
         }
       }')
   head_sha=$(echo "$pr_data" | jq -r '.data.repository.pullRequest.headRefOid')
-  commits_json=$(echo "$pr_data" | jq -c '.data.repository.pullRequest.commits')
-  # Linked authors → {login, id}. databaseId is the numeric stable ID.
-  authors_json=$(echo "$commits_json" | jq -c \
-    '[.nodes[].commit.author | select(.user != null) | {login: .user.login, id: .user.databaseId}] | unique_by(.id)')
-  # Unknown = commit authors with no linked GitHub user. Dedup by name<email>.
-  unknown_json=$(echo "$commits_json" | jq -c \
-    '[.nodes[].commit.author | select(.user == null) | {name: .name, email: .email}] | unique_by("\(.name)<\(.email)>")')
+  local pr_author_type
+  pr_author_type=$(echo "$pr_data" | jq -r '.data.repository.pullRequest.author.__typename // empty')
+  pr_author_login=$(echo "$pr_data" | jq -r '.data.repository.pullRequest.author.login // empty')
+  pr_author_id=$(echo "$pr_data" | jq -r '.data.repository.pullRequest.author.databaseId // empty')
 
-  signed_logins=()
-  unsigned_logins=()
-  while IFS=$'\t' read -r login user_id; do
-    if cla_should_skip "$login" "$ALLOWLIST" "${CLA_ORG:-}"; then continue; fi
-    if cla_signed "$user_id" "$signatures"; then
-      signed_logins+=("$login")
-    else
-      unsigned_logins+=("$login")
-    fi
-  done < <(echo "$authors_json" | jq -r '.[] | "\(.login)\t\(.id)"')
+  # GraphQL returns Bot logins as bare slugs ("dependabot"), but the allowlist
+  # and every other GitHub API surface uses the "[bot]" suffix. Normalize so
+  # `dependabot[bot]` in the allowlist actually matches a Dependabot PR.
+  if [ "$pr_author_type" = "Bot" ] && [[ "$pr_author_login" != *"[bot]" ]]; then
+    pr_author_login="${pr_author_login}[bot]"
+  fi
 
-  local unknown_count
-  unknown_count=$(echo "$unknown_json" | jq 'length')
+  if [ -z "$pr_author_login" ]; then
+    echo "ERROR: PR #${PR_NUMBER} has no identifiable GitHub author (deleted account?)" >&2
+    exit 1
+  fi
 
-  status_json=$(jq -n \
-    --argjson signed   "$(printf '%s\n' "${signed_logins[@]:-}"   | jq -R . | jq -s 'map(select(length>0))')" \
-    --argjson unsigned "$(printf '%s\n' "${unsigned_logins[@]:-}" | jq -R . | jq -s 'map(select(length>0))')" \
-    --argjson unknown  "$unknown_json" \
-    '{signed: $signed, unsigned: $unsigned, unknown: $unknown}')
+  # Allowlist short-circuits before we need the numeric id. Without this guard
+  # in place, a Bot or Mannequin author with a null databaseId would still
+  # pass via cla_should_skip even though the id is empty.
+  local pr_author_signed=false
+  if cla_should_skip "$pr_author_login" "$ALLOWLIST" "${CLA_ORG:-}"; then
+    pr_author_signed=true
+  elif [ -n "$pr_author_id" ] && cla_signed "$pr_author_id" "$signatures"; then
+    pr_author_signed=true
+  fi
 
-  # Gate matches contributor-assistant/github-action: pass/fail is based only
-  # on signed-vs-unsigned. Unknown committers (commits with no linked GitHub
-  # user) surface as a warning in the unsigned comment but don't block.
   local body status_state status_desc
-  if [ "${#unsigned_logins[@]}" -eq 0 ]; then
+  if "$pr_author_signed"; then
     status_state="success"
-    status_desc="All contributors signed the CLA"
+    status_desc="PR author has signed the CLA"
     body=$(cla_render_signed_comment "$marker")
   else
     status_state="failure"
-    status_desc="Awaiting CLA signature"
-    body=$(cla_render_unsigned_comment "$CLA_URL" "$SIGN_PHRASE" "$marker" "$status_json")
+    status_desc="Awaiting CLA signature from PR author"
+    body=$(cla_render_unsigned_comment "$CLA_URL" "$SIGN_PHRASE" "$marker" "$pr_author_login")
   fi
 
   # Upsert the sticky CLA comment (one per PR, identified by the marker).
