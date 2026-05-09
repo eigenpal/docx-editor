@@ -5,6 +5,12 @@
       "id": 114745121,
       "signed_at": "2026-05-09T20:56:29Z",
       "pull_request_no": 429
+    },
+    {
+      "name": "eigenpal-release-pal[bot]",
+      "id": 281378398,
+      "signed_at": "2026-05-09T21:43:33Z",
+      "pull_request_no": 425
     }
   ]
 }
