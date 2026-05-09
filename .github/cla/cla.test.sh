@@ -188,6 +188,23 @@ case "$body" in *"<!-- m -->"*) ok=1 ;; *) ok=0 ;; esac
 assert_eq "includes sticky-comment marker" "1" "$ok"
 
 echo
+echo "GraphQL author-extraction filters (regression guard):"
+# Sample response shaped exactly like the GraphQL query in cla_main returns.
+# This catches the bug where switching to (or away from) gh's REST shape would
+# silently drop every author and let unsigned PRs pass.
+gql_sample='{"nodes":[
+  {"commit":{"author":{"email":"alice@example.com","name":"Alice","user":{"login":"alice","databaseId":111}}}},
+  {"commit":{"author":{"email":"alice@example.com","name":"Alice","user":{"login":"alice","databaseId":111}}}},
+  {"commit":{"author":{"email":"throwaway@example.com","name":"Anon Coward","user":null}}}
+]}'
+linked=$(echo "$gql_sample" | jq -c '[.nodes[].commit.author | select(.user != null) | {login: .user.login, id: .user.databaseId}] | unique_by(.id)')
+assert_eq "linked authors are deduped by databaseId" \
+  '[{"login":"alice","id":111}]' "$linked"
+unknown=$(echo "$gql_sample" | jq -c '[.nodes[].commit.author | select(.user == null) | {name: .name, email: .email}] | unique_by("\(.name)<\(.email)>")')
+assert_eq "unknown author surfaces with name + email" \
+  '[{"name":"Anon Coward","email":"throwaway@example.com"}]' "$unknown"
+
+echo
 echo "cla_init_signatures:"
 NEW="$TMPDIR/sub/cla.json"
 cla_init_signatures "$NEW"

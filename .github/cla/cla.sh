@@ -144,22 +144,41 @@ cla_main() {
       git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
       git add "$signatures"
       git commit -m "Record CLA signature for @${COMMENT_USER_LOGIN} (PR #${PR_NUMBER})"
+      # If you enable branch protection on `main` with require-pull-request,
+      # this push will start failing. Allow `github-actions[bot]` to bypass
+      # protection in the branch ruleset, OR move the signatures file to a
+      # dedicated repo and update the checkout step accordingly.
       git push origin main
     fi
   fi
 
-  # Pull commits + head SHA in one API call. Partition authors three ways:
-  # signed, unsigned, and unknown (commits whose email isn't linked to any
-  # GitHub account — these would otherwise silently bypass the CLA check).
-  local pr_json commits_json authors_json unknown_json signed_logins unsigned_logins status_json head_sha
-  pr_json=$(gh pr view "$PR_NUMBER" --repo "$REPO" --json commits,headRefOid)
-  commits_json=$(echo "$pr_json" | jq -c '{commits}')
-  head_sha=$(echo "$pr_json" | jq -r '.headRefOid')
+  # Fetch commit authors via GraphQL — `gh pr view --json commits` flattens
+  # author info and gives node IDs instead of numeric database IDs, which
+  # don't match the IDs we record in signatures.json. The GraphQL `databaseId`
+  # is the stable numeric user ID we need, and the nested `user` field
+  # correctly distinguishes linked from unlinked commit emails.
+  local pr_data commits_json authors_json unknown_json signed_logins unsigned_logins status_json head_sha
+  pr_data=$(gh api graphql \
+    -F owner="${REPO%/*}" -F name="${REPO#*/}" -F number="$PR_NUMBER" \
+    -f query='
+      query($owner:String!, $name:String!, $number:Int!) {
+        repository(owner:$owner, name:$name) {
+          pullRequest(number:$number) {
+            headRefOid
+            commits(first:100) {
+              nodes { commit { author { email name user { login databaseId } } } }
+            }
+          }
+        }
+      }')
+  head_sha=$(echo "$pr_data" | jq -r '.data.repository.pullRequest.headRefOid')
+  commits_json=$(echo "$pr_data" | jq -c '.data.repository.pullRequest.commits')
+  # Linked authors → {login, id}. databaseId is the numeric stable ID.
   authors_json=$(echo "$commits_json" | jq -c \
-    '[.commits[].authors[] | select(.user != null) | {login: .user.login, id: .user.id}] | unique_by(.id)')
+    '[.nodes[].commit.author | select(.user != null) | {login: .user.login, id: .user.databaseId}] | unique_by(.id)')
   # Unknown = commit authors with no linked GitHub user. Dedup by name<email>.
   unknown_json=$(echo "$commits_json" | jq -c \
-    '[.commits[].authors[] | select(.user == null) | {name: .name, email: .email}] | unique_by("\(.name)<\(.email)>")')
+    '[.nodes[].commit.author | select(.user == null) | {name: .name, email: .email}] | unique_by("\(.name)<\(.email)>")')
 
   signed_logins=()
   unsigned_logins=()
@@ -196,9 +215,11 @@ cla_main() {
   fi
 
   # Upsert the sticky CLA comment (one per PR, identified by the marker).
+  # `--slurp` is load-bearing: `gh api --paginate` outputs one JSON array per
+  # page, and without `-s` jq's `first` would only see the first page's matches.
   local existing
   existing=$(gh api "repos/${REPO}/issues/${PR_NUMBER}/comments" --paginate \
-    | jq -r --arg m "$marker" '[.[] | select(.body | contains($m)) | .id] | first // empty')
+    | jq -rs --arg m "$marker" 'add | [.[] | select(.body | contains($m)) | .id] | first // empty')
   if [ -n "$existing" ]; then
     gh api -X PATCH "repos/${REPO}/issues/comments/${existing}" -f body="$body" > /dev/null
   else
