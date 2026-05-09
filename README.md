@@ -73,6 +73,10 @@ Examples: [Vite](examples/vite) | [Next.js](examples/nextjs) | [Remix](examples/
 
 **[Documentation](https://www.docx-editor.dev/docs)** | **[Props & Ref Methods](https://www.docx-editor.dev/docs/props)** | **[Plugins](https://www.docx-editor.dev/docs/plugins)** | **[Architecture](https://www.docx-editor.dev/docs/architecture)**
 
+## Contributing
+
+Contributions welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) for setup, tests, and the one-time CLA signature.
+
 ## Translations
 
 | Locale  | Language            | Coverage |

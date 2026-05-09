@@ -1,0 +1,58 @@
+name: CLA
+
+# All logic lives in .github/cla/cla.sh and is unit-tested by
+# .github/cla/cla.test.sh (run by ci.yml). This workflow is a thin orchestrator
+# that sets the env, checks out main so the script can read/write the
+# signatures file, and invokes the script.
+
+on:
+  pull_request_target:
+    types: [opened, synchronize, reopened]
+  issue_comment:
+    types: [created]
+
+concurrency:
+  group: cla-${{ github.event.pull_request.number || github.event.issue.number }}
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+  pull-requests: write
+  statuses: write
+
+jobs:
+  cla:
+    runs-on: ubuntu-latest
+    if: |
+      github.event_name == 'pull_request_target' ||
+      (github.event_name == 'issue_comment' &&
+       github.event.issue.pull_request != null &&
+       (contains(github.event.comment.body, 'I have read the CLA Document and I hereby sign the CLA') ||
+        contains(github.event.comment.body, 'recheck')))
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: main
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Process CLA
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.pull_request.number || github.event.issue.number }}
+          EVENT_NAME: ${{ github.event_name }}
+          COMMENT_USER_LOGIN: ${{ github.event.comment.user.login }}
+          COMMENT_USER_ID: ${{ github.event.comment.user.id }}
+          # Always-allowlisted: bots, plus named maintainer handles as a
+          # safety net (in case the org-membership lookup fails for any
+          # reason — private membership, transient API error, etc.).
+          ALLOWLIST: 'dependabot[bot] github-actions[bot] renovate[bot] jedrazb'
+          # Auto-allowlist members of this org. Public members are recognized
+          # via the workflow's GITHUB_TOKEN; private members will be prompted
+          # to sign once (then they're recorded like anyone else). To turn the
+          # org check off entirely, leave CLA_ORG empty.
+          CLA_ORG: 'eigenpal'
+          CLA_URL: ${{ github.server_url }}/${{ github.repository }}/blob/main/CLA.md
+          SIGN_PHRASE: 'I have read the CLA Document and I hereby sign the CLA'
+        run: bash .github/cla/cla.sh

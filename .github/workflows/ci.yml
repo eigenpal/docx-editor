@@ -27,6 +27,9 @@ jobs:
       - name: Run tests
         run: bun test
 
+      - name: CLA logic tests
+        run: bash .github/cla/cla.test.sh
+
       - name: Build
         run: bun run build
 

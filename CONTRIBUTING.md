@@ -49,6 +49,10 @@ bun run lint:fix
 bun run format
 ```
 
+## Contributor License Agreement
+
+Contributors are required to sign our [Contributor License Agreement](CLA.md). The CLA assistant will leave a comment on your first pull request with signing instructions — one short comment, about 30 seconds. That signature covers all of your future contributions.
+
 ## Making Changes
 
 1. **Fork** the repository and create a branch from `main`
@@ -59,7 +63,7 @@ bun run format
    ```bash
    bun run typecheck && bun test && bun run build
    ```
-6. **Submit a PR** against `main`
+6. **Submit a PR** against `main` — the CLA bot will prompt you on your first one
 
 ## Architecture Overview
 
