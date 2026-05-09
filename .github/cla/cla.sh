@@ -98,7 +98,7 @@ ${sign_phrase}
 ---
 ${matrix}${unknown_section}
 
-<sub>You can retrigger this bot by commenting **recheck** in this Pull Request.</sub>
+<sub>You can retrigger this bot by commenting **cla-recheck** in this Pull Request.</sub>
 <sub>Posted by the CLA bot.</sub>
 
 ${marker}

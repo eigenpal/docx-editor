@@ -140,8 +140,8 @@ case "$body" in *"committers have signed the CLA"*) ok=1 ;; *) ok=0 ;; esac
 assert_eq "does NOT show committer matrix for single contributor" "0" "$ok"
 case "$body" in *"https://e.x/CLA.md"*) ok=1 ;; *) ok=0 ;; esac
 assert_eq "includes CLA URL" "1" "$ok"
-case "$body" in *"recheck"*) ok=1 ;; *) ok=0 ;; esac
-assert_eq "mentions the recheck keyword" "1" "$ok"
+case "$body" in *"cla-recheck"*) ok=1 ;; *) ok=0 ;; esac
+assert_eq "mentions the cla-recheck keyword" "1" "$ok"
 case "$body" in *"<!-- m -->"*) ok=1 ;; *) ok=0 ;; esac
 assert_eq "includes sticky-comment marker" "1" "$ok"
 
