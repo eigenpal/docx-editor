@@ -140,14 +140,13 @@ cla_main() {
     elif ! cla_signed "$COMMENT_USER_ID" "$signatures"; then
       cla_add_signature "$COMMENT_USER_LOGIN" "$COMMENT_USER_ID" \
         "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$PR_NUMBER" "$signatures"
-      git config user.name "github-actions[bot]"
-      git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+      git config user.name "$GIT_AUTHOR_NAME"
+      git config user.email "$GIT_AUTHOR_EMAIL"
       git add "$signatures"
       git commit -m "Record CLA signature for @${COMMENT_USER_LOGIN} (PR #${PR_NUMBER})"
-      # If you enable branch protection on `main` with require-pull-request,
-      # this push will start failing. Allow `github-actions[bot]` to bypass
-      # protection in the branch ruleset, OR move the signatures file to a
-      # dedicated repo and update the checkout step accordingly.
+      # Push uses the App installation token set by the workflow (see cla.yml).
+      # The App must be on the main-branch ruleset's bypass list for this to
+      # succeed under any required-status-checks rule.
       git push origin main
     fi
   fi

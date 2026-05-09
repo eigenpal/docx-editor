@@ -241,6 +241,26 @@ Before opening any PR, self-review the diff against **DRY, KISS, YAGNI**:
 
 ---
 
+## PR Title and Description Style
+
+Keep PRs **small and quiet**. Notifications are expensive.
+
+**Title:** one short factual line (e.g. `chore: update cla list`, `fix(parser): handle empty paragraph runs`). No marketing copy. No "comprehensive" or "robust." Conventional-commit prefix when it fits.
+
+**Body:** the minimum a reviewer needs that they can't get from the diff. One sentence is often enough. If the diff is self-explanatory, the body can just be a one-liner.
+
+**Don't:**
+
+- **`@-mention` contributors by handle.** Pings them. If their identity matters for context, write the name in plain text without the `@`, or omit it entirely.
+- **Reference unrelated PR/issue numbers** (`#429`, `#430`) in titles or bodies unless directly necessary. Each `#N` reference adds the PR to that thread's notifications and pings its participants.
+- Include file tables, manifest-style lists of changed files, or test-plan checkboxes — the diff and CI already show these.
+- Add "Generated with Claude Code" or other tooling footers unless the user asks.
+- Use emojis unless the user asks.
+
+When in doubt, ship the shorter version.
+
+---
+
 ## i18n (Internationalization)
 
 All user-facing strings are translatable via a lightweight i18n system (no external dependencies).
