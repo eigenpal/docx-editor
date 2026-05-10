@@ -137,8 +137,8 @@ case "$body" in *"https://e.x/CLA.md"*) ok=1 ;; *) ok=0 ;; esac
 assert_eq "includes CLA URL" "1" "$ok"
 case "$body" in *"I sign"*) ok=1 ;; *) ok=0 ;; esac
 assert_eq "includes the sign phrase" "1" "$ok"
-case "$body" in *"cla-recheck"*) ok=1 ;; *) ok=0 ;; esac
-assert_eq "mentions the cla-recheck keyword" "1" "$ok"
+case "$body" in *'`!cla-check`'*) ok=1 ;; *) ok=0 ;; esac
+assert_eq "mentions the !cla-check keyword in a code span" "1" "$ok"
 case "$body" in *"<!-- m -->"*) ok=1 ;; *) ok=0 ;; esac
 assert_eq "includes sticky-comment marker" "1" "$ok"
 

@@ -26,12 +26,18 @@ permissions:
 jobs:
   cla:
     runs-on: ubuntu-latest
+    # NOTE: the bot login below is hardcoded in three places (this if:,
+    # GIT_AUTHOR_NAME, GIT_AUTHOR_EMAIL). They must stay in sync; missing
+    # this if: when renaming the App would let the bot self-sign again.
+    # GitHub Actions does not allow the env context in job-level if:, so
+    # this can't be DRYed via a workflow-level variable.
     if: |
       github.event_name == 'pull_request_target' ||
       (github.event_name == 'issue_comment' &&
        github.event.issue.pull_request != null &&
+       github.event.comment.user.login != 'eigenpal-release-pal[bot]' &&
        (contains(github.event.comment.body, 'I have read the CLA Document and I hereby sign the CLA') ||
-        contains(github.event.comment.body, 'cla-recheck')))
+        contains(github.event.comment.body, '!cla-check')))
     steps:
       # Mints an installation token for the eigenpal-release-pal App. That App
       # has contents:write + pull-requests:write + statuses:write on this repo

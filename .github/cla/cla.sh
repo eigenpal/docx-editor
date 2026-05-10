@@ -61,14 +61,12 @@ cla_render_unsigned_comment() {
   cat <<EOF
 @${pr_author_login} thank you for your submission, we really appreciate it. Like many open-source projects, we ask that you sign our [Contributor License Agreement](${cla_url}) before we can accept your contribution. You can sign the CLA by just posting a Pull Request Comment same as the below format.
 
----
 
+\`\`\`
 ${sign_phrase}
+\`\`\`
 
----
-
-<sub>You can retrigger this bot by commenting **cla-recheck** in this Pull Request.</sub>
-<sub>Posted by the CLA bot.</sub>
+You can retrigger this bot by commenting \`!cla-check\` in this Pull Request.
 
 ${marker}
 EOF
