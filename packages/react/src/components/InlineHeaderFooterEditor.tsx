@@ -358,7 +358,7 @@ export const InlineHeaderFooterEditor = forwardRef<
       {/* ProseMirror editor area */}
       <div
         ref={editorContainerRef}
-        className="hf-editor-pm"
+        className="hf-editor-pm prosemirror-editor"
         style={{
           minHeight: 40,
           outline: 'none',

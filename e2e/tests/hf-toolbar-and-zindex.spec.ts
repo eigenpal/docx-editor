@@ -6,6 +6,41 @@ const FIXTURE = 'fixtures/header-with-table.docx';
 test.describe.configure({ mode: 'serial' });
 
 test.describe('HF inline editor: toolbar + context menu + z-index (#384, #385)', () => {
+  test('removing a header still allows recreating it from the blank header area', async ({
+    page,
+  }) => {
+    const editor = new EditorPage(page);
+    await editor.goto();
+    await editor.waitForReady();
+
+    await page.locator('input[type="file"][accept=".docx"]').setInputFiles(`e2e/${FIXTURE}`);
+    await page.waitForSelector('.paged-editor__pages');
+    await page.waitForSelector('[data-page-number]');
+    await expect(page.locator('.layout-page-header [data-from-row]')).toHaveCount(1, {
+      timeout: 15000,
+    });
+
+    await page.locator('.layout-page-header').first().dblclick();
+    await page.locator('.hf-inline-editor').waitFor();
+
+    await page
+      .getByRole('button', { name: /options/i })
+      .last()
+      .click();
+    await page
+      .getByRole('button', { name: /remove.*header/i })
+      .last()
+      .click();
+
+    await expect(page.locator('.hf-inline-editor')).toHaveCount(0);
+    const blankHeader = page.locator('.layout-page-header').first();
+    await expect(blankHeader).toBeVisible();
+
+    await blankHeader.dblclick({ position: { x: 20, y: 10 } });
+    await expect(page.locator('.hf-inline-editor')).toHaveCount(1);
+    await expect(page.locator('.hf-inline-editor .ProseMirror')).toBeVisible();
+  });
+
   test('clicking a header table cell shows the Table toolbar group (#384)', async ({ page }) => {
     const editor = new EditorPage(page);
     await editor.goto();

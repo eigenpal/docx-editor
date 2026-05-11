@@ -500,19 +500,63 @@
 .hf-editor-pm .ProseMirror {
   outline: none;
   min-height: 40px;
-  padding: 4px;
+  padding: 0;
 }
 .hf-editor-pm .ProseMirror:focus {
   outline: none;
 }
 .hf-editor-pm .ProseMirror p {
   display: block;
-  margin: 0;
-  padding: 0;
+  margin: 0 !important;
+  padding-top: var(--docx-space-before, 0);
+  padding-bottom: var(--docx-space-after, 0);
+  padding-left: 0;
+  padding-right: 0;
   min-height: 1em;
   white-space: pre-wrap;
   word-wrap: break-word;
-  line-height: normal;
+  line-height: normal !important;
+}
+
+.hf-editor-pm .ProseMirror td p,
+.hf-editor-pm .ProseMirror th p {
+  margin: 0 !important;
+  padding-top: var(--docx-space-before, 0);
+  padding-bottom: var(--docx-space-after, 0);
+  padding-left: 0;
+  padding-right: 0;
+  min-height: auto;
+  line-height: normal !important;
+}
+
+.hf-editor-pm .ProseMirror .tableWrapper {
+  overflow: visible;
+}
+
+.hf-editor-pm .ProseMirror table {
+  border-collapse: collapse !important;
+  border-spacing: 0 !important;
+  table-layout: fixed !important;
+  margin: 0;
+}
+
+.hf-editor-pm .ProseMirror td.docx-table-cell,
+.hf-editor-pm .ProseMirror th.docx-table-header {
+  box-sizing: border-box !important;
+}
+
+.hf-editor-pm .ProseMirror td p:has(img),
+.hf-editor-pm .ProseMirror th p:has(img),
+.hf-editor-pm .ProseMirror td p:has(span),
+.hf-editor-pm .ProseMirror th p:has(span) {
+  font-size: 0 !important;
+  line-height: 0 !important;
+}
+
+.hf-editor-pm .ProseMirror td p span:not(:has(> span)),
+.hf-editor-pm .ProseMirror th p span:not(:has(> span)) {
+  position: relative;
+  top: 0.4em;
 }
 
 /* Dim body content when editing header/footer */

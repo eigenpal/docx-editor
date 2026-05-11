@@ -4378,7 +4378,7 @@ body { background: white; }
     }
 
     const pkg = history.state.package;
-    const sectionProps = initialSectionProperties;
+    const sectionProps = finalSectionProperties ?? initialSectionProperties;
     const headers = pkg.headers;
     const footers = pkg.footers;
 
@@ -4421,7 +4421,7 @@ body { background: white; }
       firstPageHeaderContent: firstHeader,
       firstPageFooterContent: firstFooter,
     };
-  }, [history.state, initialSectionProperties]);
+  }, [history.state, initialSectionProperties, finalSectionProperties]);
 
   // Handle header/footer double-click — open editing overlay
   // If no header/footer exists, create an empty one so the user can add content
