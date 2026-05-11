@@ -21,16 +21,13 @@ test.describe('HF inline editor: toolbar + context menu + z-index (#384, #385)',
     });
 
     await page.locator('.layout-page-header').first().dblclick();
-    await page.locator('.hf-inline-editor').waitFor();
+    const hfEditor = page.locator('.hf-inline-editor');
+    await hfEditor.waitFor();
 
-    await page
-      .getByRole('button', { name: /options/i })
-      .last()
-      .click();
-    await page
-      .getByRole('button', { name: /remove.*header/i })
-      .last()
-      .click();
+    // Scope to the inline editor so we don't pick up an "Options" control from
+    // the main toolbar.
+    await hfEditor.getByRole('button', { name: /options/i }).click();
+    await hfEditor.getByRole('button', { name: /remove.*header/i }).click();
 
     await expect(page.locator('.hf-inline-editor')).toHaveCount(0);
     const blankHeader = page.locator('.layout-page-header').first();
