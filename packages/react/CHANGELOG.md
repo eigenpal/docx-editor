@@ -1,5 +1,13 @@
 # @eigenpal/docx-js-editor
 
+## 0.5.1
+
+### Patch Changes
+
+- f7a1060: Fix header/footer table parity issues in paged render and inline editing, including header recreation after removal.
+- cbff36e: Resolve themed table-cell border colors (`w:themeColor`) against the document theme so they render correctly in the inline header/footer editor and copied HTML, instead of falling back to the default Office palette.
+- 2158433: Add Turkish (tr) translation with 100% coverage.
+
 ## 0.5.0
 
 ### Minor Changes
