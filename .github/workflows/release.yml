@@ -1,18 +1,23 @@
 name: Release
 
 # Two triggers, single job:
-# 1. Every push to main → if there are pending changesets in `.changeset/`,
-#    open or update a "chore: release" PR with the version bumps and CHANGELOG
-#    entries applied. The PR sits there until a maintainer merges it.
+# 1. Every push to main (1.x) or 0.x (maintenance) → if there are pending
+#    changesets in `.changeset/`, open or update a "chore: release" PR with the
+#    version bumps and CHANGELOG entries applied. The PR sits there until a
+#    maintainer merges it.
 # 2. When that PR is merged → the same job runs again, sees no pending
 #    changesets (they were drained by `changeset version`), and instead
 #    publishes the new versions to npm.
+#
+# Each branch maintains its own `.changeset/*.md` queue. 0.x and 1.x publish
+# distinct npm packages (the rename in 1.0 means no `latest` dist-tag
+# collision between branches) so no per-branch `--tag` handling is needed.
 #
 # Manual workflow_dispatch is kept for the rare case of triggering a publish
 # without a fresh push (e.g. recovering from a failed publish step).
 on:
   push:
-    branches: [main]
+    branches: [main, 0.x]
   workflow_dispatch:
 
 concurrency:
@@ -95,14 +100,13 @@ jobs:
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
           # publishedPackages is JSON like:
-          # [{"name":"@eigenpal/docx-js-editor","version":"0.1.0"}, ...]
+          # [{"name":"@eigenpal/docx-editor-react","version":"1.0.0"}, ...]
           version=$(echo "$PUBLISHED_PACKAGES" | jq -r '.[0].version')
-          editor_url="https://www.npmjs.com/package/@eigenpal/docx-js-editor/v/$version"
-          agents_url="https://www.npmjs.com/package/@eigenpal/docx-editor-agents/v/$version"
+          packages_md=$(echo "$PUBLISHED_PACKAGES" | jq -r '.[] | "• <https://www.npmjs.com/package/\(.name)/v/\(.version)|\(.name)@\(.version)>"')
           # changesets/action with a fixed group creates per-package tags (e.g.
-          # `@eigenpal/docx-js-editor@0.1.0`), not a single `vX.Y.Z`. URL-encode
-          # the `@`/`/` so the link resolves to the actual GitHub Release.
-          release_tag=$(jq -rn --arg t "@eigenpal/docx-js-editor@$version" '$t|@uri')
+          # `@eigenpal/docx-editor-react@1.0.0`), not a single `vX.Y.Z`. URL-encode
+          # `@`/`/` so the link resolves on GitHub.
+          release_tag=$(jq -rn --argjson pkgs "$PUBLISHED_PACKAGES" '$pkgs[0].name + "@" + $pkgs[0].version | @uri')
           release_url="${{ github.server_url }}/${{ github.repository }}/releases/tag/$release_tag"
           payload=$(jq -n \
             --arg version "$version" \
@@ -110,8 +114,7 @@ jobs:
             --arg run_n "$RUN_NUMBER" \
             --arg run_url "$RUN_URL" \
             --arg release "$release_url" \
-            --arg editor "$editor_url" \
-            --arg agents "$agents_url" \
+            --arg packages "$packages_md" \
             '{
               text: ":white_check_mark: docx-editor \($version) released",
               blocks: [
@@ -121,7 +124,7 @@ jobs:
                   { type: "mrkdwn", text: "*Triggered by*\n\($actor)" }
                 ] },
                 { type: "section", text: { type: "mrkdwn",
-                  text: "*Packages*\n• <\($editor)|@eigenpal/docx-js-editor@\($version)>\n• <\($agents)|@eigenpal/docx-editor-agents@\($version)>" } },
+                  text: "*Packages*\n\($packages)" } },
                 { type: "context", elements: [ { type: "mrkdwn", text: "<\($run_url)|Run #\($run_n)>" } ] }
               ]
             }')

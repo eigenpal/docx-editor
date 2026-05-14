@@ -331,6 +331,17 @@ Full contribution guide: `docs/i18n.md`
 
 Releases follow the canonical [`changesets/action@v1`](https://github.com/changesets/action) flow: every code-touching PR drops a `.changeset/*.md` describing its change; pushes to `main` open or update a `chore: release` PR aggregating those entries; merging that PR publishes to npm.
 
+### Branch model
+
+After the 1.0 cut, two release lines exist:
+
+- **`main`** — 1.x line. New work targets here. See the Packages table below.
+- **`0.x`** — maintenance line for the pre-rename packages. Patch and minor only — **never major**. `@eigenpal/docx-editor-agents` is in `ignore` on `0.x`; the 1.x line owns that name.
+
+Both branches publish to npm's `latest` for their own package names — no dist-tag collision because the package names diverged at the rename. The release workflow listens on both branches; each maintains its own `.changeset/*.md` queue.
+
+Hotfixes → `0.x`. Everything else → `main`.
+
 ### Packages
 
 | Package                        | Path                 | Published?             |
