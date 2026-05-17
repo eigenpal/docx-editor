@@ -55,12 +55,19 @@ layout modes — `wp:inline` (in-line), `wp:wrapSquare` (wrap-around float), and
 `e2e/tests/image-layout-modes.spec.ts` to lock in correct rendering of all
 three paths side by side.
 
+### issue-472-floating-textbox.docx
+
+A synthetic document containing a `wps:wsp` text box in a `wp:anchor` with
+`wp:wrapSquare wrapText="bothSides"`. Used to reproduce issue #472 without
+committing the private original document.
+
 ## Generating Fixtures
 
 To regenerate fixtures, run:
 
 ```bash
 bun run e2e/fixtures/generate-fixtures.ts
+bun scripts/create-issue-472-floating-textbox-fixture.mjs
 ```
 
 Or manually create them using Microsoft Word or another DOCX editor.
