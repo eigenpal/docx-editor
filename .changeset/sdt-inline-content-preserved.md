@@ -1,5 +1,5 @@
 ---
-'@eigenpal/docx-js-editor': patch
+'@eigenpal/docx-editor-react': patch
 ---
 
 Preserve fields, nested SDTs, and math inside `<w:sdt>` content controls so docProps-bound titles wrapped in SDT render correctly.
