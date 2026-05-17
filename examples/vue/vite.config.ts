@@ -38,6 +38,12 @@ const coreAliases = [
 export default defineConfig({
   base: process.env.VITE_BASE_PATH ?? '/',
   plugins: [vue()],
+  define: {
+    // Matches the React examples — the parity build sets this to true so
+    // the framework-switcher pills render alongside the chevron source
+    // menu. Regular previews keep the title bar minimal.
+    __ENABLE_FRAMEWORK_SWITCHER__: JSON.stringify(process.env.ENABLE_FRAMEWORK_SWITCHER === 'true'),
+  },
   root: __dirname,
   resolve: {
     alias: usePublished

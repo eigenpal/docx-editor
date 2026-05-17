@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { examples } from './config';
 
 interface ExampleSwitcherProps {
-  current: 'Vite' | 'Next.js' | 'Remix' | 'Astro';
+  current: 'Vite' | 'Next.js' | 'Remix' | 'Astro' | 'Vue';
 }
 
 const containerBaseStyle: React.CSSProperties = {
@@ -11,6 +11,10 @@ const containerBaseStyle: React.CSSProperties = {
   gap: '4px',
   borderRadius: '8px',
   position: 'relative',
+  // Establish a stacking context above the editor pages so the open
+  // dropdown can't be visually covered by the floating outline (TOC)
+  // button anchored inside the document area.
+  zIndex: 1000,
 };
 
 const containerWithTabsStyle: React.CSSProperties = {
@@ -65,14 +69,18 @@ const codeButtonStyle: React.CSSProperties = {
 const dropdownStyle: React.CSSProperties = {
   position: 'absolute',
   top: '100%',
-  right: 0,
-  marginTop: '4px',
+  // Anchor to the left of the chevron button so the dropdown extends
+  // rightward into the title bar / document space instead of leftward
+  // toward the screen edge. Avoids hanging over the floating outline
+  // (TOC) button anchored at the document's left margin.
+  left: 0,
+  marginTop: '6px',
   background: '#fff',
   border: '1px solid #e2e8f0',
   borderRadius: '8px',
   boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
   padding: '4px',
-  zIndex: 100,
+  zIndex: 1,
   minWidth: '180px',
 };
 

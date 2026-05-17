@@ -16,6 +16,7 @@ const icons = {
     '<svg viewBox="0 0 800 800" width="14" height="14"><path d="M587.9 527.7c4.5 61.2 4.5 89.9 4.5 119.8H440.7c0-10-.4-19.2-.8-28.9-1.6-40.7-3.7-91.2 30-125 25.8-25.8 62-36.2 113.2-36.2h171.5v-113H599.2c-145.8 0-236.8 72.5-236.8 200.2 0 21.1 2.2 41.3 6 60.7l.3 1.2c.2 1 .5 2 .7 2.9.8 3.3 1.6 6.5 2.6 9.7l.8 2.8c.3 1 .6 2 .9 2.9.6 1.9 1.3 3.7 2 5.6.5 1.4 1.1 2.7 1.6 4.1.4.9.7 1.8 1.1 2.7.7 1.8 1.5 3.5 2.3 5.3l1 2.3c1 2.3 2.1 4.6 3.2 6.9l.6 1.2h-201v.5c0-17.6 0-17.6-1.6-43.3-.6-9.9-1.5-23-3-42.5-10.4-139.2-59.6-184-155.5-184H0V270.2h30.3c94.5 0 152.8-47.7 152.8-125.8 0-68.5-47.7-117.2-136-117.2H0V.1h197c162.3 0 258.3 83.4 258.3 206.2 0 90.6-54.6 153.5-135.1 176.5 77.4 19.5 116.6 71.5 121 145h146.7Z" fill="currentColor"/></svg>',
   astro:
     '<svg viewBox="0 0 256 366" width="12" height="14"><path d="M182.0 300.3c-16.5 12.7-49.5 21.3-87.4 21.3-37.9 0-70.9-8.6-87.4-21.3C-5.7 271.4 2.0 227.5 2.0 227.5l37.0-155.6L76.9 0h102.2l37.9 71.9 37.0 155.6s7.7 43.9-72.0 72.8Z" fill="#FF5D01"/><path d="M149.1 251.8c0 20.4-32.4 50.9-32.4 50.9s-32.4-30.5-32.4-50.9c0-20.4 14.5-37.0 32.4-37.0s32.4 16.6 32.4 37.0Z" fill="#1B1042"/></svg>',
+  vue: '<svg viewBox="0 0 261.76 226.69" width="14" height="14"><path d="M161.1 0L130.9 52.4 100.6 0H0l130.9 226.7L261.8 0Z" fill="#41B883"/><path d="M161.1 0L130.9 52.4 100.6 0H52.3l78.5 136L209.4 0Z" fill="#34495E"/></svg>',
 };
 
 const localPorts = {
@@ -23,6 +24,7 @@ const localPorts = {
   'Next.js': 3000,
   Remix: 3001,
   Astro: 4321,
+  Vue: 5174,
 };
 
 export const examples: FrameworkExample[] = [
@@ -57,5 +59,13 @@ export const examples: FrameworkExample[] = [
     sourceUrl: 'https://github.com/eigenpal/docx-editor/tree/main/examples/astro',
     description: 'Astro + React Island',
     icon: icons.astro,
+  },
+  {
+    name: 'Vue',
+    url: 'https://docx-editor-vue.vercel.app',
+    localUrl: `http://localhost:${localPorts.Vue}`,
+    sourceUrl: 'https://github.com/eigenpal/docx-editor/tree/main/examples/vue',
+    description: 'Vue 3 + Vite',
+    icon: icons.vue,
   },
 ];

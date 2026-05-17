@@ -17,10 +17,13 @@
         @rename="(n: string) => (fileName = n)"
       >
         <template #title-bar-left>
-          <span class="switcher" role="tablist" aria-label="Adapter">
-            <a :href="reactHref" role="tab" :aria-selected="false" class="pill">React</a>
-            <a :href="vueHref" role="tab" :aria-selected="true" class="pill active">Vue</a>
-          </span>
+          <div class="title-bar-left-group">
+            <span class="switcher" role="tablist" aria-label="Adapter">
+              <a :href="reactHref" role="tab" :aria-selected="false" class="pill">React</a>
+              <a :href="vueHref" role="tab" :aria-selected="true" class="pill active">Vue</a>
+            </span>
+            <ExampleSwitcher current="Vue" />
+          </div>
         </template>
         <template #title-bar-right>
           <label class="btn btn-primary">
@@ -63,6 +66,7 @@
 <script setup lang="ts">
 import { computed, ref, onBeforeUnmount, onMounted } from 'vue';
 import { DocxEditor, type DocxEditorRef } from '@eigenpal/docx-editor-vue';
+import ExampleSwitcher from '../../shared/ExampleSwitcher.vue';
 import { createEmptyDocument, findStartPosForParaId } from '@eigenpal/docx-editor-core';
 import type { Document } from '@eigenpal/docx-editor-core/types/document';
 import {
@@ -413,6 +417,12 @@ function handleReady() {
   gap: 12px;
   background: #fff;
   border-bottom: 1px solid #e2e8f0;
+}
+
+.title-bar-left-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .switcher {
