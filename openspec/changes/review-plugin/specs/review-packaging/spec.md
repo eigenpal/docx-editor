@@ -2,7 +2,7 @@
 
 ### Requirement: Separate BSL-1.1 licensed package
 
-The package SHALL be published as `@eigenpal/docx-editor-agents` on public npm under BSL-1.1. SHALL declare `@eigenpal/docx-core` as a peer dependency. SHALL include a `LICENSE` file with BSL-1.1 terms (licensor: EigenPal, change date: 4 years, change license: MIT, additional use grant: non-production permitted).
+The package SHALL be published as `@eigenpal/docx-editor-agents` on public npm under BSL-1.1. SHALL declare `@eigenpal/docx-editor-core` as a peer dependency. SHALL include a `LICENSE` file with BSL-1.1 terms (licensor: EigenPal, change date: 4 years, change license: MIT, additional use grant: non-production permitted).
 
 #### Scenario: Install and import
 

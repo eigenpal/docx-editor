@@ -26,8 +26,8 @@ import type {
   Theme,
   HeaderFooter,
   SectionProperties,
-} from '@eigenpal/docx-core/types/document';
-import defaultLocale from '../../i18n/en.json';
+} from '@eigenpal/docx-editor-core/types/document';
+import defaultLocale from '@eigenpal/docx-editor-i18n/en.json';
 
 import {
   ToolbarButton,
@@ -37,6 +37,7 @@ import {
 } from './Toolbar';
 import type { FontOption } from './ui/FontPicker';
 import { EditorToolbar } from './EditorToolbar';
+import { undoDepth, redoDepth } from 'prosemirror-history';
 import { pointsToHalfPoints } from './ui/FontSizePicker';
 import {
   DocumentOutline,
@@ -46,14 +47,14 @@ import {
 } from './DocumentOutline';
 import { SIDEBAR_DOCUMENT_SHIFT } from './sidebar/constants';
 import { UnifiedSidebar } from './UnifiedSidebar';
-import { AgentPanel } from './AgentPanel';
+import { AgentPanel } from '@eigenpal/docx-editor-agents/react';
 import { CommentMarginMarkers } from './CommentMarginMarkers';
 import { useCommentSidebarItems, type CommentCallbacks } from '../hooks/useCommentSidebarItems';
 import { useTrackedChanges } from '../hooks/useTrackedChanges';
 import type { EditorState as PMEditorState } from 'prosemirror-state';
 import type { ReactSidebarItem } from '../plugin-api/types';
-import type { HeadingInfo } from '@eigenpal/docx-core/utils';
-import type { Comment, BlockContent, ParagraphContent } from '@eigenpal/docx-core/types/content';
+import type { HeadingInfo } from '@eigenpal/docx-editor-core/utils';
+import type { Comment } from '@eigenpal/docx-editor-core/types/content';
 import { ErrorBoundary, ErrorProvider } from './ErrorBoundary';
 import type { TableAction } from './ui/TableToolbar';
 import { mapHexToHighlightName } from './toolbarUtils';
@@ -109,40 +110,47 @@ import {
   type TextContextMenuItem,
 } from './TextContextMenu';
 import { ImageContextMenu, useImageContextMenu } from './ImageContextMenu';
-import { setImageWrapType, type ImageLayoutTarget } from '@eigenpal/docx-core/prosemirror/commands';
-import type { WrapType } from '@eigenpal/docx-core/docx/wrapTypes';
+import {
+  setImageWrapType,
+  type ImageLayoutTarget,
+} from '@eigenpal/docx-editor-core/prosemirror/commands';
+import type { WrapType } from '@eigenpal/docx-editor-core/docx/wrapTypes';
 import {
   captureInlinePositionEmu,
   toolbarValueToLayoutTarget,
-} from '@eigenpal/docx-core/layout-painter';
+} from '@eigenpal/docx-editor-core/layout-painter';
 import { HyperlinkPopup, type HyperlinkPopupData } from './ui/HyperlinkPopup';
 import { Toaster, toast } from 'sonner';
 import { getBuiltinTableStyle, type TableStylePreset } from './ui/TableStyleGallery';
-import { DocumentAgent } from '@eigenpal/docx-core/agent';
+import { DocumentAgent } from '@eigenpal/docx-editor-core/agent';
 import { DefaultLoadingIndicator, DefaultPlaceholder, ParseError } from './DocxEditorHelpers';
-import { parseDocx } from '@eigenpal/docx-core/docx';
-import { findBodyPmAnchors } from '@eigenpal/docx-core/layout-bridge';
-import { type DocxInput } from '@eigenpal/docx-core/utils';
-import { onFontsLoaded, loadDocumentFonts } from '@eigenpal/docx-core/utils';
-import { resolveColorToHex } from '@eigenpal/docx-core/utils';
-import { executeCommand } from '@eigenpal/docx-core/agent';
+import {
+  parseDocx,
+  injectReplyRangeMarkers,
+  injectTCReplyRangeMarkers,
+} from '@eigenpal/docx-editor-core/docx';
+import { type DocxInput } from '@eigenpal/docx-editor-core/utils';
+import { onFontsLoaded, loadDocumentFonts } from '@eigenpal/docx-editor-core/utils';
+import { resolveColorToHex, readDocxFileFromInput } from '@eigenpal/docx-editor-core/utils';
+import { resolveHeaderFooter, findBodyPmAnchors } from '@eigenpal/docx-editor-core/layout-bridge';
+import { executeCommand } from '@eigenpal/docx-editor-core/agent';
 import { useTableSelection } from '../hooks/useTableSelection';
 import { useDocumentHistory } from '../hooks/useHistory';
 import {
   getSplitCellDialogConfig,
   splitActiveTableCell,
-} from '@eigenpal/docx-core/prosemirror/commands';
+} from '@eigenpal/docx-editor-core/prosemirror/commands';
 
 // Extension system
-import { createStarterKit } from '@eigenpal/docx-core/prosemirror/extensions';
-import { ExtensionManager } from '@eigenpal/docx-core/prosemirror/extensions';
+import { createStarterKit } from '@eigenpal/docx-editor-core/prosemirror/extensions';
+import { ExtensionManager } from '@eigenpal/docx-editor-core/prosemirror/extensions';
 import {
   createSuggestionModePlugin,
   setSuggestionMode,
-} from '@eigenpal/docx-core/prosemirror/plugins';
+} from '@eigenpal/docx-editor-core/prosemirror/plugins';
 
 // Conversion (for HF inline editor save)
-import { proseDocToBlocks } from '@eigenpal/docx-core/prosemirror/conversion';
+import { proseDocToBlocks } from '@eigenpal/docx-editor-core/prosemirror/conversion';
 
 // ProseMirror editor
 import {
@@ -178,6 +186,7 @@ import {
   // Hyperlink commands
   getHyperlinkAttrs,
   getSelectedText,
+  findHyperlinkRangeAt,
   setHyperlink,
   removeHyperlink,
   insertHyperlink,
@@ -221,15 +230,15 @@ import {
   setTableBorderColor,
   setTableBorderWidth,
   type TableContextInfo,
-} from '@eigenpal/docx-core/prosemirror';
-import { acceptChange, rejectChange } from '@eigenpal/docx-core/prosemirror/commands';
-import { collectHeadings } from '@eigenpal/docx-core/utils';
+} from '@eigenpal/docx-editor-core/prosemirror';
+import { acceptChange, rejectChange } from '@eigenpal/docx-editor-core/prosemirror/commands';
+import { collectHeadings } from '@eigenpal/docx-editor-core/utils';
 import {
   getChangedParagraphIds,
   hasStructuralChanges,
   hasUntrackedChanges,
   clearTrackedChanges,
-} from '@eigenpal/docx-core/prosemirror/extensions';
+} from '@eigenpal/docx-editor-core/prosemirror/extensions';
 
 // Paginated editor
 import { PagedEditor, type PagedEditorRef, DEFAULT_PAGE_WIDTH } from '../paged-editor/PagedEditor';
@@ -325,11 +334,13 @@ export interface DocxEditorProps {
    * @example fontFamilies={[{ name: 'Roboto', fontFamily: 'Roboto, sans-serif', category: 'sans-serif' }]}
    */
   fontFamilies?: ReadonlyArray<string | FontOption>;
-  /** Whether to show print button in toolbar (default: true) */
-  showPrintButton?: boolean;
   /** Print options for print preview */
   printOptions?: PrintOptions;
-  /** Callback when print is triggered */
+  /**
+   * Callback when print is triggered. Pass it to enable the `File > Print`
+   * menu entry; omit to hide. The imperative `ref.current.print()` also
+   * invokes this callback.
+   */
   onPrint?: () => void;
   /** Callback when content is copied */
   onCopy?: () => void;
@@ -575,7 +586,7 @@ interface EditorState {
   paragraphIndentRight: number;
   paragraphFirstLineIndent: number;
   paragraphHangingIndent: boolean;
-  paragraphTabs: import('@eigenpal/docx-core/types/document').TabMark[] | null;
+  paragraphTabs: import('@eigenpal/docx-editor-core/types/document').TabMark[] | null;
   /** ProseMirror table context (for showing table toolbar) */
   pmTableContext: TableContextInfo | null;
   /** Image context when cursor is on an image node */
@@ -589,6 +600,8 @@ interface EditorState {
     borderWidth: number | null;
     borderColor: string | null;
     borderKind: string | null;
+    width: number | null;
+    height: number | null;
   } | null;
 }
 
@@ -638,6 +651,38 @@ function CommentsSidebarToggle({ active, onClick }: { active: boolean; onClick: 
     <ToolbarButton onClick={onClick} active={active} title={title} ariaLabel={title}>
       <MaterialSymbol name="comment" size={20} />
     </ToolbarButton>
+  );
+}
+
+/**
+ * Inner wrapper that calls `useTranslation` to forward localised labels
+ * down to AgentPanel. Lives below the LocaleProvider so the context is
+ * resolved.
+ */
+function LocalizedAgentPanel({
+  agentPanel,
+  closed,
+  onClose,
+}: {
+  agentPanel: NonNullable<DocxEditorProps['agentPanel']>;
+  closed: boolean;
+  onClose: () => void;
+}) {
+  const { t } = useTranslation();
+  return (
+    <AgentPanel
+      title={agentPanel.title ?? t('agentPanel.defaultTitle')}
+      icon={agentPanel.icon}
+      closeLabel={t('agentPanel.close')}
+      resizeHandleLabel={t('agentPanel.resizeHandle')}
+      defaultWidth={agentPanel.defaultWidth}
+      minWidth={agentPanel.minWidth}
+      maxWidth={agentPanel.maxWidth}
+      onClose={onClose}
+      closed={closed}
+    >
+      {agentPanel.render({ close: onClose })}
+    </AgentPanel>
   );
 }
 
@@ -931,150 +976,9 @@ function EditingModeDropdown({
 let nextCommentId = 1;
 const PENDING_COMMENT_ID = -1;
 
-/**
- * Inject commentRangeStart/End/Reference for reply comments.
- * Replies share the parent comment's text range in document.xml.
- * Without these markers, Pages/Word can't find the reply.
- */
-function injectReplyRangeMarkers(content: BlockContent[], comments: Comment[]): void {
-  const replies = comments.filter((c) => c.parentId != null);
-  if (replies.length === 0) return;
-
-  // Build parentId → reply IDs map
-  const replyIdsByParent = new Map<number, number[]>();
-  for (const r of replies) {
-    const arr = replyIdsByParent.get(r.parentId!);
-    if (arr) arr.push(r.id);
-    else replyIdsByParent.set(r.parentId!, [r.id]);
-  }
-
-  // Walk document content and find parent commentRangeStart/End locations
-  function walkBlocks(blocks: BlockContent[]): void {
-    for (const block of blocks) {
-      if (block.type === 'paragraph') {
-        // Skip paragraphs without any comment range markers
-        if (
-          !block.content.some((i) => i.type === 'commentRangeStart' || i.type === 'commentRangeEnd')
-        )
-          continue;
-        const newItems: ParagraphContent[] = [];
-        for (const item of block.content) {
-          if (item.type === 'commentRangeStart') {
-            newItems.push(item);
-            // Add reply range starts right after parent's start
-            const replyIds = replyIdsByParent.get(item.id);
-            if (replyIds) {
-              for (const rid of replyIds) {
-                newItems.push({ type: 'commentRangeStart', id: rid });
-              }
-            }
-          } else if (item.type === 'commentRangeEnd') {
-            // Parent's rangeEnd first, then reply rangeEnds (parallel, not nested)
-            newItems.push(item);
-            const replyIds = replyIdsByParent.get(item.id);
-            if (replyIds) {
-              for (const rid of replyIds) {
-                newItems.push({ type: 'commentRangeEnd', id: rid });
-              }
-            }
-          } else {
-            newItems.push(item);
-          }
-        }
-        block.content = newItems;
-      } else if (block.type === 'table') {
-        for (const row of block.rows) {
-          for (const cell of row.cells) {
-            walkBlocks(cell.content);
-          }
-        }
-      }
-    }
-  }
-
-  walkBlocks(content);
-}
-
-/**
- * Inject commentRangeStart/End for comments that reply to tracked changes.
- * TC replies' parents are insertion/deletion nodes (not comments), so
- * injectReplyRangeMarkers can't find them. This function finds the TC
- * content nodes and wraps them with comment range markers.
- */
-function injectTCReplyRangeMarkers(content: BlockContent[], comments: Comment[]): void {
-  // Find replies whose parentId is a tracked change (not a real comment)
-  const commentIds = new Set(comments.map((c) => c.id));
-  const tcReplies = comments.filter((c) => c.parentId != null && !commentIds.has(c.parentId));
-  if (tcReplies.length === 0) return;
-
-  // Build revisionId → reply comment IDs
-  const replyIdsByRevision = new Map<number, number[]>();
-  for (const r of tcReplies) {
-    const arr = replyIdsByRevision.get(r.parentId!);
-    if (arr) arr.push(r.id);
-    else replyIdsByRevision.set(r.parentId!, [r.id]);
-  }
-
-  function walkBlocks(blocks: BlockContent[]): void {
-    for (const block of blocks) {
-      if (block.type === 'paragraph') {
-        // Check if any insertion/deletion in this paragraph matches a TC reply
-        const hasTC = block.content.some(
-          (item) =>
-            (item.type === 'insertion' || item.type === 'deletion') &&
-            replyIdsByRevision.has(item.info.id)
-        );
-        if (!hasTC) continue;
-
-        const newItems: ParagraphContent[] = [];
-        const items = block.content;
-        for (let i = 0; i < items.length; i++) {
-          const item = items[i];
-          if (
-            (item.type === 'insertion' || item.type === 'deletion') &&
-            replyIdsByRevision.has(item.info.id)
-          ) {
-            const replyIds = replyIdsByRevision.get(item.info.id)!;
-            // Add commentRangeStart BEFORE the TC content
-            for (const rid of replyIds) {
-              newItems.push({ type: 'commentRangeStart', id: rid });
-            }
-            newItems.push(item);
-            // Check if the next item is the other half of a replacement pair
-            // (adjacent del+ins with same author+date). If so, include it inside
-            // the comment range so we don't break del-ins adjacency.
-            const next = items[i + 1];
-            if (
-              next &&
-              (next.type === 'insertion' || next.type === 'deletion') &&
-              next.type !== item.type &&
-              next.info.author === item.info.author &&
-              next.info.date === item.info.date
-            ) {
-              newItems.push(next);
-              i++; // skip the paired item
-            }
-            // Add commentRangeEnd AFTER both TC items
-            for (const rid of replyIds) {
-              newItems.push({ type: 'commentRangeEnd', id: rid });
-            }
-          } else {
-            newItems.push(item);
-          }
-        }
-        block.content = newItems;
-      } else if (block.type === 'table') {
-        for (const row of block.rows) {
-          for (const cell of row.cells) {
-            walkBlocks(cell.content);
-          }
-        }
-      }
-    }
-  }
-
-  walkBlocks(content);
-}
+// `injectReplyRangeMarkers` + `injectTCReplyRangeMarkers` live in
+// `@eigenpal/docx-editor-core/docx` so React + Vue share the same
+// pre-serialization range-marker injection.
 
 const EMPTY_ANCHOR_POSITIONS = new Map<string, number>();
 
@@ -1278,7 +1182,6 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
     showOutline: showOutlineProp = false,
     showOutlineButton = true,
     fontFamilies,
-    showPrintButton = true,
     printOptions: _printOptions,
     onPrint,
     onCopy: _onCopy,
@@ -2021,6 +1924,8 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
             borderWidth: (selectedNode.attrs.borderWidth as number) ?? null,
             borderColor: (selectedNode.attrs.borderColor as string) ?? null,
             borderKind: (selectedNode.attrs.borderKind as string) ?? null,
+            width: (selectedNode.attrs.width as number) ?? null,
+            height: (selectedNode.attrs.height as number) ?? null,
           };
         }
       }
@@ -2459,6 +2364,8 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
         borderWidth: data.borderWidth ?? null,
         borderColor: data.borderColor ?? null,
         borderKind: data.borderKind ?? null,
+        width: data.width ?? null,
+        height: data.height ?? null,
       });
       view.dispatch(tr.scrollIntoView());
       focusActiveEditor();
@@ -2469,8 +2376,8 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
   // Handle footnote/endnote properties update
   const handleApplyFootnoteProperties = useCallback(
     (
-      footnotePr: import('@eigenpal/docx-core/types/document').FootnoteProperties,
-      endnotePr: import('@eigenpal/docx-core/types/document').EndnoteProperties
+      footnotePr: import('@eigenpal/docx-editor-core/types/document').FootnoteProperties,
+      endnotePr: import('@eigenpal/docx-editor-core/types/document').EndnoteProperties
     ) => {
       if (!history.state?.package) return;
       const newDoc = {
@@ -3016,58 +2923,16 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
       const view = getActiveEditorView();
       if (!view) return;
 
-      // Find the full hyperlink mark range at current cursor position
-      const hlType = view.state.schema.marks.hyperlink;
-      if (!hlType) return;
-
-      const { $from } = view.state.selection;
-      const linkMark = $from.marks().find((m) => m.type === hlType);
-
-      if (linkMark) {
-        // Collect all contiguous text nodes with the same hyperlink mark
-        const parent = $from.parent;
-        const parentStart = $from.start();
-
-        // Build ranges of consecutive hyperlink-marked nodes
-        type Range = { start: number; end: number };
-        const ranges: Range[] = [];
-        let currentRange: Range | null = null;
-
-        parent.forEach((node, offset) => {
-          const nodeStart = parentStart + offset;
-          const nodeEnd = nodeStart + node.nodeSize;
-          const hlMark = node.isText
-            ? node.marks.find((m) => m.type === hlType && m.attrs.href === linkMark.attrs.href)
-            : null;
-
-          if (hlMark) {
-            if (currentRange) {
-              currentRange.end = nodeEnd;
-            } else {
-              currentRange = { start: nodeStart, end: nodeEnd };
-            }
-          } else {
-            if (currentRange) {
-              ranges.push(currentRange);
-              currentRange = null;
-            }
-          }
-        });
-        if (currentRange) ranges.push(currentRange);
-
-        // Find the range that contains the cursor
-        const cursorPos = $from.pos;
-        const targetRange = ranges.find((r) => r.start <= cursorPos && cursorPos <= r.end);
-        if (!targetRange) return;
-
-        // Replace the text and mark
-        const tr = view.state.tr;
-        const newMark = hlType.create({ href, tooltip: linkMark.attrs.tooltip });
+      const hit = findHyperlinkRangeAt(view.state);
+      if (hit) {
+        const hlType = view.state.schema.marks.hyperlink;
+        const { $from } = view.state.selection;
+        const newMark = hlType.create({ href, tooltip: hit.mark.attrs.tooltip });
         const textNode = view.state.schema.text(displayText, [
           ...$from.marks().filter((m) => m.type !== hlType),
           newMark,
         ]);
-        tr.replaceWith(targetRange.start, targetRange.end, textNode);
+        const tr = view.state.tr.replaceWith(hit.start, hit.end, textNode);
         view.dispatch(tr.scrollIntoView());
       }
 
@@ -3081,72 +2946,11 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
     const view = getActiveEditorView();
     if (!view) return;
 
+    const hit = findHyperlinkRangeAt(view.state, hyperlinkPopupData?.href);
+    if (!hit) return;
+
     const hlType = view.state.schema.marks.hyperlink;
-    if (!hlType) return;
-
-    const { $from } = view.state.selection;
-
-    // Try $from.marks() first, then check the node after the cursor
-    // (ProseMirror may not report marks at boundary positions)
-    let linkMark = $from.marks().find((m) => m.type === hlType);
-    if (!linkMark && $from.nodeAfter) {
-      linkMark = $from.nodeAfter.marks.find((m) => m.type === hlType);
-    }
-    if (!linkMark && $from.nodeBefore) {
-      linkMark = $from.nodeBefore.marks.find((m) => m.type === hlType);
-    }
-
-    // Fall back to searching by href from popup data
-    if (!linkMark && hyperlinkPopupData) {
-      const parent = $from.parent;
-      parent.forEach((node) => {
-        if (!linkMark && node.isText) {
-          const m = node.marks.find(
-            (mk) => mk.type === hlType && mk.attrs.href === hyperlinkPopupData.href
-          );
-          if (m) linkMark = m;
-        }
-      });
-    }
-
-    if (!linkMark) return;
-
-    // Find contiguous range of nodes with matching hyperlink mark
-    const parent = $from.parent;
-    const parentStart = $from.start();
-    type Range = { start: number; end: number };
-    const ranges: Range[] = [];
-    let currentRange: Range | null = null;
-
-    parent.forEach((node, offset) => {
-      const nodeStart = parentStart + offset;
-      const nodeEnd = nodeStart + node.nodeSize;
-      const hlMark = node.isText
-        ? node.marks.find((m) => m.type === hlType && m.attrs.href === linkMark!.attrs.href)
-        : null;
-
-      if (hlMark) {
-        if (currentRange) {
-          currentRange.end = nodeEnd;
-        } else {
-          currentRange = { start: nodeStart, end: nodeEnd };
-        }
-      } else {
-        if (currentRange) {
-          ranges.push(currentRange);
-          currentRange = null;
-        }
-      }
-    });
-    if (currentRange) ranges.push(currentRange);
-
-    const cursorPos = $from.pos;
-    const targetRange = ranges.find((r) => r.start <= cursorPos && cursorPos <= r.end);
-    if (!targetRange) return;
-
-    const tr = view.state.tr;
-    tr.removeMark(targetRange.start, targetRange.end, hlType);
-    view.dispatch(tr.scrollIntoView());
+    view.dispatch(view.state.tr.removeMark(hit.start, hit.end, hlType).scrollIntoView());
 
     setHyperlinkPopupData(null);
     focusActiveEditor();
@@ -3750,14 +3554,11 @@ body { background: white; }
 
   const handleDocxFileChange = useCallback(
     async (event: React.ChangeEvent<HTMLInputElement>) => {
-      const file = event.target.files?.[0];
-      // Reset so picking the same file twice still fires `change`.
-      event.target.value = '';
-      if (!file) return;
       try {
-        const buffer = await file.arrayBuffer();
-        await loadBuffer(buffer);
-        onDocumentNameChange?.(file.name.replace(/\.docx$/i, ''));
+        const result = await readDocxFileFromInput(event.nativeEvent);
+        if (!result) return;
+        await loadBuffer(result.buffer);
+        onDocumentNameChange?.(result.name);
       } catch (error) {
         onError?.(error instanceof Error ? error : new Error('Failed to open document'));
       }
@@ -4362,66 +4163,19 @@ body { background: white; }
   const finalSectionProperties = history.state?.package.document?.finalSectionProperties;
 
   // Get header and footer content from document
-  const { headerContent, footerContent, firstPageHeaderContent, firstPageFooterContent } = useMemo<{
-    headerContent: HeaderFooter | null;
-    footerContent: HeaderFooter | null;
-    firstPageHeaderContent: HeaderFooter | null;
-    firstPageFooterContent: HeaderFooter | null;
-  }>(() => {
-    if (!history.state?.package) {
+  const { headerContent, footerContent, firstPageHeaderContent, firstPageFooterContent } =
+    useMemo(() => {
+      const { header, footer, firstHeader, firstFooter } = resolveHeaderFooter(
+        history.state ?? null,
+        finalSectionProperties ?? initialSectionProperties
+      );
       return {
-        headerContent: null,
-        footerContent: null,
-        firstPageHeaderContent: null,
-        firstPageFooterContent: null,
+        headerContent: header,
+        footerContent: footer,
+        firstPageHeaderContent: firstHeader,
+        firstPageFooterContent: firstFooter,
       };
-    }
-
-    const pkg = history.state.package;
-    const sectionProps = finalSectionProperties ?? initialSectionProperties;
-    const headers = pkg.headers;
-    const footers = pkg.footers;
-
-    let header: HeaderFooter | null = null;
-    let footer: HeaderFooter | null = null;
-    let firstHeader: HeaderFooter | null = null;
-    let firstFooter: HeaderFooter | null = null;
-
-    if (headers && sectionProps?.headerReferences) {
-      const defaultRef = sectionProps.headerReferences.find((r) => r.type === 'default');
-      if (defaultRef?.rId) {
-        header = headers.get(defaultRef.rId) ?? null;
-      }
-      const firstRef = sectionProps.headerReferences.find((r) => r.type === 'first');
-      if (firstRef?.rId) {
-        firstHeader = headers.get(firstRef.rId) ?? null;
-      }
-    }
-
-    if (footers && sectionProps?.footerReferences) {
-      const defaultRef = sectionProps.footerReferences.find((r) => r.type === 'default');
-      if (defaultRef?.rId) {
-        footer = footers.get(defaultRef.rId) ?? null;
-      }
-      const firstRef = sectionProps.footerReferences.find((r) => r.type === 'first');
-      if (firstRef?.rId) {
-        firstFooter = footers.get(firstRef.rId) ?? null;
-      }
-    }
-
-    // When titlePg is not set but only 'first' headers exist, use them as default
-    if (!sectionProps?.titlePg) {
-      if (!header && firstHeader) header = firstHeader;
-      if (!footer && firstFooter) footer = firstFooter;
-    }
-
-    return {
-      headerContent: header,
-      footerContent: footer,
-      firstPageHeaderContent: firstHeader,
-      firstPageFooterContent: firstFooter,
-    };
-  }, [history.state, initialSectionProperties, finalSectionProperties]);
+    }, [history.state, initialSectionProperties, finalSectionProperties]);
 
   // Handle header/footer double-click — open editing overlay
   // If no header/footer exists, create an empty one so the user can add content
@@ -4517,8 +4271,8 @@ body { background: white; }
   const handleHeaderFooterSave = useCallback(
     (
       content: (
-        | import('@eigenpal/docx-core/types/document').Paragraph
-        | import('@eigenpal/docx-core/types/document').Table
+        | import('@eigenpal/docx-editor-core/types/document').Paragraph
+        | import('@eigenpal/docx-editor-core/types/document').Table
       )[]
     ) => {
       if (!hfEditPosition || !history.state?.package) {
@@ -4942,12 +4696,11 @@ body { background: white; }
                       onFormat={handleFormat}
                       onUndo={undoActiveEditor}
                       onRedo={redoActiveEditor}
-                      canUndo={true}
-                      canRedo={true}
+                      canUndo={pmState ? undoDepth(pmState) > 0 : false}
+                      canRedo={pmState ? redoDepth(pmState) > 0 : false}
                       disabled={readOnly}
                       documentStyles={history.state?.package.styles?.styles}
                       theme={history.state?.package.theme || theme}
-                      showPrintButton={showPrintButton}
                       fontFamilies={fontFamilies}
                       onPrint={handleDirectPrint}
                       onOpen={handleOpenDocument}
@@ -4985,7 +4738,7 @@ body { background: white; }
                         )}
                         <EditorToolbar.MenuBar />
                       </EditorToolbar.TitleBar>
-                      <EditorToolbar.FormattingBar>{toolbarChildren}</EditorToolbar.FormattingBar>
+                      <EditorToolbar.Toolbar>{toolbarChildren}</EditorToolbar.Toolbar>
                     </EditorToolbar>
                   </div>
                 )}
@@ -5399,17 +5152,11 @@ body { background: white; }
                   prop is set so chat state survives close/reopen.
                   `closed={!agentPanelOpen}` triggers the slide / fade. */}
               {agentPanel && (
-                <AgentPanel
-                  title={agentPanel.title}
-                  icon={agentPanel.icon}
-                  defaultWidth={agentPanel.defaultWidth}
-                  minWidth={agentPanel.minWidth}
-                  maxWidth={agentPanel.maxWidth}
-                  onClose={() => setAgentPanelOpen(false)}
+                <LocalizedAgentPanel
+                  agentPanel={agentPanel}
                   closed={!agentPanelOpen}
-                >
-                  {agentPanel.render({ close: () => setAgentPanelOpen(false) })}
-                </AgentPanel>
+                  onClose={() => setAgentPanelOpen(false)}
+                />
               )}
             </div>
 
@@ -5444,6 +5191,7 @@ body { background: white; }
               onApplyLayout={handleImageWrapApply}
               textActions={imageContextMenuTextActions}
               onTextAction={handleContextMenuAction}
+              onOpenProperties={handleOpenImageProperties}
               onClose={imageContextMenu.closeMenu}
             />
 
@@ -5522,6 +5270,8 @@ body { background: white; }
                           borderWidth: state.pmImageContext.borderWidth ?? undefined,
                           borderColor: state.pmImageContext.borderColor ?? undefined,
                           borderKind: state.pmImageContext.borderKind ?? undefined,
+                          width: state.pmImageContext.width ?? undefined,
+                          height: state.pmImageContext.height ?? undefined,
                         }
                       : undefined
                   }

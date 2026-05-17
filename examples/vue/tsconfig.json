@@ -12,8 +12,8 @@
     "skipLibCheck": true,
     "paths": {
       "@eigenpal/docx-editor-vue": ["../../packages/vue/src/index.ts"],
-      "@eigenpal/docx-core": ["../../packages/core/src/core.ts"],
-      "@eigenpal/docx-core/*": ["../../packages/core/src/*"]
+      "@eigenpal/docx-editor-core": ["../../packages/core/src/core.ts"],
+      "@eigenpal/docx-editor-core/*": ["../../packages/core/src/*"]
     }
   },
   "include": ["src"]

@@ -550,6 +550,22 @@ export function IconBorderRight(props: IconProps) {
   );
 }
 
+export function IconBorderHorizontal(props: IconProps) {
+  return (
+    <SvgIcon {...props}>
+      <path d="M120-120v-60h60v60h-60Zm0-165v-60h60v60h-60Zm0-165v-60h720v60H120Zm0-165v-60h60v60h-60Zm0-165v-60h60v60h-60Zm165 660v-60h60v60h-60Zm0-660v-60h60v60h-60Zm165 660v-60h60v60h-60Zm0-165v-60h60v60h-60Zm0-330v-60h60v60h-60Zm0-165v-60h60v60h-60Zm165 660v-60h60v60h-60Zm0-660v-60h60v60h-60Zm165 660v-60h60v60h-60Zm0-165v-60h60v60h-60Zm0-330v-60h60v60h-60Zm0-165v-60h60v60h-60Z" />
+    </SvgIcon>
+  );
+}
+
+export function IconBorderVertical(props: IconProps) {
+  return (
+    <SvgIcon {...props}>
+      <path d="M120-120v-60h60v60h-60Zm0-165v-60h60v60h-60Zm0-165v-60h60v60h-60Zm0-165v-60h60v60h-60Zm0-165v-60h60v60h-60Zm165 660v-60h60v60h-60Zm0-330v-60h60v60h-60Zm0-330v-60h60v60h-60Zm165 660v-720h60v720h-60Zm165 0v-60h60v60h-60Zm0-330v-60h60v60h-60Zm0-330v-60h60v60h-60Zm165 660v-60h60v60h-60Zm0-165v-60h60v60h-60Zm0-165v-60h60v60h-60Zm0-165v-60h60v60h-60Zm0-165v-60h60v60h-60Z" />
+    </SvgIcon>
+  );
+}
+
 export function IconPadding(props: IconProps) {
   return (
     <SvgIcon {...props}>
@@ -891,6 +907,8 @@ const iconMap: Record<string, React.ComponentType<IconProps>> = {
   border_bottom: IconBorderBottom,
   border_left: IconBorderLeft,
   border_right: IconBorderRight,
+  border_horizontal: IconBorderHorizontal,
+  border_vertical: IconBorderVertical,
   padding: IconPadding,
   text_rotation_none: IconTextRotationNone,
   wrap_text: IconWrapText,

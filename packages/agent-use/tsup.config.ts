@@ -1,5 +1,9 @@
 import { defineConfig } from 'tsup';
 
+// Tsup builds the framework-agnostic + React entries. Vue SFCs are built by
+// `vite.config.ts` because tsup/esbuild can't compile `.vue` files. The
+// dedicated `tsconfig.tsup.json` excludes vue/* so the d.ts pass doesn't
+// trip on the SFC shim.
 export default defineConfig({
   entry: {
     index: 'src/index.ts',
@@ -11,7 +15,8 @@ export default defineConfig({
     'ai-sdk/react': 'src/ai-sdk/react.ts',
   },
   format: ['cjs', 'esm'],
-  dts: true,
+  dts: { resolve: true },
+  tsconfig: 'tsconfig.tsup.json',
   splitting: true,
   sourcemap: false,
   clean: true,
@@ -19,6 +24,6 @@ export default defineConfig({
     preset: 'smallest',
   },
   minify: true,
-  noExternal: ['@eigenpal/docx-core'],
+  noExternal: ['@eigenpal/docx-editor-core'],
   external: ['prosemirror-model', 'prosemirror-state', 'prosemirror-view', 'react', 'ai'],
 });

@@ -27,6 +27,6 @@ Separate package (`@eigenpal/docx-editor-agents`) under BSL-1.1 — source-avail
 ## Impact
 
 - **New package**: `packages/agent-use/` with own `package.json`, `tsconfig.json`, `tsup.config.ts`, BSL-1.1 `LICENSE`
-- **Peer dependency**: `@eigenpal/docx-core` — no code duplication
+- **Peer dependency**: `@eigenpal/docx-editor-core` — no code duplication
 - **Core package**: No changes
 - **Breaking changes**: None — purely additive

@@ -3,12 +3,11 @@ import { defineConfig } from 'tsup';
 export default defineConfig({
   entry: {
     index: 'src/index.ts',
-    react: 'src/react.ts',
     ui: 'src/ui.ts',
-    'core-reexport': 'src/core-reexport.ts',
-    'headless-reexport': 'src/headless-reexport.ts',
-    'core-plugins-reexport': 'src/core-plugins-reexport.ts',
-    'mcp-reexport': 'src/mcp-reexport.ts',
+    dialogs: 'src/components/dialogs/index.ts',
+    hooks: 'src/hooks/index.ts',
+    'plugin-api': 'src/plugin-api/index.ts',
+    styles: 'src/styles/index.ts',
   },
   format: ['cjs', 'esm'],
   dts: true,

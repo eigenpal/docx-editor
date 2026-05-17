@@ -12,6 +12,7 @@ declare global {
       scrollToPage: (pageNumber: number) => void;
       getTotalPages: () => number;
       getCurrentPage: () => number;
+      saveByteLength: () => Promise<number | null>;
       // Agent bridge surface
       agentAddComment: (opts: {
         paraId: string;
@@ -65,6 +66,7 @@ declare global {
         text: string;
         paragraphs: Array<{ paraId: string; text: string; styleId?: string }>;
       } | null;
+      agentGetDocumentText: () => string;
     };
   }
 }

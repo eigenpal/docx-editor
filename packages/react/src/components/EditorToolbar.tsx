@@ -11,7 +11,7 @@
  *         <button>Save</button>
  *       </EditorToolbar.TitleBarRight>
  *     </EditorToolbar.TitleBar>
- *     <EditorToolbar.FormattingBar />
+ *     <EditorToolbar.Toolbar />
  *   </EditorToolbar>
  */
 
@@ -20,8 +20,7 @@ import { EditorToolbarContext } from './EditorToolbarContext';
 import type { EditorToolbarProps } from './EditorToolbarContext';
 import { TitleBar, Logo, DocumentName, MenuBar, TitleBarRight } from './TitleBar';
 import type { TitleBarProps, LogoProps, DocumentNameProps, TitleBarRightProps } from './TitleBar';
-import { FormattingBar } from './FormattingBar';
-import type { FormattingBarProps } from './FormattingBar';
+import { Toolbar } from './Toolbar';
 import { cn } from '../lib/utils';
 
 // ============================================================================
@@ -35,7 +34,7 @@ interface EditorToolbarComponent {
   DocumentName: typeof DocumentName;
   MenuBar: typeof MenuBar;
   TitleBarRight: typeof TitleBarRight;
-  FormattingBar: typeof FormattingBar;
+  Toolbar: typeof Toolbar;
 }
 
 function EditorToolbarBase({
@@ -64,14 +63,7 @@ EditorToolbar.Logo = Logo;
 EditorToolbar.DocumentName = DocumentName;
 EditorToolbar.MenuBar = MenuBar;
 EditorToolbar.TitleBarRight = TitleBarRight;
-EditorToolbar.FormattingBar = FormattingBar;
+EditorToolbar.Toolbar = Toolbar;
 
 export { EditorToolbar };
-export type {
-  EditorToolbarProps,
-  TitleBarProps,
-  LogoProps,
-  DocumentNameProps,
-  TitleBarRightProps,
-  FormattingBarProps,
-};
+export type { EditorToolbarProps, TitleBarProps, LogoProps, DocumentNameProps, TitleBarRightProps };

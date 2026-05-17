@@ -12,8 +12,8 @@
 
 import React, { useState, useRef, useCallback, useEffect } from 'react';
 import type { CSSProperties } from 'react';
-import type { SectionProperties } from '@eigenpal/docx-core/types/document';
-import { twipsToPixels, pixelsToTwips, formatPx } from '@eigenpal/docx-core/utils';
+import type { SectionProperties } from '@eigenpal/docx-editor-core/types/document';
+import { twipsToPixels, pixelsToTwips, formatPx } from '@eigenpal/docx-editor-core/utils';
 import { useTranslation } from '../../i18n';
 
 // ============================================================================

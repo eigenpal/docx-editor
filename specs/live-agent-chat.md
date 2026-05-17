@@ -87,7 +87,7 @@ The bridge connects agent tool handlers to the live editor. It wraps a `DocxEdit
 ```ts
 // packages/agent-use/src/bridge.ts
 
-import type { DocxEditorRef } from '@eigenpal/docx-js-editor';
+import type { DocxEditorRef } from '@eigenpal/docx-editor-react';
 
 export interface EditorBridge {
   // ── READ ──────────────────────────────────────────────────
@@ -449,8 +449,8 @@ export function useAgentChat(options: {
 ```tsx
 // Example: App using the editor + chat with Anthropic SDK
 
-import { DocxEditor, type DocxEditorRef } from '@eigenpal/docx-js-editor';
-import { AgentChatPanel, useAgentChat } from '@eigenpal/docx-js-editor/ui';
+import { DocxEditor, type DocxEditorRef } from '@eigenpal/docx-editor-react';
+import { AgentChatPanel, useAgentChat } from '@eigenpal/docx-editor-react/ui';
 import Anthropic from '@anthropic-ai/sdk';
 
 function App() {

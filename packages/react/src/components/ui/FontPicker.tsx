@@ -22,11 +22,8 @@ import { useTranslation } from '../../i18n';
 // TYPES
 // ============================================================================
 
-export interface FontOption {
-  name: string;
-  fontFamily: string;
-  category?: 'sans-serif' | 'serif' | 'monospace' | 'other';
-}
+export type { FontOption } from '@eigenpal/docx-editor-core/utils/fontOptions';
+import type { FontOption } from '@eigenpal/docx-editor-core/utils/fontOptions';
 
 export interface FontPickerProps {
   value?: string;

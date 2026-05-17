@@ -6,8 +6,7 @@
  *
  * @example
  * ```tsx
- * import { PluginHost, type EditorPlugin } from '@docx-editor/plugin-api';
- * import { templatePlugin } from '@docx-editor/plugins/template';
+ * import { PluginHost, templatePlugin, type EditorPlugin } from '@eigenpal/docx-editor-react/plugin-api';
  *
  * function MyEditor() {
  *   return (
@@ -41,3 +40,17 @@ export { PluginHost, PLUGIN_HOST_STYLES } from './PluginHost';
 
 // Rendered DOM Context
 export { createRenderedDomContext, RenderedDomContextImpl } from './RenderedDomContext';
+
+// Built-in editor plugins
+export {
+  templatePlugin,
+  createPlugin as createTemplatePlugin,
+  createTemplatePlugin as createTemplateProseMirrorPlugin,
+  templatePluginKey,
+  getTemplateTags as getTemplatePluginTags,
+  setHoveredElement,
+  setSelectedElement,
+  TEMPLATE_DECORATION_STYLES,
+  type TemplateTag,
+  type TagType,
+} from '../plugins/template';

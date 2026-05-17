@@ -1,5 +1,28 @@
 # Props & Ref Methods
 
+The documented root API shape is shared by the React and Vue packages:
+
+```ts
+import { DocxEditor, type DocxEditorRef, renderAsync } from '@eigenpal/docx-editor-react';
+import '@eigenpal/docx-editor-react/styles.css';
+```
+
+```ts
+import { DocxEditor, type DocxEditorRef, renderAsync } from '@eigenpal/docx-editor-vue';
+import '@eigenpal/docx-editor-vue/styles.css';
+```
+
+Both packages export `DocxEditor`, `DocxEditorProps`, `DocxEditorRef`,
+`DocxEditorHandle`, `RenderAsyncOptions`, `EditorMode`, and `renderAsync`.
+Framework-specific customization stays in explicit subpaths such as `/ui`,
+`/hooks` or `/composables`, `/dialogs`, and `/plugin-api`.
+
+React still exposes a few wider host-integration props, but Vue now supports the
+common document, mode, toolbar, title-bar, i18n, plugin, error, ready, save,
+zoom, scroll, print, and programmatic load flows. Staged prop divergences are
+enforced by `bun run check:editor-contract` so they stay explicit instead of
+accidental.
+
 ## Props
 
 | Prop                          | Type                                        | Default     | Description                                                                                            |
@@ -15,7 +38,6 @@
 | `showRuler`                   | `boolean`                                   | `false`     | Show horizontal & vertical rulers                                                                      |
 | `rulerUnit`                   | `'inch' \| 'cm'`                            | `'inch'`    | Unit for ruler display                                                                                 |
 | `showZoomControl`             | `boolean`                                   | `true`      | Show zoom controls in toolbar                                                                          |
-| `showPrintButton`             | `boolean`                                   | `true`      | Show print button in toolbar                                                                           |
 | `showOutline`                 | `boolean`                                   | `false`     | Show document outline sidebar (table of contents)                                                      |
 | `showMarginGuides`            | `boolean`                                   | `false`     | Show page margin guide boundaries                                                                      |
 | `marginGuideColor`            | `string`                                    | `'#c0c0c0'` | Color for margin guides                                                                                |
@@ -32,7 +54,7 @@
 | `onError`                     | `(error: Error) => void`                    | —           | Called on error                                                                                        |
 | `onSelectionChange`           | `(state: SelectionState \| null) => void`   | —           | Called on selection change                                                                             |
 | `onFontsLoaded`               | `() => void`                                | —           | Called when fonts finish loading                                                                       |
-| `onPrint`                     | `() => void`                                | —           | Called when print is triggered                                                                         |
+| `onPrint`                     | `() => void`                                | —           | Pass to enable File → Print and the `editor.print()` ref method; omit to hide the menu entry           |
 | `onCopy`                      | `() => void`                                | —           | Called when content is copied                                                                          |
 | `onCut`                       | `() => void`                                | —           | Called when content is cut                                                                             |
 | `onPaste`                     | `() => void`                                | —           | Called when content is pasted                                                                          |
@@ -45,6 +67,10 @@
 
 Source: [`DocxEditorProps`](../packages/react/src/components/DocxEditor.tsx)
 
+Vue uses `VNodeChild` render functions for `toolbarExtra`, `renderLogo`, and
+`renderTitleBarRight`. In SFC templates, the equivalent named slots are
+`toolbar-extra`, `title-bar-left`, and `title-bar-right`.
+
 ## Ref Methods
 
 ```tsx
@@ -56,6 +82,7 @@ ref.current.setZoom(1.5); // Set zoom to 150%
 ref.current.focus(); // Focus the editor
 ref.current.scrollToPage(3); // Scroll to page 3
 ref.current.print(); // Print the document
+ref.current.loadDocumentBuffer(file); // Programmatically load a new DOCX
 ```
 
 ## Read-Only Preview
@@ -82,7 +109,8 @@ Set `externalContent` when something other than the `document` prop is the sourc
 
 ```tsx
 import { useMemo } from 'react';
-import { DocxEditor, createEmptyDocument } from '@eigenpal/docx-js-editor';
+import { createEmptyDocument } from '@eigenpal/docx-editor-core';
+import { DocxEditor } from '@eigenpal/docx-editor-react';
 import { ySyncPlugin, yUndoPlugin } from 'y-prosemirror';
 
 function CollaborativeEditor({ ydoc }) {
@@ -102,7 +130,7 @@ Comment thread metadata (text, author, replies, resolved status) lives outside t
 ```tsx
 import { useEffect, useState, useCallback } from 'react';
 import * as Y from 'yjs';
-import type { Comment } from '@eigenpal/docx-js-editor';
+import type { Comment } from '@eigenpal/docx-editor-core';
 
 function useSyncedComments(ydoc: Y.Doc): [Comment[], (next: Comment[]) => void] {
   const yComments = ydoc.getArray<Comment>('comments');

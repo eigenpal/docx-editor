@@ -132,7 +132,7 @@ const handleDirectPrint = useCallback(() => {
 
 **Key changes:**
 
-1. Import `forceRenderAllPages` and `restoreVirtualization` from `@eigenpal/docx-core/layout-painter/paintPage`
+1. Import `forceRenderAllPages` and `restoreVirtualization` from `@eigenpal/docx-editor-core/layout-painter/paintPage`
 2. Call `forceRenderAllPages()` before `cloneNode(true)`
 3. Call `restoreVirtualization()` after cloning in a `requestAnimationFrame` to defer the cleanup
 

@@ -1,14 +1,18 @@
 import { useState, useCallback, useMemo, useEffect } from 'react';
 import type { CSSProperties } from 'react';
-import type { ColorValue, Theme, ThemeColorScheme } from '@eigenpal/docx-core/types/document';
+import type {
+  ColorValue,
+  Theme,
+  ThemeColorScheme,
+} from '@eigenpal/docx-editor-core/types/document';
 import {
   generateThemeTintShadeMatrix,
   resolveColor,
   resolveColorToHex,
   resolveHighlightColor,
-} from '@eigenpal/docx-core/utils';
-import type { ThemeMatrixCell } from '@eigenpal/docx-core/utils';
-import { useFixedDropdown } from './useFixedDropdown';
+} from '@eigenpal/docx-editor-core/utils';
+import type { ThemeMatrixCell } from '@eigenpal/docx-editor-core/utils';
+import { useFixedDropdown } from '../../hooks/useFixedDropdown';
 import { MaterialSymbol } from './MaterialSymbol';
 import { useTranslation } from '../../i18n';
 import type { TranslationKey } from '../../i18n';

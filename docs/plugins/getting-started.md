@@ -8,7 +8,7 @@ The docx-editor has two plugin systems for different use cases:
 | Purpose      | UI panels, overlays, ProseMirror decorations               | Command handlers for server-side document manipulation |
 | Registration | `<PluginHost plugins={[...]}>` wrapping `<DocxEditor>`     | `pluginRegistry.register(plugin)`                      |
 | State model  | Reactive — `onStateChange` fires on every edit/click/focus | Stateless — pure functions transforming `Document`     |
-| Entry point  | `src/plugin-api`                                           | `src/core-plugins`                                     |
+| Entry point  | `@eigenpal/docx-editor-react/plugin-api`                   | `@eigenpal/docx-editor-core/core-plugins`              |
 
 Most plugins are **EditorPlugins**. Use a **CorePlugin** when you need headless document manipulation — API routes, Node.js scripts, CI pipelines — without a browser.
 
@@ -21,7 +21,8 @@ Most plugins are **EditorPlugins**. Use a **CorePlugin** when you need headless 
 Plugins are passed as an array to `PluginHost`, which wraps your `DocxEditor`:
 
 ```tsx
-import { DocxEditor, PluginHost } from '@eigenpal/docx-js-editor';
+import { DocxEditor } from '@eigenpal/docx-editor-react';
+import { PluginHost } from '@eigenpal/docx-editor-react/plugin-api';
 import { myPlugin } from './myPlugin';
 
 <PluginHost plugins={[myPlugin]}>
@@ -38,7 +39,7 @@ import { myPlugin } from './myPlugin';
 CorePlugins are registered imperatively on the global registry:
 
 ```ts
-import { pluginRegistry, docxtemplaterPlugin } from '@eigenpal/docx-js-editor';
+import { pluginRegistry, docxtemplaterPlugin } from '@eigenpal/docx-editor-core/core-plugins';
 
 pluginRegistry.register(docxtemplaterPlugin);
 ```
@@ -80,7 +81,7 @@ function WordCountPanel({ pluginState }: PluginPanelProps<WordCountState>) {
 ### 3. Wire it into an EditorPlugin
 
 ```ts
-import type { EditorPlugin } from '@eigenpal/docx-js-editor';
+import type { EditorPlugin } from '@eigenpal/docx-editor-react/plugin-api';
 
 export const wordCountPlugin: EditorPlugin<WordCountState> = {
   id: 'word-count',

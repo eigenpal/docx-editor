@@ -19,30 +19,12 @@
 
 import { readFileSync, writeFileSync, readdirSync, existsSync } from 'fs';
 import { join } from 'path';
+import { getLeafPaths } from './lib/i18n-keys.mjs';
 
-const I18N_DIR = join(import.meta.dirname, '..', 'packages', 'react', 'i18n');
+// Locale files live in the shared @eigenpal/docx-editor-i18n package — both
+// the React and Vue adapters read their defaults from here.
+const I18N_DIR = join(import.meta.dirname, '..', 'packages', 'i18n');
 const EN_PATH = join(I18N_DIR, 'en.json');
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-/** Keys that are metadata, not translatable strings */
-const METADATA_KEYS = new Set(['_lang']);
-
-function getLeafPaths(obj, prefix = '') {
-  const paths = [];
-  for (const [k, v] of Object.entries(obj)) {
-    if (!prefix && METADATA_KEYS.has(k)) continue; // skip top-level metadata
-    const path = prefix ? `${prefix}.${k}` : k;
-    if (v !== null && typeof v === 'object' && !Array.isArray(v)) {
-      paths.push(...getLeafPaths(v, path));
-    } else {
-      paths.push(path);
-    }
-  }
-  return paths.sort();
-}
 
 function setNestedValue(obj, path, value) {
   const parts = path.split('.');
@@ -91,7 +73,7 @@ function buildSkeleton(obj) {
 
 function getLocaleFiles() {
   return readdirSync(I18N_DIR)
-    .filter((f) => f.endsWith('.json') && f !== 'en.json')
+    .filter((f) => f.endsWith('.json') && f !== 'en.json' && f !== 'package.json')
     .sort();
 }
 
@@ -197,7 +179,7 @@ function cmdNew(lang) {
   console.log(`Created ${lang}.json with ${leafCount} keys (all set to null).`);
   console.log('');
   console.log('Next steps:');
-  console.log(`  1. Open packages/react/i18n/${lang}.json`);
+  console.log(`  1. Open packages/i18n/${lang}.json`);
   console.log('  2. Replace null values with translations');
   console.log('     (partial is fine — null keys fall back to English)');
   console.log('  3. Run: bun run i18n:status');

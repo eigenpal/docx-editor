@@ -2,9 +2,9 @@
 
 - [x] 1.1 Create `packages/core/` and `packages/react/` directories
 - [x] 1.2 Add `"workspaces": ["packages/*"]` and `"private": true` to root `package.json`
-- [x] 1.3 Create `packages/core/package.json` with name `@eigenpal/docx-core`, dependencies (prosemirror-\*, jszip, pizzip, xml-js, docxtemplater, clsx), and exports config
-- [x] 1.4 Create `packages/react/package.json` with name `@eigenpal/docx-js-editor`, dependency on `@eigenpal/docx-core`, peerDependencies (react, react-dom), and `@radix-ui/react-select`
-- [x] 1.5 Create `packages/vue/package.json` with name `@eigenpal/docx-editor-vue`, dependency on `@eigenpal/docx-core`, peerDependency on `vue`, and a placeholder `src/index.ts`
+- [x] 1.3 Create `packages/core/package.json` with name `@eigenpal/docx-editor-core`, dependencies (prosemirror-\*, jszip, pizzip, xml-js, docxtemplater, clsx), and exports config
+- [x] 1.4 Create `packages/react/package.json` with name `@eigenpal/docx-editor-react`, dependency on `@eigenpal/docx-editor-core`, peerDependencies (react, react-dom), and `@radix-ui/react-select`
+- [x] 1.5 Create `packages/vue/package.json` with name `@eigenpal/docx-editor-vue`, dependency on `@eigenpal/docx-editor-core`, peerDependency on `vue`, and a placeholder `src/index.ts`
 - [x] 1.6 Create `packages/core/tsconfig.json`, `packages/react/tsconfig.json`, and `packages/vue/tsconfig.json` extending a shared root tsconfig
 
 ## 2. Move Source Files to Core Package
@@ -42,24 +42,24 @@
 
 - [x] 5.1 Create `EditorPluginCore` interface in `packages/core/src/plugin-api/types.ts` with framework-agnostic fields only (`id`, `name`, `proseMirrorPlugins`, `onStateChange`, `initialize`, `destroy`, `styles`, `panelConfig`)
 - [x] 5.2 Move `PluginPanelProps` (without `ReactNode` fields), `PanelConfig`, and `RenderedDomContext` to `packages/core/src/plugin-api/`
-- [x] 5.3 Export `EditorPluginCore`, `PluginPanelProps`, `PanelConfig`, `RenderedDomContext` from `@eigenpal/docx-core`
+- [x] 5.3 Export `EditorPluginCore`, `PluginPanelProps`, `PanelConfig`, `RenderedDomContext` from `@eigenpal/docx-editor-core`
 - [x] 5.4 Create `ReactEditorPlugin` interface in `packages/react/src/plugin-api/types.ts` extending `EditorPluginCore` with `Panel` (React.ComponentType) and `renderOverlay` (returns ReactNode)
 - [x] 5.5 Update `PluginHost.tsx` in React package to import `ReactEditorPlugin` (aliased locally as `EditorPlugin` for backwards compat)
 - [x] 5.6 Update template plugin to use `ReactEditorPlugin` return type
 - [x] 5.7 Scaffold `VueEditorPlugin` interface in `packages/vue/src/plugin-api/types.ts` extending `EditorPluginCore` with Vue-specific `Panel` and `renderOverlay` types
-- [x] 5.8 Export `ReactEditorPlugin` from `@eigenpal/docx-js-editor` and `VueEditorPlugin` from `@eigenpal/docx-editor-vue`
+- [x] 5.8 Export `ReactEditorPlugin` from `@eigenpal/docx-editor-react` and `VueEditorPlugin` from `@eigenpal/docx-editor-vue`
 
 ## 6. Update Internal Imports
 
-- [x] 6.1 Update all imports in `packages/react/` that reference core modules to use `@eigenpal/docx-core` instead of relative paths
-- [x] 6.2 Update `packages/react/src/index.ts` to re-export everything from `@eigenpal/docx-core` for backwards compatibility
-- [x] 6.3 Create re-export shims (core-reexport.ts, headless-reexport.ts, core-plugins-reexport.ts, mcp-reexport.ts)
+- [x] 6.1 Update all imports in `packages/react/` that reference core modules to use `@eigenpal/docx-editor-core` instead of relative paths
+- [x] 6.2 Keep `packages/react/src/index.ts` scoped to React-owned adapter exports; import core utilities from `@eigenpal/docx-editor-core`
+- [x] 6.3 Do not publish a legacy `@eigenpal/docx-js-editor` shim in 1.x; import canonical packages directly
 - [x] 6.4 Verify all internal imports in `packages/core/` use relative paths within the package
 
 ## 7. Build Configuration
 
 - [x] 7.1 Create `packages/core/tsup.config.ts` with entry points (`core.ts`, `headless.ts`, `core-plugins`, `mcp`) and externals
-- [x] 7.2 Create `packages/react/tsup.config.ts` with entry points (`index.ts`, `react.ts`, `ui.ts`, re-exports) externalizing `@eigenpal/docx-core`
+- [x] 7.2 Create `packages/react/tsup.config.ts` with React-owned entry points (`index.ts`, `ui.ts`, `dialogs`, `hooks`, `plugin-api`, `styles`)
 - [x] 7.3 CSS build already in `packages/react/` build script
 - [x] 7.4 Root `build` script builds core first, then react
 - [x] 7.5 Root `typecheck` script typechecks all packages
@@ -83,7 +83,7 @@
 
 ## 10. Backwards Compatibility Verification
 
-- [x] 10.1 Verify `@eigenpal/docx-js-editor` main export includes all previously exported symbols
+- [x] 10.1 Verify `@eigenpal/docx-editor-react` main export includes all previously exported symbols
 - [x] 10.2 Verify subpath exports (`/core`, `/headless`, `/react`, `/ui`, `/core-plugins`, `/mcp`) still work from the React package
-- [x] 10.3 Verify `@eigenpal/docx-core` can be imported and used without React installed
+- [x] 10.3 Verify `@eigenpal/docx-editor-core` can be imported and used without React installed
 - [x] 10.4 Update root README with new monorepo structure and usage instructions for core package

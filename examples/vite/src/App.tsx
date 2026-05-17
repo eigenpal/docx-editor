@@ -1,21 +1,33 @@
 import React, { useState, useRef, useCallback, useEffect, useMemo } from 'react';
-import { findStartPosForParaId } from '@eigenpal/docx-core';
+import { createEmptyDocument, findStartPosForParaId } from '@eigenpal/docx-editor-core';
+import { DocxEditor, type DocxEditorRef } from '@eigenpal/docx-editor-react';
 import {
-  DocxEditor,
-  type DocxEditorRef,
-  createEmptyDocument,
   AgentChatLog,
   type AgentMessage,
-} from '@eigenpal/docx-js-editor';
-import { getToolDisplayName } from '@eigenpal/docx-editor-agents/react';
+  getToolDisplayName,
+} from '@eigenpal/docx-editor-agents/react';
 import { ExampleSwitcher } from '../../shared/ExampleSwitcher';
-import { GitHubBadge } from '../../shared/GitHubBadge';
+import { AdapterSwitcher } from '../../shared/AdapterSwitcher';
+
+function extractDocumentText(value: unknown): string {
+  if (!value || typeof value !== 'object') return '';
+  const maybeText = (value as { text?: unknown }).text;
+  if (typeof maybeText === 'string') return maybeText;
+  return Object.values(value)
+    .map((child) =>
+      Array.isArray(child)
+        ? child.map((item) => extractDocumentText(item)).join('')
+        : extractDocumentText(child)
+    )
+    .join('');
+}
 
 const styles: Record<string, React.CSSProperties> = {
   container: {
     display: 'flex',
     flexDirection: 'column',
-    height: '100vh',
+    flex: 1,
+    minHeight: 0,
     overflow: 'hidden',
     background: '#f8fafc',
   },
@@ -169,6 +181,10 @@ export function App() {
       },
       getTotalPages: () => editorRef.current?.getTotalPages() ?? 0,
       getCurrentPage: () => editorRef.current?.getCurrentPage() ?? 0,
+      saveByteLength: async () => {
+        const buffer = await editorRef.current?.save();
+        return buffer?.byteLength ?? null;
+      },
       // Agent-bridge surface — drives the same paths the live agent uses.
       agentAddComment: (opts: { paraId: string; text: string; author?: string; search?: string }) =>
         editorRef.current?.addComment({
@@ -223,6 +239,7 @@ export function App() {
         editorRef.current?.setParagraphStyle(opts) ?? false,
       agentGetPageContent: (pageNumber: number) =>
         editorRef.current?.getPageContent(pageNumber) ?? null,
+      agentGetDocumentText: () => extractDocumentText(editorRef.current?.getDocument()),
     };
     return () => {
       delete window.__DOCX_EDITOR_E2E__;
@@ -230,7 +247,7 @@ export function App() {
   }, []);
 
   useEffect(() => {
-    fetch('/docx-editor-demo.docx')
+    fetch(`${import.meta.env.BASE_URL}docx-editor-demo.docx`)
       .then((res) => res.arrayBuffer())
       .then((buffer) => {
         setDocumentBuffer(buffer);
@@ -303,7 +320,7 @@ export function App() {
   const renderLogo = useCallback(
     () => (
       <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-        <GitHubBadge />
+        <AdapterSwitcher current="react" />
         <ExampleSwitcher current="Vite" />
       </div>
     ),

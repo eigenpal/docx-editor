@@ -1,7 +1,7 @@
 {
   "name": "@eigenpal/docx-editor-agents",
   "version": "0.5.1",
-  "description": "Agent-friendly API for DOCX document review — read, comment, propose changes, accept/reject tracked changes",
+  "description": "Agent SDK and chat UI for the DOCX editor — framework-agnostic bridge, MCP server, AI SDK adapters, plus React UI (and Vue UI in 1.x)",
   "main": "./dist/index.js",
   "module": "./dist/index.mjs",
   "types": "./dist/index.d.ts",
@@ -26,6 +26,11 @@
       "import": "./dist/react.mjs",
       "require": "./dist/react.js"
     },
+    "./vue": {
+      "types": "./dist/vue.d.ts",
+      "import": "./dist/vue.mjs",
+      "require": "./dist/vue.js"
+    },
     "./mcp": {
       "types": "./dist/mcp.d.ts",
       "import": "./dist/mcp.mjs",
@@ -40,6 +45,11 @@
       "types": "./dist/ai-sdk/react.d.ts",
       "import": "./dist/ai-sdk/react.mjs",
       "require": "./dist/ai-sdk/react.js"
+    },
+    "./ai-sdk/vue": {
+      "types": "./dist/ai-sdk/vue.d.ts",
+      "import": "./dist/ai-sdk/vue.mjs",
+      "require": "./dist/ai-sdk/vue.js"
     }
   },
   "typesVersions": {
@@ -53,6 +63,9 @@
       "react": [
         "./dist/react.d.ts"
       ],
+      "vue": [
+        "./dist/vue.d.ts"
+      ],
       "mcp": [
         "./dist/mcp.d.ts"
       ],
@@ -61,27 +74,48 @@
       ],
       "ai-sdk/react": [
         "./dist/ai-sdk/react.d.ts"
+      ],
+      "ai-sdk/vue": [
+        "./dist/ai-sdk/vue.d.ts"
       ]
     }
   },
   "peerDependencies": {
-    "ai": "^5.0.0 || ^6.0.0"
+    "@ai-sdk/vue": "^2.0.0",
+    "ai": "^5.0.0 || ^6.0.0",
+    "react": "^17.0.0 || ^18.0.0 || ^19.0.0",
+    "vue": "^3.0.0"
   },
   "peerDependenciesMeta": {
+    "@ai-sdk/vue": {
+      "optional": true
+    },
     "ai": {
+      "optional": true
+    },
+    "react": {
+      "optional": true
+    },
+    "vue": {
       "optional": true
     }
   },
   "devDependencies": {
-    "ai": "^6.0.169"
+    "@microsoft/api-extractor": "^7.50.0",
+    "@vitejs/plugin-vue": "^5.2.4",
+    "ai": "^6.0.169",
+    "vite": "^7.0.0",
+    "vite-plugin-dts": "^5.0.0",
+    "vue": "^3.4.0",
+    "vue-tsc": "^2.0.0"
   },
   "files": [
     "dist",
     "LICENSE"
   ],
   "scripts": {
-    "build": "tsup",
-    "typecheck": "tsc --noEmit"
+    "build": "tsup && vite build",
+    "typecheck": "vue-tsc --noEmit"
   },
   "dependencies": {
     "docxtemplater": "^3.50.0",
@@ -99,8 +133,12 @@
     "legal",
     "contract"
   ],
-  "author": "EigenPal",
-  "license": "AGPL-3.0-or-later",
+  "author": {
+    "name": "Jedr Blaszyk",
+    "email": "jedr@eigenpal.com",
+    "url": "https://github.com/jedrazb"
+  },
+  "license": "Apache-2.0",
   "homepage": "https://docx-editor.dev/",
   "repository": {
     "type": "git",

@@ -12,6 +12,19 @@ Client-side only. No backend.
 
 ---
 
+## Active integration branch: `1.0.0-release`
+
+The 1.0.0 unified package rename is being assembled on the long-living **`1.0.0-release`** branch, not on `main`. Anything in scope for 1.0.0 — the Vue impl (#245), the React/Vue parity demo, follow-up fixes to the rename itself — opens its PR against `1.0.0-release`, not `main`. The whole train ships to `main` as a single squash-merge once everything is in.
+
+- `.changeset/config.json` `baseBranch` is `1.0.0-release` while the train is open. Changeset's release PR will compare against this branch and not auto-publish to npm until the branch lands on `main`.
+- Currently merged into `1.0.0-release`: PR #337 (the rename + DX fixes).
+- Still pending: PR #245 (Vue implementation) — replaces the `packages/vue/` stub, drops the `[STUB]` description, makes `renderAsync` actually work.
+- Hotfixes for shipped 0.x versions still go to `main` directly. Don't accumulate them on `1.0.0-release`.
+
+After the train merges to `main`, reset `.changeset/config.json` `baseBranch` back to `main`.
+
+---
+
 ## Verify Commands
 
 ```bash
@@ -135,6 +148,21 @@ Saving:
 
 User clicks on visible page → `PagedEditor.handlePagesMouseDown()` → `getPositionFromMouse(clientX, clientY)` maps pixel coordinates to a PM document position → `hiddenPMRef.current.setSelection(pos)` → PM state update → visible pages re-render with selection overlay.
 
+### Vue mounting path
+
+- Vue host mounts via `useDocxEditor()` (`packages/vue/src/composables/useDocxEditor.ts`); `EditorView` and `Document` are held in `shallowRef`. Reactivity contract for the rest of the surface lives in `openspec/changes/vue-editor-robust-implementation/notes/reactivity.md`.
+- The dual-rendering rule above (visible pages from `layout-painter/`, NOT `toDOM`) applies to both adapters — a fix in `toDOM` won't show up on screen in React or Vue.
+
+### FlowBlock invariant
+
+Adding a new variant to `FlowBlock` (`packages/core/src/layout-engine/types.ts`) requires updating **three** switches:
+
+1. `runLayoutPipeline` in `packages/core/src/layout-engine/index.ts`
+2. `measureBlock` in `packages/react/src/paged-editor/PagedEditor.tsx`
+3. `measureBlock` in `packages/vue/src/composables/useDocxEditor.ts`
+
+All three end with `assertExhaustiveFlowBlock(block, '<site>')`, so omitting any case fails `bun run typecheck` with a `never` mismatch that names the missing site. This was the root cause of the Vue-only text-box crash before the guard landed.
+
 ### Debugging Checklist
 
 1. **Visual rendering bug or editing/data bug?**
@@ -213,10 +241,10 @@ For visual testing of UI changes:
 
 ## Issue-Driven Bug Fix Workflow
 
-Issue tracker: **https://github.com/eigenpal/docx-js-editor/issues**
+Issue tracker: **https://github.com/eigenpal/docx-editor/issues**
 
 ```bash
-gh issue view <N> --repo eigenpal/docx-js-editor
+gh issue view <N> --repo eigenpal/docx-editor
 ```
 
 1. **Read** the issue — get description, repro steps, attached files
@@ -267,12 +295,12 @@ All user-facing strings are translatable via a lightweight i18n system (no exter
 
 ### Key Files
 
-| What                    | Where                                       |
-| ----------------------- | ------------------------------------------- |
-| Default English strings | `packages/react/i18n/en.json`               |
-| Types (auto-derived)    | `packages/react/src/i18n/types.ts`          |
-| Context + hook          | `packages/react/src/i18n/LocaleContext.tsx` |
-| Barrel export           | `packages/react/src/i18n/index.ts`          |
+| What                  | Where                                                                                                                        |
+| --------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| Locale JSONs (shared) | `packages/i18n/*.json` (`@eigenpal/docx-editor-i18n`) — `en.json` is the source of truth; React + Vue both read it from here |
+| Types (auto-derived)  | `packages/react/src/i18n/types.ts`                                                                                           |
+| Context + hook        | `packages/react/src/i18n/LocaleContext.tsx`                                                                                  |
+| Barrel export         | `packages/react/src/i18n/index.ts`                                                                                           |
 
 ### How It Works
 
@@ -344,14 +372,17 @@ Hotfixes → `0.x`. Everything else → `main`.
 
 ### Packages
 
-| Package                        | Path                 | Published?             |
-| ------------------------------ | -------------------- | ---------------------- |
-| `@eigenpal/docx-js-editor`     | `packages/react`     | ✅                     |
-| `@eigenpal/docx-editor-agents` | `packages/agent-use` | ✅                     |
-| `@eigenpal/docx-core`          | `packages/core`      | ❌ private             |
-| `@eigenpal/docx-editor-vue`    | `packages/vue`       | ❌ private / community |
+| Package                        | Path                 | Published?               |
+| ------------------------------ | -------------------- | ------------------------ |
+| `@eigenpal/docx-editor-react`  | `packages/react`     | ✅                       |
+| `@eigenpal/docx-editor-core`   | `packages/core`      | ✅                       |
+| `@eigenpal/docx-editor-agents` | `packages/agent-use` | ✅                       |
+| `@eigenpal/docx-editor-i18n`   | `packages/i18n`      | ✅ (shared locale JSONs) |
+| `@eigenpal/docx-editor-vue`    | `packages/vue`       | ❌ private / community   |
 
-The two published packages are in a **fixed group** in `.changeset/config.json` — they always ship the same version. A changeset only needs to declare the bump for one; the other follows automatically.
+`@eigenpal/docx-editor-react`, `@eigenpal/docx-editor-core`, `@eigenpal/docx-editor-agents`, `@eigenpal/docx-editor-i18n`, and the Vue adapter are all in a **fixed group** in `.changeset/config.json` — they always ship the same version. A changeset only needs to declare the bump for one; the others follow automatically. `@eigenpal/docx-editor-i18n` ships the locale JSONs that React and Vue both consume — adding a new key to `en.json` only needs a changeset on `@eigenpal/docx-editor-i18n` (the consumers pick it up at build time).
+
+The old `@eigenpal/docx-js-editor` name does **not** publish a 1.x shim. New work must reference `@eigenpal/docx-editor-react`.
 
 ### Author flow (every contributor, every code PR)
 
@@ -369,11 +400,11 @@ The frontmatter must use the **full npm package name**, not the repo name or a g
 
 ```markdown
 ---
-'@eigenpal/docx-js-editor': patch
+'@eigenpal/docx-editor-react': patch
 ---
 ```
 
-Only `@eigenpal/docx-js-editor` needs to be listed — the fixed group in `.changeset/config.json` auto-bumps `@eigenpal/docx-editor-agents` to match. Always run `bun changeset` rather than hand-writing the file; the interactive prompt picks valid names from the workspace. A wrong name (e.g. bare `docx-editor`) does not fail the PR's CI but **crashes the post-merge Release workflow** with `Found changeset X for package Y which is not in the workspace`, blocking all releases until someone edits the bad changeset.
+Only `@eigenpal/docx-editor-react` needs to be listed — the fixed group in `.changeset/config.json` auto-bumps `@eigenpal/docx-editor-agents` to match. Always run `bun changeset` rather than hand-writing the file; the interactive prompt picks valid names from the workspace. A wrong name (e.g. bare `docx-editor`) does not fail the PR's CI but **crashes the post-merge Release workflow** with `Found changeset X for package Y which is not in the workspace`, blocking all releases until someone edits the bad changeset.
 
 #### Bump levels (semver)
 
@@ -390,7 +421,7 @@ The summary you write (`Add foo prop to DocxEditor`) goes verbatim into `CHANGEL
 1. **Look for an open PR titled `chore: release`** on `main`. The bot opens it automatically the first time a changeset lands; subsequent changeset-bearing PRs update the same PR with the latest bumps and CHANGELOG entries.
 2. **Review the PR.** It shows: version bumps in `package.json`s, new CHANGELOG sections, and the `.md` files being drained from `.changeset/`. Treat it like any other PR — CI runs on it.
 3. **Merge it.** Standard merge. No bypass, no manual workflow trigger needed.
-4. **Wait ~3 minutes.** The post-merge workflow run sees an empty changeset queue, runs `changeset publish` against npm via OIDC Trusted Publishing (no `NPM_TOKEN`), creates per-package git tags (`@eigenpal/docx-js-editor@X.Y.Z`), and creates a GitHub Release with the new CHANGELOG section.
+4. **Wait ~3 minutes.** The post-merge workflow run sees an empty changeset queue, runs `changeset publish` against npm via OIDC Trusted Publishing (no `NPM_TOKEN`), creates per-package git tags (`@eigenpal/docx-editor-react@X.Y.Z`), and creates a GitHub Release with the new CHANGELOG section.
 
 That's the entire release. One PR merge.
 
@@ -412,7 +443,7 @@ That's the entire release. One PR merge.
 | ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------- |
 | npmjs.com                | Trusted Publisher configured for both packages → repo `eigenpal/docx-editor`, workflow `release.yml`                                        |
 | `package.json`           | `"publishConfig": { "access": "public" }` on each published package (already set)                                                           |
-| `.changeset/config.json` | `"access": "public"`; `fixed: [["@eigenpal/docx-js-editor", "@eigenpal/docx-editor-agents"]]` (already set)                                 |
+| `.changeset/config.json` | `"access": "public"`; `fixed: [["@eigenpal/docx-editor-react", "@eigenpal/docx-editor-agents"]]` (already set)                              |
 | GitHub perms             | Settings → Actions → General → Workflow permissions = **Read and write**, **Allow GitHub Actions to create and approve pull requests** = on |
 | GitHub secrets           | `SLACK_WEBHOOK_URL` (optional — release notifications)                                                                                      |
 
@@ -431,7 +462,7 @@ The published-from-CI flow is preferred because it uses OIDC (no long-lived npm 
 - **Don't manually delete `.changeset/*.md` files** outside of `changeset version`. They're the single source of truth for what's pending.
 - **Don't edit `CHANGELOG.md` by hand.** It's auto-generated from changesets; manual edits get clobbered on the next release.
 - **Don't edit the `version` field in `package.json` by hand.** `changeset version` owns it.
-- **Don't open changesets for `@eigenpal/docx-core` or `@eigenpal/docx-editor-vue`** — they're listed in `.changeset/config.json` `ignore`.
+- **Don't open changesets for `@eigenpal/docx-editor-vue`** — it's listed in `.changeset/config.json` `ignore` until PR #245 lands its implementation.
 - **Don't hand-write the package name in changeset frontmatter.** Use `bun changeset` so the package list comes from the workspace. A bare `docx-editor` (or any name not in `package.json`) crashes the Release workflow post-merge.
 
 ---

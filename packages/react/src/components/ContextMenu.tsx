@@ -6,8 +6,11 @@
  */
 
 import React, { useEffect, useRef, useCallback, useState } from 'react';
-import type { AIAction, SelectionContext } from '@eigenpal/docx-core/types/agentApi';
-import { getActionDescription, DEFAULT_AI_ACTIONS } from '@eigenpal/docx-core/types/agentApi';
+import type { AIAction, SelectionContext } from '@eigenpal/docx-editor-core/types/agentApi';
+import {
+  getActionDescription,
+  DEFAULT_AI_ACTIONS,
+} from '@eigenpal/docx-editor-core/types/agentApi';
 import { useTranslation } from '../i18n';
 import type { TranslationKey } from '../i18n';
 import { Z_INDEX } from '../styles/zIndex';

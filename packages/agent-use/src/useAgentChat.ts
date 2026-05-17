@@ -3,7 +3,7 @@
  *
  * @example
  * ```tsx
- * import { useAgentChat } from '@eigenpal/docx-editor-agents/bridge';
+ * import { useAgentChat } from '@eigenpal/docx-editor-agents/react';
  *
  * const { executeToolCall, toolSchemas } = useAgentChat({ editorRef, author: 'Assistant' });
  *

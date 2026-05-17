@@ -58,7 +58,7 @@ The `EditorCoordinator` SHALL implement the same `subscribe(listener)` / `getSna
 
 ### Requirement: EditorCoordinator has zero framework dependencies
 
-The `EditorCoordinator` class SHALL import only from `@eigenpal/docx-core` internals and vanilla APIs.
+The `EditorCoordinator` class SHALL import only from `@eigenpal/docx-editor-core` internals and vanilla APIs.
 
 #### Scenario: Verify no framework imports
 

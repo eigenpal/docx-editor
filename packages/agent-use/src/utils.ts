@@ -12,13 +12,13 @@ import type {
   Deletion,
   MoveFrom,
   MoveTo,
-} from '@eigenpal/docx-core/headless';
+} from '@eigenpal/docx-editor-core/headless';
 import {
   getRunText,
   getHyperlinkText,
   isHeadingStyle,
   parseHeadingLevel,
-} from '@eigenpal/docx-core/headless';
+} from '@eigenpal/docx-editor-core/headless';
 
 // Re-export from core so other modules import from one place
 export { getRunText, getHyperlinkText, isHeadingStyle, parseHeadingLevel };

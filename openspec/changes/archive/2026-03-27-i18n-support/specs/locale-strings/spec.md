@@ -66,14 +66,14 @@ A `LocaleStrings` type SHALL be exported from `src/i18n/types.ts`. It SHALL be a
 Locale files SHALL be stored in the `i18n/` directory at the package root. Each locale SHALL be a single JSON file named with a standard BCP 47 language tag (e.g., `en.json`, `pl.json`, `de.json`, `fr.json`, `ja.json`). Community-contributed locale files SHALL be importable as:
 
 ```typescript
-import pl from '@eigenpal/docx-js-editor/i18n/pl.json';
+import pl from '@eigenpal/docx-editor-react/i18n/pl.json';
 ```
 
 #### Scenario: Adding a new locale
 
 - **WHEN** a community contributor wants to add German translations
 - **THEN** they SHALL create `i18n/de.json` with the same structure as `en.json`
-- **AND** the file SHALL be usable immediately via `import de from '@eigenpal/docx-js-editor/i18n/de.json'`
+- **AND** the file SHALL be usable immediately via `import de from '@eigenpal/docx-editor-react/i18n/de.json'`
 
 #### Scenario: Partial locale file is valid
 
@@ -82,11 +82,11 @@ import pl from '@eigenpal/docx-js-editor/i18n/pl.json';
 
 ### Requirement: Package exports include locale files
 
-The package `package.json` SHALL include exports entries for locale JSON files so they can be imported by consumers using the `@eigenpal/docx-js-editor/i18n/{lang}` path.
+The package `package.json` SHALL include exports entries for locale JSON files so they can be imported by consumers using the `@eigenpal/docx-editor-react/i18n/{lang}` path.
 
 #### Scenario: Consumer imports a locale
 
-- **WHEN** a consumer writes `import pl from '@eigenpal/docx-js-editor/i18n/pl.json'`
+- **WHEN** a consumer writes `import pl from '@eigenpal/docx-editor-react/i18n/pl.json'`
 - **THEN** the import SHALL resolve correctly in both ESM and CommonJS environments
 
 #### Scenario: Only imported locales are bundled

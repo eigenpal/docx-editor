@@ -10,7 +10,7 @@
 
 import React, { useState, useCallback } from 'react';
 import type { CSSProperties, ReactNode } from 'react';
-import type { NumberFormat } from '@eigenpal/docx-core/types/document';
+import type { NumberFormat } from '@eigenpal/docx-editor-core/types/document';
 import { MaterialSymbol } from './MaterialSymbol';
 import { useTranslation } from '../../i18n';
 
@@ -18,24 +18,9 @@ import { useTranslation } from '../../i18n';
 // TYPES
 // ============================================================================
 
-/**
- * List type
- */
-export type ListType = 'bullet' | 'numbered' | 'none';
-
-/**
- * List state for the current selection
- */
-export interface ListState {
-  /** Type of list (bullet, numbered, or none) */
-  type: ListType;
-  /** Current list level (0-8) */
-  level: number;
-  /** Whether the selection is in a list */
-  isInList: boolean;
-  /** Numbering ID if in a list */
-  numId?: number;
-}
+// List-state types live in core; re-exported here for backwards compat.
+export type { ListType, ListState } from '@eigenpal/docx-editor-core/utils/listState';
+import type { ListState } from '@eigenpal/docx-editor-core/utils/listState';
 
 /**
  * Props for the ListButtons component
@@ -308,96 +293,19 @@ export function ListButtons({
 // UTILITY FUNCTIONS
 // ============================================================================
 
-/**
- * Create a default list state (not in a list)
- */
-export function createDefaultListState(): ListState {
-  return {
-    type: 'none',
-    level: 0,
-    isInList: false,
-  };
-}
-
-/**
- * Create a bullet list state
- */
-export function createBulletListState(level: number = 0, numId?: number): ListState {
-  return {
-    type: 'bullet',
-    level,
-    isInList: true,
-    numId,
-  };
-}
-
-/**
- * Create a numbered list state
- */
-export function createNumberedListState(level: number = 0, numId?: number): ListState {
-  return {
-    type: 'numbered',
-    level,
-    isInList: true,
-    numId,
-  };
-}
-
-/**
- * Check if a list state represents a bullet list
- */
-export function isBulletListState(state: ListState | undefined): boolean {
-  return state?.type === 'bullet';
-}
-
-/**
- * Check if a list state represents a numbered list
- */
-export function isNumberedListState(state: ListState | undefined): boolean {
-  return state?.type === 'numbered';
-}
-
-/**
- * Check if a list state represents any list
- */
-export function isAnyListState(state: ListState | undefined): boolean {
-  return state?.isInList === true;
-}
-
-/**
- * Get the next indent level (max 8)
- */
-export function getNextIndentLevel(currentLevel: number): number {
-  return Math.min(currentLevel + 1, 8);
-}
-
-/**
- * Get the previous indent level (min 0)
- */
-export function getPreviousIndentLevel(currentLevel: number): number {
-  return Math.max(currentLevel - 1, 0);
-}
-
-/**
- * Toggle between list types
- */
-export function toggleListType(state: ListState | undefined, targetType: ListType): ListState {
-  // If already that type, remove list
-  if (state?.type === targetType) {
-    return createDefaultListState();
-  }
-
-  // Otherwise, set to the target type (preserving level if coming from another list)
-  const level = state?.isInList ? state.level : 0;
-
-  if (targetType === 'bullet') {
-    return createBulletListState(level);
-  } else if (targetType === 'numbered') {
-    return createNumberedListState(level);
-  } else {
-    return createDefaultListState();
-  }
-}
+// Pure list-state helpers live in core; re-exported here so the
+// existing import surface keeps working.
+export {
+  createDefaultListState,
+  createBulletListState,
+  createNumberedListState,
+  isBulletListState,
+  isNumberedListState,
+  isAnyListState,
+  getNextIndentLevel,
+  getPreviousIndentLevel,
+  toggleListType,
+} from '@eigenpal/docx-editor-core/utils/listState';
 
 /**
  * Get CSS for list indent

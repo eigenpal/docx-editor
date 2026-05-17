@@ -28,7 +28,8 @@ Internally, `PluginHost` uses `React.cloneElement` to inject props into the chil
 ## Quick Start
 
 ```tsx
-import { DocxEditor, PluginHost, templatePlugin } from '@eigenpal/docx-js-editor';
+import { DocxEditor } from '@eigenpal/docx-editor-react';
+import { PluginHost, templatePlugin } from '@eigenpal/docx-editor-react/plugin-api';
 
 function Editor({ file }: { file: ArrayBuffer }) {
   return (
@@ -314,10 +315,13 @@ interface PositionCoordinates {
 }
 ```
 
-Both types are exported from the main package:
+Both types are exported from the plugin API subpath:
 
 ```ts
-import type { RenderedDomContext, PositionCoordinates } from '@eigenpal/docx-js-editor';
+import type {
+  RenderedDomContext,
+  PositionCoordinates,
+} from '@eigenpal/docx-editor-react/plugin-api';
 ```
 
 **Important**: `renderedDomContext` may be `null` during initial render (before LayoutPainter has painted pages). Always null-check before using.

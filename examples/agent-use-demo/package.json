@@ -7,9 +7,9 @@
     "start": "next start"
   },
   "dependencies": {
-    "@eigenpal/docx-core": "workspace:*",
+    "@eigenpal/docx-editor-core": "workspace:*",
     "@eigenpal/docx-editor-agents": "workspace:*",
-    "@eigenpal/docx-js-editor": "workspace:*",
+    "@eigenpal/docx-editor-react": "workspace:*",
     "next": "^15.3.3",
     "openai": "^6.36.0",
     "react": "^19.0.0",

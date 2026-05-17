@@ -10,8 +10,8 @@ The library owns the panel chrome and chat primitives. **You bring your own agen
 
 | Piece                                                         | Where                                        | Notes                                                       |
 | ------------------------------------------------------------- | -------------------------------------------- | ----------------------------------------------------------- |
-| `<DocxEditor agentPanel>`                                     | `@eigenpal/docx-js-editor`                   | Right-hand panel, sparkle toolbar toggle, drag-resize       |
-| `<AgentChatLog>`, `<AgentComposer>`, `<AgentTimeline>`        | `@eigenpal/docx-js-editor`                   | Opinionated chat primitives — optional                      |
+| `<DocxEditor agentPanel>`                                     | `@eigenpal/docx-editor-react`                | Right-hand panel, sparkle toolbar toggle, drag-resize       |
+| `<AgentChatLog>`, `<AgentComposer>`, `<AgentTimeline>`        | `@eigenpal/docx-editor-agents/react`         | Opinionated chat primitives — optional                      |
 | `useDocxAgentTools()`                                         | `@eigenpal/docx-editor-agents/react`         | Tool executor + selection / page context                    |
 | `getToolSchemas()`, `getToolDisplayName()`, `executeToolCall` | `@eigenpal/docx-editor-agents/server`        | OpenAI function-calling format — runtime-agnostic           |
 | `getAiSdkTools()`                                             | `@eigenpal/docx-editor-agents/ai-sdk/server` | **AI SDK only.** Returns `streamText({ tools })` shape      |
@@ -27,7 +27,7 @@ The `/ai-sdk/*` subpaths import `ai`. Don't use them if you're not on AI SDK —
 ### 1. Install
 
 ```bash
-npm i @eigenpal/docx-js-editor @eigenpal/docx-editor-agents \
+npm i @eigenpal/docx-editor-react @eigenpal/docx-editor-agents \
       ai @ai-sdk/react @ai-sdk/openai
 ```
 
@@ -73,8 +73,10 @@ import { useRef, useState, useMemo } from 'react';
 import dynamic from 'next/dynamic';
 import { useChat } from '@ai-sdk/react';
 import { DefaultChatTransport, lastAssistantMessageIsCompleteWithToolCalls } from 'ai';
-import { type DocxEditorRef, AgentChatLog, AgentComposer } from '@eigenpal/docx-js-editor';
+import { type DocxEditorRef } from '@eigenpal/docx-editor-react';
 import {
+  AgentChatLog,
+  AgentComposer,
   useDocxAgentTools,
   getToolDisplayName,
   type EditorRefLike,
@@ -82,7 +84,7 @@ import {
 import { toAgentMessages } from '@eigenpal/docx-editor-agents/ai-sdk/react';
 
 const DocxEditor = dynamic(
-  () => import('@eigenpal/docx-js-editor').then((m) => ({ default: m.DocxEditor })),
+  () => import('@eigenpal/docx-editor-react').then((m) => ({ default: m.DocxEditor })),
   { ssr: false }
 );
 

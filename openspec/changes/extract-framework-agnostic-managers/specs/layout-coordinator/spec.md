@@ -69,7 +69,7 @@ The `LayoutCoordinator` SHALL implement a `subscribe(listener)` / `getSnapshot()
 
 ### Requirement: LayoutCoordinator has zero framework dependencies
 
-The `LayoutCoordinator` class SHALL import only from `@eigenpal/docx-core` internals and vanilla DOM APIs. It SHALL NOT import React, Vue, or any framework.
+The `LayoutCoordinator` class SHALL import only from `@eigenpal/docx-editor-core` internals and vanilla DOM APIs. It SHALL NOT import React, Vue, or any framework.
 
 #### Scenario: Verify no framework imports
 

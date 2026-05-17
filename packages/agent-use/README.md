@@ -1,6 +1,6 @@
 # @eigenpal/docx-editor-agents
 
-[![License: AGPL-3.0](https://img.shields.io/badge/License-AGPL--3.0-blue.svg)](./LICENSE)
+[![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](./LICENSE)
 
 Word-like API for AI agents to review DOCX documents. Read, comment, suggest tracked changes, accept/reject. Headless. Server-friendly. Browser-friendly. **The library you build your AI document features on top of.**
 
@@ -8,7 +8,7 @@ Word-like API for AI agents to review DOCX documents. Read, comment, suggest tra
 npm install @eigenpal/docx-editor-agents
 ```
 
-## Three ways to use this package
+## Common patterns
 
 ### 1. Static review (`DocxReviewer`) — single function call against a parsed DOCX
 
@@ -23,15 +23,25 @@ const output = await reviewer.toBuffer();
 
 Drop into a CI bot, a queue worker, a Lambda. No editor needed. ~50 KB.
 
-### 2. Live editor bridge (`createEditorBridge`) — wire AI tools into a running `<DocxEditor>` instance
+### 2. Live editor bridge — wire AI tools into a running `<DocxEditor>` instance
+
+**React** (`useAgentChat`):
 
 ```ts
-import { useAgentChat } from '@eigenpal/docx-editor-agents/bridge';
+import { useAgentChat } from '@eigenpal/docx-editor-agents/react';
 
 const { executeToolCall, toolSchemas } = useAgentChat({ editorRef, author: 'Assistant' });
 ```
 
-The agent's `add_comment`, `suggest_change`, `find_text` etc. show up live in the user's editor. Used by Eigenpal's chat panel; published for anyone building an AI document UX.
+**Vue** (`useAgentBridge`):
+
+```ts
+import { useAgentBridge } from '@eigenpal/docx-editor-agents/vue';
+
+const { executeToolCall, toolSchemas } = useAgentBridge({ editorRef, author: 'Assistant' });
+```
+
+The agent's `add_comment`, `suggest_change`, `find_text` etc. show up live in the user's editor. Both subpaths share the same `EditorRefLike` contract from `/bridge`, the same tool catalog, and the same `AgentMessage[]` chat shape. (For other framework adapters, build the bridge directly via `createEditorBridge` from `@eigenpal/docx-editor-agents/bridge`.)
 
 ### 3. Build your own MCP server (`McpServer` + `createReviewerBridge`) — the SaaS path
 
@@ -79,16 +89,37 @@ import type { WordCompatBridge } from '@eigenpal/docx-editor-agents';
 
 `WordCompatBridge` is a TypeScript interface that `EditorBridge` is statically required to satisfy. If we ever drop a method that maps to a Word API call, typecheck breaks.
 
-## What's in the package
+## Subpath map
 
-| Subpath                               | What                                                              | Use when                                                  |
-| ------------------------------------- | ----------------------------------------------------------------- | --------------------------------------------------------- |
-| `@eigenpal/docx-editor-agents`        | `DocxReviewer`, `createReviewerBridge`, agent tool catalog, types | Server-side review, building your own MCP server          |
-| `@eigenpal/docx-editor-agents/bridge` | `useAgentChat`, `createEditorBridge`, `EditorBridge` interface    | Wiring AI tools into a live `<DocxEditor>` in the browser |
-| `@eigenpal/docx-editor-agents/mcp`    | `McpServer`, JSON-RPC types, stdio adapter                        | Building an MCP server (any transport)                    |
+Each subpath tree-shakes independently and pulls only its peers.
 
-Zero new runtime dependencies. Tree-shakes cleanly per subpath.
+| Subpath                                      | What                                                                                               | Use when                                                                          |
+| -------------------------------------------- | -------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------- |
+| `@eigenpal/docx-editor-agents`               | `DocxReviewer`, `createReviewerBridge`, agent tool catalog, types                                  | Server-side review, library glue                                                  |
+| `@eigenpal/docx-editor-agents/bridge`        | `createEditorBridge`, `EditorBridge`, `EditorRefLike` (the integration contract)                   | Wiring AI tools into a running editor adapter                                     |
+| `@eigenpal/docx-editor-agents/server`        | Tool catalog + `DocxReviewer` + `createReviewerBridge` re-exported for backend routes (no UI peer) | Server routes that need agent tooling without the MCP transport                   |
+| `@eigenpal/docx-editor-agents/mcp`           | `McpServer`, JSON-RPC types, stdio adapter                                                         | Building an MCP server (any transport)                                            |
+| `@eigenpal/docx-editor-agents/ai-sdk/server` | Vercel AI SDK adapter — agent tools as AI SDK tools server-side                                    | Server-side streaming chat with `ai` package                                      |
+| `@eigenpal/docx-editor-agents/react`         | Hook (`useAgentChat`) + agent UI components — see [`src/react.ts`](./src/react.ts)                 | React apps wiring `<DocxEditor>` (from `@eigenpal/docx-editor-react`) to an agent |
+| `@eigenpal/docx-editor-agents/ai-sdk/react`  | React-flavoured AI SDK adapter (`useChat` → `AgentMessage[]`)                                      | React chat UI over the bridge                                                     |
+| `@eigenpal/docx-editor-agents/vue`           | Composable (`useAgentBridge`) + agent UI components — see [`src/vue.ts`](./src/vue.ts)             | Vue apps wiring `<DocxEditor>` (from `@eigenpal/docx-editor-vue`) to an agent     |
+| `@eigenpal/docx-editor-agents/ai-sdk/vue`    | Vue-flavoured AI SDK adapter (`useChat` → `AgentMessage[]`)                                        | Vue chat UI over the bridge                                                       |
+
+`/react` and `/vue` share the same `EditorRefLike` contract from `/bridge` and the same `AgentMessage[]` shape (`toAgentMessages` lifted to `ai-sdk/shared.ts`), so the React and Vue UIs feed off the same chat state — but the host wiring differs (different hook names + different editor component + different SFC vs JSX shells).
+
+Zero new runtime dependencies. Vue and AI SDK peers are optional via `peerDependenciesMeta`.
+
+## Migration from 0.x
+
+The 1.0.0 train tightened the package boundary so the bare entry stays UI-framework-agnostic. React-only hooks moved to the `/react` subpath:
+
+```diff
+- import { useAgentChat, useDocxAgentTools } from '@eigenpal/docx-editor-agents';
++ import { useAgentChat, useDocxAgentTools } from '@eigenpal/docx-editor-agents/react';
+```
+
+`DocxReviewer`, `createReviewerBridge`, `createEditorBridge`, the agent tool catalog, and all types stay on the bare entry — they're framework-agnostic.
 
 ## License
 
-[AGPL-3.0](./LICENSE) — free to use and modify, but you must open-source your code. For commercial licensing without AGPL obligations, contact [founders@eigenpal.com](mailto:founders@eigenpal.com).
+[Apache-2.0](./LICENSE) — permissive use with an explicit patent grant. Free for commercial use; no copyleft obligations.

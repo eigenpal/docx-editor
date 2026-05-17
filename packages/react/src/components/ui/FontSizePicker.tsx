@@ -14,7 +14,7 @@ import { useState, useCallback, useRef } from 'react';
 import { Button } from './Button';
 import { MaterialSymbol } from './MaterialSymbol';
 import { cn } from '../../lib/utils';
-import { useFixedDropdown } from './useFixedDropdown';
+import { useFixedDropdown } from '../../hooks/useFixedDropdown';
 import { useTranslation } from '../../i18n';
 
 // ============================================================================
@@ -45,19 +45,9 @@ const DEFAULT_MAX_SIZE = 400;
 // UTILITY FUNCTIONS
 // ============================================================================
 
-/**
- * Convert half-points to points (OOXML uses half-points for font sizes)
- */
-export function halfPointsToPoints(halfPoints: number): number {
-  return halfPoints / 2;
-}
-
-/**
- * Convert points to half-points
- */
-export function pointsToHalfPoints(points: number): number {
-  return points * 2;
-}
+// Re-export the canonical half-point conversions from core so the
+// React FontSizePicker keeps its existing import surface.
+export { halfPointsToPoints, pointsToHalfPoints } from '@eigenpal/docx-editor-core/utils/units';
 
 /**
  * Find the next size in the preset list (going up)

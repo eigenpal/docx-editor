@@ -36,22 +36,39 @@ export default defineConfig({
     {
       name: 'chromium',
       use: { ...devices['Desktop Chrome'] },
+      // React-only specs run against the React demo (port 5173).
+      testIgnore: ['**/parity/**', '**/vue/**'],
     },
-    // TODO: Add 'vue' project when @eigenpal/docx-editor-vue has a working editor
-    // {
-    //   name: 'vue',
-    //   use: { ...devices['Desktop Chrome'], baseURL: 'http://localhost:5174' },
-    //   testMatch: ['tests/shared/**/*.spec.ts'],
-    // },
+    {
+      name: 'vue',
+      use: { ...devices['Desktop Chrome'] },
+      testMatch: ['**/vue/**/*.spec.ts'],
+    },
+    {
+      // Parity specs target both adapters via the `parityCases` fixture.
+      // The fixture file is excluded from `testMatch` so Playwright doesn't
+      // treat it as a spec.
+      name: 'parity',
+      use: { ...devices['Desktop Chrome'] },
+      testMatch: ['**/parity/**/*.spec.ts'],
+    },
   ],
 
-  /* Run dev server before tests */
-  webServer: {
-    command: 'bun run dev',
-    url: 'http://localhost:5173',
-    reuseExistingServer: !process.env.CI,
-    timeout: 60 * 1000, // Reduced from 120s
-  },
+  /* Run dev servers before tests */
+  webServer: [
+    {
+      command: 'bun run dev',
+      url: 'http://localhost:5173',
+      reuseExistingServer: !process.env.CI,
+      timeout: 60 * 1000,
+    },
+    {
+      command: 'bun run dev:vue',
+      url: 'http://localhost:5174',
+      reuseExistingServer: !process.env.CI,
+      timeout: 60 * 1000,
+    },
+  ],
 
   /* Output directory for screenshots */
   outputDir: './screenshots/test-results',

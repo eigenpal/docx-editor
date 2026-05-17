@@ -1,0 +1,13 @@
+export { default as FindReplaceDialog } from './FindReplaceDialog.vue';
+export { default as FootnotePropertiesDialog } from './FootnotePropertiesDialog.vue';
+export { default as HyperlinkDialog } from './HyperlinkDialog.vue';
+export { default as ImagePositionDialog } from './ImagePositionDialog.vue';
+export { default as ImagePropertiesDialog } from './ImagePropertiesDialog.vue';
+export { default as InsertImageDialog } from './InsertImageDialog.vue';
+export { default as InsertSymbolDialog } from './InsertSymbolDialog.vue';
+export { default as InsertTableDialog } from './InsertTableDialog.vue';
+export { default as KeyboardShortcutsDialog } from './KeyboardShortcutsDialog.vue';
+export { default as PageSetupDialog } from './PageSetupDialog.vue';
+export { default as PasteSpecialDialog } from './PasteSpecialDialog.vue';
+export { default as SplitCellDialog } from './SplitCellDialog.vue';
+export { default as TablePropertiesDialog } from './TablePropertiesDialog.vue';

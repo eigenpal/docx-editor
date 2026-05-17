@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useRef, useCallback } from 'react';
-import { DocxEditor, type DocxEditorRef } from '@eigenpal/docx-js-editor';
+import { DocxEditor, type DocxEditorRef } from '@eigenpal/docx-editor-react';
 
 type Phase = 'upload' | 'roasting' | 'result';
 

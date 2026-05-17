@@ -34,7 +34,7 @@ There are **two ways** to customize the toolbar:
 The simplest way to customize the toolbar:
 
 ```tsx
-import { DocxEditor } from '@eigenpal/docx-js-editor';
+import { DocxEditor } from '@eigenpal/docx-editor-react';
 
 function App() {
   const [fileName, setFileName] = useState('Untitled.docx');
@@ -73,7 +73,7 @@ All existing toolbar props (`showToolbar`, `showZoomControl`, `showRuler`, `tool
 For full control over the toolbar structure, use `EditorToolbar` directly:
 
 ```tsx
-import { EditorToolbar, type EditorToolbarProps } from '@eigenpal/docx-js-editor';
+import { EditorToolbar, type EditorToolbarProps } from '@eigenpal/docx-editor-react/ui';
 
 function MyEditor({ toolbarProps }: { toolbarProps: EditorToolbarProps }) {
   return (
@@ -93,7 +93,7 @@ function MyEditor({ toolbarProps }: { toolbarProps: EditorToolbarProps }) {
           <button onClick={handleShare}>Share</button>
         </EditorToolbar.TitleBarRight>
       </EditorToolbar.TitleBar>
-      <EditorToolbar.FormattingBar />
+      <EditorToolbar.Toolbar />
     </EditorToolbar>
   );
 }
@@ -107,7 +107,7 @@ The root wrapper. Provides toolbar context to all sub-components.
 
 | Prop              | Type        | Description                                                   |
 | ----------------- | ----------- | ------------------------------------------------------------- |
-| `children`        | `ReactNode` | Sub-components (TitleBar, FormattingBar)                      |
+| `children`        | `ReactNode` | Sub-components (TitleBar, Toolbar)                            |
 | `className`       | `string`    | Additional CSS class for the container                        |
 | _...ToolbarProps_ |             | All standard toolbar props (formatting state, handlers, etc.) |
 
@@ -155,7 +155,7 @@ Right-aligned container for custom actions (buttons, toggles, status indicators)
 | ---------- | ----------- | ----------------------------- |
 | `children` | `ReactNode` | Action buttons, toggles, etc. |
 
-#### `EditorToolbar.FormattingBar`
+#### `EditorToolbar.Toolbar`
 
 The icon formatting toolbar (undo/redo, zoom, fonts, bold/italic/underline, colors, alignment, lists, etc.) rendered inside a rounded pill with a subtle gray background. Can also be used standalone outside of `EditorToolbar`.
 
@@ -228,8 +228,8 @@ Mix standard sub-components with your own elements inside the TitleBar:
       <SaveButton />
     </EditorToolbar.TitleBarRight>
   </EditorToolbar.TitleBar>
-  <EditorToolbar.FormattingBar>
+  <EditorToolbar.Toolbar>
     <CustomToolbarButton icon="spell_check" onClick={handleSpellCheck} />
-  </EditorToolbar.FormattingBar>
+  </EditorToolbar.Toolbar>
 </EditorToolbar>
 ```

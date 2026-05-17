@@ -12,7 +12,7 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react';
 import type { CSSProperties, KeyboardEvent, MouseEvent } from 'react';
 import { useTranslation } from '../../i18n';
-import type { Image as ImageType, ImageSize } from '@eigenpal/docx-core/types/document';
+import type { Image as ImageType, ImageSize } from '@eigenpal/docx-editor-core/types/document';
 import {
   getImageWidthPx,
   getImageHeightPx,
@@ -22,8 +22,8 @@ import {
   isInFrontOfText,
   isDecorativeImage,
   getWrapDistancesPx,
-} from '@eigenpal/docx-core/docx';
-import { pixelsToEmu } from '@eigenpal/docx-core/utils';
+} from '@eigenpal/docx-editor-core/docx';
+import { pixelsToEmu } from '@eigenpal/docx-editor-core/utils';
 
 // ============================================================================
 // TYPES

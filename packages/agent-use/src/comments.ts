@@ -2,7 +2,7 @@
  * Comment operations — addComment, replyTo, removeComment
  */
 
-import type { DocumentBody, Paragraph, Comment, Run } from '@eigenpal/docx-core/headless';
+import type { DocumentBody, Paragraph, Comment, Run } from '@eigenpal/docx-editor-core/headless';
 import type { AddCommentOptions, ReplyOptions } from './types';
 import { CommentNotFoundError } from './errors';
 import { findTextInParagraph } from './textSearch';

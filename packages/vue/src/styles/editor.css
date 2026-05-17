@@ -1,0 +1,639 @@
+/* Mirrored from packages/react/src/styles/editor.css for visual parity.
+   TODO: lift to packages/core/src/styles/editor.css once both adapter
+   build pipelines have been retested. The React file keeps its
+   '@tailwind utilities' directive; this Vue copy strips it because
+   the Vue build does not run Tailwind. */
+
+/* Comment-anchored span highlights — layout-painter writes
+   `data-comment-id` on every run that has comments. Subtle yellow
+   underline shows the user that a comment exists; hover boosts it
+   so it's discoverable. The expanded-comment style (full yellow
+   background) gets injected dynamically by DocxEditorVue.vue when
+   a sidebar card is clicked. */
+/* Scope to the rendered pages container only — the sidebar card
+   roots also carry `data-comment-id` for the expand-highlight
+   selector, and we don't want them to get the yellow tint too.
+   React handles this by painting the inline style in the
+   layout-painter rather than via a wrapper-scoped CSS rule, but
+   the Vue path keeps the rule and just narrows the scope. */
+.paged-editor__pages [data-comment-id] {
+  background-color: rgba(255, 212, 0, 0.12);
+  border-bottom: 1px solid rgba(255, 212, 0, 0.5);
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+}
+.paged-editor__pages [data-comment-id]:hover {
+  background-color: rgba(255, 212, 0, 0.25);
+}
+
+/**
+ * DOCX Editor Styles
+ *
+ * Core styles for the WYSIWYG DOCX editor including:
+ * - Tailwind utility classes used by toolbar/UI components
+ * - CSS custom properties for theming (shadcn compatible)
+ * - Cursor/caret visibility
+ * - Selection highlighting
+ * - ContentEditable element styling
+ *
+ * NOTE: @tailwind utilities is required so that the built dist/styles.css
+ * includes all Tailwind utility classes used in the component JSX.
+ * Without this, consuming apps that import the library won't have
+ * the necessary button/toolbar styles unless they happen to generate
+ * the same classes in their own Tailwind build.
+ * We intentionally do NOT include @tailwind base (preflight) to avoid
+ * resetting styles in the consuming application.
+ */
+
+/* ============================================================================
+ * CSS CUSTOM PROPERTIES (shadcn theme)
+ * ============================================================================ */
+
+/* Scoped to .ep-root to avoid clashing with host application CSS variables */
+.ep-root {
+  --background: 0 0% 100%;
+  --foreground: 222.2 84% 4.9%;
+  --card: 0 0% 100%;
+  --card-foreground: 222.2 84% 4.9%;
+  --popover: 0 0% 100%;
+  --popover-foreground: 222.2 84% 4.9%;
+  --primary: 221.2 83.2% 53.3%;
+  --primary-foreground: 210 40% 98%;
+  --secondary: 210 40% 96.1%;
+  --secondary-foreground: 222.2 47.4% 11.2%;
+  --muted: 210 40% 96.1%;
+  --muted-foreground: 215.4 16.3% 46.9%;
+  --accent: 210 40% 96.1%;
+  --accent-foreground: 222.2 47.4% 11.2%;
+  --destructive: 0 84.2% 60.2%;
+  --destructive-foreground: 210 40% 98%;
+  --border: 214.3 31.8% 91.4%;
+  --input: 214.3 31.8% 91.4%;
+  --ring: 221.2 83.2% 53.3%;
+  --radius: 0.5rem;
+
+  /* ========================================
+   * Document Editor Color System
+   * ======================================== */
+
+  /* Document background - area behind the page */
+  --doc-bg: #f8f9fa;
+
+  /* Primary action color (Google blue) */
+  --doc-primary: #1a73e8;
+  --doc-primary-hover: #1557b0;
+  --doc-primary-light: #e8f0fe; /* selected/active backgrounds */
+
+  /* Text colors */
+  --doc-text: #202124; /* primary text */
+  --doc-text-muted: #5f6368; /* secondary text */
+  --doc-text-subtle: #9aa0a6; /* tertiary/disabled text */
+  --doc-text-placeholder: #999; /* placeholder text */
+
+  /* Border colors */
+  --doc-border: #e0e0e0; /* standard borders */
+  --doc-border-light: #dadce0; /* lighter borders */
+  --doc-border-dark: #d0d0d0; /* darker borders (tables) */
+  --doc-border-input: #ccc; /* input borders */
+
+  /* Background colors */
+  --doc-bg-subtle: #f5f5f5; /* subtle backgrounds */
+  --doc-bg-hover: #f1f3f4; /* hover states */
+  --doc-bg-input: #f8f9fa; /* input backgrounds */
+
+  /* Status colors */
+  --doc-error: #c5221f; /* error states */
+  --doc-error-bg: #fce8e6; /* error backgrounds */
+  --doc-success: #34a853; /* success states */
+  --doc-success-bg: #e8f5e9; /* success backgrounds */
+  --doc-warning: #f9a825; /* warning states */
+  --doc-warning-bg: #fff8e1; /* warning backgrounds */
+
+  /* Link color */
+  --doc-link: #0563c1; /* hyperlinks */
+}
+
+/* ============================================================================
+ * CURSOR / CARET STYLING
+ * ============================================================================ */
+
+/* Base cursor styles for all editable elements */
+[contenteditable='true'] {
+  /* Black caret for light backgrounds - highly visible */
+  caret-color: #000;
+
+  /* Ensure cursor is always visible */
+  outline: none;
+
+  /* Smooth caret animation */
+  caret-shape: bar;
+}
+
+/* Editable runs - the main text editing elements */
+.docx-run-editable[contenteditable='true'] {
+  caret-color: #000;
+
+  /* Ensure minimum height for cursor visibility in empty runs */
+  min-height: 1em;
+
+  /* Display inline for text flow */
+  display: inline;
+}
+
+/* Empty paragraph cursor placeholder */
+.docx-paragraph-empty [contenteditable='true'] {
+  /* Ensure cursor is visible in empty paragraphs */
+  min-height: 1em;
+  min-width: 1px;
+  display: inline-block;
+}
+
+/* Editable paragraphs container */
+.docx-paragraph-editable {
+  /* Allow cursor placement anywhere in paragraph */
+  cursor: text;
+}
+
+/* ============================================================================
+ * FOCUS STATES
+ * ============================================================================ */
+
+/* Subtle focus indicator without disrupting layout */
+.docx-run-editable[contenteditable='true']:focus {
+  outline: none;
+  /* Optional: very subtle indicator - uncomment if needed */
+  /* box-shadow: 0 0 0 1px rgba(26, 115, 232, 0.2); */
+}
+
+/* Focus within paragraph */
+.docx-paragraph-editable:focus-within {
+  /* No visible border to maintain WYSIWYG fidelity */
+  outline: none;
+}
+
+/* ============================================================================
+ * SELECTION HIGHLIGHTING
+ * ============================================================================ */
+
+/*
+ * Selection highlighting CSS ensures consistent visual feedback when selecting
+ * text across multiple runs (spans) with different formatting.
+ *
+ * Key considerations:
+ * - Use !important to override inline styles from formatting
+ * - Ensure selection is visible against various backgrounds
+ * - Maintain text color (inherit) for readability
+ * - Use rgba for semi-transparent highlight that shows text clearly
+ */
+
+/* Base selection styling for all editable elements */
+.docx-run-editable::selection,
+.docx-run-editable *::selection,
+.docx-run::selection,
+.docx-run *::selection,
+[contenteditable='true']::selection,
+[contenteditable='true'] *::selection {
+  background-color: rgba(26, 115, 232, 0.3) !important;
+  color: inherit !important;
+}
+
+/* Firefox selection */
+.docx-run-editable::-moz-selection,
+.docx-run-editable *::-moz-selection,
+.docx-run::-moz-selection,
+.docx-run *::-moz-selection,
+[contenteditable='true']::-moz-selection,
+[contenteditable='true'] *::-moz-selection {
+  background-color: rgba(26, 115, 232, 0.3) !important;
+  color: inherit !important;
+}
+
+/* Selection in paragraphs - ensure runs within get consistent styling */
+.docx-paragraph::selection,
+.docx-paragraph *::selection,
+.docx-paragraph-editable::selection,
+.docx-paragraph-editable *::selection {
+  background-color: rgba(26, 115, 232, 0.3) !important;
+  color: inherit !important;
+}
+
+.docx-paragraph::-moz-selection,
+.docx-paragraph *::-moz-selection,
+.docx-paragraph-editable::-moz-selection,
+.docx-paragraph-editable *::-moz-selection {
+  background-color: rgba(26, 115, 232, 0.3) !important;
+  color: inherit !important;
+}
+
+/* Selection in hyperlinks */
+.docx-hyperlink::selection,
+.docx-hyperlink *::selection {
+  background-color: rgba(26, 115, 232, 0.3) !important;
+  color: inherit !important;
+}
+
+.docx-hyperlink::-moz-selection,
+.docx-hyperlink *::-moz-selection {
+  background-color: rgba(26, 115, 232, 0.3) !important;
+  color: inherit !important;
+}
+
+/* Selection on highlighted text - use darker selection for visibility */
+.docx-run-highlighted::selection,
+.docx-run-highlighted *::selection {
+  background-color: rgba(26, 115, 232, 0.5) !important;
+  color: inherit !important;
+}
+
+.docx-run-highlighted::-moz-selection,
+.docx-run-highlighted *::-moz-selection {
+  background-color: rgba(26, 115, 232, 0.5) !important;
+  color: inherit !important;
+}
+
+/* Selection on dark background text - lighter selection */
+.docx-run-dark-bg::selection,
+.docx-run-dark-bg *::selection {
+  background-color: rgba(100, 181, 246, 0.5) !important;
+  color: inherit !important;
+}
+
+.docx-run-dark-bg::-moz-selection,
+.docx-run-dark-bg *::-moz-selection {
+  background-color: rgba(100, 181, 246, 0.5) !important;
+  color: inherit !important;
+}
+
+/* Selection on bold text - ensure same style */
+.docx-run-bold::selection,
+.docx-run-bold *::selection {
+  background-color: rgba(26, 115, 232, 0.3) !important;
+  color: inherit !important;
+}
+
+.docx-run-bold::-moz-selection,
+.docx-run-bold *::-moz-selection {
+  background-color: rgba(26, 115, 232, 0.3) !important;
+  color: inherit !important;
+}
+
+/* Selection on italic text - ensure same style */
+.docx-run-italic::selection,
+.docx-run-italic *::selection {
+  background-color: rgba(26, 115, 232, 0.3) !important;
+  color: inherit !important;
+}
+
+.docx-run-italic::-moz-selection,
+.docx-run-italic *::-moz-selection {
+  background-color: rgba(26, 115, 232, 0.3) !important;
+  color: inherit !important;
+}
+
+/* ============================================================================
+ * FIND & REPLACE HIGHLIGHTING
+ * ============================================================================ */
+
+/* Find/replace match highlighting */
+.docx-find-highlight {
+  background-color: rgba(255, 235, 59, 0.5) !important;
+  border-radius: 2px;
+}
+
+/* Current find/replace match */
+.docx-find-highlight-current {
+  background-color: rgba(255, 152, 0, 0.6) !important;
+  border-radius: 2px;
+  outline: 2px solid rgba(255, 152, 0, 0.8);
+}
+
+/* ============================================================================
+ * AI ACTION PREVIEW HIGHLIGHTING
+ * ============================================================================ */
+
+/* Text selected for AI action */
+.docx-ai-selection-preview {
+  background-color: rgba(156, 39, 176, 0.2);
+  border-bottom: 2px dashed rgba(156, 39, 176, 0.6);
+}
+
+/* ============================================================================
+ * SELECTION OVERLAY (for programmatic highlighting)
+ * ============================================================================ */
+
+/* Container for selection overlay rectangles */
+.docx-selection-overlay-container {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 1;
+  overflow: hidden;
+}
+
+/* Individual selection overlay rectangle */
+.docx-selection-overlay-rect {
+  position: absolute;
+  background-color: rgba(66, 133, 244, 0.25);
+  pointer-events: none;
+  user-select: none;
+}
+
+/* ============================================================================
+ * SPECIAL CONTENT TYPES
+ * ============================================================================ */
+
+/* Highlighted text - ensure caret is visible against yellow */
+.docx-run-highlighted[contenteditable='true'] {
+  caret-color: #333;
+}
+
+/* Dark background text - use white caret */
+.docx-run-dark-bg[contenteditable='true'] {
+  caret-color: #fff;
+}
+
+/* ============================================================================
+ * EDITOR CONTAINER
+ * ============================================================================ */
+
+/* Main editor container */
+.docx-editor {
+  /* Inherit cursor styling */
+  cursor: default;
+}
+
+/* Editor page area */
+.docx-editor-page {
+  cursor: text;
+}
+
+/* Non-editable elements within editor */
+.docx-list-marker,
+.docx-bookmark-start,
+.docx-bookmark-end,
+.docx-field,
+.docx-drawing-placeholder,
+.docx-shape-placeholder {
+  cursor: default;
+  user-select: none;
+}
+
+/* ============================================================================
+ * TEMPLATE VARIABLES
+ * ============================================================================ */
+
+/* Template variable highlighting - non-editable within run */
+.docx-run-has-variable [contenteditable='false'] {
+  cursor: default;
+  user-select: all;
+}
+
+/* ============================================================================
+ * LAYOUT TABLE COLUMN RESIZE
+ * ============================================================================ */
+
+/* ============================================================================
+ * TABLE CELL SELECTION (visible layout table cells)
+ * ============================================================================ */
+
+.layout-table-cell-selected {
+  position: relative;
+  outline: 2px solid rgba(66, 133, 244, 0.6);
+  outline-offset: -2px;
+}
+
+.layout-table-cell-selected::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-color: rgba(66, 133, 244, 0.15);
+  pointer-events: none;
+}
+
+/* ============================================================================
+ * LAYOUT TABLE COLUMN RESIZE
+ * ============================================================================ */
+
+.layout-table-resize-handle {
+  background-color: transparent;
+  transition: background-color 0.15s;
+}
+
+.layout-table-resize-handle:hover,
+.layout-table-resize-handle.dragging {
+  background-color: rgba(66, 133, 244, 0.6);
+}
+
+/* Row resize handles */
+.layout-table-row-resize-handle,
+.layout-table-edge-handle-bottom {
+  background-color: transparent;
+  transition: background-color 0.15s;
+}
+
+.layout-table-row-resize-handle:hover,
+.layout-table-row-resize-handle.dragging,
+.layout-table-edge-handle-bottom:hover,
+.layout-table-edge-handle-bottom.dragging {
+  background-color: rgba(66, 133, 244, 0.6);
+}
+
+/* Right edge handle */
+.layout-table-edge-handle-right {
+  background-color: transparent;
+  transition: background-color 0.15s;
+}
+
+.layout-table-edge-handle-right:hover,
+.layout-table-edge-handle-right.dragging {
+  background-color: rgba(66, 133, 244, 0.6);
+}
+
+/* ============================================================================
+ * READONLY MODE — suppress interactive editing cues
+ * ============================================================================ */
+
+/* Hide table resize handles */
+.paged-editor--readonly .layout-table-resize-handle,
+.paged-editor--readonly .layout-table-row-resize-handle,
+.paged-editor--readonly .layout-table-edge-handle-bottom,
+.paged-editor--readonly .layout-table-edge-handle-right {
+  display: none !important;
+}
+
+/* Remove header/footer hover effects and edit hints */
+.paged-editor--readonly .layout-page-header,
+.paged-editor--readonly .layout-page-footer {
+  cursor: default;
+  pointer-events: none;
+}
+
+/* Remove text cursor from page content */
+.paged-editor--readonly .layout-page-content {
+  cursor: default;
+}
+
+/* Outline heading hover */
+.docx-outline-heading-btn:hover {
+  background-color: #f1f3f4;
+}
+
+/* ============================================================================
+ * HEADER / FOOTER EDITING
+ *
+ * These styles are needed when editing headers/footers inline (Google Docs style).
+ * They must be in dist/styles.css since the runtime CSS import in
+ * OffscreenEditorHost.tsx is stripped by tsup (injectStyle: false).
+ * ============================================================================ */
+
+/* Page content area — show text cursor when hovering over editable content */
+.layout-page-content {
+  cursor: text;
+}
+
+/* Header/footer areas — double-click hint */
+.layout-page-header,
+.layout-page-footer {
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+}
+.layout-page-header:hover,
+.layout-page-footer:hover {
+  background-color: rgba(37, 99, 235, 0.06);
+}
+/* Show "Double-click to edit" hint on hover when area is empty */
+.layout-page-header:empty:hover::after {
+  content: 'Double-click to add header';
+  display: block;
+  text-align: center;
+  color: #9ca3af;
+  font-size: 11px;
+  padding: 4px 0;
+}
+.layout-page-footer:empty:hover::after {
+  content: 'Double-click to add footer';
+  display: block;
+  text-align: center;
+  color: #9ca3af;
+  font-size: 11px;
+  padding: 4px 0;
+}
+
+/* Header/footer editor ProseMirror styles */
+.hf-editor-pm .ProseMirror {
+  outline: none;
+  min-height: 40px;
+  padding: 4px;
+}
+.hf-editor-pm .ProseMirror:focus {
+  outline: none;
+}
+.hf-editor-pm .ProseMirror p {
+  display: block;
+  margin: 0;
+  padding: 0;
+  min-height: 1em;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  line-height: normal;
+}
+
+/* Dim body content when editing header/footer */
+.paged-editor--hf-editing .layout-page-content {
+  opacity: 0.4;
+  pointer-events: none;
+  transition: opacity 0.15s ease;
+}
+
+/* Dotted border on active header area */
+.paged-editor--editing-header .layout-page-header {
+  border-bottom: 1px dotted #4285f4;
+}
+
+/* Dotted border on active footer area */
+.paged-editor--editing-footer .layout-page-footer {
+  border-top: 1px dotted #4285f4;
+}
+
+/* Hide the original layout-painter content in the area being edited */
+.paged-editor--editing-header .layout-page-header > * {
+  visibility: hidden;
+}
+.paged-editor--editing-footer .layout-page-footer > * {
+  visibility: hidden;
+}
+
+/* Remove hover effect on header/footer when in editing mode */
+.paged-editor--hf-editing .layout-page-header:hover,
+.paged-editor--hf-editing .layout-page-footer:hover {
+  background-color: transparent;
+}
+
+/* Section break indicator */
+.docx-section-break {
+  position: relative;
+}
+.docx-section-break::after {
+  content: 'Section Break (' attr(data-section-break) ')';
+  display: block;
+  text-align: center;
+  font-size: 9px;
+  color: var(--doc-text-muted, #9ca3af);
+  border-top: 1px dashed var(--doc-border, #d1d5db);
+  margin-top: 4px;
+  padding-top: 2px;
+  pointer-events: none;
+}
+
+/* Hyperlink popup icon button hover */
+.ep-hyperlink-popup__icon-btn:hover {
+  background: #f1f3f4;
+}
+
+/* =============================================================================
+ * ProseMirror decoration forwarding overlay
+ *
+ * Generic surface for decorations published via PM plugins' `props.decorations`
+ * (the layout-painter doesn't render them itself — see `DecorationLayer.tsx`).
+ * Children are absolutely-positioned inside this container; pointer-events
+ * are off by default so editing isn't blocked. Plugins that need hover/click
+ * on a decoration (e.g. cursor name labels) opt in via inline styles.
+ *
+ * z-index: 11 — one above SelectionOverlay (10) so cursor name labels render
+ * above the local caret.
+ * ============================================================================= */
+.paged-editor__decoration-overlay {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 11;
+}
+
+/* Default styles for y-prosemirror remote cursor decorations. Consumers can
+ * override by providing their own `.ProseMirror-yjs-cursor` rules. */
+.ProseMirror-yjs-cursor {
+  position: relative;
+  margin-left: -1px;
+  margin-right: -1px;
+  border-left: 1px solid;
+  border-right: 1px solid;
+  word-break: normal;
+  pointer-events: none;
+}
+.ProseMirror-yjs-cursor > div {
+  position: absolute;
+  top: -1.05em;
+  left: -1px;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1;
+  color: #fff;
+  padding: 2px 4px;
+  border-radius: 3px 3px 3px 0;
+  white-space: nowrap;
+  user-select: none;
+  pointer-events: none;
+}

@@ -29,9 +29,9 @@ jobs:
     name: Release
     runs-on: ubuntu-latest
     permissions:
-      contents: write       # push tags, create GitHub Releases
-      pull-requests: write  # changesets/action opens / updates the release PR
-      id-token: write       # OIDC for npm Trusted Publishing
+      contents: write # push tags, create GitHub Releases
+      pull-requests: write # changesets/action opens / updates the release PR
+      id-token: write # OIDC for npm Trusted Publishing
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -64,14 +64,30 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
+      - name: Lint
+        run: bun run lint
+
+      - name: Format check
+        run: bun run format:check
+
       - name: Type check
         run: bun run typecheck
 
       - name: Run tests
         run: bun test
 
-      - name: Build (always — the release PR's CI uses this and publish reuses the dist/)
-        run: bun run build
+      - name: Build packages (always — the release PR's CI uses this and publish reuses the dist/)
+        run: bun run build:packages
+        env:
+          # tsup's dts worker (rollup-plugin-dts) loads the full TS program;
+          # core's 67 entries OOM under the default 1.5 GB heap.
+          NODE_OPTIONS: --max-old-space-size=8192
+
+      - name: Install Playwright browsers for parity gate
+        run: npx playwright install --with-deps chromium
+
+      - name: Parity prepublish gate
+        run: bun run parity:prepublish
 
       # The single step that does both PR-management and publishing.
       # - If `.changeset/*.md` are pending: opens / updates a "chore: release X.Y.Z" PR
@@ -131,8 +147,8 @@ jobs:
           curl -sSf -X POST -H 'Content-Type: application/json' -d "$payload" "$SLACK_WEBHOOK_URL" >/dev/null
 
       # Distinguish three failure modes when notifying Slack:
-      #   - MODE=pre-release → an earlier step failed (typecheck, tests, build,
-      #     install) before the changesets step ever ran.
+      #   - MODE=pre-release → an earlier step failed (lint, format check,
+      #     typecheck, tests, build, install) before the changesets step ever ran.
       #   - MODE=release-pr  → changesets step failed AND pending changesets
       #     exist, so the run was trying to open/update the "chore: release" PR
       #     (no publish was attempted).
@@ -154,7 +170,7 @@ jobs:
           if [ "$CHANGESETS_OUTCOME" != "failure" ]; then
             mode="pre-release"
             title=":x: docx-editor — pre-release step failed"
-            detail="A step before the changesets action failed (install, typecheck, tests, or build). No release PR was updated and no publish was attempted. Check the run logs for the failing step."
+            detail="A step before the changesets action failed (install, lint, format check, typecheck, tests, or build). No release PR was updated and no publish was attempted. Check the run logs for the failing step."
           elif [ "$pending" -gt 0 ]; then
             mode="release-pr"
             title=":warning: docx-editor — failed to update release PR"

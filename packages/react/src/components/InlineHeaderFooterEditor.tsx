@@ -22,20 +22,20 @@ import { useTranslation } from '../i18n';
 import { EditorView } from 'prosemirror-view';
 import { undo, redo } from 'prosemirror-history';
 
-import { schema } from '@eigenpal/docx-core/prosemirror';
-import { headerFooterToProseDoc } from '@eigenpal/docx-core/prosemirror/conversion';
-import { proseDocToBlocks } from '@eigenpal/docx-core/prosemirror/conversion';
+import { schema } from '@eigenpal/docx-editor-core/prosemirror';
+import { headerFooterToProseDoc } from '@eigenpal/docx-editor-core/prosemirror/conversion';
+import { proseDocToBlocks } from '@eigenpal/docx-editor-core/prosemirror/conversion';
 import { Z_INDEX } from '../styles/zIndex';
-import { extractSelectionState, type SelectionState } from '@eigenpal/docx-core/prosemirror';
-import { createStarterKit } from '@eigenpal/docx-core/prosemirror/extensions';
-import { ExtensionManager } from '@eigenpal/docx-core/prosemirror/extensions';
-import { createStyleResolver } from '@eigenpal/docx-core/prosemirror';
+import { extractSelectionState, type SelectionState } from '@eigenpal/docx-editor-core/prosemirror';
+import { createStarterKit } from '@eigenpal/docx-editor-core/prosemirror/extensions';
+import { ExtensionManager } from '@eigenpal/docx-editor-core/prosemirror/extensions';
+import { createStyleResolver } from '@eigenpal/docx-editor-core/prosemirror';
 import type {
   HeaderFooter,
   Paragraph,
   Table,
   StyleDefinitions,
-} from '@eigenpal/docx-core/types/document';
+} from '@eigenpal/docx-editor-core/types/document';
 
 import 'prosemirror-view/style/prosemirror.css';
 

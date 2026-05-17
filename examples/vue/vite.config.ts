@@ -4,34 +4,70 @@ import path from 'path';
 
 const monorepoRoot = path.resolve(__dirname, '../..');
 
+// USE_PUBLISHED_PACKAGES=true is set by the parity build; in that mode we
+// resolve `@eigenpal/docx-editor-vue` + `/agents/*` through node_modules
+// (the workspace's published dist/) so the deployment shows the real
+// consumer experience. Core deep paths (e.g.
+// `@eigenpal/docx-editor-core/headless`) are kept aliased to source in
+// both modes — agent-use's dist references them as bare imports and
+// rollup can't resolve subpath exports through the workspace symlink
+// during the bundle pass.
+const usePublished = process.env.USE_PUBLISHED_PACKAGES === 'true';
+
+const coreAliases = [
+  {
+    find: '@eigenpal/docx-editor-core/headless',
+    replacement: path.join(monorepoRoot, 'packages/core/src/headless.ts'),
+  },
+  {
+    find: '@eigenpal/docx-editor-core/core-plugins',
+    replacement: path.join(monorepoRoot, 'packages/core/src/core-plugins/index.ts'),
+  },
+  // Wildcard alias for deep core imports
+  {
+    find: /^@eigenpal\/docx-editor-core\/(.+)/,
+    replacement: path.join(monorepoRoot, 'packages/core/src/$1'),
+  },
+  // Exact match for bare @eigenpal/docx-editor-core (must come AFTER prefix match)
+  {
+    find: /^@eigenpal\/docx-editor-core$/,
+    replacement: path.join(monorepoRoot, 'packages/core/src/core.ts'),
+  },
+];
+
 export default defineConfig({
+  base: process.env.VITE_BASE_PATH ?? '/',
   plugins: [vue()],
   root: __dirname,
   resolve: {
-    alias: [
-      {
-        find: '@eigenpal/docx-editor-vue',
-        replacement: path.join(monorepoRoot, 'packages/vue/src/index.ts'),
-      },
-      {
-        find: '@eigenpal/docx-core/headless',
-        replacement: path.join(monorepoRoot, 'packages/core/src/headless.ts'),
-      },
-      {
-        find: '@eigenpal/docx-core/core-plugins',
-        replacement: path.join(monorepoRoot, 'packages/core/src/core-plugins/index.ts'),
-      },
-      // Wildcard alias for deep core imports
-      {
-        find: /^@eigenpal\/docx-core\/(.+)/,
-        replacement: path.join(monorepoRoot, 'packages/core/src/$1'),
-      },
-      // Exact match for bare @eigenpal/docx-core (must come AFTER prefix match)
-      {
-        find: /^@eigenpal\/docx-core$/,
-        replacement: path.join(monorepoRoot, 'packages/core/src/core.ts'),
-      },
-    ],
+    alias: usePublished
+      ? coreAliases
+      : [
+          // Resolve the CSS subpath to source in dev so a clean checkout can
+          // run the Vue demo and parity smoke tests without prebuilding dist.
+          {
+            find: '@eigenpal/docx-editor-vue/styles.css',
+            replacement: path.join(monorepoRoot, 'packages/vue/src/styles/editor.css'),
+          },
+          {
+            find: /^@eigenpal\/docx-editor-vue$/,
+            replacement: path.join(monorepoRoot, 'packages/vue/src/index.ts'),
+          },
+          {
+            find: '@eigenpal/docx-editor-agents/vue',
+            replacement: path.join(monorepoRoot, 'packages/agent-use/src/vue.ts'),
+          },
+          {
+            find: '@eigenpal/docx-editor-agents/bridge',
+            replacement: path.join(monorepoRoot, 'packages/agent-use/src/bridge.ts'),
+          },
+          // Bare @eigenpal/docx-editor-agents (e.g. for type re-exports)
+          {
+            find: /^@eigenpal\/docx-editor-agents$/,
+            replacement: path.join(monorepoRoot, 'packages/agent-use/src/index.ts'),
+          },
+          ...coreAliases,
+        ],
   },
   server: {
     port: 5174,

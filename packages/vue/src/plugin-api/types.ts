@@ -17,13 +17,13 @@ export type {
   PanelConfig,
   RenderedDomContext,
   PositionCoordinates,
-} from '@eigenpal/docx-core/plugin-api';
+} from '@eigenpal/docx-editor-core/plugin-api';
 
 import type {
   EditorPluginCore,
   PluginPanelProps,
   RenderedDomContext,
-} from '@eigenpal/docx-core/plugin-api';
+} from '@eigenpal/docx-editor-core/plugin-api';
 
 /**
  * Vue-specific editor plugin interface.

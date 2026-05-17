@@ -9,7 +9,8 @@
     "start": "remix-serve ./build/server/index.js"
   },
   "dependencies": {
-    "@eigenpal/docx-js-editor": "^0.0.7",
+    "@eigenpal/docx-editor-core": "workspace:*",
+    "@eigenpal/docx-editor-react": "workspace:*",
     "@remix-run/node": "^2.16.0",
     "@remix-run/react": "^2.16.0",
     "@remix-run/serve": "^2.16.0",

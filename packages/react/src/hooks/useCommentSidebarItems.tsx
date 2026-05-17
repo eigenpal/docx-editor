@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import type { Comment } from '@eigenpal/docx-core/types/content';
+import type { Comment } from '@eigenpal/docx-editor-core/types/content';
 import type { ReactSidebarItem } from '../plugin-api/types';
 import type { TrackedChangeEntry } from '../components/sidebar/cardUtils';
 import { CommentCard } from '../components/sidebar/CommentCard';

@@ -18,7 +18,7 @@ import type {
   Paragraph,
   ParagraphContent,
   Run,
-} from '@eigenpal/docx-core/headless';
+} from '@eigenpal/docx-editor-core/headless';
 import { DocxReviewer } from '../DocxReviewer';
 import { createReviewerBridge } from '../reviewerBridge';
 import { McpServer } from '../mcp/server';

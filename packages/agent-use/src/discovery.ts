@@ -2,7 +2,7 @@
  * getChanges() and getComments() — discover tracked changes and comments in a document.
  */
 
-import type { DocumentBody, Run, Comment } from '@eigenpal/docx-core/headless';
+import type { DocumentBody, Run, Comment } from '@eigenpal/docx-editor-core/headless';
 import type { ReviewChange, ReviewComment, ChangeFilter, CommentFilter } from './types';
 import { getParagraphPlainText } from './textSearch';
 import { getRunText, getTrackedChangeText, isTrackedChange, forEachParagraph } from './utils';

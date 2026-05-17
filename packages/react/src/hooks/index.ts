@@ -39,6 +39,21 @@ export type {
   SavedDocumentData,
 } from './useAutoSave';
 
+export { useDragAutoScroll } from './useDragAutoScroll';
+export type { DragAutoScrollOptions } from './useDragAutoScroll';
+
+export { useFindReplace } from './useFindReplace';
+export type { FindReplaceOptions, FindReplaceState, UseFindReplaceReturn } from './useFindReplace';
+
+export { useFixedDropdown } from './useFixedDropdown';
+export type { UseFixedDropdownOptions, UseFixedDropdownReturn } from './useFixedDropdown';
+
+export { useAspectLockedSize } from './useAspectLockedSize';
+export type { UseAspectLockedSizeReturn } from './useAspectLockedSize';
+
+export { useVisualLineNavigation } from './useVisualLineNavigation';
+export type { VisualLineNavigationOptions } from './useVisualLineNavigation';
+
 export {
   useWheelZoom,
   getZoomPresets,

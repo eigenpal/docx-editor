@@ -1,4 +1,4 @@
-import en from '../../i18n/en.json';
+import en from '@eigenpal/docx-editor-i18n/en.json';
 
 /** Auto-derived from en.json — never manually maintained */
 export type LocaleStrings = typeof en;

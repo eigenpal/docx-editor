@@ -10,7 +10,7 @@
  */
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import type { Document } from '@eigenpal/docx-core/types/document';
+import type { Document } from '@eigenpal/docx-editor-core/types/document';
 import { useTranslation } from '../../i18n';
 
 // ============================================================================

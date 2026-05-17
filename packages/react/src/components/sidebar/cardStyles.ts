@@ -1,17 +1,10 @@
+// Re-export the canonical card chrome from core. React's CSSProperties
+// is structurally compatible with the loose Record shape core uses.
 import type { CSSProperties } from 'react';
+import {
+  CARD_STYLE_COLLAPSED as CORE_COLLAPSED,
+  CARD_STYLE_EXPANDED as CORE_EXPANDED,
+} from '@eigenpal/docx-editor-core/utils/cardStyles';
 
-export const CARD_STYLE_COLLAPSED: CSSProperties = {
-  padding: '8px 10px',
-  borderRadius: 8,
-  backgroundColor: '#f8fbff',
-  cursor: 'pointer',
-  boxShadow: '0 1px 3px rgba(60,64,67,0.2), 0 2px 6px rgba(60,64,67,0.08)',
-};
-
-export const CARD_STYLE_EXPANDED: CSSProperties = {
-  padding: '10px 12px',
-  borderRadius: 8,
-  backgroundColor: '#fff',
-  cursor: 'pointer',
-  boxShadow: '0 1px 3px rgba(60,64,67,0.3), 0 4px 8px 3px rgba(60,64,67,0.15)',
-};
+export const CARD_STYLE_COLLAPSED = CORE_COLLAPSED as CSSProperties;
+export const CARD_STYLE_EXPANDED = CORE_EXPANDED as CSSProperties;

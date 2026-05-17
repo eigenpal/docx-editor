@@ -10,15 +10,15 @@
  */
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { WrapType } from '@eigenpal/docx-core/docx/wrapTypes';
-import type { ImageLayoutTarget } from '@eigenpal/docx-core/prosemirror/commands';
+import type { WrapType } from '@eigenpal/docx-editor-core/docx/wrapTypes';
+import type { ImageLayoutTarget } from '@eigenpal/docx-editor-core/prosemirror/commands';
 import {
   IMAGE_LAYOUT_OPTIONS,
   deriveLayoutChoice,
   isImageLayoutOptionEnabled,
   type ImageLayoutIconHint,
   type ImageLayoutOptionDef,
-} from '@eigenpal/docx-core/layout-painter';
+} from '@eigenpal/docx-editor-core/layout-painter';
 import { Z_INDEX } from '../styles/zIndex';
 import { useTranslation } from '../i18n';
 import { MaterialSymbol } from './ui/Icons';
@@ -59,6 +59,9 @@ export interface ImageContextMenuProps {
   textActions?: ImageContextMenuTextAction[];
   /** Invoked when a text action item is selected. */
   onTextAction?: (action: TextContextAction) => void;
+  /** When provided, an "Image properties…" item is rendered at the top of the
+   *  menu (above the layout group). Used to open the properties dialog. */
+  onOpenProperties?: () => void;
   onClose: () => void;
 }
 
@@ -72,6 +75,7 @@ export const ImageContextMenu: React.FC<ImageContextMenuProps> = ({
   onApplyLayout,
   textActions,
   onTextAction,
+  onOpenProperties,
   onClose,
 }) => {
   const { t } = useTranslation();
@@ -94,7 +98,10 @@ export const ImageContextMenu: React.FC<ImageContextMenuProps> = ({
     () => (textActions ?? []).filter((a) => !a.disabled),
     [textActions]
   );
-  const totalNavigable = enabledLayout.length + navigableTextActions.length;
+  // When "Image properties…" is offered, it occupies nav index 0 and everything
+  // else shifts down by one. Keeps arrow-key / Enter parity with the rest.
+  const propertiesOffset = onOpenProperties ? 1 : 0;
+  const totalNavigable = propertiesOffset + enabledLayout.length + navigableTextActions.length;
 
   useEffect(() => {
     if (!isOpen) return;
@@ -129,13 +136,19 @@ export const ImageContextMenu: React.FC<ImageContextMenuProps> = ({
         setHighlightedIndex((i) => (i - 1 + span) % span);
       } else if (e.key === 'Enter') {
         e.preventDefault();
-        if (highlightedIndex < enabledLayout.length) {
+        if (propertiesOffset && highlightedIndex === 0) {
+          onOpenProperties?.();
+          onClose();
+        } else if (highlightedIndex < propertiesOffset + enabledLayout.length) {
           // `inline` is filtered out of `enabledLayout` by `isLayoutOptionEnabled`,
           // so this assertion holds.
-          onApplyLayout(enabledLayout[highlightedIndex].choice as ImageLayoutTarget);
+          onApplyLayout(
+            enabledLayout[highlightedIndex - propertiesOffset].choice as ImageLayoutTarget
+          );
           onClose();
         } else if (onTextAction) {
-          const ta = navigableTextActions[highlightedIndex - enabledLayout.length];
+          const ta =
+            navigableTextActions[highlightedIndex - propertiesOffset - enabledLayout.length];
           if (ta) {
             onTextAction(ta.action);
             onClose();
@@ -151,7 +164,9 @@ export const ImageContextMenu: React.FC<ImageContextMenuProps> = ({
     enabledLayout,
     navigableTextActions,
     totalNavigable,
+    propertiesOffset,
     onApplyLayout,
+    onOpenProperties,
     onTextAction,
     onClose,
   ]);
@@ -161,8 +176,8 @@ export const ImageContextMenu: React.FC<ImageContextMenuProps> = ({
     const initialIdx = currentChoice
       ? enabledLayout.findIndex((o) => o.choice === currentChoice)
       : -1;
-    setHighlightedIndex(initialIdx >= 0 ? initialIdx : 0);
-  }, [isOpen, currentChoice, enabledLayout]);
+    setHighlightedIndex(initialIdx >= 0 ? propertiesOffset + initialIdx : 0);
+  }, [isOpen, currentChoice, enabledLayout, propertiesOffset]);
 
   const getMenuStyle = useCallback((): React.CSSProperties => {
     const menuWidth = 260;
@@ -203,10 +218,59 @@ export const ImageContextMenu: React.FC<ImageContextMenuProps> = ({
       aria-label={t('imageWrap.menu.ariaLabel')}
       data-testid="image-context-menu"
     >
+      {onOpenProperties && (
+        <>
+          <button
+            type="button"
+            role="menuitem"
+            data-action="open-properties"
+            onClick={() => {
+              onOpenProperties();
+              onClose();
+            }}
+            onMouseEnter={() => setHighlightedIndex(0)}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '10px',
+              width: '100%',
+              padding: '8px 12px',
+              border: 'none',
+              background:
+                highlightedIndex === 0 ? 'var(--doc-primary-light, #eef4ff)' : 'transparent',
+              cursor: 'pointer',
+              fontSize: '13px',
+              color: 'var(--doc-text, #222)',
+              textAlign: 'left',
+            }}
+          >
+            <span
+              style={{
+                display: 'flex',
+                color: 'var(--doc-text-muted, #666)',
+                width: ICON_SIZE,
+              }}
+            >
+              <MaterialSymbol name="settings" size={ICON_SIZE} />
+            </span>
+            <span style={{ flex: 1 }}>{t('imageWrap.menu.imageProperties')}</span>
+          </button>
+          <div
+            style={{
+              height: 1,
+              background: 'var(--doc-border-light, #e0e0e0)',
+              margin: '4px 0',
+            }}
+            role="separator"
+          />
+        </>
+      )}
       {IMAGE_LAYOUT_OPTIONS.map((option: ImageLayoutOptionDef) => {
         const isCurrent = option.choice === currentChoice;
         const isEnabled = isImageLayoutOptionEnabled(option, currentWrapType);
-        const navIdx = isEnabled ? enabledLayout.findIndex((o) => o.choice === option.choice) : -1;
+        const navIdx = isEnabled
+          ? propertiesOffset + enabledLayout.findIndex((o) => o.choice === option.choice)
+          : -1;
         const isHighlighted = navIdx >= 0 && navIdx === highlightedIndex;
         // Always show the descriptive tooltip — disabled options are disabled
         // because they would no-op against the current image.
@@ -279,7 +343,8 @@ export const ImageContextMenu: React.FC<ImageContextMenuProps> = ({
           {textActions.map((item, idx) => {
             const navIdx = item.disabled
               ? -1
-              : enabledLayout.length +
+              : propertiesOffset +
+                enabledLayout.length +
                 navigableTextActions.findIndex((a) => a.action === item.action);
             const isHighlighted = navIdx === highlightedIndex && !item.disabled;
             return (

@@ -34,7 +34,7 @@ import type {
   SelectionInfo,
 } from './types';
 import type { ContentChangeEvent, EditorBridge } from './bridge';
-import type { Paragraph } from '@eigenpal/docx-core/headless';
+import type { Paragraph } from '@eigenpal/docx-editor-core/headless';
 
 /**
  * Build the paraId → top-level paragraphIndex map. Counting mirrors

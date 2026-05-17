@@ -1,4 +1,4 @@
-import type { Comment } from '@eigenpal/docx-core/types/content';
+import type { Comment } from '@eigenpal/docx-editor-core/types/content';
 import { MaterialSymbol } from '../ui/Icons';
 import type { SidebarItemRenderProps } from '../../plugin-api/types';
 import type { TrackedChangeEntry } from './cardUtils';

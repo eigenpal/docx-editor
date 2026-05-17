@@ -15,6 +15,8 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react';
 import type { CSSProperties, DragEvent, ChangeEvent } from 'react';
 import { useTranslation } from '../../i18n';
+import { MaterialSymbol } from '../ui/Icons';
+import { useAspectLockedSize } from '../../hooks/useAspectLockedSize';
 
 // ============================================================================
 // TYPES
@@ -198,38 +200,34 @@ const SIZE_ROW_STYLE: CSSProperties = {
   display: 'flex',
   alignItems: 'center',
   gap: '12px',
+  marginBottom: '16px',
 };
 
 const SIZE_INPUT_STYLE: CSSProperties = {
   width: '100px',
-  padding: '8px 12px',
+  padding: '6px 8px',
   border: '1px solid var(--doc-border-input)',
   borderRadius: '4px',
   fontSize: '14px',
-  textAlign: 'center',
 };
 
-const LOCK_BUTTON_STYLE: CSSProperties = {
-  padding: '6px 10px',
-  border: '1px solid var(--doc-border-input)',
-  borderRadius: '4px',
-  backgroundColor: 'white',
-  cursor: 'pointer',
-  fontSize: '16px',
+const INLINE_LABEL_STYLE: CSSProperties = {
+  display: 'inline-flex',
+  alignItems: 'center',
+  gap: '6px',
+  fontSize: '14px',
+  color: 'var(--doc-text)',
+  fontWeight: 500,
 };
 
-const LOCK_BUTTON_ACTIVE_STYLE: CSSProperties = {
-  ...LOCK_BUTTON_STYLE,
-  backgroundColor: 'var(--doc-primary)',
-  borderColor: 'var(--doc-primary)',
-  color: 'white',
-};
-
-const FILE_INFO_STYLE: CSSProperties = {
-  fontSize: '12px',
+const LOCK_LABEL_STYLE: CSSProperties = {
+  display: 'inline-flex',
+  alignItems: 'center',
+  gap: '6px',
+  fontSize: '13px',
   color: 'var(--doc-text-muted)',
-  marginTop: '8px',
-  textAlign: 'center',
+  cursor: 'pointer',
+  whiteSpace: 'nowrap',
 };
 
 const DIALOG_FOOTER_STYLE: CSSProperties = {
@@ -273,67 +271,11 @@ const DISABLED_BUTTON_STYLE: CSSProperties = {
 // ICONS
 // ============================================================================
 
-/**
- * Image Icon
- */
 function ImageIcon(): React.ReactElement {
   return (
-    <svg width="48" height="48" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
-      <rect
-        x="6"
-        y="10"
-        width="36"
-        height="28"
-        rx="2"
-        stroke="var(--doc-text-placeholder)"
-        strokeWidth="2"
-        fill="none"
-      />
-      <circle
-        cx="16"
-        cy="20"
-        r="4"
-        stroke="var(--doc-text-placeholder)"
-        strokeWidth="2"
-        fill="none"
-      />
-      <path
-        d="M6 32L16 24L26 34L36 22L42 28"
-        stroke="var(--doc-text-placeholder)"
-        strokeWidth="2"
-        fill="none"
-      />
-    </svg>
-  );
-}
-
-/**
- * Lock Icon
- */
-function LockIcon({ locked }: { locked: boolean }): React.ReactElement {
-  if (locked) {
-    return (
-      <svg
-        width="16"
-        height="16"
-        viewBox="0 0 16 16"
-        fill="currentColor"
-        xmlns="http://www.w3.org/2000/svg"
-      >
-        <path d="M12 6V4a4 4 0 0 0-8 0v2H3v8h10V6h-1zm-6-2a2 2 0 0 1 4 0v2H6V4zm6 8H4V8h8v4z" />
-      </svg>
-    );
-  }
-  return (
-    <svg
-      width="16"
-      height="16"
-      viewBox="0 0 16 16"
-      fill="currentColor"
-      xmlns="http://www.w3.org/2000/svg"
-    >
-      <path d="M10 6V4a2 2 0 0 0-4 0v2H4v8h8V6h-2zM6 4a2 2 0 0 1 4 0v2h-2V4H6v2H4v2H6V4zm4 8H6V8h4v4z" />
-    </svg>
+    <span style={{ color: 'var(--doc-text-placeholder)' }}>
+      <MaterialSymbol name="image" size={48} />
+    </span>
   );
 }
 
@@ -359,11 +301,16 @@ export function InsertImageDialog({
   // State
   const [imageData, setImageData] = useState<ImageData | null>(null);
   const [isDragging, setIsDragging] = useState(false);
-  const [width, setWidth] = useState(0);
-  const [height, setHeight] = useState(0);
+  const {
+    width,
+    height,
+    lockAspect: aspectLocked,
+    setLockAspect: setAspectLocked,
+    handleWidthChange,
+    handleHeightChange,
+    seed: seedAspect,
+  } = useAspectLockedSize();
   const [altText, setAltText] = useState('');
-  const [aspectLocked, setAspectLocked] = useState(true);
-  const [originalAspectRatio, setOriginalAspectRatio] = useState(1);
   const [error, setError] = useState<string | null>(null);
 
   // Refs
@@ -375,13 +322,11 @@ export function InsertImageDialog({
     if (isOpen) {
       setImageData(null);
       setIsDragging(false);
-      setWidth(0);
-      setHeight(0);
+      seedAspect(null, null);
       setAltText('');
-      setAspectLocked(true);
-      setOriginalAspectRatio(1);
       setError(null);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen]);
 
   /**
@@ -422,9 +367,7 @@ export function InsertImageDialog({
             h = Math.round(h * scale);
           }
 
-          setWidth(w);
-          setHeight(h);
-          setOriginalAspectRatio(img.width / img.height);
+          seedAspect(w, h);
           setImageData({
             src,
             width: w,
@@ -498,40 +441,10 @@ export function InsertImageDialog({
   );
 
   /**
-   * Handle width change
-   */
-  const handleWidthChange = useCallback(
-    (e: ChangeEvent<HTMLInputElement>) => {
-      const newWidth = parseInt(e.target.value, 10) || 0;
-      setWidth(newWidth);
-
-      if (aspectLocked && originalAspectRatio) {
-        setHeight(Math.round(newWidth / originalAspectRatio));
-      }
-    },
-    [aspectLocked, originalAspectRatio]
-  );
-
-  /**
-   * Handle height change
-   */
-  const handleHeightChange = useCallback(
-    (e: ChangeEvent<HTMLInputElement>) => {
-      const newHeight = parseInt(e.target.value, 10) || 0;
-      setHeight(newHeight);
-
-      if (aspectLocked && originalAspectRatio) {
-        setWidth(Math.round(newHeight * originalAspectRatio));
-      }
-    },
-    [aspectLocked, originalAspectRatio]
-  );
-
-  /**
    * Handle insert
    */
   const handleInsert = useCallback(() => {
-    if (imageData) {
+    if (imageData && typeof width === 'number' && typeof height === 'number') {
       onInsert({
         ...imageData,
         width,
@@ -573,21 +486,25 @@ export function InsertImageDialog({
    */
   const handleClear = useCallback(() => {
     setImageData(null);
-    setWidth(0);
-    setHeight(0);
+    seedAspect(null, null);
     setAltText('');
     setError(null);
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
-  }, []);
+  }, [seedAspect]);
 
   // Don't render if not open
   if (!isOpen) {
     return null;
   }
 
-  const canInsert = imageData !== null && width > 0 && height > 0;
+  const canInsert =
+    imageData !== null &&
+    typeof width === 'number' &&
+    width > 0 &&
+    typeof height === 'number' &&
+    height > 0;
 
   // Get drop zone style
   const getDropZoneStyle = (): CSSProperties => {
@@ -666,30 +583,6 @@ export function InsertImageDialog({
             )}
           </div>
 
-          {/* File info */}
-          {imageData?.fileName && (
-            <div style={FILE_INFO_STYLE}>
-              {imageData.fileName}
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  handleClear();
-                }}
-                style={{
-                  marginLeft: '8px',
-                  background: 'none',
-                  border: 'none',
-                  color: 'var(--doc-primary)',
-                  cursor: 'pointer',
-                  fontSize: '12px',
-                }}
-              >
-                {t('common.change')}
-              </button>
-            </div>
-          )}
-
           {/* Error message */}
           {error && (
             <div
@@ -704,53 +597,41 @@ export function InsertImageDialog({
             </div>
           )}
 
-          {/* Size controls */}
           {imageData && (
             <>
-              <div style={FORM_GROUP_STYLE}>
-                <label style={LABEL_STYLE}>{t('dialogs.insertImage.dimensions')}</label>
-                <div style={SIZE_ROW_STYLE}>
-                  <span style={{ fontSize: '14px', color: 'var(--doc-text-muted)' }}>
-                    {t('dialogs.insertImage.widthLabel')}
-                  </span>
+              <div style={SIZE_ROW_STYLE}>
+                <label style={INLINE_LABEL_STYLE}>
+                  {t('dialogs.insertImage.widthLabel')}
                   <input
                     type="number"
                     value={width}
-                    onChange={handleWidthChange}
+                    onChange={(e) => handleWidthChange(e.target.value)}
                     min={1}
                     max={maxWidth}
                     style={SIZE_INPUT_STYLE}
                   />
-                  <span style={{ fontSize: '14px', color: 'var(--doc-text-muted)' }}>
-                    {t('common.px')}
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => setAspectLocked(!aspectLocked)}
-                    style={aspectLocked ? LOCK_BUTTON_ACTIVE_STYLE : LOCK_BUTTON_STYLE}
-                    title={
-                      aspectLocked
-                        ? t('dialogs.insertImage.aspectRatioLocked')
-                        : t('dialogs.insertImage.aspectRatioUnlocked')
-                    }
-                  >
-                    <LockIcon locked={aspectLocked} />
-                  </button>
-                  <span style={{ fontSize: '14px', color: 'var(--doc-text-muted)' }}>
-                    {t('dialogs.insertImage.heightLabel')}
-                  </span>
+                </label>
+                <label style={INLINE_LABEL_STYLE}>
+                  {t('dialogs.insertImage.heightLabel')}
                   <input
                     type="number"
                     value={height}
-                    onChange={handleHeightChange}
+                    onChange={(e) => handleHeightChange(e.target.value)}
                     min={1}
                     max={maxHeight}
                     style={SIZE_INPUT_STYLE}
                   />
-                  <span style={{ fontSize: '14px', color: 'var(--doc-text-muted)' }}>
-                    {t('common.px')}
-                  </span>
-                </div>
+                </label>
+                <label style={LOCK_LABEL_STYLE}>
+                  <input
+                    type="checkbox"
+                    checked={aspectLocked}
+                    onChange={(e) => setAspectLocked(e.target.checked)}
+                  />
+                  {aspectLocked
+                    ? t('dialogs.insertImage.aspectRatioLocked')
+                    : t('dialogs.insertImage.aspectRatioUnlocked')}
+                </label>
               </div>
 
               <div style={FORM_GROUP_STYLE}>
@@ -770,16 +651,20 @@ export function InsertImageDialog({
           )}
         </div>
 
-        {/* Footer */}
         <div className="docx-insert-image-dialog-footer" style={DIALOG_FOOTER_STYLE}>
-          <button
-            type="button"
-            className="docx-insert-image-dialog-cancel"
-            style={SECONDARY_BUTTON_STYLE}
-            onClick={onClose}
-          >
-            {t('common.cancel')}
-          </button>
+          {(() => {
+            const hasImage = imageData !== null;
+            return (
+              <button
+                type="button"
+                className="docx-insert-image-dialog-clear"
+                style={SECONDARY_BUTTON_STYLE}
+                onClick={hasImage ? handleClear : onClose}
+              >
+                {hasImage ? t('common.clear') : t('common.cancel')}
+              </button>
+            );
+          })()}
           <button
             type="button"
             className="docx-insert-image-dialog-insert"

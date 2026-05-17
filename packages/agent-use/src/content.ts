@@ -3,7 +3,7 @@
  * formatContentForLLM() — converts blocks to plain text (avoids JSON quote-escaping issues).
  */
 
-import type { DocumentBody, Paragraph, Table } from '@eigenpal/docx-core/headless';
+import type { DocumentBody, Paragraph, Table } from '@eigenpal/docx-editor-core/headless';
 import type { ContentBlock, GetContentOptions } from './types';
 import {
   getRunText,

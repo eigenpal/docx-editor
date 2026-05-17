@@ -3,7 +3,7 @@
  * Handles text spanning multiple runs and tracked change wrappers.
  */
 
-import type { Paragraph, Run } from '@eigenpal/docx-core/headless';
+import type { Paragraph, Run } from '@eigenpal/docx-editor-core/headless';
 import { TextNotFoundError } from './errors';
 import { getRunText, isTrackedChange } from './utils';
 

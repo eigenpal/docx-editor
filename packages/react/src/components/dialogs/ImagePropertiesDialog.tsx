@@ -9,6 +9,7 @@
 import React, { useState, useCallback, useEffect } from 'react';
 import type { CSSProperties } from 'react';
 import { useTranslation } from '../../i18n';
+import { useAspectLockedSize } from '../../hooks/useAspectLockedSize';
 
 // ============================================================================
 // TYPES
@@ -19,6 +20,8 @@ export interface ImagePropertiesData {
   borderWidth?: number;
   borderColor?: string;
   borderKind?: string;
+  width?: number;
+  height?: number;
 }
 
 export interface ImagePropertiesDialogProps {
@@ -143,14 +146,21 @@ export function ImagePropertiesDialog({
   const [borderWidth, setBorderWidth] = useState(0);
   const [borderColor, setBorderColor] = useState('#000000');
   const [borderKind, setBorderKind] = useState('solid');
+  const { width, height, lockAspect, setLockAspect, handleWidthChange, handleHeightChange, seed } =
+    useAspectLockedSize();
 
+  // Snapshot-on-open: seed fields once when the dialog opens. We deliberately do
+  // NOT depend on `currentData` here — the parent rebuilds it as a fresh object
+  // each render, which would clobber whatever the user has typed.
   useEffect(() => {
     if (!isOpen) return;
     setAlt(currentData?.alt ?? '');
     setBorderWidth(currentData?.borderWidth ?? 0);
     setBorderColor(currentData?.borderColor ?? '#000000');
     setBorderKind(currentData?.borderKind ?? 'solid');
-  }, [isOpen, currentData]);
+    seed(currentData?.width, currentData?.height);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen]);
 
   const handleApply = useCallback(() => {
     onApply({
@@ -158,9 +168,11 @@ export function ImagePropertiesDialog({
       borderWidth: borderWidth > 0 ? borderWidth : undefined,
       borderColor: borderWidth > 0 ? borderColor : undefined,
       borderKind: borderWidth > 0 ? borderKind : undefined,
+      width: typeof width === 'number' && width > 0 ? width : undefined,
+      height: typeof height === 'number' && height > 0 ? height : undefined,
     });
     onClose();
-  }, [alt, borderWidth, borderColor, borderKind, onApply, onClose]);
+  }, [alt, borderWidth, borderColor, borderKind, width, height, onApply, onClose]);
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
@@ -192,6 +204,51 @@ export function ImagePropertiesDialog({
               onChange={(e) => setAlt(e.target.value)}
               placeholder={t('dialogs.imageProperties.altTextPlaceholder')}
             />
+          </div>
+
+          <div style={sectionStyle}>
+            <div style={sectionLabelStyle}>{t('dialogs.imageProperties.dimensions')}</div>
+            <div style={rowStyle}>
+              <label style={labelStyle}>{t('dialogs.imageProperties.widthLabel')}</label>
+              <input
+                type="number"
+                style={{ ...inputStyle, maxWidth: 100 }}
+                min={1}
+                step={1}
+                value={width}
+                onChange={(e) => handleWidthChange(e.target.value)}
+              />
+              <span style={{ fontSize: 12, color: 'var(--doc-text-muted)' }}>{t('common.px')}</span>
+            </div>
+            <div style={rowStyle}>
+              <label style={labelStyle}>{t('dialogs.imageProperties.heightLabel')}</label>
+              <input
+                type="number"
+                style={{ ...inputStyle, maxWidth: 100 }}
+                min={1}
+                step={1}
+                value={height}
+                onChange={(e) => handleHeightChange(e.target.value)}
+              />
+              <span style={{ fontSize: 12, color: 'var(--doc-text-muted)' }}>{t('common.px')}</span>
+            </div>
+            <label
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 6,
+                fontSize: 12,
+                color: 'var(--doc-text-muted)',
+                cursor: 'pointer',
+              }}
+            >
+              <input
+                type="checkbox"
+                checked={lockAspect}
+                onChange={(e) => setLockAspect(e.target.checked)}
+              />
+              {t('dialogs.imageProperties.lockAspectRatio')}
+            </label>
           </div>
 
           {/* Border / Outline */}

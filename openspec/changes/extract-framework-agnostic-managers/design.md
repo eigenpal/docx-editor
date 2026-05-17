@@ -1,6 +1,6 @@
 ## Context
 
-This change follows `extract-core-monorepo`, which splits the codebase into `@eigenpal/docx-core` and `@eigenpal/docx-js-editor` (React). After that split, the package boundary is clean but the React package still contains ~50% framework-agnostic business logic embedded in React components and hooks. Specifically:
+This change follows `extract-core-monorepo`, which splits the codebase into `@eigenpal/docx-editor-core` and `@eigenpal/docx-editor-react` (React). After that split, the package boundary is clean but the React package still contains ~50% framework-agnostic business logic embedded in React components and hooks. Specifically:
 
 - `PagedEditor.tsx` (2080 lines) — coordinates PM state, layout engine, layout painter, selection overlays, column resizing, image interaction. Uses 50+ `useRef`/`useState`.
 - `DocxEditor.tsx` (1400 lines) — manages document parsing, font loading, zoom, dialog state, extension manager, agent commands. Orchestrates everything.
@@ -11,13 +11,13 @@ This change follows `extract-core-monorepo`, which splits the codebase into `@ei
 - `renderAsync.ts` — imperative mount via `React.createRoot()`
 - `ErrorBoundary.tsx` — error capture via `componentDidCatch` + React context
 
-A Vue contributor would need to reimplement all of this logic. The goal is to extract the state machines and coordination logic into framework-agnostic classes in `@eigenpal/docx-core`.
+A Vue contributor would need to reimplement all of this logic. The goal is to extract the state machines and coordination logic into framework-agnostic classes in `@eigenpal/docx-editor-core`.
 
 ## Goals / Non-Goals
 
 **Goals:**
 
-- Extract framework-agnostic state machines and coordination logic from React components into plain TypeScript classes in `@eigenpal/docx-core`
+- Extract framework-agnostic state machines and coordination logic from React components into plain TypeScript classes in `@eigenpal/docx-editor-core`
 - React components become thin wrappers (~50-70% line reduction) that subscribe to manager state and render
 - Vue contributor can build components by wrapping the same managers in Vue composables
 - Manager classes are independently unit-testable without DOM or React
@@ -27,7 +27,7 @@ A Vue contributor would need to reimplement all of this logic. The goal is to ex
 
 - Rewriting PagedEditor or DocxEditor from scratch (incremental extraction)
 - Building the Vue composables (community contribution)
-- Changing any public API of `@eigenpal/docx-js-editor`
+- Changing any public API of `@eigenpal/docx-editor-react`
 - Extracting visual rendering logic (layout painter is already framework-agnostic)
 - Optimizing performance (preserve current behavior exactly)
 
@@ -103,9 +103,9 @@ function PagedEditor({ coordinator }) {
 
 **Alternative considered:** Managers emit events with payloads, components store in local state. Rejected — leads to stale state bugs and sync issues.
 
-### 4. Keep managers in `@eigenpal/docx-core` as plain classes
+### 4. Keep managers in `@eigenpal/docx-editor-core` as plain classes
 
-**Decision:** All manager/coordinator classes live in `packages/core/src/managers/` and are exported from `@eigenpal/docx-core`.
+**Decision:** All manager/coordinator classes live in `packages/core/src/managers/` and are exported from `@eigenpal/docx-editor-core`.
 
 **Rationale:** They have zero framework dependencies (pure TS + DOM APIs). Putting them in core means both React and Vue packages can import them directly.
 

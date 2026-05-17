@@ -11,7 +11,7 @@ import { Tooltip } from './Tooltip';
 import { MaterialSymbol } from './MaterialSymbol';
 import { TableGridInline } from './TableGridInline';
 import { cn } from '../../lib/utils';
-import { useFixedDropdown } from './useFixedDropdown';
+import { useFixedDropdown } from '../../hooks/useFixedDropdown';
 
 // ============================================================================
 // TYPES

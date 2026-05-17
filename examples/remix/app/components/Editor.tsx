@@ -1,10 +1,6 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react';
-import {
-  DocxEditor,
-  type DocxEditorRef,
-  createEmptyDocument,
-  type Document,
-} from '@eigenpal/docx-js-editor';
+import { DocxEditor, type DocxEditorRef } from '@eigenpal/docx-editor-react';
+import { createEmptyDocument, type Document } from '@eigenpal/docx-editor-core';
 import { ExampleSwitcher } from '../../../shared/ExampleSwitcher';
 import { GitHubBadge } from '../../../shared/GitHubBadge';
 

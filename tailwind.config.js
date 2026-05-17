@@ -1,7 +1,16 @@
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+const __configDir = path.dirname(fileURLToPath(import.meta.url));
+
 /** @type {import('tailwindcss').Config} */
 export default {
   darkMode: ['class'],
-  content: ['./packages/react/src/**/*.{ts,tsx}', './examples/**/*.{ts,tsx}'],
+  // Absolute paths so example builds (cd examples/vite && vite build) still scan the right files.
+  content: [
+    path.join(__configDir, 'packages/react/src/**/*.{ts,tsx}'),
+    path.join(__configDir, 'examples/**/*.{ts,tsx}'),
+  ],
   theme: {
     extend: {
       colors: {

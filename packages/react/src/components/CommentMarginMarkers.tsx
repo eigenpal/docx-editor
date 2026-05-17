@@ -6,7 +6,7 @@
  * Clicking opens sidebar / toggles resolved popup
  */
 
-import type { Comment } from '@eigenpal/docx-core/types/content';
+import type { Comment } from '@eigenpal/docx-editor-core/types/content';
 import { MaterialSymbol } from './ui/Icons';
 import { useTranslation } from '../i18n';
 

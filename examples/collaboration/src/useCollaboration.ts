@@ -3,7 +3,7 @@ import * as Y from 'yjs';
 import { WebrtcProvider } from 'y-webrtc';
 import { ySyncPlugin, yCursorPlugin, yUndoPlugin } from 'y-prosemirror';
 import type { Plugin } from 'prosemirror-state';
-import type { Comment } from '@eigenpal/docx-core/types/content';
+import type { Comment } from '@eigenpal/docx-editor-core/types/content';
 
 export interface CollaborativeUser {
   clientId: number;

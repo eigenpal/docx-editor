@@ -11,7 +11,7 @@ import { Tooltip } from './Tooltip';
 import { MaterialSymbol } from './MaterialSymbol';
 import { cn } from '../../lib/utils';
 import type { TableAction } from './TableToolbar';
-import { useFixedDropdown } from './useFixedDropdown';
+import { useFixedDropdown } from '../../hooks/useFixedDropdown';
 import { useTranslation } from '../../i18n';
 import type { TranslationKey } from '../../i18n';
 

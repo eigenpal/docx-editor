@@ -2,7 +2,7 @@
 
 The editor has complete OOXML support for track changes and comments (types, parsers, serializers, ProseMirror marks/commands). Missing: a high-level API that works with paragraph indices and IDs instead of ProseMirror positions.
 
-Monorepo: `packages/core` (`@eigenpal/docx-core`, MIT), `packages/react`, `packages/vue`. Root workspace `"packages/*"`. Build: tsup. New package: `packages/agent-use` → `@eigenpal/docx-editor-agents` (BSL-1.1).
+Monorepo: `packages/core` (`@eigenpal/docx-editor-core`, MIT), `packages/react`, `packages/vue`. Root workspace `"packages/*"`. Build: tsup. New package: `packages/agent-use` → `@eigenpal/docx-editor-agents` (BSL-1.1).
 
 ## Goals / Non-Goals
 
@@ -27,7 +27,7 @@ Monorepo: `packages/core` (`@eigenpal/docx-core`, MIT), `packages/react`, `packa
 
 ### 1. Separate BSL-1.1 package, not a plugin
 
-`packages/agent-use/` with `@eigenpal/docx-core` as peer dep. Published on public npm under BSL-1.1.
+`packages/agent-use/` with `@eigenpal/docx-editor-core` as peer dep. Published on public npm under BSL-1.1.
 
 **Why not CorePlugin?** DocxReviewer is a standalone class with its own lifecycle. Plugin registration adds unnecessary ceremony for something that's just `new DocxReviewer(doc)`.
 

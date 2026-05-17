@@ -4,7 +4,23 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>docx-editor — Vite Example</title>
-  <link rel="icon" href="/favicon.ico">
+
+  <!-- Icons + manifest mirror the docx-editor.dev marketing site so
+       the demo, PWA install, and og share image all use the same
+       artwork. Source: ~/docx-editor-page/src/app + public/. -->
+  <link rel="icon" href="/favicon.ico" sizes="any">
+  <link rel="icon" href="/icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="/icon.png">
+  <link rel="icon" type="image/png" sizes="192x192" href="/web-app-manifest-192x192.png">
+  <link rel="icon" type="image/png" sizes="512x512" href="/web-app-manifest-512x512.png">
+  <link rel="canonical" href="https://docx-editor.dev/">
+
+  <meta property="og:title" content="DOCX Editor — Open-source DOCX editor for the browser">
+  <meta property="og:description" content="WYSIWYG DOCX editor in the browser. Tables, images, tracked changes, comments. No server required. MIT.">
+  <meta property="og:url" content="https://docx-editor.dev/">
+  <meta property="og:image" content="/og/docx-icon.png">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:image" content="/og/docx-icon.png">
 
   <!-- Preconnect to Google Fonts -->
   <link rel="preconnect" href="https://fonts.googleapis.com">

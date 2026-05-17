@@ -1,0 +1,11 @@
+{
+  "capturedAt": "2026-05-12T21:21:53.450Z",
+  "adapter": "react",
+  "fixture": "e2e/fixtures/example-with-image.docx",
+  "metrics": {
+    "coldStartMs": 933,
+    "inputLatencyP95Ms": 58,
+    "saveMs": 5,
+    "scrollFps": 120
+  }
+}

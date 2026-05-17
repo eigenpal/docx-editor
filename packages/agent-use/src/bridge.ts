@@ -1,23 +1,15 @@
 /**
  * Editor Bridge — connects agent tools to a live DocxEditor instance.
- *
- * Separate entry point: import from '@eigenpal/docx-editor-agents/bridge'
+ * Framework-agnostic; React adapter lives in `/react`.
  *
  * @example
  * ```ts
- * import { createEditorBridge, useAgentChat } from '@eigenpal/docx-editor-agents/bridge';
- *
- * // Hook (React) — simplest way
- * const { executeToolCall, toolSchemas } = useAgentChat({ editorRef, author: 'Assistant' });
- *
- * // Manual
+ * import { createEditorBridge } from '@eigenpal/docx-editor-agents/bridge';
  * const bridge = createEditorBridge(editorRef, 'Assistant');
  * bridge.addComment({ paragraphIndex: 3, text: 'Fix this.' });
  * ```
  */
 
-// Re-export hook and tools for convenience
-export { useAgentChat, type UseAgentChatOptions, type UseAgentChatReturn } from './useAgentChat';
 export { agentTools, executeToolCall, getToolSchemas } from './tools';
 export type { AgentToolDefinition, AgentToolResult } from './tools';
 export { createReviewerBridge } from './reviewerBridge';
@@ -44,8 +36,10 @@ import { getChanges, getComments } from './discovery';
 // ── Types ───────────────────────────────────────────────────────────────────
 
 /**
- * Minimal DocxEditorRef interface — only the methods the bridge needs.
- * This avoids importing the full React package at type level.
+ * Agent-bridge contract every editor adapter (React, Vue, future) MUST satisfy.
+ * Versioning: additions are coordinated minor bumps across the fixed group;
+ * signature changes / removals are major. See
+ * `openspec/changes/vue-editor-robust-implementation/design.md` Decision 18.
  */
 export interface EditorRefLike {
   getDocument(): unknown | null;
@@ -179,15 +173,19 @@ function getCommentText(content: unknown[]): string {
  */
 function getDocumentBody(
   editorRef: EditorRefLike
-): import('@eigenpal/docx-core/headless').DocumentBody | null {
+): import('@eigenpal/docx-editor-core/headless').DocumentBody | null {
   // Prefer the live PM-based document (reflects user edits)
   const pagedRef = editorRef.getEditorRef();
   if (pagedRef) {
-    const doc = pagedRef.getDocument() as import('@eigenpal/docx-core/headless').Document | null;
+    const doc = pagedRef.getDocument() as
+      | import('@eigenpal/docx-editor-core/headless').Document
+      | null;
     if (doc?.package?.document) return doc.package.document;
   }
   // Fallback to the initial document
-  const doc = editorRef.getDocument() as import('@eigenpal/docx-core/headless').Document | null;
+  const doc = editorRef.getDocument() as
+    | import('@eigenpal/docx-editor-core/headless').Document
+    | null;
   return doc?.package?.document ?? null;
 }
 

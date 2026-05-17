@@ -1,0 +1,38 @@
+{
+  "name": "@eigenpal/docx-editor-i18n",
+  "version": "0.0.1",
+  "description": "Shared UI locale strings for the @eigenpal docx-editor adapters (React and Vue).",
+  "type": "module",
+  "exports": {
+    "./*.json": "./*.json",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "*.json"
+  ],
+  "scripts": {
+    "typecheck": "echo 'no types to check (json only)'"
+  },
+  "keywords": [
+    "docx",
+    "editor",
+    "i18n",
+    "locales",
+    "translations"
+  ],
+  "author": {
+    "name": "Jedr Blaszyk",
+    "email": "jedr@eigenpal.com",
+    "url": "https://github.com/jedrazb"
+  },
+  "license": "Apache-2.0",
+  "homepage": "https://docx-editor.dev/",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/eigenpal/docx-editor.git",
+    "directory": "packages/i18n"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}

@@ -20,12 +20,14 @@
     "baseUrl": ".",
     "paths": {
       "@/*": ["./src/*"],
-      "@eigenpal/docx-core": ["../core/src/core.ts"],
-      "@eigenpal/docx-core/headless": ["../core/src/headless.ts"],
-      "@eigenpal/docx-core/core-plugins": ["../core/src/core-plugins/index.ts"],
-      "@eigenpal/docx-core/mcp": ["../core/src/mcp/index.ts"],
-      "@eigenpal/docx-core/plugin-api/*": ["../core/src/plugin-api/*"],
-      "@eigenpal/docx-core/*": ["../core/src/*"]
+      "@eigenpal/docx-editor-core": ["../core/src/core.ts"],
+      "@eigenpal/docx-editor-core/headless": ["../core/src/headless.ts"],
+      "@eigenpal/docx-editor-core/core-plugins": ["../core/src/core-plugins/index.ts"],
+      "@eigenpal/docx-editor-core/mcp": ["../core/src/mcp/index.ts"],
+      "@eigenpal/docx-editor-core/plugin-api/*": ["../core/src/plugin-api/*"],
+      "@eigenpal/docx-editor-core/*": ["../core/src/*"],
+      "@eigenpal/docx-editor-agents/react": ["../agent-use/src/react.ts"],
+      "@eigenpal/docx-editor-agents/bridge": ["../agent-use/src/bridge.ts"]
     }
   },
   "include": ["src"],

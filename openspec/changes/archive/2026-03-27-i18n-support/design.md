@@ -2,7 +2,7 @@
 
 The docx-editor is a client-side WYSIWYG editor for DOCX files built with React + ProseMirror. All ~200+ user-facing strings (dialog titles, button labels, tooltips, placeholders, aria-labels, error messages, menu items) are hardcoded in English across ~25+ component files.
 
-The editor is consumed as an npm package (`@eigenpal/docx-js-editor`) via the `<DocxEditor>` component. Consumers need to localize the UI for their end users without forking.
+The editor is consumed as an npm package (`@eigenpal/docx-editor-react`) via the `<DocxEditor>` component. Consumers need to localize the UI for their end users without forking.
 
 The codebase already uses React Context in several places (e.g., editor state). There are no existing i18n patterns or dependencies.
 
@@ -111,7 +111,7 @@ export function useTranslation() {
 **Decision:** Locale files live at `i18n/{lang}.json` in the package. Consumers import them explicitly:
 
 ```typescript
-import pl from '@eigenpal/docx-js-editor/i18n/pl.json';
+import pl from '@eigenpal/docx-editor-react/i18n/pl.json';
 <DocxEditor locale={pl} />
 ```
 

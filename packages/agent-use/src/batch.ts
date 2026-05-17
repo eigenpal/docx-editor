@@ -2,7 +2,7 @@
  * applyReview() — batch review operations in a single call.
  */
 
-import type { DocumentBody } from '@eigenpal/docx-core/headless';
+import type { DocumentBody } from '@eigenpal/docx-editor-core/headless';
 import type { BatchReviewOptions, BatchResult, BatchError } from './types';
 import { acceptChange, rejectChange, proposeReplacement } from './changes';
 import { addComment, replyTo } from './comments';

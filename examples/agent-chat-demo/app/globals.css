@@ -3,5 +3,5 @@
 @tailwind utilities;
 
 /* Import editor styles (CSS variables, custom properties, etc.)
-   In standalone usage: @import '@eigenpal/docx-js-editor/styles.css'; */
+   In standalone usage: @import '@eigenpal/docx-editor-react/styles.css'; */
 @import '../../../packages/react/src/styles/editor.css';

@@ -1,6 +1,6 @@
 # docx-editor — Realtime Collaboration
 
-A minimal demo of multi-user collaborative editing on top of `@eigenpal/docx-js-editor` using [Yjs](https://yjs.dev), [`y-prosemirror`](https://github.com/yjs/y-prosemirror), and [`y-webrtc`](https://github.com/yjs/y-webrtc).
+A minimal demo of multi-user collaborative editing on top of `@eigenpal/docx-editor-react` using [Yjs](https://yjs.dev), [`y-prosemirror`](https://github.com/yjs/y-prosemirror), and [`y-webrtc`](https://github.com/yjs/y-webrtc).
 
 **No backend required.** Peers find each other through Yjs's public WebRTC signaling servers and sync directly browser-to-browser.
 

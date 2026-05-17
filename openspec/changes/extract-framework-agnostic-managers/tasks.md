@@ -2,7 +2,7 @@
 
 - [ ] 1.1 Create `packages/core/src/managers/` directory and a base `Subscribable` class with `subscribe(listener)` / `getSnapshot()` / `notify()` pattern
 - [ ] 1.2 Add `EditorHandle` interface to `packages/core/src/managers/types.ts` (save, getDocument, focus, destroy)
-- [ ] 1.3 Export all manager types from `@eigenpal/docx-core`
+- [ ] 1.3 Export all manager types from `@eigenpal/docx-editor-core`
 
 ## 2. AutoSaveManager (lowest risk)
 

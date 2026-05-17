@@ -1,4 +1,4 @@
-# Contributing to @eigenpal/docx-js-editor
+# Contributing to @eigenpal/docx-editor-react
 
 Thanks for your interest in contributing! This guide will help you get started.
 
@@ -11,8 +11,8 @@ Thanks for your interest in contributing! This guide will help you get started.
 
 ```bash
 # Clone the repo
-git clone https://github.com/eigenpal/docx-js-editor.git
-cd docx-js-editor
+git clone https://github.com/eigenpal/docx-editor.git
+cd docx-editor
 
 # Install dependencies
 bun install
@@ -61,7 +61,7 @@ Contributors are required to sign our [Contributor License Agreement](CLA.md). T
 4. **Add/update tests** for your changes (see `e2e/` for E2E tests)
 5. **Verify** everything works:
    ```bash
-   bun run typecheck && bun test && bun run build
+   bun run typecheck && bun test && bun run build:packages
    ```
 6. **Submit a PR** against `main` — the CLA bot will prompt you on your first one
 
@@ -74,9 +74,17 @@ The editor has two rendering systems:
 
 See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the full architecture, and [docs/EXTENSIONS.md](docs/EXTENSIONS.md) for the extension system.
 
+## Adapter Parity
+
+The editor ships first-party adapters for React (`packages/react`) and Vue (`packages/vue`). Both share `@eigenpal/docx-editor-core`, which owns the parser, ProseMirror schema, layout engine, layout bridge (page mapping, footnote convergence, header/footer measurement), and serializer. Adapters only own their framework-specific shell, components, and lifecycle wiring.
+
+**When you touch layout, parsing, or rendering logic, put it in core, not in an adapter.** If you copy a 30-line helper from React to Vue, you've created a divergence trap. The footnote convergence loop (`stabilizeFootnoteLayout` in `packages/core/src/layout-bridge/footnoteLayout.ts`) is the canonical example: one helper, both adapters call it.
+
+Parity smoke tests live under `e2e/tests/parity/smoke/` and run each spec against both demos. Add one when you fix a bug that could plausibly affect rendering on either side.
+
 ## Reporting Bugs
 
-Open an issue at [github.com/eigenpal/docx-js-editor/issues](https://github.com/eigenpal/docx-js-editor/issues) with:
+Open an issue at [github.com/eigenpal/docx-editor/issues](https://github.com/eigenpal/docx-editor/issues) with:
 
 - Steps to reproduce
 - Expected vs actual behavior

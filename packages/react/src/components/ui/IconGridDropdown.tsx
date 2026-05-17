@@ -11,7 +11,7 @@ import { MaterialSymbol } from './MaterialSymbol';
 import { Button } from './Button';
 import { Tooltip } from './Tooltip';
 import { cn } from '../../lib/utils';
-import { useFixedDropdown } from './useFixedDropdown';
+import { useFixedDropdown } from '../../hooks/useFixedDropdown';
 
 const ICON_SIZE = 20;
 

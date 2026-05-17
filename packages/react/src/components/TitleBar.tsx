@@ -114,7 +114,6 @@ export function MenuBar() {
     disabled = false,
     onFormat,
     onPrint,
-    showPrintButton = true,
     onOpen,
     onSave,
     onPageSetup,
@@ -145,7 +144,7 @@ export function MenuBar() {
     [disabled, onInsertTable, onRefocusEditor]
   );
 
-  const hasPrintOrPageSetup = (showPrintButton && onPrint) || onPageSetup;
+  const hasPrintOrPageSetup = !!onPrint || !!onPageSetup;
   const hasFileMenu = hasPrintOrPageSetup || onOpen || onSave;
 
   return (
@@ -179,7 +178,7 @@ export function MenuBar() {
             ...((onOpen || onSave) && hasPrintOrPageSetup
               ? [{ type: 'separator' as const } as MenuEntry]
               : []),
-            ...(showPrintButton && onPrint
+            ...(onPrint
               ? [
                   {
                     icon: 'print',

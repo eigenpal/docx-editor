@@ -7,7 +7,7 @@ All UI strings in the editor (~200+) are hardcoded in English. This makes it imp
 - Extract all ~200+ user-facing strings (dialog titles, button labels, tooltips, placeholders, aria-labels, status messages, error messages, menu items) into a structured default `en.json` locale file
 - Create a `useTranslation()` hook backed by React Context that all components use instead of hardcoded strings
 - Add a `locale` prop on `<DocxEditor>` accepting `Partial<LocaleStrings>` with deep merge against English defaults — consumers override only what they need
-- Ship locale JSON files under `i18n/en.json` (required, bundled) with community-contributed locales as optional imports (e.g., `@eigenpal/docx-js-editor/i18n/pl.json`)
+- Ship locale JSON files under `i18n/en.json` (required, bundled) with community-contributed locales as optional imports (e.g., `@eigenpal/docx-editor-react/i18n/pl.json`)
 - Provide a TypeScript type contract (`LocaleStrings`) so locale objects are type-safe and autocomplete-friendly
 - Zero new runtime dependencies — plain JSON + React Context only
 

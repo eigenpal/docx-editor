@@ -1,4 +1,4 @@
-import type { Comment } from '@eigenpal/docx-core/types/content';
+import type { Comment } from '@eigenpal/docx-editor-core/types/content';
 import { getCommentText, formatDate, getInitials, avatarStyle } from './cardUtils';
 import { useTranslation } from '../../i18n';
 

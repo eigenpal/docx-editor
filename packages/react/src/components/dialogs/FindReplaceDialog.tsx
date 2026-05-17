@@ -30,8 +30,12 @@ export {
   scrollToMatch,
 } from './findReplaceUtils';
 
-export type { FindReplaceOptions, FindReplaceState, UseFindReplaceReturn } from './useFindReplace';
-export { useFindReplace } from './useFindReplace';
+export type {
+  FindReplaceOptions,
+  FindReplaceState,
+  UseFindReplaceReturn,
+} from '../../hooks/useFindReplace';
+export { useFindReplace } from '../../hooks/useFindReplace';
 
 import type { FindOptions, FindResult, FindMatch } from './findReplaceUtils';
 

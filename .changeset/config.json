@@ -2,10 +2,18 @@
   "$schema": "https://unpkg.com/@changesets/config@3.1.3/schema.json",
   "changelog": "@changesets/cli/changelog",
   "commit": false,
-  "fixed": [["@eigenpal/docx-js-editor", "@eigenpal/docx-editor-agents"]],
+  "fixed": [
+    [
+      "@eigenpal/docx-editor-react",
+      "@eigenpal/docx-editor-core",
+      "@eigenpal/docx-editor-agents",
+      "@eigenpal/docx-editor-vue",
+      "@eigenpal/docx-editor-i18n"
+    ]
+  ],
   "linked": [],
   "access": "public",
   "baseBranch": "main",
   "updateInternalDependencies": "patch",
-  "ignore": ["@eigenpal/docx-editor-vue", "@eigenpal/docx-core"]
+  "ignore": []
 }

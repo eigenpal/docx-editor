@@ -21,14 +21,12 @@ import { useMemo, useRef, useState } from 'react';
 import dynamic from 'next/dynamic';
 import { useChat } from '@ai-sdk/react';
 import { DefaultChatTransport, lastAssistantMessageIsCompleteWithToolCalls } from 'ai';
+import { type DocxEditorRef } from '@eigenpal/docx-editor-react';
+import { createEmptyDocument } from '@eigenpal/docx-editor-core';
 import {
-  type DocxEditorRef,
   AgentChatLog,
   AgentComposer,
   AgentSuggestionChip,
-  createEmptyDocument,
-} from '@eigenpal/docx-js-editor';
-import {
   useDocxAgentTools,
   getToolDisplayName,
   type EditorRefLike,
@@ -38,7 +36,7 @@ import { toAgentMessages } from '@eigenpal/docx-editor-agents/ai-sdk/react';
 // SSR-disabled: the editor uses `useSyncExternalStore` which Next.js' SSR
 // pre-pass can't snapshot. Lazy-loading on the client sidesteps that.
 const DocxEditor = dynamic(
-  () => import('@eigenpal/docx-js-editor').then((m) => ({ default: m.DocxEditor })),
+  () => import('@eigenpal/docx-editor-react').then((m) => ({ default: m.DocxEditor })),
   {
     ssr: false,
     loading: () => (
@@ -233,7 +231,7 @@ const SUGGESTIONS = [
 ];
 
 // Page-level styles only — chat chrome (bubbles, composer, suggestion
-// chips) ships from `@eigenpal/docx-js-editor`. The welcome card matches
+// chips) ships from `@eigenpal/docx-editor-react`. The welcome card matches
 // the panel's typography for a single visual surface.
 const S: Record<string, React.CSSProperties> = {
   layout: {

@@ -1,8 +1,11 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "buildCommand": "bun run build:demo",
-  "outputDirectory": "examples/vite/dist",
-  "installCommand": "bun install",
-  "framework": "vite",
-  "rewrites": [{ "source": "/(.*)", "destination": "/index.html" }]
+  "buildCommand": "bun run build",
+  "outputDirectory": "examples/parity/dist",
+  "installCommand": "rm -rf node_modules && bun install --frozen-lockfile",
+  "redirects": [{ "source": "/", "destination": "/react/", "permanent": false }],
+  "rewrites": [
+    { "source": "/react/(.*)", "destination": "/react/index.html" },
+    { "source": "/vue/(.*)", "destination": "/vue/index.html" }
+  ]
 }

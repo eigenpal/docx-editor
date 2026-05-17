@@ -35,6 +35,9 @@ interface MenuDropdownProps {
   label: string;
   items: MenuEntry[];
   disabled?: boolean;
+  /** When true, the trigger renders a down-arrow caret next to the label.
+   *  Default `false` — every in-tree caller is a top-level menubar button. */
+  showChevron?: boolean;
 }
 
 const triggerStyle: CSSProperties = {
@@ -105,7 +108,7 @@ const submenuPanelStyle: CSSProperties = {
   zIndex: 1001,
 };
 
-export function MenuDropdown({ label, items, disabled }: MenuDropdownProps) {
+export function MenuDropdown({ label, items, disabled, showChevron = false }: MenuDropdownProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [hoveredSubmenu, setHoveredSubmenu] = useState<string | null>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
@@ -179,7 +182,7 @@ export function MenuDropdown({ label, items, disabled }: MenuDropdownProps) {
         style={isOpen ? triggerOpenStyle : triggerStyle}
       >
         {label}
-        <MaterialSymbol name="arrow_drop_down" size={16} />
+        {showChevron && <MaterialSymbol name="arrow_drop_down" size={16} />}
       </button>
 
       {isOpen && (

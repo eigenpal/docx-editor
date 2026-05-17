@@ -1,6 +1,6 @@
 import { createContext, useContext, useMemo, useCallback } from 'react';
 import type { ReactNode } from 'react';
-import en from '../../i18n/en.json';
+import en from '@eigenpal/docx-editor-i18n/en.json';
 import type { LocaleStrings, Translations, TranslationKey } from './types';
 
 const defaultLocale: LocaleStrings = en;

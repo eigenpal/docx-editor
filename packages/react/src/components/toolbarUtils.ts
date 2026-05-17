@@ -9,43 +9,20 @@ import type {
   TextFormatting,
   ParagraphFormatting,
   Theme,
-} from '@eigenpal/docx-core/types/document';
-import { resolveColorToHex } from '@eigenpal/docx-core/utils';
+} from '@eigenpal/docx-editor-core/types/document';
+import { resolveColorToHex } from '@eigenpal/docx-editor-core/utils';
 import { pointsToHalfPoints } from './ui/FontSizePicker';
 import { createDefaultListState } from './ui/ListButtons';
 import type { SelectionFormatting, FormattingAction } from './Toolbar';
 
-// ============================================================================
-// HIGHLIGHT COLOR MAPPING
-// ============================================================================
-
-/**
- * Map hex color to OOXML highlight color name
- * OOXML uses named colors for highlights (yellow, green, cyan, etc.)
- */
-const HIGHLIGHT_HEX_TO_NAME: Record<string, string> = {
-  FFFF00: 'yellow',
-  '00FF00': 'green',
-  '00FFFF': 'cyan',
-  FF00FF: 'magenta',
-  '0000FF': 'blue',
-  FF0000: 'red',
-  '00008B': 'darkBlue',
-  '008080': 'darkCyan',
-  '008000': 'darkGreen',
-  '800080': 'darkMagenta',
-  '8B0000': 'darkRed',
-  '808000': 'darkYellow',
-  '808080': 'darkGray',
-  C0C0C0: 'lightGray',
-  '000000': 'black',
-  FFFFFF: 'white',
-};
-
-export function mapHexToHighlightName(hex: string): string | null {
-  const normalized = hex.replace(/^#/, '').toUpperCase();
-  return HIGHLIGHT_HEX_TO_NAME[normalized] || null;
-}
+// Re-export the canonical highlight-color table from core. Local
+// import below so internal callers (extractFormattingState etc.)
+// can use it without going through the public surface.
+export {
+  HIGHLIGHT_HEX_TO_NAME,
+  mapHexToHighlightName,
+} from '@eigenpal/docx-editor-core/utils/highlightColors';
+import { mapHexToHighlightName } from '@eigenpal/docx-editor-core/utils/highlightColors';
 
 // ============================================================================
 // FORMATTING STATE EXTRACTION

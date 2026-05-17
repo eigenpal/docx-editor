@@ -13,7 +13,7 @@ The repository SHALL be organized as a Bun workspaces monorepo with a root `pack
 
 ### Requirement: Core package directory structure
 
-The `packages/core/` directory SHALL contain all framework-agnostic source code with its own `package.json` named `@eigenpal/docx-core`.
+The `packages/core/` directory SHALL contain all framework-agnostic source code with its own `package.json` named `@eigenpal/docx-editor-core`.
 
 #### Scenario: Core package contains framework-agnostic modules
 
@@ -30,7 +30,7 @@ The `packages/core/` directory SHALL contain all framework-agnostic source code 
 
 ### Requirement: React package directory structure
 
-The `packages/react/` directory SHALL contain all React-dependent source code with its own `package.json` named `@eigenpal/docx-js-editor`.
+The `packages/react/` directory SHALL contain all React-dependent source code with its own `package.json` named `@eigenpal/docx-editor-react`.
 
 #### Scenario: React package contains UI modules
 
@@ -41,7 +41,7 @@ The `packages/react/` directory SHALL contain all React-dependent source code wi
 #### Scenario: React package depends on core
 
 - **WHEN** inspecting `packages/react/package.json`
-- **THEN** `@eigenpal/docx-core` SHALL be listed in dependencies
+- **THEN** `@eigenpal/docx-editor-core` SHALL be listed in dependencies
 - **AND** `react` and `react-dom` SHALL be listed as peerDependencies
 - **AND** `@radix-ui/react-select` SHALL be listed in dependencies
 
@@ -59,7 +59,7 @@ Each package SHALL have its own `tsup.config.ts` producing independent build out
 
 - **WHEN** running `bun run build` in `packages/react/`
 - **THEN** it SHALL produce `dist/` with CJS and ESM outputs, type declarations, and `styles.css`
-- **AND** it SHALL externalize `@eigenpal/docx-core` (not bundle it)
+- **AND** it SHALL externalize `@eigenpal/docx-editor-core` (not bundle it)
 
 ### Requirement: Shared development scripts at root
 
@@ -82,7 +82,7 @@ Playwright E2E tests SHALL remain functional and test the full integrated editor
 #### Scenario: E2E tests use both packages
 
 - **WHEN** running `npx playwright test` from the root (or a tests directory)
-- **THEN** tests SHALL import from both `@eigenpal/docx-core` and `@eigenpal/docx-js-editor`
+- **THEN** tests SHALL import from both `@eigenpal/docx-editor-core` and `@eigenpal/docx-editor-react`
 - **AND** all existing tests SHALL pass without modification to test logic
 
 ### Requirement: Cross-framework E2E test reuse
@@ -118,7 +118,7 @@ An `examples/vue/` directory SHALL contain a minimal Vite + Vue app that mounts 
 
 - **WHEN** running `bun run dev` in `examples/vue/`
 - **THEN** it SHALL start a Vite dev server with `@vitejs/plugin-vue`
-- **AND** the app SHALL render a functional DOCX editor using `@eigenpal/docx-editor-vue` and `@eigenpal/docx-core`
+- **AND** the app SHALL render a functional DOCX editor using `@eigenpal/docx-editor-vue` and `@eigenpal/docx-editor-core`
 
 #### Scenario: Vue example app serves on a distinct port
 
@@ -127,13 +127,13 @@ An `examples/vue/` directory SHALL contain a minimal Vite + Vue app that mounts 
 
 ### Requirement: Vue package scaffold
 
-The `packages/vue/` directory SHALL contain an empty scaffolded package named `@eigenpal/docx-editor-vue` with a dependency on `@eigenpal/docx-core`, ready for community contribution.
+The `packages/vue/` directory SHALL contain an empty scaffolded package named `@eigenpal/docx-editor-vue` with a dependency on `@eigenpal/docx-editor-core`, ready for community contribution.
 
 #### Scenario: Vue package has minimal package.json
 
 - **WHEN** inspecting `packages/vue/package.json`
 - **THEN** it SHALL have name `@eigenpal/docx-editor-vue`
-- **AND** `@eigenpal/docx-core` SHALL be listed in dependencies
+- **AND** `@eigenpal/docx-editor-core` SHALL be listed in dependencies
 - **AND** `vue` SHALL be listed in peerDependencies
 - **AND** `react` and `react-dom` SHALL NOT appear in dependencies or peerDependencies
 

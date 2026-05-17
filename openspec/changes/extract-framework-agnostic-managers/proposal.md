@@ -28,8 +28,8 @@ After the monorepo extraction (`extract-core-monorepo`), the package boundary is
 
 ## Impact
 
-- **`@eigenpal/docx-core`**: Gains new exports — coordinator classes, manager classes, `RenderAsyncHandle` interface
-- **`@eigenpal/docx-js-editor`**: `PagedEditor.tsx`, `DocxEditor.tsx`, and hooks become thin React wrappers (~50-70% line reduction). No public API changes.
+- **`@eigenpal/docx-editor-core`**: Gains new exports — coordinator classes, manager classes, `RenderAsyncHandle` interface
+- **`@eigenpal/docx-editor-react`**: `PagedEditor.tsx`, `DocxEditor.tsx`, and hooks become thin React wrappers (~50-70% line reduction). No public API changes.
 - **`@eigenpal/docx-editor-vue`**: Vue contributor can now build components by wrapping the same coordinators/managers in Vue composables instead of reverse-engineering React logic
 - **Testing**: Manager classes are unit-testable in isolation (no DOM/React needed for logic tests)
 - **Risk**: Large internal refactor touching the two biggest components. Requires careful incremental extraction with E2E test validation at each step.
