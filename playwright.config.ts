@@ -57,7 +57,7 @@ export default defineConfig({
   /* Run dev servers before tests */
   webServer: [
     {
-      command: 'bun run dev',
+      command: 'bun run dev:react',
       url: 'http://localhost:5173',
       reuseExistingServer: !process.env.CI,
       timeout: 60 * 1000,
