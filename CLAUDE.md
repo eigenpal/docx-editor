@@ -282,7 +282,11 @@ We track every published package's `@public` surface in `packages/<pkg>/etc/<ent
 
 **When CI fails on API drift:** `bun run api:extract` locally, commit the new snapshot, push.
 
-**Status:** Pilot lives on `@eigenpal/docx-editor-agents/server` (Phase 0 of #475). Core barrels are tagged `@public` (Phase 0.5). Other entries are added one at a time in subsequent phases.
+**Status:**
+
+- `@eigenpal/docx-editor-agents/server` — snapshot at `packages/agents/etc/agents-server.api.md`.
+- `@eigenpal/docx-editor-core` — snapshots for every published subpath at `packages/core/etc/*.api.md`. The runner at `packages/core/scripts/api-extractor.mjs` iterates the exports map automatically; adding a new core subpath extends the snapshot set without config changes.
+- `@eigenpal/docx-editor-react` and `@eigenpal/docx-editor-vue` — pending Phase 2/3 of #475.
 
 ---
 
