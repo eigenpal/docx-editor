@@ -28,8 +28,8 @@
 import { useEffect, useRef, useState } from 'react';
 import type { EditorState } from 'prosemirror-state';
 import type { Decoration, EditorView } from 'prosemirror-view';
-import { createRenderedDomContext } from '../../plugin-api/RenderedDomContext';
-import type { SelectionBridge } from './SelectionBridge';
+import { createRenderedDomContext } from '../../../plugin-api/RenderedDomContext';
+import type { SelectionBridge } from '../internals/SelectionBridge';
 
 interface DecorationLayerProps {
   /** Returns the current PM view (or null if not yet mounted). */
@@ -39,7 +39,7 @@ interface DecorationLayerProps {
   /** Current zoom — affects coordinate translation. */
   zoom: number;
   /** Bumps on every PM transaction; drives recomputation. */
-  transactionVersion: number;
+  decorationSyncToken: number;
   /**
    * Layout/selection gate: blocks decoration sync when layout is mid-update
    * (otherwise `getCoordinatesForPosition` reads against stale geometry and
@@ -62,14 +62,14 @@ export function DecorationLayer({
   getView,
   getPagesContainer,
   zoom,
-  transactionVersion,
+  decorationSyncToken,
   syncCoordinator,
 }: DecorationLayerProps) {
   const overlayRef = useRef<HTMLDivElement>(null);
   const rafRef = useRef<number | null>(null);
 
   // Bumps when layout completes a render pass. Without this, a doc-changing
-  // transaction would bump `transactionVersion`, the rAF would fire while
+  // transaction would bump `decorationSyncToken`, the rAF would fire while
   // layout is still updating, `isSafeToRender()` returns false, and the
   // decorations would never paint until the next user input.
   const [renderEpoch, setRenderEpoch] = useState(0);
@@ -97,7 +97,7 @@ export function DecorationLayer({
     // getView/getPagesContainer are stable closures over refs; syncCoordinator
     // is a useMemo([]) singleton from PagedEditor.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [zoom, transactionVersion, renderEpoch]);
+  }, [zoom, decorationSyncToken, renderEpoch]);
 
   return (
     <div

@@ -5,9 +5,10 @@
  * `addComment` / `proposeChange` anchor against).
  *
  * Mirrors the React side at
- * `packages/react/src/components/DocxEditor/helpers.ts`. Kept duplicated
- * for now — consolidating into `@eigenpal/docx-editor-core/utils` is a
- * separate cross-package change.
+ * `packages/react/src/components/DocxEditor/internals/pmAnchors.ts` +
+ * `internals/vanillaText.ts`. Kept duplicated for now — consolidating
+ * into `@eigenpal/docx-editor-core/utils` is a separate cross-package
+ * change.
  *
  * TODO(file-size-cap): move these four into
  * `@eigenpal/docx-editor-core/utils/paraText` so both adapters import

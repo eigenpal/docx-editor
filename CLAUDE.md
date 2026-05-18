@@ -63,7 +63,7 @@ bun run typecheck && npx playwright test --timeout=60000 --workers=4
 - `packages/react/src/components/UnifiedSidebar.tsx`
 - `packages/react/src/components/sidebar/**`
 - `packages/react/src/hooks/useCommentSidebarItems.tsx`
-- `packages/react/src/paged-editor/PagedEditor.tsx` → `updateSelectionOverlay` / `onSelectionChange`
+- `packages/react/src/components/DocxEditor/hooks/useSelectionOverlay.ts` → `updateSelectionOverlay` / `onSelectionChange`
 - `packages/react/src/components/DocxEditor.tsx` → `onSelectionChange` handler, `expandedSidebarItem` state
 
 **Known flaky tests:** `formatting.spec.ts` (bold toggle/undo/redo), `text-editing.spec.ts` (clipboard ops).
@@ -117,7 +117,7 @@ Output must look identical to Microsoft Word. Must preserve: fonts, theme colors
 │  - Real editing state (selection, undo/redo, commands)       │
 │  - Receives keyboard input                                   │
 │  - CSS class: .paged-editor__hidden-pm                       │
-│  - Component: src/paged-editor/OffscreenEditorHost.tsx         │
+│  - Component: components/DocxEditor/OffscreenEditorHost.tsx    │
 └──────────────────────────────────────────────────────────────┘
         │ state changes trigger re-render ↓
 ┌──────────────────────────────────────────────────────────────┐
@@ -146,7 +146,7 @@ Saving:
 
 ### Click/Selection Flow
 
-User clicks on visible page → `PagedEditor.handlePagesMouseDown()` → `getPositionFromMouse(clientX, clientY)` maps pixel coordinates to a PM document position → `hiddenPMRef.current.setSelection(pos)` → PM state update → visible pages re-render with selection overlay.
+User clicks on visible page → `usePagesPointer.handlePagesMouseDown()` (in `components/DocxEditor/hooks/usePagesPointer.ts`) → `getPositionFromMouse(clientX, clientY)` maps pixel coordinates to a PM document position → `hiddenPMRef.current.setSelection(pos)` → PM transaction routes through `PagedEditor.handleTransaction` → `useLayoutPipeline.scheduleLayout` if doc changed + `useSelectionOverlay.updateSelectionOverlay` otherwise → visible pages re-render with selection overlay.
 
 ### Vue mounting path
 
@@ -158,7 +158,7 @@ User clicks on visible page → `PagedEditor.handlePagesMouseDown()` → `getPos
 Adding a new variant to `FlowBlock` (`packages/core/src/layout-engine/types.ts`) requires updating **three** switches:
 
 1. `runLayoutPipeline` in `packages/core/src/layout-engine/index.ts`
-2. `measureBlock` in `packages/react/src/paged-editor/PagedEditor.tsx`
+2. `measureBlock` in `packages/react/src/components/DocxEditor/internals/measureBlock.ts`
 3. `measureBlock` in `packages/vue/src/composables/useDocxEditor.ts`
 
 All three end with `assertExhaustiveFlowBlock(block, '<site>')`, so omitting any case fails `bun run typecheck` with a `never` mismatch that names the missing site. This was the root cause of the Vue-only text-box crash before the guard landed.
@@ -181,21 +181,34 @@ All three end with `assertExhaustiveFlowBlock(block, '<site>')`, so omitting any
 
 ### Key File Map
 
-| What you're debugging                | Look here                                                |
-| ------------------------------------ | -------------------------------------------------------- |
-| How text/paragraphs appear on screen | `layout-painter/renderParagraph.ts`                      |
-| How images appear on screen          | `layout-painter/renderImage.ts`                          |
-| How tables appear on screen          | `layout-painter/renderTable.ts`                          |
-| How pages are composed               | `layout-painter/paintPage.ts`                           |
-| How a formatting command works       | `prosemirror/extensions/` (marks/ and nodes/)            |
-| How keyboard shortcuts work          | `prosemirror/extensions/features/BaseKeymapExtension.ts` |
-| How toolbar reflects selection       | `prosemirror/plugins/selectionTracker.ts`                |
-| How DOCX XML is parsed               | `docx/paragraphParser.ts`, `docx/tableParser.ts`, etc.   |
-| How PM doc is built from parsed data | `prosemirror/conversion/toProseDoc.ts`                   |
-| Schema (node/mark definitions)       | `prosemirror/extensions/nodes/`, `marks/`                |
-| Table toolbar/dropdown               | `components/ui/TableOptionsDropdown.tsx`                 |
-| Main toolbar                         | `components/Toolbar.tsx`                                 |
-| CSS for editor                       | `prosemirror/editor.css`                                 |
+| What you're debugging                | Look here                                                                 |
+| ------------------------------------ | ------------------------------------------------------------------------- |
+| How text/paragraphs appear on screen | `layout-painter/renderParagraph.ts`                                       |
+| How images appear on screen          | `layout-painter/renderImage.ts`                                           |
+| How tables appear on screen          | `layout-painter/renderTable.ts`                                           |
+| How pages are composed               | `layout-painter/paintPage.ts`                                            |
+| How a formatting command works       | `prosemirror/extensions/` (marks/ and nodes/)                             |
+| How keyboard shortcuts work          | `prosemirror/extensions/features/BaseKeymapExtension.ts`                  |
+| How toolbar reflects selection       | `prosemirror/plugins/selectionTracker.ts`                                 |
+| How DOCX XML is parsed               | `docx/paragraphParser.ts`, `docx/tableParser.ts`, etc.                    |
+| How PM doc is built from parsed data | `prosemirror/conversion/toProseDoc.ts`                                    |
+| Schema (node/mark definitions)       | `prosemirror/extensions/nodes/`, `marks/`                                 |
+| Table toolbar/dropdown               | `components/ui/TableOptionsDropdown.tsx`                                  |
+| Main toolbar                         | `components/Toolbar.tsx`                                                  |
+| CSS for editor                       | `prosemirror/editor.css`                                                  |
+| Click → PM position mapping          | `components/DocxEditor/hooks/usePagesPointer.ts` (`getPositionFromMouse`) |
+| Selection rects / caret geometry     | `components/DocxEditor/hooks/useSelectionOverlay.ts`                      |
+| Layout pipeline + painter wiring     | `components/DocxEditor/hooks/useLayoutPipeline.ts`                        |
+| Scroll to position / paraId / page   | `components/DocxEditor/hooks/usePagedScrollApi.ts`                        |
+| Image resize + drag                  | `components/DocxEditor/hooks/useImageInteractions.ts`                     |
+| Font-load / HF-change reflow         | `components/DocxEditor/hooks/useLayoutTriggers.ts`                        |
+| Table column/row/edge resize         | `components/DocxEditor/hooks/useTableResizeState.ts`                      |
+| `PagedEditorRef` shape               | `components/DocxEditor/hooks/usePagedEditorRefApi.ts`                     |
+| Measure-block invariant + caches     | `components/DocxEditor/internals/measureBlock.ts`                         |
+| Scroll-restore strategies            | `components/DocxEditor/internals/scrollRestore.ts`                        |
+| Sidebar comment anchor Y positions   | `components/DocxEditor/internals/sidebarAnchorPositions.ts`               |
+| PM doc → vanilla-view text           | `components/DocxEditor/internals/vanillaText.ts`                          |
+| PM position → DOM element            | `components/DocxEditor/internals/pmAnchors.ts`                            |
 
 ### Extension System
 

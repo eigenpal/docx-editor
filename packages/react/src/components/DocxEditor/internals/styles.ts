@@ -1,6 +1,11 @@
 /**
- * Layout constants and CSS-in-JS style objects for PagedEditor's
- * container, viewport, pages, and plugin-overlays layers.
+ * Layout constants + CSS-in-JS style objects for PagedEditor's container,
+ * viewport, pages, and plugin-overlays layers.
+ *
+ * Note: this file also re-exports a handful of non-style constants
+ * (DEFAULT_PAGE_WIDTH / DEFAULT_PAGE_GAP / VIEWPORT_PADDING_TOP / EMPTY_PLUGINS)
+ * because they're consumed by both the JSX styles below and the layout
+ * pipeline — keeping them here avoids a separate constants file.
  */
 
 import type { CSSProperties } from 'react';
@@ -17,6 +22,9 @@ export const EMPTY_PLUGINS: Plugin[] = [];
 /** Padding above page content in the viewport div. */
 export const VIEWPORT_PADDING_TOP = 24;
 
+/** Padding below page content in the viewport div. */
+export const VIEWPORT_PADDING_BOTTOM = 24;
+
 export const containerStyles: CSSProperties = {
   position: 'relative',
   width: '100%',
@@ -31,7 +39,7 @@ export const viewportStyles: CSSProperties = {
   flexDirection: 'column',
   alignItems: 'center',
   paddingTop: VIEWPORT_PADDING_TOP,
-  paddingBottom: 24,
+  paddingBottom: VIEWPORT_PADDING_BOTTOM,
   overflowAnchor: 'none',
 };
 

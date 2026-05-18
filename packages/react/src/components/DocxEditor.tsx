@@ -609,9 +609,9 @@ interface EditorState {
 // EDITING MODE DROPDOWN (Google Docs-style)
 // ============================================================================
 
-export type { EditorMode } from './DocxEditor/editing-modes';
-import { EDITING_MODES } from './DocxEditor/editing-modes';
-import type { EditorMode } from './DocxEditor/editing-modes';
+export type { EditorMode } from './DocxEditor/internals/editing-modes';
+import { EDITING_MODES } from './DocxEditor/internals/editing-modes';
+import type { EditorMode } from './DocxEditor/internals/editing-modes';
 
 /**
  * Wrapper for the comments-sidebar toggle so the button title runs through
@@ -960,10 +960,12 @@ import {
   findSelectionYPosition,
   getInitialSectionProperties,
   findParaIdRange,
+} from './DocxEditor/internals/pmAnchors';
+import {
   getVanillaNodeText,
   getVanillaTextBetween,
   findTextInPmParagraph,
-} from './DocxEditor/helpers';
+} from './DocxEditor/internals/vanillaText';
 
 function createComment(text: string, authorName: string, parentId?: number): Comment {
   return {

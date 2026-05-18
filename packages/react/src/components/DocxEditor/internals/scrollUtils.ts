@@ -7,7 +7,7 @@
 
 import { findBodyPmAnchors } from '@eigenpal/docx-editor-core/layout-bridge';
 import type { Layout } from '@eigenpal/docx-editor-core/layout-engine';
-import { VIEWPORT_PADDING_TOP } from './styles';
+import { VIEWPORT_PADDING_BOTTOM, VIEWPORT_PADDING_TOP } from './styles';
 
 /**
  * Vertically scroll `container` so `el`'s center aligns with the container's visible center.
@@ -74,9 +74,11 @@ export function findPaintedPmStartAtOrBefore(pages: HTMLElement, pmPos: number):
   return best;
 }
 
-/** Min-height of the zoom/viewport wrapper (padding + page stack). Must match JSX `totalHeight`. */
+/** Min-height of the zoom/viewport wrapper: top + bottom padding plus the page stack. */
 export function viewportMinHeightPx(layout: Layout, pageGap: number): number {
   const n = layout.pages.length;
   const pagesHeight = layout.pages.reduce((sum, page) => sum + page.size.h, 0);
-  return pagesHeight + Math.max(0, n - 1) * pageGap + VIEWPORT_PADDING_TOP + 24;
+  return (
+    pagesHeight + Math.max(0, n - 1) * pageGap + VIEWPORT_PADDING_TOP + VIEWPORT_PADDING_BOTTOM
+  );
 }
