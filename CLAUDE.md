@@ -372,13 +372,13 @@ Hotfixes → `0.x`. Everything else → `main`.
 
 ### Packages
 
-| Package                        | Path                 | Published?               |
-| ------------------------------ | -------------------- | ------------------------ |
-| `@eigenpal/docx-editor-react`  | `packages/react`     | ✅                       |
-| `@eigenpal/docx-editor-core`   | `packages/core`      | ✅                       |
-| `@eigenpal/docx-editor-agents` | `packages/agent-use` | ✅                       |
-| `@eigenpal/docx-editor-i18n`   | `packages/i18n`      | ✅ (shared locale JSONs) |
-| `@eigenpal/docx-editor-vue`    | `packages/vue`       | ✅                       |
+| Package                        | Path              | Published?               |
+| ------------------------------ | ----------------- | ------------------------ |
+| `@eigenpal/docx-editor-react`  | `packages/react`  | ✅                       |
+| `@eigenpal/docx-editor-core`   | `packages/core`   | ✅                       |
+| `@eigenpal/docx-editor-agents` | `packages/agents` | ✅                       |
+| `@eigenpal/docx-editor-i18n`   | `packages/i18n`   | ✅ (shared locale JSONs) |
+| `@eigenpal/docx-editor-vue`    | `packages/vue`    | ✅                       |
 
 `@eigenpal/docx-editor-react`, `@eigenpal/docx-editor-core`, `@eigenpal/docx-editor-agents`, `@eigenpal/docx-editor-i18n`, and the Vue adapter are all in a **fixed group** in `.changeset/config.json` — they always ship the same version. A changeset only needs to declare the bump for one; the others follow automatically. `@eigenpal/docx-editor-i18n` ships the locale JSONs that React and Vue both consume — adding a new key to `en.json` only needs a changeset on `@eigenpal/docx-editor-i18n` (the consumers pick it up at build time).
 

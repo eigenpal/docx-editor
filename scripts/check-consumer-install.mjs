@@ -50,7 +50,7 @@ try {
   const tarballs = [
     packPackage('packages/core'),
     packPackage('packages/i18n'),
-    packPackage('packages/agent-use'),
+    packPackage('packages/agents'),
     packPackage('packages/vue'),
   ];
 

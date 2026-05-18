@@ -1,5 +1,5 @@
 /**
- * Shared utilities for agent-use package.
+ * Shared utilities for the agents package.
  */
 
 import type {

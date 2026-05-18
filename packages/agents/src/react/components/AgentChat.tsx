@@ -19,7 +19,7 @@ import { defaultHumanizeToolName, type AgentMessage, type AgentToolCall } from '
 
 export type { AgentMessage, AgentToolCall };
 
-// Defaults come from packages/agent-use/i18n/en.json so translators own them
+// Defaults come from packages/agents/i18n/en.json so translators own them
 // the same way they do for the editor adapters. Consumers wanting another
 // locale either (a) pass `*Label` props with localised strings (typically
 // from their own t()), or (b) [future] pass an `i18n` override object.

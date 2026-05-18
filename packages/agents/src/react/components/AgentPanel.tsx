@@ -18,7 +18,7 @@ import en from '../../../i18n/en.json';
 
 const STORAGE_KEY = 'eigenpal:docx-editor:agentPanelWidth';
 
-// Inline SVGs — agent-use stays UI-kit-independent. Consumers wanting a
+// Inline SVGs — the agents package stays UI-kit-independent. Consumers wanting a
 // different look pass `icon` (or skip the close button entirely via
 // `onClose=undefined`).
 function SparkleIcon({ size = 22 }: { size?: number }) {

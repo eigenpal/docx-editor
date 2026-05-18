@@ -9,7 +9,7 @@
  *
  * Editor i18n: `<DocxEditor :i18n="..."` does NOT translate agent UI
  * strings — these components own their own English defaults from
- * `packages/agent-use/i18n/en.json`. Wire your `t()` results to the
+ * `packages/agents/i18n/en.json`. Wire your `t()` results to the
  * `*Label` / `labels` props for translation:
  *
  * ```vue

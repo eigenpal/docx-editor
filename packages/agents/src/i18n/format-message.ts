@@ -1,5 +1,5 @@
 /**
- * Tiny ICU-subset formatter shared by agent-use's React + Vue components
+ * Tiny ICU-subset formatter shared by the agents package's React + Vue components
  * for falling back on bundled English defaults. Same shape as React's
  * `useTranslation` formatMessage.
  *

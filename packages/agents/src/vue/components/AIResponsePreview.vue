@@ -1,7 +1,7 @@
 <!--
   AIResponsePreview — diff/loading/error preview for an AI action result.
   Migrated from packages/vue in the 1.0 train. Labels default to bundled
-  English (`packages/agent-use/i18n/en.json`); pass `labels` to translate.
+  English (`packages/agents/i18n/en.json`); pass `labels` to translate.
 -->
 <template>
   <!-- role=region (not dialog) — focus management for a real dialog
