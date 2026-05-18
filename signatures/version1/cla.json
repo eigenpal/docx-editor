@@ -35,6 +35,12 @@
       "id": 83713217,
       "signed_at": "2026-05-15T20:36:28Z",
       "pull_request_no": 481
+    },
+    {
+      "name": "ResiDev",
+      "id": 181527634,
+      "signed_at": "2026-05-18T12:50:17Z",
+      "pull_request_no": 497
     }
   ]
 }
