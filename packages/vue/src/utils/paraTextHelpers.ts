@@ -8,6 +8,10 @@
  * `packages/react/src/components/DocxEditor/helpers.ts`. Kept duplicated
  * for now — consolidating into `@eigenpal/docx-editor-core/utils` is a
  * separate cross-package change.
+ *
+ * TODO(file-size-cap): move these four into
+ * `@eigenpal/docx-editor-core/utils/paraText` so both adapters import
+ * from one source. Grep for `paraText` to find the React/Vue twins.
  */
 
 import type { Node as ProseMirrorNode } from 'prosemirror-model';

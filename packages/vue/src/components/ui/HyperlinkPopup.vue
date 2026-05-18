@@ -144,12 +144,8 @@ import { useTranslation } from '../../i18n';
 
 const { t } = useTranslation();
 
-export interface HyperlinkPopupData {
-  href: string;
-  displayText: string;
-  tooltip?: string;
-  anchorRect: DOMRect;
-}
+export type { HyperlinkPopupData } from './hyperlinkPopupTypes';
+import type { HyperlinkPopupData } from './hyperlinkPopupTypes';
 
 const props = defineProps<{
   data: HyperlinkPopupData | null;

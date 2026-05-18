@@ -300,7 +300,7 @@
             @add-comment="handleAddComment"
             @cancel-add-comment="handleCancelAddComment"
             @comment-reply="handleCommentReply"
-            @comment-resolve="handleCommentResolve"
+            @comment-resolve="resolveComment"
             @comment-unresolve="handleCommentUnresolve"
             @comment-delete="handleCommentDelete"
             @accept-change="handleAcceptChange"
@@ -429,6 +429,23 @@ import {
   getVanillaTextBetween,
   findTextInPmParagraph,
 } from '../utils/paraTextHelpers';
+import {
+  findInDocument as findInDocumentImpl,
+  getSelectionInfo as getSelectionInfoImpl,
+  getPageContent as getPageContentImpl,
+} from '../utils/refApiQueries';
+import {
+  findElementAtPosition,
+  scrollVisiblePositionIntoView as scrollVisiblePositionIntoViewImpl,
+  resolvePos as resolvePosImpl,
+  selectWord as selectWordImpl,
+  selectParagraph as selectParagraphImpl,
+} from '../utils/domQueries';
+import {
+  copyImageToClipboard,
+  pasteFromClipboard,
+  triggerReplaceImage,
+} from '../utils/imageClipboard';
 import Toolbar from './Toolbar.vue';
 import FindReplaceDialog from './dialogs/FindReplaceDialog.vue';
 import TableToolbar from './ui/TableToolbar.vue';
@@ -464,6 +481,13 @@ import type { TrackedChangeEntry } from './sidebar/sidebarUtils';
 import { useDocxEditor } from '../composables/useDocxEditor';
 import { useZoom } from '../composables/useZoom';
 import { useTableResize } from '../composables/useTableResize';
+import { useFileIO } from '../composables/useFileIO';
+import { useHyperlinkManagement } from '../composables/useHyperlinkManagement';
+import { useFormattingActions } from '../composables/useFormattingActions';
+import { usePageSetupControls } from '../composables/usePageSetupControls';
+import { useOutlineSidebar } from '../composables/useOutlineSidebar';
+import { useKeyboardShortcuts } from '../composables/useKeyboardShortcuts';
+import { useCommentManagement } from '../composables/useCommentManagement';
 import { TextSelection, NodeSelection } from 'prosemirror-state';
 import type { DocxEditorRef } from '../editor-ref';
 import type { EditorView } from 'prosemirror-view';
@@ -472,14 +496,11 @@ import type { Document, SectionProperties } from '@eigenpal/docx-editor-core/typ
 import type { Comment } from '@eigenpal/docx-editor-core/types/content';
 import { collectHeadings } from '@eigenpal/docx-editor-core/utils/headingCollector';
 import type { HeadingInfo } from '@eigenpal/docx-editor-core/utils/headingCollector';
-import { resolveDomPosition } from '@eigenpal/docx-editor-core/layout-bridge/resolveDomPosition';
 import { collectBodySpans } from '@eigenpal/docx-editor-core/layout-bridge';
 import {
   readSelectionGeometry,
   getCaretPositionFromDom,
 } from '@eigenpal/docx-editor-core/layout-bridge/resolveDomPosition';
-import { findWordBoundaries } from '@eigenpal/docx-editor-core/utils/textSelection';
-import { readDocxFileFromInput } from '@eigenpal/docx-editor-core/utils';
 import {
   captureInlinePositionEmu,
   findImageElement,
@@ -487,23 +508,15 @@ import {
 } from '@eigenpal/docx-editor-core/layout-painter';
 import { createTranslator, provideLocale } from '../i18n';
 import { Z_INDEX } from '../styles/zIndex';
-import { pointsToHalfPoints, twipsToPixels } from '@eigenpal/docx-editor-core/utils/units';
+import { twipsToPixels } from '@eigenpal/docx-editor-core/utils/units';
 import { extractTrackedChanges } from '@eigenpal/docx-editor-core/prosemirror/utils/extractTrackedChanges';
 import { openReportIssue } from '@eigenpal/docx-editor-core/utils/reportIssue';
-import { mapHexToHighlightName } from '@eigenpal/docx-editor-core/utils/highlightColors';
-import { insertPageBreak } from '@eigenpal/docx-editor-core/prosemirror/commands/pageBreak';
 import {
-  applyStyle,
   setIndentLeft,
   setIndentRight,
   setIndentFirstLine,
   removeTabMark,
 } from '@eigenpal/docx-editor-core/prosemirror/commands/paragraph';
-import { createStyleResolver } from '@eigenpal/docx-editor-core/prosemirror/styles';
-import {
-  clearFormatting,
-  findHyperlinkRangeAt,
-} from '@eigenpal/docx-editor-core/prosemirror/commands/formatting';
 import { acceptChange, rejectChange } from '@eigenpal/docx-editor-core/prosemirror/commands';
 import { getTableContext } from '@eigenpal/docx-editor-core/prosemirror/extensions/nodes/TableExtension';
 import type { ImageLayoutTarget } from '@eigenpal/docx-editor-core/prosemirror/commands';
@@ -665,44 +678,10 @@ const activeSidebarItem = ref<string | null>(null);
 // cursor-mark detector (`recomputeActiveSidebarItem`); clicks inside
 // the sidebar are real interactions with the card itself, so we let
 // those through.
-function handleEditorScrollMouseDown(event: MouseEvent) {
-  const target = event.target as HTMLElement | null;
-  if (!target) return;
-  if (
-    target.closest('.paged-editor__pages') ||
-    target.closest('.unified-sidebar') ||
-    target.closest('.docx-comment-margin-markers')
-  ) {
-    return;
-  }
-  activeSidebarItem.value = null;
-}
 
 // Hidden file input that backs the File > Open menu action. Lets
 // users open a document straight from the menu without the host
 // having to wire its own picker.
-const docxInputRef = ref<HTMLInputElement | null>(null);
-
-async function handleDocxFileChange(event: Event) {
-  try {
-    const result = await readDocxFileFromInput(event);
-    if (!result) return;
-    await loadBuffer(result.buffer);
-    emit('update:document', getDocument());
-    emit('rename', result.name);
-    await emitReadyAfterSidebarStateRefresh();
-  } catch (err) {
-    emit('error', err instanceof Error ? err : new Error('Failed to open document'));
-  }
-}
-
-async function emitReadyAfterSidebarStateRefresh() {
-  // Extract comments BEFORE emitting `ready` so host listeners that read
-  // comments / tracked changes on the event see the new doc, not stale arrays.
-  await nextTick();
-  extractCommentsAndChanges();
-  emit('ready');
-}
 
 function handleMenuAction(action: string) {
   switch (action) {
@@ -762,38 +741,8 @@ function handleMenuAction(action: string) {
   }
 }
 
-function handleDocumentNameChange(name: string) {
-  props.onDocumentNameChange?.(name);
-  emit('rename', name);
-}
 
-function handleClearFormatting() {
-  const view = editorView.value;
-  if (!view) return;
-  clearFormatting(view.state, view.dispatch, view);
-  view.focus();
-}
 
-/**
- * File > Save in the menu bar should produce a downloadable .docx, not
- * just stash the Blob and forget. Falls back to "document.docx" when
- * the host doesn't supply a `documentName` prop.
- */
-async function downloadCurrentDocument() {
-  const blob = await saveBlob();
-  if (!blob) return;
-  const baseName = (props.documentName || '').trim() || 'document';
-  const url = URL.createObjectURL(blob);
-  const a = window.document.createElement('a');
-  a.href = url;
-  a.download = `${baseName.replace(/\.docx$/i, '')}.docx`;
-  // The anchor never enters the DOM tree — `.click()` works without
-  // appending in modern browsers, and skipping the append/remove dance
-  // avoids a layout flash on tall pages.
-  a.click();
-  // Defer revoke so Safari has time to start the download.
-  setTimeout(() => URL.revokeObjectURL(url), 0);
-}
 
 const hiddenPmRef = ref<HTMLElement | null>(null);
 const pagesRef = ref<HTMLElement | null>(null);
@@ -831,7 +780,8 @@ const contextMenu = ref({
 const imageContextMenu = ref<ImageContextMenuState | null>(null);
 // Single-click on a hyperlink surfaces a popup with copy / edit /
 // unlink. Cleared on selection change, escape, or click-outside.
-const hyperlinkPopupData = ref<HyperlinkPopupData | null>(null);
+// Owned by useHyperlinkManagement below; destructured into scope so the
+// existing watch / event handlers can keep reading it directly.
 
 // Table quick-action "+" button — surfaces on hover near the left
 // edge (row insert) or top edge (column insert) of a layout table.
@@ -920,6 +870,103 @@ const {
   },
 });
 
+const {
+  docxInputRef,
+  handleDocxFileChange,
+  handleDocumentNameChange,
+  downloadCurrentDocument,
+  emitReadyAfterSidebarStateRefresh,
+  loadDocumentBuffer,
+  loadDocument,
+  save,
+} = useFileIO({
+  loadBuffer,
+  loadParsedDocument,
+  getDocument,
+  saveBlob,
+  extractCommentsAndChanges: () => extractCommentsAndChanges(),
+  emit,
+  documentName: () => props.documentName,
+  onDocumentNameChange: props.onDocumentNameChange,
+  nextTick,
+});
+
+const {
+  hyperlinkPopupData,
+  handleHyperlinkSubmit,
+  handleHyperlinkRemove,
+  handleHyperlinkPopupNavigate,
+  handleHyperlinkPopupEdit,
+  handleHyperlinkPopupRemove,
+} = useHyperlinkManagement({ editorView, getCommands });
+
+const {
+  handleClearFormatting,
+  handleApplyStyle,
+  handleInsertPageBreak,
+  handleInsertSymbol,
+  applyFormatting,
+  setParagraphStyle,
+} = useFormattingActions({ editorView, getDocument });
+
+const {
+  handlePageSetupApply,
+  handleLeftMarginChange,
+  handleRightMarginChange,
+  handleTopMarginChange,
+  handleBottomMarginChange,
+  handleIndentLeftChange,
+  handleIndentRightChange,
+  handleFirstLineIndentChange,
+  handleTabMarkRemove,
+} = usePageSetupControls({ editorView, getDocument, readOnly, stateTick, reLayout, emit });
+
+const {
+  handleToggleOutline,
+  handleOutlineNavigate,
+  handleToggleSidebar,
+  handleEditorScrollMouseDown,
+} = useOutlineSidebar({
+  editorView,
+  showOutline,
+  showSidebar,
+  outlineHeadings,
+  activeSidebarItem,
+  extractCommentsAndChanges: () => extractCommentsAndChanges(),
+});
+
+useKeyboardShortcuts({
+  showKeyboardShortcuts,
+  showFindReplace,
+  showHyperlink,
+  handleZoomKeyDown,
+  disableFindReplaceShortcuts: () => props.disableFindReplaceShortcuts,
+});
+
+const {
+  addComment,
+  replyToComment,
+  resolveComment,
+  proposeChange,
+  handleCommentReply,
+  handleCommentUnresolve,
+  handleCommentDelete,
+  handleAcceptChange,
+  handleRejectChange,
+  handleTrackedChangeReply,
+} = useCommentManagement({
+  editorView,
+  getDocument,
+  comments,
+  trackedChanges,
+  showSidebar,
+  isAddingComment,
+  pendingCommentRange,
+  contentChangeSubscribers,
+  extractCommentsAndChanges: () => extractCommentsAndChanges(),
+  emit,
+});
+
 function print() {
   props.onPrint?.();
   window.print();
@@ -951,21 +998,6 @@ function scrollToPosition(pmPos: number) {
   scrollVisiblePositionIntoView(pmPos);
 }
 
-async function loadDocumentBuffer(buffer: Parameters<typeof loadBuffer>[0]) {
-  await loadBuffer(buffer);
-  await emitReadyAfterSidebarStateRefresh();
-}
-
-function loadDocument(doc: Document) {
-  loadParsedDocument(doc);
-  emit('update:document', doc);
-  void emitReadyAfterSidebarStateRefresh();
-}
-
-async function save(): Promise<ArrayBuffer | null> {
-  const blob = await saveBlob();
-  return blob ? blob.arrayBuffer() : null;
-}
 
 const getEditorViewForDecorations = () => editorView.value;
 const getPagesContainerForDecorations = () => pagesRef.value;
@@ -1012,140 +1044,6 @@ function getCurrentPage(): number {
 }
 
 
-function createComment(text: string, author: string, parentId?: number): Comment {
-  const doc = getDocument();
-  const commentsList = doc?.package?.document?.comments ?? [];
-  const maxId = commentsList.reduce((max, comment) => Math.max(max, comment.id), 0);
-  return {
-    id: maxId + 1,
-    author,
-    date: new Date().toISOString(),
-    content: [
-      {
-        type: 'paragraph',
-        properties: {},
-        content: [{ type: 'run', properties: {}, content: [{ type: 'text', text }] }],
-      },
-    ] as any,
-    ...(parentId != null ? { parentId } : {}),
-  };
-}
-
-function addComment(options: {
-  paraId: string;
-  text: string;
-  author: string;
-  search?: string;
-}): number | null {
-  const doc = getDocument();
-  const view = editorView.value;
-  if (!doc?.package?.document || !view) return null;
-  if (!doc.package.document.comments) doc.package.document.comments = [];
-  const commentMark = view.state.schema.marks.comment;
-  if (!commentMark) return null;
-
-  const range = findParaIdRange(view.state.doc, options.paraId);
-  if (!range) return null;
-
-  let from = range.from + 1;
-  let to = range.to - 1;
-  if (options.search) {
-    const textRange = findTextInPmParagraph(view.state.doc, range.from, range.to, options.search);
-    if (!textRange) return null;
-    from = textRange.from;
-    to = textRange.to;
-  }
-  if (from >= to) return null;
-
-  const comment = createComment(options.text, options.author);
-  doc.package.document.comments.push(comment);
-  comments.value = [...doc.package.document.comments];
-  view.dispatch(view.state.tr.addMark(from, to, commentMark.create({ commentId: comment.id })));
-  showSidebar.value = true;
-  emit('change', doc);
-  contentChangeSubscribers.forEach((listener) => listener(doc));
-  return comment.id;
-}
-
-function replyToComment(commentId: number, text: string, author: string): number | null {
-  const doc = getDocument();
-  if (!doc?.package?.document?.comments) return null;
-  if (!doc.package.document.comments.some((comment) => comment.id === commentId)) return null;
-  const reply = createComment(text, author, commentId);
-  doc.package.document.comments.push(reply);
-  comments.value = [...doc.package.document.comments];
-  emit('change', doc);
-  contentChangeSubscribers.forEach((listener) => listener(doc));
-  return reply.id;
-}
-
-function resolveComment(commentId: number): void {
-  const doc = getDocument();
-  if (!doc?.package?.document?.comments) return;
-  const comment = doc.package.document.comments.find((item) => item.id === commentId);
-  if (!comment) return;
-  comment.done = true;
-  comments.value = [...doc.package.document.comments];
-  emit('change', doc);
-  contentChangeSubscribers.forEach((listener) => listener(doc));
-}
-
-function proposeChange(options: {
-  paraId: string;
-  search: string;
-  replaceWith: string;
-  author: string;
-}): boolean {
-  const view = editorView.value;
-  if (!view) return false;
-  const { schema } = view.state;
-  if (!schema.marks.deletion || !schema.marks.insertion) return false;
-  const range = findParaIdRange(view.state.doc, options.paraId);
-  if (!range) return false;
-
-  const isInsertion = options.search === '';
-  const isDeletion = options.replaceWith === '';
-  if (isInsertion && isDeletion) return false;
-
-  let textFrom: number;
-  let textTo: number;
-  if (isInsertion) {
-    textFrom = range.to - 1;
-    textTo = range.to - 1;
-  } else {
-    const textRange = findTextInPmParagraph(view.state.doc, range.from, range.to, options.search);
-    if (!textRange) return false;
-    textFrom = textRange.from;
-    textTo = textRange.to;
-  }
-
-  let overlapsTrackedChange = false;
-  if (textFrom < textTo) {
-    view.state.doc.nodesBetween(textFrom, textTo, (node) => {
-      for (const mark of node.marks) {
-        if (mark.type === schema.marks.insertion || mark.type === schema.marks.deletion) {
-          overlapsTrackedChange = true;
-          return false;
-        }
-      }
-      return true;
-    });
-  }
-  if (overlapsTrackedChange) return false;
-
-  const revisionId = Math.max(0, ...trackedChanges.value.map((change) => change.revisionId)) + 1;
-  const date = new Date().toISOString();
-  const deletionMark = schema.marks.deletion.create({ revisionId, author: options.author, date });
-  const insertionMark = schema.marks.insertion.create({ revisionId, author: options.author, date });
-
-  let tr = view.state.tr;
-  if (!isInsertion) tr = tr.addMark(textFrom, textTo, deletionMark);
-  if (!isDeletion) tr = tr.insert(textTo, schema.text(options.replaceWith, [insertionMark]));
-  view.dispatch(tr);
-  extractCommentsAndChanges();
-  showSidebar.value = true;
-  return true;
-}
 
 function scrollToParaId(paraId: string): boolean {
   const view = editorView.value;
@@ -1159,231 +1057,21 @@ function scrollToParaId(paraId: string): boolean {
 function findInDocument(
   query: string,
   opts?: { caseSensitive?: boolean; limit?: number }
-): Array<{ paraId: string; match: string; before: string; after: string }> {
-  const view = editorView.value;
-  if (!view || !query) return [];
-  const caseSensitive = opts?.caseSensitive ?? false;
-  const limit = opts?.limit ?? 20;
-  const needle = caseSensitive ? query : query.toLowerCase();
-  const results: Array<{ paraId: string; match: string; before: string; after: string }> = [];
-
-  view.state.doc.descendants((node) => {
-    if (results.length >= limit) return false;
-    if (!node.isTextblock) return true;
-    const paraId = node.attrs?.paraId as string | undefined;
-    if (!paraId) return false;
-    const text = getVanillaNodeText(node);
-    const haystack = caseSensitive ? text : text.toLowerCase();
-    const at = haystack.indexOf(needle);
-    if (at === -1 || haystack.indexOf(needle, at + 1) !== -1) return false;
-    const context = 40;
-    results.push({
-      paraId,
-      match: text.slice(at, at + query.length),
-      before: text.slice(Math.max(0, at - context), at),
-      after: text.slice(at + query.length, at + query.length + context),
-    });
-    return false;
-  });
-
-  return results;
+) {
+  return findInDocumentImpl(editorView.value, query, opts);
 }
 
 function getSelectionInfo() {
-  const view = editorView.value;
-  if (!view) return null;
-  const { selection, doc } = view.state;
-  const $from = selection.$from;
-  let depth = $from.depth;
-  while (depth > 0 && !$from.node(depth).isTextblock) depth--;
-  const para = depth > 0 ? $from.node(depth) : null;
-  if (!para) return null;
-  const paraId = (para.attrs?.paraId as string | undefined) ?? null;
-  const paraStart = $from.start(depth);
-  const paraEnd = paraStart + para.content.size;
-  const before = getVanillaTextBetween(doc, paraStart, selection.from);
-  const selectedText = getVanillaTextBetween(doc, selection.from, selection.to);
-  const after = getVanillaTextBetween(doc, selection.to, paraEnd);
-  return { paraId, selectedText, paragraphText: before + selectedText + after, before, after };
+  return getSelectionInfoImpl(editorView.value);
 }
 
 function getComments() {
   return comments.value;
 }
 
-function applyFormatting(options: {
-  paraId: string;
-  search?: string;
-  marks: {
-    bold?: boolean;
-    italic?: boolean;
-    underline?: boolean | { style?: string };
-    strike?: boolean;
-    color?: { rgb?: string; themeColor?: string };
-    highlight?: string;
-    fontSize?: number;
-    fontFamily?: { ascii?: string; hAnsi?: string };
-  };
-}): boolean {
-  const view = editorView.value;
-  if (!view) return false;
-  const range = findParaIdRange(view.state.doc, options.paraId);
-  if (!range) return false;
-
-  let from = range.from + 1;
-  let to = range.to - 1;
-  if (options.search) {
-    const textRange = findTextInPmParagraph(view.state.doc, range.from, range.to, options.search);
-    if (!textRange) return false;
-    from = textRange.from;
-    to = textRange.to;
-  }
-  if (from >= to) return true;
-
-  const { schema } = view.state;
-  const marks = options.marks;
-  let tr = view.state.tr;
-
-  if (marks.bold !== undefined && schema.marks.bold) {
-    tr = marks.bold
-      ? tr.addMark(from, to, schema.marks.bold.create())
-      : tr.removeMark(from, to, schema.marks.bold);
-  }
-  if (marks.italic !== undefined && schema.marks.italic) {
-    tr = marks.italic
-      ? tr.addMark(from, to, schema.marks.italic.create())
-      : tr.removeMark(from, to, schema.marks.italic);
-  }
-  if (marks.underline !== undefined && schema.marks.underline) {
-    if (marks.underline) {
-      const style = typeof marks.underline === 'object' ? marks.underline.style : undefined;
-      tr = tr.addMark(from, to, schema.marks.underline.create({ style: style ?? 'single' }));
-    } else {
-      tr = tr.removeMark(from, to, schema.marks.underline);
-    }
-  }
-  if (marks.strike !== undefined && schema.marks.strike) {
-    tr = marks.strike
-      ? tr.addMark(from, to, schema.marks.strike.create())
-      : tr.removeMark(from, to, schema.marks.strike);
-  }
-  if (marks.color !== undefined && schema.marks.textColor) {
-    if (marks.color && (marks.color.rgb || marks.color.themeColor)) {
-      tr = tr.addMark(
-        from,
-        to,
-        schema.marks.textColor.create({
-          rgb: marks.color.rgb ?? null,
-          themeColor: marks.color.themeColor ?? null,
-        })
-      );
-    } else {
-      tr = tr.removeMark(from, to, schema.marks.textColor);
-    }
-  }
-  if (marks.highlight !== undefined && schema.marks.highlight) {
-    if (marks.highlight) {
-      tr = tr.addMark(
-        from,
-        to,
-        schema.marks.highlight.create({
-          color: mapHexToHighlightName(marks.highlight) || marks.highlight,
-        })
-      );
-    } else {
-      tr = tr.removeMark(from, to, schema.marks.highlight);
-    }
-  }
-  if (marks.fontSize !== undefined && schema.marks.fontSize) {
-    tr =
-      marks.fontSize > 0
-        ? tr.addMark(
-            from,
-            to,
-            schema.marks.fontSize.create({ size: pointsToHalfPoints(marks.fontSize) })
-          )
-        : tr.removeMark(from, to, schema.marks.fontSize);
-  }
-  if (marks.fontFamily !== undefined && schema.marks.fontFamily) {
-    if (marks.fontFamily && (marks.fontFamily.ascii || marks.fontFamily.hAnsi)) {
-      tr = tr.addMark(
-        from,
-        to,
-        schema.marks.fontFamily.create({
-          ascii: marks.fontFamily.ascii ?? null,
-          hAnsi: marks.fontFamily.hAnsi ?? marks.fontFamily.ascii ?? null,
-        })
-      );
-    } else {
-      tr = tr.removeMark(from, to, schema.marks.fontFamily);
-    }
-  }
-
-  view.dispatch(tr);
-  return true;
-}
-
-function setParagraphStyle(options: { paraId: string; styleId: string }): boolean {
-  const view = editorView.value;
-  if (!view) return false;
-  const range = findParaIdRange(view.state.doc, options.paraId);
-  if (!range) return false;
-
-  const doc = getDocument();
-  const styleResolver = doc?.package?.styles ? createStyleResolver(doc.package.styles) : null;
-  if (styleResolver && !styleResolver.hasParagraphStyle(options.styleId)) return false;
-
-  const $from = view.state.doc.resolve(range.from + 1);
-  const $to = view.state.doc.resolve(range.to - 1);
-  const stateWithSelection = view.state.apply(
-    view.state.tr.setSelection(TextSelection.between($from, $to))
-  );
-  const command = styleResolver
-    ? (() => {
-        const resolved = styleResolver.resolveParagraphStyle(options.styleId);
-        return applyStyle(options.styleId, {
-          paragraphFormatting: resolved.paragraphFormatting,
-          runFormatting: resolved.runFormatting,
-        });
-      })()
-    : applyStyle(options.styleId);
-
-  let didApply = false;
-  command(stateWithSelection, (transaction: any) => {
-    didApply = true;
-    transaction.setSelection(view.state.selection.map(transaction.doc, transaction.mapping));
-    view.dispatch(transaction);
-  });
-  return didApply;
-}
 
 function getPageContent(pageNumber: number) {
-  const currentLayout = layout.value;
-  const view = editorView.value;
-  if (!currentLayout || !view) return null;
-  const page = currentLayout.pages[pageNumber - 1];
-  if (!page) return null;
-
-  const seen = new Set<string>();
-  const paragraphs: Array<{ paraId: string; text: string; styleId?: string }> = [];
-  for (const fragment of page.fragments) {
-    if (fragment.kind !== 'paragraph') continue;
-    const docFrom = fragment.docFrom;
-    if (docFrom == null) continue;
-    const node = view.state.doc.nodeAt(docFrom);
-    if (!node || !node.isTextblock) continue;
-    const paraId = node.attrs?.paraId as string | undefined;
-    if (!paraId || seen.has(paraId)) continue;
-    seen.add(paraId);
-    paragraphs.push({
-      paraId,
-      text: getVanillaNodeText(node),
-      styleId: (node.attrs?.styleId as string | undefined) ?? undefined,
-    });
-  }
-
-  const text = paragraphs.map((paragraph) => `[${paragraph.paraId}] ${paragraph.text}`).join('\n');
-  return { pageNumber, text, paragraphs };
+  return getPageContentImpl(editorView.value, layout.value, pageNumber);
 }
 
 function onContentChange(listener: (document: unknown) => void): () => void {
@@ -1690,68 +1378,9 @@ function navigateToBookmark(bookmarkName: string) {
 }
 
 function scrollVisiblePositionIntoView(pmPos: number) {
-  const pagesContainer = pagesRef.value;
-  const viewport = pagesViewportRef.value;
-  if (!pagesContainer || !viewport) return;
-  let targetEl: HTMLElement | null = null;
-  for (const el of collectBodySpans(pagesContainer)) {
-    const start = Number(el.dataset.docFrom);
-    const end = Number(el.dataset.docTo);
-    if (Number.isFinite(start) && Number.isFinite(end) && pmPos >= start && pmPos <= end) {
-      targetEl = el;
-      break;
-    }
-  }
-  if (!targetEl) {
-    targetEl = pagesContainer.querySelector<HTMLElement>(`[data-doc-from="${pmPos}"]`);
-  }
-  if (!targetEl) return;
-  const viewportRect = viewport.getBoundingClientRect();
-  const targetRect = targetEl.getBoundingClientRect();
-  viewport.scrollTo({
-    top: targetRect.top - viewportRect.top + viewport.scrollTop - 48,
-    behavior: 'smooth',
-  });
+  scrollVisiblePositionIntoViewImpl(pagesRef.value, pagesViewportRef.value, pmPos);
 }
 
-function handleHyperlinkPopupNavigate(href: string) {
-  window.open(href, '_blank', 'noopener,noreferrer');
-  hyperlinkPopupData.value = null;
-}
-
-function handleHyperlinkPopupEdit(displayText: string, href: string) {
-  const view = editorView.value;
-  if (!view) return;
-  const hit = findHyperlinkRangeAt(view.state);
-  if (!hit) {
-    hyperlinkPopupData.value = null;
-    return;
-  }
-  const hlType = view.state.schema.marks.hyperlink;
-  const { $from } = view.state.selection;
-  const newMark = hlType.create({ href, tooltip: hit.mark.attrs.tooltip });
-  const otherMarks = $from.marks().filter((m) => m.type !== hlType);
-  const textNode = view.state.schema.text(displayText, [...otherMarks, newMark]);
-  const tr = view.state.tr.replaceWith(hit.start, hit.end, textNode);
-  view.dispatch(tr.scrollIntoView());
-  hyperlinkPopupData.value = null;
-  view.focus();
-}
-
-function handleHyperlinkPopupRemove() {
-  const view = editorView.value;
-  if (!view) return;
-  const hit = findHyperlinkRangeAt(view.state, hyperlinkPopupData.value?.href);
-  if (!hit) {
-    hyperlinkPopupData.value = null;
-    return;
-  }
-  const hlType = view.state.schema.marks.hyperlink;
-  const tr = view.state.tr.removeMark(hit.start, hit.end, hlType);
-  view.dispatch(tr.scrollIntoView());
-  hyperlinkPopupData.value = null;
-  view.focus();
-}
 
 function handlePagesDoubleClick(event: MouseEvent) {
   const target = event.target as HTMLElement;
@@ -2051,51 +1680,12 @@ let lastClickTime = 0;
 let lastClickPos: number | null = null;
 let clickCount = 0;
 
-function findElementAtPosition(container: HTMLElement, pmPos: number): HTMLElement | null {
-  // Scope to body PM spans (which carry both docFrom and docTo) so HF
-  // runs in the separate PM document don't mis-resolve double-/triple-
-  // click selection. Tighter than `findBodyPmAnchors` (which includes
-  // bare paragraph anchors that don't have data-doc-to). Mirrors
-  // React's PagedEditor selection-resolution call.
-  const els = collectBodySpans(container);
-  for (const el of els) {
-    const start = Number(el.dataset.docFrom);
-    const end = Number(el.dataset.docTo);
-    if (!isNaN(start) && !isNaN(end) && pmPos >= start && pmPos <= end) {
-      return el;
-    }
-  }
-  return null;
-}
-
 function selectWord(pos: number) {
-  const container = pagesRef.value;
-  if (!container) return;
-  const el = findElementAtPosition(container, pos);
-  if (!el) return;
-  const text = el.textContent || '';
-  const docFrom = Number(el.dataset.docFrom) || 0;
-  const offset = pos - docFrom;
-  const [start, end] = findWordBoundaries(text, offset);
-  const from = docFrom + start;
-  const to = docFrom + end;
-  if (from < to) {
-    setPmSelection(from, to);
-  }
+  selectWordImpl(pagesRef.value, pos, setPmSelection);
 }
 
 function selectParagraph(pos: number) {
-  const container = pagesRef.value;
-  if (!container) return;
-  const el = findElementAtPosition(container, pos);
-  if (!el) return;
-  const paragraph = el.closest('.layout-paragraph') as HTMLElement | null;
-  if (!paragraph) return;
-  const docFrom = Number(paragraph.dataset.docFrom);
-  const docTo = Number(paragraph.dataset.docTo);
-  if (!isNaN(docFrom) && !isNaN(docTo) && docFrom < docTo) {
-    setPmSelection(docFrom, docTo);
-  }
+  selectParagraphImpl(pagesRef.value, pos, setPmSelection);
 }
 
 // =========================================================================
@@ -2106,13 +1696,7 @@ let isDragging = false;
 let dragAnchor: number | null = null;
 
 function resolvePos(clientX: number, clientY: number): number | null {
-  const container = pagesRef.value;
-  if (!container) return null;
-  const pos = resolveDomPosition(container, clientX, clientY, 1);
-  if (pos === null || pos < 0) return null;
-  const view = editorView.value;
-  if (!view) return null;
-  return Math.min(pos, view.state.doc.content.size);
+  return resolvePosImpl(pagesRef.value, editorView.value, clientX, clientY);
 }
 
 function setPmSelection(anchor: number, head?: number) {
@@ -2266,82 +1850,7 @@ function handleInsertImage(data: { src: string; width: number; height: number; a
   view.focus();
 }
 
-function handleHyperlinkSubmit(data: {
-  url?: string;
-  bookmark?: string;
-  displayText: string;
-  tooltip: string;
-}) {
-  const view = editorView.value;
-  if (!view) return;
-  const cmds = getCommands();
-  const { empty } = view.state.selection;
-  const href = data.bookmark ? `#${data.bookmark}` : data.url;
-  if (!href) return;
 
-  if (empty && data.displayText) {
-    // Insert new link with text
-    const cmd = cmds['insertHyperlink'];
-    if (cmd) {
-      const command = cmd(data.displayText, href, data.tooltip || undefined);
-      command(view.state, (tr: any) => view.dispatch(tr), view);
-    }
-  } else {
-    // Apply link to selection
-    const cmd = cmds['setHyperlink'];
-    if (cmd) {
-      const command = cmd(href, data.tooltip || undefined);
-      command(view.state, (tr: any) => view.dispatch(tr), view);
-    }
-  }
-  view.focus();
-}
-
-function handleHyperlinkRemove() {
-  const view = editorView.value;
-  if (!view) return;
-  const cmds = getCommands();
-  const cmd = cmds['removeHyperlink'];
-  if (cmd) {
-    const command = cmd();
-    command(view.state, (tr: any) => view.dispatch(tr), view);
-  }
-  view.focus();
-}
-
-function handleApplyStyle(styleId: string) {
-  const view = editorView.value;
-  if (!view) return;
-  const doc = getDocument();
-  const styles = doc?.package?.styles;
-  if (styles) {
-    const resolver = createStyleResolver(styles);
-    const resolved = resolver.resolveParagraphStyle(styleId);
-    applyStyle(styleId, {
-      paragraphFormatting: resolved.paragraphFormatting,
-      runFormatting: resolved.runFormatting,
-    })(view.state, (tr: any) => view.dispatch(tr));
-  } else {
-    applyStyle(styleId)(view.state, (tr: any) => view.dispatch(tr));
-  }
-  view.focus();
-}
-
-function handleInsertPageBreak() {
-  const view = editorView.value;
-  if (!view) return;
-  insertPageBreak(view.state, (tr: any) => view.dispatch(tr), view);
-  view.focus();
-}
-
-function handleInsertSymbol(symbol: string) {
-  const view = editorView.value;
-  if (!view) return;
-  const { from } = view.state.selection;
-  const tr = view.state.tr.insertText(symbol, from);
-  view.dispatch(tr.scrollIntoView());
-  view.focus();
-}
 
 // =========================================================================
 // Page setup
@@ -2352,263 +1861,11 @@ function handleInsertSymbol(symbol: string) {
 // without the sections[0] fallback.
 const currentSectionProperties = currentSectionProps;
 
-function handlePageSetupApply(sp: Partial<SectionProperties>) {
-  const doc = getDocument();
-  if (!doc?.package?.document) return;
-  const existing = doc.package.document.finalSectionProperties ?? {};
-  doc.package.document.finalSectionProperties = { ...existing, ...sp };
-  // Bump stateTick so `currentSectionProps` re-evaluates and the
-  // rulers receive the new sectionProperties prop. Without this the
-  // document is mutated but the rulers keep showing the old margin
-  // because Vue's reactivity doesn't see the deep mutation through
-  // shallowRef.
-  stateTick.value++;
-  // Re-render with new page dimensions (empty tr won't trigger docChanged)
-  reLayout();
-  emit('change', doc);
-}
-
-// Ruler-driven margin/indent handlers — port of React DocxEditor.tsx
-// 3416-3520. The horizontal ruler emits left/right margin + first-line
-// /left/right indent + tab-stop-remove events; the vertical ruler emits
-// top/bottom margin events. Without these listeners the markers were
-// draggable but the document never updated.
-
-function applyMarginChange(
-  property: 'marginLeft' | 'marginRight' | 'marginTop' | 'marginBottom',
-  twips: number
-) {
-  if (readOnly.value) return;
-  handlePageSetupApply({ [property]: twips });
-}
-
-function handleLeftMarginChange(twips: number) {
-  applyMarginChange('marginLeft', twips);
-}
-function handleRightMarginChange(twips: number) {
-  applyMarginChange('marginRight', twips);
-}
-function handleTopMarginChange(twips: number) {
-  applyMarginChange('marginTop', twips);
-}
-function handleBottomMarginChange(twips: number) {
-  applyMarginChange('marginBottom', twips);
-}
-
-function handleIndentLeftChange(twips: number) {
-  const view = editorView.value;
-  if (!view) return;
-  setIndentLeft(twips)(view.state, view.dispatch);
-}
-function handleIndentRightChange(twips: number) {
-  const view = editorView.value;
-  if (!view) return;
-  setIndentRight(twips)(view.state, view.dispatch);
-}
-function handleFirstLineIndentChange(twips: number) {
-  const view = editorView.value;
-  if (!view) return;
-  // Negative twips → hanging indent (matches React's flag-shape API).
-  if (twips < 0) {
-    setIndentFirstLine(-twips, true)(view.state, view.dispatch);
-  } else {
-    setIndentFirstLine(twips, false)(view.state, view.dispatch);
-  }
-}
-function handleTabMarkRemove(positionTwips: number) {
-  const view = editorView.value;
-  if (!view) return;
-  removeTabMark(positionTwips)(view.state, view.dispatch);
-}
 
 // =========================================================================
 // Document outline
 // =========================================================================
 
-function handleToggleOutline() {
-  if (!showOutline.value) {
-    // Opening: collect headings
-    const view = editorView.value;
-    if (view) {
-      outlineHeadings.value = collectHeadings(view.state.doc);
-    }
-  }
-  showOutline.value = !showOutline.value;
-}
-
-function handleOutlineNavigate(pmPos: number) {
-  const view = editorView.value;
-  if (!view) return;
-  // Set selection to heading position and scroll into view
-  const $pos = view.state.doc.resolve(Math.min(pmPos + 1, view.state.doc.content.size));
-  const sel = TextSelection.near($pos);
-  view.dispatch(view.state.tr.setSelection(sel).scrollIntoView());
-  view.focus();
-}
-
-function handleToggleSidebar() {
-  if (!showSidebar.value) {
-    extractCommentsAndChanges();
-  }
-  showSidebar.value = !showSidebar.value;
-}
-
-// =========================================================================
-// Image clipboard & replace helpers
-// =========================================================================
-
-function copyImageToClipboard(view: EditorView, pmPos: number) {
-  const node = view.state.doc.nodeAt(pmPos);
-  if (!node || node.type.name !== 'image') return;
-
-  const src = node.attrs.src as string;
-  // Write both HTML (for pasting back as image node) and the image blob if possible
-  const imgHtml = `<img src="${src}" data-pm-image="true" data-width="${node.attrs.width ?? ''}" data-height="${node.attrs.height ?? ''}" data-wrap-type="${node.attrs.wrapType ?? ''}" data-display-mode="${node.attrs.displayMode ?? ''}" data-rid="${node.attrs.rId ?? ''}" />`;
-
-  const clipboardItem = new ClipboardItem({
-    'text/html': new Blob([imgHtml], { type: 'text/html' }),
-    'text/plain': new Blob(['[image]'], { type: 'text/plain' }),
-  });
-  navigator.clipboard.write([clipboardItem]).catch(() => {
-    // Fallback: at least copy as HTML
-    const ta = document.createElement('textarea');
-    ta.value = imgHtml;
-    document.body.appendChild(ta);
-    ta.select();
-    document.execCommand('copy');
-    document.body.removeChild(ta);
-  });
-}
-
-async function pasteFromClipboard(view: EditorView) {
-  try {
-    const items = await navigator.clipboard.read();
-    for (const item of items) {
-      // Check for image types first
-      const imageType = item.types.find((t) => t.startsWith('image/'));
-      if (imageType) {
-        const blob = await item.getBlob(imageType);
-        const dataUrl = await blobToDataUrl(blob);
-        const dims = await loadImageDimensions(dataUrl);
-        const maxW = 612;
-        let w = dims.width,
-          h = dims.height;
-        if (w > maxW) {
-          h = Math.round(h * (maxW / w));
-          w = maxW;
-        }
-        const imageNode = view.state.schema.nodes.image.create({
-          src: dataUrl,
-          width: w,
-          height: h,
-          rId: `rId_img_${Date.now()}`,
-          wrapType: 'inline',
-          displayMode: 'inline',
-        });
-        const { from } = view.state.selection;
-        view.dispatch(view.state.tr.replaceSelectionWith(imageNode));
-        return;
-      }
-
-      // Check for HTML with image
-      if (item.types.includes('text/html')) {
-        const htmlBlob = await item.getBlob('text/html');
-        const html = await htmlBlob.text();
-        const match = html.match(/<img[^>]+src="([^"]+)"[^>]*>/i);
-        if (match && match[1]) {
-          const src = match[1];
-          const widthMatch = html.match(/data-width="(\d+)"/);
-          const heightMatch = html.match(/data-height="(\d+)"/);
-          const w = widthMatch ? Number(widthMatch[1]) : 200;
-          const h = heightMatch ? Number(heightMatch[1]) : 200;
-          const imageNode = view.state.schema.nodes.image.create({
-            src,
-            width: w || 200,
-            height: h || 200,
-            rId: `rId_img_${Date.now()}`,
-            wrapType: 'inline',
-            displayMode: 'inline',
-          });
-          view.dispatch(view.state.tr.replaceSelectionWith(imageNode));
-          return;
-        }
-      }
-
-      // Fall back to text paste
-      if (item.types.includes('text/plain')) {
-        const textBlob = await item.getBlob('text/plain');
-        const text = await textBlob.text();
-        if (text && text !== '[image]') {
-          const { from } = view.state.selection;
-          view.dispatch(view.state.tr.insertText(text, from));
-        }
-        return;
-      }
-    }
-  } catch {
-    // Fallback for browsers without clipboard API
-    const text = await navigator.clipboard?.readText();
-    if (text) {
-      const { from } = view.state.selection;
-      view.dispatch(view.state.tr.insertText(text, from));
-    }
-  }
-}
-
-function blobToDataUrl(blob: Blob): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(reader.result as string);
-    reader.onerror = reject;
-    reader.readAsDataURL(blob);
-  });
-}
-
-function loadImageDimensions(src: string): Promise<{ width: number; height: number }> {
-  return new Promise((resolve) => {
-    const img = new Image();
-    img.onload = () => resolve({ width: img.naturalWidth, height: img.naturalHeight });
-    img.onerror = () => resolve({ width: 200, height: 200 });
-    img.src = src;
-  });
-}
-
-function triggerReplaceImage(view: EditorView, pmPos: number) {
-  const node = view.state.doc.nodeAt(pmPos);
-  if (!node || node.type.name !== 'image') return;
-
-  const input = document.createElement('input');
-  input.type = 'file';
-  input.accept = 'image/*';
-  input.onchange = async () => {
-    const file = input.files?.[0];
-    if (!file) return;
-    const dataUrl = await blobToDataUrl(file);
-    const dims = await loadImageDimensions(dataUrl);
-
-    // Keep existing dimensions unless the aspect ratio is wildly different;
-    // scale the new image to fit within the old bounding box.
-    const oldW = (node.attrs.width as number) || dims.width;
-    const oldH = (node.attrs.height as number) || dims.height;
-    const scale = Math.min(oldW / dims.width, oldH / dims.height);
-    const newW = Math.round(dims.width * scale);
-    const newH = Math.round(dims.height * scale);
-
-    try {
-      const tr = view.state.tr.setNodeMarkup(pmPos, undefined, {
-        ...node.attrs,
-        src: dataUrl,
-        width: newW,
-        height: newH,
-        rId: `rId_img_${Date.now()}`,
-      });
-      view.dispatch(tr);
-    } catch {
-      // position may have changed
-    }
-  };
-  input.click();
-}
 
 // =========================================================================
 // Context menu
@@ -2993,138 +2250,11 @@ function handleCancelAddComment() {
   isAddingComment.value = false;
 }
 
-function handleTrackedChangeReply(revisionId: number, text: string) {
-  // Replies threaded under a tracked change use parentId =
-  // revisionId so the same comments.xml shape React produces is
-  // round-tripped back to OOXML. UnifiedSidebar's
-  // useCommentSidebarItems puts these next to the tc card via
-  // repliesByParent.get(revisionId).
-  const doc = getDocument();
-  if (!doc?.package?.document) return;
-  if (!doc.package.document.comments) doc.package.document.comments = [];
-  const maxId = doc.package.document.comments.reduce((m, c) => Math.max(m, c.id), 0);
-  const reply: Comment = {
-    id: maxId + 1,
-    author: 'User',
-    date: new Date().toISOString(),
-    content: [
-      {
-        type: 'paragraph',
-        properties: {},
-        content: [{ type: 'run', properties: {}, content: [{ type: 'text', text }] }],
-      },
-    ] as any,
-    parentId: revisionId,
-  };
-  doc.package.document.comments.push(reply);
-  comments.value = [...doc.package.document.comments];
-  emit('change', doc);
-}
-
-function handleCommentReply(commentId: number, text: string) {
-  const doc = getDocument();
-  if (!doc?.package?.document?.comments) return;
-
-  const maxId = doc.package.document.comments.reduce((max, c) => Math.max(max, c.id), 0);
-  const reply: Comment = {
-    id: maxId + 1,
-    author: 'User',
-    date: new Date().toISOString(),
-    content: [
-      {
-        type: 'paragraph',
-        properties: {},
-        content: [{ type: 'run', properties: {}, content: [{ type: 'text', text }] }],
-      },
-    ] as any,
-    parentId: commentId,
-  };
-  doc.package.document.comments.push(reply);
-  comments.value = [...doc.package.document.comments];
-  emit('change', doc);
-}
-
-function handleCommentResolve(commentId: number) {
-  const doc = getDocument();
-  if (!doc?.package?.document?.comments) return;
-  const c = doc.package.document.comments.find((c) => c.id === commentId);
-  if (c) c.done = true;
-  comments.value = [...doc.package.document.comments];
-  emit('change', doc);
-}
-
-function handleCommentUnresolve(commentId: number) {
-  const doc = getDocument();
-  if (!doc?.package?.document?.comments) return;
-  const c = doc.package.document.comments.find((c) => c.id === commentId);
-  if (c) c.done = false;
-  comments.value = [...doc.package.document.comments];
-  emit('change', doc);
-}
-
-function handleCommentDelete(commentId: number) {
-  const doc = getDocument();
-  if (!doc?.package?.document?.comments) return;
-  // Remove comment and its replies
-  doc.package.document.comments = doc.package.document.comments.filter(
-    (c) => c.id !== commentId && c.parentId !== commentId
-  );
-  comments.value = [...doc.package.document.comments];
-  emit('change', doc);
-}
-
-function handleAcceptChange(from: number, to: number) {
-  const view = editorView.value;
-  if (!view) return;
-  // Route through the shared core command so any future change to
-  // accept/reject semantics (e.g. real text deletion for `deletion`
-  // marks) lands in both adapters at once.
-  acceptChange(from, to)(view.state, view.dispatch);
-  extractCommentsAndChanges();
-  view.focus();
-}
-
-function handleRejectChange(from: number, to: number) {
-  const view = editorView.value;
-  if (!view) return;
-  rejectChange(from, to)(view.state, view.dispatch);
-  extractCommentsAndChanges();
-  view.focus();
-}
-
-// =========================================================================
-// Keyboard shortcuts
-// =========================================================================
-
-function handleKeyDown(e: KeyboardEvent) {
-  // F1 opens keyboard shortcuts
-  if (e.key === 'F1') {
-    e.preventDefault();
-    showKeyboardShortcuts.value = true;
-    return;
-  }
-
-  // Zoom shortcuts (Ctrl+=/Ctrl+-/Ctrl+0)
-  handleZoomKeyDown(e);
-
-  if (!(e.ctrlKey || e.metaKey)) return;
-  if (props.disableFindReplaceShortcuts && (e.key === 'f' || e.key === 'h')) return;
-  if (e.key === 'f' || e.key === 'h') {
-    e.preventDefault();
-    showFindReplace.value = true;
-  } else if (e.key === 'k') {
-    e.preventDefault();
-    showHyperlink.value = true;
-  } else if (e.key === '/') {
-    e.preventDefault();
-    showKeyboardShortcuts.value = !showKeyboardShortcuts.value;
-  }
-}
+// useKeyboardShortcuts owns its own window keydown listener lifecycle.
 
 onMounted(() => {
   window.addEventListener('mousemove', handleMouseMove);
   window.addEventListener('mouseup', handleMouseUp);
-  window.addEventListener('keydown', handleKeyDown);
   pagesViewportRef.value?.addEventListener('scroll', handleViewportScroll, { passive: true });
 });
 
@@ -3132,7 +2262,6 @@ onBeforeUnmount(() => {
   clearTableInsertTimer();
   window.removeEventListener('mousemove', handleMouseMove);
   window.removeEventListener('mouseup', handleMouseUp);
-  window.removeEventListener('keydown', handleKeyDown);
   pagesViewportRef.value?.removeEventListener('scroll', handleViewportScroll);
   if (scrollFadeTimer) clearTimeout(scrollFadeTimer);
   clearOverlay();

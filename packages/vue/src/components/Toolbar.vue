@@ -387,7 +387,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch, onMounted, onBeforeUnmount, type CSSProperties } from 'vue';
+import { ref, computed, watch } from 'vue';
 import type { EditorView } from 'prosemirror-view';
 import { undoDepth, redoDepth } from 'prosemirror-history';
 import { extractSelectionContext } from '@eigenpal/docx-editor-core/prosemirror/plugins/selectionTracker';
@@ -410,7 +410,10 @@ import {
   fontSizePresets,
   paragraphStyles,
   lineSpacingOptions,
+  ZOOM_PRESETS,
+  DEFAULT_ZOOM_PERCENT,
 } from './Toolbar/presets';
+import { useToolbarDropdowns } from '../composables/useToolbarDropdowns';
 
 /**
  * Image context — populated by the host when a NodeSelection lands on
@@ -471,13 +474,12 @@ const emit = defineEmits<{
 // Dropdown state
 // =========================================================================
 
-const zoomPercent = computed(() => props.zoomPercent ?? 100);
+const zoomPercent = computed(() => props.zoomPercent ?? DEFAULT_ZOOM_PERCENT);
 const isMinZoom = computed(() => props.isMinZoom ?? false);
 const isMaxZoom = computed(() => props.isMaxZoom ?? false);
-const zoomPresets = computed(() => props.zoomPresets ?? [0.5, 0.75, 1.0, 1.25, 1.5, 2.0]);
+const zoomPresets = computed(() => props.zoomPresets ?? ZOOM_PRESETS);
 const showZoomControl = computed(() => props.showZoomControl ?? true);
 
-const openDropdown = ref<string | null>(null);
 const styleDropdownRef = ref<HTMLElement | null>(null);
 const fontDropdownRef = ref<HTMLElement | null>(null);
 const sizeDropdownRef = ref<HTMLElement | null>(null);
@@ -487,61 +489,16 @@ const zoomDropdownRef = ref<HTMLElement | null>(null);
 
 // `.basic-toolbar` uses `overflow-x: auto` for narrow-viewport scrolling,
 // which forces overflow-y to clip per the CSS spec. Dropdowns therefore
-// can't escape via `position: absolute` — they get hidden by the page
-// body below. The fix: render each menu with `position: fixed` and
-// recompute coords from the trigger's bounding rect every open.
-const dropdownPos = ref<{ top: number; left: number }>({ top: 0, left: 0 });
-function dropdownTriggerRef(name: string): HTMLElement | null {
-  switch (name) {
-    case 'zoom':
-      return zoomDropdownRef.value;
-    case 'style':
-      return styleDropdownRef.value;
-    case 'font':
-      return fontDropdownRef.value;
-    case 'size':
-      return sizeDropdownRef.value;
-    case 'align':
-      return alignDropdownRef.value;
-    case 'spacing':
-      return spacingDropdownRef.value;
-    default:
-      return null;
-  }
-}
-function recomputeDropdownPos(name: string) {
-  const el = dropdownTriggerRef(name);
-  if (!el) return;
-  const r = el.getBoundingClientRect();
-  dropdownPos.value = { top: r.bottom, left: r.left };
-}
-const dropdownMenuStyle = computed<CSSProperties>(() => ({
-  top: dropdownPos.value.top + 'px',
-  left: dropdownPos.value.left + 'px',
-}));
-
-function toggleDropdown(name: string) {
-  if (openDropdown.value !== name) recomputeDropdownPos(name);
-  openDropdown.value = openDropdown.value === name ? null : name;
-}
-
-function closeDropdowns(e: MouseEvent) {
-  const refs = [
-    styleDropdownRef,
-    fontDropdownRef,
-    sizeDropdownRef,
-    alignDropdownRef,
-    spacingDropdownRef,
-    zoomDropdownRef,
-  ];
-  const target = e.target as Node;
-  if (!refs.some((r) => r.value?.contains(target))) {
-    openDropdown.value = null;
-  }
-}
-
-onMounted(() => document.addEventListener('mousedown', closeDropdowns));
-onBeforeUnmount(() => document.removeEventListener('mousedown', closeDropdowns));
+// can't escape via `position: absolute` — `useToolbarDropdowns` renders
+// each menu with `position: fixed` and recomputes coords on every open.
+const { openDropdown, dropdownMenuStyle, toggleDropdown } = useToolbarDropdowns({
+  zoom: zoomDropdownRef,
+  style: styleDropdownRef,
+  font: fontDropdownRef,
+  size: sizeDropdownRef,
+  align: alignDropdownRef,
+  spacing: spacingDropdownRef,
+});
 
 // =========================================================================
 // Selection context (reactive via stateTick)
