@@ -84,6 +84,7 @@ const commonRules = {
   '@typescript-eslint/no-explicit-any': 'warn',
   'no-console': ['warn', { allow: ['warn', 'error'] }],
   'prefer-const': 'error',
+  'max-lines': ['error', { max: 1000, skipBlankLines: false, skipComments: false }],
 };
 
 export default [
@@ -163,6 +164,16 @@ export default [
       'packages/agent-use/src/useDocxAgentTools.ts',
     ],
     rules: restrictVue,
+  },
+
+  // DocxEditor.tsx has a relaxed 2000-line cap while the extraction effort
+  // (tracked in MEMORY.md) continues. The cap still enforces a ceiling so
+  // the file can't grow unbounded; the rest of the repo stays at 1000.
+  {
+    files: ['packages/react/src/components/DocxEditor.tsx'],
+    rules: {
+      'max-lines': ['error', { max: 2000, skipBlankLines: false, skipComments: false }],
+    },
   },
 
   // Agent-use framework-agnostic surface — top-level utilities + tools/,
