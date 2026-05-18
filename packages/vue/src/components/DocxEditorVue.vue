@@ -423,7 +423,12 @@
 
 <script setup lang="ts">
 import { ref, shallowRef, computed, watch, onMounted, onBeforeUnmount, nextTick } from 'vue';
-import type { Node as ProseMirrorNode } from 'prosemirror-model';
+import {
+  findParaIdRange,
+  getVanillaNodeText,
+  getVanillaTextBetween,
+  findTextInPmParagraph,
+} from '../utils/paraTextHelpers';
 import Toolbar from './Toolbar.vue';
 import FindReplaceDialog from './dialogs/FindReplaceDialog.vue';
 import TableToolbar from './ui/TableToolbar.vue';
@@ -1006,88 +1011,6 @@ function getCurrentPage(): number {
   return pageIndex == null ? 0 : pageIndex + 1;
 }
 
-function findParaIdRange(
-  doc: ProseMirrorNode,
-  paraId: string
-): { from: number; to: number } | null {
-  if (!paraId.trim()) return null;
-  let result: { from: number; to: number } | null = null;
-  doc.descendants((node, pos) => {
-    if (result) return false;
-    if (node.isTextblock && node.attrs?.paraId === paraId) {
-      result = { from: pos, to: pos + node.nodeSize };
-      return false;
-    }
-    return true;
-  });
-  return result;
-}
-
-function getVanillaNodeText(node: ProseMirrorNode): string {
-  const parts: string[] = [];
-  node.descendants((child) => {
-    if (!child.isText || !child.text) return true;
-    if (child.marks.some((mark) => mark.type.name === 'insertion')) return false;
-    parts.push(child.text);
-    return true;
-  });
-  return parts.join('');
-}
-
-function getVanillaTextBetween(doc: ProseMirrorNode, from: number, to: number): string {
-  if (from >= to) return '';
-  const parts: string[] = [];
-  doc.nodesBetween(from, to, (child, pos) => {
-    if (!child.isText || !child.text) return;
-    if (child.marks.some((mark) => mark.type.name === 'insertion')) return;
-    const start = Math.max(from, pos);
-    const end = Math.min(to, pos + child.text.length);
-    if (start < end) parts.push(child.text.slice(start - pos, end - pos));
-  });
-  return parts.join('');
-}
-
-function findTextInPmParagraph(
-  doc: ProseMirrorNode,
-  paragraphFrom: number,
-  paragraphTo: number,
-  searchText: string
-): { from: number; to: number } | null {
-  if (!searchText) return null;
-  let fullText = '';
-  const textPositions: { pos: number; len: number }[] = [];
-
-  doc.nodesBetween(paragraphFrom, paragraphTo, (node, pos) => {
-    if (!node.isText || !node.text) return;
-    if (node.marks.some((mark) => mark.type.name === 'insertion')) return;
-    textPositions.push({ pos, len: node.text.length });
-    fullText += node.text;
-  });
-
-  const firstMatch = fullText.indexOf(searchText);
-  if (firstMatch === -1) return null;
-  if (fullText.indexOf(searchText, firstMatch + 1) !== -1) return null;
-
-  let charOffset = 0;
-  let fromPos = paragraphFrom;
-  let toPos = paragraphFrom;
-  for (const textPos of textPositions) {
-    const segmentEnd = charOffset + textPos.len;
-    if (charOffset <= firstMatch && firstMatch < segmentEnd) {
-      fromPos = textPos.pos + (firstMatch - charOffset);
-    }
-    if (
-      charOffset <= firstMatch + searchText.length &&
-      firstMatch + searchText.length <= segmentEnd
-    ) {
-      toPos = textPos.pos + (firstMatch + searchText.length - charOffset);
-      break;
-    }
-    charOffset = segmentEnd;
-  }
-
-  return { from: fromPos, to: toPos };
-}
 
 function createComment(text: string, author: string, parentId?: number): Comment {
   const doc = getDocument();
