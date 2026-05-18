@@ -1,6 +1,6 @@
 /**
  * Pure ref-API query helpers — read-only inspectors over the PM document
- * and the paginated layout. Used by DocxEditorVue's `defineExpose` ref API
+ * and the paginated layout. Used by DocxEditor's `defineExpose` ref API
  * (`findInDocument`, `getSelectionInfo`, `getPageContent`).
  *
  * Every function takes the PM view (or layout + view) as a parameter

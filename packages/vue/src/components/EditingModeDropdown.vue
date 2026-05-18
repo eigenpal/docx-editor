@@ -58,7 +58,7 @@
 import { ref, computed, onMounted, onBeforeUnmount } from 'vue';
 import MaterialSymbol from './ui/MaterialSymbol.vue';
 import Popover from './ui/Popover.vue';
-import type { EditorMode } from '../editor-mode';
+import type { EditorMode } from './DocxEditor/types';
 
 const props = defineProps<{
   modelValue: EditorMode;

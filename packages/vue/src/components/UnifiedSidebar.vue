@@ -110,7 +110,7 @@ const props = defineProps<{
   pageWidthPx: number;
   zoom?: number;
   /** Controlled expand: when set, overrides local click toggling.
-   *  Used by DocxEditorVue to auto-expand cards when the cursor
+   *  Used by DocxEditor to auto-expand cards when the cursor
    *  lands on a commented / tracked span (mirrors React
    *  DocxEditor.tsx:5080-5118 cursorSidebarItem detection). */
   activeItemId?: string | null;
@@ -135,7 +135,7 @@ const emit = defineEmits<{
 }>();
 
 // Local fallback for uncontrolled use; when `activeItemId` is bound
-// from the parent (DocxEditorVue) the prop wins and toggleExpanded
+// from the parent (DocxEditor) the prop wins and toggleExpanded
 // emits up so the parent can update its own state.
 const localExpanded = ref<string | null>(null);
 const expandedId = computed<string | null>(() =>
@@ -277,7 +277,7 @@ const minHeightPx = computed(() => {
 // scaled `__pages` container — so it is NOT itself scaled. The page
 // renders at its visible (post-zoom) width, AND the page is shifted
 // left by SIDEBAR_DOCUMENT_SHIFT whenever the sidebar is open
-// (DocxEditorVue applies translateX on `__pages`). The sidebar must
+// (DocxEditor applies translateX on `__pages`). The sidebar must
 // sit at `50% - SIDEBAR_DOCUMENT_SHIFT + visibleHalfPage + gap` so
 // it tracks the shifted page right-edge — using `50% + halfPage` (the
 // stale calc) put the rail ~352px past the page edge whenever the

@@ -1,7 +1,7 @@
 /**
  * Ref-API assembler — takes the foundational primitives from
  * `useDocxEditor` plus the action objects from every other composable
- * in `DocxEditorVue.vue` and returns the `DocxEditorRef`-shaped
+ * in `DocxEditor.vue` and returns the `DocxEditorRef`-shaped
  * `exposed` object the parent feeds into `defineExpose`. Owns the
  * small local helpers (print, scrollToPage, scrollToPosition,
  * getEditorRef, getTotalPages, getCurrentPage, findInDocument,
@@ -27,7 +27,7 @@ import {
   getPageContent as getPageContentImpl,
 } from '../utils/refApiQueries';
 import { findParaIdRange } from '../utils/paraTextHelpers';
-import type { DocxEditorRef } from '../editor-ref';
+import type { DocxEditorRef } from '../components/DocxEditor/types';
 import type { ApplyFormattingOptions } from './useFormattingActions';
 
 export interface UseDocxEditorRefApiOptions {

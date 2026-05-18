@@ -1,17 +1,25 @@
+/**
+ * Public type surface for `<DocxEditor>`.
+ *
+ * Mirrors the React adapter's `DocxEditorProps` / `DocxEditorRef` / `EditorMode`
+ * exports — the names match deliberately so shared docs only differ by package
+ * name. `DocxEditorRef` borrows its base shape from
+ * `EditorRefLike` (Decision 10) so React + Vue cannot drift on the agent SDK
+ * surface they share.
+ */
+
 import type { Plugin } from 'prosemirror-state';
-import type { Document } from '@eigenpal/docx-editor-core/types/document';
+import type { Document, Theme } from '@eigenpal/docx-editor-core/types/document';
 import type { DocxInput } from '@eigenpal/docx-editor-core/utils';
 import type { FontOption } from '@eigenpal/docx-editor-core/utils/fontOptions';
-import type { Theme } from '@eigenpal/docx-editor-core/types/document';
 import type { StyleValue, VNodeChild } from 'vue';
-import type { Translations } from './i18n';
-import type { EditorMode } from './editor-mode';
+import type { EditorRefLike } from '@eigenpal/docx-editor-agents/bridge';
+import type { Translations } from '../../i18n';
+
+export type EditorMode = 'editing' | 'suggesting' | 'viewing';
 
 /**
  * Public props for the Vue editor component.
- *
- * The preferred public export name mirrors React's `DocxEditorProps`; Vue-only
- * aliases should stay additive so shared docs can differ only by package name.
  */
 export interface DocxEditorProps {
   /** Document data — ArrayBuffer, Uint8Array, Blob, or File. */
@@ -71,3 +79,35 @@ export interface DocxEditorProps {
   /** Custom right-side actions renderer for the title bar. Slots remain preferred in templates. */
   renderTitleBarRight?: () => VNodeChild;
 }
+
+/**
+ * Public ref shape for `<DocxEditor>`. Exposes the full editor-scope
+ * `EditorRefLike` contract so the agent bridge can attach to either
+ * React or Vue without an adapter shim.
+ */
+export type DocxEditorRef = EditorRefLike & {
+  /** Agent instance access is React-only today; Vue returns null for API parity. */
+  getAgent(): null;
+  /** Save the document and return DOCX bytes, matching React's component ref. */
+  save(): Promise<ArrayBuffer | null>;
+  /** Set zoom level (1.0 = 100%). */
+  setZoom(zoom: number): void;
+  /** Get current zoom level. */
+  getZoom(): number;
+  /** Focus the editor's hidden ProseMirror view. Vue-only — not in EditorRefLike. */
+  focus(): void;
+  /** Scroll the visible pages to a 1-indexed page number. */
+  scrollToPage(pageNumber: number): void;
+  /** Scroll to a raw ProseMirror document position. */
+  scrollToPosition(pmPos: number): void;
+  /** Open print preview / browser print. */
+  openPrintPreview(): void;
+  /** Print the document. */
+  print(): void;
+  /** Load a pre-parsed document programmatically. */
+  loadDocument(doc: Document): void;
+  /** Load a DOCX buffer programmatically. */
+  loadDocumentBuffer(buffer: DocxInput): Promise<void>;
+  /** Tear down the editor (destroys the PM view + frees listeners). */
+  destroy(): void;
+};

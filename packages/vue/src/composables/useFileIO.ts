@@ -1,5 +1,5 @@
 /**
- * File I/O composable for DocxEditorVue — owns the hidden file-picker
+ * File I/O composable for DocxEditor — owns the hidden file-picker
  * ref, the document-name change emit path, the `.docx` download flow,
  * and the load/save bridge over `useDocxEditor`'s `loadBuffer` /
  * `loadParsedDocument` / `saveBlob`. Re-emits `ready` after a tick so

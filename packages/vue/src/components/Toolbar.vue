@@ -2,7 +2,7 @@
   The formatting rail — Vue counterpart of React's <Toolbar>
   (packages/react/src/components/Toolbar.tsx). Button order, dropdowns,
   and groupings match React's render order so the parity preview shows
-  the same rail in the same sequence. Rendered by DocxEditorVue and
+  the same rail in the same sequence. Rendered by DocxEditor and
   exposed publicly as `Toolbar`.
 -->
 <template>
@@ -569,7 +569,7 @@ const currentStyleLabel = computed(() => {
 // Mirror React Toolbar's `canUndo` / `canRedo` props (Toolbar.tsx:81-82).
 // React threads them in from a parent hook; Vue computes them straight from the
 // prosemirror-history plugin state via undoDepth/redoDepth so the buttons grey
-// out the same way without needing extra plumbing in DocxEditorVue.
+// out the same way without needing extra plumbing in DocxEditor.
 const canUndo = computed(() => {
   void props.stateTick;
   const v = props.view;

@@ -1,15 +1,13 @@
 /**
- * Vue renderAsync — mounts a DocxEditorVue into a container element.
+ * Vue renderAsync — mounts a DocxEditor into a container element.
  */
 
 import { createApp, h, type App } from 'vue';
-import DocxEditorVue from './components/DocxEditorVue.vue';
+import DocxEditor from './components/DocxEditor.vue';
 import type { EditorHandle } from '@eigenpal/docx-editor-core';
 import type { Document } from '@eigenpal/docx-editor-core/types/document';
 import { toArrayBuffer, type DocxInput } from '@eigenpal/docx-editor-core/utils';
-import type { EditorMode } from './editor-mode';
-import type { DocxEditorProps } from './docx-editor-props';
-import type { DocxEditorRef } from './editor-ref';
+import type { DocxEditorProps, DocxEditorRef, EditorMode } from './components/DocxEditor/types';
 
 /** Options for the Vue renderAsync. */
 export type VueRenderAsyncOptions = Omit<DocxEditorProps, 'documentBuffer' | 'document'> & {
@@ -84,7 +82,7 @@ export async function renderAsync(
     app = createApp({
       setup() {
         return () =>
-          h(DocxEditorVue, {
+          h(DocxEditor, {
             ...options,
             documentBuffer: buffer,
             showToolbar: options.showToolbar ?? true,

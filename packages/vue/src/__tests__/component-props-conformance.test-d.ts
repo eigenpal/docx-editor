@@ -1,7 +1,7 @@
 // Type-level drift guard for the framework-neutral Vue DocxEditor prop contract.
 // Cross-package React/Vue key drift is checked by `bun run check:editor-contract`.
 
-import type { DocxEditorProps as VueDocxEditorProps } from '../docx-editor-props';
+import type { DocxEditorProps as VueDocxEditorProps } from '../components/DocxEditor/types';
 
 type ImplementedSharedPropKeys =
   | 'documentBuffer'

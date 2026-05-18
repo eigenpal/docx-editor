@@ -7,7 +7,10 @@ const reactSource = readFileSync(
   resolve(root, 'packages/react/src/components/DocxEditor.tsx'),
   'utf8'
 );
-const vueSource = readFileSync(resolve(root, 'packages/vue/src/docx-editor-props.ts'), 'utf8');
+const vueSource = readFileSync(
+  resolve(root, 'packages/vue/src/components/DocxEditor/types.ts'),
+  'utf8'
+);
 
 const VUE_ONLY_PROPS = new Set([
   // Vue chrome split that does not exist as a React prop.

@@ -1,5 +1,5 @@
 <!--
-  Title-bar block for DocxEditorVue — DocumentName + MenuBar centered
+  Title-bar block for DocxEditor — DocumentName + MenuBar centered
   between left/right chrome slots. Renders nothing when `showMenuBar`
   is false. The host SFC wraps this and the Toolbar inside the
   `__toolbar-shell` (`bg-white shadow-sm` shared background); mirroring
@@ -31,8 +31,8 @@
 
 <script setup lang="ts">
 import type { Component } from 'vue';
-import DocumentName from './DocumentName.vue';
-import MenuBar from './MenuBar.vue';
+import DocumentName from '../DocumentName.vue';
+import MenuBar from '../MenuBar.vue';
 
 withDefaults(
   defineProps<{

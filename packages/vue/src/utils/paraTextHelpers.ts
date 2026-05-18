@@ -1,5 +1,5 @@
 /**
- * Pure ProseMirror lookup helpers used by DocxEditorVue's agent-facing
+ * Pure ProseMirror lookup helpers used by DocxEditor's agent-facing
  * commands — paragraph-by-paraId, vanilla-view text extraction (skips
  * text inside `insertion` marks so the agent reads the same view that
  * `addComment` / `proposeChange` anchor against).

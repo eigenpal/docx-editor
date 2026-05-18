@@ -8,7 +8,7 @@
    `data-comment-id` on every run that has comments. Subtle yellow
    underline shows the user that a comment exists; hover boosts it
    so it's discoverable. The expanded-comment style (full yellow
-   background) gets injected dynamically by DocxEditorVue.vue when
+   background) gets injected dynamically by DocxEditor.vue when
    a sidebar card is clicked. */
 /* Scope to the rendered pages container only — the sidebar card
    roots also carry `data-comment-id` for the expand-highlight

@@ -7,9 +7,8 @@
 export const VERSION = '0.0.2';
 
 // Main editor contract
-export { default as DocxEditor } from './components/DocxEditorVue.vue';
-export type { EditorMode } from './editor-mode';
-export type { DocxEditorProps } from './docx-editor-props';
+export { default as DocxEditor } from './components/DocxEditor.vue';
+export type { DocxEditorProps, EditorMode } from './components/DocxEditor/types';
 
 // i18n
 export { useTranslation, provideLocale, i18nPlugin, defaultLocale } from './i18n';
@@ -24,4 +23,4 @@ export type {
 } from './renderAsync';
 
 // Public ref shape (typecheck contract with EditorRefLike — Decision 10).
-export type { DocxEditorRef } from './editor-ref';
+export type { DocxEditorRef } from './components/DocxEditor/types';

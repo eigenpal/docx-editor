@@ -1,5 +1,5 @@
 <!--
-  Modal-dialog cluster for DocxEditorVue — collects the seven
+  Modal-dialog cluster for DocxEditor — collects the seven
   dialogs the editor surfaces (find/replace, insert image,
   hyperlink, insert symbol, image properties, page setup,
   keyboard shortcuts) so the parent template doesn't have to
@@ -64,13 +64,13 @@
 <script setup lang="ts">
 import type { EditorView } from 'prosemirror-view';
 import type { SectionProperties } from '@eigenpal/docx-editor-core/types/document';
-import FindReplaceDialog from './dialogs/FindReplaceDialog.vue';
-import InsertImageDialog from './dialogs/InsertImageDialog.vue';
-import HyperlinkDialog from './dialogs/HyperlinkDialog.vue';
-import InsertSymbolDialog from './dialogs/InsertSymbolDialog.vue';
-import ImagePropertiesDialog from './dialogs/ImagePropertiesDialog.vue';
-import PageSetupDialog from './dialogs/PageSetupDialog.vue';
-import KeyboardShortcutsDialog from './dialogs/KeyboardShortcutsDialog.vue';
+import FindReplaceDialog from '../dialogs/FindReplaceDialog.vue';
+import InsertImageDialog from '../dialogs/InsertImageDialog.vue';
+import HyperlinkDialog from '../dialogs/HyperlinkDialog.vue';
+import InsertSymbolDialog from '../dialogs/InsertSymbolDialog.vue';
+import ImagePropertiesDialog from '../dialogs/ImagePropertiesDialog.vue';
+import PageSetupDialog from '../dialogs/PageSetupDialog.vue';
+import KeyboardShortcutsDialog from '../dialogs/KeyboardShortcutsDialog.vue';
 
 interface BookmarkOption {
   name: string;

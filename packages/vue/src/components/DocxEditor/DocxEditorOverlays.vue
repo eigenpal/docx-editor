@@ -1,5 +1,5 @@
 <!--
-  Floating-popover cluster for DocxEditorVue — collects the three
+  Floating-popover cluster for DocxEditor — collects the three
   click-anchored popups that surface above the editor: the
   selection / table context menu, the image context menu, and the
   hyperlink popup. Mounted at the SFC root (after the editor scroll
@@ -46,11 +46,11 @@
 </template>
 
 <script setup lang="ts">
-import TextContextMenu from './TextContextMenu.vue';
-import ImageContextMenu from './ImageContextMenu.vue';
-import HyperlinkPopup, { type HyperlinkPopupData } from './ui/HyperlinkPopup.vue';
-import type { TextContextMenuState } from '../composables/useContextMenus';
-import type { ImageContextMenuState, ImageContextMenuTextAction } from './imageContextMenuTypes';
+import TextContextMenu from '../TextContextMenu.vue';
+import ImageContextMenu from '../ImageContextMenu.vue';
+import HyperlinkPopup, { type HyperlinkPopupData } from '../ui/HyperlinkPopup.vue';
+import type { TextContextMenuState } from '../../composables/useContextMenus';
+import type { ImageContextMenuState, ImageContextMenuTextAction } from '../imageContextMenuTypes';
 import type { ImageLayoutTarget } from '@eigenpal/docx-editor-core/prosemirror/commands';
 
 defineProps<{

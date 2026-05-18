@@ -1,7 +1,7 @@
 <!--
   Vue alias for packages/react/src/components/TitleBar.tsx — the
   three-column title row (left logo / center doc-name + menu /
-  right buttons). DocxEditorVue.vue inlines this layout; this
+  right buttons). DocxEditor.vue inlines this layout; this
   standalone version exposes the same slots so plugin code can
   build its own toolbar variant.
 -->

@@ -341,13 +341,12 @@ import PageIndicator from './PageIndicator.vue';
 import InlineHeaderFooterEditor from './InlineHeaderFooterEditor.vue';
 import HorizontalRuler from './ui/HorizontalRuler.vue';
 import VerticalRuler from './ui/VerticalRuler.vue';
-import DocxEditorMenuBar from './DocxEditorMenuBar.vue';
-import DocxEditorDialogs from './DocxEditorDialogs.vue';
-import DocxEditorOverlays from './DocxEditorOverlays.vue';
+import DocxEditorMenuBar from './DocxEditor/DocxEditorMenuBar.vue';
+import DocxEditorDialogs from './DocxEditor/DocxEditorDialogs.vue';
+import DocxEditorOverlays from './DocxEditor/DocxEditorOverlays.vue';
 import type { HyperlinkPopupData } from './ui/HyperlinkPopup.vue';
 import type { TrackedChangeEntry } from './sidebar/sidebarUtils';
-import type { EditorMode } from '../editor-mode';
-import type { DocxEditorProps } from '../docx-editor-props';
+import type { EditorMode, DocxEditorProps } from './DocxEditor/types';
 import { useDocxEditor } from '../composables/useDocxEditor';
 import { useZoom } from '../composables/useZoom';
 import { useTableResize } from '../composables/useTableResize';
@@ -886,4 +885,4 @@ const { exposed } = useDocxEditorRefApi({
 defineExpose(exposed);
 </script>
 
-<style src="./DocxEditorVue.css"></style>
+<style src="./DocxEditor.css"></style>

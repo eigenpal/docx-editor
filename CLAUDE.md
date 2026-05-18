@@ -12,19 +12,6 @@ Client-side only. No backend.
 
 ---
 
-## Active integration branch: `1.0.0-release`
-
-The 1.0.0 unified package rename is being assembled on the long-living **`1.0.0-release`** branch, not on `main`. Anything in scope for 1.0.0 — the Vue impl (#245), the React/Vue parity demo, follow-up fixes to the rename itself — opens its PR against `1.0.0-release`, not `main`. The whole train ships to `main` as a single squash-merge once everything is in.
-
-- `.changeset/config.json` `baseBranch` is `1.0.0-release` while the train is open. Changeset's release PR will compare against this branch and not auto-publish to npm until the branch lands on `main`.
-- Currently merged into `1.0.0-release`: PR #337 (the rename + DX fixes).
-- Still pending: PR #245 (Vue implementation) — replaces the `packages/vue/` stub, drops the `[STUB]` description, makes `renderAsync` actually work.
-- Hotfixes for shipped 0.x versions still go to `main` directly. Don't accumulate them on `1.0.0-release`.
-
-After the train merges to `main`, reset `.changeset/config.json` `baseBranch` back to `main`.
-
----
-
 ## Verify Commands
 
 ```bash
@@ -391,7 +378,7 @@ Hotfixes → `0.x`. Everything else → `main`.
 | `@eigenpal/docx-editor-core`   | `packages/core`      | ✅                       |
 | `@eigenpal/docx-editor-agents` | `packages/agent-use` | ✅                       |
 | `@eigenpal/docx-editor-i18n`   | `packages/i18n`      | ✅ (shared locale JSONs) |
-| `@eigenpal/docx-editor-vue`    | `packages/vue`       | ❌ private / community   |
+| `@eigenpal/docx-editor-vue`    | `packages/vue`       | ✅                       |
 
 `@eigenpal/docx-editor-react`, `@eigenpal/docx-editor-core`, `@eigenpal/docx-editor-agents`, `@eigenpal/docx-editor-i18n`, and the Vue adapter are all in a **fixed group** in `.changeset/config.json` — they always ship the same version. A changeset only needs to declare the bump for one; the others follow automatically. `@eigenpal/docx-editor-i18n` ships the locale JSONs that React and Vue both consume — adding a new key to `en.json` only needs a changeset on `@eigenpal/docx-editor-i18n` (the consumers pick it up at build time).
 
@@ -475,7 +462,6 @@ The published-from-CI flow is preferred because it uses OIDC (no long-lived npm 
 - **Don't manually delete `.changeset/*.md` files** outside of `changeset version`. They're the single source of truth for what's pending.
 - **Don't edit `CHANGELOG.md` by hand.** It's auto-generated from changesets; manual edits get clobbered on the next release.
 - **Don't edit the `version` field in `package.json` by hand.** `changeset version` owns it.
-- **Don't open changesets for `@eigenpal/docx-editor-vue`** — it's listed in `.changeset/config.json` `ignore` until PR #245 lands its implementation.
 - **Don't hand-write the package name in changeset frontmatter.** Use `bun changeset` so the package list comes from the workspace. A bare `docx-editor` (or any name not in `package.json`) crashes the Release workflow post-merge.
 
 ---
