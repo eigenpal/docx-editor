@@ -10,14 +10,15 @@ Releases follow the canonical [`changesets/action@v1`](https://github.com/change
 
 ## Packages
 
-| Package                        | Path              | Published?             |
-| ------------------------------ | ----------------- | ---------------------- |
-| `@eigenpal/docx-editor-react`  | `packages/react`  | ✅                     |
-| `@eigenpal/docx-editor-agents` | `packages/agents` | ✅                     |
-| `@eigenpal/docx-editor-core`   | `packages/core`   | ❌ private             |
-| `@eigenpal/docx-editor-vue`    | `packages/vue`    | ❌ private / community |
+| Package                        | Path              | Published?               |
+| ------------------------------ | ----------------- | ------------------------ |
+| `@eigenpal/docx-editor-react`  | `packages/react`  | ✅                       |
+| `@eigenpal/docx-editor-core`   | `packages/core`   | ✅                       |
+| `@eigenpal/docx-editor-agents` | `packages/agents` | ✅                       |
+| `@eigenpal/docx-editor-vue`    | `packages/vue`    | ✅                       |
+| `@eigenpal/docx-editor-i18n`   | `packages/i18n`   | ✅ (shared locale JSONs) |
 
-The two published packages are in a **fixed group** in `.changeset/config.json` — they always ship the same version. A changeset only needs to declare the bump for one; the other follows automatically.
+All five packages are in a **fixed group** in `.changeset/config.json` — they always ship the same version. A changeset only needs to declare the bump for one; the others follow automatically. `@eigenpal/docx-editor-i18n` ships the locale JSONs that the React and Vue adapters both consume, so adding a new key to `en.json` only needs a changeset on `@eigenpal/docx-editor-i18n` (the consumers pick it up at build time).
 
 ## Author flow (every contributor, every code PR)
 
@@ -64,7 +65,7 @@ That's the entire release. One PR merge.
 
 | Where                    | What                                                                                                                                        |
 | ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------- |
-| npmjs.com                | Trusted Publisher configured for both packages → repo `eigenpal/docx-editor`, workflow `release.yml`                                        |
+| npmjs.com                | Trusted Publisher configured for each published package → repo `eigenpal/docx-editor`, workflow `release.yml`                               |
 | `package.json`           | `"publishConfig": { "access": "public" }` on each published package                                                                         |
 | `.changeset/config.json` | `"access": "public"`; fixed release group for React, core, agents, Vue, and i18n packages                                                   |
 | GitHub perms             | Settings → Actions → General → Workflow permissions = **Read and write**, **Allow GitHub Actions to create and approve pull requests** = on |
@@ -85,4 +86,4 @@ The CI flow is preferred because it uses OIDC (no long-lived npm token needed) a
 - **Don't manually delete `.changeset/*.md` files** outside of `changeset version`. They're the single source of truth for what's pending.
 - **Don't edit `CHANGELOG.md` by hand.** It's auto-generated from changesets; manual edits get clobbered on the next release.
 - **Don't edit the `version` field in `package.json` by hand.** `changeset version` owns it.
-- **Don't open changesets for `@eigenpal/docx-editor-core` or `@eigenpal/docx-editor-vue`** — they're listed in `.changeset/config.json` `ignore`.
+- **Don't hand-write package names in changeset frontmatter.** Run `bun changeset` so the names come from the workspace — a typo crashes the post-merge Release workflow and blocks all releases.
