@@ -9,19 +9,9 @@
  * - Loading states
  */
 
-import {
-  useRef,
-  useCallback,
-  useState,
-  useEffect,
-  useMemo,
-  forwardRef,
-  useImperativeHandle,
-  lazy,
-  Suspense,
-} from 'react';
+import { useRef, useCallback, useState, useEffect, useMemo, forwardRef } from 'react';
 import type { CSSProperties, ReactNode } from 'react';
-import type { Document, Theme, HeaderFooter } from '@eigenpal/docx-editor-core/types/document';
+import type { Document, Theme } from '@eigenpal/docx-editor-core/types/document';
 import defaultLocale from '@eigenpal/docx-editor-i18n/en.json';
 
 import { ToolbarSeparator, type SelectionFormatting } from './Toolbar';
@@ -40,10 +30,15 @@ import { useHyperlinkActions } from './DocxEditor/hooks/useHyperlinkActions';
 import { useFindReplaceBridge } from './DocxEditor/hooks/useFindReplaceBridge';
 import { useFormattingActions } from './DocxEditor/hooks/useFormattingActions';
 import { useImageActions } from './DocxEditor/hooks/useImageActions';
+import { useDocxEditorRefApi } from './DocxEditor/hooks/useDocxEditorRefApi';
+import { useTableDialogs } from './DocxEditor/hooks/useTableDialogs';
+import { useHeaderFooterEditing } from './DocxEditor/hooks/useHeaderFooterEditing';
+import { useDocumentLoader } from './DocxEditor/hooks/useDocumentLoader';
+import { DocxEditorOverlays } from './DocxEditor/DocxEditorOverlays';
+import { DocxEditorDialogs } from './DocxEditor/DocxEditorDialogs';
 import type { FontOption } from './ui/FontPicker';
 import { EditorToolbar } from './EditorToolbar';
 import { undoDepth, redoDepth } from 'prosemirror-history';
-import { pointsToHalfPoints } from './ui/FontSizePicker';
 import {
   DocumentOutline,
   OUTLINE_BUTTON_RESERVED_SPACE,
@@ -58,8 +53,6 @@ import { TextSelection, type EditorState as PMEditorState } from 'prosemirror-st
 import type { ReactSidebarItem } from '../plugin-api/types';
 import type { Comment } from '@eigenpal/docx-editor-core/types/content';
 import { ErrorBoundary, ErrorProvider } from './ErrorBoundary';
-import type { TableAction } from './ui/TableToolbar';
-import { mapHexToHighlightName } from './toolbarUtils';
 import { LocaleProvider, useTranslation } from '../i18n';
 import type { Translations } from '../i18n';
 import { HorizontalRuler } from './ui/HorizontalRuler';
@@ -74,56 +67,22 @@ import {
   type InlineHeaderFooterEditorRef,
 } from './InlineHeaderFooterEditor';
 
-// Dialog components (lazy-loaded — only fetched when first opened)
-const FindReplaceDialog = lazy(() => import('./dialogs/FindReplaceDialog'));
-const HyperlinkDialog = lazy(() => import('./dialogs/HyperlinkDialog'));
-const TablePropertiesDialog = lazy(() =>
-  import('./dialogs/TablePropertiesDialog').then((m) => ({ default: m.TablePropertiesDialog }))
-);
-const SplitCellDialog = lazy(() => import('./dialogs/SplitCellDialog'));
-const ImagePositionDialog = lazy(() =>
-  import('./dialogs/ImagePositionDialog').then((m) => ({ default: m.ImagePositionDialog }))
-);
-const ImagePropertiesDialog = lazy(() =>
-  import('./dialogs/ImagePropertiesDialog').then((m) => ({ default: m.ImagePropertiesDialog }))
-);
-const FootnotePropertiesDialog = lazy(() =>
-  import('./dialogs/FootnotePropertiesDialog').then((m) => ({
-    default: m.FootnotePropertiesDialog,
-  }))
-);
-const PageSetupDialog = lazy(() =>
-  import('./dialogs/PageSetupDialog').then((m) => ({ default: m.PageSetupDialog }))
-);
 import { MaterialSymbol } from './ui/Icons';
 import { Tooltip } from './ui/Tooltip';
-import {
-  TextContextMenu,
-  type TextContextAction,
-  type TextContextMenuItem,
-} from './TextContextMenu';
-import { ImageContextMenu, useImageContextMenu } from './ImageContextMenu';
+import { type TextContextAction, type TextContextMenuItem } from './TextContextMenu';
+import { useImageContextMenu } from './ImageContextMenu';
 import {
   setImageWrapType,
   type ImageLayoutTarget,
 } from '@eigenpal/docx-editor-core/prosemirror/commands';
 import type { WrapType } from '@eigenpal/docx-editor-core/docx/wrapTypes';
-import { HyperlinkPopup } from './ui/HyperlinkPopup';
-import { Toaster } from 'sonner';
-import { getBuiltinTableStyle, type TableStylePreset } from './ui/TableStyleGallery';
 import { DocumentAgent } from '@eigenpal/docx-editor-core/agent';
 import { DefaultLoadingIndicator, DefaultPlaceholder, ParseError } from './DocxEditorHelpers';
-import { parseDocx } from '@eigenpal/docx-editor-core/docx';
 import { type DocxInput } from '@eigenpal/docx-editor-core/utils';
-import { onFontsLoaded, loadDocumentFonts } from '@eigenpal/docx-editor-core/utils';
+import { onFontsLoaded } from '@eigenpal/docx-editor-core/utils';
 import { resolveColorToHex } from '@eigenpal/docx-editor-core/utils';
-import { resolveHeaderFooter } from '@eigenpal/docx-editor-core/layout-bridge';
 import { useTableSelection } from '../hooks/useTableSelection';
 import { useDocumentHistory } from '../hooks/useHistory';
-import {
-  getSplitCellDialogConfig,
-  splitActiveTableCell,
-} from '@eigenpal/docx-editor-core/prosemirror/commands';
 
 // Extension system
 import { createStarterKit } from '@eigenpal/docx-editor-core/prosemirror/extensions';
@@ -134,15 +93,12 @@ import {
 } from '@eigenpal/docx-editor-core/prosemirror/plugins';
 
 // Conversion (for HF inline editor save)
-import { proseDocToBlocks } from '@eigenpal/docx-editor-core/prosemirror/conversion';
 
 // ProseMirror editor
 import {
   type SelectionState,
   extractSelectionState,
-  applyStyle,
   createStyleResolver,
-  // Table commands
   getTableContext,
   addRowAbove,
   addRowBelow,
@@ -150,29 +106,7 @@ import {
   addColumnLeft,
   addColumnRight,
   deleteColumn as pmDeleteColumn,
-  deleteTable as pmDeleteTable,
-  selectTable as pmSelectTable,
-  selectRow as pmSelectRow,
-  selectColumn as pmSelectColumn,
   mergeCells as pmMergeCells,
-  setCellBorder,
-  setCellVerticalAlign,
-  setCellMargins,
-  setCellTextDirection,
-  toggleNoWrap,
-  setRowHeight,
-  toggleHeaderRow,
-  distributeColumns,
-  autoFitContents,
-  setTableProperties,
-  applyTableStyle,
-  removeTableBorders,
-  setAllTableBorders,
-  setOutsideTableBorders,
-  setInsideTableBorders,
-  setCellFillColor,
-  setTableBorderColor,
-  setTableBorderWidth,
   type TableContextInfo,
 } from '@eigenpal/docx-editor-core/prosemirror';
 import { acceptChange, rejectChange } from '@eigenpal/docx-editor-core/prosemirror/commands';
@@ -536,18 +470,10 @@ import type { EditorMode } from './DocxEditor/internals/editing-modes';
 import {
   findSelectionYPosition,
   getInitialSectionProperties,
-  findParaIdRange,
 } from './DocxEditor/internals/pmAnchors';
-import {
-  getVanillaNodeText,
-  getVanillaTextBetween,
-  findTextInPmParagraph,
-} from './DocxEditor/internals/vanillaText';
 import {
   PENDING_COMMENT_ID,
   EMPTY_ANCHOR_POSITIONS,
-  getNextCommentId,
-  bumpNextCommentIdAbove,
   createComment,
 } from './DocxEditor/commentFactories';
 
@@ -628,20 +554,8 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
     pmImageContext: null,
   });
 
-  // Table properties dialog state
-  const [tablePropsOpen, setTablePropsOpen] = useState(false);
-  const [splitCellDialogState, setSplitCellDialogState] = useState({
-    isOpen: false,
-    initialRows: 1,
-    initialCols: 2,
-    minRows: 1,
-    minCols: 1,
-    source: null as 'pm' | 'legacy' | null,
-    /** Captured cell coordinates at dialog-open time (PM path) */
-    capturedCellRow: null as number | null,
-    capturedCellCol: null as number | null,
-  });
-  // Header/footer editing state
+  // Header/footer editing state (lifted into the parent so getActiveEditorView
+  // can read hfEditPosition before useHeaderFooterEditing is called).
   const [hfEditPosition, setHfEditPosition] = useState<'header' | 'footer' | null>(null);
   const [hfEditIsFirstPage, setHfEditIsFirstPage] = useState(false);
 
@@ -838,34 +752,6 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
     enableKeyboardShortcuts: true,
   });
 
-  // Extract comments from document model on initial load
-  const commentsLoadedRef = useRef(false);
-  useEffect(() => {
-    if (commentsLoadedRef.current) return;
-    const doc = history.state;
-    if (!doc) return;
-    const bodyComments = doc.package?.document?.comments;
-    if (bodyComments && bodyComments.length > 0) {
-      setComments(bodyComments);
-      setShowCommentsSidebar(true);
-      commentsLoadedRef.current = true;
-      // Bump the shared comment/revision ID counter above all loaded IDs to
-      // avoid collisions (comments and tracked changes share the OOXML ID space).
-      let maxId = bodyComments.reduce((max, c) => Math.max(max, c.id), 0);
-      const view = pagedEditorRef.current?.getView();
-      if (view) {
-        view.state.doc.descendants((node) => {
-          for (const mark of node.marks) {
-            if (mark.attrs.revisionId != null) {
-              maxId = Math.max(maxId, mark.attrs.revisionId as number);
-            }
-          }
-        });
-      }
-      bumpNextCommentIdAbove(maxId);
-    }
-  }, [history.state]);
-
   // Extension manager — built once, provides schema + plugins + commands
   const extensionManager = useMemo(() => {
     const mgr = new ExtensionManager(createStarterKit());
@@ -980,8 +866,9 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
   // Hyperlink dialog hook
   const hyperlinkDialog = useHyperlinkDialog();
 
-  // Monotonically increasing generation counter to discard stale async loads
-  const loadGenerationRef = useRef(0);
+  // Lifted out of useDocumentLoader so `resetForNewDocument` (declared in
+  // the parent) can clear it on every fresh load.
+  const commentsLoadedRef = useRef(false);
 
   // Reset internal state when loading a new document (clears stale refs, comments, tracked changes, etc.)
   const resetForNewDocument = useCallback(() => {
@@ -995,6 +882,7 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
     setAddCommentYPosition(null);
     setFloatingCommentBtn(null);
     setHfEditPosition(null);
+    setHfEditIsFirstPage(false);
     setAnchorPositions(EMPTY_ANCHOR_POSITIONS);
     findReplace.setMatches([], 0);
     if (cleanOrphanedCommentsTimerRef.current) {
@@ -1003,43 +891,22 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
     }
   }, [findReplace.setMatches, setComments]);
 
-  // Load a pre-parsed document (used by ref method and internally)
-  const loadParsedDocument = useCallback(
-    (doc: Document) => {
-      resetForNewDocument();
-      history.reset(doc);
-      setState((prev) => ({ ...prev, isLoading: false, parseError: null }));
-      loadDocumentFonts(doc).catch((err) => {
-        console.warn('Failed to load document fonts:', err);
-      });
-    },
-    [resetForNewDocument, history]
-  );
-
-  // Load a DOCX buffer (used by ref method and internally)
-  const loadBuffer = useCallback(
-    async (buffer: DocxInput) => {
-      const generation = ++loadGenerationRef.current;
-      resetForNewDocument();
-      setState((prev) => ({ ...prev, isLoading: true, parseError: null }));
-      try {
-        const doc = await parseDocx(buffer);
-        // Discard result if a newer load was started while we were parsing
-        if (loadGenerationRef.current !== generation) return;
-        loadParsedDocument(doc);
-      } catch (error) {
-        if (loadGenerationRef.current !== generation) return;
-        const message = error instanceof Error ? error.message : 'Failed to parse document';
-        setState((prev) => ({
-          ...prev,
-          isLoading: false,
-          parseError: message,
-        }));
-        onError?.(error instanceof Error ? error : new Error(message));
-      }
-    },
-    [resetForNewDocument, loadParsedDocument, onError]
-  );
+  const { loadParsedDocument, loadBuffer } = useDocumentLoader({
+    documentBuffer,
+    initialDocument,
+    externalContent,
+    history,
+    agentRef,
+    pagedEditorRef,
+    setLoadingState: useCallback((s: { isLoading: boolean; parseError: string | null }) => {
+      setState((prev) => ({ ...prev, isLoading: s.isLoading, parseError: s.parseError }));
+    }, []),
+    setComments,
+    setShowCommentsSidebar,
+    onError,
+    resetForNewDocument,
+    commentsLoadedRef,
+  });
 
   const {
     imageInputRef,
@@ -1065,30 +932,6 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
     getActiveEditorView,
     focusActiveEditor,
   });
-
-  // React to document/documentBuffer prop changes
-  useEffect(() => {
-    // External content mode: caller (e.g. ySyncPlugin) populates PM directly — skip the load.
-    if (externalContent) return;
-
-    if (!documentBuffer) {
-      if (initialDocument) {
-        loadParsedDocument(initialDocument);
-      }
-      return;
-    }
-
-    loadBuffer(documentBuffer);
-  }, [documentBuffer, initialDocument, externalContent]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  // Create/update agent when document changes
-  useEffect(() => {
-    if (history.state) {
-      agentRef.current = new DocumentAgent(history.state);
-    } else {
-      agentRef.current = null;
-    }
-  }, [history.state]);
 
   // Mirror PM state on each external document load (mount-time view creation
   // is handled by PagedEditor's `onReady` below; this effect catches subsequent
@@ -1440,214 +1283,22 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
     pushDocument,
   });
 
-  const openSplitCellDialog = useCallback(() => {
-    const view = getActiveEditorView();
-    const pmConfig = view ? getSplitCellDialogConfig(view.state) : null;
-    const legacyConfig = pmConfig ? null : tableSelection.getSplitCellConfig();
-    const config = pmConfig ?? legacyConfig;
-    if (!config) return;
-
-    setSplitCellDialogState({
-      isOpen: true,
-      ...config,
-      source: pmConfig ? 'pm' : 'legacy',
-      capturedCellRow: pmConfig?.capturedCellRow ?? null,
-      capturedCellCol: pmConfig?.capturedCellCol ?? null,
-    });
-  }, [getActiveEditorView, tableSelection]);
-
-  // Handle table action from Toolbar - use ProseMirror commands
-  const handleTableAction = useCallback(
-    (action: TableAction) => {
-      const view = getActiveEditorView();
-      if (!view) {
-        if (action === 'splitCell') {
-          openSplitCellDialog();
-        } else if (typeof action !== 'object') {
-          tableSelection.handleAction(action);
-        }
-        return;
-      }
-
-      switch (action) {
-        case 'addRowAbove':
-          addRowAbove(view.state, view.dispatch);
-          break;
-        case 'addRowBelow':
-          addRowBelow(view.state, view.dispatch);
-          break;
-        case 'addColumnLeft':
-          addColumnLeft(view.state, view.dispatch);
-          break;
-        case 'addColumnRight':
-          addColumnRight(view.state, view.dispatch);
-          break;
-        case 'deleteRow':
-          pmDeleteRow(view.state, view.dispatch);
-          break;
-        case 'deleteColumn':
-          pmDeleteColumn(view.state, view.dispatch);
-          break;
-        case 'deleteTable':
-          pmDeleteTable(view.state, view.dispatch);
-          break;
-        case 'selectTable':
-          pmSelectTable(view.state, view.dispatch);
-          break;
-        case 'selectRow':
-          pmSelectRow(view.state, view.dispatch);
-          break;
-        case 'selectColumn':
-          pmSelectColumn(view.state, view.dispatch);
-          break;
-        case 'mergeCells':
-          pmMergeCells(view.state, view.dispatch);
-          break;
-        case 'splitCell':
-          openSplitCellDialog();
-          break;
-        // Border actions — use current border spec from toolbar
-        case 'borderAll':
-          setAllTableBorders(view.state, view.dispatch, borderSpecRef.current);
-          break;
-        case 'borderOutside':
-          setOutsideTableBorders(view.state, view.dispatch, borderSpecRef.current);
-          break;
-        case 'borderInside':
-          setInsideTableBorders(view.state, view.dispatch, borderSpecRef.current);
-          break;
-        case 'borderNone':
-          removeTableBorders(view.state, view.dispatch);
-          break;
-        // Per-side border actions (use current border spec)
-        case 'borderTop':
-          setCellBorder('top', borderSpecRef.current, true)(view.state, view.dispatch);
-          break;
-        case 'borderBottom':
-          setCellBorder('bottom', borderSpecRef.current, true)(view.state, view.dispatch);
-          break;
-        case 'borderLeft':
-          setCellBorder('left', borderSpecRef.current, true)(view.state, view.dispatch);
-          break;
-        case 'borderRight':
-          setCellBorder('right', borderSpecRef.current, true)(view.state, view.dispatch);
-          break;
-        default:
-          // Handle complex actions (with parameters)
-          if (typeof action === 'object') {
-            if (action.type === 'cellFillColor') {
-              setCellFillColor(action.color)(view.state, view.dispatch);
-            } else if (action.type === 'borderColor') {
-              const rgb = action.color.replace(/^#/, '');
-              borderSpecRef.current = { ...borderSpecRef.current, color: { rgb } };
-              setTableBorderColor(action.color)(view.state, view.dispatch);
-            } else if (action.type === 'borderWidth') {
-              borderSpecRef.current = { ...borderSpecRef.current, size: action.size };
-              setTableBorderWidth(action.size)(view.state, view.dispatch);
-            } else if (action.type === 'cellBorder') {
-              setCellBorder(action.side, {
-                style: action.style,
-                size: action.size,
-                color: { rgb: action.color.replace(/^#/, '') },
-              })(view.state, view.dispatch);
-            } else if (action.type === 'cellVerticalAlign') {
-              setCellVerticalAlign(action.align)(view.state, view.dispatch);
-            } else if (action.type === 'cellMargins') {
-              setCellMargins(action.margins)(view.state, view.dispatch);
-            } else if (action.type === 'cellTextDirection') {
-              setCellTextDirection(action.direction)(view.state, view.dispatch);
-            } else if (action.type === 'toggleNoWrap') {
-              toggleNoWrap()(view.state, view.dispatch);
-            } else if (action.type === 'rowHeight') {
-              setRowHeight(action.height, action.rule)(view.state, view.dispatch);
-            } else if (action.type === 'toggleHeaderRow') {
-              toggleHeaderRow()(view.state, view.dispatch);
-            } else if (action.type === 'distributeColumns') {
-              distributeColumns()(view.state, view.dispatch);
-            } else if (action.type === 'autoFitContents') {
-              autoFitContents()(view.state, view.dispatch);
-            } else if (action.type === 'openTableProperties') {
-              setTablePropsOpen(true);
-            } else if (action.type === 'tableProperties') {
-              setTableProperties(action.props)(view.state, view.dispatch);
-            } else if (action.type === 'applyTableStyle') {
-              // Resolve style data from built-in presets or document styles
-              let preset: TableStylePreset | undefined = getBuiltinTableStyle(action.styleId);
-              const currentDocForTable = historyStateRef.current;
-              if (!preset && currentDocForTable?.package.styles) {
-                const styleResolver = getCachedStyleResolver(currentDocForTable.package.styles);
-                const docStyle = styleResolver.getStyle(action.styleId);
-                if (docStyle) {
-                  // Convert to preset inline (same as documentStyleToPreset)
-                  preset = { id: docStyle.styleId, name: docStyle.name ?? docStyle.styleId };
-                  if (docStyle.tblPr?.borders) {
-                    const b = docStyle.tblPr.borders;
-                    preset.tableBorders = {};
-                    for (const side of [
-                      'top',
-                      'bottom',
-                      'left',
-                      'right',
-                      'insideH',
-                      'insideV',
-                    ] as const) {
-                      const bs = b[side];
-                      if (bs) {
-                        preset.tableBorders[side] = {
-                          style: bs.style,
-                          size: bs.size,
-                          color: bs.color?.rgb ? { rgb: bs.color.rgb } : undefined,
-                        };
-                      }
-                    }
-                  }
-                  if (docStyle.tblStylePr) {
-                    preset.conditionals = {};
-                    for (const cond of docStyle.tblStylePr) {
-                      const entry: Record<string, unknown> = {};
-                      if (cond.tcPr?.shading?.fill)
-                        entry.backgroundColor = `#${cond.tcPr.shading.fill}`;
-                      if (cond.tcPr?.borders) {
-                        const borders: Record<string, unknown> = {};
-                        for (const s of ['top', 'bottom', 'left', 'right'] as const) {
-                          const bs2 = cond.tcPr.borders[s];
-                          if (bs2)
-                            borders[s] = {
-                              style: bs2.style,
-                              size: bs2.size,
-                              color: bs2.color?.rgb ? { rgb: bs2.color.rgb } : undefined,
-                            };
-                        }
-                        entry.borders = borders;
-                      }
-                      if (cond.rPr?.bold) entry.bold = true;
-                      if (cond.rPr?.color?.rgb) entry.color = `#${cond.rPr.color.rgb}`;
-                      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                      (preset.conditionals as any)[cond.type] = entry;
-                    }
-                  }
-                  preset.look = { firstRow: true, lastRow: false, noHBand: false, noVBand: true };
-                }
-              }
-              if (preset) {
-                applyTableStyle({
-                  styleId: preset.id,
-                  tableBorders: preset.tableBorders,
-                  conditionals: preset.conditionals,
-                  look: preset.look,
-                })(view.state, view.dispatch);
-              }
-            }
-          } else {
-            // Fallback to legacy table selection handler for other actions
-            tableSelection.handleAction(action);
-          }
-      }
-
-      focusActiveEditor();
-    },
-    [tableSelection, getActiveEditorView, focusActiveEditor, openSplitCellDialog]
-  );
+  const {
+    tablePropsOpen,
+    setTablePropsOpen,
+    splitCellDialogState,
+    openSplitCellDialog,
+    handleTableAction,
+    handleSplitCellDialogClose,
+    handleSplitCellDialogApply,
+  } = useTableDialogs({
+    getActiveEditorView,
+    focusActiveEditor,
+    tableSelection,
+    borderSpecRef,
+    historyStateRef,
+    getCachedStyleResolver,
+  });
 
   // Context menu handler. Body content has its own context-menu plumbing
   // wired through PagedEditor (handleContextMenu below), so we early-out
@@ -1688,46 +1339,6 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
       historyStateRef,
       getCachedStyleResolver,
     });
-
-  const handleSplitCellDialogClose = useCallback(() => {
-    setSplitCellDialogState((prev) => ({
-      ...prev,
-      isOpen: false,
-      source: null,
-      capturedCellRow: null,
-      capturedCellCol: null,
-    }));
-  }, []);
-
-  const handleSplitCellDialogApply = useCallback(
-    (rows: number, cols: number) => {
-      if (splitCellDialogState.source === 'legacy') {
-        tableSelection.applySplitCell(rows, cols);
-        focusActiveEditor();
-        return;
-      }
-
-      const view = getActiveEditorView();
-      if (!view) return;
-      splitActiveTableCell(
-        view.state,
-        view.dispatch,
-        rows,
-        cols,
-        splitCellDialogState.capturedCellRow ?? undefined,
-        splitCellDialogState.capturedCellCol ?? undefined
-      );
-      focusActiveEditor();
-    },
-    [
-      focusActiveEditor,
-      getActiveEditorView,
-      splitCellDialogState.source,
-      splitCellDialogState.capturedCellRow,
-      splitCellDialogState.capturedCellCol,
-      tableSelection,
-    ]
-  );
 
   // Handle zoom change
   const handleZoomChange = useCallback((zoom: number) => {
@@ -2121,438 +1732,26 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
   });
 
   // Expose ref methods
-  useImperativeHandle(
+  useDocxEditorRefApi({
     ref,
-    () => ({
-      getAgent: () => agentRef.current,
-      getDocument: () => history.state,
-      getEditorRef: () => pagedEditorRef.current,
-      save: handleSave,
-      setZoom: (zoom: number) => setState((prev) => ({ ...prev, zoom })),
-      getZoom: () => state.zoom,
-      focus: () => {
-        pagedEditorRef.current?.focus();
-      },
-      getCurrentPage: () => scrollPageInfo.currentPage,
-      getTotalPages: () => scrollPageInfo.totalPages,
-      scrollToPage: (pageNumber: number) => {
-        pagedEditorRef.current?.scrollToPage(pageNumber);
-      },
-      scrollToPosition: (pmPos: number) => {
-        pagedEditorRef.current?.scrollToPosition(pmPos);
-      },
-      openPrintPreview: handleDirectPrint,
-      print: handleDirectPrint,
-      loadDocument: loadParsedDocument,
-      loadDocumentBuffer: loadBuffer,
-
-      addComment: (options) => {
-        const view = pagedEditorRef.current?.getView();
-        if (!view) return null;
-        const { schema } = view.state;
-        if (!schema.marks.comment) return null;
-
-        const range = findParaIdRange(view.state.doc, options.paraId);
-        if (!range) return null;
-
-        let from = range.from;
-        let to = range.to;
-
-        if (options.search) {
-          const textRange = findTextInPmParagraph(
-            view.state.doc,
-            range.from,
-            range.to,
-            options.search
-          );
-          if (!textRange) return null;
-          from = textRange.from;
-          to = textRange.to;
-        }
-
-        const comment = createComment(options.text, options.author);
-        const commentMark = schema.marks.comment.create({ commentId: comment.id });
-        view.dispatch(view.state.tr.addMark(from, to, commentMark));
-        setComments((prev) => [...prev, comment]);
-        setShowCommentsSidebar(true);
-        return comment.id;
-      },
-
-      replyToComment: (commentId, text, authorName) => {
-        if (!comments.some((c) => c.id === commentId)) return null;
-        const reply = createComment(text, authorName, commentId);
-        setComments((prev) => [...prev, reply]);
-        return reply.id;
-      },
-
-      resolveComment: (commentId) => {
-        setComments((prev) => prev.map((c) => (c.id === commentId ? { ...c, done: true } : c)));
-      },
-
-      proposeChange: (options) => {
-        const view = pagedEditorRef.current?.getView();
-        if (!view) return false;
-        const { schema } = view.state;
-        if (!schema.marks.deletion || !schema.marks.insertion) return false;
-
-        const range = findParaIdRange(view.state.doc, options.paraId);
-        if (!range) return false;
-
-        const isInsertion = options.search === '';
-        const isDeletion = options.replaceWith === '';
-
-        let textFrom: number;
-        let textTo: number;
-
-        if (isInsertion) {
-          // Insert at end of paragraph (just before closing token).
-          textFrom = range.to - 1;
-          textTo = range.to - 1;
-        } else {
-          const textRange = findTextInPmParagraph(
-            view.state.doc,
-            range.from,
-            range.to,
-            options.search
-          );
-          if (!textRange) return false;
-          textFrom = textRange.from;
-          textTo = textRange.to;
-        }
-
-        // Refuse to layer onto an existing tracked change.
-        let overlapsTrackedChange = false;
-        if (textFrom < textTo) {
-          view.state.doc.nodesBetween(textFrom, textTo, (node) => {
-            for (const m of node.marks) {
-              if (m.type === schema.marks.insertion || m.type === schema.marks.deletion) {
-                overlapsTrackedChange = true;
-                return false;
-              }
-            }
-            return true;
-          });
-          if (overlapsTrackedChange) return false;
-        }
-
-        const revisionId = getNextCommentId();
-        const date = new Date().toISOString();
-
-        const deletionMark = schema.marks.deletion.create({
-          revisionId,
-          author: options.author,
-          date,
-        });
-        const insertionMark = schema.marks.insertion.create({
-          revisionId,
-          author: options.author,
-          date,
-        });
-
-        let tr = view.state.tr;
-        if (!isInsertion) {
-          tr = tr.addMark(textFrom, textTo, deletionMark);
-        }
-        if (!isDeletion) {
-          const insertedNode = schema.text(options.replaceWith, [insertionMark]);
-          tr = tr.insert(textTo, insertedNode);
-        }
-
-        if (isInsertion && isDeletion) return false; // nothing to do
-        view.dispatch(tr);
-
-        setShowCommentsSidebar(true);
-        return true;
-      },
-
-      applyFormatting: (options) => {
-        const view = pagedEditorRef.current?.getView();
-        if (!view) return false;
-        const { schema } = view.state;
-
-        const range = findParaIdRange(view.state.doc, options.paraId);
-        if (!range) return false;
-
-        // Default range: the paragraph's text content (skip open/close tokens).
-        let from = range.from + 1;
-        let to = range.to - 1;
-
-        if (options.search) {
-          const textRange = findTextInPmParagraph(
-            view.state.doc,
-            range.from,
-            range.to,
-            options.search
-          );
-          if (!textRange) return false;
-          from = textRange.from;
-          to = textRange.to;
-        }
-
-        if (from >= to) return true;
-
-        let tr = view.state.tr;
-        const m = options.marks;
-
-        if (m.bold !== undefined && schema.marks.bold) {
-          tr = m.bold
-            ? tr.addMark(from, to, schema.marks.bold.create())
-            : tr.removeMark(from, to, schema.marks.bold);
-        }
-        if (m.italic !== undefined && schema.marks.italic) {
-          tr = m.italic
-            ? tr.addMark(from, to, schema.marks.italic.create())
-            : tr.removeMark(from, to, schema.marks.italic);
-        }
-        if (m.underline !== undefined && schema.marks.underline) {
-          if (m.underline) {
-            const style = typeof m.underline === 'object' ? m.underline.style : undefined;
-            tr = tr.addMark(from, to, schema.marks.underline.create({ style: style ?? 'single' }));
-          } else {
-            tr = tr.removeMark(from, to, schema.marks.underline);
-          }
-        }
-        if (m.strike !== undefined && schema.marks.strike) {
-          tr = m.strike
-            ? tr.addMark(from, to, schema.marks.strike.create())
-            : tr.removeMark(from, to, schema.marks.strike);
-        }
-        if (m.color !== undefined && schema.marks.textColor) {
-          if (m.color && (m.color.rgb || m.color.themeColor)) {
-            tr = tr.addMark(
-              from,
-              to,
-              schema.marks.textColor.create({
-                rgb: m.color.rgb ?? null,
-                themeColor: m.color.themeColor ?? null,
-              })
-            );
-          } else {
-            tr = tr.removeMark(from, to, schema.marks.textColor);
-          }
-        }
-        if (m.highlight !== undefined && schema.marks.highlight) {
-          if (m.highlight) {
-            const name = mapHexToHighlightName(m.highlight);
-            tr = tr.addMark(
-              from,
-              to,
-              schema.marks.highlight.create({ color: name || m.highlight })
-            );
-          } else {
-            tr = tr.removeMark(from, to, schema.marks.highlight);
-          }
-        }
-        if (m.fontSize !== undefined && schema.marks.fontSize) {
-          if (m.fontSize > 0) {
-            tr = tr.addMark(
-              from,
-              to,
-              schema.marks.fontSize.create({ size: pointsToHalfPoints(m.fontSize) })
-            );
-          } else {
-            tr = tr.removeMark(from, to, schema.marks.fontSize);
-          }
-        }
-        if (m.fontFamily !== undefined && schema.marks.fontFamily) {
-          if (m.fontFamily && (m.fontFamily.ascii || m.fontFamily.hAnsi)) {
-            tr = tr.addMark(
-              from,
-              to,
-              schema.marks.fontFamily.create({
-                ascii: m.fontFamily.ascii ?? null,
-                hAnsi: m.fontFamily.hAnsi ?? m.fontFamily.ascii ?? null,
-              })
-            );
-          } else {
-            tr = tr.removeMark(from, to, schema.marks.fontFamily);
-          }
-        }
-
-        view.dispatch(tr);
-        return true;
-      },
-
-      setParagraphStyle: (options) => {
-        const view = pagedEditorRef.current?.getView();
-        if (!view) return false;
-
-        const range = findParaIdRange(view.state.doc, options.paraId);
-        if (!range) return false;
-
-        const currentDoc = historyStateRef.current;
-        const styleResolver = currentDoc?.package?.styles
-          ? getCachedStyleResolver(currentDoc.package.styles)
-          : null;
-
-        // Refuse unknown styleIds so the agent gets a clear error
-        // instead of silently writing `<w:pStyle w:val="NoSuchStyle"/>`.
-        // We only enforce this when we have a resolver — without one,
-        // we can't know which styles are defined, so fall through.
-        if (styleResolver && !styleResolver.hasParagraphStyle(options.styleId)) {
-          return false;
-        }
-
-        // Build a synthetic state with selection inside the target paragraph
-        // so applyStyle's cursor-driven walk lands on it. We restore the
-        // original selection on the dispatched transaction.
-        const $from = view.state.doc.resolve(range.from + 1);
-        const $to = view.state.doc.resolve(range.to - 1);
-        const paraSelection = TextSelection.between($from, $to);
-        const stateWithSel = view.state.apply(view.state.tr.setSelection(paraSelection));
-
-        const cmd = styleResolver
-          ? (() => {
-              const r = styleResolver.resolveParagraphStyle(options.styleId);
-              return applyStyle(options.styleId, {
-                paragraphFormatting: r.paragraphFormatting,
-                runFormatting: r.runFormatting,
-              });
-            })()
-          : applyStyle(options.styleId);
-
-        let didApply = false;
-        cmd(stateWithSel, (newTr) => {
-          didApply = true;
-          newTr.setSelection(view.state.selection.map(newTr.doc, newTr.mapping));
-          view.dispatch(newTr);
-        });
-
-        return didApply;
-      },
-
-      getPageContent: (pageNumber) => {
-        const layout = pagedEditorRef.current?.getLayout();
-        if (!layout) return null;
-        const page = layout.pages[pageNumber - 1];
-        if (!page) return null;
-        const view = pagedEditorRef.current?.getView();
-        if (!view) return null;
-        const doc = view.state.doc;
-
-        const seen = new Set<string>();
-        const paragraphs: Array<{ paraId: string; text: string; styleId?: string }> = [];
-
-        for (const frag of page.fragments) {
-          if (frag.kind !== 'paragraph') continue;
-          // `docFrom` is the position immediately before the paragraph node;
-          // `doc.nodeAt(docFrom)` resolves to the paragraph itself.
-          const docFrom = frag.docFrom;
-          if (docFrom == null) continue;
-          const node = doc.nodeAt(docFrom);
-          if (!node || !node.isTextblock) continue;
-
-          const paraId = node.attrs?.paraId as string | undefined;
-          if (!paraId || seen.has(paraId)) continue;
-          seen.add(paraId);
-          paragraphs.push({
-            paraId,
-            text: getVanillaNodeText(node),
-            styleId: (node.attrs?.styleId as string | undefined) ?? undefined,
-          });
-        }
-
-        const text = paragraphs.map((p) => `[${p.paraId}] ${p.text}`).join('\n');
-        return { pageNumber, text, paragraphs };
-      },
-
-      scrollToParaId: (paraId) => pagedEditorRef.current?.scrollToParaId(paraId) ?? false,
-
-      findInDocument: (query, opts) => {
-        const view = pagedEditorRef.current?.getView();
-        if (!view || !query) return [];
-        const caseSensitive = opts?.caseSensitive ?? false;
-        const limit = opts?.limit ?? 20;
-        const needle = caseSensitive ? query : query.toLowerCase();
-        const results: Array<{
-          paraId: string;
-          match: string;
-          before: string;
-          after: string;
-        }> = [];
-
-        view.state.doc.descendants((node) => {
-          if (results.length >= limit) return false;
-          if (!node.isTextblock) return true;
-          const paraId = node.attrs?.paraId as string | undefined;
-          if (!paraId) return false;
-          const text = getVanillaNodeText(node);
-          const haystack = caseSensitive ? text : text.toLowerCase();
-          const at = haystack.indexOf(needle);
-          if (at === -1) return false;
-
-          // Reject ambiguous matches in the same paragraph — agent should narrow query.
-          if (haystack.indexOf(needle, at + 1) !== -1) return false;
-
-          const match = text.slice(at, at + query.length);
-          const CONTEXT = 40;
-          results.push({
-            paraId,
-            match,
-            before: text.slice(Math.max(0, at - CONTEXT), at),
-            after: text.slice(at + query.length, at + query.length + CONTEXT),
-          });
-          return false;
-        });
-
-        return results;
-      },
-
-      getSelectionInfo: () => {
-        const view = pagedEditorRef.current?.getView();
-        if (!view) return null;
-        const { selection, doc } = view.state;
-        const $from = selection.$from;
-        // Walk up to nearest textblock
-        let depth = $from.depth;
-        while (depth > 0 && !$from.node(depth).isTextblock) depth--;
-        const para = depth > 0 ? $from.node(depth) : null;
-        if (!para) return null;
-        const paraId = (para.attrs?.paraId as string | undefined) ?? null;
-        const paraStart = $from.start(depth);
-        const paraEnd = paraStart + para.content.size;
-        // Vanilla view: build before/selectedText/after independently from the
-        // doc so the result matches what the agent reads via read_document and
-        // can anchor via add_comment. Insertion-marked text never appears.
-        const before = getVanillaTextBetween(doc, paraStart, selection.from);
-        const selectedText = getVanillaTextBetween(doc, selection.from, selection.to);
-        const after = getVanillaTextBetween(doc, selection.to, paraEnd);
-        return {
-          paraId,
-          selectedText,
-          paragraphText: before + selectedText + after,
-          before,
-          after,
-        };
-      },
-
-      getComments: () => comments,
-
-      onContentChange: (listener) => {
-        contentChangeSubscribersRef.current.add(listener);
-        return () => {
-          contentChangeSubscribersRef.current.delete(listener);
-        };
-      },
-
-      onSelectionChange: (listener) => {
-        selectionChangeSubscribersRef.current.add(listener);
-        return () => {
-          selectionChangeSubscribersRef.current.delete(listener);
-        };
-      },
-    }),
-    [
-      history.state,
-      state.zoom,
-      scrollPageInfo,
-      handleSave,
-      handleDirectPrint,
-      loadParsedDocument,
-      loadBuffer,
-      comments,
-    ]
-  );
+    agentRef,
+    document: history.state,
+    historyStateRef,
+    pagedEditorRef,
+    handleSave,
+    handleDirectPrint,
+    zoom: state.zoom,
+    setZoom: (zoom: number) => setState((prev) => ({ ...prev, zoom })),
+    scrollPageInfo,
+    loadParsedDocument,
+    loadBuffer,
+    comments,
+    setComments,
+    setShowCommentsSidebar,
+    contentChangeSubscribersRef,
+    selectionChangeSubscribersRef,
+    getCachedStyleResolver,
+  });
 
   const initialSectionProperties = useMemo(
     () => getInitialSectionProperties(history.state),
@@ -2560,232 +1759,28 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
   );
   const finalSectionProperties = history.state?.package.document?.finalSectionProperties;
 
-  // Get header and footer content from document
-  const { headerContent, footerContent, firstPageHeaderContent, firstPageFooterContent } =
-    useMemo(() => {
-      const { header, footer, firstHeader, firstFooter } = resolveHeaderFooter(
-        history.state ?? null,
-        finalSectionProperties ?? initialSectionProperties
-      );
-      return {
-        headerContent: header,
-        footerContent: footer,
-        firstPageHeaderContent: firstHeader,
-        firstPageFooterContent: firstFooter,
-      };
-    }, [history.state, initialSectionProperties, finalSectionProperties]);
-
-  // Handle header/footer double-click — open editing overlay
-  // If no header/footer exists, create an empty one so the user can add content
-  const handleHeaderFooterDoubleClick = useCallback(
-    (position: 'header' | 'footer', pageNumber?: number) => {
-      const sectProps = history.state?.package?.document?.finalSectionProperties;
-      const isFirstPage = sectProps?.titlePg === true && (pageNumber ?? 1) === 1;
-      const hf = isFirstPage
-        ? position === 'header'
-          ? firstPageHeaderContent
-          : firstPageFooterContent
-        : position === 'header'
-          ? headerContent
-          : footerContent;
-      setHfEditIsFirstPage(isFirstPage);
-      if (hf) {
-        setHfEditPosition(position);
-        return;
-      }
-
-      // Create empty header/footer for docs that don't have one yet
-      if (!history.state?.package) return;
-      const pkg = history.state.package;
-      const sectionProps = pkg.document?.finalSectionProperties;
-      if (!sectionProps) return;
-
-      const hdrFtrType = isFirstPage ? 'first' : 'default';
-      const rId = `rId_new_${position}_${hdrFtrType}`;
-      const emptyHf: HeaderFooter = {
-        type: position === 'header' ? 'header' : 'footer',
-        hdrFtrType,
-        content: [{ type: 'paragraph', content: [] }],
-      };
-
-      const mapKey = position === 'header' ? 'headers' : 'footers';
-      const newMap = new Map(pkg[mapKey] ?? []);
-      newMap.set(rId, emptyHf);
-
-      const refKey = position === 'header' ? 'headerReferences' : 'footerReferences';
-      const existingRefs = sectionProps[refKey] ?? [];
-      const newRef = { type: hdrFtrType as 'default' | 'first', rId };
-
-      // Register the rel so the serializer wires up content types + doc rels (#274).
-      const existingRels = pkg.relationships;
-      const usedTargets = new Set<string>();
-      for (const rel of existingRels?.values() ?? []) {
-        if (rel.target) usedTargets.add(rel.target);
-      }
-      let targetNum = 1;
-      while (usedTargets.has(`${position}${targetNum}.xml`)) targetNum++;
-      const relType =
-        position === 'header'
-          ? 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/header'
-          : 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/footer';
-      const newRelationships = new Map(existingRels);
-      newRelationships.set(rId, {
-        id: rId,
-        type: relType,
-        target: `${position}${targetNum}.xml`,
-      });
-
-      const newDoc: Document = {
-        ...history.state,
-        package: {
-          ...pkg,
-          [mapKey]: newMap,
-          relationships: newRelationships,
-          document: pkg.document
-            ? {
-                ...pkg.document,
-                finalSectionProperties: {
-                  ...sectionProps,
-                  [refKey]: [...existingRefs, newRef],
-                },
-              }
-            : pkg.document,
-        },
-      };
-      pushDocument(newDoc);
-      setHfEditPosition(position);
-    },
-    [
-      headerContent,
-      footerContent,
-      firstPageHeaderContent,
-      firstPageFooterContent,
-      history,
-      pushDocument,
-    ]
-  );
-
-  // Handle header/footer save — update document package with edited content
-  const handleHeaderFooterSave = useCallback(
-    (
-      content: (
-        | import('@eigenpal/docx-editor-core/types/document').Paragraph
-        | import('@eigenpal/docx-editor-core/types/document').Table
-      )[]
-    ) => {
-      if (!hfEditPosition || !history.state?.package) {
-        setHfEditPosition(null);
-        return;
-      }
-
-      const pkg = history.state.package;
-      const sectionProps = pkg.document?.finalSectionProperties;
-      const refs =
-        hfEditPosition === 'header'
-          ? sectionProps?.headerReferences
-          : sectionProps?.footerReferences;
-      const targetType = hfEditIsFirstPage ? 'first' : 'default';
-      const activeRef =
-        refs?.find((r) => r.type === targetType) ??
-        refs?.find((r) => r.type === 'default') ??
-        refs?.find((r) => r.type === 'first') ??
-        refs?.[0];
-      const mapKey = hfEditPosition === 'header' ? 'headers' : 'footers';
-      const map = pkg[mapKey];
-
-      if (activeRef?.rId && map) {
-        const existing = map.get(activeRef.rId);
-        const updated: HeaderFooter = {
-          type: hfEditPosition,
-          hdrFtrType: activeRef.type as 'default' | 'first' | 'even',
-          ...existing,
-          content,
-        };
-        const newMap = new Map(map);
-        newMap.set(activeRef.rId, updated);
-
-        const newDoc: Document = {
-          ...history.state,
-          package: {
-            ...pkg,
-            [mapKey]: newMap,
-          },
-        };
-        pushDocument(newDoc);
-      }
-
-      setHfEditPosition(null);
-    },
-    [hfEditPosition, history, pushDocument]
-  );
-
-  // Handle body click while in HF editing mode — save + close
-  const handleBodyClick = useCallback(() => {
-    if (!hfEditPosition) return;
-    // Save if dirty, then close
-    const view = hfEditorRef.current?.getView();
-    if (view) {
-      const blocks = proseDocToBlocks(view.state.doc);
-      handleHeaderFooterSave(blocks);
-    } else {
-      setHfEditPosition(null);
-    }
-  }, [hfEditPosition, handleHeaderFooterSave]);
-
-  // Handle removing the header/footer entirely
-  const handleRemoveHeaderFooter = useCallback(() => {
-    if (!hfEditPosition || !history.state?.package) {
-      setHfEditPosition(null);
-      return;
-    }
-
-    const pkg = history.state.package;
-    const sectionProps = pkg.document?.finalSectionProperties;
-    const refKey = hfEditPosition === 'header' ? 'headerReferences' : 'footerReferences';
-    const mapKey = hfEditPosition === 'header' ? 'headers' : 'footers';
-    const refs = sectionProps?.[refKey];
-    const delTargetType = hfEditIsFirstPage ? 'first' : 'default';
-    const activeRef =
-      refs?.find((r) => r.type === delTargetType) ??
-      refs?.find((r) => r.type === 'default') ??
-      refs?.find((r) => r.type === 'first') ??
-      refs?.[0];
-
-    if (activeRef?.rId) {
-      const newMap = new Map(pkg[mapKey] ?? []);
-      newMap.delete(activeRef.rId);
-
-      const newRefs = (refs ?? []).filter((r) => r.rId !== activeRef.rId);
-
-      const newDoc: Document = {
-        ...history.state,
-        package: {
-          ...pkg,
-          [mapKey]: newMap,
-          document: pkg.document
-            ? {
-                ...pkg.document,
-                finalSectionProperties: {
-                  ...sectionProps,
-                  [refKey]: newRefs,
-                },
-              }
-            : pkg.document,
-        },
-      };
-      pushDocument(newDoc);
-    }
-
-    setHfEditPosition(null);
-  }, [hfEditPosition, history, pushDocument]);
-
-  // Get the DOM element for the header/footer area on the first page
-  const getHfTargetElement = useCallback((pos: 'header' | 'footer'): HTMLElement | null => {
-    const pagesContainer = containerRef.current?.querySelector('.paged-editor__pages');
-    if (!pagesContainer) return null;
-    const className = pos === 'header' ? '.layout-page-header' : '.layout-page-footer';
-    return pagesContainer.querySelector(className);
-  }, []);
+  const {
+    headerContent,
+    footerContent,
+    firstPageHeaderContent,
+    firstPageFooterContent,
+    handleHeaderFooterDoubleClick,
+    handleHeaderFooterSave,
+    handleBodyClick,
+    handleRemoveHeaderFooter,
+    getHfTargetElement,
+  } = useHeaderFooterEditing({
+    document: history.state,
+    pushDocument,
+    hfEditorRef,
+    containerRef,
+    initialSectionProperties,
+    finalSectionProperties,
+    hfEditPosition,
+    setHfEditPosition,
+    hfEditIsFirstPage,
+    setHfEditIsFirstPage,
+  });
 
   // Container styles - using overflow: auto so sticky toolbar works
   const containerStyle: CSSProperties = {
@@ -2960,6 +1955,65 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
     }
     return ids;
   }, [comments]);
+
+  // PagedEditor onSelectionChange — runs on every selection movement.
+  // Extracts the full selection state for the host callback, then walks the
+  // marks at the cursor to detect comment / tracked-change marks so the
+  // matching sidebar card opens. Comment marks are reported by either
+  // $from.marks() or by storedMarks/nodeBefore/nodeAfter at boundaries; the
+  // four sources get unioned. Resolved comments stay collapsed unless the
+  // user explicitly clicks them, so the sidebar doesn't fill with old
+  // threads as the cursor sweeps through commented text.
+  const handlePagedSelectionChange = useCallback(() => {
+    const view = pagedEditorRef.current?.getView();
+    if (!view) {
+      handleSelectionChange(null);
+      return;
+    }
+    const selectionState = extractSelectionState(view.state);
+    handleSelectionChange(selectionState);
+
+    const $from = view.state.selection.$from;
+    const marks = [
+      ...(view.state.storedMarks ?? []),
+      ...($from.nodeAfter?.marks ?? []),
+      ...($from.nodeBefore?.marks ?? []),
+      ...$from.marks(),
+    ];
+    let cursorSidebarItem: string | null = null;
+    for (const mark of marks) {
+      if (mark.type.name === 'comment' && mark.attrs.commentId != null) {
+        const commentId = mark.attrs.commentId as number;
+        if (resolvedCommentIds.has(commentId)) continue;
+        cursorSidebarItem = `comment-${commentId}`;
+        break;
+      }
+      if (
+        (mark.type.name === 'insertion' || mark.type.name === 'deletion') &&
+        mark.attrs.revisionId != null
+      ) {
+        const revId = String(mark.attrs.revisionId);
+        const prefix = `tc-${revId}-`;
+        let match = commentSidebarItems.find((i) => i.id.startsWith(prefix));
+        // The insertion side of a replacement has a different revisionId;
+        // check the alias map to find the correct sidebar card.
+        if (!match && revisionIdAliases) {
+          const aliasedId = revisionIdAliases.get(revId);
+          if (aliasedId) {
+            match = commentSidebarItems.find((i) => i.id === aliasedId);
+          }
+        }
+        if (match) {
+          cursorSidebarItem = match.id;
+          break;
+        }
+      }
+    }
+    if (cursorSidebarItem) {
+      setShowCommentsSidebar(true);
+    }
+    setExpandedSidebarItem(cursorSidebarItem);
+  }, [handleSelectionChange, resolvedCommentIds, commentSidebarItems, revisionIdAliases]);
 
   // Exclude expanded resolved comment from hide-set so its text gets highlighted
   const resolvedIdsForRender = useMemo(() => {
@@ -3304,67 +2358,7 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
                         readOnly={readOnly}
                         extensionManager={extensionManager}
                         onDocumentChange={handleDocumentChange}
-                        onSelectionChange={(_from, _to) => {
-                          // Extract full selection state from PM and use the standard handler
-                          const view = pagedEditorRef.current?.getView();
-                          if (view) {
-                            const selectionState = extractSelectionState(view.state);
-                            handleSelectionChange(selectionState);
-
-                            // Detect comment/tracked-change marks at cursor to open sidebar card.
-                            // Collect marks from all sources — inclusive:false marks aren't
-                            // reported by $from.marks() at boundaries, and empty arrays are
-                            // truthy so an OR chain would short-circuit.
-                            const $from = view.state.selection.$from;
-                            const marks = [
-                              ...(view.state.storedMarks ?? []),
-                              ...($from.nodeAfter?.marks ?? []),
-                              ...($from.nodeBefore?.marks ?? []),
-                              ...$from.marks(),
-                            ];
-                            let cursorSidebarItem: string | null = null;
-                            for (const mark of marks) {
-                              if (mark.type.name === 'comment' && mark.attrs.commentId != null) {
-                                // Skip resolved comments — they stay collapsed as a checkmark
-                                // marker unless the user explicitly clicks it. Otherwise the
-                                // sidebar fills up with old threads every time the cursor
-                                // passes through commented text.
-                                const commentId = mark.attrs.commentId as number;
-                                if (resolvedCommentIds.has(commentId)) continue;
-                                cursorSidebarItem = `comment-${commentId}`;
-                                break;
-                              }
-                              if (
-                                (mark.type.name === 'insertion' || mark.type.name === 'deletion') &&
-                                mark.attrs.revisionId != null
-                              ) {
-                                const revId = String(mark.attrs.revisionId);
-                                const prefix = `tc-${revId}-`;
-                                let match = commentSidebarItems.find((i) =>
-                                  i.id.startsWith(prefix)
-                                );
-                                // Insertion side of a replacement has a different revisionId;
-                                // check alias map to find the correct sidebar card.
-                                if (!match && revisionIdAliases) {
-                                  const aliasedId = revisionIdAliases.get(revId);
-                                  if (aliasedId) {
-                                    match = commentSidebarItems.find((i) => i.id === aliasedId);
-                                  }
-                                }
-                                if (match) {
-                                  cursorSidebarItem = match.id;
-                                  break;
-                                }
-                              }
-                            }
-                            if (cursorSidebarItem) {
-                              setShowCommentsSidebar(true);
-                            }
-                            setExpandedSidebarItem(cursorSidebarItem);
-                          } else {
-                            handleSelectionChange(null);
-                          }
-                        }}
+                        onSelectionChange={handlePagedSelectionChange}
                         externalPlugins={allExternalPlugins}
                         onReady={(ref) => {
                           const view = ref.getView();
@@ -3558,141 +2552,57 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
               )}
             </div>
 
-            {/* Hyperlink popup (Google Docs-style) */}
-            <HyperlinkPopup
-              data={hyperlinkPopupData}
-              onNavigate={handleHyperlinkPopupNavigate}
-              onCopy={handleHyperlinkPopupCopy}
-              onEdit={handleHyperlinkPopupEdit}
-              onRemove={handleHyperlinkPopupRemove}
-              onClose={handleHyperlinkPopupClose}
+            <DocxEditorOverlays
+              hyperlinkPopupData={hyperlinkPopupData}
+              onHyperlinkPopupNavigate={handleHyperlinkPopupNavigate}
+              onHyperlinkPopupCopy={handleHyperlinkPopupCopy}
+              onHyperlinkPopupEdit={handleHyperlinkPopupEdit}
+              onHyperlinkPopupRemove={handleHyperlinkPopupRemove}
+              onHyperlinkPopupClose={handleHyperlinkPopupClose}
+              contextMenu={contextMenu}
+              contextMenuItems={contextMenuItems}
+              onContextMenuAction={handleContextMenuAction}
+              onContextMenuClose={handleContextMenuClose}
+              imageContextMenu={imageContextMenu}
+              onImageWrapApply={handleImageWrapApply}
+              imageContextMenuTextActions={imageContextMenuTextActions}
+              onOpenImageProperties={handleOpenImageProperties}
               readOnly={readOnly}
             />
 
-            {/* Right-click context menu */}
-            <TextContextMenu
-              isOpen={contextMenu.isOpen}
-              position={contextMenu.position}
-              hasSelection={contextMenu.hasSelection}
-              isEditable={!readOnly}
-              items={contextMenuItems}
-              onAction={handleContextMenuAction}
-              onClose={handleContextMenuClose}
+            <DocxEditorDialogs
+              findReplace={findReplace}
+              findResultRef={findResultRef}
+              onFind={handleFind}
+              onFindNext={handleFindNext}
+              onFindPrevious={handleFindPrevious}
+              onReplace={handleReplace}
+              onReplaceAll={handleReplaceAll}
+              hyperlinkDialog={hyperlinkDialog}
+              onHyperlinkSubmit={handleHyperlinkSubmit}
+              onHyperlinkRemove={handleHyperlinkRemove}
+              tablePropsOpen={tablePropsOpen}
+              onTablePropsClose={() => setTablePropsOpen(false)}
+              pmTableContext={state.pmTableContext}
+              getActiveEditorView={getActiveEditorView}
+              splitCellDialogState={splitCellDialogState}
+              onSplitCellDialogClose={handleSplitCellDialogClose}
+              onSplitCellDialogApply={handleSplitCellDialogApply}
+              imagePositionOpen={imagePositionOpen}
+              onImagePositionClose={() => setImagePositionOpen(false)}
+              onApplyImagePosition={handleApplyImagePosition}
+              imagePropsOpen={imagePropsOpen}
+              onImagePropsClose={() => setImagePropsOpen(false)}
+              onApplyImageProperties={handleApplyImageProperties}
+              pmImageContext={state.pmImageContext}
+              showPageSetup={showPageSetup}
+              onPageSetupClose={() => setShowPageSetup(false)}
+              onPageSetupApply={handlePageSetupApply}
+              document={history.state}
+              footnotePropsOpen={footnotePropsOpen}
+              onFootnotePropsClose={() => setFootnotePropsOpen(false)}
+              onApplyFootnoteProperties={handleApplyFootnoteProperties}
             />
-
-            {/* Image-specific right-click menu — layout options + text actions */}
-            <ImageContextMenu
-              isOpen={imageContextMenu.isOpen}
-              position={imageContextMenu.position}
-              currentWrapType={imageContextMenu.currentWrapType}
-              currentCssFloat={imageContextMenu.currentCssFloat}
-              onApplyLayout={handleImageWrapApply}
-              textActions={imageContextMenuTextActions}
-              onTextAction={handleContextMenuAction}
-              onOpenProperties={handleOpenImageProperties}
-              onClose={imageContextMenu.closeMenu}
-            />
-
-            {/* Toast notifications */}
-            <Toaster position="bottom-right" />
-
-            {/* Lazy-loaded dialogs — only fetched when first opened */}
-            <Suspense fallback={null}>
-              {findReplace.state.isOpen && (
-                <FindReplaceDialog
-                  isOpen={findReplace.state.isOpen}
-                  onClose={findReplace.close}
-                  onFind={handleFind}
-                  onFindNext={handleFindNext}
-                  onFindPrevious={handleFindPrevious}
-                  onReplace={handleReplace}
-                  onReplaceAll={handleReplaceAll}
-                  initialSearchText={findReplace.state.searchText}
-                  replaceMode={findReplace.state.replaceMode}
-                  currentResult={findResultRef.current}
-                />
-              )}
-              {hyperlinkDialog.state.isOpen && (
-                <HyperlinkDialog
-                  isOpen={hyperlinkDialog.state.isOpen}
-                  onClose={hyperlinkDialog.close}
-                  onSubmit={handleHyperlinkSubmit}
-                  onRemove={hyperlinkDialog.state.isEditing ? handleHyperlinkRemove : undefined}
-                  initialData={hyperlinkDialog.state.initialData}
-                  selectedText={hyperlinkDialog.state.selectedText}
-                  isEditing={hyperlinkDialog.state.isEditing}
-                />
-              )}
-              {tablePropsOpen && (
-                <TablePropertiesDialog
-                  isOpen={tablePropsOpen}
-                  onClose={() => setTablePropsOpen(false)}
-                  onApply={(props) => {
-                    const view = getActiveEditorView();
-                    if (view) {
-                      setTableProperties(props)(view.state, view.dispatch);
-                    }
-                  }}
-                  currentProps={
-                    state.pmTableContext?.table?.attrs as Record<string, unknown> | undefined
-                  }
-                />
-              )}
-              {splitCellDialogState.isOpen && (
-                <SplitCellDialog
-                  isOpen={splitCellDialogState.isOpen}
-                  onClose={handleSplitCellDialogClose}
-                  onApply={handleSplitCellDialogApply}
-                  initialRows={splitCellDialogState.initialRows}
-                  initialCols={splitCellDialogState.initialCols}
-                  minRows={splitCellDialogState.minRows}
-                  minCols={splitCellDialogState.minCols}
-                />
-              )}
-              {imagePositionOpen && (
-                <ImagePositionDialog
-                  isOpen={imagePositionOpen}
-                  onClose={() => setImagePositionOpen(false)}
-                  onApply={handleApplyImagePosition}
-                />
-              )}
-              {imagePropsOpen && (
-                <ImagePropertiesDialog
-                  isOpen={imagePropsOpen}
-                  onClose={() => setImagePropsOpen(false)}
-                  onApply={handleApplyImageProperties}
-                  currentData={
-                    state.pmImageContext
-                      ? {
-                          alt: state.pmImageContext.alt ?? undefined,
-                          borderWidth: state.pmImageContext.borderWidth ?? undefined,
-                          borderColor: state.pmImageContext.borderColor ?? undefined,
-                          borderKind: state.pmImageContext.borderKind ?? undefined,
-                          width: state.pmImageContext.width ?? undefined,
-                          height: state.pmImageContext.height ?? undefined,
-                        }
-                      : undefined
-                  }
-                />
-              )}
-              {showPageSetup && (
-                <PageSetupDialog
-                  isOpen={showPageSetup}
-                  onClose={() => setShowPageSetup(false)}
-                  onApply={handlePageSetupApply}
-                  currentProps={history.state?.package.document?.finalSectionProperties}
-                />
-              )}
-              {footnotePropsOpen && (
-                <FootnotePropertiesDialog
-                  isOpen={footnotePropsOpen}
-                  onClose={() => setFootnotePropsOpen(false)}
-                  onApply={handleApplyFootnoteProperties}
-                  footnotePr={history.state?.package.document?.finalSectionProperties?.footnotePr}
-                  endnotePr={history.state?.package.document?.finalSectionProperties?.endnotePr}
-                />
-              )}
-            </Suspense>
             {/* InlineHeaderFooterEditor is rendered inside the editor content area (position:relative div) */}
             {/* Hidden file input for image insertion */}
             <input
