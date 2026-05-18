@@ -9,7 +9,7 @@ const monorepoRoot = path.resolve(__dirname, '../..');
 // (the workspace's published dist/) so the deployment shows the real
 // consumer experience. Core deep paths (e.g.
 // `@eigenpal/docx-editor-core/headless`) are kept aliased to source in
-// both modes — agent-use's dist references them as bare imports and
+// both modes — the agents package's dist references them as bare imports and
 // rollup can't resolve subpath exports through the workspace symlink
 // during the bundle pass.
 const usePublished = process.env.USE_PUBLISHED_PACKAGES === 'true';
@@ -61,16 +61,16 @@ export default defineConfig({
           },
           {
             find: '@eigenpal/docx-editor-agents/vue',
-            replacement: path.join(monorepoRoot, 'packages/agent-use/src/vue.ts'),
+            replacement: path.join(monorepoRoot, 'packages/agents/src/vue.ts'),
           },
           {
             find: '@eigenpal/docx-editor-agents/bridge',
-            replacement: path.join(monorepoRoot, 'packages/agent-use/src/bridge.ts'),
+            replacement: path.join(monorepoRoot, 'packages/agents/src/bridge.ts'),
           },
           // Bare @eigenpal/docx-editor-agents (e.g. for type re-exports)
           {
             find: /^@eigenpal\/docx-editor-agents$/,
-            replacement: path.join(monorepoRoot, 'packages/agent-use/src/index.ts'),
+            replacement: path.join(monorepoRoot, 'packages/agents/src/index.ts'),
           },
           ...coreAliases,
         ],

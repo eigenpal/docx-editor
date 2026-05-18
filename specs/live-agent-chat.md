@@ -58,7 +58,7 @@ The agent's comments and tracked changes appear **instantly** in the editor — 
 │  2. AGENT TOOLS  (tool definitions + handlers)               │
 │     - Tool schemas the AI can call                           │
 │     - Handlers that call into EditorBridge                   │
-│     - Lives in packages/agent-use                            │
+│     - Lives in packages/agents                            │
 └────────────┬─────────────────────────────────────────────────┘
              │ calls
 ┌────────────▼─────────────────────────────────────────────────┐
@@ -66,7 +66,7 @@ The agent's comments and tracked changes appear **instantly** in the editor — 
 │     - Connects agent tools → live editor state               │
 │     - Reads from ProseMirror doc + Document model            │
 │     - Writes comments/changes into editor state              │
-│     - Lives in packages/agent-use/bridge + packages/react    │
+│     - Lives in packages/agents/bridge + packages/react    │
 └──────────────────────────────────────────────────────────────┘
 ```
 
@@ -78,14 +78,14 @@ This means the chat component receives messages and tool results as props — it
 
 ---
 
-## Layer 3: Editor Bridge (`packages/agent-use/src/bridge.ts`)
+## Layer 3: Editor Bridge (`packages/agents/src/bridge.ts`)
 
 The bridge connects agent tool handlers to the live editor. It wraps a `DocxEditorRef` and exposes the same operations as `DocxReviewer`, but operating on the **live editor state** instead of a static Document.
 
 ### Interface
 
 ```ts
-// packages/agent-use/src/bridge.ts
+// packages/agents/src/bridge.ts
 
 import type { DocxEditorRef } from '@eigenpal/docx-editor-react';
 
@@ -220,7 +220,7 @@ interface DocxEditorRef {
 
 ---
 
-## Layer 2: Agent Tool Definitions (`packages/agent-use/src/tools/`)
+## Layer 2: Agent Tool Definitions (`packages/agents/src/tools/`)
 
 Tools are defined as **JSON schemas** (compatible with Anthropic, OpenAI, and Vercel AI SDK tool formats). Each tool has a schema + a handler function that calls into the `EditorBridge`.
 
@@ -244,7 +244,7 @@ Tools are defined as **JSON schemas** (compatible with Anthropic, OpenAI, and Ve
 ### Tool definition format
 
 ```ts
-// packages/agent-use/src/tools/types.ts
+// packages/agents/src/tools/types.ts
 
 export interface AgentToolDefinition<TInput = unknown> {
   /** Tool name (used in tool_use blocks) */
@@ -270,7 +270,7 @@ export interface AgentToolResult {
 ### Example tool definition
 
 ```ts
-// packages/agent-use/src/tools/readDocument.ts
+// packages/agents/src/tools/readDocument.ts
 
 export const readDocumentTool: AgentToolDefinition<{ fromIndex?: number; toIndex?: number }> = {
   name: 'read_document',
@@ -304,7 +304,7 @@ export const readDocumentTool: AgentToolDefinition<{ fromIndex?: number; toIndex
 ### Registry + helpers
 
 ```ts
-// packages/agent-use/src/tools/index.ts
+// packages/agents/src/tools/index.ts
 
 /** All built-in tools */
 export const agentTools: AgentToolDefinition[];
@@ -545,7 +545,7 @@ function App() {
 
 ## Implementation Plan
 
-### Phase 1: Editor Bridge (packages/agent-use + packages/react)
+### Phase 1: Editor Bridge (packages/agents + packages/react)
 
 **Goal**: Make `createEditorBridge()` work against a live `DocxEditorRef`.
 
@@ -555,12 +555,12 @@ function App() {
    - `addHighlight()` — add/remove ProseMirror `Decoration`
    - `scrollToIndex()` — scroll to paragraph by index
 
-2. **Implement `createEditorBridge()`** (packages/agent-use/bridge.ts)
+2. **Implement `createEditorBridge()`** (packages/agents/bridge.ts)
    - Read ops: call `editorRef.getDocument()` → pass body to existing `DocxReviewer` content/discovery functions
    - Write ops: call the new `DocxEditorRef` methods above
    - Selection: read from ProseMirror selection state
 
-### Phase 2: Tool Definitions (packages/agent-use)
+### Phase 2: Tool Definitions (packages/agents)
 
 **Goal**: Define all 12 tools with schemas and handlers.
 

@@ -1,5 +1,5 @@
 {
-  "name": "agent-use-demo",
+  "name": "agents-demo",
   "private": true,
   "scripts": {
     "dev": "next dev --port 3001",

@@ -4,7 +4,7 @@
   "private": true,
   "workspaces": [
     "packages/*",
-    "examples/agent-use-demo",
+    "examples/agents-demo",
     "examples/agent-chat-demo",
     "examples/astro",
     "examples/collaboration",

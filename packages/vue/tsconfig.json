@@ -20,8 +20,8 @@
     "paths": {
       "@eigenpal/docx-editor-core": ["../core/src/core.ts"],
       "@eigenpal/docx-editor-core/*": ["../core/src/*"],
-      "@eigenpal/docx-editor-agents/bridge": ["../agent-use/src/bridge.ts"],
-      "@eigenpal/docx-editor-agents/vue": ["../agent-use/src/vue.ts"]
+      "@eigenpal/docx-editor-agents/bridge": ["../agents/src/bridge.ts"],
+      "@eigenpal/docx-editor-agents/vue": ["../agents/src/vue.ts"]
     }
   },
   "include": ["src"],

@@ -39,15 +39,15 @@ export default defineConfig(async () => {
             },
             {
               find: '@eigenpal/docx-editor-agents/react',
-              replacement: path.join(monorepoRoot, 'packages/agent-use/src/react.ts'),
+              replacement: path.join(monorepoRoot, 'packages/agents/src/react.ts'),
             },
             {
               find: '@eigenpal/docx-editor-agents/server',
-              replacement: path.join(monorepoRoot, 'packages/agent-use/src/server.ts'),
+              replacement: path.join(monorepoRoot, 'packages/agents/src/server.ts'),
             },
             {
               find: /^@eigenpal\/docx-editor-agents$/,
-              replacement: path.join(monorepoRoot, 'packages/agent-use/src/index.ts'),
+              replacement: path.join(monorepoRoot, 'packages/agents/src/index.ts'),
             },
             {
               find: '@eigenpal/docx-editor-core/headless',

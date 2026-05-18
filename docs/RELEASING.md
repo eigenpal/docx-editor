@@ -10,12 +10,12 @@ Releases follow the canonical [`changesets/action@v1`](https://github.com/change
 
 ## Packages
 
-| Package                        | Path                 | Published?             |
-| ------------------------------ | -------------------- | ---------------------- |
-| `@eigenpal/docx-editor-react`  | `packages/react`     | ✅                     |
-| `@eigenpal/docx-editor-agents` | `packages/agent-use` | ✅                     |
-| `@eigenpal/docx-editor-core`   | `packages/core`      | ❌ private             |
-| `@eigenpal/docx-editor-vue`    | `packages/vue`       | ❌ private / community |
+| Package                        | Path              | Published?             |
+| ------------------------------ | ----------------- | ---------------------- |
+| `@eigenpal/docx-editor-react`  | `packages/react`  | ✅                     |
+| `@eigenpal/docx-editor-agents` | `packages/agents` | ✅                     |
+| `@eigenpal/docx-editor-core`   | `packages/core`   | ❌ private             |
+| `@eigenpal/docx-editor-vue`    | `packages/vue`    | ❌ private / community |
 
 The two published packages are in a **fixed group** in `.changeset/config.json` — they always ship the same version. A changeset only needs to declare the bump for one; the other follows automatically.
 

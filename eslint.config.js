@@ -4,7 +4,7 @@ import vueParser from 'vue-eslint-parser';
 import reactPlugin from 'eslint-plugin-react';
 import reactHooksPlugin from 'eslint-plugin-react-hooks';
 
-// Framework-isolation: keep core/react/vue/agent-use packages from cross-importing
+// Framework-isolation: keep core/react/vue/agents packages from cross-importing
 // each other's UI framework. Spec:
 //   openspec/changes/vue-editor-robust-implementation/specs/framework-isolation-lint/spec.md
 
@@ -143,8 +143,8 @@ export default [
   { files: ['packages/core/src/**/*.{ts,tsx}'], rules: restrictBoth },
 
   // Agent-use UI subpaths mirror the editor adapters.
-  { files: ['packages/agent-use/src/vue/**/*.{ts,tsx,vue}'], rules: restrictReact },
-  { files: ['packages/agent-use/src/react/**/*.{ts,tsx}'], rules: restrictVue },
+  { files: ['packages/agents/src/vue/**/*.{ts,tsx,vue}'], rules: restrictReact },
+  { files: ['packages/agents/src/react/**/*.{ts,tsx}'], rules: restrictVue },
 
   // Top-level adapter entries: vue.ts can import Vue but not React; symmetric
   // for react.ts. Mirrors how packages/{vue,react}/src/index.ts work.
@@ -153,15 +153,15 @@ export default [
   // them from also importing Vue. Without this rule a future Vue
   // import in either file would lint clean (gap caught by §10.3 audit).
   {
-    files: ['packages/agent-use/src/vue.ts', 'packages/agent-use/src/ai-sdk/vue.ts'],
+    files: ['packages/agents/src/vue.ts', 'packages/agents/src/ai-sdk/vue.ts'],
     rules: restrictReact,
   },
   {
     files: [
-      'packages/agent-use/src/react.ts',
-      'packages/agent-use/src/ai-sdk/react.ts',
-      'packages/agent-use/src/useAgentChat.ts',
-      'packages/agent-use/src/useDocxAgentTools.ts',
+      'packages/agents/src/react.ts',
+      'packages/agents/src/ai-sdk/react.ts',
+      'packages/agents/src/useAgentChat.ts',
+      'packages/agents/src/useDocxAgentTools.ts',
     ],
     rules: restrictVue,
   },
@@ -182,16 +182,16 @@ export default [
   // into src/react/.
   {
     files: [
-      'packages/agent-use/src/*.{ts,tsx}',
-      'packages/agent-use/src/{tools,ai-sdk,i18n,__tests__}/**/*.{ts,tsx}',
+      'packages/agents/src/*.{ts,tsx}',
+      'packages/agents/src/{tools,ai-sdk,i18n,__tests__}/**/*.{ts,tsx}',
     ],
     ignores: [
-      'packages/agent-use/src/react.ts',
-      'packages/agent-use/src/vue.ts',
-      'packages/agent-use/src/useAgentChat.ts',
-      'packages/agent-use/src/useDocxAgentTools.ts',
-      'packages/agent-use/src/ai-sdk/react.ts',
-      'packages/agent-use/src/ai-sdk/vue.ts',
+      'packages/agents/src/react.ts',
+      'packages/agents/src/vue.ts',
+      'packages/agents/src/useAgentChat.ts',
+      'packages/agents/src/useDocxAgentTools.ts',
+      'packages/agents/src/ai-sdk/react.ts',
+      'packages/agents/src/ai-sdk/vue.ts',
     ],
     rules: restrictBoth,
   },

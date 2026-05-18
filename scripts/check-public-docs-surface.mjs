@@ -8,8 +8,8 @@ const entries = {
   vue: collectNamedExports(resolve(root, 'packages/vue/src/index.ts')),
   reactUi: collectNamedExports(resolve(root, 'packages/react/src/ui.ts')),
   reactPluginApi: collectNamedExports(resolve(root, 'packages/react/src/plugin-api/index.ts')),
-  agentsReact: collectNamedExports(resolve(root, 'packages/agent-use/src/react.ts')),
-  agentsVue: collectNamedExports(resolve(root, 'packages/agent-use/src/vue.ts')),
+  agentsReact: collectNamedExports(resolve(root, 'packages/agents/src/react.ts')),
+  agentsVue: collectNamedExports(resolve(root, 'packages/agents/src/vue.ts')),
 };
 
 const required = {
