@@ -21,39 +21,41 @@ import {
   Suspense,
 } from 'react';
 import type { CSSProperties, ReactNode } from 'react';
-import type {
-  Document,
-  Theme,
-  HeaderFooter,
-  SectionProperties,
-} from '@eigenpal/docx-editor-core/types/document';
+import type { Document, Theme, HeaderFooter } from '@eigenpal/docx-editor-core/types/document';
 import defaultLocale from '@eigenpal/docx-editor-i18n/en.json';
 
-import {
-  ToolbarButton,
-  ToolbarSeparator,
-  type SelectionFormatting,
-  type FormattingAction,
-} from './Toolbar';
+import { ToolbarSeparator, type SelectionFormatting } from './Toolbar';
+import { CommentsSidebarToggle } from './DocxEditor/CommentsSidebarToggle';
+import { LocalizedAgentPanel } from './DocxEditor/LocalizedAgentPanel';
+import { PageIndicator } from './DocxEditor/PageIndicator';
+import { AgentPanelToggle } from './DocxEditor/AgentPanelToggle';
+import { OutlineToggleButton } from './DocxEditor/OutlineToggleButton';
+import { EditingModeDropdown } from './DocxEditor/EditingModeDropdown';
+import type { AgentPanelOptions } from './DocxEditor/types';
+import { useOutlineSidebar } from './DocxEditor/hooks/useOutlineSidebar';
+import { useKeyboardShortcuts } from './DocxEditor/hooks/useKeyboardShortcuts';
+import { useFileIO } from './DocxEditor/hooks/useFileIO';
+import { usePageSetupControls } from './DocxEditor/hooks/usePageSetupControls';
+import { useHyperlinkActions } from './DocxEditor/hooks/useHyperlinkActions';
+import { useFindReplaceBridge } from './DocxEditor/hooks/useFindReplaceBridge';
+import { useFormattingActions } from './DocxEditor/hooks/useFormattingActions';
+import { useImageActions } from './DocxEditor/hooks/useImageActions';
 import type { FontOption } from './ui/FontPicker';
 import { EditorToolbar } from './EditorToolbar';
 import { undoDepth, redoDepth } from 'prosemirror-history';
 import { pointsToHalfPoints } from './ui/FontSizePicker';
 import {
   DocumentOutline,
-  OUTLINE_BUTTON_LEFT_OFFSET,
   OUTLINE_BUTTON_RESERVED_SPACE,
   OUTLINE_RESERVED_SPACE,
 } from './DocumentOutline';
 import { SIDEBAR_DOCUMENT_SHIFT } from './sidebar/constants';
 import { UnifiedSidebar } from './UnifiedSidebar';
-import { AgentPanel } from '@eigenpal/docx-editor-agents/react';
 import { CommentMarginMarkers } from './CommentMarginMarkers';
 import { useCommentSidebarItems, type CommentCallbacks } from '../hooks/useCommentSidebarItems';
 import { useTrackedChanges } from '../hooks/useTrackedChanges';
-import type { EditorState as PMEditorState } from 'prosemirror-state';
+import { TextSelection, type EditorState as PMEditorState } from 'prosemirror-state';
 import type { ReactSidebarItem } from '../plugin-api/types';
-import type { HeadingInfo } from '@eigenpal/docx-editor-core/utils';
 import type { Comment } from '@eigenpal/docx-editor-core/types/content';
 import { ErrorBoundary, ErrorProvider } from './ErrorBoundary';
 import type { TableAction } from './ui/TableToolbar';
@@ -65,17 +67,8 @@ import { VerticalRuler } from './ui/VerticalRuler';
 import { Z_INDEX } from '../styles/zIndex';
 import { type PrintOptions } from './ui/PrintPreview';
 // Dialog hooks and utilities (static imports — lightweight, no UI)
-import {
-  useFindReplace,
-  findInDocument,
-  scrollToMatch,
-  type FindMatch,
-  type FindOptions,
-  type FindResult,
-} from './dialogs/FindReplaceDialog';
-import { useHyperlinkDialog, type HyperlinkData } from './dialogs/HyperlinkDialog';
-import type { ImagePositionData } from './dialogs/ImagePositionDialog';
-import type { ImagePropertiesData } from './dialogs/ImagePropertiesDialog';
+import { useFindReplace } from './dialogs/FindReplaceDialog';
+import { useHyperlinkDialog } from './dialogs/HyperlinkDialog';
 import {
   InlineHeaderFooterEditor,
   type InlineHeaderFooterEditorRef,
@@ -115,25 +108,16 @@ import {
   type ImageLayoutTarget,
 } from '@eigenpal/docx-editor-core/prosemirror/commands';
 import type { WrapType } from '@eigenpal/docx-editor-core/docx/wrapTypes';
-import {
-  captureInlinePositionEmu,
-  toolbarValueToLayoutTarget,
-} from '@eigenpal/docx-editor-core/layout-painter';
-import { HyperlinkPopup, type HyperlinkPopupData } from './ui/HyperlinkPopup';
-import { Toaster, toast } from 'sonner';
+import { HyperlinkPopup } from './ui/HyperlinkPopup';
+import { Toaster } from 'sonner';
 import { getBuiltinTableStyle, type TableStylePreset } from './ui/TableStyleGallery';
 import { DocumentAgent } from '@eigenpal/docx-editor-core/agent';
 import { DefaultLoadingIndicator, DefaultPlaceholder, ParseError } from './DocxEditorHelpers';
-import {
-  parseDocx,
-  injectReplyRangeMarkers,
-  injectTCReplyRangeMarkers,
-} from '@eigenpal/docx-editor-core/docx';
+import { parseDocx } from '@eigenpal/docx-editor-core/docx';
 import { type DocxInput } from '@eigenpal/docx-editor-core/utils';
 import { onFontsLoaded, loadDocumentFonts } from '@eigenpal/docx-editor-core/utils';
-import { resolveColorToHex, readDocxFileFromInput } from '@eigenpal/docx-editor-core/utils';
+import { resolveColorToHex } from '@eigenpal/docx-editor-core/utils';
 import { resolveHeaderFooter } from '@eigenpal/docx-editor-core/layout-bridge';
-import { executeCommand } from '@eigenpal/docx-editor-core/agent';
 import { useTableSelection } from '../hooks/useTableSelection';
 import { useDocumentHistory } from '../hooks/useHistory';
 import {
@@ -155,51 +139,11 @@ import { proseDocToBlocks } from '@eigenpal/docx-editor-core/prosemirror/convers
 // ProseMirror editor
 import {
   type SelectionState,
-  TextSelection,
   extractSelectionState,
-  toggleBold,
-  toggleItalic,
-  toggleUnderline,
-  toggleStrike,
-  toggleSuperscript,
-  toggleSubscript,
-  setTextColor,
-  clearTextColor,
-  setHighlight,
-  setFontSize,
-  setFontFamily,
-  setAlignment,
-  setLineSpacing,
-  toggleBulletList,
-  toggleNumberedList,
-  increaseIndent,
-  decreaseIndent,
-  setIndentLeft,
-  setIndentRight,
-  setIndentFirstLine,
-  removeTabMark,
-  increaseListLevel,
-  decreaseListLevel,
-  clearFormatting,
   applyStyle,
   createStyleResolver,
-  // Hyperlink commands
-  getHyperlinkAttrs,
-  getSelectedText,
-  findHyperlinkRangeAt,
-  setHyperlink,
-  removeHyperlink,
-  insertHyperlink,
-  // Text direction commands
-  setRtl,
-  setLtr,
-  // Page break command
-  insertPageBreak,
-  // Table of Contents command
-  generateTOC,
   // Table commands
   getTableContext,
-  insertTable,
   addRowAbove,
   addRowBelow,
   deleteRow as pmDeleteRow,
@@ -233,12 +177,6 @@ import {
 } from '@eigenpal/docx-editor-core/prosemirror';
 import { acceptChange, rejectChange } from '@eigenpal/docx-editor-core/prosemirror/commands';
 import { collectHeadings } from '@eigenpal/docx-editor-core/utils';
-import {
-  getChangedParagraphIds,
-  hasStructuralChanges,
-  hasUntrackedChanges,
-  clearTrackedChanges,
-} from '@eigenpal/docx-editor-core/prosemirror/extensions';
 
 // Paginated editor
 import { PagedEditor, type PagedEditorRef, DEFAULT_PAGE_WIDTH } from './DocxEditor/PagedEditor';
@@ -418,28 +356,7 @@ export interface DocxEditorProps {
    *  - **Headless**: omit `agentPanel`, use the toolkit directly via
    *    `useDocxAgentTools` — render the panel anywhere you want.
    */
-  agentPanel?: {
-    /** Render-prop returning the panel content. Called only when open. */
-    render: (ctx: { close: () => void }) => ReactNode;
-    /** Controlled open state. Omit for uncontrolled. */
-    open?: boolean;
-    /** Fires when toolbar button or panel close button is clicked. */
-    onOpenChange?: (open: boolean) => void;
-    /** Show the toolbar toggle button. Default: true. */
-    showToolbarButton?: boolean;
-    /** Optional badge / dot on the toolbar button. */
-    toolbarBadge?: ReactNode;
-    /** Optional panel title. Default: t('agentPanel.defaultTitle'). */
-    title?: string;
-    /** Optional panel header icon. Default: sparkle. */
-    icon?: ReactNode;
-    /** Initial panel width in px (uncontrolled). Default: 360. */
-    defaultWidth?: number;
-    /** Min drag width. Default: 280. */
-    minWidth?: number;
-    /** Max drag width. Default: 600. */
-    maxWidth?: number;
-  };
+  agentPanel?: AgentPanelOptions;
 }
 
 /**
@@ -605,356 +522,16 @@ interface EditorState {
   } | null;
 }
 
-// ============================================================================
-// EDITING MODE DROPDOWN (Google Docs-style)
-// ============================================================================
-
 export type { EditorMode } from './DocxEditor/internals/editing-modes';
-import { EDITING_MODES } from './DocxEditor/internals/editing-modes';
 import type { EditorMode } from './DocxEditor/internals/editing-modes';
-
-/**
- * Wrapper for the comments-sidebar toggle so the button title runs through
- * `t()` — `useTranslation()` only works for components rendered *inside*
- * `<LocaleProvider>`, which `DocxEditor`'s own body is not.
- */
-function CommentsSidebarToggle({ active, onClick }: { active: boolean; onClick: () => void }) {
-  const { t } = useTranslation();
-  const title = t('editor.toggleCommentsSidebar');
-  return (
-    <ToolbarButton onClick={onClick} active={active} title={title} ariaLabel={title}>
-      <MaterialSymbol name="comment" size={20} />
-    </ToolbarButton>
-  );
-}
-
-/**
- * Inner wrapper that calls `useTranslation` to forward localised labels
- * down to AgentPanel. Lives below the LocaleProvider so the context is
- * resolved.
- */
-function LocalizedAgentPanel({
-  agentPanel,
-  closed,
-  onClose,
-}: {
-  agentPanel: NonNullable<DocxEditorProps['agentPanel']>;
-  closed: boolean;
-  onClose: () => void;
-}) {
-  const { t } = useTranslation();
-  return (
-    <AgentPanel
-      title={agentPanel.title ?? t('agentPanel.defaultTitle')}
-      icon={agentPanel.icon}
-      closeLabel={t('agentPanel.close')}
-      resizeHandleLabel={t('agentPanel.resizeHandle')}
-      defaultWidth={agentPanel.defaultWidth}
-      minWidth={agentPanel.minWidth}
-      maxWidth={agentPanel.maxWidth}
-      onClose={onClose}
-      closed={closed}
-    >
-      {agentPanel.render({ close: onClose })}
-    </AgentPanel>
-  );
-}
-
-/**
- * Floating page indicator shown next to the scrollbar while the user
- * scrolls a multi-page document. Wrapped so the `{current} of {total}`
- * template runs through `t()`; `useTranslation()` only works inside
- * `<LocaleProvider>`, which `DocxEditor`'s own body is not.
- */
-function PageIndicator({
-  currentPage,
-  totalPages,
-  visible,
-}: {
-  currentPage: number;
-  totalPages: number;
-  visible: boolean;
-}) {
-  const { t } = useTranslation();
-  return (
-    <div
-      style={{
-        position: 'absolute',
-        right: 24,
-        top: '50%',
-        transform: 'translateY(-50%)',
-        backgroundColor: 'rgba(0, 0, 0, 0.7)',
-        color: 'white',
-        padding: '6px 12px',
-        borderRadius: '4px',
-        fontSize: '12px',
-        fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
-        fontWeight: 500,
-        whiteSpace: 'nowrap',
-        pointerEvents: 'none',
-        zIndex: 1000,
-        opacity: visible ? 1 : 0,
-        transition: 'opacity 0.3s ease',
-        userSelect: 'none',
-      }}
-      aria-live="polite"
-      role="status"
-    >
-      {t('viewer.pageIndicator', { current: currentPage, total: totalPages })}
-    </div>
-  );
-}
-
-function AgentPanelToggle({
-  active,
-  onClick,
-  badge,
-}: {
-  active: boolean;
-  onClick: () => void;
-  badge?: ReactNode;
-}) {
-  const { t } = useTranslation();
-  const title = t('agentPanel.toggle');
-  return (
-    <ToolbarButton onClick={onClick} active={active} title={title} ariaLabel={title}>
-      <span style={{ position: 'relative', display: 'inline-flex' }}>
-        <MaterialSymbol name="agent-sparkle" size={20} />
-        {badge != null && (
-          <span
-            data-testid="agent-panel-toggle-badge"
-            style={{
-              position: 'absolute',
-              top: -4,
-              right: -6,
-              display: 'inline-flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              minWidth: 14,
-              height: 14,
-              padding: '0 3px',
-              borderRadius: 7,
-              fontSize: 10,
-              fontWeight: 600,
-              background: '#ef4444',
-              color: '#fff',
-              lineHeight: 1,
-            }}
-          >
-            {badge}
-          </span>
-        )}
-      </span>
-    </ToolbarButton>
-  );
-}
-
-/**
- * Outline toggle — same reason as `CommentsSidebarToggle`: needs to render
- * inside `<LocaleProvider>` to see the user's `i18n` prop.
- */
-function OutlineToggleButton({
-  onClick,
-  topPx,
-  scrollLeft = 0,
-}: {
-  onClick: () => void;
-  topPx: number;
-  /** Horizontal scroll offset of the editor — button slides with the doc. */
-  scrollLeft?: number;
-}) {
-  const { t } = useTranslation();
-  return (
-    <button
-      className="docx-outline-nav"
-      onClick={onClick}
-      onMouseDown={(e) => e.stopPropagation()}
-      title={t('editor.showDocumentOutline')}
-      style={{
-        position: 'absolute',
-        // Anchor at the page's top-left and track horizontal scroll so the
-        // button doesn't pin to the viewport and overlay the doc.
-        left: OUTLINE_BUTTON_LEFT_OFFSET - scrollLeft,
-        top: topPx,
-        zIndex: 50,
-        background: 'transparent',
-        border: 'none',
-        borderRadius: '50%',
-        padding: 6,
-        cursor: 'pointer',
-        display: 'flex',
-        alignItems: 'center',
-      }}
-    >
-      <MaterialSymbol name="format_list_bulleted" size={20} style={{ color: '#444746' }} />
-    </button>
-  );
-}
-
-function EditingModeDropdown({
-  mode,
-  onModeChange,
-}: {
-  mode: EditorMode;
-  onModeChange: (mode: EditorMode) => void;
-}) {
-  const { t } = useTranslation();
-  const [isOpen, setIsOpen] = useState(false);
-  const [compact, setCompact] = useState(false);
-  const triggerRef = useRef<HTMLButtonElement>(null);
-  const dropdownRef = useRef<HTMLDivElement>(null);
-  const [pos, setPos] = useState({ top: 0, left: 0 });
-
-  const current = EDITING_MODES.find((m) => m.value === mode)!;
-
-  // Responsive: icon-only below 1400px
-  useEffect(() => {
-    const mql = window.matchMedia('(max-width: 1400px)');
-    setCompact(mql.matches);
-    const handler = (e: MediaQueryListEvent) => setCompact(e.matches);
-    mql.addEventListener('change', handler);
-    return () => mql.removeEventListener('change', handler);
-  }, []);
-
-  useEffect(() => {
-    if (!isOpen || !triggerRef.current) return;
-    const rect = triggerRef.current.getBoundingClientRect();
-    // Align dropdown to right edge of trigger so it doesn't overflow the screen
-    setPos({ top: rect.bottom + 2, left: rect.right - 220 });
-  }, [isOpen]);
-
-  useEffect(() => {
-    if (!isOpen) return;
-    const close = (e: MouseEvent) => {
-      if (
-        !triggerRef.current?.contains(e.target as Node) &&
-        !dropdownRef.current?.contains(e.target as Node)
-      ) {
-        setIsOpen(false);
-      }
-    };
-    const esc = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setIsOpen(false);
-    };
-    document.addEventListener('mousedown', close);
-    document.addEventListener('keydown', esc);
-    return () => {
-      document.removeEventListener('mousedown', close);
-      document.removeEventListener('keydown', esc);
-    };
-  }, [isOpen]);
-
-  return (
-    <div style={{ position: 'relative' }}>
-      <button
-        ref={triggerRef}
-        type="button"
-        onMouseDown={(e) => e.preventDefault()}
-        onClick={() => setIsOpen(!isOpen)}
-        title={`${t(current.labelKey)} (Ctrl+Shift+E)`}
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: compact ? 0 : 4,
-          padding: compact ? '2px 4px' : '2px 6px 2px 4px',
-          border: 'none',
-          background: isOpen ? 'var(--doc-hover, #f3f4f6)' : 'transparent',
-          borderRadius: 4,
-          cursor: 'pointer',
-          fontSize: 13,
-          fontWeight: 400,
-          color: 'var(--doc-text, #374151)',
-          whiteSpace: 'nowrap',
-          height: 28,
-        }}
-      >
-        <MaterialSymbol name={current.icon} size={18} />
-        {!compact && <span>{t(current.labelKey)}</span>}
-        <MaterialSymbol name="arrow_drop_down" size={16} />
-      </button>
-
-      {isOpen && (
-        <div
-          ref={dropdownRef}
-          onMouseDown={(e) => e.preventDefault()}
-          style={{
-            position: 'fixed',
-            top: pos.top,
-            left: pos.left,
-            backgroundColor: 'white',
-            border: '1px solid var(--doc-border, #d1d5db)',
-            borderRadius: 8,
-            boxShadow: '0 4px 12px rgba(0, 0, 0, 0.12)',
-            padding: '4px 0',
-            zIndex: 10000,
-            minWidth: 220,
-          }}
-        >
-          {EDITING_MODES.map((m) => (
-            <button
-              key={m.value}
-              type="button"
-              onMouseDown={(e) => e.preventDefault()}
-              onClick={() => {
-                onModeChange(m.value);
-                setIsOpen(false);
-              }}
-              onMouseOver={(e) => {
-                (e.currentTarget as HTMLButtonElement).style.backgroundColor =
-                  'var(--doc-hover, #f3f4f6)';
-              }}
-              onMouseOut={(e) => {
-                (e.currentTarget as HTMLButtonElement).style.backgroundColor = 'transparent';
-              }}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 10,
-                padding: '8px 12px',
-                border: 'none',
-                background: 'transparent',
-                cursor: 'pointer',
-                fontSize: 13,
-                color: 'var(--doc-text, #374151)',
-                width: '100%',
-                textAlign: 'left',
-              }}
-            >
-              <MaterialSymbol name={m.icon} size={20} />
-              <span style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>
-                <span style={{ fontWeight: 500 }}>{t(m.labelKey)}</span>
-                <span style={{ fontSize: 11, color: 'var(--doc-text-muted, #9ca3af)' }}>
-                  {t(m.descKey)}
-                </span>
-              </span>
-              {m.value === mode && (
-                <MaterialSymbol
-                  name="check"
-                  size={18}
-                  style={{ marginLeft: 'auto', color: '#1a73e8' }}
-                />
-              )}
-            </button>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
 
 // ============================================================================
 // MAIN COMPONENT
 // ============================================================================
 
-// Bumped on document load to be above all existing comment + tracked change IDs
-let nextCommentId = 1;
-const PENDING_COMMENT_ID = -1;
-
 // `injectReplyRangeMarkers` + `injectTCReplyRangeMarkers` live in
 // `@eigenpal/docx-editor-core/docx` so React + Vue share the same
 // pre-serialization range-marker injection.
-
-const EMPTY_ANCHOR_POSITIONS = new Map<string, number>();
 
 import {
   findSelectionYPosition,
@@ -966,22 +543,13 @@ import {
   getVanillaTextBetween,
   findTextInPmParagraph,
 } from './DocxEditor/internals/vanillaText';
-
-function createComment(text: string, authorName: string, parentId?: number): Comment {
-  return {
-    id: nextCommentId++,
-    author: authorName,
-    date: new Date().toISOString(),
-    content: [
-      {
-        type: 'paragraph',
-        formatting: {},
-        content: [{ type: 'run', formatting: {}, content: [{ type: 'text', text }] }],
-      },
-    ],
-    ...(parentId !== undefined && { parentId }),
-  };
-}
+import {
+  PENDING_COMMENT_ID,
+  EMPTY_ANCHOR_POSITIONS,
+  getNextCommentId,
+  bumpNextCommentIdAbove,
+  createComment,
+} from './DocxEditor/commentFactories';
 
 /**
  * DocxEditor - Complete DOCX editor component
@@ -1073,20 +641,9 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
     capturedCellRow: null as number | null,
     capturedCellCol: null as number | null,
   });
-  // Image position dialog state
-  const [imagePositionOpen, setImagePositionOpen] = useState(false);
-  // Image properties dialog state
-  const [imagePropsOpen, setImagePropsOpen] = useState(false);
-  // Footnote properties dialog state
-  const [footnotePropsOpen, setFootnotePropsOpen] = useState(false);
   // Header/footer editing state
   const [hfEditPosition, setHfEditPosition] = useState<'header' | 'footer' | null>(null);
   const [hfEditIsFirstPage, setHfEditIsFirstPage] = useState(false);
-  // Document outline sidebar state
-  const [showOutline, setShowOutline] = useState(showOutlineProp);
-  const showOutlineRef = useRef(false);
-  showOutlineRef.current = showOutline;
-  const [outlineHeadings, setHeadingInfos] = useState<HeadingInfo[]>([]);
 
   // Comments sidebar state
   const [showCommentsSidebar, setShowCommentsSidebar] = useState(false);
@@ -1274,17 +831,6 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
     };
   }, []);
 
-  // Sync outline visibility when prop changes
-  useEffect(() => {
-    setShowOutline(showOutlineProp);
-    if (showOutlineProp) {
-      const view = pagedEditorRef.current?.getView();
-      if (view) {
-        setHeadingInfos(collectHeadings(view.state.doc));
-      }
-    }
-  }, [showOutlineProp]);
-
   // History hook for undo/redo - start with null document
   const history = useDocumentHistory<Document | null>(initialDocument || null, {
     maxEntries: 100,
@@ -1303,10 +849,9 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
       setComments(bodyComments);
       setShowCommentsSidebar(true);
       commentsLoadedRef.current = true;
-      // Ensure nextCommentId is above all loaded comment IDs AND tracked change
-      // revisionIds to avoid collisions (they share the same ID space in OOXML)
+      // Bump the shared comment/revision ID counter above all loaded IDs to
+      // avoid collisions (comments and tracked changes share the OOXML ID space).
       let maxId = bodyComments.reduce((max, c) => Math.max(max, c.id), 0);
-      // Also check tracked change revisionIds from the PM document
       const view = pagedEditorRef.current?.getView();
       if (view) {
         view.state.doc.descendants((node) => {
@@ -1317,7 +862,7 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
           }
         });
       }
-      if (maxId >= nextCommentId) nextCommentId = maxId + 1;
+      bumpNextCommentIdAbove(maxId);
     }
   }, [history.state]);
 
@@ -1346,19 +891,23 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
   const containerRef = useRef<HTMLDivElement>(null);
   // Save the last known selection for restoring after toolbar interactions
   const lastSelectionRef = useRef<{ from: number; to: number } | null>(null);
-  const imageInputRef = useRef<HTMLInputElement>(null);
-  const docxInputRef = useRef<HTMLInputElement>(null);
   const editorContentRef = useRef<HTMLDivElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
-  const toolbarWrapperRef = useRef<HTMLDivElement>(null);
-  const toolbarRoRef = useRef<ResizeObserver | null>(null);
-  const [toolbarHeight, setToolbarHeight] = useState(0);
-  // Horizontal scroll offset of the editor scroll container. Used to pin the
-  // vertical ruler to the viewport's left edge during horizontal scroll
-  // (`position: sticky` won't work — it only kicks in after scrolling past the
-  // element's natural position, but we want the ruler at left=0 from the
-  // start). The horizontal ruler scrolls natively via sticky-top.
-  const [editorScrollLeft, setEditorScrollLeft] = useState(0);
+  const {
+    showOutline,
+    setShowOutline,
+    showOutlineRef,
+    outlineHeadings,
+    setHeadingInfos,
+    toolbarHeight,
+    toolbarRefCallback,
+    editorScrollLeft,
+  } = useOutlineSidebar({
+    showOutlineProp,
+    pagedEditorRef,
+    scrollContainerRef,
+    isLoading: state.isLoading,
+  });
   // Keep history.state accessible in stable callbacks without stale closures
   const historyStateRef = useRef(history.state);
   historyStateRef.current = history.state;
@@ -1389,57 +938,6 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
     visible: boolean;
   }>({ currentPage: 1, totalPages: 1, visible: false });
   const scrollFadeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  // Measure toolbar height for positioning the outline panel below it
-  const toolbarRefCallback = useCallback((el: HTMLDivElement | null) => {
-    toolbarWrapperRef.current = el;
-    // Clean up previous observer
-    if (toolbarRoRef.current) {
-      toolbarRoRef.current.disconnect();
-      toolbarRoRef.current = null;
-    }
-    if (!el) {
-      setToolbarHeight(0);
-      return;
-    }
-    setToolbarHeight(el.offsetHeight);
-    const ro = new ResizeObserver(() => {
-      setToolbarHeight(el.offsetHeight);
-    });
-    ro.observe(el);
-    toolbarRoRef.current = ro;
-  }, []);
-
-  // Cleanup ResizeObserver on unmount
-  useEffect(() => {
-    return () => {
-      toolbarRoRef.current?.disconnect();
-    };
-  }, []);
-
-  // Track horizontal scroll so the outline panel and toggle button slide
-  // with the doc instead of staying pinned. Re-runs after the loading state
-  // flips because the scroll container only mounts once the doc is ready.
-  // Updates are coalesced to one per frame — scroll events fire faster than
-  // React can re-render the whole editor tree.
-  useEffect(() => {
-    const el = scrollContainerRef.current;
-    if (!el) return;
-    let frame = 0;
-    const update = () => {
-      frame = 0;
-      setEditorScrollLeft(el.scrollLeft);
-    };
-    const onScroll = () => {
-      if (frame === 0) frame = requestAnimationFrame(update);
-    };
-    update();
-    el.addEventListener('scroll', onScroll, { passive: true });
-    return () => {
-      el.removeEventListener('scroll', onScroll);
-      if (frame !== 0) cancelAnimationFrame(frame);
-    };
-  }, [state.isLoading]);
 
   // Helper to get the active editor's view — returns HF editor view when in HF editing mode
   const getActiveEditorView = useCallback(() => {
@@ -1481,13 +979,6 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
 
   // Hyperlink dialog hook
   const hyperlinkDialog = useHyperlinkDialog();
-
-  // Page setup dialog state
-  const [showPageSetup, setShowPageSetup] = useState(false);
-  const handleOpenPageSetup = useCallback(() => setShowPageSetup(true), []);
-
-  // Hyperlink popup state (Google Docs-style floating popup on link click)
-  const [hyperlinkPopupData, setHyperlinkPopupData] = useState<HyperlinkPopupData | null>(null);
 
   // Monotonically increasing generation counter to discard stale async loads
   const loadGenerationRef = useRef(0);
@@ -1549,6 +1040,31 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
     },
     [resetForNewDocument, loadParsedDocument, onError]
   );
+
+  const {
+    imageInputRef,
+    docxInputRef,
+    handleSave,
+    handleDirectPrint,
+    handleDownloadDocument,
+    handleOpenDocument,
+    handleDocxFileChange,
+    handleInsertImageClick,
+    handleImageFileChange,
+  } = useFileIO({
+    agentRef,
+    pagedEditorRef,
+    containerRef,
+    comments,
+    documentName,
+    onSave,
+    onError,
+    onPrint,
+    onDocumentNameChange,
+    loadBuffer,
+    getActiveEditorView,
+    focusActiveEditor,
+  });
 
   // React to document/documentBuffer prop changes
   useEffect(() => {
@@ -1869,120 +1385,15 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
     },
   });
 
-  // Keyboard shortcuts for Find/Replace (Ctrl+F, Ctrl+H) and delete table selection
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      // Check for Ctrl+F (Find) or Ctrl+H (Replace)
-      const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
-      const cmdOrCtrl = isMac ? e.metaKey : e.ctrlKey;
-
-      // Delete selected table from layout selection (non-ProseMirror selection)
-      if (!cmdOrCtrl && !e.shiftKey && !e.altKey) {
-        if (e.key === 'Delete' || e.key === 'Backspace') {
-          // If full table is selected via ProseMirror CellSelection, delete it.
-          const view = pagedEditorRef.current?.getView();
-          if (view) {
-            const sel = view.state.selection as { $anchorCell?: unknown; forEachCell?: unknown };
-            const isCellSel = '$anchorCell' in sel && typeof sel.forEachCell === 'function';
-            if (isCellSel) {
-              const context = getTableContext(view.state);
-              if (context.isInTable && context.table) {
-                let totalCells = 0;
-                context.table.descendants((node) => {
-                  if (node.type.name === 'tableCell' || node.type.name === 'tableHeader') {
-                    totalCells += 1;
-                  }
-                });
-                let selectedCells = 0;
-                (sel as { forEachCell: (fn: () => void) => void }).forEachCell(() => {
-                  selectedCells += 1;
-                });
-                if (totalCells > 0 && selectedCells >= totalCells) {
-                  e.preventDefault();
-                  pmDeleteTable(view.state, view.dispatch);
-                  return;
-                }
-              }
-            }
-          }
-
-          if (tableSelection.state.tableIndex !== null) {
-            e.preventDefault();
-            tableSelection.handleAction('deleteTable');
-            return;
-          }
-        }
-      }
-
-      if (cmdOrCtrl && !e.shiftKey && !e.altKey) {
-        if (e.key.toLowerCase() === 'f') {
-          if (disableFindReplaceShortcuts) return;
-          e.preventDefault();
-          // Get selected text if any
-          const selection = window.getSelection();
-          const selectedText = selection && !selection.isCollapsed ? selection.toString() : '';
-          findReplace.openFind(selectedText);
-        } else if (e.key.toLowerCase() === 'h') {
-          if (disableFindReplaceShortcuts) return;
-          e.preventDefault();
-          // Get selected text if any
-          const selection = window.getSelection();
-          const selectedText = selection && !selection.isCollapsed ? selection.toString() : '';
-          findReplace.openReplace(selectedText);
-        } else if (e.key.toLowerCase() === 'k') {
-          e.preventDefault();
-          // Open hyperlink dialog
-          const view = pagedEditorRef.current?.getView();
-          if (view) {
-            const selectedText = getSelectedText(view.state);
-            const existingLink = getHyperlinkAttrs(view.state);
-            if (existingLink) {
-              hyperlinkDialog.openEdit({
-                url: existingLink.href,
-                displayText: selectedText,
-                tooltip: existingLink.tooltip,
-              });
-            } else {
-              hyperlinkDialog.openInsert(selectedText);
-            }
-          }
-        }
-      }
-    };
-
-    document.addEventListener('keydown', handleKeyDown);
-    return () => {
-      document.removeEventListener('keydown', handleKeyDown);
-    };
-  }, [disableFindReplaceShortcuts, findReplace, hyperlinkDialog, tableSelection]);
+  useKeyboardShortcuts({
+    pagedEditorRef,
+    disableFindReplaceShortcuts,
+    findReplace,
+    hyperlinkDialog,
+    tableSelection,
+  });
 
   // Handle table insert from toolbar
-  const handleInsertTable = useCallback(
-    (rows: number, columns: number) => {
-      const view = getActiveEditorView();
-      if (!view) return;
-      insertTable(rows, columns)(view.state, view.dispatch);
-      focusActiveEditor();
-    },
-    [getActiveEditorView, focusActiveEditor]
-  );
-
-  // Insert a page break at cursor
-  const handleInsertPageBreak = useCallback(() => {
-    const view = getActiveEditorView();
-    if (!view) return;
-    insertPageBreak(view.state, view.dispatch);
-    focusActiveEditor();
-  }, [getActiveEditorView, focusActiveEditor]);
-
-  // Insert a table of contents at cursor
-  const handleInsertTOC = useCallback(() => {
-    const view = getActiveEditorView();
-    if (!view) return;
-    generateTOC(view.state, view.dispatch);
-    focusActiveEditor();
-  }, [getActiveEditorView, focusActiveEditor]);
-
   // Toggle document outline sidebar
   const handleToggleOutline = useCallback(() => {
     setShowOutline((prev) => {
@@ -2005,231 +1416,29 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
     pagedEditorRef.current?.focus();
   }, []);
 
-  // Trigger file picker for image insert
-  const handleInsertImageClick = useCallback(() => {
-    imageInputRef.current?.click();
-  }, []);
-
-  // Handle file selection for image insert
-  const handleImageFileChange = useCallback(
-    (e: React.ChangeEvent<HTMLInputElement>) => {
-      const file = e.target.files?.[0];
-      if (!file) return;
-
-      const view = getActiveEditorView();
-      if (!view) return;
-
-      const reader = new FileReader();
-      reader.onload = () => {
-        const dataUrl = reader.result as string;
-
-        // Create an Image element to get natural dimensions
-        const img = new Image();
-        img.onload = () => {
-          let width = img.naturalWidth;
-          let height = img.naturalHeight;
-
-          // Constrain to reasonable max width (content area of US Letter page at 96dpi)
-          const maxWidth = 612; // ~6.375 inches
-          if (width > maxWidth) {
-            const scale = maxWidth / width;
-            width = maxWidth;
-            height = Math.round(height * scale);
-          }
-
-          const rId = `rId_img_${Date.now()}`;
-          const imageNode = view.state.schema.nodes.image.create({
-            src: dataUrl,
-            alt: file.name,
-            width,
-            height,
-            rId,
-            wrapType: 'inline',
-            displayMode: 'inline',
-          });
-
-          const { from } = view.state.selection;
-          const tr = view.state.tr.insert(from, imageNode);
-          view.dispatch(tr.scrollIntoView());
-          focusActiveEditor();
-        };
-        img.src = dataUrl;
-      };
-      reader.readAsDataURL(file);
-
-      // Reset the input so the same file can be selected again
-      e.target.value = '';
-    },
-    [getActiveEditorView, focusActiveEditor]
-  );
-
   // Handle shape insertion
   // Handle image wrap type change
-  const handleImageWrapType = useCallback(
-    (toolbarValue: string) => {
-      const view = getActiveEditorView();
-      if (!view || !state.pmImageContext) return;
-      const pos = state.pmImageContext.pos;
-      const node = view.state.doc.nodeAt(pos);
-      if (!node || node.type.name !== 'image') return;
-
-      // Translate the toolbar's legacy vocabulary into the PM command's
-      // `ImageLayoutTarget` so the toolbar and the right-click menu share
-      // `setImageWrapType` and its `resolveAnchorAttrs` taxonomy. The mapping
-      // lives in core so the Vue adapter doesn't have to duplicate it.
-      const target = toolbarValueToLayoutTarget(toolbarValue);
-      if (!target) return;
-
-      // For inline → anchor, capture the inline glyph's rendered offset so
-      // the new float lands at the same X/Y (Word's behavior). The core
-      // helper handles the zoom + EMU conversion uniformly.
-      let opts: { initialPositionEmu?: { horizontalEmu: number; verticalEmu: number } } | undefined;
-      if (node.attrs.wrapType === 'inline' && target !== 'inline') {
-        const inlineEl = document.querySelector(
-          `.layout-run-image[data-doc-from="${pos}"]`
-        ) as HTMLElement | null;
-        const captured = inlineEl ? captureInlinePositionEmu(inlineEl, state.zoom) : undefined;
-        if (captured) opts = { initialPositionEmu: captured };
-      }
-
-      setImageWrapType(pos, target, opts)(view.state, view.dispatch);
-      focusActiveEditor();
-    },
-    [getActiveEditorView, focusActiveEditor, state.pmImageContext, state.zoom]
-  );
-
-  // Handle image transform (rotate/flip)
-  const handleImageTransform = useCallback(
-    (action: 'rotateCW' | 'rotateCCW' | 'flipH' | 'flipV') => {
-      const view = getActiveEditorView();
-      if (!view || !state.pmImageContext) return;
-
-      const pos = state.pmImageContext.pos;
-      const node = view.state.doc.nodeAt(pos);
-      if (!node || node.type.name !== 'image') return;
-
-      const currentTransform = (node.attrs.transform as string) || '';
-
-      // Parse current rotation and flip state
-      const rotateMatch = currentTransform.match(/rotate\((-?\d+(?:\.\d+)?)deg\)/);
-      let rotation = rotateMatch ? parseFloat(rotateMatch[1]) : 0;
-      let hasFlipH = /scaleX\(-1\)/.test(currentTransform);
-      let hasFlipV = /scaleY\(-1\)/.test(currentTransform);
-
-      switch (action) {
-        case 'rotateCW':
-          rotation = (rotation + 90) % 360;
-          break;
-        case 'rotateCCW':
-          rotation = (rotation - 90 + 360) % 360;
-          break;
-        case 'flipH':
-          hasFlipH = !hasFlipH;
-          break;
-        case 'flipV':
-          hasFlipV = !hasFlipV;
-          break;
-      }
-
-      // Build new transform string
-      const parts: string[] = [];
-      if (rotation !== 0) parts.push(`rotate(${rotation}deg)`);
-      if (hasFlipH) parts.push('scaleX(-1)');
-      if (hasFlipV) parts.push('scaleY(-1)');
-      const newTransform = parts.length > 0 ? parts.join(' ') : null;
-
-      const tr = view.state.tr.setNodeMarkup(pos, undefined, {
-        ...node.attrs,
-        transform: newTransform,
-      });
-      view.dispatch(tr.scrollIntoView());
-      focusActiveEditor();
-    },
-    [getActiveEditorView, focusActiveEditor, state.pmImageContext]
-  );
-
-  // Apply image position changes
-  const handleApplyImagePosition = useCallback(
-    (data: ImagePositionData) => {
-      const view = getActiveEditorView();
-      if (!view || !state.pmImageContext) return;
-
-      const pos = state.pmImageContext.pos;
-      const node = view.state.doc.nodeAt(pos);
-      if (!node || node.type.name !== 'image') return;
-
-      const tr = view.state.tr.setNodeMarkup(pos, undefined, {
-        ...node.attrs,
-        position: {
-          horizontal: data.horizontal,
-          vertical: data.vertical,
-        },
-        distTop: data.distTop ?? node.attrs.distTop,
-        distBottom: data.distBottom ?? node.attrs.distBottom,
-        distLeft: data.distLeft ?? node.attrs.distLeft,
-        distRight: data.distRight ?? node.attrs.distRight,
-      });
-      view.dispatch(tr.scrollIntoView());
-      focusActiveEditor();
-    },
-    [getActiveEditorView, focusActiveEditor, state.pmImageContext]
-  );
-
-  // Open image properties dialog
-  const handleOpenImageProperties = useCallback(() => {
-    setImagePropsOpen(true);
-  }, []);
-
-  // Apply image properties (alt text + border)
-  const handleApplyImageProperties = useCallback(
-    (data: ImagePropertiesData) => {
-      const view = getActiveEditorView();
-      if (!view || !state.pmImageContext) return;
-
-      const pos = state.pmImageContext.pos;
-      const node = view.state.doc.nodeAt(pos);
-      if (!node || node.type.name !== 'image') return;
-
-      const tr = view.state.tr.setNodeMarkup(pos, undefined, {
-        ...node.attrs,
-        alt: data.alt ?? null,
-        borderWidth: data.borderWidth ?? null,
-        borderColor: data.borderColor ?? null,
-        borderKind: data.borderKind ?? null,
-        width: data.width ?? null,
-        height: data.height ?? null,
-      });
-      view.dispatch(tr.scrollIntoView());
-      focusActiveEditor();
-    },
-    [getActiveEditorView, focusActiveEditor, state.pmImageContext]
-  );
-
-  // Handle footnote/endnote properties update
-  const handleApplyFootnoteProperties = useCallback(
-    (
-      footnotePr: import('@eigenpal/docx-editor-core/types/document').FootnoteProperties,
-      endnotePr: import('@eigenpal/docx-editor-core/types/document').EndnoteProperties
-    ) => {
-      if (!history.state?.package) return;
-      const newDoc = {
-        ...history.state.package.document,
-        finalSectionProperties: {
-          ...history.state.package.document.finalSectionProperties,
-          footnotePr,
-          endnotePr,
-        },
-      };
-      pushDocument({
-        ...history.state,
-        package: {
-          ...history.state.package,
-          document: newDoc,
-        },
-      });
-    },
-    [history, pushDocument]
-  );
+  const {
+    imagePositionOpen,
+    setImagePositionOpen,
+    imagePropsOpen,
+    setImagePropsOpen,
+    footnotePropsOpen,
+    setFootnotePropsOpen,
+    handleImageWrapType,
+    handleImageTransform,
+    handleApplyImagePosition,
+    handleOpenImageProperties,
+    handleApplyImageProperties,
+    handleApplyFootnoteProperties,
+  } = useImageActions({
+    document: history.state,
+    pmImageContext: state.pmImageContext,
+    zoom: state.zoom,
+    getActiveEditorView,
+    focusActiveEditor,
+    pushDocument,
+  });
 
   const openSplitCellDialog = useCallback(() => {
     const view = getActiveEditorView();
@@ -2469,174 +1678,16 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
   );
 
   // Handle formatting action from toolbar
-  const handleFormat = useCallback(
-    (action: FormattingAction) => {
-      const view = getActiveEditorView();
-      if (!view) return;
-
-      // Focus editor first to ensure we can dispatch commands
-      view.focus();
-
-      // Restore selection if it was lost during toolbar interaction
-      // This happens when user clicks on dropdown menus (font picker, style picker, etc.)
-      // Only restore for the body editor — HF editor manages its own selection
-      const isBodyEditor = view === pagedEditorRef.current?.getView();
-      const { from, to } = view.state.selection;
-      const savedSelection = lastSelectionRef.current;
-
-      if (
-        isBodyEditor &&
-        savedSelection &&
-        (from !== savedSelection.from || to !== savedSelection.to)
-      ) {
-        // Selection was lost (focus moved to dropdown portal) - restore it
-        try {
-          const tr = view.state.tr.setSelection(
-            TextSelection.create(view.state.doc, savedSelection.from, savedSelection.to)
-          );
-          view.dispatch(tr);
-        } catch (e) {
-          // If restoration fails (e.g., positions are invalid after doc change), continue with current selection
-          console.warn('Could not restore selection:', e);
-        }
-      }
-
-      // Handle simple toggle actions
-      if (action === 'bold') {
-        toggleBold(view.state, view.dispatch);
-        return;
-      }
-      if (action === 'italic') {
-        toggleItalic(view.state, view.dispatch);
-        return;
-      }
-      if (action === 'underline') {
-        toggleUnderline(view.state, view.dispatch);
-        return;
-      }
-      if (action === 'strikethrough') {
-        toggleStrike(view.state, view.dispatch);
-        return;
-      }
-      if (action === 'superscript') {
-        toggleSuperscript(view.state, view.dispatch);
-        return;
-      }
-      if (action === 'subscript') {
-        toggleSubscript(view.state, view.dispatch);
-        return;
-      }
-      if (action === 'bulletList') {
-        toggleBulletList(view.state, view.dispatch);
-        return;
-      }
-      if (action === 'numberedList') {
-        toggleNumberedList(view.state, view.dispatch);
-        return;
-      }
-      if (action === 'indent') {
-        // Try list indent first, then paragraph indent
-        if (!increaseListLevel(view.state, view.dispatch)) {
-          increaseIndent()(view.state, view.dispatch);
-        }
-        return;
-      }
-      if (action === 'outdent') {
-        // Try list outdent first, then paragraph outdent
-        if (!decreaseListLevel(view.state, view.dispatch)) {
-          decreaseIndent()(view.state, view.dispatch);
-        }
-        return;
-      }
-      if (action === 'clearFormatting') {
-        clearFormatting(view.state, view.dispatch);
-        return;
-      }
-      if (action === 'setRtl') {
-        setRtl(view.state, view.dispatch);
-        return;
-      }
-      if (action === 'setLtr') {
-        setLtr(view.state, view.dispatch);
-        return;
-      }
-      if (action === 'insertLink') {
-        // Get the selected text for the hyperlink dialog
-        const selectedText = getSelectedText(view.state);
-        // Check if we're editing an existing link
-        const existingLink = getHyperlinkAttrs(view.state);
-        if (existingLink) {
-          hyperlinkDialog.openEdit({
-            url: existingLink.href,
-            displayText: selectedText,
-            tooltip: existingLink.tooltip,
-          });
-        } else {
-          hyperlinkDialog.openInsert(selectedText);
-        }
-        return;
-      }
-
-      // Handle object-based actions
-      if (typeof action === 'object') {
-        switch (action.type) {
-          case 'alignment':
-            setAlignment(action.value)(view.state, view.dispatch);
-            break;
-          case 'textColor': {
-            // action.value can be a ColorValue object or a string like "#FF0000"
-            const colorVal = action.value;
-            if (typeof colorVal === 'string') {
-              setTextColor({ rgb: colorVal.replace('#', '') })(view.state, view.dispatch);
-            } else if (colorVal.auto) {
-              // "Automatic" — remove text color
-              clearTextColor(view.state, view.dispatch);
-            } else {
-              setTextColor(colorVal)(view.state, view.dispatch);
-            }
-            break;
-          }
-          case 'highlightColor': {
-            // Convert hex to OOXML named highlight value (e.g., 'FFFF00' → 'yellow')
-            const highlightName = action.value ? mapHexToHighlightName(action.value) : '';
-            setHighlight(highlightName || action.value)(view.state, view.dispatch);
-            break;
-          }
-          case 'fontSize':
-            // Convert points to half-points (OOXML uses half-points for font sizes)
-            setFontSize(pointsToHalfPoints(action.value))(view.state, view.dispatch);
-            break;
-          case 'fontFamily':
-            setFontFamily(action.value)(view.state, view.dispatch);
-            break;
-          case 'lineSpacing':
-            setLineSpacing(action.value)(view.state, view.dispatch);
-            break;
-          case 'applyStyle': {
-            // Resolve style to get its formatting properties
-            // Use ref to avoid stale closure (handleFormat has [] deps)
-            const currentDoc = historyStateRef.current;
-            const styleResolver = currentDoc?.package.styles
-              ? getCachedStyleResolver(currentDoc.package.styles)
-              : null;
-
-            if (styleResolver) {
-              const resolved = styleResolver.resolveParagraphStyle(action.value);
-              applyStyle(action.value, {
-                paragraphFormatting: resolved.paragraphFormatting,
-                runFormatting: resolved.runFormatting,
-              })(view.state, view.dispatch);
-            } else {
-              // No styles available, just set the styleId
-              applyStyle(action.value)(view.state, view.dispatch);
-            }
-            break;
-          }
-        }
-      }
-    },
-    [getActiveEditorView, openSplitCellDialog]
-  );
+  const { handleFormat, handleInsertTable, handleInsertPageBreak, handleInsertTOC } =
+    useFormattingActions({
+      getActiveEditorView,
+      focusActiveEditor,
+      pagedEditorRef,
+      lastSelectionRef,
+      hyperlinkDialog,
+      historyStateRef,
+      getCachedStyleResolver,
+    });
 
   const handleSplitCellDialogClose = useCallback(() => {
     setSplitCellDialogState((prev) => ({
@@ -2683,115 +1734,21 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
     setState((prev) => ({ ...prev, zoom }));
   }, []);
 
-  // Handle hyperlink dialog submit
-  const handleHyperlinkSubmit = useCallback(
-    (data: HyperlinkData) => {
-      const view = getActiveEditorView();
-      if (!view) return;
-
-      const url = data.url || '';
-      const tooltip = data.tooltip;
-
-      // Check if we have a selection
-      const { empty } = view.state.selection;
-
-      if (empty && data.displayText) {
-        // No selection but display text provided - insert new linked text
-        insertHyperlink(data.displayText, url, tooltip)(view.state, view.dispatch);
-      } else if (!empty) {
-        // Have selection - apply hyperlink to it
-        setHyperlink(url, tooltip)(view.state, view.dispatch);
-      } else if (data.displayText) {
-        // Empty selection but display text provided
-        insertHyperlink(data.displayText, url, tooltip)(view.state, view.dispatch);
-      }
-
-      hyperlinkDialog.close();
-      focusActiveEditor();
-    },
-    [hyperlinkDialog, getActiveEditorView, focusActiveEditor]
-  );
-
-  // Shared: remove hyperlink mark and refocus editor
-  const doRemoveHyperlink = useCallback(() => {
-    const view = getActiveEditorView();
-    if (!view) return;
-    removeHyperlink(view.state, view.dispatch);
-    focusActiveEditor();
-  }, [getActiveEditorView, focusActiveEditor]);
-
-  // Handle hyperlink removal (from dialog)
-  const handleHyperlinkRemove = useCallback(() => {
-    doRemoveHyperlink();
-    hyperlinkDialog.close();
-  }, [hyperlinkDialog, doRemoveHyperlink]);
-
-  // Handle hyperlink popup (Google Docs-style)
-  const handleHyperlinkClick = useCallback(
-    (data: HyperlinkPopupData) => setHyperlinkPopupData(data),
-    []
-  );
-
-  const handleHyperlinkPopupNavigate = useCallback((href: string) => {
-    window.open(href, '_blank', 'noopener,noreferrer');
-  }, []);
-
-  const handleHyperlinkPopupCopy = useCallback((href: string) => {
-    navigator.clipboard.writeText(href).catch(() => {
-      // Fallback for older browsers
-      const textarea = document.createElement('textarea');
-      textarea.value = href;
-      textarea.style.position = 'fixed';
-      textarea.style.opacity = '0';
-      document.body.appendChild(textarea);
-      textarea.select();
-      document.execCommand('copy');
-      document.body.removeChild(textarea);
-    });
-  }, []);
-
-  const handleHyperlinkPopupEdit = useCallback(
-    (displayText: string, href: string) => {
-      const view = getActiveEditorView();
-      if (!view) return;
-
-      const hit = findHyperlinkRangeAt(view.state);
-      if (hit) {
-        const hlType = view.state.schema.marks.hyperlink;
-        const { $from } = view.state.selection;
-        const newMark = hlType.create({ href, tooltip: hit.mark.attrs.tooltip });
-        const textNode = view.state.schema.text(displayText, [
-          ...$from.marks().filter((m) => m.type !== hlType),
-          newMark,
-        ]);
-        const tr = view.state.tr.replaceWith(hit.start, hit.end, textNode);
-        view.dispatch(tr.scrollIntoView());
-      }
-
-      setHyperlinkPopupData(null);
-      focusActiveEditor();
-    },
-    [getActiveEditorView, focusActiveEditor]
-  );
-
-  const handleHyperlinkPopupRemove = useCallback(() => {
-    const view = getActiveEditorView();
-    if (!view) return;
-
-    const hit = findHyperlinkRangeAt(view.state, hyperlinkPopupData?.href);
-    if (!hit) return;
-
-    const hlType = view.state.schema.marks.hyperlink;
-    view.dispatch(view.state.tr.removeMark(hit.start, hit.end, hlType).scrollIntoView());
-
-    setHyperlinkPopupData(null);
-    focusActiveEditor();
-    toast('Link removed');
-  }, [getActiveEditorView, focusActiveEditor, hyperlinkPopupData]);
-
-  const handleHyperlinkPopupClose = useCallback(() => {
-    setHyperlinkPopupData(null);
-  }, []);
+  const {
+    hyperlinkPopupData,
+    handleHyperlinkSubmit,
+    handleHyperlinkRemove,
+    handleHyperlinkClick,
+    handleHyperlinkPopupNavigate,
+    handleHyperlinkPopupCopy,
+    handleHyperlinkPopupEdit,
+    handleHyperlinkPopupRemove,
+    handleHyperlinkPopupClose,
+  } = useHyperlinkActions({
+    hyperlinkDialog,
+    getActiveEditorView,
+    focusActiveEditor,
+  });
 
   // Image-specific right-click menu state.
   const imageContextMenu = useImageContextMenu();
@@ -3067,108 +2024,25 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
   );
 
   // Handle margin changes from rulers
-  const createMarginHandler = useCallback(
-    (property: 'marginLeft' | 'marginRight' | 'marginTop' | 'marginBottom') =>
-      (marginTwips: number) => {
-        if (!history.state || readOnly) return;
-        const newDoc = {
-          ...history.state,
-          package: {
-            ...history.state.package,
-            document: {
-              ...history.state.package.document,
-              finalSectionProperties: {
-                ...history.state.package.document.finalSectionProperties,
-                [property]: marginTwips,
-              },
-            },
-          },
-        };
-        handleDocumentChange(newDoc);
-      },
-    [history.state, readOnly, handleDocumentChange]
-  );
-
-  const handleLeftMarginChange = useMemo(
-    () => createMarginHandler('marginLeft'),
-    [createMarginHandler]
-  );
-  const handleRightMarginChange = useMemo(
-    () => createMarginHandler('marginRight'),
-    [createMarginHandler]
-  );
-  const handleTopMarginChange = useMemo(
-    () => createMarginHandler('marginTop'),
-    [createMarginHandler]
-  );
-  const handleBottomMarginChange = useMemo(
-    () => createMarginHandler('marginBottom'),
-    [createMarginHandler]
-  );
-
-  // Page setup apply handler
-  const handlePageSetupApply = useCallback(
-    (props: Partial<SectionProperties>) => {
-      if (!history.state || readOnly) return;
-      const newDoc = {
-        ...history.state,
-        package: {
-          ...history.state.package,
-          document: {
-            ...history.state.package.document,
-            finalSectionProperties: {
-              ...history.state.package.document.finalSectionProperties,
-              ...props,
-            },
-          },
-        },
-      };
-      handleDocumentChange(newDoc);
-    },
-    [history.state, readOnly, handleDocumentChange]
-  );
-
-  // Paragraph indent handlers (for ruler)
-  const handleIndentLeftChange = useCallback(
-    (twips: number) => {
-      const view = getActiveEditorView();
-      if (!view) return;
-      setIndentLeft(twips)(view.state, view.dispatch);
-    },
-    [getActiveEditorView]
-  );
-
-  const handleIndentRightChange = useCallback(
-    (twips: number) => {
-      const view = getActiveEditorView();
-      if (!view) return;
-      setIndentRight(twips)(view.state, view.dispatch);
-    },
-    [getActiveEditorView]
-  );
-
-  const handleFirstLineIndentChange = useCallback(
-    (twips: number) => {
-      const view = getActiveEditorView();
-      if (!view) return;
-      // If twips is negative, it's a hanging indent
-      if (twips < 0) {
-        setIndentFirstLine(-twips, true)(view.state, view.dispatch);
-      } else {
-        setIndentFirstLine(twips, false)(view.state, view.dispatch);
-      }
-    },
-    [getActiveEditorView]
-  );
-
-  const handleTabMarkRemove = useCallback(
-    (positionTwips: number) => {
-      const view = getActiveEditorView();
-      if (!view) return;
-      removeTabMark(positionTwips)(view.state, view.dispatch);
-    },
-    [getActiveEditorView]
-  );
+  const {
+    showPageSetup,
+    setShowPageSetup,
+    handleOpenPageSetup,
+    handleLeftMarginChange,
+    handleRightMarginChange,
+    handleTopMarginChange,
+    handleBottomMarginChange,
+    handlePageSetupApply,
+    handleIndentLeftChange,
+    handleIndentRightChange,
+    handleFirstLineIndentChange,
+    handleTabMarkRemove,
+  } = usePageSetupControls({
+    document: history.state,
+    readOnly,
+    handleDocumentChange,
+    getActiveEditorView,
+  });
 
   // Scroll-based page tracking: calculate current page from scroll position.
   // Re-attaches when the scroll container mounts (after loading completes).
@@ -3224,69 +2098,6 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
   }, [scrollContainerEl]);
 
   // Handle save
-  const handleSave = useCallback(
-    async (options?: { selective?: boolean }): Promise<ArrayBuffer | null> => {
-      if (!agentRef.current) return null;
-
-      try {
-        const agentDoc = agentRef.current.getDocument();
-
-        // Get the document from the PM editor state — this runs fromProseDoc which
-        // converts PM comment marks into commentRangeStart/End in the document body.
-        // The agent's internal document has the original parsed content and won't
-        // include markers for newly added comments.
-        const pmDoc = pagedEditorRef.current?.getDocument();
-        if (pmDoc?.package?.document) {
-          agentDoc.package.document.content = pmDoc.package.document.content;
-        }
-
-        // Sync React comments state (including new replies) back to the document model
-        agentDoc.package.document.comments = comments;
-
-        // Inject commentRangeStart/End for reply comments that share the parent's range.
-        // Pages/Word require every comment (including replies) to have range markers in document.xml.
-        injectReplyRangeMarkers(agentDoc.package.document.content, comments);
-        // Also inject range markers for comments that reply to tracked changes.
-        injectTCReplyRangeMarkers(agentDoc.package.document.content, comments);
-
-        // Build selective save options from change tracker state
-        const useSelective = options?.selective !== false;
-        const view = pagedEditorRef.current?.getView();
-        let selectiveOptions: Parameters<typeof agentRef.current.toBuffer>[0] = undefined;
-
-        if (useSelective && view) {
-          const editorState = view.state;
-          // Force full repack if any reply comments exist (both comment replies and
-          // tracked-change replies need range markers injected into document.xml,
-          // which selective save can't handle since the affected paragraphs may not
-          // be in changedParaIds)
-          const hasInjectedReplies = comments.some((c) => c.parentId != null);
-          selectiveOptions = {
-            selective: {
-              changedParaIds: getChangedParagraphIds(editorState),
-              structuralChange: hasStructuralChanges(editorState) || hasInjectedReplies,
-              hasUntrackedChanges: hasUntrackedChanges(editorState),
-            },
-          };
-        }
-
-        const buffer = await agentRef.current.toBuffer(selectiveOptions);
-
-        // Clear change tracker after successful save
-        if (view) {
-          view.dispatch(clearTrackedChanges(view.state));
-        }
-
-        onSave?.(buffer);
-        return buffer;
-      } catch (error) {
-        onError?.(error instanceof Error ? error : new Error('Failed to save document'));
-        return null;
-      }
-    },
-    [onSave, onError, comments]
-  );
-
   // Handle error from editor
   const handleEditorError = useCallback(
     (error: Error) => {
@@ -3295,264 +2106,19 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
     [onError]
   );
 
-  const handleDirectPrint = useCallback(() => {
-    // Find the pages container and clone its content into a clean print window
-    const pagesEl = containerRef.current?.querySelector('.paged-editor__pages');
-    if (!pagesEl) {
-      window.print();
-      onPrint?.();
-      return;
-    }
-
-    const printWindow = window.open('', '_blank');
-    if (!printWindow) {
-      // Popup blocked — fall back to window.print()
-      window.print();
-      onPrint?.();
-      return;
-    }
-
-    // Collect all @font-face rules from the current page
-    const fontFaceRules: string[] = [];
-    for (const sheet of Array.from(document.styleSheets)) {
-      try {
-        for (const rule of Array.from(sheet.cssRules)) {
-          if (rule instanceof CSSFontFaceRule) {
-            fontFaceRules.push(rule.cssText);
-          }
-        }
-      } catch {
-        // Cross-origin stylesheets can't be read — skip
-      }
-    }
-
-    // Clone pages and remove transforms/shadows
-    const pagesClone = pagesEl.cloneNode(true) as HTMLElement;
-    pagesClone.style.cssText = 'display: block; margin: 0; padding: 0;';
-    for (const page of Array.from(pagesClone.querySelectorAll('.layout-page'))) {
-      const el = page as HTMLElement;
-      el.style.boxShadow = 'none';
-      el.style.margin = '0';
-    }
-
-    printWindow.document.write(`<!DOCTYPE html>
-<html><head><title>Print</title>
-<style>
-${fontFaceRules.join('\n')}
-* { margin: 0; padding: 0; }
-body { background: white; }
-.layout-page { break-after: page; }
-.layout-page:last-child { break-after: auto; }
-@page { margin: 0; size: auto; }
-</style>
-</head><body>${pagesClone.outerHTML}</body></html>`);
-    printWindow.document.close();
-
-    // Wait for fonts/images then print
-    printWindow.onload = () => {
-      printWindow.print();
-      printWindow.close();
-    };
-
-    // Fallback if onload doesn't fire (some browsers)
-    setTimeout(() => {
-      if (!printWindow.closed) {
-        printWindow.print();
-        printWindow.close();
-      }
-    }, 1000);
-
-    onPrint?.();
-  }, [onPrint]);
-
-  const handleDownloadDocument = useCallback(async () => {
-    const buffer = await handleSave();
-    if (!buffer) return;
-    const blob = new Blob([buffer], {
-      type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-    });
-    const url = URL.createObjectURL(blob);
-    const a = window.document.createElement('a');
-    a.href = url;
-    a.download = `${(documentName?.trim() || 'document').replace(/\.docx$/i, '')}.docx`;
-    a.click();
-    // Defer revoke so Safari has time to start the download.
-    setTimeout(() => URL.revokeObjectURL(url), 0);
-  }, [handleSave, documentName]);
-
-  const handleOpenDocument = useCallback(() => {
-    docxInputRef.current?.click();
-  }, []);
-
-  const handleDocxFileChange = useCallback(
-    async (event: React.ChangeEvent<HTMLInputElement>) => {
-      try {
-        const result = await readDocxFileFromInput(event.nativeEvent);
-        if (!result) return;
-        await loadBuffer(result.buffer);
-        onDocumentNameChange?.(result.name);
-      } catch (error) {
-        onError?.(error instanceof Error ? error : new Error('Failed to open document'));
-      }
-    },
-    [loadBuffer, onDocumentNameChange, onError]
-  );
-
-  // ============================================================================
-  // FIND/REPLACE HANDLERS
-  // ============================================================================
-
-  // Store the current find result for navigation
-  const findResultRef = useRef<FindResult | null>(null);
-
-  // Handle find operation
-  const handleFind = useCallback(
-    (searchText: string, options: FindOptions): FindResult | null => {
-      if (!history.state || !searchText.trim()) {
-        findResultRef.current = null;
-        return null;
-      }
-
-      const matches = findInDocument(history.state, searchText, options);
-      const result: FindResult = {
-        matches,
-        totalCount: matches.length,
-        currentIndex: 0,
-      };
-
-      findResultRef.current = result;
-      findReplace.setMatches(matches, 0);
-
-      // Scroll to first match
-      if (matches.length > 0 && containerRef.current) {
-        scrollToMatch(containerRef.current, matches[0]);
-      }
-
-      return result;
-    },
-    [history.state, findReplace]
-  );
-
-  // Handle find next
-  const handleFindNext = useCallback((): FindMatch | null => {
-    if (!findResultRef.current || findResultRef.current.matches.length === 0) {
-      return null;
-    }
-
-    const newIndex = findReplace.goToNextMatch();
-    const match = findResultRef.current.matches[newIndex];
-
-    // Scroll to the match
-    if (match && containerRef.current) {
-      scrollToMatch(containerRef.current, match);
-    }
-
-    return match || null;
-  }, [findReplace]);
-
-  // Handle find previous
-  const handleFindPrevious = useCallback((): FindMatch | null => {
-    if (!findResultRef.current || findResultRef.current.matches.length === 0) {
-      return null;
-    }
-
-    const newIndex = findReplace.goToPreviousMatch();
-    const match = findResultRef.current.matches[newIndex];
-
-    // Scroll to the match
-    if (match && containerRef.current) {
-      scrollToMatch(containerRef.current, match);
-    }
-
-    return match || null;
-  }, [findReplace]);
-
-  // Handle replace current match
-  const handleReplace = useCallback(
-    (replaceText: string): boolean => {
-      if (!history.state || !findResultRef.current || findResultRef.current.matches.length === 0) {
-        return false;
-      }
-
-      const currentMatch = findResultRef.current.matches[findResultRef.current.currentIndex];
-      if (!currentMatch) return false;
-
-      // Execute replace command
-      try {
-        const newDoc = executeCommand(history.state, {
-          type: 'replaceText',
-          range: {
-            start: {
-              paragraphIndex: currentMatch.paragraphIndex,
-              offset: currentMatch.startOffset,
-            },
-            end: {
-              paragraphIndex: currentMatch.paragraphIndex,
-              offset: currentMatch.endOffset,
-            },
-          },
-          text: replaceText,
-        });
-
-        handleDocumentChange(newDoc);
-        return true;
-      } catch (error) {
-        console.error('Replace failed:', error);
-        return false;
-      }
-    },
-    [history.state, handleDocumentChange]
-  );
-
-  // Handle replace all matches
-  const handleReplaceAll = useCallback(
-    (searchText: string, replaceText: string, options: FindOptions): number => {
-      if (!history.state || !searchText.trim()) {
-        return 0;
-      }
-
-      // Find all matches first
-      const matches = findInDocument(history.state, searchText, options);
-      if (matches.length === 0) return 0;
-
-      // Replace from end to start to maintain correct indices
-      let doc = history.state;
-      const sortedMatches = [...matches].sort((a, b) => {
-        if (a.paragraphIndex !== b.paragraphIndex) {
-          return b.paragraphIndex - a.paragraphIndex;
-        }
-        return b.startOffset - a.startOffset;
-      });
-
-      for (const match of sortedMatches) {
-        try {
-          doc = executeCommand(doc, {
-            type: 'replaceText',
-            range: {
-              start: {
-                paragraphIndex: match.paragraphIndex,
-                offset: match.startOffset,
-              },
-              end: {
-                paragraphIndex: match.paragraphIndex,
-                offset: match.endOffset,
-              },
-            },
-            text: replaceText,
-          });
-        } catch (error) {
-          console.error('Replace failed for match:', match, error);
-        }
-      }
-
-      handleDocumentChange(doc);
-      findResultRef.current = null;
-      findReplace.setMatches([], 0);
-
-      return matches.length;
-    },
-    [history.state, handleDocumentChange, findReplace]
-  );
+  const {
+    findResultRef,
+    handleFind,
+    handleFindNext,
+    handleFindPrevious,
+    handleReplace,
+    handleReplaceAll,
+  } = useFindReplaceBridge({
+    document: history.state,
+    containerRef,
+    findReplace,
+    handleDocumentChange,
+  });
 
   // Expose ref methods
   useImperativeHandle(
@@ -3669,7 +2235,7 @@ body { background: white; }
           if (overlapsTrackedChange) return false;
         }
 
-        const revisionId = nextCommentId++;
+        const revisionId = getNextCommentId();
         const date = new Date().toISOString();
 
         const deletionMark = schema.marks.deletion.create({
