@@ -8,6 +8,7 @@
 <template>
   <div
     v-if="data"
+    ref="popupRef"
     :class="['docx-hyperlink-popup', { 'docx-hyperlink-popup--edit': isEditing }]"
     :style="popupStyle"
     @mousedown.stop
@@ -139,7 +140,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch, type CSSProperties } from 'vue';
+import { ref, computed, watch, onBeforeUnmount, type CSSProperties } from 'vue';
 import { useTranslation } from '../../i18n';
 
 const { t } = useTranslation();
@@ -163,6 +164,15 @@ const emit = defineEmits<{
 const isEditing = ref(false);
 const editText = ref('');
 const editHref = ref('');
+const popupRef = ref<HTMLDivElement | null>(null);
+
+// Position comes from props.data.position in container coordinates. With
+// position: absolute inside the pages-viewport, the browser handles scroll
+// repositioning — no JS listeners needed.
+const popupStyle = computed<CSSProperties>(() => ({
+  left: (props.data?.position.left ?? 0) + 'px',
+  top: (props.data?.position.top ?? 0) + 'px',
+}));
 
 watch(
   () => props.data?.href,
@@ -170,6 +180,45 @@ watch(
     isEditing.value = false;
   }
 );
+
+let outsideMouseDownListener: ((e: MouseEvent) => void) | null = null;
+let outsideListenerTimer: ReturnType<typeof setTimeout> | null = null;
+
+function teardownListeners() {
+  if (outsideListenerTimer) {
+    clearTimeout(outsideListenerTimer);
+    outsideListenerTimer = null;
+  }
+  if (outsideMouseDownListener) {
+    document.removeEventListener('mousedown', outsideMouseDownListener);
+    outsideMouseDownListener = null;
+  }
+}
+
+watch(
+  () => props.data,
+  (data) => {
+    teardownListeners();
+    if (!data) return;
+
+    // Close on click outside the popup. Defer attaching so the click that
+    // opened the popup doesn't immediately close it.
+    outsideMouseDownListener = (e: MouseEvent) => {
+      const el = popupRef.value;
+      if (el && !el.contains(e.target as Node)) {
+        emit('close');
+      }
+    };
+    outsideListenerTimer = setTimeout(() => {
+      if (outsideMouseDownListener) {
+        document.addEventListener('mousedown', outsideMouseDownListener);
+      }
+    }, 0);
+  },
+  { immediate: true }
+);
+
+onBeforeUnmount(teardownListeners);
 
 function startEdit() {
   if (!props.data) return;
@@ -191,20 +240,11 @@ function onCopy() {
     navigator.clipboard.writeText(props.data.href).catch(() => {});
   }
 }
-
-const popupStyle = computed<CSSProperties>(() => {
-  const r = props.data?.anchorRect;
-  if (!r) return {};
-  return {
-    left: r.left + 'px',
-    top: r.bottom + 6 + 'px',
-  };
-});
 </script>
 
 <style scoped>
 .docx-hyperlink-popup {
-  position: fixed;
+  position: absolute;
   z-index: 10000;
   background: #fff;
   border: 1px solid #dadce0;

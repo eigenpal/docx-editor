@@ -10,5 +10,9 @@ export interface HyperlinkPopupData {
   href: string;
   displayText: string;
   tooltip?: string;
-  anchorRect: DOMRect;
+  /** Popup position in the editor's pages-viewport coordinate space (CSS
+   *  pixels from its top-left). Computed once at click time. The popup
+   *  renders inside that viewport with `position: absolute`, so the
+   *  browser handles repositioning during scroll for free. */
+  position: { top: number; left: number };
 }

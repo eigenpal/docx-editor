@@ -84,7 +84,7 @@ export interface UsePagesPointerOptions {
     href: string;
     displayText: string;
     tooltip?: string;
-    anchorRect: DOMRect;
+    position: { top: number; left: number };
   }) => void;
   onHeaderFooterDoubleClick?: (position: 'header' | 'footer', pageNumber?: number) => void;
   setSelectedImageInfo: React.Dispatch<React.SetStateAction<ImageSelectionInfo | null>>;
@@ -585,8 +585,20 @@ export function usePagesPointer(opts: UsePagesPointerOptions): UsePagesPointerRe
           if (!hasRangeSelection) {
             const displayText = anchorEl.textContent || '';
             const tooltip = anchorEl.getAttribute('title') || undefined;
-            const anchorRect = anchorEl.getBoundingClientRect();
-            onHyperlinkClick({ href, displayText, tooltip, anchorRect });
+            // Compute the popup position in the PagedEditor root container's
+            // coordinate space. The popup renders inside that container with
+            // `position: absolute`, so the browser handles repositioning on
+            // scroll for free — no JS listener needed.
+            const root = anchorEl.closest('.ep-root.paged-editor') as HTMLElement | null;
+            if (root) {
+              const rootRect = root.getBoundingClientRect();
+              const linkRect = anchorEl.getBoundingClientRect();
+              const position = {
+                top: linkRect.bottom - rootRect.top + 4,
+                left: linkRect.left - rootRect.left,
+              };
+              onHyperlinkClick({ href, displayText, tooltip, position });
+            }
           }
         }
         return;

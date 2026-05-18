@@ -1556,6 +1556,12 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
           onRenderedDomContextReady={onRenderedDomContextReady}
           pluginOverlays={pluginOverlays}
           onHyperlinkClick={handleHyperlinkClick}
+          hyperlinkPopupData={hyperlinkPopupData}
+          onHyperlinkPopupNavigate={handleHyperlinkPopupNavigate}
+          onHyperlinkPopupCopy={handleHyperlinkPopupCopy}
+          onHyperlinkPopupEdit={handleHyperlinkPopupEdit}
+          onHyperlinkPopupRemove={handleHyperlinkPopupRemove}
+          onHyperlinkPopupClose={handleHyperlinkPopupClose}
           onContextMenu={handleContextMenu}
           sidebarOpen={sidebarOpen}
           sidebarItems={allSidebarItems}
@@ -1584,12 +1590,6 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
       }
       overlays={
         <DocxEditorOverlays
-          hyperlinkPopupData={hyperlinkPopupData}
-          onHyperlinkPopupNavigate={handleHyperlinkPopupNavigate}
-          onHyperlinkPopupCopy={handleHyperlinkPopupCopy}
-          onHyperlinkPopupEdit={handleHyperlinkPopupEdit}
-          onHyperlinkPopupRemove={handleHyperlinkPopupRemove}
-          onHyperlinkPopupClose={handleHyperlinkPopupClose}
           contextMenu={contextMenu}
           contextMenuItems={contextMenuItems}
           onContextMenuAction={handleContextMenuAction}

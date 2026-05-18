@@ -70,6 +70,7 @@ import { usePagesPointer } from './hooks/usePagesPointer';
 import { usePagedEditorRefApi } from './hooks/usePagedEditorRefApi';
 import { useLayoutTriggers } from './hooks/useLayoutTriggers';
 import { TableInsertButton } from './overlays/TableInsertButton';
+import { HyperlinkPopup, type HyperlinkPopupData } from '../ui/HyperlinkPopup';
 
 export { DEFAULT_PAGE_WIDTH };
 
@@ -137,8 +138,20 @@ export interface PagedEditorProps {
     href: string;
     displayText: string;
     tooltip?: string;
-    anchorRect: DOMRect;
+    position: { top: number; left: number };
   }) => void;
+  /** Hyperlink popup state (null = hidden). */
+  hyperlinkPopupData?: HyperlinkPopupData | null;
+  /** Called when user wants to navigate to the link. */
+  onHyperlinkPopupNavigate?: (href: string) => void;
+  /** Called when user wants to copy the URL. */
+  onHyperlinkPopupCopy?: (href: string) => void;
+  /** Called when user saves hyperlink edits. */
+  onHyperlinkPopupEdit?: (displayText: string, href: string) => void;
+  /** Called when user removes the hyperlink. */
+  onHyperlinkPopupRemove?: () => void;
+  /** Called when the popup should close. */
+  onHyperlinkPopupClose?: () => void;
   /** Callback when user right-clicks on the pages (for context menu).
    *  When the right-click target resolves to an image node, `image` carries
    *  the image's PM doc position, current wrap type, current cssFloat (lets
@@ -255,6 +268,12 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
       onAnchorPositionsChange,
       onTotalPagesChange,
       resolvedCommentIds,
+      hyperlinkPopupData,
+      onHyperlinkPopupNavigate,
+      onHyperlinkPopupCopy,
+      onHyperlinkPopupEdit,
+      onHyperlinkPopupRemove,
+      onHyperlinkPopupClose,
     } = props;
 
     // Resolve the scroll container: prefer parent-provided ref, fallback to own container
@@ -769,6 +788,26 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
             <div style={{ pointerEvents: 'auto' }}>{sidebarOverlay}</div>
           </div>
         )}
+
+        {/* Hyperlink popup — rendered inside containerRef so it shares a
+            scroll context with the link. position: absolute + coords in
+            container space mean the browser repositions on scroll for free. */}
+        {hyperlinkPopupData &&
+          onHyperlinkPopupNavigate &&
+          onHyperlinkPopupCopy &&
+          onHyperlinkPopupEdit &&
+          onHyperlinkPopupRemove &&
+          onHyperlinkPopupClose && (
+            <HyperlinkPopup
+              data={hyperlinkPopupData}
+              onNavigate={onHyperlinkPopupNavigate}
+              onCopy={onHyperlinkPopupCopy}
+              onEdit={onHyperlinkPopupEdit}
+              onRemove={onHyperlinkPopupRemove}
+              onClose={onHyperlinkPopupClose}
+              readOnly={readOnly}
+            />
+          )}
       </div>
     );
   }

@@ -266,6 +266,19 @@
             @tracked-change-reply="handleTrackedChangeReply"
             @update:active-item-id="(id: string | null) => (activeSidebarItem = id)"
           />
+
+          <!-- Hyperlink popup — lives inside the scroll container so it
+               moves with the link on scroll for free (position: absolute
+               inside the pages-viewport, no JS scroll listener). -->
+          <HyperlinkPopup
+            :data="hyperlinkPopupData"
+            :read-only="readOnly"
+            @navigate="handleHyperlinkPopupNavigate"
+            @copy="hyperlinkPopupData = null"
+            @edit="handleHyperlinkPopupEdit"
+            @remove="handleHyperlinkPopupRemove"
+            @close="hyperlinkPopupData = null"
+          />
         </div>
 
         <button
@@ -312,16 +325,11 @@
       :image-context-menu="imageContextMenu"
       :image-context-menu-text-actions="imageContextMenuTextActions"
       :can-open-image-properties="!!selectedImage"
-      :hyperlink-popup-data="hyperlinkPopupData"
       @context-menu-action="handleContextMenuAction"
       @close-context-menu="contextMenu.isOpen = false"
       @image-wrap-select="handleImageWrapSelect"
       @close-image-context-menu="imageContextMenu = null"
       @open-image-properties="showImageProperties = true"
-      @hyperlink-navigate="handleHyperlinkPopupNavigate"
-      @hyperlink-edit="handleHyperlinkPopupEdit"
-      @hyperlink-remove="handleHyperlinkPopupRemove"
-      @close-hyperlink-popup="hyperlinkPopupData = null"
     />
   </div>
 </template>
@@ -344,7 +352,7 @@ import VerticalRuler from './ui/VerticalRuler.vue';
 import DocxEditorMenuBar from './DocxEditor/DocxEditorMenuBar.vue';
 import DocxEditorDialogs from './DocxEditor/DocxEditorDialogs.vue';
 import DocxEditorOverlays from './DocxEditor/DocxEditorOverlays.vue';
-import type { HyperlinkPopupData } from './ui/HyperlinkPopup.vue';
+import HyperlinkPopup, { type HyperlinkPopupData } from './ui/HyperlinkPopup.vue';
 import type { TrackedChangeEntry } from './sidebar/sidebarUtils';
 import type { EditorMode, DocxEditorProps } from './DocxEditor/types';
 import { useDocxEditor } from '../composables/useDocxEditor';

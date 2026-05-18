@@ -22,8 +22,11 @@ export interface HyperlinkPopupData {
   displayText: string;
   /** Tooltip if any */
   tooltip?: string;
-  /** Bounding rect of the anchor element (for positioning) */
-  anchorRect: DOMRect;
+  /** Popup position in the PagedEditor root container's coordinate space
+   *  (CSS pixels from its top-left). Computed once at click time. The
+   *  popup renders with `position: absolute` inside that container, so the
+   *  browser handles repositioning during scroll for free. */
+  position: { top: number; left: number };
 }
 
 export interface HyperlinkPopupProps {
@@ -48,7 +51,7 @@ export interface HyperlinkPopupProps {
 // ============================================================================
 
 const BASE_POPUP_STYLE: CSSProperties = {
-  position: 'fixed',
+  position: 'absolute',
   zIndex: 10000,
   background: 'white',
   borderRadius: '8px',
@@ -359,10 +362,10 @@ export function HyperlinkPopup({
 
   if (!data) return null;
 
-  // Calculate position: below the anchor element
-  const { anchorRect } = data;
-  const popupTop = anchorRect.bottom + 4;
-  const popupLeft = anchorRect.left;
+  // Position is in PagedEditor container coords; popup is rendered inside
+  // that container so the browser repositions it on scroll automatically.
+  const popupTop = data.position.top;
+  const popupLeft = data.position.left;
 
   if (mode === 'edit') {
     return (

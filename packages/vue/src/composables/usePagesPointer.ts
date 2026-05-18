@@ -264,11 +264,21 @@ export function usePagesPointer(opts: UsePagesPointerOptions): UsePagesPointerRe
     const view = opts.editorView.value;
     const hasRangeSelection = view && view.state.selection.from !== view.state.selection.to;
     if (hasRangeSelection) return;
+    // Compute popup position relative to the pages viewport so the popup
+    // can render inside the scroll context — the browser then repositions
+    // it on scroll via CSS alone, no JS listener needed.
+    const viewport = opts.pagesViewportRef.value;
+    if (!viewport) return;
+    const vpRect = viewport.getBoundingClientRect();
+    const linkRect = anchor.getBoundingClientRect();
     opts.hyperlinkPopupData.value = {
       href,
       displayText: anchor.textContent || '',
       tooltip: anchor.getAttribute('title') || undefined,
-      anchorRect: anchor.getBoundingClientRect(),
+      position: {
+        top: linkRect.bottom - vpRect.top + viewport.scrollTop + 4,
+        left: linkRect.left - vpRect.left + viewport.scrollLeft,
+      },
     };
   }
 

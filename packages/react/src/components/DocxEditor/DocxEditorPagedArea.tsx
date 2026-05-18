@@ -75,6 +75,12 @@ export function DocxEditorPagedArea({
   onRenderedDomContextReady,
   pluginOverlays,
   onHyperlinkClick,
+  hyperlinkPopupData,
+  onHyperlinkPopupNavigate,
+  onHyperlinkPopupCopy,
+  onHyperlinkPopupEdit,
+  onHyperlinkPopupRemove,
+  onHyperlinkPopupClose,
   onContextMenu,
   // Sidebar
   sidebarOpen,
@@ -131,6 +137,12 @@ export function DocxEditorPagedArea({
   onRenderedDomContextReady: ((ctx: RenderedDomContext) => void) | undefined;
   pluginOverlays: ReactNode;
   onHyperlinkClick: (data: HyperlinkPopupData) => void;
+  hyperlinkPopupData: HyperlinkPopupData | null;
+  onHyperlinkPopupNavigate: (href: string) => void;
+  onHyperlinkPopupCopy: (href: string) => void;
+  onHyperlinkPopupEdit: (displayText: string, href: string) => void;
+  onHyperlinkPopupRemove: () => void;
+  onHyperlinkPopupClose: () => void;
   onContextMenu: (data: {
     x: number;
     y: number;
@@ -206,6 +218,12 @@ export function DocxEditorPagedArea({
         onRenderedDomContextReady={onRenderedDomContextReady}
         pluginOverlays={pluginOverlays}
         onHyperlinkClick={onHyperlinkClick}
+        hyperlinkPopupData={hyperlinkPopupData}
+        onHyperlinkPopupNavigate={onHyperlinkPopupNavigate}
+        onHyperlinkPopupCopy={onHyperlinkPopupCopy}
+        onHyperlinkPopupEdit={onHyperlinkPopupEdit}
+        onHyperlinkPopupRemove={onHyperlinkPopupRemove}
+        onHyperlinkPopupClose={onHyperlinkPopupClose}
         onContextMenu={onContextMenu}
         commentsSidebarOpen={sidebarOpen}
         onAnchorPositionsChange={onAnchorPositionsChange}
