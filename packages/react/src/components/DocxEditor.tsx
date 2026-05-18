@@ -12,7 +12,6 @@
 import { useRef, useCallback, useState, useEffect, useMemo, forwardRef } from 'react';
 import type { CSSProperties, ReactNode } from 'react';
 import type { Document, Theme } from '@eigenpal/docx-editor-core/types/document';
-import defaultLocale from '@eigenpal/docx-editor-i18n/en.json';
 
 import { ToolbarSeparator, type SelectionFormatting } from './Toolbar';
 import { CommentsSidebarToggle } from './DocxEditor/CommentsSidebarToggle';
@@ -34,6 +33,13 @@ import { useDocxEditorRefApi } from './DocxEditor/hooks/useDocxEditorRefApi';
 import { useTableDialogs } from './DocxEditor/hooks/useTableDialogs';
 import { useHeaderFooterEditing } from './DocxEditor/hooks/useHeaderFooterEditing';
 import { useDocumentLoader } from './DocxEditor/hooks/useDocumentLoader';
+import { useContextMenus } from './DocxEditor/hooks/useContextMenus';
+import { useCommentManagement } from './DocxEditor/hooks/useCommentManagement';
+import { useCommentLifecycle } from './DocxEditor/hooks/useCommentLifecycle';
+import { useSelectionTracker } from './DocxEditor/hooks/useSelectionTracker';
+import { useFloatingCommentBtn } from './DocxEditor/hooks/useFloatingCommentBtn';
+import { useActiveEditor } from './DocxEditor/hooks/useActiveEditor';
+import { useScrollPageInfo } from './DocxEditor/hooks/useScrollPageInfo';
 import { DocxEditorOverlays } from './DocxEditor/DocxEditorOverlays';
 import { DocxEditorDialogs } from './DocxEditor/DocxEditorDialogs';
 import type { FontOption } from './ui/FontPicker';
@@ -53,7 +59,7 @@ import { TextSelection, type EditorState as PMEditorState } from 'prosemirror-st
 import type { ReactSidebarItem } from '../plugin-api/types';
 import type { Comment } from '@eigenpal/docx-editor-core/types/content';
 import { ErrorBoundary, ErrorProvider } from './ErrorBoundary';
-import { LocaleProvider, useTranslation } from '../i18n';
+import { LocaleProvider } from '../i18n';
 import type { Translations } from '../i18n';
 import { HorizontalRuler } from './ui/HorizontalRuler';
 import { VerticalRuler } from './ui/VerticalRuler';
@@ -69,18 +75,10 @@ import {
 
 import { MaterialSymbol } from './ui/Icons';
 import { Tooltip } from './ui/Tooltip';
-import { type TextContextAction, type TextContextMenuItem } from './TextContextMenu';
-import { useImageContextMenu } from './ImageContextMenu';
-import {
-  setImageWrapType,
-  type ImageLayoutTarget,
-} from '@eigenpal/docx-editor-core/prosemirror/commands';
-import type { WrapType } from '@eigenpal/docx-editor-core/docx/wrapTypes';
 import { DocumentAgent } from '@eigenpal/docx-editor-core/agent';
 import { DefaultLoadingIndicator, DefaultPlaceholder, ParseError } from './DocxEditorHelpers';
 import { type DocxInput } from '@eigenpal/docx-editor-core/utils';
 import { onFontsLoaded } from '@eigenpal/docx-editor-core/utils';
-import { resolveColorToHex } from '@eigenpal/docx-editor-core/utils';
 import { useTableSelection } from '../hooks/useTableSelection';
 import { useDocumentHistory } from '../hooks/useHistory';
 
@@ -99,14 +97,6 @@ import {
   type SelectionState,
   extractSelectionState,
   createStyleResolver,
-  getTableContext,
-  addRowAbove,
-  addRowBelow,
-  deleteRow as pmDeleteRow,
-  addColumnLeft,
-  addColumnRight,
-  deleteColumn as pmDeleteColumn,
-  mergeCells as pmMergeCells,
   type TableContextInfo,
 } from '@eigenpal/docx-editor-core/prosemirror';
 import { acceptChange, rejectChange } from '@eigenpal/docx-editor-core/prosemirror/commands';
@@ -467,10 +457,7 @@ import type { EditorMode } from './DocxEditor/internals/editing-modes';
 // `@eigenpal/docx-editor-core/docx` so React + Vue share the same
 // pre-serialization range-marker injection.
 
-import {
-  findSelectionYPosition,
-  getInitialSectionProperties,
-} from './DocxEditor/internals/pmAnchors';
+import { getInitialSectionProperties } from './DocxEditor/internals/pmAnchors';
 import {
   PENDING_COMMENT_ID,
   EMPTY_ANCHOR_POSITIONS,
@@ -538,7 +525,6 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
   },
   ref
 ) {
-  const { t } = useTranslation();
   // State
   const [state, setState] = useState<EditorState>({
     isLoading: !!documentBuffer && !externalContent,
@@ -562,13 +548,32 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
   // Comments sidebar state
   const [showCommentsSidebar, setShowCommentsSidebar] = useState(false);
   const [expandedSidebarItem, setExpandedSidebarItem] = useState<string | null>(null);
-  // Comments live in internal state by default; if the consumer passes
-  // `comments` as a prop, we treat the editor as controlled — `setComments`
-  // routes mutations through `onCommentsChange` instead of touching internal
-  // state. Keeps the controlled/uncontrolled API symmetric with React inputs.
-  const [internalComments, setInternalComments] = useState<Comment[]>([]);
-  const isControlledComments = commentsProp !== undefined;
-  const comments = isControlledComments ? commentsProp : internalComments;
+  // PagedEditor ref declared early so useCommentManagement (which reads
+  // pagedEditorRef.current.getView() for orphan cleanup) can be wired before
+  // the trackedChanges effect that drives `setComments`.
+  const pagedEditorRef = useRef<PagedEditorRef>(null);
+
+  const {
+    comments,
+    setComments,
+    isAddingComment,
+    setIsAddingComment,
+    isAddingCommentRef,
+    commentSelectionRange,
+    setCommentSelectionRange,
+    addCommentYPosition,
+    setAddCommentYPosition,
+    floatingCommentBtn,
+    setFloatingCommentBtn,
+    cleanOrphanedCommentsTimerRef,
+    cleanOrphanedComments,
+  } = useCommentManagement({
+    commentsProp,
+    onCommentDelete,
+    onCommentsChange,
+    pagedEditorRef,
+  });
+
   // Latest PM state — mirrored from the view on every doc-changing transaction.
   // Drives `useTrackedChanges` so the sidebar derives its list directly from PM
   // (the source of truth, including remote ySync updates) rather than a debounced
@@ -579,12 +584,6 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
     useState<Map<string, number>>(EMPTY_ANCHOR_POSITIONS);
   // No separate state needed — pluginRenderedDomContext comes from PluginHost
 
-  const [isAddingComment, setIsAddingComment] = useState(false);
-  const [commentSelectionRange, setCommentSelectionRange] = useState<{
-    from: number;
-    to: number;
-  } | null>(null);
-  const [addCommentYPosition, setAddCommentYPosition] = useState<number | null>(null);
   const [editingModeInternal, setEditingModeInternal] = useState<EditorMode>(modeProp ?? 'editing');
   const editingMode = modeProp ?? editingModeInternal;
   const setEditingMode = (mode: EditorMode) => {
@@ -610,140 +609,11 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
     [agentPanel, isAgentPanelControlled]
   );
 
-  // Accessed by the stable recomputeFloatingCommentBtn callback below.
-  // Kept in sync below after that callback is declared.
-  // Floating "add comment" button position (relative to scroll container, null = hidden)
-  const [floatingCommentBtn, setFloatingCommentBtn] = useState<{
-    top: number;
-    left: number;
-  } | null>(null);
-
-  // Right-click context menu state
-  const [contextMenu, setContextMenu] = useState<{
-    isOpen: boolean;
-    position: { x: number; y: number };
-    hasSelection: boolean;
-    cursorInTable: boolean;
-    tableContext: TableContextInfo | null;
-  }>({
-    isOpen: false,
-    position: { x: 0, y: 0 },
-    hasSelection: false,
-    cursorInTable: false,
-    tableContext: null,
-  });
-
-  // Debounce timer for orphaned-comment cleanup (still needed: orphan detection
-  // requires a post-edit settle so the user doesn't see comments vanish mid-edit).
-  const cleanOrphanedCommentsTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const commentsRef = useRef(comments);
-  commentsRef.current = comments;
-  const isAddingCommentRef = useRef(isAddingComment);
-  isAddingCommentRef.current = isAddingComment;
-  const onCommentDeleteRef = useRef(onCommentDelete);
-  onCommentDeleteRef.current = onCommentDelete;
-
   // Bridge / agent event subscribers — fan-out from the existing onChange and
   // onSelectionChange paths so multiple listeners (host app, MCP server, etc.)
   // can observe edits without competing for the single React prop.
   const contentChangeSubscribersRef = useRef(new Set<(doc: Document) => void>());
   const selectionChangeSubscribersRef = useRef(new Set<(s: SelectionState | null) => void>());
-  const onCommentsChangeRef = useRef(onCommentsChange);
-  onCommentsChangeRef.current = onCommentsChange;
-
-  // Unified setter — routes to internal state in uncontrolled mode and/or to
-  // the parent's onCommentsChange callback in controlled mode.
-  //
-  // In uncontrolled mode we mutate `commentsRef.current` synchronously
-  // *before* queuing the React update so rapid sequential calls in the
-  // same tick (e.g. an agent loop calling `addComment` 30 times back-to-
-  // back) see the latest accumulated state. Without this, every functional
-  // updater reads the same stale ref and only the last comment survives.
-  //
-  // In controlled mode the parent's prop is the source of truth — we don't
-  // mutate the ref here because the parent might transform / reject the
-  // value before echoing it back via `commentsProp`. The `commentsRef.current = comments`
-  // assignment one effect above keeps the ref in sync with the prop.
-  const setComments = useCallback(
-    (next: Comment[] | ((prev: Comment[]) => Comment[])) => {
-      const resolved =
-        typeof next === 'function'
-          ? (next as (prev: Comment[]) => Comment[])(commentsRef.current)
-          : next;
-      if (resolved === commentsRef.current) return;
-      if (!isControlledComments) {
-        commentsRef.current = resolved;
-        setInternalComments(resolved);
-      }
-      onCommentsChangeRef.current?.(resolved);
-    },
-    [isControlledComments]
-  );
-
-  // Thread comments under their overlapping tracked change (parentId = revisionId).
-  // The overlap map is computed in the same doc walk as `extractTrackedChanges`
-  // so we don't pay for a second descendants() pass per transaction.
-  useEffect(() => {
-    if (commentToRevision.size === 0) return;
-    setComments((prev) => {
-      let changed = false;
-      const updated = prev.map((c) => {
-        if (c.parentId != null) return c; // already threaded
-        const rid = commentToRevision.get(c.id);
-        if (rid != null) {
-          changed = true;
-          return { ...c, parentId: rid };
-        }
-        return c;
-      });
-      return changed ? updated : prev;
-    });
-  }, [commentToRevision, setComments]);
-
-  // Remove comments whose marks no longer exist in the document
-  const cleanOrphanedComments = useCallback(() => {
-    if (isAddingCommentRef.current) return;
-    const view = pagedEditorRef.current?.getView();
-    if (!view) return;
-    const { doc, schema } = view.state;
-    const commentMarkType = schema.marks.comment;
-    if (!commentMarkType) return;
-
-    const liveIds = new Set<number>();
-    doc.descendants((node) => {
-      for (const mark of node.marks) {
-        if (mark.type === commentMarkType) {
-          const id = mark.attrs.commentId as number;
-          if (id !== PENDING_COMMENT_ID) liveIds.add(id);
-        }
-      }
-    });
-
-    const currentComments = commentsRef.current;
-    const orphanedIds = new Set<number>();
-    for (const c of currentComments) {
-      if (c.parentId == null && !liveIds.has(c.id)) {
-        orphanedIds.add(c.id);
-      }
-    }
-    if (orphanedIds.size === 0) return;
-
-    for (const c of currentComments) {
-      if (orphanedIds.has(c.id)) onCommentDeleteRef.current?.(c);
-    }
-    setComments((prev) =>
-      prev.filter((c) => !orphanedIds.has(c.id) && !orphanedIds.has(c.parentId!))
-    );
-  }, []);
-
-  // Clean up debounce timers on unmount
-  useEffect(() => {
-    return () => {
-      if (cleanOrphanedCommentsTimerRef.current) {
-        clearTimeout(cleanOrphanedCommentsTimerRef.current);
-      }
-    };
-  }, []);
 
   // History hook for undo/redo - start with null document
   const history = useDocumentHistory<Document | null>(initialDocument || null, {
@@ -770,8 +640,7 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
     [suggestionPlugin, externalPlugins]
   );
 
-  // Refs
-  const pagedEditorRef = useRef<PagedEditorRef>(null);
+  // Refs (pagedEditorRef is declared earlier — useCommentManagement needs it)
   const hfEditorRef = useRef<InlineHeaderFooterEditorRef>(null);
   const agentRef = useRef<DocumentAgent | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -817,48 +686,12 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
     []
   );
 
-  // Scroll-based page indicator (Google Docs style)
-  const [scrollPageInfo, setScrollPageInfo] = useState<{
-    currentPage: number;
-    totalPages: number;
-    visible: boolean;
-  }>({ currentPage: 1, totalPages: 1, visible: false });
-  const scrollFadeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  // Helper to get the active editor's view — returns HF editor view when in HF editing mode
-  const getActiveEditorView = useCallback(() => {
-    if (hfEditPosition && hfEditorRef.current) {
-      return hfEditorRef.current.getView();
-    }
-    return pagedEditorRef.current?.getView();
-  }, [hfEditPosition]);
-
-  // Helper to focus the active editor
-  const focusActiveEditor = useCallback(() => {
-    if (hfEditPosition && hfEditorRef.current) {
-      hfEditorRef.current.focus();
-    } else {
-      pagedEditorRef.current?.focus();
-    }
-  }, [hfEditPosition]);
-
-  // Helper to undo in the active editor
-  const undoActiveEditor = useCallback(() => {
-    if (hfEditPosition && hfEditorRef.current) {
-      hfEditorRef.current.undo();
-    } else {
-      pagedEditorRef.current?.undo();
-    }
-  }, [hfEditPosition]);
-
-  // Helper to redo in the active editor
-  const redoActiveEditor = useCallback(() => {
-    if (hfEditPosition && hfEditorRef.current) {
-      hfEditorRef.current.redo();
-    } else {
-      pagedEditorRef.current?.redo();
-    }
-  }, [hfEditPosition]);
+  const { getActiveEditorView, focusActiveEditor, undoActiveEditor, redoActiveEditor } =
+    useActiveEditor({
+      hfEditPosition,
+      hfEditorRef,
+      pagedEditorRef,
+    });
 
   // Find/Replace hook
   const findReplace = useFindReplace();
@@ -866,9 +699,10 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
   // Hyperlink dialog hook
   const hyperlinkDialog = useHyperlinkDialog();
 
-  // Lifted out of useDocumentLoader so `resetForNewDocument` (declared in
-  // the parent) can clear it on every fresh load.
+  // Lifted out of useDocumentLoader / useCommentLifecycle so `resetForNewDocument`
+  // (declared next) can clear both on every fresh load.
   const commentsLoadedRef = useRef(false);
+  const trackedChangesLoadedRef = useRef(false);
 
   // Reset internal state when loading a new document (clears stale refs, comments, tracked changes, etc.)
   const resetForNewDocument = useCallback(() => {
@@ -946,13 +780,15 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
   }, [state.isLoading, history.state]);
 
   // Auto-open the sidebar once if the loaded document already has tracked changes.
-  const trackedChangesLoadedRef = useRef(false);
-  useEffect(() => {
-    if (trackedChangesLoadedRef.current) return;
-    if (state.isLoading || !pmState) return;
-    trackedChangesLoadedRef.current = true;
-    if (trackedChanges.length > 0) setShowCommentsSidebar(true);
-  }, [pmState, state.isLoading, trackedChanges.length]);
+  useCommentLifecycle({
+    commentToRevision,
+    setComments,
+    pmState,
+    isLoading: state.isLoading,
+    trackedChangesCount: trackedChanges.length,
+    setShowCommentsSidebar,
+    trackedChangesLoadedRef,
+  });
 
   // Listen for font loading
   useEffect(() => {
@@ -1017,207 +853,31 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
   // from the geometry-change effects below (resize, zoom), because PagedEditor's
   // onSelectionChange no longer fires on mere overlay redraws after the
   // state-identity dedup in #268.
-  const readOnlyForFloatingBtnRef = useRef(false);
-  const recomputeFloatingCommentBtn = useCallback(() => {
-    const view = pagedEditorRef.current?.getView();
-    if (!view) return;
-    if (isAddingCommentRef.current || readOnlyForFloatingBtnRef.current) {
-      setFloatingCommentBtn(null);
-      return;
-    }
-    const { from, to } = view.state.selection;
-    if (from === to) {
-      setFloatingCommentBtn(null);
-      return;
-    }
-    const container = scrollContainerRef.current;
-    const parentEl = editorContentRef.current;
-    if (!container || !parentEl) return;
-    const top = findSelectionYPosition(container, parentEl, from);
-    if (top == null) return;
-    const pagesEl = container.querySelector('.paged-editor__pages');
-    const pageEl = pagesEl?.querySelector('.layout-page') as HTMLElement | null;
-    const left = pageEl
-      ? pageEl.getBoundingClientRect().right - parentEl.getBoundingClientRect().left
-      : parentEl.getBoundingClientRect().width / 2 + 408;
-    setFloatingCommentBtn({ top, left });
-  }, []);
-  // Keep the readOnly ref used by recomputeFloatingCommentBtn in sync
-  readOnlyForFloatingBtnRef.current = readOnly;
-
-  // Reposition the floating "add comment" button when the editor container
-  // resizes (window resize, sidebar toggle, loading→ready transition) or when
-  // zoom changes. Both move the page edges without changing PM selection, so
-  // the onSelectionChange path no longer covers them after the dedup fix in
-  // #268. The scroll container may not be mounted on the first render (loading
-  // state renders a different subtree), so re-run the effect whenever that
-  // state flips — that's the point at which the container first becomes
-  // available.
-  useEffect(() => {
-    const container = scrollContainerRef.current;
-    if (!container) return;
-    const ro = new ResizeObserver(() => recomputeFloatingCommentBtn());
-    ro.observe(container);
-    const onWinResize = () => recomputeFloatingCommentBtn();
-    window.addEventListener('resize', onWinResize);
-    return () => {
-      ro.disconnect();
-      window.removeEventListener('resize', onWinResize);
-    };
-  }, [state.isLoading, recomputeFloatingCommentBtn]);
-  useEffect(() => {
-    recomputeFloatingCommentBtn();
-  }, [state.zoom, recomputeFloatingCommentBtn]);
+  const { recomputeFloatingCommentBtn } = useFloatingCommentBtn({
+    pagedEditorRef,
+    scrollContainerRef,
+    editorContentRef,
+    isAddingCommentRef,
+    setFloatingCommentBtn,
+    readOnly,
+    isLoading: state.isLoading,
+    zoom: state.zoom,
+  });
 
   // Handle selection changes from ProseMirror
-  const handleSelectionChange = useCallback(
-    (selectionState: SelectionState | null) => {
-      // Save selection for restoring after toolbar interactions
-      const view = getActiveEditorView();
-      if (view) {
-        const { from, to } = view.state.selection;
-        lastSelectionRef.current = { from, to };
-      }
-
-      // Also check table context from ProseMirror
-      let pmTableCtx: TableContextInfo | null = null;
-      if (view) {
-        pmTableCtx = getTableContext(view.state);
-        if (!pmTableCtx.isInTable) {
-          pmTableCtx = null;
-        }
-      }
-
-      // Sync borderSpecRef with the current cell's actual border color
-      if (pmTableCtx?.cellBorderColor) {
-        const rgb = resolveColorToHex(pmTableCtx.cellBorderColor, theme);
-        if (rgb) {
-          borderSpecRef.current = { ...borderSpecRef.current, color: { rgb } };
-        }
-      }
-
-      // Check if cursor is on an image (NodeSelection)
-      let pmImageCtx: typeof state.pmImageContext = null;
-      if (view) {
-        const sel = view.state.selection;
-        // NodeSelection has a `node` property
-        const selectedNode = (
-          sel as { node?: { type: { name: string }; attrs: Record<string, unknown> } }
-        ).node;
-        if (selectedNode?.type.name === 'image') {
-          pmImageCtx = {
-            pos: sel.from,
-            wrapType: (selectedNode.attrs.wrapType as string) ?? 'inline',
-            displayMode: (selectedNode.attrs.displayMode as string) ?? 'inline',
-            cssFloat: (selectedNode.attrs.cssFloat as string) ?? null,
-            transform: (selectedNode.attrs.transform as string) ?? null,
-            alt: (selectedNode.attrs.alt as string) ?? null,
-            borderWidth: (selectedNode.attrs.borderWidth as number) ?? null,
-            borderColor: (selectedNode.attrs.borderColor as string) ?? null,
-            borderKind: (selectedNode.attrs.borderKind as string) ?? null,
-            width: (selectedNode.attrs.width as number) ?? null,
-            height: (selectedNode.attrs.height as number) ?? null,
-          };
-        }
-      }
-
-      if (!selectionState) {
-        setFloatingCommentBtn(null);
-        setState((prev) => ({
-          ...prev,
-          selectionFormatting: {},
-          pmTableContext: pmTableCtx,
-          pmImageContext: pmImageCtx,
-        }));
-        return;
-      }
-
-      // Update toolbar formatting from ProseMirror selection
-      const { textFormatting, paragraphFormatting } = selectionState;
-
-      // Extract font family (prefer ascii, fall back to hAnsi)
-      let fontFamily = textFormatting.fontFamily?.ascii || textFormatting.fontFamily?.hAnsi;
-      let fontSize = textFormatting.fontSize;
-
-      // If no explicit font/size marks, resolve from paragraph style or document defaults
-      if (!fontFamily || !fontSize) {
-        const currentDoc = historyStateRef.current;
-        const paraStyleId = selectionState.styleId;
-        if (currentDoc?.package.styles && paraStyleId) {
-          const resolver = getCachedStyleResolver(currentDoc.package.styles);
-          const resolved = resolver.resolveParagraphStyle(paraStyleId);
-          if (!fontFamily && resolved.runFormatting?.fontFamily) {
-            fontFamily =
-              resolved.runFormatting.fontFamily.ascii || resolved.runFormatting.fontFamily.hAnsi;
-          }
-          if (!fontSize && resolved.runFormatting?.fontSize) {
-            fontSize = resolved.runFormatting.fontSize;
-          }
-        }
-      }
-
-      const textColorHex = resolveColorToHex(textFormatting.color, theme);
-      const textColor = textColorHex ? `#${textColorHex}` : undefined;
-
-      // Build list state from numPr
-      const numPr = paragraphFormatting.numPr;
-      const listState = numPr
-        ? {
-            type: (numPr.numId === 1 ? 'bullet' : 'numbered') as 'bullet' | 'numbered',
-            level: numPr.ilvl ?? 0,
-            isInList: true,
-            numId: numPr.numId,
-          }
-        : undefined;
-
-      const formatting: SelectionFormatting = {
-        bold: textFormatting.bold,
-        italic: textFormatting.italic,
-        underline: !!textFormatting.underline,
-        strike: textFormatting.strike,
-        superscript: textFormatting.vertAlign === 'superscript',
-        subscript: textFormatting.vertAlign === 'subscript',
-        fontFamily,
-        fontSize,
-        color: textColor,
-        highlight: textFormatting.highlight,
-        alignment: paragraphFormatting.alignment,
-        lineSpacing: paragraphFormatting.lineSpacing,
-        listState,
-        styleId: selectionState.styleId ?? undefined,
-        indentLeft: paragraphFormatting.indentLeft,
-        bidi: !!paragraphFormatting.bidi,
-      };
-      setState((prev) => ({
-        ...prev,
-        selectionFormatting: formatting,
-        paragraphIndentLeft: paragraphFormatting.indentLeft ?? 0,
-        paragraphIndentRight: paragraphFormatting.indentRight ?? 0,
-        paragraphFirstLineIndent: paragraphFormatting.indentFirstLine ?? 0,
-        paragraphHangingIndent: paragraphFormatting.hangingIndent ?? false,
-        paragraphTabs: paragraphFormatting.tabs ?? null,
-        pmTableContext: pmTableCtx,
-        pmImageContext: pmImageCtx,
-      }));
-
-      // Update floating comment button position
-      recomputeFloatingCommentBtn();
-
-      // Notify parent
-      onSelectionChange?.(selectionState);
-      // Fan out to bridge subscribers.
-      for (const cb of selectionChangeSubscribersRef.current) {
-        try {
-          cb(selectionState);
-        } catch (e) {
-          console.error('selectionChange subscriber threw:', e);
-        }
-      }
-    },
-    // getActiveEditorView's return depends on hfEditPosition; theme drives
-    // color resolution. Both must be in deps to avoid stale-closure reads.
-    [onSelectionChange, isAddingComment, readOnly, getActiveEditorView, theme]
-  );
+  const { handleSelectionChange } = useSelectionTracker({
+    getActiveEditorView,
+    lastSelectionRef,
+    borderSpecRef,
+    theme,
+    historyStateRef,
+    getCachedStyleResolver,
+    setFloatingCommentBtn,
+    applySelectionDelta: useCallback((delta) => setState((prev) => ({ ...prev, ...delta })), []),
+    recomputeFloatingCommentBtn,
+    onSelectionChange,
+    selectionChangeSubscribersRef,
+  });
 
   // Table selection hook
   const tableSelection = useTableSelection({
@@ -1300,35 +960,6 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
     getCachedStyleResolver,
   });
 
-  // Context menu handler. Body content has its own context-menu plumbing
-  // wired through PagedEditor (handleContextMenu below), so we early-out
-  // when the right-click landed in the body's pages region — *unless* the
-  // inline HF editor is open, in which case we need to show the menu for
-  // the HF view since body's plumbing won't fire for HF clicks.
-  const handleEditorContextMenu = useCallback(
-    (e: React.MouseEvent) => {
-      const target = e.target as HTMLElement | null;
-      if (target?.closest('.paged-editor__pages') && !target.closest('.hf-inline-editor')) {
-        return;
-      }
-      e.preventDefault();
-      e.stopPropagation();
-      const view = getActiveEditorView();
-      const tableContext = view ? getTableContext(view.state) : { isInTable: false };
-      const { from, to } = view?.state.selection ?? { from: 0, to: 0 };
-      const hasSel = from !== to;
-      setContextMenu({
-        isOpen: true,
-        position: { x: e.clientX, y: e.clientY },
-        hasSelection: hasSel,
-        cursorInTable: tableContext.isInTable,
-        tableContext: tableContext.isInTable ? tableContext : null,
-      });
-    },
-    [getActiveEditorView]
-  );
-
-  // Handle formatting action from toolbar
   const { handleFormat, handleInsertTable, handleInsertPageBreak, handleInsertTOC } =
     useFormattingActions({
       getActiveEditorView,
@@ -1340,7 +971,6 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
       getCachedStyleResolver,
     });
 
-  // Handle zoom change
   const handleZoomChange = useCallback((zoom: number) => {
     setState((prev) => ({ ...prev, zoom }));
   }, []);
@@ -1361,278 +991,34 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
     focusActiveEditor,
   });
 
-  // Image-specific right-click menu state.
-  const imageContextMenu = useImageContextMenu();
-
-  // Right-click context menu handlers. Use the active view so the menu
-  // reflects HF state when the inline editor is open.
-  const handleContextMenu = useCallback(
-    (data: {
-      x: number;
-      y: number;
-      hasSelection: boolean;
-      image?: {
-        pos: number;
-        wrapType: WrapType;
-        cssFloat?: 'left' | 'right' | 'none' | null;
-        inlinePositionEmu?: { horizontalEmu: number; verticalEmu: number };
-      } | null;
-    }) => {
-      // Image right-click takes priority over the text context menu.
-      if (data.image) {
-        imageContextMenu.openForImage({
-          x: data.x,
-          y: data.y,
-          wrapType: data.image.wrapType,
-          cssFloat: data.image.cssFloat,
-          pos: data.image.pos,
-          inlinePositionEmu: data.image.inlinePositionEmu,
-        });
-        return;
-      }
-      const view = getActiveEditorView();
-      const tableContext = view ? getTableContext(view.state) : { isInTable: false };
-      setContextMenu({
-        isOpen: true,
-        position: data,
-        hasSelection: data.hasSelection,
-        cursorInTable: tableContext.isInTable,
-        tableContext: tableContext.isInTable ? tableContext : null,
-      });
-    },
-    [getActiveEditorView, imageContextMenu]
-  );
-
-  const handleImageWrapApply = useCallback(
-    (target: ImageLayoutTarget) => {
-      const view = getActiveEditorView();
-      if (!view || imageContextMenu.imagePos === null) return;
-      // For inline → anchor, hand the captured EMU offset to the command so
-      // the new float lands where the inline glyph used to sit.
-      const opts = imageContextMenu.inlinePositionEmu
-        ? { initialPositionEmu: imageContextMenu.inlinePositionEmu }
-        : undefined;
-      setImageWrapType(imageContextMenu.imagePos, target, opts)(view.state, view.dispatch);
-    },
-    [getActiveEditorView, imageContextMenu.imagePos, imageContextMenu.inlinePositionEmu]
-  );
-
-  // Text actions that ride along inside the image context menu — Word shows
-  // Cut / Copy / Paste / Delete underneath the layout choices, so users don't
-  // need to flip menus to do basic clipboard work on the selected image.
-  const imageContextMenuTextActions = useMemo(
-    () => [
-      {
-        action: 'cut' as TextContextAction,
-        label: t('contextMenu.cut'),
-        shortcut: t('contextMenu.cutShortcut'),
+  const {
+    contextMenu,
+    imageContextMenu,
+    handleEditorContextMenu,
+    handleContextMenu,
+    handleContextMenuClose,
+    handleImageWrapApply,
+    imageContextMenuTextActions,
+    contextMenuItems,
+    handleContextMenuAction,
+  } = useContextMenus({
+    getActiveEditorView,
+    focusActiveEditor,
+    openSplitCellDialog,
+    scrollContainerRef,
+    editorContentRef,
+    i18n,
+    onAddComment: useCallback(
+      ({ from, to, yPos }: { from: number; to: number; yPos: number | null }) => {
+        setCommentSelectionRange({ from, to });
+        setAddCommentYPosition(yPos);
+        setShowCommentsSidebar(true);
+        setIsAddingComment(true);
+        setFloatingCommentBtn(null);
       },
-      {
-        action: 'copy' as TextContextAction,
-        label: t('contextMenu.copy'),
-        shortcut: t('contextMenu.copyShortcut'),
-      },
-      {
-        action: 'paste' as TextContextAction,
-        label: t('contextMenu.paste'),
-        shortcut: t('contextMenu.pasteShortcut'),
-        dividerAfter: true,
-      },
-      {
-        action: 'delete' as TextContextAction,
-        label: t('contextMenu.delete'),
-        shortcut: t('contextMenu.deleteShortcut'),
-      },
-    ],
-    [t]
-  );
-
-  const handleContextMenuClose = useCallback(() => {
-    setContextMenu({
-      isOpen: false,
-      position: { x: 0, y: 0 },
-      hasSelection: false,
-      cursorInTable: false,
-      tableContext: null,
-    });
-  }, []);
-
-  const contextMenuItems = useMemo((): TextContextMenuItem[] => {
-    const isMac = typeof navigator !== 'undefined' && /Mac/.test(navigator.platform);
-    const mod = isMac ? '⌘' : 'Ctrl';
-    const items: TextContextMenuItem[] = [
-      { action: 'cut', label: 'Cut', shortcut: `${mod}+X` },
-      { action: 'copy', label: 'Copy', shortcut: `${mod}+C` },
-      { action: 'paste', label: 'Paste', shortcut: `${mod}+V` },
-      {
-        action: 'pasteAsPlainText',
-        label: 'Paste as Plain Text',
-        shortcut: `${mod}+Shift+V`,
-        dividerAfter: true,
-      },
-      {
-        action: 'delete',
-        label: 'Delete',
-        shortcut: 'Del',
-        dividerAfter: !contextMenu.hasSelection && !contextMenu.cursorInTable,
-      },
-    ];
-    if (contextMenu.hasSelection) {
-      items.push({
-        action: 'addComment',
-        label: 'Comment',
-        dividerAfter: !contextMenu.cursorInTable,
-      });
-    }
-    if (contextMenu.cursorInTable) {
-      items.push(
-        { action: 'addRowAbove', label: 'Insert row above' },
-        { action: 'addRowBelow', label: 'Insert row below' },
-        { action: 'deleteRow', label: 'Delete row', dividerAfter: true },
-        { action: 'addColumnLeft', label: 'Insert column left' },
-        { action: 'addColumnRight', label: 'Insert column right' },
-        { action: 'deleteColumn', label: 'Delete column' },
-        {
-          action: 'mergeCells',
-          label: i18n?.table?.mergeCells ?? defaultLocale.table.mergeCells,
-          disabled: !contextMenu.tableContext?.hasMultiCellSelection,
-        },
-        {
-          action: 'splitCell',
-          label: i18n?.table?.splitCell ?? defaultLocale.table.splitCell,
-          disabled: !contextMenu.tableContext?.canSplitCell,
-          dividerAfter: true,
-        }
-      );
-    }
-    items.push({ action: 'selectAll', label: 'Select All', shortcut: `${mod}+A` });
-    return items;
-  }, [contextMenu.hasSelection, contextMenu.cursorInTable, contextMenu.tableContext]);
-
-  const handleContextMenuAction = useCallback(
-    async (action: TextContextAction) => {
-      const view = getActiveEditorView();
-      if (!view) return;
-
-      // Focus the hidden PM so execCommand targets the right element
-      focusActiveEditor();
-
-      switch (action) {
-        case 'cut':
-          document.execCommand('cut');
-          break;
-        case 'copy':
-          document.execCommand('copy');
-          break;
-        case 'paste': {
-          // Use Clipboard API — document.execCommand('paste') is blocked in modern browsers
-          try {
-            const items = await navigator.clipboard.read();
-            let html = '';
-            let text = '';
-            for (const item of items) {
-              if (item.types.includes('text/html')) {
-                html = await (await item.getType('text/html')).text();
-              }
-              if (item.types.includes('text/plain')) {
-                text = await (await item.getType('text/plain')).text();
-              }
-            }
-            const dt = new DataTransfer();
-            if (html) dt.items.add(html, 'text/html');
-            if (text) dt.items.add(text, 'text/plain');
-            const pasteEvent = new ClipboardEvent('paste', {
-              clipboardData: dt,
-              bubbles: true,
-              cancelable: true,
-            });
-            view.dom.dispatchEvent(pasteEvent);
-          } catch {
-            try {
-              const text = await navigator.clipboard.readText();
-              if (text) view.dispatch(view.state.tr.insertText(text));
-            } catch {
-              // Clipboard access denied
-            }
-          }
-          break;
-        }
-        case 'pasteAsPlainText':
-          try {
-            const text = await navigator.clipboard.readText();
-            if (text) view.dispatch(view.state.tr.insertText(text));
-          } catch {
-            // Clipboard access denied
-          }
-          break;
-        case 'delete': {
-          const { from, to } = view.state.selection;
-          if (from !== to) {
-            view.dispatch(view.state.tr.deleteRange(from, to));
-          }
-          break;
-        }
-        case 'selectAll':
-          view.dispatch(
-            view.state.tr.setSelection(
-              TextSelection.create(view.state.doc, 0, view.state.doc.content.size)
-            )
-          );
-          break;
-        // Table operations
-        case 'addRowAbove':
-          addRowAbove(view.state, view.dispatch);
-          break;
-        case 'addRowBelow':
-          addRowBelow(view.state, view.dispatch);
-          break;
-        case 'deleteRow':
-          pmDeleteRow(view.state, view.dispatch);
-          break;
-        case 'addColumnLeft':
-          addColumnLeft(view.state, view.dispatch);
-          break;
-        case 'addColumnRight':
-          addColumnRight(view.state, view.dispatch);
-          break;
-        case 'deleteColumn':
-          pmDeleteColumn(view.state, view.dispatch);
-          break;
-        case 'mergeCells':
-          pmMergeCells(view.state, view.dispatch);
-          break;
-        case 'splitCell':
-          openSplitCellDialog();
-          break;
-        // Comment — same flow as floating comment button
-        case 'addComment': {
-          const { from, to } = view.state.selection;
-          if (from === to) break;
-          // Compute Y position BEFORE dispatching — dispatch triggers re-layout
-          // which rebuilds page DOM and invalidates the old span elements
-          const yPos = findSelectionYPosition(
-            scrollContainerRef.current,
-            editorContentRef.current,
-            from
-          );
-          setCommentSelectionRange({ from, to });
-          const pendingMark = view.state.schema.marks.comment.create({
-            commentId: PENDING_COMMENT_ID,
-          });
-          const tr = view.state.tr.addMark(from, to, pendingMark);
-          tr.setSelection(TextSelection.create(tr.doc, to));
-          view.dispatch(tr);
-          setAddCommentYPosition(yPos);
-          setShowCommentsSidebar(true);
-          setIsAddingComment(true);
-          setFloatingCommentBtn(null);
-          break;
-        }
-      }
-      // TextContextMenu calls onClose after onAction, so no need to close here
-    },
-    [getActiveEditorView, focusActiveEditor, openSplitCellDialog]
-  );
+      []
+    ),
+  });
 
   // Handle margin changes from rulers
   const {
@@ -1655,58 +1041,10 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
     getActiveEditorView,
   });
 
-  // Scroll-based page tracking: calculate current page from scroll position.
-  // Re-attaches when the scroll container mounts (after loading completes).
-  const scrollContainerEl = scrollContainerRef.current;
-  useEffect(() => {
-    if (!scrollContainerEl) return;
-
-    const handleScroll = () => {
-      const layout = pagedEditorRef.current?.getLayout();
-      if (!layout || layout.pages.length === 0) return;
-
-      const scrollTop = scrollContainerEl.scrollTop;
-      const totalPages = layout.pages.length;
-      const pageGap = 24; // DEFAULT_PAGE_GAP from PagedEditor
-      const paddingTop = 24; // top padding in paged-editor__pages
-
-      // Calculate which page is visible at the viewport center
-      const viewportCenter = scrollTop + scrollContainerEl.clientHeight / 2;
-      let accumulatedY = paddingTop;
-      let currentPage = 1;
-
-      for (let i = 0; i < layout.pages.length; i++) {
-        const pageHeight = layout.pages[i].size.h;
-        const pageEnd = accumulatedY + pageHeight;
-        if (viewportCenter < pageEnd) {
-          currentPage = i + 1;
-          break;
-        }
-        accumulatedY = pageEnd + pageGap;
-        currentPage = i + 2; // next page
-      }
-      currentPage = Math.min(currentPage, totalPages);
-
-      setScrollPageInfo({ currentPage, totalPages, visible: true });
-
-      // Clear existing fade timer
-      if (scrollFadeTimerRef.current) {
-        clearTimeout(scrollFadeTimerRef.current);
-      }
-      // Hide after 0.6s of no scrolling
-      scrollFadeTimerRef.current = setTimeout(() => {
-        setScrollPageInfo((prev) => ({ ...prev, visible: false }));
-      }, 600);
-    };
-
-    scrollContainerEl.addEventListener('scroll', handleScroll, { passive: true });
-    return () => {
-      scrollContainerEl.removeEventListener('scroll', handleScroll);
-      if (scrollFadeTimerRef.current) {
-        clearTimeout(scrollFadeTimerRef.current);
-      }
-    };
-  }, [scrollContainerEl]);
+  const { scrollPageInfo, setScrollPageInfo } = useScrollPageInfo({
+    scrollContainerRef,
+    pagedEditorRef,
+  });
 
   // Handle save
   // Handle error from editor
