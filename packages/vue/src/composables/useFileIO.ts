@@ -83,6 +83,7 @@ export function useFileIO(opts: UseFileIOOptions) {
 
   async function loadDocumentBuffer(buffer: Parameters<typeof opts.loadBuffer>[0]) {
     await opts.loadBuffer(buffer);
+    opts.emit('update:document', opts.getDocument());
     await emitReadyAfterSidebarStateRefresh();
   }
 
