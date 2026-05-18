@@ -269,6 +269,23 @@ Before opening any PR, self-review the diff against **DRY, KISS, YAGNI**:
 
 ---
 
+## Public API Surface (API Extractor)
+
+We track every published package's `@public` surface in `packages/<pkg>/etc/<entry>.api.md` snapshots. CI runs `bun run api:check` and fails on any drift you haven't checked in.
+
+**Adding or changing a `@public` symbol:**
+
+1. Tag the source declaration with `@public` (or `@internal` / `@beta`) in TSDoc.
+2. Rebuild the package: `bun run --filter '@eigenpal/docx-editor-<pkg>' build`
+3. Regenerate the snapshot: `bun run api:extract`
+4. Commit the updated `etc/<entry>.api.md` alongside your code change.
+
+**When CI fails on API drift:** `bun run api:extract` locally, commit the new snapshot, push.
+
+**Status:** Pilot lives on `@eigenpal/docx-editor-agents/server` (Phase 0 of #475). Core barrels are tagged `@public` (Phase 0.5). Other entries are added one at a time in subsequent phases.
+
+---
+
 ## PR Title and Description Style
 
 Keep PRs **small and quiet**. Notifications are expensive.

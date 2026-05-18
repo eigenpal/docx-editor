@@ -72,3 +72,6 @@ jobs:
         run: bun run build:packages
         env:
           NODE_OPTIONS: --max-old-space-size=8192
+
+      - name: API report check
+        run: bun run api:check

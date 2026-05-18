@@ -68,3 +68,6 @@ examples/plugins/*/package-lock.json
 
 # Reference documentation (large files - can be re-downloaded)
 reference/ecma-376/*.zip
+
+# API Extractor temp output (snapshots live in etc/)
+packages/*/temp/
