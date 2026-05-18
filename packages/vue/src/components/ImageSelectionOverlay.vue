@@ -60,12 +60,8 @@ import { useTranslation } from '../i18n';
 
 const { t } = useTranslation();
 
-export interface ImageSelectionInfo {
-  element: HTMLElement;
-  pmPos: number;
-  width: number;
-  height: number;
-}
+import type { ImageSelectionInfo } from './imageSelectionTypes';
+export type { ImageSelectionInfo };
 
 /** 4 corners + 4 edge midpoints — mirrors the React overlay's handle set. */
 type ResizeHandle = 'nw' | 'n' | 'ne' | 'e' | 'se' | 's' | 'sw' | 'w';

@@ -423,29 +423,7 @@
 
 <script setup lang="ts">
 import { ref, shallowRef, computed, watch, onMounted, onBeforeUnmount, nextTick } from 'vue';
-import {
-  findParaIdRange,
-  getVanillaNodeText,
-  getVanillaTextBetween,
-  findTextInPmParagraph,
-} from '../utils/paraTextHelpers';
-import {
-  findInDocument as findInDocumentImpl,
-  getSelectionInfo as getSelectionInfoImpl,
-  getPageContent as getPageContentImpl,
-} from '../utils/refApiQueries';
-import {
-  findElementAtPosition,
-  scrollVisiblePositionIntoView as scrollVisiblePositionIntoViewImpl,
-  resolvePos as resolvePosImpl,
-  selectWord as selectWordImpl,
-  selectParagraph as selectParagraphImpl,
-} from '../utils/domQueries';
-import {
-  copyImageToClipboard,
-  pasteFromClipboard,
-  triggerReplaceImage,
-} from '../utils/imageClipboard';
+import { getSelectionInfo as getSelectionInfoImpl } from '../utils/refApiQueries';
 import Toolbar from './Toolbar.vue';
 import FindReplaceDialog from './dialogs/FindReplaceDialog.vue';
 import TableToolbar from './ui/TableToolbar.vue';
@@ -454,24 +432,20 @@ import HyperlinkDialog from './dialogs/HyperlinkDialog.vue';
 import InsertSymbolDialog from './dialogs/InsertSymbolDialog.vue';
 import DecorationLayer from './DecorationLayer.vue';
 import ImageSelectionOverlay from './ImageSelectionOverlay.vue';
-import type { ImageSelectionInfo } from './ImageSelectionOverlay.vue';
+import type { ImageSelectionInfo } from './imageSelectionTypes';
 import ImagePropertiesDialog from './dialogs/ImagePropertiesDialog.vue';
 import PageSetupDialog from './dialogs/PageSetupDialog.vue';
 import DocumentOutline from './DocumentOutline.vue';
 import KeyboardShortcutsDialog from './dialogs/KeyboardShortcutsDialog.vue';
 import TextContextMenu from './TextContextMenu.vue';
-import ImageContextMenu, { type ImageContextMenuState } from './ImageContextMenu.vue';
+import ImageContextMenu from './ImageContextMenu.vue';
+import type { ImageContextMenuState } from './imageContextMenuTypes';
 import HyperlinkPopup, { type HyperlinkPopupData } from './ui/HyperlinkPopup.vue';
-import {
-  detectTableInsertHover,
-  TABLE_INSERT_HIDE_DELAY_MS,
-} from '@eigenpal/docx-editor-core/layout-bridge/tableInsertHover';
 import UnifiedSidebar from './UnifiedSidebar.vue';
 import CommentMarginMarkers from './CommentMarginMarkers.vue';
 import MaterialSymbol from './ui/MaterialSymbol.vue';
 import PageIndicator from './PageIndicator.vue';
 import InlineHeaderFooterEditor from './InlineHeaderFooterEditor.vue';
-import type { HeaderFooter, Paragraph, Table } from '@eigenpal/docx-editor-core/types/content';
 import type { EditorMode } from '../editor-mode';
 import MenuBar from './MenuBar.vue';
 import DocumentName from './DocumentName.vue';
@@ -488,26 +462,18 @@ import { usePageSetupControls } from '../composables/usePageSetupControls';
 import { useOutlineSidebar } from '../composables/useOutlineSidebar';
 import { useKeyboardShortcuts } from '../composables/useKeyboardShortcuts';
 import { useCommentManagement } from '../composables/useCommentManagement';
-import { TextSelection, NodeSelection } from 'prosemirror-state';
-import type { DocxEditorRef } from '../editor-ref';
+import { useImageActions } from '../composables/useImageActions';
+import { useContextMenus } from '../composables/useContextMenus';
+import { usePagesPointer } from '../composables/usePagesPointer';
+import { useSelectionSync } from '../composables/useSelectionSync';
+import { useDocxEditorRefApi } from '../composables/useDocxEditorRefApi';
 import type { EditorView } from 'prosemirror-view';
-import { findPageIndexContainingPmPos } from '@eigenpal/docx-editor-core/layout-engine';
 import type { Document, SectionProperties } from '@eigenpal/docx-editor-core/types/document';
 import type { Comment } from '@eigenpal/docx-editor-core/types/content';
 import { collectHeadings } from '@eigenpal/docx-editor-core/utils/headingCollector';
 import type { HeadingInfo } from '@eigenpal/docx-editor-core/utils/headingCollector';
 import { collectBodySpans } from '@eigenpal/docx-editor-core/layout-bridge';
-import {
-  readSelectionGeometry,
-  getCaretPositionFromDom,
-} from '@eigenpal/docx-editor-core/layout-bridge/resolveDomPosition';
-import {
-  captureInlinePositionEmu,
-  findImageElement,
-  toolbarValueToLayoutTarget,
-} from '@eigenpal/docx-editor-core/layout-painter';
 import { createTranslator, provideLocale } from '../i18n';
-import { Z_INDEX } from '../styles/zIndex';
 import { twipsToPixels } from '@eigenpal/docx-editor-core/utils/units';
 import { extractTrackedChanges } from '@eigenpal/docx-editor-core/prosemirror/utils/extractTrackedChanges';
 import { openReportIssue } from '@eigenpal/docx-editor-core/utils/reportIssue';
@@ -518,9 +484,6 @@ import {
   removeTabMark,
 } from '@eigenpal/docx-editor-core/prosemirror/commands/paragraph';
 import { acceptChange, rejectChange } from '@eigenpal/docx-editor-core/prosemirror/commands';
-import { getTableContext } from '@eigenpal/docx-editor-core/prosemirror/extensions/nodes/TableExtension';
-import type { ImageLayoutTarget } from '@eigenpal/docx-editor-core/prosemirror/commands';
-import type { WrapType } from '@eigenpal/docx-editor-core/docx/wrapTypes';
 import { SIDEBAR_DOCUMENT_SHIFT } from '@eigenpal/docx-editor-core/utils';
 import { SelectionBridge } from '@eigenpal/docx-editor-core/prosemirror';
 import type { DocxEditorProps } from '../docx-editor-props';
@@ -766,60 +729,12 @@ const isAddingComment = ref(false);
 // design's shallowRef contract (Decision 5/6) and notes/reactivity-review.md.
 const comments = shallowRef<Comment[]>([]);
 const trackedChanges = shallowRef<TrackedChangeEntry[]>([]);
-const contextMenu = ref({
-  isOpen: false,
-  position: { x: 0, y: 0 },
-  hasSelection: false,
-  inTable: false,
-  onImage: false,
-  canMergeCells: false,
-  canSplitCell: false,
-});
-// Image-specific right-click menu — shows wrap-mode options instead of the
-// generic text menu when the user right-clicks a rendered image.
-const imageContextMenu = ref<ImageContextMenuState | null>(null);
 // Single-click on a hyperlink surfaces a popup with copy / edit /
 // unlink. Cleared on selection change, escape, or click-outside.
 // Owned by useHyperlinkManagement below; destructured into scope so the
 // existing watch / event handlers can keep reading it directly.
 
-// Table quick-action "+" button — surfaces on hover near the left
-// edge (row insert) or top edge (column insert) of a layout table.
-const tableInsertButton = ref<{
-  type: 'row' | 'column';
-  x: number;
-  y: number;
-  cellPmPos: number;
-} | null>(null);
-let tableInsertHideTimer: ReturnType<typeof setTimeout> | null = null;
-function clearTableInsertTimer() {
-  if (tableInsertHideTimer !== null) {
-    clearTimeout(tableInsertHideTimer);
-    tableInsertHideTimer = null;
-  }
-}
-// Cut / Copy / Paste / Delete items appended below the layout choices in
-// the image context menu so users don't have to flip menus to do
-// clipboard work on a selected image.
-const imageContextMenuTextActions = computed(() => [
-  { action: 'cut', label: t('contextMenu.cut'), shortcut: t('contextMenu.cutShortcut') },
-  { action: 'copy', label: t('contextMenu.copy'), shortcut: t('contextMenu.copyShortcut') },
-  {
-    action: 'paste',
-    label: t('contextMenu.paste'),
-    shortcut: t('contextMenu.pasteShortcut'),
-    dividerAfter: true,
-  },
-  { action: 'delete', label: t('contextMenu.delete'), shortcut: t('contextMenu.deleteShortcut') },
-]);
 const outlineHeadings = shallowRef<HeadingInfo[]>([]);
-// shallowRef so the wrapped HTMLElement isn't proxied — identity comparisons
-// downstream (ImageSelectionOverlay) rely on raw element references.
-const selectedImage = shallowRef<ImageSelectionInfo | null>(null);
-// True while the overlay is mid-resize / move / rotate — gates the pages
-// mousedown handler so an in-flight image gesture isn't clobbered by a stray
-// click (mirrors React's PagedEditor.isImageInteractingRef).
-const imageInteracting = ref(false);
 
 const {
   zoom,
@@ -865,7 +780,7 @@ const {
   onSelectionUpdate: () => {
     stateTick.value++;
     updateSelectionOverlay();
-    const selection = getSelectionInfo();
+    const selection = getSelectionInfoImpl(editorView.value);
     selectionChangeSubscribers.forEach((listener) => listener(selection));
   },
 });
@@ -967,37 +882,84 @@ const {
   emit,
 });
 
-function print() {
-  props.onPrint?.();
-  window.print();
-}
+// ─── Composable order: useImageActions → usePagesPointer → useContextMenus
+//     → useSelectionSync → useDocxEditorRefApi
+//
+//   • usePagesPointer / useContextMenus / useSelectionSync all consume the
+//     `selectedImage` + `imageInteracting` refs from useImageActions, so
+//     it has to come first.
+//   • useContextMenus takes `resolvePos` / `setPmSelection` callbacks
+//     produced by usePagesPointer, so usePagesPointer goes second.
+//   • useSelectionSync is constructed last among the cluster because the
+//     hoisted clearOverlay / updateSelectionOverlay wrappers below close
+//     over `selectionSync` by name (see TDZ note where they're defined).
+// ────────────────────────────────────────────────────────────────────────
+const {
+  selectedImage,
+  imageInteracting,
+  imageToolbarContext,
+  handleInsertImage,
+  handleToolbarImageWrap,
+  handleImageTransform,
+} = useImageActions({ editorView, zoom, stateTick, getCommands });
 
-function openPrintPreview() {
-  print();
-}
+// Table resize handlers — port of React PagedEditor.tsx column/row/right-edge
+// resize. tryStartResize() runs from handlePagesMouseDown; install() wires
+// global mousemove/mouseup that drives the drag and commits the PM transaction.
+const tableResize = useTableResize();
+let tableResizeCleanup: (() => void) | null = null;
 
-function getZoom() {
-  return zoom.value;
-}
+const {
+  tableInsertButton,
+  hfEdit,
+  scrollPageInfo,
+  resolvePos,
+  setPmSelection,
+  scrollVisiblePositionIntoView,
+  handlePagesMouseDown,
+  handlePagesMouseMove,
+  handlePagesClick,
+  handlePagesDoubleClick,
+  handleTableInsertClick,
+  clearTableInsertTimer,
+  handleHfSave,
+  handleHfRemove,
+} = usePagesPointer({
+  editorView,
+  pagesRef,
+  pagesViewportRef,
+  selectedImage,
+  imageInteracting,
+  hyperlinkPopupData,
+  readOnly,
+  zoom,
+  layout,
+  tableResize,
+  getCommands,
+  getDocument,
+  reLayout,
+  emit,
+  clearOverlay,
+});
 
-function scrollToPage(pageNumber: number) {
-  if (!Number.isInteger(pageNumber) || pageNumber < 1) return;
-  const viewport = pagesViewportRef.value;
-  const pageEl = pagesRef.value?.querySelector<HTMLElement>(`[data-page-number="${pageNumber}"]`);
-  if (!viewport || !pageEl) return;
-  const viewportRect = viewport.getBoundingClientRect();
-  const pageRect = pageEl.getBoundingClientRect();
-  viewport.scrollTo({
-    top: pageRect.top - viewportRect.top + viewport.scrollTop - 24,
-    behavior: 'smooth',
-  });
-}
-
-function scrollToPosition(pmPos: number) {
-  if (!Number.isFinite(pmPos)) return;
-  scrollVisiblePositionIntoView(pmPos);
-}
-
+const {
+  contextMenu,
+  imageContextMenu,
+  imageContextMenuTextActions,
+  handleContextMenu,
+  handleSelectedImageContextMenu,
+  handleImageWrapSelect,
+  handleContextMenuAction,
+} = useContextMenus({
+  editorView,
+  selectedImage,
+  zoom,
+  showImageProperties,
+  getCommands,
+  clearOverlay,
+  setPmSelection,
+  resolvePos,
+});
 
 const getEditorViewForDecorations = () => editorView.value;
 const getPagesContainerForDecorations = () => pagesRef.value;
@@ -1022,67 +984,6 @@ function setEditorMode(mode: EditorMode) {
   emit('mode-change', mode);
 }
 
-function getEditorRef() {
-  if (!editorView.value) return null;
-  return {
-    getDocument,
-    getView: () => editorView.value,
-    getState: () => editorView.value?.state ?? null,
-  };
-}
-
-function getTotalPages(): number {
-  return layout.value?.pages.length ?? 0;
-}
-
-function getCurrentPage(): number {
-  const currentLayout = layout.value;
-  const view = editorView.value;
-  if (!currentLayout || !view) return 0;
-  const pageIndex = findPageIndexContainingPmPos(currentLayout, view.state.selection.from);
-  return pageIndex == null ? 0 : pageIndex + 1;
-}
-
-
-
-function scrollToParaId(paraId: string): boolean {
-  const view = editorView.value;
-  if (!view) return false;
-  const range = findParaIdRange(view.state.doc, paraId);
-  if (!range) return false;
-  scrollVisiblePositionIntoView(range.from + 1);
-  return true;
-}
-
-function findInDocument(
-  query: string,
-  opts?: { caseSensitive?: boolean; limit?: number }
-) {
-  return findInDocumentImpl(editorView.value, query, opts);
-}
-
-function getSelectionInfo() {
-  return getSelectionInfoImpl(editorView.value);
-}
-
-function getComments() {
-  return comments.value;
-}
-
-
-function getPageContent(pageNumber: number) {
-  return getPageContentImpl(editorView.value, layout.value, pageNumber);
-}
-
-function onContentChange(listener: (document: unknown) => void): () => void {
-  contentChangeSubscribers.add(listener);
-  return () => contentChangeSubscribers.delete(listener);
-}
-
-function onSelectionChange(listener: (selection: unknown) => void): () => void {
-  selectionChangeSubscribers.add(listener);
-  return () => selectionChangeSubscribers.delete(listener);
-}
 
 // ─── Floating "Add comment" button — recompute logic ──────────────────────
 // Lives here (after useDocxEditor / useZoom) so it can access editorView /
@@ -1243,262 +1144,6 @@ function handleStartAddComment() {
 // inside the pages-viewport). Mirrors React's addCommentYPosition.
 const addCommentYPosition = ref<number | null>(null);
 
-// Inline header/footer editor state (#388 port). When the user
-// double-clicks a header or footer region, capture which side they hit,
-// which HF (default vs first-page), and the bounding rect of the clicked
-// region so the floating editor can overlay it. Save flow updates the
-// matching pkg.headers/footers Map entry and re-runs layout.
-const hfEdit = ref<{
-  position: 'header' | 'footer';
-  rId: string | null;
-  headerFooter: HeaderFooter | null;
-  targetRect: { top: number; left: number; width: number; height: number } | null;
-} | null>(null);
-
-/**
- * Show / hide the "+" insert button as the cursor moves near a
- * table's edges. Hide is debounced through `TABLE_INSERT_HIDE_DELAY_MS`
- * so transient gaps between cells don't make the button flicker.
- */
-function handlePagesMouseMove(event: MouseEvent) {
-  if (readOnly.value) return;
-  // Skip the hit-test during text drag-selects so the (+) doesn't
-  // pop in mid-selection when the drag path crosses a table edge.
-  if (isDragging) return;
-  const pagesEl = pagesRef.value;
-  if (!pagesEl) return;
-  const viewportEl = pagesViewportRef.value;
-  if (!viewportEl) return;
-
-  const hit = detectTableInsertHover({
-    mouseX: event.clientX,
-    mouseY: event.clientY,
-    pagesContainer: pagesEl,
-    target: event.target as HTMLElement,
-    hfEditMode: hfEdit.value?.position ?? null,
-  });
-
-  if (!hit) {
-    if (tableInsertHideTimer === null) {
-      tableInsertHideTimer = setTimeout(() => {
-        tableInsertButton.value = null;
-        tableInsertHideTimer = null;
-      }, TABLE_INSERT_HIDE_DELAY_MS);
-    }
-    return;
-  }
-
-  const viewportRect = viewportEl.getBoundingClientRect();
-  tableInsertButton.value = {
-    type: hit.type,
-    x: hit.clientX - viewportRect.left,
-    y: hit.clientY - viewportRect.top,
-    cellPmPos: hit.cellPmPos,
-  };
-  clearTableInsertTimer();
-}
-
-/**
- * Insert a row below / column to the right of the target cell. The
- * core `addRowBelow` / `addColumnRight` commands read the current
- * PM selection to know which cell to extend, so we plant a caret
- * inside the hovered cell first.
- */
-function handleTableInsertClick(event: MouseEvent) {
-  event.preventDefault();
-  event.stopPropagation();
-  const btn = tableInsertButton.value;
-  const view = editorView.value;
-  if (!btn || !view) return;
-  const tr = view.state.tr.setSelection(TextSelection.create(view.state.doc, btn.cellPmPos + 1));
-  view.dispatch(tr);
-  const cmds = getCommands();
-  const cmd = btn.type === 'row' ? cmds.addRowBelow() : cmds.addColumnRight();
-  cmd(view.state, (t: any) => view.dispatch(t), view);
-  tableInsertButton.value = null;
-  view.focus();
-}
-
-/**
- * Single-click on a hyperlink → surface the popup or navigate internal
- * bookmarks. Browser default navigation stays suppressed so drag-selects
- * ending on links do not unexpectedly leave the document.
- */
-function handlePagesClick(event: MouseEvent) {
-  const anchor = (event.target as HTMLElement | null)?.closest(
-    'a[href]'
-  ) as HTMLAnchorElement | null;
-  if (!anchor) return;
-  // Suppress the browser's default navigation for every click that
-  // lands on an anchor — including drag-selects that end on one.
-  // Without this, ending a selection inside a link still opens it.
-  event.preventDefault();
-  const href = anchor.getAttribute('href') || '';
-  if (!href) return;
-  if (href.startsWith('#')) {
-    const bookmarkName = href.slice(1);
-    if (bookmarkName) navigateToBookmark(bookmarkName);
-    return;
-  }
-  // Drag-to-select past a link should suppress the popup but still
-  // keep navigation blocked above.
-  const view = editorView.value;
-  const hasRangeSelection = view && view.state.selection.from !== view.state.selection.to;
-  if (hasRangeSelection) return;
-  hyperlinkPopupData.value = {
-    href,
-    displayText: anchor.textContent || '',
-    tooltip: anchor.getAttribute('title') || undefined,
-    anchorRect: anchor.getBoundingClientRect(),
-  };
-}
-
-function navigateToBookmark(bookmarkName: string) {
-  const view = editorView.value;
-  if (!view) return;
-  let targetPos: number | null = null;
-  view.state.doc.descendants((node, pos) => {
-    if (targetPos !== null) return false;
-    const bookmarks = node.attrs?.bookmarks as Array<{ name?: string }> | undefined;
-    if (bookmarks?.some((b) => b.name === bookmarkName)) {
-      targetPos = pos;
-      return false;
-    }
-    return true;
-  });
-  if (targetPos === null) return;
-  scrollVisiblePositionIntoView(targetPos);
-  try {
-    setPmSelection(Math.min(targetPos + 1, view.state.doc.content.size));
-  } catch {
-    // Bookmark target may be a non-text selectable position; fall back to the
-    // start position so the click still moves the editor near the target.
-    setPmSelection(targetPos);
-  }
-}
-
-function scrollVisiblePositionIntoView(pmPos: number) {
-  scrollVisiblePositionIntoViewImpl(pagesRef.value, pagesViewportRef.value, pmPos);
-}
-
-
-function handlePagesDoubleClick(event: MouseEvent) {
-  const target = event.target as HTMLElement;
-  const headerEl = target.closest('.layout-page-header') as HTMLElement | null;
-  const footerEl = target.closest('.layout-page-footer') as HTMLElement | null;
-  const hfEl = headerEl ?? footerEl;
-  if (!hfEl) return;
-
-  const position: 'header' | 'footer' = headerEl ? 'header' : 'footer';
-  const doc = getDocument();
-  if (!doc?.package) return;
-
-  // Resolve the HF for the current section. Mirrors the lookup in
-  // useDocxEditor.runLayoutPipeline so what the user sees on page is
-  // what they get to edit.
-  const sp =
-    doc.package.document?.sections?.[0]?.properties ??
-    doc.package.document?.finalSectionProperties ??
-    null;
-  const refs = position === 'header' ? sp?.headerReferences : sp?.footerReferences;
-  const map = position === 'header' ? doc.package.headers : doc.package.footers;
-  if (!refs || !map) return;
-  // Default ref takes priority; fall back to `first` if the doc only ships first.
-  const refEntry = refs.find((r) => r.type === 'default') ?? refs.find((r) => r.type === 'first');
-  const rId = refEntry?.rId ?? null;
-  const hf = rId ? (map.get(rId) ?? null) : null;
-
-  // Bounding rect relative to the pages-viewport. zoom is applied via
-  // CSS transform on the viewport, so use the unscaled element coords.
-  const viewport = pagesViewportRef.value;
-  if (!viewport) return;
-  const elRect = hfEl.getBoundingClientRect();
-  const vpRect = viewport.getBoundingClientRect();
-  const z = zoom.value || 1;
-  hfEdit.value = {
-    position,
-    rId,
-    headerFooter: hf,
-    targetRect: {
-      top: (elRect.top - vpRect.top + viewport.scrollTop) / z,
-      left: (elRect.left - vpRect.left + viewport.scrollLeft) / z,
-      width: elRect.width / z,
-      height: elRect.height / z,
-    },
-  };
-}
-
-function handleHfSave(content: (Paragraph | Table)[]) {
-  const doc = getDocument();
-  const edit = hfEdit.value;
-  if (!doc?.package || !edit) return;
-  const map = edit.position === 'header' ? doc.package.headers : doc.package.footers;
-  if (!map || !edit.rId) return;
-  const existing = map.get(edit.rId);
-  if (existing) {
-    existing.content = content;
-  }
-  reLayout();
-  emit('change', doc);
-}
-
-function handleHfRemove() {
-  const doc = getDocument();
-  const edit = hfEdit.value;
-  if (!doc?.package || !edit || !edit.rId) return;
-  const map = edit.position === 'header' ? doc.package.headers : doc.package.footers;
-  const existing = map?.get(edit.rId);
-  if (existing) {
-    existing.content = [];
-  }
-  hfEdit.value = null;
-  reLayout();
-  emit('change', doc);
-}
-
-// Page indicator overlay state — mirrors React DocxEditor.tsx scrollPageInfo.
-// `currentPage` is computed from scroll position against per-page heights from
-// the engine layout; the indicator fades out 600ms after scrolling stops.
-const scrollPageInfo = ref<{
-  currentPage: number;
-  totalPages: number;
-  visible: boolean;
-}>({ currentPage: 1, totalPages: 1, visible: false });
-let scrollFadeTimer: ReturnType<typeof setTimeout> | null = null;
-
-function handleViewportScroll() {
-  const container = pagesViewportRef.value;
-  const lay = layout.value;
-  if (!container || !lay || lay.pages.length === 0) return;
-
-  const scrollTop = container.scrollTop;
-  const totalPages = lay.pages.length;
-  const PAGE_GAP = 24; // matches DEFAULT_PAGE_GAP in useDocxEditor
-  const PADDING_TOP = 24;
-
-  const viewportCenter = scrollTop + container.clientHeight / 2;
-  let accumulatedY = PADDING_TOP;
-  let currentPage = 1;
-  for (let i = 0; i < lay.pages.length; i++) {
-    const pageHeight = lay.pages[i].size.h;
-    const pageEnd = accumulatedY + pageHeight;
-    if (viewportCenter < pageEnd) {
-      currentPage = i + 1;
-      break;
-    }
-    accumulatedY = pageEnd + PAGE_GAP;
-    currentPage = i + 2;
-  }
-  currentPage = Math.min(currentPage, totalPages);
-
-  scrollPageInfo.value = { currentPage, totalPages, visible: true };
-
-  if (scrollFadeTimer) clearTimeout(scrollFadeTimer);
-  scrollFadeTimer = setTimeout(() => {
-    scrollPageInfo.value = { ...scrollPageInfo.value, visible: false };
-  }, 600);
-}
-
 watch(
   () => props.documentBuffer,
   async (buf) => {
@@ -1522,12 +1167,6 @@ watch(
   }
 );
 
-// Table resize handlers — port of React PagedEditor.tsx column/row/right-edge
-// resize. tryStartResize() runs from handlePagesMouseDown; install() wires
-// global mousemove/mouseup that drives the drag and commits the PM transaction.
-const tableResize = useTableResize();
-let tableResizeCleanup: (() => void) | null = null;
-
 onMounted(async () => {
   tableResizeCleanup = tableResize.install();
   await nextTick();
@@ -1548,266 +1187,26 @@ onBeforeUnmount(() => {
 });
 
 // =========================================================================
-// Selection & caret overlay
+// Selection & caret overlay — useSelectionSync owns the implementation.
+//
+// These wrappers MUST stay as hoisted `function` declarations. The
+// `useDocxEditor({ onSelectionUpdate })` call earlier in this script
+// closes over `updateSelectionOverlay` by name; if these were rewritten
+// as `const updateSelectionOverlay = ...`, the closure would TDZ-crash
+// because `useDocxEditor` runs before `useSelectionSync` here. Function
+// declarations are hoisted, so the closure resolves at call time
+// (after script-setup finishes and `selectionSync` exists).
 // =========================================================================
 
-let caretBlinkInterval: ReturnType<typeof setInterval> | null = null;
-let caretEl: HTMLElement | null = null;
-
 function clearOverlay() {
-  const container = pagesRef.value;
-  if (!container) return;
-  container.querySelectorAll('.vue-sel-rect, .vue-caret').forEach((el) => el.remove());
-  if (caretBlinkInterval !== null) {
-    clearInterval(caretBlinkInterval);
-    caretBlinkInterval = null;
-  }
-  caretEl = null;
+  selectionSync.clearOverlay();
 }
 
 function updateSelectionOverlay() {
-  const container = pagesRef.value;
-  const view = editorView.value;
-  if (!container || !view) return;
-
-  clearOverlay();
-
-  // Keep `selectedImage` in sync with the PM selection: when the doc holds a
-  // NodeSelection on an image (e.g. the overlay just re-selected it after a
-  // resize / move / rotate that re-painted the pages), re-resolve to the fresh
-  // painted element. Mirrors React's PagedEditor selection handler. A PM
-  // position can carry `data-doc-from` on more than one painted element (the
-  // image's wrapper plus, say, the run span beside it), so scan the matches
-  // and take the one that resolves to an actual image wrapper.
-  const sel = view.state.selection;
-  if (sel instanceof NodeSelection && sel.node.type.name === 'image') {
-    let imgEl: HTMLElement | null = null;
-    for (const el of container.querySelectorAll<HTMLElement>(`[data-doc-from="${sel.from}"]`)) {
-      const img = findImageElement(el);
-      if (img) {
-        imgEl = img;
-        break;
-      }
-    }
-    if (imgEl) {
-      const prev = selectedImage.value;
-      if (
-        !prev ||
-        prev.element !== imgEl ||
-        prev.pmPos !== sel.from ||
-        prev.width !== imgEl.offsetWidth ||
-        prev.height !== imgEl.offsetHeight
-      ) {
-        selectedImage.value = {
-          element: imgEl,
-          pmPos: sel.from,
-          width: imgEl.offsetWidth,
-          height: imgEl.offsetHeight,
-        };
-      }
-      return;
-    }
-  }
-
-  // Skip text/caret overlay when an image is selected — ImageSelectionOverlay handles it
-  if (selectedImage.value) return;
-
-  const { from, to, empty } = view.state.selection;
-
-  // Account for scroll offset: overlays are position:absolute inside the
-  // scrollable container, so we need to add scrollTop/scrollLeft to convert
-  // viewport-relative coordinates from getBoundingClientRect to container-relative.
-  const scrollTop = container.scrollTop;
-  const scrollLeft = container.scrollLeft;
-
-  if (empty) {
-    // Draw blinking caret
-    const overlayRect = container.getBoundingClientRect();
-    const caret = getCaretPositionFromDom(container, from, overlayRect);
-    if (caret) {
-      const el = document.createElement('div');
-      el.className = 'vue-caret';
-      el.style.cssText = `
-        position: absolute;
-        left: ${caret.x + scrollLeft}px;
-        top: ${caret.y + scrollTop}px;
-        width: 2px;
-        height: ${caret.height}px;
-        background: #000;
-        pointer-events: none;
-        z-index: ${Z_INDEX.selectionOverlay};
-      `;
-      container.appendChild(el);
-      caretEl = el;
-
-      // Blink
-      let visible = true;
-      caretBlinkInterval = setInterval(() => {
-        visible = !visible;
-        if (caretEl) caretEl.style.opacity = visible ? '1' : '0';
-      }, 530);
-    }
-    return;
-  }
-
-  // Draw selection highlight rects (character-level)
-  const overlayRect = container.getBoundingClientRect();
-  const rects = readSelectionGeometry(container, from, to, overlayRect);
-
-  for (const rect of rects) {
-    const el = document.createElement('div');
-    el.className = 'vue-sel-rect';
-    el.style.cssText = `
-      position: absolute;
-      left: ${rect.x + scrollLeft}px;
-      top: ${rect.y + scrollTop}px;
-      width: ${rect.width}px;
-      height: ${rect.height}px;
-      background: rgba(66, 133, 244, 0.3);
-      pointer-events: none;
-      z-index: ${Z_INDEX.selectionOverlay};
-    `;
-    container.appendChild(el);
-  }
+  selectionSync.updateSelectionOverlay();
 }
 
-// =========================================================================
-// Multi-click detection (double-click = word, triple-click = paragraph)
-// =========================================================================
-
-const MULTI_CLICK_DELAY = 500;
-let lastClickTime = 0;
-let lastClickPos: number | null = null;
-let clickCount = 0;
-
-function selectWord(pos: number) {
-  selectWordImpl(pagesRef.value, pos, setPmSelection);
-}
-
-function selectParagraph(pos: number) {
-  selectParagraphImpl(pagesRef.value, pos, setPmSelection);
-}
-
-// =========================================================================
-// Drag-to-select support
-// =========================================================================
-
-let isDragging = false;
-let dragAnchor: number | null = null;
-
-function resolvePos(clientX: number, clientY: number): number | null {
-  return resolvePosImpl(pagesRef.value, editorView.value, clientX, clientY);
-}
-
-function setPmSelection(anchor: number, head?: number) {
-  const view = editorView.value;
-  if (!view) return;
-  const $anchor = view.state.doc.resolve(anchor);
-  const $head = head !== undefined ? view.state.doc.resolve(head) : $anchor;
-  const sel = TextSelection.between($anchor, $head);
-  view.dispatch(view.state.tr.setSelection(sel));
-}
-
-// `findImageElement` lives in
-// `@eigenpal/docx-editor-core/layout-painter` so React + Vue share the
-// rendered-image hit-test taxonomy (LAYOUT_IMAGE_CLASSES). Imported
-// alongside the rest of the layout-painter API at the top of the file.
-
-function handlePagesMouseDown(event: MouseEvent) {
-  if (event.button !== 0) return;
-  // An image resize / move / rotate is in progress — its own document-level
-  // listeners own this gesture; don't let the pages handler interfere.
-  if (imageInteracting.value) return;
-  const view = editorView.value;
-  if (!view) return;
-
-  // Table resize: if the user clicked a column/row/right-edge handle,
-  // start the resize drag and skip text selection.
-  if (!readOnly.value && tableResize.tryStartResize(event, view)) {
-    return;
-  }
-
-  // Check if user clicked on an image
-  const target = event.target as HTMLElement;
-  const imageEl = findImageElement(target);
-  if (imageEl) {
-    event.preventDefault();
-    event.stopPropagation();
-    const docFrom = Number(imageEl.dataset.docFrom);
-    if (!isNaN(docFrom)) {
-      // Set ProseMirror node selection on the image
-      try {
-        const sel = NodeSelection.create(view.state.doc, docFrom);
-        view.dispatch(view.state.tr.setSelection(sel));
-      } catch {
-        // Position may be invalid
-      }
-      selectedImage.value = {
-        element: imageEl,
-        pmPos: docFrom,
-        width: imageEl.offsetWidth,
-        height: imageEl.offsetHeight,
-      };
-      // Clear text caret overlay so it doesn't show alongside the image selection
-      clearOverlay();
-    }
-    view.focus();
-    return;
-  }
-
-  // Clicked outside image — deselect
-  selectedImage.value = null;
-
-  // Prevent browser from moving focus to the pages div — PM must keep focus
-  event.preventDefault();
-
-  const pos = resolvePos(event.clientX, event.clientY);
-  if (pos === null) {
-    view.focus();
-    return;
-  }
-
-  // Multi-click detection
-  const now = Date.now();
-  if (now - lastClickTime < MULTI_CLICK_DELAY && lastClickPos === pos) {
-    clickCount++;
-  } else {
-    clickCount = 1;
-  }
-  lastClickTime = now;
-  lastClickPos = pos;
-
-  if (clickCount === 2) {
-    selectWord(pos);
-  } else if (clickCount >= 3) {
-    selectParagraph(pos);
-    clickCount = 0;
-  } else {
-    // Single click
-    if (event.shiftKey) {
-      const { from } = view.state.selection;
-      setPmSelection(from, pos);
-    } else {
-      setPmSelection(pos);
-    }
-    dragAnchor = pos;
-    isDragging = true;
-  }
-
-  view.focus();
-}
-
-function handleMouseMove(event: MouseEvent) {
-  if (!isDragging || dragAnchor === null) return;
-  const pos = resolvePos(event.clientX, event.clientY);
-  if (pos !== null && pos !== dragAnchor) {
-    setPmSelection(dragAnchor, pos);
-  }
-}
-
-function handleMouseUp() {
-  isDragging = false;
-}
+const selectionSync = useSelectionSync({ editorView, pagesRef, selectedImage });
 
 // =========================================================================
 // Insert operation handlers
@@ -1833,25 +1232,6 @@ function handleMenuTableInsert(rows: number, cols: number) {
   view.focus();
 }
 
-function handleInsertImage(data: { src: string; width: number; height: number; alt: string }) {
-  const view = editorView.value;
-  if (!view) return;
-  const imageNodeType = view.state.schema.nodes.image;
-  if (!imageNodeType) return;
-  const node = imageNodeType.create({
-    src: data.src,
-    alt: data.alt,
-    width: data.width,
-    height: data.height,
-  });
-  const { from } = view.state.selection;
-  const tr = view.state.tr.insert(from, node);
-  view.dispatch(tr.scrollIntoView());
-  view.focus();
-}
-
-
-
 // =========================================================================
 // Page setup
 // =========================================================================
@@ -1866,295 +1246,6 @@ const currentSectionProperties = currentSectionProps;
 // Document outline
 // =========================================================================
 
-
-// =========================================================================
-// Context menu
-// =========================================================================
-
-function handleContextMenu(event: MouseEvent) {
-  const view = editorView.value;
-  if (!view) return;
-  const target = event.target as HTMLElement;
-
-  // Check if right-click is on an image
-  const imageEl = findImageElement(target);
-  if (imageEl) {
-    const docFrom = Number(imageEl.dataset.docFrom);
-    if (!isNaN(docFrom)) {
-      try {
-        const sel = NodeSelection.create(view.state.doc, docFrom);
-        view.dispatch(view.state.tr.setSelection(sel));
-      } catch {
-        /* ignore */
-      }
-      selectedImage.value = {
-        element: imageEl,
-        pmPos: docFrom,
-        width: imageEl.offsetWidth,
-        height: imageEl.offsetHeight,
-      };
-      clearOverlay();
-
-      // Image right-click takes priority over the text context menu —
-      // surface the layout-options menu instead and bail out.
-      const node = view.state.doc.nodeAt(docFrom);
-      if (node && node.type.name === 'image') {
-        const wrapType = (node.attrs.wrapType as WrapType | undefined) ?? 'inline';
-        const cssFloat = node.attrs.cssFloat as 'left' | 'right' | 'none' | null | undefined;
-        imageContextMenu.value = {
-          open: true,
-          position: { x: event.clientX, y: event.clientY },
-          pmPos: docFrom,
-          currentWrapType: wrapType,
-          currentCssFloat: cssFloat ?? null,
-          inlinePositionEmu:
-            wrapType === 'inline' ? captureInlinePositionEmu(imageEl, zoom.value) : undefined,
-        };
-        contextMenu.value.isOpen = false;
-        return;
-      }
-    }
-  }
-
-  // Move the PM caret to the right-click point unless the click landed
-  // inside the current selection (or exactly on a collapsed caret —
-  // re-dispatching the same position would force a needless re-layout).
-  // Mirrors React's PagedEditor: table ops and other caret-scoped
-  // actions then operate on the cell/run the user actually clicked.
-  {
-    const { from, to } = view.state.selection;
-    const clickPos = resolvePos(event.clientX, event.clientY);
-    if (clickPos !== null && (clickPos < from || clickPos > to)) {
-      try {
-        setPmSelection(clickPos);
-      } catch {
-        // resolved position may be out of range after a concurrent edit
-      }
-    }
-  }
-
-  const tableCtx = getTableContext(view.state);
-  const { empty } = view.state.selection;
-
-  // Right-clicking outside an image clears any open image context menu
-  // — otherwise the image menu can stay visible while TextContextMenu
-  // is shown over a different element. Mirrors React's PagedEditor
-  // exclusivity (only one of the two menus visible at a time).
-  if (imageContextMenu.value) imageContextMenu.value = null;
-
-  contextMenu.value = {
-    isOpen: true,
-    position: { x: event.clientX, y: event.clientY },
-    hasSelection: !empty,
-    inTable: tableCtx.isInTable,
-    onImage: !!imageEl,
-    canMergeCells: !!tableCtx.hasMultiCellSelection,
-    canSplitCell: !!tableCtx.canSplitCell,
-  };
-}
-
-function handleSelectedImageContextMenu(event: MouseEvent) {
-  const view = editorView.value;
-  const sel = selectedImage.value;
-  if (!view || !sel) return;
-  const node = view.state.doc.nodeAt(sel.pmPos);
-  if (!node || node.type.name !== 'image') return;
-  const wrapType = (node.attrs.wrapType as WrapType | undefined) ?? 'inline';
-  const cssFloat = node.attrs.cssFloat as 'left' | 'right' | 'none' | null | undefined;
-  imageContextMenu.value = {
-    open: true,
-    position: { x: event.clientX, y: event.clientY },
-    pmPos: sel.pmPos,
-    currentWrapType: wrapType,
-    currentCssFloat: cssFloat ?? null,
-    inlinePositionEmu:
-      wrapType === 'inline' ? captureInlinePositionEmu(sel.element, zoom.value) : undefined,
-  };
-  contextMenu.value.isOpen = false;
-}
-
-function handleImageWrapSelect(target: ImageLayoutTarget) {
-  const view = editorView.value;
-  const state = imageContextMenu.value;
-  if (!view || !state) return;
-  const cmds = getCommands();
-  const opts =
-    state.inlinePositionEmu && target !== 'inline'
-      ? { initialPositionEmu: state.inlinePositionEmu }
-      : undefined;
-  const cmd = cmds.setImageWrapType?.(state.pmPos, target, opts);
-  if (!cmd) return;
-  cmd(view.state, (tr: any) => view.dispatch(tr), view);
-  view.focus();
-}
-
-// Toolbar image group: read the live image attrs from the PM doc at the
-// selected image's position so the wrap dropdown highlights the correct
-// active option. Only the three fields the toolbar dropdown reads — wrap
-// dropdown is the only UI element wired to this context in v1.
-const imageToolbarContext = computed<{
-  wrapType: string;
-  displayMode: string;
-  cssFloat: string | null;
-} | null>(() => {
-  void stateTick.value;
-  const view = editorView.value;
-  const sel = selectedImage.value;
-  if (!view || !sel) return null;
-  const node = view.state.doc.nodeAt(sel.pmPos);
-  if (!node || node.type.name !== 'image') return null;
-  return {
-    wrapType: (node.attrs.wrapType as string) ?? 'inline',
-    displayMode: (node.attrs.displayMode as string) ?? 'inline',
-    cssFloat: (node.attrs.cssFloat as string) ?? null,
-  };
-});
-
-// Toolbar wrap dropdown → core PM command. Translates the legacy
-// toolbar vocabulary via `toolbarValueToLayoutTarget` so this path
-// shares `setImageWrapType` with the right-click menu.
-function handleToolbarImageWrap(value: string) {
-  const view = editorView.value;
-  const sel = selectedImage.value;
-  if (!view || !sel) return;
-  const target = toolbarValueToLayoutTarget(value);
-  if (!target) return;
-  const node = view.state.doc.nodeAt(sel.pmPos);
-  const cmds = getCommands();
-  const opts =
-    node?.attrs.wrapType === 'inline' && target !== 'inline'
-      ? { initialPositionEmu: captureInlinePositionEmu(sel.element, zoom.value) }
-      : undefined;
-  const cmd = cmds.setImageWrapType?.(sel.pmPos, target, opts);
-  if (!cmd) return;
-  cmd(view.state, (tr: any) => view.dispatch(tr), view);
-  view.focus();
-}
-
-// Toolbar transform dropdown → mutate the selected image's
-// `transform` attribute. Rotate is folded mod 360, flip toggles bit
-// flags, then the parts are joined back into a CSS transform string.
-function handleImageTransform(action: 'rotateCW' | 'rotateCCW' | 'flipH' | 'flipV') {
-  const view = editorView.value;
-  const sel = selectedImage.value;
-  if (!view || !sel) return;
-  const node = view.state.doc.nodeAt(sel.pmPos);
-  if (!node || node.type.name !== 'image') return;
-
-  const current = (node.attrs.transform as string | null) || '';
-  const rotateMatch = current.match(/rotate\((-?\d+(?:\.\d+)?)deg\)/);
-  let rotation = rotateMatch ? parseFloat(rotateMatch[1]) : 0;
-  let flipH = /scaleX\(-1\)/.test(current);
-  let flipV = /scaleY\(-1\)/.test(current);
-
-  if (action === 'rotateCW') rotation = (rotation + 90) % 360;
-  else if (action === 'rotateCCW') rotation = (rotation - 90 + 360) % 360;
-  else if (action === 'flipH') flipH = !flipH;
-  else if (action === 'flipV') flipV = !flipV;
-
-  const parts: string[] = [];
-  if (rotation !== 0) parts.push(`rotate(${rotation}deg)`);
-  if (flipH) parts.push('scaleX(-1)');
-  if (flipV) parts.push('scaleY(-1)');
-  const next = parts.length > 0 ? parts.join(' ') : null;
-
-  const tr = view.state.tr.setNodeMarkup(sel.pmPos, undefined, {
-    ...node.attrs,
-    transform: next,
-  });
-  view.dispatch(tr.scrollIntoView());
-  view.focus();
-}
-
-function handleContextMenuAction(action: string) {
-  const view = editorView.value;
-  if (!view) return;
-  const cmds = getCommands();
-
-  switch (action) {
-    case 'cut':
-      if (selectedImage.value) {
-        copyImageToClipboard(view, selectedImage.value.pmPos);
-        const pos = selectedImage.value.pmPos;
-        const node = view.state.doc.nodeAt(pos);
-        if (node) {
-          view.dispatch(view.state.tr.delete(pos, pos + node.nodeSize));
-          selectedImage.value = null;
-        }
-      } else {
-        document.execCommand('cut');
-      }
-      break;
-    case 'copy':
-      if (selectedImage.value) {
-        copyImageToClipboard(view, selectedImage.value.pmPos);
-      } else {
-        document.execCommand('copy');
-      }
-      break;
-    case 'paste':
-      pasteFromClipboard(view);
-      break;
-    case 'pasteAsPlainText':
-      // Strip all formatting — insert the clipboard's text/plain only.
-      navigator.clipboard
-        .readText()
-        .then((text) => {
-          if (text) view.dispatch(view.state.tr.insertText(text).scrollIntoView());
-        })
-        .catch(() => {
-          // Clipboard read denied — nothing to paste.
-        });
-      break;
-    case 'delete': {
-      const { from, to } = view.state.selection;
-      if (from !== to) view.dispatch(view.state.tr.delete(from, to));
-      break;
-    }
-    case 'selectAll': {
-      const sel = TextSelection.create(view.state.doc, 0, view.state.doc.content.size);
-      view.dispatch(view.state.tr.setSelection(sel));
-      break;
-    }
-    case 'imageProperties':
-      if (selectedImage.value) {
-        showImageProperties.value = true;
-      }
-      break;
-    case 'replaceImage':
-      if (selectedImage.value) {
-        triggerReplaceImage(view, selectedImage.value.pmPos);
-      }
-      break;
-    case 'deleteImage': {
-      if (selectedImage.value) {
-        const pos = selectedImage.value.pmPos;
-        const node = view.state.doc.nodeAt(pos);
-        if (node) {
-          view.dispatch(view.state.tr.delete(pos, pos + node.nodeSize));
-          selectedImage.value = null;
-        }
-      }
-      break;
-    }
-    case 'addRowAbove':
-    case 'addRowBelow':
-    case 'deleteRow':
-    case 'addColumnLeft':
-    case 'addColumnRight':
-    case 'deleteColumn':
-    case 'mergeCells':
-    case 'splitCell': {
-      const cmd = cmds[action];
-      if (cmd) {
-        const command = cmd();
-        command(view.state, (tr: any) => view.dispatch(tr), view);
-      }
-      break;
-    }
-  }
-  view.focus();
-}
 
 // =========================================================================
 // Comments & tracked changes sidebar
@@ -2251,56 +1342,42 @@ function handleCancelAddComment() {
 }
 
 // useKeyboardShortcuts owns its own window keydown listener lifecycle.
-
-onMounted(() => {
-  window.addEventListener('mousemove', handleMouseMove);
-  window.addEventListener('mouseup', handleMouseUp);
-  pagesViewportRef.value?.addEventListener('scroll', handleViewportScroll, { passive: true });
-});
+// usePagesPointer owns its own window mousemove/mouseup + viewport scroll
+// listener lifecycle and table-insert timer cleanup.
 
 onBeforeUnmount(() => {
-  clearTableInsertTimer();
-  window.removeEventListener('mousemove', handleMouseMove);
-  window.removeEventListener('mouseup', handleMouseUp);
-  pagesViewportRef.value?.removeEventListener('scroll', handleViewportScroll);
-  if (scrollFadeTimer) clearTimeout(scrollFadeTimer);
   clearOverlay();
 });
 
-// `satisfies DocxEditorRef` enforces signatures against
-// EditorRefLike at typecheck time (Decision 10 in the 1.0 spec) without
-// affecting the runtime shape exposed via defineExpose.
-const exposed = {
-  getAgent: () => null,
-  save,
-  setZoom,
-  getZoom,
+// Ref-API assembly — single source of truth for the surface
+// described by `DocxEditorRef`. `satisfies DocxEditorRef` lives
+// inside `useDocxEditorRefApi` so signature drift is caught at
+// composable-build time.
+const { exposed } = useDocxEditorRefApi({
+  editorView,
+  layout,
+  pagesRef,
+  pagesViewportRef,
+  zoom,
+  comments,
   focus,
-  scrollToPage,
-  scrollToPosition,
-  openPrintPreview,
-  print,
-  loadDocument,
-  loadDocumentBuffer,
   destroy,
   getDocument,
-  getEditorRef,
+  setZoom,
+  save,
+  loadDocument,
+  loadDocumentBuffer,
   addComment,
   replyToComment,
   resolveComment,
   proposeChange,
-  scrollToParaId,
-  findInDocument,
-  getSelectionInfo,
-  getComments,
   applyFormatting,
   setParagraphStyle,
-  getPageContent,
-  getTotalPages,
-  getCurrentPage,
-  onContentChange,
-  onSelectionChange,
-} satisfies DocxEditorRef;
+  scrollVisiblePositionIntoView,
+  contentChangeSubscribers,
+  selectionChangeSubscribers,
+  onPrint: props.onPrint,
+});
 defineExpose(exposed);
 </script>
 

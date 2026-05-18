@@ -116,32 +116,12 @@ import {
   type ImageLayoutOptionDef,
 } from '@eigenpal/docx-editor-core/layout-painter';
 import type { ImageLayoutTarget } from '@eigenpal/docx-editor-core/prosemirror/commands';
-import type { WrapType } from '@eigenpal/docx-editor-core/docx/wrapTypes';
 
-type ImageAttrsCssFloat = 'left' | 'right' | 'none' | null;
-
-export interface ImageContextMenuState {
-  open: boolean;
-  position: { x: number; y: number };
-  pmPos: number;
-  currentWrapType: WrapType;
-  currentCssFloat?: ImageAttrsCssFloat;
-  inlinePositionEmu?: { horizontalEmu: number; verticalEmu: number };
-}
-
-/**
- * Item appended below a divider — mirrors the React side
- * (`ImageContextMenuTextAction`). `dividerAfter` lets the host group
- * the items the same way Word does (Cut/Copy/Paste then divider then
- * Delete).
- */
-export interface ImageContextMenuTextAction {
-  action: string;
-  label: string;
-  shortcut?: string;
-  disabled?: boolean;
-  dividerAfter?: boolean;
-}
+import type {
+  ImageContextMenuState,
+  ImageContextMenuTextAction,
+} from './imageContextMenuTypes';
+export type { ImageContextMenuState, ImageContextMenuTextAction };
 
 const props = withDefaults(
   defineProps<{
