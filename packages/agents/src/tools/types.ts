@@ -4,6 +4,12 @@
 
 import type { EditorBridge } from '../bridge';
 
+/**
+ * Definition of an agent tool — name, JSON-schema input, handler.
+ * Use this to build custom tools alongside the built-in `agentTools`.
+ *
+ * @public
+ */
 export interface AgentToolDefinition<TInput = Record<string, unknown>> {
   /** Tool name (used in tool_use blocks) */
   name: string;
@@ -22,6 +28,12 @@ export interface AgentToolDefinition<TInput = Record<string, unknown>> {
   handler: (input: TInput, bridge: EditorBridge) => AgentToolResult;
 }
 
+/**
+ * Result returned by a tool handler. `success: false` carries an `error`
+ * message; `success: true` may carry tool-specific `data`.
+ *
+ * @public
+ */
 export interface AgentToolResult {
   success: boolean;
   data?: unknown;

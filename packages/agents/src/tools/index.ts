@@ -278,7 +278,13 @@ const scroll: AgentToolDefinition<{ paraId: string }> = {
 
 // ── Registry ────────────────────────────────────────────────────────────────
 
-/** All built-in agent tools. */
+/**
+ * All built-in agent tools — read/write document content, comments, and
+ * tracked changes. Use `getToolSchemas()` to feed them to an LLM and
+ * `executeToolCall()` to run the handlers against an `EditorBridge`.
+ *
+ * @public
+ */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export const agentTools: AgentToolDefinition<any>[] = [
   readDocument,
@@ -300,6 +306,8 @@ export const agentTools: AgentToolDefinition<any>[] = [
 /**
  * Execute a tool call against an EditorBridge.
  * Returns the result (never throws).
+ *
+ * @public
  */
 export function executeToolCall(
   toolName: string,
@@ -322,6 +330,8 @@ export function executeToolCall(
  *
  * @example getToolDisplayName('add_comment') // → 'Adding comment'
  * @example getToolDisplayName('fetch_clause_template') // → 'Fetch clause template'
+ *
+ * @public
  */
 export function getToolDisplayName(name: string): string {
   const def = agentTools.find((t) => t.name === name);
@@ -336,6 +346,8 @@ export function getToolDisplayName(name: string): string {
  * LangChain, or other agent runtimes, transform this output to that
  * runtime's required shape — see `examples/agent-chat-demo/` for a
  * Vercel AI SDK example. The package stays runtime-agnostic.
+ *
+ * @public
  */
 export function getToolSchemas() {
   return agentTools.map((t) => ({

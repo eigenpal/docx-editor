@@ -90,6 +90,13 @@ export interface EditorRefLike {
   onSelectionChange(listener: (selection: unknown) => void): () => void;
 }
 
+/**
+ * High-level agent surface over a live editor (or a headless reviewer).
+ * Every built-in tool calls into this contract — implement it once and
+ * the agent toolkit works against your editor.
+ *
+ * @public
+ */
 export interface EditorBridge {
   /** Get document content as paraId-tagged text lines for LLM prompts. */
   getContentAsText(options?: GetContentOptions): string;

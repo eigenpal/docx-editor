@@ -1,7 +1,3 @@
-/**
- * Types for @eigenpal/docx-editor-agents
- */
-
 // ============================================================================
 // CONTENT BLOCKS — what getContent() returns
 // ============================================================================
@@ -177,7 +173,7 @@ export interface FoundMatch {
   after: string;
 }
 
-/** Snapshot of the user's current selection / cursor. */
+/** @public */
 export interface SelectionInfo {
   paraId: string | null;
   selectedText: string;
@@ -248,6 +244,8 @@ export interface PageContent {
  * Snapshot of what the user is looking at — pass this to your agent's system
  * prompt so it knows the current selection / page without an extra
  * `read_selection` round-trip.
+ *
+ * @public
  */
 export interface AgentContextSnapshot {
   /** User's current selection or cursor (null if editor isn't focused). */

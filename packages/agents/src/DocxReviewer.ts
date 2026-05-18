@@ -1,16 +1,3 @@
-/**
- * DocxReviewer — Word-like API for AI document review.
- *
- * @example
- * ```ts
- * const reviewer = await DocxReviewer.fromBuffer(buffer, 'AI Reviewer');
- * const text = reviewer.getContentAsText();
- * reviewer.addComment(5, 'Fix this paragraph.');
- * reviewer.replace(5, '$50k', '$500k');
- * const output = await reviewer.toBuffer();
- * ```
- */
-
 import type { Document, DocumentBody } from '@eigenpal/docx-editor-core/headless';
 import { parseDocx } from '@eigenpal/docx-editor-core/headless';
 import type {
@@ -46,6 +33,22 @@ import {
 } from './changes';
 import { applyReview as applyReviewImpl } from './batch';
 
+/**
+ * Headless DOCX reviewer — parse a file, read/comment/track changes
+ * against the document model, write the modified DOCX back out. No DOM,
+ * no editor instance. Pair with `createReviewerBridge()` to drive the
+ * built-in agent tools against a file on disk.
+ *
+ * @example
+ * ```ts
+ * const reviewer = await DocxReviewer.fromBuffer(buffer, 'AI Reviewer');
+ * reviewer.addComment(5, 'Fix this paragraph.');
+ * reviewer.replace(5, '$50k', '$500k');
+ * const output = await reviewer.toBuffer();
+ * ```
+ *
+ * @public
+ */
 export class DocxReviewer {
   private doc: Document;
   /** Default author for comments and tracked changes. Set once, used everywhere. */
@@ -53,7 +56,7 @@ export class DocxReviewer {
 
   /**
    * Create a reviewer from a parsed Document.
-   * @param document - Parsed Document from @eigenpal/docx-editor-core
+   * @param document - Parsed Document from the core package
    * @param author - Default author name for comments and changes. (default: 'AI')
    * @param originalBuffer - Original DOCX buffer, needed for toBuffer()
    */

@@ -1,0 +1,2 @@
+# API Extractor snapshots — owned by `bun run api:extract`, never hand-edit.
+packages/*/etc/*.api.md

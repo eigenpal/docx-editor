@@ -115,7 +115,9 @@
   ],
   "scripts": {
     "build": "tsup && vite build",
-    "typecheck": "vue-tsc --noEmit"
+    "typecheck": "vue-tsc --noEmit",
+    "api:extract": "api-extractor run --local --verbose",
+    "api:check": "api-extractor run"
   },
   "dependencies": {
     "docxtemplater": "^3.50.0",

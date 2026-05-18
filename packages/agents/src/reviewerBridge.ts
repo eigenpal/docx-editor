@@ -117,6 +117,8 @@ function getParagraphPlainText(p: Paragraph): string {
  * disk. Call `reviewer.toBuffer()` afterwards to get the modified DOCX.
  *
  * @param reviewer - A DocxReviewer instance. The bridge mutates it in place.
+ *
+ * @public
  */
 export function createReviewerBridge(reviewer: DocxReviewer): EditorBridge {
   // Content-change listeners fan out from successful mutations. Selection
