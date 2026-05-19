@@ -11,6 +11,7 @@ import {
   onMounted,
   onBeforeUnmount,
   type Ref,
+  type ComputedRef,
   type CSSProperties,
 } from 'vue';
 import {
@@ -34,7 +35,18 @@ export interface UseSelectionHighlightOptions {
   onSelectionChange?: (hasSelection: boolean, text: string) => void;
 }
 
-export function useSelectionHighlight(options: UseSelectionHighlightOptions) {
+export interface UseSelectionHighlightReturn {
+  hasSelection: ComputedRef<boolean>;
+  selectedText: ComputedRef<string>;
+  highlightRects: ComputedRef<HighlightRect[]>;
+  isSelectionInContainer: ComputedRef<boolean>;
+  refresh: () => void;
+  getOverlayStyle: (rect: HighlightRect) => CSSProperties;
+}
+
+export function useSelectionHighlight(
+  options: UseSelectionHighlightOptions
+): UseSelectionHighlightReturn {
   const {
     containerRef,
     enabled = true,

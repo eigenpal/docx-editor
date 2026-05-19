@@ -20,10 +20,15 @@ export interface DragAutoScrollOptions {
   onScrollExtendSelection: (clientX: number, clientY: number) => void;
 }
 
+export interface UseDragAutoScrollReturn {
+  updateMousePosition: (clientX: number, clientY: number) => void;
+  stopAutoScroll: () => void;
+}
+
 export function useDragAutoScroll({
   pagesContainer,
   onScrollExtendSelection,
-}: DragAutoScrollOptions) {
+}: DragAutoScrollOptions): UseDragAutoScrollReturn {
   let rafId: number | null = null;
   let lastMouseX = 0;
   let lastMouseY = 0;

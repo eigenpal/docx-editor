@@ -50,7 +50,13 @@ interface RightEdgeResizeState {
   origWidth: number;
 }
 
-export function useTableResize() {
+export interface UseTableResizeReturn {
+  tryStartResize: (e: MouseEvent, view: EditorView) => boolean;
+  install: () => () => void;
+  isResizing: () => boolean;
+}
+
+export function useTableResize(): UseTableResizeReturn {
   const col: ColumnResizeState = {
     active: false,
     startX: 0,

@@ -9,11 +9,18 @@
  * type imports resolve at compile time without making it a hard
  * peer dep for consumers.
  */
-import { computed, type Ref } from 'vue';
+import { computed, type ComputedRef, type Ref } from 'vue';
 import type { EditorView } from 'prosemirror-view';
 import { undo, redo, undoDepth, redoDepth } from 'prosemirror-history';
 
-export function useHistory(view: Ref<EditorView | null>, stateTick: Ref<number>) {
+export interface UseHistoryReturn {
+  canUndo: ComputedRef<boolean>;
+  canRedo: ComputedRef<boolean>;
+  undo: () => boolean;
+  redo: () => boolean;
+}
+
+export function useHistory(view: Ref<EditorView | null>, stateTick: Ref<number>): UseHistoryReturn {
   const canUndo = computed(() => {
     void stateTick.value;
     const v = view.value;

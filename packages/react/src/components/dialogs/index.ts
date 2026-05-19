@@ -1,7 +1,17 @@
 /**
- * Dialog Components
+ * @eigenpal/docx-editor-react/dialogs
  *
- * Modal dialogs for user interaction in the DOCX editor.
+ * Modal dialogs for hyperlinks, find/replace, paste-special, page setup,
+ * and keyboard shortcuts. Pair with the hooks under
+ * `@eigenpal/docx-editor-react/hooks` when wiring custom UI.
+ *
+ * @example
+ * ```tsx
+ * import { HyperlinkDialog, FindReplaceDialog } from '@eigenpal/docx-editor-react/dialogs';
+ * ```
+ *
+ * @packageDocumentation
+ * @public
  */
 
 // Hyperlink dialog for inserting and editing hyperlinks

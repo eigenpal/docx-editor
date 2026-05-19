@@ -14,7 +14,17 @@ import {
 } from '@eigenpal/docx-editor-core/prosemirror/utils/visualLineNavigation';
 import type { EditorView } from 'prosemirror-view';
 
-export function useVisualLineNavigation(pagesContainer: Ref<HTMLElement | null>) {
+export interface UseVisualLineNavigationReturn {
+  state: ReturnType<typeof createVisualLineState>;
+  getCaretClientX: (pmPos: number) => number | null;
+  findLineElementAtPosition: (pmPos: number) => HTMLElement | null;
+  findPositionOnLineAtClientX: (line: HTMLElement, clientX: number) => number | null;
+  handlePMKeyDown: (view: EditorView, event: KeyboardEvent) => boolean;
+}
+
+export function useVisualLineNavigation(
+  pagesContainer: Ref<HTMLElement | null>
+): UseVisualLineNavigationReturn {
   const state = createVisualLineState();
 
   function getCaretClientX(pmPos: number): number | null {

@@ -10,6 +10,9 @@
  *
  * Framework-agnostic document utilities live in `@eigenpal/docx-editor-core`.
  * Agent/MCP surfaces live in `@eigenpal/docx-editor-agents`.
+ *
+ * @packageDocumentation
+ * @public
  */
 
 export const VERSION = '0.0.2';

@@ -285,8 +285,53 @@ We track every published package's `@public` surface in `packages/<pkg>/etc/<ent
 **Status:**
 
 - `@eigenpal/docx-editor-agents/server` — snapshot at `packages/agents/etc/agents-server.api.md`.
-- `@eigenpal/docx-editor-core` — snapshots for every published subpath at `packages/core/etc/*.api.md`. The runner at `packages/core/scripts/api-extractor.mjs` iterates the exports map automatically; adding a new core subpath extends the snapshot set without config changes.
-- `@eigenpal/docx-editor-react` and `@eigenpal/docx-editor-vue` — pending Phase 2/3 of #475.
+- `@eigenpal/docx-editor-core` — snapshots for every published subpath at `packages/core/etc/*.api.md`.
+- `@eigenpal/docx-editor-react` — snapshots for all 6 subpaths at `packages/react/etc/*.api.md`.
+- `@eigenpal/docx-editor-vue` — snapshots for all 6 subpaths at `packages/vue/etc/*.api.md`.
+
+The shared runner at `scripts/lib/api-extractor-runner.mjs` walks each package's `exports` map and writes one snapshot per subpath. Adding a new entry to `package.json` `exports` extends the snapshot set automatically — no per-subpath config. Per-package wrappers live at `packages/<pkg>/scripts/api-extractor.mjs`.
+
+For React and Vue the runner uses a `tsconfig.api.json` that strips `paths` so Extractor follows `@eigenpal/...` imports via node_modules (and the built `dist/*.d.ts` of sibling workspaces) instead of through dev-time source mappings — the source files import JSON locale data, which Extractor cannot analyze.
+
+### Cross-adapter parity contract
+
+`etc/parity.contract.json` is the source of truth for which `DocxEditorProps` fields and `DocxEditorRef` members are paired across `@eigenpal/docx-editor-react` and `@eigenpal/docx-editor-vue`, which are deliberately deferred in Vue, and which are Vue-exclusive. `bun run check:parity-contract` (part of `bun run check:parity`, run in CI) parses both adapter snapshots, applies the contract, and fails on any drift the contract doesn't acknowledge.
+
+The contract uses different bucket shapes for props vs ref because the surfaces differ:
+
+| Section | Buckets                                          | Notes                                                                                                                        |
+| ------- | ------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------- |
+| `props` | `paired`, `deferredInVue`, `vueExclusive`        | Symmetric props comparison.                                                                                                  |
+| `ref`   | `paired`, `pairedViaInheritance`, `vueExclusive` | Vue's `DocxEditorRef = EditorRefLike & {...}`; the inherited members ARE callable on Vue but DON'T appear in Vue's snapshot. |
+
+**Adding a prop or ref method to either adapter:**
+
+1. Edit the adapter source. Run `bun run api:extract`.
+2. Add the field to `etc/parity.contract.json` in the right bucket:
+   - `props.paired` / `ref.paired`: both adapters declare it explicitly.
+   - `props.deferredInVue`: React-only prop, Vue hasn't ported it yet (with a one-line reason).
+   - `ref.pairedViaInheritance`: React declares it explicitly; Vue inherits it via `EditorRefLike`. Must NOT be present in Vue's enumerated `DocxEditorRef` snapshot.
+   - `props.vueExclusive` / `ref.vueExclusive`: Vue-only.
+3. Run `bun run check:parity-contract` locally to confirm.
+
+The contract makes silent divergence impossible — every new symbol forces an explicit classification.
+
+### Vue composable conventions
+
+When adding or modifying a Vue composable in `packages/vue/src/composables/`, declare a named `Use<Name>Return` interface and annotate the function's return type with it. This keeps the API Extractor snapshot from recursively inlining core's internal types into Vue's public surface — without the annotation, an anonymous return type leaked ~3,000 lines of core's `Run`/`Comment` shape into `etc/composables.api.md`.
+
+```ts
+export interface UseFooReturn {
+  bar: Ref<number>;
+  doThing: () => void;
+}
+
+export function useFoo(options: UseFooOptions): UseFooReturn {
+  // ...
+}
+```
+
+The React side already follows this convention (`UseAutoSaveReturn`, `UseClipboardReturn`, etc.) — keep them in lockstep.
 
 ---
 
