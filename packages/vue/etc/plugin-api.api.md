@@ -18,6 +18,9 @@ import { VNode } from 'vue';
 
 export { createRenderedDomContext }
 
+// @public
+export type EditorPlugin<TState = any> = VueEditorPlugin<TState>;
+
 export { EditorPluginCore }
 
 export { PanelConfig }

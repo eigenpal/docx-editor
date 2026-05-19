@@ -28,11 +28,7 @@ export { useTranslation, provideLocale, i18nPlugin, defaultLocale } from './i18n
 
 // renderAsync
 export { renderAsync } from './renderAsync';
-export type {
-  DocxEditorHandle,
-  VueRenderAsyncOptions,
-  VueRenderAsyncOptions as RenderAsyncOptions,
-} from './renderAsync';
+export type { DocxEditorHandle, RenderAsyncOptions } from './renderAsync';
 
 // Public ref shape (typecheck contract with EditorRefLike — Decision 10).
 export type { DocxEditorRef } from './components/DocxEditor/types';
