@@ -17,4 +17,12 @@ export default defineConfig({
   sourcemap: false,
   clean: true,
   minify: false,
+  // Keep non-ASCII characters raw instead of `\uHHHH`-escaping them. esbuild
+  // defaults to `ascii` for max compatibility, but every script and tag in
+  // these JSONs is BMP UTF-8 that consumers' bundlers handle natively.
+  // Hebrew shrinks ~40% (54 KB → 32 KB), Chinese ~20% (34 KB → 27 KB),
+  // and the index bundle drops in lockstep.
+  esbuildOptions(options) {
+    options.charset = 'utf8';
+  },
 });
