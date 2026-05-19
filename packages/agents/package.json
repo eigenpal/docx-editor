@@ -2,6 +2,9 @@
   "name": "@eigenpal/docx-editor-agents",
   "version": "0.5.1",
   "description": "Agent SDK and chat UI for the DOCX editor — framework-agnostic bridge, MCP server, AI SDK adapters, plus React UI (and Vue UI in 1.x)",
+  "sideEffects": [
+    "*.css"
+  ],
   "main": "./dist/index.js",
   "module": "./dist/index.mjs",
   "types": "./dist/index.d.ts",

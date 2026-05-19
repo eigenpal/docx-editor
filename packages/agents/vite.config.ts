@@ -20,6 +20,9 @@ export default defineConfig({
       // consumers and matches how tsup emits dist/*.d.ts above.
       entryRoot: 'src',
       cleanVueFileName: true,
+      // Don't ship `.d.ts.map`. Maps point at source `.ts` files that
+      // aren't in the published tarball, so they're dead weight.
+      compilerOptions: { declarationMap: false },
     }),
   ],
   build: {
