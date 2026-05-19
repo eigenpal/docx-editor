@@ -126,6 +126,4 @@ export const toggleBulletList: Command;
 // @public (undocumented)
 export const toggleNumberedList: Command;
 
-// (No @packageDocumentation comment for this package)
-
 ```

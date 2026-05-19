@@ -1,14 +1,16 @@
 /**
- * Vue entry — components and composables that need Vue peer deps.
+ * @eigenpal/docx-editor-agents/vue
  *
- * Parity with the React adapter: same prop/event names where possible.
+ * Vue entry. Components and composables that need Vue as a peer dependency.
+ *
+ * Parity with the React adapter: same prop and event names where possible.
  * Where React passes `ReactNode` props (`icon`, `emptyState`, `footnote`),
- * the Vue components use idiomatic named slots — see each component's
- * JSDoc for the slot list. `AgentComposer` follows the standard Vue 3
- * v-model contract (`modelValue` / `update:modelValue`).
+ * the Vue components use idiomatic named slots. See each component's JSDoc
+ * for the slot list. `AgentComposer` follows the standard Vue 3 v-model
+ * contract (`modelValue` / `update:modelValue`).
  *
- * Editor i18n: `<DocxEditor :i18n="..."` does NOT translate agent UI
- * strings — these components own their own English defaults from
+ * Editor i18n: `<DocxEditor :i18n="..." />` does NOT translate agent UI
+ * strings. These components own their own English defaults from
  * `packages/agents/i18n/en.json`. Wire your `t()` results to the
  * `*Label` / `labels` props for translation:
  *
@@ -44,6 +46,9 @@
  *   </AgentPanel>
  * </template>
  * ```
+ *
+ * @packageDocumentation
+ * @public
  */
 
 export { default as AgentPanel } from './vue/components/AgentPanel.vue';

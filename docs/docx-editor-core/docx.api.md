@@ -444,6 +444,4 @@ export function updateMultipleFiles(originalBuffer: ArrayBuffer, updates: Map<st
 // @public
 export function validatePatchSafety(originalXml: string, serializedXml: string, changedIds: Set<string>): PatchValidationResult;
 
-// (No @packageDocumentation comment for this package)
-
 ```

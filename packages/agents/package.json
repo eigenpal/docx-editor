@@ -114,7 +114,7 @@
     "LICENSE"
   ],
   "scripts": {
-    "build": "tsup && vite build",
+    "build": "tsup && vite build && node ../../scripts/inject-package-doc.mjs --package @eigenpal/docx-editor-agents",
     "typecheck": "vue-tsc --noEmit",
     "api:extract": "node ../../scripts/api-extractor.mjs --package @eigenpal/docx-editor-agents --local",
     "api:check": "node ../../scripts/api-extractor.mjs --package @eigenpal/docx-editor-agents"

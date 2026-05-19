@@ -23,6 +23,4 @@ export interface ResolvedPosition<T extends ResolvableSidebarItem = ResolvableSi
 // @public (undocumented)
 export function resolveItemPositions<T extends ResolvableSidebarItem>(items: T[], anchorPositions: Map<string, number>, renderedDomContext: RenderedDomContext | null, zoom: number, cardHeights: Map<string, number>, lastKnown: Map<string, number>): ResolvedPosition<T>[];
 
-// (No @packageDocumentation comment for this package)
-
 ```

@@ -1309,6 +1309,4 @@ export type UnderlineStyle = 'none' | 'single' | 'words' | 'double' | 'thick' | 
 // @public
 export type VerticalAlign = 'top' | 'center' | 'both' | 'bottom';
 
-// (No @packageDocumentation comment for this package)
-
 ```

@@ -1,10 +1,12 @@
 /**
- * Vercel AI SDK adapter (React side) — opt-in.
+ * @eigenpal/docx-editor-agents/ai-sdk/react
  *
- * Use this if you're driving the chat with `useChat` from
- * `@ai-sdk/react`. The library's `<AgentChatLog>` consumes a flat
- * `AgentMessage[]` shape; AI SDK's `useChat` produces `UIMessage[]`
- * with structured `parts`. `toAgentMessages()` is the bridge.
+ * Vercel AI SDK adapter (React side). Opt-in.
+ *
+ * Use this if you're driving the chat with `useChat` from `@ai-sdk/react`.
+ * The library's `<AgentChatLog>` consumes a flat `AgentMessage[]` shape;
+ * AI SDK's `useChat` produces `UIMessage[]` with structured `parts`.
+ * `toAgentMessages()` is the bridge.
  *
  * @example
  * ```tsx
@@ -15,6 +17,9 @@
  * );
  * return <AgentChatLog messages={messages} />;
  * ```
+ *
+ * @packageDocumentation
+ * @public
  */
 
 export type { AgentMessage, AgentToolCall } from '../agent-types';

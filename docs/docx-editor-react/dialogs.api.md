@@ -264,6 +264,4 @@ export interface UsePasteSpecialReturn {
     pasteAsPlainText: () => Promise<void>;
 }
 
-// (No @packageDocumentation comment for this package)
-
 ```

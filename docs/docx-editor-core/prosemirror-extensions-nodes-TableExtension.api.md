@@ -78,6 +78,4 @@ export const TablePluginExtension: (options?: Partial<Record<string, unknown>> |
 // @public (undocumented)
 export const TableRowExtension: (options?: Partial<Record<string, unknown>> | undefined) => NodeExtension;
 
-// (No @packageDocumentation comment for this package)
-
 ```

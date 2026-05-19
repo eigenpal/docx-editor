@@ -234,6 +234,4 @@ export const TableNodeExtension: (options?: Partial<Record<string, unknown>> | u
 // @public (undocumented)
 export const TableRowExtension: (options?: Partial<Record<string, unknown>> | undefined) => NodeExtension;
 
-// (No @packageDocumentation comment for this package)
-
 ```

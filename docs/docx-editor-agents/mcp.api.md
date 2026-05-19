@@ -173,6 +173,4 @@ export interface StdioServerOptions extends McpServerOptions {
     output?: OutputStream;
 }
 
-// (No @packageDocumentation comment for this package)
-
 ```

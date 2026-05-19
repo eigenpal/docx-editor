@@ -209,6 +209,4 @@ export interface WordCompatBridge {
     setParagraphStyle(options: SetParagraphStyleOptions): boolean;
 }
 
-// (No @packageDocumentation comment for this package)
-
 ```

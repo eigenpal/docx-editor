@@ -49,6 +49,4 @@ export interface TemplateTag {
     type: TagType;
 }
 
-// (No @packageDocumentation comment for this package)
-
 ```

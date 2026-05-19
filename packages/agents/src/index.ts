@@ -24,6 +24,9 @@
  *
  * const output = await reviewer.toBuffer();
  * ```
+ *
+ * @packageDocumentation
+ * @public
  */
 
 export { DocxReviewer } from './DocxReviewer';

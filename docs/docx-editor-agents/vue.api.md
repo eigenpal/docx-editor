@@ -294,6 +294,4 @@ export interface UseAgentBridgeReturn {
     toolSchemas: ReturnType<typeof getToolSchemas>;
 }
 
-// (No @packageDocumentation comment for this package)
-
 ```

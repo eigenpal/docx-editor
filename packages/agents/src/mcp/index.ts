@@ -1,16 +1,21 @@
 /**
+ * @eigenpal/docx-editor-agents/mcp
+ *
  * Model Context Protocol (MCP) server for the docx editor agent bridge.
  *
  * Two transports, same core:
- *   - stdio: classic MCP transport. Use `runStdioServer(bridge)` from a Node
- *     subprocess that Claude Desktop / Cursor / any MCP-aware client will
- *     spawn. Newline-delimited JSON-RPC.
- *   - direct: call `new McpServer(bridge).handle(message)` if you have your
- *     own transport (websocket, postMessage, http long-poll, etc.).
+ *   - `stdio`: classic MCP transport. Use `runStdioServer(bridge)` from a
+ *     Node subprocess that Claude Desktop, Cursor, or any MCP-aware client
+ *     will spawn. Newline-delimited JSON-RPC.
+ *   - `direct`: call `new McpServer(bridge).handle(message)` if you have
+ *     your own transport (WebSocket, `postMessage`, HTTP long-poll, etc.).
  *
  * The server is transport-agnostic and zero-dep. The stdio module reaches
- * for `process.stdin` / `process.stdout` only when you call `runStdioServer`
- * without explicit streams.
+ * for `process.stdin` / `process.stdout` only when you call
+ * `runStdioServer` without explicit streams.
+ *
+ * @packageDocumentation
+ * @public
  */
 
 export { McpServer, type McpServerOptions } from './server';

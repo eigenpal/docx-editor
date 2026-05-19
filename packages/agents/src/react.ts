@@ -1,5 +1,9 @@
 /**
- * React entry — hooks and types that need React peer deps.
+ * @eigenpal/docx-editor-agents/react
+ *
+ * React entry. Hooks, components, and types that need React as a peer
+ * dependency. Pair with `/server` (or `/ai-sdk/server`) for the API route
+ * that drives the LLM.
  *
  * @example
  * ```tsx
@@ -10,6 +14,9 @@
  *   author: 'Assistant',
  * });
  * ```
+ *
+ * @packageDocumentation
+ * @public
  */
 
 export { useAgentChat } from './useAgentChat';

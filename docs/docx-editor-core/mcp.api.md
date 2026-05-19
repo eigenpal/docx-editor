@@ -80,6 +80,4 @@ export const saveDocumentTool: McpToolDefinition;
 // @public
 export function startStdioServer(config?: McpServerConfig): Promise<void>;
 
-// (No @packageDocumentation comment for this package)
-
 ```

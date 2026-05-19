@@ -29,6 +29,4 @@ export interface VisualLineState {
     stickyX: number | null;
 }
 
-// (No @packageDocumentation comment for this package)
-
 ```

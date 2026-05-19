@@ -124,6 +124,4 @@ export interface SelectionInfo {
     selectedText: string;
 }
 
-// (No @packageDocumentation comment for this package)
-
 ```

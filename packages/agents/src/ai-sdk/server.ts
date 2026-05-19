@@ -1,11 +1,13 @@
 /**
- * Vercel AI SDK adapter (server side) — opt-in.
+ * @eigenpal/docx-editor-agents/ai-sdk/server
+ *
+ * Vercel AI SDK adapter (server side). Opt-in.
  *
  * The core toolkit is runtime-agnostic. Use this entry only if you're
  * wiring `streamText` / `generateText` from `ai` in your route handler.
- * For LangChain / Anthropic SDK / OpenAI direct, import
- * `getToolSchemas` from `@eigenpal/docx-editor-agents/server` and
- * shape it however your runtime expects.
+ * For LangChain, the Anthropic SDK, or OpenAI direct, import
+ * `getToolSchemas` from `@eigenpal/docx-editor-agents/server` and shape it
+ * however your runtime expects.
  *
  * @example
  * ```ts
@@ -25,6 +27,9 @@
  *   return result.toUIMessageStreamResponse();
  * }
  * ```
+ *
+ * @packageDocumentation
+ * @public
  */
 
 import { jsonSchema, type Tool } from 'ai';

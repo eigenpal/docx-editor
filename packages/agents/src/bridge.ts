@@ -1,6 +1,9 @@
 /**
- * Editor Bridge — connects agent tools to a live DocxEditor instance.
- * Framework-agnostic; React adapter lives in `/react`.
+ * @eigenpal/docx-editor-agents/bridge
+ *
+ * Editor bridge that connects agent tools to a live `DocxEditor` instance.
+ * Framework-agnostic. The React adapter lives in
+ * `@eigenpal/docx-editor-agents/react`.
  *
  * @example
  * ```ts
@@ -8,6 +11,9 @@
  * const bridge = createEditorBridge(editorRef, 'Assistant');
  * bridge.addComment({ paragraphIndex: 3, text: 'Fix this.' });
  * ```
+ *
+ * @packageDocumentation
+ * @public
  */
 
 export { agentTools, executeToolCall, getToolSchemas } from './tools';

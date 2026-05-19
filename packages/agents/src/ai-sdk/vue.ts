@@ -1,10 +1,12 @@
 /**
- * Vercel AI SDK adapter (Vue side) — opt-in.
+ * @eigenpal/docx-editor-agents/ai-sdk/vue
+ *
+ * Vercel AI SDK adapter (Vue side). Opt-in.
  *
  * Use this if you're driving the chat with `useChat` from `@ai-sdk/vue`.
- * The library's `<AgentChatLog>` (Vue) consumes a flat `AgentMessage[]`
- * shape; AI SDK's `useChat` produces `UIMessage[]` with structured
- * `parts`. `toAgentMessages()` is the bridge.
+ * The Vue `<AgentChatLog>` consumes a flat `AgentMessage[]` shape;
+ * AI SDK's `useChat` produces `UIMessage[]` with structured `parts`.
+ * `toAgentMessages()` is the bridge.
  *
  * @example
  * ```vue
@@ -22,6 +24,9 @@
  *   <AgentChatLog :messages="messages" />
  * </template>
  * ```
+ *
+ * @packageDocumentation
+ * @public
  */
 
 export type { AgentMessage, AgentToolCall } from '../agent-types';

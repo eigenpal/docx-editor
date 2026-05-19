@@ -122,6 +122,4 @@ export { templatePluginKey }
 
 export { TemplateTag }
 
-// (No @packageDocumentation comment for this package)
-
 ```

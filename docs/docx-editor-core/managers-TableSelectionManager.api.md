@@ -33,6 +33,4 @@ export class TableSelectionManager extends Subscribable<TableSelectionSnapshot> 
 // @internal
 export function updateTableInDocument(doc: Document_2, tableIndex: number, newTable: Table): Document_2;
 
-// (No @packageDocumentation comment for this package)
-
 ```

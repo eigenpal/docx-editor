@@ -1,9 +1,11 @@
 /**
- * Server entry — for API routes / Node.js / serverless / Workers.
+ * @eigenpal/docx-editor-agents/server
  *
- * Import the toolkit here without pulling React peer deps. Use this in your
- * Next.js route, FastAPI bridge, Cloudflare Worker, or any other backend
- * that streams an LLM call with tool definitions.
+ * Server entry for API routes, Node.js, serverless functions, and Workers.
+ *
+ * Import the toolkit here without pulling in React peer deps. Use this from
+ * Next.js routes, a FastAPI bridge, a Cloudflare Worker, or any other
+ * backend that streams an LLM call with tool definitions.
  *
  * @example
  * ```ts
@@ -25,6 +27,9 @@
  *   return result.toUIMessageStreamResponse();
  * }
  * ```
+ *
+ * @packageDocumentation
+ * @public
  */
 
 export {
