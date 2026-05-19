@@ -1,3 +1,17 @@
+<p align="center">
+  <a href="https://www.docx-editor.dev/">
+    <img src="https://raw.githubusercontent.com/eigenpal/docx-editor/main/assets/header.png" alt="DOCX Editor — .docx in, .docx out. Open source, agent ready, client-side." width="500" />
+  </a>
+</p>
+
+<p align="center">
+  <a href="https://www.npmjs.com/package/@eigenpal/docx-editor-vue"><img src="https://img.shields.io/npm/v/@eigenpal/docx-editor-vue.svg?style=flat-square&color=3B5BDB" alt="npm version" /></a>
+  <a href="https://www.npmjs.com/package/@eigenpal/docx-editor-vue"><img src="https://img.shields.io/npm/dm/@eigenpal/docx-editor-vue.svg?style=flat-square&color=3B5BDB" alt="npm downloads" /></a>
+  <a href="https://github.com/eigenpal/docx-editor/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-Apache_2.0-blue.svg?style=flat-square&color=3B5BDB" alt="license" /></a>
+  <a href="https://docx-editor.dev/editor"><img src="https://img.shields.io/badge/Live_Demo-3B5BDB?style=flat-square&logo=vercel&logoColor=white" alt="Demo" /></a>
+  <a href="https://www.docx-editor.dev/docs"><img src="https://img.shields.io/badge/Docs-3B5BDB?style=flat-square&logo=readthedocs&logoColor=white" alt="Documentation" /></a>
+</p>
+
 # @eigenpal/docx-editor-vue
 
 Vue 3 adapter for the [docx-editor](https://docx-editor.dev). WYSIWYG `.docx` editing with canonical OOXML, tracked changes, comments, and an AI agent bridge.
@@ -30,6 +44,18 @@ async function loadFile(e: Event) {
 
 Import the stylesheet once at your app entry. Vite's library mode doesn't auto-inject CSS imports, so the toolbar will render unstyled without it.
 
+## Packages
+
+| Package                                                                                      | Description                                                                                                                                |
+| -------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| [`@eigenpal/docx-editor-react`](https://www.npmjs.com/package/@eigenpal/docx-editor-react)   | <img src="https://cdn.simpleicons.org/react/61DAFB" width="20" align="middle" /> &nbsp; React adapter. Toolbar, paged editor, plugins.     |
+| [`@eigenpal/docx-editor-vue`](https://www.npmjs.com/package/@eigenpal/docx-editor-vue)       | <img src="https://cdn.simpleicons.org/vuedotjs/4FC08D" width="20" align="middle" /> &nbsp; Vue 3 adapter. Toolbar, paged editor, plugins.  |
+| [`@eigenpal/docx-editor-core`](https://www.npmjs.com/package/@eigenpal/docx-editor-core)     | Framework-agnostic core: OOXML parser, serializer, layout engine, ProseMirror schema. Depend on this if you fork the React or Vue adapter. |
+| [`@eigenpal/docx-editor-i18n`](https://www.npmjs.com/package/@eigenpal/docx-editor-i18n)     | Shared locale strings and types consumed by both adapters.                                                                                 |
+| [`@eigenpal/docx-editor-agents`](https://www.npmjs.com/package/@eigenpal/docx-editor-agents) | Agent SDK and chat UI: framework-agnostic bridge, MCP server, AI SDK adapters, plus React UI.                                              |
+
+> **Forking the adapter?** Keep your fork thin. Depend on `@eigenpal/docx-editor-core` directly so parser, serializer, and rendering fixes land in your build automatically, without backporting each upstream change by hand.
+
 ## Imperative mounting
 
 ```ts
@@ -55,6 +81,11 @@ editor.destroy();
 
 For lower-level mounting on your own DOM, use the `useDocxEditor` composable.
 
-## v1 scope
+## Contributing
 
-Real-time collaboration (Yjs), a third-party Vue plugin API, and a Nuxt module are deferred to a later 1.x release. If you need any of these today, prefer [`@eigenpal/docx-editor-react`](https://www.npmjs.com/package/@eigenpal/docx-editor-react).
+Contributions welcome. See [CONTRIBUTING.md](https://github.com/eigenpal/docx-editor/blob/main/CONTRIBUTING.md) for setup, tests, and the one-time CLA signature.
+
+## Commercial Support
+
+> [!TIP]
+> Questions or custom features? Email **[docx-editor@eigenpal.com](mailto:docx-editor@eigenpal.com)**.
