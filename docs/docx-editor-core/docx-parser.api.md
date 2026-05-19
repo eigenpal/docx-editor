@@ -40,6 +40,4 @@ export type ProgressCallback = (stage: string, percent: number) => void;
 // @public
 export function quickParseDocx(buffer: ArrayBuffer): Promise<Document_2>;
 
-// (No @packageDocumentation comment for this package)
-
 ```

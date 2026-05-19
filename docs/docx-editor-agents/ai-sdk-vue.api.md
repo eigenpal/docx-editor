@@ -17,6 +17,4 @@ export { AiSdkUIMessage }
 
 export { toAgentMessages }
 
-// (No @packageDocumentation comment for this package)
-
 ```

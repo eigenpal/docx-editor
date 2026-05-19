@@ -100,6 +100,4 @@ export const toggleSuperscript: Command;
 // @public (undocumented)
 export const toggleUnderline: Command;
 
-// (No @packageDocumentation comment for this package)
-
 ```

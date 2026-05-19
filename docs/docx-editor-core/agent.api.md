@@ -484,6 +484,4 @@ export interface SuggestedAction {
     priority?: number;
 }
 
-// (No @packageDocumentation comment for this package)
-
 ```

@@ -65,7 +65,7 @@
     "dist"
   ],
   "scripts": {
-    "build": "vite build",
+    "build": "vite build && node ../../scripts/inject-package-doc.mjs --package @eigenpal/docx-editor-vue",
     "typecheck": "tsc --noEmit",
     "api:extract": "node ../../scripts/api-extractor.mjs --package @eigenpal/docx-editor-vue --local",
     "api:check": "node ../../scripts/api-extractor.mjs --package @eigenpal/docx-editor-vue"

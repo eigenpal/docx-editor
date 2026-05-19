@@ -459,6 +459,4 @@ export interface VisualLineNavigationOptions {
 // @public
 export const ZOOM_PRESETS: number[];
 
-// (No @packageDocumentation comment for this package)
-
 ```

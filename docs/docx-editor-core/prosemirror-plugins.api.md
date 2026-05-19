@@ -55,6 +55,4 @@ export const suggestionModeKey: PluginKey<SuggestionModeState>;
 // @public
 export function toggleSuggestionMode(state: EditorState, dispatch?: (tr: Transaction) => void): boolean;
 
-// (No @packageDocumentation comment for this package)
-
 ```

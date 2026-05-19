@@ -1534,6 +1534,4 @@ export interface ZoomControlProps {
     value?: number;
 }
 
-// (No @packageDocumentation comment for this package)
-
 ```

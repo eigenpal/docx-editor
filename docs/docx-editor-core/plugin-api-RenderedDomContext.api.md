@@ -28,6 +28,4 @@ export class RenderedDomContextImpl implements RenderedDomContext {
     zoom: number;
 }
 
-// (No @packageDocumentation comment for this package)
-
 ```

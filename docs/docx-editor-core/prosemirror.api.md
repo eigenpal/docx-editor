@@ -671,6 +671,4 @@ export interface UnderlineAttrs {
 // @public
 export function updateDocumentContent(originalDocument: Document_2, pmDoc: Node_2): Document_2;
 
-// (No @packageDocumentation comment for this package)
-
 ```

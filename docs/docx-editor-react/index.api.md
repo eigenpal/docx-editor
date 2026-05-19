@@ -212,6 +212,4 @@ export function useTranslation(): {
 // @public
 export const VERSION = "0.0.2";
 
-// (No @packageDocumentation comment for this package)
-
 ```

@@ -820,6 +820,4 @@ export interface WordSelectionResult {
 // @public
 export function writeToClipboard(content: ClipboardContent): Promise<boolean>;
 
-// (No @packageDocumentation comment for this package)
-
 ```

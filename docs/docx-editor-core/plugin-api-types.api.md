@@ -91,6 +91,4 @@ export interface SidebarItemContext {
     zoom: number;
 }
 
-// (No @packageDocumentation comment for this package)
-
 ```

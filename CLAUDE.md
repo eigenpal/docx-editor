@@ -294,6 +294,10 @@ The shared runner at `scripts/lib/api-extractor-runner.mjs` walks each package's
 
 For React and Vue the runner uses a `tsconfig.api.json` that strips `paths` so Extractor follows `@eigenpal/...` imports via node_modules (and the built `dist/*.d.ts` of sibling workspaces) instead of through dev-time source mappings — the source files import JSON locale data, which Extractor cannot analyze.
 
+### Package-level descriptions (`@packageDocumentation`)
+
+Each entry source's head doc-block can carry an `@packageDocumentation` block; that prose feeds both `docs/json/<pkg-slug>/<entry>.json#summary` and the API Extractor snapshot. tsup's rollup-plugin-dts hoists transitive type imports above the file-head comment, which would strip the tag from the dist `.d.ts`. Each package's build script runs `scripts/inject-package-doc.mjs --package <name>` after tsup to re-prepend the source block when missing, so the description survives into the published types and the generated `.api.md`. Idempotent: if the dist already starts with a `@packageDocumentation` block, the script skips it.
+
 ### Cross-adapter parity contract
 
 `etc/parity.contract.json` is the source of truth for which `DocxEditorProps` fields and `DocxEditorRef` members are paired across `@eigenpal/docx-editor-react` and `@eigenpal/docx-editor-vue`, which are deliberately deferred in Vue, and which are Vue-exclusive. `bun run check:parity-contract` (part of `bun run check:parity`, run in CI) parses both adapter snapshots, applies the contract, and fails on any drift the contract doesn't acknowledge.

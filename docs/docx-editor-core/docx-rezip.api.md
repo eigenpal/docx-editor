@@ -90,6 +90,4 @@ export function validateDocx(buffer: ArrayBuffer): Promise<{
     warnings: string[];
 }>;
 
-// (No @packageDocumentation comment for this package)
-
 ```

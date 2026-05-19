@@ -47,6 +47,4 @@ export interface AiSdkUIMessage {
 // @public
 export function toAgentMessages(uiMessages: ReadonlyArray<AiSdkUIMessage>, status: string): AgentMessage[];
 
-// (No @packageDocumentation comment for this package)
-
 ```

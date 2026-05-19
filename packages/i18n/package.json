@@ -19,7 +19,7 @@
     "README.md"
   ],
   "scripts": {
-    "build": "tsup",
+    "build": "tsup && node ../../scripts/inject-package-doc.mjs --package @eigenpal/docx-editor-i18n",
     "typecheck": "tsc --noEmit",
     "api:extract": "node ../../scripts/api-extractor.mjs --package @eigenpal/docx-editor-i18n --local",
     "api:check": "node ../../scripts/api-extractor.mjs --package @eigenpal/docx-editor-i18n"

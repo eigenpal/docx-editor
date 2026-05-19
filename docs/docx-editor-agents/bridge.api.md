@@ -147,6 +147,4 @@ export function getToolSchemas(): {
 // @public
 export type SelectionChangeEvent = SelectionInfo | null;
 
-// (No @packageDocumentation comment for this package)
-
 ```

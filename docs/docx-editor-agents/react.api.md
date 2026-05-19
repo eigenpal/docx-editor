@@ -246,6 +246,4 @@ export interface UseDocxAgentToolsReturn {
     tools: ReturnType<typeof getToolSchemas>;
 }
 
-// (No @packageDocumentation comment for this package)
-
 ```

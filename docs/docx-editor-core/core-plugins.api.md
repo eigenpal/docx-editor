@@ -251,6 +251,4 @@ export interface ZodSchemaLike {
     };
 }
 
-// (No @packageDocumentation comment for this package)
-
 ```
