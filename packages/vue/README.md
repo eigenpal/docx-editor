@@ -44,6 +44,28 @@ async function loadFile(e: Event) {
 
 Import the stylesheet once at your app entry. Vite's library mode doesn't auto-inject CSS imports, so the toolbar will render unstyled without it.
 
+## Start with a blank document
+
+Skip the file picker for new documents. `createEmptyDocument` returns a fresh `Document` model you can pass straight to the editor:
+
+```vue
+<script setup lang="ts">
+import { ref } from 'vue';
+import { DocxEditor, createEmptyDocument } from '@eigenpal/docx-editor-vue';
+import '@eigenpal/docx-editor-vue/styles.css';
+
+const doc = ref(createEmptyDocument());
+// Or with options:
+// createEmptyDocument({ initialText: 'Untitled', pageWidth: 12240 })
+</script>
+
+<template>
+  <DocxEditor :document="doc" mode="editing" />
+</template>
+```
+
+`createDocumentWithText(text, options?)` is the same idea with a starting paragraph already typed. Both helpers are re-exported from `@eigenpal/docx-editor-core` so you don't need a separate dependency.
+
 ## Packages
 
 | Package                                                                                      | Description                                                                                                                                |

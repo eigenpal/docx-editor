@@ -82,6 +82,9 @@ jobs:
       - name: Parity contract check
         run: bun run check:parity-contract
 
+      - name: i18n per-locale bundle size check
+        run: bun run check:i18n-bundle-size
+
       - name: Docs JSON generation (smoke test)
         # Not committed — `docs/json/` is gitignored. Run as a smoke test
         # so any breakage in the generator surfaces here instead of when

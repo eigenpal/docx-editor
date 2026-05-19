@@ -80,6 +80,20 @@ import { locales } from '@eigenpal/docx-editor-i18n';
 
 > Importing `locales` pulls every locale into your bundle. For a smaller bundle, import only the ones you need by name; `sideEffects: false` lets the rest tree-shake.
 
+## Per-locale subpaths
+
+For apps that pick the locale at runtime, the named exports above don't tree-shake — the bundler can't know which locale wins, so it ships them all. Use the per-locale subpaths instead. Each one bundles a single locale (~30KB) and code-splits cleanly:
+
+```ts
+// Static — bundler ships only this locale's strings
+import pl from '@eigenpal/docx-editor-i18n/pl';
+
+// Dynamic — splits into its own chunk, loaded on demand
+const pl = (await import('@eigenpal/docx-editor-i18n/pl')).default;
+```
+
+Subpaths ship for every locale: `/en`, `/de`, `/he`, `/pl`, `/pt-BR`, `/tr`, `/zh-CN`. Each also exports its locale as a named binding (`import { pl } from '@eigenpal/docx-editor-i18n/pl'`) for callers that prefer non-default imports.
+
 ## Types
 
 ```ts

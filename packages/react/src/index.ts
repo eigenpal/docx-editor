@@ -26,6 +26,15 @@ export {
 } from './components/DocxEditor';
 export { renderAsync, type RenderAsyncOptions, type DocxEditorHandle } from './renderAsync';
 
+// Document factory helpers — re-exported from `@eigenpal/docx-editor-core` so
+// the common "spawn a blank editor" affordance is available without forcing
+// consumers to add `-core` to their dependency tree alongside `-react`.
+export {
+  createEmptyDocument,
+  createDocumentWithText,
+  type CreateEmptyDocumentOptions,
+} from '@eigenpal/docx-editor-core';
+
 // i18n contract — runtime only. Locale string types (LocaleStrings,
 // Translations, PartialLocaleStrings, TranslationKey) live in
 // `@eigenpal/docx-editor-i18n`; import them from there.

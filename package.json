@@ -56,6 +56,7 @@
     "check:consumer-install": "node scripts/check-consumer-install.mjs",
     "check:parity-contract": "node scripts/check-parity-contract.mjs",
     "check:parity": "bun run check:export-parity && bun run check:editor-contract && bun run check:public-docs-surface && bun run check:parity-contract",
+    "check:i18n-bundle-size": "node scripts/check-i18n-bundle-size.mjs",
     "api:extract": "node scripts/api-extractor.mjs --local",
     "api:check": "node scripts/api-extractor.mjs",
     "docs:json": "node scripts/build-docs-json.mjs",

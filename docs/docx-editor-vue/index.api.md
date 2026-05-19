@@ -5,6 +5,9 @@
 ```ts
 
 import { App } from 'vue';
+import { createDocumentWithText } from '@eigenpal/docx-editor-core';
+import { createEmptyDocument } from '@eigenpal/docx-editor-core';
+import { CreateEmptyDocumentOptions } from '@eigenpal/docx-editor-core';
 import { en as defaultLocale } from '@eigenpal/docx-editor-i18n';
 import { Document as Document_2 } from '@eigenpal/docx-editor-core/types/document';
 import { default as DocxEditor } from './components/DocxEditor.vue';
@@ -19,6 +22,12 @@ import { TFunction } from '@eigenpal/docx-editor-i18n';
 import { Theme } from '@eigenpal/docx-editor-core/types/document';
 import { Translations } from '@eigenpal/docx-editor-i18n';
 import { VNodeChild } from 'vue';
+
+export { createDocumentWithText }
+
+export { createEmptyDocument }
+
+export { CreateEmptyDocumentOptions }
 
 export { defaultLocale }
 

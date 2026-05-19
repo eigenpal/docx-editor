@@ -5,6 +5,9 @@
 ```ts
 
 import { Comment as Comment_2 } from '@eigenpal/docx-editor-core/types/content';
+import { createDocumentWithText } from '@eigenpal/docx-editor-core';
+import { createEmptyDocument } from '@eigenpal/docx-editor-core';
+import { CreateEmptyDocumentOptions } from '@eigenpal/docx-editor-core';
 import { CSSProperties } from 'react';
 import { Document as Document_2 } from '@eigenpal/docx-editor-core/types/document';
 import { DocumentAgent } from '@eigenpal/docx-editor-core/agent';
@@ -26,6 +29,12 @@ import { TFunction } from '@eigenpal/docx-editor-i18n';
 import { Theme } from '@eigenpal/docx-editor-core/types/document';
 import { Transaction } from 'prosemirror-state';
 import { Translations } from '@eigenpal/docx-editor-i18n';
+
+export { createDocumentWithText }
+
+export { createEmptyDocument }
+
+export { CreateEmptyDocumentOptions }
 
 // @public
 export const DocxEditor: React_2.ForwardRefExoticComponent<DocxEditorProps & React_2.RefAttributes<DocxEditorRef>>;

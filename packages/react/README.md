@@ -45,6 +45,23 @@ export function App() {
 
 > **Next.js / SSR:** Use dynamic import. The editor requires the DOM.
 
+## Start with a blank document
+
+Skip the file picker for new documents. `createEmptyDocument` returns a fresh `Document` model you can pass straight to the editor:
+
+```tsx
+import { DocxEditor, createEmptyDocument } from '@eigenpal/docx-editor-react';
+import '@eigenpal/docx-editor-react/styles.css';
+
+const doc = createEmptyDocument();
+// Or with options:
+// createEmptyDocument({ initialText: 'Untitled', pageWidth: 12240 })
+
+<DocxEditor document={doc} mode="editing" />;
+```
+
+`createDocumentWithText(text, options?)` is the same idea with a starting paragraph already typed. Both helpers are re-exported from `@eigenpal/docx-editor-core` so you don't need a separate dependency.
+
 ## Packages
 
 | Package                                                                                      | Description                                                                                                                                |

@@ -232,6 +232,34 @@ export interface ColumnResizeState {
 }
 
 // @public
+interface Comment_2 {
+    author: string;
+    content: Paragraph[];
+    date?: string;
+    done?: boolean;
+    id: number;
+    initials?: string;
+    parentId?: number;
+}
+export { Comment_2 as Comment }
+
+// @public
+export interface CommentRangeEnd {
+    // (undocumented)
+    id: number;
+    // (undocumented)
+    type: 'commentRangeEnd';
+}
+
+// @public
+export interface CommentRangeStart {
+    // (undocumented)
+    id: number;
+    // (undocumented)
+    type: 'commentRangeStart';
+}
+
+// @public
 export type ConvertFootnoteOptions = {
     styles?: StyleDefinitions | null;
     theme?: Theme | null;
@@ -323,6 +351,14 @@ export interface DeleteTextCommand extends BaseCommand {
     range: Range_2;
     // (undocumented)
     type: 'deleteText';
+}
+
+// @public
+export interface Deletion {
+    content: (Run | Hyperlink)[];
+    info: TrackedChangeInfo;
+    // (undocumented)
+    type: 'deletion';
 }
 
 // @public
@@ -796,6 +832,14 @@ export interface InsertImageCommand extends BaseCommand {
 }
 
 // @public
+export interface Insertion {
+    content: (Run | Hyperlink)[];
+    info: TrackedChangeInfo;
+    // (undocumented)
+    type: 'insertion';
+}
+
+// @public
 export function insertPageBreak(doc: Document_2, position: InsertPosition_2): Document_2;
 
 // @public
@@ -983,6 +1027,22 @@ export type Measure = ParagraphMetrics | ImageMeasure | TableMeasure | TextBoxMe
 export type MeasureBlocksFn = (blocks: FlowBlock[], contentWidth: number) => Measure[];
 
 // @public
+export interface MoveFrom {
+    content: (Run | Hyperlink)[];
+    info: TrackedChangeInfo;
+    // (undocumented)
+    type: 'moveFrom';
+}
+
+// @public
+export interface MoveTo {
+    content: (Run | Hyperlink)[];
+    info: TrackedChangeInfo;
+    // (undocumented)
+    type: 'moveTo';
+}
+
+// @public
 export interface NumberingDefinitions {
     abstractNums: AbstractNumbering[];
     nums: NumberingInstance[];
@@ -1039,6 +1099,9 @@ export interface Paragraph {
     // (undocumented)
     type: 'paragraph';
 }
+
+// @public
+export type ParagraphContent = Run | Hyperlink | BookmarkStart | BookmarkEnd | SimpleField | ComplexField | InlineSdt | CommentRangeStart | CommentRangeEnd | Insertion | Deletion | MoveFrom | MoveTo | MoveFromRangeStart | MoveFromRangeEnd | MoveToRangeStart | MoveToRangeEnd | MathEquation;
 
 // @public
 export interface ParagraphContext {
@@ -1734,6 +1797,16 @@ export interface ThemeMatrixCell {
 
 // @public
 export function toArrayBuffer(input: DocxInput): Promise<ArrayBuffer>;
+
+// @public
+export interface TrackedChangeInfo {
+    author: string;
+    date?: string;
+    id: number;
+}
+
+// @public
+export type TrackedRunChange = Insertion | Deletion | MoveFrom | MoveTo;
 
 // @public
 export function twipsToEmu(twips: number): number;
