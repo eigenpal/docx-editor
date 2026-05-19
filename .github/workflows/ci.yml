@@ -81,3 +81,9 @@ jobs:
 
       - name: Parity contract check
         run: bun run check:parity-contract
+
+      - name: Docs JSON generation (smoke test)
+        # Not committed — `docs/json/` is gitignored. Run as a smoke test
+        # so any breakage in the generator surfaces here instead of when
+        # the docs site (`docx-editor-page`) tries to consume it.
+        run: bun run docs:json

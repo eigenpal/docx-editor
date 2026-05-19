@@ -1,10 +1,11 @@
-// Shared API Extractor runner used by per-package `scripts/api-extractor.mjs`
-// entry points. Walks a package's `exports` map, builds one `etc/<slug>.api.md`
-// snapshot per public subpath, and shares a single `CompilerState` so adding
-// new subpaths doesn't quadratically slow down the run.
+// Shared API Extractor runner used by `scripts/api-extractor.mjs`. Walks
+// a package's `exports` map, builds one `<reportDir>/<slug>.api.md`
+// snapshot per public subpath, and shares a single `CompilerState` so
+// adding new subpaths doesn't quadratically slow down the run.
 //
-// Per-package wrappers pass in the package root and (optionally) a custom
-// tsconfig path. Default tsconfig is `<packageRoot>/tsconfig.json`.
+// Caller passes `reportDir` (where the committed snapshots live —
+// `docs/<pkg-slug>/` in this repo) and optionally a custom tsconfig.
+// Default tsconfig is `<packageRoot>/tsconfig.json`.
 
 import { CompilerState, Extractor, ExtractorConfig } from '@microsoft/api-extractor';
 import fs from 'node:fs';
@@ -48,27 +49,41 @@ function entriesFromExports(packageRoot, exportsMap) {
 /**
  * @param {{
  *   packageRoot: string,
+ *   reportDir: string,
  *   isLocal: boolean,
  *   buildHint: string,
  *   tsconfigPath?: string,
+ *   emitDocModel?: boolean,
  * }} options
  */
 export function runApiExtractor(options) {
   const {
     packageRoot,
+    reportDir,
     isLocal,
     buildHint,
     tsconfigPath = path.join(packageRoot, 'tsconfig.json'),
+    emitDocModel = false,
   } = options;
 
+  if (!reportDir) {
+    // Explicit check — otherwise the failure is `fs.mkdirSync(undefined)`
+    // a few lines below, which is cryptic.
+    throw new Error('runApiExtractor: reportDir is required');
+  }
+  if (!packageRoot) {
+    throw new Error('runApiExtractor: packageRoot is required');
+  }
+
   const packageJsonPath = path.join(packageRoot, 'package.json');
-  const etcDir = path.join(packageRoot, 'etc');
   const tempDir = path.join(packageRoot, 'temp');
+  const docModelDir = path.join(tempDir, 'api-model');
+  if (emitDocModel) fs.mkdirSync(docModelDir, { recursive: true });
 
   const pkg = JSON.parse(fs.readFileSync(packageJsonPath, 'utf8'));
   const targets = entriesFromExports(packageRoot, pkg.exports || {});
 
-  fs.mkdirSync(etcDir, { recursive: true });
+  fs.mkdirSync(reportDir, { recursive: true });
   fs.mkdirSync(tempDir, { recursive: true });
 
   const tsdocMessageReporting = {
@@ -90,11 +105,18 @@ export function runApiExtractor(options) {
       mainEntryPointFilePath: dtsPath,
       apiReport: {
         enabled: true,
-        reportFolder: etcDir,
+        reportFolder: reportDir,
         reportFileName: `${slug}.api.md`,
         reportTempFolder: tempDir,
       },
-      docModel: { enabled: false },
+      docModel: emitDocModel
+        ? {
+            enabled: true,
+            // One file per subpath. Otherwise the runner overwrites a single
+            // <unscopedPackageName>.api.json between invocations.
+            apiJsonFilePath: path.join(docModelDir, `${slug}.api.json`),
+          }
+        : { enabled: false },
       dtsRollup: { enabled: false },
       tsdocMetadata: { enabled: false },
       compiler: { tsconfigFilePath: tsconfigPath },
@@ -181,7 +203,7 @@ export function runApiExtractor(options) {
       console.error(`  - ${t.slug}${where}`);
     }
     console.error(`\nFix: bun run api:extract`);
-    console.error(`Then commit the updated etc/*.api.md files.`);
+    console.error(`Then commit the updated docs/<pkg-slug>/*.api.md files.`);
     process.exit(1);
   }
 

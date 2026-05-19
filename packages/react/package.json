@@ -68,8 +68,8 @@
     "build:css": "tailwindcss -c ../../tailwind.config.lib.js -i ./src/styles/editor.css -o ./dist/styles.css --minify",
     "prepublishOnly": "bun run build && sed -e 's|\\./assets/|https://raw.githubusercontent.com/eigenpal/docx-editor/main/assets/|g' -e 's|(packages/|(https://github.com/eigenpal/docx-editor/tree/main/packages/|g' -e 's|(docs/|(https://github.com/eigenpal/docx-editor/blob/main/docs/|g' -e 's|(examples/|(https://github.com/eigenpal/docx-editor/tree/main/examples/|g' ../../README.md > README.md",
     "typecheck": "tsc --noEmit",
-    "api:extract": "node scripts/api-extractor.mjs --local",
-    "api:check": "node scripts/api-extractor.mjs"
+    "api:extract": "node ../../scripts/api-extractor.mjs --package @eigenpal/docx-editor-react --local",
+    "api:check": "node ../../scripts/api-extractor.mjs --package @eigenpal/docx-editor-react"
   },
   "peerDependencies": {
     "prosemirror-commands": "^1.5.2",

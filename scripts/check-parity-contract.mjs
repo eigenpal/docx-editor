@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Cross-adapter parity check between @eigenpal/docx-editor-react and
 // @eigenpal/docx-editor-vue. Reads each adapter's API Extractor snapshot
-// (`packages/<adapter>/etc/index.api.md`), extracts the `DocxEditorProps`
+// (`docs/<adapter-slug>/index.api.md`), extracts the `DocxEditorProps`
 // and `DocxEditorRef` field names, and applies `etc/parity.contract.json`.
 //
 // Fails non-zero on any drift the contract does not acknowledge:
@@ -25,8 +25,8 @@ import { fileURLToPath } from 'node:url';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(__dirname, '..');
 
-const REACT_SNAPSHOT = path.join(repoRoot, 'packages/react/etc/index.api.md');
-const VUE_SNAPSHOT = path.join(repoRoot, 'packages/vue/etc/index.api.md');
+const REACT_SNAPSHOT = path.join(repoRoot, 'docs/docx-editor-react/index.api.md');
+const VUE_SNAPSHOT = path.join(repoRoot, 'docs/docx-editor-vue/index.api.md');
 const CONTRACT_PATH = path.join(repoRoot, 'etc/parity.contract.json');
 
 /**
@@ -190,19 +190,19 @@ function main() {
   const vueRef = extractVueRefMembers(vueSnapshot);
 
   if (!reactProps) {
-    console.error('Could not locate DocxEditorProps in packages/react/etc/index.api.md');
+    console.error('Could not locate DocxEditorProps in docs/docx-editor-react/index.api.md');
     process.exit(1);
   }
   if (!vueProps) {
-    console.error('Could not locate DocxEditorProps in packages/vue/etc/index.api.md');
+    console.error('Could not locate DocxEditorProps in docs/docx-editor-vue/index.api.md');
     process.exit(1);
   }
   if (!reactRef) {
-    console.error('Could not locate DocxEditorRef in packages/react/etc/index.api.md');
+    console.error('Could not locate DocxEditorRef in docs/docx-editor-react/index.api.md');
     process.exit(1);
   }
   if (!vueRef) {
-    console.error('Could not locate DocxEditorRef in packages/vue/etc/index.api.md');
+    console.error('Could not locate DocxEditorRef in docs/docx-editor-vue/index.api.md');
     process.exit(1);
   }
 

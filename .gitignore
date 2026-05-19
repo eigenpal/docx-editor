@@ -71,3 +71,8 @@ reference/ecma-376/*.zip
 
 # API Extractor temp output (snapshots live in etc/)
 packages/*/temp/
+
+# Consumer-generated docs JSON. Regenerate with `bun run docs:json`.
+# Not committed — consumer (e.g. docs-editor-page) clones the repo and
+# runs the script itself. See CLAUDE.md → Docs JSON.
+docs/json/
