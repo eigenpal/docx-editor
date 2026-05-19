@@ -67,6 +67,14 @@ A synthetic document containing dense bottom-of-page footnote references with
 long citation-like note text. Used to verify that final footnote reservation and
 painted footnote height agree so notes do not run off the page.
 
+### toc-hyperlink-tabs.docx
+
+A synthetic document with one TOC1 paragraph wrapping
+`1[tab]Introduction[tab]5` inside a `<w:hyperlink>`, plus the TOC1 style with
+its right-aligned dot-leader tab stop. Used to verify that tabs inside
+hyperlinks survive parsing and that TOC entries render with dot leaders and
+right-aligned page numbers like Word.
+
 ## Generating Fixtures
 
 To regenerate fixtures, run:
@@ -75,6 +83,7 @@ To regenerate fixtures, run:
 bun run e2e/fixtures/generate-fixtures.ts
 bun scripts/create-issue-472-floating-textbox-fixture.mjs
 bun scripts/create-footnote-bottom-overflow-fixture.mjs
+bun scripts/create-toc-hyperlink-fixture.mjs
 ```
 
 Or manually create them using Microsoft Word or another DOCX editor.

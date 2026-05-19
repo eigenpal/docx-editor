@@ -140,6 +140,18 @@ User clicks on visible page → `usePagesPointer.handlePagesMouseDown()` (in `co
 - Vue host mounts via `useDocxEditor()` (`packages/vue/src/composables/useDocxEditor.ts`); `EditorView` and `Document` are held in `shallowRef`. Reactivity contract for the rest of the surface lives in `openspec/changes/vue-editor-robust-implementation/notes/reactivity.md`.
 - The dual-rendering rule above (visible pages from `layout-painter/`, NOT `toDOM`) applies to both adapters — a fix in `toDOM` won't show up on screen in React or Vue.
 
+### Painter DOM contract
+
+The visible pages render with stable class names and dataset attributes that other code (CSS, queries, selection mapping) depends on. When adding new dataset attributes, document them here:
+
+- `data-block-id` — `<div class="layout-fragment-*">` — paragraph/table/image/textbox block index
+- `data-from-line` / `data-to-line` — `<div class="layout-fragment-paragraph">` — measured-line range covered
+- `data-doc-from` / `data-doc-to` — every painted run/fragment — ProseMirror document positions for selection mapping
+- `data-comment-id` — text spans inside an active comment range
+- `data-change-author` / `data-change-date` / `data-revision-id` — tracked insertion/deletion runs
+- `data-continues-from-prev` / `data-continues-on-next` — paragraph fragments split across pages
+- `data-flex-line` — `<div class="layout-line">` lines promoted to `display: flex` (image-aligned lines, right-tab anchor lines). `paintParagraphFragment` suppresses `text-indent` on these because `text-indent` applies per-flex-item, not to the line as a whole.
+
 ### FlowBlock invariant
 
 Adding a new variant to `FlowBlock` (`packages/core/src/layout-engine/types.ts`) requires updating **three** switches:
