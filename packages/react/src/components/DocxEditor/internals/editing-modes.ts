@@ -4,7 +4,7 @@
  * forwardRef body share one source of truth.
  */
 
-import type { TranslationKey } from '../../../i18n';
+import type { TranslationKey } from '@eigenpal/docx-editor-i18n';
 
 export type EditorMode = 'editing' | 'suggesting' | 'viewing';
 

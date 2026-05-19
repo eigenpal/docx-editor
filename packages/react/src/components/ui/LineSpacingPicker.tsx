@@ -18,7 +18,7 @@ import {
 import { cn } from '../../lib/utils';
 import { IconLineSpacing } from './Icons';
 import { useTranslation } from '../../i18n';
-import type { TranslationKey } from '../../i18n';
+import type { TranslationKey } from '@eigenpal/docx-editor-i18n';
 
 // ============================================================================
 // TYPES

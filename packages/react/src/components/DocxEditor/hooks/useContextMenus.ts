@@ -17,8 +17,9 @@ import {
   type ImageLayoutTarget,
 } from '@eigenpal/docx-editor-core/prosemirror/commands';
 import type { WrapType } from '@eigenpal/docx-editor-core/docx/wrapTypes';
-import defaultLocale from '@eigenpal/docx-editor-i18n/en.json';
-import { useTranslation, type Translations } from '../../../i18n';
+import { en as defaultLocale } from '@eigenpal/docx-editor-i18n';
+import { useTranslation } from '../../../i18n';
+import type { Translations } from '@eigenpal/docx-editor-i18n';
 import { useImageContextMenu } from '../../ImageContextMenu';
 import { type TextContextAction, type TextContextMenuItem } from '../../TextContextMenu';
 import { findSelectionYPosition } from '../internals/pmAnchors';

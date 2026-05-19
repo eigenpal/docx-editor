@@ -27,7 +27,8 @@
       "@eigenpal/docx-editor-core/plugin-api/*": ["../core/src/plugin-api/*"],
       "@eigenpal/docx-editor-core/*": ["../core/src/*"],
       "@eigenpal/docx-editor-agents/react": ["../agents/src/react.ts"],
-      "@eigenpal/docx-editor-agents/bridge": ["../agents/src/bridge.ts"]
+      "@eigenpal/docx-editor-agents/bridge": ["../agents/src/bridge.ts"],
+      "@eigenpal/docx-editor-i18n": ["../i18n/src/index.ts"]
     }
   },
   "include": ["src"],

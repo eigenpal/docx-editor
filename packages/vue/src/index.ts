@@ -10,9 +10,10 @@ export const VERSION = '0.0.2';
 export { default as DocxEditor } from './components/DocxEditor.vue';
 export type { DocxEditorProps, EditorMode } from './components/DocxEditor/types';
 
-// i18n
+// i18n contract — runtime only. Locale string types (LocaleStrings,
+// Translations, PartialLocaleStrings, TranslationKey) live in
+// `@eigenpal/docx-editor-i18n`; import them from there.
 export { useTranslation, provideLocale, i18nPlugin, defaultLocale } from './i18n';
-export type { LocaleStrings, PartialLocaleStrings, TranslationKey, Translations } from './i18n';
 
 // renderAsync
 export { renderAsync } from './renderAsync';
