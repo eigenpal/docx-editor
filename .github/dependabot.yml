@@ -1,3 +1,9 @@
+# Supply-chain defense: 7-day cooldown before Dependabot opens an update PR.
+# Compromised packages (stolen maintainer tokens) are almost always yanked
+# within hours, well before this window elapses.
+#
+# Dependabot v2 has no global default and rejects YAML aliases
+# (dependabot-core#1582), so the cooldown block is duplicated per entry.
 version: 2
 updates:
   - package-ecosystem: "npm"
@@ -5,9 +11,125 @@ updates:
     schedule:
       interval: "weekly"
       day: "monday"
+    cooldown:
+      default-days: 7
+
+  - package-ecosystem: "npm"
+    directory: "/packages/agents"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    cooldown:
+      default-days: 7
+
+  - package-ecosystem: "npm"
+    directory: "/packages/core"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    cooldown:
+      default-days: 7
+
+  - package-ecosystem: "npm"
+    directory: "/packages/i18n"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    cooldown:
+      default-days: 7
+
+  - package-ecosystem: "npm"
+    directory: "/packages/react"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    cooldown:
+      default-days: 7
+
+  - package-ecosystem: "npm"
+    directory: "/packages/vue"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    cooldown:
+      default-days: 7
+
+  - package-ecosystem: "npm"
+    directory: "/examples/agents-demo"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    cooldown:
+      default-days: 7
+
+  - package-ecosystem: "npm"
+    directory: "/examples/agent-chat-demo"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    cooldown:
+      default-days: 7
+
+  - package-ecosystem: "npm"
+    directory: "/examples/astro"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    cooldown:
+      default-days: 7
+
+  - package-ecosystem: "npm"
+    directory: "/examples/collaboration"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    cooldown:
+      default-days: 7
+
+  - package-ecosystem: "npm"
+    directory: "/examples/plugins/docxtemplater"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    cooldown:
+      default-days: 7
+
+  - package-ecosystem: "npm"
+    directory: "/examples/plugins/hello-world"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    cooldown:
+      default-days: 7
+
+  - package-ecosystem: "npm"
+    directory: "/examples/remix"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    cooldown:
+      default-days: 7
+
+  - package-ecosystem: "npm"
+    directory: "/examples/vite"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    cooldown:
+      default-days: 7
+
+  - package-ecosystem: "npm"
+    directory: "/examples/vue"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    cooldown:
+      default-days: 7
 
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
       interval: "weekly"
       day: "monday"
+    cooldown:
+      default-days: 7
