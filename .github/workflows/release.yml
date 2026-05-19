@@ -106,6 +106,30 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           NPM_CONFIG_PROVENANCE: 'true'
 
+      # changesets/action creates per-package tags (e.g. `@eigenpal/docx-editor-react@1.0.0`).
+      # Renovate, Dependabot, and "Releases" pages prefer a single named version
+      # tag too. Since the fixed group keeps every 1.x package in lockstep, the
+      # umbrella version is just the version of any published package. 1.x only —
+      # the 0.x maintenance line keeps its own per-package tag scheme.
+      - name: Create umbrella version tag (vX.Y.Z)
+        if: ${{ steps.changesets.outputs.published == 'true' && github.ref == 'refs/heads/main' }}
+        env:
+          PUBLISHED_PACKAGES: ${{ steps.changesets.outputs.publishedPackages }}
+        run: |
+          version=$(echo "$PUBLISHED_PACKAGES" | jq -r '.[0].version')
+          tag="v$version"
+          if git rev-parse --verify --quiet "refs/tags/$tag" >/dev/null; then
+            echo "Tag $tag already exists locally, skipping"
+            exit 0
+          fi
+          if git ls-remote --exit-code --tags origin "$tag" >/dev/null 2>&1; then
+            echo "Tag $tag already exists on origin, skipping"
+            exit 0
+          fi
+          git tag -a "$tag" -m "Release $tag"
+          git push origin "$tag"
+          echo "Created $tag"
+
       - name: Notify Slack — release succeeded
         if: ${{ steps.changesets.outputs.published == 'true' && env.SLACK_WEBHOOK_URL != '' }}
         env:

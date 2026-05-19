@@ -21,6 +21,15 @@ export const VERSION = '0.0.2';
 export { default as DocxEditor } from './components/DocxEditor.vue';
 export type { DocxEditorProps, EditorMode } from './components/DocxEditor/types';
 
+// Document factory helpers — re-exported from `@eigenpal/docx-editor-core` so
+// the common "spawn a blank editor" affordance is available without forcing
+// consumers to add `-core` to their dependency tree alongside `-vue`.
+export {
+  createEmptyDocument,
+  createDocumentWithText,
+  type CreateEmptyDocumentOptions,
+} from '@eigenpal/docx-editor-core';
+
 // i18n contract — runtime only. Locale string types (LocaleStrings,
 // Translations, PartialLocaleStrings, TranslationKey) live in
 // `@eigenpal/docx-editor-i18n`; import them from there.
