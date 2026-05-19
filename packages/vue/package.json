@@ -67,8 +67,8 @@
   "scripts": {
     "build": "vite build",
     "typecheck": "tsc --noEmit",
-    "api:extract": "node scripts/api-extractor.mjs --local",
-    "api:check": "node scripts/api-extractor.mjs"
+    "api:extract": "node ../../scripts/api-extractor.mjs --package @eigenpal/docx-editor-vue --local",
+    "api:check": "node ../../scripts/api-extractor.mjs --package @eigenpal/docx-editor-vue"
   },
   "peerDependencies": {
     "prosemirror-commands": "^1.5.2",

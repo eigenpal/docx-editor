@@ -116,8 +116,8 @@
   "scripts": {
     "build": "tsup && vite build",
     "typecheck": "vue-tsc --noEmit",
-    "api:extract": "api-extractor run --local --verbose",
-    "api:check": "api-extractor run"
+    "api:extract": "node ../../scripts/api-extractor.mjs --package @eigenpal/docx-editor-agents --local",
+    "api:check": "node ../../scripts/api-extractor.mjs --package @eigenpal/docx-editor-agents"
   },
   "dependencies": {
     "docxtemplater": "^3.50.0",

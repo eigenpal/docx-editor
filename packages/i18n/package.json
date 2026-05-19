@@ -20,7 +20,9 @@
   ],
   "scripts": {
     "build": "tsup",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "api:extract": "node ../../scripts/api-extractor.mjs --package @eigenpal/docx-editor-i18n --local",
+    "api:check": "node ../../scripts/api-extractor.mjs --package @eigenpal/docx-editor-i18n"
   },
   "devDependencies": {
     "tsup": "^8.0.1",

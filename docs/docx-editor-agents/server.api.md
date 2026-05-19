@@ -38,31 +38,19 @@ export const docxAgentTools: AgentToolDefinition<any>[];
 
 // @public
 export class DocxReviewer {
-    // Warning: (ae-forgotten-export) The symbol "Document_2" needs to be exported by the entry point server.d.ts
     constructor(document: Document_2, author?: string, originalBuffer?: ArrayBuffer);
     acceptAll(): number;
     acceptChange(id: number): void;
     addComment(paragraphIndex: number, text: string): number;
-    // Warning: (ae-forgotten-export) The symbol "AddCommentOptions" needs to be exported by the entry point server.d.ts
     addComment(options: AddCommentOptions): number;
-    // Warning: (ae-forgotten-export) The symbol "BatchReviewOptions" needs to be exported by the entry point server.d.ts
-    // Warning: (ae-forgotten-export) The symbol "BatchResult" needs to be exported by the entry point server.d.ts
     applyReview(ops: BatchReviewOptions): BatchResult;
     readonly author: string;
     static fromBuffer(buffer: ArrayBuffer, author?: string): Promise<DocxReviewer>;
-    // Warning: (ae-forgotten-export) The symbol "ChangeFilter" needs to be exported by the entry point server.d.ts
-    // Warning: (ae-forgotten-export) The symbol "ReviewChange" needs to be exported by the entry point server.d.ts
     getChanges(filter?: ChangeFilter): ReviewChange[];
-    // Warning: (ae-forgotten-export) The symbol "CommentFilter" needs to be exported by the entry point server.d.ts
-    // Warning: (ae-forgotten-export) The symbol "ReviewComment" needs to be exported by the entry point server.d.ts
     getComments(filter?: CommentFilter): ReviewComment[];
-    // Warning: (ae-forgotten-export) The symbol "GetContentOptions" needs to be exported by the entry point server.d.ts
-    // Warning: (ae-forgotten-export) The symbol "ContentBlock" needs to be exported by the entry point server.d.ts
     getContent(options?: GetContentOptions): ContentBlock[];
     getContentAsText(options?: GetContentOptions): string;
-    // Warning: (ae-forgotten-export) The symbol "ProposeDeletionOptions" needs to be exported by the entry point server.d.ts
     proposeDeletion(options: ProposeDeletionOptions): void;
-    // Warning: (ae-forgotten-export) The symbol "ProposeInsertionOptions" needs to be exported by the entry point server.d.ts
     proposeInsertion(options: ProposeInsertionOptions): void;
     // @deprecated (undocumented)
     proposeReplacement(options: ProposeReplacementOptions): void;
@@ -70,10 +58,8 @@ export class DocxReviewer {
     rejectChange(id: number): void;
     removeComment(commentId: number): void;
     replace(paragraphIndex: number, search: string, replaceWith: string): void;
-    // Warning: (ae-forgotten-export) The symbol "ProposeReplacementOptions" needs to be exported by the entry point server.d.ts
     replace(options: ProposeReplacementOptions): void;
     replyTo(commentId: number, text: string): number;
-    // Warning: (ae-forgotten-export) The symbol "ReplyOptions" needs to be exported by the entry point server.d.ts
     replyTo(commentId: number, options: ReplyOptions): number;
     toBuffer(): Promise<ArrayBuffer>;
     toDocument(): Document_2;
@@ -81,11 +67,8 @@ export class DocxReviewer {
 
 // @public
 export interface EditorBridge {
-    // Warning: (ae-forgotten-export) The symbol "AddCommentByParaIdOptions" needs to be exported by the entry point server.d.ts
     addComment(options: AddCommentByParaIdOptions): number | null;
-    // Warning: (ae-forgotten-export) The symbol "ApplyFormattingOptions" needs to be exported by the entry point server.d.ts
     applyFormatting(options: ApplyFormattingOptions): boolean;
-    // Warning: (ae-forgotten-export) The symbol "FoundMatch" needs to be exported by the entry point server.d.ts
     findText(query: string, options?: {
         caseSensitive?: boolean;
         limit?: number;
@@ -95,7 +78,6 @@ export interface EditorBridge {
     getContent(options?: GetContentOptions): ContentBlock[];
     getContentAsText(options?: GetContentOptions): string;
     getCurrentPage(): number;
-    // Warning: (ae-forgotten-export) The symbol "PageContent" needs to be exported by the entry point server.d.ts
     getPage(pageNumber: number): PageContent | null;
     getPages(options: {
         from: number;
@@ -103,16 +85,12 @@ export interface EditorBridge {
     }): PageContent[];
     getSelection(): SelectionInfo | null;
     getTotalPages(): number;
-    // Warning: (ae-forgotten-export) The symbol "ContentChangeEvent" needs to be exported by the entry point server.d.ts
     onContentChange(listener: (event: ContentChangeEvent) => void): () => void;
-    // Warning: (ae-forgotten-export) The symbol "SelectionChangeEvent" needs to be exported by the entry point server.d.ts
     onSelectionChange(listener: (event: SelectionChangeEvent) => void): () => void;
-    // Warning: (ae-forgotten-export) The symbol "ProposeChangeOptions" needs to be exported by the entry point server.d.ts
     proposeChange(options: ProposeChangeOptions): boolean;
     replyTo(commentId: number, options: ReplyOptions): number | null;
     resolveComment(commentId: number): void;
     scrollTo(paraId: string): boolean;
-    // Warning: (ae-forgotten-export) The symbol "SetParagraphStyleOptions" needs to be exported by the entry point server.d.ts
     setParagraphStyle(options: SetParagraphStyleOptions): boolean;
 }
 
