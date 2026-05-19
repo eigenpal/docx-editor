@@ -19,7 +19,7 @@
     "change": "Alterar",
     "px": "px",
     "closeDialog": "Fechar diálogo",
-    "clear": null
+    "clear": "Limpar"
   },
   "toolbar": {
     "ariaLabel": "Barra de formatação",
@@ -205,7 +205,7 @@
       "matchCase": "Diferenciar maiúsculas e minúsculas",
       "wholeWords": "Palavras inteiras",
       "toggleReplace": "+ Substituir",
-      "matchesFound": null
+      "matchesFound": "{total} ocorrências"
     },
     "hyperlink": {
       "titleEdit": "Editar hiperlink",
@@ -235,11 +235,11 @@
       "columnsLabel": "Colunas:",
       "insertButton": "Inserir tabela",
       "sizeSelector": "Seletor de tamanho da tabela",
-      "autofit": null,
-      "columnWidthLabel": null,
-      "fixedWidth": null,
-      "tableStyleLabel": null,
-      "validationHint": null
+      "autofit": "Ajustar automaticamente ao conteúdo",
+      "columnWidthLabel": "Largura da coluna",
+      "fixedWidth": "Fixa",
+      "tableStyleLabel": "Estilo da tabela",
+      "validationHint": "Linhas: {minRows}-{maxRows}, Colunas: {minCols}-{maxCols}"
     },
     "splitCell": {
       "title": "Dividir célula",
@@ -285,8 +285,8 @@
         "music": "Música",
         "emoji": "Emoji"
       },
-      "noResultsEmpty": null,
-      "recent": null
+      "noResultsEmpty": "Nenhum símbolo encontrado",
+      "recent": "Recentes:"
     },
     "imageProperties": {
       "title": "Propriedades da imagem",
@@ -307,18 +307,18 @@
         "inset": "Recessado",
         "outset": "Relevo"
       },
-      "dimensions": null,
-      "heightLabel": null,
-      "lockAspectRatio": null,
-      "textWrapping": null,
-      "widthLabel": null,
+      "dimensions": "Dimensões",
+      "heightLabel": "Altura:",
+      "lockAspectRatio": "Bloquear proporção",
+      "textWrapping": "Quebra de texto",
+      "widthLabel": "Largura:",
       "wrapOptions": {
-        "behind": null,
-        "inFront": null,
-        "inline": null,
-        "topAndBottom": null,
-        "wrapLeft": null,
-        "wrapRight": null
+        "behind": "Atrás do texto",
+        "inFront": "Na frente do texto",
+        "inline": "Em linha com o texto",
+        "topAndBottom": "Acima e abaixo",
+        "wrapLeft": "Quebra de texto, flutuar à direita",
+        "wrapRight": "Quebra de texto, flutuar à esquerda"
       }
     },
     "imagePosition": {
@@ -523,8 +523,8 @@
         "resetZoomDescription": "Redefinir zoom para 100%",
         "keyboardShortcuts": "Atalhos de teclado",
         "keyboardShortcutsDescription": "Mostrar esta caixa de diálogo de ajuda",
-        "insertLink": null,
-        "insertLinkDescription": null
+        "insertLink": "Inserir link",
+        "insertLinkDescription": "Inserir ou editar hiperlink"
       },
       "noResults": "Nenhum atalho encontrado para \"{query}\"",
       "pressEscToClose": "Pressione {key} para fechar",
@@ -710,7 +710,7 @@
       "inLineWithText": "Em linha com o texto",
       "squareLeft": "Quadrado à esquerda",
       "squareRight": "Quadrado à direita",
-      "imageProperties": null
+      "imageProperties": "Propriedades da imagem…"
     },
     "menuDesc": {
       "behindText": "A imagem fica atrás do texto",
@@ -813,8 +813,8 @@
     "pageIndicator": "{current} de {total}"
   },
   "imageOverlay": {
-    "deleteImage": null,
-    "imageProperties": null,
-    "rotate": null
+    "deleteImage": "Excluir imagem",
+    "imageProperties": "Propriedades da imagem",
+    "rotate": "Girar"
   }
 }

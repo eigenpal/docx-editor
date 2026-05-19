@@ -19,7 +19,7 @@
     "change": "Zmień",
     "px": "px",
     "closeDialog": "Zamknij okno dialogowe",
-    "clear": null
+    "clear": "Wyczyść"
   },
   "toolbar": {
     "ariaLabel": "Pasek narzędzi formatowania",
@@ -205,7 +205,7 @@
       "matchCase": "Uwzględnij wielkość liter",
       "wholeWords": "Całe wyrazy",
       "toggleReplace": "+ Zamień",
-      "matchesFound": null
+      "matchesFound": "{total} wyników"
     },
     "hyperlink": {
       "titleEdit": "Edytuj hiperłącze",
@@ -235,11 +235,11 @@
       "columnsLabel": "Kolumny:",
       "insertButton": "Wstaw tabelę",
       "sizeSelector": "Wybór rozmiaru tabeli",
-      "autofit": null,
-      "columnWidthLabel": null,
-      "fixedWidth": null,
-      "tableStyleLabel": null,
-      "validationHint": null
+      "autofit": "Autodopasowanie do zawartości",
+      "columnWidthLabel": "Szerokość kolumny",
+      "fixedWidth": "Stała",
+      "tableStyleLabel": "Styl tabeli",
+      "validationHint": "Wiersze: {minRows}-{maxRows}, Kolumny: {minCols}-{maxCols}"
     },
     "splitCell": {
       "title": "Podziel komórkę",
@@ -285,8 +285,8 @@
         "music": "Muzyczne",
         "emoji": "Emoji"
       },
-      "noResultsEmpty": null,
-      "recent": null
+      "noResultsEmpty": "Nie znaleziono symboli",
+      "recent": "Ostatnio używane:"
     },
     "imageProperties": {
       "title": "Właściwości obrazu",
@@ -307,18 +307,18 @@
         "inset": "Wklęsłe",
         "outset": "Wypukłe"
       },
-      "dimensions": null,
-      "heightLabel": null,
-      "lockAspectRatio": null,
-      "textWrapping": null,
-      "widthLabel": null,
+      "dimensions": "Wymiary",
+      "heightLabel": "Wysokość:",
+      "lockAspectRatio": "Zablokuj proporcje",
+      "textWrapping": "Zawijanie tekstu",
+      "widthLabel": "Szerokość:",
       "wrapOptions": {
-        "behind": null,
-        "inFront": null,
-        "inline": null,
-        "topAndBottom": null,
-        "wrapLeft": null,
-        "wrapRight": null
+        "behind": "Za tekstem",
+        "inFront": "Przed tekstem",
+        "inline": "Równo z tekstem",
+        "topAndBottom": "Góra i dół",
+        "wrapLeft": "Zawijanie tekstu, pływające z prawej",
+        "wrapRight": "Zawijanie tekstu, pływające z lewej"
       }
     },
     "imagePosition": {
@@ -523,8 +523,8 @@
         "resetZoomDescription": "Przywróć powiększenie do 100%",
         "keyboardShortcuts": "Skróty klawiaturowe",
         "keyboardShortcutsDescription": "Pokaż to okno pomocy",
-        "insertLink": null,
-        "insertLinkDescription": null
+        "insertLink": "Wstaw link",
+        "insertLinkDescription": "Wstaw lub edytuj hiperłącze"
       },
       "noResults": "Nie znaleziono skrótów pasujących do \"{query}\"",
       "pressEscToClose": "Naciśnij {key}, aby zamknąć",
@@ -710,7 +710,7 @@
       "inLineWithText": "Równo z tekstem",
       "squareLeft": "Kwadrat z lewej",
       "squareRight": "Kwadrat z prawej",
-      "imageProperties": null
+      "imageProperties": "Właściwości obrazu…"
     },
     "menuDesc": {
       "behindText": "Obraz za tekstem",
@@ -813,8 +813,8 @@
     "pageIndicator": "{current} z {total}"
   },
   "imageOverlay": {
-    "deleteImage": null,
-    "imageProperties": null,
-    "rotate": null
+    "deleteImage": "Usuń obraz",
+    "imageProperties": "Właściwości obrazu",
+    "rotate": "Obróć"
   }
 }
