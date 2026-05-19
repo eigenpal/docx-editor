@@ -26,6 +26,9 @@ export default defineConfig({
       // consumers install from npm, and a hard fail for API Extractor's
       // surface check since it would walk the source.
       pathsToAliases: false,
+      // Don't ship `.d.ts.map`. Maps point at source `.ts` files that
+      // aren't in the published tarball, so they're dead weight.
+      compilerOptions: { declarationMap: false },
     }),
   ],
   build: {
