@@ -1,7 +1,7 @@
 ---
-'@eigenpal/docx-editor-i18n': minor
-'@eigenpal/docx-editor-react': minor
-'@eigenpal/docx-editor-core': minor
+'@eigenpal/docx-editor-i18n': patch
+'@eigenpal/docx-editor-react': patch
+'@eigenpal/docx-editor-core': patch
 ---
 
 Add per-locale subpath imports to `@eigenpal/docx-editor-i18n` so dynamic
