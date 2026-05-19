@@ -5,7 +5,15 @@
  * This is the Vue equivalent of PagedEditor + OffscreenEditorHost from the React package.
  */
 
-import { ref, onBeforeUnmount, shallowRef, unref, type MaybeRef, type Ref } from 'vue';
+import {
+  ref,
+  onBeforeUnmount,
+  shallowRef,
+  unref,
+  type MaybeRef,
+  type Ref,
+  type ShallowRef,
+} from 'vue';
 import { EditorState, type Transaction, type Plugin } from 'prosemirror-state';
 import { EditorView } from 'prosemirror-view';
 
@@ -14,6 +22,7 @@ import { parseDocx } from '@eigenpal/docx-editor-core/docx/parser';
 import { toProseDoc, createEmptyDoc } from '@eigenpal/docx-editor-core/prosemirror/conversion';
 import { fromProseDoc } from '@eigenpal/docx-editor-core/prosemirror/conversion/fromProseDoc';
 import { singletonManager } from '@eigenpal/docx-editor-core/prosemirror/schema';
+import type { CommandMap } from '@eigenpal/docx-editor-core/prosemirror/extensions/types';
 import { buildBoxTree } from '@eigenpal/docx-editor-core/layout-bridge/buildBoxTree';
 import { paragraphLayout } from '@eigenpal/docx-editor-core/layout-bridge/measuring';
 import {
@@ -153,7 +162,36 @@ export interface UseDocxEditorOptions {
   syncCoordinator?: SelectionBridge;
 }
 
-export function useDocxEditor(options: UseDocxEditorOptions) {
+export interface UseDocxEditorReturn {
+  /** ProseMirror editor view (hidden). */
+  editorView: ShallowRef<EditorView | null>;
+  /** Latest editor state. Updated on each transaction. */
+  editorState: ShallowRef<EditorState | null>;
+  /** True once the editor view has mounted and a document is loaded. */
+  isReady: Ref<boolean>;
+  /** Last parse error message, or null if the most recent load succeeded. */
+  parseError: Ref<string | null>;
+  /** Computed page layout. */
+  layout: ShallowRef<Layout | null>;
+  /** Load a DOCX from a binary buffer. */
+  loadBuffer: (buffer: ArrayBuffer | Uint8Array | Blob | File) => Promise<void>;
+  /** Load a parsed `Document` directly. */
+  loadDocument: (doc: Document) => void;
+  /** Serialize the current document to a DOCX blob. */
+  save: () => Promise<Blob | null>;
+  /** Focus the hidden ProseMirror view. */
+  focus: () => void;
+  /** Destroy the editor view and clean up listeners. */
+  destroy: () => void;
+  /** Snapshot the current document model. */
+  getDocument: () => Document | null;
+  /** Access the extension command map for invoking marks/nodes/features. */
+  getCommands: () => CommandMap;
+  /** Force a re-layout without a doc change (e.g. after page-setup changes). */
+  reLayout: () => void;
+}
+
+export function useDocxEditor(options: UseDocxEditorOptions): UseDocxEditorReturn {
   const {
     hiddenContainer,
     pagesContainer,

@@ -1,3 +1,18 @@
+/**
+ * @eigenpal/docx-editor-vue/dialogs
+ *
+ * Modal dialog components — hyperlinks, find/replace, page setup, image
+ * properties, and keyboard shortcuts. Mirrors the React dialogs subpath.
+ *
+ * @example
+ * ```ts
+ * import { HyperlinkDialog, FindReplaceDialog } from '@eigenpal/docx-editor-vue/dialogs';
+ * ```
+ *
+ * @packageDocumentation
+ * @public
+ */
+
 export { default as FindReplaceDialog } from './FindReplaceDialog.vue';
 export { default as FootnotePropertiesDialog } from './FootnotePropertiesDialog.vue';
 export { default as HyperlinkDialog } from './HyperlinkDialog.vue';

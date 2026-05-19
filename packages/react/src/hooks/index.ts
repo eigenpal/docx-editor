@@ -1,7 +1,16 @@
 /**
- * Hooks Index
+ * @eigenpal/docx-editor-react/hooks
  *
- * Export all hooks for public API.
+ * React hooks for editor history, table selection, find/replace, autosave,
+ * clipboard, and zoom. Use alongside the main `DocxEditor` component.
+ *
+ * @example
+ * ```tsx
+ * import { useAutoSave, useFindReplace } from '@eigenpal/docx-editor-react/hooks';
+ * ```
+ *
+ * @packageDocumentation
+ * @public
  */
 
 export { useHistory, useAutoHistory, useDocumentHistory, HistoryManager } from './useHistory';

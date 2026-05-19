@@ -3,7 +3,7 @@
  * Same state shape, same operations, same callbacks. Reactive refs
  * replace useState; the rest is direct translation.
  */
-import { reactive, computed } from 'vue';
+import { reactive, computed, type ComputedRef } from 'vue';
 import type { FindMatch, FindOptions } from '@eigenpal/docx-editor-core/utils/findReplace';
 import { createDefaultFindOptions } from '@eigenpal/docx-editor-core/utils/findReplace';
 
@@ -25,7 +25,24 @@ export interface FindReplaceState {
   replaceMode: boolean;
 }
 
-export function useFindReplace(hookOptions: FindReplaceOptions = {}) {
+export interface UseFindReplaceReturn {
+  state: FindReplaceState;
+  currentMatch: ComputedRef<FindMatch | null>;
+  hasMatches: ComputedRef<boolean>;
+  openFind: (selectedText?: string) => void;
+  openReplace: (selectedText?: string) => void;
+  close: () => void;
+  toggle: () => void;
+  setSearchText: (text: string) => void;
+  setReplaceText: (text: string) => void;
+  setOptions: (opts: Partial<FindOptions>) => void;
+  setMatches: (matches: FindMatch[], currentIndex?: number) => void;
+  goToNextMatch: () => number;
+  goToPreviousMatch: () => number;
+  goToMatch: (index: number) => void;
+}
+
+export function useFindReplace(hookOptions: FindReplaceOptions = {}): UseFindReplaceReturn {
   const state = reactive<FindReplaceState>({
     isOpen: false,
     searchText: '',

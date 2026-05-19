@@ -4,16 +4,24 @@
  * Tracks selected table cell and provides table operations.
  */
 
-import { ref, onBeforeUnmount } from 'vue';
+import { ref, onBeforeUnmount, type Ref } from 'vue';
 import {
   TableSelectionManager,
   findTableFromClick,
 } from '@eigenpal/docx-editor-core/managers/TableSelectionManager';
 import type { CellCoordinates } from '@eigenpal/docx-editor-core/managers/types';
 
-export function useTableSelection() {
+export interface UseTableSelectionReturn {
+  selectedCell: Ref<CellCoordinates | null>;
+  handleCellClick: (tableIndex: number, rowIndex: number, columnIndex: number) => void;
+  handleClickTarget: (target: EventTarget | null, container?: HTMLElement | null) => void;
+  clearSelection: () => void;
+  isCellSelected: (tableIndex: number, rowIndex: number, columnIndex: number) => boolean;
+}
+
+export function useTableSelection(): UseTableSelectionReturn {
   const manager = new TableSelectionManager();
-  const selectedCell = ref<CellCoordinates | null>(null);
+  const selectedCell: Ref<CellCoordinates | null> = ref(null);
 
   // Subscribe with the framework-agnostic () => void signature, then read
   // the snapshot to update Vue's ref. Same pattern React uses with
@@ -55,6 +63,5 @@ export function useTableSelection() {
     handleClickTarget,
     clearSelection,
     isCellSelected,
-    manager,
   };
 }

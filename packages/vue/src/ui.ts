@@ -2,13 +2,18 @@
  * @eigenpal/docx-editor-vue/ui
  *
  * UI entry point — toolbar primitives, pickers, dialogs.
- * Mirrors packages/react/src/ui.ts so consumer code that imports
+ * Mirrors `packages/react/src/ui.ts` so consumer code that imports
  * `@eigenpal/docx-editor-react/ui { ColorPicker, FontPicker }` and
  * swaps to `@eigenpal/docx-editor-vue/ui` works without surface
  * changes.
  *
  * @example
- *   import { Toolbar, FontPicker, ColorPicker } from '@eigenpal/docx-editor-vue/ui';
+ * ```ts
+ * import { Toolbar, FontPicker, ColorPicker } from '@eigenpal/docx-editor-vue/ui';
+ * ```
+ *
+ * @packageDocumentation
+ * @public
  */
 
 // ─── TOOLBAR ──────────────────────────────────────────────────────────────

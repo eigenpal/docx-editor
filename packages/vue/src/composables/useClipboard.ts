@@ -3,7 +3,7 @@
  * framework-agnostic clipboard helpers in core. Same surface as the
  * React hook but without the React-specific useRef wrappers.
  */
-import { ref } from 'vue';
+import { ref, type Ref } from 'vue';
 import {
   copyRuns,
   parseClipboardHtml,
@@ -30,7 +30,15 @@ export interface UseClipboardOptions {
   theme?: Theme | null;
 }
 
-export function useClipboard(options: UseClipboardOptions = {}) {
+export interface UseClipboardReturn {
+  copy: (selection: ClipboardSelection) => Promise<boolean>;
+  cut: (selection: ClipboardSelection) => Promise<boolean>;
+  paste: (asPlainText?: boolean) => Promise<ParsedClipboardContent | null>;
+  isProcessing: Ref<boolean>;
+  lastPastedContent: Ref<ParsedClipboardContent | null>;
+}
+
+export function useClipboard(options: UseClipboardOptions = {}): UseClipboardReturn {
   const {
     onCopy,
     onCut,

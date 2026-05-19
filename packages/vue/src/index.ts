@@ -1,8 +1,19 @@
-// @eigenpal/docx-editor-vue
-// Vue.js wrapper for the DOCX editor — community contributed
-//
-// This package provides Vue 3 components wrapping @eigenpal/docx-editor-core.
-// Contributions welcome! See the repository README for guidelines.
+/**
+ * @eigenpal/docx-editor-vue
+ *
+ * Curated root entry for the documented Vue 3 editor API. Advanced surfaces
+ * stay public through explicit subpaths:
+ * - `@eigenpal/docx-editor-vue/ui`
+ * - `@eigenpal/docx-editor-vue/dialogs`
+ * - `@eigenpal/docx-editor-vue/composables`
+ * - `@eigenpal/docx-editor-vue/plugin-api`
+ *
+ * Framework-agnostic document utilities live in `@eigenpal/docx-editor-core`.
+ * Agent/MCP surfaces live in `@eigenpal/docx-editor-agents`.
+ *
+ * @packageDocumentation
+ * @public
+ */
 
 export const VERSION = '0.0.2';
 

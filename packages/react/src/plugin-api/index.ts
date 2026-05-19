@@ -1,8 +1,9 @@
 /**
- * Plugin API for the DOCX Editor
+ * @eigenpal/docx-editor-react/plugin-api
  *
- * This module exports the generic plugin interface and host component
- * that allows external plugins to integrate with the editor.
+ * Generic plugin interface and host component for integrating external
+ * plugins with the editor. Pairs with the framework-agnostic plugin types
+ * exported from `@eigenpal/docx-editor-core/plugin-api`.
  *
  * @example
  * ```tsx
@@ -16,6 +17,9 @@
  *   );
  * }
  * ```
+ *
+ * @packageDocumentation
+ * @public
  */
 
 // Types (React-specific + re-exports from core)

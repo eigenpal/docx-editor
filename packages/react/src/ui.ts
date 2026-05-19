@@ -7,6 +7,9 @@
  * ```tsx
  * import { Toolbar, FontPicker, ColorPicker } from '@eigenpal/docx-editor-react/ui';
  * ```
+ *
+ * @packageDocumentation
+ * @public
  */
 
 // ============================================================================

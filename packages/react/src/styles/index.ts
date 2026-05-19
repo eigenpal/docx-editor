@@ -1,17 +1,12 @@
 /**
- * Editor Styles
+ * @eigenpal/docx-editor-react/styles
  *
- * Export CSS styles for the DOCX editor.
- * Import this file to include all editor styles:
+ * CSS import entry. Bring in the editor's base styles by importing
+ * `@eigenpal/docx-editor-react/styles.css` directly; this module exists for
+ * tooling that prefers a JS-style import.
  *
- * ```
- * import '@eigenpal/docx-editor/styles';
- * ```
- *
- * Or import the CSS directly:
- * ```
- * import '@eigenpal/docx-editor/styles/editor.css';
- * ```
+ * @packageDocumentation
+ * @public
  */
 
 // Re-export CSS path for documentation

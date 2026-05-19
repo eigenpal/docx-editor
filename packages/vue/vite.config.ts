@@ -19,6 +19,13 @@ export default defineConfig({
       // to dist/index.d.ts + dist/ui.d.ts (auto-detect drifts to a parent
       // dir once core's workspace types enter the graph).
       entryRoot: 'src',
+      // Keep workspace package names (`@eigenpal/docx-editor-core`,
+      // `@eigenpal/docx-editor-i18n`) intact in published declarations.
+      // Otherwise tsconfig.json's `paths` field rewrites them to
+      // `../../core/src/*.ts` — valid in this repo but broken once
+      // consumers install from npm, and a hard fail for API Extractor's
+      // surface check since it would walk the source.
+      pathsToAliases: false,
     }),
   ],
   build: {

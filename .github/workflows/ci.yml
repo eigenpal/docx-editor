@@ -78,3 +78,6 @@ jobs:
 
       - name: API report check
         run: bun run api:check
+
+      - name: Parity contract check
+        run: bun run check:parity-contract

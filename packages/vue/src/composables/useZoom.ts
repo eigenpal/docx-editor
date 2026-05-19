@@ -6,14 +6,29 @@
  * Ctrl+0 keyboard shortcuts (matches React's useWheelZoom contract).
  */
 
-import { ref, computed, onMounted, onBeforeUnmount } from 'vue';
+import { ref, computed, onMounted, onBeforeUnmount, type Ref, type ComputedRef } from 'vue';
 
 const MIN_ZOOM = 0.25;
 const MAX_ZOOM = 4.0;
 const ZOOM_STEP = 0.1;
 const ZOOM_PRESETS = [0.25, 0.5, 0.75, 1.0, 1.25, 1.5, 2.0, 3.0, 4.0];
 
-export function useZoom(initialZoom = 1.0) {
+export interface UseZoomReturn {
+  zoom: Ref<number>;
+  zoomPercent: ComputedRef<number>;
+  isMinZoom: ComputedRef<boolean>;
+  isMaxZoom: ComputedRef<boolean>;
+  setZoom: (level: number) => void;
+  zoomIn: () => void;
+  zoomOut: () => void;
+  resetZoom: () => void;
+  handleWheel: (e: WheelEvent) => void;
+  handleKeyDown: (e: KeyboardEvent) => void;
+  installShortcuts: () => void;
+  ZOOM_PRESETS: number[];
+}
+
+export function useZoom(initialZoom = 1.0): UseZoomReturn {
   const zoom = ref(Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, initialZoom)));
 
   const zoomPercent = computed(() => Math.round(zoom.value * 100));
