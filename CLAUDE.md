@@ -316,19 +316,21 @@ All user-facing strings are translatable via a lightweight i18n system (no exter
 
 ### Key Files
 
-| What                  | Where                                                                                                                        |
-| --------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
-| Locale JSONs (shared) | `packages/i18n/*.json` (`@eigenpal/docx-editor-i18n`) — `en.json` is the source of truth; React + Vue both read it from here |
-| Types (auto-derived)  | `packages/react/src/i18n/types.ts`                                                                                           |
-| Context + hook        | `packages/react/src/i18n/LocaleContext.tsx`                                                                                  |
-| Barrel export         | `packages/react/src/i18n/index.ts`                                                                                           |
+| What                 | Where                                                                                                                           |
+| -------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| Locale source JSONs  | `packages/i18n/*.json` — `en.json` is the source of truth; community locales mirror its shape. Not exported as subpaths.        |
+| Public surface       | `packages/i18n/src/index.ts` — typed locale values (`en`, `de`, `pl`, `ptBR`, `tr`, `he`, `zhCN`, `locales`) + types            |
+| Types (auto-derived) | `LocaleStrings`, `Translations`, `TranslationKey`, `LocaleCode` — consumers import everything from `@eigenpal/docx-editor-i18n` |
+| Context + hook       | `packages/react/src/i18n/LocaleContext.tsx`                                                                                     |
+| Barrel export        | `packages/react/src/i18n/index.ts`                                                                                              |
 
 ### How It Works
 
-- `LocaleStrings` type is auto-derived from `en.json` via `typeof import` — no manual interface
-- `TranslationKey` is a union of all valid dot-paths (e.g., `"toolbar.bold" | "dialogs.findReplace.title" | ...`)
-- `<DocxEditor i18n={de} />` deep-merges with English defaults (null keys fall back to English)
-- `useTranslation()` hook returns `t(key, vars?)` for string lookup with `{variable}` interpolation
+- The published surface lives at the root of `@eigenpal/docx-editor-i18n`: named locale values (`en`, `de`, `pl`, `ptBR`, `tr`, `he`, `zhCN`, `locales`), the runtime helpers (`deepMerge`, `createT`), and the types (`LocaleStrings`, `Translations`, `TranslationKey`, `LocaleCode`, `TFunction`).
+- `LocaleStrings` is auto-derived from `en.json` via `typeof import` — no manual interface.
+- `TranslationKey` is a union of all valid dot-paths (e.g., `"toolbar.bold" | "dialogs.findReplace.title" | ...`).
+- `<DocxEditor i18n={de} />` deep-merges with English defaults (null keys fall back to English).
+- `useTranslation()` hook returns `t(key, vars?)` for string lookup with `{variable}` interpolation. React + Vue both build it on top of `createT()` from the i18n package — one ICU formatter + merge implementation, both adapters consume it.
 
 ### Using t() in Components
 
@@ -351,6 +353,20 @@ t('dialogs.findReplace.matchCount', { current: 3, total: 15 })
 2. Use `t('your.new.key')` in the component — types update automatically
 3. Run `bun run i18n:fix` to sync community locale files (adds new keys as `null`)
 
+### Adding a New Language
+
+1. Run `bun run i18n:new <lang>` (e.g. `bun run i18n:new ja` or `bun run i18n:new pt-PT`).
+   This scaffolds `packages/i18n/<lang>.json` and rewrites the typed exports in
+   `packages/i18n/src/index.ts` — `LocaleCode` gets `'<lang>'`, a typed
+   `export const <id>: PartialLocaleStrings` lands, and the `locales` record
+   picks it up. Zero manual edits to the i18n source.
+2. Replace nulls with translations in the new JSON.
+3. Run `bun run i18n:status` to see coverage.
+
+`bun run i18n:codegen` regenerates the index from the on-disk JSONs if you ever
+add or remove a locale file by hand; `bun run i18n:validate` errors when the
+two drift.
+
 ### Locale Key States
 
 | Value       | Meaning            | Behavior                              |
@@ -362,10 +378,11 @@ t('dialogs.findReplace.matchCount', { current: 3, total: 15 })
 ### i18n CLI
 
 ```bash
-bun run i18n:new <lang>   # scaffold new locale (e.g., bun run i18n:new de)
+bun run i18n:new <lang>   # scaffold new locale + auto-wire it into the typed exports
+bun run i18n:codegen       # regenerate the typed exports from on-disk locale JSONs
 bun run i18n:status        # show translation coverage for all locales
-bun run i18n:validate      # check all locale files in sync with en.json
-bun run i18n:fix           # auto-add missing keys as null, remove extras
+bun run i18n:validate      # check locale JSONs + typed exports are in sync
+bun run i18n:fix           # auto-add missing keys as null, regenerate typed exports
 ```
 
 ### When adding UI strings

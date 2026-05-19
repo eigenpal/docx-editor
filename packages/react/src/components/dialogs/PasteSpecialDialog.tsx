@@ -12,7 +12,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import type { ParsedClipboardContent } from '@eigenpal/docx-editor-core/utils';
 import { readFromClipboard } from '@eigenpal/docx-editor-core/utils';
 import { useTranslation } from '../../i18n';
-import type { TranslationKey } from '../../i18n';
+import type { TranslationKey } from '@eigenpal/docx-editor-i18n';
 
 // ============================================================================
 // TYPES

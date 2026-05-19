@@ -14,7 +14,7 @@ import type { DocxInput } from '@eigenpal/docx-editor-core/utils';
 import type { FontOption } from '@eigenpal/docx-editor-core/utils/fontOptions';
 import type { StyleValue, VNodeChild } from 'vue';
 import type { EditorRefLike } from '@eigenpal/docx-editor-agents/bridge';
-import type { Translations } from '../../i18n';
+import type { Translations } from '@eigenpal/docx-editor-i18n';
 
 export type EditorMode = 'editing' | 'suggesting' | 'viewing';
 

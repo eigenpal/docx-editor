@@ -1,17 +1,30 @@
 {
   "name": "@eigenpal/docx-editor-i18n",
   "version": "0.0.1",
-  "description": "Shared UI locale strings for the @eigenpal docx-editor adapters (React and Vue).",
-  "type": "module",
+  "description": "Shared UI locale strings and types for the @eigenpal docx-editor adapters (React and Vue).",
+  "sideEffects": false,
+  "main": "./dist/index.js",
+  "module": "./dist/index.mjs",
+  "types": "./dist/index.d.ts",
   "exports": {
-    "./*.json": "./*.json",
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.js"
+    },
     "./package.json": "./package.json"
   },
   "files": [
-    "*.json"
+    "dist",
+    "README.md"
   ],
   "scripts": {
-    "typecheck": "echo 'no types to check (json only)'"
+    "build": "tsup",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "tsup": "^8.0.1",
+    "typescript": "^5.3.3"
   },
   "keywords": [
     "docx",

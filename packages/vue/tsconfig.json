@@ -21,7 +21,8 @@
       "@eigenpal/docx-editor-core": ["../core/src/core.ts"],
       "@eigenpal/docx-editor-core/*": ["../core/src/*"],
       "@eigenpal/docx-editor-agents/bridge": ["../agents/src/bridge.ts"],
-      "@eigenpal/docx-editor-agents/vue": ["../agents/src/vue.ts"]
+      "@eigenpal/docx-editor-agents/vue": ["../agents/src/vue.ts"],
+      "@eigenpal/docx-editor-i18n": ["../i18n/src/index.ts"]
     }
   },
   "include": ["src"],

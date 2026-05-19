@@ -15,7 +15,7 @@ import type { ThemeMatrixCell } from '@eigenpal/docx-editor-core/utils';
 import { useFixedDropdown } from '../../hooks/useFixedDropdown';
 import { MaterialSymbol } from './MaterialSymbol';
 import { useTranslation } from '../../i18n';
-import type { TranslationKey } from '../../i18n';
+import type { TranslationKey } from '@eigenpal/docx-editor-i18n';
 
 // ============================================================================
 // TYPES

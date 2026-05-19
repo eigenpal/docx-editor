@@ -48,7 +48,7 @@ import { useTrackedChanges } from '../hooks/useTrackedChanges';
 import { type EditorState as PMEditorState } from 'prosemirror-state';
 import type { ReactSidebarItem } from '../plugin-api/types';
 import type { Comment } from '@eigenpal/docx-editor-core/types/content';
-import type { Translations } from '../i18n';
+import type { Translations } from '@eigenpal/docx-editor-i18n';
 import { type PrintOptions } from './ui/PrintPreview';
 // Dialog hooks and utilities (static imports — lightweight, no UI)
 import { useFindReplace } from './dialogs/FindReplaceDialog';

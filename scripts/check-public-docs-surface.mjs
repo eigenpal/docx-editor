@@ -25,10 +25,10 @@ const required = {
       'renderAsync',
     ],
   },
-  'shared i18n contract': {
-    entries: ['react', 'vue'],
-    names: ['Translations'],
-  },
+  // Locale string types (LocaleStrings, Translations, PartialLocaleStrings,
+  // TranslationKey) live in `@eigenpal/docx-editor-i18n` and are no longer
+  // re-exported from the React or Vue adapters. Consumers import them from
+  // the i18n package directly.
   'documented React toolbar/customization surface': {
     entries: ['reactUi'],
     names: [

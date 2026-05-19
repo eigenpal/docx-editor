@@ -23,13 +23,7 @@ export {
 } from './components/DocxEditor';
 export { renderAsync, type RenderAsyncOptions, type DocxEditorHandle } from './renderAsync';
 
-// i18n contract
-export {
-  LocaleProvider,
-  useTranslation,
-  type LocaleProviderProps,
-  type LocaleStrings,
-  type Translations,
-  type PartialLocaleStrings,
-  type TranslationKey,
-} from './i18n';
+// i18n contract — runtime only. Locale string types (LocaleStrings,
+// Translations, PartialLocaleStrings, TranslationKey) live in
+// `@eigenpal/docx-editor-i18n`; import them from there.
+export { LocaleProvider, useTranslation, type LocaleProviderProps } from './i18n';

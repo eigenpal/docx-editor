@@ -11,7 +11,7 @@ import { Tooltip } from './Tooltip';
 import { cn } from '../../lib/utils';
 import type { TableAction } from './TableToolbar';
 import { useTranslation } from '../../i18n';
-import type { TranslationKey } from '../../i18n';
+import type { TranslationKey } from '@eigenpal/docx-editor-i18n';
 
 export interface TableInsertButtonsProps {
   onAction: (action: TableAction) => void;

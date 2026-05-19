@@ -4,7 +4,7 @@
 
 import { IconGridDropdown, type IconGridOption } from './IconGridDropdown';
 import { useTranslation } from '../../i18n';
-import type { TranslationKey } from '../../i18n';
+import type { TranslationKey } from '@eigenpal/docx-editor-i18n';
 
 type TransformAction = 'rotateCW' | 'rotateCCW' | 'flipH' | 'flipV';
 

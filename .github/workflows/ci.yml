@@ -47,6 +47,9 @@ jobs:
       - name: Type check
         run: bun run typecheck
 
+      - name: i18n locale + typed-exports sync check
+        run: bun run i18n:validate
+
       - name: Run tests
         run: bun test
 
