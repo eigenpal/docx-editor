@@ -7,7 +7,7 @@
  *
  * @example
  * ```ts
- * import { PluginHost, type VueEditorPlugin } from '@eigenpal/docx-editor-vue/plugin-api';
+ * import { PluginHost, type EditorPlugin } from '@eigenpal/docx-editor-vue/plugin-api';
  * ```
  *
  * @packageDocumentation
@@ -17,6 +17,7 @@
 export { default as PluginHost } from './PluginHost.vue';
 export { createRenderedDomContext, RenderedDomContextImpl } from './RenderedDomContext';
 export type {
+  EditorPlugin,
   EditorPluginCore,
   PanelConfig,
   PluginPanelProps,

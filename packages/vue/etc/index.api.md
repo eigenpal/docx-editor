@@ -89,7 +89,17 @@ export const i18nPlugin: {
 export function provideLocale(i18n?: MaybeRef<Translations | undefined>): void;
 
 // @public
-export function renderAsync(input: DocxInput, container: HTMLElement, options?: VueRenderAsyncOptions): Promise<DocxEditorHandle>;
+export function renderAsync(input: DocxInput, container: HTMLElement, options?: RenderAsyncOptions): Promise<DocxEditorHandle>;
+
+// @public
+export type RenderAsyncOptions = Omit<DocxEditorProps, 'documentBuffer' | 'document'> & {
+    onReady?: () => void;
+    onError?: (error: Error) => void;
+    onChange?: (document: Document_2) => void;
+    onRename?: (name: string) => void;
+    onMenuAction?: (action: string) => void;
+    onModeChange?: (mode: EditorMode) => void;
+};
 
 // @public
 export function useTranslation(): {
@@ -98,17 +108,5 @@ export function useTranslation(): {
 
 // @public
 export const VERSION = "0.0.2";
-
-// @public
-type VueRenderAsyncOptions = Omit<DocxEditorProps, 'documentBuffer' | 'document'> & {
-    onReady?: () => void;
-    onError?: (error: Error) => void;
-    onChange?: (document: Document_2) => void;
-    onRename?: (name: string) => void;
-    onMenuAction?: (action: string) => void;
-    onModeChange?: (mode: EditorMode) => void;
-};
-export { VueRenderAsyncOptions as RenderAsyncOptions }
-export { VueRenderAsyncOptions }
 
 ```

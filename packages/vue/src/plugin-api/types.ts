@@ -48,3 +48,12 @@ export interface VueEditorPlugin<TState = any> extends EditorPluginCore<TState> 
     editorView: EditorView | null
   ) => VNode | null;
 }
+
+/**
+ * Canonical alias — `EditorPlugin` is `VueEditorPlugin` inside the Vue
+ * adapter. The package name already encodes the framework; importing
+ * `EditorPlugin` from `@eigenpal/docx-editor-vue/plugin-api` reads as
+ * cleanly as the React import. Mirrors React's `EditorPlugin` alias.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export type EditorPlugin<TState = any> = VueEditorPlugin<TState>;

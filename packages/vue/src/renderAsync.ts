@@ -9,8 +9,8 @@ import type { Document } from '@eigenpal/docx-editor-core/types/document';
 import { toArrayBuffer, type DocxInput } from '@eigenpal/docx-editor-core/utils';
 import type { DocxEditorProps, DocxEditorRef, EditorMode } from './components/DocxEditor/types';
 
-/** Options for the Vue renderAsync. */
-export type VueRenderAsyncOptions = Omit<DocxEditorProps, 'documentBuffer' | 'document'> & {
+/** Options for `renderAsync`. */
+export type RenderAsyncOptions = Omit<DocxEditorProps, 'documentBuffer' | 'document'> & {
   onReady?: () => void;
   onError?: (error: Error) => void;
   onChange?: (document: Document) => void;
@@ -40,7 +40,7 @@ export interface DocxEditorHandle extends EditorHandle {
 export async function renderAsync(
   input: DocxInput,
   container: HTMLElement,
-  options: VueRenderAsyncOptions = {}
+  options: RenderAsyncOptions = {}
 ): Promise<DocxEditorHandle> {
   // Convert once up front so the prop stays stable across re-renders.
   const buffer = input instanceof ArrayBuffer ? input : await toArrayBuffer(input);
