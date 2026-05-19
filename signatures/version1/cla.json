@@ -41,6 +41,12 @@
       "id": 181527634,
       "signed_at": "2026-05-18T12:50:17Z",
       "pull_request_no": 497
+    },
+    {
+      "name": "arthrod",
+      "id": 89408329,
+      "signed_at": "2026-05-19T20:13:53Z",
+      "pull_request_no": 568
     }
   ]
 }
