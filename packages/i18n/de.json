@@ -19,7 +19,7 @@
     "change": "Ändern",
     "px": "px",
     "closeDialog": "Dialogfeld schließen",
-    "clear": null
+    "clear": "Löschen"
   },
   "toolbar": {
     "ariaLabel": "Formatierungssymbolleiste",
@@ -205,7 +205,7 @@
       "matchCase": "Groß-/Kleinschreibung beachten",
       "wholeWords": "Nur ganzes Wort suchen",
       "toggleReplace": "+ Ersetzen",
-      "matchesFound": null
+      "matchesFound": "{total} Treffer"
     },
     "hyperlink": {
       "titleEdit": "Hyperlink bearbeiten",
@@ -235,11 +235,11 @@
       "columnsLabel": "Spalten:",
       "insertButton": "Tabelle einfügen",
       "sizeSelector": "Tabellengröße auswählen",
-      "autofit": null,
-      "columnWidthLabel": null,
-      "fixedWidth": null,
-      "tableStyleLabel": null,
-      "validationHint": null
+      "autofit": "An Inhalt anpassen",
+      "columnWidthLabel": "Spaltenbreite",
+      "fixedWidth": "Fest",
+      "tableStyleLabel": "Tabellenformat",
+      "validationHint": "Zeilen: {minRows}-{maxRows}, Spalten: {minCols}-{maxCols}"
     },
     "splitCell": {
       "title": "Zelle teilen",
@@ -285,8 +285,8 @@
         "music": "Musik",
         "emoji": "Emoji"
       },
-      "noResultsEmpty": null,
-      "recent": null
+      "noResultsEmpty": "Keine Symbole gefunden",
+      "recent": "Zuletzt verwendet:"
     },
     "imageProperties": {
       "title": "Bildeigenschaften",
@@ -307,18 +307,18 @@
         "inset": "Eingelassen",
         "outset": "Erhaben"
       },
-      "dimensions": null,
-      "heightLabel": null,
-      "lockAspectRatio": null,
-      "textWrapping": null,
-      "widthLabel": null,
+      "dimensions": "Abmessungen",
+      "heightLabel": "Höhe:",
+      "lockAspectRatio": "Seitenverhältnis sperren",
+      "textWrapping": "Textumbruch",
+      "widthLabel": "Breite:",
       "wrapOptions": {
-        "behind": null,
-        "inFront": null,
-        "inline": null,
-        "topAndBottom": null,
-        "wrapLeft": null,
-        "wrapRight": null
+        "behind": "Hinter den Text",
+        "inFront": "Vor den Text",
+        "inline": "Mit Text in Zeile",
+        "topAndBottom": "Oben und unten",
+        "wrapLeft": "Textumbruch, rechts ausgerichtet",
+        "wrapRight": "Textumbruch, links ausgerichtet"
       }
     },
     "imagePosition": {
@@ -523,8 +523,8 @@
         "resetZoomDescription": "Zoom auf 100 % zurücksetzen",
         "keyboardShortcuts": "Tastenkombinationen",
         "keyboardShortcutsDescription": "Dieses Hilfedialogfeld anzeigen",
-        "insertLink": null,
-        "insertLinkDescription": null
+        "insertLink": "Link einfügen",
+        "insertLinkDescription": "Hyperlink einfügen oder bearbeiten"
       },
       "noResults": "Keine Tastenkombinationen für \"{query}\" gefunden",
       "pressEscToClose": "{key} drücken, um zu schließen",
@@ -710,7 +710,7 @@
       "inLineWithText": "Mit Text in Zeile",
       "squareLeft": "Quadrat links",
       "squareRight": "Quadrat rechts",
-      "imageProperties": null
+      "imageProperties": "Bildeigenschaften…"
     },
     "menuDesc": {
       "behindText": "Bild liegt hinter dem Text",
@@ -813,8 +813,8 @@
     "pageIndicator": "{current} von {total}"
   },
   "imageOverlay": {
-    "deleteImage": null,
-    "imageProperties": null,
-    "rotate": null
+    "deleteImage": "Bild löschen",
+    "imageProperties": "Bildeigenschaften",
+    "rotate": "Drehen"
   }
 }

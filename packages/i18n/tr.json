@@ -19,7 +19,7 @@
     "change": "Değiştir",
     "px": "px",
     "closeDialog": "İletişim kutusunu kapat",
-    "clear": null
+    "clear": "Temizle"
   },
   "toolbar": {
     "ariaLabel": "Biçimlendirme araç çubuğu",
@@ -205,7 +205,7 @@
       "matchCase": "Büyük/küçük harf eşleştir",
       "wholeWords": "Tam sözcük",
       "toggleReplace": "+ Değiştir",
-      "matchesFound": null
+      "matchesFound": "{total} eşleşme"
     },
     "hyperlink": {
       "titleEdit": "Köprüyü düzenle",
@@ -235,11 +235,11 @@
       "columnsLabel": "Sütun:",
       "insertButton": "Tablo ekle",
       "sizeSelector": "Tablo boyutu seçici",
-      "autofit": null,
-      "columnWidthLabel": null,
-      "fixedWidth": null,
-      "tableStyleLabel": null,
-      "validationHint": null
+      "autofit": "İçeriğe göre otomatik sığdır",
+      "columnWidthLabel": "Sütun genişliği",
+      "fixedWidth": "Sabit",
+      "tableStyleLabel": "Tablo stili",
+      "validationHint": "Satır: {minRows}-{maxRows}, Sütun: {minCols}-{maxCols}"
     },
     "splitCell": {
       "title": "Hücreyi böl",
@@ -285,8 +285,8 @@
         "music": "Müzik",
         "emoji": "Emoji"
       },
-      "noResultsEmpty": null,
-      "recent": null
+      "noResultsEmpty": "Sembol bulunamadı",
+      "recent": "Son kullanılanlar:"
     },
     "imageProperties": {
       "title": "Görsel özellikleri",
@@ -307,18 +307,18 @@
         "inset": "Çukur",
         "outset": "Çıkıntı"
       },
-      "dimensions": null,
-      "heightLabel": null,
-      "lockAspectRatio": null,
-      "textWrapping": null,
-      "widthLabel": null,
+      "dimensions": "Boyutlar",
+      "heightLabel": "Yükseklik:",
+      "lockAspectRatio": "En boy oranını kilitle",
+      "textWrapping": "Metin sarma",
+      "widthLabel": "Genişlik:",
       "wrapOptions": {
-        "behind": null,
-        "inFront": null,
-        "inline": null,
-        "topAndBottom": null,
-        "wrapLeft": null,
-        "wrapRight": null
+        "behind": "Metnin arkasında",
+        "inFront": "Metnin önünde",
+        "inline": "Metinle aynı satırda",
+        "topAndBottom": "Üst ve alt",
+        "wrapLeft": "Metin sarma, sağa yasla",
+        "wrapRight": "Metin sarma, sola yasla"
       }
     },
     "imagePosition": {
@@ -523,8 +523,8 @@
         "resetZoomDescription": "Yakınlaştırmayı %100'e döndür",
         "keyboardShortcuts": "Klavye kısayolları",
         "keyboardShortcutsDescription": "Bu yardım iletişim kutusunu göster",
-        "insertLink": null,
-        "insertLinkDescription": null
+        "insertLink": "Bağlantı ekle",
+        "insertLinkDescription": "Köprü ekle veya düzenle"
       },
       "noResults": "\"{query}\" eşleşen kısayol yok",
       "pressEscToClose": "Kapatmak için {key} tuşuna bas",
@@ -713,7 +713,7 @@
       "behindText": "Metnin arkasında",
       "inFrontOfText": "Metnin önünde",
       "ariaLabel": "Görsel düzeni seçenekleri",
-      "imageProperties": null
+      "imageProperties": "Görsel özellikleri…"
     },
     "menuDesc": {
       "inLineWithText": "Görsel satır içinde harf gibi akar",
@@ -813,8 +813,8 @@
     }
   },
   "imageOverlay": {
-    "deleteImage": null,
-    "imageProperties": null,
-    "rotate": null
+    "deleteImage": "Görseli sil",
+    "imageProperties": "Görsel özellikleri",
+    "rotate": "Döndür"
   }
 }

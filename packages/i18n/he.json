@@ -19,7 +19,7 @@
     "change": "שינוי",
     "px": "px",
     "closeDialog": "סגור חלון",
-    "clear": null
+    "clear": "נקה"
   },
   "toolbar": {
     "ariaLabel": "סרגל כלים לעיצוב",
@@ -205,7 +205,7 @@
       "matchCase": "התאמה לאותיות רישיות",
       "wholeWords": "חיפוש לפי מילה שלמה",
       "toggleReplace": "+ החלף",
-      "matchesFound": null
+      "matchesFound": "{total} תוצאות"
     },
     "hyperlink": {
       "titleEdit": "ערוך קישור",
@@ -235,11 +235,11 @@
       "columnsLabel": "עמודות:",
       "insertButton": "הוסף טבלה",
       "sizeSelector": "בחירת גודל טבלה",
-      "autofit": null,
-      "columnWidthLabel": null,
-      "fixedWidth": null,
-      "tableStyleLabel": null,
-      "validationHint": null
+      "autofit": "התאמה אוטומטית לתוכן",
+      "columnWidthLabel": "רוחב עמודה",
+      "fixedWidth": "קבוע",
+      "tableStyleLabel": "סגנון טבלה",
+      "validationHint": "שורות: {minRows}-{maxRows}, עמודות: {minCols}-{maxCols}"
     },
     "splitCell": {
       "title": "פצל תא",
@@ -285,8 +285,8 @@
         "music": "מוזיקה",
         "emoji": "אימוג'י"
       },
-      "noResultsEmpty": null,
-      "recent": null
+      "noResultsEmpty": "לא נמצאו סימנים",
+      "recent": "אחרונים:"
     },
     "imageProperties": {
       "title": "מאפייני תמונה",
@@ -307,18 +307,18 @@
         "inset": "פנימי",
         "outset": "חיצוני"
       },
-      "dimensions": null,
-      "heightLabel": null,
-      "lockAspectRatio": null,
-      "textWrapping": null,
-      "widthLabel": null,
+      "dimensions": "ממדים",
+      "heightLabel": "גובה:",
+      "lockAspectRatio": "נעל יחס גובה-רוחב",
+      "textWrapping": "גלישת טקסט",
+      "widthLabel": "רוחב:",
       "wrapOptions": {
-        "behind": null,
-        "inFront": null,
-        "inline": null,
-        "topAndBottom": null,
-        "wrapLeft": null,
-        "wrapRight": null
+        "behind": "מאחורי הטקסט",
+        "inFront": "לפני הטקסט",
+        "inline": "בתוך שורת הטקסט",
+        "topAndBottom": "מעל ומתחת",
+        "wrapLeft": "גלישת טקסט, צף ימינה",
+        "wrapRight": "גלישת טקסט, צף שמאלה"
       }
     },
     "imagePosition": {
@@ -523,8 +523,8 @@
         "resetZoomDescription": "אפס את הזום ל־100%",
         "keyboardShortcuts": "קיצורי מקלדת",
         "keyboardShortcutsDescription": "הצג את חלון העזרה",
-        "insertLink": null,
-        "insertLinkDescription": null
+        "insertLink": "הוסף קישור",
+        "insertLinkDescription": "הוסף או ערוך קישור"
       },
       "noResults": "לא נמצאו קיצורים עבור \"{query}\"",
       "pressEscToClose": "לחץ {key} כדי לסגור",
@@ -710,7 +710,7 @@
       "inLineWithText": "בתוך שורת הטקסט",
       "squareLeft": "ריבוע משמאל",
       "squareRight": "ריבוע מימין",
-      "imageProperties": null
+      "imageProperties": "מאפייני תמונה…"
     },
     "menuDesc": {
       "behindText": "התמונה מאחורי הטקסט",
@@ -813,8 +813,8 @@
     "pageIndicator": "{current} מתוך {total}"
   },
   "imageOverlay": {
-    "deleteImage": null,
-    "imageProperties": null,
-    "rotate": null
+    "deleteImage": "מחק תמונה",
+    "imageProperties": "מאפייני תמונה",
+    "rotate": "סובב"
   }
 }
