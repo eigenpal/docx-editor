@@ -8,10 +8,10 @@
     "preview": "astro preview"
   },
   "dependencies": {
-    "@astrojs/react": "^4.2.1",
+    "@astrojs/react": "^5.0.4",
     "@eigenpal/docx-editor-core": "workspace:*",
     "@eigenpal/docx-editor-react": "workspace:*",
-    "astro": "^5.8.5",
+    "astro": "^6.3.1",
     "react": "^19.0.0",
     "react-dom": "^19.0.0"
   },
