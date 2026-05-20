@@ -44,6 +44,8 @@ async function loadFile(e: Event) {
 
 Import the stylesheet once at your app entry. Vite's library mode doesn't auto-inject CSS imports, so the toolbar will render unstyled without it.
 
+> **Using Nuxt?** [`@eigenpal/nuxt-docx-editor`](https://www.npmjs.com/package/@eigenpal/nuxt-docx-editor) wraps this adapter as a Nuxt 3 & 4 module — SSR-safe component registration and the stylesheet are wired automatically.
+
 ## Start with a blank document
 
 Skip the file picker for new documents. `createEmptyDocument` returns a fresh `Document` model you can pass straight to the editor:
@@ -72,6 +74,7 @@ const doc = ref(createEmptyDocument());
 | -------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
 | [`@eigenpal/docx-editor-react`](https://www.npmjs.com/package/@eigenpal/docx-editor-react)   | <img src="https://cdn.simpleicons.org/react/61DAFB" width="20" align="middle" /> &nbsp; React adapter. Toolbar, paged editor, plugins.     |
 | [`@eigenpal/docx-editor-vue`](https://www.npmjs.com/package/@eigenpal/docx-editor-vue)       | <img src="https://cdn.simpleicons.org/vuedotjs/4FC08D" width="20" align="middle" /> &nbsp; Vue 3 adapter. Toolbar, paged editor, plugins.  |
+| [`@eigenpal/nuxt-docx-editor`](https://www.npmjs.com/package/@eigenpal/nuxt-docx-editor)     | <img src="https://cdn.simpleicons.org/nuxt/00DC82" width="20" align="middle" /> &nbsp; Nuxt 3 & 4 module wrapping this adapter.            |
 | [`@eigenpal/docx-editor-core`](https://www.npmjs.com/package/@eigenpal/docx-editor-core)     | Framework-agnostic core: OOXML parser, serializer, layout engine, ProseMirror schema. Depend on this if you fork the React or Vue adapter. |
 | [`@eigenpal/docx-editor-i18n`](https://www.npmjs.com/package/@eigenpal/docx-editor-i18n)     | Shared locale strings and types consumed by both adapters.                                                                                 |
 | [`@eigenpal/docx-editor-agents`](https://www.npmjs.com/package/@eigenpal/docx-editor-agents) | Agent SDK and chat UI: framework-agnostic bridge, MCP server, AI SDK adapters, plus React UI.                                              |
