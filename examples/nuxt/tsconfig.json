@@ -1,0 +1,5 @@
+{
+  // Nuxt generates the real tsconfig at .nuxt/tsconfig.json on `nuxt prepare`
+  // (run automatically by `nuxt dev` / `nuxt build`).
+  "extends": "./.nuxt/tsconfig.json"
+}

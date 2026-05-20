@@ -1,0 +1,27 @@
+{
+  "compilerOptions": {
+    "target": "ESNext",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "lib": ["ESNext", "DOM", "DOM.Iterable"],
+    "strict": true,
+    "skipLibCheck": true,
+    "noEmit": true,
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "esModuleInterop": true,
+    "declaration": true,
+    "declarationMap": true,
+    "baseUrl": ".",
+    "paths": {
+      "@eigenpal/docx-editor-vue": ["../vue/src/index.ts"],
+      "@eigenpal/docx-editor-core": ["../core/src/core.ts"],
+      "@eigenpal/docx-editor-core/*": ["../core/src/*"],
+      "@eigenpal/docx-editor-agents/bridge": ["../agents/src/bridge.ts"],
+      "@eigenpal/docx-editor-agents/vue": ["../agents/src/vue.ts"],
+      "@eigenpal/docx-editor-i18n": ["../i18n/src/index.ts"]
+    }
+  },
+  "include": ["src"],
+  "exclude": ["node_modules", "dist"]
+}
