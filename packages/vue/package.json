@@ -1,6 +1,6 @@
 {
   "name": "@eigenpal/docx-editor-vue",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "Vue 3 DOCX editor adapter for @eigenpal/docx-editor-core.",
   "type": "module",
   "main": "./dist/index.cjs",
@@ -83,9 +83,9 @@
     "vue": "^3.3.0"
   },
   "dependencies": {
-    "@eigenpal/docx-editor-agents": "^1.0.1",
-    "@eigenpal/docx-editor-core": "^1.0.1",
-    "@eigenpal/docx-editor-i18n": "^1.0.1"
+    "@eigenpal/docx-editor-agents": "^1.0.2",
+    "@eigenpal/docx-editor-core": "^1.0.2",
+    "@eigenpal/docx-editor-i18n": "^1.0.2"
   },
   "keywords": [
     "docx",
