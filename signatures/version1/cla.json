@@ -47,6 +47,12 @@
       "id": 89408329,
       "signed_at": "2026-05-19T20:13:53Z",
       "pull_request_no": 568
+    },
+    {
+      "name": "DawnFolk",
+      "id": 105495140,
+      "signed_at": "2026-05-20T17:03:13Z",
+      "pull_request_no": 582
     }
   ]
 }
