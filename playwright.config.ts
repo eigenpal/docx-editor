@@ -37,12 +37,18 @@ export default defineConfig({
       name: 'chromium',
       use: { ...devices['Desktop Chrome'] },
       // React-only specs run against the React demo (port 5173).
-      testIgnore: ['**/parity/**', '**/vue/**'],
+      testIgnore: ['**/parity/**', '**/vue/**', '**/nuxt/**'],
     },
     {
       name: 'vue',
       use: { ...devices['Desktop Chrome'] },
       testMatch: ['**/vue/**/*.spec.ts'],
+    },
+    {
+      // Smoke specs for the Nuxt module demo (port 3002).
+      name: 'nuxt',
+      use: { ...devices['Desktop Chrome'] },
+      testMatch: ['**/nuxt/**/*.spec.ts'],
     },
     {
       // Parity specs target both adapters via the `parityCases` fixture.
@@ -67,6 +73,13 @@ export default defineConfig({
       url: 'http://localhost:5174',
       reuseExistingServer: !process.env.CI,
       timeout: 60 * 1000,
+    },
+    {
+      // Nuxt dev is slower to boot than Vite — allow extra startup time.
+      command: 'bun run dev:nuxt',
+      url: 'http://localhost:3002',
+      reuseExistingServer: !process.env.CI,
+      timeout: 120 * 1000,
     },
   ],
 

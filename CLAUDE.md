@@ -302,6 +302,8 @@ We track every published package's `@public` surface in `docs/<pkg-slug>/<entry>
 - `@eigenpal/docx-editor-vue` → `docs/docx-editor-vue/` (6 subpaths)
 - `@eigenpal/docx-editor-agents` → `docs/docx-editor-agents/` (9 subpaths)
 
+`@eigenpal/nuxt-docx-editor` is intentionally excluded — it builds with `@nuxt/module-builder`, not the API Extractor pipeline, and its public surface is just the Nuxt module + `ModuleOptions`. It is not listed in `scripts/lib/packages.mjs`, so `api:check` skips it.
+
 The shared runner at `scripts/lib/api-extractor-runner.mjs` walks each package's `exports` map and writes one snapshot per subpath. Adding a new entry to `package.json` `exports` extends the snapshot set automatically — no per-subpath config. Per-package wrappers live at `packages/<pkg>/scripts/api-extractor.mjs`.
 
 For React and Vue the runner uses a `tsconfig.api.json` that strips `paths` so Extractor follows `@eigenpal/...` imports via node_modules (and the built `dist/*.d.ts` of sibling workspaces) instead of through dev-time source mappings — the source files import JSON locale data, which Extractor cannot analyze.
@@ -532,8 +534,9 @@ Hotfixes → `0.x`. Everything else → `main`.
 | `@eigenpal/docx-editor-agents` | `packages/agents` | ✅                       |
 | `@eigenpal/docx-editor-i18n`   | `packages/i18n`   | ✅ (shared locale JSONs) |
 | `@eigenpal/docx-editor-vue`    | `packages/vue`    | ✅                       |
+| `@eigenpal/nuxt-docx-editor`   | `packages/nuxt`   | ✅ (Nuxt 3/4 module)     |
 
-`@eigenpal/docx-editor-react`, `@eigenpal/docx-editor-core`, `@eigenpal/docx-editor-agents`, `@eigenpal/docx-editor-i18n`, and the Vue adapter are all in a **fixed group** in `.changeset/config.json` — they always ship the same version. A changeset only needs to declare the bump for one; the others follow automatically. `@eigenpal/docx-editor-i18n` ships the locale JSONs that React and Vue both consume — adding a new key to `en.json` only needs a changeset on `@eigenpal/docx-editor-i18n` (the consumers pick it up at build time).
+`@eigenpal/docx-editor-react`, `@eigenpal/docx-editor-core`, `@eigenpal/docx-editor-agents`, `@eigenpal/docx-editor-i18n`, the Vue adapter, and the Nuxt module are all in a **fixed group** in `.changeset/config.json` — they always ship the same version. A changeset only needs to declare the bump for one; the others follow automatically. `@eigenpal/docx-editor-i18n` ships the locale JSONs that React and Vue both consume — adding a new key to `en.json` only needs a changeset on `@eigenpal/docx-editor-i18n` (the consumers pick it up at build time).
 
 The old `@eigenpal/docx-js-editor` name does **not** publish a 1.x shim. New work must reference `@eigenpal/docx-editor-react`.
 

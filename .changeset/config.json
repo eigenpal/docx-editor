@@ -8,6 +8,7 @@
       "@eigenpal/docx-editor-core",
       "@eigenpal/docx-editor-agents",
       "@eigenpal/docx-editor-vue",
+      "@eigenpal/nuxt-docx-editor",
       "@eigenpal/docx-editor-i18n"
     ]
   ],

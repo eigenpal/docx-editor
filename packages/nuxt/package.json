@@ -1,0 +1,75 @@
+{
+  "name": "@eigenpal/nuxt-docx-editor",
+  "version": "1.0.1",
+  "description": "Nuxt 3 & 4 module for the @eigenpal/docx-editor WYSIWYG DOCX editor — auto-imports an SSR-safe <DocxEditor> component.",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/types.d.mts",
+      "import": "./dist/module.mjs"
+    }
+  },
+  "main": "./dist/module.mjs",
+  "types": "./dist/types.d.mts",
+  "typesVersions": {
+    "*": {
+      ".": [
+        "./dist/types.d.mts"
+      ]
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "nuxt-module-build build",
+    "prepack": "nuxt-module-build build",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@nuxt/kit": "^3.14.0 || ^4.0.0",
+    "@eigenpal/docx-editor-vue": "^1.0.1",
+    "prosemirror-commands": "^1.5.2",
+    "prosemirror-dropcursor": "^1.8.2",
+    "prosemirror-history": "^1.4.0",
+    "prosemirror-keymap": "^1.2.2",
+    "prosemirror-model": "^1.19.4",
+    "prosemirror-state": "^1.4.3",
+    "prosemirror-tables": "^1.8.5",
+    "prosemirror-transform": "^1.12.0",
+    "prosemirror-view": "^1.41.6"
+  },
+  "peerDependencies": {
+    "vue": "^3.3.0"
+  },
+  "devDependencies": {
+    "@nuxt/module-builder": "^1.0.0",
+    "@nuxt/schema": "^3.14.0",
+    "nuxt": "^3.14.0",
+    "vue": "^3.5.0"
+  },
+  "keywords": [
+    "nuxt",
+    "nuxt-module",
+    "docx",
+    "editor",
+    "word",
+    "document",
+    "ssr"
+  ],
+  "author": {
+    "name": "Jedr Blaszyk",
+    "email": "jedr@eigenpal.com",
+    "url": "https://github.com/jedrazb"
+  },
+  "license": "Apache-2.0",
+  "homepage": "https://docx-editor.dev/",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/eigenpal/docx-editor.git",
+    "directory": "packages/nuxt"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}
