@@ -8,6 +8,7 @@
     "examples/agent-chat-demo",
     "examples/astro",
     "examples/collaboration",
+    "examples/nextjs",
     "examples/plugins/docxtemplater",
     "examples/plugins/hello-world",
     "examples/nuxt",
