@@ -53,7 +53,7 @@ bun run typecheck && npx playwright test --timeout=60000 --workers=4
 - `packages/react/src/components/DocxEditor/hooks/useSelectionOverlay.ts` → `updateSelectionOverlay` / `onSelectionChange`
 - `packages/react/src/components/DocxEditor.tsx` → `onSelectionChange` handler, `expandedSidebarItem` state
 
-**Known flaky tests:** `formatting.spec.ts` (bold toggle/undo/redo), `text-editing.spec.ts` (clipboard ops).
+**Empty-document tests:** specs that build their own content (`formatting.spec.ts`, `text-editing.spec.ts`) call `editor.gotoEmpty()` so the editor boots from a blank document instead of racing the example app's demo-fixture fetch. Plain `editor.goto()` keeps loading the demo doc for specs that assert against it. Don't mix the two in one spec.
 
 ### Avoid Hanging
 
