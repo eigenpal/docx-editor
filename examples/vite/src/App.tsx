@@ -117,17 +117,25 @@ export function App() {
     []
   );
 
+  // E2E opt-in: ?e2e=1 in URL, MODE=test, or VITE_DOCX_EDITOR_E2E=1. Gates the
+  // Playwright debug hooks below. By default E2E still loads the demo fixture
+  // (so existing tests are unaffected); ?empty=1 boots from an empty document
+  // instead, giving tests that build their own content a deterministic start
+  // that doesn't race the demo fetch.
+  const { isE2E, e2eBootEmpty } = useMemo(() => {
+    if (typeof window === 'undefined') return { isE2E: false, e2eBootEmpty: false };
+    const params = new URLSearchParams(window.location.search);
+    const env = import.meta.env;
+    const e2e =
+      params.get('e2e') === '1' || env.MODE === 'test' || env.VITE_DOCX_EDITOR_E2E === '1';
+    return { isE2E: e2e, e2eBootEmpty: e2e && params.get('empty') === '1' };
+  }, []);
+
   const { zoom: autoZoom, isMobile } = useResponsiveLayout();
 
   useEffect(() => {
     // Only expose Playwright/E2E hooks under an explicit opt-in. Otherwise
     // this leaks an internal API into the public demo at docx-editor.dev.
-    // Opt-in: ?e2e=1 in URL, MODE=test, or VITE_DOCX_EDITOR_E2E=1.
-    if (typeof window === 'undefined') return;
-    const params = new URLSearchParams(window.location.search);
-    const env = import.meta.env;
-    const isE2E =
-      params.get('e2e') === '1' || env.MODE === 'test' || env.VITE_DOCX_EDITOR_E2E === '1';
     if (!isE2E) return;
     window.__DOCX_EDITOR_E2E__ = {
       getPmStartForParaId: (paraId: string) => {
@@ -244,9 +252,16 @@ export function App() {
     return () => {
       delete window.__DOCX_EDITOR_E2E__;
     };
-  }, []);
+  }, [isE2E]);
 
   useEffect(() => {
+    // Under E2E with ?empty=1, boot empty so tests get a deterministic,
+    // known starting document instead of racing this async fixture fetch.
+    if (e2eBootEmpty) {
+      setCurrentDocument(createEmptyDocument());
+      setFileName('Untitled.docx');
+      return;
+    }
     fetch(`${import.meta.env.BASE_URL}docx-editor-demo.docx`)
       .then((res) => res.arrayBuffer())
       .then((buffer) => {
@@ -257,7 +272,7 @@ export function App() {
         setCurrentDocument(createEmptyDocument());
         setFileName('Untitled.docx');
       });
-  }, []);
+  }, [e2eBootEmpty]);
 
   const handleNewDocument = useCallback(() => {
     setCurrentDocument(createEmptyDocument());
@@ -311,10 +326,6 @@ export function App() {
   const handleError = useCallback((error: Error) => {
     console.error('Editor error:', error);
     setStatus(`Error: ${error.message}`);
-  }, []);
-
-  const handleFontsLoaded = useCallback(() => {
-    console.log('Fonts loaded');
   }, []);
 
   const renderLogo = useCallback(
@@ -422,7 +433,6 @@ export function App() {
           documentBuffer={documentBuffer}
           author={randomAuthor}
           onError={handleError}
-          onFontsLoaded={handleFontsLoaded}
           showToolbar={true}
           showRuler={!isMobile}
           showZoomControl={true}

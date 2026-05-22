@@ -176,6 +176,17 @@ export default [
     },
   },
 
+  // editor-page.ts is the e2e Page Object Model — a single class covering
+  // every editor interaction. It's intentionally one file; the cap still
+  // enforces a ceiling (modest headroom over its current size) so it can't
+  // grow unbounded.
+  {
+    files: ['e2e/helpers/editor-page.ts'],
+    rules: {
+      'max-lines': ['error', { max: 1650, skipBlankLines: false, skipComments: false }],
+    },
+  },
+
   // Agent-use framework-agnostic surface — top-level utilities + tools/,
   // ai-sdk/ (excluding the per-framework entry files), i18n/, __tests__/.
   // TODO: drop the `ignores` list once task §9 migrates the React hooks
