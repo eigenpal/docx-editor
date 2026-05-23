@@ -1,6 +1,6 @@
 <p align="center">
   <a href="https://www.docx-editor.dev/">
-    <img src="./assets/header.png" alt="DOCX Editor — .docx in, .docx out. Open source, agent ready, client-side." width="500" />
+    <img src="./.github/assets/header.png" alt="DOCX Editor — .docx in, .docx out. Open source, agent ready, client-side." width="500" />
   </a>
 </p>
 
@@ -36,7 +36,7 @@ See the [Nuxt quick start](#nuxt) below.
 
 <p align="center">
   <a href="https://docx-editor.dev/editor">
-    <img src="./assets/editor.png" alt="docx-editor screenshot" width="100%" />
+    <img src="./.github/assets/editor.png" alt="docx-editor screenshot" width="100%" />
   </a>
 </p>
 

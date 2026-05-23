@@ -1,4 +1,4 @@
 # API Extractor snapshots — owned by `bun run api:extract`, never hand-edit.
 # Prettier would reformat union types onto multiple lines and the next
 # run of api:check would flag the result as drift.
-docs/*/*.api.md
+docs/api/**/*.api.md

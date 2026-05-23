@@ -1,6 +1,6 @@
 <p align="center">
   <a href="https://www.docx-editor.dev/">
-    <img src="https://raw.githubusercontent.com/eigenpal/docx-editor/main/assets/header.png" alt="DOCX Editor — .docx in, .docx out. Open source, agent ready, client-side." width="500" />
+    <img src="https://raw.githubusercontent.com/eigenpal/docx-editor/main/.github/assets/header.png" alt="DOCX Editor — .docx in, .docx out. Open source, agent ready, client-side." width="500" />
   </a>
 </p>
 

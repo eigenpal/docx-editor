@@ -67,10 +67,11 @@ examples/*/package-lock.json
 examples/plugins/*/bun.lockb
 examples/plugins/*/package-lock.json
 
-# Reference documentation (large files - can be re-downloaded)
-reference/ecma-376/*.zip
+# ECMA-376 PDFs and supplementary ZIPs; run `bun run reference:fetch` to populate.
+reference/ecma-376/**/*.pdf
+reference/ecma-376/**/*.zip
 
-# API Extractor temp output (snapshots live in etc/)
+# API Extractor temp output (committed snapshots live in docs/api/<pkg-slug>/)
 packages/*/temp/
 
 # Consumer-generated docs JSON. Regenerate with `bun run docs:json`.

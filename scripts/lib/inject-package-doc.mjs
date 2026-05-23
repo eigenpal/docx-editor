@@ -5,7 +5,7 @@
 // tsup uses rollup-plugin-dts under the hood, which hoists transitive type
 // imports above the file-head doc comment. That strips the
 // `@packageDocumentation` block from the published `.d.ts`. Both API
-// Extractor (driving `docs/<pkg>/*.api.md`) and consumer IDEs lose the
+// Extractor (driving `docs/api/<pkg>/*.api.md`) and consumer IDEs lose the
 // package-level description.
 //
 // This script reads the original source's head doc-block (the one tagged

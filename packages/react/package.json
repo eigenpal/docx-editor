@@ -65,7 +65,7 @@
   ],
   "scripts": {
     "build": "tsup && bun run build:css && node ../../scripts/inject-package-doc.mjs --package @eigenpal/docx-editor-react",
-    "build:css": "tailwindcss -c ../../tailwind.config.lib.js -i ./src/styles/editor.css -o ./dist/styles.css --minify",
+    "build:css": "tailwindcss -c ./tailwind.config.js -i ./src/styles/editor.css -o ./dist/styles.css --minify",
     "typecheck": "tsc --noEmit",
     "api:extract": "node ../../scripts/api-extractor.mjs --package @eigenpal/docx-editor-react --local",
     "api:check": "node ../../scripts/api-extractor.mjs --package @eigenpal/docx-editor-react"

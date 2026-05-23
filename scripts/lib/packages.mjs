@@ -55,10 +55,11 @@ export function buildHintFor(pkg) {
 
 // Derived: where API Extractor writes (and reads-for-drift-check) the
 // committed `<slug>.api.md` snapshots. Same path for all packages — one
-// directory per package under `docs/`. Co-located with the rest of the
-// docs tree, rather than the API Extractor default `<packageRoot>/etc/`.
+// directory per package under `docs/api/`. Co-located with the rest of
+// the docs tree, rather than the API Extractor default
+// `<packageRoot>/etc/`.
 export function reportDirFor(pkg, repoRoot) {
-  return path.join(repoRoot, 'docs', pkg.pkgSlug);
+  return path.join(repoRoot, 'docs', 'api', pkg.pkgSlug);
 }
 
 export function packageByName(name) {

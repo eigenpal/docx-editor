@@ -64,6 +64,7 @@
     "api:extract": "node scripts/api-extractor.mjs --local",
     "api:check": "node scripts/api-extractor.mjs",
     "docs:json": "node scripts/build-docs-json.mjs",
+    "reference:fetch": "node scripts/fetch-reference.mjs",
     "parity:perf": "node scripts/perf/cold-start.mjs && node scripts/perf/input-latency.mjs && node scripts/perf/save.mjs && node scripts/perf/scroll-fps.mjs",
     "parity:prepublish": "node scripts/parity-prepublish.mjs",
     "changeset": "changeset",

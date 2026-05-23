@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 // Cross-adapter parity check between @eigenpal/docx-editor-react and
 // @eigenpal/docx-editor-vue. Reads each adapter's API Extractor snapshot
-// (`docs/<adapter-slug>/index.api.md`), extracts the `DocxEditorProps`
-// and `DocxEditorRef` field names, and applies `etc/parity.contract.json`.
+// (`docs/api/<adapter-slug>/index.api.md`), extracts the `DocxEditorProps`
+// and `DocxEditorRef` field names, and applies `scripts/parity/parity.contract.json`.
 //
 // Fails non-zero on any drift the contract does not acknowledge:
 // - A prop/method exists in one adapter but the contract didn't classify it.
@@ -25,9 +25,9 @@ import { fileURLToPath } from 'node:url';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(__dirname, '..');
 
-const REACT_SNAPSHOT = path.join(repoRoot, 'docs/docx-editor-react/index.api.md');
-const VUE_SNAPSHOT = path.join(repoRoot, 'docs/docx-editor-vue/index.api.md');
-const CONTRACT_PATH = path.join(repoRoot, 'etc/parity.contract.json');
+const REACT_SNAPSHOT = path.join(repoRoot, 'docs/api/docx-editor-react/index.api.md');
+const VUE_SNAPSHOT = path.join(repoRoot, 'docs/api/docx-editor-vue/index.api.md');
+const CONTRACT_PATH = path.join(repoRoot, 'scripts/parity/parity.contract.json');
 
 /**
  * Pull field names out of an `export interface FooProps { ... }` block.
@@ -190,19 +190,19 @@ function main() {
   const vueRef = extractVueRefMembers(vueSnapshot);
 
   if (!reactProps) {
-    console.error('Could not locate DocxEditorProps in docs/docx-editor-react/index.api.md');
+    console.error('Could not locate DocxEditorProps in docs/api/docx-editor-react/index.api.md');
     process.exit(1);
   }
   if (!vueProps) {
-    console.error('Could not locate DocxEditorProps in docs/docx-editor-vue/index.api.md');
+    console.error('Could not locate DocxEditorProps in docs/api/docx-editor-vue/index.api.md');
     process.exit(1);
   }
   if (!reactRef) {
-    console.error('Could not locate DocxEditorRef in docs/docx-editor-react/index.api.md');
+    console.error('Could not locate DocxEditorRef in docs/api/docx-editor-react/index.api.md');
     process.exit(1);
   }
   if (!vueRef) {
-    console.error('Could not locate DocxEditorRef in docs/docx-editor-vue/index.api.md');
+    console.error('Could not locate DocxEditorRef in docs/api/docx-editor-vue/index.api.md');
     process.exit(1);
   }
 
@@ -289,7 +289,7 @@ function main() {
   const vuePropsCount = vueProps.size;
   const reactRefCount = reactRef.size;
   const vueRefCount = vueRef.size;
-  console.log(`Parity contract: etc/parity.contract.json (v${contract.version})`);
+  console.log(`Parity contract: scripts/parity/parity.contract.json (v${contract.version})`);
   console.log(`  React DocxEditorProps: ${reactPropsCount} fields`);
   console.log(`  Vue   DocxEditorProps: ${vuePropsCount} fields`);
   console.log(`  React DocxEditorRef:   ${reactRefCount} members`);
@@ -304,7 +304,7 @@ function main() {
   if (issues.length > 0) {
     console.error(`\nParity drift: ${issues.length} issue${issues.length === 1 ? '' : 's'}`);
     for (const issue of issues) console.error(`  - ${issue}`);
-    console.error(`\nFix: update etc/parity.contract.json to acknowledge the change,`);
+    console.error(`\nFix: update scripts/parity/parity.contract.json to acknowledge the change,`);
     console.error(`then commit the contract alongside the adapter change.`);
     process.exit(1);
   }
