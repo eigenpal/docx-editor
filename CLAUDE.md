@@ -1,629 +1,195 @@
 # Eigenpal DOCX Editor
 
-## Project Context
-
-Bun + React (TSX) WYSIWYG editor for DOCX files:
-
-1. **Display DOCX** — render with full WYSIWYG fidelity per ECMA-376 spec
-2. **Insert docxtemplater variables** — `{variable}` mappings with live preview
-
-Two entry points: `src/index.ts` (full UI), `src/headless.ts` (Node.js API).
-Client-side only. No backend.
+Bun + React/Vue WYSIWYG editor for DOCX. Client-side only, no backend.
+Entry points: `src/index.ts` (full UI), `src/headless.ts` (Node API).
+Output must look identical to MS Word. Preserve fonts, theme colors, styles, tables, headers/footers, section layout.
 
 ---
 
-## Verify Commands
+## Verify
 
 ```bash
-# Fast cycle (use this 95% of the time)
 bun run typecheck && npx playwright test --grep "<pattern>" --timeout=30000 --workers=4
-
-# Single test file
-bun run typecheck && npx playwright test tests/formatting.spec.ts --timeout=30000
-
-# Only affected test files (use this after targeted changes)
-bun run typecheck && npx playwright test tests/formatting.spec.ts tests/demo-docx.spec.ts --timeout=30000 --workers=4
-
-# Full suite (only for final validation — NEVER run casually, 500+ tests)
-bun run typecheck && npx playwright test --timeout=60000 --workers=4
 ```
 
-### Test File Mapping
+- Never run full suite (500+ tests) unless final validation.
+- Per-test timeout 30s; if cmd >60s, narrow scope.
+- `bun run format` before pushing.
 
-| Feature Area          | Test File                      | Quick Verify Pattern        |
-| --------------------- | ------------------------------ | --------------------------- |
-| Bold/Italic/Underline | `formatting.spec.ts`           | `--grep "apply bold"`       |
-| Alignment             | `alignment.spec.ts`            | `--grep "align text"`       |
-| Lists                 | `lists.spec.ts`                | `--grep "bullet list"`      |
-| Colors                | `colors.spec.ts`               | `--grep "text color"`       |
-| Fonts                 | `fonts.spec.ts`                | `--grep "font family"`      |
-| Enter/Paragraphs      | `text-editing.spec.ts`         | `--grep "Enter"`            |
-| Undo/Redo             | `scenario-driven.spec.ts`      | `--grep "undo"`             |
-| Line spacing          | `line-spacing.spec.ts`         | `--grep "line spacing"`     |
-| Paragraph styles      | `paragraph-styles.spec.ts`     | `--grep "Heading"`          |
-| Toolbar state         | `toolbar-state.spec.ts`        | `--grep "toolbar"`          |
-| Cursor-only ops       | `cursor-paragraph-ops.spec.ts` | `--grep "cursor only"`      |
-| Comments sidebar      | `comments-sidebar.spec.ts`     | `--grep "Comments sidebar"` |
+### Test file map
 
-**When touching anything in these paths, run `comments-sidebar.spec.ts`:**
+| Area                  | File                           |
+| --------------------- | ------------------------------ |
+| Bold/Italic/Underline | `formatting.spec.ts`           |
+| Alignment             | `alignment.spec.ts`            |
+| Lists                 | `lists.spec.ts`                |
+| Colors                | `colors.spec.ts`               |
+| Fonts                 | `fonts.spec.ts`                |
+| Enter/Paragraphs      | `text-editing.spec.ts`         |
+| Undo/Redo             | `scenario-driven.spec.ts`      |
+| Line spacing          | `line-spacing.spec.ts`         |
+| Paragraph styles      | `paragraph-styles.spec.ts`     |
+| Toolbar state         | `toolbar-state.spec.ts`        |
+| Cursor-only ops       | `cursor-paragraph-ops.spec.ts` |
+| Comments sidebar      | `comments-sidebar.spec.ts`     |
 
-- `packages/react/src/components/UnifiedSidebar.tsx`
-- `packages/react/src/components/sidebar/**`
-- `packages/react/src/hooks/useCommentSidebarItems.tsx`
-- `packages/react/src/components/DocxEditor/hooks/useSelectionOverlay.ts` → `updateSelectionOverlay` / `onSelectionChange`
-- `packages/react/src/components/DocxEditor.tsx` → `onSelectionChange` handler, `expandedSidebarItem` state
+Run `comments-sidebar.spec.ts` when touching any of these (all under `packages/react/src/`): `components/UnifiedSidebar.tsx`, `components/sidebar/**`, `hooks/useCommentSidebarItems.tsx`, `components/DocxEditor/hooks/useSelectionOverlay.ts` (`updateSelectionOverlay`/`onSelectionChange`), `components/DocxEditor.tsx` (`onSelectionChange` handler, `expandedSidebarItem` state).
 
-**Empty-document tests:** specs that build their own content (`formatting.spec.ts`, `text-editing.spec.ts`) call `editor.gotoEmpty()` so the editor boots from a blank document instead of racing the example app's demo-fixture fetch. Plain `editor.goto()` keeps loading the demo doc for specs that assert against it. Don't mix the two in one spec.
-
-### Avoid Hanging
-
-- **Never run all 500+ tests at once** unless explicitly validating final results
-- Use `--timeout=30000` (30s max per test)
-- Use `--workers=4` for parallel execution
-- If a command takes >60s, Ctrl+C and retry with narrower scope
-- Avoid `git log` with large outputs; use `--oneline -10`
+Empty-doc specs (`formatting`, `text-editing`) use `editor.gotoEmpty()`. Demo-asserting specs use `editor.goto()`. Don't mix in one spec.
 
 ---
 
-## Subagents — Use For Complex Tasks
+## Architecture — Dual Rendering
 
-Spin up subagents for parallel work using the Task tool:
+**Two renderers. Know which one owns your bug.**
 
-- **Explore agent** — codebase exploration, finding files, understanding architecture
-- **Plan agent** — designing implementation approaches
-- **Bash agent** — running commands, git operations
+- **HIDDEN ProseMirror** (`left: -9999px`) — editing state, undo/redo, keyboard. `components/DocxEditor/OffscreenEditorHost.tsx`.
+- **VISIBLE pages** — what user sees. Static DOM rebuilt from PM state. **NOT `toDOM`** — `src/layout-painter/paintPage.ts`. Fixing `toDOM` for a visual bug → user sees nothing.
 
-Use when: searching across multiple files, investigating cross-cutting features, running parallel tests, complex research.
+Data flow: DOCX → `unzip` → `parser` → `Document` → `toProseDoc` → PM → painter → pages. Save: PM → `fromProseDoc` → `Document` → `serializer` → `rezip`.
 
----
+Click flow: `usePagesPointer.handlePagesMouseDown` → `getPositionFromMouse` → PM setSelection → `PagedEditor.handleTransaction` → painter re-render.
 
-## ECMA-376 Reference
+Vue host: `useDocxEditor()` in `packages/vue/src/composables/useDocxEditor.ts`. Dual-rendering rule applies to Vue too.
 
-```bash
-reference/quick-ref/wordprocessingml.md   # Paragraphs, runs, formatting
-reference/quick-ref/themes-colors.md      # Theme colors, fonts, tints
-reference/ecma-376/part1/schemas/wml.xsd  # WordprocessingML schema
-reference/ecma-376/part1/schemas/dml-main.xsd # DrawingML schema
-```
+### FlowBlock invariant — 3 switches
 
----
-
-## WYSIWYG Fidelity — Hard Rule
-
-Output must look identical to Microsoft Word. Must preserve: fonts, theme colors, styles, character formatting, tables (borders, shading, merged cells), headers/footers, section layout (margins, page size, orientation).
-
----
-
-## Editor Architecture — Dual Rendering System
-
-**This editor has TWO separate rendering systems. You MUST understand which one you're working with.**
-
-```
-┌──────────────────────────────────────────────────────────────┐
-│  HIDDEN ProseMirror (left: -9999px)                          │
-│  - Real editing state (selection, undo/redo, commands)       │
-│  - Receives keyboard input                                   │
-│  - CSS class: .paged-editor__hidden-pm                       │
-│  - Component: components/DocxEditor/OffscreenEditorHost.tsx    │
-└──────────────────────────────────────────────────────────────┘
-        │ state changes trigger re-render ↓
-┌──────────────────────────────────────────────────────────────┐
-│  VISIBLE Pages (layout-painter)                              │
-│  - What the user actually sees                               │
-│  - Static DOM, re-built from PM state on every change        │
-│  - Has its own rendering logic (NOT toDOM)                   │
-│  - CSS class: .paged-editor__pages                           │
-│  - Entry: src/layout-painter/paintPage.ts                   │
-└──────────────────────────────────────────────────────────────┘
-```
-
-### Data Flow
-
-```
-DOCX file
-  → unzip.ts → parser.ts → Document model (types/)
-  → toProseDoc.ts → ProseMirror document
-  → OffscreenEditorHost renders off-screen
-  → PagedEditor.tsx reads PM state → layout-painter renders visible pages
-  → User edits → PM state updates → layout-painter re-renders
-
-Saving:
-  PM state → fromProseDoc.ts → Document model → serializer/ → XML → rezip.ts → DOCX
-```
-
-### Click/Selection Flow
-
-User clicks on visible page → `usePagesPointer.handlePagesMouseDown()` (in `components/DocxEditor/hooks/usePagesPointer.ts`) → `getPositionFromMouse(clientX, clientY)` maps pixel coordinates to a PM document position → `hiddenPMRef.current.setSelection(pos)` → PM transaction routes through `PagedEditor.handleTransaction` → `useLayoutPipeline.scheduleLayout` if doc changed + `useSelectionOverlay.updateSelectionOverlay` otherwise → visible pages re-render with selection overlay.
-
-### Vue mounting path
-
-- Vue host mounts via `useDocxEditor()` (`packages/vue/src/composables/useDocxEditor.ts`); `EditorView` and `Document` are held in `shallowRef`. Reactivity contract for the rest of the surface lives in `openspec/changes/vue-editor-robust-implementation/notes/reactivity.md`.
-- The dual-rendering rule above (visible pages from `layout-painter/`, NOT `toDOM`) applies to both adapters — a fix in `toDOM` won't show up on screen in React or Vue.
-
-### Painter DOM contract
-
-The visible pages render with stable class names and dataset attributes that other code (CSS, queries, selection mapping) depends on. When adding new dataset attributes, document them here:
-
-- `data-block-id` — `<div class="layout-fragment-*">` — paragraph/table/image/textbox block index
-- `data-from-line` / `data-to-line` — `<div class="layout-fragment-paragraph">` — measured-line range covered
-- `data-doc-from` / `data-doc-to` — every painted run/fragment — ProseMirror document positions for selection mapping
-- `data-comment-id` — text spans inside an active comment range
-- `data-change-author` / `data-change-date` / `data-revision-id` — tracked insertion/deletion runs
-- `data-continues-from-prev` / `data-continues-on-next` — paragraph fragments split across pages
-- `data-flex-line` — `<div class="layout-line">` lines promoted to `display: flex` (image-aligned lines, right-tab anchor lines). `paintParagraphFragment` suppresses `text-indent` on these because `text-indent` applies per-flex-item, not to the line as a whole.
-
-### FlowBlock invariant
-
-Adding a new variant to `FlowBlock` (`packages/core/src/layout-engine/types.ts`) requires updating **three** switches:
+Adding a `FlowBlock` variant in `packages/core/src/layout-engine/types.ts` requires updating all three; each ends with `assertExhaustiveFlowBlock` so `bun run typecheck` names the missing site:
 
 1. `runLayoutPipeline` in `packages/core/src/layout-engine/index.ts`
 2. `measureBlock` in `packages/react/src/components/DocxEditor/internals/measureBlock.ts`
 3. `measureBlock` in `packages/vue/src/composables/useDocxEditor.ts`
 
-All three end with `assertExhaustiveFlowBlock(block, '<site>')`, so omitting any case fails `bun run typecheck` with a `never` mismatch that names the missing site. This was the root cause of the Vue-only text-box crash before the guard landed.
+### Painter DOM contract
 
-### Debugging Checklist
+Stable dataset attrs on painted DOM (CSS, queries, selection map depend on these):
 
-1. **Visual rendering bug or editing/data bug?**
-   - Visual only → fix in `layout-painter/`
-   - Editing behavior → fix in `prosemirror/extensions/`
-   - Both → likely need changes in both systems
+- `data-block-id` — block index
+- `data-from-line`/`data-to-line` — measured line range
+- `data-doc-from`/`data-doc-to` — PM positions for selection mapping
+- `data-comment-id` — comment-range spans
+- `data-change-author`/`data-change-date`/`data-revision-id` — tracked changes
+- `data-continues-from-prev`/`data-continues-on-next` — split paragraphs
+- `data-flex-line` — flex-promoted lines (image-aligned, right-tab); `paintParagraphFragment` suppresses `text-indent` on these (would apply per-flex-item)
 
-2. **Which renderer owns the output?**
-   - Visible pages are rendered by `layout-painter/`, NOT by ProseMirror's `toDOM`
-   - If you fix `toDOM` for a visual bug, **the user won't see the change**
+### Key file map
 
-3. **Where does the data come from?**
-   - DOCX XML → `src/docx/` parsers → `Document` model in `src/types/`
-   - `toProseDoc.ts` converts Document → PM nodes
-   - `fromProseDoc.ts` converts PM → Document (round-trip for saving)
+| Debugging                   | File                                                        |
+| --------------------------- | ----------------------------------------------------------- |
+| Text/paragraph rendering    | `layout-painter/renderParagraph.ts`                         |
+| Image rendering             | `layout-painter/renderImage.ts`                             |
+| Table rendering             | `layout-painter/renderTable.ts`                             |
+| Page composition            | `layout-painter/paintPage.ts`                              |
+| Formatting commands         | `prosemirror/extensions/marks/`, `nodes/`                   |
+| Keyboard shortcuts          | `prosemirror/extensions/features/BaseKeymapExtension.ts`    |
+| Toolbar ↔ selection         | `prosemirror/plugins/selectionTracker.ts`                   |
+| DOCX XML parsers            | `docx/paragraphParser.ts`, `docx/tableParser.ts`            |
+| Document → PM               | `prosemirror/conversion/toProseDoc.ts`                      |
+| Click → PM position         | `components/DocxEditor/hooks/usePagesPointer.ts`            |
+| Selection rects / caret     | `components/DocxEditor/hooks/useSelectionOverlay.ts`        |
+| Layout pipeline             | `components/DocxEditor/hooks/useLayoutPipeline.ts`          |
+| Scroll API                  | `components/DocxEditor/hooks/usePagedScrollApi.ts`          |
+| Image resize/drag           | `components/DocxEditor/hooks/useImageInteractions.ts`       |
+| Font/HF reflow triggers     | `components/DocxEditor/hooks/useLayoutTriggers.ts`          |
+| Table resize                | `components/DocxEditor/hooks/useTableResizeState.ts`        |
+| Measure-block cache         | `components/DocxEditor/internals/measureBlock.ts`           |
+| Sidebar comment Y positions | `components/DocxEditor/internals/sidebarAnchorPositions.ts` |
+| PM position → DOM           | `components/DocxEditor/internals/pmAnchors.ts`              |
+| Main toolbar                | `components/Toolbar.tsx`                                    |
+| Editor CSS                  | `prosemirror/editor.css`                                    |
 
-### Key File Map
+### Extensions
 
-| What you're debugging                | Look here                                                                 |
-| ------------------------------------ | ------------------------------------------------------------------------- |
-| How text/paragraphs appear on screen | `layout-painter/renderParagraph.ts`                                       |
-| How images appear on screen          | `layout-painter/renderImage.ts`                                           |
-| How tables appear on screen          | `layout-painter/renderTable.ts`                                           |
-| How pages are composed               | `layout-painter/paintPage.ts`                                            |
-| How a formatting command works       | `prosemirror/extensions/` (marks/ and nodes/)                             |
-| How keyboard shortcuts work          | `prosemirror/extensions/features/BaseKeymapExtension.ts`                  |
-| How toolbar reflects selection       | `prosemirror/plugins/selectionTracker.ts`                                 |
-| How DOCX XML is parsed               | `docx/paragraphParser.ts`, `docx/tableParser.ts`, etc.                    |
-| How PM doc is built from parsed data | `prosemirror/conversion/toProseDoc.ts`                                    |
-| Schema (node/mark definitions)       | `prosemirror/extensions/nodes/`, `marks/`                                 |
-| Table toolbar/dropdown               | `components/ui/TableOptionsDropdown.tsx`                                  |
-| Main toolbar                         | `components/Toolbar.tsx`                                                  |
-| CSS for editor                       | `prosemirror/editor.css`                                                  |
-| Click → PM position mapping          | `components/DocxEditor/hooks/usePagesPointer.ts` (`getPositionFromMouse`) |
-| Selection rects / caret geometry     | `components/DocxEditor/hooks/useSelectionOverlay.ts`                      |
-| Layout pipeline + painter wiring     | `components/DocxEditor/hooks/useLayoutPipeline.ts`                        |
-| Scroll to position / paraId / page   | `components/DocxEditor/hooks/usePagedScrollApi.ts`                        |
-| Image resize + drag                  | `components/DocxEditor/hooks/useImageInteractions.ts`                     |
-| Font-load / HF-change reflow         | `components/DocxEditor/hooks/useLayoutTriggers.ts`                        |
-| Table column/row/edge resize         | `components/DocxEditor/hooks/useTableResizeState.ts`                      |
-| `PagedEditorRef` shape               | `components/DocxEditor/hooks/usePagedEditorRefApi.ts`                     |
-| Measure-block invariant + caches     | `components/DocxEditor/internals/measureBlock.ts`                         |
-| Scroll-restore strategies            | `components/DocxEditor/internals/scrollRestore.ts`                        |
-| Sidebar comment anchor Y positions   | `components/DocxEditor/internals/sidebarAnchorPositions.ts`               |
-| PM doc → vanilla-view text           | `components/DocxEditor/internals/vanillaText.ts`                          |
-| PM position → DOM element            | `components/DocxEditor/internals/pmAnchors.ts`                            |
+`src/prosemirror/extensions/` — `nodes/`, `marks/`, `features/`. `StarterKit.ts` bundles all. `ExtensionManager.buildSchema()` (sync) → `initializeRuntime()` (post EditorState). Singleton in `schema/index.ts`.
 
-### Extension System
+### Pitfalls
 
-Extensions live in `src/prosemirror/extensions/`:
+- **Icons** — inline SVG in `components/ui/Icons.tsx`, NOT a font. `<MaterialSymbol name="x">` looks up `iconMap`; missing → renders raw text. Add SVG paths from fonts.google.com/icons.
+- **Tailwind scope** — library scoped to `.ep-root`. Painter output isn't always protected → use inline styles on painted elements.
+- **Focus stealing** — any mousedown that bubbles to PM moves caret. Dropdown/dialog mousedown needs `stopPropagation()`.
+- **No `require()`** — ESM only.
 
-- `nodes/` — ParagraphExtension, TableExtension, ImageExtension, etc.
-- `marks/` — BoldExtension, ColorExtension, FontExtension, etc.
-- `features/` — BaseKeymapExtension, ListExtension, HistoryExtension, etc.
-- `StarterKit.ts` bundles all extensions; `ExtensionManager` builds schema + runtime
-- Two-phase init: `ExtensionManager.buildSchema()` (sync) → `initializeRuntime()` (after EditorState)
-
-### Common Pitfalls
-
-- **Toolbar icons must be SVG imports**: Icons use inline SVGs in `components/ui/Icons.tsx`, NOT a font. `<MaterialSymbol name="foo">` looks up the icon in `iconMap`. If you use a name that's not in the map, it renders as raw text. **Always add new icons as SVG path components** (source: https://fonts.google.com/icons) and register them in `iconMap`.
-- **Tailwind CSS conflicts**: Library CSS is scoped via `.ep-root` but layout-painter output isn't always protected. Use explicit inline styles on painted elements.
-- **ProseMirror focus stealing**: Any mousedown that propagates to the PM view will move the cursor. Dropdown/dialog elements need `onMouseDown` with `stopPropagation()`.
-- **Never use `require()`** in extension files — Vite/ESM only.
+OOXML reference: `reference/quick-ref/wordprocessingml.md`, `themes-colors.md`; schemas in `reference/ecma-376/part1/schemas/`.
 
 ---
 
-## Browser Testing — Prefer Claude in Chrome
+## i18n
 
-For visual testing of UI changes:
-
-- **Prefer Claude in Chrome** (`mcp__claude-in-chrome__*` tools) — connects to user's actual Chrome, faster, supports file uploads natively
-- Use `tabs_context_mcp` first, then navigate to `http://localhost:5173/`
-- Take screenshots with `computer` action `screenshot`
-
-**Playwright MCP** is better for: automated E2E test runs, file upload via `browser_file_upload`, headless/CI scenarios.
-
----
-
-## When Stuck
-
-1. **Type error?** Read the actual types, don't guess
-2. **Test failing?** Run with `--debug` and check console output
-3. **Selection bug?** Add `console.log` in `getSelectionRange()` to trace
-4. **OOXML spec question?** Check `reference/quick-ref/` or ECMA-376 schemas
-5. **Timeout?** Kill command, narrow test scope, retry
-6. **Complex task?** Spin up a subagent with Task tool
-
----
-
-## Issue-Driven Bug Fix Workflow
-
-Issue tracker: **https://github.com/eigenpal/docx-editor/issues**
-
-```bash
-gh issue view <N> --repo eigenpal/docx-editor
-```
-
-1. **Read** the issue — get description, repro steps, attached files
-2. **Reproduce** locally — `bun run dev` + browser at `localhost:5173`
-3. **Investigate** root cause — use Debugging Checklist + Key File Map above
-4. **Fix** — minimal change, fix the right renderer (layout-painter vs PM)
-5. **Test** — add/update Playwright E2E tests (see Test File Mapping)
-6. **Verify** — `bun run typecheck` + targeted Playwright tests + visual check
-7. **Commit** — reference issue number: `fix: ... (fixes #N)`
-8. **PR** — `gh pr create` referencing issue, include screenshots for visual bugs
-
----
-
-## Pre-PR Self-Review
-
-Before opening any PR, self-review the diff against **DRY, KISS, YAGNI**:
-
-1. **DRY** — Is the same logic/style repeated across files? Extract shared code.
-2. **KISS** — Is the solution more complex than needed? Simpler alternatives?
-3. **YAGNI** — Did you add anything not required by the task? Remove it.
-4. **Formatting** — Run `bun run format` to ensure Prettier compliance before pushing.
-
----
-
-## Public API Surface (API Extractor)
-
-We track every published package's `@public` surface in `docs/<pkg-slug>/<entry>.api.md` snapshots — one file per published subpath, generated by API Extractor. CI runs `bun run api:check` and fails on any drift you haven't checked in. (Co-locating the committed surface report with the docs tree, instead of the API Extractor default `packages/<pkg>/etc/`, keeps adapter-specific docs together and matches the JSON output layout under `docs/json/`.)
-
-**Adding or changing a `@public` symbol:**
-
-1. Tag the source declaration with `@public` (or `@internal` / `@beta`) in TSDoc.
-2. Rebuild the package: `bun run --filter '@eigenpal/docx-editor-<pkg>' build`
-3. Regenerate the snapshot: `bun run api:extract`
-4. Commit the updated `docs/<pkg-slug>/<entry>.api.md` alongside your code change.
-
-**When CI fails on API drift:** `bun run api:extract` locally, commit the new snapshot, push.
-
-**Status:** snapshots committed under `docs/<pkg-slug>/*.api.md` for every published package and subpath:
-
-- `@eigenpal/docx-editor-core` → `docs/docx-editor-core/` (61 subpaths)
-- `@eigenpal/docx-editor-i18n` → `docs/docx-editor-i18n/` (1 subpath)
-- `@eigenpal/docx-editor-react` → `docs/docx-editor-react/` (6 subpaths)
-- `@eigenpal/docx-editor-vue` → `docs/docx-editor-vue/` (6 subpaths)
-- `@eigenpal/docx-editor-agents` → `docs/docx-editor-agents/` (9 subpaths)
-
-`@eigenpal/nuxt-docx-editor` is intentionally excluded — it builds with `@nuxt/module-builder`, not the API Extractor pipeline, and its public surface is just the Nuxt module + `ModuleOptions`. It is not listed in `scripts/lib/packages.mjs`, so `api:check` skips it.
-
-The shared runner at `scripts/lib/api-extractor-runner.mjs` walks each package's `exports` map and writes one snapshot per subpath. Adding a new entry to `package.json` `exports` extends the snapshot set automatically — no per-subpath config. Per-package wrappers live at `packages/<pkg>/scripts/api-extractor.mjs`.
-
-For React and Vue the runner uses a `tsconfig.api.json` that strips `paths` so Extractor follows `@eigenpal/...` imports via node_modules (and the built `dist/*.d.ts` of sibling workspaces) instead of through dev-time source mappings — the source files import JSON locale data, which Extractor cannot analyze.
-
-### Package-level descriptions (`@packageDocumentation`)
-
-Each entry source's head doc-block can carry an `@packageDocumentation` block; that prose feeds both `docs/json/<pkg-slug>/<entry>.json#summary` and the API Extractor snapshot. tsup's rollup-plugin-dts hoists transitive type imports above the file-head comment, which would strip the tag from the dist `.d.ts`. Each package's build script runs `scripts/inject-package-doc.mjs --package <name>` after tsup to re-prepend the source block when missing, so the description survives into the published types and the generated `.api.md`. Idempotent: if the dist already starts with a `@packageDocumentation` block, the script skips it.
-
-### Cross-adapter parity contract
-
-`etc/parity.contract.json` is the source of truth for which `DocxEditorProps` fields and `DocxEditorRef` members are paired across `@eigenpal/docx-editor-react` and `@eigenpal/docx-editor-vue`, which are deliberately deferred in Vue, and which are Vue-exclusive. `bun run check:parity-contract` (part of `bun run check:parity`, run in CI) parses both adapter snapshots, applies the contract, and fails on any drift the contract doesn't acknowledge.
-
-The contract uses different bucket shapes for props vs ref because the surfaces differ:
-
-| Section | Buckets                                          | Notes                                                                                                                        |
-| ------- | ------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------- |
-| `props` | `paired`, `deferredInVue`, `vueExclusive`        | Symmetric props comparison.                                                                                                  |
-| `ref`   | `paired`, `pairedViaInheritance`, `vueExclusive` | Vue's `DocxEditorRef = EditorRefLike & {...}`; the inherited members ARE callable on Vue but DON'T appear in Vue's snapshot. |
-
-**Adding a prop or ref method to either adapter:**
-
-1. Edit the adapter source. Run `bun run api:extract`.
-2. Add the field to `etc/parity.contract.json` in the right bucket:
-   - `props.paired` / `ref.paired`: both adapters declare it explicitly.
-   - `props.deferredInVue`: React-only prop, Vue hasn't ported it yet (with a one-line reason).
-   - `ref.pairedViaInheritance`: React declares it explicitly; Vue inherits it via `EditorRefLike`. Must NOT be present in Vue's enumerated `DocxEditorRef` snapshot.
-   - `props.vueExclusive` / `ref.vueExclusive`: Vue-only.
-3. Run `bun run check:parity-contract` locally to confirm.
-
-The contract makes silent divergence impossible — every new symbol forces an explicit classification.
-
-### Vue composable conventions
-
-When adding or modifying a Vue composable in `packages/vue/src/composables/`, declare a named `Use<Name>Return` interface and annotate the function's return type with it. This keeps the API Extractor snapshot from recursively inlining core's internal types into Vue's public surface — without the annotation, an anonymous return type leaked ~3,000 lines of core's `Run`/`Comment` shape into `docs/docx-editor-vue/composables.api.md`.
+`packages/i18n/en.json` is source of truth. Other locales mirror its shape with `null` = falls back to English. Missing key = CI fails.
 
 ```ts
-export interface UseFooReturn {
-  bar: Ref<number>;
-  doThing: () => void;
-}
-
-export function useFoo(options: UseFooOptions): UseFooReturn {
-  // ...
-}
+import { useTranslation } from '../i18n';
+const { t } = useTranslation();
+t('toolbar.bold');
+t('dialogs.findReplace.matchCount', { current: 3, total: 15 });
 ```
 
-The React side already follows this convention (`UseAutoSaveReturn`, `UseClipboardReturn`, etc.) — keep them in lockstep.
+Workflow:
 
-### Docs JSON (`docs/json/`)
+- New string → add to `en.json`, use `t('key')`, run `bun run i18n:fix`.
+- New language → `bun run i18n:new <code>`, fill nulls, `bun run i18n:status`.
+- Validate: `bun run i18n:validate`.
 
-`bun run docs:json` generates a consumer-friendly JSON view of every `@public` export across all published packages. Output lives at `docs/json/<pkg-slug>/<subpath>.json` plus a per-package `index.subpaths.json` and a top-level `docs/json/index.json`.
+Never hardcode user-facing English in components.
 
-**The JSON is NOT committed.** `docs/json/` is gitignored. The downstream docs site (e.g. `docx-editor-page`) clones this repo and runs `bun run docs:json` itself — same source of truth as `docs/<pkg-slug>/*.api.md` but the JSON output stays local to the consumer's build. CI runs `bun run docs:json` as a smoke test so generator breakage surfaces here, not when the docs site tries to consume.
-
-The contract for downstream docs sites is:
-
-```jsonc
-// docs/json/index.json — root entry; lists every package + its subpath index
-{
-  "github": { "repo": "eigenpal/docx-editor", "ref": "main" },
-  "packages": [{ "name": "@eigenpal/docx-editor-react", "pkgSlug": "docx-editor-react", "indexPath": "docx-editor-react/index.subpaths.json" }]
-}
-
-// docs/json/<pkg-slug>/<subpath>.json — one per published subpath
-{
-  "package": "@eigenpal/docx-editor-react",
-  "subpath": "./hooks",
-  "version": "1.0.0",
-  "summary": "...",           // top-level @packageDocumentation
-  "remarks": "...",
-  "examples": ["..."],
-  "exports": [
-    {
-      "name": "useAutoSave",
-      "kind": "function",     // function | interface | class | type-alias | enum | variable | namespace
-      "releaseTag": "public", // public | beta | (internal symbols are stripped)
-      "summary": "...",
-      "remarks": "...",
-      "examples": ["..."],
-      "deprecated": null,     // or @deprecated text
-      "signature": "declare function useAutoSave(...): UseAutoSaveReturn",
-      "source": {             // GitHub permalink to the source declaration
-        "path": "packages/react/src/hooks/useAutoSave.ts",
-        "line": 42,
-        "url": "https://github.com/eigenpal/docx-editor/blob/main/..."
-      },
-      "parameters": [...],    // function: { name, type, optional, description, typeRefs? }
-      "returns": {...},       // function: { type, description, typeRefs? }
-      "members": [...]        // interface/class: nested member objects (same shape)
-    }
-  ]
-}
-```
-
-`typeRefs` entries carry the API Extractor canonical reference (`@eigenpal/docx-editor-core!Document:interface`) so the consumer can link cross-package type references to their own pages.
-
-Source resolution: the orchestrator scans each package's `src/` for top-level `export` declarations and matches by symbol name. tsup strips the file-head `@packageDocumentation` block from the `.d.ts`, so the orchestrator also re-reads the entry source to recover the subpath summary.
-
-To pin source-links to a specific commit instead of `main` (recommended for versioned docs), set `DOCS_GITHUB_REF=<sha> bun run docs:json` before regenerating.
+Vue composables: declare named `Use<Name>Return` interface and annotate return type. Without it, core's internal types leak into the API Extractor snapshot.
 
 ---
 
-## PR Title and Description Style
+## Public API surface
 
-Keep PRs **small and quiet**. Notifications are expensive.
+API Extractor snapshots live in `docs/<pkg-slug>/<entry>.api.md`. CI runs `bun run api:check`.
 
-**Title:** one short factual line (e.g. `chore: update cla list`, `fix(parser): handle empty paragraph runs`). No marketing copy. No "comprehensive" or "robust." Conventional-commit prefix when it fits.
+CI fails on drift → `bun run api:extract` → commit.
+Changing a `@public` symbol → tag in TSDoc, rebuild package, `bun run api:extract`, commit snapshot.
 
-**Body:** the minimum a reviewer needs that they can't get from the diff. One sentence is often enough. If the diff is self-explanatory, the body can just be a one-liner.
+`bun run docs:json` generates downstream-consumer JSON. Output is gitignored; CI runs it as a smoke test.
 
-**Don't:**
+### Parity contract
 
-- **`@-mention` contributors by handle.** Pings them. If their identity matters for context, write the name in plain text without the `@`, or omit it entirely.
-- **Reference unrelated PR/issue numbers** (`#429`, `#430`) in titles or bodies unless directly necessary. Each `#N` reference adds the PR to that thread's notifications and pings its participants.
-- Include file tables, manifest-style lists of changed files, or test-plan checkboxes — the diff and CI already show these.
-- Add "Generated with Claude Code" or other tooling footers unless the user asks.
-- Use emojis unless the user asks.
+`etc/parity.contract.json` enumerates which `DocxEditorProps`/`DocxEditorRef` members are paired across React/Vue. CI runs `bun run check:parity-contract`.
 
-When in doubt, ship the shorter version.
+Adding adapter prop/ref method:
 
----
-
-## i18n (Internationalization)
-
-All user-facing strings are translatable via a lightweight i18n system (no external dependencies).
-
-### Key Files
-
-| What                 | Where                                                                                                                                                                                                                                 |
-| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Locale source JSONs  | `packages/i18n/*.json` — `en.json` is the source of truth; community locales mirror its shape.                                                                                                                                        |
-| Root public surface  | `packages/i18n/src/index.ts` — typed locale values (`en`, `de`, `pl`, `ptBR`, `tr`, `he`, `zhCN`, `locales`) + types. Static imports tree-shake.                                                                                      |
-| Per-locale subpaths  | `packages/i18n/src/<code>.ts` → ship as `@eigenpal/docx-editor-i18n/<code>` (e.g. `/pl`, `/pt-BR`). Each is a JSON-only bundle (~30KB) for `import('@eigenpal/docx-editor-i18n/pl')` code-splitting. Generated by `bun run i18n:fix`. |
-| Types (auto-derived) | `LocaleStrings`, `Translations`, `TranslationKey`, `LocaleCode` — consumers import everything from `@eigenpal/docx-editor-i18n`                                                                                                       |
-| Context + hook       | `packages/react/src/i18n/LocaleContext.tsx`                                                                                                                                                                                           |
-| Barrel export        | `packages/react/src/i18n/index.ts`                                                                                                                                                                                                    |
-
-### How It Works
-
-- The published surface lives at the root of `@eigenpal/docx-editor-i18n`: named locale values (`en`, `de`, `pl`, `ptBR`, `tr`, `he`, `zhCN`, `locales`), the runtime helpers (`deepMerge`, `createT`), and the types (`LocaleStrings`, `Translations`, `TranslationKey`, `LocaleCode`, `TFunction`).
-- `LocaleStrings` is auto-derived from `en.json` via `typeof import` — no manual interface.
-- `TranslationKey` is a union of all valid dot-paths (e.g., `"toolbar.bold" | "dialogs.findReplace.title" | ...`).
-- `<DocxEditor i18n={de} />` deep-merges with English defaults (null keys fall back to English).
-- `useTranslation()` hook returns `t(key, vars?)` for string lookup with `{variable}` interpolation. React + Vue both build it on top of `createT()` from the i18n package — one ICU formatter + merge implementation, both adapters consume it.
-
-### Using t() in Components
-
-```typescript
-import { useTranslation } from '../i18n'; // adjust path
-
-function MyComponent() {
-  const { t } = useTranslation();
-  return <button title={t('toolbar.bold')}>{t('common.apply')}</button>;
-}
-
-// With interpolation:
-t('dialogs.findReplace.matchCount', { current: 3, total: 15 })
-// → "3 of 15 matches"
-```
-
-### Adding a New String
-
-1. Add the key + English value to `i18n/en.json` (nest by feature area)
-2. Use `t('your.new.key')` in the component — types update automatically
-3. Run `bun run i18n:fix` to sync community locale files (adds new keys as `null`)
-
-### Adding a New Language
-
-1. Run `bun run i18n:new <lang>` (e.g. `bun run i18n:new ja` or `bun run i18n:new pt-PT`).
-   This scaffolds `packages/i18n/<lang>.json` and rewrites the typed exports in
-   `packages/i18n/src/index.ts` — `LocaleCode` gets `'<lang>'`, a typed
-   `export const <id>: PartialLocaleStrings` lands, and the `locales` record
-   picks it up. Zero manual edits to the i18n source.
-2. Replace nulls with translations in the new JSON.
-3. Run `bun run i18n:status` to see coverage.
-
-`bun run i18n:codegen` regenerates the index from the on-disk JSONs if you ever
-add or remove a locale file by hand; `bun run i18n:validate` errors when the
-two drift.
-
-### Locale Key States
-
-| Value       | Meaning            | Behavior                              |
-| ----------- | ------------------ | ------------------------------------- |
-| `"Fett"`    | Translated         | Displayed to user                     |
-| `null`      | Not yet translated | Falls back to English                 |
-| _(missing)_ | Out of sync        | **CI fails** — run `bun run i18n:fix` |
-
-### i18n CLI
-
-```bash
-bun run i18n:new <lang>   # scaffold new locale + auto-wire it into typed exports, per-locale subpath source, and package.json
-bun run i18n:codegen       # regenerate the typed exports, src/<code>.ts subpath sources, and package.json exports from on-disk locale JSONs
-bun run i18n:status        # show translation coverage for all locales
-bun run i18n:validate      # check locale JSONs + typed exports + subpath sources + package.json exports are in sync
-bun run i18n:fix           # auto-add missing keys as null, regenerate typed exports, subpath sources, and package.json exports
-```
-
-### When adding UI strings
-
-**Always** use `t()` for user-facing text. Never hardcode English strings in components. After adding new keys to `en.json`, run `bun run i18n:fix` to sync all community locale files.
-
-Full contribution guide: `docs/i18n.md`
+1. Edit adapter, `bun run api:extract`.
+2. Add to contract bucket: `paired`, `deferredInVue` (React-only), `pairedViaInheritance` (React explicit, Vue via `EditorRefLike`), or `vueExclusive`.
+3. `bun run check:parity-contract`.
 
 ---
 
-## Releasing
+## Releasing (changesets)
 
-Releases follow the canonical [`changesets/action@v1`](https://github.com/changesets/action) flow: every code-touching PR drops a `.changeset/*.md` describing its change; pushes to `main` open or update a `chore: release` PR aggregating those entries; merging that PR publishes to npm.
+Every code PR → `bun changeset` → commit `.changeset/*.md`. Skip only for test/docs/CI-only PRs.
 
-### Branch model
+- Use full npm name in frontmatter (`@eigenpal/docx-editor-react`). Always run `bun changeset`, don't hand-write. Wrong name crashes post-merge Release workflow.
+- All published packages in fixed group — declare one bump, others follow.
+- Default bump: `patch`. `minor` for additive public API. `major` for breaks.
+- Summary lands verbatim in CHANGELOG; write for consumer.
 
-After the 1.0 cut, two release lines exist:
+Release: merge the bot's `chore: release` PR. Publish runs via OIDC, tags, GH release. ~3 min.
 
-- **`main`** — 1.x line. New work targets here. See the Packages table below.
-- **`0.x`** — maintenance line for the pre-rename packages. Patch and minor only — **never major**. `@eigenpal/docx-editor-agents` is in `ignore` on `0.x`; the 1.x line owns that name.
+Branches: `main` = 1.x line. `0.x` = pre-rename maintenance, patch/minor only.
 
-Both branches publish to npm's `latest` for their own package names — no dist-tag collision because the package names diverged at the rename. The release workflow listens on both branches; each maintains its own `.changeset/*.md` queue.
+Packages: `@eigenpal/docx-editor-{react,core,agents,i18n,vue}`, `@eigenpal/nuxt-docx-editor`. All published.
 
-Hotfixes → `0.x`. Everything else → `main`.
+### Don't
 
-### Packages
-
-| Package                        | Path              | Published?               |
-| ------------------------------ | ----------------- | ------------------------ |
-| `@eigenpal/docx-editor-react`  | `packages/react`  | ✅                       |
-| `@eigenpal/docx-editor-core`   | `packages/core`   | ✅                       |
-| `@eigenpal/docx-editor-agents` | `packages/agents` | ✅                       |
-| `@eigenpal/docx-editor-i18n`   | `packages/i18n`   | ✅ (shared locale JSONs) |
-| `@eigenpal/docx-editor-vue`    | `packages/vue`    | ✅                       |
-| `@eigenpal/nuxt-docx-editor`   | `packages/nuxt`   | ✅ (Nuxt 3/4 module)     |
-
-`@eigenpal/docx-editor-react`, `@eigenpal/docx-editor-core`, `@eigenpal/docx-editor-agents`, `@eigenpal/docx-editor-i18n`, the Vue adapter, and the Nuxt module are all in a **fixed group** in `.changeset/config.json` — they always ship the same version. A changeset only needs to declare the bump for one; the others follow automatically. `@eigenpal/docx-editor-i18n` ships the locale JSONs that React and Vue both consume — adding a new key to `en.json` only needs a changeset on `@eigenpal/docx-editor-i18n` (the consumers pick it up at build time).
-
-The old `@eigenpal/docx-js-editor` name does **not** publish a 1.x shim. New work must reference `@eigenpal/docx-editor-react`.
-
-### Author flow (every contributor, every code PR)
-
-```bash
-bun changeset       # interactive — pick bump + write a one-line summary
-git add .changeset/*.md
-# ... commit with the rest of your PR
-```
-
-Skip only for **test-only / docs-only / CI-only** PRs (no published-package code changed). When in doubt, add one — an extra patch entry is harmless; a missing entry ships invisibly.
-
-#### Package name in the changeset frontmatter (READ THIS — agents get it wrong)
-
-The frontmatter must use the **full npm package name**, not the repo name or a guess:
-
-```markdown
----
-'@eigenpal/docx-editor-react': patch
----
-```
-
-Only `@eigenpal/docx-editor-react` needs to be listed — the fixed group in `.changeset/config.json` auto-bumps `@eigenpal/docx-editor-agents` to match. Always run `bun changeset` rather than hand-writing the file; the interactive prompt picks valid names from the workspace. A wrong name (e.g. bare `docx-editor`) does not fail the PR's CI but **crashes the post-merge Release workflow** with `Found changeset X for package Y which is not in the workspace`, blocking all releases until someone edits the bad changeset.
-
-#### Bump levels (semver)
-
-- **patch** — bug fix, internal refactor, no public API change. **Default — use this unless you have a clear reason not to.**
-- **minor** — new public API (additive, backward compatible)
-- **major** — breaking change to existing public API
-
-`changeset version` resolves to the **highest bump** across all pending changesets, so a single `minor` from another PR will correctly bump everything. You don't need to coordinate.
-
-The summary you write (`Add foo prop to DocxEditor`) goes verbatim into `CHANGELOG.md`, so write it for the _consumer_ of the package — not for the team. Avoid PR/issue numbers in the body; the changelog tooling can backlink them automatically when needed.
-
-### Release flow (the maintainer, when ready to ship)
-
-1. **Look for an open PR titled `chore: release`** on `main`. The bot opens it automatically the first time a changeset lands; subsequent changeset-bearing PRs update the same PR with the latest bumps and CHANGELOG entries.
-2. **Review the PR.** It shows: version bumps in `package.json`s, new CHANGELOG sections, and the `.md` files being drained from `.changeset/`. Treat it like any other PR — CI runs on it.
-3. **Merge it.** Standard merge. No bypass, no manual workflow trigger needed.
-4. **Wait ~3 minutes.** The post-merge workflow run sees an empty changeset queue, runs `changeset publish` against npm via OIDC Trusted Publishing (no `NPM_TOKEN`), creates per-package git tags (`@eigenpal/docx-editor-react@X.Y.Z`), and creates a GitHub Release with the new CHANGELOG section.
-
-That's the entire release. One PR merge.
-
-#### Common situations
-
-| Situation                                | What to do                                                                                              |
-| ---------------------------------------- | ------------------------------------------------------------------------------------------------------- |
-| Hotfix, ship now                         | Land the fix PR with a `patch` changeset → release PR auto-updates → merge it.                          |
-| Several PRs, ship together               | All landed PRs aggregated into one release PR. Merge once, one coordinated release.                     |
-| Forgot a changeset on a merged PR        | Open a tiny follow-up PR with just `.changeset/foo.md`, _or_ edit the release PR's frontmatter inline.  |
-| Not ready to release yet                 | Don't merge the release PR. It keeps updating as new PRs land.                                          |
-| Publish step crashed after PR merged     | Re-run the workflow manually (`workflow_dispatch` is kept for this). `changeset publish` is idempotent. |
-| Need to force a major bump for marketing | Edit a pending changeset's frontmatter from `minor` → `major` before merging.                           |
-| No pending changesets                    | No release PR opens. Nothing to ship.                                                                   |
-
-### First-time setup (already configured, documented for future reference)
-
-| Where                    | What                                                                                                                                        |
-| ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------- |
-| npmjs.com                | Trusted Publisher configured for both packages → repo `eigenpal/docx-editor`, workflow `release.yml`                                        |
-| `package.json`           | `"publishConfig": { "access": "public" }` on each published package (already set)                                                           |
-| `.changeset/config.json` | `"access": "public"`; `fixed: [["@eigenpal/docx-editor-react", "@eigenpal/docx-editor-agents"]]` (already set)                              |
-| GitHub perms             | Settings → Actions → General → Workflow permissions = **Read and write**, **Allow GitHub Actions to create and approve pull requests** = on |
-| GitHub secrets           | `SLACK_WEBHOOK_URL` (optional — release notifications)                                                                                      |
-
-### Manual / local releases (don't, but if you must)
-
-```bash
-bun run version-packages   # consume .changeset/*.md → bump versions + write CHANGELOGs
-bun run release            # build + changeset publish (needs NPM_TOKEN locally)
-```
-
-The published-from-CI flow is preferred because it uses OIDC (no long-lived npm token needed) and produces npm provenance.
-
-### Anti-patterns to avoid
-
-- **Don't push directly to `main` with a `chore: release` commit by hand.** That bypasses the release PR, skips CI, and confuses the changesets/action state machine on the next push.
-- **Don't manually delete `.changeset/*.md` files** outside of `changeset version`. They're the single source of truth for what's pending.
-- **Don't edit `CHANGELOG.md` by hand.** It's auto-generated from changesets; manual edits get clobbered on the next release.
-- **Don't edit the `version` field in `package.json` by hand.** `changeset version` owns it.
-- **Don't hand-write the package name in changeset frontmatter.** Use `bun changeset` so the package list comes from the workspace. A bare `docx-editor` (or any name not in `package.json`) crashes the Release workflow post-merge.
+- Push `chore: release` commit by hand.
+- Delete `.changeset/*.md` outside `changeset version`.
+- Edit `CHANGELOG.md` or `package.json#version` by hand.
 
 ---
 
-## Rules
+## PR style
 
-- Client-side only. No backend.
-- Toolbar icons are Material Symbol fonts (same as Google Docs), saved locally as SVGs.
-- Save screenshots to `screenshots/` folder
+Short factual title (conventional-commit prefix). Body is the minimum the diff doesn't show — often one sentence.
+
+Don't: `@`-mention contributors, reference unrelated PR/issue numbers, list changed files, add tooling footers, use emojis.
+
+---
+
+## Bugs
+
+Issue tracker: `gh issue view <N> --repo eigenpal/docx-editor`. Dev server: `bun run dev` → `http://localhost:5173/`. Commit format: `fix: ... (fixes #N)`.
+
+Toolbar icons: Material Symbol SVGs, saved locally. Screenshots → `screenshots/`.
