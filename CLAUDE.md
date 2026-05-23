@@ -1,7 +1,7 @@
 # Eigenpal DOCX Editor
 
 Bun + React/Vue WYSIWYG editor for DOCX. Client-side only, no backend.
-Entry points: `src/index.ts` (full UI), `src/headless.ts` (Node API).
+Per-package entries: `packages/react/src/index.ts`, `packages/vue/src/index.ts`, `packages/core/src/headless.ts`.
 Output must look identical to MS Word. Preserve fonts, theme colors, styles, tables, headers/footers, section layout.
 
 ---
@@ -109,7 +109,7 @@ Stable dataset attrs on painted DOM (CSS, queries, selection map depend on these
 - **Focus stealing** — any mousedown that bubbles to PM moves caret. Dropdown/dialog mousedown needs `stopPropagation()`.
 - **No `require()`** — ESM only.
 
-OOXML reference: `reference/quick-ref/wordprocessingml.md`, `themes-colors.md`; schemas in `reference/ecma-376/part1/schemas/`.
+OOXML reference: `reference/quick-ref/wordprocessingml.md`, `themes-colors.md`; schemas in `reference/ecma-376/part1/schemas/`. PDFs in `reference/ecma-376/` are gitignored — run `bun run reference:fetch` once when you need them.
 
 ---
 
@@ -138,7 +138,7 @@ Vue composables: declare named `Use<Name>Return` interface and annotate return t
 
 ## Public API surface
 
-API Extractor snapshots live in `docs/<pkg-slug>/<entry>.api.md`. CI runs `bun run api:check`.
+API Extractor snapshots live in `docs/api/<pkg-slug>/<entry>.api.md`. CI runs `bun run api:check`.
 
 CI fails on drift → `bun run api:extract` → commit.
 Changing a `@public` symbol → tag in TSDoc, rebuild package, `bun run api:extract`, commit snapshot.
@@ -147,7 +147,7 @@ Changing a `@public` symbol → tag in TSDoc, rebuild package, `bun run api:extr
 
 ### Parity contract
 
-`etc/parity.contract.json` enumerates which `DocxEditorProps`/`DocxEditorRef` members are paired across React/Vue. CI runs `bun run check:parity-contract`.
+`scripts/parity/parity.contract.json` enumerates which `DocxEditorProps`/`DocxEditorRef` members are paired across React/Vue. CI runs `bun run check:parity-contract`.
 
 Adding adapter prop/ref method:
 

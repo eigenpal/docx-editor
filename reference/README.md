@@ -2,22 +2,35 @@
 
 Reference materials for implementing the DOCX editor.
 
-## Folder Structure
+## Fetching the heavy files
+
+ECMA-376 PDFs and supplementary ZIPs (~58 MB) are gitignored. Fetch them on demand:
+
+```bash
+bun run reference:fetch
+```
+
+Idempotent. The handwritten quick-refs and XSDs under
+`ecma-376/part1/schemas/` stay committed for offline schema lookups.
+
+## Folder structure
 
 ```
 reference/
-├── quick-ref/                    # Human-readable quick references
+├── quick-ref/                    # Committed. Human quick references.
 │   ├── wordprocessingml.md       # Paragraphs, runs, formatting
 │   └── themes-colors.md          # Theme colors, fonts
 └── ecma-376/
-    ├── overview.pdf              # High-level OOXML overview
+    ├── overview.pdf              # Optional; fetch manually
     ├── part1/
-    │   ├── *.pdf                 # Full spec (~5000 pages)
-    │   └── schemas/
+    │   ├── *.pdf                 # Gitignored. `bun run reference:fetch`
+    │   ├── *.zip                 # Gitignored. Same.
+    │   └── schemas/              # Committed. XSDs for lookup.
     │       ├── wml.xsd           # WordprocessingML schema
     │       └── dml-main.xsd      # DrawingML (colors, themes)
     └── part4/
-        └── *.pdf                 # Transitional features
+        ├── *.pdf                 # Gitignored.
+        └── *.zip                 # Gitignored.
 ```
 
 ## Key Files for DOCX Editing

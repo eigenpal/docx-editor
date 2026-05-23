@@ -4,7 +4,7 @@
 // adding new subpaths doesn't quadratically slow down the run.
 //
 // Caller passes `reportDir` (where the committed snapshots live —
-// `docs/<pkg-slug>/` in this repo) and optionally a custom tsconfig.
+// `docs/api/<pkg-slug>/` in this repo) and optionally a custom tsconfig.
 // Default tsconfig is `<packageRoot>/tsconfig.json`.
 
 import { CompilerState, Extractor, ExtractorConfig } from '@microsoft/api-extractor';
@@ -203,7 +203,7 @@ export function runApiExtractor(options) {
       console.error(`  - ${t.slug}${where}`);
     }
     console.error(`\nFix: bun run api:extract`);
-    console.error(`Then commit the updated docs/<pkg-slug>/*.api.md files.`);
+    console.error(`Then commit the updated docs/api/<pkg-slug>/*.api.md files.`);
     process.exit(1);
   }
 

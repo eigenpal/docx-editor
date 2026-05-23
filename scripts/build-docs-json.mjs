@@ -4,18 +4,18 @@
 //
 // 1. Drive the existing API Extractor runner with `emitDocModel: true`,
 //    which writes raw `<pkg>/temp/api-model/<slug>.api.json` files
-//    alongside the existing `docs/<pkg-slug>/<slug>.api.md` snapshots.
+//    alongside the existing `docs/api/<pkg-slug>/<slug>.api.md` snapshots.
 // 2. Walk each `.api.json`, parse the TSDoc blocks, join with a
 //    source-location index (built by scanning each package's `src/`),
 //    and emit `docs/json/<pkg-slug>/<slug>.json` — the shape the
 //    `docx-editor-page` docs site consumes.
 //
 // Side effect: phase 1 runs the API Extractor with `isLocal: true`, which
-// rewrites the committed `docs/<pkg-slug>/<slug>.api.md` snapshots in
+// rewrites the committed `docs/api/<pkg-slug>/<slug>.api.md` snapshots in
 // place. The bytes match what `api:check` would produce, so this is a
 // no-op when snapshots are already in sync — but it DOES touch them.
 // CI runs `api:check` first, so the rewrite is silent in CI. Locally,
-// expect `git status` to surface `docs/<pkg-slug>/*.api.md` changes if
+// expect `git status` to surface `docs/api/<pkg-slug>/*.api.md` changes if
 // your branch hasn't run `bun run api:extract` yet.
 //
 // Run:    bun run docs:json
@@ -145,7 +145,7 @@ function processPackage(pkg) {
   const apiModelDir = path.join(pkgRoot, 'temp', 'api-model');
 
   // Phase 1: drive API Extractor with docModel on. This also rewrites the
-  // `docs/<pkg-slug>/<slug>.api.md` snapshots — fine because those are
+  // `docs/api/<pkg-slug>/<slug>.api.md` snapshots — fine because those are
   // deterministic outputs of the same .d.ts files; if they were correct
   // before this run they stay byte-identical.
   runApiExtractor({
