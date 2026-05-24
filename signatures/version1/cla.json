@@ -59,6 +59,12 @@
       "id": 40647186,
       "signed_at": "2026-05-21T21:34:08Z",
       "pull_request_no": 585
+    },
+    {
+      "name": "fahdarafat",
+      "id": 21697064,
+      "signed_at": "2026-05-24T21:05:07Z",
+      "pull_request_no": 597
     }
   ]
 }
