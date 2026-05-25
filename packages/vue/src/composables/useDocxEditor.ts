@@ -24,7 +24,11 @@ import { fromProseDoc } from '@eigenpal/docx-editor-core/prosemirror/conversion/
 import { singletonManager } from '@eigenpal/docx-editor-core/prosemirror/schema';
 import type { CommandMap } from '@eigenpal/docx-editor-core/prosemirror/extensions/types';
 import { buildBoxTree } from '@eigenpal/docx-editor-core/layout-bridge/buildBoxTree';
-import { paragraphLayout } from '@eigenpal/docx-editor-core/layout-bridge/measuring';
+import {
+  measureBlocksWithFloats,
+  paragraphLayout,
+} from '@eigenpal/docx-editor-core/layout-bridge/measuring';
+import type { FloatingImageZone } from '@eigenpal/docx-editor-core/layout-bridge/measuring';
 import {
   measureTable,
   convertHeaderFooterToContent,
@@ -83,17 +87,27 @@ const DEFAULT_PAGE_GAP = 24;
 // twips→px math + HF lookup. Imported at the top of this file.
 
 /**
- * Simplified block measurement for the Vue harness. Floating zones and
- * two-pass HF measurement are still React-only; footnotes are now
- * supported via the two-pass layout in `runLayoutPipeline`.
+ * Block measurement for the Vue harness. Two-pass HF measurement is still
+ * React-only; footnotes are supported via the two-pass layout in
+ * `runLayoutPipeline`. Floating-zone orchestration is shared with React
+ * via `measureBlocksWithFloats` in core so anchored images, floating
+ * textboxes, and floating tables wrap text consistently across adapters.
  *
  * `measureTable` lives in `@eigenpal/docx-editor-core/layout-bridge`
  * so React and Vue stay in lockstep on table-cell measurement.
  */
-function measureBlock(block: FlowBlock, contentWidth: number): Measure {
+function measureBlock(
+  block: FlowBlock,
+  contentWidth: number,
+  floatingZones?: FloatingImageZone[],
+  cumulativeY?: number
+): Measure {
   switch (block.kind) {
     case 'paragraph':
-      return paragraphLayout(block as ParagraphBlock, contentWidth);
+      return paragraphLayout(block as ParagraphBlock, contentWidth, {
+        floatingZones,
+        paragraphYOffset: cumulativeY ?? 0,
+      });
 
     case 'table':
       return measureTable(block as TableBlock, contentWidth, measureBlock);
@@ -134,7 +148,7 @@ function measureBlock(block: FlowBlock, contentWidth: number): Measure {
 }
 
 function measureBlocks(blocks: FlowBlock[], contentWidth: number): Measure[] {
-  return blocks.map((b) => measureBlock(b, contentWidth));
+  return measureBlocksWithFloats(blocks, contentWidth, measureBlock);
 }
 
 // ============================================================================
