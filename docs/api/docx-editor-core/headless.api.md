@@ -327,6 +327,7 @@ export interface DocxPackage {
         modified?: Date;
     };
     relationships?: RelationshipMap;
+    settings?: DocumentSettings;
     styles?: StyleDefinitions;
     theme?: Theme;
 }
