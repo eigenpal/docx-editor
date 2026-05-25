@@ -163,6 +163,7 @@ export interface ParagraphAttrs {
     listMarkerFontFamily?: string;
     listMarkerFontSize?: number;
     listMarkerHidden?: boolean;
+    listMarkerSuffix?: 'tab' | 'space' | 'nothing';
     listNumFmt?: NumberFormat;
     listStartOverride?: number;
     // (undocumented)

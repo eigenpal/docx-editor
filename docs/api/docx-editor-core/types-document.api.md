@@ -176,6 +176,11 @@ export interface DocumentBody {
 }
 
 // @public
+export interface DocumentSettings {
+    defaultTabMark: number;
+}
+
+// @public
 export interface DocxPackage {
     document: DocumentBody;
     endnotes?: Endnote[];
@@ -197,6 +202,7 @@ export interface DocxPackage {
         modified?: Date;
     };
     relationships?: RelationshipMap;
+    settings?: DocumentSettings;
     styles?: StyleDefinitions;
     theme?: Theme;
 }
@@ -523,6 +529,7 @@ export interface ListRendering {
     markerFontFamily?: string;
     markerFontSize?: number;
     markerHidden?: boolean;
+    markerSuffix?: LevelSuffix;
     numFmt?: NumberFormat;
     numId: number;
     startOverride?: number;

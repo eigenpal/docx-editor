@@ -264,6 +264,7 @@ export type ConvertFootnoteOptions = {
     styles?: StyleDefinitions | null;
     theme?: Theme | null;
     measureBlocks: MeasureBlocksFn;
+    defaultTabMarkTwips?: number | null;
 };
 
 // @public (undocumented)
@@ -271,6 +272,7 @@ export type ConvertHeaderFooterOptions = {
     styles?: StyleDefinitions | null;
     theme?: Theme | null;
     measureBlocks: MeasureBlocksFn;
+    defaultTabMarkTwips?: number | null;
 };
 
 // @public
@@ -458,6 +460,7 @@ export interface DocxPackage {
         modified?: Date;
     };
     relationships?: RelationshipMap;
+    settings?: DocumentSettings;
     styles?: StyleDefinitions;
     theme?: Theme;
 }

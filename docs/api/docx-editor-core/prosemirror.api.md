@@ -354,6 +354,7 @@ export interface ParagraphAttrs {
     listMarkerFontFamily?: string;
     listMarkerFontSize?: number;
     listMarkerHidden?: boolean;
+    listMarkerSuffix?: 'tab' | 'space' | 'nothing';
     listNumFmt?: NumberFormat;
     listStartOverride?: number;
     // (undocumented)
@@ -657,6 +658,7 @@ export function toProseDoc(document: Document_2, options?: ToProseDocOptions): N
 
 // @public
 export interface ToProseDocOptions {
+    defaultTabMarkTwips?: number | null;
     styles?: StyleDefinitions;
 }
 

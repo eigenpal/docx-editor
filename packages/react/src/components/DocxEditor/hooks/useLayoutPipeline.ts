@@ -247,7 +247,8 @@ export function useLayoutPipeline(opts: UseLayoutPipelineOptions): UseLayoutPipe
         // to compute effective margins when header content exceeds available space)
         const hfMetricsHeader = { section: 'header' as const, pageSize, margins };
         const hfMetricsFooter = { section: 'footer' as const, pageSize, margins };
-        const hfOptions = { styles, theme, measureBlocks };
+        const defaultTabMarkTwips = state.doc.attrs?.defaultTabMarkTwips as number | null;
+        const hfOptions = { styles, theme, measureBlocks, defaultTabMarkTwips };
         const headerContentForRender = convertHeaderFooterToContent(
           headerContent,
           contentWidth,
@@ -351,7 +352,12 @@ export function useLayoutPipeline(opts: UseLayoutPipelineOptions): UseLayoutPipe
             document!.package.footnotes!,
             footnoteRefs,
             contentWidth,
-            { styles: styles ?? undefined, theme: theme ?? null, measureBlocks }
+            {
+              styles: styles ?? undefined,
+              theme: theme ?? null,
+              measureBlocks,
+              defaultTabMarkTwips,
+            }
           );
           const stabilized = stabilizeFootnoteLayout({
             blocks: newBlocks,

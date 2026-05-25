@@ -30,6 +30,7 @@ export function toProseDoc(document: Document_2, options?: ToProseDocOptions): N
 
 // @public
 export interface ToProseDocOptions {
+    defaultTabMarkTwips?: number | null;
     styles?: StyleDefinitions;
 }
 

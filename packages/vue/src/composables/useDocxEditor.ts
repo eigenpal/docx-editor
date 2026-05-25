@@ -280,7 +280,8 @@ export function useDocxEditor(options: UseDocxEditorOptions): UseDocxEditorRetur
       // the per-block callback the earlier version used. The pipeline
       // calls `measureBlocks(normalizedBlocks, contentWidth)` once per
       // HF flow.
-      const hfOptions = { styles, theme, measureBlocks };
+      const defaultTabMarkTwips = state.doc.attrs?.defaultTabMarkTwips as number | null;
+      const hfOptions = { styles, theme, measureBlocks, defaultTabMarkTwips };
       const headerContent = convertHeaderFooterToContent(
         header,
         contentWidth,
@@ -364,7 +365,7 @@ export function useDocxEditor(options: UseDocxEditorOptions): UseDocxEditorRetur
           document.value.package!.footnotes!,
           footnoteRefs,
           contentWidth,
-          { styles, theme, measureBlocks }
+          { styles, theme, measureBlocks, defaultTabMarkTwips }
         );
 
         // Pass 2+: multi-pass convergence loop lives in core so the React
