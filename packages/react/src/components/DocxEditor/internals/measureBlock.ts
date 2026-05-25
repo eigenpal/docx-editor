@@ -35,6 +35,7 @@ import {
 } from '@eigenpal/docx-editor-core/layout-bridge';
 import { emuToPixels } from '@eigenpal/docx-editor-core/utils';
 import { isTextWrappingFloatingImageRun } from '@eigenpal/docx-editor-core/layout-painter';
+import { isFloatingTextBoxBlock, isWrapNone } from '@eigenpal/docx-editor-core/layout-engine';
 
 /**
  * Extended floating zone info that includes anchor block index.
@@ -44,6 +45,56 @@ interface FloatingZoneWithAnchor extends FloatingImageZone {
   anchorBlockIndex: number;
   /** If true, zone is positioned relative to margin/page and applies to all blocks */
   isMarginRelative?: boolean;
+}
+
+/**
+ * Maximum block-index distance for paragraph-relative floats to be considered
+ * co-located. Anchors within this window with overlapping Y ranges get merged
+ * so a body paragraph between them sees the combined exclusion zone. Beyond
+ * this window we keep zones independent — different sections of the document
+ * routinely have float topY values that coincidentally overlap.
+ */
+const ANCHOR_PROXIMITY = 4;
+
+/**
+ * Group `zones` such that any two whose Y ranges overlap AND whose
+ * anchorBlockIndex differs by no more than `maxAnchorGap` land in the same
+ * group. Single-pass; groups merge transitively as zones connect them.
+ */
+function groupOverlappingZones(
+  zones: FloatingZoneWithAnchor[],
+  maxAnchorGap: number
+): FloatingZoneWithAnchor[][] {
+  const groups: FloatingZoneWithAnchor[][] = [];
+  for (const z of zones) {
+    const target = groups.find((g) =>
+      g.some(
+        (other) =>
+          Math.abs(other.anchorBlockIndex - z.anchorBlockIndex) <= maxAnchorGap &&
+          z.topY < other.bottomY &&
+          z.bottomY > other.topY
+      )
+    );
+    if (target) target.push(z);
+    else groups.push([z]);
+  }
+  return groups;
+}
+
+/**
+ * Re-anchor every zone in each group to the group's earliest block index and
+ * append the result to `out`.
+ */
+function collectReanchoredToEarliest(
+  groups: FloatingZoneWithAnchor[][],
+  out: FloatingZoneWithAnchor[]
+): void {
+  for (const group of groups) {
+    const minAnchor = Math.min(...group.map((z) => z.anchorBlockIndex));
+    for (const z of group) {
+      out.push({ ...z, anchorBlockIndex: minAnchor });
+    }
+  }
 }
 
 /**
@@ -196,6 +247,71 @@ function extractFloatingZones(blocks: FlowBlock[], contentWidth: number): Floati
     });
   }
 
+  // Floating text boxes — siblings of paragraphs in the block list, not
+  // children. They need exclusion zones too, otherwise body paragraphs that
+  // overlap a side-anchored textbox render full-width over it.
+  for (let blockIndex = 0; blockIndex < blocks.length; blockIndex++) {
+    const block = blocks[blockIndex];
+    if (block.kind !== 'textBox') continue;
+
+    const tbBlock = block as TextBoxBlock;
+    if (!isFloatingTextBoxBlock(tbBlock)) continue;
+    if (isWrapNone(tbBlock.wrapType) || tbBlock.wrapType === 'topAndBottom') {
+      continue;
+    }
+
+    const tbWidth = tbBlock.width ?? 0;
+    const tbHeight = tbBlock.height ?? 0;
+    if (tbWidth <= 0 || tbHeight <= 0) continue;
+
+    const distTop = tbBlock.distTop ?? 0;
+    const distBottom = tbBlock.distBottom ?? 0;
+    const distLeft = tbBlock.distLeft ?? 12;
+    const distRight = tbBlock.distRight ?? 12;
+
+    let topY = 0;
+    if (tbBlock.position?.vertical?.posOffset !== undefined) {
+      topY = emuToPixels(tbBlock.position.vertical.posOffset);
+    }
+    const bottomY = topY + tbHeight;
+
+    let leftMargin = 0;
+    let rightMargin = 0;
+    const h = tbBlock.position?.horizontal;
+    if (h?.align === 'left') {
+      leftMargin = tbWidth + distRight;
+    } else if (h?.align === 'right') {
+      rightMargin = tbWidth + distLeft;
+    } else if (h?.posOffset !== undefined) {
+      const x = emuToPixels(h.posOffset);
+      if (x < contentWidth / 2) {
+        leftMargin = x + tbWidth + distRight;
+      } else {
+        rightMargin = contentWidth - x + distLeft;
+      }
+    } else if (tbBlock.cssFloat === 'left') {
+      leftMargin = tbWidth + distRight;
+    } else if (tbBlock.cssFloat === 'right') {
+      rightMargin = tbWidth + distLeft;
+    }
+
+    ({ leftMargin, rightMargin } = constrainWrapMargins(leftMargin, rightMargin, contentWidth));
+
+    if (leftMargin <= 0 && rightMargin <= 0) continue;
+
+    const isMarginRelative =
+      tbBlock.position?.vertical?.relativeTo === 'margin' ||
+      tbBlock.position?.vertical?.relativeTo === 'page';
+    zones.push({
+      leftMargin,
+      rightMargin,
+      topY: topY - distTop,
+      bottomY: bottomY + distBottom,
+      anchorBlockIndex: blockIndex,
+      isMarginRelative,
+    });
+  }
+
   return zones;
 }
 
@@ -305,13 +421,23 @@ export function measureBlocks(blocks: FlowBlock[], contentWidth: number | number
     marginByTopY.set(z.topY, group);
   }
 
-  const adjustedZones: FloatingZoneWithAnchor[] = [...paragraphRelative];
-  for (const group of marginByTopY.values()) {
-    const minAnchor = Math.min(...group.map((z) => z.anchorBlockIndex));
-    for (const z of group) {
-      adjustedZones.push({ ...z, anchorBlockIndex: minAnchor });
-    }
-  }
+  // Group paragraph-relative zones that vertically overlap AND anchor at
+  // nearby blocks, then re-anchor each group to its earliest block index.
+  // Without this, when paragraph 0 anchors an image AND a sibling floating
+  // textbox anchors at a later block, reaching the textbox anchor REPLACES
+  // the active zones and drops the image zone — body paragraphs after both
+  // anchors then measure as if the image weren't there and overflow the
+  // float region.
+  //
+  // The block-proximity bound prevents floats at unrelated places in the
+  // document from being merged just because their paragraph-local topY
+  // values happen to overlap (every paragraph-anchored float starts at a
+  // small posOffset, so without this bound their topY ranges always overlap).
+  const paragraphGroups = groupOverlappingZones(paragraphRelative, ANCHOR_PROXIMITY);
+
+  const adjustedZones: FloatingZoneWithAnchor[] = [];
+  collectReanchoredToEarliest(paragraphGroups, adjustedZones);
+  collectReanchoredToEarliest(Array.from(marginByTopY.values()), adjustedZones);
 
   // Group zones by effective anchor block index
   const zonesByAnchor = new Map<number, FloatingImageZone[]>();
