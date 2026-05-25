@@ -1,7 +1,8 @@
 /**
  * Block-measurement pipeline for PagedEditor — paragraph/table/image/
- * textBox measurement + the floating-image exclusion-zone pre-scan that
- * lets paragraphs flow around anchored images and floating tables.
+ * textBox measurement. The floating-zone pre-scan + per-block cumulative-Y
+ * orchestration lives in core's `measureBlocksWithFloats` so React and Vue
+ * stay in lockstep.
  *
  * `measureBlock` contains the FlowBlock exhaustiveness switch. The
  * `assertExhaustiveFlowBlock(block, 'react PagedEditor measureBlock')`
@@ -18,7 +19,6 @@ import {
 import type {
   FlowBlock,
   ImageBlock,
-  ImageRun,
   Measure,
   ParagraphBlock,
   TableBlock,
@@ -26,294 +26,13 @@ import type {
   TextBoxBlock,
 } from '@eigenpal/docx-editor-core/layout-engine';
 import {
-  constrainWrapMargins,
   type FloatingImageZone,
   getCachedParagraphMetrics,
+  measureBlocksWithFloats,
   paragraphLayout,
   measureTable,
   setCachedParagraphMetrics,
 } from '@eigenpal/docx-editor-core/layout-bridge';
-import { emuToPixels } from '@eigenpal/docx-editor-core/utils';
-import { isTextWrappingFloatingImageRun } from '@eigenpal/docx-editor-core/layout-painter';
-import { isFloatingTextBoxBlock, isWrapNone } from '@eigenpal/docx-editor-core/layout-engine';
-
-/**
- * Extended floating zone info that includes anchor block index.
- */
-interface FloatingZoneWithAnchor extends FloatingImageZone {
-  /** Block index where this floating image is anchored */
-  anchorBlockIndex: number;
-  /** If true, zone is positioned relative to margin/page and applies to all blocks */
-  isMarginRelative?: boolean;
-}
-
-/**
- * Maximum block-index distance for paragraph-relative floats to be considered
- * co-located. Anchors within this window with overlapping Y ranges get merged
- * so a body paragraph between them sees the combined exclusion zone. Beyond
- * this window we keep zones independent — different sections of the document
- * routinely have float topY values that coincidentally overlap.
- */
-const ANCHOR_PROXIMITY = 4;
-
-/**
- * Group `zones` such that any two whose Y ranges overlap AND whose
- * anchorBlockIndex differs by no more than `maxAnchorGap` land in the same
- * group. Single-pass; groups merge transitively as zones connect them.
- */
-function groupOverlappingZones(
-  zones: FloatingZoneWithAnchor[],
-  maxAnchorGap: number
-): FloatingZoneWithAnchor[][] {
-  const groups: FloatingZoneWithAnchor[][] = [];
-  for (const z of zones) {
-    const target = groups.find((g) =>
-      g.some(
-        (other) =>
-          Math.abs(other.anchorBlockIndex - z.anchorBlockIndex) <= maxAnchorGap &&
-          z.topY < other.bottomY &&
-          z.bottomY > other.topY
-      )
-    );
-    if (target) target.push(z);
-    else groups.push([z]);
-  }
-  return groups;
-}
-
-/**
- * Re-anchor every zone in each group to the group's earliest block index and
- * append the result to `out`.
- */
-function collectReanchoredToEarliest(
-  groups: FloatingZoneWithAnchor[][],
-  out: FloatingZoneWithAnchor[]
-): void {
-  for (const group of groups) {
-    const minAnchor = Math.min(...group.map((z) => z.anchorBlockIndex));
-    for (const z of group) {
-      out.push({ ...z, anchorBlockIndex: minAnchor });
-    }
-  }
-}
-
-/**
- * Extract floating image exclusion zones from all blocks.
- * Called before measurement to determine line width reductions.
- *
- * For images with vertical align="top" relative to margin, they're at Y=0.
- * The exclusion zones define the areas where text lines need reduced widths.
- */
-function extractFloatingZones(blocks: FlowBlock[], contentWidth: number): FloatingZoneWithAnchor[] {
-  const zones: FloatingZoneWithAnchor[] = [];
-
-  for (let blockIndex = 0; blockIndex < blocks.length; blockIndex++) {
-    const block = blocks[blockIndex];
-    if (block.kind !== 'paragraph') continue;
-
-    const paragraphBlock = block as ParagraphBlock;
-
-    for (const run of paragraphBlock.runs) {
-      if (run.kind !== 'image') continue;
-      const imgRun = run as ImageRun;
-
-      if (!isTextWrappingFloatingImageRun(imgRun)) continue;
-
-      // Calculate Y position based on vertical alignment
-      let topY = 0;
-      const position = imgRun.position;
-      const distTop = imgRun.distTop ?? 0;
-      const distBottom = imgRun.distBottom ?? 0;
-      const distLeft = imgRun.distLeft ?? 12;
-      const distRight = imgRun.distRight ?? 12;
-
-      if (position?.vertical) {
-        const v = position.vertical;
-        if (v.align === 'top' && v.relativeTo === 'margin') {
-          // Image at top of content area
-          topY = 0;
-        } else if (v.posOffset !== undefined) {
-          topY = emuToPixels(v.posOffset);
-        }
-        // Other cases (paragraph-relative) are harder to handle without knowing paragraph positions
-      }
-
-      const bottomY = topY + imgRun.height;
-
-      // Calculate margins based on horizontal position
-      let leftMargin = 0;
-      let rightMargin = 0;
-
-      if (position?.horizontal) {
-        const h = position.horizontal;
-        if (h.align === 'left') {
-          // Image on left - text needs left margin
-          leftMargin = imgRun.width + distRight;
-        } else if (h.align === 'right') {
-          // Image on right - text needs right margin
-          rightMargin = imgRun.width + distLeft;
-        } else if (h.posOffset !== undefined) {
-          const x = emuToPixels(h.posOffset);
-          if (x < contentWidth / 2) {
-            leftMargin = x + imgRun.width + distRight;
-          } else {
-            rightMargin = contentWidth - x + distLeft;
-          }
-        }
-      } else if (imgRun.cssFloat === 'left') {
-        leftMargin = imgRun.width + distRight;
-      } else if (imgRun.cssFloat === 'right') {
-        rightMargin = imgRun.width + distLeft;
-      }
-
-      ({ leftMargin, rightMargin } = constrainWrapMargins(
-        leftMargin,
-        rightMargin,
-        contentWidth
-      ));
-
-      if (leftMargin > 0 || rightMargin > 0) {
-        // Images positioned relative to margin/page apply globally (before their anchor paragraph)
-        const isMarginRelative =
-          position?.vertical?.relativeTo === 'margin' || position?.vertical?.relativeTo === 'page';
-        zones.push({
-          leftMargin,
-          rightMargin,
-          topY: topY - distTop,
-          bottomY: bottomY + distBottom,
-          anchorBlockIndex: blockIndex,
-          isMarginRelative,
-        });
-      }
-    }
-  }
-
-  // Floating tables (block-level) - treat them as exclusion zones for subsequent text
-  for (let blockIndex = 0; blockIndex < blocks.length; blockIndex++) {
-    const block = blocks[blockIndex];
-    if (block.kind !== 'table') continue;
-
-    const tableBlock = block as TableBlock;
-    const floating = tableBlock.floating;
-    if (!floating) continue;
-
-    const tableMeasure = measureTable(tableBlock, contentWidth, measureBlock);
-    const tableWidth = tableMeasure.totalWidth;
-    const tableHeight = tableMeasure.totalHeight;
-
-    const distLeft = floating.leftFromText ?? 12;
-    const distRight = floating.rightFromText ?? 12;
-    const distTop = floating.topFromText ?? 0;
-    const distBottom = floating.bottomFromText ?? 0;
-
-    let leftMargin = 0;
-    let rightMargin = 0;
-
-    // Determine horizontal position relative to content area
-    let x = 0;
-    if (floating.tblpX !== undefined) {
-      x = floating.tblpX;
-    } else if (floating.tblpXSpec) {
-      if (floating.tblpXSpec === 'left' || floating.tblpXSpec === 'inside') {
-        x = 0;
-      } else if (floating.tblpXSpec === 'right' || floating.tblpXSpec === 'outside') {
-        x = contentWidth - tableWidth;
-      } else if (floating.tblpXSpec === 'center') {
-        x = (contentWidth - tableWidth) / 2;
-      }
-    } else if (tableBlock.justification === 'center') {
-      x = (contentWidth - tableWidth) / 2;
-    } else if (tableBlock.justification === 'right') {
-      x = contentWidth - tableWidth;
-    }
-
-    if (x < contentWidth / 2) {
-      leftMargin = x + tableWidth + distRight;
-    } else {
-      rightMargin = contentWidth - x + distLeft;
-    }
-
-    ({ leftMargin, rightMargin } = constrainWrapMargins(leftMargin, rightMargin, contentWidth));
-
-    const topY = floating.tblpY ?? 0;
-    const bottomY = topY + tableHeight;
-
-    zones.push({
-      leftMargin,
-      rightMargin,
-      topY: topY - distTop,
-      bottomY: bottomY + distBottom,
-      anchorBlockIndex: blockIndex,
-    });
-  }
-
-  // Floating text boxes — siblings of paragraphs in the block list, not
-  // children. They need exclusion zones too, otherwise body paragraphs that
-  // overlap a side-anchored textbox render full-width over it.
-  for (let blockIndex = 0; blockIndex < blocks.length; blockIndex++) {
-    const block = blocks[blockIndex];
-    if (block.kind !== 'textBox') continue;
-
-    const tbBlock = block as TextBoxBlock;
-    if (!isFloatingTextBoxBlock(tbBlock)) continue;
-    if (isWrapNone(tbBlock.wrapType) || tbBlock.wrapType === 'topAndBottom') {
-      continue;
-    }
-
-    const tbWidth = tbBlock.width ?? 0;
-    const tbHeight = tbBlock.height ?? 0;
-    if (tbWidth <= 0 || tbHeight <= 0) continue;
-
-    const distTop = tbBlock.distTop ?? 0;
-    const distBottom = tbBlock.distBottom ?? 0;
-    const distLeft = tbBlock.distLeft ?? 12;
-    const distRight = tbBlock.distRight ?? 12;
-
-    let topY = 0;
-    if (tbBlock.position?.vertical?.posOffset !== undefined) {
-      topY = emuToPixels(tbBlock.position.vertical.posOffset);
-    }
-    const bottomY = topY + tbHeight;
-
-    let leftMargin = 0;
-    let rightMargin = 0;
-    const h = tbBlock.position?.horizontal;
-    if (h?.align === 'left') {
-      leftMargin = tbWidth + distRight;
-    } else if (h?.align === 'right') {
-      rightMargin = tbWidth + distLeft;
-    } else if (h?.posOffset !== undefined) {
-      const x = emuToPixels(h.posOffset);
-      if (x < contentWidth / 2) {
-        leftMargin = x + tbWidth + distRight;
-      } else {
-        rightMargin = contentWidth - x + distLeft;
-      }
-    } else if (tbBlock.cssFloat === 'left') {
-      leftMargin = tbWidth + distRight;
-    } else if (tbBlock.cssFloat === 'right') {
-      rightMargin = tbWidth + distLeft;
-    }
-
-    ({ leftMargin, rightMargin } = constrainWrapMargins(leftMargin, rightMargin, contentWidth));
-
-    if (leftMargin <= 0 && rightMargin <= 0) continue;
-
-    const isMarginRelative =
-      tbBlock.position?.vertical?.relativeTo === 'margin' ||
-      tbBlock.position?.vertical?.relativeTo === 'page';
-    zones.push({
-      leftMargin,
-      rightMargin,
-      topY: topY - distTop,
-      bottomY: bottomY + distBottom,
-      anchorBlockIndex: blockIndex,
-      isMarginRelative,
-    });
-  }
-
-  return zones;
-}
 
 /**
  * Measure a block based on its type.
@@ -394,110 +113,12 @@ export function measureBlock(
 }
 
 /**
- * Measure all blocks with floating image support.
- *
- * Pre-scans all blocks to find floating images and creates exclusion zones.
- * Then measures each block, passing the zones so paragraphs can calculate
- * per-line widths based on vertical overlap with floating images.
+ * Measure all blocks with floating-image support. Pre-scans for anchored
+ * images, floating tables, and floating textboxes, then threads the
+ * exclusion zones plus cumulative Y into each per-block measurement.
  */
 export function measureBlocks(blocks: FlowBlock[], contentWidth: number | number[]): Measure[] {
-  const defaultWidth = Array.isArray(contentWidth) ? (contentWidth[0] ?? 0) : contentWidth;
-  // Pre-extract floating image exclusion zones with anchor block indices
-  const floatingZonesWithAnchors = extractFloatingZones(blocks, defaultWidth);
-
-  // Margin-relative zones (positioned relative to page/margin) on the same vertical
-  // position are likely on the same page. Group them and activate all from the earliest
-  // anchor so text wraps around ALL images from the first paragraph onward.
-  // e.g. left-aligned and right-aligned images at margin top should both affect text
-  // starting from the first anchor paragraph, not just the one containing each image.
-  const marginRelative = floatingZonesWithAnchors.filter((z) => z.isMarginRelative);
-  const paragraphRelative = floatingZonesWithAnchors.filter((z) => !z.isMarginRelative);
-
-  // Group margin-relative zones by topY and move all to earliest anchor in group
-  const marginByTopY = new Map<number, FloatingZoneWithAnchor[]>();
-  for (const z of marginRelative) {
-    const group = marginByTopY.get(z.topY) ?? [];
-    group.push(z);
-    marginByTopY.set(z.topY, group);
-  }
-
-  // Group paragraph-relative zones that vertically overlap AND anchor at
-  // nearby blocks, then re-anchor each group to its earliest block index.
-  // Without this, when paragraph 0 anchors an image AND a sibling floating
-  // textbox anchors at a later block, reaching the textbox anchor REPLACES
-  // the active zones and drops the image zone — body paragraphs after both
-  // anchors then measure as if the image weren't there and overflow the
-  // float region.
-  //
-  // The block-proximity bound prevents floats at unrelated places in the
-  // document from being merged just because their paragraph-local topY
-  // values happen to overlap (every paragraph-anchored float starts at a
-  // small posOffset, so without this bound their topY ranges always overlap).
-  const paragraphGroups = groupOverlappingZones(paragraphRelative, ANCHOR_PROXIMITY);
-
-  const adjustedZones: FloatingZoneWithAnchor[] = [];
-  collectReanchoredToEarliest(paragraphGroups, adjustedZones);
-  collectReanchoredToEarliest(Array.from(marginByTopY.values()), adjustedZones);
-
-  // Group zones by effective anchor block index
-  const zonesByAnchor = new Map<number, FloatingImageZone[]>();
-  for (const z of adjustedZones) {
-    const existing = zonesByAnchor.get(z.anchorBlockIndex) ?? [];
-    existing.push({
-      leftMargin: z.leftMargin,
-      rightMargin: z.rightMargin,
-      topY: z.topY,
-      bottomY: z.bottomY,
-    });
-    zonesByAnchor.set(z.anchorBlockIndex, existing);
-  }
-
-  const anchorIndices = new Set(adjustedZones.map((z) => z.anchorBlockIndex));
-
-  // Track cumulative Y position for floating zone overlap calculation
-  // Resets when we reach a block with floating images (establishing local page coords)
-  let cumulativeY = 0;
-  let activeZones: FloatingImageZone[] = [];
-
-  return blocks.map((block, blockIndex) => {
-    // Check if this block is an anchor for floating images
-    // If so, reset cumulative Y and replace active zones (old zones from previous
-    // anchors are invalid after the Y reset since their topY/bottomY are in the old
-    // coordinate system)
-    if (anchorIndices.has(blockIndex)) {
-      cumulativeY = 0;
-      activeZones = zonesByAnchor.get(blockIndex) ?? [];
-    }
-
-    const zones = activeZones.length > 0 ? activeZones : undefined;
-
-    try {
-      const blockStart = performance.now();
-      const blockWidth = Array.isArray(contentWidth)
-        ? (contentWidth[blockIndex] ?? defaultWidth)
-        : contentWidth;
-      const measure = measureBlock(block, blockWidth, zones, cumulativeY);
-      const blockTime = performance.now() - blockStart;
-      if (blockTime > 500) {
-        console.warn(
-          `[measureBlocks] Block ${blockIndex} (${block.kind}) took ${Math.round(blockTime)}ms`
-        );
-      }
-
-      // Update cumulative Y for next block
-      if ('totalHeight' in measure) {
-        if (!(block.kind === 'table' && (block as TableBlock).floating)) {
-          cumulativeY += measure.totalHeight;
-        }
-      }
-
-      return measure;
-    } catch (error) {
-      console.error(`[measureBlocks] Error measuring block ${blockIndex} (${block.kind}):`, error);
-      // Return a minimal measure so we don't crash the entire layout
-      return { totalHeight: 20 } as Measure;
-    }
-  });
+  return measureBlocksWithFloats(blocks, contentWidth, measureBlock);
 }
 
 // TableMeasure used internally above; re-exported for tests that compare types.
