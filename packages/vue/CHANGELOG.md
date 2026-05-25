@@ -1,5 +1,21 @@
 # @eigenpal/docx-editor-vue
 
+## 1.0.3
+
+### Patch Changes
+
+- 6d56181: Vue now renders documents with stacked floating objects identically to React. Previously, the Vue composable ran a simplified measurement pipeline without floating-zone awareness, so anchored images / floating textboxes / floating tables would not push body text below them in Vue. The float-extraction and per-block orchestration is now shared from `@eigenpal/docx-editor-core/layout-bridge` (`measureBlocksWithFloats`); both adapters call it with their own per-block measure callback.
+- Updated dependencies [24b31a4]
+- Updated dependencies [ec36a50]
+- Updated dependencies [143c31e]
+- Updated dependencies [d91357e]
+- Updated dependencies [bdd7f50]
+- Updated dependencies [6d56181]
+- Updated dependencies [e80093d]
+  - @eigenpal/docx-editor-core@1.0.3
+  - @eigenpal/docx-editor-agents@1.0.3
+  - @eigenpal/docx-editor-i18n@1.0.3
+
 ## 1.0.2
 
 ### Patch Changes
