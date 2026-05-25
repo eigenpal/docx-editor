@@ -60,6 +60,10 @@ export default defineConfig({
             replacement: path.join(monorepoRoot, 'packages/vue/src/index.ts'),
           },
           {
+            find: '@eigenpal/docx-editor-i18n',
+            replacement: path.join(monorepoRoot, 'packages/i18n/src/index.ts'),
+          },
+          {
             find: '@eigenpal/docx-editor-agents/vue',
             replacement: path.join(monorepoRoot, 'packages/agents/src/vue.ts'),
           },
