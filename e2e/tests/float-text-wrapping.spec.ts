@@ -325,4 +325,78 @@ test.describe('Float Text Wrapping (Issues #143 & #188)', () => {
 
     expect(duplicates).toBe(0);
   });
+
+  test('stacked floats + floating table: text flows below floats and around the table', async ({
+    page,
+  }) => {
+    // Regression fixture: a side-anchored textbox + right-anchored image
+    // (both wrapSquare/bothSides) at the top of the first page, followed by
+    // body paragraphs and a floating table with w:tblpPr w:vertAnchor="text".
+    // Before the fix, body paragraphs stacked at the same Y as the floats
+    // and the table jumped to the page top.
+    const editor = new EditorPage(page);
+    await editor.goto();
+    await editor.waitForReady();
+    await page
+      .locator('input[type="file"][accept=".docx"]')
+      .setInputFiles('e2e/fixtures/stacked-floats-with-floating-table.docx');
+    await page.waitForSelector('.paged-editor__pages');
+    await page.waitForSelector('[data-page-number]');
+    await page.waitForTimeout(1500);
+
+    const layout = await page.evaluate(() => {
+      const firstPage = document.querySelector('[data-page-number="1"]');
+      if (!firstPage) return null;
+      const pageBox = firstPage.getBoundingClientRect();
+      const textbox = firstPage.querySelector('.layout-textbox');
+      const floatImage = firstPage.querySelector('.layout-page-floating-image');
+      const table = firstPage.querySelector<HTMLElement>('.layout-table');
+      const bodyParas = Array.from(
+        firstPage.querySelectorAll<HTMLElement>('.layout-paragraph')
+      ).filter((p) => (p.textContent ?? '').includes('Computer entwickeln'));
+      return {
+        textboxBottom: textbox ? textbox.getBoundingClientRect().bottom - pageBox.top : null,
+        imageBottom: floatImage ? floatImage.getBoundingClientRect().bottom - pageBox.top : null,
+        bodyTop:
+          bodyParas[0] != null ? bodyParas[0].getBoundingClientRect().top - pageBox.top : null,
+        tableTop: table ? table.getBoundingClientRect().top - pageBox.top : null,
+        tableBottom: table ? table.getBoundingClientRect().bottom - pageBox.top : null,
+      };
+    });
+
+    expect(layout).not.toBeNull();
+    const { textboxBottom, imageBottom, bodyTop, tableTop, tableBottom } = layout!;
+    expect(textboxBottom).not.toBeNull();
+    expect(imageBottom).not.toBeNull();
+    expect(bodyTop).not.toBeNull();
+    expect(tableTop).not.toBeNull();
+    expect(tableBottom).not.toBeNull();
+
+    // The first body paragraph must visually appear BELOW the textbox and
+    // image (before the fix it stacked at the same Y as the floats).
+    const floatsBottom = Math.max(textboxBottom!, imageBottom!);
+    const firstBodyLine = bodyTop!;
+    const renderedFirstLine =
+      page.viewportSize() && firstBodyLine !== null
+        ? await page.evaluate(() => {
+            const p = Array.from(document.querySelectorAll<HTMLElement>('.layout-paragraph')).find(
+              (el) => (el.textContent ?? '').includes('Computer entwickeln')
+            );
+            const line = p?.querySelector<HTMLElement>('.layout-line');
+            if (!line || !p) return null;
+            return (
+              line.getBoundingClientRect().top -
+              p.closest('[data-page-number]')!.getBoundingClientRect().top
+            );
+          })
+        : firstBodyLine;
+    // Use the line's actual painted Y (paragraph container starts above, but
+    // the line itself gets floatSkipBefore as marginTop).
+    expect(renderedFirstLine).not.toBeNull();
+    expect(renderedFirstLine!).toBeGreaterThanOrEqual(floatsBottom - 4);
+
+    // The floating table must NOT jump to the top of the page — it should sit
+    // below the body paragraphs that precede it in the document.
+    expect(tableTop!).toBeGreaterThan(floatsBottom + 50);
+  });
 });
