@@ -71,6 +71,12 @@
       "id": 88898653,
       "signed_at": "2026-05-25T17:56:38Z",
       "pull_request_no": 603
+    },
+    {
+      "name": "occupy5",
+      "id": 16299493,
+      "signed_at": "2026-05-26T13:37:00Z",
+      "pull_request_no": 613
     }
   ]
 }
