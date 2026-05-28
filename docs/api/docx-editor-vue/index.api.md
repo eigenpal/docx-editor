@@ -14,6 +14,7 @@ import { default as DocxEditor } from './components/DocxEditor.vue';
 import { DocxInput } from '@eigenpal/docx-editor-core/utils';
 import { EditorHandle } from '@eigenpal/docx-editor-core';
 import { EditorRefLike } from '@eigenpal/docx-editor-agents/bridge';
+import { FontDefinition } from '@eigenpal/docx-editor-core/utils';
 import { FontOption } from '@eigenpal/docx-editor-core/utils/fontOptions';
 import { MaybeRef } from 'vue';
 import { Plugin as Plugin_2 } from 'prosemirror-state';
@@ -50,6 +51,7 @@ export interface DocxEditorProps {
     documentNameEditable?: boolean;
     externalPlugins?: Plugin_2[];
     fontFamilies?: ReadonlyArray<string | FontOption>;
+    fonts?: ReadonlyArray<FontDefinition>;
     i18n?: Translations;
     initialZoom?: number;
     mode?: EditorMode;

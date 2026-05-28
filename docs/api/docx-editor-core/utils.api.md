@@ -237,6 +237,13 @@ export function findWordStart(text: string, position: number): number;
 export const FONT_MAPPING: Record<string, string>;
 
 // @public
+export interface FontDefinition {
+    family: string;
+    src: string;
+    weight?: number | string;
+}
+
+// @public
 export function formatPx(px: number): string;
 
 // @public
@@ -448,9 +455,16 @@ export function loadFont(fontFamily: string, options?: {
 }): Promise<boolean>;
 
 // @public
+export function loadFontDefinitions(defs: ReadonlyArray<FontDefinition> | undefined): Promise<void>;
+
+// @public
 export function loadFontFromBuffer(fontFamily: string, buffer: ArrayBuffer, options?: {
     weight?: number | string;
-    style?: 'normal' | 'italic';
+}): Promise<boolean>;
+
+// @public
+export function loadFontFromUrl(fontFamily: string, src: string, options?: {
+    weight?: number | string;
 }): Promise<boolean>;
 
 // @public
@@ -514,6 +528,9 @@ export type NavigationUnit = 'character' | 'word' | 'line' | 'paragraph' | 'docu
 
 // @public
 export function normalizeSelectionDirection(): void;
+
+// @public
+export function onFontError(callback: (error: Error) => void): () => void;
 
 // @public
 export function onFontsLoaded(callback: (fonts: string[]) => void): () => void;
