@@ -77,6 +77,12 @@
       "id": 16299493,
       "signed_at": "2026-05-26T13:37:00Z",
       "pull_request_no": 613
+    },
+    {
+      "name": "mondaychen",
+      "id": 1001890,
+      "signed_at": "2026-05-28T15:29:05Z",
+      "pull_request_no": 624
     }
   ]
 }
