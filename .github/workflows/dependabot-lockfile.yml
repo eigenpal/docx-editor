@@ -1,0 +1,93 @@
+name: Dependabot lockfile refresh + CI
+
+# Dependabot doesn't update Bun lockfiles natively, so dep-bump PRs fail
+# CI's `bun install --frozen-lockfile`. This workflow handles dependabot
+# PRs end-to-end:
+#   1. checkout the PR branch
+#   2. refresh `bun.lock`
+#   3. commit + push it back (so the PR is mergeable as-is)
+#   4. run the same lint/typecheck/test/build checks as `ci.yml` inline
+#
+# The standard `ci.yml` skips dependabot PRs (`if: github.actor != 'dependabot[bot]'`)
+# so we don't double-run.
+#
+# Note: pushes from GITHUB_TOKEN do not re-trigger workflows
+# (GitHub's anti-recursion guard), which is why the verification has
+# to live in *this* workflow instead of delegating back to ci.yml.
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  refresh-and-verify:
+    if: github.actor == 'dependabot[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout PR branch
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.pull_request.head.ref }}
+          # Default GITHUB_TOKEN can push to dependabot PR branches when
+          # workflow-level `permissions: contents: write` is granted.
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Refresh bun.lock
+        env:
+          HUSKY: 0
+        run: bun install --no-frozen-lockfile
+
+      - name: Commit lockfile if changed
+        env:
+          HUSKY: 0
+        run: |
+          if [[ -n "$(git status --porcelain bun.lock)" ]]; then
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add bun.lock
+            git commit -m "chore: refresh bun.lock for dependabot"
+            git push
+          else
+            echo "bun.lock already in sync — nothing to commit"
+          fi
+
+      - name: Lint
+        run: bun run lint
+
+      - name: Format check
+        run: bun run format:check
+
+      - name: Type check
+        run: bun run typecheck
+
+      - name: i18n locale + typed-exports sync check
+        run: bun run i18n:validate
+
+      - name: Run tests
+        run: bun test
+
+      - name: Build packages
+        run: bun run build:packages
+        env:
+          NODE_OPTIONS: --max-old-space-size=8192
+
+      - name: API report check
+        run: bun run api:check
+
+      - name: Parity contract check
+        run: bun run check:parity-contract
+
+      - name: i18n per-locale bundle size check
+        run: bun run check:i18n-bundle-size
+
+      - name: Docs JSON generation (smoke test)
+        run: bun run docs:json

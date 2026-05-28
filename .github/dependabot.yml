@@ -3,7 +3,11 @@
 # within hours, well before this window elapses.
 #
 # Dependabot v2 has no global default and rejects YAML aliases
-# (dependabot-core#1582), so the cooldown block is duplicated per entry.
+# (dependabot-core#1582), so the cooldown block + groups block are
+# duplicated per entry. The `dev-dependencies` group bundles every
+# patch+minor devDep bump into one PR per directory, so dependabot-lockfile.yml
+# only has to refresh `bun.lock` once per week per directory. Major bumps
+# still get their own PR (real upgrade work).
 version: 2
 updates:
   - package-ecosystem: "npm"
@@ -13,6 +17,10 @@ updates:
       day: "monday"
     cooldown:
       default-days: 7
+    groups:
+      dev-dependencies:
+        dependency-type: "development"
+        update-types: ["minor", "patch"]
 
   - package-ecosystem: "npm"
     directory: "/packages/agents"
@@ -21,6 +29,10 @@ updates:
       day: "monday"
     cooldown:
       default-days: 7
+    groups:
+      dev-dependencies:
+        dependency-type: "development"
+        update-types: ["minor", "patch"]
 
   - package-ecosystem: "npm"
     directory: "/packages/core"
@@ -29,6 +41,10 @@ updates:
       day: "monday"
     cooldown:
       default-days: 7
+    groups:
+      dev-dependencies:
+        dependency-type: "development"
+        update-types: ["minor", "patch"]
 
   - package-ecosystem: "npm"
     directory: "/packages/i18n"
@@ -37,6 +53,10 @@ updates:
       day: "monday"
     cooldown:
       default-days: 7
+    groups:
+      dev-dependencies:
+        dependency-type: "development"
+        update-types: ["minor", "patch"]
 
   - package-ecosystem: "npm"
     directory: "/packages/react"
@@ -45,6 +65,10 @@ updates:
       day: "monday"
     cooldown:
       default-days: 7
+    groups:
+      dev-dependencies:
+        dependency-type: "development"
+        update-types: ["minor", "patch"]
 
   - package-ecosystem: "npm"
     directory: "/packages/vue"
@@ -53,6 +77,10 @@ updates:
       day: "monday"
     cooldown:
       default-days: 7
+    groups:
+      dev-dependencies:
+        dependency-type: "development"
+        update-types: ["minor", "patch"]
 
   - package-ecosystem: "npm"
     directory: "/examples/agents-demo"
@@ -61,6 +89,10 @@ updates:
       day: "monday"
     cooldown:
       default-days: 7
+    groups:
+      dev-dependencies:
+        dependency-type: "development"
+        update-types: ["minor", "patch"]
 
   - package-ecosystem: "npm"
     directory: "/examples/agent-chat-demo"
@@ -69,6 +101,10 @@ updates:
       day: "monday"
     cooldown:
       default-days: 7
+    groups:
+      dev-dependencies:
+        dependency-type: "development"
+        update-types: ["minor", "patch"]
 
   - package-ecosystem: "npm"
     directory: "/examples/astro"
@@ -77,6 +113,10 @@ updates:
       day: "monday"
     cooldown:
       default-days: 7
+    groups:
+      dev-dependencies:
+        dependency-type: "development"
+        update-types: ["minor", "patch"]
 
   - package-ecosystem: "npm"
     directory: "/examples/collaboration"
@@ -85,6 +125,10 @@ updates:
       day: "monday"
     cooldown:
       default-days: 7
+    groups:
+      dev-dependencies:
+        dependency-type: "development"
+        update-types: ["minor", "patch"]
 
   - package-ecosystem: "npm"
     directory: "/examples/plugins/docxtemplater"
@@ -93,6 +137,10 @@ updates:
       day: "monday"
     cooldown:
       default-days: 7
+    groups:
+      dev-dependencies:
+        dependency-type: "development"
+        update-types: ["minor", "patch"]
 
   - package-ecosystem: "npm"
     directory: "/examples/plugins/hello-world"
@@ -101,6 +149,10 @@ updates:
       day: "monday"
     cooldown:
       default-days: 7
+    groups:
+      dev-dependencies:
+        dependency-type: "development"
+        update-types: ["minor", "patch"]
 
   - package-ecosystem: "npm"
     directory: "/examples/remix"
@@ -109,6 +161,10 @@ updates:
       day: "monday"
     cooldown:
       default-days: 7
+    groups:
+      dev-dependencies:
+        dependency-type: "development"
+        update-types: ["minor", "patch"]
 
   - package-ecosystem: "npm"
     directory: "/examples/vite"
@@ -117,6 +173,10 @@ updates:
       day: "monday"
     cooldown:
       default-days: 7
+    groups:
+      dev-dependencies:
+        dependency-type: "development"
+        update-types: ["minor", "patch"]
 
   - package-ecosystem: "npm"
     directory: "/examples/vue"
@@ -125,6 +185,10 @@ updates:
       day: "monday"
     cooldown:
       default-days: 7
+    groups:
+      dev-dependencies:
+        dependency-type: "development"
+        update-types: ["minor", "patch"]
 
   - package-ecosystem: "github-actions"
     directory: "/"
