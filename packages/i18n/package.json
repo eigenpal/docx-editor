@@ -27,6 +27,11 @@
       "import": "./dist/he.mjs",
       "require": "./dist/he.js"
     },
+    "./hi": {
+      "types": "./dist/hi.d.ts",
+      "import": "./dist/hi.mjs",
+      "require": "./dist/hi.js"
+    },
     "./pl": {
       "types": "./dist/pl.d.ts",
       "import": "./dist/pl.mjs",
