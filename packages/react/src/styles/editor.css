@@ -496,68 +496,13 @@
   padding: 4px 0;
 }
 
-/* Header/footer editor ProseMirror styles */
-.hf-editor-pm .ProseMirror {
-  outline: none;
-  min-height: 40px;
-  padding: 0;
-}
-.hf-editor-pm .ProseMirror:focus {
-  outline: none;
-}
-.hf-editor-pm .ProseMirror p {
-  display: block;
-  margin: 0 !important;
-  padding-top: var(--docx-space-before, 0);
-  padding-bottom: var(--docx-space-after, 0);
-  padding-left: 0;
-  padding-right: 0;
-  min-height: 1em;
-  white-space: pre-wrap;
-  word-wrap: break-word;
-  line-height: normal !important;
-}
-
-.hf-editor-pm .ProseMirror td p,
-.hf-editor-pm .ProseMirror th p {
-  margin: 0 !important;
-  padding-top: var(--docx-space-before, 0);
-  padding-bottom: var(--docx-space-after, 0);
-  padding-left: 0;
-  padding-right: 0;
-  min-height: auto;
-  line-height: normal !important;
-}
-
-.hf-editor-pm .ProseMirror .tableWrapper {
-  overflow: visible;
-}
-
-.hf-editor-pm .ProseMirror table {
-  border-collapse: collapse !important;
-  border-spacing: 0 !important;
-  table-layout: fixed !important;
-  margin: 0;
-}
-
-.hf-editor-pm .ProseMirror td.docx-table-cell,
-.hf-editor-pm .ProseMirror th.docx-table-header {
-  box-sizing: border-box !important;
-}
-
-.hf-editor-pm .ProseMirror td p:has(img),
-.hf-editor-pm .ProseMirror th p:has(img),
-.hf-editor-pm .ProseMirror td p:has(span),
-.hf-editor-pm .ProseMirror th p:has(span) {
-  font-size: 0 !important;
-  line-height: 0 !important;
-}
-
-.hf-editor-pm .ProseMirror td p span:not(:has(> span)),
-.hf-editor-pm .ProseMirror th p span:not(:has(> span)) {
-  position: relative;
-  top: 0.4em;
-}
+/*
+ * Phase 5 of HF editing unification (openspec/changes/unify-hf-editing/):
+ * the inline overlay no longer mounts a PM EditorView, so the entire
+ * `.hf-editor-pm` rule block (font-strut zeroing, table-layout overrides,
+ * `top: 0.4em` shim, line-height resets) is gone. Painter + persistent
+ * hidden PM are the only HF rendering paths now.
+ */
 
 /* Dim body content when editing header/footer */
 .paged-editor--hf-editing .layout-page-content {
@@ -576,13 +521,11 @@
   border-top: 1px dotted #4285f4;
 }
 
-/* Hide the original layout-painter content in the area being edited */
-.paged-editor--editing-header .layout-page-header > * {
-  visibility: hidden;
-}
-.paged-editor--editing-footer .layout-page-footer > * {
-  visibility: hidden;
-}
+/*
+ * HF editing unification phase 2 (openspec/changes/unify-hf-editing/):
+ * removed; the painter is now the sole visible HF renderer in both modes
+ * and the inline overlay's PM container moves off-screen instead.
+ */
 
 /* Remove hover effect on header/footer when in editing mode */
 .paged-editor--hf-editing .layout-page-header:hover,

@@ -63,6 +63,10 @@ export function useHeaderFooterEditing({
 
   const handleHeaderFooterDoubleClick = useCallback(
     (position: 'header' | 'footer', pageNumber?: number) => {
+      // No scroll-to-page-1 — the HF content is shared across all pages by
+      // `r:id`, so the painter renders the same edits on every page in real
+      // time. Whichever page the user double-clicked, the chrome bar floats
+      // over THAT page's header and edits propagate visually to all others.
       const sectProps = document?.package?.document?.finalSectionProperties;
       const isFirstPage = sectProps?.titlePg === true && (pageNumber ?? 1) === 1;
       const hf = isFirstPage

@@ -14,13 +14,15 @@
  * 4. Selection changes → compute rects → update overlay
  */
 
-import React, { useRef, useState, useCallback, useMemo, forwardRef, memo } from 'react';
+import React, { useEffect, useRef, useState, useCallback, useMemo, forwardRef, memo } from 'react';
 import type { CSSProperties } from 'react';
-import type { EditorState, Transaction, Plugin } from 'prosemirror-state';
+import { TextSelection, type EditorState, type Transaction, type Plugin } from 'prosemirror-state';
 import type { EditorView } from 'prosemirror-view';
+import type { Node as PMNode } from 'prosemirror-model';
 
 // Internal components
 import { OffscreenEditorHost, type OffscreenEditorHostRef } from './OffscreenEditorHost';
+import { HiddenHeaderFooterPMs, type HiddenHeaderFooterPMsRef } from './HiddenHeaderFooterPMs';
 import { SelectionOverlay } from './overlays/SelectionOverlay';
 import { ImageSelectionOverlay } from './overlays/ImageSelectionOverlay';
 import { DecorationLayer } from './overlays/DecorationLayer';
@@ -123,6 +125,14 @@ export interface PagedEditorProps {
   hfEditMode?: 'header' | 'footer' | null;
   /** Called when user clicks the body area while in HF editing mode. */
   onBodyClick?: () => void;
+  /**
+   * Called after every transaction lands on the persistent hidden HF PM
+   * for any `rId`. Phase 5 of HF unification — the persistent PM is the
+   * sole HF editor and its transactions must trigger relayout (so the
+   * painter repaints) plus whatever caret / save state the parent owns.
+   * Returns nothing.
+   */
+  onHfTransaction?: (rId: string, view: EditorView, docChanged: boolean) => void;
   /** Custom class name. */
   className?: string;
   /** Custom styles. */
@@ -219,6 +229,17 @@ export interface PagedEditorRef {
    * No-op if the layout isn't ready yet or pageNumber is out of range.
    */
   scrollToPage(pageNumber: number): void;
+  /**
+   * Look up the persistent hidden HF PM EditorView for a given HeaderFooter
+   * instance. Returns null when none is mounted (no document, or `hf` is not
+   * present in `Document.package.headers/footers`). Phase 2 of the HF
+   * unification: the inline overlay uses this to replicate edits into the
+   * persistent PM so the painter — which reads from the persistent PM per
+   * phase 1 — re-renders live during typing. Phase 5 deletes the inline
+   * overlay's PM and this method's only remaining caller is the click /
+   * focus router (phase 3).
+   */
+  getHfPmView(hf: HeaderFooter): EditorView | null;
 }
 
 // =============================================================================
@@ -258,6 +279,7 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
       onHeaderFooterDoubleClick,
       hfEditMode,
       onBodyClick,
+      onHfTransaction,
       className,
       style,
       commentsSidebarOpen = false,
@@ -290,6 +312,21 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
     /** Viewport wrapper: sync minHeight/marginBottom in layout pipeline before scroll restore. */
     const viewportLayoutRef = useRef<HTMLDivElement>(null);
     const hiddenPMRef = useRef<OffscreenEditorHostRef>(null);
+    /**
+     * Persistent hidden PM EditorViews for every distinct HF `rId` — phase 1
+     * of the HF editing unification (see openspec/changes/unify-hf-editing/).
+     * Phase 1 mounts them off-screen with no user input wiring; the painter
+     * pipeline and selection overlay learn to consult them in later phases.
+     */
+    const hiddenHfPMsRef = useRef<HiddenHeaderFooterPMsRef>(null);
+    /**
+     * Latest `document` prop in a ref — read by HF PM lookup (`getHfPmView`
+     * on the PagedEditorRef). Refs are needed because the imperative-handle
+     * API rebuilds on `[layout, runLayoutPipeline, …]` not on `document`, so
+     * a closure over `document` directly would go stale between rebuilds.
+     */
+    const documentRef = useRef(document);
+    documentRef.current = document;
 
     // Visual line navigation (ArrowUp/ArrowDown with sticky X)
     const { handlePMKeyDown } = useVisualLineNavigation({ pagesContainerRef });
@@ -309,6 +346,29 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
     // State
     const [isFocused, setIsFocused] = useState(false);
 
+    // When HF edit mode engages, the body PM must visually retire — collapse
+    // its selection to a non-rendered cursor, drop `isFocused`, and blur the
+    // PM. Otherwise the user sees TWO carets (one in the painted header, one
+    // in the body) and keystrokes that briefly land on the body before the
+    // HF view reclaims focus get inserted into the body doc. Symmetric cleanup
+    // when HF edit mode exits — restore body focus so typing flows back.
+    useEffect(() => {
+      if (hfEditMode) {
+        const view = hiddenPMRef.current?.getView();
+        if (view) {
+          try {
+            const tr = view.state.tr.setSelection(TextSelection.create(view.state.doc, 0));
+            view.dispatch(tr);
+          } catch {
+            // Position may be invalid mid-transaction; SelectionOverlay
+            // also gates on hfEditMode so the caret stays hidden anyway.
+          }
+          (view.dom as HTMLElement).blur?.();
+        }
+        setIsFocused(false);
+      }
+    }, [hfEditMode]);
+
     // Image selection state — `isImageInteractingRef` lives at the parent so
     // useSelectionOverlay can read it (to gate the deferred image-info clear)
     // while useImageInteractions writes it (during drag / resize).
@@ -316,6 +376,33 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
 
     // Selection gate - ensures selection renders only when layout is current
     const syncCoordinator = useMemo(() => new SelectionBridge(), []);
+
+    // Persistent hidden HF PM lookup — phase 1 of HF editing unification.
+    // Walks `document.package.headers`/`footers` to find the rId for this
+    // HeaderFooter instance, then asks the HiddenHeaderFooterPMs ref for
+    // its current PM doc. Returns null when no PM is mounted (cold boot
+    // before the effect runs) so the pipeline falls back to the Document
+    // model path. Stable identity per `document` so the layout pipeline
+    // doesn't re-run on every render.
+    const getHfPmDoc = useCallback(
+      (hf: HeaderFooter): PMNode | null => {
+        const ref = hiddenHfPMsRef.current;
+        if (!ref) return null;
+        const pkg = document?.package;
+        if (!pkg) return null;
+        const findRid = (bag?: Map<string, HeaderFooter>): string | null => {
+          if (!bag) return null;
+          for (const [rId, value] of bag) {
+            if (value === hf) return rId;
+          }
+          return null;
+        };
+        const rId = findRid(pkg.headers) ?? findRid(pkg.footers);
+        if (!rId) return null;
+        return ref.getView(rId)?.state.doc ?? null;
+      },
+      [document]
+    );
 
     // Layout pipeline — owns layout/blocks/measures state, the rAF-coalesced
     // scheduler, scroll-restore plumbing, the painter, and the page-count
@@ -340,6 +427,7 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
       footerContent,
       firstPageHeaderContent,
       firstPageFooterContent,
+      getHfPmDoc,
       pageGap,
       zoom,
       resolvedCommentIds,
@@ -450,6 +538,20 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
     } = usePagesPointer({
       pagesContainerRef,
       hiddenPMRef,
+      // Resolve the active HF EditorView for the current `hfEditMode` slot
+      // so usePagesPointer can route every gesture (single-click, drag,
+      // multi-click, image-select, hyperlink, context menu) through the
+      // HF PM instead of the body PM.
+      getHfView: useCallback(() => {
+        const hfRef = hiddenHfPMsRef.current;
+        if (!hfRef) return null;
+        const sp = document?.package?.document?.finalSectionProperties;
+        const refs = hfEditMode === 'header' ? sp?.headerReferences : sp?.footerReferences;
+        const refEntry =
+          refs?.find((r) => r.type === 'default') ?? refs?.find((r) => r.type === 'first') ?? null;
+        if (!refEntry?.rId) return null;
+        return hfRef.getView(refEntry.rId);
+      }, [hfEditMode, document]),
       layout,
       blocks,
       measures,
@@ -478,6 +580,12 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
         const target = e.target as HTMLElement;
         if (target.closest('.docx-comments-sidebar') || target.closest('.docx-unified-sidebar'))
           return;
+        // Phase 5 of HF editing unification: when focus lands on one of
+        // the persistent hidden HF PMs (mounted off-screen as siblings of
+        // `.layout-page-content`), don't redirect to the body PM — that
+        // would steal focus from the HF editor the user just opened.
+        // `data-hf-r-id` is set on the host div by HiddenHeaderFooterPMs.
+        if (target.closest('[data-hf-r-id]')) return;
         hiddenPMRef.current?.focus();
         setIsFocused(true);
       },
@@ -530,6 +638,11 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
     const handleKeyDown = useCallback(
       (e: React.KeyboardEvent) => {
         if (readOnly) return;
+        // Don't steal focus from a persistent HF EditorView — body's
+        // `isFocused()` check would return false while HF is focused,
+        // causing the body PM to grab every keystroke after the first.
+        const target = e.target as HTMLElement | null;
+        if (target?.closest('[data-hf-r-id]')) return;
         // Ensure hidden PM is focused if user types
         if (!hiddenPMRef.current?.isFocused()) {
           hiddenPMRef.current?.focus();
@@ -636,6 +749,8 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
     usePagedEditorRefApi({
       ref,
       hiddenPMRef,
+      hiddenHfPMsRef,
+      documentRef,
       layout,
       runLayoutPipeline,
       scrollToPositionImpl,
@@ -675,13 +790,35 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
           document={document}
           styles={styles}
           widthPx={contentWidth}
-          readOnly={readOnly}
+          // When HF mode is active, the body PM is functionally retired —
+          // marking it readOnly stops keystrokes / input events from being
+          // applied to the body doc even if focus briefly slips to it.
+          readOnly={readOnly || !!hfEditMode}
           onTransaction={handleTransaction}
           onSelectionChange={handleSelectionChange}
           externalPlugins={externalPlugins}
           extensionManager={extensionManager}
           onEditorViewReady={handleEditorViewReady}
           onKeyDown={handlePMKeyDown}
+        />
+
+        {/* Persistent hidden HF PMs — one per distinct rId */}
+        <HiddenHeaderFooterPMs
+          ref={hiddenHfPMsRef}
+          document={document}
+          styles={styles}
+          theme={_theme}
+          defaultTabMarkTwips={document?.package?.settings?.defaultTabMark ?? null}
+          onTransaction={(rId, view, docChanged) => {
+            // Only re-layout when the HF doc actually changed — selection-only
+            // transactions (arrow keys, click-to-position) don't move text, so
+            // the painter has nothing new to paint.
+            if (docChanged) {
+              const bodyState = hiddenPMRef.current?.getState();
+              if (bodyState) runLayoutPipeline(bodyState);
+            }
+            onHfTransaction?.(rId, view, docChanged);
+          }}
         />
 
         {/* Viewport for visible pages */}
@@ -718,11 +855,14 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
             aria-hidden="true" // Visual only, PM provides semantic content
           />
 
-          {/* Selection overlay */}
+          {/* Selection overlay — hidden while HF edit mode is active so the
+              body PM caret + selection rects don't render alongside the
+              header's. The HF view owns its own caret via DocxEditorPagedArea
+              `hfCaretRect`. */}
           <SelectionOverlay
-            selectionGeometry={selectionGeometry}
-            caretPosition={caretPosition}
-            isFocused={isFocused}
+            selectionGeometry={hfEditMode ? [] : selectionGeometry}
+            caretPosition={hfEditMode ? null : caretPosition}
+            isFocused={isFocused && !hfEditMode}
             pageGap={pageGap}
             readOnly={readOnly}
           />

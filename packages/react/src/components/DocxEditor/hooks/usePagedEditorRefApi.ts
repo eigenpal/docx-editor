@@ -14,14 +14,20 @@
 
 import { useEffect, useImperativeHandle } from 'react';
 import type { EditorState, Transaction } from 'prosemirror-state';
+import type { EditorView } from 'prosemirror-view';
 
 import type { Layout } from '@eigenpal/docx-editor-core/layout-engine';
+import type { Document, HeaderFooter } from '@eigenpal/docx-editor-core/types/document';
 
 import type { OffscreenEditorHostRef } from '../OffscreenEditorHost';
+import type { HiddenHeaderFooterPMsRef } from '../HiddenHeaderFooterPMs';
 import type { PagedEditorRef } from '../PagedEditor';
 
 interface RefApiInputs {
   hiddenPMRef: React.RefObject<OffscreenEditorHostRef | null>;
+  hiddenHfPMsRef: React.RefObject<HiddenHeaderFooterPMsRef | null>;
+  /** Current document — needed to resolve `HeaderFooter` instance → `rId`. */
+  documentRef: React.MutableRefObject<Document | null>;
   layout: Layout | null;
   runLayoutPipeline: (state: EditorState) => void;
   scrollToPositionImpl: (pmPos: number) => void;
@@ -31,12 +37,33 @@ interface RefApiInputs {
 }
 
 /**
+ * Walk `package.headers` / `.footers` to find the `rId` for a given
+ * `HeaderFooter` instance. Identity match — relies on the runtime model
+ * sharing a single `HeaderFooter` object per `rId` across sections that
+ * reference it. O(n) in the number of HF parts (typically 1–4).
+ */
+function findRidForHeaderFooter(doc: Document | null, hf: HeaderFooter): string | null {
+  const pkg = doc?.package;
+  if (!pkg) return null;
+  const findIn = (bag?: Map<string, HeaderFooter>): string | null => {
+    if (!bag) return null;
+    for (const [rId, value] of bag) {
+      if (value === hf) return rId;
+    }
+    return null;
+  };
+  return findIn(pkg.headers) ?? findIn(pkg.footers);
+}
+
+/**
  * Assemble the `PagedEditorRef` object. Single source of truth shared by
  * the imperative handle (deps re-run) and the `onReady` mirror.
  */
 function buildRefApi(inputs: RefApiInputs): PagedEditorRef {
   const {
     hiddenPMRef,
+    hiddenHfPMsRef,
+    documentRef,
     layout,
     runLayoutPipeline,
     scrollToPositionImpl,
@@ -70,6 +97,11 @@ function buildRefApi(inputs: RefApiInputs): PagedEditorRef {
     scrollToPosition: scrollToPositionImpl,
     scrollToParaId: scrollToParaIdImpl,
     scrollToPage: scrollToPageImpl,
+    getHfPmView: (hf: HeaderFooter): EditorView | null => {
+      const rId = findRidForHeaderFooter(documentRef.current, hf);
+      if (!rId) return null;
+      return hiddenHfPMsRef.current?.getView(rId) ?? null;
+    },
   };
 }
 
@@ -82,6 +114,8 @@ export function usePagedEditorRefApi(opts: UsePagedEditorRefApiOptions): void {
   const {
     ref,
     hiddenPMRef,
+    hiddenHfPMsRef,
+    documentRef,
     layout,
     runLayoutPipeline,
     scrollToPositionImpl,
@@ -96,6 +130,8 @@ export function usePagedEditorRefApi(opts: UsePagedEditorRefApiOptions): void {
     () =>
       buildRefApi({
         hiddenPMRef,
+        hiddenHfPMsRef,
+        documentRef,
         layout,
         runLayoutPipeline,
         scrollToPositionImpl,
@@ -114,6 +150,8 @@ export function usePagedEditorRefApi(opts: UsePagedEditorRefApiOptions): void {
       onReadyRef.current(
         buildRefApi({
           hiddenPMRef,
+          hiddenHfPMsRef,
+          documentRef,
           layout,
           runLayoutPipeline,
           scrollToPositionImpl,

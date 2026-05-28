@@ -16,6 +16,7 @@ import { EditorHandle } from '@eigenpal/docx-editor-core';
 import { EditorState } from 'prosemirror-state';
 import { EditorView } from 'prosemirror-view';
 import { FontOption } from '@eigenpal/docx-editor-core/utils/fontOptions';
+import { HeaderFooter } from '@eigenpal/docx-editor-core/types/document';
 import { Layout } from '@eigenpal/docx-editor-core/layout-engine';
 import * as prosemirror_state from 'prosemirror-state';
 import * as prosemirror_view from 'prosemirror-view';
