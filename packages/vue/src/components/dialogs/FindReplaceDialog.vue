@@ -90,6 +90,7 @@ const { t } = useTranslation();
 const props = defineProps<{
   isOpen: boolean;
   view: EditorView | null;
+  scrollVisiblePositionIntoView?: (pmPos: number) => void;
 }>();
 
 const emit = defineEmits<{
@@ -219,7 +220,8 @@ function goToMatch(index: number) {
     const $from = view.state.doc.resolve(from);
     const $to = view.state.doc.resolve(to);
     const sel = TextSelection.between($from, $to);
-    view.dispatch(view.state.tr.setSelection(sel).scrollIntoView());
+    view.dispatch(view.state.tr.setSelection(sel));
+    props.scrollVisiblePositionIntoView?.(from);
   } catch {
     // Position might be invalid after edits
   }

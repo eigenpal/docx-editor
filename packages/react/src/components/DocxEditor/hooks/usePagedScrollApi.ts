@@ -13,7 +13,11 @@
 
 import { useCallback, useEffect, useRef } from 'react';
 
-import { findBodyPmAnchor, getCaretPosition } from '@eigenpal/docx-editor-core/layout-bridge';
+import {
+  findBodyPmAnchor,
+  collectBodySpans,
+  getCaretPosition,
+} from '@eigenpal/docx-editor-core/layout-bridge';
 import { findPageIndexContainingPmPos } from '@eigenpal/docx-editor-core/layout-engine';
 import type { FlowBlock, Layout, Measure } from '@eigenpal/docx-editor-core/layout-engine';
 import { findStartPosForParaId } from '@eigenpal/docx-editor-core/prosemirror';
@@ -73,7 +77,20 @@ export function usePagedScrollApi(opts: UsePagedScrollApiOptions): UsePagedScrol
       scrollAbortRef.current = ac;
       const { signal } = ac;
 
-      const queryPaintedStartEl = (): HTMLElement | null => findBodyPmAnchor(pages, pmPos);
+      const queryPaintedPositionEl = (): HTMLElement | null => {
+        const exact = findBodyPmAnchor(pages, pmPos);
+        if (exact) return exact;
+
+        for (const span of collectBodySpans(pages)) {
+          const start = Number(span.dataset.docFrom);
+          const end = Number(span.dataset.docTo);
+          if (Number.isFinite(start) && Number.isFinite(end) && pmPos >= start && pmPos <= end) {
+            return span;
+          }
+        }
+
+        return null;
+      };
 
       if (!forParaIdScroll) {
         // Smooth scroll preserves the legacy UX for outline / bookmark /
@@ -85,7 +102,7 @@ export function usePagedScrollApi(opts: UsePagedScrollApiOptions): UsePagedScrol
           inline: 'nearest',
           behavior: 'smooth',
         };
-        const targetEl = queryPaintedStartEl();
+        const targetEl = queryPaintedPositionEl();
         if (targetEl) {
           targetEl.scrollIntoView(smoothScroll);
           return;
@@ -111,7 +128,7 @@ export function usePagedScrollApi(opts: UsePagedScrollApiOptions): UsePagedScrol
         shell.scrollIntoView(smoothScroll);
         runAfterPaint(() => {
           if (!pages.isConnected) return;
-          const painted = queryPaintedStartEl();
+          const painted = queryPaintedPositionEl();
           if (painted) painted.scrollIntoView(smoothScroll);
         }, signal);
         return;
@@ -120,7 +137,7 @@ export function usePagedScrollApi(opts: UsePagedScrollApiOptions): UsePagedScrol
       const scroller = getScrollContainer() ?? findVerticalScrollParentOrRoot(pages);
 
       const scrollPaintedTargetInstant = (): boolean => {
-        const targetEl = queryPaintedStartEl();
+        const targetEl = queryPaintedPositionEl();
         if (!targetEl) return false;
         scrollElementCenterIntoContainer(targetEl, scroller, 'instant');
         return true;
@@ -151,7 +168,7 @@ export function usePagedScrollApi(opts: UsePagedScrollApiOptions): UsePagedScrol
 
       runAfterPaint(() => {
         if (!pages.isConnected) return;
-        const painted = queryPaintedStartEl();
+        const painted = queryPaintedPositionEl();
         if (painted) {
           scrollElementCenterIntoContainer(painted, scroller, 'instant');
         } else {

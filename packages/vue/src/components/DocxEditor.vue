@@ -94,6 +94,7 @@
       :bookmarks="bookmarkOptions"
       :selected-image-pm-pos="selectedImage?.pmPos ?? null"
       :section-properties="currentSectionProps"
+      :scroll-visible-position-into-view="scrollVisiblePositionIntoView"
       @insert-image="handleInsertImage"
       @insert-symbol="handleInsertSymbol"
       @hyperlink-submit="handleHyperlinkSubmit"

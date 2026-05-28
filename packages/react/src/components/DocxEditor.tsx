@@ -1051,10 +1051,8 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
     handleReplace,
     handleReplaceAll,
   } = useFindReplaceBridge({
-    document: history.state,
-    containerRef,
+    pagedEditorRef,
     findReplace,
-    handleDocumentChange,
   });
 
   // Expose ref methods

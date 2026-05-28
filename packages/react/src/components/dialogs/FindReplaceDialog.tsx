@@ -245,6 +245,8 @@ const NO_RESULTS_STYLE: CSSProperties = {
   color: 'var(--doc-error)',
 };
 
+const AUTO_SEARCH_DELAY_MS = 220;
+
 // ============================================================================
 // ICONS
 // ============================================================================
@@ -319,6 +321,15 @@ export function FindReplaceDialog({
   // Refs
   const searchInputRef = useRef<HTMLInputElement>(null);
   const replaceInputRef = useRef<HTMLInputElement>(null);
+  const onFindRef = useRef(onFind);
+  const onHighlightMatchesRef = useRef(onHighlightMatches);
+  const onClearHighlightsRef = useRef(onClearHighlights);
+
+  useEffect(() => {
+    onFindRef.current = onFind;
+    onHighlightMatchesRef.current = onHighlightMatches;
+    onClearHighlightsRef.current = onClearHighlights;
+  }, [onFind, onHighlightMatches, onClearHighlights]);
 
   // Sync with external result if provided
   useEffect(() => {
@@ -339,90 +350,63 @@ export function FindReplaceDialog({
         searchInputRef.current?.focus();
         searchInputRef.current?.select();
       }, 100);
-
-      if (initialSearchText) {
-        const searchResult = onFind(initialSearchText, { matchCase, matchWholeWord });
-        setResult(searchResult);
-        if (searchResult?.matches && onHighlightMatches) {
-          onHighlightMatches(searchResult.matches);
-        }
-      }
     } else {
-      if (onClearHighlights) {
-        onClearHighlights();
-      }
+      onClearHighlightsRef.current?.();
     }
   }, [isOpen, initialSearchText, replaceMode]);
 
-  const performSearch = useCallback(() => {
-    if (!searchText.trim()) {
-      setResult(null);
-      if (onClearHighlights) {
-        onClearHighlights();
+  const clearSearchResult = useCallback(() => {
+    setResult(null);
+    onClearHighlightsRef.current?.();
+  }, []);
+
+  const performSearch = useCallback(
+    (nextSearchText: string, options: FindOptions) => {
+      if (!nextSearchText.trim()) {
+        clearSearchResult();
+        return;
       }
+
+      const searchResult = onFindRef.current(nextSearchText, options);
+      setResult(searchResult);
+
+      if (searchResult?.matches) {
+        onHighlightMatchesRef.current?.(searchResult.matches);
+      } else {
+        onClearHighlightsRef.current?.();
+      }
+    },
+    [clearSearchResult]
+  );
+
+  useEffect(() => {
+    if (!isOpen) return;
+
+    if (!searchText.trim()) {
+      clearSearchResult();
       return;
     }
 
-    const searchResult = onFind(searchText, { matchCase, matchWholeWord });
-    setResult(searchResult);
+    const timeoutId = window.setTimeout(() => {
+      performSearch(searchText, { matchCase, matchWholeWord });
+    }, AUTO_SEARCH_DELAY_MS);
 
-    if (searchResult?.matches && onHighlightMatches) {
-      onHighlightMatches(searchResult.matches);
-    } else if (onClearHighlights) {
-      onClearHighlights();
-    }
-  }, [searchText, matchCase, matchWholeWord, onFind, onHighlightMatches, onClearHighlights]);
-
-  useEffect(() => {
-    if (isOpen && searchText.trim()) {
-      performSearch();
-    }
-  }, [matchCase, matchWholeWord]);
+    return () => window.clearTimeout(timeoutId);
+  }, [isOpen, searchText, matchCase, matchWholeWord, performSearch, clearSearchResult]);
 
   const handleSearchChange = useCallback((e: ChangeEvent<HTMLInputElement>) => {
     setSearchText(e.target.value);
+    setResult(null);
   }, []);
-
-  const handleSearchKeyDown = useCallback(
-    (e: KeyboardEvent<HTMLInputElement>) => {
-      if (e.key === 'Enter') {
-        e.preventDefault();
-        if (e.shiftKey) {
-          handleFindPrevious();
-        } else {
-          if (!result) {
-            performSearch();
-          } else {
-            handleFindNext();
-          }
-        }
-      } else if (e.key === 'Escape') {
-        onClose();
-      }
-    },
-    [result, performSearch, onClose]
-  );
-
-  const handleReplaceKeyDown = useCallback(
-    (e: KeyboardEvent<HTMLInputElement>) => {
-      if (e.key === 'Enter') {
-        e.preventDefault();
-        handleReplace();
-      } else if (e.key === 'Escape') {
-        onClose();
-      }
-    },
-    [onClose]
-  );
 
   const handleFindNext = useCallback(() => {
     if (!searchText.trim()) {
-      performSearch();
+      performSearch(searchText, { matchCase, matchWholeWord });
       return;
     }
 
     if (!result) {
-      performSearch();
+      performSearch(searchText, { matchCase, matchWholeWord });
       return;
     }
 
@@ -434,16 +418,16 @@ export function FindReplaceDialog({
         currentIndex: newIndex,
       });
     }
-  }, [searchText, result, performSearch, onFindNext]);
+  }, [searchText, matchCase, matchWholeWord, result, performSearch, onFindNext]);
 
   const handleFindPrevious = useCallback(() => {
     if (!searchText.trim()) {
-      performSearch();
+      performSearch(searchText, { matchCase, matchWholeWord });
       return;
     }
 
     if (!result) {
-      performSearch();
+      performSearch(searchText, { matchCase, matchWholeWord });
       return;
     }
 
@@ -455,7 +439,36 @@ export function FindReplaceDialog({
         currentIndex: newIndex,
       });
     }
-  }, [searchText, result, performSearch, onFindPrevious]);
+  }, [searchText, matchCase, matchWholeWord, result, performSearch, onFindPrevious]);
+
+  const handleSearchKeyDown = useCallback(
+    (e: KeyboardEvent<HTMLInputElement>) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        if (e.shiftKey) {
+          handleFindPrevious();
+        } else {
+          if (!result) {
+            performSearch(searchText, { matchCase, matchWholeWord });
+          } else {
+            handleFindNext();
+          }
+        }
+      } else if (e.key === 'Escape') {
+        onClose();
+      }
+    },
+    [
+      result,
+      searchText,
+      matchCase,
+      matchWholeWord,
+      performSearch,
+      handleFindNext,
+      handleFindPrevious,
+      onClose,
+    ]
+  );
 
   const handleReplace = useCallback(() => {
     if (!result || result.totalCount === 0) return;
@@ -479,21 +492,27 @@ export function FindReplaceDialog({
     onHighlightMatches,
   ]);
 
+  const handleReplaceKeyDown = useCallback(
+    (e: KeyboardEvent<HTMLInputElement>) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        handleReplace();
+      } else if (e.key === 'Escape') {
+        onClose();
+      }
+    },
+    [handleReplace, onClose]
+  );
+
   const handleReplaceAll = useCallback(() => {
     if (!searchText.trim()) return;
 
     const count = onReplaceAll(searchText, replaceText, { matchCase, matchWholeWord });
     if (count > 0) {
-      setResult({
-        matches: [],
-        totalCount: 0,
-        currentIndex: -1,
-      });
-      if (onClearHighlights) {
-        onClearHighlights();
-      }
+      setResult(null);
+      onClearHighlightsRef.current?.();
     }
-  }, [searchText, replaceText, matchCase, matchWholeWord, onReplaceAll, onClearHighlights]);
+  }, [searchText, replaceText, matchCase, matchWholeWord, onReplaceAll]);
 
   const toggleReplaceMode = useCallback(() => {
     setShowReplace((prev) => {
@@ -580,7 +599,7 @@ export function FindReplaceDialog({
               onBlur={() => {
                 setSearchFocused(false);
                 if (searchText.trim() && !result) {
-                  performSearch();
+                  performSearch(searchText, { matchCase, matchWholeWord });
                 }
               }}
               placeholder={t('dialogs.findReplace.findPlaceholder')}
