@@ -30,10 +30,12 @@ import {
   buildFootnoteRenderItems,
   collectFootnoteRefs,
   convertHeaderFooterToContent,
+  convertHeaderFooterPmDocToContent,
   getMargins,
   getPageSize,
   stabilizeFootnoteLayout,
 } from '@eigenpal/docx-editor-core/layout-bridge';
+import type { Node as PMNode } from 'prosemirror-model';
 import {
   LayoutPainter,
   paintPages,
@@ -77,6 +79,15 @@ export interface UseLayoutPipelineOptions {
   footerContent?: HeaderFooter | null;
   firstPageHeaderContent?: HeaderFooter | null;
   firstPageFooterContent?: HeaderFooter | null;
+  /**
+   * Resolve the current PM document for an HF instance, when a persistent
+   * hidden PM EditorView exists for it. Phase 1 of the HF unification
+   * (openspec/changes/unify-hf-editing/) — the painter prefers the PM
+   * doc over re-parsing `HeaderFooter.content` so future phases that
+   * dispatch edits into the PM are picked up automatically. Returns null
+   * for HF instances without a mounted PM (boot, or rId not yet projected).
+   */
+  getHfPmDoc?: (hf: HeaderFooter) => PMNode | null;
   pageGap: number;
   zoom: number;
   resolvedCommentIds?: Set<number>;
@@ -112,6 +123,7 @@ export function useLayoutPipeline(opts: UseLayoutPipelineOptions): UseLayoutPipe
     footerContent,
     firstPageHeaderContent,
     firstPageFooterContent,
+    getHfPmDoc,
     pageGap,
     zoom,
     resolvedCommentIds,
@@ -141,9 +153,11 @@ export function useLayoutPipeline(opts: UseLayoutPipelineOptions): UseLayoutPipe
   const onTotalPagesChangeRef = useRef(onTotalPagesChange);
   const onAnchorPositionsChangeRef = useRef(onAnchorPositionsChange);
   const onRenderedDomContextReadyRef = useRef(onRenderedDomContextReady);
+  const getHfPmDocRef = useRef(getHfPmDoc);
   onTotalPagesChangeRef.current = onTotalPagesChange;
   onAnchorPositionsChangeRef.current = onAnchorPositionsChange;
   onRenderedDomContextReadyRef.current = onRenderedDomContextReady;
+  getHfPmDocRef.current = getHfPmDoc;
 
   // Total-pages notifier — fires only when count changes (including N → 0).
   const lastTotalPagesRef = useRef<number>(0);
@@ -249,34 +263,34 @@ export function useLayoutPipeline(opts: UseLayoutPipelineOptions): UseLayoutPipe
         const hfMetricsFooter = { section: 'footer' as const, pageSize, margins };
         const defaultTabMarkTwips = state.doc.attrs?.defaultTabMarkTwips as number | null;
         const hfOptions = { styles, theme, measureBlocks, defaultTabMarkTwips };
-        const headerContentForRender = convertHeaderFooterToContent(
-          headerContent,
-          contentWidth,
-          hfMetricsHeader,
-          hfOptions
-        );
-        const footerContentForRender = convertHeaderFooterToContent(
-          footerContent,
-          contentWidth,
-          hfMetricsFooter,
-          hfOptions
-        );
+
+        // HF unification phase 1: when a persistent hidden PM EditorView is
+        // mounted for an HF instance (via `HiddenHeaderFooterPMs`), the
+        // painter reads from `view.state.doc` rather than re-parsing
+        // `HeaderFooter.content` every layout pass. In phase 1 the PM doc is
+        // a faithful mirror of the Document model — visible behavior is
+        // unchanged — but this routing is the seam that later phases plug
+        // edits into. (openspec/changes/unify-hf-editing/)
+        const convertHf = (
+          hf: HeaderFooter | null | undefined,
+          metrics: typeof hfMetricsHeader | typeof hfMetricsFooter
+        ) => {
+          if (!hf) return undefined;
+          const pmDoc = getHfPmDocRef.current?.(hf);
+          if (pmDoc) {
+            return convertHeaderFooterPmDocToContent(pmDoc, contentWidth, metrics, hfOptions);
+          }
+          return convertHeaderFooterToContent(hf, contentWidth, metrics, hfOptions);
+        };
+
+        const headerContentForRender = convertHf(headerContent, hfMetricsHeader);
+        const footerContentForRender = convertHf(footerContent, hfMetricsFooter);
         const hasTitlePg = sectionProperties?.titlePg === true;
         const firstPageHeaderForRender = hasTitlePg
-          ? convertHeaderFooterToContent(
-              firstPageHeaderContent,
-              contentWidth,
-              hfMetricsHeader,
-              hfOptions
-            )
+          ? convertHf(firstPageHeaderContent, hfMetricsHeader)
           : undefined;
         const firstPageFooterForRender = hasTitlePg
-          ? convertHeaderFooterToContent(
-              firstPageFooterContent,
-              contentWidth,
-              hfMetricsFooter,
-              hfOptions
-            )
+          ? convertHf(firstPageFooterContent, hfMetricsFooter)
           : undefined;
 
         // Adjust margins if header/footer content exceeds available space
@@ -457,6 +471,17 @@ export function useLayoutPipeline(opts: UseLayoutPipelineOptions): UseLayoutPipe
             console.warn(`[PagedEditor] paintPages took ${Math.round(stepTime)}ms`);
           }
 
+          // Deterministic "painter is done writing" signal. HF caret +
+          // selection-rect resolvers wait on this instead of `requestAnimationFrame`
+          // chains — the rAF approach raced the painter and stale
+          // `data-doc-from` spans showed up on the first frame after engage
+          // (`computeHfCaretRectFromView` had to retry through a second rAF).
+          // Bubbling CustomEvent so any ancestor (DocxEditorPagedArea) can
+          // listen via `pagesContainerRef.current?.addEventListener(...)`.
+          pagesContainerRef.current?.dispatchEvent(
+            new CustomEvent('painter:painted', { bubbles: true })
+          );
+
           if (onRenderedDomContextReadyRef.current) {
             const domContext = createRenderedDomContext(pagesContainerRef.current, zoom);
             onRenderedDomContextReadyRef.current(domContext);
@@ -508,6 +533,8 @@ export function useLayoutPipeline(opts: UseLayoutPipelineOptions): UseLayoutPipe
       footerContent,
       firstPageHeaderContent,
       firstPageFooterContent,
+      // `getHfPmDoc` is read through a ref in the pipeline so identity
+      // changes don't re-trigger the layout effect every render.
       sectionProperties,
       finalSectionProperties,
       document,

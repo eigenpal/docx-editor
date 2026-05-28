@@ -1,43 +1,33 @@
 /**
- * InlineHeaderFooterEditor — inline overlay editor for header/footer content
+ * InlineHeaderFooterEditor — UI chrome for header/footer editing.
  *
- * Renders a ProseMirror EditorView positioned over the header/footer area
- * on the page, Google Docs style. The main body is dimmed and the toolbar
- * routes formatting commands to this editor while it's active.
+ * Phase 5 of HF editing unification (openspec/changes/unify-hf-editing/):
+ * this component no longer creates a ProseMirror EditorView. The painter
+ * is the visible HF renderer (phase 2), and the persistent hidden HF PM
+ * mounted by `HiddenHeaderFooterPMs` is the sole editor. This wrapper
+ * floats the separator bar / options menu over the painted HF region and
+ * exposes the persistent view via its imperative ref so toolbar commands
+ * (bold, font, undo/redo) and save-on-close find the right PM.
  */
 
 import React, {
   useRef,
   useEffect,
   useCallback,
-  useMemo,
   useState,
   useImperativeHandle,
   useLayoutEffect,
   forwardRef,
 } from 'react';
 import type { CSSProperties } from 'react';
-import { EditorState } from 'prosemirror-state';
 import { useTranslation } from '../i18n';
 import { EditorView } from 'prosemirror-view';
 import { undo, redo } from 'prosemirror-history';
 
 import { schema } from '@eigenpal/docx-editor-core/prosemirror';
-import { headerFooterToProseDoc } from '@eigenpal/docx-editor-core/prosemirror/conversion';
 import { proseDocToBlocks } from '@eigenpal/docx-editor-core/prosemirror/conversion';
 import { Z_INDEX } from '../styles/zIndex';
-import { extractSelectionState, type SelectionState } from '@eigenpal/docx-editor-core/prosemirror';
-import { createStarterKit } from '@eigenpal/docx-editor-core/prosemirror/extensions';
-import { ExtensionManager } from '@eigenpal/docx-editor-core/prosemirror/extensions';
-import { createStyleResolver } from '@eigenpal/docx-editor-core/prosemirror';
-import type {
-  HeaderFooter,
-  Paragraph,
-  Table,
-  StyleDefinitions,
-} from '@eigenpal/docx-editor-core/types/document';
-
-import 'prosemirror-view/style/prosemirror.css';
+import type { HeaderFooter, Paragraph, Table } from '@eigenpal/docx-editor-core/types/document';
 
 // ============================================================================
 // TYPES
@@ -48,8 +38,15 @@ export interface InlineHeaderFooterEditorProps {
   headerFooter: HeaderFooter;
   /** Whether editing header or footer */
   position: 'header' | 'footer';
-  /** Document styles for style resolution */
-  styles?: StyleDefinitions | null;
+  /**
+   * The persistent hidden HF EditorView for this slot. Phase 5 of the HF
+   * editing unification (openspec/changes/unify-hf-editing/) — this
+   * component no longer creates its own EditorView; the painter and this
+   * overlay both read from the same persistent PM mounted by
+   * `HiddenHeaderFooterPMs`. The component is now UI chrome only:
+   * separator bar, options menu, save-and-close on Escape.
+   */
+  view: EditorView | null;
   /** The DOM element to overlay (the .layout-page-header / .layout-page-footer) */
   targetElement: HTMLElement;
   /** The positioning parent element (the div wrapping PagedEditor) */
@@ -58,8 +55,6 @@ export interface InlineHeaderFooterEditorProps {
   onSave: (content: Array<Paragraph | Table>) => void;
   /** Callback when editing is cancelled */
   onClose: () => void;
-  /** Callback when selection changes in the HF editor (for toolbar sync) */
-  onSelectionChange?: (state: SelectionState | null) => void;
   /** Callback to remove the header/footer entirely */
   onRemove?: () => void;
 }
@@ -80,6 +75,13 @@ export interface InlineHeaderFooterEditorRef {
 // ============================================================================
 
 const separatorBarStyle: CSSProperties = {
+  position: 'absolute',
+  left: 0,
+  right: 0,
+  // Sit ABOVE the painted header content so the bar doesn't intercept clicks
+  // landing on the first row of header text. Pre-unification the bar floated
+  // above an empty box; the painter now shows through so we have to hoist.
+  bottom: '100%',
   display: 'flex',
   alignItems: 'center',
   justifyContent: 'space-between',
@@ -87,6 +89,9 @@ const separatorBarStyle: CSSProperties = {
   fontSize: 11,
   color: '#4285f4',
   userSelect: 'none',
+  // Container is `pointer-events: none`; restore on the chrome so the
+  // label + options button stay clickable.
+  pointerEvents: 'auto',
 };
 
 const labelStyle: CSSProperties = {
@@ -138,48 +143,31 @@ export const InlineHeaderFooterEditor = forwardRef<
   InlineHeaderFooterEditorProps
 >(function InlineHeaderFooterEditor(
   {
-    headerFooter,
+    headerFooter: _headerFooter,
     position,
-    styles,
+    view,
     targetElement,
     parentElement,
     onSave,
     onClose,
-    onSelectionChange,
     onRemove,
   },
   ref
 ) {
-  const editorContainerRef = useRef<HTMLDivElement>(null);
-  const viewRef = useRef<EditorView | null>(null);
-  const [isDirty, setIsDirty] = useState(false);
-
-  // Keep the latest `onSelectionChange` in a ref so `dispatchTransaction`
-  // (closed over once when the HF EditorView is created) always calls the
-  // current callback. Without this, the parent's `handleSelectionChange`
-  // becomes stale as soon as its identity changes (e.g. when theme or
-  // hfEditPosition flips), so HF selection events stop landing on the
-  // up-to-date toolbar/state.
-  const onSelectionChangeRef = useRef(onSelectionChange);
-  onSelectionChangeRef.current = onSelectionChange;
-
-  // Resolve default font size from document styles so the PM editor's
-  // line-height calculations use the correct base (not browser-default 16px)
-  const defaultFontSizePt = useMemo(() => {
-    if (!styles) return 11; // Word 2007+ default
-    const resolver = createStyleResolver(styles);
-    const resolved = resolver.resolveParagraphStyle(undefined);
-    // fontSize in document model is in half-points
-    return resolved.runFormatting?.fontSize ? (resolved.runFormatting.fontSize as number) / 2 : 11;
-  }, [styles]);
+  const viewRef = useRef<EditorView | null>(view);
+  viewRef.current = view;
   const [showOptions, setShowOptions] = useState(false);
   const optionsRef = useRef<HTMLDivElement>(null);
 
-  // Compute overlay position relative to the parent element
+  // Compute overlay position relative to the parent element so the
+  // separator-bar / options-menu chrome floats over the painted HF region.
+  // No PM is mounted here any more (phase 5) — the persistent hidden HF PM
+  // mounted by `HiddenHeaderFooterPMs` is the sole HF editor.
   const [overlayPos, setOverlayPos] = useState<{
     top: number;
     left: number;
     width: number;
+    height: number;
   } | null>(null);
 
   useLayoutEffect(() => {
@@ -190,11 +178,12 @@ export const InlineHeaderFooterEditor = forwardRef<
         top: targetRect.top - parentRect.top + parentElement.scrollTop,
         left: targetRect.left - parentRect.left + parentElement.scrollLeft,
         width: targetRect.width,
+        height: targetRect.height,
       });
     };
     computePosition();
 
-    // Recompute on scroll/resize
+    // Recompute on scroll/resize so the bar follows the painter.
     const scrollParent = parentElement.closest('[style*="overflow"]') || parentElement;
     scrollParent.addEventListener('scroll', computePosition);
     window.addEventListener('resize', computePosition);
@@ -204,77 +193,33 @@ export const InlineHeaderFooterEditor = forwardRef<
     };
   }, [targetElement, parentElement]);
 
-  // Create ProseMirror editor when the container is available
-  // (overlayPos starts null → first render returns null → container ref not set)
+  // Auto-focus the persistent PM when the overlay first mounts — this is
+  // what makes typing land in HF content after a double-click. Clicks
+  // inside the painter route through `usePagesPointer.onHfPagesMouseDown`
+  // which also calls `view.focus()`, but mount-time focus is needed for
+  // the initial entry. Guarded by a ref so a later view-identity change
+  // (e.g. HF EditorView re-mount on doc reload) doesn't yank focus away
+  // from the user's current selection mid-session.
+  const didAutoFocusRef = useRef(false);
   useEffect(() => {
-    if (!editorContainerRef.current || viewRef.current) return;
+    if (!view || didAutoFocusRef.current) return;
+    didAutoFocusRef.current = true;
+    requestAnimationFrame(() => view.focus());
+  }, [view]);
 
-    // Convert header/footer content to PM document
-    const pmDoc = headerFooterToProseDoc(headerFooter.content, {
-      styles: styles || undefined,
-    });
-
-    // Create a fresh ExtensionManager to get independent plugin instances
-    // (keyed plugins like history$ can't be shared across EditorViews)
-    const hfMgr = new ExtensionManager(createStarterKit());
-    hfMgr.buildSchema();
-    hfMgr.initializeRuntime();
-    const plugins = hfMgr.getPlugins();
-
-    const state = EditorState.create({
-      doc: pmDoc,
-      schema,
-      plugins,
-    });
-
-    const view = new EditorView(editorContainerRef.current, {
-      state,
-      dispatchTransaction(tr) {
-        const newState = view.state.apply(tr);
-        view.updateState(newState);
-        if (tr.docChanged) {
-          setIsDirty(true);
-        }
-        // Report selection changes for toolbar sync
-        if (tr.selectionSet || tr.docChanged) {
-          const selState = extractSelectionState(newState);
-          onSelectionChangeRef.current?.(selState);
-        }
-      },
-    });
-
-    viewRef.current = view;
-
-    // Auto-focus
-    requestAnimationFrame(() => {
-      view.focus();
-      // Report initial selection state
-      const selState = extractSelectionState(view.state);
-      onSelectionChangeRef.current?.(selState);
-    });
-
-    return () => {
-      view.destroy();
-      viewRef.current = null;
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [overlayPos]); // Re-run when position is computed (container becomes available)
-
-  // Save current content
+  // Save current content from the persistent PM.
   const handleSave = useCallback(() => {
     if (!viewRef.current) return;
     const blocks = proseDocToBlocks(viewRef.current.state.doc);
     onSave(blocks);
   }, [onSave]);
 
-  // Save + close
+  // Save-and-close: always save (the persistent PM may have edits that
+  // never went through this overlay, e.g. via the agent bridge).
   const handleSaveAndClose = useCallback(() => {
-    if (isDirty) {
-      handleSave();
-    } else {
-      onClose();
-    }
-  }, [isDirty, handleSave, onClose]);
+    handleSave();
+    onClose();
+  }, [handleSave, onClose]);
 
   // Handle Escape key — save + close
   useEffect(() => {
@@ -327,21 +272,27 @@ export const InlineHeaderFooterEditor = forwardRef<
     top: overlayPos.top,
     left: overlayPos.left,
     width: overlayPos.width,
+    // Match the painted HF rect height so the chrome bar (positioned via
+    // `top: 100%` / `bottom: 100%`) sits flush against the painter.
+    height: overlayPos.height,
     zIndex: Z_INDEX.hfInlineEditor,
+    // Post-unification (openspec/changes/unify-hf-editing): the painter shows
+    // through this overlay — only the chrome (separator bar, options menu)
+    // should swallow clicks. Painter clicks must reach the pages container so
+    // `usePagesPointer.handlePagesMouseDown` can route them via
+    // `onHfPagesMouseDown` to the persistent HF EditorView. Without this,
+    // clicking anywhere inside the painted HF region was a no-op (#468).
+    pointerEvents: 'none',
   };
 
+  // Footer bar sits BELOW the painted footer; header bar ABOVE the painted
+  // header. Both anchored so they never overlap the cells underneath.
+  const footerBarStyle: CSSProperties = { ...separatorBarStyle, bottom: 'auto', top: '100%' };
+
   return (
-    <div
-      className="hf-inline-editor"
-      style={containerStyle}
-      onMouseDown={(e) => {
-        // Prevent clicks from bubbling to pages container / body click handler
-        e.stopPropagation();
-      }}
-    >
-      {/* Separator bar — shown below for header, above for footer */}
+    <div className="hf-inline-editor" style={containerStyle}>
       {position === 'footer' && (
-        <div className="hf-separator-bar" style={separatorBarStyle}>
+        <div className="hf-separator-bar" style={footerBarStyle}>
           <span style={labelStyle}>{label}</span>
           <OptionsMenu
             label={label}
@@ -355,18 +306,6 @@ export const InlineHeaderFooterEditor = forwardRef<
         </div>
       )}
 
-      {/* ProseMirror editor area */}
-      <div
-        ref={editorContainerRef}
-        className="hf-editor-pm prosemirror-editor"
-        style={{
-          minHeight: 40,
-          outline: 'none',
-          fontSize: `${defaultFontSizePt}pt`,
-        }}
-      />
-
-      {/* Separator bar — shown below for header */}
       {position === 'header' && (
         <div className="hf-separator-bar" style={separatorBarStyle}>
           <span style={labelStyle}>{label}</span>
@@ -421,6 +360,14 @@ function OptionsMenu({
     });
     const tr = view.state.tr.insert(from, node.mark(marks));
     view.dispatch(tr);
+    // PM's `view.focus()` (NOT `view.dom.focus()`) — the former dispatches
+    // a no-op transaction internally to refresh the selection display,
+    // which the painter pipeline observes and re-paints with the freshly
+    // inserted field resolved. `view.dom.focus()` skips that step and
+    // leaves the painter showing pre-insert content until the next
+    // keystroke triggers a transaction. The hidden host is at
+    // `position: fixed; left:-9999px` so PM's focus doesn't actually
+    // scroll the viewport, despite the earlier comment to the contrary.
     view.focus();
   };
 
@@ -438,7 +385,17 @@ function OptionsMenu({
         {t('headerFooter.options')} ▾
       </button>
       {showOptions && (
-        <div style={dropdownStyle}>
+        <div style={dropdownStyle} onMouseDown={(e) => e.stopPropagation()}>
+          {/*
+            `onMouseDown={(e) => e.stopPropagation()}` on the dropdown is
+            CRITICAL — without it, the button's mousedown bubbles to the
+            pages container, where `handlePagesMouseDown` treats the click
+            as "in HF area but not on a span" and snaps the HF cursor to
+            end-of-doc. The button's onClick then runs insertField with
+            `from = end-of-doc` and the field lands far away from where
+            the user was typing. Stopping propagation keeps the HF
+            selection where the user left it.
+          */}
           <button
             type="button"
             style={dropdownItemStyle}

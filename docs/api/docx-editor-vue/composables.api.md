@@ -24,6 +24,7 @@ import { formatStorageSize } from '@eigenpal/docx-editor-core';
 import { getAutoSaveStatusLabel } from '@eigenpal/docx-editor-core';
 import { getAutoSaveStorageSize } from '@eigenpal/docx-editor-core';
 import { getSelectionRuns } from '@eigenpal/docx-editor-core';
+import { HeaderFooter } from '@eigenpal/docx-editor-core/types/document';
 import { HighlightRect } from '@eigenpal/docx-editor-core/utils';
 import { isAutoSaveSupported } from '@eigenpal/docx-editor-core';
 import { Layout } from '@eigenpal/docx-editor-core/layout-engine/types';
@@ -251,6 +252,7 @@ export interface UseDocxEditorReturn {
     focus: () => void;
     getCommands: () => CommandMap;
     getDocument: () => Document_2 | null;
+    getHfPmView: (hf: HeaderFooter) => EditorView | null;
     isReady: Ref<boolean>;
     layout: ShallowRef<Layout | null>;
     loadBuffer: (buffer: ArrayBuffer | Uint8Array | Blob | File) => Promise<void>;
@@ -258,6 +260,9 @@ export interface UseDocxEditorReturn {
     parseError: Ref<string | null>;
     reLayout: () => void;
     save: () => Promise<Blob | null>;
+    setDocument: (doc: Document_2) => void;
+    setHfTransactionListener: (cb: ((rId: string, view: EditorView, docChanged: boolean) => void) | null) => void;
+    syncHfPMs: () => void;
 }
 
 // @public (undocumented)

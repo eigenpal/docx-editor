@@ -11,7 +11,7 @@
  * `useSelectionSync` lands.
  */
 
-import { onBeforeUnmount, onMounted, ref, type Ref, type ShallowRef } from 'vue';
+import { onBeforeUnmount, onMounted, ref, shallowRef, type Ref, type ShallowRef } from 'vue';
 import type { EditorView } from 'prosemirror-view';
 import { TextSelection, NodeSelection } from 'prosemirror-state';
 import type { HeaderFooter, Paragraph, Table } from '@eigenpal/docx-editor-core/types/content';
@@ -74,13 +74,31 @@ export interface UsePagesPointerOptions {
   reLayout: () => void;
   emit: (event: string, ...args: unknown[]) => void;
   clearOverlay: () => void;
+  /**
+   * Vue parity for the HF editing unification (openspec/changes/unify-hf-editing).
+   * Re-mount HF EditorViews when `package.headers/footers` content
+   * changes — exposed by `useDocxEditor.syncHfPMs`. Called after every
+   * save so the persistent PM points at the new HeaderFooter object.
+   * Optional so existing consumers can no-op until they wire it through.
+   */
+  syncHfPMs?: () => void;
+  /** Resolve the persistent EditorView for an HF instance (for click routing). */
+  getHfPmView?: (
+    hf: import('@eigenpal/docx-editor-core/types/content').HeaderFooter
+  ) => import('prosemirror-view').EditorView | null;
+  /**
+   * Replace the loaded Document — used by HF materialisation to publish a
+   * fresh Document object instead of mutating in place. Optional; if absent,
+   * callers fall back to in-place mutation + `syncHfPMs()`.
+   */
+  setDocument?: (doc: Document) => void;
 }
 
 const MULTI_CLICK_DELAY = 500;
 
 export interface UsePagesPointerReturn {
   tableInsertButton: Ref<TableInsertButton | null>;
-  hfEdit: Ref<HfEditState | null>;
+  hfEdit: ShallowRef<HfEditState | null>;
   scrollPageInfo: Ref<ScrollPageInfo>;
   resolvePos: (clientX: number, clientY: number) => number | null;
   setPmSelection: (anchor: number, head?: number) => void;
@@ -108,7 +126,11 @@ export function usePagesPointer(opts: UsePagesPointerOptions): UsePagesPointerRe
   }
 
   // ─── Inline header/footer editor (#388 port) ────────────────────────────
-  const hfEdit = ref<HfEditState | null>(null);
+  // shallowRef so the nested `headerFooter` reference stays identity-equal
+  // to the instance in `Document.package.headers/footers`. Plain `ref` deeply
+  // proxies the value, which breaks the IDENTITY-based lookup in
+  // `useDocxEditor.findHfRid` (proxy !== raw → click never finds the HF view).
+  const hfEdit = shallowRef<HfEditState | null>(null);
 
   // ─── Multi-click detection (double = word, triple = paragraph) ──────────
   let lastClickTime = 0;
@@ -127,13 +149,34 @@ export function usePagesPointer(opts: UsePagesPointerOptions): UsePagesPointerRe
     return resolvePosImpl(opts.pagesRef.value, opts.editorView.value, clientX, clientY);
   }
 
+  /**
+   * The PM EditorView every pointer gesture flows through. When HF edit
+   * mode is active and the matching persistent HF view exists, that's the
+   * "active" view — drag, multi-click, image-select, hyperlink, context
+   * menu all dispatch on it. Otherwise (or as a fallback) it's the body PM.
+   * Routing through a single helper keeps `handlePagesMouseDown` free of
+   * if/else "which PM?" branches.
+   */
+  function activeView(): EditorView | null {
+    const hf = hfEdit.value;
+    if (hf?.headerFooter && opts.getHfPmView) {
+      const v = opts.getHfPmView(hf.headerFooter);
+      if (v) return v;
+    }
+    return opts.editorView.value;
+  }
+
   function setPmSelection(anchor: number, head?: number) {
-    const view = opts.editorView.value;
+    const view = activeView();
     if (!view) return;
-    const $anchor = view.state.doc.resolve(anchor);
-    const $head = head !== undefined ? view.state.doc.resolve(head) : $anchor;
-    const sel = TextSelection.between($anchor, $head);
-    view.dispatch(view.state.tr.setSelection(sel));
+    try {
+      const $anchor = view.state.doc.resolve(anchor);
+      const $head = head !== undefined ? view.state.doc.resolve(head) : $anchor;
+      const sel = TextSelection.between($anchor, $head);
+      view.dispatch(view.state.tr.setSelection(sel));
+    } catch {
+      // Position invalid for this doc (e.g. body pos passed to HF view).
+    }
   }
 
   function scrollVisiblePositionIntoView(pmPos: number) {
@@ -290,6 +333,10 @@ export function usePagesPointer(opts: UsePagesPointerOptions): UsePagesPointerRe
     if (!hfEl) return;
 
     const position: 'header' | 'footer' = headerEl ? 'header' : 'footer';
+
+    // No scroll-to-page-1 — HF content is shared across pages by `r:id`,
+    // so edits propagate to every painted instance automatically. The
+    // chrome bar floats over whichever page the user actually clicked.
     const doc = opts.getDocument();
     if (!doc?.package) return;
 
@@ -302,11 +349,81 @@ export function usePagesPointer(opts: UsePagesPointerOptions): UsePagesPointerRe
       null;
     const refs = position === 'header' ? sp?.headerReferences : sp?.footerReferences;
     const map = position === 'header' ? doc.package.headers : doc.package.footers;
-    if (!refs || !map) return;
     // Default ref takes priority; fall back to `first` if the doc only ships first.
-    const refEntry = refs.find((r) => r.type === 'default') ?? refs.find((r) => r.type === 'first');
-    const rId = refEntry?.rId ?? null;
-    const hf = rId ? (map.get(rId) ?? null) : null;
+    const refEntry =
+      refs?.find((r) => r.type === 'default') ?? refs?.find((r) => r.type === 'first') ?? null;
+    let rId: string | null = refEntry?.rId ?? null;
+    let hf: HeaderFooter | null = rId ? (map?.get(rId) ?? null) : null;
+
+    // Materialise an empty HF part if none exists for this section yet
+    // (mirrors React's `handleHeaderFooterDoubleClick` in
+    // useHeaderFooterEditing.ts). Without this, double-clicking an empty
+    // header is a no-op — the user has no way to add one.
+    if (!hf) {
+      if (!sp) return;
+      const hdrFtrType = 'default' as const;
+      const newRId = `rId_new_${position}_${hdrFtrType}`;
+      const emptyHf: HeaderFooter = {
+        type: position,
+        hdrFtrType,
+        content: [{ type: 'paragraph', content: [] }],
+      };
+      const mapKey = position === 'header' ? 'headers' : 'footers';
+      const refKey = position === 'header' ? 'headerReferences' : 'footerReferences';
+      const newMap = new Map(doc.package[mapKey] ?? []);
+      newMap.set(newRId, emptyHf);
+
+      // Register a relationship so the serializer emits content types + doc rels.
+      const existingRels = doc.package.relationships;
+      const usedTargets = new Set<string>();
+      for (const rel of existingRels?.values() ?? []) {
+        if (rel.target) usedTargets.add(rel.target);
+      }
+      let targetNum = 1;
+      while (usedTargets.has(`${position}${targetNum}.xml`)) targetNum++;
+      const relType =
+        position === 'header'
+          ? 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/header'
+          : 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/footer';
+      const newRels = new Map(existingRels);
+      newRels.set(newRId, {
+        id: newRId,
+        type: relType,
+        target: `${position}${targetNum}.xml`,
+      });
+
+      // Create a fresh Document with the new HF wired in (mirror of React's
+      // pushDocument path) so any computeds watching document identity
+      // refire and undo/redo can track the materialization event.
+      const newRef = { type: hdrFtrType, rId: newRId };
+      const newSp = sp ? { ...sp, [refKey]: [...(sp[refKey] ?? []), newRef] } : sp;
+      const newDoc: Document = {
+        ...doc,
+        package: {
+          ...doc.package,
+          [mapKey]: newMap,
+          relationships: newRels,
+          document: doc.package.document
+            ? {
+                ...doc.package.document,
+                sections: doc.package.document.sections?.map((s, i) =>
+                  i === 0 ? { ...s, properties: newSp ?? s.properties } : s
+                ),
+                finalSectionProperties:
+                  doc.package.document.finalSectionProperties === sp
+                    ? newSp
+                    : doc.package.document.finalSectionProperties,
+              }
+            : doc.package.document,
+        },
+      };
+      rId = newRId;
+      hf = emptyHf;
+      opts.setDocument?.(newDoc);
+      opts.syncHfPMs?.();
+      opts.reLayout();
+      opts.emit('change', newDoc);
+    }
 
     // Bounding rect relative to the pages-viewport. zoom is applied via
     // CSS transform on the viewport, so use the unscaled element coords.
@@ -338,6 +455,14 @@ export function usePagesPointer(opts: UsePagesPointerOptions): UsePagesPointerRe
     if (existing) {
       existing.content = content;
     }
+    // Vue parity for the HF unification: after the inline overlay writes
+    // back into `pkg.headers/footers[rId].content`, the persistent
+    // EditorView for that rId still holds the pre-save doc. Re-syncing
+    // re-mounts it from the new content so the painter — which reads
+    // `view.state.doc` via `convertHeaderFooterPmDocToContent` — sees
+    // the saved version. Hosts that haven't wired the new surface yet
+    // (`syncHfPMs` is optional) still get the old behavior.
+    opts.syncHfPMs?.();
     opts.reLayout();
     opts.emit('change', doc);
   }
@@ -352,26 +477,45 @@ export function usePagesPointer(opts: UsePagesPointerOptions): UsePagesPointerRe
       existing.content = [];
     }
     hfEdit.value = null;
+    opts.syncHfPMs?.();
     opts.reLayout();
     opts.emit('change', doc);
   }
 
   function handlePagesMouseDown(event: MouseEvent) {
     if (event.button !== 0) return;
-    // An image resize / move / rotate is in progress — its own document-level
-    // listeners own this gesture; don't let the pages handler interfere.
     if (opts.imageInteracting.value) return;
-    const view = opts.editorView.value;
-    if (!view) return;
+    const body = opts.editorView.value;
+    if (!body) return;
 
-    // Table resize: if the user clicked a column/row/right-edge handle,
-    // start the resize drag and skip text selection.
+    const target = event.target as HTMLElement;
+
+    // HF mode: clicks OUTSIDE the painted HF area close edit mode and refocus
+    // the body PM. The body-PM-selection branch below also falls through, so
+    // the next keystroke lands at the click site in the body.
+    if (hfEdit.value) {
+      const isInHfArea =
+        target.closest('.layout-page-header') ||
+        target.closest('.layout-page-footer') ||
+        target.closest('.hf-editor');
+      if (!isInHfArea) {
+        hfEdit.value = null;
+        body.focus();
+        // Fall through — body-selection path resolves cursor at click coord.
+      }
+    }
+
+    // Resolve the PM the user is currently editing (HF when active, body
+    // otherwise). Every gesture below dispatches on this view.
+    const view = activeView() ?? body;
+
+    // Table resize: column / row / right-edge handles claim the gesture
+    // regardless of which doc the cells belong to.
     if (!opts.readOnly.value && opts.tableResize.tryStartResize(event, view)) {
       return;
     }
 
-    // Check if user clicked on an image
-    const target = event.target as HTMLElement;
+    // Image click → NodeSelection on the active doc.
     const imageEl = findImageElement(target);
     if (imageEl) {
       event.preventDefault();
@@ -379,10 +523,9 @@ export function usePagesPointer(opts: UsePagesPointerOptions): UsePagesPointerRe
       const docFrom = Number(imageEl.dataset.docFrom);
       if (!isNaN(docFrom)) {
         try {
-          const sel = NodeSelection.create(view.state.doc, docFrom);
-          view.dispatch(view.state.tr.setSelection(sel));
+          view.dispatch(view.state.tr.setSelection(NodeSelection.create(view.state.doc, docFrom)));
         } catch {
-          // Position may be invalid
+          // Position may not be a valid node anchor.
         }
         opts.selectedImage.value = {
           element: imageEl,
@@ -390,17 +533,15 @@ export function usePagesPointer(opts: UsePagesPointerOptions): UsePagesPointerRe
           width: imageEl.offsetWidth,
           height: imageEl.offsetHeight,
         };
-        // Clear text caret overlay so it doesn't show alongside the image selection
         opts.clearOverlay();
       }
       view.focus();
       return;
     }
 
-    // Clicked outside image — deselect
+    // Click outside an image clears the image selection.
     opts.selectedImage.value = null;
 
-    // Prevent browser from moving focus to the pages div — PM must keep focus
     event.preventDefault();
 
     const pos = resolvePos(event.clientX, event.clientY);
@@ -425,7 +566,7 @@ export function usePagesPointer(opts: UsePagesPointerOptions): UsePagesPointerRe
       selectParagraph(pos);
       clickCount = 0;
     } else {
-      // Single click
+      // Single click — shift-click extends, plain click collapses.
       if (event.shiftKey) {
         const { from } = view.state.selection;
         setPmSelection(from, pos);

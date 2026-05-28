@@ -161,13 +161,28 @@
           <InlineHeaderFooterEditor
             :is-open="hfEdit !== null"
             :position="hfEdit?.position ?? 'header'"
-            :header-footer="hfEdit?.headerFooter ?? null"
-            :styles="getDocument()?.package?.styles ?? null"
-            :theme="getDocument()?.package?.theme ?? null"
+            :view="activeHfView"
             :target-rect="hfEdit?.targetRect ?? null"
             @save="handleHfSave"
             @close="hfEdit = null"
             @remove="handleHfRemove"
+          />
+
+          <!-- HF caret overlay: blinking blue caret at the persistent HF PM's selection head. -->
+          <div
+            v-if="hfEdit && hfCaretRect"
+            aria-hidden="true"
+            :style="{
+              position: 'fixed',
+              top: `${hfCaretRect.top}px`,
+              left: `${hfCaretRect.left}px`,
+              width: '2px',
+              height: `${hfCaretRect.height}px`,
+              background: '#4285f4',
+              pointerEvents: 'none',
+              zIndex: 9999,
+              animation: 'hf-caret-blink 1.06s steps(1) infinite',
+            }"
           />
 
           <ImageSelectionOverlay
@@ -336,6 +351,9 @@
 
 <script setup lang="ts">
 import { ref, shallowRef, computed, watch, onMounted, onBeforeUnmount, nextTick } from 'vue';
+import type { EditorView } from 'prosemirror-view';
+import { TextSelection } from 'prosemirror-state';
+import { computeHfCaretRectFromView } from '@eigenpal/docx-editor-core/layout-bridge';
 import { getSelectionInfo as getSelectionInfoImpl } from '../utils/refApiQueries';
 import Toolbar from './Toolbar.vue';
 import TableToolbar from './ui/TableToolbar.vue';
@@ -481,6 +499,10 @@ const {
   getDocument,
   getCommands,
   reLayout,
+  getHfPmView,
+  syncHfPMs,
+  setHfTransactionListener,
+  setDocument,
 } = useDocxEditor({
   hiddenContainer: hiddenPmRef,
   pagesContainer: pagesRef,
@@ -516,6 +538,92 @@ const currentSectionProps = computed(() => {
 const documentTheme = computed(() => {
   void stateTick.value;
   return getDocument()?.package?.theme ?? props.theme ?? null;
+});
+
+// HF caret overlay: viewport-relative rect from the persistent HF view's
+// selection head. Shared with React via core's `computeHfCaretRectFromView`.
+const hfCaretRect = ref<{ top: number; left: number; height: number } | null>(null);
+
+// Memoized so the template doesn't walk the headers/footers Maps every tick.
+const activeHfView = computed<EditorView | null>(() =>
+  hfEdit.value?.headerFooter ? (getHfPmView(hfEdit.value.headerFooter) ?? null) : null
+);
+
+// Registered in onMounted because `hfEdit` is destructured later in this script setup (TDZ).
+onMounted(() => {
+  setHfTransactionListener((_rId, view) => {
+    // Defer a frame so the painter repaints before we measure spans, then
+    // re-measure the painted HF rect so the chrome outline grows with the
+    // header as the user types (targetRect captured at engage stays fixed
+    // otherwise — blue border ends up covering only the original height).
+    requestAnimationFrame(() => {
+      hfCaretRect.value = computeHfCaretRectFromView(view);
+      const edit = hfEdit.value;
+      if (!edit) return;
+      const hfEl = window.document.querySelector(
+        edit.position === 'header' ? '.layout-page-header' : '.layout-page-footer'
+      ) as HTMLElement | null;
+      const viewport = pagesViewportRef.value;
+      if (!hfEl || !viewport) return;
+      const el = hfEl.getBoundingClientRect();
+      const vp = viewport.getBoundingClientRect();
+      const z = zoom.value || 1;
+      hfEdit.value = {
+        ...edit,
+        targetRect: {
+          top: (el.top - vp.top + viewport.scrollTop) / z,
+          left: (el.left - vp.left + viewport.scrollLeft) / z,
+          width: el.width / z,
+          height: el.height / z,
+        },
+      };
+    });
+  });
+  watch(
+    () => hfEdit.value,
+    (e) => {
+      if (!e) {
+        hfCaretRect.value = null;
+        return;
+      }
+      // Collapse body PM selection + blur the body view so the user doesn't
+      // see two carets (body + header) at once and stray keystrokes can't
+      // land in the body before the HF view reclaims focus.
+      const view = editorView.value;
+      if (view) {
+        try {
+          const tr = view.state.tr.setSelection(TextSelection.create(view.state.doc, 0));
+          view.dispatch(tr);
+        } catch {
+          // selection may be invalid mid-transition; overlay is gated on
+          // `isHfEditing` so the body caret stays hidden anyway.
+        }
+        (view.dom as HTMLElement).blur?.();
+      }
+      // Force the selection overlay to re-render so the body caret disappears.
+      selectionSync.updateSelectionOverlay();
+    }
+  );
+
+  // HF caret uses position:fixed — recompute on scroll/resize so it follows the painted span.
+  let rafScroll = 0;
+  function onHfScroll() {
+    if (!hfEdit.value || rafScroll) return;
+    rafScroll = requestAnimationFrame(() => {
+      rafScroll = 0;
+      const hf = hfEdit.value;
+      if (!hf?.headerFooter) return;
+      const view = getHfPmView(hf.headerFooter);
+      if (view) hfCaretRect.value = computeHfCaretRectFromView(view);
+    });
+  }
+  window.addEventListener('scroll', onHfScroll, true);
+  window.addEventListener('resize', onHfScroll);
+  onBeforeUnmount(() => {
+    if (rafScroll) cancelAnimationFrame(rafScroll);
+    window.removeEventListener('scroll', onHfScroll, true);
+    window.removeEventListener('resize', onHfScroll);
+  });
 });
 
 // When the comments sidebar opens, shift the pages container (NOT the
@@ -572,10 +680,7 @@ const bookmarkOptions = computed(() => {
   return options.sort((a, b) => a.name.localeCompare(b.name));
 });
 
-// ─── Comment lifecycle (owns floating FAB + add/cancel flow + selection-
-//     driven sidebar focus tracking + extract pipeline). Declared before
-//     useFileIO so the IO layer can call extractCommentsAndChanges.
-// ─────────────────────────────────────────────────────────────────────────
+// Comment lifecycle: declared before useFileIO so IO can call extractCommentsAndChanges.
 const {
   floatingCommentBtn,
   pendingCommentRange,
@@ -700,18 +805,7 @@ const {
   emit,
 });
 
-// ─── Composable order: useImageActions → usePagesPointer → useContextMenus
-//     → useSelectionSync → useDocxEditorRefApi
-//
-//   • usePagesPointer / useContextMenus / useSelectionSync all consume the
-//     `selectedImage` + `imageInteracting` refs from useImageActions, so
-//     it has to come first.
-//   • useContextMenus takes `resolvePos` / `setPmSelection` callbacks
-//     produced by usePagesPointer, so usePagesPointer goes second.
-//   • useSelectionSync is constructed last among the cluster because the
-//     hoisted clearOverlay / updateSelectionOverlay wrappers below close
-//     over `selectionSync` by name (see TDZ note where they're defined).
-// ────────────────────────────────────────────────────────────────────────
+// Composable order (TDZ-sensitive): useImageActions → usePagesPointer → useContextMenus → useSelectionSync → useDocxEditorRefApi.
 const {
   selectedImage,
   imageInteracting,
@@ -758,6 +852,9 @@ const {
   reLayout,
   emit,
   clearOverlay,
+  syncHfPMs,
+  getHfPmView,
+  setDocument,
 });
 
 const {
@@ -855,7 +952,13 @@ function updateSelectionOverlay() {
   selectionSync.updateSelectionOverlay();
 }
 
-const selectionSync = useSelectionSync({ editorView, pagesRef, selectedImage });
+const isHfEditing = computed(() => hfEdit.value !== null);
+const selectionSync = useSelectionSync({
+  editorView,
+  pagesRef,
+  selectedImage,
+  isHfEditing,
+});
 
 onBeforeUnmount(() => {
   clearOverlay();

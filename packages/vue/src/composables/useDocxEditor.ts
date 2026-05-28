@@ -19,9 +19,19 @@ import { EditorView } from 'prosemirror-view';
 
 // Core imports — these all resolve through Vite aliases to packages/core/src/
 import { parseDocx } from '@eigenpal/docx-editor-core/docx/parser';
-import { toProseDoc, createEmptyDoc } from '@eigenpal/docx-editor-core/prosemirror/conversion';
+import {
+  toProseDoc,
+  createEmptyDoc,
+  headerFooterToProseDoc,
+  proseDocToBlocks,
+} from '@eigenpal/docx-editor-core/prosemirror/conversion';
 import { fromProseDoc } from '@eigenpal/docx-editor-core/prosemirror/conversion/fromProseDoc';
+import { schema } from '@eigenpal/docx-editor-core/prosemirror';
 import { singletonManager } from '@eigenpal/docx-editor-core/prosemirror/schema';
+import {
+  ExtensionManager,
+  createStarterKit,
+} from '@eigenpal/docx-editor-core/prosemirror/extensions';
 import type { CommandMap } from '@eigenpal/docx-editor-core/prosemirror/extensions/types';
 import { buildBoxTree } from '@eigenpal/docx-editor-core/layout-bridge/buildBoxTree';
 import {
@@ -32,6 +42,7 @@ import type { FloatingImageZone } from '@eigenpal/docx-editor-core/layout-bridge
 import {
   measureTable,
   convertHeaderFooterToContent,
+  convertHeaderFooterPmDocToContent,
   getPageSize,
   getMargins,
   resolveHeaderFooter,
@@ -203,6 +214,33 @@ export interface UseDocxEditorReturn {
   getCommands: () => CommandMap;
   /** Force a re-layout without a doc change (e.g. after page-setup changes). */
   reLayout: () => void;
+  /**
+   * Look up the persistent hidden HF EditorView for a HeaderFooter
+   * instance. The inline overlay and the click router use this to
+   * dispatch selection / focus on the same EditorView the painter reads.
+   * Returns null if the document is unloaded or no PM is mounted for
+   * the HF's `rId` (cold boot, or just-removed slot).
+   */
+  getHfPmView: (
+    hf: import('@eigenpal/docx-editor-core/types/document').HeaderFooter
+  ) => EditorView | null;
+  /**
+   * Re-mount / tear down HF EditorViews to match the current document's
+   * `package.headers/footers`. Call this after the inline overlay saves
+   * back into `Document.package.headers` (the swap produces new HeaderFooter
+   * objects; new EditorViews need to point at the new objects).
+   */
+  syncHfPMs: () => void;
+  /**
+   * Subscribe to every HF transaction. `cb(rId, view)` fires after the
+   * EditorView's state has been updated. Used by the painted-HF caret
+   * overlay and HF UI chrome (toolbar selection sync).
+   */
+  setHfTransactionListener: (
+    cb: ((rId: string, view: EditorView, docChanged: boolean) => void) | null
+  ) => void;
+  /** Publish a fresh Document object (used by HF materialisation). */
+  setDocument: (doc: Document) => void;
 }
 
 export function useDocxEditor(options: UseDocxEditorOptions): UseDocxEditorReturn {
@@ -282,24 +320,37 @@ export function useDocxEditor(options: UseDocxEditorOptions): UseDocxEditorRetur
       // HF flow.
       const defaultTabMarkTwips = state.doc.attrs?.defaultTabMarkTwips as number | null;
       const hfOptions = { styles, theme, measureBlocks, defaultTabMarkTwips };
-      const headerContent = convertHeaderFooterToContent(
-        header,
-        contentWidth,
-        hfMetricsHeader,
-        hfOptions
-      );
-      const footerContent = convertHeaderFooterToContent(
-        footer,
-        contentWidth,
-        hfMetricsFooter,
-        hfOptions
-      );
+
+      // HF unification (openspec changes/unify-hf-editing): when a
+      // persistent hidden HF EditorView is mounted for a HeaderFooter,
+      // route through `convertHeaderFooterPmDocToContent` so the painter
+      // reflects the PM's live doc instead of the Document model snapshot.
+      // Mirror of React's `useLayoutPipeline.convertHf` branch.
+      const convertHf = (
+        hf: import('@eigenpal/docx-editor-core/types/document').HeaderFooter | null | undefined,
+        metrics: typeof hfMetricsHeader | typeof hfMetricsFooter
+      ): HeaderFooterContent | undefined => {
+        if (!hf) return undefined;
+        const view = getHfPmView(hf);
+        if (view) {
+          return convertHeaderFooterPmDocToContent(
+            view.state.doc,
+            contentWidth,
+            metrics,
+            hfOptions
+          );
+        }
+        return convertHeaderFooterToContent(hf, contentWidth, metrics, hfOptions);
+      };
+
+      const headerContent = convertHf(header, hfMetricsHeader);
+      const footerContent = convertHf(footer, hfMetricsFooter);
       const hasTitlePg = initialSp?.titlePg === true;
       const firstPageHeaderContent = hasTitlePg
-        ? convertHeaderFooterToContent(firstHeader, contentWidth, hfMetricsHeader, hfOptions)
+        ? convertHf(firstHeader, hfMetricsHeader)
         : undefined;
       const firstPageFooterContent = hasTitlePg
-        ? convertHeaderFooterToContent(firstFooter, contentWidth, hfMetricsFooter, hfOptions)
+        ? convertHf(firstFooter, hfMetricsFooter)
         : undefined;
 
       // Step 4: Extend margins when HF content overflows the authored
@@ -500,6 +551,177 @@ export function useDocxEditor(options: UseDocxEditorOptions): UseDocxEditorRetur
   }
 
   // ========================================================================
+  // Persistent header/footer PMs (Vue parity for #468 unification, openspec
+  // changes/unify-hf-editing). One off-screen EditorView per distinct
+  // `rId` in `Document.package.headers ∪ package.footers`. The painter
+  // reads from `view.state.doc` via `convertHeaderFooterPmDocToContent`
+  // so HF edits live-render in the painter without a second visible PM.
+  // ========================================================================
+
+  /** Off-screen host that owns all HF EditorView DOM. */
+  const hfHostRef: { current: HTMLDivElement | null } = { current: null };
+  /** rId → mounted EditorView. */
+  const hfViews = new Map<string, EditorView>();
+  /** rId → ExtensionManager owning the view's plugins/commands. */
+  const hfManagers = new Map<string, ExtensionManager>();
+
+  function ensureHfHost(): HTMLDivElement {
+    if (hfHostRef.current && hfHostRef.current.isConnected) return hfHostRef.current;
+    const host = window.document.createElement('div');
+    host.dataset.hfHost = 'true';
+    host.style.cssText =
+      'position: fixed; left: -9999px; top: 0; opacity: 0; z-index: -1; pointer-events: none;';
+    window.document.body.appendChild(host);
+    hfHostRef.current = host;
+    return host;
+  }
+
+  /**
+   * Resolve a HeaderFooter instance to its `rId` by walking
+   * `Document.package.headers/footers`. Identity match — both maps share
+   * a single HeaderFooter object per `rId` across sections that reference
+   * it (the spec-faithful sharing-by-reference pattern). Returns null
+   * when the doc is unloaded or the HF isn't currently in the package
+   * (e.g. just removed).
+   */
+  function findHfRid(
+    hf: import('@eigenpal/docx-editor-core/types/document').HeaderFooter
+  ): string | null {
+    const pkg = document.value?.package;
+    if (!pkg) return null;
+    if (pkg.headers) {
+      for (const [rId, value] of pkg.headers) if (value === hf) return rId;
+    }
+    if (pkg.footers) {
+      for (const [rId, value] of pkg.footers) if (value === hf) return rId;
+    }
+    return null;
+  }
+
+  /**
+   * Public lookup used by the inline overlay + click router. Returns the
+   * persistent EditorView for the HF instance, or null when no PM is yet
+   * mounted (cold boot, or the HF was just materialised at runtime).
+   */
+  function getHfPmView(
+    hf: import('@eigenpal/docx-editor-core/types/document').HeaderFooter
+  ): EditorView | null {
+    const rId = findHfRid(hf);
+    if (!rId) return null;
+    return hfViews.get(rId) ?? null;
+  }
+
+  /**
+   * Mount missing HF EditorViews and tear down stale ones to match the
+   * current `Document.package.headers/footers`. Called on every document
+   * load + after the inline overlay's save (`package.headers` swap).
+   */
+  function syncHfPMs() {
+    const pkg = document.value?.package;
+    const host = ensureHfHost();
+    const wantRIds = new Set<string>();
+    if (pkg?.headers) for (const rId of pkg.headers.keys()) wantRIds.add(rId);
+    if (pkg?.footers) for (const rId of pkg.footers.keys()) wantRIds.add(rId);
+
+    // Tear down rIds no longer present (e.g. user removed a header).
+    for (const [rId, view] of hfViews) {
+      if (!wantRIds.has(rId)) {
+        view.destroy();
+        view.dom.parentElement?.remove();
+        hfManagers.get(rId)?.destroy();
+        hfManagers.delete(rId);
+        hfViews.delete(rId);
+      }
+    }
+
+    // Bring up new ones. Each gets its own ExtensionManager — history /
+    // input rules plugins are per-EditorView and can't be shared.
+    if (!pkg) return;
+    const styles = pkg.styles ?? null;
+    const theme = pkg.theme ?? null;
+    // Read from package.settings (canonical) not editorState (race on first sync).
+    const defaultTabMarkTwips = pkg.settings?.defaultTabMark ?? null;
+    for (const rId of wantRIds) {
+      if (hfViews.has(rId)) continue;
+      const hf = pkg.headers?.get(rId) ?? pkg.footers?.get(rId);
+      if (!hf) continue;
+      const kind = pkg.headers?.has(rId) ? 'header' : 'footer';
+
+      const mgr = new ExtensionManager(createStarterKit());
+      mgr.buildSchema();
+      mgr.initializeRuntime();
+      hfManagers.set(rId, mgr);
+
+      const node = window.document.createElement('div');
+      node.dataset.hfRId = rId;
+      node.dataset.hfKind = kind;
+      host.appendChild(node);
+
+      const pmDoc = headerFooterToProseDoc(hf.content, {
+        styles: styles ?? undefined,
+        theme,
+        defaultTabMarkTwips,
+      });
+      const state = EditorState.create({
+        doc: pmDoc,
+        schema,
+        plugins: mgr.getPlugins(),
+      });
+      const slotKind = kind;
+      const view: EditorView = new EditorView(node, {
+        state,
+        dispatchTransaction(tr) {
+          const newState = view.state.apply(tr);
+          view.updateState(newState);
+          // Writeback: sync `view.state.doc` into
+          // `Document.package.headers[rId].content` (or `.footers[rId].content`)
+          // so `save()` reads the latest HF content. Without this the
+          // persistent PM holds edits the saved DOCX doesn't.
+          if (tr.docChanged) {
+            const pkg = document.value?.package;
+            const bag = slotKind === 'header' ? pkg?.headers : pkg?.footers;
+            const hf = bag?.get(rId);
+            if (hf) hf.content = proseDocToBlocks(newState.doc);
+          }
+          // Only re-layout when the HF doc actually changed — selection-only
+          // transactions don't move text so the painter has nothing new.
+          if (tr.docChanged && editorState.value) runLayoutPipeline(editorState.value);
+          onHfTransactionRef.value?.(rId, view, tr.docChanged);
+        },
+      });
+      hfViews.set(rId, view);
+    }
+  }
+
+  function destroyHfPMs() {
+    for (const view of hfViews.values()) {
+      view.destroy();
+      view.dom.parentElement?.remove();
+    }
+    hfViews.clear();
+    for (const mgr of hfManagers.values()) mgr.destroy();
+    hfManagers.clear();
+    if (hfHostRef.current) {
+      hfHostRef.current.remove();
+      hfHostRef.current = null;
+    }
+  }
+
+  // Listener slot — DocxEditor.vue subscribes here to update caret + UI
+  // chrome on every HF transaction. Held in a ref so swapping it doesn't
+  // require resetting the `dispatchTransaction` closure on each EditorView.
+  const onHfTransactionRef: {
+    value: ((rId: string, view: EditorView, docChanged: boolean) => void) | null;
+  } = {
+    value: null,
+  };
+  function setHfTransactionListener(
+    cb: ((rId: string, view: EditorView, docChanged: boolean) => void) | null
+  ) {
+    onHfTransactionRef.value = cb;
+  }
+
+  // ========================================================================
   // Document loading
   // ========================================================================
 
@@ -525,7 +747,9 @@ export function useDocxEditor(options: UseDocxEditorOptions): UseDocxEditorRetur
 
       // Recreate PM view with new document
       destroyEditorView();
+      destroyHfPMs();
       createEditorView();
+      syncHfPMs();
     } catch (err) {
       const error = err instanceof Error ? err : new Error(String(err));
       parseError.value = error.message;
@@ -537,7 +761,9 @@ export function useDocxEditor(options: UseDocxEditorOptions): UseDocxEditorRetur
     parseError.value = null;
     document.value = doc;
     destroyEditorView();
+    destroyHfPMs();
     createEditorView();
+    syncHfPMs();
   }
 
   // ========================================================================
@@ -579,6 +805,7 @@ export function useDocxEditor(options: UseDocxEditorOptions): UseDocxEditorRetur
 
   function destroy() {
     destroyEditorView();
+    destroyHfPMs();
     document.value = null;
   }
 
@@ -617,6 +844,18 @@ export function useDocxEditor(options: UseDocxEditorOptions): UseDocxEditorRetur
     /** Force a re-layout without a doc change (e.g. after page-setup changes). */
     reLayout() {
       if (editorView.value) runLayoutPipeline(editorView.value.state);
+    },
+
+    // HF unification surface — phase 6 of openspec/changes/unify-hf-editing.
+    getHfPmView,
+    syncHfPMs,
+    setHfTransactionListener,
+    /**
+     * Publish a fresh Document object — used by HF materialisation in
+     * usePagesPointer to push a new doc identity that watchers can observe.
+     */
+    setDocument(doc: Document) {
+      document.value = doc;
     },
   };
 }

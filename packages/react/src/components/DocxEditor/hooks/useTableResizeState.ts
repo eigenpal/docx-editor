@@ -21,6 +21,7 @@
  */
 
 import { useCallback, useRef } from 'react';
+import type { EditorView } from 'prosemirror-view';
 
 import type { OffscreenEditorHostRef } from '../OffscreenEditorHost';
 import {
@@ -38,6 +39,14 @@ const MIN_ROW_HEIGHT_TWIPS = 200;
 
 export interface UseTableResizeStateOptions {
   hiddenPMRef: React.RefObject<OffscreenEditorHostRef | null>;
+  /**
+   * Resolve the HF EditorView the user is currently editing, if any.
+   * When the resize handle the user grabbed lives inside `.layout-page-header`
+   * or `.layout-page-footer`, the table cells belong to the HF doc and the
+   * commit transaction MUST dispatch on this view — not on the body PM, or
+   * the body doc gets a stray colWidth change at an out-of-range position.
+   */
+  getActiveHfView?: () => EditorView | null;
 }
 
 export interface UseTableResizeStateReturn {
@@ -48,7 +57,18 @@ export interface UseTableResizeStateReturn {
 }
 
 export function useTableResizeState(opts: UseTableResizeStateOptions): UseTableResizeStateReturn {
-  const { hiddenPMRef } = opts;
+  const { hiddenPMRef, getActiveHfView } = opts;
+
+  // Captured at tryStart and consulted by mouseup commit — guarantees the
+  // resize transaction lands on the view that owns the table even if the
+  // user toggles HF mode mid-drag (or focus moves around).
+  const resizeTargetViewRef = useRef<EditorView | null>(null);
+  function pickViewForHandle(target: HTMLElement): EditorView | null {
+    if (target.closest('.layout-page-header') || target.closest('.layout-page-footer')) {
+      return getActiveHfView?.() ?? hiddenPMRef.current?.getView() ?? null;
+    }
+    return hiddenPMRef.current?.getView() ?? null;
+  }
 
   // Column-between resize
   const isResizingColumnRef = useRef(false);
@@ -77,6 +97,12 @@ export function useTableResizeState(opts: UseTableResizeStateOptions): UseTableR
 
   const tryStartFromMouseDown = useCallback(
     (target: HTMLElement, e: React.MouseEvent): boolean => {
+      // Pick the EditorView that owns the table this handle lives in.
+      // Header/footer handles must dispatch on the HF view; body handles on
+      // the body PM.
+      const view = pickViewForHandle(target);
+      if (!view) return false;
+
       // Column-between resize
       if (target.classList.contains('layout-table-resize-handle')) {
         e.preventDefault();
@@ -84,15 +110,13 @@ export function useTableResizeState(opts: UseTableResizeStateOptions): UseTableR
         isResizingColumnRef.current = true;
         resizeStartXRef.current = e.clientX;
         resizeHandleRef.current = target;
+        resizeTargetViewRef.current = view;
         target.classList.add('dragging');
         const colIndex = parseInt(target.dataset.columnIndex ?? '0', 10);
         resizeColumnIndexRef.current = colIndex;
         resizeTablePmStartRef.current = parseInt(target.dataset.tablePmStart ?? '0', 10);
-        const view = hiddenPMRef.current?.getView();
-        if (view) {
-          const widths = readColumnWidths(view, resizeTablePmStartRef.current, colIndex);
-          if (widths) resizeOrigWidthsRef.current = widths;
-        }
+        const widths = readColumnWidths(view, resizeTablePmStartRef.current, colIndex);
+        if (widths) resizeOrigWidthsRef.current = widths;
         return true;
       }
 
@@ -107,24 +131,20 @@ export function useTableResizeState(opts: UseTableResizeStateOptions): UseTableR
         resizeStartYRef.current = e.clientY;
         resizeRowHandleRef.current = target;
         resizeRowIsEdgeRef.current = target.dataset.isEdge === 'bottom';
+        resizeTargetViewRef.current = view;
         target.classList.add('dragging');
         const rowIndex = parseInt(target.dataset.rowIndex ?? '0', 10);
         resizeRowIndexRef.current = rowIndex;
         resizeRowTablePmStartRef.current = parseInt(target.dataset.tablePmStart ?? '0', 10);
-        const view = hiddenPMRef.current?.getView();
-        if (view) {
-          const height = readRowHeight(view, resizeRowTablePmStartRef.current, rowIndex);
-          if (height != null) {
-            resizeRowOrigHeightRef.current = height;
-          } else {
-            // No explicit height — estimate from rendered DOM.
-            const tableEl = target.closest('.layout-table');
-            const rowEl = tableEl?.querySelector(`[data-row-index="${rowIndex}"]`);
-            const renderedHeight = rowEl
-              ? (rowEl as HTMLElement).getBoundingClientRect().height
-              : 30;
-            resizeRowOrigHeightRef.current = Math.round(renderedHeight * TWIPS_PER_PIXEL);
-          }
+        const height = readRowHeight(view, resizeRowTablePmStartRef.current, rowIndex);
+        if (height != null) {
+          resizeRowOrigHeightRef.current = height;
+        } else {
+          // No explicit height — estimate from rendered DOM.
+          const tableEl = target.closest('.layout-table');
+          const rowEl = tableEl?.querySelector(`[data-row-index="${rowIndex}"]`);
+          const renderedHeight = rowEl ? (rowEl as HTMLElement).getBoundingClientRect().height : 30;
+          resizeRowOrigHeightRef.current = Math.round(renderedHeight * TWIPS_PER_PIXEL);
         }
         return true;
       }
@@ -136,21 +156,20 @@ export function useTableResizeState(opts: UseTableResizeStateOptions): UseTableR
         isResizingRightEdgeRef.current = true;
         resizeRightEdgeStartXRef.current = e.clientX;
         resizeRightEdgeHandleRef.current = target;
+        resizeTargetViewRef.current = view;
         target.classList.add('dragging');
         const colIndex = parseInt(target.dataset.columnIndex ?? '0', 10);
         resizeRightEdgeColIndexRef.current = colIndex;
         resizeRightEdgePmStartRef.current = parseInt(target.dataset.tablePmStart ?? '0', 10);
-        const view = hiddenPMRef.current?.getView();
-        if (view) {
-          const w = readLastColumnWidth(view, resizeRightEdgePmStartRef.current, colIndex);
-          if (w != null) resizeRightEdgeOrigWidthRef.current = w;
-        }
+        const w = readLastColumnWidth(view, resizeRightEdgePmStartRef.current, colIndex);
+        if (w != null) resizeRightEdgeOrigWidthRef.current = w;
         return true;
       }
 
       return false;
     },
-    [hiddenPMRef]
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- pickViewForHandle closes over refs.
+    [hiddenPMRef, getActiveHfView]
   );
 
   const handleMouseMoveUpdate = useCallback((e: MouseEvent): boolean => {
@@ -207,13 +226,16 @@ export function useTableResizeState(opts: UseTableResizeStateOptions): UseTableR
   }, []);
 
   const tryCommit = useCallback((): boolean => {
+    // Use the view captured at drag-start, NOT a fresh body PM lookup —
+    // for header tables this is the HF view, for body tables it's body.
+    const view = resizeTargetViewRef.current;
+
     if (isResizingColumnRef.current) {
       isResizingColumnRef.current = false;
       if (resizeHandleRef.current) {
         resizeHandleRef.current.classList.remove('dragging');
         resizeHandleRef.current = null;
       }
-      const view = hiddenPMRef.current?.getView();
       if (view) {
         const { left: newLeft, right: newRight } = resizeOrigWidthsRef.current;
         commitColumnResize(view, {
@@ -223,6 +245,7 @@ export function useTableResizeState(opts: UseTableResizeStateOptions): UseTableR
           newRight,
         });
       }
+      resizeTargetViewRef.current = null;
       return true;
     }
 
@@ -232,7 +255,6 @@ export function useTableResizeState(opts: UseTableResizeStateOptions): UseTableR
         resizeRowHandleRef.current.classList.remove('dragging');
         resizeRowHandleRef.current = null;
       }
-      const view = hiddenPMRef.current?.getView();
       if (view) {
         commitRowResize(view, {
           docFrom: resizeRowTablePmStartRef.current,
@@ -240,6 +262,7 @@ export function useTableResizeState(opts: UseTableResizeStateOptions): UseTableR
           newHeight: resizeRowOrigHeightRef.current,
         });
       }
+      resizeTargetViewRef.current = null;
       return true;
     }
 
@@ -249,7 +272,6 @@ export function useTableResizeState(opts: UseTableResizeStateOptions): UseTableR
         resizeRightEdgeHandleRef.current.classList.remove('dragging');
         resizeRightEdgeHandleRef.current = null;
       }
-      const view = hiddenPMRef.current?.getView();
       if (view) {
         commitRightEdgeResize(view, {
           docFrom: resizeRightEdgePmStartRef.current,
@@ -257,11 +279,12 @@ export function useTableResizeState(opts: UseTableResizeStateOptions): UseTableR
           newWidth: resizeRightEdgeOrigWidthRef.current,
         });
       }
+      resizeTargetViewRef.current = null;
       return true;
     }
 
     return false;
-  }, [hiddenPMRef]);
+  }, []);
 
   const isAnyResizeActive = useCallback(
     () => isResizingColumnRef.current || isResizingRowRef.current || isResizingRightEdgeRef.current,

@@ -21,6 +21,8 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { NodeSelection, TextSelection } from 'prosemirror-state';
+import { CellSelection } from 'prosemirror-tables';
+import type { EditorView } from 'prosemirror-view';
 
 import type { CaretPosition, SelectionBox } from '@eigenpal/docx-editor-core/layout-bridge';
 import {
@@ -67,6 +69,13 @@ interface ImageInfo {
 export interface UsePagesPointerOptions {
   pagesContainerRef: React.RefObject<HTMLDivElement | null>;
   hiddenPMRef: React.RefObject<OffscreenEditorHostRef | null>;
+  /**
+   * Active HF EditorView lookup — when `hfEditMode` is truthy, every
+   * gesture (single-click, drag, multi-click, image-select, hyperlink) is
+   * routed through this view instead of the body PM. Without it the hook
+   * stays single-surface and only the body PM receives input.
+   */
+  getHfView?: () => EditorView | null;
   layout: Layout | null;
   blocks: FlowBlock[];
   measures: Measure[];
@@ -109,10 +118,63 @@ export interface UsePagesPointerReturn {
   getPositionFromMouse: (clientX: number, clientY: number) => number | null;
 }
 
+/**
+ * Minimal surface every pointer gesture needs from "the PM the user is
+ * editing." Body PM (`OffscreenEditorHostRef`) and HF PM (raw `EditorView`)
+ * both project into this shape. Routing through `activeSurface()` keeps
+ * the handler body single-pipeline: drag, multi-click, image-select,
+ * hyperlink, table-cell selection all flow through whichever PM is
+ * active without the handler caring which one.
+ */
+interface ActivePmSurface {
+  getView(): EditorView | null;
+  setSelection(anchor: number, head?: number): void;
+  setNodeSelection(pos: number): void;
+  setCellSelection(anchorCellPos: number, headCellPos: number): void;
+  focus(): void;
+}
+
+function wrapEditorViewAsSurface(view: EditorView): ActivePmSurface {
+  return {
+    getView: () => view,
+    setSelection(anchor, head) {
+      const headPos = head ?? anchor;
+      try {
+        const $a = view.state.doc.resolve(anchor);
+        const $h = view.state.doc.resolve(headPos);
+        view.dispatch(view.state.tr.setSelection(TextSelection.between($a, $h)));
+      } catch {
+        // Out-of-range — fall back to start of doc.
+        view.dispatch(view.state.tr.setSelection(TextSelection.create(view.state.doc, 0)));
+      }
+    },
+    setNodeSelection(pos) {
+      try {
+        view.dispatch(view.state.tr.setSelection(NodeSelection.create(view.state.doc, pos)));
+      } catch {
+        // Position may not be a valid node anchor.
+      }
+    },
+    setCellSelection(anchorCellPos, headCellPos) {
+      try {
+        const $a = view.state.doc.resolve(anchorCellPos);
+        const $h = view.state.doc.resolve(headCellPos);
+        view.dispatch(view.state.tr.setSelection(new CellSelection($a, $h)));
+      } catch {
+        // Not inside a table — ignore.
+      }
+    },
+    focus() {
+      view.focus();
+    },
+  };
+}
+
 export function usePagesPointer(opts: UsePagesPointerOptions): UsePagesPointerReturn {
   const {
     pagesContainerRef,
     hiddenPMRef,
+    getHfView,
     layout,
     blocks,
     measures,
@@ -136,7 +198,11 @@ export function usePagesPointer(opts: UsePagesPointerOptions): UsePagesPointerRe
   const dragAnchorRef = useRef<number | null>(null);
 
   // Table resize state machine (column-between, row, right-edge handles).
-  const tableResize = useTableResizeState({ hiddenPMRef });
+  // `getActiveHfView` lets the hook dispatch column/row commits on the HF
+  // EditorView when the handle lives inside `.layout-page-header/footer`,
+  // not on the body PM (which would corrupt the body doc with stray
+  // colWidth changes at out-of-range positions).
+  const tableResize = useTableResizeState({ hiddenPMRef, getActiveHfView: getHfView });
 
   // Cell selection drag state
   const isCellDraggingRef = useRef(false);
@@ -186,6 +252,52 @@ export function usePagesPointer(opts: UsePagesPointerOptions): UsePagesPointerRe
       const domPos = resolveDomPosition(pagesContainerRef.current, clientX, clientY, zoom);
       if (domPos !== null) return domPos;
 
+      // In HF edit mode, the geometry-based fallback below uses BODY blocks/
+      // measures — wrong coord space for HF clicks. If resolveDomPosition
+      // couldn't pin a span, find the nearest HF data-doc-from span at the
+      // same y so drag-select doesn't ping-pong between HF and body coords
+      // mid-drag. Returning null is safer than returning a body pos.
+      if (hfEditMode) {
+        const els = window.document.elementsFromPoint(clientX, clientY);
+        const hfHost = els.find(
+          (el) =>
+            (el as HTMLElement).closest('.layout-page-header') ||
+            (el as HTMLElement).closest('.layout-page-footer')
+        ) as HTMLElement | undefined;
+        if (!hfHost) return null;
+        // Walk every painted span in the HF host; pick the closest by horizontal
+        // distance on the same line (within span vertical bounds).
+        const host = hfHost.closest('.layout-page-header') ?? hfHost.closest('.layout-page-footer');
+        if (!host) return null;
+        const spans = Array.from(
+          host.querySelectorAll<HTMLElement>('span[data-doc-from][data-doc-to]')
+        );
+        let best: { pos: number; dist: number } | null = null;
+        for (const span of spans) {
+          const r = span.getBoundingClientRect();
+          if (clientY < r.top - 4 || clientY > r.bottom + 4) continue;
+          const docFrom = Number(span.dataset.docFrom);
+          const docTo = Number(span.dataset.docTo);
+          if (!Number.isFinite(docFrom) || !Number.isFinite(docTo)) continue;
+          // Snap to span edge nearest the cursor.
+          let pos: number;
+          let dist: number;
+          if (clientX < r.left) {
+            pos = docFrom;
+            dist = r.left - clientX;
+          } else if (clientX > r.right) {
+            pos = docTo;
+            dist = clientX - r.right;
+          } else {
+            const ratio = (clientX - r.left) / Math.max(1, r.width);
+            pos = docFrom + Math.round(ratio * (docTo - docFrom));
+            dist = 0;
+          }
+          if (!best || dist < best.dist) best = { pos, dist };
+        }
+        return best?.pos ?? null;
+      }
+
       const pageElements = pagesContainerRef.current.querySelectorAll('.layout-page');
       let clickedPageIndex = -1;
       let pageRect: DOMRect | null = null;
@@ -225,7 +337,7 @@ export function usePagesPointer(opts: UsePagesPointerOptions): UsePagesPointerRe
       }
       return pointerToDocPos(fragmentHit);
     },
-    [layout, blocks, measures, zoom, pagesContainerRef]
+    [layout, blocks, measures, zoom, hfEditMode, pagesContainerRef]
   );
 
   /**
@@ -233,9 +345,22 @@ export function usePagesPointer(opts: UsePagesPointerOptions): UsePagesPointerRe
    * Returns the cell's `before(d)` so CellSelection.create can resolve via
    * cellAround() internally.
    */
+  // Build the active surface for whichever PM the user is editing — HF view
+  // when `hfEditMode` is set AND `getHfView` resolves, body PM otherwise.
+  // Holding it as a function (not a value) lets the closure see the latest
+  // `hfEditMode` on each gesture without rebuilding handler callbacks.
+  const activeSurface = useCallback((): ActivePmSurface | null => {
+    if (hfEditMode && getHfView) {
+      const hfView = getHfView();
+      if (hfView) return wrapEditorViewAsSurface(hfView);
+    }
+    return hiddenPMRef.current;
+  }, [hfEditMode, getHfView, hiddenPMRef]);
+
   const findCellPosFromPmPos = useCallback(
     (pmPos: number): number | null => {
-      const view = hiddenPMRef.current?.getView();
+      const surface = activeSurface();
+      const view = surface?.getView();
       if (!view) return null;
       try {
         const $pos = view.state.doc.resolve(pmPos);
@@ -250,12 +375,13 @@ export function usePagesPointer(opts: UsePagesPointerOptions): UsePagesPointerRe
       }
       return null;
     },
-    [hiddenPMRef]
+    [activeSurface]
   );
 
   const handlePagesMouseDown = useCallback(
     (e: React.MouseEvent) => {
-      if (!hiddenPMRef.current) return;
+      const surface = activeSurface();
+      if (!surface) return;
 
       // Right-click: stop Firefox from resetting selection, but skip our routing.
       if (e.button === 2) {
@@ -276,42 +402,43 @@ export function usePagesPointer(opts: UsePagesPointerOptions): UsePagesPointerRe
 
       if (readOnly) return;
 
-      // HF edit mode: clicks outside header/footer area close the HF editor.
-      if (hfEditMode && onBodyClick) {
-        const target = e.target as HTMLElement;
+      const target = e.target as HTMLElement;
+
+      // HF edit mode: clicks outside the painted header/footer exit the HF
+      // editor — that's the only HF-specific carve-out. Everything else
+      // (table resize, image select, drag, multi-click) flows through the
+      // unified pipeline below via `surface`, which auto-routes to the HF
+      // EditorView when `hfEditMode` is set.
+      if (hfEditMode) {
         const isInHfArea =
           target.closest('.layout-page-header') ||
           target.closest('.layout-page-footer') ||
           target.closest('.hf-inline-editor');
-        if (!isInHfArea) {
+        if (!isInHfArea && onBodyClick) {
           e.preventDefault();
           e.stopPropagation();
           onBodyClick();
           return;
         }
-      }
-
-      // Normal mode: clicks in H/F area place cursor at start of body content
-      // (matches Word + Google Docs behavior).
-      if (!hfEditMode) {
-        const target = e.target as HTMLElement;
+      } else {
+        // Normal mode: single-click on H/F area is a no-op (matches Word —
+        // don't yank the body caret to position 0). Double-click (`e.detail === 2`)
+        // falls through to the dblclick branch below where HF edit mode engages.
         const isInHfArea =
           target.closest('.layout-page-header') || target.closest('.layout-page-footer');
-        if (isInHfArea) {
+        if (isInHfArea && e.detail !== 2) {
           e.preventDefault();
-          hiddenPMRef.current.setSelection(0);
-          hiddenPMRef.current.focus();
-          setIsFocused(true);
           return;
         }
       }
 
-      const target = e.target as HTMLElement;
-
-      // Table resize handles (column-between, row, right-edge).
+      // Table resize handles (column-between, row, right-edge). Body OR
+      // header tables — `tableResize.tryStartFromMouseDown` doesn't care
+      // which document the cells belong to, only that the click landed on
+      // a `.layout-table-*-handle`.
       if (tableResize.tryStartFromMouseDown(target, e)) return;
 
-      // Image click → NodeSelection on the image, suppress text overlay.
+      // Image click → NodeSelection on the active doc.
       const imageEl = coreFindImageElement(target);
       if (imageEl) {
         e.preventDefault();
@@ -319,13 +446,13 @@ export function usePagesPointer(opts: UsePagesPointerOptions): UsePagesPointerRe
         const docFrom = imageEl.dataset.docFrom;
         if (docFrom !== undefined) {
           const pos = parseInt(docFrom, 10);
-          hiddenPMRef.current.setNodeSelection(pos);
+          surface.setNodeSelection(pos);
           setSelectedImageInfo(buildImageSelectionInfo(imageEl, pos));
           setSelectionGeometry([]);
           setCaretPosition(null);
         }
-        hiddenPMRef.current.focus();
-        setIsFocused(true);
+        surface.focus();
+        if (!hfEditMode) setIsFocused(true);
         return;
       }
 
@@ -343,30 +470,31 @@ export function usePagesPointer(opts: UsePagesPointerOptions): UsePagesPointerRe
         cellDragOverflowXRef.current = null;
         isDraggingRef.current = true;
         dragAnchorRef.current = pmPos;
-        hiddenPMRef.current.setSelection(pmPos);
+        surface.setSelection(pmPos);
       } else {
-        // Click outside content — move cursor to end.
+        // Click outside content — move cursor to end of active doc.
         cellDragAnchorPosRef.current = null;
         isCellDraggingRef.current = false;
-        const view = hiddenPMRef.current.getView();
+        const view = surface.getView();
         if (view) {
           const endPos = Math.max(0, view.state.doc.content.size - 1);
-          hiddenPMRef.current.setSelection(endPos);
+          surface.setSelection(endPos);
           dragAnchorRef.current = endPos;
           isDraggingRef.current = true;
         }
       }
 
-      hiddenPMRef.current.focus();
-      setIsFocused(true);
+      surface.focus();
+      if (!hfEditMode) setIsFocused(true);
     },
     [
-      hiddenPMRef,
+      activeSurface,
       readOnly,
       hfEditMode,
       onBodyClick,
       getPositionFromMouse,
       findCellPosFromPmPos,
+      tableResize,
       clearTableInsertTimer,
       setSelectedImageInfo,
       setSelectionGeometry,
@@ -377,13 +505,14 @@ export function usePagesPointer(opts: UsePagesPointerOptions): UsePagesPointerRe
   );
 
   // Re-wire the drag trampoline every render so it sees the latest
-  // `getPositionFromMouse` closure.
+  // `getPositionFromMouse` closure + the latest active surface.
   dragExtendRef.current = (cx: number, cy: number) => {
     if (!isDraggingRef.current || dragAnchorRef.current === null) return;
-    if (!hiddenPMRef.current) return;
+    const surface = activeSurface();
+    if (!surface) return;
     const pmPos = getPositionFromMouse(cx, cy);
     if (pmPos === null) return;
-    hiddenPMRef.current.setSelection(dragAnchorRef.current, pmPos);
+    surface.setSelection(dragAnchorRef.current, pmPos);
   };
 
   const handleMouseMove = useCallback(
@@ -393,7 +522,8 @@ export function usePagesPointer(opts: UsePagesPointerOptions): UsePagesPointerRe
       if (tableResize.handleMouseMoveUpdate(e)) return;
 
       if (!isDraggingRef.current || dragAnchorRef.current === null) return;
-      if (!hiddenPMRef.current || !pagesContainerRef.current) return;
+      const surface = activeSurface();
+      if (!surface || !pagesContainerRef.current) return;
 
       updateDragScroll(e.clientX, e.clientY);
 
@@ -406,7 +536,7 @@ export function usePagesPointer(opts: UsePagesPointerOptions): UsePagesPointerRe
         if (isCellDraggingRef.current) {
           const currentCellPos = findCellPosFromPmPos(pmPos);
           if (currentCellPos !== null) {
-            hiddenPMRef.current.setCellSelection(cellDragAnchorPosRef.current, currentCellPos);
+            surface.setCellSelection(cellDragAnchorPosRef.current, currentCellPos);
             return;
           }
         }
@@ -414,7 +544,7 @@ export function usePagesPointer(opts: UsePagesPointerOptions): UsePagesPointerRe
         const currentCellPos = findCellPosFromPmPos(pmPos);
         if (currentCellPos !== null && currentCellPos !== cellDragAnchorPosRef.current) {
           isCellDraggingRef.current = true;
-          hiddenPMRef.current.setCellSelection(cellDragAnchorPosRef.current, currentCellPos);
+          surface.setCellSelection(cellDragAnchorPosRef.current, currentCellPos);
           cellDragOverflowXRef.current = null;
           return;
         }
@@ -429,10 +559,7 @@ export function usePagesPointer(opts: UsePagesPointerOptions): UsePagesPointerRe
             Math.abs(e.clientX - cellDragOverflowXRef.current) >= CELL_SELECT_OVERFLOW_PX
           ) {
             isCellDraggingRef.current = true;
-            hiddenPMRef.current.setCellSelection(
-              cellDragAnchorPosRef.current,
-              cellDragAnchorPosRef.current
-            );
+            surface.setCellSelection(cellDragAnchorPosRef.current, cellDragAnchorPosRef.current);
             cellDragOverflowXRef.current = null;
             return;
           }
@@ -444,9 +571,16 @@ export function usePagesPointer(opts: UsePagesPointerOptions): UsePagesPointerRe
 
       // Regular text-selection drag (outside tables, or inside a single cell).
       const anchor = dragAnchorRef.current;
-      hiddenPMRef.current.setSelection(anchor, pmPos);
+      surface.setSelection(anchor, pmPos);
     },
-    [getPositionFromMouse, findCellPosFromPmPos, updateDragScroll, hiddenPMRef, pagesContainerRef]
+    [
+      activeSurface,
+      getPositionFromMouse,
+      findCellPosFromPmPos,
+      updateDragScroll,
+      tableResize,
+      pagesContainerRef,
+    ]
   );
 
   const handleMouseUp = useCallback(() => {
@@ -527,9 +661,10 @@ export function usePagesPointer(opts: UsePagesPointerOptions): UsePagesPointerRe
     (e: React.MouseEvent) => {
       e.preventDefault();
       e.stopPropagation();
-      if (!tableInsertButton || !hiddenPMRef.current) return;
-      const view = hiddenPMRef.current.getView();
-      if (!view) return;
+      if (!tableInsertButton) return;
+      const surface = activeSurface();
+      const view = surface?.getView();
+      if (!surface || !view) return;
 
       const { type, cellPmPos } = tableInsertButton;
       const tr = view.state.tr.setSelection(TextSelection.create(view.state.doc, cellPmPos + 1));
@@ -542,53 +677,48 @@ export function usePagesPointer(opts: UsePagesPointerOptions): UsePagesPointerRe
       }
 
       setTableInsertButton(null);
-      hiddenPMRef.current.focus();
+      surface.focus();
     },
-    [tableInsertButton, hiddenPMRef]
+    [tableInsertButton, activeSurface]
   );
 
   const handlePagesClick = useCallback(
     (e: React.MouseEvent) => {
+      const surface = activeSurface();
+
       // Hyperlink: bookmark anchor (#name) or external href.
       const anchorEl = (e.target as HTMLElement).closest('a[href]') as HTMLAnchorElement | null;
-      if (anchorEl) {
+      if (anchorEl && surface) {
         e.preventDefault();
         const href = anchorEl.getAttribute('href') || '';
+        const view = surface.getView();
         if (href.startsWith('#')) {
           const bookmarkName = href.substring(1);
-          if (bookmarkName && hiddenPMRef.current) {
-            const view = hiddenPMRef.current.getView();
-            if (view) {
-              let targetPos: number | null = null;
-              view.state.doc.descendants((node, pos) => {
-                if (targetPos !== null) return false;
-                if (node.type.name === 'paragraph') {
-                  const bookmarks = node.attrs.bookmarks as
-                    | Array<{ id: number; name: string }>
-                    | undefined;
-                  if (bookmarks?.some((b) => b.name === bookmarkName)) {
-                    targetPos = pos;
-                    return false;
-                  }
+          if (bookmarkName && view) {
+            let targetPos: number | null = null;
+            view.state.doc.descendants((node, pos) => {
+              if (targetPos !== null) return false;
+              if (node.type.name === 'paragraph') {
+                const bookmarks = node.attrs.bookmarks as
+                  | Array<{ id: number; name: string }>
+                  | undefined;
+                if (bookmarks?.some((b) => b.name === bookmarkName)) {
+                  targetPos = pos;
+                  return false;
                 }
-              });
-              if (targetPos !== null) {
-                scrollToPositionImpl(targetPos);
-                hiddenPMRef.current.setSelection(targetPos + 1);
               }
+            });
+            if (targetPos !== null) {
+              scrollToPositionImpl(targetPos);
+              surface.setSelection(targetPos + 1);
             }
           }
         } else if (onHyperlinkClick) {
           // External hyperlink — show popup unless this is a drag-to-select.
-          const view = hiddenPMRef.current?.getView();
           const hasRangeSelection = view && view.state.selection.from !== view.state.selection.to;
           if (!hasRangeSelection) {
             const displayText = anchorEl.textContent || '';
             const tooltip = anchorEl.getAttribute('title') || undefined;
-            // Compute the popup position in the PagedEditor root container's
-            // coordinate space. The popup renders inside that container with
-            // `position: absolute`, so the browser handles repositioning on
-            // scroll for free — no JS listener needed.
             const root = anchorEl.closest('.ep-root.paged-editor') as HTMLElement | null;
             if (root) {
               const rootRect = root.getBoundingClientRect();
@@ -604,80 +734,68 @@ export function usePagesPointer(opts: UsePagesPointerOptions): UsePagesPointerRe
         return;
       }
 
-      // Double-click on header/footer area → enter HF editing mode.
-      if (e.detail === 2 && onHeaderFooterDoubleClick) {
+      // Double-click on header/footer area → enter HF editing mode. Only
+      // fires when NOT already in HF mode — once engaged, the dblclick falls
+      // through to the word-select / cell-select branches below.
+      if (e.detail === 2 && !hfEditMode && onHeaderFooterDoubleClick) {
         const target = e.target as HTMLElement;
         const headerEl = target.closest('.layout-page-header');
         const footerEl = target.closest('.layout-page-footer');
         if (headerEl || footerEl) {
           const pageEl = target.closest('[data-page-number]') as HTMLElement | null;
           const pageNum = pageEl ? Number(pageEl.dataset.pageNumber) : 1;
-          if (headerEl) {
-            e.preventDefault();
-            e.stopPropagation();
-            onHeaderFooterDoubleClick('header', pageNum);
-            return;
-          }
-          if (footerEl) {
-            e.preventDefault();
-            e.stopPropagation();
-            onHeaderFooterDoubleClick('footer', pageNum);
-            return;
-          }
+          e.preventDefault();
+          e.stopPropagation();
+          onHeaderFooterDoubleClick(headerEl ? 'header' : 'footer', pageNum);
+          return;
         }
       }
 
+      if (!surface) return;
+      const view = surface.getView();
+      if (!view) return;
+
       // Double-click: cell selection if inside a table, otherwise word selection.
-      if (e.detail === 2 && hiddenPMRef.current) {
+      if (e.detail === 2) {
         const pmPos = getPositionFromMouse(e.clientX, e.clientY);
         if (pmPos !== null) {
           const cellPos = findCellPosFromPmPos(pmPos);
           if (cellPos !== null) {
             e.preventDefault();
             e.stopPropagation();
-            hiddenPMRef.current.setCellSelection(cellPos, cellPos);
+            surface.setCellSelection(cellPos, cellPos);
             return;
           }
 
-          const view = hiddenPMRef.current.getView();
-          if (view) {
-            const { doc } = view.state;
-            const $pos = doc.resolve(pmPos);
-            const parent = $pos.parent;
-            if (parent.isTextblock) {
-              const text = parent.textContent;
-              const offset = $pos.parentOffset;
-              const [start, end] = findWordBoundaries(text, offset);
-              const absStart = $pos.start() + start;
-              const absEnd = $pos.start() + end;
-              if (absStart < absEnd) {
-                hiddenPMRef.current.setSelection(absStart, absEnd);
-              }
-            }
+          const { doc } = view.state;
+          const $pos = doc.resolve(pmPos);
+          const parent = $pos.parent;
+          if (parent.isTextblock) {
+            const text = parent.textContent;
+            const offset = $pos.parentOffset;
+            const [start, end] = findWordBoundaries(text, offset);
+            const absStart = $pos.start() + start;
+            const absEnd = $pos.start() + end;
+            if (absStart < absEnd) surface.setSelection(absStart, absEnd);
           }
         }
       }
 
       // Triple-click: paragraph selection.
-      if (e.detail === 3 && hiddenPMRef.current) {
+      if (e.detail === 3) {
         const pmPos = getPositionFromMouse(e.clientX, e.clientY);
         if (pmPos !== null) {
-          const view = hiddenPMRef.current.getView();
-          if (view) {
-            const { doc } = view.state;
-            const $pos = doc.resolve(pmPos);
-            const paragraphStart = $pos.start($pos.depth);
-            const paragraphEnd = $pos.end($pos.depth);
-            hiddenPMRef.current.setSelection(paragraphStart, paragraphEnd);
-          }
+          const $pos = view.state.doc.resolve(pmPos);
+          surface.setSelection($pos.start($pos.depth), $pos.end($pos.depth));
         }
       }
     },
     [
+      activeSurface,
+      hfEditMode,
       getPositionFromMouse,
       onHeaderFooterDoubleClick,
       onHyperlinkClick,
-      hiddenPMRef,
       findCellPosFromPmPos,
       scrollToPositionImpl,
     ]
@@ -688,8 +806,9 @@ export function usePagesPointer(opts: UsePagesPointerOptions): UsePagesPointerRe
       if (!onContextMenu) return;
       e.preventDefault();
 
-      const view = hiddenPMRef.current?.getView();
-      if (!view) return;
+      const surface = activeSurface();
+      const view = surface?.getView();
+      if (!surface || !view) return;
 
       // Two routes land here. The cheap one — right-clicking a non-selected
       // image — surfaces the image element as e.target and we walk up. The
@@ -735,23 +854,26 @@ export function usePagesPointer(opts: UsePagesPointerOptions): UsePagesPointerRe
       // Right-click inside an existing range keeps the selection; otherwise
       // move cursor to the right-click position.
       if (pmPos !== null && (from === to || pmPos < from || pmPos > to)) {
-        hiddenPMRef.current?.setSelection(pmPos);
-        hiddenPMRef.current?.focus();
-        setIsFocused(true);
+        surface.setSelection(pmPos);
+        surface.focus();
+        if (!hfEditMode) setIsFocused(true);
       }
 
-      const updatedState = hiddenPMRef.current?.getState();
-      const hasSelection = updatedState
-        ? updatedState.selection.from !== updatedState.selection.to
-        : false;
+      const hasSelection = view.state.selection.from !== view.state.selection.to;
 
       onContextMenu({ x: e.clientX, y: e.clientY, hasSelection, image: imageInfo });
     },
     // `zoom` is read inside captureInlinePositionEmu to convert post-
-    // transform px deltas back to authored space. List it explicitly even
-    // though getPositionFromMouse already invalidates on zoom — the dep is
-    // direct, not transitive, so it survives a refactor of the sibling.
-    [onContextMenu, getPositionFromMouse, zoom, hiddenPMRef, pagesContainerRef, setIsFocused]
+    // transform px deltas back to authored space.
+    [
+      activeSurface,
+      hfEditMode,
+      onContextMenu,
+      getPositionFromMouse,
+      zoom,
+      pagesContainerRef,
+      setIsFocused,
+    ]
   );
 
   const hideTableInsertButton = useCallback(() => setTableInsertButton(null), []);

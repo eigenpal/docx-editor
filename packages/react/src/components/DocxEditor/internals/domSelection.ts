@@ -199,8 +199,30 @@ export function computeSelectionGeometryFromDom(
  * `instanceof` to dodge bundling issues across `prosemirror-tables`
  * copies (the same trick used inline in updateSelectionOverlay).
  */
-export function applyCellSelectionHighlight(pagesContainer: HTMLElement, state: EditorState): void {
-  const prevSelected = pagesContainer.querySelectorAll('.layout-table-cell-selected');
+export function applyCellSelectionHighlight(
+  pagesContainer: HTMLElement,
+  state: EditorState,
+  options: { scope?: 'body' | 'hf' } = {}
+): void {
+  const scope = options.scope ?? 'body';
+  // The selector that limits which cells this call can highlight. HF cells
+  // live in `.layout-page-header` / `.layout-page-footer` (separate PM
+  // doc), body cells in `.layout-page-content`. PM positions overlap
+  // across docs, so we MUST scope the walk to the matching tree — a body
+  // CellSelection at pos 100 would otherwise also light up an HF cell
+  // at `data-doc-from="100"`.
+  const scopeSelector =
+    scope === 'hf'
+      ? '.layout-page-header .layout-table-cell, .layout-page-footer .layout-table-cell'
+      : '.layout-page-content .layout-table-cell';
+
+  // Only clear highlights inside this scope so the body call doesn't wipe
+  // HF highlights (and vice versa).
+  const prevSelected = pagesContainer.querySelectorAll(
+    scope === 'hf'
+      ? '.layout-page-header .layout-table-cell-selected, .layout-page-footer .layout-table-cell-selected'
+      : '.layout-page-content .layout-table-cell-selected'
+  );
   for (const el of Array.from(prevSelected)) {
     el.classList.remove('layout-table-cell-selected');
   }
@@ -217,7 +239,7 @@ export function applyCellSelectionHighlight(pagesContainer: HTMLElement, state: 
     selectedRanges.push([pos, pos + node.nodeSize]);
   });
 
-  const allCells = pagesContainer.querySelectorAll('.layout-table-cell');
+  const allCells = pagesContainer.querySelectorAll(scopeSelector);
   for (const cellEl of Array.from(allCells)) {
     const htmlEl = cellEl as HTMLElement;
     const docFromAttr = htmlEl.dataset.docFrom;
