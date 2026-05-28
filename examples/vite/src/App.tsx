@@ -1,5 +1,6 @@
 import React, { useState, useRef, useCallback, useEffect, useMemo } from 'react';
 import { createEmptyDocument, findStartPosForParaId } from '@eigenpal/docx-editor-core';
+import { loadFont } from '@eigenpal/docx-editor-core/utils';
 import { DocxEditor, type DocxEditorRef } from '@eigenpal/docx-editor-react';
 import {
   AgentChatLog,
@@ -116,6 +117,29 @@ export function App() {
     () => new URLSearchParams(window.location.search).get('disableFindReplaceShortcuts') === '1',
     []
   );
+  // E2E hook: ?customFonts=1 wires a custom-font registration against the
+  // bundled fixture so the Playwright suite can verify the `fonts` prop both
+  // injects @font-face and renders glyphs from the loaded face.
+  const customFonts = useMemo(() => {
+    if (typeof window === 'undefined') return undefined;
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('customFonts') !== '1') return undefined;
+    return [
+      { family: 'E2E Custom Font', src: '/e2e-fixtures/inter-regular.woff2' },
+      { family: 'E2E Custom Font', src: '/e2e-fixtures/inter-bold.woff2', weight: 700 },
+    ];
+  }, []);
+
+  // E2E hook: ?googleFont=Pacifico demonstrates the existing Google Fonts
+  // path. The `fonts` prop is for self-hosted faces; for Google Fonts call
+  // `loadFont(name)` from `@eigenpal/docx-editor-core/utils` directly.
+  const googleFontName = useMemo(() => {
+    if (typeof window === 'undefined') return null;
+    return new URLSearchParams(window.location.search).get('googleFont');
+  }, []);
+  useEffect(() => {
+    if (googleFontName) void loadFont(googleFontName);
+  }, [googleFontName]);
 
   // E2E opt-in: ?e2e=1 in URL, MODE=test, or VITE_DOCX_EDITOR_E2E=1. Gates the
   // Playwright debug hooks below. By default E2E still loads the demo fixture
@@ -438,6 +462,7 @@ export function App() {
           showZoomControl={true}
           initialZoom={autoZoom}
           disableFindReplaceShortcuts={disableFindReplaceShortcuts}
+          fonts={customFonts}
           renderLogo={renderLogo}
           documentName={fileName}
           onDocumentNameChange={setFileName}

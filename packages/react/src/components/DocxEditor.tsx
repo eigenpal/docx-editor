@@ -57,7 +57,8 @@ import { type InlineHeaderFooterEditorRef } from './InlineHeaderFooterEditor';
 import { DocumentAgent } from '@eigenpal/docx-editor-core/agent';
 import { DefaultLoadingIndicator, DefaultPlaceholder, ParseError } from './DocxEditorHelpers';
 import { type DocxInput } from '@eigenpal/docx-editor-core/utils';
-import { onFontsLoaded } from '@eigenpal/docx-editor-core/utils';
+import type { FontDefinition } from '@eigenpal/docx-editor-core/utils';
+import { useFontLifecycle } from '../hooks/useFontLifecycle';
 import { useTableSelection } from '../hooks/useTableSelection';
 import { useDocumentHistory } from '../hooks/useHistory';
 
@@ -175,6 +176,23 @@ export interface DocxEditorProps {
    * @example fontFamilies={[{ name: 'Roboto', fontFamily: 'Roboto, sans-serif', category: 'sans-serif' }]}
    */
   fontFamilies?: ReadonlyArray<string | FontOption>;
+  /**
+   * Custom font faces to register with the browser before the editor measures
+   * text. Each entry injects an `@font-face` rule. Pass a URL (woff2/woff/
+   * ttf/otf), an ArrayBuffer, or omit `src` to load by name from Google Fonts.
+   * Multiple entries can share `family` to register different weights/styles.
+   *
+   * Pass a stable reference — inline arrays re-register faces on each render
+   * (the loader dedupes by `family|weight|style`, so it's harmless but wastes
+   * work).
+   *
+   * @example
+   * fonts={[
+   *   { family: 'Custom Sans', src: '/fonts/CustomSans-Regular.woff2' },
+   *   { family: 'Custom Sans', src: '/fonts/CustomSans-Bold.woff2', weight: 700 },
+   * ]}
+   */
+  fonts?: ReadonlyArray<FontDefinition>;
   /** Print options for print preview */
   printOptions?: PrintOptions;
   /**
@@ -474,6 +492,7 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
     showOutline: showOutlineProp = false,
     showOutlineButton = true,
     fontFamilies,
+    fonts,
     printOptions: _printOptions,
     onPrint,
     onCopy: _onCopy,
@@ -765,13 +784,7 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
     trackedChangesLoadedRef,
   });
 
-  // Listen for font loading
-  useEffect(() => {
-    const cleanup = onFontsLoaded(() => {
-      onFontsLoadedCallback?.();
-    });
-    return cleanup;
-  }, [onFontsLoadedCallback]);
+  useFontLifecycle(fonts, onFontsLoadedCallback, onError);
 
   // Sync editing mode to ProseMirror suggestion mode plugin
   useEffect(() => {

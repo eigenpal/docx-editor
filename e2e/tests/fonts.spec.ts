@@ -359,3 +359,106 @@ test.describe('Font Edge Cases', () => {
     await assertions.assertDocumentContainsText(page, 'Unicode:');
   });
 });
+
+test.describe('Custom font registration via fonts prop', () => {
+  test('does not register the custom face when fonts prop is omitted', async ({ page }) => {
+    const editor = new EditorPage(page);
+    await editor.goto();
+    await editor.waitForReady();
+
+    const found = await page.evaluate(() => {
+      return Array.from(document.fonts).some(
+        (f) => f.family.replace(/^["']|["']$/g, '') === 'E2E Custom Font'
+      );
+    });
+    expect(found).toBe(false);
+  });
+
+  test('injects @font-face with each declared weight when fonts prop is supplied', async ({
+    page,
+  }) => {
+    await page.goto('/?e2e=1&empty=1&customFonts=1');
+    const editor = new EditorPage(page);
+    await editor.waitForReady();
+
+    const styleText = await page.evaluate(() => {
+      const styles = Array.from(document.head.querySelectorAll('style'));
+      return styles.map((s) => s.textContent || '').join('\n');
+    });
+    expect(styleText).toContain('font-family: "E2E Custom Font"');
+    expect(styleText).toContain('font-weight: normal');
+    expect(styleText).toContain('font-weight: 700');
+  });
+
+  test('registers the custom face on document.fonts', async ({ page }) => {
+    await page.goto('/?e2e=1&empty=1&customFonts=1');
+    const editor = new EditorPage(page);
+    await editor.waitForReady();
+
+    const families = await page.evaluate(() => {
+      return Array.from(document.fonts).map((f) => f.family.replace(/^["']|["']$/g, ''));
+    });
+    expect(families).toContain('E2E Custom Font');
+  });
+
+  test('custom font actually loads and renders distinct glyphs', async ({ page }) => {
+    await page.goto('/?e2e=1&empty=1&customFonts=1');
+    const editor = new EditorPage(page);
+    await editor.waitForReady();
+
+    // Wait for the registered face to finish loading.
+    const status = await page.evaluate(async () => {
+      const face = Array.from(document.fonts).find(
+        (f) => f.family.replace(/^["']|["']$/g, '') === 'E2E Custom Font'
+      );
+      if (!face) return 'missing';
+      await face.load();
+      return face.status;
+    });
+    expect(status).toBe('loaded');
+
+    // Compare canvas measurement against a generic fallback. Different glyphs
+    // produce different widths — proves the browser used the loaded face.
+    const widths = await page.evaluate(() => {
+      const sample = 'Custom font sample 1234567890';
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d')!;
+      ctx.font = '72px monospace';
+      const monospace = ctx.measureText(sample).width;
+      ctx.font = '72px "E2E Custom Font", monospace';
+      const custom = ctx.measureText(sample).width;
+      return { monospace, custom };
+    });
+    expect(widths.custom).not.toBe(widths.monospace);
+  });
+});
+
+test.describe('Google Fonts via loadFont()', () => {
+  test('loadFont(name) registers a Google Fonts face on document.fonts', async ({ page }) => {
+    // The `fonts` prop is for self-hosted faces. For Google Fonts, consumers
+    // call `loadFont(name)` directly — the demo does that when ?googleFont=
+    // is set, mirroring the recommended consumer pattern.
+    await page.goto('/?e2e=1&empty=1&googleFont=Pacifico');
+    const editor = new EditorPage(page);
+    await editor.waitForReady();
+
+    const loaded = await page.evaluate(async () => {
+      await document.fonts.ready;
+      return document.fonts.check('16px "Pacifico"');
+    });
+    expect(loaded).toBe(true);
+
+    // Glyph check: Pacifico is a script face, visibly wider than monospace.
+    const widths = await page.evaluate(() => {
+      const sample = 'Pacifico script sample';
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d')!;
+      ctx.font = '72px monospace';
+      const fallback = ctx.measureText(sample).width;
+      ctx.font = '72px "Pacifico", monospace';
+      const pacifico = ctx.measureText(sample).width;
+      return { fallback, pacifico };
+    });
+    expect(widths.pacifico).not.toBe(widths.fallback);
+  });
+});

@@ -15,6 +15,7 @@ import { DocxInput } from '@eigenpal/docx-editor-core/utils';
 import { EditorHandle } from '@eigenpal/docx-editor-core';
 import { EditorState } from 'prosemirror-state';
 import { EditorView } from 'prosemirror-view';
+import { FontDefinition } from '@eigenpal/docx-editor-core/utils';
 import { FontOption } from '@eigenpal/docx-editor-core/utils/fontOptions';
 import { HeaderFooter } from '@eigenpal/docx-editor-core/types/document';
 import { Layout } from '@eigenpal/docx-editor-core/layout-engine';
@@ -61,6 +62,7 @@ export interface DocxEditorProps {
     externalContent?: boolean;
     externalPlugins?: prosemirror_state.Plugin[];
     fontFamilies?: ReadonlyArray<string | FontOption>;
+    fonts?: ReadonlyArray<FontDefinition>;
     i18n?: Translations;
     initialZoom?: number;
     loadingIndicator?: ReactNode;

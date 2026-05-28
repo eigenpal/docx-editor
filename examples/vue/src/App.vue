@@ -11,6 +11,7 @@
         :document="currentDocument"
         :show-toolbar="true"
         :document-name="fileName"
+        :fonts="customFonts"
         @change="handleDocumentChange"
         @error="handleError"
         @ready="handleReady"
@@ -102,6 +103,18 @@ const documentBuffer = ref<ArrayBuffer | null>(null);
 const currentDocument = ref<Document | null>(null);
 const fileName = ref('docx-editor-demo.docx');
 const status = ref('');
+
+// E2E hook: ?customFonts=1 wires a custom-font registration against the
+// bundled fixture so the Vue Playwright suite can verify the `fonts` prop.
+const customFonts = computed(() => {
+  if (typeof window === 'undefined') return undefined;
+  const params = new URLSearchParams(window.location.search);
+  if (params.get('customFonts') !== '1') return undefined;
+  return [
+    { family: 'E2E Custom Font', src: '/e2e-fixtures/inter-regular.woff2' },
+    { family: 'E2E Custom Font', src: '/e2e-fixtures/inter-bold.woff2', weight: 700 },
+  ];
+});
 
 // Agent panel — opt-in via `?agentPanel=1` like the React demo. Keeps the
 // live preview clean and gives Playwright parity tests a stable toggle.

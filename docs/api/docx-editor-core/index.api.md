@@ -980,7 +980,6 @@ export function loadFont(fontFamily: string, options?: {
 // @public
 export function loadFontFromBuffer(fontFamily: string, buffer: ArrayBuffer, options?: {
     weight?: number | string;
-    style?: 'normal' | 'italic';
 }): Promise<boolean>;
 
 // @public

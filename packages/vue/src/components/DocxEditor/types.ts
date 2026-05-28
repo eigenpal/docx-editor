@@ -12,6 +12,7 @@ import type { Plugin } from 'prosemirror-state';
 import type { Document, Theme } from '@eigenpal/docx-editor-core/types/document';
 import type { DocxInput } from '@eigenpal/docx-editor-core/utils';
 import type { FontOption } from '@eigenpal/docx-editor-core/utils/fontOptions';
+import type { FontDefinition } from '@eigenpal/docx-editor-core/utils';
 import type { StyleValue, VNodeChild } from 'vue';
 import type { EditorRefLike } from '@eigenpal/docx-editor-agents/bridge';
 import type { Translations } from '@eigenpal/docx-editor-i18n';
@@ -62,6 +63,13 @@ export interface DocxEditorProps {
   showOutlineButton?: boolean;
   /** Custom list of fonts shown in the font-family dropdown. */
   fontFamilies?: ReadonlyArray<string | FontOption>;
+  /**
+   * Custom font faces to register before the editor measures text. Each entry
+   * injects an `@font-face` rule. Pass a URL (woff2/woff/ttf/otf), an
+   * ArrayBuffer, or omit `src` to load by name from Google Fonts. Multiple
+   * entries can share `family` to register different weights/styles.
+   */
+  fonts?: ReadonlyArray<FontDefinition>;
   /**
    * Callback fired when the print action is triggered. Pass it to enable the
    * `File > Print` menu entry; omit to hide. The `editor.print()` ref method

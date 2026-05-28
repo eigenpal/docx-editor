@@ -397,6 +397,7 @@ import type { HeadingInfo } from '@eigenpal/docx-editor-core/utils/headingCollec
 import { createTranslator, provideLocale } from '../i18n';
 import { twipsToPixels } from '@eigenpal/docx-editor-core/utils/units';
 import { SIDEBAR_DOCUMENT_SHIFT } from '@eigenpal/docx-editor-core/utils';
+import { useFontLifecycle } from '../composables/useFontLifecycle';
 import { SelectionBridge } from '@eigenpal/docx-editor-core/prosemirror';
 
 const props = withDefaults(defineProps<DocxEditorProps>(), {
@@ -540,9 +541,9 @@ const documentTheme = computed(() => {
   return getDocument()?.package?.theme ?? props.theme ?? null;
 });
 
-// HF caret overlay: viewport-relative rect from the persistent HF view's
-// selection head. Shared with React via core's `computeHfCaretRectFromView`.
+// HF caret overlay rect from the persistent HF view; shared with React via core's `computeHfCaretRectFromView`.
 const hfCaretRect = ref<{ top: number; left: number; height: number } | null>(null);
+useFontLifecycle(() => props.fonts, (err) => emit('error', err));
 
 // Memoized so the template doesn't walk the headers/footers Maps every tick.
 const activeHfView = computed<EditorView | null>(() =>
