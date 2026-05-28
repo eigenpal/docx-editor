@@ -7,7 +7,6 @@
   <div
     :class="['ep-agent-chat-log', className]"
     :style="rootStyle"
-    ref="rootEl"
     role="log"
     aria-live="polite"
     aria-atomic="false"
@@ -73,7 +72,6 @@ const props = withDefaults(defineProps<AgentChatLogProps>(), {
   className: '',
 });
 
-const rootEl = ref<HTMLDivElement | null>(null);
 const endEl = ref<HTMLDivElement | null>(null);
 
 const isEmpty = computed(
