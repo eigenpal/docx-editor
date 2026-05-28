@@ -17,6 +17,7 @@
   <FindReplaceDialog
     :is-open="showFindReplace"
     :view="view"
+    :scroll-visible-position-into-view="scrollVisiblePositionIntoView"
     @close="emit('update:showFindReplace', false)"
   />
 
@@ -96,6 +97,7 @@ defineProps<{
   bookmarks: BookmarkOption[];
   selectedImagePmPos: number | null;
   sectionProperties: SectionProperties | null;
+  scrollVisiblePositionIntoView: (pmPos: number) => void;
   showFindReplace: boolean;
   showInsertImage: boolean;
   showHyperlink: boolean;
