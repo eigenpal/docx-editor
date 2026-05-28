@@ -2,6 +2,11 @@ name: CI
 
 # `lint` and `test` run in parallel; `build needs: [lint, test]` so a
 # package can never build before lint has passed (OpenSpec §4.3).
+#
+# Dependabot PRs are handled by dependabot-lockfile.yml (which refreshes
+# bun.lock first and then runs the same checks inline), so we skip them
+# here. GitHub treats skipped required checks as passing since 2022, so
+# branch protection still works.
 
 on:
   push:
@@ -11,6 +16,7 @@ on:
 
 jobs:
   lint:
+    if: github.actor != 'dependabot[bot]'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -31,6 +37,7 @@ jobs:
         run: bun run format:check
 
   test:
+    if: github.actor != 'dependabot[bot]'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -57,6 +64,7 @@ jobs:
         run: bash .github/cla/cla.test.sh
 
   build:
+    if: github.actor != 'dependabot[bot]'
     runs-on: ubuntu-latest
     needs: [lint, test]
     steps:
