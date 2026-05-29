@@ -580,6 +580,10 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
         const target = e.target as HTMLElement;
         if (target.closest('.docx-comments-sidebar') || target.closest('.docx-unified-sidebar'))
           return;
+        // Don't steal focus from the hyperlink popup's text/URL inputs —
+        // the focus event bubbles up here and would bounce focus back to
+        // the body PM, making the inputs impossible to edit.
+        if (target.closest('.ep-hyperlink-popup')) return;
         // Phase 5 of HF editing unification: when focus lands on one of
         // the persistent hidden HF PMs (mounted off-screen as siblings of
         // `.layout-page-content`), don't redirect to the body PM — that
@@ -643,6 +647,10 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
         // causing the body PM to grab every keystroke after the first.
         const target = e.target as HTMLElement | null;
         if (target?.closest('[data-hf-r-id]')) return;
+        // Don't hijack keystrokes typed into the hyperlink popup's inputs —
+        // refocusing the body PM here would steal focus mid-type and route
+        // keys (e.g. space) into the document instead of the input.
+        if (target?.closest('.ep-hyperlink-popup')) return;
         // Ensure hidden PM is focused if user types
         if (!hiddenPMRef.current?.isFocused()) {
           hiddenPMRef.current?.focus();
