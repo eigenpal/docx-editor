@@ -166,11 +166,15 @@ export default [
     rules: restrictVue,
   },
 
-  // DocxEditor.tsx has a relaxed 2000-line cap while the extraction effort
-  // (tracked in MEMORY.md) continues. The cap still enforces a ceiling so
-  // the file can't grow unbounded; the rest of the repo stays at 1000.
+  // The DocxEditor entry components (React and Vue twins) have a relaxed
+  // 2000-line cap while the extraction effort (tracked in MEMORY.md)
+  // continues. The cap still enforces a ceiling so the files can't grow
+  // unbounded; the rest of the repo stays at 1000.
   {
-    files: ['packages/react/src/components/DocxEditor.tsx'],
+    files: [
+      'packages/react/src/components/DocxEditor.tsx',
+      'packages/vue/src/components/DocxEditor.vue',
+    ],
     rules: {
       'max-lines': ['error', { max: 2000, skipBlankLines: false, skipComments: false }],
     },
