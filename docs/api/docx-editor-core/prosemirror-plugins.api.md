@@ -25,6 +25,19 @@ export function getSelectionContext(state: EditorState): SelectionContext | null
 export function isSuggestionModeActive(state: EditorState): boolean;
 
 // @public
+export function makeRevisionInfo(state: EditorState): RevisionInfo | null;
+
+// @public
+export interface RevisionInfo {
+    // (undocumented)
+    author: string;
+    // (undocumented)
+    date: string | null;
+    // (undocumented)
+    revisionId: number;
+}
+
+// @public
 export type SelectionChangeCallback = (context: SelectionContext) => void;
 
 // @public
@@ -49,7 +62,7 @@ export const selectionTrackerKey: PluginKey<SelectionContext>;
 // @public
 export function setSuggestionMode(active: boolean, state: EditorState, dispatch?: (tr: Transaction) => void, author?: string): boolean;
 
-// @public
+// @public (undocumented)
 export const suggestionModeKey: PluginKey<SuggestionModeState>;
 
 // @public

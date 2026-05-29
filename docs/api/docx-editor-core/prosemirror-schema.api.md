@@ -178,6 +178,9 @@ export interface ParagraphAttrs {
     pageBreakBefore?: boolean;
     // (undocumented)
     paraId?: string;
+    pPrChange?: ParagraphPropertyChange[] | null;
+    pPrDel?: RevisionInfo | null;
+    pPrIns?: RevisionInfo | null;
     renderedPageBreakBefore?: boolean;
     // (undocumented)
     sectionBreakType?: 'nextPage' | 'continuous' | 'oddPage' | 'evenPage';
@@ -217,6 +220,7 @@ export interface TableAttrs {
     look?: TableLook;
     _originalFormatting?: TableFormatting;
     styleId?: string;
+    tblPrChange?: TablePropertyChange[] | null;
     width?: number;
     widthType?: string;
 }
@@ -230,6 +234,18 @@ export interface TableCellAttrs {
         left?: BorderSpec;
         right?: BorderSpec;
     };
+    cellMarker?: {
+        kind: 'ins';
+        info: RevisionInfo;
+    } | {
+        kind: 'del';
+        info: RevisionInfo;
+    } | {
+        kind: 'merge';
+        info: RevisionInfo;
+        vMerge: 'rest' | 'cont';
+        vMergeOrig?: 'rest' | 'cont';
+    } | null;
     colspan: number;
     colwidth?: number[] | null;
     margins?: {
@@ -242,6 +258,7 @@ export interface TableCellAttrs {
     _originalFormatting?: TableCellFormatting;
     _originalResolvedFill?: string;
     rowspan: number;
+    tcPrChange?: TableCellPropertyChange[] | null;
     textDirection?: string;
     verticalAlign?: 'top' | 'center' | 'bottom';
     width?: number;
@@ -254,6 +271,10 @@ export interface TableRowAttrs {
     heightRule?: string;
     isHeader?: boolean;
     _originalFormatting?: TableRowFormatting;
+    // (undocumented)
+    trDel?: RevisionInfo | null;
+    trIns?: RevisionInfo | null;
+    trPrChange?: TableRowPropertyChange[] | null;
 }
 
 // @public

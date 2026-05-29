@@ -233,6 +233,8 @@ export function useDocxEditor(options: UseDocxEditorOptions): UseDocxEditorRetur
 
 // @public (undocumented)
 export interface UseDocxEditorOptions {
+    author?: MaybeRef<string>;
+    editorMode?: MaybeRef<'editing' | 'suggesting' | 'viewing'>;
     externalPlugins?: Plugin_2[];
     hiddenContainer: Ref<HTMLElement | null>;
     onChange?: (doc: Document_2) => void;

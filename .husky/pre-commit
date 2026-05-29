@@ -19,6 +19,18 @@ if [ $? -ne 0 ]; then
   exit 1
 fi
 
+# API snapshot gate — catches changes to any @public symbol that the
+# committer forgot to regenerate. CI runs the same `api:check`, so failing
+# here saves a round-trip. Fix is `bun run api:extract` then
+# `git add docs/api/` and `git commit --amend --no-edit` (or re-stage on
+# a fresh commit).
+echo "Running API snapshot check..."
+bun run api:check
+if [ $? -ne 0 ]; then
+  echo "API snapshot drift. Run 'bun run api:extract' and commit the updated docs/api/*.api.md files."
+  exit 1
+fi
+
 # Run lint-staged (prettier + eslint on staged files)
 echo "Running lint-staged..."
 npx lint-staged

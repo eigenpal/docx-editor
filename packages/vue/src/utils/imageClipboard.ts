@@ -11,6 +11,34 @@
  */
 
 import type { EditorView } from 'prosemirror-view';
+import { makeRevisionInfo } from '@eigenpal/docx-editor-core/prosemirror/plugins';
+import type { Node as PMNode } from 'prosemirror-model';
+import type { Transaction } from 'prosemirror-state';
+
+/**
+ * Apply the `insertion` mark to the just-replaced image when suggesting
+ * mode is active, so clipboard-pasted images round-trip as tracked
+ * additions. Run after replaceSelectionWith on the SAME tr.
+ */
+function tagPastedImageAsInsertion(view: EditorView, tr: Transaction, imageNode: PMNode): void {
+  const info = makeRevisionInfo(view.state);
+  const insertionType = view.state.schema.marks.insertion;
+  if (!info || !insertionType) return;
+  // After replaceSelectionWith, the image lives at the prior selection's
+  // start position (mapped). The cursor sits just after it.
+  const to = tr.selection.from;
+  const from = to - imageNode.nodeSize;
+  if (from < 0) return;
+  tr.addMark(
+    from,
+    to,
+    insertionType.create({
+      revisionId: info.revisionId,
+      author: info.author,
+      date: info.date,
+    })
+  );
+}
 
 /**
  * `ClipboardItem.getBlob(type)` is non-standard but ships in current
@@ -86,7 +114,9 @@ export async function pasteFromClipboard(view: EditorView): Promise<void> {
           wrapType: 'inline',
           displayMode: 'inline',
         });
-        view.dispatch(view.state.tr.replaceSelectionWith(imageNode));
+        const tr = view.state.tr.replaceSelectionWith(imageNode);
+        tagPastedImageAsInsertion(view, tr, imageNode);
+        view.dispatch(tr);
         return;
       }
 
@@ -108,7 +138,9 @@ export async function pasteFromClipboard(view: EditorView): Promise<void> {
             wrapType: 'inline',
             displayMode: 'inline',
           });
-          view.dispatch(view.state.tr.replaceSelectionWith(imageNode));
+          const tr = view.state.tr.replaceSelectionWith(imageNode);
+          tagPastedImageAsInsertion(view, tr, imageNode);
+          view.dispatch(tr);
           return;
         }
       }

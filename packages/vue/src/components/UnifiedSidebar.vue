@@ -68,6 +68,8 @@
             @click="toggleExpanded(item.id)"
             @accept="(from: number, to: number) => $emit('accept-change', from, to)"
             @reject="(from: number, to: number) => $emit('reject-change', from, to)"
+            @accept-by-id="(rev: number) => $emit('accept-change-by-id', rev)"
+            @reject-by-id="(rev: number) => $emit('reject-change-by-id', rev)"
             @reply="(rev: number, text: string) => $emit('tracked-change-reply', rev, text)"
           />
         </div>
@@ -130,6 +132,9 @@ const emit = defineEmits<{
   (e: 'comment-delete', commentId: number): void;
   (e: 'accept-change', from: number, to: number): void;
   (e: 'reject-change', from: number, to: number): void;
+  /** For paragraph-mark and other structural revisions — accept/reject by w:id. */
+  (e: 'accept-change-by-id', revisionId: number): void;
+  (e: 'reject-change-by-id', revisionId: number): void;
   (e: 'tracked-change-reply', revisionId: number, text: string): void;
   (e: 'update:activeItemId', id: string | null): void;
 }>();
@@ -224,6 +229,26 @@ function computePositions() {
   for (const el of container.querySelectorAll<HTMLElement>('.docx-deletion[data-revision-id]')) {
     const id = el.dataset.revisionId;
     if (id && !deletionEls.has(id)) deletionEls.set(id, el);
+  }
+  // Structural tracked changes (whole-table / row / cell insert+delete +
+  // tracked paragraph marks) live on the painted table/row/cell or on
+  // paragraph-fragment elements, not on `.docx-insertion` text spans —
+  // without these, an empty inserted table, a cell-only insert, or a
+  // pure-pmark revision never anchors and its card stays invisible.
+  // Two class prefixes are in play: `ep-revision-*` for table scopes,
+  // `layout-revision-*` for paragraph marks (renderParagraph.ts:128).
+  for (const el of container.querySelectorAll<HTMLElement>(
+    '.ep-revision-table[data-revision-id], ' +
+      '.ep-revision-row[data-revision-id], ' +
+      '.ep-revision-cell[data-revision-id], ' +
+      '.layout-revision-pmark[data-revision-id]'
+  )) {
+    const id = el.dataset.revisionId;
+    if (!id) continue;
+    const isIns =
+      el.classList.contains('ep-revision-ins') || el.classList.contains('layout-revision-ins');
+    const map = isIns ? insertionEls : deletionEls;
+    if (!map.has(id)) map.set(id, el);
   }
 
   const positioned: { id: string; targetY: number }[] = [];

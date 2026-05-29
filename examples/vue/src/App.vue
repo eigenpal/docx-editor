@@ -70,6 +70,18 @@ import { DocxEditor, type DocxEditorRef } from '@eigenpal/docx-editor-vue';
 import ExampleSwitcher from '../../shared/ExampleSwitcher.vue';
 import { createEmptyDocument, findStartPosForParaId } from '@eigenpal/docx-editor-core';
 import type { Document } from '@eigenpal/docx-editor-core/types/document';
+import { setSuggestionMode } from '@eigenpal/docx-editor-core/prosemirror/plugins';
+import {
+  acceptChangeById,
+  rejectChangeById,
+  acceptAllChanges,
+  rejectAllChanges,
+  addRowBelow,
+  deleteRow,
+} from '@eigenpal/docx-editor-core/prosemirror/commands';
+import type { Node as PMNode } from 'prosemirror-model';
+
+const randomAuthorVue = `Docx Editor User ${Math.floor(Math.random() * 900) + 100}`;
 import {
   AgentPanel,
   AgentChatLog,
@@ -310,7 +322,205 @@ onMounted(async () => {
       agentSetParagraphStyle: (opts) => editorRef.value?.setParagraphStyle(opts) ?? false,
       agentGetPageContent: (pageNumber: number) => editorRef.value?.getPageContent(pageNumber) ?? null,
       agentGetDocumentText: () => extractDocumentText(editorRef.value?.getDocument()),
+      // Tracked structural revisions (#614) — mirror of the React demo hooks
+      // so the same Playwright spec can run against this adapter.
+      setSuggestionMode: (active: boolean, authorOverride?: string) => {
+        const view = (editorRef.value?.getEditorRef() as any)?.getView?.();
+        if (!view) return false;
+        setSuggestionMode(active, view.state, view.dispatch, authorOverride ?? randomAuthorVue);
+        return true;
+      },
+      getParagraphRevisionAt: (index: number) => {
+        const view = (editorRef.value?.getEditorRef() as any)?.getView?.();
+        if (!view) return null;
+        let count = 0;
+        let out: { pPrIns: unknown; pPrDel: unknown } | null = null;
+        view.state.doc.descendants((node: PMNode) => {
+          if (out != null) return false;
+          if (node.type.name !== 'paragraph') return true;
+          if (count === index) {
+            out = {
+              pPrIns: (node.attrs as Record<string, unknown>).pPrIns ?? null,
+              pPrDel: (node.attrs as Record<string, unknown>).pPrDel ?? null,
+            };
+            return false;
+          }
+          count += 1;
+          return true;
+        });
+        return out;
+      },
+      acceptChangeById: (revisionId: number) => {
+        const view = (editorRef.value?.getEditorRef() as any)?.getView?.();
+        if (!view) return false;
+        return acceptChangeById(revisionId)(view.state, view.dispatch);
+      },
+      rejectChangeById: (revisionId: number) => {
+        const view = (editorRef.value?.getEditorRef() as any)?.getView?.();
+        if (!view) return false;
+        return rejectChangeById(revisionId)(view.state, view.dispatch);
+      },
+      acceptAllChanges: () => {
+        const view = (editorRef.value?.getEditorRef() as any)?.getView?.();
+        if (!view) return false;
+        return acceptAllChanges()(view.state, view.dispatch);
+      },
+      rejectAllChanges: () => {
+        const view = (editorRef.value?.getEditorRef() as any)?.getView?.();
+        if (!view) return false;
+        return rejectAllChanges()(view.state, view.dispatch);
+      },
+      getParagraphAttrs: (index: number) => {
+        const view = (editorRef.value?.getEditorRef() as any)?.getView?.();
+        if (!view) return null;
+        let count = 0;
+        let out: Record<string, unknown> | null = null;
+        view.state.doc.descendants((node: PMNode) => {
+          if (out != null) return false;
+          if (node.type.name !== 'paragraph') return true;
+          if (count === index) {
+            out = { ...node.attrs };
+            return false;
+          }
+          count += 1;
+          return true;
+        });
+        return out;
+      },
+      plantParagraphPropertyChange: (revisionId: number, prior: unknown) => {
+        const view = (editorRef.value?.getEditorRef() as any)?.getView?.();
+        if (!view) return false;
+        let firstParaPos: number | null = null;
+        let firstPara: PMNode | null = null;
+        view.state.doc.descendants((node: PMNode, pos: number) => {
+          if (firstParaPos != null) return false;
+          if (node.type.name === 'paragraph') {
+            firstParaPos = pos;
+            firstPara = node;
+            return false;
+          }
+          return true;
+        });
+        if (firstParaPos == null || firstPara == null) return false;
+        view.dispatch(
+          view.state.tr.setNodeMarkup(firstParaPos, undefined, {
+            ...(firstPara as PMNode).attrs,
+            pPrChange: [
+              {
+                type: 'paragraphPropertyChange',
+                info: { id: revisionId, author: 'Jane', date: new Date().toISOString() },
+                previousFormatting: prior,
+              },
+            ],
+          })
+        );
+        return true;
+      },
+      plantSimpleTable: () => {
+        const view = (editorRef.value?.getEditorRef() as any)?.getView?.();
+        if (!view) return false;
+        const { schema } = view.state;
+        const cellPara = schema.node('paragraph', {}, [schema.text('A')]);
+        const cell = schema.node('tableCell', { colspan: 1, rowspan: 1 }, [cellPara]);
+        const row = schema.node('tableRow', {}, [cell]);
+        const table = schema.node('table', {}, [row]);
+        view.dispatch(view.state.tr.replaceSelectionWith(table));
+        return true;
+      },
+      countTableRows: () => {
+        const view = (editorRef.value?.getEditorRef() as any)?.getView?.();
+        if (!view) return 0;
+        let count = 0;
+        let inFirstTable = false;
+        view.state.doc.descendants((node: PMNode) => {
+          if (node.type.name === 'table') {
+            if (inFirstTable) return false;
+            inFirstTable = true;
+            return true;
+          }
+          if (inFirstTable && node.type.name === 'tableRow') count += 1;
+          return false;
+        });
+        return count;
+      },
+      focusFirstTableCell: () => {
+        const view = (editorRef.value?.getEditorRef() as any)?.getView?.();
+        if (!view) return false;
+        let target: number | null = null;
+        view.state.doc.descendants((node: PMNode, pos: number) => {
+          if (target != null) return false;
+          if (node.type.name === 'tableCell' || node.type.name === 'tableHeader') {
+            target = pos + 2;
+            return false;
+          }
+          return true;
+        });
+        if (target == null) return false;
+        // Use the constructor on the live selection to avoid a direct
+        // `prosemirror-state` dependency in the demo's package.json.
+        const SelectionCtor = (view.state.selection as any).constructor;
+        const tr = view.state.tr.setSelection(SelectionCtor.near(view.state.doc.resolve(target)));
+        view.dispatch(tr);
+        view.focus();
+        return true;
+      },
+      plantTableRowInsertion: (revisionId: number) => {
+        const view = (editorRef.value?.getEditorRef() as any)?.getView?.();
+        if (!view) return false;
+        let rowPos: number | null = null;
+        let rowNode: PMNode | null = null;
+        view.state.doc.descendants((node: PMNode, pos: number) => {
+          if (rowPos != null) return false;
+          if (node.type.name === 'tableRow') {
+            rowPos = pos;
+            rowNode = node;
+            return false;
+          }
+          return true;
+        });
+        if (rowPos == null || rowNode == null) return false;
+        view.dispatch(
+          view.state.tr.setNodeMarkup(rowPos, undefined, {
+            ...(rowNode as PMNode).attrs,
+            trIns: { revisionId, author: 'Jane', date: new Date().toISOString() },
+          })
+        );
+        return true;
+      },
+      getFirstTableRowAttrs: () => {
+        const view = (editorRef.value?.getEditorRef() as any)?.getView?.();
+        if (!view) return null;
+        let out: Record<string, unknown> | null = null;
+        view.state.doc.descendants((node: PMNode) => {
+          if (out != null) return false;
+          if (node.type.name === 'tableRow') {
+            out = { ...node.attrs };
+            return false;
+          }
+          return true;
+        });
+        return out;
+      },
+      addRowBelow: () => {
+        const view = (editorRef.value?.getEditorRef() as any)?.getView?.();
+        if (!view) return false;
+        return addRowBelow(view.state, view.dispatch);
+      },
+      deleteCurrentRow: () => {
+        const view = (editorRef.value?.getEditorRef() as any)?.getView?.();
+        if (!view) return false;
+        return deleteRow(view.state, view.dispatch);
+      },
     };
+  }
+
+  // Under E2E with ?empty=1, boot empty so tests get a deterministic,
+  // known starting document instead of racing the async fixture fetch.
+  // Mirrors the React demo's behavior in examples/vite/src/App.tsx.
+  if (isE2E && params.get('empty') === '1') {
+    currentDocument.value = createEmptyDocument();
+    fileName.value = 'Untitled.docx';
+    return;
   }
 
   try {

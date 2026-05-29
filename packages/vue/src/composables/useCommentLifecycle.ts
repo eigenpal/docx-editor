@@ -254,6 +254,12 @@ export function useCommentLifecycle(opts: UseCommentLifecycleOptions) {
 
   watch([opts.stateTick, opts.isAddingComment, opts.zoom], () => recomputeFloatingCommentBtn());
   watch(opts.stateTick, () => recomputeActiveSidebarItem());
+  // Re-extract comments + tracked changes on every PM transaction so the
+  // sidebar stays in sync as the user types. Without this, the sidebar
+  // only refreshes on toggle/accept/reject — typing after the sidebar
+  // is open would leave the card list stale (React already does this via
+  // useTrackedChanges memoized on state).
+  watch(opts.stateTick, () => extractCommentsAndChanges());
 
   let floatingResizeObserver: ResizeObserver | null = null;
   onMounted(() => {

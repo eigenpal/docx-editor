@@ -15,6 +15,7 @@ import {
   captureInlinePositionEmu,
   toolbarValueToLayoutTarget,
 } from '@eigenpal/docx-editor-core/layout-painter';
+import { insertImageNode } from '@eigenpal/docx-editor-core/prosemirror/commands';
 import type { ImageSelectionInfo } from '../components/imageSelectionTypes';
 
 type Commands = Record<string, ((...args: unknown[]) => unknown) | undefined>;
@@ -80,9 +81,9 @@ export function useImageActions(opts: UseImageActionsOptions): UseImageActionsRe
       width: data.width,
       height: data.height,
     });
-    const { from } = view.state.selection;
-    const tr = view.state.tr.insert(from, node);
-    view.dispatch(tr.scrollIntoView());
+    // Shared helper applies the `insertion` mark when suggesting mode is
+    // active so the inserted image round-trips as a tracked addition.
+    insertImageNode(view.state, view.dispatch, node, view.state.selection.from);
     view.focus();
   }
 

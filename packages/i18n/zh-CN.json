@@ -816,5 +816,20 @@
     "deleteImage": "删除图片",
     "imageProperties": "图片属性",
     "rotate": "旋转"
+  },
+  "revisions": {
+    "cellDeleted": null,
+    "cellInserted": null,
+    "cellMerged": null,
+    "cellPropertiesChanged": null,
+    "paragraphMarkDeleted": null,
+    "paragraphMarkInserted": null,
+    "paragraphPropertiesChanged": null,
+    "rowDeleted": null,
+    "rowInserted": null,
+    "rowPropertiesChanged": null,
+    "tablePropertiesChanged": null,
+    "tableDeleted": null,
+    "tableInserted": null
   }
 }

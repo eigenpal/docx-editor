@@ -369,6 +369,9 @@ export interface ParagraphAttrs {
     pageBreakBefore?: boolean;
     // (undocumented)
     paraId?: string;
+    pPrChange?: ParagraphPropertyChange[] | null;
+    pPrDel?: RevisionInfo | null;
+    pPrIns?: RevisionInfo | null;
     renderedPageBreakBefore?: boolean;
     // (undocumented)
     sectionBreakType?: 'nextPage' | 'continuous' | 'oddPage' | 'evenPage';

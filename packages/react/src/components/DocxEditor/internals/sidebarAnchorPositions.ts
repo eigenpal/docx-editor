@@ -44,7 +44,69 @@ export function computeAnchorPositions(
   // viewport paddingTop + pages container padding (CSS padding = pageGap)
   const contentOffset = VIEWPORT_PADDING_TOP + renderedPageGap;
 
+  const registerKey = (key: string, pos: number) => {
+    if (seen.has(key)) return;
+    seen.add(key);
+
+    // Try exact position (paragraphs/images)
+    const caret = getCaretPosition(layout, blocks, measures, pos);
+    if (caret) {
+      positions.set(key, caret.y + contentOffset);
+      return;
+    }
+
+    // Fallback: find containing fragment (tables, etc.) by PM position
+    for (let pi = 0; pi < layout.pages.length; pi++) {
+      const page = layout.pages[pi];
+      for (const frag of page.fragments) {
+        const fStart = frag.docFrom ?? 0;
+        const fEnd = (frag as { docTo?: number }).docTo ?? fStart;
+        if (pos < fStart || pos > fEnd) continue;
+
+        const rowOffsetY =
+          frag.kind === 'table' ? getTableRowOffset(blocks, measures, frag, pos) : 0;
+        positions.set(key, frag.y + rowOffsetY + pageTopOffset(layout, pi) + contentOffset);
+        return;
+      }
+    }
+  };
+
   pmDoc.descendants((node, pos) => {
+    // Structural tracked-change attrs on non-text nodes (whole-table insert,
+    // row insert/delete, cell insert, paragraph-break tracked, etc). Without
+    // these, an empty inserted table has no anchor — the sidebar's
+    // hasPositions check stays false and the whole rail renders at opacity 0.
+    //
+    // The attrs use three different shapes for the revisionId:
+    //   • flat       — trIns / trDel / pPrIns / pPrDel: `{ revisionId, ... }`
+    //   • nested     — cellMarker: `{ kind, info: { revisionId, ... } }`
+    //   • array+info — *PrChange (paragraph/row/cell/table): `[{ info: { id } }, ...]`
+    // Pre-fix all three by extracting the revisionId at registration time.
+    const attrs = node.attrs as Record<string, unknown> | undefined;
+    if (attrs) {
+      const flat = [attrs.trIns, attrs.trDel, attrs.pPrIns, attrs.pPrDel];
+      for (const entry of flat) {
+        const revId = (entry as { revisionId?: unknown } | null | undefined)?.revisionId;
+        if (typeof revId === 'number') registerKey(`revision-${revId}`, pos);
+      }
+      const cellMarker = attrs.cellMarker as { info?: { revisionId?: unknown } } | null;
+      const cellRev = cellMarker?.info?.revisionId;
+      if (typeof cellRev === 'number') registerKey(`revision-${cellRev}`, pos);
+      const propChangeArrays = [
+        attrs.pPrChange,
+        attrs.trPrChange,
+        attrs.tcPrChange,
+        attrs.tblPrChange,
+      ];
+      for (const arr of propChangeArrays) {
+        if (!Array.isArray(arr)) continue;
+        for (const entry of arr as Array<{ info?: { id?: unknown } }>) {
+          const id = entry?.info?.id;
+          if (typeof id === 'number') registerKey(`revision-${id}`, pos);
+        }
+      }
+    }
+
     if (!node.isText) return;
     for (const mark of node.marks) {
       let key: string | null = null;
@@ -56,33 +118,8 @@ export function computeAnchorPositions(
       ) {
         key = `revision-${mark.attrs.revisionId}`;
       }
-      if (!key || seen.has(key)) continue;
-      seen.add(key);
-
-      // Try exact position (paragraphs/images)
-      const caret = getCaretPosition(layout, blocks, measures, pos);
-      if (caret) {
-        positions.set(key, caret.y + contentOffset);
-        continue;
-      }
-
-      // Fallback: find containing fragment (tables, etc.) by PM position
-      for (let pi = 0; pi < layout.pages.length; pi++) {
-        const page = layout.pages[pi];
-        let found = false;
-        for (const frag of page.fragments) {
-          const fStart = frag.docFrom ?? 0;
-          const fEnd = (frag as { docTo?: number }).docTo ?? fStart;
-          if (pos < fStart || pos > fEnd) continue;
-
-          const rowOffsetY =
-            frag.kind === 'table' ? getTableRowOffset(blocks, measures, frag, pos) : 0;
-          positions.set(key, frag.y + rowOffsetY + pageTopOffset(layout, pi) + contentOffset);
-          found = true;
-          break;
-        }
-        if (found) break;
-      }
+      if (!key) continue;
+      registerKey(key, pos);
     }
   });
 

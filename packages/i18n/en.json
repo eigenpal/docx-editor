@@ -548,6 +548,21 @@
     "added": "Added",
     "deleted": "Deleted"
   },
+  "revisions": {
+    "paragraphMarkInserted": "Inserted paragraph break",
+    "paragraphMarkDeleted": "Deleted paragraph break",
+    "paragraphPropertiesChanged": "Changed paragraph properties",
+    "rowInserted": "Inserted row",
+    "rowDeleted": "Deleted row",
+    "rowPropertiesChanged": "Changed row properties",
+    "cellInserted": "Inserted cell",
+    "cellDeleted": "Deleted cell",
+    "cellMerged": "Merged cells",
+    "cellPropertiesChanged": "Changed cell properties",
+    "tablePropertiesChanged": "Changed table properties",
+    "tableInserted": "Inserted table",
+    "tableDeleted": "Deleted table"
+  },
   "contextMenu": {
     "ariaLabel": "AI actions menu",
     "textMenuAriaLabel": "Text editing menu",

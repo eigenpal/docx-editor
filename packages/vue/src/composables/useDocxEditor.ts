@@ -10,6 +10,7 @@ import {
   onBeforeUnmount,
   shallowRef,
   unref,
+  watch,
   type MaybeRef,
   type Ref,
   type ShallowRef,
@@ -28,6 +29,10 @@ import {
 import { fromProseDoc } from '@eigenpal/docx-editor-core/prosemirror/conversion/fromProseDoc';
 import { schema } from '@eigenpal/docx-editor-core/prosemirror';
 import { singletonManager } from '@eigenpal/docx-editor-core/prosemirror/schema';
+import {
+  createSuggestionModePlugin,
+  setSuggestionMode,
+} from '@eigenpal/docx-editor-core/prosemirror/plugins';
 import {
   ExtensionManager,
   createStarterKit,
@@ -185,6 +190,15 @@ export interface UseDocxEditorOptions {
   externalPlugins?: Plugin[];
   /** Coordinates layout updates with visible selection/decoration overlays. */
   syncCoordinator?: SelectionBridge;
+  /**
+   * Editor mode. When set to `'suggesting'`, the composable toggles the
+   * mounted suggestion-mode plugin's active state so typed text becomes
+   * tracked changes. Reactive — flip at runtime to switch modes.
+   * Mirrors React's `editingMode` prop wiring.
+   */
+  editorMode?: MaybeRef<'editing' | 'suggesting' | 'viewing'>;
+  /** Author name attached to tracked changes minted in suggesting mode. */
+  author?: MaybeRef<string>;
 }
 
 export interface UseDocxEditorReturn {
@@ -254,6 +268,8 @@ export function useDocxEditor(options: UseDocxEditorOptions): UseDocxEditorRetur
     onSelectionUpdate,
     externalPlugins = [],
     syncCoordinator,
+    editorMode,
+    author,
   } = options;
 
   // State
@@ -492,7 +508,11 @@ export function useDocxEditor(options: UseDocxEditorOptions): UseDocxEditorRetur
         })
       : createEmptyDoc();
 
-    const plugins: Plugin[] = [...externalPlugins, ...(mgr.getPlugins() ?? [])];
+    // Suggestion-mode plugin is registered inactive; `setSuggestionMode()`
+    // toggles its `active` state via PluginKey meta. Mirrors React's
+    // mount-once-and-toggle pattern (DocxEditor.tsx createSuggestionModePlugin).
+    const suggestionPlugin = createSuggestionModePlugin(false);
+    const plugins: Plugin[] = [suggestionPlugin, ...externalPlugins, ...(mgr.getPlugins() ?? [])];
 
     const state = EditorState.create({
       doc,
@@ -540,6 +560,20 @@ export function useDocxEditor(options: UseDocxEditorOptions): UseDocxEditorRetur
     runLayoutPipeline(state);
     syncCoordinator?.requestRender();
   }
+
+  // Sync editorMode/author to the mounted suggestion-mode plugin.
+  // Mirrors React's DocxEditor.tsx useEffect that calls setSuggestionMode
+  // whenever editingMode or author changes. Without this watch, the Vue
+  // `mode="suggesting"` prop would not actually activate the plugin —
+  // typed text would land as plain edits.
+  watch(
+    [() => unref(editorMode), () => unref(author), editorView],
+    ([mode, who, view]) => {
+      if (!view) return;
+      setSuggestionMode(mode === 'suggesting', view.state, view.dispatch, who);
+    },
+    { immediate: true }
+  );
 
   function destroyEditorView() {
     if (editorView.value) {

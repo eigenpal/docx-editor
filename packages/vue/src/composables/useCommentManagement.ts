@@ -12,7 +12,12 @@
 import type { Ref } from 'vue';
 import type { EditorView } from 'prosemirror-view';
 import type { Comment, Document } from '@eigenpal/docx-editor-core/types/document';
-import { acceptChange, rejectChange } from '@eigenpal/docx-editor-core/prosemirror/commands';
+import {
+  acceptChange,
+  rejectChange,
+  acceptChangeById,
+  rejectChangeById,
+} from '@eigenpal/docx-editor-core/prosemirror/commands';
 import { findParaIdRange, findTextInPmParagraph } from '../utils/paraTextHelpers';
 import { createComment as createCommentImpl } from './../utils/commentFactories';
 import type { TrackedChangeEntry } from '../components/sidebar/sidebarUtils';
@@ -199,6 +204,22 @@ export function useCommentManagement(opts: UseCommentManagementOptions) {
     view.focus();
   }
 
+  function handleAcceptChangeById(revisionId: number) {
+    const view = opts.editorView.value;
+    if (!view) return;
+    acceptChangeById(revisionId)(view.state, view.dispatch);
+    opts.extractCommentsAndChanges();
+    view.focus();
+  }
+
+  function handleRejectChangeById(revisionId: number) {
+    const view = opts.editorView.value;
+    if (!view) return;
+    rejectChangeById(revisionId)(view.state, view.dispatch);
+    opts.extractCommentsAndChanges();
+    view.focus();
+  }
+
   function handleTrackedChangeReply(revisionId: number, text: string) {
     const doc = opts.getDocument();
     const view = opts.editorView.value;
@@ -246,6 +267,8 @@ export function useCommentManagement(opts: UseCommentManagementOptions) {
     handleCommentDelete,
     handleAcceptChange,
     handleRejectChange,
+    handleAcceptChangeById,
+    handleRejectChangeById,
     handleTrackedChangeReply,
   };
 }

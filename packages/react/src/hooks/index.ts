@@ -76,3 +76,6 @@ export {
   ZOOM_PRESETS,
 } from './useWheelZoom';
 export type { UseWheelZoomOptions, UseWheelZoomReturn } from './useWheelZoom';
+
+export { useTrackedChanges, extractTrackedChanges } from './useTrackedChanges';
+export type { TrackedChangesResult } from './useTrackedChanges';

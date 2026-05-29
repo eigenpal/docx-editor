@@ -279,6 +279,8 @@
             @comment-delete="handleCommentDelete"
             @accept-change="handleAcceptChange"
             @reject-change="handleRejectChange"
+            @accept-change-by-id="handleAcceptChangeById"
+            @reject-change-by-id="handleRejectChangeById"
             @tracked-change-reply="handleTrackedChangeReply"
             @update:active-item-id="(id: string | null) => (activeSidebarItem = id)"
           />
@@ -371,7 +373,7 @@ import VerticalRuler from './ui/VerticalRuler.vue';
 import DocxEditorMenuBar from './DocxEditor/DocxEditorMenuBar.vue';
 import DocxEditorDialogs from './DocxEditor/DocxEditorDialogs.vue';
 import DocxEditorOverlays from './DocxEditor/DocxEditorOverlays.vue';
-import HyperlinkPopup, { type HyperlinkPopupData } from './ui/HyperlinkPopup.vue';
+import HyperlinkPopup from './ui/HyperlinkPopup.vue';
 import type { TrackedChangeEntry } from './sidebar/sidebarUtils';
 import type { EditorMode, DocxEditorProps } from './DocxEditor/types';
 import { useDocxEditor } from '../composables/useDocxEditor';
@@ -509,8 +511,7 @@ const {
   hiddenContainer: hiddenPmRef,
   pagesContainer: pagesRef,
   readOnly,
-  externalPlugins: props.externalPlugins,
-  syncCoordinator,
+  externalPlugins: props.externalPlugins, syncCoordinator, editorMode,
   onChange: (doc) => {
     emit('change', doc);
     emit('update:document', doc);
@@ -715,7 +716,6 @@ const {
   handleDocxFileChange,
   handleDocumentNameChange,
   downloadCurrentDocument,
-  emitReadyAfterSidebarStateRefresh,
   loadDocumentBuffer,
   loadDocument,
   save,
@@ -791,8 +791,8 @@ const {
   handleCommentReply,
   handleCommentUnresolve,
   handleCommentDelete,
-  handleAcceptChange,
-  handleRejectChange,
+  handleAcceptChange, handleRejectChange,
+  handleAcceptChangeById, handleRejectChangeById,
   handleTrackedChangeReply,
 } = useCommentManagement({
   editorView,
