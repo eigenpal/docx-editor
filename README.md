@@ -155,10 +155,12 @@ Contributions welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) for setup, tests, 
 | ------- | -------------------- |
 | `en`    | English              |
 | `de`    | German               |
+| `fr`    | French               |
+| `he`    | Hebrew               |
+| `hi`    | Hindi                |
 | `pl`    | Polish               |
 | `pt-BR` | Portuguese (Brazil)  |
 | `tr`    | Turkish              |
-| `he`    | Hebrew               |
 | `zh-CN` | Chinese (Simplified) |
 
 Help translate the editor into your language! See the full **[i18n contribution guide](docs/i18n.md)**.
