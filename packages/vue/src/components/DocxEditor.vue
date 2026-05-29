@@ -997,5 +997,4 @@ const { exposed } = useDocxEditorRefApi({
 });
 defineExpose(exposed);
 </script>
-
 <style src="./DocxEditor.css"></style>

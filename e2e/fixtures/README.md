@@ -67,6 +67,12 @@ A synthetic document containing dense bottom-of-page footnote references with
 long citation-like note text. Used to verify that final footnote reservation and
 painted footnote height agree so notes do not run off the page.
 
+### empty-table-row-vmerge.docx
+
+A synthetic document containing a table whose middle row is made entirely of
+`w:vMerge` continuation cells. Used to verify that DOCX import does not produce
+an invalid empty ProseMirror `tableRow`.
+
 ### toc-hyperlink-tabs.docx
 
 A synthetic document with one TOC1 paragraph wrapping
@@ -83,6 +89,7 @@ To regenerate fixtures, run:
 bun run e2e/fixtures/generate-fixtures.ts
 bun scripts/create-issue-472-floating-textbox-fixture.mjs
 bun scripts/create-footnote-bottom-overflow-fixture.mjs
+bun scripts/create-empty-table-row-vmerge-fixture.mjs
 bun scripts/create-toc-hyperlink-fixture.mjs
 ```
 
