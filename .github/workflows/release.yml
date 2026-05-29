@@ -75,6 +75,16 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
+      # `bun install` runs `prepare` (husky), pointing core.hooksPath at the
+      # repo's pre-commit hook (typecheck + parity + api:check + lint-staged).
+      # That hook is for local dev — it must NOT gate the bot's automated
+      # `chore: release` commit, where it both fails (api:check needs a build
+      # this path skips, and breaks on any pre-existing snapshot drift on main)
+      # and is redundant: ci.yml already runs these on contributor PRs, and the
+      # publish path runs them as real steps below. Neuter hooks for the job.
+      - name: Disable git hooks for automated commits
+        run: git config core.hooksPath /dev/null
+
       # Pending changesets ⇒ PR-update path (skip the heavy gate); none ⇒
       # publish path (run the full gate before publishing to npm). README.md /
       # config.json are not changesets. Inline check so it works even if a later
