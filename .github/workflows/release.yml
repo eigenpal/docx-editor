@@ -9,6 +9,14 @@ name: Release
 #    changesets (they were drained by `changeset version`), and instead
 #    publishes the new versions to npm.
 #
+# The heavy gate (lint, format, typecheck, tests, build, Playwright, parity)
+# only guards the PUBLISH path (mode 2). On the PR-update path (mode 1) those
+# steps are skipped: `changeset version` just rewrites versions + CHANGELOGs,
+# needs no build, and the work is already validated by each contributing PR's
+# own CI. Skipping keeps PR-update runs to ~1 min so they finish before the
+# next push to main supersedes them in the `release` concurrency group —
+# otherwise slow runs queue and get cancelled, leaving the release PR stale.
+#
 # Each branch maintains its own `.changeset/*.md` queue. 0.x and 1.x publish
 # distinct npm packages (the rename in 1.0 means no `latest` dist-tag
 # collision between branches) so no per-branch `--tag` handling is needed.
@@ -28,6 +36,9 @@ jobs:
   release:
     name: Release
     runs-on: ubuntu-latest
+    # Default job timeout is 6h; a hung step (e.g. an apt prompt) otherwise burns
+    # a runner for hours. A healthy run finishes in well under 10 min.
+    timeout-minutes: 30
     permissions:
       contents: write # push tags, create GitHub Releases
       pull-requests: write # changesets/action opens / updates the release PR
@@ -64,29 +75,60 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
+      # Pending changesets ⇒ PR-update path (skip the heavy gate); none ⇒
+      # publish path (run the full gate before publishing to npm). README.md /
+      # config.json are not changesets. Inline check so it works even if a later
+      # step crashes.
+      - name: Detect pending changesets
+        id: pending
+        run: |
+          count=$(find .changeset -maxdepth 1 -name '*.md' ! -name 'README.md' | wc -l | tr -d ' ')
+          echo "Pending changesets: $count"
+          if [ "$count" -gt 0 ]; then
+            echo "publishing=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "publishing=true" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Lint
+        if: ${{ steps.pending.outputs.publishing == 'true' }}
         run: bun run lint
 
       - name: Format check
+        if: ${{ steps.pending.outputs.publishing == 'true' }}
         run: bun run format:check
 
       - name: Type check
+        if: ${{ steps.pending.outputs.publishing == 'true' }}
         run: bun run typecheck
 
       - name: Run tests
+        if: ${{ steps.pending.outputs.publishing == 'true' }}
         run: bun test
 
-      - name: Build packages (always — the release PR's CI uses this and publish reuses the dist/)
+      - name: Build packages (publish reuses the dist/)
+        if: ${{ steps.pending.outputs.publishing == 'true' }}
         run: bun run build:packages
         env:
           # tsup's dts worker (rollup-plugin-dts) loads the full TS program;
           # core's 67 entries OOM under the default 1.5 GB heap.
           NODE_OPTIONS: --max-old-space-size=8192
 
+      # `--with-deps` shells out to apt-get; on the current ubuntu-latest image a
+      # post-install needrestart prompt can hang it indefinitely (observed
+      # burning ~6h until the run was cancelled). NEEDRESTART_MODE=a +
+      # noninteractive frontend suppress the prompt, and timeout-minutes turns
+      # any remaining hang into a fast failure instead of hours of idle runner.
       - name: Install Playwright browsers for parity gate
+        if: ${{ steps.pending.outputs.publishing == 'true' }}
+        timeout-minutes: 10
         run: npx playwright install --with-deps chromium
+        env:
+          DEBIAN_FRONTEND: noninteractive
+          NEEDRESTART_MODE: a
 
       - name: Parity prepublish gate
+        if: ${{ steps.pending.outputs.publishing == 'true' }}
         run: bun run parity:prepublish
 
       # The single step that does both PR-management and publishing.
