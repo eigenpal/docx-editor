@@ -100,6 +100,33 @@ test.describe('Hyperlink Popup', () => {
     expect(page.url()).toContain('localhost');
   });
 
+  test('edit-mode inputs are focusable and editable', async ({ page }) => {
+    // Regression: the container's onFocus redirected focus to the hidden PM,
+    // so the popup's text/URL inputs could never be focused or typed into.
+    const pagesContainer = page.locator('.paged-editor__pages');
+    const link = pagesContainer.locator('a[href]').first();
+    await expect(link).toBeVisible({ timeout: 10000 });
+
+    await link.click();
+    const popup = page.locator('.ep-hyperlink-popup');
+    await expect(popup).toBeVisible({ timeout: 5000 });
+
+    // Enter edit mode.
+    await popup.locator('button[title="Edit link"]').click();
+    const editPopup = page.locator('.ep-hyperlink-popup--edit');
+    await expect(editPopup).toBeVisible({ timeout: 5000 });
+
+    const urlInput = editPopup.locator('input').nth(1);
+    await urlInput.click();
+    await expect(urlInput).toBeFocused();
+
+    // Typing must land in the input, not get swallowed by the editor.
+    await urlInput.fill('');
+    await urlInput.type('https://example.com/edited');
+    await expect(urlInput).toHaveValue('https://example.com/edited');
+    await expect(urlInput).toBeFocused();
+  });
+
   test('popup has edit and unlink buttons in edit mode', async ({ page }) => {
     // Switch to editing mode
     const viewingToggle = page.locator('text=Editing').first();
