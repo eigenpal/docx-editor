@@ -816,5 +816,20 @@
     "deleteImage": "מחק תמונה",
     "imageProperties": "מאפייני תמונה",
     "rotate": "סובב"
+  },
+  "revisions": {
+    "cellDeleted": null,
+    "cellInserted": null,
+    "cellMerged": null,
+    "cellPropertiesChanged": null,
+    "paragraphMarkDeleted": null,
+    "paragraphMarkInserted": null,
+    "paragraphPropertiesChanged": null,
+    "rowDeleted": null,
+    "rowInserted": null,
+    "rowPropertiesChanged": null,
+    "tablePropertiesChanged": null,
+    "tableDeleted": null,
+    "tableInserted": null
   }
 }

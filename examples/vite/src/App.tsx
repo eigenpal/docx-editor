@@ -1,5 +1,15 @@
 import React, { useState, useRef, useCallback, useEffect, useMemo } from 'react';
 import { createEmptyDocument, findStartPosForParaId } from '@eigenpal/docx-editor-core';
+import { setSuggestionMode } from '@eigenpal/docx-editor-core/prosemirror/plugins';
+import {
+  acceptChangeById,
+  rejectChangeById,
+  acceptAllChanges,
+  rejectAllChanges,
+  addRowBelow,
+  deleteRow,
+  insertTable,
+} from '@eigenpal/docx-editor-core/prosemirror/commands';
 import { loadFont } from '@eigenpal/docx-editor-core/utils';
 import { DocxEditor, type DocxEditorRef } from '@eigenpal/docx-editor-react';
 import {
@@ -272,11 +282,234 @@ export function App() {
       agentGetPageContent: (pageNumber: number) =>
         editorRef.current?.getPageContent(pageNumber) ?? null,
       agentGetDocumentText: () => extractDocumentText(editorRef.current?.getDocument()),
+      // Tracked structural revisions (#614). Drive the suggesting-mode plugin
+      // and the new id-based accept/reject commands directly against the
+      // active PM view, so tests don't depend on React mode-prop wiring.
+      setSuggestionMode: (active: boolean, authorOverride?: string) => {
+        const view = editorRef.current?.getEditorRef()?.getView?.();
+        if (!view) return false;
+        setSuggestionMode(active, view.state, view.dispatch, authorOverride ?? randomAuthor);
+        return true;
+      },
+      getParagraphRevisionAt: (index: number) => {
+        const view = editorRef.current?.getEditorRef()?.getView?.();
+        if (!view) return null;
+        let count = 0;
+        let out: { pPrIns: unknown; pPrDel: unknown } | null = null;
+        view.state.doc.descendants((node) => {
+          if (out != null) return false;
+          if (node.type.name !== 'paragraph') return true;
+          if (count === index) {
+            out = {
+              pPrIns: (node.attrs as Record<string, unknown>).pPrIns ?? null,
+              pPrDel: (node.attrs as Record<string, unknown>).pPrDel ?? null,
+            };
+            return false;
+          }
+          count += 1;
+          return true;
+        });
+        return out;
+      },
+      acceptChangeById: (revisionId: number) => {
+        const view = editorRef.current?.getEditorRef()?.getView?.();
+        if (!view) return false;
+        return acceptChangeById(revisionId)(view.state, view.dispatch);
+      },
+      rejectChangeById: (revisionId: number) => {
+        const view = editorRef.current?.getEditorRef()?.getView?.();
+        if (!view) return false;
+        return rejectChangeById(revisionId)(view.state, view.dispatch);
+      },
+      acceptAllChanges: () => {
+        const view = editorRef.current?.getEditorRef()?.getView?.();
+        if (!view) return false;
+        return acceptAllChanges()(view.state, view.dispatch);
+      },
+      rejectAllChanges: () => {
+        const view = editorRef.current?.getEditorRef()?.getView?.();
+        if (!view) return false;
+        return rejectAllChanges()(view.state, view.dispatch);
+      },
+      // Test-only: read full attrs of the Nth paragraph, including new
+      // revision attrs (pPrIns/pPrDel/pPrChange).
+      getParagraphAttrs: (index: number) => {
+        const view = editorRef.current?.getEditorRef()?.getView?.();
+        if (!view) return null;
+        let count = 0;
+        let out: Record<string, unknown> | null = null;
+        view.state.doc.descendants((node) => {
+          if (out != null) return false;
+          if (node.type.name !== 'paragraph') return true;
+          if (count === index) {
+            out = { ...node.attrs };
+            return false;
+          }
+          count += 1;
+          return true;
+        });
+        return out;
+      },
+      // Test-only: insert a 1x1 table at the cursor (replaces selection),
+      // bypassing the toolbar. Used by the trIns spec.
+      // Calls the real insertTable command — exercises the suggesting-mode
+      // tracking path (trIns + cellMarker:ins) when used after setSuggestionMode.
+      insertTable: (rows: number, cols: number) => {
+        const view = editorRef.current?.getEditorRef()?.getView?.();
+        if (!view) return false;
+        return insertTable(rows, cols)(view.state, view.dispatch);
+      },
+      plantSimpleTable: () => {
+        const view = editorRef.current?.getEditorRef()?.getView?.();
+        if (!view) return false;
+        const { schema } = view.state;
+        const cellPara = schema.node('paragraph', {}, [schema.text('A')]);
+        const cell = schema.node('tableCell', { colspan: 1, rowspan: 1 }, [cellPara]);
+        const row = schema.node('tableRow', {}, [cell]);
+        const table = schema.node('table', {}, [row]);
+        view.dispatch(view.state.tr.replaceSelectionWith(table));
+        return true;
+      },
+      // Test-only: count the rows of the first table in the doc.
+      countTableRows: () => {
+        const view = editorRef.current?.getEditorRef()?.getView?.();
+        if (!view) return 0;
+        let count = 0;
+        let inFirstTable = false;
+        view.state.doc.descendants((node) => {
+          if (node.type.name === 'table') {
+            if (inFirstTable) return false;
+            inFirstTable = true;
+            return true;
+          }
+          if (inFirstTable && node.type.name === 'tableRow') count += 1;
+          return false;
+        });
+        return count;
+      },
+      // Test-only: place the caret inside the first cell of the first
+      // table in the doc so suggesting-mode commands like `addRowBelow`
+      // have a row index to work with.
+      focusFirstTableCell: () => {
+        const view = editorRef.current?.getEditorRef()?.getView?.();
+        if (!view) return false;
+        let target: number | null = null;
+        view.state.doc.descendants((node, pos) => {
+          if (target != null) return false;
+          if (node.type.name === 'tableCell' || node.type.name === 'tableHeader') {
+            // `pos + 2` works when the first child is a paragraph (the
+            // typical case). If it's a nested table, `TextSelection.near`
+            // snaps forward to the next text-allowing position.
+            target = pos + 2;
+            return false;
+          }
+          return true;
+        });
+        if (target == null) return false;
+        // Use the constructor on the live selection to avoid a direct
+        // `prosemirror-state` dependency in the demo's package.json.
+        const SelectionCtor = view.state.selection.constructor as unknown as {
+          near: (
+            $pos: import('prosemirror-model').ResolvedPos
+          ) => import('prosemirror-state').Selection;
+        };
+        const tr = view.state.tr.setSelection(SelectionCtor.near(view.state.doc.resolve(target)));
+        view.dispatch(tr);
+        view.focus();
+        return true;
+      },
+      // Test-only: dispatch the `addRowBelow` table command. Suggesting-mode
+      // active → sets `trIns` on the new row + `cellMarker: ins` on each cell.
+      addRowBelow: () => {
+        const view = editorRef.current?.getEditorRef()?.getView?.();
+        if (!view) return false;
+        return addRowBelow(view.state, view.dispatch);
+      },
+      // Test-only: dispatch the schema-free `deleteRow` table command.
+      // Suggesting-mode active → sets `trDel` on the row + `cellMarker: del`.
+      deleteCurrentRow: () => {
+        const view = editorRef.current?.getEditorRef()?.getView?.();
+        if (!view) return false;
+        return deleteRow(view.state, view.dispatch);
+      },
+      // Test-only: plant trIns on the first table row in the document.
+      // Returns false if no table exists.
+      plantTableRowInsertion: (revisionId: number) => {
+        const view = editorRef.current?.getEditorRef()?.getView?.();
+        if (!view) return false;
+        let rowPos: number | null = null;
+        let rowNode: import('prosemirror-model').Node | null = null;
+        view.state.doc.descendants((node, pos) => {
+          if (rowPos != null) return false;
+          if (node.type.name === 'tableRow') {
+            rowPos = pos;
+            rowNode = node;
+            return false;
+          }
+          return true;
+        });
+        if (rowPos == null || rowNode == null) return false;
+        view.dispatch(
+          view.state.tr.setNodeMarkup(rowPos, undefined, {
+            ...(rowNode as import('prosemirror-model').Node).attrs,
+            trIns: {
+              revisionId,
+              author: 'Jane',
+              date: new Date().toISOString(),
+            },
+          })
+        );
+        return true;
+      },
+      getFirstTableRowAttrs: () => {
+        const view = editorRef.current?.getEditorRef()?.getView?.();
+        if (!view) return null;
+        let out: Record<string, unknown> | null = null;
+        view.state.doc.descendants((node) => {
+          if (out != null) return false;
+          if (node.type.name === 'tableRow') {
+            out = { ...node.attrs };
+            return false;
+          }
+          return true;
+        });
+        return out;
+      },
+      // Test-only: plant a pPrChange entry on the first paragraph for
+      // round-trip / reject-restore verification.
+      plantParagraphPropertyChange: (revisionId: number, prior: unknown) => {
+        const view = editorRef.current?.getEditorRef()?.getView?.();
+        if (!view) return false;
+        let firstParaPos: number | null = null;
+        let firstPara: import('prosemirror-model').Node | null = null;
+        view.state.doc.descendants((node, pos) => {
+          if (firstParaPos != null) return false;
+          if (node.type.name === 'paragraph') {
+            firstParaPos = pos;
+            firstPara = node;
+            return false;
+          }
+          return true;
+        });
+        if (firstParaPos == null || firstPara == null) return false;
+        const tr = view.state.tr.setNodeMarkup(firstParaPos, undefined, {
+          ...(firstPara as import('prosemirror-model').Node).attrs,
+          pPrChange: [
+            {
+              type: 'paragraphPropertyChange',
+              info: { id: revisionId, author: 'Jane', date: new Date().toISOString() },
+              previousFormatting: prior,
+            },
+          ],
+        });
+        view.dispatch(tr);
+        return true;
+      },
     };
     return () => {
       delete window.__DOCX_EDITOR_E2E__;
     };
-  }, [isE2E]);
+  }, [isE2E, randomAuthor]);
 
   useEffect(() => {
     // Under E2E with ?empty=1, boot empty so tests get a deterministic,

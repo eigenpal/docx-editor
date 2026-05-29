@@ -9,7 +9,9 @@ import { ClipboardSelection } from '@eigenpal/docx-editor-core';
 import { createSelectionFromDOM } from '@eigenpal/docx-editor-core';
 import { CSSProperties } from 'react';
 import { Document as Document_2 } from '@eigenpal/docx-editor-core/types/document';
+import { EditorState } from 'prosemirror-state';
 import { EditorView } from 'prosemirror-view';
+import { extractTrackedChanges } from '@eigenpal/docx-editor-core/prosemirror/utils/extractTrackedChanges';
 import { FindMatch } from '@eigenpal/docx-editor-core/utils/findReplace';
 import { FindOptions } from '@eigenpal/docx-editor-core/utils/findReplace';
 import { formatLastSaveTime } from '@eigenpal/docx-editor-core';
@@ -28,6 +30,7 @@ import { SelectionHighlightConfig } from '@eigenpal/docx-editor-core/utils';
 import { Table } from '@eigenpal/docx-editor-core/types/document';
 import { TABLE_DATA_ATTRIBUTES } from '@eigenpal/docx-editor-core';
 import { Theme } from '@eigenpal/docx-editor-core';
+import { TrackedChangesResult } from '@eigenpal/docx-editor-core/prosemirror/utils/extractTrackedChanges';
 
 export { AutoSaveStatus }
 
@@ -43,6 +46,8 @@ export interface DragAutoScrollOptions {
     onScrollExtendSelection: (clientX: number, clientY: number) => void;
     pagesContainerRef: React.RefObject<HTMLDivElement | null>;
 }
+
+export { extractTrackedChanges }
 
 // @public
 export function findNearestZoomPreset(zoom: number): number;
@@ -154,6 +159,8 @@ export interface TableSelectionState {
     // (undocumented)
     tableIndex: number | null;
 }
+
+export { TrackedChangesResult }
 
 // @public (undocumented)
 export function useAspectLockedSize(): UseAspectLockedSizeReturn;
@@ -407,6 +414,9 @@ export interface UseTableSelectionReturn {
     // (undocumented)
     tableContext: TableContext | null;
 }
+
+// @public
+export function useTrackedChanges(state: EditorState | null): TrackedChangesResult;
 
 // @public (undocumented)
 export function useVisualLineNavigation(input: VisualLineNavigationOptions): {

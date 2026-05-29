@@ -6,10 +6,10 @@
 
 import { EditorState } from 'prosemirror-state';
 
-// @internal (undocumented)
+// @public
 export function extractTrackedChanges(state: EditorState | null): TrackedChangesResult;
 
-// @internal (undocumented)
+// @public
 export interface TrackedChangesResult {
     commentToRevision: Map<number, number>;
     entries: TrackedChangeEntry[];

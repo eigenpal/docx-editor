@@ -79,7 +79,12 @@ import {
   createStyleResolver,
   type TableContextInfo,
 } from '@eigenpal/docx-editor-core/prosemirror';
-import { acceptChange, rejectChange } from '@eigenpal/docx-editor-core/prosemirror/commands';
+import {
+  acceptChange,
+  rejectChange,
+  acceptChangeById,
+  rejectChangeById,
+} from '@eigenpal/docx-editor-core/prosemirror/commands';
 import { collectHeadings } from '@eigenpal/docx-editor-core/utils';
 
 // Paginated editor
@@ -545,6 +550,10 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
 
   // Comments sidebar state
   const [showCommentsSidebar, setShowCommentsSidebar] = useState(false);
+  // Auto-open the sidebar the first time a comment / tracked change
+  // appears so users see the card without manually toggling. Latches so
+  // a subsequent close stays closed; reset on doc reload.
+  const sidebarAutoOpenedRef = useRef(false);
   const [expandedSidebarItem, setExpandedSidebarItem] = useState<string | null>(null);
   // PagedEditor ref declared early so useCommentManagement (which reads
   // pagedEditorRef.current.getView() for orphan cleanup) can be wired before
@@ -1206,6 +1215,14 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
       const view = pagedEditorRef.current?.getView();
       if (view) rejectChange(from, to)(view.state, view.dispatch);
     },
+    onAcceptChangeById: (revisionId) => {
+      const view = pagedEditorRef.current?.getView();
+      if (view) acceptChangeById(revisionId)(view.state, view.dispatch);
+    },
+    onRejectChangeById: (revisionId) => {
+      const view = pagedEditorRef.current?.getView();
+      if (view) rejectChangeById(revisionId)(view.state, view.dispatch);
+    },
     onTrackedChangeReply: (revisionId, text) => {
       setComments((prev) => [...prev, createComment(text, author, revisionId)]);
     },
@@ -1222,6 +1239,8 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
       onCancelAddComment: (...args) => commentCallbacksRef.current.onCancelAddComment?.(...args),
       onAcceptChange: (...args) => commentCallbacksRef.current.onAcceptChange?.(...args),
       onRejectChange: (...args) => commentCallbacksRef.current.onRejectChange?.(...args),
+      onAcceptChangeById: (...args) => commentCallbacksRef.current.onAcceptChangeById?.(...args),
+      onRejectChangeById: (...args) => commentCallbacksRef.current.onRejectChangeById?.(...args),
       onTrackedChangeReply: (...args) =>
         commentCallbacksRef.current.onTrackedChangeReply?.(...args),
     }),
@@ -1338,6 +1357,18 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
     }
     setExpandedSidebarItem(cursorSidebarItem);
   }, [handleSelectionChange, resolvedCommentIds, commentSidebarItems, revisionIdAliases]);
+
+  // Auto-open the sidebar the first time a comment or tracked-change card
+  // is produced — covers the case where the user inserts an empty tracked
+  // table: no cursor anchor exists yet (no inline marks at cursor), so the
+  // cursor-driven open above doesn't fire. Latches via a ref so a later
+  // manual close stays closed.
+  useEffect(() => {
+    if (sidebarAutoOpenedRef.current) return;
+    if (commentSidebarItems.length === 0) return;
+    sidebarAutoOpenedRef.current = true;
+    setShowCommentsSidebar(true);
+  }, [commentSidebarItems]);
 
   // Exclude expanded resolved comment from hide-set so its text gets highlighted
   const resolvedIdsForRender = useMemo(() => {

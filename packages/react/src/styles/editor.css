@@ -598,3 +598,6 @@
   user-select: none;
   pointer-events: none;
 }
+
+/* Tracked-revision styles live in core (prosemirror/editor.css), shared
+   by React + Vue adapters. Do not duplicate here. */

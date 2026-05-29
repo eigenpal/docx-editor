@@ -12,6 +12,7 @@ import {
   clearTrackedChanges,
 } from '@eigenpal/docx-editor-core/prosemirror/extensions';
 import { readDocxFileFromInput, type DocxInput } from '@eigenpal/docx-editor-core/utils';
+import { insertImageNode } from '@eigenpal/docx-editor-core/prosemirror/commands';
 import type { EditorView } from 'prosemirror-view';
 import type { PagedEditorRef } from '../PagedEditor';
 
@@ -260,9 +261,10 @@ body { background: white; }
             displayMode: 'inline',
           });
 
-          const { from } = view.state.selection;
-          const tr = view.state.tr.insert(from, imageNode);
-          view.dispatch(tr.scrollIntoView());
+          // Shared helper dispatches the insert + applies the `insertion`
+          // mark when suggesting mode is active (Vue + clipboard paste
+          // call the same path).
+          insertImageNode(view.state, view.dispatch, imageNode, view.state.selection.from);
           focusActiveEditor();
         };
         img.src = dataUrl;

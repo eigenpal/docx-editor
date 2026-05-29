@@ -16,6 +16,14 @@ export interface CommentCallbacks {
   onCancelAddComment?: () => void;
   onAcceptChange?: (from: number, to: number) => void;
   onRejectChange?: (from: number, to: number) => void;
+  /**
+   * Accept a structural revision (e.g. `pPrIns`/`pPrDel`) by its `w:id`.
+   * Required for entries whose `type` is `paragraphMarkInsertion` or
+   * `paragraphMarkDeletion`; ignored by inline-entry cards.
+   */
+  onAcceptChangeById?: (revisionId: number) => void;
+  /** See `onAcceptChangeById`. */
+  onRejectChangeById?: (revisionId: number) => void;
   onTrackedChangeReply?: (revisionId: number, text: string) => void;
 }
 
@@ -125,6 +133,8 @@ export function useCommentSidebarItems({
             replies={replies}
             onAccept={callbacks.onAcceptChange}
             onReject={callbacks.onRejectChange}
+            onAcceptById={callbacks.onAcceptChangeById}
+            onRejectById={callbacks.onRejectChangeById}
             onReply={callbacks.onTrackedChangeReply}
           />
         ),

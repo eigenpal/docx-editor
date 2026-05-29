@@ -67,6 +67,26 @@ declare global {
         paragraphs: Array<{ paraId: string; text: string; styleId?: string }>;
       } | null;
       agentGetDocumentText: () => string;
+      // Tracked structural revisions (#614).
+      setSuggestionMode: (active: boolean, authorOverride?: string) => boolean;
+      getParagraphRevisionAt: (index: number) => {
+        pPrIns: { revisionId: number; author: string; date: string | null } | null;
+        pPrDel: { revisionId: number; author: string; date: string | null } | null;
+      } | null;
+      acceptChangeById: (revisionId: number) => boolean;
+      rejectChangeById: (revisionId: number) => boolean;
+      acceptAllChanges: () => boolean;
+      rejectAllChanges: () => boolean;
+      getParagraphAttrs: (index: number) => Record<string, unknown> | null;
+      plantParagraphPropertyChange: (revisionId: number, prior: unknown) => boolean;
+      insertTable: (rows: number, cols: number) => boolean;
+      plantSimpleTable: () => boolean;
+      plantTableRowInsertion: (revisionId: number) => boolean;
+      getFirstTableRowAttrs: () => Record<string, unknown> | null;
+      countTableRows: () => number;
+      focusFirstTableCell: () => boolean;
+      addRowBelow: () => boolean;
+      deleteCurrentRow: () => boolean;
     };
   }
 }

@@ -423,6 +423,8 @@ export interface Paragraph {
     formatting?: ParagraphFormatting;
     listRendering?: ListRendering;
     paraId?: string;
+    pPrDel?: TrackedChangeInfo;
+    pPrIns?: TrackedChangeInfo;
     propertyChanges?: ParagraphPropertyChange[];
     renderedPageBreakBefore?: boolean;
     sectionProperties?: SectionProperties;
@@ -725,6 +727,8 @@ export interface TableStructuralChangeInfo {
     info: TrackedChangeInfo;
     // (undocumented)
     type: 'tableRowInsertion' | 'tableRowDeletion' | 'tableCellInsertion' | 'tableCellDeletion' | 'tableCellMerge';
+    vMerge?: 'rest' | 'cont';
+    vMergeOrig?: 'rest' | 'cont';
 }
 
 // @public
