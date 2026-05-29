@@ -22,6 +22,11 @@
       "import": "./dist/de.mjs",
       "require": "./dist/de.js"
     },
+    "./fr": {
+      "types": "./dist/fr.d.ts",
+      "import": "./dist/fr.mjs",
+      "require": "./dist/fr.js"
+    },
     "./he": {
       "types": "./dist/he.d.ts",
       "import": "./dist/he.mjs",

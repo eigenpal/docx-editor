@@ -22,13 +22,16 @@ export type DeepPartial<T> = {
 export const en: LocaleStrings;
 
 // @public
+export const fr: PartialLocaleStrings;
+
+// @public
 export const he: PartialLocaleStrings;
 
 // @public
 export const hi: PartialLocaleStrings;
 
 // @public
-export type LocaleCode = 'en' | 'de' | 'he' | 'hi' | 'pl' | 'pt-BR' | 'tr' | 'zh-CN';
+export type LocaleCode = 'en' | 'de' | 'fr' | 'he' | 'hi' | 'pl' | 'pt-BR' | 'tr' | 'zh-CN';
 
 // @public
 export const locales: Record<LocaleCode, PartialLocaleStrings>;
