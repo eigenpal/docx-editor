@@ -181,7 +181,7 @@ Every code PR → `bun changeset` → commit `.changeset/*.md`. Skip only for te
 - Use full npm name in frontmatter (`@eigenpal/docx-editor-react`). Always run `bun changeset`, don't hand-write. Wrong name crashes post-merge Release workflow.
 - All published packages in fixed group — declare one bump, others follow.
 - Default bump: `patch`. `minor` for additive public API. `major` for breaks.
-- Summary lands verbatim in CHANGELOG; write for consumer.
+- Summary lands verbatim in CHANGELOG; write for the consumer. Keep it concise (one or two lines), lead with the user-visible change (what changed, not how), and put `Fixes #N` at the end if relevant. No emojis or marketing.
 
 Release: merge the bot's `chore: release` PR. Publish runs via OIDC, tags, GH release. ~3 min.
 
