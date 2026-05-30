@@ -1,5 +1,16 @@
 # @eigenpal/docx-editor-i18n
 
+## 1.1.0
+
+### Minor Changes
+
+- a7f9ac5: Add French locale
+- 42ea72d: Track structural edits as OOXML revisions in suggesting mode. Paragraph-break insert/delete, paragraph-property changes, and table row/cell insert/delete/merge are now recorded, round-tripped through DOCX, and shown in the tracked-changes sidebar (React and Vue, localized). Adds `acceptChangeById(id)` / `rejectChangeById(id)`, and `acceptAllChanges` / `rejectAllChanges` now resolve every revision type rather than inline marks only. Fixes #614.
+
+### Patch Changes
+
+- 14fe4f2: add Hindi (hi) community-maintained locale
+
 ## 1.0.3
 
 ## 1.0.2

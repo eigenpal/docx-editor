@@ -1,5 +1,33 @@
 # @eigenpal/docx-js-editor
 
+## 1.1.0
+
+### Minor Changes
+
+- 9d7138e: Add a `fonts` prop on `<DocxEditor>` for declarative custom-font registration — each entry injects an `@font-face` from the URL you provide, and entries sharing a `family` register different weights. Also exposes `loadFontFromUrl`, `loadFontDefinitions`, and the `FontDefinition` type from `@eigenpal/docx-editor-core/utils`. Fixes #620.
+- 9d7138e: Font-load failures now route through the React `onError` prop and the Vue `error` event instead of the console, so you can forward them to your own error tracker; with no subscriber attached they fall back to `console.warn`. Adds `onFontError(callback)` to `@eigenpal/docx-editor-core/utils` for non-adapter hosts.
+- 42ea72d: Track structural edits as OOXML revisions in suggesting mode. Paragraph-break insert/delete, paragraph-property changes, and table row/cell insert/delete/merge are now recorded, round-tripped through DOCX, and shown in the tracked-changes sidebar (React and Vue, localized). Adds `acceptChangeById(id)` / `rejectChangeById(id)`, and `acceptAllChanges` / `rejectAllChanges` now resolve every revision type rather than inline marks only. Fixes #614.
+
+### Patch Changes
+
+- 371dbaf: Fix Find navigation in the paged editor: matches now map to live document positions, the page scrolls to the active match, and Enter advances through results instead of snapping back to the first. Fixes #321.
+- 79c68b0: Fix hyperlink popup text and URL inputs being uneditable. The editor container's focus and keydown handlers were redirecting focus to the document, so the popup inputs could never hold focus or accept typing.
+- Updated dependencies [14fe4f2]
+- Updated dependencies [9d7138e]
+- Updated dependencies [7e77654]
+- Updated dependencies [bf11ee8]
+- Updated dependencies [30c1931]
+- Updated dependencies [9d7138e]
+- Updated dependencies [7a91813]
+- Updated dependencies [a7f9ac5]
+- Updated dependencies [42ea72d]
+- Updated dependencies [ebb85a5]
+- Updated dependencies [137d5de]
+- Updated dependencies [e5e0997]
+  - @eigenpal/docx-editor-i18n@1.1.0
+  - @eigenpal/docx-editor-core@1.1.0
+  - @eigenpal/docx-editor-agents@1.1.0
+
 ## 1.0.3
 
 ### Patch Changes
