@@ -496,6 +496,41 @@ test.describe('Tracked paragraph-mark revisions (issue #614)', () => {
     expect(await page.locator('.ProseMirror').textContent()).toBe('abc');
   });
 
+  test('Undo of tracked Enters does not mark existing text as inserted (issue #633)', async ({
+    page,
+  }) => {
+    // Repro: in suggesting mode, press Enter several times in the MIDDLE of
+    // pre-existing (untracked) text, then undo. Undo must simply remove the
+    // tracked paragraph break — it must NOT mark any pre-existing character
+    // as inserted. Regression: the catch-all appendTransaction re-processed
+    // the undo transaction's structural steps and stamped a stray `insertion`
+    // mark on the boundary character.
+    await editor.typeText('abcdef');
+    // Move caret into the middle: between "abc" and "def".
+    await page.keyboard.press('ArrowLeft');
+    await page.keyboard.press('ArrowLeft');
+    await page.keyboard.press('ArrowLeft');
+
+    expect(await setSuggestionMode(page, true, 'Jane')).toBe(true);
+    await editor.pressEnter();
+    await editor.pressEnter();
+    await editor.pressEnter();
+    await page.waitForTimeout(100);
+
+    // The text predates suggesting mode and only paragraph breaks were
+    // tracked — no inline insertion marks should exist yet.
+    expect(await page.locator('.docx-insertion').count()).toBe(0);
+
+    await editor.undo();
+    await page.waitForTimeout(100);
+
+    // After undo, still no character marked as inserted (the bug produced a
+    // stray "Added 'd'" insertion on the boundary character), and the text
+    // is intact.
+    expect(await page.locator('.docx-insertion').count()).toBe(0);
+    expect(await page.locator('.ProseMirror').textContent()).toBe('abcdef');
+  });
+
   test('Inserting a table in suggesting mode shows one "Inserted table" card', async ({ page }) => {
     // OOXML model: every row gets <w:trPr><w:ins/></w:trPr> and every cell
     // gets <w:cellIns/> with the SAME w:id. Sidebar synthesizes one
