@@ -28,6 +28,16 @@ async function getParaRevision(
   }, index);
 }
 
+async function getParagraphAttrs(
+  page: import('@playwright/test').Page,
+  index: number
+): Promise<Record<string, unknown> | null> {
+  return page.evaluate((i) => {
+    const hook = window.__DOCX_EDITOR_E2E__;
+    return hook?.getParagraphAttrs?.(i) ?? null;
+  }, index);
+}
+
 async function setSuggestionMode(
   page: import('@playwright/test').Page,
   active: boolean,
@@ -262,28 +272,58 @@ test.describe('Tracked paragraph-mark revisions (issue #614)', () => {
     });
     // (test-only helper — see App.tsx; falls through if not present)
     // Sanity: the pPrChange attr is present.
-    const before = await page.evaluate(() => {
-      const w = window as unknown as {
-        __DOCX_EDITOR_E2E__?: { getParagraphAttrs?: (i: number) => Record<string, unknown> | null };
-      };
-      return w.__DOCX_EDITOR_E2E__?.getParagraphAttrs?.(0) ?? null;
-    });
+    const before = await getParagraphAttrs(page, 0);
     // The helper IS wired in examples/vite/src/App.tsx; assert presence rather
     // than skipping, so a future regression of the helper surfaces here.
     expect(before, 'plantParagraphPropertyChange helper must populate pPrChange').toBeTruthy();
-    expect((before as Record<string, unknown>).pPrChange).toBeTruthy();
+    expect(before?.pPrChange).toBeTruthy();
     // Reject restores `alignment: 'left'` via applyPriorParagraphFormattingToAttrs.
     const ok = await rejectById(page, 99);
     expect(ok).toBe(true);
-    const after = await page.evaluate(() => {
-      const w = window as unknown as {
-        __DOCX_EDITOR_E2E__?: { getParagraphAttrs?: (i: number) => Record<string, unknown> | null };
-      };
-      return w.__DOCX_EDITOR_E2E__?.getParagraphAttrs?.(0) ?? null;
-    });
+    const after = await getParagraphAttrs(page, 0);
     expect(after).not.toBeNull();
-    expect((after as Record<string, unknown>).pPrChange).toBeNull();
-    expect((after as Record<string, unknown>).alignment).toBe('left');
+    expect(after?.pPrChange).toBeNull();
+    expect(after?.alignment).toBe('left');
+  });
+
+  test('reject of a reloaded list-creation pPrChange clears numbering (issue #634)', async ({
+    page,
+  }) => {
+    // Simulate the post-save/reload state of a list created in suggesting mode:
+    // the paragraph IS a list (numPr set), and its pPrChange has an EMPTY prior
+    // (the `<w:pPr/>` Word writes) but a `currentFormatting` carrying numPr (as
+    // the parser repopulates on load). Reject must still strip the numbering —
+    // otherwise the lingering item returns after a round-trip.
+    await editor.typeText('Item');
+    await page.evaluate(() => {
+      const w = window as unknown as {
+        __DOCX_EDITOR_E2E__?: {
+          plantParagraphPropertyChange?: (
+            revisionId: number,
+            prior: unknown,
+            current?: unknown,
+            paraAttrs?: Record<string, unknown>
+          ) => boolean;
+        };
+      };
+      w.__DOCX_EDITOR_E2E__?.plantParagraphPropertyChange?.(
+        77,
+        {}, // empty prior — round-tripped <w:pPr/>
+        { numPr: { numId: 2, ilvl: 0 } }, // current snapshot the parser rebuilds
+        { numPr: { numId: 2, ilvl: 0 }, listIsBullet: false, listNumFmt: 'decimal' }
+      );
+    });
+
+    const before = await getParagraphAttrs(page, 0);
+    expect(before?.numPr, 'planted paragraph must be a list').toBeTruthy();
+    expect(before?.pPrChange).toBeTruthy();
+
+    expect(await rejectById(page, 77)).toBe(true);
+
+    const after = await getParagraphAttrs(page, 0);
+    expect(after?.pPrChange).toBeNull();
+    expect(after?.numPr ?? null, 'numbering must be removed on reject').toBeNull();
+    expect(after?.listIsBullet ?? null, 'derived list attrs must be cleared too').toBeNull();
   });
 
   test('trIns round-trips and acceptChangeById clears the marker on the row', async ({ page }) => {
@@ -470,6 +510,91 @@ test.describe('Tracked paragraph-mark revisions (issue #614)', () => {
 
     await expect(page.locator('.docx-tracked-change-card')).toHaveCount(0);
     expect(await page.locator('[data-revision-id]').count()).toBe(0);
+  });
+
+  test('Reject of a list created in suggesting mode leaves no lingering item (issue #634)', async ({
+    page,
+  }) => {
+    // Apply a numbered list to a pre-existing empty paragraph, then type a
+    // few items. The numbering change on the pre-existing paragraph is a
+    // tracked pPrChange that folds into the one insertion card; Reject must
+    // clear the text AND revert the numbering, leaving a single plain
+    // paragraph — not a stranded empty list item.
+    expect(await setSuggestionMode(page, true, 'Jane')).toBe(true);
+    await editor.toggleNumberedList();
+    await editor.typeText('one');
+    await editor.pressEnter();
+    await editor.typeText('two');
+    await editor.pressEnter();
+    await editor.typeText('three');
+    await page.waitForTimeout(100);
+
+    // The list marker paints in the insertion color while the numbering is a
+    // pending suggestion (Word shows an inserted list item's number tracked).
+    const markerColor = await page
+      .locator('.layout-list-marker')
+      .first()
+      .evaluate((el) => (el as HTMLElement).style.color);
+    expect(markerColor).toBe('rgb(46, 125, 50)');
+
+    const toggle = page.locator('[aria-label="Toggle comments sidebar"]');
+    if ((await toggle.getAttribute('aria-pressed')) !== 'true') {
+      await toggle.click();
+      await page.waitForTimeout(150);
+    }
+
+    // One card — the numbering pPrChange folds into the insertion.
+    await expect(page.locator('.docx-tracked-change-card')).toHaveCount(1);
+
+    await page.locator('.docx-tracked-change-card button[title="Reject"]').first().click();
+    await page.waitForTimeout(200);
+
+    // No tracked changes remain anywhere.
+    await expect(page.locator('.docx-tracked-change-card')).toHaveCount(0);
+    expect(await page.locator('[data-revision-id]').count()).toBe(0);
+
+    // Exactly one paragraph, and it is no longer a list.
+    const first = await getParagraphAttrs(page, 0);
+    const second = await getParagraphAttrs(page, 1);
+    expect(second, 'all inserted list items should be gone').toBeNull();
+    expect(first?.numPr ?? null, 'numbering must be reverted by the pPrChange').toBeNull();
+    expect(first?.pPrChange ?? null, 'the tracked numbering change must be cleared').toBeNull();
+  });
+
+  test('Accept of a list created in suggesting mode keeps it as a plain list (issue #634)', async ({
+    page,
+  }) => {
+    expect(await setSuggestionMode(page, true, 'Jane')).toBe(true);
+    await editor.toggleNumberedList();
+    await editor.typeText('alpha');
+    await editor.pressEnter();
+    await editor.typeText('beta');
+    await page.waitForTimeout(100);
+
+    const toggle = page.locator('[aria-label="Toggle comments sidebar"]');
+    if ((await toggle.getAttribute('aria-pressed')) !== 'true') {
+      await toggle.click();
+      await page.waitForTimeout(150);
+    }
+
+    await expect(page.locator('.docx-tracked-change-card')).toHaveCount(1);
+    await page.locator('.docx-tracked-change-card button[title="Accept"]').first().click();
+    await page.waitForTimeout(200);
+
+    await expect(page.locator('.docx-tracked-change-card')).toHaveCount(0);
+    expect(await page.locator('[data-revision-id]').count()).toBe(0);
+
+    // The list survives, with no leftover tracked numbering change.
+    const first = await getParagraphAttrs(page, 0);
+    expect((first?.numPr as { numId?: number } | null)?.numId, 'list is kept on accept').toBe(2);
+    expect(first?.pPrChange ?? null, 'pPrChange entry is cleared on accept').toBeNull();
+
+    // The marker is now a plain list marker — no revision color.
+    const markerColor = await page
+      .locator('.layout-list-marker')
+      .first()
+      .evaluate((el) => (el as HTMLElement).style.color);
+    expect(markerColor).toBe('');
   });
 
   test('Backspace on own pPrIns retracts the paragraph break (joins back)', async ({ page }) => {

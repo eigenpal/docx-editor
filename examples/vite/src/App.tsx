@@ -476,8 +476,15 @@ export function App() {
         return out;
       },
       // Test-only: plant a pPrChange entry on the first paragraph for
-      // round-trip / reject-restore verification.
-      plantParagraphPropertyChange: (revisionId: number, prior: unknown) => {
+      // round-trip / reject-restore verification. `current` and `paraAttrs`
+      // let a test simulate a post-save/reload state (e.g. a list-creation
+      // suggestion whose empty prior `<w:pPr/>` round-tripped without numPr).
+      plantParagraphPropertyChange: (
+        revisionId: number,
+        prior: unknown,
+        current?: unknown,
+        paraAttrs?: Record<string, unknown>
+      ) => {
         const view = editorRef.current?.getEditorRef()?.getView?.();
         if (!view) return false;
         let firstParaPos: number | null = null;
@@ -494,11 +501,13 @@ export function App() {
         if (firstParaPos == null || firstPara == null) return false;
         const tr = view.state.tr.setNodeMarkup(firstParaPos, undefined, {
           ...(firstPara as import('prosemirror-model').Node).attrs,
+          ...(paraAttrs ?? {}),
           pPrChange: [
             {
               type: 'paragraphPropertyChange',
               info: { id: revisionId, author: 'Jane', date: new Date().toISOString() },
               previousFormatting: prior,
+              ...(current !== undefined ? { currentFormatting: current } : {}),
             },
           ],
         });
