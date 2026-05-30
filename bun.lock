@@ -10,7 +10,7 @@
         "@happy-dom/global-registrator": "^20.8.3",
         "@microsoft/api-extractor": "^7.50.0",
         "@microsoft/tsdoc": "^0.16.0",
-        "@playwright/test": "^1.58.1",
+        "@playwright/test": "^1.60.0",
         "@testing-library/react": "^16.0.0",
         "@types/bun": "^1.0.0",
         "@types/react": "19.2.15",
@@ -236,7 +236,7 @@
     },
     "packages/agents": {
       "name": "@eigenpal/docx-editor-agents",
-      "version": "1.0.3",
+      "version": "1.1.0",
       "dependencies": {
         "docxtemplater": "^3.50.0",
         "jszip": "^3.10.1",
@@ -267,7 +267,7 @@
     },
     "packages/core": {
       "name": "@eigenpal/docx-editor-core",
-      "version": "1.0.3",
+      "version": "1.1.0",
       "bin": {
         "docx-editor-mcp": "./dist/mcp-cli.mjs",
       },
@@ -281,7 +281,7 @@
         "@microsoft/api-extractor": "^7.50.0",
         "prosemirror-commands": "^1.5.2",
         "prosemirror-dropcursor": "^1.8.2",
-        "prosemirror-history": "^1.4.0",
+        "prosemirror-history": "^1.5.0",
         "prosemirror-keymap": "^1.2.2",
         "prosemirror-model": "^1.19.4",
         "prosemirror-state": "^1.4.3",
@@ -292,7 +292,7 @@
       "peerDependencies": {
         "prosemirror-commands": "^1.5.2",
         "prosemirror-dropcursor": "^1.8.2",
-        "prosemirror-history": "^1.4.0",
+        "prosemirror-history": "^1.5.0",
         "prosemirror-keymap": "^1.2.2",
         "prosemirror-model": "^1.19.4",
         "prosemirror-state": "^1.4.3",
@@ -303,7 +303,7 @@
     },
     "packages/i18n": {
       "name": "@eigenpal/docx-editor-i18n",
-      "version": "1.0.3",
+      "version": "1.1.0",
       "devDependencies": {
         "tsup": "^8.0.1",
         "typescript": "^5.3.3",
@@ -311,7 +311,7 @@
     },
     "packages/nuxt": {
       "name": "@eigenpal/nuxt-docx-editor",
-      "version": "1.0.3",
+      "version": "1.1.0",
       "dependencies": {
         "@eigenpal/docx-editor-vue": "^1.0.3",
         "@nuxt/kit": "^3.14.0 || ^4.0.0",
@@ -337,7 +337,7 @@
     },
     "packages/react": {
       "name": "@eigenpal/docx-editor-react",
-      "version": "1.0.3",
+      "version": "1.1.0",
       "dependencies": {
         "@eigenpal/docx-editor-agents": "^1.0.3",
         "@eigenpal/docx-editor-core": "^1.0.3",
@@ -377,7 +377,7 @@
     },
     "packages/vue": {
       "name": "@eigenpal/docx-editor-vue",
-      "version": "1.0.3",
+      "version": "1.1.0",
       "dependencies": {
         "@eigenpal/docx-editor-agents": "^1.0.3",
         "@eigenpal/docx-editor-core": "^1.0.3",
@@ -965,7 +965,7 @@
 
     "@pkgjs/parseargs": ["@pkgjs/parseargs@0.11.0", "", {}, "sha512-+1VkjdD0QBLPodGrJUeqarH8VAIvQODIbwh9XpP5Syisf7YoQgsJKPNFoqqLQlu+VQ/tVSshMR6loPMn8U+dPg=="],
 
-    "@playwright/test": ["@playwright/test@1.59.1", "", { "dependencies": { "playwright": "1.59.1" }, "bin": { "playwright": "cli.js" } }, "sha512-PG6q63nQg5c9rIi4/Z5lR5IVF7yU5MqmKaPOe0HSc0O2cX1fPi96sUQu5j7eo4gKCkB2AnNGoWt7y4/Xx3Kcqg=="],
+    "@playwright/test": ["@playwright/test@1.60.0", "", { "dependencies": { "playwright": "1.60.0" }, "bin": { "playwright": "cli.js" } }, "sha512-O71yZIbAh/PxDMNGns37GHBIfrVkEVyn+AXyIa5dOTfb4/xNvRWV+Vv/NMbNCtODB/pO7vLlF2OTmMVLhmr7Ag=="],
 
     "@polka/url": ["@polka/url@1.0.0-next.29", "", {}, "sha512-wwQAWhWSuHaag8c4q/KN/vCoeOJYshAIvMQwD4GpSb3OiZklFfvAgmj0VCBBImRpuF/aFgIRzllXlVX93Jevww=="],
 
@@ -2687,9 +2687,9 @@
 
     "pkg-types": ["pkg-types@2.3.1", "", { "dependencies": { "confbox": "^0.2.4", "exsolve": "^1.0.8", "pathe": "^2.0.3" } }, "sha512-y+ichcgc2LrADuhLNAx8DFjVfgz91pRxfZdI3UDhxHvcVEZsenLO+7XaU5vOp0u/7V/wZ+plyuQxtrDlZJ+yeg=="],
 
-    "playwright": ["playwright@1.59.1", "", { "dependencies": { "playwright-core": "1.59.1" }, "optionalDependencies": { "fsevents": "2.3.2" }, "bin": { "playwright": "cli.js" } }, "sha512-C8oWjPR3F81yljW9o5OxcWzfh6avkVwDD2VYdwIGqTkl+OGFISgypqzfu7dOe4QNLL2aqcWBmI3PMtLIK233lw=="],
+    "playwright": ["playwright@1.60.0", "", { "dependencies": { "playwright-core": "1.60.0" }, "optionalDependencies": { "fsevents": "2.3.2" }, "bin": { "playwright": "cli.js" } }, "sha512-hheHdokM8cdqCb0lcE3s+zT4t4W+vvjpGxsZlDnikarzx8tSzMebh3UiFtgqwFwnTnjYQcsyMF8ei2mCO/tpeA=="],
 
-    "playwright-core": ["playwright-core@1.59.1", "", { "bin": { "playwright-core": "cli.js" } }, "sha512-HBV/RJg81z5BiiZ9yPzIiClYV/QMsDCKUyogwH9p3MCP6IYjUFu/MActgYAvK0oWyV9NlwM3GLBjADyWgydVyg=="],
+    "playwright-core": ["playwright-core@1.60.0", "", { "bin": { "playwright-core": "cli.js" } }, "sha512-9bW6zvX/m0lEbgTKJ6YppOKx8H3VOPBMOCFh2irXFOT4BbHgrx5hPjwJYLT40Lu+4qtD36qKc/Hn56StUW57IA=="],
 
     "possible-typed-array-names": ["possible-typed-array-names@1.1.0", "", {}, "sha512-/+5VFTchJDoVj3bhoqi6UeymcD00DAwb1nJwamzPvHEszJ4FpF6SNNbUbOS8yI56qHzdV8eK0qEfOSiodkTdxg=="],
 

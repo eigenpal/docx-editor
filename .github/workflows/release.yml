@@ -125,10 +125,9 @@ jobs:
           NODE_OPTIONS: --max-old-space-size=8192
 
       # Restore the browser binaries from cache so the common path skips the
-      # ~170 MB download from cdn.playwright.dev entirely (that download is the
-      # part that hangs — see the install step below). Keyed on the lockfile so
-      # a @playwright/test bump invalidates it. Cache miss falls through to a
-      # fresh download, which the retry loop guards.
+      # download from cdn.playwright.dev. Keyed on the lockfile so a
+      # @playwright/test bump invalidates it; a miss falls through to a fresh
+      # download.
       - name: Cache Playwright browsers
         if: ${{ steps.pending.outputs.publishing == 'true' }}
         uses: actions/cache@v4
@@ -136,31 +135,20 @@ jobs:
           path: ~/.cache/ms-playwright
           key: playwright-${{ runner.os }}-${{ hashFiles('bun.lock') }}
 
-      # Two distinct hangs have been observed and are both guarded here:
-      #   1. `--with-deps` shells out to apt-get; a post-install needrestart
-      #      prompt can hang it (NEEDRESTART_MODE=a + noninteractive suppress it).
-      #   2. The browser download from cdn.playwright.dev intermittently stalls
-      #      *after* reaching 100% — the socket never closes, so the process
-      #      waits forever (this is what burned the 10-min timeout on run #218).
-      # A raised timeout just hangs longer, so instead bound each attempt with
-      # `timeout` and retry: a stalled download is killed in 5 min and re-run.
-      # On a cache hit the download is skipped, so attempt 1 finishes in seconds.
-      # Budget: 3 × 5 min + apt < the 20-min step backstop < the 30-min job cap.
+      # `--with-deps` shells out to apt-get; a post-install needrestart prompt
+      # can hang it, so NEEDRESTART_MODE=a + noninteractive suppress it.
+      # timeout-minutes turns any remaining hang into a fast failure.
+      #
+      # NB: Playwright < 1.60.0 deadlocks here on Node >= 24.16 — a vendored
+      # yauzl regression hangs extraction *after* the download hits 100%
+      # (microsoft/playwright#40724). `setup-node` pins Node 24, whose runner
+      # default crossed 24.16, so every publish-path run hung until the job
+      # timeout. The fix is the >=1.60.0 bump in package.json, not a longer
+      # timeout. Keep this pinned at >=1.60.0.
       - name: Install Playwright browsers for parity gate
         if: ${{ steps.pending.outputs.publishing == 'true' }}
-        timeout-minutes: 20
-        run: |
-          for attempt in 1 2 3; do
-            echo "::group::Playwright install attempt $attempt"
-            if timeout --kill-after=30s 300 npx playwright install --with-deps chromium; then
-              echo "::endgroup::"
-              exit 0
-            fi
-            echo "Attempt $attempt stalled or failed; retrying..."
-            echo "::endgroup::"
-          done
-          echo "Playwright browser install failed after 3 attempts." >&2
-          exit 1
+        timeout-minutes: 10
+        run: npx playwright install --with-deps chromium
         env:
           DEBIAN_FRONTEND: noninteractive
           NEEDRESTART_MODE: a
