@@ -124,15 +124,43 @@ jobs:
           # core's 67 entries OOM under the default 1.5 GB heap.
           NODE_OPTIONS: --max-old-space-size=8192
 
-      # `--with-deps` shells out to apt-get; on the current ubuntu-latest image a
-      # post-install needrestart prompt can hang it indefinitely (observed
-      # burning ~6h until the run was cancelled). NEEDRESTART_MODE=a +
-      # noninteractive frontend suppress the prompt, and timeout-minutes turns
-      # any remaining hang into a fast failure instead of hours of idle runner.
+      # Restore the browser binaries from cache so the common path skips the
+      # ~170 MB download from cdn.playwright.dev entirely (that download is the
+      # part that hangs — see the install step below). Keyed on the lockfile so
+      # a @playwright/test bump invalidates it. Cache miss falls through to a
+      # fresh download, which the retry loop guards.
+      - name: Cache Playwright browsers
+        if: ${{ steps.pending.outputs.publishing == 'true' }}
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('bun.lock') }}
+
+      # Two distinct hangs have been observed and are both guarded here:
+      #   1. `--with-deps` shells out to apt-get; a post-install needrestart
+      #      prompt can hang it (NEEDRESTART_MODE=a + noninteractive suppress it).
+      #   2. The browser download from cdn.playwright.dev intermittently stalls
+      #      *after* reaching 100% — the socket never closes, so the process
+      #      waits forever (this is what burned the 10-min timeout on run #218).
+      # A raised timeout just hangs longer, so instead bound each attempt with
+      # `timeout` and retry: a stalled download is killed in 5 min and re-run.
+      # On a cache hit the download is skipped, so attempt 1 finishes in seconds.
+      # Budget: 3 × 5 min + apt < the 20-min step backstop < the 30-min job cap.
       - name: Install Playwright browsers for parity gate
         if: ${{ steps.pending.outputs.publishing == 'true' }}
-        timeout-minutes: 10
-        run: npx playwright install --with-deps chromium
+        timeout-minutes: 20
+        run: |
+          for attempt in 1 2 3; do
+            echo "::group::Playwright install attempt $attempt"
+            if timeout --kill-after=30s 300 npx playwright install --with-deps chromium; then
+              echo "::endgroup::"
+              exit 0
+            fi
+            echo "Attempt $attempt stalled or failed; retrying..."
+            echo "::endgroup::"
+          done
+          echo "Playwright browser install failed after 3 attempts." >&2
+          exit 1
         env:
           DEBIAN_FRONTEND: noninteractive
           NEEDRESTART_MODE: a
