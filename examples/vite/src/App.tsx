@@ -511,6 +511,16 @@ export function App() {
     };
   }, [isE2E, randomAuthor]);
 
+  // Set once the user starts their own document (New / open a file). The demo
+  // fixture fetch below resolves asynchronously and must NOT clobber that
+  // choice if it lands afterwards — otherwise New during the (slow) demo load
+  // silently restores the demo. This was the root cause of the formatting /
+  // text-editing E2E flakes: `newDocument` cleared the doc, then the late
+  // fetch repopulated it and subsequent edits landed on the demo content.
+  const userStartedOwnDocRef = useRef(false);
+  // Bumped on New / open to force a fresh DocxEditor instance (see handlers).
+  const [docVersion, setDocVersion] = useState(0);
+
   useEffect(() => {
     // Under E2E with ?empty=1, boot empty so tests get a deterministic,
     // known starting document instead of racing this async fixture fetch.
@@ -522,20 +532,28 @@ export function App() {
     fetch(`${import.meta.env.BASE_URL}docx-editor-demo.docx`)
       .then((res) => res.arrayBuffer())
       .then((buffer) => {
+        if (userStartedOwnDocRef.current) return; // user already moved on
         setDocumentBuffer(buffer);
         setFileName('docx-editor-demo.docx');
       })
       .catch(() => {
+        if (userStartedOwnDocRef.current) return;
         setCurrentDocument(createEmptyDocument());
         setFileName('Untitled.docx');
       });
   }, [e2eBootEmpty]);
 
   const handleNewDocument = useCallback(() => {
+    userStartedOwnDocRef.current = true;
     setCurrentDocument(createEmptyDocument());
     setDocumentBuffer(null);
     setFileName('Untitled.docx');
     setStatus('');
+    // Force a fresh editor instance. Switching the `documentBuffer` prop from a
+    // loaded buffer back to an empty `document` does not reliably re-init the
+    // editor's content, so remount it via a changing key — otherwise "New"
+    // leaves the previous document in the editor.
+    setDocVersion((v) => v + 1);
   }, []);
 
   const handleFileSelect = useCallback(async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -543,12 +561,14 @@ export function App() {
     if (!file) return;
 
     try {
+      userStartedOwnDocRef.current = true;
       setStatus('Loading...');
       const buffer = await file.arrayBuffer();
       setCurrentDocument(null);
       setDocumentBuffer(buffer);
       setFileName(file.name);
       setStatus('');
+      setDocVersion((v) => v + 1);
     } catch {
       setStatus('Error loading file');
     }
@@ -685,6 +705,7 @@ export function App() {
     <div style={styles.container}>
       <main style={styles.main}>
         <DocxEditor
+          key={docVersion}
           ref={editorRef}
           document={documentBuffer ? undefined : currentDocument}
           documentBuffer={documentBuffer}

@@ -161,16 +161,19 @@ export class EditorPage {
    * Get a specific paragraph by index (0-based)
    */
   getParagraph(index: number): Locator {
-    // Use 'p' prefix to avoid matching span elements that also have data-paragraph-index
-    return this.page.locator(`p[data-paragraph-index="${index}"]`);
+    // The visible, clickable paragraph is the painter's `.layout-paragraph`
+    // fragment (the editable ProseMirror copy is off-screen at left:-9999px and
+    // carries no positional attribute). Index by document order.
+    return this.page.locator('.layout-page-content .layout-paragraph').nth(index);
   }
 
   /**
    * Focus on a specific paragraph
    */
   async focusParagraph(index: number): Promise<void> {
-    const paragraph = this.getParagraph(index);
-    await paragraph.click();
+    // Clicking the visible painted paragraph routes to a PM selection via
+    // `usePagesPointer`.
+    await this.getParagraph(index).click();
   }
 
   /**
@@ -1232,12 +1235,10 @@ export class EditorPage {
    * Click New button to create a new document
    */
   async newDocument(): Promise<void> {
-    // The demo app fetches docx-editor-demo.docx asynchronously on mount and
-    // its load lifecycle (unzip -> parse -> layout) keeps running well after
-    // the page is interactive. Clicking "New" while that is still in flight
-    // lets the load finish afterwards and clobber the empty document — this
-    // was the root cause of the long-standing formatting/text-editing test
-    // failures. Wait for the document to stop changing before resetting.
+    // The demo app fetches docx-editor-demo.docx asynchronously on mount.
+    // Clicking "New" sets a guard (see App.tsx) so a late-resolving demo fetch
+    // can no longer clobber the reset document. Wait for whatever is currently
+    // loading to settle, then reset.
     await this.waitForDocumentTextStable();
 
     await this.page.locator('button:has-text("New")').click();
@@ -1284,8 +1285,11 @@ export class EditorPage {
    * Open find dialog (Ctrl+F / Cmd+F)
    */
   async openFind(): Promise<void> {
-    const modifier = process.platform === 'darwin' ? 'Meta' : 'Control';
-    await this.page.keyboard.press(`${modifier}+f`);
+    // Always use Control: headless Chromium on macOS swallows Cmd+F (native
+    // browser find) before it reaches the editor, so Meta+F never opens the
+    // dialog locally even though it works in CI on Linux. The editor's handler
+    // accepts Ctrl or Cmd, so Control works on every platform.
+    await this.page.keyboard.press('Control+f');
     await this.findReplaceDialog.waitFor();
   }
 
@@ -1293,8 +1297,8 @@ export class EditorPage {
    * Open find & replace dialog (Ctrl+H / Cmd+H)
    */
   async openFindReplace(): Promise<void> {
-    const modifier = process.platform === 'darwin' ? 'Meta' : 'Control';
-    await this.page.keyboard.press(`${modifier}+h`);
+    // Control on every platform — see openFind (Cmd+H is also browser-reserved).
+    await this.page.keyboard.press('Control+h');
     await this.findReplaceDialog.waitFor();
   }
 

@@ -134,7 +134,11 @@ export class ScenarioRunner {
 
     switch (action) {
       case 'goto':
-        await this.editor.goto();
+        // Every scenario clears to an empty document anyway (all 210 use
+        // `newDocument`), so boot empty and skip the async demo-fixture fetch
+        // entirely. Loading the demo only to clear it added a load/clear race
+        // that flaked the suite under parallel load.
+        await this.editor.gotoEmpty();
         break;
 
       case 'waitForReady':
@@ -215,6 +219,14 @@ export class ScenarioRunner {
 
       case 'paste':
         await this.editor.paste();
+        break;
+
+      case 'setLineSpacing':
+        await this.editor.setLineSpacing(args.spacing as string);
+        break;
+
+      case 'setParagraphStyle':
+        await this.editor.setParagraphStyle(args.style as string);
         break;
 
       case 'applyBold':

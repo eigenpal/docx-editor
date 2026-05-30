@@ -321,10 +321,9 @@ export async function assertParagraphAlignment(
   expectedAlignment: 'left' | 'center' | 'right' | 'justify'
 ): Promise<void> {
   const alignment = await page.evaluate((pIndex) => {
-    const paragraph = document.querySelector(`[data-paragraph-index="${pIndex}"]`);
+    const paragraph = document.querySelectorAll('.layout-page-content .layout-paragraph')[pIndex];
     if (!paragraph) return '';
-    const style = window.getComputedStyle(paragraph);
-    return style.textAlign;
+    return window.getComputedStyle(paragraph).textAlign;
   }, paragraphIndex);
 
   expect(
@@ -343,32 +342,16 @@ export async function assertParagraphIsList(
 ): Promise<void> {
   const isList = await page.evaluate(
     ({ pIndex, type }) => {
-      const paragraph = document.querySelector(`p[data-paragraph-index="${pIndex}"]`);
+      // The painter renders the marker as `.layout-list-marker` inside the
+      // paragraph fragment; bullets are non-digit glyphs, numbers end in a dot.
+      const paragraph = document.querySelectorAll('.layout-page-content .layout-paragraph')[pIndex];
       if (!paragraph) return false;
-
-      // Check for our editor's list classes
-      if (type === 'bullet' && paragraph.classList.contains('docx-list-bullet')) return true;
-      if (type === 'numbered' && paragraph.classList.contains('docx-list-numbered')) return true;
-
-      // Also check for generic list-item class with list marker check
-      if (paragraph.classList.contains('docx-list-item')) {
-        // Look for list marker
-        const marker = paragraph.querySelector('.docx-list-marker');
-        if (marker) {
-          const markerText = marker.textContent || '';
-          if (type === 'bullet' && /^[•○▪◦▸]$/.test(markerText)) return true;
-          if (type === 'numbered' && /^\d+\.$/.test(markerText)) return true;
-        }
-      }
-
-      // Fallback: Check for ul/ol parent (for standard HTML lists)
-      const parent = paragraph.closest('ul, ol');
-      if (parent) {
-        if (type === 'bullet' && parent.tagName === 'UL') return true;
-        if (type === 'numbered' && parent.tagName === 'OL') return true;
-      }
-
-      return false;
+      const marker = paragraph.querySelector('.layout-list-marker');
+      if (!marker) return false;
+      const markerText = (marker.textContent || '').trim();
+      if (type === 'numbered') return /\d[.)]?$/.test(markerText);
+      // bullet: a marker that is present but not a number
+      return markerText.length > 0 && !/^\d/.test(markerText);
     },
     { pIndex: paragraphIndex, type: listType }
   );
