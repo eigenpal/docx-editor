@@ -11,6 +11,7 @@ import type {
   Deletion,
   MoveFrom,
   MoveTo,
+  StyleDefinitions,
 } from '@eigenpal/docx-editor-core/headless';
 import { DocxReviewer } from '../DocxReviewer';
 import { createReviewerBridge } from '../reviewerBridge';
@@ -39,10 +40,11 @@ function makeTable(cells: string[][]): Table {
   } as unknown as Table;
 }
 
-function makeReviewer(content: (Paragraph | Table)[]): DocxReviewer {
+function makeReviewer(content: (Paragraph | Table)[], styles?: StyleDefinitions): DocxReviewer {
   const doc = {
     package: {
       document: { content, comments: [] } as DocumentBody,
+      styles,
     },
   } as Document;
   return new DocxReviewer(doc, 'TestAgent');
@@ -90,6 +92,10 @@ function makeHyperlink(text: string): Hyperlink {
     href: 'https://example.com',
     children: [makeRun(text)],
   } as Hyperlink;
+}
+
+function reviewerParagraph(reviewer: DocxReviewer, index = 0): Paragraph {
+  return reviewer.toDocument().package.document.content[index] as Paragraph;
 }
 
 // ── Suite ──────────────────────────────────────────────────────────────────
@@ -405,6 +411,115 @@ describe('createReviewerBridge — proposeChange (3 modes)', () => {
     expect(bridge.proposeChange({ paraId: 'p_a', search: '', replaceWith: '', author: 'AI' })).toBe(
       false
     );
+  });
+});
+
+describe('createReviewerBridge — applyFormatting', () => {
+  test('applies character formatting to a whole paragraph', () => {
+    const paragraph = makeParagraph('Format me.', 'p_a');
+    const reviewer = makeReviewer([paragraph]);
+    const bridge = createReviewerBridge(reviewer);
+
+    const ok = bridge.applyFormatting({
+      paraId: 'p_a',
+      marks: {
+        bold: true,
+        italic: true,
+        color: { rgb: 'FF0000' },
+        fontSize: 14,
+        fontFamily: { ascii: 'Aptos' },
+      },
+    });
+
+    expect(ok).toBe(true);
+    const run = reviewerParagraph(reviewer).content[0] as Run;
+    expect(run.formatting?.bold).toBe(true);
+    expect(run.formatting?.italic).toBe(true);
+    expect(run.formatting?.color?.rgb).toBe('FF0000');
+    expect(run.formatting?.fontSize).toBe(28);
+    expect(run.formatting?.fontFamily?.hAnsi).toBe('Aptos');
+  });
+
+  test('formats only a unique phrase by splitting runs', () => {
+    const paragraph = makeParagraph('Alpha Beta Gamma', 'p_a');
+    const reviewer = makeReviewer([paragraph]);
+    const bridge = createReviewerBridge(reviewer);
+
+    const ok = bridge.applyFormatting({
+      paraId: 'p_a',
+      search: 'Beta',
+      marks: { underline: { style: 'double' }, highlight: 'yellow' },
+    });
+
+    expect(ok).toBe(true);
+    const updated = reviewerParagraph(reviewer);
+    expect(
+      updated.content.map((item) =>
+        item.type === 'run' && item.content[0].type === 'text' ? item.content[0].text : ''
+      )
+    ).toEqual(['Alpha ', 'Beta', ' Gamma']);
+    const target = updated.content[1] as Run;
+    expect(target.formatting?.underline?.style).toBe('double');
+    expect(target.formatting?.highlight).toBe('yellow');
+    expect((updated.content[0] as Run).formatting?.underline).toBeUndefined();
+  });
+
+  test('returns false for ambiguous or missing search text', () => {
+    const reviewer = makeReviewer([makeParagraph('Repeat Repeat', 'p_a')]);
+    const bridge = createReviewerBridge(reviewer);
+
+    expect(bridge.applyFormatting({ paraId: 'p_a', search: 'Repeat', marks: { bold: true } })).toBe(
+      false
+    );
+    expect(
+      bridge.applyFormatting({ paraId: 'p_a', search: 'Missing', marks: { bold: true } })
+    ).toBe(false);
+  });
+
+  test('clears requested marks without removing unrelated formatting', () => {
+    const paragraph = makeParagraph('Format me.', 'p_a');
+    const run = paragraph.content[0] as Run;
+    run.formatting = { bold: true, italic: true, underline: { style: 'single' } };
+    const reviewer = makeReviewer([paragraph]);
+    const bridge = createReviewerBridge(reviewer);
+
+    const ok = bridge.applyFormatting({
+      paraId: 'p_a',
+      marks: { bold: false, underline: false },
+    });
+
+    expect(ok).toBe(true);
+    const updated = reviewerParagraph(reviewer).content[0] as Run;
+    expect(updated.formatting?.bold).toBeUndefined();
+    expect(updated.formatting?.underline).toBeUndefined();
+    expect(updated.formatting?.italic).toBe(true);
+  });
+});
+
+describe('createReviewerBridge — setParagraphStyle', () => {
+  test('sets a defined paragraph style', () => {
+    const paragraph = makeParagraph('Heading text', 'p_a');
+    const styles: StyleDefinitions = {
+      styles: [{ styleId: 'Heading1', type: 'paragraph', name: 'Heading 1' }],
+    };
+    const reviewer = makeReviewer([paragraph], styles);
+    const bridge = createReviewerBridge(reviewer);
+
+    expect(bridge.setParagraphStyle({ paraId: 'p_a', styleId: 'Heading1' })).toBe(true);
+    expect(reviewerParagraph(reviewer).formatting?.styleId).toBe('Heading1');
+  });
+
+  test('returns false for unknown paraId or undefined styleId', () => {
+    const paragraph = makeParagraph('Text', 'p_a');
+    const styles: StyleDefinitions = {
+      styles: [{ styleId: 'Heading1', type: 'paragraph', name: 'Heading 1' }],
+    };
+    const reviewer = makeReviewer([paragraph], styles);
+    const bridge = createReviewerBridge(reviewer);
+
+    expect(bridge.setParagraphStyle({ paraId: 'missing', styleId: 'Heading1' })).toBe(false);
+    expect(bridge.setParagraphStyle({ paraId: 'p_a', styleId: 'NoSuchStyle' })).toBe(false);
+    expect(reviewerParagraph(reviewer).formatting?.styleId).toBeUndefined();
   });
 });
 

@@ -705,6 +705,9 @@ export interface LoadedDocument {
     source?: string;
 }
 
+// @public (undocumented)
+export function mapHexToHighlightName(hex: string): string | null;
+
 // @public
 export interface McpSession {
     data: Map<string, unknown>;
@@ -963,6 +966,9 @@ export class PluginRegistry {
 
 // @public
 export const pluginRegistry: PluginRegistry;
+
+// @public
+export function pointsToHalfPoints(points: number): number;
 
 // @public
 export function pointsToPixels(points: number): number;

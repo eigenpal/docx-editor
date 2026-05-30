@@ -32,9 +32,20 @@ import type {
   ReviewChange,
   ReviewComment,
   SelectionInfo,
+  CharacterFormatting,
 } from './types';
 import type { ContentChangeEvent, EditorBridge } from './bridge';
-import type { Paragraph } from '@eigenpal/docx-editor-core/headless';
+import type {
+  Hyperlink,
+  Paragraph,
+  ParagraphContent,
+  Run,
+  RunContent,
+  StyleDefinitions,
+  TextFormatting,
+} from '@eigenpal/docx-editor-core/headless';
+import { mapHexToHighlightName, pointsToHalfPoints } from '@eigenpal/docx-editor-core/headless';
+import { getParagraphAtIndex } from './utils';
 
 /**
  * Build the paraId → top-level paragraphIndex map. Counting mirrors
@@ -109,6 +120,221 @@ function getParagraphPlainText(p: Paragraph): string {
     }
   }
   return parts.join('');
+}
+
+type RunParent = Array<Run | ParagraphContent | Hyperlink['children'][number]>;
+
+interface TextLeaf {
+  run: Run;
+  parent: RunParent;
+  index: number;
+  text: string;
+  start: number;
+  end: number;
+}
+
+function cloneRunWithText(run: Run, text: string): Run {
+  const content: RunContent[] = [{ type: 'text', text, preserveSpace: /^\s|\s$/.test(text) }];
+  const clone: Run = { type: 'run', content };
+  if (run.formatting) clone.formatting = { ...run.formatting };
+  if (run.propertyChanges) clone.propertyChanges = [...run.propertyChanges];
+  return clone;
+}
+
+function getRunPlainText(run: Run): string {
+  return run.content.map((item) => (item.type === 'text' ? item.text : '')).join('');
+}
+
+function collectRunLeaves(
+  run: Run,
+  parent: RunParent,
+  index: number,
+  leaves: TextLeaf[],
+  offset: { value: number }
+): void {
+  const text = getRunPlainText(run);
+  if (!text) return;
+  const start = offset.value;
+  const end = start + text.length;
+  leaves.push({ run, parent, index, text, start, end });
+  offset.value = end;
+}
+
+function collectHyperlinkLeaves(
+  hyperlink: Hyperlink,
+  leaves: TextLeaf[],
+  offset: { value: number }
+): void {
+  hyperlink.children.forEach((child, index) => {
+    if (child.type === 'run') {
+      collectRunLeaves(child, hyperlink.children as RunParent, index, leaves, offset);
+    }
+  });
+}
+
+function collectFormattingLeaves(
+  paragraph: Paragraph,
+  includeTrackedInsertions: boolean
+): TextLeaf[] {
+  const leaves: TextLeaf[] = [];
+  const offset = { value: 0 };
+
+  paragraph.content.forEach((item, index) => {
+    if (item.type === 'run') {
+      collectRunLeaves(item, paragraph.content as RunParent, index, leaves, offset);
+    } else if (item.type === 'hyperlink') {
+      collectHyperlinkLeaves(item, leaves, offset);
+    } else if (
+      item.type === 'deletion' ||
+      item.type === 'moveFrom' ||
+      (includeTrackedInsertions && (item.type === 'insertion' || item.type === 'moveTo'))
+    ) {
+      item.content.forEach((child, childIndex) => {
+        if (child.type === 'run') {
+          collectRunLeaves(child, item.content as RunParent, childIndex, leaves, offset);
+        } else if (child.type === 'hyperlink') {
+          collectHyperlinkLeaves(child, leaves, offset);
+        }
+      });
+    }
+  });
+
+  return leaves;
+}
+
+function applyMarksToFormatting(
+  formatting: TextFormatting | undefined,
+  marks: CharacterFormatting
+): TextFormatting | undefined {
+  const next: TextFormatting = { ...(formatting ?? {}) };
+
+  if (marks.bold !== undefined) next.bold = marks.bold || undefined;
+  if (marks.italic !== undefined) next.italic = marks.italic || undefined;
+  if (marks.underline !== undefined) {
+    if (marks.underline) {
+      next.underline = {
+        style:
+          typeof marks.underline === 'object' && marks.underline.style
+            ? (marks.underline.style as NonNullable<TextFormatting['underline']>['style'])
+            : 'single',
+      };
+    } else {
+      delete next.underline;
+    }
+  }
+  if (marks.strike !== undefined) next.strike = marks.strike || undefined;
+  if (marks.color !== undefined) {
+    if (marks.color && (marks.color.rgb || marks.color.themeColor)) {
+      next.color = {
+        rgb: marks.color.rgb,
+        themeColor: marks.color.themeColor,
+      } as NonNullable<TextFormatting['color']>;
+    } else {
+      delete next.color;
+    }
+  }
+  if (marks.highlight !== undefined) {
+    if (marks.highlight) {
+      next.highlight = (mapHexToHighlightName(marks.highlight) ||
+        marks.highlight) as TextFormatting['highlight'];
+    } else {
+      delete next.highlight;
+    }
+  }
+  if (marks.fontSize !== undefined) {
+    if (marks.fontSize > 0) next.fontSize = pointsToHalfPoints(marks.fontSize);
+    else delete next.fontSize;
+  }
+  if (marks.fontFamily !== undefined) {
+    if (marks.fontFamily && (marks.fontFamily.ascii || marks.fontFamily.hAnsi)) {
+      next.fontFamily = {
+        ascii: marks.fontFamily.ascii,
+        hAnsi: marks.fontFamily.hAnsi ?? marks.fontFamily.ascii,
+      };
+    } else {
+      delete next.fontFamily;
+    }
+  }
+
+  for (const key of Object.keys(next) as (keyof TextFormatting)[]) {
+    if (next[key] === undefined) delete next[key];
+  }
+
+  return Object.keys(next).length > 0 ? next : undefined;
+}
+
+function applyMarksToRun(run: Run, marks: CharacterFormatting): void {
+  run.formatting = applyMarksToFormatting(run.formatting, marks);
+}
+
+function applyMarksToRunSlice(
+  leaf: TextLeaf,
+  fromOffset: number,
+  toOffset: number,
+  marks: CharacterFormatting
+): void {
+  const canSplitRun = leaf.run.content.every((item) => item.type === 'text');
+  if ((fromOffset <= 0 && toOffset >= leaf.text.length) || !canSplitRun) {
+    applyMarksToRun(leaf.run, marks);
+    return;
+  }
+
+  const replacement: Run[] = [];
+  if (fromOffset > 0) replacement.push(cloneRunWithText(leaf.run, leaf.text.slice(0, fromOffset)));
+  const middle = cloneRunWithText(leaf.run, leaf.text.slice(fromOffset, toOffset));
+  applyMarksToRun(middle, marks);
+  replacement.push(middle);
+  if (toOffset < leaf.text.length) {
+    replacement.push(cloneRunWithText(leaf.run, leaf.text.slice(toOffset)));
+  }
+
+  leaf.parent.splice(leaf.index, 1, ...replacement);
+}
+
+function applyMarksToParagraphRange(
+  paragraph: Paragraph,
+  from: number,
+  to: number,
+  marks: CharacterFormatting
+): boolean {
+  const leaves = collectFormattingLeaves(paragraph, false);
+  const targets = leaves.filter((leaf) => leaf.start < to && leaf.end > from);
+  if (targets.length === 0) return true;
+
+  for (let i = targets.length - 1; i >= 0; i--) {
+    const leaf = targets[i];
+    applyMarksToRunSlice(
+      leaf,
+      Math.max(0, from - leaf.start),
+      Math.min(leaf.text.length, to - leaf.start),
+      marks
+    );
+  }
+  return true;
+}
+
+function applyMarksToWholeParagraph(paragraph: Paragraph, marks: CharacterFormatting): boolean {
+  const leaves = collectFormattingLeaves(paragraph, true);
+  for (const leaf of leaves) applyMarksToRun(leaf.run, marks);
+  return true;
+}
+
+function findUniqueTextRange(
+  paragraph: Paragraph,
+  search: string
+): { from: number; to: number } | null {
+  if (!search) return null;
+  const leaves = collectFormattingLeaves(paragraph, false);
+  const text = leaves.map((leaf) => leaf.text).join('');
+  const first = text.indexOf(search);
+  if (first === -1) return null;
+  if (text.indexOf(search, first + 1) !== -1) return null;
+  return { from: first, to: first + search.length };
+}
+
+function hasParagraphStyle(styles: StyleDefinitions | undefined, styleId: string): boolean {
+  if (!styles) return true;
+  return !!styles.styles?.some((style) => style.styleId === styleId && style.type === 'paragraph');
 }
 
 /**
@@ -291,22 +517,49 @@ export function createReviewerBridge(reviewer: DocxReviewer): EditorBridge {
       return map().has(paraId);
     },
 
-    /**
-     * Headless mode: character formatting mutations on a parsed Document model
-     * are not yet implemented. The live editor bridge supports this — the
-     * static reviewer will gain it in a follow-up.
-     */
-    applyFormatting(): boolean {
-      return false;
+    applyFormatting(options): boolean {
+      const idx = map().get(options.paraId);
+      if (idx === undefined) return false;
+
+      const body = reviewer.toDocument().package?.document;
+      if (!body) return false;
+
+      try {
+        const para = body ? getParagraphAtIndex(body, idx) : null;
+        if (!para) return false;
+
+        if (options.search) {
+          const range = findUniqueTextRange(para, options.search);
+          if (!range) return false;
+          applyMarksToParagraphRange(para, range.from, range.to, options.marks);
+        } else {
+          applyMarksToWholeParagraph(para, options.marks);
+        }
+
+        emitContentChange();
+        return true;
+      } catch {
+        return false;
+      }
     },
 
-    /**
-     * Headless mode: paragraph style mutations on a parsed Document model
-     * are not yet implemented. The live editor bridge supports this — the
-     * static reviewer will gain it in a follow-up.
-     */
-    setParagraphStyle(): boolean {
-      return false;
+    setParagraphStyle(options): boolean {
+      const idx = map().get(options.paraId);
+      if (idx === undefined) return false;
+
+      const doc = reviewer.toDocument();
+      const body = doc.package?.document;
+      if (!body) return false;
+      if (!hasParagraphStyle(doc.package?.styles, options.styleId)) return false;
+
+      try {
+        const para = getParagraphAtIndex(body, idx);
+        para.formatting = { ...(para.formatting ?? {}), styleId: options.styleId };
+        emitContentChange();
+        return true;
+      } catch {
+        return false;
+      }
     },
 
     /** Headless mode: pages are a layout concept; the static document has none. */
