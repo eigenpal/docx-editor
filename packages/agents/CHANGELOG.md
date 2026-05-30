@@ -1,5 +1,12 @@
 # @eigenpal/docx-editor-agents
 
+## 1.1.0
+
+### Minor Changes
+
+- 7a91813: Add headless reviewer formatting and paragraph style edits
+- 42ea72d: Track structural edits as OOXML revisions in suggesting mode. Paragraph-break insert/delete, paragraph-property changes, and table row/cell insert/delete/merge are now recorded, round-tripped through DOCX, and shown in the tracked-changes sidebar (React and Vue, localized). Adds `acceptChangeById(id)` / `rejectChangeById(id)`, and `acceptAllChanges` / `rejectAllChanges` now resolve every revision type rather than inline marks only. Fixes #614.
+
 ## 1.0.3
 
 ## 1.0.2
