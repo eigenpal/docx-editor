@@ -85,6 +85,8 @@ declare global {
         paraAttrs?: Record<string, unknown>
       ) => boolean;
       insertTable: (rows: number, cols: number) => boolean;
+      insertImage: (src: string, width?: number, height?: number) => boolean;
+      selectFirstImage: () => boolean;
       plantSimpleTable: () => boolean;
       plantTableRowInsertion: (revisionId: number) => boolean;
       getFirstTableRowAttrs: () => Record<string, unknown> | null;

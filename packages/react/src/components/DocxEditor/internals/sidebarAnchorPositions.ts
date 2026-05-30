@@ -107,7 +107,10 @@ export function computeAnchorPositions(
       }
     }
 
-    if (!node.isText) return;
+    // Text AND inline atoms (image, shape) can carry comment / tracked-change
+    // marks, so an inserted picture's card gets a sidebar anchor like inserted
+    // text. Without this an image-only change has no positioned card.
+    if (!node.isInline) return;
     for (const mark of node.marks) {
       let key: string | null = null;
       if (commentType && mark.type === commentType) {

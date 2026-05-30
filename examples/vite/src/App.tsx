@@ -1,6 +1,9 @@
 import React, { useState, useRef, useCallback, useEffect, useMemo } from 'react';
 import { createEmptyDocument, findStartPosForParaId } from '@eigenpal/docx-editor-core';
 import { setSuggestionMode } from '@eigenpal/docx-editor-core/prosemirror/plugins';
+// Re-exported by core, so the demo needs no direct `prosemirror-state` dep
+// (which would break the production build — it isn't in examples/vite deps).
+import { TextSelection } from '@eigenpal/docx-editor-core/prosemirror';
 import {
   acceptChangeById,
   rejectChangeById,
@@ -9,6 +12,7 @@ import {
   addRowBelow,
   deleteRow,
   insertTable,
+  insertImageNode,
 } from '@eigenpal/docx-editor-core/prosemirror/commands';
 import { loadFont } from '@eigenpal/docx-editor-core/utils';
 import { DocxEditor, type DocxEditorRef } from '@eigenpal/docx-editor-react';
@@ -358,6 +362,44 @@ export function App() {
         const view = editorRef.current?.getEditorRef()?.getView?.();
         if (!view) return false;
         return insertTable(rows, cols)(view.state, view.dispatch);
+      },
+      // Test-only: insert an inline image at the cursor via the same helper the
+      // UI uses, so it is wrapped in the `insertion` mark under suggesting mode.
+      insertImage: (src: string, width = 80, height = 60) => {
+        const view = editorRef.current?.getEditorRef()?.getView?.();
+        if (!view) return false;
+        const imageNode = view.state.schema.nodes.image.create({
+          src,
+          alt: 'test image',
+          width,
+          height,
+          wrapType: 'inline',
+          displayMode: 'inline',
+        });
+        return insertImageNode(view.state, view.dispatch, imageNode, view.state.selection.from);
+      },
+      // Test-only: select the first image (a text selection spanning the atom)
+      // so a following Backspace/Delete exercises the suggesting-mode
+      // atom-deletion path.
+      selectFirstImage: () => {
+        const view = editorRef.current?.getEditorRef()?.getView?.();
+        if (!view) return false;
+        let imgPos: number | null = null;
+        view.state.doc.descendants((node, pos) => {
+          if (imgPos != null) return false;
+          if (node.type.name === 'image') {
+            imgPos = pos;
+            return false;
+          }
+          return true;
+        });
+        if (imgPos == null) return false;
+        const tr = view.state.tr.setSelection(
+          TextSelection.create(view.state.doc, imgPos, imgPos + 1)
+        );
+        view.dispatch(tr);
+        view.focus();
+        return true;
       },
       plantSimpleTable: () => {
         const view = editorRef.current?.getEditorRef()?.getView?.();
