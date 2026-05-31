@@ -154,7 +154,7 @@ export interface FontSizeAttrs {
 }
 
 // @public
-export function footnoteToProseDoc(content: Array<Paragraph | Table>, options?: ToProseDocOptions & {
+export function footnoteToProseDoc(content: BlockContent[], options?: ToProseDocOptions & {
     theme?: Theme | null;
 }): Node_2;
 
@@ -198,7 +198,7 @@ export function getStyleId(state: EditorState): string | null;
 export function getTableContext(state: EditorState): TableContextInfo;
 
 // @public
-export function headerFooterToProseDoc(content: Array<Paragraph | Table>, options?: ToProseDocOptions & {
+export function headerFooterToProseDoc(content: BlockContent[], options?: ToProseDocOptions & {
     theme?: Theme | null;
 }): Node_2;
 
