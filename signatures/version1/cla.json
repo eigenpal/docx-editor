@@ -89,6 +89,12 @@
       "id": 20113895,
       "signed_at": "2026-05-28T23:24:17Z",
       "pull_request_no": 627
+    },
+    {
+      "name": "jacobjove",
+      "id": 25336795,
+      "signed_at": "2026-05-31T02:44:57Z",
+      "pull_request_no": 646
     }
   ]
 }
