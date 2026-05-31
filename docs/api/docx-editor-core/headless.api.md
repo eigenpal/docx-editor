@@ -340,7 +340,7 @@ export function emuToTwips(emu: number): number;
 
 // @public
 export interface Endnote {
-    content: (Paragraph | Table)[];
+    content: BlockContent[];
     id: number;
     noteType?: 'normal' | 'separator' | 'continuationSeparator' | 'continuationNotice';
     // (undocumented)
@@ -369,7 +369,7 @@ export function extractVariablesFromText(text: string): string[];
 
 // @public
 export interface Footnote {
-    content: (Paragraph | Table)[];
+    content: BlockContent[];
     id: number;
     noteType?: 'normal' | 'separator' | 'continuationSeparator' | 'continuationNotice';
     // (undocumented)

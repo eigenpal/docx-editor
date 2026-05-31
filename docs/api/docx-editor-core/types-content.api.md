@@ -9,7 +9,7 @@ export type BlockContent = Paragraph | Table | BlockSdt;
 
 // @public
 export interface BlockSdt {
-    content: (Paragraph | Table)[];
+    content: BlockContent[];
     properties: SdtProperties;
     // (undocumented)
     type: 'blockSdt';
@@ -112,7 +112,7 @@ export interface DrawingContent {
 
 // @public
 export interface Endnote {
-    content: (Paragraph | Table)[];
+    content: BlockContent[];
     id: number;
     noteType?: 'normal' | 'separator' | 'continuationSeparator' | 'continuationNotice';
     // (undocumented)
@@ -159,7 +159,7 @@ export interface FooterReference {
 
 // @public
 export interface Footnote {
-    content: (Paragraph | Table)[];
+    content: BlockContent[];
     id: number;
     noteType?: 'normal' | 'separator' | 'continuationSeparator' | 'continuationNotice';
     // (undocumented)
@@ -183,7 +183,7 @@ export interface FootnoteProperties {
 
 // @public
 export interface HeaderFooter {
-    content: (Paragraph | Table)[];
+    content: BlockContent[];
     hdrFtrType: HeaderFooterType;
     // (undocumented)
     type: 'header' | 'footer';
@@ -476,19 +476,22 @@ export interface SdtProperties {
     alias?: string;
     checked?: boolean;
     dateFormat?: string;
+    id?: number;
     listItems?: {
         displayText: string;
         value: string;
     }[];
     lock?: 'sdtLocked' | 'contentLocked' | 'sdtContentLocked' | 'unlocked';
     placeholder?: string;
+    rawEndPropertiesXml?: string;
+    rawPropertiesXml?: string;
     sdtType: SdtType;
     showingPlaceholder?: boolean;
     tag?: string;
 }
 
 // @public
-export type SdtType = 'richText' | 'plainText' | 'date' | 'dropdown' | 'comboBox' | 'checkbox' | 'picture' | 'buildingBlockGallery' | 'group' | 'unknown';
+export type SdtType = 'richText' | 'plainText' | 'date' | 'dropDownList' | 'comboBox' | 'checkbox' | 'picture' | 'buildingBlockGallery' | 'group' | 'equation' | 'citation' | 'bibliography' | 'unknown';
 
 // @public
 export interface Section {

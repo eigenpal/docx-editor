@@ -10,7 +10,7 @@ import { Node as Node_2 } from 'prosemirror-model';
 export function createEmptyDoc(): Node_2;
 
 // @public
-export function footnoteToProseDoc(content: Array<Paragraph | Table>, options?: ToProseDocOptions & {
+export function footnoteToProseDoc(content: BlockContent[], options?: ToProseDocOptions & {
     theme?: Theme | null;
 }): Node_2;
 
@@ -18,7 +18,7 @@ export function footnoteToProseDoc(content: Array<Paragraph | Table>, options?: 
 export function fromProseDoc(pmDoc: Node_2, baseDocument?: Document_2): Document_2;
 
 // @public
-export function headerFooterToProseDoc(content: Array<Paragraph | Table>, options?: ToProseDocOptions & {
+export function headerFooterToProseDoc(content: BlockContent[], options?: ToProseDocOptions & {
     theme?: Theme | null;
 }): Node_2;
 
