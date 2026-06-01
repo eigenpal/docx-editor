@@ -78,7 +78,9 @@ import {
   extractSelectionState,
   createStyleResolver,
   type TableContextInfo,
+  type PMContentControl,
 } from '@eigenpal/docx-editor-core/prosemirror';
+import type { ContentControlFilter } from '@eigenpal/docx-editor-core/agent';
 import {
   acceptChange,
   rejectChange,
@@ -409,6 +411,33 @@ export interface DocxEditorRef {
   } | null;
   /** Get all comments. */
   getComments: () => Comment[];
+  /**
+   * List block-level content controls (SDTs) in the live document, optionally
+   * filtered by `tag`/`alias`/`id`/`type`. Each result includes the control's
+   * text and PM position. Anchors for templates and document automation.
+   */
+  getContentControls: (filter?: ContentControlFilter) => PMContentControl[];
+  /** Scroll the first content control matching `filter` into view. Returns false if none. */
+  scrollToContentControl: (filter: ContentControlFilter) => boolean;
+  /**
+   * Replace the content of the first control matching `filter` with `text`
+   * (newlines become paragraphs). Returns false if no match. Throws if the
+   * control is content-locked unless `{ force: true }`.
+   */
+  setContentControlContent: (
+    filter: ContentControlFilter,
+    text: string,
+    options?: { force?: boolean }
+  ) => boolean;
+  /**
+   * Remove the first control matching `filter`. With `{ keepContent: true }`
+   * the inner blocks are unwrapped in place. Returns false if no match. Throws
+   * if the control is deletion-locked unless `{ force: true }`.
+   */
+  removeContentControl: (
+    filter: ContentControlFilter,
+    options?: { force?: boolean; keepContent?: boolean }
+  ) => boolean;
   /** Subscribe to document changes. Fires after every committed edit. Returns unsubscribe. */
   onContentChange: (listener: (document: Document) => void) => () => void;
   /** Subscribe to selection changes (cursor moves / selection changes). Returns unsubscribe. */

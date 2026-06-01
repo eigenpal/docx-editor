@@ -4,7 +4,19 @@ import type { Document } from '@eigenpal/docx-editor-core/types/document';
 import type { Comment } from '@eigenpal/docx-editor-core/types/content';
 import { DocumentAgent } from '@eigenpal/docx-editor-core/agent';
 import { applyStyle } from '@eigenpal/docx-editor-core/prosemirror/commands';
-import { createStyleResolver, type SelectionState } from '@eigenpal/docx-editor-core/prosemirror';
+import {
+  createStyleResolver,
+  findContentControlsInPM,
+  findContentControlPos,
+  setContentControlContentTr,
+  removeContentControlTr,
+  type SelectionState,
+  type PMContentControl,
+} from '@eigenpal/docx-editor-core/prosemirror';
+import {
+  ContentControlNotFoundError,
+  type ContentControlFilter,
+} from '@eigenpal/docx-editor-core/agent';
 import type { DocxInput } from '@eigenpal/docx-editor-core/utils';
 import type { DocxEditorRef } from '../../DocxEditor';
 import type { PagedEditorRef } from '../PagedEditor';
@@ -471,6 +483,52 @@ export function useDocxEditorRefApi({
       },
 
       getComments: () => comments,
+
+      getContentControls: (filter?: ContentControlFilter): PMContentControl[] => {
+        const view = pagedEditorRef.current?.getView();
+        return view ? findContentControlsInPM(view.state.doc, filter ?? {}) : [];
+      },
+
+      scrollToContentControl: (filter: ContentControlFilter): boolean => {
+        const view = pagedEditorRef.current?.getView();
+        if (!view) return false;
+        const pos = findContentControlPos(view.state.doc, filter);
+        if (pos == null) return false;
+        pagedEditorRef.current?.scrollToPosition(pos);
+        return true;
+      },
+
+      setContentControlContent: (
+        filter: ContentControlFilter,
+        text: string,
+        options?: { force?: boolean }
+      ): boolean => {
+        const view = pagedEditorRef.current?.getView();
+        if (!view) return false;
+        try {
+          view.dispatch(setContentControlContentTr(view.state, filter, text, options));
+          return true;
+        } catch (err) {
+          // Not-found is a soft miss; a lock refusal surfaces to the caller.
+          if (err instanceof ContentControlNotFoundError) return false;
+          throw err;
+        }
+      },
+
+      removeContentControl: (
+        filter: ContentControlFilter,
+        options?: { force?: boolean; keepContent?: boolean }
+      ): boolean => {
+        const view = pagedEditorRef.current?.getView();
+        if (!view) return false;
+        try {
+          view.dispatch(removeContentControlTr(view.state, filter, options));
+          return true;
+        } catch (err) {
+          if (err instanceof ContentControlNotFoundError) return false;
+          throw err;
+        }
+      },
 
       onContentChange: (listener) => {
         contentChangeSubscribersRef.current.add(listener);

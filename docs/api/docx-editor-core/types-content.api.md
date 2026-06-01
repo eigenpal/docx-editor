@@ -472,9 +472,17 @@ export interface RunPropertyChange {
 }
 
 // @public
+export interface SdtDataBinding {
+    prefixMappings?: string;
+    storeItemID?: string;
+    xpath?: string;
+}
+
+// @public
 export interface SdtProperties {
     alias?: string;
     checked?: boolean;
+    dataBinding?: SdtDataBinding;
     dateFormat?: string;
     id?: number;
     listItems?: {

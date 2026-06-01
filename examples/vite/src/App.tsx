@@ -231,6 +231,27 @@ export function App() {
         const buffer = await editorRef.current?.save();
         return buffer?.byteLength ?? null;
       },
+      // Content-control (SDT) addressing surface.
+      agentGetContentControls: (filter?: {
+        tag?: string;
+        alias?: string;
+        id?: number;
+        type?: string;
+      }) =>
+        editorRef.current
+          ?.getContentControls(filter as Parameters<typeof editorRef.current.getContentControls>[0])
+          .map((c) => ({ tag: c.tag, alias: c.alias, sdtType: c.sdtType, text: c.text })) ?? [],
+      agentSetContentControlContent: (
+        filter: { tag?: string; alias?: string; id?: number },
+        text: string,
+        options?: { force?: boolean }
+      ) => editorRef.current?.setContentControlContent(filter, text, options) ?? false,
+      agentRemoveContentControl: (
+        filter: { tag?: string; alias?: string; id?: number },
+        options?: { force?: boolean; keepContent?: boolean }
+      ) => editorRef.current?.removeContentControl(filter, options) ?? false,
+      agentScrollToContentControl: (filter: { tag?: string; alias?: string; id?: number }) =>
+        editorRef.current?.scrollToContentControl(filter) ?? false,
       // Agent-bridge surface — drives the same paths the live agent uses.
       agentAddComment: (opts: { paraId: string; text: string; author?: string; search?: string }) =>
         editorRef.current?.addComment({
