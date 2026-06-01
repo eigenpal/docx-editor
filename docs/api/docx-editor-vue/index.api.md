@@ -6,6 +6,7 @@
 
 import { App } from 'vue';
 import { ContentControlFilter } from '@eigenpal/docx-editor-core/agent';
+import { ContentControlValue } from '@eigenpal/docx-editor-core/agent';
 import { createDocumentWithText } from '@eigenpal/docx-editor-core';
 import { createEmptyDocument } from '@eigenpal/docx-editor-core';
 import { CreateEmptyDocumentOptions } from '@eigenpal/docx-editor-core';
@@ -96,6 +97,9 @@ export type DocxEditorRef = EditorRefLike & {
     removeContentControl(filter: ContentControlFilter, options?: {
         force?: boolean;
         keepContent?: boolean;
+    }): boolean;
+    setContentControlValue(filter: ContentControlFilter, value: ContentControlValue, options?: {
+        force?: boolean;
     }): boolean;
 };
 

@@ -159,6 +159,8 @@
             :style="pagesContainerStyle"
           />
 
+          <ContentControlWidgets v-if="!readOnly" :container="pagesRef" :view="editorView" />
+
           <InlineHeaderFooterEditor
             :is-open="hfEdit !== null"
             :position="hfEdit?.position ?? 'header'"
@@ -368,6 +370,7 @@ import CommentMarginMarkers from './CommentMarginMarkers.vue';
 import MaterialSymbol from './ui/MaterialSymbol.vue';
 import PageIndicator from './PageIndicator.vue';
 import InlineHeaderFooterEditor from './InlineHeaderFooterEditor.vue';
+import ContentControlWidgets from './ContentControlWidgets.vue';
 import HorizontalRuler from './ui/HorizontalRuler.vue';
 import VerticalRuler from './ui/VerticalRuler.vue';
 import DocxEditorMenuBar from './DocxEditor/DocxEditorMenuBar.vue';

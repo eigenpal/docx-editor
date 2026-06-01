@@ -38,6 +38,7 @@ import { DocxEditorOverlays } from './DocxEditor/DocxEditorOverlays';
 import { DocxEditorDialogs } from './DocxEditor/DocxEditorDialogs';
 import { DocxEditorToolbar } from './DocxEditor/DocxEditorToolbar';
 import { DocxEditorPagedArea } from './DocxEditor/DocxEditorPagedArea';
+import { ContentControlWidgets } from './DocxEditor/ContentControlWidgets';
 import { useResetEditorState } from './DocxEditor/hooks/useResetEditorState';
 import { DocxEditorShell } from './DocxEditor/DocxEditorShell';
 import type { FontOption } from './ui/FontPicker';
@@ -80,7 +81,7 @@ import {
   type TableContextInfo,
   type PMContentControl,
 } from '@eigenpal/docx-editor-core/prosemirror';
-import type { ContentControlFilter } from '@eigenpal/docx-editor-core/agent';
+import type { ContentControlFilter, ContentControlValue } from '@eigenpal/docx-editor-core/agent';
 import {
   acceptChange,
   rejectChange,
@@ -437,6 +438,18 @@ export interface DocxEditorRef {
   removeContentControl: (
     filter: ContentControlFilter,
     options?: { force?: boolean; keepContent?: boolean }
+  ) => boolean;
+  /**
+   * Set a typed value on the first control matching `filter`: a dropdown
+   * selection (`{ kind: 'dropdown', value }`), checkbox (`{ kind: 'checkbox',
+   * checked }`), or date (`{ kind: 'date', date }`). Updates the visible
+   * content and structured state. Returns false if no match; throws if
+   * content-locked (unless `force`) or the value doesn't fit the control type.
+   */
+  setContentControlValue: (
+    filter: ContentControlFilter,
+    value: ContentControlValue,
+    options?: { force?: boolean }
   ) => boolean;
   /** Subscribe to document changes. Fires after every committed edit. Returns unsubscribe. */
   onContentChange: (listener: (document: Document) => void) => () => void;
@@ -1591,73 +1604,81 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
         ) : null
       }
       pagedArea={
-        <DocxEditorPagedArea
-          pagedEditorRef={pagedEditorRef}
-          hfEditorRef={hfEditorRef}
-          scrollContainerRef={scrollContainerRef}
-          editorContentRef={editorContentRef}
-          document={history.state}
-          theme={theme}
-          initialSectionProperties={initialSectionProperties}
-          finalSectionProperties={finalSectionProperties}
-          headerContent={headerContent}
-          footerContent={footerContent}
-          firstPageHeaderContent={firstPageHeaderContent}
-          firstPageFooterContent={firstPageFooterContent}
-          hfEditPosition={hfEditPosition}
-          setHfEditPosition={setHfEditPosition}
-          hfEditIsFirstPage={hfEditIsFirstPage}
-          onHeaderFooterDoubleClick={handleHeaderFooterDoubleClick}
-          onHeaderFooterSave={handleHeaderFooterSave}
-          onRemoveHeaderFooter={handleRemoveHeaderFooter}
-          onBodyClick={handleBodyClick}
-          getHfTargetElement={getHfTargetElement}
-          zoom={state.zoom}
-          readOnly={readOnly}
-          extensionManager={extensionManager}
-          externalPlugins={allExternalPlugins}
-          onDocumentChange={handleDocumentChange}
-          onSelectionChange={handleSelectionChange}
-          onPagedSelectionChange={handlePagedSelectionChange}
-          onReady={(ref) => {
-            const view = ref.getView();
-            if (view) setPmState(view.state);
-          }}
-          onEditorViewReady={onEditorViewReady}
-          onRenderedDomContextReady={onRenderedDomContextReady}
-          pluginOverlays={pluginOverlays}
-          onHyperlinkClick={handleHyperlinkClick}
-          hyperlinkPopupData={hyperlinkPopupData}
-          onHyperlinkPopupNavigate={handleHyperlinkPopupNavigate}
-          onHyperlinkPopupCopy={handleHyperlinkPopupCopy}
-          onHyperlinkPopupEdit={handleHyperlinkPopupEdit}
-          onHyperlinkPopupRemove={handleHyperlinkPopupRemove}
-          onHyperlinkPopupClose={handleHyperlinkPopupClose}
-          onContextMenu={handleContextMenu}
-          sidebarOpen={sidebarOpen}
-          sidebarItems={allSidebarItems}
-          anchorPositions={anchorPositions}
-          onAnchorPositionsChange={setAnchorPositions}
-          pluginRenderedDomContext={pluginRenderedDomContext}
-          pageWidthPx={pageWidthPx}
-          expandedSidebarItem={expandedSidebarItem}
-          setExpandedSidebarItem={setExpandedSidebarItem}
-          comments={comments}
-          resolvedCommentIds={resolvedCommentIds}
-          resolvedIdsForRender={resolvedIdsForRender}
-          setShowCommentsSidebar={setShowCommentsSidebar}
-          onTotalPagesChange={(totalPages) => {
-            setScrollPageInfo((prev) =>
-              prev.totalPages === totalPages ? prev : { ...prev, totalPages }
-            );
-          }}
-          floatingCommentBtn={floatingCommentBtn}
-          isAddingComment={isAddingComment}
-          setCommentSelectionRange={setCommentSelectionRange}
-          setAddCommentYPosition={setAddCommentYPosition}
-          setIsAddingComment={setIsAddingComment}
-          setFloatingCommentBtn={setFloatingCommentBtn}
-        />
+        <>
+          <DocxEditorPagedArea
+            pagedEditorRef={pagedEditorRef}
+            hfEditorRef={hfEditorRef}
+            scrollContainerRef={scrollContainerRef}
+            editorContentRef={editorContentRef}
+            document={history.state}
+            theme={theme}
+            initialSectionProperties={initialSectionProperties}
+            finalSectionProperties={finalSectionProperties}
+            headerContent={headerContent}
+            footerContent={footerContent}
+            firstPageHeaderContent={firstPageHeaderContent}
+            firstPageFooterContent={firstPageFooterContent}
+            hfEditPosition={hfEditPosition}
+            setHfEditPosition={setHfEditPosition}
+            hfEditIsFirstPage={hfEditIsFirstPage}
+            onHeaderFooterDoubleClick={handleHeaderFooterDoubleClick}
+            onHeaderFooterSave={handleHeaderFooterSave}
+            onRemoveHeaderFooter={handleRemoveHeaderFooter}
+            onBodyClick={handleBodyClick}
+            getHfTargetElement={getHfTargetElement}
+            zoom={state.zoom}
+            readOnly={readOnly}
+            extensionManager={extensionManager}
+            externalPlugins={allExternalPlugins}
+            onDocumentChange={handleDocumentChange}
+            onSelectionChange={handleSelectionChange}
+            onPagedSelectionChange={handlePagedSelectionChange}
+            onReady={(ref) => {
+              const view = ref.getView();
+              if (view) setPmState(view.state);
+            }}
+            onEditorViewReady={onEditorViewReady}
+            onRenderedDomContextReady={onRenderedDomContextReady}
+            pluginOverlays={pluginOverlays}
+            onHyperlinkClick={handleHyperlinkClick}
+            hyperlinkPopupData={hyperlinkPopupData}
+            onHyperlinkPopupNavigate={handleHyperlinkPopupNavigate}
+            onHyperlinkPopupCopy={handleHyperlinkPopupCopy}
+            onHyperlinkPopupEdit={handleHyperlinkPopupEdit}
+            onHyperlinkPopupRemove={handleHyperlinkPopupRemove}
+            onHyperlinkPopupClose={handleHyperlinkPopupClose}
+            onContextMenu={handleContextMenu}
+            sidebarOpen={sidebarOpen}
+            sidebarItems={allSidebarItems}
+            anchorPositions={anchorPositions}
+            onAnchorPositionsChange={setAnchorPositions}
+            pluginRenderedDomContext={pluginRenderedDomContext}
+            pageWidthPx={pageWidthPx}
+            expandedSidebarItem={expandedSidebarItem}
+            setExpandedSidebarItem={setExpandedSidebarItem}
+            comments={comments}
+            resolvedCommentIds={resolvedCommentIds}
+            resolvedIdsForRender={resolvedIdsForRender}
+            setShowCommentsSidebar={setShowCommentsSidebar}
+            onTotalPagesChange={(totalPages) => {
+              setScrollPageInfo((prev) =>
+                prev.totalPages === totalPages ? prev : { ...prev, totalPages }
+              );
+            }}
+            floatingCommentBtn={floatingCommentBtn}
+            isAddingComment={isAddingComment}
+            setCommentSelectionRange={setCommentSelectionRange}
+            setAddCommentYPosition={setAddCommentYPosition}
+            setIsAddingComment={setIsAddingComment}
+            setFloatingCommentBtn={setFloatingCommentBtn}
+          />
+          {!readOnly && (
+            <ContentControlWidgets
+              containerRef={containerRef}
+              getView={() => pagedEditorRef.current?.getView() ?? null}
+            />
+          )}
+        </>
       }
       overlays={
         <DocxEditorOverlays

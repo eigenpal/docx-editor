@@ -16,7 +16,7 @@ import type { FontDefinition } from '@eigenpal/docx-editor-core/utils';
 import type { StyleValue, VNodeChild } from 'vue';
 import type { EditorRefLike } from '@eigenpal/docx-editor-agents/bridge';
 import type { PMContentControl } from '@eigenpal/docx-editor-core/prosemirror';
-import type { ContentControlFilter } from '@eigenpal/docx-editor-core/agent';
+import type { ContentControlFilter, ContentControlValue } from '@eigenpal/docx-editor-core/agent';
 import type { Translations } from '@eigenpal/docx-editor-i18n';
 
 export type EditorMode = 'editing' | 'suggesting' | 'viewing';
@@ -134,5 +134,11 @@ export type DocxEditorRef = EditorRefLike & {
   removeContentControl(
     filter: ContentControlFilter,
     options?: { force?: boolean; keepContent?: boolean }
+  ): boolean;
+  /** Set a typed value (dropdown / checkbox / date) on a control by tag. False if no match. */
+  setContentControlValue(
+    filter: ContentControlFilter,
+    value: ContentControlValue,
+    options?: { force?: boolean }
   ): boolean;
 };

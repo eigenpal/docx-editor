@@ -10,12 +10,14 @@ import {
   findContentControlPos,
   setContentControlContentTr,
   removeContentControlTr,
+  setContentControlValueTr,
   type SelectionState,
   type PMContentControl,
 } from '@eigenpal/docx-editor-core/prosemirror';
 import {
   ContentControlNotFoundError,
   type ContentControlFilter,
+  type ContentControlValue,
 } from '@eigenpal/docx-editor-core/agent';
 import type { DocxInput } from '@eigenpal/docx-editor-core/utils';
 import type { DocxEditorRef } from '../../DocxEditor';
@@ -523,6 +525,22 @@ export function useDocxEditorRefApi({
         if (!view) return false;
         try {
           view.dispatch(removeContentControlTr(view.state, filter, options));
+          return true;
+        } catch (err) {
+          if (err instanceof ContentControlNotFoundError) return false;
+          throw err;
+        }
+      },
+
+      setContentControlValue: (
+        filter: ContentControlFilter,
+        value: ContentControlValue,
+        options?: { force?: boolean }
+      ): boolean => {
+        const view = pagedEditorRef.current?.getView();
+        if (!view) return false;
+        try {
+          view.dispatch(setContentControlValueTr(view.state, filter, value, options));
           return true;
         } catch (err) {
           if (err instanceof ContentControlNotFoundError) return false;
