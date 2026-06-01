@@ -2,8 +2,7 @@ import { useCallback, useMemo } from 'react';
 import type {
   Document,
   HeaderFooter,
-  Paragraph,
-  Table,
+  BlockContent,
   SectionProperties,
 } from '@eigenpal/docx-editor-core/types/document';
 import { resolveHeaderFooter } from '@eigenpal/docx-editor-core/layout-bridge';
@@ -156,7 +155,7 @@ export function useHeaderFooterEditing({
   );
 
   const handleHeaderFooterSave = useCallback(
-    (content: (Paragraph | Table)[]) => {
+    (content: BlockContent[]) => {
       if (!hfEditPosition || !document?.package) {
         setHfEditPosition(null);
         return;

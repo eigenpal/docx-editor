@@ -77,6 +77,7 @@ import type {
   TextBoxBlock,
 } from '@eigenpal/docx-editor-core/layout-engine/types';
 import type { BlockLookup, HeaderFooterContent } from '@eigenpal/docx-editor-core/layout-painter';
+import { enclosingSdtGroupIds, applySdtFocus } from '@eigenpal/docx-editor-core/layout-painter';
 import type { Document } from '@eigenpal/docx-editor-core/types/document';
 import type { SelectionBridge } from '@eigenpal/docx-editor-core/prosemirror';
 
@@ -487,6 +488,12 @@ export function useDocxEditor(options: UseDocxEditorOptions): UseDocxEditorRetur
       for (const child of Array.from(container.children)) {
         (child as HTMLElement).style.flexShrink = '0';
       }
+      // Keep a content control's boundary visible while the caret is inside it
+      // (Word-style focus); re-applied here so it survives every re-paint.
+      applySdtFocus(
+        container,
+        enclosingSdtGroupIds(state.doc, state.selection.from, state.selection.to)
+      );
     } catch (err) {
       console.error('[useDocxEditor] Layout pipeline error:', err);
       onError?.(err instanceof Error ? err : new Error(String(err)));
@@ -559,6 +566,18 @@ export function useDocxEditor(options: UseDocxEditorOptions): UseDocxEditorRetur
         // Notify about selection changes (for highlight overlay)
         syncCoordinator?.requestRender();
         onSelectionUpdate?.();
+
+        // Selection-only moves don't relayout, so update content-control focus
+        // here too; relayouts re-apply it from runLayoutPipeline.
+        if (!transaction.docChanged) {
+          const pagesEl = pagesContainer.value;
+          if (pagesEl) {
+            applySdtFocus(
+              pagesEl,
+              enclosingSdtGroupIds(newState.doc, newState.selection.from, newState.selection.to)
+            );
+          }
+        }
       },
     });
 

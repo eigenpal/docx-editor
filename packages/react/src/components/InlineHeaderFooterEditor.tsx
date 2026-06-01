@@ -27,7 +27,7 @@ import { undo, redo } from 'prosemirror-history';
 import { schema } from '@eigenpal/docx-editor-core/prosemirror';
 import { proseDocToBlocks } from '@eigenpal/docx-editor-core/prosemirror/conversion';
 import { Z_INDEX } from '../styles/zIndex';
-import type { HeaderFooter, Paragraph, Table } from '@eigenpal/docx-editor-core/types/document';
+import type { HeaderFooter, BlockContent } from '@eigenpal/docx-editor-core/types/document';
 
 // ============================================================================
 // TYPES
@@ -52,7 +52,7 @@ export interface InlineHeaderFooterEditorProps {
   /** The positioning parent element (the div wrapping PagedEditor) */
   parentElement: HTMLElement;
   /** Callback when editing is complete — receives updated content blocks */
-  onSave: (content: Array<Paragraph | Table>) => void;
+  onSave: (content: BlockContent[]) => void;
   /** Callback when editing is cancelled */
   onClose: () => void;
   /** Callback to remove the header/footer entirely */

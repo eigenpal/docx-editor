@@ -468,6 +468,48 @@
   cursor: text;
 }
 
+/* Block-level Structured Document Tag (content control) boundary.
+   The painter lays body fragments as flat absolutely-positioned siblings, so
+   the boundary is a single overlay box per control (see renderSdtBoundaryBoxes)
+   spanning its fragments at content width — drawn as one rounded rectangle
+   like Word, with a corner label chip revealed on hover/focus. The box is
+   non-interactive so it never steals clicks from the editable content under it.
+   Nested controls each draw their own (slightly inset) box. */
+.layout-block-sdt-box {
+  pointer-events: none;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  box-sizing: border-box;
+  transition: border-color 0.1s ease;
+  z-index: 1;
+}
+.layout-block-sdt-box.is-active,
+.layout-block-sdt-box.is-focused {
+  border-color: rgba(25, 103, 210, 0.5);
+}
+/* Corner label chip — hidden until its control is hovered/active. */
+.layout-block-sdt-label {
+  position: absolute;
+  left: -1px;
+  bottom: 100%;
+  max-width: 160px;
+  height: 16px;
+  padding: 0 6px;
+  font-size: 10px;
+  line-height: 16px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: #fff;
+  background-color: rgba(25, 103, 210, 0.92);
+  border-radius: 4px 4px 0 0;
+  display: none;
+}
+.layout-block-sdt-box.is-active .layout-block-sdt-label,
+.layout-block-sdt-box.is-focused .layout-block-sdt-label {
+  display: block;
+}
+
 /* Header/footer areas — double-click hint */
 .layout-page-header,
 .layout-page-footer {

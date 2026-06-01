@@ -14,7 +14,7 @@
 import { onBeforeUnmount, onMounted, ref, shallowRef, type Ref, type ShallowRef } from 'vue';
 import type { EditorView } from 'prosemirror-view';
 import { TextSelection, NodeSelection } from 'prosemirror-state';
-import type { HeaderFooter, Paragraph, Table } from '@eigenpal/docx-editor-core/types/content';
+import type { HeaderFooter, BlockContent } from '@eigenpal/docx-editor-core/types/content';
 import type { Document } from '@eigenpal/docx-editor-core/types/document';
 import { findImageElement } from '@eigenpal/docx-editor-core/layout-painter';
 import {
@@ -110,7 +110,7 @@ export interface UsePagesPointerReturn {
   handlePagesDoubleClick: (event: MouseEvent) => void;
   handleTableInsertClick: (event: MouseEvent) => void;
   clearTableInsertTimer: () => void;
-  handleHfSave: (content: (Paragraph | Table)[]) => void;
+  handleHfSave: (content: BlockContent[]) => void;
   handleHfRemove: () => void;
 }
 
@@ -445,7 +445,7 @@ export function usePagesPointer(opts: UsePagesPointerOptions): UsePagesPointerRe
     };
   }
 
-  function handleHfSave(content: (Paragraph | Table)[]) {
+  function handleHfSave(content: BlockContent[]) {
     const doc = opts.getDocument();
     const edit = hfEdit.value;
     if (!doc?.package || !edit) return;

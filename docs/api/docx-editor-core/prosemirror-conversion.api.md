@@ -23,7 +23,7 @@ export function headerFooterToProseDoc(content: BlockContent[], options?: ToPros
 }): Node_2;
 
 // @public
-export function proseDocToBlocks(pmDoc: Node_2): (Paragraph | Table)[];
+export function proseDocToBlocks(pmDoc: Node_2): BlockContent[];
 
 // @public
 export function toProseDoc(document: Document_2, options?: ToProseDocOptions): Node_2;
