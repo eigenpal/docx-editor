@@ -24,6 +24,7 @@ import {
   type SelectionBox,
 } from '@eigenpal/docx-editor-core/layout-bridge';
 import type { FlowBlock, Layout, Measure } from '@eigenpal/docx-editor-core/layout-engine';
+import { enclosingSdtGroupIds, applySdtFocus } from '@eigenpal/docx-editor-core/layout-painter';
 
 import type { OffscreenEditorHostRef } from '../OffscreenEditorHost';
 import type { ImageSelectionInfo } from '../overlays/ImageSelectionOverlay';
@@ -110,6 +111,9 @@ export function useSelectionOverlay(opts: UseSelectionOverlayOptions): UseSelect
       const pagesEl = pagesContainerRef.current;
       if (pagesEl) {
         applyCellSelectionHighlight(pagesEl, state);
+        // Keep a content control's boundary visible while the caret is inside
+        // it (Word-style focus), in addition to the painter's hover reveal.
+        applySdtFocus(pagesEl, enclosingSdtGroupIds(state.doc, from, to));
       }
 
       if (!layout || blocks.length === 0) return;

@@ -8,8 +8,7 @@ import type {
   Theme,
   SectionProperties,
   HeaderFooter,
-  Paragraph,
-  Table,
+  BlockContent,
 } from '@eigenpal/docx-editor-core/types/document';
 import type { Comment } from '@eigenpal/docx-editor-core/types/content';
 import type { Plugin } from 'prosemirror-state';
@@ -130,7 +129,7 @@ export function DocxEditorPagedArea({
   setHfEditPosition: React.Dispatch<React.SetStateAction<'header' | 'footer' | null>>;
   hfEditIsFirstPage: boolean;
   onHeaderFooterDoubleClick: (position: 'header' | 'footer', pageNumber?: number) => void;
-  onHeaderFooterSave: (content: (Paragraph | Table)[]) => void;
+  onHeaderFooterSave: (content: BlockContent[]) => void;
   onRemoveHeaderFooter: () => void;
   onBodyClick: () => void;
   getHfTargetElement: (pos: 'header' | 'footer') => HTMLElement | null;

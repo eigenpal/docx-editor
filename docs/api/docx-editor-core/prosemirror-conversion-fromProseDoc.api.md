@@ -10,7 +10,7 @@ import { Node as Node_2 } from 'prosemirror-model';
 export function fromProseDoc(pmDoc: Node_2, baseDocument?: Document_2): Document_2;
 
 // @public
-export function proseDocToBlocks(pmDoc: Node_2): (Paragraph | Table)[];
+export function proseDocToBlocks(pmDoc: Node_2): BlockContent[];
 
 // @public
 export function updateDocumentContent(originalDocument: Document_2, pmDoc: Node_2): Document_2;
