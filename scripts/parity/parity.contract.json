@@ -69,14 +69,18 @@
     "paired": [
       "focus",
       "getAgent",
+      "getContentControls",
       "getZoom",
       "loadDocument",
       "loadDocumentBuffer",
       "openPrintPreview",
       "print",
+      "removeContentControl",
       "save",
+      "scrollToContentControl",
       "scrollToPage",
       "scrollToPosition",
+      "setContentControlContent",
       "setZoom"
     ],
     "pairedViaInheritance": {

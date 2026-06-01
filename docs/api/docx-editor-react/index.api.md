@@ -5,6 +5,7 @@
 ```ts
 
 import { Comment as Comment_2 } from '@eigenpal/docx-editor-core/types/content';
+import { ContentControlFilter } from '@eigenpal/docx-editor-core/agent';
 import { createDocumentWithText } from '@eigenpal/docx-editor-core';
 import { createEmptyDocument } from '@eigenpal/docx-editor-core';
 import { CreateEmptyDocumentOptions } from '@eigenpal/docx-editor-core';
@@ -19,6 +20,7 @@ import { FontDefinition } from '@eigenpal/docx-editor-core/utils';
 import { FontOption } from '@eigenpal/docx-editor-core/utils/fontOptions';
 import { HeaderFooter } from '@eigenpal/docx-editor-core/types/document';
 import { Layout } from '@eigenpal/docx-editor-core/layout-engine';
+import { PMContentControl } from '@eigenpal/docx-editor-core/prosemirror';
 import * as prosemirror_state from 'prosemirror-state';
 import * as prosemirror_view from 'prosemirror-view';
 import * as React_2 from 'react';
@@ -148,6 +150,7 @@ export interface DocxEditorRef {
     focus: () => void;
     getAgent: () => DocumentAgent | null;
     getComments: () => Comment_2[];
+    getContentControls: (filter?: ContentControlFilter) => PMContentControl[];
     getCurrentPage: () => number;
     getDocument: () => Document_2 | null;
     getEditorRef: () => PagedEditorRef | null;
@@ -181,14 +184,22 @@ export interface DocxEditorRef {
         replaceWith: string;
         author: string;
     }) => boolean;
+    removeContentControl: (filter: ContentControlFilter, options?: {
+        force?: boolean;
+        keepContent?: boolean;
+    }) => boolean;
     replyToComment: (commentId: number, text: string, author: string) => number | null;
     resolveComment: (commentId: number) => void;
     save: (options?: {
         selective?: boolean;
     }) => Promise<ArrayBuffer | null>;
+    scrollToContentControl: (filter: ContentControlFilter) => boolean;
     scrollToPage: (pageNumber: number) => void;
     scrollToParaId: (paraId: string) => boolean;
     scrollToPosition: (pmPos: number) => void;
+    setContentControlContent: (filter: ContentControlFilter, text: string, options?: {
+        force?: boolean;
+    }) => boolean;
     setParagraphStyle: (options: {
         paraId: string;
         styleId: string;

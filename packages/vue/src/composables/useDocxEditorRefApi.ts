@@ -22,6 +22,17 @@ import type { DocxInput } from '@eigenpal/docx-editor-core/utils';
 import type { Layout } from '@eigenpal/docx-editor-core/layout-engine';
 import { findPageIndexContainingPmPos } from '@eigenpal/docx-editor-core/layout-engine';
 import {
+  findContentControlsInPM,
+  findContentControlPos,
+  setContentControlContentTr,
+  removeContentControlTr,
+  type PMContentControl,
+} from '@eigenpal/docx-editor-core/prosemirror';
+import {
+  ContentControlNotFoundError,
+  type ContentControlFilter,
+} from '@eigenpal/docx-editor-core/agent';
+import {
   findInDocument as findInDocumentImpl,
   getSelectionInfo as getSelectionInfoImpl,
   getPageContent as getPageContentImpl,
@@ -148,6 +159,52 @@ export function useDocxEditorRefApi(opts: UseDocxEditorRefApiOptions): {
     return opts.comments.value;
   }
 
+  function getContentControls(filter?: ContentControlFilter): PMContentControl[] {
+    const view = opts.editorView.value;
+    return view ? findContentControlsInPM(view.state.doc, filter ?? {}) : [];
+  }
+
+  function scrollToContentControl(filter: ContentControlFilter): boolean {
+    const view = opts.editorView.value;
+    if (!view) return false;
+    const pos = findContentControlPos(view.state.doc, filter);
+    if (pos == null) return false;
+    scrollToPosition(pos);
+    return true;
+  }
+
+  function setContentControlContent(
+    filter: ContentControlFilter,
+    text: string,
+    options?: { force?: boolean }
+  ): boolean {
+    const view = opts.editorView.value;
+    if (!view) return false;
+    try {
+      view.dispatch(setContentControlContentTr(view.state, filter, text, options));
+      return true;
+    } catch (err) {
+      // Not-found is a soft miss; a lock refusal surfaces to the caller.
+      if (err instanceof ContentControlNotFoundError) return false;
+      throw err;
+    }
+  }
+
+  function removeContentControl(
+    filter: ContentControlFilter,
+    options?: { force?: boolean; keepContent?: boolean }
+  ): boolean {
+    const view = opts.editorView.value;
+    if (!view) return false;
+    try {
+      view.dispatch(removeContentControlTr(view.state, filter, options));
+      return true;
+    } catch (err) {
+      if (err instanceof ContentControlNotFoundError) return false;
+      throw err;
+    }
+  }
+
   function getPageContent(pageNumber: number) {
     return getPageContentImpl(opts.editorView.value, opts.layout.value, pageNumber);
   }
@@ -185,6 +242,10 @@ export function useDocxEditorRefApi(opts: UseDocxEditorRefApiOptions): {
     findInDocument,
     getSelectionInfo,
     getComments,
+    getContentControls,
+    scrollToContentControl,
+    setContentControlContent,
+    removeContentControl,
     applyFormatting: opts.applyFormatting,
     setParagraphStyle: opts.setParagraphStyle,
     getPageContent,

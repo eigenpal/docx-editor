@@ -5,6 +5,7 @@
 ```ts
 
 import { App } from 'vue';
+import { ContentControlFilter } from '@eigenpal/docx-editor-core/agent';
 import { createDocumentWithText } from '@eigenpal/docx-editor-core';
 import { createEmptyDocument } from '@eigenpal/docx-editor-core';
 import { CreateEmptyDocumentOptions } from '@eigenpal/docx-editor-core';
@@ -18,6 +19,7 @@ import { FontDefinition } from '@eigenpal/docx-editor-core/utils';
 import { FontOption } from '@eigenpal/docx-editor-core/utils/fontOptions';
 import { MaybeRef } from 'vue';
 import { Plugin as Plugin_2 } from 'prosemirror-state';
+import { PMContentControl } from '@eigenpal/docx-editor-core/prosemirror';
 import { StyleValue } from 'vue';
 import { TFunction } from '@eigenpal/docx-editor-i18n';
 import { Theme } from '@eigenpal/docx-editor-core/types/document';
@@ -86,6 +88,15 @@ export type DocxEditorRef = EditorRefLike & {
     loadDocument(doc: Document_2): void;
     loadDocumentBuffer(buffer: DocxInput): Promise<void>;
     destroy(): void;
+    getContentControls(filter?: ContentControlFilter): PMContentControl[];
+    scrollToContentControl(filter: ContentControlFilter): boolean;
+    setContentControlContent(filter: ContentControlFilter, text: string, options?: {
+        force?: boolean;
+    }): boolean;
+    removeContentControl(filter: ContentControlFilter, options?: {
+        force?: boolean;
+        keepContent?: boolean;
+    }): boolean;
 };
 
 // @public (undocumented)

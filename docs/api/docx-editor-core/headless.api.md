@@ -138,6 +138,55 @@ export interface CommentRangeStart {
 export function comparePositions(a: Position_2, b: Position_2): -1 | 0 | 1;
 
 // @public
+export class ContentControlBoundError extends Error {
+    constructor();
+}
+
+// @public
+export interface ContentControlFilter {
+    alias?: string;
+    id?: number;
+    tag?: string;
+    type?: SdtType;
+}
+
+// @public
+export interface ContentControlInfo {
+    alias?: string;
+    checked?: boolean;
+    dataBinding?: SdtDataBinding;
+    dateFormat?: string;
+    depth: number;
+    id?: number;
+    listItems?: {
+        displayText: string;
+        value: string;
+    }[];
+    lock?: SdtProperties['lock'];
+    path: number[];
+    placeholder?: string;
+    sdtType: SdtType;
+    showingPlaceholder?: boolean;
+    tag?: string;
+    text: string;
+}
+
+// @public
+export class ContentControlLockedError extends Error {
+    constructor(lock: SdtProperties['lock'], op: 'edit' | 'remove');
+}
+
+// @public
+export class ContentControlNotFoundError extends Error {
+    constructor(filter: ContentControlFilter);
+}
+
+// @public
+export class ContentControlTypeError extends Error {
+    constructor(sdtType: SdtType);
+}
+
+// @public
 export interface ContextSelectionOptions {
     contextChars?: number;
     includeSuggestions?: boolean;
@@ -368,6 +417,12 @@ export interface ExtendedSelectionContext extends SelectionContext {
 export function extractVariablesFromText(text: string): string[];
 
 // @public
+export function findContentControl(input: Document_2 | DocumentBody, filter: ContentControlFilter): ContentControlInfo | undefined;
+
+// @public
+export function findContentControls(input: Document_2 | DocumentBody, filter?: ContentControlFilter): ContentControlInfo[];
+
+// @public
 export interface Footnote {
     content: BlockContent[];
     id: number;
@@ -433,6 +488,9 @@ export function getBodyText(body: DocumentBody): string;
 
 // @public
 export function getBodyWordCount(body: DocumentBody): number;
+
+// @public
+export function getContentControlText(control: BlockSdt): string;
 
 // @public
 export function getContrastingColor(backgroundColor: ColorValue | undefined | null, theme: Theme | null | undefined): string;
@@ -1038,6 +1096,12 @@ export interface Relationship {
 }
 
 // @public
+export function removeContentControl(doc: Document_2, filter: ContentControlFilter, options?: {
+    force?: boolean;
+    keepContent?: boolean;
+}): Document_2;
+
+// @public
 export function removeVariables(text: string, placeholder?: string): string;
 
 // @public
@@ -1179,6 +1243,11 @@ export function serializeDocx(doc: Document_2): string;
 
 // @public
 export function serializeSectionProperties(props: SectionProperties | undefined): string;
+
+// @public
+export function setContentControlContent(doc: Document_2, filter: ContentControlFilter, replacement: string | BlockContent[], options?: {
+    force?: boolean;
+}): Document_2;
 
 // @public
 export interface SetVariableCommand extends BaseCommand {

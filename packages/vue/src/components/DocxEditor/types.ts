@@ -15,6 +15,8 @@ import type { FontOption } from '@eigenpal/docx-editor-core/utils/fontOptions';
 import type { FontDefinition } from '@eigenpal/docx-editor-core/utils';
 import type { StyleValue, VNodeChild } from 'vue';
 import type { EditorRefLike } from '@eigenpal/docx-editor-agents/bridge';
+import type { PMContentControl } from '@eigenpal/docx-editor-core/prosemirror';
+import type { ContentControlFilter } from '@eigenpal/docx-editor-core/agent';
 import type { Translations } from '@eigenpal/docx-editor-i18n';
 
 export type EditorMode = 'editing' | 'suggesting' | 'viewing';
@@ -118,4 +120,19 @@ export type DocxEditorRef = EditorRefLike & {
   loadDocumentBuffer(buffer: DocxInput): Promise<void>;
   /** Tear down the editor (destroys the PM view + frees listeners). */
   destroy(): void;
+  /** List block-level content controls (SDTs), optionally filtered by tag/alias/id/type. */
+  getContentControls(filter?: ContentControlFilter): PMContentControl[];
+  /** Scroll the first content control matching `filter` into view. False if none. */
+  scrollToContentControl(filter: ContentControlFilter): boolean;
+  /** Replace a control's content by tag with `text`. False if no match; throws if locked. */
+  setContentControlContent(
+    filter: ContentControlFilter,
+    text: string,
+    options?: { force?: boolean }
+  ): boolean;
+  /** Remove a control by tag (or unwrap with `keepContent`). False if no match; throws if locked. */
+  removeContentControl(
+    filter: ContentControlFilter,
+    options?: { force?: boolean; keepContent?: boolean }
+  ): boolean;
 };

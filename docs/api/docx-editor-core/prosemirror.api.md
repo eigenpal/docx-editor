@@ -117,6 +117,12 @@ export function extractSelectionContext(state: EditorState): SelectionContext;
 export function extractSelectionState(state: EditorState): SelectionState | null;
 
 // @public
+export function findContentControlPos(doc: Node_2, filter: ContentControlFilter): number | null;
+
+// @public
+export function findContentControlsInPM(doc: Node_2, filter?: ContentControlFilter): PMContentControl[];
+
+// @public
 export function findHyperlinkRangeAt(state: EditorState, fallbackHref?: string): {
     mark: Mark;
     start: number;
@@ -400,6 +406,37 @@ export interface ParagraphAttrs {
     textId?: string;
 }
 
+// @public
+export interface PMContentControl {
+    // (undocumented)
+    alias?: string;
+    checked?: boolean;
+    dataBinding?: SdtDataBinding;
+    dateFormat?: string;
+    depth: number;
+    // (undocumented)
+    id?: number;
+    listItems?: {
+        displayText: string;
+        value: string;
+    }[];
+    // (undocumented)
+    lock?: SdtProperties['lock'];
+    pos: number;
+    // (undocumented)
+    sdtType: SdtType;
+    showingPlaceholder?: boolean;
+    // (undocumented)
+    tag?: string;
+    text: string;
+}
+
+// @public
+export function removeContentControlTr(state: EditorState, filter: ContentControlFilter, options?: {
+    force?: boolean;
+    keepContent?: boolean;
+}): Transaction;
+
 // @public (undocumented)
 export const removeHyperlink: Command;
 
@@ -500,6 +537,11 @@ export function setCellTextDirection(direction: string | null): (state: EditorSt
 
 // @public (undocumented)
 export function setCellVerticalAlign(align: 'top' | 'center' | 'bottom'): (state: EditorState, dispatch?: (tr: Transaction) => void) => boolean;
+
+// @public
+export function setContentControlContentTr(state: EditorState, filter: ContentControlFilter, text: string, options?: {
+    force?: boolean;
+}): Transaction;
 
 // @public (undocumented)
 export function setFontFamily(fontName: string): Command;

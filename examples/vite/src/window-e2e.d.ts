@@ -13,6 +13,27 @@ declare global {
       getTotalPages: () => number;
       getCurrentPage: () => number;
       saveByteLength: () => Promise<number | null>;
+      // Content-control (SDT) addressing surface
+      agentGetContentControls: (filter?: {
+        tag?: string;
+        alias?: string;
+        id?: number;
+        type?: string;
+      }) => Array<{ tag?: string; alias?: string; sdtType: string; text: string }>;
+      agentSetContentControlContent: (
+        filter: { tag?: string; alias?: string; id?: number },
+        text: string,
+        options?: { force?: boolean }
+      ) => boolean;
+      agentRemoveContentControl: (
+        filter: { tag?: string; alias?: string; id?: number },
+        options?: { force?: boolean; keepContent?: boolean }
+      ) => boolean;
+      agentScrollToContentControl: (filter: {
+        tag?: string;
+        alias?: string;
+        id?: number;
+      }) => boolean;
       // Agent bridge surface
       agentAddComment: (opts: {
         paraId: string;
