@@ -78,6 +78,9 @@ export const clearStyle: Command;
 export const clearTextColor: Command;
 
 // @public
+export function createDocumentStylesPlugin(styles: StyleDefinitions | StyleResolver | null | undefined): Plugin_2;
+
+// @public
 export function createEmptyDoc(): Node_2;
 
 // @public
@@ -103,6 +106,9 @@ export function deleteTable(state: EditorState, dispatch?: (tr: Transaction) => 
 
 // @public (undocumented)
 export function distributeColumns(): (state: EditorState, dispatch?: (tr: Transaction) => void) => boolean;
+
+// @public
+export const documentStylesKey: PluginKey<StyleResolver | null>;
 
 // @public
 export function extractSelectionContext(state: EditorState): SelectionContext;
@@ -163,6 +169,9 @@ export function fromProseDoc(pmDoc: Node_2, baseDocument?: Document_2): Document
 
 // @public (undocumented)
 export const generateTOC: Command;
+
+// @public
+export function getDocumentStyleResolver(state: EditorState): StyleResolver | null;
 
 // @public (undocumented)
 export function getHyperlinkAttrs(state: EditorState): {
@@ -578,6 +587,7 @@ export class StyleResolver {
     getDefaultParagraphStyle(): Style | undefined;
     getDefaultTableStyle(): Style | undefined;
     getDocDefaults(): DocDefaults | undefined;
+    getNextStyleId(styleId: string | undefined | null): string | null;
     getParagraphStyles(): Style[];
     getRunStyleOwnProperties(styleId: string | undefined | null): TextFormatting | undefined;
     getStyle(styleId: string): Style | undefined;

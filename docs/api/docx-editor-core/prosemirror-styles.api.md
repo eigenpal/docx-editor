@@ -20,6 +20,7 @@ export class StyleResolver {
     getDefaultParagraphStyle(): Style | undefined;
     getDefaultTableStyle(): Style | undefined;
     getDocDefaults(): DocDefaults | undefined;
+    getNextStyleId(styleId: string | undefined | null): string | null;
     getParagraphStyles(): Style[];
     getRunStyleOwnProperties(styleId: string | undefined | null): TextFormatting | undefined;
     getStyle(styleId: string): Style | undefined;

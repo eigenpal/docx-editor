@@ -385,3 +385,74 @@ test.describe('Styles Edge Cases', () => {
     await assertions.assertDocumentContainsText(page, 'This is a very long heading');
   });
 });
+
+test.describe('Empty-paragraph style + next-style on Enter', () => {
+  let editor: EditorPage;
+
+  test.beforeEach(async ({ page }) => {
+    editor = new EditorPage(page);
+    await editor.goto();
+    await editor.waitForReady();
+    await editor.newDocument();
+    await editor.focus();
+  });
+
+  /**
+   * Read each paragraph's styleId + the mark types on its runs straight from
+   * the ProseMirror model — the source of truth both the hidden editor and
+   * the visible painter derive from, and which CSS can't mask.
+   */
+  async function paragraphModel(
+    page: import('@playwright/test').Page
+  ): Promise<Array<{ styleId: string | null; text: string; marks: string[] }>> {
+    return page.evaluate(() => {
+      const pm = document.querySelector('.ProseMirror') as unknown as {
+        pmViewDesc?: { node?: { forEach: (cb: (p: unknown) => void) => void } };
+      } | null;
+      const node = pm?.pmViewDesc?.node;
+      if (!node) return [];
+      const out: Array<{ styleId: string | null; text: string; marks: string[] }> = [];
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      node.forEach((p: any) => {
+        const marks = new Set<string>();
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        p.forEach((c: any) => {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          if (c.isText) c.marks.forEach((m: any) => marks.add(m.type.name));
+        });
+        out.push({ styleId: p.attrs.styleId ?? null, text: p.textContent, marks: [...marks] });
+      });
+      return out;
+    });
+  }
+
+  test('text typed after applying Heading 1 to an empty paragraph is styled', async ({ page }) => {
+    // Regression: applying a heading to an empty paragraph then typing used to
+    // produce unstyled text — the style picker's refocus discarded the stored
+    // marks before the first keystroke.
+    await editor.applyHeading1();
+    await editor.typeText('Heading text');
+
+    const paras = await paragraphModel(page);
+    expect(paras[0].styleId).toBe('Heading1');
+    expect(paras[0].marks).toContain('bold');
+    expect(paras[0].marks).toContain('fontSize');
+    await assertions.assertTextIsBold(page, 'Heading text');
+  });
+
+  test('Enter at the end of a heading drops to the body (next) style', async ({ page }) => {
+    await editor.applyHeading1();
+    await editor.typeText('Heading One');
+    await editor.pressEnter();
+    await editor.typeText('Body paragraph text');
+
+    const paras = await paragraphModel(page);
+    expect(paras).toHaveLength(2);
+    expect(paras[0].styleId).toBe('Heading1');
+    expect(paras[0].marks).toContain('bold');
+    // The heading's `w:next` is Normal, so the new paragraph is body text.
+    expect(paras[1].styleId).toBe('Normal');
+    expect(paras[1].marks).not.toContain('bold');
+    await assertions.assertTextIsNotBold(page, 'Body paragraph text');
+  });
+});
