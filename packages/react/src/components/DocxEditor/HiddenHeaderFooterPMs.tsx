@@ -34,7 +34,7 @@ import {
 import { EditorState } from 'prosemirror-state';
 import type { EditorState as EditorStateT } from 'prosemirror-state';
 import { EditorView } from 'prosemirror-view';
-import { schema } from '@eigenpal/docx-editor-core/prosemirror';
+import { schema, createDocumentStylesPlugin } from '@eigenpal/docx-editor-core/prosemirror';
 import {
   headerFooterToProseDoc,
   proseDocToBlocks,
@@ -109,10 +109,13 @@ function buildInitialState(
     theme: theme ?? null,
     defaultTabMarkTwips: defaultTabMarkTwips ?? null,
   });
+  // Header/footer paragraphs share the document's style table, so they get the
+  // same style-aware behavior (e.g. Enter after a heading → body text).
+  const styleResolverPlugin = createDocumentStylesPlugin(styles);
   return EditorState.create({
     doc: pmDoc,
     schema,
-    plugins: mgr.getPlugins(),
+    plugins: [...mgr.getPlugins(), styleResolverPlugin],
   });
 }
 

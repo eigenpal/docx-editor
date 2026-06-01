@@ -10,13 +10,22 @@ import { PluginKey } from 'prosemirror-state';
 import { Transaction } from 'prosemirror-state';
 
 // @public
+export function createDocumentStylesPlugin(styles: StyleDefinitions | StyleResolver | null | undefined): Plugin_2;
+
+// @public
 export function createSelectionTrackerPlugin(onSelectionChange?: SelectionChangeCallback): Plugin_2;
 
 // @public
 export function createSuggestionModePlugin(initialActive?: boolean, author?: string): Plugin_2;
 
 // @public
+export const documentStylesKey: PluginKey<StyleResolver | null>;
+
+// @public
 export function extractSelectionContext(state: EditorState): SelectionContext;
+
+// @public
+export function getDocumentStyleResolver(state: EditorState): StyleResolver | null;
 
 // @public
 export function getSelectionContext(state: EditorState): SelectionContext | null;

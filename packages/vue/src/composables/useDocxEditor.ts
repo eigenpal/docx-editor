@@ -32,6 +32,7 @@ import { singletonManager } from '@eigenpal/docx-editor-core/prosemirror/schema'
 import {
   createSuggestionModePlugin,
   setSuggestionMode,
+  createDocumentStylesPlugin,
 } from '@eigenpal/docx-editor-core/prosemirror/plugins';
 import {
   ExtensionManager,
@@ -502,17 +503,25 @@ export function useDocxEditor(options: UseDocxEditorOptions): UseDocxEditorRetur
     const host = hiddenContainer.value;
     if (!host) return;
 
+    const docStyles = document.value?.package?.styles;
     const doc = document.value
-      ? toProseDoc(document.value, {
-          styles: document.value.package?.styles ?? undefined,
-        })
+      ? toProseDoc(document.value, { styles: docStyles ?? undefined })
       : createEmptyDoc();
 
     // Suggestion-mode plugin is registered inactive; `setSuggestionMode()`
     // toggles its `active` state via PluginKey meta. Mirrors React's
     // mount-once-and-toggle pattern (DocxEditor.tsx createSuggestionModePlugin).
     const suggestionPlugin = createSuggestionModePlugin(false);
-    const plugins: Plugin[] = [suggestionPlugin, ...externalPlugins, ...(mgr.getPlugins() ?? [])];
+    // Expose the document's styles to style-aware commands (e.g. the Enter
+    // handler's `w:next` switch from heading to body text). Mirrors React's
+    // OffscreenEditorHost createInitialState.
+    const styleResolverPlugin = createDocumentStylesPlugin(docStyles);
+    const plugins: Plugin[] = [
+      suggestionPlugin,
+      ...externalPlugins,
+      ...(mgr.getPlugins() ?? []),
+      styleResolverPlugin,
+    ];
 
     const state = EditorState.create({
       doc,
@@ -696,10 +705,13 @@ export function useDocxEditor(options: UseDocxEditorOptions): UseDocxEditorRetur
         theme,
         defaultTabMarkTwips,
       });
+      // Header/footer paragraphs share the document's style table, so they get
+      // the same style-aware behavior (e.g. Enter after a heading → body text).
+      const hfStyleResolverPlugin = createDocumentStylesPlugin(styles);
       const state = EditorState.create({
         doc: pmDoc,
         schema,
-        plugins: mgr.getPlugins(),
+        plugins: [...mgr.getPlugins(), hfStyleResolverPlugin],
       });
       const slotKind = kind;
       const view: EditorView = new EditorView(node, {
