@@ -21,6 +21,9 @@ export function addColumnLeft(state: EditorState, dispatch?: (tr: Transaction) =
 // @public (undocumented)
 export function addColumnRight(state: EditorState, dispatch?: (tr: Transaction) => void): boolean;
 
+// @public
+export function addRepeatingSectionItemTr(state: EditorState, itemPos: number): Transaction;
+
 // @public (undocumented)
 export function addRowAbove(state: EditorState, dispatch?: (tr: Transaction) => void): boolean;
 
@@ -413,6 +416,7 @@ export interface PMContentControl {
     checked?: boolean;
     dataBinding?: SdtDataBinding;
     dateFormat?: string;
+    dateValue?: string;
     depth: number;
     // (undocumented)
     id?: number;
@@ -442,6 +446,9 @@ export const removeHyperlink: Command;
 
 // @public (undocumented)
 export const removeList: Command;
+
+// @public
+export function removeRepeatingSectionItemTr(state: EditorState, itemPos: number): Transaction;
 
 // @public (undocumented)
 export function removeTableBorders(state: EditorState, dispatch?: (tr: Transaction) => void): boolean;
@@ -540,6 +547,11 @@ export function setCellVerticalAlign(align: 'top' | 'center' | 'bottom'): (state
 
 // @public
 export function setContentControlContentTr(state: EditorState, filter: ContentControlFilter, text: string, options?: {
+    force?: boolean;
+}): Transaction;
+
+// @public
+export function setContentControlValueTr(state: EditorState, filter: ContentControlFilter, value: ContentControlValue, options?: {
     force?: boolean;
 }): Transaction;
 

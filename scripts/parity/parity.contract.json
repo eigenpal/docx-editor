@@ -81,6 +81,7 @@
       "scrollToPage",
       "scrollToPosition",
       "setContentControlContent",
+      "setContentControlValue",
       "setZoom"
     ],
     "pairedViaInheritance": {

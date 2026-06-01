@@ -5,6 +5,11 @@
 ```ts
 
 // @public
+export function addRepeatingSectionItem(doc: Document_2, filter: ContentControlFilter, options?: {
+    afterIndex?: number;
+}): Document_2;
+
+// @public
 export type AgentCommand = InsertTextCommand | ReplaceTextCommand | DeleteTextCommand | FormatTextCommand | FormatParagraphCommand | ApplyStyleCommand | InsertTableCommand | InsertImageCommand | InsertHyperlinkCommand | RemoveHyperlinkCommand | InsertParagraphBreakCommand | MergeParagraphsCommand | SplitParagraphCommand | SetVariableCommand | ApplyVariablesCommand;
 
 // @public
@@ -184,6 +189,23 @@ export class ContentControlNotFoundError extends Error {
 // @public
 export class ContentControlTypeError extends Error {
     constructor(sdtType: SdtType);
+}
+
+// @public
+export type ContentControlValue = {
+    kind: 'dropdown';
+    value: string;
+} | {
+    kind: 'checkbox';
+    checked: boolean;
+} | {
+    kind: 'date';
+    date: string;
+};
+
+// @public
+export class ContentControlValueError extends Error {
+    constructor(message: string);
 }
 
 // @public
@@ -443,6 +465,9 @@ export interface FormatParagraphCommand extends BaseCommand {
 export function formatPx(px: number): string;
 
 // @public
+export function formatSdtDate(iso: string, pattern?: string): string;
+
+// @public
 export interface FormattedTextSegment {
     formatting?: TextFormatting;
     hyperlinkUrl?: string;
@@ -682,6 +707,12 @@ export function isPositionInHyperlink(paragraph: Paragraph, offset: number): boo
 
 // @public
 export function isPositionInRange(position: Position_2, range: Range_2): boolean;
+
+// @public
+export function isRepeatingSection(props: SdtProperties): boolean;
+
+// @public
+export function isRepeatingSectionItem(props: SdtProperties): boolean;
 
 // @public
 export function isValidVariableName(name: string): boolean;
@@ -1102,10 +1133,18 @@ export function removeContentControl(doc: Document_2, filter: ContentControlFilt
 }): Document_2;
 
 // @public
+export function removeRepeatingSectionItem(doc: Document_2, filter: ContentControlFilter, index: number): Document_2;
+
+// @public
 export function removeVariables(text: string, placeholder?: string): string;
 
 // @public
 export function repackDocx(doc: Document_2, options?: RepackOptions): Promise<ArrayBuffer>;
+
+// @public
+export class RepeatingSectionError extends Error {
+    constructor(message: string);
+}
 
 // @public
 export interface ReplaceTextCommand extends BaseCommand {
@@ -1246,6 +1285,11 @@ export function serializeSectionProperties(props: SectionProperties | undefined)
 
 // @public
 export function setContentControlContent(doc: Document_2, filter: ContentControlFilter, replacement: string | BlockContent[], options?: {
+    force?: boolean;
+}): Document_2;
+
+// @public
+export function setContentControlValue(doc: Document_2, filter: ContentControlFilter, value: ContentControlValue, options?: {
     force?: boolean;
 }): Document_2;
 

@@ -87,6 +87,39 @@ These return `false` when no control matches; a locked or typed control throws
 `setContentControlContent` takes a **string** today (newlines become
 paragraphs); the headless API takes string or `BlockContent[]`.
 
+## Typed value setters (dropdown / checkbox / date)
+
+For typed controls, use `setContentControlValue` instead of
+`setContentControlContent` (which refuses them). It updates both the visible
+content and the structured `w:sdtPr` state.
+
+```ts
+// headless
+setContentControlValue(doc, { tag: 'status' }, { kind: 'dropdown', value: '2' });
+setContentControlValue(doc, { tag: 'agree' }, { kind: 'checkbox', checked: true });
+setContentControlValue(doc, { tag: 'effective' }, { kind: 'date', date: '2026-06-01' });
+
+// editor ref (React / Vue)
+ref.current?.setContentControlValue({ tag: 'status' }, { kind: 'dropdown', value: '2' });
+```
+
+A dropdown value must match one of the control's list items (by value or
+display text); a date is ISO `yyyy-mm-dd` and is formatted with the control's
+`w:dateFormat`. A data-bound control (`w:dataBinding`) is refused (its value is
+driven by the Custom XML store); a content-locked one is refused unless forced.
+**comboBox controls are treated as pick-only** — typing a value outside the
+list is not supported yet.
+
+### Interactive UI
+
+In the editor, typed controls render a small trigger at the top-right of their
+box (revealed on hover/focus). Clicking it toggles a checkbox, opens a menu of
+the dropdown's items, or opens a date picker — each runs through
+`setContentControlValue` as a normal undoable edit. Available in both the React
+and Vue adapters; no wiring required. The trigger is a focusable button and the
+dropdown menu is arrow-key navigable (Enter to choose, Escape to close). Data-
+bound and content-locked controls don't render a trigger.
+
 ## Reading bound / typed state
 
 Both `ContentControlInfo` (headless) and `PMContentControl` (editor) expose

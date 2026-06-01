@@ -6,6 +6,7 @@
 
 import { Comment as Comment_2 } from '@eigenpal/docx-editor-core/types/content';
 import { ContentControlFilter } from '@eigenpal/docx-editor-core/agent';
+import { ContentControlValue } from '@eigenpal/docx-editor-core/agent';
 import { createDocumentWithText } from '@eigenpal/docx-editor-core';
 import { createEmptyDocument } from '@eigenpal/docx-editor-core';
 import { CreateEmptyDocumentOptions } from '@eigenpal/docx-editor-core';
@@ -198,6 +199,9 @@ export interface DocxEditorRef {
     scrollToParaId: (paraId: string) => boolean;
     scrollToPosition: (pmPos: number) => void;
     setContentControlContent: (filter: ContentControlFilter, text: string, options?: {
+        force?: boolean;
+    }) => boolean;
+    setContentControlValue: (filter: ContentControlFilter, value: ContentControlValue, options?: {
         force?: boolean;
     }) => boolean;
     setParagraphStyle: (options: {

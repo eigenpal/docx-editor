@@ -5,6 +5,11 @@
 ```ts
 
 // @public
+export function addRepeatingSectionItem(doc: Document_2, filter: ContentControlFilter, options?: {
+    afterIndex?: number;
+}): Document_2;
+
+// @public
 export type AgentCommand = InsertTextCommand | ReplaceTextCommand | DeleteTextCommand | FormatTextCommand | FormatParagraphCommand | ApplyStyleCommand | InsertTableCommand | InsertImageCommand | InsertHyperlinkCommand | RemoveHyperlinkCommand | InsertParagraphBreakCommand | MergeParagraphsCommand | SplitParagraphCommand | SetVariableCommand | ApplyVariablesCommand;
 
 // @public
@@ -145,6 +150,23 @@ export class ContentControlTypeError extends Error {
 }
 
 // @public
+export type ContentControlValue = {
+    kind: 'dropdown';
+    value: string;
+} | {
+    kind: 'checkbox';
+    checked: boolean;
+} | {
+    kind: 'date';
+    date: string;
+};
+
+// @public
+export class ContentControlValueError extends Error {
+    constructor(message: string);
+}
+
+// @public
 export interface ContextSelectionOptions {
     contextChars?: number;
     includeSuggestions?: boolean;
@@ -251,6 +273,9 @@ export interface FormatParagraphCommand extends BaseCommand {
     // (undocumented)
     type: 'formatParagraph';
 }
+
+// @public
+export function formatSdtDate(iso: string, pattern?: string): string;
 
 // @public
 export interface FormattedTextSegment {
@@ -426,6 +451,12 @@ export function isPositionInHyperlink(paragraph: Paragraph, offset: number): boo
 export function isPositionInRange(position: Position_2, range: Range_2): boolean;
 
 // @public
+export function isRepeatingSection(props: SdtProperties): boolean;
+
+// @public
+export function isRepeatingSectionItem(props: SdtProperties): boolean;
+
+// @public
 export interface MergeParagraphsCommand extends BaseCommand {
     count: number;
     paragraphIndex: number;
@@ -486,6 +517,14 @@ export interface RemoveHyperlinkCommand extends BaseCommand {
 }
 
 // @public
+export function removeRepeatingSectionItem(doc: Document_2, filter: ContentControlFilter, index: number): Document_2;
+
+// @public
+export class RepeatingSectionError extends Error {
+    constructor(message: string);
+}
+
+// @public
 export interface ReplaceTextCommand extends BaseCommand {
     formatting?: TextFormatting;
     range: Range_2;
@@ -518,6 +557,11 @@ export interface SelectionContextOptions {
 
 // @public
 export function setContentControlContent(doc: Document_2, filter: ContentControlFilter, replacement: string | BlockContent[], options?: {
+    force?: boolean;
+}): Document_2;
+
+// @public
+export function setContentControlValue(doc: Document_2, filter: ContentControlFilter, value: ContentControlValue, options?: {
     force?: boolean;
 }): Document_2;
 
