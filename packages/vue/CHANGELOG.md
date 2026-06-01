@@ -1,5 +1,27 @@
 # @eigenpal/docx-editor-vue
 
+## 1.2.0
+
+### Minor Changes
+
+- 362a65f: Make block-level content controls (`w:sdt`) editable. Block structured document tags wrapping paragraphs or tables now convert to a dedicated ProseMirror node, so their content stays editable and the control survives the full edit cycle (previously it round-tripped on save but was flattened in the editor). The control boundary is drawn around its content in the paged view, and the region remains addressable by its tag/alias.
+- d791e05: Add content-control (SDT) methods to the editor ref. `getContentControls` lists block controls in the live document (filtered by tag/alias/id/type) with their text and position; `scrollToContentControl` brings one into view; `setContentControlContent` fills a control by tag (as a normal undoable edit); `removeContentControl` deletes or unwraps one. Locked controls are refused unless forced. Paired across the React and Vue adapters.
+- a60ed77: Add typed value setters for content controls. `setContentControlValue` (headless) and the `setContentControlValue` editor-ref method (React + Vue) set a dropdown selection, toggle a checkbox, or set a date by tag, updating both the visible content and the structured `w:sdtPr` state (dropdown `w:lastValue`, `w14:checked`, `w:date`'s `w:fullDate`). Validates the value against the control type and list items.
+- a60ed77: Support repeating sections (`w15:repeatingSection`) with add/remove, matching Word. `addRepeatingSectionItem`/`removeRepeatingSectionItem` (headless) clone an item with fresh unique ids or drop one (keeping at least one); the editor renders ＋/✕ affordances on each repeating item in React and Vue. Items round-trip losslessly.
+
+### Patch Changes
+
+- Updated dependencies [362a65f]
+- Updated dependencies [e30c763]
+- Updated dependencies [d791e05]
+- Updated dependencies [d791e05]
+- Updated dependencies [a60ed77]
+- Updated dependencies [bc67374]
+- Updated dependencies [a60ed77]
+  - @eigenpal/docx-editor-core@1.2.0
+  - @eigenpal/docx-editor-agents@1.2.0
+  - @eigenpal/docx-editor-i18n@1.2.0
+
 ## 1.1.0
 
 ### Minor Changes
