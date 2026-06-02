@@ -7,12 +7,24 @@
  * `toBuffer()`): nothing asserted that an edit reaches the saved bytes. This
  * matters most for the from-scratch case — the fixture has no comments part, so
  * the save path has to scaffold `comments.xml` + its content-type/rels rather
- * than patch an existing part.
+ * than patch an existing part. The final test inspects the saved zip directly
+ * to confirm that wiring, since the reload path finds `comments.xml` by
+ * hardcoded path and would pass even if the part were left unregistered.
  */
 import { describe, test, expect } from 'bun:test';
 import { readFileSync } from 'fs';
 import path from 'path';
+import JSZip from 'jszip';
 import { DocxReviewer } from '../DocxReviewer';
+
+// Word-facing wiring for a freshly-scaffolded comments part. A reload via
+// fromBuffer() only proves comments.xml parses (it's located by hardcoded
+// path), so these constants let us assert the part is actually registered the
+// way Word requires before it will open the file.
+const COMMENTS_CONTENT_TYPE =
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.comments+xml';
+const COMMENTS_REL_TYPE =
+  'http://schemas.openxmlformats.org/officeDocument/2006/relationships/comments';
 
 // A small, clean fixture: a handful of paragraphs, no pre-existing comments or
 // tracked changes, so post-reload counts are unambiguous.
@@ -67,5 +79,29 @@ describe('DocxReviewer headless save round-trip', () => {
     const reloaded = await roundTrip(reviewer);
     expect(reloaded.getComments()).toHaveLength(1);
     expect(reloaded.getChanges()).toHaveLength(1);
+  });
+
+  // The reload above proves comments.xml is parseable, but the part is located
+  // by hardcoded path — it would still pass if the save dropped the
+  // content-type Override and the document.xml.rels relationship, producing a
+  // file Word refuses to open. These assert the part is actually wired up.
+  test('scaffolds comments.xml content-type + relationship for a doc with none', async () => {
+    const reviewer = await DocxReviewer.fromBuffer(loadBuffer(), 'Reviewer');
+    reviewer.addComment(0, 'Round-trip comment.');
+
+    const zip = await JSZip.loadAsync(await reviewer.toBuffer());
+
+    // The part itself exists.
+    expect(zip.file('word/comments.xml')).not.toBeNull();
+
+    // [Content_Types].xml registers an Override for the part.
+    const contentTypes = await zip.file('[Content_Types].xml')!.async('text');
+    expect(contentTypes).toContain('PartName="/word/comments.xml"');
+    expect(contentTypes).toContain(COMMENTS_CONTENT_TYPE);
+
+    // document.xml.rels points the body at the comments part.
+    const rels = await zip.file('word/_rels/document.xml.rels')!.async('text');
+    expect(rels).toContain(COMMENTS_REL_TYPE);
+    expect(rels).toMatch(/Target="comments\.xml"/);
   });
 });
