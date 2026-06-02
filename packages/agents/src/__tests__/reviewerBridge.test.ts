@@ -139,10 +139,12 @@ describe('createReviewerBridge — findText', () => {
     expect(matches[0].after).toContain('jumps');
   });
 
-  test('skips paragraphs without paraIds', () => {
+  test('anchors paraId-less paragraphs by ordinal index (matches buildParaIdMap)', () => {
     const reviewer = makeReviewer([makeParagraph('orphan paragraph')]);
     const bridge = createReviewerBridge(reviewer);
-    expect(bridge.findText('orphan')).toEqual([]);
+    const matches = bridge.findText('orphan');
+    expect(matches).toHaveLength(1);
+    expect(matches[0].paraId).toBe('0');
   });
 
   test('skips ambiguous matches inside a single paragraph', () => {
@@ -610,5 +612,119 @@ describe('createReviewerBridge — table indexing', () => {
     expect(bridge.scrollTo('p_after')).toBe(true);
     // Mutating after a table should still work.
     expect(bridge.addComment({ paraId: 'p_after', text: 'OK', author: 'AI' })).not.toBeNull();
+  });
+});
+
+// `read_document` (formatContentForLLM) labels a paragraph with no w14:paraId by
+// its ordinal index — `[0]`, `[1]`, … — and Word does not always emit paraIds.
+// The bridge map must therefore resolve those ordinal-string ids, or every id
+// read_document hands the agent for a paraId-less doc is rejected by the mutate
+// tools. `find_text` mirrors the same convention: it emits `String(index)` for a
+// paraId-less paragraph, so a phrase it surfaces is anchorable by the mutate tools
+// on a doc with no paraIds (its index counting matches buildParaIdMap exactly).
+describe('createReviewerBridge — paraId-less paragraphs addressable by ordinal index', () => {
+  test('addComment resolves the ordinal-index id read_document shows', () => {
+    const reviewer = makeReviewer([makeParagraph('first'), makeParagraph('second')]);
+    const bridge = createReviewerBridge(reviewer);
+    const id = bridge.addComment({ paraId: '1', text: 'on the second', author: 'AI' });
+    expect(id).not.toBeNull();
+    const comments = reviewer.getComments();
+    expect(comments).toHaveLength(1);
+    expect(comments[0].paragraphIndex).toBe(1);
+  });
+
+  test('proposeChange resolves an ordinal-index id', () => {
+    const reviewer = makeReviewer([makeParagraph('alpha'), makeParagraph('beta')]);
+    const bridge = createReviewerBridge(reviewer);
+    const ok = bridge.proposeChange({
+      paraId: '0',
+      search: '',
+      replaceWith: ' [ins]',
+      author: 'AI',
+    });
+    expect(ok).toBe(true);
+    expect(reviewer.getChanges()).toHaveLength(1);
+  });
+
+  test('a real paraId still wins; the paraId-less sibling is reached by ordinal', () => {
+    const reviewer = makeReviewer([makeParagraph('has id', 'p_x'), makeParagraph('no id')]);
+    const bridge = createReviewerBridge(reviewer);
+    expect(bridge.addComment({ paraId: 'p_x', text: 'a', author: 'AI' })).not.toBeNull();
+    expect(bridge.addComment({ paraId: '1', text: 'b', author: 'AI' })).not.toBeNull();
+    expect(reviewer.getComments()).toHaveLength(2);
+  });
+
+  test('the ordinal index counts across a table, matching read_document', () => {
+    // before(0), table(cells advance the index), after — `after` is index
+    // 1 + (#cell-paragraphs). 2x2 table = 4 cell paragraphs → after is [5].
+    const before = makeParagraph('before');
+    const table = makeTable([
+      ['A', 'B'],
+      ['C', 'D'],
+    ]);
+    const after = makeParagraph('after');
+    const reviewer = makeReviewer([before, table, after]);
+    const bridge = createReviewerBridge(reviewer);
+    const id = bridge.addComment({ paraId: '5', text: 'on after', author: 'AI' });
+    expect(id).not.toBeNull();
+    expect(reviewer.getComments()[0].paragraphIndex).toBe(5);
+  });
+
+  test('applyFormatting resolves an ordinal-index id (all map consumers, not just comments)', () => {
+    const reviewer = makeReviewer([makeParagraph('format me')]);
+    const bridge = createReviewerBridge(reviewer);
+    expect(bridge.applyFormatting({ paraId: '0', marks: { bold: true } })).toBe(true);
+  });
+
+  test('a genuinely unknown id still returns null', () => {
+    const reviewer = makeReviewer([makeParagraph('only')]);
+    const bridge = createReviewerBridge(reviewer);
+    expect(bridge.addComment({ paraId: '99', text: 'x', author: 'AI' })).toBeNull();
+  });
+
+  test('find_text → addComment round-trips on a paraId-less doc', () => {
+    // The end-to-end invariant: a phrase find_text surfaces must be anchorable
+    // by the mutate tools even when the paragraph carries no w14:paraId.
+    const reviewer = makeReviewer([makeParagraph('alpha'), makeParagraph('unique beta phrase')]);
+    const bridge = createReviewerBridge(reviewer);
+    const matches = bridge.findText('unique beta phrase');
+    expect(matches).toHaveLength(1);
+    expect(matches[0].paraId).toBe('1');
+    const id = bridge.addComment({
+      paraId: matches[0].paraId,
+      text: 'note',
+      search: matches[0].match,
+    });
+    expect(typeof id).toBe('number');
+    expect(reviewer.getComments()[0].paragraphIndex).toBe(1);
+  });
+
+  test('find_text ordinal index counts across a table, matching buildParaIdMap', () => {
+    // before(0), 2x2 table (4 cell paragraphs advance the index), after → [5].
+    const before = makeParagraph('before');
+    const table = makeTable([
+      ['A', 'B'],
+      ['C', 'D'],
+    ]);
+    const after = makeParagraph('locate me after the table');
+    const reviewer = makeReviewer([before, table, after]);
+    const bridge = createReviewerBridge(reviewer);
+    const matches = bridge.findText('locate me after the table');
+    expect(matches).toHaveLength(1);
+    expect(matches[0].paraId).toBe('5');
+    // …and the emitted id resolves through the mutate path.
+    expect(
+      bridge.addComment({ paraId: matches[0].paraId, text: 'x', author: 'AI' })
+    ).not.toBeNull();
+  });
+
+  test('find_text prefers a real paraId over the ordinal when present', () => {
+    const reviewer = makeReviewer([
+      makeParagraph('no id here'),
+      makeParagraph('tagged text', 'p_z'),
+    ]);
+    const bridge = createReviewerBridge(reviewer);
+    expect(bridge.findText('no id here')[0].paraId).toBe('0');
+    expect(bridge.findText('tagged text')[0].paraId).toBe('p_z');
   });
 });

@@ -51,6 +51,14 @@ import { getParagraphAtIndex } from './utils';
  * Build the paraId → top-level paragraphIndex map. Counting mirrors
  * `forEachParagraph` / `getParagraphAtIndex` in utils.ts so the lookup
  * stays consistent with the reviewer's own walker.
+ *
+ * A paragraph that lacks a `w14:paraId` is keyed by its ordinal index as a
+ * string. This mirrors `formatContentForLLM` (content.ts), whose `read_document`
+ * output labels such paragraphs `[<index>]` rather than `[<paraId>]` — so the
+ * id the agent is handed always resolves here. Without this, a document with no
+ * paraIds (Word doesn't always emit them) advertises ids the mutate tools then
+ * reject. The index space is identical to `getContent`, so the string key and
+ * the label match exactly.
  */
 function buildParaIdMap(reviewer: DocxReviewer): Map<string, number> {
   const body = reviewer.toDocument().package?.document;
@@ -65,7 +73,7 @@ function buildParaIdMap(reviewer: DocxReviewer): Map<string, number> {
   for (const block of body.content) {
     if (block.type === 'paragraph') {
       const paraId = (block as Paragraph).paraId;
-      if (paraId) map.set(paraId, index);
+      map.set(paraId ?? String(index), index);
       index++;
     } else if (block.type === 'table') {
       // Cell paragraphs advance the index but aren't directly addressable in
@@ -410,11 +418,29 @@ export function createReviewerBridge(reviewer: DocxReviewer): EditorBridge {
       const matches: FoundMatch[] = [];
       const CONTEXT = 40;
 
+      // Track the top-level ordinal index exactly as buildParaIdMap does, so a
+      // paraId-less paragraph surfaces the same `String(index)` id the mutate
+      // tools resolve. Tables advance the index by their cell-paragraph count
+      // (cells aren't searched here — same top-level-only scope as before).
+      let index = 0;
       for (const block of body.content) {
         if (matches.length >= limit) break;
-        if (block.type !== 'paragraph') continue;
+        if (block.type === 'table') {
+          for (const row of block.rows) {
+            for (const cell of row.cells) {
+              for (const cellBlock of cell.content) {
+                if (cellBlock.type === 'paragraph') index++;
+              }
+            }
+          }
+          continue;
+        }
+        if (block.type !== 'paragraph') {
+          index++;
+          continue;
+        }
         const para = block as Paragraph;
-        if (!para.paraId) continue;
+        const paraIndex = index++;
         const text = getParagraphPlainText(para);
         const haystack = caseSensitive ? text : text.toLowerCase();
         const at = haystack.indexOf(needle);
@@ -423,7 +449,7 @@ export function createReviewerBridge(reviewer: DocxReviewer): EditorBridge {
         if (haystack.indexOf(needle, at + 1) !== -1) continue;
         const match = text.slice(at, at + query.length);
         matches.push({
-          paraId: para.paraId,
+          paraId: para.paraId ?? String(paraIndex),
           match,
           before: text.slice(Math.max(0, at - CONTEXT), at),
           after: text.slice(at + query.length, at + query.length + CONTEXT),
