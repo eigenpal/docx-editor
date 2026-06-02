@@ -15,6 +15,7 @@ import type {
 } from '@eigenpal/docx-editor-core/headless';
 import { DocxReviewer } from '../DocxReviewer';
 import { createReviewerBridge } from '../reviewerBridge';
+import { CommentNotFoundError } from '../errors';
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 
@@ -548,6 +549,14 @@ describe('createReviewerBridge — comments lifecycle', () => {
     bridge.resolveComment(id!);
     const comment = reviewer.getComments().find((c) => c.id === id);
     expect(comment?.done).toBe(true);
+  });
+
+  test('resolveComment throws CommentNotFoundError for an unknown id', () => {
+    const reviewer = makeReviewer([makeParagraph('First.', 'p_a')]);
+    const bridge = createReviewerBridge(reviewer);
+    // No comment with id 9999 exists — a miss must be a loud failure, not a
+    // silent no-op that reports success (regression guard for fail-quiet resolve).
+    expect(() => bridge.resolveComment(9999)).toThrow(CommentNotFoundError);
   });
 });
 

@@ -46,6 +46,7 @@ import type {
 } from '@eigenpal/docx-editor-core/headless';
 import { mapHexToHighlightName, pointsToHalfPoints } from '@eigenpal/docx-editor-core/headless';
 import { getParagraphAtIndex } from './utils';
+import { CommentNotFoundError } from './errors';
 
 /**
  * Build the paraId → top-level paragraphIndex map. Counting mirrors
@@ -491,14 +492,18 @@ export function createReviewerBridge(reviewer: DocxReviewer): EditorBridge {
     },
 
     /** Mark a comment resolved. DocxReviewer doesn't expose this directly,
-     * so we mutate the body's comment record in place. */
+     * so we mutate the body's comment record in place. Throws
+     * `CommentNotFoundError` if no comment carries `commentId` — mirrors the
+     * not-found semantics of `acceptChange`/`removeComment` so a missed id is a
+     * loud failure, not a silent no-op that reports success to the caller. */
     resolveComment(commentId: number): void {
       const body = reviewer.toDocument().package?.document;
       const comment = body?.comments?.find((c) => c.id === commentId);
-      if (comment) {
-        comment.done = true;
-        emitContentChange();
+      if (!comment) {
+        throw new CommentNotFoundError(commentId);
       }
+      comment.done = true;
+      emitContentChange();
     },
 
     proposeChange(options: ProposeChangeOptions): boolean {
