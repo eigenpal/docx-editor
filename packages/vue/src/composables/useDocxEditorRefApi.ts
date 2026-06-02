@@ -21,6 +21,7 @@ import type { Comment } from '@eigenpal/docx-editor-core/types/content';
 import type { DocxInput } from '@eigenpal/docx-editor-core/utils';
 import type { Layout } from '@eigenpal/docx-editor-core/layout-engine';
 import { findPageIndexContainingPmPos } from '@eigenpal/docx-editor-core/layout-engine';
+import { paintAllPagesNow } from '@eigenpal/docx-editor-core/layout-painter';
 import {
   findContentControlsInPM,
   findContentControlPos,
@@ -87,6 +88,10 @@ export function useDocxEditorRefApi(opts: UseDocxEditorRefApiOptions): {
   exposed: DocxEditorRef;
 } {
   function print() {
+    // Virtualization keeps off-screen pages as empty shells. Without this
+    // they print as blank pages past the visible band (issue #579).
+    const pagesEl = opts.pagesRef.value;
+    if (pagesEl) paintAllPagesNow(pagesEl);
     opts.onPrint?.();
     window.print();
   }

@@ -13,6 +13,7 @@ import {
 } from '@eigenpal/docx-editor-core/prosemirror/extensions';
 import { readDocxFileFromInput, type DocxInput } from '@eigenpal/docx-editor-core/utils';
 import { insertImageNode } from '@eigenpal/docx-editor-core/prosemirror/commands';
+import { paintAllPagesNow } from '@eigenpal/docx-editor-core/layout-painter';
 import type { EditorView } from 'prosemirror-view';
 import type { PagedEditorRef } from '../PagedEditor';
 
@@ -126,6 +127,10 @@ export function useFileIO({
       onPrint?.();
       return;
     }
+
+    // Virtualization keeps off-screen pages as empty shells. Without this
+    // they clone as blank pages in the print output (issue #579).
+    paintAllPagesNow(pagesEl as HTMLElement);
 
     const printWindow = window.open('', '_blank');
     if (!printWindow) {
