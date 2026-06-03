@@ -5,6 +5,9 @@
 import type {
   DocumentBody,
   Paragraph,
+  BlockContent,
+  Footnote,
+  Endnote,
   Run,
   Hyperlink,
   ParagraphContent,
@@ -83,15 +86,22 @@ export function getParagraphAtIndex(body: DocumentBody, paragraphIndex: number):
 }
 
 /**
- * Walk all paragraphs in the document body (including inside tables),
- * calling the callback with each paragraph and its document-wide index.
+ * Walk paragraphs in a block sequence (including paragraphs inside tables),
+ * calling `fn` with each paragraph and a running index; returning `false` from
+ * `fn` stops the walk early.
+ *
+ * `countOther` controls how non-paragraph, non-table blocks affect the index:
+ * the document body advances the index over them (so it stays a document-wide
+ * paragraph index — `getParagraphAtIndex`'s contract), whereas note bodies hold
+ * only paragraphs and tables and want a dense note-local index.
  */
-export function forEachParagraph(
-  body: DocumentBody,
+function walkParagraphs(
+  blocks: readonly BlockContent[],
+  countOther: boolean,
   fn: (para: Paragraph, index: number) => void | boolean
 ): void {
   let index = 0;
-  for (const block of body.content) {
+  for (const block of blocks) {
     if (block.type === 'paragraph') {
       if (fn(block, index) === false) return;
       index++;
@@ -106,8 +116,32 @@ export function forEachParagraph(
           }
         }
       }
-    } else {
+    } else if (countOther) {
       index++;
     }
   }
+}
+
+/**
+ * Walk all paragraphs in the document body (including inside tables),
+ * calling the callback with each paragraph and its document-wide index.
+ */
+export function forEachParagraph(
+  body: DocumentBody,
+  fn: (para: Paragraph, index: number) => void | boolean
+): void {
+  walkParagraphs(body.content, true, fn);
+}
+
+/**
+ * Walk every paragraph in a footnote/endnote body (including paragraphs inside
+ * tables), calling the callback with each paragraph and its note-local index.
+ * Mirrors {@link forEachParagraph} but over a single note's `(Paragraph |
+ * Table)[]` content rather than the document body.
+ */
+export function forEachNoteParagraph(
+  note: Footnote | Endnote,
+  fn: (para: Paragraph, index: number) => void | boolean
+): void {
+  walkParagraphs(note.content, false, fn);
 }

@@ -117,6 +117,7 @@ export interface Endnote {
     noteType?: 'normal' | 'separator' | 'continuationSeparator' | 'continuationNotice';
     // (undocumented)
     type: 'endnote';
+    verbatimXml?: string;
 }
 
 // @public
@@ -164,6 +165,7 @@ export interface Footnote {
     noteType?: 'normal' | 'separator' | 'continuationSeparator' | 'continuationNotice';
     // (undocumented)
     type: 'footnote';
+    verbatimXml?: string;
 }
 
 // @public
@@ -415,6 +417,12 @@ export interface NoteReferenceContent {
 }
 
 // @public
+export interface NoteRefMarkContent {
+    // (undocumented)
+    type: 'footnoteRefMark' | 'endnoteRefMark';
+}
+
+// @public
 export type PageOrientation = 'portrait' | 'landscape';
 
 // @public
@@ -460,7 +468,7 @@ export interface Run {
 }
 
 // @public
-export type RunContent = TextContent | TabContent | BreakContent | SymbolContent | NoteReferenceContent | FieldCharContent | InstrTextContent | SoftHyphenContent | NoBreakHyphenContent | DrawingContent | ShapeContent;
+export type RunContent = TextContent | TabContent | BreakContent | SymbolContent | NoteReferenceContent | NoteRefMarkContent | SeparatorContent | FieldCharContent | InstrTextContent | SoftHyphenContent | NoBreakHyphenContent | DrawingContent | ShapeContent;
 
 // @public
 export interface RunPropertyChange {
@@ -567,6 +575,12 @@ export interface SectionProperties {
 
 // @public
 export type SectionStart = 'continuous' | 'nextPage' | 'oddPage' | 'evenPage' | 'nextColumn';
+
+// @public
+export interface SeparatorContent {
+    // (undocumented)
+    type: 'separator' | 'continuationSeparator';
+}
 
 // @public
 export interface Shape {

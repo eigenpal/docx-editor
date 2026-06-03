@@ -5,6 +5,9 @@
 ```ts
 
 // @public
+export function serializeBlockContent(block: BlockContent): string;
+
+// @public
 export function serializeComments(comments: Comment_2[]): string;
 
 // @public
@@ -12,6 +15,12 @@ export function serializeDocument(doc: Document_2): string;
 
 // @public
 export function serializeDocumentBody(body: DocumentBody): string;
+
+// @public
+export function serializeEndnotes(endnotes: Endnote[]): string;
+
+// @public
+export function serializeFootnotes(footnotes: Footnote[]): string;
 
 // @public
 export function serializeHeaderFooter(hf: HeaderFooter): string;

@@ -2,18 +2,59 @@
  * getChanges() and getComments() — discover tracked changes and comments in a document.
  */
 
-import type { DocumentBody, Run, Comment } from '@eigenpal/docx-editor-core/headless';
+import type {
+  DocumentBody,
+  Run,
+  Comment,
+  Footnote,
+  Endnote,
+  Paragraph,
+} from '@eigenpal/docx-editor-core/headless';
 import type { ReviewChange, ReviewComment, ChangeFilter, CommentFilter } from './types';
 import { getParagraphPlainText } from './textSearch';
-import { getRunText, getTrackedChangeText, isTrackedChange, forEachParagraph } from './utils';
+import {
+  getRunText,
+  getTrackedChangeText,
+  isTrackedChange,
+  forEachParagraph,
+  forEachNoteParagraph,
+} from './utils';
+
+/** The footnote/endnote stores a change walk can reach beyond the body. */
+export interface ChangeNotes {
+  footnotes?: Footnote[];
+  endnotes?: Endnote[];
+}
 
 /**
- * Collect all tracked changes from the document body.
+ * Collect all tracked changes from the document body, and — when the filter
+ * opts in — from footnote/endnote bodies as well.
+ *
+ * Note bodies live on the package rather than the document body, so the
+ * caller passes them via `notes`. The `id` carried on each {@link ReviewChange}
+ * is the raw `w:id`, which is unique only *within* its part (document.xml /
+ * footnotes.xml / endnotes.xml) — it is NOT namespaced across parts. The same
+ * `id` can therefore legitimately appear on a body change and a note change;
+ * internally we key by `noteType:noteId:id` (below) so they don't clobber each
+ * other, and callers must read `noteType` / `noteId` to disambiguate which part
+ * a change belongs to.
  */
-export function getChanges(body: DocumentBody, filter?: ChangeFilter): ReviewChange[] {
-  const grouped = new Map<number, ReviewChange>();
+export function getChanges(
+  body: DocumentBody,
+  filter?: ChangeFilter,
+  notes?: ChangeNotes
+): ReviewChange[] {
+  // Keyed by location + id, not id alone: a tracked-change `w:id` is unique
+  // only within its part (document.xml / footnotes.xml / endnotes.xml), so the
+  // same id can legitimately appear in the body and in a note. Keying on id
+  // alone would let a note change clobber a body change with the same id.
+  const grouped = new Map<string, ReviewChange>();
 
-  forEachParagraph(body, (para, paragraphIndex) => {
+  const collect = (
+    para: Paragraph,
+    paragraphIndex: number,
+    location: { noteId?: number; noteType?: 'footnote' | 'endnote' }
+  ): void => {
     let context: string | null = null;
 
     for (const item of para.content) {
@@ -21,12 +62,13 @@ export function getChanges(body: DocumentBody, filter?: ChangeFilter): ReviewCha
         if (context === null) context = getParagraphPlainText(para);
         const text = getTrackedChangeText(item.content);
         const id = item.info.id;
+        const key = `${location.noteType ?? 'body'}:${location.noteId ?? ''}:${id}`;
 
-        const existing = grouped.get(id);
+        const existing = grouped.get(key);
         if (existing && existing.paragraphIndex === paragraphIndex) {
           existing.text += text;
         } else {
-          grouped.set(id, {
+          grouped.set(key, {
             id,
             type: item.type,
             author: item.info.author,
@@ -34,11 +76,31 @@ export function getChanges(body: DocumentBody, filter?: ChangeFilter): ReviewCha
             text,
             context,
             paragraphIndex,
+            ...(location.noteId !== undefined ? { noteId: location.noteId } : {}),
+            ...(location.noteType !== undefined ? { noteType: location.noteType } : {}),
           });
         }
       }
     }
-  });
+  };
+
+  forEachParagraph(body, (para, paragraphIndex) => collect(para, paragraphIndex, {}));
+
+  if (filter?.includeFootnotes && notes?.footnotes) {
+    for (const fn of notes.footnotes) {
+      forEachNoteParagraph(fn, (para, i) =>
+        collect(para, i, { noteId: fn.id, noteType: 'footnote' })
+      );
+    }
+  }
+
+  if (filter?.includeEndnotes && notes?.endnotes) {
+    for (const en of notes.endnotes) {
+      forEachNoteParagraph(en, (para, i) =>
+        collect(para, i, { noteId: en.id, noteType: 'endnote' })
+      );
+    }
+  }
 
   const changes = Array.from(grouped.values());
 

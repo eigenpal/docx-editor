@@ -67,6 +67,13 @@ A synthetic document containing dense bottom-of-page footnote references with
 long citation-like note text. Used to verify that final footnote reservation and
 painted footnote height agree so notes do not run off the page.
 
+### endnotes-tracked-changes.docx
+
+A synthetic document with two body endnote references, separator and
+continuation-separator endnotes, and a normal endnote whose body contains a
+tracked insertion (`w:ins`). Used to verify the note-body serializer round-trip
+(separators + `w:endnoteRef` survive repack) and `getChanges({ includeEndnotes })`.
+
 ### empty-table-row-vmerge.docx
 
 A synthetic document containing a table whose middle row is made entirely of

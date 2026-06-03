@@ -69,7 +69,24 @@ export interface ReviewChange {
   date: string | null;
   text: string;
   context: string;
+  /**
+   * Index of the containing paragraph. For body changes this is the
+   * document-wide paragraph index; for note changes it is the paragraph index
+   * *within that note* (note bodies have their own numbering), so pair it with
+   * `noteId` / `noteType` rather than reading it as a body index.
+   */
   paragraphIndex: number;
+  /**
+   * Set when the change lives inside a footnote or endnote. Such changes are
+   * surfaced for discovery only — accept/reject operate on the body, so an id
+   * that resolves *only* to a note change throws `NoteChangeNotEditableError`
+   * (an id also present on a body change resolves to the body change). The
+   * raw `id` is not namespaced across parts, so pair it with `noteId` /
+   * `noteType` to identify the change.
+   */
+  noteId?: number;
+  /** Which note store the change came from. Absent for body changes. */
+  noteType?: 'footnote' | 'endnote';
 }
 
 export interface ReviewCommentReply {
@@ -93,6 +110,10 @@ export interface ReviewComment {
 export interface ChangeFilter {
   author?: string;
   type?: 'insertion' | 'deletion' | 'moveFrom' | 'moveTo';
+  /** Also report tracked changes inside footnote bodies. Default: false. */
+  includeFootnotes?: boolean;
+  /** Also report tracked changes inside endnote bodies. Default: false. */
+  includeEndnotes?: boolean;
 }
 
 export interface CommentFilter {

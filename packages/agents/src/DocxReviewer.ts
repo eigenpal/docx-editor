@@ -32,6 +32,7 @@ import {
   proposeDeletion as proposeDeletionImpl,
 } from './changes';
 import { applyReview as applyReviewImpl } from './batch';
+import { NoteChangeNotEditableError } from './errors';
 
 /**
  * Headless DOCX reviewer — parse a file, read/comment/track changes
@@ -110,9 +111,26 @@ export class DocxReviewer {
   // DISCOVER
   // ==========================================================================
 
-  /** Get all tracked changes in the document. */
+  /**
+   * Get all tracked changes in the document. Pass `includeFootnotes` /
+   * `includeEndnotes` in the filter to also report changes inside note bodies
+   * (each such change carries `noteId` / `noteType`).
+   *
+   * The reported `id` is the raw `w:id`, which is unique only within its part
+   * (document.xml / footnotes.xml / endnotes.xml) — it is NOT namespaced across
+   * parts, so the same `id` can appear on a body change and a note change. Use
+   * `noteType` / `noteId` to disambiguate.
+   *
+   * Note changes are surfaced for discovery only. `acceptChange` /
+   * `rejectChange` operate on the document body, so an id that resolves *only*
+   * to a note change throws {@link NoteChangeNotEditableError} rather than
+   * mutating it (an id shared with a body change resolves to the body change).
+   */
   getChanges(filter?: ChangeFilter): ReviewChange[] {
-    return getChangesImpl(this.body, filter);
+    return getChangesImpl(this.body, filter, {
+      footnotes: this.doc.package.footnotes,
+      endnotes: this.doc.package.endnotes,
+    });
   }
 
   /** Get all comments with their replies. */
@@ -227,13 +245,56 @@ export class DocxReviewer {
   // RESOLVE
   // ==========================================================================
 
-  /** Accept a tracked change by its revision ID. */
+  /**
+   * Guard the body-only accept/reject path against in-note changes.
+   *
+   * A tracked-change `w:id` is unique only within its part, so the same id can
+   * appear in the body and in a footnote/endnote. When the id resolves to a
+   * body change we let the body-only impl handle it (body wins; the note, if
+   * any, is left untouched). When the id resolves ONLY to a note change we fail
+   * closed with {@link NoteChangeNotEditableError} rather than mis-reporting it
+   * as not-found — accept/reject cannot yet mutate note bodies.
+   */
+  private assertNotNoteOnly(id: number): void {
+    const bodyHasId = this.getChanges().some((c) => c.id === id);
+    if (bodyHasId) return; // body wins — let the body-only impl process it.
+    const noteChange = this.getChanges({ includeFootnotes: true, includeEndnotes: true }).find(
+      (c) => c.id === id && c.noteType !== undefined
+    );
+    if (noteChange) {
+      throw new NoteChangeNotEditableError(id, noteChange.noteType!, noteChange.noteId!);
+    }
+    // Neither body nor note: fall through; the body-only impl throws
+    // ChangeNotFoundError as before.
+  }
+
+  /**
+   * Accept a tracked change by its revision ID. Operates on the document body
+   * only.
+   *
+   * The public `id` is a `w:id`, which is unique only within its part, so the
+   * same id may appear in the body and in a footnote/endnote. Resolution is
+   * body-first: if a body change carries this id it is accepted and any
+   * same-id note change is left untouched. If the id resolves *only* to a note
+   * change, this throws {@link NoteChangeNotEditableError} (note bodies are not
+   * yet mutable here). If it resolves to nothing, it throws
+   * {@link ChangeNotFoundError}.
+   */
   acceptChange(id: number): void {
+    this.assertNotNoteOnly(id);
     acceptChangeImpl(this.body, id);
   }
 
-  /** Reject a tracked change by its revision ID. */
+  /**
+   * Reject a tracked change by its revision ID. Operates on the document body
+   * only.
+   *
+   * Same resolution rules as {@link acceptChange}: body-first, throws
+   * {@link NoteChangeNotEditableError} for a note-only id, and
+   * {@link ChangeNotFoundError} when the id matches nothing.
+   */
   rejectChange(id: number): void {
+    this.assertNotNoteOnly(id);
     rejectChangeImpl(this.body, id);
   }
 
