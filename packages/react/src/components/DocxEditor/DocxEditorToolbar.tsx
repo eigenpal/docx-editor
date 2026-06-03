@@ -87,6 +87,7 @@ export function DocxEditorToolbar({
   onImageTransform,
   onOpenImageProperties,
   onPageSetup,
+  onWatermark,
   onTableAction,
 }: {
   toolbarRefCallback: (el: HTMLDivElement | null) => void;
@@ -130,6 +131,7 @@ export function DocxEditorToolbar({
   onImageTransform: (action: 'rotateCW' | 'rotateCCW' | 'flipH' | 'flipV') => void;
   onOpenImageProperties: () => void;
   onPageSetup: () => void;
+  onWatermark: () => void;
   onTableAction: (action: TableAction) => void;
 }) {
   // Radius transition matches the agent panel's open/close so the seam
@@ -170,6 +172,7 @@ export function DocxEditorToolbar({
         onImageTransform={onImageTransform}
         onOpenImageProperties={onOpenImageProperties}
         onPageSetup={onPageSetup}
+        onWatermark={onWatermark}
         tableContext={tableContext}
         onTableAction={onTableAction}
       >

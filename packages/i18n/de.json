@@ -41,7 +41,8 @@
     "open": "Öffnen",
     "openShortcut": "Strg+O",
     "save": "Speichern",
-    "saveShortcut": "Strg+S"
+    "saveShortcut": "Strg+S",
+    "watermark": "Wasserzeichen"
   },
   "formattingBar": {
     "groups": {
@@ -529,6 +530,27 @@
       "noResults": "Keine Tastenkombinationen für \"{query}\" gefunden",
       "pressEscToClose": "{key} drücken, um zu schließen",
       "or": "oder"
+    },
+    "watermark": {
+      "applyButton": "Übernehmen",
+      "cancelButton": "Abbrechen",
+      "colorLabel": "Farbe",
+      "diagonal": "Diagonal",
+      "fontLabel": "Schriftart",
+      "horizontal": "Horizontal",
+      "layoutLabel": "Layout",
+      "noWatermark": "Kein Wasserzeichen",
+      "picture": "Bildwasserzeichen",
+      "presetLabel": "Vorlage",
+      "scale": "Skalierung",
+      "selectPicture": "Bild auswählen …",
+      "semitransparent": "Halbtransparent",
+      "sizeAuto": "Automatisch",
+      "sizeLabel": "Größe",
+      "text": "Textwasserzeichen",
+      "textLabel": "Text",
+      "title": "Wasserzeichen",
+      "washout": "Auswaschen"
     }
   },
   "comments": {

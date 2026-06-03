@@ -41,7 +41,8 @@
     "tableOfContents": "विषय-सूची",
     "symbol": "प्रतीक",
     "help": "सहायता",
-    "reportIssue": "समस्या की रिपोर्ट करें"
+    "reportIssue": "समस्या की रिपोर्ट करें",
+    "watermark": "वॉटरमार्क"
   },
   "formattingBar": {
     "groups": {
@@ -529,6 +530,27 @@
       "noResults": "\"{query}\" से मेल खाने वाला कोई शॉर्टकट नहीं मिला",
       "pressEscToClose": "बंद करने के लिए {key} दबाएं",
       "or": "या"
+    },
+    "watermark": {
+      "applyButton": "लागू करें",
+      "cancelButton": "रद्द करें",
+      "colorLabel": "रंग",
+      "diagonal": "विकर्ण",
+      "fontLabel": "फ़ॉन्ट",
+      "horizontal": "क्षैतिज",
+      "layoutLabel": "लेआउट",
+      "noWatermark": "कोई वॉटरमार्क नहीं",
+      "picture": "चित्र वॉटरमार्क",
+      "presetLabel": "प्रीसेट",
+      "scale": "स्केल",
+      "selectPicture": "चित्र चुनें…",
+      "semitransparent": "अर्धपारदर्शी",
+      "sizeAuto": "स्वतः",
+      "sizeLabel": "आकार",
+      "text": "टेक्स्ट वॉटरमार्क",
+      "textLabel": "टेक्स्ट",
+      "title": "वॉटरमार्क",
+      "washout": "धुंधला"
     }
   },
   "comments": {

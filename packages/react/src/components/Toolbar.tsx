@@ -220,6 +220,8 @@ export interface ToolbarProps {
   onOpenImageProperties?: () => void;
   /** Callback to open page setup dialog */
   onPageSetup?: () => void;
+  /** Callback to open the watermark dialog */
+  onWatermark?: () => void;
   /** Table context when cursor is in a table */
   tableContext?: {
     isInTable: boolean;

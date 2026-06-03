@@ -41,7 +41,8 @@
     "tableOfContents": "目录",
     "symbol": "符号",
     "help": "帮助",
-    "reportIssue": "反馈问题"
+    "reportIssue": "反馈问题",
+    "watermark": "水印"
   },
   "formattingBar": {
     "groups": {
@@ -529,6 +530,27 @@
       "noResults": "未找到与 \"{query}\" 匹配的快捷方式",
       "pressEscToClose": "按 {key} 关闭",
       "or": "或"
+    },
+    "watermark": {
+      "applyButton": "应用",
+      "cancelButton": "取消",
+      "colorLabel": "颜色",
+      "diagonal": "斜式",
+      "fontLabel": "字体",
+      "horizontal": "水平",
+      "layoutLabel": "版式",
+      "noWatermark": "无水印",
+      "picture": "图片水印",
+      "presetLabel": "预设",
+      "scale": "缩放",
+      "selectPicture": "选择图片…",
+      "semitransparent": "半透明",
+      "sizeAuto": "自动",
+      "sizeLabel": "大小",
+      "text": "文字水印",
+      "textLabel": "文字",
+      "title": "水印",
+      "washout": "冲蚀"
     }
   },
   "comments": {

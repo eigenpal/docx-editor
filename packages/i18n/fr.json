@@ -41,7 +41,8 @@
     "tableOfContents": "Table des matières",
     "symbol": "Symbole",
     "help": "Aide",
-    "reportIssue": "Signaler un bug"
+    "reportIssue": "Signaler un bug",
+    "watermark": "Filigrane"
   },
   "formattingBar": {
     "groups": {
@@ -529,6 +530,27 @@
       "noResults": "Aucun raccourci trouvé pour « {query} »",
       "pressEscToClose": "Appuyez sur {key} pour fermer",
       "or": "ou"
+    },
+    "watermark": {
+      "applyButton": "Appliquer",
+      "cancelButton": "Annuler",
+      "colorLabel": "Couleur",
+      "diagonal": "Diagonale",
+      "fontLabel": "Police",
+      "horizontal": "Horizontale",
+      "layoutLabel": "Disposition",
+      "noWatermark": "Aucun filigrane",
+      "picture": "Filigrane image",
+      "presetLabel": "Prédéfini",
+      "scale": "Échelle",
+      "selectPicture": "Sélectionner une image…",
+      "semitransparent": "Semi-transparent",
+      "sizeAuto": "Auto",
+      "sizeLabel": "Taille",
+      "text": "Filigrane texte",
+      "textLabel": "Texte",
+      "title": "Filigrane",
+      "washout": "Estompé"
     }
   },
   "comments": {

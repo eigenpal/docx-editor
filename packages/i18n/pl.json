@@ -41,7 +41,8 @@
     "open": "Otwórz",
     "openShortcut": "Ctrl+O",
     "save": "Zapisz",
-    "saveShortcut": "Ctrl+S"
+    "saveShortcut": "Ctrl+S",
+    "watermark": "Znak wodny"
   },
   "formattingBar": {
     "groups": {
@@ -529,6 +530,27 @@
       "noResults": "Nie znaleziono skrótów pasujących do \"{query}\"",
       "pressEscToClose": "Naciśnij {key}, aby zamknąć",
       "or": "lub"
+    },
+    "watermark": {
+      "applyButton": "Zastosuj",
+      "cancelButton": "Anuluj",
+      "colorLabel": "Kolor",
+      "diagonal": "Po przekątnej",
+      "fontLabel": "Czcionka",
+      "horizontal": "Poziomo",
+      "layoutLabel": "Układ",
+      "noWatermark": "Bez znaku wodnego",
+      "picture": "Obrazkowy znak wodny",
+      "presetLabel": "Predefiniowany",
+      "scale": "Skala",
+      "selectPicture": "Wybierz obraz…",
+      "semitransparent": "Półprzezroczysty",
+      "sizeAuto": "Auto",
+      "sizeLabel": "Rozmiar",
+      "text": "Tekstowy znak wodny",
+      "textLabel": "Tekst",
+      "title": "Znak wodny",
+      "washout": "Wyblakły"
     }
   },
   "comments": {

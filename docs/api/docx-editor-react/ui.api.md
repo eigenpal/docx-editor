@@ -1243,6 +1243,7 @@ export interface ToolbarProps {
     onSave?: () => void;
     onTableAction?: (action: TableAction) => void;
     onUndo?: () => void;
+    onWatermark?: () => void;
     onZoomChange?: (zoom: number) => void;
     showAlignmentButtons?: boolean;
     showFontPicker?: boolean;

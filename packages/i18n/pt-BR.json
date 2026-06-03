@@ -41,7 +41,8 @@
     "open": "Abrir",
     "openShortcut": "Ctrl+O",
     "save": "Salvar",
-    "saveShortcut": "Ctrl+S"
+    "saveShortcut": "Ctrl+S",
+    "watermark": "Marca d'água"
   },
   "formattingBar": {
     "groups": {
@@ -529,6 +530,27 @@
       "noResults": "Nenhum atalho encontrado para \"{query}\"",
       "pressEscToClose": "Pressione {key} para fechar",
       "or": "ou"
+    },
+    "watermark": {
+      "applyButton": "Aplicar",
+      "cancelButton": "Cancelar",
+      "colorLabel": "Cor",
+      "diagonal": "Diagonal",
+      "fontLabel": "Fonte",
+      "horizontal": "Horizontal",
+      "layoutLabel": "Layout",
+      "noWatermark": "Sem marca d'água",
+      "picture": "Marca d'água de imagem",
+      "presetLabel": "Predefinição",
+      "scale": "Escala",
+      "selectPicture": "Selecionar imagem…",
+      "semitransparent": "Semitransparente",
+      "sizeAuto": "Automático",
+      "sizeLabel": "Tamanho",
+      "text": "Marca d'água de texto",
+      "textLabel": "Texto",
+      "title": "Marca d'água",
+      "washout": "Desbotado"
     }
   },
   "comments": {

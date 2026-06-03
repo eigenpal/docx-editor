@@ -41,7 +41,8 @@
     "open": "פתיחה",
     "openShortcut": "Ctrl+O",
     "save": "שמירה",
-    "saveShortcut": "Ctrl+S"
+    "saveShortcut": "Ctrl+S",
+    "watermark": "סימן מים"
   },
   "formattingBar": {
     "groups": {
@@ -529,6 +530,27 @@
       "noResults": "לא נמצאו קיצורים עבור \"{query}\"",
       "pressEscToClose": "לחץ {key} כדי לסגור",
       "or": "או"
+    },
+    "watermark": {
+      "applyButton": "החלה",
+      "cancelButton": "ביטול",
+      "colorLabel": "צבע",
+      "diagonal": "אלכסוני",
+      "fontLabel": "גופן",
+      "horizontal": "אופקי",
+      "layoutLabel": "פריסה",
+      "noWatermark": "ללא סימן מים",
+      "picture": "סימן מים תמונה",
+      "presetLabel": "קבוע מראש",
+      "scale": "קנה מידה",
+      "selectPicture": "בחר תמונה…",
+      "semitransparent": "שקוף למחצה",
+      "sizeAuto": "אוטומטי",
+      "sizeLabel": "גודל",
+      "text": "סימן מים טקסט",
+      "textLabel": "טקסט",
+      "title": "סימן מים",
+      "washout": "דהוי"
     }
   },
   "comments": {
