@@ -963,6 +963,7 @@ const selectionSync = useSelectionSync({
   pagesRef,
   selectedImage,
   isHfEditing,
+  imageInteracting,
 });
 
 onBeforeUnmount(() => {
