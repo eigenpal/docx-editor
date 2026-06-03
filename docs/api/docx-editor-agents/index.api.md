@@ -138,6 +138,11 @@ export function getToolSchemas(): {
     };
 }[];
 
+// @public
+export class NoteChangeNotEditableError extends Error {
+    constructor(id: number, noteType: 'footnote' | 'endnote', noteId: number);
+}
+
 // @public (undocumented)
 export interface ReviewChange {
     // (undocumented)
@@ -148,7 +153,8 @@ export interface ReviewChange {
     date: string | null;
     // (undocumented)
     id: number;
-    // (undocumented)
+    noteId?: number;
+    noteType?: 'footnote' | 'endnote';
     paragraphIndex: number;
     // (undocumented)
     text: string;

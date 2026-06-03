@@ -509,6 +509,74 @@ async function generateHeaderWithTableDocx(): Promise<void> {
 }
 
 /**
+ * A document with endnotes, including separator notes and a tracked insertion
+ * inside an endnote body. Exercises the note-body serializer round-trip and the
+ * getChanges({ includeEndnotes }) path.
+ */
+async function generateEndnotesTrackedChangesDocx(): Promise<void> {
+  const documentXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+  <w:body>
+    <w:p>
+      <w:r><w:t xml:space="preserve">First claim</w:t></w:r>
+      <w:r><w:rPr><w:rStyle w:val="EndnoteReference"/><w:vertAlign w:val="superscript"/></w:rPr><w:endnoteReference w:id="1"/></w:r>
+      <w:r><w:t xml:space="preserve"> and second claim</w:t></w:r>
+      <w:r><w:rPr><w:rStyle w:val="EndnoteReference"/><w:vertAlign w:val="superscript"/></w:rPr><w:endnoteReference w:id="2"/></w:r>
+      <w:r><w:t>.</w:t></w:r>
+    </w:p>
+    <w:sectPr>
+      <w:endnotePr><w:numFmt w:val="lowerRoman"/></w:endnotePr>
+      <w:pgSz w:w="12240" w:h="15840"/>
+      <w:pgMar w:top="1440" w:right="1440" w:bottom="1440" w:left="1440" w:header="720" w:footer="720"/>
+    </w:sectPr>
+  </w:body>
+</w:document>`;
+
+  const endnotesXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:endnotes xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+  <w:endnote w:type="separator" w:id="-1"><w:p><w:r><w:separator/></w:r></w:p></w:endnote>
+  <w:endnote w:type="continuationSeparator" w:id="0"><w:p><w:r><w:continuationSeparator/></w:r></w:p></w:endnote>
+  <w:endnote w:id="1"><w:p><w:pPr><w:pStyle w:val="EndnoteText"/></w:pPr><w:r><w:rPr><w:rStyle w:val="EndnoteReference"/></w:rPr><w:endnoteRef/></w:r><w:r><w:t xml:space="preserve"> First endnote, clean.</w:t></w:r></w:p></w:endnote>
+  <w:endnote w:id="2"><w:p><w:pPr><w:pStyle w:val="EndnoteText"/></w:pPr><w:r><w:rPr><w:rStyle w:val="EndnoteReference"/></w:rPr><w:endnoteRef/></w:r><w:r><w:t xml:space="preserve"> Second endnote with a </w:t></w:r><w:ins w:id="100" w:author="Reviewer" w:date="2024-01-01T00:00:00Z"><w:r><w:t>tracked insertion</w:t></w:r></w:ins><w:r><w:t>.</w:t></w:r></w:p></w:endnote>
+</w:endnotes>`;
+
+  const stylesXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+  <w:style w:type="paragraph" w:default="1" w:styleId="Normal"><w:name w:val="Normal"/></w:style>
+  <w:style w:type="paragraph" w:styleId="EndnoteText"><w:name w:val="endnote text"/></w:style>
+  <w:style w:type="character" w:styleId="EndnoteReference"><w:name w:val="endnote reference"/><w:rPr><w:vertAlign w:val="superscript"/></w:rPr></w:style>
+</w:styles>`;
+
+  const contentTypes = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+  <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+  <Default Extension="xml" ContentType="application/xml"/>
+  <Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>
+  <Override PartName="/word/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/>
+  <Override PartName="/word/endnotes.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.endnotes+xml"/>
+</Types>`;
+
+  const documentRels = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>
+  <Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/endnotes" Target="endnotes.xml"/>
+</Relationships>`;
+
+  const zip = new JSZip();
+  zip.file('[Content_Types].xml', contentTypes);
+  zip.file('_rels/.rels', RELS_XML);
+  zip.file('word/_rels/document.xml.rels', documentRels);
+  zip.file('word/styles.xml', stylesXml);
+  zip.file('word/document.xml', documentXml);
+  zip.file('word/endnotes.xml', endnotesXml);
+
+  const buffer = await zip.generateAsync({ type: 'nodebuffer' });
+  const outputPath = path.join(FIXTURES_DIR, 'endnotes-tracked-changes.docx');
+  fs.writeFileSync(outputPath, buffer);
+  console.log(`Created: ${outputPath}`);
+}
+
+/**
  * Main function
  */
 async function main(): Promise<void> {
@@ -520,6 +588,7 @@ async function main(): Promise<void> {
   await generateComplexStylesDocx();
   await generateHeaderWithTableDocx();
   await generateHeaderWithTableAndParagraphsDocx();
+  await generateEndnotesTrackedChangesDocx();
 
   console.log('\nAll fixtures generated successfully!');
 }

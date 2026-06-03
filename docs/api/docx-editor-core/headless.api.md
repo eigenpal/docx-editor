@@ -380,9 +380,11 @@ export function documentHasVariables(doc: Document_2): boolean;
 export interface DocxPackage {
     document: DocumentBody;
     endnotes?: Endnote[];
+    endnoteSeparators?: Endnote[];
     fontTable?: FontTable;
     footers?: Map<string, HeaderFooter>;
     footnotes?: Footnote[];
+    footnoteSeparators?: Footnote[];
     headers?: Map<string, HeaderFooter>;
     media?: Map<string, MediaFile>;
     numbering?: NumberingDefinitions;
@@ -416,6 +418,7 @@ export interface Endnote {
     noteType?: 'normal' | 'separator' | 'continuationSeparator' | 'continuationNotice';
     // (undocumented)
     type: 'endnote';
+    verbatimXml?: string;
 }
 
 // @public
@@ -451,6 +454,7 @@ export interface Footnote {
     noteType?: 'normal' | 'separator' | 'continuationSeparator' | 'continuationNotice';
     // (undocumented)
     type: 'footnote';
+    verbatimXml?: string;
 }
 
 // @public
@@ -1177,7 +1181,7 @@ export interface Run {
 }
 
 // @public
-export type RunContent = TextContent | TabContent | BreakContent | SymbolContent | NoteReferenceContent | FieldCharContent | InstrTextContent | SoftHyphenContent | NoBreakHyphenContent | DrawingContent | ShapeContent;
+export type RunContent = TextContent | TabContent | BreakContent | SymbolContent | NoteReferenceContent | NoteRefMarkContent | SeparatorContent | FieldCharContent | InstrTextContent | SoftHyphenContent | NoBreakHyphenContent | DrawingContent | ShapeContent;
 
 // @public
 export function sanitizeVariableName(name: string): string;
