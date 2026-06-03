@@ -51,6 +51,7 @@ import type {
   SectionProperties,
   StyleDefinitions,
   Theme,
+  Watermark,
 } from '@eigenpal/docx-editor-core/types/document';
 
 import type { OffscreenEditorHostRef } from '../OffscreenEditorHost';
@@ -293,6 +294,10 @@ export function useLayoutPipeline(opts: UseLayoutPipelineOptions): UseLayoutPipe
           ? convertHf(firstPageFooterContent, hfMetricsFooter)
           : undefined;
 
+        // The watermark rides PM state as a doc attr (so it's undoable); read it
+        // from there rather than the document model.
+        const watermark = (state.doc.attrs?.watermark as Watermark | null) ?? undefined;
+
         // Adjust margins if header/footer content exceeds available space
         // (Word and Google Docs push body content down when header grows)
         const headerDistance = margins.header ?? 48;
@@ -439,6 +444,7 @@ export function useLayoutPipeline(opts: UseLayoutPipelineOptions): UseLayoutPipe
               : undefined,
             pageBorders: sectionProperties?.pageBorders,
             theme,
+            watermark,
             footnotesByPage: footnotesByPage?.size ? footnotesByPage : undefined,
             resolvedCommentIds,
           } as RenderPageOptions & {

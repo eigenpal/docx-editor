@@ -41,7 +41,8 @@
     "tableOfContents": "İçindekiler tablosu",
     "symbol": "Sembol",
     "help": "Yardım",
-    "reportIssue": "Sorun bildir"
+    "reportIssue": "Sorun bildir",
+    "watermark": "Filigran"
   },
   "formattingBar": {
     "groups": {
@@ -529,6 +530,27 @@
       "noResults": "\"{query}\" eşleşen kısayol yok",
       "pressEscToClose": "Kapatmak için {key} tuşuna bas",
       "or": "veya"
+    },
+    "watermark": {
+      "applyButton": "Uygula",
+      "cancelButton": "İptal",
+      "colorLabel": "Renk",
+      "diagonal": "Çapraz",
+      "fontLabel": "Yazı tipi",
+      "horizontal": "Yatay",
+      "layoutLabel": "Düzen",
+      "noWatermark": "Filigran yok",
+      "picture": "Resim filigranı",
+      "presetLabel": "Hazır ayar",
+      "scale": "Ölçek",
+      "selectPicture": "Resim Seç…",
+      "semitransparent": "Yarı saydam",
+      "sizeAuto": "Otomatik",
+      "sizeLabel": "Boyut",
+      "text": "Metin filigranı",
+      "textLabel": "Metin",
+      "title": "Filigran",
+      "washout": "Soluk"
     }
   },
   "comments": {

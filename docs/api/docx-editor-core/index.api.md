@@ -724,6 +724,7 @@ export interface HeaderFooter {
     hdrFtrType: HeaderFooterType;
     // (undocumented)
     type: 'header' | 'footer';
+    watermark?: Watermark;
 }
 
 // @public

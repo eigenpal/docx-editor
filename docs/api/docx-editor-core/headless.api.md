@@ -528,6 +528,9 @@ export function getContrastingColor(backgroundColor: ColorValue | undefined | nu
 export function getDocumentSummary(doc: Document_2): string;
 
 // @public
+export function getDocumentWatermark(doc: Document_2 | null | undefined): Watermark | undefined;
+
+// @public
 export function getFormattingAtPosition(paragraph: Paragraph, offset: number): Partial<TextFormatting>;
 
 // @public
@@ -1296,6 +1299,9 @@ export function setContentControlContent(doc: Document_2, filter: ContentControl
 export function setContentControlValue(doc: Document_2, filter: ContentControlFilter, value: ContentControlValue, options?: {
     force?: boolean;
 }): Document_2;
+
+// @public
+export function setDocumentWatermark(doc: Document_2, watermark: Watermark | null): Document_2;
 
 // @public
 export interface SetVariableCommand extends BaseCommand {

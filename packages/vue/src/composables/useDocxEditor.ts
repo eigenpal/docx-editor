@@ -371,6 +371,13 @@ export function useDocxEditor(options: UseDocxEditorOptions): UseDocxEditorRetur
         ? convertHf(firstFooter, hfMetricsFooter)
         : undefined;
 
+      // The watermark rides PM state as a doc attr (so it's undoable); read it
+      // from there rather than the document model. Mirror of React's pipeline.
+      const watermark =
+        (state.doc.attrs?.watermark as
+          | import('@eigenpal/docx-editor-core/types/document').Watermark
+          | null) ?? undefined;
+
       // Step 4: Extend margins when HF content overflows the authored
       // header/footer space (#400 port). Apply the extension to body
       // margins, finalMargins, AND every per-`sectionBreak.margins` so
@@ -478,6 +485,7 @@ export function useDocxEditor(options: UseDocxEditorOptions): UseDocxEditorRetur
         firstPageHeaderContent,
         firstPageFooterContent,
         titlePage: hasTitlePg,
+        watermark,
         footnotesByPage,
       } as Parameters<typeof paintPages>[2]);
 

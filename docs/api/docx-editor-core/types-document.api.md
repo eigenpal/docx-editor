@@ -348,6 +348,7 @@ export interface HeaderFooter {
     hdrFtrType: HeaderFooterType;
     // (undocumented)
     type: 'header' | 'footer';
+    watermark?: Watermark;
 }
 
 // @public
@@ -736,6 +737,21 @@ export interface ParagraphPropertyChange {
     previousFormatting?: ParagraphFormatting;
     // (undocumented)
     type: 'paragraphPropertyChange';
+}
+
+// @public
+export interface PictureWatermark {
+    contentType?: string;
+    data?: Uint8Array;
+    dataUrl?: string;
+    heightEmu?: number;
+    // (undocumented)
+    kind: 'picture';
+    mediaPath?: string;
+    relId?: string;
+    scale: number;
+    washout: boolean;
+    widthEmu?: number;
 }
 
 // @public
@@ -1284,6 +1300,18 @@ export interface TextFormatting {
 }
 
 // @public
+export interface TextWatermark {
+    color: string;
+    font: string;
+    fontSize?: number;
+    // (undocumented)
+    kind: 'text';
+    layout: 'diagonal' | 'horizontal';
+    semitransparent: boolean;
+    text: string;
+}
+
+// @public
 export interface Theme {
     colorScheme?: ThemeColorScheme;
     fontScheme?: ThemeFontScheme;
@@ -1346,5 +1374,8 @@ export type UnderlineStyle = 'none' | 'single' | 'words' | 'double' | 'thick' | 
 
 // @public
 export type VerticalAlign = 'top' | 'center' | 'both' | 'bottom';
+
+// @public
+export type Watermark = TextWatermark | PictureWatermark;
 
 ```

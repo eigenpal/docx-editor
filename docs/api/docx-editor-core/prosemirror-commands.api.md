@@ -165,6 +165,9 @@ export function getStyleId(state: EditorState): string | null;
 export function getTableContext(state: EditorState): TableContextInfo;
 
 // @public
+export function getWatermarkFromState(state: EditorState): Watermark | null;
+
+// @public
 export type ImageLayoutTarget = AnchorWrapType | 'squareLeft' | 'squareRight' | 'inline';
 
 // @public (undocumented)
@@ -378,6 +381,9 @@ export function setTextColor(attrs: TextColorAttrs): Command;
 
 // @public (undocumented)
 export function setUnderlineStyle(style: string, color?: TextColorAttrs): Command;
+
+// @public
+export function setWatermark(watermark: Watermark | null): Command;
 
 // @public (undocumented)
 export const singleSpacing: Command;

@@ -40,6 +40,7 @@
     "pageBreak": "Page break",
     "tableOfContents": "Table of contents",
     "symbol": "Symbol",
+    "watermark": "Watermark",
     "help": "Help",
     "reportIssue": "Report issue"
   },
@@ -240,6 +241,27 @@
       "autofit": "Auto-fit to contents",
       "tableStyleLabel": "Table style",
       "validationHint": "Rows: {minRows}-{maxRows}, Columns: {minCols}-{maxCols}"
+    },
+    "watermark": {
+      "title": "Watermark",
+      "noWatermark": "No watermark",
+      "picture": "Picture watermark",
+      "text": "Text watermark",
+      "selectPicture": "Select Picture...",
+      "scale": "Scale",
+      "washout": "Washout",
+      "textLabel": "Text",
+      "fontLabel": "Font",
+      "sizeLabel": "Size",
+      "sizeAuto": "Auto",
+      "colorLabel": "Color",
+      "layoutLabel": "Layout",
+      "diagonal": "Diagonal",
+      "horizontal": "Horizontal",
+      "semitransparent": "Semitransparent",
+      "presetLabel": "Preset",
+      "applyButton": "Apply",
+      "cancelButton": "Cancel"
     },
     "splitCell": {
       "title": "Split Cell",

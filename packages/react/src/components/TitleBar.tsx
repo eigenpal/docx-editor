@@ -122,6 +122,7 @@ export function MenuBar() {
     showTableInsert = true,
     onInsertPageBreak,
     onInsertTOC,
+    onWatermark,
     onRefocusEditor,
   } = ctx;
 
@@ -258,6 +259,15 @@ export function MenuBar() {
             onClick: onInsertTOC,
             disabled: !onInsertTOC,
           },
+          ...(onWatermark
+            ? [
+                {
+                  icon: 'branding_watermark',
+                  label: t('toolbar.watermark'),
+                  onClick: onWatermark,
+                } as MenuEntry,
+              ]
+            : []),
         ]}
       />
 
