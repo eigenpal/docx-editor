@@ -755,6 +755,12 @@ export interface PictureWatermark {
 }
 
 // @public
+export function pictureWatermarkDisplayEmu(naturalWidthPx: number, naturalHeightPx: number): {
+    widthEmu: number;
+    heightEmu: number;
+} | undefined;
+
+// @public
 export interface PropertyChangeInfo extends TrackedChangeInfo {
     rsid?: string;
 }

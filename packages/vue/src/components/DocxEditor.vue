@@ -89,17 +89,20 @@
       v-model:show-insert-symbol="showInsertSymbol"
       v-model:show-image-properties="showImageProperties"
       v-model:show-page-setup="showPageSetup"
+      v-model:show-watermark="showWatermark"
       v-model:show-keyboard-shortcuts="showKeyboardShortcuts"
       :view="editorView"
       :bookmarks="bookmarkOptions"
       :selected-image-pm-pos="selectedImage?.pmPos ?? null"
       :section-properties="currentSectionProps"
+      :current-watermark="currentWatermark"
       :scroll-visible-position-into-view="scrollVisiblePositionIntoView"
       @insert-image="handleInsertImage"
       @insert-symbol="handleInsertSymbol"
       @hyperlink-submit="handleHyperlinkSubmit"
       @hyperlink-remove="handleHyperlinkRemove"
       @page-setup-apply="handlePageSetupApply"
+      @watermark-apply="handleWatermarkApply"
     />
 
     <div v-if="parseError" class="docx-editor-vue__error">
@@ -386,6 +389,7 @@ import { useFileIO } from '../composables/useFileIO';
 import { useHyperlinkManagement } from '../composables/useHyperlinkManagement';
 import { useFormattingActions } from '../composables/useFormattingActions';
 import { usePageSetupControls } from '../composables/usePageSetupControls';
+import { useWatermarkControls } from '../composables/useWatermarkControls';
 import { useOutlineSidebar } from '../composables/useOutlineSidebar';
 import { useKeyboardShortcuts } from '../composables/useKeyboardShortcuts';
 import { useCommentManagement } from '../composables/useCommentManagement';
@@ -764,6 +768,12 @@ const {
   handleTabMarkRemove,
 } = usePageSetupControls({ editorView, getDocument, readOnly, stateTick, reLayout, emit });
 
+const { showWatermark, currentWatermark, handleWatermarkApply } = useWatermarkControls({
+  editorView,
+  readOnly,
+  stateTick,
+});
+
 const {
   handleToggleOutline,
   handleOutlineNavigate,
@@ -886,6 +896,7 @@ const { handleMenuAction, handleMenuTableInsert } = useMenuActions({
   getCommands,
   docxInputRef,
   showPageSetup,
+  showWatermark,
   showInsertImage,
   showHyperlink,
   showInsertSymbol,

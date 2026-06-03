@@ -20,6 +20,7 @@ export interface UseMenuActionsOptions {
   getCommands: () => Record<string, (...args: any[]) => any>;
   docxInputRef: Ref<HTMLInputElement | null>;
   showPageSetup: Ref<boolean>;
+  showWatermark: Ref<boolean>;
   showInsertImage: Ref<boolean>;
   showHyperlink: Ref<boolean>;
   showInsertSymbol: Ref<boolean>;
@@ -64,6 +65,9 @@ export function useMenuActions(opts: UseMenuActionsOptions) {
         break;
       case 'pageSetup':
         opts.showPageSetup.value = true;
+        break;
+      case 'watermark':
+        opts.showWatermark.value = true;
         break;
       case 'clearFormatting':
         opts.handleClearFormatting();
