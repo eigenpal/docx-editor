@@ -11,6 +11,7 @@
 import React, { useState, useCallback, useEffect } from 'react';
 import type { CSSProperties } from 'react';
 import type { Watermark } from '@eigenpal/docx-editor-core/types/document';
+import { pictureWatermarkDisplayEmu } from '@eigenpal/docx-editor-core/types/document';
 import { useTranslation } from '../../i18n';
 
 export interface WatermarkDialogProps {
@@ -141,6 +142,10 @@ export function WatermarkDialog({
   const [semitransparent, setSemitransparent] = useState(true);
   // Picture
   const [pictureUrl, setPictureUrl] = useState<string | undefined>(undefined);
+  // Display dimensions (EMUs) for the picked image, preserving aspect ratio.
+  const [pictureDims, setPictureDims] = useState<
+    { widthEmu: number; heightEmu: number } | undefined
+  >(undefined);
   const [scale, setScale] = useState(100);
   const [washout, setWashout] = useState(true);
 
@@ -159,6 +164,11 @@ export function WatermarkDialog({
     } else if (current?.kind === 'picture') {
       setMode('picture');
       setPictureUrl(current.dataUrl);
+      setPictureDims(
+        current.widthEmu !== undefined && current.heightEmu !== undefined
+          ? { widthEmu: current.widthEmu, heightEmu: current.heightEmu }
+          : undefined
+      );
       setScale(Math.round((current.scale || 1) * 100));
       setWashout(current.washout);
     } else {
@@ -170,8 +180,17 @@ export function WatermarkDialog({
     const file = e.target.files?.[0];
     if (!file) return;
     const reader = new FileReader();
-    reader.onload = () =>
-      setPictureUrl(typeof reader.result === 'string' ? reader.result : undefined);
+    reader.onload = () => {
+      const url = typeof reader.result === 'string' ? reader.result : undefined;
+      setPictureUrl(url);
+      setPictureDims(undefined);
+      if (!url) return;
+      // Measure the natural size so the watermark keeps the image's aspect ratio.
+      const img = new Image();
+      img.onload = () =>
+        setPictureDims(pictureWatermarkDisplayEmu(img.naturalWidth, img.naturalHeight));
+      img.src = url;
+    };
     reader.readAsDataURL(file);
   }, []);
 
@@ -190,7 +209,13 @@ export function WatermarkDialog({
       });
     } else {
       if (!pictureUrl) return;
-      onApply({ kind: 'picture', dataUrl: pictureUrl, scale: scale / 100, washout });
+      onApply({
+        kind: 'picture',
+        dataUrl: pictureUrl,
+        scale: scale / 100,
+        washout,
+        ...(pictureDims ?? {}),
+      });
     }
     onClose();
   }, [
@@ -203,6 +228,7 @@ export function WatermarkDialog({
     autoSize,
     fontSize,
     pictureUrl,
+    pictureDims,
     scale,
     washout,
     onApply,

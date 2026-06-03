@@ -56,6 +56,13 @@
     @apply="(props) => emit('page-setup-apply', props)"
   />
 
+  <WatermarkDialog
+    :is-open="showWatermark"
+    :current="currentWatermark"
+    @close="emit('update:showWatermark', false)"
+    @apply="(watermark) => emit('watermark-apply', watermark)"
+  />
+
   <KeyboardShortcutsDialog
     :is-open="showKeyboardShortcuts"
     @close="emit('update:showKeyboardShortcuts', false)"
@@ -64,13 +71,14 @@
 
 <script setup lang="ts">
 import type { EditorView } from 'prosemirror-view';
-import type { SectionProperties } from '@eigenpal/docx-editor-core/types/document';
+import type { SectionProperties, Watermark } from '@eigenpal/docx-editor-core/types/document';
 import FindReplaceDialog from '../dialogs/FindReplaceDialog.vue';
 import InsertImageDialog from '../dialogs/InsertImageDialog.vue';
 import HyperlinkDialog from '../dialogs/HyperlinkDialog.vue';
 import InsertSymbolDialog from '../dialogs/InsertSymbolDialog.vue';
 import ImagePropertiesDialog from '../dialogs/ImagePropertiesDialog.vue';
 import PageSetupDialog from '../dialogs/PageSetupDialog.vue';
+import WatermarkDialog from '../dialogs/WatermarkDialog.vue';
 import KeyboardShortcutsDialog from '../dialogs/KeyboardShortcutsDialog.vue';
 
 interface BookmarkOption {
@@ -104,6 +112,8 @@ defineProps<{
   showInsertSymbol: boolean;
   showImageProperties: boolean;
   showPageSetup: boolean;
+  showWatermark: boolean;
+  currentWatermark: Watermark | undefined;
   showKeyboardShortcuts: boolean;
 }>();
 
@@ -114,11 +124,13 @@ const emit = defineEmits<{
   (e: 'update:showInsertSymbol', value: boolean): void;
   (e: 'update:showImageProperties', value: boolean): void;
   (e: 'update:showPageSetup', value: boolean): void;
+  (e: 'update:showWatermark', value: boolean): void;
   (e: 'update:showKeyboardShortcuts', value: boolean): void;
   (e: 'insert-image', data: InsertImagePayload): void;
   (e: 'insert-symbol', symbol: string): void;
   (e: 'hyperlink-submit', data: HyperlinkSubmitPayload): void;
   (e: 'hyperlink-remove'): void;
   (e: 'page-setup-apply', props: Partial<SectionProperties>): void;
+  (e: 'watermark-apply', watermark: Watermark | null): void;
 }>();
 </script>

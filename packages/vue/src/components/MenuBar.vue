@@ -67,6 +67,7 @@ const insertItems = computed<MenuEntry[]>(() => [
   { type: 'separator' },
   { icon: 'page_break', label: t('toolbar.pageBreak'), onClick: act('insertPageBreak') },
   { icon: 'format_list_numbered', label: t('toolbar.tableOfContents'), onClick: act('insertTOC') },
+  { icon: 'branding_watermark', label: t('toolbar.watermark'), onClick: act('watermark') },
 ]);
 
 const helpItems = computed<MenuEntry[]>(() => [
