@@ -54,6 +54,7 @@ import type { EditorView } from 'prosemirror-view';
 import { NodeSelection } from 'prosemirror-state';
 import { pixelsToEmu } from '@eigenpal/docx-editor-core/utils';
 import { resolveDomPosition } from '@eigenpal/docx-editor-core/layout-bridge/resolveDomPosition';
+import { findBodyPmAnchor } from '@eigenpal/docx-editor-core/layout-bridge';
 import { findImageElement } from '@eigenpal/docx-editor-core/layout-painter';
 import { Z_INDEX } from '../styles/zIndex';
 import { useTranslation } from '../i18n';
@@ -130,12 +131,13 @@ function getImageNode(v: EditorView | null, pos: number) {
 
 /**
  * The painted element to anchor the overlay to. After a resize / move / rotate
- * commits, the layout-painter re-builds the visible pages, so the originally
- * tracked element is detached — re-find the fresh one by PM position (covering
- * inline, floating, and block images). A single PM position can carry
- * `data-doc-from` on more than one painted element (e.g. a run span next to
- * the image's wrapper), so scan the matches and take the one that resolves to
- * an actual image wrapper. Returns null if it's gone.
+ * commits — or after the image is pushed onto another page — the layout-painter
+ * re-builds the visible pages, so the originally tracked element is detached.
+ * Re-find the fresh one by the image's current PM position (covering inline,
+ * floating, and block images) through the body-scoped `findBodyPmAnchor`, which
+ * restricts the lookup to `.layout-page-content` so a header/footer run (a
+ * separate PM doc whose positions overlap the body's) can never match. Mirrors
+ * React's single-source resolution. Returns null if it's gone.
  */
 function resolveImageEl(): HTMLElement | null {
   const info = props.imageInfo;
@@ -145,11 +147,8 @@ function resolveImageEl(): HTMLElement | null {
     ?.closest('.docx-editor-vue__pages-viewport')
     ?.querySelector<HTMLElement>('.docx-editor-vue__pages');
   if (!pages) return null;
-  for (const el of pages.querySelectorAll<HTMLElement>(`[data-doc-from="${info.pmPos}"]`)) {
-    const img = findImageElement(el);
-    if (img) return img;
-  }
-  return null;
+  const anchor = findBodyPmAnchor(pages, info.pmPos);
+  return anchor ? findImageElement(anchor) : null;
 }
 
 function updatePosition() {
@@ -169,9 +168,16 @@ function updatePosition() {
   const imageRect = imgEl.getBoundingClientRect();
   const z = props.zoom;
 
+  // The overlay is `position: absolute` inside its offsetParent, which is the
+  // scroll container (`.docx-editor-vue__pages-viewport`). Absolutely-positioned
+  // children are placed relative to the *content* origin, so the scroll offset
+  // must be added back — otherwise the frame lands `scrollTop` px too high once
+  // the page has scrolled (e.g. after the image is pushed onto a later page and
+  // the user scrolls down to it). Mirrors the scroll handling the text-caret
+  // path in `useSelectionSync` already does.
   overlayRect.value = {
-    left: (imageRect.left - parentRect.left) / z,
-    top: (imageRect.top - parentRect.top) / z,
+    left: (imageRect.left - parentRect.left + parent.scrollLeft) / z,
+    top: (imageRect.top - parentRect.top + parent.scrollTop) / z,
     width: imageRect.width / z,
     height: imageRect.height / z,
   };
@@ -198,14 +204,17 @@ watch(
       rafId = requestAnimationFrame(updatePosition);
     };
 
+    // The viewport itself is the scroll container (`overflow-y: auto`); its
+    // parent `.docx-editor-vue__editor-area` is `overflow: hidden` and never
+    // scrolls. `scroll` events don't bubble, so the listener must sit on the
+    // viewport or it never fires and the overlay drifts off the image on scroll.
     const viewport = overlayRootRef.value?.closest('.docx-editor-vue__pages-viewport');
-    const scrollParent = viewport?.parentElement;
 
-    scrollParent?.addEventListener('scroll', handleScrollOrResize, { passive: true });
+    viewport?.addEventListener('scroll', handleScrollOrResize, { passive: true });
     window.addEventListener('resize', handleScrollOrResize, { passive: true });
 
     onCleanup(() => {
-      scrollParent?.removeEventListener('scroll', handleScrollOrResize);
+      viewport?.removeEventListener('scroll', handleScrollOrResize);
       window.removeEventListener('resize', handleScrollOrResize);
       if (rafId) cancelAnimationFrame(rafId);
     });
@@ -380,6 +389,10 @@ function onResizeEnd() {
           height: currentHeight.value,
         })
       );
+      // `setNodeMarkup` doesn't reliably keep the NodeSelection on the node, so
+      // re-assert it (mirrors React's `setNodeSelection` after resize). Without
+      // this the selection collapses to a text caret and the overlay clears.
+      reselectImage(info.pmPos);
     } catch {
       // Position might be invalid after concurrent edits
     }
@@ -476,6 +489,8 @@ function onRotateEnd() {
           transform: writeRotation(node.attrs.transform as string, currentRotation.value),
         })
       );
+      // Keep the image node-selected after the markup change (see onResizeEnd).
+      reselectImage(info.pmPos);
     }
   } catch {
     /* position invalid after a concurrent edit */
