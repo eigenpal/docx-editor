@@ -215,9 +215,48 @@ export function DocxEditorPagedArea({
     Array<{ top: number; left: number; width: number; height: number }>
   >([]);
 
-  const computeHfCaretRect = useCallback(
-    (view: EditorView): typeof hfCaretRect => computeHfCaretRectFromView(view),
-    []
+  // The caret/selection rects come back from core in viewport coords. The
+  // overlay is portalled into the (`position: relative`) sibling parent of
+  // `.paged-editor__pages` and positioned `absolute`, so the browser moves it
+  // with the painter on scroll for free — BUT only if we store the host-local
+  // coordinate, NOT the viewport one. Viewport coords go stale the moment the
+  // page scrolls; since unrelated re-renders fire on scroll (e.g. the page
+  // indicator), re-converting viewport→local each render would re-add the
+  // scroll delta and the caret would drift away from the footer (#671
+  // follow-up). Converting ONCE here yields a scroll-invariant value that the
+  // absolutely-positioned div tracks natively with zero per-frame JS.
+  const toHfHostLocal = useCallback(<T extends { top: number; left: number }>(rect: T): T => {
+    const pagesEl = window.document.querySelector('.paged-editor__pages') as HTMLElement | null;
+    const host = pagesEl?.parentElement as HTMLElement | null;
+    if (!host) return rect;
+    const c = host.getBoundingClientRect();
+    return {
+      ...rect,
+      top: rect.top - c.top + host.scrollTop,
+      left: rect.left - c.left + host.scrollLeft,
+    };
+  }, []);
+
+  // Recompute the painted HF overlay (caret + drag-selection rects + multi-cell
+  // highlight) for the active section from the live HF view. Called on engage,
+  // on every HF transaction, and on resize. Coords are converted to host-local
+  // once here so they survive scroll (see `toHfHostLocal`).
+  const applyHfOverlay = useCallback(
+    (view: EditorView) => {
+      if (!hfEditPosition) {
+        setHfCaretRect(null);
+        setHfSelectionGeometry([]);
+        return;
+      }
+      const caret = computeHfCaretRectFromView(view, hfEditPosition);
+      setHfCaretRect(caret ? toHfHostLocal(caret) : null);
+      setHfSelectionGeometry(readHfSelectionGeometry(view, hfEditPosition).map(toHfHostLocal));
+      const pagesEl = window.document.querySelector('.paged-editor__pages') as HTMLElement | null;
+      // Multi-cell selection renders via `.layout-table-cell-selected`, scoped
+      // to the active section so footer selections don't light up header cells.
+      if (pagesEl) applyCellSelectionHighlight(pagesEl, view.state, { scope: hfEditPosition });
+    },
+    [hfEditPosition, toHfHostLocal]
   );
 
   // Initial-caret-on-engage: when the user double-clicks into HF mode the
@@ -235,12 +274,7 @@ export function DocxEditorPagedArea({
     }
     const measure = () => {
       const view = hfEditorRef.current?.getView();
-      if (view) {
-        setHfCaretRect(computeHfCaretRect(view));
-        setHfSelectionGeometry(readHfSelectionGeometry(view));
-        const pagesEl = window.document.querySelector('.paged-editor__pages') as HTMLElement | null;
-        if (pagesEl) applyCellSelectionHighlight(pagesEl, view.state, { scope: 'hf' });
-      }
+      if (view) applyHfOverlay(view);
     };
 
     // Deterministic "painter is done" signal — `useLayoutPipeline` dispatches
@@ -273,7 +307,7 @@ export function DocxEditorPagedArea({
       window.removeEventListener('resize', onResize);
       invalidateHfDomCache();
     };
-  }, [hfEditPosition, hfEditorRef, computeHfCaretRect]);
+  }, [hfEditPosition, hfEditorRef, applyHfOverlay]);
 
   return (
     <>
@@ -312,11 +346,7 @@ export function DocxEditorPagedArea({
             if (painted) return;
             painted = true;
             invalidateHfDomCache();
-            setHfCaretRect(computeHfCaretRect(view));
-            setHfSelectionGeometry(readHfSelectionGeometry(view));
-            // Multi-cell selection renders via `.layout-table-cell-selected`.
-            // Mirror the body call here so HF drag-select highlights work.
-            if (pagesEl) applyCellSelectionHighlight(pagesEl, view.state, { scope: 'hf' });
+            applyHfOverlay(view);
           };
           pagesEl?.addEventListener('painter:painted', apply, { once: true });
           requestAnimationFrame(() => {
@@ -446,12 +476,14 @@ export function DocxEditorPagedArea({
 
       {/* HF caret + selection rects portalled into the SIBLING parent of
           `.paged-editor__pages` (same scroll container the body's
-          `SelectionOverlay` uses). `position: absolute` + container-relative
-          coords means the browser moves them with the painter on scroll —
-          zero JS per wheel tick. Crisper than `position: fixed` + scroll
-          listener. The painter never touches this layer (siblings, not
-          children of `.paged-editor__pages`), so the wipe-on-rebuild
-          regression that bit the previous portal attempt is avoided. */}
+          `SelectionOverlay` uses). `position: absolute` + host-local coords
+          (already converted via `toHfHostLocal` at compute time) means the
+          browser moves them with the painter on scroll — zero JS per wheel
+          tick. The coords are scroll-invariant, so re-renders never re-add the
+          scroll delta. Crisper than `position: fixed` + scroll listener. The
+          painter never touches this layer (siblings, not children of
+          `.paged-editor__pages`), so the wipe-on-rebuild regression that bit
+          the previous portal attempt is avoided. */}
       {hfEditPosition &&
         (hfCaretRect || hfSelectionGeometry.length > 0) &&
         (() => {
@@ -460,11 +492,6 @@ export function DocxEditorPagedArea({
           ) as HTMLElement | null;
           const host = pagesEl?.parentElement as HTMLElement | null;
           if (!pagesEl || !host) return null;
-          const c = host.getBoundingClientRect();
-          const toLocal = (top: number, left: number) => ({
-            top: top - c.top + host.scrollTop,
-            left: left - c.left + host.scrollLeft,
-          });
           return createPortal(
             <>
               {hfCaretRect && hfSelectionGeometry.length === 0 && (
@@ -473,7 +500,8 @@ export function DocxEditorPagedArea({
                     aria-hidden="true"
                     style={{
                       position: 'absolute',
-                      ...toLocal(hfCaretRect.top, hfCaretRect.left),
+                      top: hfCaretRect.top,
+                      left: hfCaretRect.left,
                       width: 2,
                       height: hfCaretRect.height,
                       background: '#4285f4',
@@ -486,15 +514,14 @@ export function DocxEditorPagedArea({
                 </>
               )}
               {hfSelectionGeometry.map((r, i) => {
-                const local = toLocal(r.top, r.left);
                 return (
                   <div
                     key={`hf-sel-${i}-${r.top}-${r.left}`}
                     aria-hidden="true"
                     style={{
                       position: 'absolute',
-                      top: local.top,
-                      left: local.left,
+                      top: r.top,
+                      left: r.left,
                       width: r.width,
                       height: r.height,
                       background: 'rgba(66, 133, 244, 0.25)',

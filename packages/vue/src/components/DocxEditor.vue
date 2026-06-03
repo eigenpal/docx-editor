@@ -563,9 +563,9 @@ onMounted(() => {
     // header as the user types (targetRect captured at engage stays fixed
     // otherwise — blue border ends up covering only the original height).
     requestAnimationFrame(() => {
-      hfCaretRect.value = computeHfCaretRectFromView(view);
       const edit = hfEdit.value;
       if (!edit) return;
+      hfCaretRect.value = computeHfCaretRectFromView(view, edit.position);
       const hfEl = window.document.querySelector(
         edit.position === 'header' ? '.layout-page-header' : '.layout-page-footer'
       ) as HTMLElement | null;
@@ -620,7 +620,7 @@ onMounted(() => {
       const hf = hfEdit.value;
       if (!hf?.headerFooter) return;
       const view = getHfPmView(hf.headerFooter);
-      if (view) hfCaretRect.value = computeHfCaretRectFromView(view);
+      if (view) hfCaretRect.value = computeHfCaretRectFromView(view, hf.position);
     });
   }
   window.addEventListener('scroll', onHfScroll, true);
