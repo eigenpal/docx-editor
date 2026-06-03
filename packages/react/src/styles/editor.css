@@ -553,14 +553,24 @@
   transition: opacity 0.15s ease;
 }
 
-/* Dotted border on active header area */
-.paged-editor--editing-header .layout-page-header {
-  border-bottom: 1px dotted #4285f4;
+/* While editing one HF region, the sibling region (and the non-edited area)
+   shows a normal arrow, not the double-click "pointer" hint. The active
+   region's `cursor: text` below wins via later source order. */
+.paged-editor--hf-editing .layout-page-header,
+.paged-editor--hf-editing .layout-page-footer {
+  cursor: default;
 }
 
-/* Dotted border on active footer area */
+/* Dotted border on active header area; text caret since it's being edited */
+.paged-editor--editing-header .layout-page-header {
+  border-bottom: 1px dotted #4285f4;
+  cursor: text;
+}
+
+/* Dotted border on active footer area; text caret since it's being edited */
 .paged-editor--editing-footer .layout-page-footer {
   border-top: 1px dotted #4285f4;
+  cursor: text;
 }
 
 /*

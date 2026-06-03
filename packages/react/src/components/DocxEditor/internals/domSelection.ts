@@ -202,26 +202,24 @@ export function computeSelectionGeometryFromDom(
 export function applyCellSelectionHighlight(
   pagesContainer: HTMLElement,
   state: EditorState,
-  options: { scope?: 'body' | 'hf' } = {}
+  options: { scope?: 'body' | 'header' | 'footer' } = {}
 ): void {
   const scope = options.scope ?? 'body';
-  // The selector that limits which cells this call can highlight. HF cells
-  // live in `.layout-page-header` / `.layout-page-footer` (separate PM
-  // doc), body cells in `.layout-page-content`. PM positions overlap
-  // across docs, so we MUST scope the walk to the matching tree — a body
-  // CellSelection at pos 100 would otherwise also light up an HF cell
-  // at `data-doc-from="100"`.
-  const scopeSelector =
-    scope === 'hf'
-      ? '.layout-page-header .layout-table-cell, .layout-page-footer .layout-table-cell'
-      : '.layout-page-content .layout-table-cell';
+  // The selector that limits which cells this call can highlight. Header and
+  // footer cells live in `.layout-page-header` / `.layout-page-footer`
+  // (separate PM docs), body cells in `.layout-page-content`. PM positions
+  // overlap across all three docs, so we MUST scope the walk to the matching
+  // tree — a footer CellSelection at pos 100 would otherwise also light up a
+  // header cell at `data-doc-from="100"` (#671), and a body selection would
+  // bleed into both.
+  const scopeClass = scope === 'body' ? 'layout-page-content' : `layout-page-${scope}`;
+  const scopeSelector = `.${scopeClass} .layout-table-cell`;
 
   // Only clear highlights inside this scope so the body call doesn't wipe
-  // HF highlights (and vice versa).
+  // HF highlights (and vice versa), and the header call doesn't wipe the
+  // footer's.
   const prevSelected = pagesContainer.querySelectorAll(
-    scope === 'hf'
-      ? '.layout-page-header .layout-table-cell-selected, .layout-page-footer .layout-table-cell-selected'
-      : '.layout-page-content .layout-table-cell-selected'
+    `.${scopeClass} .layout-table-cell-selected`
   );
   for (const el of Array.from(prevSelected)) {
     el.classList.remove('layout-table-cell-selected');
