@@ -129,6 +129,15 @@ function getImageNode(v: EditorView | null, pos: number) {
 
 // ---- Position calculation (matches React's approach) ----
 
+/** The scaled `.docx-editor-vue__pages` element this overlay is anchored to. */
+function getPagesEl(): HTMLElement | null {
+  return (
+    overlayRootRef.value
+      ?.closest('.docx-editor-vue__pages-viewport')
+      ?.querySelector<HTMLElement>('.docx-editor-vue__pages') ?? null
+  );
+}
+
 /**
  * The painted element to anchor the overlay to. After a resize / move / rotate
  * commits — or after the image is pushed onto another page — the layout-painter
@@ -143,9 +152,7 @@ function resolveImageEl(): HTMLElement | null {
   const info = props.imageInfo;
   if (!info) return null;
   if (info.element.isConnected) return info.element;
-  const pages = overlayRootRef.value
-    ?.closest('.docx-editor-vue__pages-viewport')
-    ?.querySelector<HTMLElement>('.docx-editor-vue__pages');
+  const pages = getPagesEl();
   if (!pages) return null;
   const anchor = findBodyPmAnchor(pages, info.pmPos);
   return anchor ? findImageElement(anchor) : null;
@@ -191,6 +198,41 @@ watch(
     updatePosition();
   },
   { immediate: true }
+);
+
+// Re-anchor when zoom changes. Unlike React's overlay — which lives *inside*
+// the scaled container, so its layout-px position is zoom-invariant — this
+// overlay sits in the unscaled viewport, so the image's measured viewport rect
+// shifts and resizes as zoom changes and the frame must be recomputed. The
+// `.docx-editor-vue__pages` container animates its `transform` over ~0.2s (see
+// DocxEditor.vue `pagesContainerStyle`) and the layout may also repaint, so the
+// image rect keeps moving for a few frames — and `transitionend` is unreliable
+// (it never fires under `prefers-reduced-motion`). So recompute each frame
+// until the rect holds steady (or a short cap elapses): this tracks an animated
+// zoom smoothly and settles instantly when there's no animation.
+watch(
+  () => props.zoom,
+  (_z, _prev, onCleanup) => {
+    if (!props.imageInfo) return;
+    let raf = 0;
+    let prevKey = '';
+    let stableFrames = 0;
+    let elapsed = 0;
+    const step = (last: number) => {
+      updatePosition();
+      const r = overlayRect.value;
+      const key = r ? `${r.left}|${r.top}|${r.width}|${r.height}` : '';
+      stableFrames = key === prevKey ? stableFrames + 1 : 0;
+      prevKey = key;
+      // ~16ms/frame; cap at ~30 frames (≈0.5s) so a stuck rect can't spin.
+      elapsed += last;
+      if (stableFrames < 2 && elapsed < 500) {
+        raf = requestAnimationFrame(() => step(16));
+      }
+    };
+    raf = requestAnimationFrame(() => step(16));
+    onCleanup(() => cancelAnimationFrame(raf));
+  }
 );
 
 // Update on scroll/resize
@@ -248,12 +290,23 @@ const overlayStyle = computed(() => {
   const w = isResizing.value ? currentWidth.value : r.width;
   const h = isResizing.value ? currentHeight.value : r.height;
 
+  // `overlayRect` is kept in layout (unscaled) px — the same space the image's
+  // `width`/`height` attrs and the resize/drag math live in. But the overlay's
+  // offsetParent is `.docx-editor-vue__pages-viewport`, which is NOT scaled
+  // (only the inner `.docx-editor-vue__pages` carries `transform: scale(zoom)`).
+  // So position the box at real (post-scale) px and scale its contents — border,
+  // handles and rotate handle all grow with zoom, mirroring React's overlay,
+  // which sits inside its scaled container and scales for free.
+  const z = props.zoom || 1;
+
   return {
     position: 'absolute' as const,
-    left: `${r.left}px`,
-    top: `${r.top}px`,
+    left: `${r.left * z}px`,
+    top: `${r.top * z}px`,
     width: `${w}px`,
     height: `${h}px`,
+    transform: z === 1 ? undefined : `scale(${z})`,
+    transformOrigin: 'top left' as const,
     zIndex: Z_INDEX.imageOverlay,
     pointerEvents: 'auto' as const,
   };
@@ -621,9 +674,7 @@ function commitDragMove(clientX: number, clientY: number) {
       // Map the drop point to a PM position via the *visible pages* hit-test —
       // the hidden ProseMirror lives off-screen, so `view.posAtCoords` would
       // never intersect it. Mirrors how the editor places the caret on click.
-      const pagesEl = overlayRootRef.value
-        ?.closest('.docx-editor-vue__pages-viewport')
-        ?.querySelector<HTMLElement>('.docx-editor-vue__pages');
+      const pagesEl = getPagesEl();
       if (!pagesEl) return;
       const dropPos = resolveDomPosition(pagesEl, clientX, clientY, 1);
       if (dropPos == null || dropPos < 0) return;
