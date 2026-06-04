@@ -301,13 +301,17 @@ export function usePagesPointer(opts: UsePagesPointerOptions): UsePagesPointerRe
     if (!anchor) return;
     event.preventDefault();
     const href = anchor.getAttribute('href') || '';
-    if (!href) return;
     if (href.startsWith('#')) {
       const bookmarkName = href.slice(1);
       if (bookmarkName) navigateToBookmark(bookmarkName);
       return;
     }
-    const view = opts.editorView.value;
+    // Route through the active view (the header/footer PM when editing one),
+    // not the body PM. A link in a painted header/footer resolves against the
+    // HF doc, so checking the body's selection here suppressed the popup for
+    // HF links. Mirrors React's `activeSurface()`. Empty hrefs still surface
+    // the popup (so the user can add/edit a URL), matching React.
+    const view = activeView();
     const hasRangeSelection = view && view.state.selection.from !== view.state.selection.to;
     if (hasRangeSelection) return;
     // Compute popup position relative to the pages viewport so the popup
