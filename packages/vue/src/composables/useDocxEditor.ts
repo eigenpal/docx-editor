@@ -44,7 +44,10 @@ import {
   measureBlocksWithFloats,
   paragraphLayout,
 } from '@eigenpal/docx-editor-core/layout-bridge/measuring';
-import type { FloatingImageZone } from '@eigenpal/docx-editor-core/layout-bridge/measuring';
+import type {
+  FloatingImageZone,
+  FloatPageGeometry,
+} from '@eigenpal/docx-editor-core/layout-bridge/measuring';
 import {
   measureTable,
   convertHeaderFooterToContent,
@@ -77,7 +80,11 @@ import type {
   TextBoxBlock,
 } from '@eigenpal/docx-editor-core/layout-engine/types';
 import type { BlockLookup, HeaderFooterContent } from '@eigenpal/docx-editor-core/layout-painter';
-import { enclosingSdtGroupIds, applySdtFocus } from '@eigenpal/docx-editor-core/layout-painter';
+import {
+  enclosingSdtGroupIds,
+  applySdtFocus,
+  pageGeometryFromPage,
+} from '@eigenpal/docx-editor-core/layout-painter';
 import type { Document } from '@eigenpal/docx-editor-core/types/document';
 import type { SelectionBridge } from '@eigenpal/docx-editor-core/prosemirror';
 
@@ -165,8 +172,12 @@ function measureBlock(
   }
 }
 
-function measureBlocks(blocks: FlowBlock[], contentWidth: number): Measure[] {
-  return measureBlocksWithFloats(blocks, contentWidth, measureBlock);
+function measureBlocks(
+  blocks: FlowBlock[],
+  contentWidth: number,
+  pageGeometry?: FloatPageGeometry
+): Measure[] {
+  return measureBlocksWithFloats(blocks, contentWidth, measureBlock, pageGeometry);
 }
 
 // ============================================================================
@@ -320,7 +331,11 @@ export function useDocxEditor(options: UseDocxEditorOptions): UseDocxEditorRetur
       const blocks = buildBoxTree(state.doc, { theme, pageContentHeight });
 
       // Step 2: Measure blocks
-      const measures = measureBlocks(blocks, contentWidth);
+      const measures = measureBlocks(
+        blocks,
+        contentWidth,
+        pageGeometryFromPage({ size: pageSize, margins })
+      );
 
       // Step 3: Resolve and measure header/footer content (#400 port).
       // Routes through the shared core helper so HF rendering matches
