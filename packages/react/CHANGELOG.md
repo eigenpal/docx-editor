@@ -1,5 +1,27 @@
 # @eigenpal/docx-js-editor
 
+## 1.3.0
+
+### Patch Changes
+
+- 0d5beed: Fix long content in a table row getting cut off / hidden instead of flowing across pages. A table cell now measures its stacked paragraphs the way it paints them — collapsing adjacent paragraph before/after spacing (like Word) instead of adding it — so the row's height matches what's rendered and page breaks land on whole lines instead of slicing a line in two. Selecting text across a table that spans a page break no longer scatters selection highlights into the gap between pages, and contextual spacing is now suppressed inside table cells. Fixes #570.
+- Updated dependencies [15966fc]
+- Updated dependencies [2003cec]
+- Updated dependencies [5e51a9b]
+- Updated dependencies [cb5f622]
+- Updated dependencies [1be9cf5]
+- Updated dependencies [5fcca3b]
+- Updated dependencies [f73706e]
+- Updated dependencies [0d5beed]
+- Updated dependencies [5b38696]
+- Updated dependencies [15966fc]
+- Updated dependencies [f3d6861]
+- Updated dependencies [0f3eb97]
+- Updated dependencies [eaa6f7f]
+  - @eigenpal/docx-editor-core@1.3.0
+  - @eigenpal/docx-editor-agents@1.3.0
+  - @eigenpal/docx-editor-i18n@1.3.0
+
 ## 1.2.1
 
 ### Patch Changes

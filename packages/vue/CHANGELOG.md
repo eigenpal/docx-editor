@@ -1,5 +1,47 @@
 # @eigenpal/docx-editor-vue
 
+## 1.3.0
+
+### Minor Changes
+
+- 0f3eb97: Add the Insert → Watermark dialog to the Vue editor. The Vue adapter could already render and round-trip watermarks from opened documents; now you can also add, edit, or remove text and picture watermarks from the UI, with the change participating in undo/redo.
+
+### Patch Changes
+
+- 928593b: Vue: show the hyperlink popup when clicking a link in a header or footer. The click handler now resolves against the active header/footer editor (matching the body and React behavior) instead of the body, and no longer ignores links whose URL is empty.
+
+  Fixes #692
+
+- 6dc5b50: Vue: fix the image selection frame being offset from the image at zoom levels other than 100%. The overlay lives in the unscaled scroll viewport, so it now positions at post-scale pixels and scales its border/handles with the zoom factor, wrapping the image tightly. It also re-anchors when the zoom transition settles.
+
+  Fixes #695
+
+- 98ae3e5: Vue: fix the text selection highlight and caret drifting away from the text at zoom levels other than 100%. The overlay rects are painted into the scaled pages container, so they are now divided by the zoom factor to land on the selected text.
+
+  Fixes #693
+
+- 9c8068f: Fix the Vue "Add comment" card overlapping existing comment and tracked-change cards in the sidebar. The add-comment input now flows through the same collision-avoidance pass as every other card, so it claims its slot and neighbouring cards stack below it. Fixes #669
+- cab7424: Fix the Vue header/footer "Remove" button doing nothing. Removing a header or footer now drops the part from the package and strips its section references, so it stops rendering on the page (matching React). Fixes #686
+- f3d6861: Fix text selection not showing in Vue headers and footers. Selecting text while editing a header or footer now paints the highlight (the body overlay was suppressed in HF mode but the HF rects were never drawn), and double/triple-click word and paragraph selection resolves against the header/footer text instead of a body run at the same position. On multi-page documents, the caret and selection now render on the header/footer instance being edited rather than always on page one's copy. Fixes #691
+- 06aea12: Vue: keep the image selection frame on the image when it moves to another page or is resized, instead of stranding it at the old position.
+- 127985a: Fix the Vue horizontal ruler indent handles not tracking the active paragraph. The ruler now reads the selection's left/right/first-line/hanging indents and tab stops (like React) and moves the handles to match. Also stop showing an extra first-line-indent marker at the left margin. Fixes #685
+- Updated dependencies [15966fc]
+- Updated dependencies [2003cec]
+- Updated dependencies [5e51a9b]
+- Updated dependencies [cb5f622]
+- Updated dependencies [1be9cf5]
+- Updated dependencies [5fcca3b]
+- Updated dependencies [f73706e]
+- Updated dependencies [0d5beed]
+- Updated dependencies [5b38696]
+- Updated dependencies [15966fc]
+- Updated dependencies [f3d6861]
+- Updated dependencies [0f3eb97]
+- Updated dependencies [eaa6f7f]
+  - @eigenpal/docx-editor-core@1.3.0
+  - @eigenpal/docx-editor-agents@1.3.0
+  - @eigenpal/docx-editor-i18n@1.3.0
+
 ## 1.2.1
 
 ### Patch Changes
