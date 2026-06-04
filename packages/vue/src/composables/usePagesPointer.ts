@@ -184,11 +184,14 @@ export function usePagesPointer(opts: UsePagesPointerOptions): UsePagesPointerRe
   }
 
   function selectWord(pos: number) {
-    selectWordImpl(opts.pagesRef.value, pos, setPmSelection);
+    // Scope the span lookup to the active HF host when editing a header/footer,
+    // so word bounds resolve against the HF text and not a coincidental body
+    // span at the same PM position (#691).
+    selectWordImpl(opts.pagesRef.value, pos, setPmSelection, hfEdit.value?.position);
   }
 
   function selectParagraph(pos: number) {
-    selectParagraphImpl(opts.pagesRef.value, pos, setPmSelection);
+    selectParagraphImpl(opts.pagesRef.value, pos, setPmSelection, hfEdit.value?.position);
   }
 
   function navigateToBookmark(bookmarkName: string) {

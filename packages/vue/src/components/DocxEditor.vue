@@ -179,6 +179,26 @@
             @remove="handleHfRemove"
           />
 
+          <!-- HF selection overlay: blue highlight rects for a drag-selected range
+               in the painted header/footer. Coords are viewport-relative (position:
+               fixed), recomputed on every HF transaction and on scroll/resize. -->
+          <div
+            v-for="(rect, i) in hfEdit ? hfSelectionGeometry : []"
+            :key="`hf-sel-${i}-${rect.top}-${rect.left}`"
+            class="vue-hf-sel-rect"
+            aria-hidden="true"
+            :style="{
+              position: 'fixed',
+              top: `${rect.top}px`,
+              left: `${rect.left}px`,
+              width: `${rect.width}px`,
+              height: `${rect.height}px`,
+              background: 'rgba(66, 133, 244, 0.25)',
+              pointerEvents: 'none',
+              zIndex: 9998,
+            }"
+          />
+
           <!-- HF caret overlay: blinking blue caret at the persistent HF PM's selection head. -->
           <div
             v-if="hfEdit && hfCaretRect"
@@ -366,8 +386,12 @@
 import { ref, shallowRef, computed, watch, onMounted, onBeforeUnmount, nextTick } from 'vue';
 import type { EditorView } from 'prosemirror-view';
 import { TextSelection } from 'prosemirror-state';
-import { computeHfCaretRectFromView } from '@eigenpal/docx-editor-core/layout-bridge';
+import {
+  computeHfCaretRectFromView,
+  readHfSelectionGeometry,
+} from '@eigenpal/docx-editor-core/layout-bridge';
 import { getSelectionInfo as getSelectionInfoImpl } from '../utils/refApiQueries';
+import { nearestHfHostEl } from '../utils/domQueries';
 import Toolbar from './Toolbar.vue';
 import TableToolbar from './ui/TableToolbar.vue';
 import DecorationLayer from './DecorationLayer.vue';
@@ -574,6 +598,28 @@ const documentTheme = computed(() => {
 
 // HF caret overlay rect from the persistent HF view; shared with React via core's `computeHfCaretRectFromView`.
 const hfCaretRect = ref<{ top: number; left: number; height: number } | null>(null);
+// HF drag-selection rects — drawn when the user selects a range inside the
+// painted header/footer. The body selection overlay is gated off in HF mode
+// (`isHfEditing` in useSelectionSync), so without these the selection is set on
+// the HF PM but never highlighted (#691). Shared with React via core's
+// `readHfSelectionGeometry`.
+const hfSelectionGeometry = ref<Array<{ top: number; left: number; width: number; height: number }>>(
+  []
+);
+
+// Paint the HF caret + drag-selection rects from the live HF view together
+// (mirror of React's `applyHfOverlay`). `computeHfCaretRectFromView` returns
+// null for a non-empty selection and `readHfSelectionGeometry` returns
+// [] for a collapsed one, so the caret and highlight are mutually exclusive.
+function applyHfOverlay(view: EditorView, position: 'header' | 'footer') {
+  hfCaretRect.value = computeHfCaretRectFromView(view, position);
+  hfSelectionGeometry.value = readHfSelectionGeometry(view, position);
+}
+function clearHfOverlay() {
+  hfCaretRect.value = null;
+  hfSelectionGeometry.value = [];
+}
+
 useFontLifecycle(() => props.fonts, (err) => emit('error', err));
 
 // Memoized so the template doesn't walk the headers/footers Maps every tick.
@@ -591,10 +637,8 @@ onMounted(() => {
     requestAnimationFrame(() => {
       const edit = hfEdit.value;
       if (!edit) return;
-      hfCaretRect.value = computeHfCaretRectFromView(view, edit.position);
-      const hfEl = window.document.querySelector(
-        edit.position === 'header' ? '.layout-page-header' : '.layout-page-footer'
-      ) as HTMLElement | null;
+      applyHfOverlay(view, edit.position);
+      const hfEl = nearestHfHostEl(edit.position);
       const viewport = pagesViewportRef.value;
       if (!hfEl || !viewport) return;
       const el = hfEl.getBoundingClientRect();
@@ -615,7 +659,7 @@ onMounted(() => {
     () => hfEdit.value,
     (e) => {
       if (!e) {
-        hfCaretRect.value = null;
+        clearHfOverlay();
         return;
       }
       // Collapse body PM selection + blur the body view so the user doesn't
@@ -646,7 +690,7 @@ onMounted(() => {
       const hf = hfEdit.value;
       if (!hf?.headerFooter) return;
       const view = getHfPmView(hf.headerFooter);
-      if (view) hfCaretRect.value = computeHfCaretRectFromView(view, hf.position);
+      if (view) applyHfOverlay(view, hf.position);
     });
   }
   window.addEventListener('scroll', onHfScroll, true);
