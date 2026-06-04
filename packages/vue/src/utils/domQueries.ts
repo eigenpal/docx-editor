@@ -14,12 +14,51 @@ import { collectBodySpans, resolveDomPosition } from '@eigenpal/docx-editor-core
 import { findWordBoundaries } from '@eigenpal/docx-editor-core/utils';
 
 /**
- * Find the body PM span containing `pmPos`. Scoped to body spans (which
- * carry both docFrom and docTo) so HF runs in the separate PM document
- * don't mis-resolve double-/triple-click selection.
+ * Resolve the painted header/footer instance nearest the viewport center — the
+ * one the user is editing. The same HF is painted on every page (shared
+ * `r:id`), so the chrome outline must track the active page rather than snap to
+ * page one's copy (mirrors core's `getHfDomSnapshot` host pick; #691).
  */
-export function findElementAtPosition(container: HTMLElement, pmPos: number): HTMLElement | null {
-  const els = collectBodySpans(container);
+export function nearestHfHostEl(position: 'header' | 'footer'): HTMLElement | null {
+  const hosts = window.document.querySelectorAll<HTMLElement>(`.layout-page-${position}`);
+  if (hosts.length === 0) return null;
+  const vpCenter = window.innerHeight / 2;
+  let host = hosts[0];
+  let bestDist = Infinity;
+  for (const h of Array.from(hosts)) {
+    const r = h.getBoundingClientRect();
+    const dist = Math.abs((r.top + r.bottom) / 2 - vpCenter);
+    if (dist < bestDist) {
+      bestDist = dist;
+      host = h;
+    }
+  }
+  return host;
+}
+
+/**
+ * Find the painted span containing `pmPos`. By default scoped to body spans
+ * (which carry both docFrom and docTo) so HF runs in the separate PM document
+ * don't mis-resolve double-/triple-click selection. When `hfSection` is set
+ * (the user is editing a header/footer), scope to that section's painted host
+ * instead — the HF spans live in `.layout-page-header` / `.layout-page-footer`
+ * and carry PM positions from the HF document, so resolving against body spans
+ * would compute word/paragraph bounds from the wrong text (#691).
+ */
+export function findElementAtPosition(
+  container: HTMLElement,
+  pmPos: number,
+  hfSection?: 'header' | 'footer'
+): HTMLElement | null {
+  const els = hfSection
+    ? // The same HF doc is painted on every page; the first host's spans share
+      // the HF PM coord space, so one host suffices.
+      Array.from(
+        container.querySelectorAll<HTMLElement>(
+          `.layout-page-${hfSection} span[data-doc-from][data-doc-to]`
+        )
+      )
+    : collectBodySpans(container);
   for (const el of els) {
     const start = Number(el.dataset.docFrom);
     const end = Number(el.dataset.docTo);
@@ -85,10 +124,11 @@ export function resolvePos(
 export function selectWord(
   pagesContainer: HTMLElement | null,
   pos: number,
-  setPmSelection: (from: number, to: number) => void
+  setPmSelection: (from: number, to: number) => void,
+  hfSection?: 'header' | 'footer'
 ): void {
   if (!pagesContainer) return;
-  const el = findElementAtPosition(pagesContainer, pos);
+  const el = findElementAtPosition(pagesContainer, pos, hfSection);
   if (!el) return;
   const text = el.textContent || '';
   const docFrom = Number(el.dataset.docFrom) || 0;
@@ -108,10 +148,11 @@ export function selectWord(
 export function selectParagraph(
   pagesContainer: HTMLElement | null,
   pos: number,
-  setPmSelection: (from: number, to: number) => void
+  setPmSelection: (from: number, to: number) => void,
+  hfSection?: 'header' | 'footer'
 ): void {
   if (!pagesContainer) return;
-  const el = findElementAtPosition(pagesContainer, pos);
+  const el = findElementAtPosition(pagesContainer, pos, hfSection);
   if (!el) return;
   const paragraph = el.closest('.layout-paragraph') as HTMLElement | null;
   if (!paragraph) return;
