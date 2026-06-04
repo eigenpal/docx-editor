@@ -24,29 +24,30 @@
       class="unified-sidebar__inner"
       :style="{ minHeight: minHeightPx + 'px' }"
     >
-      <div
-        v-if="isAddingComment"
-        class="unified-sidebar__addcomment"
-        :style="addCommentSlotStyle"
-      >
-        <AddCommentCard
-          @submit="(text: string) => $emit('add-comment', text)"
-          @cancel="$emit('cancel-add-comment')"
-        />
-      </div>
-
-      <template v-for="item in sortedItems" :key="item.id">
+      <!-- Every item — add-comment input, comments, tracked changes —
+           flows through the same `items` list and the shared
+           `resolveItemPositions` collision pass (mirrors React's
+           UnifiedSidebar.tsx). The add-comment card no longer has a
+           separate, independently-positioned block, so it claims its Y
+           slot and neighbouring cards stack below it instead of
+           overlapping (fixes #669). -->
+      <template v-for="item in items" :key="item.id">
         <div
           class="unified-sidebar__card-slot"
           :data-card-id="item.id"
           :style="cardSlotStyle(item.id)"
         >
+          <AddCommentCard
+            v-if="item.kind === 'add-comment'"
+            @submit="(text: string) => $emit('add-comment', text)"
+            @cancel="$emit('cancel-add-comment')"
+          />
           <!-- Resolved + collapsed comments render as a small
                chat-bubble-check marker (matches React's
                useCommentSidebarItems.tsx:96-98). Click expands into
                the full card. -->
           <ResolvedCommentMarker
-            v-if="item.kind === 'comment' && item.comment!.done && expandedId !== item.id"
+            v-else-if="item.kind === 'comment' && item.comment!.done && expandedId !== item.id"
             :comment="item.comment!"
             @toggle-expand="toggleExpanded(item.id)"
           />
@@ -86,21 +87,10 @@ import CommentCard from './sidebar/CommentCard.vue';
 import ResolvedCommentMarker from './sidebar/ResolvedCommentMarker.vue';
 import TrackedChangeCard from './sidebar/TrackedChangeCard.vue';
 import AddCommentCard from './sidebar/AddCommentCard.vue';
+import { useCommentSidebarItems } from '../composables/useCommentSidebarItems';
+import { resolveItemPositions } from './sidebar/resolveItemPositions';
 
-import {
-  MIN_CARD_GAP,
-  SIDEBAR_DOCUMENT_SHIFT,
-} from '@eigenpal/docx-editor-core/utils/sidebarConstants';
-
-interface SidebarItem {
-  id: string;
-  kind: 'comment' | 'tracked-change';
-  anchorSelector: string;
-  fallbackOrder: number;
-  comment?: Comment;
-  replies?: Comment[];
-  change?: TrackedChangeEntry;
-}
+import { SIDEBAR_DOCUMENT_SHIFT } from '@eigenpal/docx-editor-core/utils/sidebarConstants';
 
 const props = defineProps<{
   isOpen: boolean;
@@ -153,47 +143,15 @@ function toggleExpanded(id: string) {
   emit('update:activeItemId', next);
 }
 
-const sortedItems = computed<SidebarItem[]>(() => {
-  const items: SidebarItem[] = [];
-  const topLevelComments = props.comments.filter((c) => !c.parentId);
-  const replyMap = new Map<number, Comment[]>();
-  for (const c of props.comments) {
-    if (c.parentId != null) {
-      const arr = replyMap.get(c.parentId) || [];
-      arr.push(c);
-      replyMap.set(c.parentId, arr);
-    }
-  }
-
-  let order = 0;
-  for (const comment of topLevelComments) {
-    if (comment.done && !props.showResolved) continue;
-    items.push({
-      id: `comment-${comment.id}`,
-      kind: 'comment',
-      anchorSelector: `[data-comment-id="${comment.id}"]`,
-      fallbackOrder: order++,
-      comment,
-      replies: replyMap.get(comment.id) || [],
-    });
-  }
-
-  for (let i = 0; i < props.trackedChanges.length; i++) {
-    const change = props.trackedChanges[i];
-    const insRev = change.insertionRevisionId ?? change.revisionId;
-    const sel =
-      change.type === 'deletion'
-        ? `.docx-deletion[data-revision-id="${change.revisionId}"]`
-        : `.docx-insertion[data-revision-id="${insRev}"]`;
-    items.push({
-      id: `tc-${change.revisionId}-${i}`,
-      kind: 'tracked-change',
-      anchorSelector: sel,
-      fallbackOrder: order++,
-      change,
-    });
-  }
-  return items;
+// Single source of truth for the item list — shared with React via
+// the same-named composable. Comments, tracked changes AND the
+// add-comment input all live here, so they go through one layout pass.
+const items = useCommentSidebarItems({
+  comments: computed(() => props.comments),
+  trackedChanges: computed(() => props.trackedChanges),
+  showResolved: computed(() => props.showResolved ?? false),
+  isAddingComment: computed(() => props.isAddingComment ?? false),
+  addCommentYPosition: computed(() => props.addCommentYPosition ?? null),
 });
 
 // Resolved Y per item id. Recomputed on tick changes (manual recompute,
@@ -201,12 +159,15 @@ const sortedItems = computed<SidebarItem[]>(() => {
 // layout when an anchor isn't found yet.
 const rootRef = ref<HTMLElement | null>(null);
 const resolvedY = ref<Map<string, number>>(new Map());
+// Persistent across recomputes: lets resolveItemPositions keep a card
+// at its last-known Y during transient layout instead of popping it out.
+const lastKnown = new Map<string, number>();
 let resizeObserver: ResizeObserver | null = null;
 
 function computePositions() {
   const container = props.pagesContainer;
-  const items = sortedItems.value;
-  if (!container || items.length === 0) {
+  const list = items.value;
+  if (!container || list.length === 0) {
     resolvedY.value = new Map();
     return;
   }
@@ -251,43 +212,50 @@ function computePositions() {
     if (!map.has(id)) map.set(id, el);
   }
 
-  const positioned: { id: string; targetY: number }[] = [];
-  for (const item of items) {
+  // Resolve each anchored item's Y from its painted span and key it by
+  // the item's anchorKey (`comment-<id>` / `revision-<revId>`), which is
+  // what resolveItemPositions looks up. The add-comment item carries a
+  // fixedY instead and needs no DOM anchor. Y is in pages-container
+  // coords, already post-zoom (getBoundingClientRect is post-transform),
+  // so resolveItemPositions runs with zoom 1.
+  const anchorPositions = new Map<string, number>();
+  const anchorY = (el: HTMLElement) =>
+    el.getBoundingClientRect().top - containerRect.top + container.scrollTop;
+  for (const item of list) {
+    if (!item.anchorKey) continue;
     let anchor: HTMLElement | undefined;
     if (item.kind === 'comment') {
       anchor = commentEls.get(String(item.comment!.id));
-    } else if (item.change!.type === 'deletion') {
-      anchor = deletionEls.get(String(item.change!.revisionId));
-    } else {
-      const insRev = item.change!.insertionRevisionId ?? item.change!.revisionId;
-      anchor = insertionEls.get(String(insRev));
+    } else if (item.kind === 'tracked-change') {
+      const change = item.change!;
+      anchor =
+        change.type === 'deletion'
+          ? deletionEls.get(String(change.revisionId))
+          : insertionEls.get(String(change.insertionRevisionId ?? change.revisionId));
     }
-    if (!anchor) continue;
-    const r = anchor.getBoundingClientRect();
-    positioned.push({
-      id: item.id,
-      targetY: r.top - containerRect.top + container.scrollTop,
-    });
+    if (anchor) anchorPositions.set(item.anchorKey, anchorY(anchor));
   }
-  positioned.sort((a, b) => a.targetY - b.targetY);
 
   // Card-height lookup: also batched into one querySelectorAll.
-  const heights = new Map<string, number>();
+  const cardHeights = new Map<string, number>();
   const root = rootRef.value;
   if (root) {
     for (const el of root.querySelectorAll<HTMLElement>('[data-card-id]')) {
       const id = el.dataset.cardId;
-      if (id) heights.set(id, el.offsetHeight);
+      if (id) cardHeights.set(id, el.offsetHeight);
     }
   }
 
   const map = new Map<string, number>();
-  let lastBottom = 0;
-  for (const p of positioned) {
-    const h = heights.get(p.id) ?? 80;
-    const y = Math.max(p.targetY, lastBottom + MIN_CARD_GAP);
-    map.set(p.id, y);
-    lastBottom = y + h;
+  for (const { item, y } of resolveItemPositions(
+    list,
+    anchorPositions,
+    null,
+    1,
+    cardHeights,
+    lastKnown
+  )) {
+    map.set(item.id, y);
   }
   resolvedY.value = map;
 }
@@ -324,7 +292,7 @@ const expandedHighlightCss = computed(() => {
     // id shape: tc-<revisionId>-<index>
     const parts = id.split('-');
     const revId = parts[1];
-    const item = sortedItems.value.find((s) => s.id === id);
+    const item = items.value.find((s) => s.id === id);
     const insRev = item?.change?.insertionRevisionId ?? Number(revId);
     return `
       .paged-editor__pages .docx-insertion[data-revision-id="${insRev}"] { background-color: rgba(52, 168, 83, 0.2) !important; border-bottom: 2px solid #2e7d32 !important; }
@@ -332,20 +300,6 @@ const expandedHighlightCss = computed(() => {
     `;
   }
   return '';
-});
-
-const addCommentSlotStyle = computed(() => {
-  const y = props.addCommentYPosition;
-  if (y == null) {
-    return { position: 'static' as const, marginBottom: '8px' };
-  }
-  return {
-    position: 'absolute' as const,
-    top: y + 'px',
-    left: 0,
-    right: 0,
-    transition: 'top 0.15s ease',
-  };
 });
 
 const asideStyle = computed(() => {
@@ -360,7 +314,7 @@ const asideStyle = computed(() => {
   // Mirrors React UnifiedSidebar.tsx:202 — opacity 1 only once any
   // card position has resolved, so the rail fades in cleanly
   // instead of blinking blank.
-  const hasPositions = resolvedY.value.size > 0 || sortedItems.value.length === 0;
+  const hasPositions = resolvedY.value.size > 0 || items.value.length === 0;
   return {
     position: 'absolute' as const,
     top: '0',
@@ -407,11 +361,13 @@ function recompute() {
 // post-transform coords, so a zoom change shifts every anchor.
 watch(
   () => [
-    sortedItems.value.length,
+    items.value.length,
     expandedId.value,
     props.pagesContainer,
     props.pageWidthPx,
     props.zoom,
+    props.isAddingComment,
+    props.addCommentYPosition,
   ],
   () => recompute(),
   { immediate: true }
@@ -485,9 +441,5 @@ onBeforeUnmount(() => {
 .unified-sidebar__inner {
   position: relative;
   padding: 0 8px;
-}
-.unified-sidebar__addcomment {
-  position: relative;
-  margin-bottom: 8px;
 }
 </style>
