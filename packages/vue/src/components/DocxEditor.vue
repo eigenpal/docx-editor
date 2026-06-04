@@ -127,6 +127,11 @@
           :section-props="currentSectionProps"
           :zoom="zoom"
           :editable="!readOnly"
+          :indent-left="rulerIndents.indentLeft"
+          :indent-right="rulerIndents.indentRight"
+          :first-line-indent="rulerIndents.firstLineIndent"
+          :hanging-indent="rulerIndents.hangingIndent"
+          :tab-stops="rulerIndents.tabMarks"
           @left-margin-change="handleLeftMarginChange"
           @right-margin-change="handleRightMarginChange"
           @indent-left-change="handleIndentLeftChange"
@@ -409,6 +414,7 @@ import { twipsToPixels } from '@eigenpal/docx-editor-core/utils/units';
 import { SIDEBAR_DOCUMENT_SHIFT } from '@eigenpal/docx-editor-core/utils';
 import { useFontLifecycle } from '../composables/useFontLifecycle';
 import { SelectionBridge } from '@eigenpal/docx-editor-core/prosemirror';
+import { extractSelectionContext } from '@eigenpal/docx-editor-core/prosemirror/plugins/selectionTracker';
 
 const props = withDefaults(defineProps<DocxEditorProps>(), {
   documentBuffer: null,
@@ -543,6 +549,22 @@ const currentSectionProps = computed(() => {
   if (!doc?.package?.document) return null;
   const body = doc.package.document;
   return body.finalSectionProperties ?? body.sections?.[0]?.properties ?? null;
+});
+
+// Active paragraph's indents/tab stops, so the ruler handles track the
+// selection like React's. Read from the same extractSelectionContext the
+// toolbar uses; recomputed on every selection/transaction via stateTick.
+const rulerIndents = computed(() => {
+  void stateTick.value;
+  const view = editorView.value;
+  const pf = view ? extractSelectionContext(view.state).paragraphFormatting : {};
+  return {
+    indentLeft: pf.indentLeft ?? 0,
+    indentRight: pf.indentRight ?? 0,
+    firstLineIndent: pf.indentFirstLine ?? 0,
+    hangingIndent: pf.hangingIndent ?? false,
+    tabMarks: pf.tabs ?? null,
+  };
 });
 
 const documentTheme = computed(() => {

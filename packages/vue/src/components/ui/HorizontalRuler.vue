@@ -127,7 +127,7 @@ const props = withDefaults(
   {
     zoom: 1,
     editable: true,
-    showFirstLineIndent: true,
+    showFirstLineIndent: false,
     firstLineIndent: 0,
     hangingIndent: false,
     indentLeft: 0,
