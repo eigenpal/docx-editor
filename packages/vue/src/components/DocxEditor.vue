@@ -1038,6 +1038,7 @@ const isHfEditing = computed(() => hfEdit.value !== null);
 const selectionSync = useSelectionSync({
   editorView,
   pagesRef,
+  zoom,
   selectedImage,
   isHfEditing,
   imageInteracting,
