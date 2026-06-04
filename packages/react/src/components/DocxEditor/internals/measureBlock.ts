@@ -27,6 +27,7 @@ import type {
 } from '@eigenpal/docx-editor-core/layout-engine';
 import {
   type FloatingImageZone,
+  type FloatPageGeometry,
   getCachedParagraphMetrics,
   measureBlocksWithFloats,
   paragraphLayout,
@@ -117,8 +118,12 @@ export function measureBlock(
  * images, floating tables, and floating textboxes, then threads the
  * exclusion zones plus cumulative Y into each per-block measurement.
  */
-export function measureBlocks(blocks: FlowBlock[], contentWidth: number | number[]): Measure[] {
-  return measureBlocksWithFloats(blocks, contentWidth, measureBlock);
+export function measureBlocks(
+  blocks: FlowBlock[],
+  contentWidth: number | number[],
+  pageGeometry?: FloatPageGeometry
+): Measure[] {
+  return measureBlocksWithFloats(blocks, contentWidth, measureBlock, pageGeometry);
 }
 
 // TableMeasure used internally above; re-exported for tests that compare types.

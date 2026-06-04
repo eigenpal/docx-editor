@@ -38,6 +38,7 @@ import {
 import type { Node as PMNode } from 'prosemirror-model';
 import {
   LayoutPainter,
+  pageGeometryFromPage,
   paintPages,
   type BlockLookup,
   type FootnoteRenderItem,
@@ -245,7 +246,11 @@ export function useLayoutPipeline(opts: UseLayoutPipelineOptions): UseLayoutPipe
           { pageSize, margins, columns },
           { pageSize: finalPageSize, margins: finalMargins, columns: finalColumns }
         );
-        const newMeasures = measureBlocks(newBlocks, blockWidths);
+        const newMeasures = measureBlocks(
+          newBlocks,
+          blockWidths,
+          pageGeometryFromPage({ size: pageSize, margins })
+        );
         stepTime = performance.now() - stepStart;
         if (stepTime > 1000) {
           console.warn(
