@@ -9,6 +9,7 @@
 
 import type { EditorState } from 'prosemirror-state';
 import {
+  clipRectToTableWindow,
   findBodyEmptyRuns,
   collectBodySpans,
   type CaretPosition,
@@ -135,17 +136,26 @@ export function computeSelectionGeometryFromDom(
 
     if (docTo <= from || docFrom >= to) continue;
 
-    if (spanEl.classList.contains('layout-run-tab')) {
-      const spanRect = spanEl.getBoundingClientRect();
-      const pageEl = spanEl.closest('.layout-page');
-      const pageIndex = pageEl ? Number((pageEl as HTMLElement).dataset.pageNumber) - 1 : 0;
+    // Clip each rect to the enclosing split-table's visible window so selecting
+    // across a page-broken table doesn't scatter boxes into the inter-page gap
+    // (getClientRects reports geometry for lines hidden by the table's
+    // overflow:hidden). Shared with the Vue path via clipRectToTableWindow.
+    const pageEl = spanEl.closest('.layout-page');
+    const pageIndex = pageEl ? Number((pageEl as HTMLElement).dataset.pageNumber) - 1 : 0;
+    const pushClipped = (rect: { left: number; top: number; right: number; bottom: number }) => {
+      const clipped = clipRectToTableWindow(spanEl, rect);
+      if (!clipped) return;
       domRects.push({
-        x: (spanRect.left - overlayRect.left) / zoom,
-        y: (spanRect.top - overlayRect.top) / zoom,
-        width: spanRect.width / zoom,
-        height: spanRect.height / zoom,
+        x: (clipped.left - overlayRect.left) / zoom,
+        y: (clipped.top - overlayRect.top) / zoom,
+        width: (clipped.right - clipped.left) / zoom,
+        height: (clipped.bottom - clipped.top) / zoom,
         pageIndex,
       });
+    };
+
+    if (spanEl.classList.contains('layout-run-tab')) {
+      pushClipped(spanEl.getBoundingClientRect());
       continue;
     }
 
@@ -174,15 +184,7 @@ export function computeSelectionGeometryFromDom(
 
     const clientRects = range.getClientRects();
     for (const rect of Array.from(clientRects)) {
-      const pageEl = spanEl.closest('.layout-page');
-      const pageIndex = pageEl ? Number((pageEl as HTMLElement).dataset.pageNumber) - 1 : 0;
-      domRects.push({
-        x: (rect.left - overlayRect.left) / zoom,
-        y: (rect.top - overlayRect.top) / zoom,
-        width: rect.width / zoom,
-        height: rect.height / zoom,
-        pageIndex,
-      });
+      pushClipped(rect);
     }
   }
 
