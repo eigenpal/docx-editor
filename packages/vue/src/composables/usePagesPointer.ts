@@ -15,7 +15,7 @@ import { onBeforeUnmount, onMounted, ref, shallowRef, type Ref, type ShallowRef 
 import type { EditorView } from 'prosemirror-view';
 import { TextSelection, NodeSelection } from 'prosemirror-state';
 import type { HeaderFooter, BlockContent } from '@eigenpal/docx-editor-core/types/content';
-import type { Document } from '@eigenpal/docx-editor-core/types/document';
+import type { Document, SectionProperties } from '@eigenpal/docx-editor-core/types/document';
 import { findImageElement } from '@eigenpal/docx-editor-core/layout-painter';
 import {
   detectTableInsertHover,
@@ -470,16 +470,60 @@ export function usePagesPointer(opts: UsePagesPointerOptions): UsePagesPointerRe
   function handleHfRemove() {
     const doc = opts.getDocument();
     const edit = hfEdit.value;
-    if (!doc?.package || !edit || !edit.rId) return;
-    const map = edit.position === 'header' ? doc.package.headers : doc.package.footers;
-    const existing = map?.get(edit.rId);
-    if (existing) {
-      existing.content = [];
+    if (!doc?.package || !edit || !edit.rId) {
+      hfEdit.value = null;
+      return;
     }
+    // Actually remove the header/footer (mirror React's
+    // useHeaderFooterEditing.handleRemoveHeaderFooter): drop the part from
+    // the headers/footers map AND strip every section reference that points
+    // at it. Clearing `content` alone (the old behavior) left an empty
+    // header/footer still referenced by the section, so it kept rendering.
+    const mapKey = edit.position === 'header' ? 'headers' : 'footers';
+    const refKey = edit.position === 'header' ? 'headerReferences' : 'footerReferences';
+    const rId = edit.rId;
+
+    const newMap = new Map(doc.package[mapKey] ?? []);
+    newMap.delete(rId);
+
+    // Strip the reference everywhere a section can carry it: each
+    // sections[].properties, finalSectionProperties, and any mid-body
+    // section break (a paragraph's pPr/sectPr in body.content). The painter
+    // and serializer read from these, so the ref must be gone from all of
+    // them or the header/footer keeps rendering or re-serializes.
+    const stripRefs = (sp: SectionProperties): SectionProperties => ({
+      ...sp,
+      [refKey]: (sp[refKey] ?? []).filter((r) => r.rId !== rId),
+    });
+    const stripBlock = <T extends BlockContent>(block: T): T =>
+      'sectionProperties' in block && block.sectionProperties
+        ? { ...block, sectionProperties: stripRefs(block.sectionProperties) }
+        : block;
+
+    const body = doc.package.document;
+    const newDoc: Document = {
+      ...doc,
+      package: {
+        ...doc.package,
+        [mapKey]: newMap,
+        document: body
+          ? {
+              ...body,
+              content: body.content.map(stripBlock),
+              sections: body.sections?.map((s) => ({ ...s, properties: stripRefs(s.properties) })),
+              finalSectionProperties: body.finalSectionProperties
+                ? stripRefs(body.finalSectionProperties)
+                : body.finalSectionProperties,
+            }
+          : body,
+      },
+    };
+
     hfEdit.value = null;
+    opts.setDocument?.(newDoc);
     opts.syncHfPMs?.();
     opts.reLayout();
-    opts.emit('change', doc);
+    opts.emit('change', newDoc);
   }
 
   function handlePagesMouseDown(event: MouseEvent) {
