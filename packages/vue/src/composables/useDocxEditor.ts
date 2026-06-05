@@ -39,7 +39,6 @@ import {
   createStarterKit,
 } from '@eigenpal/docx-editor-core/prosemirror/extensions';
 import type { CommandMap } from '@eigenpal/docx-editor-core/prosemirror/extensions/types';
-import { buildBoxTree } from '@eigenpal/docx-editor-core/layout-bridge/buildBoxTree';
 import {
   measureBlocksWithFloats,
   paragraphLayout,
@@ -50,19 +49,17 @@ import type {
 } from '@eigenpal/docx-editor-core/layout-bridge/measuring';
 import {
   measureTable,
-  convertHeaderFooterToContent,
-  convertHeaderFooterPmDocToContent,
-  extendMarginsForHeaderFooter,
   getPageSize,
   getMargins,
+  getColumns,
   resolveHeaderFooter,
-  collectFootnoteRefs,
-  buildFootnoteContentMap,
-  buildFootnoteRenderItems,
-  stabilizeFootnoteLayout,
 } from '@eigenpal/docx-editor-core/layout-bridge';
 import {
-  layOutPages,
+  computeLayout,
+  createLayoutScheduler,
+  stripScrollFlag,
+} from '@eigenpal/docx-editor-core/editor';
+import {
   DEFAULT_TEXTBOX_MARGINS,
   DEFAULT_TEXTBOX_WIDTH,
   assertExhaustiveFlowBlock,
@@ -70,7 +67,6 @@ import {
 import { paintPages } from '@eigenpal/docx-editor-core/layout-painter/paintPage';
 import type {
   FlowBlock,
-  FootnoteContent,
   Layout,
   Measure,
   ParagraphBlock,
@@ -78,11 +74,10 @@ import type {
   ImageBlock,
   TextBoxBlock,
 } from '@eigenpal/docx-editor-core/layout-engine/types';
-import type { BlockLookup, HeaderFooterContent } from '@eigenpal/docx-editor-core/layout-painter';
 import {
+  buildBlockLookup,
   enclosingSdtGroupIds,
   applySdtFocus,
-  pageGeometryFromPage,
 } from '@eigenpal/docx-editor-core/layout-painter';
 import type { Document } from '@eigenpal/docx-editor-core/types/document';
 import type { SelectionBridge } from '@eigenpal/docx-editor-core/prosemirror';
@@ -173,7 +168,7 @@ function measureBlock(
 
 function measureBlocks(
   blocks: FlowBlock[],
-  contentWidth: number,
+  contentWidth: number | number[],
   pageGeometry?: FloatPageGeometry
 ): Measure[] {
   return measureBlocksWithFloats(blocks, contentWidth, measureBlock, pageGeometry);
@@ -317,151 +312,63 @@ export function useDocxEditor(options: UseDocxEditorOptions): UseDocxEditorRetur
     const initialSp = body?.sections?.[0]?.properties ?? body?.finalSectionProperties ?? null;
     const finalSp = body?.finalSectionProperties ?? initialSp;
     const pageSize = getPageSize(initialSp);
-    let margins = getMargins(initialSp);
+    const margins = getMargins(initialSp);
     const finalPageSize = getPageSize(finalSp);
-    let finalMargins = getMargins(finalSp);
+    const finalMargins = getMargins(finalSp);
+    const columns = getColumns(initialSp);
+    const finalColumns = getColumns(finalSp);
     const contentWidth = pageSize.w - margins.left - margins.right;
-    const pageContentHeight = pageSize.h - margins.top - margins.bottom;
     const theme = document.value.package?.theme ?? null;
     const styles = document.value.package?.styles ?? null;
 
     try {
-      // Step 1: PM doc → flow blocks
-      const blocks = buildBoxTree(state.doc, { theme, pageContentHeight });
-
-      // Step 2: Measure blocks
-      const measures = measureBlocks(
-        blocks,
-        contentWidth,
-        pageGeometryFromPage({ size: pageSize, margins })
-      );
-
-      // Step 3: Resolve and measure header/footer content (#400 port).
-      // Routes through the shared core helper so HF rendering matches
-      // React's PagedEditor byte-for-byte.
+      // Steps 1-5 (blocks → measure → HF resolve → margin extend → layout →
+      // footnote items) are the shared compute pass in core/editor. Paint +
+      // container styling + SDT focus stay here. Routing through the same
+      // `computeLayout` as React keeps the adapters in lockstep and gives Vue
+      // column / per-block-width support it lacked.
       const { header, footer, firstHeader, firstFooter } = resolveHeaderFooter(
         document.value,
         initialSp
       );
-      const hfMetricsHeader = { section: 'header' as const, pageSize, margins };
-      const hfMetricsFooter = { section: 'footer' as const, pageSize, margins };
-      // Core's `convertHeaderFooterToContent` (post-#379-382) takes a
-      // single options object with `measureBlocks` (plural) instead of
-      // the per-block callback the earlier version used. The pipeline
-      // calls `measureBlocks(normalizedBlocks, contentWidth)` once per
-      // HF flow.
-      const defaultTabMarkTwips = state.doc.attrs?.defaultTabMarkTwips as number | null;
-      const hfOptions = { styles, theme, measureBlocks, defaultTabMarkTwips };
-
-      // HF unification (openspec changes/unify-hf-editing): when a
-      // persistent hidden HF EditorView is mounted for a HeaderFooter,
-      // route through `convertHeaderFooterPmDocToContent` so the painter
-      // reflects the PM's live doc instead of the Document model snapshot.
-      // Mirror of React's `useLayoutPipeline.convertHf` branch.
-      const convertHf = (
-        hf: import('@eigenpal/docx-editor-core/types/document').HeaderFooter | null | undefined,
-        metrics: typeof hfMetricsHeader | typeof hfMetricsFooter
-      ): HeaderFooterContent | undefined => {
-        if (!hf) return undefined;
-        const view = getHfPmView(hf);
-        if (view) {
-          return convertHeaderFooterPmDocToContent(
-            view.state.doc,
-            contentWidth,
-            metrics,
-            hfOptions
-          );
-        }
-        return convertHeaderFooterToContent(hf, contentWidth, metrics, hfOptions);
-      };
-
-      const headerContent = convertHf(header, hfMetricsHeader);
-      const footerContent = convertHf(footer, hfMetricsFooter);
-      const hasTitlePg = initialSp?.titlePg === true;
-      const firstPageHeaderContent = hasTitlePg
-        ? convertHf(firstHeader, hfMetricsHeader)
-        : undefined;
-      const firstPageFooterContent = hasTitlePg
-        ? convertHf(firstFooter, hfMetricsFooter)
-        : undefined;
-
-      // The watermark rides PM state as a doc attr (so it's undoable); read it
-      // from there rather than the document model. Mirror of React's pipeline.
-      const watermark =
-        (state.doc.attrs?.watermark as
-          | import('@eigenpal/docx-editor-core/types/document').Watermark
-          | null) ?? undefined;
-
-      // Step 4: Extend margins when in-flow HF content overflows the authored
-      // header/footer space (#400 port). Band height comes from `flowHeight`,
-      // so page/margin-anchored floats (a letterhead) don't push the body
-      // (#705). Shared with React; mutates each `sectionBreak.margins` in place.
-      ({ margins, finalMargins } = extendMarginsForHeaderFooter({
+      const {
+        blocks,
+        measures,
+        layout: newLayout,
+        headerContentForRender,
+        footerContentForRender,
+        firstPageHeaderForRender,
+        firstPageFooterForRender,
+        hasTitlePg,
+        watermark,
+        footnotesByPage,
+      } = computeLayout({
+        state,
+        document: document.value,
         pageSize,
         margins,
-        finalMargins,
-        bodyBlocks: blocks,
-        headers: [headerContent, firstPageHeaderContent],
-        footers: [footerContent, firstPageFooterContent],
-        warn: (msg) => console.warn(`[useDocxEditor] ${msg}`),
-      }));
-
-      // Step 5: Layout. Two-pass when footnotes exist so per-page reserved
-      // heights can be subtracted from the page content area on pass 2.
-      const layoutOpts = {
-        pageSize,
-        margins,
+        columns,
         finalPageSize,
         finalMargins,
+        finalColumns,
         pageGap,
-      };
-
-      const footnoteRefs = collectFootnoteRefs(blocks);
-      const hasFootnotes = footnoteRefs.length > 0 && !!document.value.package?.footnotes;
-
-      let newLayout = layOutPages(blocks, measures, layoutOpts);
-      let pageFootnoteMap = new Map<number, number[]>();
-      let footnoteContentMap = new Map<number, FootnoteContent>();
-
-      if (hasFootnotes) {
-        // post-#378 footnote pipeline: pass styles/theme/measureBlocks
-        // through so footnote content is built via the body pipeline.
-        footnoteContentMap = buildFootnoteContentMap(
-          document.value.package!.footnotes!,
-          footnoteRefs,
-          contentWidth,
-          { styles, theme, measureBlocks, defaultTabMarkTwips }
-        );
-
-        // Pass 2+: multi-pass convergence loop lives in core so the React
-        // + Vue adapters stay in lockstep (see #485).
-        const stabilized = stabilizeFootnoteLayout({
-          blocks,
-          measures,
-          layoutOpts,
-          footnoteRefs,
-          footnoteContentMap,
-          initialLayout: newLayout,
-        });
-        newLayout = stabilized.layout;
-        pageFootnoteMap = stabilized.pageFootnoteMap;
-      }
+        contentWidth,
+        theme,
+        styles,
+        sectionProperties: initialSp,
+        finalSectionProperties: finalSp,
+        headerContent: header,
+        footerContent: footer,
+        firstPageHeaderContent: firstHeader,
+        firstPageFooterContent: firstFooter,
+        measureBlocks,
+        getHfPmDoc: (hf) => getHfPmView(hf)?.state.doc ?? null,
+      });
 
       layout.value = newLayout;
 
       // Step 6: Build block lookup and paint
-      const blockLookup: BlockLookup = new Map();
-      for (let i = 0; i < blocks.length; i++) {
-        const block = blocks[i];
-        const measure = measures[i];
-        if (block && measure) {
-          blockLookup.set(String(block.id), { block, measure });
-        }
-      }
-
-      const footnotesByPage = hasFootnotes
-        ? buildFootnoteRenderItems(pageFootnoteMap, footnoteContentMap, document.value)
-        : undefined;
+      const blockLookup = buildBlockLookup(blocks, measures);
 
       paintPages(newLayout.pages, container, {
         pageGap,
@@ -469,10 +376,10 @@ export function useDocxEditor(options: UseDocxEditorOptions): UseDocxEditorRetur
         pageBackground: '#fff',
         blockLookup,
         theme,
-        headerContent,
-        footerContent,
-        firstPageHeaderContent,
-        firstPageFooterContent,
+        headerContent: headerContentForRender,
+        footerContent: footerContentForRender,
+        firstPageHeaderContent: firstPageHeaderForRender,
+        firstPageFooterContent: firstPageFooterForRender,
         titlePage: hasTitlePg,
         watermark,
         footnotesByPage,
@@ -498,6 +405,11 @@ export function useDocxEditor(options: UseDocxEditorOptions): UseDocxEditorRetur
       syncCoordinator?.onLayoutComplete(layoutSeq);
     }
   }
+
+  // rAF-coalescing layout scheduler (shared with React via core). Body
+  // doc-change transactions schedule through this so a burst of keystrokes
+  // lays out once per frame instead of synchronously per keystroke.
+  const layoutScheduler = createLayoutScheduler(runLayoutPipeline);
 
   // ========================================================================
   // ProseMirror setup
@@ -539,15 +451,20 @@ export function useDocxEditor(options: UseDocxEditorOptions): UseDocxEditorRetur
       editable: () => !unref(readOnly),
       dispatchTransaction(transaction: Transaction) {
         if (!view) return;
+        // Paginated painter owns scroll; strip PM's scroll flag so updateState
+        // doesn't yank this hidden off-screen view's ancestors to the caret.
+        stripScrollFlag(transaction, view.state.tr);
         const newState = view.state.apply(transaction);
         view.updateState(newState);
         editorState.value = newState;
 
         // Snapshot marks at cursor for reactive toolbar state.
-        // Re-layout on doc changes
+        // Re-layout on doc changes — coalesced through the shared core
+        // scheduler so a burst of keystrokes lays out once per frame (the
+        // selection overlay waits via `syncCoordinator`, matching React).
         if (transaction.docChanged) {
           syncCoordinator?.incrementStateSeq();
-          runLayoutPipeline(newState);
+          layoutScheduler.schedule(newState);
           // Notify parent about document change
           try {
             if (document.value) {
@@ -601,6 +518,9 @@ export function useDocxEditor(options: UseDocxEditorOptions): UseDocxEditorRetur
   );
 
   function destroyEditorView() {
+    // Drop any pending coalesced layout frame so a reload (destroy → recreate)
+    // can't repaint the old document's state against the new document.
+    layoutScheduler.cancel();
     if (editorView.value) {
       editorView.value.destroy();
       editorView.value = null;
@@ -866,7 +786,7 @@ export function useDocxEditor(options: UseDocxEditorOptions): UseDocxEditorRetur
   }
 
   function destroy() {
-    destroyEditorView();
+    destroyEditorView(); // cancels the layout scheduler
     destroyHfPMs();
     document.value = null;
   }
