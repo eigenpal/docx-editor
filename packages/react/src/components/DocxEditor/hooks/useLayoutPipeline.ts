@@ -21,8 +21,6 @@ import {
   type FootnoteContent,
   type Layout,
   type Measure,
-  type PageMargins,
-  type SectionMarkerBlock,
 } from '@eigenpal/docx-editor-core/layout-engine';
 import { buildBoxTree } from '@eigenpal/docx-editor-core/layout-bridge';
 import {
@@ -31,6 +29,7 @@ import {
   collectFootnoteRefs,
   convertHeaderFooterToContent,
   convertHeaderFooterPmDocToContent,
+  extendMarginsForHeaderFooter,
   getMargins,
   getPageSize,
   stabilizeFootnoteLayout,
@@ -42,7 +41,6 @@ import {
   paintPages,
   type BlockLookup,
   type FootnoteRenderItem,
-  type HeaderFooterContent,
   type RenderPageOptions,
 } from '@eigenpal/docx-editor-core/layout-painter';
 import { findVerticalScrollParentOrRoot } from '@eigenpal/docx-editor-core/utils/findVerticalScrollParent';
@@ -303,50 +301,22 @@ export function useLayoutPipeline(opts: UseLayoutPipelineOptions): UseLayoutPipe
         // from there rather than the document model.
         const watermark = (state.doc.attrs?.watermark as Watermark | null) ?? undefined;
 
-        // Adjust margins if header/footer content exceeds available space
-        // (Word and Google Docs push body content down when header grows)
-        const headerDistance = margins.header ?? 48;
-        const footerDistance = margins.footer ?? 48;
-        const availableHeaderSpace = margins.top - headerDistance;
-        const availableFooterSpace = margins.bottom - footerDistance;
-        const hfHeight = (hf: HeaderFooterContent | undefined) =>
-          hf ? (hf.visualBottom ?? hf.height) : 0;
-        const hfFooterHeight = (hf: HeaderFooterContent | undefined) =>
-          hf ? Math.max((hf.visualBottom ?? hf.height) - (hf.visualTop ?? 0), hf.height) : 0;
-        const headerContentHeight = Math.max(
-          hfHeight(headerContentForRender),
-          hfHeight(firstPageHeaderForRender)
-        );
-        const footerContentHeight = Math.max(
-          hfFooterHeight(footerContentForRender),
-          hfFooterHeight(firstPageFooterForRender)
-        );
-
-        // Extend margins so body content gets pushed clear of header / footer.
-        // Apply to body-level fallback, finalMargins, and every per-sectionBreak margins.
-        const extendHeader = headerContentHeight > availableHeaderSpace;
-        const extendFooter = footerContentHeight > availableFooterSpace;
-        let effectiveMargins = margins;
-        let effectiveFinalMargins = finalMargins;
-        if (extendHeader || extendFooter) {
-          const extend = (m: PageMargins): PageMargins => {
-            const out = { ...m };
-            if (extendHeader) {
-              out.top = Math.max(m.top, headerDistance + headerContentHeight);
-            }
-            if (extendFooter) {
-              out.bottom = Math.max(m.bottom, footerDistance + footerContentHeight);
-            }
-            return out;
-          };
-          effectiveMargins = extend(margins);
-          effectiveFinalMargins = extend(finalMargins);
-          for (const block of newBlocks) {
-            if (block.kind !== 'sectionBreak') continue;
-            const sb = block as SectionMarkerBlock;
-            if (sb.margins) sb.margins = extend(sb.margins);
-          }
-        }
+        // Extend margins so body content clears the header / footer bands
+        // (Word pushes body content down when the in-flow header grows). The
+        // band height comes from `flowHeight` — page/margin-anchored floats
+        // (e.g. a letterhead) are positioned on the page and must NOT push the
+        // body (issue #705). Shared with the Vue pipeline; mutates each
+        // `sectionBreak.margins` in place.
+        const { margins: effectiveMargins, finalMargins: effectiveFinalMargins } =
+          extendMarginsForHeaderFooter({
+            pageSize,
+            margins,
+            finalMargins,
+            bodyBlocks: newBlocks,
+            headers: [headerContentForRender, firstPageHeaderForRender],
+            footers: [footerContentForRender, firstPageFooterForRender],
+            warn: (msg) => console.warn(`[PagedEditor] ${msg}`),
+          });
 
         // Step 3: Layout blocks onto pages (two-pass if footnotes exist)
         stepStart = performance.now();
