@@ -40,7 +40,7 @@ import {
   getSelectionInfo as getSelectionInfoImpl,
   getPageContent as getPageContentImpl,
 } from '../utils/refApiQueries';
-import { findParaIdRange } from '../utils/paraTextHelpers';
+import { findParaIdRange } from '@eigenpal/docx-editor-core/prosemirror/paraText';
 import type { DocxEditorRef } from '../components/DocxEditor/types';
 import type { ApplyFormattingOptions } from './useFormattingActions';
 

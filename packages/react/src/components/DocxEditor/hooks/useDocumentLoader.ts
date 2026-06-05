@@ -6,7 +6,8 @@ import { DocumentAgent } from '@eigenpal/docx-editor-core/agent';
 import { loadDocumentFonts, type DocxInput } from '@eigenpal/docx-editor-core/utils';
 import type { UseHistoryReturn } from '../../../hooks/useHistory';
 import type { PagedEditorRef } from '../PagedEditor';
-import { bumpNextCommentIdAbove } from '../commentFactories';
+import type { CommentIdAllocator } from '../commentFactories';
+import { seedCommentAllocator } from '@eigenpal/docx-editor-core/prosemirror/commentIdAllocator';
 
 /**
  * Document lifecycle: load buffer / pre-parsed doc, keep the agent in
@@ -31,6 +32,7 @@ export function useDocumentLoader({
   onError,
   resetForNewDocument,
   commentsLoadedRef,
+  commentIdAllocator,
 }: {
   documentBuffer: DocxInput | null | undefined;
   initialDocument: Document | null | undefined;
@@ -48,6 +50,8 @@ export function useDocumentLoader({
   // `resetForNewDocument` (declared earlier in the parent) needs to clear
   // this ref on every load. Lifted out of the hook for that reason.
   commentsLoadedRef: React.RefObject<boolean>;
+  // Per-editor-instance ID allocator; seeded above the loaded doc's max ID.
+  commentIdAllocator: CommentIdAllocator;
 }) {
   // Monotonically increasing generation counter so a late `parseDocx`
   // result doesn't overwrite a newer load that started while we were
@@ -119,25 +123,28 @@ export function useDocumentLoader({
     if (commentsLoadedRef.current) return;
     const doc = history.state;
     if (!doc) return;
+    commentsLoadedRef.current = true;
     const bodyComments = doc.package?.document?.comments;
     if (bodyComments && bodyComments.length > 0) {
       setComments(bodyComments);
       setShowCommentsSidebar(true);
-      commentsLoadedRef.current = true;
-      let maxId = bodyComments.reduce((max, c) => Math.max(max, c.id), 0);
-      const view = pagedEditorRef.current?.getView();
-      if (view) {
-        view.state.doc.descendants((node) => {
-          for (const mark of node.marks) {
-            if (mark.attrs.revisionId != null) {
-              maxId = Math.max(maxId, mark.attrs.revisionId as number);
-            }
-          }
-        });
-      }
-      bumpNextCommentIdAbove(maxId);
     }
-  }, [history.state, pagedEditorRef, setComments, setShowCommentsSidebar, commentsLoadedRef]);
+    // Seed the shared allocator above every existing comment + revision ID —
+    // unconditionally, so a doc with tracked changes but no comments still
+    // can't allocate a revisionId that collides with an existing w:ins/w:del.
+    seedCommentAllocator(
+      commentIdAllocator,
+      bodyComments,
+      pagedEditorRef.current?.getView() ?? null
+    );
+  }, [
+    history.state,
+    pagedEditorRef,
+    setComments,
+    setShowCommentsSidebar,
+    commentsLoadedRef,
+    commentIdAllocator,
+  ]);
 
   return {
     loadParsedDocument,

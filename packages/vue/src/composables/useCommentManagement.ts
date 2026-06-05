@@ -18,8 +18,15 @@ import {
   acceptChangeById,
   rejectChangeById,
 } from '@eigenpal/docx-editor-core/prosemirror/commands';
-import { findParaIdRange, findTextInPmParagraph } from '../utils/paraTextHelpers';
-import { createComment as createCommentImpl } from './../utils/commentFactories';
+import {
+  addCommentToRange,
+  applyProposedChange,
+  createComment as createCommentCore,
+} from '@eigenpal/docx-editor-core/prosemirror/commentOps';
+import {
+  seedCommentAllocator,
+  type CommentIdAllocator,
+} from '@eigenpal/docx-editor-core/prosemirror/commentIdAllocator';
 import type { TrackedChangeEntry } from '../components/sidebar/sidebarUtils';
 
 export interface UseCommentManagementOptions {
@@ -33,12 +40,26 @@ export interface UseCommentManagementOptions {
   contentChangeSubscribers: Set<(document: unknown) => void>;
   extractCommentsAndChanges: () => void;
   emit: (event: string, ...args: unknown[]) => void;
+  /**
+   * Per-editor-instance monotonic ID allocator, shared with
+   * `useCommentLifecycle` so comment and tracked-change IDs never collide.
+   */
+  commentIdAllocator: CommentIdAllocator;
 }
 
 export function useCommentManagement(opts: UseCommentManagementOptions) {
+  /** Seed the shared allocator above every ID currently in the document. */
+  function seedAllocator() {
+    seedCommentAllocator(
+      opts.commentIdAllocator,
+      opts.getDocument()?.package?.document?.comments,
+      opts.editorView.value
+    );
+  }
+
   function createComment(text: string, author: string, parentId?: number): Comment {
-    const doc = opts.getDocument();
-    return createCommentImpl(doc?.package?.document?.comments ?? [], text, author, parentId);
+    seedAllocator();
+    return createCommentCore(opts.commentIdAllocator, text, author, parentId);
   }
 
   function addComment(options: {
@@ -51,26 +72,13 @@ export function useCommentManagement(opts: UseCommentManagementOptions) {
     const view = opts.editorView.value;
     if (!doc?.package?.document || !view) return null;
     if (!doc.package.document.comments) doc.package.document.comments = [];
-    const commentMark = view.state.schema.marks.comment;
-    if (!commentMark) return null;
 
-    const range = findParaIdRange(view.state.doc, options.paraId);
-    if (!range) return null;
+    seedAllocator();
+    const comment = addCommentToRange(view, options, opts.commentIdAllocator);
+    if (!comment) return null;
 
-    let from = range.from + 1;
-    let to = range.to - 1;
-    if (options.search) {
-      const textRange = findTextInPmParagraph(view.state.doc, range.from, range.to, options.search);
-      if (!textRange) return null;
-      from = textRange.from;
-      to = textRange.to;
-    }
-    if (from >= to) return null;
-
-    const comment = createComment(options.text, options.author);
     doc.package.document.comments.push(comment);
     opts.comments.value = [...doc.package.document.comments];
-    view.dispatch(view.state.tr.addMark(from, to, commentMark.create({ commentId: comment.id })));
     opts.showSidebar.value = true;
     opts.emit('change', doc);
     opts.contentChangeSubscribers.forEach((listener) => listener(doc));
@@ -108,58 +116,13 @@ export function useCommentManagement(opts: UseCommentManagementOptions) {
   }): boolean {
     const view = opts.editorView.value;
     if (!view) return false;
-    const { schema } = view.state;
-    if (!schema.marks.deletion || !schema.marks.insertion) return false;
-    const range = findParaIdRange(view.state.doc, options.paraId);
-    if (!range) return false;
-
-    const isInsertion = options.search === '';
-    const isDeletion = options.replaceWith === '';
-    if (isInsertion && isDeletion) return false;
-
-    let textFrom: number;
-    let textTo: number;
-    if (isInsertion) {
-      textFrom = range.to - 1;
-      textTo = range.to - 1;
-    } else {
-      const textRange = findTextInPmParagraph(view.state.doc, range.from, range.to, options.search);
-      if (!textRange) return false;
-      textFrom = textRange.from;
-      textTo = textRange.to;
+    seedAllocator();
+    const ok = applyProposedChange(view, options, opts.commentIdAllocator);
+    if (ok) {
+      opts.extractCommentsAndChanges();
+      opts.showSidebar.value = true;
     }
-
-    let overlapsTrackedChange = false;
-    if (textFrom < textTo) {
-      view.state.doc.nodesBetween(textFrom, textTo, (node) => {
-        for (const mark of node.marks) {
-          if (mark.type === schema.marks.insertion || mark.type === schema.marks.deletion) {
-            overlapsTrackedChange = true;
-            return false;
-          }
-        }
-        return true;
-      });
-    }
-    if (overlapsTrackedChange) return false;
-
-    const revisionId =
-      Math.max(0, ...opts.trackedChanges.value.map((change) => change.revisionId)) + 1;
-    const date = new Date().toISOString();
-    const deletionMark = schema.marks.deletion.create({ revisionId, author: options.author, date });
-    const insertionMark = schema.marks.insertion.create({
-      revisionId,
-      author: options.author,
-      date,
-    });
-
-    let tr = view.state.tr;
-    if (!isInsertion) tr = tr.addMark(textFrom, textTo, deletionMark);
-    if (!isDeletion) tr = tr.insert(textTo, schema.text(options.replaceWith, [insertionMark]));
-    view.dispatch(tr);
-    opts.extractCommentsAndChanges();
-    opts.showSidebar.value = true;
-    return true;
+    return ok;
   }
 
   function handleCommentReply(commentId: number, text: string) {

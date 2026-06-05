@@ -8,11 +8,10 @@
 
 import { useCallback, useRef } from 'react';
 import { findVerticalScrollParent } from '@eigenpal/docx-editor-core/utils/findVerticalScrollParent';
-
-/** Pixel distance from container edge where auto-scroll activates. */
-const EDGE_ZONE = 40;
-/** Maximum scroll speed in pixels per frame (~60fps). */
-const MAX_SPEED = 12;
+import {
+  AUTO_SCROLL_EDGE_ZONE as EDGE_ZONE,
+  computeAutoScrollDelta,
+} from '@eigenpal/docx-editor-core/utils/autoScroll';
 
 export interface DragAutoScrollOptions {
   /** Ref to the pages container (used to find the scroll parent). */
@@ -55,17 +54,7 @@ export function useDragAutoScroll({
     const rect = container.getBoundingClientRect();
     const { x: mx, y: my } = lastMouseRef.current;
 
-    let scrollDelta = 0;
-
-    if (my < rect.top + EDGE_ZONE) {
-      // Near top edge — scroll up
-      const proximity = Math.max(0, rect.top + EDGE_ZONE - my);
-      scrollDelta = -Math.min(MAX_SPEED, (proximity / EDGE_ZONE) * MAX_SPEED);
-    } else if (my > rect.bottom - EDGE_ZONE) {
-      // Near bottom edge — scroll down
-      const proximity = Math.max(0, my - (rect.bottom - EDGE_ZONE));
-      scrollDelta = Math.min(MAX_SPEED, (proximity / EDGE_ZONE) * MAX_SPEED);
-    }
+    const scrollDelta = computeAutoScrollDelta(rect, my);
 
     if (scrollDelta !== 0) {
       container.scrollTop += scrollDelta;

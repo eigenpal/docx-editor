@@ -119,6 +119,19 @@ Stable dataset attrs on painted DOM (CSS, queries, selection map depend on these
 | Main toolbar                | `components/Toolbar.tsx`                                        |
 | Editor CSS                  | `prosemirror/editor.css`                                        |
 
+Shared React/Vue orchestration lives in core (issue #696, Tier 1) — adapters re-export or delegate, so grepping an adapter lands on a thin wrapper:
+
+| Shared op                           | Core module (in `@eigenpal/docx-editor-core`) |
+| ----------------------------------- | --------------------------------------------- |
+| paraId/text helpers                 | `prosemirror/paraText.ts`                     |
+| ref-API queries (find/selInfo/page) | `prosemirror/queries.ts`                      |
+| agent applyFormatting/setParaStyle  | `prosemirror/applyFormatting.ts`              |
+| comment/proposeChange + ID alloc    | `prosemirror/commentOps.ts`                   |
+| table-resize read/commit + twips    | `prosemirror/tableResize.ts`                  |
+| image resize/drag PM commits        | `prosemirror/imageCommit.ts`                  |
+| cell-selection highlight            | `layout-bridge/cellSelectionHighlight.ts`     |
+| drag auto-scroll delta math         | `utils/autoScroll.ts`                         |
+
 ### Extensions
 
 `src/prosemirror/extensions/` — `nodes/`, `marks/`, `features/`. `StarterKit.ts` bundles all. `ExtensionManager.buildSchema()` (sync) → `initializeRuntime()` (post EditorState). Singleton in `schema/index.ts`.

@@ -439,6 +439,7 @@ import { SIDEBAR_DOCUMENT_SHIFT } from '@eigenpal/docx-editor-core/utils';
 import { useFontLifecycle } from '../composables/useFontLifecycle';
 import { SelectionBridge } from '@eigenpal/docx-editor-core/prosemirror';
 import { extractSelectionContext } from '@eigenpal/docx-editor-core/prosemirror/plugins/selectionTracker';
+import { createCommentIdAllocator } from '@eigenpal/docx-editor-core/prosemirror/commentIdAllocator';
 
 const props = withDefaults(defineProps<DocxEditorProps>(), {
   documentBuffer: null,
@@ -756,6 +757,11 @@ const bookmarkOptions = computed(() => {
   return options.sort((a, b) => a.name.localeCompare(b.name));
 });
 
+// One comment/revision ID allocator per editor instance (monotonic, no reuse),
+// shared by the comment lifecycle and management composables so comment and
+// tracked-change IDs never collide.
+const commentIdAllocator = createCommentIdAllocator();
+
 // Comment lifecycle: declared before useFileIO so IO can call extractCommentsAndChanges.
 const {
   floatingCommentBtn,
@@ -782,6 +788,7 @@ const {
   pagesRef,
   pagesViewportRef,
   emit,
+  commentIdAllocator,
 });
 
 const {
@@ -884,6 +891,7 @@ const {
   contentChangeSubscribers,
   extractCommentsAndChanges,
   emit,
+  commentIdAllocator,
 });
 
 // Composable order (TDZ-sensitive): useImageActions → usePagesPointer → useContextMenus → useSelectionSync → useDocxEditorRefApi.

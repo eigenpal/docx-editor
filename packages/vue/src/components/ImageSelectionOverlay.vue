@@ -54,6 +54,12 @@ import type { EditorView } from 'prosemirror-view';
 import { NodeSelection } from 'prosemirror-state';
 import { pixelsToEmu } from '@eigenpal/docx-editor-core/utils';
 import { resolveDomPosition } from '@eigenpal/docx-editor-core/layout-bridge/resolveDomPosition';
+import {
+  isFloatingImage,
+  commitImageResize,
+  commitImageFloatMove,
+  commitImageInlineMove,
+} from '@eigenpal/docx-editor-core/prosemirror/imageCommit';
 import { findBodyPmAnchor } from '@eigenpal/docx-editor-core/layout-bridge';
 import { findImageElement } from '@eigenpal/docx-editor-core/layout-painter';
 import { Z_INDEX } from '../styles/zIndex';
@@ -432,24 +438,11 @@ function onResizeEnd() {
     return;
   }
 
-  const node = getImageNode(v, info.pmPos);
-  if (node) {
-    try {
-      v.dispatch(
-        v.state.tr.setNodeMarkup(info.pmPos, undefined, {
-          ...node.attrs,
-          width: currentWidth.value,
-          height: currentHeight.value,
-        })
-      );
-      // `setNodeMarkup` doesn't reliably keep the NodeSelection on the node, so
-      // re-assert it (mirrors React's `setNodeSelection` after resize). Without
-      // this the selection collapses to a text caret and the overlay clears.
-      reselectImage(info.pmPos);
-    } catch {
-      // Position might be invalid after concurrent edits
-    }
-  }
+  // `setNodeMarkup` doesn't reliably keep the NodeSelection on the node, so
+  // re-assert it (mirrors React's `setNodeSelection` after resize). Without
+  // this the selection collapses to a text caret and the overlay clears.
+  const sel = commitImageResize(v, info.pmPos, currentWidth.value, currentHeight.value);
+  if (sel !== null) reselectImage(sel);
   // Re-derive the rect from the freshly painted element.
   nextTick(() => updatePosition());
 }
@@ -631,72 +624,40 @@ function commitDragMove(clientX: number, clientY: number) {
   const node = getImageNode(v, info.pmPos);
   if (!node) return;
 
-  const wrapType = node.attrs.wrapType as string | undefined;
-  const isFloating =
-    node.attrs.displayMode === 'float' ||
-    (wrapType ? ['square', 'tight', 'through'].includes(wrapType) : false);
+  if (isFloatingImage(node)) {
+    const viewport = overlayRootRef.value?.closest('.docx-editor-vue__pages-viewport');
+    const pages = viewport?.querySelectorAll<HTMLElement>('.layout-page');
+    if (!pages || pages.length === 0) return;
 
-  try {
-    if (isFloating) {
-      const viewport = overlayRootRef.value?.closest('.docx-editor-vue__pages-viewport');
-      const pages = viewport?.querySelectorAll<HTMLElement>('.layout-page');
-      if (!pages || pages.length === 0) return;
-
-      let contentEl: HTMLElement | null = null;
-      for (const page of pages) {
-        const r = page.getBoundingClientRect();
-        if (clientY >= r.top && clientY <= r.bottom) {
-          contentEl = page.querySelector<HTMLElement>('.layout-page-content');
-          break;
-        }
-      }
-      if (!contentEl) {
-        contentEl = pages[pages.length - 1].querySelector<HTMLElement>('.layout-page-content');
-      }
-      if (!contentEl) return;
-
-      const contentRect = contentEl.getBoundingClientRect();
-      const z = props.zoom;
-      const dropX = (clientX - contentRect.left) / z;
-      const dropY = (clientY - contentRect.top) / z;
-      const newPosition = {
-        horizontal: { posOffset: pixelsToEmu(dropX), relativeTo: 'margin' },
-        vertical: { posOffset: pixelsToEmu(dropY), relativeTo: 'margin' },
-      };
-
-      const tr = v.state.tr.setNodeMarkup(info.pmPos, undefined, {
-        ...node.attrs,
-        position: newPosition,
-      });
-      v.dispatch(tr);
-      reselectImage(info.pmPos);
-    } else {
-      // Map the drop point to a PM position via the *visible pages* hit-test —
-      // the hidden ProseMirror lives off-screen, so `view.posAtCoords` would
-      // never intersect it. Mirrors how the editor places the caret on click.
-      const pagesEl = getPagesEl();
-      if (!pagesEl) return;
-      const dropPos = resolveDomPosition(pagesEl, clientX, clientY, 1);
-      if (dropPos == null || dropPos < 0) return;
-      if (dropPos === info.pmPos || dropPos === info.pmPos + 1) return;
-
-      let tr = v.state.tr;
-      const size = node.nodeSize;
-      if (dropPos <= info.pmPos) {
-        tr = tr.delete(info.pmPos, info.pmPos + size);
-        tr = tr.insert(dropPos, node);
-        v.dispatch(tr);
-        reselectImage(dropPos);
-      } else {
-        tr = tr.delete(info.pmPos, info.pmPos + size);
-        const adjusted = Math.min(dropPos - size, tr.doc.content.size);
-        tr = tr.insert(adjusted, node);
-        v.dispatch(tr);
-        reselectImage(Math.min(adjusted, v.state.doc.content.size - 1));
+    let contentEl: HTMLElement | null = null;
+    for (const page of pages) {
+      const r = page.getBoundingClientRect();
+      if (clientY >= r.top && clientY <= r.bottom) {
+        contentEl = page.querySelector<HTMLElement>('.layout-page-content');
+        break;
       }
     }
-  } catch {
-    /* position invalid after concurrent edits */
+    if (!contentEl) {
+      contentEl = pages[pages.length - 1].querySelector<HTMLElement>('.layout-page-content');
+    }
+    if (!contentEl) return;
+
+    const contentRect = contentEl.getBoundingClientRect();
+    const z = props.zoom;
+    const hEmu = pixelsToEmu((clientX - contentRect.left) / z);
+    const vEmu = pixelsToEmu((clientY - contentRect.top) / z);
+    const sel = commitImageFloatMove(v, info.pmPos, hEmu, vEmu);
+    if (sel !== null) reselectImage(sel);
+  } else {
+    // Map the drop point to a PM position via the *visible pages* hit-test —
+    // the hidden ProseMirror lives off-screen, so `view.posAtCoords` would
+    // never intersect it. Mirrors how the editor places the caret on click.
+    const pagesEl = getPagesEl();
+    if (!pagesEl) return;
+    const dropPos = resolveDomPosition(pagesEl, clientX, clientY, 1);
+    if (dropPos == null || dropPos < 0) return;
+    const sel = commitImageInlineMove(v, info.pmPos, dropPos);
+    if (sel !== null) reselectImage(sel);
   }
   nextTick(() => updatePosition());
 }

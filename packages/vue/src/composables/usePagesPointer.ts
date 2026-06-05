@@ -30,6 +30,7 @@ import {
 import type { ImageSelectionInfo } from '../components/imageSelectionTypes';
 import type { Layout } from '@eigenpal/docx-editor-core/layout-engine';
 import type { HyperlinkPopupData } from '../components/ui/hyperlinkPopupTypes';
+import { useDragAutoScroll } from './useDragAutoScroll';
 
 type TableResizeApi = {
   tryStartResize: (e: MouseEvent, view: EditorView) => boolean;
@@ -140,6 +141,17 @@ export function usePagesPointer(opts: UsePagesPointerOptions): UsePagesPointerRe
   // ─── Drag-to-select ─────────────────────────────────────────────────────
   let isDragging = false;
   let dragAnchor: number | null = null;
+
+  // Auto-scroll when a drag-select reaches the top/bottom edge of the scroll
+  // container, extending the selection as it scrolls (parity with React).
+  const dragAutoScroll = useDragAutoScroll({
+    pagesContainer: opts.pagesRef,
+    onScrollExtendSelection: (clientX, clientY) => {
+      if (!isDragging || dragAnchor === null) return;
+      const pos = resolvePos(clientX, clientY);
+      if (pos !== null && pos !== dragAnchor) setPmSelection(dragAnchor, pos);
+    },
+  });
 
   // ─── Page-indicator overlay ─────────────────────────────────────────────
   const scrollPageInfo = ref<ScrollPageInfo>({ currentPage: 1, totalPages: 1, visible: false });
@@ -637,10 +649,13 @@ export function usePagesPointer(opts: UsePagesPointerOptions): UsePagesPointerRe
     if (pos !== null && pos !== dragAnchor) {
       setPmSelection(dragAnchor, pos);
     }
+    // Drive edge auto-scroll while dragging.
+    dragAutoScroll.updateMousePosition(event.clientX, event.clientY);
   }
 
   function handleMouseUp() {
     isDragging = false;
+    dragAutoScroll.stopAutoScroll();
   }
 
   function handleViewportScroll() {

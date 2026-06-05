@@ -10,9 +10,10 @@
  */
 import { onBeforeUnmount, type Ref } from 'vue';
 import { findVerticalScrollParent } from '@eigenpal/docx-editor-core/utils/findVerticalScrollParent';
-
-const EDGE_ZONE = 40;
-const MAX_SPEED = 12;
+import {
+  AUTO_SCROLL_EDGE_ZONE as EDGE_ZONE,
+  computeAutoScrollDelta,
+} from '@eigenpal/docx-editor-core/utils/autoScroll';
 
 export interface DragAutoScrollOptions {
   pagesContainer: Ref<HTMLElement | null>;
@@ -57,14 +58,7 @@ export function useDragAutoScroll({
     if (!container) return;
 
     const rect = container.getBoundingClientRect();
-    let scrollDelta = 0;
-    if (lastMouseY < rect.top + EDGE_ZONE) {
-      const proximity = Math.max(0, rect.top + EDGE_ZONE - lastMouseY);
-      scrollDelta = -Math.min(MAX_SPEED, (proximity / EDGE_ZONE) * MAX_SPEED);
-    } else if (lastMouseY > rect.bottom - EDGE_ZONE) {
-      const proximity = Math.max(0, lastMouseY - (rect.bottom - EDGE_ZONE));
-      scrollDelta = Math.min(MAX_SPEED, (proximity / EDGE_ZONE) * MAX_SPEED);
-    }
+    const scrollDelta = computeAutoScrollDelta(rect, lastMouseY);
 
     if (scrollDelta !== 0) {
       container.scrollTop += scrollDelta;
