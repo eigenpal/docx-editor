@@ -67,6 +67,13 @@ A synthetic document containing dense bottom-of-page footnote references with
 long citation-like note text. Used to verify that final footnote reservation and
 painted footnote height agree so notes do not run off the page.
 
+### footnote-overlap-regression.docx
+
+A synthetic document containing neutral filler paragraphs with dense short
+footnote references around page boundaries. Used to verify that references in
+split paragraph fragments are mapped to the page containing their rendered
+line, so the painted footnote area does not overlap body text.
+
 ### endnotes-tracked-changes.docx
 
 A synthetic document with two body endnote references, separator and
@@ -96,6 +103,7 @@ To regenerate fixtures, run:
 bun run e2e/fixtures/generate-fixtures.ts
 bun scripts/create-issue-472-floating-textbox-fixture.mjs
 bun scripts/create-footnote-bottom-overflow-fixture.mjs
+bun scripts/create-footnote-overlap-regression-fixture.mjs
 bun scripts/create-empty-table-row-vmerge-fixture.mjs
 bun scripts/create-toc-hyperlink-fixture.mjs
 ```
