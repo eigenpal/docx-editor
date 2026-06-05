@@ -52,6 +52,7 @@ import {
   measureTable,
   convertHeaderFooterToContent,
   convertHeaderFooterPmDocToContent,
+  extendMarginsForHeaderFooter,
   getPageSize,
   getMargins,
   resolveHeaderFooter,
@@ -73,10 +74,8 @@ import type {
   Layout,
   Measure,
   ParagraphBlock,
-  SectionMarkerBlock,
   TableBlock,
   ImageBlock,
-  PageMargins,
   TextBoxBlock,
 } from '@eigenpal/docx-editor-core/layout-engine/types';
 import type { BlockLookup, HeaderFooterContent } from '@eigenpal/docx-editor-core/layout-painter';
@@ -393,44 +392,19 @@ export function useDocxEditor(options: UseDocxEditorOptions): UseDocxEditorRetur
           | import('@eigenpal/docx-editor-core/types/document').Watermark
           | null) ?? undefined;
 
-      // Step 4: Extend margins when HF content overflows the authored
-      // header/footer space (#400 port). Apply the extension to body
-      // margins, finalMargins, AND every per-`sectionBreak.margins` so
-      // multi-section docs paginate correctly — the layout engine prefers
-      // sb.margins over the body fallback.
-      const headerDistance = margins.header ?? 48;
-      const footerDistance = margins.footer ?? 48;
-      const availableHeaderSpace = margins.top - headerDistance;
-      const availableFooterSpace = margins.bottom - footerDistance;
-      const hfHeight = (hf: HeaderFooterContent | undefined) =>
-        hf ? (hf.visualBottom ?? hf.height) : 0;
-      const hfFooterHeight = (hf: HeaderFooterContent | undefined) =>
-        hf ? Math.max((hf.visualBottom ?? hf.height) - (hf.visualTop ?? 0), hf.height) : 0;
-      const headerContentHeight = Math.max(
-        hfHeight(headerContent),
-        hfHeight(firstPageHeaderContent)
-      );
-      const footerContentHeight = Math.max(
-        hfFooterHeight(footerContent),
-        hfFooterHeight(firstPageFooterContent)
-      );
-      const extendHeader = headerContentHeight > availableHeaderSpace;
-      const extendFooter = footerContentHeight > availableFooterSpace;
-      if (extendHeader || extendFooter) {
-        const extend = (m: PageMargins): PageMargins => {
-          const out = { ...m };
-          if (extendHeader) out.top = Math.max(m.top, headerDistance + headerContentHeight);
-          if (extendFooter) out.bottom = Math.max(m.bottom, footerDistance + footerContentHeight);
-          return out;
-        };
-        margins = extend(margins);
-        finalMargins = extend(finalMargins);
-        for (const block of blocks) {
-          if (block.kind !== 'sectionBreak') continue;
-          const sb = block as SectionMarkerBlock;
-          if (sb.margins) sb.margins = extend(sb.margins);
-        }
-      }
+      // Step 4: Extend margins when in-flow HF content overflows the authored
+      // header/footer space (#400 port). Band height comes from `flowHeight`,
+      // so page/margin-anchored floats (a letterhead) don't push the body
+      // (#705). Shared with React; mutates each `sectionBreak.margins` in place.
+      ({ margins, finalMargins } = extendMarginsForHeaderFooter({
+        pageSize,
+        margins,
+        finalMargins,
+        bodyBlocks: blocks,
+        headers: [headerContent, firstPageHeaderContent],
+        footers: [footerContent, firstPageFooterContent],
+        warn: (msg) => console.warn(`[useDocxEditor] ${msg}`),
+      }));
 
       // Step 5: Layout. Two-pass when footnotes exist so per-page reserved
       // heights can be subtracted from the page content area on pass 2.
