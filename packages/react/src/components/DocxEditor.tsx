@@ -507,6 +507,7 @@ import {
   PENDING_COMMENT_ID,
   EMPTY_ANCHOR_POSITIONS,
   createComment,
+  createCommentIdAllocator,
 } from './DocxEditor/commentFactories';
 
 /**
@@ -754,6 +755,11 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
   const commentsLoadedRef = useRef(false);
   const trackedChangesLoadedRef = useRef(false);
 
+  // One comment/revision ID allocator per editor instance (monotonic, no reuse).
+  // Seeded above the loaded doc's max ID on load; shared by every comment/
+  // tracked-change allocation in this component and its hooks.
+  const commentIdAllocatorRef = useRef(createCommentIdAllocator());
+
   const { resetForNewDocument } = useResetEditorState({
     commentsLoadedRef,
     trackedChangesLoadedRef,
@@ -786,6 +792,7 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
     onError,
     resetForNewDocument,
     commentsLoadedRef,
+    commentIdAllocator: commentIdAllocatorRef.current,
   });
 
   const {
@@ -1138,6 +1145,7 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
     contentChangeSubscribersRef,
     selectionChangeSubscribersRef,
     getCachedStyleResolver,
+    commentIdAllocator: commentIdAllocatorRef.current,
   });
 
   const initialSectionProperties = useMemo(
@@ -1191,7 +1199,7 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
   const commentCallbacksRef = useRef<CommentCallbacks>({});
   commentCallbacksRef.current = {
     onCommentReply: (id, text) => {
-      const reply = createComment(text, author, id);
+      const reply = createComment(commentIdAllocatorRef.current, text, author, id);
       const parent = comments.find((c) => c.id === id);
       setComments((prev) => [...prev, reply]);
       if (parent) onCommentReply?.(reply, parent);
@@ -1226,7 +1234,7 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
       if (target) onCommentDelete?.(target);
     },
     onAddComment: (addText) => {
-      const comment = createComment(addText, author);
+      const comment = createComment(commentIdAllocatorRef.current, addText, author);
       const view = pagedEditorRef.current?.getView();
       if (view && commentSelectionRange) {
         const { from, to } = commentSelectionRange;
@@ -1278,7 +1286,10 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
       if (view) rejectChangeById(revisionId)(view.state, view.dispatch);
     },
     onTrackedChangeReply: (revisionId, text) => {
-      setComments((prev) => [...prev, createComment(text, author, revisionId)]);
+      setComments((prev) => [
+        ...prev,
+        createComment(commentIdAllocatorRef.current, text, author, revisionId),
+      ]);
     },
   };
 

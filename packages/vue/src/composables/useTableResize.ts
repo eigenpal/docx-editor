@@ -16,11 +16,17 @@
  *     should invoke the returned cleanup on unmount.
  */
 import type { EditorView } from 'prosemirror-view';
-
-const PX_TO_TWIPS = 15;
-const MIN_COLUMN_WIDTH_TWIPS = 300; // ~0.2"
-const MIN_ROW_HEIGHT_TWIPS = 200; // ~0.14"
-const TWIPS_PER_RENDERED_PX = 15;
+import {
+  readColumnWidths,
+  readRowHeight,
+  readColumnWidthAt,
+  commitColumnResize,
+  commitRowResize,
+  commitRightEdgeResize,
+  TWIPS_PER_PIXEL,
+  MIN_CELL_WIDTH_TWIPS,
+  MIN_ROW_HEIGHT_TWIPS,
+} from '@eigenpal/docx-editor-core/prosemirror/tableResize';
 
 interface ColumnResizeState {
   active: boolean;
@@ -103,7 +109,7 @@ export function useTableResize(): UseTableResizeReturn {
       target.classList.add('dragging');
       col.columnIndex = parseInt(target.dataset.columnIndex ?? '0', 10);
       col.tablePmStart = parseInt(target.dataset.tablePmStart ?? '0', 10);
-      readColumnWidths(view, col);
+      seedColumnWidths(view, col);
       return true;
     }
 
@@ -121,7 +127,7 @@ export function useTableResize(): UseTableResizeReturn {
       target.classList.add('dragging');
       row.rowIndex = parseInt(target.dataset.rowIndex ?? '0', 10);
       row.tablePmStart = parseInt(target.dataset.tablePmStart ?? '0', 10);
-      readRowHeight(view, row, target);
+      seedRowHeight(view, row, target);
       return true;
     }
 
@@ -135,7 +141,7 @@ export function useTableResize(): UseTableResizeReturn {
       target.classList.add('dragging');
       edge.columnIndex = parseInt(target.dataset.columnIndex ?? '0', 10);
       edge.tablePmStart = parseInt(target.dataset.tablePmStart ?? '0', 10);
-      readRightEdgeWidth(view, edge);
+      seedRightEdgeWidth(view, edge);
       return true;
     }
 
@@ -149,10 +155,10 @@ export function useTableResize(): UseTableResizeReturn {
       const origLeft = parseFloat(col.handle.style.left);
       col.handle.style.left = `${origLeft + delta}px`;
       col.startX = e.clientX;
-      const deltaTwips = Math.round(delta * PX_TO_TWIPS);
+      const deltaTwips = Math.round(delta * TWIPS_PER_PIXEL);
       const newLeft = col.origWidths.left + deltaTwips;
       const newRight = col.origWidths.right - deltaTwips;
-      if (newLeft >= MIN_COLUMN_WIDTH_TWIPS && newRight >= MIN_COLUMN_WIDTH_TWIPS) {
+      if (newLeft >= MIN_CELL_WIDTH_TWIPS && newRight >= MIN_CELL_WIDTH_TWIPS) {
         col.origWidths = { left: newLeft, right: newRight };
       }
       return;
@@ -164,7 +170,7 @@ export function useTableResize(): UseTableResizeReturn {
       const origTop = parseFloat(row.handle.style.top);
       row.handle.style.top = `${origTop + delta}px`;
       row.startY = e.clientY;
-      const deltaTwips = Math.round(delta * PX_TO_TWIPS);
+      const deltaTwips = Math.round(delta * TWIPS_PER_PIXEL);
       const newHeight = row.origHeight + deltaTwips;
       if (newHeight >= MIN_ROW_HEIGHT_TWIPS) {
         row.origHeight = newHeight;
@@ -178,9 +184,9 @@ export function useTableResize(): UseTableResizeReturn {
       const origLeft = parseFloat(edge.handle.style.left);
       edge.handle.style.left = `${origLeft + delta}px`;
       edge.startX = e.clientX;
-      const deltaTwips = Math.round(delta * PX_TO_TWIPS);
+      const deltaTwips = Math.round(delta * TWIPS_PER_PIXEL);
       const newWidth = edge.origWidth + deltaTwips;
-      if (newWidth >= MIN_COLUMN_WIDTH_TWIPS) {
+      if (newWidth >= MIN_CELL_WIDTH_TWIPS) {
         edge.origWidth = newWidth;
       }
     }
@@ -190,21 +196,37 @@ export function useTableResize(): UseTableResizeReturn {
     if (col.active) {
       col.active = false;
       col.handle?.classList.remove('dragging');
-      if (viewRef) commitColumnResize(viewRef, col);
+      if (viewRef)
+        commitColumnResize(viewRef, {
+          docFrom: col.tablePmStart,
+          colIdx: col.columnIndex,
+          newLeft: col.origWidths.left,
+          newRight: col.origWidths.right,
+        });
       col.handle = null;
       return;
     }
     if (row.active) {
       row.active = false;
       row.handle?.classList.remove('dragging');
-      if (viewRef) commitRowResize(viewRef, row);
+      if (viewRef)
+        commitRowResize(viewRef, {
+          docFrom: row.tablePmStart,
+          rowIdx: row.rowIndex,
+          newHeight: row.origHeight,
+        });
       row.handle = null;
       return;
     }
     if (edge.active) {
       edge.active = false;
       edge.handle?.classList.remove('dragging');
-      if (viewRef) commitRightEdgeResize(viewRef, edge);
+      if (viewRef)
+        commitRightEdgeResize(viewRef, {
+          docFrom: edge.tablePmStart,
+          colIdx: edge.columnIndex,
+          newWidth: edge.origWidth,
+        });
       edge.handle = null;
     }
   }
@@ -221,179 +243,31 @@ export function useTableResize(): UseTableResizeReturn {
   return { tryStartResize, install, isResizing };
 }
 
-// ─── PM doc readers ────────────────────────────────────────────────────────
+// ─── FSM-state ⇆ core adapters ─────────────────────────────────────────────
+// The pure PM readers/commits live in core (shared with React). These thin
+// wrappers translate between Vue's FSM-state objects and core's explicit
+// param shape, and own the DOM row-height estimate when the row has no
+// stored height (matching React's FSM).
 
-function readColumnWidths(view: EditorView, col: ColumnResizeState) {
-  const $pos = view.state.doc.resolve(col.tablePmStart + 1);
-  for (let d = $pos.depth; d >= 0; d--) {
-    const node = $pos.node(d);
-    if (node.type.name === 'table') {
-      const widths = node.attrs.columnWidths as number[] | null;
-      if (
-        widths &&
-        widths[col.columnIndex] !== undefined &&
-        widths[col.columnIndex + 1] !== undefined
-      ) {
-        col.origWidths = {
-          left: widths[col.columnIndex],
-          right: widths[col.columnIndex + 1],
-        };
-      }
-      return;
-    }
-  }
+function seedColumnWidths(view: EditorView, col: ColumnResizeState) {
+  const w = readColumnWidths(view, col.tablePmStart, col.columnIndex);
+  if (w) col.origWidths = w;
 }
 
-function readRowHeight(view: EditorView, row: RowResizeState, target: HTMLElement) {
-  const $pos = view.state.doc.resolve(row.tablePmStart + 1);
-  for (let d = $pos.depth; d >= 0; d--) {
-    const node = $pos.node(d);
-    if (node.type.name === 'table') {
-      let rowNode: ReturnType<typeof node.child> | null = null;
-      let idx = 0;
-      node.forEach((child) => {
-        if (idx === row.rowIndex) rowNode = child;
-        idx++;
-      });
-      if (rowNode) {
-        const stored = (rowNode as ReturnType<typeof node.child>).attrs.height as number | null;
-        if (stored) {
-          row.origHeight = stored;
-        } else {
-          // Estimate from rendered height when row.height is null
-          const tableEl = target.closest('.layout-table');
-          const rowEl = tableEl?.querySelector(`[data-row-index="${row.rowIndex}"]`);
-          const renderedHeight = rowEl ? (rowEl as HTMLElement).getBoundingClientRect().height : 30;
-          row.origHeight = Math.round(renderedHeight * TWIPS_PER_RENDERED_PX);
-        }
-      }
-      return;
-    }
-  }
-}
-
-function readRightEdgeWidth(view: EditorView, edge: RightEdgeResizeState) {
-  const $pos = view.state.doc.resolve(edge.tablePmStart + 1);
-  for (let d = $pos.depth; d >= 0; d--) {
-    const node = $pos.node(d);
-    if (node.type.name === 'table') {
-      const widths = node.attrs.columnWidths as number[] | null;
-      if (widths && widths[edge.columnIndex] !== undefined) {
-        edge.origWidth = widths[edge.columnIndex];
-      }
-      return;
-    }
-  }
-}
-
-// ─── PM transactions ──────────────────────────────────────────────────────
-
-function commitColumnResize(view: EditorView, col: ColumnResizeState) {
-  const $pos = view.state.doc.resolve(col.tablePmStart + 1);
-  for (let d = $pos.depth; d >= 0; d--) {
-    const node = $pos.node(d);
-    if (node.type.name !== 'table') continue;
-
-    const tablePos = $pos.before(d);
-    const tr = view.state.tr;
-    const widths = [...((node.attrs.columnWidths as number[]) || [])];
-    widths[col.columnIndex] = col.origWidths.left;
-    widths[col.columnIndex + 1] = col.origWidths.right;
-
-    tr.setNodeMarkup(tablePos, undefined, {
-      ...node.attrs,
-      columnWidths: widths,
-    });
-
-    let rowOffset = tablePos + 1;
-    node.forEach((rowNode) => {
-      let cellOffset = rowOffset + 1;
-      let cellColIdx = 0;
-      rowNode.forEach((cell) => {
-        const colspan = (cell.attrs.colspan as number) || 1;
-        if (cellColIdx === col.columnIndex || cellColIdx === col.columnIndex + 1) {
-          const newWidth =
-            cellColIdx === col.columnIndex ? col.origWidths.left : col.origWidths.right;
-          tr.setNodeMarkup(tr.mapping.map(cellOffset), undefined, {
-            ...cell.attrs,
-            width: newWidth,
-            widthType: 'dxa',
-            colwidth: null,
-          });
-        }
-        cellOffset += cell.nodeSize;
-        cellColIdx += colspan;
-      });
-      rowOffset += rowNode.nodeSize;
-    });
-
-    view.dispatch(tr);
+function seedRowHeight(view: EditorView, row: RowResizeState, target: HTMLElement) {
+  const stored = readRowHeight(view, row.tablePmStart, row.rowIndex);
+  if (stored != null) {
+    row.origHeight = stored;
     return;
   }
+  // Estimate from rendered height when the row has no explicit height.
+  const tableEl = target.closest('.layout-table');
+  const rowEl = tableEl?.querySelector(`[data-row-index="${row.rowIndex}"]`);
+  const renderedHeight = rowEl ? (rowEl as HTMLElement).getBoundingClientRect().height : 30;
+  row.origHeight = Math.round(renderedHeight * TWIPS_PER_PIXEL);
 }
 
-function commitRowResize(view: EditorView, row: RowResizeState) {
-  const $pos = view.state.doc.resolve(row.tablePmStart + 1);
-  for (let d = $pos.depth; d >= 0; d--) {
-    const node = $pos.node(d);
-    if (node.type.name !== 'table') continue;
-
-    const tablePos = $pos.before(d);
-    const tr = view.state.tr;
-    let rowOffset = tablePos + 1;
-    let idx = 0;
-    node.forEach((rowNode) => {
-      if (idx === row.rowIndex) {
-        tr.setNodeMarkup(tr.mapping.map(rowOffset), undefined, {
-          ...rowNode.attrs,
-          height: row.origHeight,
-          heightRule: 'atLeast',
-        });
-      }
-      rowOffset += rowNode.nodeSize;
-      idx++;
-    });
-    view.dispatch(tr);
-    return;
-  }
-}
-
-function commitRightEdgeResize(view: EditorView, edge: RightEdgeResizeState) {
-  const $pos = view.state.doc.resolve(edge.tablePmStart + 1);
-  for (let d = $pos.depth; d >= 0; d--) {
-    const node = $pos.node(d);
-    if (node.type.name !== 'table') continue;
-
-    const tablePos = $pos.before(d);
-    const tr = view.state.tr;
-    const widths = [...((node.attrs.columnWidths as number[]) || [])];
-    widths[edge.columnIndex] = edge.origWidth;
-
-    tr.setNodeMarkup(tablePos, undefined, {
-      ...node.attrs,
-      columnWidths: widths,
-    });
-
-    let rowOffset = tablePos + 1;
-    node.forEach((rowNode) => {
-      let cellOffset = rowOffset + 1;
-      let cellColIdx = 0;
-      rowNode.forEach((cell) => {
-        const colspan = (cell.attrs.colspan as number) || 1;
-        if (cellColIdx === edge.columnIndex) {
-          tr.setNodeMarkup(tr.mapping.map(cellOffset), undefined, {
-            ...cell.attrs,
-            width: edge.origWidth,
-            widthType: 'dxa',
-            colwidth: null,
-          });
-        }
-        cellOffset += cell.nodeSize;
-        cellColIdx += colspan;
-      });
-      rowOffset += rowNode.nodeSize;
-    });
-    view.dispatch(tr);
-    return;
-  }
+function seedRightEdgeWidth(view: EditorView, edge: RightEdgeResizeState) {
+  const w = readColumnWidthAt(view, edge.tablePmStart, edge.columnIndex);
+  if (w != null) edge.origWidth = w;
 }

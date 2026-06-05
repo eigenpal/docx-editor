@@ -15,6 +15,12 @@
 import { useCallback } from 'react';
 
 import { pixelsToEmu } from '@eigenpal/docx-editor-core/utils';
+import {
+  isFloatingImage,
+  commitImageResize,
+  commitImageFloatMove,
+  commitImageInlineMove,
+} from '@eigenpal/docx-editor-core/prosemirror/imageCommit';
 
 import type { OffscreenEditorHostRef } from '../OffscreenEditorHost';
 
@@ -45,19 +51,8 @@ export function useImageInteractions(
     (pmPos: number, newWidth: number, newHeight: number) => {
       const view = hiddenPMRef.current?.getView();
       if (!view) return;
-      try {
-        const node = view.state.doc.nodeAt(pmPos);
-        if (!node || node.type.name !== 'image') return;
-        const tr = view.state.tr.setNodeMarkup(pmPos, undefined, {
-          ...node.attrs,
-          width: newWidth,
-          height: newHeight,
-        });
-        view.dispatch(tr);
-        hiddenPMRef.current?.setNodeSelection(pmPos);
-      } catch {
-        // Position may have shifted during resize.
-      }
+      const sel = commitImageResize(view, pmPos, newWidth, newHeight);
+      if (sel !== null) hiddenPMRef.current?.setNodeSelection(sel);
     },
     [hiddenPMRef]
   );
@@ -74,75 +69,40 @@ export function useImageInteractions(
     (pmPos: number, clientX: number, clientY: number) => {
       const view = hiddenPMRef.current?.getView();
       if (!view) return;
-      try {
-        const node = view.state.doc.nodeAt(pmPos);
-        if (!node || node.type.name !== 'image') return;
+      const node = view.state.doc.nodeAt(pmPos);
+      if (!node || node.type.name !== 'image') return;
 
-        const isFloating =
-          node.attrs.displayMode === 'float' ||
-          (node.attrs.wrapType &&
-            ['square', 'tight', 'through'].includes(node.attrs.wrapType as string));
+      if (isFloatingImage(node)) {
+        // Floating image: resolve the drop point's `.layout-page-content` and
+        // hand core the margin-relative EMU offsets.
+        const pages = pagesContainerRef.current?.querySelectorAll('.layout-page');
+        if (!pages || pages.length === 0) return;
 
-        if (isFloating) {
-          // Floating image: update wp:positionH/V offsets so the image lands
-          // at the drop point while staying floating.
-          const pages = pagesContainerRef.current?.querySelectorAll('.layout-page');
-          if (!pages || pages.length === 0) return;
-
-          let contentEl: HTMLElement | null = null;
-          for (const page of pages) {
-            const rect = page.getBoundingClientRect();
-            if (clientY >= rect.top && clientY <= rect.bottom) {
-              contentEl = page.querySelector('.layout-page-content') as HTMLElement;
-              break;
-            }
+        let contentEl: HTMLElement | null = null;
+        for (const page of pages) {
+          const rect = page.getBoundingClientRect();
+          if (clientY >= rect.top && clientY <= rect.bottom) {
+            contentEl = page.querySelector('.layout-page-content') as HTMLElement;
+            break;
           }
-          if (!contentEl) {
-            // Below all pages — fall back to the last page's content area.
-            contentEl = pages[pages.length - 1].querySelector(
-              '.layout-page-content'
-            ) as HTMLElement;
-          }
-          if (!contentEl) return;
-
-          const contentRect = contentEl.getBoundingClientRect();
-          const dropX = (clientX - contentRect.left) / zoom;
-          const dropY = (clientY - contentRect.top) / zoom;
-          const hOffsetEmu = pixelsToEmu(dropX);
-          const vOffsetEmu = pixelsToEmu(dropY);
-
-          const newPosition = {
-            horizontal: { posOffset: hOffsetEmu, relativeTo: 'margin' },
-            vertical: { posOffset: vOffsetEmu, relativeTo: 'margin' },
-          };
-
-          const tr = view.state.tr.setNodeMarkup(pmPos, undefined, {
-            ...node.attrs,
-            position: newPosition,
-          });
-          view.dispatch(tr);
-          hiddenPMRef.current?.setNodeSelection(pmPos);
-        } else {
-          // Inline image: move to the drop text position via delete + insert.
-          const dropPos = getPositionFromMouse(clientX, clientY);
-          if (dropPos === null) return;
-          if (dropPos === pmPos || dropPos === pmPos + 1) return;
-
-          let tr = view.state.tr;
-          if (dropPos <= pmPos) {
-            tr = tr.delete(pmPos, pmPos + node.nodeSize);
-            tr = tr.insert(dropPos, node);
-            hiddenPMRef.current?.setNodeSelection(dropPos);
-          } else {
-            tr = tr.delete(pmPos, pmPos + node.nodeSize);
-            const adjusted = dropPos - node.nodeSize;
-            tr = tr.insert(Math.min(adjusted, tr.doc.content.size), node);
-            hiddenPMRef.current?.setNodeSelection(Math.min(adjusted, tr.doc.content.size - 1));
-          }
-          view.dispatch(tr);
         }
-      } catch {
-        // Position may have shifted between the drag's frames.
+        if (!contentEl) {
+          // Below all pages — fall back to the last page's content area.
+          contentEl = pages[pages.length - 1].querySelector('.layout-page-content') as HTMLElement;
+        }
+        if (!contentEl) return;
+
+        const contentRect = contentEl.getBoundingClientRect();
+        const hOffsetEmu = pixelsToEmu((clientX - contentRect.left) / zoom);
+        const vOffsetEmu = pixelsToEmu((clientY - contentRect.top) / zoom);
+        const sel = commitImageFloatMove(view, pmPos, hOffsetEmu, vOffsetEmu);
+        if (sel !== null) hiddenPMRef.current?.setNodeSelection(sel);
+      } else {
+        // Inline image: hit-test the drop text position, core does delete+insert.
+        const dropPos = getPositionFromMouse(clientX, clientY);
+        if (dropPos === null) return;
+        const sel = commitImageInlineMove(view, pmPos, dropPos);
+        if (sel !== null) hiddenPMRef.current?.setNodeSelection(sel);
       }
     },
     [getPositionFromMouse, zoom, hiddenPMRef, pagesContainerRef]

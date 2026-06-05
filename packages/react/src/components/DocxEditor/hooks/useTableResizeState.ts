@@ -29,13 +29,12 @@ import {
   commitRightEdgeResize,
   commitRowResize,
   readColumnWidths,
-  readLastColumnWidth,
+  readColumnWidthAt,
   readRowHeight,
+  TWIPS_PER_PIXEL,
+  MIN_CELL_WIDTH_TWIPS,
+  MIN_ROW_HEIGHT_TWIPS,
 } from '../internals/tableResize';
-
-const TWIPS_PER_PIXEL = 15;
-const MIN_CELL_WIDTH_TWIPS = 300;
-const MIN_ROW_HEIGHT_TWIPS = 200;
 
 export interface UseTableResizeStateOptions {
   hiddenPMRef: React.RefObject<OffscreenEditorHostRef | null>;
@@ -161,7 +160,7 @@ export function useTableResizeState(opts: UseTableResizeStateOptions): UseTableR
         const colIndex = parseInt(target.dataset.columnIndex ?? '0', 10);
         resizeRightEdgeColIndexRef.current = colIndex;
         resizeRightEdgePmStartRef.current = parseInt(target.dataset.tablePmStart ?? '0', 10);
-        const w = readLastColumnWidth(view, resizeRightEdgePmStartRef.current, colIndex);
+        const w = readColumnWidthAt(view, resizeRightEdgePmStartRef.current, colIndex);
         if (w != null) resizeRightEdgeOrigWidthRef.current = w;
         return true;
       }
