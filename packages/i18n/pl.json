@@ -78,7 +78,9 @@
     "subscriptShortcut": "Indeks dolny (Ctrl+=)",
     "imageProperties": "Właściwości obrazu",
     "imagePropertiesShortcut": "Właściwości obrazu (tekst alternatywny, obramowanie)...",
-    "clearFormatting": "Wyczyść formatowanie"
+    "clearFormatting": "Wyczyść formatowanie",
+    "commentsAndChanges": null,
+    "moreItems": null
   },
   "alignment": {
     "alignLeft": "Wyrównaj do lewej",
@@ -103,7 +105,8 @@
     "single": "Pojedyncza",
     "double": "Podwójna",
     "lineSpacingTitle": "Interlinia: {label}",
-    "blockSpacingRules": "Odstępy między akapitami"
+    "blockSpacingRules": "Odstępy między akapitami",
+    "label": null
   },
   "styles": {
     "selectAriaLabel": "Wybierz styl akapitu",
@@ -118,7 +121,8 @@
     "selectAriaLabel": "Wybierz rodzinę czcionek",
     "sansSerif": "Sans Serif",
     "serif": "Serif",
-    "monospace": "Monospace"
+    "monospace": "Monospace",
+    "other": null
   },
   "fontSize": {
     "decrease": "Zmniejsz rozmiar czcionki",
@@ -127,7 +131,10 @@
     "listLabel": "Rozmiary czcionek"
   },
   "zoom": {
-    "ariaLabel": "Powiększenie: {label}"
+    "ariaLabel": "Powiększenie: {label}",
+    "zoomIn": null,
+    "zoomLevel": null,
+    "zoomOut": null
   },
   "colorPicker": {
     "ariaLabel": "Próbnik kolorów — {type}",
@@ -837,7 +844,8 @@
   "imageOverlay": {
     "deleteImage": "Usuń obraz",
     "imageProperties": "Właściwości obrazu",
-    "rotate": "Obróć"
+    "rotate": "Obróć",
+    "replaceImage": null
   },
   "revisions": {
     "cellDeleted": null,

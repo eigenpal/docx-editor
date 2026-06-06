@@ -4,10 +4,10 @@
 -->
 <template>
   <IconGridDropdown
-    :options="OPTIONS"
+    :options="options"
     :active-value="activeValue"
     :trigger-icon="currentOption.iconName"
-    :tooltip-content="`Wrap: ${currentOption.label}`"
+    :tooltip-content="t('imageWrap.tooltipPrefix', { label: currentOption.label })"
     :disabled="disabled"
     @select="(v: string) => $emit('change', v)"
   />
@@ -16,6 +16,8 @@
 <script setup lang="ts">
 import { computed } from 'vue';
 import IconGridDropdown, { type IconGridOption } from './IconGridDropdown.vue';
+import { useTranslation } from '../../i18n';
+import type { TranslationKey } from '@eigenpal/docx-editor-i18n';
 
 const props = defineProps<{
   imageContext: { wrapType: string; displayMode: string; cssFloat: string | null };
@@ -26,14 +28,20 @@ defineEmits<{
   (e: 'change', wrapType: string): void;
 }>();
 
-const OPTIONS: IconGridOption[] = [
-  { value: 'inline', label: 'In line', iconName: 'format_image_left' },
-  { value: 'wrapRight', label: 'Float left', iconName: 'format_image_right' },
-  { value: 'wrapLeft', label: 'Float right', iconName: 'format_image_left' },
-  { value: 'topAndBottom', label: 'Top & bottom', iconName: 'horizontal_rule' },
-  { value: 'behind', label: 'Behind text', iconName: 'flip_to_back' },
-  { value: 'inFront', label: 'In front of text', iconName: 'flip_to_front' },
+const { t } = useTranslation();
+
+const OPTION_DEFS: { value: string; labelKey: TranslationKey; iconName: string }[] = [
+  { value: 'inline', labelKey: 'imageWrap.inline', iconName: 'format_image_left' },
+  { value: 'wrapRight', labelKey: 'imageWrap.floatLeft', iconName: 'format_image_right' },
+  { value: 'wrapLeft', labelKey: 'imageWrap.floatRight', iconName: 'format_image_left' },
+  { value: 'topAndBottom', labelKey: 'imageWrap.topAndBottom', iconName: 'horizontal_rule' },
+  { value: 'behind', labelKey: 'imageWrap.behindText', iconName: 'flip_to_back' },
+  { value: 'inFront', labelKey: 'imageWrap.inFrontOfText', iconName: 'flip_to_front' },
 ];
+
+const options = computed<IconGridOption[]>(() =>
+  OPTION_DEFS.map((o) => ({ value: o.value, label: t(o.labelKey), iconName: o.iconName }))
+);
 
 const activeValue = computed(() => {
   const ctx = props.imageContext;
@@ -42,6 +50,6 @@ const activeValue = computed(() => {
   return ctx.wrapType;
 });
 const currentOption = computed(
-  () => OPTIONS.find((o) => o.value === activeValue.value) ?? OPTIONS[0]
+  () => options.value.find((o) => o.value === activeValue.value) ?? options.value[0]
 );
 </script>

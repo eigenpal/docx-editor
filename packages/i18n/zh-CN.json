@@ -78,7 +78,9 @@
     "subscriptShortcut": "下标(Ctrl+=)",
     "imageProperties": "图片属性",
     "imagePropertiesShortcut": "图片属性(替代文本、边框)...",
-    "clearFormatting": "清除格式"
+    "clearFormatting": "清除格式",
+    "commentsAndChanges": null,
+    "moreItems": null
   },
   "alignment": {
     "alignLeft": "左对齐",
@@ -103,7 +105,8 @@
     "single": "单倍行距",
     "double": "双倍行距",
     "lineSpacingTitle": "行距: {label}",
-    "blockSpacingRules": "段间距"
+    "blockSpacingRules": "段间距",
+    "label": null
   },
   "styles": {
     "selectAriaLabel": "选择段落样式",
@@ -118,7 +121,8 @@
     "selectAriaLabel": "选择字体",
     "sansSerif": "Sans Serif",
     "serif": "Serif",
-    "monospace": "Monospace"
+    "monospace": "Monospace",
+    "other": null
   },
   "fontSize": {
     "decrease": "减小字号",
@@ -127,7 +131,10 @@
     "listLabel": "字号列表"
   },
   "zoom": {
-    "ariaLabel": "缩放: {label}"
+    "ariaLabel": "缩放: {label}",
+    "zoomIn": null,
+    "zoomLevel": null,
+    "zoomOut": null
   },
   "colorPicker": {
     "ariaLabel": "{type} 颜色选择器",
@@ -837,7 +844,8 @@
   "imageOverlay": {
     "deleteImage": "删除图片",
     "imageProperties": "图片属性",
-    "rotate": "旋转"
+    "rotate": "旋转",
+    "replaceImage": null
   },
   "revisions": {
     "cellDeleted": null,

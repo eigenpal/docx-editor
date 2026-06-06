@@ -10,6 +10,7 @@
   "dependencies": {
     "@eigenpal/docx-editor-agents": "workspace:*",
     "@eigenpal/docx-editor-core": "workspace:*",
+    "@eigenpal/docx-editor-i18n": "workspace:*",
     "@eigenpal/docx-editor-vue": "workspace:*",
     "vue": "^3.5.0"
   },

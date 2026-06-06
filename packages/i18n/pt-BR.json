@@ -78,7 +78,9 @@
     "subscriptShortcut": "Subscrito (Ctrl+=)",
     "imageProperties": "Propriedades da imagem",
     "imagePropertiesShortcut": "Propriedades da imagem (texto alternativo, borda)...",
-    "clearFormatting": "Limpar formatação"
+    "clearFormatting": "Limpar formatação",
+    "commentsAndChanges": null,
+    "moreItems": null
   },
   "alignment": {
     "alignLeft": "Alinhar à esquerda",
@@ -103,7 +105,8 @@
     "single": "Simples",
     "double": "Duplo",
     "lineSpacingTitle": "Espaçamento entre linhas: {label}",
-    "blockSpacingRules": "Espaçamento entre parágrafos"
+    "blockSpacingRules": "Espaçamento entre parágrafos",
+    "label": null
   },
   "styles": {
     "selectAriaLabel": "Selecionar estilo de parágrafo",
@@ -118,7 +121,8 @@
     "selectAriaLabel": "Selecionar família da fonte",
     "sansSerif": "Sans Serif",
     "serif": "Serif",
-    "monospace": "Monoespaçado"
+    "monospace": "Monoespaçado",
+    "other": null
   },
   "fontSize": {
     "decrease": "Diminuir tamanho da fonte",
@@ -127,7 +131,10 @@
     "listLabel": "Tamanhos da fonte"
   },
   "zoom": {
-    "ariaLabel": "Zoom: {label}"
+    "ariaLabel": "Zoom: {label}",
+    "zoomIn": null,
+    "zoomLevel": null,
+    "zoomOut": null
   },
   "colorPicker": {
     "ariaLabel": "Seletor de cores {type}",
@@ -837,7 +844,8 @@
   "imageOverlay": {
     "deleteImage": "Excluir imagem",
     "imageProperties": "Propriedades da imagem",
-    "rotate": "Girar"
+    "rotate": "Girar",
+    "replaceImage": null
   },
   "revisions": {
     "cellDeleted": null,

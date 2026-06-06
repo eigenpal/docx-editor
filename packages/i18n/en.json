@@ -78,7 +78,9 @@
     "subscriptShortcut": "Subscript (Ctrl+=)",
     "imageProperties": "Image properties",
     "imagePropertiesShortcut": "Image properties (alt text, border)...",
-    "clearFormatting": "Clear formatting"
+    "clearFormatting": "Clear formatting",
+    "commentsAndChanges": "Comments & Changes",
+    "moreItems": "{count, plural, one {# more item} other {# more items}}"
   },
   "alignment": {
     "alignLeft": "Align Left",
@@ -100,6 +102,7 @@
     "increaseIndent": "Increase Indent"
   },
   "lineSpacing": {
+    "label": "Line spacing",
     "single": "Single",
     "double": "Double",
     "lineSpacingTitle": "Line spacing: {label}",
@@ -118,7 +121,8 @@
     "selectAriaLabel": "Select font family",
     "sansSerif": "Sans Serif",
     "serif": "Serif",
-    "monospace": "Monospace"
+    "monospace": "Monospace",
+    "other": "Other"
   },
   "fontSize": {
     "decrease": "Decrease font size",
@@ -127,7 +131,10 @@
     "listLabel": "Font sizes"
   },
   "zoom": {
-    "ariaLabel": "Zoom: {label}"
+    "ariaLabel": "Zoom: {label}",
+    "zoomOut": "Zoom out",
+    "zoomIn": "Zoom in",
+    "zoomLevel": "Zoom level"
   },
   "colorPicker": {
     "ariaLabel": "{type} color picker",
@@ -812,7 +819,8 @@
   "imageOverlay": {
     "rotate": "Rotate",
     "imageProperties": "Image properties",
-    "deleteImage": "Delete image"
+    "deleteImage": "Delete image",
+    "replaceImage": "Replace image…"
   },
   "ruler": {
     "horizontal": "Horizontal ruler",

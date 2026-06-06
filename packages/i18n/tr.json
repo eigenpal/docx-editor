@@ -78,7 +78,9 @@
     "subscriptShortcut": "Alt simge (Ctrl+=)",
     "imageProperties": "Görsel özellikleri",
     "imagePropertiesShortcut": "Görsel özellikleri (alternatif metin, kenarlık)...",
-    "clearFormatting": "Biçimlendirmeyi temizle"
+    "clearFormatting": "Biçimlendirmeyi temizle",
+    "commentsAndChanges": null,
+    "moreItems": null
   },
   "alignment": {
     "alignLeft": "Sola hizala",
@@ -103,7 +105,8 @@
     "single": "Tek",
     "double": "Çift",
     "lineSpacingTitle": "Satır aralığı: {label}",
-    "blockSpacingRules": "Paragraf aralığı"
+    "blockSpacingRules": "Paragraf aralığı",
+    "label": null
   },
   "styles": {
     "selectAriaLabel": "Paragraf stili seç",
@@ -118,7 +121,8 @@
     "selectAriaLabel": "Yazı tipi ailesini seç",
     "sansSerif": "Sans Serif",
     "serif": "Serif",
-    "monospace": "Eş aralıklı"
+    "monospace": "Eş aralıklı",
+    "other": null
   },
   "fontSize": {
     "decrease": "Yazı tipi boyutunu küçült",
@@ -127,7 +131,10 @@
     "listLabel": "Yazı tipi boyutları"
   },
   "zoom": {
-    "ariaLabel": "Yakınlaştırma: {label}"
+    "ariaLabel": "Yakınlaştırma: {label}",
+    "zoomIn": null,
+    "zoomLevel": null,
+    "zoomOut": null
   },
   "colorPicker": {
     "ariaLabel": "{type} renk seçici",
@@ -837,7 +844,8 @@
   "imageOverlay": {
     "deleteImage": "Görseli sil",
     "imageProperties": "Görsel özellikleri",
-    "rotate": "Döndür"
+    "rotate": "Döndür",
+    "replaceImage": null
   },
   "revisions": {
     "cellDeleted": null,

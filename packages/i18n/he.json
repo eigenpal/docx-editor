@@ -78,7 +78,9 @@
     "subscriptShortcut": "כתב תחתי",
     "imageProperties": "מאפייני תמונה",
     "imagePropertiesShortcut": "מאפייני תמונה",
-    "clearFormatting": "נקה עיצוב"
+    "clearFormatting": "נקה עיצוב",
+    "commentsAndChanges": null,
+    "moreItems": null
   },
   "alignment": {
     "alignLeft": "יישור לשמאל",
@@ -103,7 +105,8 @@
     "single": "יחיד",
     "double": "כפול",
     "lineSpacingTitle": "מרחק בין שורות: {label}",
-    "blockSpacingRules": "מרחק בין פסקאות"
+    "blockSpacingRules": "מרחק בין פסקאות",
+    "label": null
   },
   "styles": {
     "selectAriaLabel": "בחר סגנון פסקה",
@@ -118,7 +121,8 @@
     "selectAriaLabel": "בחר סוג גופן",
     "sansSerif": "Sans Serif",
     "serif": "Serif",
-    "monospace": "Monospace"
+    "monospace": "Monospace",
+    "other": null
   },
   "fontSize": {
     "decrease": "הקטנת גופן",
@@ -127,7 +131,10 @@
     "listLabel": "גדלי גופן"
   },
   "zoom": {
-    "ariaLabel": "זום: {label}"
+    "ariaLabel": "זום: {label}",
+    "zoomIn": null,
+    "zoomLevel": null,
+    "zoomOut": null
   },
   "colorPicker": {
     "ariaLabel": "בחר צבע {type}",
@@ -837,7 +844,8 @@
   "imageOverlay": {
     "deleteImage": "מחק תמונה",
     "imageProperties": "מאפייני תמונה",
-    "rotate": "סובב"
+    "rotate": "סובב",
+    "replaceImage": null
   },
   "revisions": {
     "cellDeleted": null,
