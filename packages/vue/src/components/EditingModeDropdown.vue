@@ -20,11 +20,11 @@
           'editing-mode__trigger--open': isOpen,
           'editing-mode__trigger--compact': compact,
         }"
-        :title="`${current.label} (Ctrl+Shift+E)`"
+        :title="`${t(current.labelKey)} (Ctrl+Shift+E)`"
         @click.prevent="toggle"
       >
         <MaterialSymbol :name="current.icon" :size="18" />
-        <span v-if="!compact" class="editing-mode__label">{{ current.label }}</span>
+        <span v-if="!compact" class="editing-mode__label">{{ t(current.labelKey) }}</span>
         <MaterialSymbol name="arrow_drop_down" :size="16" />
       </button>
     </template>
@@ -39,8 +39,8 @@
         >
           <MaterialSymbol :name="m.icon" :size="20" />
           <span class="editing-mode__option-text">
-            <span class="editing-mode__option-label">{{ m.label }}</span>
-            <span class="editing-mode__option-desc">{{ m.desc }}</span>
+            <span class="editing-mode__option-label">{{ t(m.labelKey) }}</span>
+            <span class="editing-mode__option-desc">{{ t(m.descKey) }}</span>
           </span>
           <MaterialSymbol
             v-if="m.value === modelValue"
@@ -59,6 +59,10 @@ import { ref, computed, onMounted, onBeforeUnmount } from 'vue';
 import MaterialSymbol from './ui/MaterialSymbol.vue';
 import Popover from './ui/Popover.vue';
 import type { EditorMode } from './DocxEditor/types';
+import { useTranslation } from '../i18n';
+import type { TranslationKey } from '@eigenpal/docx-editor-i18n';
+
+const { t } = useTranslation();
 
 const props = defineProps<{
   modelValue: EditorMode;
@@ -68,24 +72,29 @@ const emit = defineEmits<{
   (e: 'update:modelValue', mode: EditorMode): void;
 }>();
 
-const modes = [
+const modes: {
+  value: EditorMode;
+  labelKey: TranslationKey;
+  icon: string;
+  descKey: TranslationKey;
+}[] = [
   {
-    value: 'editing' as const,
-    label: 'Editing',
+    value: 'editing',
+    labelKey: 'editor.editing',
     icon: 'edit_note',
-    desc: 'Edit document directly',
+    descKey: 'editor.editingDescription',
   },
   {
-    value: 'suggesting' as const,
-    label: 'Suggesting',
+    value: 'suggesting',
+    labelKey: 'editor.suggesting',
     icon: 'rate_review',
-    desc: 'Edits become suggestions',
+    descKey: 'editor.suggestingDescription',
   },
   {
-    value: 'viewing' as const,
-    label: 'Viewing',
+    value: 'viewing',
+    labelKey: 'editor.viewing',
     icon: 'visibility',
-    desc: 'Read or print final document',
+    descKey: 'editor.viewingDescription',
   },
 ];
 

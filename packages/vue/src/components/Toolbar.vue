@@ -8,10 +8,20 @@
 <template>
   <div class="basic-toolbar" v-if="view">
     <!-- 1. Undo / Redo -->
-    <button title="Undo (Ctrl+Z)" :disabled="!canUndo" @mousedown.prevent="execCommand('undo')">
+    <button
+      :title="t('formattingBar.undoShortcut')"
+      :aria-label="t('formattingBar.undo')"
+      :disabled="!canUndo"
+      @mousedown.prevent="execCommand('undo')"
+    >
       <MaterialSymbol name="undo" />
     </button>
-    <button title="Redo (Ctrl+Y)" :disabled="!canRedo" @mousedown.prevent="execCommand('redo')">
+    <button
+      :title="t('formattingBar.redoShortcut')"
+      :aria-label="t('formattingBar.redo')"
+      :disabled="!canRedo"
+      @mousedown.prevent="execCommand('redo')"
+    >
       <MaterialSymbol name="redo" />
     </button>
 
@@ -23,14 +33,14 @@
         class="size-btn"
         @mousedown.prevent="$emit('zoom-out')"
         :disabled="isMinZoom"
-        title="Zoom out"
+        :title="t('zoom.zoomOut')"
       >
         −
       </button>
       <button
         class="toolbar-dropdown__trigger zoom-trigger"
         @mousedown.prevent="toggleDropdown('zoom')"
-        title="Zoom level"
+        :title="t('zoom.zoomLevel')"
       >
         {{ zoomPercent }}%
       </button>
@@ -38,7 +48,7 @@
         class="size-btn"
         @mousedown.prevent="$emit('zoom-in')"
         :disabled="isMaxZoom"
-        title="Zoom in"
+        :title="t('zoom.zoomIn')"
       >
         +
       </button>
@@ -66,7 +76,7 @@
       <button
         class="toolbar-dropdown__trigger style-trigger"
         @mousedown.prevent="toggleDropdown('style')"
-        :title="'Paragraph style'"
+        :title="t('styles.selectAriaLabel')"
       >
         {{ currentStyleLabel }}
         <MaterialSymbol class="chevron" name="arrow_drop_down" :size="16" />
@@ -84,7 +94,7 @@
           :style="s.previewStyle"
           @mousedown.prevent="handleApplyStyle(s.id)"
         >
-          {{ s.label }}
+          {{ t(s.nameKey) }}
         </button>
       </div>
     </div>
@@ -96,7 +106,7 @@
       <button
         class="toolbar-dropdown__trigger font-trigger"
         @mousedown.prevent="toggleDropdown('font')"
-        title="Font family"
+        :title="t('font.selectAriaLabel')"
       >
         {{ currentFontFamily }}
         <MaterialSymbol class="chevron" name="arrow_drop_down" :size="16" />
@@ -126,17 +136,25 @@
 
     <!-- 5. Font Size: −, value, + -->
     <div class="toolbar-dropdown font-size-group" ref="sizeDropdownRef">
-      <button class="size-btn" @mousedown.prevent="decreaseFontSize" title="Decrease font size">
+      <button
+        class="size-btn"
+        @mousedown.prevent="decreaseFontSize"
+        :title="t('fontSize.decrease')"
+      >
         −
       </button>
       <button
         class="toolbar-dropdown__trigger size-trigger"
         @mousedown.prevent="toggleDropdown('size')"
-        title="Font size"
+        :title="t('fontSize.label')"
       >
         {{ currentFontSize }}
       </button>
-      <button class="size-btn" @mousedown.prevent="increaseFontSize" title="Increase font size">
+      <button
+        class="size-btn"
+        @mousedown.prevent="increaseFontSize"
+        :title="t('fontSize.increase')"
+      >
         +
       </button>
       <div
@@ -160,28 +178,32 @@
 
     <!-- 6. Bold / Italic / Underline / Strike -->
     <button
-      title="Bold (Ctrl+B)"
+      :title="t('formattingBar.boldShortcut')"
+      :aria-label="t('formattingBar.bold')"
       :class="{ active: ctx.textFormatting.bold }"
       @mousedown.prevent="execCommand('toggleBold')"
     >
       <MaterialSymbol name="format_bold" />
     </button>
     <button
-      title="Italic (Ctrl+I)"
+      :title="t('formattingBar.italicShortcut')"
+      :aria-label="t('formattingBar.italic')"
       :class="{ active: ctx.textFormatting.italic }"
       @mousedown.prevent="execCommand('toggleItalic')"
     >
       <MaterialSymbol name="format_italic" />
     </button>
     <button
-      title="Underline (Ctrl+U)"
+      :title="t('formattingBar.underlineShortcut')"
+      :aria-label="t('formattingBar.underline')"
       :class="{ active: !!ctx.textFormatting.underline }"
       @mousedown.prevent="execCommand('toggleUnderline')"
     >
       <MaterialSymbol name="format_underlined" />
     </button>
     <button
-      title="Strikethrough"
+      :title="t('formattingBar.strikethrough')"
+      :aria-label="t('formattingBar.strikethrough')"
       :class="{ active: ctx.textFormatting.strike }"
       @mousedown.prevent="execCommand('toggleStrike')"
     >
@@ -205,20 +227,26 @@
     />
 
     <!-- 9. Link -->
-    <button title="Insert link (Ctrl+K)" @mousedown.prevent="$emit('insert-link')">
+    <button
+      :title="t('formattingBar.insertLinkShortcut')"
+      :aria-label="t('formattingBar.insertLink')"
+      @mousedown.prevent="$emit('insert-link')"
+    >
       <MaterialSymbol name="link" />
     </button>
 
     <!-- 10. Superscript / Subscript -->
     <button
-      title="Superscript (Ctrl+Shift+=)"
+      :title="t('formattingBar.superscriptShortcut')"
+      :aria-label="t('formattingBar.superscript')"
       :class="{ active: ctx.textFormatting.vertAlign === 'superscript' }"
       @mousedown.prevent="execCommand('toggleSuperscript')"
     >
       <MaterialSymbol name="superscript" />
     </button>
     <button
-      title="Subscript (Ctrl+=)"
+      :title="t('formattingBar.subscriptShortcut')"
+      :aria-label="t('formattingBar.subscript')"
       :class="{ active: ctx.textFormatting.vertAlign === 'subscript' }"
       @mousedown.prevent="execCommand('toggleSubscript')"
     >
@@ -232,7 +260,7 @@
       <button
         class="toolbar-dropdown__trigger align-trigger"
         @mousedown.prevent="toggleDropdown('align')"
-        title="Alignment"
+        :title="t('formattingBar.groups.alignment')"
       >
         <MaterialSymbol :name="alignIconName" />
         <MaterialSymbol class="chevron" name="arrow_drop_down" :size="16" />
@@ -250,7 +278,8 @@
             openDropdown = null;
           "
         >
-          <MaterialSymbol name="format_align_left" :size="18" /> Left (Ctrl+L)
+          <MaterialSymbol name="format_align_left" :size="18" />
+          {{ t('alignment.alignLeft') }} ({{ t('alignment.alignLeftShortcut') }})
         </button>
         <button
           class="toolbar-dropdown__item dropdown-item--icon"
@@ -260,7 +289,8 @@
             openDropdown = null;
           "
         >
-          <MaterialSymbol name="format_align_center" :size="18" /> Center (Ctrl+E)
+          <MaterialSymbol name="format_align_center" :size="18" />
+          {{ t('alignment.center') }} ({{ t('alignment.centerShortcut') }})
         </button>
         <button
           class="toolbar-dropdown__item dropdown-item--icon"
@@ -270,7 +300,8 @@
             openDropdown = null;
           "
         >
-          <MaterialSymbol name="format_align_right" :size="18" /> Right (Ctrl+R)
+          <MaterialSymbol name="format_align_right" :size="18" />
+          {{ t('alignment.alignRight') }} ({{ t('alignment.alignRightShortcut') }})
         </button>
         <button
           class="toolbar-dropdown__item dropdown-item--icon"
@@ -280,34 +311,42 @@
             openDropdown = null;
           "
         >
-          <MaterialSymbol name="format_align_justify" :size="18" /> Justify (Ctrl+J)
+          <MaterialSymbol name="format_align_justify" :size="18" />
+          {{ t('alignment.justify') }} ({{ t('alignment.justifyShortcut') }})
         </button>
       </div>
     </div>
 
     <!-- 12. Lists + Indent -->
     <button
-      title="Bullet List"
+      :title="t('lists.bulletList')"
+      :aria-label="t('lists.bulletList')"
       :class="{ active: ctx.inList && ctx.listType === 'bullet' }"
       @mousedown.prevent="execCommand('toggleBulletList')"
     >
       <MaterialSymbol name="format_list_bulleted" />
     </button>
     <button
-      title="Numbered List"
+      :title="t('lists.numberedList')"
+      :aria-label="t('lists.numberedList')"
       :class="{ active: ctx.inList && ctx.listType === 'numbered' }"
       @mousedown.prevent="execCommand('toggleNumberedList')"
     >
       <MaterialSymbol name="format_list_numbered" />
     </button>
     <button
-      title="Decrease Indent (Shift+Tab)"
+      :title="t('lists.decreaseIndent')"
+      :aria-label="t('lists.decreaseIndent')"
       :disabled="!canOutdent"
       @mousedown.prevent="execCommand('outdent')"
     >
       <MaterialSymbol name="format_indent_decrease" />
     </button>
-    <button title="Increase Indent (Tab)" @mousedown.prevent="execCommand('indent')">
+    <button
+      :title="t('lists.increaseIndent')"
+      :aria-label="t('lists.increaseIndent')"
+      @mousedown.prevent="execCommand('indent')"
+    >
       <MaterialSymbol name="format_indent_increase" />
     </button>
 
@@ -316,7 +355,7 @@
       <button
         class="toolbar-dropdown__trigger"
         @mousedown.prevent="toggleDropdown('spacing')"
-        title="Line spacing"
+        :title="t('lineSpacing.label')"
       >
         <MaterialSymbol name="format_line_spacing" />
         <MaterialSymbol class="chevron" name="arrow_drop_down" :size="16" />
@@ -333,13 +372,17 @@
           :class="{ active: isCurrentLineSpacing(sp.value) }"
           @mousedown.prevent="setLineSpacing(sp.value)"
         >
-          {{ sp.label }}
+          {{ sp.labelKey ? t(sp.labelKey) : sp.label }}
         </button>
       </div>
     </div>
 
     <!-- 14. Clear Formatting -->
-    <button title="Clear formatting" @mousedown.prevent="handleClearFormatting">
+    <button
+      :title="t('formattingBar.clearFormatting')"
+      :aria-label="t('formattingBar.clearFormatting')"
+      @mousedown.prevent="handleClearFormatting"
+    >
       <MaterialSymbol name="format_clear" />
     </button>
 
@@ -347,7 +390,8 @@
 
     <!-- 15. Comments & Changes -->
     <button
-      title="Comments & Changes"
+      :title="t('formattingBar.commentsAndChanges')"
+      :aria-label="t('formattingBar.commentsAndChanges')"
       :class="{ active: commentsSidebarOpen }"
       @mousedown.prevent="$emit('toggle-sidebar')"
     >
@@ -364,7 +408,11 @@
         @change="(v) => $emit('image-wrap-type', v)"
       />
       <ImageTransformDropdown @transform="(a) => $emit('image-transform', a)" />
-      <button title="Image properties" @mousedown.prevent="$emit('image-properties')">
+      <button
+        :title="t('formattingBar.imagePropertiesShortcut')"
+        :aria-label="t('formattingBar.imageProperties')"
+        @mousedown.prevent="$emit('image-properties')"
+      >
         <MaterialSymbol name="tune" />
       </button>
     </template>
@@ -414,6 +462,7 @@ import {
   DEFAULT_ZOOM_PERCENT,
 } from './Toolbar/presets';
 import { useToolbarDropdowns } from '../composables/useToolbarDropdowns';
+import { useTranslation } from '../i18n';
 
 /**
  * Image context — populated by the host when a NodeSelection lands on
@@ -448,6 +497,8 @@ const props = defineProps<{
   /** Optional custom font list matching React's `fontFamilies` prop. */
   fontFamilies?: ReadonlyArray<string | FontOption>;
 }>();
+
+const { t } = useTranslation();
 
 const emit = defineEmits<{
   (e: 'find-replace'): void;
@@ -563,7 +614,7 @@ const alignIconName = computed(() => {
 const currentStyleLabel = computed(() => {
   const id = ctx.value.paragraphFormatting.styleId || 'Normal';
   const s = paragraphStyles.find((ps) => ps.id === id);
-  return s?.label || id;
+  return s ? t(s.nameKey) : id;
 });
 
 // Mirror React Toolbar's `canUndo` / `canRedo` props (Toolbar.tsx:81-82).
@@ -613,16 +664,19 @@ const currentHighlightHex = computed<string | undefined>(() => {
 const normalizedFonts = computed(() => normalizeFontFamilies(props.fontFamilies) ?? defaultFonts);
 const fontGroups = computed(() => [
   {
-    label: 'Sans-serif',
+    label: t('font.sansSerif'),
     fonts: normalizedFonts.value.filter((font) => font.category === 'sans-serif'),
   },
-  { label: 'Serif', fonts: normalizedFonts.value.filter((font) => font.category === 'serif') },
   {
-    label: 'Monospace',
+    label: t('font.serif'),
+    fonts: normalizedFonts.value.filter((font) => font.category === 'serif'),
+  },
+  {
+    label: t('font.monospace'),
     fonts: normalizedFonts.value.filter((font) => font.category === 'monospace'),
   },
   {
-    label: 'Other',
+    label: t('font.other'),
     fonts: normalizedFonts.value.filter((font) => !font.category || font.category === 'other'),
   },
 ]);

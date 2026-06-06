@@ -78,7 +78,9 @@
     "subscriptShortcut": "Indice (Ctrl+=)",
     "imageProperties": "Propriétés de l'image",
     "imagePropertiesShortcut": "Propriétés de l'image... (description, bordure)",
-    "clearFormatting": "Effacer la mise en forme"
+    "clearFormatting": "Effacer la mise en forme",
+    "commentsAndChanges": null,
+    "moreItems": null
   },
   "alignment": {
     "alignLeft": "Aligner à gauche",
@@ -103,7 +105,8 @@
     "single": "Simple",
     "double": "Double",
     "lineSpacingTitle": "Interligne : {label}",
-    "blockSpacingRules": "Espacement des paragraphes"
+    "blockSpacingRules": "Espacement des paragraphes",
+    "label": null
   },
   "styles": {
     "selectAriaLabel": "Sélectionner le type de paragraphe",
@@ -118,7 +121,8 @@
     "selectAriaLabel": "Sélectionner une police",
     "sansSerif": "Sans Serif",
     "serif": "Serif",
-    "monospace": "Monospace"
+    "monospace": "Monospace",
+    "other": null
   },
   "fontSize": {
     "decrease": "Diminuer la taille de la police",
@@ -127,7 +131,10 @@
     "listLabel": "Tailles de police"
   },
   "zoom": {
-    "ariaLabel": "Zoom : {label}"
+    "ariaLabel": "Zoom : {label}",
+    "zoomIn": null,
+    "zoomLevel": null,
+    "zoomOut": null
   },
   "colorPicker": {
     "ariaLabel": "Choisir la couleur {type}",
@@ -797,7 +804,8 @@
   "imageOverlay": {
     "rotate": "Faire pivoter",
     "imageProperties": "Propriétés de l'image",
-    "deleteImage": "Supprimer l'image"
+    "deleteImage": "Supprimer l'image",
+    "replaceImage": null
   },
   "ruler": {
     "horizontal": "Règle horizontale",

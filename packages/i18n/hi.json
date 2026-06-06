@@ -78,7 +78,9 @@
     "subscriptShortcut": "सबस्क्रिप्ट (Ctrl+=)",
     "imageProperties": "चित्र की विशेषताएँ",
     "imagePropertiesShortcut": "चित्र की विशेषताएँ (ऑल्ट टेक्स्ट, बॉर्डर)...",
-    "clearFormatting": "प्रारूपण साफ करें"
+    "clearFormatting": "प्रारूपण साफ करें",
+    "commentsAndChanges": null,
+    "moreItems": null
   },
   "alignment": {
     "alignLeft": "बाएं संरेखित करें",
@@ -103,7 +105,8 @@
     "single": "एकल",
     "double": "दुगुना",
     "lineSpacingTitle": "लाइन स्पेसिंग: {label}",
-    "blockSpacingRules": "पैराग्राफ स्पेसिंग"
+    "blockSpacingRules": "पैराग्राफ स्पेसिंग",
+    "label": null
   },
   "styles": {
     "selectAriaLabel": "पैराग्राफ शैली चुनें",
@@ -118,7 +121,8 @@
     "selectAriaLabel": "फ़ॉन्ट फैमिली चुनें",
     "sansSerif": "Sans Serif",
     "serif": "Serif",
-    "monospace": "Monospace"
+    "monospace": "Monospace",
+    "other": null
   },
   "fontSize": {
     "decrease": "फ़ॉन्ट आकार घटाएं",
@@ -127,7 +131,10 @@
     "listLabel": "फ़ॉन्ट आकार"
   },
   "zoom": {
-    "ariaLabel": "ज़ूम: {label}"
+    "ariaLabel": "ज़ूम: {label}",
+    "zoomIn": null,
+    "zoomLevel": null,
+    "zoomOut": null
   },
   "colorPicker": {
     "ariaLabel": "{type} रंग पिकर",
@@ -797,7 +804,8 @@
   "imageOverlay": {
     "rotate": "घुमाएं",
     "imageProperties": "चित्र की विशेषताएँ",
-    "deleteImage": "चित्र हटाएं"
+    "deleteImage": "चित्र हटाएं",
+    "replaceImage": null
   },
   "ruler": {
     "horizontal": "क्षैतिज रूलर",

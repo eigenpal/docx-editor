@@ -12,6 +12,7 @@
         :show-toolbar="true"
         :document-name="fileName"
         :fonts="customFonts"
+        :i18n="editorLocale"
         @change="handleDocumentChange"
         @error="handleError"
         @ready="handleReady"
@@ -67,6 +68,7 @@
 <script setup lang="ts">
 import { computed, ref, onBeforeUnmount, onMounted } from 'vue';
 import { DocxEditor, type DocxEditorRef } from '@eigenpal/docx-editor-vue';
+import { de as deLocale } from '@eigenpal/docx-editor-i18n';
 import ExampleSwitcher from '../../shared/ExampleSwitcher.vue';
 import { createEmptyDocument, findStartPosForParaId } from '@eigenpal/docx-editor-core';
 import type { Document } from '@eigenpal/docx-editor-core/types/document';
@@ -126,6 +128,14 @@ const customFonts = computed(() => {
     { family: 'E2E Custom Font', src: '/e2e-fixtures/inter-regular.woff2' },
     { family: 'E2E Custom Font', src: '/e2e-fixtures/inter-bold.woff2', weight: 700 },
   ];
+});
+
+// E2E hook: `?locale=de` mounts the editor with the German i18n pack so
+// the Playwright suite can assert localized tooltips / context-menu text.
+const editorLocale = computed(() => {
+  if (typeof window === 'undefined') return undefined;
+  const params = new URLSearchParams(window.location.search);
+  return params.get('locale') === 'de' ? deLocale : undefined;
 });
 
 // Agent panel — opt-in via `?agentPanel=1` like the React demo. Keeps the

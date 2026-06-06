@@ -7,7 +7,7 @@
       <button
         class="responsive-toolbar__overflow-btn"
         @mousedown.prevent="showOverflow = !showOverflow"
-        :title="`${overflowCount} more items`"
+        :title="t('formattingBar.moreItems', { count: overflowCount })"
       >
         &#x22EF;
       </button>
@@ -20,6 +20,9 @@
 
 <script setup lang="ts">
 import { ref, onMounted, onBeforeUnmount, nextTick } from 'vue';
+import { useTranslation } from '../../i18n';
+
+const { t } = useTranslation();
 
 const containerRef = ref<HTMLElement | null>(null);
 const itemsRef = ref<HTMLElement | null>(null);
@@ -110,7 +113,9 @@ onBeforeUnmount(() => {
   align-items: center;
   justify-content: center;
 }
-.responsive-toolbar__overflow-btn:hover { background: #f1f5f9; }
+.responsive-toolbar__overflow-btn:hover {
+  background: #f1f5f9;
+}
 .responsive-toolbar__overflow-menu {
   position: absolute;
   right: 0;
@@ -119,7 +124,7 @@ onBeforeUnmount(() => {
   background: #fff;
   border: 1px solid #d1d5db;
   border-radius: 6px;
-  box-shadow: 0 4px 12px rgba(0,0,0,0.12);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
   padding: 8px;
   display: flex;
   flex-wrap: wrap;
