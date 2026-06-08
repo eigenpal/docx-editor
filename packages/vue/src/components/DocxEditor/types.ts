@@ -9,7 +9,10 @@
  */
 
 import type { Plugin } from 'prosemirror-state';
+import type { EditorView } from 'prosemirror-view';
 import type { Document, Theme } from '@eigenpal/docx-editor-core/types/document';
+import type { Comment } from '@eigenpal/docx-editor-core/types/content';
+import type { SelectionState } from '@eigenpal/docx-editor-core/prosemirror';
 import type { DocxInput } from '@eigenpal/docx-editor-core/utils';
 import type { FontOption } from '@eigenpal/docx-editor-core/utils/fontOptions';
 import type { FontDefinition } from '@eigenpal/docx-editor-core/utils';
@@ -90,6 +93,24 @@ export interface DocxEditorProps {
   documentNameEditable?: boolean;
   /** Custom right-side actions renderer for the title bar. Slots remain preferred in templates. */
   renderTitleBarRight?: () => VNodeChild;
+  /** Callback fired whenever the document changes. Mirrors the `@change` event. */
+  onChange?: (document: Document) => void;
+  /** Callback fired when the editor errors (parse/layout/font). Mirrors the `@error` event. */
+  onError?: (error: Error) => void;
+  /** Callback fired when the selection changes, with the current selection state (or null). */
+  onSelectionChange?: (state: SelectionState | null) => void;
+  /** Callback fired once the underlying ProseMirror EditorView is ready. */
+  onEditorViewReady?: (view: EditorView) => void;
+  /** Callback fired when a top-level comment is added via the UI. */
+  onCommentAdd?: (comment: Comment) => void;
+  /** Callback fired when a comment is resolved via the UI. Receives the comment with `done: true`. */
+  onCommentResolve?: (comment: Comment) => void;
+  /** Callback fired when a comment (and its replies) is deleted via the UI. */
+  onCommentDelete?: (comment: Comment) => void;
+  /** Callback fired when a reply is added to a comment via the UI. */
+  onCommentReply?: (reply: Comment, parent: Comment) => void;
+  /** Callback fired with the full comment array whenever it changes (add/reply/resolve/delete). */
+  onCommentsChange?: (comments: Comment[]) => void;
 }
 
 /**
