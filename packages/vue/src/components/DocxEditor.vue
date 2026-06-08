@@ -304,7 +304,7 @@
             @add-comment="handleAddComment"
             @cancel-add-comment="handleCancelAddComment"
             @comment-reply="handleCommentReply"
-            @comment-resolve="resolveComment"
+            @comment-resolve="handleCommentResolve"
             @comment-unresolve="handleCommentUnresolve"
             @comment-delete="handleCommentDelete"
             @accept-change="handleAcceptChange"
@@ -391,6 +391,7 @@ import {
   readHfSelectionGeometry,
 } from '@eigenpal/docx-editor-core/layout-bridge';
 import { getSelectionInfo as getSelectionInfoImpl } from '../utils/refApiQueries';
+import { extractSelectionState } from '@eigenpal/docx-editor-core/prosemirror';
 import { nearestHfHostEl } from '../utils/domQueries';
 import Toolbar from './Toolbar.vue';
 import TableToolbar from './ui/TableToolbar.vue';
@@ -422,6 +423,7 @@ import { useWatermarkControls } from '../composables/useWatermarkControls';
 import { useOutlineSidebar } from '../composables/useOutlineSidebar';
 import { useKeyboardShortcuts } from '../composables/useKeyboardShortcuts';
 import { useCommentManagement } from '../composables/useCommentManagement';
+import { useHostCallbacks } from '../composables/useHostCallbacks';
 import { useCommentLifecycle } from '../composables/useCommentLifecycle';
 import { useImageActions } from '../composables/useImageActions';
 import { useContextMenus } from '../composables/useContextMenus';
@@ -558,16 +560,29 @@ const {
   onChange: (doc) => {
     emit('change', doc);
     emit('update:document', doc);
+    props.onChange?.(doc);
     contentChangeSubscribers.forEach((listener) => listener(doc));
   },
-  onError: (err) => emit('error', err),
+  onError: (err) => {
+    emit('error', err);
+    props.onError?.(err);
+  },
   onSelectionUpdate: () => {
     stateTick.value++;
     updateSelectionOverlay();
-    const selection = getSelectionInfoImpl(editorView.value);
+    const view = editorView.value;
+    // The prop mirrors React's `onSelectionChange`, which delivers a
+    // `SelectionState` (formatting/style snapshot). The ref-API subscribers
+    // keep Vue's existing `SelectionInfo` payload — a separate surface.
+    props.onSelectionChange?.(view ? extractSelectionState(view.state) : null);
+    const selection = getSelectionInfoImpl(view);
     selectionChangeSubscribers.forEach((listener) => listener(selection));
   },
 });
+
+// Host-facing comment callbacks + onEditorViewReady wiring (the `onComment*` /
+// `onEditorViewReady` props), threaded into the comment composables below.
+const { commentCallbacks } = useHostCallbacks(props, editorView);
 
 // ─── Document-state derived computed refs ─────────────────────────────────
 // Active section's properties drive the horizontal ruler (margins + indents).
@@ -626,7 +641,10 @@ function clearHfOverlay() {
   hfSelectionGeometry.value = [];
 }
 
-useFontLifecycle(() => props.fonts, (err) => emit('error', err));
+useFontLifecycle(() => props.fonts, (err) => {
+  emit('error', err);
+  props.onError?.(err);
+});
 
 // Memoized so the template doesn't walk the headers/footers Maps every tick.
 const activeHfView = computed<EditorView | null>(() =>
@@ -795,6 +813,7 @@ const {
   emit,
   commentIdAllocator,
   author: authorRef,
+  commentCallbacks,
 });
 
 const {
@@ -881,6 +900,7 @@ const {
   resolveComment,
   proposeChange,
   handleCommentReply,
+  handleCommentResolve,
   handleCommentUnresolve,
   handleCommentDelete,
   handleAcceptChange, handleRejectChange,
@@ -899,6 +919,7 @@ const {
   emit,
   commentIdAllocator,
   author: authorRef,
+  commentCallbacks,
 });
 
 // Composable order (TDZ-sensitive): useImageActions → usePagesPointer → useContextMenus → useSelectionSync → useDocxEditorRefApi.

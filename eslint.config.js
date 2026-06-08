@@ -204,13 +204,15 @@ export default [
   },
 
   // DocxEditor.vue is the host component — same role as React's
-  // DocxEditor.tsx (which has a 2000-line cap). Vue's SFC sits at 1000
-  // exact; eslint counts an extra blank/EOF line that wc -l doesn't,
-  // so allow modest headroom while a real split is planned.
+  // DocxEditor.tsx (which has a 2000-line cap). The React-parity callback
+  // props (#720) add per-prop wiring that must live inline in the SFC (the
+  // handlers are passed into useDocxEditor and can't be hoisted); the reusable
+  // pieces were extracted to useHostCallbacks. Modest headroom while a real
+  // split is planned.
   {
     files: ['packages/vue/src/components/DocxEditor.vue'],
     rules: {
-      'max-lines': ['error', { max: 1100, skipBlankLines: false, skipComments: false }],
+      'max-lines': ['error', { max: 1130, skipBlankLines: false, skipComments: false }],
     },
   },
 

@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "comment": "Cross-adapter parity contract between @eigenpal/docx-editor-react and @eigenpal/docx-editor-vue. Tracked in issue #475 Phase 3. Drives `bun run check:parity-contract`, which parses each adapter's docs/api/<slug>/index.api.md, applies this contract, and fails on undocumented drift. Adding a new prop or ref method to either adapter forces a contract update — there is no way to silently introduce divergence.",
+  "comment": "Cross-adapter parity contract between @eigenpal/docx-editor-react and @eigenpal/docx-editor-vue. Tracked in issue #475 Phase 3. Drives `bun run check:parity-contract`, which parses each adapter's docs/api/<slug>/index.api.md, applies this contract, and fails on undocumented drift. Adding a new prop or ref method to either adapter forces a contract update \u2014 there is no way to silently introduce divergence.",
   "props": {
     "paired": [
       "author",
@@ -16,9 +16,18 @@
       "i18n",
       "initialZoom",
       "mode",
+      "onChange",
+      "onCommentAdd",
+      "onCommentDelete",
+      "onCommentReply",
+      "onCommentResolve",
+      "onCommentsChange",
       "onDocumentNameChange",
+      "onEditorViewReady",
+      "onError",
       "onModeChange",
       "onPrint",
+      "onSelectionChange",
       "readOnly",
       "renderLogo",
       "renderTitleBarRight",
@@ -36,36 +45,27 @@
       "comments": "Comment threads. Part of the Vue comments API gap.",
       "externalContent": "Sandboxed external-content rendering mode. React-only escape hatch.",
       "loadingIndicator": "Custom loading slot. Vue uses default slot via VNodeChild.",
-      "marginGuideColor": "Pairs with showMarginGuides — both deferred together.",
-      "onChange": "Document-change callback. Critical parity gap — Vue currently exposes layout via composables but not via a single onChange prop.",
-      "onCommentAdd": "Part of the Vue comments API gap.",
-      "onCommentDelete": "Part of the Vue comments API gap.",
-      "onCommentReply": "Part of the Vue comments API gap.",
-      "onCommentResolve": "Part of the Vue comments API gap.",
-      "onCommentsChange": "Part of the Vue comments API gap.",
+      "marginGuideColor": "Pairs with showMarginGuides \u2014 both deferred together.",
       "onCopy": "Clipboard event hooks. Vue exposes via useClipboard composable instead.",
       "onCut": "Clipboard event hooks. Vue exposes via useClipboard composable instead.",
-      "onEditorViewReady": "PM EditorView ready callback. Vue exposes editorView via useDocxEditor instead.",
-      "onError": "Error callback. Vue currently exposes via useDocxEditor option.",
       "onFontsLoaded": "Font-load lifecycle. Vue-deferred.",
       "onPaste": "Clipboard event hook. Vue exposes via useClipboard composable instead.",
       "onRenderedDomContextReady": "Plugin host ready callback. Pairs with pluginRenderedDomContext.",
-      "onSave": "Save-to-buffer callback. Critical parity gap — Vue uses useDocxEditor().save() that returns a Blob, not a prop callback.",
-      "onSelectionChange": "Selection observer. Vue exposes via useSelectionHighlight composable instead.",
+      "onSave": "Save-to-buffer callback. Critical parity gap \u2014 Vue uses useDocxEditor().save() that returns a Blob, not a prop callback.",
       "placeholder": "Empty-state slot. Vue uses default slot pattern.",
       "pluginOverlays": "Plugin overlay slot. Pairs with pluginRenderedDomContext.",
       "pluginRenderedDomContext": "Plugin host hand-off. Vue plugin-api is a smaller surface.",
       "pluginSidebarItems": "Sidebar plugin items. Pairs with the Vue plugin-api gap.",
       "printOptions": "Print configuration. Vue uses onPrint without options object.",
       "rulerUnit": "Ruler unit toggle (inch/cm). Vue uses inch only currently.",
-      "showMarginGuides": "Margin guide overlay. Pairs with marginGuideColor — both deferred together."
+      "showMarginGuides": "Margin guide overlay. Pairs with marginGuideColor \u2014 both deferred together."
     },
     "vueExclusive": {
       "showMenuBar": "Vue adapter ships a Google-Docs-style menu bar above the toolbar. React uses a single toolbar with no menu-bar concept."
     }
   },
   "ref": {
-    "comment": "DocxEditorRef parity. React's DocxEditorRef declares every member directly. Vue's DocxEditorRef intersects EditorRefLike (from @eigenpal/docx-editor-agents/bridge) plus its own additions — so members inherited via EditorRefLike are NOT enumerated in Vue's snapshot, but ARE callable at runtime. The contract uses three buckets: `paired` (explicit on both sides), `pairedViaInheritance` (explicit on React, inherited via EditorRefLike on Vue), and `vueExclusive` (only on Vue's DocxEditorRef).",
+    "comment": "DocxEditorRef parity. React's DocxEditorRef declares every member directly. Vue's DocxEditorRef intersects EditorRefLike (from @eigenpal/docx-editor-agents/bridge) plus its own additions \u2014 so members inherited via EditorRefLike are NOT enumerated in Vue's snapshot, but ARE callable at runtime. The contract uses three buckets: `paired` (explicit on both sides), `pairedViaInheritance` (explicit on React, inherited via EditorRefLike on Vue), and `vueExclusive` (only on Vue's DocxEditorRef).",
     "paired": [
       "focus",
       "getAgent",

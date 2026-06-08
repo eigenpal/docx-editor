@@ -5,6 +5,7 @@
 ```ts
 
 import { App } from 'vue';
+import { Comment as Comment_2 } from '@eigenpal/docx-editor-core/types/content';
 import { ContentControlFilter } from '@eigenpal/docx-editor-core/agent';
 import { ContentControlValue } from '@eigenpal/docx-editor-core/agent';
 import { createDocumentWithText } from '@eigenpal/docx-editor-core';
@@ -16,11 +17,13 @@ import { default as DocxEditor } from './components/DocxEditor.vue';
 import { DocxInput } from '@eigenpal/docx-editor-core/utils';
 import { EditorHandle } from '@eigenpal/docx-editor-core';
 import { EditorRefLike } from '@eigenpal/docx-editor-agents/bridge';
+import { EditorView } from 'prosemirror-view';
 import { FontDefinition } from '@eigenpal/docx-editor-core/utils';
 import { FontOption } from '@eigenpal/docx-editor-core/utils/fontOptions';
 import { MaybeRef } from 'vue';
 import { Plugin as Plugin_2 } from 'prosemirror-state';
 import { PMContentControl } from '@eigenpal/docx-editor-core/prosemirror';
+import { SelectionState } from '@eigenpal/docx-editor-core/prosemirror';
 import { StyleValue } from 'vue';
 import { TFunction } from '@eigenpal/docx-editor-i18n';
 import { Theme } from '@eigenpal/docx-editor-core/types/document';
@@ -59,9 +62,18 @@ export interface DocxEditorProps {
     i18n?: Translations;
     initialZoom?: number;
     mode?: EditorMode;
+    onChange?: (document: Document_2) => void;
+    onCommentAdd?: (comment: Comment_2) => void;
+    onCommentDelete?: (comment: Comment_2) => void;
+    onCommentReply?: (reply: Comment_2, parent: Comment_2) => void;
+    onCommentResolve?: (comment: Comment_2) => void;
+    onCommentsChange?: (comments: Comment_2[]) => void;
     onDocumentNameChange?: (name: string) => void;
+    onEditorViewReady?: (view: EditorView) => void;
+    onError?: (error: Error) => void;
     onModeChange?: (mode: EditorMode) => void;
     onPrint?: () => void;
+    onSelectionChange?: (state: SelectionState | null) => void;
     readOnly?: boolean;
     renderLogo?: () => VNodeChild;
     renderTitleBarRight?: () => VNodeChild;

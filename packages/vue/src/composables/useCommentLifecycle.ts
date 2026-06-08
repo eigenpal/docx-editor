@@ -45,6 +45,7 @@ import {
   type CommentIdAllocator,
 } from '@eigenpal/docx-editor-core/prosemirror/commentIdAllocator';
 import type { TrackedChangeEntry } from '../components/sidebar/sidebarUtils';
+import type { CommentCallbacks } from './useCommentManagement';
 
 export interface UseCommentLifecycleOptions {
   editorView: Ref<EditorView | null>;
@@ -65,6 +66,8 @@ export interface UseCommentLifecycleOptions {
   emit: (event: string, ...args: unknown[]) => void;
   /** Author name for UI-created comments (the `author` prop). */
   author?: MaybeRef<string>;
+  /** Host-facing comment lifecycle callbacks (the `onComment*` props). */
+  commentCallbacks?: CommentCallbacks;
 }
 
 export function useCommentLifecycle(opts: UseCommentLifecycleOptions) {
@@ -230,6 +233,9 @@ export function useCommentLifecycle(opts: UseCommentLifecycleOptions) {
     );
     doc.package.document.comments.push(newComment);
     opts.comments.value = [...doc.package.document.comments];
+    // Match React's order: the full-array change fires before the granular add.
+    opts.commentCallbacks?.onCommentsChange?.(opts.comments.value);
+    opts.commentCallbacks?.onCommentAdd?.(newComment);
 
     // Swap the pending `commentId: -1` mark for the real id over the
     // captured range so the layout-painter writes [data-comment-id="N"].
