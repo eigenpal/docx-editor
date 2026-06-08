@@ -9,7 +9,7 @@
  * composable as inputs.
  */
 
-import type { Ref } from 'vue';
+import { unref, type MaybeRef, type Ref } from 'vue';
 import type { EditorView } from 'prosemirror-view';
 import type { Comment, Document } from '@eigenpal/docx-editor-core/types/document';
 import {
@@ -45,9 +45,14 @@ export interface UseCommentManagementOptions {
    * `useCommentLifecycle` so comment and tracked-change IDs never collide.
    */
   commentIdAllocator: CommentIdAllocator;
+  /** Author name for UI-created replies/changes (the `author` prop). */
+  author?: MaybeRef<string>;
 }
 
 export function useCommentManagement(opts: UseCommentManagementOptions) {
+  /** Current author name for UI-created comments/changes, defaulting to 'User'. */
+  const resolveAuthor = () => unref(opts.author) ?? 'User';
+
   /** Seed the shared allocator above every ID currently in the document. */
   function seedAllocator() {
     seedCommentAllocator(
@@ -126,7 +131,7 @@ export function useCommentManagement(opts: UseCommentManagementOptions) {
   }
 
   function handleCommentReply(commentId: number, text: string) {
-    replyToComment(commentId, text, 'User');
+    replyToComment(commentId, text, resolveAuthor());
   }
 
   // handleCommentResolve was a pure pass-through wrapper for resolveComment —
@@ -211,7 +216,7 @@ export function useCommentManagement(opts: UseCommentManagementOptions) {
     });
     if (anchorPos === null) return;
 
-    const comment = createComment(text, 'User');
+    const comment = createComment(text, resolveAuthor());
     doc.package.document.comments.push(comment);
     opts.comments.value = [...doc.package.document.comments];
     const from = anchorPos;

@@ -3,6 +3,7 @@
   "comment": "Cross-adapter parity contract between @eigenpal/docx-editor-react and @eigenpal/docx-editor-vue. Tracked in issue #475 Phase 3. Drives `bun run check:parity-contract`, which parses each adapter's docs/api/<slug>/index.api.md, applies this contract, and fails on undocumented drift. Adding a new prop or ref method to either adapter forces a contract update — there is no way to silently introduce divergence.",
   "props": {
     "paired": [
+      "author",
       "className",
       "disableFindReplaceShortcuts",
       "document",
@@ -32,7 +33,6 @@
     ],
     "deferredInVue": {
       "agentPanel": "AI agent panel UI. Vue adapter ships without the agent surface; React-only until the Vue agent components land.",
-      "author": "Author name for new comments/changes. Required when comments API arrives in Vue.",
       "comments": "Comment threads. Part of the Vue comments API gap.",
       "externalContent": "Sandboxed external-content rendering mode. React-only escape hatch.",
       "loadingIndicator": "Custom loading slot. Vue uses default slot via VNodeChild.",

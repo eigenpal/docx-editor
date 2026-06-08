@@ -32,7 +32,7 @@
  * that read them (margin markers, sidebar) keep a single source of truth.
  */
 
-import { ref, onMounted, onBeforeUnmount, watch, type Ref } from 'vue';
+import { ref, onMounted, onBeforeUnmount, watch, unref, type MaybeRef, type Ref } from 'vue';
 import type { EditorView } from 'prosemirror-view';
 import type { Document } from '@eigenpal/docx-editor-core/types/document';
 import type { Comment } from '@eigenpal/docx-editor-core/types/content';
@@ -63,6 +63,8 @@ export interface UseCommentLifecycleOptions {
   pagesRef: Ref<HTMLElement | null>;
   pagesViewportRef: Ref<HTMLElement | null>;
   emit: (event: string, ...args: unknown[]) => void;
+  /** Author name for UI-created comments (the `author` prop). */
+  author?: MaybeRef<string>;
 }
 
 export function useCommentLifecycle(opts: UseCommentLifecycleOptions) {
@@ -221,7 +223,11 @@ export function useCommentLifecycle(opts: UseCommentLifecycleOptions) {
     if (!doc.package.document.comments) doc.package.document.comments = [];
 
     seedCommentAllocator(opts.commentIdAllocator, doc.package.document.comments, view);
-    const newComment = createCommentCore(opts.commentIdAllocator, text, 'User');
+    const newComment = createCommentCore(
+      opts.commentIdAllocator,
+      text,
+      unref(opts.author) ?? 'User'
+    );
     doc.package.document.comments.push(newComment);
     opts.comments.value = [...doc.package.document.comments];
 

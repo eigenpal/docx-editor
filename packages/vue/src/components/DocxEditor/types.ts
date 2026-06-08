@@ -39,6 +39,8 @@ export interface DocxEditorProps {
   documentName?: string;
   /** Whether the editor is read-only. */
   readOnly?: boolean;
+  /** Author name used for comments and tracked changes created in the UI. Defaults to `'User'`. */
+  author?: string;
   /** Editor mode: direct editing, suggesting, or viewing. */
   mode?: EditorMode;
   /** Callback when the editing mode changes. */

@@ -46,6 +46,7 @@ export interface DocxEditorHandle extends EditorHandle {
 
 // @public
 export interface DocxEditorProps {
+    author?: string;
     className?: string;
     disableFindReplaceShortcuts?: boolean;
     document?: Document_2 | null;
