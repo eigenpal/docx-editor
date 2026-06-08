@@ -1,5 +1,19 @@
 # @eigenpal/docx-editor-vue
 
+## 1.3.2
+
+### Patch Changes
+
+- b05e9cf: Add the `author` prop to the Vue editor, matching React. Comments and tracked changes created through the UI now use the supplied author name instead of always being attributed to "User". Fixes #720.
+- 1c254e8: Add React-parity callback props to the Vue editor: `onChange`, `onError`, `onSelectionChange`, `onEditorViewReady`, and the comment lifecycle callbacks `onCommentAdd`, `onCommentResolve`, `onCommentDelete`, `onCommentReply`, and `onCommentsChange`. Hosts can now observe document, selection, and comment changes via props alongside the existing Vue events. Part of #720.
+- 6228132: Vue toolbar tooltips and the right-click text context menu now follow the active i18n locale instead of always rendering English. Shortcut-bearing buttons (bold, italic, underline, insert link, super/subscript, image properties) and every context-menu item (cut, copy, paste, delete, select all, table and image actions) route through `t()`.
+- Updated dependencies [3bd7bf7]
+- Updated dependencies [0ded2a1]
+- Updated dependencies [58e3a7e]
+  - @eigenpal/docx-editor-core@1.3.2
+  - @eigenpal/docx-editor-agents@1.3.2
+  - @eigenpal/docx-editor-i18n@1.3.2
+
 ## 1.3.1
 
 ### Patch Changes
