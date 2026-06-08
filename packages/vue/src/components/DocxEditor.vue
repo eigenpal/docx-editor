@@ -449,6 +449,7 @@ const props = withDefaults(defineProps<DocxEditorProps>(), {
   showRuler: true,
   documentName: '',
   readOnly: false,
+  author: 'User',
   mode: 'editing',
   i18n: undefined,
   theme: null,
@@ -481,6 +482,9 @@ const emit = defineEmits<{
 
 const editorMode = ref<EditorMode>(props.mode);
 const readOnly = computed(() => props.readOnly || editorMode.value === 'viewing');
+// Author for UI-created comments and tracked changes; threaded into the editor
+// (suggestion-mode plugin) and the comment composables. (#720)
+const authorRef = computed(() => props.author);
 
 provideLocale(computed(() => props.i18n));
 const { t } = createTranslator(computed(() => props.i18n));
@@ -550,6 +554,7 @@ const {
   pagesContainer: pagesRef,
   readOnly,
   externalPlugins: props.externalPlugins, syncCoordinator, editorMode,
+  author: authorRef,
   onChange: (doc) => {
     emit('change', doc);
     emit('update:document', doc);
@@ -789,6 +794,7 @@ const {
   pagesViewportRef,
   emit,
   commentIdAllocator,
+  author: authorRef,
 });
 
 const {
@@ -892,6 +898,7 @@ const {
   extractCommentsAndChanges,
   emit,
   commentIdAllocator,
+  author: authorRef,
 });
 
 // Composable order (TDZ-sensitive): useImageActions → usePagesPointer → useContextMenus → useSelectionSync → useDocxEditorRefApi.

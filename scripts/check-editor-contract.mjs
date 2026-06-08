@@ -19,7 +19,6 @@ const VUE_ONLY_PROPS = new Set([
 
 const REACT_PROPS_NOT_YET_IN_VUE = new Set([
   'onSave',
-  'author',
   'onChange',
   'onSelectionChange',
   'onError',
