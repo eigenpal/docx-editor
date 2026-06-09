@@ -114,6 +114,9 @@ export function distributeColumns(): (state: EditorState, dispatch?: (tr: Transa
 export const documentStylesKey: PluginKey<StyleResolver | null>;
 
 // @public
+export function ensureParaIdsInState(state: EditorState): EditorState;
+
+// @public
 export function extractSelectionContext(state: EditorState): SelectionContext;
 
 // @public
