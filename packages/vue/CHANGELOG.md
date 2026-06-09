@@ -1,5 +1,20 @@
 # @eigenpal/docx-editor-vue
 
+## 1.3.3
+
+### Patch Changes
+
+- bd704e2: Assign every paragraph a stable id when a document is opened, so block ids and `getSelectionInfo().paraId` work before the first edit. Previously a document without `w14:paraId` had null ids until you typed or added a comment. Fixes #738.
+- bf42c14: Fix the Vue editor's text caret disappearing or jumping to the wrong place while typing. The caret/selection overlay now repaints through the layout gate (after the page repaints) instead of synchronously against stale DOM, so the caret stays visible and follows the insertion point. Fixes #736.
+- Updated dependencies [bf748c0]
+- Updated dependencies [15d4f39]
+- Updated dependencies [06fa96b]
+- Updated dependencies [bd704e2]
+- Updated dependencies [30df527]
+  - @eigenpal/docx-editor-core@1.3.3
+  - @eigenpal/docx-editor-agents@1.3.3
+  - @eigenpal/docx-editor-i18n@1.3.3
+
 ## 1.3.2
 
 ### Patch Changes
