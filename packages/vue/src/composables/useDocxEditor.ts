@@ -27,7 +27,7 @@ import {
   proseDocToBlocks,
 } from '@eigenpal/docx-editor-core/prosemirror/conversion';
 import { fromProseDoc } from '@eigenpal/docx-editor-core/prosemirror/conversion/fromProseDoc';
-import { schema } from '@eigenpal/docx-editor-core/prosemirror';
+import { schema, ensureParaIdsInState } from '@eigenpal/docx-editor-core/prosemirror';
 import { singletonManager } from '@eigenpal/docx-editor-core/prosemirror/schema';
 import {
   createSuggestionModePlugin,
@@ -439,11 +439,16 @@ export function useDocxEditor(options: UseDocxEditorOptions): UseDocxEditorRetur
       styleResolverPlugin,
     ];
 
-    const state = EditorState.create({
-      doc,
-      schema: mgr.getSchema(),
-      plugins,
-    });
+    // Give every paragraph a paraId up front (docs without `w14:paraId` ship
+    // none), so block ids / agent scope work before the first edit — the
+    // allocator plugin's appendTransaction never fires on create (#738).
+    const state = ensureParaIdsInState(
+      EditorState.create({
+        doc,
+        schema: mgr.getSchema(),
+        plugins,
+      })
+    );
     editorState.value = state;
 
     const view = new EditorView(host, {
