@@ -569,7 +569,10 @@ const {
   },
   onSelectionUpdate: () => {
     stateTick.value++;
-    updateSelectionOverlay();
+    // The overlay repaint is intentionally NOT called here — it's driven via
+    // the `syncCoordinator.onRender` registration below so it paints against
+    // current DOM. Painting synchronously here resolves the caret against the
+    // not-yet-repainted DOM and the caret vanishes until the next click (#736).
     const view = editorView.value;
     // The prop mirrors React's `onSelectionChange`, which delivers a
     // `SelectionState` (formatting/style snapshot). The ref-API subscribers
@@ -1080,7 +1083,16 @@ const selectionSync = useSelectionSync({
   imageInteracting,
 });
 
+// Drive the overlay through the layout gate (mirrors DecorationLayer): the
+// `requestRender` in `dispatchTransaction` runs this immediately for
+// selection-only moves or defers it until `onLayoutComplete` after a doc edit
+// repaints, so the caret always lands on current DOM (#736). The eager call
+// paints the initial caret (the editor's own `requestRender` ran before this).
+const stopSelectionRender = syncCoordinator.onRender(() => updateSelectionOverlay());
+updateSelectionOverlay();
+
 onBeforeUnmount(() => {
+  stopSelectionRender();
   clearOverlay();
 });
 
