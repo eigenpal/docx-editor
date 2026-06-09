@@ -1,5 +1,19 @@
 # @eigenpal/docx-js-editor
 
+## 1.3.3
+
+### Patch Changes
+
+- bd704e2: Assign every paragraph a stable id when a document is opened, so block ids and `getSelectionInfo().paraId` work before the first edit. Previously a document without `w14:paraId` had null ids until you typed or added a comment. Fixes #738.
+- Updated dependencies [bf748c0]
+- Updated dependencies [15d4f39]
+- Updated dependencies [06fa96b]
+- Updated dependencies [bd704e2]
+- Updated dependencies [30df527]
+  - @eigenpal/docx-editor-core@1.3.3
+  - @eigenpal/docx-editor-agents@1.3.3
+  - @eigenpal/docx-editor-i18n@1.3.3
+
 ## 1.3.2
 
 ### Patch Changes
