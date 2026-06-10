@@ -20,21 +20,31 @@ import {
 
 export interface UseFormattingActionsOptions {
   editorView: Ref<EditorView | null>;
+  /**
+   * The view interactive toolbar formatting should target. While a header or
+   * footer is being edited this is its EditorView, so toolbar actions land in
+   * the HF and not the body (#749). Falls back to the body `editorView`. The
+   * agent ref-API (`applyFormatting`/`setParagraphStyle`, which resolve a
+   * paraId in the body) deliberately keeps using `editorView`.
+   */
+  activeView?: Ref<EditorView | null>;
   getDocument: () => Document | null;
 }
 
 export type { ApplyFormattingOptions };
 
 export function useFormattingActions(opts: UseFormattingActionsOptions) {
+  const targetView = () => opts.activeView?.value ?? opts.editorView.value;
+
   function handleClearFormatting() {
-    const view = opts.editorView.value;
+    const view = targetView();
     if (!view) return;
     clearFormatting(view.state, view.dispatch, view);
     view.focus();
   }
 
   function handleApplyStyle(styleId: string) {
-    const view = opts.editorView.value;
+    const view = targetView();
     if (!view) return;
     const doc = opts.getDocument();
     const styles = doc?.package?.styles;
@@ -59,7 +69,7 @@ export function useFormattingActions(opts: UseFormattingActionsOptions) {
   }
 
   function handleInsertSymbol(symbol: string) {
-    const view = opts.editorView.value;
+    const view = targetView();
     if (!view) return;
     const { from } = view.state.selection;
     const tr = view.state.tr.insertText(symbol, from);
