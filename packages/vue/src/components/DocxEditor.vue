@@ -31,17 +31,12 @@
         <template #title-bar-right><slot name="title-bar-right" /></template>
       </DocxEditorMenuBar>
 
-      <!-- Toolbar: pill with formatting buttons + editing-mode dropdown
-           on the right end. Mirrors React's <Toolbar> inline layout.
-           TableToolbar is rendered into Toolbar's `table-context`
-           slot so the table-context buttons appear inline inside the same
-           pill (React Toolbar.tsx does this with a conditional
-           `<ToolbarGroup>`). When the cursor leaves a table the slot
-           renders nothing and the pill collapses back to formatting
-           buttons + editing mode only. -->
+      <!-- Toolbar pill: formatting buttons + editing-mode dropdown. TableToolbar
+           renders into the `table-context` slot (inline in the same pill); the
+           slot is empty when the cursor isn't in a table. -->
       <Toolbar
         v-if="showToolbar"
-        :view="editorView"
+        :view="activeFormattingView"
         :get-commands="getCommands"
         :state-tick="stateTick"
         :zoom-percent="zoomPercent"
@@ -67,7 +62,7 @@
       >
         <template #table-context>
           <TableToolbar
-            :view="editorView"
+            :view="activeFormattingView"
             :get-commands="getCommands"
             :state-tick="stateTick"
             :theme="documentTheme"
@@ -654,13 +649,16 @@ const activeHfView = computed<EditorView | null>(() =>
   hfEdit.value?.headerFooter ? (getHfPmView(hfEdit.value.headerFooter) ?? null) : null
 );
 
+// Interactive toolbar formatting targets the edited header/footer, else body (#749).
+const activeFormattingView = computed<EditorView | null>(() => activeHfView.value ?? editorView.value);
+
 // Registered in onMounted because `hfEdit` is destructured later in this script setup (TDZ).
 onMounted(() => {
   setHfTransactionListener((_rId, view) => {
-    // Defer a frame so the painter repaints before we measure spans, then
-    // re-measure the painted HF rect so the chrome outline grows with the
-    // header as the user types (targetRect captured at engage stays fixed
-    // otherwise — blue border ends up covering only the original height).
+    // Re-derive toolbar state against the HF selection (incl. selection-only
+    // moves the HF dispatch never reports to stateTick) — parity with React (#749).
+    stateTick.value++;
+    // Defer a frame so the painter repaints, then re-measure the painted HF rect.
     requestAnimationFrame(() => {
       const edit = hfEdit.value;
       if (!edit) return;
@@ -855,7 +853,7 @@ const {
   handleInsertSymbol,
   applyFormatting,
   setParagraphStyle,
-} = useFormattingActions({ editorView, getDocument });
+} = useFormattingActions({ editorView, activeView: activeFormattingView, getDocument });
 
 const {
   handlePageSetupApply,
