@@ -231,6 +231,9 @@ onMounted(async () => {
     import.meta.env.VITE_DOCX_EDITOR_E2E === '1';
   if (isE2E) {
     window.__DOCX_EDITOR_E2E__ = {
+      // Raw body EditorView — lets specs build precise PM states (e.g. a line
+      // with mixed font sizes) without driving the toolbar UI.
+      getView: () => (editorRef.value?.getEditorRef() as any)?.getView?.() ?? null,
       getPmStartForParaId: (paraId: string) => {
         const state = (editorRef.value?.getEditorRef() as any)?.getState?.();
         if (!state || !paraId) return null;
