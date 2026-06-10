@@ -284,6 +284,17 @@ onMounted(async () => {
       },
       getTotalPages: () => editorRef.value?.getTotalPages() ?? 0,
       getCurrentPage: () => editorRef.value?.getCurrentPage() ?? 0,
+      // Collect every paragraph paraId from the host-facing Document model
+      // (getDocument()), regardless of nesting — used to assert getDocument()
+      // stays in sync with PM paraIds (#746).
+      getDocumentParaIds: () => {
+        const ids: (string | null)[] = [];
+        JSON.stringify(editorRef.value?.getDocument() ?? null, (k, v) => {
+          if (k === 'paraId') ids.push(v as string | null);
+          return v;
+        });
+        return ids;
+      },
       saveByteLength: async () => {
         const buffer = await editorRef.value?.save();
         return buffer?.byteLength ?? null;

@@ -451,6 +451,22 @@ export function useDocxEditor(options: UseDocxEditorOptions): UseDocxEditorRetur
     );
     editorState.value = state;
 
+    // Sync the cached host Document with the just-allocated paraIds so
+    // getDocument() exposes them before the first edit (#746). The allocation
+    // is applied to the state without dispatching (so #738 fires no onChange),
+    // which means the normal docChanged → fromProseDoc writeback never ran and
+    // the cache stayed at the parsed, id-less doc. Reassigning `document.value`
+    // here is silent (onChange only fires from dispatchTransaction) and keeps
+    // getDocument() returning the live, mutable cache that page-setup and
+    // comment ops rely on.
+    if (document.value) {
+      try {
+        document.value = fromProseDoc(state.doc, document.value);
+      } catch (err) {
+        console.error('[useDocxEditor] paraId cache sync error:', err);
+      }
+    }
+
     const view = new EditorView(host, {
       state,
       editable: () => !unref(readOnly),
