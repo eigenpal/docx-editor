@@ -171,6 +171,10 @@ export interface ParagraphAttrs {
         numId?: number;
         ilvl?: number;
     };
+    numPrFromStyle?: {
+        numId?: number;
+        ilvl?: number;
+    };
     _originalFormatting?: ParagraphFormatting;
     // (undocumented)
     outlineLevel?: number;

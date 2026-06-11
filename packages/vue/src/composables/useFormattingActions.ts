@@ -10,6 +10,7 @@ import type { EditorView } from 'prosemirror-view';
 import type { Document } from '@eigenpal/docx-editor-core/types/document';
 import { applyStyle } from '@eigenpal/docx-editor-core/prosemirror/commands/paragraph';
 import { createStyleResolver } from '@eigenpal/docx-editor-core/prosemirror/styles';
+import { getCachedNumberingMap } from '@eigenpal/docx-editor-core/docx';
 import { clearFormatting } from '@eigenpal/docx-editor-core/prosemirror/commands/formatting';
 import { insertPageBreak } from '@eigenpal/docx-editor-core/prosemirror/commands/pageBreak';
 import {
@@ -54,6 +55,7 @@ export function useFormattingActions(opts: UseFormattingActionsOptions) {
       applyStyle(styleId, {
         paragraphFormatting: resolved.paragraphFormatting,
         runFormatting: resolved.runFormatting,
+        numbering: doc?.package?.numbering ? getCachedNumberingMap(doc.package.numbering) : null,
       })(view.state, (tr) => view.dispatch(tr));
     } else {
       applyStyle(styleId)(view.state, (tr) => view.dispatch(tr));
@@ -88,7 +90,8 @@ export function useFormattingActions(opts: UseFormattingActionsOptions) {
     if (!view) return false;
     const doc = opts.getDocument();
     const styleResolver = doc?.package?.styles ? createStyleResolver(doc.package.styles) : null;
-    return setParagraphStyleCore(view, options, { styleResolver });
+    const numbering = doc?.package?.numbering ? getCachedNumberingMap(doc.package.numbering) : null;
+    return setParagraphStyleCore(view, options, { styleResolver, numbering });
   }
 
   return {

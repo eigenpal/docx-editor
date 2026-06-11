@@ -42,6 +42,7 @@ export function setParagraphStyle(view: EditorView, options: {
     styleId: string;
 }, deps: {
     styleResolver: StyleResolver | null;
+    numbering?: NumberingMap | null;
 }): boolean;
 
 // (No @packageDocumentation comment for this package)
