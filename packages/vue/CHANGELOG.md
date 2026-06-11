@@ -1,5 +1,21 @@
 # @eigenpal/docx-editor-vue
 
+## 1.4.0
+
+### Minor Changes
+
+- 1ab8b30: Image resize: drag a corner handle to scale (keeping aspect ratio) or an edge handle to stretch one side (width or height) and deliberately change the aspect ratio. Selection handles are now Word-style white dots. Inserted images keep their aspect ratio — a wide image dropped into a table cell or a narrow column now scales down to fit while staying in proportion, instead of squashing or overflowing the page. Fixes #266.
+
+### Patch Changes
+
+- 3d36236: Fix Vue `getDocument()` returning paragraphs without their `paraId`s until the first edit. The host Document cache is now synced with the ids assigned at load (#738), so `getDocument()` exposes them immediately. Fixes #746.
+- 92690d6: Fix the Vue formatting toolbar not applying to a header or footer while editing it. Bold, italic, font, size, color, paragraph style, and clear-formatting now target the header/footer being edited instead of the document body. Fixes #749.
+- Updated dependencies [28a521a]
+- Updated dependencies [1ab8b30]
+  - @eigenpal/docx-editor-core@1.4.0
+  - @eigenpal/docx-editor-agents@1.4.0
+  - @eigenpal/docx-editor-i18n@1.4.0
+
 ## 1.3.3
 
 ### Patch Changes
