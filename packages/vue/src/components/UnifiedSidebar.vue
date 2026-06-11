@@ -13,17 +13,8 @@
        a sibling so the !important overrides win against the base
        editor.css highlight rules without touching DOM nodes. -->
   <component v-if="expandedHighlightCss" :is="'style'">{{ expandedHighlightCss }}</component>
-  <aside
-    v-if="isOpen"
-    ref="rootRef"
-    class="unified-sidebar"
-    :style="asideStyle"
-    @mousedown.stop
-  >
-    <div
-      class="unified-sidebar__inner"
-      :style="{ minHeight: minHeightPx + 'px' }"
-    >
+  <aside v-if="isOpen" ref="rootRef" class="unified-sidebar" :style="asideStyle" @mousedown.stop>
+    <div class="unified-sidebar__inner" :style="{ minHeight: minHeightPx + 'px' }">
       <!-- Every item — add-comment input, comments, tracked changes —
            flows through the same `items` list and the shared
            `resolveItemPositions` collision pass (mirrors React's
@@ -65,6 +56,7 @@
           <TrackedChangeCard
             v-else-if="item.kind === 'tracked-change'"
             :change="item.change!"
+            :replies="item.replies ?? []"
             :expanded="expandedId === item.id"
             @click="toggleExpanded(item.id)"
             @accept="(from: number, to: number) => $emit('accept-change', from, to)"
@@ -163,6 +155,31 @@ const resolvedY = ref<Map<string, number>>(new Map());
 // at its last-known Y during transient layout instead of popping it out.
 const lastKnown = new Map<string, number>();
 let resizeObserver: ResizeObserver | null = null;
+// Observes every card slot. A card grows when it expands (reply input +
+// thread mount) or when its reply textarea auto-grows; the pagesContainer
+// observer never sees that, so without this the cards below stay stacked at
+// the collapsed height and the expanded card overlaps its neighbour.
+// Observing the slots re-runs the collision pass on any height change.
+let cardResizeObserver: ResizeObserver | null = null;
+// The slot elements currently observed — keyed by element identity, NOT by
+// card id. After a sidebar close/reopen the same ids reappear on brand-new
+// DOM nodes, so an id-string guard would keep observing detached nodes;
+// comparing elements re-binds to the live ones. Re-`observe()` is skipped
+// when the element set is unchanged (it would otherwise re-fire the
+// initial callback and spin recompute).
+let observedSlots = new Set<HTMLElement>();
+
+function syncCardObservers() {
+  const root = rootRef.value;
+  if (!root || !cardResizeObserver) return;
+  const slots = new Set(root.querySelectorAll<HTMLElement>('[data-card-id]'));
+  if (slots.size === observedSlots.size && [...slots].every((el) => observedSlots.has(el))) {
+    return;
+  }
+  cardResizeObserver.disconnect();
+  for (const el of slots) cardResizeObserver.observe(el);
+  observedSlots = slots;
+}
 
 function computePositions() {
   const container = props.pagesContainer;
@@ -258,6 +275,10 @@ function computePositions() {
     map.set(item.id, y);
   }
   resolvedY.value = map;
+
+  // Cards are in the DOM now — observe each slot so a later height change
+  // (expand, reply thread render, textarea growth) re-runs this pass.
+  syncCardObservers();
 }
 
 const minHeightPx = computed(() => {
@@ -398,6 +419,9 @@ function bindScrollListener() {
 }
 
 onMounted(() => {
+  // Watches card-slot height changes (expand / reply thread / textarea).
+  // computePositions() binds the observations once cards render.
+  cardResizeObserver = new ResizeObserver(() => recompute());
   recompute();
   // Bind ResizeObserver once pagesContainer is non-null.
   if (props.pagesContainer) {
@@ -409,7 +433,7 @@ onMounted(() => {
 
 watch(
   () => props.pagesContainer,
-  (el, _old) => {
+  (el) => {
     resizeObserver?.disconnect();
     resizeObserver = null;
     if (el) {
@@ -422,6 +446,7 @@ watch(
 
 onBeforeUnmount(() => {
   resizeObserver?.disconnect();
+  cardResizeObserver?.disconnect();
   if (scrollParent) scrollParent.removeEventListener('scroll', recompute);
 });
 </script>

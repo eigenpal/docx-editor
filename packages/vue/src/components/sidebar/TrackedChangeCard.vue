@@ -30,18 +30,38 @@
     <div class="tc-card__body">
       <template v-if="change.type === 'replacement'">
         {{ t('trackedChanges.replaced') }}
-        <span class="tc-card__deleted">&quot;{{ truncateText(change.deletedText || '') }}&quot;</span>
+        <span class="tc-card__deleted"
+          >&quot;{{ truncateText(change.deletedText || '') }}&quot;</span
+        >
         {{ t('trackedChanges.with') }}
         <span class="tc-card__inserted">&quot;{{ truncateText(change.text) }}&quot;</span>
       </template>
       <template v-else-if="change.type === 'paragraphMarkInsertion'">
-        {{ t('revisions.paragraphMarkInserted') }}<template v-if="change.text">: <span class="tc-card__inserted">&quot;{{ truncateText(change.text) }}&quot;</span></template>
+        {{ t('revisions.paragraphMarkInserted')
+        }}<template v-if="change.text"
+          >:
+          <span class="tc-card__inserted"
+            >&quot;{{ truncateText(change.text) }}&quot;</span
+          ></template
+        >
       </template>
       <template v-else-if="change.type === 'paragraphMarkDeletion'">
-        {{ t('revisions.paragraphMarkDeleted') }}<template v-if="change.text">: <span class="tc-card__deleted">&quot;{{ truncateText(change.text) }}&quot;</span></template>
+        {{ t('revisions.paragraphMarkDeleted')
+        }}<template v-if="change.text"
+          >:
+          <span class="tc-card__deleted"
+            >&quot;{{ truncateText(change.text) }}&quot;</span
+          ></template
+        >
       </template>
       <template v-else-if="change.type === 'paragraphPropertiesChanged'">
-        {{ t('revisions.paragraphPropertiesChanged') }}<template v-if="change.text">: <span class="tc-card__changed">&quot;{{ truncateText(change.text) }}&quot;</span></template>
+        {{ t('revisions.paragraphPropertiesChanged')
+        }}<template v-if="change.text"
+          >:
+          <span class="tc-card__changed"
+            >&quot;{{ truncateText(change.text) }}&quot;</span
+          ></template
+        >
       </template>
       <template v-else-if="change.type === 'rowInserted'">
         <span class="tc-card__inserted">{{ t('revisions.rowInserted') }}</span>
@@ -81,8 +101,11 @@
       </template>
     </div>
 
-    <!-- Reply input — mirrors React TrackedChangeCard.tsx:103. Lets
-         a user thread a comment under a tracked change. -->
+    <!-- Threaded replies + reply input — mirrors React
+         TrackedChangeCard.tsx. Replies are child comments keyed by
+         parentId === revisionId. -->
+    <ReplyThread :replies="replies" :is-expanded="expanded" />
+
     <ReplyInput
       v-if="expanded"
       @submit="(text: string) => $emit('reply', change.revisionId, text)"
@@ -92,18 +115,23 @@
 
 <script setup lang="ts">
 import { computed } from 'vue';
+import type { Comment } from '@eigenpal/docx-editor-core/types/content';
 import type { TrackedChangeEntry } from './sidebarUtils';
 import { formatDate, truncateText } from './sidebarUtils';
 import Avatar from './Avatar.vue';
 import MaterialSymbol from '../ui/MaterialSymbol.vue';
+import ReplyThread from './ReplyThread.vue';
 import ReplyInput from './ReplyInput.vue';
 import { useTranslation } from '../../i18n';
 
 const { t } = useTranslation();
 
+// `replies` is always supplied by UnifiedSidebar (`item.replies ?? []`),
+// matching the sibling CommentCard. Required, like React's TrackedChangeCard.
 const props = defineProps<{
   change: TrackedChangeEntry;
   expanded: boolean;
+  replies: Comment[];
 }>();
 
 const emit = defineEmits<{
@@ -147,7 +175,10 @@ function onReject() {
     0 1px 3px rgba(60, 64, 67, 0.2),
     0 2px 6px rgba(60, 64, 67, 0.08);
   margin-bottom: 6px;
-  transition: box-shadow 0.15s ease, background-color 0.15s ease, padding 0.15s ease;
+  transition:
+    box-shadow 0.15s ease,
+    background-color 0.15s ease,
+    padding 0.15s ease;
 }
 .tc-card--expanded {
   padding: 10px 12px;
