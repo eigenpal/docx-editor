@@ -1,0 +1,109 @@
+---
+title: 'MCP server'
+description: 'Expose DOCX review tools over the Model Context Protocol. Transport-agnostic McpServer, a stdio helper, and hosting patterns with your auth and storage.'
+category: 'Agents'
+seoTitle: 'MCP server for DOCX review'
+---
+
+`McpServer` exposes the [14 agent tools](/docs/1.x/agents/tools) over the Model Context Protocol, so any MCP-compatible client (Claude Desktop, agent platforms, your own MCP client) can read, comment, and redline a DOCX without knowing anything about this library.
+
+```ts
+import { McpServer } from '@eigenpal/docx-editor-agents/mcp';
+import { DocxReviewer, createReviewerBridge } from '@eigenpal/docx-editor-agents';
+
+const reviewer = await DocxReviewer.fromBuffer(buffer, 'MCP Reviewer');
+const server = new McpServer(createReviewerBridge(reviewer), {
+  name: 'acme-docx-review',
+  version: '1.0.0',
+});
+```
+
+The server wraps any `EditorBridge`. In practice that is a reviewer bridge (file-backed, server-side); the same class would accept a live-editor bridge since the interface is identical.
+
+## Transport-agnostic handle()
+
+The core is one synchronous method:
+
+```ts
+handle(message: JsonRpcMessage): JsonRpcResponse | null
+```
+
+- Accepts one JSON-RPC message; returns the response to send back, or `null` for notifications (which never get a reply).
+- Never throws. Protocol-level problems come back as JSON-RPC errors; tool failures come back as successful responses with `isError: true` in the MCP content payload, per MCP convention.
+- Implements `initialize`, `tools/list`, `tools/call`, and `ping`. Protocol version: `2025-06-18` (overridable via options).
+
+`tools/list` advertises all 14 built-in tools with their JSON-Schema inputs. `tools/call` dispatches through the same `executeToolCall` the other integration shapes use. Note the headless caveats: against a reviewer bridge, `read_selection` and the page tools fail with descriptive errors, since there is no user and no rendered pages.
+
+Because `handle()` is sync and transport-free, you can put it behind anything: HTTP, SSE, WebSocket, a queue consumer.
+
+## Hosting over HTTP
+
+The host owns everything around the protocol: authentication, loading the right document for the caller, and persisting the result. The server only translates JSON-RPC into bridge calls.
+
+```ts
+import express from 'express';
+import { McpServer } from '@eigenpal/docx-editor-agents/mcp';
+import { DocxReviewer, createReviewerBridge } from '@eigenpal/docx-editor-agents';
+
+const app = express();
+app.use(express.json());
+
+app.post('/mcp/:docId', requireAuth, async (req, res) => {
+  // You own storage: load the caller's document...
+  const buffer = await loadDocxForUser(req.user, req.params.docId);
+  const reviewer = await DocxReviewer.fromBuffer(buffer, req.user.name);
+  const server = new McpServer(createReviewerBridge(reviewer), {
+    name: 'acme-docx-review',
+    version: '1.0.0',
+  });
+
+  const reply = server.handle(req.body); // sync, never throws
+  if (reply) res.json(reply);
+  else res.status(204).end(); // notification: no reply by spec
+
+  // ...and you own persistence: flush mutations back to storage.
+  await saveDocxForUser(req.user, req.params.docId, await reviewer.toBuffer());
+});
+```
+
+For high-traffic hosts, keep a reviewer per session instead of re-parsing per request; the server and bridge are plain objects with no global state.
+
+## Stdio transport
+
+For local, single-document use there is a ready-made stdio loop (newline-delimited JSON-RPC on stdin/stdout):
+
+```ts
+import { readFile } from 'node:fs/promises';
+import { runStdioServer } from '@eigenpal/docx-editor-agents/mcp';
+import { DocxReviewer, createReviewerBridge } from '@eigenpal/docx-editor-agents';
+
+const buffer = await readFile(process.argv[2]);
+const reviewer = await DocxReviewer.fromBuffer(buffer, 'MCP Reviewer');
+
+runStdioServer(createReviewerBridge(reviewer), { name: 'docx-review', version: '1.0.0' });
+```
+
+`runStdioServer` returns a handle with the underlying `server`, a `feed()` method (used by tests), and `close()`. It defaults to `process.stdin` / `process.stdout` but accepts any duck-typed streams, caps the frame buffer at 1 MiB, and answers malformed frames with JSON-RPC parse errors instead of crashing.
+
+<Callout type="warn" title="Stdio is one document per config">
+  A stdio MCP bin binds to one file at launch, and clients like Claude Desktop load their server
+  list at startup. That does not fit a multi-document product. For anything beyond local
+  experiments, host the server yourself over HTTP with your own auth and per-request document
+  loading, as above.
+</Callout>
+
+## When to use MCP
+
+Pick MCP when the agent side already exists and speaks MCP: a desktop assistant, an agent platform, an internal orchestrator. You get tool discovery and invocation for free, and the client needs zero knowledge of this library.
+
+Pick the other shapes when you control both ends:
+
+- Building a product UI: the [live editor bridge](/docs/1.x/agents/ai-editing) gives you streaming, in-document feedback that MCP cannot.
+- Building a server pipeline you also own: calling [DocxReviewer](/docs/1.x/agents/docx-reviewer) directly is less moving parts than JSON-RPC framing.
+
+## Next steps
+
+- [DocxReviewer reference](/docs/1.x/agents/docx-reviewer), the bridge these servers wrap
+- [Tools reference](/docs/1.x/agents/tools), what `tools/list` advertises
+- [AI redlining](/docs/1.x/agents/redlining), the review semantics behind the tools
+- [API reference](/docs/1.x/api/agents)

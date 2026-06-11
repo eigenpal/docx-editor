@@ -1,0 +1,194 @@
+---
+title: 'Realtime collaboration'
+description: "Sync DocxEditor across users with Yjs, live cursors, presence, comment sync, and tracked changes attribution."
+category: "Guides"
+order: 35
+---
+
+Bind `DocxEditor` to a [Yjs](https://github.com/yjs/yjs) document to get live multi-user editing: cursors, presence, comment sync, and tracked-change attribution.
+
+**Try it in 30 seconds:** open the [collaboration demo](/editor?collaborate=1), share the URL with a tab or a colleague. (Or visit the [online editor](/editor) and click **Collaborate**.)
+
+## How it works
+
+The editor exposes three props that hand off state to a CRDT:
+
+| Prop | What it does |
+| --- | --- |
+| `externalContent` | Skip the built-in document loader. Yjs will populate the doc instead. |
+| `externalPlugins` | Pass Yjs's ProseMirror plugins (`ySyncPlugin`, `yCursorPlugin`, `yUndoPlugin`). |
+| `comments` + `onCommentsChange` | Controlled comment threads, mirrored to a Y.Array on the same Y.Doc. |
+
+Tracked changes sync **for free**: they're ProseMirror marks, so `ySyncPlugin` carries them along with everything else.
+
+## Step 1. Install
+
+```bash
+npm install yjs y-prosemirror y-webrtc
+```
+
+`y-webrtc` uses free public signaling and needs zero infra, which makes it the right starter. We'll cover production providers (PartyKit, Liveblocks, Hocuspocus) below.
+
+## Step 2. Set up a shared Y.Doc
+
+```tsx
+// useCollaboration.ts
+import { useEffect, useState } from 'react';
+import * as Y from 'yjs';
+import { WebrtcProvider } from 'y-webrtc';
+import { ySyncPlugin, yCursorPlugin, yUndoPlugin } from 'y-prosemirror';
+import type { Plugin } from 'prosemirror-state';
+
+export function useCollaboration(roomName: string, user: { name: string; color: string }) {
+  // Construct the provider in an effect (not useMemo): y-webrtc registers the
+  // room as a side effect, and an aborted render would leak it.
+  const [state, setState] = useState<{
+    provider: WebrtcProvider;
+    plugins: Plugin[];
+  } | null>(null);
+
+  useEffect(() => {
+    const ydoc = new Y.Doc();
+    const provider = new WebrtcProvider(roomName, ydoc);
+    const fragment = ydoc.getXmlFragment('prosemirror');
+    const plugins = [
+      ySyncPlugin(fragment),                 // syncs the PM doc
+      yCursorPlugin(provider.awareness),     // remote cursors
+      yUndoPlugin(),                         // shared undo/redo
+    ];
+    setState({ provider, plugins });
+    return () => {
+      provider.destroy();
+      ydoc.destroy();
+      setState(null);
+    };
+  }, [roomName]);
+
+  // Publish identity so peers can render avatars and labelled cursors.
+  useEffect(() => {
+    state?.provider.awareness.setLocalStateField('user', user);
+  }, [state, user.name, user.color]);
+
+  return state?.plugins ?? null;
+}
+```
+
+The hook returns `null` until the provider is ready; guard the editor render on it (shown in Step 3).
+
+## Step 3. Pass it to DocxEditor
+
+```tsx
+import { DocxEditor, createEmptyDocument } from '@eigenpal/docx-editor-react';
+import { useCollaboration } from './useCollaboration';
+
+export function CollaborativeEditor({ room, user }) {
+  const plugins = useCollaboration(room, user);
+
+  // Hold the editor mount until the Y.Doc + provider are ready: ySyncPlugin
+  // has to attach on initial EditorState construction; swapping plugins in
+  // later doesn't repopulate the doc.
+  if (!plugins) return <div>Joining room…</div>;
+
+  return (
+    <DocxEditor
+      document={createEmptyDocument()}  // schema seed. Yjs owns the content
+      externalContent
+      externalPlugins={plugins}
+      author={user.name}
+      showToolbar
+      showRuler
+    />
+  );
+}
+```
+
+Open the page in two tabs with the same `room`, type in one, watch the other update with a labelled cursor showing the remote user's color.
+
+## Adding comment sync
+
+Comment threads (text, replies, resolved status) live **outside** the PM doc. Mirror them through the controlled `comments` API to a Y.Array on the same Y.Doc.
+
+Two small changes to Step 2's hook first: keep the `Y.Doc` in the state object (`setState({ provider, plugins, ydoc })`) and return it alongside the plugins (`return { plugins: state?.plugins ?? null, ydoc: state?.ydoc ?? null }`). Step 3's call becomes `const { plugins, ydoc } = useCollaboration(room, user);`. Then this self-contained hook does the mirroring:
+
+```tsx
+// useSharedComments.ts
+import { useCallback, useEffect, useState } from 'react';
+import type * as Y from 'yjs';
+import type { Comment } from '@eigenpal/docx-editor-core';
+
+export function useSharedComments(ydoc: Y.Doc | null) {
+  const [comments, setCommentsState] = useState<Comment[]>([]);
+
+  // Mirror Y.Array → React state.
+  useEffect(() => {
+    if (!ydoc) return;
+    const yComments = ydoc.getArray<Comment>('comments');
+    const sync = () => setCommentsState(yComments.toArray());
+    sync();
+    yComments.observeDeep(sync);
+    return () => yComments.unobserveDeep(sync);
+  }, [ydoc]);
+
+  // Push React state → Y.Array.
+  const setComments = useCallback(
+    (next: Comment[]) => {
+      if (!ydoc) return;
+      const yComments = ydoc.getArray<Comment>('comments');
+      ydoc.transact(() => {
+        yComments.delete(0, yComments.length);
+        yComments.push(next);
+      });
+    },
+    [ydoc]
+  );
+
+  return { comments, setComments };
+}
+```
+
+Then pass to the editor:
+
+```tsx
+const { comments, setComments } = useSharedComments(ydoc);
+
+<DocxEditor
+  /* …other props… */
+  comments={comments}
+  onCommentsChange={setComments}
+/>
+```
+
+> **Production tip:** the snippet above replaces the entire array on every change. For high-concurrency rooms, store comments in a `Y.Map<commentId, Comment>` and apply diffs by id; that avoids two users clobbering each other's edits.
+
+## Production providers
+
+`y-webrtc` is fine for demos: peers connect directly and there's no server. Real apps want a backed provider with persistence and access control:
+
+| Provider | Best for | Swap |
+| --- | --- | --- |
+| [`y-partykit`](https://docs.partykit.io/reference/y-partykit-api/) (Cloudflare) | Edge-hosted rooms with storage | `new YPartyKitProvider(host, room, ydoc)` |
+| [`@liveblocks/yjs`](https://liveblocks.io/docs/api-reference/liveblocks-yjs) | Managed presence + auth | `new LiveblocksYjsProvider(room, ydoc)` |
+| [`@hocuspocus/provider`](https://tiptap.dev/docs/hocuspocus) | Self-hosted Node.js server | `new HocuspocusProvider({ url, name, document })` |
+| `y-websocket` | Roll-your-own WebSocket server | `new WebsocketProvider(url, room, ydoc)` |
+
+All four are drop-in replacements for `WebrtcProvider`; every other line of the hook stays the same. For example, switching to PartyKit means installing `y-partykit partysocket`, deploying a tiny `party/server.ts` that delegates to `y-partykit`'s `onConnect`, and changing one line in the hook:
+
+```ts
+import YPartyKitProvider from 'y-partykit/provider';
+const provider = new YPartyKitProvider('docx-collab.your-account.partykit.dev', roomName, ydoc);
+```
+
+## Full example
+
+A complete runnable example (full hook, AvatarStack, identity helper, App.tsx wiring) lives in the repo:
+
+> [examples/collaboration on GitHub](https://github.com/eigenpal/docx-editor/tree/main/examples/collaboration)
+
+The same code powers the **Collaborate** button in the [online editor](/editor) on this site. Direct deep-link: [/editor?collaborate=1](/editor?collaborate=1).
+
+## Next steps
+
+- [Comments](/docs/1.x/guides/comments) for the controlled comments API the sync builds on
+- [Tracked changes](/docs/1.x/guides/tracked-changes) for revision attribution and review
+- [examples/collaboration](https://github.com/eigenpal/docx-editor/tree/main/examples/collaboration): the full runnable starter
+- [React props](/docs/1.x/react/props) for `externalContent`, `externalPlugins`, and `comments`

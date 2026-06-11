@@ -1,0 +1,128 @@
+---
+title: 'Tracked changes'
+description: 'Enable suggesting mode to record edits as Word tracked changes. Text, formatting, and structural revisions you can accept or reject in the UI or via API.'
+category: 'Guides'
+---
+
+In suggesting mode every edit becomes a revision instead of a direct change. Insertions render underlined, deletions render struck through, and each revision carries its author and timestamp. Revisions serialize to Word's native `<w:ins>` / `<w:del>` markup, so a document reviewed in the editor and a document reviewed in Word are interchangeable.
+
+## Enable suggesting mode
+
+Set `mode="suggesting"`. Pair with `onModeChange` if you want to own the mode state; without it the editor manages mode internally (users can switch via the mode picker in the toolbar).
+
+```tsx
+import { useState } from 'react';
+import { DocxEditor, type EditorMode } from '@eigenpal/docx-editor-react';
+
+export function ReviewerEditor({ buf, reviewer }: { buf: ArrayBuffer; reviewer: string }) {
+  const [mode, setMode] = useState<EditorMode>('suggesting');
+
+  return (
+    <DocxEditor
+      documentBuffer={buf}
+      author={reviewer}
+      mode={mode}
+      onModeChange={setMode}
+    />
+  );
+}
+```
+
+<ModeToggleDemo />
+
+`EditorMode` is `"editing" | "suggesting" | "viewing"`. Lock reviewers into suggesting by passing `mode="suggesting"` and ignoring mode changes, or hide the toolbar and provide your own switch.
+
+## What gets tracked
+
+The revision model covers more than inline text:
+
+- **Text** insertions and deletions, including replacements (shown as "Replaced X with Y").
+- **Paragraph structure**: inserted and deleted paragraph breaks, paragraph property changes.
+- **Tables**: row and cell insert, delete, and merge, plus row, cell, and table property changes.
+- **Images**: inserted and deleted images.
+- **Lists**: numbering changes. Rejecting a list change reverts both the text and the numbering.
+
+All of these round-trip through DOCX as real OOXML revisions, not editor-private state.
+
+## The review sidebar
+
+Each revision appears as a card in the sidebar next to the document, labeled with what changed ("Added", "Deleted", "Inserted row", "Changed paragraph properties", and so on), who made it, and when. Each card has Accept and Reject buttons, and a reply box that attaches a comment to the revision. Placing the cursor inside a change opens the sidebar and expands the matching card.
+
+Documents that already contain revisions made in Word show them the same way; accepting or rejecting works regardless of which tool recorded the change.
+
+## Author and date attribution
+
+The `author` prop names the person behind new revisions (and new comments). Word shows the same name in its Review pane.
+
+```tsx
+<DocxEditor documentBuffer={buf} author="Jess Lin" mode="suggesting" />
+```
+
+Each revision records a timestamp at creation. Both fields survive save and reload.
+
+## Accept and reject via API
+
+The accept/reject operations behind the sidebar buttons are exported as ProseMirror commands from `@eigenpal/docx-editor-core/prosemirror/commands`:
+
+| Command | Effect |
+|---|---|
+| `acceptChangeById(revisionId)` | Accept one revision by id |
+| `rejectChangeById(revisionId)` | Reject one revision by id |
+| `acceptAllChanges()` | Accept every revision, all revision types |
+| `rejectAllChanges()` | Reject every revision, all revision types |
+
+Each returns a `Command` you run against the editor's view. Capture the view with the `onEditorViewReady` prop:
+
+```tsx
+import { useRef } from 'react';
+import type { EditorView } from 'prosemirror-view';
+import { DocxEditor } from '@eigenpal/docx-editor-react';
+import { acceptAllChanges } from '@eigenpal/docx-editor-core/prosemirror/commands';
+
+export function BulkReview({ buf }: { buf: ArrayBuffer }) {
+  const viewRef = useRef<EditorView | null>(null);
+
+  return (
+    <>
+      <button
+        onClick={() => {
+          const view = viewRef.current;
+          if (view) acceptAllChanges()(view.state, view.dispatch);
+        }}
+      >
+        Accept all
+      </button>
+      <DocxEditor documentBuffer={buf} onEditorViewReady={(v) => (viewRef.current = v)} />
+    </>
+  );
+}
+```
+
+To enumerate revisions (for your own list UI or an approval workflow), use `extractTrackedChanges` from `@eigenpal/docx-editor-core/prosemirror/utils/extractTrackedChanges`. It takes the editor state and returns the revision entries plus a comment-to-revision map.
+
+## Propose a change programmatically
+
+`DocxEditorRef.proposeChange` inserts a tracked replacement without the user typing, anchored to a paragraph by its `w14:paraId`:
+
+```ts
+ref.current?.proposeChange({
+  paraId: 'ABC12300',
+  search: 'thirty (30) days',
+  replaceWith: 'sixty (60) days',
+  author: 'Contract Bot',
+});
+```
+
+It returns `false` when the paragraph or search text is not found. This is the primitive AI redlining builds on; see [AI redlining](/docs/1.x/agents/redlining) for driving it from an LLM.
+
+## Interop with Word
+
+- Saving in suggesting mode writes standard `<w:ins>` and `<w:del>` elements. Word lists them in its Review pane with the same author and date, and Word's Accept/Reject resolves them.
+- Opening a document that contains Word revisions renders them inline and in the sidebar. Nothing is flattened on load.
+- Accept-all and reject-all resolve every revision type, including structural table and list revisions.
+
+## Next steps
+
+- [AI redlining](/docs/1.x/agents/redlining) for LLM-proposed tracked changes
+- [Comments](/docs/1.x/guides/comments) for discussion threads alongside revisions
+- [Props reference](/docs/1.x/react/props) for `mode`, `author`, and `onModeChange`

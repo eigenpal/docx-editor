@@ -1,0 +1,77 @@
+---
+title: 'Nuxt'
+description: 'Set up a Nuxt DOCX editor with the official module. One line in nuxt.config.ts gives you an auto-imported, SSR-safe DocxEditor component on Nuxt 3 and 4.'
+category: 'Frameworks'
+seoTitle: 'Nuxt DOCX editor setup'
+---
+
+By the end of this page you have a Nuxt app that opens a `.docx` from disk and edits it in the browser. Nuxt is the shortest setup of all the frameworks because the official module handles the SSR boundary and the stylesheet for you.
+
+## Install
+
+```bash
+npm install @eigenpal/nuxt-docx-editor
+```
+
+## Register the module
+
+```ts
+// nuxt.config.ts
+export default defineNuxtConfig({
+  modules: ['@eigenpal/nuxt-docx-editor'],
+});
+```
+
+That is the whole integration. The module auto-imports an SSR-safe `<DocxEditor>` and injects the editor stylesheet. No manual import, no `<ClientOnly>` wrapper, no Vite config. Works on Nuxt 3 and 4.
+
+## Use the component
+
+Adapted from [`examples/nuxt/app.vue`](https://github.com/eigenpal/docx-editor/tree/main/examples/nuxt):
+
+```vue
+<!-- app.vue -->
+<script setup lang="ts">
+import { ref } from 'vue';
+
+const buffer = ref<ArrayBuffer | null>(null);
+
+async function onFileSelect(event: Event) {
+  const file = (event.target as HTMLInputElement).files?.[0];
+  if (file) buffer.value = await file.arrayBuffer();
+}
+</script>
+
+<template>
+  <div style="height: 100vh; display: flex; flex-direction: column">
+    <div style="padding: 8px">
+      <input type="file" accept=".docx" @change="onFileSelect" />
+    </div>
+    <DocxEditor :document-buffer="buffer" :show-toolbar="true" />
+  </div>
+</template>
+```
+
+`<DocxEditor>` never renders during SSR; Nuxt shows a placeholder and hydrates the editor on the client. The component is the Vue adapter registered unchanged, so every prop, event, and ref method from `@eigenpal/docx-editor-vue` applies.
+
+<Callout type="info">
+  This page is the short version. Module options (`prefix`, `injectStyles`), auto-imported
+  composables, and what the module does not re-export are covered on the
+  [Nuxt module reference](/docs/1.x/vue/nuxt).
+</Callout>
+
+## Run the example
+
+```bash
+git clone https://github.com/eigenpal/docx-editor.git
+cd docx-editor
+bun install
+bun run dev:nuxt   # http://localhost:3002
+```
+
+## Next steps
+
+- [Nuxt module reference](/docs/1.x/vue/nuxt): options, composables, saving via a Nitro route
+- [Quickstart](/docs/1.x/quickstart): the load, edit, save flow in detail
+- [Loading and saving](/docs/1.x/guides/loading-and-saving): URLs, autosave, upload to your API
+- [Nuxt DOCX editor guide](/blog/nuxt-docx-editor): the long-form walkthrough
+- [Nuxt example on GitHub](https://github.com/eigenpal/docx-editor/tree/main/examples/nuxt)

@@ -1,0 +1,131 @@
+---
+title: 'Bring your own agent'
+description: 'Wire the 14 DOCX tools into Vercel AI SDK, OpenAI, Anthropic, LangChain, or any runtime that accepts OpenAI-style function schemas, with one shared executor.'
+category: 'Agents'
+order: 52
+---
+
+## Tool schemas
+
+All 14 tools ship as OpenAI-style function definitions. Anything that accepts that shape (Vercel AI SDK, Anthropic tool use, OpenAI Assistants, LangChain) takes them as-is.
+
+```ts
+import { getToolSchemas } from '@eigenpal/docx-editor-agents';
+
+const schemas = getToolSchemas();
+// [{ type: 'function', function: { name: 'add_comment', description: '...', parameters: { ... } } }, ...]
+```
+
+Execution is the same everywhere: when your runtime returns a tool call, run it with `executeToolCall(name, input, bridge)`. It is synchronous, never throws, and returns `{ success, data?, error? }`.
+
+## Vercel AI SDK
+
+The AI SDK has a dedicated subpath: `getAiSdkTools()` returns the catalog in the AI SDK's tool shape, with no `execute` functions, so every call is forwarded to the client.
+
+```ts
+// server route
+import { getAiSdkTools } from '@eigenpal/docx-editor-agents/ai-sdk/server';
+
+const tools = getAiSdkTools(); // pass to streamText({ tools, ... })
+```
+
+The route also needs `convertToModelMessages(messages)` and a `stopWhen` so the agent loop can run more than one step. The [AI editing tutorial](/docs/1.x/agents/ai-editing) walks through the complete server route and client wiring; start there if you are on the AI SDK.
+
+## Anthropic (Claude)
+
+Anthropic's Messages API wants `{ name, description, input_schema }` instead of the OpenAI envelope; the mapping is four lines.
+
+```ts
+import Anthropic from '@anthropic-ai/sdk';
+import { getToolSchemas, executeToolCall } from '@eigenpal/docx-editor-agents';
+
+const client = new Anthropic();
+
+const tools = getToolSchemas().map(({ function: fn }) => ({
+  name: fn.name,
+  description: fn.description,
+  input_schema: fn.parameters,
+}));
+
+const response = await client.messages.create({
+  model: 'claude-sonnet-4-5',
+  max_tokens: 1024,
+  tools,
+  messages: [
+    /* ... */
+  ],
+});
+
+// For each tool_use block, run it against your bridge and send the
+// result back as a tool_result block:
+for (const block of response.content) {
+  if (block.type !== 'tool_use') continue;
+  const result = executeToolCall(block.name, block.input as Record<string, unknown>, bridge);
+}
+```
+
+## OpenAI
+
+Same schemas, same shape: pass them to `tools:` in the chat completions API.
+
+```ts
+import OpenAI from 'openai';
+import { getToolSchemas, executeToolCall } from '@eigenpal/docx-editor-agents';
+
+const client = new OpenAI();
+
+const response = await client.chat.completions.create({
+  model: 'gpt-4o',
+  messages,
+  tools: getToolSchemas(), // already in chat-completions tool format
+});
+
+for (const call of response.choices[0].message.tool_calls ?? []) {
+  const result = executeToolCall(call.function.name, JSON.parse(call.function.arguments), bridge);
+  messages.push({
+    role: 'tool',
+    tool_call_id: call.id,
+    content: typeof result.data === 'string' ? result.data : JSON.stringify(result),
+  });
+}
+// Send `messages` back to the model; repeat until there are no tool calls.
+```
+
+## MCP clients
+
+If your agent already speaks MCP, expose the toolkit as a server instead:
+
+```ts
+import { McpServer } from '@eigenpal/docx-editor-agents/mcp';
+import { DocxReviewer, createReviewerBridge } from '@eigenpal/docx-editor-agents';
+
+const reviewer = await DocxReviewer.fromBuffer(buffer, 'Agent');
+const server = new McpServer(createReviewerBridge(reviewer));
+// wire to your MCP transport (stdio, websocket, etc.)
+```
+
+See [MCP server](/docs/1.x/agents/mcp) for transports and hosting, and the [API reference: agents](/docs/1.x/api/agents) for full signatures.
+
+## LangChain / custom
+
+`agentTools` is the underlying tool definition array. Wrap each entry however your framework expects, then dispatch through `executeToolCall` with a bridge. A headless `DocxReviewer` must be wrapped with `createReviewerBridge` first; a live editor uses `createEditorBridge` (or the React/Vue hooks).
+
+```ts
+import { agentTools, executeToolCall, createReviewerBridge } from '@eigenpal/docx-editor-agents';
+
+const bridge = createReviewerBridge(reviewer);
+
+for (const tool of agentTools) {
+  // Convert { name, description, inputSchema } to your framework's tool shape...
+}
+
+// When the framework dispatches a tool call (synchronous, never throws):
+const result = executeToolCall(toolName, toolInput, bridge);
+```
+
+## Next steps
+
+- [AI editing tutorial](/docs/1.x/agents/ai-editing), full client wiring with the AI SDK
+- [Tools reference](/docs/1.x/agents/tools), every parameter and return shape
+- [Word JS API parity](/docs/1.x/agents/word-js-api), the Office.js mapping
+- [API reference](/docs/1.x/api/agents), every subpath

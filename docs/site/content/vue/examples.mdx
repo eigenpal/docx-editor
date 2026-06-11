@@ -1,0 +1,222 @@
+---
+title: "Vue examples"
+description: "Concrete patterns for embedding <DocxEditor> in Vue 3: load from URL or file input, autosave, comment persistence, custom fonts, read-only viewer, agent chat."
+category: "Vue"
+order: 42
+---
+
+Drop-in components for the common patterns. Each is self-contained; swap the data source for your own.
+
+## Load a document from a URL
+
+```vue
+<script setup lang="ts">
+import { ref, watchEffect } from 'vue';
+import { DocxEditor } from '@eigenpal/docx-editor-vue';
+import '@eigenpal/docx-editor-vue/styles.css';
+
+const props = defineProps<{ url: string }>();
+const buf = ref<ArrayBuffer | null>(null);
+
+watchEffect(async () => {
+  buf.value = await fetch(props.url).then((r) => r.arrayBuffer());
+});
+</script>
+
+<template>
+  <DocxEditor :document-buffer="buf" />
+</template>
+```
+
+<DemoPlayground />
+
+## Load from a file input
+
+`document-buffer` accepts a `File` directly, so there is no `arrayBuffer()` step:
+
+```vue
+<script setup lang="ts">
+import { ref } from 'vue';
+import { DocxEditor } from '@eigenpal/docx-editor-vue';
+
+const file = ref<File | null>(null);
+
+function onFile(e: Event) {
+  file.value = (e.target as HTMLInputElement).files?.[0] ?? null;
+}
+</script>
+
+<template>
+  <input type="file" accept=".docx" @change="onFile" />
+  <DocxEditor v-if="file" :document-buffer="file" />
+</template>
+```
+
+## Autosave on change
+
+Debounce `save()` on the template ref to persist to a server:
+
+```vue
+<script setup lang="ts">
+import { useTemplateRef } from 'vue';
+import { DocxEditor, type DocxEditorRef } from '@eigenpal/docx-editor-vue';
+
+const props = defineProps<{ docId: string }>();
+const editor = useTemplateRef<DocxEditorRef>('editor');
+
+let timer: number | undefined;
+function onChange() {
+  window.clearTimeout(timer);
+  timer = window.setTimeout(async () => {
+    const buf = await editor.value?.save(); // Promise<ArrayBuffer | null>
+    if (buf) await fetch(`/api/documents/${props.docId}`, { method: 'PUT', body: buf });
+  }, 1500);
+}
+</script>
+
+<template>
+  <DocxEditor ref="editor" :document-buffer="null" @change="onChange" />
+</template>
+```
+
+For localStorage autosave with crash recovery, use the `useAutoSave` composable from `@eigenpal/docx-editor-vue/composables` instead.
+
+## Persisting comments
+
+The Vue adapter has no controlled `comments` prop (React-only; see [Vue props](/docs/1.x/vue/props#comments-and-collaboration)). Listen to `@comments-change` to persist comment state as it mutates:
+
+```vue
+<script setup lang="ts">
+import { DocxEditor } from '@eigenpal/docx-editor-vue';
+import type { Comment } from '@eigenpal/docx-editor-core';
+
+defineProps<{ buf: ArrayBuffer; author: string }>();
+
+async function persist(next: Comment[]) {
+  await fetch('/api/comments', {
+    method: 'PUT',
+    body: JSON.stringify(next),
+    headers: { 'content-type': 'application/json' },
+  });
+}
+</script>
+
+<template>
+  <DocxEditor :document-buffer="buf" :author="author" @comments-change="persist" />
+</template>
+```
+
+To create a comment from your own UI, call `editor.value?.addComment({ paraId, text, author })` on the template ref. Pushing an external comment array into the editor is not possible in Vue today.
+
+## Suggesting mode
+
+```vue
+<script setup lang="ts">
+import { DocxEditor } from '@eigenpal/docx-editor-vue';
+
+defineProps<{ buf: ArrayBuffer; reviewer: string }>();
+</script>
+
+<template>
+  <DocxEditor :document-buffer="buf" :author="reviewer" mode="suggesting" />
+</template>
+```
+
+<ModeToggleDemo />
+
+Edits wrap in revision markup and round-trip to Word's `<w:ins>` / `<w:del>`; since 1.1.0 this covers paragraph, table, image, and list changes as well as inline text. See [Tracked changes](/docs/1.x/guides/tracked-changes).
+
+## Custom fonts
+
+`:fonts` registers self-hosted font faces and `:font-families` controls the picker; the full rules are under [React props → Fonts](/docs/1.x/react/props#fonts).
+
+```vue
+<script setup lang="ts">
+import { DocxEditor } from '@eigenpal/docx-editor-vue';
+
+defineProps<{ buf: ArrayBuffer }>();
+
+// Declared once in setup so the array identity stays stable.
+const fonts = [
+  { family: 'Inter', src: '/fonts/Inter-Regular.woff2' },
+  { family: 'Inter', src: '/fonts/Inter-Bold.woff2', weight: 700 },
+  { family: 'JetBrains Mono', src: '/fonts/JetBrainsMono-Regular.woff2' },
+];
+const fontFamilies = ['Inter', 'JetBrains Mono', 'Arial', 'Times New Roman'];
+</script>
+
+<template>
+  <DocxEditor
+    :document-buffer="buf"
+    :fonts="fonts"
+    :font-families="fontFamilies"
+    @error="(err) => console.error('font or parse error', err)"
+  />
+</template>
+```
+
+The `/fonts/...` paths resolve against your site root (`public/` in Vite or a Nuxt app).
+
+## Read-only viewer
+
+```vue
+<script setup lang="ts">
+import { DocxEditor } from '@eigenpal/docx-editor-vue';
+
+defineProps<{ buf: ArrayBuffer }>();
+</script>
+
+<template>
+  <DocxEditor
+    :document-buffer="buf"
+    read-only
+    :show-toolbar="false"
+    :show-zoom-control="false"
+  />
+</template>
+```
+
+<ReadOnlyDemo />
+
+## Realtime collaboration (Yjs)
+
+The Vue adapter ships `:external-plugins` for the y-prosemirror plugins, but the two other pieces of the collaboration setup are React-only today: the `externalContent` loader hand-off and the controlled `comments` prop (both listed as deferred in the parity contract). The full Yjs walkthrough on [Realtime collaboration](/docs/1.x/realtime-collaboration) is therefore written against the React adapter; follow it there if you need live multi-user editing now.
+
+## Agent chat next to the editor
+
+Vue exposes the agent toolkit through the `useAgentBridge` composable. There is no `agentPanel` prop or slot in the Vue adapter (React-only for now), so render the chat UI beside the editor:
+
+```vue
+<script setup lang="ts">
+import { useTemplateRef } from 'vue';
+import { DocxEditor, type DocxEditorRef } from '@eigenpal/docx-editor-vue';
+import { useAgentBridge } from '@eigenpal/docx-editor-agents/vue';
+
+defineProps<{ buf: ArrayBuffer }>();
+const editor = useTemplateRef<DocxEditorRef>('editor');
+const { executeToolCall, toolSchemas } = useAgentBridge({
+  editorRef: editor,
+  author: 'Assistant',
+});
+// Send toolSchemas to your LLM route; run each returned tool call through
+// executeToolCall(name, input) and feed the result back to the model.
+</script>
+
+<template>
+  <div class="layout">
+    <DocxEditor ref="editor" :document-buffer="buf" />
+    <!-- your chat pane: AgentChatLog / AgentComposer from
+         @eigenpal/docx-editor-agents/vue, or your own UI -->
+  </div>
+</template>
+```
+
+Full tool loop (server route, streaming, AI SDK wiring) in [AI document editing](/docs/1.x/agents/ai-editing); the Vue specifics are in [Agents → Live editor](/docs/1.x/agents/live-editor).
+
+<AgentChatDemo />
+
+## Next steps
+
+- [Vue props](/docs/1.x/vue/props)
+- [Vue API reference](/docs/1.x/api/vue)
+- [React examples](/docs/1.x/react/examples), identical patterns for cross-reference

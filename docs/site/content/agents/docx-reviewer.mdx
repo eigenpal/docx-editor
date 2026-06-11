@@ -1,0 +1,190 @@
+---
+title: 'DocxReviewer'
+description: 'DocxReviewer API reference: parse a DOCX buffer in Node, add comments and tracked changes, accept or reject, batch-apply an AI review, serialize back.'
+category: 'Agents'
+seoTitle: 'DocxReviewer: headless DOCX review'
+---
+
+`DocxReviewer` is the headless half of the agent toolkit: parse a DOCX buffer, read and mutate the document model (comments, tracked changes, formatting), and serialize the result back to a buffer. No DOM, no editor instance, no browser. It runs anywhere Node-flavored JavaScript runs: API routes, queue workers, Lambdas, CI bots.
+
+```ts
+import { readFile, writeFile } from 'node:fs/promises';
+import { DocxReviewer } from '@eigenpal/docx-editor-agents';
+
+const buffer = await readFile('contract.docx');
+const reviewer = await DocxReviewer.fromBuffer(buffer, 'AI Reviewer');
+
+reviewer.addComment(5, 'This cap seems too low.');
+reviewer.replace(5, '$50k', '$500k');
+
+await writeFile('contract.reviewed.docx', new Uint8Array(await reviewer.toBuffer()));
+```
+
+The reviewer addresses paragraphs by **ordinal index** (the `[N]` prefix in `getContentAsText()` output). When you drive it through `createReviewerBridge`, the bridge translates the agent-facing `paraId` handles to indices for you.
+
+## Constructing
+
+```ts
+// From a DOCX file buffer (the usual path):
+const reviewer = await DocxReviewer.fromBuffer(buffer, 'AI Reviewer');
+
+// From an already-parsed Document (advanced):
+const reviewer = new DocxReviewer(document, 'AI Reviewer', originalBuffer);
+```
+
+The second argument is the default author stamped on every comment and tracked change; it defaults to `'AI'`. Per-call `author` options override it. The reviewer deep-clones the document, so the input model is never mutated.
+
+## Reading
+
+```ts
+// Structured blocks: headings, paragraphs, tables, list items.
+const blocks = reviewer.getContent();
+
+// Plain text for LLM prompts. Each paragraph is prefixed with its index:
+// "[0] Quarterly report", "[5] (table, row 1, col 2) cell text".
+const text = reviewer.getContentAsText();
+```
+
+`getContentAsText()` is the recommended prompt format: index-prefixed plain lines avoid the JSON quote-escaping that makes models misquote text.
+
+## Discovering comments and changes
+
+```ts
+const comments = reviewer.getComments(); // ReviewComment[] with threaded replies
+const changes = reviewer.getChanges(); // ReviewChange[] (insertions / deletions)
+
+// Also report changes inside footnote / endnote bodies:
+const all = reviewer.getChanges({ includeFootnotes: true, includeEndnotes: true });
+```
+
+Change ids are the raw `w:id`, unique only within their part (document vs. footnotes vs. endnotes). Note-only changes are surfaced for discovery; trying to accept or reject one throws `NoteChangeNotEditableError`.
+
+## Commenting
+
+```ts
+// Short form: paragraph index + text.
+const id = reviewer.addComment(5, 'Liability cap seems too low.');
+
+// Full options: anchor to a phrase, override the author.
+reviewer.addComment({
+  paragraphIndex: 5,
+  text: 'Quantify this.',
+  search: 'substantially all',
+  author: 'Compliance Bot',
+});
+
+reviewer.replyTo(id, 'Raised to $500k in the linked proposal.');
+reviewer.removeComment(id); // also removes replies + range markers
+```
+
+## Proposing tracked changes
+
+All three verbs write Word-native tracked changes attributed to the author; nothing is edited in place.
+
+```ts
+// Replace: deletion + insertion pair.
+reviewer.replace(5, '$50k', '$500k');
+reviewer.replace({ paragraphIndex: 5, search: '$50k', replaceWith: '$500k', author: 'Legal AI' });
+
+// Insert (position relative to the paragraph or to a phrase within it):
+reviewer.proposeInsertion({
+  paragraphIndex: 5,
+  insertText: ' as adjusted annually for inflation',
+  position: 'after',
+  search: '$500k',
+});
+
+// Delete a phrase:
+reviewer.proposeDeletion({ paragraphIndex: 9, search: 'time is of the essence' });
+```
+
+`search` phrases must occur in the target paragraph; `TextNotFoundError` is thrown otherwise.
+
+## Accepting and rejecting
+
+These are host APIs for your pipeline or review UI. They are deliberately not exposed as agent tools; see [AI redlining: human accept and reject](/docs/1.x/agents/redlining#human-accept-and-reject).
+
+```ts
+reviewer.acceptChange(12); // throws ChangeNotFoundError for unknown ids
+reviewer.rejectChange(13); // throws NoteChangeNotEditableError for note-only ids
+const accepted = reviewer.acceptAll(); // returns count
+const rejected = reviewer.rejectAll(); // returns count
+```
+
+## Batch: applyReview
+
+`applyReview()` applies a whole review in one call. It is built for the structured-output path: ask the model for a JSON review, parse it, hand it over. Individual failures are collected in the result, not thrown.
+
+```ts
+const result = reviewer.applyReview({
+  accept: [3],
+  reject: [7],
+  comments: [
+    { paragraphIndex: 4, text: 'Cite the source for this figure.', search: '40% reduction' },
+  ],
+  replies: [{ commentId: 2, text: 'Resolved in section 4.' }],
+  proposals: [
+    { paragraphIndex: 9, search: 'best efforts', replaceWith: 'commercially reasonable efforts' },
+  ],
+});
+
+// {
+//   accepted: 1, rejected: 1, commentsAdded: 1, repliesAdded: 1,
+//   proposalsAdded: 1,
+//   errors: []   // [{ operation, id?, search?, error }] for anything that failed
+// }
+```
+
+Operations run in a fixed order: accept/reject, then comments, then replies, then proposals. Items without an `author` use the reviewer's default.
+
+## Exporting
+
+```ts
+const docxBuffer = await reviewer.toBuffer(); // ArrayBuffer, ready to write or upload
+const document = reviewer.toDocument(); // the mutated Document model
+```
+
+`toBuffer()` repacks against the original file, preserving the parts the reviewer does not touch. It requires the original buffer, so construct via `fromBuffer()` (or pass `originalBuffer` to the constructor) if you plan to serialize.
+
+## createReviewerBridge: tool loops against a file
+
+`createReviewerBridge(reviewer)` wraps the reviewer in the same `EditorBridge` interface the live editor exposes. That means the [14 agent tools](/docs/1.x/agents/tools), `executeToolCall`, and the [MCP server](/docs/1.x/agents/mcp) all work against a static file:
+
+```ts
+import { DocxReviewer, createReviewerBridge, executeToolCall } from '@eigenpal/docx-editor-agents';
+
+const reviewer = await DocxReviewer.fromBuffer(buffer, 'AI Reviewer');
+const bridge = createReviewerBridge(reviewer);
+
+executeToolCall('find_text', { query: 'best efforts' }, bridge);
+executeToolCall(
+  'suggest_change',
+  { paraId: '5D0A21', search: 'best efforts', replaceWith: 'commercially reasonable efforts' },
+  bridge
+);
+
+const out = await reviewer.toBuffer(); // the bridge mutates the reviewer in place
+```
+
+Headless trade-offs:
+
+- `read_selection` reports no selection (there is no user).
+- `scroll` validates the `paraId` and reports success without moving anything.
+- `read_page` / `read_pages` fail: a static document has no rendered pages.
+- `onContentChange` listeners fire after each successful mutation; `onSelectionChange` never fires.
+- The bridge does not auto-save. Call `reviewer.toBuffer()` when the loop finishes.
+
+A complete LLM-driven loop using this bridge is worked through in [AI redlining: batch review on the server](/docs/1.x/agents/redlining#batch-review-on-the-server).
+
+## Deployment notes
+
+- No DOM and no editor dependency; the package README quotes roughly 50 KB for this path.
+- Works in Node, serverless functions, and edge-like runtimes that provide `structuredClone` and dynamic `import()`.
+- `fromBuffer` parses with font preloading disabled; nothing touches the network.
+
+## Next steps
+
+- [AI redlining](/docs/1.x/agents/redlining), the batch review pipeline in context
+- [MCP server](/docs/1.x/agents/mcp), expose a reviewer-backed bridge over JSON-RPC
+- [Tools reference](/docs/1.x/agents/tools), what the agent can call through the bridge
+- [API reference](/docs/1.x/api/agents)

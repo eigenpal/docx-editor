@@ -1,0 +1,15 @@
+{
+  "title": "AI & Agents",
+  "defaultOpen": true,
+  "pages": [
+    "index",
+    "ai-editing",
+    "redlining",
+    "live-editor",
+    "tools",
+    "docx-reviewer",
+    "mcp",
+    "bring-your-own",
+    "word-js-api"
+  ]
+}

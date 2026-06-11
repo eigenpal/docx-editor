@@ -1,0 +1,77 @@
+---
+title: 'Introduction'
+description: 'Open source WYSIWYG DOCX editor for React and Vue. Runs in the browser, no backend: .docx in, .docx out, with tracked changes, comments, and AI agents.'
+category: 'Getting Started'
+order: 1
+seoTitle: 'DOCX Editor for React and Vue'
+---
+
+`.docx` in, `.docx` out: an open-source WYSIWYG DOCX editor for React and Vue, client-side, agent-ready. It parses OOXML in the browser, renders true paginated pages with Word's metrics, and serializes back to a `.docx` that opens cleanly in Microsoft Word. No upload, no conversion service, no backend.
+
+<Cards>
+  <Card title="Get it running" href="/docs/1.x/quickstart">
+    Load → edit → save in five minutes. Copy-paste React and Vue snippets, file input to .docx download.
+  </Card>
+  <Card title="Can I trust it in prod?" href="/docs/1.x/word-fidelity">
+    Rendering fidelity, round-trip guarantees, security model, API stability. The adoption checklist.
+  </Card>
+  <Card title="Build AI document features" href="/docs/1.x/agents">
+    Wire an agent to the live editor: read paragraphs, add comments, suggest tracked changes. MCP included.
+  </Card>
+</Cards>
+
+## Packages
+
+| Package | What's in it |
+|---|---|
+| [`@eigenpal/docx-editor-react`](/docs/1.x/react) | React adapter. `<DocxEditor>` with toolbar, dialogs, hooks (history, find/replace, autosave, clipboard), plugin host. |
+| [`@eigenpal/docx-editor-vue`](/docs/1.x/vue) | Vue 3 adapter. Same `<DocxEditor>`, same props and ref methods; hooks become composables. |
+| [`@eigenpal/nuxt-docx-editor`](/docs/1.x/vue/nuxt) | Nuxt 3 & 4 module wrapping the Vue adapter. Auto-imports an SSR-safe `<DocxEditor>`. |
+| [`@eigenpal/docx-editor-core`](/docs/1.x/core) | Framework-agnostic core: OOXML parser/serializer, document model, ProseMirror schema, layout engine. |
+| [`@eigenpal/docx-editor-agents`](/docs/1.x/agents) | Agent toolkit: `DocxReviewer` (headless), live-editor bridge, AI SDK adapters, MCP server, chat UI. |
+| [`@eigenpal/docx-editor-i18n`](/docs/1.x/i18n) | Locale data for both adapters. Ships `en`, `de`, `fr`, `he`, `hi`, `pl`, `pt-BR`, `tr`, `zh-CN`. |
+
+All packages are Apache 2.0 and released together in a fixed version group.
+
+## Which package do I need?
+
+**React app.** Install `-react`. It pulls in `-core` and `-i18n`.
+
+```bash
+npm install @eigenpal/docx-editor-react
+```
+
+**Vue 3 app.** Same shape, swap the adapter. On Nuxt, install `@eigenpal/nuxt-docx-editor` instead.
+
+```bash
+npm install @eigenpal/docx-editor-vue
+```
+
+**Server-side parsing or batch review.** No UI needed: `-core` for the document model, `-agents` for `DocxReviewer`.
+
+```bash
+npm install @eigenpal/docx-editor-core @eigenpal/docx-editor-agents
+```
+
+**AI on top of an existing editor.** Layer `-agents` onto `-react` or `-vue`. The MCP server is the `/mcp` subpath of the same package.
+
+## What it handles
+
+The editor models the Word constructs that production documents actually use, and round-trips them through OOXML:
+
+- Text formatting, fonts, theme colors, paragraph styles
+- Tables (including merged cells and page-spanning rows), lists and numbering
+- Headers, footers, sections, page layout
+- Tracked changes and suggesting mode, comments with replies
+- Images (inline and anchored), hyperlinks, bookmarks, fields
+- Footnotes, endnotes, content controls
+- Real-time collaboration over [Yjs](/docs/1.x/realtime-collaboration)
+
+Feature-by-feature coverage and fidelity notes: [Word features](/docs/1.x/word-fidelity). Or open one of your own documents in the [live demo](https://docx-editor.dev/editor).
+
+## Next steps
+
+- [Quickstart](/docs/1.x/quickstart): the load → edit → save loop
+- [Installation](/docs/1.x/installation): Next.js, Vite, Remix, Astro, Vue, Nuxt
+- [Production readiness](/docs/1.x/word-fidelity): the evaluation checklist
+- [Examples](/docs/1.x/examples): runnable starters and live demos

@@ -1,0 +1,151 @@
+---
+title: 'Word fidelity'
+description: 'Word feature support matrix and fidelity guarantees for the open source DOCX editor: rendering, round-trip, security and API stability for adoption reviews.'
+category: 'Getting Started'
+seoTitle: 'Word feature support and fidelity'
+---
+
+<PackageStats name="@eigenpal/docx-editor-react" />
+
+## Overview
+
+- **Client-side only.** Parsing, rendering, editing, and serialization all run in the browser.
+- **`.docx` in, `.docx` out.** The editor reads OOXML and writes OOXML. Parts of the file it doesn't edit are carried over from the original archive unchanged.
+- **Apache 2.0**, all published packages. **SemVer**, with the public API tracked by generated snapshots in CI. React and Vue parity is a machine-checked contract.
+- **Commercial support**: [docx-editor@eigenpal.com](mailto:docx-editor@eigenpal.com).
+
+## Feature matrix
+
+Every feature is tracked on three axes:
+
+- **Editing**: can a user (or an AI agent) change it in the editor?
+- **Rendering**: does it display the way Microsoft Word renders it?
+- **Round-trip**: does it survive open, then save, unchanged?
+
+A construct the editor doesn't model is preserved byte-for-byte and
+written back on save; that's the "Preserved" status below.
+
+<FeatureSummary />
+
+**Legend**: Full = works like Word · Partial = works with noted limits ·
+Render only = displays correctly, not editable · Preserved = round-trips
+losslessly without rendering · Planned = on the roadmap · No = not supported.
+
+### Text & formatting
+
+<FeatureMatrix category="text" />
+
+### Paragraphs & styles
+
+<FeatureMatrix category="paragraphs" />
+
+### Lists & numbering
+
+<FeatureMatrix category="lists" />
+
+### Tables
+
+<FeatureMatrix category="tables" />
+
+### Images & drawings
+
+<FeatureMatrix category="images" />
+
+### Page layout, headers & footers
+
+<FeatureMatrix category="layout" />
+
+### Review: tracked changes, comments, notes
+
+<FeatureMatrix category="review" />
+
+### Fields, links & TOC
+
+<FeatureMatrix category="fields" />
+
+### Document structure & content controls
+
+<FeatureMatrix category="structure" />
+
+### Collaboration, i18n & editing UX
+
+<FeatureMatrix category="collaboration" />
+
+## Rendering fidelity
+
+The editor runs two renderers at once. A hidden ProseMirror instance owns the editing state (document, selection,
+undo history, keyboard and IME input) and is never shown. On every change, a
+layout painter rebuilds the visible pages from that state using Word's own
+metrics: twips, the document's fonts and themes, its section and margin
+geometry. The browser never decides where a line or page breaks; the painter does.
+The output doesn't drift from Word the way contenteditable editors drift,
+and it stays plain DOM text rather than a canvas bitmap.
+
+The full comparison with contenteditable and canvas approaches is in
+[Architecture](/docs/1.x/core/architecture). To judge fidelity yourself, open
+one of your own documents in the [live demo](https://docx-editor.dev/editor)
+next to Word.
+
+## The round-trip guarantee
+
+A `.docx` file is a ZIP of XML parts, and Word writes a lot of XML the
+editor has no reason to model: bookmarks, custom XML parts, mail-merge fields,
+compatibility settings, VBA projects.
+
+This editor's pipeline is parse → document model → edit → serialize. On
+save it rewrites only the parts it changed (the body, plus headers, footers,
+comments and notes when touched) and repacks every other part of the
+original archive as-is: `styles.xml`, themes, the font table, settings,
+media, relationships, custom XML. Concretely:
+
+- Unmodeled XML elements and attributes are kept and re-emitted in place.
+- Whole parts the editor never touches (custom XML, VBA projects, embedded fonts, OLE objects) are copied through the ZIP untouched.
+- References stay intact: relationship IDs, bookmark names, field codes, style IDs and numbering definitions are not renamed or renumbered.
+- Output is canonical OOXML, not merely valid: tracked changes are real `w:ins`/`w:del` revisions Word's review pane understands, theme colors stay theme references, numbering keeps its definitions.
+
+How it's tested: a parity corpus of real documents is round-tripped in CI
+and compared structurally; serializer unit tests assert revision markup,
+conditional table formatting and section properties survive; 500+ Playwright
+tests drive the editor against Word-derived expectations.
+
+What the guarantee is not: bit-identical files. The ZIP container is
+rebuilt and XML is re-serialized (whitespace can differ). The guarantee is
+semantic: nothing you didn't touch is lost or reinterpreted. A document that
+breaks this promise is a bug we want; attach it to a
+[GitHub issue](https://github.com/eigenpal/docx-editor/issues/new/choose).
+
+## Security
+
+- **Documents never leave the browser.** No upload endpoint, no server-side rendering service, no third-party conversion API.
+- **No macro execution.** VBA macros and embedded code are never evaluated.
+- **AI integrations don't change this.** With the [agents toolkit](/docs/1.x/agents), only tool-call text crosses the wire, to a route you own. There is no Eigenpal service in the path.
+
+## Bundle and performance
+
+- `-core` ships subpath exports that tree-shake independently.
+- ProseMirror packages are peers, never duplicated.
+- Lazy-load the editor (`next/dynamic`, `React.lazy`) to keep it out of the initial bundle.
+- The layout engine caches per-block measurements; an edit doesn't re-measure the document.
+
+No published benchmarks; test with your own documents in the
+[live demo](https://docx-editor.dev/editor).
+
+## Stability, license and support
+
+- **Apache 2.0**, all packages. Contributions need a one-time [CLA](https://github.com/eigenpal/docx-editor/blob/main/CLA.md).
+- **SemVer** via changesets; all packages share one version number.
+- The public API is tracked by [API Extractor snapshots](https://github.com/eigenpal/docx-editor/tree/main/docs/api); CI fails on drift.
+- React/Vue parity is a checked contract; `agentPanel` and controlled `comments` are still React-only.
+- `layout-engine`, `layout-painter`, `layout-bridge` and `plugin-api` are `@experimental`.
+- Some advanced fidelity features may move to a commercial plan later; everything published stays Apache 2.0.
+
+If a feature you need is Partial or missing, [open an issue](https://github.com/eigenpal/docx-editor/issues/new/choose)
+with a sample `.docx`, or email [docx-editor@eigenpal.com](mailto:docx-editor@eigenpal.com)
+for priority features and support contracts.
+
+## Next steps
+
+- [Quickstart](/docs/1.x/quickstart): the load, edit, save loop
+- [Architecture](/docs/1.x/core/architecture): the dual-renderer design in depth
+- [Tracked changes](/docs/1.x/guides/tracked-changes): the review model in practice
+- [Migrating to 1.x](/docs/1.x/migration) if you're upgrading

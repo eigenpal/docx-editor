@@ -1,0 +1,287 @@
+---
+title: "Props"
+description: "A curated reference for DocxEditorProps, grouped by concern, with examples for the most common configuration patterns of the React component."
+category: "React"
+order: 31
+---
+
+`<DocxEditor>` is configured through props. Groups below match how you'd reach for them in practice. The full generated reference (every prop, every type signature) is at [/docs/1.x/api/react](/docs/1.x/api/react).
+
+## Document input
+
+How the editor receives the document. Use `documentBuffer` for raw bytes; use `document` when you've already parsed.
+
+| Prop | Type | Description |
+|---|---|---|
+| `documentBuffer` | `DocxInput \| null` | `ArrayBuffer`, `Uint8Array`, `Blob`, or `File`. Most common entry. `null` mounts an empty document. |
+| `document` | `Document \| null` | Pre-parsed `-core` document tree. Skip the parser if you already have one. |
+
+```tsx
+// From a fetch
+const buf = await fetch('/template.docx').then((r) => r.arrayBuffer());
+<DocxEditor documentBuffer={buf} />;
+
+// From a file input (File is accepted directly, no arrayBuffer() needed)
+<input type="file" accept=".docx" onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
+<DocxEditor documentBuffer={file} />
+
+// Empty document (mounts with no content; useful when collecting input from scratch)
+<DocxEditor documentBuffer={null} />
+```
+
+## Mode and read-only
+
+Editing mode and the suggest/view/read-only states. Pair with `onModeChange` for controlled mode.
+
+| Prop | Type | Default | Description |
+|---|---|---|---|
+| `mode` | `EditorMode` | `'editing'` | `'editing'` \| `'suggesting'` \| `'viewing'`. For read-only, use the `readOnly` boolean below. |
+| `onModeChange` | `(mode) => void` | | Controlled mode handler. Without it, the editor manages mode internally. |
+| `readOnly` | `boolean` | `false` | Independent of `mode`. Disables every input affordance (typing, toolbar buttons, dialogs) regardless of which mode is active. |
+
+```tsx
+const [mode, setMode] = useState<EditorMode>('editing');
+
+<DocxEditor
+  documentBuffer={buf}
+  mode={mode}
+  onModeChange={setMode}
+/>;
+```
+
+`'suggesting'` wraps every edit as a tracked change. Use it for review flows.
+
+<ModeToggleDemo />
+
+## Comments and collaboration
+
+Pull author identity in, push comment state back out.
+
+| Prop | Type | Description |
+|---|---|---|
+| `author` | `string` | Author name attached to new comments and tracked changes. |
+| `comments` | `Comment[]` | Controlled comments. Pair with `onCommentsChange`. |
+| `onCommentsChange` | `(comments) => void` | Fires on any comment mutation. Mirror into Y.Array for live sync. |
+| `onCommentAdd` / `onCommentResolve` / `onCommentDelete` / `onCommentReply` | callbacks | Granular events when you want to log or trigger side effects, not own state. |
+
+```tsx
+const [comments, setComments] = useState<Comment[]>([]);
+
+<DocxEditor
+  documentBuffer={buf}
+  author='Jess Lin'
+  comments={comments}
+  onCommentsChange={setComments}
+/>;
+```
+
+Controlled comments (`comments` + `onCommentsChange`) are React-only today; the Vue adapter exposes the callback events but not the `comments` prop (see [Vue props](/docs/1.x/vue/props#comments-and-collaboration)).
+
+<AuthorDemo />
+
+For Yjs-backed sync, see [Realtime collaboration](/docs/1.x/realtime-collaboration).
+
+## Toolbar and chrome
+
+Toggle the built-in UI on or off.
+
+| Prop | Type | Default | Description |
+|---|---|---|---|
+| `showToolbar` | `boolean` | `true` | Toolbar visibility. Pass `false` and compose your own from `/ui`. |
+| `showZoomControl` | `boolean` | `true` | Bottom-right zoom widget. |
+| `showRuler` | `boolean` | `false` | Page ruler above the document body. |
+| `rulerUnit` | `'inch' \| 'cm'` | `'inch'` | Ruler unit. |
+| `showMarginGuides` | `boolean` | `false` | Faint guides at page margins. |
+| `marginGuideColor` | `string` | `'#c0c0c0'` | CSS color for the guides above. |
+| `showOutline` | `boolean` | `false` | Document outline / table of contents drawer. |
+| `showOutlineButton` | `boolean` | `true` | Outline toggle button in the toolbar. |
+| `initialZoom` | `number` | `1.0` | Starting zoom (`1.0` = 100%). |
+
+The font picker and custom font registration have their own section below.
+
+```tsx
+// Headless-feeling editor: drop chrome and compose your own.
+<DocxEditor documentBuffer={buf} showToolbar={false} showZoomControl={false} />
+```
+
+<UIControlsDemo />
+
+## Fonts
+
+`fontFamilies` controls what the toolbar dropdown offers. `fonts` (added in 1.1.0) registers the actual font faces so the editor can render and measure them. They are independent: list a family in `fontFamilies` to make it pickable, register it with `fonts` so its glyphs paint correctly.
+
+| Prop | Type | Default | Description |
+|---|---|---|---|
+| `fonts` | `ReadonlyArray<FontDefinition>` | none | Custom font faces to register before the editor measures text. Each entry injects one `@font-face`. |
+| `fontFamilies` | `ReadonlyArray<string \| FontOption>` | built-in 12 | Constrain the font picker to a specific list. |
+| `onFontsLoaded` | `() => void` | none | Fires once the registered faces are ready. |
+
+A `FontDefinition` is `{ family, src, weight? }`. `src` is a URL to a `woff2`/`woff`/`ttf`/`otf` file you host. Register multiple weights of the same family as separate entries that share `family`:
+
+```tsx
+import { DocxEditor } from '@eigenpal/docx-editor-react';
+
+const FONTS = [
+  { family: 'Custom Sans', src: '/fonts/CustomSans-Regular.woff2' },
+  { family: 'Custom Sans', src: '/fonts/CustomSans-Bold.woff2', weight: 700 },
+];
+
+<DocxEditor
+  documentBuffer={buf}
+  fonts={FONTS}
+  fontFamilies={['Custom Sans', 'Arial', 'Times New Roman']}
+/>;
+```
+
+Pass a stable reference (module-level or memoized). Inline arrays re-register on every render; the loader dedupes by `family|weight|style` so it's harmless, but it wastes work.
+
+Font-load failures route through `onError` (see [Callbacks](#callbacks)), so you can forward them to your own tracker. With no `onError` attached they fall back to `console.warn`.
+
+For host code that isn't using the React or Vue adapter, `@eigenpal/docx-editor-core/utils` exports `loadFontFromUrl`, `loadFontDefinitions`, `onFontError`, and the `FontDefinition` type so you can drive the same registration directly.
+
+## Title bar customization
+
+The header strip is fully overridable.
+
+| Prop | Type | Description |
+|---|---|---|
+| `documentName` | `string` | Display name in the title bar. |
+| `onDocumentNameChange` | `(name) => void` | Fires when the user edits the title in-place. |
+| `documentNameEditable` | `boolean` | Default `true`. Set `false` to lock the title. |
+| `renderLogo` | `() => ReactNode` | Left-side logo slot. Default renders the document icon. |
+| `renderTitleBarRight` | `() => ReactNode` | Right-side slot. Wire your save status, share button, avatars. |
+| `toolbarExtra` | `ReactNode` | Extra items appended to the toolbar. |
+
+```tsx
+<DocxEditor
+  documentBuffer={buf}
+  documentName={file.name}
+  onDocumentNameChange={(name) => updateMetadata({ name })}
+  renderTitleBarRight={() => <SaveIndicator dirty={dirty} />}
+/>;
+```
+
+The Vue adapter exposes the same areas as named slots (`#title-bar-left`, `#title-bar-right`, `#toolbar-extra`); see [Vue props](/docs/1.x/vue/props#title-bar-slots).
+
+## Callbacks
+
+Lifecycle and integration hooks.
+
+| Prop | Type | Description |
+|---|---|---|
+| `onChange` | `(doc: Document) => void` | Fires on every document mutation. Throttle for autosave. |
+| `onSave` | `(buf: ArrayBuffer) => void` | Fires when the user invokes Save (Cmd+S or toolbar). |
+| `onSelectionChange` | `(state: SelectionState \| null) => void` | Selection metadata for custom UI (active marks, paragraph style, etc.). |
+| `onError` | `(error: Error) => void` | Errors during parse or render. Send to your error tracker. |
+| `onFontsLoaded` | `() => void` | Fired once the font set is ready. Use to defer measurement-sensitive UI. |
+| `onPrint` / `onCopy` / `onCut` / `onPaste` | `() => void` | Notification hooks for clipboard and print events. |
+
+```tsx
+<DocxEditor
+  documentBuffer={buf}
+  onChange={(doc) => debouncedAutosave(doc)}
+  onSave={async (buf) => {
+    await fetch('/api/documents/1', { method: 'PUT', body: buf });
+  }}
+  onError={(err) => reportError(err)}
+/>;
+```
+
+## Styling
+
+| Prop | Type | Description |
+|---|---|---|
+| `theme` | `Theme \| null` | OOXML document theme (`colorScheme`, `fontScheme`) used to resolve theme colors and theme fonts. Normally parsed from the file; pass one to override. Not UI styling tokens. |
+| `className` | `string` | Applied to the editor root element. |
+| `style` | `CSSProperties` | Inline styles on the root. |
+| `placeholder` | `ReactNode` | Rendered while there's no document content. |
+| `loadingIndicator` | `ReactNode` | Rendered while the buffer is being parsed. |
+| `printOptions` | `PrintOptions` | Margins, header/footer toggles for the print pipeline. |
+
+```tsx
+<DocxEditor
+  documentBuffer={buf}
+  className='rounded-lg shadow-md'
+  loadingIndicator={<Spinner label='Loading document' />}
+  placeholder={<EmptyState />}
+/>;
+```
+
+## i18n
+
+| Prop | Type | Description |
+|---|---|---|
+| `i18n` | `LocaleStrings \| PartialLocaleStrings` | Locale data from `@eigenpal/docx-editor-i18n`. See [i18n page](/docs/1.x/i18n). |
+
+```tsx
+import pl from '@eigenpal/docx-editor-i18n/pl';
+
+<DocxEditor documentBuffer={buf} i18n={pl} />;
+```
+
+## Agents
+
+| Prop | Type | Description |
+|---|---|---|
+| `agentPanel` | `AgentPanelOptions` | Wires a side panel slot. Pair with `useDocxAgentTools`. |
+
+```tsx
+<DocxEditor
+  ref={editorRef}
+  documentBuffer={buf}
+  agentPanel={{ render: () => <AgentChatLog messages={messages} /> }}
+/>;
+```
+
+`agentPanel` is React-only; the Vue adapter pairs `useAgentBridge` with your own chat UI instead. Full setup in [Agents → Live editor](/docs/1.x/agents/live-editor).
+
+## Plugins
+
+| Prop | Type | Description |
+|---|---|---|
+| `externalPlugins` | `Plugin[]` | ProseMirror plugins appended to the editor's plugin list. |
+| `pluginOverlays` | `ReactNode` | Absolutely-positioned overlay slot for plugin UI. |
+| `pluginSidebarItems` | `ReactSidebarItem[]` | Sidebar entries contributed by plugins. |
+| `pluginRenderedDomContext` | `RenderedDomContext \| null` | Hand-off when you need plugin code to read editor DOM measurements. |
+
+See [Plugins](/docs/1.x/plugins) for the full plugin contract.
+
+## Ref methods
+
+Imperative API exposed through `forwardRef`. Capture a `DocxEditorRef` and call methods directly when you need to drive the editor from outside React state.
+
+```tsx
+import { useRef } from 'react';
+import { DocxEditor, type DocxEditorRef } from '@eigenpal/docx-editor-react';
+
+const editorRef = useRef<DocxEditorRef>(null);
+
+editorRef.current?.addComment({
+  paraId: 'ABC12300',
+  text: 'Tighten this paragraph.',
+  author: 'Jess Lin',
+});
+editorRef.current?.scrollToParaId('DEF45600');
+const buf = await editorRef.current?.save(); // Promise<ArrayBuffer | null>
+```
+
+Common methods:
+
+| Method | Returns | What it does |
+|---|---|---|
+| `save()` | `Promise<ArrayBuffer \| null>` | Serialize the current document to a `.docx` buffer. `null` if there is no document. |
+| `addComment({ paraId, text, author })` | `number \| null` | Add a comment anchored to a paragraph by `w14:paraId`. Returns the new comment id, or `null` if the paragraph wasn't found. |
+| `proposeChange({ paraId, search, replaceWith, author })` | `boolean` | Insert a tracked change. `false` if the search text wasn't found. |
+| `findInDocument(query, options?)` | `Array<{ paraId, match, before, after }>` | Search the document; each hit carries its paragraph id and surrounding context. |
+| `scrollToParaId(paraId)` | `boolean` | Scroll to a paragraph by `w14:paraId`. Returns `false` if not found. |
+| `scrollToPosition(pos)` | `void` | Scroll to a raw ProseMirror position. |
+| `getDocument()` | `Document \| null` | Snapshot of the parsed tree. `null` before a document is loaded. |
+
+The full method list with signatures is at [/docs/1.x/api/react](/docs/1.x/api/react).
+
+## Next steps
+
+- [React quickstart](/docs/1.x/react)
+- [React examples](/docs/1.x/react/examples)
+- [Migration: API renames](/docs/1.x/migration#api-renames) for the `FormattingBar` → `Toolbar` and `Toolbar` → `EditorToolbar` shifts
+- [Full API reference](/docs/1.x/api/react)

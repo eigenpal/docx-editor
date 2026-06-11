@@ -1,0 +1,139 @@
+---
+title: 'Live editor bridge'
+description: 'Reference for the live-editor agent bridge: useDocxAgentTools, useAgentBridge, createEditorBridge, the agentPanel prop, chat UI, and paraId anchors.'
+category: 'Agents'
+seoTitle: 'Live editor bridge reference'
+---
+
+Reference for wiring an agent to a running `<DocxEditor>`. For the end-to-end walkthrough, read the [AI editing tutorial](/docs/1.x/agents/ai-editing) first; this page documents the surface it builds on.
+
+## useDocxAgentTools (React)
+
+The full-featured hook from `@eigenpal/docx-editor-agents/react`. It owns the bridge to the editor and returns everything a chat integration needs.
+
+```tsx
+const { tools, executeToolCall, getContext } = useDocxAgentTools({
+  editorRef, // React.RefObject<EditorRefLike | null>; DocxEditorRef satisfies it
+  author: 'Assistant', // stamped on comments + tracked changes. Default: 'AI'
+  include: ['read_document', 'find_text', 'add_comment'], // optional allow-list
+  exclude: ['apply_formatting'], // optional block-list, applied after include
+  tools: { my_tool: myToolDefinition }, // optional custom tools, keyed by name
+});
+```
+
+Returns:
+
+| Member            | Type                              | Purpose                                                                            |
+| ----------------- | --------------------------------- | ---------------------------------------------------------------------------------- |
+| `tools`           | OpenAI function-calling schemas   | Pass to your provider (`streamText({ tools })`, OpenAI `tools`, Anthropic `tools`) |
+| `executeToolCall` | `(name, args) => AgentToolResult` | The executor. Hand to AI SDK's `onToolCall` or call it from your own loop          |
+| `getContext`      | `() => AgentContextSnapshot`      | Snapshot of `{ selection, currentPage, totalPages }` for system-prompt injection   |
+
+Behavior worth knowing:
+
+- `include` / `exclude` filter built-in tools both in the returned schemas and at execution time. A filtered tool call returns `Tool 'x' is not enabled.`, so a hallucinated name cannot bypass the policy. Custom tools always pass.
+- A custom tool with a built-in's name replaces the built-in.
+- Pass a stable (memoized or module-level) `tools` object to avoid rebuilding schemas every render.
+- Tool calls before the editor mounts return `{ success: false, error: 'Editor not ready.' }`.
+
+## useAgentChat (React)
+
+The minimal variant: executor plus static schemas, no filtering, no context snapshot.
+
+```tsx
+import { useAgentChat } from '@eigenpal/docx-editor-agents/react';
+
+const { executeToolCall, toolSchemas } = useAgentChat({ editorRef, author: 'Assistant' });
+```
+
+Use `useDocxAgentTools` unless you specifically want the smaller surface.
+
+## useAgentBridge (Vue)
+
+The Vue twin, from `@eigenpal/docx-editor-agents/vue`:
+
+```ts
+import { ref } from 'vue';
+import { useAgentBridge, type EditorRefLike } from '@eigenpal/docx-editor-agents/vue';
+
+const editorRef = ref<EditorRefLike | null>(null);
+const { executeToolCall, toolSchemas } = useAgentBridge({
+  editorRef,
+  author: 'Assistant', // accepts a string or a Ref<string>
+});
+```
+
+Same `EditorRefLike` contract, same tool catalog, same `AgentToolResult` shape. As of 1.4 it matches `useAgentChat` (executor + schemas); the `include`/`exclude`/custom-tools options live in the React hook only, so filter `toolSchemas` yourself and guard names in your dispatch if you need scoping in Vue.
+
+## createEditorBridge (any host)
+
+For hosts that are neither React nor Vue, build the bridge directly from `@eigenpal/docx-editor-agents/bridge`:
+
+```ts
+import { createEditorBridge, type EditorRefLike } from '@eigenpal/docx-editor-agents/bridge';
+import { executeToolCall, getToolSchemas } from '@eigenpal/docx-editor-agents';
+
+const bridge = createEditorBridge(editorHandle satisfies EditorRefLike, 'Assistant');
+const result = executeToolCall('find_text', { query: 'liability' }, bridge);
+```
+
+`EditorRefLike` is the structural contract both adapters' `DocxEditorRef` satisfy: `addComment`, `proposeChange`, `findInDocument`, `getSelectionInfo`, `applyFormatting`, `setParagraphStyle`, `scrollToParaId`, `getPageContent`, and friends. Anything implementing it can host the toolkit. The resulting `EditorBridge` also satisfies the compile-time [Word JS API parity contract](/docs/1.x/agents/word-js-api).
+
+## The agentPanel prop (React)
+
+`<DocxEditor agentPanel={...}>` mounts a right-hand panel with library-owned chrome (header, close button, drag-resize) and a toolbar toggle button. Three control patterns:
+
+- **Uncontrolled:** `agentPanel={{ render }}`. The toolbar and close buttons toggle it; width persists to localStorage.
+- **Controlled:** `agentPanel={{ render, open, onOpenChange }}`. You own open state.
+- **Headless:** omit `agentPanel` entirely and render the toolkit's output wherever you want.
+
+```tsx
+<DocxEditor
+  agentPanel={{
+    render: ({ close }) => <MyChatUI onClose={close} />, // called only while open
+    open, // optional: controlled open state
+    onOpenChange: setOpen, // fires on toolbar / close button clicks
+    showToolbarButton: true, // default true
+    toolbarBadge: <Dot />, // optional badge on the toolbar button
+    title: 'Assistant', // panel header title
+    icon: <SparkIcon />, // header icon, default sparkle
+    defaultWidth: 360, // px, default 360
+    minWidth: 280, // drag limit, default 280
+    maxWidth: 600, // drag limit, default 600
+  }}
+/>
+```
+
+Panel chrome is intentionally not customizable beyond these options; everything inside `render` is yours. In Vue the `agentPanel` prop does not exist yet (React-only per the parity contract); mount the `AgentPanel` component from `@eigenpal/docx-editor-agents/vue` next to the editor instead.
+
+## Chat UI primitives
+
+Optional, opinionated components for the inside of the panel. React: `@eigenpal/docx-editor-agents/react`. Vue: `@eigenpal/docx-editor-agents/vue`.
+
+| Component             | Purpose                                                                                                                                                                                    |
+| --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `AgentChatLog`        | Message list with streaming text and a collapsible tool-call timeline. Props: `messages: AgentMessage[]`, `loading`, `error`, `humanizeToolName` (pass `getToolDisplayName`), `emptyState` |
+| `AgentComposer`       | Input row. React props: `value`, `onChange`, `onSubmit`, `disabled`, `placeholder`, `footnote`. The Vue component uses `modelValue` (`v-model`) instead of `value`/`onChange` and has no `footnote` prop |
+| `AgentTimeline`       | Standalone tool-call list (running spinner, done check), used internally by the chat log                                                                                                   |
+| `AgentSuggestionChip` | Prompt-suggestion chip for empty states                                                                                                                                                    |
+| `AgentPanel`          | The panel shell itself, for hosts not using the `agentPanel` prop                                                                                                                          |
+
+If you drive the chat with the Vercel AI SDK, `toAgentMessages(chat.messages, chat.status)` from `@eigenpal/docx-editor-agents/ai-sdk/react` (or `/ai-sdk/vue`) converts `useChat`'s `UIMessage[]` into the `AgentMessage[]` shape these components render. Nothing forces these components: the panel accepts any node, so assistant-ui or your design system drop in.
+
+## paraId anchoring
+
+Every locate tool returns paragraphs tagged with `paraId`; every mutate tool addresses by it. Details that make this reliable:
+
+- The id is Word's own `w14:paraId` attribute, read from the file and preserved through save, so anchors stay valid across the whole edit session and across reloads.
+- A `ParaIdAllocatorExtension` runs in the editor and assigns fresh ids when paragraphs are created or split (Enter, paste). Concurrent typing while the agent loop runs does not desync anchors.
+- Paragraphs that arrive without a `paraId` (Word does not always emit them) are addressed by their ordinal index as a string. The ids the agent reads always resolve when written back.
+- Sub-paragraph anchoring uses `search`: an exact phrase that must occur exactly once in the paragraph. `find_text` returns the matched phrase precisely so it can be passed back as `search`.
+
+This is also why the tool surface serializes cleanly over JSON (and MCP): an anchor is a plain `{ paraId, search? }` value, not a live object like Office.js' `Range`.
+
+## Next steps
+
+- [AI editing tutorial](/docs/1.x/agents/ai-editing), the wiring in context
+- [Tools reference](/docs/1.x/agents/tools), every tool the bridge executes
+- [Word JS API parity](/docs/1.x/agents/word-js-api), the contract behind `EditorBridge`
+- [agents API reference](/docs/1.x/api/agents), full signatures

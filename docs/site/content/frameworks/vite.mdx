@@ -1,0 +1,95 @@
+---
+title: 'Vite'
+description: 'Build a Vite DOCX editor with React in minutes. No SSR caveats: install the package, mount the component, open a .docx, edit it, and download the result.'
+category: 'Frameworks'
+seoTitle: 'Vite DOCX editor setup'
+---
+
+This page builds the open-edit-download loop in a Vite + React app. Vite is client-rendered, so there is no SSR boundary to set up; this is the simplest integration and the one to start with.
+
+## Install
+
+```bash
+npm install @eigenpal/docx-editor-react
+```
+
+## Mount the editor
+
+Two files, mirroring [`examples/vite`](https://github.com/eigenpal/docx-editor/tree/main/examples/vite).
+
+```tsx
+// src/main.tsx
+import { createRoot } from 'react-dom/client';
+import { App } from './App';
+
+const container = document.getElementById('app');
+if (container) {
+  createRoot(container).render(<App />);
+}
+```
+
+```tsx
+// src/App.tsx
+import { useRef, useState } from 'react';
+import { DocxEditor, type DocxEditorRef } from '@eigenpal/docx-editor-react';
+import '@eigenpal/docx-editor-react/styles.css';
+
+export function App() {
+  const editorRef = useRef<DocxEditorRef>(null);
+  const [buffer, setBuffer] = useState<ArrayBuffer | null>(null);
+  const [fileName, setFileName] = useState('document.docx');
+
+  async function onFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setBuffer(await file.arrayBuffer());
+    setFileName(file.name);
+  }
+
+  async function onSave() {
+    const out = await editorRef.current?.save();
+    if (!out) return;
+    const blob = new Blob([out], {
+      type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = fileName;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  return (
+    <div style={{ height: '100vh', display: 'flex', flexDirection: 'column' }}>
+      <div style={{ padding: 8, display: 'flex', gap: 8 }}>
+        <input type="file" accept=".docx" onChange={onFileSelect} />
+        <button onClick={onSave}>Save .docx</button>
+      </div>
+      <DocxEditor ref={editorRef} documentBuffer={buffer} showToolbar />
+    </div>
+  );
+}
+```
+
+`documentBuffer` and `save()` work as described in the [Quickstart](/docs/1.x/quickstart); the only Vite-specific fact is that there is no SSR boundary to manage.
+
+The full example also wires `createEmptyDocument()` for a New button and an agent panel; see [`src/App.tsx`](https://github.com/eigenpal/docx-editor/tree/main/examples/vite) in the repo.
+
+## Run the example
+
+The Vite example aliases `@eigenpal/*` to workspace source, so no build step is needed:
+
+```bash
+git clone https://github.com/eigenpal/docx-editor.git
+cd docx-editor
+bun install
+bun run dev:react   # http://localhost:5173
+```
+
+## Next steps
+
+- [Quickstart](/docs/1.x/quickstart): the load, edit, save flow in detail
+- [Loading and saving](/docs/1.x/guides/loading-and-saving): URLs, autosave, upload to your API
+- [Vite DOCX editor guide](/blog/vite-docx-editor): the long-form walkthrough
+- [Vite example on GitHub](https://github.com/eigenpal/docx-editor/tree/main/examples/vite)

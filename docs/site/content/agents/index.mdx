@@ -1,0 +1,112 @@
+---
+title: 'Overview'
+description: 'Agent toolkit for DOCX: 14 tools for AI comments, tracked changes, and redlining. Run them against a live editor, headless in Node, or over MCP.'
+category: 'Agents'
+order: 50
+seoTitle: 'AI agents for DOCX editing'
+---
+
+<PackageStats name="@eigenpal/docx-editor-agents" />
+
+`@eigenpal/docx-editor-agents` gives an LLM a Word-like API for DOCX documents: read paragraphs, add comments, suggest tracked changes, apply formatting. The same 14 tools run in three places. You bring your own agent runtime (Vercel AI SDK, OpenAI, Anthropic, LangChain); the toolkit ships plain JSON-Schema tool definitions plus optional adapters.
+
+```bash
+npm install @eigenpal/docx-editor-agents
+```
+
+## Integration shapes
+
+**1. Live editor panel.** The agent's tool calls land on a `<DocxEditor>` running in the user's browser. Comments and tracked changes appear in the document as the model streams. Tool calls execute in the browser against the open editor; your API route only ever sees tool-call text.
+
+```tsx
+const { tools, executeToolCall, getContext } = useDocxAgentTools({
+  editorRef,
+  author: 'Assistant',
+});
+```
+
+Full walkthrough: [AI editing with the Vercel AI SDK](/docs/1.x/agents/ai-editing).
+
+**2. Headless `DocxReviewer` on the server.** Parse a buffer, run a review, serialize the modified DOCX back. No DOM, no editor instance. Fits a queue worker, Lambda, or CI bot.
+
+```ts
+import { DocxReviewer } from '@eigenpal/docx-editor-agents';
+
+const reviewer = await DocxReviewer.fromBuffer(buffer, 'AI Reviewer');
+reviewer.addComment(5, 'This cap seems too low.');
+reviewer.replace(5, '$50k', '$500k');
+const out = await reviewer.toBuffer();
+```
+
+Reference: [DocxReviewer](/docs/1.x/agents/docx-reviewer).
+
+**3. MCP server.** Expose the tool catalog over JSON-RPC for any MCP-compatible client. Transport-agnostic core; you own auth, storage, and the transport.
+
+```ts
+import { McpServer } from '@eigenpal/docx-editor-agents/mcp';
+import { createReviewerBridge } from '@eigenpal/docx-editor-agents';
+
+const server = new McpServer(createReviewerBridge(reviewer), {
+  name: 'acme-review',
+  version: '1.0.0',
+});
+```
+
+Reference: [MCP server](/docs/1.x/agents/mcp).
+
+## Which shape to pick
+
+|                                    | Live editor                                  | Headless `DocxReviewer`                     | MCP server                              |
+| ---------------------------------- | -------------------------------------------- | ------------------------------------------- | --------------------------------------- |
+| Where the agent runs               | Your API route; tools execute in the browser | Your server process                         | Wherever the MCP client points          |
+| Where the document lives           | The user's browser, in the open editor       | A buffer you load and save                  | A buffer your host loads per request    |
+| User watches it happen             | Yes, live                                    | No, batch                                   | No                                      |
+| Pages (`read_page` / `read_pages`) | Yes                                          | No (no layout, zero pages)                  | No (reviewer-backed)                    |
+| Typical use                        | AI writing assistant, in-editor review       | Contract review API, CI bot, bulk redlining | Existing MCP-speaking agent or platform |
+
+If you are building a product UI, start with the live editor. If you have documents and no UI, start with `DocxReviewer`. Pick MCP only when the client already speaks MCP.
+
+## The 14 tools
+
+- **Locate (7):** `read_document`, `read_selection`, `read_page`, `read_pages`, `find_text`, `read_comments`, `read_changes`
+- **Mutate (6):** `add_comment`, `reply_comment`, `resolve_comment`, `suggest_change`, `apply_formatting`, `set_paragraph_style`
+- **Navigate (1):** `scroll`
+
+The pattern is locate-then-mutate, mirroring Word's JS API: locate tools return paragraphs tagged with a stable `paraId`, and mutate tools address by it ([how paraId anchoring works](/docs/1.x/agents/live-editor#paraid-anchoring)). Full parameter and return shapes: [tools reference](/docs/1.x/agents/tools).
+
+## Subpaths
+
+| Subpath                        | Use when                                                                                  |
+| ------------------------------ | ----------------------------------------------------------------------------------------- |
+| `@eigenpal/docx-editor-agents` | `DocxReviewer`, `agentTools`, `getToolSchemas`, `executeToolCall`, `createReviewerBridge` |
+| `/react`                       | `useDocxAgentTools`, `useAgentChat`, chat UI components                                   |
+| `/vue`                         | `useAgentBridge`, Vue chat UI components                                                  |
+| `/server`                      | Backend routes that need tool schemas without MCP                                         |
+| `/bridge`                      | `createEditorBridge` for non-React/Vue hosts                                              |
+| `/mcp`                         | `McpServer`, `runStdioServer`                                                             |
+| `/ai-sdk/server`               | `getAiSdkTools()` for Vercel AI SDK `streamText`                                          |
+| `/ai-sdk/react`, `/ai-sdk/vue` | `toAgentMessages()` to feed `useChat` output into `<AgentChatLog>`                        |
+
+Each subpath tree-shakes independently. The `/ai-sdk/*` entries import `ai`, which is an optional peer dependency; skip them if you are not on the AI SDK.
+
+<Cards>
+  <Card title="AI editing tutorial" href="/docs/1.x/agents/ai-editing">
+    Wire an LLM to the live editor with the Vercel AI SDK, end to end.
+  </Card>
+  <Card title="AI redlining" href="/docs/1.x/agents/redlining">
+    Tracked-change review the human accepts or rejects, live or in batch.
+  </Card>
+  <Card title="Tools reference" href="/docs/1.x/agents/tools">
+    All 14 tools: parameters, return shapes, examples.
+  </Card>
+  <Card title="Word JS API parity" href="/docs/1.x/agents/word-js-api">
+    The Office.js verb mapping, enforced at compile time.
+  </Card>
+</Cards>
+
+## Next steps
+
+- [AI editing with the Vercel AI SDK](/docs/1.x/agents/ai-editing)
+- [AI redlining and tracked-change review](/docs/1.x/agents/redlining)
+- [Live editor bridge reference](/docs/1.x/agents/live-editor)
+- [API reference](/docs/1.x/api/agents)

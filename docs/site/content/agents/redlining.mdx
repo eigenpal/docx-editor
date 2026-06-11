@@ -1,0 +1,167 @@
+---
+title: 'AI redlining'
+description: 'AI redlining for DOCX: every suggestion is a Word-native tracked change a human accepts or rejects, live in the editor or in batch with DocxReviewer.'
+category: 'Agents'
+seoTitle: 'AI redlining with tracked changes'
+---
+
+Every edit the agent proposes through `suggest_change` is written as a
+Word-native tracked change (`w:ins` / `w:del`), attributed to the agent's
+`author` name with a timestamp. A human accepts or rejects each one, in this
+editor or in Microsoft Word; the output is a normal redlined `.docx`.
+
+Set up the workflow with two rules:
+
+- **Don't expect the agent to accept or reject changes.** There is no `accept_change` or `reject_change` tool. `DocxReviewer.acceptChange` / `rejectChange` exist for your host code only.
+- **Exclude `apply_formatting` and `set_paragraph_style`** when you need a pure audit trail; those two edit directly instead of proposing a tracked change. The filter is shown below.
+
+## suggest_change semantics
+
+`suggest_change` has three modes, selected by empty strings:
+
+| Mode    | `search`  | `replaceWith` | Result                                                 |
+| ------- | --------- | ------------- | ------------------------------------------------------ |
+| Replace | non-empty | non-empty     | `search` marked deleted, `replaceWith` marked inserted |
+| Delete  | non-empty | `""`          | `search` marked deleted                                |
+| Insert  | `""`      | non-empty     | `replaceWith` inserted at the end of the paragraph     |
+
+`search` must match exactly once inside the target paragraph; an ambiguous or missing phrase fails with an error the model can self-correct from. The paragraph is addressed by `paraId`, which the agent gets from `read_document` or `find_text`. Full parameter shapes: [tools reference](/docs/1.x/agents/tools#suggest_change).
+
+## Redline in the live editor
+
+Restrict the agent to locate tools plus `suggest_change` and `add_comment`. The user watches redlines land in the open document and reviews them with the built-in change cards.
+
+```tsx
+const REDLINE_TOOLS = [
+  'read_document',
+  'read_selection',
+  'find_text',
+  'read_comments',
+  'read_changes',
+  'suggest_change',
+  'add_comment',
+];
+
+const { executeToolCall, getContext } = useDocxAgentTools({
+  editorRef,
+  author: 'Legal AI',
+  include: REDLINE_TOOLS,
+});
+```
+
+Filter the server-side schemas to the same list so the model never sees the excluded tools:
+
+```ts
+// app/api/chat/route.ts
+import { getAiSdkTools } from '@eigenpal/docx-editor-agents/ai-sdk/server';
+
+const all = getAiSdkTools();
+const tools = Object.fromEntries(
+  Object.entries(all).filter(([name]) => REDLINE_TOOLS.includes(name))
+);
+```
+
+`executeToolCall` enforces the `include` list at runtime, so even a hallucinated `apply_formatting` call comes back as an error rather than an edit. The rest of the wiring (route, `useChat`, panel) is identical to the [AI editing tutorial](/docs/1.x/agents/ai-editing).
+
+## Batch review on the server
+
+No editor, no browser. Load a buffer, let the model run a tool loop against it, write the redlined file back out. This works in any Node runtime: an API route, a queue worker, a Lambda.
+
+`createReviewerBridge` wraps a `DocxReviewer` in the same bridge interface the live editor exposes, so the same tools and the same `executeToolCall` work against a file on disk:
+
+```ts
+// app/api/review/route.ts (Node runtime)
+import {
+  DocxReviewer,
+  createReviewerBridge,
+  getToolSchemas,
+  executeToolCall,
+} from '@eigenpal/docx-editor-agents';
+import OpenAI from 'openai';
+
+const openai = new OpenAI();
+
+const REDLINE_TOOLS = [
+  'read_document',
+  'find_text',
+  'read_changes',
+  'suggest_change',
+  'add_comment',
+];
+const tools = getToolSchemas().filter((t) => REDLINE_TOOLS.includes(t.function.name));
+
+export async function POST(req: Request) {
+  const buffer = await req.arrayBuffer();
+  const reviewer = await DocxReviewer.fromBuffer(buffer, 'Contract Review Bot');
+  const bridge = createReviewerBridge(reviewer);
+
+  const messages: OpenAI.ChatCompletionMessageParam[] = [
+    {
+      role: 'system',
+      content:
+        'Review this contract. Flag risky clauses with add_comment and ' +
+        'propose concrete fixes with suggest_change. Read the document first.',
+    },
+    { role: 'user', content: 'Review the document.' },
+  ];
+
+  // Plain tool loop: ask, execute tool calls against the bridge, repeat
+  // until the model answers in text. Capped at 12 steps.
+  for (let step = 0; step < 12; step++) {
+    const res = await openai.chat.completions.create({ model: 'gpt-4o', messages, tools });
+    const msg = res.choices[0].message;
+    messages.push(msg);
+    if (!msg.tool_calls?.length) break;
+
+    for (const call of msg.tool_calls) {
+      const result = executeToolCall(
+        call.function.name,
+        JSON.parse(call.function.arguments),
+        bridge
+      );
+      messages.push({
+        role: 'tool',
+        tool_call_id: call.id,
+        content: result.success
+          ? typeof result.data === 'string'
+            ? result.data
+            : JSON.stringify(result.data)
+          : (result.error ?? 'Tool failed'),
+      });
+    }
+  }
+
+  // The bridge mutated the reviewer in place; serialize the redlined DOCX.
+  const out = await reviewer.toBuffer();
+  return new Response(out, {
+    headers: {
+      'Content-Type': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    },
+  });
+}
+```
+
+The bridge has documented headless trade-offs: `read_selection` reports no selection, `scroll` validates the `paraId` but moves nothing, and `read_page` / `read_pages` fail because a static document has no rendered pages. Stick to `read_document` and `find_text` for location.
+
+If your model emits one structured JSON response instead of a tool loop, skip the bridge and use `reviewer.applyReview()` to apply the whole batch in one call; see [DocxReviewer](/docs/1.x/agents/docx-reviewer#batch-applyreview).
+
+## Human accept and reject
+
+- **In this editor:** pending changes render with author attribution; the user accepts or rejects each from the change card UI. `read_changes` lets the agent see what is still pending, but it cannot resolve anything.
+- **In Microsoft Word:** open the output file; the agent's suggestions appear under Review → Tracked Changes with the author name you passed (`'Legal AI'`, `'Contract Review Bot'`). Accept/Reject works exactly as with human edits, because they are the same OOXML constructs.
+- **In your own pipeline:** `DocxReviewer` exposes `acceptChange(id)`, `rejectChange(id)`, `acceptAll()`, and `rejectAll()` so you can build a programmatic approval step. These are host APIs, not agent tools.
+
+## Guardrails and limits
+
+- Accept/reject deliberately not exposed to the agent. The human (or your host code) keeps the final say.
+- `apply_formatting` and `set_paragraph_style` are direct edits. Exclude them when you need a pure-redline audit trail.
+- Table content is readable, but table structure mutation (insert row, delete cell) is out of scope; the agent cannot restructure tables.
+- Paragraph creation is out of scope in v1; `suggest_change` inserts text within an existing paragraph.
+- `search` phrases must be unique within their paragraph, and a suggestion that overlaps an existing tracked change is rejected, which prevents the agent from stacking edits on unreviewed edits.
+
+## Next steps
+
+- [DocxReviewer reference](/docs/1.x/agents/docx-reviewer), the full headless API
+- [Tools reference](/docs/1.x/agents/tools#suggest_change), exact `suggest_change` parameters
+- [AI editing tutorial](/docs/1.x/agents/ai-editing), the live-editor wiring this builds on
+- [Word features](/docs/1.x/word-fidelity), tracked-change rendering support in the editor

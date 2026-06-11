@@ -1,0 +1,95 @@
+---
+title: "@eigenpal/docx-editor-core"
+description: "Framework-agnostic core: document tree, OOXML parser/serializer, ProseMirror schema, plugin contract. Underlies both the React and Vue adapters."
+category: "Packages"
+order: 20
+---
+
+<PackageStats name="@eigenpal/docx-editor-core" />
+
+## What's in it
+
+The document tree, the OOXML parser and serializer, the ProseMirror schema, layout primitives, the plugin contract. No DOM, no framework. The React and Vue adapters depend on it. You install `-core` directly only when you don't want an editor UI on the page.
+
+```bash
+npm install @eigenpal/docx-editor-core
+```
+
+## When to use it directly
+
+- Server-side `.docx` processing: parse buffer, walk the tree, mutate, serialize back out.
+- Headless extraction: pull text, tables, headers/footers without rendering.
+- Custom renderer or DOM bridge against the shared schema.
+- Plugins that need to work in React, Vue, and headless contexts. Use the `core-plugins` subpath.
+
+If you want an actual editor in a React or Vue app, install `@eigenpal/docx-editor-react` or `@eigenpal/docx-editor-vue`. Both pull `-core` in transitively, so you don't need it as a separate dep.
+
+## In this section
+
+<Cards>
+  <Card
+    title="Architecture"
+    href="/docs/1.x/core/architecture"
+    description="The dual-renderer design: hidden ProseMirror for editing state, layout painter for Word-fidelity pages, and the data flow between them."
+  />
+  <Card
+    title="Headless API"
+    href="/docs/1.x/core/headless"
+    description="Parse, mutate, and serialize DOCX in Node or workers: text helpers, content controls, templates, watermarks, DocumentAgent."
+  />
+</Cards>
+
+## Subpaths
+
+70 published subpaths. The ones you'll touch most:
+
+- `@eigenpal/docx-editor-core`: root barrel
+- `@eigenpal/docx-editor-core/headless`: the full DOM-free surface in one import
+- `@eigenpal/docx-editor-core/docx/parser`: `parseDocx(buffer)` → `Document` tree
+- `@eigenpal/docx-editor-core/docx/rezip`: `repackDocx` / `createDocx` → `.docx` bytes
+- `@eigenpal/docx-editor-core/types/document`: `Document`, `Paragraph`, `Run`, `Insertion`, `Deletion`, `Comment`
+- `@eigenpal/docx-editor-core/core-plugins`: plugin contract for non-React, non-Vue hosts
+
+All 70 are in the [API reference](/docs/1.x/api/core).
+
+## Parse, mutate, serialize
+
+```ts
+import {
+  parseDocx,
+  getParagraphs,
+  getParagraphText,
+  repackDocx,
+} from '@eigenpal/docx-editor-core/headless';
+
+const buffer = await fetch('./document.docx').then((r) => r.arrayBuffer());
+const doc = await parseDocx(buffer);
+
+for (const para of getParagraphs(doc.package.document)) {
+  console.log(para.paraId, getParagraphText(para));
+}
+
+const out = await repackDocx(doc); // ArrayBuffer, ready to download or store
+```
+
+The tree shape is the same the editor renders against. Anything you build against `-core` ports without translation when the same buffer reaches the live editor. Full walkthrough: [Headless processing](/docs/1.x/guides/headless-processing).
+
+## Content controls
+
+Block-level content controls (Word's `w:sdt`) are addressable by tag, alias, id, or type. `findContentControls` lists the matches, `setContentControlContent` fills a control, `setContentControlValue` sets typed values (dropdown selection, checkbox, date), and `addRepeatingSectionItem` / `removeRepeatingSectionItem` manage repeating sections. Edits preserve the control's identity and raw properties, so the document still round-trips; that stability is what makes content controls usable as anchors for templates and document automation.
+
+```ts
+import { findContentControls, setContentControlValue } from '@eigenpal/docx-editor-core/headless';
+
+const boxes = findContentControls(doc, { type: 'checkbox' });
+const next = setContentControlValue(doc, { tag: 'agreed' }, { kind: 'checkbox', checked: true });
+```
+
+Full behavior contract (locks, typed controls, data binding): [Content controls guide](/docs/1.x/guides/content-controls).
+
+## Next steps
+
+- [Architecture](/docs/1.x/core/architecture) for how the pieces fit
+- [Headless API](/docs/1.x/core/headless) for the grouped DOM-free surface
+- [API reference (70 subpaths)](/docs/1.x/api/core)
+- [Plugins](/docs/1.x/plugins) for the plugin contract

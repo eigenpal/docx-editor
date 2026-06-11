@@ -1,0 +1,108 @@
+---
+title: 'Headless API'
+description: 'Reference for @eigenpal/docx-editor-core/headless: DOCX parse and serialize, document creation, content controls, templates, watermarks, DocumentAgent.'
+category: 'Core'
+---
+
+`@eigenpal/docx-editor-core/headless` aggregates the DOM-free surface of the core package for Node.js scripts, CLI tools, workers, and server-side processing. The smaller subpaths (`/docx`, `/agent`, `/utils`) export the same symbols and tree-shake better; the headless entry exists to make the "no DOM" intent explicit and to give you everything from one import.
+
+This page groups the surface by task. Full signatures for every export are in the generated reference: [/docs/1.x/api/core/headless](/docs/1.x/api/core/headless).
+
+## Parse and serialize
+
+| Export | Signature | Notes |
+|---|---|---|
+| `parseDocx` | `(input: DocxInput, options?) => Promise<Document>` | `DocxInput` is `ArrayBuffer \| Uint8Array \| Blob \| File` |
+| `repackDocx` | `(doc, options?) => Promise<ArrayBuffer>` | Round-trips against the original buffer; untouched parts pass through verbatim |
+| `createDocx` | `(doc) => Promise<ArrayBuffer>` | Builds a package from scratch; for documents created in code |
+| `serializeDocx` | `(doc) => string` | Returns `document.xml` markup only, not a `.docx` file |
+| `attemptSelectiveSave` | `(doc, originalBuffer, options) => Promise<ArrayBuffer \| null>` | Patches only changed paragraphs into the original XML; `null` when not safely applicable |
+| `updateMultipleFiles` | `(originalBuffer, updates, options?) => Promise<ArrayBuffer>` | Low-level: replace named parts inside an existing package |
+
+```ts
+import { parseDocx, repackDocx } from "@eigenpal/docx-editor-core/headless";
+
+const doc = await parseDocx(buffer);
+// ...mutate...
+const out = await repackDocx(doc);
+```
+
+The parsed `Document` holds a `DocxPackage`: `package.document` (the body), `headers`, `footers`, `styles`, `numbering`, `theme`, `media`, `relationships`, `settings`, and core properties.
+
+## Create documents
+
+| Export | Notes |
+|---|---|
+| `createEmptyDocument(options?)` | Blank `Document` with default section setup |
+| `createDocumentWithText(text, options?)` | Blank document seeded with a paragraph of text |
+
+## Read text and structure
+
+Helpers over the body so you do not hand-walk the tree: `getBodyText`, `getParagraphs`, `getParagraphAtIndex`, `getParagraphText`, `getRunText`, `getHyperlinkText`, `getTableText`, `countWords`, `countCharacters`, `getBodyWordCount`, `getBodyCharacterCount`, `getTextBefore`, `getTextAfter`, `getFormattingAtPosition`, `hasImages`, `hasHyperlinks`, `hasTables`, `isHeadingStyle`, `parseHeadingLevel`.
+
+```ts
+import { getParagraphs, getParagraphText } from "@eigenpal/docx-editor-core/headless";
+
+for (const para of getParagraphs(doc.package.document)) {
+  console.log(para.paraId, getParagraphText(para));
+}
+```
+
+## Content controls (SDTs)
+
+Find and edit Word content controls by `tag`, `alias`, `id`, or `type`. All mutators are pure (return a new `Document`) and respect Word's lock semantics. The full behavior contract is in the [content controls guide](/docs/1.x/guides/content-controls).
+
+| Export | Purpose |
+|---|---|
+| `findContentControls(doc, filter?)` | List matching controls as `ContentControlInfo[]` |
+| `findContentControl(doc, filter)` | First match or `undefined` |
+| `getContentControlText(control)` | Plain text of a control |
+| `setContentControlContent(doc, filter, replacement, options?)` | Fill a rich/plain-text control with a string or `BlockContent[]` |
+| `setContentControlValue(doc, filter, value, options?)` | Set a typed value: `{ kind: 'dropdown' \| 'checkbox' \| 'date', ... }` |
+| `removeContentControl(doc, filter, options?)` | Delete a control, or unwrap with `keepContent: true` |
+| `addRepeatingSectionItem(doc, filter, options?)` | Clone a repeating-section item with fresh ids |
+| `removeRepeatingSectionItem(doc, filter, index)` | Drop one repeating-section item |
+| `formatSdtDate(iso, pattern?)` | Format an ISO date with a `w:dateFormat` pattern |
+
+Errors are typed: `ContentControlNotFoundError`, `ContentControlLockedError`, `ContentControlTypeError`, `ContentControlBoundError`, `ContentControlValueError`, `RepeatingSectionError`.
+
+## Watermarks
+
+| Export | Purpose |
+|---|---|
+| `getDocumentWatermark(doc)` | Current `Watermark` (`TextWatermark \| PictureWatermark`) or `undefined` |
+| `setDocumentWatermark(doc, watermark \| null)` | Apply or remove a watermark across the document's headers |
+
+## Templates and variables
+
+A docxtemplater-backed pipeline for `{{variable}}` templates: `processTemplate`, `processTemplateDetailed`, `processTemplateAsBlob`, `processTemplateAdvanced`, `getTemplateTags`, `validateTemplate`, `getMissingVariables`, `previewTemplate`, `createTemplateProcessor`.
+
+Variable detection over a parsed `Document`: `detectVariables`, `detectVariablesDetailed`, `hasTemplateVariables`, `replaceVariables`, `removeVariables`, and related string helpers.
+
+```ts
+import { processTemplate } from "@eigenpal/docx-editor-core/headless";
+
+const out = processTemplate(buffer, { customer_name: "Acme GmbH" }); // ArrayBuffer
+```
+
+## DocumentAgent
+
+`DocumentAgent` is a chainable, immutable wrapper for multi-step edits: `DocumentAgent.fromBuffer(buffer)` / `fromDocument(doc)`, mutation methods (`insertText`, `replaceRange`, `deleteRange`, `insertTable`, `insertImage`, `insertHyperlink`, `applyFormatting`, `applyStyle`, `applyVariables`, `executeCommands`), inspection methods (`getText`, `getWordCount`, `getPageCount`, `getStyles`, `getVariables`, `getAgentContext`), and export via `toBuffer(options?)` / `toBlob()`. `executeCommand` / `executeCommands` run serializable `AgentCommand` objects against a plain `Document`.
+
+Usage walkthrough: [Headless processing](/docs/1.x/guides/headless-processing).
+
+## Units, colors, and plugin registry
+
+- Unit conversion: `twipsToPixels`, `pixelsToTwips`, `emuToPixels`, `pixelsToEmu`, `emuToTwips`, `twipsToEmu`, `pointsToPixels`, `pointsToHalfPoints`, `halfPointsToPixels`, `formatPx`.
+- Color resolution against the document theme: `resolveColor`, `resolveHighlightColor`, `resolveShadingColor`, `parseColorString`, `createThemeColor`, `createRgbColor`, `darkenColor`, `lightenColor`, `blendColors`, `getContrastingColor`.
+- Plugin system: `pluginRegistry`, `registerPlugins`, `createPluginRegistrar`, plus the `CorePlugin` / command / MCP tool types shared with the [plugin contract](/docs/1.x/plugins).
+
+## Types
+
+The entry re-exports the document model types (`Document`, `DocxPackage`, `Paragraph`, `Run`, `Table`, `Comment`, `Insertion`, `Deletion`, `SectionProperties`, `StyleDefinitions`, and more) and the agent API types (`AgentCommand`, `AgentContext`, `Range`, `Position`, ...), so a headless script rarely needs a second import path.
+
+## Next steps
+
+- [Generated API reference](/docs/1.x/api/core/headless) for every signature
+- [Headless processing guide](/docs/1.x/guides/headless-processing) for end-to-end patterns
+- [Content controls guide](/docs/1.x/guides/content-controls) for template automation

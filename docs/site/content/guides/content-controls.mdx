@@ -1,0 +1,144 @@
+---
+title: 'Content controls'
+description: 'Find and fill Word content controls by tag, alias, or id. Set text, dropdown, checkbox, and date values and manage repeating sections, headless or live.'
+category: 'Guides'
+seoTitle: 'Content controls (SDTs)'
+---
+
+Word content controls (`w:sdt`, Structured Document Tags) are labeled, bounded regions of a document. A block-level control wraps one or more paragraphs or a table and carries a stable `tag`, `alias`, and `id`. That stability makes them the natural anchor for templates, conditional sections, and document automation: design the template in Word, tag the fillable regions, then fill them by tag from code.
+
+The editor parses block controls into the document model, keeps them editable, renders their boundary, and round-trips them losslessly on save, including unmodeled properties such as `w:dataBinding` and `w15:repeatingSection`.
+
+<Callout>
+Content controls are addressed by `tag`, `alias`, or `id`. They are not the `{{mustache}}` template variables handled by the docxtemplater plugin; the two systems coexist in one document.
+</Callout>
+
+## Finding controls
+
+Headless (no DOM, no editor), against a parsed `Document`:
+
+```ts
+import {
+  parseDocx,
+  findContentControls,
+  findContentControl,
+} from "@eigenpal/docx-editor-core/headless";
+
+const doc = await parseDocx(buffer);
+
+const all = findContentControls(doc);                       // ContentControlInfo[]
+const checkboxes = findContentControls(doc, { type: "checkbox" });
+const intro = findContentControl(doc, { tag: "intro" });    // first match or undefined
+```
+
+The filter is `{ tag?, alias?, id?, type? }`. Each `ContentControlInfo` carries `tag`, `alias`, `id`, `sdtType`, `lock`, `listItems`, `placeholder`, `text`, plus modeled state: `showingPlaceholder`, `checked`, `dateFormat`, and `dataBinding`.
+
+When `showingPlaceholder` is `true`, `text` is the placeholder boilerplate ("Click here to enter text"), not entered content. Check this flag before treating `text` as real data.
+
+## Setting text content
+
+`setContentControlContent` fills a `richText` or `plainText` control with a string (or `BlockContent[]` headless):
+
+```ts
+import { setContentControlContent, removeContentControl } from "@eigenpal/docx-editor-core/headless";
+
+let next = setContentControlContent(doc, { tag: "intro" }, "Filled by template");
+
+// Conditional sections: drop a control, or unwrap it (keep its content)
+next = removeContentControl(next, { tag: "optionalClause" });
+next = removeContentControl(next, { tag: "wrapper" }, { keepContent: true });
+```
+
+All headless mutators are pure: they return a new `Document` and preserve the control's identity and raw `w:sdtPr`, so the result still round-trips. Mutators affect the first match only; when a tag repeats, enumerate with `findContentControls` and disambiguate by `id`.
+
+Safety rules (each overridable with `{ force: true }`):
+
+- A content-locked control throws `ContentControlLockedError` on edit; a deletion-locked one throws on remove.
+- A typed control (dropdown, date, checkbox, picture, group) throws `ContentControlTypeError` on free-text replacement. Use the typed setter below.
+- A data-bound control (`w:dataBinding`) throws `ContentControlBoundError`: its content is driven by the Custom XML store, so a direct write would not persist in Word.
+- An unmatched filter throws `ContentControlNotFoundError`.
+
+## Setting typed values (dropdown, checkbox, date)
+
+`setContentControlValue` updates both the visible content and the structured `w:sdtPr` state:
+
+```ts
+import { setContentControlValue } from "@eigenpal/docx-editor-core/headless";
+
+setContentControlValue(doc, { tag: "status" }, { kind: "dropdown", value: "2" });
+setContentControlValue(doc, { tag: "agree" }, { kind: "checkbox", checked: true });
+setContentControlValue(doc, { tag: "effective" }, { kind: "date", date: "2026-06-01" });
+```
+
+A dropdown value must match one of the control's list items (by value or display text). A date is ISO `yyyy-mm-dd` and is rendered with the control's `w:dateFormat`. `comboBox` controls are pick-only today; typing a value outside the list is not supported.
+
+In the editor, typed controls also get an interactive trigger at the top-right of their box: it toggles the checkbox, opens the dropdown's item menu, or opens a date picker, each as a normal undoable edit. No wiring required, in both the React and Vue adapters.
+
+## Repeating sections
+
+Repeating-section controls (`w15:repeatingSection`) round-trip verbatim, and two helpers manage their items:
+
+```ts
+import { addRepeatingSectionItem, removeRepeatingSectionItem } from "@eigenpal/docx-editor-core/headless";
+
+// Clone an item (with fresh ids); afterIndex picks the insertion point.
+let next = addRepeatingSectionItem(doc, { tag: "lineItems" }, { afterIndex: 0 });
+
+// Drop one item by index.
+next = removeRepeatingSectionItem(next, { tag: "lineItems" }, 2);
+```
+
+Unwrapping a repeating-section control is refused, since it would orphan the `w15` structure.
+
+## In the live editor
+
+The same operations exist on `DocxEditorRef`, running against the editor so writes are normal undoable edits:
+
+```ts
+const ref = useRef<DocxEditorRef>(null);
+
+ref.current?.getContentControls({ type: "dropDownList" }); // PMContentControl[]
+ref.current?.scrollToContentControl({ tag: "intro" });
+ref.current?.setContentControlContent({ tag: "intro" }, "Filled");  // boolean
+ref.current?.setContentControlValue({ tag: "agree" }, { kind: "checkbox", checked: true });
+ref.current?.removeContentControl({ tag: "optionalClause" });
+```
+
+These return `false` when no control matches; locked and typed controls throw under the same rules as headless unless `{ force: true }` is passed. The ref's `setContentControlContent` takes a string (newlines become paragraphs).
+
+## Headless document generation
+
+A complete fill-and-export pipeline in Node:
+
+```ts
+import { readFile, writeFile } from "node:fs/promises";
+import {
+  parseDocx,
+  setContentControlContent,
+  setContentControlValue,
+  removeContentControl,
+  repackDocx,
+} from "@eigenpal/docx-editor-core/headless";
+
+const buffer = await readFile("contract-template.docx");
+let doc = await parseDocx(buffer);
+
+doc = setContentControlContent(doc, { tag: "customerName" }, "Acme GmbH");
+doc = setContentControlValue(doc, { tag: "effective" }, { kind: "date", date: "2026-07-01" });
+doc = removeContentControl(doc, { tag: "betaClause" }); // condition not met
+
+const out = await repackDocx(doc);
+await writeFile("contract-acme.docx", Buffer.from(out));
+```
+
+## Current limits
+
+- Scope is block-level controls in the document body. Inline controls parse and round-trip but are not part of this addressing API.
+- Controls inside headers/footers and inside table cells are not discovered; `findContentControls` will not return them and mutators report "not found".
+- `dataBinding` and repeating sections round-trip verbatim but have no live behavior (no bound-value resolution, no automatic repeat expansion).
+
+## Next steps
+
+- [Headless processing](/docs/1.x/guides/headless-processing) for the full server-side toolkit
+- [Core headless API](/docs/1.x/core/headless) for every exported helper
+- [AI & Agents](/docs/1.x/agents) for filling documents from an LLM

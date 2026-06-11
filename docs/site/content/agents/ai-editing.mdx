@@ -1,0 +1,291 @@
+---
+title: 'AI editing'
+description: 'Tutorial: wire an LLM to a DOCX editor with the Vercel AI SDK. The AI reads paragraphs, comments, and suggests tracked changes live in the browser.'
+category: 'Agents'
+seoTitle: 'AI DOCX editing with the Vercel AI SDK'
+---
+
+## What you'll build
+
+A `<DocxEditor>` with an assistant panel on the right. The user asks a question, the model reads the document, drops comments and tracked changes that appear live as it streams, and finishes with a text reply. The chat UI, tool-call timeline, and panel chrome ship with the library; you write one API route and one page.
+
+<AgentChatDemo />
+
+This is the same wiring as [`examples/agent-chat-demo/`](https://github.com/eigenpal/docx-editor/tree/main/examples/agent-chat-demo) in the repo, which you can run locally.
+
+## How it works
+
+Three facts drive the wiring:
+
+- **Tools execute client-side, in the browser.** The server route declares the tool schemas but no `execute` functions. The AI SDK forwards each tool call to the client, where `useDocxAgentTools` runs it against the live editor.
+- **The document never leaves the browser.** Your `/api/chat` route sees chat messages and tool-call text (tool names, arguments, results). It never receives the DOCX file. `read_document` runs locally and its output goes up as a tool result, so the model sees document text only when it asks for it.
+- **Anchors survive concurrent edits.** Locate tools return paragraphs tagged with `paraId` (Word's `w14:paraId`). A `ParaIdAllocatorExtension` in the editor assigns fresh ids on Enter, paste, and split, so the user typing mid-conversation does not desync the agent's anchors.
+
+One round of the loop: user message goes up, model streams a tool call down, the client executes it against the editor, the result goes back up, the model continues. Repeat until the model writes plain text instead of a tool call.
+
+## Setup
+
+<Steps>
+<Step>
+
+Install the editor, the agent toolkit, and the AI SDK:
+
+```bash
+npm install @eigenpal/docx-editor-react @eigenpal/docx-editor-agents \
+            ai @ai-sdk/react @ai-sdk/openai
+```
+
+</Step>
+<Step>
+
+Set `OPENAI_API_KEY` in your environment (or swap `@ai-sdk/openai` for any AI SDK provider).
+
+</Step>
+</Steps>
+
+## The server route
+
+```ts
+// app/api/chat/route.ts
+import { streamText, convertToModelMessages, stepCountIs, type UIMessage } from 'ai';
+import { openai } from '@ai-sdk/openai';
+import { type AgentContextSnapshot } from '@eigenpal/docx-editor-agents/server';
+import { getAiSdkTools } from '@eigenpal/docx-editor-agents/ai-sdk/server';
+
+// No `execute` on these tools: the AI SDK forwards every call to the
+// client's useChat({ onToolCall }), which runs it against the live editor.
+const tools = getAiSdkTools();
+
+export async function POST(req: Request) {
+  const { messages, context } = (await req.json()) as {
+    messages: UIMessage[];
+    context?: AgentContextSnapshot;
+  };
+
+  const result = streamText({
+    model: openai('gpt-4o'),
+    system:
+      'You are a careful document assistant. Locate paragraphs with ' +
+      'read_document or find_text before commenting or suggesting changes.' +
+      (context?.selection?.paraId
+        ? `\nThe user's cursor is in paragraph ${context.selection.paraId}.`
+        : ''),
+    messages: await convertToModelMessages(messages),
+    tools,
+    // AI SDK stops after a single step by default. Without stopWhen the
+    // model never reads its own tool results and never writes a final reply.
+    stopWhen: stepCountIs(12),
+  });
+
+  return result.toUIMessageStreamResponse();
+}
+```
+
+<Callout type="warn" title="stopWhen is not optional">
+  `streamText` defaults to one step. The model calls `read_document`, the step ends, and the user
+  never gets an answer. `stopWhen: stepCountIs(12)` lets the agent loop (read, then comment, then
+  summarize) without running away.
+</Callout>
+
+The `context` field carries `getContext()`'s snapshot of the user's selection and page, so the model knows what the user is looking at without spending a tool call on `read_selection`.
+
+## The client
+
+```tsx
+'use client';
+
+import { useMemo, useRef, useState } from 'react';
+import dynamic from 'next/dynamic';
+import { useChat } from '@ai-sdk/react';
+import { DefaultChatTransport, lastAssistantMessageIsCompleteWithToolCalls } from 'ai';
+import { type DocxEditorRef } from '@eigenpal/docx-editor-react';
+import {
+  AgentChatLog,
+  AgentComposer,
+  useDocxAgentTools,
+  getToolDisplayName,
+  type EditorRefLike,
+} from '@eigenpal/docx-editor-agents/react';
+import { toAgentMessages } from '@eigenpal/docx-editor-agents/ai-sdk/react';
+
+// Client-only import; see /docs/1.x/installation for the SSR recipe.
+const DocxEditor = dynamic(
+  () => import('@eigenpal/docx-editor-react').then((m) => ({ default: m.DocxEditor })),
+  { ssr: false }
+);
+
+export default function Page() {
+  const editorRef = useRef<DocxEditorRef>(null);
+  const [input, setInput] = useState('');
+
+  // The hook owns the bridge to the live editor: a tool executor plus a
+  // context snapshot for the system prompt.
+  const { executeToolCall, getContext } = useDocxAgentTools({
+    // RefObject is invariant; DocxEditorRef satisfies EditorRefLike, so cast at the boundary.
+    editorRef: editorRef as React.RefObject<EditorRefLike | null>,
+    author: 'Assistant',
+  });
+
+  // `chat` is not defined yet inside onToolCall, so route the tool result
+  // back through a ref that is set after useChat returns.
+  const chatRef = useRef<{ addToolResult: (args: unknown) => Promise<void> } | null>(null);
+  const chat = useChat({
+    transport: new DefaultChatTransport({
+      api: '/api/chat',
+      prepareSendMessagesRequest: ({ messages }) => ({
+        body: { messages, context: getContext() },
+      }),
+    }),
+    // Re-send the conversation after each tool result so the model can read
+    // its own output and either call another tool or write the final reply.
+    sendAutomaticallyWhen: lastAssistantMessageIsCompleteWithToolCalls,
+    onToolCall: ({ toolCall }) => {
+      const result = executeToolCall(
+        toolCall.toolName,
+        (toolCall.input ?? {}) as Record<string, unknown>
+      );
+      const output =
+        typeof result.data === 'string'
+          ? result.data
+          : (result.error ?? JSON.stringify(result.data));
+      void chatRef.current?.addToolResult({
+        tool: toolCall.toolName,
+        toolCallId: toolCall.toolCallId,
+        output,
+      });
+    },
+  });
+  // useChat's return type is wider than the minimal addToolResult shape the ref declares.
+  chatRef.current = chat as unknown as typeof chatRef.current;
+
+  const messages = useMemo(
+    () => toAgentMessages(chat.messages, chat.status),
+    [chat.messages, chat.status]
+  );
+  const loading = chat.status === 'streaming' || chat.status === 'submitted';
+
+  return (
+    <DocxEditor
+      ref={editorRef}
+      // ...your usual editor props (documentBuffer, etc.)
+      agentPanel={{
+        title: 'Assistant',
+        render: () => (
+          <>
+            <AgentChatLog
+              messages={messages}
+              loading={loading}
+              error={chat.error?.message}
+              humanizeToolName={getToolDisplayName}
+            />
+            <AgentComposer
+              value={input}
+              onChange={setInput}
+              onSubmit={() => {
+                if (!input.trim() || loading) return;
+                chat.sendMessage({ text: input });
+                setInput('');
+              }}
+              disabled={loading}
+            />
+          </>
+        ),
+      }}
+    />
+  );
+}
+```
+
+Notes on this code:
+
+- `agentPanel` mounts the right-hand panel and adds a toggle button to the toolbar. The `render` prop is yours; `AgentChatLog` and `AgentComposer` are optional conveniences, not requirements.
+- `toAgentMessages(chat.messages, chat.status)` converts the AI SDK's `UIMessage[]` into the flat `AgentMessage[]` shape `<AgentChatLog>` renders, including the collapsible tool-call timeline.
+- `sendAutomaticallyWhen: lastAssistantMessageIsCompleteWithToolCalls` is the second half of the loop. `addToolResult` alone commits the result to history; this option re-sends the conversation so the model keeps going.
+
+## Example tool loop
+
+User types "tighten the wordiest paragraph" and hits send.
+
+1. **Client → server.** `useChat` POSTs the messages plus `context: getContext()` (cursor in paragraph `4A1F3B`, page 2 of 5).
+2. **Model → client.** The model streams a `read_document` call. `onToolCall` fires; `executeToolCall('read_document', {})` runs in the browser and returns the document as `[paraId] text` lines. The timeline in the panel shows "Reading document" with a spinner, then a check.
+3. **Client → server.** `addToolResult` commits the text; `sendAutomaticallyWhen` re-sends the conversation.
+4. **Model → client.** The model picks paragraph `7C22E0` and streams `suggest_change` with `{ paraId: '7C22E0', search: 'in order to be able to', replaceWith: 'to' }`. The tracked change appears in the document immediately, attributed to "Assistant".
+5. **Client → server.** Result: `Replacement proposed: "in order to be able to" → "to" on 7C22E0.` The conversation re-sends.
+6. **Model → client.** No more tool calls. The model streams its final text reply ("I suggested one change; accept it from the change card"). `stopWhen` never triggered because the model stopped on its own at step 3 of 12.
+
+The user accepts or rejects the change in the editor UI. The agent cannot do that part; accept and reject are deliberately not tools.
+
+## Controlling what the agent can do
+
+`useDocxAgentTools` takes allow and block lists for the built-in tools:
+
+```tsx
+// Read-only agent: can look, cannot touch.
+useDocxAgentTools({
+  editorRef,
+  include: ['read_document', 'read_selection', 'find_text', 'read_comments', 'read_changes'],
+});
+
+// Comment-only reviewer: reads plus comments, no text edits.
+useDocxAgentTools({
+  editorRef,
+  include: ['read_document', 'find_text', 'add_comment', 'reply_comment'],
+});
+
+// Everything except direct edits.
+useDocxAgentTools({
+  editorRef,
+  exclude: ['suggest_change', 'apply_formatting', 'set_paragraph_style'],
+});
+```
+
+`executeToolCall` enforces the filter at execution time. A model that hallucinates a filtered tool gets `Tool 'x' is not enabled.` back, not a silent bypass. Remember to filter the server side too, so the model never sees the schema in the first place:
+
+```ts
+const REVIEW_TOOLS = ['read_document', 'find_text', 'add_comment'];
+const all = getAiSdkTools();
+const tools = Object.fromEntries(
+  Object.entries(all).filter(([name]) => REVIEW_TOOLS.includes(name))
+);
+```
+
+Custom tools merge with the built-ins and always pass the filter. A custom tool with a built-in's name replaces the built-in:
+
+```tsx
+import type { AgentToolDefinition } from '@eigenpal/docx-editor-agents/react';
+
+const fetchClause: AgentToolDefinition<{ name: string }> = {
+  name: 'fetch_clause_template',
+  displayName: 'Fetching template',
+  description: 'Fetch a clause from the template library by name.',
+  inputSchema: { type: 'object', properties: { name: { type: 'string' } }, required: ['name'] },
+  handler: (input) => ({ success: true, data: fetchTemplateSync(input.name) }),
+};
+
+useDocxAgentTools({ editorRef, tools: { fetch_clause_template: fetchClause } });
+```
+
+## Vue
+
+The Vue adapter shares the same bridge contract (`EditorRefLike`), the same tool catalog, and the same `AgentMessage[]` chat shape:
+
+```ts
+import {
+  useAgentBridge,
+  AgentPanel,
+  AgentChatLog,
+  AgentComposer,
+} from '@eigenpal/docx-editor-agents/vue';
+import { toAgentMessages } from '@eigenpal/docx-editor-agents/ai-sdk/vue';
+
+const { executeToolCall, toolSchemas } = useAgentBridge({ editorRef, author: 'Assistant' });
+```
+
+Differences from React, as of 1.4: the `agentPanel` prop on `<DocxEditor>` is React-only, so in Vue you mount the `AgentPanel` component next to the editor yourself; and `useAgentBridge` exposes `executeToolCall` plus `toolSchemas` without the `include`/`exclude` filtering of `useDocxAgentTools` (filter `toolSchemas` before sending them to your route, and guard tool names in your own dispatch).
+
+## Next steps
+
+- [Live editor bridge reference](/docs/1.x/agents/live-editor), the full hook and panel API
+- [AI redlining](/docs/1.x/agents/redlining), restrict the agent to tracked changes and comments
+- [Tools reference](/docs/1.x/agents/tools), every parameter and return shape
+- [Bring your own agent](/docs/1.x/agents/bring-your-own), the same loop without the AI SDK
