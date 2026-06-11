@@ -27,6 +27,7 @@ import {
   type ContentControlValue,
 } from '@eigenpal/docx-editor-core/agent';
 import type { DocxInput } from '@eigenpal/docx-editor-core/utils';
+import { getCachedNumberingMap } from '@eigenpal/docx-editor-core/docx';
 import type { DocxEditorRef } from '../../DocxEditor';
 import type { PagedEditorRef } from '../PagedEditor';
 import {
@@ -154,7 +155,10 @@ export function useDocxEditorRefApi({
         const styleResolver = currentDoc?.package?.styles
           ? getCachedStyleResolver(currentDoc.package.styles)
           : null;
-        return setParagraphStyle(view, options, { styleResolver });
+        const numbering = currentDoc?.package?.numbering
+          ? getCachedNumberingMap(currentDoc.package.numbering)
+          : null;
+        return setParagraphStyle(view, options, { styleResolver, numbering });
       },
 
       getPageContent: (pageNumber) =>

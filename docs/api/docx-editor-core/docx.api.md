@@ -36,10 +36,19 @@ export interface ComplexFieldContext {
 export type ComplexFieldState = 'outside' | 'code' | 'result';
 
 // @public
+export function computeListRendering(numPr: {
+    numId?: number;
+    ilvl?: number;
+}, numbering: NumberingMap): ListRendering | null;
+
+// @public
 export function createComplexFieldContext(): ComplexFieldContext;
 
 // @public
 export function createDocx(doc: Document_2): Promise<ArrayBuffer>;
+
+// @public (undocumented)
+export function createNumberingMap(definitions: NumberingDefinitions): NumberingMap;
 
 // @public
 export const DEFAULT_TAB_ALIGNMENT: TabJustify;
@@ -92,6 +101,9 @@ export function formatNumber(num: number, format: NumberFormat): string;
 
 // @public
 export function getBulletCharacter(level: ListLevel): string;
+
+// @public (undocumented)
+export function getCachedNumberingMap(definitions: NumberingDefinitions): NumberingMap;
 
 // @public
 export function getEndnoteText(endnote: Endnote): string;

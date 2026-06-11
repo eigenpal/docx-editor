@@ -232,6 +232,7 @@ export function removeTabMark(position: number): Command;
 
 // @public (undocumented)
 export interface ResolvedStyleAttrs {
+    numbering?: NumberingMap | null;
     // (undocumented)
     paragraphFormatting?: ParagraphFormatting;
     // (undocumented)

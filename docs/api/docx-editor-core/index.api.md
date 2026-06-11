@@ -1158,6 +1158,10 @@ export interface ParagraphFormatting {
         numId?: number;
         ilvl?: number;
     };
+    numPrFromStyle?: {
+        numId?: number;
+        ilvl?: number;
+    };
     outlineLevel?: number;
     pageBreakBefore?: boolean;
     runProperties?: TextFormatting;
