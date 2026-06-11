@@ -1,5 +1,19 @@
 # @eigenpal/docx-js-editor
 
+## 1.4.0
+
+### Minor Changes
+
+- 1ab8b30: Image resize: drag a corner handle to scale (keeping aspect ratio) or an edge handle to stretch one side (width or height) and deliberately change the aspect ratio. Selection handles are now Word-style white dots. Inserted images keep their aspect ratio — a wide image dropped into a table cell or a narrow column now scales down to fit while staying in proportion, instead of squashing or overflowing the page. Fixes #266.
+
+### Patch Changes
+
+- Updated dependencies [28a521a]
+- Updated dependencies [1ab8b30]
+  - @eigenpal/docx-editor-core@1.4.0
+  - @eigenpal/docx-editor-agents@1.4.0
+  - @eigenpal/docx-editor-i18n@1.4.0
+
 ## 1.3.3
 
 ### Patch Changes
