@@ -8,6 +8,12 @@ import { EditorView } from 'prosemirror-view';
 import { Node as Node_2 } from 'prosemirror-model';
 
 // @public
+export function calculateResizedImageDimensions(handle: ImageResizeHandle, deltaX: number, deltaY: number, startWidth: number, startHeight: number, lockAspect: boolean): {
+    width: number;
+    height: number;
+};
+
+// @public
 export function commitImageFloatMove(view: EditorView, pmPos: number, hOffsetEmu: number, vOffsetEmu: number): number | null;
 
 // @public
@@ -15,6 +21,9 @@ export function commitImageInlineMove(view: EditorView, pmPos: number, dropPos: 
 
 // @public
 export function commitImageResize(view: EditorView, pmPos: number, newWidth: number, newHeight: number): number | null;
+
+// @public
+export type ImageResizeHandle = 'nw' | 'ne' | 'se' | 'sw' | 'n' | 's' | 'e' | 'w';
 
 // @public
 export function isFloatingImage(node: Node_2): boolean;
