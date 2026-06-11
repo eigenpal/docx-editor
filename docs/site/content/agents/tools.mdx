@@ -1,0 +1,251 @@
+---
+title: 'Tool catalog'
+description: 'Reference for the 14 DOCX agent tools: parameters, return shapes, and examples for reading, comments, tracked changes, formatting, and navigation.'
+category: 'Agents'
+seoTitle: 'Agent tools reference'
+---
+
+All 14 built-in tools, with exact parameters and return shapes. The schemas come from `getToolSchemas()` (OpenAI function-calling format) or `getAiSdkTools()` (Vercel AI SDK shape); execution goes through `executeToolCall(name, args, bridge)` or the framework hooks.
+
+Every tool returns the same envelope:
+
+```ts
+interface AgentToolResult {
+  success: boolean;
+  data?: unknown; // present on success; string for most tools
+  error?: string; // present on failure; written so the model can self-correct
+}
+```
+
+The pattern is locate-then-mutate. Locate tools return paragraphs tagged with a stable `paraId` (Word's `w14:paraId`); mutate tools take that `paraId` as input. Paragraphs without a `paraId` in the source file are addressed by their ordinal index as a string, so the ids the agent reads always resolve.
+
+## Locate
+
+### read_document
+
+Read the document as `[paraId] text` lines. Returns the vanilla view: pending tracked insertions are hidden, pending deletions still show as plain text (they are part of the document until accepted), and comment markers are stripped. Use `read_changes` / `read_comments` to inspect what is pending.
+
+| Parameter   | Type   | Required | Description                     |
+| ----------- | ------ | -------- | ------------------------------- |
+| `fromIndex` | number | no       | Start ordinal index (inclusive) |
+| `toIndex`   | number | no       | End ordinal index (inclusive)   |
+
+```jsonc
+// call
+{ "name": "read_document", "arguments": {} }
+// data
+"[2A1F3B] Quarterly report\n[2A1F3C] Revenue grew 14% over the prior period..."
+```
+
+### read_selection
+
+Read the user's current cursor or selection. No parameters. Returns a `SelectionInfo` object: `{ paraId, selectedText, paragraphText, before, after }`. Fails with `No selection (editor not focused).` when there is no live cursor, which is always the case in headless mode.
+
+```jsonc
+// data
+{
+  "paraId": "2A1F3C",
+  "selectedText": "grew 14%",
+  "paragraphText": "Revenue grew 14% over the prior period.",
+  "before": "Revenue ",
+  "after": " over the prior period.",
+}
+```
+
+### read_page
+
+Read one rendered page. Live editor only: the headless reviewer has no layout, so it reports zero pages.
+
+| Parameter    | Type   | Required | Description           |
+| ------------ | ------ | -------- | --------------------- |
+| `pageNumber` | number | yes      | 1-indexed page number |
+
+Returns the page text as `[paraId] text` lines. Out-of-range pages fail with `Page 9 does not exist (document has 4 pages).`; headless mode fails with `No pages rendered (headless mode or empty document).`
+
+### read_pages
+
+Read a contiguous range of rendered pages in a single round-trip. Live editor only, same headless caveat as `read_page`.
+
+| Parameter | Type   | Required | Description                      |
+| --------- | ------ | -------- | -------------------------------- |
+| `from`    | number | yes      | 1-indexed start page (inclusive) |
+| `to`      | number | yes      | 1-indexed end page (inclusive)   |
+
+```jsonc
+// data
+"--- Page 2 ---\n[3B1C44] ...\n\n--- Page 3 ---\n[3B1C59] ..."
+```
+
+### find_text
+
+Locate paragraphs containing a phrase. Returns handles the agent passes straight to the mutate tools: `paraId` plus the matched substring (use it as `search`).
+
+| Parameter       | Type    | Required | Description                          |
+| --------------- | ------- | -------- | ------------------------------------ |
+| `query`         | string  | yes      | Text to find (substring match)       |
+| `caseSensitive` | boolean | no       | Default `false`                      |
+| `limit`         | number  | no       | Max paragraphs to return. Default 20 |
+
+Returns `FoundMatch[]`, or the string `No matches.`:
+
+```jsonc
+// data
+[
+  {
+    "paraId": "5D0A21",
+    "match": "best efforts",
+    "before": "The Supplier shall use ",
+    "after": " to deliver the goods by the agreed date.",
+  },
+]
+```
+
+### read_comments
+
+List all comments with authors, anchored text, and threaded replies. No parameters.
+
+```jsonc
+// data
+"[Comment #3] Legal AI: \"Define 'material breach'.\" (anchored to: \"material breach\")\n  Reply by Dana: \"Agreed, drafting a definition.\""
+```
+
+### read_changes
+
+List tracked changes (insertions and deletions) currently pending in the document. No parameters.
+
+```jsonc
+// data
+"[Change #12] insertion by Legal AI: \"commercially reasonable efforts\"\n[Change #13] deletion by Legal AI: \"best efforts\""
+```
+
+## Mutate
+
+### add_comment
+
+Attach a comment to a paragraph, optionally anchored to a phrase within it. In the live editor it appears in the comments sidebar immediately.
+
+| Parameter | Type   | Required | Description                                                      |
+| --------- | ------ | -------- | ---------------------------------------------------------------- |
+| `paraId`  | string | yes      | Paragraph id from `read_document` / `find_text`                  |
+| `text`    | string | yes      | Comment body                                                     |
+| `search`  | string | no       | Anchor to this exact phrase within the paragraph; must be unique |
+
+```jsonc
+// call
+{ "paraId": "5D0A21", "text": "Replace with a defined-efforts standard.", "search": "best efforts" }
+// data
+"Comment 7 added on 5D0A21."
+```
+
+Fails when the `paraId` does not exist or `search` is missing from / ambiguous within the paragraph.
+
+### reply_comment
+
+Reply to an existing comment; the reply threads under the original.
+
+| Parameter   | Type   | Required | Description                     |
+| ----------- | ------ | -------- | ------------------------------- |
+| `commentId` | number | yes      | Comment id from `read_comments` |
+| `text`      | string | yes      | Reply body                      |
+
+Returns `Reply 9 added to comment 7.` Fails with `Comment #7 not found.` for unknown ids.
+
+### resolve_comment
+
+Mark a comment as resolved (done).
+
+| Parameter   | Type   | Required | Description                     |
+| ----------- | ------ | -------- | ------------------------------- |
+| `commentId` | number | yes      | Comment id from `read_comments` |
+
+Returns `Comment 7 resolved.`
+
+### suggest_change
+
+Suggest a tracked change the user accepts or rejects. Never edits text directly. Three modes selected by empty strings:
+
+| Mode                       | `search`  | `replaceWith` |
+| -------------------------- | --------- | ------------- |
+| Replacement                | non-empty | non-empty     |
+| Deletion                   | non-empty | `""`          |
+| Insertion at paragraph end | `""`      | non-empty     |
+
+| Parameter     | Type   | Required | Description                                                                         |
+| ------------- | ------ | -------- | ----------------------------------------------------------------------------------- |
+| `paraId`      | string | yes      | Paragraph id from `read_document` / `find_text`                                     |
+| `search`      | string | yes      | Phrase to find; must be unique within the paragraph. `""` = insert at paragraph end |
+| `replaceWith` | string | yes      | Replacement text. `""` = delete the matched phrase                                  |
+
+```jsonc
+// call
+{ "paraId": "5D0A21", "search": "best efforts", "replaceWith": "commercially reasonable efforts" }
+// data
+"Replacement proposed: \"best efforts\" → \"commercially reasonable efforts\" on 5D0A21."
+```
+
+Fails when the `paraId` is unknown, `search` is missing or ambiguous, or the target overlaps an existing tracked change.
+
+### apply_formatting
+
+Apply character formatting to a whole paragraph or a unique phrase within it. This is a direct edit, not a tracked change; exclude it in strict [redlining workflows](/docs/1.x/agents/redlining).
+
+| Parameter | Type   | Required | Description                                                                        |
+| --------- | ------ | -------- | ---------------------------------------------------------------------------------- |
+| `paraId`  | string | yes      | Paragraph id from `read_document` / `find_text`                                    |
+| `search`  | string | no       | Format only this exact phrase (must be unique). Omit to format the whole paragraph |
+| `marks`   | object | yes      | Marks to set or clear. Omit a key to leave it untouched; pass `false` to clear     |
+
+`marks` keys:
+
+| Key                        | Type                   | Notes                                                                                                                                                                       |
+| -------------------------- | ---------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `bold`, `italic`, `strike` | boolean                | `false` clears                                                                                                                                                              |
+| `underline`                | boolean or `{ style }` | `true` = single. Styles are the closed ECMA-376 `ST_Underline` set (`single`, `double`, `thick`, `dotted`, `dash`, `wave`, `words`, `none`, ...); other values are rejected |
+| `color`                    | object                 | `{ rgb: "FF0000" }` (no hash) or `{ themeColor: "accent1" }`                                                                                                                |
+| `highlight`                | string                 | Closed Word set only (`yellow`, `green`, `cyan`, `magenta`, `red`, `darkBlue`, ...). `"none"` clears. Hex is rejected: Word does not accept hex for `<w:highlight>`         |
+| `fontSize`                 | number                 | Points (e.g. 12, 14, 24)                                                                                                                                                    |
+| `fontFamily`               | object                 | `{ ascii, hAnsi }`                                                                                                                                                          |
+
+```jsonc
+// call
+{ "paraId": "2A1F3B", "marks": { "bold": true, "color": { "rgb": "1A73E8" } } }
+// data
+"Formatting applied to 2A1F3B."
+```
+
+Out-of-spec values fail early with the allowed list in the error message, so the model can self-correct instead of writing OOXML Word would discard.
+
+### set_paragraph_style
+
+Apply a paragraph style by id. The `styleId` must exist in the document's `styles.xml`; unknown ids are rejected. Direct edit, not a tracked change.
+
+| Parameter | Type   | Required | Description                                                                 |
+| --------- | ------ | -------- | --------------------------------------------------------------------------- |
+| `paraId`  | string | yes      | Paragraph id from `read_document` / `find_text`                             |
+| `styleId` | string | yes      | Style id, e.g. `"Heading1"`, `"Heading2"`, `"Title"`, `"Quote"`, `"Normal"` |
+
+```jsonc
+// call
+{ "paraId": "2A1F3B", "styleId": "Heading1" }
+// data
+"Style \"Heading1\" applied to 2A1F3B."
+```
+
+## Navigate
+
+### scroll
+
+Scroll the editor viewport to a paragraph. Does not move the user's cursor. In headless mode it validates the `paraId` and reports success without doing anything (there is no viewport).
+
+| Parameter | Type   | Required | Description                                     |
+| --------- | ------ | -------- | ----------------------------------------------- |
+| `paraId`  | string | yes      | Paragraph id from `read_document` / `find_text` |
+
+Returns `Scrolled to 2A1F3B.` or fails with `paraId 2A1F3B not found.`
+
+## Next steps
+
+- [AI editing tutorial](/docs/1.x/agents/ai-editing), wire these tools to a live editor
+- [AI redlining](/docs/1.x/agents/redlining), tool subsets for tracked-change-only review
+- [Word JS API parity](/docs/1.x/agents/word-js-api), how each tool maps to Office.js
+- [API reference](/docs/1.x/api/agents)

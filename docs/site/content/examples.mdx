@@ -1,0 +1,102 @@
+---
+title: 'Examples'
+description: 'Runnable DOCX editor starters for Vite, Next.js, Remix, Astro, Vue, and Nuxt, plus collaboration and AI agent demos, and live in-page playgrounds.'
+category: 'Examples'
+order: 55
+---
+
+Two kinds of examples. The [starters](#runnable-starters) are complete apps in the repo, one per framework or feature; clone and run them. The [live demos](#live-demos) run right here on this page.
+
+## Runnable starters
+
+Every starter lives under [`examples/`](https://github.com/eigenpal/docx-editor/tree/main/examples) in the repo and runs with `bun install` followed by the `bun run dev:*` script in its README. All of them resolve `@eigenpal/*` from the monorepo workspace rather than from npm, so build the packages once first (`bun run build:packages` from the repo root); to run a starter against the published npm packages instead, replace the `workspace:*` versions in its `package.json`.
+
+<Cards>
+  <Card title="Vite + React" href="https://github.com/eigenpal/docx-editor/tree/main/examples/vite">
+    Plain Vite + React SPA. No SSR, no wrappers. The simplest starter; begin here.
+  </Card>
+  <Card title="Vue 3" href="https://github.com/eigenpal/docx-editor/tree/main/examples/vue">
+    Vue 3 + Vite SPA with the Vue adapter. Same editor surface as React, with Vue components and refs.
+  </Card>
+  <Card title="Next.js" href="https://github.com/eigenpal/docx-editor/tree/main/examples/nextjs">
+    App Router integration. One dynamic() import with ssr: false; the rest of the page stays server-rendered.
+  </Card>
+  <Card title="Nuxt" href="https://github.com/eigenpal/docx-editor/tree/main/examples/nuxt">
+    The @eigenpal/nuxt-docx-editor module on Nuxt 3/4. Register the module; the SSR-safe component is auto-imported.
+  </Card>
+  <Card title="Remix" href="https://github.com/eigenpal/docx-editor/tree/main/examples/remix">
+    Remix (Vite) with the editor gated behind a mount check and a lazy() import.
+  </Card>
+  <Card title="Astro" href="https://github.com/eigenpal/docx-editor/tree/main/examples/astro">
+    The editor as a React island with client:only="react", skipping Astro's SSR for the component.
+  </Card>
+  <Card title="Realtime collaboration" href="https://github.com/eigenpal/docx-editor/tree/main/examples/collaboration">
+    Multi-user editing over Yjs, y-prosemirror, and y-webrtc. Peers sync browser-to-browser; no backend required.
+  </Card>
+  <Card title="React/Vue parity" href="https://github.com/eigenpal/docx-editor/tree/main/examples/parity">
+    Both adapters served from the same deployment, resolved from the built package output (the same bytes published to npm). Proof the same DOCX renders identically in React and Vue.
+  </Card>
+  <Card title="Agent chat (Roast My Doc)" href="https://github.com/eigenpal/docx-editor/tree/main/examples/agent-chat-demo">
+    Next.js app wiring useDocxAgentTools to an OpenAI-backed /api/chat route. The agent reads your DOCX and drops comments live in the editor.
+  </Card>
+  <Card title="Headless agents" href="https://github.com/eigenpal/docx-editor/tree/main/examples/agents-demo">
+    Next.js + OpenAI demo of DocxReviewer and agent tool calls operating on a Document model, no live editor.
+  </Card>
+  <Card title="Plugin: hello world" href="https://github.com/eigenpal/docx-editor/tree/main/examples/plugins/hello-world">
+    Minimal scaffold for the React adapter's plugin API. Start here for your first plugin.
+  </Card>
+  <Card title="Plugin: docxtemplater" href="https://github.com/eigenpal/docx-editor/tree/main/examples/plugins/docxtemplater">
+    Plugin adding docxtemplater variable insertion with a live preview.
+  </Card>
+</Cards>
+
+Each starter's README has the exact commands.
+
+## Live demos
+
+Interactive demos of `<DocxEditor>` props, running in this page.
+
+### Playground
+
+Toggle props and see changes immediately:
+
+<DemoPlayground />
+
+### Read-only mode
+
+Compare the full editor with a read-only preview. The `readOnly` prop strips the toolbar and all editing UI:
+
+<ReadOnlyDemo />
+
+### Mode toggle
+
+Switch between editing, suggesting, and viewing modes:
+
+<ModeToggleDemo />
+
+### Toolbar customization
+
+Customize the title bar with a logo, document name, and right-side actions:
+
+<ToolbarCustomDemo />
+
+### Author attribution
+
+Set the `author` prop to attribute comments and tracked changes to specific users:
+
+<AuthorDemo />
+
+### Agent chat in the editor
+
+Wire `<DocxEditor>` to the agent UI kit ([`<AgentPanel>`, `<AgentChatLog>`, `<AgentComposer>`](/docs/1.x/react)) and a chat backend. The agent reads paragraphs, adds comments, suggests tracked changes, and scrolls while the user watches:
+
+<AgentChatDemo />
+
+The full client + server walkthrough is in [AI editing](/docs/1.x/agents/ai-editing). For OpenAI, Anthropic, and Vercel AI SDK adapters see [Bring your own agent](/docs/1.x/agents/bring-your-own).
+
+## Next steps
+
+- [Quickstart](/docs/1.x/quickstart): build the load → edit → save loop yourself
+- [Installation](/docs/1.x/installation): per-framework setup behind each starter
+- [Agents](/docs/1.x/agents): the toolkit behind the agent demos
+- [Plugins](/docs/1.x/plugins): the API behind the plugin starters

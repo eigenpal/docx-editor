@@ -1,0 +1,214 @@
+---
+title: 'Migrating to 1.x'
+description: "Move from @eigenpal/docx-js-editor 0.x to the 1.x package set. Package-rename map, moved-symbol map, i18n restructure, license update."
+category: "Getting Started"
+order: 5
+seoTitle: 'Migrating from 0.x to 1.x'
+---
+
+## What moved where
+
+0.x was a single package. 1.x splits it into five npm packages by concern (plus `@eigenpal/nuxt-docx-editor`, a Nuxt module wrapping the Vue adapter):
+
+| What you used in 0.x | Where it is in 1.x |
+|---|---|
+| The `<DocxEditor>` component, toolbar, dialogs, hooks, plugin host | `@eigenpal/docx-editor-react` (or `@eigenpal/docx-editor-vue`) |
+| The document model and OOXML parse/serialize (`Document`, `Paragraph`, `createEmptyDocument`, ...) | `@eigenpal/docx-editor-core` |
+| Anything AI: the reviewer, agent UI components, the MCP server | `@eigenpal/docx-editor-agents` |
+| Locale strings (`pl`, `de`, `pt-BR`, ...) | `@eigenpal/docx-editor-i18n` |
+
+In practice a React app still imports from one package, `@eigenpal/docx-editor-react`, which pulls in `-core` and `-i18n` for you. You only name the other packages when you import the document model, the agent toolkit, or locale data directly. The rest of this guide is the symbol-level detail behind that split.
+
+## Overview
+
+1. Install the new package set (`-react` or `-vue`, plus `-core` and `-agents` if you need them).
+2. **Update the symbols whose home changed across packages first** (see [Moved symbols](#moved-symbols)); a plain package-name swap leaves them unresolved.
+3. Change every remaining `@eigenpal/docx-js-editor` import to `@eigenpal/docx-editor-react`.
+4. Rename `FormattingBar` → `Toolbar` and `Toolbar` (composite) → `EditorToolbar`.
+5. Remove `showPrintButton` from `<DocxEditor>` and toolbar props (deleted in 1.0).
+6. Rewire i18n imports; locales are **named exports** now, not subpath JSON files.
+7. License changes: every package is now Apache 2.0 (the agents package was AGPL-3.0).
+
+The mechanical work is small but the moved symbols catch people. Read [Moved symbols](#moved-symbols) before you start updating imports.
+
+## Package renames
+
+The monolithic `@eigenpal/docx-js-editor` split into five packages under the `@eigenpal/docx-editor-*` namespace, plus the `@eigenpal/nuxt-docx-editor` module.
+
+| Old (0.x) | New (1.x) |
+|---|---|
+| `@eigenpal/docx-js-editor` | `@eigenpal/docx-editor-react` |
+| `@eigenpal/docx-js-editor/core` | `@eigenpal/docx-editor-core` |
+| `@eigenpal/docx-js-editor/mcp` | `@eigenpal/docx-editor-agents/mcp` |
+| `@eigenpal/docx-js-editor/i18n/<code>.json` | `@eigenpal/docx-editor-i18n/<code>` (subpath) or named export off the root |
+| `@eigenpal/docx-editor-agents` (AGPL-3.0) | `@eigenpal/docx-editor-agents` (Apache 2.0) |
+
+Install the package set you actually use:
+
+```bash
+# Bare minimum for a React editor:
+npm uninstall @eigenpal/docx-js-editor
+npm install @eigenpal/docx-editor-react
+
+# Vue 3 instead:
+npm install @eigenpal/docx-editor-vue
+
+# Add the agent toolkit (also where the agent UI components live now):
+npm install @eigenpal/docx-editor-agents
+
+# Standalone i18n (transitively installed by -react and -vue):
+npm install @eigenpal/docx-editor-i18n
+```
+
+`-core` and `-i18n` are pulled in transitively by `-react` and `-vue`. Install them explicitly only when you import directly from those packages.
+
+## Moved symbols
+
+Five categories of symbols moved across packages (not just subpaths). A plain package-name swap to `@eigenpal/docx-editor-react` won't resolve these. **If a symbol from this list lives in your code, point its import at the new home below; otherwise every one of them becomes a "no exported member" error.**
+
+| Symbol(s) | Was (0.x) | Now (1.x, recommended) |
+|---|---|---|
+| `createEmptyDocument`, `createDocumentWithText`, `CreateEmptyDocumentOptions` | `@eigenpal/docx-js-editor` | `@eigenpal/docx-editor-react` or `@eigenpal/docx-editor-vue` (re-exported in 1.0.1 from `-core`) |
+| Document-tree types most apps reach for: `Document`, `Comment`, `Paragraph`, `Run`, `Insertion`, `Deletion`, `TrackedChangeInfo`, `Hyperlink`, `Table` | `@eigenpal/docx-js-editor` | `@eigenpal/docx-editor-core` (root entry surfaces them in 1.0.1) |
+| Rarer document-tree types: `Image`, `Footnote`, `Endnote`, `TableRow`, `TableCell` | `@eigenpal/docx-js-editor` | `@eigenpal/docx-editor-core` (root entry; also on `/headless`) |
+| Agent UI components: `AgentPanel`, `AgentChatLog`, `AgentComposer`, `AgentSuggestionChip`, `AgentTimeline` (and their `*Props` types) | `@eigenpal/docx-js-editor` | `@eigenpal/docx-editor-agents/react` (or `/vue`) |
+| `PluginHost`, `PluginHostProps`, `PluginHostRef`, `templatePlugin` | `@eigenpal/docx-js-editor` | `@eigenpal/docx-editor-react/plugin-api` |
+
+**Why these moved.** Agent UI primitives ship with the toolkit they pair with, not with the editor. Plugin types live next to the plugin contract. Document types and `createEmptyDocument` are declared in `-core` (framework-agnostic); 1.0.1 re-exports `createEmptyDocument`/`createDocumentWithText` from `-react` and `-vue` so most apps don't need a separate `-core` install, and surfaces the document-tree types (including the rarer ones like `Image` and `Footnote`) at the `-core` root entry, so the `-core/headless` subpath is a convenience rather than a requirement.
+
+**Pin to ≥1.0.1.** Earlier 1.0.0 required importing `createEmptyDocument` from `@eigenpal/docx-editor-core` (a separate install) and document types from `@eigenpal/docx-editor-core/headless` (an unguessable subpath). 1.0.1 fixed both. If you're on 1.0.0, upgrade the patch version before migrating; it removes most of the import-pain in this guide.
+
+You don't need a script for this. TypeScript will point you at each one: a moved symbol that's still importing from the old package shows up as a `Module has no exported member` error, and the table above gives its new home. Fix them as they come up.
+
+## Remaining imports
+
+Once the moved symbols are handled, every remaining `@eigenpal/docx-js-editor` import changes to `@eigenpal/docx-editor-react`. Only the package name changes; the imported names stay the same.
+
+A few 0.x subpaths don't live under `-react` and need a different package:
+
+| 0.x subpath | 1.x home |
+|---|---|
+| `@eigenpal/docx-js-editor/core` | `@eigenpal/docx-editor-core` |
+| `@eigenpal/docx-js-editor/mcp` | `@eigenpal/docx-editor-agents/mcp` |
+| `@eigenpal/docx-js-editor/i18n/<code>.json` | `@eigenpal/docx-editor-i18n` (see [i18n restructure](#i18n-restructure) below) |
+
+## API renames
+
+### `FormattingBar` → `Toolbar`
+
+What was previously called the "formatting bar" is now `Toolbar`, a closer name to what it actually is.
+
+```diff
+- import { FormattingBar } from '@eigenpal/docx-js-editor';
++ import { Toolbar } from '@eigenpal/docx-editor-react/ui';
+```
+
+### `Toolbar` (composite) → `EditorToolbar`
+
+The old `Toolbar` that combined a menu bar + the formatting buttons is now `EditorToolbar`. The formatting strip on its own is `Toolbar`. The lower-level pieces (`ToolbarButton`, `ToolbarGroup`, `ToolbarSeparator`, `ResponsiveToolbar`) are exported alongside.
+
+```diff
+- import { Toolbar } from '@eigenpal/docx-js-editor';
++ import { EditorToolbar } from '@eigenpal/docx-editor-react/ui';
+// or compose your own:
++ import { Toolbar, ToolbarButton, ToolbarGroup } from '@eigenpal/docx-editor-react/ui';
+```
+
+If you want the same behavior as 0.x's `Toolbar`, use `EditorToolbar`. If you want only the formatting buttons (what 0.x called `FormattingBar`), use the new `Toolbar`.
+
+`MenuBar` from 0.x is gone in 1.x. Compose your own from `ToolbarButton` and `ToolbarGroup`, or use `EditorToolbar` which includes a menu strip by default.
+
+## Removed APIs
+
+### `showPrintButton`
+
+Removed from `<DocxEditor>` and the toolbar. Render your own button if you need it.
+
+```diff
+- <DocxEditor documentBuffer={buf} showPrintButton />
++ <DocxEditor documentBuffer={buf} />
+```
+
+## i18n restructure
+
+To add a language, see [Contributing a translation](/docs/1.x/i18n/contributing).
+
+The package changed name (`-i18n` is now standalone) and gained two import styles. Both are supported in **1.0.1+**.
+
+### Locales: subpath or named export
+
+The 1.0 release shipped named exports only and broke per-locale code splitting in the process. 1.0.1 restored subpath exports, so you can pick:
+
+```ts
+// Subpath, bundlers tree-shake to just this locale's strings. Best for dynamic loading.
+import pl from '@eigenpal/docx-editor-i18n/pl';
+
+// Named, drops the dash for camelCase. Best for static "load all known locales" lists.
+import { pl, ptBR } from '@eigenpal/docx-editor-i18n';
+```
+
+The diff from 0.x:
+
+```diff
+- import pl from '@eigenpal/docx-js-editor/i18n/pl.json';
++ import pl from '@eigenpal/docx-editor-i18n/pl';
+```
+
+### Locale codes
+
+| Locale | 0.x JSON path | 1.x subpath | 1.x named export |
+|---|---|---|---|
+| English | `/i18n/en.json` | `/en` | `en` |
+| Polish | `/i18n/pl.json` | `/pl` | `pl` |
+| German | `/i18n/de.json` | `/de` | `de` |
+| Brazilian Portuguese | `/i18n/pt-BR.json` | `/pt-BR` | `ptBR` |
+| Hebrew | `/i18n/he.json` | `/he` | `he` |
+| Turkish | `/i18n/tr.json` | `/tr` | `tr` |
+| Chinese (Simplified) | `/i18n/zh-CN.json` | `/zh-CN` | `zhCN` |
+
+### Dynamic locale imports
+
+Path-templated dynamic imports work the same shape as before, just against the new package:
+
+```diff
+- import(`@eigenpal/docx-js-editor/i18n/${locale}.json`).then(setI18n);
++ import(`@eigenpal/docx-editor-i18n/${locale}`).then((m) => setI18n(m.default));
+```
+
+Each subpath emits its own chunk, so the bundler ships only the locale that loaded.
+
+### TypeScript types
+
+In 0.x each locale's type was the inferred `typeof <json>`, concrete and indistinguishable from one another. In 1.x, only `en` is the source-of-truth `LocaleStrings`; the others are `PartialLocaleStrings` (some keys may be missing). Update your local type unions:
+
+```diff
+- type LocaleI18n = typeof pl | typeof de | undefined;
++ import type { LocaleStrings, PartialLocaleStrings } from '@eigenpal/docx-editor-i18n';
++ type LocaleI18n = LocaleStrings | PartialLocaleStrings | undefined;
+```
+
+## License change
+
+The 0.x line of `@eigenpal/docx-editor-agents` was AGPL-3.0. In 1.0, every published package is **Apache 2.0**. If you tracked license obligations for compliance review, update the entry. Apache 2.0 is permissive: no copyleft on derivative works.
+
+The non-agents packages (`-core`, `-react`, `-vue`, `-i18n`) were also previously AGPL through `@eigenpal/docx-js-editor`; they're now Apache 2.0 as well.
+
+## Vue users
+
+Vue 3 is a published adapter in 1.0; it didn't exist in 0.x. If you were embedding the editor in a Vue app via the React adapter + a wrapper, drop the wrapper and use `@eigenpal/docx-editor-vue` directly. The surface mirrors React (same component name, hooks-as-composables, same plugin contract). Cross-adapter parity is enforced by `scripts/parity/parity.contract.json` upstream. See the [Vue package page](/docs/1.x/vue).
+
+## Verifying the migration
+
+1. **TypeScript first.** TypeScript will flag every moved symbol with a `Module has no exported member` error. Those are your roadmap to the [Moved symbols](#moved-symbols) table.
+2. **Build the project.** `next build` / `vite build` catches dynamic-import path errors that TS misses.
+3. **Run your test suite.** The behavior of every preserved API is unchanged; tests are the safety net for the import changes.
+4. **Check the editor visually** for the missing print button and any toolbar configuration you used to pass via `showPrintButton`.
+
+If something behaves differently and isn't covered above, it's likely a bug rather than an intended change; please file an issue in the [docx-editor repo](https://github.com/eigenpal/docx-editor/issues).
+
+## Next steps
+
+- [Installation](/docs/1.x/installation), framework-specific setup for 1.x
+- [Package overview](/docs/1.x), which package does what
+- [API reference](/docs/1.x/api), every export, generated from upstream types
+- [0.x archive](/docs/0.x), your old docs are still here if you need them

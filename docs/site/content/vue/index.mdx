@@ -1,0 +1,85 @@
+---
+title: "@eigenpal/docx-editor-vue"
+description: "The Vue 3 adapter for docx-editor. The same DocxEditor component as React, with hooks exposed as Vue composables and UI primitives under /ui."
+category: "Packages"
+order: 40
+---
+
+<PackageStats name="@eigenpal/docx-editor-vue" />
+
+## Status
+
+`@eigenpal/docx-editor-vue` is a stable adapter, released in lockstep with the React package (both publish from the same fixed version group). It targets Vue 3. Its surface mirrors the React adapter: same component name, same subpath layout, same plugin contract, with the remaining gaps tracked explicitly in the parity contract (see below). If you've shipped against `@eigenpal/docx-editor-react`, the Vue package is a port, not a learning curve.
+
+## Install
+
+```bash
+npm install @eigenpal/docx-editor-vue
+```
+
+Pulls in `@eigenpal/docx-editor-core` and `@eigenpal/docx-editor-i18n`.
+
+## Quickstart
+
+```vue
+<script setup lang="ts">
+import { ref } from 'vue';
+import { DocxEditor } from '@eigenpal/docx-editor-vue';
+import '@eigenpal/docx-editor-vue/styles.css';
+
+const buf = ref<ArrayBuffer | null>(null);
+</script>
+
+<template>
+  <DocxEditor :document-buffer="buf" />
+</template>
+```
+
+## Using with Nuxt
+
+For Nuxt 3 and 4, install [`@eigenpal/nuxt-docx-editor`](/docs/1.x/vue/nuxt), the official Nuxt module. It wraps this adapter and auto-imports an SSR-safe `<DocxEditor>`, so there's no `<ClientOnly>` wrapper to write:
+
+```ts
+// nuxt.config.ts
+export default defineNuxtConfig({
+  modules: ['@eigenpal/nuxt-docx-editor'],
+});
+```
+
+See [Nuxt](/docs/1.x/vue/nuxt) for the module options and what to import from the adapter directly.
+
+## Subpaths
+
+- `@eigenpal/docx-editor-vue`: `<DocxEditor>`, `DocxEditorProps`, `DocxEditorRef`, `EditorMode`, `renderAsync`, `i18nPlugin`, `provideLocale`
+- `@eigenpal/docx-editor-vue/ui`: `Toolbar`, `EditorToolbar`, `ResponsiveToolbar`, `TableToolbar`, `MenuBar`, `TitleBar`, `ColorPicker`, `FontPicker`, `StylePicker`, and the dialog components (find/replace, hyperlink, page setup, table properties, and more)
+- `@eigenpal/docx-editor-vue/composables`: Vue equivalents of the React hooks (`useDocxEditor`, `useHistory`, `useAutoSave`, `useTrackedChanges`, `useFindReplace`, etc.)
+- `@eigenpal/docx-editor-vue/dialogs`: hyperlink, find/replace, paste special, page setup
+- `@eigenpal/docx-editor-vue/plugin-api`: plugin host
+- `@eigenpal/docx-editor-vue/styles`: CSS
+
+Every export is in the [Vue API reference](/docs/1.x/api/vue).
+
+## Parity with React
+
+Upstream's `scripts/parity/parity.contract.json` lists every public prop and ref member shipped under either adapter, with explicit buckets for paired, deferred-in-Vue, and adapter-exclusive symbols. A CI step parses both packages' API snapshots and fails when the contract drifts, so divergence is never silent. The notable deferred-in-Vue items today: the `agentPanel` prop, the controlled `comments` prop, `onSave`/`onFontsLoaded`/clipboard callbacks, and the plugin overlay surface. Everything in the paired bucket behaves identically on both adapters.
+
+## Agent integration
+
+Same toolkit, Vue subpath:
+
+```ts
+import { useAgentBridge } from '@eigenpal/docx-editor-agents/vue';
+
+const { executeToolCall, toolSchemas } = useAgentBridge({
+  editorRef,
+  author: 'Assistant',
+});
+```
+
+Composable instead of a hook. Same tools, same transport. Server side is identical (`@eigenpal/docx-editor-agents/ai-sdk/server`). The React-only `agentPanel` prop has no Vue equivalent yet; render the chat UI components next to the editor (see [Vue examples](/docs/1.x/vue/examples)).
+
+## Next steps
+
+- [Vue API reference](/docs/1.x/api/vue)
+- [Migration: 0.x → 1.x](/docs/1.x/migration) if you ran the React adapter inside a Vue wrapper before
+- [Plugins](/docs/1.x/plugins)

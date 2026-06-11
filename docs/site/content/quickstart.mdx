@@ -1,0 +1,183 @@
+---
+title: 'Quickstart'
+description: 'Load, edit, and save a .docx in the browser in five minutes. Copy-paste setup for the open source DOCX editor in React and Vue, no backend needed.'
+category: 'Getting Started'
+---
+
+One component, one stylesheet, no backend.
+
+<Steps>
+
+<Step>
+
+### Install
+
+Either adapter pulls in `@eigenpal/docx-editor-core` and `@eigenpal/docx-editor-i18n` transitively. One install is enough.
+
+<Tabs items={['React', 'Vue']}>
+
+<Tab value="React">
+
+```bash
+npm install @eigenpal/docx-editor-react
+```
+
+</Tab>
+
+<Tab value="Vue">
+
+```bash
+npm install @eigenpal/docx-editor-vue
+```
+
+</Tab>
+
+</Tabs>
+
+On Next.js, Remix, or other SSR frameworks the editor must render client-side. On Next.js, mounting it during SSR throws `window is not defined`; use the `dynamic()` recipe in [Installation](/docs/1.x/installation), which also covers the other frameworks. The code below works as-is in any client-rendered app.
+
+</Step>
+
+<Step>
+
+### Load, edit, save
+
+The complete flow in one file. A file input feeds the editor, the editor handles all editing (typing, formatting, undo, tables, tracked changes), and a button serializes the current state back to a `.docx` download.
+
+<Tabs items={['React', 'Vue']}>
+
+<Tab value="React">
+
+```tsx
+// App.tsx
+import { useRef, useState } from 'react';
+import { DocxEditor, type DocxEditorRef } from '@eigenpal/docx-editor-react';
+import '@eigenpal/docx-editor-react/styles.css';
+
+export default function App() {
+  const editorRef = useRef<DocxEditorRef>(null);
+  const [file, setFile] = useState<File | null>(null);
+
+  async function download() {
+    const buffer = await editorRef.current?.save();
+    if (!buffer) return;
+    const blob = new Blob([buffer], {
+      type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = file?.name ?? 'document.docx';
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  return (
+    <div style={{ height: '100vh', display: 'flex', flexDirection: 'column' }}>
+      <div style={{ padding: 8, display: 'flex', gap: 8 }}>
+        <input
+          type="file"
+          accept=".docx"
+          onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+        />
+        <button onClick={download}>Download .docx</button>
+      </div>
+      {file && <DocxEditor ref={editorRef} documentBuffer={file} mode="editing" />}
+    </div>
+  );
+}
+```
+
+</Tab>
+
+<Tab value="Vue">
+
+```vue
+<!-- App.vue -->
+<script setup lang="ts">
+import { ref } from 'vue';
+import { DocxEditor, type DocxEditorRef } from '@eigenpal/docx-editor-vue';
+import '@eigenpal/docx-editor-vue/styles.css';
+
+const editorRef = ref<DocxEditorRef | null>(null);
+const file = ref<File | null>(null);
+
+function onPick(e: Event) {
+  file.value = (e.target as HTMLInputElement).files?.[0] ?? null;
+}
+
+async function download() {
+  const buffer = await editorRef.value?.save();
+  if (!buffer) return;
+  const blob = new Blob([buffer], {
+    type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = file.value?.name ?? 'document.docx';
+  a.click();
+  URL.revokeObjectURL(url);
+}
+</script>
+
+<template>
+  <div style="height: 100vh; display: flex; flex-direction: column">
+    <div style="padding: 8px; display: flex; gap: 8px">
+      <input type="file" accept=".docx" @change="onPick" />
+      <button @click="download">Download .docx</button>
+    </div>
+    <DocxEditor v-if="file" ref="editorRef" :document-buffer="file" mode="editing" />
+  </div>
+</template>
+```
+
+</Tab>
+
+</Tabs>
+
+Three things to know about this code:
+
+- `documentBuffer` accepts a `File`, `Blob`, `ArrayBuffer`, or `Uint8Array`. Pass the `File` from the input directly; no manual `arrayBuffer()` step needed. Pass `null` to mount an empty document instead.
+- `save()` on the editor ref returns a `Promise<ArrayBuffer | null>`: a complete `.docx`, or `null` when there is no document to serialize (the code above guards for it). Parsing and serialization both happen in the browser; the document never touches a server.
+- The stylesheet import is required once per app. Without it the toolbar renders unstyled.
+
+</Step>
+
+<Step>
+
+### Fetch instead of file input (optional)
+
+Loading a template from your own server is the same prop with a fetched buffer:
+
+```ts
+const buffer = await fetch('/template.docx').then((r) => r.arrayBuffer());
+// <DocxEditor documentBuffer={buffer} />
+```
+
+And if you'd rather react to the built-in Save action (Cmd+S or the toolbar button) instead of adding your own button, use the `onSave` prop, which receives the same `ArrayBuffer`:
+
+```tsx
+<DocxEditor documentBuffer={file} onSave={(buffer) => upload(buffer)} />
+```
+
+</Step>
+
+<Step>
+
+### Open a real .docx from your machine
+
+Run your dev server, click the file input, and pick any `.docx` you have lying around: a contract, a CV, a report with tables and headers. The editor parses it client-side, renders true Word-style pages, and the downloaded copy opens cleanly in Microsoft Word with formatting intact. That round trip is the whole point. If something renders wrong, [file an issue](https://github.com/eigenpal/docx-editor/issues) with the document.
+
+No file handy? Try the [live demo](https://docx-editor.dev/editor) first.
+
+</Step>
+
+</Steps>
+
+## Next steps
+
+- [Installation](/docs/1.x/installation) for Next.js, Remix, Astro, and Nuxt specifics
+- [Production readiness](/docs/1.x/word-fidelity) if you're evaluating the library for adoption
+- [React props and ref methods](/docs/1.x/react/props) for everything `<DocxEditor>` can do
+- [Agents](/docs/1.x/agents) to wire AI tools to the editor

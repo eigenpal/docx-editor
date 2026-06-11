@@ -1,0 +1,68 @@
+---
+title: 'Architecture'
+description: 'How the editor renders DOCX with Word fidelity: a hidden ProseMirror instance owns editing state while a layout painter draws true paginated pages.'
+category: 'Core'
+---
+
+The editing surface and the visible output are separate DOMs: two renderers run at once.
+
+## The dual-renderer design
+
+<DualRenderingDiagram />
+
+**The hidden ProseMirror instance** is the editor. It owns the document state, the selection, undo/redo history, keyboard input, and the schema-validated transaction model. It is mounted off-screen and never shown to the user.
+
+**The visible pages** are the renderer. The layout painter rebuilds a static DOM from ProseMirror state on every change: real pages with Word's page size, margins, headers, footers, and page breaks computed from Word's own metrics (twips, half-points, EMUs) rather than approximated from browser layout.
+
+The two stay in sync through a thin bridge:
+
+- ProseMirror state changes trigger a layout pass and a repaint of the affected pages.
+- Clicks and drags on the painted pages map back to ProseMirror positions, so the caret and selection behave as if you were editing the visible DOM directly.
+- Painted elements carry the ProseMirror position ranges they came from, which is how selection highlights, comment anchors, and tracked-change markers land on the right pixels.
+
+Headers and footers follow the same model: each header/footer part gets its own persistent hidden ProseMirror instance, and the painter is the sole visible renderer in both display and edit modes. That is why header editing behaves exactly like body editing.
+
+### Word-fidelity pagination
+
+The painter is free to lay text out the way Word does, because it is not constrained by what contenteditable can express:
+
+- Pagination is computed, not approximated. Lines are measured, blocks are split across pages where Word splits them, and tables fragment across page boundaries with correct border treatment at the cut.
+- Word's units drive geometry. The layout engine works in the document's own twips and EMUs, so indents, line spacing, and table grids land where Word puts them.
+- Editing stays reliable. ProseMirror's schema and transaction model handle input, IME, undo grouping, and collaborative-editing plugins, none of which need to know pages exist.
+
+The trade-off is that every visual feature has to be implemented in the painter; the editor cannot fall back to ProseMirror's default node rendering for the visible output.
+
+## Data flow
+
+<DataFlowDiagram />
+
+Loading:
+
+```
+.docx → unzip → OOXML parser → Document model → toProseDoc → ProseMirror state
+      → layout engine (measure + paginate) → layout painter → visible pages
+```
+
+Editing loops through the right half: a keystroke becomes a ProseMirror transaction, the new state is measured and the affected pages repaint.
+
+Saving runs the load path in reverse:
+
+```
+ProseMirror state → fromProseDoc → Document model → OOXML serializer → rezip → .docx
+```
+
+The save path repacks against the original file where possible, so parts of the package the editor does not model (custom XML, embedded fonts, unknown extensions) pass through untouched. That is what makes round-trips lossless: the editor edits the parts it understands and preserves the rest byte-for-byte.
+
+## The Document model
+
+The pivot point of the whole pipeline is the `Document` tree in `@eigenpal/docx-editor-core`: a typed, framework-free representation of the OOXML package (body content, styles, numbering, themes, headers/footers, comments, revisions, media). The parser produces it, the serializer consumes it, and the headless API operates on it directly, which is why server-side code and the live editor share one model. See [Headless API](/docs/1.x/core/headless).
+
+## Adapters
+
+`-core` contains everything described above and no framework code. The React and Vue adapters mount the hidden ProseMirror instances, host the painter output, and wire the chrome (toolbar, sidebar, dialogs). Both adapters drive the same core pipeline, and their public surfaces are kept in parity.
+
+## Next steps
+
+- [Headless API](/docs/1.x/core/headless) to use the parser, model, and serializer without a UI
+- [Core package overview](/docs/1.x/core) for subpaths and install
+- [Plugins](/docs/1.x/plugins) to extend the editor from the outside

@@ -1,0 +1,115 @@
+---
+title: 'Next.js'
+description: 'Set up a Next.js DOCX editor in the App Router. Dynamic import with ssr: false, the window is not defined fix, file upload, and saving back to .docx.'
+category: 'Frameworks'
+seoTitle: 'Next.js DOCX editor setup'
+---
+
+By the end of this page you have an App Router route that opens a `.docx` from disk, edits it in the browser, and downloads the result as a `.docx`.
+
+## Install
+
+```bash
+npm install @eigenpal/docx-editor-react
+```
+
+## Mount the editor
+
+Two files. The route stays a thin client shell; the editor itself lives in a separate component loaded with `dynamic()` and `ssr: false`. This is the structure of [`examples/nextjs`](https://github.com/eigenpal/docx-editor/tree/main/examples/nextjs).
+
+```tsx
+// app/page.tsx
+'use client';
+
+import dynamic from 'next/dynamic';
+
+const Editor = dynamic(() => import('./components/Editor').then((m) => m.Editor), {
+  ssr: false,
+  loading: () => <div>Loading editor...</div>,
+});
+
+export default function Page() {
+  return <Editor />;
+}
+```
+
+```tsx
+// app/components/Editor.tsx
+'use client';
+
+import { useRef, useState } from 'react';
+import { DocxEditor, type DocxEditorRef } from '@eigenpal/docx-editor-react';
+import '@eigenpal/docx-editor-react/styles.css';
+
+export function Editor() {
+  const editorRef = useRef<DocxEditorRef>(null);
+  const [buffer, setBuffer] = useState<ArrayBuffer | null>(null);
+  const [fileName, setFileName] = useState('document.docx');
+
+  async function onFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setBuffer(await file.arrayBuffer());
+    setFileName(file.name);
+  }
+
+  async function onSave() {
+    const out = await editorRef.current?.save();
+    if (!out) return;
+    const blob = new Blob([out], {
+      type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = fileName;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  return (
+    <div style={{ height: '100vh', display: 'flex', flexDirection: 'column' }}>
+      <div style={{ padding: 8, display: 'flex', gap: 8 }}>
+        <input type="file" accept=".docx" onChange={onFileSelect} />
+        <button onClick={onSave}>Save .docx</button>
+      </div>
+      <DocxEditor ref={editorRef} documentBuffer={buffer} showToolbar />
+    </div>
+  );
+}
+```
+
+`documentBuffer={null}` mounts an empty document until the user picks a file. The stylesheet import is required once.
+
+## Why this pattern
+
+The editor reads the DOM and measures text at mount, so it cannot run during server rendering. If you import `DocxEditor` directly in a route, `next build` fails during prerender with:
+
+```
+ReferenceError: window is not defined
+```
+
+<Callout type="info">
+  `dynamic(..., { ssr: false })` is the fix: the editor module is never evaluated on the server,
+  and it stays out of the route's initial bundle. Keep the rest of the page (nav, footer) as server
+  components; only the editor needs the client boundary.
+</Callout>
+
+## Run the example
+
+The example resolves `@eigenpal/*` from the monorepo workspace, so build the packages once first:
+
+```bash
+git clone https://github.com/eigenpal/docx-editor.git
+cd docx-editor
+bun install
+bun run build:packages
+bun run dev:nextjs   # http://localhost:3000
+```
+
+## Next steps
+
+- [Quickstart](/docs/1.x/quickstart): the load, edit, save flow in detail
+- [Loading and saving](/docs/1.x/guides/loading-and-saving): URLs, autosave, upload to your API
+- [Next.js DOCX editor guide](/blog/nextjs-docx-editor): the long-form walkthrough
+- [Next.js example on GitHub](https://github.com/eigenpal/docx-editor/tree/main/examples/nextjs)

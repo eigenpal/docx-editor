@@ -1,0 +1,105 @@
+---
+title: 'Astro'
+description: 'Run an Astro DOCX editor as a React island with client:only. Why client:load crashes, how styles load, and the path from file upload to .docx download.'
+category: 'Frameworks'
+seoTitle: 'Astro DOCX editor setup'
+---
+
+By the end of this page you have an Astro page that mounts the editor as a React island, opens a `.docx` from disk, and downloads the edited result.
+
+## Install
+
+```bash
+npm install @eigenpal/docx-editor-react
+npx astro add react
+```
+
+`astro add react` wires `@astrojs/react` into `astro.config.mjs` for you.
+
+## Mount the editor
+
+The page stays static HTML; the editor is a single island with `client:only="react"`. This is the structure of [`examples/astro`](https://github.com/eigenpal/docx-editor/tree/main/examples/astro):
+
+```astro
+---
+// src/pages/index.astro
+import { Editor } from '../components/Editor';
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>DOCX editor</title>
+  </head>
+  <body>
+    <Editor client:only="react" />
+  </body>
+</html>
+```
+
+```tsx
+// src/components/Editor.tsx
+import { useRef, useState } from 'react';
+import { DocxEditor, type DocxEditorRef } from '@eigenpal/docx-editor-react';
+import '@eigenpal/docx-editor-react/styles.css';
+
+export function Editor() {
+  const editorRef = useRef<DocxEditorRef>(null);
+  const [buffer, setBuffer] = useState<ArrayBuffer | null>(null);
+
+  async function onFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (file) setBuffer(await file.arrayBuffer());
+  }
+
+  async function onSave() {
+    const out = await editorRef.current?.save();
+    if (!out) return;
+    const blob = new Blob([out], {
+      type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'document.docx';
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  return (
+    <div style={{ height: '100vh', display: 'flex', flexDirection: 'column' }}>
+      <div style={{ padding: 8, display: 'flex', gap: 8 }}>
+        <input type="file" accept=".docx" onChange={onFileSelect} />
+        <button onClick={onSave}>Save .docx</button>
+      </div>
+      <DocxEditor ref={editorRef} documentBuffer={buffer} showToolbar />
+    </div>
+  );
+}
+```
+
+## Why this pattern
+
+`client:only="react"` is the key directive. `client:load` would still server-render the component once to produce static HTML, and the editor crashes on `window` during that pass. `client:only` skips SSR for the island entirely and renders it in the browser only. The rest of the page stays zero-JS static HTML.
+
+Styles need no extra setup: the `styles.css` import sits inside the island component, and Astro's Vite pipeline bundles CSS imported from `client:only` components like any other module.
+
+## Run the example
+
+The example resolves `@eigenpal/*` from built output, so build the workspace packages once first:
+
+```bash
+git clone https://github.com/eigenpal/docx-editor.git
+cd docx-editor
+bun install
+bun run build:packages
+bun run dev:astro   # http://localhost:4321
+```
+
+## Next steps
+
+- [Quickstart](/docs/1.x/quickstart): the load, edit, save flow in detail
+- [Loading and saving](/docs/1.x/guides/loading-and-saving): URLs, autosave, upload to your API
+- [Astro DOCX editor guide](/blog/astro-docx-editor): the long-form walkthrough
+- [Astro example on GitHub](https://github.com/eigenpal/docx-editor/tree/main/examples/astro)

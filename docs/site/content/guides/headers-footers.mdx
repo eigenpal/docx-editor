@@ -1,0 +1,83 @@
+---
+title: 'Headers & footers'
+description: 'Edit DOCX headers and footers in place, insert PAGE and NUMPAGES fields, use per-section first-page and even-page variants, and add watermarks.'
+category: 'Guides'
+seoTitle: 'Headers, footers, and watermarks'
+---
+
+Headers and footers render on every page exactly where Word puts them, and they are edited in place. There is no separate header dialog: double-click the header or footer area and type.
+
+## Editing
+
+Double-click inside the header or footer band to enter edit mode. From there, editing follows the same model as the document body: click to place the caret, drag to select, double- and triple-click for word and paragraph selection, right-click menus, hyperlinks, image selection, and table row, column, and edge resize all work identically. Undo and redo cover header and footer edits.
+
+While editing, a separator bar labels the region (Header or Footer) and shows an Options menu:
+
+- **Insert current page number** inserts a PAGE field.
+- **Insert total page count** inserts a NUMPAGES field.
+- **Remove header/footer** clears the region.
+
+Press Escape or click the close action to save and leave header/footer editing.
+
+## PAGE and NUMPAGES fields
+
+Page-number fields are stored as real Word fields, not baked-in text. The page view renders the resolved value on each page (page 3 of a 10-page document shows "3" and "10"), values update as the document reflows, and the fields round-trip to OOXML so Word keeps them live.
+
+A "Page X of Y" footer is the two inserts with literal text between them: type `Page `, insert the page number, type ` of `, insert the total page count.
+
+## Per-section headers and footers
+
+The OOXML model attaches header and footer references to sections, and the editor honors it:
+
+- Each section can reference `default`, `first`, and `even` header and footer parts (`w:headerReference` / `w:footerReference`).
+- **Different first page** (`w:titlePg`) shows the `first` variant on a section's first page. Typical use: no header on a title page.
+- **Different odd and even pages** (`w:evenAndOddHeaders`) alternates `default` and `even` variants, as in book-style layouts.
+- Sections without their own references inherit from earlier sections, matching Word's "link to previous" behavior.
+
+Documents using any of these render and round-trip correctly; editing a header edits the specific part the page displays.
+
+## Watermarks
+
+Watermarks live in headers (that is how Word models them) and render behind the body content on every page.
+
+### In the editor
+
+Insert → Watermark opens a dialog with three states:
+
+- **No watermark** removes the current one.
+- **Text watermark**: preset (like DRAFT or CONFIDENTIAL) or custom text, font, size (or Auto), color, diagonal or horizontal layout, and a semitransparent toggle.
+- **Picture watermark**: pick an image, set scale, and optionally apply washout.
+
+Watermarks in opened documents render as Word shows them, and edits round-trip to valid OOXML. Sections with first-page or even-page headers get the watermark there too: missing header parts are created without disturbing existing header inheritance, and picture watermarks keep their aspect ratio.
+
+### Headless
+
+`getDocumentWatermark` and `setDocumentWatermark` from `@eigenpal/docx-editor-core/headless` read and write the same model:
+
+```ts
+import { parseDocx, setDocumentWatermark, repackDocx } from "@eigenpal/docx-editor-core/headless";
+
+let doc = await parseDocx(buffer);
+
+doc = setDocumentWatermark(doc, {
+  kind: "text",
+  text: "DRAFT",
+  font: "Calibri",
+  color: "#C0C0C0",
+  layout: "diagonal",
+  semitransparent: true,
+});
+
+// or remove it
+doc = setDocumentWatermark(doc, null);
+
+const out = await repackDocx(doc);
+```
+
+The `Watermark` type is a union of `TextWatermark` (`kind: 'text'`, with `text`, `font`, `fontSize?`, `color`, `layout`, `semitransparent`) and `PictureWatermark` (`kind: 'picture'`, with image data, `scale`, `washout`).
+
+## Next steps
+
+- [Architecture](/docs/1.x/core/architecture) for how header/footer editing shares the body's editing model
+- [Loading and saving](/docs/1.x/guides/loading-and-saving) for the save pipeline that round-trips these parts
+- [Headless processing](/docs/1.x/guides/headless-processing) for server-side watermark stamping

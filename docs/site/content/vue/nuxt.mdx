@@ -1,0 +1,116 @@
+---
+title: "@eigenpal/nuxt-docx-editor"
+description: "Official Nuxt 3 and 4 module. Auto-imports an SSR-safe <DocxEditor>, injects the stylesheet, no <ClientOnly> boilerplate."
+category: "Vue"
+order: 43
+---
+
+<PackageStats name="@eigenpal/nuxt-docx-editor" />
+
+`@eigenpal/nuxt-docx-editor` is the official Nuxt module. It wraps [`@eigenpal/docx-editor-vue`](/docs/1.x/vue) and registers an SSR-safe `<DocxEditor>` as an auto-imported component, so a Nuxt app needs no manual import, no `<ClientOnly>` wrapper, and no Vite config. It supports Nuxt 3 and Nuxt 4.
+
+For a step-by-step walkthrough with loading, saving, tracked changes, and collaboration, see the [Nuxt DOCX editor guide](/blog/nuxt-docx-editor).
+
+## Install
+
+```bash
+npm install @eigenpal/nuxt-docx-editor
+```
+
+Pulls in `@eigenpal/docx-editor-vue`, and transitively `@eigenpal/docx-editor-core` and `@eigenpal/docx-editor-i18n`.
+
+## Register the module
+
+```ts
+// nuxt.config.ts
+export default defineNuxtConfig({
+  modules: ['@eigenpal/nuxt-docx-editor'],
+});
+```
+
+That is the whole setup. The module registers `<DocxEditor>` as a client-only component and pushes the editor stylesheet into Nuxt's CSS pipeline.
+
+## Use the component
+
+```vue
+<script setup lang="ts">
+import { ref } from 'vue';
+
+const buf = ref<ArrayBuffer | null>(null);
+</script>
+
+<template>
+  <DocxEditor :document-buffer="buf" />
+</template>
+```
+
+No import, no `<ClientOnly>`. `<DocxEditor>` is the Vue adapter's component, registered unchanged: the same props (`document-buffer`, `mode`, `show-toolbar`, `external-plugins`, and the rest), events, and `DocxEditorRef` methods as [`@eigenpal/docx-editor-vue`](/docs/1.x/vue). The full prop list is on [Vue props](/docs/1.x/vue/props). It renders in the browser only (ProseMirror measures DOM geometry at mount), so Nuxt shows a placeholder during SSR and hydrates the editor on the client.
+
+## Load a document
+
+`document-buffer` accepts the `DocxInput` union (`File`, `Blob`, `ArrayBuffer`, or `Uint8Array`). A `null` value mounts an empty document. Here is a file picker that binds the `File` directly, with `@error` wired for unreadable input:
+
+```vue
+<script setup lang="ts">
+import { ref } from 'vue';
+
+const file = ref<File | null>(null);
+
+function onFile(e: Event) {
+  file.value = (e.target as HTMLInputElement).files?.[0] ?? null;
+}
+</script>
+
+<template>
+  <input type="file" accept=".docx" @change="onFile" />
+  <DocxEditor
+    v-if="file"
+    :document-buffer="file"
+    @error="(err) => console.error(err)"
+  />
+</template>
+```
+
+To save, call `save()` on the component's `DocxEditorRef`; it resolves to an `ArrayBuffer` of OOXML bytes (`null` if no document is loaded), the same format the editor reads. The [Nuxt DOCX editor guide](/blog/nuxt-docx-editor) covers loading from a URL, saving to a download or a Nitro route, tracked changes, and collaboration.
+
+## Options
+
+```ts
+export default defineNuxtConfig({
+  modules: ['@eigenpal/nuxt-docx-editor'],
+  docxEditor: {
+    prefix: 'Ep',
+    injectStyles: true,
+  },
+});
+```
+
+| Option | Type | Default | Description |
+|---|---|---|---|
+| `prefix` | `string` | `''` | Component name prefix. `Ep` registers `<EpDocxEditor>`. |
+| `injectStyles` | `boolean` | `true` | Pushes `@eigenpal/docx-editor-vue/styles.css` into `nuxt.options.css`. Set `false` to import the stylesheet yourself. |
+
+## Composables
+
+Every composable from `@eigenpal/docx-editor-vue/composables` (`useDocxEditor`, `useTrackedChanges`, `useFindReplace`, `useAutoSave`, and the rest) is auto-imported. Use them in any page or component with no import.
+
+## What the module does not re-export
+
+The module re-exports the `<DocxEditor>` component and the composables, not the whole adapter. These come from `@eigenpal/docx-editor-vue` directly:
+
+- the `DocxEditorProps` and `DocxEditorRef` types
+- `renderAsync`, `createEmptyDocument`
+- the `/ui`, `/dialogs`, and `/plugin-api` subpaths
+
+If you use any of them, add the adapter to your own `dependencies` so the import is explicit:
+
+```bash
+npm install @eigenpal/docx-editor-vue
+```
+
+## Next steps
+
+- [Nuxt DOCX editor guide](/blog/nuxt-docx-editor): full walkthrough with loading, saving, collaboration, and agents
+- [Vue package overview](/docs/1.x/vue): the adapter the module wraps
+- [Vue API reference](/docs/1.x/api/vue): auto-generated from the d.ts
+- [Nuxt example on GitHub](https://github.com/eigenpal/docx-editor/tree/main/examples/nuxt)

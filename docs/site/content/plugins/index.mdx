@@ -1,0 +1,32 @@
+---
+title: "Plugin system"
+description: "Overview of the two plugin systems: EditorPlugin for browser UI panels and overlays, and CorePlugin for headless document processing in Node.js."
+category: "Plugins"
+order: 70
+---
+
+The editor has two plugin systems. **EditorPlugin** extends the browser editor with React UI: side panels, overlays painted over the pages, ProseMirror plugins, and scoped CSS. **CorePlugin** extends the headless document engine with command handlers that transform a `Document` without a browser. They share the same document model and parsers but run in different environments and do not communicate with each other.
+
+|              | **EditorPlugin**                                | **CorePlugin**                                  |
+| ------------ | ----------------------------------------------- | ----------------------------------------------- |
+| Environment  | Browser (React)                                 | Node.js (headless)                              |
+| Extends      | `<DocxEditor>` UI: panels, overlays, ProseMirror | `Document` transforms via command handlers      |
+| Registration | `<PluginHost plugins={[...]}>`                  | `pluginRegistry.register(plugin)`               |
+| Entry point  | `@eigenpal/docx-editor-react/plugin-api`        | `@eigenpal/docx-editor-core/core-plugins`       |
+
+Building UI inside the editor? Write an EditorPlugin. Processing documents in API routes, Node.js scripts, or CI pipelines? Write a CorePlugin.
+
+<Cards>
+  <Card title="Getting started" href="/docs/1.x/plugins/getting-started">
+    The decision table in depth, how registration works, and a hello-world word count plugin.
+  </Card>
+  <Card title="EditorPlugin API" href="/docs/1.x/plugins/editor-plugins">
+    Full reference: panels, overlays, ProseMirror plugins, CSS injection, PluginHostRef, limitations.
+  </Card>
+  <Card title="CorePlugin & headless API" href="/docs/1.x/plugins/core-plugins">
+    Command handlers, the plugin registry, and template processing in Node.js.
+  </Card>
+  <Card title="Examples & cookbook" href="/docs/1.x/plugins/examples">
+    Runnable example plugins and recipes: shortcuts, decorations, overlays, transaction filters.
+  </Card>
+</Cards>

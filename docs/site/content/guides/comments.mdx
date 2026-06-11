@@ -1,0 +1,114 @@
+---
+title: 'Comments'
+description: 'Add comment threads to DOCX documents: replies, resolve state, the comments sidebar, controlled comment props and callbacks, and programmatic APIs.'
+category: 'Guides'
+---
+
+Comments anchor discussion to a range of text. The editor reads the document's existing OOXML comments on load, shows them in a sidebar, and writes them back on save, so threads started in Word continue in the editor and vice versa.
+
+## The comment model
+
+A `Comment` (exported from `@eigenpal/docx-editor-core`) is:
+
+```ts
+interface Comment {
+  id: number;
+  author: string;
+  date?: string;
+  initials?: string;
+  content: Paragraph[];   // comment body as document paragraphs
+  parentId?: number;      // set on replies; points at the thread root
+  done?: boolean;         // true once resolved
+}
+```
+
+Replies are comments whose `parentId` references the root comment. Resolving sets `done: true`; the thread stays in the document (and in Word's comment pane) rather than being deleted.
+
+## The comments sidebar
+
+Commented ranges are highlighted in the page. The sidebar shows each thread next to its anchor: the comment text, author, date, replies, a reply box, and a resolve action. Placing the cursor in commented text opens the sidebar and expands the matching thread. A toolbar button toggles the sidebar.
+
+Users add comments by selecting text and using the comment action; the `author` prop supplies the name attached to anything they write:
+
+```tsx
+<DocxEditor documentBuffer={buf} author="Jess Lin" />
+```
+
+<AuthorDemo />
+
+## Controlled comments
+
+By default the editor owns comment state. To mirror it into your own store (database, Yjs array, audit log), make it controlled with `comments` + `onCommentsChange`:
+
+```tsx
+import { useState } from "react";
+import { DocxEditor } from "@eigenpal/docx-editor-react";
+import type { Comment } from "@eigenpal/docx-editor-core";
+
+export function ReviewEditor({ buf, author }: { buf: ArrayBuffer; author: string }) {
+  const [comments, setComments] = useState<Comment[]>([]);
+
+  return (
+    <DocxEditor
+      documentBuffer={buf}
+      author={author}
+      comments={comments}
+      onCommentsChange={(next) => {
+        setComments(next);
+        void persist(next);
+      }}
+    />
+  );
+}
+```
+
+`onCommentsChange` fires on any comment mutation with the full array. For side effects without owning state, use the granular callbacks instead:
+
+| Prop | Fires when |
+|---|---|
+| `onCommentAdd` | a comment is created |
+| `onCommentReply` | a reply is added (receives reply and parent) |
+| `onCommentResolve` | a thread is resolved |
+| `onCommentDelete` | a comment is deleted |
+
+For syncing comments across clients with Yjs, see [Realtime collaboration](/docs/1.x/realtime-collaboration).
+
+## Programmatic comment APIs
+
+`DocxEditorRef` exposes the same operations the UI uses. Comments anchor to a paragraph by its `w14:paraId`; pass `search` to narrow the anchor to a text match inside that paragraph.
+
+```tsx
+import { useRef } from "react";
+import { DocxEditor, type DocxEditorRef } from "@eigenpal/docx-editor-react";
+
+const ref = useRef<DocxEditorRef>(null);
+
+// Add a comment; returns the new comment id, or null if the anchor wasn't found.
+const id = ref.current?.addComment({
+  paraId: "ABC12300",
+  text: "Tighten this paragraph.",
+  author: "Review Bot",
+  search: "very unique",
+});
+
+// Reply and resolve.
+if (id != null) {
+  ref.current?.replyToComment(id, "Agreed, rephrased.", "Jess Lin");
+  ref.current?.resolveComment(id);
+}
+
+// Read the current thread state.
+const all = ref.current?.getComments();
+```
+
+Find anchor paragraphs with `ref.current?.findInDocument(query)`, which returns matches with their `paraId`, then scroll with `scrollToParaId`.
+
+## Word round-trip
+
+Comments parse from and serialize to the document's comments part, including author, initials, date, reply threading, and resolve state. A document annotated in the editor opens in Word with the same threads, and resolved threads stay marked resolved.
+
+## Next steps
+
+- [Tracked changes](/docs/1.x/guides/tracked-changes) for revisions alongside comments
+- [Realtime collaboration](/docs/1.x/realtime-collaboration) to sync comments live
+- [Props reference](/docs/1.x/react/props) for the full comments prop group

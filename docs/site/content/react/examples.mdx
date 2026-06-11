@@ -1,0 +1,288 @@
+---
+title: "React examples"
+description: "Concrete patterns for embedding <DocxEditor> in React: load from URL, controlled comments, autosave, custom toolbar, custom fonts, Yjs collaboration, agent panel."
+category: "React"
+order: 32
+---
+
+Each example is a self-contained component. Drop into a React file, swap the data source, render.
+
+## Load a document from a URL
+
+```tsx
+import { useEffect, useState } from 'react';
+import { DocxEditor } from '@eigenpal/docx-editor-react';
+import '@eigenpal/docx-editor-react/styles.css';
+
+export function Editor({ url }: { url: string }) {
+  const [buf, setBuf] = useState<ArrayBuffer | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch(url)
+      .then((r) => r.arrayBuffer())
+      .then((b) => {
+        if (!cancelled) setBuf(b);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [url]);
+
+  return <DocxEditor documentBuffer={buf} />;
+}
+```
+
+`null` vs `undefined`: `null` mounts an empty document immediately; `undefined` defers the mount until the buffer arrives (skips the empty-state flash).
+
+## Load from a file input
+
+`documentBuffer` accepts a `File` directly, so there is no `arrayBuffer()` step:
+
+```tsx
+import { useState } from 'react';
+import { DocxEditor } from '@eigenpal/docx-editor-react';
+
+export function FileEditor() {
+  const [file, setFile] = useState<File | null>(null);
+
+  return (
+    <>
+      <input
+        type='file'
+        accept='.docx'
+        onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+      />
+      {file && <DocxEditor documentBuffer={file} />}
+    </>
+  );
+}
+```
+
+## Autosave
+
+`useAutoSave` from `/hooks` persists the parsed document to localStorage on an interval (or debounced on change) and offers recovery after a crash or reload:
+
+```tsx
+import { useState } from 'react';
+import { DocxEditor } from '@eigenpal/docx-editor-react';
+import { useAutoSave } from '@eigenpal/docx-editor-react/hooks';
+import type { Document } from '@eigenpal/docx-editor-core';
+
+export function AutosaveEditor() {
+  const [doc, setDoc] = useState<Document | null>(null);
+  const { status, lastSaveTime, hasRecoveryData, acceptRecovery } = useAutoSave(doc, {
+    saveOnChange: true,
+  });
+
+  return <DocxEditor documentBuffer={null} onChange={setDoc} />;
+}
+```
+
+To persist to a server instead, debounce `save()` on the ref yourself:
+
+```tsx
+let timer: number | undefined;
+function onChange() {
+  window.clearTimeout(timer);
+  timer = window.setTimeout(async () => {
+    const buf = await editorRef.current?.save(); // Promise<ArrayBuffer | null>
+    if (buf) await fetch(`/api/documents/${docId}`, { method: 'PUT', body: buf });
+  }, 1500);
+}
+```
+
+More on saving in [Loading and saving](/docs/1.x/guides/loading-and-saving).
+
+## Controlled comments
+
+Own the comment array; mirror into a backing store. (React-only: the Vue adapter exposes comment events but not the `comments` prop.)
+
+```tsx
+import { useState } from 'react';
+import { DocxEditor } from '@eigenpal/docx-editor-react';
+import type { Comment } from '@eigenpal/docx-editor-core';
+
+export function ReviewEditor({ buf, author }: { buf: ArrayBuffer; author: string }) {
+  const [comments, setComments] = useState<Comment[]>([]);
+
+  return (
+    <DocxEditor
+      documentBuffer={buf}
+      author={author}
+      comments={comments}
+      onCommentsChange={(next) => {
+        setComments(next);
+        void fetch('/api/comments', {
+          method: 'PUT',
+          body: JSON.stringify(next),
+          headers: { 'content-type': 'application/json' },
+        });
+      }}
+    />
+  );
+}
+```
+
+## Suggesting mode (tracked changes)
+
+```tsx
+import { DocxEditor } from '@eigenpal/docx-editor-react';
+
+export function ReviewerEditor({ buf, reviewer }: { buf: ArrayBuffer; reviewer: string }) {
+  return <DocxEditor documentBuffer={buf} author={reviewer} mode='suggesting' />;
+}
+```
+
+Edits made in `'suggesting'` mode wrap in revision markup; the document owner accepts or rejects them from the tracked-changes sidebar. Since 1.1.0 this covers paragraph, table, image, and list changes as well as inline text; see [Tracked changes](/docs/1.x/guides/tracked-changes).
+
+## Custom toolbar
+
+Hide the built-in toolbar and compose the primitives from `/ui`. `ToolbarButton` takes `active`, `onClick`, and children; drive both from the editor ref and `onSelectionChange`:
+
+```tsx
+import { useRef, useState } from 'react';
+import { DocxEditor, type DocxEditorRef } from '@eigenpal/docx-editor-react';
+import { ToolbarButton, ToolbarGroup, ToolbarSeparator } from '@eigenpal/docx-editor-react/ui';
+import type { SelectionState } from '@eigenpal/docx-editor-core/prosemirror';
+
+export function CustomChromeEditor({ buf }: { buf: ArrayBuffer }) {
+  const editorRef = useRef<DocxEditorRef>(null);
+  const [selection, setSelection] = useState<SelectionState | null>(null);
+
+  function toggle(mark: 'bold' | 'italic') {
+    const info = editorRef.current?.getSelectionInfo();
+    if (!info?.paraId) return;
+    editorRef.current?.applyFormatting({
+      paraId: info.paraId,
+      search: info.selectedText || undefined,
+      marks: { [mark]: !selection?.textFormatting?.[mark] },
+    });
+  }
+
+  return (
+    <div className='flex flex-col h-full'>
+      <ToolbarGroup label='Formatting'>
+        <ToolbarButton
+          active={!!selection?.textFormatting?.bold}
+          onClick={() => toggle('bold')}
+          ariaLabel='Bold'
+        >
+          B
+        </ToolbarButton>
+        <ToolbarButton
+          active={!!selection?.textFormatting?.italic}
+          onClick={() => toggle('italic')}
+          ariaLabel='Italic'
+        >
+          I
+        </ToolbarButton>
+        <ToolbarSeparator />
+      </ToolbarGroup>
+      <DocxEditor
+        ref={editorRef}
+        documentBuffer={buf}
+        showToolbar={false}
+        onSelectionChange={setSelection}
+      />
+    </div>
+  );
+}
+```
+
+Prefer the prebuilt strip? Keep `showToolbar` on and append your own controls with `toolbarExtra`, or compose the full `EditorToolbar` chrome; both are covered in [Toolbar customization](/docs/1.x/guides/toolbar).
+
+In 0.x the formatting buttons were called `FormattingBar`. They're now `Toolbar`. The old composite is now `EditorToolbar`. See [migration](/docs/1.x/migration#api-renames).
+
+<ToolbarCustomDemo />
+
+## Custom fonts
+
+`fonts` registers self-hosted font faces, `fontFamilies` controls the picker; the full rules are under [Props → Fonts](/docs/1.x/react/props#fonts).
+
+```tsx
+import { DocxEditor } from '@eigenpal/docx-editor-react';
+import '@eigenpal/docx-editor-react/styles.css';
+
+// Module-level so the array identity is stable across renders.
+const FONTS = [
+  { family: 'Inter', src: '/fonts/Inter-Regular.woff2' },
+  { family: 'Inter', src: '/fonts/Inter-Bold.woff2', weight: 700 },
+  { family: 'JetBrains Mono', src: '/fonts/JetBrainsMono-Regular.woff2' },
+];
+
+export function BrandedEditor({ buf }: { buf: ArrayBuffer }) {
+  return (
+    <DocxEditor
+      documentBuffer={buf}
+      fonts={FONTS}
+      fontFamilies={['Inter', 'JetBrains Mono', 'Arial', 'Times New Roman']}
+      onError={(err) => console.error('font or parse error', err)}
+    />
+  );
+}
+```
+
+The `/fonts/...` paths resolve against your site root (`public/` in Next.js or Vite).
+
+## Read-only viewer
+
+```tsx
+import { DocxEditor } from '@eigenpal/docx-editor-react';
+
+export function Viewer({ buf }: { buf: ArrayBuffer }) {
+  return (
+    <DocxEditor
+      documentBuffer={buf}
+      readOnly
+      showToolbar={false}
+      showZoomControl={false}
+    />
+  );
+}
+```
+
+`readOnly` disables every edit affordance. Pair with `showToolbar={false}` for a viewer-only feel.
+
+<ReadOnlyDemo />
+
+## Realtime collaboration (Yjs)
+
+Three props hand state to a CRDT: `externalContent` (skip the built-in loader; Yjs owns the content), `externalPlugins` (the y-prosemirror plugins), and `comments` + `onCommentsChange` (mirror threads into a `Y.Array`):
+
+```tsx
+import { DocxEditor, createEmptyDocument } from '@eigenpal/docx-editor-react';
+import { ySyncPlugin, yCursorPlugin, yUndoPlugin } from 'y-prosemirror';
+
+<DocxEditor
+  document={createEmptyDocument()} // schema seed; Yjs populates the content
+  externalContent
+  externalPlugins={[ySyncPlugin(fragment), yCursorPlugin(provider.awareness), yUndoPlugin()]}
+  author={user.name}
+/>;
+```
+
+The provider setup, presence, and comment sync live on the canonical page: [Realtime collaboration](/docs/1.x/realtime-collaboration).
+
+## Agent panel
+
+`agentPanel={{ render }}` mounts a resizable side panel next to the document, and `useDocxAgentTools` bridges tool calls to the live editor:
+
+```tsx
+import { useDocxAgentTools } from '@eigenpal/docx-editor-agents/react';
+
+const { tools, executeToolCall, getContext } = useDocxAgentTools({ editorRef });
+
+<DocxEditor ref={editorRef} documentBuffer={buf} agentPanel={{ render: () => <MyChat /> }} />;
+```
+
+The full loop (AI SDK transport, `onToolCall` execution, `toAgentMessages` for `<AgentChatLog>`, the server route) is the [AI document editing](/docs/1.x/agents/ai-editing) tutorial; the bridge reference is [Agents → Live editor](/docs/1.x/agents/live-editor).
+
+<AgentChatDemo />
+
+## Next steps
+
+- [Props reference](/docs/1.x/react/props)
+- [React API reference](/docs/1.x/api/react)
+- [Realtime collaboration](/docs/1.x/realtime-collaboration)
+- [Agents](/docs/1.x/agents)

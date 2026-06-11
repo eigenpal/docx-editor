@@ -1,0 +1,164 @@
+---
+title: 'Quickstart: AI'
+description: 'Wire an AI assistant to the DOCX editor: one API route, one page. The agent reads the document, adds comments, and suggests tracked changes in the browser.'
+category: 'Getting Started'
+seoTitle: 'AI DOCX editor quickstart'
+---
+
+Two files to an editor with an AI assistant panel: the model reads the
+document, adds comments, and proposes tracked changes that the user accepts
+or rejects. Only chat messages and tool-call text reach your route; the file itself
+stays client-side.
+
+<Steps>
+<Step>
+
+## Install
+
+```bash
+npm install @eigenpal/docx-editor-react @eigenpal/docx-editor-agents ai @ai-sdk/react @ai-sdk/openai
+```
+
+</Step>
+<Step>
+
+## The API route
+
+The tools ship without `execute` handlers: the AI SDK forwards every call to
+the client, which runs it against the live editor.
+
+```ts
+// app/api/chat/route.ts
+import { streamText, convertToModelMessages, stepCountIs, type UIMessage } from 'ai';
+import { openai } from '@ai-sdk/openai';
+import { getAiSdkTools } from '@eigenpal/docx-editor-agents/ai-sdk/server';
+
+export async function POST(req: Request) {
+  const { messages } = (await req.json()) as { messages: UIMessage[] };
+  return streamText({
+    model: openai('gpt-4o'),
+    system: 'You are a careful document assistant. Locate paragraphs before editing.',
+    messages: await convertToModelMessages(messages),
+    tools: getAiSdkTools(),
+    stopWhen: stepCountIs(12), // without this the loop ends after one tool call
+  }).toUIMessageStreamResponse();
+}
+```
+
+</Step>
+<Step>
+
+## The page
+
+`useDocxAgentTools` bridges tool calls to the live editor; `agentPanel`
+mounts the chat next to the pages with the shipped `AgentChatLog` and
+`AgentComposer` components.
+
+```tsx
+'use client';
+
+import { useMemo, useRef, useState } from 'react';
+import dynamic from 'next/dynamic';
+import { useChat } from '@ai-sdk/react';
+import { DefaultChatTransport, lastAssistantMessageIsCompleteWithToolCalls } from 'ai';
+import { type DocxEditorRef } from '@eigenpal/docx-editor-react';
+import {
+  AgentChatLog,
+  AgentComposer,
+  useDocxAgentTools,
+  getToolDisplayName,
+  type EditorRefLike,
+} from '@eigenpal/docx-editor-agents/react';
+import { toAgentMessages } from '@eigenpal/docx-editor-agents/ai-sdk/react';
+
+// Client-only import; see /docs/1.x/installation for the SSR recipe.
+const DocxEditor = dynamic(
+  () => import('@eigenpal/docx-editor-react').then((m) => ({ default: m.DocxEditor })),
+  { ssr: false }
+);
+
+export default function Page() {
+  const editorRef = useRef<DocxEditorRef>(null);
+  const [input, setInput] = useState('');
+
+  const { executeToolCall } = useDocxAgentTools({
+    // RefObject is invariant; DocxEditorRef satisfies EditorRefLike.
+    editorRef: editorRef as React.RefObject<EditorRefLike | null>,
+    author: 'Assistant',
+  });
+
+  // Tool results route back through a ref set after useChat returns.
+  const chatRef = useRef<{ addToolResult: (args: unknown) => Promise<void> } | null>(null);
+  const chat = useChat({
+    transport: new DefaultChatTransport({ api: '/api/chat' }),
+    sendAutomaticallyWhen: lastAssistantMessageIsCompleteWithToolCalls,
+    onToolCall: ({ toolCall }) => {
+      const result = executeToolCall(
+        toolCall.toolName,
+        (toolCall.input ?? {}) as Record<string, unknown>
+      );
+      void chatRef.current?.addToolResult({
+        tool: toolCall.toolName,
+        toolCallId: toolCall.toolCallId,
+        output:
+          typeof result.data === 'string'
+            ? result.data
+            : (result.error ?? JSON.stringify(result.data)),
+      });
+    },
+  });
+  chatRef.current = chat as unknown as typeof chatRef.current;
+
+  const messages = useMemo(
+    () => toAgentMessages(chat.messages, chat.status),
+    [chat.messages, chat.status]
+  );
+  const loading = chat.status === 'streaming' || chat.status === 'submitted';
+
+  return (
+    <DocxEditor
+      ref={editorRef}
+      // ...your usual editor props (documentBuffer, etc.)
+      agentPanel={{
+        title: 'Assistant',
+        render: () => (
+          <>
+            <AgentChatLog
+              messages={messages}
+              loading={loading}
+              error={chat.error?.message}
+              humanizeToolName={getToolDisplayName}
+            />
+            <AgentComposer
+              value={input}
+              onChange={setInput}
+              onSubmit={() => {
+                if (!input.trim() || loading) return;
+                chat.sendMessage({ text: input });
+                setInput('');
+              }}
+              disabled={loading}
+            />
+          </>
+        ),
+      }}
+    />
+  );
+}
+```
+
+</Step>
+</Steps>
+
+Ask it to "find every passive sentence and suggest a rewrite": the
+suggestions land as Word-native tracked changes, ready for accept or reject.
+
+The [AI editing tutorial](/docs/1.x/agents/ai-editing) explains every moving
+part of this code (the tool loop traced step by step, selection context,
+restricting what the agent can do) and the Vue equivalent.
+
+## Next steps
+
+- [AI redlining](/docs/1.x/agents/redlining): restrict the agent to tracked-change proposals
+- [Tool catalog](/docs/1.x/agents/tools): all 14 tools with parameters
+- [Agents overview](/docs/1.x/agents): live editor vs headless vs MCP

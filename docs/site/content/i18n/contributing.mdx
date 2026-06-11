@@ -1,0 +1,42 @@
+---
+title: 'Contributing a translation'
+description: 'Add a new editor language to @eigenpal/docx-editor-i18n: scaffold the locale JSON, fill the strings, validate, and open a PR. Partial translations welcome.'
+category: 'i18n'
+---
+
+The editor UI ships in nine languages. Adding a tenth is a single JSON file
+in the [monorepo](https://github.com/eigenpal/docx-editor).
+
+## How locales work
+
+`packages/i18n/en.json` is the source of truth. Every other locale mirrors
+its shape; a `null` value falls back to the English string at runtime, and a
+missing key fails CI. Locales publish as named exports and per-locale
+subpaths of `@eigenpal/docx-editor-i18n`.
+
+## Add a language
+
+```bash
+git clone https://github.com/eigenpal/docx-editor && cd docx-editor
+bun install
+
+bun run i18n:new <code>   # scaffolds packages/i18n/<code>.json with nulls
+# fill in the strings, then
+bun run i18n:status       # shows remaining nulls per locale
+bun run i18n:validate     # CI runs this; missing keys fail
+```
+
+Use a BCP 47 code (`pl`, `pt-BR`, `zh-CN`). Open a PR with the filled JSON.
+Partial translations are fine: anything left `null` renders in English, so a
+locale can land incomplete and improve over time.
+
+## Fixing an existing locale
+
+Edit the string in `packages/i18n/<code>.json`, run `bun run i18n:validate`,
+and open a PR. No code changes needed.
+
+## Next steps
+
+- [i18n package](/docs/1.x/i18n): wiring locales into the editor
+- [i18n API reference](/docs/1.x/api/i18n): every locale export
+- [Open a PR](https://github.com/eigenpal/docx-editor/pulls)

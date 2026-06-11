@@ -1,0 +1,74 @@
+---
+title: "@eigenpal/docx-editor-i18n"
+description: "Locale data shared by the React and Vue adapters. Ships nine languages: English, Polish, German, French, Portuguese, Hebrew, Hindi, Turkish, and Chinese."
+category: "Packages"
+order: 60
+---
+
+<PackageStats name="@eigenpal/docx-editor-i18n" />
+
+Locale data for the editor UI; both adapters consume it through the `i18n` prop.
+
+```bash
+npm install @eigenpal/docx-editor-i18n
+```
+
+You usually don't install this directly. `-react` and `-vue` pull it in transitively. Install it explicitly only when you're using the locale data outside the editor (a custom toolbar, a search dropdown, that kind of thing).
+
+## Available locales
+
+| Code | Language | Named export |
+|---|---|---|
+| `en` | English | `en` |
+| `pl` | Polish | `pl` |
+| `de` | German | `de` |
+| `fr` | French | `fr` |
+| `pt-BR` | Brazilian Portuguese | `ptBR` |
+| `he` | Hebrew | `he` |
+| `hi` | Hindi | `hi` |
+| `tr` | Turkish | `tr` |
+| `zh-CN` | Chinese (Simplified) | `zhCN` |
+
+Two import shapes are supported in 1.0.1+:
+
+- **Named exports off the root** (`import { pl } from '@eigenpal/docx-editor-i18n'`). Use this when you ship a small static list of locales. Hyphenated codes (`pt-BR`, `zh-CN`) become camelCase exports (`ptBR`, `zhCN`).
+- **Per-locale subpath imports** (`import pl from '@eigenpal/docx-editor-i18n/pl'`). Use this when you dynamically load locales; the per-locale subpath code-splits so users only download the language they need.
+
+The 0.x `import pl from '@eigenpal/docx-js-editor/i18n/pl.json'` JSON pattern is gone, but the new subpath form covers the same use case. See the [migration guide](/docs/1.x/migration#i18n-restructure) for the rewrite.
+
+Verify what your installed version ships:
+
+```bash
+ls node_modules/@eigenpal/docx-editor-i18n/
+```
+
+## Wiring into the editor
+
+Pass the locale object to the `i18n` prop. React:
+
+```tsx
+import { DocxEditor } from '@eigenpal/docx-editor-react';
+import { pl } from '@eigenpal/docx-editor-i18n';
+
+<DocxEditor documentBuffer={buf} i18n={pl} />;
+```
+
+Vue:
+
+```vue
+<script setup lang="ts">
+import { DocxEditor } from '@eigenpal/docx-editor-vue';
+import { pl } from '@eigenpal/docx-editor-i18n';
+</script>
+
+<template>
+  <DocxEditor :document-buffer="buf" :i18n="pl" />
+</template>
+```
+
+## Next steps
+
+- [Contributing a translation](/docs/1.x/i18n/contributing): add or improve a locale with one JSON file
+- [i18n API reference](/docs/1.x/api/i18n)
+- [React API reference: i18n prop](/docs/1.x/api/react)
+- [Migration: i18n restructure](/docs/1.x/migration#i18n-restructure)
