@@ -81,6 +81,9 @@ export function useCommentSidebarItems({
     }
 
     trackedChanges.value.forEach((change, idx) => {
+      // Replies thread under the change by `parentId === revisionId`
+      // (set in useCommentManagement.handleTrackedChangeReply), mirroring
+      // React's useCommentSidebarItems.tsx.
       items.push({
         id: `tc-${change.revisionId}-${idx}`,
         anchorPos: change.from,
@@ -89,6 +92,7 @@ export function useCommentSidebarItems({
         estimatedHeight: 80,
         kind: 'tracked-change',
         change,
+        replies: repliesByParent.get(change.revisionId) ?? [],
       });
     });
 
