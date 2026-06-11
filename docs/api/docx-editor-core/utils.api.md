@@ -396,6 +396,9 @@ export function isEditorHtml(html: string): boolean;
 export function isFontLoaded(fontFamily: string): boolean;
 
 // @public
+export function isGoogleFontsEnabled(): boolean;
+
+// @public
 export function isLineBreak(content: RunContent): boolean;
 
 // @public
@@ -718,6 +721,9 @@ export function selectWordAtCursor(): boolean;
 
 // @public
 export function selectWordInTextNode(textNode: Text, offset: number): boolean;
+
+// @public
+export function setGoogleFontsEnabled(enabled: boolean): void;
 
 // @public
 export function setSelectionPosition(node: Node, offset: number): void;

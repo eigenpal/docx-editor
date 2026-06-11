@@ -897,6 +897,9 @@ export function isFontLoaded(fontFamily: string): boolean;
 export function isFontsLoading(): boolean;
 
 // @public
+export function isGoogleFontsEnabled(): boolean;
+
+// @public
 export function isLineBreak(content: RunContent): boolean;
 
 // @public
@@ -1512,6 +1515,9 @@ export function serializeDocx(doc: Document_2): string;
 
 // @public
 export function serializeSectionProperties(props: SectionProperties | undefined): string;
+
+// @public
+export function setGoogleFontsEnabled(enabled: boolean): void;
 
 // @public
 export interface SetVariableCommand extends BaseCommand {
