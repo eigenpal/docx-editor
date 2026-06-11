@@ -4,19 +4,24 @@
  * Renders a selection overlay with resize handles over a selected image
  * in the visible pages. Handles:
  * - Blue selection border
- * - 4 corner resize handles
- * - Drag-to-resize with aspect ratio lock
+ * - 4 corner handles (resize, keeping aspect ratio; Shift frees it)
+ * - 4 edge handles (stretch one dimension, breaking aspect ratio)
  * - Dimension tooltip during resize
  */
 
 import React, { useState, useRef, useCallback, useEffect } from 'react';
 import type { CSSProperties } from 'react';
+import {
+  calculateResizedImageDimensions,
+  type ImageResizeHandle,
+} from '@eigenpal/docx-editor-core/prosemirror/imageCommit';
 
 // =============================================================================
 // TYPES
 // =============================================================================
 
-export type ResizeHandle = 'nw' | 'ne' | 'se' | 'sw';
+/** Resize handle position; the resize math lives in core (shared with Vue). */
+type ResizeHandle = ImageResizeHandle;
 
 export interface ImageSelectionInfo {
   /** The DOM element of the selected image in the pages container */
@@ -82,13 +87,16 @@ const borderKinds: CSSProperties = {
   boxSizing: 'border-box',
 };
 
+// White circular dots with a thin accent ring — matches the resize handles in
+// Word / PowerPoint.
 const handleBaseStyles: CSSProperties = {
   position: 'absolute',
   width: `${HANDLE_SIZE}px`,
   height: `${HANDLE_SIZE}px`,
-  backgroundColor: ACCENT_COLOR,
-  border: '1px solid white',
-  boxShadow: '0 1px 3px rgba(0, 0, 0, 0.3)',
+  backgroundColor: '#ffffff',
+  border: `1.5px solid ${ACCENT_COLOR}`,
+  borderRadius: '50%',
+  boxShadow: '0 1px 2.5px rgba(0, 0, 0, 0.35)',
   boxSizing: 'border-box',
   pointerEvents: 'auto',
   zIndex: 16,
@@ -113,37 +121,24 @@ const HANDLE_CURSORS: Record<ResizeHandle, string> = {
   ne: 'ne-resize',
   se: 'se-resize',
   sw: 'sw-resize',
+  n: 'ns-resize',
+  s: 'ns-resize',
+  e: 'ew-resize',
+  w: 'ew-resize',
 };
 
-// =============================================================================
-// RESIZE CALCULATION
-// =============================================================================
-
-function calculateNewDimensions(
-  handle: ResizeHandle,
-  deltaX: number,
-  deltaY: number,
-  startWidth: number,
-  startHeight: number,
-  lockAspect: boolean
-): { width: number; height: number } {
-  const signX = handle.includes('w') ? -1 : 1;
-  const signY = handle.includes('n') ? -1 : 1;
-
-  let newWidth = startWidth + deltaX * signX;
-  let newHeight = startHeight + deltaY * signY;
-
-  if (lockAspect) {
-    const scale = Math.max(newWidth / startWidth, newHeight / startHeight);
-    newWidth = startWidth * scale;
-    newHeight = startHeight * scale;
-  }
-
-  return {
-    width: Math.max(20, Math.min(2000, newWidth)),
-    height: Math.max(20, Math.min(2000, newHeight)),
-  };
-}
+// Handle positions as fractions of the box: 0 = start edge, 0.5 = midpoint,
+// 1 = end edge. Corners drive both axes; edge midpoints drive one.
+const HANDLES: ReadonlyArray<{ pos: ResizeHandle; x: number; y: number }> = [
+  { pos: 'nw', x: 0, y: 0 },
+  { pos: 'ne', x: 1, y: 0 },
+  { pos: 'se', x: 1, y: 1 },
+  { pos: 'sw', x: 0, y: 1 },
+  { pos: 'n', x: 0.5, y: 0 },
+  { pos: 's', x: 0.5, y: 1 },
+  { pos: 'e', x: 1, y: 0.5 },
+  { pos: 'w', x: 0, y: 0.5 },
+];
 
 // =============================================================================
 // COMPONENT
@@ -280,7 +275,7 @@ export function ImageSelectionOverlay({
         const deltaY = (moveEvent.clientY - startY) / currentZoom;
         const lockAspect = !moveEvent.shiftKey;
 
-        const dims = calculateNewDimensions(
+        const dims = calculateResizedImageDimensions(
           handle,
           deltaX,
           deltaY,
@@ -446,27 +441,16 @@ export function ImageSelectionOverlay({
         onContextMenu={onContextMenu}
       />
 
-      {/* Corner resize handles */}
-      <Handle
-        handle="nw"
-        style={{ left: left - HANDLE_HALF, top: top - HANDLE_HALF }}
-        onMouseDown={handleResizeStart}
-      />
-      <Handle
-        handle="ne"
-        style={{ left: left + width - HANDLE_HALF, top: top - HANDLE_HALF }}
-        onMouseDown={handleResizeStart}
-      />
-      <Handle
-        handle="se"
-        style={{ left: left + width - HANDLE_HALF, top: top + height - HANDLE_HALF }}
-        onMouseDown={handleResizeStart}
-      />
-      <Handle
-        handle="sw"
-        style={{ left: left - HANDLE_HALF, top: top + height - HANDLE_HALF }}
-        onMouseDown={handleResizeStart}
-      />
+      {/* 4 corner handles (keep aspect) + 4 edge handles (stretch one axis).
+          x/y are fractions of the box: 0 = start edge, 0.5 = midpoint, 1 = end. */}
+      {HANDLES.map(({ pos, x, y }) => (
+        <Handle
+          key={pos}
+          handle={pos}
+          style={{ left: left + width * x - HANDLE_HALF, top: top + height * y - HANDLE_HALF }}
+          onMouseDown={handleResizeStart}
+        />
+      ))}
 
       {/* Dimension indicator during resize */}
       {isResizing && (

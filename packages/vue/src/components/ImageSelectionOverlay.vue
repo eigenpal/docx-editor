@@ -59,6 +59,8 @@ import {
   commitImageResize,
   commitImageFloatMove,
   commitImageInlineMove,
+  calculateResizedImageDimensions,
+  type ImageResizeHandle,
 } from '@eigenpal/docx-editor-core/prosemirror/imageCommit';
 import { findBodyPmAnchor } from '@eigenpal/docx-editor-core/layout-bridge';
 import { findImageElement } from '@eigenpal/docx-editor-core/layout-painter';
@@ -70,8 +72,8 @@ const { t } = useTranslation();
 import type { ImageSelectionInfo } from './imageSelectionTypes';
 export type { ImageSelectionInfo };
 
-/** 4 corners + 4 edge midpoints — mirrors the React overlay's handle set. */
-type ResizeHandle = 'nw' | 'n' | 'ne' | 'e' | 'se' | 's' | 'sw' | 'w';
+/** Resize handle position; the resize math lives in core (shared with React). */
+type ResizeHandle = ImageResizeHandle;
 
 const props = defineProps<{
   imageInfo: ImageSelectionInfo | null;
@@ -345,39 +347,8 @@ const handles = computed<Array<{ pos: ResizeHandle; style: Record<string, string
 });
 
 // ---- Resize logic ----
-
-const isCornerHandle = (h: ResizeHandle): boolean => h.length === 2;
-
-/**
- * Resize math, mirroring React's `calculateNewDimensions`:
- *  - corner handles move both edges; aspect ratio is preserved unless Shift is held
- *  - edge handles move exactly one dimension and never preserve aspect
- */
-function calculateNewDimensions(
-  handle: ResizeHandle,
-  deltaX: number,
-  deltaY: number,
-  sw: number,
-  sh: number,
-  lockAspect: boolean
-): { width: number; height: number } {
-  const signX = handle.includes('w') ? -1 : handle.includes('e') ? 1 : 0;
-  const signY = handle.includes('n') ? -1 : handle.includes('s') ? 1 : 0;
-
-  let newW = sw + deltaX * signX;
-  let newH = sh + deltaY * signY;
-
-  if (isCornerHandle(handle) && lockAspect) {
-    const scale = Math.max(newW / sw, newH / sh);
-    newW = sw * scale;
-    newH = sh * scale;
-  }
-
-  return {
-    width: signX === 0 ? sw : Math.max(20, Math.min(2000, newW)),
-    height: signY === 0 ? sh : Math.max(20, Math.min(2000, newH)),
-  };
-}
+// The dimension math lives in core (`calculateResizedImageDimensions`), shared
+// with the React overlay.
 
 function startResize(e: MouseEvent, handle: string) {
   if (!props.imageInfo || !overlayRect.value) return;
@@ -402,7 +373,7 @@ function onResizeMove(e: MouseEvent) {
   const deltaY = (e.clientY - startY) / z;
   const lockAspect = !e.shiftKey;
 
-  const dims = calculateNewDimensions(
+  const dims = calculateResizedImageDimensions(
     resizeHandle,
     deltaX,
     deltaY,
@@ -704,14 +675,16 @@ onBeforeUnmount(() => {
   inset: 0;
   pointer-events: auto;
 }
+/* White circular dots with a thin accent ring — matches the resize handles in
+   Word / PowerPoint. Mirrors the React overlay's handleBaseStyles. */
 .image-overlay__handle {
   position: absolute;
   width: 10px;
   height: 10px;
-  background: #2563eb;
-  border: 1px solid white;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
-  border-radius: 2px;
+  background: #ffffff;
+  border: 1.5px solid #2563eb;
+  box-shadow: 0 1px 2.5px rgba(0, 0, 0, 0.35);
+  border-radius: 50%;
   z-index: 16;
   box-sizing: border-box;
   pointer-events: auto;
