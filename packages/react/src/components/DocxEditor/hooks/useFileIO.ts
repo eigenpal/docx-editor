@@ -12,7 +12,7 @@ import {
   clearTrackedChanges,
 } from '@eigenpal/docx-editor-core/prosemirror/extensions';
 import { readDocxFileFromInput, type DocxInput } from '@eigenpal/docx-editor-core/utils';
-import { insertImageNode } from '@eigenpal/docx-editor-core/prosemirror/commands';
+import { insertImageFromFile } from '@eigenpal/docx-editor-core/prosemirror/commands';
 import { paintAllPagesNow } from '@eigenpal/docx-editor-core/layout-painter';
 import type { EditorView } from 'prosemirror-view';
 import type { PagedEditorRef } from '../PagedEditor';
@@ -233,48 +233,11 @@ body { background: white; }
   const handleImageFileChange = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
       const file = e.target.files?.[0];
-      if (!file) return;
-
       const view = getActiveEditorView();
-      if (!view) return;
-
-      const reader = new FileReader();
-      reader.onload = () => {
-        const dataUrl = reader.result as string;
-
-        const img = new Image();
-        img.onload = () => {
-          let width = img.naturalWidth;
-          let height = img.naturalHeight;
-
-          // Constrain to reasonable max width (content area of US Letter page at 96dpi)
-          const maxWidth = 612; // ~6.375 inches
-          if (width > maxWidth) {
-            const scale = maxWidth / width;
-            width = maxWidth;
-            height = Math.round(height * scale);
-          }
-
-          const rId = `rId_img_${Date.now()}`;
-          const imageNode = view.state.schema.nodes.image.create({
-            src: dataUrl,
-            alt: file.name,
-            width,
-            height,
-            rId,
-            wrapType: 'inline',
-            displayMode: 'inline',
-          });
-
-          // Shared helper dispatches the insert + applies the `insertion`
-          // mark when suggesting mode is active (Vue + clipboard paste
-          // call the same path).
-          insertImageNode(view.state, view.dispatch, imageNode, view.state.selection.from);
-          focusActiveEditor();
-        };
-        img.src = dataUrl;
-      };
-      reader.readAsDataURL(file);
+      // `insertImageFromFile` is the shared core flow (Vue calls it too): read
+      // the file, fit the image to the page width, and insert it inline with
+      // the `insertion` mark when suggesting mode is active.
+      if (file && view) insertImageFromFile(view, file, { onInserted: focusActiveEditor });
 
       // Reset the input so the same file can be selected again
       e.target.value = '';

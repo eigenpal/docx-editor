@@ -46,6 +46,128 @@ async function overlayStranded(page: Page) {
   );
 }
 
+/** Largest gap between any overlay box edge and the matching image edge. */
+async function maxEdgeOffset(page: Page) {
+  return page.evaluate(
+    ({ overlaySel, imgSel }) => {
+      const ov = document.querySelector(overlaySel) as HTMLElement | null;
+      const img = document.querySelector(imgSel) as HTMLElement | null;
+      if (!ov || !img) return Infinity;
+      const o = ov.getBoundingClientRect();
+      const i = img.getBoundingClientRect();
+      return Math.max(
+        Math.abs(o.left - i.left),
+        Math.abs(o.top - i.top),
+        Math.abs(o.right - i.right),
+        Math.abs(o.bottom - i.bottom)
+      );
+    },
+    { overlaySel: OVERLAY, imgSel: INLINE_IMAGE }
+  );
+}
+
+test('Vue: selection frame stays wrapped on the image across zoom changes (#764)', async ({
+  page,
+}) => {
+  await loadFixture(page);
+
+  const image = page.locator(INLINE_IMAGE).first();
+  await image.click();
+  await expect(page.locator(OVERLAY)).toBeVisible();
+
+  // At 100% the frame wraps the image tightly.
+  expect(await maxEdgeOffset(page)).toBeLessThan(3);
+
+  // Zooming scales the page via a transform on the unscaled scroll viewport the
+  // overlay lives in, so the overlay's measured rect shifts and must be
+  // recomputed. Before #764 the overlay cached its rect at the old zoom and
+  // reconstructed the painted position as `left * zoom`; if the recompute
+  // didn't land at the new zoom, the stale rect got amplified and the frame
+  // jumped sideways off the image. The re-anchor must not depend on the
+  // animation-frame settle loop alone — that loop is paused while the tab is
+  // backgrounded, and on a real page it can latch onto the pre-transition rect.
+  //
+  // Pin that down deterministically by disabling `requestAnimationFrame` for
+  // the duration of the zoom: the only thing that can re-anchor the frame is
+  // the timer-based safety net, which the fix added. (CSS transforms and
+  // `getBoundingClientRect` don't need rAF, so the image itself still moves.)
+  await page.evaluate(() => {
+    const w = window as unknown as { __raf?: typeof window.requestAnimationFrame };
+    w.__raf = window.requestAnimationFrame.bind(window);
+    window.requestAnimationFrame = () => 0;
+  });
+
+  const zoomIn = page.locator('.zoom-group button[title="Zoom in"]');
+  for (let i = 0; i < 3; i++) await zoomIn.click();
+  await page.waitForTimeout(1000); // let the transform settle + the safety-net timer fire
+  expect(await maxEdgeOffset(page)).toBeLessThan(3);
+
+  // Zooming back out must keep it aligned too (round-trip — the stale-rect bug
+  // could even leave the frame offset once returned to 100%).
+  const zoomOut = page.locator('.zoom-group button[title="Zoom out"]');
+  for (let i = 0; i < 4; i++) await zoomOut.click();
+  await page.waitForTimeout(1000);
+  expect(await maxEdgeOffset(page)).toBeLessThan(3);
+
+  await page.evaluate(() => {
+    const w = window as unknown as { __raf?: typeof window.requestAnimationFrame };
+    if (w.__raf) window.requestAnimationFrame = w.__raf;
+  });
+});
+
+test('Vue: selection frame re-anchors when the page re-centers after selection (#764)', async ({
+  page,
+}) => {
+  await loadFixture(page);
+
+  const image = page.locator(INLINE_IMAGE).first();
+  await image.click();
+  await expect(page.locator(OVERLAY)).toBeVisible();
+  expect(await maxEdgeOffset(page)).toBeLessThan(3);
+
+  // The real #764 race: `.docx-editor-vue__pages` re-centers horizontally as the
+  // layout settles just after load (a `translateX` change — no ResizeObserver
+  // would see it), shifting the image out from under a frame measured one frame
+  // too early. Reproduce it deterministically by shifting the pages container
+  // right after selection — within the post-selection re-anchor window. A single
+  // updatePosition leaves the frame stranded at the old spot; the settle loop
+  // must follow the image to its new position.
+  await page.evaluate(() => {
+    const p = document.querySelector('.docx-editor-vue__pages') as HTMLElement;
+    p.style.transform = `${p.style.transform} translateX(60px)`;
+  });
+  await page.waitForTimeout(600); // settle window + buffer
+  expect(await maxEdgeOffset(page)).toBeLessThan(3);
+});
+
+test('Vue: selection frame re-anchors when comments shift the page long after selection (#764)', async ({
+  page,
+}) => {
+  await loadFixture(page);
+
+  const image = page.locator(INLINE_IMAGE).first();
+  await image.click();
+  await expect(page.locator(OVERLAY)).toBeVisible();
+  expect(await maxEdgeOffset(page)).toBeLessThan(3);
+
+  // Let the post-selection re-anchor loop fully finish, so only a transform
+  // observer — not the initial settle window — can catch the next shift.
+  await page.waitForTimeout(900);
+
+  // Opening the comments sidebar slides `.docx-editor-vue__pages` sideways
+  // (a translateX) — and that can happen seconds after the image was selected,
+  // e.g. while moving between comments. It moves the image out from under the
+  // frame with no scroll / resize / zoom event, so without observing the pages
+  // transform the frame strands ~translateX px off the image. React's overlay
+  // lives inside that container and never drifts.
+  await page.evaluate(() => {
+    const p = document.querySelector('.docx-editor-vue__pages') as HTMLElement;
+    p.style.transform = `${p.style.transform} translateX(-120px)`;
+  });
+  await page.waitForTimeout(700); // observer re-anchor + transform transition
+  expect(await maxEdgeOffset(page)).toBeLessThan(3);
+});
+
 test('Vue: image overlay never strands when the image is pushed to a new page (#670)', async ({
   page,
 }) => {

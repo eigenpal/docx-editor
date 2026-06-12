@@ -1,8 +1,9 @@
 /**
  * Image-actions composable — owns the `selectedImage` /
- * `imageInteracting` refs plus the toolbar/menu handlers that mutate
- * an image's wrap type, transform, or insert a fresh image at the
- * caret. Consumed downstream by `useContextMenus`, `usePagesPointer`,
+ * `imageInteracting` refs plus the toolbar/menu handlers that mutate a
+ * selected image's wrap type or transform. (Inserting a fresh image is the
+ * shared core `insertImageFromFile` flow, wired in `DocxEditor.vue`.)
+ * Consumed downstream by `useContextMenus`, `usePagesPointer`,
  * and the selection-overlay update in the parent (which writes back
  * into `selectedImage` when the PM doc holds a NodeSelection on an
  * image). Does NOT own the right-click menus — those live in
@@ -15,7 +16,6 @@ import {
   captureInlinePositionEmu,
   toolbarValueToLayoutTarget,
 } from '@eigenpal/docx-editor-core/layout-painter';
-import { insertImageNode } from '@eigenpal/docx-editor-core/prosemirror/commands';
 import type { ImageSelectionInfo } from '../components/imageSelectionTypes';
 
 type Commands = Record<string, ((...args: unknown[]) => unknown) | undefined>;
@@ -37,7 +37,6 @@ export interface UseImageActionsReturn {
   selectedImage: import('vue').ShallowRef<ImageSelectionInfo | null>;
   imageInteracting: import('vue').Ref<boolean>;
   imageToolbarContext: import('vue').ComputedRef<ImageToolbarContext | null>;
-  handleInsertImage: (data: { src: string; width: number; height: number; alt: string }) => void;
   handleToolbarImageWrap: (value: string) => void;
   handleImageTransform: (action: 'rotateCW' | 'rotateCCW' | 'flipH' | 'flipV') => void;
 }
@@ -69,23 +68,6 @@ export function useImageActions(opts: UseImageActionsOptions): UseImageActionsRe
       cssFloat: (node.attrs.cssFloat as string) ?? null,
     };
   });
-
-  function handleInsertImage(data: { src: string; width: number; height: number; alt: string }) {
-    const view = opts.editorView.value;
-    if (!view) return;
-    const imageNodeType = view.state.schema.nodes.image;
-    if (!imageNodeType) return;
-    const node = imageNodeType.create({
-      src: data.src,
-      alt: data.alt,
-      width: data.width,
-      height: data.height,
-    });
-    // Shared helper applies the `insertion` mark when suggesting mode is
-    // active so the inserted image round-trips as a tracked addition.
-    insertImageNode(view.state, view.dispatch, node, view.state.selection.from);
-    view.focus();
-  }
 
   // Toolbar wrap dropdown → core PM command. Translates the legacy
   // toolbar vocabulary via `toolbarValueToLayoutTarget` so this path
@@ -153,7 +135,6 @@ export function useImageActions(opts: UseImageActionsOptions): UseImageActionsRe
     selectedImage,
     imageInteracting,
     imageToolbarContext,
-    handleInsertImage,
     handleToolbarImageWrap,
     handleImageTransform,
   };

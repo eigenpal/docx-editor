@@ -6,6 +6,7 @@
 
 import { Command } from 'prosemirror-state';
 import { EditorState } from 'prosemirror-state';
+import { EditorView } from 'prosemirror-view';
 import { Mark } from 'prosemirror-model';
 import { MarkType } from 'prosemirror-model';
 import { Node as Node_2 } from 'prosemirror-model';
@@ -176,8 +177,18 @@ export function increaseIndent(amount?: number): Command;
 // @public (undocumented)
 export const increaseListLevel: Command;
 
+// @public
+export const INSERT_IMAGE_MAX_WIDTH_PX = 612;
+
 // @public (undocumented)
 export function insertHyperlink(text: string, href: string, tooltip?: string): Command;
+
+// @public
+export function insertImageFromFile(view: EditorView, file: File, opts?: {
+    maxWidth?: number;
+    onError?: (error: unknown) => void;
+    onInserted?: () => void;
+}): void;
 
 // @public
 export function insertImageNode(state: EditorState, dispatch: ((tr: Transaction) => void) | undefined, imageNode: Node_2, pos: number): boolean;

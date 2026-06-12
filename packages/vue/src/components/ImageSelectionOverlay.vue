@@ -198,52 +198,103 @@ function updatePosition() {
   };
 }
 
-// Update when imageInfo changes
+// The image's painted position can keep moving for a few frames after a
+// trigger, and this overlay — unlike React's, which lives *inside* the scaled
+// container and tracks for free — sits in the unscaled viewport and must
+// re-anchor itself across that window. Two triggers need it:
+//   - Selecting an image right after load: `.docx-editor-vue__pages` re-centers
+//     horizontally as the layout settles (a `translateX` change, so no
+//     ResizeObserver would catch it), shifting the image out from under a
+//     frame measured one frame too early (issue #764).
+//   - Zoom: the pages `transform` animates over ~0.2s (DocxEditor.vue
+//     `pagesContainerStyle`); `transitionend` is unreliable (never fires under
+//     `prefers-reduced-motion`).
+//
+// So recompute each frame until the rect holds steady — but only honor
+// steadiness AFTER a minimum window: in the first frame or two the rect is
+// momentarily steady at its pre-transition position, and latching there strands
+// the frame. Track elapsed time from the rAF timestamp (not a per-frame guess)
+// so high-refresh displays can't race through the window, and cap it so a
+// perpetually-moving rect can't spin.
+const SETTLE_MIN_MS = 250; // covers the 0.2s pages transform transition + buffer
+const SETTLE_CAP_MS = 700; // hard stop so a perpetually-moving rect can't spin
+
+// Cancel for the in-flight re-anchor loop. Only one runs at a time — a fresh
+// trigger cancels and restarts it so overlapping triggers don't pile up rAFs.
+let cancelReanchor: (() => void) | null = null;
+
+// Re-measure the frame against the image every frame until the layout holds
+// steady. The image's painted position keeps moving for a few frames after a
+// trigger (zoom and the comments-sidebar shift both animate the pages
+// `transform` over ~0.2s — see DocxEditor.vue `pagesContainerStyle`), and this
+// overlay — unlike React's, which lives *inside* the scaled+translated container
+// and tracks for free — sits in the unscaled viewport and must re-anchor across
+// that window. Only honor steadiness AFTER a minimum window: in the first frame
+// or two the rect is momentarily steady at its pre-transition position, and
+// latching there strands the frame. Track elapsed from the rAF timestamp so
+// high-refresh displays can't race through the window; cap it so a
+// perpetually-moving rect can't spin.
+function scheduleReanchor() {
+  cancelReanchor?.();
+  let raf = 0;
+  let prevKey = '';
+  let stableFrames = 0;
+  let startTs = 0;
+  const step = (ts: number) => {
+    if (startTs === 0) startTs = ts;
+    const elapsed = ts - startTs;
+    updatePosition();
+    const r = overlayRect.value;
+    const key = r ? `${r.left}|${r.top}|${r.width}|${r.height}` : '';
+    stableFrames = key === prevKey ? stableFrames + 1 : 0;
+    prevKey = key;
+    const settled = elapsed >= SETTLE_MIN_MS && stableFrames >= 2;
+    if (!settled && elapsed < SETTLE_CAP_MS) {
+      raf = requestAnimationFrame(step);
+    }
+  };
+  raf = requestAnimationFrame(step);
+  // Safety net: rAF is paused while the tab is backgrounded, so a timer also
+  // re-measures once the layout has settled, guaranteeing a correct final anchor.
+  const settleTimer = setTimeout(updatePosition, SETTLE_MIN_MS);
+  cancelReanchor = () => {
+    cancelAnimationFrame(raf);
+    clearTimeout(settleTimer);
+  };
+}
+
+// Re-anchor when the selected image changes. The first rAF step runs after Vue
+// has mounted the `v-if` overlay, so `overlayRootRef` is available by then.
 watch(
   () => props.imageInfo,
-  async () => {
-    await nextTick();
-    updatePosition();
+  (_info, _prev, onCleanup) => {
+    if (!props.imageInfo) {
+      overlayRect.value = null;
+      return;
+    }
+    scheduleReanchor();
+    onCleanup(() => cancelReanchor?.());
   },
   { immediate: true }
 );
 
-// Re-anchor when zoom changes. Unlike React's overlay — which lives *inside*
-// the scaled container, so its layout-px position is zoom-invariant — this
-// overlay sits in the unscaled viewport, so the image's measured viewport rect
-// shifts and resizes as zoom changes and the frame must be recomputed. The
-// `.docx-editor-vue__pages` container animates its `transform` over ~0.2s (see
-// DocxEditor.vue `pagesContainerStyle`) and the layout may also repaint, so the
-// image rect keeps moving for a few frames — and `transitionend` is unreliable
-// (it never fires under `prefers-reduced-motion`). So recompute each frame
-// until the rect holds steady (or a short cap elapses): this tracks an animated
-// zoom smoothly and settles instantly when there's no animation.
+// Re-anchor when zoom changes.
 watch(
   () => props.zoom,
-  (_z, _prev, onCleanup) => {
+  () => {
     if (!props.imageInfo) return;
-    let raf = 0;
-    let prevKey = '';
-    let stableFrames = 0;
-    let elapsed = 0;
-    const step = (last: number) => {
-      updatePosition();
-      const r = overlayRect.value;
-      const key = r ? `${r.left}|${r.top}|${r.width}|${r.height}` : '';
-      stableFrames = key === prevKey ? stableFrames + 1 : 0;
-      prevKey = key;
-      // ~16ms/frame; cap at ~30 frames (≈0.5s) so a stuck rect can't spin.
-      elapsed += last;
-      if (stableFrames < 2 && elapsed < 500) {
-        raf = requestAnimationFrame(() => step(16));
-      }
-    };
-    raf = requestAnimationFrame(() => step(16));
-    onCleanup(() => cancelAnimationFrame(raf));
+    scheduleReanchor();
   }
 );
 
-// Update on scroll/resize
+// While an image is selected, keep the frame on it across the layout shifts
+// that fire no zoom/imageInfo event: page scroll/resize, and the comments
+// sidebar sliding `.docx-editor-vue__pages` sideways (a `translateX`) to make
+// room for the panel. The sidebar shift moves the image with no scroll/resize
+// event, so observe the pages container's style and re-anchor through the
+// ~0.2s transition — React's overlay lives inside that container and tracks for
+// free. The transform observer is deferred to the next tick because the overlay
+// mounts via `v-if`, so `getPagesEl` isn't resolvable until then.
 watch(
   () => props.imageInfo,
   (_newVal, _oldVal, onCleanup) => {
@@ -259,13 +310,24 @@ watch(
     // scrolls. `scroll` events don't bubble, so the listener must sit on the
     // viewport or it never fires and the overlay drifts off the image on scroll.
     const viewport = overlayRootRef.value?.closest('.docx-editor-vue__pages-viewport');
-
     viewport?.addEventListener('scroll', handleScrollOrResize, { passive: true });
     window.addEventListener('resize', handleScrollOrResize, { passive: true });
 
+    let transformObserver: MutationObserver | null = null;
+    let cancelled = false;
+    nextTick(() => {
+      if (cancelled || !props.imageInfo) return;
+      const pages = getPagesEl();
+      if (!pages) return;
+      transformObserver = new MutationObserver(() => scheduleReanchor());
+      transformObserver.observe(pages, { attributes: true, attributeFilter: ['style'] });
+    });
+
     onCleanup(() => {
+      cancelled = true;
       viewport?.removeEventListener('scroll', handleScrollOrResize);
       window.removeEventListener('resize', handleScrollOrResize);
+      transformObserver?.disconnect();
       if (rafId) cancelAnimationFrame(rafId);
     });
   },
@@ -656,6 +718,7 @@ onBeforeUnmount(() => {
     moveGhostEl = null;
   }
   if (rafId) cancelAnimationFrame(rafId);
+  cancelReanchor?.();
 });
 </script>
 
