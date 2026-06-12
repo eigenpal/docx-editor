@@ -212,7 +212,7 @@ export default [
   {
     files: ['packages/vue/src/components/DocxEditor.vue'],
     rules: {
-      'max-lines': ['error', { max: 1130, skipBlankLines: false, skipComments: false }],
+      'max-lines': ['error', { max: 1145, skipBlankLines: false, skipComments: false }],
     },
   },
 

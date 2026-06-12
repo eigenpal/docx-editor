@@ -1,14 +1,14 @@
 <!--
-  Modal-dialog cluster for DocxEditor — collects the seven
-  dialogs the editor surfaces (find/replace, insert image,
-  hyperlink, insert symbol, image properties, page setup,
-  keyboard shortcuts) so the parent template doesn't have to
-  carry 60+ lines of dialog markup just to wire show-flags
-  and close handlers.
+  Modal-dialog cluster for DocxEditor — collects the dialogs the
+  editor surfaces (find/replace, hyperlink, insert symbol, image
+  properties, page setup, watermark, keyboard shortcuts) so the
+  parent template doesn't have to carry 60+ lines of dialog markup
+  just to wire show-flags and close handlers. (Image insertion has
+  no dialog — Insert > Image opens the OS file picker directly.)
 
   Visibility is passed via `v-model:show-*` so the parent owns
   the boolean refs and dialogs close themselves through the
-  standard `update:` emit pattern. Action emits (`insert-image`,
+  standard `update:` emit pattern. Action emits (`insert-symbol`,
   `hyperlink-submit`, `page-setup-apply`, …) bubble up so the
   feature composables in the parent can keep ownership of the
   document mutations.
@@ -19,12 +19,6 @@
     :view="view"
     :scroll-visible-position-into-view="scrollVisiblePositionIntoView"
     @close="emit('update:showFindReplace', false)"
-  />
-
-  <InsertImageDialog
-    :is-open="showInsertImage"
-    @close="emit('update:showInsertImage', false)"
-    @insert="(data) => emit('insert-image', data)"
   />
 
   <HyperlinkDialog
@@ -73,7 +67,6 @@
 import type { EditorView } from 'prosemirror-view';
 import type { SectionProperties, Watermark } from '@eigenpal/docx-editor-core/types/document';
 import FindReplaceDialog from '../dialogs/FindReplaceDialog.vue';
-import InsertImageDialog from '../dialogs/InsertImageDialog.vue';
 import HyperlinkDialog from '../dialogs/HyperlinkDialog.vue';
 import InsertSymbolDialog from '../dialogs/InsertSymbolDialog.vue';
 import ImagePropertiesDialog from '../dialogs/ImagePropertiesDialog.vue';
@@ -93,13 +86,6 @@ interface HyperlinkSubmitPayload {
   tooltip: string;
 }
 
-interface InsertImagePayload {
-  src: string;
-  width: number;
-  height: number;
-  alt: string;
-}
-
 defineProps<{
   view: EditorView | null;
   bookmarks: BookmarkOption[];
@@ -107,7 +93,6 @@ defineProps<{
   sectionProperties: SectionProperties | null;
   scrollVisiblePositionIntoView: (pmPos: number) => void;
   showFindReplace: boolean;
-  showInsertImage: boolean;
   showHyperlink: boolean;
   showInsertSymbol: boolean;
   showImageProperties: boolean;
@@ -119,14 +104,12 @@ defineProps<{
 
 const emit = defineEmits<{
   (e: 'update:showFindReplace', value: boolean): void;
-  (e: 'update:showInsertImage', value: boolean): void;
   (e: 'update:showHyperlink', value: boolean): void;
   (e: 'update:showInsertSymbol', value: boolean): void;
   (e: 'update:showImageProperties', value: boolean): void;
   (e: 'update:showPageSetup', value: boolean): void;
   (e: 'update:showWatermark', value: boolean): void;
   (e: 'update:showKeyboardShortcuts', value: boolean): void;
-  (e: 'insert-image', data: InsertImagePayload): void;
   (e: 'insert-symbol', symbol: string): void;
   (e: 'hyperlink-submit', data: HyperlinkSubmitPayload): void;
   (e: 'hyperlink-remove'): void;

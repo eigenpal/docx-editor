@@ -79,7 +79,6 @@
 
     <DocxEditorDialogs
       v-model:show-find-replace="showFindReplace"
-      v-model:show-insert-image="showInsertImage"
       v-model:show-hyperlink="showHyperlink"
       v-model:show-insert-symbol="showInsertSymbol"
       v-model:show-image-properties="showImageProperties"
@@ -92,7 +91,6 @@
       :section-properties="currentSectionProps"
       :current-watermark="currentWatermark"
       :scroll-visible-position-into-view="scrollVisiblePositionIntoView"
-      @insert-image="handleInsertImage"
       @insert-symbol="handleInsertSymbol"
       @hyperlink-submit="handleHyperlinkSubmit"
       @hyperlink-remove="handleHyperlinkRemove"
@@ -361,6 +359,14 @@
       style="display: none"
       @change="handleDocxFileChange"
     />
+    <!-- Hidden image picker for Insert > Image (direct insert, no dialog). -->
+    <input
+      ref="imageInputRef"
+      type="file"
+      accept="image/*"
+      style="display: none"
+      @change="handleImageFileChange"
+    />
 
     <DocxEditorOverlays
       :read-only="readOnly"
@@ -497,7 +503,6 @@ const contentChangeSubscribers = new Set<(document: unknown) => void>();
 const selectionChangeSubscribers = new Set<(selection: unknown) => void>();
 const syncCoordinator = new SelectionBridge();
 const showFindReplace = ref(false);
-const showInsertImage = ref(false);
 const showHyperlink = ref(false);
 const showInsertSymbol = ref(false);
 const showImageProperties = ref(false);
@@ -819,6 +824,8 @@ const {
 
 const {
   docxInputRef,
+  imageInputRef,
+  handleImageFileChange,
   handleDocxFileChange,
   handleDocumentNameChange,
   downloadCurrentDocument,
@@ -834,6 +841,7 @@ const {
   emit,
   documentName: () => props.documentName,
   onDocumentNameChange: props.onDocumentNameChange,
+  getActiveView: () => activeFormattingView.value,
   nextTick,
 });
 
@@ -928,10 +936,10 @@ const {
   selectedImage,
   imageInteracting,
   imageToolbarContext,
-  handleInsertImage,
   handleToolbarImageWrap,
   handleImageTransform,
 } = useImageActions({ editorView, zoom, stateTick, getCommands });
+
 
 // Table resize handlers — port of React PagedEditor.tsx column/row/right-edge
 // resize. tryStartResize() runs from handlePagesMouseDown; install() wires
@@ -998,9 +1006,9 @@ const { handleMenuAction, handleMenuTableInsert } = useMenuActions({
   editorView,
   getCommands,
   docxInputRef,
+  imageInputRef,
   showPageSetup,
   showWatermark,
-  showInsertImage,
   showHyperlink,
   showInsertSymbol,
   showKeyboardShortcuts,
