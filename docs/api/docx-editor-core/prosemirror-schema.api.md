@@ -224,6 +224,7 @@ export interface TableAttrs {
     look?: TableLook;
     _originalFormatting?: TableFormatting;
     styleId?: string;
+    tableLayout?: 'fixed' | 'autofit' | null;
     tblPrChange?: TablePropertyChange[] | null;
     width?: number;
     widthType?: string;
