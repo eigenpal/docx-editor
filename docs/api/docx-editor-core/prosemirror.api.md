@@ -558,6 +558,11 @@ export function setContentControlContentTr(state: EditorState, filter: ContentCo
 }): Transaction;
 
 // @public
+export function setContentControlValueAtPosTr(state: EditorState, pos: number, value: ContentControlValue, options?: {
+    force?: boolean;
+}): Transaction;
+
+// @public
 export function setContentControlValueTr(state: EditorState, filter: ContentControlFilter, value: ContentControlValue, options?: {
     force?: boolean;
 }): Transaction;
