@@ -91,7 +91,7 @@ Parse and render errors surface through the `onError` prop; attach it and forwar
 Two paths produce a `.docx` buffer:
 
 - `ref.save()` returns `Promise<ArrayBuffer | null>`. Call it whenever you want bytes (autosave, your own save button).
-- The `onSave` prop fires with an `ArrayBuffer` when the user invokes Save through the built-in chrome (Ctrl/Cmd+S or the File menu).
+- The `onSave` prop fires with an `ArrayBuffer` when the user invokes Save through the built-in toolbar UI (Ctrl/Cmd+S or the File menu).
 
 ```tsx
 <DocxEditor
@@ -177,4 +177,4 @@ For local crash recovery rather than server persistence, the React adapter ships
 
 - [Props reference](/docs/1.x/react/props) for `documentBuffer`, `onSave`, `onChange`, and `readOnly` details
 - [Headless processing](/docs/1.x/guides/headless-processing) to parse and serialize without mounting an editor
-- [React examples](/docs/1.x/react/examples) for more drop-in patterns
+- [React examples](/docs/1.x/react/examples) for more loading, saving, and editor state patterns

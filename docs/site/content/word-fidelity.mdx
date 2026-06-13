@@ -1,6 +1,6 @@
 ---
 title: 'Word fidelity'
-description: 'Word feature support matrix and fidelity guarantees for the open source DOCX editor: rendering, round-trip, security and API stability for adoption reviews.'
+description: 'Word feature support matrix for the DOCX editor: rendering, round-trip behavior, security, and API stability.'
 category: 'Getting Started'
 seoTitle: 'Word feature support and fidelity'
 ---
@@ -9,8 +9,8 @@ seoTitle: 'Word feature support and fidelity'
 
 ## Overview
 
-- **Client-side only.** Parsing, rendering, editing, and serialization all run in the browser.
-- **`.docx` in, `.docx` out.** The editor reads OOXML and writes OOXML. Parts of the file it doesn't edit are carried over from the original archive unchanged.
+- **Browser editor use is client-side.** Parsing, rendering, editing, and serialization run in the browser for normal `<DocxEditor>` usage. Headless core, `DocxReviewer`, and MCP run wherever you host them.
+- **`.docx` in, `.docx` out.** The editor reads OOXML and writes OOXML. Parts of the file it does not edit are carried over from the original archive unchanged.
 - **Apache 2.0**, all published packages. **SemVer**, with the public API tracked by generated snapshots in CI. React and Vue parity is a machine-checked contract.
 - **Commercial support**: [docx-editor@eigenpal.com](mailto:docx-editor@eigenpal.com).
 
@@ -78,15 +78,14 @@ undo history, keyboard and IME input) and is never shown. On every change, a
 layout painter rebuilds the visible pages from that state using Word's own
 metrics: twips, the document's fonts and themes, its section and margin
 geometry. The browser never decides where a line or page breaks; the painter does.
-The output doesn't drift from Word the way contenteditable editors drift,
-and it stays plain DOM text rather than a canvas bitmap.
+The output stays plain DOM text rather than a canvas bitmap.
 
 The full comparison with contenteditable and canvas approaches is in
 [Architecture](/docs/1.x/core/architecture). To judge fidelity yourself, open
 one of your own documents in the [live demo](https://docx-editor.dev/editor)
 next to Word.
 
-## The round-trip guarantee
+## Round-trip behavior
 
 A `.docx` file is a ZIP of XML parts, and Word writes a lot of XML the
 editor has no reason to model: bookmarks, custom XML parts, mail-merge fields,
@@ -108,22 +107,22 @@ and compared structurally; serializer unit tests assert revision markup,
 conditional table formatting and section properties survive; 500+ Playwright
 tests drive the editor against Word-derived expectations.
 
-What the guarantee is not: bit-identical files. The ZIP container is
-rebuilt and XML is re-serialized (whitespace can differ). The guarantee is
-semantic: nothing you didn't touch is lost or reinterpreted. A document that
-breaks this promise is a bug we want; attach it to a
+What this does not mean: bit-identical files. The ZIP container is
+rebuilt and XML is re-serialized, so whitespace and part ordering can differ.
+The goal is semantic preservation: content you did not edit should not be lost or reinterpreted. A document that
+breaks this behavior is a bug; attach it to a
 [GitHub issue](https://github.com/eigenpal/docx-editor/issues/new/choose).
 
 ## Security
 
-- **Documents never leave the browser.** No upload endpoint, no server-side rendering service, no third-party conversion API.
-- **No macro execution.** VBA macros and embedded code are never evaluated.
-- **AI integrations don't change this.** With the [agents toolkit](/docs/1.x/agents), only tool-call text crosses the wire, to a route you own. There is no Eigenpal service in the path.
+- **Normal editor use is browser-only.** The editor package does not upload documents or call a conversion API.
+- **No macro execution.** VBA macros and embedded code are not evaluated.
+- **AI integrations are host-controlled.** With the [agents toolkit](/docs/1.x/agents), the live-editor setup keeps the DOCX file client-side and sends chat/tool-call text to a route you own. Headless review and MCP setups run wherever you host them.
 
 ## Bundle and performance
 
 - `-core` ships subpath exports that tree-shake independently.
-- ProseMirror packages are peers, never duplicated.
+- ProseMirror packages are peers so your package manager can share one copy.
 - Lazy-load the editor (`next/dynamic`, `React.lazy`) to keep it out of the initial bundle.
 - The layout engine caches per-block measurements; an edit doesn't re-measure the document.
 

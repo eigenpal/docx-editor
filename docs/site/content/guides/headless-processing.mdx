@@ -5,9 +5,9 @@ category: 'Guides'
 seoTitle: 'Headless DOCX processing'
 ---
 
-`@eigenpal/docx-editor-core/headless` is the editor's document engine without the editor: the OOXML parser, the document model, mutation helpers, and the serializer. It runs in Node.js and web workers. Nothing in it touches the DOM.
+`@eigenpal/docx-editor-core/headless` is the document engine without the editor UI: the OOXML parser, document model, mutation helpers, and serializer. It runs in Node.js and web workers. Nothing in it touches the DOM.
 
-Use it for batch pipelines: fill templates, stamp watermarks, extract text, generate documents, and post-process uploads on the server. The model it produces is exactly what the live editor renders, so logic written headless ports unchanged when the same buffer reaches a `<DocxEditor>`.
+Use it for batch pipelines: fill templates, stamp watermarks, extract text, generate documents, and post-process uploads on the server. It produces the same document model that `<DocxEditor>` renders.
 
 ```bash
 npm install @eigenpal/docx-editor-core
@@ -98,10 +98,10 @@ const out = processTemplate(buffer, { customer_name: "Acme GmbH", date: "2026-07
 
 ## When to use this vs DocxReviewer
 
-- **Headless core** (this page) is deterministic plumbing: you write the logic, it executes. Use it for template fills, extraction, format conversion steps, and any pipeline where the transformation is known in advance.
+- **Headless core** (this page) runs code you write against the document model. Use it for template fills, extraction, format conversion steps, and pipelines where the document changes are known in advance.
 - **`DocxReviewer`** from `@eigenpal/docx-editor-agents` wraps this same engine in an LLM tool surface: an agent reads the document, decides what to change, and applies edits (including tracked changes) through tool calls. Use it when the transformation requires judgment. See [DocxReviewer](/docs/1.x/agents/docx-reviewer).
 
-The two compose: a pipeline can fill a template headlessly, then hand the buffer to a `DocxReviewer` pass for AI review.
+A pipeline can fill a template headlessly, then pass the buffer to `DocxReviewer` for model-assisted review.
 
 ## Next steps
 

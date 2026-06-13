@@ -81,7 +81,7 @@ Controlled comments (`comments` + `onCommentsChange`) are React-only today; the 
 
 For Yjs-backed sync, see [Realtime collaboration](/docs/1.x/realtime-collaboration).
 
-## Toolbar and chrome
+## Toolbar UI
 
 Toggle the built-in UI on or off.
 
@@ -100,7 +100,7 @@ Toggle the built-in UI on or off.
 The font picker and custom font registration have their own section below.
 
 ```tsx
-// Headless-feeling editor: drop chrome and compose your own.
+// Editor without built-in toolbar UI.
 <DocxEditor documentBuffer={buf} showToolbar={false} showZoomControl={false} />
 ```
 

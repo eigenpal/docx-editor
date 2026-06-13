@@ -1,15 +1,15 @@
 ---
 title: 'Toolbar'
-description: 'Customize the DOCX editor toolbar: hide built-in chrome, brand the title bar, append your own controls, or rebuild it from compound EditorToolbar parts.'
+description: 'Customize the DOCX editor toolbar: hide the built-in toolbar, brand the title bar, append controls, or rebuild it from compound EditorToolbar parts.'
 category: 'Guides'
 seoTitle: 'Toolbar customization'
 ---
 
-The built-in chrome has two levels: a title bar (logo, document name, File / Format / Insert menus, a right-side action slot) and a formatting bar (undo/redo, zoom, styles, fonts, formatting buttons). Both are customizable, at two depths: quick render props on `<DocxEditor>`, or full compound components from `/ui`.
+The built-in toolbar has two levels: a title bar (logo, document name, File / Format / Insert menus, a right-side action slot) and a formatting bar (undo/redo, zoom, styles, fonts, formatting buttons). You can customize it with render props on `<DocxEditor>` or compound components from `/ui`.
 
 <ToolbarLayoutDiagram />
 
-## Show and hide chrome
+## Show and hide toolbar UI
 
 | Prop | Default | Controls |
 |---|---|---|
@@ -22,7 +22,7 @@ The built-in chrome has two levels: a title bar (logo, document name, File / For
 | `initialZoom` | `1.0` | Starting zoom level |
 
 ```tsx
-// Bare document surface; bring your own chrome.
+// Bare document surface; bring your own toolbar UI.
 <DocxEditor documentBuffer={buf} showToolbar={false} showZoomControl={false} />
 ```
 
@@ -115,7 +115,7 @@ The pieces:
 - `EditorToolbar.MenuBar` renders the File, Format, and Insert menus, wired to the context automatically.
 - `EditorToolbar.Toolbar` is the formatting-button strip; children are appended at the end, and `inline` renders it with `display: contents` for embedding in your own flex row.
 
-For even lower-level assembly, `/ui` also exports `Toolbar` (the formatting strip standalone), `ResponsiveToolbar` (adapts to width), and the primitives `ToolbarButton`, `ToolbarGroup`, `ToolbarSeparator`. The primitives are presentational: `ToolbarButton` takes `active`, `disabled`, `title`, `ariaLabel`, and `onClick`, and renders its children. Wire them to the same callbacks the standalone `Toolbar` uses, `currentFormatting` (a `SelectionFormatting`) for state and `onFormat` (takes a `FormattingAction`) for dispatch:
+For lower-level assembly, `/ui` also exports `Toolbar` (the formatting strip standalone), `ResponsiveToolbar` (adapts to width), and presentational controls such as `ToolbarButton`, `ToolbarGroup`, and `ToolbarSeparator`. `ToolbarButton` takes `active`, `disabled`, `title`, `ariaLabel`, and `onClick`, and renders its children. Wire them to the same callbacks the standalone `Toolbar` uses: `currentFormatting` (a `SelectionFormatting`) for state and `onFormat` (takes a `FormattingAction`) for dispatch.
 
 ```tsx
 import { ToolbarButton, ToolbarGroup, ToolbarSeparator } from '@eigenpal/docx-editor-react/ui';

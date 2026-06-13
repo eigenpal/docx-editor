@@ -9,7 +9,7 @@ order: 20
 
 ## What's in it
 
-The document tree, the OOXML parser and serializer, the ProseMirror schema, layout primitives, the plugin contract. No DOM, no framework. The React and Vue adapters depend on it. You install `-core` directly only when you don't want an editor UI on the page.
+The core package contains the document tree, OOXML parser and serializer, ProseMirror schema, layout engine, and plugin contract. It has no framework dependency. The React and Vue adapters depend on it. Install `-core` directly for headless DOCX processing or custom hosts.
 
 ```bash
 npm install @eigenpal/docx-editor-core
@@ -17,12 +17,12 @@ npm install @eigenpal/docx-editor-core
 
 ## When to use it directly
 
-- Server-side `.docx` processing: parse buffer, walk the tree, mutate, serialize back out.
+- Server-side `.docx` processing: parse a buffer, walk the tree, mutate, and serialize back out.
 - Headless extraction: pull text, tables, headers/footers without rendering.
 - Custom renderer or DOM bridge against the shared schema.
 - Plugins that need to work in React, Vue, and headless contexts. Use the `core-plugins` subpath.
 
-If you want an actual editor in a React or Vue app, install `@eigenpal/docx-editor-react` or `@eigenpal/docx-editor-vue`. Both pull `-core` in transitively, so you don't need it as a separate dep.
+If you want the editor UI in a React or Vue app, install `@eigenpal/docx-editor-react` or `@eigenpal/docx-editor-vue`. Both pull `-core` transitively.
 
 ## In this section
 
@@ -41,7 +41,7 @@ If you want an actual editor in a React or Vue app, install `@eigenpal/docx-edit
 
 ## Subpaths
 
-70 published subpaths. The ones you'll touch most:
+The most common subpaths:
 
 - `@eigenpal/docx-editor-core`: root barrel
 - `@eigenpal/docx-editor-core/headless`: the full DOM-free surface in one import
@@ -50,7 +50,7 @@ If you want an actual editor in a React or Vue app, install `@eigenpal/docx-edit
 - `@eigenpal/docx-editor-core/types/document`: `Document`, `Paragraph`, `Run`, `Insertion`, `Deletion`, `Comment`
 - `@eigenpal/docx-editor-core/core-plugins`: plugin contract for non-React, non-Vue hosts
 
-All 70 are in the [API reference](/docs/1.x/api/core).
+All generated subpaths are in the [API reference](/docs/1.x/api/core).
 
 ## Parse, mutate, serialize
 
@@ -72,11 +72,11 @@ for (const para of getParagraphs(doc.package.document)) {
 const out = await repackDocx(doc); // ArrayBuffer, ready to download or store
 ```
 
-The tree shape is the same the editor renders against. Anything you build against `-core` ports without translation when the same buffer reaches the live editor. Full walkthrough: [Headless processing](/docs/1.x/guides/headless-processing).
+The tree shape is the same one the editor renders. Code written against `-core` can run before or after a document is opened in the live editor. Full walkthrough: [Headless processing](/docs/1.x/guides/headless-processing).
 
 ## Content controls
 
-Block-level content controls (Word's `w:sdt`) are addressable by tag, alias, id, or type. `findContentControls` lists the matches, `setContentControlContent` fills a control, `setContentControlValue` sets typed values (dropdown selection, checkbox, date), and `addRepeatingSectionItem` / `removeRepeatingSectionItem` manage repeating sections. Edits preserve the control's identity and raw properties, so the document still round-trips; that stability is what makes content controls usable as anchors for templates and document automation.
+Block-level content controls (Word's `w:sdt`) are addressable by tag, alias, id, or type. `findContentControls` lists matches, `setContentControlContent` fills a control, `setContentControlValue` sets typed values (dropdown selection, checkbox, date), and `addRepeatingSectionItem` / `removeRepeatingSectionItem` manage repeating sections. Edits preserve the control's identity and raw properties, so content controls can act as anchors for templates and document automation.
 
 ```ts
 import { findContentControls, setContentControlValue } from '@eigenpal/docx-editor-core/headless';

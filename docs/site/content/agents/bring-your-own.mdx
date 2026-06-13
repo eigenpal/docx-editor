@@ -7,7 +7,7 @@ order: 52
 
 ## Tool schemas
 
-All 14 tools ship as OpenAI-style function definitions. Anything that accepts that shape (Vercel AI SDK, Anthropic tool use, OpenAI Assistants, LangChain) takes them as-is.
+All 14 tools ship as OpenAI-style function definitions. Runtimes that accept that shape can use `getToolSchemas()` directly; other runtimes usually need a small mapping layer.
 
 ```ts
 import { getToolSchemas } from '@eigenpal/docx-editor-agents';
@@ -16,7 +16,7 @@ const schemas = getToolSchemas();
 // [{ type: 'function', function: { name: 'add_comment', description: '...', parameters: { ... } } }, ...]
 ```
 
-Execution is the same everywhere: when your runtime returns a tool call, run it with `executeToolCall(name, input, bridge)`. It is synchronous, never throws, and returns `{ success, data?, error? }`.
+Execution is the same everywhere: when your runtime returns a tool call, run it with `executeToolCall(name, input, bridge)`. It is synchronous and returns `{ success, data?, error? }`.
 
 ## Vercel AI SDK
 
@@ -108,7 +108,7 @@ See [MCP server](/docs/1.x/agents/mcp) for transports and hosting, and the [API 
 
 ## LangChain / custom
 
-`agentTools` is the underlying tool definition array. Wrap each entry however your framework expects, then dispatch through `executeToolCall` with a bridge. A headless `DocxReviewer` must be wrapped with `createReviewerBridge` first; a live editor uses `createEditorBridge` (or the React/Vue hooks).
+`agentTools` is the underlying tool definition array. Wrap each entry in the shape your framework expects, then dispatch through `executeToolCall` with a bridge. A headless `DocxReviewer` must be wrapped with `createReviewerBridge` first; a live editor uses `createEditorBridge` or the React/Vue hooks.
 
 ```ts
 import { agentTools, executeToolCall, createReviewerBridge } from '@eigenpal/docx-editor-agents';
@@ -119,7 +119,7 @@ for (const tool of agentTools) {
   // Convert { name, description, inputSchema } to your framework's tool shape...
 }
 
-// When the framework dispatches a tool call (synchronous, never throws):
+// When the framework dispatches a tool call:
 const result = executeToolCall(toolName, toolInput, bridge);
 ```
 
