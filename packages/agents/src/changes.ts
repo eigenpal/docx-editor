@@ -9,18 +9,24 @@ import type {
   Insertion,
   Deletion,
   ParagraphContent,
+  Footnote,
+  Endnote,
 } from '@eigenpal/docx-editor-core/headless';
 import type {
   ProposeReplacementOptions,
   ProposeInsertionOptions,
   ProposeDeletionOptions,
+  ReviewChange,
+  AcceptChangesOptions,
 } from './types';
+import type { ChangeNotes } from './discovery';
 import { ChangeNotFoundError } from './errors';
 import { isolateMatchedText } from './textSearch';
 import {
   isTrackedChange,
   getParagraphAtIndex,
   forEachParagraph,
+  forEachNoteParagraph,
   type TrackedChangeItem,
 } from './utils';
 
@@ -29,75 +35,167 @@ import {
 // ============================================================================
 
 /**
- * Accept a tracked change by ID.
- * Insertion: keep text, remove wrapper.
- * Deletion: remove text and wrapper.
+ * Accept a tracked change.
+ *
+ * Pass a numeric revision id to accept a change in the document **body** (the
+ * historical signature). Pass a {@link ReviewChange} from `getChanges` to accept
+ * a change wherever it lives — a change carrying `noteType`/`noteId` is resolved
+ * inside that footnote/endnote (the `notes` arg supplies the note stores). A
+ * `ReviewChange` with no `noteType` resolves in the body, like the numeric form.
+ *
+ * Insertion: keep text, remove wrapper. Deletion: remove text and wrapper.
  */
-export function acceptChange(body: DocumentBody, id: number): void {
-  if (!processChangeById(body, id, 'accept')) {
-    throw new ChangeNotFoundError(id);
+export function acceptChange(
+  body: DocumentBody,
+  target: number | ReviewChange,
+  notes?: ChangeNotes
+): void {
+  if (!processChange(body, target, 'accept', notes)) {
+    throw new ChangeNotFoundError(typeof target === 'number' ? target : target.id);
   }
 }
 
 /**
- * Reject a tracked change by ID.
- * Insertion: remove text and wrapper.
- * Deletion: keep text, remove wrapper.
+ * Reject a tracked change. See {@link acceptChange} for body-vs-note targeting.
+ * Insertion: remove text and wrapper. Deletion: keep text, remove wrapper.
  */
-export function rejectChange(body: DocumentBody, id: number): void {
-  if (!processChangeById(body, id, 'reject')) {
-    throw new ChangeNotFoundError(id);
+export function rejectChange(
+  body: DocumentBody,
+  target: number | ReviewChange,
+  notes?: ChangeNotes
+): void {
+  if (!processChange(body, target, 'reject', notes)) {
+    throw new ChangeNotFoundError(typeof target === 'number' ? target : target.id);
   }
 }
 
 /**
- * Accept all tracked changes. Returns count.
+ * Accept all tracked changes in the body. Pass `{ includeFootnotes,
+ * includeEndnotes }` (and the `notes` stores) to also resolve changes inside
+ * note bodies. Returns the total count processed.
  */
-export function acceptAll(body: DocumentBody): number {
-  return processAllChanges(body, 'accept');
+export function acceptAll(
+  body: DocumentBody,
+  opts?: AcceptChangesOptions,
+  notes?: ChangeNotes
+): number {
+  return processAllChanges(body, 'accept', opts, notes);
 }
 
 /**
- * Reject all tracked changes. Returns count.
+ * Reject all tracked changes. See {@link acceptAll} for note opt-in.
  */
-export function rejectAll(body: DocumentBody): number {
-  return processAllChanges(body, 'reject');
+export function rejectAll(
+  body: DocumentBody,
+  opts?: AcceptChangesOptions,
+  notes?: ChangeNotes
+): number {
+  return processAllChanges(body, 'reject', opts, notes);
 }
 
 /**
- * Process all tracked changes in a single pass (O(M) where M = total paragraphs).
- * Iterates backward within each paragraph so splice doesn't shift unprocessed indices.
+ * Accept/reject every tracked-change item in a paragraph that matches `match`.
+ * Iterates backward so splice doesn't shift unprocessed indices. Returns the
+ * number of items processed. Shared by the body walk and the note walk.
  */
-function processAllChanges(body: DocumentBody, mode: 'accept' | 'reject'): number {
+function processParagraph(
+  para: Paragraph,
+  mode: 'accept' | 'reject',
+  match: (item: TrackedChangeItem) => boolean
+): number {
+  let count = 0;
+  for (let i = para.content.length - 1; i >= 0; i--) {
+    const item = para.content[i];
+    if (isTrackedChange(item) && match(item)) {
+      applyChangeAtIndex(para, i, item, mode);
+      count++;
+    }
+  }
+  return count;
+}
+
+/** Resolve a single change — in the body, or in a note when `target` carries `noteType`/`noteId`. */
+function processChange(
+  body: DocumentBody,
+  target: number | ReviewChange,
+  mode: 'accept' | 'reject',
+  notes?: ChangeNotes
+): boolean {
+  // Note-intent: any ReviewChange carrying `noteType` routes to the note path —
+  // including a malformed one missing `noteId`, which then fails loud (note not
+  // found → ChangeNotFoundError) rather than silently resolving in the body.
+  if (typeof target !== 'number' && target.noteType) {
+    const list = target.noteType === 'footnote' ? notes?.footnotes : notes?.endnotes;
+    const note =
+      target.noteId !== undefined ? list?.find((n) => n.id === target.noteId) : undefined;
+    if (!note) return false;
+    return processChangeInNote(note, target.id, mode);
+  }
+  const id = typeof target === 'number' ? target : target.id;
+  return processChangeById(body, id, mode);
+}
+
+/**
+ * Process all tracked changes in a single pass (O(M) where M = total paragraphs),
+ * across the body and — when opted in — footnote/endnote bodies.
+ */
+function processAllChanges(
+  body: DocumentBody,
+  mode: 'accept' | 'reject',
+  opts?: AcceptChangesOptions,
+  notes?: ChangeNotes
+): number {
   let count = 0;
   forEachParagraph(body, (para) => {
-    for (let i = para.content.length - 1; i >= 0; i--) {
-      const item = para.content[i];
-      if (isTrackedChange(item)) {
-        applyChangeAtIndex(para, i, item, mode);
-        count++;
-      }
-    }
+    count += processParagraph(para, mode, () => true);
   });
+  if (opts?.includeFootnotes && notes?.footnotes) {
+    for (const fn of notes.footnotes) {
+      forEachNoteParagraph(fn, (para) => {
+        count += processParagraph(para, mode, () => true);
+      });
+    }
+  }
+  if (opts?.includeEndnotes && notes?.endnotes) {
+    for (const en of notes.endnotes) {
+      forEachNoteParagraph(en, (para) => {
+        count += processParagraph(para, mode, () => true);
+      });
+    }
+  }
   return count;
 }
 
 /**
- * Find and process a tracked change by revision ID.
- * Processes ALL content items with matching ID (a revision can span multiple items).
+ * Find and process a tracked change by revision id in the document body.
+ * Processes ALL items with matching id within the first paragraph that contains
+ * it (a revision can span multiple items), then stops — the body's established
+ * semantics.
  */
 function processChangeById(body: DocumentBody, id: number, mode: 'accept' | 'reject'): boolean {
   let found = false;
   forEachParagraph(body, (para) => {
-    for (let i = para.content.length - 1; i >= 0; i--) {
-      const item = para.content[i];
-      if (isTrackedChange(item) && item.info.id === id) {
-        applyChangeAtIndex(para, i, item, mode);
-        found = true;
-      }
-    }
+    if (processParagraph(para, mode, (item) => item.info.id === id) > 0) found = true;
     // Stop traversal once we've found and processed the change
     if (found) return false;
+  });
+  return found;
+}
+
+/**
+ * Process a tracked change by revision id inside a single note. Unlike the body
+ * path, this scans ALL of the note's paragraphs (a note is a small, bounded
+ * scope, and a revision can span its paragraphs) — matching what `getChanges`
+ * accumulates for that change.
+ */
+function processChangeInNote(
+  note: Footnote | Endnote,
+  id: number,
+  mode: 'accept' | 'reject'
+): boolean {
+  let found = false;
+  forEachNoteParagraph(note, (para) => {
+    if (processParagraph(para, mode, (item) => item.info.id === id) > 0) found = true;
   });
   return found;
 }

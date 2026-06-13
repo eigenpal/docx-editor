@@ -12,6 +12,7 @@ import type {
   ProposeReplacementOptions,
   ProposeInsertionOptions,
   ProposeDeletionOptions,
+  AcceptChangesOptions,
   BatchReviewOptions,
   BatchResult,
 } from './types';
@@ -32,7 +33,6 @@ import {
   proposeDeletion as proposeDeletionImpl,
 } from './changes';
 import { applyReview as applyReviewImpl } from './batch';
-import { NoteChangeNotEditableError } from './errors';
 
 /**
  * Headless DOCX reviewer — parse a file, read/comment/track changes
@@ -121,10 +121,11 @@ export class DocxReviewer {
    * parts, so the same `id` can appear on a body change and a note change. Use
    * `noteType` / `noteId` to disambiguate.
    *
-   * Note changes are surfaced for discovery only. `acceptChange` /
-   * `rejectChange` operate on the document body, so an id that resolves *only*
-   * to a note change throws {@link NoteChangeNotEditableError} rather than
-   * mutating it (an id shared with a body change resolves to the body change).
+   * A returned change with `noteId`/`noteType` set can be accepted or rejected
+   * by passing the whole {@link ReviewChange} back to {@link acceptChange} /
+   * {@link rejectChange} (which resolves it inside its footnote/endnote), or in
+   * bulk via {@link acceptAll} / {@link rejectAll} with the matching `include*`
+   * option; the result persists on {@link toBuffer}.
    */
   getChanges(filter?: ChangeFilter): ReviewChange[] {
     return getChangesImpl(this.body, filter, {
@@ -246,66 +247,41 @@ export class DocxReviewer {
   // ==========================================================================
 
   /**
-   * Guard the body-only accept/reject path against in-note changes.
+   * Accept a tracked change. Pass a revision id to accept a change in the
+   * document body, or pass a {@link ReviewChange} from {@link getChanges} to
+   * accept it wherever it lives — a change carrying `noteId`/`noteType` is
+   * resolved inside that footnote/endnote and persists on {@link toBuffer}.
    *
-   * A tracked-change `w:id` is unique only within its part, so the same id can
-   * appear in the body and in a footnote/endnote. When the id resolves to a
-   * body change we let the body-only impl handle it (body wins; the note, if
-   * any, is left untouched). When the id resolves ONLY to a note change we fail
-   * closed with {@link NoteChangeNotEditableError} rather than mis-reporting it
-   * as not-found — accept/reject cannot yet mutate note bodies.
+   * A bare numeric id targets the body only: a `w:id` is unique only within its
+   * part, so the same id can appear on a body change and a note change. To
+   * resolve a note change pass the whole {@link ReviewChange} (its
+   * `noteId`/`noteType` locate it); a bare id resolves to the body change, if any.
    */
-  private assertNotNoteOnly(id: number): void {
-    const bodyHasId = this.getChanges().some((c) => c.id === id);
-    if (bodyHasId) return; // body wins — let the body-only impl process it.
-    const noteChange = this.getChanges({ includeFootnotes: true, includeEndnotes: true }).find(
-      (c) => c.id === id && c.noteType !== undefined
-    );
-    if (noteChange) {
-      throw new NoteChangeNotEditableError(id, noteChange.noteType!, noteChange.noteId!);
-    }
-    // Neither body nor note: fall through; the body-only impl throws
-    // ChangeNotFoundError as before.
+  acceptChange(target: number | ReviewChange): void {
+    acceptChangeImpl(this.body, target, this.changeNotes());
+  }
+
+  /** Reject a tracked change. See {@link acceptChange} for body-vs-note targeting. */
+  rejectChange(target: number | ReviewChange): void {
+    rejectChangeImpl(this.body, target, this.changeNotes());
   }
 
   /**
-   * Accept a tracked change by its revision ID. Operates on the document body
-   * only.
-   *
-   * The public `id` is a `w:id`, which is unique only within its part, so the
-   * same id may appear in the body and in a footnote/endnote. Resolution is
-   * body-first: if a body change carries this id it is accepted and any
-   * same-id note change is left untouched. If the id resolves *only* to a note
-   * change, this throws {@link NoteChangeNotEditableError} (note bodies are not
-   * yet mutable here). If it resolves to nothing, it throws
-   * {@link ChangeNotFoundError}.
+   * Accept all tracked changes in the body. Pass `{ includeFootnotes,
+   * includeEndnotes }` to also accept changes inside note bodies. Returns count.
    */
-  acceptChange(id: number): void {
-    this.assertNotNoteOnly(id);
-    acceptChangeImpl(this.body, id);
+  acceptAll(opts?: AcceptChangesOptions): number {
+    return acceptAllImpl(this.body, opts, this.changeNotes());
   }
 
-  /**
-   * Reject a tracked change by its revision ID. Operates on the document body
-   * only.
-   *
-   * Same resolution rules as {@link acceptChange}: body-first, throws
-   * {@link NoteChangeNotEditableError} for a note-only id, and
-   * {@link ChangeNotFoundError} when the id matches nothing.
-   */
-  rejectChange(id: number): void {
-    this.assertNotNoteOnly(id);
-    rejectChangeImpl(this.body, id);
+  /** Reject all tracked changes. See {@link acceptAll} for the note opt-in. */
+  rejectAll(opts?: AcceptChangesOptions): number {
+    return rejectAllImpl(this.body, opts, this.changeNotes());
   }
 
-  /** Accept all tracked changes. Returns count accepted. */
-  acceptAll(): number {
-    return acceptAllImpl(this.body);
-  }
-
-  /** Reject all tracked changes. Returns count rejected. */
-  rejectAll(): number {
-    return rejectAllImpl(this.body);
+  /** The package's note stores, passed to change ops so note changes resolve. */
+  private changeNotes() {
+    return { footnotes: this.doc.package.footnotes, endnotes: this.doc.package.endnotes };
   }
 
   // ==========================================================================
