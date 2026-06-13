@@ -107,7 +107,64 @@ test.describe('Content-control widgets (#622)', () => {
       .getByRole('option', { name: 'Archived' })
       .click();
     await expect.poll(() => controlText(page, 'status')).toBe('Archived');
-    await page.keyboard.press('ControlOrMeta+z');
+    await editor.undo();
     await expect.poll(() => controlText(page, 'status')).toBe('Draft');
+  });
+});
+
+test.describe('Inline checkbox content-control widgets', () => {
+  let editor: EditorPage;
+
+  test.beforeEach(async ({ page }) => {
+    editor = new EditorPage(page);
+    await editor.goto();
+    await editor.waitForReady();
+    await editor.loadDocxFile('fixtures/inline-checkbox-controls.docx');
+  });
+
+  test('clicking an inline checkbox glyph toggles the Word control value', async ({ page }) => {
+    const checkbox = page.locator('.layout-inline-sdt-widget[data-sdt-tag="option-alpha"]');
+    await expect(checkbox).toHaveText('☐');
+    expect(await controlText(page, 'option-alpha')).toBe('☐');
+
+    await checkbox.click();
+    await expect.poll(() => controlText(page, 'option-alpha')).toBe('☒');
+    await expect(checkbox).toHaveText('☒');
+
+    await checkbox.click();
+    await expect.poll(() => controlText(page, 'option-alpha')).toBe('☐');
+    await expect(checkbox).toHaveText('☐');
+  });
+
+  test('untagged inline checkboxes toggle by document position', async ({ page }) => {
+    const untagged = page.locator('.layout-inline-sdt-widget:not([data-sdt-tag])');
+    await expect(untagged).toHaveCount(1);
+    await expect(untagged).toHaveText('☐');
+
+    await untagged.click();
+    await expect(untagged).toHaveText('☒');
+  });
+
+  test('locked, bound, and plain-text fallback boxes are not editable widgets', async ({
+    page,
+  }) => {
+    await expect(page.locator('.layout-inline-sdt-widget')).toHaveCount(3);
+    await expect(
+      page.locator('.layout-inline-sdt-widget[data-sdt-tag="locked-checkbox"]')
+    ).toHaveCount(0);
+    await expect(
+      page.locator('.layout-inline-sdt-widget[data-sdt-tag="bound-checkbox"]')
+    ).toHaveCount(0);
+    await expect(
+      page.locator('.layout-page-content').getByText('[ X ] Plain text fallback')
+    ).toBeVisible();
+  });
+
+  test('undo restores an inline checkbox edit', async ({ page }) => {
+    const checkbox = page.locator('.layout-inline-sdt-widget[data-sdt-tag="option-alpha"]');
+    await checkbox.click();
+    await expect.poll(() => controlText(page, 'option-alpha')).toBe('☒');
+    await editor.undo();
+    await expect.poll(() => controlText(page, 'option-alpha')).toBe('☐');
   });
 });

@@ -95,6 +95,14 @@ its right-aligned dot-leader tab stop. Used to verify that tabs inside
 hyperlinks survive parsing and that TOC entries render with dot leaders and
 right-aligned page numbers like Word.
 
+### inline-checkbox-controls.docx
+
+A synthetic document with inline Word checkbox content controls
+(`w14:checkbox`) covering unchecked, checked, untagged, locked, data-bound, and
+plain-text fallback cases. Used to verify that docx-editor paints the existing
+Word glyph in flow while exposing only unlocked/unbound controls as clickable
+editor widgets.
+
 ## Generating Fixtures
 
 To regenerate fixtures, run:
@@ -106,6 +114,7 @@ bun scripts/create-footnote-bottom-overflow-fixture.mjs
 bun scripts/create-footnote-overlap-regression-fixture.mjs
 bun scripts/create-empty-table-row-vmerge-fixture.mjs
 bun scripts/create-toc-hyperlink-fixture.mjs
+bun scripts/create-inline-checkbox-controls-fixture.mjs e2e/fixtures/inline-checkbox-controls.docx
 ```
 
 Or manually create them using Microsoft Word or another DOCX editor.

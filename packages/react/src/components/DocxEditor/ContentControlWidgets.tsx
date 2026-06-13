@@ -17,10 +17,13 @@ import type { EditorView } from 'prosemirror-view';
 import {
   findContentControlsInPM,
   setContentControlValueTr,
+  setContentControlValueAtPosTr,
   addRepeatingSectionItemTr,
   removeRepeatingSectionItemTr,
   type PMContentControl,
 } from '@eigenpal/docx-editor-core/prosemirror';
+
+const WIDGET_SELECTOR = '.layout-sdt-widget, .layout-inline-sdt-widget';
 
 /** Parse the PM position out of a `sdt@<pos>` group id. */
 function posFromGroupId(id: string | undefined): number | null {
@@ -28,15 +31,33 @@ function posFromGroupId(id: string | undefined): number | null {
   return m ? Number(m[1]) : null;
 }
 
+function posFromDataset(value: string | undefined): number | null {
+  if (value == null || value === '') return null;
+  const pos = Number(value);
+  return Number.isFinite(pos) ? pos : null;
+}
+
+type ControlTarget = {
+  tag?: string;
+  pos?: number;
+};
+
+function targetFromTrigger(trigger: HTMLElement): ControlTarget | null {
+  const pos = posFromGroupId(trigger.dataset.sdtGroupId) ?? posFromDataset(trigger.dataset.sdtPos);
+  const tag = trigger.dataset.sdtTag;
+  if (pos != null) return tag ? { pos, tag } : { pos };
+  return tag ? { tag } : null;
+}
+
 type Popup =
   | {
       kind: 'dropdown';
-      tag: string;
+      target: ControlTarget;
       items: { displayText: string; value: string }[];
       current: string;
       rect: DOMRect;
     }
-  | { kind: 'date'; tag: string; current: string; rect: DOMRect };
+  | { kind: 'date'; target: ControlTarget; current: string; rect: DOMRect };
 
 export interface ContentControlWidgetsProps {
   /** The persistent pages container the painter renders into. */
@@ -49,6 +70,13 @@ function controlByTag(view: EditorView, tag: string): PMContentControl | undefin
   return findContentControlsInPM(view.state.doc, { tag })[0];
 }
 
+function controlByTarget(view: EditorView, target: ControlTarget): PMContentControl | undefined {
+  if (target.pos != null) {
+    return findContentControlsInPM(view.state.doc).find((control) => control.pos === target.pos);
+  }
+  return target.tag ? controlByTag(view, target.tag) : undefined;
+}
+
 export function ContentControlWidgets({
   containerRef,
   getView,
@@ -57,11 +85,18 @@ export function ContentControlWidgets({
   const popupRef = useRef<HTMLDivElement>(null);
 
   const apply = useCallback(
-    (tag: string, value: Parameters<typeof setContentControlValueTr>[2]) => {
+    (target: ControlTarget, value: Parameters<typeof setContentControlValueTr>[2]) => {
       const view = getView();
       if (!view) return;
       try {
-        view.dispatch(setContentControlValueTr(view.state, { tag }, value));
+        const tr =
+          target.pos != null
+            ? setContentControlValueAtPosTr(view.state, target.pos, value)
+            : target.tag
+              ? setContentControlValueTr(view.state, { tag: target.tag }, value)
+              : null;
+        if (!tr) return;
+        view.dispatch(tr);
         view.focus(); // return focus so keyboard (undo, typing) works after the edit
       } catch {
         // Locked / invalid — ignore in the UI layer.
@@ -77,23 +112,23 @@ export function ContentControlWidgets({
 
     const activate = (trigger: HTMLElement) => {
       const view = getView();
-      const tag = trigger.dataset.sdtTag;
       const kind = trigger.dataset.sdtWidget;
-      if (!view || !tag || !kind) return;
-      const control = controlByTag(view, tag);
+      const target = targetFromTrigger(trigger);
+      if (!view || !kind || !target) return;
+      const control = controlByTarget(view, target);
       const rect = trigger.getBoundingClientRect();
       if (kind === 'checkbox') {
-        apply(tag, { kind: 'checkbox', checked: !control?.checked });
+        apply(target, { kind: 'checkbox', checked: !control?.checked });
       } else if (kind === 'dropdown') {
         setPopup({
           kind: 'dropdown',
-          tag,
+          target,
           items: control?.listItems ?? [],
           current: control?.text ?? '',
           rect,
         });
       } else if (kind === 'date') {
-        setPopup({ kind: 'date', tag, current: control?.dateValue ?? '', rect });
+        setPopup({ kind: 'date', target, current: control?.dateValue ?? '', rect });
       }
     };
 
@@ -117,7 +152,7 @@ export function ContentControlWidgets({
     // Stop the trigger's mousedown from moving the PM caret / stealing focus.
     const onMouseDown = (e: MouseEvent) => {
       const t = e.target as HTMLElement;
-      if (t?.closest?.('.layout-sdt-widget') || t?.closest?.('.layout-sdt-repeat-btn')) {
+      if (t?.closest?.(WIDGET_SELECTOR) || t?.closest?.('.layout-sdt-repeat-btn')) {
         e.preventDefault();
       }
     };
@@ -131,9 +166,7 @@ export function ContentControlWidgets({
         repeat(repeatBtn);
         return;
       }
-      const trigger = (e.target as HTMLElement)?.closest?.(
-        '.layout-sdt-widget'
-      ) as HTMLElement | null;
+      const trigger = (e.target as HTMLElement)?.closest?.(WIDGET_SELECTOR) as HTMLElement | null;
       if (!trigger) return;
       e.preventDefault();
       e.stopPropagation();
@@ -143,9 +176,7 @@ export function ContentControlWidgets({
     // painter button's native click synthesis.
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.key !== 'Enter' && e.key !== ' ') return;
-      const trigger = (e.target as HTMLElement)?.closest?.(
-        '.layout-sdt-widget'
-      ) as HTMLElement | null;
+      const trigger = (e.target as HTMLElement)?.closest?.(WIDGET_SELECTOR) as HTMLElement | null;
       if (!trigger) return;
       e.preventDefault();
       activate(trigger);
@@ -234,7 +265,7 @@ export function ContentControlWidgets({
                 role="option"
                 aria-selected={selected}
                 className={`layout-sdt-widget-option${selected ? ' is-selected' : ''}`}
-                onClick={() => apply(popup.tag, { kind: 'dropdown', value: it.value })}
+                onClick={() => apply(popup.target, { kind: 'dropdown', value: it.value })}
               >
                 {it.displayText}
               </button>
@@ -248,7 +279,7 @@ export function ContentControlWidgets({
           autoFocus
           defaultValue={popup.current}
           onChange={(e) => {
-            if (e.target.value) apply(popup.tag, { kind: 'date', date: e.target.value });
+            if (e.target.value) apply(popup.target, { kind: 'date', date: e.target.value });
           }}
         />
       )}

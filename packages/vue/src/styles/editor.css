@@ -717,6 +717,19 @@
   background: #e8f0fe;
 }
 
+.layout-inline-sdt-widget {
+  cursor: pointer;
+  pointer-events: auto;
+  border-radius: 2px;
+  outline-offset: 1px;
+  user-select: none;
+}
+.layout-inline-sdt-widget:hover,
+.layout-inline-sdt-widget:focus {
+  background: #e8f0fe;
+  outline: 1px solid rgba(25, 103, 210, 0.55);
+}
+
 /* Popup for dropdown/date content-control widgets (rendered by the adapter). */
 .layout-sdt-widget-popup {
   min-width: 120px;

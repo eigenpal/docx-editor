@@ -12,15 +12,36 @@ import type { EditorView } from 'prosemirror-view';
 import {
   findContentControlsInPM,
   setContentControlValueTr,
+  setContentControlValueAtPosTr,
   addRepeatingSectionItemTr,
   removeRepeatingSectionItemTr,
 } from '@eigenpal/docx-editor-core/prosemirror';
 import type { ContentControlValue } from '@eigenpal/docx-editor-core/agent';
 
+const WIDGET_SELECTOR = '.layout-sdt-widget, .layout-inline-sdt-widget';
+
 /** Parse the PM position out of a `sdt@<pos>` group id. */
 function posFromGroupId(id: string | undefined): number | null {
   const m = /^sdt@(\d+)$/.exec(id ?? '');
   return m ? Number(m[1]) : null;
+}
+
+function posFromDataset(value: string | undefined): number | null {
+  if (value == null || value === '') return null;
+  const pos = Number(value);
+  return Number.isFinite(pos) ? pos : null;
+}
+
+type ControlTarget = {
+  tag?: string;
+  pos?: number;
+};
+
+function targetFromTrigger(trigger: HTMLElement): ControlTarget | null {
+  const pos = posFromGroupId(trigger.dataset.sdtGroupId) ?? posFromDataset(trigger.dataset.sdtPos);
+  const tag = trigger.dataset.sdtTag;
+  if (pos != null) return tag ? { pos, tag } : { pos };
+  return tag ? { tag } : null;
 }
 
 const props = defineProps<{
@@ -31,22 +52,29 @@ const props = defineProps<{
 type Popup =
   | {
       kind: 'dropdown';
-      tag: string;
+      target: ControlTarget;
       items: { displayText: string; value: string }[];
       current: string;
       x: number;
       y: number;
     }
-  | { kind: 'date'; tag: string; current: string; x: number; y: number };
+  | { kind: 'date'; target: ControlTarget; current: string; x: number; y: number };
 
 const popup = ref<Popup | null>(null);
 const popupEl = ref<HTMLElement | null>(null);
 
-function apply(tag: string, value: ContentControlValue): void {
+function apply(target: ControlTarget, value: ContentControlValue): void {
   const view = props.view;
   if (view) {
     try {
-      view.dispatch(setContentControlValueTr(view.state, { tag }, value));
+      const tr =
+        target.pos != null
+          ? setContentControlValueAtPosTr(view.state, target.pos, value)
+          : target.tag
+            ? setContentControlValueTr(view.state, { tag: target.tag }, value)
+            : null;
+      if (!tr) return;
+      view.dispatch(tr);
       view.focus(); // return focus so keyboard (undo, typing) works after the edit
     } catch {
       // Locked / invalid — ignore in the UI layer.
@@ -73,31 +101,42 @@ function repeat(btn: HTMLElement): void {
 
 function onMouseDown(e: MouseEvent): void {
   const t = e.target as HTMLElement;
-  if (t?.closest?.('.layout-sdt-widget') || t?.closest?.('.layout-sdt-repeat-btn')) {
+  if (t?.closest?.(WIDGET_SELECTOR) || t?.closest?.('.layout-sdt-repeat-btn')) {
     e.preventDefault();
   }
 }
 
 function activate(trigger: HTMLElement): void {
   const view = props.view;
-  const tag = trigger.dataset.sdtTag;
   const kind = trigger.dataset.sdtWidget;
-  if (!view || !tag || !kind) return;
-  const control = findContentControlsInPM(view.state.doc, { tag })[0];
+  const target = targetFromTrigger(trigger);
+  if (!view || !kind || !target) return;
+  const control =
+    target.pos != null
+      ? findContentControlsInPM(view.state.doc).find((c) => c.pos === target.pos)
+      : target.tag
+        ? findContentControlsInPM(view.state.doc, { tag: target.tag })[0]
+        : undefined;
   const rect = trigger.getBoundingClientRect();
   if (kind === 'checkbox') {
-    apply(tag, { kind: 'checkbox', checked: !control?.checked });
+    apply(target, { kind: 'checkbox', checked: !control?.checked });
   } else if (kind === 'dropdown') {
     popup.value = {
       kind: 'dropdown',
-      tag,
+      target,
       items: control?.listItems ?? [],
       current: control?.text ?? '',
       x: rect.left,
       y: rect.bottom + 2,
     };
   } else if (kind === 'date') {
-    popup.value = { kind: 'date', tag, current: control?.dateValue ?? '', x: rect.left, y: rect.bottom + 2 };
+    popup.value = {
+      kind: 'date',
+      target,
+      current: control?.dateValue ?? '',
+      x: rect.left,
+      y: rect.bottom + 2,
+    };
   }
 }
 
@@ -109,7 +148,7 @@ function onClick(e: MouseEvent): void {
     repeat(repeatBtn);
     return;
   }
-  const trigger = (e.target as HTMLElement)?.closest?.('.layout-sdt-widget') as HTMLElement | null;
+  const trigger = (e.target as HTMLElement)?.closest?.(WIDGET_SELECTOR) as HTMLElement | null;
   if (!trigger) return;
   e.preventDefault();
   e.stopPropagation();
@@ -119,7 +158,7 @@ function onClick(e: MouseEvent): void {
 // Keyboard activation (Enter/Space) — explicit, not reliant on native button click.
 function onTriggerKeyDown(e: KeyboardEvent): void {
   if (e.key !== 'Enter' && e.key !== ' ') return;
-  const trigger = (e.target as HTMLElement)?.closest?.('.layout-sdt-widget') as HTMLElement | null;
+  const trigger = (e.target as HTMLElement)?.closest?.(WIDGET_SELECTOR) as HTMLElement | null;
   if (!trigger) return;
   e.preventDefault();
   activate(trigger);
@@ -192,7 +231,7 @@ onBeforeUnmount(() => {
 
 function onDateInput(e: Event): void {
   const value = (e.target as HTMLInputElement).value;
-  if (value && popup.value) apply(popup.value.tag, { kind: 'date', date: value });
+  if (value && popup.value) apply(popup.value.target, { kind: 'date', date: value });
 }
 </script>
 
@@ -216,7 +255,7 @@ function onDateInput(e: Event): void {
         :aria-selected="it.displayText === popup.current"
         class="layout-sdt-widget-option"
         :class="{ 'is-selected': it.displayText === popup.current }"
-        @click="apply(popup.tag, { kind: 'dropdown', value: it.value })"
+        @click="apply(popup.target, { kind: 'dropdown', value: it.value })"
       >
         {{ it.displayText }}
       </button>
