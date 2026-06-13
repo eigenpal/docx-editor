@@ -125,6 +125,12 @@
       "id": 245037279,
       "signed_at": "2026-06-09T21:50:56Z",
       "pull_request_no": 752
+    },
+    {
+      "name": "raphaelsebb",
+      "id": 21245766,
+      "signed_at": "2026-06-13T09:22:29Z",
+      "pull_request_no": 788
     }
   ]
 }
