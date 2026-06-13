@@ -5,7 +5,7 @@ category: 'Agents'
 seoTitle: 'MCP server for DOCX review'
 ---
 
-`McpServer` exposes the [14 agent tools](/docs/1.x/agents/tools) over the Model Context Protocol, so any MCP-compatible client (Claude Desktop, agent platforms, your own MCP client) can read, comment, and redline a DOCX without knowing anything about this library.
+`McpServer` exposes the [14 agent tools](/docs/1.x/agents/tools) over the Model Context Protocol. Use it when an MCP-compatible client should read, comment, or redline a DOCX through your host process.
 
 ```ts
 import { McpServer } from '@eigenpal/docx-editor-agents/mcp';
@@ -29,7 +29,7 @@ handle(message: JsonRpcMessage): JsonRpcResponse | null
 ```
 
 - Accepts one JSON-RPC message; returns the response to send back, or `null` for notifications (which never get a reply).
-- Never throws. Protocol-level problems come back as JSON-RPC errors; tool failures come back as successful responses with `isError: true` in the MCP content payload, per MCP convention.
+- It does not throw for protocol or tool failures. Protocol-level problems come back as JSON-RPC errors; tool failures come back as successful responses with `isError: true` in the MCP content payload, per MCP convention.
 - Implements `initialize`, `tools/list`, `tools/call`, and `ping`. Protocol version: `2025-06-18` (overridable via options).
 
 `tools/list` advertises all 14 built-in tools with their JSON-Schema inputs. `tools/call` dispatches through the same `executeToolCall` the other integration shapes use. Note the headless caveats: against a reviewer bridge, `read_selection` and the page tools fail with descriptive errors, since there is no user and no rendered pages.
@@ -57,7 +57,7 @@ app.post('/mcp/:docId', requireAuth, async (req, res) => {
     version: '1.0.0',
   });
 
-  const reply = server.handle(req.body); // sync, never throws
+  const reply = server.handle(req.body); // sync; errors are returned as JSON-RPC/MCP payloads
   if (reply) res.json(reply);
   else res.status(204).end(); // notification: no reply by spec
 
@@ -94,12 +94,12 @@ runStdioServer(createReviewerBridge(reviewer), { name: 'docx-review', version: '
 
 ## When to use MCP
 
-Pick MCP when the agent side already exists and speaks MCP: a desktop assistant, an agent platform, an internal orchestrator. You get tool discovery and invocation for free, and the client needs zero knowledge of this library.
+Pick MCP when the agent side already exists and speaks MCP: a desktop assistant, an agent platform, or an internal orchestrator. The MCP client discovers and invokes tools through the protocol; it does not import this library.
 
 Pick the other shapes when you control both ends:
 
 - Building a product UI: the [live editor bridge](/docs/1.x/agents/ai-editing) gives you streaming, in-document feedback that MCP cannot.
-- Building a server pipeline you also own: calling [DocxReviewer](/docs/1.x/agents/docx-reviewer) directly is less moving parts than JSON-RPC framing.
+- Building a server pipeline you also own: calling [DocxReviewer](/docs/1.x/agents/docx-reviewer) directly is simpler than adding JSON-RPC framing.
 
 ## Next steps
 

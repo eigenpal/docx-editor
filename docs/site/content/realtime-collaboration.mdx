@@ -19,7 +19,7 @@ The editor exposes three props that hand off state to a CRDT:
 | `externalPlugins` | Pass Yjs's ProseMirror plugins (`ySyncPlugin`, `yCursorPlugin`, `yUndoPlugin`). |
 | `comments` + `onCommentsChange` | Controlled comment threads, mirrored to a Y.Array on the same Y.Doc. |
 
-Tracked changes sync **for free**: they're ProseMirror marks, so `ySyncPlugin` carries them along with everything else.
+Tracked changes sync through `ySyncPlugin` because they are stored as ProseMirror marks.
 
 ## Step 1. Install
 
@@ -27,7 +27,7 @@ Tracked changes sync **for free**: they're ProseMirror marks, so `ySyncPlugin` c
 npm install yjs y-prosemirror y-webrtc
 ```
 
-`y-webrtc` uses free public signaling and needs zero infra, which makes it the right starter. We'll cover production providers (PartyKit, Liveblocks, Hocuspocus) below.
+`y-webrtc` uses public signaling servers, so it is useful for local tests and prototypes. For application deployments, use a provider you operate or a hosted provider such as PartyKit, Liveblocks, or Hocuspocus.
 
 ## Step 2. Set up a shared Y.Doc
 
@@ -171,7 +171,7 @@ const { comments, setComments } = useSharedComments(ydoc);
 | [`@hocuspocus/provider`](https://tiptap.dev/docs/hocuspocus) | Self-hosted Node.js server | `new HocuspocusProvider({ url, name, document })` |
 | `y-websocket` | Roll-your-own WebSocket server | `new WebsocketProvider(url, room, ydoc)` |
 
-All four are drop-in replacements for `WebrtcProvider`; every other line of the hook stays the same. For example, switching to PartyKit means installing `y-partykit partysocket`, deploying a tiny `party/server.ts` that delegates to `y-partykit`'s `onConnect`, and changing one line in the hook:
+All four implement the same Yjs provider role as `WebrtcProvider`, but their auth, persistence, and deployment setup differ. For example, switching to PartyKit means installing `y-partykit partysocket`, deploying a small `party/server.ts` that delegates to `y-partykit`'s `onConnect`, and changing the provider constructor in the hook:
 
 ```ts
 import YPartyKitProvider from 'y-partykit/provider';

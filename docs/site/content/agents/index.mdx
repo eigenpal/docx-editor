@@ -1,6 +1,6 @@
 ---
 title: 'Overview'
-description: 'Agent toolkit for DOCX: 14 tools for AI comments, tracked changes, and redlining. Run them against a live editor, headless in Node, or over MCP.'
+description: 'Agent toolkit for DOCX: 14 tools for comments, tracked changes, and redlining. Run them against a live editor, headless in Node, or over MCP.'
 category: 'Agents'
 order: 50
 seoTitle: 'AI agents for DOCX editing'
@@ -8,7 +8,7 @@ seoTitle: 'AI agents for DOCX editing'
 
 <PackageStats name="@eigenpal/docx-editor-agents" />
 
-`@eigenpal/docx-editor-agents` gives an LLM a Word-like API for DOCX documents: read paragraphs, add comments, suggest tracked changes, apply formatting. The same 14 tools run in three places. You bring your own agent runtime (Vercel AI SDK, OpenAI, Anthropic, LangChain); the toolkit ships plain JSON-Schema tool definitions plus optional adapters.
+`@eigenpal/docx-editor-agents` exposes DOCX editing operations as model tools: read paragraphs, add comments, suggest tracked changes, and apply formatting. The same 14 tools can run against a live editor, a headless reviewer, or an MCP server. You bring the model runtime; the package ships JSON-Schema tool definitions and optional adapters for the Vercel AI SDK, OpenAI-style tools, React, Vue, and MCP.
 
 ```bash
 npm install @eigenpal/docx-editor-agents
@@ -16,7 +16,7 @@ npm install @eigenpal/docx-editor-agents
 
 ## Integration shapes
 
-**1. Live editor panel.** The agent's tool calls land on a `<DocxEditor>` running in the user's browser. Comments and tracked changes appear in the document as the model streams. Tool calls execute in the browser against the open editor; your API route only ever sees tool-call text.
+**1. Live editor panel.** Tool calls execute against a `<DocxEditor>` running in the user's browser. Comments and tracked changes appear in the open document. In this setup your API route sees chat messages, tool names, arguments, and tool results; the DOCX file stays client-side.
 
 ```tsx
 const { tools, executeToolCall, getContext } = useDocxAgentTools({
@@ -32,9 +32,9 @@ Full walkthrough: [AI editing with the Vercel AI SDK](/docs/1.x/agents/ai-editin
 ```ts
 import { DocxReviewer } from '@eigenpal/docx-editor-agents';
 
-const reviewer = await DocxReviewer.fromBuffer(buffer, 'AI Reviewer');
-reviewer.addComment(5, 'This cap seems too low.');
-reviewer.replace(5, '$50k', '$500k');
+const reviewer = await DocxReviewer.fromBuffer(buffer, 'Reviewer');
+reviewer.addComment({ paragraphIndex: 5, text: 'This cap seems too low.' });
+reviewer.replace({ paragraphIndex: 5, search: '$50k', replaceWith: '$500k' });
 const out = await reviewer.toBuffer();
 ```
 
@@ -91,7 +91,7 @@ Each subpath tree-shakes independently. The `/ai-sdk/*` entries import `ai`, whi
 
 <Cards>
   <Card title="AI editing tutorial" href="/docs/1.x/agents/ai-editing">
-    Wire an LLM to the live editor with the Vercel AI SDK, end to end.
+    Wire model tool calls to the live editor with the Vercel AI SDK.
   </Card>
   <Card title="AI redlining" href="/docs/1.x/agents/redlining">
     Tracked-change review the human accepts or rejects, live or in batch.

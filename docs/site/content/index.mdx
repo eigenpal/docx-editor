@@ -1,22 +1,22 @@
 ---
 title: 'Introduction'
-description: 'Open source WYSIWYG DOCX editor for React and Vue. Runs in the browser, no backend: .docx in, .docx out, with tracked changes, comments, and AI agents.'
+description: 'Open source WYSIWYG DOCX editor for React and Vue. Runs in the browser: .docx in, .docx out, with tracked changes, comments, and AI tools.'
 category: 'Getting Started'
 order: 1
 seoTitle: 'DOCX Editor for React and Vue'
 ---
 
-`.docx` in, `.docx` out: an open-source WYSIWYG DOCX editor for React and Vue, client-side, agent-ready. It parses OOXML in the browser, renders true paginated pages with Word's metrics, and serializes back to a `.docx` that opens cleanly in Microsoft Word. No upload, no conversion service, no backend.
+`docx-editor` is an open-source WYSIWYG DOCX editor for React and Vue. It parses OOXML in the browser, renders paginated pages, and serializes the current document back to `.docx`. You do not need an upload service or conversion backend for normal browser editing.
 
 <Cards>
   <Card title="Get it running" href="/docs/1.x/quickstart">
-    Load → edit → save in five minutes. Copy-paste React and Vue snippets, file input to .docx download.
+    Install the adapter, import the stylesheet, load a .docx from a file input, and save it back.
   </Card>
-  <Card title="Can I trust it in prod?" href="/docs/1.x/word-fidelity">
-    Rendering fidelity, round-trip guarantees, security model, API stability. The adoption checklist.
+  <Card title="Evaluate fidelity" href="/docs/1.x/word-fidelity">
+    Feature support, round-trip behavior, security model, API stability, and known limits.
   </Card>
-  <Card title="Build AI document features" href="/docs/1.x/agents">
-    Wire an agent to the live editor: read paragraphs, add comments, suggest tracked changes. MCP included.
+  <Card title="Add AI tools" href="/docs/1.x/agents">
+    Connect model tool calls to the editor or to server-side DOCX review.
   </Card>
 </Cards>
 
@@ -53,11 +53,11 @@ npm install @eigenpal/docx-editor-vue
 npm install @eigenpal/docx-editor-core @eigenpal/docx-editor-agents
 ```
 
-**AI on top of an existing editor.** Layer `-agents` onto `-react` or `-vue`. The MCP server is the `/mcp` subpath of the same package.
+**AI on top of an existing editor.** Add `-agents` next to `-react` or `-vue`. Use `/mcp` from the same package when your client already speaks MCP.
 
 ## What it handles
 
-The editor models the Word constructs that production documents actually use, and round-trips them through OOXML:
+The editor models common Word constructs and writes them back through OOXML:
 
 - Text formatting, fonts, theme colors, paragraph styles
 - Tables (including merged cells and page-spanning rows), lists and numbering
@@ -67,11 +67,11 @@ The editor models the Word constructs that production documents actually use, an
 - Footnotes, endnotes, content controls
 - Real-time collaboration over [Yjs](/docs/1.x/realtime-collaboration)
 
-Feature-by-feature coverage and fidelity notes: [Word features](/docs/1.x/word-fidelity). Or open one of your own documents in the [live demo](https://docx-editor.dev/editor).
+Feature-by-feature coverage and known limits: [Word fidelity](/docs/1.x/word-fidelity). You can also open one of your own documents in the [live demo](https://docx-editor.dev/editor).
 
 ## Next steps
 
-- [Quickstart](/docs/1.x/quickstart): the load → edit → save loop
+- [Quickstart](/docs/1.x/quickstart): load, edit, and save a `.docx`
 - [Installation](/docs/1.x/installation): Next.js, Vite, Remix, Astro, Vue, Nuxt
-- [Production readiness](/docs/1.x/word-fidelity): the evaluation checklist
+- [Word fidelity](/docs/1.x/word-fidelity): feature support and round-trip behavior
 - [Examples](/docs/1.x/examples): runnable starters and live demos

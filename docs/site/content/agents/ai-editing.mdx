@@ -7,7 +7,7 @@ seoTitle: 'AI DOCX editing with the Vercel AI SDK'
 
 ## What you'll build
 
-A `<DocxEditor>` with an assistant panel on the right. The user asks a question, the model reads the document, drops comments and tracked changes that appear live as it streams, and finishes with a text reply. The chat UI, tool-call timeline, and panel chrome ship with the library; you write one API route and one page.
+A `<DocxEditor>` with an assistant panel on the right. The user asks a question, the model reads document text through tools, adds comments or tracked changes in the editor, and finishes with a text reply. The package includes chat components, a tool-call timeline, and the panel shell; you write one API route and one page.
 
 <AgentChatDemo />
 
@@ -21,7 +21,7 @@ Three facts drive the wiring:
 - **The document never leaves the browser.** Your `/api/chat` route sees chat messages and tool-call text (tool names, arguments, results). It never receives the DOCX file. `read_document` runs locally and its output goes up as a tool result, so the model sees document text only when it asks for it.
 - **Anchors survive concurrent edits.** Locate tools return paragraphs tagged with `paraId` (Word's `w14:paraId`). A `ParaIdAllocatorExtension` in the editor assigns fresh ids on Enter, paste, and split, so the user typing mid-conversation does not desync the agent's anchors.
 
-One round of the loop: user message goes up, model streams a tool call down, the client executes it against the editor, the result goes back up, the model continues. Repeat until the model writes plain text instead of a tool call.
+One tool round: the client sends the user message, the model streams a tool call, the client executes it against the editor, and the tool result is sent back to the model. Repeat until the model writes text instead of another tool call.
 
 ## Setup
 
@@ -83,8 +83,8 @@ export async function POST(req: Request) {
 
 <Callout type="warn" title="stopWhen is not optional">
   `streamText` defaults to one step. The model calls `read_document`, the step ends, and the user
-  never gets an answer. `stopWhen: stepCountIs(12)` lets the agent loop (read, then comment, then
-  summarize) without running away.
+  never gets an answer. `stopWhen: stepCountIs(12)` lets the model read, comment, and summarize
+  across multiple tool steps while still capping the run.
 </Callout>
 
 The `context` field carries `getContext()`'s snapshot of the user's selection and page, so the model knows what the user is looking at without spending a tool call on `read_selection`.
@@ -99,6 +99,7 @@ import dynamic from 'next/dynamic';
 import { useChat } from '@ai-sdk/react';
 import { DefaultChatTransport, lastAssistantMessageIsCompleteWithToolCalls } from 'ai';
 import { type DocxEditorRef } from '@eigenpal/docx-editor-react';
+import '@eigenpal/docx-editor-react/styles.css';
 import {
   AgentChatLog,
   AgentComposer,
@@ -116,6 +117,7 @@ const DocxEditor = dynamic(
 
 export default function Page() {
   const editorRef = useRef<DocxEditorRef>(null);
+  const [file, setFile] = useState<File | null>(null);
   const [input, setInput] = useState('');
 
   // The hook owns the bridge to the live editor: a tool executor plus a
@@ -165,33 +167,42 @@ export default function Page() {
   const loading = chat.status === 'streaming' || chat.status === 'submitted';
 
   return (
-    <DocxEditor
-      ref={editorRef}
-      // ...your usual editor props (documentBuffer, etc.)
-      agentPanel={{
-        title: 'Assistant',
-        render: () => (
-          <>
-            <AgentChatLog
-              messages={messages}
-              loading={loading}
-              error={chat.error?.message}
-              humanizeToolName={getToolDisplayName}
-            />
-            <AgentComposer
-              value={input}
-              onChange={setInput}
-              onSubmit={() => {
-                if (!input.trim() || loading) return;
-                chat.sendMessage({ text: input });
-                setInput('');
-              }}
-              disabled={loading}
-            />
-          </>
-        ),
-      }}
-    />
+    <div style={{ height: '100vh', display: 'flex', flexDirection: 'column' }}>
+      <div style={{ padding: 8 }}>
+        <input
+          type="file"
+          accept=".docx"
+          onChange={(event) => setFile(event.target.files?.[0] ?? null)}
+        />
+      </div>
+      <DocxEditor
+        ref={editorRef}
+        documentBuffer={file}
+        agentPanel={{
+          title: 'Assistant',
+          render: () => (
+            <>
+              <AgentChatLog
+                messages={messages}
+                loading={loading}
+                error={chat.error?.message}
+                humanizeToolName={getToolDisplayName}
+              />
+              <AgentComposer
+                value={input}
+                onChange={setInput}
+                onSubmit={() => {
+                  if (!input.trim() || loading) return;
+                  chat.sendMessage({ text: input });
+                  setInput('');
+                }}
+                disabled={loading}
+              />
+            </>
+          ),
+        }}
+      />
+    </div>
   );
 }
 ```
@@ -204,7 +215,7 @@ Notes on this code:
 
 ## Example tool loop
 
-User types "tighten the wordiest paragraph" and hits send.
+After choosing a `.docx`, the user types "tighten the wordiest paragraph" and hits send.
 
 1. **Client → server.** `useChat` POSTs the messages plus `context: getContext()` (cursor in paragraph `4A1F3B`, page 2 of 5).
 2. **Model → client.** The model streams a `read_document` call. `onToolCall` fires; `executeToolCall('read_document', {})` runs in the browser and returns the document as `[paraId] text` lines. The timeline in the panel shows "Reading document" with a spinner, then a check.
@@ -239,7 +250,7 @@ useDocxAgentTools({
 });
 ```
 
-`executeToolCall` enforces the filter at execution time. A model that hallucinates a filtered tool gets `Tool 'x' is not enabled.` back, not a silent bypass. Remember to filter the server side too, so the model never sees the schema in the first place:
+`executeToolCall` enforces the filter at execution time. If the model calls a filtered tool, it gets `Tool 'x' is not enabled.` back. Filter the server side too, so the model does not receive schemas for tools it cannot use:
 
 ```ts
 const REVIEW_TOOLS = ['read_document', 'find_text', 'add_comment'];
@@ -249,7 +260,7 @@ const tools = Object.fromEntries(
 );
 ```
 
-Custom tools merge with the built-ins and always pass the filter. A custom tool with a built-in's name replaces the built-in:
+Custom tools are added after the built-ins and are not filtered by `include` or `exclude`. A custom tool with a built-in's name replaces the built-in:
 
 ```tsx
 import type { AgentToolDefinition } from '@eigenpal/docx-editor-agents/react';

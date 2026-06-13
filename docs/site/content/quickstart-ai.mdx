@@ -1,14 +1,11 @@
 ---
 title: 'Quickstart: AI'
-description: 'Wire an AI assistant to the DOCX editor: one API route, one page. The agent reads the document, adds comments, and suggests tracked changes in the browser.'
+description: 'Wire model tool calls to the DOCX editor: one API route, one page. The assistant reads the document, adds comments, and suggests tracked changes in the browser.'
 category: 'Getting Started'
 seoTitle: 'AI DOCX editor quickstart'
 ---
 
-Two files to an editor with an AI assistant panel: the model reads the
-document, adds comments, and proposes tracked changes that the user accepts
-or rejects. Only chat messages and tool-call text reach your route; the file itself
-stays client-side.
+This page adds an assistant panel to a Next.js App Router page. The model can read document text through tools, add comments, and propose tracked changes that the user accepts or rejects. Only chat messages, tool names, arguments, and tool results reach your route; the DOCX file stays client-side.
 
 <Steps>
 <Step>
@@ -18,6 +15,8 @@ stays client-side.
 ```bash
 npm install @eigenpal/docx-editor-react @eigenpal/docx-editor-agents ai @ai-sdk/react @ai-sdk/openai
 ```
+
+Set `OPENAI_API_KEY` in the environment that runs your Next.js app, or swap `@ai-sdk/openai` for another AI SDK provider.
 
 </Step>
 <Step>
@@ -62,6 +61,7 @@ import dynamic from 'next/dynamic';
 import { useChat } from '@ai-sdk/react';
 import { DefaultChatTransport, lastAssistantMessageIsCompleteWithToolCalls } from 'ai';
 import { type DocxEditorRef } from '@eigenpal/docx-editor-react';
+import '@eigenpal/docx-editor-react/styles.css';
 import {
   AgentChatLog,
   AgentComposer,
@@ -79,6 +79,7 @@ const DocxEditor = dynamic(
 
 export default function Page() {
   const editorRef = useRef<DocxEditorRef>(null);
+  const [file, setFile] = useState<File | null>(null);
   const [input, setInput] = useState('');
 
   const { executeToolCall } = useDocxAgentTools({
@@ -116,33 +117,42 @@ export default function Page() {
   const loading = chat.status === 'streaming' || chat.status === 'submitted';
 
   return (
-    <DocxEditor
-      ref={editorRef}
-      // ...your usual editor props (documentBuffer, etc.)
-      agentPanel={{
-        title: 'Assistant',
-        render: () => (
-          <>
-            <AgentChatLog
-              messages={messages}
-              loading={loading}
-              error={chat.error?.message}
-              humanizeToolName={getToolDisplayName}
-            />
-            <AgentComposer
-              value={input}
-              onChange={setInput}
-              onSubmit={() => {
-                if (!input.trim() || loading) return;
-                chat.sendMessage({ text: input });
-                setInput('');
-              }}
-              disabled={loading}
-            />
-          </>
-        ),
-      }}
-    />
+    <div style={{ height: '100vh', display: 'flex', flexDirection: 'column' }}>
+      <div style={{ padding: 8 }}>
+        <input
+          type="file"
+          accept=".docx"
+          onChange={(event) => setFile(event.target.files?.[0] ?? null)}
+        />
+      </div>
+      <DocxEditor
+        ref={editorRef}
+        documentBuffer={file}
+        agentPanel={{
+          title: 'Assistant',
+          render: () => (
+            <>
+              <AgentChatLog
+                messages={messages}
+                loading={loading}
+                error={chat.error?.message}
+                humanizeToolName={getToolDisplayName}
+              />
+              <AgentComposer
+                value={input}
+                onChange={setInput}
+                onSubmit={() => {
+                  if (!input.trim() || loading) return;
+                  chat.sendMessage({ text: input });
+                  setInput('');
+                }}
+                disabled={loading}
+              />
+            </>
+          ),
+        }}
+      />
+    </div>
   );
 }
 ```
@@ -150,12 +160,9 @@ export default function Page() {
 </Step>
 </Steps>
 
-Ask it to "find every passive sentence and suggest a rewrite": the
-suggestions land as Word-native tracked changes, ready for accept or reject.
+Pick a `.docx`, then ask it to "find every passive sentence and suggest a rewrite." The suggested edits appear as tracked changes in the editor, where the user can accept or reject them.
 
-The [AI editing tutorial](/docs/1.x/agents/ai-editing) explains every moving
-part of this code (the tool loop traced step by step, selection context,
-restricting what the agent can do) and the Vue equivalent.
+The [AI editing tutorial](/docs/1.x/agents/ai-editing) explains the tool loop, selection context, tool filtering, and the Vue equivalent.
 
 ## Next steps
 

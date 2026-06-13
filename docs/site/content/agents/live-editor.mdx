@@ -5,11 +5,11 @@ category: 'Agents'
 seoTitle: 'Live editor bridge reference'
 ---
 
-Reference for wiring an agent to a running `<DocxEditor>`. For the end-to-end walkthrough, read the [AI editing tutorial](/docs/1.x/agents/ai-editing) first; this page documents the surface it builds on.
+Reference for wiring model tool calls to a running `<DocxEditor>`. For a complete walkthrough, read the [AI editing tutorial](/docs/1.x/agents/ai-editing) first; this page documents the APIs it uses.
 
 ## useDocxAgentTools (React)
 
-The full-featured hook from `@eigenpal/docx-editor-agents/react`. It owns the bridge to the editor and returns everything a chat integration needs.
+The main React hook from `@eigenpal/docx-editor-agents/react`. It creates the bridge to the editor and returns the tool schemas, executor, and context snapshot.
 
 ```tsx
 const { tools, executeToolCall, getContext } = useDocxAgentTools({
@@ -31,7 +31,7 @@ Returns:
 
 Behavior worth knowing:
 
-- `include` / `exclude` filter built-in tools both in the returned schemas and at execution time. A filtered tool call returns `Tool 'x' is not enabled.`, so a hallucinated name cannot bypass the policy. Custom tools always pass.
+- `include` / `exclude` filter built-in tools both in the returned schemas and at execution time. A filtered tool call returns `Tool 'x' is not enabled.` Custom tools are not filtered by these options.
 - A custom tool with a built-in's name replaces the built-in.
 - Pass a stable (memoized or module-level) `tools` object to avoid rebuilding schemas every render.
 - Tool calls before the editor mounts return `{ success: false, error: 'Editor not ready.' }`.
@@ -81,7 +81,7 @@ const result = executeToolCall('find_text', { query: 'liability' }, bridge);
 
 ## The agentPanel prop (React)
 
-`<DocxEditor agentPanel={...}>` mounts a right-hand panel with library-owned chrome (header, close button, drag-resize) and a toolbar toggle button. Three control patterns:
+`<DocxEditor agentPanel={...}>` mounts a right-hand panel with a header, close button, drag-resize handle, and toolbar toggle button. Three control patterns:
 
 - **Uncontrolled:** `agentPanel={{ render }}`. The toolbar and close buttons toggle it; width persists to localStorage.
 - **Controlled:** `agentPanel={{ render, open, onOpenChange }}`. You own open state.
@@ -104,11 +104,11 @@ const result = executeToolCall('find_text', { query: 'liability' }, bridge);
 />
 ```
 
-Panel chrome is intentionally not customizable beyond these options; everything inside `render` is yours. In Vue the `agentPanel` prop does not exist yet (React-only per the parity contract); mount the `AgentPanel` component from `@eigenpal/docx-editor-agents/vue` next to the editor instead.
+The panel shell is configurable through these options; render your own chat UI inside `render`. In Vue the `agentPanel` prop does not exist yet (React-only per the parity contract); mount the `AgentPanel` component from `@eigenpal/docx-editor-agents/vue` next to the editor instead.
 
-## Chat UI primitives
+## Chat UI components
 
-Optional, opinionated components for the inside of the panel. React: `@eigenpal/docx-editor-agents/react`. Vue: `@eigenpal/docx-editor-agents/vue`.
+Optional components for the inside of the panel. React: `@eigenpal/docx-editor-agents/react`. Vue: `@eigenpal/docx-editor-agents/vue`.
 
 | Component             | Purpose                                                                                                                                                                                    |
 | --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
@@ -118,7 +118,7 @@ Optional, opinionated components for the inside of the panel. React: `@eigenpal/
 | `AgentSuggestionChip` | Prompt-suggestion chip for empty states                                                                                                                                                    |
 | `AgentPanel`          | The panel shell itself, for hosts not using the `agentPanel` prop                                                                                                                          |
 
-If you drive the chat with the Vercel AI SDK, `toAgentMessages(chat.messages, chat.status)` from `@eigenpal/docx-editor-agents/ai-sdk/react` (or `/ai-sdk/vue`) converts `useChat`'s `UIMessage[]` into the `AgentMessage[]` shape these components render. Nothing forces these components: the panel accepts any node, so assistant-ui or your design system drop in.
+If you drive the chat with the Vercel AI SDK, `toAgentMessages(chat.messages, chat.status)` from `@eigenpal/docx-editor-agents/ai-sdk/react` (or `/ai-sdk/vue`) converts `useChat`'s `UIMessage[]` into the `AgentMessage[]` shape these components render. You can also render components from another chat UI library or your own design system.
 
 ## paraId anchoring
 
@@ -126,7 +126,7 @@ Every locate tool returns paragraphs tagged with `paraId`; every mutate tool add
 
 - The id is Word's own `w14:paraId` attribute, read from the file and preserved through save, so anchors stay valid across the whole edit session and across reloads.
 - A `ParaIdAllocatorExtension` runs in the editor and assigns fresh ids when paragraphs are created or split (Enter, paste). Concurrent typing while the agent loop runs does not desync anchors.
-- Paragraphs that arrive without a `paraId` (Word does not always emit them) are addressed by their ordinal index as a string. The ids the agent reads always resolve when written back.
+- Paragraphs that arrive without a `paraId` (Word does not always emit them) are addressed by their ordinal index as a string. Use the ids returned by locate tools when you call mutate tools.
 - Sub-paragraph anchoring uses `search`: an exact phrase that must occur exactly once in the paragraph. `find_text` returns the matched phrase precisely so it can be passed back as `search`.
 
 This is also why the tool surface serializes cleanly over JSON (and MCP): an anchor is a plain `{ paraId, search? }` value, not a live object like Office.js' `Range`.

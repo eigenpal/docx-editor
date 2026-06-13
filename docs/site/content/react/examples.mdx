@@ -138,7 +138,7 @@ Edits made in `'suggesting'` mode wrap in revision markup; the document owner ac
 
 ## Custom toolbar
 
-Hide the built-in toolbar and compose the primitives from `/ui`. `ToolbarButton` takes `active`, `onClick`, and children; drive both from the editor ref and `onSelectionChange`:
+Hide the built-in toolbar and compose controls from `/ui`. `ToolbarButton` takes `active`, `onClick`, and children; drive both from the editor ref and `onSelectionChange`:
 
 ```tsx
 import { useRef, useState } from 'react';
@@ -190,7 +190,7 @@ export function CustomChromeEditor({ buf }: { buf: ArrayBuffer }) {
 }
 ```
 
-Prefer the prebuilt strip? Keep `showToolbar` on and append your own controls with `toolbarExtra`, or compose the full `EditorToolbar` chrome; both are covered in [Toolbar customization](/docs/1.x/guides/toolbar).
+Prefer the prebuilt strip? Keep `showToolbar` on and append your own controls with `toolbarExtra`, or compose the full `EditorToolbar`; both are covered in [Toolbar customization](/docs/1.x/guides/toolbar).
 
 In 0.x the formatting buttons were called `FormattingBar`. They're now `Toolbar`. The old composite is now `EditorToolbar`. See [migration](/docs/1.x/migration#api-renames).
 

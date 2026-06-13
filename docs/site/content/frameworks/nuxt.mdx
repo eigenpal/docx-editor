@@ -5,7 +5,7 @@ category: 'Frameworks'
 seoTitle: 'Nuxt DOCX editor setup'
 ---
 
-By the end of this page you have a Nuxt app that opens a `.docx` from disk and edits it in the browser. Nuxt is the shortest setup of all the frameworks because the official module handles the SSR boundary and the stylesheet for you.
+By the end of this page you have a Nuxt app that opens a `.docx` from disk and edits it in the browser. The official module handles the SSR boundary and stylesheet registration.
 
 ## Install
 
@@ -22,7 +22,7 @@ export default defineNuxtConfig({
 });
 ```
 
-That is the whole integration. The module auto-imports an SSR-safe `<DocxEditor>` and injects the editor stylesheet. No manual import, no `<ClientOnly>` wrapper, no Vite config. Works on Nuxt 3 and 4.
+The module auto-imports an SSR-safe `<DocxEditor>` and injects the editor stylesheet. You do not need a manual component import, a `<ClientOnly>` wrapper, or Vite config. Works on Nuxt 3 and 4.
 
 ## Use the component
 
