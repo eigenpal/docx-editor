@@ -230,6 +230,27 @@ export interface PagedEditorRef {
    */
   scrollToPage(pageNumber: number): void;
   /**
+   * Scroll to the comment identified by `commentId` and flash a transient
+   * highlight over its range. Resolves the id → PM range via the live
+   * comment marks; returns `false` (not a throw, not a silent no-op) when
+   * the id no longer resolves so the caller can surface a "location no
+   * longer exists" affordance.
+   */
+  scrollToCommentId(commentId: number): boolean;
+  /**
+   * Scroll to the tracked change identified by `revisionId` and flash a
+   * transient highlight over its range. Resolves the id → PM range via the
+   * live tracked-change marks; returns `false` when the id no longer
+   * resolves (the change was accepted/rejected/deleted).
+   */
+  scrollToChangeId(revisionId: number): boolean;
+  /**
+   * Flash a transient highlight over the PM position range `[from, to]` by
+   * selecting it (the selection overlay paints the range) and scrolling it
+   * into view. No-op for a malformed range.
+   */
+  highlightRange(from: number, to: number): void;
+  /**
    * Look up the persistent hidden HF PM EditorView for a given HeaderFooter
    * instance. Returns null when none is mounted (no document, or `hf` is not
    * present in `Document.package.headers/footers`). Phase 2 of the HF

@@ -65,7 +65,7 @@
     }
   },
   "ref": {
-    "comment": "DocxEditorRef parity. React's DocxEditorRef declares every member directly. Vue's DocxEditorRef intersects EditorRefLike (from @eigenpal/docx-editor-agents/bridge) plus its own additions \u2014 so members inherited via EditorRefLike are NOT enumerated in Vue's snapshot, but ARE callable at runtime. The contract uses three buckets: `paired` (explicit on both sides), `pairedViaInheritance` (explicit on React, inherited via EditorRefLike on Vue), and `vueExclusive` (only on Vue's DocxEditorRef).",
+    "comment": "DocxEditorRef parity. React's DocxEditorRef declares every member directly. Vue's DocxEditorRef intersects EditorRefLike (from @eigenpal/docx-editor-agents/bridge) plus its own additions \u2014 so members inherited via EditorRefLike are NOT enumerated in Vue's snapshot, but ARE callable at runtime. The contract uses four buckets: `paired` (explicit on both sides), `pairedViaInheritance` (explicit on React, inherited via EditorRefLike on Vue), `deferredInVue` (React-only by design, Vue mirror deferred to a tracked follow-up — must NOT appear on Vue's snapshot), and `vueExclusive` (only on Vue's DocxEditorRef).",
     "paired": [
       "focus",
       "getAgent",
@@ -102,6 +102,11 @@
       "resolveComment": "Inherited via EditorRefLike. Identical signature on both adapters.",
       "scrollToParaId": "Inherited via EditorRefLike. Identical signature on both adapters.",
       "setParagraphStyle": "Inherited via EditorRefLike. Identical signature on both adapters."
+    },
+    "deferredInVue": {
+      "scrollToCommentId": "Bidirectional-anchor reveal (vscode-review-console, step 7). React-only in v1 — Vue mirror + upstream PR deferred to a tracked follow-up.",
+      "scrollToChangeId": "Bidirectional-anchor reveal (vscode-review-console, step 7). React-only in v1 — Vue mirror + upstream PR deferred to a tracked follow-up.",
+      "highlightRange": "Bidirectional-anchor transient highlight (vscode-review-console, step 7). React-only in v1 — Vue mirror + upstream PR deferred to a tracked follow-up."
     },
     "vueExclusive": {
       "destroy": "Vue's component-level imperative teardown. React's DocxEditorRef omits this because React handles unmount automatically; both adapters expose `destroy` via their `renderAsync()` return (DocxEditorHandle from core's EditorHandle base)."

@@ -331,6 +331,35 @@ export interface DocxEditorRef {
    * @example ref.current?.scrollToPosition(42)
    */
   scrollToPosition: (pmPos: number) => void;
+  /**
+   * Scroll the paginated view to the comment with the given id and flash a
+   * transient highlight over its anchored range. Resolves the id against the
+   * live comment marks at call time.
+   * @returns `false` when the id no longer resolves (the comment was deleted
+   *   or its anchored text removed between render and click), so the caller
+   *   can surface a "location no longer exists" affordance rather than
+   *   silently no-op'ing.
+   * @example ref.current?.scrollToCommentId(3)
+   */
+  scrollToCommentId: (commentId: number) => boolean;
+  /**
+   * Scroll the paginated view to the tracked change with the given Word
+   * revision `w:id` and flash a transient highlight over its range. Resolves
+   * the id against the live tracked-change marks at call time (matching
+   * coalesced revisions the way the changes sidebar does).
+   * @returns `false` when the id no longer resolves (the change was
+   *   accepted, rejected, or deleted between render and click).
+   * @example ref.current?.scrollToChangeId(42)
+   */
+  scrollToChangeId: (revisionId: number) => boolean;
+  /**
+   * Flash a transient highlight over the ProseMirror position range
+   * `[from, to]` by selecting it (the selection overlay paints the range)
+   * and scrolling its start into view. No-op for a malformed range or a
+   * `from` past the document end; `to` is clamped to the document size.
+   * @example ref.current?.highlightRange(10, 24)
+   */
+  highlightRange: (from: number, to: number) => void;
   /** Open print preview */
   openPrintPreview: () => void;
   /** Print the document directly */

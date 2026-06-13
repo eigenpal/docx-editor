@@ -170,6 +170,16 @@ export function useDocxEditorRefApi({
 
       scrollToParaId: (paraId) => pagedEditorRef.current?.scrollToParaId(paraId) ?? false,
 
+      scrollToCommentId: (commentId) =>
+        pagedEditorRef.current?.scrollToCommentId(commentId) ?? false,
+
+      scrollToChangeId: (revisionId) =>
+        pagedEditorRef.current?.scrollToChangeId(revisionId) ?? false,
+
+      highlightRange: (from, to) => {
+        pagedEditorRef.current?.highlightRange(from, to);
+      },
+
       findInDocument: (query, opts) =>
         findInDocumentCore(pagedEditorRef.current?.getView() ?? null, query, opts),
 

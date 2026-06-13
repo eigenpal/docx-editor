@@ -9,6 +9,8 @@ declare global {
       getLastTextblockParaId: () => string | null;
       scrollToParaId: (paraId: string) => boolean;
       scrollToPosition: (pmPos: number) => void;
+      getDocSize: () => number | null;
+      highlightRange: (from: number, to: number) => void;
       scrollToPage: (pageNumber: number) => void;
       getTotalPages: () => number;
       getCurrentPage: () => number;
