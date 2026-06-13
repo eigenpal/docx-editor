@@ -7,12 +7,18 @@
 import { EditorView } from 'prosemirror-view';
 
 // @public
+export function findChangeRange(view: EditorView | null, revisionId: number): PmRange | null;
+
+// @public
+export function findCommentRange(view: EditorView | null, commentId: number): PmRange | null;
+
+// @public
 export function findInDocument(view: EditorView | null, query: string, opts?: {
     caseSensitive?: boolean;
     limit?: number;
 }): FindInDocumentMatch[];
 
-// @public
+// @public (undocumented)
 export interface FindInDocumentMatch {
     // (undocumented)
     after: string;
@@ -42,6 +48,14 @@ export interface PageContent {
     }>;
     // (undocumented)
     text: string;
+}
+
+// @public
+export interface PmRange {
+    // (undocumented)
+    from: number;
+    // (undocumented)
+    to: number;
 }
 
 // @public (undocumented)

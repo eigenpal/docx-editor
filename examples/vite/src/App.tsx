@@ -225,6 +225,13 @@ export function App() {
       scrollToPosition: (pmPos: number) => {
         editorRef.current?.scrollToPosition(pmPos);
       },
+      getDocSize: () => {
+        const state = editorRef.current?.getEditorRef()?.getState?.();
+        return state?.doc.content.size ?? null;
+      },
+      highlightRange: (from: number, to: number) => {
+        editorRef.current?.highlightRange(from, to);
+      },
       scrollToPage: (pageNumber: number) => {
         editorRef.current?.scrollToPage(pageNumber);
       },

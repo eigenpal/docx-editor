@@ -173,6 +173,7 @@ export interface DocxEditorRef {
     } | null;
     getTotalPages: () => number;
     getZoom: () => number;
+    highlightRange: (from: number, to: number) => void;
     loadDocument: (doc: Document_2) => void;
     loadDocumentBuffer: (buffer: DocxInput) => Promise<void>;
     onContentChange: (listener: (document: Document_2) => void) => () => void;
@@ -194,6 +195,8 @@ export interface DocxEditorRef {
     save: (options?: {
         selective?: boolean;
     }) => Promise<ArrayBuffer | null>;
+    scrollToChangeId: (revisionId: number) => boolean;
+    scrollToCommentId: (commentId: number) => boolean;
     scrollToContentControl: (filter: ContentControlFilter) => boolean;
     scrollToPage: (pageNumber: number) => void;
     scrollToParaId: (paraId: string) => boolean;
