@@ -1,4 +1,5 @@
 import { useTranslation } from '../../i18n';
+import { Z_INDEX } from '../../styles/zIndex';
 import { OUTLINE_BUTTON_LEFT_OFFSET } from '../DocumentOutline';
 import { MaterialSymbol } from '../ui/Icons';
 
@@ -29,7 +30,7 @@ export function OutlineToggleButton({
         // button doesn't pin to the viewport and overlay the doc.
         left: OUTLINE_BUTTON_LEFT_OFFSET - scrollLeft,
         top: topPx,
-        zIndex: 50,
+        zIndex: Z_INDEX.outline,
         background: 'transparent',
         border: 'none',
         borderRadius: '50%',
