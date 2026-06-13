@@ -5,6 +5,10 @@
 ```ts
 
 import { EditorView } from 'prosemirror-view';
+import { Node as Node_2 } from 'prosemirror-model';
+
+// @public
+export function clampRangeToDoc(doc: Node_2, from: number, to: number): PmRange | null;
 
 // @public
 export function findChangeRange(view: EditorView | null, revisionId: number): PmRange | null;

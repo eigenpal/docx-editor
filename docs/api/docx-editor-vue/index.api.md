@@ -97,6 +97,9 @@ export type DocxEditorRef = EditorRefLike & {
     focus(): void;
     scrollToPage(pageNumber: number): void;
     scrollToPosition(pmPos: number): void;
+    scrollToCommentId(commentId: number): boolean;
+    scrollToChangeId(revisionId: number): boolean;
+    highlightRange(from: number, to: number): void;
     openPrintPreview(): void;
     print(): void;
     loadDocument(doc: Document_2): void;

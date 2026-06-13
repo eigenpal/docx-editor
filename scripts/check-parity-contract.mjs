@@ -122,7 +122,6 @@ const SECTION_SCHEMA = {
   ref: {
     paired: 'array',
     pairedViaInheritance: { type: 'object', optional: true },
-    deferredInVue: { type: 'object', optional: true },
     vueExclusive: 'object',
   },
 };
@@ -252,7 +251,6 @@ function main() {
   //  - vueExclusive: explicit on Vue only
   const refPaired = contract.ref.paired;
   const refInherited = Object.keys(contract.ref.pairedViaInheritance || {});
-  const refDeferred = Object.keys(contract.ref.deferredInVue || {});
   const refVueOnly = Object.keys(contract.ref.vueExclusive);
 
   for (const k of refPaired) {
@@ -267,27 +265,13 @@ function main() {
         `REF '${k}' is now explicit on Vue's DocxEditorRef — move from pairedViaInheritance to paired`
       );
   }
-  // Deferred ref members: React-only by design (Vue mirror deferred to a
-  // tracked follow-up). Must exist on React; must NOT exist on Vue's snapshot
-  // (if it did, Vue caught up — move to paired).
-  for (const k of refDeferred) {
-    if (!reactRef.has(k))
-      issues.push(`REF deferredInVue '${k}' missing from React (contract stale)`);
-    if (vueRef.has(k))
-      issues.push(`REF '${k}' has shipped in Vue — move from deferredInVue to paired`);
-  }
   for (const k of refVueOnly) {
     if (!vueRef.has(k)) issues.push(`REF vueExclusive '${k}' missing from Vue (contract stale)`);
     if (reactRef.has(k))
       issues.push(`REF '${k}' has shipped in React — move from vueExclusive to paired`);
   }
   for (const k of reactRef) {
-    if (
-      !refPaired.includes(k) &&
-      !refInherited.includes(k) &&
-      !refDeferred.includes(k) &&
-      !refVueOnly.includes(k)
-    ) {
+    if (!refPaired.includes(k) && !refInherited.includes(k) && !refVueOnly.includes(k)) {
       issues.push(`REF '${k}' in React is not declared in the parity contract`);
     }
   }
@@ -315,7 +299,6 @@ function main() {
   console.log(`  Vue-exclusive props:   ${vueOnly.length}`);
   console.log(`  Paired ref members:    ${refPaired.length}`);
   console.log(`  Inherited via EditorRefLike: ${refInherited.length}`);
-  console.log(`  Deferred in Vue refs:  ${refDeferred.length}`);
   console.log(`  Vue-exclusive refs:    ${refVueOnly.length}`);
 
   if (issues.length > 0) {
