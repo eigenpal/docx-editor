@@ -65,6 +65,7 @@ import {
 import { findBodyPmAnchor } from '@eigenpal/docx-editor-core/layout-bridge';
 import { findImageElement } from '@eigenpal/docx-editor-core/layout-painter';
 import { Z_INDEX } from '../styles/zIndex';
+import { computeImageOverlayRect } from '../composables/imageOverlayRect';
 import { useTranslation } from '../i18n';
 
 const { t } = useTranslation();
@@ -181,21 +182,24 @@ function updatePosition() {
 
   const parentRect = parent.getBoundingClientRect();
   const imageRect = imgEl.getBoundingClientRect();
-  const z = props.zoom;
 
-  // The overlay is `position: absolute` inside its offsetParent, which is the
-  // scroll container (`.docx-editor-vue__pages-viewport`). Absolutely-positioned
+  // The overlay is `position: absolute` inside its offsetParent, the scroll
+  // container (`.docx-editor-vue__pages-viewport`). Absolutely-positioned
   // children are placed relative to the *content* origin, so the scroll offset
-  // must be added back — otherwise the frame lands `scrollTop` px too high once
-  // the page has scrolled (e.g. after the image is pushed onto a later page and
-  // the user scrolls down to it). Mirrors the scroll handling the text-caret
-  // path in `useSelectionSync` already does.
-  overlayRect.value = {
-    left: (imageRect.left - parentRect.left + parent.scrollLeft) / z,
-    top: (imageRect.top - parentRect.top + parent.scrollTop) / z,
-    width: imageRect.width / z,
-    height: imageRect.height / z,
-  };
+  // is added back, and the inline-start scrollbar gutter (from
+  // `scrollbar-gutter: stable both-edges`) is subtracted — otherwise the frame
+  // lands `scrollTop` px too high after scrolling, or shifted right by the
+  // gutter width on platforms with classic scrollbars (issue #764). See
+  // `computeImageOverlayRect` for the geometry.
+  overlayRect.value = computeImageOverlayRect({
+    imageRect,
+    parentRect,
+    scrollLeft: parent.scrollLeft,
+    scrollTop: parent.scrollTop,
+    parentOffsetWidth: parent.offsetWidth,
+    parentClientWidth: parent.clientWidth,
+    zoom: props.zoom,
+  });
 }
 
 // The image's painted position can keep moving for a few frames after a
