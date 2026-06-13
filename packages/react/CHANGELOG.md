@@ -1,5 +1,30 @@
 # @eigenpal/docx-js-editor
 
+## 1.5.0
+
+### Minor Changes
+
+- 19a25eb: Add `scrollToCommentId`, `scrollToChangeId`, and `highlightRange` methods to `DocxEditorRef` on both the React and Vue adapters, for revealing a location in the editor. Each scrolls the comment, tracked change, or position range into view and selects it so the selection overlay highlights the spot. `scrollToCommentId` and `scrollToChangeId` return `false` when the id no longer resolves, so callers can surface a "location no longer exists" affordance instead of silently doing nothing.
+
+### Patch Changes
+
+- ab38192: Support clickable inline Word checkbox content controls
+- ca275f9: Fix the document outline toggle rendering above the title bar File menu. The outline button now uses the shared `Z_INDEX.outline` layer (40) instead of 50, and the toolbar shell is raised to `Z_INDEX.toolbar` (100) so title-bar dropdowns stay on top. Vue parity: outline toggle at 40, toolbar shell at 100.
+- Updated dependencies [7d02ec1]
+- Updated dependencies [04130ef]
+- Updated dependencies [ab38192]
+- Updated dependencies [5cdfa5c]
+- Updated dependencies [335ad6c]
+- Updated dependencies [c5a4b1e]
+- Updated dependencies [c4fd221]
+- Updated dependencies [ca005c5]
+- Updated dependencies [7d6daeb]
+- Updated dependencies [5cdfa5c]
+- Updated dependencies [44161e5]
+  - @eigenpal/docx-editor-core@1.5.0
+  - @eigenpal/docx-editor-agents@1.5.0
+  - @eigenpal/docx-editor-i18n@1.5.0
+
 ## 1.4.0
 
 ### Minor Changes
