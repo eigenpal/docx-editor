@@ -232,6 +232,10 @@ export function App() {
       highlightRange: (from: number, to: number) => {
         editorRef.current?.highlightRange(from, to);
       },
+      scrollToCommentId: (commentId: number) =>
+        editorRef.current?.scrollToCommentId(commentId) ?? false,
+      scrollToChangeId: (revisionId: number) =>
+        editorRef.current?.scrollToChangeId(revisionId) ?? false,
       scrollToPage: (pageNumber: number) => {
         editorRef.current?.scrollToPage(pageNumber);
       },

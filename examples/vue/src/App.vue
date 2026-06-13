@@ -280,6 +280,17 @@ onMounted(async () => {
         if (!view) return;
         view.dispatch(view.state.tr.setSelection(view.state.selection.constructor.near(view.state.doc.resolve(pmPos))));
       },
+      getDocSize: () => {
+        const state = (editorRef.value?.getEditorRef() as any)?.getState?.();
+        return state?.doc.content.size ?? null;
+      },
+      highlightRange: (from: number, to: number) => {
+        editorRef.value?.highlightRange(from, to);
+      },
+      scrollToCommentId: (commentId: number) =>
+        editorRef.value?.scrollToCommentId(commentId) ?? false,
+      scrollToChangeId: (revisionId: number) =>
+        editorRef.value?.scrollToChangeId(revisionId) ?? false,
       scrollToPage: (pageNumber: number) => {
         document
           .querySelector<HTMLElement>(`.paged-editor__page[data-page-number="${pageNumber}"]`)

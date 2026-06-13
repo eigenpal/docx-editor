@@ -133,6 +133,24 @@ export type DocxEditorRef = EditorRefLike & {
   scrollToPage(pageNumber: number): void;
   /** Scroll to a raw ProseMirror document position. */
   scrollToPosition(pmPos: number): void;
+  /**
+   * Scroll the comment with the given id into view and select its anchored
+   * range so the selection overlay highlights it. False when the id no longer
+   * resolves (the comment was deleted or its anchored text removed).
+   */
+  scrollToCommentId(commentId: number): boolean;
+  /**
+   * Scroll the tracked change with the given revision id into view and select
+   * its range so the selection overlay highlights it. False when the id no
+   * longer resolves (the change was accepted/rejected/deleted).
+   */
+  scrollToChangeId(revisionId: number): boolean;
+  /**
+   * Select the position range `[from, to]` so the selection overlay highlights
+   * it, and scroll its start into view. No-op for a malformed range or a
+   * `from` past the document end; `to` is clamped to the document size.
+   */
+  highlightRange(from: number, to: number): void;
   /** Open print preview / browser print. */
   openPrintPreview(): void;
   /** Print the document. */

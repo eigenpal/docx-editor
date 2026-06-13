@@ -230,24 +230,25 @@ export interface PagedEditorRef {
    */
   scrollToPage(pageNumber: number): void;
   /**
-   * Scroll to the comment identified by `commentId` and flash a transient
-   * highlight over its range. Resolves the id → PM range via the live
-   * comment marks; returns `false` (not a throw, not a silent no-op) when
-   * the id no longer resolves so the caller can surface a "location no
+   * Scroll to the comment identified by `commentId` and select its range so
+   * the selection overlay highlights it. Resolves the id → PM range via the
+   * live comment marks; returns `false` (not a throw, not a silent no-op)
+   * when the id no longer resolves so the caller can surface a "location no
    * longer exists" affordance.
    */
   scrollToCommentId(commentId: number): boolean;
   /**
-   * Scroll to the tracked change identified by `revisionId` and flash a
-   * transient highlight over its range. Resolves the id → PM range via the
-   * live tracked-change marks; returns `false` when the id no longer
+   * Scroll to the tracked change identified by `revisionId` and select its
+   * range so the selection overlay highlights it. Resolves the id → PM range
+   * via the live tracked-change marks; returns `false` when the id no longer
    * resolves (the change was accepted/rejected/deleted).
    */
   scrollToChangeId(revisionId: number): boolean;
   /**
-   * Flash a transient highlight over the PM position range `[from, to]` by
-   * selecting it (the selection overlay paints the range) and scrolling it
-   * into view. No-op for a malformed range.
+   * Select the PM position range `[from, to]` so the selection overlay
+   * highlights it, and scroll its start into view. No-op for a malformed
+   * range or a `from` past the document end; `to` is clamped to the document
+   * size (raw caller positions, so out-of-range must not throw).
    */
   highlightRange(from: number, to: number): void;
   /**

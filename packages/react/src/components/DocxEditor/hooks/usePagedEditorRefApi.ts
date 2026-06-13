@@ -18,7 +18,11 @@ import type { EditorView } from 'prosemirror-view';
 
 import type { Layout } from '@eigenpal/docx-editor-core/layout-engine';
 import type { Document, HeaderFooter } from '@eigenpal/docx-editor-core/types/document';
-import { findCommentRange, findChangeRange } from '@eigenpal/docx-editor-core/prosemirror/queries';
+import {
+  findCommentRange,
+  findChangeRange,
+  clampRangeToDoc,
+} from '@eigenpal/docx-editor-core/prosemirror/queries';
 
 import type { OffscreenEditorHostRef } from '../OffscreenEditorHost';
 import type { HiddenHeaderFooterPMsRef } from '../HiddenHeaderFooterPMs';
@@ -99,21 +103,18 @@ function buildRefApi(inputs: RefApiInputs): PagedEditorRef {
     scrollToParaId: scrollToParaIdImpl,
     scrollToPage: scrollToPageImpl,
     highlightRange: (from: number, to: number): void => {
-      if (!Number.isInteger(from) || !Number.isInteger(to) || from < 0 || to < from) return;
-      // Clamp to the document size before selecting. `highlightRange` takes raw
-      // caller positions, so an out-of-range `to` would otherwise make
-      // setSelection -> doc.resolve() throw a RangeError instead of no-op'ing
-      // as the docstring promises.
       const view = hiddenPMRef.current?.getView() ?? null;
       if (!view) return;
-      const max = view.state.doc.content.size;
-      if (from > max) return;
-      const clampedTo = Math.min(to, max);
-      // Reuse the selection-overlay machinery: selecting the range makes the
-      // overlay paint highlight rects over it. Scroll the start into view via
-      // the existing paraId-scroll path (instant, virtualization-safe).
-      hiddenPMRef.current?.setSelection(from, clampedTo);
-      scrollToPositionImpl(from, true);
+      // `highlightRange` takes raw caller positions; clampRangeToDoc returns
+      // null for a malformed/out-of-range request (no-op) and clamps `to` to
+      // the document size so setSelection -> doc.resolve() can't throw.
+      const range = clampRangeToDoc(view.state.doc, from, to);
+      if (!range) return;
+      // Selecting the range makes the selection overlay paint highlight rects
+      // over it. Scroll the start into view via the existing paraId-scroll
+      // path (instant, virtualization-safe).
+      hiddenPMRef.current?.setSelection(range.from, range.to);
+      scrollToPositionImpl(range.from, true);
     },
     scrollToCommentId: (commentId: number): boolean => {
       const view = hiddenPMRef.current?.getView() ?? null;

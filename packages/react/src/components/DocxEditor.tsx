@@ -332,9 +332,9 @@ export interface DocxEditorRef {
    */
   scrollToPosition: (pmPos: number) => void;
   /**
-   * Scroll the paginated view to the comment with the given id and flash a
-   * transient highlight over its anchored range. Resolves the id against the
-   * live comment marks at call time.
+   * Scroll the paginated view to the comment with the given id and select its
+   * anchored range so the selection overlay highlights it. Resolves the id
+   * against the live comment marks at call time.
    * @returns `false` when the id no longer resolves (the comment was deleted
    *   or its anchored text removed between render and click), so the caller
    *   can surface a "location no longer exists" affordance rather than
@@ -344,19 +344,20 @@ export interface DocxEditorRef {
   scrollToCommentId: (commentId: number) => boolean;
   /**
    * Scroll the paginated view to the tracked change with the given Word
-   * revision `w:id` and flash a transient highlight over its range. Resolves
-   * the id against the live tracked-change marks at call time (matching
-   * coalesced revisions the way the changes sidebar does).
+   * revision `w:id` and select its range so the selection overlay highlights
+   * it. Resolves the id against the live tracked-change marks at call time
+   * (matching coalesced revisions the way the changes sidebar does).
    * @returns `false` when the id no longer resolves (the change was
    *   accepted, rejected, or deleted between render and click).
    * @example ref.current?.scrollToChangeId(42)
    */
   scrollToChangeId: (revisionId: number) => boolean;
   /**
-   * Flash a transient highlight over the ProseMirror position range
-   * `[from, to]` by selecting it (the selection overlay paints the range)
-   * and scrolling its start into view. No-op for a malformed range or a
-   * `from` past the document end; `to` is clamped to the document size.
+   * Select the ProseMirror position range `[from, to]` so the selection
+   * overlay highlights it, and scroll its start into view. The selection
+   * persists until it next changes (there is no auto-clearing flash). No-op
+   * for a malformed range or a `from` past the document end; `to` is clamped
+   * to the document size.
    * @example ref.current?.highlightRange(10, 24)
    */
   highlightRange: (from: number, to: number) => void;
