@@ -89,8 +89,8 @@ export function createReviewerBridge(reviewer: DocxReviewer): EditorBridge;
 // @public
 export class DocxReviewer {
     constructor(document: Document_2, author?: string, originalBuffer?: ArrayBuffer);
-    acceptAll(): number;
-    acceptChange(id: number): void;
+    acceptAll(opts?: AcceptChangesOptions): number;
+    acceptChange(target: number | ReviewChange): void;
     addComment(paragraphIndex: number, text: string): number;
     addComment(options: AddCommentOptions): number;
     applyReview(ops: BatchReviewOptions): BatchResult;
@@ -104,8 +104,8 @@ export class DocxReviewer {
     proposeInsertion(options: ProposeInsertionOptions): void;
     // @deprecated (undocumented)
     proposeReplacement(options: ProposeReplacementOptions): void;
-    rejectAll(): number;
-    rejectChange(id: number): void;
+    rejectAll(opts?: AcceptChangesOptions): number;
+    rejectChange(target: number | ReviewChange): void;
     removeComment(commentId: number): void;
     replace(paragraphIndex: number, search: string, replaceWith: string): void;
     replace(options: ProposeReplacementOptions): void;
@@ -137,11 +137,6 @@ export function getToolSchemas(): {
         parameters: Record<string, unknown>;
     };
 }[];
-
-// @public
-export class NoteChangeNotEditableError extends Error {
-    constructor(id: number, noteType: 'footnote' | 'endnote', noteId: number);
-}
 
 // @public (undocumented)
 export interface ReviewChange {
