@@ -47,8 +47,10 @@ import type { OffscreenEditorHostRef } from '../OffscreenEditorHost';
 import type { ImageSelectionInfo } from '../overlays/ImageSelectionOverlay';
 import { useDragAutoScroll } from '../../../hooks/useDragAutoScroll';
 import { useTableResizeState } from './useTableResizeState';
-
-const CELL_SELECT_OVERFLOW_PX = 5;
+import {
+  createCellDragTracker,
+  findCellPosFromPmPos as coreFindCellPosFromPmPos,
+} from '@eigenpal/docx-editor-core/prosemirror/cellDragSelection';
 
 interface TableInsertButtonState {
   type: 'row' | 'column';
@@ -204,11 +206,8 @@ export function usePagesPointer(opts: UsePagesPointerOptions): UsePagesPointerRe
   // colWidth changes at out-of-range positions).
   const tableResize = useTableResizeState({ hiddenPMRef, getActiveHfView: getHfView });
 
-  // Cell selection drag state
-  const isCellDraggingRef = useRef(false);
-  const cellDragAnchorPosRef = useRef<number | null>(null);
-  const cellDragLastPmPosRef = useRef<number | null>(null);
-  const cellDragOverflowXRef = useRef<number | null>(null);
+  // Cell-drag selection state machine (shared with Vue via core).
+  const cellDragRef = useRef(createCellDragTracker());
 
   // Table insert button state + delayed-hide timer
   const [tableInsertButton, setTableInsertButton] = useState<TableInsertButtonState | null>(null);
@@ -359,21 +358,8 @@ export function usePagesPointer(opts: UsePagesPointerOptions): UsePagesPointerRe
 
   const findCellPosFromPmPos = useCallback(
     (pmPos: number): number | null => {
-      const surface = activeSurface();
-      const view = surface?.getView();
-      if (!view) return null;
-      try {
-        const $pos = view.state.doc.resolve(pmPos);
-        for (let d = $pos.depth; d > 0; d--) {
-          const node = $pos.node(d);
-          if (node.type.name === 'tableCell' || node.type.name === 'tableHeader') {
-            return $pos.before(d);
-          }
-        }
-      } catch {
-        // Stale PM position.
-      }
-      return null;
+      const view = activeSurface()?.getView();
+      return view ? coreFindCellPosFromPmPos(view, pmPos) : null;
     },
     [activeSurface]
   );
@@ -463,18 +449,13 @@ export function usePagesPointer(opts: UsePagesPointerOptions): UsePagesPointerRe
       const pmPos = getPositionFromMouse(e.clientX, e.clientY);
       if (pmPos !== null) {
         // Track for potential text-drag → cell-drag promotion.
-        const cellPos = findCellPosFromPmPos(pmPos);
-        cellDragAnchorPosRef.current = cellPos;
-        isCellDraggingRef.current = false;
-        cellDragLastPmPosRef.current = null;
-        cellDragOverflowXRef.current = null;
+        cellDragRef.current.begin(findCellPosFromPmPos(pmPos));
         isDraggingRef.current = true;
         dragAnchorRef.current = pmPos;
         surface.setSelection(pmPos);
       } else {
         // Click outside content — move cursor to end of active doc.
-        cellDragAnchorPosRef.current = null;
-        isCellDraggingRef.current = false;
+        cellDragRef.current.begin(null);
         const view = surface.getView();
         if (view) {
           const endPos = Math.max(0, view.state.doc.content.size - 1);
@@ -530,44 +511,10 @@ export function usePagesPointer(opts: UsePagesPointerOptions): UsePagesPointerRe
       const pmPos = getPositionFromMouse(e.clientX, e.clientY);
       if (pmPos === null) return;
 
-      // Drag started inside a table cell — promote to CellSelection when the
-      // drag crosses the cell boundary, otherwise stay in text selection.
-      if (cellDragAnchorPosRef.current !== null) {
-        if (isCellDraggingRef.current) {
-          const currentCellPos = findCellPosFromPmPos(pmPos);
-          if (currentCellPos !== null) {
-            surface.setCellSelection(cellDragAnchorPosRef.current, currentCellPos);
-            return;
-          }
-        }
-
-        const currentCellPos = findCellPosFromPmPos(pmPos);
-        if (currentCellPos !== null && currentCellPos !== cellDragAnchorPosRef.current) {
-          isCellDraggingRef.current = true;
-          surface.setCellSelection(cellDragAnchorPosRef.current, currentCellPos);
-          cellDragOverflowXRef.current = null;
-          return;
-        }
-
-        // Text selection has maxed out within the cell: if pmPos stops changing
-        // while the mouse keeps moving, the user has dragged past content. Once
-        // the overflow threshold is reached, promote to a full-cell selection.
-        if (cellDragLastPmPosRef.current !== null && pmPos === cellDragLastPmPosRef.current) {
-          if (cellDragOverflowXRef.current === null) {
-            cellDragOverflowXRef.current = e.clientX;
-          } else if (
-            Math.abs(e.clientX - cellDragOverflowXRef.current) >= CELL_SELECT_OVERFLOW_PX
-          ) {
-            isCellDraggingRef.current = true;
-            surface.setCellSelection(cellDragAnchorPosRef.current, cellDragAnchorPosRef.current);
-            cellDragOverflowXRef.current = null;
-            return;
-          }
-        } else {
-          cellDragOverflowXRef.current = null;
-          cellDragLastPmPosRef.current = pmPos;
-        }
-      }
+      // A drag that crosses cell boundaries is promoted to a CellSelection;
+      // when it handles the move, skip the text-selection update.
+      const view = surface.getView();
+      if (view && cellDragRef.current.update(view, pmPos, e.clientX)) return;
 
       // Regular text-selection drag (outside tables, or inside a single cell).
       const anchor = dragAnchorRef.current;
@@ -588,9 +535,7 @@ export function usePagesPointer(opts: UsePagesPointerOptions): UsePagesPointerRe
     if (tableResize.tryCommit()) return;
 
     isDraggingRef.current = false;
-    isCellDraggingRef.current = false;
-    cellDragLastPmPosRef.current = null;
-    cellDragOverflowXRef.current = null;
+    cellDragRef.current.end();
     stopDragAutoScroll();
     // Keep dragAnchorRef for potential shift-click extension.
   }, [stopDragAutoScroll, tableResize]);
@@ -613,7 +558,7 @@ export function usePagesPointer(opts: UsePagesPointerOptions): UsePagesPointerRe
       if (
         readOnly ||
         isDraggingRef.current ||
-        isCellDraggingRef.current ||
+        cellDragRef.current.isCellDragging ||
         tableResize.isAnyResizeActive()
       )
         return;
