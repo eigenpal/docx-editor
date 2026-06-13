@@ -153,7 +153,11 @@
      whether the scrollbar is currently visible or not — without this,
      the page nudges horizontally when content grows past one screen
      and the centered horizontal ruler ends up offset relative to the
-     page on first paint. `both-edges` keeps the centering symmetric. */
+     page on first paint. `both-edges` keeps the centering symmetric.
+     NOTE: ImageSelectionOverlay's `computeImageOverlayRect` subtracts the
+     inline-start gutter as half of `offsetWidth - clientWidth`, which assumes
+     `both-edges`. If this ever changes to single-edge `stable`, update that
+     math too (issue #764). */
   scrollbar-gutter: stable both-edges;
   /* Breathing room under the last page so it isn't flush against the
      scroll bottom. */
