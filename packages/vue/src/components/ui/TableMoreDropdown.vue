@@ -418,14 +418,14 @@ function applyDirection(direction: string | null) {
   border: none;
   border-radius: 6px;
   background: transparent;
-  color: #64748b;
+  color: var(--doc-text-muted);
   cursor: pointer;
 }
 .docx-tmore__btn:hover:not(:disabled) {
-  background: rgba(241, 245, 249, 0.8);
+  background: var(--doc-bg-hover);
 }
 .docx-tmore__btn--open {
-  background: #f1f5f9;
+  background: var(--doc-bg-hover);
 }
 .docx-tmore__panel {
   min-width: 220px;
@@ -439,7 +439,7 @@ function applyDirection(direction: string | null) {
   gap: 10px;
   padding: 7px 14px;
   font-size: 13px;
-  color: #374151;
+  color: var(--doc-text-muted);
   cursor: pointer;
   border: none;
   background: transparent;
@@ -447,27 +447,27 @@ function applyDirection(direction: string | null) {
   text-align: left;
 }
 .docx-tmore__item:hover:not(:disabled) {
-  background: #f3f4f6;
+  background: var(--doc-bg-hover);
 }
 .docx-tmore__item:disabled {
   opacity: 0.4;
   cursor: not-allowed;
 }
 .docx-tmore__item--danger:not(:disabled) {
-  color: #dc2626;
+  color: var(--doc-error);
 }
 .docx-tmore__grow {
   flex: 1;
 }
 .docx-tmore__separator {
   height: 1px;
-  background: #e5e7eb;
+  background: var(--doc-border);
   margin: 4px 0;
 }
 .docx-tmore__section-label {
   padding: 6px 14px 2px;
   font-size: 11px;
-  color: #9ca3af;
+  color: var(--doc-text-subtle);
   font-weight: 500;
 }
 .docx-tmore__icon-row {
@@ -481,24 +481,24 @@ function applyDirection(direction: string | null) {
   justify-content: center;
   width: 32px;
   height: 28px;
-  border: 1px solid #d1d5db;
+  border: 1px solid var(--doc-border-dark);
   border-radius: 4px;
   background: transparent;
-  color: #374151;
+  color: var(--doc-text-muted);
   cursor: pointer;
 }
 .docx-tmore__icon-btn:hover {
-  background: #f3f4f6;
+  background: var(--doc-bg-hover);
 }
 .docx-tmore__icon-btn--active {
-  background: #eff6ff;
-  border-color: #2563eb;
-  color: #2563eb;
+  background: var(--doc-primary-light);
+  border-color: var(--doc-primary);
+  color: var(--doc-primary);
 }
 .docx-tmore__sub {
-  background: #f9fafb;
-  border-top: 1px solid #e5e7eb;
-  border-bottom: 1px solid #e5e7eb;
+  background: var(--doc-bg);
+  border-top: 1px solid var(--doc-border);
+  border-bottom: 1px solid var(--doc-border);
   padding: 8px 14px;
 }
 .docx-tmore__sub--list {
@@ -510,14 +510,14 @@ function applyDirection(direction: string | null) {
   width: 100%;
   padding: 6px 14px;
   font-size: 13px;
-  color: #374151;
+  color: var(--doc-text-muted);
   border: none;
   background: transparent;
   text-align: left;
   cursor: pointer;
 }
 .docx-tmore__sub-item:hover {
-  background: #f3f4f6;
+  background: var(--doc-bg-hover);
 }
 .docx-tmore__margin-grid {
   display: grid;
@@ -537,33 +537,33 @@ function applyDirection(direction: string | null) {
 .docx-tmore__field-label {
   width: 42px;
   text-transform: capitalize;
-  color: #6b7280;
+  color: var(--doc-text-muted);
 }
 .docx-tmore__input,
 .docx-tmore__select {
   flex: 1;
   min-width: 0;
   padding: 2px 4px;
-  border: 1px solid #d1d5db;
+  border: 1px solid var(--doc-border-dark);
   border-radius: 3px;
   font-size: 12px;
 }
 .docx-tmore__unit {
   font-size: 10px;
-  color: #9ca3af;
+  color: var(--doc-text-subtle);
 }
 .docx-tmore__apply {
   margin-top: 6px;
   width: 100%;
   padding: 4px 12px;
   font-size: 12px;
-  border: 1px solid #2563eb;
+  border: 1px solid var(--doc-primary);
   border-radius: 4px;
-  background: #2563eb;
-  color: #fff;
+  background: var(--doc-primary);
+  color: var(--doc-on-primary);
   cursor: pointer;
 }
 .docx-tmore__apply:hover {
-  background: #1d4ed8;
+  background: var(--doc-primary-hover);
 }
 </style>

@@ -70,10 +70,10 @@ function onChange(e: Event) {
   height: 32px;
   min-width: 70px;
   font-size: 14px;
-  border: 1px solid #d1d5db;
+  border: 1px solid var(--doc-border-dark);
   border-radius: 6px;
   padding: 0 6px;
-  background: #fff;
+  background: var(--doc-surface);
   cursor: pointer;
 }
 .docx-zoom-control--compact {

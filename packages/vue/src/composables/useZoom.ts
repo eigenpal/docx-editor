@@ -8,10 +8,12 @@
 
 import { ref, computed, onMounted, onBeforeUnmount, type Ref, type ComputedRef } from 'vue';
 
-const MIN_ZOOM = 0.25;
-const MAX_ZOOM = 4.0;
+// Range + presets match React (Toolbar.tsx minZoom=0.5/maxZoom=2 +
+// ZoomControl DEFAULT_ZOOM_LEVELS) so both adapters offer the same zoom levels.
+const MIN_ZOOM = 0.5;
+const MAX_ZOOM = 2.0;
 const ZOOM_STEP = 0.1;
-const ZOOM_PRESETS = [0.25, 0.5, 0.75, 1.0, 1.25, 1.5, 2.0, 3.0, 4.0];
+const ZOOM_PRESETS = [0.5, 0.75, 1.0, 1.25, 1.5, 2.0];
 
 export interface UseZoomReturn {
   zoom: Ref<number>;

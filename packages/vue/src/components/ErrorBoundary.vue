@@ -117,13 +117,13 @@ defineExpose({ addToast, dismissToast });
   gap: 8px;
   padding: 10px 14px;
   border-radius: 6px;
-  box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+  box-shadow: 0 4px 12px var(--doc-shadow);
   font-size: 13px;
   line-height: 1.4;
 }
-.error-toast--error { background: #fef2f2; color: #991b1b; border: 1px solid #fecaca; }
-.error-toast--warning { background: #fffbeb; color: #92400e; border: 1px solid #fde68a; }
-.error-toast--info { background: #eff6ff; color: #1e40af; border: 1px solid #bfdbfe; }
+.error-toast--error { background: var(--doc-error-bg); color: var(--doc-error); border: 1px solid var(--doc-error); }
+.error-toast--warning { background: var(--doc-warning-bg); color: var(--doc-warning-text); border: 1px solid var(--doc-warning); }
+.error-toast--info { background: var(--doc-primary-light); color: var(--doc-primary); border: 1px solid var(--doc-primary); }
 .error-toast__icon { flex-shrink: 0; font-size: 14px; }
 .error-toast__message { flex: 1; }
 .error-toast__close {

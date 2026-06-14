@@ -118,15 +118,15 @@ function onItemClick(item: MenuItem) {
   cursor: pointer;
   font-size: 13px;
   font-weight: 400;
-  color: #374151;
+  color: var(--doc-text);
   white-space: nowrap;
   height: 28px;
 }
 .docx-menu-dropdown__trigger:hover {
-  background: #f3f4f6;
+  background: var(--doc-bg-hover);
 }
 .docx-menu-dropdown__trigger--open {
-  background: #f3f4f6;
+  background: var(--doc-bg-hover);
 }
 .docx-menu-dropdown__menu {
   min-width: 200px;
@@ -144,13 +144,13 @@ function onItemClick(item: MenuItem) {
   background: transparent;
   cursor: pointer;
   font-size: 13px;
-  color: #374151;
+  color: var(--doc-text);
   width: 100%;
   text-align: left;
   white-space: nowrap;
 }
 .docx-menu-dropdown__item:hover:not(.docx-menu-dropdown__item--disabled) {
-  background: #f3f4f6;
+  background: var(--doc-bg-hover);
 }
 .docx-menu-dropdown__item--disabled {
   opacity: 0.4;
@@ -161,14 +161,13 @@ function onItemClick(item: MenuItem) {
 }
 .docx-menu-dropdown__shortcut {
   margin-left: auto;
-  font-size: 11px;
-  color: #9ca3af;
-  font-family: monospace;
+  font-size: 12px;
+  color: var(--doc-text-muted);
 }
 .docx-menu-dropdown__chevron {
   margin-left: auto;
   display: inline-flex;
-  color: #9ca3af;
+  color: var(--doc-text-subtle);
 }
 .docx-menu-dropdown__submenu {
   /* Flush against the item (no margin) so the cursor never crosses a gap
@@ -176,16 +175,16 @@ function onItemClick(item: MenuItem) {
   position: absolute;
   left: 100%;
   top: -4px;
-  background: #fff;
-  border: 1px solid #d1d5db;
+  background: var(--doc-surface);
+  border: 1px solid var(--doc-border);
   border-radius: 6px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+  box-shadow: 0 4px 12px var(--doc-shadow);
   padding: 8px;
   z-index: 1;
 }
 .docx-menu-dropdown__separator {
   height: 1px;
-  background: #e5e7eb;
+  background: var(--doc-border);
   margin: 4px 0;
 }
 </style>

@@ -127,10 +127,10 @@ const MENU_ITEMS: MenuItem[] = [
 
 const baseDropdownStyles: CSSProperties = {
   position: 'fixed',
-  backgroundColor: 'white',
+  backgroundColor: 'var(--doc-surface)',
   border: '1px solid var(--doc-border)',
   borderRadius: 8,
-  boxShadow: '0 4px 16px rgba(0, 0, 0, 0.12)',
+  boxShadow: '0 4px 16px var(--doc-shadow)',
   padding: '4px 0',
   zIndex: 10000,
   minWidth: 220,
@@ -261,7 +261,7 @@ function CellMarginsRow({ onAction }: { onAction: (action: TableAction) => void 
       {isExpanded && (
         <div
           style={{
-            backgroundColor: 'var(--doc-bg-muted)',
+            backgroundColor: 'var(--doc-bg-hover)',
             borderTop: '1px solid var(--doc-border)',
             borderBottom: '1px solid var(--doc-border)',
             padding: '8px 12px',
@@ -307,7 +307,7 @@ function CellMarginsRow({ onAction }: { onAction: (action: TableAction) => void 
               border: '1px solid var(--doc-border)',
               borderRadius: 4,
               backgroundColor: 'var(--doc-primary)',
-              color: 'white',
+              color: 'var(--doc-on-primary)',
               cursor: 'pointer',
               width: '100%',
             }}
@@ -362,7 +362,7 @@ function TextDirectionRow({ onAction }: { onAction: (action: TableAction) => voi
       {isExpanded && (
         <div
           style={{
-            backgroundColor: 'var(--doc-bg-muted)',
+            backgroundColor: 'var(--doc-bg-hover)',
             borderTop: '1px solid var(--doc-border)',
             borderBottom: '1px solid var(--doc-border)',
             padding: '4px 0',
@@ -472,7 +472,7 @@ function RowHeightRow({ onAction }: { onAction: (action: TableAction) => void })
       {isExpanded && (
         <div
           style={{
-            backgroundColor: 'var(--doc-bg-muted)',
+            backgroundColor: 'var(--doc-bg-hover)',
             borderTop: '1px solid var(--doc-border)',
             borderBottom: '1px solid var(--doc-border)',
             padding: '8px 12px',
@@ -530,7 +530,7 @@ function RowHeightRow({ onAction }: { onAction: (action: TableAction) => void })
               border: '1px solid var(--doc-border)',
               borderRadius: 4,
               backgroundColor: 'var(--doc-primary)',
-              color: 'white',
+              color: 'var(--doc-on-primary)',
               cursor: 'pointer',
               width: '100%',
             }}
@@ -781,8 +781,8 @@ export function TableOptionsDropdown({
       variant="ghost"
       size="icon-sm"
       className={cn(
-        'text-slate-500 hover:text-slate-900 hover:bg-slate-100/80',
-        isOpen && 'bg-slate-100',
+        'text-muted-foreground hover:text-foreground hover:bg-muted/80',
+        isOpen && 'bg-muted',
         disabled && 'opacity-30 cursor-not-allowed',
         className
       )}
@@ -847,7 +847,7 @@ export function TableOptionsDropdown({
                   <MaterialSymbol
                     name={item.icon}
                     size={18}
-                    className={item.danger && !isDisabled ? 'text-red-600' : ''}
+                    className={item.danger && !isDisabled ? 'text-destructive' : ''}
                   />
                   <span style={{ flex: 1 }}>{t(item.labelKey)}</span>
                   {item.shortcut && (

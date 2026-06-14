@@ -81,15 +81,15 @@ function submitAndClose() {
   box-sizing: border-box;
 }
 .reply-input__field--inactive {
-  border: 1px solid #dadce0;
-  color: #80868b;
+  border: 1px solid var(--doc-border-light);
+  color: var(--doc-text-subtle);
   cursor: text;
-  background: #fff;
+  background: var(--doc-surface);
 }
 .reply-input__field--active {
-  border: 1px solid #1a73e8;
-  color: #202124;
-  background: #fff;
+  border: 1px solid var(--doc-primary);
+  color: var(--doc-text);
+  background: var(--doc-surface);
 }
 .reply-input__actions {
   display: flex;
@@ -102,7 +102,7 @@ function submitAndClose() {
   font-size: 14px;
   border: none;
   background: none;
-  color: #1a73e8;
+  color: var(--doc-primary);
   cursor: pointer;
   font-weight: 500;
   font-family: inherit;
@@ -112,15 +112,15 @@ function submitAndClose() {
   font-size: 14px;
   border: none;
   border-radius: 20px;
-  background: #f1f3f4;
-  color: #80868b;
+  background: var(--doc-bg-hover);
+  color: var(--doc-text-subtle);
   cursor: default;
   font-weight: 500;
   font-family: inherit;
 }
 .reply-input__submit--active {
-  background: #1a73e8;
-  color: #fff;
+  background: var(--doc-primary);
+  color: var(--doc-on-primary);
   cursor: pointer;
 }
 </style>

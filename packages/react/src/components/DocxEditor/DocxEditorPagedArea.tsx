@@ -447,26 +447,26 @@ export function DocxEditorPagedArea({
               width: 28,
               height: 28,
               borderRadius: 6,
-              border: '1px solid rgba(26, 115, 232, 0.3)',
-              backgroundColor: '#fff',
-              color: '#1a73e8',
+              border: '1px solid var(--doc-focus-ring)',
+              backgroundColor: 'var(--doc-surface)',
+              color: 'var(--doc-primary)',
               cursor: 'pointer',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              boxShadow: '0 1px 3px rgba(60,64,67,0.2)',
+              boxShadow: '0 1px 3px var(--doc-shadow)',
               transition: 'background-color 0.15s ease, box-shadow 0.15s ease',
             }}
             onMouseOver={(e) => {
               (e.currentTarget as HTMLButtonElement).style.backgroundColor =
-                'rgba(26, 115, 232, 0.08)';
+                'var(--doc-primary-light)';
               (e.currentTarget as HTMLButtonElement).style.boxShadow =
-                '0 1px 4px rgba(26, 115, 232, 0.3)';
+                '0 1px 4px var(--doc-focus-ring)';
             }}
             onMouseOut={(e) => {
-              (e.currentTarget as HTMLButtonElement).style.backgroundColor = '#fff';
+              (e.currentTarget as HTMLButtonElement).style.backgroundColor = 'var(--doc-surface)';
               (e.currentTarget as HTMLButtonElement).style.boxShadow =
-                '0 1px 3px rgba(60,64,67,0.2)';
+                '0 1px 3px var(--doc-shadow)';
             }}
           >
             <MaterialSymbol name="add_comment" size={16} />
@@ -510,7 +510,6 @@ export function DocxEditorPagedArea({
                       animation: 'hf-caret-blink 1.06s steps(1) infinite',
                     }}
                   />
-                  <style>{`@keyframes hf-caret-blink { 0%,49%{opacity:1} 50%,100%{opacity:0} }`}</style>
                 </>
               )}
               {hfSelectionGeometry.map((r, i) => {

@@ -151,9 +151,9 @@ const DEFAULT_MARGIN_TWIPS = 1440;
 const TWIPS_PER_INCH = 1440;
 const TWIPS_PER_CM = 567;
 const RULER_HEIGHT = 22;
-const INDENT_COLOR = '#4285f4';
-const INDENT_HOVER_COLOR = '#3367d6';
-const INDENT_ACTIVE_COLOR = '#2a56c6';
+const INDENT_COLOR = 'var(--doc-primary)';
+const INDENT_HOVER_COLOR = 'var(--doc-primary)';
+const INDENT_ACTIVE_COLOR = 'var(--doc-primary-hover)';
 const TRI_SIZE = 5;
 const TRI_HEIGHT = Math.round(TRI_SIZE * 1.6); // 8
 
@@ -213,8 +213,8 @@ const leftMarginStyle = computed<CSSProperties>(() => ({
   left: 0,
   width: leftMarginPx.value + 'px',
   height: RULER_HEIGHT + 'px',
-  backgroundColor: 'rgba(0, 0, 0, 0.02)',
-  borderRight: '1px solid rgba(0,0,0,0.06)',
+  backgroundColor: 'var(--doc-shadow-subtle)',
+  borderRight: '1px solid var(--doc-shadow-subtle)',
   cursor: props.editable ? 'ew-resize' : 'default',
   zIndex: 1,
 }));
@@ -224,8 +224,8 @@ const rightMarginStyle = computed<CSSProperties>(() => ({
   right: 0,
   width: rightMarginPx.value + 'px',
   height: RULER_HEIGHT + 'px',
-  backgroundColor: 'rgba(0, 0, 0, 0.02)',
-  borderLeft: '1px solid rgba(0,0,0,0.06)',
+  backgroundColor: 'var(--doc-shadow-subtle)',
+  borderLeft: '1px solid var(--doc-shadow-subtle)',
   cursor: props.editable ? 'ew-resize' : 'default',
   zIndex: 1,
 }));
@@ -435,14 +435,14 @@ onBeforeUnmount(() => {
   position: absolute;
   bottom: 0;
   width: 1px;
-  background-color: var(--doc-text-subtle, #9aa0a6);
+  background-color: var(--doc-text-subtle);
 }
 .docx-horizontal-ruler__tick-label {
   position: absolute;
   top: 3px;
   transform: translateX(-50%);
   font-size: 9px;
-  color: var(--doc-text-muted, #5f6368);
+  color: var(--doc-text-muted);
   font-family: sans-serif;
   white-space: nowrap;
 }
@@ -456,7 +456,7 @@ onBeforeUnmount(() => {
   justify-content: center;
   font-size: 8px;
   font-weight: 700;
-  color: #555;
+  color: var(--doc-text-muted);
   cursor: pointer;
   user-select: none;
   transform: translateX(-5px);
@@ -465,8 +465,8 @@ onBeforeUnmount(() => {
   position: absolute;
   top: -22px;
   transform: translateX(-50%);
-  background: #333;
-  color: #fff;
+  background: var(--doc-text);
+  color: var(--doc-on-primary);
   font-size: 10px;
   font-family: sans-serif;
   padding: 2px 6px;

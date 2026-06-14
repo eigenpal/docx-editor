@@ -67,7 +67,7 @@ export function TableInsertButtons({ onAction, disabled = false }: TableInsertBu
               variant="ghost"
               size="icon-sm"
               className={cn(
-                'text-slate-500 hover:text-slate-900 hover:bg-slate-100/80',
+                'text-muted-foreground hover:text-foreground hover:bg-muted/80',
                 disabled && 'opacity-30 cursor-not-allowed'
               )}
               onMouseDown={handleMouseDown}

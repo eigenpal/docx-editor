@@ -55,10 +55,10 @@ const TWIPS_PER_CM = 567;
 const RULER_HEIGHT = 22;
 const RULER_TEXT_COLOR = 'var(--doc-text-muted)';
 const RULER_TICK_COLOR = 'var(--doc-text-subtle)';
-const MARGIN_ZONE_COLOR = 'rgba(0, 0, 0, 0.02)';
-const INDENT_COLOR = '#4285f4';
-const INDENT_HOVER_COLOR = '#3367d6';
-const INDENT_ACTIVE_COLOR = '#2a56c6';
+const MARGIN_ZONE_COLOR = 'var(--doc-shadow-subtle)';
+const INDENT_COLOR = 'var(--doc-primary)';
+const INDENT_HOVER_COLOR = 'var(--doc-primary-hover)';
+const INDENT_ACTIVE_COLOR = 'var(--doc-primary-hover)';
 
 const TRI_SIZE = 5; // triangle half-width in px
 
@@ -242,7 +242,7 @@ export function HorizontalRuler({
           width: formatPx(leftMarginPx),
           height: RULER_HEIGHT,
           backgroundColor: MARGIN_ZONE_COLOR,
-          borderRight: '1px solid rgba(0,0,0,0.06)',
+          borderRight: '1px solid var(--doc-shadow-subtle)',
           cursor: editable ? 'ew-resize' : 'default',
           zIndex: 1,
         }}
@@ -258,7 +258,7 @@ export function HorizontalRuler({
           width: formatPx(rightMarginPx),
           height: RULER_HEIGHT,
           backgroundColor: MARGIN_ZONE_COLOR,
-          borderLeft: '1px solid rgba(0,0,0,0.06)',
+          borderLeft: '1px solid var(--doc-shadow-subtle)',
           cursor: editable ? 'ew-resize' : 'default',
           zIndex: 1,
         }}
@@ -479,8 +479,8 @@ function DragTooltip({
         left: formatPx(positionPx),
         top: -22,
         transform: 'translateX(-50%)',
-        backgroundColor: '#333',
-        color: '#fff',
+        backgroundColor: 'var(--doc-text)',
+        color: 'var(--doc-on-primary)',
         fontSize: '10px',
         fontFamily: 'sans-serif',
         padding: '2px 6px',
@@ -527,7 +527,7 @@ function TabMarker({
         justifyContent: 'center',
         fontSize: 8,
         fontWeight: 700,
-        color: '#555',
+        color: 'var(--doc-text-muted)',
         cursor: 'pointer',
         userSelect: 'none',
       }}

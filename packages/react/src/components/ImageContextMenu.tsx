@@ -197,10 +197,10 @@ export const ImageContextMenu: React.FC<ImageContextMenuProps> = ({
       top: y,
       left: x,
       minWidth: menuWidth,
-      background: 'white',
-      border: '1px solid var(--doc-border-light, #e0e0e0)',
+      background: 'var(--doc-surface)',
+      border: '1px solid var(--doc-border-light)',
       borderRadius: '8px',
-      boxShadow: '0 2px 10px rgba(0, 0, 0, 0.15)',
+      boxShadow: '0 2px 10px var(--doc-shadow)',
       zIndex: Z_INDEX.contextMenu,
       padding: '4px 0',
       overflow: 'hidden',
@@ -236,18 +236,17 @@ export const ImageContextMenu: React.FC<ImageContextMenuProps> = ({
               width: '100%',
               padding: '8px 12px',
               border: 'none',
-              background:
-                highlightedIndex === 0 ? 'var(--doc-primary-light, #eef4ff)' : 'transparent',
+              background: highlightedIndex === 0 ? 'var(--doc-primary-light)' : 'transparent',
               cursor: 'pointer',
               fontSize: '13px',
-              color: 'var(--doc-text, #222)',
+              color: 'var(--doc-text)',
               textAlign: 'left',
             }}
           >
             <span
               style={{
                 display: 'flex',
-                color: 'var(--doc-text-muted, #666)',
+                color: 'var(--doc-text-muted)',
                 width: ICON_SIZE,
               }}
             >
@@ -258,7 +257,7 @@ export const ImageContextMenu: React.FC<ImageContextMenuProps> = ({
           <div
             style={{
               height: 1,
-              background: 'var(--doc-border-light, #e0e0e0)',
+              background: 'var(--doc-border-light)',
               margin: '4px 0',
             }}
             role="separator"
@@ -300,10 +299,10 @@ export const ImageContextMenu: React.FC<ImageContextMenuProps> = ({
               width: '100%',
               padding: '8px 12px',
               border: 'none',
-              background: isHighlighted ? 'var(--doc-primary-light, #eef4ff)' : 'transparent',
+              background: isHighlighted ? 'var(--doc-primary-light)' : 'transparent',
               cursor: isEnabled ? 'pointer' : 'not-allowed',
               fontSize: '13px',
-              color: isEnabled ? 'var(--doc-text, #222)' : 'var(--doc-text-placeholder, #999)',
+              color: isEnabled ? 'var(--doc-text)' : 'var(--doc-text-placeholder)',
               textAlign: 'left',
               opacity: isEnabled ? 1 : 0.55,
             }}
@@ -311,7 +310,7 @@ export const ImageContextMenu: React.FC<ImageContextMenuProps> = ({
             <span
               style={{
                 display: 'flex',
-                color: isCurrent ? 'var(--doc-primary, #2563eb)' : 'var(--doc-text-muted, #666)',
+                color: isCurrent ? 'var(--doc-primary)' : 'var(--doc-text-muted)',
                 width: ICON_SIZE,
               }}
             >
@@ -320,7 +319,7 @@ export const ImageContextMenu: React.FC<ImageContextMenuProps> = ({
             <span style={{ flex: 1 }}>{t(`imageWrap.menu.${option.i18nLabelKey}` as never)}</span>
             {isCurrent && (
               <span
-                style={{ fontSize: '11px', color: 'var(--doc-primary, #2563eb)' }}
+                style={{ fontSize: '11px', color: 'var(--doc-primary)' }}
                 aria-label={t('toolbar.imageWrap.current' as never)}
               >
                 ●
@@ -335,7 +334,7 @@ export const ImageContextMenu: React.FC<ImageContextMenuProps> = ({
           <div
             style={{
               height: 1,
-              background: 'var(--doc-border-light, #e0e0e0)',
+              background: 'var(--doc-border-light)',
               margin: '4px 0',
             }}
             role="separator"
@@ -370,12 +369,10 @@ export const ImageContextMenu: React.FC<ImageContextMenuProps> = ({
                     width: '100%',
                     padding: '7px 12px',
                     border: 'none',
-                    background: isHighlighted ? 'var(--doc-primary-light, #eef4ff)' : 'transparent',
+                    background: isHighlighted ? 'var(--doc-primary-light)' : 'transparent',
                     cursor: item.disabled ? 'not-allowed' : 'pointer',
                     fontSize: '13px',
-                    color: item.disabled
-                      ? 'var(--doc-text-placeholder, #999)'
-                      : 'var(--doc-text, #222)',
+                    color: item.disabled ? 'var(--doc-text-placeholder)' : 'var(--doc-text)',
                     textAlign: 'left',
                     opacity: item.disabled ? 0.55 : 1,
                   }}
@@ -386,7 +383,7 @@ export const ImageContextMenu: React.FC<ImageContextMenuProps> = ({
                     <span
                       style={{
                         fontSize: '11px',
-                        color: 'var(--doc-text-muted, #888)',
+                        color: 'var(--doc-text-muted)',
                         fontFamily: 'monospace',
                       }}
                     >
@@ -398,7 +395,7 @@ export const ImageContextMenu: React.FC<ImageContextMenuProps> = ({
                   <div
                     style={{
                       height: 1,
-                      background: 'var(--doc-border-light, #e0e0e0)',
+                      background: 'var(--doc-border-light)',
                       margin: '4px 0',
                     }}
                     role="separator"

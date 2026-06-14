@@ -144,9 +144,11 @@ onBeforeUnmount(removeListeners);
 .docx-popover__panel {
   position: fixed;
   z-index: 10000;
-  background: #fff;
-  border: 1px solid #d1d5db;
+  background: var(--doc-surface);
+  /* Match React's dropdown/menu panels (MenuDropdown / EditingModeDropdown):
+     --doc-border + a 12px-blur shadow. */
+  border: 1px solid var(--doc-border);
   border-radius: 6px;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+  box-shadow: 0 4px 12px var(--doc-shadow);
 }
 </style>

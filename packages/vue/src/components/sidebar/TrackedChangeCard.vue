@@ -169,11 +169,9 @@ function onReject() {
 .tc-card {
   padding: 8px 10px;
   border-radius: 8px;
-  background: #f8fbff;
+  background: var(--doc-card);
   cursor: pointer;
-  box-shadow:
-    0 1px 3px rgba(60, 64, 67, 0.2),
-    0 2px 6px rgba(60, 64, 67, 0.08);
+  box-shadow: var(--doc-card-shadow);
   margin-bottom: 6px;
   transition:
     box-shadow 0.15s ease,
@@ -182,10 +180,8 @@ function onReject() {
 }
 .tc-card--expanded {
   padding: 10px 12px;
-  background: #fff;
-  box-shadow:
-    0 1px 3px rgba(60, 64, 67, 0.3),
-    0 4px 8px 3px rgba(60, 64, 67, 0.15);
+  background: var(--doc-surface);
+  box-shadow: var(--doc-card-shadow-strong);
 }
 .tc-card__head {
   display: flex;
@@ -199,11 +195,11 @@ function onReject() {
 .tc-card__author {
   font-size: 13px;
   font-weight: 600;
-  color: #202124;
+  color: var(--doc-text);
 }
 .tc-card__date {
   font-size: 11px;
-  color: #5f6368;
+  color: var(--doc-text-muted);
 }
 .tc-card__actions {
   display: flex;
@@ -215,29 +211,29 @@ function onReject() {
   border: none;
   cursor: pointer;
   padding: 4px;
-  color: #5f6368;
+  color: var(--doc-text-muted);
   display: flex;
   border-radius: 50%;
 }
 .tc-card__icon-btn:hover {
-  background: rgba(60, 64, 67, 0.08);
+  background: var(--doc-shadow-subtle);
 }
 .tc-card__body {
   font-size: 13px;
   line-height: 20px;
-  color: #202124;
+  color: var(--doc-text);
   margin-top: 6px;
 }
 .tc-card__deleted {
-  color: #c5221f;
+  color: var(--doc-error);
   font-weight: 500;
 }
 .tc-card__inserted {
-  color: #137333;
+  color: var(--doc-success);
   font-weight: 500;
 }
 .tc-card__changed {
-  color: #5f6368;
+  color: var(--doc-text-muted);
   font-weight: 500;
 }
 </style>

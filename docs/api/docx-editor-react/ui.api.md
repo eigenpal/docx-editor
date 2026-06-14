@@ -1520,17 +1520,7 @@ export interface ZoomControlProps {
     // (undocumented)
     levels?: ZoomLevel[];
     // (undocumented)
-    maxZoom?: number;
-    // (undocumented)
-    minZoom?: number;
-    // (undocumented)
     onChange?: (zoom: number) => void;
-    // (undocumented)
-    persistZoom?: boolean;
-    // (undocumented)
-    showButtons?: boolean;
-    // (undocumented)
-    storageKey?: string;
     // (undocumented)
     value?: number;
 }

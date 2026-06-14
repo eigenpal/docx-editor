@@ -107,24 +107,24 @@ onBeforeUnmount(() => {
   background: transparent;
   cursor: pointer;
   font-size: 16px;
-  color: #6b7280;
+  color: var(--doc-text-muted);
   border-radius: 4px;
   display: flex;
   align-items: center;
   justify-content: center;
 }
 .responsive-toolbar__overflow-btn:hover {
-  background: #f1f5f9;
+  background: var(--doc-bg-hover);
 }
 .responsive-toolbar__overflow-menu {
   position: absolute;
   right: 0;
   top: 100%;
   z-index: 200;
-  background: #fff;
-  border: 1px solid #d1d5db;
+  background: var(--doc-surface);
+  border: 1px solid var(--doc-border-dark);
   border-radius: 6px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+  box-shadow: 0 4px 12px var(--doc-shadow);
   padding: 8px;
   display: flex;
   flex-wrap: wrap;

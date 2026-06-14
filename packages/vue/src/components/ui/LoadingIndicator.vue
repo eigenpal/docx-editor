@@ -44,24 +44,29 @@ withDefaults(
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  color: #5f6368;
+  color: var(--doc-text-muted);
   font-size: 13px;
 }
 .docx-loading--overlay {
   position: fixed;
   inset: 0;
-  background: rgba(255, 255, 255, 0.8);
+  /* Dark modal backdrop with light text, matching React's overlay
+     (rgba(0,0,0,0.5) + white message). */
+  background: var(--doc-overlay);
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   z-index: 9999;
 }
+.docx-loading--overlay .docx-loading__message {
+  color: var(--doc-on-primary);
+}
 .docx-loading__spinner {
   width: 20px;
   height: 20px;
-  border: 2px solid #e5e7eb;
-  border-top-color: #1a73e8;
+  border: 2px solid var(--doc-border);
+  border-top-color: var(--doc-primary);
   border-radius: 50%;
   animation: docx-loading-spin 0.8s linear infinite;
 }
@@ -70,13 +75,13 @@ withDefaults(
 .docx-loading__bar {
   width: 100%;
   height: 4px;
-  background: #e5e7eb;
+  background: var(--doc-border);
   border-radius: 2px;
   overflow: hidden;
 }
 .docx-loading__bar-fill {
   height: 100%;
-  background: #1a73e8;
+  background: var(--doc-primary);
   width: 100%;
   transition: width 0.2s ease;
   animation: docx-loading-bar 1.5s linear infinite;

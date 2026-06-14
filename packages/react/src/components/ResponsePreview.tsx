@@ -225,14 +225,14 @@ const DiffView: React.FC<DiffViewProps> = ({ original, modified }) => {
           case 'removed':
             style = {
               textDecoration: 'line-through',
-              color: '#d32f2f',
-              backgroundColor: '#ffebee',
+              color: 'var(--doc-error)',
+              backgroundColor: 'var(--doc-error-bg)',
             };
             break;
           case 'added':
             style = {
-              color: '#2e7d32',
-              backgroundColor: '#e8f5e9',
+              color: 'var(--doc-success)',
+              backgroundColor: 'var(--doc-success-bg)',
             };
             break;
           default:
@@ -335,10 +335,10 @@ export const ResponsePreview: React.FC<ResponsePreviewProps> = ({
     width: '400px',
     maxWidth: '90vw',
     maxHeight: '80vh',
-    background: 'white',
+    background: 'var(--doc-surface)',
     border: '1px solid var(--doc-border-light)',
     borderRadius: '8px',
-    boxShadow: '0 4px 20px rgba(0, 0, 0, 0.15)',
+    boxShadow: '0 4px 20px var(--doc-shadow)',
     zIndex: 10000,
     overflow: 'hidden',
     display: 'flex',
@@ -404,7 +404,7 @@ export const ResponsePreview: React.FC<ResponsePreviewProps> = ({
                   padding: '8px 16px',
                   border: '1px solid var(--doc-border-light)',
                   borderRadius: '4px',
-                  background: 'white',
+                  background: 'var(--doc-surface)',
                   cursor: 'pointer',
                   fontSize: '13px',
                 }}
@@ -531,9 +531,9 @@ export const ResponsePreview: React.FC<ResponsePreviewProps> = ({
             <div
               style={{
                 padding: '8px 12px',
-                background: '#e8f5e9',
+                background: 'var(--doc-success-bg)',
                 borderRadius: '4px',
-                color: '#2e7d32',
+                color: 'var(--doc-success)',
                 fontSize: '13px',
               }}
             >
@@ -551,7 +551,7 @@ export const ResponsePreview: React.FC<ResponsePreviewProps> = ({
               background: 'var(--doc-warning-bg)',
               borderRadius: '4px',
               fontSize: '12px',
-              color: 'var(--doc-warning)',
+              color: 'var(--doc-warning-text)',
             }}
           >
             {response.warnings.map((warning, index) => (
@@ -583,7 +583,7 @@ export const ResponsePreview: React.FC<ResponsePreviewProps> = ({
                 padding: '6px 12px',
                 border: '1px solid var(--doc-border-light)',
                 borderRadius: '4px',
-                background: 'white',
+                background: 'var(--doc-surface)',
                 cursor: 'pointer',
                 fontSize: '12px',
                 color: 'var(--doc-text-muted)',
@@ -601,7 +601,7 @@ export const ResponsePreview: React.FC<ResponsePreviewProps> = ({
                 padding: '6px 12px',
                 border: '1px solid var(--doc-border-light)',
                 borderRadius: '4px',
-                background: 'white',
+                background: 'var(--doc-surface)',
                 cursor: 'pointer',
                 fontSize: '12px',
                 color: 'var(--doc-text-muted)',
@@ -622,7 +622,7 @@ export const ResponsePreview: React.FC<ResponsePreviewProps> = ({
               padding: '8px 16px',
               border: '1px solid var(--doc-border-light)',
               borderRadius: '4px',
-              background: 'white',
+              background: 'var(--doc-surface)',
               cursor: 'pointer',
               fontSize: '13px',
               color: 'var(--doc-text-muted)',
@@ -644,7 +644,7 @@ export const ResponsePreview: React.FC<ResponsePreviewProps> = ({
               background: 'var(--doc-primary)',
               cursor: 'pointer',
               fontSize: '13px',
-              color: 'white',
+              color: 'var(--doc-on-primary)',
             }}
           >
             <CheckIcon />

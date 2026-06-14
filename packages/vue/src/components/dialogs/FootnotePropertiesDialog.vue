@@ -170,25 +170,25 @@ function apply() {
 .fnpd-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.4);
+  background: var(--doc-overlay);
   display: flex;
   align-items: center;
   justify-content: center;
   z-index: 10000;
 }
 .fnpd-dialog {
-  background: #fff;
+  background: var(--doc-surface);
   border-radius: 8px;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+  box-shadow: 0 4px 20px var(--doc-shadow);
   width: 440px;
   max-width: 90vw;
 }
 .fnpd-dialog__header {
   padding: 16px 20px 12px;
-  border-bottom: 1px solid #e5e7eb;
+  border-bottom: 1px solid var(--doc-border);
   font-size: 16px;
   font-weight: 600;
-  color: #1f2937;
+  color: var(--doc-text);
 }
 .fnpd-dialog__body {
   padding: 12px 20px;
@@ -200,13 +200,13 @@ function apply() {
 }
 .fnpd-dialog__footer {
   padding: 12px 20px 16px;
-  border-top: 1px solid #e5e7eb;
+  border-top: 1px solid var(--doc-border);
   display: flex;
   justify-content: flex-end;
   gap: 8px;
 }
 .fnpd-fieldset {
-  border: 1px solid #e5e7eb;
+  border: 1px solid var(--doc-border);
   border-radius: 6px;
   padding: 10px 12px;
   margin: 0;
@@ -214,7 +214,7 @@ function apply() {
 .fnpd-legend {
   font-size: 12px;
   font-weight: 600;
-  color: #4b5563;
+  color: var(--doc-text-muted);
   padding: 0 4px;
 }
 .fnpd-row {
@@ -229,28 +229,28 @@ function apply() {
 .fnpd-label {
   width: 100px;
   font-size: 13px;
-  color: #6b7280;
+  color: var(--doc-text-muted);
   flex-shrink: 0;
 }
 .fnpd-input,
 .fnpd-select {
   flex: 1;
   padding: 5px 8px;
-  border: 1px solid #d1d5db;
+  border: 1px solid var(--doc-border-dark);
   border-radius: 4px;
   font-size: 13px;
 }
 .fnpd-btn {
   padding: 6px 16px;
   font-size: 13px;
-  border: 1px solid #d1d5db;
+  border: 1px solid var(--doc-border-dark);
   border-radius: 4px;
   cursor: pointer;
-  background: #fff;
+  background: var(--doc-surface);
 }
 .fnpd-btn--primary {
-  background: #1a73e8;
-  color: #fff;
-  border-color: #1a73e8;
+  background: var(--doc-primary);
+  color: var(--doc-on-primary);
+  border-color: var(--doc-primary);
 }
 </style>

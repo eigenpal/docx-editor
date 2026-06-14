@@ -1,11 +1,15 @@
 /**
- * Zoom Control Component (Radix UI)
+ * Zoom Control Component
  *
- * A dropdown for controlling document zoom level using Radix Select.
+ * A − / + stepper around a Radix Select: the buttons step through the zoom
+ * levels and the middle % opens a dropdown for a direct pick. Matches the Vue
+ * toolbar's zoom stepper and the font-size stepper.
  */
 
 import * as React from 'react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './Select';
+import { Button } from './Button';
+import { MaterialSymbol } from './MaterialSymbol';
 import { cn } from '../../lib/utils';
 import { useTranslation } from '../../i18n';
 
@@ -24,11 +28,6 @@ export interface ZoomControlProps {
   levels?: ZoomLevel[];
   disabled?: boolean;
   className?: string;
-  minZoom?: number;
-  maxZoom?: number;
-  showButtons?: boolean;
-  persistZoom?: boolean;
-  storageKey?: string;
   compact?: boolean;
 }
 
@@ -74,22 +73,69 @@ export function ZoomControl({
     [onChange]
   );
 
+  // Stepper logic: − / + walk the sorted zoom levels (matches the Vue toolbar
+  // and the font-size stepper). The middle % stays a dropdown for direct picks.
+  const sorted = React.useMemo(() => [...levels].sort((a, b) => a.value - b.value), [levels]);
+  const prevLevel = React.useMemo(
+    () => [...sorted].reverse().find((l) => l.value < value - 0.001),
+    [sorted, value]
+  );
+  const nextLevel = React.useMemo(
+    () => sorted.find((l) => l.value > value + 0.001),
+    [sorted, value]
+  );
+  const btnCls = compact ? 'h-7 w-7' : 'h-8 w-8';
+
   return (
-    <Select value={value.toString()} onValueChange={handleValueChange} disabled={disabled}>
-      <SelectTrigger
-        className={cn(compact ? 'h-7 min-w-[55px] text-xs' : 'h-8 min-w-[70px] text-sm', className)}
-        aria-label={t('zoom.ariaLabel', { label: displayLabel })}
+    <div className="flex items-center">
+      <Button
+        variant="ghost"
+        size="icon-sm"
+        className={cn(
+          btnCls,
+          'text-muted-foreground hover:text-foreground hover:bg-muted/80 rounded-r-none',
+          (disabled || !prevLevel) && 'opacity-30 cursor-not-allowed'
+        )}
+        onClick={() => prevLevel && onChange?.(prevLevel.value)}
+        disabled={disabled || !prevLevel}
+        aria-label={t('zoom.zoomOut')}
       >
-        <SelectValue placeholder="100%">{displayLabel}</SelectValue>
-      </SelectTrigger>
-      <SelectContent>
-        {levels.map((level) => (
-          <SelectItem key={level.value} value={level.value.toString()}>
-            {level.label}
-          </SelectItem>
-        ))}
-      </SelectContent>
-    </Select>
+        <MaterialSymbol name="remove" size={18} />
+      </Button>
+      <Select value={value.toString()} onValueChange={handleValueChange} disabled={disabled}>
+        <SelectTrigger
+          className={cn(
+            compact ? 'h-7 min-w-[55px] text-xs' : 'h-8 min-w-[64px] text-sm',
+            'rounded-none',
+            className
+          )}
+          aria-label={t('zoom.ariaLabel', { label: displayLabel })}
+        >
+          <SelectValue placeholder="100%">{displayLabel}</SelectValue>
+        </SelectTrigger>
+        <SelectContent>
+          {levels.map((level) => (
+            <SelectItem key={level.value} value={level.value.toString()}>
+              {level.label}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+      <Button
+        variant="ghost"
+        size="icon-sm"
+        className={cn(
+          btnCls,
+          'text-muted-foreground hover:text-foreground hover:bg-muted/80 rounded-l-none',
+          (disabled || !nextLevel) && 'opacity-30 cursor-not-allowed'
+        )}
+        onClick={() => nextLevel && onChange?.(nextLevel.value)}
+        disabled={disabled || !nextLevel}
+        aria-label={t('zoom.zoomIn')}
+      >
+        <MaterialSymbol name="add" size={18} />
+      </Button>
+    </div>
   );
 }
 

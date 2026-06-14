@@ -317,16 +317,16 @@ function insertSymbol(sym: string) {
 .dialog-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.3);
+  background: var(--doc-overlay);
   z-index: 300;
   display: flex;
   align-items: center;
   justify-content: center;
 }
 .dialog {
-  background: #fff;
+  background: var(--doc-surface);
   border-radius: 8px;
-  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.2);
+  box-shadow: 0 8px 30px var(--doc-shadow);
   max-width: 90vw;
 }
 .symbol-dialog {
@@ -337,19 +337,19 @@ function insertSymbol(sym: string) {
   align-items: center;
   justify-content: space-between;
   padding: 12px 16px;
-  border-bottom: 1px solid #e5e7eb;
+  border-bottom: 1px solid var(--doc-border);
 }
 .dialog__title {
   font-weight: 600;
   font-size: 14px;
-  color: #1f2937;
+  color: var(--doc-text);
 }
 .dialog__close {
   border: none;
   background: transparent;
   cursor: pointer;
   font-size: 14px;
-  color: #6b7280;
+  color: var(--doc-text-muted);
   width: 24px;
   height: 24px;
   display: flex;
@@ -358,7 +358,7 @@ function insertSymbol(sym: string) {
   border-radius: 4px;
 }
 .dialog__close:hover {
-  background: #f3f4f6;
+  background: var(--doc-bg-hover);
 }
 .dialog__body {
   padding: 16px;
@@ -371,19 +371,19 @@ function insertSymbol(sym: string) {
 }
 .dialog__btn {
   padding: 6px 16px;
-  border: 1px solid #d1d5db;
+  border: 1px solid var(--doc-border-dark);
   border-radius: 4px;
   cursor: pointer;
   font-size: 13px;
-  background: #fff;
+  background: var(--doc-surface);
 }
 .dialog__btn--primary {
-  background: #3b82f6;
-  color: #fff;
-  border-color: #3b82f6;
+  background: var(--doc-primary);
+  color: var(--doc-on-primary);
+  border-color: var(--doc-primary);
 }
 .dialog__btn--primary:hover {
-  background: #2563eb;
+  background: var(--doc-primary);
 }
 .dialog__btn--primary:disabled {
   opacity: 0.5;
@@ -393,7 +393,7 @@ function insertSymbol(sym: string) {
 .symbol-search {
   width: 100%;
   padding: 6px 10px;
-  border: 1px solid #d1d5db;
+  border: 1px solid var(--doc-border-dark);
   border-radius: 4px;
   font-size: 13px;
   outline: none;
@@ -401,7 +401,7 @@ function insertSymbol(sym: string) {
   margin-bottom: 8px;
 }
 .symbol-search:focus {
-  border-color: #3b82f6;
+  border-color: var(--doc-primary);
 }
 
 .symbol-tabs {
@@ -417,14 +417,14 @@ function insertSymbol(sym: string) {
   background: transparent;
   cursor: pointer;
   font-size: 11px;
-  color: #6b7280;
+  color: var(--doc-text-muted);
 }
 .symbol-tab:hover {
-  background: #f3f4f6;
+  background: var(--doc-bg-hover);
 }
 .symbol-tab.active {
-  background: #e0e7ff;
-  color: #3730a3;
+  background: var(--doc-accent-bg);
+  color: var(--doc-accent);
   font-weight: 600;
 }
 
@@ -434,7 +434,7 @@ function insertSymbol(sym: string) {
   gap: 2px;
   max-height: 240px;
   overflow-y: auto;
-  border: 1px solid #e5e7eb;
+  border: 1px solid var(--doc-border);
   border-radius: 4px;
   padding: 4px;
 }
@@ -451,12 +451,12 @@ function insertSymbol(sym: string) {
   background: transparent;
 }
 .symbol-cell:hover {
-  background: #f3f4f6;
-  border-color: #d1d5db;
+  background: var(--doc-bg-hover);
+  border-color: var(--doc-border-dark);
 }
 .symbol-cell.selected {
-  background: #dbeafe;
-  border-color: #3b82f6;
+  background: var(--doc-primary-light);
+  border-color: var(--doc-primary);
 }
 .symbol-cell--small {
   width: 28px;
@@ -467,7 +467,7 @@ function insertSymbol(sym: string) {
   grid-column: 1/-1;
   text-align: center;
   padding: 24px;
-  color: #9ca3af;
+  color: var(--doc-text-subtle);
   font-size: 13px;
 }
 
@@ -477,7 +477,7 @@ function insertSymbol(sym: string) {
   gap: 12px;
   margin-top: 8px;
   padding: 8px 12px;
-  background: #f9fafb;
+  background: var(--doc-bg);
   border-radius: 4px;
 }
 .symbol-preview__char {
@@ -485,7 +485,7 @@ function insertSymbol(sym: string) {
 }
 .symbol-preview__info {
   font-size: 12px;
-  color: #6b7280;
+  color: var(--doc-text-muted);
   font-family: monospace;
 }
 
@@ -498,7 +498,7 @@ function insertSymbol(sym: string) {
 }
 .symbol-recent__label {
   font-size: 11px;
-  color: #9ca3af;
+  color: var(--doc-text-subtle);
   margin-right: 4px;
 }
 </style>

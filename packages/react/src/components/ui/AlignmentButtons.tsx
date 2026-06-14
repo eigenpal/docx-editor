@@ -174,8 +174,8 @@ export function AlignmentButtons({
       variant="ghost"
       size="icon-sm"
       className={cn(
-        'text-slate-500 hover:text-slate-900 hover:bg-slate-100/80',
-        isOpen && 'bg-slate-100',
+        'text-muted-foreground hover:text-foreground hover:bg-muted/80',
+        isOpen && 'bg-muted',
         disabled && 'opacity-30 cursor-not-allowed'
       )}
       onMouseDown={handleMouseDown}
@@ -200,10 +200,10 @@ export function AlignmentButtons({
           ref={dropdownRef}
           style={{
             ...dropdownStyle,
-            backgroundColor: 'white',
+            backgroundColor: 'var(--doc-surface)',
             border: '1px solid var(--doc-border)',
             borderRadius: 8,
-            boxShadow: '0 4px 16px rgba(0, 0, 0, 0.12)',
+            boxShadow: '0 4px 16px var(--doc-shadow)',
             padding: 6,
           }}
           onMouseDown={(e) => e.stopPropagation()}

@@ -65,10 +65,10 @@ function onChange(e: Event) {
 .docx-line-spacing {
   height: 28px;
   font-size: 13px;
-  border: 1px solid #d1d5db;
+  border: 1px solid var(--doc-border-dark);
   border-radius: 4px;
   padding: 0 6px;
-  background: #fff;
+  background: var(--doc-surface);
   cursor: pointer;
 }
 .docx-line-spacing:disabled {

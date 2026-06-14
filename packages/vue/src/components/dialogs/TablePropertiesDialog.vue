@@ -84,15 +84,15 @@ function apply() {
 </script>
 
 <style scoped>
-.tpd-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.4); display: flex; align-items: center; justify-content: center; z-index: 10000; }
-.tpd-dialog { background: #fff; border-radius: 8px; box-shadow: 0 4px 20px rgba(0,0,0,0.15); min-width: 360px; max-width: 440px; width: 100%; }
-.tpd-dialog__header { padding: 16px 20px 12px; border-bottom: 1px solid #e5e7eb; font-size: 16px; font-weight: 600; color: #1f2937; }
+.tpd-overlay { position: fixed; inset: 0; background: var(--doc-overlay); display: flex; align-items: center; justify-content: center; z-index: 10000; }
+.tpd-dialog { background: var(--doc-surface); border-radius: 8px; box-shadow: 0 4px 20px var(--doc-shadow); min-width: 360px; max-width: 440px; width: 100%; }
+.tpd-dialog__header { padding: 16px 20px 12px; border-bottom: 1px solid var(--doc-border); font-size: 16px; font-weight: 600; color: var(--doc-text); }
 .tpd-dialog__body { padding: 16px 20px; display: flex; flex-direction: column; gap: 12px; }
-.tpd-dialog__footer { padding: 12px 20px 16px; border-top: 1px solid #e5e7eb; display: flex; justify-content: flex-end; gap: 8px; }
+.tpd-dialog__footer { padding: 12px 20px 16px; border-top: 1px solid var(--doc-border); display: flex; justify-content: flex-end; gap: 8px; }
 .tpd-row { display: flex; align-items: center; gap: 12px; }
-.tpd-label { width: 80px; font-size: 13px; color: #6b7280; }
-.tpd-input, .tpd-select { flex: 1; padding: 6px 8px; border: 1px solid #d1d5db; border-radius: 4px; font-size: 13px; }
-.tpd-unit { font-size: 11px; color: #9ca3af; }
-.tpd-btn { padding: 6px 16px; font-size: 13px; border: 1px solid #d1d5db; border-radius: 4px; cursor: pointer; background: #fff; }
-.tpd-btn--primary { background: #1a73e8; color: #fff; border-color: #1a73e8; }
+.tpd-label { width: 80px; font-size: 13px; color: var(--doc-text-muted); }
+.tpd-input, .tpd-select { flex: 1; padding: 6px 8px; border: 1px solid var(--doc-border-dark); border-radius: 4px; font-size: 13px; }
+.tpd-unit { font-size: 11px; color: var(--doc-text-subtle); }
+.tpd-btn { padding: 6px 16px; font-size: 13px; border: 1px solid var(--doc-border-dark); border-radius: 4px; cursor: pointer; background: var(--doc-surface); }
+.tpd-btn--primary { background: var(--doc-primary); color: var(--doc-on-primary); border-color: var(--doc-primary); }
 </style>

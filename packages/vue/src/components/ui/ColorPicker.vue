@@ -412,7 +412,7 @@ onBeforeUnmount(() => document.removeEventListener('mousedown', onClickOutside))
   border: none;
   border-radius: 4px;
   background: transparent;
-  color: var(--doc-text-muted, #5f6368);
+  color: var(--doc-text-muted);
   cursor: pointer;
   padding: 0;
   transition: background-color 0.1s;
@@ -440,12 +440,12 @@ onBeforeUnmount(() => document.removeEventListener('mousedown', onClickOutside))
 .docx-color-picker__apply:hover:not(:disabled),
 .docx-color-picker__arrow:hover:not(:disabled),
 .docx-color-picker__button:hover:not(:disabled) {
-  background: var(--doc-bg-hover, #f1f3f4);
+  background: var(--doc-bg-hover);
 }
 .docx-color-picker__arrow.is-open,
 .docx-color-picker__button.is-open {
-  background: var(--doc-primary-light, #e8f0fe);
-  color: var(--doc-primary, #1a73e8);
+  background: var(--doc-primary-light);
+  color: var(--doc-primary);
 }
 .docx-color-picker__apply:disabled,
 .docx-color-picker__arrow:disabled,
@@ -460,7 +460,7 @@ onBeforeUnmount(() => document.removeEventListener('mousedown', onClickOutside))
   margin-top: -2px;
 }
 .docx-color-picker__bar.is-light {
-  outline: 1px solid #bbb;
+  outline: 1px solid var(--doc-border-input);
 }
 
 /* ── Dropdown panel ── */
@@ -468,10 +468,10 @@ onBeforeUnmount(() => document.removeEventListener('mousedown', onClickOutside))
   position: fixed;
   z-index: 10000;
   padding: 10px;
-  background: #fff;
-  border: 1px solid #d0d0d0;
+  background: var(--doc-surface);
+  border: 1px solid var(--doc-border-dark);
   border-radius: 6px;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+  box-shadow: 0 4px 16px var(--doc-shadow);
   width: auto;
 }
 .docx-color-picker__auto {
@@ -480,15 +480,15 @@ onBeforeUnmount(() => document.removeEventListener('mousedown', onClickOutside))
   gap: 8px;
   width: 100%;
   padding: 5px 8px;
-  border: 1px solid #d0d0d0;
+  border: 1px solid var(--doc-border-dark);
   border-radius: 4px;
-  background: #fff;
+  background: var(--doc-surface);
   font-size: 12px;
-  color: #333;
+  color: var(--doc-text);
   cursor: pointer;
 }
 .docx-color-picker__auto:hover {
-  background: #f5f5f5;
+  background: var(--doc-bg-subtle);
 }
 .docx-color-picker__auto-icon {
   display: inline-block;
@@ -515,12 +515,12 @@ onBeforeUnmount(() => document.removeEventListener('mousedown', onClickOutside))
 }
 .docx-color-picker__divider {
   height: 1px;
-  background: #e0e0e0;
+  background: var(--doc-border);
   margin: 8px 0;
 }
 .docx-color-picker__section-label {
   font-size: 11px;
-  color: #666;
+  color: var(--doc-text-muted);
   margin-bottom: 4px;
   font-weight: 500;
 }
@@ -532,7 +532,7 @@ onBeforeUnmount(() => document.removeEventListener('mousedown', onClickOutside))
 .docx-color-picker__cell {
   width: 18px;
   height: 18px;
-  border: 1px solid #c0c0c0;
+  border: 1px solid var(--doc-border-input);
   border-radius: 2px;
   padding: 0;
   cursor: pointer;
@@ -542,13 +542,13 @@ onBeforeUnmount(() => document.removeEventListener('mousedown', onClickOutside))
 }
 .docx-color-picker__cell:hover {
   transform: scale(1.15);
-  border-color: #333;
+  border-color: var(--doc-text);
   z-index: 1;
 }
 .docx-color-picker__cell.is-selected {
   border-width: 2px;
-  border-color: #0066cc;
-  box-shadow: 0 0 0 1px #0066cc;
+  border-color: var(--doc-primary);
+  box-shadow: 0 0 0 1px var(--doc-primary);
 }
 .docx-color-picker__custom {
   display: flex;
@@ -557,22 +557,22 @@ onBeforeUnmount(() => document.removeEventListener('mousedown', onClickOutside))
 }
 .docx-color-picker__hash {
   font-size: 12px;
-  color: #666;
+  color: var(--doc-text-muted);
 }
 .docx-color-picker__hex {
   width: 70px;
   height: 24px;
   padding: 2px 6px;
-  border: 1px solid #ccc;
+  border: 1px solid var(--doc-border-input);
   border-radius: 3px;
   font-size: 12px;
 }
 .docx-color-picker__apply-btn {
   height: 24px;
   padding: 0 10px;
-  border: 1px solid #ccc;
+  border: 1px solid var(--doc-border-input);
   border-radius: 3px;
-  background: #f5f5f5;
+  background: var(--doc-bg-subtle);
   font-size: 12px;
   cursor: pointer;
 }

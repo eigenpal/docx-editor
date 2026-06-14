@@ -470,16 +470,16 @@ const filteredCategories = computed(() => {
 .kbd-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.3);
+  background: var(--doc-overlay);
   z-index: 300;
   display: flex;
   align-items: center;
   justify-content: center;
 }
 .kbd-dialog {
-  background: #fff;
+  background: var(--doc-surface);
   border-radius: 8px;
-  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.2);
+  box-shadow: 0 8px 30px var(--doc-shadow);
   width: 520px;
   max-width: 90vw;
   max-height: 80vh;
@@ -491,19 +491,19 @@ const filteredCategories = computed(() => {
   align-items: center;
   justify-content: space-between;
   padding: 12px 16px;
-  border-bottom: 1px solid #e5e7eb;
+  border-bottom: 1px solid var(--doc-border);
 }
 .kbd-dialog__title {
   font-weight: 600;
   font-size: 14px;
-  color: #1f2937;
+  color: var(--doc-text);
 }
 .kbd-dialog__close {
   border: none;
   background: transparent;
   cursor: pointer;
   font-size: 14px;
-  color: #6b7280;
+  color: var(--doc-text-muted);
   width: 24px;
   height: 24px;
   display: flex;
@@ -512,23 +512,23 @@ const filteredCategories = computed(() => {
   border-radius: 4px;
 }
 .kbd-dialog__close:hover {
-  background: #f3f4f6;
+  background: var(--doc-bg-hover);
 }
 .kbd-dialog__search {
   padding: 8px 16px;
-  border-bottom: 1px solid #e5e7eb;
+  border-bottom: 1px solid var(--doc-border);
 }
 .kbd-dialog__search-input {
   width: 100%;
   padding: 6px 10px;
-  border: 1px solid #d1d5db;
+  border: 1px solid var(--doc-border-dark);
   border-radius: 4px;
   font-size: 13px;
   outline: none;
 }
 .kbd-dialog__search-input:focus {
-  border-color: #3b82f6;
-  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.15);
+  border-color: var(--doc-primary);
+  box-shadow: 0 0 0 2px var(--doc-focus-ring);
 }
 .kbd-dialog__body {
   flex: 1;
@@ -538,22 +538,22 @@ const filteredCategories = computed(() => {
 .kbd-dialog__empty {
   padding: 24px 16px;
   text-align: center;
-  color: #9ca3af;
+  color: var(--doc-text-subtle);
   font-size: 13px;
 }
 .kbd-dialog__footer {
   padding: 8px 16px;
-  border-top: 1px solid #e5e7eb;
+  border-top: 1px solid var(--doc-border);
   text-align: center;
   font-size: 12px;
-  color: #9ca3af;
+  color: var(--doc-text-subtle);
 }
 
 .kbd-category {
   padding: 8px 16px 4px;
   font-size: 11px;
   font-weight: 600;
-  color: #6b7280;
+  color: var(--doc-text-muted);
   text-transform: uppercase;
   letter-spacing: 0.05em;
 }
@@ -564,7 +564,7 @@ const filteredCategories = computed(() => {
   padding: 5px 16px;
 }
 .kbd-item:hover {
-  background: #f9fafb;
+  background: var(--doc-bg);
 }
 .kbd-item__info {
   display: flex;
@@ -574,12 +574,12 @@ const filteredCategories = computed(() => {
 }
 .kbd-item__name {
   font-size: 13px;
-  color: #1f2937;
+  color: var(--doc-text);
   font-weight: 500;
 }
 .kbd-item__desc {
   font-size: 11px;
-  color: #9ca3af;
+  color: var(--doc-text-subtle);
 }
 .kbd-item__keys {
   display: flex;
@@ -589,17 +589,17 @@ const filteredCategories = computed(() => {
 }
 .kbd-or {
   font-size: 11px;
-  color: #9ca3af;
+  color: var(--doc-text-subtle);
 }
 .kbd-badge {
   display: inline-block;
   padding: 2px 6px;
-  background: #f3f4f6;
-  border: 1px solid #d1d5db;
+  background: var(--doc-bg-hover);
+  border: 1px solid var(--doc-border-dark);
   border-radius: 4px;
   font-size: 11px;
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  color: #374151;
+  color: var(--doc-text-muted);
   white-space: nowrap;
 }
 .kbd-badge--small {

@@ -101,11 +101,9 @@ function onDelete() {
 .comment-card {
   padding: 8px 10px;
   border-radius: 8px;
-  background: #f8fbff;
+  background: var(--doc-card);
   cursor: pointer;
-  box-shadow:
-    0 1px 3px rgba(60, 64, 67, 0.2),
-    0 2px 6px rgba(60, 64, 67, 0.08);
+  box-shadow: var(--doc-card-shadow);
   margin-bottom: 6px;
   transition: box-shadow 0.15s ease, background-color 0.15s ease, padding 0.15s ease;
 }
@@ -116,10 +114,8 @@ function onDelete() {
    chrome. */
 .comment-card--expanded {
   padding: 10px 12px;
-  background: #fff;
-  box-shadow:
-    0 1px 3px rgba(60, 64, 67, 0.3),
-    0 4px 8px 3px rgba(60, 64, 67, 0.15);
+  background: var(--doc-surface);
+  box-shadow: var(--doc-card-shadow-strong);
 }
 .comment-card__resolved {
   display: inline-flex;
@@ -129,8 +125,8 @@ function onDelete() {
   margin-bottom: 8px;
   font-size: 11px;
   font-weight: 500;
-  color: #188038;
-  background: #e6f4ea;
+  color: var(--doc-success);
+  background: var(--doc-success-bg);
   border-radius: 10px;
 }
 .comment-card__head {
@@ -145,11 +141,11 @@ function onDelete() {
 .comment-card__author {
   font-size: 13px;
   font-weight: 600;
-  color: #202124;
+  color: var(--doc-text);
 }
 .comment-card__date {
   font-size: 11px;
-  color: #5f6368;
+  color: var(--doc-text-muted);
 }
 .comment-card__actions {
   display: flex;
@@ -162,22 +158,22 @@ function onDelete() {
   border: none;
   cursor: pointer;
   padding: 4px;
-  color: #5f6368;
+  color: var(--doc-text-muted);
   display: flex;
   border-radius: 50%;
 }
 .comment-card__icon-btn:hover {
-  background: rgba(60, 64, 67, 0.08);
+  background: var(--doc-shadow-subtle);
 }
 .comment-card__menu {
   position: absolute;
   top: 32px;
   right: 0;
-  background: #fff;
+  background: var(--doc-surface);
   border-radius: 8px;
   box-shadow:
-    0 2px 6px rgba(60, 64, 67, 0.3),
-    0 1px 2px rgba(60, 64, 67, 0.15);
+    0 2px 6px var(--doc-shadow-strong),
+    0 1px 2px var(--doc-shadow);
   z-index: 100;
   min-width: 120px;
   padding: 4px 0;
@@ -190,16 +186,16 @@ function onDelete() {
   background: none;
   text-align: left;
   font-size: 14px;
-  color: #202124;
+  color: var(--doc-text);
   cursor: pointer;
   font-family: inherit;
 }
 .comment-card__menu-item:hover {
-  background: #f1f3f4;
+  background: var(--doc-bg-hover);
 }
 .comment-card__body {
   font-size: 13px;
-  color: #202124;
+  color: var(--doc-text);
   line-height: 20px;
   margin-top: 6px;
 }

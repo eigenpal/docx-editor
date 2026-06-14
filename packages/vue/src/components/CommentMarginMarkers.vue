@@ -113,7 +113,7 @@ const containerStyle = computed<CSSProperties>(() => ({
   background: transparent;
   cursor: pointer;
   pointer-events: auto;
-  color: #5f6368;
+  color: var(--doc-text-muted);
   padding: 0;
   font-family: inherit;
   transition: opacity 0.15s ease;

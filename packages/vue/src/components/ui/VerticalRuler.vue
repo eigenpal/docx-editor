@@ -172,10 +172,10 @@ function triangleStyle(type: MarkerType): CSSProperties {
   const isActive = dragging.value === type;
   const isHovered = hovered.value === type;
   const color = isActive
-    ? 'var(--doc-primary-hover, #1557b0)'
+    ? 'var(--doc-primary-hover)'
     : isHovered
-      ? 'var(--doc-primary, #1a73e8)'
-      : 'var(--doc-primary, #1a73e8)';
+      ? 'var(--doc-primary)'
+      : 'var(--doc-primary)';
   return {
     position: 'absolute',
     top: '0px',
@@ -238,14 +238,14 @@ onBeforeUnmount(() => {
   position: absolute;
   right: 0;
   height: 1px;
-  background-color: var(--doc-text-subtle, #9aa0a6);
+  background-color: var(--doc-text-subtle);
 }
 .docx-vertical-ruler__tick-label {
   position: absolute;
   left: 2px;
   transform: translateY(-50%);
   font-size: 9px;
-  color: var(--doc-text-muted, #5f6368);
+  color: var(--doc-text-muted);
   font-family: sans-serif;
   white-space: nowrap;
 }

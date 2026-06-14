@@ -215,16 +215,16 @@ function onKeydown(e: KeyboardEvent) {
 .ps-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.5);
+  background: var(--doc-overlay);
   display: flex;
   align-items: center;
   justify-content: center;
   z-index: 10000;
 }
 .ps-dialog {
-  background: #fff;
+  background: var(--doc-surface);
   border-radius: 8px;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+  box-shadow: 0 4px 20px var(--doc-shadow);
   min-width: 400px;
   max-width: 480px;
   width: 100%;
@@ -232,10 +232,10 @@ function onKeydown(e: KeyboardEvent) {
 }
 .ps-header {
   padding: 16px 20px 12px;
-  border-bottom: 1px solid #e5e7eb;
+  border-bottom: 1px solid var(--doc-border);
   font-size: 16px;
   font-weight: 600;
-  color: #1f2937;
+  color: var(--doc-text);
 }
 .ps-body {
   padding: 16px 20px;
@@ -246,7 +246,7 @@ function onKeydown(e: KeyboardEvent) {
 .ps-section-label {
   font-size: 12px;
   font-weight: 600;
-  color: #6b7280;
+  color: var(--doc-text-muted);
   text-transform: uppercase;
   letter-spacing: 0.5px;
 }
@@ -261,33 +261,33 @@ function onKeydown(e: KeyboardEvent) {
 .ps-label {
   width: 80px;
   font-size: 13px;
-  color: #6b7280;
+  color: var(--doc-text-muted);
   flex-shrink: 0;
 }
 .ps-input {
   flex: 1;
   min-width: 0;
   padding: 6px 8px;
-  border: 1px solid #d1d5db;
+  border: 1px solid var(--doc-border-dark);
   border-radius: 4px;
   font-size: 13px;
-  background: #fff;
-  color: #1f2937;
+  background: var(--doc-surface);
+  color: var(--doc-text);
   box-sizing: border-box;
 }
 .ps-input:focus {
   outline: none;
-  border-color: #3b82f6;
+  border-color: var(--doc-primary);
 }
 .ps-unit {
   font-size: 11px;
-  color: #6b7280;
+  color: var(--doc-text-muted);
   width: 16px;
   flex-shrink: 0;
 }
 .ps-footer {
   padding: 12px 20px 16px;
-  border-top: 1px solid #e5e7eb;
+  border-top: 1px solid var(--doc-border);
   display: flex;
   justify-content: flex-end;
   gap: 8px;
@@ -295,21 +295,21 @@ function onKeydown(e: KeyboardEvent) {
 .ps-btn {
   padding: 6px 16px;
   font-size: 13px;
-  border: 1px solid #d1d5db;
+  border: 1px solid var(--doc-border-dark);
   border-radius: 4px;
   cursor: pointer;
-  background: #fff;
-  color: #1f2937;
+  background: var(--doc-surface);
+  color: var(--doc-text);
 }
 .ps-btn:hover {
-  background: #f9fafb;
+  background: var(--doc-bg);
 }
 .ps-btn--primary {
-  background: #3b82f6;
-  color: #fff;
-  border-color: #3b82f6;
+  background: var(--doc-primary);
+  color: var(--doc-on-primary);
+  border-color: var(--doc-primary);
 }
 .ps-btn--primary:hover {
-  background: #2563eb;
+  background: var(--doc-primary);
 }
 </style>

@@ -82,14 +82,14 @@ function select(value: T) {
   border: none;
   border-radius: 6px;
   background: transparent;
-  color: #64748b;
+  color: var(--doc-text-muted);
   cursor: pointer;
 }
 .docx-icon-grid__btn:hover:not(:disabled) {
-  background: rgba(241, 245, 249, 0.8);
-  color: #0f172a;
+  background: var(--doc-bg-hover);
+  color: var(--doc-text);
 }
-.docx-icon-grid__btn--open { background: #f1f5f9; }
+.docx-icon-grid__btn--open { background: var(--doc-bg-hover); }
 .docx-icon-grid__btn:disabled { opacity: 0.3; cursor: not-allowed; }
 .docx-icon-grid__panel {
   display: flex;
@@ -106,12 +106,12 @@ function select(value: T) {
   border: 1px solid transparent;
   border-radius: 4px;
   background: transparent;
-  color: #5f6368;
+  color: var(--doc-text-muted);
   cursor: pointer;
 }
-.docx-icon-grid__option:hover { background: #f3f4f6; }
+.docx-icon-grid__option:hover { background: var(--doc-bg-hover); }
 .docx-icon-grid__option--active {
-  background: rgba(26, 115, 232, 0.12);
-  color: #1a73e8;
+  background: var(--doc-primary-light);
+  color: var(--doc-primary);
 }
 </style>

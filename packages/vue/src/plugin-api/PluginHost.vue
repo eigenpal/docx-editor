@@ -160,16 +160,16 @@ onBeforeUnmount(() => {
 .plugin-host__editor { flex: 1; min-width: 0; min-height: 0; }
 .plugin-host__panel {
   flex-shrink: 0;
-  background: #fff;
-  border-left: 1px solid #e5e7eb;
+  background: var(--doc-surface);
+  border-left: 1px solid var(--doc-border);
 }
 .plugin-host--left .plugin-host__panel {
   border-left: none;
-  border-right: 1px solid #e5e7eb;
+  border-right: 1px solid var(--doc-border);
   order: -1;
 }
 .plugin-host--bottom .plugin-host__panel {
   border-left: none;
-  border-top: 1px solid #e5e7eb;
+  border-top: 1px solid var(--doc-border);
 }
 </style>

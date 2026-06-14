@@ -82,9 +82,9 @@ function pick(preset: TableBorderPreset) {
   width: 28px; height: 28px;
   display: inline-flex; align-items: center; justify-content: center;
   border: none; border-radius: 6px;
-  background: transparent; color: #64748b; cursor: pointer;
+  background: transparent; color: var(--doc-text-muted); cursor: pointer;
 }
-.docx-tbp__btn:hover:not(:disabled) { background: rgba(241, 245, 249, 0.8); }
+.docx-tbp__btn:hover:not(:disabled) { background: var(--doc-bg-hover); }
 .docx-tbp__panel {
   display: grid;
   grid-template-columns: repeat(5, 32px);
@@ -95,7 +95,7 @@ function pick(preset: TableBorderPreset) {
   width: 32px; height: 32px;
   display: inline-flex; align-items: center; justify-content: center;
   border: none; border-radius: 4px;
-  background: transparent; color: #5f6368; cursor: pointer;
+  background: transparent; color: var(--doc-text-muted); cursor: pointer;
 }
-.docx-tbp__option:hover { background: #f3f4f6; }
+.docx-tbp__option:hover { background: var(--doc-bg-hover); }
 </style>

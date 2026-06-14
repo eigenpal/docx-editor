@@ -213,7 +213,7 @@ function onRowHeight(value: { height: number | null; rule?: 'auto' | 'atLeast' |
   width: 1px;
   height: 20px;
   margin: 0 6px;
-  background: rgba(226, 232, 240, 0.5);
+  background: var(--doc-border);
   flex-shrink: 0;
 }
 </style>

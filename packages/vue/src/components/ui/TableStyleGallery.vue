@@ -64,15 +64,15 @@ function presetName(preset: TableStylePreset): string {
   padding: 6px;
   border: 2px solid transparent;
   border-radius: 6px;
-  background: #fff;
+  background: var(--doc-surface);
   cursor: pointer;
 }
 .tsg__item:hover {
-  border-color: #d1d5db;
+  border-color: var(--doc-border-dark);
 }
 .tsg__item--selected {
-  border-color: #3b82f6;
-  background: #eff6ff;
+  border-color: var(--doc-primary);
+  background: var(--doc-primary-light);
 }
 .tsg__preview {
   display: grid;
@@ -85,7 +85,7 @@ function presetName(preset: TableStylePreset): string {
 }
 .tsg__name {
   font-size: 9px;
-  color: #6b7280;
+  color: var(--doc-text-muted);
   text-align: center;
   line-height: 1.2;
   max-width: 72px;

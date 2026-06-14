@@ -46,8 +46,8 @@ defineEmits<{
 .docx-editor-toolbar {
   display: flex;
   flex-direction: column;
-  background: #fff;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+  background: var(--doc-surface);
+  box-shadow: 0 1px 2px var(--doc-shadow-subtle);
   flex-shrink: 0;
 }
 .docx-editor-toolbar__title-row {

@@ -72,7 +72,7 @@ const DIALOG_OVERLAY_STYLE: CSSProperties = {
   left: 0,
   right: 0,
   bottom: 0,
-  backgroundColor: 'rgba(0, 0, 0, 0.5)',
+  backgroundColor: 'var(--doc-overlay)',
   display: 'flex',
   alignItems: 'center',
   justifyContent: 'center',
@@ -80,9 +80,9 @@ const DIALOG_OVERLAY_STYLE: CSSProperties = {
 };
 
 const DIALOG_CONTENT_STYLE: CSSProperties = {
-  backgroundColor: 'white',
+  backgroundColor: 'var(--doc-surface)',
   borderRadius: '8px',
-  boxShadow: '0 4px 20px rgba(0, 0, 0, 0.15)',
+  boxShadow: '0 4px 20px var(--doc-shadow)',
   minWidth: '450px',
   maxWidth: '600px',
   width: '100%',
@@ -250,7 +250,7 @@ const BUTTON_BASE_STYLE: CSSProperties = {
 const PRIMARY_BUTTON_STYLE: CSSProperties = {
   ...BUTTON_BASE_STYLE,
   backgroundColor: 'var(--doc-primary)',
-  color: 'white',
+  color: 'var(--doc-on-primary)',
 };
 
 const SECONDARY_BUTTON_STYLE: CSSProperties = {

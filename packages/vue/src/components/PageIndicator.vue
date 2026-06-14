@@ -32,7 +32,7 @@ const { t } = useTranslation();
   right: 24px;
   top: 50%;
   transform: translateY(-50%);
-  background-color: rgba(0, 0, 0, 0.7);
+  background-color: var(--doc-overlay);
   color: white;
   padding: 6px 12px;
   border-radius: 4px;

@@ -34,8 +34,8 @@ export function AgentPanelToggle({
               borderRadius: 7,
               fontSize: 10,
               fontWeight: 600,
-              background: '#ef4444',
-              color: '#fff',
+              background: 'var(--doc-error)',
+              color: 'var(--doc-on-primary)',
               lineHeight: 1,
             }}
           >

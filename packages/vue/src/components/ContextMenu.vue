@@ -153,10 +153,10 @@ onBeforeUnmount(() => {
 .docx-context-menu {
   position: fixed;
   z-index: 10000;
-  background: #fff;
-  border: 1px solid #d1d5db;
+  background: var(--doc-surface);
+  border: 1px solid var(--doc-border-dark);
   border-radius: 8px;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+  box-shadow: 0 4px 16px var(--doc-shadow);
   min-width: 220px;
   padding: 6px 0;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
@@ -164,16 +164,16 @@ onBeforeUnmount(() => {
 }
 .docx-context-menu__preview {
   padding: 6px 12px 8px;
-  border-bottom: 1px solid #f1f3f4;
+  border-bottom: 1px solid var(--doc-bg-hover);
   font-size: 12px;
-  color: #5f6368;
+  color: var(--doc-text-muted);
   display: flex;
   gap: 6px;
   align-items: baseline;
 }
 .docx-context-menu__preview-text {
   font-style: italic;
-  color: #202124;
+  color: var(--doc-text);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -192,43 +192,43 @@ onBeforeUnmount(() => {
   background: transparent;
   cursor: pointer;
   font-size: 13px;
-  color: #1f2937;
+  color: var(--doc-text);
   text-align: left;
   width: 100%;
 }
-.docx-context-menu__item:hover { background: #f3f4f6; }
+.docx-context-menu__item:hover { background: var(--doc-bg-hover); }
 .docx-context-menu__icon {
   width: 18px;
   text-align: center;
-  color: #5f6368;
+  color: var(--doc-text-muted);
 }
 .docx-context-menu__custom {
   display: flex;
   gap: 4px;
   padding: 8px 8px 4px;
-  border-top: 1px solid #f1f3f4;
+  border-top: 1px solid var(--doc-bg-hover);
 }
 .docx-context-menu__custom-input {
   flex: 1;
   padding: 6px 8px;
-  border: 1px solid #d1d5db;
+  border: 1px solid var(--doc-border-dark);
   border-radius: 4px;
   font-size: 13px;
   outline: none;
 }
-.docx-context-menu__custom-input:focus { border-color: #1a73e8; }
+.docx-context-menu__custom-input:focus { border-color: var(--doc-primary); }
 .docx-context-menu__custom-submit {
   padding: 6px 12px;
   font-size: 13px;
   border: none;
-  background: #1a73e8;
-  color: #fff;
+  background: var(--doc-primary);
+  color: var(--doc-on-primary);
   border-radius: 4px;
   cursor: pointer;
 }
 .docx-context-menu__custom-submit:disabled {
-  background: #f1f3f4;
-  color: #80868b;
+  background: var(--doc-bg-hover);
+  color: var(--doc-text-subtle);
   cursor: not-allowed;
 }
 </style>

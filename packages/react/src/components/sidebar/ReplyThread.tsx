@@ -20,10 +20,10 @@ export function ReplyThread({ replies, isExpanded }: ReplyThreadProps) {
           style={{
             fontSize: 12,
             fontWeight: 500,
-            color: '#1a73e8',
+            color: 'var(--doc-primary)',
             paddingTop: 6,
             paddingBottom: 6,
-            borderTop: '1px solid #e8eaed',
+            borderTop: '1px solid var(--doc-border-light)',
           }}
         >
           {t('comments.replyCount', { count: hiddenCount })}
@@ -35,7 +35,7 @@ export function ReplyThread({ replies, isExpanded }: ReplyThreadProps) {
           style={{
             marginBottom: isExpanded ? 8 : 0,
             paddingTop: 8,
-            borderTop: '1px solid #e8eaed',
+            borderTop: '1px solid var(--doc-border-light)',
           }}
         >
           <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
@@ -43,16 +43,18 @@ export function ReplyThread({ replies, isExpanded }: ReplyThreadProps) {
               {getInitials(reply.author || 'U')}
             </div>
             <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontSize: 13, fontWeight: 600, color: '#202124' }}>
+              <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--doc-text)' }}>
                 {reply.author || t('comments.unknown')}
               </div>
-              <div style={{ fontSize: 11, color: '#5f6368' }}>{formatDate(reply.date)}</div>
+              <div style={{ fontSize: 11, color: 'var(--doc-text-muted)' }}>
+                {formatDate(reply.date)}
+              </div>
             </div>
           </div>
           <div
             style={{
               fontSize: 13,
-              color: '#202124',
+              color: 'var(--doc-text)',
               lineHeight: '20px',
               marginTop: 4,
               ...(!isExpanded

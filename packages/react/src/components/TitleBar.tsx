@@ -71,7 +71,7 @@ export function DocumentName({ value, onChange, placeholder, editable = true }: 
 
   if (!editable) {
     return (
-      <span className="text-base font-normal text-slate-800 px-2 py-0 min-w-[100px] max-w-[300px] truncate leading-tight">
+      <span className="text-base font-normal text-foreground px-2 py-0 min-w-[100px] max-w-[300px] truncate leading-tight">
         {displayName || resolvedPlaceholder}
       </span>
     );
@@ -85,7 +85,7 @@ export function DocumentName({ value, onChange, placeholder, editable = true }: 
         onChange?.(raw.endsWith('.docx') ? raw : raw + '.docx');
       }}
       placeholder={resolvedPlaceholder}
-      className="text-base font-normal text-slate-800 bg-transparent border-0 outline-none px-2 py-0 rounded hover:bg-slate-50 focus:bg-white focus:ring-1 focus:ring-slate-300 min-w-[100px] max-w-[300px] truncate leading-tight"
+      className="text-base font-normal text-foreground bg-transparent border-0 outline-none px-2 py-0 rounded hover:bg-muted focus:bg-white focus:ring-1 focus:ring-ring min-w-[100px] max-w-[300px] truncate leading-tight"
       aria-label={t('titleBar.documentNameAriaLabel')}
     />
   );

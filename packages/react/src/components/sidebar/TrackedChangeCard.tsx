@@ -95,9 +95,13 @@ export function TrackedChangeCard({
       <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
         <div style={avatarStyle(authorName)}>{getInitials(authorName)}</div>
         <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontSize: 13, fontWeight: 600, color: '#202124' }}>{authorName}</div>
+          <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--doc-text)' }}>
+            {authorName}
+          </div>
           {change.date && (
-            <div style={{ fontSize: 11, color: '#5f6368' }}>{formatDate(change.date)}</div>
+            <div style={{ fontSize: 11, color: 'var(--doc-text-muted)' }}>
+              {formatDate(change.date)}
+            </div>
           )}
         </div>
         {isExpanded && (
@@ -112,15 +116,15 @@ export function TrackedChangeCard({
         )}
       </div>
 
-      <div style={{ fontSize: 13, lineHeight: '20px', color: '#202124', marginTop: 6 }}>
+      <div style={{ fontSize: 13, lineHeight: '20px', color: 'var(--doc-text)', marginTop: 6 }}>
         {change.type === 'replacement' ? (
           <>
             {t('trackedChanges.replaced')}{' '}
-            <span style={{ color: '#c5221f', fontWeight: 500 }}>
+            <span style={{ color: 'var(--doc-error)', fontWeight: 500 }}>
               &quot;{truncateText(change.deletedText || '')}&quot;
             </span>{' '}
             {t('trackedChanges.with')}{' '}
-            <span style={{ color: '#137333', fontWeight: 500 }}>
+            <span style={{ color: 'var(--doc-success)', fontWeight: 500 }}>
               &quot;{truncateText(change.text)}&quot;
             </span>
           </>
@@ -130,7 +134,7 @@ export function TrackedChangeCard({
             {change.text ? (
               <>
                 {': '}
-                <span style={{ color: '#137333', fontWeight: 500 }}>
+                <span style={{ color: 'var(--doc-success)', fontWeight: 500 }}>
                   &quot;{truncateText(change.text)}&quot;
                 </span>
               </>
@@ -142,7 +146,7 @@ export function TrackedChangeCard({
             {change.text ? (
               <>
                 {': '}
-                <span style={{ color: '#c5221f', fontWeight: 500 }}>
+                <span style={{ color: 'var(--doc-error)', fontWeight: 500 }}>
                   &quot;{truncateText(change.text)}&quot;
                 </span>
               </>
@@ -154,38 +158,58 @@ export function TrackedChangeCard({
             {change.text ? (
               <>
                 {': '}
-                <span style={{ color: '#5f6368', fontWeight: 500 }}>
+                <span style={{ color: 'var(--doc-text-muted)', fontWeight: 500 }}>
                   &quot;{truncateText(change.text)}&quot;
                 </span>
               </>
             ) : null}
           </>
         ) : change.type === 'rowInserted' ? (
-          <span style={{ color: '#137333', fontWeight: 500 }}>{t('revisions.rowInserted')}</span>
+          <span style={{ color: 'var(--doc-success)', fontWeight: 500 }}>
+            {t('revisions.rowInserted')}
+          </span>
         ) : change.type === 'rowDeleted' ? (
-          <span style={{ color: '#c5221f', fontWeight: 500 }}>{t('revisions.rowDeleted')}</span>
+          <span style={{ color: 'var(--doc-error)', fontWeight: 500 }}>
+            {t('revisions.rowDeleted')}
+          </span>
         ) : change.type === 'cellInserted' ? (
-          <span style={{ color: '#137333', fontWeight: 500 }}>{t('revisions.cellInserted')}</span>
+          <span style={{ color: 'var(--doc-success)', fontWeight: 500 }}>
+            {t('revisions.cellInserted')}
+          </span>
         ) : change.type === 'cellDeleted' ? (
-          <span style={{ color: '#c5221f', fontWeight: 500 }}>{t('revisions.cellDeleted')}</span>
+          <span style={{ color: 'var(--doc-error)', fontWeight: 500 }}>
+            {t('revisions.cellDeleted')}
+          </span>
         ) : change.type === 'cellMerged' ? (
-          <span style={{ color: '#5f6368', fontWeight: 500 }}>{t('revisions.cellMerged')}</span>
+          <span style={{ color: 'var(--doc-text-muted)', fontWeight: 500 }}>
+            {t('revisions.cellMerged')}
+          </span>
         ) : change.type === 'rowPropertiesChanged' ? (
-          <span style={{ color: '#5f6368' }}>{t('revisions.rowPropertiesChanged')}</span>
+          <span style={{ color: 'var(--doc-text-muted)' }}>
+            {t('revisions.rowPropertiesChanged')}
+          </span>
         ) : change.type === 'cellPropertiesChanged' ? (
-          <span style={{ color: '#5f6368' }}>{t('revisions.cellPropertiesChanged')}</span>
+          <span style={{ color: 'var(--doc-text-muted)' }}>
+            {t('revisions.cellPropertiesChanged')}
+          </span>
         ) : change.type === 'tablePropertiesChanged' ? (
-          <span style={{ color: '#5f6368' }}>{t('revisions.tablePropertiesChanged')}</span>
+          <span style={{ color: 'var(--doc-text-muted)' }}>
+            {t('revisions.tablePropertiesChanged')}
+          </span>
         ) : change.type === 'tableInserted' ? (
-          <span style={{ color: '#137333', fontWeight: 500 }}>{t('revisions.tableInserted')}</span>
+          <span style={{ color: 'var(--doc-success)', fontWeight: 500 }}>
+            {t('revisions.tableInserted')}
+          </span>
         ) : change.type === 'tableDeleted' ? (
-          <span style={{ color: '#c5221f', fontWeight: 500 }}>{t('revisions.tableDeleted')}</span>
+          <span style={{ color: 'var(--doc-error)', fontWeight: 500 }}>
+            {t('revisions.tableDeleted')}
+          </span>
         ) : (
           <>
             {change.type === 'insertion' ? t('trackedChanges.added') : t('trackedChanges.deleted')}{' '}
             <span
               style={{
-                color: change.type === 'insertion' ? '#137333' : '#c5221f',
+                color: change.type === 'insertion' ? 'var(--doc-success)' : 'var(--doc-error)',
                 fontWeight: 500,
               }}
             >

@@ -234,7 +234,7 @@ export const KeyboardShortcutsDialog: React.FC<KeyboardShortcutsDialogProps> = (
         left: 0,
         right: 0,
         bottom: 0,
-        backgroundColor: 'rgba(0, 0, 0, 0.5)',
+        backgroundColor: 'var(--doc-overlay)',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
@@ -248,9 +248,9 @@ export const KeyboardShortcutsDialog: React.FC<KeyboardShortcutsDialogProps> = (
           width: '600px',
           maxWidth: '90vw',
           maxHeight: '80vh',
-          backgroundColor: 'white',
+          backgroundColor: 'var(--doc-surface)',
           borderRadius: '12px',
-          boxShadow: '0 4px 24px rgba(0, 0, 0, 0.2)',
+          boxShadow: '0 4px 24px var(--doc-shadow)',
           display: 'flex',
           flexDirection: 'column',
           overflow: 'hidden',
@@ -397,7 +397,7 @@ export const KeyboardShortcutsDialog: React.FC<KeyboardShortcutsDialogProps> = (
                 <kbd
                   style={{
                     padding: '2px 6px',
-                    backgroundColor: 'white',
+                    backgroundColor: 'var(--doc-surface)',
                     borderRadius: '4px',
                     border: '1px solid var(--doc-border-light)',
                   }}

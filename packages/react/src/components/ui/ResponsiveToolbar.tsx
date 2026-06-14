@@ -302,10 +302,10 @@ const OverflowMenu: React.FC<OverflowMenuProps> = ({ items, isOpen, onClose, anc
         top: '100%',
         right: 0,
         marginTop: '4px',
-        backgroundColor: 'white',
+        backgroundColor: 'var(--doc-surface)',
         border: '1px solid var(--doc-border)',
         borderRadius: '8px',
-        boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)',
+        boxShadow: '0 4px 12px var(--doc-shadow)',
         padding: '8px',
         zIndex: 1000,
         display: 'flex',
@@ -340,7 +340,7 @@ export const ResponsiveToolbar: React.FC<ResponsiveToolbarProps> = ({
   className = '',
   style,
   height = 44,
-  backgroundColor = 'var(--doc-toolbar-bg)',
+  backgroundColor = 'var(--doc-surface)',
   borderBottom = '1px solid var(--doc-border)',
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);

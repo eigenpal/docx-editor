@@ -94,7 +94,7 @@ export function PrintButton({
     gap: compact ? '4px' : '6px',
     padding: compact ? '4px 8px' : '6px 12px',
     fontSize: compact ? '13px' : '14px',
-    backgroundColor: 'white',
+    backgroundColor: 'var(--doc-surface)',
     border: '1px solid var(--doc-border)',
     borderRadius: '4px',
     cursor: disabled ? 'not-allowed' : 'pointer',

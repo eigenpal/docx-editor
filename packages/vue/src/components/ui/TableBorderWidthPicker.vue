@@ -72,9 +72,9 @@ function pick(eighths: number) {
   width: 28px; height: 28px;
   display: inline-flex; align-items: center; justify-content: center;
   border: none; border-radius: 6px;
-  background: transparent; color: #64748b; cursor: pointer;
+  background: transparent; color: var(--doc-text-muted); cursor: pointer;
 }
-.docx-tbwidth__btn:hover:not(:disabled) { background: rgba(241, 245, 249, 0.8); }
+.docx-tbwidth__btn:hover:not(:disabled) { background: var(--doc-bg-hover); }
 .docx-tbwidth__panel {
   padding: 4px 0;
   min-width: 120px;
@@ -90,15 +90,15 @@ function pick(eighths: number) {
   cursor: pointer;
   text-align: left;
 }
-.docx-tbwidth__option:hover { background: #f3f4f6; }
+.docx-tbwidth__option:hover { background: var(--doc-bg-hover); }
 .docx-tbwidth__preview {
   flex-shrink: 0;
   display: inline-block;
   width: 40px;
-  border-top: 1px solid #1f2937;
+  border-top: 1px solid var(--doc-text);
 }
 .docx-tbwidth__label {
   font-size: 13px;
-  color: #1f2937;
+  color: var(--doc-text);
 }
 </style>

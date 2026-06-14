@@ -43,10 +43,10 @@ const DEFAULT_GRID_COLUMNS = 5;
 // ============================================================================
 
 const dropdownPanelStyle: React.CSSProperties = {
-  backgroundColor: 'white',
+  backgroundColor: 'var(--doc-surface)',
   border: '1px solid var(--doc-border)',
   borderRadius: 6,
-  boxShadow: '0 4px 16px rgba(0, 0, 0, 0.12)',
+  boxShadow: '0 4px 16px var(--doc-shadow)',
   padding: 8,
 };
 
@@ -93,8 +93,8 @@ export function TableGridPicker({
       variant="ghost"
       size="icon-sm"
       className={cn(
-        'text-slate-500 hover:text-slate-900 hover:bg-slate-100/80',
-        isOpen && 'bg-slate-100',
+        'text-muted-foreground hover:text-foreground hover:bg-muted/80',
+        isOpen && 'bg-muted',
         disabled && 'opacity-30 cursor-not-allowed',
         className
       )}

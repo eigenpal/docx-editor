@@ -470,7 +470,7 @@ export function TableStyleGallery({
             backgroundColor: 'var(--doc-bg)',
             border: '1px solid var(--doc-border)',
             borderRadius: 6,
-            boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+            boxShadow: '0 4px 12px var(--doc-shadow)',
             padding: 8,
             display: 'flex',
             flexWrap: 'wrap',

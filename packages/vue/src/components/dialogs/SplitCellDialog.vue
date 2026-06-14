@@ -93,16 +93,16 @@ function apply() {
 .docx-split-cell {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.5);
+  background: var(--doc-overlay);
   display: flex;
   align-items: center;
   justify-content: center;
   z-index: 10000;
 }
 .docx-split-cell__dialog {
-  background: #fff;
+  background: var(--doc-surface);
   border-radius: 8px;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+  box-shadow: 0 4px 20px var(--doc-shadow);
   min-width: 360px;
   max-width: 440px;
   width: 100%;
@@ -110,7 +110,7 @@ function apply() {
 }
 .docx-split-cell__header {
   padding: 16px 20px 12px;
-  border-bottom: 1px solid #e5e7eb;
+  border-bottom: 1px solid var(--doc-border);
   font-size: 16px;
   font-weight: 600;
 }
@@ -128,12 +128,12 @@ function apply() {
 .docx-split-cell__label {
   width: 160px;
   font-size: 13px;
-  color: #1f2937;
+  color: var(--doc-text);
 }
 .docx-split-cell__input {
   flex: 1;
   height: 32px;
-  border: 1px solid #d1d5db;
+  border: 1px solid var(--doc-border-dark);
   border-radius: 4px;
   padding: 0 8px;
   font-size: 13px;
@@ -150,18 +150,18 @@ function apply() {
   font-size: 14px;
   border-radius: 4px;
   cursor: pointer;
-  border: 1px solid #d1d5db;
-  background: #fff;
+  border: 1px solid var(--doc-border-dark);
+  background: var(--doc-surface);
 }
 .docx-split-cell__apply {
-  background: #1a73e8;
-  border-color: #1a73e8;
-  color: #fff;
+  background: var(--doc-primary);
+  border-color: var(--doc-primary);
+  color: var(--doc-on-primary);
 }
 .docx-split-cell__apply:disabled {
-  background: #f1f3f4;
-  border-color: #f1f3f4;
-  color: #80868b;
+  background: var(--doc-bg-hover);
+  border-color: var(--doc-bg-hover);
+  color: var(--doc-text-subtle);
   cursor: not-allowed;
 }
 </style>

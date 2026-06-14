@@ -65,7 +65,7 @@ const label = computed(() => {
 
 <style scoped>
 .template-annotation-chip {
-  border: 1px solid #d1d5db;
+  border: 1px solid var(--doc-border-dark);
   border-radius: 6px;
   padding: 6px 10px;
   font-size: 13px;
@@ -84,7 +84,7 @@ const label = computed(() => {
 .template-annotation-chip__nested {
   display: block;
   font-size: 11px;
-  color: #6b7280;
+  color: var(--doc-text-muted);
   margin-top: 2px;
 }
 </style>

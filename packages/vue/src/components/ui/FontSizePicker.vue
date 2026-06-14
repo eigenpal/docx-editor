@@ -109,14 +109,14 @@ function commit(e: Event) {
   height: 22px;
   font-size: 14px;
   line-height: 1;
-  border: 1px solid #e2e8f0;
+  border: 1px solid var(--doc-border);
   border-radius: 3px;
   padding: 0;
-  background: #fff;
+  background: var(--doc-surface);
   cursor: pointer;
 }
 .docx-font-size__btn:hover:not(:disabled) {
-  background: #f1f5f9;
+  background: var(--doc-bg-hover);
 }
 .docx-font-size__btn:disabled {
   cursor: not-allowed;
@@ -134,6 +134,6 @@ function commit(e: Event) {
   margin: 0 2px;
 }
 .docx-font-size__input:focus {
-  border-color: #1a73e8;
+  border-color: var(--doc-primary);
 }
 </style>

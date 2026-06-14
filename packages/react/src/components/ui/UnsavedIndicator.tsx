@@ -211,7 +211,7 @@ const getIndicatorStyles = (
         fontSize: '11px',
         fontWeight: 500,
         backgroundColor: hasUnsavedChanges ? unsavedColor : savedColor,
-        color: 'white',
+        color: 'var(--doc-on-primary)',
       };
 
     case 'text':

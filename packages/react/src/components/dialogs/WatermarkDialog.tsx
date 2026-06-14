@@ -37,7 +37,7 @@ const OVERLAY: CSSProperties = {
   left: 0,
   right: 0,
   bottom: 0,
-  backgroundColor: 'rgba(0, 0, 0, 0.5)',
+  backgroundColor: 'var(--doc-overlay)',
   display: 'flex',
   alignItems: 'center',
   justifyContent: 'center',
@@ -45,9 +45,9 @@ const OVERLAY: CSSProperties = {
 };
 
 const CONTENT: CSSProperties = {
-  backgroundColor: 'white',
+  backgroundColor: 'var(--doc-surface)',
   borderRadius: 8,
-  boxShadow: '0 4px 20px rgba(0, 0, 0, 0.15)',
+  boxShadow: '0 4px 20px var(--doc-shadow)',
   minWidth: 400,
   maxWidth: 480,
   width: '100%',
@@ -118,7 +118,7 @@ const BTN_BASE: CSSProperties = {
 const PRIMARY_BTN: CSSProperties = {
   ...BTN_BASE,
   backgroundColor: 'var(--doc-primary)',
-  color: 'white',
+  color: 'var(--doc-on-primary)',
   borderColor: 'var(--doc-primary)',
 };
 const SECONDARY_BTN: CSSProperties = { ...BTN_BASE };

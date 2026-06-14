@@ -18,8 +18,8 @@ const CELL_GAP = 2;
 const cellStyle: CSSProperties = {
   width: CELL_SIZE,
   height: CELL_SIZE,
-  backgroundColor: 'white',
-  border: '1px solid var(--doc-border, #d1d5db)',
+  backgroundColor: 'var(--doc-surface)',
+  border: '1px solid var(--doc-border)',
   borderRadius: 2,
   transition: 'background-color 0.1s, border-color 0.1s',
   cursor: 'pointer',
@@ -27,15 +27,15 @@ const cellStyle: CSSProperties = {
 
 const cellSelectedStyle: CSSProperties = {
   ...cellStyle,
-  backgroundColor: 'var(--doc-primary, #3b82f6)',
-  border: '1px solid var(--doc-primary, #3b82f6)',
+  backgroundColor: 'var(--doc-primary)',
+  border: '1px solid var(--doc-primary)',
 };
 
 const labelStyle: CSSProperties = {
   marginTop: 6,
   fontSize: 11,
   fontWeight: 500,
-  color: 'var(--doc-text, #374151)',
+  color: 'var(--doc-text)',
   textAlign: 'center',
 };
 
