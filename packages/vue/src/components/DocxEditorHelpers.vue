@@ -45,14 +45,14 @@ defineProps<{
   justify-content: center;
   height: 100%;
   gap: 20px;
-  color: #5f6368;
+  color: var(--doc-text-muted);
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
 }
 .docx-editor-helpers__spinner {
   width: 36px;
   height: 36px;
-  border: 3px solid #e5e7eb;
-  border-top-color: #1a73e8;
+  border: 3px solid var(--doc-border);
+  border-top-color: var(--doc-primary);
   border-radius: 50%;
   animation: docx-helpers-spin 0.8s linear infinite;
 }
@@ -65,12 +65,12 @@ defineProps<{
 .docx-editor-helpers__retry {
   padding: 6px 16px;
   font-size: 14px;
-  border: 1px solid #d1d5db;
+  border: 1px solid var(--doc-border-dark);
   border-radius: 4px;
-  background: #fff;
+  background: var(--doc-surface);
   cursor: pointer;
 }
-.docx-editor-helpers__retry:hover { background: #f1f3f4; }
+.docx-editor-helpers__retry:hover { background: var(--doc-bg-hover); }
 @keyframes docx-helpers-spin {
   to { transform: rotate(360deg); }
 }

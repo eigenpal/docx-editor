@@ -92,19 +92,19 @@ defineEmits<{
   border: none;
   border-radius: 6px;
   background: transparent;
-  color: #64748b;
+  color: var(--doc-text-muted);
   cursor: pointer;
 }
 .docx-list-btns__btn:hover:not(:disabled) {
-  background: rgba(241, 245, 249, 0.8);
-  color: #0f172a;
+  background: var(--doc-bg-hover);
+  color: var(--doc-text);
 }
 .docx-list-btns__btn--active {
-  background: #0f172a;
-  color: #fff;
+  background: var(--doc-text);
+  color: var(--doc-on-primary);
 }
 .docx-list-btns__btn--active:hover {
-  background: #1e293b;
+  background: var(--doc-text);
 }
 .docx-list-btns__btn:disabled {
   opacity: 0.3;

@@ -42,12 +42,12 @@ const emit = defineEmits<{
   border: none;
   border-radius: 6px;
   background: transparent;
-  color: #64748b;
+  color: var(--doc-text-muted);
   cursor: pointer;
 }
 .docx-table-merge:hover:not(:disabled) {
-  background: rgba(241, 245, 249, 0.8);
-  color: #0f172a;
+  background: var(--doc-bg-hover);
+  color: var(--doc-text);
 }
 .docx-table-merge:disabled {
   opacity: 0.3;

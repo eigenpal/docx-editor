@@ -272,16 +272,16 @@ function onKeydown(e: KeyboardEvent) {
 .wm-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.5);
+  background: var(--doc-overlay);
   display: flex;
   align-items: center;
   justify-content: center;
   z-index: 10000;
 }
 .wm-dialog {
-  background: #fff;
+  background: var(--doc-surface);
   border-radius: 8px;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+  box-shadow: 0 4px 20px var(--doc-shadow);
   min-width: 400px;
   max-width: 480px;
   width: 100%;
@@ -335,7 +335,7 @@ function onKeydown(e: KeyboardEvent) {
   border: 1px solid var(--doc-border);
   border-radius: 4px;
   font-size: 13px;
-  background: #fff;
+  background: var(--doc-surface);
   color: var(--doc-text);
   box-sizing: border-box;
 }
@@ -369,15 +369,15 @@ function onKeydown(e: KeyboardEvent) {
   border: 1px solid var(--doc-border);
   border-radius: 4px;
   cursor: pointer;
-  background: #fff;
+  background: var(--doc-surface);
   color: var(--doc-text);
 }
 .wm-btn:hover {
-  background: #f9fafb;
+  background: var(--doc-bg);
 }
 .wm-btn--primary {
   background: var(--doc-primary);
-  color: #fff;
+  color: var(--doc-on-primary);
   border-color: var(--doc-primary);
 }
 .wm-btn--primary:hover {

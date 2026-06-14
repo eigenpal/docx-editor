@@ -38,17 +38,17 @@ function handlePrint() {
 <style scoped>
 .print-btn {
   padding: 4px 12px;
-  border: 1px solid #d1d5db;
+  border: 1px solid var(--doc-border-dark);
   border-radius: 4px;
-  background: #fff;
+  background: var(--doc-surface);
   cursor: pointer;
   font-size: 13px;
-  color: #374151;
+  color: var(--doc-text-muted);
   display: flex;
   align-items: center;
   gap: 4px;
 }
-.print-btn:hover:not(:disabled) { background: #f3f4f6; }
+.print-btn:hover:not(:disabled) { background: var(--doc-bg-hover); }
 .print-btn:disabled { opacity: 0.5; cursor: default; }
 .print-btn__icon { font-size: 14px; }
 </style>

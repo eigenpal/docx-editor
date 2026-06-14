@@ -221,7 +221,7 @@ export function SplitCellIcon(): React.ReactElement {
 }
 
 export function DeleteTableIcon(): React.ReactElement {
-  return <MaterialSymbol name="delete" size={ICON_SIZE} className="text-red-600" />;
+  return <MaterialSymbol name="delete" size={ICON_SIZE} className="text-destructive" />;
 }
 
 // ============================================================================
@@ -246,7 +246,7 @@ const TOOLBAR_STYLES: Record<string, CSSProperties> = {
   containerFloating: {
     position: 'absolute',
     zIndex: 1000,
-    boxShadow: '0 2px 8px rgba(0, 0, 0, 0.15)',
+    boxShadow: '0 2px 8px var(--doc-shadow)',
   },
   group: {
     display: 'flex',

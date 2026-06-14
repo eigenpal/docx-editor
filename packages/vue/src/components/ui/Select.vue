@@ -43,10 +43,10 @@ function onChange(e: Event) {
 .docx-select {
   height: 32px;
   font-size: 14px;
-  border: 1px solid #d1d5db;
+  border: 1px solid var(--doc-border-dark);
   border-radius: 6px;
   padding: 0 8px;
-  background: #fff;
+  background: var(--doc-surface);
   cursor: pointer;
 }
 .docx-select:disabled {

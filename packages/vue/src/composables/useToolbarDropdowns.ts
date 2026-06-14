@@ -74,5 +74,6 @@ export function useToolbarDropdowns(refs: UseToolbarDropdownsOptions) {
     openDropdown,
     dropdownMenuStyle,
     toggleDropdown,
+    recomputeDropdownPos,
   };
 }

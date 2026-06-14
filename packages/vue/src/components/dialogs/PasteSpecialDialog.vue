@@ -83,52 +83,52 @@ function apply() {
 .psd-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.4);
+  background: var(--doc-overlay);
   display: flex;
   align-items: center;
   justify-content: center;
   z-index: 10000;
 }
 .psd-dialog {
-  background: #fff;
+  background: var(--doc-surface);
   border-radius: 8px;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+  box-shadow: 0 4px 20px var(--doc-shadow);
   width: 380px;
   max-width: 90vw;
 }
 .psd-dialog__header {
   padding: 16px 20px 12px;
-  border-bottom: 1px solid #e5e7eb;
+  border-bottom: 1px solid var(--doc-border);
   font-size: 16px;
   font-weight: 600;
-  color: #1f2937;
+  color: var(--doc-text);
 }
 .psd-dialog__body {
   padding: 16px 20px;
 }
 .psd-dialog__footer {
   padding: 12px 20px 16px;
-  border-top: 1px solid #e5e7eb;
+  border-top: 1px solid var(--doc-border);
   display: flex;
   justify-content: flex-end;
   gap: 8px;
 }
 .psd-preview {
   padding: 8px 10px;
-  background: #f9fafb;
-  border: 1px solid #e5e7eb;
+  background: var(--doc-bg);
+  border: 1px solid var(--doc-border);
   border-radius: 4px;
   margin-bottom: 12px;
 }
 .psd-preview__label {
   display: block;
   font-size: 11px;
-  color: #9ca3af;
+  color: var(--doc-text-subtle);
   margin-bottom: 4px;
 }
 .psd-preview__text {
   font-size: 12px;
-  color: #374151;
+  color: var(--doc-text-muted);
   font-family: ui-monospace, monospace;
   word-break: break-all;
 }
@@ -142,17 +142,17 @@ function apply() {
   align-items: flex-start;
   gap: 10px;
   padding: 10px 12px;
-  border: 2px solid #e5e7eb;
+  border: 2px solid var(--doc-border);
   border-radius: 6px;
   cursor: pointer;
   transition: border-color 0.15s;
 }
 .psd-option:hover {
-  border-color: #d1d5db;
+  border-color: var(--doc-border-dark);
 }
 .psd-option--selected {
-  border-color: #3b82f6;
-  background: #eff6ff;
+  border-color: var(--doc-primary);
+  background: var(--doc-primary-light);
 }
 .psd-option input {
   margin-top: 2px;
@@ -164,23 +164,23 @@ function apply() {
 .psd-option__name {
   font-size: 13px;
   font-weight: 500;
-  color: #1f2937;
+  color: var(--doc-text);
 }
 .psd-option__desc {
   font-size: 11px;
-  color: #9ca3af;
+  color: var(--doc-text-subtle);
 }
 .psd-btn {
   padding: 6px 16px;
   font-size: 13px;
-  border: 1px solid #d1d5db;
+  border: 1px solid var(--doc-border-dark);
   border-radius: 4px;
   cursor: pointer;
-  background: #fff;
+  background: var(--doc-surface);
 }
 .psd-btn--primary {
-  background: #1a73e8;
-  color: #fff;
-  border-color: #1a73e8;
+  background: var(--doc-primary);
+  color: var(--doc-on-primary);
+  border-color: var(--doc-primary);
 }
 </style>

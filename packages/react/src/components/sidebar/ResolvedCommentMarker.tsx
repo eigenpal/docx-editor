@@ -22,7 +22,7 @@ export function ResolvedCommentMarker({
         display: 'inline-flex',
         alignItems: 'center',
         cursor: 'pointer',
-        color: '#5f6368',
+        color: 'var(--doc-text-muted)',
         padding: 2,
       }}
       onMouseOver={(e) => {

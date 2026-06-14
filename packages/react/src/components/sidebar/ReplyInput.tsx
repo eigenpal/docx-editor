@@ -4,27 +4,27 @@ import { useTranslation } from '../../i18n';
 
 const ACTIVE_INPUT_STYLE: React.CSSProperties = {
   width: '100%',
-  border: '1px solid #1a73e8',
+  border: '1px solid var(--doc-primary)',
   borderRadius: 20,
   outline: 'none',
   fontSize: 14,
   padding: '8px 16px',
   fontFamily: 'inherit',
   boxSizing: 'border-box',
-  color: '#202124',
+  color: 'var(--doc-text)',
 };
 
 const INACTIVE_INPUT_STYLE: React.CSSProperties = {
   width: '100%',
-  border: '1px solid #dadce0',
+  border: '1px solid var(--doc-border-light)',
   borderRadius: 20,
   outline: 'none',
   fontSize: 14,
   padding: '8px 16px',
   fontFamily: 'inherit',
-  color: '#80868b',
+  color: 'var(--doc-text-subtle)',
   cursor: 'text',
-  backgroundColor: '#fff',
+  backgroundColor: 'var(--doc-surface)',
   boxSizing: 'border-box',
 };
 

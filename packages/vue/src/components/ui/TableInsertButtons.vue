@@ -59,12 +59,12 @@ const INSERT_ACTIONS: { action: TableAction; icon: string; label: string }[] = [
   border: none;
   border-radius: 6px;
   background: transparent;
-  color: #64748b;
+  color: var(--doc-text-muted);
   cursor: pointer;
 }
 .docx-table-insert__btn:hover:not(:disabled) {
-  background: rgba(241, 245, 249, 0.8);
-  color: #0f172a;
+  background: var(--doc-bg-hover);
+  color: var(--doc-text);
 }
 .docx-table-insert__btn:disabled {
   opacity: 0.3;

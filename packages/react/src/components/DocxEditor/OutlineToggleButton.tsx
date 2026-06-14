@@ -40,7 +40,11 @@ export function OutlineToggleButton({
         alignItems: 'center',
       }}
     >
-      <MaterialSymbol name="format_list_bulleted" size={20} style={{ color: '#444746' }} />
+      <MaterialSymbol
+        name="format_list_bulleted"
+        size={20}
+        style={{ color: 'var(--doc-text-muted)' }}
+      />
     </button>
   );
 }

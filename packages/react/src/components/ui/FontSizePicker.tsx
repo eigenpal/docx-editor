@@ -220,7 +220,7 @@ export function FontSizePicker({
         variant="ghost"
         size="icon-sm"
         className={cn(
-          'h-7 w-7 text-slate-500 hover:text-slate-900 hover:bg-slate-100/80 rounded-r-none',
+          'h-7 w-7 text-muted-foreground hover:text-foreground hover:bg-muted/80 rounded-r-none',
           disabled && 'opacity-30 cursor-not-allowed'
         )}
         onMouseDown={handleDecrease}
@@ -242,8 +242,8 @@ export function FontSizePicker({
             onBlur={handleInputBlur}
             onKeyDown={handleInputKeyDown}
             className={cn(
-              'h-7 w-10 text-center text-sm border border-slate-300 bg-white',
-              'focus:outline-none focus:ring-1 focus:ring-slate-400',
+              'h-7 w-10 text-center text-sm border border-input bg-white',
+              'focus:outline-none focus:ring-1 focus:ring-ring',
               'rounded-none'
             )}
             aria-label={t('fontSize.label')}
@@ -254,9 +254,9 @@ export function FontSizePicker({
             type="button"
             onClick={handleInputClick}
             className={cn(
-              'h-7 w-10 text-center text-sm border border-slate-200 bg-white',
-              'hover:border-slate-300 hover:bg-slate-50',
-              'focus:outline-none focus:ring-1 focus:ring-slate-400',
+              'h-7 w-10 text-center text-sm border border-border bg-white',
+              'hover:border-input hover:bg-slate-50',
+              'focus:outline-none focus:ring-1 focus:ring-ring',
               'rounded-none',
               disabled && 'opacity-50 cursor-not-allowed'
             )}
@@ -277,10 +277,10 @@ export function FontSizePicker({
           ref={dropdownRef}
           style={{
             ...fixedDropdownStyle,
-            backgroundColor: 'white',
-            border: '1px solid #e2e8f0',
+            backgroundColor: 'var(--doc-surface)',
+            border: '1px solid var(--doc-border)',
             borderRadius: 6,
-            boxShadow: '0 4px 12px rgba(0, 0, 0, 0.12)',
+            boxShadow: '0 4px 12px var(--doc-shadow)',
             maxHeight: 240,
             overflowY: 'auto',
             minWidth: 60,
@@ -295,8 +295,8 @@ export function FontSizePicker({
               onClick={() => handleSizeSelect(size)}
               className={cn(
                 'w-full px-3 py-1.5 text-sm text-left',
-                'hover:bg-slate-100',
-                size === currentValue && 'bg-slate-100 font-medium'
+                'hover:bg-muted',
+                size === currentValue && 'bg-muted font-medium'
               )}
               role="option"
               aria-selected={size === currentValue}
@@ -312,7 +312,7 @@ export function FontSizePicker({
         variant="ghost"
         size="icon-sm"
         className={cn(
-          'h-7 w-7 text-slate-500 hover:text-slate-900 hover:bg-slate-100/80 rounded-l-none',
+          'h-7 w-7 text-muted-foreground hover:text-foreground hover:bg-muted/80 rounded-l-none',
           disabled && 'opacity-30 cursor-not-allowed'
         )}
         onMouseDown={handleIncrease}

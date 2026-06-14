@@ -217,19 +217,24 @@ function NotificationToast({ notification, onDismiss }: NotificationToastProps) 
       case 'error':
         return {
           bg: 'var(--doc-error-bg)',
-          border: '#f5c6cb',
+          border: 'var(--doc-error)',
           text: 'var(--doc-error)',
           icon: 'var(--doc-error)',
         };
       case 'warning':
         return {
           bg: 'var(--doc-warning-bg)',
-          border: '#ffeeba',
-          text: '#856404',
+          border: 'var(--doc-warning)',
+          text: 'var(--doc-warning-text)',
           icon: 'var(--doc-warning)',
         };
       case 'info':
-        return { bg: '#e8f4fd', border: '#b8daff', text: '#0c5460', icon: 'var(--doc-primary)' };
+        return {
+          bg: 'var(--doc-primary-light)',
+          border: 'var(--doc-primary)',
+          text: 'var(--doc-primary)',
+          icon: 'var(--doc-primary)',
+        };
     }
   };
 
@@ -240,7 +245,7 @@ function NotificationToast({ notification, onDismiss }: NotificationToastProps) 
     border: `1px solid ${colors.border}`,
     borderRadius: '8px',
     padding: '12px 16px',
-    boxShadow: '0 2px 8px rgba(0, 0, 0, 0.15)',
+    boxShadow: '0 2px 8px var(--doc-shadow)',
     animation: 'slideIn 0.3s ease-out',
   };
 
@@ -270,7 +275,7 @@ function NotificationToast({ notification, onDismiss }: NotificationToastProps) 
   const detailsStyle: CSSProperties = {
     marginTop: '8px',
     padding: '8px',
-    background: 'rgba(0, 0, 0, 0.05)',
+    background: 'var(--doc-shadow-subtle)',
     borderRadius: '4px',
     fontSize: '12px',
     fontFamily: 'monospace',
@@ -492,7 +497,7 @@ function DefaultErrorFallback({
     padding: '40px',
     textAlign: 'center',
     minHeight: '200px',
-    background: 'white',
+    background: 'var(--doc-surface)',
     borderRadius: '8px',
     border: '1px solid var(--doc-border)',
     margin: '20px',
@@ -536,7 +541,7 @@ function DefaultErrorFallback({
   const buttonStyle: CSSProperties = {
     padding: '10px 20px',
     background: 'var(--doc-primary)',
-    color: 'white',
+    color: 'var(--doc-on-primary)',
     border: 'none',
     borderRadius: '4px',
     fontSize: '14px',
@@ -602,7 +607,7 @@ export function ParseErrorDisplay({
     justifyContent: 'center',
     padding: '40px',
     textAlign: 'center',
-    background: 'white',
+    background: 'var(--doc-surface)',
     borderRadius: '8px',
     border: '1px solid var(--doc-border-light)',
   };
@@ -641,7 +646,7 @@ export function ParseErrorDisplay({
   const buttonStyle: CSSProperties = {
     padding: '8px 16px',
     background: 'var(--doc-primary)',
-    color: 'white',
+    color: 'var(--doc-on-primary)',
     border: 'none',
     borderRadius: '4px',
     fontSize: '13px',
@@ -699,10 +704,10 @@ export function UnsupportedFeatureWarning({
     gap: '8px',
     padding: '8px 12px',
     background: 'var(--doc-warning-bg)',
-    border: '1px solid #ffeeba',
+    border: '1px solid var(--doc-warning)',
     borderRadius: '4px',
     fontSize: '12px',
-    color: '#856404',
+    color: 'var(--doc-warning-text)',
   };
 
   const iconStyle: CSSProperties = {

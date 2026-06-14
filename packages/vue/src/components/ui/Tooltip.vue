@@ -81,10 +81,10 @@ const bubbleStyle = computed<CSSProperties>(() => ({
   padding: 4px 8px;
   font-size: 12px;
   font-weight: 500;
-  color: #fff;
-  background: #0f172a;
+  color: var(--doc-on-primary);
+  background: var(--doc-text);
   border-radius: 6px;
-  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 4px 6px -1px var(--doc-shadow);
   pointer-events: none;
 }
 </style>

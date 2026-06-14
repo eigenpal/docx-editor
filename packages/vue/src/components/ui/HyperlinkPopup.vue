@@ -246,12 +246,12 @@ function onCopy() {
 .docx-hyperlink-popup {
   position: absolute;
   z-index: 10000;
-  background: #fff;
-  border: 1px solid #dadce0;
+  background: var(--doc-surface);
+  border: 1px solid var(--doc-border-light);
   border-radius: 8px;
   box-shadow:
-    0 1px 3px rgba(0, 0, 0, 0.12),
-    0 4px 12px rgba(0, 0, 0, 0.08);
+    0 1px 3px var(--doc-shadow),
+    0 4px 12px var(--doc-shadow-subtle);
   padding: 8px 12px;
   display: flex;
   align-items: center;
@@ -270,13 +270,13 @@ function onCopy() {
   width: 20px;
   height: 20px;
   flex-shrink: 0;
-  color: #5f6368;
+  color: var(--doc-text-muted);
   display: flex;
   align-items: center;
   justify-content: center;
 }
 .docx-hyperlink-popup__url {
-  color: #1a73e8;
+  color: var(--doc-link);
   text-decoration: none;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -289,7 +289,7 @@ function onCopy() {
 .docx-hyperlink-popup__sep {
   width: 1px;
   height: 20px;
-  background: #dadce0;
+  background: var(--doc-border-light);
   flex-shrink: 0;
 }
 .docx-hyperlink-popup__btn {
@@ -302,12 +302,12 @@ function onCopy() {
   background: none;
   border-radius: 4px;
   cursor: pointer;
-  color: #5f6368;
+  color: var(--doc-text-muted);
   padding: 0;
   flex-shrink: 0;
 }
 .docx-hyperlink-popup__btn:hover {
-  background: #f1f3f4;
+  background: var(--doc-bg-hover);
 }
 .docx-hyperlink-popup__edit-row {
   display: flex;
@@ -321,17 +321,17 @@ function onCopy() {
 .docx-hyperlink-popup__input {
   flex: 1;
   padding: 6px 8px;
-  border: 1px solid #dadce0;
+  border: 1px solid var(--doc-border-light);
   border-radius: 4px;
   font-size: 14px;
   outline: none;
   line-height: 20px;
 }
 .docx-hyperlink-popup__input:focus {
-  border-color: #1a73e8;
+  border-color: var(--doc-primary);
 }
 .docx-hyperlink-popup__apply {
-  color: #1a73e8;
+  color: var(--doc-primary);
   font-weight: 600;
   font-size: 14px;
   border: none;
@@ -342,7 +342,7 @@ function onCopy() {
   flex-shrink: 0;
 }
 .docx-hyperlink-popup__apply:disabled {
-  color: #80868b;
+  color: var(--doc-text-subtle);
   cursor: not-allowed;
 }
 </style>

@@ -301,8 +301,8 @@ export function ToolbarButton({
       variant="ghost"
       size="icon-sm"
       className={cn(
-        'text-slate-500 hover:text-slate-900 hover:bg-slate-100/80',
-        active && 'bg-slate-900 text-white hover:bg-slate-800 hover:text-white',
+        'text-muted-foreground hover:text-foreground hover:bg-muted',
+        active && 'bg-foreground text-white hover:bg-foreground hover:text-white',
         disabled && 'opacity-30 cursor-not-allowed',
         className
       )}
@@ -331,7 +331,7 @@ export function ToolbarGroup({ label, children, className }: ToolbarGroupProps) 
   return (
     <div
       className={cn(
-        'flex items-center gap-px px-1.5 border-r border-slate-200/50 last:border-r-0 first:pl-0',
+        'flex items-center gap-px px-1.5 border-r border-border/50 last:border-r-0 first:pl-0',
         className
       )}
       role="group"
@@ -346,7 +346,7 @@ export function ToolbarGroup({ label, children, className }: ToolbarGroupProps) 
  * Toolbar separator
  */
 export function ToolbarSeparator() {
-  return <div className="w-px h-6 bg-slate-200 mx-1.5" role="separator" />;
+  return <div className="w-px h-6 bg-border mx-1.5" role="separator" />;
 }
 
 // ============================================================================
@@ -661,7 +661,7 @@ export function Toolbar(explicitProps: ToolbarProps) {
       ref={barRef}
       className={cn(
         !inline &&
-          'flex items-center px-2 py-1 bg-[#f1f5f9] rounded-full min-h-[36px] overflow-x-auto mx-2 mb-1',
+          'flex items-center px-2 py-1 bg-muted rounded-full min-h-[36px] overflow-x-auto mx-2 mb-1',
         className
       )}
       style={inline ? { display: 'contents', ...style } : style}
@@ -694,15 +694,7 @@ export function Toolbar(explicitProps: ToolbarProps) {
       {/* Zoom Control */}
       {showZoomControl && (
         <ToolbarGroup label={t('formattingBar.groups.zoom')}>
-          <ZoomControl
-            value={zoom}
-            onChange={onZoomChange}
-            minZoom={0.5}
-            maxZoom={2}
-            disabled={disabled}
-            compact
-            showButtons={false}
-          />
+          <ZoomControl value={zoom} onChange={onZoomChange} disabled={disabled} compact />
         </ToolbarGroup>
       )}
 

@@ -733,7 +733,7 @@ onBeforeUnmount(() => {
 .image-overlay__border {
   position: absolute;
   inset: -2px;
-  border: 2px solid #2563eb;
+  border: 2px solid var(--doc-primary);
   border-radius: 2px;
   pointer-events: none;
 }
@@ -748,9 +748,9 @@ onBeforeUnmount(() => {
   position: absolute;
   width: 10px;
   height: 10px;
-  background: #ffffff;
-  border: 1.5px solid #2563eb;
-  box-shadow: 0 1px 2.5px rgba(0, 0, 0, 0.35);
+  background: var(--doc-surface);
+  border: 1.5px solid var(--doc-primary);
+  box-shadow: 0 1px 2.5px var(--doc-shadow-strong);
   border-radius: 50%;
   z-index: 16;
   box-sizing: border-box;
@@ -762,7 +762,7 @@ onBeforeUnmount(() => {
   top: -22px;
   width: 0;
   height: 22px;
-  border-left: 1px solid #2563eb;
+  border-left: 1px solid var(--doc-primary);
   pointer-events: none;
 }
 .image-overlay__rotate-handle {
@@ -771,9 +771,9 @@ onBeforeUnmount(() => {
   width: 14px;
   height: 14px;
   border-radius: 50%;
-  background: #fff;
-  border: 2px solid #2563eb;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+  background: var(--doc-surface);
+  border: 2px solid var(--doc-primary);
+  box-shadow: 0 1px 3px var(--doc-shadow-strong);
   cursor: grab;
   z-index: 16;
   box-sizing: border-box;
@@ -787,7 +787,7 @@ onBeforeUnmount(() => {
   bottom: -24px;
   left: 50%;
   transform: translateX(-50%);
-  background: rgba(0, 0, 0, 0.75);
+  background: var(--doc-overlay);
   color: #fff;
   font-size: 11px;
   padding: 2px 8px;

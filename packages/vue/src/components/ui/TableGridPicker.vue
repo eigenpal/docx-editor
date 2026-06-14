@@ -93,12 +93,12 @@ function onClose() {
   border: none;
   border-radius: 6px;
   background: transparent;
-  color: #64748b;
+  color: var(--doc-text-muted);
   cursor: pointer;
 }
 .docx-table-grid__btn:hover:not(:disabled) {
-  background: rgba(241, 245, 249, 0.8);
-  color: #0f172a;
+  background: var(--doc-bg-hover);
+  color: var(--doc-text);
 }
 .docx-table-grid__btn:disabled {
   opacity: 0.3;
@@ -110,7 +110,7 @@ function onClose() {
 .docx-table-grid__label {
   font-size: 12px;
   text-align: center;
-  color: #5f6368;
+  color: var(--doc-text-muted);
   margin-bottom: 6px;
 }
 .docx-table-grid__grid {
@@ -120,13 +120,13 @@ function onClose() {
 .docx-table-grid__cell {
   width: 18px;
   height: 18px;
-  border: 1px solid #d1d5db;
-  background: #fff;
+  border: 1px solid var(--doc-border);
+  background: var(--doc-surface);
   cursor: pointer;
   padding: 0;
 }
 .docx-table-grid__cell--active {
-  background: #1a73e8;
-  border-color: #1a73e8;
+  background: var(--doc-primary);
+  border-color: var(--doc-primary);
 }
 </style>

@@ -178,7 +178,7 @@ function handleSave() {
 .hf-editor {
   /* Container itself has pointer-events: none (set inline) so painter clicks
      pass through. Border is purely visual chrome. */
-  border: 2px solid #4285f4;
+  border: 2px solid var(--doc-primary);
   border-radius: 4px;
 }
 .hf-editor__toolbar {
@@ -189,22 +189,22 @@ function handleSave() {
   align-items: center;
   justify-content: space-between;
   padding: 4px 8px;
-  background: #f0f4ff;
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
+  background: var(--doc-primary-light);
+  box-shadow: 0 1px 4px var(--doc-shadow-subtle);
   pointer-events: auto;
 }
 .hf-editor__toolbar--above {
   bottom: 100%;
-  border-bottom: 1px solid #d0daf0;
+  border-bottom: 1px solid var(--doc-primary-light);
 }
 .hf-editor__toolbar--below {
   top: 100%;
-  border-top: 1px solid #d0daf0;
+  border-top: 1px solid var(--doc-primary-light);
 }
 .hf-editor__label {
   font-size: 12px;
   font-weight: 600;
-  color: #1a73e8;
+  color: var(--doc-primary);
   text-transform: uppercase;
   letter-spacing: 0.03em;
 }
@@ -214,33 +214,33 @@ function handleSave() {
 }
 .hf-editor__btn {
   padding: 3px 10px;
-  border: 1px solid #d1d5db;
+  border: 1px solid var(--doc-border-dark);
   border-radius: 3px;
-  background: #fff;
+  background: var(--doc-surface);
   cursor: pointer;
   font-size: 12px;
-  color: #374151;
+  color: var(--doc-text-muted);
 }
 .hf-editor__btn:hover {
-  background: #f3f4f6;
+  background: var(--doc-bg-hover);
 }
 .hf-editor__btn--primary {
-  background: #1a73e8;
-  color: #fff;
-  border-color: #1a73e8;
+  background: var(--doc-primary);
+  color: var(--doc-on-primary);
+  border-color: var(--doc-primary);
 }
 .hf-editor__btn--primary:hover {
-  background: #1557b0;
+  background: var(--doc-primary-hover);
 }
 .hf-editor__dropdown {
   position: absolute;
   top: 100%;
   right: 0;
   margin-top: 2px;
-  background: #fff;
-  border: 1px solid #d1d5db;
+  background: var(--doc-surface);
+  border: 1px solid var(--doc-border-dark);
   border-radius: 4px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+  box-shadow: 0 2px 8px var(--doc-shadow);
   min-width: 200px;
   z-index: 10;
   padding: 4px 0;
@@ -253,10 +253,10 @@ function handleSave() {
   border: none;
   text-align: left;
   font-size: 13px;
-  color: #374151;
+  color: var(--doc-text-muted);
   cursor: pointer;
 }
 .hf-editor__dropdown-item:hover {
-  background: #f3f4f6;
+  background: var(--doc-bg-hover);
 }
 </style>

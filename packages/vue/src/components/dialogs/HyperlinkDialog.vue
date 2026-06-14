@@ -262,16 +262,16 @@ function removeLink() {
 .dialog-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.3);
+  background: var(--doc-overlay);
   z-index: 300;
   display: flex;
   align-items: center;
   justify-content: center;
 }
 .dialog {
-  background: #fff;
+  background: var(--doc-surface);
   border-radius: 8px;
-  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.2);
+  box-shadow: 0 8px 30px var(--doc-shadow);
   min-width: 400px;
   max-width: 90vw;
 }
@@ -280,19 +280,19 @@ function removeLink() {
   align-items: center;
   justify-content: space-between;
   padding: 12px 16px;
-  border-bottom: 1px solid #e5e7eb;
+  border-bottom: 1px solid var(--doc-border);
 }
 .dialog__title {
   font-weight: 600;
   font-size: 14px;
-  color: #1f2937;
+  color: var(--doc-text);
 }
 .dialog__close {
   border: none;
   background: transparent;
   cursor: pointer;
   font-size: 14px;
-  color: #6b7280;
+  color: var(--doc-text-muted);
   width: 24px;
   height: 24px;
   display: flex;
@@ -301,7 +301,7 @@ function removeLink() {
   border-radius: 4px;
 }
 .dialog__close:hover {
-  background: #f3f4f6;
+  background: var(--doc-bg-hover);
 }
 .dialog__body {
   padding: 16px;
@@ -314,35 +314,35 @@ function removeLink() {
 }
 .dialog__btn {
   padding: 6px 16px;
-  border: 1px solid #d1d5db;
+  border: 1px solid var(--doc-border-dark);
   border-radius: 4px;
   cursor: pointer;
   font-size: 13px;
-  background: #fff;
+  background: var(--doc-surface);
 }
 .dialog__btn--primary {
-  background: #3b82f6;
-  color: #fff;
-  border-color: #3b82f6;
+  background: var(--doc-primary);
+  color: var(--doc-on-primary);
+  border-color: var(--doc-primary);
 }
 .dialog__btn--primary:hover {
-  background: #2563eb;
+  background: var(--doc-primary-hover);
 }
 .dialog__btn--primary:disabled {
   opacity: 0.5;
   cursor: not-allowed;
 }
 .dialog__btn--danger {
-  color: #dc2626;
-  border-color: #fca5a5;
+  color: var(--doc-error);
+  border-color: var(--doc-error-bg);
 }
 .dialog__btn--danger:hover {
-  background: #fef2f2;
+  background: var(--doc-error-bg);
 }
 
 .link-tabs {
   display: flex;
-  border-bottom: 1px solid #e5e7eb;
+  border-bottom: 1px solid var(--doc-border);
   margin-bottom: 12px;
 }
 .link-tab {
@@ -351,13 +351,13 @@ function removeLink() {
   border-bottom: 2px solid transparent;
   background: transparent;
   cursor: pointer;
-  color: #6b7280;
+  color: var(--doc-text-muted);
   font-size: 13px;
   margin-bottom: -1px;
 }
 .link-tab.active {
-  color: #2563eb;
-  border-bottom-color: #2563eb;
+  color: var(--doc-primary);
+  border-bottom-color: var(--doc-primary);
   font-weight: 600;
 }
 .field {
@@ -367,32 +367,32 @@ function removeLink() {
   display: block;
   font-size: 12px;
   font-weight: 500;
-  color: #374151;
+  color: var(--doc-text-muted);
   margin-bottom: 4px;
 }
 .field__input {
   width: 100%;
   padding: 6px 10px;
-  border: 1px solid #d1d5db;
+  border: 1px solid var(--doc-border-dark);
   border-radius: 4px;
   font-size: 13px;
   outline: none;
   box-sizing: border-box;
 }
 .field__input:focus {
-  border-color: #3b82f6;
-  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.15);
+  border-color: var(--doc-primary);
+  box-shadow: 0 0 0 2px var(--doc-focus-ring);
 }
 .field__input--error {
-  border-color: #dc2626;
+  border-color: var(--doc-error);
 }
 .field__error {
-  color: #dc2626;
+  color: var(--doc-error);
   font-size: 11px;
   margin-top: 4px;
 }
 .field__hint {
-  color: #6b7280;
+  color: var(--doc-text-muted);
   font-size: 11px;
   margin-top: 4px;
 }

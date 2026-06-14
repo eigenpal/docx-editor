@@ -91,7 +91,7 @@ export const ShortcutItem: React.FC<ShortcutItemProps> = ({
             backgroundColor: 'var(--doc-bg-hover)',
             borderRadius: '4px',
             border: '1px solid var(--doc-border-light)',
-            boxShadow: '0 1px 1px rgba(0,0,0,0.1)',
+            boxShadow: '0 1px 1px var(--doc-shadow)',
           }}
         >
           {formattedKeys}
@@ -110,7 +110,7 @@ export const ShortcutItem: React.FC<ShortcutItemProps> = ({
                 backgroundColor: 'var(--doc-bg-hover)',
                 borderRadius: '4px',
                 border: '1px solid var(--doc-border-light)',
-                boxShadow: '0 1px 1px rgba(0,0,0,0.1)',
+                boxShadow: '0 1px 1px var(--doc-shadow)',
               }}
             >
               {formattedAltKeys}

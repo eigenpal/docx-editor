@@ -66,7 +66,7 @@ export function Tooltip({ content, children, side = 'bottom', delayMs = 400 }: T
       {child}
       {isOpen && (
         <div
-          className="fixed z-50 px-2 py-1 text-xs font-medium text-white bg-slate-900 rounded-md shadow-lg"
+          className="fixed z-50 px-2 py-1 text-xs font-medium text-white bg-foreground rounded-md shadow-lg"
           style={{
             left: position.x,
             top: position.y,

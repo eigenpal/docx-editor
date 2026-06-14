@@ -22,8 +22,8 @@ function SelectTrigger({
     <SelectPrimitive.Trigger
       className={cn(
         'flex h-8 items-center justify-between gap-1 rounded px-2 py-1',
-        'text-sm text-slate-700 bg-transparent',
-        'hover:bg-slate-100/80 focus:outline-none focus:bg-slate-100/80',
+        'text-sm text-foreground bg-transparent',
+        'hover:bg-muted/80 focus:outline-none focus:bg-muted/80',
         'disabled:cursor-not-allowed disabled:opacity-50',
         'transition-colors duration-150',
         '[&>span]:truncate',
@@ -37,7 +37,7 @@ function SelectTrigger({
     >
       {children}
       <SelectPrimitive.Icon asChild>
-        <ChevronDownIcon className="h-4 w-4 text-slate-400 shrink-0" />
+        <ChevronDownIcon className="h-4 w-4 text-muted-foreground shrink-0" />
       </SelectPrimitive.Icon>
     </SelectPrimitive.Trigger>
   );
@@ -57,7 +57,7 @@ function SelectContent({
         <SelectPrimitive.Content
           className={cn(
             'relative z-50 max-h-72 min-w-[8rem] overflow-hidden',
-            'rounded-lg border border-slate-200 bg-white shadow-lg',
+            'rounded-lg border border-border bg-white shadow-lg',
             'data-[state=open]:animate-in data-[state=closed]:animate-out',
             'data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0',
             'data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95',
@@ -95,7 +95,7 @@ function SelectLabel({
 }: React.ComponentPropsWithoutRef<typeof SelectPrimitive.Label>) {
   return (
     <SelectPrimitive.Label
-      className={cn('px-2 py-1.5 text-xs font-medium text-slate-500', className)}
+      className={cn('px-2 py-1.5 text-xs font-medium text-muted-foreground', className)}
       {...props}
     />
   );
@@ -111,8 +111,8 @@ function SelectItem({
     <SelectPrimitive.Item
       className={cn(
         'relative flex w-full cursor-pointer select-none items-center',
-        'rounded px-2 py-1.5 text-sm text-slate-700 outline-none',
-        'hover:bg-slate-100 focus:bg-slate-100',
+        'rounded px-2 py-1.5 text-sm text-foreground outline-none',
+        'hover:bg-muted focus:bg-muted',
         'data-[disabled]:pointer-events-none data-[disabled]:opacity-50',
         className
       )}
@@ -137,10 +137,7 @@ function SelectSeparator({
   ...props
 }: React.ComponentPropsWithoutRef<typeof SelectPrimitive.Separator>) {
   return (
-    <SelectPrimitive.Separator
-      className={cn('-mx-1 my-1 h-px bg-slate-100', className)}
-      {...props}
-    />
+    <SelectPrimitive.Separator className={cn('-mx-1 my-1 h-px bg-muted', className)} {...props} />
   );
 }
 

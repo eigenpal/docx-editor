@@ -323,10 +323,10 @@ function handleSearchKeyDown(e: KeyboardEvent) {
   top: 8px;
   right: 16px;
   z-index: 10000;
-  background: #fff;
-  border: 1px solid #d1d5db;
+  background: var(--doc-surface);
+  border: 1px solid var(--doc-border-dark);
   border-radius: 8px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  box-shadow: 0 4px 12px var(--doc-shadow);
   min-width: 360px;
   font-size: 13px;
 }
@@ -335,17 +335,17 @@ function handleSearchKeyDown(e: KeyboardEvent) {
   align-items: center;
   justify-content: space-between;
   padding: 8px 12px;
-  border-bottom: 1px solid #e5e7eb;
+  border-bottom: 1px solid var(--doc-border);
 }
 .find-replace-dialog__title {
   font-weight: 600;
-  color: #1f2937;
+  color: var(--doc-text);
 }
 .find-replace-dialog__close {
   border: none;
   background: transparent;
   cursor: pointer;
-  color: #6b7280;
+  color: var(--doc-text-muted);
   font-size: 14px;
   width: 24px;
   height: 24px;
@@ -355,7 +355,7 @@ function handleSearchKeyDown(e: KeyboardEvent) {
   border-radius: 4px;
 }
 .find-replace-dialog__close:hover {
-  background: #f3f4f6;
+  background: var(--doc-bg-hover);
 }
 .find-replace-dialog__body {
   padding: 8px 12px 12px;
@@ -369,18 +369,18 @@ function handleSearchKeyDown(e: KeyboardEvent) {
 .find-replace-dialog__input {
   flex: 1;
   padding: 5px 8px;
-  border: 1px solid #d1d5db;
+  border: 1px solid var(--doc-border-dark);
   border-radius: 4px;
   font-size: 13px;
   outline: none;
 }
 .find-replace-dialog__input:focus {
-  border-color: #3b82f6;
-  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.15);
+  border-color: var(--doc-primary);
+  box-shadow: 0 0 0 2px var(--doc-focus-ring);
 }
 .find-replace-dialog__count {
   font-size: 11px;
-  color: #6b7280;
+  color: var(--doc-text-muted);
   white-space: nowrap;
   min-width: 60px;
   text-align: center;
@@ -391,7 +391,7 @@ function handleSearchKeyDown(e: KeyboardEvent) {
   gap: 12px;
   margin-bottom: 6px;
   font-size: 12px;
-  color: #4b5563;
+  color: var(--doc-text-muted);
 }
 .find-replace-dialog__options label {
   display: flex;
@@ -406,27 +406,27 @@ function handleSearchKeyDown(e: KeyboardEvent) {
   margin-left: auto;
   font-size: 11px;
   padding: 2px 8px;
-  border: 1px solid #d1d5db;
+  border: 1px solid var(--doc-border-dark);
   border-radius: 4px;
   background: transparent;
   cursor: pointer;
-  color: #4b5563;
+  color: var(--doc-text-muted);
 }
 .find-replace-dialog__toggle.active {
-  background: #e0e7ff;
-  border-color: #818cf8;
-  color: #3730a3;
+  background: var(--doc-accent-bg);
+  border-color: var(--doc-accent);
+  color: var(--doc-accent);
 }
 .find-replace-dialog__row button {
   padding: 4px 8px;
-  border: 1px solid #d1d5db;
+  border: 1px solid var(--doc-border-dark);
   border-radius: 4px;
-  background: #fff;
+  background: var(--doc-surface);
   cursor: pointer;
   font-size: 12px;
-  color: #374151;
+  color: var(--doc-text-muted);
 }
 .find-replace-dialog__row button:hover {
-  background: #f3f4f6;
+  background: var(--doc-bg-hover);
 }
 </style>

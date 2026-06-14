@@ -132,15 +132,16 @@ onBeforeUnmount(() => mql?.removeEventListener('change', onMqlChange));
   cursor: pointer;
   font-size: 13px;
   font-weight: 400;
-  color: #374151;
+  /* React's trigger is full-strength --doc-text, not muted. */
+  color: var(--doc-text);
   white-space: nowrap;
   height: 28px;
 }
 .editing-mode__trigger:hover {
-  background: #f3f4f6;
+  background: var(--doc-bg-hover);
 }
 .editing-mode__trigger--open {
-  background: #f3f4f6;
+  background: var(--doc-bg-hover);
 }
 .editing-mode__trigger--compact {
   gap: 0;
@@ -162,12 +163,12 @@ onBeforeUnmount(() => mql?.removeEventListener('change', onMqlChange));
   background: transparent;
   cursor: pointer;
   font-size: 13px;
-  color: #374151;
+  color: var(--doc-text);
   width: 100%;
   text-align: left;
 }
 .editing-mode__option:hover {
-  background: #f3f4f6;
+  background: var(--doc-bg-hover);
 }
 .editing-mode__option-text {
   display: flex;
@@ -179,10 +180,11 @@ onBeforeUnmount(() => mql?.removeEventListener('change', onMqlChange));
 }
 .editing-mode__option-desc {
   font-size: 11px;
-  color: #9ca3af;
+  /* React's option description is --doc-text-muted, not subtle. */
+  color: var(--doc-text-muted);
 }
 .editing-mode__check {
   margin-left: auto;
-  color: #1a73e8;
+  color: var(--doc-primary);
 }
 </style>

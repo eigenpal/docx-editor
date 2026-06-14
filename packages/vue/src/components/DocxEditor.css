@@ -88,7 +88,7 @@
   display: flex;
   flex-direction: column;
   min-height: 0;
-  background: var(--doc-bg, #f8f9fa);
+  background: var(--doc-bg);
   overflow: hidden;
 }
 /* Sticky ruler row that stays at the top while the page scrolls. */
@@ -100,7 +100,7 @@
   top: 0;
   z-index: 9;
   padding: 4px 20px;
-  background: var(--doc-bg, #f8f9fa);
+  background: var(--doc-bg);
 }
 .docx-editor-vue__editor-area {
   flex: 1;
@@ -162,7 +162,7 @@
   /* Breathing room under the last page so it isn't flush against the
      scroll bottom. */
   padding-bottom: 24px;
-  background: var(--doc-bg, #f8f9fa);
+  background: var(--doc-bg);
   cursor: text;
   position: relative;
 }

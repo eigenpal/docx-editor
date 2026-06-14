@@ -13,7 +13,13 @@
        a sibling so the !important overrides win against the base
        editor.css highlight rules without touching DOM nodes. -->
   <component v-if="expandedHighlightCss" :is="'style'">{{ expandedHighlightCss }}</component>
-  <aside v-if="isOpen" ref="rootRef" class="unified-sidebar" :style="asideStyle" @mousedown.stop>
+  <aside
+    v-if="isOpen"
+    ref="rootRef"
+    class="unified-sidebar"
+    :style="asideStyle"
+    @mousedown="onSidebarMouseDown"
+  >
     <div class="unified-sidebar__inner" :style="{ minHeight: minHeightPx + 'px' }">
       <!-- Every item — add-comment input, comments, tracked changes —
            flows through the same `items` list and the shared
@@ -82,7 +88,10 @@ import AddCommentCard from './sidebar/AddCommentCard.vue';
 import { useCommentSidebarItems } from '../composables/useCommentSidebarItems';
 import { resolveItemPositions } from './sidebar/resolveItemPositions';
 
-import { SIDEBAR_DOCUMENT_SHIFT } from '@eigenpal/docx-editor-core/utils/sidebarConstants';
+import {
+  SIDEBAR_DOCUMENT_SHIFT,
+  SIDEBAR_WIDTH,
+} from '@eigenpal/docx-editor-core/utils/sidebarConstants';
 
 const props = defineProps<{
   isOpen: boolean;
@@ -133,6 +142,21 @@ function toggleExpanded(id: string) {
   const next = expandedId.value === id ? null : id;
   localExpanded.value = next;
   emit('update:activeItemId', next);
+}
+
+// Always stop sidebar mousedowns from reaching the editor (was `@mousedown.stop`,
+// which prevents the click from moving the PM cursor / stealing focus). On top
+// of that, clicking the empty sidebar background — anywhere that isn't a card
+// slot — collapses the expanded item, matching React (where clicking the grey
+// gutter behind the cards deselects). Card clicks are handled by each card.
+function onSidebarMouseDown(e: MouseEvent) {
+  e.stopPropagation();
+  const target = e.target as HTMLElement;
+  if (target.closest('.unified-sidebar__card-slot')) return;
+  if (expandedId.value !== null) {
+    localExpanded.value = null;
+    emit('update:activeItemId', null);
+  }
 }
 
 // Single source of truth for the item list — shared with React via
@@ -297,7 +321,8 @@ const minHeightPx = computed(() => {
 // stale calc) put the rail ~352px past the page edge whenever the
 // shift was active.
 const SIDEBAR_GAP = 16;
-const SIDEBAR_WIDTH = 300;
+// SIDEBAR_WIDTH is imported from core (340) so React and Vue rails match and
+// stay consistent with SIDEBAR_DOCUMENT_SHIFT (also derived from it).
 // Dynamic CSS boost for the expanded item. Mirrors React
 // DocxEditor.tsx:5029-5044: brighten the comment-anchor highlight
 // (yellow) for the focused comment, and the tracked-change

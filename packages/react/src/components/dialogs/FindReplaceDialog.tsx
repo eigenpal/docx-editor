@@ -96,9 +96,9 @@ const DIALOG_OVERLAY_STYLE: CSSProperties = {
 };
 
 const DIALOG_CONTENT_STYLE: CSSProperties = {
-  backgroundColor: 'white',
+  backgroundColor: 'var(--doc-surface)',
   borderRadius: '4px',
-  boxShadow: '0 4px 20px rgba(0, 0, 0, 0.2)',
+  boxShadow: '0 4px 20px var(--doc-shadow)',
   minWidth: '360px',
   maxWidth: '440px',
   width: '100%',
@@ -165,7 +165,7 @@ const INPUT_STYLE: CSSProperties = {
 const INPUT_FOCUS_STYLE: CSSProperties = {
   ...INPUT_STYLE,
   borderColor: 'var(--doc-link)',
-  boxShadow: '0 0 0 2px rgba(5, 99, 193, 0.1)',
+  boxShadow: '0 0 0 2px var(--doc-focus-ring)',
 };
 
 const BUTTON_CONTAINER_STYLE: CSSProperties = {

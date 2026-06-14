@@ -39,7 +39,7 @@ const overlayStyle: CSSProperties = {
   left: 0,
   right: 0,
   bottom: 0,
-  backgroundColor: 'rgba(0, 0, 0, 0.5)',
+  backgroundColor: 'var(--doc-overlay)',
   display: 'flex',
   alignItems: 'center',
   justifyContent: 'center',
@@ -47,9 +47,9 @@ const overlayStyle: CSSProperties = {
 };
 
 const dialogStyle: CSSProperties = {
-  backgroundColor: 'white',
+  backgroundColor: 'var(--doc-surface)',
   borderRadius: 8,
-  boxShadow: '0 4px 20px rgba(0, 0, 0, 0.15)',
+  boxShadow: '0 4px 20px var(--doc-shadow)',
   padding: 24,
   minWidth: 400,
   maxWidth: 500,
@@ -58,21 +58,21 @@ const dialogStyle: CSSProperties = {
 const sectionStyle: CSSProperties = {
   marginBottom: 16,
   padding: 12,
-  border: '1px solid #e0e0e0',
+  border: '1px solid var(--doc-border)',
   borderRadius: 4,
 };
 
 const labelStyle: CSSProperties = {
   display: 'block',
   fontSize: 12,
-  color: '#666',
+  color: 'var(--doc-text-muted)',
   marginBottom: 4,
 };
 
 const selectStyle: CSSProperties = {
   width: '100%',
   padding: '4px 8px',
-  border: '1px solid #ccc',
+  border: '1px solid var(--doc-border-input)',
   borderRadius: 4,
   fontSize: 13,
   marginBottom: 8,
@@ -81,7 +81,7 @@ const selectStyle: CSSProperties = {
 const inputStyle: CSSProperties = {
   width: 60,
   padding: '4px 8px',
-  border: '1px solid #ccc',
+  border: '1px solid var(--doc-border-input)',
   borderRadius: 4,
   fontSize: 13,
   marginBottom: 8,
@@ -96,18 +96,18 @@ const buttonRowStyle: CSSProperties = {
 
 const buttonStyle: CSSProperties = {
   padding: '6px 16px',
-  border: '1px solid #ccc',
+  border: '1px solid var(--doc-border-input)',
   borderRadius: 4,
   cursor: 'pointer',
   fontSize: 13,
-  backgroundColor: 'white',
+  backgroundColor: 'var(--doc-surface)',
 };
 
 const primaryButtonStyle: CSSProperties = {
   ...buttonStyle,
-  backgroundColor: '#2563eb',
-  color: 'white',
-  border: '1px solid #2563eb',
+  backgroundColor: 'var(--doc-primary)',
+  color: 'var(--doc-on-primary)',
+  border: '1px solid var(--doc-primary)',
 };
 
 // ============================================================================

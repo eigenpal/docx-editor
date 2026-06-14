@@ -58,7 +58,7 @@ function handleBlur(event: FocusEvent) {
 .doc-name__text {
   font-size: 16px;
   font-weight: 400;
-  color: #1e293b;
+  color: var(--doc-text);
   background: transparent;
   border: 0;
   outline: none;
@@ -76,10 +76,10 @@ function handleBlur(event: FocusEvent) {
   transition: background 0.12s ease, box-shadow 0.12s ease;
 }
 .doc-name__input:hover {
-  background: #f8fafc;
+  background: var(--doc-bg);
 }
 .doc-name__input:focus {
-  background: #fff;
-  box-shadow: 0 0 0 1px #cbd5e1;
+  background: var(--doc-surface);
+  box-shadow: 0 0 0 1px var(--doc-border-light);
 }
 </style>

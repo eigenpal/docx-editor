@@ -87,7 +87,7 @@ const separatorBarStyle: CSSProperties = {
   justifyContent: 'space-between',
   padding: '2px 0',
   fontSize: 11,
-  color: '#4285f4',
+  color: 'var(--doc-primary)',
   userSelect: 'none',
   // Container is `pointer-events: none`; restore on the chrome so the
   // label + options button stay clickable.
@@ -102,7 +102,7 @@ const labelStyle: CSSProperties = {
 const optionsButtonStyle: CSSProperties = {
   background: 'none',
   border: 'none',
-  color: '#4285f4',
+  color: 'var(--doc-primary)',
   cursor: 'pointer',
   fontSize: 11,
   padding: '2px 6px',
@@ -113,10 +113,10 @@ const dropdownStyle: CSSProperties = {
   position: 'absolute',
   right: 0,
   top: '100%',
-  background: 'white',
-  border: '1px solid #dadce0',
+  background: 'var(--doc-surface)',
+  border: '1px solid var(--doc-border-light)',
   borderRadius: 4,
-  boxShadow: '0 2px 6px rgba(0,0,0,0.15)',
+  boxShadow: '0 2px 6px var(--doc-shadow)',
   zIndex: Z_INDEX.dropdown,
   minWidth: 160,
   padding: '4px 0',
@@ -131,7 +131,7 @@ const dropdownItemStyle: CSSProperties = {
   textAlign: 'left',
   cursor: 'pointer',
   fontSize: 12,
-  color: '#3c4043',
+  color: 'var(--doc-text)',
 };
 
 // ============================================================================
@@ -404,7 +404,7 @@ function OptionsMenu({
               insertField('PAGE');
             }}
             onMouseOver={(e) => {
-              (e.target as HTMLElement).style.backgroundColor = '#f1f3f4';
+              (e.target as HTMLElement).style.backgroundColor = 'var(--doc-bg-hover)';
             }}
             onMouseOut={(e) => {
               (e.target as HTMLElement).style.backgroundColor = 'transparent';
@@ -420,7 +420,7 @@ function OptionsMenu({
               insertField('NUMPAGES');
             }}
             onMouseOver={(e) => {
-              (e.target as HTMLElement).style.backgroundColor = '#f1f3f4';
+              (e.target as HTMLElement).style.backgroundColor = 'var(--doc-bg-hover)';
             }}
             onMouseOut={(e) => {
               (e.target as HTMLElement).style.backgroundColor = 'transparent';
@@ -428,7 +428,7 @@ function OptionsMenu({
           >
             {t('headerFooter.insertTotalPages')}
           </button>
-          <div style={{ borderTop: '1px solid #e8eaed', margin: '4px 0' }} />
+          <div style={{ borderTop: '1px solid var(--doc-border-light)', margin: '4px 0' }} />
           {onRemove && (
             <button
               type="button"
@@ -438,7 +438,7 @@ function OptionsMenu({
                 onRemove();
               }}
               onMouseOver={(e) => {
-                (e.target as HTMLElement).style.backgroundColor = '#f1f3f4';
+                (e.target as HTMLElement).style.backgroundColor = 'var(--doc-bg-hover)';
               }}
               onMouseOut={(e) => {
                 (e.target as HTMLElement).style.backgroundColor = 'transparent';
@@ -455,7 +455,7 @@ function OptionsMenu({
               onClose();
             }}
             onMouseOver={(e) => {
-              (e.target as HTMLElement).style.backgroundColor = '#f1f3f4';
+              (e.target as HTMLElement).style.backgroundColor = 'var(--doc-bg-hover)';
             }}
             onMouseOut={(e) => {
               (e.target as HTMLElement).style.backgroundColor = 'transparent';

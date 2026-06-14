@@ -96,13 +96,20 @@ export const DocumentOutline = React.memo(function DocumentOutline({
             borderRadius: '50%',
             display: 'flex',
             alignItems: 'center',
-            color: '#444746',
+            color: 'var(--doc-text-muted)',
           }}
           title={t('documentOutline.closeTitle')}
         >
           <MaterialSymbol name="arrow_back" size={20} />
         </button>
-        <span style={{ fontWeight: 400, fontSize: 14, color: '#1f1f1f', letterSpacing: '0.01em' }}>
+        <span
+          style={{
+            fontWeight: 400,
+            fontSize: 14,
+            color: 'var(--doc-text)',
+            letterSpacing: '0.01em',
+          }}
+        >
           {t('documentOutline.title')}
         </span>
       </div>
@@ -110,7 +117,14 @@ export const DocumentOutline = React.memo(function DocumentOutline({
       {/* Heading list */}
       <div style={{ overflowY: 'auto', flex: 1, paddingLeft: 20 }}>
         {headings.length === 0 ? (
-          <div style={{ padding: '8px 16px', color: '#80868b', fontSize: 13, lineHeight: '20px' }}>
+          <div
+            style={{
+              padding: '8px 16px',
+              color: 'var(--doc-text-subtle)',
+              fontSize: 13,
+              lineHeight: '20px',
+            }}
+          >
             {t('documentOutline.noHeadings')}
           </div>
         ) : (
@@ -134,7 +148,7 @@ export const DocumentOutline = React.memo(function DocumentOutline({
                   padding: '5px 12px',
                   fontSize: 13,
                   fontWeight: 400,
-                  color: '#1f1f1f',
+                  color: 'var(--doc-text)',
                   lineHeight: '18px',
                   whiteSpace: 'nowrap',
                   overflow: 'hidden',

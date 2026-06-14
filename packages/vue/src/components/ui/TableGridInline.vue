@@ -74,21 +74,21 @@ function handleClick() {
 .docx-table-grid-inline__cell {
   width: 18px;
   height: 18px;
-  background: #fff;
-  border: 1px solid #d1d5db;
+  background: var(--doc-surface);
+  border: 1px solid var(--doc-border);
   border-radius: 2px;
   cursor: pointer;
   transition: background-color 0.1s, border-color 0.1s;
 }
 .docx-table-grid-inline__cell--active {
-  background: #3b82f6;
-  border-color: #3b82f6;
+  background: var(--doc-primary);
+  border-color: var(--doc-primary);
 }
 .docx-table-grid-inline__label {
   margin-top: 6px;
   font-size: 11px;
   font-weight: 500;
-  color: #374151;
+  color: var(--doc-text-muted);
   text-align: center;
 }
 </style>

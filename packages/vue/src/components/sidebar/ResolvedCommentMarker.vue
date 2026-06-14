@@ -34,7 +34,7 @@ defineEmits<{
   display: inline-flex;
   align-items: center;
   cursor: pointer;
-  color: #5f6368;
+  color: var(--doc-text-muted);
   padding: 2px;
   transition: opacity 0.15s ease;
 }

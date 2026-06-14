@@ -216,16 +216,16 @@ function insertImage() {
 .dialog-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.3);
+  background: var(--doc-overlay);
   z-index: 300;
   display: flex;
   align-items: center;
   justify-content: center;
 }
 .dialog {
-  background: #fff;
+  background: var(--doc-surface);
   border-radius: 8px;
-  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.2);
+  box-shadow: 0 8px 30px var(--doc-shadow);
   min-width: 400px;
   max-width: 90vw;
 }
@@ -234,19 +234,19 @@ function insertImage() {
   align-items: center;
   justify-content: space-between;
   padding: 12px 16px;
-  border-bottom: 1px solid #e5e7eb;
+  border-bottom: 1px solid var(--doc-border);
 }
 .dialog__title {
   font-weight: 600;
   font-size: 14px;
-  color: #1f2937;
+  color: var(--doc-text);
 }
 .dialog__close {
   border: none;
   background: transparent;
   cursor: pointer;
   font-size: 14px;
-  color: #6b7280;
+  color: var(--doc-text-muted);
   width: 24px;
   height: 24px;
   display: flex;
@@ -255,7 +255,7 @@ function insertImage() {
   border-radius: 4px;
 }
 .dialog__close:hover {
-  background: #f3f4f6;
+  background: var(--doc-bg-hover);
 }
 .dialog__body {
   padding: 16px;
@@ -268,23 +268,23 @@ function insertImage() {
 }
 .dialog__btn {
   padding: 6px 16px;
-  border: 1px solid #d1d5db;
+  border: 1px solid var(--doc-border-dark);
   border-radius: 4px;
   cursor: pointer;
   font-size: 13px;
-  background: #fff;
+  background: var(--doc-surface);
 }
 .dialog__btn--primary {
-  background: #3b82f6;
-  color: #fff;
-  border-color: #3b82f6;
+  background: var(--doc-primary);
+  color: var(--doc-on-primary);
+  border-color: var(--doc-primary);
 }
 .dialog__btn--primary:hover {
-  background: #2563eb;
+  background: var(--doc-primary);
 }
 
 .drop-zone {
-  border: 2px dashed #d1d5db;
+  border: 2px dashed var(--doc-border-dark);
   border-radius: 8px;
   padding: 24px;
   text-align: center;
@@ -298,23 +298,23 @@ function insertImage() {
 }
 .drop-zone:hover,
 .drop-zone--active {
-  border-color: #3b82f6;
-  background: #eff6ff;
+  border-color: var(--doc-primary);
+  background: var(--doc-primary-light);
 }
 .drop-zone__icon {
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #9ca3af;
+  color: var(--doc-text-subtle);
   margin-bottom: 8px;
 }
 .drop-zone__text {
   font-size: 13px;
-  color: #374151;
+  color: var(--doc-text-muted);
 }
 .drop-zone__hint {
   font-size: 11px;
-  color: #9ca3af;
+  color: var(--doc-text-subtle);
   margin-top: 4px;
 }
 .drop-zone__preview {
@@ -323,7 +323,7 @@ function insertImage() {
   border-radius: 4px;
 }
 .drop-zone__error {
-  color: #dc2626;
+  color: var(--doc-error);
   font-size: 12px;
   margin-top: 8px;
 }
@@ -338,14 +338,14 @@ function insertImage() {
 .dim-input {
   width: 70px;
   padding: 4px 6px;
-  border: 1px solid #d1d5db;
+  border: 1px solid var(--doc-border-dark);
   border-radius: 4px;
   font-size: 13px;
 }
 .alt-input {
   width: 100%;
   padding: 4px 8px;
-  border: 1px solid #d1d5db;
+  border: 1px solid var(--doc-border-dark);
   border-radius: 4px;
   font-size: 13px;
   margin-top: 4px;

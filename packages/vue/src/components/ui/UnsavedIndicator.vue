@@ -76,7 +76,7 @@ defineExpose({ hasUnsavedChanges, changeCount, markAsSaved });
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  background: #f59e0b;
+  background: var(--doc-warning);
   animation: pulse 2s infinite;
 }
 @keyframes pulse {
@@ -90,15 +90,15 @@ defineExpose({ hasUnsavedChanges, changeCount, markAsSaved });
   min-width: 18px;
   height: 18px;
   padding: 0 4px;
-  background: #f59e0b;
-  color: #fff;
+  background: var(--doc-warning);
+  color: var(--doc-on-primary);
   font-size: 10px;
   font-weight: 600;
   border-radius: 9px;
 }
 .unsaved-indicator__text {
   font-size: 12px;
-  color: #f59e0b;
+  color: var(--doc-warning);
   font-weight: 500;
 }
 </style>

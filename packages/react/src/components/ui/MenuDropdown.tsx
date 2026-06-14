@@ -51,7 +51,7 @@ const triggerStyle: CSSProperties = {
   cursor: 'pointer',
   fontSize: 13,
   fontWeight: 400,
-  color: 'var(--doc-text, #374151)',
+  color: 'var(--doc-text)',
   whiteSpace: 'nowrap',
   height: 28,
   lineHeight: '28px',
@@ -59,7 +59,7 @@ const triggerStyle: CSSProperties = {
 
 const triggerOpenStyle: CSSProperties = {
   ...triggerStyle,
-  background: 'var(--doc-hover, #f3f4f6)',
+  background: 'var(--doc-bg-hover)',
 };
 
 const menuItemStyle: CSSProperties = {
@@ -71,7 +71,7 @@ const menuItemStyle: CSSProperties = {
   background: 'transparent',
   cursor: 'pointer',
   fontSize: 13,
-  color: 'var(--doc-text, #374151)',
+  color: 'var(--doc-text)',
   width: '100%',
   textAlign: 'left',
   whiteSpace: 'nowrap',
@@ -85,14 +85,14 @@ const menuItemDisabledStyle: CSSProperties = {
 
 const separatorStyle: CSSProperties = {
   height: 1,
-  backgroundColor: 'var(--doc-border, #e5e7eb)',
+  backgroundColor: 'var(--doc-border)',
   margin: '4px 0',
 };
 
 const shortcutStyle: CSSProperties = {
   marginLeft: 'auto',
   fontSize: 12,
-  color: 'var(--doc-text-muted, #9ca3af)',
+  color: 'var(--doc-text-muted)',
 };
 
 const submenuPanelStyle: CSSProperties = {
@@ -100,10 +100,10 @@ const submenuPanelStyle: CSSProperties = {
   left: '100%',
   top: -4,
   marginLeft: 2,
-  backgroundColor: 'white',
-  border: '1px solid var(--doc-border, #d1d5db)',
+  backgroundColor: 'var(--doc-surface)',
+  border: '1px solid var(--doc-border)',
   borderRadius: 6,
-  boxShadow: '0 4px 12px rgba(0, 0, 0, 0.12)',
+  boxShadow: '0 4px 12px var(--doc-shadow)',
   padding: 8,
   zIndex: 1001,
 };
@@ -192,10 +192,10 @@ export function MenuDropdown({ label, items, disabled, showChevron = false }: Me
             position: 'fixed',
             top: dropdownPos.top,
             left: dropdownPos.left,
-            backgroundColor: 'white',
-            border: '1px solid var(--doc-border, #d1d5db)',
+            backgroundColor: 'var(--doc-surface)',
+            border: '1px solid var(--doc-border)',
             borderRadius: 6,
-            boxShadow: '0 4px 12px rgba(0, 0, 0, 0.12)',
+            boxShadow: '0 4px 12px var(--doc-shadow)',
             padding: '4px 0',
             zIndex: 10000,
             minWidth: 200,
@@ -233,7 +233,7 @@ export function MenuDropdown({ label, items, disabled, showChevron = false }: Me
                   onMouseOver={(e) => {
                     if (!item.disabled) {
                       (e.currentTarget as HTMLButtonElement).style.backgroundColor =
-                        'var(--doc-hover, #f3f4f6)';
+                        'var(--doc-bg-hover)';
                     }
                   }}
                   onMouseOut={(e) => {

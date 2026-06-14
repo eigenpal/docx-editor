@@ -217,10 +217,10 @@ watch(
   z-index: 399;
 }
 .ctx-menu {
-  background: #fff;
-  border: 1px solid #d1d5db;
+  background: var(--doc-surface);
+  border: 1px solid var(--doc-border-dark);
   border-radius: 6px;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.14);
+  box-shadow: 0 4px 16px var(--doc-shadow);
   min-width: 220px;
   padding: 4px 0;
   outline: none;
@@ -235,22 +235,22 @@ watch(
   background: transparent;
   cursor: pointer;
   font-size: 13px;
-  color: #1f2937;
+  color: var(--doc-text);
   text-align: left;
   height: 32px;
 }
 .ctx-menu__item:hover:not(.ctx-menu__item--disabled):not(.ctx-menu__item--divider) {
-  background: #f3f4f6;
+  background: var(--doc-bg-hover);
 }
 .ctx-menu__item--disabled {
-  color: #9ca3af;
+  color: var(--doc-text-subtle);
   cursor: default;
 }
 .ctx-menu__item--divider {
   height: 1px;
   padding: 0;
   margin: 4px 8px;
-  background: #e5e7eb;
+  background: var(--doc-border);
   cursor: default;
   pointer-events: none;
 }
@@ -259,7 +259,7 @@ watch(
 }
 .ctx-menu__shortcut {
   font-size: 11px;
-  color: #9ca3af;
+  color: var(--doc-text-subtle);
   margin-left: 16px;
 }
 </style>

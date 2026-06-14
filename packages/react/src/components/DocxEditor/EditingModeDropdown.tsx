@@ -70,12 +70,12 @@ export function EditingModeDropdown({
           gap: compact ? 0 : 4,
           padding: compact ? '2px 4px' : '2px 6px 2px 4px',
           border: 'none',
-          background: isOpen ? 'var(--doc-hover, #f3f4f6)' : 'transparent',
+          background: isOpen ? 'var(--doc-bg-hover)' : 'transparent',
           borderRadius: 4,
           cursor: 'pointer',
           fontSize: 13,
           fontWeight: 400,
-          color: 'var(--doc-text, #374151)',
+          color: 'var(--doc-text)',
           whiteSpace: 'nowrap',
           height: 28,
         }}
@@ -93,10 +93,10 @@ export function EditingModeDropdown({
             position: 'fixed',
             top: pos.top,
             left: pos.left,
-            backgroundColor: 'white',
-            border: '1px solid var(--doc-border, #d1d5db)',
+            backgroundColor: 'var(--doc-surface)',
+            border: '1px solid var(--doc-border)',
             borderRadius: 8,
-            boxShadow: '0 4px 12px rgba(0, 0, 0, 0.12)',
+            boxShadow: '0 4px 12px var(--doc-shadow)',
             padding: '4px 0',
             zIndex: 10000,
             minWidth: 220,
@@ -113,7 +113,7 @@ export function EditingModeDropdown({
               }}
               onMouseOver={(e) => {
                 (e.currentTarget as HTMLButtonElement).style.backgroundColor =
-                  'var(--doc-hover, #f3f4f6)';
+                  'var(--doc-bg-hover)';
               }}
               onMouseOut={(e) => {
                 (e.currentTarget as HTMLButtonElement).style.backgroundColor = 'transparent';
@@ -127,7 +127,7 @@ export function EditingModeDropdown({
                 background: 'transparent',
                 cursor: 'pointer',
                 fontSize: 13,
-                color: 'var(--doc-text, #374151)',
+                color: 'var(--doc-text)',
                 width: '100%',
                 textAlign: 'left',
               }}
@@ -135,15 +135,13 @@ export function EditingModeDropdown({
               <MaterialSymbol name={m.icon} size={20} />
               <span style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>
                 <span style={{ fontWeight: 500 }}>{t(m.labelKey)}</span>
-                <span style={{ fontSize: 11, color: 'var(--doc-text-muted, #9ca3af)' }}>
-                  {t(m.descKey)}
-                </span>
+                <span style={{ fontSize: 11, color: 'var(--doc-text-muted)' }}>{t(m.descKey)}</span>
               </span>
               {m.value === mode && (
                 <MaterialSymbol
                   name="check"
                   size={18}
-                  style={{ marginLeft: 'auto', color: '#1a73e8' }}
+                  style={{ marginLeft: 'auto', color: 'var(--doc-primary)' }}
                 />
               )}
             </button>

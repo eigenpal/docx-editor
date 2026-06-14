@@ -53,13 +53,13 @@ const hiddenCount = computed(() =>
 .reply-thread__more {
   font-size: 12px;
   font-weight: 500;
-  color: #1a73e8;
+  color: var(--doc-primary);
   padding: 6px 0;
-  border-top: 1px solid #e8eaed;
+  border-top: 1px solid var(--doc-border-light);
 }
 .reply-thread__item {
   padding-top: 8px;
-  border-top: 1px solid #e8eaed;
+  border-top: 1px solid var(--doc-border-light);
 }
 .reply-thread__item--expanded { margin-bottom: 8px; }
 .reply-thread__header {
@@ -71,15 +71,15 @@ const hiddenCount = computed(() =>
 .reply-thread__author {
   font-size: 13px;
   font-weight: 600;
-  color: #202124;
+  color: var(--doc-text);
 }
 .reply-thread__date {
   font-size: 11px;
-  color: #5f6368;
+  color: var(--doc-text-muted);
 }
 .reply-thread__body {
   font-size: 13px;
-  color: #202124;
+  color: var(--doc-text);
   line-height: 20px;
   margin-top: 4px;
 }

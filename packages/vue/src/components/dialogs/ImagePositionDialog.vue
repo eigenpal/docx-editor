@@ -170,17 +170,17 @@ function apply() {
 </script>
 
 <style scoped>
-.ipd-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.4); display: flex; align-items: center; justify-content: center; z-index: 10000; }
-.ipd-dialog { background: #fff; border-radius: 8px; box-shadow: 0 4px 20px rgba(0,0,0,0.15); width: 420px; max-width: 90vw; }
-.ipd-dialog__header { padding: 16px 20px 12px; border-bottom: 1px solid #e5e7eb; font-size: 16px; font-weight: 600; color: #1f2937; }
+.ipd-overlay { position: fixed; inset: 0; background: var(--doc-overlay); display: flex; align-items: center; justify-content: center; z-index: 10000; }
+.ipd-dialog { background: var(--doc-surface); border-radius: 8px; box-shadow: 0 4px 20px var(--doc-shadow); width: 420px; max-width: 90vw; }
+.ipd-dialog__header { padding: 16px 20px 12px; border-bottom: 1px solid var(--doc-border); font-size: 16px; font-weight: 600; color: var(--doc-text); }
 .ipd-dialog__body { padding: 12px 20px; display: flex; flex-direction: column; gap: 12px; max-height: 60vh; overflow-y: auto; }
-.ipd-dialog__footer { padding: 12px 20px 16px; border-top: 1px solid #e5e7eb; display: flex; justify-content: flex-end; gap: 8px; }
-.ipd-fieldset { border: 1px solid #e5e7eb; border-radius: 6px; padding: 10px 12px; margin: 0; }
-.ipd-legend { font-size: 12px; font-weight: 600; color: #4b5563; padding: 0 4px; }
+.ipd-dialog__footer { padding: 12px 20px 16px; border-top: 1px solid var(--doc-border); display: flex; justify-content: flex-end; gap: 8px; }
+.ipd-fieldset { border: 1px solid var(--doc-border); border-radius: 6px; padding: 10px 12px; margin: 0; }
+.ipd-legend { font-size: 12px; font-weight: 600; color: var(--doc-text-muted); padding: 0 4px; }
 .ipd-row { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
 .ipd-row:last-child { margin-bottom: 0; }
-.ipd-label { width: 70px; font-size: 13px; color: #6b7280; flex-shrink: 0; }
-.ipd-input, .ipd-select { flex: 1; padding: 5px 8px; border: 1px solid #d1d5db; border-radius: 4px; font-size: 13px; }
-.ipd-btn { padding: 6px 16px; font-size: 13px; border: 1px solid #d1d5db; border-radius: 4px; cursor: pointer; background: #fff; }
-.ipd-btn--primary { background: #1a73e8; color: #fff; border-color: #1a73e8; }
+.ipd-label { width: 70px; font-size: 13px; color: var(--doc-text-muted); flex-shrink: 0; }
+.ipd-input, .ipd-select { flex: 1; padding: 5px 8px; border: 1px solid var(--doc-border-dark); border-radius: 4px; font-size: 13px; }
+.ipd-btn { padding: 6px 16px; font-size: 13px; border: 1px solid var(--doc-border-dark); border-radius: 4px; cursor: pointer; background: var(--doc-surface); }
+.ipd-btn--primary { background: var(--doc-primary); color: var(--doc-on-primary); border-color: var(--doc-primary); }
 </style>

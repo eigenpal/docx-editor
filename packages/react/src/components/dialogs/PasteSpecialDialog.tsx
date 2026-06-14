@@ -370,10 +370,10 @@ export const PasteSpecialDialog: React.FC<PasteSpecialDialogProps> = ({
       top: y,
       left: x,
       width: dialogWidth,
-      background: 'white',
+      background: 'var(--doc-surface)',
       border: '1px solid var(--doc-border-light)',
       borderRadius: '8px',
-      boxShadow: '0 4px 20px rgba(0, 0, 0, 0.15)',
+      boxShadow: '0 4px 20px var(--doc-shadow)',
       zIndex: 10001,
       overflow: 'hidden',
     };

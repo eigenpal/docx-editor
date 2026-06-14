@@ -40,9 +40,12 @@
       <button
         class="toolbar-dropdown__trigger zoom-trigger"
         @mousedown.prevent="toggleDropdown('zoom')"
+        :aria-expanded="openDropdown === 'zoom'"
+        aria-haspopup="listbox"
         :title="t('zoom.zoomLevel')"
       >
         {{ zoomPercent }}%
+        <MaterialSymbol class="chevron" name="arrow_drop_down" :size="16" />
       </button>
       <button
         class="size-btn"
@@ -76,6 +79,8 @@
       <button
         class="toolbar-dropdown__trigger style-trigger"
         @mousedown.prevent="toggleDropdown('style')"
+        :aria-expanded="openDropdown === 'style'"
+        aria-haspopup="listbox"
         :title="t('styles.selectAriaLabel')"
       >
         {{ currentStyleLabel }}
@@ -87,14 +92,13 @@
         class="toolbar-dropdown__menu style-menu"
       >
         <button
-          v-for="s in paragraphStyles"
+          v-for="s in resolvedParagraphStyles"
           :key="s.id"
           class="toolbar-dropdown__item"
           :class="{ active: (ctx.paragraphFormatting.styleId || 'Normal') === s.id }"
-          :style="s.previewStyle"
           @mousedown.prevent="handleApplyStyle(s.id)"
         >
-          {{ t(s.nameKey) }}
+          <span :style="s.previewStyle">{{ s.label }}</span>
         </button>
       </div>
     </div>
@@ -106,6 +110,8 @@
       <button
         class="toolbar-dropdown__trigger font-trigger"
         @mousedown.prevent="toggleDropdown('font')"
+        :aria-expanded="openDropdown === 'font'"
+        aria-haspopup="listbox"
         :title="t('font.selectAriaLabel')"
       >
         {{ currentFontFamily }}
@@ -143,13 +149,21 @@
       >
         −
       </button>
-      <button
-        class="toolbar-dropdown__trigger size-trigger"
-        @mousedown.prevent="toggleDropdown('size')"
+      <input
+        class="size-trigger size-input"
+        type="text"
+        :value="currentFontSize"
         :title="t('fontSize.label')"
-      >
-        {{ currentFontSize }}
-      </button>
+        @mousedown.stop
+        @focus="onSizeFocus"
+        :aria-expanded="openDropdown === 'size'"
+        aria-haspopup="listbox"
+        @input="onSizeInput"
+        @keydown.up.prevent.stop="increaseFontSize()"
+        @keydown.down.prevent.stop="decreaseFontSize()"
+        @keydown.enter.prevent="commitFontSize($event)"
+        @blur="commitFontSize($event)"
+      />
       <button
         class="size-btn"
         @mousedown.prevent="increaseFontSize"
@@ -167,7 +181,7 @@
           :key="s"
           class="toolbar-dropdown__item"
           :class="{ active: currentFontSize === s }"
-          @mousedown.prevent="setFontSize(s)"
+          @mousedown.prevent="pickFontSize(s)"
         >
           {{ s }}
         </button>
@@ -260,59 +274,63 @@
       <button
         class="toolbar-dropdown__trigger align-trigger"
         @mousedown.prevent="toggleDropdown('align')"
+        :aria-expanded="openDropdown === 'align'"
+        aria-haspopup="listbox"
         :title="t('formattingBar.groups.alignment')"
       >
         <MaterialSymbol :name="alignIconName" />
         <MaterialSymbol class="chevron" name="arrow_drop_down" :size="16" />
       </button>
+      <!-- Horizontal icon strip matching React's AlignmentButtons (icon-only,
+           blue active state), not a vertical labeled menu. -->
       <div
         v-if="openDropdown === 'align'"
         :style="dropdownMenuStyle"
-        class="toolbar-dropdown__menu align-menu"
+        class="toolbar-dropdown__menu align-strip"
       >
         <button
-          class="toolbar-dropdown__item dropdown-item--icon"
+          class="align-strip__btn"
           :class="{ active: currentAlignment === 'left' }"
+          :title="`${t('alignment.alignLeft')} (${t('alignment.alignLeftShortcut')})`"
           @mousedown.prevent="
             execCommand('alignLeft');
             openDropdown = null;
           "
         >
           <MaterialSymbol name="format_align_left" :size="18" />
-          {{ t('alignment.alignLeft') }} ({{ t('alignment.alignLeftShortcut') }})
         </button>
         <button
-          class="toolbar-dropdown__item dropdown-item--icon"
+          class="align-strip__btn"
           :class="{ active: currentAlignment === 'center' }"
+          :title="`${t('alignment.center')} (${t('alignment.centerShortcut')})`"
           @mousedown.prevent="
             execCommand('alignCenter');
             openDropdown = null;
           "
         >
           <MaterialSymbol name="format_align_center" :size="18" />
-          {{ t('alignment.center') }} ({{ t('alignment.centerShortcut') }})
         </button>
         <button
-          class="toolbar-dropdown__item dropdown-item--icon"
+          class="align-strip__btn"
           :class="{ active: currentAlignment === 'right' }"
+          :title="`${t('alignment.alignRight')} (${t('alignment.alignRightShortcut')})`"
           @mousedown.prevent="
             execCommand('alignRight');
             openDropdown = null;
           "
         >
           <MaterialSymbol name="format_align_right" :size="18" />
-          {{ t('alignment.alignRight') }} ({{ t('alignment.alignRightShortcut') }})
         </button>
         <button
-          class="toolbar-dropdown__item dropdown-item--icon"
+          class="align-strip__btn"
           :class="{ active: currentAlignment === 'both' }"
+          :title="`${t('alignment.justify')} (${t('alignment.justifyShortcut')})`"
           @mousedown.prevent="
             execCommand('alignJustify');
             openDropdown = null;
           "
         >
           <MaterialSymbol name="format_align_justify" :size="18" />
-          {{ t('alignment.justify') }} ({{ t('alignment.justifyShortcut') }})
         </button>
       </div>
     </div>
@@ -355,6 +373,8 @@
       <button
         class="toolbar-dropdown__trigger"
         @mousedown.prevent="toggleDropdown('spacing')"
+        :aria-expanded="openDropdown === 'spacing'"
+        aria-haspopup="listbox"
         :title="t('lineSpacing.label')"
       >
         <MaterialSymbol name="format_line_spacing" />
@@ -448,7 +468,7 @@ import ImageTransformDropdown, {
   type TransformAction as ImageTransformAction,
 } from './ui/ImageTransformDropdown.vue';
 import type { SelectionContext } from '@eigenpal/docx-editor-core/prosemirror/plugins/selectionTracker';
-import type { ColorValue, Theme } from '@eigenpal/docx-editor-core/types/document';
+import type { ColorValue, Theme, Style } from '@eigenpal/docx-editor-core/types/document';
 import {
   normalizeFontFamilies,
   type FontOption,
@@ -456,12 +476,13 @@ import {
 import {
   defaultFonts,
   fontSizePresets,
-  paragraphStyles,
   lineSpacingOptions,
   ZOOM_PRESETS,
   DEFAULT_ZOOM_PERCENT,
 } from './Toolbar/presets';
 import { useToolbarDropdowns } from '../composables/useToolbarDropdowns';
+import { useToolbarFontSize } from '../composables/useToolbarFontSize';
+import { useParagraphStyleOptions } from '../composables/useParagraphStyleOptions';
 import { useTranslation } from '../i18n';
 
 /**
@@ -496,6 +517,10 @@ const props = defineProps<{
   theme?: Theme | null;
   /** Optional custom font list matching React's `fontFamilies` prop. */
   fontFamilies?: ReadonlyArray<string | FontOption>;
+  /** Paragraph styles from the loaded document (document.package.styles.styles).
+      When present, the style picker shows the document's real styles + names,
+      matching React's Toolbar `documentStyles` prop. Falls back to presets. */
+  documentStyles?: Style[];
 }>();
 
 const { t } = useTranslation();
@@ -542,8 +567,9 @@ const zoomDropdownRef = ref<HTMLElement | null>(null);
 // which forces overflow-y to clip per the CSS spec. Dropdowns therefore
 // can't escape via `position: absolute` — `useToolbarDropdowns` renders
 // each menu with `position: fixed` and recomputes coords on every open.
-const { openDropdown, dropdownMenuStyle, toggleDropdown } = useToolbarDropdowns({
-  zoom: zoomDropdownRef,
+const { openDropdown, dropdownMenuStyle, toggleDropdown, recomputeDropdownPos } =
+  useToolbarDropdowns({
+    zoom: zoomDropdownRef,
   style: styleDropdownRef,
   font: fontDropdownRef,
   size: sizeDropdownRef,
@@ -611,10 +637,11 @@ const alignIconName = computed(() => {
   }
 });
 
-const currentStyleLabel = computed(() => {
-  const id = ctx.value.paragraphFormatting.styleId || 'Normal';
-  const s = paragraphStyles.find((ps) => ps.id === id);
-  return s ? t(s.nameKey) : id;
+// Style-picker options + current label (see useParagraphStyleOptions).
+const { resolvedParagraphStyles, currentStyleLabel } = useParagraphStyleOptions({
+  documentStyles: () => props.documentStyles,
+  currentStyleId: () => ctx.value.paragraphFormatting.styleId || 'Normal',
+  t,
 });
 
 // Mirror React Toolbar's `canUndo` / `canRedo` props (Toolbar.tsx:81-82).
@@ -708,22 +735,16 @@ function setFont(fontName: string) {
   execCommand('setFontFamily', fontName);
 }
 
-function setFontSize(size: number) {
-  // Commands expect half-points
-  execCommand('setFontSize', size * 2);
-}
-
-function increaseFontSize() {
-  const current = currentFontSize.value;
-  const next = fontSizePresets.find((s) => s > current) || current + 2;
-  setFontSize(next);
-}
-
-function decreaseFontSize() {
-  const current = currentFontSize.value;
-  const prev = [...fontSizePresets].reverse().find((s) => s < current) || Math.max(1, current - 2);
-  setFontSize(prev);
-}
+// Font-size box + steppers + preset dropdown (see useToolbarFontSize for the
+// editing/commit flow and the `sizeTyped` guard).
+const {
+  onSizeFocus,
+  onSizeInput,
+  commitFontSize,
+  pickFontSize,
+  increaseFontSize,
+  decreaseFontSize,
+} = useToolbarFontSize({ currentFontSize, openDropdown, recomputeDropdownPos, execCommand });
 
 function onTextColor(color: ColorValue | string) {
   if (typeof color === 'object' && color.auto) {
@@ -773,7 +794,8 @@ function isCurrentLineSpacing(twips: number): boolean {
   gap: 1px;
   padding: 4px 8px;
   margin: 0 8px 4px;
-  background: #f1f5f9;
+  /* Match React's formatting-row pill exactly (Toolbar.tsx: bg-muted) */
+  background: hsl(var(--muted));
   border-radius: 9999px;
   flex-wrap: nowrap;
   min-height: 36px;
@@ -784,7 +806,7 @@ function isCurrentLineSpacing(twips: number): boolean {
   height: 4px;
 }
 .basic-toolbar::-webkit-scrollbar-thumb {
-  background: rgba(15, 23, 42, 0.15);
+  background: var(--doc-shadow);
   border-radius: 2px;
 }
 /* Buttons match React's `<Button variant="ghost" size="icon-sm">`:
@@ -795,6 +817,10 @@ function isCurrentLineSpacing(twips: number): boolean {
    text-sm font-medium transition-colors h-7 w-7
    text-slate-500 hover:text-slate-900 hover:bg-slate-100/80
    (text-sm = 14px font-size; rounded-md = 6px; h-7 w-7 = 28×28 square) */
+.basic-toolbar button,
+.basic-toolbar input {
+  font-family: inherit;
+}
 .basic-toolbar button {
   display: inline-flex;
   align-items: center;
@@ -806,8 +832,10 @@ function isCurrentLineSpacing(twips: number): boolean {
   background: transparent;
   cursor: pointer;
   font-size: 14px;
-  font-weight: 500;
-  color: #64748b;
+  /* Normal weight + shadcn tokens to match React's toolbar buttons in light
+     and dark (text-muted-foreground / hover:text-foreground / hover:bg-muted). */
+  font-weight: 400;
+  color: hsl(var(--muted-foreground));
   padding: 0;
   white-space: nowrap;
   flex-shrink: 0;
@@ -816,14 +844,14 @@ function isCurrentLineSpacing(twips: number): boolean {
     color 0.15s ease;
 }
 .basic-toolbar button:hover:not(:disabled) {
-  background: rgba(241, 245, 249, 0.8);
-  color: #0f172a;
+  background: hsl(var(--muted));
+  color: hsl(var(--foreground));
 }
 .basic-toolbar button:active:not(:disabled) {
-  background: rgba(226, 232, 240, 0.8);
+  background: hsl(var(--muted));
 }
 .basic-toolbar button:focus-visible {
-  outline: 2px solid #2563eb;
+  outline: 2px solid var(--doc-primary);
   outline-offset: 2px;
 }
 .basic-toolbar button:disabled {
@@ -831,56 +859,62 @@ function isCurrentLineSpacing(twips: number): boolean {
   cursor: not-allowed;
 }
 .basic-toolbar button.active {
-  background: #0f172a;
-  color: #fff;
+  background: hsl(var(--foreground));
+  color: var(--doc-on-primary);
 }
 .basic-toolbar button.active:hover {
-  background: #1e293b;
-  color: #fff;
+  background: hsl(var(--foreground));
+  color: var(--doc-on-primary);
 }
 /* Match React's icon size (18px in 28px button). */
 .basic-toolbar button :deep(svg) {
   width: 18px;
   height: 18px;
 }
-/* Dropdown items with leading icons (Insert menu) */
-.dropdown-item--icon {
-  display: flex !important;
+/* Alignment popover — horizontal icon strip mirroring React's
+   AlignmentButtons (icon-only 32px buttons, blue active toggle). */
+.align-strip {
+  display: flex;
+  gap: 2px;
+  padding: 6px;
+}
+.basic-toolbar .align-strip__btn {
+  display: flex;
   align-items: center;
-  gap: 10px;
-  justify-content: flex-start !important;
-  padding: 6px 12px !important;
-  min-height: 30px;
-  font-weight: 400 !important;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--doc-text);
+  cursor: pointer;
 }
-.dropdown-item--icon :deep(svg) {
-  color: #5f6368;
-  flex-shrink: 0;
+.basic-toolbar .align-strip__btn:hover:not(.active) {
+  background: var(--doc-bg-hover);
 }
-/* Match React's ToolbarGroup `border-r border-slate-200/50` between
-   button groups (Toolbar wraps each group in a `<ToolbarGroup>`
-   that ends with a 1px slate-200/50 right border). The vertical line
-   sits centered with 6px breathing room on each side, matching the
-   `px-1.5` padding React puts on every group. */
+.basic-toolbar .align-strip__btn.active {
+  background: var(--doc-primary-light);
+  color: var(--doc-primary);
+}
+/* Group divider — React's ToolbarGroup border-r border-slate-200/50. */
 .divider {
   width: 1px;
   height: 20px;
   margin: 0 6px;
-  background: rgba(226, 232, 240, 0.5);
+  background: hsl(var(--border) / 0.5);
   flex-shrink: 0;
 }
-/* Editing-mode chip inside the slate pill — match the slate text
-   color and minimal-height the chip so it doesn't break the pill
-   alignment. */
+/* Editing-mode chip — full-strength --doc-text + --doc-bg-hover, like React. */
 .basic-toolbar :deep(.editing-mode__trigger) {
   height: 28px;
   background: transparent;
-  color: #475569;
+  color: var(--doc-text);
 }
 .basic-toolbar :deep(.editing-mode__trigger:hover),
 .basic-toolbar :deep(.editing-mode__trigger--open) {
-  background: rgba(15, 23, 42, 0.06);
-  color: #0f172a;
+  background: var(--doc-bg-hover);
+  color: var(--doc-text);
 }
 
 /* Dropdown system */
@@ -889,7 +923,9 @@ function isCurrentLineSpacing(twips: number): boolean {
   display: flex;
   align-items: center;
 }
-.toolbar-dropdown__trigger {
+/* Scoped under .basic-toolbar to beat the base button rule; mirrors React's
+   SelectTrigger (text-sm, normal weight, foreground). Hover = base button. */
+.basic-toolbar .toolbar-dropdown__trigger {
   display: flex;
   align-items: center;
   gap: 2px;
@@ -899,56 +935,62 @@ function isCurrentLineSpacing(twips: number): boolean {
   border-radius: 4px;
   background: transparent;
   cursor: pointer;
-  font-size: 12px;
-  color: #334155;
+  font-size: 14px;
+  font-weight: 400;
+  color: hsl(var(--foreground));
   white-space: nowrap;
-}
-.toolbar-dropdown__trigger:hover {
-  background: #f1f5f9;
-  border-color: #e2e8f0;
 }
 .chevron {
   font-size: 10px;
-  color: #94a3b8;
+  color: hsl(var(--muted-foreground));
 }
 .toolbar-dropdown__menu {
   position: fixed;
   z-index: 10000;
-  background: #fff;
-  border: 1px solid #d1d5db;
-  border-radius: 6px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+  background: var(--doc-surface);
+  /* Match React's Radix Select content (border-border slate, rounded-lg, shadow-lg) */
+  border: 1px solid hsl(var(--border));
+  border-radius: 8px;
+  box-shadow: var(--doc-shadow-lg);
   max-height: 320px;
   overflow-y: auto;
   min-width: 120px;
   padding: 4px 0;
 }
-.toolbar-dropdown__item {
+/* Scoped under .basic-toolbar to beat the base button rule (menu renders in
+   the toolbar subtree). Resets its fixed 28px height so items grow to the
+   preview font (Title 26px); React SelectItem foreground + py-1.5 (style menu
+   bumps to py-2.5 below); hover (bg-muted) = base button:hover. */
+.basic-toolbar .toolbar-dropdown__item {
   display: block;
   width: 100%;
+  height: auto;
+  min-width: 0;
+  line-height: 1.3;
   padding: 6px 12px;
   border: none;
   background: transparent;
   cursor: pointer;
   text-align: left;
   font-size: 13px;
-  color: #1f2937;
+  color: hsl(var(--foreground));
   white-space: nowrap;
 }
-.toolbar-dropdown__item:hover {
-  background: #f3f4f6;
+.basic-toolbar .toolbar-dropdown__item:hover {
+  background: hsl(var(--muted));
 }
-.toolbar-dropdown__item.active {
-  background: #e0e7ff;
-  color: #3730a3;
+.basic-toolbar .toolbar-dropdown__item.active {
+  /* React marks the selected item with a grey bg-muted highlight, not indigo. */
+  background: hsl(var(--muted));
+  color: hsl(var(--foreground));
+  font-weight: 500;
 }
 .toolbar-dropdown__group-label {
-  padding: 4px 12px 2px;
-  font-size: 10px;
-  font-weight: 600;
-  color: #9ca3af;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
+  /* Match React's SelectLabel: text-xs font-medium, Title Case (no uppercase). */
+  padding: 6px 8px;
+  font-size: 12px;
+  font-weight: 500;
+  color: hsl(var(--muted-foreground));
 }
 
 /* Style picker */
@@ -956,7 +998,22 @@ function isCurrentLineSpacing(twips: number): boolean {
   min-width: 90px;
 }
 .style-menu {
-  min-width: 160px;
+  /* Vue's menu is position:fixed with only top/left set, so width:auto
+     balloons (shrink-to-fit doesn't apply) — pin React's ~145px width; long
+     names truncate via the item overflow + span ellipsis. max-height mirrors
+     React's max-h-[400px] (the base 320px cap clipped the last styles). */
+  width: 160px;
+  max-height: 400px;
+}
+.basic-toolbar .style-menu .toolbar-dropdown__item {
+  overflow: hidden;
+  /* React's StylePicker item uses py-2.5 px-3 = 10px 12px. */
+  padding: 10px 12px;
+}
+.style-menu .toolbar-dropdown__item span {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 /* Font picker */
@@ -973,23 +1030,46 @@ function isCurrentLineSpacing(twips: number): boolean {
   align-items: center;
   gap: 0;
 }
+/* Ghost +/- stepper buttons (borderless, like React's icon buttons) */
 .size-btn {
-  width: 22px !important;
-  height: 22px !important;
-  min-width: 22px !important;
-  font-size: 14px !important;
-  border: 1px solid #e2e8f0 !important;
-  border-radius: 3px !important;
-  padding: 0 !important;
+  width: 28px !important;
+  height: 28px !important;
+  min-width: 28px !important;
+  font-size: 15px !important;
   line-height: 1;
+  border: none !important;
+  border-radius: 4px !important;
+  padding: 0 !important;
+  background: transparent;
+  color: hsl(var(--muted-foreground));
+  cursor: pointer;
 }
+.size-btn:hover:not(:disabled) {
+  background: hsl(var(--muted) / 0.8);
+  color: hsl(var(--foreground));
+}
+.size-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+/* Editable, clearly-bordered value box (mirrors React's font-size input) */
 .size-trigger {
-  width: 36px;
+  width: 40px;
+  height: 28px;
+  margin: 0 2px;
   text-align: center;
-  justify-content: center;
-  font-size: 13px;
-  font-weight: 600;
-  border: 1px solid transparent;
+  font-size: 14px;
+  font-weight: 400;
+  color: hsl(var(--foreground));
+  border: 1px solid hsl(var(--border));
+  border-radius: 4px;
+  background: var(--doc-surface);
+  padding: 0;
+  outline: none;
+}
+.size-trigger:focus {
+  border-color: var(--doc-primary);
+  box-shadow: 0 0 0 1px var(--doc-primary);
 }
 .size-menu {
   min-width: 60px;
@@ -1005,11 +1085,10 @@ function isCurrentLineSpacing(twips: number): boolean {
   gap: 0;
 }
 .zoom-trigger {
-  width: 48px;
   text-align: center;
   justify-content: center;
-  font-size: 12px;
-  font-weight: 600;
+  font-size: 13px;
+  font-weight: 400;
   border: 1px solid transparent;
 }
 .zoom-menu {

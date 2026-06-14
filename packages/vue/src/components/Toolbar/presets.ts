@@ -29,45 +29,41 @@ export interface ParagraphStylePreset {
   /** Fallback label used if the i18n key resolves to nothing. */
   label: string;
   nameKey: TranslationKey;
-  previewStyle: Record<string, string>;
 }
 
+// Built-in style list shown when the document defines no styles. The dropdown
+// preview CSS is derived by the shared core helper (getStylePreviewProps), so
+// presets only carry id + i18n key.
 export const paragraphStyles: ParagraphStylePreset[] = [
   {
     id: 'Normal',
     label: 'Normal',
     nameKey: 'styles.normalText',
-    previewStyle: { fontSize: '13px' },
   },
   {
     id: 'Title',
     label: 'Title',
     nameKey: 'styles.title',
-    previewStyle: { fontSize: '20px', fontWeight: 'bold' },
   },
   {
     id: 'Subtitle',
     label: 'Subtitle',
     nameKey: 'styles.subtitle',
-    previewStyle: { fontSize: '15px', color: '#6b7280' },
   },
   {
     id: 'Heading1',
     label: 'Heading 1',
     nameKey: 'styles.heading1',
-    previewStyle: { fontSize: '18px', fontWeight: 'bold', color: '#4a6c8c' },
   },
   {
     id: 'Heading2',
     label: 'Heading 2',
     nameKey: 'styles.heading2',
-    previewStyle: { fontSize: '16px', fontWeight: 'bold', color: '#4a6c8c' },
   },
   {
     id: 'Heading3',
     label: 'Heading 3',
     nameKey: 'styles.heading3',
-    previewStyle: { fontSize: '14px', fontWeight: 'bold', color: '#4a6c8c' },
   },
 ];
 

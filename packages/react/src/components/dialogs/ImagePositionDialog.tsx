@@ -49,7 +49,7 @@ const overlayStyle: CSSProperties = {
   left: 0,
   right: 0,
   bottom: 0,
-  backgroundColor: 'rgba(0, 0, 0, 0.5)',
+  backgroundColor: 'var(--doc-overlay)',
   display: 'flex',
   alignItems: 'center',
   justifyContent: 'center',
@@ -57,9 +57,9 @@ const overlayStyle: CSSProperties = {
 };
 
 const dialogStyle: CSSProperties = {
-  backgroundColor: 'white',
+  backgroundColor: 'var(--doc-surface)',
   borderRadius: 8,
-  boxShadow: '0 4px 20px rgba(0, 0, 0, 0.15)',
+  boxShadow: '0 4px 20px var(--doc-shadow)',
   minWidth: 400,
   maxWidth: 480,
   width: '100%',
@@ -415,7 +415,7 @@ export function ImagePositionDialog({
             style={{
               ...btnStyle,
               backgroundColor: 'var(--doc-primary)',
-              color: 'white',
+              color: 'var(--doc-on-primary)',
               borderColor: 'var(--doc-primary)',
             }}
             onClick={handleApply}

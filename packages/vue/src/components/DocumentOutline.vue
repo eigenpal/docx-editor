@@ -96,15 +96,15 @@ defineEmits<{
   border-radius: 50%;
   display: flex;
   align-items: center;
-  color: #444746;
+  color: var(--doc-text-muted);
 }
 .doc-outline__back:hover {
-  background: rgba(60, 64, 67, 0.08);
+  background: var(--doc-shadow-subtle);
 }
 .doc-outline__title {
   font-weight: 400;
   font-size: 14px;
-  color: #1f1f1f;
+  color: var(--doc-text);
   letter-spacing: 0.01em;
 }
 .doc-outline__body {
@@ -114,7 +114,7 @@ defineEmits<{
 }
 .doc-outline__empty {
   padding: 8px 16px;
-  color: #80868b;
+  color: var(--doc-text-subtle);
   font-size: 13px;
   line-height: 20px;
 }
@@ -127,13 +127,13 @@ defineEmits<{
   background: transparent;
   cursor: pointer;
   font-size: 13px;
-  color: #374151;
+  color: var(--doc-text-muted);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
   border-radius: 4px;
 }
 .doc-outline__item:hover {
-  background: rgba(60, 64, 67, 0.08);
+  background: var(--doc-shadow-subtle);
 }
 </style>

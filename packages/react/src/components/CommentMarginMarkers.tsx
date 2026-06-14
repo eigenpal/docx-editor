@@ -79,7 +79,7 @@ export function CommentMarginMarkers({
             background: 'transparent',
             cursor: 'pointer',
             pointerEvents: 'auto',
-            color: '#5f6368',
+            color: 'var(--doc-text-muted)',
             padding: 0,
             fontFamily: 'inherit',
           }}

@@ -20,7 +20,7 @@
 .docx-title-bar {
   display: flex;
   align-items: stretch;
-  background: #fff;
+  background: var(--doc-surface);
   padding: 8px 0 4px;
   width: 100%;
   font-family: 'Google Sans Text', system-ui, sans-serif;

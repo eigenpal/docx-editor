@@ -1,5 +1,7 @@
 import { defineConfig } from 'vite';
 import vue from '@vitejs/plugin-vue';
+import tailwindcss from 'tailwindcss';
+import autoprefixer from 'autoprefixer';
 import path from 'path';
 
 const monorepoRoot = path.resolve(__dirname, '../..');
@@ -78,6 +80,21 @@ export default defineConfig({
           },
           ...coreAliases,
         ],
+  },
+  css: {
+    // Dev mode aliases the adapter (and its styles.css) to source, so the
+    // '@tailwind utilities' directive in packages/vue/src/styles/editor.css
+    // must be expanded here. Point at the Vue package's own tailwind config
+    // (scans packages/vue/src) so the demo shows real toolbar/dialog styles
+    // without a prebuild — mirrors examples/vite's React setup. The published
+    // parity build (USE_PUBLISHED_PACKAGES) instead loads the prebuilt
+    // dist/docx-editor-vue.css, which already carries these utilities.
+    postcss: {
+      plugins: [
+        tailwindcss({ config: path.join(monorepoRoot, 'packages/vue/tailwind.config.js') }),
+        autoprefixer(),
+      ],
+    },
   },
   server: {
     port: 5174,

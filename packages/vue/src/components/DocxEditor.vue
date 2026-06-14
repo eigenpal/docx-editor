@@ -49,6 +49,7 @@
         :image-context="imageToolbarContext"
         :theme="documentTheme"
         :font-families="fontFamilies"
+        :document-styles="documentStyles"
         @insert-link="showHyperlink = true"
         @apply-style="handleApplyStyle"
         @zoom-in="zoomIn"
@@ -186,7 +187,7 @@
               left: `${rect.left}px`,
               width: `${rect.width}px`,
               height: `${rect.height}px`,
-              background: 'rgba(66, 133, 244, 0.25)',
+              background: 'var(--doc-selection)',
               pointerEvents: 'none',
               zIndex: 9998,
             }"
@@ -618,6 +619,14 @@ const rulerIndents = computed(() => {
 const documentTheme = computed(() => {
   void stateTick.value;
   return getDocument()?.package?.theme ?? props.theme ?? null;
+});
+
+// Paragraph styles from the loaded document — feeds the toolbar style picker so
+// it shows the document's real style names/order (matches React's Toolbar
+// `documentStyles={document?.package.styles?.styles}`).
+const documentStyles = computed(() => {
+  void stateTick.value;
+  return getDocument()?.package?.styles?.styles ?? undefined;
 });
 
 // HF caret overlay rect from the persistent HF view; shared with React via core's `computeHfCaretRectFromView`.

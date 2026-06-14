@@ -209,16 +209,16 @@ function insert() {
 .dialog-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.5);
+  background: var(--doc-overlay);
   z-index: 10000;
   display: flex;
   align-items: center;
   justify-content: center;
 }
 .dialog {
-  background: #fff;
+  background: var(--doc-surface);
   border-radius: 8px;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+  box-shadow: 0 4px 20px var(--doc-shadow);
   min-width: 340px;
   max-width: 90vw;
   max-height: 90vh;
@@ -230,19 +230,19 @@ function insert() {
   align-items: center;
   justify-content: space-between;
   padding: 12px 16px;
-  border-bottom: 1px solid #e5e7eb;
+  border-bottom: 1px solid var(--doc-border);
 }
 .dialog__title {
   font-weight: 600;
   font-size: 14px;
-  color: #1f2937;
+  color: var(--doc-text);
 }
 .dialog__close {
   border: none;
   background: transparent;
   cursor: pointer;
   font-size: 14px;
-  color: #6b7280;
+  color: var(--doc-text-muted);
   width: 24px;
   height: 24px;
   display: flex;
@@ -251,7 +251,7 @@ function insert() {
   border-radius: 4px;
 }
 .dialog__close:hover {
-  background: #f3f4f6;
+  background: var(--doc-bg-hover);
 }
 .dialog__body {
   padding: 16px;
@@ -262,40 +262,40 @@ function insert() {
   justify-content: flex-end;
   gap: 8px;
   padding: 12px 16px;
-  border-top: 1px solid #e5e7eb;
+  border-top: 1px solid var(--doc-border);
 }
 .dialog__btn {
   padding: 6px 16px;
-  border: 1px solid #d1d5db;
+  border: 1px solid var(--doc-border-dark);
   border-radius: 4px;
   cursor: pointer;
   font-size: 13px;
-  background: #fff;
-  color: #1f2937;
+  background: var(--doc-surface);
+  color: var(--doc-text);
 }
 .dialog__btn:hover {
-  background: #f9fafb;
+  background: var(--doc-bg);
 }
 .dialog__btn--primary {
-  background: #3b82f6;
-  color: #fff;
-  border-color: #3b82f6;
+  background: var(--doc-primary);
+  color: var(--doc-on-primary);
+  border-color: var(--doc-primary);
 }
 .dialog__btn--primary:hover {
-  background: #2563eb;
+  background: var(--doc-primary);
 }
 .dialog__btn:disabled {
   opacity: 0.5;
   cursor: not-allowed;
 }
 .dialog__btn--primary:disabled:hover {
-  background: #3b82f6;
+  background: var(--doc-primary);
 }
 .dialog__separator {
   display: flex;
   align-items: center;
   margin: 14px 0 12px;
-  color: #9ca3af;
+  color: var(--doc-text-subtle);
   font-size: 12px;
 }
 .dialog__separator::before,
@@ -303,7 +303,7 @@ function insert() {
   content: '';
   flex: 1;
   height: 1px;
-  background: #e5e7eb;
+  background: var(--doc-border);
 }
 .dialog__separator span {
   padding: 0 10px;
@@ -314,7 +314,7 @@ function insert() {
   flex-direction: column;
   gap: 2px;
   padding: 4px;
-  border: 1px solid #e5e7eb;
+  border: 1px solid var(--doc-border);
   border-radius: 4px;
 }
 .table-grid__row {
@@ -324,20 +324,20 @@ function insert() {
 .table-grid__cell {
   width: 20px;
   height: 20px;
-  border: 1px solid #d1d5db;
+  border: 1px solid var(--doc-border-dark);
   border-radius: 2px;
   cursor: pointer;
-  background: #fff;
+  background: var(--doc-surface);
 }
 .table-grid__cell.highlight {
-  background: #dbeafe;
-  border-color: #93c5fd;
+  background: var(--doc-primary-light);
+  border-color: var(--doc-primary-light);
 }
 .table-grid__label {
   text-align: center;
   margin-top: 6px;
   font-size: 12px;
-  color: #6b7280;
+  color: var(--doc-text-muted);
 }
 
 .table-manual {
@@ -354,21 +354,21 @@ function insert() {
 .table-manual__input {
   width: 60px;
   padding: 4px 6px;
-  border: 1px solid #d1d5db;
+  border: 1px solid var(--doc-border-dark);
   border-radius: 4px;
   font-size: 13px;
   text-align: center;
 }
 .table-manual__input--invalid {
-  border-color: #ef4444;
+  border-color: var(--doc-error);
 }
 .table-manual__hint {
   margin-top: 6px;
   font-size: 11px;
-  color: #9ca3af;
+  color: var(--doc-text-subtle);
 }
 .table-manual__hint--error {
-  color: #ef4444;
+  color: var(--doc-error);
 }
 
 .table-options {
@@ -380,7 +380,7 @@ function insert() {
 .table-options__label {
   font-size: 12px;
   font-weight: 600;
-  color: #374151;
+  color: var(--doc-text-muted);
   margin-bottom: 6px;
   padding: 0;
 }
@@ -389,7 +389,7 @@ function insert() {
   align-items: center;
   gap: 6px;
   font-size: 13px;
-  color: #1f2937;
+  color: var(--doc-text);
   margin-bottom: 4px;
 }
 </style>

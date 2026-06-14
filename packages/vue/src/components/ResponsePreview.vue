@@ -153,10 +153,10 @@ function cancelEdit() {
 <style scoped>
 .docx-response-preview {
   position: absolute;
-  background: #fff;
-  border: 1px solid #d1d5db;
+  background: var(--doc-surface);
+  border: 1px solid var(--doc-border-dark);
   border-radius: 8px;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+  box-shadow: 0 4px 16px var(--doc-shadow);
   padding: 12px;
   min-width: 320px;
   max-width: 480px;
@@ -168,13 +168,13 @@ function cancelEdit() {
   display: flex;
   align-items: center;
   gap: 10px;
-  color: #5f6368;
+  color: var(--doc-text-muted);
 }
 .docx-response-preview__spinner {
   width: 16px;
   height: 16px;
-  border: 2px solid #e5e7eb;
-  border-top-color: #1a73e8;
+  border: 2px solid var(--doc-border);
+  border-top-color: var(--doc-primary);
   border-radius: 50%;
   animation: docx-rp-spin 0.8s linear infinite;
 }
@@ -182,7 +182,7 @@ function cancelEdit() {
 .docx-response-preview__header {
   font-size: 11px;
   font-weight: 500;
-  color: #9ca3af;
+  color: var(--doc-text-subtle);
   text-transform: uppercase;
   letter-spacing: 0.05em;
   margin-bottom: 6px;
@@ -191,22 +191,22 @@ function cancelEdit() {
   white-space: pre-wrap;
   line-height: 20px;
   margin-bottom: 10px;
-  color: #1f2937;
+  color: var(--doc-text);
 }
 .docx-response-preview__seg--added {
-  background: rgba(52, 168, 83, 0.15);
-  color: #137333;
+  background: var(--doc-success-bg);
+  color: var(--doc-success);
 }
 .docx-response-preview__seg--removed {
-  background: rgba(211, 47, 47, 0.12);
-  color: #c62828;
+  background: var(--doc-error-bg);
+  color: var(--doc-error);
   text-decoration: line-through;
 }
 .docx-response-preview__textarea {
   width: 100%;
   min-height: 120px;
   padding: 8px 10px;
-  border: 1px solid #d1d5db;
+  border: 1px solid var(--doc-border-dark);
   border-radius: 4px;
   font-family: inherit;
   font-size: 14px;
@@ -214,7 +214,7 @@ function cancelEdit() {
   outline: none;
   resize: vertical;
 }
-.docx-response-preview__textarea:focus { border-color: #1a73e8; }
+.docx-response-preview__textarea:focus { border-color: var(--doc-primary); }
 .docx-response-preview__actions {
   display: flex;
   gap: 8px;
@@ -222,21 +222,21 @@ function cancelEdit() {
 }
 .docx-response-preview__btn {
   padding: 6px 12px;
-  border: 1px solid #d1d5db;
+  border: 1px solid var(--doc-border-dark);
   border-radius: 4px;
-  background: #fff;
+  background: var(--doc-surface);
   cursor: pointer;
   font-size: 13px;
 }
-.docx-response-preview__btn:hover { background: #f1f3f4; }
+.docx-response-preview__btn:hover { background: var(--doc-bg-hover); }
 .docx-response-preview__btn--accept {
-  background: #1a73e8;
-  border-color: #1a73e8;
-  color: #fff;
+  background: var(--doc-primary);
+  border-color: var(--doc-primary);
+  color: var(--doc-on-primary);
 }
-.docx-response-preview__btn--accept:hover { background: #1557b0; }
+.docx-response-preview__btn--accept:hover { background: var(--doc-primary-hover); }
 .docx-response-preview__error {
-  color: #c62828;
+  color: var(--doc-error);
 }
 .docx-response-preview__error-msg {
   margin-bottom: 8px;
