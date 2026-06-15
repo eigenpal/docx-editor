@@ -88,6 +88,39 @@ describe('runStdioServer — happy path', () => {
     expect((parseLine(lines[0]) as JsonRpcSuccess).result).toEqual({});
   });
 
+  test('multi-byte UTF-8 codepoint split across Buffer chunks decodes intact', () => {
+    const input = makeFakeInput();
+    const output = makeFakeOutput();
+    const bridge = makeBridge();
+    // Echo the decoded query back through find_text so a corrupted codepoint
+    // (U+FFFD from per-chunk decoding) becomes observable in the reply.
+    bridge.findText = ((query: string) => [
+      { paraId: 'p', match: query, before: '', after: '' },
+    ]) as EditorBridge['findText'];
+    runStdioServer(bridge, { input: input.stream, output: output.stream });
+
+    const query = '日本語😀'; // 3-byte CJK runs + a 4-byte emoji
+    const frame =
+      JSON.stringify({
+        jsonrpc: '2.0',
+        id: 1,
+        method: 'tools/call',
+        params: { name: 'find_text', arguments: { query } },
+      }) + '\n';
+    const bytes = Buffer.from(frame, 'utf8');
+    // Split two bytes into the emoji's 4-byte sequence so the codepoint
+    // straddles the chunk boundary — the case StringDecoder/TextDecoder
+    // streaming mode exists to handle.
+    const splitAt = Buffer.byteLength(frame.slice(0, frame.indexOf('😀')), 'utf8') + 2;
+    input.emit('data', bytes.subarray(0, splitAt));
+    expect(output.lines()).toHaveLength(0); // partial codepoint + no newline → buffered
+    input.emit('data', bytes.subarray(splitAt));
+
+    const reply = parseLine(output.lines()[0]) as JsonRpcSuccess;
+    const result = reply.result as { content: Array<{ text: string }> };
+    expect(result.content[0].text).toContain(query); // codepoint survived the split
+  });
+
   test('multiple tool calls in one chunk → each gets a reply, in order', () => {
     const input = makeFakeInput();
     const output = makeFakeOutput();

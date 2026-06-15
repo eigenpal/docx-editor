@@ -12,7 +12,6 @@
  * Writable; see __tests__/mcp/stdio.test.ts.
  */
 
-import { StringDecoder } from 'node:string_decoder';
 import { McpServer, type McpServerOptions } from './server';
 import type { EditorBridge } from '../bridge';
 import { encodeFrame, parseFrames, ErrorCode, makeError, type JsonRpcMessage } from './protocol';
@@ -91,10 +90,14 @@ export function runStdioServer(
   // Pin the narrowed type for closures.
   const out = output;
 
-  // StringDecoder preserves multi-byte UTF-8 codepoints across chunk boundaries,
-  // so emoji / CJK / accented characters that straddle a chunk boundary don't
-  // decode to U+FFFD. (Buffer.toString('utf8') decodes per-call, breaking them.)
-  const decoder = new StringDecoder('utf8');
+  // TextDecoder in streaming mode preserves multi-byte UTF-8 codepoints across
+  // chunk boundaries, so emoji / CJK / accented characters that straddle a
+  // boundary don't decode to U+FFFD. (Buffer.toString('utf8') decodes per-call,
+  // breaking them.) TextDecoder is a Web standard available in both Node (global
+  // since v11) and browsers/workers — unlike node:string_decoder it adds no
+  // Node-only import, keeping this module bundle-safe for browser consumers of
+  // McpServer, which re-exports through ./mcp alongside this stdio transport.
+  const decoder = new TextDecoder('utf-8');
   let buffer = '';
   let closed = false;
 
@@ -105,7 +108,7 @@ export function runStdioServer(
 
   function feed(chunk: string | Buffer): void {
     if (closed) return;
-    buffer += typeof chunk === 'string' ? chunk : decoder.write(chunk);
+    buffer += typeof chunk === 'string' ? chunk : decoder.decode(chunk, { stream: true });
 
     // Cap buffer length to prevent a peer that never emits a newline from
     // growing it indefinitely. On overflow, drop the buffer and emit a
