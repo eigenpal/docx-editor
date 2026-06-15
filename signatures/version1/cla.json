@@ -143,6 +143,12 @@
       "id": 31870041,
       "signed_at": "2026-06-15T16:20:11Z",
       "pull_request_no": 824
+    },
+    {
+      "name": "sorenlouv",
+      "id": 209966,
+      "signed_at": "2026-06-15T21:17:08Z",
+      "pull_request_no": 821
     }
   ]
 }
