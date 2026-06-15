@@ -462,3 +462,34 @@ test.describe('Google Fonts via loadFont()', () => {
     expect(widths.pacifico).not.toBe(widths.fallback);
   });
 });
+
+test.describe('Font size picker dropdown (issue #808)', () => {
+  let editor: EditorPage;
+
+  test.beforeEach(async ({ page }) => {
+    editor = new EditorPage(page);
+    await editor.goto();
+    await editor.waitForReady();
+    await editor.newDocument();
+    await editor.focus();
+  });
+
+  test('scrolling inside the size list keeps the dropdown open', async ({ page }) => {
+    await page.locator('[data-testid="font-size-display"]').first().click();
+
+    const listbox = page.getByRole('listbox');
+    await expect(listbox).toBeVisible();
+
+    // Scrolling the dropdown's own list fires a scroll event that previously
+    // bubbled to the window-capture close handler and dismissed the dropdown.
+    await listbox.evaluate((el) => {
+      el.scrollTop = el.scrollHeight;
+      el.dispatchEvent(new Event('scroll', { bubbles: true }));
+    });
+
+    // Dropdown must stay open so the user can reach and click a preset.
+    await expect(listbox).toBeVisible();
+    await page.getByRole('option', { name: '72', exact: true }).click();
+    await expect(listbox).toBeHidden();
+  });
+});
