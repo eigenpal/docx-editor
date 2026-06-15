@@ -137,6 +137,12 @@
       "id": 28534333,
       "signed_at": "2026-06-13T11:36:07Z",
       "pull_request_no": 789
+    },
+    {
+      "name": "mrofisr",
+      "id": 31870041,
+      "signed_at": "2026-06-15T16:20:11Z",
+      "pull_request_no": 824
     }
   ]
 }
