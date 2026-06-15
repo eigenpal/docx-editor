@@ -2,6 +2,7 @@
   <div
     :class="[
       'docx-editor-vue ep-root paged-editor',
+      isDark ? 'dark' : '',
       className,
       {
         'paged-editor--readonly': readOnly,
@@ -12,10 +13,7 @@
     ]"
     :style="style"
   >
-    <!-- Toolbar shell — wraps title-bar + Toolbar so a single
-         `bg-white shadow-sm` rule applies under both. Mirrors React's
-         `<EditorToolbar>` (EditorToolbar.tsx:50:
-         `flex flex-col bg-white shadow-sm flex-shrink-0`). -->
+
     <div class="docx-editor-vue__toolbar-shell">
       <DocxEditorMenuBar
         :show-menu-bar="showMenuBar"
@@ -34,6 +32,7 @@
       <!-- Toolbar pill: formatting buttons + editing-mode dropdown. TableToolbar
            renders into the `table-context` slot (inline in the same pill); the
            slot is empty when the cursor isn't in a table. -->
+
       <Toolbar
         v-if="showToolbar"
         :view="activeFormattingView"
@@ -105,12 +104,10 @@
 
     <div v-if="!isReady && !parseError" class="docx-editor-vue__loading">Loading...</div>
 
-    <!-- Hidden ProseMirror (off-screen, receives keyboard input). Class
-         matches React's PagedEditor so shared CSS attaches. -->
+
     <div ref="hiddenPmRef" class="docx-editor-vue__hidden-pm paged-editor__hidden-pm" />
 
-    <!-- Editor scroll container: doc-bg wraps both the ruler row
-         (centered + sticky) and the page area below. -->
+
     <div class="docx-editor-vue__editor-scroll" @mousedown="handleEditorScrollMouseDown">
       <div
         v-if="showRuler && currentSectionProps"
@@ -193,7 +190,7 @@
             }"
           />
 
-          <!-- HF caret overlay: blinking blue caret at the persistent HF PM's selection head. -->
+
           <div
             v-if="hfEdit && hfCaretRect"
             aria-hidden="true"
@@ -440,6 +437,7 @@ import type { HeadingInfo } from '@eigenpal/docx-editor-core/utils/headingCollec
 import { createTranslator, provideLocale } from '../i18n';
 import { twipsToPixels } from '@eigenpal/docx-editor-core/utils/units';
 import { SIDEBAR_DOCUMENT_SHIFT } from '@eigenpal/docx-editor-core/utils';
+import { useColorMode } from '../composables/useColorMode';
 import { useFontLifecycle } from '../composables/useFontLifecycle';
 import { SelectionBridge } from '@eigenpal/docx-editor-core/prosemirror';
 import { extractSelectionContext } from '@eigenpal/docx-editor-core/prosemirror/plugins/selectionTracker';
@@ -457,6 +455,7 @@ const props = withDefaults(defineProps<DocxEditorProps>(), {
   mode: 'editing',
   i18n: undefined,
   theme: null,
+  colorMode: 'light',
   externalPlugins: () => [],
   showZoomControl: true,
   initialZoom: 1,
@@ -484,6 +483,8 @@ const emit = defineEmits<{
   (e: 'mode-change', mode: EditorMode): void;
 }>();
 
+const isDark = useColorMode(() => props.colorMode);
+
 const editorMode = ref<EditorMode>(props.mode);
 const readOnly = computed(() => props.readOnly || editorMode.value === 'viewing');
 // Author for UI-created comments and tracked changes; threaded into the editor
@@ -493,9 +494,7 @@ const authorRef = computed(() => props.author);
 provideLocale(computed(() => props.i18n));
 const { t } = createTranslator(computed(() => props.i18n));
 
-// Foundational refs — declared up front because so many composables
-// thread them through their options. Style/layout-derived computed
-// refs sit further down.
+
 const hiddenPmRef = ref<HTMLElement | null>(null);
 const pagesRef = ref<HTMLElement | null>(null);
 const pagesViewportRef = ref<HTMLElement | null>(null);

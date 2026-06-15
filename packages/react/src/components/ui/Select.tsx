@@ -50,14 +50,17 @@ function SelectContent({
   onCloseAutoFocus,
   ...props
 }: React.ComponentPropsWithoutRef<typeof SelectPrimitive.Content>) {
+  // Radix renders into a portal outside the editor's `.ep-root.dark` subtree,
+  // so the wrapper must re-assert the theme for tokens to resolve in dark mode.
+  const isDark = typeof document !== 'undefined' && !!document.querySelector('.ep-root.dark');
   return (
     <SelectPrimitive.Portal>
       {/* Wrap in .ep-root so Tailwind scoped utilities apply inside the portal */}
-      <div className="ep-root">
+      <div className={cn('ep-root', isDark && 'dark')}>
         <SelectPrimitive.Content
           className={cn(
             'relative z-50 max-h-72 min-w-[8rem] overflow-hidden',
-            'rounded-lg border border-border bg-white shadow-lg',
+            'rounded-lg border border-border bg-popover text-popover-foreground shadow-lg',
             'data-[state=open]:animate-in data-[state=closed]:animate-out',
             'data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0',
             'data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95',

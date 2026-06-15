@@ -56,6 +56,7 @@ export interface DocxEditorProps {
     agentPanel?: AgentPanelOptions;
     author?: string;
     className?: string;
+    colorMode?: 'light' | 'dark' | 'system';
     comments?: Comment_2[];
     disableFindReplaceShortcuts?: boolean;
     document?: Document_2 | null;

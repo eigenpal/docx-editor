@@ -116,7 +116,7 @@ const containerBaseStyle: CSSProperties = {
 const containerWithTabsStyle: CSSProperties = {
   ...containerBaseStyle,
   padding: '4px',
-  background: '#f1f5f9',
+  background: 'var(--doc-bg-subtle)',
 };
 const containerNoTabsStyle: CSSProperties = {
   ...containerBaseStyle,
@@ -130,7 +130,7 @@ const pillStyle: CSSProperties = {
   padding: '5px 10px',
   fontSize: '12px',
   fontWeight: 500,
-  color: '#64748b',
+  color: 'var(--doc-text-muted)',
   textDecoration: 'none',
   borderRadius: '6px',
   transition: 'all 0.15s',
@@ -138,9 +138,9 @@ const pillStyle: CSSProperties = {
 };
 const activePillStyle: CSSProperties = {
   ...pillStyle,
-  color: '#0f172a',
-  background: '#fff',
-  boxShadow: '0 1px 2px rgba(0,0,0,0.06)',
+  color: 'var(--doc-text)',
+  background: 'var(--doc-surface)',
+  boxShadow: '0 1px 2px var(--doc-shadow-subtle)',
 };
 const codeButtonStyle: CSSProperties = {
   display: 'flex',
@@ -149,9 +149,9 @@ const codeButtonStyle: CSSProperties = {
   padding: '5px 10px',
   fontSize: '13px',
   fontWeight: 500,
-  color: '#57606a',
-  background: '#fff',
-  border: '1px solid #e2e8f0',
+  color: 'var(--doc-text-muted)',
+  background: 'var(--doc-surface)',
+  border: '1px solid var(--doc-border)',
   borderRadius: '8px',
   cursor: 'pointer',
   transition: 'box-shadow 0.2s, border-color 0.2s',
@@ -166,10 +166,10 @@ const dropdownStyle: CSSProperties = {
   // (TOC) button anchored at the document's left margin.
   left: '0',
   marginTop: '6px',
-  background: '#fff',
-  border: '1px solid #e2e8f0',
+  background: 'var(--doc-surface)',
+  border: '1px solid var(--doc-border)',
   borderRadius: '8px',
-  boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
+  boxShadow: '0 4px 12px var(--doc-shadow)',
   padding: '4px',
   zIndex: '1',
   minWidth: '180px',
@@ -181,7 +181,7 @@ const dropdownItemStyle: CSSProperties = {
   padding: '7px 10px',
   fontSize: '12px',
   fontWeight: 500,
-  color: '#334155',
+  color: 'var(--doc-text)',
   textDecoration: 'none',
   borderRadius: '6px',
   transition: 'background 0.1s',
@@ -191,15 +191,15 @@ const dropdownItemStyle: CSSProperties = {
 function onButtonEnter(e: MouseEvent) {
   const el = e.currentTarget as HTMLElement;
   el.style.boxShadow = '0 2px 8px rgba(0,0,0,0.08)';
-  el.style.borderColor = '#cbd5e1';
+  el.style.borderColor = 'var(--doc-border-dark)';
 }
 function onButtonLeave(e: MouseEvent) {
   const el = e.currentTarget as HTMLElement;
   el.style.boxShadow = '';
-  el.style.borderColor = '#e2e8f0';
+  el.style.borderColor = 'var(--doc-border)';
 }
 function onItemEnter(e: MouseEvent) {
-  (e.currentTarget as HTMLElement).style.background = '#f1f5f9';
+  (e.currentTarget as HTMLElement).style.background = 'var(--doc-bg-hover)';
 }
 function onItemLeave(e: MouseEvent) {
   (e.currentTarget as HTMLElement).style.background = 'transparent';
@@ -213,7 +213,7 @@ function onItemLeave(e: MouseEvent) {
   flex-shrink: 0;
 }
 .source-tag {
-  color: #94a3b8;
+  color: var(--doc-text-subtle);
   margin-left: auto;
   font-size: 11px;
 }
@@ -223,7 +223,7 @@ function onItemLeave(e: MouseEvent) {
 }
 .dropdown-divider {
   height: 1px;
-  background: #e2e8f0;
+  background: var(--doc-border);
   margin: 4px 0;
 }
 </style>

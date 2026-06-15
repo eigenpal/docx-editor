@@ -20,7 +20,7 @@ const containerBaseStyle: React.CSSProperties = {
 const containerWithTabsStyle: React.CSSProperties = {
   ...containerBaseStyle,
   padding: '4px',
-  background: '#f1f5f9',
+  background: 'var(--doc-bg-subtle)',
 };
 
 const containerNoTabsStyle: React.CSSProperties = {
@@ -36,7 +36,7 @@ const pillStyle: React.CSSProperties = {
   padding: '5px 10px',
   fontSize: '12px',
   fontWeight: 500,
-  color: '#64748b',
+  color: 'var(--doc-text-muted)',
   textDecoration: 'none',
   borderRadius: '6px',
   transition: 'all 0.15s',
@@ -45,9 +45,9 @@ const pillStyle: React.CSSProperties = {
 
 const activePillStyle: React.CSSProperties = {
   ...pillStyle,
-  color: '#0f172a',
-  background: '#fff',
-  boxShadow: '0 1px 2px rgba(0,0,0,0.06)',
+  color: 'var(--doc-text)',
+  background: 'var(--doc-surface)',
+  boxShadow: '0 1px 2px var(--doc-shadow-subtle)',
 };
 
 const codeButtonStyle: React.CSSProperties = {
@@ -57,9 +57,9 @@ const codeButtonStyle: React.CSSProperties = {
   padding: '5px 10px',
   fontSize: '13px',
   fontWeight: 500,
-  color: '#57606a',
-  background: '#fff',
-  border: '1px solid #e2e8f0',
+  color: 'var(--doc-text-muted)',
+  background: 'var(--doc-surface)',
+  border: '1px solid var(--doc-border)',
   borderRadius: '8px',
   cursor: 'pointer',
   transition: 'box-shadow 0.2s, border-color 0.2s',
@@ -75,10 +75,10 @@ const dropdownStyle: React.CSSProperties = {
   // (TOC) button anchored at the document's left margin.
   left: 0,
   marginTop: '6px',
-  background: '#fff',
-  border: '1px solid #e2e8f0',
+  background: 'var(--doc-surface)',
+  border: '1px solid var(--doc-border)',
   borderRadius: '8px',
-  boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
+  boxShadow: '0 4px 12px var(--doc-shadow)',
   padding: '4px',
   zIndex: 1,
   minWidth: '180px',
@@ -91,7 +91,7 @@ const dropdownItemStyle: React.CSSProperties = {
   padding: '7px 10px',
   fontSize: '12px',
   fontWeight: 500,
-  color: '#334155',
+  color: 'var(--doc-text)',
   textDecoration: 'none',
   borderRadius: '6px',
   transition: 'background 0.1s',
@@ -154,11 +154,11 @@ export function ExampleSwitcher({ current }: ExampleSwitcherProps) {
         onClick={() => setOpen(!open)}
         onMouseEnter={(e) => {
           e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,0.08)';
-          e.currentTarget.style.borderColor = '#cbd5e1';
+          e.currentTarget.style.borderColor = 'var(--doc-border-dark)';
         }}
         onMouseLeave={(e) => {
           e.currentTarget.style.boxShadow = '';
-          e.currentTarget.style.borderColor = '#e2e8f0';
+          e.currentTarget.style.borderColor = 'var(--doc-border)';
         }}
         title="View example source code"
       >
@@ -177,7 +177,7 @@ export function ExampleSwitcher({ current }: ExampleSwitcherProps) {
               rel="noopener noreferrer"
               style={dropdownItemStyle}
               onMouseEnter={(e) => {
-                e.currentTarget.style.background = '#f1f5f9';
+                e.currentTarget.style.background = 'var(--doc-bg-hover)';
               }}
               onMouseLeave={(e) => {
                 e.currentTarget.style.background = 'transparent';
@@ -188,17 +188,17 @@ export function ExampleSwitcher({ current }: ExampleSwitcherProps) {
                 dangerouslySetInnerHTML={{ __html: example.icon }}
               />
               {example.name}
-              <span style={{ color: '#94a3b8', marginLeft: 'auto', fontSize: '11px' }}>source</span>
+              <span style={{ color: 'var(--doc-text-subtle)', marginLeft: 'auto', fontSize: '11px' }}>source</span>
             </a>
           ))}
-          <div style={{ height: '1px', background: '#e2e8f0', margin: '4px 0' }} />
+          <div style={{ height: '1px', background: 'var(--doc-border)', margin: '4px 0' }} />
           <a
             href="https://www.npmjs.com/package/@eigenpal/docx-editor-react"
             target="_blank"
             rel="noopener noreferrer"
             style={dropdownItemStyle}
             onMouseEnter={(e) => {
-              e.currentTarget.style.background = '#f1f5f9';
+              e.currentTarget.style.background = 'var(--doc-bg-hover)';
             }}
             onMouseLeave={(e) => {
               e.currentTarget.style.background = 'transparent';

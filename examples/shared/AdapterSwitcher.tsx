@@ -6,19 +6,20 @@ interface Props {
   current: Adapter;
 }
 
+// Tokenized so the switcher follows the editor's light/dark theme.
 const wrap: React.CSSProperties = {
   display: 'inline-flex',
-  background: '#f1f5f9',
+  background: 'var(--doc-bg-subtle)',
   padding: '3px',
   borderRadius: '8px',
-  border: '1px solid #e2e8f0',
+  border: '1px solid var(--doc-border)',
 };
 
 const pill: React.CSSProperties = {
   padding: '4px 12px',
   fontSize: '12px',
   fontWeight: 500,
-  color: '#64748b',
+  color: 'var(--doc-text-muted)',
   textDecoration: 'none',
   borderRadius: '5px',
   transition: 'background 0.15s, color 0.15s',
@@ -26,9 +27,9 @@ const pill: React.CSSProperties = {
 
 const active: React.CSSProperties = {
   ...pill,
-  background: '#fff',
-  color: '#0f172a',
-  boxShadow: '0 1px 2px rgba(0,0,0,0.06)',
+  background: 'var(--doc-surface)',
+  color: 'var(--doc-text)',
+  boxShadow: '0 1px 2px var(--doc-shadow-subtle)',
 };
 
 // The production build (`bun run build`) serves both demos from the same

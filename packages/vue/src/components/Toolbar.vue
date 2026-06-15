@@ -809,14 +809,8 @@ function isCurrentLineSpacing(twips: number): boolean {
   background: var(--doc-shadow);
   border-radius: 2px;
 }
-/* Buttons match React's `<Button variant="ghost" size="icon-sm">`:
-   h-7 w-7 (28×28), slate-500 default text, slate-100/80 hover bg,
-   slate-900 + white when active. */
-/* Match React's Button base + ghost variant + Toolbar.tsx overrides:
-   inline-flex items-center justify-center whitespace-nowrap rounded-md
-   text-sm font-medium transition-colors h-7 w-7
-   text-slate-500 hover:text-slate-900 hover:bg-slate-100/80
-   (text-sm = 14px font-size; rounded-md = 6px; h-7 w-7 = 28×28 square) */
+/* Buttons mirror React's ghost icon-sm Button: 28×28, rounded-md (6px),
+   14px, muted-foreground default / foreground + muted on hover. */
 .basic-toolbar button,
 .basic-toolbar input {
   font-family: inherit;
@@ -858,13 +852,16 @@ function isCurrentLineSpacing(twips: number): boolean {
   opacity: 0.3;
   cursor: not-allowed;
 }
-.basic-toolbar button.active {
-  background: hsl(var(--foreground));
-  color: var(--doc-on-primary);
-}
+.basic-toolbar button.active,
 .basic-toolbar button.active:hover {
   background: hsl(var(--foreground));
   color: var(--doc-on-primary);
+}
+/* Dark: --foreground flips light → white slab; use Word's accent toggle. */
+.ep-root.dark .basic-toolbar button.active,
+.ep-root.dark .basic-toolbar button.active:hover {
+  background: var(--doc-primary-light);
+  color: var(--doc-primary);
 }
 /* Match React's icon size (18px in 28px button). */
 .basic-toolbar button :deep(svg) {

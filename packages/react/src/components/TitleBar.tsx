@@ -85,7 +85,7 @@ export function DocumentName({ value, onChange, placeholder, editable = true }: 
         onChange?.(raw.endsWith('.docx') ? raw : raw + '.docx');
       }}
       placeholder={resolvedPlaceholder}
-      className="text-base font-normal text-foreground bg-transparent border-0 outline-none px-2 py-0 rounded hover:bg-muted focus:bg-white focus:ring-1 focus:ring-ring min-w-[100px] max-w-[300px] truncate leading-tight"
+      className="text-base font-normal text-foreground bg-transparent border-0 outline-none px-2 py-0 rounded hover:bg-muted focus:bg-doc-bg-input focus:ring-1 focus:ring-ring min-w-[100px] max-w-[300px] truncate leading-tight"
       aria-label={t('titleBar.documentNameAriaLabel')}
     />
   );
@@ -340,7 +340,7 @@ export function TitleBar({ children }: TitleBarProps) {
 
   return (
     <div
-      className="flex items-stretch bg-white pt-2 pb-1"
+      className="flex items-stretch bg-doc-surface pt-2 pb-1"
       onMouseDown={handleMouseDown}
       data-testid="title-bar"
     >

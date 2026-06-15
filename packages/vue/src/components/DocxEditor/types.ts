@@ -52,6 +52,8 @@ export interface DocxEditorProps {
   i18n?: Translations;
   /** Theme override used for toolbar color palettes when the document has no theme. */
   theme?: Theme | null;
+  /** Color theme mode for UI styling. `'system'` follows the OS preference. */
+  colorMode?: 'light' | 'dark' | 'system';
   /** External ProseMirror plugins supplied by the host app. */
   externalPlugins?: Plugin[];
   /** Whether to show the zoom controls in the toolbar. */

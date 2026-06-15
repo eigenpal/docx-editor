@@ -5,6 +5,7 @@
     "paired": [
       "author",
       "className",
+      "colorMode",
       "disableFindReplaceShortcuts",
       "document",
       "documentBuffer",

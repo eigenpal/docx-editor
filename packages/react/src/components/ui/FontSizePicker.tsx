@@ -242,7 +242,7 @@ export function FontSizePicker({
             onBlur={handleInputBlur}
             onKeyDown={handleInputKeyDown}
             className={cn(
-              'h-7 w-10 text-center text-sm border border-input bg-white',
+              'h-7 w-10 text-center text-sm border border-input bg-doc-bg-input text-doc-text',
               'focus:outline-none focus:ring-1 focus:ring-ring',
               'rounded-none'
             )}
@@ -254,8 +254,8 @@ export function FontSizePicker({
             type="button"
             onClick={handleInputClick}
             className={cn(
-              'h-7 w-10 text-center text-sm border border-border bg-white',
-              'hover:border-input hover:bg-slate-50',
+              'h-7 w-10 text-center text-sm border border-border bg-doc-bg-input text-doc-text',
+              'hover:border-input hover:bg-doc-bg-hover',
               'focus:outline-none focus:ring-1 focus:ring-ring',
               'rounded-none',
               disabled && 'opacity-50 cursor-not-allowed'

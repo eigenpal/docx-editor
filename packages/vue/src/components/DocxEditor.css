@@ -38,14 +38,15 @@
   position: relative;
   /* Above outline toggle/panel (z-index: 40) so title-bar menus stay clickable. */
   z-index: 100;
-  background: #fff;
+  /* Token so the chrome follows dark mode (mirrors React's bg-doc-surface). */
+  background: var(--doc-surface);
   /* Tailwind shadow-sm: `0 1px 2px 0 rgb(0 0 0 / 0.05)` */
   box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
 }
 .docx-editor-vue__title-bar {
   display: flex;
   align-items: stretch;
-  background: #fff;
+  background: var(--doc-surface);
   padding: 8px 0 4px;
   width: 100%;
   font-family:
@@ -179,9 +180,9 @@
   width: 28px;
   height: 28px;
   border-radius: 6px;
-  border: 1px solid rgba(26, 115, 232, 0.3);
-  background: #fff;
-  color: #1a73e8;
+  border: 1px solid var(--doc-primary);
+  background: var(--doc-surface);
+  color: var(--doc-primary);
   cursor: pointer;
   display: flex;
   align-items: center;
@@ -202,9 +203,9 @@
   width: 20px;
   height: 20px;
   border-radius: 4px;
-  border: 1px solid #dadce0;
-  background: #f8f9fa;
-  color: #5f6368;
+  border: 1px solid var(--doc-border-light);
+  background: var(--doc-bg-input);
+  color: var(--doc-text-muted);
   display: flex;
   align-items: center;
   justify-content: center;

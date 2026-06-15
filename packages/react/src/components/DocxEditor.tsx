@@ -13,6 +13,7 @@ import { useRef, useCallback, useState, useEffect, useMemo, forwardRef } from 'r
 import type { CSSProperties, ReactNode } from 'react';
 import type { Document, Theme } from '@eigenpal/docx-editor-core/types/document';
 
+import { cn } from '../lib/utils';
 import { type SelectionFormatting } from './Toolbar';
 import type { AgentPanelOptions } from './DocxEditor/types';
 import { useOutlineSidebar } from './DocxEditor/hooks/useOutlineSidebar';
@@ -90,6 +91,11 @@ import {
   rejectChangeById,
 } from '@eigenpal/docx-editor-core/prosemirror/commands';
 import { collectHeadings } from '@eigenpal/docx-editor-core/utils';
+import {
+  prefersColorSchemeDark,
+  resolveIsDark,
+  subscribeSystemDark,
+} from '@eigenpal/docx-editor-core/utils';
 
 // Paginated editor
 import { type PagedEditorRef, DEFAULT_PAGE_WIDTH } from './DocxEditor/PagedEditor';
@@ -135,7 +141,9 @@ export interface DocxEditorProps {
   externalContent?: boolean;
   /** Callback when editor view is ready (for PluginHost) */
   onEditorViewReady?: (view: import('prosemirror-view').EditorView) => void;
-  /** Theme for styling */
+  /** Color theme mode for UI styling. `'system'` follows the OS preference. */
+  colorMode?: 'light' | 'dark' | 'system';
+  /** Document theme schema object */
   theme?: Theme | null;
   /** Whether to show toolbar (default: true) */
   showToolbar?: boolean;
@@ -553,6 +561,7 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
     onSelectionChange,
     onError,
     onFontsLoaded: onFontsLoadedCallback,
+    colorMode = 'light',
     theme,
     showToolbar = true,
     showZoomControl = true,
@@ -616,6 +625,16 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
     pmTableContext: null,
     pmImageContext: null,
   });
+
+  const [systemDark, setSystemDark] = useState(prefersColorSchemeDark);
+  useEffect(() => {
+    // subscribeSystemDark re-syncs immediately (correcting a stale seed if the
+    // OS theme changed while colorMode was 'light'/'dark') and is SSR-safe.
+    if (colorMode !== 'system') return;
+    return subscribeSystemDark(setSystemDark);
+  }, [colorMode]);
+
+  const isDark = resolveIsDark(colorMode, systemDark);
 
   // Header/footer editing state (lifted into the parent so getActiveEditorView
   // can read hfEditPosition before useHeaderFooterEditing is called).
@@ -1488,7 +1507,7 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
   if (state.isLoading) {
     return (
       <div
-        className={`ep-root docx-editor docx-editor-loading ${className}`}
+        className={cn('ep-root docx-editor docx-editor-loading', isDark && 'dark', className)}
         style={containerStyle}
         data-testid="docx-editor"
       >
@@ -1501,7 +1520,7 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
   if (state.parseError) {
     return (
       <div
-        className={`ep-root docx-editor docx-editor-error ${className}`}
+        className={cn('ep-root docx-editor docx-editor-error', isDark && 'dark', className)}
         style={containerStyle}
         data-testid="docx-editor"
       >
@@ -1514,7 +1533,7 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
   if (!history.state) {
     return (
       <div
-        className={`ep-root docx-editor docx-editor-empty ${className}`}
+        className={cn('ep-root docx-editor docx-editor-empty', isDark && 'dark', className)}
         style={containerStyle}
         data-testid="docx-editor"
       >
@@ -1550,6 +1569,7 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
   return (
     <DocxEditorShell
       i18n={i18n}
+      isDark={isDark}
       onEditorError={handleEditorError}
       containerRef={containerRef}
       scrollContainerRef={scrollContainerRef}
