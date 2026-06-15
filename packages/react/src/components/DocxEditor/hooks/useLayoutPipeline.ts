@@ -170,7 +170,12 @@ export function useLayoutPipeline(opts: UseLayoutPipelineOptions): UseLayoutPipe
 
   // Painter: shared singleton scoped to this hook instance.
   const painter = useMemo(
-    () => new LayoutPainter({ pageGap, showShadow: true, pageBackground: '#fff' }),
+    () =>
+      new LayoutPainter({
+        pageGap,
+        showShadow: true,
+        pageBackground: 'var(--doc-page-bg, #ffffff)',
+      }),
     [pageGap]
   );
   const painterRef = useRef<LayoutPainter | null>(null);
@@ -266,7 +271,7 @@ export function useLayoutPipeline(opts: UseLayoutPipelineOptions): UseLayoutPipe
           const paintPagesKind = paintPages(newLayout.pages, pagesContainerRef.current, {
             pageGap,
             showShadow: true,
-            pageBackground: '#fff',
+            pageBackground: 'var(--doc-page-bg, #ffffff)',
             blockLookup,
             headerContent: headerContentForRender,
             footerContent: footerContentForRender,

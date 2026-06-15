@@ -373,7 +373,7 @@ export function useDocxEditor(options: UseDocxEditorOptions): UseDocxEditorRetur
       paintPages(newLayout.pages, container, {
         pageGap,
         showShadow: true,
-        pageBackground: '#fff',
+        pageBackground: 'var(--doc-page-bg, #ffffff)',
         blockLookup,
         theme,
         headerContent: headerContentForRender,

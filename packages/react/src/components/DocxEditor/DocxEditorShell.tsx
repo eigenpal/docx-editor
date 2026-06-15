@@ -2,6 +2,7 @@ import type { CSSProperties, ReactNode } from 'react';
 import type { SectionProperties, TabMark } from '@eigenpal/docx-editor-core/types/document';
 import type { TrackedChangesResult } from '@eigenpal/docx-editor-core/prosemirror/utils/extractTrackedChanges';
 import { LocaleProvider } from '../../i18n';
+import { cn } from '../../lib/utils';
 import { ErrorBoundary, ErrorProvider } from '../ErrorBoundary';
 import { HorizontalRuler } from '../ui/HorizontalRuler';
 import { VerticalRuler } from '../ui/VerticalRuler';
@@ -68,6 +69,7 @@ interface OutlineProps {
  */
 export function DocxEditorShell({
   i18n,
+  isDark,
   onEditorError,
   containerRef,
   scrollContainerRef,
@@ -104,6 +106,7 @@ export function DocxEditorShell({
   fileInputs,
 }: {
   i18n: React.ComponentProps<typeof LocaleProvider>['i18n'];
+  isDark?: boolean;
   onEditorError: (error: Error) => void;
   containerRef: React.Ref<HTMLDivElement>;
   scrollContainerRef: React.Ref<HTMLDivElement>;
@@ -145,7 +148,7 @@ export function DocxEditorShell({
         <ErrorBoundary onError={onEditorError}>
           <div
             ref={containerRef}
-            className={`ep-root docx-editor ${className ?? ''}`}
+            className={cn('ep-root docx-editor', isDark && 'dark', className)}
             style={containerStyle}
             data-testid="docx-editor"
           >

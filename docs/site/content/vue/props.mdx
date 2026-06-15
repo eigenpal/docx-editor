@@ -124,6 +124,24 @@ Vue also has `:show-menu-bar` (default `true`) for the menu bar above the toolba
 
 <UIControlsDemo />
 
+### Appearance (dark mode)
+
+`:color-mode` (`'light' | 'dark' | 'system'`, default `'light'`) sets the editor theme; `'system'` follows the OS `prefers-color-scheme`. There is no internal toggle — drive it from your own UI by binding a ref:
+
+```vue
+<script setup>
+import { ref } from 'vue';
+const colorMode = ref('light');
+</script>
+
+<template>
+  <button @click="colorMode = colorMode === 'dark' ? 'light' : 'dark'">Toggle theme</button>
+  <DocxEditor :document-buffer="buf" :color-mode="colorMode" />
+</template>
+```
+
+Behaviour matches React. See the [Dark mode](/docs/1.x/guides/dark-mode) guide for the full details.
+
 ### Fonts
 
 `:fonts` registers custom font faces and `:font-families` constrains the picker; the full rules (FontDefinition shape, weights, stable references, error routing) are under [React props → Fonts](/docs/1.x/react/props#fonts) and apply unchanged.

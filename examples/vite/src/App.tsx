@@ -53,8 +53,8 @@ const styles: Record<string, React.CSSProperties> = {
   },
   fileInputLabel: {
     padding: '6px 12px',
-    background: '#0f172a',
-    color: '#fff',
+    background: 'var(--doc-text)',
+    color: 'var(--doc-on-primary)',
     borderRadius: '6px',
     cursor: 'pointer',
     fontSize: '13px',
@@ -64,21 +64,21 @@ const styles: Record<string, React.CSSProperties> = {
   },
   button: {
     padding: '6px 12px',
-    background: '#fff',
-    border: '1px solid #e2e8f0',
+    background: 'var(--doc-surface)',
+    border: '1px solid var(--doc-border)',
     borderRadius: '6px',
     cursor: 'pointer',
     fontSize: '13px',
     fontWeight: 500,
-    color: '#334155',
+    color: 'var(--doc-text)',
     transition: 'all 0.15s',
     whiteSpace: 'nowrap',
   },
   newButton: {
     padding: '6px 12px',
-    background: '#f1f5f9',
-    color: '#334155',
-    border: '1px solid #e2e8f0',
+    background: 'var(--doc-bg-subtle)',
+    color: 'var(--doc-text)',
+    border: '1px solid var(--doc-border)',
     borderRadius: '6px',
     cursor: 'pointer',
     fontSize: '13px',
@@ -88,9 +88,9 @@ const styles: Record<string, React.CSSProperties> = {
   },
   status: {
     fontSize: '12px',
-    color: '#64748b',
+    color: 'var(--doc-text-muted)',
     padding: '4px 8px',
-    background: '#f1f5f9',
+    background: 'var(--doc-bg-subtle)',
     borderRadius: '4px',
   },
 };
@@ -117,6 +117,83 @@ function useResponsiveLayout() {
   return { zoom, isMobile };
 }
 
+/** Fumadocs-style segmented light/dark toggle (sun/moon, sliding highlight). */
+function ThemeToggle({
+  value,
+  onChange,
+}: {
+  value: 'light' | 'dark';
+  onChange: (m: 'light' | 'dark') => void;
+}) {
+  const options: { mode: 'light' | 'dark'; label: string; icon: React.ReactNode }[] = [
+    {
+      mode: 'light',
+      label: 'Light',
+      icon: (
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <circle cx="12" cy="12" r="4" />
+          <path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4" />
+        </svg>
+      ),
+    },
+    {
+      mode: 'dark',
+      label: 'Dark',
+      icon: (
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z" />
+        </svg>
+      ),
+    },
+  ];
+  return (
+    <div
+      role="radiogroup"
+      aria-label="Color theme"
+      onMouseDown={(e) => e.stopPropagation()}
+      style={{
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: 2,
+        padding: 2,
+        borderRadius: 9999,
+        border: '1px solid var(--doc-border)',
+        background: 'var(--doc-bg-subtle)',
+      }}
+    >
+      {options.map((opt) => {
+        const selected = value === opt.mode;
+        return (
+          <button
+            key={opt.mode}
+            type="button"
+            role="radio"
+            aria-checked={selected}
+            title={`${opt.label} mode`}
+            onClick={() => onChange(opt.mode)}
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              width: 26,
+              height: 26,
+              border: 'none',
+              borderRadius: 9999,
+              cursor: 'pointer',
+              transition: 'background 0.15s, color 0.15s',
+              background: selected ? 'var(--doc-surface)' : 'transparent',
+              boxShadow: selected ? '0 1px 2px var(--doc-shadow-subtle)' : 'none',
+              color: selected ? 'var(--doc-text)' : 'var(--doc-text-subtle)',
+            }}
+          >
+            {opt.icon}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 export function App() {
   const randomAuthor = useMemo(
     () => `Docx Editor User ${Math.floor(Math.random() * 900) + 100}`,
@@ -127,6 +204,7 @@ export function App() {
   const [documentBuffer, setDocumentBuffer] = useState<ArrayBuffer | null>(null);
   const [fileName, setFileName] = useState<string>('docx-editor-demo.docx');
   const [status, setStatus] = useState<string>('');
+  const [colorMode, setColorMode] = useState<'light' | 'dark'>('light');
   const disableFindReplaceShortcuts = useMemo(
     () => new URLSearchParams(window.location.search).get('disableFindReplaceShortcuts') === '1',
     []
@@ -704,6 +782,7 @@ export function App() {
   const renderTitleBarRight = useCallback(
     () => (
       <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+        <ThemeToggle value={colorMode} onChange={setColorMode} />
         <label style={styles.fileInputLabel} onMouseDown={(e) => e.stopPropagation()}>
           <input
             type="file"
@@ -722,7 +801,7 @@ export function App() {
         {status && <span style={styles.status}>{status}</span>}
       </div>
     ),
-    [handleFileSelect, handleNewDocument, handleSave, status]
+    [handleFileSelect, handleNewDocument, handleSave, status, colorMode]
   );
 
   // Opt-in agent panel for E2E + manual smoke testing. Adds the right-hand
@@ -796,6 +875,7 @@ export function App() {
           document={documentBuffer ? undefined : currentDocument}
           documentBuffer={documentBuffer}
           author={randomAuthor}
+          colorMode={colorMode}
           onError={handleError}
           showToolbar={true}
           showRuler={!isMobile}

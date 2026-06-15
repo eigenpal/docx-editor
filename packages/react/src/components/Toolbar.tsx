@@ -303,6 +303,10 @@ export function ToolbarButton({
       className={cn(
         'text-muted-foreground hover:text-foreground hover:bg-muted',
         active && 'bg-foreground text-white hover:bg-foreground hover:text-white',
+        // Dark mode: bg-foreground flips light, so use Word's accent-tinted
+        // toggle highlight (blue tint + blue icon) instead of a white slab.
+        active &&
+          'dark:bg-doc-primary-light dark:text-doc-primary dark:hover:bg-doc-primary-light dark:hover:text-doc-primary',
         disabled && 'opacity-30 cursor-not-allowed',
         className
       )}

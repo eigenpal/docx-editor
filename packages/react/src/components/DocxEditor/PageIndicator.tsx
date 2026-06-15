@@ -24,7 +24,9 @@ export function PageIndicator({
         top: '50%',
         transform: 'translateY(-50%)',
         backgroundColor: 'var(--doc-overlay)',
-        color: 'var(--doc-on-primary)',
+        // The overlay is always a dark scrim (both themes), so text stays light
+        // — --doc-on-primary flips dark in dark mode and would vanish here.
+        color: '#fff',
         padding: '6px 12px',
         borderRadius: '4px',
         fontSize: '12px',

@@ -106,6 +106,14 @@ defineEmits<{
 .docx-list-btns__btn--active:hover {
   background: var(--doc-text);
 }
+/* Dark mode: --doc-text flips light, so the active list button would be a
+   near-white slab. Use Word's accent toggle, matching Toolbar/AlignmentButtons
+   and the React ListButtons. */
+.ep-root.dark .docx-list-btns__btn--active,
+.ep-root.dark .docx-list-btns__btn--active:hover {
+  background: var(--doc-primary-light);
+  color: var(--doc-primary);
+}
 .docx-list-btns__btn:disabled {
   opacity: 0.3;
   cursor: not-allowed;

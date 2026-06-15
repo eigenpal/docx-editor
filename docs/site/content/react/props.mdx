@@ -106,6 +106,25 @@ The font picker and custom font registration have their own section below.
 
 <UIControlsDemo />
 
+## Appearance (dark mode)
+
+| Prop | Type | Default | Description |
+|---|---|---|---|
+| `colorMode` | `'light' \| 'dark' \| 'system'` | `'light'` | Editor theme. `'system'` follows the OS `prefers-color-scheme`. |
+
+Dark mode is controlled entirely by this prop — there is no internal toggle. Drive it from your own UI by flipping the value:
+
+```tsx
+const [colorMode, setColorMode] = useState<'light' | 'dark'>('light');
+
+<button onClick={() => setColorMode((m) => (m === 'dark' ? 'light' : 'dark'))}>
+  Toggle theme
+</button>
+<DocxEditor documentBuffer={buf} colorMode={colorMode} />
+```
+
+See the [Dark mode](/docs/1.x/guides/dark-mode) guide for how the canvas transform works, what it does and doesn't change, and how to report issues.
+
 ## Fonts
 
 `fontFamilies` controls what the toolbar dropdown offers. `fonts` (added in 1.1.0) registers the actual font faces so the editor can render and measure them. They are independent: list a family in `fontFamilies` to make it pickable, register it with `fonts` so its glyphs paint correctly.

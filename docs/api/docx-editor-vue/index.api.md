@@ -51,6 +51,7 @@ export interface DocxEditorHandle extends EditorHandle {
 export interface DocxEditorProps {
     author?: string;
     className?: string;
+    colorMode?: 'light' | 'dark' | 'system';
     disableFindReplaceShortcuts?: boolean;
     document?: Document_2 | null;
     documentBuffer?: DocxInput | null;

@@ -475,4 +475,10 @@ onBeforeUnmount(() => {
   pointer-events: none;
   z-index: 20;
 }
+/* Dark mode: --doc-text bg flips light, so the chip becomes a light slab.
+   Keep it a dark chip with light text. */
+.ep-root.dark .docx-horizontal-ruler__tooltip {
+  background: var(--doc-bg-hover);
+  color: var(--doc-text);
+}
 </style>

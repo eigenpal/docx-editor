@@ -71,6 +71,9 @@ export interface ClipboardOptions {
 export function collectHeadings(doc: Node_2): HeadingInfo[];
 
 // @public
+export type ColorMode = 'light' | 'dark' | 'system';
+
+// @public
 export function colorsEqual(color1: ColorValue | undefined | null, color2: ColorValue | undefined | null, theme: Theme | null | undefined): boolean;
 
 // @public
@@ -577,6 +580,9 @@ export function pointsToHalfPoints(points: number): number;
 export function pointsToPixels(points: number): number;
 
 // @public
+export function prefersColorSchemeDark(): boolean;
+
+// @public
 export function preloadCommonFonts(): Promise<void>;
 
 // @public
@@ -650,6 +656,9 @@ export function resolveHighlightColor(highlight: string | undefined): string;
 
 // @public
 export function resolveHighlightToCss(value: string): string;
+
+// @public
+export function resolveIsDark(colorMode: ColorMode, systemDark: boolean): boolean;
 
 // @public
 export function resolveShadingColor(color: ColorValue | undefined | null, theme: Theme | null | undefined): string;
@@ -759,6 +768,9 @@ export interface SplitTarget {
     // (undocumented)
     rowspan: number;
 }
+
+// @public
+export function subscribeSystemDark(onChange: (dark: boolean) => void): () => void;
 
 // @public (undocumented)
 export function sumColumnWidths(widths: number[], start: number, span: number): number;
