@@ -522,6 +522,15 @@ export function useDocxEditor(options: UseDocxEditorOptions): UseDocxEditorRetur
     // Initial layout
     runLayoutPipeline(state);
     syncCoordinator?.requestRender();
+
+    // Auto-focus the hidden ProseMirror so the user can start typing
+    // immediately, without first clicking into the page. Mirrors React's
+    // PagedEditor.handleEditorViewReady. rAF ensures the DOM is painted.
+    if (!unref(readOnly)) {
+      requestAnimationFrame(() => {
+        view.focus();
+      });
+    }
   }
 
   // Sync editorMode/author to the mounted suggestion-mode plugin.
