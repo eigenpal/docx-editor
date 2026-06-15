@@ -72,7 +72,16 @@ export function useFixedDropdown({
       if (e.key === 'Escape') onClose();
     };
 
-    const handleScroll = () => onClose();
+    const handleScroll = (e: Event) => {
+      // Ignore scrolls inside the dropdown's own scrollable list (e.g. the font
+      // size presets). Only an ancestor/page scroll, which would detach this
+      // fixed-positioned dropdown from its trigger, should close it.
+      const target = e.target as Node | null;
+      if (target && dropdownRef.current && dropdownRef.current.contains(target)) {
+        return;
+      }
+      onClose();
+    };
 
     document.addEventListener('mousedown', handleClickOutside);
     document.addEventListener('keydown', handleEscape);
