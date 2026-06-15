@@ -83,7 +83,7 @@
     "@playwright/test": "^1.60.0",
     "@testing-library/react": "^16.0.0",
     "@types/bun": "^1.0.0",
-    "@types/react": "19.2.15",
+    "@types/react": "19.2.17",
     "@types/react-dom": "19.2.3",
     "@typescript-eslint/eslint-plugin": "^8.54.0",
     "@typescript-eslint/parser": "^8.54.0",
