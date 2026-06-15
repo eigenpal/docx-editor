@@ -27,8 +27,8 @@ import { isEmptySearch } from '@eigenpal/docx-editor-core/utils/findReplace';
 import { ListState } from '@eigenpal/docx-editor-core/utils/listState';
 import { ParagraphAlignment } from '@eigenpal/docx-editor-core/types/document';
 import { ParsedClipboardContent } from '@eigenpal/docx-editor-core/utils';
+import * as React$1 from 'react';
 import React__default from 'react';
-import * as react_jsx_runtime from 'react/jsx-runtime';
 import { ReactNode } from 'react';
 import { replaceAllInContent } from '@eigenpal/docx-editor-core/utils/findReplace';
 import { replaceFirstInContent } from '@eigenpal/docx-editor-core/utils/findReplace';
@@ -50,7 +50,7 @@ export function addColumn(table: Table, atIndex: number, position?: 'before' | '
 export function addRow(table: Table, atIndex: number, position?: 'before' | 'after'): Table;
 
 // @public
-export function AlignmentButtons(input: AlignmentButtonsProps): react_jsx_runtime.JSX.Element;
+export function AlignmentButtons(input: AlignmentButtonsProps): React__default.JSX.Element;
 
 // @public
 export interface AlignmentButtonsProps {
@@ -73,7 +73,7 @@ export function calculateFitDimensions(originalWidth: number, originalHeight: nu
 export function clampTableConfig(config: TableConfig, maxRows?: number, maxColumns?: number): TableConfig;
 
 // @public (undocumented)
-export function ColorPicker(input: ColorPickerProps): react_jsx_runtime.JSX.Element;
+export function ColorPicker(input: ColorPickerProps): React$1.JSX.Element;
 
 // @public (undocumented)
 export type ColorPickerMode = 'text' | 'highlight' | 'border';
@@ -265,9 +265,9 @@ export { FindResult }
 export { FontOption }
 
 // @public (undocumented)
-export function FontPicker(input: FontPickerProps): react_jsx_runtime.JSX.Element;
+export function FontPicker(input: FontPickerProps): React$1.JSX.Element;
 
-// @public (undocumented)
+// @public
 export interface FontPickerProps {
     // (undocumented)
     className?: string;
@@ -288,7 +288,7 @@ export interface FontPickerProps {
 }
 
 // @public (undocumented)
-export function FontSizePicker(input: FontSizePickerProps): react_jsx_runtime.JSX.Element;
+export function FontSizePicker(input: FontSizePickerProps): React$1.JSX.Element;
 
 // @public
 export interface FontSizePickerProps {
@@ -612,7 +612,7 @@ export interface KeyboardShortcutsDialogProps {
     showSearch?: boolean;
 }
 
-// @public (undocumented)
+// @public
 export interface LineSpacingOption {
     // (undocumented)
     label: string;
@@ -625,7 +625,7 @@ export interface LineSpacingOption {
 }
 
 // @public (undocumented)
-export function LineSpacingPicker(input: LineSpacingPickerProps): react_jsx_runtime.JSX.Element;
+export function LineSpacingPicker(input: LineSpacingPickerProps): React$1.JSX.Element;
 
 // @public (undocumented)
 export interface LineSpacingPickerProps {
@@ -644,7 +644,7 @@ export interface LineSpacingPickerProps {
 }
 
 // @public
-export function ListButtons(input: ListButtonsProps): react_jsx_runtime.JSX.Element;
+export function ListButtons(input: ListButtonsProps): React__default.JSX.Element;
 
 // @public
 export interface ListButtonsProps {
@@ -699,7 +699,7 @@ export type LoadingSize = 'small' | 'medium' | 'large';
 // @public
 export type LoadingVariant = 'spinner' | 'dots' | 'bar' | 'pulse' | 'progress';
 
-// @public (undocumented)
+// @public
 export interface LogoProps {
     // (undocumented)
     children: ReactNode;
@@ -865,7 +865,7 @@ export function splitCell(table: Table, rowIndex: number, columnIndex: number): 
 // @public (undocumented)
 export function splitTableCell(table: Table, rowIndex: number, columnIndex: number, rows: number, cols: number): Table;
 
-// @public (undocumented)
+// @public
 export interface StyleOption {
     bold?: boolean;
     color?: string;
@@ -888,7 +888,7 @@ export interface StyleOption {
 }
 
 // @public (undocumented)
-export function StylePicker(input: StylePickerProps): react_jsx_runtime.JSX.Element;
+export function StylePicker(input: StylePickerProps): React$1.JSX.Element;
 
 // @public (undocumented)
 export interface StylePickerProps {
@@ -978,7 +978,7 @@ export type TableAction = 'addRowAbove' | 'addRowBelow' | 'addColumnLeft' | 'add
 };
 
 // @public (undocumented)
-export function TableBorderColorPicker(input: TableBorderColorPickerProps): react_jsx_runtime.JSX.Element;
+export function TableBorderColorPicker(input: TableBorderColorPickerProps): React$1.JSX.Element;
 
 // @public (undocumented)
 export interface TableBorderColorPickerProps {
@@ -992,7 +992,7 @@ export interface TableBorderColorPickerProps {
 }
 
 // @public (undocumented)
-export function TableBorderPicker(input: TableBorderPickerProps): react_jsx_runtime.JSX.Element;
+export function TableBorderPicker(input: TableBorderPickerProps): React$1.JSX.Element;
 
 // @public (undocumented)
 export interface TableBorderPickerProps {
@@ -1003,7 +1003,7 @@ export interface TableBorderPickerProps {
 }
 
 // @public (undocumented)
-export function TableBorderWidthPicker(input: TableBorderWidthPickerProps): react_jsx_runtime.JSX.Element;
+export function TableBorderWidthPicker(input: TableBorderWidthPickerProps): React$1.JSX.Element;
 
 // @public (undocumented)
 export interface TableBorderWidthPickerProps {
@@ -1014,7 +1014,7 @@ export interface TableBorderWidthPickerProps {
 }
 
 // @public (undocumented)
-export function TableCellFillPicker(input: TableCellFillPickerProps): react_jsx_runtime.JSX.Element;
+export function TableCellFillPicker(input: TableCellFillPickerProps): React$1.JSX.Element;
 
 // @public (undocumented)
 export interface TableCellFillPickerProps {
@@ -1044,9 +1044,9 @@ export interface TableContext {
 }
 
 // @public (undocumented)
-export function TableInsertButtons(input: TableInsertButtonsProps): react_jsx_runtime.JSX.Element;
+export function TableInsertButtons(input: TableInsertButtonsProps): React__default.JSX.Element;
 
-// @public (undocumented)
+// @public
 export interface TableInsertButtonsProps {
     // (undocumented)
     disabled?: boolean;
@@ -1055,9 +1055,9 @@ export interface TableInsertButtonsProps {
 }
 
 // @public (undocumented)
-export function TableMergeButton(input: TableMergeButtonProps): react_jsx_runtime.JSX.Element;
+export function TableMergeButton(input: TableMergeButtonProps): React__default.JSX.Element;
 
-// @public (undocumented)
+// @public
 export interface TableMergeButtonProps {
     // (undocumented)
     canMerge?: boolean;
@@ -1070,7 +1070,7 @@ export interface TableMergeButtonProps {
 }
 
 // @public (undocumented)
-export function TableMoreDropdown(input: TableMoreDropdownProps): react_jsx_runtime.JSX.Element;
+export function TableMoreDropdown(input: TableMoreDropdownProps): React$1.JSX.Element;
 
 // @public (undocumented)
 export interface TableMoreDropdownProps {
@@ -1178,13 +1178,13 @@ export interface TitleBarRightProps {
 }
 
 // @public
-export function Toolbar(explicitProps: ToolbarProps): react_jsx_runtime.JSX.Element;
+export function Toolbar(explicitProps: ToolbarProps): React__default.JSX.Element;
 
 // @public
-export function ToolbarButton(input: ToolbarButtonProps): react_jsx_runtime.JSX.Element;
+export function ToolbarButton(input: ToolbarButtonProps): React__default.JSX.Element;
 
 // @public
-export function ToolbarGroup(input: ToolbarGroupProps$1): react_jsx_runtime.JSX.Element;
+export function ToolbarGroup(input: ToolbarGroupProps$1): React__default.JSX.Element;
 
 // @public
 export interface ToolbarItem {
@@ -1270,7 +1270,7 @@ export interface ToolbarProps {
 }
 
 // @public
-export function ToolbarSeparator(): react_jsx_runtime.JSX.Element;
+export function ToolbarSeparator(): React__default.JSX.Element;
 
 // @public
 export function triggerPrint(): void;
@@ -1507,7 +1507,7 @@ export interface UseUnsavedChangesReturn {
 }
 
 // @public (undocumented)
-export function ZoomControl(input: ZoomControlProps): react_jsx_runtime.JSX.Element;
+export function ZoomControl(input: ZoomControlProps): React$1.JSX.Element;
 
 // @public (undocumented)
 export interface ZoomControlProps {
