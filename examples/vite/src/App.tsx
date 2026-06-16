@@ -23,6 +23,7 @@ import {
 } from '@eigenpal/docx-editor-agents/react';
 import { ExampleSwitcher } from '../../shared/ExampleSwitcher';
 import { AdapterSwitcher } from '../../shared/AdapterSwitcher';
+import { BrandLogo } from '../../shared/BrandLogo';
 
 function extractDocumentText(value: unknown): string {
   if (!value || typeof value !== 'object') return '';
@@ -130,7 +131,16 @@ function ThemeToggle({
       mode: 'light',
       label: 'Light',
       icon: (
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <svg
+          width="15"
+          height="15"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        >
           <circle cx="12" cy="12" r="4" />
           <path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4" />
         </svg>
@@ -140,7 +150,16 @@ function ThemeToggle({
       mode: 'dark',
       label: 'Dark',
       icon: (
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <svg
+          width="15"
+          height="15"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        >
           <path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z" />
         </svg>
       ),
@@ -771,7 +790,8 @@ export function App() {
 
   const renderLogo = useCallback(
     () => (
-      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+        <BrandLogo />
         <AdapterSwitcher current="react" />
         <ExampleSwitcher current="Vite" />
       </div>
