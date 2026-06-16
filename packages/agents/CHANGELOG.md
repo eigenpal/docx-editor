@@ -1,5 +1,11 @@
 # @eigenpal/docx-editor-agents
 
+## 1.6.1
+
+### Patch Changes
+
+- 7c1d1ff: Reach paragraphs inside table cells from the headless review tools. `find_text`, `suggest_change`, and `add_comment` now locate and edit paragraphs in `w:tbl > w:tr > w:tc > w:p`, addressed by the same paraId / ordinal index as body paragraphs, so a tracked change can be authored inside a table cell.
+
 ## 1.6.0
 
 ### Minor Changes

@@ -1,5 +1,12 @@
 # @eigenpal/docx-editor-i18n
 
+## 1.6.1
+
+### Patch Changes
+
+- c25ba18: Fix Indonesian (id) locale interpolation: restore the `{total}`, `{minRows}/{maxRows}/{minCols}/{maxCols}`, and `{label}` placeholders that were renamed or dropped, so the find/replace match count, insert-table validation hint, and line-spacing tooltip render their values instead of literal braces.
+- 4a75c5e: Add Indonesian (id) community-maintained locale - 97% Coverage
+
 ## 1.6.0
 
 ## 1.5.0
