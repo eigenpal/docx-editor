@@ -108,7 +108,7 @@
     "label": "Jarak antar baris",
     "single": "1.0",
     "double": "2.0",
-    "lineSpacingTitle": "Jarak antar baris",
+    "lineSpacingTitle": "Jarak antar baris: {label}",
     "blockSpacingRules": "Jarak antar paragraf"
   },
   "styles": {
@@ -215,7 +215,7 @@
       "replaceAllTitle": "Ganti semua",
       "matchCase": "Sesuaikan huruf besar/kecil",
       "wholeWords": "Hanya kata utuh",
-      "matchesFound": "{count} hasil ditemukan",
+      "matchesFound": "{total} hasil ditemukan",
       "toggleReplace": "Opsi ganti"
     },
     "hyperlink": {
@@ -230,7 +230,7 @@
       "bookmarkPlaceholder": "Pilih bookmark",
       "displayTextLabel": "Tampilan teks",
       "displayTextPlaceholder": "Teks yang akan ditampilkan (opsional)",
-      "displayTextHint": "Teks yang akan ditampilkan pada tautan",
+      "displayTextHint": "Biarkan kosong untuk menggunakan teks yang dipilih",
       "tooltipLabel": "Keterangan (opsional)",
       "tooltipPlaceholder": "Teks muncul ketika disorot",
       "removeLink": "Hapus tautan",
@@ -250,7 +250,7 @@
       "fixedWidth": "Lebar tetap",
       "autofit": "Sesuai isi",
       "tableStyleLabel": "Gaya tabel",
-      "validationHint": "Baris: {rowMin} - {rowMax} | Kolom: {colMin} - {colMax}"
+      "validationHint": "Baris: {minRows} - {maxRows} | Kolom: {minCols} - {maxCols}"
     },
     "watermark": {
       "title": "Tanda Air",
@@ -285,7 +285,7 @@
     "insertImage": {
       "title": "Sisipkan Gambar",
       "uploadAriaLabel": "Klik atau seret gambar untuk diunggah",
-      "uploadText": "Unggah gambar",
+      "uploadText": "Klik untuk memilih atau seret dan lepas gambar",
       "uploadSubtext": "PNG, JPG, GIF sampai 10MB",
       "dimensions": "Dimensi",
       "widthLabel": "Lebar:",
@@ -305,7 +305,7 @@
       "title": "Sisipkan Simbol",
       "searchPlaceholder": "Cari simbol...",
       "noResultsEmpty": "Cari simbol berdasarkan nama atau kode Unicode",
-      "noResults": "Tidak ditemukan simbol yang cocok",
+      "noResults": "Tidak ditemukan simbol untuk \"{query}\"",
       "decimal": "Desimal: {value}",
       "recent": "Terbaru",
       "categories": {
@@ -433,7 +433,7 @@
       "readingClipboard": "Membaca isi papan klip...",
       "preview": "Pratinjau",
       "noContent": "Tidak ada konten di papan klip.",
-      "clipboardError": "Tidak dapat mengakses papan klip."
+      "clipboardError": "Tidak dapat membaca papan klip. Silakan gunakan Ctrl+V untuk menempel."
     },
     "footnoteProperties": {
       "title": "Catatan Kaki dan Catatan Akhir",
