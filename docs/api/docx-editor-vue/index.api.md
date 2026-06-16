@@ -87,6 +87,7 @@ export interface DocxEditorProps {
     style?: StyleValue;
     theme?: Theme | null;
     toolbarExtra?: () => VNodeChild;
+    watermarkPresets?: readonly string[];
 }
 
 // @public

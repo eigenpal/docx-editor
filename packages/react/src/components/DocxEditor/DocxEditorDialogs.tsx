@@ -96,6 +96,7 @@ export function DocxEditorDialogs({
   onWatermarkClose,
   onWatermarkApply,
   currentWatermark,
+  watermarkPresets,
   document,
   footnotePropsOpen,
   onFootnotePropsClose,
@@ -139,6 +140,7 @@ export function DocxEditorDialogs({
   onWatermarkClose: () => void;
   onWatermarkApply: (watermark: Watermark | null) => void;
   currentWatermark: Watermark | undefined;
+  watermarkPresets?: readonly string[];
   document: Document | null;
   // Footnote properties
   footnotePropsOpen: boolean;
@@ -236,6 +238,7 @@ export function DocxEditorDialogs({
           onClose={onWatermarkClose}
           onApply={onWatermarkApply}
           current={currentWatermark}
+          presets={watermarkPresets}
         />
       )}
       {footnotePropsOpen && (

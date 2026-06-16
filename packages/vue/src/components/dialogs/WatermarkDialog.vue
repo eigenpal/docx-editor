@@ -55,11 +55,11 @@
           <label for="wm-text" class="wm-inline-label">{{ t('dialogs.watermark.text') }}</label>
         </div>
         <div v-if="mode === 'text'" class="wm-subform">
-          <div class="wm-row">
+          <div v-if="presets.length > 0" class="wm-row">
             <span class="wm-label">{{ t('dialogs.watermark.presetLabel') }}</span>
-            <select class="wm-input" :value="PRESETS.includes(text) ? text : ''" @change="onPreset">
+            <select class="wm-input" :value="presets.includes(text) ? text : ''" @change="onPreset">
               <option value="">—</option>
-              <option v-for="p in PRESETS" :key="p" :value="p">{{ p }}</option>
+              <option v-for="p in presets" :key="p" :value="p">{{ p }}</option>
             </select>
           </div>
           <div class="wm-row">
@@ -140,20 +140,32 @@
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue';
 import type { Watermark } from '@eigenpal/docx-editor-core/types/document';
-import { pictureWatermarkDisplayEmu } from '@eigenpal/docx-editor-core/types/document';
+import {
+  pictureWatermarkDisplayEmu,
+  DEFAULT_WATERMARK_PRESETS,
+} from '@eigenpal/docx-editor-core/types/document';
 import { useTranslation } from '../../i18n';
 
 type Mode = 'none' | 'picture' | 'text';
 
-const PRESETS = ['CONFIDENTIAL', 'DRAFT', 'DO NOT COPY', 'SAMPLE', 'URGENT', 'ASAP'];
 const FONTS = ['Calibri', 'Arial', 'Times New Roman', 'Georgia', 'Verdana', 'Courier New'];
 
 const { t } = useTranslation();
 
-const props = defineProps<{
-  isOpen: boolean;
-  current?: Watermark;
-}>();
+const props = withDefaults(
+  defineProps<{
+    isOpen: boolean;
+    current?: Watermark;
+    /**
+     * Text-watermark presets for the preset dropdown. Defaults to the MS Word
+     * phrases; pass an empty array to hide the dropdown.
+     */
+    presets?: readonly string[];
+  }>(),
+  { presets: () => DEFAULT_WATERMARK_PRESETS }
+);
+
+const presets = computed(() => props.presets);
 
 const emit = defineEmits<{
   (e: 'close'): void;
@@ -161,8 +173,8 @@ const emit = defineEmits<{
 }>();
 
 const mode = ref<Mode>('none');
-// Text
-const text = ref('CONFIDENTIAL');
+// Text — seed with the first preset (falling back to Word's default phrase).
+const text = ref(props.presets[0] ?? 'CONFIDENTIAL');
 const font = ref('Calibri');
 const autoSize = ref(true);
 const fontSize = ref(54);
