@@ -388,6 +388,12 @@ export interface ParagraphAttrs {
         ilvl?: number;
     };
     _originalFormatting?: ParagraphFormatting;
+    _originalRunBoundaries?: Array<{
+        text: string;
+        marksKey?: string;
+        formatting?: TextFormatting;
+        propertyChanges?: RunPropertyChange[];
+    }>;
     // (undocumented)
     outlineLevel?: number;
     // (undocumented)
