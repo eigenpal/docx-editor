@@ -88,6 +88,9 @@ export interface ComplexField {
 }
 
 // @public
+export const DEFAULT_WATERMARK_PRESETS: readonly string[];
+
+// @public
 export interface Deletion {
     content: (Run | Hyperlink)[];
     info: TrackedChangeInfo;

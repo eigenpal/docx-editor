@@ -12,6 +12,7 @@
         :show-toolbar="true"
         :document-name="fileName"
         :fonts="customFonts"
+        :watermark-presets="['SAMPLE', 'DEMO ONLY', 'PREVIEW', 'NOT FOR DISTRIBUTION']"
         :i18n="editorLocale"
         :color-mode="colorMode"
         @change="handleDocumentChange"

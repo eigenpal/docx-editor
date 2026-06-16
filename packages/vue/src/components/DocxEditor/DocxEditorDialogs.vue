@@ -53,6 +53,7 @@
   <WatermarkDialog
     :is-open="showWatermark"
     :current="currentWatermark"
+    :presets="watermarkPresets"
     @close="emit('update:showWatermark', false)"
     @apply="(watermark) => emit('watermark-apply', watermark)"
   />
@@ -99,6 +100,7 @@ defineProps<{
   showPageSetup: boolean;
   showWatermark: boolean;
   currentWatermark: Watermark | undefined;
+  watermarkPresets?: readonly string[];
   showKeyboardShortcuts: boolean;
 }>();
 

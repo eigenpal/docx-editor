@@ -107,6 +107,7 @@ export interface DocxEditorProps {
     style?: CSSProperties;
     theme?: Theme | null;
     toolbarExtra?: ReactNode;
+    watermarkPresets?: readonly string[];
 }
 
 // @public

@@ -90,6 +90,7 @@
       :selected-image-pm-pos="selectedImage?.pmPos ?? null"
       :section-properties="currentSectionProps"
       :current-watermark="currentWatermark"
+      :watermark-presets="watermarkPresets"
       :scroll-visible-position-into-view="scrollVisiblePositionIntoView"
       @insert-symbol="handleInsertSymbol"
       @hyperlink-submit="handleHyperlinkSubmit"
@@ -465,6 +466,7 @@ const props = withDefaults(defineProps<DocxEditorProps>(), {
   showOutline: false,
   showOutlineButton: true,
   fontFamilies: undefined,
+  watermarkPresets: undefined,
   onPrint: undefined,
   disableFindReplaceShortcuts: false,
   renderLogo: undefined,

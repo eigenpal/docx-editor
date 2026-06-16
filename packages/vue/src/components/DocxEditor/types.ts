@@ -80,6 +80,12 @@ export interface DocxEditorProps {
    */
   fonts?: ReadonlyArray<FontDefinition>;
   /**
+   * Text-watermark presets shown in the watermark dialog's preset dropdown.
+   * Omit to use the built-in MS Word phrases (`DEFAULT_WATERMARK_PRESETS`).
+   * Pass an empty array to hide the preset dropdown.
+   */
+  watermarkPresets?: readonly string[];
+  /**
    * Callback fired when the print action is triggered. Pass it to enable the
    * `File > Print` menu entry; omit to hide. The `editor.print()` ref method
    * also invokes this callback.

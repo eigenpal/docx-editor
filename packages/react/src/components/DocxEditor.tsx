@@ -210,6 +210,15 @@ export interface DocxEditorProps {
    * ]}
    */
   fonts?: ReadonlyArray<FontDefinition>;
+  /**
+   * Text-watermark presets shown in the watermark dialog's preset dropdown.
+   * Omit to use the built-in MS Word phrases (`DEFAULT_WATERMARK_PRESETS`:
+   * CONFIDENTIAL, DRAFT, DO NOT COPY, SAMPLE, URGENT, ASAP). Pass an empty
+   * array to hide the preset dropdown and require custom text.
+   *
+   * @example watermarkPresets={['INTERNAL', 'PROPRIETARY', 'COPY']}
+   */
+  watermarkPresets?: readonly string[];
   /** Print options for print preview */
   printOptions?: PrintOptions;
   /**
@@ -581,6 +590,7 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
     showOutlineButton = true,
     fontFamilies,
     fonts,
+    watermarkPresets,
     printOptions: _printOptions,
     onPrint,
     onCopy: _onCopy,
@@ -1800,6 +1810,7 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
           onWatermarkClose={() => setShowWatermark(false)}
           onWatermarkApply={handleWatermarkApply}
           currentWatermark={currentWatermark}
+          watermarkPresets={watermarkPresets}
           document={history.state}
           footnotePropsOpen={footnotePropsOpen}
           onFootnotePropsClose={() => setFootnotePropsOpen(false)}

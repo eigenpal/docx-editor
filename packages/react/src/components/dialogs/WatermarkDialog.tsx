@@ -11,7 +11,10 @@
 import React, { useState, useCallback, useEffect } from 'react';
 import type { CSSProperties } from 'react';
 import type { Watermark } from '@eigenpal/docx-editor-core/types/document';
-import { pictureWatermarkDisplayEmu } from '@eigenpal/docx-editor-core/types/document';
+import {
+  pictureWatermarkDisplayEmu,
+  DEFAULT_WATERMARK_PRESETS,
+} from '@eigenpal/docx-editor-core/types/document';
 import { useTranslation } from '../../i18n';
 
 export interface WatermarkDialogProps {
@@ -23,11 +26,16 @@ export interface WatermarkDialogProps {
   onApply: (watermark: Watermark | null) => void;
   /** The document's current watermark (for editing). */
   current?: Watermark;
+  /**
+   * Text-watermark presets offered in the preset dropdown. Defaults to the
+   * MS Word phrases (`DEFAULT_WATERMARK_PRESETS`). Pass an empty array to hide
+   * the preset dropdown entirely.
+   */
+  presets?: readonly string[];
 }
 
 type Mode = 'none' | 'picture' | 'text';
 
-const PRESETS = ['CONFIDENTIAL', 'DRAFT', 'DO NOT COPY', 'SAMPLE', 'URGENT', 'ASAP'];
 const FONTS = ['Calibri', 'Arial', 'Times New Roman', 'Georgia', 'Verdana', 'Courier New'];
 
 // Styling mirrors PageSetupDialog so the dialogs read identically.
@@ -128,12 +136,13 @@ export function WatermarkDialog({
   onClose,
   onApply,
   current,
+  presets = DEFAULT_WATERMARK_PRESETS,
 }: WatermarkDialogProps): React.ReactElement | null {
   const { t } = useTranslation();
 
   const [mode, setMode] = useState<Mode>('none');
-  // Text
-  const [text, setText] = useState('CONFIDENTIAL');
+  // Text — seed with the first preset (falling back to Word's default phrase).
+  const [text, setText] = useState(presets[0] ?? 'CONFIDENTIAL');
   const [font, setFont] = useState('Calibri');
   const [autoSize, setAutoSize] = useState(true);
   const [fontSize, setFontSize] = useState(54);
@@ -324,21 +333,23 @@ export function WatermarkDialog({
           </div>
           {mode === 'text' && (
             <div style={SUBFORM}>
-              <div style={ROW}>
-                <span style={LABEL}>{t('dialogs.watermark.presetLabel')}</span>
-                <select
-                  style={INPUT}
-                  value={PRESETS.includes(text) ? text : ''}
-                  onChange={(e) => e.target.value && setText(e.target.value)}
-                >
-                  <option value="">—</option>
-                  {PRESETS.map((p) => (
-                    <option key={p} value={p}>
-                      {p}
-                    </option>
-                  ))}
-                </select>
-              </div>
+              {presets.length > 0 && (
+                <div style={ROW}>
+                  <span style={LABEL}>{t('dialogs.watermark.presetLabel')}</span>
+                  <select
+                    style={INPUT}
+                    value={presets.includes(text) ? text : ''}
+                    onChange={(e) => e.target.value && setText(e.target.value)}
+                  >
+                    <option value="">—</option>
+                    {presets.map((p) => (
+                      <option key={p} value={p}>
+                        {p}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
               <div style={ROW}>
                 <span style={LABEL}>{t('dialogs.watermark.textLabel')}</span>
                 <input style={INPUT} value={text} onChange={(e) => setText(e.target.value)} />

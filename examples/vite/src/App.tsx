@@ -883,6 +883,7 @@ export function App() {
           initialZoom={autoZoom}
           disableFindReplaceShortcuts={disableFindReplaceShortcuts}
           fonts={customFonts}
+          watermarkPresets={['SAMPLE', 'DEMO ONLY', 'PREVIEW', 'NOT FOR DISTRIBUTION']}
           renderLogo={renderLogo}
           documentName={fileName}
           onDocumentNameChange={setFileName}

@@ -39,7 +39,8 @@
       "showZoomControl",
       "style",
       "theme",
-      "toolbarExtra"
+      "toolbarExtra",
+      "watermarkPresets"
     ],
     "deferredInVue": {
       "agentPanel": "AI agent panel UI. Vue adapter ships without the agent surface; React-only until the Vue agent components land.",
