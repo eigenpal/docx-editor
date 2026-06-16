@@ -17,6 +17,7 @@ import {
 } from './Select';
 import { cn } from '../../lib/utils';
 import { useTranslation } from '../../i18n';
+import { getPrimaryFontFamily } from './fontPickerValue';
 
 // ============================================================================
 // TYPES
@@ -77,7 +78,10 @@ export function FontPicker({
   const displayValue = React.useMemo(() => {
     if (!value) return placeholder;
     const font = fonts.find(
-      (f) => f.fontFamily === value || f.name.toLowerCase() === value.toLowerCase()
+      (f) =>
+        f.fontFamily === value ||
+        f.name.toLowerCase() === value.toLowerCase() ||
+        getPrimaryFontFamily(f.fontFamily).toLowerCase() === value.toLowerCase()
     );
     return font?.name || value;
   }, [value, fonts, placeholder]);
@@ -86,7 +90,7 @@ export function FontPicker({
     (newValue: string) => {
       const font = fonts.find((f) => f.name === newValue);
       if (font) {
-        onChange?.(font.fontFamily);
+        onChange?.(getPrimaryFontFamily(font.fontFamily) || font.name);
       }
     },
     [onChange, fonts]
