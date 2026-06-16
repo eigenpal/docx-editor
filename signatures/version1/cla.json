@@ -155,6 +155,12 @@
       "id": 53407417,
       "signed_at": "2026-06-15T21:49:16Z",
       "pull_request_no": 828
+    },
+    {
+      "name": "sathinator-afk",
+      "id": 286852155,
+      "signed_at": "2026-06-16T08:31:00Z",
+      "pull_request_no": 837
     }
   ]
 }
