@@ -1,4 +1,6 @@
 import { describe, test, expect } from 'bun:test';
+import { readFileSync } from 'fs';
+import path from 'path';
 import type {
   Document,
   DocumentBody,
@@ -771,5 +773,221 @@ describe('createReviewerBridge — paraId-less paragraphs addressable by ordinal
     const bridge = createReviewerBridge(reviewer);
     expect(bridge.findText('no id here')[0].paraId).toBe('0');
     expect(bridge.findText('tagged text')[0].paraId).toBe('p_z');
+  });
+});
+
+// A table cell holds paragraphs (`w:tbl > w:tr > w:tc > w:p`). Those paragraphs
+// are part of the document-wide paragraph index space that `getParagraphAtIndex`
+// and `forEachParagraph` already walk — so once the bridge's paraId map and
+// `findText` enumerate them, every cell paragraph becomes addressable by the same
+// find_text → suggest_change / add_comment loop as a body paragraph.
+describe('createReviewerBridge — table cell paragraphs are addressable', () => {
+  // makeTable (above) leaves cell paragraphs paraId-less; this variant tags them,
+  // mirroring a Word-authored table where each cell paragraph carries a w14:paraId.
+  function makeTableWithParaIds(cells: { text: string; paraId?: string }[][]): Table {
+    return {
+      type: 'table',
+      rows: cells.map((row) => ({
+        cells: row.map((c) => ({ content: [makeParagraph(c.text, c.paraId)] })),
+      })),
+    } as unknown as Table;
+  }
+
+  test('find_text locates a phrase inside a table cell, returning the cell paragraph paraId', () => {
+    const before = makeParagraph('Before the table', 'p_before');
+    const table = makeTableWithParaIds([
+      [
+        { text: 'Licensor retains inputs', paraId: 'cell_ip' },
+        { text: 'COV documentation obligations', paraId: 'cell_doc' },
+      ],
+    ]);
+    const after = makeParagraph('After the table', 'p_after');
+    const reviewer = makeReviewer([before, table, after]);
+    const bridge = createReviewerBridge(reviewer);
+
+    const matches = bridge.findText('Licensor retains inputs');
+    expect(matches).toHaveLength(1);
+    expect(matches[0].paraId).toBe('cell_ip');
+  });
+
+  test('suggest_change (replace) authors a tracked change inside a table cell, addressed by paraId', () => {
+    const table = makeTableWithParaIds([[{ text: 'Licensor retains inputs', paraId: 'cell_ip' }]]);
+    const reviewer = makeReviewer([makeParagraph('Body', 'p0'), table]);
+    const bridge = createReviewerBridge(reviewer);
+
+    const ok = bridge.proposeChange({
+      paraId: 'cell_ip',
+      search: 'Licensor retains inputs',
+      replaceWith: 'The licensor retains the inputs',
+      author: 'AI',
+    });
+    expect(ok).toBe(true);
+
+    const changes = reviewer.getChanges();
+    expect(changes.some((c) => c.type === 'deletion' && c.text === 'Licensor retains inputs')).toBe(
+      true
+    );
+    expect(
+      changes.some((c) => c.type === 'insertion' && c.text === 'The licensor retains the inputs')
+    ).toBe(true);
+  });
+
+  test('add_comment anchors to a unique phrase inside a table cell', () => {
+    const table = makeTableWithParaIds([[{ text: 'Publicly available', paraId: 'cell_row' }]]);
+    const reviewer = makeReviewer([table]);
+    const bridge = createReviewerBridge(reviewer);
+
+    const id = bridge.addComment({
+      paraId: 'cell_row',
+      text: 'Is this row label right?',
+      search: 'Publicly available',
+      author: 'AI',
+    });
+    expect(typeof id).toBe('number');
+    expect(reviewer.getComments()).toHaveLength(1);
+  });
+
+  test('a paraId-less cell paragraph is addressable by the ordinal index read_document shows', () => {
+    // before(0), cell A1(1), cell B1(2), after(3). The doc-wide index counts INTO
+    // the table, matching getParagraphAtIndex / formatContentForLLM exactly.
+    const before = makeParagraph('before');
+    const table = makeTable([['apple cell', 'banana cell']]);
+    const after = makeParagraph('after');
+    const reviewer = makeReviewer([before, table, after]);
+    const bridge = createReviewerBridge(reviewer);
+
+    const matches = bridge.findText('banana cell');
+    expect(matches).toHaveLength(1);
+    expect(matches[0].paraId).toBe('2');
+
+    const ok = bridge.proposeChange({
+      paraId: '2',
+      search: 'banana cell',
+      replaceWith: 'cherry cell',
+      author: 'AI',
+    });
+    expect(ok).toBe(true);
+    expect(reviewer.getChanges().some((c) => c.type === 'deletion')).toBe(true);
+  });
+
+  test('find_text → suggest_change end-to-end on a cell with a real paraId', () => {
+    const table = makeTableWithParaIds([
+      [{ text: 'first cell phrase', paraId: 'c1' }],
+      [{ text: 'public availability transfers no copyright', paraId: 'c2' }],
+    ]);
+    const reviewer = makeReviewer([makeParagraph('intro', 'p_intro'), table]);
+    const bridge = createReviewerBridge(reviewer);
+
+    const matches = bridge.findText('public availability transfers no copyright');
+    expect(matches).toHaveLength(1);
+    const ok = bridge.proposeChange({
+      paraId: matches[0].paraId,
+      search: matches[0].match,
+      replaceWith: 'public availability does not transfer copyright',
+      author: 'AI',
+    });
+    expect(ok).toBe(true);
+    expect(reviewer.getChanges()).toHaveLength(2); // deletion + insertion
+  });
+
+  test('body editing is unaffected — a body paraId still resolves with a table present', () => {
+    const before = makeParagraph('edit this body phrase', 'p_body');
+    const table = makeTableWithParaIds([[{ text: 'cell', paraId: 'cell_a' }]]);
+    const reviewer = makeReviewer([before, table]);
+    const bridge = createReviewerBridge(reviewer);
+
+    const ok = bridge.proposeChange({
+      paraId: 'p_body',
+      search: 'body phrase',
+      replaceWith: 'body text',
+      author: 'AI',
+    });
+    expect(ok).toBe(true);
+    expect(
+      reviewer.getChanges().some((c) => c.type === 'deletion' && c.text === 'body phrase')
+    ).toBe(true);
+  });
+});
+
+// End-to-end against a real DOCX: the in-cell change must survive serialization
+// (save → reopen), accept/reject must resolve it inside the cell, and the
+// surrounding table geometry (rows × cols) must stay intact.
+describe('createReviewerBridge — table cell authoring round-trips through a real DOCX', () => {
+  const WITH_TABLES = path.resolve(__dirname, '../../../../e2e/fixtures/with-tables.docx');
+  function bufOf(p: string): ArrayBuffer {
+    const b = readFileSync(p);
+    return b.buffer.slice(b.byteOffset, b.byteOffset + b.byteLength) as ArrayBuffer;
+  }
+  function tableOf(r: DocxReviewer): Table {
+    return r.toDocument().package.document.content.find((b): b is Table => b.type === 'table')!;
+  }
+  // Plain run text of a cell. Every cell this test reads is untouched or
+  // post-accept/reject (plain runs); the pending tracked change is asserted via
+  // getChanges, not read here, so a run-only walk is sufficient.
+  function cellText(t: Table, row: number, col: number): string {
+    return t.rows[row].cells[col].content
+      .filter((b): b is Paragraph => b.type === 'paragraph')
+      .map((p) => {
+        let s = '';
+        for (const it of p.content) {
+          if (it.type === 'run') {
+            for (const c of it.content) {
+              if (c.type === 'text') s += c.text;
+            }
+          }
+        }
+        return s;
+      })
+      .join('\n');
+  }
+
+  // with-tables.docx: para[0] "Document with tables:", a 3×3 grid of cells A1..C3,
+  // then "End of document." Cell B2 is the doc-wide paragraph at ordinal index 5
+  // (cells carry no w14:paraId, so find_text surfaces "5").
+  test('replace B2 → reparse keeps the table intact; accept applies / reject reverts in-cell', async () => {
+    const r = await DocxReviewer.fromBuffer(bufOf(WITH_TABLES), 'AI');
+    const bridge = createReviewerBridge(r);
+
+    const matches = bridge.findText('B2');
+    expect(matches).toHaveLength(1);
+    expect(matches[0].paraId).toBe('5');
+
+    const tableBefore = tableOf(r);
+    const rowsBefore = tableBefore.rows.length;
+    const colsBefore = tableBefore.rows[0].cells.length;
+    expect(cellText(tableBefore, 1, 1)).toBe('B2');
+
+    const ok = bridge.proposeChange({
+      paraId: matches[0].paraId,
+      search: 'B2',
+      replaceWith: 'B2 EDITED',
+      author: 'AI',
+    });
+    expect(ok).toBe(true);
+    const changes = r.getChanges();
+    expect(changes.some((c) => c.type === 'deletion' && c.text === 'B2')).toBe(true);
+    expect(changes.some((c) => c.type === 'insertion' && c.text === 'B2 EDITED')).toBe(true);
+
+    // Save → reopen: the change survives and the table geometry is unchanged.
+    const buf = await r.toBuffer();
+    const rt = await DocxReviewer.fromBuffer(buf, 'AI');
+    const tableRt = tableOf(rt);
+    expect(tableRt.rows.length).toBe(rowsBefore);
+    expect(tableRt.rows.every((row) => row.cells.length === colsBefore)).toBe(true);
+    expect(rt.getChanges().some((c) => c.text === 'B2 EDITED')).toBe(true);
+    expect(cellText(tableRt, 0, 0)).toBe('A1');
+    expect(cellText(tableRt, 2, 2)).toBe('C3');
+
+    // Accept: the cell reads the replacement, table still 3×3.
+    const acc = await DocxReviewer.fromBuffer(buf, 'AI');
+    acc.acceptAll();
+    const accTable = tableOf(acc);
+    expect(accTable.rows.length).toBe(rowsBefore);
+    expect(cellText(accTable, 1, 1)).toBe('B2 EDITED');
+
+    // Reject: the cell reverts to its original text.
+    const rej = await DocxReviewer.fromBuffer(buf, 'AI');
+    rej.rejectAll();
+    expect(cellText(tableOf(rej), 1, 1)).toBe('B2');
   });
 });

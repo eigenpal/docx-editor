@@ -45,53 +45,43 @@ import type {
   TextFormatting,
 } from '@eigenpal/docx-editor-core/headless';
 import { mapHexToHighlightName, pointsToHalfPoints } from '@eigenpal/docx-editor-core/headless';
-import { getParagraphAtIndex } from './utils';
+import { forEachParagraph, getParagraphAtIndex } from './utils';
 import { CommentNotFoundError } from './errors';
 
 /**
- * Build the paraId → top-level paragraphIndex map. Counting mirrors
- * `forEachParagraph` / `getParagraphAtIndex` in utils.ts so the lookup
- * stays consistent with the reviewer's own walker.
+ * Build the paraId → document-wide paragraphIndex map. The walk is delegated to
+ * `forEachParagraph` (utils.ts) so the index space is byte-for-byte the one
+ * `getParagraphAtIndex` resolves against — body paragraphs AND paragraphs inside
+ * table cells (`w:tbl > w:tr > w:tc > w:p`) are both addressable.
  *
- * A paragraph that lacks a `w14:paraId` is keyed by its ordinal index as a
- * string. This mirrors `formatContentForLLM` (content.ts), whose `read_document`
- * output labels such paragraphs `[<index>]` rather than `[<paraId>]` — so the
- * id the agent is handed always resolves here. Without this, a document with no
- * paraIds (Word doesn't always emit them) advertises ids the mutate tools then
- * reject. The index space is identical to `getContent`, so the string key and
- * the label match exactly.
+ * Each paragraph is keyed two ways:
+ *  - by its `w14:paraId` when present (the stable anchor the agent prefers), and
+ *  - ALWAYS by its ordinal index as a string.
+ *
+ * The ordinal alias keeps the contract that every id `read_document`
+ * (`formatContentForLLM`, content.ts) hands the agent resolves here:
+ * a paraId-less paragraph is labeled `[<index>]`, and so is any non-first
+ * paragraph of a multi-paragraph cell (that path emits the ordinal, not the
+ * paraId). Real `w14:paraId`s are 8-hex-digit tokens, so they never collide with
+ * a decimal index string. The index space is identical to `getContent`, so the
+ * keys and the labels match exactly.
+ *
+ * Nested tables (a table inside a cell) are NOT descended into — neither here nor
+ * in `getParagraphAtIndex` / `forEachParagraph` / `getContent` — so their
+ * paragraphs are uniformly uncounted and unaddressable. This is intentional: all
+ * the walkers agree, so the index space stays consistent (a nested-table
+ * paragraph is invisible, never mis-indexed). Extending to nested tables means
+ * updating every walker in lockstep.
  */
 function buildParaIdMap(reviewer: DocxReviewer): Map<string, number> {
   const body = reviewer.toDocument().package?.document;
   if (!body) return new Map();
 
   const map = new Map<string, number>();
-  let index = 0;
-
-  // Counting must mirror utils.ts forEachParagraph / getParagraphAtIndex:
-  // top-level paragraph counts 1, table advances by inner cell-paragraph count,
-  // any other top-level block (BlockSdt, sectPr, etc.) counts 1.
-  for (const block of body.content) {
-    if (block.type === 'paragraph') {
-      const paraId = (block as Paragraph).paraId;
-      map.set(paraId ?? String(index), index);
-      index++;
-    } else if (block.type === 'table') {
-      // Cell paragraphs advance the index but aren't directly addressable in
-      // the reviewer surface (DocxReviewer's APIs are top-level-paragraphIndex
-      // based; cell-targeted mutations are a follow-up).
-      for (const row of block.rows) {
-        for (const cell of row.cells) {
-          for (const cellBlock of cell.content) {
-            if (cellBlock.type === 'paragraph') index++;
-          }
-        }
-      }
-    } else {
-      index++;
-    }
-  }
-
+  forEachParagraph(body, (para, index) => {
+    map.set(para.paraId ?? String(index), index);
+    map.set(String(index), index);
+  });
   return map;
 }
 
@@ -419,43 +409,27 @@ export function createReviewerBridge(reviewer: DocxReviewer): EditorBridge {
       const matches: FoundMatch[] = [];
       const CONTEXT = 40;
 
-      // Track the top-level ordinal index exactly as buildParaIdMap does, so a
-      // paraId-less paragraph surfaces the same `String(index)` id the mutate
-      // tools resolve. Tables advance the index by their cell-paragraph count
-      // (cells aren't searched here — same top-level-only scope as before).
-      let index = 0;
-      for (const block of body.content) {
-        if (matches.length >= limit) break;
-        if (block.type === 'table') {
-          for (const row of block.rows) {
-            for (const cell of row.cells) {
-              for (const cellBlock of cell.content) {
-                if (cellBlock.type === 'paragraph') index++;
-              }
-            }
-          }
-          continue;
-        }
-        if (block.type !== 'paragraph') {
-          index++;
-          continue;
-        }
-        const para = block as Paragraph;
-        const paraIndex = index++;
+      // Search every paragraph in document order — body AND table-cell
+      // paragraphs — via the canonical walker, so a cell match surfaces the same
+      // doc-wide index / paraId the mutate tools resolve. forEachParagraph counts
+      // into tables, so the ordinal it yields matches buildParaIdMap and
+      // getParagraphAtIndex exactly. Returning `false` stops the walk at `limit`.
+      forEachParagraph(body, (para, index) => {
         const text = getParagraphPlainText(para);
         const haystack = caseSensitive ? text : text.toLowerCase();
         const at = haystack.indexOf(needle);
-        if (at === -1) continue;
+        if (at === -1) return;
         // Ambiguous matches in a single paragraph: skip — agent must narrow.
-        if (haystack.indexOf(needle, at + 1) !== -1) continue;
+        if (haystack.indexOf(needle, at + 1) !== -1) return;
         const match = text.slice(at, at + query.length);
         matches.push({
-          paraId: para.paraId ?? String(paraIndex),
+          paraId: para.paraId ?? String(index),
           match,
           before: text.slice(Math.max(0, at - CONTEXT), at),
           after: text.slice(at + query.length, at + query.length + CONTEXT),
         });
-      }
+        if (matches.length >= limit) return false;
+      });
       return matches;
     },
 
