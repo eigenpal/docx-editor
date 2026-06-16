@@ -194,6 +194,10 @@ export interface ToolbarProps {
   onInsertImage?: () => void;
   /** Callback when user wants to insert a page break */
   onInsertPageBreak?: () => void;
+  /** Callback when user wants to insert a "next page" section break */
+  onInsertSectionBreakNextPage?: () => void;
+  /** Callback when user wants to insert a "continuous" section break */
+  onInsertSectionBreakContinuous?: () => void;
   /** Callback when user wants to insert a table of contents */
   onInsertTOC?: () => void;
   /** Callback when user wants to insert a shape */

@@ -252,6 +252,10 @@ export interface EditorRefLike {
     // (undocumented)
     getSelectionInfo(): SelectionInfo | null;
     getTotalPages(): number;
+    insertBreak(options: {
+        paraId: string;
+        type: 'page' | 'sectionNextPage' | 'sectionContinuous';
+    }): boolean;
     // (undocumented)
     onContentChange(listener: (doc: unknown) => void): () => void;
     // (undocumented)

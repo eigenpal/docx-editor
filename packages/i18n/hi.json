@@ -42,7 +42,10 @@
     "symbol": "प्रतीक",
     "help": "सहायता",
     "reportIssue": "समस्या की रिपोर्ट करें",
-    "watermark": "वॉटरमार्क"
+    "watermark": "वॉटरमार्क",
+    "break": null,
+    "sectionBreakContinuous": null,
+    "sectionBreakNextPage": null
   },
   "formattingBar": {
     "groups": {

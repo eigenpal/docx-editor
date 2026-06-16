@@ -28,6 +28,8 @@ import {
   setRtl,
   setLtr,
   insertPageBreak,
+  insertSectionBreakNextPage,
+  insertSectionBreakContinuous,
   generateTOC,
   insertTable,
 } from '@eigenpal/docx-editor-core/prosemirror/commands';
@@ -217,6 +219,20 @@ export function useFormattingActions({
     focusActiveEditor();
   }, [getActiveEditorView, focusActiveEditor]);
 
+  const handleInsertSectionBreakNextPage = useCallback(() => {
+    const view = getActiveEditorView();
+    if (!view) return;
+    insertSectionBreakNextPage(view.state, view.dispatch);
+    focusActiveEditor();
+  }, [getActiveEditorView, focusActiveEditor]);
+
+  const handleInsertSectionBreakContinuous = useCallback(() => {
+    const view = getActiveEditorView();
+    if (!view) return;
+    insertSectionBreakContinuous(view.state, view.dispatch);
+    focusActiveEditor();
+  }, [getActiveEditorView, focusActiveEditor]);
+
   const handleInsertTOC = useCallback(() => {
     const view = getActiveEditorView();
     if (!view) return;
@@ -228,6 +244,8 @@ export function useFormattingActions({
     handleFormat,
     handleInsertTable,
     handleInsertPageBreak,
+    handleInsertSectionBreakNextPage,
+    handleInsertSectionBreakContinuous,
     handleInsertTOC,
   };
 }

@@ -196,6 +196,12 @@ export function insertImageNode(state: EditorState, dispatch: ((tr: Transaction)
 // @public
 export const insertPageBreak: Command;
 
+// @public
+export const insertSectionBreakContinuous: Command;
+
+// @public
+export const insertSectionBreakNextPage: Command;
+
 // @public (undocumented)
 export function insertTable(rows: number, cols: number): (state: EditorState, dispatch?: (tr: Transaction) => void) => boolean;
 

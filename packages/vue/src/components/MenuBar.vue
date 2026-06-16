@@ -16,6 +16,23 @@
             }
           "
         />
+        <div v-else-if="item.key === 'break'" class="menu-bar__break-submenu">
+          <button
+            v-for="b in breakItems"
+            :key="b.action"
+            type="button"
+            class="menu-bar__break-item"
+            @click.prevent="
+              () => {
+                emit('action', b.action);
+                closeMenu();
+              }
+            "
+          >
+            <MaterialSymbol :name="b.icon" :size="18" />
+            <span>{{ b.label }}</span>
+          </button>
+        </div>
       </template>
     </MenuDropdown>
     <MenuDropdown :label="t('toolbar.help')" :items="helpItems" />
@@ -27,6 +44,7 @@ import { computed } from 'vue';
 import { useTranslation } from '../i18n';
 import MenuDropdown, { type MenuEntry } from './ui/MenuDropdown.vue';
 import TableGridInline from './ui/TableGridInline.vue';
+import MaterialSymbol from './ui/MaterialSymbol.vue';
 
 const emit = defineEmits<{
   (e: 'action', action: string): void;
@@ -65,9 +83,23 @@ const insertItems = computed<MenuEntry[]>(() => [
   { icon: 'image', label: t('toolbar.image'), onClick: act('insertImage') },
   { icon: 'grid_on', label: t('toolbar.table'), key: 'table', submenu: true },
   { type: 'separator' },
-  { icon: 'page_break', label: t('toolbar.pageBreak'), onClick: act('insertPageBreak') },
+  { icon: 'page_break', label: t('toolbar.break'), key: 'break', submenu: true },
   { icon: 'format_list_numbered', label: t('toolbar.tableOfContents'), onClick: act('insertTOC') },
   { icon: 'branding_watermark', label: t('toolbar.watermark'), onClick: act('watermark') },
+]);
+
+const breakItems = computed(() => [
+  { icon: 'page_break', label: t('toolbar.pageBreak'), action: 'insertPageBreak' },
+  {
+    icon: 'horizontal_rule',
+    label: t('toolbar.sectionBreakNextPage'),
+    action: 'insertSectionBreakNextPage',
+  },
+  {
+    icon: 'border_horizontal',
+    label: t('toolbar.sectionBreakContinuous'),
+    action: 'insertSectionBreakContinuous',
+  },
 ]);
 
 const helpItems = computed<MenuEntry[]>(() => [
@@ -79,5 +111,27 @@ const helpItems = computed<MenuEntry[]>(() => [
 .menu-bar {
   display: flex;
   align-items: center;
+}
+.menu-bar__break-submenu {
+  display: flex;
+  flex-direction: column;
+  min-width: 220px;
+}
+.menu-bar__break-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  font-size: 13px;
+  color: var(--doc-text);
+  width: 100%;
+  text-align: left;
+  white-space: nowrap;
+}
+.menu-bar__break-item:hover {
+  background: var(--doc-bg-hover);
 }
 </style>

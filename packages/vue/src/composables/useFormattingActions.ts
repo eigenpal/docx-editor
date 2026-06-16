@@ -14,9 +14,15 @@ import { getCachedNumberingMap } from '@eigenpal/docx-editor-core/docx';
 import { clearFormatting } from '@eigenpal/docx-editor-core/prosemirror/commands/formatting';
 import { insertPageBreak } from '@eigenpal/docx-editor-core/prosemirror/commands/pageBreak';
 import {
+  insertSectionBreakNextPage,
+  insertSectionBreakContinuous,
+} from '@eigenpal/docx-editor-core/prosemirror/commands/sectionBreak';
+import {
   applyFormatting as applyFormattingCore,
   setParagraphStyle as setParagraphStyleCore,
+  insertBreak as insertBreakCore,
   type ApplyFormattingOptions,
+  type InsertBreakOptions,
 } from '@eigenpal/docx-editor-core/prosemirror/applyFormatting';
 
 export interface UseFormattingActionsOptions {
@@ -32,7 +38,7 @@ export interface UseFormattingActionsOptions {
   getDocument: () => Document | null;
 }
 
-export type { ApplyFormattingOptions };
+export type { ApplyFormattingOptions, InsertBreakOptions };
 
 export function useFormattingActions(opts: UseFormattingActionsOptions) {
   const targetView = () => opts.activeView?.value ?? opts.editorView.value;
@@ -70,6 +76,20 @@ export function useFormattingActions(opts: UseFormattingActionsOptions) {
     view.focus();
   }
 
+  function handleInsertSectionBreakNextPage() {
+    const view = opts.editorView.value;
+    if (!view) return;
+    insertSectionBreakNextPage(view.state, (tr) => view.dispatch(tr), view);
+    view.focus();
+  }
+
+  function handleInsertSectionBreakContinuous() {
+    const view = opts.editorView.value;
+    if (!view) return;
+    insertSectionBreakContinuous(view.state, (tr) => view.dispatch(tr), view);
+    view.focus();
+  }
+
   function handleInsertSymbol(symbol: string) {
     const view = targetView();
     if (!view) return;
@@ -94,12 +114,21 @@ export function useFormattingActions(opts: UseFormattingActionsOptions) {
     return setParagraphStyleCore(view, options, { styleResolver, numbering });
   }
 
+  function insertBreak(options: InsertBreakOptions): boolean {
+    const view = opts.editorView.value;
+    if (!view) return false;
+    return insertBreakCore(view, options);
+  }
+
   return {
     handleClearFormatting,
     handleApplyStyle,
     handleInsertPageBreak,
+    handleInsertSectionBreakNextPage,
+    handleInsertSectionBreakContinuous,
     handleInsertSymbol,
     applyFormatting,
     setParagraphStyle,
+    insertBreak,
   };
 }

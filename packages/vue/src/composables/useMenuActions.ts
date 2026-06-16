@@ -27,6 +27,8 @@ export interface UseMenuActionsOptions {
   showKeyboardShortcuts: Ref<boolean>;
   handleClearFormatting: () => void;
   handleInsertPageBreak: () => void;
+  handleInsertSectionBreakNextPage: () => void;
+  handleInsertSectionBreakContinuous: () => void;
   handleToggleOutline: () => void;
   handleToggleSidebar: () => void;
   downloadCurrentDocument: () => Promise<void>;
@@ -85,6 +87,12 @@ export function useMenuActions(opts: UseMenuActionsOptions) {
         break;
       case 'insertPageBreak':
         opts.handleInsertPageBreak();
+        break;
+      case 'insertSectionBreakNextPage':
+        opts.handleInsertSectionBreakNextPage();
+        break;
+      case 'insertSectionBreakContinuous':
+        opts.handleInsertSectionBreakContinuous();
         break;
       case 'insertTOC':
         execSimpleCommand('generateTOC');

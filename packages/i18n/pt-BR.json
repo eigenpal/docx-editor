@@ -42,7 +42,10 @@
     "openShortcut": "Ctrl+O",
     "save": "Salvar",
     "saveShortcut": "Ctrl+S",
-    "watermark": "Marca d'água"
+    "watermark": "Marca d'água",
+    "break": null,
+    "sectionBreakContinuous": null,
+    "sectionBreakNextPage": null
   },
   "formattingBar": {
     "groups": {

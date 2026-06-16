@@ -42,7 +42,10 @@
     "openShortcut": "Ctrl+O",
     "save": "Zapisz",
     "saveShortcut": "Ctrl+S",
-    "watermark": "Znak wodny"
+    "watermark": "Znak wodny",
+    "break": null,
+    "sectionBreakContinuous": null,
+    "sectionBreakNextPage": null
   },
   "formattingBar": {
     "groups": {

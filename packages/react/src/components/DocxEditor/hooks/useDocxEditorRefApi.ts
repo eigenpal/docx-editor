@@ -20,6 +20,7 @@ import {
 import {
   applyFormatting,
   setParagraphStyle,
+  insertBreak,
 } from '@eigenpal/docx-editor-core/prosemirror/applyFormatting';
 import {
   ContentControlNotFoundError,
@@ -159,6 +160,12 @@ export function useDocxEditorRefApi({
           ? getCachedNumberingMap(currentDoc.package.numbering)
           : null;
         return setParagraphStyle(view, options, { styleResolver, numbering });
+      },
+
+      insertBreak: (options) => {
+        const view = pagedEditorRef.current?.getView();
+        if (!view) return false;
+        return insertBreak(view, options);
       },
 
       getPageContent: (pageNumber) =>

@@ -82,6 +82,10 @@ export interface UseDocxEditorRefApiOptions {
   }) => boolean;
   applyFormatting: (options: ApplyFormattingOptions) => boolean;
   setParagraphStyle: (options: { paraId: string; styleId: string }) => boolean;
+  insertBreak: (options: {
+    paraId: string;
+    type: 'page' | 'sectionNextPage' | 'sectionContinuous';
+  }) => boolean;
   scrollVisiblePositionIntoView: (pmPos: number) => void;
   // Subscriber sets (used by onContentChange / onSelectionChange)
   contentChangeSubscribers: Set<(document: unknown) => void>;
@@ -319,6 +323,7 @@ export function useDocxEditorRefApi(opts: UseDocxEditorRefApiOptions): {
     setContentControlValue,
     applyFormatting: opts.applyFormatting,
     setParagraphStyle: opts.setParagraphStyle,
+    insertBreak: opts.insertBreak,
     getPageContent,
     getTotalPages,
     getCurrentPage,
