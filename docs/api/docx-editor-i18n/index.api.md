@@ -31,7 +31,10 @@ export const he: PartialLocaleStrings;
 export const hi: PartialLocaleStrings;
 
 // @public
-export type LocaleCode = 'en' | 'de' | 'fr' | 'he' | 'hi' | 'pl' | 'pt-BR' | 'tr' | 'zh-CN';
+export const id: PartialLocaleStrings;
+
+// @public
+export type LocaleCode = 'en' | 'de' | 'fr' | 'he' | 'hi' | 'id' | 'pl' | 'pt-BR' | 'tr' | 'zh-CN';
 
 // @public
 export const locales: Record<LocaleCode, PartialLocaleStrings>;

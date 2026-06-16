@@ -37,6 +37,11 @@
       "import": "./dist/hi.mjs",
       "require": "./dist/hi.js"
     },
+    "./id": {
+      "types": "./dist/id.d.ts",
+      "import": "./dist/id.mjs",
+      "require": "./dist/id.js"
+    },
     "./pl": {
       "types": "./dist/pl.d.ts",
       "import": "./dist/pl.mjs",
