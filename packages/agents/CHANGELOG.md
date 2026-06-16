@@ -1,5 +1,11 @@
 # @eigenpal/docx-editor-agents
 
+## 1.6.0
+
+### Minor Changes
+
+- a6a2dd0: Add an `insert_break` agent/MCP tool (and `bridge.insertBreak` / editor `insertBreak` ref method) so agents can insert a page break or a section break (next page / continuous) after a paragraph.
+
 ## 1.5.0
 
 ### Minor Changes
