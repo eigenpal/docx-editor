@@ -24,6 +24,7 @@ function makeRef(): EditorRefLike {
     getComments: () => [],
     applyFormatting: () => true,
     setParagraphStyle: () => true,
+    insertBreak: () => true,
     getPageContent: () => null,
     getTotalPages: () => 0,
     getCurrentPage: () => 0,

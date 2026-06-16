@@ -34,6 +34,7 @@ import type {
   SelectionInfo,
   ApplyFormattingOptions,
   SetParagraphStyleOptions,
+  InsertBreakOptions,
   PageContent,
 } from './types';
 import { getContent, formatContentForLLM } from './content';
@@ -86,6 +87,11 @@ export interface EditorRefLike {
   }): boolean;
   /** Apply a paragraph style by styleId. Returns false if paraId is unknown. */
   setParagraphStyle(options: { paraId: string; styleId: string }): boolean;
+  /** Insert a page or section break after the paragraph. Returns false if paraId is unknown. */
+  insertBreak(options: {
+    paraId: string;
+    type: 'page' | 'sectionNextPage' | 'sectionContinuous';
+  }): boolean;
   /** Read a single page's paragraphs (1-indexed). Returns null if the page does not exist. */
   getPageContent(pageNumber: number): PageContent | null;
   /** Total number of pages currently rendered. */
@@ -135,6 +141,12 @@ export interface EditorBridge {
    * Direct edit, not a tracked change.
    */
   setParagraphStyle(options: SetParagraphStyleOptions): boolean;
+  /**
+   * Insert a page or section break after a paragraph, by paraId. `page` adds a
+   * page break; `sectionNextPage` / `sectionContinuous` start a new section on
+   * a new page / the same page. Direct edit, not a tracked change.
+   */
+  insertBreak(options: InsertBreakOptions): boolean;
   /** Read a single page (1-indexed). Returns null if the page does not exist. */
   getPage(pageNumber: number): PageContent | null;
   /** Read a range of pages (1-indexed, inclusive). Out-of-range pages are skipped. */
@@ -327,6 +339,13 @@ export function createEditorBridge(editorRef: EditorRefLike, author = 'AI'): Edi
       return editorRef.setParagraphStyle({
         paraId: options.paraId,
         styleId: options.styleId,
+      });
+    },
+
+    insertBreak(options: InsertBreakOptions): boolean {
+      return editorRef.insertBreak({
+        paraId: options.paraId,
+        type: options.type,
       });
     },
 

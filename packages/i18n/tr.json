@@ -42,7 +42,10 @@
     "symbol": "Sembol",
     "help": "Yardım",
     "reportIssue": "Sorun bildir",
-    "watermark": "Filigran"
+    "watermark": "Filigran",
+    "break": null,
+    "sectionBreakContinuous": null,
+    "sectionBreakNextPage": null
   },
   "formattingBar": {
     "groups": {

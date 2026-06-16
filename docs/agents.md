@@ -226,6 +226,7 @@ The pattern is the same: schemas in, tool calls out, run them through `executeTo
 | `suggest_change`                   | Tracked change — user accepts or rejects                                      |
 | `apply_formatting`                 | Bold / italic / underline / strike / color / highlight / size / font          |
 | `set_paragraph_style`              | Heading or named style — rejects styleIds not in `styles.xml`                 |
+| `insert_break`                     | Page break or section break (next page / continuous) after a paragraph        |
 | `reply_comment`, `resolve_comment` | Comment thread ops                                                            |
 | `scroll`                           | Move the viewport to a paragraph                                              |
 

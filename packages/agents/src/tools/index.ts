@@ -11,6 +11,7 @@ export type { AgentToolDefinition, AgentToolResult } from './types';
 import type { AgentToolDefinition, AgentToolResult } from './types';
 import type { EditorBridge } from '../bridge';
 import { applyFormatting, setParagraphStyle } from './formatting';
+import { insertBreak } from './breaks';
 import { readPage, readPages } from './pages';
 
 // ── Locate tools ────────────────────────────────────────────────────────────
@@ -298,6 +299,7 @@ export const agentTools: AgentToolDefinition<any>[] = [
   suggestChange,
   applyFormatting,
   setParagraphStyle,
+  insertBreak,
   replyComment,
   resolveComment,
   scroll,

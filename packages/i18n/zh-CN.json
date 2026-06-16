@@ -42,7 +42,10 @@
     "symbol": "符号",
     "help": "帮助",
     "reportIssue": "反馈问题",
-    "watermark": "水印"
+    "watermark": "水印",
+    "break": null,
+    "sectionBreakContinuous": null,
+    "sectionBreakNextPage": null
   },
   "formattingBar": {
     "groups": {

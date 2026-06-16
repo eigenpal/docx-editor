@@ -85,6 +85,7 @@ export interface EditorBridge {
     }): PageContent[];
     getSelection(): SelectionInfo | null;
     getTotalPages(): number;
+    insertBreak(options: InsertBreakOptions): boolean;
     onContentChange(listener: (event: ContentChangeEvent) => void): () => void;
     onSelectionChange(listener: (event: SelectionChangeEvent) => void): () => void;
     proposeChange(options: ProposeChangeOptions): boolean;

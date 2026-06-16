@@ -42,7 +42,10 @@
     "openShortcut": "Ctrl+O",
     "save": "שמירה",
     "saveShortcut": "Ctrl+S",
-    "watermark": "סימן מים"
+    "watermark": "סימן מים",
+    "break": null,
+    "sectionBreakContinuous": null,
+    "sectionBreakNextPage": null
   },
   "formattingBar": {
     "groups": {

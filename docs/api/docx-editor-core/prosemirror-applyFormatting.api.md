@@ -37,6 +37,20 @@ export interface ApplyFormattingOptions {
 }
 
 // @public
+export type BreakKind = 'page' | 'sectionNextPage' | 'sectionContinuous';
+
+// @public
+export function insertBreak(view: EditorView, options: InsertBreakOptions): boolean;
+
+// @public (undocumented)
+export interface InsertBreakOptions {
+    // (undocumented)
+    paraId: string;
+    // (undocumented)
+    type: BreakKind;
+}
+
+// @public
 export function setParagraphStyle(view: EditorView, options: {
     paraId: string;
     styleId: string;

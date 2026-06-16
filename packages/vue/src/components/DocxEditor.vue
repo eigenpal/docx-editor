@@ -868,9 +868,12 @@ const {
   handleClearFormatting,
   handleApplyStyle,
   handleInsertPageBreak,
+  handleInsertSectionBreakNextPage,
+  handleInsertSectionBreakContinuous,
   handleInsertSymbol,
   applyFormatting,
   setParagraphStyle,
+  insertBreak,
 } = useFormattingActions({ editorView, activeView: activeFormattingView, getDocument });
 
 const {
@@ -1024,6 +1027,8 @@ const { handleMenuAction, handleMenuTableInsert } = useMenuActions({
   showKeyboardShortcuts,
   handleClearFormatting,
   handleInsertPageBreak,
+  handleInsertSectionBreakNextPage,
+  handleInsertSectionBreakContinuous,
   handleToggleOutline,
   handleToggleSidebar,
   downloadCurrentDocument,
@@ -1136,6 +1141,7 @@ const { exposed } = useDocxEditorRefApi({
   proposeChange,
   applyFormatting,
   setParagraphStyle,
+  insertBreak,
   scrollVisiblePositionIntoView,
   contentChangeSubscribers,
   selectionChangeSubscribers,

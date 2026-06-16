@@ -526,6 +526,42 @@ describe('createReviewerBridge — setParagraphStyle', () => {
   });
 });
 
+describe('createReviewerBridge — insertBreak', () => {
+  test('sectionNextPage / sectionContinuous set the section start on the target', () => {
+    const reviewer = makeReviewer([makeParagraph('First', 'p_a'), makeParagraph('Second', 'p_b')]);
+    const bridge = createReviewerBridge(reviewer);
+
+    expect(bridge.insertBreak({ paraId: 'p_a', type: 'sectionNextPage' })).toBe(true);
+    expect(reviewerParagraph(reviewer, 0).sectionProperties?.sectionStart).toBe('nextPage');
+
+    expect(bridge.insertBreak({ paraId: 'p_b', type: 'sectionContinuous' })).toBe(true);
+    expect(reviewerParagraph(reviewer, 1).sectionProperties?.sectionStart).toBe('continuous');
+  });
+
+  test('page break inserts a break-run paragraph after the target', () => {
+    const reviewer = makeReviewer([makeParagraph('First', 'p_a'), makeParagraph('Second', 'p_b')]);
+    const bridge = createReviewerBridge(reviewer);
+
+    expect(bridge.insertBreak({ paraId: 'p_a', type: 'page' })).toBe(true);
+
+    const content = reviewer.toDocument().package.document.content;
+    expect(content).toHaveLength(3);
+    const inserted = content[1] as Paragraph;
+    const run = inserted.content[0] as Run;
+    expect(run.content[0]).toEqual({ type: 'break', breakType: 'page' });
+    // Second paragraph still resolvable after the inserted block (cache rebuilt):
+    // content is now [p_a, pageBreak, p_b], so p_b sits at index 2.
+    expect(bridge.insertBreak({ paraId: 'p_b', type: 'sectionNextPage' })).toBe(true);
+    expect((content[2] as Paragraph).sectionProperties?.sectionStart).toBe('nextPage');
+  });
+
+  test('returns false for an unknown paraId', () => {
+    const reviewer = makeReviewer([makeParagraph('First', 'p_a')]);
+    const bridge = createReviewerBridge(reviewer);
+    expect(bridge.insertBreak({ paraId: 'missing', type: 'page' })).toBe(false);
+  });
+});
+
 describe('createReviewerBridge — comments lifecycle', () => {
   test('replyTo adds a threaded reply', () => {
     const reviewer = makeReviewer([makeParagraph('First.', 'p_a')]);

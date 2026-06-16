@@ -25,6 +25,7 @@ function makeBridge(overrides: Partial<EditorBridge> = {}): EditorBridge {
     proposeChange: () => true,
     applyFormatting: () => true,
     setParagraphStyle: () => true,
+    insertBreak: () => true,
     getPage: () => null,
     getPages: () => [],
     getTotalPages: () => 0,
@@ -41,8 +42,8 @@ function makeBridge(overrides: Partial<EditorBridge> = {}): EditorBridge {
 // ============================================================================
 
 describe('agentTools', () => {
-  test('has 14 built-in tools', () => {
-    expect(agentTools).toHaveLength(14);
+  test('has 15 built-in tools', () => {
+    expect(agentTools).toHaveLength(15);
   });
 
   test('all tools have name, description, inputSchema, handler', () => {
@@ -66,6 +67,7 @@ describe('agentTools', () => {
         'add_comment',
         'apply_formatting',
         'find_text',
+        'insert_break',
         'read_changes',
         'read_comments',
         'read_document',
@@ -89,7 +91,7 @@ describe('agentTools', () => {
 describe('getToolSchemas', () => {
   test('returns OpenAI function calling format', () => {
     const schemas = getToolSchemas();
-    expect(schemas.length).toBe(14);
+    expect(schemas.length).toBe(15);
 
     for (const schema of schemas) {
       expect(schema.type).toBe('function');
@@ -575,6 +577,49 @@ describe('set_paragraph_style', () => {
       { paraId: 'p_x', styleId: 'NoSuchStyle' },
       bridge
     );
+    expect(result.success).toBe(false);
+  });
+});
+
+// ============================================================================
+// insert_break
+// ============================================================================
+
+describe('insert_break', () => {
+  test('forwards paraId + type to the bridge', () => {
+    let captured: { paraId?: string; type?: string } | undefined;
+    const bridge = makeBridge({
+      insertBreak: (opts) => {
+        captured = opts;
+        return true;
+      },
+    });
+    const result = executeToolCall(
+      'insert_break',
+      { paraId: 'p_a3f', type: 'sectionNextPage' },
+      bridge
+    );
+    expect(result.success).toBe(true);
+    expect(captured?.paraId).toBe('p_a3f');
+    expect(captured?.type).toBe('sectionNextPage');
+  });
+
+  test('rejects an out-of-enum break type without calling the bridge', () => {
+    let called = false;
+    const bridge = makeBridge({
+      insertBreak: () => {
+        called = true;
+        return true;
+      },
+    });
+    const result = executeToolCall('insert_break', { paraId: 'p_a3f', type: 'column' }, bridge);
+    expect(result.success).toBe(false);
+    expect(called).toBe(false);
+  });
+
+  test('returns error on bridge failure (unknown paraId)', () => {
+    const bridge = makeBridge({ insertBreak: () => false });
+    const result = executeToolCall('insert_break', { paraId: 'p_x', type: 'page' }, bridge);
     expect(result.success).toBe(false);
   });
 });

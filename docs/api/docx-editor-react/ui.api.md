@@ -1223,6 +1223,8 @@ export interface ToolbarProps {
     onImageWrapType?: (wrapType: string) => void;
     onInsertImage?: () => void;
     onInsertPageBreak?: () => void;
+    onInsertSectionBreakContinuous?: () => void;
+    onInsertSectionBreakNextPage?: () => void;
     onInsertShape?: (data: {
         shapeType: string;
         width: number;

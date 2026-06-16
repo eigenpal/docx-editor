@@ -247,6 +247,19 @@ export interface SetParagraphStyleOptions {
   styleId: string;
 }
 
+/** Kind of break `insertBreak` inserts after a paragraph. */
+export type BreakType = 'page' | 'sectionNextPage' | 'sectionContinuous';
+
+/**
+ * Insert a page or section break after the paragraph identified by `paraId`.
+ * `page` adds a page break; `sectionNextPage` starts a new section on a new
+ * page; `sectionContinuous` starts a new section on the same page.
+ */
+export interface InsertBreakOptions {
+  paraId: string;
+  type: BreakType;
+}
+
 /** A single paragraph anchored on a page (returned by `getPage` / `getPages`). */
 export interface PageParagraph {
   paraId: string;

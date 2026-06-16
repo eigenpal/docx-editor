@@ -441,6 +441,16 @@ export interface DocxEditorRef {
    */
   setParagraphStyle: (options: { paraId: string; styleId: string }) => boolean;
   /**
+   * Insert a page or section break after the paragraph identified by `paraId`.
+   * `'page'` adds a page break; `'sectionNextPage'` / `'sectionContinuous'`
+   * start a new section on a new page / the same page. Direct edit, not a
+   * tracked change. Returns false if paraId is unknown.
+   */
+  insertBreak: (options: {
+    paraId: string;
+    type: 'page' | 'sectionNextPage' | 'sectionContinuous';
+  }) => boolean;
+  /**
    * Read the contents of a single page. 1-indexed; returns null if the page
    * does not exist. Each paragraph is returned with its stable paraId so the
    * agent can comment on or modify it without an extra round-trip.
@@ -1066,16 +1076,22 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
     getCachedStyleResolver,
   });
 
-  const { handleFormat, handleInsertTable, handleInsertPageBreak, handleInsertTOC } =
-    useFormattingActions({
-      getActiveEditorView,
-      focusActiveEditor,
-      pagedEditorRef,
-      lastSelectionRef,
-      hyperlinkDialog,
-      historyStateRef,
-      getCachedStyleResolver,
-    });
+  const {
+    handleFormat,
+    handleInsertTable,
+    handleInsertPageBreak,
+    handleInsertSectionBreakNextPage,
+    handleInsertSectionBreakContinuous,
+    handleInsertTOC,
+  } = useFormattingActions({
+    getActiveEditorView,
+    focusActiveEditor,
+    pagedEditorRef,
+    lastSelectionRef,
+    hyperlinkDialog,
+    historyStateRef,
+    getCachedStyleResolver,
+  });
 
   const handleZoomChange = useCallback((zoom: number) => {
     setState((prev) => ({ ...prev, zoom }));
@@ -1677,6 +1693,8 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
             onInsertTable={handleInsertTable}
             onInsertImage={handleInsertImageClick}
             onInsertPageBreak={handleInsertPageBreak}
+            onInsertSectionBreakNextPage={handleInsertSectionBreakNextPage}
+            onInsertSectionBreakContinuous={handleInsertSectionBreakContinuous}
             onInsertTOC={handleInsertTOC}
             onImageWrapType={handleImageWrapType}
             onImageTransform={handleImageTransform}

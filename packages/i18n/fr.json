@@ -42,7 +42,10 @@
     "symbol": "Symbole",
     "help": "Aide",
     "reportIssue": "Signaler un bug",
-    "watermark": "Filigrane"
+    "watermark": "Filigrane",
+    "break": null,
+    "sectionBreakContinuous": null,
+    "sectionBreakNextPage": null
   },
   "formattingBar": {
     "groups": {

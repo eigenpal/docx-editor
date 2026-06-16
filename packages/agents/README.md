@@ -86,7 +86,7 @@ app.post('/api/mcp', requireAuth, async (req, res) => {
 });
 ```
 
-Ten built-in agent tools (`read_document`, `find_text`, `add_comment`, `suggest_change`, `read_comments`, `read_changes`, `reply_comment`, `resolve_comment`, `read_selection`, `scroll`) are exposed automatically via MCP `tools/list` and `tools/call`. MCP spec version: `2025-06-18`.
+The built-in agent tools (`read_document`, `read_selection`, `read_page`, `read_pages`, `find_text`, `read_comments`, `read_changes`, `add_comment`, `suggest_change`, `apply_formatting`, `set_paragraph_style`, `insert_break`, `reply_comment`, `resolve_comment`, `scroll`) are exposed automatically via MCP `tools/list` and `tools/call`. MCP spec version: `2025-06-18`.
 
 > A local stdio MCP bin is one-document-per-config (Claude Desktop loads its list at startup), which doesn't fit a multi-doc product. Host the server yourself with your own auth and storage.
 

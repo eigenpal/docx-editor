@@ -361,10 +361,10 @@ export function createReviewerBridge(reviewer: DocxReviewer): EditorBridge {
   // unsubscribe is a no-op.
   const contentListeners = new Set<(e: ContentChangeEvent) => void>();
 
-  // (paraId → paragraphIndex) cache. None of the reviewer's current mutators
-  // insert/remove top-level body blocks — they mutate paragraph content and
-  // append to body.comments — so the index map is invariant under the
-  // mutators we expose. Build once, lazy.
+  // (paraId → paragraphIndex) cache. Most mutators only mutate paragraph
+  // content / append to body.comments, so the index map stays invariant and we
+  // build it once, lazily. `insertBreak({type:'page'})` is the exception — it
+  // inserts a top-level block, so it resets `cache` to force a rebuild.
   let cache: Map<string, number> | null = null;
   function map(): Map<string, number> {
     if (cache === null) cache = buildParaIdMap(reviewer);
@@ -586,6 +586,46 @@ export function createReviewerBridge(reviewer: DocxReviewer): EditorBridge {
       try {
         const para = getParagraphAtIndex(body, idx);
         para.formatting = { ...(para.formatting ?? {}), styleId: options.styleId };
+        emitContentChange();
+        return true;
+      } catch {
+        return false;
+      }
+    },
+
+    insertBreak(options): boolean {
+      const idx = map().get(options.paraId);
+      if (idx === undefined) return false;
+
+      const body = reviewer.toDocument().package?.document;
+      if (!body) return false;
+
+      try {
+        const para = getParagraphAtIndex(body, idx);
+        if (!para) return false;
+
+        if (options.type === 'sectionNextPage' || options.type === 'sectionContinuous') {
+          // A section break is the sectPr carried by the section's last
+          // paragraph — set it directly on the target (no block-count change).
+          const sectionStart: 'nextPage' | 'continuous' =
+            options.type === 'sectionNextPage' ? 'nextPage' : 'continuous';
+          para.sectionProperties = { ...(para.sectionProperties ?? {}), sectionStart };
+          emitContentChange();
+          return true;
+        }
+
+        // Page break: insert a break-run paragraph right after the target
+        // top-level paragraph (the model shape `fromProseDoc` emits). paraIds
+        // only map top-level paragraphs, so the target is findable in
+        // `body.content`; inserting shifts indices, so rebuild the cache.
+        const pos = body.content.indexOf(para);
+        if (pos === -1) return false;
+        const pageBreakParagraph: Paragraph = {
+          type: 'paragraph',
+          content: [{ type: 'run', content: [{ type: 'break', breakType: 'page' }] }],
+        };
+        body.content.splice(pos + 1, 0, pageBreakParagraph);
+        cache = null;
         emitContentChange();
         return true;
       } catch {

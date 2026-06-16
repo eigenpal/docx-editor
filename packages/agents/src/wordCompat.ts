@@ -29,6 +29,7 @@
  * | `Document.onSelectionChanged.add()` | `onSelectionChange(listener)`         |
  * | `Range.font.bold` / `italic` / `color` / `size` / `name` | `applyFormatting({paraId, search?, marks})` |
  * | `ParagraphFormat.style` / `applyStyle(...)` | `setParagraphStyle({paraId, styleId})` |
+ * | `Range.insertBreak(BreakType.*)`    | `insertBreak({paraId, type})`         |
  *
  * ## Beyond Word's surface (paged-document affordances)
  *

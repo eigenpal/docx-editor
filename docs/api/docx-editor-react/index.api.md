@@ -175,6 +175,10 @@ export interface DocxEditorRef {
     getTotalPages: () => number;
     getZoom: () => number;
     highlightRange: (from: number, to: number) => void;
+    insertBreak: (options: {
+        paraId: string;
+        type: 'page' | 'sectionNextPage' | 'sectionContinuous';
+    }) => boolean;
     loadDocument: (doc: Document_2) => void;
     loadDocumentBuffer: (buffer: DocxInput) => Promise<void>;
     onContentChange: (listener: (document: Document_2) => void) => () => void;
