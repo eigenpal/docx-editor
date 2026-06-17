@@ -12,6 +12,7 @@ import type { PagedEditorRef } from '../PagedEditor';
 
 /**
  * Top-level keyboard shortcuts:
+ *  - Cmd/Ctrl+O → open the DOCX picker when File > Open is enabled
  *  - Cmd/Ctrl+F → open Find dialog (seeded with current selection)
  *  - Cmd/Ctrl+H → open Find/Replace dialog
  *  - Cmd/Ctrl+K → open Hyperlink dialog (edit if cursor sits on a link)
@@ -24,12 +25,16 @@ import type { PagedEditorRef } from '../PagedEditor';
 export function useKeyboardShortcuts({
   pagedEditorRef,
   disableFindReplaceShortcuts,
+  showFileOpen,
+  onOpenDocument,
   findReplace,
   hyperlinkDialog,
   tableSelection,
 }: {
   pagedEditorRef: React.RefObject<PagedEditorRef | null>;
   disableFindReplaceShortcuts: boolean;
+  showFileOpen: boolean;
+  onOpenDocument?: () => void;
   findReplace: ReturnType<typeof useFindReplace>;
   hyperlinkDialog: ReturnType<typeof useHyperlinkDialog>;
   tableSelection: ReturnType<typeof useTableSelection>;
@@ -84,6 +89,10 @@ export function useKeyboardShortcuts({
           const selection = window.getSelection();
           const selectedText = selection && !selection.isCollapsed ? selection.toString() : '';
           findReplace.openFind(selectedText);
+        } else if (e.key.toLowerCase() === 'o') {
+          if (!showFileOpen || !onOpenDocument) return;
+          e.preventDefault();
+          onOpenDocument();
         } else if (e.key.toLowerCase() === 'h') {
           if (disableFindReplaceShortcuts) return;
           e.preventDefault();
@@ -114,5 +123,13 @@ export function useKeyboardShortcuts({
     return () => {
       document.removeEventListener('keydown', handleKeyDown);
     };
-  }, [pagedEditorRef, disableFindReplaceShortcuts, findReplace, hyperlinkDialog, tableSelection]);
+  }, [
+    pagedEditorRef,
+    disableFindReplaceShortcuts,
+    showFileOpen,
+    onOpenDocument,
+    findReplace,
+    hyperlinkDialog,
+    tableSelection,
+  ]);
 }

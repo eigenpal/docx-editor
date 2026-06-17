@@ -62,6 +62,23 @@ const doc = createEmptyDocument();
 
 `createDocumentWithText(text, options?)` is the same idea with a starting paragraph already typed. Both helpers are re-exported from `@eigenpal/docx-editor-core` so you don't need a separate dependency.
 
+## Customize File > Open
+
+By default, the built-in `File > Open` item and Cmd/Ctrl+O prompt for a `.docx` file and load it into the local editor view. Pass `onOpen` to keep the native file picker but route the selected `File` through your own import pipeline instead:
+
+```tsx
+<DocxEditor
+  document={doc}
+  externalContent
+  externalPlugins={plugins}
+  onOpen={async (file) => {
+    await importIntoBackend(file);
+  }}
+/>
+```
+
+Set `showFileOpen={false}` to hide the built-in Open item and leave Cmd/Ctrl+O for your own menu or toolbar.
+
 ## Packages
 
 | Package                                                                                      | Description                                                                                                                                |

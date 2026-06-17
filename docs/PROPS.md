@@ -35,6 +35,7 @@ accidental.
 | `readOnly`                    | `boolean`                                   | `false`     | Read-only preview (hides toolbar, rulers, panel)                                                       |
 | `externalContent`             | `boolean`                                   | `false`     | Treat `document` as schema seed only — content is provided externally (e.g. Yjs)                       |
 | `showToolbar`                 | `boolean`                                   | `true`      | Show formatting toolbar                                                                                |
+| `showFileOpen`                | `boolean`                                   | `true`      | Show File → Open and enable Cmd/Ctrl+O; set false when the host provides its own open action           |
 | `showRuler`                   | `boolean`                                   | `false`     | Show horizontal & vertical rulers                                                                      |
 | `rulerUnit`                   | `'inch' \| 'cm'`                            | `'inch'`    | Unit for ruler display                                                                                 |
 | `showZoomControl`             | `boolean`                                   | `true`      | Show zoom controls in toolbar                                                                          |
@@ -51,6 +52,7 @@ accidental.
 | `style`                       | `CSSProperties`                             | —           | Additional inline styles                                                                               |
 | `onChange`                    | `(doc: Document) => void`                   | —           | Called on document change                                                                              |
 | `onSave`                      | `(buffer: ArrayBuffer) => void`             | —           | Called on save                                                                                         |
+| `onOpen`                      | `(file: File) => void \| Promise<void>`     | —           | Called with the file picked from File → Open / Cmd+O instead of running the built-in local load        |
 | `onError`                     | `(error: Error) => void`                    | —           | Called on error                                                                                        |
 | `onSelectionChange`           | `(state: SelectionState \| null) => void`   | —           | Called on selection change                                                                             |
 | `onFontsLoaded`               | `() => void`                                | —           | Called when fonts finish loading                                                                       |

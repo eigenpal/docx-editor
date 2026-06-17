@@ -17,6 +17,10 @@ import { paintAllPagesNow } from '@eigenpal/docx-editor-core/layout-painter';
 import type { EditorView } from 'prosemirror-view';
 import type { PagedEditorRef } from '../PagedEditor';
 
+function toFileIOError(error: unknown, fallbackMessage: string): Error {
+  return error instanceof Error ? error : new Error(fallbackMessage);
+}
+
 /**
  * File-IO surface of the editor: save (to buffer), download, print, open
  * a DOCX from disk, insert an image from disk. The two file <input> refs
@@ -33,6 +37,7 @@ export function useFileIO({
   comments,
   documentName,
   onSave,
+  onOpen,
   onError,
   onPrint,
   onDocumentNameChange,
@@ -46,6 +51,7 @@ export function useFileIO({
   comments: Comment[];
   documentName: string | undefined;
   onSave: ((buffer: ArrayBuffer) => void) | undefined;
+  onOpen: ((file: File) => void | Promise<void>) | undefined;
   onError: ((error: Error) => void) | undefined;
   onPrint: (() => void) | undefined;
   onDocumentNameChange: ((name: string) => void) | undefined;
@@ -112,7 +118,7 @@ export function useFileIO({
         onSave?.(buffer);
         return buffer;
       } catch (error) {
-        onError?.(error instanceof Error ? error : new Error('Failed to save document'));
+        onError?.(toFileIOError(error, 'Failed to save document'));
         return null;
       }
     },
@@ -214,16 +220,30 @@ body { background: white; }
 
   const handleDocxFileChange = useCallback(
     async (event: React.ChangeEvent<HTMLInputElement>) => {
+      if (onOpen) {
+        const input = event.currentTarget;
+        const file = input.files?.[0];
+        input.value = '';
+        if (!file) return;
+
+        try {
+          await onOpen(file);
+        } catch (error) {
+          onError?.(toFileIOError(error, 'Failed to open document'));
+        }
+        return;
+      }
+
       try {
         const result = await readDocxFileFromInput(event.nativeEvent);
         if (!result) return;
         await loadBuffer(result.buffer);
         onDocumentNameChange?.(result.name);
       } catch (error) {
-        onError?.(error instanceof Error ? error : new Error('Failed to open document'));
+        onError?.(toFileIOError(error, 'Failed to open document'));
       }
     },
-    [loadBuffer, onDocumentNameChange, onError]
+    [loadBuffer, onDocumentNameChange, onError, onOpen]
   );
 
   const handleInsertImageClick = useCallback(() => {

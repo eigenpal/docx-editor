@@ -95,6 +95,7 @@ Toggle the built-in UI on or off.
 | `marginGuideColor` | `string` | `'#c0c0c0'` | CSS color for the guides above. |
 | `showOutline` | `boolean` | `false` | Document outline / table of contents drawer. |
 | `showOutlineButton` | `boolean` | `true` | Outline toggle button in the toolbar. |
+| `showFileOpen` | `boolean` | `true` | Show `File > Open` and enable Cmd/Ctrl+O. Set `false` when your app provides its own open action. |
 | `initialZoom` | `number` | `1.0` | Starting zoom (`1.0` = 100%). |
 
 The font picker and custom font registration have their own section below.
@@ -190,6 +191,7 @@ Lifecycle and integration hooks.
 |---|---|---|
 | `onChange` | `(doc: Document) => void` | Fires on every document mutation. Throttle for autosave. |
 | `onSave` | `(buf: ArrayBuffer) => void` | Fires when the user invokes Save (Cmd+S or toolbar). |
+| `onOpen` | `(file: File) => void \| Promise<void>` | Replaces the built-in post-pick load for `File > Open` and Cmd/Ctrl+O. The native picker still opens; your callback receives the selected file. |
 | `onSelectionChange` | `(state: SelectionState \| null) => void` | Selection metadata for custom UI (active marks, paragraph style, etc.). |
 | `onError` | `(error: Error) => void` | Errors during parse or render. Send to your error tracker. |
 | `onFontsLoaded` | `() => void` | Fired once the font set is ready. Use to defer measurement-sensitive UI. |
@@ -202,9 +204,14 @@ Lifecycle and integration hooks.
   onSave={async (buf) => {
     await fetch('/api/documents/1', { method: 'PUT', body: buf });
   }}
+  onOpen={async (file) => {
+    await importDocument(file);
+  }}
   onError={(err) => reportError(err)}
 />;
 ```
+
+`onOpen` is useful when `externalContent` or collaborative bindings own the document state. Omit it to keep the built-in local load behavior. Pair it with `showFileOpen={false}` when you want to remove the built-in menu item and wire your own button.
 
 ## Styling
 

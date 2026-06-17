@@ -118,6 +118,12 @@ export interface DocxEditorProps {
   document?: Document | null;
   /** Callback when document is saved */
   onSave?: (buffer: ArrayBuffer) => void;
+  /**
+   * Callback when a DOCX file is selected through `File > Open` or Cmd/Ctrl+O.
+   * Pass it to route the picked file through your own import pipeline. Omit it
+   * to keep the built-in local document load behavior.
+   */
+  onOpen?: (file: File) => void | Promise<void>;
   /** Author name used for comments and track changes */
   author?: string;
   /** Callback when document changes */
@@ -148,6 +154,11 @@ export interface DocxEditorProps {
   theme?: Theme | null;
   /** Whether to show toolbar (default: true) */
   showToolbar?: boolean;
+  /**
+   * Whether to show `File > Open` and enable Cmd/Ctrl+O (default: true).
+   * Set false when you provide your own open action elsewhere.
+   */
+  showFileOpen?: boolean;
   /** Whether to show zoom control (default: true) */
   showZoomControl?: boolean;
   /** Whether to show page margin guides/boundaries (default: false) */
@@ -576,6 +587,7 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
     documentBuffer,
     document: initialDocument,
     onSave,
+    onOpen,
     author = 'User',
     onChange,
     onSelectionChange,
@@ -584,6 +596,7 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
     colorMode = 'light',
     theme,
     showToolbar = true,
+    showFileOpen = true,
     showZoomControl = true,
     showMarginGuides: _showMarginGuides = false,
     marginGuideColor: _marginGuideColor,
@@ -908,6 +921,7 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
     comments,
     documentName,
     onSave,
+    onOpen,
     onError,
     onPrint,
     onDocumentNameChange,
@@ -1034,6 +1048,8 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
   useKeyboardShortcuts({
     pagedEditorRef,
     disableFindReplaceShortcuts,
+    showFileOpen,
+    onOpenDocument: handleOpenDocument,
     findReplace,
     hyperlinkDialog,
     tableSelection,
@@ -1779,6 +1795,7 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
             onUndo={undoActiveEditor}
             onRedo={redoActiveEditor}
             onPrint={handleDirectPrint}
+            showFileOpen={showFileOpen}
             onOpen={handleOpenDocument}
             onSave={handleDownloadDocument}
             onZoomChange={handleZoomChange}

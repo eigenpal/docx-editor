@@ -75,6 +75,7 @@ export function DocxEditorToolbar({
   onUndo,
   onRedo,
   onPrint,
+  showFileOpen,
   onOpen,
   onSave,
   onZoomChange,
@@ -121,6 +122,7 @@ export function DocxEditorToolbar({
   onUndo: () => void;
   onRedo: () => void;
   onPrint: () => void;
+  showFileOpen: boolean;
   onOpen: () => void;
   onSave: () => void | Promise<void>;
   onZoomChange: (zoom: number) => void;
@@ -160,7 +162,7 @@ export function DocxEditorToolbar({
         theme={document?.package.theme || theme}
         fontFamilies={fontFamilies}
         onPrint={onPrint}
-        onOpen={onOpen}
+        onOpen={showFileOpen ? onOpen : undefined}
         onSave={onSave}
         showZoomControl={showZoomControl}
         zoom={zoom}
