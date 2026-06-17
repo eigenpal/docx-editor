@@ -882,6 +882,9 @@ const iconMap: Record<string, React.ComponentType<IconProps>> = {
   table_rows: IconTableRows,
   view_column: IconViewColumn,
   border_all: IconBorderAll,
+  // "Select entire table" reuses the grid glyph (no dedicated select_all icon
+  // to keep this file under the max-lines budget).
+  select_all: IconBorderAll,
   border_outer: IconBorderOuter,
   border_inner: IconBorderInner,
   border_clear: IconBorderClear,

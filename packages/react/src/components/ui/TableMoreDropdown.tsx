@@ -181,6 +181,11 @@ export function TableMoreDropdown({
 
           <div style={separatorStyles} role="separator" />
 
+          {/* Select */}
+          {menuItem('selectTable', 'select_all', t('table.selectTable'), 'selectTable')}
+
+          <div style={separatorStyles} role="separator" />
+
           {/* Delete actions */}
           {menuItem('deleteRow', 'delete', t('table.deleteRow'), 'deleteRow', {
             danger: true,

@@ -689,7 +689,8 @@
       "listTable4Accent3": "Liste 4 vurgu 3",
       "gridTable4Accent5": "Izgara 4 vurgu 5",
       "gridTable4Accent6": "Izgara 4 vurgu 6"
-    }
+    },
+    "selectTable": null
   },
   "tableAdvanced": {
     "verticalAlignment": "Dikey hizalama",

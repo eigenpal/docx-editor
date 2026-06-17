@@ -34,6 +34,8 @@ export type TextContextAction =
   | 'deleteColumn'
   | 'mergeCells'
   | 'splitCell'
+  | 'selectTable'
+  | 'deleteTable'
   | 'addComment';
 
 /**
@@ -290,6 +292,35 @@ const SplitCellIcon = () => (
   </svg>
 );
 
+const SelectTableIcon = () => (
+  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <rect
+      x="2"
+      y="2"
+      width="12"
+      height="12"
+      rx="1"
+      stroke="currentColor"
+      strokeWidth="1.5"
+      strokeDasharray="2 1.5"
+    />
+    <path d="M8 2v12M2 8h12" stroke="currentColor" strokeWidth="1.2" />
+  </svg>
+);
+
+const DeleteTableIcon = () => (
+  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <rect x="2" y="2" width="12" height="12" rx="1" stroke="currentColor" strokeWidth="1.3" />
+    <path d="M5 2v12M2 8h11" stroke="currentColor" strokeWidth="1.1" opacity="0.6" />
+    <path
+      d="M5.5 5.5l5 5M10.5 5.5l-5 5"
+      stroke="currentColor"
+      strokeWidth="1.5"
+      strokeLinecap="round"
+    />
+  </svg>
+);
+
 const CommentIcon = () => (
   <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
     <path
@@ -333,6 +364,10 @@ function getActionIcon(action: TextContextAction): React.ReactNode {
       return <MergeCellsIcon />;
     case 'splitCell':
       return <SplitCellIcon />;
+    case 'selectTable':
+      return <SelectTableIcon />;
+    case 'deleteTable':
+      return <DeleteTableIcon />;
     case 'addComment':
       return <CommentIcon />;
     default:
@@ -791,6 +826,8 @@ export function getTextActionLabel(action: TextContextAction): string {
     deleteColumn: 'Delete column',
     mergeCells: defaultLocale.table.mergeCells,
     splitCell: defaultLocale.table.splitCell,
+    selectTable: defaultLocale.table.selectTable,
+    deleteTable: defaultLocale.table.deleteTable,
     addComment: 'Comment',
   };
   return labels[action];
@@ -816,6 +853,8 @@ export function getTextActionShortcut(action: TextContextAction): string {
     deleteColumn: '',
     mergeCells: '',
     splitCell: '',
+    selectTable: '',
+    deleteTable: '',
     addComment: '',
   };
   return shortcuts[action];

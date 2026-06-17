@@ -665,6 +665,7 @@
     "deleteRow": "Delete row",
     "deleteColumn": "Delete column",
     "deleteTable": "Delete table",
+    "selectTable": "Select entire table",
     "mergeCells": "Merge cells",
     "splitCell": "Split cell",
     "editingTools": "Table editing tools",

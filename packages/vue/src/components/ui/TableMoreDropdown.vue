@@ -64,6 +64,13 @@
 
         <div class="docx-tmore__separator" />
 
+        <!-- Select -->
+        <button type="button" class="docx-tmore__item" @click.prevent="select('selectTable')">
+          <MaterialSymbol name="select_all" :size="18" /><span>{{ t('table.selectTable') }}</span>
+        </button>
+
+        <div class="docx-tmore__separator" />
+
         <!-- Delete -->
         <button
           type="button"
@@ -290,6 +297,7 @@ export type TableAction =
   | 'deleteRow'
   | 'deleteColumn'
   | 'deleteTable'
+  | 'selectTable'
   | 'toggleHeaderRow'
   | 'distributeColumns'
   | 'autoFit'

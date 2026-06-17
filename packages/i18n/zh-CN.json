@@ -686,7 +686,8 @@
       "listTable4Accent3": "列表表格 4 强调色 3",
       "gridTable4Accent5": "网格表 4 强调色 5",
       "gridTable4Accent6": "网格表 4 强调色 6"
-    }
+    },
+    "selectTable": null
   },
   "tableAdvanced": {
     "verticalAlignment": "垂直对齐",

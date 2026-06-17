@@ -686,7 +686,8 @@
       "listTable4Accent3": "טבלת רשימה 4 הדגשה 3",
       "gridTable4Accent5": "רשת טבלה 4 הדגשה 5",
       "gridTable4Accent6": "רשת טבלה 4 הדגשה 6"
-    }
+    },
+    "selectTable": null
   },
   "tableAdvanced": {
     "verticalAlignment": "יישור אנכי",

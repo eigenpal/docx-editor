@@ -304,7 +304,9 @@ export function useContextMenus(opts: UseContextMenusOptions): UseContextMenusRe
       case 'addColumnRight':
       case 'deleteColumn':
       case 'mergeCells':
-      case 'splitCell': {
+      case 'splitCell':
+      case 'selectTable':
+      case 'deleteTable': {
         const cmd = cmds[action];
         if (cmd) {
           const command = cmd() as (

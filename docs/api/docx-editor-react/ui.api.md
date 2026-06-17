@@ -1135,7 +1135,7 @@ export interface TableToolbarProps {
 }
 
 // @public
-export type TextContextAction = 'cut' | 'copy' | 'paste' | 'pasteAsPlainText' | 'selectAll' | 'delete' | 'separator' | 'addRowAbove' | 'addRowBelow' | 'deleteRow' | 'addColumnLeft' | 'addColumnRight' | 'deleteColumn' | 'mergeCells' | 'splitCell' | 'addComment';
+export type TextContextAction = 'cut' | 'copy' | 'paste' | 'pasteAsPlainText' | 'selectAll' | 'delete' | 'separator' | 'addRowAbove' | 'addRowBelow' | 'deleteRow' | 'addColumnLeft' | 'addColumnRight' | 'deleteColumn' | 'mergeCells' | 'splitCell' | 'selectTable' | 'deleteTable' | 'addComment';
 
 // @public (undocumented)
 export const TextContextMenu: React__default.FC<TextContextMenuProps>;

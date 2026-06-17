@@ -224,6 +224,10 @@ export function DeleteTableIcon(): React.ReactElement {
   return <MaterialSymbol name="delete" size={ICON_SIZE} className="text-destructive" />;
 }
 
+export function SelectTableIcon(): React.ReactElement {
+  return <MaterialSymbol name="select_all" size={ICON_SIZE} />;
+}
+
 // ============================================================================
 // STYLES
 // ============================================================================
@@ -505,6 +509,15 @@ export function TableToolbar({
           icon={<SplitCellIcon />}
           disabled={disabled || !canSplit}
           onClick={() => handleAction('splitCell')}
+          showLabel={showLabels}
+          compact={compact}
+        />
+        <TableToolbarButton
+          action="selectTable"
+          label={t('table.selectTable')}
+          icon={<SelectTableIcon />}
+          disabled={disabled}
+          onClick={() => handleAction('selectTable')}
           showLabel={showLabels}
           compact={compact}
         />
