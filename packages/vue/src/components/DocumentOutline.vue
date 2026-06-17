@@ -9,6 +9,7 @@
   <nav
     v-if="isOpen"
     class="doc-outline"
+    :style="{ left: leftOffset + 'px' }"
     role="navigation"
     aria-label="Document outline"
     @mousedown.stop
@@ -25,14 +26,12 @@
       <span class="doc-outline__title">Document Outline</span>
     </div>
     <div class="doc-outline__body">
-      <div v-if="headings.length === 0" class="doc-outline__empty">
-        No headings found
-      </div>
+      <div v-if="headings.length === 0" class="doc-outline__empty">No headings found</div>
       <button
         v-for="(h, i) in headings"
         :key="i"
         class="doc-outline__item"
-        :style="{ paddingLeft: 12 + (h.level - 1) * 16 + 'px' }"
+        :style="{ paddingLeft: 8 + (h.level - minLevel) * 16 + 'px' }"
         @mousedown.prevent="$emit('navigate', h.pmPos)"
       >
         {{ h.text || '(untitled)' }}
@@ -42,13 +41,25 @@
 </template>
 
 <script setup lang="ts">
+import { computed } from 'vue';
 import type { HeadingInfo } from '@eigenpal/docx-editor-core/utils/headingCollector';
 import MaterialSymbol from './ui/MaterialSymbol.vue';
 
-defineProps<{
-  isOpen: boolean;
-  headings: HeadingInfo[];
-}>();
+const props = withDefaults(
+  defineProps<{
+    isOpen: boolean;
+    headings: HeadingInfo[];
+    /** Left anchor (px); host bumps it past the vertical ruler when shown. */
+    leftOffset?: number;
+  }>(),
+  { leftOffset: 12 }
+);
+
+// Indent relative to the shallowest heading present (mirrors React) so a doc
+// whose top sections are Heading 2 doesn't carry a phantom first-level indent.
+const minLevel = computed(() =>
+  props.headings.length ? Math.min(...props.headings.map((h) => h.level)) : 0
+);
 
 defineEmits<{
   (e: 'close'): void;
@@ -58,13 +69,14 @@ defineEmits<{
 
 <style scoped>
 /* Matches React DocumentOutline.tsx: position: absolute against the
-   editor host, anchored 30px from the left, 240px wide, full height.
-   The wrapping `__editor-area` has position: relative so this lands
-   on top of the page area without consuming flex space. The slide-in
-   uses transform so it doesn't trigger layout. */
+   editor host, anchored 12px from the left (= the collapsed toggle's
+   offset so the back arrow lands where the toggle was), 240px wide,
+   full height. The wrapping `__editor-area` has position: relative so
+   this lands on top of the page area without consuming flex space. The
+   slide-in uses transform so it doesn't trigger layout. */
 .doc-outline {
   position: absolute;
-  left: 30px;
+  left: 12px;
   top: 24px;
   bottom: 0;
   width: 240px;
@@ -75,18 +87,22 @@ defineEmits<{
   animation: docOutlineIn 0.15s ease-out;
 }
 @keyframes docOutlineIn {
+  /* Large enough to fully hide the 240px panel at any left anchor (12 or,
+     when the vertical ruler is shown, 32 → right edge 272). */
   from {
-    transform: translateX(-280px);
+    transform: translateX(-300px);
   }
   to {
     transform: translateX(0);
   }
 }
+/* No left padding so the back arrow sits at the nav anchor (= the
+   collapsed toggle's position). */
 .doc-outline__header {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 16px 16px 12px;
+  padding: 16px 16px 12px 0;
 }
 .doc-outline__back {
   background: none;
@@ -110,7 +126,7 @@ defineEmits<{
 .doc-outline__body {
   flex: 1;
   overflow-y: auto;
-  padding-left: 20px;
+  padding-left: 4px;
 }
 .doc-outline__empty {
   padding: 8px 16px;

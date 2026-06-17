@@ -13,7 +13,6 @@
     ]"
     :style="style"
   >
-
     <div class="docx-editor-vue__toolbar-shell">
       <DocxEditorMenuBar
         :show-menu-bar="showMenuBar"
@@ -105,9 +104,7 @@
 
     <div v-if="!isReady && !parseError" class="docx-editor-vue__loading">Loading...</div>
 
-
     <div ref="hiddenPmRef" class="docx-editor-vue__hidden-pm paged-editor__hidden-pm" />
-
 
     <div class="docx-editor-vue__editor-scroll" @mousedown="handleEditorScrollMouseDown">
       <div
@@ -190,7 +187,6 @@
               zIndex: 9998,
             }"
           />
-
 
           <div
             v-if="hfEdit && hfCaretRect"
@@ -324,8 +320,10 @@
         <button
           v-if="!showOutline && showOutlineButton"
           type="button"
-          class="docx-editor-vue__outline-toggle"
+          class="docx-outline-toggle docx-editor-vue__outline-toggle"
+          :style="{ left: (showRuler ? 12 + 20 : 12) + 'px' }"
           :title="'Show document outline'"
+          aria-label="Show document outline"
           @click="handleToggleOutline"
           @mousedown.stop
         >
@@ -342,6 +340,7 @@
         <DocumentOutline
           :is-open="showOutline"
           :headings="outlineHeadings"
+          :left-offset="showRuler ? 12 + 20 : 12"
           @close="showOutline = false"
           @navigate="handleOutlineNavigate"
         />
@@ -496,7 +495,6 @@ const authorRef = computed(() => props.author);
 provideLocale(computed(() => props.i18n));
 const { t } = createTranslator(computed(() => props.i18n));
 
-
 const hiddenPmRef = ref<HTMLElement | null>(null);
 const pagesRef = ref<HTMLElement | null>(null);
 const pagesViewportRef = ref<HTMLElement | null>(null);
@@ -557,7 +555,9 @@ const {
   hiddenContainer: hiddenPmRef,
   pagesContainer: pagesRef,
   readOnly,
-  externalPlugins: props.externalPlugins, syncCoordinator, editorMode,
+  externalPlugins: props.externalPlugins,
+  syncCoordinator,
+  editorMode,
   author: authorRef,
   onChange: (doc) => {
     emit('change', doc);
@@ -654,10 +654,13 @@ function clearHfOverlay() {
   hfSelectionGeometry.value = [];
 }
 
-useFontLifecycle(() => props.fonts, (err) => {
-  emit('error', err);
-  props.onError?.(err);
-});
+useFontLifecycle(
+  () => props.fonts,
+  (err) => {
+    emit('error', err);
+    props.onError?.(err);
+  }
+);
 
 // Memoized so the template doesn't walk the headers/footers Maps every tick.
 const activeHfView = computed<EditorView | null>(() =>
@@ -665,7 +668,9 @@ const activeHfView = computed<EditorView | null>(() =>
 );
 
 // Interactive toolbar formatting targets the edited header/footer, else body (#749).
-const activeFormattingView = computed<EditorView | null>(() => activeHfView.value ?? editorView.value);
+const activeFormattingView = computed<EditorView | null>(
+  () => activeHfView.value ?? editorView.value
+);
 
 // Registered in onMounted because `hfEdit` is destructured later in this script setup (TDZ).
 onMounted(() => {
@@ -925,8 +930,10 @@ const {
   handleCommentResolve,
   handleCommentUnresolve,
   handleCommentDelete,
-  handleAcceptChange, handleRejectChange,
-  handleAcceptChangeById, handleRejectChangeById,
+  handleAcceptChange,
+  handleRejectChange,
+  handleAcceptChangeById,
+  handleRejectChangeById,
   handleTrackedChangeReply,
 } = useCommentManagement({
   editorView,
@@ -952,7 +959,6 @@ const {
   handleToolbarImageWrap,
   handleImageTransform,
 } = useImageActions({ editorView, zoom, stateTick, getCommands });
-
 
 // Table resize handlers — port of React PagedEditor.tsx column/row/right-edge
 // resize. tryStartResize() runs from handlePagesMouseDown; install() wires
