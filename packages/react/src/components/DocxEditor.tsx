@@ -45,6 +45,7 @@ import { useResetEditorState } from './DocxEditor/hooks/useResetEditorState';
 import { DocxEditorShell } from './DocxEditor/DocxEditorShell';
 import type { FontOption } from './ui/FontPicker';
 import { OUTLINE_BUTTON_RESERVED_SPACE, OUTLINE_RESERVED_SPACE } from './DocumentOutline';
+import { RULER_WIDTH } from './ui/VerticalRuler';
 import { SIDEBAR_DOCUMENT_SHIFT } from './sidebar/constants';
 import { useCommentSidebarItems, type CommentCallbacks } from '../hooks/useCommentSidebarItems';
 import { useTrackedChanges } from '../hooks/useTrackedChanges';
@@ -1418,15 +1419,35 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
   const sidebarOpen = allSidebarItems.length > 0;
   // Reserve 2× the left-edge allowance so the centered page clears whatever
   // outline UI is showing, without forcing a shift on wide viewports.
-  const outlineLeftAllowance = showOutline
-    ? OUTLINE_RESERVED_SPACE
-    : showOutlineButton
-      ? OUTLINE_BUTTON_RESERVED_SPACE
-      : 20;
-  const minLayoutWidth =
-    2 * outlineLeftAllowance + DEFAULT_PAGE_WIDTH + (sidebarOpen ? SIDEBAR_DOCUMENT_SHIFT * 2 : 0);
+  const outlineLeftAllowance =
+    (showOutline
+      ? OUTLINE_RESERVED_SPACE
+      : showOutlineButton
+        ? OUTLINE_BUTTON_RESERVED_SPACE
+        : 20) +
+    // The outline toggle/panel inset past the vertical ruler when it's shown,
+    // so the page must clear that extra width too.
+    (showRuler && (showOutline || showOutlineButton) ? RULER_WIDTH : 0);
+  // Reserve against the WIDEST page in the doc, not the portrait default: pages
+  // center via `alignItems:center`, so a landscape section (wider than
+  // DEFAULT_PAGE_WIDTH) gets a smaller side margin and, with the old default,
+  // slid left under the outline toggle/panel. Taking the max across all section
+  // widths also covers mixed-orientation docs.
+  const docBody = history.state?.package?.document;
+  const sectionPageWidths = [
+    docBody?.finalSectionProperties?.pageWidth,
+    ...(docBody?.sections?.map((s) => s.properties?.pageWidth) ?? []),
+  ].filter((w): w is number => typeof w === 'number' && w > 0);
+  const maxPageWidthPx = sectionPageWidths.length
+    ? Math.round(Math.max(...sectionPageWidths) / 15)
+    : DEFAULT_PAGE_WIDTH;
 
-  const sectionPropsPageWidth = history.state?.package?.document?.finalSectionProperties?.pageWidth;
+  const minLayoutWidth =
+    2 * outlineLeftAllowance + maxPageWidthPx + (sidebarOpen ? SIDEBAR_DOCUMENT_SHIFT * 2 : 0);
+
+  // pageWidthPx — the final section's width — positions the sidebar / comment
+  // margin markers against the page most content lives under.
+  const sectionPropsPageWidth = docBody?.finalSectionProperties?.pageWidth;
   const pageWidthPx = sectionPropsPageWidth
     ? Math.round(sectionPropsPageWidth / 15)
     : DEFAULT_PAGE_WIDTH;

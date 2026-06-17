@@ -51,7 +51,9 @@ const TWIPS_PER_INCH = 1440;
 const TWIPS_PER_CM = 567;
 
 // Ruler styling - Google Docs style
-const RULER_WIDTH = 20;
+// Exported so the outline toggle/panel can inset past the vertical ruler
+// (it overlays the editor's left edge) instead of rendering on top of it.
+export const RULER_WIDTH = 20;
 const RULER_TEXT_COLOR = 'var(--doc-text-muted)';
 const RULER_TICK_COLOR = 'var(--doc-text-subtle)';
 const MARKER_COLOR = 'var(--doc-primary)';
