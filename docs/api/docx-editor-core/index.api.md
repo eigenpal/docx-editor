@@ -155,7 +155,7 @@ export function buildSelectionContext(doc: Document_2, range: Range_2, options?:
 // @public
 export function calculateFootnoteReservedHeights(pageFootnoteMap: Map<number, number[]>, footnoteContentMap: Map<number, {
     height: number;
-}>): Map<number, number>;
+}>, columns?: number): Map<number, number>;
 
 // @public
 export function canRenderFont(fontFamily: string, fallbackFont?: string): boolean;
@@ -1084,6 +1084,7 @@ export type Page = {
     };
     footnoteIds?: number[];
     footnoteReservedHeight?: number;
+    footnoteColumns?: number;
     columns?: ColumnLayout;
 };
 
@@ -1438,6 +1439,7 @@ export interface SectionProperties {
     evenAndOddHeaders?: boolean;
     footerDistance?: number;
     footerReferences?: FooterReference[];
+    footnoteColumns?: number;
     footnotePr?: FootnoteProperties;
     gutter?: number;
     headerDistance?: number;
@@ -1553,6 +1555,7 @@ export function stabilizeFootnoteLayout(args: StabilizeFootnoteLayoutArgs): Stab
 export interface StabilizeFootnoteLayoutArgs {
     // (undocumented)
     blocks: FlowBlock[];
+    footnoteColumns?: number;
     // (undocumented)
     footnoteContentMap: Map<number, FootnoteContent>;
     // (undocumented)

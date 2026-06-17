@@ -564,6 +564,7 @@ export interface SectionProperties {
     evenAndOddHeaders?: boolean;
     footerDistance?: number;
     footerReferences?: FooterReference[];
+    footnoteColumns?: number;
     footnotePr?: FootnoteProperties;
     gutter?: number;
     headerDistance?: number;
