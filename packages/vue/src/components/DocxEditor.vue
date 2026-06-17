@@ -317,18 +317,11 @@
           />
         </div>
 
-        <button
+        <OutlineToggleButton
           v-if="!showOutline && showOutlineButton"
-          type="button"
-          class="docx-outline-toggle docx-editor-vue__outline-toggle"
-          :style="{ left: (showRuler ? 12 + 20 : 12) + 'px' }"
-          :title="'Show document outline'"
-          aria-label="Show document outline"
-          @click="handleToggleOutline"
-          @mousedown.stop
-        >
-          <MaterialSymbol name="format_list_bulleted" :size="20" />
-        </button>
+          :left-offset="showRuler ? 12 + 20 : 12"
+          @toggle="handleToggleOutline"
+        />
 
         <PageIndicator
           v-if="scrollPageInfo.totalPages > 1"
@@ -397,6 +390,7 @@ import TableToolbar from './ui/TableToolbar.vue';
 import DecorationLayer from './DecorationLayer.vue';
 import ImageSelectionOverlay from './ImageSelectionOverlay.vue';
 import DocumentOutline from './DocumentOutline.vue';
+import OutlineToggleButton from './OutlineToggleButton.vue';
 import UnifiedSidebar from './UnifiedSidebar.vue';
 import CommentMarginMarkers from './CommentMarginMarkers.vue';
 import MaterialSymbol from './ui/MaterialSymbol.vue';
