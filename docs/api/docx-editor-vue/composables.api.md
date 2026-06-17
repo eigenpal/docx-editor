@@ -255,6 +255,7 @@ export interface UseDocxEditorReturn {
     getCommands: () => CommandMap;
     getDocument: () => Document_2 | null;
     getHfPmView: (hf: HeaderFooter) => EditorView | null;
+    getHfPmViews: () => Map<string, EditorView>;
     isReady: Ref<boolean>;
     layout: ShallowRef<Layout | null>;
     loadBuffer: (buffer: ArrayBuffer | Uint8Array | Blob | File) => Promise<void>;

@@ -18,6 +18,7 @@ import {
   acceptChangeById,
   rejectChangeById,
 } from '@eigenpal/docx-editor-core/prosemirror/commands';
+import { extractTrackedChanges } from '@eigenpal/docx-editor-core/prosemirror/utils/extractTrackedChanges';
 import {
   addCommentToRange,
   applyProposedChange,
@@ -62,6 +63,8 @@ export interface UseCommentManagementOptions {
   author?: MaybeRef<string>;
   /** Host-facing comment lifecycle callbacks (the `onComment*` props). */
   commentCallbacks?: CommentCallbacks;
+  /** Get all active header/footer ProseMirror EditorViews. */
+  getHfPmViews?: () => Map<string, EditorView>;
 }
 
 export function useCommentManagement(opts: UseCommentManagementOptions) {
@@ -212,7 +215,25 @@ export function useCommentManagement(opts: UseCommentManagementOptions) {
   }
 
   function handleAcceptChangeById(revisionId: number) {
-    const view = opts.editorView.value;
+    const hfViews = opts.getHfPmViews?.();
+    let targetView = null;
+    if (hfViews) {
+      for (const view of hfViews.values()) {
+        const { entries } = extractTrackedChanges(view.state);
+        if (
+          entries.some(
+            (e) =>
+              e.revisionId === revisionId ||
+              e.insertionRevisionId === revisionId ||
+              e.coalescedRevisionIds?.includes(revisionId)
+          )
+        ) {
+          targetView = view;
+          break;
+        }
+      }
+    }
+    const view = targetView || opts.editorView.value;
     if (!view) return;
     acceptChangeById(revisionId)(view.state, view.dispatch);
     opts.extractCommentsAndChanges();
@@ -220,7 +241,25 @@ export function useCommentManagement(opts: UseCommentManagementOptions) {
   }
 
   function handleRejectChangeById(revisionId: number) {
-    const view = opts.editorView.value;
+    const hfViews = opts.getHfPmViews?.();
+    let targetView = null;
+    if (hfViews) {
+      for (const view of hfViews.values()) {
+        const { entries } = extractTrackedChanges(view.state);
+        if (
+          entries.some(
+            (e) =>
+              e.revisionId === revisionId ||
+              e.insertionRevisionId === revisionId ||
+              e.coalescedRevisionIds?.includes(revisionId)
+          )
+        ) {
+          targetView = view;
+          break;
+        }
+      }
+    }
+    const view = targetView || opts.editorView.value;
     if (!view) return;
     rejectChangeById(revisionId)(view.state, view.dispatch);
     opts.extractCommentsAndChanges();

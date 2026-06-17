@@ -190,6 +190,10 @@ export interface PagedEditorProps {
   onTotalPagesChange?: (totalPages: number) => void;
   /** Set of resolved comment IDs — hides highlight for these comments */
   resolvedCommentIds?: Set<number>;
+  /** Suggestion mode active state */
+  isSuggesting?: boolean;
+  /** Active author for suggestion mode */
+  author?: string;
 }
 
 export interface PagedEditorRef {
@@ -262,6 +266,8 @@ export interface PagedEditorRef {
    * focus router (phase 3).
    */
   getHfPmView(hf: HeaderFooter): EditorView | null;
+  /** Get all active header/footer EditorViews mapped by rId. */
+  getHfPmViews(): Map<string, EditorView>;
 }
 
 // =============================================================================
@@ -318,6 +324,8 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
       onHyperlinkPopupEdit,
       onHyperlinkPopupRemove,
       onHyperlinkPopupClose,
+      isSuggesting = false,
+      author = 'User',
     } = props;
 
     // Resolve the scroll container: prefer parent-provided ref, fallback to own container
@@ -838,6 +846,8 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
           document={document}
           styles={styles}
           theme={_theme}
+          isSuggesting={isSuggesting}
+          author={author}
           defaultTabMarkTwips={document?.package?.settings?.defaultTabMark ?? null}
           onTransaction={(rId, view, docChanged) => {
             // Only re-layout when the HF doc actually changed — selection-only

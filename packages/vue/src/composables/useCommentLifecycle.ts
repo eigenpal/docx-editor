@@ -68,6 +68,8 @@ export interface UseCommentLifecycleOptions {
   author?: MaybeRef<string>;
   /** Host-facing comment lifecycle callbacks (the `onComment*` props). */
   commentCallbacks?: CommentCallbacks;
+  /** Get all active header/footer ProseMirror EditorViews. */
+  getHfPmViews?: () => Map<string, EditorView>;
 }
 
 export function useCommentLifecycle(opts: UseCommentLifecycleOptions) {
@@ -89,7 +91,21 @@ export function useCommentLifecycle(opts: UseCommentLifecycleOptions) {
 
     // Same merge/replacement logic React uses, lifted to core so both
     // adapters share one implementation.
-    opts.trackedChanges.value = extractTrackedChanges(view.state).entries;
+    const bodyResult = extractTrackedChanges(view.state);
+    const mergedEntries = [...bodyResult.entries];
+
+    if (opts.getHfPmViews) {
+      const hfViews = opts.getHfPmViews();
+      for (const [rId, hfView] of hfViews.entries()) {
+        const hfResult = extractTrackedChanges(hfView.state);
+        for (const entry of hfResult.entries) {
+          (entry as any).hfRid = rId;
+          mergedEntries.push(entry);
+        }
+      }
+    }
+
+    opts.trackedChanges.value = mergedEntries;
 
     // Auto-open the sidebar on first load if the document carries comments
     // or tracked changes.
