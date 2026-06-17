@@ -22,7 +22,7 @@
     <div
       v-if="state && state.open"
       ref="menuRef"
-      class="image-ctx-menu"
+      :class="['image-ctx-menu', portalClass]"
       role="menu"
       :aria-label="t('imageWrap.menu.ariaLabel')"
       data-testid="image-context-menu"
@@ -107,6 +107,7 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue';
 import MaterialSymbol from './ui/MaterialSymbol.vue';
+import { useDocxPortalClass } from '../composables/usePortalClass';
 import { useTranslation } from '../i18n';
 import {
   IMAGE_LAYOUT_OPTIONS,
@@ -146,6 +147,8 @@ function handleOpenProperties() {
 }
 
 const { t } = useTranslation();
+// Re-apply the editor's `.ep-root` token scope to this body-teleported menu.
+const portalClass = useDocxPortalClass();
 
 const ICON_SIZE = 18;
 const MENU_WIDTH = 260;

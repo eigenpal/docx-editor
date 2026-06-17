@@ -415,6 +415,7 @@ import { usePageSetupControls } from '../composables/usePageSetupControls';
 import { useWatermarkControls } from '../composables/useWatermarkControls';
 import { useOutlineSidebar } from '../composables/useOutlineSidebar';
 import { useKeyboardShortcuts } from '../composables/useKeyboardShortcuts';
+import { provideDocxPortalClass } from '../composables/usePortalClass';
 import { useCommentManagement } from '../composables/useCommentManagement';
 import { useHostCallbacks } from '../composables/useHostCallbacks';
 import { useCommentLifecycle } from '../composables/useCommentLifecycle';
@@ -488,6 +489,8 @@ const authorRef = computed(() => props.author);
 
 provideLocale(computed(() => props.i18n));
 const { t } = createTranslator(computed(() => props.i18n));
+// Share this `.ep-root`'s token scope + theme with <body>-teleported chrome.
+provideDocxPortalClass(isDark);
 
 const hiddenPmRef = ref<HTMLElement | null>(null);
 const pagesRef = ref<HTMLElement | null>(null);
