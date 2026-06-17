@@ -112,6 +112,9 @@ export function DocxEditorPagedArea({
   setAddCommentYPosition,
   setIsAddingComment,
   setFloatingCommentBtn,
+  isSuggesting = false,
+  author = 'User',
+  onHfTransaction,
 }: {
   pagedEditorRef: React.RefObject<PagedEditorRef | null>;
   hfEditorRef: React.RefObject<InlineHeaderFooterEditorRef | null>;
@@ -131,6 +134,7 @@ export function DocxEditorPagedArea({
   onHeaderFooterDoubleClick: (position: 'header' | 'footer', pageNumber?: number) => void;
   onHeaderFooterSave: (content: BlockContent[]) => void;
   onRemoveHeaderFooter: () => void;
+  onHfTransaction?: (rId: string, view: EditorView, docChanged: boolean) => void;
   onBodyClick: () => void;
   getHfTargetElement: (pos: 'header' | 'footer') => HTMLElement | null;
   zoom: number;
@@ -183,6 +187,8 @@ export function DocxEditorPagedArea({
   setAddCommentYPosition: React.Dispatch<React.SetStateAction<number | null>>;
   setIsAddingComment: React.Dispatch<React.SetStateAction<boolean>>;
   setFloatingCommentBtn: React.Dispatch<React.SetStateAction<{ top: number; left: number } | null>>;
+  isSuggesting?: boolean;
+  author?: string;
 }) {
   // Resolve the active HF block for the inline editor — first-page variant
   // wins when `titlePg` is set and the user double-clicked page 1.
@@ -325,7 +331,9 @@ export function DocxEditorPagedArea({
         onHeaderFooterDoubleClick={onHeaderFooterDoubleClick}
         hfEditMode={hfEditPosition}
         onBodyClick={onBodyClick}
-        onHfTransaction={(_rId, view, _docChanged) => {
+        isSuggesting={isSuggesting}
+        author={author}
+        onHfTransaction={(rId, view, docChanged) => {
           // Phase 5: the persistent HF PM is the sole editor. On every
           // transaction (typing, click → setSelection, undo/redo) we need
           // the caret to follow — deferred to rAF so the painter's repaint
@@ -356,6 +364,7 @@ export function DocxEditorPagedArea({
             }
           });
           onSelectionChange(extractSelectionState(view.state));
+          onHfTransaction?.(rId, view, docChanged);
         }}
         // Click routing through `onHfPagesMouseDown` was retired; usePagesPointer
         // now routes every HF gesture (click, drag, dblclick, image, hyperlink,

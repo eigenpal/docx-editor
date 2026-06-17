@@ -407,7 +407,7 @@ function recompute() {
 // post-transform coords, so a zoom change shifts every anchor.
 watch(
   () => [
-    items.value.length,
+    items.value,
     expandedId.value,
     props.pagesContainer,
     props.pageWidthPx,

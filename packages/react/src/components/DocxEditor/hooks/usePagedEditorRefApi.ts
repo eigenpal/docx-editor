@@ -13,6 +13,7 @@
  */
 
 import { useEffect, useImperativeHandle } from 'react';
+import { TextSelection } from 'prosemirror-state';
 import type { EditorState, Transaction } from 'prosemirror-state';
 import type { EditorView } from 'prosemirror-view';
 
@@ -126,16 +127,35 @@ function buildRefApi(inputs: RefApiInputs): PagedEditorRef {
     },
     scrollToChangeId: (revisionId: number): boolean => {
       const view = hiddenPMRef.current?.getView() ?? null;
-      const range = findChangeRange(view, revisionId);
-      if (!range) return false;
-      hiddenPMRef.current?.setSelection(range.from, range.to);
-      scrollToPositionImpl(range.from, true);
-      return true;
+      let range = findChangeRange(view, revisionId);
+      if (range) {
+        hiddenPMRef.current?.setSelection(range.from, range.to);
+        scrollToPositionImpl(range.from, true);
+        return true;
+      }
+      const hfViews = hiddenHfPMsRef.current?.getViews();
+      if (hfViews) {
+        for (const hfView of hfViews.values()) {
+          range = findChangeRange(hfView, revisionId);
+          if (range) {
+            const tr = hfView.state.tr.setSelection(
+              TextSelection.create(hfView.state.doc, range.from, range.to)
+            );
+            hfView.dispatch(tr);
+            hfView.focus();
+            return true;
+          }
+        }
+      }
+      return false;
     },
     getHfPmView: (hf: HeaderFooter): EditorView | null => {
       const rId = findRidForHeaderFooter(documentRef.current, hf);
       if (!rId) return null;
       return hiddenHfPMsRef.current?.getView(rId) ?? null;
+    },
+    getHfPmViews: (): Map<string, EditorView> => {
+      return hiddenHfPMsRef.current?.getViews() ?? new Map();
     },
   };
 }

@@ -48,7 +48,7 @@ import { OUTLINE_BUTTON_RESERVED_SPACE, OUTLINE_RESERVED_SPACE } from './Documen
 import { RULER_WIDTH } from './ui/VerticalRuler';
 import { SIDEBAR_DOCUMENT_SHIFT } from './sidebar/constants';
 import { useCommentSidebarItems, type CommentCallbacks } from '../hooks/useCommentSidebarItems';
-import { useTrackedChanges } from '../hooks/useTrackedChanges';
+import { extractTrackedChanges } from '../hooks/useTrackedChanges';
 import { type EditorState as PMEditorState } from 'prosemirror-state';
 import type { ReactSidebarItem } from '../plugin-api/types';
 import type { Comment } from '@eigenpal/docx-editor-core/types/content';
@@ -696,11 +696,37 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
   });
 
   // Latest PM state — mirrored from the view on every doc-changing transaction.
-  // Drives `useTrackedChanges` so the sidebar derives its list directly from PM
-  // (the source of truth, including remote ySync updates) rather than a debounced
+  // Drives the tracked changes derivation so the sidebar derives its list directly
+  // from PM (the source of truth, including remote ySync updates) rather than a debounced
   // copy in React state.
   const [pmState, setPmState] = useState<PMEditorState | null>(null);
-  const { entries: trackedChanges, commentToRevision } = useTrackedChanges(pmState);
+  const [hfVersion, setHfVersion] = useState(0);
+
+  const { entries: trackedChanges, commentToRevision } = useMemo(() => {
+    const bodyResult = extractTrackedChanges(pmState);
+    const mergedEntries = [...bodyResult.entries];
+    const mergedCommentToRevision = new Map(bodyResult.commentToRevision);
+
+    const hfViews = pagedEditorRef.current?.getHfPmViews?.();
+    if (hfViews) {
+      for (const [rId, view] of hfViews.entries()) {
+        const hfResult = extractTrackedChanges(view.state);
+        for (const entry of hfResult.entries) {
+          (entry as any).hfRid = rId;
+          mergedEntries.push(entry);
+        }
+        for (const [commentId, revisionId] of hfResult.commentToRevision.entries()) {
+          mergedCommentToRevision.set(commentId, revisionId);
+        }
+      }
+    }
+
+    return {
+      entries: mergedEntries,
+      commentToRevision: mergedCommentToRevision,
+    };
+  }, [pmState, hfVersion]);
+
   const [anchorPositions, setAnchorPositions] =
     useState<Map<string, number>>(EMPTY_ANCHOR_POSITIONS);
   // No separate state needed — pluginRenderedDomContext comes from PluginHost
@@ -1354,12 +1380,58 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
       if (view) rejectChange(from, to)(view.state, view.dispatch);
     },
     onAcceptChangeById: (revisionId) => {
-      const view = pagedEditorRef.current?.getView();
-      if (view) acceptChangeById(revisionId)(view.state, view.dispatch);
+      const hfViews = pagedEditorRef.current?.getHfPmViews?.();
+      let targetView = null;
+      if (hfViews) {
+        for (const view of hfViews.values()) {
+          const { entries } = extractTrackedChanges(view.state);
+          if (
+            entries.some(
+              (e) =>
+                e.revisionId === revisionId ||
+                e.insertionRevisionId === revisionId ||
+                e.coalescedRevisionIds?.includes(revisionId)
+            )
+          ) {
+            targetView = view;
+            break;
+          }
+        }
+      }
+      const view = targetView || pagedEditorRef.current?.getView();
+      if (view) {
+        acceptChangeById(revisionId)(view.state, view.dispatch);
+        if (targetView) {
+          setHfVersion((prev) => prev + 1);
+        }
+      }
     },
     onRejectChangeById: (revisionId) => {
-      const view = pagedEditorRef.current?.getView();
-      if (view) rejectChangeById(revisionId)(view.state, view.dispatch);
+      const hfViews = pagedEditorRef.current?.getHfPmViews?.();
+      let targetView = null;
+      if (hfViews) {
+        for (const view of hfViews.values()) {
+          const { entries } = extractTrackedChanges(view.state);
+          if (
+            entries.some(
+              (e) =>
+                e.revisionId === revisionId ||
+                e.insertionRevisionId === revisionId ||
+                e.coalescedRevisionIds?.includes(revisionId)
+            )
+          ) {
+            targetView = view;
+            break;
+          }
+        }
+      }
+      const view = targetView || pagedEditorRef.current?.getView();
+      if (view) {
+        rejectChangeById(revisionId)(view.state, view.dispatch);
+        if (targetView) {
+          setHfVersion((prev) => prev + 1);
+        }
+      }
     },
     onTrackedChangeReply: (revisionId, text) => {
       setComments((prev) => [
@@ -1751,6 +1823,13 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
             getHfTargetElement={getHfTargetElement}
             zoom={state.zoom}
             readOnly={readOnly}
+            isSuggesting={editingMode === 'suggesting'}
+            author={author}
+            onHfTransaction={(_rId, _view, docChanged) => {
+              if (docChanged) {
+                setHfVersion((prev) => prev + 1);
+              }
+            }}
             extensionManager={extensionManager}
             externalPlugins={allExternalPlugins}
             onDocumentChange={handleDocumentChange}

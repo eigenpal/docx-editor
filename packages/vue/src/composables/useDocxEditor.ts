@@ -245,6 +245,8 @@ export interface UseDocxEditorReturn {
   getHfPmView: (
     hf: import('@eigenpal/docx-editor-core/types/document').HeaderFooter
   ) => EditorView | null;
+  /** Get all active header/footer EditorViews mapped by rId. */
+  getHfPmViews: () => Map<string, EditorView>;
   /**
    * Re-mount / tear down HF EditorViews to match the current document's
    * `package.headers/footers`. Call this after the inline overlay saves
@@ -533,20 +535,6 @@ export function useDocxEditor(options: UseDocxEditorOptions): UseDocxEditorRetur
     }
   }
 
-  // Sync editorMode/author to the mounted suggestion-mode plugin.
-  // Mirrors React's DocxEditor.tsx useEffect that calls setSuggestionMode
-  // whenever editingMode or author changes. Without this watch, the Vue
-  // `mode="suggesting"` prop would not actually activate the plugin —
-  // typed text would land as plain edits.
-  watch(
-    [() => unref(editorMode), () => unref(author), editorView],
-    ([mode, who, view]) => {
-      if (!view) return;
-      setSuggestionMode(mode === 'suggesting', view.state, view.dispatch, who);
-    },
-    { immediate: true }
-  );
-
   function destroyEditorView() {
     // Drop any pending coalesced layout frame so a reload (destroy → recreate)
     // can't repaint the old document's state against the new document.
@@ -674,10 +662,14 @@ export function useDocxEditor(options: UseDocxEditorOptions): UseDocxEditorRetur
       // Header/footer paragraphs share the document's style table, so they get
       // the same style-aware behavior (e.g. Enter after a heading → body text).
       const hfStyleResolverPlugin = createDocumentStylesPlugin(styles);
+      const hfSuggestionPlugin = createSuggestionModePlugin(
+        unref(editorMode) === 'suggesting',
+        unref(author)
+      );
       const state = EditorState.create({
         doc: pmDoc,
         schema,
-        plugins: [...mgr.getPlugins(), hfStyleResolverPlugin],
+        plugins: [hfSuggestionPlugin, ...mgr.getPlugins(), hfStyleResolverPlugin],
       });
       const slotKind = kind;
       const view: EditorView = new EditorView(node, {
@@ -718,6 +710,25 @@ export function useDocxEditor(options: UseDocxEditorOptions): UseDocxEditorRetur
       hfHostRef.current = null;
     }
   }
+
+  // Sync editorMode/author to the mounted suggestion-mode plugin.
+  // Mirrors React's DocxEditor.tsx useEffect that calls setSuggestionMode
+  // whenever editingMode or author changes. Without this watch, the Vue
+  // `mode="suggesting"` prop would not actually activate the plugin —
+  // typed text would land as plain edits.
+  watch(
+    [() => unref(editorMode), () => unref(author), editorView],
+    ([mode, who, view]) => {
+      const active = mode === 'suggesting';
+      if (view) {
+        setSuggestionMode(active, view.state, view.dispatch, who);
+      }
+      for (const hfView of hfViews.values()) {
+        setSuggestionMode(active, hfView.state, hfView.dispatch, who);
+      }
+    },
+    { immediate: true }
+  );
 
   // Listener slot — DocxEditor.vue subscribes here to update caret + UI
   // chrome on every HF transaction. Held in a ref so swapping it doesn't
@@ -860,6 +871,9 @@ export function useDocxEditor(options: UseDocxEditorOptions): UseDocxEditorRetur
 
     // HF unification surface — phase 6 of openspec/changes/unify-hf-editing.
     getHfPmView,
+    getHfPmViews(): Map<string, EditorView> {
+      return hfViews;
+    },
     syncHfPMs,
     setHfTransactionListener,
     /**

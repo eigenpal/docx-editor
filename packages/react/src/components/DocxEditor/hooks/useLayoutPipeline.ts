@@ -338,6 +338,70 @@ export function useLayoutPipeline(opts: UseLayoutPipelineOptions): UseLayoutPipe
             newMeasures,
             pageGap
           );
+
+          const pagesEl = pagesContainerRef.current;
+          if (pagesEl) {
+            const hfContainers = pagesEl.querySelectorAll(
+              '.layout-page-header, .layout-page-footer'
+            );
+            if (hfContainers.length > 0) {
+              const pagesElRect = pagesEl.getBoundingClientRect();
+              const currentZoom = zoom || 1;
+              for (let i = 0; i < hfContainers.length; i++) {
+                const hf = hfContainers[i] as HTMLElement;
+                // Query insertions
+                const insertions = hf.querySelectorAll('.docx-insertion[data-revision-id]');
+                for (let j = 0; j < insertions.length; j++) {
+                  const el = insertions[j] as HTMLElement;
+                  const rId = el.getAttribute('data-revision-id');
+                  if (rId && !positions.has(`revision-${rId}`)) {
+                    const rect = el.getBoundingClientRect();
+                    const y = (rect.top - pagesElRect.top + pagesEl.scrollTop) / currentZoom;
+                    positions.set(`revision-${rId}`, y);
+                  }
+                }
+                // Query deletions
+                const deletions = hf.querySelectorAll('.docx-deletion[data-revision-id]');
+                for (let j = 0; j < deletions.length; j++) {
+                  const el = deletions[j] as HTMLElement;
+                  const rId = el.getAttribute('data-revision-id');
+                  if (rId && !positions.has(`revision-${rId}`)) {
+                    const rect = el.getBoundingClientRect();
+                    const y = (rect.top - pagesElRect.top + pagesEl.scrollTop) / currentZoom;
+                    positions.set(`revision-${rId}`, y);
+                  }
+                }
+                // Query comments
+                const comments = hf.querySelectorAll('[data-comment-id]');
+                for (let j = 0; j < comments.length; j++) {
+                  const el = comments[j] as HTMLElement;
+                  const commentId = el.getAttribute('data-comment-id');
+                  if (commentId && !positions.has(`comment-${commentId}`)) {
+                    const rect = el.getBoundingClientRect();
+                    const y = (rect.top - pagesElRect.top + pagesEl.scrollTop) / currentZoom;
+                    positions.set(`comment-${commentId}`, y);
+                  }
+                }
+                // Query structural revisions
+                const structural = hf.querySelectorAll(
+                  '.ep-revision-table[data-revision-id], ' +
+                    '.ep-revision-row[data-revision-id], ' +
+                    '.ep-revision-cell[data-revision-id], ' +
+                    '.layout-revision-pmark[data-revision-id]'
+                );
+                for (let j = 0; j < structural.length; j++) {
+                  const el = structural[j] as HTMLElement;
+                  const rId = el.getAttribute('data-revision-id');
+                  if (rId && !positions.has(`revision-${rId}`)) {
+                    const rect = el.getBoundingClientRect();
+                    const y = (rect.top - pagesElRect.top + pagesEl.scrollTop) / currentZoom;
+                    positions.set(`revision-${rId}`, y);
+                  }
+                }
+              }
+            }
+          }
+
           onAnchorPositionsChangeRef.current(positions);
         }
 

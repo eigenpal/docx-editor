@@ -545,6 +545,7 @@ const {
   getCommands,
   reLayout,
   getHfPmView,
+  getHfPmViews,
   syncHfPMs,
   setHfTransactionListener,
   setDocument,
@@ -832,6 +833,7 @@ const {
   commentIdAllocator,
   author: authorRef,
   commentCallbacks,
+  getHfPmViews,
 });
 
 const {
@@ -946,6 +948,7 @@ const {
   commentIdAllocator,
   author: authorRef,
   commentCallbacks,
+  getHfPmViews,
 });
 
 // Composable order (TDZ-sensitive): useImageActions → usePagesPointer → useContextMenus → useSelectionSync → useDocxEditorRefApi.
