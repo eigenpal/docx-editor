@@ -1,5 +1,7 @@
 # @eigenpal/docx-editor-i18n
 
+## 1.6.2
+
 ## 1.6.1
 
 ### Patch Changes

@@ -1,5 +1,17 @@
 # @eigenpal/docx-editor-vue
 
+## 1.6.2
+
+### Patch Changes
+
+- 768b10e: Redesign the document outline toggle as a filled circular button in the left gutter (instead of a bare icon), tighten the outline panel's indentation, and keep the toggle and panel clear of the vertical ruler and of landscape pages.
+- 0ac0a4f: Localize the document outline toggle button's tooltip and label so they follow the editor's `i18n` prop instead of always showing English.
+- Updated dependencies [a8bce7a]
+- Updated dependencies [768b10e]
+  - @eigenpal/docx-editor-core@1.6.2
+  - @eigenpal/docx-editor-agents@1.6.2
+  - @eigenpal/docx-editor-i18n@1.6.2
+
 ## 1.6.1
 
 ### Patch Changes
