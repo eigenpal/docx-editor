@@ -44,10 +44,14 @@ export function getChanges(
   filter?: ChangeFilter,
   notes?: ChangeNotes
 ): ReviewChange[] {
-  // Keyed by location + id, not id alone: a tracked-change `w:id` is unique
-  // only within its part (document.xml / footnotes.xml / endnotes.xml), so the
-  // same id can legitimately appear in the body and in a note. Keying on id
-  // alone would let a note change clobber a body change with the same id.
+  // Keyed by location + paragraph + id, not id alone. A tracked-change `w:id`
+  // is unique only within its part (document.xml / footnotes.xml / endnotes.xml)
+  // — and not even reliably unique within a part: Word routinely reuses the same
+  // revision id on distinct changes in different paragraphs. So the same id can
+  // appear in the body and in a note, AND on two separate changes in different
+  // body paragraphs. paragraphIndex in the key keeps those separate changes from
+  // clobbering each other (the merge below only folds same-id runs *within one
+  // paragraph* — a single logical change split across runs — into one entry).
   const grouped = new Map<string, ReviewChange>();
 
   const collect = (
@@ -62,10 +66,12 @@ export function getChanges(
         if (context === null) context = getParagraphPlainText(para);
         const text = getTrackedChangeText(item.content);
         const id = item.info.id;
-        const key = `${location.noteType ?? 'body'}:${location.noteId ?? ''}:${id}`;
+        const key = `${location.noteType ?? 'body'}:${location.noteId ?? ''}:${paragraphIndex}:${id}`;
 
         const existing = grouped.get(key);
-        if (existing && existing.paragraphIndex === paragraphIndex) {
+        if (existing) {
+          // Same id within the same paragraph: a single logical change whose
+          // runs were split — fold their text into one entry.
           existing.text += text;
         } else {
           grouped.set(key, {

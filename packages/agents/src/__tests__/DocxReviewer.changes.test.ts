@@ -162,3 +162,41 @@ describe('applyReview', () => {
     expect(result.errors).toHaveLength(0);
   });
 });
+
+// ============================================================================
+// getChanges — cross-paragraph reused revision id (read_changes under-report)
+// ============================================================================
+
+describe('getChanges — reused w:id across paragraphs', () => {
+  // A tracked-change `w:id` is unique only within its part; Word routinely emits
+  // the SAME revision id on distinct changes in different paragraphs. getChanges
+  // must enumerate every one — not collapse two same-id changes into a single
+  // entry, silently dropping the earlier paragraph's change. Mirrors the field
+  // repro where three body deletions surfaced as two (the middle one dropped)
+  // while acceptAll reported all three.
+  const buildThreeDeletions = () =>
+    makeReviewer([
+      makeParagraphFrom([makeRun('Keep one '), makeDeletion('alpha', 1, 'Alice')]),
+      makeParagraphFrom([makeRun('Keep two '), makeDeletion('bravo', 7, 'Alice')]),
+      makeParagraphFrom([makeRun('Keep three '), makeDeletion('charlie', 7, 'Alice')]),
+    ]);
+
+  test('enumerates every deletion even when two paragraphs share a w:id', () => {
+    const changes = buildThreeDeletions().getChanges();
+    expect(changes).toHaveLength(3);
+    expect(changes.map((c) => c.text).sort()).toEqual(['alpha', 'bravo', 'charlie']);
+    // paragraphIndex disambiguates the two id-7 changes (one per paragraph).
+    expect(
+      changes
+        .filter((c) => c.id === 7)
+        .map((c) => c.paragraphIndex)
+        .sort()
+    ).toEqual([1, 2]);
+  });
+
+  test('getChanges count agrees with acceptAll count', () => {
+    // The cross-check that caught the bug in the field: read_changes listed 2
+    // while accept_all reported 3.
+    expect(buildThreeDeletions().getChanges()).toHaveLength(buildThreeDeletions().acceptAll());
+  });
+});
