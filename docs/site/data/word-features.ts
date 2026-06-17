@@ -322,12 +322,12 @@ export const wordFeatures: WordFeature[] = [
     id: 'images.wmf',
     name: 'WMF / EMF legacy vector images',
     category: 'images',
-    editing: 'partial',
-    rendering: 'full',
+    editing: 'none',
+    rendering: 'planned',
     roundTrip: 'full',
     tier: 'community',
     notes:
-      'Rendered via on-the-fly conversion (vector where possible, raster fallback) at the OOXML extent; the original WMF/EMF bytes are preserved on save.',
+      'The original WMF/EMF bytes are parsed and preserved losslessly on save, but browsers cannot decode these legacy metafiles, so the image does not yet display. On-the-fly conversion (vector where possible, raster fallback) is planned.',
   },
   {
     id: 'images.tracked',
@@ -344,10 +344,10 @@ export const wordFeatures: WordFeature[] = [
     category: 'images',
     editing: 'partial',
     rendering: 'partial',
-    roundTrip: 'full',
+    roundTrip: 'partial',
     tier: 'community',
     notes:
-      'Anchored text boxes render (incl. page-anchored letterhead shapes in headers); shape geometry editing is limited.',
+      'Anchored text boxes render (incl. page-anchored letterhead shapes in headers) and round-trip. Standalone drawn shapes (rect, oval, line) parse and serialize but do not yet render; custom-geometry shapes degrade to a rectangle on save.',
   },
 
   // --- Page layout, headers & footers --------------------------------------
