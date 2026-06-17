@@ -84,6 +84,7 @@ export interface DocxEditorProps {
     onError?: (error: Error) => void;
     onFontsLoaded?: () => void;
     onModeChange?: (mode: EditorMode) => void;
+    onOpen?: (file: File) => void | Promise<void>;
     onPaste?: () => void;
     onPrint?: () => void;
     onRenderedDomContextReady?: (context: RenderedDomContext) => void;
@@ -98,6 +99,7 @@ export interface DocxEditorProps {
     renderLogo?: () => ReactNode;
     renderTitleBarRight?: () => ReactNode;
     rulerUnit?: 'inch' | 'cm';
+    showFileOpen?: boolean;
     showMarginGuides?: boolean;
     showOutline?: boolean;
     showOutlineButton?: boolean;
