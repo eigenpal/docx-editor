@@ -689,7 +689,8 @@
       "listTable4Accent3": "सूची तालिका 4 एक्सेंट 3",
       "gridTable4Accent5": "ग्रिड तालिका 4 एक्सेंट 5",
       "gridTable4Accent6": "ग्रिड तालिका 4 एक्सेंट 6"
-    }
+    },
+    "selectTable": null
   },
   "tableAdvanced": {
     "verticalAlignment": "लंबवत संरेखण",

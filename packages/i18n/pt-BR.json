@@ -686,7 +686,8 @@
       "listTable4Accent3": "Lista de tabela 4 destaque 3",
       "gridTable4Accent5": "Grade de tabela 4 destaque 5",
       "gridTable4Accent6": "Grade de tabela 4 destaque 6"
-    }
+    },
+    "selectTable": null
   },
   "tableAdvanced": {
     "verticalAlignment": "Alinhamento vertical",

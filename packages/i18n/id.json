@@ -704,7 +704,8 @@
       "listTable4Accent3": null,
       "gridTable4Accent5": null,
       "gridTable4Accent6": null
-    }
+    },
+    "selectTable": null
   },
   "tableAdvanced": {
     "verticalAlignment": "Perataan Vertikal",

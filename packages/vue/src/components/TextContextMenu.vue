@@ -157,7 +157,10 @@ const visibleItems = computed<ContextMenuItem[]>(() => {
         label: t('table.splitCell'),
         action: 'splitCell',
         disabled: !props.canSplitCell,
-      }
+      },
+      { id: 'div5', label: '', action: '', divider: true },
+      { id: 'selectTable', label: t('table.selectTable'), action: 'selectTable' },
+      { id: 'deleteTable', label: t('table.deleteTable'), action: 'deleteTable' }
     );
   }
 

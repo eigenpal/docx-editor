@@ -10,6 +10,8 @@ import {
   addColumnRight,
   deleteColumn as pmDeleteColumn,
   mergeCells as pmMergeCells,
+  selectTable as pmSelectTable,
+  deleteTable as pmDeleteTable,
   type TableContextInfo,
 } from '@eigenpal/docx-editor-core/prosemirror';
 import {
@@ -256,6 +258,15 @@ export function useContextMenus({
           label: i18n?.table?.splitCell ?? defaultLocale.table.splitCell,
           disabled: !contextMenu.tableContext?.canSplitCell,
           dividerAfter: true,
+        },
+        {
+          action: 'selectTable',
+          label: i18n?.table?.selectTable ?? defaultLocale.table.selectTable,
+        },
+        {
+          action: 'deleteTable',
+          label: i18n?.table?.deleteTable ?? defaultLocale.table.deleteTable,
+          dividerAfter: true,
         }
       );
     }
@@ -360,6 +371,12 @@ export function useContextMenus({
           break;
         case 'splitCell':
           openSplitCellDialog();
+          break;
+        case 'selectTable':
+          pmSelectTable(view.state, view.dispatch);
+          break;
+        case 'deleteTable':
+          pmDeleteTable(view.state, view.dispatch);
           break;
         case 'addComment': {
           const { from, to } = view.state.selection;

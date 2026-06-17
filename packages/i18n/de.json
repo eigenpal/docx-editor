@@ -686,7 +686,8 @@
       "listTable4Accent3": "Listentabelle 4 Akzent 3",
       "gridTable4Accent5": "Rastertabelle 4 Akzent 5",
       "gridTable4Accent6": "Rastertabelle 4 Akzent 6"
-    }
+    },
+    "selectTable": null
   },
   "tableAdvanced": {
     "verticalAlignment": "Vertikale Ausrichtung",
