@@ -38,6 +38,7 @@ import {
   createSuggestionModePlugin,
   setSuggestionMode,
   createDocumentStylesPlugin,
+  createDocumentContextPlugin,
 } from '@eigenpal/docx-editor-core/prosemirror/plugins';
 import {
   ExtensionManager,
@@ -450,11 +451,18 @@ export function useDocxEditor(options: UseDocxEditorOptions): UseDocxEditorRetur
     // handler's `w:next` switch from heading to body text). Mirrors React's
     // OffscreenEditorHost createInitialState.
     const styleResolverPlugin = createDocumentStylesPlugin(docStyles);
+    // Document context (theme + settings `w:defaultTableStyle`) for the
+    // table-insert command's default-table-style adoption.
+    const documentContextPlugin = createDocumentContextPlugin({
+      theme: document.value?.package?.theme ?? null,
+      defaultTableStyleId: document.value?.package?.settings?.defaultTableStyle ?? null,
+    });
     const plugins: Plugin[] = [
       suggestionPlugin,
       ...externalPlugins,
       ...(mgr.getPlugins() ?? []),
       styleResolverPlugin,
+      documentContextPlugin,
     ];
 
     // Give every paragraph a paraId up front (docs without `w14:paraId` ship
@@ -654,6 +662,7 @@ export function useDocxEditor(options: UseDocxEditorOptions): UseDocxEditorRetur
     const theme = pkg.theme ?? null;
     // Read from package.settings (canonical) not editorState (race on first sync).
     const defaultTabMarkTwips = pkg.settings?.defaultTabMark ?? null;
+    const defaultTableStyleId = pkg.settings?.defaultTableStyle ?? null;
     for (const rId of wantRIds) {
       if (hfViews.has(rId)) continue;
       const hf = pkg.headers?.get(rId) ?? pkg.footers?.get(rId);
@@ -678,6 +687,12 @@ export function useDocxEditor(options: UseDocxEditorOptions): UseDocxEditorRetur
       // Header/footer paragraphs share the document's style table, so they get
       // the same style-aware behavior (e.g. Enter after a heading → body text).
       const hfStyleResolverPlugin = createDocumentStylesPlugin(styles);
+      // Document context (theme + settings `w:defaultTableStyle`) so inserting a
+      // table in a header/footer adopts the default table style too.
+      const hfDocumentContextPlugin = createDocumentContextPlugin({
+        theme,
+        defaultTableStyleId,
+      });
       const hfSuggestionPlugin = createSuggestionModePlugin(
         unref(editorMode) === 'suggesting',
         unref(author)
@@ -685,7 +700,12 @@ export function useDocxEditor(options: UseDocxEditorOptions): UseDocxEditorRetur
       const state = EditorState.create({
         doc: pmDoc,
         schema,
-        plugins: [hfSuggestionPlugin, ...mgr.getPlugins(), hfStyleResolverPlugin],
+        plugins: [
+          hfSuggestionPlugin,
+          ...mgr.getPlugins(),
+          hfStyleResolverPlugin,
+          hfDocumentContextPlugin,
+        ],
       });
       const slotKind = kind;
       const view: EditorView = new EditorView(node, {
