@@ -125,7 +125,8 @@
     "sansSerif": "Sans Serif",
     "serif": "Serif",
     "monospace": "Monospace",
-    "other": null
+    "other": null,
+    "documentFonts": null
   },
   "fontSize": {
     "decrease": "הקטנת גופן",

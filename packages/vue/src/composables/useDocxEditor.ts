@@ -21,6 +21,11 @@ import { EditorView } from 'prosemirror-view';
 // Core imports — these all resolve through Vite aliases to packages/core/src/
 import { parseDocx } from '@eigenpal/docx-editor-core/docx/parser';
 import {
+  getRenderableDocumentFonts,
+  getEmbeddedFontFamilies,
+} from '@eigenpal/docx-editor-core/utils';
+import type { FontOption } from '@eigenpal/docx-editor-core/utils/fontOptions';
+import {
   toProseDoc,
   createEmptyDoc,
   headerFooterToProseDoc,
@@ -217,6 +222,11 @@ export interface UseDocxEditorReturn {
   isReady: Ref<boolean>;
   /** Last parse error message, or null if the most recent load succeeded. */
   parseError: Ref<string | null>;
+  /**
+   * Fonts the loaded document references that the browser can render (embedded
+   * faces + system-resolved), for the picker's "Document fonts" group.
+   */
+  documentFonts: Ref<FontOption[]>;
   /** Computed page layout. */
   layout: ShallowRef<Layout | null>;
   /** Load a DOCX from a binary buffer. */
@@ -287,6 +297,12 @@ export function useDocxEditor(options: UseDocxEditorOptions): UseDocxEditorRetur
   const editorState = shallowRef<EditorState | null>(null);
   const isReady = ref(false);
   const parseError = ref<string | null>(null);
+  /**
+   * Fonts the loaded document references that the browser can render (embedded
+   * faces + system-resolved), for the picker's "Document fonts" group. Mirrors
+   * React's `documentFonts` state.
+   */
+  const documentFonts = ref<FontOption[]>([]);
   /**
    * Latest layout result. Exposed so consumers (PageIndicator, scroll-to-page)
    * can read page count + per-page geometry without re-running the engine.
@@ -767,6 +783,7 @@ export function useDocxEditor(options: UseDocxEditorOptions): UseDocxEditorRetur
 
       const doc = await parseDocx(arrayBuf);
       document.value = doc;
+      updateDocumentFonts(doc);
 
       // Recreate PM view with new document
       destroyEditorView();
@@ -783,10 +800,19 @@ export function useDocxEditor(options: UseDocxEditorOptions): UseDocxEditorRetur
   function loadDocument(doc: Document) {
     parseError.value = null;
     document.value = doc;
+    updateDocumentFonts(doc);
     destroyEditorView();
     destroyHfPMs();
     createEditorView();
     syncHfPMs();
+  }
+
+  // Surface the document's own renderable fonts (embedded faces loaded by
+  // parseDocx; system fonts probed) in the picker. Mirrors React's loader.
+  function updateDocumentFonts(doc: Document) {
+    documentFonts.value = getRenderableDocumentFonts(doc, {
+      embeddedFamilies: getEmbeddedFontFamilies(doc.package?.fontTable),
+    });
   }
 
   // ========================================================================
@@ -854,6 +880,7 @@ export function useDocxEditor(options: UseDocxEditorOptions): UseDocxEditorRetur
     editorState,
     isReady,
     parseError,
+    documentFonts,
     layout,
 
     // Actions

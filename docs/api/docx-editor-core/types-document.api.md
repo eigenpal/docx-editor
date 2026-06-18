@@ -283,16 +283,20 @@ export interface FloatingTableProperties {
 }
 
 // @public
+export interface FontEmbed {
+    fontKey?: string;
+    relId: string;
+    subsetted?: boolean;
+}
+
+// @public
 export interface FontInfo {
     altName?: string;
     charset?: string;
-    // (undocumented)
-    embedBold?: string;
-    // (undocumented)
-    embedBoldItalic?: string;
-    // (undocumented)
-    embedItalic?: string;
-    embedRegular?: string;
+    embedBold?: FontEmbed;
+    embedBoldItalic?: FontEmbed;
+    embedItalic?: FontEmbed;
+    embedRegular?: FontEmbed;
     family?: 'decorative' | 'modern' | 'roman' | 'script' | 'swiss' | 'auto';
     name: string;
     panose1?: string;

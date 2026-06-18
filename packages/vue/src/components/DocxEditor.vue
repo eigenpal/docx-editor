@@ -49,6 +49,7 @@
         :image-context="imageToolbarContext"
         :theme="documentTheme"
         :font-families="fontFamilies"
+        :document-fonts="documentFonts"
         :document-styles="documentStyles"
         @insert-link="showHyperlink = true"
         @apply-style="handleApplyStyle"
@@ -553,6 +554,7 @@ const {
   editorView,
   isReady,
   parseError,
+  documentFonts,
   layout,
   loadBuffer,
   loadDocument: loadParsedDocument,

@@ -125,7 +125,8 @@
     "sansSerif": null,
     "serif": null,
     "monospace": null,
-    "other": "Lainnya"
+    "other": "Lainnya",
+    "documentFonts": null
   },
   "fontSize": {
     "decrease": "Perkecil ukuran font",

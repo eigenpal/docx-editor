@@ -180,6 +180,9 @@ export const DEFAULT_PARAGRAPH_FLASH_DURATION_MS = 1200;
 export const DEFAULT_SELECTION_STYLE: SelectionHighlightConfig;
 
 // @public
+export function deobfuscateFont(data: ArrayBuffer, fontKey: string): ArrayBuffer;
+
+// @public
 export function describeShortcut(shortcut: KeyboardShortcut): string;
 
 // @public
@@ -189,6 +192,15 @@ export type DocxInput = ArrayBuffer | Uint8Array | Blob | File;
 export function eighthsToPixels(eighths: number): number;
 
 // @public
+export interface EmbeddedFontFace {
+    data: ArrayBuffer;
+    family: string;
+    style: 'normal' | 'italic';
+    subsetted: boolean;
+    weight: 'normal' | 'bold';
+}
+
+// @public
 export function emuToPixels(emu: number | undefined | null): number;
 
 // @public
@@ -196,6 +208,9 @@ export function emuToTwips(emu: number): number;
 
 // @public
 export function ensureHexPrefix(hex: string): string;
+
+// @public
+export function excludeFontsByName(fonts: readonly FontOption[] | undefined, existingNames: Iterable<string>): FontOption[];
 
 // @public
 export function expandSelectionToWord(): boolean;
@@ -277,6 +292,12 @@ export function getClipboardImageFiles(clipboardData: DataTransfer | null): File
 export function getContrastingColor(backgroundColor: ColorValue | undefined | null, theme: Theme | null | undefined): string;
 
 // @public
+export function getEmbeddedFontFaces(fontTable: FontTable | undefined, rawFonts: ReadonlyMap<string, ArrayBuffer>, fontTableRelsXml: string | null | undefined): EmbeddedFontFace[];
+
+// @public
+export function getEmbeddedFontFamilies(fontTable: FontTable | undefined): Set<string>;
+
+// @public
 export function getGoogleFontEquivalent(fontName: string): string;
 
 // @public
@@ -296,6 +317,9 @@ export function getNavigationShortcutDescriptions(): Array<{
     action: string;
     shortcut: string;
 }>;
+
+// @public
+export function getRenderableDocumentFonts(doc: Document_2, options?: RenderableFontOptions): FontOption[];
 
 // @public
 export function getSelectedText(): string;
@@ -438,6 +462,9 @@ export function isSelectionBackwards(): boolean;
 export function isSelectionWithin(element: HTMLElement): boolean;
 
 // @public
+export function isValidFontKey(fontKey: string | undefined | null): boolean;
+
+// @public
 export function isWhite(color: ColorValue | undefined | null, theme: Theme | null | undefined): boolean;
 
 // @public
@@ -470,6 +497,9 @@ export function lightenColor(color: ColorValue | undefined | null, theme: Theme 
 export function loadDocumentFonts(document: unknown): Promise<void>;
 
 // @public
+export function loadEmbeddedFonts(fontTable: FontTable | undefined, rawFonts: ReadonlyMap<string, ArrayBuffer>, fontTableRelsXml: string | null | undefined): Promise<Set<string>>;
+
+// @public
 export function loadFont(fontFamily: string, options?: {
     weights?: number[];
     styles?: ('normal' | 'italic')[];
@@ -481,6 +511,7 @@ export function loadFontDefinitions(defs: ReadonlyArray<FontDefinition> | undefi
 // @public
 export function loadFontFromBuffer(fontFamily: string, buffer: ArrayBuffer, options?: {
     weight?: number | string;
+    style?: 'normal' | 'italic';
 }): Promise<boolean>;
 
 // @public
@@ -670,6 +701,13 @@ export function removePageBreak(doc: Document_2, position: InsertPosition_2): Do
 export function removeSelectionStyles(): void;
 
 // @public
+export interface RenderableFontOptions {
+    canRender?: (name: string) => boolean;
+    embeddedFamilies?: ReadonlySet<string>;
+    exclude?: Iterable<string>;
+}
+
+// @public
 export function resolveColor(color: ColorValue | undefined | null, theme: Theme | null | undefined, defaultColor?: string): string;
 
 // @public
@@ -753,6 +791,9 @@ export function selectParagraphAtCursor(): boolean;
 
 // @public
 export function selectRange(range: Range): void;
+
+// @public
+export function selectRenderableFonts(names: readonly string[], options?: RenderableFontOptions): FontOption[];
 
 // @public
 export function selectWordAtCursor(): boolean;

@@ -96,6 +96,17 @@ export const wordFeatures: WordFeature[] = [
     notes: 'Custom fonts registered via the fonts prop; theme fonts resolved from the OOXML theme.',
   },
   {
+    id: 'text.embedded-fonts',
+    name: 'Embedded fonts',
+    category: 'text',
+    editing: 'partial',
+    rendering: 'full',
+    roundTrip: 'preserved',
+    tier: 'community',
+    notes:
+      'Fonts embedded in the file (word/fonts) are de-obfuscated and rendered, and become selectable in the toolbar under a Document fonts group. The embedded binaries are preserved on save; the editor does not add new embedded fonts.',
+  },
+  {
     id: 'text.color',
     name: 'Text color (RGB + theme colors)',
     category: 'text',

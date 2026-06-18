@@ -154,6 +154,12 @@ export interface ToolbarProps {
    * An empty array renders an empty (but enabled) dropdown.
    */
   fontFamilies?: ReadonlyArray<string | FontOption>;
+  /**
+   * Fonts the loaded document references that the browser can render (embedded
+   * faces + system-resolved). Rendered in a "Document fonts" group, deduped
+   * against `fontFamilies`. Managed by the editor, not a consumer prop.
+   */
+  documentFonts?: readonly FontOption[];
   /** Whether to show font size picker (default: true) */
   showFontSizePicker?: boolean;
   /** Whether to show text color picker (default: true) */
@@ -406,6 +412,7 @@ export function Toolbar(explicitProps: ToolbarProps) {
     children,
     showFontPicker = true,
     fontFamilies,
+    documentFonts,
     showFontSizePicker = true,
     showTextColorPicker = true,
     showHighlightColorPicker = true,
@@ -728,6 +735,7 @@ export function Toolbar(explicitProps: ToolbarProps) {
               value={currentFormatting.fontFamily || 'Arial'}
               onChange={handleFontFamilyChange}
               fonts={normalizedFonts}
+              documentFonts={documentFonts}
               disabled={disabled}
               width={60}
               placeholder="Arial"

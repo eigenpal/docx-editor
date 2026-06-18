@@ -273,6 +273,7 @@ export interface FontPickerProps {
     className?: string;
     // (undocumented)
     disabled?: boolean;
+    documentFonts?: readonly FontOption[];
     // (undocumented)
     fonts?: FontOption[];
     // (undocumented)
@@ -1208,6 +1209,7 @@ export interface ToolbarProps {
     className?: string;
     currentFormatting?: SelectionFormatting;
     disabled?: boolean;
+    documentFonts?: readonly FontOption[];
     documentStyles?: Style[];
     editorRef?: React__default.RefObject<HTMLElement>;
     enableShortcuts?: boolean;

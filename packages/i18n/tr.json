@@ -125,7 +125,8 @@
     "sansSerif": "Sans Serif",
     "serif": "Serif",
     "monospace": "Eş aralıklı",
-    "other": null
+    "other": null,
+    "documentFonts": null
   },
   "fontSize": {
     "decrease": "Yazı tipi boyutunu küçült",

@@ -823,6 +823,7 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
   const lastSelectionRef = useRef<{ from: number; to: number } | null>(null);
   const editorContentRef = useRef<HTMLDivElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const [documentFonts, setDocumentFonts] = useState<FontOption[]>([]);
   const {
     showOutline,
     setShowOutline,
@@ -917,6 +918,7 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
     resetForNewDocument,
     commentsLoadedRef,
     commentIdAllocator: commentIdAllocatorRef.current,
+    setDocumentFonts,
   });
 
   const {
@@ -1804,6 +1806,7 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
             renderTitleBarRight={renderTitleBarRight}
             toolbarExtra={toolbarExtra}
             fontFamilies={fontFamilies}
+            documentFonts={documentFonts}
             zoom={state.zoom}
             showZoomControl={showZoomControl}
             onFormat={handleFormat}

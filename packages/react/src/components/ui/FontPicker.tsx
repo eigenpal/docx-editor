@@ -18,6 +18,7 @@ import {
 import { cn } from '../../lib/utils';
 import { useTranslation } from '../../i18n';
 import { getPrimaryFontFamily } from './fontPickerValue';
+import { excludeFontsByName } from '@eigenpal/docx-editor-core/utils';
 
 // ============================================================================
 // TYPES
@@ -30,6 +31,11 @@ export interface FontPickerProps {
   value?: string;
   onChange?: (fontFamily: string) => void;
   fonts?: FontOption[];
+  /**
+   * Fonts the loaded document references that the browser can render. Shown in
+   * a "Document fonts" group above the built-in list, deduped against `fonts`.
+   */
+  documentFonts?: readonly FontOption[];
   disabled?: boolean;
   className?: string;
   placeholder?: string;
@@ -67,6 +73,7 @@ export function FontPicker({
   value,
   onChange,
   fonts = DEFAULT_FONTS,
+  documentFonts,
   disabled = false,
   className,
   placeholder = 'Arial',
@@ -74,26 +81,41 @@ export function FontPicker({
   showPreview = true,
 }: FontPickerProps) {
   const { t } = useTranslation();
+
+  // Document fonts shown above the built-in list, minus any the built-in list
+  // already covers (case-insensitive) so a font never appears twice.
+  const docFonts = React.useMemo(
+    () =>
+      excludeFontsByName(
+        documentFonts,
+        fonts.map((f) => f.name)
+      ),
+    [documentFonts, fonts]
+  );
+
+  // Lookups (display + change) span both the document group and the main list.
+  const lookupFonts = React.useMemo(() => [...docFonts, ...fonts], [docFonts, fonts]);
+
   // Find current font name for display
   const displayValue = React.useMemo(() => {
     if (!value) return placeholder;
-    const font = fonts.find(
+    const font = lookupFonts.find(
       (f) =>
         f.fontFamily === value ||
         f.name.toLowerCase() === value.toLowerCase() ||
         getPrimaryFontFamily(f.fontFamily).toLowerCase() === value.toLowerCase()
     );
     return font?.name || value;
-  }, [value, fonts, placeholder]);
+  }, [value, lookupFonts, placeholder]);
 
   const handleValueChange = React.useCallback(
     (newValue: string) => {
-      const font = fonts.find((f) => f.name === newValue);
+      const font = lookupFonts.find((f) => f.name === newValue);
       if (font) {
         onChange?.(getPrimaryFontFamily(font.fontFamily) || font.name);
       }
     },
-    [onChange, fonts]
+    [onChange, lookupFonts]
   );
 
   // Group fonts by category
@@ -121,6 +143,23 @@ export function FontPicker({
         <SelectValue placeholder={placeholder}>{displayValue}</SelectValue>
       </SelectTrigger>
       <SelectContent className="max-h-[300px]">
+        {docFonts.length > 0 && (
+          <>
+            <SelectGroup>
+              <SelectLabel>{t('font.documentFonts')}</SelectLabel>
+              {docFonts.map((font) => (
+                <SelectItem
+                  key={`doc-${font.name}`}
+                  value={font.name}
+                  style={showPreview ? { fontFamily: font.fontFamily } : undefined}
+                >
+                  {font.name}
+                </SelectItem>
+              ))}
+            </SelectGroup>
+            <SelectSeparator />
+          </>
+        )}
         {groupedFonts['sans-serif'].length > 0 && (
           <SelectGroup>
             <SelectLabel>{t('font.sansSerif')}</SelectLabel>

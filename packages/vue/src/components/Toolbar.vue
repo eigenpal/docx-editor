@@ -473,6 +473,7 @@ import {
   normalizeFontFamilies,
   type FontOption,
 } from '@eigenpal/docx-editor-core/utils/fontOptions';
+import { excludeFontsByName } from '@eigenpal/docx-editor-core/utils';
 import {
   defaultFonts,
   fontSizePresets,
@@ -517,6 +518,12 @@ const props = defineProps<{
   theme?: Theme | null;
   /** Optional custom font list matching React's `fontFamilies` prop. */
   fontFamilies?: ReadonlyArray<string | FontOption>;
+  /**
+   * Fonts the loaded document references that the browser can render (embedded
+   * faces + system-resolved). Rendered in a "Document fonts" group, deduped
+   * against `fontFamilies`. Managed by the editor, mirrors React's prop.
+   */
+  documentFonts?: ReadonlyArray<FontOption>;
   /** Paragraph styles from the loaded document (document.package.styles.styles).
       When present, the style picker shows the document's real styles + names,
       matching React's Toolbar `documentStyles` prop. Falls back to presets. */
@@ -689,7 +696,19 @@ const currentHighlightHex = computed<string | undefined>(() => {
 // =========================================================================
 
 const normalizedFonts = computed(() => normalizeFontFamilies(props.fontFamilies) ?? defaultFonts);
+// Document fonts shown above the built-in list, minus any the list already
+// covers (case-insensitive) so a font never appears twice.
+const docFonts = computed(() =>
+  excludeFontsByName(
+    props.documentFonts,
+    normalizedFonts.value.map((f) => f.name)
+  )
+);
 const fontGroups = computed(() => [
+  {
+    label: t('font.documentFonts'),
+    fonts: docFonts.value,
+  },
   {
     label: t('font.sansSerif'),
     fonts: normalizedFonts.value.filter((font) => font.category === 'sans-serif'),
