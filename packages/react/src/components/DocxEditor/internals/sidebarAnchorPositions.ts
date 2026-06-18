@@ -44,19 +44,28 @@ export function computeAnchorPositions(
   // viewport paddingTop + pages container padding (CSS padding = pageGap)
   const contentOffset = VIEWPORT_PADDING_TOP + renderedPageGap;
 
+  // `pmDoc.descendants` visits nodes — and therefore every registerKey call —
+  // in ascending PM order, and pages/fragments are laid out in that same order.
+  // So the page containing each successive anchor never moves backwards: we can
+  // resume the page scan from the last matched page instead of restarting at 0.
+  // This turns the whole pass from O(anchors × pages) into O(anchors + pages),
+  // which is the difference between ~1.5s and a few ms on large review docs.
+  let pageHint = 0;
+
   const registerKey = (key: string, pos: number) => {
     if (seen.has(key)) return;
     seen.add(key);
 
     // Try exact position (paragraphs/images)
-    const caret = getCaretPosition(layout, blocks, measures, pos);
+    const caret = getCaretPosition(layout, blocks, measures, pos, pageHint);
     if (caret) {
+      pageHint = caret.pageIndex;
       positions.set(key, caret.y + contentOffset);
       return;
     }
 
     // Fallback: find containing fragment (tables, etc.) by PM position
-    for (let pi = 0; pi < layout.pages.length; pi++) {
+    for (let pi = pageHint; pi < layout.pages.length; pi++) {
       const page = layout.pages[pi];
       for (const frag of page.fragments) {
         const fStart = frag.docFrom ?? 0;
@@ -65,6 +74,7 @@ export function computeAnchorPositions(
 
         const rowOffsetY =
           frag.kind === 'table' ? getTableRowOffset(blocks, measures, frag, pos) : 0;
+        pageHint = pi;
         positions.set(key, frag.y + rowOffsetY + pageTopOffset(layout, pi) + contentOffset);
         return;
       }
