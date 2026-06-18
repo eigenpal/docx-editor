@@ -1,5 +1,36 @@
 # @eigenpal/docx-editor-vue
 
+## 1.7.0
+
+### Minor Changes
+
+- c0923f7: Add `commentsSidebarOpen` and `onCommentsSidebarOpenChange` to `<DocxEditor>` for controlling the comments sidebar's visibility. When `commentsSidebarOpen` is set it becomes the source of truth; `onCommentsSidebarOpenChange` (React prop / Vue `comments-sidebar-open-change` event) fires whenever the editor wants to open or close it. Lets consumers that hide or replace the toolbar (`showToolbar={false}`) toggle the sidebar themselves, or open it programmatically. Omit both to keep the default self-managed behavior.
+- 769f1f5: Add the `showHelpMenu` prop to the Vue editor (default `true`) to hide the Help menu in the menu bar, matching the React adapter.
+- 78af476: Add `onOpen` and `showFileOpen` props so Vue consumers can route File > Open through their own import pipeline or hide the built-in Open action.
+
+### Patch Changes
+
+- 6be8146: Fix the document outline toggle button and outline panel overlapping the ruler in the Vue editor when the ruler is shown. Both now sit below the ruler row, matching React. Fixes #887
+- 36a7414: Fix the Vue comments-sidebar toggle being stuck closed. The new `commentsSidebarOpen` prop is a Boolean, and Vue casts an absent Boolean prop to `false`, so the editor read it as controlled-closed and the toolbar button could never open the sidebar. It now defaults to `undefined` (uncontrolled), matching React.
+- e740694: Fix the Vue editor layout shifting left and missing horizontal scroll on narrow viewports by enabling horizontal overflow on the pages viewport and enforcing minLayoutWidth.
+- 421faf1: Support tracked changes (Suggesting mode) in headers and footers for both React and Vue components, including card positioning in the sidebar and command support.
+- edd0bc2: Add themeable document-scrollbar CSS variables and apply the styled scrollbar to both React and Vue document scroll containers.
+- 94b5816: Fix the Vue right-click context menu (and image menu / tooltips) rendering unstyled — transparent, with no border or shadow. They teleport into `<body>`, outside the editor's `.ep-root` where the `--doc-*` color tokens are defined, so every token resolved to empty. The teleported roots now re-apply the editor's `.ep-root` (and current light/dark theme) so the tokens resolve.
+- Updated dependencies [ed04d10]
+- Updated dependencies [35b5cee]
+- Updated dependencies [186598a]
+- Updated dependencies [2dedf30]
+- Updated dependencies [dfd316f]
+- Updated dependencies [6b1897a]
+- Updated dependencies [8e95d60]
+- Updated dependencies [f2c9f9f]
+- Updated dependencies [fc95983]
+- Updated dependencies [edd0bc2]
+- Updated dependencies [d4a27d4]
+  - @eigenpal/docx-editor-core@1.7.0
+  - @eigenpal/docx-editor-agents@1.7.0
+  - @eigenpal/docx-editor-i18n@1.7.0
+
 ## 1.6.2
 
 ### Patch Changes
