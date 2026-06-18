@@ -168,7 +168,9 @@ export interface FontFamilyAttrs {
 // @public
 export interface FontSizeAttrs {
     // (undocumented)
-    size: number;
+    size?: number | null;
+    // (undocumented)
+    sizeCs?: number | null;
 }
 
 // @public
