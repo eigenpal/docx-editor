@@ -307,15 +307,13 @@ export function ToolbarButton({
       variant="ghost"
       size="icon-sm"
       className={cn(
-        'text-muted-foreground hover:text-foreground hover:bg-muted',
-        active && 'bg-foreground text-white hover:bg-foreground hover:text-white',
-        // Dark mode: bg-foreground flips light, so use Word's accent-tinted
-        // toggle highlight (blue tint + blue icon) instead of a white slab.
-        active &&
-          'dark:bg-doc-primary-light dark:text-doc-primary dark:hover:bg-doc-primary-light dark:hover:text-doc-primary',
+        // Hover + active states live in editor.css (.ep-toolbar-toggle); see
+        // that rule for why they're not Tailwind utilities here.
+        'ep-toolbar-toggle text-muted-foreground',
         disabled && 'opacity-30 cursor-not-allowed',
         className
       )}
+      data-active={active ? 'true' : undefined}
       onMouseDown={handleMouseDown}
       onClick={disabled ? undefined : onClick}
       disabled={disabled}
