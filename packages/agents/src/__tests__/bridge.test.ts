@@ -56,6 +56,7 @@ function makeMockRef(content: (Paragraph | Table)[]): EditorRefLike {
   }> = [];
   let proposeChangeCalled = false;
   let scrolledTo: string | undefined;
+  let scrollOptions: unknown;
   let nextId = 1;
   const contentListeners = new Set<(d: unknown) => void>();
   const selectionListeners = new Set<(s: unknown) => void>();
@@ -87,8 +88,9 @@ function makeMockRef(content: (Paragraph | Table)[]): EditorRefLike {
       proposeChangeCalled = true;
       return true;
     },
-    scrollToParaId: (paraId) => {
+    scrollToParaId: (paraId, options) => {
       scrolledTo = paraId;
+      scrollOptions = options;
       return true;
     },
     findInDocument: () => [],
@@ -115,12 +117,16 @@ function makeMockRef(content: (Paragraph | Table)[]): EditorRefLike {
     get _scrolledTo() {
       return scrolledTo;
     },
+    get _scrollOptions() {
+      return scrollOptions;
+    },
     _emitContent: () => contentListeners.forEach((l) => l({})),
     _emitSelection: () => selectionListeners.forEach((l) => l({})),
     _contentListenerCount: () => contentListeners.size,
   } as EditorRefLike & {
     _proposeChangeCalled: boolean;
     _scrolledTo: string | undefined;
+    _scrollOptions: unknown;
     _emitContent: () => void;
     _emitSelection: () => void;
     _contentListenerCount: () => number;
@@ -227,11 +233,14 @@ describe('createEditorBridge', () => {
   test('scrollTo forwards paraId', () => {
     const ref = makeMockRef([makeParagraph('Hello')]) as EditorRefLike & {
       _scrolledTo: string | undefined;
+      _scrollOptions: unknown;
     };
     const bridge = createEditorBridge(ref);
 
-    bridge.scrollTo('p_a3f');
+    const options = { highlight: { color: 'rgba(255, 200, 0, 0.5)', durationMs: 800 } };
+    bridge.scrollTo('p_a3f', options);
     expect(ref._scrolledTo).toBe('p_a3f');
+    expect(ref._scrollOptions).toBe(options);
   });
 
   test('findText forwards through to ref.findInDocument', () => {

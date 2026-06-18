@@ -27,7 +27,7 @@ import {
   type ContentControlFilter,
   type ContentControlValue,
 } from '@eigenpal/docx-editor-core/agent';
-import type { DocxInput } from '@eigenpal/docx-editor-core/utils';
+import type { DocxInput, ScrollToParaIdOptions } from '@eigenpal/docx-editor-core/utils';
 import { getCachedNumberingMap } from '@eigenpal/docx-editor-core/docx';
 import type { DocxEditorRef } from '../../DocxEditor';
 import type { PagedEditorRef } from '../PagedEditor';
@@ -175,7 +175,8 @@ export function useDocxEditorRefApi({
           pageNumber
         ),
 
-      scrollToParaId: (paraId) => pagedEditorRef.current?.scrollToParaId(paraId) ?? false,
+      scrollToParaId: (paraId: string, options?: ScrollToParaIdOptions) =>
+        pagedEditorRef.current?.scrollToParaId(paraId, options) ?? false,
 
       scrollToCommentId: (commentId) =>
         pagedEditorRef.current?.scrollToCommentId(commentId) ?? false,

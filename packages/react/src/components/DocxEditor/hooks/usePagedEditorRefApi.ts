@@ -19,6 +19,7 @@ import type { EditorView } from 'prosemirror-view';
 
 import type { Layout } from '@eigenpal/docx-editor-core/layout-engine';
 import type { Document, HeaderFooter } from '@eigenpal/docx-editor-core/types/document';
+import type { ScrollToParaIdOptions } from '@eigenpal/docx-editor-core/utils';
 import {
   findCommentRange,
   findChangeRange,
@@ -37,7 +38,7 @@ interface RefApiInputs {
   layout: Layout | null;
   runLayoutPipeline: (state: EditorState) => void;
   scrollToPositionImpl: (pmPos: number, forParaIdScroll?: boolean) => void;
-  scrollToParaIdImpl: (paraId: string) => boolean;
+  scrollToParaIdImpl: (paraId: string, options?: ScrollToParaIdOptions) => boolean;
   scrollToPageImpl: (pageNumber: number) => void;
   setIsFocused: React.Dispatch<React.SetStateAction<boolean>>;
 }

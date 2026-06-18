@@ -206,7 +206,7 @@ export interface EditorRefLike {
     // (undocumented)
     resolveComment(commentId: number): void;
     // (undocumented)
-    scrollToParaId(paraId: string): boolean;
+    scrollToParaId(paraId: string, options?: ScrollToParaIdOptions): boolean;
     setParagraphStyle(options: {
         paraId: string;
         styleId: string;

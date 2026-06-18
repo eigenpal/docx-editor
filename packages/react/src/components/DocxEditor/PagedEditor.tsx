@@ -29,6 +29,7 @@ import { DecorationLayer } from './overlays/DecorationLayer';
 
 // Layout engine
 import type { Layout } from '@eigenpal/docx-editor-core/layout-engine';
+import type { ScrollToParaIdOptions } from '@eigenpal/docx-editor-core/utils';
 
 // Layout bridge
 import { DEFAULT_PAGE_HEIGHT_PX } from '@eigenpal/docx-editor-core/layout-bridge';
@@ -225,9 +226,10 @@ export interface PagedEditorRef {
   scrollToPosition(pmPos: number): void;
   /**
    * Scroll to the paragraph identified by Word `w14:paraId` / PM `paraId`.
+   * Pass `options.highlight` to briefly flash rendered paragraph fragments.
    * @returns whether a matching paragraph was found
    */
-  scrollToParaId(paraId: string): boolean;
+  scrollToParaId(paraId: string, options?: ScrollToParaIdOptions): boolean;
   /**
    * Scroll the paginated view so `pageNumber` (1-indexed) is in view.
    * No-op if the layout isn't ready yet or pageNumber is out of range.

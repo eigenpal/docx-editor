@@ -8,6 +8,12 @@ function assertAssignable<T>(_value: T): void {}
 
 declare const reactRef: DocxEditorRef;
 assertAssignable<EditorRefLike>(reactRef);
+assertAssignable<{
+  scrollToParaId(
+    paraId: string,
+    options?: { highlight?: { color?: string; durationMs?: number } }
+  ): boolean;
+}>(reactRef);
 
 // Drop a required method → typecheck must fail. If a contributor renames
 // or removes an EditorRefLike method on the React ref, the @ts-expect-error

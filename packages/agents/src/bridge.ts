@@ -65,7 +65,7 @@ export interface EditorRefLike {
     replaceWith: string;
     author: string;
   }): boolean;
-  scrollToParaId(paraId: string): boolean;
+  scrollToParaId(paraId: string, options?: ScrollToParaIdOptions): boolean;
   findInDocument(
     query: string,
     options?: { caseSensitive?: boolean; limit?: number }
@@ -100,6 +100,29 @@ export interface EditorRefLike {
   getCurrentPage(): number;
   onContentChange(listener: (doc: unknown) => void): () => void;
   onSelectionChange(listener: (selection: unknown) => void): () => void;
+}
+
+/**
+ * Customization for transient paragraph highlight/flash behavior when
+ * revealing a paragraph by `paraId`.
+ *
+ * @public
+ */
+export interface ParagraphHighlightOptions {
+  /** CSS color used for the transient paragraph flash. */
+  color?: string;
+  /** How long the flash remains visible before it is removed. */
+  durationMs?: number;
+}
+
+/**
+ * Optional reveal behavior for `scrollToParaId` / `EditorBridge.scrollTo`.
+ *
+ * @public
+ */
+export interface ScrollToParaIdOptions {
+  /** Flash rendered paragraph fragments after scrolling to the paragraph. */
+  highlight?: ParagraphHighlightOptions;
 }
 
 /**
@@ -155,8 +178,8 @@ export interface EditorBridge {
   getTotalPages(): number;
   /** 1-indexed page the user's cursor / selection is on. 0 if unknown. */
   getCurrentPage(): number;
-  /** Scroll the editor to a paragraph by paraId. */
-  scrollTo(paraId: string): boolean;
+  /** Scroll the editor to a paragraph by paraId, optionally flashing it. */
+  scrollTo(paraId: string, options?: ScrollToParaIdOptions): boolean;
   /** Subscribe to document content changes. Returns an unsubscribe function. */
   onContentChange(listener: (event: ContentChangeEvent) => void): () => void;
   /** Subscribe to selection changes (cursor moves / selection changes). Returns an unsubscribe function. */
@@ -373,8 +396,8 @@ export function createEditorBridge(editorRef: EditorRefLike, author = 'AI'): Edi
       return editorRef.getCurrentPage();
     },
 
-    scrollTo(paraId: string): boolean {
-      return editorRef.scrollToParaId(paraId);
+    scrollTo(paraId: string, options?: ScrollToParaIdOptions): boolean {
+      return editorRef.scrollToParaId(paraId, options);
     },
 
     onContentChange(listener) {

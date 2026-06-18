@@ -61,7 +61,7 @@ import { type InlineHeaderFooterEditorRef } from './InlineHeaderFooterEditor';
 import { DocumentAgent } from '@eigenpal/docx-editor-core/agent';
 import { DefaultLoadingIndicator, DefaultPlaceholder, ParseError } from './DocxEditorHelpers';
 import { type DocxInput } from '@eigenpal/docx-editor-core/utils';
-import type { FontDefinition } from '@eigenpal/docx-editor-core/utils';
+import type { FontDefinition, ScrollToParaIdOptions } from '@eigenpal/docx-editor-core/utils';
 import { useFontLifecycle } from '../hooks/useFontLifecycle';
 import { useTableSelection } from '../hooks/useTableSelection';
 import { useDocumentHistory } from '../hooks/useHistory';
@@ -349,10 +349,11 @@ export interface DocxEditorRef {
   scrollToPage: (pageNumber: number) => void;
   /**
    * Scroll the paginated view to the paragraph with the given Word `w14:paraId`.
+   * Pass `options.highlight` to briefly flash it in a custom color.
    * @returns whether a matching paragraph exists in the ProseMirror document
-   * @example ref.current?.scrollToParaId('1A2B3C4D')
+   * @example ref.current?.scrollToParaId('1A2B3C4D', { highlight: { color: 'rgba(255, 235, 59, 0.55)' } })
    */
-  scrollToParaId: (paraId: string) => boolean;
+  scrollToParaId: (paraId: string, options?: ScrollToParaIdOptions) => boolean;
   /**
    * Scroll the paginated view to a specific ProseMirror document position.
    * Use this when you have a raw PM offset; for Word `w14:paraId` use
