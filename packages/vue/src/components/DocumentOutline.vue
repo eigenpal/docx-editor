@@ -9,7 +9,7 @@
   <nav
     v-if="isOpen"
     class="doc-outline"
-    :style="{ left: leftOffset + 'px' }"
+    :style="{ left: leftOffset + 'px', top: topPx + 'px' }"
     role="navigation"
     aria-label="Document outline"
     @mousedown.stop
@@ -51,8 +51,10 @@ const props = withDefaults(
     headings: HeadingInfo[];
     /** Left anchor (px); host bumps it past the vertical ruler when shown. */
     leftOffset?: number;
+    /** Top anchor (px); host bumps it past the sticky ruler row when shown. */
+    topPx?: number;
   }>(),
-  { leftOffset: 12 }
+  { leftOffset: 12, topPx: 24 }
 );
 
 // Indent relative to the shallowest heading present (mirrors React) so a doc
@@ -76,8 +78,9 @@ defineEmits<{
    slide-in uses transform so it doesn't trigger layout. */
 .doc-outline {
   position: absolute;
-  left: 12px;
-  top: 24px;
+  /* `left` and `top` are set inline by the host: `left` via the leftOffset prop
+     (page left anchor, bumped when the vertical ruler is shown), `top` at the
+     page top edge, bumped past the sticky ruler row when one is shown. */
   bottom: 0;
   width: 240px;
   display: flex;
