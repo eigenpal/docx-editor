@@ -123,6 +123,7 @@ export interface ComplexField {
     fieldResult: Run[];
     fieldType: FieldType;
     fldLock?: boolean;
+    formatting?: TextFormatting;
     instruction: string;
     // (undocumented)
     type: 'complexField';
