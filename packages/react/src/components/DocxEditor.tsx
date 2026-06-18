@@ -159,6 +159,8 @@ export interface DocxEditorProps {
    * Set false when you provide your own open action elsewhere.
    */
   showFileOpen?: boolean;
+  /** Whether to show the Help menu in the menu bar (default: true) */
+  showHelpMenu?: boolean;
   /** Whether to show zoom control (default: true) */
   showZoomControl?: boolean;
   /** Whether to show page margin guides/boundaries (default: false) */
@@ -598,6 +600,7 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
     theme,
     showToolbar = true,
     showFileOpen = true,
+    showHelpMenu = true,
     showZoomControl = true,
     showMarginGuides: _showMarginGuides = false,
     marginGuideColor: _marginGuideColor,
@@ -1797,6 +1800,7 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
             onRedo={redoActiveEditor}
             onPrint={handleDirectPrint}
             showFileOpen={showFileOpen}
+            showHelpMenu={showHelpMenu}
             onOpen={handleOpenDocument}
             onSave={handleDownloadDocument}
             onZoomChange={handleZoomChange}

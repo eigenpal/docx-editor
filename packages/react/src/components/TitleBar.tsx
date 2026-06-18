@@ -182,6 +182,7 @@ export function MenuBar() {
     onInsertImage,
     onInsertTable,
     showTableInsert = true,
+    showHelpMenu = true,
     onInsertPageBreak,
     onInsertSectionBreakNextPage,
     onInsertSectionBreakContinuous,
@@ -356,16 +357,18 @@ export function MenuBar() {
       />
 
       {/* Help Menu */}
-      <MenuDropdown
-        label={t('toolbar.help')}
-        disabled={disabled}
-        items={[
-          {
-            label: t('toolbar.reportIssue'),
-            onClick: () => openReportIssue(),
-          } as MenuEntry,
-        ]}
-      />
+      {showHelpMenu && (
+        <MenuDropdown
+          label={t('toolbar.help')}
+          disabled={disabled}
+          items={[
+            {
+              label: t('toolbar.reportIssue'),
+              onClick: () => openReportIssue(),
+            } as MenuEntry,
+          ]}
+        />
+      )}
     </div>
   );
 }

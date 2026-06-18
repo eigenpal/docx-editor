@@ -190,6 +190,8 @@ export interface ToolbarProps {
   onInsertTable?: (rows: number, columns: number) => void;
   /** Whether to show table insert button (default: true) */
   showTableInsert?: boolean;
+  /** Whether to show the Help menu in the menu bar (default: true) */
+  showHelpMenu?: boolean;
   /** Callback when user wants to insert an image */
   onInsertImage?: () => void;
   /** Callback when user wants to insert a page break */

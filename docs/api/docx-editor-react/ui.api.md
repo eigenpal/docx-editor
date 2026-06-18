@@ -1250,6 +1250,7 @@ export interface ToolbarProps {
     showAlignmentButtons?: boolean;
     showFontPicker?: boolean;
     showFontSizePicker?: boolean;
+    showHelpMenu?: boolean;
     showHighlightColorPicker?: boolean;
     showLineSpacingPicker?: boolean;
     showListButtons?: boolean;

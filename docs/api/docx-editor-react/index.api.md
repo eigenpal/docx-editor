@@ -101,6 +101,7 @@ export interface DocxEditorProps {
     renderTitleBarRight?: () => ReactNode;
     rulerUnit?: 'inch' | 'cm';
     showFileOpen?: boolean;
+    showHelpMenu?: boolean;
     showMarginGuides?: boolean;
     showOutline?: boolean;
     showOutlineButton?: boolean;

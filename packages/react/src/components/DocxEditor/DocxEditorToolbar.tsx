@@ -76,6 +76,7 @@ export function DocxEditorToolbar({
   onRedo,
   onPrint,
   showFileOpen,
+  showHelpMenu,
   onOpen,
   onSave,
   onZoomChange,
@@ -123,6 +124,7 @@ export function DocxEditorToolbar({
   onRedo: () => void;
   onPrint: () => void;
   showFileOpen: boolean;
+  showHelpMenu: boolean;
   onOpen: () => void;
   onSave: () => void | Promise<void>;
   onZoomChange: (zoom: number) => void;
@@ -170,6 +172,7 @@ export function DocxEditorToolbar({
         onRefocusEditor={onRefocusEditor}
         onInsertTable={onInsertTable}
         showTableInsert={true}
+        showHelpMenu={showHelpMenu}
         onInsertImage={onInsertImage}
         onInsertPageBreak={onInsertPageBreak}
         onInsertSectionBreakNextPage={onInsertSectionBreakNextPage}
