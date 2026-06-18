@@ -26,6 +26,7 @@ import { useFindReplaceBridge } from './DocxEditor/hooks/useFindReplaceBridge';
 import { useFormattingActions } from './DocxEditor/hooks/useFormattingActions';
 import { useImageActions } from './DocxEditor/hooks/useImageActions';
 import { useDocxEditorRefApi } from './DocxEditor/hooks/useDocxEditorRefApi';
+import { useControllableBoolean } from './DocxEditor/hooks/useControllableBoolean';
 import { useTableDialogs } from './DocxEditor/hooks/useTableDialogs';
 import { useHeaderFooterEditing } from './DocxEditor/hooks/useHeaderFooterEditing';
 import { useDocumentLoader } from './DocxEditor/hooks/useDocumentLoader';
@@ -276,6 +277,10 @@ export interface DocxEditorProps {
   comments?: Comment[];
   /** Fires whenever the comments array changes (controlled mode). */
   onCommentsChange?: (comments: Comment[]) => void;
+  /** Controlled comments-sidebar visibility; source of truth when set. Pair with `onCommentsSidebarOpenChange`; omit for the default self-managed behavior. */
+  commentsSidebarOpen?: boolean;
+  /** Fires with the next open state whenever the editor wants to show or hide the comments sidebar. Fires in both controlled and uncontrolled modes. */
+  onCommentsSidebarOpenChange?: (open: boolean) => void;
   /**
    * Callback when rendered DOM context is ready (for plugin overlays).
    * Used by PluginHost to get access to the rendered page DOM for positioning.
@@ -632,6 +637,8 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
     onCommentReply,
     comments: commentsProp,
     onCommentsChange,
+    commentsSidebarOpen,
+    onCommentsSidebarOpenChange,
     externalPlugins,
     externalContent = false,
     onEditorViewReady,
@@ -679,8 +686,12 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
   const [hfEditPosition, setHfEditPosition] = useState<'header' | 'footer' | null>(null);
   const [hfEditIsFirstPage, setHfEditIsFirstPage] = useState(false);
 
-  // Comments sidebar state
-  const [showCommentsSidebar, setShowCommentsSidebar] = useState(false);
+  // Controlled by `commentsSidebarOpen` when provided, else editor-owned; the
+  // setter routes through `onCommentsSidebarOpenChange`. See useControllableBoolean.
+  const [showCommentsSidebar, setShowCommentsSidebar] = useControllableBoolean(
+    commentsSidebarOpen,
+    onCommentsSidebarOpenChange
+  );
   // Auto-open the sidebar the first time a comment / tracked change
   // appears so users see the card without manually toggling. Latches so
   // a subsequent close stays closed; reset on doc reload.

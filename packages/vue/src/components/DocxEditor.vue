@@ -428,6 +428,7 @@ import { useSelectionSync } from '../composables/useSelectionSync';
 import { useMenuActions } from '../composables/useMenuActions';
 import { useDocumentLifecycle } from '../composables/useDocumentLifecycle';
 import { useDocxEditorRefApi } from '../composables/useDocxEditorRefApi';
+import { useControllableBoolean } from '../composables/useControllableBoolean';
 import type { Document } from '@eigenpal/docx-editor-core/types/document';
 import type { Comment } from '@eigenpal/docx-editor-core/types/content';
 import type { HeadingInfo } from '@eigenpal/docx-editor-core/utils/headingCollector';
@@ -481,6 +482,7 @@ const emit = defineEmits<{
   (e: 'rename', name: string): void;
   (e: 'menu-action', action: string): void;
   (e: 'mode-change', mode: EditorMode): void;
+  (e: 'comments-sidebar-open-change', open: boolean): void;
 }>();
 
 const isDark = useColorMode(() => props.colorMode);
@@ -510,7 +512,12 @@ const showImageProperties = ref(false);
 const showPageSetup = ref(false);
 const showOutline = ref(props.showOutline);
 const showKeyboardShortcuts = ref(false);
-const showSidebar = ref(false);
+// Controlled by `commentsSidebarOpen` when set, else editor-owned; writes route
+// through `onCommentsSidebarOpenChange`. Mirrors React's useControllableBoolean.
+const showSidebar = useControllableBoolean(
+  () => props.commentsSidebarOpen,
+  (open) => emit('comments-sidebar-open-change', open)
+);
 const isAddingComment = ref(false);
 const activeSidebarItem = ref<string | null>(null);
 // Tree-shaped + reassigned wholesale: shallowRef avoids deep-proxying the
