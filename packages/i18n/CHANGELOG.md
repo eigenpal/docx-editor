@@ -1,5 +1,7 @@
 # @eigenpal/docx-editor-i18n
 
+## 1.8.1
+
 ## 1.8.0
 
 ## 1.7.0
