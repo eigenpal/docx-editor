@@ -10,6 +10,9 @@ import { PluginKey } from 'prosemirror-state';
 import { Transaction } from 'prosemirror-state';
 
 // @public
+export function createDocumentContextPlugin(options?: Partial<DocumentContext>): Plugin_2;
+
+// @public
 export function createDocumentStylesPlugin(styles: StyleDefinitions | StyleResolver | null | undefined): Plugin_2;
 
 // @public
@@ -19,13 +22,28 @@ export function createSelectionTrackerPlugin(onSelectionChange?: SelectionChange
 export function createSuggestionModePlugin(initialActive?: boolean, author?: string): Plugin_2;
 
 // @public
+export interface DocumentContext {
+    defaultTableStyleId: string | null;
+    theme: Theme | null;
+}
+
+// @public (undocumented)
+export const documentContextKey: PluginKey<DocumentContext>;
+
+// @public
 export const documentStylesKey: PluginKey<StyleResolver | null>;
 
 // @public
 export function extractSelectionContext(state: EditorState): SelectionContext;
 
 // @public
+export function getDefaultTableStyleId(state: EditorState): string | null;
+
+// @public
 export function getDocumentStyleResolver(state: EditorState): StyleResolver | null;
+
+// @public
+export function getDocumentTheme(state: EditorState): Theme | null;
 
 // @public
 export function getSelectionContext(state: EditorState): SelectionContext | null;

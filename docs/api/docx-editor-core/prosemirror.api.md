@@ -81,6 +81,9 @@ export const clearStyle: Command;
 export const clearTextColor: Command;
 
 // @public
+export function createDocumentContextPlugin(options?: Partial<DocumentContext>): Plugin_2;
+
+// @public
 export function createDocumentStylesPlugin(styles: StyleDefinitions | StyleResolver | null | undefined): Plugin_2;
 
 // @public
@@ -109,6 +112,15 @@ export function deleteTable(state: EditorState, dispatch?: (tr: Transaction) => 
 
 // @public (undocumented)
 export function distributeColumns(): (state: EditorState, dispatch?: (tr: Transaction) => void) => boolean;
+
+// @public
+export interface DocumentContext {
+    defaultTableStyleId: string | null;
+    theme: Theme | null;
+}
+
+// @public (undocumented)
+export const documentContextKey: PluginKey<DocumentContext>;
 
 // @public
 export const documentStylesKey: PluginKey<StyleResolver | null>;
@@ -185,7 +197,13 @@ export function fromProseDoc(pmDoc: Node_2, baseDocument?: Document_2): Document
 export const generateTOC: Command;
 
 // @public
+export function getDefaultTableStyleId(state: EditorState): string | null;
+
+// @public
 export function getDocumentStyleResolver(state: EditorState): StyleResolver | null;
+
+// @public
+export function getDocumentTheme(state: EditorState): Theme | null;
 
 // @public (undocumented)
 export function getHyperlinkAttrs(state: EditorState): {

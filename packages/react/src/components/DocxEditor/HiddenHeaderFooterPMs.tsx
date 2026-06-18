@@ -34,7 +34,11 @@ import {
 import { EditorState } from 'prosemirror-state';
 import type { EditorState as EditorStateT } from 'prosemirror-state';
 import { EditorView } from 'prosemirror-view';
-import { schema, createDocumentStylesPlugin } from '@eigenpal/docx-editor-core/prosemirror';
+import {
+  schema,
+  createDocumentStylesPlugin,
+  createDocumentContextPlugin,
+} from '@eigenpal/docx-editor-core/prosemirror';
 import {
   createSuggestionModePlugin,
   setSuggestionMode,
@@ -112,6 +116,7 @@ function buildInitialState(
   styles: StyleDefinitions | null | undefined,
   theme: Theme | null | undefined,
   defaultTabMarkTwips: number | null | undefined,
+  defaultTableStyleId: string | null | undefined,
   mgr: ExtensionManager,
   isSuggesting: boolean,
   author: string
@@ -124,11 +129,17 @@ function buildInitialState(
   // Header/footer paragraphs share the document's style table, so they get the
   // same style-aware behavior (e.g. Enter after a heading → body text).
   const styleResolverPlugin = createDocumentStylesPlugin(styles);
+  // Document context (theme + settings `w:defaultTableStyle`) so inserting a
+  // table in a header/footer adopts the default table style too.
+  const documentContextPlugin = createDocumentContextPlugin({
+    theme: theme ?? null,
+    defaultTableStyleId: defaultTableStyleId ?? null,
+  });
   const suggestionPlugin = createSuggestionModePlugin(isSuggesting, author);
   return EditorState.create({
     doc: pmDoc,
     schema,
-    plugins: [suggestionPlugin, ...mgr.getPlugins(), styleResolverPlugin],
+    plugins: [suggestionPlugin, ...mgr.getPlugins(), styleResolverPlugin, documentContextPlugin],
   });
 }
 
@@ -170,6 +181,11 @@ export const HiddenHeaderFooterPMs = memo(
     // the EditorViews.
     const onTransactionRef = useRef(onTransaction);
     onTransactionRef.current = onTransaction;
+
+    // styleId for newly inserted tables — fixed per document load (a primitive,
+    // so safe in the effect deps unlike the `document` object whose identity
+    // changes on every body transaction).
+    const defaultTableStyleId = document?.package?.settings?.defaultTableStyle ?? null;
 
     const isSuggestingRef = useRef(isSuggesting);
     isSuggestingRef.current = isSuggesting;
@@ -283,6 +299,7 @@ export const HiddenHeaderFooterPMs = memo(
           styles,
           theme,
           defaultTabMarkTwips,
+          defaultTableStyleId,
           mgr,
           isSuggestingRef.current,
           authorRef.current
@@ -312,7 +329,7 @@ export const HiddenHeaderFooterPMs = memo(
       // ref; depending on `document` directly causes a full HF EditorView
       // re-mount on every body PM transaction (each Document.applyTransaction
       // returns a new identity), which destroys IME state and selection.
-    }, [slots, resolveHf, styles, theme, defaultTabMarkTwips]);
+    }, [slots, resolveHf, styles, theme, defaultTabMarkTwips, defaultTableStyleId]);
 
     // Tear everything down on unmount.
     useEffect(() => {

@@ -8,10 +8,16 @@
 export function createStyleResolver(styleDefinitions: StyleDefinitions | undefined): StyleResolver;
 
 // @public
+export const DEFAULT_NEW_TABLE_LOOK: TableLook;
+
+// @public
 export interface ResolvedParagraphStyle {
     paragraphFormatting?: ParagraphFormatting;
     runFormatting?: TextFormatting;
 }
+
+// @public
+export function resolvePreferredNewTableStyleId(defaultTableStyleId: string | undefined | null, resolver: StyleResolver | null | undefined): string | undefined;
 
 // @public
 export class StyleResolver {
