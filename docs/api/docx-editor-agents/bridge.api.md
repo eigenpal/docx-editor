@@ -66,7 +66,7 @@ export interface EditorBridge {
     proposeChange(options: ProposeChangeOptions): boolean;
     replyTo(commentId: number, options: ReplyOptions): number | null;
     resolveComment(commentId: number): void;
-    scrollTo(paraId: string): boolean;
+    scrollTo(paraId: string, options?: ScrollToParaIdOptions): boolean;
     setParagraphStyle(options: SetParagraphStyleOptions): boolean;
 }
 
@@ -129,7 +129,7 @@ export interface EditorRefLike {
     // (undocumented)
     resolveComment(commentId: number): void;
     // (undocumented)
-    scrollToParaId(paraId: string): boolean;
+    scrollToParaId(paraId: string, options?: ScrollToParaIdOptions): boolean;
     setParagraphStyle(options: {
         paraId: string;
         styleId: string;
@@ -148,6 +148,17 @@ export function getToolSchemas(): {
         parameters: Record<string, unknown>;
     };
 }[];
+
+// @public
+export interface ParagraphHighlightOptions {
+    color?: string;
+    durationMs?: number;
+}
+
+// @public
+export interface ScrollToParaIdOptions {
+    highlight?: ParagraphHighlightOptions;
+}
 
 // @public
 export type SelectionChangeEvent = SelectionInfo | null;

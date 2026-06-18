@@ -21,6 +21,10 @@ import {
 import { findPageIndexContainingPmPos } from '@eigenpal/docx-editor-core/layout-engine';
 import type { FlowBlock, Layout, Measure } from '@eigenpal/docx-editor-core/layout-engine';
 import { findStartPosForParaId } from '@eigenpal/docx-editor-core/prosemirror';
+import {
+  flashParagraphFragmentsByParaId,
+  type ScrollToParaIdOptions,
+} from '@eigenpal/docx-editor-core/utils';
 import { findVerticalScrollParentOrRoot } from '@eigenpal/docx-editor-core/utils/findVerticalScrollParent';
 
 import type { OffscreenEditorHostRef } from '../OffscreenEditorHost';
@@ -38,7 +42,7 @@ export interface UsePagedScrollApiOptions {
 export interface UsePagedScrollApiReturn {
   scrollToPositionImpl: (pmPos: number, forParaIdScroll?: boolean) => void;
   scrollToPageImpl: (pageNumber: number) => void;
-  scrollToParaIdImpl: (paraId: string) => boolean;
+  scrollToParaIdImpl: (paraId: string, options?: ScrollToParaIdOptions) => boolean;
 }
 
 export function usePagedScrollApi(opts: UsePagedScrollApiOptions): UsePagedScrollApiReturn {
@@ -203,12 +207,19 @@ export function usePagedScrollApi(opts: UsePagedScrollApiOptions): UsePagedScrol
   );
 
   const scrollToParaIdImpl = useCallback(
-    (paraId: string): boolean => {
+    (paraId: string, options?: ScrollToParaIdOptions): boolean => {
       const state = hiddenPMRef.current?.getState();
       if (!state) return false;
       const startPos = findStartPosForParaId(state.doc, paraId);
       if (startPos == null || startPos < 0) return false;
       scrollToPositionImpl(startPos, true);
+      const flashPara = (): void => {
+        if (!options?.highlight) return;
+        const pages = pagesContainerRef.current;
+        if (!pages) return;
+        flashParagraphFragmentsByParaId(pages, paraId, options.highlight);
+      };
+      flashPara();
       // Defer selection/focus until after the scroll's paint-settle rAF
       // chain runs. Setting selection synchronously on a virtualized
       // (unpainted) target triggers a layout/scroll-restore cycle that
@@ -222,13 +233,14 @@ export function usePagedScrollApi(opts: UsePagedScrollApiOptions): UsePagedScrol
           ? Math.min(startPos + 1 + targetNode.content.size, state.doc.content.size)
           : Math.min(startPos + 1, state.doc.content.size);
       runAfterPaint(() => {
+        flashPara();
         if (!hiddenPMRef.current) return;
         hiddenPMRef.current.setSelection(inner);
         hiddenPMRef.current.focus();
       }, signal);
       return true;
     },
-    [scrollToPositionImpl, hiddenPMRef]
+    [scrollToPositionImpl, hiddenPMRef, pagesContainerRef]
   );
 
   return {

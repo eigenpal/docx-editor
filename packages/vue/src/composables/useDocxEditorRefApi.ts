@@ -19,6 +19,10 @@ import type { EditorView } from 'prosemirror-view';
 import type { Document } from '@eigenpal/docx-editor-core/types/document';
 import type { Comment } from '@eigenpal/docx-editor-core/types/content';
 import type { DocxInput } from '@eigenpal/docx-editor-core/utils';
+import {
+  flashParagraphFragmentsByParaId,
+  type ScrollToParaIdOptions,
+} from '@eigenpal/docx-editor-core/utils';
 import type { Layout } from '@eigenpal/docx-editor-core/layout-engine';
 import { findPageIndexContainingPmPos } from '@eigenpal/docx-editor-core/layout-engine';
 import { paintAllPagesNow } from '@eigenpal/docx-editor-core/layout-painter';
@@ -155,12 +159,20 @@ export function useDocxEditorRefApi(opts: UseDocxEditorRefApiOptions): {
     return pageIndex == null ? 0 : pageIndex + 1;
   }
 
-  function scrollToParaId(paraId: string): boolean {
+  function scrollToParaId(paraId: string, options?: ScrollToParaIdOptions): boolean {
     const view = opts.editorView.value;
     if (!view) return false;
     const range = findParaIdRange(view.state.doc, paraId);
     if (!range) return false;
     opts.scrollVisiblePositionIntoView(range.from + 1);
+    if (options?.highlight) {
+      const flashPara = () => {
+        const pages = opts.pagesRef.value;
+        if (pages) flashParagraphFragmentsByParaId(pages, paraId, options.highlight);
+      };
+      flashPara();
+      requestAnimationFrame(() => requestAnimationFrame(flashPara));
+    }
     return true;
   }
 

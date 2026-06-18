@@ -12,6 +12,10 @@ assertAssignable<{
   setZoom(zoom: number): void;
   getZoom(): number;
   scrollToPage(pageNumber: number): void;
+  scrollToParaId(
+    paraId: string,
+    options?: { highlight?: { color?: string; durationMs?: number } }
+  ): boolean;
   scrollToPosition(pmPos: number): void;
   print(): void;
   loadDocumentBuffer(buffer: ArrayBuffer): Promise<void>;
@@ -20,6 +24,9 @@ assertAssignable<{
 declare const vueHandle: DocxEditorHandle;
 assertAssignable<{
   setZoom(zoom: number): void;
-  scrollToParaId(paraId: string): boolean;
+  scrollToParaId(
+    paraId: string,
+    options?: { highlight?: { color?: string; durationMs?: number } }
+  ): boolean;
   scrollToPosition(pmPos: number): void;
 }>(vueHandle);

@@ -206,7 +206,7 @@ export interface WordCompatBridge {
     proposeChange(options: ProposeChangeOptions): boolean;
     replyTo(commentId: number, options: ReplyOptions): number | null;
     resolveComment(commentId: number): void;
-    scrollTo(paraId: string): boolean;
+    scrollTo(paraId: string, options?: ScrollToParaIdOptions): boolean;
     setParagraphStyle(options: SetParagraphStyleOptions): boolean;
 }
 

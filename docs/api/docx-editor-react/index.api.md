@@ -27,6 +27,7 @@ import * as prosemirror_view from 'prosemirror-view';
 import * as React_2 from 'react';
 import { ReactNode } from 'react';
 import { RenderedDomContext } from '@eigenpal/docx-editor-core/plugin-api';
+import { ScrollToParaIdOptions } from '@eigenpal/docx-editor-core/utils';
 import { SelectionState } from '@eigenpal/docx-editor-core/prosemirror';
 import { SidebarItem } from '@eigenpal/docx-editor-core/plugin-api';
 import { TFunction } from '@eigenpal/docx-editor-i18n';
@@ -45,7 +46,7 @@ export const DocxEditor: React_2.ForwardRefExoticComponent<DocxEditorProps & Rea
 
 // @public
 export interface DocxEditorHandle extends EditorHandle {
-    scrollToParaId: (paraId: string) => boolean;
+    scrollToParaId: (paraId: string, options?: ScrollToParaIdOptions) => boolean;
     scrollToPosition: (pmPos: number) => void;
     setZoom: (zoom: number) => void;
 }
@@ -206,7 +207,7 @@ export interface DocxEditorRef {
     scrollToCommentId: (commentId: number) => boolean;
     scrollToContentControl: (filter: ContentControlFilter) => boolean;
     scrollToPage: (pageNumber: number) => void;
-    scrollToParaId: (paraId: string) => boolean;
+    scrollToParaId: (paraId: string, options?: ScrollToParaIdOptions) => boolean;
     scrollToPosition: (pmPos: number) => void;
     setContentControlContent: (filter: ContentControlFilter, text: string, options?: {
         force?: boolean;

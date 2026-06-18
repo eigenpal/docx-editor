@@ -171,6 +171,12 @@ export function createTripleClickParagraphSelector(): (event: MouseEvent) => voi
 export function darkenColor(color: ColorValue | undefined | null, theme: Theme | null | undefined, percent: number): string;
 
 // @public
+export const DEFAULT_PARAGRAPH_FLASH_COLOR = "rgba(255, 235, 59, 0.55)";
+
+// @public
+export const DEFAULT_PARAGRAPH_FLASH_DURATION_MS = 1200;
+
+// @public
 export const DEFAULT_SELECTION_STYLE: SelectionHighlightConfig;
 
 // @public
@@ -210,6 +216,9 @@ export function findNextWordStart(text: string, position: number): number;
 export function findPageBreaks(doc: Document_2): InsertPosition_2[];
 
 // @public
+export function findParagraphFragmentsByParaId(root: ParentNode, paraId: string): HTMLElement[];
+
+// @public
 export function findPreviousWordStart(text: string, position: number): number;
 
 // @public
@@ -235,6 +244,12 @@ export function findWordEnd(text: string, position: number): number;
 
 // @public
 export function findWordStart(text: string, position: number): number;
+
+// @public
+export function flashParagraphElements(elements: Iterable<HTMLElement>, options?: ParagraphHighlightOptions): number;
+
+// @public
+export function flashParagraphFragmentsByParaId(root: ParentNode, paraId: string, options?: ParagraphHighlightOptions): boolean;
 
 // @public
 export const FONT_MAPPING: Record<string, string>;
@@ -542,6 +557,15 @@ export function onFontError(callback: (error: Error) => void): () => void;
 export function onFontsLoaded(callback: (fonts: string[]) => void): () => void;
 
 // @public
+export const PARAGRAPH_FLASH_CLASS_NAME = "docx-paragraph-flash";
+
+// @public
+export interface ParagraphHighlightOptions {
+    color?: string;
+    durationMs?: number;
+}
+
+// @public
 export function paragraphsToClipboardContent(paragraphs: Paragraph[], includeFormatting?: boolean, theme?: Theme | null): ClipboardContent;
 
 // @public
@@ -671,6 +695,11 @@ export function roundPixels(px: number, decimalPlaces?: number): number;
 
 // @public
 export function runsToClipboardContent(runs: Run[], includeFormatting?: boolean, theme?: Theme | null): ClipboardContent;
+
+// @public
+export interface ScrollToParaIdOptions {
+    highlight?: ParagraphHighlightOptions;
+}
 
 // @public
 export function sectionToStyle(sectionProps: {

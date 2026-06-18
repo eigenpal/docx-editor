@@ -14,6 +14,7 @@ import type { Document, Theme } from '@eigenpal/docx-editor-core/types/document'
 import type { Comment } from '@eigenpal/docx-editor-core/types/content';
 import type { SelectionState } from '@eigenpal/docx-editor-core/prosemirror';
 import type { DocxInput } from '@eigenpal/docx-editor-core/utils';
+import type { ScrollToParaIdOptions } from '@eigenpal/docx-editor-core/utils';
 import type { FontOption } from '@eigenpal/docx-editor-core/utils/fontOptions';
 import type { FontDefinition } from '@eigenpal/docx-editor-core/utils';
 import type { StyleValue, VNodeChild } from 'vue';
@@ -148,6 +149,8 @@ export type DocxEditorRef = EditorRefLike & {
   getZoom(): number;
   /** Focus the editor's hidden ProseMirror view. Vue-only — not in EditorRefLike. */
   focus(): void;
+  /** Scroll to a body paragraph by Word `w14:paraId`, optionally flashing it. */
+  scrollToParaId(paraId: string, options?: ScrollToParaIdOptions): boolean;
   /** Scroll the visible pages to a 1-indexed page number. */
   scrollToPage(pageNumber: number): void;
   /** Scroll to a raw ProseMirror document position. */

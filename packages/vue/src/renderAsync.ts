@@ -6,7 +6,11 @@ import { createApp, h, type App } from 'vue';
 import DocxEditor from './components/DocxEditor.vue';
 import type { EditorHandle } from '@eigenpal/docx-editor-core';
 import type { Document } from '@eigenpal/docx-editor-core/types/document';
-import { toArrayBuffer, type DocxInput } from '@eigenpal/docx-editor-core/utils';
+import {
+  toArrayBuffer,
+  type DocxInput,
+  type ScrollToParaIdOptions,
+} from '@eigenpal/docx-editor-core/utils';
 import type { DocxEditorProps, DocxEditorRef, EditorMode } from './components/DocxEditor/types';
 
 /** Options for `renderAsync`. */
@@ -24,7 +28,7 @@ export interface DocxEditorHandle extends EditorHandle {
   /** Set zoom level (1.0 = 100%). */
   setZoom: (zoom: number) => void;
   /** Scroll to a body paragraph by Word `w14:paraId`. */
-  scrollToParaId: (paraId: string) => boolean;
+  scrollToParaId: (paraId: string, options?: ScrollToParaIdOptions) => boolean;
   /** Scroll to a raw ProseMirror document position. */
   scrollToPosition: (pmPos: number) => void;
 }
@@ -67,7 +71,8 @@ export async function renderAsync(
     setZoom: (z) => {
       editorRef?.setZoom(z);
     },
-    scrollToParaId: (paraId: string) => editorRef?.scrollToParaId(paraId) ?? false,
+    scrollToParaId: (paraId: string, options?: ScrollToParaIdOptions) =>
+      editorRef?.scrollToParaId(paraId, options) ?? false,
     scrollToPosition: (pmPos: number) => {
       editorRef?.scrollToPosition(pmPos);
     },
