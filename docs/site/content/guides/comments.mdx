@@ -26,7 +26,7 @@ Replies are comments whose `parentId` references the root comment. Resolving set
 
 ## The comments sidebar
 
-Commented ranges are highlighted in the page. The sidebar shows each thread next to its anchor: the comment text, author, date, replies, a reply box, and a resolve action. Placing the cursor in commented text opens the sidebar and expands the matching thread. A toolbar button toggles the sidebar.
+Commented ranges are highlighted in the page. The sidebar shows each thread next to its anchor: the comment text, author, date, replies, a reply box, and a resolve action. Placing the cursor in commented text opens the sidebar and expands the matching thread. A toolbar button toggles the sidebar, and it auto-opens the first time a comment or suggestion appears.
 
 Users add comments by selecting text and using the comment action; the `author` prop supplies the name attached to anything they write:
 
@@ -35,6 +35,39 @@ Users add comments by selecting text and using the comment action; the `author` 
 ```
 
 <AuthorDemo />
+
+## Toggling the sidebar
+
+By default the editor owns the sidebar's open state: the toolbar button toggles it, and it auto-opens when a thread or suggestion first appears. If you hide the toolbar (`showToolbar={false}`) or render your own, that toggle goes away. Use `commentsSidebarOpen` and `onCommentsSidebarOpenChange` to control visibility yourself.
+
+When `commentsSidebarOpen` is set, it becomes the source of truth: the editor renders the sidebar to match and stops driving its own open state. `onCommentsSidebarOpenChange` fires whenever the editor wants to change visibility (the toolbar toggle, the cursor entering a commented range, entering suggesting mode, or the first comment appearing), so you can keep your state in sync.
+
+```tsx
+import { useState } from "react";
+import { DocxEditor } from "@eigenpal/docx-editor-react";
+
+export function ReviewEditor({ buf }: { buf: ArrayBuffer }) {
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+
+  return (
+    <>
+      <button onClick={() => setSidebarOpen((open) => !open)}>
+        {sidebarOpen ? "Hide comments" : "Show comments"}
+      </button>
+      <DocxEditor
+        documentBuffer={buf}
+        showToolbar={false}
+        commentsSidebarOpen={sidebarOpen}
+        onCommentsSidebarOpenChange={setSidebarOpen}
+      />
+    </>
+  );
+}
+```
+
+Omit `commentsSidebarOpen` to keep the default self-managed behavior. You can still pass `onCommentsSidebarOpenChange` alone to observe open/close without taking ownership.
+
+In Vue the same control is a `comments-sidebar-open` prop plus a `comments-sidebar-open-change` event: `<DocxEditor :comments-sidebar-open="sidebarOpen" @comments-sidebar-open-change="sidebarOpen = $event" />`.
 
 ## Controlled comments
 

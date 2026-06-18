@@ -58,6 +58,7 @@ export interface DocxEditorProps {
     className?: string;
     colorMode?: 'light' | 'dark' | 'system';
     comments?: Comment_2[];
+    commentsSidebarOpen?: boolean;
     disableFindReplaceShortcuts?: boolean;
     document?: Document_2 | null;
     documentBuffer?: DocxInput | null;
@@ -78,6 +79,7 @@ export interface DocxEditorProps {
     onCommentReply?: (reply: Comment_2, parent: Comment_2) => void;
     onCommentResolve?: (comment: Comment_2) => void;
     onCommentsChange?: (comments: Comment_2[]) => void;
+    onCommentsSidebarOpenChange?: (open: boolean) => void;
     onCopy?: () => void;
     onCut?: () => void;
     onDocumentNameChange?: (name: string) => void;

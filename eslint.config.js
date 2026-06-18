@@ -209,12 +209,14 @@ export default [
   // handlers are passed into useDocxEditor and can't be hoisted); the reusable
   // pieces were extracted to useHostCallbacks. The Insert > Break submenu adds
   // its own inline handler wiring (page + section breaks), as does the
-  // File > Open override (onOpen + showFileOpen). Modest headroom while a real
-  // split is planned.
+  // File > Open override (onOpen + showFileOpen). The controlled
+  // commentsSidebarOpen / onCommentsSidebarOpenChange pair adds its own emit +
+  // composable wiring inline (reusable part is useControllableBoolean). Modest
+  // headroom while a real split is planned.
   {
     files: ['packages/vue/src/components/DocxEditor.vue'],
     rules: {
-      'max-lines': ['error', { max: 1165, skipBlankLines: false, skipComments: false }],
+      'max-lines': ['error', { max: 1170, skipBlankLines: false, skipComments: false }],
     },
   },
 

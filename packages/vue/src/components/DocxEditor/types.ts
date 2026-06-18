@@ -54,6 +54,10 @@ export interface DocxEditorProps {
   mode?: EditorMode;
   /** Callback when the editing mode changes. */
   onModeChange?: (mode: EditorMode) => void;
+  /** Controlled comments-sidebar visibility; source of truth when set. Pair with `onCommentsSidebarOpenChange`; omit for the default self-managed behavior. */
+  commentsSidebarOpen?: boolean;
+  /** Fires with the next open state whenever the editor wants to show or hide the comments sidebar. Fires in both controlled and uncontrolled modes. */
+  onCommentsSidebarOpenChange?: (open: boolean) => void;
   /** Translation overrides merged with English fallback. */
   i18n?: Translations;
   /** Theme override used for toolbar color palettes when the document has no theme. */
