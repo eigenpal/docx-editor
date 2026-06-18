@@ -1,5 +1,34 @@
 # @eigenpal/docx-js-editor
 
+## 1.7.0
+
+### Minor Changes
+
+- c0923f7: Add `commentsSidebarOpen` and `onCommentsSidebarOpenChange` to `<DocxEditor>` for controlling the comments sidebar's visibility. When `commentsSidebarOpen` is set it becomes the source of truth; `onCommentsSidebarOpenChange` (React prop / Vue `comments-sidebar-open-change` event) fires whenever the editor wants to open or close it. Lets consumers that hide or replace the toolbar (`showToolbar={false}`) toggle the sidebar themselves, or open it programmatically. Omit both to keep the default self-managed behavior.
+- 6f51f47: Add `onOpen` and `showFileOpen` props so React consumers can route File > Open through their own import pipeline or hide the built-in Open action.
+- e0604af: Add a `showHelpMenu` prop to `<DocxEditor>` (default `true`) for hiding the Help menu in the menu bar. It is threaded through `ToolbarProps`, so the compound `<EditorToolbar.MenuBar />` API respects it too. Consumers that want File/Format/Insert without the Help menu can now pass `showHelpMenu={false}` instead of reaching for CSS overrides.
+
+### Patch Changes
+
+- 2bd49c2: Fix React toolbar toggle buttons losing their color on hover. The active (selected) button now keeps its dark fill on hover instead of showing a white icon over a near-transparent background, and inactive buttons get a visible hover background. These states are now owned by editor.css tokens rather than Tailwind utilities, which did not dedupe (cn is clsx-only).
+- 25dbfe9: Fix severe typing and undo/redo latency when editing large documents that contain many comments and tracked changes. Sidebar anchor positions were resolved with a full page scan per comment/suggestion, so an edit near the start of a long review document spent seconds remapping every anchor. The scan now resumes from the previously matched page, cutting start-of-document keystroke latency from seconds to well under the responsiveness budget. Fixes #896.
+- 421faf1: Support tracked changes (Suggesting mode) in headers and footers for both React and Vue components, including card positioning in the sidebar and command support.
+- edd0bc2: Add themeable document-scrollbar CSS variables and apply the styled scrollbar to both React and Vue document scroll containers.
+- Updated dependencies [ed04d10]
+- Updated dependencies [35b5cee]
+- Updated dependencies [186598a]
+- Updated dependencies [2dedf30]
+- Updated dependencies [dfd316f]
+- Updated dependencies [6b1897a]
+- Updated dependencies [8e95d60]
+- Updated dependencies [f2c9f9f]
+- Updated dependencies [fc95983]
+- Updated dependencies [edd0bc2]
+- Updated dependencies [d4a27d4]
+  - @eigenpal/docx-editor-core@1.7.0
+  - @eigenpal/docx-editor-agents@1.7.0
+  - @eigenpal/docx-editor-i18n@1.7.0
+
 ## 1.6.2
 
 ### Patch Changes
