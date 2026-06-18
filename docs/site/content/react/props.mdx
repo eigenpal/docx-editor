@@ -288,6 +288,10 @@ editorRef.current?.addComment({
   author: 'Jess Lin',
 });
 editorRef.current?.scrollToParaId('DEF45600');
+// Scroll and briefly flash the paragraph so the user can spot it:
+editorRef.current?.scrollToParaId('DEF45600', {
+  highlight: { color: 'rgba(255, 235, 59, 0.55)', durationMs: 1200 },
+});
 const buf = await editorRef.current?.save(); // Promise<ArrayBuffer | null>
 ```
 
@@ -299,7 +303,7 @@ Common methods:
 | `addComment({ paraId, text, author })` | `number \| null` | Add a comment anchored to a paragraph by `w14:paraId`. Returns the new comment id, or `null` if the paragraph wasn't found. |
 | `proposeChange({ paraId, search, replaceWith, author })` | `boolean` | Insert a tracked change. `false` if the search text wasn't found. |
 | `findInDocument(query, options?)` | `Array<{ paraId, match, before, after }>` | Search the document; each hit carries its paragraph id and surrounding context. |
-| `scrollToParaId(paraId)` | `boolean` | Scroll to a paragraph by `w14:paraId`. Returns `false` if not found. |
+| `scrollToParaId(paraId, options?)` | `boolean` | Scroll to a paragraph by `w14:paraId`. Returns `false` if not found. Pass `{ highlight: { color?, durationMs? } }` to briefly flash the paragraph after scrolling. |
 | `scrollToPosition(pos)` | `void` | Scroll to a raw ProseMirror position. |
 | `getDocument()` | `Document \| null` | Snapshot of the parsed tree. `null` before a document is loaded. |
 

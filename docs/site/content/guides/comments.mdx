@@ -134,7 +134,7 @@ if (id != null) {
 const all = ref.current?.getComments();
 ```
 
-Find anchor paragraphs with `ref.current?.findInDocument(query)`, which returns matches with their `paraId`, then scroll with `scrollToParaId`.
+Find anchor paragraphs with `ref.current?.findInDocument(query)`, which returns matches with their `paraId`, then scroll with `scrollToParaId`. Pass `{ highlight: { color?, durationMs? } }` to briefly flash the paragraph once it's in view.
 
 ## Word round-trip
 

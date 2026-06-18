@@ -39,8 +39,19 @@ import type {
 } from './types';
 import { getContent, formatContentForLLM } from './content';
 import { getChanges, getComments } from './discovery';
+// Single source of truth for the paragraph-flash option shapes (also consumed
+// by the React/Vue adapters) — re-exported below so the agent bridge surface
+// stays self-describing without redefining them. Imported from the DOM-free
+// types module, not the /utils barrel, so this package's type-check surface
+// stays free of core's browser code.
+import type {
+  ParagraphHighlightOptions,
+  ScrollToParaIdOptions,
+} from '@eigenpal/docx-editor-core/utils/paragraphFlashTypes';
 
 // ── Types ───────────────────────────────────────────────────────────────────
+
+export type { ParagraphHighlightOptions, ScrollToParaIdOptions };
 
 /**
  * Agent-bridge contract every editor adapter (React, Vue, future) MUST satisfy.
@@ -100,29 +111,6 @@ export interface EditorRefLike {
   getCurrentPage(): number;
   onContentChange(listener: (doc: unknown) => void): () => void;
   onSelectionChange(listener: (selection: unknown) => void): () => void;
-}
-
-/**
- * Customization for transient paragraph highlight/flash behavior when
- * revealing a paragraph by `paraId`.
- *
- * @public
- */
-export interface ParagraphHighlightOptions {
-  /** CSS color used for the transient paragraph flash. */
-  color?: string;
-  /** How long the flash remains visible before it is removed. */
-  durationMs?: number;
-}
-
-/**
- * Optional reveal behavior for `scrollToParaId` / `EditorBridge.scrollTo`.
- *
- * @public
- */
-export interface ScrollToParaIdOptions {
-  /** Flash rendered paragraph fragments after scrolling to the paragraph. */
-  highlight?: ParagraphHighlightOptions;
 }
 
 /**
