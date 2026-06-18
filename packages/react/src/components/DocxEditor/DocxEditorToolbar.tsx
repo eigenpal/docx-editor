@@ -68,6 +68,7 @@ export function DocxEditorToolbar({
   renderTitleBarRight,
   toolbarExtra,
   fontFamilies,
+  documentFonts,
   zoom,
   showZoomControl,
   // Handlers
@@ -117,6 +118,7 @@ export function DocxEditorToolbar({
   renderTitleBarRight: (() => ReactNode) | undefined;
   toolbarExtra: ReactNode;
   fontFamilies: ReadonlyArray<string | FontOption> | undefined;
+  documentFonts?: readonly FontOption[];
   zoom: number;
   showZoomControl: boolean;
   onFormat: (action: FormattingAction) => void;
@@ -163,6 +165,7 @@ export function DocxEditorToolbar({
         documentStyles={document?.package.styles?.styles}
         theme={document?.package.theme || theme}
         fontFamilies={fontFamilies}
+        documentFonts={documentFonts}
         onPrint={onPrint}
         onOpen={showFileOpen ? onOpen : undefined}
         onSave={onSave}

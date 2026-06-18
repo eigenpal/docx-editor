@@ -125,7 +125,8 @@
     "sansSerif": "Sans Serif",
     "serif": "Serif",
     "monospace": "Monospace",
-    "other": "Andere"
+    "other": "Andere",
+    "documentFonts": null
   },
   "fontSize": {
     "decrease": "Schriftgrad verkleinern",

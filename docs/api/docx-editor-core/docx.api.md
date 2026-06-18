@@ -367,6 +367,9 @@ export function parseFieldType(instruction: string): FieldType;
 export function parseFloatingTableProperties(tblpPrElement: Element_2 | null): FloatingTableProperties | undefined;
 
 // @public
+export function parseFontTable(fontTableXml: string | null | undefined): FontTable;
+
+// @public
 export function parseFootnoteProperties(element: Element_2 | null): FootnoteProperties;
 
 // @public

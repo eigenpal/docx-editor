@@ -3,7 +3,13 @@ import type { Document } from '@eigenpal/docx-editor-core/types/document';
 import type { Comment } from '@eigenpal/docx-editor-core/types/content';
 import { parseDocx } from '@eigenpal/docx-editor-core/docx';
 import { DocumentAgent } from '@eigenpal/docx-editor-core/agent';
-import { loadDocumentFonts, type DocxInput } from '@eigenpal/docx-editor-core/utils';
+import {
+  loadDocumentFonts,
+  getRenderableDocumentFonts,
+  getEmbeddedFontFamilies,
+  type DocxInput,
+} from '@eigenpal/docx-editor-core/utils';
+import type { FontOption } from '@eigenpal/docx-editor-core/utils/fontOptions';
 import type { UseHistoryReturn } from '../../../hooks/useHistory';
 import type { PagedEditorRef } from '../PagedEditor';
 import type { CommentIdAllocator } from '../commentFactories';
@@ -33,6 +39,7 @@ export function useDocumentLoader({
   resetForNewDocument,
   commentsLoadedRef,
   commentIdAllocator,
+  setDocumentFonts,
 }: {
   documentBuffer: DocxInput | null | undefined;
   initialDocument: Document | null | undefined;
@@ -52,6 +59,10 @@ export function useDocumentLoader({
   commentsLoadedRef: React.RefObject<boolean>;
   // Per-editor-instance ID allocator; seeded above the loaded doc's max ID.
   commentIdAllocator: CommentIdAllocator;
+  // Fonts the document references that the browser can actually render
+  // (embedded or system-resolved), surfaced in the picker's "Document fonts"
+  // group.
+  setDocumentFonts: (fonts: FontOption[]) => void;
 }) {
   // Monotonically increasing generation counter so a late `parseDocx`
   // result doesn't overwrite a newer load that started while we were
@@ -66,8 +77,15 @@ export function useDocumentLoader({
       loadDocumentFonts(doc).catch((err) => {
         console.warn('Failed to load document fonts:', err);
       });
+      // Offer the document's own renderable fonts (embedded faces are loaded by
+      // parseDocx; system fonts are probed) in the picker.
+      setDocumentFonts(
+        getRenderableDocumentFonts(doc, {
+          embeddedFamilies: getEmbeddedFontFamilies(doc.package?.fontTable),
+        })
+      );
     },
-    [resetForNewDocument, history, setLoadingState]
+    [resetForNewDocument, history, setLoadingState, setDocumentFonts]
   );
 
   const loadBuffer = useCallback(

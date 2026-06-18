@@ -19,6 +19,7 @@ import { EditorView } from 'prosemirror-view';
 import { extractTrackedChanges } from '@eigenpal/docx-editor-core/prosemirror/utils/extractTrackedChanges';
 import { FindMatch } from '@eigenpal/docx-editor-core/utils/findReplace';
 import { FindOptions } from '@eigenpal/docx-editor-core/utils/findReplace';
+import { FontOption } from '@eigenpal/docx-editor-core/utils/fontOptions';
 import { formatLastSaveTime } from '@eigenpal/docx-editor-core';
 import { formatStorageSize } from '@eigenpal/docx-editor-core';
 import { getAutoSaveStatusLabel } from '@eigenpal/docx-editor-core';
@@ -249,6 +250,7 @@ export interface UseDocxEditorOptions {
 // @public (undocumented)
 export interface UseDocxEditorReturn {
     destroy: () => void;
+    documentFonts: Ref<FontOption[]>;
     editorState: ShallowRef<EditorState | null>;
     editorView: ShallowRef<EditorView | null>;
     focus: () => void;
