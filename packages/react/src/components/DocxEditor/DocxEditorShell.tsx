@@ -171,6 +171,7 @@ export function DocxEditorShell({
 
                 <div
                   ref={scrollContainerRef}
+                  className="docx-editor__scroll-container"
                   style={editorContainerStyle}
                   onMouseDown={onScrollContainerMouseDown}
                 >
