@@ -2,7 +2,7 @@
   <button
     type="button"
     class="docx-outline-toggle docx-editor-vue__outline-toggle"
-    :style="{ left: leftOffset + 'px' }"
+    :style="{ left: leftOffset + 'px', top: topPx + 'px' }"
     :title="t('editor.showDocumentOutline')"
     :aria-label="t('editor.showDocumentOutline')"
     @click="$emit('toggle')"
@@ -18,13 +18,21 @@
 import { useTranslation } from '../i18n';
 import MaterialSymbol from './ui/MaterialSymbol.vue';
 
-defineProps<{
-  /**
-   * Left anchor (px) from the editor area's left edge. The host bumps it past
-   * the vertical ruler when one is shown so the button doesn't overlap it.
-   */
-  leftOffset: number;
-}>();
+withDefaults(
+  defineProps<{
+    /**
+     * Left anchor (px) from the editor area's left edge. The host bumps it past
+     * the vertical ruler when one is shown so the button doesn't overlap it.
+     */
+    leftOffset: number;
+    /**
+     * Top anchor (px) from the editor area's top edge. The host bumps it past
+     * the sticky ruler row when one is shown so the button doesn't overlap it.
+     */
+    topPx?: number;
+  }>(),
+  { topPx: 24 }
+);
 
 defineEmits<{ toggle: [] }>();
 
