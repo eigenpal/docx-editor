@@ -139,6 +139,7 @@ function renderToolbar({ showFileOpen, onOpen }: { showFileOpen: boolean; onOpen
       onRedo={noop}
       onPrint={noop}
       showFileOpen={showFileOpen}
+      showHelpMenu={true}
       onOpen={onOpen}
       onSave={noop}
       onZoomChange={noop}
