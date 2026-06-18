@@ -1,0 +1,114 @@
+---
+title: 'Custom styles & branding'
+description: 'Use a branded DOCX template to control headings, fonts, and table styles. Documents inherit your styles automatically and preserve them when saved.'
+category: 'Guides'
+seoTitle: 'Custom styles, fonts, and branded DOCX templates'
+---
+
+Load a styled `.docx` template to give documents your branding. The editor uses the styles defined in the document itself (headings, fonts, colors, spacing, and table styles) and preserves them when users save.
+
+Templates can define:
+
+- Heading styles (`Heading1` to `Heading9`)
+- Body text (`Normal`)
+- Fonts and themes
+- Table styles and the default table style
+
+Any content users create or insert inherits those styles automatically.
+
+## Quick start
+
+Create a `.docx` containing your brand styles, remove its content, and load it whenever a user starts a new document.
+
+```tsx
+import { useEffect, useState } from 'react';
+import { DocxEditor } from '@eigenpal/docx-editor-react';
+import '@eigenpal/docx-editor-react/styles.css';
+
+export function BrandedEditor() {
+  const [template, setTemplate] = useState<ArrayBuffer>();
+
+  useEffect(() => {
+    fetch('/templates/brand.docx')
+      .then((r) => r.arrayBuffer())
+      .then(setTemplate);
+  }, []);
+
+  return <DocxEditor documentBuffer={template} />;
+}
+```
+
+For Vue, pass the template buffer to the `document-buffer` prop.
+
+## Create a template
+
+### Use a word processor
+
+1. Create a document with your desired styles.
+2. Configure a default table style (see [Tables](#tables)).
+3. Remove the document content.
+4. Save the file as your template.
+
+### Patch a DOCX programmatically
+
+You can also update DOCX files directly with the headless API.
+
+```ts
+import { updateMultipleFiles } from '@eigenpal/docx-editor-core/headless';
+
+const SETTINGS = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:settings xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+  <w:defaultTableStyle w:val="BrandGrid"/>
+</w:settings>`;
+
+const branded = await updateMultipleFiles(
+  originalDocx,
+  new Map([['word/settings.xml', SETTINGS]])
+);
+```
+
+## Headings and paragraph styles
+
+The style dropdown is populated from the paragraph styles defined in the document. When a user applies a style, the editor uses the document's definition for fonts, colors, spacing, and the configured `next` style. For example, pressing Enter after a heading switches back to body text.
+
+Set `w:qFormat` to surface a style in the dropdown, and `w:semiHidden` or `w:hidden` to keep one out.
+
+## Tables
+
+New tables use the document's default table style. To apply branded borders, shading, and header formatting automatically, define a table style and set it as the default:
+
+```xml
+<!-- word/settings.xml -->
+<w:settings xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+  <w:defaultTableStyle w:val="BrandGrid"/>
+</w:settings>
+```
+
+If no default table style is configured, inserted tables use a basic single-border style.
+
+## Fonts
+
+The recommended way to provide custom fonts is the editor's `fonts` prop. Each entry registers an `@font-face` rule, allowing the editor to render and measure the font without additional setup. Use `fontFamilies` to make fonts available in the toolbar.
+
+```tsx
+const FONTS = [
+  { family: 'Custom Sans', src: '/fonts/CustomSans-Regular.woff2' },
+  { family: 'Custom Sans', src: '/fonts/CustomSans-Bold.woff2', weight: 700 },
+];
+
+<DocxEditor
+  documentBuffer={template}
+  fonts={FONTS}
+  fontFamilies={['Custom Sans', 'Arial']}
+/>;
+```
+
+See [React props: Fonts](/docs/1.x/react/props#fonts) for the full API. In Vue, use the `fonts` and `font-families` props.
+
+Alternatively, fonts can be installed on the user's system or loaded using your own `@font-face` rules. The editor renders fonts by name, so any font available to the browser can be used.
+
+Font files embedded inside a `.docx` are preserved when saving, but they are not automatically loaded for rendering.
+
+## Style preservation
+
+The editor preserves existing style files (`styles.xml`, `theme1.xml`, `settings.xml`) rather than regenerating them. Custom styles, themes, fonts, and table defaults survive a full edit-and-save round trip.
