@@ -18,6 +18,7 @@
         @update:model-value="(name: string) => emit('rename', name)"
       />
       <MenuBar
+        :show-file-open="showFileOpen"
         @action="(action: string) => emit('menu-action', action)"
         @insert-table="(rows: number, cols: number) => emit('insert-table', rows, cols)"
       />
@@ -39,10 +40,11 @@ withDefaults(
     showMenuBar: boolean;
     documentName: string;
     documentNameEditable?: boolean;
+    showFileOpen?: boolean;
     renderLogo?: Component;
     renderTitleBarRight?: Component;
   }>(),
-  { documentNameEditable: true }
+  { documentNameEditable: true, showFileOpen: true }
 );
 
 const emit = defineEmits<{

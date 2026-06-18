@@ -17,6 +17,12 @@ import type { Document } from '@eigenpal/docx-editor-core/types/document';
 export interface UseFileIOOptions {
   /** From useDocxEditor — loads a .docx buffer into the editor. */
   loadBuffer: (buffer: ArrayBuffer | Uint8Array | Blob | File) => Promise<void>;
+  /**
+   * Host override for File > Open / Cmd+O. When provided, the picked file is
+   * passed here instead of running the built-in local load — lets consumers
+   * route Open through their own import pipeline (e.g. a CRDT backend).
+   */
+  onOpen?: (file: File) => void | Promise<void>;
   /** From useDocxEditor — loads an already-parsed Document model. */
   loadParsedDocument: (doc: Document) => void;
   /** From useDocxEditor — returns the current Document, or null. */
@@ -64,6 +70,21 @@ export function useFileIO(opts: UseFileIOOptions) {
   }
 
   async function handleDocxFileChange(event: Event) {
+    // Host-supplied open handler takes over: hand it the picked file and skip
+    // the built-in local load. Mirrors React's useFileIO onOpen branch.
+    if (opts.onOpen) {
+      const input = event.target as HTMLInputElement;
+      const file = input.files?.[0];
+      input.value = ''; // allow re-selecting the same file
+      if (!file) return;
+      try {
+        await opts.onOpen(file);
+      } catch (err) {
+        opts.emit('error', err instanceof Error ? err : new Error('Failed to open document'));
+      }
+      return;
+    }
+
     try {
       const result = await readDocxFileFromInput(event);
       if (!result) return;

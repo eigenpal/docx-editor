@@ -223,6 +223,21 @@ There is no `@save`, `@fonts-loaded`, `@copy`, `@cut`, or `@paste` in Vue. For s
 />
 ```
 
+### Customize File > Open
+
+Like React, the built-in `File > Open` item and Cmd/Ctrl+O load a picked `.docx` into the local editor. Pass `on-open` to keep the native file picker but route the selected `File` through your own import pipeline, and `:show-file-open="false"` to hide the built-in item (Cmd/Ctrl+O is then left for your own menu or toolbar):
+
+```vue
+<DocxEditor
+  :document="doc"
+  :external-plugins="plugins"
+  :show-file-open="false"
+  :on-open="(file) => importIntoBackend(file)"
+/>
+```
+
+`on-open` is useful when a collaborative binding owns the document state. Omit it to keep the built-in local load.
+
 ### Styling
 
 ```vue

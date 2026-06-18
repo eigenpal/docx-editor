@@ -73,11 +73,13 @@ export interface DocxEditorProps {
     onEditorViewReady?: (view: EditorView) => void;
     onError?: (error: Error) => void;
     onModeChange?: (mode: EditorMode) => void;
+    onOpen?: (file: File) => void | Promise<void>;
     onPrint?: () => void;
     onSelectionChange?: (state: SelectionState | null) => void;
     readOnly?: boolean;
     renderLogo?: () => VNodeChild;
     renderTitleBarRight?: () => VNodeChild;
+    showFileOpen?: boolean;
     showMenuBar?: boolean;
     showOutline?: boolean;
     showOutlineButton?: boolean;

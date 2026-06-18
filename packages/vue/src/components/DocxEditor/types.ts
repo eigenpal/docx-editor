@@ -34,6 +34,11 @@ export interface DocxEditorProps {
   document?: Document | null;
   /** Whether to show the main formatting toolbar. */
   showToolbar?: boolean;
+  /**
+   * Whether to show `File > Open` and enable Cmd/Ctrl+O (default: true).
+   * Set false when you provide your own open action elsewhere.
+   */
+  showFileOpen?: boolean;
   /** Whether to show the title/menu bar. Vue-only chrome toggle. */
   showMenuBar?: boolean;
   /** Whether to show page rulers. */
@@ -91,6 +96,12 @@ export interface DocxEditorProps {
    * also invokes this callback.
    */
   onPrint?: () => void;
+  /**
+   * Callback when a DOCX file is selected through `File > Open` or Cmd/Ctrl+O.
+   * Pass it to route the picked file through your own import pipeline. Omit it
+   * to keep the built-in local document load behavior.
+   */
+  onOpen?: (file: File) => void | Promise<void>;
   /** Disable Cmd/Ctrl+F and Cmd/Ctrl+H interception. */
   disableFindReplaceShortcuts?: boolean;
   /** Custom logo/icon renderer for the title bar. Slots remain preferred in templates. */
