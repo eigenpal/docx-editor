@@ -51,6 +51,9 @@ test('document scroll area uses the themeable editor scrollbar', async ({ page }
   expect(metrics.overflowY).toBe('auto');
   expect(metrics.scrollHeight).toBeGreaterThan(metrics.clientHeight);
   expect(metrics.scrollbarGutter).toContain('stable');
+  // `both-edges` keeps the reserved gutter symmetric so the page stays centered
+  // (matches the Vue viewport).
+  expect(metrics.scrollbarGutter).toContain('both-edges');
   expect(metrics.scrollbarWidth).toBe('auto');
   expect(metrics.sizeVar).toBe('14px');
   expect(metrics.thumbVar).toContain('color-mix');
