@@ -456,6 +456,9 @@ const props = withDefaults(defineProps<DocxEditorProps>(), {
   readOnly: false,
   author: 'User',
   mode: 'editing',
+  // Explicit `undefined` default opts out of Vue's absent-Boolean-prop cast to
+  // `false`; without it the sidebar reads as controlled-closed and never opens.
+  commentsSidebarOpen: undefined,
   i18n: undefined,
   theme: null,
   colorMode: 'light',

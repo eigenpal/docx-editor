@@ -211,12 +211,13 @@ export default [
   // its own inline handler wiring (page + section breaks), as does the
   // File > Open override (onOpen + showFileOpen). The controlled
   // commentsSidebarOpen / onCommentsSidebarOpenChange pair adds its own emit +
-  // composable wiring inline (reusable part is useControllableBoolean). Modest
-  // headroom while a real split is planned.
+  // composable wiring inline (reusable part is useControllableBoolean), plus an
+  // explicit `undefined` withDefaults entry so Vue doesn't cast the absent
+  // Boolean prop to `false`. Modest headroom while a real split is planned.
   {
     files: ['packages/vue/src/components/DocxEditor.vue'],
     rules: {
-      'max-lines': ['error', { max: 1170, skipBlankLines: false, skipComments: false }],
+      'max-lines': ['error', { max: 1178, skipBlankLines: false, skipComments: false }],
     },
   },
 
