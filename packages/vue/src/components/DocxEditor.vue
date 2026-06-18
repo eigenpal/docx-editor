@@ -18,6 +18,7 @@
         :show-menu-bar="showMenuBar"
         :document-name="documentName"
         :document-name-editable="documentNameEditable"
+        :show-file-open="showFileOpen"
         :render-logo="renderLogo"
         :render-title-bar-right="renderTitleBarRight"
         @rename="handleDocumentNameChange"
@@ -442,6 +443,7 @@ const props = withDefaults(defineProps<DocxEditorProps>(), {
   documentBuffer: null,
   document: null,
   showToolbar: true,
+  showFileOpen: true,
   showMenuBar: true,
   showRuler: true,
   documentName: '',
@@ -462,6 +464,7 @@ const props = withDefaults(defineProps<DocxEditorProps>(), {
   fontFamilies: undefined,
   watermarkPresets: undefined,
   onPrint: undefined,
+  onOpen: undefined,
   disableFindReplaceShortcuts: false,
   renderLogo: undefined,
   onDocumentNameChange: undefined,
@@ -848,6 +851,7 @@ const {
   save,
 } = useFileIO({
   loadBuffer,
+  onOpen: props.onOpen,
   loadParsedDocument,
   getDocument,
   saveBlob,
@@ -918,6 +922,8 @@ useKeyboardShortcuts({
   showHyperlink,
   handleZoomKeyDown,
   disableFindReplaceShortcuts: () => props.disableFindReplaceShortcuts,
+  showFileOpen: () => props.showFileOpen,
+  onOpenDocument: () => docxInputRef.value?.click(),
 });
 
 const {

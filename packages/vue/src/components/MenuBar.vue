@@ -46,6 +46,8 @@ import MenuDropdown, { type MenuEntry } from './ui/MenuDropdown.vue';
 import TableGridInline from './ui/TableGridInline.vue';
 import MaterialSymbol from './ui/MaterialSymbol.vue';
 
+const props = withDefaults(defineProps<{ showFileOpen?: boolean }>(), { showFileOpen: true });
+
 const emit = defineEmits<{
   (e: 'action', action: string): void;
   (e: 'insert-table', rows: number, cols: number): void;
@@ -58,12 +60,16 @@ function act(action: string) {
 }
 
 const fileItems = computed<MenuEntry[]>(() => [
-  {
-    icon: 'file_upload',
-    label: t('toolbar.open'),
-    shortcut: t('toolbar.openShortcut'),
-    onClick: act('open'),
-  },
+  ...(props.showFileOpen
+    ? [
+        {
+          icon: 'file_upload',
+          label: t('toolbar.open'),
+          shortcut: t('toolbar.openShortcut'),
+          onClick: act('open'),
+        } as MenuEntry,
+      ]
+    : []),
   {
     icon: 'file_download',
     label: t('toolbar.save'),

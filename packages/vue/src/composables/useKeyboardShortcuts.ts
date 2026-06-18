@@ -21,6 +21,14 @@ export interface UseKeyboardShortcutsOptions {
    * time would freeze it.)
    */
   disableFindReplaceShortcuts?: () => boolean | undefined;
+  /**
+   * Whether `File > Open` / Cmd+O is enabled. Read freshly so a runtime host
+   * toggle is honored. When false (or `onOpenDocument` is absent), Cmd+O is
+   * left unhandled so the browser default stands.
+   */
+  showFileOpen?: () => boolean | undefined;
+  /** Opens the DOCX picker — wired to the same hidden input as File > Open. */
+  onOpenDocument?: () => void;
 }
 
 export function useKeyboardShortcuts(opts: UseKeyboardShortcutsOptions) {
@@ -36,6 +44,13 @@ export function useKeyboardShortcuts(opts: UseKeyboardShortcutsOptions) {
     opts.handleZoomKeyDown(e);
 
     if (!(e.ctrlKey || e.metaKey)) return;
+    if (e.key === 'o') {
+      // Leave Cmd+O for the browser when Open is disabled or unhandled.
+      if (!opts.showFileOpen?.() || !opts.onOpenDocument) return;
+      e.preventDefault();
+      opts.onOpenDocument();
+      return;
+    }
     if (opts.disableFindReplaceShortcuts?.() && (e.key === 'f' || e.key === 'h')) return;
     if (e.key === 'f' || e.key === 'h') {
       e.preventDefault();
