@@ -1,5 +1,14 @@
 # @eigenpal/docx-js-editor
 
+## 1.8.1
+
+### Patch Changes
+
+- Updated dependencies [6047f84]
+  - @eigenpal/docx-editor-core@1.8.1
+  - @eigenpal/docx-editor-agents@1.8.1
+  - @eigenpal/docx-editor-i18n@1.8.1
+
 ## 1.8.0
 
 ### Patch Changes
