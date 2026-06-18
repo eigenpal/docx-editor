@@ -4,6 +4,7 @@
   height: 100%;
   overflow: hidden;
 }
+
 .docx-editor-vue__hidden-pm {
   position: fixed;
   left: -9999px;
@@ -14,9 +15,11 @@
   user-select: none;
   overflow-anchor: none;
 }
+
 .docx-editor-vue {
   width: 100%;
 }
+
 /* React TitleBar (packages/react/src/components/TitleBar.tsx:333):
    `flex items-stretch bg-white pt-2 pb-1`
    - left col:    `flex items-center flex-shrink-0 pl-3 pr-1`
@@ -43,6 +46,7 @@
   /* Tailwind shadow-sm: `0 1px 2px 0 rgb(0 0 0 / 0.05)` */
   box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
 }
+
 .docx-editor-vue__title-bar {
   display: flex;
   align-items: stretch;
@@ -55,12 +59,14 @@
     -apple-system,
     sans-serif;
 }
+
 .docx-editor-vue__title-bar-left {
   display: flex;
   align-items: center;
   flex-shrink: 0;
   padding: 0 4px 0 12px;
 }
+
 .docx-editor-vue__title-bar-right {
   display: flex;
   align-items: center;
@@ -68,6 +74,7 @@
   gap: 8px;
   padding: 0 12px;
 }
+
 .docx-editor-vue__title-bar-center {
   display: flex;
   flex-direction: column;
@@ -76,12 +83,15 @@
   min-width: 0;
   padding: 4px 0;
 }
+
 .docx-editor-vue__title-bar-center > * {
   padding: 0 4px;
 }
+
 .docx-editor-vue__title-bar-center .basic-toolbar {
   width: auto;
 }
+
 /* Editor scroll container — doc-bg paints the strip between toolbar and
    page. */
 .docx-editor-vue__editor-scroll {
@@ -92,6 +102,7 @@
   background: var(--doc-bg);
   overflow: hidden;
 }
+
 /* Sticky ruler row that stays at the top while the page scrolls. */
 .docx-editor-vue__ruler-row {
   display: flex;
@@ -103,13 +114,16 @@
   padding: 4px 20px;
   background: var(--doc-bg);
 }
+
 .docx-editor-vue__editor-area {
   flex: 1;
   display: flex;
   min-height: 0;
   overflow: hidden;
-  position: relative; /* anchors the absolutely-positioned vertical ruler */
+  position: relative;
+  /* anchors the absolutely-positioned vertical ruler */
 }
+
 /* Outline toggle — positioning only. The filled-disc visual (size, ring,
    hover, focus) is shared with React via `.docx-outline-toggle` in core's
    editor.css. `top: 24px` aligns with the page's top edge (the
@@ -121,6 +135,7 @@
   left: 12px;
   z-index: 40;
 }
+
 /* Vertical ruler overlays the left edge of the page area instead of
    eating a flex slot — keeping it in flow shifted the page 20px right
    and broke horizontal-ruler/page alignment. Mirrors React's
@@ -134,9 +149,12 @@
   z-index: 30;
   pointer-events: auto;
 }
+
 .docx-editor-vue__pages-viewport {
   flex: 1;
-  overflow-y: auto;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
   /* Reserve scrollbar gutter on both sides so the page stays centered
      whether the scrollbar is currently visible or not — without this,
      the page nudges horizontally when content grows past one screen
@@ -154,6 +172,7 @@
   cursor: text;
   position: relative;
 }
+
 .docx-editor-vue__pages {
   position: relative;
 }
@@ -179,6 +198,7 @@
     background-color 0.15s ease,
     box-shadow 0.15s ease;
 }
+
 .docx-editor-vue__floating-comment:hover {
   background: rgba(26, 115, 232, 0.08);
   box-shadow: 0 1px 4px rgba(26, 115, 232, 0.3);
@@ -200,9 +220,11 @@
   z-index: 200;
   padding: 0;
 }
+
 .docx-editor-vue__table-insert-btn:hover {
   background: #e8eaed;
 }
+
 .docx-editor-vue__loading {
   display: flex;
   align-items: center;
@@ -211,6 +233,7 @@
   color: #64748b;
   font-size: 14px;
 }
+
 .docx-editor-vue__error {
   padding: 1rem;
   background: #fef2f2;
