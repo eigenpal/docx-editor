@@ -19,6 +19,7 @@
         :document-name="documentName"
         :document-name-editable="documentNameEditable"
         :show-file-open="showFileOpen"
+        :show-help-menu="showHelpMenu"
         :render-logo="renderLogo"
         :render-title-bar-right="renderTitleBarRight"
         @rename="handleDocumentNameChange"
@@ -448,6 +449,7 @@ const props = withDefaults(defineProps<DocxEditorProps>(), {
   document: null,
   showToolbar: true,
   showFileOpen: true,
+  showHelpMenu: true,
   showMenuBar: true,
   showRuler: true,
   documentName: '',

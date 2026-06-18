@@ -83,6 +83,7 @@ export interface DocxEditorProps {
     renderLogo?: () => VNodeChild;
     renderTitleBarRight?: () => VNodeChild;
     showFileOpen?: boolean;
+    showHelpMenu?: boolean;
     showMenuBar?: boolean;
     showOutline?: boolean;
     showOutlineButton?: boolean;

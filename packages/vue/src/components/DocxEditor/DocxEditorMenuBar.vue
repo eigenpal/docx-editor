@@ -19,6 +19,7 @@
       />
       <MenuBar
         :show-file-open="showFileOpen"
+        :show-help-menu="showHelpMenu"
         @action="(action: string) => emit('menu-action', action)"
         @insert-table="(rows: number, cols: number) => emit('insert-table', rows, cols)"
       />
@@ -41,10 +42,11 @@ withDefaults(
     documentName: string;
     documentNameEditable?: boolean;
     showFileOpen?: boolean;
+    showHelpMenu?: boolean;
     renderLogo?: Component;
     renderTitleBarRight?: Component;
   }>(),
-  { documentNameEditable: true, showFileOpen: true }
+  { documentNameEditable: true, showFileOpen: true, showHelpMenu: true }
 );
 
 const emit = defineEmits<{

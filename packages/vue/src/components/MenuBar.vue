@@ -35,7 +35,7 @@
         </div>
       </template>
     </MenuDropdown>
-    <MenuDropdown :label="t('toolbar.help')" :items="helpItems" />
+    <MenuDropdown v-if="showHelpMenu" :label="t('toolbar.help')" :items="helpItems" />
   </div>
 </template>
 
@@ -46,7 +46,10 @@ import MenuDropdown, { type MenuEntry } from './ui/MenuDropdown.vue';
 import TableGridInline from './ui/TableGridInline.vue';
 import MaterialSymbol from './ui/MaterialSymbol.vue';
 
-const props = withDefaults(defineProps<{ showFileOpen?: boolean }>(), { showFileOpen: true });
+const props = withDefaults(defineProps<{ showFileOpen?: boolean; showHelpMenu?: boolean }>(), {
+  showFileOpen: true,
+  showHelpMenu: true,
+});
 
 const emit = defineEmits<{
   (e: 'action', action: string): void;

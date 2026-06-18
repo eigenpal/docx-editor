@@ -40,6 +40,8 @@ export interface DocxEditorProps {
    * Set false when you provide your own open action elsewhere.
    */
   showFileOpen?: boolean;
+  /** Whether to show the Help menu in the menu bar (default: true). */
+  showHelpMenu?: boolean;
   /** Whether to show the title/menu bar. Vue-only chrome toggle. */
   showMenuBar?: boolean;
   /** Whether to show page rulers. */

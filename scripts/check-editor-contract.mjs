@@ -22,7 +22,6 @@ const REACT_PROPS_NOT_YET_IN_VUE = new Set([
   'onFontsLoaded',
   'externalContent',
   'showMarginGuides',
-  'showHelpMenu',
   'marginGuideColor',
   'rulerUnit',
   'placeholder',

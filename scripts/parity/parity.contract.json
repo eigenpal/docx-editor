@@ -36,6 +36,7 @@
       "renderLogo",
       "renderTitleBarRight",
       "showFileOpen",
+      "showHelpMenu",
       "showOutline",
       "showOutlineButton",
       "showRuler",
@@ -64,7 +65,6 @@
       "pluginSidebarItems": "Sidebar plugin items. Pairs with the Vue plugin-api gap.",
       "printOptions": "Print configuration. Vue uses onPrint without options object.",
       "rulerUnit": "Ruler unit toggle (inch/cm). Vue uses inch only currently.",
-      "showHelpMenu": "Help menu visibility toggle. React-only until Vue exposes the same menu-bar control.",
       "showMarginGuides": "Margin guide overlay. Pairs with marginGuideColor \u2014 both deferred together."
     },
     "vueExclusive": {
