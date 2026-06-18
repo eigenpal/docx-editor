@@ -293,7 +293,7 @@ export class DocxReviewer {
    * Uses the reviewer's default author. Individual failures are collected, not thrown.
    */
   applyReview(ops: BatchReviewOptions): BatchResult {
-    return applyReviewImpl(this.body, ops, this.author);
+    return applyReviewImpl(this.body, ops, this.author, this.changeNotes());
   }
 
   // ==========================================================================
