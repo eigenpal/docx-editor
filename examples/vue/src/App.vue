@@ -10,6 +10,7 @@
         :document-buffer="documentBuffer"
         :document="currentDocument"
         :show-toolbar="true"
+        :show-help-menu="showHelpMenu"
         :document-name="fileName"
         :fonts="customFonts"
         :watermark-presets="['SAMPLE', 'DEMO ONLY', 'PREVIEW', 'NOT FOR DISTRIBUTION']"
@@ -186,6 +187,12 @@ const showAgentPanel = computed(() => {
   const params = new URLSearchParams(window.location.search);
   if (params.get('agentPanel') === '1' || params.has('agentTimeline')) return true;
   return import.meta.env.VITE_DOCX_EDITOR_AGENT_PANEL === '1';
+});
+
+// E2E hook: `?hideHelpMenu=1` hides the Help menu (parity with the React prop).
+const showHelpMenu = computed(() => {
+  if (typeof window === 'undefined') return true;
+  return new URLSearchParams(window.location.search).get('hideHelpMenu') !== '1';
 });
 
 // AgentTimeline fixture for E2E parity. Mirrors examples/vite App.tsx so a
