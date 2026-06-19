@@ -189,6 +189,71 @@ jobs:
           git tag -a "v$version" -m "Release v$version"
           git push origin "v$version"
 
+      # Post-publish fan-out runs as the eigenpal-release-pal App rather than
+      # the default GITHUB_TOKEN, so it can comment on this repo's PRs and
+      # notify docx-editor.dev. (App permissions are managed in the org.)
+      # continue-on-error on all three post-publish steps: the release has
+      # already shipped to npm, so a transient failure here must NOT flip the
+      # run to failed, which would suppress the success Slack and fire the
+      # misleading "publish failed / partial state" alert keyed on
+      # no-pending-changesets.
+      - name: Mint release-pal App token
+        if: ${{ steps.changesets.outputs.published == 'true' && github.ref == 'refs/heads/main' }}
+        id: pal-token
+        continue-on-error: true
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          app-id: ${{ secrets.RELEASE_PAL_APP_ID }}
+          private-key: ${{ secrets.RELEASE_PAL_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: docx-editor,docx-editor.dev
+
+      # Comment "🚀 Released in vX.Y.Z" on every PR that shipped in this release.
+      # The squash-merge subject GitHub writes ends in "(#N)" = the PR number;
+      # the previous umbrella tag bounds "what shipped", and chore: release
+      # commits are skipped so the release PR doesn't comment on itself.
+      - name: Comment release link on shipped PRs
+        if: ${{ steps.changesets.outputs.published == 'true' && github.ref == 'refs/heads/main' }}
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ steps.pal-token.outputs.token }}
+          PUBLISHED_PACKAGES: ${{ steps.changesets.outputs.publishedPackages }}
+        run: |
+          version=$(jq -r '.[0].version' <<<"$PUBLISHED_PACKAGES")
+          # `|| true`: the default shell is `bash -eo pipefail`, so a grep
+          # no-match (first-ever release) or a SIGPIPE from head closing the
+          # pipe early would otherwise abort this step — which, via the implicit
+          # success() gate, would skip the landing-notify dispatch below.
+          prev=$(git tag --list 'v*' --sort=-v:refname | grep -vx "v$version" | head -n1 || true)
+          if [ -z "$prev" ]; then
+            echo "No previous v* tag found; skipping PR comments."
+            exit 0
+          fi
+          release_url="${{ github.server_url }}/${{ github.repository }}/releases/tag/v$version"
+          prs=$(git log --format='%s' "$prev..HEAD" \
+            | grep -vE '^chore: release' \
+            | grep -oE '\(#[0-9]+\)$' | tr -dc '0-9\n' | sort -u)
+          echo "Shipped PRs: ${prs:-none}"
+          for pr in $prs; do
+            gh pr comment "$pr" --repo "${{ github.repository }}" \
+              --body "🚀 Released in [v$version]($release_url)" \
+              || echo "Could not comment on #$pr (closed / cross-fork?); continuing."
+          done
+
+      # Tell the landing site a new version shipped. Its sync workflow opens an
+      # auto-merging PR that bumps the pinned editor deps to this version.
+      - name: Notify landing site of new release
+        if: ${{ steps.changesets.outputs.published == 'true' && github.ref == 'refs/heads/main' }}
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ steps.pal-token.outputs.token }}
+          PUBLISHED_PACKAGES: ${{ steps.changesets.outputs.publishedPackages }}
+        run: |
+          version=$(jq -r '.[0].version' <<<"$PUBLISHED_PACKAGES")
+          gh api "repos/${{ github.repository_owner }}/docx-editor.dev/dispatches" \
+            -f event_type=upstream-release \
+            -f "client_payload[version]=$version"
+
       - name: Notify Slack — release succeeded
         if: ${{ steps.changesets.outputs.published == 'true' && env.SLACK_WEBHOOK_URL != '' }}
         env:
