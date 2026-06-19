@@ -5,7 +5,7 @@ category: 'Agents'
 seoTitle: 'MCP server for DOCX review'
 ---
 
-`McpServer` exposes the [14 agent tools](/docs/1.x/agents/tools) over the Model Context Protocol. Use it when an MCP-compatible client should read, comment, or redline a DOCX through your host process.
+`McpServer` exposes the [agent tools](/docs/1.x/agents/tools) over the Model Context Protocol. Use it when an MCP-compatible client should read, comment, or redline a DOCX through your host process.
 
 ```ts
 import { McpServer } from '@eigenpal/docx-editor-agents/mcp';
@@ -32,7 +32,7 @@ handle(message: JsonRpcMessage): JsonRpcResponse | null
 - It does not throw for protocol or tool failures. Protocol-level problems come back as JSON-RPC errors; tool failures come back as successful responses with `isError: true` in the MCP content payload, per MCP convention.
 - Implements `initialize`, `tools/list`, `tools/call`, and `ping`. Protocol version: `2025-06-18` (overridable via options).
 
-`tools/list` advertises all 14 built-in tools with their JSON-Schema inputs. `tools/call` dispatches through the same `executeToolCall` the other integration shapes use. Note the headless caveats: against a reviewer bridge, `read_selection` and the page tools fail with descriptive errors, since there is no user and no rendered pages.
+`tools/list` advertises every built-in tool with its JSON-Schema inputs. `tools/call` dispatches through the same `executeToolCall` the other integration shapes use. Note the headless caveats: against a reviewer bridge, `read_selection` and the page tools fail with descriptive errors, since there is no user and no rendered pages.
 
 Because `handle()` is sync and transport-free, you can put it behind anything: HTTP, SSE, WebSocket, a queue consumer.
 

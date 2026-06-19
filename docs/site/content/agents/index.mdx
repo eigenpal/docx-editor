@@ -1,6 +1,6 @@
 ---
 title: 'Overview'
-description: 'Agent toolkit for DOCX: 14 tools for comments, tracked changes, and redlining. Run them against a live editor, headless in Node, or over MCP.'
+description: 'Let a model read and edit DOCX: comments, tracked changes, redlining. Run against a live editor, headless in Node, or over MCP.'
 category: 'Agents'
 order: 50
 seoTitle: 'AI agents for DOCX editing'
@@ -8,7 +8,7 @@ seoTitle: 'AI agents for DOCX editing'
 
 <PackageStats name="@eigenpal/docx-editor-agents" />
 
-`@eigenpal/docx-editor-agents` exposes DOCX editing operations as model tools: read paragraphs, add comments, suggest tracked changes, and apply formatting. The same 14 tools can run against a live editor, a headless reviewer, or an MCP server. You bring the model runtime; the package ships JSON-Schema tool definitions and optional adapters for the Vercel AI SDK, OpenAI-style tools, React, Vue, and MCP.
+`@eigenpal/docx-editor-agents` lets a language model read and edit a Word document: pull out paragraphs, leave comments, suggest tracked changes, apply formatting. The same tools run in three places: a live editor in the browser, a headless reviewer on the server, or an MCP server. You point them at whatever model you already run; the tool definitions are plain JSON Schema, with adapters for the Vercel AI SDK, OpenAI-style function calling, React, and Vue.
 
 ```bash
 npm install @eigenpal/docx-editor-agents
@@ -66,11 +66,11 @@ Reference: [MCP server](/docs/1.x/agents/mcp).
 
 If you are building a product UI, start with the live editor. If you have documents and no UI, start with `DocxReviewer`. Pick MCP only when the client already supports MCP.
 
-## The 14 tools
+## The tools
 
-- **Locate (7):** `read_document`, `read_selection`, `read_page`, `read_pages`, `find_text`, `read_comments`, `read_changes`
-- **Mutate (6):** `add_comment`, `reply_comment`, `resolve_comment`, `suggest_change`, `apply_formatting`, `set_paragraph_style`
-- **Navigate (1):** `scroll`
+- **Locate:** `read_document`, `read_selection`, `read_page`, `read_pages`, `find_text`, `read_comments`, `read_changes`
+- **Mutate:** `add_comment`, `reply_comment`, `resolve_comment`, `suggest_change`, `apply_formatting`, `set_paragraph_style`
+- **Navigate:** `scroll`
 
 The pattern is locate-then-mutate, mirroring Word's JS API: locate tools return paragraphs tagged with a stable `paraId`, and mutate tools address by it ([how paraId anchoring works](/docs/1.x/agents/live-editor#paraid-anchoring)). Full parameter and return shapes: [tools reference](/docs/1.x/agents/tools).
 
@@ -97,7 +97,7 @@ Each subpath tree-shakes independently. The `/ai-sdk/*` entries import `ai`, whi
     Tracked-change review the human accepts or rejects, live or in batch.
   </Card>
   <Card title="Tools reference" href="/docs/1.x/agents/tools">
-    All 14 tools: parameters, return shapes, examples.
+    Every tool: parameters, return shapes, examples.
   </Card>
   <Card title="Word JS API parity" href="/docs/1.x/agents/word-js-api">
     The Office.js verb mapping, enforced at compile time.

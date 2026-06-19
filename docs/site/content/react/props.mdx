@@ -114,7 +114,7 @@ The font picker and custom font registration have their own section below.
 |---|---|---|---|
 | `colorMode` | `'light' \| 'dark' \| 'system'` | `'light'` | Editor theme. `'system'` follows the OS `prefers-color-scheme`. |
 
-Dark mode is controlled entirely by this prop — there is no internal toggle. Drive it from your own UI by flipping the value:
+Dark mode is controlled entirely by this prop; there is no internal toggle. Drive it from your own UI by flipping the value:
 
 ```tsx
 const [colorMode, setColorMode] = useState<'light' | 'dark'>('light');
