@@ -19,6 +19,13 @@ export interface UseOutlineSidebarOptions {
   outlineHeadings: Ref<HeadingInfo[]>;
   activeSidebarItem: Ref<string | null>;
   extractCommentsAndChanges: () => void;
+  /**
+   * Scroll the VISIBLE paged viewport to a PM position. The hidden PM
+   * (`left: -9999px`) is never what the user sees, so `tr.scrollIntoView()`
+   * on it does nothing; the outline must drive the painter viewport instead
+   * (mirrors React's `scrollToPosition`; #930).
+   */
+  scrollToVisiblePosition: (pmPos: number) => void;
 }
 
 export function useOutlineSidebar(opts: UseOutlineSidebarOptions) {
@@ -36,10 +43,12 @@ export function useOutlineSidebar(opts: UseOutlineSidebarOptions) {
   function handleOutlineNavigate(pmPos: number) {
     const view = opts.editorView.value;
     if (!view) return;
-    // Set selection to heading position and scroll into view
+    // Put the caret on the heading in the hidden PM (so typing continues from
+    // there), then scroll the VISIBLE pages — not the hidden PM — to it.
     const $pos = view.state.doc.resolve(Math.min(pmPos + 1, view.state.doc.content.size));
     const sel = TextSelection.near($pos);
-    view.dispatch(view.state.tr.setSelection(sel).scrollIntoView());
+    view.dispatch(view.state.tr.setSelection(sel));
+    opts.scrollToVisiblePosition(pmPos);
     view.focus();
   }
 
