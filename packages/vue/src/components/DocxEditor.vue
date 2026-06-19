@@ -936,6 +936,10 @@ const {
   outlineHeadings,
   activeSidebarItem,
   extractCommentsAndChanges,
+  // Deferred closure: `scrollVisiblePositionIntoView` is destructured from
+  // usePagesPointer further down (TDZ-sensitive composable order). The arrow is
+  // only invoked on an outline click, long after setup, so the reference is safe.
+  scrollToVisiblePosition: (pmPos: number) => scrollVisiblePositionIntoView(pmPos),
 });
 
 useKeyboardShortcuts({

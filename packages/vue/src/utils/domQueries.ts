@@ -10,7 +10,11 @@
  */
 
 import type { EditorView } from 'prosemirror-view';
-import { collectBodySpans, resolveDomPosition } from '@eigenpal/docx-editor-core/layout-bridge';
+import {
+  collectBodySpans,
+  findBodyPmAnchor,
+  resolveDomPosition,
+} from '@eigenpal/docx-editor-core/layout-bridge';
 import { findWordBoundaries } from '@eigenpal/docx-editor-core/utils';
 
 /**
@@ -80,17 +84,23 @@ export function scrollVisiblePositionIntoView(
   pmPos: number
 ): void {
   if (!pagesContainer || !viewport) return;
-  let targetEl: HTMLElement | null = null;
-  for (const el of collectBodySpans(pagesContainer)) {
-    const start = Number(el.dataset.docFrom);
-    const end = Number(el.dataset.docTo);
-    if (Number.isFinite(start) && Number.isFinite(end) && pmPos >= start && pmPos <= end) {
-      targetEl = el;
-      break;
-    }
-  }
+  // Resolve the painted element the same way the React paged-scroll API does:
+  // an exact, body-scoped `data-doc-from` anchor first (paragraph elements,
+  // including headings, carry one), then the run-span [start,end] range. A
+  // heading's pmPos is the paragraph node position, which only the anchor
+  // match catches — the span loop alone would miss it (#930). The old
+  // unscoped `[data-doc-from]` fallback is dropped: it could latch onto a
+  // header/footer element sharing the same PM position.
+  let targetEl: HTMLElement | null = findBodyPmAnchor(pagesContainer, pmPos);
   if (!targetEl) {
-    targetEl = pagesContainer.querySelector<HTMLElement>(`[data-doc-from="${pmPos}"]`);
+    for (const el of collectBodySpans(pagesContainer)) {
+      const start = Number(el.dataset.docFrom);
+      const end = Number(el.dataset.docTo);
+      if (Number.isFinite(start) && Number.isFinite(end) && pmPos >= start && pmPos <= end) {
+        targetEl = el;
+        break;
+      }
+    }
   }
   if (!targetEl) return;
   const viewportRect = viewport.getBoundingClientRect();
