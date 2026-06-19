@@ -97,7 +97,7 @@ comments and notes when touched) and repacks every other part of the
 original archive as-is: `styles.xml`, themes, the font table, settings,
 media, relationships, custom XML. Concretely:
 
-- Unmodeled XML elements and attributes are kept and re-emitted in place. (One exception: legacy run-level VML drawn shapes other than watermarks — `v:rect`, `v:line`, non-text `v:shape` — are not yet modeled or preserved.)
+- Unmodeled XML elements and attributes are kept and re-emitted in place. (One exception: legacy run-level VML drawn shapes other than watermarks, namely `v:rect`, `v:line`, and non-text `v:shape`, are not yet modeled or preserved.)
 - Whole parts the editor never touches (custom XML, VBA projects, embedded fonts, OLE objects) are copied through the ZIP untouched.
 - References stay intact: relationship IDs, bookmark names, field codes, style IDs and numbering definitions are not renamed or renumbered.
 - Output is canonical OOXML, not merely valid: tracked changes are real `w:ins`/`w:del` revisions Word's review pane understands, theme colors stay theme references, numbering keeps its definitions.

@@ -1,13 +1,13 @@
 ---
 title: 'Bring your own agent'
-description: 'Wire the 14 DOCX tools into Vercel AI SDK, OpenAI, Anthropic, LangChain, or any runtime that accepts OpenAI-style function schemas, with one shared executor.'
+description: 'Wire the DOCX tools into Vercel AI SDK, OpenAI, Anthropic, LangChain, or any runtime that accepts OpenAI-style function schemas, with one shared executor.'
 category: 'Agents'
 order: 52
 ---
 
 ## Tool schemas
 
-All 14 tools ship as OpenAI-style function definitions. Runtimes that accept that shape can use `getToolSchemas()` directly; other runtimes usually need a small mapping layer.
+Every tool ships as an OpenAI-style function definition. Runtimes that accept that shape can use `getToolSchemas()` directly; other runtimes usually need a small mapping layer.
 
 ```ts
 import { getToolSchemas } from '@eigenpal/docx-editor-agents';

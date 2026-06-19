@@ -148,7 +148,7 @@ const document = reviewer.toDocument(); // the mutated Document model
 
 ## createReviewerBridge: tool loops against a file
 
-`createReviewerBridge(reviewer)` wraps the reviewer in the same `EditorBridge` interface the live editor exposes. That means the [14 agent tools](/docs/1.x/agents/tools), `executeToolCall`, and the [MCP server](/docs/1.x/agents/mcp) all work against a static file:
+`createReviewerBridge(reviewer)` wraps the reviewer in the same `EditorBridge` interface the live editor exposes. That means the [agent tools](/docs/1.x/agents/tools), `executeToolCall`, and the [MCP server](/docs/1.x/agents/mcp) all work against a static file:
 
 ```ts
 import { DocxReviewer, createReviewerBridge, executeToolCall } from '@eigenpal/docx-editor-agents';
