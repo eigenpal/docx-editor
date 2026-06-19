@@ -35,9 +35,11 @@ export function getCaretFromDom(
   const overlay = pagesContainer.parentElement?.querySelector('[data-testid="selection-overlay"]');
   if (!overlay) return null;
   const overlayRect = overlay.getBoundingClientRect();
-  const caret = getCaretPositionFromDom(pagesContainer, pmPos, overlayRect);
+  const caret = getCaretPositionFromDom(pagesContainer, pmPos, overlayRect, currentZoom);
   if (!caret) return null;
   return {
+    // x/y are screen-space deltas → divide by zoom. height is already returned
+    // in layout px by getCaretPositionFromDom (#928), so it passes through.
     x: caret.x / currentZoom,
     y: caret.y / currentZoom,
     height: caret.height,
