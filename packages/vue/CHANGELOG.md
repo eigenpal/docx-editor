@@ -1,5 +1,28 @@
 # @eigenpal/docx-editor-vue
 
+## 1.8.2
+
+### Patch Changes
+
+- 9022b42: Vue: Cut and Copy from the right-click context menu now work. The editor is focused before the clipboard command runs, so the selection is actually cut or copied, matching React.
+
+  Fixes #929
+
+- 9622082: Vue: clicking a heading in the document outline now scrolls the page to that heading, matching React.
+
+  Fixes #930
+
+- 7811a73: Fix caret size and table insert button position when the editor is zoomed. Both are painted inside the zoomed page container, so their geometry is now normalized by the zoom factor instead of being scaled twice.
+
+  Fixes #928
+
+- Updated dependencies [4f183b3]
+- Updated dependencies [0c233db]
+- Updated dependencies [7811a73]
+  - @eigenpal/docx-editor-core@1.8.2
+  - @eigenpal/docx-editor-agents@1.8.2
+  - @eigenpal/docx-editor-i18n@1.8.2
+
 ## 1.8.1
 
 ### Patch Changes
