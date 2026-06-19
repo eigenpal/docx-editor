@@ -1,4 +1,11 @@
-import '@happy-dom/global-registrator/register';
+import { GlobalRegistrator } from '@happy-dom/global-registrator';
+import { afterAll, beforeAll } from 'bun:test';
+
+// Register happy-dom for this file and unregister after, matching the rest of
+// the suite. A load-time register that never unregisters leaks the global
+// registration across files and collides with other files' setup.
+beforeAll(() => GlobalRegistrator.register());
+afterAll(() => GlobalRegistrator.unregister());
 import { afterEach, describe, expect, mock, test } from 'bun:test';
 import { act, cleanup, renderHook } from '@testing-library/react';
 import { useControllableBoolean } from './useControllableBoolean';
