@@ -220,6 +220,7 @@ export const singletonManager: ExtensionManager;
 
 // @public
 export interface TableAttrs {
+    bidi?: boolean;
     cellMargins?: {
         top?: number;
         bottom?: number;
