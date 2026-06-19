@@ -590,16 +590,20 @@ export function usePagesPointer(opts: UsePagesPointerOptions): UsePagesPointerRe
 
       const viewportEl = pagesEl.parentElement;
       if (!viewportEl) return;
+      // viewportEl carries `transform: scale(zoom)`; its rect is screen-space.
+      // The button is an absolutely-positioned child of that scaled element, so
+      // its left/top live in the element's own (unscaled) coords. Divide the
+      // screen-space offset by zoom or it gets re-scaled and drifts (#928).
       const viewportRect = viewportEl.getBoundingClientRect();
       setTableInsertButton({
         type: hit.type,
-        x: hit.clientX - viewportRect.left,
-        y: hit.clientY - viewportRect.top,
+        x: (hit.clientX - viewportRect.left) / zoom,
+        y: (hit.clientY - viewportRect.top) / zoom,
         cellPmPos: hit.cellPmPos,
       });
       clearTableInsertTimer();
     },
-    [readOnly, clearTableInsertTimer, hfEditMode, pagesContainerRef]
+    [readOnly, clearTableInsertTimer, hfEditMode, pagesContainerRef, zoom]
   );
 
   const handleTableInsertClick = useCallback(
