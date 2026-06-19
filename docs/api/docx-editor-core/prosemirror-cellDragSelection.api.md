@@ -9,7 +9,7 @@ import { EditorView } from 'prosemirror-view';
 // @public
 export function applyCellSelection(view: EditorView, anchorCellPos: number, headCellPos: number): boolean;
 
-// @public
+// @public @deprecated (undocumented)
 export const CELL_SELECT_OVERFLOW_PX = 5;
 
 // @public
