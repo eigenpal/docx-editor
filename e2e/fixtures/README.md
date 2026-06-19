@@ -87,6 +87,12 @@ A synthetic document containing a table whose middle row is made entirely of
 `w:vMerge` continuation cells. Used to verify that DOCX import does not produce
 an invalid empty ProseMirror `tableRow`.
 
+### table-cell-selection-drag.docx
+
+A synthetic document containing a simple table with generic sample text. Used to
+verify precise drag selection inside a single table cell without promoting the
+selection to the whole cell.
+
 ### toc-hyperlink-tabs.docx
 
 A synthetic document with one TOC1 paragraph wrapping
@@ -113,6 +119,7 @@ bun scripts/create-issue-472-floating-textbox-fixture.mjs
 bun scripts/create-footnote-bottom-overflow-fixture.mjs
 bun scripts/create-footnote-overlap-regression-fixture.mjs
 bun scripts/create-empty-table-row-vmerge-fixture.mjs
+bun scripts/create-table-cell-selection-drag-fixture.mjs
 bun scripts/create-toc-hyperlink-fixture.mjs
 bun scripts/create-inline-checkbox-controls-fixture.mjs e2e/fixtures/inline-checkbox-controls.docx
 ```
