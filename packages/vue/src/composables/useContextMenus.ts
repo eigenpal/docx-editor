@@ -242,6 +242,11 @@ export function useContextMenus(opts: UseContextMenusOptions): UseContextMenusRe
             opts.selectedImage.value = null;
           }
         } else {
+          // Focus the hidden PM first so the browser's clipboard op targets it.
+          // The hidden editor is off-screen (left: -9999px) and not focused
+          // after a context-menu click, so execCommand would otherwise no-op
+          // (#929). The trailing view.focus() below runs too late.
+          view.focus();
           document.execCommand('cut');
         }
         break;
@@ -249,6 +254,7 @@ export function useContextMenus(opts: UseContextMenusOptions): UseContextMenusRe
         if (opts.selectedImage.value) {
           copyImageToClipboard(view, opts.selectedImage.value.pmPos);
         } else {
+          view.focus();
           document.execCommand('copy');
         }
         break;
