@@ -107,7 +107,7 @@ See [React props: Fonts](/docs/1.x/react/props#fonts) for the full API. In Vue, 
 
 Alternatively, fonts can be installed on the user's system or loaded using your own `@font-face` rules. The editor renders fonts by name, so any font available to the browser can be used.
 
-Font files embedded inside a `.docx` are preserved when saving, but they are not automatically loaded for rendering.
+Fonts embedded inside a `.docx` are loaded automatically: the editor de-obfuscates the embedded faces, renders with them, and lists them in the font picker. They are also preserved when saving.
 
 ## Style preservation
 
