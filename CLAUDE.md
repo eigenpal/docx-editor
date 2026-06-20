@@ -154,6 +154,37 @@ Website docs (docx-editor.dev/docs/1.x) are authored here in `docs/site/content/
 
 ---
 
+## Security — untrusted DOCX/HTML input
+
+**Treat every value from a DOCX, pasted HTML, or embedded part as attacker-controlled.** A `.docx` is a zip of XML an attacker fully controls — font names, hyperlink targets, shape attrs, image rels, run text. Sanitize at the **parse/trust boundary** (in `packages/core/src/docx/*Parser.ts` / PM `parseDOM`), not at render time, so every downstream consumer gets the clean value.
+
+When you add/touch anything that **parses or renders unknown files** (parsers, `layout-painter/*`, PM `toDOM`/`parseDOM`, clipboard, print), audit these sink classes before merging:
+
+- **No HTML-from-strings.** Never build DOM from file-derived values via `innerHTML` / `outerHTML` / `insertAdjacentHTML` / `document.write`. Build with `document.createElement(NS)` + `setAttribute` / `textContent`.
+- **URLs go through `sanitizeHref`** (`packages/core/src/utils/sanitizeHref.ts`) — allowlists `http(s)/mailto/tel/ftp`, drops `javascript:`/`data:`/`vbscript:`/`file:`, strips embedded tab/LF/CR like WHATWG. Apply to every `href`, image `hlinkHref`, and `window.open(...)` arg.
+- **Escape strings interpolated into CSS** — `@font-face` family names and any inline `style` built from file data. See `cssStringEscape` in `fontLoader.ts` (escapes `" \ < >` and CSS newlines `\n \r \f`). Build print/popup `<style>` via `textContent`, never `document.write`.
+- **Residual CSS injection** — colors/transform/font-family still flow into inline `style` strings (set via `setAttribute`, so not XSS, but enables overlay/clickjacking and `url()` beacons). Validate/clamp where practical.
+
+Malicious-file parsing also has non-injection classes — guard these when opening/saving unknown files:
+
+- **XML safety** — the XML parser must not resolve DTDs/external entities (XXE → file/SSRF read) or expand nested entities (billion-laughs DoS).
+- **Zip safety** — enforce a decompression-ratio/size cap (zip bomb) and reject part/rel/media paths containing `..` or a leading `/` before resolving them (path traversal).
+- **No zero-click external fetch** — never auto-load a remote target from a file: external-mode image/font/link relationships (`TargetMode="External"`), remote `src`, CSS `url()`/`@import`. A network request on open is SSRF / IP-leak / tracking-beacon. Fetch only same-origin/embedded parts; gate remote loads behind explicit user action.
+- **Resource limits** — cap recursion depth (nested tables/shapes/SDT/groups/textboxes) and element counts (rows/cells/runs/pages); never feed a file-supplied number straight into allocation, `.repeat()`, or a loop bound. Avoid catastrophic-backtracking (ReDoS) regex on file-derived strings.
+- **XML injection on save** — escape every attacker-derived string written back into XML on serialize/round-trip (`escapeXml`); never template a raw value into output markup.
+- **Prototype pollution** — guard `JSON.parse`-of-file-data merges and any XML-attribute-name → object-key assignment against `__proto__`/`constructor`/`prototype`.
+- **Field codes / OLE / embedded objects** — never execute or auto-resolve Word field instructions (DDE, `INCLUDE*`, etc.) or embedded OLE/macro content; render inert.
+
+Quick audit grep when reviewing file-handling diffs:
+
+```bash
+grep -rnE "innerHTML|outerHTML|insertAdjacentHTML|document\.write|window\.open\(|\.href\s*=|font-family:.*\$\{" packages --include="*.ts" --include="*.tsx" --include="*.vue" | grep -viE "test|\.spec\."
+```
+
+Run that grep on any PR that parses or renders file data before merging. When you touch one sink, **check sibling sinks** so the same class isn't left open elsewhere — e.g. the exported `openPrintWindow` util (`core/utils/print.ts`, `PrintPreview.tsx`/`.vue`) still builds its popup via `document.write` with an unescaped `title`/`content`. Treat it as a **known sink to harden**, not a safe reference.
+
+---
+
 ## i18n
 
 `packages/i18n/en.json` is source of truth. Other locales mirror its shape with `null` = falls back to English. Missing key = CI fails.
