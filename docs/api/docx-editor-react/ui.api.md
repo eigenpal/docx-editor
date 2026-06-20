@@ -20,13 +20,19 @@ import { FindMatch } from '@eigenpal/docx-editor-core/utils/findReplace';
 import { FindOptions } from '@eigenpal/docx-editor-core/utils/findReplace';
 import { FindResult } from '@eigenpal/docx-editor-core/utils/findReplace';
 import { FontOption } from '@eigenpal/docx-editor-core/utils/fontOptions';
+import { formatPageRange as formatPrintPageRange } from '@eigenpal/docx-editor-core';
 import { getDefaultHighlightOptions } from '@eigenpal/docx-editor-core/utils/findReplace';
+import { getDefaultPrintOptions } from '@eigenpal/docx-editor-core';
 import { getMatchCountText } from '@eigenpal/docx-editor-core/utils/findReplace';
 import { HighlightOptions } from '@eigenpal/docx-editor-core/utils/findReplace';
 import { isEmptySearch } from '@eigenpal/docx-editor-core/utils/findReplace';
+import { isPrintSupported } from '@eigenpal/docx-editor-core';
 import { ListState } from '@eigenpal/docx-editor-core/utils/listState';
+import { openPrintWindow } from '@eigenpal/docx-editor-core';
 import { ParagraphAlignment } from '@eigenpal/docx-editor-core/types/document';
 import { ParsedClipboardContent } from '@eigenpal/docx-editor-core/utils';
+import { parsePageRange } from '@eigenpal/docx-editor-core';
+import { PrintOptions } from '@eigenpal/docx-editor-core';
 import * as React$1 from 'react';
 import React__default from 'react';
 import { ReactNode } from 'react';
@@ -42,6 +48,7 @@ import { TableCell } from '@eigenpal/docx-editor-core/types/document';
 import { TabMark } from '@eigenpal/docx-editor-core/types/document';
 import { Theme } from '@eigenpal/docx-editor-core/types/document';
 import { TranslationKey } from '@eigenpal/docx-editor-i18n';
+import { triggerPrint } from '@eigenpal/docx-editor-core';
 
 // @public
 export function addColumn(table: Table, atIndex: number, position?: 'before' | 'after'): Table;
@@ -316,11 +323,7 @@ export interface FontSizePickerProps {
 // @public
 export function formatFileSize(bytes: number): string;
 
-// @public
-export function formatPrintPageRange(range: {
-    start: number;
-    end: number;
-} | null, totalPages: number): string;
+export { formatPrintPageRange }
 
 // @public
 export function formatShortcutKeys(keys: string): string;
@@ -372,8 +375,7 @@ export { getDefaultHighlightOptions }
 // @public
 export function getDefaultPasteOption(): PasteOption;
 
-// @public
-export function getDefaultPrintOptions(): PrintOptions;
+export { getDefaultPrintOptions }
 
 // @public
 export function getDefaultShortcuts(): DialogKeyboardShortcut[];
@@ -589,8 +591,7 @@ export { isEmptySearch }
 // @public
 export function isPasteSpecialShortcut(event: KeyboardEvent): boolean;
 
-// @public
-export function isPrintSupported(): boolean;
+export { isPrintSupported }
 
 // @public
 export function isTextActionAvailable(action: TextContextAction, hasSelection: boolean, isEditable: boolean): boolean;
@@ -709,17 +710,12 @@ export interface LogoProps {
 // @public
 export function mergeCells(table: Table, selection: TableSelection): Table;
 
-// @public
-export function openPrintWindow(title: string | undefined, content: string): Window | null;
+export { openPrintWindow }
 
 // @public (undocumented)
 export function parseMarginFromUnits(value: string, unit: 'inch' | 'cm'): number | null;
 
-// @public
-export function parsePageRange(input: string, maxPages: number): {
-    start: number;
-    end: number;
-} | null;
+export { parsePageRange }
 
 // @public
 export type PasteOption = 'formatted' | 'plainText';
@@ -756,19 +752,7 @@ export interface PrintButtonProps {
     style?: CSSProperties;
 }
 
-// @public
-export interface PrintOptions {
-    includeFooters?: boolean;
-    includeHeaders?: boolean;
-    includePageNumbers?: boolean;
-    margins?: 'default' | 'none' | 'minimum';
-    pageRange?: {
-        start: number;
-        end: number;
-    } | null;
-    printBackground?: boolean;
-    scale?: number;
-}
+export { PrintOptions }
 
 // @public
 export function PrintStyles(): React__default.ReactElement;
@@ -1277,8 +1261,7 @@ export interface ToolbarProps {
 // @public
 export function ToolbarSeparator(): React__default.JSX.Element;
 
-// @public
-export function triggerPrint(): void;
+export { triggerPrint }
 
 // @public (undocumented)
 export const UnsavedIndicator: React__default.FC<UnsavedIndicatorProps>;
