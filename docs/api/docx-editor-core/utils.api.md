@@ -735,6 +735,9 @@ export function roundPixels(px: number, decimalPlaces?: number): number;
 export function runsToClipboardContent(runs: Run[], includeFormatting?: boolean, theme?: Theme | null): ClipboardContent;
 
 // @public
+export function sanitizeHref(href: string | null | undefined): string | undefined;
+
+// @public
 export interface ScrollToParaIdOptions {
     highlight?: ParagraphHighlightOptions;
 }
