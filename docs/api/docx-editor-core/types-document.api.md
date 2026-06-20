@@ -183,6 +183,10 @@ export interface DocumentBody {
 export interface DocumentSettings {
     defaultTableStyle?: string;
     defaultTabMark: number;
+    themeFontLang?: {
+        eastAsia?: string;
+        bidi?: string;
+    };
 }
 
 // @public
