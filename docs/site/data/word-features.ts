@@ -104,7 +104,7 @@ export const wordFeatures: WordFeature[] = [
     roundTrip: 'preserved',
     tier: 'community',
     notes:
-      'Fonts embedded in the file (word/fonts) are de-obfuscated and rendered, and become selectable in the toolbar under a Document fonts group. The embedded binaries are preserved on save; the editor does not add new embedded fonts.',
+      'Fonts embedded in the file (word/fonts) are de-obfuscated, rendered, and selectable in the toolbar under a Document fonts group. The embedded binaries round-trip on save; the editor does not add new embedded fonts.',
   },
   {
     id: 'text.color',
@@ -114,7 +114,7 @@ export const wordFeatures: WordFeature[] = [
     rendering: 'full',
     roundTrip: 'full',
     tier: 'community',
-    notes: 'Theme color references (accent1...) are kept as references, not flattened to hex.',
+    notes: 'Theme color references (accent1...) round-trip as references, not flattened to hex.',
   },
   {
     id: 'text.highlight',
@@ -136,6 +136,39 @@ export const wordFeatures: WordFeature[] = [
     tier: 'community',
     notes:
       'Bidi layout with mirrored alignment; Hebrew locale ships in @eigenpal/docx-editor-i18n.',
+  },
+  {
+    id: 'text.effects',
+    name: 'Text effects (outline, shadow, emboss, emphasis mark)',
+    category: 'text',
+    editing: 'none',
+    rendering: 'full',
+    roundTrip: 'full',
+    tier: 'community',
+    notes:
+      'w:outline, w:shadow, w:emboss, w:imprint and w:em render and round-trip; not settable from the toolbar. w14 glow and gradient text fill are not supported.',
+  },
+  {
+    id: 'text.math',
+    name: 'Math equations (OMML)',
+    category: 'text',
+    editing: 'none',
+    rendering: 'partial',
+    roundTrip: 'full',
+    tier: 'community',
+    notes:
+      'Equations round-trip verbatim (raw OMML) and show a styled text fallback. Laid-out math and equation editing are not built yet.',
+  },
+  {
+    id: 'text.symbols',
+    name: 'Symbol characters (w:sym)',
+    category: 'text',
+    editing: 'none',
+    rendering: 'none',
+    roundTrip: 'partial',
+    tier: 'community',
+    notes:
+      'Round-trip through a headless parse/serialize, but are not rendered in the editor and are dropped if the run is edited.',
   },
 
   // --- Paragraphs & styles ---------------------------------------------
@@ -197,6 +230,27 @@ export const wordFeatures: WordFeature[] = [
     notes:
       'Existing tab stops render (incl. right-tabs and dotted leaders in TOCs); a tab-stop editing UI is not built yet.',
   },
+  {
+    id: 'paragraphs.frames',
+    name: 'Drop caps & text frames (framePr)',
+    category: 'paragraphs',
+    editing: 'none',
+    rendering: 'none',
+    roundTrip: 'full',
+    tier: 'community',
+    notes:
+      'Parsed and round-tripped; text flows inline rather than as a drop cap or positioned frame.',
+  },
+  {
+    id: 'paragraphs.hyphenation',
+    name: 'Automatic hyphenation',
+    category: 'paragraphs',
+    editing: 'none',
+    rendering: 'none',
+    roundTrip: 'preserved',
+    tier: 'community',
+    notes: 'Document hyphenation settings round-trip; the layout engine does not hyphenate.',
+  },
 
   // --- Lists & numbering -------------------------------------------------
   {
@@ -235,6 +289,16 @@ export const wordFeatures: WordFeature[] = [
     rendering: 'full',
     roundTrip: 'full',
     tier: 'community',
+  },
+  {
+    id: 'lists.picture-bullets',
+    name: 'Picture bullets (numPicBullet)',
+    category: 'lists',
+    editing: 'none',
+    rendering: 'none',
+    roundTrip: 'none',
+    tier: 'community',
+    notes: 'Not parsed; an image bullet is dropped on save and falls back to no bullet.',
   },
 
   // --- Tables -------------------------------------------------------------
@@ -307,6 +371,16 @@ export const wordFeatures: WordFeature[] = [
     notes:
       'cnfStyle conditional formatting renders and round-trips; switching table styles from the UI is not built yet.',
   },
+  {
+    id: 'tables.text-direction',
+    name: 'Vertical cell text (textDirection)',
+    category: 'tables',
+    editing: 'none',
+    rendering: 'full',
+    roundTrip: 'full',
+    tier: 'community',
+    notes: 'tbRl/btLr cell text renders via writing-mode and round-trips; not settable from the UI.',
+  },
 
   // --- Images & drawings ---------------------------------------------------
   {
@@ -337,8 +411,7 @@ export const wordFeatures: WordFeature[] = [
     rendering: 'planned',
     roundTrip: 'full',
     tier: 'community',
-    notes:
-      'The original WMF/EMF bytes are parsed and preserved losslessly on save, but browsers cannot decode these legacy metafiles, so the image does not yet display. On-the-fly conversion (vector where possible, raster fallback) is planned.',
+    notes: 'Round-trip without loss; not rendered yet.',
   },
   {
     id: 'images.tracked',
@@ -351,14 +424,86 @@ export const wordFeatures: WordFeature[] = [
   },
   {
     id: 'images.textboxes',
-    name: 'Text boxes & shapes',
+    name: 'Text boxes',
     category: 'images',
     editing: 'partial',
+    rendering: 'full',
+    roundTrip: 'full',
+    tier: 'community',
+    notes:
+      'Anchored text boxes render (incl. page-anchored letterhead shapes in headers) and round-trip. Inner text is editable; move and resize handles for the box are not built yet.',
+  },
+  {
+    id: 'images.shapes',
+    name: 'Drawing shapes & geometry',
+    category: 'images',
+    editing: 'none',
+    rendering: 'none',
+    roundTrip: 'partial',
+    tier: 'community',
+    notes:
+      'Round-trip but are not painted yet. Custom geometry is reduced to its bounding rectangle on save.',
+  },
+  {
+    id: 'images.crop',
+    name: 'Picture cropping (srcRect)',
+    category: 'images',
+    editing: 'none',
+    rendering: 'full',
+    roundTrip: 'full',
+    tier: 'community',
+    notes: 'Crop renders and round-trips; cropping from the UI is not built.',
+  },
+  {
+    id: 'images.adjustments',
+    name: 'Picture adjustments (brightness, contrast, recolor)',
+    category: 'images',
+    editing: 'none',
     rendering: 'partial',
     roundTrip: 'partial',
     tier: 'community',
     notes:
-      'Anchored text boxes render (incl. page-anchored letterhead shapes in headers) and round-trip. Standalone drawn shapes (rect, oval, line) parse and serialize but do not yet render; custom-geometry shapes degrade to a rectangle on save.',
+      'Transparency (opacity) renders and round-trips; brightness, contrast, recolor and artistic effects are dropped.',
+  },
+  {
+    id: 'images.effects',
+    name: 'Picture effects (shadow, glow, reflection)',
+    category: 'images',
+    editing: 'none',
+    rendering: 'none',
+    roundTrip: 'partial',
+    tier: 'community',
+    notes: 'Not painted; effectExtent spacing round-trips, the effect itself may not.',
+  },
+  {
+    id: 'images.charts',
+    name: 'Charts (DrawingML)',
+    category: 'images',
+    editing: 'none',
+    rendering: 'none',
+    roundTrip: 'none',
+    tier: 'community',
+    notes: 'Not parsed; dropped on save.',
+  },
+  {
+    id: 'images.smartart',
+    name: 'SmartArt & diagrams',
+    category: 'images',
+    editing: 'none',
+    rendering: 'none',
+    roundTrip: 'none',
+    tier: 'community',
+    notes: 'Not parsed; dropped on save.',
+  },
+  {
+    id: 'images.ink',
+    name: 'Ink annotations (w:ink)',
+    category: 'images',
+    editing: 'none',
+    rendering: 'none',
+    roundTrip: 'none',
+    tier: 'community',
+    notes: 'Not modeled; dropped on save.',
   },
 
   // --- Page layout, headers & footers --------------------------------------
@@ -382,7 +527,7 @@ export const wordFeatures: WordFeature[] = [
     roundTrip: 'full',
     tier: 'community',
     notes:
-      'Margins editable; mid-body sectPr (section breaks) render and round-trip, inserting new sections from the UI is not built yet.',
+      'Margins editable; mid-body sectPr (section breaks) render and round-trip. Inserting new sections from the UI is not built yet.',
   },
   {
     id: 'layout.headers-footers',
@@ -422,10 +567,72 @@ export const wordFeatures: WordFeature[] = [
     name: 'Multi-column layout',
     category: 'layout',
     editing: 'none',
-    rendering: 'partial',
-    roundTrip: 'preserved',
+    rendering: 'full',
+    roundTrip: 'full',
     tier: 'community',
-    notes: 'Column definitions are preserved on round-trip; rendering flows single-column today.',
+    notes:
+      'Text flows into newspaper columns with balancing and separators; column count is not editable from the UI.',
+  },
+  {
+    id: 'layout.page-borders',
+    name: 'Page borders',
+    category: 'layout',
+    editing: 'none',
+    rendering: 'full',
+    roundTrip: 'full',
+    tier: 'community',
+    notes: 'Render with z-order, offset modes and first-page filters; not editable from the UI.',
+  },
+  {
+    id: 'layout.line-numbers',
+    name: 'Line numbers (lnNumType)',
+    category: 'layout',
+    editing: 'none',
+    rendering: 'none',
+    roundTrip: 'full',
+    tier: 'community',
+    notes: 'Parsed and round-tripped; not drawn in the margin.',
+  },
+  {
+    id: 'layout.even-odd-headers',
+    name: 'Different even & odd headers',
+    category: 'layout',
+    editing: 'none',
+    rendering: 'none',
+    roundTrip: 'full',
+    tier: 'community',
+    notes:
+      'Header/footer references round-trip; the even-page variant is not yet swapped in. Different first page is supported.',
+  },
+  {
+    id: 'layout.vertical-align',
+    name: 'Section vertical alignment (vAlign)',
+    category: 'layout',
+    editing: 'none',
+    rendering: 'none',
+    roundTrip: 'full',
+    tier: 'community',
+    notes: 'Round-trips; page content stays top-aligned.',
+  },
+  {
+    id: 'layout.background',
+    name: 'Page background color/image (w:background)',
+    category: 'layout',
+    editing: 'none',
+    rendering: 'none',
+    roundTrip: 'none',
+    tier: 'community',
+    notes: 'Parsed but not serialized; dropped on save and not rendered.',
+  },
+  {
+    id: 'layout.page-num-format',
+    name: 'Page number format (pgNumType)',
+    category: 'layout',
+    editing: 'none',
+    rendering: 'none',
+    roundTrip: 'none',
+    tier: 'community',
+    notes: 'Not modeled; numbering start/format (i, ii, A) is dropped and PAGE fields render as arabic.',
   },
 
   // --- Review ---------------------------------------------------------------
@@ -474,6 +681,16 @@ export const wordFeatures: WordFeature[] = [
     notes:
       'Agents propose Word-native tracked changes via suggest_change; live in the editor, headless via DocxReviewer, or over MCP.',
     docsLink: '/docs/1.x/agents/redlining',
+  },
+  {
+    id: 'review.moves',
+    name: 'Tracked moves (move from/to)',
+    category: 'review',
+    editing: 'partial',
+    rendering: 'full',
+    roundTrip: 'full',
+    tier: 'community',
+    notes: 'Imported moves render distinctly from insert/delete and round-trip.',
   },
 
   // --- Fields, links & TOC ---------------------------------------------------
@@ -527,28 +744,52 @@ export const wordFeatures: WordFeature[] = [
     tier: 'community',
     notes: 'Last-computed field results display; the field codes themselves round-trip untouched.',
   },
+  {
+    id: 'fields.citations',
+    name: 'Citations & bibliography',
+    category: 'fields',
+    editing: 'none',
+    rendering: 'none',
+    roundTrip: 'none',
+    tier: 'community',
+    notes:
+      'CITATION/BIBLIOGRAPHY fields and the b:Sources store are not parsed; bibliography data is dropped (any cached result text survives as plain runs).',
+  },
+  {
+    id: 'fields.legacy-forms',
+    name: 'Legacy form fields (FORMTEXT, FORMCHECKBOX, FORMDROPDOWN)',
+    category: 'fields',
+    editing: 'none',
+    rendering: 'partial',
+    roundTrip: 'partial',
+    tier: 'community',
+    notes:
+      'The field result shows as static text; w:ffData (checkbox state, constraints) is dropped and the control is not interactive.',
+  },
 
   // --- Document structure & content controls ---------------------------------
   {
     id: 'structure.content-controls',
     name: 'Content controls (SDT): block, inline',
     category: 'structure',
-    editing: 'full',
+    editing: 'partial',
     rendering: 'full',
     roundTrip: 'full',
     tier: 'community',
     notes:
-      'Discover, create, fill, and remove by tag/id/alias from the headless API and the live editor, including controls inside table cells; headers and footers via the headless API.',
+      'Discover, create, fill, and remove by tag/id/alias from the headless API and the editor (inline controls in table cells, headers and footers included). Content is editable; control properties (tag, alias, lock) are not UI-editable, and a block control inside a table cell or text box is not modeled.',
     docsLink: '/docs/1.x/guides/content-controls',
   },
   {
     id: 'structure.repeating-sections',
     name: 'Repeating section controls',
     category: 'structure',
-    editing: 'full',
+    editing: 'partial',
     rendering: 'full',
     roundTrip: 'full',
     tier: 'community',
+    notes:
+      'Add and remove items from the editor; the section configuration itself is read-only.',
     docsLink: '/docs/1.x/guides/content-controls',
   },
   {
@@ -573,13 +814,33 @@ export const wordFeatures: WordFeature[] = [
   },
   {
     id: 'structure.macros',
-    name: 'VBA macros & form fields (legacy)',
+    name: 'VBA macros',
     category: 'structure',
     editing: 'none',
     rendering: 'none',
     roundTrip: 'preserved',
     tier: 'community',
-    notes: 'Never executed, by design (client-side security); the parts survive open -> save.',
+    notes: 'Never executed, by design (client-side security); the vbaProject part survives open -> save.',
+  },
+  {
+    id: 'structure.ole',
+    name: 'OLE & embedded objects',
+    category: 'structure',
+    editing: 'none',
+    rendering: 'none',
+    roundTrip: 'none',
+    tier: 'community',
+    notes: 'Embedded objects are dropped; only a fallback preview image, when present, survives.',
+  },
+  {
+    id: 'structure.protection',
+    name: 'Document protection & editing restrictions',
+    category: 'structure',
+    editing: 'none',
+    rendering: 'none',
+    roundTrip: 'preserved',
+    tier: 'community',
+    notes: 'Protection settings round-trip but are not enforced; inline permission ranges may be dropped.',
   },
 
   // --- Collaboration, i18n & editing UX ---------------------------------------

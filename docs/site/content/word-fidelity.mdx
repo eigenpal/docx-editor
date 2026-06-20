@@ -85,6 +85,17 @@ The full comparison with contenteditable and canvas approaches is in
 one of your own documents in the [live demo](https://docx-editor.dev/editor)
 next to Word.
 
+## Drawings, shapes and legacy images
+
+These rows in the "Images & drawings" matrix are not Full yet. Original bytes
+round-trip on save, so editing the document does not lose them.
+
+- **Text boxes**: render and round-trip; inner text is editable. Move and
+  resize handles for the box are not built yet.
+- **Drawing shapes**: round-trip but are not painted yet. Custom geometry is
+  reduced to its bounding rectangle on save.
+- **WMF / EMF**: round-trip without loss; not rendered yet.
+
 ## Round-trip behavior
 
 A `.docx` file is a ZIP of XML parts, and Word writes a lot of XML the
