@@ -106,6 +106,11 @@ export class ContentControlBoundError extends Error {
 }
 
 // @public
+export class ContentControlCreateError extends Error {
+    constructor(message: string);
+}
+
+// @public
 export interface ContentControlFilter {
     alias?: string;
     id?: number;
@@ -121,10 +126,12 @@ export interface ContentControlInfo {
     dateFormat?: string;
     depth: number;
     id?: number;
+    kind: 'block' | 'inline';
     listItems?: {
         displayText: string;
         value: string;
     }[];
+    location: ContentControlLocation;
     lock?: SdtProperties['lock'];
     path: number[];
     placeholder?: string;
@@ -133,6 +140,19 @@ export interface ContentControlInfo {
     tag?: string;
     text: string;
 }
+
+// @public
+export class ContentControlKindError extends Error {
+    constructor(detail: string);
+}
+
+// @public
+export type ContentControlLocation = {
+    part: 'body';
+} | {
+    part: 'header' | 'footer';
+    rId: string;
+};
 
 // @public
 export class ContentControlLockedError extends Error {
@@ -189,6 +209,19 @@ export function createCollapsedRange(position: Position_2): Range_2;
 
 // @public
 export function createCommand<T extends AgentCommand>(command: Omit<T, 'id'>): T;
+
+// @public
+export function createContentControl(doc: Document_2, target: CreateContentControlTarget, props?: NewContentControlProps): {
+    doc: Document_2;
+    control: ContentControlInfo;
+};
+
+// @public
+export interface CreateContentControlTarget {
+    occurrence?: number;
+    paraId: string;
+    text: string;
+}
 
 // @public
 export function createRange(start: Position_2, end: Position_2): Range_2;
@@ -261,10 +294,15 @@ export interface ExtendedSelectionContext extends AgentSelectionContext {
 }
 
 // @public
-export function findContentControl(input: Document_2 | DocumentBody, filter: ContentControlFilter): ContentControlInfo | undefined;
+export function findContentControl(input: Document_2 | DocumentBody, filter: ContentControlFilter, options?: FindContentControlsOptions): ContentControlInfo | undefined;
 
 // @public
-export function findContentControls(input: Document_2 | DocumentBody, filter?: ContentControlFilter): ContentControlInfo[];
+export function findContentControls(input: Document_2 | DocumentBody, filter?: ContentControlFilter, options?: FindContentControlsOptions): ContentControlInfo[];
+
+// @public
+export interface FindContentControlsOptions {
+    includeHeadersFooters?: boolean;
+}
 
 // @public
 export interface FormatParagraphCommand extends BaseCommand {
@@ -322,7 +360,7 @@ export function getBodyText(body: DocumentBody): string;
 export function getBodyWordCount(body: DocumentBody): number;
 
 // @public
-export function getContentControlText(control: BlockSdt): string;
+export function getContentControlText(control: BlockSdt | InlineSdt): string;
 
 // @public
 export function getDocumentSummary(doc: Document_2): string;
@@ -465,6 +503,22 @@ export interface MergeParagraphsCommand extends BaseCommand {
 }
 
 // @public
+export interface NewContentControlProps {
+    alias?: string;
+    checked?: boolean;
+    dateFormat?: string;
+    id?: number;
+    listItems?: {
+        displayText: string;
+        value: string;
+    }[];
+    lock?: SdtProperties['lock'];
+    sdtType?: SdtType;
+    showingPlaceholder?: boolean;
+    tag?: string;
+}
+
+// @public
 export interface ParagraphContext {
     fullText: string;
     index: number;
@@ -507,6 +561,8 @@ export { Range_2 as Range }
 export function removeContentControl(doc: Document_2, filter: ContentControlFilter, options?: {
     force?: boolean;
     keepContent?: boolean;
+    includeHeadersFooters?: boolean;
+    all?: boolean;
 }): Document_2;
 
 // @public
@@ -558,11 +614,15 @@ export interface SelectionContextOptions {
 // @public
 export function setContentControlContent(doc: Document_2, filter: ContentControlFilter, replacement: string | BlockContent[], options?: {
     force?: boolean;
+    includeHeadersFooters?: boolean;
+    all?: boolean;
 }): Document_2;
 
 // @public
 export function setContentControlValue(doc: Document_2, filter: ContentControlFilter, value: ContentControlValue, options?: {
     force?: boolean;
+    includeHeadersFooters?: boolean;
+    all?: boolean;
 }): Document_2;
 
 // @public

@@ -537,7 +537,8 @@ export const wordFeatures: WordFeature[] = [
     rendering: 'full',
     roundTrip: 'full',
     tier: 'community',
-    notes: 'Addressable by tag/id/alias from the headless API; works inside footnotes too.',
+    notes:
+      'Discover, create, fill, and remove by tag/id/alias from the headless API and the live editor, including controls inside table cells; headers and footers via the headless API.',
     docsLink: '/docs/1.x/guides/content-controls',
   },
   {

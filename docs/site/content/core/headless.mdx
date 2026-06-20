@@ -57,14 +57,15 @@ Find and edit Word content controls by `tag`, `alias`, `id`, or `type`. All muta
 | `findContentControls(doc, filter?)` | List matching controls as `ContentControlInfo[]` |
 | `findContentControl(doc, filter)` | First match or `undefined` |
 | `getContentControlText(control)` | Plain text of a control |
-| `setContentControlContent(doc, filter, replacement, options?)` | Fill a rich/plain-text control with a string or `BlockContent[]` |
-| `setContentControlValue(doc, filter, value, options?)` | Set a typed value: `{ kind: 'dropdown' \| 'checkbox' \| 'date', ... }` |
-| `removeContentControl(doc, filter, options?)` | Delete a control, or unwrap with `keepContent: true` |
+| `createContentControl(doc, target, props?)` | Wrap a text span in a new control; returns `{ doc, control }` |
+| `setContentControlContent(doc, filter, replacement, options?)` | Fill a rich/plain-text control with a string or `BlockContent[]` (`{ all: true }` fills every match) |
+| `setContentControlValue(doc, filter, value, options?)` | Set a typed value: `{ kind: 'dropdown' \| 'checkbox' \| 'date', ... }` (`{ all: true }` sets every match) |
+| `removeContentControl(doc, filter, options?)` | Delete a control, or unwrap with `keepContent: true` (`{ all: true }` removes every match) |
 | `addRepeatingSectionItem(doc, filter, options?)` | Clone a repeating-section item with fresh ids |
 | `removeRepeatingSectionItem(doc, filter, index)` | Drop one repeating-section item |
 | `formatSdtDate(iso, pattern?)` | Format an ISO date with a `w:dateFormat` pattern |
 
-Errors are typed: `ContentControlNotFoundError`, `ContentControlLockedError`, `ContentControlTypeError`, `ContentControlBoundError`, `ContentControlValueError`, `RepeatingSectionError`.
+Errors are typed: `ContentControlNotFoundError`, `ContentControlLockedError`, `ContentControlTypeError`, `ContentControlBoundError`, `ContentControlKindError`, `ContentControlValueError`, `ContentControlCreateError`, `RepeatingSectionError`.
 
 ## Watermarks
 

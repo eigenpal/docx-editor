@@ -49,7 +49,7 @@ next = removeContentControl(next, { tag: "optionalClause" });
 next = removeContentControl(next, { tag: "wrapper" }, { keepContent: true });
 ```
 
-All headless mutators are pure: they return a new `Document` and preserve the control's identity and raw `w:sdtPr`, so the result still round-trips. Mutators affect the first match only; when a tag repeats, enumerate with `findContentControls` and disambiguate by `id`.
+All headless mutators are pure: they return a new `Document` and preserve the control's identity and raw `w:sdtPr`, so the result still round-trips. By default mutators affect the first match; when a tag repeats, enumerate with `findContentControls` and disambiguate by `id` (or pass `{ all: true }` to act on every match).
 
 Safety rules (each overridable with `{ force: true }`):
 
@@ -73,6 +73,30 @@ setContentControlValue(doc, { tag: "effective" }, { kind: "date", date: "2026-06
 A dropdown value must match one of the control's list items (by value or display text). A date is ISO `yyyy-mm-dd` and is rendered with the control's `w:dateFormat`. `comboBox` controls are pick-only today; typing a value outside the list is not supported.
 
 In the editor, typed controls also get an interactive trigger at the top-right of their box: it toggles the checkbox, opens the dropdown's item menu, or opens a date picker, each as a normal undoable edit. No wiring required, in both the React and Vue adapters.
+
+## Creating controls
+
+`createContentControl` wraps a text span in a **new** control — the step that turns a placeholder in a template into a fillable, tagged region (including inside a table cell). It is pure (returns a new `Document`) and returns the created control:
+
+```ts
+import { createContentControl } from "@eigenpal/docx-editor-core/headless";
+
+// Wrap "[CUSTOMER]" in the paragraph with this Word w14:paraId.
+const { doc: d1, control } = createContentControl(
+  doc,
+  { paraId: "0A1B2C3D", text: "[CUSTOMER]" },
+  { tag: "customer", alias: "Customer", sdtType: "plainText" }
+);
+
+// Typed controls are created ready to fill — set the value afterwards.
+const { doc: d2 } = createContentControl(
+  doc,
+  { paraId: "0A1B2C3D", text: "[DATE]" },
+  { tag: "effective", sdtType: "date", dateFormat: "MMMM d, yyyy" }
+);
+```
+
+The `w:id` is auto-assigned (pass `props.id` to set it yourself), and the result round-trips immediately, so `findContentControl(doc, { tag })` resolves it and a typed control accepts `setContentControlValue`. `createContentControl` throws `ContentControlCreateError` if the text isn't found or the span can't be cleanly wrapped (for example, it overlaps an existing control).
 
 ## Repeating sections
 
@@ -131,11 +155,36 @@ const out = await repackDocx(doc);
 await writeFile("contract-acme.docx", Buffer.from(out));
 ```
 
+## Headers and footers
+
+By default the API searches the main document body. Pass `includeHeadersFooters: true` to also search headers and footers:
+
+```ts
+findContentControls(doc, { type: 'checkbox' }, { includeHeadersFooters: true });
+setContentControlContent(doc, { tag: 'supplier' }, 'ACME Ltd', { includeHeadersFooters: true });
+```
+
+`includeHeadersFooters` needs a full `Document` (a bare `DocumentBody` has no header/footer parts), and a result's `location` tells you which part it lives in. When filling a control, the value inherits the surrounding formatting so it matches the text it replaces.
+
+The live-editor `DocxEditorRef` methods (`getContentControls` / `setContentControlContent` / `removeContentControl`) cover the body only — they take no `includeHeadersFooters` option, so header and footer controls are addressable from the headless API.
+
+## Filling every match
+
+By default the mutators (`setContentControlContent`, `setContentControlValue`, `removeContentControl`) act on the **first** control matching the filter. Pass `{ all: true }` to act on **every** match instead — for one logical value that recurs under a shared tag (a name in the body, a running header, and several table cells):
+
+```ts
+setContentControlContent(doc, { tag: 'customerName' }, 'Acme GmbH', { all: true, includeHeadersFooters: true });
+removeContentControl(doc, {}, { all: true, keepContent: true }); // flatten: unwrap every control
+```
+
+`{ all: true }` is atomic — if any matched control is refused by a lock, type, or data-binding guard, nothing is written unless you also pass `{ force: true }`.
+
 ## Current limits
 
-- Scope is block-level controls in the document body. Inline controls parse and round-trip but are not part of this addressing API.
-- Controls inside headers/footers and inside table cells are not discovered; `findContentControls` will not return them and mutators report "not found".
-- `dataBinding` and repeating sections round-trip verbatim but have no live behavior (no bound-value resolution, no automatic repeat expansion).
+- A control that _wraps_ a whole table cell or row isn't supported (inline controls _inside_ a cell are).
+- A control inside a hyperlink isn't surfaced.
+- Controls inside tracked changes, footnotes, and endnotes are not searched.
+- `dataBinding` and repeating sections round-trip but have no live behavior (no bound-value resolution, no automatic repeat expansion).
 
 ## Next steps
 
