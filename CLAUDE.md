@@ -233,7 +233,7 @@ Adding adapter prop/ref method:
 
 Every code PR → `bun changeset` → commit `.changeset/*.md`. Skip only for test/docs/CI-only PRs.
 
-- Use full npm name in frontmatter (`@eigenpal/docx-editor-react`). Always run `bun changeset`, don't hand-write. Wrong name crashes post-merge Release workflow.
+- **Generate the changeset with `bun changeset` — never hand-write the `.changeset/*.md` file.** The interactive prompt picks the correct package name and bump and writes the right frontmatter. Hand-writing risks a wrong/typo'd package name, which crashes the post-merge Release workflow. (It's an interactive TTY command — run it in your own terminal; don't fabricate the file because the prompt is inconvenient.)
 - All published packages in fixed group — declare one bump, others follow.
 - Default bump: `patch`. `minor` for additive public API. `major` for breaks.
 - Summary lands verbatim in CHANGELOG; write for the consumer. Keep it concise (one or two lines), lead with the user-visible change (what changed, not how), and put `Fixes #N` at the end if relevant. No emojis or marketing.
@@ -246,6 +246,7 @@ Packages: `@eigenpal/docx-editor-{react,core,agents,i18n,vue}`, `@eigenpal/nuxt-
 
 ### Don't
 
+- Hand-write `.changeset/*.md` — always `bun changeset`.
 - Push `chore: release` commit by hand.
 - Delete `.changeset/*.md` outside `changeset version`.
 - Edit `CHANGELOG.md` or `package.json#version` by hand.
