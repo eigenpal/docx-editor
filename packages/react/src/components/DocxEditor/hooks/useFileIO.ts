@@ -172,14 +172,18 @@ export function useFileIO({
     printWindow.document.write(`<!DOCTYPE html>
 <html><head><title>Print</title>
 <style>
-${fontFaceRules.join('\n')}
 * { margin: 0; padding: 0; }
 body { background: white; }
 .layout-page { break-after: page; }
 .layout-page:last-child { break-after: auto; }
 @page { margin: 0; size: auto; }
 </style>
-</head><body>${pagesClone.outerHTML}</body></html>`);
+</head><body></body></html>`);
+
+    const fontStyleEl = printWindow.document.createElement('style');
+    fontStyleEl.textContent = fontFaceRules.join('\n');
+    printWindow.document.head.appendChild(fontStyleEl);
+    printWindow.document.body.appendChild(printWindow.document.importNode(pagesClone, true));
     printWindow.document.close();
 
     // Wait for fonts/images then print
