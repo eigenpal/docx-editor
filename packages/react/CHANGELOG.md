@@ -1,5 +1,20 @@
 # @eigenpal/docx-js-editor
 
+## 1.8.3
+
+### Patch Changes
+
+- 5ce3faa: Escape embedded font-family names before interpolating into the injected `@font-face` stylesheet, and build the print window via DOM APIs instead of `document.write` string concatenation. Prevents CSS injection and print-time XSS from crafted DOCX font names.
+- Updated dependencies [88a7650]
+- Updated dependencies [5ce3faa]
+- Updated dependencies [5eb0a43]
+- Updated dependencies [673e917]
+- Updated dependencies [74e36ef]
+- Updated dependencies [447d5b0]
+  - @eigenpal/docx-editor-core@1.8.3
+  - @eigenpal/docx-editor-agents@1.8.3
+  - @eigenpal/docx-editor-i18n@1.8.3
+
 ## 1.8.2
 
 ### Patch Changes
