@@ -12,29 +12,22 @@ import React from 'react';
 import type { CSSProperties } from 'react';
 import { useTranslation } from '../../i18n';
 
+// Print data helpers are framework-agnostic and live in core as the single
+// source of truth; re-export them so the React API surface is unchanged.
+// Only the React-specific JSX (PrintButton, PrintStyles) is defined here.
+export {
+  type PrintOptions,
+  getDefaultPrintOptions,
+  triggerPrint,
+  openPrintWindow,
+  parsePageRange,
+  formatPageRange,
+  isPrintSupported,
+} from '@eigenpal/docx-editor-core';
+
 // ============================================================================
 // TYPES
 // ============================================================================
-
-/**
- * Print options
- */
-export interface PrintOptions {
-  /** Whether to include headers */
-  includeHeaders?: boolean;
-  /** Whether to include footers */
-  includeFooters?: boolean;
-  /** Whether to include page numbers */
-  includePageNumbers?: boolean;
-  /** Page range to print (null = all) */
-  pageRange?: { start: number; end: number } | null;
-  /** Scale factor for printing (1.0 = 100%) */
-  scale?: number;
-  /** Whether to show background colors */
-  printBackground?: boolean;
-  /** Margins mode */
-  margins?: 'default' | 'none' | 'minimum';
-}
 
 /**
  * PrintButton props
@@ -55,20 +48,6 @@ export interface PrintButtonProps {
   /** Compact mode */
   compact?: boolean;
 }
-
-// ============================================================================
-// DEFAULT VALUES
-// ============================================================================
-
-const DEFAULT_PRINT_OPTIONS: PrintOptions = {
-  includeHeaders: true,
-  includeFooters: true,
-  includePageNumbers: true,
-  pageRange: null,
-  scale: 1.0,
-  printBackground: true,
-  margins: 'default',
-};
 
 // ============================================================================
 // PRINT BUTTON COMPONENT
@@ -216,109 +195,4 @@ function PrintIcon({ size = 18 }: IconProps): React.ReactElement {
       <rect x="6" y="14" width="12" height="8" />
     </svg>
   );
-}
-
-// ============================================================================
-// UTILITY FUNCTIONS
-// ============================================================================
-
-/**
- * Trigger browser print dialog for the current document
- */
-export function triggerPrint(): void {
-  window.print();
-}
-
-/**
- * Create print-optimized document view in a new window
- */
-export function openPrintWindow(title: string = 'Document', content: string): Window | null {
-  const printWindow = window.open('', '_blank');
-  if (!printWindow) return null;
-
-  printWindow.document.write(`
-    <!DOCTYPE html>
-    <html>
-    <head>
-      <title>${title}</title>
-      <style>
-        @media print {
-          body {
-            margin: 0;
-            padding: 0;
-          }
-          @page {
-            margin: 0;
-          }
-        }
-      </style>
-    </head>
-    <body>
-      ${content}
-    </body>
-    </html>
-  `);
-
-  printWindow.document.close();
-  return printWindow;
-}
-
-/**
- * Get default print options
- */
-export function getDefaultPrintOptions(): PrintOptions {
-  return { ...DEFAULT_PRINT_OPTIONS };
-}
-
-/**
- * Create page range from string (e.g., "1-5", "3", "1,3,5")
- */
-export function parsePageRange(
-  input: string,
-  maxPages: number
-): { start: number; end: number } | null {
-  if (!input || !input.trim()) return null;
-
-  const trimmed = input.trim();
-
-  // Single page
-  if (/^\d+$/.test(trimmed)) {
-    const page = parseInt(trimmed, 10);
-    if (page >= 1 && page <= maxPages) {
-      return { start: page, end: page };
-    }
-    return null;
-  }
-
-  // Range (e.g., "1-5")
-  const rangeMatch = trimmed.match(/^(\d+)-(\d+)$/);
-  if (rangeMatch) {
-    const start = parseInt(rangeMatch[1], 10);
-    const end = parseInt(rangeMatch[2], 10);
-    if (start >= 1 && end <= maxPages && start <= end) {
-      return { start, end };
-    }
-    return null;
-  }
-
-  return null;
-}
-
-/**
- * Format page range for display
- */
-export function formatPageRange(
-  range: { start: number; end: number } | null,
-  totalPages: number
-): string {
-  if (!range) return `All (${totalPages} pages)`;
-  if (range.start === range.end) return `Page ${range.start}`;
-  return `Pages ${range.start}-${range.end}`;
-}
-
-/**
- * Check if browser supports good print functionality
- */
-export function isPrintSupported(): boolean {
-  return typeof window !== 'undefined' && typeof window.print === 'function';
 }

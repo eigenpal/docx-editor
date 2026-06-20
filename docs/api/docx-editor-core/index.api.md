@@ -664,6 +664,12 @@ export function footnoteReservedHeightsEqual(a: Map<number, number>, b: Map<numb
 // @public
 export function formatLastSaveTime(date: Date | null): string;
 
+// @public (undocumented)
+export function formatPageRange(range: {
+    start: number;
+    end: number;
+} | null, totalPages: number): string;
+
 // @public
 export function formatPx(px: number): string;
 
@@ -695,6 +701,9 @@ export function getAutoSaveStorageSize(storageKey?: string): number;
 
 // @public
 export function getContrastingColor(backgroundColor: ColorValue | undefined | null, theme: Theme | null | undefined): string;
+
+// @public (undocumented)
+export function getDefaultPrintOptions(): PrintOptions;
 
 // @public
 export function getDocumentSummary(doc: Document_2): string;
@@ -910,6 +919,9 @@ export function isLineBreak(content: RunContent): boolean;
 // @public
 export function isPageBreak(content: RunContent): boolean;
 
+// @public (undocumented)
+export function isPrintSupported(): boolean;
+
 // @public
 export function isValidVariableName(name: string): boolean;
 
@@ -1065,6 +1077,9 @@ export interface NumberingDefinitions {
 export function onFontsLoaded(callback: (fonts: string[]) => void): () => void;
 
 // @public
+export function openPrintWindow(title: string | undefined, content: string): Window | null;
+
+// @public
 export type Page = {
     number: number;
     fragments: Fragment[];
@@ -1190,6 +1205,12 @@ export function parseColorString(colorString: string | undefined): ColorValue | 
 export function parseDocx(input: DocxInput, options?: ParseOptions): Promise<Document_2>;
 
 // @public
+export function parsePageRange(input: string, maxPages: number): {
+    start: number;
+    end: number;
+} | null;
+
+// @public
 export function parseVariable(variable: string): string | null;
 
 // @public
@@ -1291,6 +1312,27 @@ export interface PositionCoordinates {
 
 // @public
 export function preloadCommonFonts(): Promise<void>;
+
+// @public
+export interface PrintOptions {
+    // (undocumented)
+    includeFooters?: boolean;
+    // (undocumented)
+    includeHeaders?: boolean;
+    // (undocumented)
+    includePageNumbers?: boolean;
+    // (undocumented)
+    margins?: 'default' | 'none' | 'minimum';
+    // (undocumented)
+    pageRange?: {
+        start: number;
+        end: number;
+    } | null;
+    // (undocumented)
+    printBackground?: boolean;
+    // (undocumented)
+    scale?: number;
+}
 
 // @public
 export function processTemplate(buffer: ArrayBuffer, variables: Record<string, string>, options?: ProcessTemplateOptions): ArrayBuffer;
@@ -1829,6 +1871,9 @@ export interface TrackedChangeInfo {
 
 // @public
 export type TrackedRunChange = Insertion | Deletion | MoveFrom | MoveTo;
+
+// @public
+export function triggerPrint(): void;
 
 // @public
 export function twipsToEmu(twips: number): number;
