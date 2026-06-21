@@ -104,8 +104,15 @@ const AUTHOR_INITIALS: Record<string, string> = {
 // Deterministic timestamps so the fixture is reproducible across runs.
 const BASE_DATE = Date.parse('2026-01-05T09:00:00Z');
 
+// Escape for both element text and double-quoted attribute values, so a value
+// containing `"` cannot break out of `w:author="..."` / `w:val="..."`.
 function escapeXml(text: string): string {
-  return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  return text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
 }
 
 function countWords(text: string): number {
@@ -298,7 +305,7 @@ function buildCommentsXml(): string {
     .map((c) => {
       return `  <w:comment w:id="${c.id}" w:author="${escapeXml(c.author)}" w:date="${
         c.date
-      }" w:initials="${AUTHOR_INITIALS[c.author] ?? ''}">
+      }" w:initials="${escapeXml(AUTHOR_INITIALS[c.author] ?? '')}">
     <w:p w14:paraId="${c.paraId}"><w:r><w:t xml:space="preserve">${escapeXml(
       c.text
     )}</w:t></w:r></w:p>

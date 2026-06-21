@@ -11,7 +11,15 @@ const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 const W14 = 'http://schemas.microsoft.com/office/word/2010/wordml';
 const MC = 'http://schemas.openxmlformats.org/markup-compatibility/2006';
 
-const esc = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+// Escape for both element text and double-quoted attribute values, so a value
+// containing `"` cannot break out of `w:val="..."`.
+const esc = (s) =>
+  s
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
 
 const run = (text, options = {}) => {
   const preserve =
