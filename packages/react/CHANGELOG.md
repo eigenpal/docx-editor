@@ -1,5 +1,25 @@
 # @eigenpal/docx-js-editor
 
+## 1.9.0
+
+### Patch Changes
+
+- f61435b: Harden `openPrintWindow` to build the print window via DOM APIs instead of `document.write`, so a crafted document title cannot break out into executable markup. The framework-agnostic print helpers are now exported from `@eigenpal/docx-editor-core` as the single source of truth, and the React package re-exports them unchanged.
+- 791b132: Remove two potential slow-input denial-of-service paths in the React adapter. The data URL MIME parser now uses index math instead of a backtracking regex, and the toolbar test-id helper no longer scans across unmatched parentheses, so neither degrades on long crafted input.
+- Updated dependencies [4b47daf]
+- Updated dependencies [9144b69]
+- Updated dependencies [826aa32]
+- Updated dependencies [826aa32]
+- Updated dependencies [12c1f87]
+- Updated dependencies [7839ee9]
+- Updated dependencies [826aa32]
+- Updated dependencies [9454c9a]
+- Updated dependencies [f61435b]
+- Updated dependencies [28876a2]
+  - @eigenpal/docx-editor-core@1.9.0
+  - @eigenpal/docx-editor-i18n@1.9.0
+  - @eigenpal/docx-editor-agents@1.9.0
+
 ## 1.8.3
 
 ### Patch Changes
