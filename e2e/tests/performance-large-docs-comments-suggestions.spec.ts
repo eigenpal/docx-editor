@@ -14,6 +14,7 @@
  */
 import { test, expect, Page } from '@playwright/test';
 import { EditorPage } from '../helpers/editor-page';
+import { recordMetric, writeMetricsIfRequested } from '../helpers/perf-metrics';
 import * as path from 'path';
 import { fileURLToPath } from 'url';
 
@@ -22,6 +23,9 @@ const LARGE_DOC_PATH = path.resolve(
   __dirname,
   '../fixtures/issue-68-large-comments-suggestions.docx'
 );
+
+/** Suite id — also the baseline/metrics filename stem. Keep in sync with the baseline JSON. */
+const PERF_SUITE = 'large-docs-comments-suggestions';
 
 const MODIFIER = process.platform === 'darwin' ? 'Meta' : 'Control';
 
@@ -106,6 +110,12 @@ test.describe('Large Document Performance — comments + suggestions (#68)', () 
     await editor.waitForReady();
   });
 
+  test.afterAll(() => {
+    // Persist a machine-readable result when PERF_EMIT_JSON is set (the
+    // !check-performance workflow). No-op for ordinary test runs.
+    writeMetricsIfRequested(PERF_SUITE);
+  });
+
   test('loads 127K word document with comments and suggestions without crashing', async ({
     page,
   }) => {
@@ -129,6 +139,35 @@ test.describe('Large Document Performance — comments + suggestions (#68)', () 
     console.log(
       `Load time: ${loadTime}ms, Pages: ${pageCount}, comment spans: ${commentSpans}, tracked spans: ${trackedSpans}`
     );
+
+    recordMetric({
+      key: 'load.timeMs',
+      label: 'Doc load',
+      value: loadTime,
+      unit: 'ms',
+      direction: 'lower-is-better',
+    });
+    recordMetric({
+      key: 'load.pageCount',
+      label: 'Page count',
+      value: pageCount,
+      unit: 'count',
+      direction: 'informational',
+    });
+    recordMetric({
+      key: 'load.commentSpans',
+      label: 'Comment spans',
+      value: commentSpans,
+      unit: 'count',
+      direction: 'informational',
+    });
+    recordMetric({
+      key: 'load.trackedSpans',
+      label: 'Tracked spans',
+      value: trackedSpans,
+      unit: 'count',
+      direction: 'informational',
+    });
   });
 
   test('typing at document start stays responsive', async ({ page }) => {
@@ -149,6 +188,13 @@ test.describe('Large Document Performance — comments + suggestions (#68)', () 
     console.log(
       `Start-of-doc typing — avg: ${stats.avg}ms, max: ${stats.max}ms, all: [${stats.latencies.join(', ')}]`
     );
+    recordMetric({
+      key: 'typing.start.avgMs',
+      label: 'Typing — start (avg)',
+      value: stats.avg,
+      unit: 'ms',
+      direction: 'lower-is-better',
+    });
     expect(stats.avg).toBeLessThan(500);
   });
 
@@ -179,6 +225,13 @@ test.describe('Large Document Performance — comments + suggestions (#68)', () 
     console.log(
       `Mid-doc typing — avg: ${stats.avg}ms, max: ${stats.max}ms, all: [${stats.latencies.join(', ')}]`
     );
+    recordMetric({
+      key: 'typing.middle.avgMs',
+      label: 'Typing — middle (avg)',
+      value: stats.avg,
+      unit: 'ms',
+      direction: 'lower-is-better',
+    });
     expect(stats.avg).toBeLessThan(500);
   });
 
@@ -210,6 +263,13 @@ test.describe('Large Document Performance — comments + suggestions (#68)', () 
     console.log(
       `End-of-doc typing — avg: ${stats.avg}ms, max: ${stats.max}ms, all: [${stats.latencies.join(', ')}]`
     );
+    recordMetric({
+      key: 'typing.end.avgMs',
+      label: 'Typing — end (avg)',
+      value: stats.avg,
+      unit: 'ms',
+      direction: 'lower-is-better',
+    });
     expect(stats.avg).toBeLessThan(500);
   });
 
@@ -238,6 +298,13 @@ test.describe('Large Document Performance — comments + suggestions (#68)', () 
     console.log(
       `Comment-adjacent typing — avg: ${stats.avg}ms, max: ${stats.max}ms, all: [${stats.latencies.join(', ')}]`
     );
+    recordMetric({
+      key: 'typing.commentAdjacent.avgMs',
+      label: 'Typing — next to comment (avg)',
+      value: stats.avg,
+      unit: 'ms',
+      direction: 'lower-is-better',
+    });
     expect(stats.avg).toBeLessThan(500);
   });
 
@@ -266,6 +333,13 @@ test.describe('Large Document Performance — comments + suggestions (#68)', () 
     expect(visiblePageCount).toBeGreaterThan(0);
 
     console.log(`Scroll-after-edit time: ${scrollTime}ms, visible pages: ${visiblePageCount}`);
+    recordMetric({
+      key: 'scroll.afterEditMs',
+      label: 'Scroll after edit',
+      value: scrollTime,
+      unit: 'ms',
+      direction: 'lower-is-better',
+    });
   });
 
   test('undo/redo stays responsive on large document', async ({ page }) => {
@@ -289,6 +363,21 @@ test.describe('Large Document Performance — comments + suggestions (#68)', () 
     console.log(
       `Redo — avg: ${redoStats.avg}ms, max: ${redoStats.max}ms, all: [${redoStats.latencies.join(', ')}]`
     );
+
+    recordMetric({
+      key: 'undo.avgMs',
+      label: 'Undo (avg)',
+      value: undoStats.avg,
+      unit: 'ms',
+      direction: 'lower-is-better',
+    });
+    recordMetric({
+      key: 'redo.avgMs',
+      label: 'Redo (avg)',
+      value: redoStats.avg,
+      unit: 'ms',
+      direction: 'lower-is-better',
+    });
 
     expect(undoStats.avg).toBeLessThan(500);
     expect(redoStats.avg).toBeLessThan(500);

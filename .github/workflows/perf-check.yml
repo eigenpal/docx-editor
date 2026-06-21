@@ -1,0 +1,90 @@
+name: Performance Check
+
+# On-demand large-document performance probe. Add the `perf-check` label to a PR
+# to run the comments+suggestions perf suite against the PR's code and post a
+# comparison against the baseline committed on main. Informational only — it
+# never fails the check.
+#
+# SECURITY: this uses the `pull_request` trigger, not `issue_comment`, on purpose.
+# A pull_request run executes in the PR's own cache scope and with a PR-scoped
+# GITHUB_TOKEN, so running untrusted PR code here cannot poison the default-branch
+# cache or reach a privileged token (CodeQL's documented "correct usage"). The
+# baseline refresh, which needs a write token, lives in perf-baseline-refresh.yml
+# (workflow_dispatch only) so no secret is ever exposed to a PR-triggered run.
+#
+# The label is removed after each run, so it acts as a one-shot trigger: re-add
+# it to run again.
+
+on:
+  pull_request:
+    types: [labeled]
+
+concurrency:
+  group: perf-check-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  pull-requests: write
+
+env:
+  PERF_SPEC: e2e/tests/performance-large-docs-comments-suggestions.spec.ts
+  PERF_BASELINE: e2e/perf-baselines/large-docs-comments-suggestions.json
+  PERF_RESULT: test-results/perf/large-docs-comments-suggestions.json
+
+jobs:
+  perf:
+    if: github.event.label.name == 'perf-check'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout PR
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Install Playwright (chromium)
+        run: npx playwright install --with-deps chromium
+
+      - name: Run perf suite
+        continue-on-error: true # comment-only: a slow run (or assertion miss) must not fail the job
+        env:
+          PERF_EMIT_JSON: '1'
+          PERF_REACT_ONLY: '1'
+          PERF_OUT_DIR: test-results/perf
+        run: |
+          npx playwright test "$PERF_SPEC" \
+            --project=chromium --workers=1 --retries=0 --timeout=120000
+
+      - name: Compare against baseline
+        if: always()
+        run: |
+          node scripts/perf/compare-baseline.mjs \
+            --baseline "$PERF_BASELINE" \
+            --current "$PERF_RESULT" \
+            --commit "${{ github.event.pull_request.head.sha }}" \
+            --threshold 20 \
+            --out perf-comment.md
+
+      - name: Post results comment
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if [ ! -s perf-comment.md ]; then
+            printf '## ⚡ Performance check\n\n⚠️ The perf run did not produce a result. Check the workflow logs.\n' > perf-comment.md
+          fi
+          gh pr comment "${{ github.event.pull_request.number }}" --body-file perf-comment.md
+
+      - name: Remove label (one-shot trigger)
+        if: always()
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh pr edit "${{ github.event.pull_request.number }}" --remove-label perf-check
