@@ -301,7 +301,9 @@ export function ToolbarButton({
     title
       ?.toLowerCase()
       .replace(/\s+/g, '-')
-      .replace(/\([^)]*\)/g, '')
+      // `[^()]` (not `[^)]`) so the run can't span unmatched `(` and
+      // backtrack quadratically on a long parenthesis-heavy title.
+      .replace(/\([^()]*\)/g, '')
       .trim();
 
   const handleMouseDown = (e: React.MouseEvent) => {
