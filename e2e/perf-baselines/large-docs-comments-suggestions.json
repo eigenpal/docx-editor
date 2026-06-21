@@ -1,0 +1,85 @@
+{
+  "suite": "large-docs-comments-suggestions",
+  "capturedAt": "seed",
+  "seed": true,
+  "note": "Conservative seed baseline. Latency ceilings match the spec's 500ms pass thresholds so a first real run never reports a false regression. Refresh with real CI numbers via the perf-check workflow's manual 'Run workflow' dispatch on main, which re-captures on the runner and commits the result here.",
+  "metrics": [
+    {
+      "key": "load.timeMs",
+      "label": "Doc load",
+      "value": 8000,
+      "unit": "ms",
+      "direction": "lower-is-better"
+    },
+    {
+      "key": "load.pageCount",
+      "label": "Page count",
+      "value": 60,
+      "unit": "count",
+      "direction": "informational"
+    },
+    {
+      "key": "load.commentSpans",
+      "label": "Comment spans",
+      "value": 212,
+      "unit": "count",
+      "direction": "informational"
+    },
+    {
+      "key": "load.trackedSpans",
+      "label": "Tracked spans",
+      "value": 211,
+      "unit": "count",
+      "direction": "informational"
+    },
+    {
+      "key": "typing.start.avgMs",
+      "label": "Typing — start (avg)",
+      "value": 500,
+      "unit": "ms",
+      "direction": "lower-is-better"
+    },
+    {
+      "key": "typing.middle.avgMs",
+      "label": "Typing — middle (avg)",
+      "value": 500,
+      "unit": "ms",
+      "direction": "lower-is-better"
+    },
+    {
+      "key": "typing.end.avgMs",
+      "label": "Typing — end (avg)",
+      "value": 500,
+      "unit": "ms",
+      "direction": "lower-is-better"
+    },
+    {
+      "key": "typing.commentAdjacent.avgMs",
+      "label": "Typing — next to comment (avg)",
+      "value": 500,
+      "unit": "ms",
+      "direction": "lower-is-better"
+    },
+    {
+      "key": "scroll.afterEditMs",
+      "label": "Scroll after edit",
+      "value": 2500,
+      "unit": "ms",
+      "direction": "lower-is-better"
+    },
+    {
+      "key": "undo.avgMs",
+      "label": "Undo (avg)",
+      "value": 500,
+      "unit": "ms",
+      "direction": "lower-is-better"
+    },
+    {
+      "key": "redo.avgMs",
+      "label": "Redo (avg)",
+      "value": 500,
+      "unit": "ms",
+      "direction": "lower-is-better"
+    }
+  ]
+}
