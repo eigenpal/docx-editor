@@ -28,8 +28,16 @@ import { BCP47_FILENAME, readLocaleCodes } from '../packages/i18n/locale-files.m
 const I18N_DIR = join(import.meta.dirname, '..', 'packages', 'i18n');
 const EN_PATH = join(I18N_DIR, 'en.json');
 
+// Keys that would mutate the prototype chain rather than the target object.
+const UNSAFE_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
+
 function setNestedValue(obj, path, value) {
   const parts = path.split('.');
+  // Guard against prototype pollution from a dotted path built out of locale
+  // data: a segment like `__proto__` must never become an object key here.
+  if (parts.some((p) => UNSAFE_KEYS.has(p))) {
+    throw new Error(`Refusing to set unsafe key path: ${path}`);
+  }
   let current = obj;
   for (let i = 0; i < parts.length - 1; i++) {
     if (
@@ -46,6 +54,11 @@ function setNestedValue(obj, path, value) {
 
 function deleteNestedValue(obj, path) {
   const parts = path.split('.');
+  // Same prototype-pollution guard as setNestedValue. This sink matters more:
+  // its paths come from locale-file data (getLeafPaths), i.e. untrusted input.
+  if (parts.some((p) => UNSAFE_KEYS.has(p))) {
+    throw new Error(`Refusing to delete unsafe key path: ${path}`);
+  }
   const stack = [obj];
   for (let i = 0; i < parts.length - 1; i++) {
     if (!stack[i][parts[i]] || typeof stack[i][parts[i]] !== 'object') return;
