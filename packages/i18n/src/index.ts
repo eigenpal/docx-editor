@@ -231,7 +231,13 @@ function formatMessage(
   if (!vars) return template;
 
   const result = template.replace(
-    /\{(\w+),\s*plural,\s*((?:[^{}]|\{[^{}]*\})*)\}/g,
+    // Linear on hostile templates: the branch group keeps the single-char
+    // `[^{}]` alternative (using `[^{}]+` would form `(X+)*`, an exponential
+    // pattern), and there is no `\s*` before the group — that `\s*` overlapped
+    // with the group's leading whitespace and let a run of spaces be
+    // partitioned many ways (the polynomial-ReDoS source). parseBranches
+    // already tolerates the leading whitespace now folded into the capture.
+    /\{(\w+),\s*plural,((?:[^{}]|\{[^{}]*\})*)\}/g,
     (full, varName, branchStr) => {
       const count = Number(vars[varName]);
       if (isNaN(count)) return full;

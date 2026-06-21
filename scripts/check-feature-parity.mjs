@@ -75,12 +75,18 @@ function walkFiles(rootDir, accept) {
 }
 
 function readSfcScript(src) {
-  // Pull the `<script setup ...>` block out of a .vue SFC. Returns
-  // both the inner contents (for body extraction) and a mock
-  // "TS-like" surface so the regexes below find the same patterns
-  // in Vue files as in React .tsx files.
-  const m = src.match(/<script[^>]*>([\s\S]*?)<\/script>/);
-  return m ? m[1] : '';
+  // Pull the `<script setup ...>` block out of a .vue SFC. Index-based scan
+  // rather than a tag-matching regex: a regex over `<script…>…</script>` is
+  // fragile to handle for every casing/whitespace variant, so we just locate
+  // the opening tag, its end, and the closing tag by string search.
+  const lower = src.toLowerCase();
+  const open = lower.indexOf('<script');
+  if (open === -1) return '';
+  const openEnd = src.indexOf('>', open);
+  if (openEnd === -1) return '';
+  const close = lower.indexOf('</script', openEnd);
+  if (close === -1) return '';
+  return src.slice(openEnd + 1, close);
 }
 
 function extractFromFile(absPath) {
