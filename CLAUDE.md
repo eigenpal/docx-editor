@@ -233,7 +233,7 @@ Adding adapter prop/ref method:
 
 Every code PR → `bun changeset` → commit `.changeset/*.md`. Skip only for test/docs/CI-only PRs.
 
-- **Generate the changeset with `bun changeset` — never hand-write the `.changeset/*.md` file.** The interactive prompt picks the correct package name and bump and writes the right frontmatter. Hand-writing risks a wrong/typo'd package name, which crashes the post-merge Release workflow. (It's an interactive TTY command — run it in your own terminal; don't fabricate the file because the prompt is inconvenient.)
+- A hand-written `.changeset/*.md` is fine as long as it is correct — `bun changeset` is convenient but optional, don't make a human run a TTY prompt just to land a changeset. The frontmatter package name MUST exactly match one of the published packages below and the bump MUST be `patch`/`minor`/`major`; a wrong/typo'd name crashes the post-merge Release workflow. Copy the exact name from the Packages list (or an existing `.changeset/*.md`) rather than typing it independently.
 - All published packages in fixed group — declare one bump, others follow.
 - Default bump: `patch`. `minor` for additive public API. `major` for breaks.
 - Summary lands verbatim in CHANGELOG; write for the consumer. Keep it concise (one or two lines), lead with the user-visible change (what changed, not how), and put `Fixes #N` at the end if relevant. No emojis or marketing.
@@ -246,7 +246,6 @@ Packages: `@eigenpal/docx-editor-{react,core,agents,i18n,vue}`, `@eigenpal/nuxt-
 
 ### Don't
 
-- Hand-write `.changeset/*.md` — always `bun changeset`.
 - Push `chore: release` commit by hand.
 - Delete `.changeset/*.md` outside `changeset version`.
 - Edit `CHANGELOG.md` or `package.json#version` by hand.
