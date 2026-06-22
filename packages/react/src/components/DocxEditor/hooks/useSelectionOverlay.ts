@@ -19,7 +19,9 @@ import type { EditorState } from 'prosemirror-state';
 import {
   findBodyPmAnchor,
   getCaretPosition,
+  resetImeCaretAnchor,
   rectsForSelection,
+  syncImeCaretAnchor,
   type CaretPosition,
   type SelectionBox,
 } from '@eigenpal/docx-editor-core/layout-bridge';
@@ -116,13 +118,30 @@ export function useSelectionOverlay(opts: UseSelectionOverlayOptions): UseSelect
         applySdtFocus(pagesEl, enclosingSdtGroupIds(state.doc, from, to));
       }
 
-      if (!layout || blocks.length === 0) return;
+      if (!layout || blocks.length === 0) {
+        resetImeCaretAnchor(hiddenPMRef.current?.getHostElement());
+        return;
+      }
 
       if (from === to) {
         // Collapsed selection — show caret.
         const domCaret = pagesEl ? getCaretFromDom(pagesEl, from, zoom) : null;
         if (domCaret) {
           setCaretPosition(domCaret);
+          const overlay = pagesEl?.parentElement?.querySelector(
+            '[data-testid="selection-overlay"]'
+          );
+          const overlayRect = overlay?.getBoundingClientRect();
+          syncImeCaretAnchor({
+            hiddenHost: hiddenPMRef.current?.getHostElement(),
+            editorView: hiddenPMRef.current?.getView(),
+            visibleCaret: overlayRect
+              ? {
+                  left: overlayRect.left + domCaret.x * zoom,
+                  top: overlayRect.top + domCaret.y * zoom,
+                }
+              : null,
+          });
         } else {
           // Fallback to layout-based math when the DOM isn't painted yet.
           const overlay = pagesContainerRef.current?.parentElement?.querySelector(
@@ -134,20 +153,38 @@ export function useSelectionOverlay(opts: UseSelectionOverlayOptions): UseSelect
             const pageRect = firstPage.getBoundingClientRect();
             const caret = getCaretPosition(layout, blocks, measures, from);
             if (caret) {
-              setCaretPosition({
+              const fallbackCaret = {
                 ...caret,
                 x: caret.x + (pageRect.left - overlayRect.left) / zoom,
                 y: caret.y + (pageRect.top - overlayRect.top) / zoom,
+              };
+              setCaretPosition(fallbackCaret);
+              syncImeCaretAnchor({
+                hiddenHost: hiddenPMRef.current?.getHostElement(),
+                editorView: hiddenPMRef.current?.getView(),
+                visibleCaret: {
+                  left: overlayRect.left + fallbackCaret.x * zoom,
+                  top: overlayRect.top + fallbackCaret.y * zoom,
+                },
               });
             } else {
               setCaretPosition(null);
+              if (!hiddenPMRef.current?.getView()?.composing) {
+                resetImeCaretAnchor(hiddenPMRef.current?.getHostElement());
+              }
             }
           } else {
             setCaretPosition(null);
+            if (!hiddenPMRef.current?.getView()?.composing) {
+              resetImeCaretAnchor(hiddenPMRef.current?.getHostElement());
+            }
           }
         }
         setSelectionGeometry([]);
       } else {
+        if (!hiddenPMRef.current?.getView()?.composing) {
+          resetImeCaretAnchor(hiddenPMRef.current?.getHostElement());
+        }
         // Range selection — DOM-walk preferred; fall back to layout math.
         const overlay = pagesContainerRef.current?.parentElement?.querySelector(
           '[data-testid="selection-overlay"]'
@@ -186,7 +223,7 @@ export function useSelectionOverlay(opts: UseSelectionOverlayOptions): UseSelect
         setCaretPosition(null);
       }
     },
-    [layout, blocks, measures, zoom, onSelectionChangeRef, pagesContainerRef]
+    [layout, blocks, measures, zoom, onSelectionChangeRef, pagesContainerRef, hiddenPMRef]
   );
 
   const handleSelectionChange = useCallback(
@@ -197,6 +234,7 @@ export function useSelectionOverlay(opts: UseSelectionOverlayOptions): UseSelect
         // only thing painted over the selection.
         setSelectionGeometry([]);
         setCaretPosition(null);
+        resetImeCaretAnchor(hiddenPMRef.current?.getHostElement());
       } else if (syncCoordinator.isSafeToRender()) {
         // Skip overlay update when layout is pending — overlay would sit on
         // stale DOM and the caret would visibly jump after layout commits.

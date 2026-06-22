@@ -1126,6 +1126,7 @@ function updateSelectionOverlay() {
 const isHfEditing = computed(() => hfEdit.value !== null);
 const selectionSync = useSelectionSync({
   editorView,
+  hiddenContainer: hiddenPmRef,
   pagesRef,
   zoom,
   selectedImage,
