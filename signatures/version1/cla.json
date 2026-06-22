@@ -191,6 +191,12 @@
       "id": 169331997,
       "signed_at": "2026-06-20T01:56:34Z",
       "pull_request_no": 950
+    },
+    {
+      "name": "xcrong",
+      "id": 46434477,
+      "signed_at": "2026-06-22T15:06:58Z",
+      "pull_request_no": 980
     }
   ]
 }
