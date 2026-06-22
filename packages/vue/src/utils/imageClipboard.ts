@@ -90,9 +90,48 @@ export function loadImageDimensions(src: string): Promise<{ width: number; heigh
   });
 }
 
+/**
+ * HTML emitted by {@link copyImageToClipboard} is just a single tagged `<img>`
+ * wrapper; it is handled by the manual image branch below so dimensions/rIds
+ * round-trip. Everything else (Word, web pages) is real document content that
+ * must go through the normal paste pipeline.
+ */
+function isOwnImageHtml(html: string): boolean {
+  return html.includes('data-pm-image="true"');
+}
+
 export async function pasteFromClipboard(view: EditorView): Promise<void> {
   try {
     const items = await navigator.clipboard.read();
+
+    // Word (and many rich editors) place a bitmap snapshot of the selection on the
+    // clipboard alongside the real text/html. Route that rich text through the normal
+    // paste pipeline — a synthetic paste event into the PM view, mirroring the React
+    // context-menu paste and the keyboard-paste guard in core's ImagePasteExtension —
+    // so text and formatting survive instead of inserting the snapshot as an image.
+    let richHtml = '';
+    let richText = '';
+    for (const item of items) {
+      if (!richHtml && item.types.includes('text/html')) {
+        richHtml = await (await getBlob(item, 'text/html')).text();
+      }
+      if (!richText && item.types.includes('text/plain')) {
+        richText = await (await getBlob(item, 'text/plain')).text();
+      }
+    }
+    if (richHtml.trim().length > 0 && !isOwnImageHtml(richHtml)) {
+      const dt = new DataTransfer();
+      dt.items.add(richHtml, 'text/html');
+      if (richText) dt.items.add(richText, 'text/plain');
+      const pasteEvent = new ClipboardEvent('paste', {
+        clipboardData: dt,
+        bubbles: true,
+        cancelable: true,
+      });
+      view.dom.dispatchEvent(pasteEvent);
+      return;
+    }
+
     for (const item of items) {
       const imageType = item.types.find((t) => t.startsWith('image/'));
       if (imageType) {
