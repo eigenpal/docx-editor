@@ -229,6 +229,9 @@ export const HiddenHeaderFooterPMs = memo(
       // sections, so mutating `hf.content` propagates to every section
       // that references the same rId (the spec-faithful sharing pattern).
       hf.content = proseDocToBlocks(state.doc);
+      // First edit invalidates the captured original XML — serialize from the
+      // model from here on so the user's change actually lands in the export.
+      hf.verbatimXml = undefined;
     };
 
     // Resolve a HeaderFooter from doc by rId — used both at mount and when

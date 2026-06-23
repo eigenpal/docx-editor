@@ -361,6 +361,7 @@ export interface HeaderFooter {
     hdrFtrType: HeaderFooterType;
     // (undocumented)
     type: 'header' | 'footer';
+    verbatimXml?: string;
     watermark?: Watermark;
 }
 

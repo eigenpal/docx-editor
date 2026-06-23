@@ -183,6 +183,7 @@ export function useHeaderFooterEditing({
           hdrFtrType: activeRef.type as 'default' | 'first' | 'even',
           ...existing,
           content,
+          verbatimXml: undefined,
         };
         const newMap = new Map(map);
         newMap.set(activeRef.rId, updated);

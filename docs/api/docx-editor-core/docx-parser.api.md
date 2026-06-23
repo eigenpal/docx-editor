@@ -23,11 +23,15 @@ export function getDocxSummary(buffer: ArrayBuffer): Promise<{
 export function getDocxVariables(buffer: ArrayBuffer): Promise<string[]>;
 
 // @public
+export type MediaResolver = (file: MediaFile) => Promise<string | null | undefined>;
+
+// @public
 export function parseDocx(input: DocxInput, options?: ParseOptions): Promise<Document_2>;
 
 // @public
 export interface ParseOptions {
     detectVariables?: boolean;
+    mediaResolver?: MediaResolver;
     onProgress?: ProgressCallback;
     parseHeadersFooters?: boolean;
     parseNotes?: boolean;
