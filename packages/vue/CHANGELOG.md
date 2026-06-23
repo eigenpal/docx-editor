@@ -1,5 +1,23 @@
 # @eigenpal/docx-editor-vue
 
+## 1.10.0
+
+### Patch Changes
+
+- 53ede3c: Anchor the hidden ProseMirror caret to the painted caret so CJK IME candidate windows appear near the visible insertion point.
+- Updated dependencies [00c015b]
+- Updated dependencies [a631be1]
+- Updated dependencies [7a03c16]
+- Updated dependencies [c1871b5]
+- Updated dependencies [18a686d]
+- Updated dependencies [dc3d694]
+- Updated dependencies [7a94b49]
+- Updated dependencies [53ede3c]
+- Updated dependencies [5e7120b]
+  - @eigenpal/docx-editor-core@1.10.0
+  - @eigenpal/docx-editor-agents@1.10.0
+  - @eigenpal/docx-editor-i18n@1.10.0
+
 ## 1.9.0
 
 ### Patch Changes
