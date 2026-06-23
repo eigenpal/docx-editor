@@ -721,7 +721,10 @@ export function useDocxEditor(options: UseDocxEditorOptions): UseDocxEditorRetur
             const pkg = document.value?.package;
             const bag = slotKind === 'header' ? pkg?.headers : pkg?.footers;
             const hf = bag?.get(rId);
-            if (hf) hf.content = proseDocToBlocks(newState.doc);
+            if (hf) {
+              hf.content = proseDocToBlocks(newState.doc);
+              hf.verbatimXml = undefined;
+            }
           }
           // Only re-layout when the HF doc actually changed — selection-only
           // transactions don't move text so the painter has nothing new.

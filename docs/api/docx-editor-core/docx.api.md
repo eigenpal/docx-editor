@@ -74,6 +74,17 @@ export interface EndnoteMap {
 }
 
 // @public
+export interface ExtractedRaster {
+    // (undocumented)
+    bytes: Uint8Array;
+    // (undocumented)
+    mimeType: 'image/png' | 'image/jpeg';
+}
+
+// @public
+export function extractMetafileRaster(data: ArrayBuffer | Uint8Array): ExtractedRaster | null;
+
+// @public
 export function extractTextBoxContentElements(txbxContent: Element_2 | null): {
     paragraphElements: Element_2[];
     tableElements: Element_2[];
@@ -284,6 +295,9 @@ export function isLineShape(shape: Shape): boolean;
 export function isMergeField(field: Field): boolean;
 
 // @public
+export function isMetafileMimeType(mimeType: string | undefined): boolean;
+
+// @public
 export function isPageNumberField(field: Field): boolean;
 
 // @public
@@ -315,6 +329,9 @@ export function isTotalPagesField(field: Field): boolean;
 
 // @public
 export const KNOWN_FIELD_TYPES: FieldType[];
+
+// @public
+export type MediaResolver = (file: MediaFile) => Promise<string | null | undefined>;
 
 // @public
 export function mergeTabMarks(styleTabs: TabMark[] | undefined, directTabs: TabMark[] | undefined): TabMark[];
@@ -385,6 +402,16 @@ export function parseImage(node: Element_2, rels: RelationshipMap | undefined, m
 export function parseNumbering(numberingXml: string | null): NumberingMap;
 
 // @public
+export interface ParseOptions {
+    detectVariables?: boolean;
+    mediaResolver?: MediaResolver;
+    onProgress?: ProgressCallback;
+    parseHeadersFooters?: boolean;
+    parseNotes?: boolean;
+    preloadFonts?: boolean;
+}
+
+// @public
 export function parseShading(shdElement: Element_2 | null): ShadingProperties | undefined;
 
 // @public
@@ -428,6 +455,9 @@ export function parseTextBoxFromShape(wsp: Element_2, size: ImageSize, position?
 
 // @public
 export function pixelsToEmu(px: number): number;
+
+// @public
+export type ProgressCallback = (stage: string, percent: number) => void;
 
 // @public
 export function renderListMarker(lvlText: string, counters: number[], formats: NumberFormat[]): string;

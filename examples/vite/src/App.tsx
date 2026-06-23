@@ -1,5 +1,5 @@
 import React, { useState, useRef, useCallback, useEffect, useMemo } from 'react';
-import { createEmptyDocument, findStartPosForParaId } from '@eigenpal/docx-editor-core';
+import { createEmptyDocument, findStartPosForParaId, parseDocx } from '@eigenpal/docx-editor-core';
 import { setSuggestionMode } from '@eigenpal/docx-editor-core/prosemirror/plugins';
 // Re-exported by core, so the demo needs no direct `prosemirror-state` dep
 // (which would break the production build — it isn't in examples/vite deps).
@@ -257,13 +257,21 @@ export function App() {
   // (so existing tests are unaffected); ?empty=1 boots from an empty document
   // instead, giving tests that build their own content a deterministic start
   // that doesn't race the demo fetch.
-  const { isE2E, e2eBootEmpty } = useMemo(() => {
-    if (typeof window === 'undefined') return { isE2E: false, e2eBootEmpty: false };
+  const { isE2E, e2eBootEmpty, e2eExternalContent } = useMemo(() => {
+    if (typeof window === 'undefined')
+      return { isE2E: false, e2eBootEmpty: false, e2eExternalContent: false };
     const params = new URLSearchParams(window.location.search);
     const env = import.meta.env;
     const e2e =
       params.get('e2e') === '1' || env.MODE === 'test' || env.VITE_DOCX_EDITOR_E2E === '1';
-    return { isE2E: e2e, e2eBootEmpty: e2e && params.get('empty') === '1' };
+    return {
+      isE2E: e2e,
+      e2eBootEmpty: e2e && params.get('empty') === '1',
+      // Mounts <DocxEditor document={parsed} externalContent /> so e2e can
+      // verify headers/styles render from `document` even when the body PM
+      // is populated externally (e.g. ySyncPlugin).
+      e2eExternalContent: e2e && params.get('externalContent') === '1',
+    };
   }, []);
 
   const { zoom: autoZoom, isMobile } = useResponsiveLayout();
@@ -710,6 +718,11 @@ export function App() {
     if (e2eBootEmpty) {
       setCurrentDocument(createEmptyDocument());
       setFileName('Untitled.docx');
+      // externalContent skips useDocumentLoader's prop-change reload, so the
+      // editor only sees `document` via useDocumentHistory's initial value.
+      // Bump the key so it remounts with the seeded empty doc and the
+      // toolbar (and its file input) render for the test to drive.
+      if (e2eExternalContent) setDocVersion((v) => v + 1);
       return;
     }
     fetch(`${import.meta.env.BASE_URL}docx-editor-demo.docx`)
@@ -724,7 +737,7 @@ export function App() {
         setCurrentDocument(createEmptyDocument());
         setFileName('Untitled.docx');
       });
-  }, [e2eBootEmpty]);
+  }, [e2eBootEmpty, e2eExternalContent]);
 
   const handleNewDocument = useCallback(() => {
     userStartedOwnDocRef.current = true;
@@ -739,23 +752,32 @@ export function App() {
     setDocVersion((v) => v + 1);
   }, []);
 
-  const handleFileSelect = useCallback(async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
+  const handleFileSelect = useCallback(
+    async (event: React.ChangeEvent<HTMLInputElement>) => {
+      const file = event.target.files?.[0];
+      if (!file) return;
 
-    try {
-      userStartedOwnDocRef.current = true;
-      setStatus('Loading...');
-      const buffer = await file.arrayBuffer();
-      setCurrentDocument(null);
-      setDocumentBuffer(buffer);
-      setFileName(file.name);
-      setStatus('');
-      setDocVersion((v) => v + 1);
-    } catch {
-      setStatus('Error loading file');
-    }
-  }, []);
+      try {
+        userStartedOwnDocRef.current = true;
+        setStatus('Loading...');
+        const buffer = await file.arrayBuffer();
+        if (e2eExternalContent) {
+          const parsed = await parseDocx(buffer);
+          setDocumentBuffer(null);
+          setCurrentDocument(parsed);
+        } else {
+          setCurrentDocument(null);
+          setDocumentBuffer(buffer);
+        }
+        setFileName(file.name);
+        setStatus('');
+        setDocVersion((v) => v + 1);
+      } catch {
+        setStatus('Error loading file');
+      }
+    },
+    [e2eExternalContent]
+  );
 
   const handleSave = useCallback(async () => {
     if (!editorRef.current) return;
@@ -894,6 +916,7 @@ export function App() {
           ref={editorRef}
           document={documentBuffer ? undefined : currentDocument}
           documentBuffer={documentBuffer}
+          externalContent={e2eExternalContent}
           author={randomAuthor}
           colorMode={colorMode}
           onError={handleError}

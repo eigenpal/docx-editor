@@ -485,6 +485,7 @@ export function usePagesPointer(opts: UsePagesPointerOptions): UsePagesPointerRe
     const existing = map.get(edit.rId);
     if (existing) {
       existing.content = content;
+      existing.verbatimXml = undefined;
     }
     // Vue parity for the HF unification: after the inline overlay writes
     // back into `pkg.headers/footers[rId].content`, the persistent
