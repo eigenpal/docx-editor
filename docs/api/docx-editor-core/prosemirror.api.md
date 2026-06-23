@@ -384,6 +384,7 @@ export interface ParagraphAttrs {
     keepLines?: boolean;
     // (undocumented)
     keepNext?: boolean;
+    leadingBlockMarkers?: BlockBookmarkMarkers;
     // (undocumented)
     lineSpacing?: number;
     // (undocumented)
@@ -398,6 +399,7 @@ export interface ParagraphAttrs {
     listMarkerSuffix?: 'tab' | 'space' | 'nothing';
     listNumFmt?: NumberFormat;
     listStartOverride?: number;
+    loneBookmarkEndIds?: number[];
     // (undocumented)
     numPr?: {
         numId?: number;
@@ -440,6 +442,7 @@ export interface ParagraphAttrs {
     tabs?: TabMark[];
     // (undocumented)
     textId?: string;
+    trailingBlockMarkers?: BlockBookmarkMarkers;
 }
 
 // @public
