@@ -221,7 +221,7 @@ export function App() {
   const editorRef = useRef<DocxEditorRef>(null);
   const [currentDocument, setCurrentDocument] = useState<Document | null>(null);
   const [documentBuffer, setDocumentBuffer] = useState<ArrayBuffer | null>(null);
-  const [fileName, setFileName] = useState<string>('docx-editor-demo.docx');
+  const [fileName, setFileName] = useState<string>('sample.docx');
   const [status, setStatus] = useState<string>('');
   const [colorMode, setColorMode] = useState<'light' | 'dark'>('light');
   const disableFindReplaceShortcuts = useMemo(
@@ -725,12 +725,12 @@ export function App() {
       if (e2eExternalContent) setDocVersion((v) => v + 1);
       return;
     }
-    fetch(`${import.meta.env.BASE_URL}docx-editor-demo.docx`)
+    fetch(`${import.meta.env.BASE_URL}sample.docx`)
       .then((res) => res.arrayBuffer())
       .then((buffer) => {
         if (userStartedOwnDocRef.current) return; // user already moved on
         setDocumentBuffer(buffer);
-        setFileName('docx-editor-demo.docx');
+        setFileName('sample.docx');
       })
       .catch(() => {
         if (userStartedOwnDocRef.current) return;

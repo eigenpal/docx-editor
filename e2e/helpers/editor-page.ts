@@ -1235,7 +1235,7 @@ export class EditorPage {
    * Click New button to create a new document
    */
   async newDocument(): Promise<void> {
-    // The demo app fetches docx-editor-demo.docx asynchronously on mount.
+    // The demo app fetches sample.docx asynchronously on mount.
     // Clicking "New" sets a guard (see App.tsx) so a late-resolving demo fetch
     // can no longer clobber the reset document. Wait for whatever is currently
     // loading to settle, then reset.

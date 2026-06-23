@@ -154,7 +154,7 @@ const vueHref = import.meta.env.DEV ? 'http://localhost:5174/' : '/vue/';
 const editorRef = ref<DocxEditorRef | null>(null);
 const documentBuffer = ref<ArrayBuffer | null>(null);
 const currentDocument = ref<Document | null>(null);
-const fileName = ref('docx-editor-demo.docx');
+const fileName = ref('sample.docx');
 const status = ref('');
 const colorMode = ref<'light' | 'dark'>('light');
 
@@ -605,10 +605,10 @@ onMounted(async () => {
   }
 
   try {
-    const res = await fetch(`${import.meta.env.BASE_URL}docx-editor-demo.docx`);
+    const res = await fetch(`${import.meta.env.BASE_URL}sample.docx`);
     const buffer = await res.arrayBuffer();
     documentBuffer.value = buffer;
-    fileName.value = 'docx-editor-demo.docx';
+    fileName.value = 'sample.docx';
   } catch {
     currentDocument.value = createEmptyDocument();
     fileName.value = 'Untitled.docx';
