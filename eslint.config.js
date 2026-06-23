@@ -233,6 +233,20 @@ export default [
     },
   },
 
+  // useDocxEditor.ts is the Vue composable counterpart to React's PagedEditor —
+  // a single orchestrator wiring the dual-rendering pipeline (hidden PM views,
+  // painter, selection, layout triggers, HF + footnote surfaces). Editable
+  // footnotes (React parity, same change that bumped DocxEditor.vue to 1250)
+  // added the footnote PM/overlay wiring here too, pushing it just over the
+  // default 1000. Modest headroom while a real split (lift shared orchestration
+  // into core, per MEMORY.md) is planned; the cap still enforces a ceiling.
+  {
+    files: ['packages/vue/src/composables/useDocxEditor.ts'],
+    rules: {
+      'max-lines': ['error', { max: 1060, skipBlankLines: false, skipComments: false }],
+    },
+  },
+
   // paragraphLayout.ts is the line-breaker — one cohesive measurement + wrap
   // algorithm (empty-para metrics, intrinsic-width scan, cross-run glue, float
   // zones, tab stops, image lines). The file sat right at the default 1000 cap;
