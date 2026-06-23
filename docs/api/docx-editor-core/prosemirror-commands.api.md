@@ -129,8 +129,19 @@ export function findNextChange(state: EditorState, startPos: number): ChangeRang
 // @public
 export function findPreviousChange(state: EditorState, startPos: number): ChangeRange | null;
 
+// @public
+export function generateTableOfContents(options?: GenerateTOCOptions): Command;
+
 // @public (undocumented)
 export const generateTOC: Command;
+
+// @public
+export interface GenerateTOCOptions {
+    includeHyperlinks?: boolean;
+    maxLevel?: number;
+    minLevel?: number;
+    title?: string | null;
+}
 
 // @public (undocumented)
 export function getHyperlinkAttrs(state: EditorState): {
