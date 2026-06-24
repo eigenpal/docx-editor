@@ -197,6 +197,12 @@
       "id": 46434477,
       "signed_at": "2026-06-22T15:06:58Z",
       "pull_request_no": 980
+    },
+    {
+      "name": "108signals",
+      "id": 23108658,
+      "signed_at": "2026-06-24T04:35:42Z",
+      "pull_request_no": 1008
     }
   ]
 }
