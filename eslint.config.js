@@ -191,13 +191,13 @@ export default [
     },
   },
 
-  // layout-engine/types.ts is the canonical schema definition for the
+  // pagination-model/types.ts is the canonical schema definition for the
   // layout model — single file by design (cross-referencing types). Bumped
   // modestly above the default to accommodate new revision-tracking and
   // table-pagination fields without forcing a split that would obscure the
   // schema.
   {
-    files: ['packages/core/src/layout-engine/types.ts'],
+    files: ['packages/core/src/pagination-model/types.ts'],
     rules: {
       'max-lines': ['error', { max: 1085, skipBlankLines: false, skipComments: false }],
     },
@@ -208,7 +208,7 @@ export default [
   // handles). Bumped modestly above the default rather than split, which would
   // scatter the shared grid/column geometry across files.
   {
-    files: ['packages/core/src/layout-painter/renderTable.ts'],
+    files: ['packages/core/src/painter-model/renderTable.ts'],
     rules: {
       'max-lines': ['error', { max: 1040, skipBlankLines: false, skipComments: false }],
     },
@@ -254,7 +254,7 @@ export default [
   // headroom while a real split (extract the per-run-kind handlers) is planned;
   // the cap still enforces a ceiling so it can't grow unbounded.
   {
-    files: ['packages/core/src/layout-bridge/measuring/paragraphLayout.ts'],
+    files: ['packages/core/src/flow-model/metrics/paragraphLayout.ts'],
     rules: {
       'max-lines': ['error', { max: 1060, skipBlankLines: false, skipComments: false }],
     },
