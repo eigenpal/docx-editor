@@ -336,27 +336,6 @@ export function isInTable(state: EditorState): boolean;
 // @public
 export function isMarkActive(state: EditorState, markType: MarkType, attrs?: Record<string, unknown>): boolean;
 
-// @public
-export class SelectionBridge {
-    getDebugInfo(): {
-        stateSeq: number;
-        renderSeq: number;
-        layoutUpdating: boolean;
-        hasPendingRender: boolean;
-        isSafe: boolean;
-    };
-    getRenderSeq(): number;
-    getStateSeq(): number;
-    incrementStateSeq(): number;
-    isSafeToRender(): boolean;
-    onLayoutComplete(seq: number): void;
-    onLayoutStart(): void;
-    onRender(callback: RenderCallback): () => void;
-    requestRender(): void;
-    reset(): void;
-    setStateSeq(seq: number): void;
-}
-
 // @public (undocumented)
 export function mergeCells(state: EditorState, dispatch?: (tr: Transaction) => void): boolean;
 

@@ -30,7 +30,6 @@ import { enclosingSdtGroupIds, applySdtFocus } from '@eigenpal/docx-editor-core/
 
 import type { OffscreenEditorHostRef } from '../OffscreenEditorHost';
 import type { ImageSelectionInfo } from '../overlays/ImageSelectionOverlay';
-import type { SelectionBridge } from '../internals/SelectionBridge';
 import {
   applyCellSelectionHighlight,
   computeSelectionGeometryFromDom,
@@ -45,7 +44,6 @@ export interface UseSelectionOverlayOptions {
   containerRef: React.RefObject<HTMLDivElement | null>;
   pagesContainerRef: React.RefObject<HTMLDivElement | null>;
   hiddenPMRef: React.RefObject<OffscreenEditorHostRef | null>;
-  syncCoordinator: SelectionBridge;
   isImageInteractingRef: React.MutableRefObject<boolean>;
   onSelectionChangeRef: React.MutableRefObject<((from: number, to: number) => void) | undefined>;
 }
@@ -71,7 +69,6 @@ export function useSelectionOverlay(opts: UseSelectionOverlayOptions): UseSelect
     containerRef,
     pagesContainerRef,
     hiddenPMRef,
-    syncCoordinator,
     isImageInteractingRef,
     onSelectionChangeRef,
   } = opts;
@@ -235,9 +232,7 @@ export function useSelectionOverlay(opts: UseSelectionOverlayOptions): UseSelect
         setSelectionGeometry([]);
         setCaretPosition(null);
         resetImeCaretAnchor(hiddenPMRef.current?.getHostElement());
-      } else if (syncCoordinator.isSafeToRender()) {
-        // Skip overlay update when layout is pending — overlay would sit on
-        // stale DOM and the caret would visibly jump after layout commits.
+      } else {
         updateSelectionOverlay(state);
       }
 
@@ -268,7 +263,6 @@ export function useSelectionOverlay(opts: UseSelectionOverlayOptions): UseSelect
     [
       updateSelectionOverlay,
       buildImageSelectionInfo,
-      syncCoordinator,
       hiddenPMRef,
       isImageInteractingRef,
       pagesContainerRef,

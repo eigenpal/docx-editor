@@ -3,9 +3,9 @@ import { test, expect } from '@playwright/test';
 // Regression for #736 — Vue: the blinking text caret disappeared while typing
 // (and only came back on a click). The caret/selection overlay was repainted
 // synchronously on every transaction, before the rAF-coalesced layout repaint,
-// so it resolved against stale painted DOM and vanished. It now runs through
-// the layout gate (`syncCoordinator.onRender` + `requestRender`), painting only
-// once the layout is current. React was never affected (different overlay path).
+// so it resolved against stale painted DOM and vanished. This test preserves
+// coverage of the user-visible caret behavior independently of its coordination
+// mechanism. React was never affected (different overlay path).
 test('Vue: caret stays visible and follows the text while typing (#736)', async ({ page }) => {
   await page.goto('http://localhost:5174/?e2e=1');
   await page.locator('.docx-editor-vue').waitFor();
