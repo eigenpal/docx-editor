@@ -34,9 +34,6 @@ import type { ScrollToParaIdOptions } from '@eigenpal/docx-editor-core/utils';
 // Layout bridge
 import { DEFAULT_PAGE_HEIGHT_PX } from '@eigenpal/docx-editor-core/layout-bridge';
 
-// Selection sync
-import { SelectionBridge } from './internals/SelectionBridge';
-
 // Visual line navigation hook
 import { useVisualLineNavigation } from '../../hooks/useVisualLineNavigation';
 
@@ -406,9 +403,6 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
     // while useImageInteractions writes it (during drag / resize).
     const isImageInteractingRef = useRef(false);
 
-    // Selection gate - ensures selection renders only when layout is current
-    const syncCoordinator = useMemo(() => new SelectionBridge(), []);
-
     // Persistent hidden HF PM lookup — phase 1 of HF editing unification.
     // Walks `document.package.headers`/`footers` to find the rId for this
     // HeaderFooter instance, then asks the HiddenHeaderFooterPMs ref for
@@ -466,7 +460,6 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
       pagesContainerRef,
       viewportLayoutRef,
       hiddenPMRef,
-      syncCoordinator,
       getScrollContainer,
       onTotalPagesChange,
       onAnchorPositionsChange,
@@ -493,7 +486,6 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
       containerRef,
       pagesContainerRef,
       hiddenPMRef,
-      syncCoordinator,
       isImageInteractingRef,
       onSelectionChangeRef,
     });
@@ -513,9 +505,6 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
         notifyDecorationLayer();
 
         if (transaction.docChanged) {
-          // Increment state sequence to signal document changed
-          syncCoordinator.incrementStateSeq();
-
           // Content changed - schedule layout (coalesced via rAF)
           scheduleLayout(newState);
 
@@ -526,9 +515,6 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
           }
         }
 
-        // Request selection update (will only execute when layout is current)
-        syncCoordinator.requestRender();
-
         // Only update selection overlay immediately for non-doc-changing transactions
         // (e.g. arrow keys, clicks). For doc changes, the overlay will be updated
         // after layout completes via the useEffect([layout]) hook, avoiding cursor
@@ -537,7 +523,7 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
           updateSelectionOverlay(newState);
         }
       },
-      [scheduleLayout, updateSelectionOverlay, syncCoordinator, notifyDecorationLayer]
+      [scheduleLayout, updateSelectionOverlay, notifyDecorationLayer]
       // NOTE: onDocumentChange removed from dependencies - accessed via ref to prevent infinite loops
     );
 
@@ -950,7 +936,6 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
             getPagesContainer={() => pagesContainerRef.current}
             zoom={zoom}
             decorationSyncToken={decorationSyncToken}
-            syncCoordinator={syncCoordinator}
           />
         </div>
 

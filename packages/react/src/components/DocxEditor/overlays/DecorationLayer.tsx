@@ -25,11 +25,10 @@
  * its `Decoration` spec with `noOverlay: true` to prevent double-painting.
  */
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef } from 'react';
 import type { EditorState } from 'prosemirror-state';
 import type { Decoration, EditorView } from 'prosemirror-view';
 import { createRenderedDomContext } from '../../../plugin-api/RenderedDomContext';
-import type { SelectionBridge } from '../internals/SelectionBridge';
 
 interface DecorationLayerProps {
   /** Returns the current PM view (or null if not yet mounted). */
@@ -40,13 +39,6 @@ interface DecorationLayerProps {
   zoom: number;
   /** Bumps on every PM transaction; drives recomputation. */
   decorationSyncToken: number;
-  /**
-   * Layout/selection gate: blocks decoration sync when layout is mid-update
-   * (otherwise `getCoordinatesForPosition` reads against stale geometry and
-   * decorations visibly jump). The component subscribes to `onRender` so a
-   * sync that's blocked by the gate retriggers when layout completes.
-   */
-  syncCoordinator: SelectionBridge;
 }
 
 const overlayStyle: React.CSSProperties = {
@@ -63,19 +55,9 @@ export function DecorationLayer({
   getPagesContainer,
   zoom,
   decorationSyncToken,
-  syncCoordinator,
 }: DecorationLayerProps) {
   const overlayRef = useRef<HTMLDivElement>(null);
   const rafRef = useRef<number | null>(null);
-
-  // Bumps when layout completes a render pass. Without this, a doc-changing
-  // transaction would bump `decorationSyncToken`, the rAF would fire while
-  // layout is still updating, `isSafeToRender()` returns false, and the
-  // decorations would never paint until the next user input.
-  const [renderEpoch, setRenderEpoch] = useState(0);
-  useEffect(() => {
-    return syncCoordinator.onRender(() => setRenderEpoch((e) => e + 1));
-  }, [syncCoordinator]);
 
   useEffect(() => {
     if (rafRef.current !== null) cancelAnimationFrame(rafRef.current);
@@ -85,7 +67,6 @@ export function DecorationLayer({
       const pagesContainer = getPagesContainer();
       const overlay = overlayRef.current;
       if (!view || !pagesContainer || !overlay) return;
-      if (!syncCoordinator.isSafeToRender()) return;
       syncDecorations(view, pagesContainer, overlay, zoom);
     });
     return () => {
@@ -94,10 +75,9 @@ export function DecorationLayer({
         rafRef.current = null;
       }
     };
-    // getView/getPagesContainer are stable closures over refs; syncCoordinator
-    // is a useMemo([]) singleton from PagedEditor.
+    // getView/getPagesContainer are stable closures over refs.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [zoom, decorationSyncToken, renderEpoch]);
+  }, [zoom, decorationSyncToken]);
 
   return (
     <div

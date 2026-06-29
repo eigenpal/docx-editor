@@ -224,7 +224,6 @@
             :get-pages-container="getPagesContainerForDecorations"
             :zoom="zoom"
             :transaction-version="stateTick"
-            :sync-coordinator="syncCoordinator"
           />
 
           <!-- Floating "Add comment" button — appears at the right edge
@@ -441,7 +440,6 @@ import { twipsToPixels } from '@eigenpal/docx-editor-core/utils/units';
 import { SIDEBAR_DOCUMENT_SHIFT } from '@eigenpal/docx-editor-core/utils';
 import { useColorMode } from '../composables/useColorMode';
 import { useFontLifecycle } from '../composables/useFontLifecycle';
-import { SelectionBridge } from '@eigenpal/docx-editor-core/prosemirror';
 import { extractSelectionContext } from '@eigenpal/docx-editor-core/prosemirror/plugins/selectionTracker';
 import { createCommentIdAllocator } from '@eigenpal/docx-editor-core/prosemirror/commentIdAllocator';
 
@@ -512,7 +510,6 @@ const pagesViewportRef = ref<HTMLElement | null>(null);
 const stateTick = ref(0);
 const contentChangeSubscribers = new Set<(document: unknown) => void>();
 const selectionChangeSubscribers = new Set<(selection: unknown) => void>();
-const syncCoordinator = new SelectionBridge();
 const showFindReplace = ref(false);
 const showHyperlink = ref(false);
 const showInsertSymbol = ref(false);
@@ -574,7 +571,6 @@ const {
   pagesContainer: pagesRef,
   readOnly,
   externalPlugins: props.externalPlugins,
-  syncCoordinator,
   editorMode,
   author: authorRef,
   onChange: (doc) => {
@@ -589,10 +585,7 @@ const {
   },
   onSelectionUpdate: () => {
     stateTick.value++;
-    // The overlay repaint is intentionally NOT called here — it's driven via
-    // the `syncCoordinator.onRender` registration below so it paints against
-    // current DOM. Painting synchronously here resolves the caret against the
-    // not-yet-repainted DOM and the caret vanishes until the next click (#736).
+    updateSelectionOverlay();
     const view = editorView.value;
     // The prop mirrors React's `onSelectionChange`, which delivers a
     // `SelectionState` (formatting/style snapshot). The ref-API subscribers
@@ -1134,16 +1127,9 @@ const selectionSync = useSelectionSync({
   imageInteracting,
 });
 
-// Drive the overlay through the layout gate (mirrors DecorationLayer): the
-// `requestRender` in `dispatchTransaction` runs this immediately for
-// selection-only moves or defers it until `onLayoutComplete` after a doc edit
-// repaints, so the caret always lands on current DOM (#736). The eager call
-// paints the initial caret (the editor's own `requestRender` ran before this).
-const stopSelectionRender = syncCoordinator.onRender(() => updateSelectionOverlay());
 updateSelectionOverlay();
 
 onBeforeUnmount(() => {
-  stopSelectionRender();
   clearOverlay();
 });
 

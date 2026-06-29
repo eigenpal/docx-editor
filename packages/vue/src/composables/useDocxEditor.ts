@@ -86,7 +86,6 @@ import {
   applySdtFocus,
 } from '@eigenpal/docx-editor-core/layout-painter';
 import type { Document } from '@eigenpal/docx-editor-core/types/document';
-import type { SelectionBridge } from '@eigenpal/docx-editor-core/prosemirror';
 
 // ProseMirror CSS — must be imported for the hidden editor to work
 import 'prosemirror-view/style/prosemirror.css';
@@ -201,8 +200,6 @@ export interface UseDocxEditorOptions {
   onSelectionUpdate?: () => void;
   /** External ProseMirror plugins supplied by the host app. */
   externalPlugins?: Plugin[];
-  /** Coordinates layout updates with visible selection/decoration overlays. */
-  syncCoordinator?: SelectionBridge;
   /**
    * Editor mode. When set to `'suggesting'`, the composable toggles the
    * mounted suggestion-mode plugin's active state so typed text becomes
@@ -287,7 +284,6 @@ export function useDocxEditor(options: UseDocxEditorOptions): UseDocxEditorRetur
     onError,
     onSelectionUpdate,
     externalPlugins = [],
-    syncCoordinator,
     editorMode,
     author,
   } = options;
@@ -321,8 +317,6 @@ export function useDocxEditor(options: UseDocxEditorOptions): UseDocxEditorRetur
   function runLayoutPipeline(state: EditorState) {
     const container = pagesContainer.value;
     if (!container || !document.value) return;
-    const layoutSeq = syncCoordinator?.getStateSeq() ?? 0;
-    syncCoordinator?.onLayoutStart();
 
     const body = document.value.package?.document;
     // Initial geometry comes from the FIRST section's properties; the trailing
@@ -420,8 +414,6 @@ export function useDocxEditor(options: UseDocxEditorOptions): UseDocxEditorRetur
     } catch (err) {
       console.error('[useDocxEditor] Layout pipeline error:', err);
       onError?.(err instanceof Error ? err : new Error(String(err)));
-    } finally {
-      syncCoordinator?.onLayoutComplete(layoutSeq);
     }
   }
 
@@ -507,10 +499,8 @@ export function useDocxEditor(options: UseDocxEditorOptions): UseDocxEditorRetur
 
         // Snapshot marks at cursor for reactive toolbar state.
         // Re-layout on doc changes — coalesced through the shared core
-        // scheduler so a burst of keystrokes lays out once per frame (the
-        // selection overlay waits via `syncCoordinator`, matching React).
+        // scheduler so a burst of keystrokes lays out once per frame.
         if (transaction.docChanged) {
-          syncCoordinator?.incrementStateSeq();
           layoutScheduler.schedule(newState);
           // Notify parent about document change
           try {
@@ -525,7 +515,6 @@ export function useDocxEditor(options: UseDocxEditorOptions): UseDocxEditorRetur
         }
 
         // Notify about selection changes (for highlight overlay)
-        syncCoordinator?.requestRender();
         onSelectionUpdate?.();
 
         // Selection-only moves don't relayout, so update content-control focus
@@ -547,7 +536,6 @@ export function useDocxEditor(options: UseDocxEditorOptions): UseDocxEditorRetur
 
     // Initial layout
     runLayoutPipeline(state);
-    syncCoordinator?.requestRender();
 
     // Auto-focus the hidden ProseMirror so the user can start typing
     // immediately, without first clicking into the page. Mirrors React's

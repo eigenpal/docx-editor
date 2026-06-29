@@ -7,20 +7,16 @@ import { onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import type { EditorState } from 'prosemirror-state';
 import type { Decoration, EditorView } from 'prosemirror-view';
 import { createRenderedDomContext } from '../plugin-api/RenderedDomContext';
-import type { SelectionBridge } from '@eigenpal/docx-editor-core/prosemirror';
 
 const props = defineProps<{
   getView: () => EditorView | null;
   getPagesContainer: () => HTMLElement | null;
   zoom: number;
   transactionVersion: number;
-  syncCoordinator: SelectionBridge;
 }>();
 
 const overlayRef = ref<HTMLDivElement | null>(null);
-const renderEpoch = ref(0);
 let rafId: number | null = null;
-let unsubscribeRender: (() => void) | null = null;
 
 function scheduleSync() {
   if (rafId !== null) cancelAnimationFrame(rafId);
@@ -30,15 +26,11 @@ function scheduleSync() {
     const pagesContainer = props.getPagesContainer();
     const overlay = overlayRef.value;
     if (!view || !pagesContainer || !overlay) return;
-    if (!props.syncCoordinator.isSafeToRender()) return;
     syncDecorations(view, pagesContainer, overlay, props.zoom);
   });
 }
 
 onMounted(() => {
-  unsubscribeRender = props.syncCoordinator.onRender(() => {
-    renderEpoch.value++;
-  });
   scheduleSync();
 });
 
@@ -47,11 +39,10 @@ onBeforeUnmount(() => {
     cancelAnimationFrame(rafId);
     rafId = null;
   }
-  unsubscribeRender?.();
 });
 
 watch(
-  () => [props.zoom, props.transactionVersion, renderEpoch.value],
+  () => [props.zoom, props.transactionVersion],
   () => scheduleSync()
 );
 

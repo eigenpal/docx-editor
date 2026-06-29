@@ -1136,11 +1136,6 @@
             "name": "transactionVersion",
             "required": true,
             "type": "number"
-          },
-          {
-            "name": "syncCoordinator",
-            "required": true,
-            "type": "SelectionBridge"
           }
         ],
         "emits": [],

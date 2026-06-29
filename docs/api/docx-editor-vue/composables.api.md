@@ -29,7 +29,6 @@ import { HeaderFooter } from '@eigenpal/docx-editor-core/types/document';
 import { HighlightRect } from '@eigenpal/docx-editor-core/utils';
 import { isAutoSaveSupported } from '@eigenpal/docx-editor-core';
 import { Layout } from '@eigenpal/docx-editor-core/layout-engine/types';
-import { SelectionBridge } from '@eigenpal/docx-editor-core/prosemirror';
 import { MaybeRef } from 'vue';
 import { ParsedClipboardContent } from '@eigenpal/docx-editor-core/utils';
 import { Plugin as Plugin_2 } from 'prosemirror-state';
@@ -244,7 +243,6 @@ export interface UseDocxEditorOptions {
     pageGap?: number;
     pagesContainer: Ref<HTMLElement | null>;
     readOnly?: MaybeRef<boolean>;
-    syncCoordinator?: SelectionBridge;
 }
 
 // @public (undocumented)

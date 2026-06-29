@@ -41,7 +41,6 @@ import type {
 } from '@eigenpal/docx-editor-core/types/document';
 
 import type { OffscreenEditorHostRef } from '../OffscreenEditorHost';
-import type { SelectionBridge } from '../internals/SelectionBridge';
 import { computeAnchorPositions } from '../internals/sidebarAnchorPositions';
 import { measureBlocks } from '../internals/measureBlock';
 import { createRenderedDomContext } from '../../../plugin-api/RenderedDomContext';
@@ -80,7 +79,6 @@ export interface UseLayoutPipelineOptions {
   pagesContainerRef: React.RefObject<HTMLDivElement | null>;
   viewportLayoutRef: React.RefObject<HTMLDivElement | null>;
   hiddenPMRef: React.RefObject<OffscreenEditorHostRef | null>;
-  syncCoordinator: SelectionBridge;
   getScrollContainer: () => HTMLDivElement | null;
   onTotalPagesChange?: (totalPages: number) => void;
   onAnchorPositionsChange?: (positions: Map<string, number>) => void;
@@ -116,7 +114,6 @@ export function useLayoutPipeline(opts: UseLayoutPipelineOptions): UseLayoutPipe
     pagesContainerRef,
     viewportLayoutRef,
     hiddenPMRef,
-    syncCoordinator,
     getScrollContainer,
     onTotalPagesChange,
     onAnchorPositionsChange,
@@ -193,9 +190,6 @@ export function useLayoutPipeline(opts: UseLayoutPipelineOptions): UseLayoutPipe
   const runLayoutPipeline = useCallback(
     (state: EditorState) => {
       const pipelineStart = performance.now();
-
-      const currentEpoch = syncCoordinator.getStateSeq();
-      syncCoordinator.onLayoutStart();
 
       const applyPendingIncrementalScrollSnapshot = (onlyIfSnapshotJustWritten: boolean) => {
         const pe0 = pagesContainerRef.current;
@@ -418,7 +412,6 @@ export function useLayoutPipeline(opts: UseLayoutPipelineOptions): UseLayoutPipe
         console.error('[PagedEditor] Layout pipeline error:', error);
       }
 
-      syncCoordinator.onLayoutComplete(currentEpoch);
       applyPendingIncrementalScrollSnapshot(false);
     },
     [
@@ -431,7 +424,6 @@ export function useLayoutPipeline(opts: UseLayoutPipelineOptions): UseLayoutPipe
       finalColumns,
       pageGap,
       zoom,
-      syncCoordinator,
       headerContent,
       footerContent,
       firstPageHeaderContent,

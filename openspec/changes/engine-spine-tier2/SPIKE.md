@@ -15,9 +15,9 @@ Run after the eng-review + outside voice challenged the premise (class vs pure-f
 - `headerContent, …firstPageFooterContent` ← `resolveHeaderFooter` + `convertHeaderFooter*` — already core (HF resolve is shared).
 - `styles, theme` ← from `document`.
 
-**Genuine host seams (~6):** `zoom`, `getScrollContainer`, the host elements (pages/viewport/body), `resolvedCommentIds` (React-only; Vue empty), `getHfPmView`/`getHfPmDoc`, plus the already-core `syncCoordinator` (SelectionBridge).
+**Genuine host seams (~5):** `zoom`, `getScrollContainer`, the host elements (pages/viewport/body), `resolvedCommentIds` (React-only; Vue empty), and `getHfPmView`/`getHfPmDoc`.
 
-**Verdict:** the outside voice's "run needs ~25 inputs" is true by COUNT but ~18 are derived-from-`document`. The real contract is `run(state)` + pull `document` + ~6 host getters. **The input explosion is not a blocker.** Caveat that IS real: both adapters must stop computing geometry their own way (React upstream, Vue inline at `useDocxEditor.ts:314-327`) and delegate geometry resolution to the engine. That's a bounded change touching both adapters, and it requires `getColumns` → core. Decision 4 ("push-based, never reads framework state") needs rewording: the engine _pulls_ editor inputs (`document`, `zoom`, host els) via host getters — those are editor state exposed by the host, not React/Vue reactive primitives. Mild softening, defensible.
+**Verdict:** the outside voice's "run needs ~25 inputs" is true by COUNT but ~18 are derived-from-`document`. The real contract is `run(state)` + pull `document` + ~5 host getters. **The input explosion is not a blocker.** Caveat that IS real: both adapters must stop computing geometry their own way (React upstream, Vue inline at `useDocxEditor.ts:314-327`) and delegate geometry resolution to the engine. That's a bounded change touching both adapters, and it requires `getColumns` → core. Decision 4 ("push-based, never reads framework state") needs rewording: the engine _pulls_ editor inputs (`document`, `zoom`, host els) via host getters — those are editor state exposed by the host, not React/Vue reactive primitives. Mild softening, defensible.
 
 ## Q2 — Does `engine.load`/`save` lift cleanly against React's actual structure?
 
