@@ -14,7 +14,7 @@
 import { useCallback, useRef } from 'react';
 import { TextSelection } from 'prosemirror-state';
 import type { EditorView } from 'prosemirror-view';
-import { collectBodySpans } from '@eigenpal/docx-editor-core/layout-bridge';
+import { collectBodySpans } from '@eigenpal/docx-editor-core/flow-model';
 import { findVerticalScrollParent } from '@eigenpal/docx-editor-core/utils/findVerticalScrollParent';
 
 /** Only match lines inside page body content, skipping header/footer lines. */

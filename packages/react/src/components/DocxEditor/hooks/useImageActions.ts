@@ -8,7 +8,7 @@ import { setImageWrapType } from '@eigenpal/docx-editor-core/prosemirror/command
 import {
   captureInlinePositionEmu,
   toolbarValueToLayoutTarget,
-} from '@eigenpal/docx-editor-core/layout-painter';
+} from '@eigenpal/docx-editor-core/painter-model';
 import type { EditorView } from 'prosemirror-view';
 import type { ImagePositionData } from '../../dialogs/ImagePositionDialog';
 import type { ImagePropertiesData } from '../../dialogs/ImagePropertiesDialog';
