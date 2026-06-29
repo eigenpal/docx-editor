@@ -386,7 +386,7 @@ import { TextSelection } from 'prosemirror-state';
 import {
   computeHfCaretRectFromView,
   readHfSelectionGeometry,
-} from '@eigenpal/docx-editor-core/layout-bridge';
+} from '@eigenpal/docx-editor-core/flow-model';
 import { getSelectionInfo as getSelectionInfoImpl } from '../utils/refApiQueries';
 import { extractSelectionState } from '@eigenpal/docx-editor-core/prosemirror';
 import { nearestHfHostEl } from '../utils/domQueries';

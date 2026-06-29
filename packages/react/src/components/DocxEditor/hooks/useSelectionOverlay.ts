@@ -24,9 +24,9 @@ import {
   syncImeCaretAnchor,
   type CaretPosition,
   type SelectionBox,
-} from '@eigenpal/docx-editor-core/layout-bridge';
-import type { FlowBlock, Layout, Measure } from '@eigenpal/docx-editor-core/layout-engine';
-import { enclosingSdtGroupIds, applySdtFocus } from '@eigenpal/docx-editor-core/layout-painter';
+} from '@eigenpal/docx-editor-core/flow-model';
+import type { FlowBlock, Layout, Measure } from '@eigenpal/docx-editor-core/pagination-model';
+import { enclosingSdtGroupIds, applySdtFocus } from '@eigenpal/docx-editor-core/painter-model';
 
 import type { OffscreenEditorHostRef } from '../OffscreenEditorHost';
 import type { ImageSelectionInfo } from '../overlays/ImageSelectionOverlay';

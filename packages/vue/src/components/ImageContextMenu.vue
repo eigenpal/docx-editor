@@ -115,7 +115,7 @@ import {
   isImageLayoutOptionEnabled,
   type ImageLayoutIconHint,
   type ImageLayoutOptionDef,
-} from '@eigenpal/docx-editor-core/layout-painter';
+} from '@eigenpal/docx-editor-core/painter-model';
 import type { ImageLayoutTarget } from '@eigenpal/docx-editor-core/prosemirror/commands';
 
 import type {

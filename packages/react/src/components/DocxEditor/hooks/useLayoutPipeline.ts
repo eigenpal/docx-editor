@@ -15,8 +15,8 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { EditorState } from 'prosemirror-state';
 
-import type { FlowBlock, Layout, Measure } from '@eigenpal/docx-editor-core/layout-engine';
-import { getMargins, getPageSize, getColumns } from '@eigenpal/docx-editor-core/layout-bridge';
+import type { FlowBlock, Layout, Measure } from '@eigenpal/docx-editor-core/pagination-model';
+import { getMargins, getPageSize, getColumns } from '@eigenpal/docx-editor-core/flow-model';
 import type { Node as PMNode } from 'prosemirror-model';
 import {
   LayoutPainter,
@@ -25,7 +25,7 @@ import {
   type BlockLookup,
   type FootnoteRenderItem,
   type RenderPageOptions,
-} from '@eigenpal/docx-editor-core/layout-painter';
+} from '@eigenpal/docx-editor-core/painter-model';
 import {
   computeLayout,
   createLayoutScheduler,

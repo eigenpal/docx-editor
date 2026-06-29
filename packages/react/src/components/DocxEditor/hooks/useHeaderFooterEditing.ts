@@ -5,7 +5,7 @@ import type {
   BlockContent,
   SectionProperties,
 } from '@eigenpal/docx-editor-core/types/document';
-import { resolveHeaderFooter } from '@eigenpal/docx-editor-core/layout-bridge';
+import { resolveHeaderFooter } from '@eigenpal/docx-editor-core/flow-model';
 import { proseDocToBlocks } from '@eigenpal/docx-editor-core/prosemirror/conversion';
 import type { InlineHeaderFooterEditorRef } from '../../InlineHeaderFooterEditor';
 

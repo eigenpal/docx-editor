@@ -2,7 +2,7 @@
  * Interactive UI for typed content controls (checkbox / dropdown / date).
  *
  * The painter draws a `.layout-sdt-widget` trigger on each typed control (see
- * `layout-painter/sdtBoundary`). This component delegates clicks on those
+ * `painter-model/sdtBoundary`). This component delegates clicks on those
  * triggers: a checkbox toggles immediately; a dropdown opens a menu of its list
  * items; a date opens a small date picker. Selections run through the shared
  * `setContentControlValueTr`, so they are normal undoable edits that update both

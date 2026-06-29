@@ -53,7 +53,7 @@ import { ref, computed, watch, onBeforeUnmount, nextTick } from 'vue';
 import type { EditorView } from 'prosemirror-view';
 import { NodeSelection } from 'prosemirror-state';
 import { pixelsToEmu } from '@eigenpal/docx-editor-core/utils';
-import { resolveDomPosition } from '@eigenpal/docx-editor-core/layout-bridge/resolveDomPosition';
+import { resolveDomPosition } from '@eigenpal/docx-editor-core/flow-model/resolveDomPosition';
 import {
   isFloatingImage,
   commitImageResize,
@@ -62,8 +62,8 @@ import {
   calculateResizedImageDimensions,
   type ImageResizeHandle,
 } from '@eigenpal/docx-editor-core/prosemirror/imageCommit';
-import { findBodyPmAnchor } from '@eigenpal/docx-editor-core/layout-bridge';
-import { findImageElement } from '@eigenpal/docx-editor-core/layout-painter';
+import { findBodyPmAnchor } from '@eigenpal/docx-editor-core/flow-model';
+import { findImageElement } from '@eigenpal/docx-editor-core/painter-model';
 import { Z_INDEX } from '../styles/zIndex';
 import { computeImageOverlayRect } from '../composables/imageOverlayRect';
 import { useTranslation } from '../i18n';
@@ -149,7 +149,7 @@ function getPagesEl(): HTMLElement | null {
 
 /**
  * The painted element to anchor the overlay to. After a resize / move / rotate
- * commits — or after the image is pushed onto another page — the layout-painter
+ * commits — or after the image is pushed onto another page — the painter-model
  * re-builds the visible pages, so the originally tracked element is detached.
  * Re-find the fresh one by the image's current PM position (covering inline,
  * floating, and block images) through the body-scoped `findBodyPmAnchor`, which

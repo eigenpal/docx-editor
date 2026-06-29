@@ -18,7 +18,7 @@ import {
   isImageLayoutOptionEnabled,
   type ImageLayoutIconHint,
   type ImageLayoutOptionDef,
-} from '@eigenpal/docx-editor-core/layout-painter';
+} from '@eigenpal/docx-editor-core/painter-model';
 import { Z_INDEX } from '../styles/zIndex';
 import { useTranslation } from '../i18n';
 import { MaterialSymbol } from './ui/Icons';

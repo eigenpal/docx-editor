@@ -16,7 +16,7 @@ import {
   computeHfCaretRectFromView,
   readHfSelectionGeometry,
   invalidateHfDomCache,
-} from '@eigenpal/docx-editor-core/layout-bridge';
+} from '@eigenpal/docx-editor-core/flow-model';
 import { applyCellSelectionHighlight } from './internals/domSelection';
 import { extractSelectionState } from '@eigenpal/docx-editor-core/prosemirror';
 import type { ExtensionManager } from '@eigenpal/docx-editor-core/prosemirror/extensions';
