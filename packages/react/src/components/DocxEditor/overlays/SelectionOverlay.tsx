@@ -44,7 +44,10 @@ export interface SelectionOverlayProps {
 // var so dark mode (.ep-root.dark sets --doc-caret light) shows a visible
 // caret — the overlay sits outside the inverted page, so #000 would vanish.
 const DEFAULT_CARET_COLOR = 'var(--doc-caret, #000)';
-const DEFAULT_SELECTION_COLOR = 'rgba(66, 133, 244, 0.3)'; // Google Docs style blue
+// Token first, so the selection re-themes with the rest of the chrome — a
+// hardcoded blue stays light-mode blue on a dark page. The literal is only the
+// fallback for a host that hasn't loaded the stylesheet.
+const DEFAULT_SELECTION_COLOR = 'var(--doc-selection, rgba(26, 115, 232, 0.3))';
 const DEFAULT_CARET_WIDTH = 2;
 const DEFAULT_BLINK_INTERVAL = 530; // Standard cursor blink rate
 

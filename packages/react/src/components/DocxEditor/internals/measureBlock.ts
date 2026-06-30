@@ -28,6 +28,7 @@ import type {
 import {
   type FloatingImageZone,
   type FloatPageGeometry,
+  floatZoneKey,
   getCachedParagraphMetrics,
   measureBlocksWithFloats,
   paragraphLayout,
@@ -53,19 +54,21 @@ export function measureBlock(
       // and contentWidth (both captured in the cache key). When floating zones
       // ARE present, we always measure fresh since zones depend on inter-block
       // layout context (cumulative Y, neighboring floating tables/images).
-      if (!floatingZones || floatingZones.length === 0) {
-        const cached = getCachedParagraphMetrics(pBlock, contentWidth);
-        if (cached) return cached;
-      }
+      //
+      // The float context is part of the cache key, not a reason to skip the
+      // cache: the same paragraph beside an image and below it are different
+      // layouts, and `floatZoneKey` is what keeps them apart.
+      const floatKey = floatZoneKey(floatingZones ?? [], cumulativeY ?? 0);
+
+      const cached = getCachedParagraphMetrics(pBlock, contentWidth, floatKey);
+      if (cached) return cached;
 
       const result = paragraphLayout(pBlock, contentWidth, {
         floatingZones,
         paragraphYOffset: cumulativeY ?? 0,
       });
 
-      if (!floatingZones || floatingZones.length === 0) {
-        setCachedParagraphMetrics(pBlock, contentWidth, result);
-      }
+      setCachedParagraphMetrics(pBlock, contentWidth, result, floatKey);
 
       return result;
     }

@@ -16,6 +16,11 @@ export default defineConfig({
   clean: true,
   treeshake: true,
   minify: true,
+  // The rendering engine is intentionally not a public core subpath. Bundle
+  // first-party adapter uses so published JS never imports those private paths.
+  noExternal: [
+    /^@eigenpal\/docx-editor-core\/(?:editor|flow-model|painter-model|pagination-model)(?:\/|$)/,
+  ],
   external: [
     'react',
     'react-dom',

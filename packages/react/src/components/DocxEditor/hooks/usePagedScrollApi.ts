@@ -22,7 +22,7 @@ import { findPageIndexContainingPmPos } from '@eigenpal/docx-editor-core/paginat
 import type { FlowBlock, Layout, Measure } from '@eigenpal/docx-editor-core/pagination-model';
 import { findStartPosForParaId } from '@eigenpal/docx-editor-core/prosemirror';
 import {
-  flashParagraphFragmentsByParaId,
+  flashParagraphBoxesByParaId,
   type ScrollToParaIdOptions,
 } from '@eigenpal/docx-editor-core/utils';
 import { findVerticalScrollParentOrRoot } from '@eigenpal/docx-editor-core/utils/findVerticalScrollParent';
@@ -217,7 +217,7 @@ export function usePagedScrollApi(opts: UsePagedScrollApiOptions): UsePagedScrol
         if (!options?.highlight) return;
         const pages = pagesContainerRef.current;
         if (!pages) return;
-        flashParagraphFragmentsByParaId(pages, paraId, options.highlight);
+        flashParagraphBoxesByParaId(pages, paraId, options.highlight);
       };
       flashPara();
       // Defer selection/focus until after the scroll's paint-settle rAF
