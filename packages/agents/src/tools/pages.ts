@@ -2,7 +2,7 @@
  * Paged-document tools — read content scoped to one or more rendered pages.
  *
  * Word's JS API doesn't model pages as first-class addressable units. We do
- * because the editor is paged. Backed by the painter-model's page boundary
+ * because the editor is paged. Backed by the painter's page boundary
  * state in the live editor; the headless reviewer reports zero pages.
  */
 
