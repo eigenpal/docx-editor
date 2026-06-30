@@ -15,7 +15,7 @@ import {
   DEFAULT_TEXTBOX_MARGINS,
   DEFAULT_TEXTBOX_WIDTH,
   assertExhaustiveFlowBlock,
-} from '@eigenpal/docx-editor-core/layout-engine';
+} from '@eigenpal/docx-editor-core/pagination-model';
 import type {
   FlowBlock,
   ImageBlock,
@@ -24,7 +24,7 @@ import type {
   TableBlock,
   TableMeasure,
   TextBoxBlock,
-} from '@eigenpal/docx-editor-core/layout-engine';
+} from '@eigenpal/docx-editor-core/pagination-model';
 import {
   type FloatingImageZone,
   type FloatPageGeometry,
@@ -33,7 +33,7 @@ import {
   paragraphLayout,
   measureTable,
   setCachedParagraphMetrics,
-} from '@eigenpal/docx-editor-core/layout-bridge';
+} from '@eigenpal/docx-editor-core/flow-model';
 
 /**
  * Measure a block based on its type.
@@ -108,7 +108,7 @@ export function measureBlock(
       return { kind: 'sectionBreak' };
 
     default:
-      // Exhaustiveness guard — see FlowBlock in core/layout-engine/types.ts.
+      // Exhaustiveness guard — see FlowBlock in core/pagination-model/types.ts.
       assertExhaustiveFlowBlock(block, 'react PagedEditor measureBlock');
   }
 }

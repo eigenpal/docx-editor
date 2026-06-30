@@ -26,7 +26,7 @@ Check: `ListExtension` or list rendering code — where indicators are generated
 
 `w:contextualSpacing` (17.3.1.9): when true, suppress `spaceBefore` and `spaceAfter` between consecutive paragraphs of the same style.
 
-In the layout-painter, when calculating paragraph spacing:
+In the painter-model, when calculating paragraph spacing:
 
 1. Check if current paragraph has `contextualSpacing` enabled
 2. Check if the previous paragraph has the same `pStyle`
@@ -38,5 +38,5 @@ In the layout-painter, when calculating paragraph spacing:
 | File                                                   | Change                                    |
 | ------------------------------------------------------ | ----------------------------------------- |
 | `src/prosemirror/extensions/features/ListExtension.ts` | Multi-select indent/toggle                |
-| `src/layout-painter/renderParagraph.ts`                | Indicator positioning, contextual spacing |
-| `src/layout-painter/renderListIndicator.ts`            | Hidden indicator check                    |
+| `src/painter-model/renderParagraph.ts`                | Indicator positioning, contextual spacing |
+| `src/painter-model/renderListIndicator.ts`            | Hidden indicator check                    |

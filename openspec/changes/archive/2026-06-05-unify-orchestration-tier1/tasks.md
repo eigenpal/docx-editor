@@ -23,7 +23,7 @@ Each numbered group is one independently-shippable PR. Land in order (1 is a dep
 
 - [ ] 3.1 React: delete `getCaretFromDom` (`domSelection.ts:29-113`) walk logic; keep a thin shim resolving overlay rect + zoom, delegating to core `getCaretPositionFromDom`
 - [ ] 3.2 React: same for `computeSelectionGeometryFromDom` (`:123-192`) → core `readSelectionGeometry`
-- [ ] 3.3 Create `packages/core/src/layout-bridge/cellSelectionHighlight.ts` from `applyCellSelectionHighlight` (`domSelection.ts:204-255`); add export key
+- [ ] 3.3 Create `packages/core/src/flow-model/cellSelectionHighlight.ts` from `applyCellSelectionHighlight` (`domSelection.ts:204-255`); add export key
 - [ ] 3.4 React: wire `useSelectionOverlay.ts:113` and `DocxEditorPagedArea.tsx:257` to the core function
 - [ ] 3.5 Vue: call `applyCellSelectionHighlight` from `useSelectionSync.ts` (new wiring — closes Vue gap)
 - [ ] 3.6 Add a zoom≠1 caret-position assertion (React shim must match the prior zoom path); add an **automated Vue spec** asserting multi-cell selection paints `.layout-table-cell-selected`

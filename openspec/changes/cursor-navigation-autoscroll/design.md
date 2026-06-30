@@ -2,7 +2,7 @@
 
 ## Architecture context
 
-Our editor has a hidden ProseMirror instance (off-screen, receives keyboard input) and visible pages (layout-painter DOM). The `useVisualLineNavigation` hook handles arrow key mapping between PM positions and visual line positions on the painted pages.
+Our editor has a hidden ProseMirror instance (off-screen, receives keyboard input) and visible pages (painter-model DOM). The `useVisualLineNavigation` hook handles arrow key mapping between PM positions and visual line positions on the painted pages.
 
 ## Arrow key navigation
 

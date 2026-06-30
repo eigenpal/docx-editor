@@ -18,7 +18,7 @@ The `packages/core/` directory SHALL contain all framework-agnostic source code 
 #### Scenario: Core package contains framework-agnostic modules
 
 - **WHEN** inspecting `packages/core/src/`
-- **THEN** it SHALL contain the directories: `docx/`, `types/`, `prosemirror/`, `layout-engine/`, `layout-painter/`, `layout-bridge/`, `core-plugins/`, `utils/`, `agent/`, `mcp/`
+- **THEN** it SHALL contain the directories: `docx/`, `types/`, `prosemirror/`, `pagination-model/`, `painter-model/`, `flow-model/`, `core-plugins/`, `utils/`, `agent/`, `mcp/`
 - **AND** it SHALL contain entry points: `core.ts`, `headless.ts`
 - **AND** no file in the package SHALL have a runtime import of `react` or `react-dom`
 

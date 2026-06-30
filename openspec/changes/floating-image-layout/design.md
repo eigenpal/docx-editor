@@ -2,7 +2,7 @@
 
 ## Current state
 
-Images are rendered by `layout-painter/renderImage.ts`. Floating images are positioned absolutely, but the paragraph text layout in `renderParagraph.ts` doesn't account for the image's bounding box when flowing text.
+Images are rendered by `painter-model/renderImage.ts`. Floating images are positioned absolutely, but the paragraph text layout in `renderParagraph.ts` doesn't account for the image's bounding box when flowing text.
 
 ## Architecture
 
@@ -33,7 +33,7 @@ Images inside table cells should be constrained to the cell's content area. The 
 
 | File                                    | Change                                       |
 | --------------------------------------- | -------------------------------------------- |
-| `src/layout-painter/renderParagraph.ts` | Text flow around floating images             |
-| `src/layout-painter/renderImage.ts`     | Image positioning, z-index                   |
-| `src/layout-painter/renderTable.ts`     | Image containment within cells               |
-| `src/layout-painter/measurement.ts`     | Line width calculation with image exclusions |
+| `src/painter-model/renderParagraph.ts` | Text flow around floating images             |
+| `src/painter-model/renderImage.ts`     | Image positioning, z-index                   |
+| `src/painter-model/renderTable.ts`     | Image containment within cells               |
+| `src/painter-model/measurement.ts`     | Line width calculation with image exclusions |

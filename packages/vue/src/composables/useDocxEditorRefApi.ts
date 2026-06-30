@@ -23,9 +23,9 @@ import {
   flashParagraphFragmentsByParaId,
   type ScrollToParaIdOptions,
 } from '@eigenpal/docx-editor-core/utils';
-import type { Layout } from '@eigenpal/docx-editor-core/layout-engine';
-import { findPageIndexContainingPmPos } from '@eigenpal/docx-editor-core/layout-engine';
-import { paintAllPagesNow } from '@eigenpal/docx-editor-core/layout-painter';
+import type { Layout } from '@eigenpal/docx-editor-core/pagination-model';
+import { findPageIndexContainingPmPos } from '@eigenpal/docx-editor-core/pagination-model';
+import { paintAllPagesNow } from '@eigenpal/docx-editor-core/painter-model';
 import {
   findContentControlsInPM,
   findContentControlPos,

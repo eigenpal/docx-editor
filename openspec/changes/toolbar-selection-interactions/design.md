@@ -6,7 +6,7 @@ Our architecture: hidden ProseMirror (off-screen) holds the real selection, and 
 
 When a toolbar dropdown opens, mousedown events on the dropdown shouldn't steal PM focus. Current approach uses `stopPropagation()` on dropdown mousedown — verify this works for all dropdown types.
 
-The selection overlay in layout-painter should continue rendering even when the dropdown has focus. Check if the overlay re-render is triggered by PM blur events.
+The selection overlay in painter-model should continue rendering even when the dropdown has focus. Check if the overlay re-render is triggered by PM blur events.
 
 **Fix:** Ensure selection overlay persists based on PM's stored selection range, not on PM's focus state.
 

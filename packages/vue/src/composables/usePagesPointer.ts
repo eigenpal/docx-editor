@@ -16,11 +16,11 @@ import type { EditorView } from 'prosemirror-view';
 import { TextSelection, NodeSelection } from 'prosemirror-state';
 import type { HeaderFooter, BlockContent } from '@eigenpal/docx-editor-core/types/content';
 import type { Document, SectionProperties } from '@eigenpal/docx-editor-core/types/document';
-import { findImageElement } from '@eigenpal/docx-editor-core/layout-painter';
+import { findImageElement } from '@eigenpal/docx-editor-core/painter-model';
 import {
   detectTableInsertHover,
   TABLE_INSERT_HIDE_DELAY_MS,
-} from '@eigenpal/docx-editor-core/layout-bridge/tableInsertHover';
+} from '@eigenpal/docx-editor-core/flow-model/tableInsertHover';
 import {
   scrollVisiblePositionIntoView as scrollVisiblePositionIntoViewImpl,
   resolvePos as resolvePosImpl,
@@ -28,7 +28,7 @@ import {
   selectParagraph as selectParagraphImpl,
 } from '../utils/domQueries';
 import type { ImageSelectionInfo } from '../components/imageSelectionTypes';
-import type { Layout } from '@eigenpal/docx-editor-core/layout-engine';
+import type { Layout } from '@eigenpal/docx-editor-core/pagination-model';
 import type { HyperlinkPopupData } from '../components/ui/hyperlinkPopupTypes';
 import { useDragAutoScroll } from './useDragAutoScroll';
 import {

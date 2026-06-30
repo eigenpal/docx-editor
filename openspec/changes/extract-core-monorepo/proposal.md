@@ -5,7 +5,7 @@ The editor's core (DOCX parsing, ProseMirror schema/extensions/plugins, layout e
 ## What Changes
 
 - **BREAKING**: Split the single `@eigenpal/docx-editor-react` package into a Bun workspaces monorepo with separate packages
-- New `@eigenpal/docx-editor-core` package containing all framework-agnostic code: `src/docx/`, `src/types/`, `src/prosemirror/`, `src/layout-engine/`, `src/layout-painter/`, `src/layout-bridge/`, `src/core-plugins/`, `src/utils/` (non-React parts), `src/agent/`, `src/mcp/`
+- New `@eigenpal/docx-editor-core` package containing all framework-agnostic code: `src/docx/`, `src/types/`, `src/prosemirror/`, `src/pagination-model/`, `src/painter-model/`, `src/flow-model/`, `src/core-plugins/`, `src/utils/` (non-React parts), `src/agent/`, `src/mcp/`
 - `@eigenpal/docx-editor-react` becomes a thin React UI package depending on `@eigenpal/docx-editor-core`, containing: `src/components/`, `src/hooks/`, `src/plugin-api/`, `src/plugins/`, `src/paged-editor/`
 - Remove React type leaks from core code paths (e.g., `CSSProperties` imports in utils)
 - Split `EditorPlugin` interface into a framework-agnostic core (`EditorPluginCore` in `@eigenpal/docx-editor-core`) and framework-specific adapters (`ReactEditorPlugin` in React package, `VueEditorPlugin` in Vue package)

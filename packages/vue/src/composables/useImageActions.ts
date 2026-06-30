@@ -15,7 +15,7 @@ import type { EditorView } from 'prosemirror-view';
 import {
   captureInlinePositionEmu,
   toolbarValueToLayoutTarget,
-} from '@eigenpal/docx-editor-core/layout-painter';
+} from '@eigenpal/docx-editor-core/painter-model';
 import type { ImageSelectionInfo } from '../components/imageSelectionTypes';
 
 type Commands = Record<string, ((...args: unknown[]) => unknown) | undefined>;

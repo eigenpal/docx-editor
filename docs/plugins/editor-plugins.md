@@ -86,7 +86,7 @@ PluginHost mounts
 
 Editor mounts
   → onEditorViewReady fires             // PluginHost stores the view
-  → onRenderedDomContextReady fires     // layout-painter has rendered pages
+  → onRenderedDomContextReady fires     // painter-model has rendered pages
 
 User edits / clicks / focuses
   → PluginHost's dispatch wrapper fires
@@ -363,7 +363,7 @@ proseMirrorPlugins: [
 - **Prevent focus stealing**: ProseMirror captures `mousedown`. Dropdowns and dialogs in panels need `onMouseDown` with `event.stopPropagation()`.
 - **Scope CSS under `.ep-root`**: use inline styles on overlay/panel elements to avoid Tailwind collisions.
 - **`renderOverlay` must be fast**: it runs on every state change. Avoid heavy DOM queries inside it.
-- **Null-check `renderedDomContext`**: it's `null` until layout-painter finishes the first render.
+- **Null-check `renderedDomContext`**: it's `null` until painter-model finishes the first render.
 - **Null-check `editorView`**: it's `null` until ProseMirror mounts. Don't assume it's always available.
 
 ## Full Example: Template Plugin

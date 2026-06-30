@@ -72,7 +72,7 @@ Contributors are required to sign our [Contributor License Agreement](CLA.md). T
 The editor has two rendering systems:
 
 - **Hidden ProseMirror** — the real editing state (selection, undo/redo, keyboard input)
-- **Visible Pages** (layout-painter) — what the user sees, rebuilt from PM state on every change
+- **Visible Pages** (painter-model) — what the user sees, rebuilt from PM state on every change
 
 See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the full architecture and [CLAUDE.md](CLAUDE.md) for the agent-facing quick reference (also useful for humans).
 
@@ -104,7 +104,7 @@ The same `@public` surface is also emitted as structured JSON for downstream doc
 
 The editor ships first-party adapters for React (`packages/react`) and Vue (`packages/vue`). Both share `@eigenpal/docx-editor-core`, which owns the parser, ProseMirror schema, layout engine, layout bridge (page mapping, footnote convergence, header/footer measurement), and serializer. Adapters only own their framework-specific shell, components, and lifecycle wiring.
 
-**When you touch layout, parsing, or rendering logic, put it in core, not in an adapter.** If you copy a 30-line helper from React to Vue, you've created a divergence trap. The footnote convergence loop (`stabilizeFootnoteLayout` in `packages/core/src/layout-bridge/footnoteLayout.ts`) is the canonical example: one helper, both adapters call it.
+**When you touch layout, parsing, or rendering logic, put it in core, not in an adapter.** If you copy a 30-line helper from React to Vue, you've created a divergence trap. The footnote convergence loop (`stabilizeFootnoteLayout` in `packages/core/src/flow-model/footnoteLayout.ts`) is the canonical example: one helper, both adapters call it.
 
 Parity smoke tests live under `e2e/tests/parity/smoke/` and run each spec against both demos. Add one when you fix a bug that could plausibly affect rendering on either side.
 

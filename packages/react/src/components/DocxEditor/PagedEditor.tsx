@@ -28,11 +28,11 @@ import { ImageSelectionOverlay } from './overlays/ImageSelectionOverlay';
 import { DecorationLayer } from './overlays/DecorationLayer';
 
 // Layout engine
-import type { Layout } from '@eigenpal/docx-editor-core/layout-engine';
+import type { Layout } from '@eigenpal/docx-editor-core/pagination-model';
 import type { ScrollToParaIdOptions } from '@eigenpal/docx-editor-core/utils';
 
 // Layout bridge
-import { DEFAULT_PAGE_HEIGHT_PX } from '@eigenpal/docx-editor-core/layout-bridge';
+import { DEFAULT_PAGE_HEIGHT_PX } from '@eigenpal/docx-editor-core/flow-model';
 
 // Visual line navigation hook
 import { useVisualLineNavigation } from '../../hooks/useVisualLineNavigation';

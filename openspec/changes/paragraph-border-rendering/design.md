@@ -34,5 +34,5 @@ More complex: requires knowledge of adjacent paragraphs.
 
 | File                                    | Change                                         |
 | --------------------------------------- | ---------------------------------------------- |
-| `src/layout-painter/renderParagraph.ts` | Add `bar` and `between` border rendering       |
+| `src/painter-model/renderParagraph.ts` | Add `bar` and `between` border rendering       |
 | `src/types/formatting.ts`               | Verify `between` and `bar` are in border types |

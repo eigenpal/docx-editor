@@ -8,7 +8,7 @@ The editor currently has three color picker components:
 
 These pickers lack the theme color matrix (10 columns x 6 rows with tint/shade variations) that Word provides. The text color picker doesn't pass theme color information through to the command — it only emits hex strings, losing theme references. The OOXML round-trip for colors (theme refs, tints, shades, named highlights, border colors) works but lacks dedicated test coverage.
 
-Key constraint: the editor is client-side only, renders within `.ep-root`, and uses inline styles (no Tailwind in layout-painter output).
+Key constraint: the editor is client-side only, renders within `.ep-root`, and uses inline styles (no Tailwind in painter-model output).
 
 ## Goals / Non-Goals
 
@@ -24,7 +24,7 @@ Key constraint: the editor is client-side only, renders within `.ep-root`, and u
 
 - Full HSL/HSV gradient picker canvas (phase 2 — for now, hex input is sufficient for custom colors)
 - Eyedropper / color sampling tool
-- Changes to how colors render in layout-painter (rendering is already correct)
+- Changes to how colors render in painter-model (rendering is already correct)
 - Refactoring colorResolver.ts internals
 
 ## Decisions

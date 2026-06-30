@@ -48,18 +48,18 @@ import type { CommandMap } from '@eigenpal/docx-editor-core/prosemirror/extensio
 import {
   measureBlocksWithFloats,
   paragraphLayout,
-} from '@eigenpal/docx-editor-core/layout-bridge/measuring';
+} from '@eigenpal/docx-editor-core/flow-model/metrics';
 import type {
   FloatingImageZone,
   FloatPageGeometry,
-} from '@eigenpal/docx-editor-core/layout-bridge/measuring';
+} from '@eigenpal/docx-editor-core/flow-model/metrics';
 import {
   measureTable,
   getPageSize,
   getMargins,
   getColumns,
   resolveHeaderFooter,
-} from '@eigenpal/docx-editor-core/layout-bridge';
+} from '@eigenpal/docx-editor-core/flow-model';
 import {
   computeLayout,
   createLayoutScheduler,
@@ -69,8 +69,8 @@ import {
   DEFAULT_TEXTBOX_MARGINS,
   DEFAULT_TEXTBOX_WIDTH,
   assertExhaustiveFlowBlock,
-} from '@eigenpal/docx-editor-core/layout-engine';
-import { paintPages } from '@eigenpal/docx-editor-core/layout-painter/paintPage';
+} from '@eigenpal/docx-editor-core/pagination-model';
+import { paintPages } from '@eigenpal/docx-editor-core/painter-model/paintPage';
 import type {
   FlowBlock,
   Layout,
@@ -79,12 +79,12 @@ import type {
   TableBlock,
   ImageBlock,
   TextBoxBlock,
-} from '@eigenpal/docx-editor-core/layout-engine/types';
+} from '@eigenpal/docx-editor-core/pagination-model/types';
 import {
   buildBlockLookup,
   enclosingSdtGroupIds,
   applySdtFocus,
-} from '@eigenpal/docx-editor-core/layout-painter';
+} from '@eigenpal/docx-editor-core/painter-model';
 import type { Document } from '@eigenpal/docx-editor-core/types/document';
 
 // ProseMirror CSS — must be imported for the hidden editor to work
@@ -107,7 +107,7 @@ const DEFAULT_PAGE_GAP = 24;
 // ============================================================================
 
 // `getPageSize`, `getMargins`, `resolveHeaderFooter` live in
-// `@eigenpal/docx-editor-core/layout-bridge` so React and Vue agree on
+// `@eigenpal/docx-editor-core/flow-model` so React and Vue agree on
 // twips→px math + HF lookup. Imported at the top of this file.
 
 /**
@@ -117,7 +117,7 @@ const DEFAULT_PAGE_GAP = 24;
  * via `measureBlocksWithFloats` in core so anchored images, floating
  * textboxes, and floating tables wrap text consistently across adapters.
  *
- * `measureTable` lives in `@eigenpal/docx-editor-core/layout-bridge`
+ * `measureTable` lives in `@eigenpal/docx-editor-core/flow-model`
  * so React and Vue stay in lockstep on table-cell measurement.
  */
 function measureBlock(
@@ -166,7 +166,7 @@ function measureBlock(
       return { kind: 'sectionBreak' };
 
     default:
-      // Exhaustiveness guard — see FlowBlock in core/layout-engine/types.ts.
+      // Exhaustiveness guard — see FlowBlock in core/pagination-model/types.ts.
       assertExhaustiveFlowBlock(block, 'vue useDocxEditor measureBlock');
   }
 }
