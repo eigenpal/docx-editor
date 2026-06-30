@@ -20,7 +20,7 @@ import type { Document } from '@eigenpal/docx-editor-core/types/document';
 import type { Comment } from '@eigenpal/docx-editor-core/types/content';
 import type { DocxInput } from '@eigenpal/docx-editor-core/utils';
 import {
-  flashParagraphFragmentsByParaId,
+  flashParagraphBoxesByParaId,
   type ScrollToParaIdOptions,
 } from '@eigenpal/docx-editor-core/utils';
 import type { Layout } from '@eigenpal/docx-editor-core/pagination-model';
@@ -168,7 +168,7 @@ export function useDocxEditorRefApi(opts: UseDocxEditorRefApiOptions): {
     if (options?.highlight) {
       const flashPara = () => {
         const pages = opts.pagesRef.value;
-        if (pages) flashParagraphFragmentsByParaId(pages, paraId, options.highlight);
+        if (pages) flashParagraphBoxesByParaId(pages, paraId, options.highlight);
       };
       flashPara();
       requestAnimationFrame(() => requestAnimationFrame(flashPara));
