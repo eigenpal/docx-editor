@@ -27,8 +27,6 @@ import { SelectionOverlay } from './overlays/SelectionOverlay';
 import { ImageSelectionOverlay } from './overlays/ImageSelectionOverlay';
 import { DecorationLayer } from './overlays/DecorationLayer';
 
-// Layout engine
-import type { Layout } from '@eigenpal/docx-editor-core/pagination-model';
 import type { ScrollToParaIdOptions } from '@eigenpal/docx-editor-core/utils';
 
 // Layout bridge
@@ -215,8 +213,10 @@ export interface PagedEditorRef {
   redo(): boolean;
   /** Set selection by PM position. */
   setSelection(anchor: number, head?: number): void;
-  /** Get current layout. */
-  getLayout(): Layout | null;
+  /** Get page geometry without exposing engine internals. */
+  getLayout(): {
+    readonly pages: readonly { readonly number: number; readonly size: { w: number; h: number } }[];
+  } | null;
   /** Force re-layout. */
   relayout(): void;
   /** Scroll the visible pages to bring a PM position into view. */

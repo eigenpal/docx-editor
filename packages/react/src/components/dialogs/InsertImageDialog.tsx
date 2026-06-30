@@ -139,7 +139,7 @@ const DROP_ZONE_ACTIVE_STYLE: CSSProperties = {
 const DROP_ZONE_WITH_IMAGE_STYLE: CSSProperties = {
   ...DROP_ZONE_STYLE,
   padding: '20px',
-  borderKind: 'solid',
+  borderStyle: 'solid',
   borderColor: 'var(--doc-primary)',
 };
 

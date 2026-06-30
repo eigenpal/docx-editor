@@ -509,11 +509,7 @@ const TAB_SYMBOLS: Record<string, string> = {
   bar: '|',
 };
 
-function TabMarker({
-  tabMark,
-  positionPx,
-  onDoubleClick,
-}: TabMarkerProps): React.ReactElement {
+function TabMarker({ tabMark, positionPx, onDoubleClick }: TabMarkerProps): React.ReactElement {
   return (
     <div
       style={{
