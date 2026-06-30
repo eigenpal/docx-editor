@@ -26,7 +26,7 @@ Deferred:
 - [ ] 2.2 Each EditorView creates its own `ExtensionManager` instance (matches `InlineHeaderFooterEditor.tsx:217-222` pattern). Confirm history plugin is per-view and undo stacks stay independent.
 - [ ] 2.3 On every HF transaction, serialize `proseDocToBlocks(view.state.doc)` and write back to `Document.package.headers[rId].content` (or `.footers[rId].content`). Debounce to avoid thrashing the layout pipeline.
 - [ ] 2.4 In `useLayoutPipeline.ts`, replace the call to `convertHeaderFooterToContent(headerContent, …)` with a path that resolves the painted HF region to its `rId` (via the section's `headerReferences` / `footerReferences`), looks up the corresponding HF EditorView from the `useHeaderFooterPM` registry, and reads from `view.state.doc`. Fall back to `package.headers[rId].content` for `rId`s without a mounted PM (shouldn't happen post-2.1, but guard it).
-- [ ] 2.5 Refactor `convertHeaderFooterToContent` (in `packages/core/src/layout-bridge/headerFooterLayout.ts`) to accept either a `HeaderFooter` object or a `PMNode` directly — the existing first branch already calls `headerFooterToProseDoc`, so the change is to skip that step when given a PMNode.
+- [ ] 2.5 Refactor `convertHeaderFooterToContent` (in `packages/core/src/flow-model/headerFooterLayout.ts`) to accept either a `HeaderFooter` object or a `PMNode` directly — the existing first branch already calls `headerFooterToProseDoc`, so the change is to skip that step when given a PMNode.
 - [ ] 2.6 Keep the inline overlay's existing PM EditorView (the user-visible one) in place for now. UX is unchanged at this phase.
 - [ ] 2.7 Verify: existing HF playwright specs all pass; the new screenshot-diff spec from 1.2 still fails (overlay still visible during edit) but no regression in coverage.
 - [ ] 2.8 Land phase-1 PR to feature branch with `bun run typecheck`, `bun test packages/core/src`, and the existing HF playwright suite green.
@@ -42,7 +42,7 @@ Deferred:
 
 ## 4. Phase 3 — Click routing to HF PM
 
-- [ ] 4.1 Add `packages/core/src/layout-bridge/findHfPmSpans.ts` mirroring `collectBodySpans.ts`, scoped to `.layout-page-header` / `.layout-page-footer` regions. Function takes an `rId` and returns the matching PM range info within the painted region for that `rId`.
+- [ ] 4.1 Add `packages/core/src/flow-model/findHfPmSpans.ts` mirroring `collectBodySpans.ts`, scoped to `.layout-page-header` / `.layout-page-footer` regions. Function takes an `rId` and returns the matching PM range info within the painted region for that `rId`.
 - [ ] 4.2 In `usePagesPointer.handlePagesMouseDown`, detect when the click target is inside `.layout-page-header` or `.layout-page-footer`. Resolve the painted region to its `rId` via the section's `headerReferences` / `footerReferences` and the current page's `hdrFtrType` resolution (`default` / `first` / `even` per §17.10.7 `titlePg` and §17.15.1.45 `evenAndOddHeaders`). Look up the corresponding HF EditorView from the `useHeaderFooterPM` registry.
 - [ ] 4.3 Call slot-scoped `resolveDomPosition` against the clicked DOM to resolve a PM position inside the HF EditorView's document.
 - [ ] 4.4 Dispatch `setSelection(TextSelection.create(view.state.doc, pos))` to the HF EditorView. Call `view.focus()`. Body EditorView loses focus naturally.

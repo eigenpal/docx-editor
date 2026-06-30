@@ -17,7 +17,7 @@ The leader should only fill the gap between:
 
 ### Implementation
 
-In the tab rendering code (layout-painter), the leader element should:
+In the tab rendering code (painter-model), the leader element should:
 
 1. Be absolutely positioned within the tab span
 2. Use CSS `overflow: hidden` to clip to the tab span boundaries
@@ -36,4 +36,4 @@ In the tab rendering code (layout-painter), the leader element should:
 
 | File                                    | Change                   |
 | --------------------------------------- | ------------------------ |
-| `src/layout-painter/renderParagraph.ts` | Tab and leader rendering |
+| `src/painter-model/renderParagraph.ts` | Tab and leader rendering |

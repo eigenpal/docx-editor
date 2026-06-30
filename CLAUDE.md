@@ -44,7 +44,7 @@ Empty-doc specs (`formatting`, `text-editing`) use `editor.gotoEmpty()`. Demo-as
 **Two renderers. Know which one owns your bug.**
 
 - **HIDDEN ProseMirror** (`left: -9999px`) — editing state, undo/redo, keyboard. `components/DocxEditor/OffscreenEditorHost.tsx` (body) + `HiddenHeaderFooterPMs.tsx` (one EditorView per HF `rId`).
-- **VISIBLE pages** — what user sees. Static DOM rebuilt from PM state. **NOT `toDOM`** — `src/layout-painter/paintPage.ts`. Fixing `toDOM` for a visual bug → user sees nothing.
+- **VISIBLE pages** — what user sees. Static DOM rebuilt from PM state. **NOT `toDOM`** — `src/painter-model/paintPage.ts`. Fixing `toDOM` for a visual bug → user sees nothing.
 
 Data flow: DOCX → `unzip` → `parser` → `Document` → `toProseDoc` → PM → painter → pages. Save: PM → `fromProseDoc` → `Document` → `serializer` → `rezip`.
 
@@ -61,7 +61,7 @@ Changes to layout / measurement / paint behavior MUST land in both adapters in t
 Before merging a change in `packages/react/`:
 
 - Find the Vue counterpart in `packages/vue/src/composables/useDocxEditor.ts` (or under `packages/vue/src/`) and apply the same behavior change.
-- If the change is platform-agnostic logic, lift it into `packages/core/` and have both adapters call it. The float-zone pipeline (`measureBlocksWithFloats` in `packages/core/src/layout-bridge/measuring/measureBlocksPipeline.ts`) is the canonical example.
+- If the change is platform-agnostic logic, lift it into `packages/core/` and have both adapters call it. The float-zone pipeline (`measureBlocksWithFloats` in `packages/core/src/flow-model/metrics/measureBlocksPipeline.ts`) is the canonical example.
 - The reverse holds when starting from Vue.
 
 Adapter-only changes are fine for things genuinely scoped to one framework (React-specific hook glue, Vue composition API ergonomics, the demo apps). When in doubt, mirror.
@@ -70,9 +70,9 @@ Adapter-only changes are fine for things genuinely scoped to one framework (Reac
 
 ### FlowBlock invariant — 3 switches
 
-Adding a `FlowBlock` variant in `packages/core/src/layout-engine/types.ts` requires updating all three; each ends with `assertExhaustiveFlowBlock` so `bun run typecheck` names the missing site:
+Adding a `FlowBlock` variant in `packages/core/src/pagination-model/types.ts` requires updating all three; each ends with `assertExhaustiveFlowBlock` so `bun run typecheck` names the missing site:
 
-1. `runLayoutPipeline` in `packages/core/src/layout-engine/index.ts`
+1. `runLayoutPipeline` in `packages/core/src/pagination-model/index.ts`
 2. `measureBlock` in `packages/react/src/components/DocxEditor/internals/measureBlock.ts`
 3. `measureBlock` in `packages/vue/src/composables/useDocxEditor.ts`
 
@@ -93,13 +93,13 @@ Stable dataset attrs on painted DOM (CSS, queries, selection map depend on these
 
 | Debugging                    | File                                                            |
 | ---------------------------- | --------------------------------------------------------------- |
-| Text/paragraph rendering     | `layout-painter/renderParagraph.ts`                             |
-| Image rendering              | `layout-painter/renderImage.ts`                                 |
-| Table rendering              | `layout-painter/renderTable.ts`                                 |
-| Table borders / cut edges    | `layout-painter/renderTableBorders.ts`                          |
-| Table grid geometry (SoT)    | `layout-bridge/tableWidthUtils.ts` (`resolveCellGrid`)          |
-| Table page-break geometry    | `layout-engine/tableRowBreak.ts`                                |
-| Page composition             | `layout-painter/paintPage.ts`                                  |
+| Text/paragraph rendering     | `painter-model/renderParagraph.ts`                             |
+| Image rendering              | `painter-model/renderImage.ts`                                 |
+| Table rendering              | `painter-model/renderTable.ts`                                 |
+| Table borders / cut edges    | `painter-model/renderTableBorders.ts`                          |
+| Table grid geometry (SoT)    | `flow-model/tableWidthUtils.ts` (`resolveCellGrid`)          |
+| Table page-break geometry    | `pagination-model/tableRowBreak.ts`                                |
+| Page composition             | `painter-model/paintPage.ts`                                  |
 | Formatting commands          | `prosemirror/extensions/marks/`, `nodes/`                       |
 | Keyboard shortcuts           | `prosemirror/extensions/features/BaseKeymapExtension.ts`        |
 | Toolbar ↔ selection          | `prosemirror/plugins/selectionTracker.ts`                       |
@@ -132,7 +132,7 @@ Shared React/Vue orchestration lives in core (issue #696, Tier 1) — adapters r
 | comment/proposeChange + ID alloc    | `prosemirror/commentOps.ts`                   |
 | table-resize read/commit + twips    | `prosemirror/tableResize.ts`                  |
 | image resize/drag PM commits        | `prosemirror/imageCommit.ts`                  |
-| cell-selection highlight            | `layout-bridge/cellSelectionHighlight.ts`     |
+| cell-selection highlight            | `flow-model/cellSelectionHighlight.ts`     |
 | drag auto-scroll delta math         | `utils/autoScroll.ts`                         |
 
 ### Extensions
@@ -158,7 +158,7 @@ Website docs (docx-editor.dev/docs/1.x) are authored here in `docs/site/content/
 
 **Treat every value from a DOCX, pasted HTML, or embedded part as attacker-controlled.** A `.docx` is a zip of XML an attacker fully controls — font names, hyperlink targets, shape attrs, image rels, run text. Sanitize at the **parse/trust boundary** (in `packages/core/src/docx/*Parser.ts` / PM `parseDOM`), not at render time, so every downstream consumer gets the clean value.
 
-When you add/touch anything that **parses or renders unknown files** (parsers, `layout-painter/*`, PM `toDOM`/`parseDOM`, clipboard, print), audit these sink classes before merging:
+When you add/touch anything that **parses or renders unknown files** (parsers, `painter-model/*`, PM `toDOM`/`parseDOM`, clipboard, print), audit these sink classes before merging:
 
 - **No HTML-from-strings.** Never build DOM from file-derived values via `innerHTML` / `outerHTML` / `insertAdjacentHTML` / `document.write`. Build with `document.createElement(NS)` + `setAttribute` / `textContent`.
 - **URLs go through `sanitizeHref`** (`packages/core/src/utils/sanitizeHref.ts`) — allowlists `http(s)/mailto/tel/ftp`, drops `javascript:`/`data:`/`vbscript:`/`file:`, strips embedded tab/LF/CR like WHATWG. Apply to every `href`, image `hlinkHref`, and `window.open(...)` arg.

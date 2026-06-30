@@ -2,7 +2,7 @@
 
 ## Investigation
 
-- [ ] Find tab leader rendering code in layout-painter
+- [ ] Find tab leader rendering code in painter-model
 - [ ] Create/find test DOCX with TOC using dotted tab leaders
 - [ ] Compare current rendering against Word — identify overlap areas
 - [ ] Check how tab span width is calculated

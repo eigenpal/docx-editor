@@ -17,9 +17,9 @@ import {
   findBodyPmAnchor,
   collectBodySpans,
   getCaretPosition,
-} from '@eigenpal/docx-editor-core/layout-bridge';
-import { findPageIndexContainingPmPos } from '@eigenpal/docx-editor-core/layout-engine';
-import type { FlowBlock, Layout, Measure } from '@eigenpal/docx-editor-core/layout-engine';
+} from '@eigenpal/docx-editor-core/flow-model';
+import { findPageIndexContainingPmPos } from '@eigenpal/docx-editor-core/pagination-model';
+import type { FlowBlock, Layout, Measure } from '@eigenpal/docx-editor-core/pagination-model';
 import { findStartPosForParaId } from '@eigenpal/docx-editor-core/prosemirror';
 import {
   flashParagraphFragmentsByParaId,

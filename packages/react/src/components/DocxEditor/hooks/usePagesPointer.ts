@@ -24,7 +24,7 @@ import { NodeSelection, TextSelection } from 'prosemirror-state';
 import { CellSelection } from 'prosemirror-tables';
 import type { EditorView } from 'prosemirror-view';
 
-import type { CaretPosition, SelectionBox } from '@eigenpal/docx-editor-core/layout-bridge';
+import type { CaretPosition, SelectionBox } from '@eigenpal/docx-editor-core/flow-model';
 import {
   pointerToDocPos,
   resolveDomPosition,
@@ -32,14 +32,14 @@ import {
   resolveFragmentHit,
   resolveTableCellHit,
   TABLE_INSERT_HIDE_DELAY_MS as TABLE_INSERT_HIDE_DELAY,
-} from '@eigenpal/docx-editor-core/layout-bridge';
-import type { FlowBlock, Layout, Measure } from '@eigenpal/docx-editor-core/layout-engine';
+} from '@eigenpal/docx-editor-core/flow-model';
+import type { FlowBlock, Layout, Measure } from '@eigenpal/docx-editor-core/pagination-model';
 import { addColumnRight, addRowBelow } from '@eigenpal/docx-editor-core/prosemirror';
 import {
   captureInlinePositionEmu,
   findImageElement as coreFindImageElement,
   pointerHitResolveImage,
-} from '@eigenpal/docx-editor-core/layout-painter';
+} from '@eigenpal/docx-editor-core/painter-model';
 import type { WrapType } from '@eigenpal/docx-editor-core/docx/wrapTypes';
 import { findWordBoundaries } from '@eigenpal/docx-editor-core/utils';
 

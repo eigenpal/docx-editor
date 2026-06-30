@@ -14,7 +14,7 @@ The editor has two rendering systems running simultaneously:
                │ state changes
                ▼
 ┌──────────────────────────────────────────┐
-│  VISIBLE Pages (layout-painter)          │
+│  VISIBLE Pages (painter-model)          │
 │  What the user sees — static DOM         │
 │  Rebuilt from PM state on every change   │
 │  CSS: .paged-editor__pages               │
@@ -29,7 +29,7 @@ User clicks on visible pages get mapped back to ProseMirror positions via `getPo
 DOCX → unzip → parser → Document model (types/)
   → toProseDoc → ProseMirror doc
   → OffscreenEditorHost (off-screen)
-  → layout-painter renders visible pages
+  → painter-model renders visible pages
   → user edits → PM state updates → re-render
 
 Saving: PM state → fromProseDoc → Document model → serializer → XML → rezip → DOCX
@@ -43,7 +43,7 @@ Saving: PM state → fromProseDoc → Document model → serializer → XML → 
 | `src/types/`                  | Document model types                      |
 | `src/prosemirror/conversion/` | `toProseDoc` / `fromProseDoc` converters  |
 | `src/prosemirror/extensions/` | ProseMirror schema, commands, keybindings |
-| `src/layout-painter/`         | Visible page rendering                    |
+| `src/painter-model/`         | Visible page rendering                    |
 | `src/paged-editor/`           | PagedEditor component, click/selection    |
 | `src/components/`             | Toolbar, dialogs, UI                      |
 | `src/plugin-api/`             | External plugin system                    |
@@ -72,4 +72,4 @@ For adding features **from the outside**, use the [Plugin API](./PLUGINS.md) ins
 
 ## Common Pitfall
 
-If you fix a visual bug in ProseMirror's `toDOM`, **the user won't see it** — visible pages are rendered by `layout-painter/`, not by ProseMirror.
+If you fix a visual bug in ProseMirror's `toDOM`, **the user won't see it** — visible pages are rendered by `painter-model/`, not by ProseMirror.

@@ -14,7 +14,7 @@ import {
   collectBodySpans,
   findBodyPmAnchor,
   resolveDomPosition,
-} from '@eigenpal/docx-editor-core/layout-bridge';
+} from '@eigenpal/docx-editor-core/flow-model';
 import { findWordBoundaries } from '@eigenpal/docx-editor-core/utils';
 
 /**

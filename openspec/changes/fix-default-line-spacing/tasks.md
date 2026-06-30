@@ -1,11 +1,11 @@
 ## 1. Change Default Constant
 
-- [x] 1.1 Change `DEFAULT_LINE_HEIGHT_MULTIPLIER` from 1.15 to 1.0 in `packages/core/src/layout-bridge/measuring/paragraphLayout.ts`
-- [x] 1.2 Change `DEFAULT_LINE_HEIGHT_MULTIPLIER` from 1.15 to 1.0 in `packages/core/src/layout-bridge/measuring/textMetrics.ts`
+- [x] 1.1 Change `DEFAULT_LINE_HEIGHT_MULTIPLIER` from 1.15 to 1.0 in `packages/core/src/flow-model/metrics/paragraphLayout.ts`
+- [x] 1.2 Change `DEFAULT_LINE_HEIGHT_MULTIPLIER` from 1.15 to 1.0 in `packages/core/src/flow-model/metrics/textMetrics.ts`
 
 ## 2. Align Visible Rendering
 
-- [x] 2.1 Update default line height fallback in `packages/core/src/layout-painter/renderParagraph.ts` to use 1.0× (N/A — uses line.lineHeight from measurement directly)
+- [x] 2.1 Update default line height fallback in `packages/core/src/painter-model/renderParagraph.ts` to use 1.0× (N/A — uses line.lineHeight from measurement directly)
 - [x] 2.2 Update default line height in `packages/core/src/prosemirror/extensions/core/ParagraphExtension.ts` toDOM for PM hidden view consistency (N/A — no lineHeight in toDOM)
 
 ## 3. Update formatToStyle

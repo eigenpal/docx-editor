@@ -5,7 +5,7 @@
 DrawingML images can have hyperlinks via `<a:hlinkClick r:id="rId5"/>` inside `<pic:cNvPr>`. The relationship ID points to a URL in the .rels file.
 
 **Parser:** Extract `a:hlinkClick` relationship ID during drawing parsing, resolve to URL.
-**Rendering:** Wrap the image element in an `<a>` tag with the resolved URL in layout-painter.
+**Rendering:** Wrap the image element in an `<a>` tag with the resolved URL in painter-model.
 
 ## TIFF images
 
@@ -41,8 +41,8 @@ When `w:cols` has `w:sep="true"` or child `<w:sep/>`, render a vertical line bet
 | File                                                   | Change                              |
 | ------------------------------------------------------ | ----------------------------------- |
 | `src/docx/drawingParser.ts`                            | Parse a:hlinkClick                  |
-| `src/layout-painter/renderImage.ts`                    | Wrap image in link, TIFF conversion |
+| `src/painter-model/renderImage.ts`                    | Wrap image in link, TIFF conversion |
 | `src/components/ui/FontSizePicker.tsx`                 | Decimal input handling              |
 | `src/prosemirror/extensions/features/ListExtension.ts` | lvlText null guard                  |
-| `src/layout-painter/paintPage.ts`                     | Column separator line               |
+| `src/painter-model/paintPage.ts`                     | Column separator line               |
 | `src/docx/sectionParser.ts`                            | Parse w:sep from w:cols             |

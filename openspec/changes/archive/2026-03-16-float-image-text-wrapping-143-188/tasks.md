@@ -1,6 +1,6 @@
 ## 1. Layout Engine Types and FloatingObjectManager Updates
 
-- [x] 1.1 Add `offsetX: number` and `availableWidth: number` fields to `MeasuredLine` type in `layout-engine/types.ts` (default offsetX=0, availableWidth=full paragraph width)
+- [x] 1.1 Add `offsetX: number` and `availableWidth: number` fields to `MeasuredLine` type in `pagination-model/types.ts` (default offsetX=0, availableWidth=full paragraph width)
 - [x] 1.2 Add `wrapEdge` mapping logic to `FloatingObjectManager` — convert `wrapText` values (bothSides, left, right, largest) to exclusion zone `wrapEdge` (left, right, both, none), including `largest` which requires comparing available space on each side
 - [x] 1.3 Add `wrapTopAndBottom` support to `FloatingObjectManager` — when wrap type is topAndBottom, `computeAvailableWidth()` returns `{ width: 0, offsetX: 0 }` to signal the line must skip below the zone
 - [x] 1.4 Add minimum width threshold in `computeAvailableWidth()` — clamp to 0 and let caller handle skip logic when available width is insufficient

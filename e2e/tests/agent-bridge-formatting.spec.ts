@@ -44,7 +44,7 @@ test.describe('Agent bridge — formatting + paged reads', () => {
     );
     expect(ok).toBe(true);
 
-    // The layout-painter renders bold via inline `font-weight: bold` rather
+    // The painter-model renders bold via inline `font-weight: bold` rather
     // than <strong>, so assert on the painted style.
     await expect
       .poll(

@@ -24,7 +24,7 @@
 
 ## General optimizations
 
-- [ ] Check if layout-painter recalculates unchanged pages unnecessarily
+- [ ] Check if painter-model recalculates unchanged pages unnecessarily
 - [ ] Consider caching page measurements for unchanged content
 - [ ] Profile memory usage with large documents
 

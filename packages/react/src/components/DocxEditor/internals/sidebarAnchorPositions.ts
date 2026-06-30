@@ -7,14 +7,14 @@
  */
 
 import type { EditorView } from 'prosemirror-view';
-import { getCaretPosition, pageTopOffset } from '@eigenpal/docx-editor-core/layout-bridge';
+import { getCaretPosition, pageTopOffset } from '@eigenpal/docx-editor-core/flow-model';
 import type {
   FlowBlock,
   Layout,
   Measure,
   TableBlock,
   TableMeasure,
-} from '@eigenpal/docx-editor-core/layout-engine';
+} from '@eigenpal/docx-editor-core/pagination-model';
 import { VIEWPORT_PADDING_TOP } from './styles';
 
 /**

@@ -74,7 +74,7 @@ Three serializer rules MUST be enforced or output is rejected by strict readers:
 
 ### Painter
 
-`packages/core/src/layout-painter/renderParagraph.ts` and `renderTable.ts` are the canonical painter (per CLAUDE.md). Both React and Vue inherit. Cues:
+`packages/core/src/painter-model/renderParagraph.ts` and `renderTable.ts` are the canonical painter (per CLAUDE.md). Both React and Vue inherit. Cues:
 
 - Vertical change bar in the page margin for any block carrying a structural revision attr.
 - Pilcrow glyph at the end of paragraphs with `pPrIns` (insert color) or `pPrDel` (delete color, strike).
@@ -87,7 +87,7 @@ All revision DOM carries `data-revision-id`, `data-revision-author`, `data-revis
 
 ### Cache key
 
-`paragraphCacheKey` in `packages/core/src/layout-bridge/measuring/cache.ts` MUST include the new revision-presence flags. Without this, two paragraphs with identical text and different `pPrIns` would share a cached measurement — a cross-document paint bug.
+`paragraphCacheKey` in `packages/core/src/flow-model/metrics/cache.ts` MUST include the new revision-presence flags. Without this, two paragraphs with identical text and different `pPrIns` would share a cached measurement — a cross-document paint bug.
 
 ### Review sidebar
 
@@ -113,7 +113,7 @@ No new `FlowBlock` variants. The structural attrs ride on existing block nodes. 
 ## Impact
 
 - **Schema** — additive only. Existing documents load without migration; new attrs default to `null`. Public API snapshot regenerates (`bun run api:extract`).
-- **Vue parity** — painter changes inherit via `packages/core/src/layout-painter/`. Suggestion-mode keymap is in `packages/core/`. Vue work is sidebar wiring only.
+- **Vue parity** — painter changes inherit via `packages/core/src/painter-model/`. Suggestion-mode keymap is in `packages/core/`. Vue work is sidebar wiring only.
 - **Public API** — `acceptChange` / `rejectChange` / `acceptAll` / `rejectAll` signatures unchanged. New methods on `DocxEditorRef`: `acceptChangeById`, `rejectChangeById`, `acceptChangesInRange`, `rejectChangesInRange`. New public fields on `ParagraphAttrs`, `TableAttrs`, `TableRowAttrs`, `TableCellAttrs` (all currently `@public`).
 - **Backwards compatibility** — no breaks. Files with no structural revisions are byte-identical on round-trip under canonical XML comparison. Files with structural revisions stop losing them.
 - **Agents package** — Phase 1 extends `packages/agents/src/changes.ts` to handle new structural-revision fields, or explicitly defers with a tracking issue. Decision recorded in `tasks.md`.

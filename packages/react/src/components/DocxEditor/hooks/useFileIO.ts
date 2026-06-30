@@ -13,7 +13,7 @@ import {
 } from '@eigenpal/docx-editor-core/prosemirror/extensions';
 import { readDocxFileFromInput, type DocxInput } from '@eigenpal/docx-editor-core/utils';
 import { insertImageFromFile } from '@eigenpal/docx-editor-core/prosemirror/commands';
-import { paintAllPagesNow } from '@eigenpal/docx-editor-core/layout-painter';
+import { paintAllPagesNow } from '@eigenpal/docx-editor-core/painter-model';
 import type { EditorView } from 'prosemirror-view';
 import type { PagedEditorRef } from '../PagedEditor';
 

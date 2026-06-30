@@ -12,9 +12,9 @@
 - [x] 2.1 Move `src/docx/` → `packages/core/src/docx/`
 - [x] 2.2 Move `src/types/` → `packages/core/src/types/`
 - [x] 2.3 Move `src/prosemirror/` → `packages/core/src/prosemirror/`
-- [x] 2.4 Move `src/layout-engine/` → `packages/core/src/layout-engine/`
-- [x] 2.5 Move `src/layout-painter/` → `packages/core/src/layout-painter/`
-- [x] 2.6 Move `src/layout-bridge/` → `packages/core/src/layout-bridge/`
+- [x] 2.4 Move `src/pagination-model/` → `packages/core/src/pagination-model/`
+- [x] 2.5 Move `src/painter-model/` → `packages/core/src/painter-model/`
+- [x] 2.6 Move `src/flow-model/` → `packages/core/src/flow-model/`
 - [x] 2.7 Move `src/core-plugins/` → `packages/core/src/core-plugins/`
 - [x] 2.8 Move `src/utils/` → `packages/core/src/utils/`
 - [x] 2.9 Move `src/agent/` → `packages/core/src/agent/`
