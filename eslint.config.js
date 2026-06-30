@@ -85,6 +85,13 @@ const commonRules = {
   'no-console': ['warn', { allow: ['warn', 'error'] }],
   'prefer-const': 'error',
   'max-lines': ['error', { max: 1000, skipBlankLines: false, skipComments: false }],
+  // Loop labels are minified to single characters, and Vite's SSR
+  // module-runner transform (vite-node — Nuxt's dev server) rewrites imported
+  // bindings to `__vite_ssr_import_N__.<name>` *in label position too*. A
+  // minified label that collides with an imported binding of the same name
+  // emits `__vite_ssr_import_6__.e: for (...)` — a syntax error that 500s SSR.
+  // We ship these bundles to consumers, so keep the emitted JS label-free.
+  'no-labels': 'error',
 };
 
 export default [
@@ -191,7 +198,7 @@ export default [
     },
   },
 
-  // pagination-model/types.ts is the canonical schema definition for the
+  // pagination/types.ts is the canonical schema definition for the
   // layout model — single file by design (cross-referencing types). Bumped
   // modestly above the default to accommodate new revision-tracking and
   // table-pagination fields without forcing a split that would obscure the
