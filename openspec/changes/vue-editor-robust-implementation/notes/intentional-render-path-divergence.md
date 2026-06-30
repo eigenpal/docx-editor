@@ -1,6 +1,6 @@
 # Intentional render-path divergence
 
-Both adapters render the visible pages via `packages/core/src/layout-painter/`.
+Both adapters render the visible pages via `packages/core/src/painter-model/`.
 React's old PM-node render component wrappers were removed during the
 source-tree parity cleanup, so Vue no longer needs matching omissions for
 that dead render-component tree.

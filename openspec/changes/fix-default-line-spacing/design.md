@@ -24,7 +24,7 @@ The 1.15 multiplier is Word's _convention for new documents_ (Normal style has `
 
 - Correct the default line spacing to match OOXML spec (1.0× when unspecified)
 - Ensure documents with explicit `w:line=276` continue to render at 1.15×
-- Align all rendering paths (layout engine, layout-painter, PM hidden view)
+- Align all rendering paths (layout engine, painter-model, PM hidden view)
 
 **Non-Goals:**
 

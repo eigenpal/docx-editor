@@ -37,7 +37,7 @@
 
 ## Contextual spacing
 
-- [ ] In layout-painter spacing calculation, check `contextualSpacing` flag
+- [ ] In painter-model spacing calculation, check `contextualSpacing` flag
 - [ ] Compare current and previous paragraph styles
 - [ ] Suppress spaceBefore/spaceAfter when same style and flag is set
 - [ ] Test with consecutive list items that have contextualSpacing

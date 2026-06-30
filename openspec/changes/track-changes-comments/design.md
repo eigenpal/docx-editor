@@ -1,6 +1,6 @@
 ## Context
 
-The Eigenpal DOCX Editor uses a dual-rendering architecture: a hidden ProseMirror instance handles editing state while a layout-painter system renders visible pages. The editor already has foundational infrastructure for comments and tracked changes:
+The Eigenpal DOCX Editor uses a dual-rendering architecture: a hidden ProseMirror instance handles editing state while a painter-model system renders visible pages. The editor already has foundational infrastructure for comments and tracked changes:
 
 - **CommentExtension** mark (yellow highlight, `commentId` attribute)
 - **InsertionExtension** / **DeletionExtension** marks (green underline / red strikethrough, with `revisionId`, `author`, `date`)

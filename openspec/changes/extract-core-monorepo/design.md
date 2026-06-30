@@ -1,6 +1,6 @@
 ## Context
 
-The editor is currently a single npm package (`@eigenpal/docx-editor-react`) with ~80% framework-agnostic code and ~20% React UI. The codebase already has clean internal boundaries — separate entry points (`core.ts`, `headless.ts`, `react.ts`, `ui.ts`) and framework-agnostic directories (`src/docx/`, `src/types/`, `src/prosemirror/`, `src/layout-engine/`, `src/layout-painter/`, `src/layout-bridge/`). A community contributor wants to build a Vue wrapper, which requires the core to be importable without React dependencies.
+The editor is currently a single npm package (`@eigenpal/docx-editor-react`) with ~80% framework-agnostic code and ~20% React UI. The codebase already has clean internal boundaries — separate entry points (`core.ts`, `headless.ts`, `react.ts`, `ui.ts`) and framework-agnostic directories (`src/docx/`, `src/types/`, `src/prosemirror/`, `src/pagination-model/`, `src/painter-model/`, `src/flow-model/`). A community contributor wants to build a Vue wrapper, which requires the core to be importable without React dependencies.
 
 Current state:
 
@@ -59,9 +59,9 @@ Current state:
 - `src/docx/` — DOCX parsing, serialization, XML handling
 - `src/types/` — document model types
 - `src/prosemirror/` — schema, extensions, plugins, commands, conversions
-- `src/layout-engine/` — pagination algorithm
-- `src/layout-painter/` — vanilla DOM rendering
-- `src/layout-bridge/` — hit-testing, position mapping
+- `src/pagination-model/` — pagination algorithm
+- `src/painter-model/` — vanilla DOM rendering
+- `src/flow-model/` — hit-testing, position mapping
 - `src/core-plugins/` — plugin registry
 - `src/utils/` — all utilities (with React type leaks cleaned up)
 - `src/agent/` — DocumentAgent API

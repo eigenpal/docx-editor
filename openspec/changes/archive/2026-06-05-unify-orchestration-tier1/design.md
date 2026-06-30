@@ -6,7 +6,7 @@ Code mapping established (file:line) for each target:
 
 - **paraText helpers** — React `internals/pmAnchors.ts:52-64` + `internals/vanillaText.ts:13-93`; Vue `utils/paraTextHelpers.ts` (carries the `TODO(file-size-cap)` to move to core).
 - **Query helpers** — React inline closures `useDocxEditorRefApi.ts:383-485`; Vue pure functions `utils/refApiQueries.ts:28,74,102`.
-- **domSelection dedup** — React `internals/domSelection.ts:29-113` (`getCaretFromDom`) + `:123-192` (`computeSelectionGeometryFromDom`) duplicate core `getCaretPositionFromDom` / `readSelectionGeometry` (`layout-bridge/resolveDomPosition.ts:477,398`). `applyCellSelectionHighlight` at `:204-255`. Vue already calls core for the first two (`useSelectionSync.ts:178,207`) and lacks the third.
+- **domSelection dedup** — React `internals/domSelection.ts:29-113` (`getCaretFromDom`) + `:123-192` (`computeSelectionGeometryFromDom`) duplicate core `getCaretPositionFromDom` / `readSelectionGeometry` (`flow-model/resolveDomPosition.ts:477,398`). `applyCellSelectionHighlight` at `:204-255`. Vue already calls core for the first two (`useSelectionSync.ts:178,207`) and lacks the third.
 - **applyFormatting** — React `useDocxEditorRefApi.ts:228-381`; Vue `useFormattingActions.ts:82-213`. Mark body byte-for-byte identical; differ only on how `EditorView` and the style resolver are obtained, plus import path (Vue reaches `/commands/paragraph`, React uses the index).
 - **Table-resize** — React readers/commits isolated in `internals/tableResize.ts:40-196`, FSM in `useTableResizeState.ts`; Vue inlines both in `useTableResize.ts:226-399`.
 - **Image commit** — React `useImageInteractions.ts:44-149`; Vue `ImageSelectionOverlay.vue:574-651` (commit ~`627-702`).
@@ -33,8 +33,8 @@ Constraints: core `package.json` `exports` is explicit (62 keys, no wildcards) �
 
 ## Decisions
 
-**1. New core modules live under `packages/core/src/prosemirror/` (and `layout-bridge/` for DOM-selection items), one explicit `exports` key each.**
-Rationale: matches the existing layout — commands, content controls, and conversion already sit under `prosemirror/`; `resolveDomPosition` sits under `layout-bridge/`. Alternative (a fresh `core/editor/` namespace) is reserved for Tier 2's engine and would imply more than these leaf functions belong there. Proposed homes: `prosemirror/paraText.ts`, `prosemirror/queries.ts`, `prosemirror/applyFormatting.ts`, `prosemirror/tableResize.ts`, `prosemirror/imageCommit.ts`, `prosemirror/commentOps.ts`; `layout-bridge/cellSelectionHighlight.ts`; auto-scroll math co-located with `utils/findVerticalScrollParent` (already core).
+**1. New core modules live under `packages/core/src/prosemirror/` (and `flow-model/` for DOM-selection items), one explicit `exports` key each.**
+Rationale: matches the existing layout — commands, content controls, and conversion already sit under `prosemirror/`; `resolveDomPosition` sits under `flow-model/`. Alternative (a fresh `core/editor/` namespace) is reserved for Tier 2's engine and would imply more than these leaf functions belong there. Proposed homes: `prosemirror/paraText.ts`, `prosemirror/queries.ts`, `prosemirror/applyFormatting.ts`, `prosemirror/tableResize.ts`, `prosemirror/imageCommit.ts`, `prosemirror/commentOps.ts`; `flow-model/cellSelectionHighlight.ts`; auto-scroll math co-located with `utils/findVerticalScrollParent` (already core).
 
 **2. Adapters delegate, and keep their old import paths via thin re-exports where call sites are many.**
 Rationale: `pmAnchors.ts`/`vanillaText.ts`/`paraTextHelpers.ts` have ~10 import sites; re-exporting from core avoids churn and keeps each PR small. New delegations (ref methods, commit calls) call core directly.

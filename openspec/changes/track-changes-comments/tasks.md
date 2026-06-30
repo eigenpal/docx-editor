@@ -75,8 +75,8 @@
 ## 9. Visual Polish & Edge Cases
 
 - [x] 9.1 Enhance comment text highlighting in `renderParagraph.ts`: yellow/amber background with data-comment-id attribute
-- [x] 9.2 Ensure insertion mark renders with green color + underline in layout-painter
-- [x] 9.3 Ensure deletion mark renders with red color + strikethrough in layout-painter
+- [x] 9.2 Ensure insertion mark renders with green color + underline in painter-model
+- [x] 9.3 Ensure deletion mark renders with red color + strikethrough in painter-model
 - [ ] 9.4 Handle overlapping comments (multiple comments on same text): stack highlights with different opacities
 - [x] 9.5 Prevent PM focus stealing from sidebar interactions (`onMouseDown` stopPropagation on sidebar)
 - [x] 9.6 Add smooth CSS transitions for sidebar open/close animation (200ms ease)

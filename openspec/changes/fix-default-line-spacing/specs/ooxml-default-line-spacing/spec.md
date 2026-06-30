@@ -29,7 +29,7 @@ Where `singleLineRatio` is the font's OS/2 metric ratio `(usWinAscent + usWinDes
 
 ### Requirement: All rendering paths use consistent default
 
-The default line spacing multiplier SHALL be consistent across the layout engine measurement, the visible page rendering (layout-painter), and the ProseMirror hidden view.
+The default line spacing multiplier SHALL be consistent across the layout engine measurement, the visible page rendering (painter-model), and the ProseMirror hidden view.
 
 #### Scenario: Layout measurement matches visible rendering
 

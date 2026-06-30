@@ -13,7 +13,7 @@ Documents using these borders for visual grouping (legal documents, callout boxe
 
 - Render `w:between` borders as horizontal lines between consecutive paragraphs in the same border group
 - Render `w:bar` borders as vertical lines on the left side of paragraphs
-- Parser already handles these; fix is in the layout-painter rendering pipeline
+- Parser already handles these; fix is in the painter-model rendering pipeline
 
 ## Out of scope
 

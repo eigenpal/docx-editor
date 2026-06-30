@@ -24,12 +24,12 @@ Three landable phases. Each phase is a separate PR. Phase 1 includes the snapsho
 
 ### Cache key
 
-- [ ] `packages/core/src/layout-bridge/measuring/cache.ts` — extend `paragraphCacheKey` to include `pPrIns`/`pPrDel`/`pPrChange`/`paraRPrChange`/`sectPrChange` presence flags and `revision_change` mark presence on runs
+- [ ] `packages/core/src/flow-model/metrics/cache.ts` — extend `paragraphCacheKey` to include `pPrIns`/`pPrDel`/`pPrChange`/`paraRPrChange`/`sectPrChange` presence flags and `revision_change` mark presence on runs
 - [ ] If `hashTableBlock` (or equivalent) exists, mirror
 
 ### FlowBlock plumbing
 
-- [ ] `packages/core/src/layout-engine/buildBoxTree*.ts` — pass the new revision attrs through into `ParagraphBlock.attrs` so measurement is consistent with the cache key
+- [ ] `packages/core/src/pagination-model/buildBoxTree*.ts` — pass the new revision attrs through into `ParagraphBlock.attrs` so measurement is consistent with the cache key
 
 ### Conversion
 
@@ -70,7 +70,7 @@ Three landable phases. Each phase is a separate PR. Phase 1 includes the snapsho
 
 ### Painter
 
-- [ ] `packages/core/src/layout-painter/renderParagraph.ts` (canonical painter; React/Vue inherit) — pilcrow `<span class="ep-revision-pilcrow ep-revision-ins" data-revision-id data-revision-author data-revision-date>¶</span>` for `pPrIns`; class `ep-revision-del` for `pPrDel`; margin change bar for `pPrChange` / `paraRPrChange` / `sectPrChange`
+- [ ] `packages/core/src/painter-model/renderParagraph.ts` (canonical painter; React/Vue inherit) — pilcrow `<span class="ep-revision-pilcrow ep-revision-ins" data-revision-id data-revision-author data-revision-date>¶</span>` for `pPrIns`; class `ep-revision-del` for `pPrDel`; margin change bar for `pPrChange` / `paraRPrChange` / `sectPrChange`
 - [ ] Section gutter cue for `sectPrChange` (carries `sectPrChangeBodyLevel` to position the cue correctly)
 - [ ] All revision DOM carries `data-revision-id`, `data-revision-author`, `data-revision-date`
 
@@ -93,7 +93,7 @@ Three landable phases. Each phase is a separate PR. Phase 1 includes the snapsho
 
 ### Vue parity
 
-- [ ] Verify painter changes inherit transparently (changes are in `packages/core/src/layout-painter/`)
+- [ ] Verify painter changes inherit transparently (changes are in `packages/core/src/painter-model/`)
 - [ ] Mirror sidebar wiring in `packages/vue/src/`
 - [ ] Update `scripts/parity/parity.contract.json` with new `DocxEditorRef` methods (paired bucket)
 
@@ -176,7 +176,7 @@ Three landable phases. Each phase is a separate PR. Phase 1 includes the snapsho
 
 ### Painter
 
-- [ ] `packages/core/src/layout-painter/renderTable.ts` — colored border on revised rows/cells, change bar, strikethrough for deletions
+- [ ] `packages/core/src/painter-model/renderTable.ts` — colored border on revised rows/cells, change bar, strikethrough for deletions
 - [ ] Dashed boundary for unaccepted vertical `cellMerge`
 - [ ] `data-revision-id`, `data-revision-author`, `data-revision-date` on all revision DOM
 
