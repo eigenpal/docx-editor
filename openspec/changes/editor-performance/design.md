@@ -63,7 +63,7 @@ With 100+ changes, this multiplies DOM nodes and event listeners significantly.
 
 | File                                       | Change                           |
 | ------------------------------------------ | -------------------------------- |
-| `src/layout-painter/paintPage.ts`         | Incremental rendering            |
+| `src/painter-model/paintPage.ts`         | Incremental rendering            |
 | `src/paged-editor/PagedEditor.tsx`         | Chunked page rendering           |
 | `src/docx/parser.ts`                       | Web Worker offloading            |
 | `src/prosemirror/conversion/toProseDoc.ts` | PM doc construction optimization |

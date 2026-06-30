@@ -25,6 +25,6 @@ Ensure tab stop rendering in headers/footers uses the correct page width and mar
 
 | File                                    | Change                                      |
 | --------------------------------------- | ------------------------------------------- |
-| `src/layout-painter/paintPage.ts`      | Header/footer area sizing                   |
-| `src/layout-painter/renderParagraph.ts` | Tab stop alignment in header/footer context |
+| `src/painter-model/paintPage.ts`      | Header/footer area sizing                   |
+| `src/painter-model/renderParagraph.ts` | Tab stop alignment in header/footer context |
 | `src/docx/sectionParser.ts`             | Verify header/footer distance parsing       |

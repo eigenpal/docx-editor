@@ -40,6 +40,6 @@ When a row must split across pages (cell content too tall):
 
 | File                                | Change                                        |
 | ----------------------------------- | --------------------------------------------- |
-| `src/layout-painter/renderTable.ts` | Merged cells, indentation, height, pagination |
-| `src/layout-painter/paintPage.ts`  | Table flow block, page break coordination     |
+| `src/painter-model/renderTable.ts` | Merged cells, indentation, height, pagination |
+| `src/painter-model/paintPage.ts`  | Table flow block, page break coordination     |
 | `src/docx/tableParser.ts`           | Verify header row flag parsing                |

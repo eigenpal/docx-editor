@@ -8,7 +8,7 @@ Run after the eng-review + outside voice challenged the premise (class vs pure-f
 
 **Derivable inside `run` from `document` (NOT irreducible inputs):**
 
-- `pageSize, margins, finalPageSize, finalMargins` ← `getPageSize`/`getMargins(sectionProperties)` — **already core** (`layout-bridge/sectionGeometry.ts:28,44`).
+- `pageSize, margins, finalPageSize, finalMargins` ← `getPageSize`/`getMargins(sectionProperties)` — **already core** (`flow-model/sectionGeometry.ts:28,44`).
 - `columns, finalColumns` ← `getColumns(...)` — React-local pure fn (`internals/columnLayout.ts:26`), lifts trivially.
 - `contentWidth` ← derived from pageSize − margins.
 - `sectionProperties, finalSectionProperties` ← from `document`.

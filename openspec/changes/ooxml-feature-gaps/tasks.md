@@ -5,7 +5,7 @@
 - [ ] Check if `a:hlinkClick` is parsed from DrawingML in `drawingParser.ts`
 - [ ] If not, add parsing of `a:hlinkClick` relationship ID
 - [ ] Resolve relationship ID to URL from .rels
-- [ ] Wrap image in `<a>` tag in layout-painter
+- [ ] Wrap image in `<a>` tag in painter-model
 - [ ] Test with DOCX containing clickable image in footer
 
 ## TIFF images
@@ -39,7 +39,7 @@
 
 - [ ] Check if `w:sep` is parsed from `w:cols` in section properties
 - [ ] If not, add parsing
-- [ ] Render vertical line between columns in layout-painter
+- [ ] Render vertical line between columns in painter-model
 - [ ] Position at midpoint between columns, full column height
 - [ ] Test with DOCX using "Line between" columns option
 

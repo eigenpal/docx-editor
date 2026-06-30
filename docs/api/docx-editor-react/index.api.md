@@ -20,7 +20,7 @@ import { EditorView } from 'prosemirror-view';
 import { FontDefinition } from '@eigenpal/docx-editor-core/utils';
 import { FontOption } from '@eigenpal/docx-editor-core/utils/fontOptions';
 import { HeaderFooter } from '@eigenpal/docx-editor-core/types/document';
-import { Layout } from '@eigenpal/docx-editor-core/layout-engine';
+import { Layout } from '@eigenpal/docx-editor-core/pagination-model';
 import { PMContentControl } from '@eigenpal/docx-editor-core/prosemirror';
 import { PrintOptions } from '@eigenpal/docx-editor-core';
 import * as prosemirror_state from 'prosemirror-state';

@@ -23,9 +23,9 @@ Documents that explicitly specify `line=276` (most Word-created documents) are u
 
 ## Impact
 
-- `packages/core/src/layout-bridge/measuring/paragraphLayout.ts` — fallback line height calculation
-- `packages/core/src/layout-bridge/measuring/textMetrics.ts` — `DEFAULT_LINE_HEIGHT_MULTIPLIER` constant
-- `packages/core/src/layout-painter/renderParagraph.ts` — visible page rendering line height default
+- `packages/core/src/flow-model/metrics/paragraphLayout.ts` — fallback line height calculation
+- `packages/core/src/flow-model/metrics/textMetrics.ts` — `DEFAULT_LINE_HEIGHT_MULTIPLIER` constant
+- `packages/core/src/painter-model/renderParagraph.ts` — visible page rendering line height default
 - `packages/core/src/prosemirror/extensions/core/ParagraphExtension.ts` — PM toDOM line height
 - Documents without explicit line spacing will render more compactly (correct behavior)
 - Existing tests may need line height expectations updated

@@ -2,7 +2,7 @@
 
 Today the docx-editor has two rendering models running simultaneously:
 
-- **Body**: hidden ProseMirror EditorView at `left: -9999px` (`packages/react/src/components/DocxEditor/OffscreenEditorHost.tsx`) plus a visible painter (`packages/core/src/layout-painter/paintPage.ts`). Click on the painter → `resolveDomPosition` → PM `setSelection` → painter re-renders. One renderer, true WYSIWYG.
+- **Body**: hidden ProseMirror EditorView at `left: -9999px` (`packages/react/src/components/DocxEditor/OffscreenEditorHost.tsx`) plus a visible painter (`packages/core/src/painter-model/paintPage.ts`). Click on the painter → `resolveDomPosition` → PM `setSelection` → painter re-renders. One renderer, true WYSIWYG.
 - **Headers/footers**: same painter for normal display, but on double-click `InlineHeaderFooterEditor.tsx` (~513 lines) mounts a **second visible PM EditorView** on top of the painter. CSS hides the painted HF region during edit; PM's native `toDOM` tables become the visible layer. The two pipelines disagree about column widths, vertical alignment, line-box height, and row distribution — issue #468 already took three CSS patches to bring them visually closer.
 
 Two reviewer agents (code architect + OOXML specialist) independently concluded the architectural fix is to put HF editing on the body's hidden-PM + visible-painter model. The OOXML reviewer specifically warned against the "make the painter editable, no PM" alternative (would force us to re-invent selection / IME / undo / a11y in the painter — neither Word nor LibreOffice nor Google Docs took that path).
@@ -65,7 +65,7 @@ When a new HF part is materialized at runtime (e.g., the user toggles `titlePg` 
 
 **Alternatives considered:**
 
-- **Single global `resolveDomPosition` with a multi-PM lookup.** Cleaner caller, but the hit-test query mixes body and HF DOM ranges. The scoped variant matches the existing pattern: `collectBodySpans` already scopes to `.layout-page-content` (`packages/core/src/layout-bridge/collectBodySpans.ts:13-15` — the comment literally says HF callers "should write their own queries scoped to those classes").
+- **Single global `resolveDomPosition` with a multi-PM lookup.** Cleaner caller, but the hit-test query mixes body and HF DOM ranges. The scoped variant matches the existing pattern: `collectBodySpans` already scopes to `.layout-page-content` (`packages/core/src/flow-model/collectBodySpans.ts:13-15` — the comment literally says HF callers "should write their own queries scoped to those classes").
 
 **Rationale:** Scoped queries are the existing pattern in `collectBodySpans`. The same convention applied to HF means no new architectural primitive — just a sibling helper `findHfPmSpans(slot)`.
 
@@ -102,7 +102,7 @@ When a new HF part is materialized at runtime (e.g., the user toggles `titlePg` 
 
 ### 7. Vue parity is mandatory, lifted into core where possible
 
-**Chosen:** Land the React changes first to validate the model, then port to `packages/vue/src/composables/useDocxEditor.ts`. Where the new abstraction is platform-agnostic (e.g., `findHfPmSpans` helper, the projection sync logic), lift into `packages/core/`. The float-zone pipeline in `packages/core/src/layout-bridge/measuring/measureBlocksPipeline.ts` is the canonical example to mirror.
+**Chosen:** Land the React changes first to validate the model, then port to `packages/vue/src/composables/useDocxEditor.ts`. Where the new abstraction is platform-agnostic (e.g., `findHfPmSpans` helper, the projection sync logic), lift into `packages/core/`. The float-zone pipeline in `packages/core/src/flow-model/metrics/measureBlocksPipeline.ts` is the canonical example to mirror.
 
 **Rationale:** CLAUDE.md's parity rule explicitly demands this. The parity contract gate (`bun run check:parity-contract`) will block merge to main until both adapters are aligned.
 

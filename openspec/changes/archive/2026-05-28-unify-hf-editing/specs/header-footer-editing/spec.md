@@ -105,7 +105,7 @@ Each hidden HF EditorView SHALL be initialized from its corresponding `Document.
 
 ### Requirement: Painter consumes HF PM document directly
 
-The painter pipeline (`convertHeaderFooterToContent` in `packages/core/src/layout-bridge/headerFooterLayout.ts`) SHALL accept either the legacy `HeaderFooter.content` array or the current PM document of the corresponding HF EditorView, and prefer the PM document when one exists for that slot.
+The painter pipeline (`convertHeaderFooterToContent` in `packages/core/src/flow-model/headerFooterLayout.ts`) SHALL accept either the legacy `HeaderFooter.content` array or the current PM document of the corresponding HF EditorView, and prefer the PM document when one exists for that slot.
 
 #### Scenario: PM-driven paint after edit
 
