@@ -553,6 +553,8 @@ const {
   parseError,
   documentFonts,
   layout,
+  blocks,
+  measures,
   loadBuffer,
   loadDocument: loadParsedDocument,
   save: saveBlob,
@@ -1125,6 +1127,10 @@ const selectionSync = useSelectionSync({
   selectedImage,
   isHfEditing,
   imageInteracting,
+  readOnly,
+  layout,
+  blocks,
+  measures,
 });
 
 updateSelectionOverlay();

@@ -7,6 +7,38 @@ import { resolve } from 'path';
 // package ships .vue SFCs that need the @vitejs/plugin-vue compiler step.
 // External: vue, prosemirror-*, and the editor core — consumers bring those.
 export default defineConfig({
+  resolve: {
+    alias: [
+      {
+        find: /^@eigenpal\/docx-editor-core\/flow-model\/(.+)$/,
+        replacement: resolve(__dirname, '../core/src/flow-model/$1'),
+      },
+      {
+        find: '@eigenpal/docx-editor-core/flow-model',
+        replacement: resolve(__dirname, '../core/src/flow-model/index.ts'),
+      },
+      {
+        find: /^@eigenpal\/docx-editor-core\/painter-model\/(.+)$/,
+        replacement: resolve(__dirname, '../core/src/painter-model/$1'),
+      },
+      {
+        find: '@eigenpal/docx-editor-core/painter-model',
+        replacement: resolve(__dirname, '../core/src/painter-model/index.ts'),
+      },
+      {
+        find: /^@eigenpal\/docx-editor-core\/pagination-model\/(.+)$/,
+        replacement: resolve(__dirname, '../core/src/pagination-model/$1'),
+      },
+      {
+        find: '@eigenpal/docx-editor-core/pagination-model',
+        replacement: resolve(__dirname, '../core/src/pagination-model/index.ts'),
+      },
+      {
+        find: '@eigenpal/docx-editor-core/editor',
+        replacement: resolve(__dirname, '../core/src/editor/index.ts'),
+      },
+    ],
+  },
   plugins: [
     vue(),
     // Exclude __tests__ + *.test-d.ts so type-level conformance tests don't
@@ -48,7 +80,13 @@ export default defineConfig({
       cssFileName: 'docx-editor-vue',
     },
     rollupOptions: {
-      external: ['vue', /^@eigenpal\/docx-editor-core(\/.*)?$/, /^prosemirror-/],
+      external: (id) => {
+        if (id === 'vue' || /^prosemirror-/.test(id)) return true;
+        if (!id.startsWith('@eigenpal/docx-editor-core')) return false;
+        return !/^@eigenpal\/docx-editor-core\/(?:editor|flow-model|painter-model|pagination-model)(?:\/|$)/.test(
+          id
+        );
+      },
     },
     emptyOutDir: true,
   },

@@ -81,7 +81,7 @@ import type {
   TextBoxBlock,
 } from '@eigenpal/docx-editor-core/pagination-model/types';
 import {
-  buildBlockLookup,
+  indexBlocksById,
   enclosingSdtGroupIds,
   applySdtFocus,
 } from '@eigenpal/docx-editor-core/painter-model';
@@ -227,6 +227,15 @@ export interface UseDocxEditorReturn {
   documentFonts: Ref<FontOption[]>;
   /** Computed page layout. */
   layout: ShallowRef<Layout | null>;
+  /**
+   * The flow blocks behind the current `layout`, and their measures.
+   *
+   * Selection mapping needs them when the painted DOM can't answer — a page
+   * virtualization hasn't rendered, or the frame before a repaint lands. Without
+   * a layout-math fallback the caret simply disappears in those moments.
+   */
+  blocks: ShallowRef<FlowBlock[]>;
+  measures: ShallowRef<Measure[]>;
   /** Load a DOCX from a binary buffer. */
   loadBuffer: (buffer: ArrayBuffer | Uint8Array | Blob | File) => Promise<void>;
   /** Load a parsed `Document` directly. */
@@ -306,6 +315,15 @@ export function useDocxEditor(options: UseDocxEditorOptions): UseDocxEditorRetur
    * Mirrors React's pagedEditorRef.current.getLayout().
    */
   const layout = shallowRef<Layout | null>(null);
+  /**
+   * The flow blocks and their measures behind the current `layout`.
+   *
+   * Exposed because selection mapping needs them when the painted DOM can't
+   * answer — a virtualized page, or the frame before a repaint lands. React
+   * keeps the same pair on its `PagedEditor` state for the same reason.
+   */
+  const blocks = shallowRef<FlowBlock[]>([]);
+  const measures = shallowRef<Measure[]>([]);
 
   // Use the singleton extension manager — same schema used by toProseDoc/commands
   const mgr = singletonManager;
@@ -345,8 +363,8 @@ export function useDocxEditor(options: UseDocxEditorOptions): UseDocxEditorRetur
         initialSp
       );
       const {
-        blocks,
-        measures,
+        blocks: newBlocks,
+        measures: newMeasures,
         layout: newLayout,
         headerContentForRender,
         footerContentForRender,
@@ -379,9 +397,11 @@ export function useDocxEditor(options: UseDocxEditorOptions): UseDocxEditorRetur
       });
 
       layout.value = newLayout;
+      blocks.value = newBlocks;
+      measures.value = newMeasures;
 
       // Step 6: Build block lookup and paint
-      const blockLookup = buildBlockLookup(blocks, measures);
+      const blockLookup = indexBlocksById(newBlocks, newMeasures);
 
       paintPages(newLayout.pages, container, {
         pageGap,
@@ -893,6 +913,8 @@ export function useDocxEditor(options: UseDocxEditorOptions): UseDocxEditorRetur
     parseError,
     documentFonts,
     layout,
+    blocks,
+    measures,
 
     // Actions
     loadBuffer,
