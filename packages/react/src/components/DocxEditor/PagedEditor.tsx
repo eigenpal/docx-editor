@@ -116,7 +116,15 @@ export interface PagedEditorProps {
   /** Plugin overlays to render inside the viewport. */
   pluginOverlays?: React.ReactNode;
   /** Callback when header or footer is double-clicked for editing. */
-  onHeaderFooterDoubleClick?: (position: 'header' | 'footer', pageNumber?: number) => void;
+  onHeaderFooterDoubleClick?: (
+    position: 'header' | 'footer',
+    pageNumber?: number,
+    target?: {
+      rId: string | null;
+      variant: 'default' | 'first' | 'even';
+      sectionIndex: number;
+    }
+  ) => void;
   /** Active header/footer editing mode (dims body, intercepts body clicks). */
   hfEditMode?: 'header' | 'footer' | null;
   /** Called when user clicks the body area while in HF editing mode. */
