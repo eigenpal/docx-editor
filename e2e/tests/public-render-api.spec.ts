@@ -1,6 +1,7 @@
 import { expect, test } from '@playwright/test';
 import {
   PUBLIC_RENDER_API_MODULE,
+  renderDocumentThroughPublicApi,
   renderFixtureThroughPublicApi,
 } from '../helpers/public-render-api';
 
@@ -43,6 +44,165 @@ test.describe('public rendering facade', () => {
     expect(result.boxCount).toBeGreaterThan(0);
     expect(result.caretHeight).toBeGreaterThan(0);
     expect(result.selectionBoxCount).toBeGreaterThan(0);
+  });
+
+  test('keeps body and header/footer position spaces distinct', async ({ page }) => {
+    await renderFixtureThroughPublicApi(page, 'header-with-table.docx');
+
+    const result = await page.evaluate(async (apiModule) => {
+      const api = (await import(apiModule)) as {
+        caretAt(
+          document: unknown,
+          position: number
+        ): { region: 'body' | 'header' | 'footer' } | null;
+      };
+      const rendered = (
+        window as unknown as {
+          __publicRenderedDocument: {
+            pages: readonly {
+              boxes: readonly {
+                region: 'body' | 'header' | 'footer';
+                docFrom?: number;
+                docTo?: number;
+              }[];
+            }[];
+          };
+        }
+      ).__publicRenderedDocument;
+      const boxes = rendered.pages.flatMap((renderedPage) => renderedPage.boxes);
+      const body = boxes.find((box) => box.region === 'body' && box.docFrom !== undefined);
+      const header = boxes.find((box) => box.region === 'header' && box.docFrom !== undefined);
+      const headerAnchor = rendered.root.querySelector<HTMLElement>(
+        '.layout-page-header [data-doc-from]'
+      );
+      if (body?.docFrom !== undefined && headerAnchor) {
+        headerAnchor.dataset.docFrom = String(body.docFrom);
+        if (body.docTo !== undefined) headerAnchor.dataset.docTo = String(body.docTo);
+      }
+      const caret = body?.docFrom === undefined ? null : api.caretAt(rendered, body.docFrom);
+      return {
+        regions: [...new Set(boxes.map((box) => box.region))],
+        hasHeader: !!header,
+        hasNumericCollision:
+          body?.docFrom !== undefined &&
+          headerAnchor?.dataset.docFrom === String(body.docFrom) &&
+          headerAnchor?.dataset.docTo === String(body.docTo),
+        caretRegion: caret?.region ?? null,
+      };
+    }, PUBLIC_RENDER_API_MODULE);
+
+    expect(result.regions).toContain('body');
+    expect(result.hasHeader).toBe(true);
+    expect(result.hasNumericCollision).toBe(true);
+    expect(result.caretRegion).toBe('body');
+  });
+
+  test('snapshots every virtualized page and resolves zoomed cross-page geometry', async ({
+    page,
+  }) => {
+    const pageCount = 10;
+    const content = Array.from({ length: pageCount }, (_, index) => ({
+      type: 'paragraph',
+      paraId: `public-page-${index + 1}`,
+      content: [
+        {
+          type: 'run',
+          content: [{ type: 'text', text: `Public page ${index + 1}` }],
+        },
+        ...(index < pageCount - 1
+          ? [
+              {
+                type: 'run',
+                content: [{ type: 'break', breakType: 'page' }],
+              },
+            ]
+          : []),
+      ],
+    }));
+    await renderDocumentThroughPublicApi(page, {
+      package: { document: { content } },
+    });
+
+    const result = await page.evaluate(async (apiModule) => {
+      type Box = {
+        x: number;
+        y: number;
+        width: number;
+        height: number;
+        pageIndex: number;
+        region: 'body' | 'header' | 'footer';
+        docFrom?: number;
+        docTo?: number;
+      };
+      type Rendered = {
+        root: HTMLElement;
+        pages: readonly { boxes: readonly Box[] }[];
+      };
+      const api = (await import(apiModule)) as {
+        caretAt(document: Rendered, position: number): Box | null;
+        rectsFor(document: Rendered, from: number, to: number): readonly Box[];
+      };
+      const rendered = (
+        window as unknown as { __publicRenderedDocument: Rendered }
+      ).__publicRenderedDocument;
+      const first = rendered.pages[0]?.boxes.find(
+        (box) => box.region === 'body' && box.docFrom !== undefined && box.docTo !== undefined
+      );
+      const last = rendered.pages.at(-1)?.boxes.find(
+        (box) => box.region === 'body' && box.docFrom !== undefined && box.docTo !== undefined
+      );
+      if (
+        first?.docFrom === undefined ||
+        first.docTo === undefined ||
+        last?.docFrom === undefined ||
+        last.docTo === undefined
+      ) {
+        throw new Error('cross-page body anchors missing');
+      }
+
+      const beforeCaret = api.caretAt(rendered, last.docFrom);
+      const beforeRange = api.rectsFor(rendered, first.docFrom, last.docTo);
+      rendered.root.style.transform = 'scale(1.5)';
+      rendered.root.style.transformOrigin = 'top left';
+      const zoomedCaret = api.caretAt(rendered, last.docFrom);
+      const zoomedRange = api.rectsFor(rendered, first.docFrom, last.docTo);
+
+      return {
+        pageCount: rendered.pages.length,
+        pageBoxCounts: rendered.pages.map((renderedPage) => renderedPage.boxes.length),
+        emptyPaintedPages: [...rendered.root.querySelectorAll<HTMLElement>('.layout-page')].filter(
+          (pageElement) => pageElement.childElementCount === 0
+        ).length,
+        lastPageText:
+          rendered.root.querySelector<HTMLElement>('.layout-page:last-child')?.textContent ?? '',
+        caretPage: beforeCaret?.pageIndex ?? -1,
+        rangePages: [...new Set(beforeRange.map((box) => box.pageIndex))],
+        allRangeBoxesBody: beforeRange.every((box) => box.region === 'body'),
+        zoomedRangePages: [...new Set(zoomedRange.map((box) => box.pageIndex))],
+        caretDelta:
+          beforeCaret && zoomedCaret
+            ? {
+                x: Math.abs(beforeCaret.x - zoomedCaret.x),
+                y: Math.abs(beforeCaret.y - zoomedCaret.y),
+                height: Math.abs(beforeCaret.height - zoomedCaret.height),
+              }
+            : null,
+      };
+    }, PUBLIC_RENDER_API_MODULE);
+
+    expect(result.pageCount).toBeGreaterThanOrEqual(9);
+    expect(result.pageBoxCounts.every((count) => count > 0)).toBe(true);
+    expect(result.emptyPaintedPages).toBe(0);
+    expect(result.lastPageText).toContain(`Public page ${pageCount}`);
+    expect(result.caretPage).toBe(result.pageCount - 1);
+    expect(result.rangePages).toContain(0);
+    expect(result.rangePages).toContain(result.pageCount - 1);
+    expect(result.zoomedRangePages).toEqual(result.rangePages);
+    expect(result.allRangeBoxesBody).toBe(true);
+    expect(result.caretDelta).not.toBeNull();
+    expect(result.caretDelta!.x).toBeLessThan(1);
+    expect(result.caretDelta!.y).toBeLessThan(1);
+    expect(result.caretDelta!.height).toBeLessThan(1);
   });
 
   test('paints DOCX superscript and subscript without changing line boxes', async ({ page }) => {
