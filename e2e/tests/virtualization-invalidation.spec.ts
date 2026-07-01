@@ -148,3 +148,110 @@ test('virtualized pages repaint semantic body and same-height header edits', asy
   expect(result.paintedSignals).toBe(4);
   expect(result.stillVirtualized).toBe(true);
 });
+
+test('virtualized pages repaint section-specific header furniture', async ({ page }) => {
+  await page.goto('/');
+
+  const result = await page.evaluate(
+    async (painterModule) => {
+      const painter = (await import(painterModule)) as {
+        indexBlocksById(blocks: any[], measures: any[]): Map<string, unknown>;
+        paintPages(pages: any[], container: HTMLElement, options: Record<string, unknown>): string;
+        registerPageFurniture(page: any, furniture: Record<string, unknown>): void;
+      };
+      const paragraph = (id: string, text: string) => ({
+        kind: 'paragraph',
+        id,
+        runs: [{ kind: 'text', text, docFrom: 1, docTo: text.length + 1 }],
+      });
+      const measure = {
+        kind: 'paragraph',
+        totalHeight: 20,
+        lines: [
+          {
+            fromRun: 0,
+            fromChar: 0,
+            toRun: 0,
+            toChar: 5,
+            width: 50,
+            ascent: 14,
+            descent: 4,
+            lineHeight: 20,
+          },
+        ],
+      };
+      const header = (text: string) => ({
+        blocks: [paragraph(`header-${text}`, text)],
+        measures: [measure],
+        height: 20,
+        flowHeight: 20,
+        visualTop: 0,
+        visualBottom: 20,
+      });
+      const pages = Array.from({ length: 9 }, (_, index) => ({
+        number: index + 1,
+        size: { w: 300, h: 400 },
+        margins: { top: 40, right: 20, bottom: 40, left: 20 },
+        fragments: [
+          {
+            kind: 'paragraph',
+            blockId: `body-${index}`,
+            x: 0,
+            y: 0,
+            width: 260,
+            height: 20,
+            fromLine: 0,
+            toLine: 1,
+            docFrom: index * 10 + 1,
+            docTo: index * 10 + 6,
+          },
+        ],
+      }));
+      const blocks = pages.map((_, index) => paragraph(`body-${index}`, 'alpha'));
+      const furniture = (text: string, sectionIndex: number) => ({
+        sectionIndex,
+        sectionPageNumber: 1,
+        headerRId: `rId-${text}`,
+        footerRId: null,
+        headerVariant: 'default',
+        footerVariant: 'default',
+        headerContent: header(text),
+        headerDistance: 0,
+        footerDistance: 48,
+      });
+      for (const pageData of pages) painter.registerPageFurniture(pageData, furniture('AAAAA', 0));
+
+      const container = document.createElement('div');
+      document.body.replaceChildren(container);
+      const options = {
+        document,
+        pageGap: 24,
+        blockLookup: painter.indexBlocksById(blocks, pages.map(() => measure)),
+      };
+      painter.paintPages(pages, container, options);
+      const before =
+        container.querySelector<HTMLElement>('[data-page-number="1"] .layout-page-header')
+          ?.textContent ?? '';
+
+      painter.registerPageFurniture(pages[0], furniture('BBBBB', 1));
+      const updateKind = painter.paintPages(pages, container, options);
+      const first =
+        container.querySelector<HTMLElement>('[data-page-number="1"] .layout-page-header')
+          ?.textContent ?? '';
+      const second =
+        container.querySelector<HTMLElement>('[data-page-number="2"] .layout-page-header')
+          ?.textContent ?? '';
+      const firstSection = container.querySelector<HTMLElement>('[data-page-number="1"]')?.dataset
+        .sectionIndex;
+
+      return { before, first, second, firstSection, updateKind };
+    },
+    PAINTER_MODULE
+  );
+
+  expect(result.before).toContain('AAAAA');
+  expect(result.updateKind).toBe('incremental');
+  expect(result.first).toContain('BBBBB');
+  expect(result.second).toContain('AAAAA');
+  expect(result.firstSection).toBe('1');
+});
