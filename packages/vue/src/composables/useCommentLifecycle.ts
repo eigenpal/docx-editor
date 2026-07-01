@@ -161,7 +161,7 @@ export function useCommentLifecycle(opts: UseCommentLifecycleOptions) {
     floatingCommentBtn.value = { top, left };
   }
 
-  // Cursor-driven sidebar expand. When the cursor lands on a span
+  // LayoutCursor-driven sidebar expand. When the cursor lands on a span
   // covered by a comment / insertion / deletion mark, auto-expand
   // the matching sidebar card (and open the sidebar if it isn't
   // already).
@@ -218,7 +218,7 @@ export function useCommentLifecycle(opts: UseCommentLifecycleOptions) {
     // anchored to the selection, not at the top of the rail.
     addCommentYPosition.value = floatingCommentBtn.value?.top ?? null;
     // Stamp a pending comment mark (commentId: -1) over the selection
-    // so the painter-model writes [data-comment-id] right away — the
+    // so the painter writes [data-comment-id] right away — the
     // user sees the yellow highlight immediately instead of waiting
     // for submit.
     const commentMark = view.state.schema.marks.comment;
@@ -254,7 +254,7 @@ export function useCommentLifecycle(opts: UseCommentLifecycleOptions) {
     opts.commentCallbacks?.onCommentAdd?.(newComment);
 
     // Swap the pending `commentId: -1` mark for the real id over the
-    // captured range so the painter-model writes [data-comment-id="N"].
+    // captured range so the painter writes [data-comment-id="N"].
     const range = pendingCommentRange.value;
     if (view && range && range.from !== range.to) {
       const commentMark = view.state.schema.marks.comment;

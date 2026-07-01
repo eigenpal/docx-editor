@@ -43,7 +43,7 @@ export default defineConfig({
   ],
 
   use: {
-    baseURL: 'http://localhost:5173',
+    baseURL: process.env.PLAYWRIGHT_BASE_URL ?? 'http://localhost:5173',
     // Only trace/screenshot on failure to speed up passing tests
     trace: 'on-first-retry',
     screenshot: 'only-on-failure',

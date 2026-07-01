@@ -4,7 +4,7 @@
   sidebar is closed; clicking opens the sidebar.
 
   Anchor positions are resolved DOM-side (querySelector on
-  [data-comment-id="N"]) rather than via the React pagination-model
+  [data-comment-id="N"]) rather than via the React pagination
   anchorPositions Map, since the Vue adapter doesn't expose that.
   Same visual output, slightly different data path.
 -->

@@ -27,7 +27,7 @@ Three landable phases. Each phase is a separate PR. Phase 1 includes the snapsho
 - [ ] `packages/core/src/flow-model/metrics/cache.ts` — extend `paragraphCacheKey` to include `pPrIns`/`pPrDel`/`pPrChange`/`paraRPrChange`/`sectPrChange` presence flags and `revision_change` mark presence on runs
 - [ ] If `hashTableBlock` (or equivalent) exists, mirror
 
-### FlowBlock plumbing
+### ContentNode plumbing
 
 - [ ] `packages/core/src/pagination-model/buildBoxTree*.ts` — pass the new revision attrs through into `ParagraphBlock.attrs` so measurement is consistent with the cache key
 
@@ -143,7 +143,7 @@ Three landable phases. Each phase is a separate PR. Phase 1 includes the snapsho
 
 - [ ] `hashTableBlock` (or equivalent) — extend to include revision attrs
 
-### FlowBlock plumbing
+### ContentNode plumbing
 
 - [ ] `buildBoxTree` — pass table revision attrs through to `TableBlock.attrs`
 

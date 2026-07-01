@@ -149,7 +149,7 @@ function getPagesEl(): HTMLElement | null {
 
 /**
  * The painted element to anchor the overlay to. After a resize / move / rotate
- * commits — or after the image is pushed onto another page — the painter-model
+ * commits — or after the image is pushed onto another page — the painter
  * re-builds the visible pages, so the originally tracked element is detached.
  * Re-find the fresh one by the image's current PM position (covering inline,
  * floating, and block images) through the body-scoped `findBodyPmAnchor`, which

@@ -25,7 +25,11 @@ import {
   type CaretPosition,
   type SelectionBox,
 } from '@eigenpal/docx-editor-core/flow-model';
-import type { FlowBlock, Layout, Measure } from '@eigenpal/docx-editor-core/pagination-model';
+import type {
+  ContentNode,
+  LayoutMetrics,
+  PageLayout,
+} from '@eigenpal/docx-editor-core/pagination-model';
 import { enclosingSdtGroupIds, applySdtFocus } from '@eigenpal/docx-editor-core/painter-model';
 
 import type { OffscreenEditorHostRef } from '../OffscreenEditorHost';
@@ -37,9 +41,9 @@ import {
 } from '../internals/domSelection';
 
 export interface UseSelectionOverlayOptions {
-  layout: Layout | null;
-  blocks: FlowBlock[];
-  measures: Measure[];
+  pageLayout: PageLayout | null;
+  nodes: ContentNode[];
+  metrics: LayoutMetrics[];
   zoom: number;
   containerRef: React.RefObject<HTMLDivElement | null>;
   pagesContainerRef: React.RefObject<HTMLDivElement | null>;
@@ -62,9 +66,9 @@ export interface UseSelectionOverlayReturn {
 
 export function useSelectionOverlay(opts: UseSelectionOverlayOptions): UseSelectionOverlayReturn {
   const {
-    layout,
-    blocks,
-    measures,
+    pageLayout,
+    nodes,
+    metrics,
     zoom,
     containerRef,
     pagesContainerRef,
@@ -115,7 +119,7 @@ export function useSelectionOverlay(opts: UseSelectionOverlayOptions): UseSelect
         applySdtFocus(pagesEl, enclosingSdtGroupIds(state.doc, from, to));
       }
 
-      if (!layout || blocks.length === 0) {
+      if (!pageLayout || nodes.length === 0) {
         resetImeCaretAnchor(hiddenPMRef.current?.getHostElement());
         return;
       }
@@ -148,7 +152,7 @@ export function useSelectionOverlay(opts: UseSelectionOverlayOptions): UseSelect
           if (overlay && firstPage) {
             const overlayRect = overlay.getBoundingClientRect();
             const pageRect = firstPage.getBoundingClientRect();
-            const caret = getCaretPosition(layout, blocks, measures, from);
+            const caret = getCaretPosition(pageLayout, nodes, metrics, from);
             if (caret) {
               const fallbackCaret = {
                 ...caret,
@@ -203,7 +207,7 @@ export function useSelectionOverlay(opts: UseSelectionOverlayOptions): UseSelect
               const pageRect = firstPage.getBoundingClientRect();
               const pageOffsetX = (pageRect.left - overlayRect.left) / zoom;
               const pageOffsetY = (pageRect.top - overlayRect.top) / zoom;
-              const rects = rectsForSelection(layout, blocks, measures, from, to);
+              const rects = rectsForSelection(pageLayout, nodes, metrics, from, to);
               const adjustedRects = rects.map((rect) => ({
                 ...rect,
                 x: rect.x + pageOffsetX,
@@ -220,7 +224,7 @@ export function useSelectionOverlay(opts: UseSelectionOverlayOptions): UseSelect
         setCaretPosition(null);
       }
     },
-    [layout, blocks, measures, zoom, onSelectionChangeRef, pagesContainerRef, hiddenPMRef]
+    [pageLayout, nodes, metrics, zoom, onSelectionChangeRef, pagesContainerRef, hiddenPMRef]
   );
 
   const handleSelectionChange = useCallback(
@@ -287,15 +291,15 @@ export function useSelectionOverlay(opts: UseSelectionOverlayOptions): UseSelect
     return () => observer.disconnect();
   }, [updateSelectionOverlay, containerRef, hiddenPMRef]);
 
-  // Update once layout is ready. handleEditorViewReady → runLayoutPipeline is
-  // async; this effect ensures the first overlay pass runs once `layout`
+  // Update once page layout is ready. handleEditorViewReady → runLayoutPipeline is
+  // async; this effect ensures the first overlay pass runs once `pageLayout`
   // populates.
   useEffect(() => {
     const state = hiddenPMRef.current?.getState();
-    if (layout && state) {
+    if (pageLayout && state) {
       updateSelectionOverlay(state);
     }
-  }, [layout, updateSelectionOverlay, hiddenPMRef]);
+  }, [pageLayout, updateSelectionOverlay, hiddenPMRef]);
 
   return {
     selectionGeometry,

@@ -1,6 +1,6 @@
 /**
  * DecorationLayer — generic ProseMirror decoration forwarder for the
- * painter-model visible pages.
+ * painter visible pages.
  *
  * Background: the editor renders into TWO surfaces (see CLAUDE.md → "Editor
  * Architecture — Dual Rendering System"). PM's own decoration rendering
@@ -17,7 +17,7 @@
  *   yCursorPlugin's selection-range tint, search highlights, etc.
  *
  * The overlay is `pointer-events: none` so it never blocks editing; the
- * painter-model's spans below remain interactive. Per-decoration opt-in to
+ * painter's spans below remain interactive. Per-decoration opt-in to
  * pointer events is up to the plugin (set `style: 'pointer-events: auto'`).
  *
  * **Opt-out**: a plugin that already renders its decorations through its own

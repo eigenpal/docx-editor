@@ -44,7 +44,10 @@ export interface SelectionOverlayProps {
 // var so dark mode (.ep-root.dark sets --doc-caret light) shows a visible
 // caret — the overlay sits outside the inverted page, so #000 would vanish.
 const DEFAULT_CARET_COLOR = 'var(--doc-caret, #000)';
-const DEFAULT_SELECTION_COLOR = 'rgba(66, 133, 244, 0.3)'; // Google Docs style blue
+// Token first, so the selection re-themes with the rest of the chrome — a
+// hardcoded blue stays light-mode blue on a dark page. The literal is only the
+// fallback for a host that hasn't loaded the stylesheet.
+const DEFAULT_SELECTION_COLOR = 'var(--doc-selection, rgba(26, 115, 232, 0.3))';
 const DEFAULT_CARET_WIDTH = 2;
 const DEFAULT_BLINK_INTERVAL = 530; // Standard cursor blink rate
 
@@ -233,16 +236,16 @@ export const SelectionOverlay: React.FC<SelectionOverlayProps> = ({
  * Hook to manage selection overlay state.
  *
  * @param pmSelection - ProseMirror selection {from, to}.
- * @param layout - Document layout.
- * @param blocks - Flow blocks.
- * @param measures - Measurements.
+ * @param pageLayout - Document page layout.
+ * @param nodes - Content nodes.
+ * @param metrics - Layout metrics.
  * @returns Selection overlay props.
  */
 export function useSelectionOverlay(
   pmSelection: { from: number; to: number } | null,
-  layout: import('@eigenpal/docx-editor-core/pagination-model').Layout | null,
-  blocks: import('@eigenpal/docx-editor-core/pagination-model').FlowBlock[],
-  measures: import('@eigenpal/docx-editor-core/pagination-model').Measure[]
+  pageLayout: import('@eigenpal/docx-editor-core/pagination-model').PageLayout | null,
+  nodes: import('@eigenpal/docx-editor-core/pagination-model').ContentNode[],
+  metrics: import('@eigenpal/docx-editor-core/pagination-model').LayoutMetrics[]
 ): {
   selectionGeometry: SelectionBox[];
   caretPosition: CaretPosition | null;
@@ -251,7 +254,7 @@ export function useSelectionOverlay(
   const [caretPosition, setCaretPosition] = useState<CaretPosition | null>(null);
 
   useEffect(() => {
-    if (!layout || !pmSelection) {
+    if (!pageLayout || !pmSelection) {
       setSelectionGeometry([]);
       setCaretPosition(null);
       return;
@@ -264,18 +267,18 @@ export function useSelectionOverlay(
 
         if (from === to) {
           // Collapsed selection - show caret
-          const caret = getCaretPosition(layout, blocks, measures, from);
+          const caret = getCaretPosition(pageLayout, nodes, metrics, from);
           setCaretPosition(caret);
           setSelectionGeometry([]);
         } else {
           // Range selection - show highlight
-          const rects = rectsForSelection(layout, blocks, measures, from, to);
+          const rects = rectsForSelection(pageLayout, nodes, metrics, from, to);
           setSelectionGeometry(rects);
           setCaretPosition(null);
         }
       }
     );
-  }, [pmSelection, layout, blocks, measures]);
+  }, [pmSelection, pageLayout, nodes, metrics]);
 
   return { selectionGeometry, caretPosition };
 }

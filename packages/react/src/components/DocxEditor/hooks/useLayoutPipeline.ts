@@ -1,28 +1,32 @@
 /**
  * Layout pipeline hook for PagedEditor.
  *
- * Owns the 4-step layout pass (PM doc → flow blocks → measure → layout →
+ * Owns the 4-step layout pass (PM doc → content nodes → metrics → page layout →
  * paint), its rAF-coalesced scheduler, and the scroll-restore state that
  * keeps the user's scroll position locked across re-paints.
  *
  * Extraction note: every line of `runLayoutPipeline` moves in here
- * verbatim. The FlowBlock invariant (`assertExhaustiveFlowBlock` in the
+ * verbatim. The ContentNode invariant (`assertExhaustiveContentNode` in the
  * `buildBoxTree` chain via `measureBlock.ts`) depends on this site staying
- * stable — if a new FlowBlock variant is added, the three measureBlock
+ * stable — if a new ContentNode variant is added, the three measureBlock
  * switches still need updates per the CLAUDE.md invariant.
  */
 
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { EditorState } from 'prosemirror-state';
 
-import type { FlowBlock, Layout, Measure } from '@eigenpal/docx-editor-core/pagination-model';
+import type {
+  ContentNode,
+  LayoutMetrics,
+  PageLayout,
+} from '@eigenpal/docx-editor-core/pagination-model';
 import { getMargins, getPageSize, getColumns } from '@eigenpal/docx-editor-core/flow-model';
 import type { Node as PMNode } from 'prosemirror-model';
 import {
   LayoutPainter,
   paintPages,
-  buildBlockLookup,
-  type BlockLookup,
+  indexNodesById,
+  type NodeLookup,
   type FootnoteRenderItem,
   type RenderPageOptions,
 } from '@eigenpal/docx-editor-core/painter-model';
@@ -86,9 +90,9 @@ export interface UseLayoutPipelineOptions {
 }
 
 export interface UseLayoutPipelineReturn {
-  layout: Layout | null;
-  blocks: FlowBlock[];
-  measures: Measure[];
+  pageLayout: PageLayout | null;
+  nodes: ContentNode[];
+  metrics: LayoutMetrics[];
   decorationSyncToken: number;
   notifyDecorationLayer: () => void;
   contentWidth: number;
@@ -120,9 +124,9 @@ export function useLayoutPipeline(opts: UseLayoutPipelineOptions): UseLayoutPipe
     onRenderedDomContextReady,
   } = opts;
 
-  const [layout, setLayout] = useState<Layout | null>(null);
-  const [blocks, setBlocks] = useState<FlowBlock[]>([]);
-  const [measures, setMeasures] = useState<Measure[]>([]);
+  const [pageLayout, setPageLayout] = useState<PageLayout | null>(null);
+  const [nodes, setNodes] = useState<ContentNode[]>([]);
+  const [metrics, setMetrics] = useState<LayoutMetrics[]>([]);
   // Monotonic token bumped on every PM transaction (doc, selection,
   // meta-only). Drives the DecorationLayer's resync so plugins like
   // yCursorPlugin (which update decorations on awareness pings — non-doc
@@ -145,11 +149,11 @@ export function useLayoutPipeline(opts: UseLayoutPipelineOptions): UseLayoutPipe
   // Total-pages notifier — fires only when count changes (including N → 0).
   const lastTotalPagesRef = useRef<number>(0);
   useEffect(() => {
-    const total = layout?.pages.length ?? 0;
+    const total = pageLayout?.pages.length ?? 0;
     if (total === lastTotalPagesRef.current) return;
     lastTotalPagesRef.current = total;
     onTotalPagesChangeRef.current?.(total);
-  }, [layout]);
+  }, [pageLayout]);
 
   // Page geometry derived from section properties.
   const pageSize = useMemo(() => getPageSize(sectionProperties), [sectionProperties]);
@@ -205,13 +209,13 @@ export function useLayoutPipeline(opts: UseLayoutPipelineOptions): UseLayoutPipe
       applyPendingIncrementalScrollSnapshot(true);
 
       try {
-        // Steps 1-3 (PM doc → blocks → measure → HF resolve → margin extend →
-        // layout → footnote items) are the shared compute pass, lifted to
+        // Steps 1-3 (PM doc → nodes → metrics → HF resolve → margin extend →
+        // page layout → footnote items) are the shared compute pass, lifted to
         // `@eigenpal/docx-editor-core/editor`. Paint + scroll/events stay here.
         const {
-          blocks: newBlocks,
-          measures: newMeasures,
-          layout: newLayout,
+          nodes: newNodes,
+          metrics: newMetrics,
+          layout: newPageLayout,
           headerContentForRender,
           footerContentForRender,
           firstPageHeaderForRender,
@@ -244,9 +248,9 @@ export function useLayoutPipeline(opts: UseLayoutPipelineOptions): UseLayoutPipe
           measureBlocks,
           getHfPmDoc: (hf) => getHfPmDocRef.current?.(hf) ?? null,
         });
-        setBlocks(newBlocks);
-        setMeasures(newMeasures);
-        setLayout(newLayout);
+        setNodes(newNodes);
+        setMetrics(newMetrics);
+        setPageLayout(newPageLayout);
 
         // Step 4: Paint to DOM
         if (pagesContainerRef.current && painterRef.current) {
@@ -259,14 +263,14 @@ export function useLayoutPipeline(opts: UseLayoutPipelineOptions): UseLayoutPipe
             ? captureScrollAnchor(pagesEl, scrollParent, state.selection.head)
             : null;
 
-          const blockLookup = buildBlockLookup(newBlocks, newMeasures);
-          painterRef.current.setBlockLookup(blockLookup);
+          const nodeLookup = indexNodesById(newNodes, newMetrics);
+          painterRef.current.setNodeLookup(nodeLookup);
 
-          const paintPagesKind = paintPages(newLayout.pages, pagesContainerRef.current, {
+          const paintPagesKind = paintPages(newPageLayout.pages, pagesContainerRef.current, {
             pageGap,
             showShadow: true,
             pageBackground: 'var(--doc-page-bg, #ffffff)',
-            blockLookup,
+            nodeLookup,
             headerContent: headerContentForRender,
             footerContent: footerContentForRender,
             firstPageHeaderContent: firstPageHeaderForRender,
@@ -281,13 +285,13 @@ export function useLayoutPipeline(opts: UseLayoutPipelineOptions): UseLayoutPipe
             resolvedCommentIds,
           } as RenderPageOptions & {
             pageGap?: number;
-            blockLookup?: BlockLookup;
+            nodeLookup?: NodeLookup;
             footnotesByPage?: Map<number, FootnoteRenderItem[]>;
           });
 
           const vp = viewportLayoutRef.current;
           if (vp) {
-            const mh = viewportMinHeightPx(newLayout, pageGap);
+            const mh = viewportMinHeightPx(newPageLayout, pageGap);
             vp.style.minHeight = `${mh}px`;
             if (zoom !== 1) {
               vp.style.marginBottom = `${mh * (zoom - 1)}px`;
@@ -327,9 +331,9 @@ export function useLayoutPipeline(opts: UseLayoutPipelineOptions): UseLayoutPipe
         if (onAnchorPositionsChangeRef.current) {
           const positions = computeAnchorPositions(
             hiddenPMRef.current?.getView() ?? null,
-            newLayout,
-            newBlocks,
-            newMeasures,
+            newPageLayout,
+            newNodes,
+            newMetrics,
             pageGap
           );
 
@@ -405,7 +409,7 @@ export function useLayoutPipeline(opts: UseLayoutPipelineOptions): UseLayoutPipe
         if (totalTime > 2000) {
           console.warn(
             `[PagedEditor] Layout pipeline took ${Math.round(totalTime)}ms total ` +
-              `(${newBlocks.length} blocks, ${newMeasures.length} measures)`
+              `(${newNodes.length} nodes, ${newMetrics.length} metrics)`
           );
         }
       } catch (error) {
@@ -443,7 +447,7 @@ export function useLayoutPipeline(opts: UseLayoutPipelineOptions): UseLayoutPipe
     ]
   );
 
-  // After `setLayout`, React still commits `totalHeight` / margin on the viewport wrapper.
+  // After `setPageLayout`, React still commits `totalHeight` / margin on the viewport wrapper.
   // Restoring scroll here (plus one rAF) matches the committed DOM scrollHeight.
   useLayoutEffect(() => {
     const pending = pendingScrollRestoreRef.current;
@@ -463,7 +467,7 @@ export function useLayoutPipeline(opts: UseLayoutPipelineOptions): UseLayoutPipe
       applyScrollRestore(pending, pagesEl, scrollParent);
     });
     return () => cancelAnimationFrame(rafId);
-  }, [layout, getScrollContainer, pagesContainerRef]);
+  }, [pageLayout, getScrollContainer, pagesContainerRef]);
 
   // =========================================================================
   // Coalesced Layout (rAF throttle)
@@ -494,9 +498,9 @@ export function useLayoutPipeline(opts: UseLayoutPipelineOptions): UseLayoutPipe
   }, []);
 
   return {
-    layout,
-    blocks,
-    measures,
+    pageLayout,
+    nodes,
+    metrics,
     decorationSyncToken,
     notifyDecorationLayer,
     contentWidth,
