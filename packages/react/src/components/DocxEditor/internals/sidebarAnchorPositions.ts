@@ -9,11 +9,11 @@
 import type { EditorView } from 'prosemirror-view';
 import { getCaretPosition, pageTopOffset } from '@eigenpal/docx-editor-core/flow-model';
 import type {
-  FlowBlock,
-  Layout,
-  Measure,
+  ContentNode,
+  PageLayout,
+  LayoutMetrics,
   TableBlock,
-  TableMeasure,
+  TableMetrics,
 } from '@eigenpal/docx-editor-core/pagination-model';
 import { VIEWPORT_PADDING_TOP } from './styles';
 
@@ -25,9 +25,9 @@ import { VIEWPORT_PADDING_TOP } from './styles';
  */
 export function computeAnchorPositions(
   pmView: EditorView | null,
-  layout: Layout,
-  blocks: FlowBlock[],
-  measures: Measure[],
+  pageLayout: PageLayout,
+  nodes: ContentNode[],
+  metrics: LayoutMetrics[],
   renderedPageGap: number
 ): Map<string, number> {
   const positions = new Map<string, number>();
@@ -57,7 +57,7 @@ export function computeAnchorPositions(
     seen.add(key);
 
     // Try exact position (paragraphs/images)
-    const caret = getCaretPosition(layout, blocks, measures, pos, pageHint);
+    const caret = getCaretPosition(pageLayout, nodes, metrics, pos, pageHint);
     if (caret) {
       pageHint = caret.pageIndex;
       positions.set(key, caret.y + contentOffset);
@@ -65,17 +65,16 @@ export function computeAnchorPositions(
     }
 
     // Fallback: find containing fragment (tables, etc.) by PM position
-    for (let pi = pageHint; pi < layout.pages.length; pi++) {
-      const page = layout.pages[pi];
+    for (let pi = pageHint; pi < pageLayout.pages.length; pi++) {
+      const page = pageLayout.pages[pi];
       for (const frag of page.fragments) {
         const fStart = frag.docFrom ?? 0;
         const fEnd = (frag as { docTo?: number }).docTo ?? fStart;
         if (pos < fStart || pos > fEnd) continue;
 
-        const rowOffsetY =
-          frag.kind === 'table' ? getTableRowOffset(blocks, measures, frag, pos) : 0;
+        const rowOffsetY = frag.kind === 'table' ? getTableRowOffset(nodes, metrics, frag, pos) : 0;
         pageHint = pi;
-        positions.set(key, frag.y + rowOffsetY + pageTopOffset(layout, pi) + contentOffset);
+        positions.set(key, frag.y + rowOffsetY + pageTopOffset(pageLayout, pi) + contentOffset);
         return;
       }
     }
@@ -144,30 +143,30 @@ export function computeAnchorPositions(
  * Sums row heights until finding the row that contains the given position.
  */
 function getTableRowOffset(
-  blocks: FlowBlock[],
-  measures: Measure[],
-  frag: { blockId: string | number; fromRow: number; toRow: number },
+  nodes: ContentNode[],
+  metrics: LayoutMetrics[],
+  frag: { nodeId: string | number; fromRow: number; toRow: number },
   pmPos: number
 ): number {
-  const blockIdx = blocks.findIndex((b) => b.id === frag.blockId);
-  if (blockIdx === -1) return 0;
-  const tBlock = blocks[blockIdx];
-  const tMeasure = measures[blockIdx];
-  if (tBlock.kind !== 'table' || tMeasure.kind !== 'table') return 0;
+  const nodeIndex = nodes.findIndex((node) => node.id === frag.nodeId);
+  if (nodeIndex === -1) return 0;
+  const tableNode = nodes[nodeIndex];
+  const tableMetrics = metrics[nodeIndex];
+  if (tableNode.kind !== 'table' || tableMetrics.kind !== 'table') return 0;
 
   let offsetY = 0;
   for (let ri = frag.fromRow; ri < frag.toRow; ri++) {
-    const row = (tBlock as TableBlock).rows[ri];
+    const row = (tableNode as TableBlock).rows[ri];
     if (!row) break;
     const posInRow = row.cells.some((cell) =>
-      cell.blocks.some((b) => {
-        const s = (b as { docFrom?: number }).docFrom ?? 0;
-        const e = (b as { docTo?: number }).docTo ?? s;
+      cell.nodes.some((node) => {
+        const s = (node as { docFrom?: number }).docFrom ?? 0;
+        const e = (node as { docTo?: number }).docTo ?? s;
         return pmPos >= s && pmPos <= e;
       })
     );
     if (posInRow) break;
-    offsetY += (tMeasure as TableMeasure).rows[ri]?.height ?? 0;
+    offsetY += (tableMetrics as TableMetrics).rows[ri]?.height ?? 0;
   }
   return offsetY;
 }

@@ -19,10 +19,14 @@ import {
   getCaretPosition,
 } from '@eigenpal/docx-editor-core/flow-model';
 import { findPageIndexContainingPmPos } from '@eigenpal/docx-editor-core/pagination-model';
-import type { FlowBlock, Layout, Measure } from '@eigenpal/docx-editor-core/pagination-model';
+import type {
+  ContentNode,
+  LayoutMetrics,
+  PageLayout,
+} from '@eigenpal/docx-editor-core/pagination-model';
 import { findStartPosForParaId } from '@eigenpal/docx-editor-core/prosemirror';
 import {
-  flashParagraphFragmentsByParaId,
+  flashParagraphBoxesByParaId,
   type ScrollToParaIdOptions,
 } from '@eigenpal/docx-editor-core/utils';
 import { findVerticalScrollParentOrRoot } from '@eigenpal/docx-editor-core/utils/findVerticalScrollParent';
@@ -31,9 +35,9 @@ import type { OffscreenEditorHostRef } from '../OffscreenEditorHost';
 import { runAfterPaint, scrollElementCenterIntoContainer } from '../internals/scrollUtils';
 
 export interface UsePagedScrollApiOptions {
-  layout: Layout | null;
-  blocks: FlowBlock[];
-  measures: Measure[];
+  pageLayout: PageLayout | null;
+  nodes: ContentNode[];
+  metrics: LayoutMetrics[];
   pagesContainerRef: React.RefObject<HTMLDivElement | null>;
   hiddenPMRef: React.RefObject<OffscreenEditorHostRef | null>;
   getScrollContainer: () => HTMLDivElement | null;
@@ -46,7 +50,7 @@ export interface UsePagedScrollApiReturn {
 }
 
 export function usePagedScrollApi(opts: UsePagedScrollApiOptions): UsePagedScrollApiReturn {
-  const { layout, blocks, measures, pagesContainerRef, hiddenPMRef, getScrollContainer } = opts;
+  const { pageLayout, nodes, metrics, pagesContainerRef, hiddenPMRef, getScrollContainer } = opts;
 
   const scrollAbortRef = useRef<AbortController | null>(null);
 
@@ -111,17 +115,22 @@ export function usePagedScrollApi(opts: UsePagedScrollApiOptions): UsePagedScrol
           targetEl.scrollIntoView(smoothScroll);
           return;
         }
-        const lay = layout;
-        const blk = blocks;
-        const meas = measures;
-        if (!lay || blk.length === 0 || meas.length !== blk.length) return;
+        const currentPageLayout = pageLayout;
+        const currentNodes = nodes;
+        const currentMetrics = metrics;
+        if (
+          !currentPageLayout ||
+          currentNodes.length === 0 ||
+          currentMetrics.length !== currentNodes.length
+        )
+          return;
 
         let pageIndex: number | null = null;
-        const caret = getCaretPosition(lay, blk, meas, pmPos);
+        const caret = getCaretPosition(currentPageLayout, currentNodes, currentMetrics, pmPos);
         if (caret) {
           pageIndex = caret.pageIndex;
         } else {
-          pageIndex = findPageIndexContainingPmPos(lay, pmPos);
+          pageIndex = findPageIndexContainingPmPos(currentPageLayout, pmPos);
         }
         if (pageIndex == null) return;
 
@@ -149,17 +158,22 @@ export function usePagedScrollApi(opts: UsePagedScrollApiOptions): UsePagedScrol
 
       if (scrollPaintedTargetInstant()) return;
 
-      const lay = layout;
-      const blk = blocks;
-      const meas = measures;
-      if (!lay || blk.length === 0 || meas.length !== blk.length) return;
+      const currentPageLayout = pageLayout;
+      const currentNodes = nodes;
+      const currentMetrics = metrics;
+      if (
+        !currentPageLayout ||
+        currentNodes.length === 0 ||
+        currentMetrics.length !== currentNodes.length
+      )
+        return;
 
       let pageIndex: number | null = null;
-      const caret = getCaretPosition(lay, blk, meas, pmPos);
+      const caret = getCaretPosition(currentPageLayout, currentNodes, currentMetrics, pmPos);
       if (caret) {
         pageIndex = caret.pageIndex;
       } else {
-        pageIndex = findPageIndexContainingPmPos(lay, pmPos);
+        pageIndex = findPageIndexContainingPmPos(currentPageLayout, pmPos);
       }
       if (pageIndex == null) return;
 
@@ -180,7 +194,7 @@ export function usePagedScrollApi(opts: UsePagedScrollApiOptions): UsePagedScrol
         }
       }, signal);
     },
-    [layout, blocks, measures, getScrollContainer, pagesContainerRef]
+    [pageLayout, nodes, metrics, getScrollContainer, pagesContainerRef]
   );
 
   // 1-indexed pageNumber. Prefers scrolling to the page's first PM-anchored
@@ -191,8 +205,8 @@ export function usePagedScrollApi(opts: UsePagedScrollApiOptions): UsePagedScrol
   const scrollToPageImpl = useCallback(
     (pageNumber: number): void => {
       if (!Number.isInteger(pageNumber) || pageNumber < 1) return;
-      if (!layout || pageNumber > layout.pages.length) return;
-      const page = layout.pages[pageNumber - 1];
+      if (!pageLayout || pageNumber > pageLayout.pages.length) return;
+      const page = pageLayout.pages[pageNumber - 1];
       for (const frag of page.fragments) {
         if (typeof frag.docFrom === 'number') {
           scrollToPositionImpl(frag.docFrom, true);
@@ -203,7 +217,7 @@ export function usePagedScrollApi(opts: UsePagedScrollApiOptions): UsePagedScrol
         pagesContainerRef.current?.querySelectorAll<HTMLElement>('.layout-page')[pageNumber - 1];
       shell?.scrollIntoView({ block: 'center', inline: 'nearest' });
     },
-    [layout, scrollToPositionImpl, pagesContainerRef]
+    [pageLayout, scrollToPositionImpl, pagesContainerRef]
   );
 
   const scrollToParaIdImpl = useCallback(
@@ -217,7 +231,7 @@ export function usePagedScrollApi(opts: UsePagedScrollApiOptions): UsePagedScrol
         if (!options?.highlight) return;
         const pages = pagesContainerRef.current;
         if (!pages) return;
-        flashParagraphFragmentsByParaId(pages, paraId, options.highlight);
+        flashParagraphBoxesByParaId(pages, paraId, options.highlight);
       };
       flashPara();
       // Defer selection/focus until after the scroll's paint-settle rAF

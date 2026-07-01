@@ -1089,6 +1089,9 @@ export interface TabContent {
 }
 
 // @public
+export type TabJustify = 'left' | 'center' | 'right' | 'decimal' | 'bar' | 'clear' | 'num';
+
+// @public
 export interface Table {
     columnWidths?: number[];
     formatting?: TableFormatting;
@@ -1250,9 +1253,6 @@ export interface TabMark {
     leader?: TabLeader;
     position: number;
 }
-
-// @public
-export type TabJustify = 'left' | 'center' | 'right' | 'decimal' | 'bar' | 'clear' | 'num';
 
 // @public
 export interface TextBox {

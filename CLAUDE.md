@@ -68,9 +68,9 @@ Adapter-only changes are fine for things genuinely scoped to one framework (Reac
 
 **UI styling / colors are single-source-of-truth.** All editor chrome CSS + color tokens live in `packages/core/src/styles/editor.css`; both adapters only `@import` it (the adapter `src/styles/editor.css` files must stay thin — enforced by `bun run check:adapter-css-thin`). Never hardcode hex/rgba in components — use the `--doc-*` tokens (or shadcn token utilities like `bg-primary`). The shared Tailwind theme lives in `packages/core/tailwind-preset.cjs`, extended by all three `tailwind.config.js`. Dark mode is a token override under `.ep-root.dark` (scaffold in the core stylesheet). The document canvas (painter output) is intentionally NOT themed — it stays Word-faithful.
 
-### FlowBlock invariant — 3 switches
+### ContentNode invariant — 3 switches
 
-Adding a `FlowBlock` variant in `packages/core/src/pagination-model/types.ts` requires updating all three; each ends with `assertExhaustiveFlowBlock` so `bun run typecheck` names the missing site:
+Adding a `ContentNode` variant in `packages/core/src/pagination-model/types.ts` requires updating all three; each ends with `assertExhaustiveContentNode` so `bun run typecheck` names the missing site:
 
 1. `runLayoutPipeline` in `packages/core/src/pagination-model/index.ts`
 2. `measureBlock` in `packages/react/src/components/DocxEditor/internals/measureBlock.ts`
@@ -93,13 +93,13 @@ Stable dataset attrs on painted DOM (CSS, queries, selection map depend on these
 
 | Debugging                    | File                                                            |
 | ---------------------------- | --------------------------------------------------------------- |
-| Text/paragraph rendering     | `painter-model/renderParagraph.ts`                             |
-| Image rendering              | `painter-model/renderImage.ts`                                 |
-| Table rendering              | `painter-model/renderTable.ts`                                 |
-| Table borders / cut edges    | `painter-model/renderTableBorders.ts`                          |
-| Table grid geometry (SoT)    | `flow-model/tableWidthUtils.ts` (`resolveCellGrid`)          |
-| Table page-break geometry    | `pagination-model/tableRowBreak.ts`                                |
-| Page composition             | `painter-model/paintPage.ts`                                  |
+| Text/paragraph rendering     | `painter-model/renderParagraph.ts`                              |
+| Image rendering              | `painter-model/renderImage.ts`                                  |
+| Table rendering              | `painter-model/renderTable.ts`                                  |
+| Table borders / cut edges    | `painter-model/renderTableBorders.ts`                           |
+| Table grid geometry (SoT)    | `flow-model/tableWidthUtils.ts` (`resolveCellGrid`)             |
+| Table page-break geometry    | `pagination-model/tableRowBreak.ts`                             |
+| Page composition             | `painter-model/paintPage.ts`                                    |
 | Formatting commands          | `prosemirror/extensions/marks/`, `nodes/`                       |
 | Keyboard shortcuts           | `prosemirror/extensions/features/BaseKeymapExtension.ts`        |
 | Toolbar ↔ selection          | `prosemirror/plugins/selectionTracker.ts`                       |
@@ -132,7 +132,7 @@ Shared React/Vue orchestration lives in core (issue #696, Tier 1) — adapters r
 | comment/proposeChange + ID alloc    | `prosemirror/commentOps.ts`                   |
 | table-resize read/commit + twips    | `prosemirror/tableResize.ts`                  |
 | image resize/drag PM commits        | `prosemirror/imageCommit.ts`                  |
-| cell-selection highlight            | `flow-model/cellSelectionHighlight.ts`     |
+| cell-selection highlight            | `flow-model/cellSelectionHighlight.ts`        |
 | drag auto-scroll delta math         | `utils/autoScroll.ts`                         |
 
 ### Extensions

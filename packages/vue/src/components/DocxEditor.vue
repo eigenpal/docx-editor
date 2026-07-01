@@ -127,12 +127,20 @@
             :style="rulerRowStyle"
           >
             <HorizontalRuler
-              :section-props="currentSectionProps" :zoom="zoom" :editable="!readOnly"
-              :indent-left="rulerIndents.indentLeft" :indent-right="rulerIndents.indentRight"
-              :first-line-indent="rulerIndents.firstLineIndent" :hanging-indent="rulerIndents.hangingIndent" :tab-stops="rulerIndents.tabMarks"
-              @left-margin-change="handleLeftMarginChange" @right-margin-change="handleRightMarginChange"
-              @indent-left-change="handleIndentLeftChange" @indent-right-change="handleIndentRightChange"
-              @first-line-indent-change="handleFirstLineIndentChange" @tab-stop-remove="handleTabMarkRemove"
+              :section-props="currentSectionProps"
+              :zoom="zoom"
+              :editable="!readOnly"
+              :indent-left="rulerIndents.indentLeft"
+              :indent-right="rulerIndents.indentRight"
+              :first-line-indent="rulerIndents.firstLineIndent"
+              :hanging-indent="rulerIndents.hangingIndent"
+              :tab-stops="rulerIndents.tabMarks"
+              @left-margin-change="handleLeftMarginChange"
+              @right-margin-change="handleRightMarginChange"
+              @indent-left-change="handleIndentLeftChange"
+              @indent-right-change="handleIndentRightChange"
+              @first-line-indent-change="handleFirstLineIndentChange"
+              @tab-stop-remove="handleTabMarkRemove"
             />
           </div>
 
@@ -149,8 +157,11 @@
           >
             <div v-if="showRuler && currentSectionProps" class="docx-editor-vue__vertical-ruler">
               <VerticalRuler
-                :section-props="currentSectionProps" :zoom="zoom" :editable="!readOnly"
-                @top-margin-change="handleTopMarginChange" @bottom-margin-change="handleBottomMarginChange"
+                :section-props="currentSectionProps"
+                :zoom="zoom"
+                :editable="!readOnly"
+                @top-margin-change="handleTopMarginChange"
+                @bottom-margin-change="handleBottomMarginChange"
               />
             </div>
             <div
@@ -552,7 +563,9 @@ const {
   isReady,
   parseError,
   documentFonts,
-  layout,
+  pageLayout,
+  nodes,
+  metrics,
   loadBuffer,
   loadDocument: loadParsedDocument,
   save: saveBlob,
@@ -648,9 +661,9 @@ const hfCaretRect = ref<{ top: number; left: number; height: number } | null>(nu
 // (`isHfEditing` in useSelectionSync), so without these the selection is set on
 // the HF PM but never highlighted (#691). Shared with React via core's
 // `readHfSelectionGeometry`.
-const hfSelectionGeometry = ref<Array<{ top: number; left: number; width: number; height: number }>>(
-  []
-);
+const hfSelectionGeometry = ref<
+  Array<{ top: number; left: number; width: number; height: number }>
+>([]);
 
 // Paint the HF caret + drag-selection rects from the live HF view together
 // (mirror of React's `applyHfOverlay`). `computeHfCaretRectFromView` returns
@@ -764,12 +777,25 @@ const RULER_WIDTH = 20;
 const DEFAULT_PAGE_WIDTH = 816;
 const minLayoutWidth = computed(() => {
   void stateTick.value;
-  const outlineLeftAllowance = (showOutline.value ? OUTLINE_RESERVED_SPACE : props.showOutlineButton ? OUTLINE_BUTTON_RESERVED_SPACE : 20) + (props.showRuler && (showOutline.value || props.showOutlineButton) ? RULER_WIDTH : 0);
+  const outlineLeftAllowance =
+    (showOutline.value
+      ? OUTLINE_RESERVED_SPACE
+      : props.showOutlineButton
+        ? OUTLINE_BUTTON_RESERVED_SPACE
+        : 20) +
+    (props.showRuler && (showOutline.value || props.showOutlineButton) ? RULER_WIDTH : 0);
   const doc = getDocument();
   const docBody = doc?.package?.document;
-  const sectionPageWidths = [docBody?.finalSectionProperties?.pageWidth, ...(docBody?.sections?.map((s) => s.properties?.pageWidth) ?? [])].filter((w): w is number => typeof w === 'number' && w > 0);
-  const maxPageWidthPx = sectionPageWidths.length ? Math.round(Math.max(...sectionPageWidths) / 15) : DEFAULT_PAGE_WIDTH;
-  return 2 * outlineLeftAllowance + maxPageWidthPx + (showSidebar.value ? SIDEBAR_DOCUMENT_SHIFT * 2 : 0);
+  const sectionPageWidths = [
+    docBody?.finalSectionProperties?.pageWidth,
+    ...(docBody?.sections?.map((s) => s.properties?.pageWidth) ?? []),
+  ].filter((w): w is number => typeof w === 'number' && w > 0);
+  const maxPageWidthPx = sectionPageWidths.length
+    ? Math.round(Math.max(...sectionPageWidths) / 15)
+    : DEFAULT_PAGE_WIDTH;
+  return (
+    2 * outlineLeftAllowance + maxPageWidthPx + (showSidebar.value ? SIDEBAR_DOCUMENT_SHIFT * 2 : 0)
+  );
 });
 
 // When the comments sidebar opens, shift the pages container (NOT the
@@ -780,7 +806,11 @@ const pagesContainerStyle = computed(() => {
   const parts: string[] = [];
   if (showSidebar.value) parts.push(`translateX(-${SIDEBAR_DOCUMENT_SHIFT}px)`);
   if (zoom.value !== 1) parts.push(`scale(${zoom.value})`);
-  return { transform: parts.length > 0 ? parts.join(' ') : undefined, transformOrigin: 'top center', transition: 'transform 0.2s ease' };
+  return {
+    transform: parts.length > 0 ? parts.join(' ') : undefined,
+    transformOrigin: 'top center',
+    transition: 'transform 0.2s ease',
+  };
 });
 
 const rulerRowStyle = computed(() => ({
@@ -795,7 +825,9 @@ const pageWidthPx = computed(() => {
   return twipsToPixels(sp?.pageWidth ?? 12240) * zoom.value;
 });
 
-const resolvedCommentIds = computed(() => new Set(comments.value.filter(c => c.parentId == null && c.done).map(c => c.id)));
+const resolvedCommentIds = computed(
+  () => new Set(comments.value.filter((c) => c.parentId == null && c.done).map((c) => c.id))
+);
 
 const bookmarkOptions = computed(() => {
   void stateTick.value;
@@ -1012,7 +1044,7 @@ const {
   hyperlinkPopupData,
   readOnly,
   zoom,
-  layout,
+  pageLayout,
   tableResize,
   getCommands,
   getDocument,
@@ -1125,6 +1157,10 @@ const selectionSync = useSelectionSync({
   selectedImage,
   isHfEditing,
   imageInteracting,
+  readOnly,
+  pageLayout,
+  nodes,
+  metrics,
 });
 
 updateSelectionOverlay();
@@ -1139,7 +1175,7 @@ onBeforeUnmount(() => {
 // composable-build time.
 const { exposed } = useDocxEditorRefApi({
   editorView,
-  layout,
+  pageLayout,
   pagesRef,
   pagesViewportRef,
   zoom,

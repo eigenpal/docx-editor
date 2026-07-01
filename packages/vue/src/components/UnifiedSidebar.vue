@@ -4,7 +4,7 @@
   fixed-width column to the right of the page, each card sits at the
   Y of its corresponding [data-comment-id] / .docx-insertion span.
   Falls back to stacked layout when an anchor can't be resolved (e.g.
-  the painter-model hasn't finished rendering yet) — cards still
+  the painter hasn't finished rendering yet) — cards still
   show up rather than going invisible.
 -->
 <template>

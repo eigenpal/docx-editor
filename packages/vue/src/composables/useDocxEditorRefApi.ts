@@ -20,10 +20,10 @@ import type { Document } from '@eigenpal/docx-editor-core/types/document';
 import type { Comment } from '@eigenpal/docx-editor-core/types/content';
 import type { DocxInput } from '@eigenpal/docx-editor-core/utils';
 import {
-  flashParagraphFragmentsByParaId,
+  flashParagraphBoxesByParaId,
   type ScrollToParaIdOptions,
 } from '@eigenpal/docx-editor-core/utils';
-import type { Layout } from '@eigenpal/docx-editor-core/pagination-model';
+import type { PageLayout } from '@eigenpal/docx-editor-core/pagination-model';
 import { findPageIndexContainingPmPos } from '@eigenpal/docx-editor-core/pagination-model';
 import { paintAllPagesNow } from '@eigenpal/docx-editor-core/painter-model';
 import {
@@ -57,7 +57,7 @@ import type { ApplyFormattingOptions } from './useFormattingActions';
 export interface UseDocxEditorRefApiOptions {
   // Foundational refs / accessors (useDocxEditor)
   editorView: Ref<EditorView | null>;
-  layout: Ref<Layout | null>;
+  pageLayout: Ref<PageLayout | null>;
   pagesRef: Ref<HTMLElement | null>;
   pagesViewportRef: Ref<HTMLElement | null>;
   zoom: Ref<number>;
@@ -148,14 +148,14 @@ export function useDocxEditorRefApi(opts: UseDocxEditorRefApiOptions): {
   }
 
   function getTotalPages(): number {
-    return opts.layout.value?.pages.length ?? 0;
+    return opts.pageLayout.value?.pages.length ?? 0;
   }
 
   function getCurrentPage(): number {
-    const currentLayout = opts.layout.value;
+    const currentPageLayout = opts.pageLayout.value;
     const view = opts.editorView.value;
-    if (!currentLayout || !view) return 0;
-    const pageIndex = findPageIndexContainingPmPos(currentLayout, view.state.selection.from);
+    if (!currentPageLayout || !view) return 0;
+    const pageIndex = findPageIndexContainingPmPos(currentPageLayout, view.state.selection.from);
     return pageIndex == null ? 0 : pageIndex + 1;
   }
 
@@ -168,7 +168,7 @@ export function useDocxEditorRefApi(opts: UseDocxEditorRefApiOptions): {
     if (options?.highlight) {
       const flashPara = () => {
         const pages = opts.pagesRef.value;
-        if (pages) flashParagraphFragmentsByParaId(pages, paraId, options.highlight);
+        if (pages) flashParagraphBoxesByParaId(pages, paraId, options.highlight);
       };
       flashPara();
       requestAnimationFrame(() => requestAnimationFrame(flashPara));
@@ -289,7 +289,7 @@ export function useDocxEditorRefApi(opts: UseDocxEditorRefApiOptions): {
   }
 
   function getPageContent(pageNumber: number) {
-    return getPageContentImpl(opts.editorView.value, opts.layout.value, pageNumber);
+    return getPageContentImpl(opts.editorView.value, opts.pageLayout.value, pageNumber);
   }
 
   function onContentChange(listener: (document: unknown) => void): () => void {

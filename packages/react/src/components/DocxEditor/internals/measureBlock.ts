@@ -1,33 +1,34 @@
 /**
- * Block-measurement pipeline for PagedEditor — paragraph/table/image/
- * textBox measurement. The floating-zone pre-scan + per-block cumulative-Y
+ * Node-measurement pipeline for PagedEditor — paragraph/table/image/
+ * textBox measurement. The floating-zone pre-scan + per-node cumulative-Y
  * orchestration lives in core's `measureBlocksWithFloats` so React and Vue
  * stay in lockstep.
  *
- * `measureBlock` contains the FlowBlock exhaustiveness switch. The
- * `assertExhaustiveFlowBlock(block, 'react PagedEditor measureBlock')`
+ * `measureBlock` contains the ContentNode exhaustiveness switch. The
+ * `assertExhaustiveContentNode(node, 'react PagedEditor measureBlock')`
  * call at the default branch is one of three sites that fail typecheck
- * with a `never` mismatch when a new FlowBlock variant is added — see
- * the FlowBlock invariant note in CLAUDE.md.
+ * with a `never` mismatch when a new ContentNode variant is added — see
+ * the ContentNode invariant note in CLAUDE.md.
  */
 
 import {
   DEFAULT_TEXTBOX_MARGINS,
   DEFAULT_TEXTBOX_WIDTH,
-  assertExhaustiveFlowBlock,
+  assertExhaustiveContentNode,
 } from '@eigenpal/docx-editor-core/pagination-model';
 import type {
-  FlowBlock,
+  ContentNode,
   ImageBlock,
-  Measure,
+  LayoutMetrics,
   ParagraphBlock,
   TableBlock,
-  TableMeasure,
+  TableMetrics,
   TextBoxBlock,
 } from '@eigenpal/docx-editor-core/pagination-model';
 import {
   type FloatingImageZone,
   type FloatPageGeometry,
+  floatZoneKey,
   getCachedParagraphMetrics,
   measureBlocksWithFloats,
   paragraphLayout,
@@ -39,62 +40,64 @@ import {
  * Measure a block based on its type.
  */
 export function measureBlock(
-  block: FlowBlock,
+  node: ContentNode,
   contentWidth: number,
   floatingZones?: FloatingImageZone[],
   cumulativeY?: number
-): Measure {
-  switch (block.kind) {
+): LayoutMetrics {
+  switch (node.kind) {
     case 'paragraph': {
-      const pBlock = block as ParagraphBlock;
+      const paragraphNode = node as ParagraphBlock;
 
       // Cache paragraph measurements when no floating zones affect this block.
       // Safe because without floating zones the result depends only on content
       // and contentWidth (both captured in the cache key). When floating zones
       // ARE present, we always measure fresh since zones depend on inter-block
       // layout context (cumulative Y, neighboring floating tables/images).
-      if (!floatingZones || floatingZones.length === 0) {
-        const cached = getCachedParagraphMetrics(pBlock, contentWidth);
-        if (cached) return cached;
-      }
+      //
+      // The float context is part of the cache key, not a reason to skip the
+      // cache: the same paragraph beside an image and below it are different
+      // layouts, and `floatZoneKey` is what keeps them apart.
+      const floatKey = floatZoneKey(floatingZones ?? [], cumulativeY ?? 0);
 
-      const result = paragraphLayout(pBlock, contentWidth, {
+      const cached = getCachedParagraphMetrics(paragraphNode, contentWidth, floatKey);
+      if (cached) return cached;
+
+      const result = paragraphLayout(paragraphNode, contentWidth, {
         floatingZones,
         paragraphYOffset: cumulativeY ?? 0,
       });
 
-      if (!floatingZones || floatingZones.length === 0) {
-        setCachedParagraphMetrics(pBlock, contentWidth, result);
-      }
+      setCachedParagraphMetrics(paragraphNode, contentWidth, result, floatKey);
 
       return result;
     }
 
     case 'table': {
-      return measureTable(block as TableBlock, contentWidth, measureBlock);
+      return measureTable(node as TableBlock, contentWidth, measureBlock);
     }
 
     case 'image': {
-      const imageBlock = block as ImageBlock;
+      const imageNode = node as ImageBlock;
       return {
         kind: 'image',
-        width: imageBlock.width ?? 100,
-        height: imageBlock.height ?? 100,
+        width: imageNode.width ?? 100,
+        height: imageNode.height ?? 100,
       };
     }
 
     case 'textBox': {
-      const tb = block as TextBoxBlock;
+      const tb = node as TextBoxBlock;
       const margins = tb.margins ?? DEFAULT_TEXTBOX_MARGINS;
       const innerWidth = (tb.width ?? DEFAULT_TEXTBOX_WIDTH) - margins.left - margins.right;
-      const innerMeasures = tb.content.map((p) => paragraphLayout(p, innerWidth));
-      const contentHeight = innerMeasures.reduce((sum, m) => sum + m.totalHeight, 0);
+      const innerMetrics = tb.content.map((p) => paragraphLayout(p, innerWidth));
+      const contentHeight = innerMetrics.reduce((sum, metric) => sum + metric.totalHeight, 0);
       const totalHeight = tb.height ?? contentHeight + margins.top + margins.bottom;
       return {
         kind: 'textBox' as const,
         width: tb.width ?? DEFAULT_TEXTBOX_WIDTH,
         height: totalHeight,
-        innerMeasures,
+        innerMetrics,
       };
     }
 
@@ -108,23 +111,23 @@ export function measureBlock(
       return { kind: 'sectionBreak' };
 
     default:
-      // Exhaustiveness guard — see FlowBlock in core/pagination-model/types.ts.
-      assertExhaustiveFlowBlock(block, 'react PagedEditor measureBlock');
+      // Exhaustiveness guard — see ContentNode in core/pagination-model/types.ts.
+      assertExhaustiveContentNode(node, 'react PagedEditor measureBlock');
   }
 }
 
 /**
- * Measure all blocks with floating-image support. Pre-scans for anchored
+ * Measure all nodes with floating-image support. Pre-scans for anchored
  * images, floating tables, and floating textboxes, then threads the
- * exclusion zones plus cumulative Y into each per-block measurement.
+ * exclusion zones plus cumulative Y into each per-node measurement.
  */
 export function measureBlocks(
-  blocks: FlowBlock[],
+  nodes: ContentNode[],
   contentWidth: number | number[],
   pageGeometry?: FloatPageGeometry
-): Measure[] {
-  return measureBlocksWithFloats(blocks, contentWidth, measureBlock, pageGeometry);
+): LayoutMetrics[] {
+  return measureBlocksWithFloats(nodes, contentWidth, measureBlock, pageGeometry);
 }
 
-// TableMeasure used internally above; re-exported for tests that compare types.
-export type { TableMeasure };
+// TableMetrics used internally above; re-exported for tests that compare types.
+export type { TableMetrics };

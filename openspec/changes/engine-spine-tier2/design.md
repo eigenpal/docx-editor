@@ -23,7 +23,7 @@ Constraints: CLAUDE.md dual-rendering model (hidden PM = editing state; painter 
 - Shipping the vanilla package (#89) — separate change, unblocked by this.
 - Changing the overlay-painting strategy (React declarative state vs Vue imperative createElement).
 - The cell-drag→CellSelection pointer promotion (Vue cell-select gap) — pointer-controller work; may ride a step but is not core to the engine.
-- Reworking the FlowBlock measure/layout/paint algorithms (already core).
+- Reworking the ContentNode metrics/page-layout/paint algorithms (already core).
 
 ## Decisions
 

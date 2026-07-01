@@ -183,7 +183,7 @@ function buildReport() {
   // Drop pure core re-exports — the surface lives in core, not in
   // the adapter, so they shouldn't count as adapter-specific drift.
   // Also drop files documented as intentional render-path divergence
-  // (Vue ships the same behaviour via core's painter-model).
+  // (Vue ships the same behaviour via core's painter).
   const reactComponents = reactFiles
     .map(extractFromFile)
     .filter((f) => !f.isCoreReexport && !INTENTIONAL_RENDER_PATH.has(f.componentName));

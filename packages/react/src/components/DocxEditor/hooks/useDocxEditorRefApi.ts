@@ -171,7 +171,7 @@ export function useDocxEditorRefApi({
       getPageContent: (pageNumber) =>
         getPageContentCore(
           pagedEditorRef.current?.getView() ?? null,
-          pagedEditorRef.current?.getLayout() ?? null,
+          (pagedEditorRef.current?.getLayout() ?? null) as Parameters<typeof getPageContentCore>[1],
           pageNumber
         ),
 

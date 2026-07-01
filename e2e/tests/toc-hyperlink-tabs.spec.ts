@@ -31,7 +31,7 @@ test('hyperlink-wrapped TOC entry preserves tab runs between number, title, and 
   expect(bodyText).toContain('Introduction');
   expect(bodyText).toContain('5');
 
-  // Both tab runs survive the hyperlink boundary. The painter-model emits
+  // Both tab runs survive the hyperlink boundary. The painter emits
   // tabs as inline-block elements with class layout-run-tab.
   const tabCount = await page1.locator('.layout-run-tab').count();
   expect(tabCount).toBeGreaterThanOrEqual(2);

@@ -28,7 +28,7 @@ import {
   selectParagraph as selectParagraphImpl,
 } from '../utils/domQueries';
 import type { ImageSelectionInfo } from '../components/imageSelectionTypes';
-import type { Layout } from '@eigenpal/docx-editor-core/pagination-model';
+import type { PageLayout } from '@eigenpal/docx-editor-core/pagination-model';
 import type { HyperlinkPopupData } from '../components/ui/hyperlinkPopupTypes';
 import { useDragAutoScroll } from './useDragAutoScroll';
 import {
@@ -72,7 +72,7 @@ export interface UsePagesPointerOptions {
   hyperlinkPopupData: Ref<HyperlinkPopupData | null>;
   readOnly: Ref<boolean>;
   zoom: Ref<number>;
-  layout: Ref<Layout | null>;
+  pageLayout: Ref<PageLayout | null>;
   tableResize: TableResizeApi;
   getCommands: () => Commands;
   getDocument: () => Document | null;
@@ -686,19 +686,19 @@ export function usePagesPointer(opts: UsePagesPointerOptions): UsePagesPointerRe
 
   function handleViewportScroll() {
     const container = opts.pagesViewportRef.value;
-    const lay = opts.layout.value;
-    if (!container || !lay || lay.pages.length === 0) return;
+    const pageLayout = opts.pageLayout.value;
+    if (!container || !pageLayout || pageLayout.pages.length === 0) return;
 
     const scrollTop = container.scrollTop;
-    const totalPages = lay.pages.length;
+    const totalPages = pageLayout.pages.length;
     const PAGE_GAP = 24; // matches DEFAULT_PAGE_GAP in useDocxEditor
     const PADDING_TOP = 24;
 
     const viewportCenter = scrollTop + container.clientHeight / 2;
     let accumulatedY = PADDING_TOP;
     let currentPage = 1;
-    for (let i = 0; i < lay.pages.length; i++) {
-      const pageHeight = lay.pages[i].size.h;
+    for (let i = 0; i < pageLayout.pages.length; i++) {
+      const pageHeight = pageLayout.pages[i].size.h;
       const pageEnd = accumulatedY + pageHeight;
       if (viewportCenter < pageEnd) {
         currentPage = i + 1;

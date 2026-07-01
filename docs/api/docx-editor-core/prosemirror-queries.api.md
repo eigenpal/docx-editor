@@ -35,7 +35,7 @@ export interface FindInDocumentMatch {
 }
 
 // @public
-export function getPageContent(view: EditorView | null, layout: Layout | null, pageNumber: number): PageContent | null;
+export function getPageContent(view: EditorView | null, pageLayout: PageLayout | null, pageNumber: number): PageContent | null;
 
 // @public
 export function getSelectionInfo(view: EditorView | null): SelectionInfo | null;
