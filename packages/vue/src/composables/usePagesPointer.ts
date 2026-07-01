@@ -21,6 +21,7 @@ import {
   detectTableInsertHover,
   TABLE_INSERT_HIDE_DELAY_MS,
 } from '@eigenpal/docx-editor-core/flow-model/tableInsertHover';
+import { resolveHfDomPosition } from '@eigenpal/docx-editor-core/flow-model';
 import {
   scrollVisiblePositionIntoView as scrollVisiblePositionIntoViewImpl,
   resolvePos as resolvePosImpl,
@@ -53,6 +54,8 @@ export interface TableInsertButton {
 export interface HfEditState {
   position: 'header' | 'footer';
   rId: string | null;
+  variant: 'default' | 'first' | 'even';
+  sectionIndex: number;
   headerFooter: HeaderFooter | null;
   targetRect: { top: number; left: number; width: number; height: number } | null;
 }
@@ -100,6 +103,34 @@ export interface UsePagesPointerOptions {
 }
 
 const MULTI_CLICK_DELAY = 500;
+
+function updateSectionPropertiesAt(
+  body: Document['package']['document'],
+  sectionIndex: number,
+  update: (properties: SectionProperties) => SectionProperties
+): Document['package']['document'] {
+  let breakSectionIndex = 0;
+  const content = body.content.map((block) => {
+    if (!('sectionProperties' in block) || !block.sectionProperties) return block;
+    const current = breakSectionIndex++;
+    return current === sectionIndex
+      ? { ...block, sectionProperties: update(block.sectionProperties) }
+      : block;
+  });
+  const sections = body.sections?.map((section, index) =>
+    index === sectionIndex ? { ...section, properties: update(section.properties) } : section
+  );
+  const finalIndex = Math.max(0, (sections?.length ?? 1) - 1);
+  return {
+    ...body,
+    content,
+    sections,
+    finalSectionProperties:
+      sectionIndex === finalIndex && body.finalSectionProperties
+        ? update(body.finalSectionProperties)
+        : body.finalSectionProperties,
+  };
+}
 
 export interface UsePagesPointerReturn {
   tableInsertButton: Ref<TableInsertButton | null>;
@@ -165,6 +196,19 @@ export function usePagesPointer(opts: UsePagesPointerOptions): UsePagesPointerRe
   let scrollFadeTimer: ReturnType<typeof setTimeout> | null = null;
 
   function resolvePos(clientX: number, clientY: number): number | null {
+    const edit = hfEdit.value;
+    if (edit) {
+      const selector =
+        edit.position === 'header' ? '.layout-page-header' : '.layout-page-footer';
+      const host = document
+        .elementsFromPoint(clientX, clientY)
+        .map((element) => (element as HTMLElement).closest<HTMLElement>(selector))
+        .find(
+          (element): element is HTMLElement =>
+            element != null && (!edit.rId || element.dataset.hfRId === edit.rId)
+        );
+      return host ? resolveHfDomPosition(host, clientX, clientY) : null;
+    }
     return resolvePosImpl(opts.pagesRef.value, opts.editorView.value, clientX, clientY);
   }
 
@@ -371,19 +415,19 @@ export function usePagesPointer(opts: UsePagesPointerOptions): UsePagesPointerRe
     const doc = opts.getDocument();
     if (!doc?.package) return;
 
-    // Resolve the HF for the current section. Mirrors the lookup in
-    // useDocxEditor.runLayoutPipeline so what the user sees on page is
-    // what they get to edit.
+    // The painter stamps the exact section/variant/rId used for this page.
+    // Route editing through those values instead of re-resolving from section 0.
+    const sectionIndex = Number(hfEl.dataset.sectionIndex ?? 0);
+    const variant =
+      hfEl.dataset.hfVariant === 'first' || hfEl.dataset.hfVariant === 'even'
+        ? hfEl.dataset.hfVariant
+        : 'default';
     const sp =
-      doc.package.document?.sections?.[0]?.properties ??
+      doc.package.document?.sections?.[sectionIndex]?.properties ??
       doc.package.document?.finalSectionProperties ??
       null;
-    const refs = position === 'header' ? sp?.headerReferences : sp?.footerReferences;
     const map = position === 'header' ? doc.package.headers : doc.package.footers;
-    // Default ref takes priority; fall back to `first` if the doc only ships first.
-    const refEntry =
-      refs?.find((r) => r.type === 'default') ?? refs?.find((r) => r.type === 'first') ?? null;
-    let rId: string | null = refEntry?.rId ?? null;
+    let rId: string | null = hfEl.dataset.hfRId ?? null;
     let hf: HeaderFooter | null = rId ? (map?.get(rId) ?? null) : null;
 
     // Materialise an empty HF part if none exists for this section yet
@@ -392,8 +436,16 @@ export function usePagesPointer(opts: UsePagesPointerOptions): UsePagesPointerRe
     // header is a no-op — the user has no way to add one.
     if (!hf) {
       if (!sp) return;
-      const hdrFtrType = 'default' as const;
-      const newRId = `rId_new_${position}_${hdrFtrType}`;
+      const hdrFtrType = variant;
+      let suffix = 1;
+      let newRId = `rId_new_${position}_${hdrFtrType}_${suffix}`;
+      while (
+        doc.package.headers?.has(newRId) ||
+        doc.package.footers?.has(newRId) ||
+        doc.package.relationships?.has(newRId)
+      ) {
+        newRId = `rId_new_${position}_${hdrFtrType}_${++suffix}`;
+      }
       const emptyHf: HeaderFooter = {
         type: position,
         hdrFtrType,
@@ -427,25 +479,20 @@ export function usePagesPointer(opts: UsePagesPointerOptions): UsePagesPointerRe
       // pushDocument path) so any computeds watching document identity
       // refire and undo/redo can track the materialization event.
       const newRef = { type: hdrFtrType, rId: newRId };
-      const newSp = sp ? { ...sp, [refKey]: [...(sp[refKey] ?? []), newRef] } : sp;
+      const newBody = updateSectionPropertiesAt(doc.package.document, sectionIndex, (properties) => ({
+        ...properties,
+        [refKey]: [
+          ...(properties[refKey] ?? []).filter((entry) => entry.type !== hdrFtrType),
+          newRef,
+        ],
+      }));
       const newDoc: Document = {
         ...doc,
         package: {
           ...doc.package,
           [mapKey]: newMap,
           relationships: newRels,
-          document: doc.package.document
-            ? {
-                ...doc.package.document,
-                sections: doc.package.document.sections?.map((s, i) =>
-                  i === 0 ? { ...s, properties: newSp ?? s.properties } : s
-                ),
-                finalSectionProperties:
-                  doc.package.document.finalSectionProperties === sp
-                    ? newSp
-                    : doc.package.document.finalSectionProperties,
-              }
-            : doc.package.document,
+          document: newBody,
         },
       };
       rId = newRId;
@@ -466,6 +513,8 @@ export function usePagesPointer(opts: UsePagesPointerOptions): UsePagesPointerRe
     hfEdit.value = {
       position,
       rId,
+      variant,
+      sectionIndex,
       headerFooter: hf,
       targetRect: {
         top: (elRect.top - vpRect.top + viewport.scrollTop) / z,
@@ -506,48 +555,27 @@ export function usePagesPointer(opts: UsePagesPointerOptions): UsePagesPointerRe
       hfEdit.value = null;
       return;
     }
-    // Actually remove the header/footer (mirror React's
-    // useHeaderFooterEditing.handleRemoveHeaderFooter): drop the part from
-    // the headers/footers map AND strip every section reference that points
-    // at it. Clearing `content` alone (the old behavior) left an empty
-    // header/footer still referenced by the section, so it kept rendering.
     const mapKey = edit.position === 'header' ? 'headers' : 'footers';
     const refKey = edit.position === 'header' ? 'headerReferences' : 'footerReferences';
     const rId = edit.rId;
-
-    const newMap = new Map(doc.package[mapKey] ?? []);
-    newMap.delete(rId);
-
-    // Strip the reference everywhere a section can carry it: each
-    // sections[].properties, finalSectionProperties, and any mid-body
-    // section break (a paragraph's pPr/sectPr in body.content). The painter
-    // and serializer read from these, so the ref must be gone from all of
-    // them or the header/footer keeps rendering or re-serializes.
     const stripRefs = (sp: SectionProperties): SectionProperties => ({
       ...sp,
       [refKey]: (sp[refKey] ?? []).filter((r) => r.rId !== rId),
     });
-    const stripBlock = <T extends BlockContent>(block: T): T =>
-      'sectionProperties' in block && block.sectionProperties
-        ? { ...block, sectionProperties: stripRefs(block.sectionProperties) }
-        : block;
-
     const body = doc.package.document;
+    const nextBody = updateSectionPropertiesAt(body, edit.sectionIndex, stripRefs);
+    const stillReferenced =
+      (nextBody.sections ?? []).some((section) =>
+        (section.properties[refKey] ?? []).some((ref) => ref.rId === rId)
+      ) || (nextBody.finalSectionProperties?.[refKey] ?? []).some((ref) => ref.rId === rId);
+    const newMap = new Map(doc.package[mapKey] ?? []);
+    if (!stillReferenced) newMap.delete(rId);
     const newDoc: Document = {
       ...doc,
       package: {
         ...doc.package,
         [mapKey]: newMap,
-        document: body
-          ? {
-              ...body,
-              content: body.content.map(stripBlock),
-              sections: body.sections?.map((s) => ({ ...s, properties: stripRefs(s.properties) })),
-              finalSectionProperties: body.finalSectionProperties
-                ? stripRefs(body.finalSectionProperties)
-                : body.finalSectionProperties,
-            }
-          : body,
+        document: nextBody,
       },
     };
 

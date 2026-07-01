@@ -211,7 +211,7 @@
           <ImageSelectionOverlay
             :image-info="selectedImage"
             :zoom="zoom"
-            :view="editorView"
+            :view="activeFormattingView"
             @open-properties="showImageProperties = true"
             @deselect="selectedImage = null"
             @interact-start="imageInteracting = true"
@@ -993,7 +993,7 @@ const {
   imageToolbarContext,
   handleToolbarImageWrap,
   handleImageTransform,
-} = useImageActions({ editorView, zoom, stateTick, getCommands });
+} = useImageActions({ editorView: activeFormattingView, zoom, stateTick, getCommands });
 
 const tableResize = useTableResize();
 let tableResizeCleanup: (() => void) | null = null;
@@ -1043,7 +1043,7 @@ const {
   handleImageWrapSelect,
   handleContextMenuAction,
 } = useContextMenus({
-  editorView,
+  editorView: activeFormattingView,
   selectedImage,
   zoom,
   showImageProperties,
@@ -1076,6 +1076,7 @@ const { handleMenuAction, handleMenuTableInsert } = useMenuActions({
 useDocumentLifecycle({
   documentBuffer: () => props.documentBuffer,
   document: () => props.document,
+  currentDocument: getDocument,
   loadDocumentBuffer,
   loadDocument,
   sidebarAutoOpenedRef,

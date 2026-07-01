@@ -117,6 +117,28 @@ export function useSelectionSync(opts: UseSelectionSyncOptions): UseSelectionSyn
     });
   });
 
+  onMounted(() => {
+    let frame = 0;
+    const invalidateGeometry = () => {
+      if (frame) return;
+      frame = requestAnimationFrame(() => {
+        frame = 0;
+        updateSelectionOverlay();
+      });
+    };
+    const observer =
+      typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(invalidateGeometry);
+    if (opts.pagesRef.value) observer?.observe(opts.pagesRef.value);
+    if (opts.pagesRef.value?.parentElement) observer?.observe(opts.pagesRef.value.parentElement);
+    window.addEventListener('resize', invalidateGeometry);
+
+    onBeforeUnmount(() => {
+      if (frame) cancelAnimationFrame(frame);
+      observer?.disconnect();
+      window.removeEventListener('resize', invalidateGeometry);
+    });
+  });
+
   /**
    * The overlay is a sibling of the painted pages, sharing their coordinate
    * origin — so a rectangle's position is just its offset from the pages box,

@@ -95,6 +95,8 @@ export interface PagedEditorProps {
   firstPageHeaderContent?: HeaderFooter | null;
   /** Footer content for first page only (when titlePg is set). */
   firstPageFooterContent?: HeaderFooter | null;
+  /** Relationship id of the exact painted header/footer story being edited. */
+  activeHfRId?: string | null;
   /** Whether the editor is read-only. */
   readOnly?: boolean;
   /** Gap between pages in pixels. */
@@ -301,6 +303,7 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
       footerContent,
       firstPageHeaderContent,
       firstPageFooterContent,
+      activeHfRId,
       readOnly = false,
       pageGap = DEFAULT_PAGE_GAP,
       zoom = 1,
@@ -546,6 +549,12 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
       getScrollContainer,
     });
 
+    const getActiveHfView = useCallback(
+      () =>
+        activeHfRId ? (hiddenHfPMsRef.current?.getView(activeHfRId) ?? null) : null,
+      [activeHfRId]
+    );
+
     // Pointer routing — every mouse path on the visible pages: cursor
     // placement, drag-to-select (with cell-selection promotion), table
     // resize handles, the floating "+" insert button, hyperlink clicks,
@@ -568,19 +577,10 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
       // so usePagesPointer can route every gesture (single-click, drag,
       // multi-click, image-select, hyperlink, context menu) through the
       // HF PM instead of the body PM.
-      getHfView: useCallback(() => {
-        const hfRef = hiddenHfPMsRef.current;
-        if (!hfRef) return null;
-        const sp = document?.package?.document?.finalSectionProperties;
-        const refs = hfEditMode === 'header' ? sp?.headerReferences : sp?.footerReferences;
-        const refEntry =
-          refs?.find((r) => r.type === 'default') ?? refs?.find((r) => r.type === 'first') ?? null;
-        if (!refEntry?.rId) return null;
-        return hfRef.getView(refEntry.rId);
-      }, [hfEditMode, document]),
-      pageLayout,
-      nodes,
-      metrics,
+      getHfView: getActiveHfView,
+      layout,
+      blocks,
+      measures,
       zoom,
       readOnly,
       hfEditMode,
@@ -655,6 +655,8 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
     } = useImageInteractions({
       pagesContainerRef,
       hiddenPMRef,
+      getActiveView: getActiveHfView,
+      activeRegion: hfEditMode,
       zoom,
       isImageInteractingRef,
       getPositionFromMouse,

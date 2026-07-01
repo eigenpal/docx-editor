@@ -63,6 +63,7 @@ export function DocxEditorPagedArea({
   firstPageHeaderContent,
   firstPageFooterContent,
   activeHf,
+  activeHfRId,
   hfEditPosition,
   setHfEditPosition,
   onHeaderFooterDoubleClick,
@@ -129,6 +130,7 @@ export function DocxEditorPagedArea({
   firstPageHeaderContent: HeaderFooter | null | undefined;
   firstPageFooterContent: HeaderFooter | null | undefined;
   activeHf: HeaderFooter | null;
+  activeHfRId: string | null;
   hfEditPosition: 'header' | 'footer' | null;
   setHfEditPosition: React.Dispatch<React.SetStateAction<'header' | 'footer' | null>>;
   onHeaderFooterDoubleClick: (
@@ -324,6 +326,7 @@ export function DocxEditorPagedArea({
         footerContent={footerContent}
         firstPageHeaderContent={firstPageHeaderContent}
         firstPageFooterContent={firstPageFooterContent}
+        activeHfRId={activeHfRId}
         onHeaderFooterDoubleClick={onHeaderFooterDoubleClick}
         hfEditMode={hfEditPosition}
         onBodyClick={onBodyClick}

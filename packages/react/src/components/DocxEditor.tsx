@@ -1857,6 +1857,7 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
             firstPageHeaderContent={firstPageHeaderContent}
             firstPageFooterContent={firstPageFooterContent}
             activeHf={activeHf}
+            activeHfRId={hfEditRId}
             hfEditPosition={hfEditPosition}
             setHfEditPosition={setHfEditPosition}
             onHeaderFooterDoubleClick={handleHeaderFooterDoubleClick}
