@@ -225,12 +225,20 @@ export interface UseDocxEditorReturn {
    * faces + system-resolved), for the picker's "Document fonts" group.
    */
   documentFonts: Ref<FontOption[]>;
-  /** Computed page layout. */
-  pageLayout: ShallowRef<PageLayout | null>;
-  /** Content nodes behind the current `pageLayout`, used for selection mapping. */
-  nodes: ShallowRef<ContentNode[]>;
-  /** Measurements behind the current `pageLayout`, used for selection mapping. */
-  metrics: ShallowRef<LayoutMetrics[]>;
+  /** @internal Engine layout state consumed by the first-party Vue shell. */
+  layout: ShallowRef<Layout | null>;
+  /**
+   * The flow blocks behind the current `layout`, and their measures.
+   *
+   * Selection mapping needs them when the painted DOM can't answer — a page
+   * virtualization hasn't rendered, or the frame before a repaint lands. Without
+   * a layout-math fallback the caret simply disappears in those moments.
+   *
+   * @internal
+   */
+  blocks: ShallowRef<FlowBlock[]>;
+  /** @internal Measurements paired with the first-party shell's flow blocks. */
+  measures: ShallowRef<Measure[]>;
   /** Load a DOCX from a binary buffer. */
   loadBuffer: (buffer: ArrayBuffer | Uint8Array | Blob | File) => Promise<void>;
   /** Load a parsed `Document` directly. */

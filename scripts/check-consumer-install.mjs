@@ -60,7 +60,10 @@ try {
       {
         private: true,
         type: 'module',
-        scripts: { build: 'vite build' },
+        scripts: {
+          typecheck: 'vue-tsc --noEmit',
+          build: 'npm run typecheck && vite build',
+        },
         dependencies: {},
         devDependencies: {},
       },
@@ -75,9 +78,15 @@ try {
     `<script setup lang="ts">
 import { ref } from 'vue';
 import { DocxEditor } from '@eigenpal/docx-editor-vue';
+import { caretAt, rectsFor, renderDocument } from '@eigenpal/docx-editor-core/api';
 import '@eigenpal/docx-editor-vue/styles.css';
 
 const buffer = ref<ArrayBuffer | null>(null);
+console.assert(
+  typeof renderDocument === 'function' &&
+    typeof caretAt === 'function' &&
+    typeof rectsFor === 'function'
+);
 
 async function loadFile(event: Event) {
   const file = (event.target as HTMLInputElement).files?.[0];
@@ -118,18 +127,29 @@ export default defineConfig({ plugins: [vue()] });
           moduleResolution: 'Bundler',
           jsx: 'preserve',
           skipLibCheck: true,
-          types: ['vite/client'],
         },
-        include: ['src/**/*.ts', 'src/**/*.vue', 'vite.config.ts'],
+        include: ['src/**/*.ts', 'src/**/*.vue'],
       },
       null,
       2
     )
   );
 
-  run('npm', ['install', '--ignore-scripts', 'vue', '@vitejs/plugin-vue', 'vite', 'typescript', ...tarballs], {
-    cwd: appDir,
-  });
+  run(
+    'npm',
+    [
+      'install',
+      '--ignore-scripts',
+      'vue',
+      'vue-tsc',
+      '@vitejs/plugin-vue',
+      'vite',
+      // vue-tsc currently requires TypeScript's 5.x compiler internals.
+      'typescript@5.9.3',
+      ...tarballs,
+    ],
+    { cwd: appDir }
+  );
   run('npm', ['run', 'build'], { cwd: appDir });
   console.log('Fresh Vue consumer install/build passed.');
 } finally {

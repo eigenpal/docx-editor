@@ -46,7 +46,16 @@ export default defineConfig({
     // on PR #359.
     dts({
       include: ['src/**/*'],
-      exclude: ['src/**/__tests__/**', 'src/**/*.test-d.ts'],
+      exclude: [
+        'src/**/__tests__/**',
+        'src/**/*.test-d.ts',
+        // First-party shell plumbing. These modules are bundled into DocxEditor
+        // but are not package subpaths; emitting standalone declarations would
+        // preserve workspace-only rendering-model imports in the npm tarball.
+        'src/composables/useDocxEditorRefApi.ts',
+        'src/composables/usePagesPointer.ts',
+        'src/composables/useSelectionSync.ts',
+      ],
       // Pin the entry root so multi-entry builds still flatten declarations
       // to dist/index.d.ts + dist/ui.d.ts (auto-detect drifts to a parent
       // dir once core's workspace types enter the graph).
@@ -60,7 +69,7 @@ export default defineConfig({
       pathsToAliases: false,
       // Don't ship `.d.ts.map`. Maps point at source `.ts` files that
       // aren't in the published tarball, so they're dead weight.
-      compilerOptions: { declarationMap: false },
+      compilerOptions: { declarationMap: false, stripInternal: true },
     }),
   ],
   build: {

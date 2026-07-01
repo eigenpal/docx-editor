@@ -425,7 +425,7 @@ export interface ParagraphAttrs {
     spaceAfter?: number;
     // (undocumented)
     spaceBefore?: number;
-    spacingOverrides?: ParagraphSpacingOverrides;
+    spacingExplicit?: SpacingExplicit;
     // (undocumented)
     styleId?: string;
     // (undocumented)
@@ -433,6 +433,7 @@ export interface ParagraphAttrs {
     // (undocumented)
     textId?: string;
     trailingBlockMarkers?: BlockBookmarkMarkers;
+    widowControl?: boolean;
 }
 
 // @public
@@ -493,6 +494,17 @@ export const schema: prosemirror_model.Schema<any, any>;
 
 // @public (undocumented)
 export function selectColumn(state: EditorState, dispatch?: (tr: Transaction) => void): boolean;
+
+// @public
+export class SelectionBridge {
+    getStateSeq(): number;
+    incrementStateSeq(): void;
+    isSafeToRender(): boolean;
+    onLayoutComplete(epoch: number): void;
+    onLayoutStart(): void;
+    onRender(listener: RenderListener): () => void;
+    requestRender(): void;
+}
 
 // @public
 export type SelectionChangeCallback = (context: SelectionContext) => void;

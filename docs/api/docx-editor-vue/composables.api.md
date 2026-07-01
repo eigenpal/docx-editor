@@ -258,9 +258,6 @@ export interface UseDocxEditorReturn {
     isReady: Ref<boolean>;
     loadBuffer: (buffer: ArrayBuffer | Uint8Array | Blob | File) => Promise<void>;
     loadDocument: (doc: Document_2) => void;
-    metrics: ShallowRef<LayoutMetrics[]>;
-    nodes: ShallowRef<ContentNode[]>;
-    pageLayout: ShallowRef<PageLayout | null>;
     parseError: Ref<string | null>;
     reLayout: () => void;
     save: () => Promise<Blob | null>;
