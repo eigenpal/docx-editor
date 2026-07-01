@@ -5,7 +5,7 @@
  * doc gets the auto-open treatment. Also handles first-mount load.
  */
 
-import { watch, onMounted, nextTick, type Ref } from 'vue';
+import { watch, onMounted, nextTick, toRaw, type Ref } from 'vue';
 import type { Document } from '@eigenpal/docx-editor-core/types/document';
 import type { DocxInput } from '@eigenpal/docx-editor-core/utils';
 
@@ -13,6 +13,7 @@ export interface UseDocumentLifecycleOptions {
   documentBuffer: () => DocxInput | null;
   document: () => Document | null;
   currentDocument?: () => Document | null;
+  lastEmittedDocument?: () => Document | null;
   loadDocumentBuffer: (buffer: DocxInput) => Promise<void>;
   loadDocument: (doc: Document) => void;
   sidebarAutoOpenedRef: Ref<boolean>;
@@ -28,7 +29,15 @@ export function useDocumentLifecycle(opts: UseDocumentLifecycleOptions) {
     // A controlled host commonly echoes the exact object emitted by `change`.
     // That object is already the live editor cache; rebuilding ProseMirror here
     // would erase undo history after every keystroke.
-    if (doc === opts.currentDocument?.()) return;
+    const rawDoc = toRaw(doc);
+    const current = opts.currentDocument?.();
+    const lastEmitted = opts.lastEmittedDocument?.();
+    if (
+      (current && rawDoc === toRaw(current)) ||
+      (lastEmitted && rawDoc === toRaw(lastEmitted))
+    ) {
+      return;
+    }
     opts.sidebarAutoOpenedRef.value = false;
     opts.loadDocument(doc);
   }
