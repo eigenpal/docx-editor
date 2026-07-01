@@ -398,4 +398,53 @@ test.describe('public rendering facade', () => {
     ).toBeLessThanOrEqual(4);
     expect(tablePages.slice(1).every((entry) => entry.header === tablePages[0].header)).toBe(true);
   });
+
+  test('paints complex-script font attributes for RTL runs', async ({ page }) => {
+    const formatting = {
+      fontSize: 24,
+      fontSizeCs: 36,
+      fontFamily: { ascii: 'Arial', hAnsi: 'Arial', cs: 'David' },
+    };
+    await renderDocumentThroughPublicApi(page, {
+      package: {
+        document: {
+          content: [
+            {
+              type: 'paragraph',
+              content: [
+                {
+                  type: 'run',
+                  formatting: { ...formatting, rtl: true },
+                  content: [{ type: 'text', text: 'בדיקה' }],
+                },
+                {
+                  type: 'run',
+                  formatting,
+                  content: [{ type: 'text', text: 'Latin' }],
+                },
+              ],
+            },
+          ],
+        },
+      },
+    });
+
+    const styles = await page.evaluate(() => {
+      const runs = [...document.querySelectorAll<HTMLElement>('.layout-run-text')];
+      const read = (text: string) => {
+        const element = runs.find((run) => run.textContent === text);
+        if (!element) return null;
+        const style = getComputedStyle(element);
+        return { fontFamily: style.fontFamily, fontSize: style.fontSize };
+      };
+      return { rtl: read('בדיקה'), latin: read('Latin') };
+    });
+
+    expect(styles.rtl).not.toBeNull();
+    expect(styles.rtl!.fontFamily).toContain('David');
+    expect(styles.rtl!.fontSize).toBe('24px');
+    expect(styles.latin).not.toBeNull();
+    expect(styles.latin!.fontFamily).toContain('Arial');
+    expect(styles.latin!.fontSize).toBe('16px');
+  });
 });
