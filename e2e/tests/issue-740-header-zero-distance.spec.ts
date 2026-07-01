@@ -51,6 +51,7 @@ test.describe('issue #740 — w:header="0" pagination parity', () => {
         totalLineCount: lines.length,
         firstLongParagraphLineCount:
           paragraphs[2]?.querySelectorAll('.layout-line').length ?? 0,
+        firstLineHeight: Number.parseFloat(lines[0]?.style.lineHeight ?? '0'),
         lastParagraphBottomRatio:
           pageRect && lastRect ? (lastRect.bottom - pageRect.top) / pageRect.height : 0,
         maxTextOverflow,
@@ -60,7 +61,8 @@ test.describe('issue #740 — w:header="0" pagination parity', () => {
     expect(bodyGeometry.paragraphCount).toBe(12);
     expect(bodyGeometry.firstLongParagraphLineCount).toBe(8);
     expect(bodyGeometry.totalLineCount).toBe(43);
-    expect(bodyGeometry.lastParagraphBottomRatio).toBeGreaterThan(0.85);
+    expect(bodyGeometry.firstLineHeight).toBeCloseTo(17.7184, 2);
+    expect(bodyGeometry.lastParagraphBottomRatio).toBeCloseTo(0.88447, 2);
     expect(bodyGeometry.maxTextOverflow).toBeLessThanOrEqual(1);
 
     // The header is pinned to the page top (`w:header="0"`), so the body content
