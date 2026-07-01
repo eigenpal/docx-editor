@@ -513,6 +513,7 @@ const pagesViewportRef = ref<HTMLElement | null>(null);
 const stateTick = ref(0);
 const contentChangeSubscribers = new Set<(document: unknown) => void>();
 const selectionChangeSubscribers = new Set<(selection: unknown) => void>();
+let lastEmittedDocument: Document | null = null;
 const syncCoordinator = new SelectionBridge();
 const showFindReplace = ref(false);
 const showHyperlink = ref(false);
@@ -581,6 +582,7 @@ const {
   editorMode,
   author: authorRef,
   onChange: (doc) => {
+    lastEmittedDocument = doc;
     emit('change', doc);
     emit('update:document', doc);
     props.onChange?.(doc);
@@ -1077,6 +1079,7 @@ useDocumentLifecycle({
   documentBuffer: () => props.documentBuffer,
   document: () => props.document,
   currentDocument: getDocument,
+  lastEmittedDocument: () => lastEmittedDocument,
   loadDocumentBuffer,
   loadDocument,
   sidebarAutoOpenedRef,

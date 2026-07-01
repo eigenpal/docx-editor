@@ -673,8 +673,16 @@ async function handleSave() {
   }
 }
 
-function handleDocumentChange(_doc: Document) {
-  // no-op — could track dirty state here
+function handleDocumentChange(doc: Document) {
+  // E2E hook: echo the emitted object through the controlled `document` prop.
+  // Real hosts commonly use this pattern, and the editor must not rebuild its
+  // ProseMirror view (or lose undo history) for that same-object echo.
+  if (
+    typeof window !== 'undefined' &&
+    new URLSearchParams(window.location.search).get('controlledDocument') === '1'
+  ) {
+    currentDocument.value = doc;
+  }
 }
 
 function handleError(error: Error) {
