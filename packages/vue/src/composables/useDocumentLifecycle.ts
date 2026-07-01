@@ -12,6 +12,7 @@ import type { DocxInput } from '@eigenpal/docx-editor-core/utils';
 export interface UseDocumentLifecycleOptions {
   documentBuffer: () => DocxInput | null;
   document: () => Document | null;
+  currentDocument?: () => Document | null;
   loadDocumentBuffer: (buffer: DocxInput) => Promise<void>;
   loadDocument: (doc: Document) => void;
   sidebarAutoOpenedRef: Ref<boolean>;
@@ -24,6 +25,10 @@ export function useDocumentLifecycle(opts: UseDocumentLifecycleOptions) {
   }
 
   function loadDocReset(doc: Document) {
+    // A controlled host commonly echoes the exact object emitted by `change`.
+    // That object is already the live editor cache; rebuilding ProseMirror here
+    // would erase undo history after every keystroke.
+    if (doc === opts.currentDocument?.()) return;
     opts.sidebarAutoOpenedRef.value = false;
     opts.loadDocument(doc);
   }
