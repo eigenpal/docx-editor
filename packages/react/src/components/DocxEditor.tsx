@@ -685,6 +685,8 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
   // can read hfEditPosition before useHeaderFooterEditing is called).
   const [hfEditPosition, setHfEditPosition] = useState<'header' | 'footer' | null>(null);
   const [hfEditIsFirstPage, setHfEditIsFirstPage] = useState(false);
+  const [hfEditRId, setHfEditRId] = useState<string | null>(null);
+  const [hfEditSectionIndex, setHfEditSectionIndex] = useState<number | null>(null);
 
   // Controlled by `commentsSidebarOpen` when provided, else editor-owned; the
   // setter routes through `onCommentsSidebarOpenChange`. See useControllableBoolean.
@@ -1294,6 +1296,7 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
     footerContent,
     firstPageHeaderContent,
     firstPageFooterContent,
+    activeHf,
     handleHeaderFooterDoubleClick,
     handleHeaderFooterSave,
     handleBodyClick,
@@ -1310,6 +1313,10 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
     setHfEditPosition,
     hfEditIsFirstPage,
     setHfEditIsFirstPage,
+    hfEditRId,
+    setHfEditRId,
+    hfEditSectionIndex,
+    setHfEditSectionIndex,
   });
 
   // Container styles - using overflow: auto so sticky toolbar works
@@ -1849,9 +1856,9 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
             footerContent={footerContent}
             firstPageHeaderContent={firstPageHeaderContent}
             firstPageFooterContent={firstPageFooterContent}
+            activeHf={activeHf}
             hfEditPosition={hfEditPosition}
             setHfEditPosition={setHfEditPosition}
-            hfEditIsFirstPage={hfEditIsFirstPage}
             onHeaderFooterDoubleClick={handleHeaderFooterDoubleClick}
             onHeaderFooterSave={handleHeaderFooterSave}
             onRemoveHeaderFooter={handleRemoveHeaderFooter}

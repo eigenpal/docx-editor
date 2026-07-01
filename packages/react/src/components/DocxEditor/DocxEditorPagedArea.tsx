@@ -62,9 +62,9 @@ export function DocxEditorPagedArea({
   footerContent,
   firstPageHeaderContent,
   firstPageFooterContent,
+  activeHf,
   hfEditPosition,
   setHfEditPosition,
-  hfEditIsFirstPage,
   onHeaderFooterDoubleClick,
   onHeaderFooterSave,
   onRemoveHeaderFooter,
@@ -128,10 +128,18 @@ export function DocxEditorPagedArea({
   footerContent: HeaderFooter | null | undefined;
   firstPageHeaderContent: HeaderFooter | null | undefined;
   firstPageFooterContent: HeaderFooter | null | undefined;
+  activeHf: HeaderFooter | null;
   hfEditPosition: 'header' | 'footer' | null;
   setHfEditPosition: React.Dispatch<React.SetStateAction<'header' | 'footer' | null>>;
-  hfEditIsFirstPage: boolean;
-  onHeaderFooterDoubleClick: (position: 'header' | 'footer', pageNumber?: number) => void;
+  onHeaderFooterDoubleClick: (
+    position: 'header' | 'footer',
+    pageNumber?: number,
+    target?: {
+      rId: string | null;
+      variant: 'default' | 'first' | 'even';
+      sectionIndex: number;
+    }
+  ) => void;
   onHeaderFooterSave: (content: BlockContent[]) => void;
   onRemoveHeaderFooter: () => void;
   onHfTransaction?: (rId: string, view: EditorView, docChanged: boolean) => void;
@@ -190,18 +198,6 @@ export function DocxEditorPagedArea({
   isSuggesting?: boolean;
   author?: string;
 }) {
-  // Resolve the active HF block for the inline editor — first-page variant
-  // wins when `titlePg` is set and the user double-clicked page 1.
-  const activeHf = hfEditPosition
-    ? hfEditIsFirstPage
-      ? hfEditPosition === 'header'
-        ? firstPageHeaderContent
-        : firstPageFooterContent
-      : hfEditPosition === 'header'
-        ? headerContent
-        : footerContent
-    : null;
-
   // Phase 4 of HF editing unification: the painter is the visible HF
   // renderer (phase 2) and the inline overlay's PM is off-screen — so the
   // user has no visible caret in the painted region. We compute one here
