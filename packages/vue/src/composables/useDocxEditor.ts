@@ -68,20 +68,20 @@ import {
 import {
   DEFAULT_TEXTBOX_MARGINS,
   DEFAULT_TEXTBOX_WIDTH,
-  assertExhaustiveFlowBlock,
+  assertExhaustiveContentNode,
 } from '@eigenpal/docx-editor-core/pagination-model';
 import { paintPages } from '@eigenpal/docx-editor-core/painter-model/paintPage';
 import type {
-  FlowBlock,
-  Layout,
-  Measure,
+  ContentNode,
+  PageLayout,
+  LayoutMetrics,
   ParagraphBlock,
   TableBlock,
   ImageBlock,
   TextBoxBlock,
 } from '@eigenpal/docx-editor-core/pagination-model/types';
 import {
-  indexBlocksById,
+  indexNodesById,
   enclosingSdtGroupIds,
   applySdtFocus,
 } from '@eigenpal/docx-editor-core/painter-model';
@@ -121,38 +121,38 @@ const DEFAULT_PAGE_GAP = 24;
  * so React and Vue stay in lockstep on table-cell measurement.
  */
 function measureBlock(
-  block: FlowBlock,
+  node: ContentNode,
   contentWidth: number,
   floatingZones?: FloatingImageZone[],
   cumulativeY?: number
-): Measure {
-  switch (block.kind) {
+): LayoutMetrics {
+  switch (node.kind) {
     case 'paragraph':
-      return paragraphLayout(block as ParagraphBlock, contentWidth, {
+      return paragraphLayout(node as ParagraphBlock, contentWidth, {
         floatingZones,
         paragraphYOffset: cumulativeY ?? 0,
       });
 
     case 'table':
-      return measureTable(block as TableBlock, contentWidth, measureBlock);
+      return measureTable(node as TableBlock, contentWidth, measureBlock);
 
     case 'image': {
-      const ib = block as ImageBlock;
+      const ib = node as ImageBlock;
       return { kind: 'image', width: ib.width ?? 100, height: ib.height ?? 100 };
     }
 
     case 'textBox': {
-      const tb = block as TextBoxBlock;
+      const tb = node as TextBoxBlock;
       const margins = tb.margins ?? DEFAULT_TEXTBOX_MARGINS;
       const innerWidth = (tb.width ?? DEFAULT_TEXTBOX_WIDTH) - margins.left - margins.right;
-      const innerMeasures = tb.content.map((p) => paragraphLayout(p, innerWidth));
-      const contentHeight = innerMeasures.reduce((sum, m) => sum + m.totalHeight, 0);
+      const innerMetrics = tb.content.map((p) => paragraphLayout(p, innerWidth));
+      const contentHeight = innerMetrics.reduce((sum, metric) => sum + metric.totalHeight, 0);
       const totalHeight = tb.height ?? contentHeight + margins.top + margins.bottom;
       return {
         kind: 'textBox' as const,
         width: tb.width ?? DEFAULT_TEXTBOX_WIDTH,
         height: totalHeight,
-        innerMeasures,
+        innerMetrics,
       };
     }
 
@@ -166,17 +166,17 @@ function measureBlock(
       return { kind: 'sectionBreak' };
 
     default:
-      // Exhaustiveness guard — see FlowBlock in core/pagination-model/types.ts.
-      assertExhaustiveFlowBlock(block, 'vue useDocxEditor measureBlock');
+      // Exhaustiveness guard — see ContentNode in core/pagination-model/types.ts.
+      assertExhaustiveContentNode(node, 'vue useDocxEditor measureBlock');
   }
 }
 
 function measureBlocks(
-  blocks: FlowBlock[],
+  nodes: ContentNode[],
   contentWidth: number | number[],
   pageGeometry?: FloatPageGeometry
-): Measure[] {
-  return measureBlocksWithFloats(blocks, contentWidth, measureBlock, pageGeometry);
+): LayoutMetrics[] {
+  return measureBlocksWithFloats(nodes, contentWidth, measureBlock, pageGeometry);
 }
 
 // ============================================================================
@@ -226,16 +226,11 @@ export interface UseDocxEditorReturn {
    */
   documentFonts: Ref<FontOption[]>;
   /** Computed page layout. */
-  layout: ShallowRef<Layout | null>;
-  /**
-   * The flow blocks behind the current `layout`, and their measures.
-   *
-   * Selection mapping needs them when the painted DOM can't answer — a page
-   * virtualization hasn't rendered, or the frame before a repaint lands. Without
-   * a layout-math fallback the caret simply disappears in those moments.
-   */
-  blocks: ShallowRef<FlowBlock[]>;
-  measures: ShallowRef<Measure[]>;
+  pageLayout: ShallowRef<PageLayout | null>;
+  /** Content nodes behind the current `pageLayout`, used for selection mapping. */
+  nodes: ShallowRef<ContentNode[]>;
+  /** Measurements behind the current `pageLayout`, used for selection mapping. */
+  metrics: ShallowRef<LayoutMetrics[]>;
   /** Load a DOCX from a binary buffer. */
   loadBuffer: (buffer: ArrayBuffer | Uint8Array | Blob | File) => Promise<void>;
   /** Load a parsed `Document` directly. */
@@ -314,16 +309,16 @@ export function useDocxEditor(options: UseDocxEditorOptions): UseDocxEditorRetur
    * can read page count + per-page geometry without re-running the engine.
    * Mirrors React's pagedEditorRef.current.getLayout().
    */
-  const layout = shallowRef<Layout | null>(null);
+  const pageLayout = shallowRef<PageLayout | null>(null);
   /**
-   * The flow blocks and their measures behind the current `layout`.
+   * The content nodes and their metrics behind the current `pageLayout`.
    *
    * Exposed because selection mapping needs them when the painted DOM can't
    * answer — a virtualized page, or the frame before a repaint lands. React
    * keeps the same pair on its `PagedEditor` state for the same reason.
    */
-  const blocks = shallowRef<FlowBlock[]>([]);
-  const measures = shallowRef<Measure[]>([]);
+  const nodes = shallowRef<ContentNode[]>([]);
+  const metrics = shallowRef<LayoutMetrics[]>([]);
 
   // Use the singleton extension manager — same schema used by toProseDoc/commands
   const mgr = singletonManager;
@@ -353,7 +348,7 @@ export function useDocxEditor(options: UseDocxEditorOptions): UseDocxEditorRetur
     const styles = document.value.package?.styles ?? null;
 
     try {
-      // Steps 1-5 (blocks → measure → HF resolve → margin extend → layout →
+      // Steps 1-5 (nodes → metrics → HF resolve → margin extend → page layout →
       // footnote items) are the shared compute pass in core/editor. Paint +
       // container styling + SDT focus stay here. Routing through the same
       // `computeLayout` as React keeps the adapters in lockstep and gives Vue
@@ -363,9 +358,9 @@ export function useDocxEditor(options: UseDocxEditorOptions): UseDocxEditorRetur
         initialSp
       );
       const {
-        blocks: newBlocks,
-        measures: newMeasures,
-        layout: newLayout,
+        nodes: newNodes,
+        metrics: newMetrics,
+        layout: newPageLayout,
         headerContentForRender,
         footerContentForRender,
         firstPageHeaderForRender,
@@ -399,18 +394,18 @@ export function useDocxEditor(options: UseDocxEditorOptions): UseDocxEditorRetur
         getHfPmDoc: (hf) => getHfPmView(hf)?.state.doc ?? null,
       });
 
-      layout.value = newLayout;
-      blocks.value = newBlocks;
-      measures.value = newMeasures;
+      pageLayout.value = newPageLayout;
+      nodes.value = newNodes;
+      metrics.value = newMetrics;
 
       // Step 6: Build block lookup and paint
-      const blockLookup = indexBlocksById(newBlocks, newMeasures);
+      const nodeLookup = indexNodesById(newNodes, newMetrics);
 
-      paintPages(newLayout.pages, container, {
+      paintPages(newPageLayout.pages, container, {
         pageGap,
         showShadow: true,
         pageBackground: 'var(--doc-page-bg, #ffffff)',
-        blockLookup,
+        nodeLookup,
         theme,
         headerContent: headerContentForRender,
         footerContent: footerContentForRender,
@@ -918,9 +913,9 @@ export function useDocxEditor(options: UseDocxEditorOptions): UseDocxEditorRetur
     isReady,
     parseError,
     documentFonts,
-    layout,
-    blocks,
-    measures,
+    pageLayout,
+    nodes,
+    metrics,
 
     // Actions
     loadBuffer,

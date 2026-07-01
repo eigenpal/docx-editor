@@ -29,7 +29,7 @@
 
 ## 3. Transaction→repaint loop — engine.handleTransaction(tr, state)
 
-- [ ] 3.1 Lift the shared handler from React `PagedEditor.tsx:476-510` into `engine.handleTransaction(tr,newState)`: decoration-notify, docChanged → incrementStateSeq + scheduleLayout + onDocumentChange, requestRender, selection-only → immediate overlay/SDT-focus. Strip `UPDATED_SCROLL` (from `OffscreenEditorHost.tsx:317`).
+- [ ] 3.1 Lift the shared handler from React `PagedEditor.tsx:476-510` into `engine.handleTransaction(tr,newState)`: decoration-notify, docChanged → scheduleLayout + onDocumentChange + overlay refresh, selection-only → immediate overlay/SDT-focus. Strip `UPDATED_SCROLL` (from `OffscreenEditorHost.tsx:317`).
 - [ ] 3.2 React: body `dispatchTransaction` (OffscreenEditorHost) + HF dispatch (HiddenHeaderFooterPMs:261-266 → PagedEditor:820) route through `engine.handleTransaction`.
 - [ ] 3.3 Vue: body + HF `dispatchTransaction` (`useDocxEditor.ts:566-604`, `761-778`) route through `engine.handleTransaction`. Add scroll-flag stripping (Vue currently lacks it).
 - [ ] 3.4 Engine unit test: docChanged schedules + notifies; selection-only updates overlay only; scroll flag cleared; HF docChanged triggers writeback + body schedule.

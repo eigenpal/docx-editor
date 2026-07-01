@@ -27,9 +27,7 @@ test.describe('Vue rendering parity', () => {
     await loadVueFixture(page, 'issue-740-header-zero-distance.docx');
 
     await expect(page.locator('.layout-page')).toHaveCount(1);
-    await expect
-      .poll(() => page.locator('.layout-page-content .layout-line').count())
-      .toBe(43);
+    await expect.poll(() => page.locator('.layout-page-content .layout-line').count()).toBe(43);
     await expect(
       page.locator('.layout-page-content .layout-paragraph').nth(2).locator('.layout-line')
     ).toHaveCount(8);

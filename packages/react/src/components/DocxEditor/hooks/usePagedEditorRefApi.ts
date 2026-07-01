@@ -17,7 +17,7 @@ import { TextSelection } from 'prosemirror-state';
 import type { EditorState, Transaction } from 'prosemirror-state';
 import type { EditorView } from 'prosemirror-view';
 
-import type { Layout } from '@eigenpal/docx-editor-core/pagination-model';
+import type { PageLayout } from '@eigenpal/docx-editor-core/pagination-model';
 import type { Document, HeaderFooter } from '@eigenpal/docx-editor-core/types/document';
 import type { ScrollToParaIdOptions } from '@eigenpal/docx-editor-core/utils';
 import {
@@ -35,7 +35,7 @@ interface RefApiInputs {
   hiddenHfPMsRef: React.RefObject<HiddenHeaderFooterPMsRef | null>;
   /** Current document — needed to resolve `HeaderFooter` instance → `rId`. */
   documentRef: React.MutableRefObject<Document | null>;
-  layout: Layout | null;
+  pageLayout: PageLayout | null;
   runLayoutPipeline: (state: EditorState) => void;
   scrollToPositionImpl: (pmPos: number, forParaIdScroll?: boolean) => void;
   scrollToParaIdImpl: (paraId: string, options?: ScrollToParaIdOptions) => boolean;
@@ -71,7 +71,7 @@ function buildRefApi(inputs: RefApiInputs): PagedEditorRef {
     hiddenPMRef,
     hiddenHfPMsRef,
     documentRef,
-    layout,
+    pageLayout,
     runLayoutPipeline,
     scrollToPositionImpl,
     scrollToParaIdImpl,
@@ -96,7 +96,7 @@ function buildRefApi(inputs: RefApiInputs): PagedEditorRef {
     redo: () => hiddenPMRef.current?.redo() ?? false,
     setSelection: (anchor: number, head?: number) =>
       hiddenPMRef.current?.setSelection(anchor, head),
-    getLayout: () => layout,
+    getLayout: () => pageLayout,
     relayout: () => {
       const state = hiddenPMRef.current?.getState();
       if (state) runLayoutPipeline(state);
@@ -172,7 +172,7 @@ export function usePagedEditorRefApi(opts: UsePagedEditorRefApiOptions): void {
     hiddenPMRef,
     hiddenHfPMsRef,
     documentRef,
-    layout,
+    pageLayout,
     runLayoutPipeline,
     scrollToPositionImpl,
     scrollToParaIdImpl,
@@ -188,14 +188,14 @@ export function usePagedEditorRefApi(opts: UsePagedEditorRefApiOptions): void {
         hiddenPMRef,
         hiddenHfPMsRef,
         documentRef,
-        layout,
+        pageLayout,
         runLayoutPipeline,
         scrollToPositionImpl,
         scrollToParaIdImpl,
         scrollToPageImpl,
         setIsFocused,
       }),
-    [layout, runLayoutPipeline, scrollToPositionImpl, scrollToParaIdImpl, scrollToPageImpl]
+    [pageLayout, runLayoutPipeline, scrollToPositionImpl, scrollToParaIdImpl, scrollToPageImpl]
   );
 
   // onReady mirror — dep array intentionally omits `scrollToPositionImpl`
@@ -208,7 +208,7 @@ export function usePagedEditorRefApi(opts: UsePagedEditorRefApiOptions): void {
           hiddenPMRef,
           hiddenHfPMsRef,
           documentRef,
-          layout,
+          pageLayout,
           runLayoutPipeline,
           scrollToPositionImpl,
           scrollToParaIdImpl,
@@ -217,6 +217,6 @@ export function usePagedEditorRefApi(opts: UsePagedEditorRefApiOptions): void {
         })
       );
     }
-  }, [layout, runLayoutPipeline, scrollToParaIdImpl, scrollToPageImpl]);
+  }, [pageLayout, runLayoutPipeline, scrollToParaIdImpl, scrollToPageImpl]);
   // NOTE: onReady removed from deps — accessed via ref to prevent infinite loops.
 }
