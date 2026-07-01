@@ -308,17 +308,6 @@ export function useLayoutPipeline(opts: UseLayoutPipelineOptions): UseLayoutPipe
             }
           }
 
-          // Deterministic "painter is done writing" signal. HF caret +
-          // selection-rect resolvers wait on this instead of `requestAnimationFrame`
-          // chains — the rAF approach raced the painter and stale
-          // `data-doc-from` spans showed up on the first frame after engage
-          // (`computeHfCaretRectFromView` had to retry through a second rAF).
-          // Bubbling CustomEvent so any ancestor (DocxEditorPagedArea) can
-          // listen via `pagesContainerRef.current?.addEventListener(...)`.
-          pagesContainerRef.current?.dispatchEvent(
-            new CustomEvent('painter:painted', { bubbles: true })
-          );
-
           if (onRenderedDomContextReadyRef.current) {
             const domContext = createRenderedDomContext(pagesContainerRef.current, zoom);
             onRenderedDomContextReadyRef.current(domContext);

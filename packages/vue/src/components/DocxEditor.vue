@@ -127,20 +127,12 @@
             :style="rulerRowStyle"
           >
             <HorizontalRuler
-              :section-props="currentSectionProps"
-              :zoom="zoom"
-              :editable="!readOnly"
-              :indent-left="rulerIndents.indentLeft"
-              :indent-right="rulerIndents.indentRight"
-              :first-line-indent="rulerIndents.firstLineIndent"
-              :hanging-indent="rulerIndents.hangingIndent"
-              :tab-stops="rulerIndents.tabMarks"
-              @left-margin-change="handleLeftMarginChange"
-              @right-margin-change="handleRightMarginChange"
-              @indent-left-change="handleIndentLeftChange"
-              @indent-right-change="handleIndentRightChange"
-              @first-line-indent-change="handleFirstLineIndentChange"
-              @tab-stop-remove="handleTabMarkRemove"
+              :section-props="currentSectionProps" :zoom="zoom" :editable="!readOnly"
+              :indent-left="rulerIndents.indentLeft" :indent-right="rulerIndents.indentRight"
+              :first-line-indent="rulerIndents.firstLineIndent" :hanging-indent="rulerIndents.hangingIndent" :tab-stops="rulerIndents.tabMarks"
+              @left-margin-change="handleLeftMarginChange" @right-margin-change="handleRightMarginChange"
+              @indent-left-change="handleIndentLeftChange" @indent-right-change="handleIndentRightChange"
+              @first-line-indent-change="handleFirstLineIndentChange" @tab-stop-remove="handleTabMarkRemove"
             />
           </div>
 
@@ -157,11 +149,8 @@
           >
             <div v-if="showRuler && currentSectionProps" class="docx-editor-vue__vertical-ruler">
               <VerticalRuler
-                :section-props="currentSectionProps"
-                :zoom="zoom"
-                :editable="!readOnly"
-                @top-margin-change="handleTopMarginChange"
-                @bottom-margin-change="handleBottomMarginChange"
+                :section-props="currentSectionProps" :zoom="zoom" :editable="!readOnly"
+                @top-margin-change="handleTopMarginChange" @bottom-margin-change="handleBottomMarginChange"
               />
             </div>
             <div
@@ -235,6 +224,7 @@
             :get-pages-container="getPagesContainerForDecorations"
             :zoom="zoom"
             :transaction-version="stateTick"
+            :sync-coordinator="syncCoordinator"
           />
 
           <!-- Floating "Add comment" button — appears at the right edge
@@ -396,6 +386,7 @@ import type { EditorView } from 'prosemirror-view';
 import { TextSelection } from 'prosemirror-state';
 import {
   computeHfCaretRectFromView,
+  invalidateHfDomCache,
   readHfSelectionGeometry,
 } from '@eigenpal/docx-editor-core/flow-model';
 import { getSelectionInfo as getSelectionInfoImpl } from '../utils/refApiQueries';
@@ -451,6 +442,7 @@ import { twipsToPixels } from '@eigenpal/docx-editor-core/utils/units';
 import { SIDEBAR_DOCUMENT_SHIFT } from '@eigenpal/docx-editor-core/utils';
 import { useColorMode } from '../composables/useColorMode';
 import { useFontLifecycle } from '../composables/useFontLifecycle';
+import { SelectionBridge } from '@eigenpal/docx-editor-core/prosemirror';
 import { extractSelectionContext } from '@eigenpal/docx-editor-core/prosemirror/plugins/selectionTracker';
 import { createCommentIdAllocator } from '@eigenpal/docx-editor-core/prosemirror/commentIdAllocator';
 
@@ -521,6 +513,7 @@ const pagesViewportRef = ref<HTMLElement | null>(null);
 const stateTick = ref(0);
 const contentChangeSubscribers = new Set<(document: unknown) => void>();
 const selectionChangeSubscribers = new Set<(selection: unknown) => void>();
+const syncCoordinator = new SelectionBridge();
 const showFindReplace = ref(false);
 const showHyperlink = ref(false);
 const showInsertSymbol = ref(false);
@@ -563,9 +556,9 @@ const {
   isReady,
   parseError,
   documentFonts,
-  pageLayout,
-  nodes,
-  metrics,
+  layout,
+  blocks,
+  measures,
   loadBuffer,
   loadDocument: loadParsedDocument,
   save: saveBlob,
@@ -584,6 +577,7 @@ const {
   pagesContainer: pagesRef,
   readOnly,
   externalPlugins: props.externalPlugins,
+  syncCoordinator,
   editorMode,
   author: authorRef,
   onChange: (doc) => {
@@ -598,7 +592,10 @@ const {
   },
   onSelectionUpdate: () => {
     stateTick.value++;
-    updateSelectionOverlay();
+    // The overlay repaint is intentionally NOT called here — it's driven via
+    // the `syncCoordinator.onRender` registration below so it paints against
+    // current DOM. Painting synchronously here resolves the caret against the
+    // not-yet-repainted DOM and the caret vanishes until the next click (#736).
     const view = editorView.value;
     // The prop mirrors React's `onSelectionChange`, which delivers a
     // `SelectionState` (formatting/style snapshot). The ref-API subscribers
@@ -661,9 +658,9 @@ const hfCaretRect = ref<{ top: number; left: number; height: number } | null>(nu
 // (`isHfEditing` in useSelectionSync), so without these the selection is set on
 // the HF PM but never highlighted (#691). Shared with React via core's
 // `readHfSelectionGeometry`.
-const hfSelectionGeometry = ref<
-  Array<{ top: number; left: number; width: number; height: number }>
->([]);
+const hfSelectionGeometry = ref<Array<{ top: number; left: number; width: number; height: number }>>(
+  []
+);
 
 // Paint the HF caret + drag-selection rects from the live HF view together
 // (mirror of React's `applyHfOverlay`). `computeHfCaretRectFromView` returns
@@ -777,25 +774,12 @@ const RULER_WIDTH = 20;
 const DEFAULT_PAGE_WIDTH = 816;
 const minLayoutWidth = computed(() => {
   void stateTick.value;
-  const outlineLeftAllowance =
-    (showOutline.value
-      ? OUTLINE_RESERVED_SPACE
-      : props.showOutlineButton
-        ? OUTLINE_BUTTON_RESERVED_SPACE
-        : 20) +
-    (props.showRuler && (showOutline.value || props.showOutlineButton) ? RULER_WIDTH : 0);
+  const outlineLeftAllowance = (showOutline.value ? OUTLINE_RESERVED_SPACE : props.showOutlineButton ? OUTLINE_BUTTON_RESERVED_SPACE : 20) + (props.showRuler && (showOutline.value || props.showOutlineButton) ? RULER_WIDTH : 0);
   const doc = getDocument();
   const docBody = doc?.package?.document;
-  const sectionPageWidths = [
-    docBody?.finalSectionProperties?.pageWidth,
-    ...(docBody?.sections?.map((s) => s.properties?.pageWidth) ?? []),
-  ].filter((w): w is number => typeof w === 'number' && w > 0);
-  const maxPageWidthPx = sectionPageWidths.length
-    ? Math.round(Math.max(...sectionPageWidths) / 15)
-    : DEFAULT_PAGE_WIDTH;
-  return (
-    2 * outlineLeftAllowance + maxPageWidthPx + (showSidebar.value ? SIDEBAR_DOCUMENT_SHIFT * 2 : 0)
-  );
+  const sectionPageWidths = [docBody?.finalSectionProperties?.pageWidth, ...(docBody?.sections?.map((s) => s.properties?.pageWidth) ?? [])].filter((w): w is number => typeof w === 'number' && w > 0);
+  const maxPageWidthPx = sectionPageWidths.length ? Math.round(Math.max(...sectionPageWidths) / 15) : DEFAULT_PAGE_WIDTH;
+  return 2 * outlineLeftAllowance + maxPageWidthPx + (showSidebar.value ? SIDEBAR_DOCUMENT_SHIFT * 2 : 0);
 });
 
 // When the comments sidebar opens, shift the pages container (NOT the
@@ -806,11 +790,7 @@ const pagesContainerStyle = computed(() => {
   const parts: string[] = [];
   if (showSidebar.value) parts.push(`translateX(-${SIDEBAR_DOCUMENT_SHIFT}px)`);
   if (zoom.value !== 1) parts.push(`scale(${zoom.value})`);
-  return {
-    transform: parts.length > 0 ? parts.join(' ') : undefined,
-    transformOrigin: 'top center',
-    transition: 'transform 0.2s ease',
-  };
+  return { transform: parts.length > 0 ? parts.join(' ') : undefined, transformOrigin: 'top center', transition: 'transform 0.2s ease' };
 });
 
 const rulerRowStyle = computed(() => ({
@@ -825,9 +805,7 @@ const pageWidthPx = computed(() => {
   return twipsToPixels(sp?.pageWidth ?? 12240) * zoom.value;
 });
 
-const resolvedCommentIds = computed(
-  () => new Set(comments.value.filter((c) => c.parentId == null && c.done).map((c) => c.id))
-);
+const resolvedCommentIds = computed(() => new Set(comments.value.filter(c => c.parentId == null && c.done).map(c => c.id)));
 
 const bookmarkOptions = computed(() => {
   void stateTick.value;
@@ -1044,7 +1022,7 @@ const {
   hyperlinkPopupData,
   readOnly,
   zoom,
-  pageLayout,
+  layout,
   tableResize,
   getCommands,
   getDocument,
@@ -1158,14 +1136,42 @@ const selectionSync = useSelectionSync({
   isHfEditing,
   imageInteracting,
   readOnly,
-  pageLayout,
-  nodes,
-  metrics,
+  layout,
+  blocks,
+  measures,
 });
 
+// The shared painter emits after every DOM mutation, including IntersectionObserver
+// population of a virtualized page. Keep body and HF overlays on fresh spans and
+// invalidate the shared HF host cache in lockstep with React.
+onMounted(() => {
+  const pages = pagesRef.value;
+  if (!pages) return;
+  const onPainted = () => {
+    invalidateHfDomCache();
+    updateSelectionOverlay();
+    const edit = hfEdit.value;
+    if (!edit?.headerFooter) return;
+    const view = getHfPmView(edit.headerFooter);
+    if (view) applyHfOverlay(view, edit.position);
+  };
+  pages.addEventListener('painter:painted', onPainted);
+  onBeforeUnmount(() => {
+    pages.removeEventListener('painter:painted', onPainted);
+    invalidateHfDomCache();
+  });
+});
+
+// Drive the overlay through the layout gate (mirrors DecorationLayer): the
+// `requestRender` in `dispatchTransaction` runs this immediately for
+// selection-only moves or defers it until `onLayoutComplete` after a doc edit
+// repaints, so the caret always lands on current DOM (#736). The eager call
+// paints the initial caret (the editor's own `requestRender` ran before this).
+const stopSelectionRender = syncCoordinator.onRender(() => updateSelectionOverlay());
 updateSelectionOverlay();
 
 onBeforeUnmount(() => {
+  stopSelectionRender();
   clearOverlay();
 });
 
@@ -1175,7 +1181,7 @@ onBeforeUnmount(() => {
 // composable-build time.
 const { exposed } = useDocxEditorRefApi({
   editorView,
-  pageLayout,
+  layout,
   pagesRef,
   pagesViewportRef,
   zoom,

@@ -1,0 +1,150 @@
+import { expect, test } from '@playwright/test';
+import { resolve } from 'node:path';
+
+const PAINTER_MODULE = `/@fs/${resolve('packages/core/src/painter-model/index.ts')}`;
+
+test('virtualized pages repaint semantic body and same-height header edits', async ({ page }) => {
+  await page.goto('/');
+
+  const result = await page.evaluate(async (painterModule) => {
+    const painter = (await import(painterModule)) as {
+      indexBlocksById(blocks: any[], measures: any[]): Map<string, unknown>;
+      paintPages(pages: any[], container: HTMLElement, options: Record<string, unknown>): string;
+    };
+    const paragraph = (id: string, text: string, docFrom: number, bold = false) => ({
+      kind: 'paragraph',
+      id,
+      docFrom,
+      docTo: docFrom + text.length,
+      runs: [
+        {
+          kind: 'text',
+          text,
+          bold,
+          docFrom,
+          docTo: docFrom + text.length,
+        },
+      ],
+    });
+    const measure = {
+      kind: 'paragraph',
+      totalHeight: 20,
+      lines: [
+        {
+          fromRun: 0,
+          fromChar: 0,
+          toRun: 0,
+          toChar: 5,
+          width: 50,
+          ascent: 14,
+          descent: 4,
+          lineHeight: 20,
+        },
+      ],
+    };
+    const makeHeader = (text: string) => ({
+      blocks: [paragraph('header', text, 1)],
+      measures: [measure],
+      height: 20,
+      flowHeight: 20,
+      visualTop: 0,
+      visualBottom: 20,
+    });
+    const pages = Array.from({ length: 9 }, (_, index) => {
+      const docFrom = index * 10 + 1;
+      return {
+        number: index + 1,
+        size: { w: 300, h: 400 },
+        margins: { top: 40, right: 20, bottom: 40, left: 20 },
+        fragments: [
+          {
+            kind: 'paragraph',
+            blockId: `body-${index}`,
+            x: 0,
+            y: 0,
+            width: 260,
+            height: 20,
+            fromLine: 0,
+            toLine: 1,
+            docFrom,
+            docTo: docFrom + 5,
+          },
+        ],
+      };
+    });
+    let blocks = pages.map((_, index) => paragraph(`body-${index}`, 'alpha', index * 10 + 1));
+    const measures = pages.map(() => measure);
+    const container = document.createElement('div');
+    document.body.replaceChildren(container);
+    let paintedSignals = 0;
+    container.addEventListener('painter:painted', () => paintedSignals++);
+
+    const paint = (headerText: string) =>
+      painter.paintPages(pages, container, {
+        document,
+        pageGap: 24,
+        blockLookup: painter.indexBlocksById(blocks, measures),
+        headerContent: makeHeader(headerText),
+      });
+
+    paint('AAAAA');
+    const initiallyRendered = [...container.querySelectorAll<HTMLElement>('.layout-page')].filter(
+      (pageElement) => pageElement.childElementCount > 0
+    ).length;
+
+    blocks = blocks.map((block, index) =>
+      index === 0 ? paragraph(block.id, 'omega', block.docFrom) : block
+    );
+    const sameLengthKind = paint('AAAAA');
+    const sameLengthText =
+      container.querySelector<HTMLElement>('[data-page-number="1"] .layout-page-content')
+        ?.textContent ?? '';
+
+    blocks = blocks.map((block, index) =>
+      index === 1 ? paragraph(block.id, block.runs[0].text, block.docFrom, true) : block
+    );
+    const formattingKind = paint('AAAAA');
+    const formattedRun = container.querySelector<HTMLElement>(
+      '[data-page-number="2"] .layout-page-content .layout-run-text'
+    );
+    const formattedFontWeight = formattedRun ? getComputedStyle(formattedRun).fontWeight : '';
+
+    const beforeHeaderHosts = [...container.querySelectorAll<HTMLElement>('.layout-page-header')]
+      .filter((host) => host.closest<HTMLElement>('.layout-page')?.childElementCount)
+      .map((host) => host.textContent ?? '');
+    const headerKind = paint('BBBBB');
+    const afterHeaderHosts = [...container.querySelectorAll<HTMLElement>('.layout-page-header')].map(
+      (host) => host.textContent ?? ''
+    );
+
+    return {
+      initiallyRendered,
+      sameLengthKind,
+      sameLengthText,
+      formattingKind,
+      fontWeight: formattedFontWeight,
+      headerKind,
+      beforeHeaderHosts,
+      afterHeaderHosts,
+      paintedSignals,
+      stillVirtualized:
+        [...container.querySelectorAll<HTMLElement>('.layout-page')].filter(
+          (pageElement) => pageElement.childElementCount === 0
+        ).length > 0,
+    };
+  }, PAINTER_MODULE);
+
+  expect(result.initiallyRendered).toBeGreaterThan(0);
+  expect(result.initiallyRendered).toBeLessThan(9);
+  expect(result.sameLengthKind).toBe('incremental');
+  expect(result.sameLengthText).toContain('omega');
+  expect(result.formattingKind).toBe('incremental');
+  expect(Number(result.fontWeight)).toBeGreaterThanOrEqual(600);
+  expect(result.headerKind).toBe('incremental');
+  expect(result.beforeHeaderHosts.length).toBe(result.initiallyRendered);
+  expect(result.beforeHeaderHosts.every((text) => text.includes('AAAAA'))).toBe(true);
+  expect(result.afterHeaderHosts).toHaveLength(result.initiallyRendered);
+  expect(result.afterHeaderHosts.every((text) => text.includes('BBBBB'))).toBe(true);
+  expect(result.paintedSignals).toBe(4);
+  expect(result.stillVirtualized).toBe(true);
+});

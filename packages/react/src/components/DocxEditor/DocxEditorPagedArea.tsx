@@ -283,9 +283,9 @@ export function DocxEditorPagedArea({
       if (view) applyHfOverlay(view);
     };
 
-    // Deterministic "painter is done" signal — `useLayoutPipeline` dispatches
-    // `painter:painted` after `paintPages` writes the page DOM. Listen for
-    // it instead of the rAF chain so the measurement always sees the fresh
+    // Deterministic "painter is done" signal — the shared painter dispatches
+    // `painter:painted` whenever page DOM changes, including lazy virtualized
+    // population. Listen instead of relying only on an rAF chain so the measurement sees the fresh
     // `data-doc-from` spans. Also invalidate the cached HF DOM snapshot so
     // the next caret compute re-walks the host.
     const pagesEl = window.document.querySelector('.paged-editor__pages') as HTMLElement | null;
