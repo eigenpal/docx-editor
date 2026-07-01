@@ -21,6 +21,48 @@ test.describe('issue #740 — w:header="0" pagination parity', () => {
     const pageCount = await page.evaluate(() => document.querySelectorAll('.layout-page').length);
     expect(pageCount).toBe(1);
 
+    // This fixture deliberately contains several very long Latin tokens. Word
+    // breaks them at character boundaries; treating each token as atomic makes
+    // the body collapse into a handful of overflowing lines while this page-
+    // count assertion still passes.
+    const bodyGeometry = await page.evaluate(() => {
+      const pageElement = document.querySelector<HTMLElement>('.layout-page');
+      const paragraphs = Array.from(
+        document.querySelectorAll<HTMLElement>('.layout-page-content .layout-paragraph')
+      );
+      const lines = paragraphs.flatMap((paragraph) =>
+        Array.from(paragraph.querySelectorAll<HTMLElement>('.layout-line'))
+      );
+      const maxTextOverflow = lines.reduce((max, line) => {
+        const paragraphRight =
+          line.closest<HTMLElement>('.layout-paragraph')?.getBoundingClientRect().right ??
+          line.getBoundingClientRect().right;
+        const overflow = Array.from(line.querySelectorAll<HTMLElement>('.layout-run-text')).reduce(
+          (lineMax, run) => Math.max(lineMax, run.getBoundingClientRect().right - paragraphRight),
+          0
+        );
+        return Math.max(max, overflow);
+      }, 0);
+      const pageRect = pageElement?.getBoundingClientRect();
+      const lastRect = paragraphs.at(-1)?.getBoundingClientRect();
+
+      return {
+        paragraphCount: paragraphs.length,
+        totalLineCount: lines.length,
+        firstLongParagraphLineCount:
+          paragraphs[2]?.querySelectorAll('.layout-line').length ?? 0,
+        lastParagraphBottomRatio:
+          pageRect && lastRect ? (lastRect.bottom - pageRect.top) / pageRect.height : 0,
+        maxTextOverflow,
+      };
+    });
+
+    expect(bodyGeometry.paragraphCount).toBe(12);
+    expect(bodyGeometry.firstLongParagraphLineCount).toBe(8);
+    expect(bodyGeometry.totalLineCount).toBe(43);
+    expect(bodyGeometry.lastParagraphBottomRatio).toBeGreaterThan(0.85);
+    expect(bodyGeometry.maxTextOverflow).toBeLessThanOrEqual(1);
+
     // The header is pinned to the page top (`w:header="0"`), so the body content
     // area starts right below the header band — not the 0.5in-default offset.
     const headerTop = await page.evaluate(() => {
