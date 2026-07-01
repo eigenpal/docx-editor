@@ -10,7 +10,7 @@
  * Architecture:
  * 1. User clicks on visible pages → hit test → update PM selection
  * 2. User types → hidden PM receives input → PM transaction
- * 3. PM transaction → convert to blocks → measure → layout → paint
+ * 3. PM transaction → build content nodes → metrics → page layout → paint
  * 4. Selection changes → compute rects → update overlay
  */
 
@@ -430,14 +430,14 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
       [document]
     );
 
-    // Layout pipeline — owns layout/blocks/measures state, the rAF-coalesced
+    // Layout pipeline — owns pageLayout/nodes/metrics state, the rAF-coalesced
     // scheduler, scroll-restore plumbing, the painter, and the page-count
     // notifier. Returns `notifyDecorationLayer` for the DecorationLayer
     // resync that handleTransaction triggers on every PM transaction.
     const {
-      layout,
-      blocks,
-      measures,
+      pageLayout,
+      nodes,
+      metrics,
       decorationSyncToken,
       notifyDecorationLayer,
       contentWidth,
@@ -479,9 +479,9 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
       updateSelectionOverlay,
       handleSelectionChange,
     } = useSelectionOverlay({
-      layout,
-      blocks,
-      measures,
+      pageLayout,
+      nodes,
+      metrics,
       zoom,
       containerRef,
       pagesContainerRef,
@@ -517,7 +517,7 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
 
         // Only update selection overlay immediately for non-doc-changing transactions
         // (e.g. arrow keys, clicks). For doc changes, the overlay will be updated
-        // after layout completes via the useEffect([layout]) hook, avoiding cursor
+        // after layout completes via the useEffect([pageLayout]) hook, avoiding cursor
         // flicker from stale DOM positions.
         if (!transaction.docChanged) {
           updateSelectionOverlay(newState);
@@ -530,9 +530,9 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
     // Scroll API exposed via the PagedEditorRef. Owns the AbortController
     // chain that lets a fresh scroll supersede an in-flight paint-settle.
     const { scrollToPositionImpl, scrollToPageImpl, scrollToParaIdImpl } = usePagedScrollApi({
-      layout,
-      blocks,
-      measures,
+      pageLayout,
+      nodes,
+      metrics,
       pagesContainerRef,
       hiddenPMRef,
       getScrollContainer,
@@ -570,9 +570,9 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
         if (!refEntry?.rId) return null;
         return hfRef.getView(refEntry.rId);
       }, [hfEditMode, document]),
-      layout,
-      blocks,
-      measures,
+      pageLayout,
+      nodes,
+      metrics,
       zoom,
       readOnly,
       hfEditMode,
@@ -777,7 +777,7 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
       hiddenPMRef,
       hiddenHfPMsRef,
       documentRef,
-      layout,
+      pageLayout,
       runLayoutPipeline,
       scrollToPositionImpl,
       scrollToParaIdImpl,
@@ -786,7 +786,6 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
       onReadyRef,
     });
 
-    // =========================================================================
     // Render
     // =========================================================================
 
@@ -795,9 +794,10 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
     // the layout pipeline does mid-pipeline (needed for scroll-restore math
     // before React commits).
     const totalHeight = useMemo(() => {
-      if (!layout) return DEFAULT_PAGE_HEIGHT_PX + VIEWPORT_PADDING_TOP + VIEWPORT_PADDING_BOTTOM;
-      return viewportMinHeightPx(layout, pageGap);
-    }, [layout, pageGap]);
+      if (!pageLayout)
+        return DEFAULT_PAGE_HEIGHT_PX + VIEWPORT_PADDING_TOP + VIEWPORT_PADDING_BOTTOM;
+      return viewportMinHeightPx(pageLayout, pageGap);
+    }, [pageLayout, pageGap]);
 
     return (
       <div

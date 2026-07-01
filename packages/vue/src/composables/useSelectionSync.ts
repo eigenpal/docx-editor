@@ -36,7 +36,11 @@ import {
   type DomSelectionBox,
 } from '@eigenpal/docx-editor-core/flow-model';
 import { applySdtFocus, enclosingSdtGroupIds } from '@eigenpal/docx-editor-core/painter-model';
-import type { FlowBlock, Layout, Measure } from '@eigenpal/docx-editor-core/pagination-model';
+import type {
+  ContentNode,
+  LayoutMetrics,
+  PageLayout,
+} from '@eigenpal/docx-editor-core/pagination-model';
 
 import type { ImageSelectionInfo } from '../components/imageSelectionTypes';
 
@@ -64,9 +68,9 @@ export interface UseSelectionSyncOptions {
    * the frame before a repaint lands — has no DOM to resolve against, and the
    * caret would simply vanish. Layout math still knows where it goes.
    */
-  layout: Ref<Layout | null>;
-  blocks: Ref<FlowBlock[]>;
-  measures: Ref<Measure[]>;
+  pageLayout: Ref<PageLayout | null>;
+  nodes: Ref<ContentNode[]>;
+  metrics: Ref<LayoutMetrics[]>;
 }
 
 export interface UseSelectionSyncReturn {
@@ -267,11 +271,11 @@ export function useSelectionSync(opts: UseSelectionSyncOptions): UseSelectionSyn
   }
 
   function caretFromLayout(pmPos: number, overlayRect: DOMRect): DomCaretPosition | null {
-    const layout = opts.layout.value;
+    const pageLayout = opts.pageLayout.value;
     const origin = pageStackOrigin(overlayRect);
-    if (!layout || !origin) return null;
+    if (!pageLayout || !origin) return null;
 
-    const caret = getCaretPosition(layout, opts.blocks.value, opts.measures.value, pmPos);
+    const caret = getCaretPosition(pageLayout, opts.nodes.value, opts.metrics.value, pmPos);
     if (!caret) return null;
 
     const zoom = opts.zoom.value;
@@ -284,12 +288,12 @@ export function useSelectionSync(opts: UseSelectionSyncOptions): UseSelectionSyn
   }
 
   function rectsFromLayout(from: number, to: number, overlayRect: DOMRect): DomSelectionBox[] {
-    const layout = opts.layout.value;
+    const pageLayout = opts.pageLayout.value;
     const origin = pageStackOrigin(overlayRect);
-    if (!layout || !origin) return [];
+    if (!pageLayout || !origin) return [];
 
     const zoom = opts.zoom.value;
-    return rectsForSelection(layout, opts.blocks.value, opts.measures.value, from, to).map(
+    return rectsForSelection(pageLayout, opts.nodes.value, opts.metrics.value, from, to).map(
       (box) => ({
         x: origin.x + box.x * zoom,
         y: origin.y + box.y * zoom,

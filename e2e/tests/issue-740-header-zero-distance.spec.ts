@@ -49,8 +49,7 @@ test.describe('issue #740 — w:header="0" pagination parity', () => {
       return {
         paragraphCount: paragraphs.length,
         totalLineCount: lines.length,
-        firstLongParagraphLineCount:
-          paragraphs[2]?.querySelectorAll('.layout-line').length ?? 0,
+        firstLongParagraphLineCount: paragraphs[2]?.querySelectorAll('.layout-line').length ?? 0,
         firstLineHeight: Number.parseFloat(lines[0]?.style.lineHeight ?? '0'),
         lastParagraphBottomRatio:
           pageRect && lastRect ? (lastRect.bottom - pageRect.top) / pageRect.height : 0,

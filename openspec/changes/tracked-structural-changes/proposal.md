@@ -93,9 +93,9 @@ All revision DOM carries `data-revision-id`, `data-revision-author`, `data-revis
 
 `UnifiedSidebar.tsx` + `useCommentSidebarItems.tsx` + `extractTrackedChanges.ts` grow entries for every structural revision, grouped by `(id, author, date)`. Each entry: kind label (i18n), short description, click-to-block via `data-revision-id`, Accept/Reject buttons routed to `acceptChangeById` / `rejectChangeById`.
 
-### FlowBlock invariant
+### ContentNode invariant
 
-No new `FlowBlock` variants. The structural attrs ride on existing block nodes. `buildBoxTree` plumbs the new attrs into `ParagraphBlock.attrs` so measurement is consistent with the cache key.
+No new `ContentNode` variants. The structural attrs ride on existing content nodes. `buildBoxTree` plumbs the new attrs into `ParagraphBlock.attrs` so measurement is consistent with the cache key.
 
 ## Capabilities
 

@@ -288,9 +288,9 @@ Mechanics:
 
 `packages/vue/src/composables/useDocxEditor.ts` — verify it picks up painter output transparently (it should, via the shared painter-model). The Vue adapter's only change for this feature is wiring the new `data-revision-id` events to the sidebar.
 
-### FlowBlock measurement
+### ContentNode measurement
 
-`FlowBlock` invariant holds — no new variants. `ParagraphBlock.attrs` (the contract consumed by `paragraphCacheKey` and `measureBlock`) needs the new revision-presence flags plumbed through `buildBoxTree`. This is a small but easy-to-miss task: without it, the cache and measurement are inconsistent.
+`ContentNode` invariant holds — no new variants. `ParagraphBlock.attrs` (the contract consumed by `paragraphCacheKey` and `measureBlock`) needs the new revision-presence flags plumbed through `buildBoxTree`. This is a small but easy-to-miss task: without it, the cache and measurement are inconsistent.
 
 ## Review sidebar
 
@@ -364,13 +364,13 @@ Three landable PRs. Phase 1 lands the snapshot-and-restore infrastructure even t
 | Parser          | `packages/core/src/docx/paragraphParser/properties.ts`                                  | Read `pPr/rPr/ins`, `pPr/rPr/del`, `CT_ParaRPrChange`                                                                |
 | Parser          | `packages/core/src/docx/documentParser.ts` _or_ `sectionParser.ts` if it exists         | Read `sectPrChange` (both pPr-level and body-level)                                                                  |
 | Parser          | `packages/core/src/docx/tableParser.ts`                                                 | Wire existing table revision parses; add `trPr/ins`, `trPr/del`; relocate `tblPrExChange` to row                     |
-| Cache           | `packages/core/src/flow-model/metrics/cache.ts`                                    | Add revision attrs to `paragraphCacheKey` / `hashTableBlock`                                                        |
+| Cache           | `packages/core/src/flow-model/metrics/cache.ts`                                         | Add revision attrs to `paragraphCacheKey` / `hashTableBlock`                                                         |
 | Conversion      | `packages/core/src/prosemirror/conversion/toProseDoc/paragraph.ts`                      | Map paragraph revisions to attrs                                                                                     |
 | Conversion      | `packages/core/src/prosemirror/conversion/toProseDoc/table.ts`                          | Map table revisions to attrs                                                                                         |
 | Conversion      | `packages/core/src/prosemirror/conversion/toProseDoc/run.ts`                            | Map run `rPrChange` to mark with canonicalized `prior`                                                               |
 | Conversion      | `packages/core/src/prosemirror/conversion/fromProseDoc/*`                               | Inverse                                                                                                              |
 | Conversion      | `packages/core/src/prosemirror/utils/extractTrackedChanges.ts`                          | Walk node attrs in addition to marks                                                                                 |
-| Layout          | `packages/core/src/pagination-model/buildBoxTree*`                                         | Plumb new attrs into `ParagraphBlock.attrs`                                                                          |
+| Layout          | `packages/core/src/pagination-model/buildBoxTree*`                                      | Plumb new attrs into `ParagraphBlock.attrs`                                                                          |
 | Serializer      | `packages/core/src/docx/serializer/paragraphSerializer.ts`                              | Emit `pPr/rPr/ins`/`del` first; emit `paraRPrChange` last; enforce ordering                                          |
 | Serializer      | `packages/core/src/docx/serializer/runSerializer.ts` (or wherever)                      | Enforce `rPrChange` last in `rPr`                                                                                    |
 | Serializer      | `packages/core/src/docx/tableSerializer.ts`                                             | Emit row/cell/table revisions; `cellMerge` uses `vMerge` (no `val`); `tblGridChange` id-only                         |
@@ -378,9 +378,9 @@ Three landable PRs. Phase 1 lands the snapshot-and-restore infrastructure even t
 | Plugin          | `packages/core/src/prosemirror/plugins/suggestionMode.ts`                               | Block-boundary keymap composing with `splitBlockClearBorders`; snapshot-on-property-edit helper                      |
 | Commands        | `packages/core/src/prosemirror/commands/comments.ts`                                    | Add `acceptChangeById`, `rejectChangeById`, `acceptChangesInRange`, `rejectChangesInRange`; extend accept/reject all |
 | Commands        | `packages/core/src/prosemirror/extensions/nodes/TableExtension.ts`                      | Suggesting-aware row/column/merge commands                                                                           |
-| Painter         | `packages/core/src/painter-model/renderParagraph.ts`                                   | Pilcrow + change bar                                                                                                 |
-| Painter         | `packages/core/src/painter-model/renderTable.ts`                                       | Row/cell cues; dashed cellMerge boundary                                                                             |
-| Painter         | `packages/core/src/painter-model/paintRun.ts` (or equivalent)                         | `revision_change` mark cue                                                                                           |
+| Painter         | `packages/core/src/painter-model/renderParagraph.ts`                                    | Pilcrow + change bar                                                                                                 |
+| Painter         | `packages/core/src/painter-model/renderTable.ts`                                        | Row/cell cues; dashed cellMerge boundary                                                                             |
+| Painter         | `packages/core/src/painter-model/paintRun.ts` (or equivalent)                           | `revision_change` mark cue                                                                                           |
 | Sidebar (React) | `packages/react/src/components/UnifiedSidebar.tsx` and `useCommentSidebarItems.tsx`     | Group by `(id, author, date)` triple; structural revision items                                                      |
 | Sidebar (Vue)   | `packages/vue/src/components/UnifiedSidebar.vue` (or equivalent)                        | Mirror                                                                                                               |
 | Agents          | `packages/agents/src/changes.ts`                                                        | Extend or defer (decision in `tasks.md`)                                                                             |

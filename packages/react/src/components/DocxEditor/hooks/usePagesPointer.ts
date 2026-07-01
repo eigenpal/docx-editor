@@ -29,16 +29,20 @@ import {
   pointerToDocPos,
   resolveDomPosition,
   detectTableInsertHover,
-  resolveFragmentHit,
-  resolveTableCellHit,
+  resolveFragmentTarget,
+  resolveTableCellTarget,
   TABLE_INSERT_HIDE_DELAY_MS as TABLE_INSERT_HIDE_DELAY,
 } from '@eigenpal/docx-editor-core/flow-model';
-import type { FlowBlock, Layout, Measure } from '@eigenpal/docx-editor-core/pagination-model';
+import type {
+  ContentNode,
+  LayoutMetrics,
+  PageLayout,
+} from '@eigenpal/docx-editor-core/pagination-model';
 import { addColumnRight, addRowBelow } from '@eigenpal/docx-editor-core/prosemirror';
 import {
   captureInlinePositionEmu,
   findImageElement as coreFindImageElement,
-  pointerHitResolveImage,
+  pointerTargetResolveImage,
 } from '@eigenpal/docx-editor-core/painter-model';
 import type { WrapType } from '@eigenpal/docx-editor-core/docx/wrapTypes';
 import { findWordBoundaries } from '@eigenpal/docx-editor-core/utils';
@@ -78,9 +82,9 @@ export interface UsePagesPointerOptions {
    * stays single-surface and only the body PM receives input.
    */
   getHfView?: () => EditorView | null;
-  layout: Layout | null;
-  blocks: FlowBlock[];
-  measures: Measure[];
+  pageLayout: PageLayout | null;
+  nodes: ContentNode[];
+  metrics: LayoutMetrics[];
   zoom: number;
   readOnly: boolean;
   hfEditMode?: 'header' | 'footer' | null;
@@ -177,9 +181,9 @@ export function usePagesPointer(opts: UsePagesPointerOptions): UsePagesPointerRe
     pagesContainerRef,
     hiddenPMRef,
     getHfView,
-    layout,
-    blocks,
-    measures,
+    pageLayout,
+    nodes,
+    metrics,
     zoom,
     readOnly,
     hfEditMode,
@@ -246,13 +250,13 @@ export function usePagesPointer(opts: UsePagesPointerOptions): UsePagesPointerRe
    */
   const getPositionFromMouse = useCallback(
     (clientX: number, clientY: number): number | null => {
-      if (!pagesContainerRef.current || !layout) return null;
+      if (!pagesContainerRef.current || !pageLayout) return null;
 
       const domPos = resolveDomPosition(pagesContainerRef.current, clientX, clientY, zoom);
       if (domPos !== null) return domPos;
 
-      // In HF edit mode, the geometry-based fallback below uses BODY blocks/
-      // measures — wrong coord space for HF clicks. If resolveDomPosition
+      // In HF edit mode, the geometry-based fallback below uses BODY nodes/
+      // metrics — wrong coord space for HF clicks. If resolveDomPosition
       // couldn't pin a span, find the nearest HF data-doc-from span at the
       // same y so drag-select doesn't ping-pong between HF and body coords
       // mid-drag. Returning null is safer than returning a body pos.
@@ -320,23 +324,26 @@ export function usePagesPointer(opts: UsePagesPointerOptions): UsePagesPointerRe
 
       const pageX = (clientX - pageRect.left) / zoom;
       const pageY = (clientY - pageRect.top) / zoom;
-      const page = layout.pages[clickedPageIndex];
+      const page = pageLayout.pages[clickedPageIndex];
       if (!page) return null;
 
-      const pageHit = { pageIndex: clickedPageIndex, page, pageY };
-      const fragmentHit = resolveFragmentHit(pageHit, blocks, measures, { x: pageX, y: pageY });
-      if (!fragmentHit) return null;
+      const pageTarget = { pageIndex: clickedPageIndex, page, pageY };
+      const fragmentTarget = resolveFragmentTarget(pageTarget, nodes, metrics, {
+        x: pageX,
+        y: pageY,
+      });
+      if (!fragmentTarget) return null;
 
-      if (fragmentHit.fragment.kind === 'table') {
-        const tableCellHit = resolveTableCellHit(pageHit, blocks, measures, {
+      if (fragmentTarget.fragment.kind === 'table') {
+        const tableCellTarget = resolveTableCellTarget(pageTarget, nodes, metrics, {
           x: pageX,
           y: pageY,
         });
-        return pointerToDocPos(fragmentHit, tableCellHit);
+        return pointerToDocPos(fragmentTarget, tableCellTarget);
       }
-      return pointerToDocPos(fragmentHit);
+      return pointerToDocPos(fragmentTarget);
     },
-    [layout, blocks, measures, zoom, hfEditMode, pagesContainerRef]
+    [pageLayout, nodes, metrics, zoom, hfEditMode, pagesContainerRef]
   );
 
   /**
@@ -775,11 +782,11 @@ export function usePagesPointer(opts: UsePagesPointerOptions): UsePagesPointerRe
       };
 
       let imageInfo: ImageInfo | null = null;
-      const hit = pointerHitResolveImage(e.target);
-      if (hit) {
-        imageInfo = readImageNodeAt(hit.pos);
+      const imageTarget = pointerTargetResolveImage(e.target);
+      if (imageTarget) {
+        imageInfo = readImageNodeAt(imageTarget.pos);
         if (imageInfo) {
-          imageInfo.inlinePositionEmu = captureInlinePositionEmu(hit.imageEl, zoom);
+          imageInfo.inlinePositionEmu = captureInlinePositionEmu(imageTarget.imageEl, zoom);
         }
       }
       if (!imageInfo) {

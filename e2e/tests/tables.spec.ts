@@ -14,6 +14,43 @@
 import { test, expect } from '@playwright/test';
 import { EditorPage } from '../helpers/editor-page';
 
+test.describe('Authored DOCX borders', () => {
+  test('paints table and paragraph borders from the demo document', async ({ page }) => {
+    const editor = new EditorPage(page);
+    await editor.goto();
+    await editor.waitForReady();
+    await expect(page.locator('.layout-table-cell').first()).toBeVisible();
+    await expect(page.locator('.layout-paragraph-border').first()).toBeVisible();
+
+    const borders = await page.evaluate(() => {
+      const visibleBorderEdges = (element: Element): number =>
+        [
+          getComputedStyle(element).borderTopWidth,
+          getComputedStyle(element).borderRightWidth,
+          getComputedStyle(element).borderBottomWidth,
+          getComputedStyle(element).borderLeftWidth,
+        ].filter((width) => Number.parseFloat(width) > 0).length;
+
+      const tableCells = Array.from(document.querySelectorAll('.layout-table-cell'));
+      const paragraphBorders = Array.from(document.querySelectorAll('.layout-paragraph-border'));
+
+      return {
+        tableCellCount: tableCells.length,
+        borderlessTableCells: tableCells.filter((cell) => visibleBorderEdges(cell) === 0).length,
+        paragraphBorderCount: paragraphBorders.length,
+        invisibleParagraphBorders: paragraphBorders.filter(
+          (border) => visibleBorderEdges(border) === 0
+        ).length,
+      };
+    });
+
+    expect(borders.tableCellCount).toBeGreaterThan(0);
+    expect(borders.borderlessTableCells).toBe(0);
+    expect(borders.paragraphBorderCount).toBeGreaterThan(0);
+    expect(borders.invisibleParagraphBorders).toBe(0);
+  });
+});
+
 test.describe('Table Creation', () => {
   let editor: EditorPage;
 
