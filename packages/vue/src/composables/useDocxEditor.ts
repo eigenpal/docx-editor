@@ -372,6 +372,9 @@ export function useDocxEditor(options: UseDocxEditorOptions): UseDocxEditorRetur
         firstPageFooterForRender,
         hasTitlePg,
         watermark,
+        headerDistancePx,
+        footerDistancePx,
+        pageBorders,
         footnotesByPage,
       } = computeLayout({
         state,
@@ -413,7 +416,10 @@ export function useDocxEditor(options: UseDocxEditorOptions): UseDocxEditorRetur
         footerContent: footerContentForRender,
         firstPageHeaderContent: firstPageHeaderForRender,
         firstPageFooterContent: firstPageFooterForRender,
-        titlePage: hasTitlePg,
+        titlePg: hasTitlePg,
+        headerDistance: headerDistancePx,
+        footerDistance: footerDistancePx,
+        pageBorders,
         watermark,
         footnotesByPage,
       } as Parameters<typeof paintPages>[2]);
