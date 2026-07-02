@@ -37,6 +37,10 @@ export default defineConfig({
         find: '@eigenpal/docx-editor-core/editor',
         replacement: resolve(__dirname, '../core/src/editor/index.ts'),
       },
+      {
+        find: '@eigenpal/docx-editor-core/utils/removeHeaderFooterForSection',
+        replacement: resolve(__dirname, '../core/src/utils/removeHeaderFooterForSection.ts'),
+      },
     ],
   },
   plugins: [
@@ -92,8 +96,10 @@ export default defineConfig({
       external: (id) => {
         if (id === 'vue' || /^prosemirror-/.test(id)) return true;
         if (!id.startsWith('@eigenpal/docx-editor-core')) return false;
-        return !/^@eigenpal\/docx-editor-core\/(?:editor|flow-model|painter-model|pagination-model)(?:\/|$)/.test(
-          id
+        return !(
+          /^@eigenpal\/docx-editor-core\/(?:editor|flow-model|painter-model|pagination-model)(?:\/|$)/.test(
+            id
+          ) || id === '@eigenpal/docx-editor-core/utils/removeHeaderFooterForSection'
         );
       },
     },
