@@ -249,15 +249,19 @@ export function DocxEditorPagedArea({
         setHfSelectionGeometry([]);
         return;
       }
-      const caret = computeHfCaretRectFromView(view, hfEditPosition);
+      const caret = computeHfCaretRectFromView(view, hfEditPosition, window.document, activeHfRId);
       setHfCaretRect(caret ? toHfHostLocal(caret) : null);
-      setHfSelectionGeometry(readHfSelectionGeometry(view, hfEditPosition).map(toHfHostLocal));
+      setHfSelectionGeometry(
+        readHfSelectionGeometry(view, hfEditPosition, window.document, activeHfRId).map(
+          toHfHostLocal
+        )
+      );
       const pagesEl = window.document.querySelector('.paged-editor__pages') as HTMLElement | null;
       // Multi-cell selection renders via `.layout-table-cell-selected`, scoped
       // to the active section so footer selections don't light up header cells.
       if (pagesEl) applyCellSelectionHighlight(pagesEl, view.state, { scope: hfEditPosition });
     },
-    [hfEditPosition, toHfHostLocal]
+    [activeHfRId, hfEditPosition, toHfHostLocal]
   );
 
   // Initial-caret-on-engage: when the user double-clicks into HF mode the
