@@ -8,41 +8,16 @@ import type {
 } from '@eigenpal/docx-editor-core/types/document';
 import { resolveHeaderFooter } from '@eigenpal/docx-editor-core/flow-model';
 import { proseDocToBlocks } from '@eigenpal/docx-editor-core/prosemirror/conversion';
-import { removeHeaderFooterForSection } from '@eigenpal/docx-editor-core/utils/removeHeaderFooterForSection';
+import {
+  removeHeaderFooterForSection,
+  updateSectionPropertiesAt,
+} from '@eigenpal/docx-editor-core/utils/removeHeaderFooterForSection';
 import type { InlineHeaderFooterEditorRef } from '../../InlineHeaderFooterEditor';
 
 export interface HeaderFooterClickTarget {
   rId: string | null;
   variant: HeaderFooterType;
   sectionIndex: number;
-}
-
-function updateSectionPropertiesAt(
-  body: Document['package']['document'],
-  sectionIndex: number,
-  update: (properties: SectionProperties) => SectionProperties
-): Document['package']['document'] {
-  let breakSectionIndex = 0;
-  const content = body.content.map((block) => {
-    if (!('sectionProperties' in block) || !block.sectionProperties) return block;
-    const current = breakSectionIndex++;
-    return current === sectionIndex
-      ? { ...block, sectionProperties: update(block.sectionProperties) }
-      : block;
-  });
-  const sections = body.sections?.map((section, index) =>
-    index === sectionIndex ? { ...section, properties: update(section.properties) } : section
-  );
-  const finalIndex = Math.max(0, (sections?.length ?? 1) - 1);
-  return {
-    ...body,
-    content,
-    sections,
-    finalSectionProperties:
-      sectionIndex === finalIndex && body.finalSectionProperties
-        ? update(body.finalSectionProperties)
-        : body.finalSectionProperties,
-  };
 }
 
 /**
