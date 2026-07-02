@@ -681,6 +681,14 @@ function handleDocumentChange(doc: Document) {
     typeof window !== 'undefined' &&
     new URLSearchParams(window.location.search).get('controlledDocument') === '1'
   ) {
+    const hooks = window as Window & {
+      __docxVueLastEmittedDocument?: Document;
+      __docxVueSetControlledDocument?: (next: Document) => void;
+    };
+    hooks.__docxVueLastEmittedDocument = doc;
+    hooks.__docxVueSetControlledDocument = (next) => {
+      currentDocument.value = next;
+    };
     currentDocument.value = doc;
   }
 }
