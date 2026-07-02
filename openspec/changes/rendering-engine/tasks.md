@@ -9,6 +9,6 @@
 - [x] Stamp painted DOM with document-position ranges and scope body versus header/footer queries.
 - [x] Keep caret and selection rectangles correct across lines, pages, scrolling, virtualization, and zoom.
 - [x] Keep one active editing region and preserve body/header/footer focus hand-off.
-- [ ] Verify the stable DOM-facing package API with real DOCX fixtures.
-- [ ] Build the core, React, and Vue packages and check emitted JavaScript and declarations.
-- [ ] Run type checking and focused rendering/selection tests.
+- [x] Verify the stable DOM-facing package API with real DOCX fixtures.
+- [x] Build the core, React, and Vue packages and check emitted JavaScript and declarations.
+- [x] Run type checking and focused rendering/selection tests.
