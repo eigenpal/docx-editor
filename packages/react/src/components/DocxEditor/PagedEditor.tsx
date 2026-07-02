@@ -1,18 +1,5 @@
-/**
- * PagedEditor Component
- *
- * Main paginated editing component that integrates:
- * - OffscreenEditorHost: off-screen editor for keyboard input
- * - Layout engine: computes page layout from PM state
- * - DOM painter: renders pages to visible DOM
- * - Selection overlay: renders caret and selection highlights
- *
- * Architecture:
- * 1. User clicks on visible pages → hit test → update PM selection
- * 2. User types → hidden PM receives input → PM transaction
- * 3. PM transaction → build content nodes → metrics → page layout → paint
- * 4. Selection changes → compute rects → update overlay
- */
+/** Bridges the off-screen ProseMirror editor with painted pages, pointer
+ * routing, pagination, and visible selection overlays. */
 
 import React, { useEffect, useRef, useState, useCallback, useMemo, forwardRef, memo } from 'react';
 import type { CSSProperties } from 'react';
@@ -65,6 +52,7 @@ import { useSelectionOverlay } from './hooks/useSelectionOverlay';
 import { useImageInteractions } from './hooks/useImageInteractions';
 import { usePagedScrollApi } from './hooks/usePagedScrollApi';
 import { usePagesPointer } from './hooks/usePagesPointer';
+import type { HeaderFooterClickTarget } from './hooks/useHeaderFooterEditing';
 import { usePagedEditorRefApi } from './hooks/usePagedEditorRefApi';
 import { useLayoutTriggers } from './hooks/useLayoutTriggers';
 import { TableInsertButton } from './overlays/TableInsertButton';
@@ -121,11 +109,7 @@ export interface PagedEditorProps {
   onHeaderFooterDoubleClick?: (
     position: 'header' | 'footer',
     pageNumber?: number,
-    target?: {
-      rId: string | null;
-      variant: 'default' | 'first' | 'even';
-      sectionIndex: number;
-    }
+    target?: HeaderFooterClickTarget
   ) => void;
   /** Active header/footer editing mode (dims body, intercepts body clicks). */
   hfEditMode?: 'header' | 'footer' | null;

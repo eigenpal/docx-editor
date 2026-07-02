@@ -1,4 +1,4 @@
-import { useCallback, useMemo } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import type {
   Document,
   HeaderFooter,
@@ -67,10 +67,6 @@ export function useHeaderFooterEditing({
   setHfEditPosition,
   hfEditIsFirstPage,
   setHfEditIsFirstPage,
-  hfEditRId,
-  setHfEditRId,
-  hfEditSectionIndex,
-  setHfEditSectionIndex,
 }: {
   document: Document | null;
   pushDocument: (doc: Document) => void;
@@ -84,11 +80,9 @@ export function useHeaderFooterEditing({
   setHfEditPosition: React.Dispatch<React.SetStateAction<'header' | 'footer' | null>>;
   hfEditIsFirstPage: boolean;
   setHfEditIsFirstPage: React.Dispatch<React.SetStateAction<boolean>>;
-  hfEditRId: string | null;
-  setHfEditRId: React.Dispatch<React.SetStateAction<string | null>>;
-  hfEditSectionIndex: number | null;
-  setHfEditSectionIndex: React.Dispatch<React.SetStateAction<number | null>>;
 }) {
+  const [hfEditRId, setHfEditRId] = useState<string | null>(null);
+  const [hfEditSectionIndex, setHfEditSectionIndex] = useState<number | null>(null);
   const { headerContent, footerContent, firstPageHeaderContent, firstPageFooterContent } =
     useMemo(() => {
       const { header, footer, firstHeader, firstFooter } = resolveHeaderFooter(
@@ -355,6 +349,7 @@ export function useHeaderFooterEditing({
     firstPageHeaderContent,
     firstPageFooterContent,
     activeHf,
+    hfEditRId,
     handleHeaderFooterDoubleClick,
     handleHeaderFooterSave,
     handleBodyClick,
