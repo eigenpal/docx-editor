@@ -354,6 +354,7 @@ export function useDocxEditor(options: UseDocxEditorOptions): UseDocxEditorRetur
     const contentWidth = pageSize.w - margins.left - margins.right;
     const theme = document.value.package?.theme ?? null;
     const styles = document.value.package?.styles ?? null;
+    let didPaint = false;
 
     try {
       // Steps 1-5 (nodes → metrics → HF resolve → margin extend → page layout →
@@ -426,6 +427,7 @@ export function useDocxEditor(options: UseDocxEditorOptions): UseDocxEditorRetur
         watermark,
         footnotesByPage,
       } as Parameters<typeof paintPages>[2]);
+      didPaint = true;
 
       // paintPages sets display:flex on the container — fix scrolling
       container.style.overflowY = 'auto';
@@ -443,6 +445,8 @@ export function useDocxEditor(options: UseDocxEditorOptions): UseDocxEditorRetur
     } catch (err) {
       console.error('[useDocxEditor] Layout pipeline error:', err);
       onError?.(err instanceof Error ? err : new Error(String(err)));
+    } finally {
+      if (didPaint) syncCoordinator?.onLayoutComplete(layoutSeq);
     }
   }
 
