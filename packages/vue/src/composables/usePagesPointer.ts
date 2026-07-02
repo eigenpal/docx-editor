@@ -22,6 +22,7 @@ import {
   TABLE_INSERT_HIDE_DELAY_MS,
 } from '@eigenpal/docx-editor-core/flow-model/tableInsertHover';
 import { resolveHfDomPosition } from '@eigenpal/docx-editor-core/flow-model';
+import { removeHeaderFooterForSection } from '@eigenpal/docx-editor-core/utils/removeHeaderFooterForSection';
 import {
   scrollVisiblePositionIntoView as scrollVisiblePositionIntoViewImpl,
   resolvePos as resolvePosImpl,
@@ -558,29 +559,7 @@ export function usePagesPointer(opts: UsePagesPointerOptions): UsePagesPointerRe
       hfEdit.value = null;
       return;
     }
-    const mapKey = edit.position === 'header' ? 'headers' : 'footers';
-    const refKey = edit.position === 'header' ? 'headerReferences' : 'footerReferences';
-    const rId = edit.rId;
-    const stripRefs = (sp: SectionProperties): SectionProperties => ({
-      ...sp,
-      [refKey]: (sp[refKey] ?? []).filter((r) => r.rId !== rId),
-    });
-    const body = doc.package.document;
-    const nextBody = updateSectionPropertiesAt(body, edit.sectionIndex, stripRefs);
-    const stillReferenced =
-      (nextBody.sections ?? []).some((section) =>
-        (section.properties[refKey] ?? []).some((ref) => ref.rId === rId)
-      ) || (nextBody.finalSectionProperties?.[refKey] ?? []).some((ref) => ref.rId === rId);
-    const newMap = new Map(doc.package[mapKey] ?? []);
-    if (!stillReferenced) newMap.delete(rId);
-    const newDoc: Document = {
-      ...doc,
-      package: {
-        ...doc.package,
-        [mapKey]: newMap,
-        document: nextBody,
-      },
-    };
+    const newDoc = removeHeaderFooterForSection(doc, edit.position, edit.sectionIndex, edit.rId);
 
     hfEdit.value = null;
     opts.setDocument?.(newDoc);

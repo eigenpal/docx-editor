@@ -8,6 +8,7 @@ import type {
 } from '@eigenpal/docx-editor-core/types/document';
 import { resolveHeaderFooter } from '@eigenpal/docx-editor-core/flow-model';
 import { proseDocToBlocks } from '@eigenpal/docx-editor-core/prosemirror/conversion';
+import { removeHeaderFooterForSection } from '@eigenpal/docx-editor-core/utils/removeHeaderFooterForSection';
 import type { InlineHeaderFooterEditorRef } from '../../InlineHeaderFooterEditor';
 
 export interface HeaderFooterClickTarget {
@@ -287,33 +288,16 @@ export function useHeaderFooterEditing({
     }
 
     const pkg = document.package;
-    const refKey = hfEditPosition === 'header' ? 'headerReferences' : 'footerReferences';
-    const mapKey = hfEditPosition === 'header' ? 'headers' : 'footers';
 
     if (hfEditRId) {
-      const strip = (properties: SectionProperties): SectionProperties => ({
-        ...properties,
-        [refKey]: (properties[refKey] ?? []).filter((ref) => ref.rId !== hfEditRId),
-      });
       const sectionIndex =
         hfEditSectionIndex ?? Math.max(0, (pkg.document.sections?.length ?? 1) - 1);
-      const updatedBody = updateSectionPropertiesAt(pkg.document, sectionIndex, strip);
-      const stillReferenced =
-        (updatedBody.sections ?? []).some((section) =>
-          (section.properties[refKey] ?? []).some((ref) => ref.rId === hfEditRId)
-        ) ||
-        (updatedBody.finalSectionProperties?.[refKey] ?? []).some((ref) => ref.rId === hfEditRId);
-      const newMap = new Map(pkg[mapKey] ?? []);
-      if (!stillReferenced) newMap.delete(hfEditRId);
-
-      const newDoc: Document = {
-        ...document,
-        package: {
-          ...pkg,
-          [mapKey]: newMap,
-          document: updatedBody,
-        },
-      };
+      const newDoc = removeHeaderFooterForSection(
+        document,
+        hfEditPosition,
+        sectionIndex,
+        hfEditRId
+      );
       pushDocument(newDoc);
     }
 
