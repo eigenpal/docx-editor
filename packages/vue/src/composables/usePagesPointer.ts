@@ -198,8 +198,7 @@ export function usePagesPointer(opts: UsePagesPointerOptions): UsePagesPointerRe
   function resolvePos(clientX: number, clientY: number): number | null {
     const edit = hfEdit.value;
     if (edit) {
-      const selector =
-        edit.position === 'header' ? '.layout-page-header' : '.layout-page-footer';
+      const selector = edit.position === 'header' ? '.layout-page-header' : '.layout-page-footer';
       const host = document
         .elementsFromPoint(clientX, clientY)
         .map((element) => (element as HTMLElement).closest<HTMLElement>(selector))
@@ -479,13 +478,17 @@ export function usePagesPointer(opts: UsePagesPointerOptions): UsePagesPointerRe
       // pushDocument path) so any computeds watching document identity
       // refire and undo/redo can track the materialization event.
       const newRef = { type: hdrFtrType, rId: newRId };
-      const newBody = updateSectionPropertiesAt(doc.package.document, sectionIndex, (properties) => ({
-        ...properties,
-        [refKey]: [
-          ...(properties[refKey] ?? []).filter((entry) => entry.type !== hdrFtrType),
-          newRef,
-        ],
-      }));
+      const newBody = updateSectionPropertiesAt(
+        doc.package.document,
+        sectionIndex,
+        (properties) => ({
+          ...properties,
+          [refKey]: [
+            ...(properties[refKey] ?? []).filter((entry) => entry.type !== hdrFtrType),
+            newRef,
+          ],
+        })
+      );
       const newDoc: Document = {
         ...doc,
         package: {

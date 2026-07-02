@@ -59,10 +59,7 @@ export function useImageInteractions(
   } = opts;
 
   const activeView = useCallback(
-    () =>
-      activeRegion
-        ? (getActiveView?.() ?? null)
-        : (hiddenPMRef.current?.getView() ?? null),
+    () => (activeRegion ? (getActiveView?.() ?? null) : (hiddenPMRef.current?.getView() ?? null)),
     [activeRegion, getActiveView, hiddenPMRef]
   );
 

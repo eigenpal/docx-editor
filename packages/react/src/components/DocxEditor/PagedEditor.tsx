@@ -550,8 +550,7 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
     });
 
     const getActiveHfView = useCallback(
-      () =>
-        activeHfRId ? (hiddenHfPMsRef.current?.getView(activeHfRId) ?? null) : null,
+      () => (activeHfRId ? (hiddenHfPMsRef.current?.getView(activeHfRId) ?? null) : null),
       [activeHfRId]
     );
 
