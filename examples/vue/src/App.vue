@@ -684,10 +684,15 @@ function handleDocumentChange(doc: Document) {
     const hooks = window as Window & {
       __docxVueLastEmittedDocument?: Document;
       __docxVueSetControlledDocument?: (next: Document) => void;
+      __docxVueSetDocumentBuffer?: (next: ArrayBuffer) => void;
     };
     hooks.__docxVueLastEmittedDocument = doc;
     hooks.__docxVueSetControlledDocument = (next) => {
       currentDocument.value = next;
+    };
+    hooks.__docxVueSetDocumentBuffer = (next) => {
+      currentDocument.value = null;
+      documentBuffer.value = next;
     };
     currentDocument.value = doc;
   }

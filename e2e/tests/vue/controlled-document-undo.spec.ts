@@ -85,3 +85,38 @@ test('Vue: a previously emitted document can be reopened after an external switc
   });
   await expect(bodyEditor).toHaveText('abc');
 });
+
+test('Vue: a buffer load clears the controlled document echo marker', async ({ page }) => {
+  await page.goto('http://localhost:5174/?e2e=1&empty=1&controlledDocument=1');
+  await page.locator('.docx-editor-vue').waitFor();
+  const content = page.locator('.layout-page-content').first();
+  const contentBox = await content.boundingBox();
+  expect(contentBox).not.toBeNull();
+  await page.mouse.click(contentBox!.x + 20, contentBox!.y + 20);
+  await page.keyboard.type('abc');
+
+  await page.evaluate(async () => {
+    const hooks = window as typeof window & {
+      __docxVueSetDocumentBuffer?: (next: ArrayBuffer) => void;
+    };
+    if (!hooks.__docxVueSetDocumentBuffer) throw new Error('missing buffer E2E hook');
+    const response = await fetch('/sample.docx');
+    hooks.__docxVueSetDocumentBuffer(await response.arrayBuffer());
+  });
+
+  const bodyEditor = page.locator('.docx-editor-vue .ProseMirror').first();
+  await expect.poll(async () => (await bodyEditor.textContent())?.length ?? 0).toBeGreaterThan(20);
+  await page.evaluate(() => {
+    const hooks = window as typeof window & {
+      __docxVueCachedDocument?: unknown;
+      __docxVueLastEmittedDocument?: unknown;
+      __docxVueSetControlledDocument?: (next: unknown) => void;
+    };
+    const cached = hooks.__docxVueCachedDocument ?? hooks.__docxVueLastEmittedDocument;
+    if (!cached || !hooks.__docxVueSetControlledDocument) {
+      throw new Error('missing cached controlled document');
+    }
+    hooks.__docxVueSetControlledDocument(cached);
+  });
+  await expect(bodyEditor).toHaveText('abc');
+});
