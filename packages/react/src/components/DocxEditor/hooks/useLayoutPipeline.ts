@@ -401,6 +401,7 @@ export function useLayoutPipeline(opts: UseLayoutPipelineOptions): UseLayoutPipe
               `(${newNodes.length} nodes, ${newMetrics.length} metrics)`
           );
         }
+        syncCoordinator.onLayoutComplete(currentEpoch);
       } catch (error) {
         console.error('[PagedEditor] Layout pipeline error:', error);
       }
