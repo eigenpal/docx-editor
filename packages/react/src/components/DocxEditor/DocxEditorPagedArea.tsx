@@ -35,6 +35,7 @@ import type { HyperlinkPopupData } from '../ui/HyperlinkPopup';
 import type { WrapType } from '@eigenpal/docx-editor-core/docx/wrapTypes';
 import type { ReactSidebarItem } from '../../plugin-api/types';
 import type { RenderedDomContext } from '../../plugin-api/types';
+import type { HeaderFooterClickTarget } from './hooks/useHeaderFooterEditing';
 
 /**
  * Body of the editor: the paged ProseMirror host, its sidebar overlay
@@ -136,11 +137,7 @@ export function DocxEditorPagedArea({
   onHeaderFooterDoubleClick: (
     position: 'header' | 'footer',
     pageNumber?: number,
-    target?: {
-      rId: string | null;
-      variant: 'default' | 'first' | 'even';
-      sectionIndex: number;
-    }
+    target?: HeaderFooterClickTarget
   ) => void;
   onHeaderFooterSave: (content: BlockContent[]) => void;
   onRemoveHeaderFooter: () => void;

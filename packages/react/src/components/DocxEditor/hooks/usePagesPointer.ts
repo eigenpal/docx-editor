@@ -47,6 +47,7 @@ import {
 } from '@eigenpal/docx-editor-core/painter-model';
 import type { WrapType } from '@eigenpal/docx-editor-core/docx/wrapTypes';
 import { findWordBoundaries } from '@eigenpal/docx-editor-core/utils';
+import type { HeaderFooterClickTarget } from './useHeaderFooterEditing';
 
 import type { OffscreenEditorHostRef } from '../OffscreenEditorHost';
 import type { ImageSelectionInfo } from '../overlays/ImageSelectionOverlay';
@@ -105,11 +106,7 @@ export interface UsePagesPointerOptions {
   onHeaderFooterDoubleClick?: (
     position: 'header' | 'footer',
     pageNumber?: number,
-    target?: {
-      rId: string | null;
-      variant: 'default' | 'first' | 'even';
-      sectionIndex: number;
-    }
+    target?: HeaderFooterClickTarget
   ) => void;
   setSelectedImageInfo: React.Dispatch<React.SetStateAction<ImageSelectionInfo | null>>;
   setSelectionGeometry: React.Dispatch<React.SetStateAction<SelectionBox[]>>;
