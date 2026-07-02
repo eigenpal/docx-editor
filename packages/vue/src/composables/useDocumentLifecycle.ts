@@ -21,6 +21,7 @@ export interface UseDocumentLifecycleOptions {
 
 export function useDocumentLifecycle(opts: UseDocumentLifecycleOptions) {
   async function loadBufferReset(buf: DocxInput) {
+    opts.takeLastEmittedDocument?.();
     opts.sidebarAutoOpenedRef.value = false;
     await opts.loadDocumentBuffer(buf);
   }
