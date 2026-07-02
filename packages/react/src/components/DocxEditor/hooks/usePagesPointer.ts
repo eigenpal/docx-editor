@@ -262,8 +262,7 @@ export function usePagesPointer(opts: UsePagesPointerOptions): UsePagesPointerRe
       if (!pagesContainerRef.current || !pageLayout) return null;
 
       if (hfEditMode) {
-        const selector =
-          hfEditMode === 'header' ? '.layout-page-header' : '.layout-page-footer';
+        const selector = hfEditMode === 'header' ? '.layout-page-header' : '.layout-page-footer';
         const host = window.document
           .elementsFromPoint(clientX, clientY)
           .map((element) => (element as HTMLElement).closest<HTMLElement>(selector))

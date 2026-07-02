@@ -105,33 +105,24 @@ export function useHeaderFooterEditing({
 
   const activeHf = useMemo(() => {
     if (!hfEditPosition || !hfEditRId) return null;
-    const bag =
-      hfEditPosition === 'header'
-        ? document?.package.headers
-        : document?.package.footers;
+    const bag = hfEditPosition === 'header' ? document?.package.headers : document?.package.footers;
     return bag?.get(hfEditRId) ?? null;
   }, [document, hfEditPosition, hfEditRId]);
 
   const handleHeaderFooterDoubleClick = useCallback(
-    (
-      position: 'header' | 'footer',
-      pageNumber?: number,
-      target?: HeaderFooterClickTarget
-    ) => {
+    (position: 'header' | 'footer', pageNumber?: number, target?: HeaderFooterClickTarget) => {
       // No scroll-to-page-1 — the HF content is shared across all pages by
       // `r:id`, so the painter renders the same edits on every page in real
       // time. Whichever page the user double-clicked, the chrome bar floats
       // over THAT page's header and edits propagate visually to all others.
       const body = document?.package?.document;
       const sectionIndex = target?.sectionIndex ?? Math.max(0, (body?.sections?.length ?? 1) - 1);
-      const sectProps =
-        body?.sections?.[sectionIndex]?.properties ?? body?.finalSectionProperties;
+      const sectProps = body?.sections?.[sectionIndex]?.properties ?? body?.finalSectionProperties;
       const variant =
         target?.variant ??
         (sectProps?.titlePg === true && (pageNumber ?? 1) === 1 ? 'first' : 'default');
       const isFirstPage = variant === 'first';
-      const bag =
-        position === 'header' ? document?.package?.headers : document?.package?.footers;
+      const bag = position === 'header' ? document?.package?.headers : document?.package?.footers;
       const hf = target?.rId ? (bag?.get(target.rId) ?? null) : null;
       setHfEditIsFirstPage(isFirstPage);
       setHfEditSectionIndex(sectionIndex);
@@ -145,8 +136,7 @@ export function useHeaderFooterEditing({
       if (!document?.package) return;
       const pkg = document.package;
       const sectionProps =
-        pkg.document?.sections?.[sectionIndex]?.properties ??
-        pkg.document?.finalSectionProperties;
+        pkg.document?.sections?.[sectionIndex]?.properties ?? pkg.document?.finalSectionProperties;
       if (!sectionProps) return;
 
       const hdrFtrType = variant;
@@ -318,9 +308,7 @@ export function useHeaderFooterEditing({
         (updatedBody.sections ?? []).some((section) =>
           (section.properties[refKey] ?? []).some((ref) => ref.rId === hfEditRId)
         ) ||
-        (updatedBody.finalSectionProperties?.[refKey] ?? []).some(
-          (ref) => ref.rId === hfEditRId
-        );
+        (updatedBody.finalSectionProperties?.[refKey] ?? []).some((ref) => ref.rId === hfEditRId);
       const newMap = new Map(pkg[mapKey] ?? []);
       if (!stillReferenced) newMap.delete(hfEditRId);
 

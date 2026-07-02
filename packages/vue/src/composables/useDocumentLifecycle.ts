@@ -32,10 +32,7 @@ export function useDocumentLifecycle(opts: UseDocumentLifecycleOptions) {
     const rawDoc = toRaw(doc);
     const current = opts.currentDocument?.();
     const lastEmitted = opts.lastEmittedDocument?.();
-    if (
-      (current && rawDoc === toRaw(current)) ||
-      (lastEmitted && rawDoc === toRaw(lastEmitted))
-    ) {
+    if ((current && rawDoc === toRaw(current)) || (lastEmitted && rawDoc === toRaw(lastEmitted))) {
       return;
     }
     opts.sidebarAutoOpenedRef.value = false;
