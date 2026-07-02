@@ -13,7 +13,7 @@ export interface UseDocumentLifecycleOptions {
   documentBuffer: () => DocxInput | null;
   document: () => Document | null;
   currentDocument?: () => Document | null;
-  lastEmittedDocument?: () => Document | null;
+  takeLastEmittedDocument?: () => Document | null;
   loadDocumentBuffer: (buffer: DocxInput) => Promise<void>;
   loadDocument: (doc: Document) => void;
   sidebarAutoOpenedRef: Ref<boolean>;
@@ -31,7 +31,10 @@ export function useDocumentLifecycle(opts: UseDocumentLifecycleOptions) {
     // would erase undo history after every keystroke.
     const rawDoc = toRaw(doc);
     const current = opts.currentDocument?.();
-    const lastEmitted = opts.lastEmittedDocument?.();
+    // Consume the one-shot marker even when `current` already matches. Keeping
+    // it indefinitely would misclassify a later A → B → cached A switch as an
+    // echo of the old edit.
+    const lastEmitted = opts.takeLastEmittedDocument?.();
     if ((current && rawDoc === toRaw(current)) || (lastEmitted && rawDoc === toRaw(lastEmitted))) {
       return;
     }

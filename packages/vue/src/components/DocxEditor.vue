@@ -1072,7 +1072,11 @@ useDocumentLifecycle({
   documentBuffer: () => props.documentBuffer,
   document: () => props.document,
   currentDocument: getDocument,
-  lastEmittedDocument: () => lastEmittedDocument,
+  takeLastEmittedDocument: () => {
+    const emitted = lastEmittedDocument;
+    lastEmittedDocument = null;
+    return emitted;
+  },
   loadDocumentBuffer,
   loadDocument,
   sidebarAutoOpenedRef,
