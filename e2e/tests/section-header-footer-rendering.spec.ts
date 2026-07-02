@@ -28,6 +28,10 @@ test('paints each section header, distance, and relationship id on its pages', a
     const secondSection = {
       headerDistance: 720,
       headerReferences: [{ type: 'default', rId: 'rId-header-two' }],
+      pageBorders: {
+        display: 'notFirstPage',
+        top: { style: 'single', size: 8, color: '000000' },
+      },
     };
     const firstParagraph = paragraph('First section body', firstSection);
     const secondParagraph = paragraph('Second section body');
@@ -60,6 +64,7 @@ test('paints each section header, distance, and relationship id on its pages', a
         headerRId: headerElement?.dataset.hfRId,
         headerText: headerElement?.textContent ?? '',
         headerTop: headerRect ? headerRect.top - pageRect.top : -1,
+        hasPageBorder: pageElement.querySelector('.layout-page-border') !== null,
       };
     });
 
@@ -87,4 +92,5 @@ test('paints each section header, distance, and relationship id on its pages', a
   });
   expect(second!.headerText).toContain('Second section header');
   expect(second!.headerTop).toBeCloseTo(48, 0);
+  expect(second!.hasPageBorder).toBe(false);
 });

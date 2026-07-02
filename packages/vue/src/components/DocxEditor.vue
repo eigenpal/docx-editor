@@ -642,8 +642,9 @@ const hfSelectionGeometry = ref<
 // null for a non-empty selection and `readHfSelectionGeometry` returns
 // [] for a collapsed one, so the caret and highlight are mutually exclusive.
 function applyHfOverlay(view: EditorView, position: 'header' | 'footer') {
-  hfCaretRect.value = computeHfCaretRectFromView(view, position);
-  hfSelectionGeometry.value = readHfSelectionGeometry(view, position);
+  const rId = hfEdit.value?.rId ?? null;
+  hfCaretRect.value = computeHfCaretRectFromView(view, position, window.document, rId);
+  hfSelectionGeometry.value = readHfSelectionGeometry(view, position, window.document, rId);
 }
 function clearHfOverlay() {
   hfCaretRect.value = null;
