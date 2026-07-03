@@ -24,6 +24,8 @@ export interface RenderedBox {
     // (undocumented)
     pageIndex: number;
     // (undocumented)
+    region: RenderedRegion;
+    // (undocumented)
     width: number;
     // (undocumented)
     x: number;
@@ -46,5 +48,8 @@ export interface RenderedPage {
     // (undocumented)
     element: HTMLElement;
 }
+
+// @public
+export type RenderedRegion = 'body' | 'header' | 'footer';
 
 ```

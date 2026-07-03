@@ -45,6 +45,9 @@ test.describe('issue #740 — w:header="0" pagination parity', () => {
       }, 0);
       const pageRect = pageElement?.getBoundingClientRect();
       const lastRect = paragraphs.at(-1)?.getBoundingClientRect();
+      const contentRect = document
+        .querySelector<HTMLElement>('.layout-page-content')
+        ?.getBoundingClientRect();
 
       return {
         paragraphCount: paragraphs.length,
@@ -54,6 +57,9 @@ test.describe('issue #740 — w:header="0" pagination parity', () => {
         lastParagraphBottomRatio:
           pageRect && lastRect ? (lastRect.bottom - pageRect.top) / pageRect.height : 0,
         maxTextOverflow,
+        maxLineExtension: contentRect
+          ? Math.max(...lines.map((line) => line.getBoundingClientRect().right - contentRect.right))
+          : 0,
       };
     });
 
@@ -63,6 +69,7 @@ test.describe('issue #740 — w:header="0" pagination parity', () => {
     expect(bodyGeometry.firstLineHeight).toBeCloseTo(17.7184, 2);
     expect(bodyGeometry.lastParagraphBottomRatio).toBeCloseTo(0.88447, 2);
     expect(bodyGeometry.maxTextOverflow).toBeLessThanOrEqual(1);
+    expect(bodyGeometry.maxLineExtension).toBeCloseTo(23 / 15, 1);
 
     // The header is pinned to the page top (`w:header="0"`), so the body content
     // area starts right below the header band — not the 0.5in-default offset.

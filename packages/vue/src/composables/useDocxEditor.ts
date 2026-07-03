@@ -174,9 +174,16 @@ function measureBlock(
 function measureBlocks(
   nodes: ContentNode[],
   contentWidth: number | number[],
-  pageGeometry?: FloatPageGeometry
+  pageGeometry?: FloatPageGeometry,
+  finalPageGeometry?: FloatPageGeometry
 ): LayoutMetrics[] {
-  return measureBlocksWithFloats(nodes, contentWidth, measureBlock, pageGeometry);
+  return measureBlocksWithFloats(
+    nodes,
+    contentWidth,
+    measureBlock,
+    pageGeometry,
+    finalPageGeometry
+  );
 }
 
 // ============================================================================
@@ -225,11 +232,11 @@ export interface UseDocxEditorReturn {
    * faces + system-resolved), for the picker's "Document fonts" group.
    */
   documentFonts: Ref<FontOption[]>;
-  /** Computed page layout. */
+  /** @internal Engine page-layout state consumed by the first-party Vue shell. */
   pageLayout: ShallowRef<PageLayout | null>;
-  /** Content nodes behind the current `pageLayout`, used for selection mapping. */
+  /** @internal Engine content nodes consumed by the first-party Vue shell. */
   nodes: ShallowRef<ContentNode[]>;
-  /** Measurements behind the current `pageLayout`, used for selection mapping. */
+  /** @internal Layout metrics paired with the first-party shell's content nodes. */
   metrics: ShallowRef<LayoutMetrics[]>;
   /** Load a DOCX from a binary buffer. */
   loadBuffer: (buffer: ArrayBuffer | Uint8Array | Blob | File) => Promise<void>;

@@ -1,18 +1,5 @@
-/**
- * PagedEditor Component
- *
- * Main paginated editing component that integrates:
- * - OffscreenEditorHost: off-screen editor for keyboard input
- * - Layout engine: computes page layout from PM state
- * - DOM painter: renders pages to visible DOM
- * - Selection overlay: renders caret and selection highlights
- *
- * Architecture:
- * 1. User clicks on visible pages → hit test → update PM selection
- * 2. User types → hidden PM receives input → PM transaction
- * 3. PM transaction → build content nodes → metrics → page layout → paint
- * 4. Selection changes → compute rects → update overlay
- */
+/** Bridges the off-screen ProseMirror editor with painted pages, pointer
+ * routing, pagination, and visible selection overlays. */
 
 import React, { useEffect, useRef, useState, useCallback, useMemo, forwardRef, memo } from 'react';
 import type { CSSProperties } from 'react';
@@ -65,6 +52,7 @@ import { useSelectionOverlay } from './hooks/useSelectionOverlay';
 import { useImageInteractions } from './hooks/useImageInteractions';
 import { usePagedScrollApi } from './hooks/usePagedScrollApi';
 import { usePagesPointer } from './hooks/usePagesPointer';
+import type { HeaderFooterClickTarget } from './hooks/useHeaderFooterEditing';
 import { usePagedEditorRefApi } from './hooks/usePagedEditorRefApi';
 import { useLayoutTriggers } from './hooks/useLayoutTriggers';
 import { TableInsertButton } from './overlays/TableInsertButton';
@@ -95,6 +83,8 @@ export interface PagedEditorProps {
   firstPageHeaderContent?: HeaderFooter | null;
   /** Footer content for first page only (when titlePg is set). */
   firstPageFooterContent?: HeaderFooter | null;
+  /** Relationship id of the exact painted header/footer story being edited. */
+  activeHfRId?: string | null;
   /** Whether the editor is read-only. */
   readOnly?: boolean;
   /** Gap between pages in pixels. */
@@ -116,7 +106,11 @@ export interface PagedEditorProps {
   /** Plugin overlays to render inside the viewport. */
   pluginOverlays?: React.ReactNode;
   /** Callback when header or footer is double-clicked for editing. */
-  onHeaderFooterDoubleClick?: (position: 'header' | 'footer', pageNumber?: number) => void;
+  onHeaderFooterDoubleClick?: (
+    position: 'header' | 'footer',
+    pageNumber?: number,
+    target?: HeaderFooterClickTarget
+  ) => void;
   /** Active header/footer editing mode (dims body, intercepts body clicks). */
   hfEditMode?: 'header' | 'footer' | null;
   /** Called when user clicks the body area while in HF editing mode. */
@@ -293,6 +287,7 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
       footerContent,
       firstPageHeaderContent,
       firstPageFooterContent,
+      activeHfRId,
       readOnly = false,
       pageGap = DEFAULT_PAGE_GAP,
       zoom = 1,
@@ -517,7 +512,7 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
 
         // Only update selection overlay immediately for non-doc-changing transactions
         // (e.g. arrow keys, clicks). For doc changes, the overlay will be updated
-        // after layout completes via the useEffect([pageLayout]) hook, avoiding cursor
+        // after layout completes via the useEffect([layout]) hook, avoiding cursor
         // flicker from stale DOM positions.
         if (!transaction.docChanged) {
           updateSelectionOverlay(newState);
@@ -537,6 +532,11 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
       hiddenPMRef,
       getScrollContainer,
     });
+
+    const getActiveHfView = useCallback(
+      () => (activeHfRId ? (hiddenHfPMsRef.current?.getView(activeHfRId) ?? null) : null),
+      [activeHfRId]
+    );
 
     // Pointer routing — every mouse path on the visible pages: cursor
     // placement, drag-to-select (with cell-selection promotion), table
@@ -560,16 +560,7 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
       // so usePagesPointer can route every gesture (single-click, drag,
       // multi-click, image-select, hyperlink, context menu) through the
       // HF PM instead of the body PM.
-      getHfView: useCallback(() => {
-        const hfRef = hiddenHfPMsRef.current;
-        if (!hfRef) return null;
-        const sp = document?.package?.document?.finalSectionProperties;
-        const refs = hfEditMode === 'header' ? sp?.headerReferences : sp?.footerReferences;
-        const refEntry =
-          refs?.find((r) => r.type === 'default') ?? refs?.find((r) => r.type === 'first') ?? null;
-        if (!refEntry?.rId) return null;
-        return hfRef.getView(refEntry.rId);
-      }, [hfEditMode, document]),
+      getHfView: getActiveHfView,
       pageLayout,
       nodes,
       metrics,
@@ -647,6 +638,8 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
     } = useImageInteractions({
       pagesContainerRef,
       hiddenPMRef,
+      getActiveView: getActiveHfView,
+      activeRegion: hfEditMode,
       zoom,
       isImageInteractingRef,
       getPositionFromMouse,
@@ -786,6 +779,7 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
       onReadyRef,
     });
 
+    // =========================================================================
     // Render
     // =========================================================================
 

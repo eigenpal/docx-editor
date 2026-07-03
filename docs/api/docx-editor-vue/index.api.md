@@ -12,8 +12,8 @@ import { createDocumentWithText } from '@eigenpal/docx-editor-core';
 import { createEmptyDocument } from '@eigenpal/docx-editor-core';
 import { CreateEmptyDocumentOptions } from '@eigenpal/docx-editor-core';
 import { en as defaultLocale } from '@eigenpal/docx-editor-i18n';
+import { DefineComponent } from 'vue';
 import { Document as Document_2 } from '@eigenpal/docx-editor-core/types/document';
-import { default as DocxEditor } from './components/DocxEditor.vue';
 import { DocxInput } from '@eigenpal/docx-editor-core/utils';
 import { EditorHandle } from '@eigenpal/docx-editor-core';
 import { EditorRefLike } from '@eigenpal/docx-editor-agents/bridge';
@@ -39,7 +39,8 @@ export { CreateEmptyDocumentOptions }
 
 export { defaultLocale }
 
-export { DocxEditor }
+// @public
+export const DocxEditor: DefineComponent<DocxEditorProps>;
 
 // @public
 export interface DocxEditorHandle extends EditorHandle {

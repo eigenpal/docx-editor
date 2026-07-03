@@ -91,6 +91,12 @@ jobs:
       - name: API report check
         run: bun run api:check
 
+      - name: Published-package artifact check
+        run: bun run check:package-artifacts
+
+      - name: Published-package consumer check
+        run: SKIP_CONSUMER_INSTALL_BUILD=1 bun run check:consumer-install
+
       - name: Parity contract check
         run: bun run check:parity-contract
 

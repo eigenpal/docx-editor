@@ -433,6 +433,7 @@ export interface ParagraphAttrs {
     // (undocumented)
     textId?: string;
     trailingBlockMarkers?: BlockBookmarkMarkers;
+    widowControl?: boolean;
 }
 
 // @public

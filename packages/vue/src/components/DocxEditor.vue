@@ -222,7 +222,7 @@
           <ImageSelectionOverlay
             :image-info="selectedImage"
             :zoom="zoom"
-            :view="editorView"
+            :view="activeFormattingView"
             @open-properties="showImageProperties = true"
             @deselect="selectedImage = null"
             @interact-start="imageInteracting = true"
@@ -441,6 +441,8 @@ import { usePagesPointer } from '../composables/usePagesPointer';
 import { useSelectionSync } from '../composables/useSelectionSync';
 import { useMenuActions } from '../composables/useMenuActions';
 import { useDocumentLifecycle } from '../composables/useDocumentLifecycle';
+import { usePainterOverlayRefresh } from '../composables/usePainterOverlayRefresh';
+import { useEditorDocumentMetadata } from '../composables/useEditorDocumentMetadata';
 import { useDocxEditorRefApi } from '../composables/useDocxEditorRefApi';
 import { useControllableBoolean } from '../composables/useControllableBoolean';
 import type { Document } from '@eigenpal/docx-editor-core/types/document';
@@ -451,7 +453,6 @@ import { twipsToPixels } from '@eigenpal/docx-editor-core/utils/units';
 import { SIDEBAR_DOCUMENT_SHIFT } from '@eigenpal/docx-editor-core/utils';
 import { useColorMode } from '../composables/useColorMode';
 import { useFontLifecycle } from '../composables/useFontLifecycle';
-import { extractSelectionContext } from '@eigenpal/docx-editor-core/prosemirror/plugins/selectionTracker';
 import { createCommentIdAllocator } from '@eigenpal/docx-editor-core/prosemirror/commentIdAllocator';
 
 const props = withDefaults(defineProps<DocxEditorProps>(), {
@@ -521,6 +522,7 @@ const pagesViewportRef = ref<HTMLElement | null>(null);
 const stateTick = ref(0);
 const contentChangeSubscribers = new Set<(document: unknown) => void>();
 const selectionChangeSubscribers = new Set<(selection: unknown) => void>();
+let lastEmittedDocument: Document | null = null;
 const showFindReplace = ref(false);
 const showHyperlink = ref(false);
 const showInsertSymbol = ref(false);
@@ -587,6 +589,7 @@ const {
   editorMode,
   author: authorRef,
   onChange: (doc) => {
+    lastEmittedDocument = doc;
     emit('change', doc);
     emit('update:document', doc);
     props.onChange?.(doc);
@@ -613,46 +616,8 @@ const {
 // `onEditorViewReady` props), threaded into the comment composables below.
 const { commentCallbacks } = useHostCallbacks(props, editorView);
 
-// ─── Document-state derived computed refs ─────────────────────────────────
-// Active section's properties drive the horizontal ruler (margins + indents).
-// React reads `package.document.finalSectionProperties` for the same purpose;
-// fall back to the first section's properties for older parses.
-const currentSectionProps = computed(() => {
-  void stateTick.value;
-  const doc = getDocument();
-  if (!doc?.package?.document) return null;
-  const body = doc.package.document;
-  return body.finalSectionProperties ?? body.sections?.[0]?.properties ?? null;
-});
-
-// Active paragraph's indents/tab stops, so the ruler handles track the
-// selection like React's. Read from the same extractSelectionContext the
-// toolbar uses; recomputed on every selection/transaction via stateTick.
-const rulerIndents = computed(() => {
-  void stateTick.value;
-  const view = editorView.value;
-  const pf = view ? extractSelectionContext(view.state).paragraphFormatting : {};
-  return {
-    indentLeft: pf.indentLeft ?? 0,
-    indentRight: pf.indentRight ?? 0,
-    firstLineIndent: pf.indentFirstLine ?? 0,
-    hangingIndent: pf.hangingIndent ?? false,
-    tabMarks: pf.tabs ?? null,
-  };
-});
-
-const documentTheme = computed(() => {
-  void stateTick.value;
-  return getDocument()?.package?.theme ?? props.theme ?? null;
-});
-
-// Paragraph styles from the loaded document — feeds the toolbar style picker so
-// it shows the document's real style names/order (matches React's Toolbar
-// `documentStyles={document?.package.styles?.styles}`).
-const documentStyles = computed(() => {
-  void stateTick.value;
-  return getDocument()?.package?.styles?.styles ?? undefined;
-});
+const { currentSectionProps, rulerIndents, documentTheme, documentStyles } =
+  useEditorDocumentMetadata(stateTick, editorView, getDocument, () => props.theme);
 
 // HF caret overlay rect from the persistent HF view; shared with React via core's `computeHfCaretRectFromView`.
 const hfCaretRect = ref<{ top: number; left: number; height: number } | null>(null);
@@ -670,8 +635,9 @@ const hfSelectionGeometry = ref<
 // null for a non-empty selection and `readHfSelectionGeometry` returns
 // [] for a collapsed one, so the caret and highlight are mutually exclusive.
 function applyHfOverlay(view: EditorView, position: 'header' | 'footer') {
-  hfCaretRect.value = computeHfCaretRectFromView(view, position);
-  hfSelectionGeometry.value = readHfSelectionGeometry(view, position);
+  const rId = hfEdit.value?.rId ?? null;
+  hfCaretRect.value = computeHfCaretRectFromView(view, position, window.document, rId);
+  hfSelectionGeometry.value = readHfSelectionGeometry(view, position, window.document, rId);
 }
 function clearHfOverlay() {
   hfCaretRect.value = null;
@@ -1015,7 +981,7 @@ const {
   imageToolbarContext,
   handleToolbarImageWrap,
   handleImageTransform,
-} = useImageActions({ editorView, zoom, stateTick, getCommands });
+} = useImageActions({ editorView: activeFormattingView, zoom, stateTick, getCommands });
 
 const tableResize = useTableResize();
 let tableResizeCleanup: (() => void) | null = null;
@@ -1065,7 +1031,7 @@ const {
   handleImageWrapSelect,
   handleContextMenuAction,
 } = useContextMenus({
-  editorView,
+  editorView: activeFormattingView,
   selectedImage,
   zoom,
   showImageProperties,
@@ -1098,6 +1064,12 @@ const { handleMenuAction, handleMenuTableInsert } = useMenuActions({
 useDocumentLifecycle({
   documentBuffer: () => props.documentBuffer,
   document: () => props.document,
+  currentDocument: getDocument,
+  takeLastEmittedDocument: () => {
+    const emitted = lastEmittedDocument;
+    lastEmittedDocument = null;
+    return emitted;
+  },
   loadDocumentBuffer,
   loadDocument,
   sidebarAutoOpenedRef,
@@ -1163,6 +1135,12 @@ const selectionSync = useSelectionSync({
   metrics,
 });
 
+usePainterOverlayRefresh(pagesRef, updateSelectionOverlay, () => {
+  const edit = hfEdit.value;
+  if (!edit?.headerFooter) return;
+  const view = getHfPmView(edit.headerFooter);
+  if (view) applyHfOverlay(view, edit.position);
+});
 updateSelectionOverlay();
 
 onBeforeUnmount(() => {

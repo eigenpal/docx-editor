@@ -5,13 +5,15 @@
  * doc gets the auto-open treatment. Also handles first-mount load.
  */
 
-import { watch, onMounted, nextTick, type Ref } from 'vue';
+import { watch, onMounted, nextTick, toRaw, type Ref } from 'vue';
 import type { Document } from '@eigenpal/docx-editor-core/types/document';
 import type { DocxInput } from '@eigenpal/docx-editor-core/utils';
 
 export interface UseDocumentLifecycleOptions {
   documentBuffer: () => DocxInput | null;
   document: () => Document | null;
+  currentDocument?: () => Document | null;
+  takeLastEmittedDocument?: () => Document | null;
   loadDocumentBuffer: (buffer: DocxInput) => Promise<void>;
   loadDocument: (doc: Document) => void;
   sidebarAutoOpenedRef: Ref<boolean>;
@@ -19,11 +21,24 @@ export interface UseDocumentLifecycleOptions {
 
 export function useDocumentLifecycle(opts: UseDocumentLifecycleOptions) {
   async function loadBufferReset(buf: DocxInput) {
+    opts.takeLastEmittedDocument?.();
     opts.sidebarAutoOpenedRef.value = false;
     await opts.loadDocumentBuffer(buf);
   }
 
   function loadDocReset(doc: Document) {
+    // A controlled host commonly echoes the exact object emitted by `change`.
+    // That object is already the live editor cache; rebuilding ProseMirror here
+    // would erase undo history after every keystroke.
+    const rawDoc = toRaw(doc);
+    const current = opts.currentDocument?.();
+    // Consume the one-shot marker even when `current` already matches. Keeping
+    // it indefinitely would misclassify a later A → B → cached A switch as an
+    // echo of the old edit.
+    const lastEmitted = opts.takeLastEmittedDocument?.();
+    if ((current && rawDoc === toRaw(current)) || (lastEmitted && rawDoc === toRaw(lastEmitted))) {
+      return;
+    }
     opts.sidebarAutoOpenedRef.value = false;
     opts.loadDocument(doc);
   }

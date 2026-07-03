@@ -20,6 +20,7 @@ export default defineConfig({
   // first-party adapter uses so published JS never imports those private paths.
   noExternal: [
     /^@eigenpal\/docx-editor-core\/(?:editor|flow-model|painter-model|pagination-model)(?:\/|$)/,
+    '@eigenpal/docx-editor-core/utils/removeHeaderFooterForSection',
   ],
   external: [
     'react',

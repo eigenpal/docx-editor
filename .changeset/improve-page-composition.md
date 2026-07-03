@@ -1,6 +1,7 @@
 ---
-'@eigenpal/docx-editor-core': minor
+'@eigenpal/docx-editor-core': major
 ---
 
-Improve page composition, caret placement after tabs, preserved leading spaces, unequal-width
-columns, paragraph spacing across page breaks, and even/odd section breaks.
+Add the stable `./api` DOM rendering facade and improve Word-faithful page composition, selection,
+tables, footnotes, floating content, and section furniture. Remove the experimental rendering-model
+and editor subpaths in favor of the supported facade.
