@@ -87,6 +87,7 @@ Stable dataset attrs on painted DOM (CSS, queries, selection map depend on these
 - `data-change-author`/`data-change-date`/`data-revision-id` — tracked changes
 - `data-continues-from-prev`/`data-continues-on-next` — split paragraphs
 - `data-flex-line` — flex-promoted lines (image-aligned, right-tab); `paintParagraphFragment` suppresses `text-indent` on these (would apply per-flex-item)
+- `data-table-body-clip` — visible body window below repeated table headers; selection geometry intersects body runs with this box while keeping repeated headers selectable
 - `data-vmerge-continuation` — synthetic slice of a vertically-merged cell re-painted on a continuation page (not selectable); `.layout-table-cut-border` — the horizontal rule that closes a table fragment at a page break. Tables split across pages via `TableFragment.fromRow/toRow` + `topClip`/`bottomClip` (mid-content row break).
 
 ### Key file map
