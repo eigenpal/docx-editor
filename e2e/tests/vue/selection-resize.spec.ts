@@ -15,13 +15,15 @@ test('Vue: body selection geometry follows the page after viewport resize', asyn
   await expect(selection).toBeVisible();
 
   const relativeLeft = async () => {
-    const [spanBox, selectionBox] = await Promise.all([span.boundingBox(), selection.boundingBox()]);
-    expect(spanBox).not.toBeNull();
-    expect(selectionBox).not.toBeNull();
-    return selectionBox!.x - spanBox!.x;
+    const [spanBox, selectionBox] = await Promise.all([
+      span.boundingBox(),
+      selection.boundingBox(),
+    ]);
+    return spanBox && selectionBox ? selectionBox.x - spanBox.x : null;
   };
 
   const before = await relativeLeft();
+  expect(before).not.toBeNull();
   await page.setViewportSize({ width: 1500, height: 900 });
-  await expect.poll(relativeLeft).toBeCloseTo(before, 1);
+  await expect.poll(relativeLeft).toBeCloseTo(before!, 1);
 });
