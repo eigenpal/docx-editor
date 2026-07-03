@@ -124,9 +124,16 @@ export function measureBlock(
 export function measureBlocks(
   nodes: ContentNode[],
   contentWidth: number | number[],
-  pageGeometry?: FloatPageGeometry
-): LayoutMetrics[] {
-  return measureBlocksWithFloats(nodes, contentWidth, measureBlock, pageGeometry);
+  pageGeometry?: FloatPageGeometry,
+  finalPageGeometry?: FloatPageGeometry
+): Measure[] {
+  return measureBlocksWithFloats(
+    blocks,
+    contentWidth,
+    measureBlock,
+    pageGeometry,
+    finalPageGeometry
+  );
 }
 
 // TableMetrics used internally above; re-exported for tests that compare types.
