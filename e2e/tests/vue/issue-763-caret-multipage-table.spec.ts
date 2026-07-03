@@ -9,10 +9,6 @@ import { test, expect, type Page } from '@playwright/test';
 
 async function readCaretAlignment(page: Page) {
   return page.evaluate(() => {
-    const caretEl = document.querySelector('[data-testid="caret"]') as HTMLElement | null;
-    if (!caretEl) return { error: 'no caret' };
-    const caret = caretEl.getBoundingClientRect();
-    const caretMid = caret.top + caret.height / 2;
     const pageAt = (y: number) => {
       for (const p of Array.from(document.querySelectorAll('.layout-page')) as HTMLElement[]) {
         const r = p.getBoundingClientRect();
@@ -32,6 +28,10 @@ async function readCaretAlignment(page: Page) {
         line70Y = r.top;
       }
     });
+    const caretEl = document.querySelector('[data-testid="caret"]') as HTMLElement | null;
+    if (!caretEl) return { error: 'no caret', line70Page, line70Y };
+    const caret = caretEl.getBoundingClientRect();
+    const caretMid = caret.top + caret.height / 2;
     return { caretPage: pageAt(caretMid), caretTop: caret.top, line70Page, line70Y };
   });
 }
@@ -41,6 +41,18 @@ test('Vue: caret follows a table cell across a page break (#763)', async ({ page
   await page.locator('.docx-editor-vue').waitFor();
   await page.locator('input[type="file"]').first().setInputFiles('e2e/fixtures/demo.docx');
   await page.waitForSelector('[data-page-number]');
+  await expect
+    .poll(
+      () =>
+        page.evaluate(() => {
+          const view = (
+            window as unknown as { __DOCX_EDITOR_E2E__?: { getView?: () => any } }
+          ).__DOCX_EDITOR_E2E__?.getView?.();
+          return view?.state.doc.textContent.includes('Demonstration of DOCX support');
+        }),
+      { timeout: 15000 }
+    )
+    .toBe(true);
 
   // Build a single-cell table tall enough to break across a page boundary.
   await page.evaluate(() => {
