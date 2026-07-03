@@ -58,6 +58,7 @@
     "check:export-parity": "node scripts/check-export-parity.mjs",
     "check:feature-parity": "node scripts/check-feature-parity.mjs",
     "check:consumer-install": "node scripts/check-consumer-install.mjs",
+    "check:package-artifacts": "node scripts/check-package-artifacts.mjs",
     "check:parity-contract": "node scripts/check-parity-contract.mjs",
     "check:adapter-css-thin": "node scripts/check-adapter-css-thin.mjs",
     "check:parity": "bun run check:export-parity && bun run check:editor-contract && bun run check:public-docs-surface && bun run check:parity-contract && bun run check:adapter-css-thin",

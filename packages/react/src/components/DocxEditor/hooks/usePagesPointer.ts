@@ -28,6 +28,7 @@ import type { CaretPosition, SelectionBox } from '@eigenpal/docx-editor-core/flo
 import {
   pointerToDocPos,
   resolveDomPosition,
+  resolveHfDomPosition,
   detectTableInsertHover,
   resolveFragmentTarget,
   resolveTableCellTarget,
@@ -46,6 +47,7 @@ import {
 } from '@eigenpal/docx-editor-core/painter-model';
 import type { WrapType } from '@eigenpal/docx-editor-core/docx/wrapTypes';
 import { findWordBoundaries } from '@eigenpal/docx-editor-core/utils';
+import type { HeaderFooterClickTarget } from './useHeaderFooterEditing';
 
 import type { OffscreenEditorHostRef } from '../OffscreenEditorHost';
 import type { ImageSelectionInfo } from '../overlays/ImageSelectionOverlay';
@@ -101,7 +103,11 @@ export interface UsePagesPointerOptions {
     tooltip?: string;
     position: { top: number; left: number };
   }) => void;
-  onHeaderFooterDoubleClick?: (position: 'header' | 'footer', pageNumber?: number) => void;
+  onHeaderFooterDoubleClick?: (
+    position: 'header' | 'footer',
+    pageNumber?: number,
+    target?: HeaderFooterClickTarget
+  ) => void;
   setSelectedImageInfo: React.Dispatch<React.SetStateAction<ImageSelectionInfo | null>>;
   setSelectionGeometry: React.Dispatch<React.SetStateAction<SelectionBox[]>>;
   setCaretPosition: React.Dispatch<React.SetStateAction<CaretPosition | null>>;
@@ -252,54 +258,17 @@ export function usePagesPointer(opts: UsePagesPointerOptions): UsePagesPointerRe
     (clientX: number, clientY: number): number | null => {
       if (!pagesContainerRef.current || !pageLayout) return null;
 
+      if (hfEditMode) {
+        const selector = hfEditMode === 'header' ? '.layout-page-header' : '.layout-page-footer';
+        const host = window.document
+          .elementsFromPoint(clientX, clientY)
+          .map((element) => (element as HTMLElement).closest<HTMLElement>(selector))
+          .find((element): element is HTMLElement => element != null);
+        return host ? resolveHfDomPosition(host, clientX, clientY) : null;
+      }
+
       const domPos = resolveDomPosition(pagesContainerRef.current, clientX, clientY, zoom);
       if (domPos !== null) return domPos;
-
-      // In HF edit mode, the geometry-based fallback below uses BODY nodes/
-      // metrics — wrong coord space for HF clicks. If resolveDomPosition
-      // couldn't pin a span, find the nearest HF data-doc-from span at the
-      // same y so drag-select doesn't ping-pong between HF and body coords
-      // mid-drag. Returning null is safer than returning a body pos.
-      if (hfEditMode) {
-        const els = window.document.elementsFromPoint(clientX, clientY);
-        const hfHost = els.find(
-          (el) =>
-            (el as HTMLElement).closest('.layout-page-header') ||
-            (el as HTMLElement).closest('.layout-page-footer')
-        ) as HTMLElement | undefined;
-        if (!hfHost) return null;
-        // Walk every painted span in the HF host; pick the closest by horizontal
-        // distance on the same line (within span vertical bounds).
-        const host = hfHost.closest('.layout-page-header') ?? hfHost.closest('.layout-page-footer');
-        if (!host) return null;
-        const spans = Array.from(
-          host.querySelectorAll<HTMLElement>('span[data-doc-from][data-doc-to]')
-        );
-        let best: { pos: number; dist: number } | null = null;
-        for (const span of spans) {
-          const r = span.getBoundingClientRect();
-          if (clientY < r.top - 4 || clientY > r.bottom + 4) continue;
-          const docFrom = Number(span.dataset.docFrom);
-          const docTo = Number(span.dataset.docTo);
-          if (!Number.isFinite(docFrom) || !Number.isFinite(docTo)) continue;
-          // Snap to span edge nearest the cursor.
-          let pos: number;
-          let dist: number;
-          if (clientX < r.left) {
-            pos = docFrom;
-            dist = r.left - clientX;
-          } else if (clientX > r.right) {
-            pos = docTo;
-            dist = clientX - r.right;
-          } else {
-            const ratio = (clientX - r.left) / Math.max(1, r.width);
-            pos = docFrom + Math.round(ratio * (docTo - docFrom));
-            dist = 0;
-          }
-          if (!best || dist < best.dist) best = { pos, dist };
-        }
-        return best?.pos ?? null;
-      }
 
       const pageElements = pagesContainerRef.current.querySelectorAll('.layout-page');
       let clickedPageIndex = -1;
@@ -698,11 +667,20 @@ export function usePagesPointer(opts: UsePagesPointerOptions): UsePagesPointerRe
         const headerEl = target.closest('.layout-page-header');
         const footerEl = target.closest('.layout-page-footer');
         if (headerEl || footerEl) {
+          const host = (headerEl ?? footerEl) as HTMLElement;
           const pageEl = target.closest('[data-page-number]') as HTMLElement | null;
           const pageNum = pageEl ? Number(pageEl.dataset.pageNumber) : 1;
+          const variant =
+            host.dataset.hfVariant === 'first' || host.dataset.hfVariant === 'even'
+              ? host.dataset.hfVariant
+              : 'default';
           e.preventDefault();
           e.stopPropagation();
-          onHeaderFooterDoubleClick(headerEl ? 'header' : 'footer', pageNum);
+          onHeaderFooterDoubleClick(headerEl ? 'header' : 'footer', pageNum, {
+            rId: host.dataset.hfRId ?? null,
+            variant,
+            sectionIndex: Number(host.dataset.sectionIndex ?? 0),
+          });
           return;
         }
       }

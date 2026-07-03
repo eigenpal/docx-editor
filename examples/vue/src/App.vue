@@ -673,8 +673,29 @@ async function handleSave() {
   }
 }
 
-function handleDocumentChange(_doc: Document) {
-  // no-op — could track dirty state here
+function handleDocumentChange(doc: Document) {
+  // E2E hook: echo the emitted object through the controlled `document` prop.
+  // Real hosts commonly use this pattern, and the editor must not rebuild its
+  // ProseMirror view (or lose undo history) for that same-object echo.
+  if (
+    typeof window !== 'undefined' &&
+    new URLSearchParams(window.location.search).get('controlledDocument') === '1'
+  ) {
+    const hooks = window as Window & {
+      __docxVueLastEmittedDocument?: Document;
+      __docxVueSetControlledDocument?: (next: Document) => void;
+      __docxVueSetDocumentBuffer?: (next: ArrayBuffer) => void;
+    };
+    hooks.__docxVueLastEmittedDocument = doc;
+    hooks.__docxVueSetControlledDocument = (next) => {
+      currentDocument.value = next;
+    };
+    hooks.__docxVueSetDocumentBuffer = (next) => {
+      currentDocument.value = null;
+      documentBuffer.value = next;
+    };
+    currentDocument.value = doc;
+  }
 }
 
 function handleError(error: Error) {

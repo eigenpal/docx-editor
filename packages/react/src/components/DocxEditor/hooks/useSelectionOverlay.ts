@@ -291,8 +291,8 @@ export function useSelectionOverlay(opts: UseSelectionOverlayOptions): UseSelect
     return () => observer.disconnect();
   }, [updateSelectionOverlay, containerRef, hiddenPMRef]);
 
-  // Update once page layout is ready. handleEditorViewReady → runLayoutPipeline is
-  // async; this effect ensures the first overlay pass runs once `pageLayout`
+  // Update once layout is ready. handleEditorViewReady → runLayoutPipeline is
+  // async; this effect ensures the first overlay pass runs once `layout`
   // populates.
   useEffect(() => {
     const state = hiddenPMRef.current?.getState();

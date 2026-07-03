@@ -13,6 +13,8 @@
  */
 
 import { useCallback } from 'react';
+import { NodeSelection } from 'prosemirror-state';
+import type { EditorView } from 'prosemirror-view';
 
 import { pixelsToEmu } from '@eigenpal/docx-editor-core/utils';
 import {
@@ -27,6 +29,8 @@ import type { OffscreenEditorHostRef } from '../OffscreenEditorHost';
 export interface UseImageInteractionsOptions {
   pagesContainerRef: React.RefObject<HTMLDivElement | null>;
   hiddenPMRef: React.RefObject<OffscreenEditorHostRef | null>;
+  getActiveView?: () => EditorView | null;
+  activeRegion?: 'header' | 'footer' | null;
   zoom: number;
   isImageInteractingRef: React.MutableRefObject<boolean>;
   getPositionFromMouse: (clientX: number, clientY: number) => number | null;
@@ -44,17 +48,42 @@ export interface UseImageInteractionsReturn {
 export function useImageInteractions(
   opts: UseImageInteractionsOptions
 ): UseImageInteractionsReturn {
-  const { pagesContainerRef, hiddenPMRef, zoom, isImageInteractingRef, getPositionFromMouse } =
-    opts;
+  const {
+    pagesContainerRef,
+    hiddenPMRef,
+    getActiveView,
+    activeRegion,
+    zoom,
+    isImageInteractingRef,
+    getPositionFromMouse,
+  } = opts;
+
+  const activeView = useCallback(
+    () => (activeRegion ? (getActiveView?.() ?? null) : (hiddenPMRef.current?.getView() ?? null)),
+    [activeRegion, getActiveView, hiddenPMRef]
+  );
+
+  const selectImage = useCallback(
+    (view: EditorView, position: number) => {
+      try {
+        view.dispatch(view.state.tr.setSelection(NodeSelection.create(view.state.doc, position)));
+      } catch {
+        if (view === hiddenPMRef.current?.getView()) {
+          hiddenPMRef.current?.setNodeSelection(position);
+        }
+      }
+    },
+    [hiddenPMRef]
+  );
 
   const handleImageResize = useCallback(
     (pmPos: number, newWidth: number, newHeight: number) => {
-      const view = hiddenPMRef.current?.getView();
+      const view = activeView();
       if (!view) return;
       const sel = commitImageResize(view, pmPos, newWidth, newHeight);
-      if (sel !== null) hiddenPMRef.current?.setNodeSelection(sel);
+      if (sel !== null) selectImage(view, sel);
     },
-    [hiddenPMRef]
+    [activeView, selectImage]
   );
 
   const handleImageResizeStart = useCallback(() => {
@@ -67,7 +96,7 @@ export function useImageInteractions(
 
   const handleImageDragMove = useCallback(
     (pmPos: number, clientX: number, clientY: number) => {
-      const view = hiddenPMRef.current?.getView();
+      const view = activeView();
       if (!view) return;
       const node = view.state.doc.nodeAt(pmPos);
       if (!node || node.type.name !== 'image') return;
@@ -78,17 +107,23 @@ export function useImageInteractions(
         const pages = pagesContainerRef.current?.querySelectorAll('.layout-page');
         if (!pages || pages.length === 0) return;
 
+        const regionSelector =
+          activeRegion === 'header'
+            ? '.layout-page-header'
+            : activeRegion === 'footer'
+              ? '.layout-page-footer'
+              : '.layout-page-content';
         let contentEl: HTMLElement | null = null;
         for (const page of pages) {
           const rect = page.getBoundingClientRect();
           if (clientY >= rect.top && clientY <= rect.bottom) {
-            contentEl = page.querySelector('.layout-page-content') as HTMLElement;
+            contentEl = page.querySelector(regionSelector) as HTMLElement;
             break;
           }
         }
         if (!contentEl) {
           // Below all pages — fall back to the last page's content area.
-          contentEl = pages[pages.length - 1].querySelector('.layout-page-content') as HTMLElement;
+          contentEl = pages[pages.length - 1].querySelector(regionSelector) as HTMLElement;
         }
         if (!contentEl) return;
 
@@ -96,16 +131,24 @@ export function useImageInteractions(
         const hOffsetEmu = pixelsToEmu((clientX - contentRect.left) / zoom);
         const vOffsetEmu = pixelsToEmu((clientY - contentRect.top) / zoom);
         const sel = commitImageFloatMove(view, pmPos, hOffsetEmu, vOffsetEmu);
-        if (sel !== null) hiddenPMRef.current?.setNodeSelection(sel);
+        if (sel !== null) selectImage(view, sel);
       } else {
         // Inline image: hit-test the drop text position, core does delete+insert.
         const dropPos = getPositionFromMouse(clientX, clientY);
         if (dropPos === null) return;
         const sel = commitImageInlineMove(view, pmPos, dropPos);
-        if (sel !== null) hiddenPMRef.current?.setNodeSelection(sel);
+        if (sel !== null) selectImage(view, sel);
       }
     },
-    [getPositionFromMouse, zoom, hiddenPMRef, pagesContainerRef]
+    [
+      activeRegion,
+      activeView,
+      getPositionFromMouse,
+      zoom,
+      hiddenPMRef,
+      pagesContainerRef,
+      selectImage,
+    ]
   );
 
   const handleImageDragStart = useCallback(() => {

@@ -738,6 +738,9 @@ export function runsToClipboardContent(runs: Run[], includeFormatting?: boolean,
 export function sanitizeHref(href: string | null | undefined): string | undefined;
 
 // @public
+export function sanitizeImageSrc(src: string | null | undefined): string | undefined;
+
+// @public
 export interface ScrollToParaIdOptions {
     highlight?: ParagraphHighlightOptions;
 }

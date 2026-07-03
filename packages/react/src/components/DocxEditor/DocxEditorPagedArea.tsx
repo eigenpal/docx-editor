@@ -35,6 +35,7 @@ import type { HyperlinkPopupData } from '../ui/HyperlinkPopup';
 import type { WrapType } from '@eigenpal/docx-editor-core/docx/wrapTypes';
 import type { ReactSidebarItem } from '../../plugin-api/types';
 import type { RenderedDomContext } from '../../plugin-api/types';
+import type { HeaderFooterClickTarget } from './hooks/useHeaderFooterEditing';
 
 /**
  * Body of the editor: the paged ProseMirror host, its sidebar overlay
@@ -62,9 +63,10 @@ export function DocxEditorPagedArea({
   footerContent,
   firstPageHeaderContent,
   firstPageFooterContent,
+  activeHf,
+  activeHfRId,
   hfEditPosition,
   setHfEditPosition,
-  hfEditIsFirstPage,
   onHeaderFooterDoubleClick,
   onHeaderFooterSave,
   onRemoveHeaderFooter,
@@ -128,10 +130,15 @@ export function DocxEditorPagedArea({
   footerContent: HeaderFooter | null | undefined;
   firstPageHeaderContent: HeaderFooter | null | undefined;
   firstPageFooterContent: HeaderFooter | null | undefined;
+  activeHf: HeaderFooter | null;
+  activeHfRId: string | null;
   hfEditPosition: 'header' | 'footer' | null;
   setHfEditPosition: React.Dispatch<React.SetStateAction<'header' | 'footer' | null>>;
-  hfEditIsFirstPage: boolean;
-  onHeaderFooterDoubleClick: (position: 'header' | 'footer', pageNumber?: number) => void;
+  onHeaderFooterDoubleClick: (
+    position: 'header' | 'footer',
+    pageNumber?: number,
+    target?: HeaderFooterClickTarget
+  ) => void;
   onHeaderFooterSave: (content: BlockContent[]) => void;
   onRemoveHeaderFooter: () => void;
   onHfTransaction?: (rId: string, view: EditorView, docChanged: boolean) => void;
@@ -190,18 +197,6 @@ export function DocxEditorPagedArea({
   isSuggesting?: boolean;
   author?: string;
 }) {
-  // Resolve the active HF block for the inline editor — first-page variant
-  // wins when `titlePg` is set and the user double-clicked page 1.
-  const activeHf = hfEditPosition
-    ? hfEditIsFirstPage
-      ? hfEditPosition === 'header'
-        ? firstPageHeaderContent
-        : firstPageFooterContent
-      : hfEditPosition === 'header'
-        ? headerContent
-        : footerContent
-    : null;
-
   // Phase 4 of HF editing unification: the painter is the visible HF
   // renderer (phase 2) and the inline overlay's PM is off-screen — so the
   // user has no visible caret in the painted region. We compute one here
@@ -254,15 +249,19 @@ export function DocxEditorPagedArea({
         setHfSelectionGeometry([]);
         return;
       }
-      const caret = computeHfCaretRectFromView(view, hfEditPosition);
+      const caret = computeHfCaretRectFromView(view, hfEditPosition, window.document, activeHfRId);
       setHfCaretRect(caret ? toHfHostLocal(caret) : null);
-      setHfSelectionGeometry(readHfSelectionGeometry(view, hfEditPosition).map(toHfHostLocal));
+      setHfSelectionGeometry(
+        readHfSelectionGeometry(view, hfEditPosition, window.document, activeHfRId).map(
+          toHfHostLocal
+        )
+      );
       const pagesEl = window.document.querySelector('.paged-editor__pages') as HTMLElement | null;
       // Multi-cell selection renders via `.layout-table-cell-selected`, scoped
       // to the active section so footer selections don't light up header cells.
       if (pagesEl) applyCellSelectionHighlight(pagesEl, view.state, { scope: hfEditPosition });
     },
-    [hfEditPosition, toHfHostLocal]
+    [activeHfRId, hfEditPosition, toHfHostLocal]
   );
 
   // Initial-caret-on-engage: when the user double-clicks into HF mode the
@@ -283,9 +282,9 @@ export function DocxEditorPagedArea({
       if (view) applyHfOverlay(view);
     };
 
-    // Deterministic "painter is done" signal — `useLayoutPipeline` dispatches
-    // `painter:painted` after `paintPages` writes the page DOM. Listen for
-    // it instead of the rAF chain so the measurement always sees the fresh
+    // Deterministic "painter is done" signal — the shared painter dispatches
+    // `painter:painted` whenever page DOM changes, including lazy virtualized
+    // population. Listen instead of relying only on an rAF chain so the measurement sees the fresh
     // `data-doc-from` spans. Also invalidate the cached HF DOM snapshot so
     // the next caret compute re-walks the host.
     const pagesEl = window.document.querySelector('.paged-editor__pages') as HTMLElement | null;
@@ -328,6 +327,7 @@ export function DocxEditorPagedArea({
         footerContent={footerContent}
         firstPageHeaderContent={firstPageHeaderContent}
         firstPageFooterContent={firstPageFooterContent}
+        activeHfRId={activeHfRId}
         onHeaderFooterDoubleClick={onHeaderFooterDoubleClick}
         hfEditMode={hfEditPosition}
         onBodyClick={onBodyClick}

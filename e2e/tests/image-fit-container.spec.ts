@@ -44,9 +44,19 @@ test('a wide image in a table cell fits and keeps its aspect ratio', async ({ pa
   const m = await img.evaluate((el) => {
     const r = el.getBoundingClientRect();
     const cell = el.closest('.layout-table-cell, [class*=table-cell], td') as HTMLElement | null;
-    return { w: r.width, h: r.height, cellW: cell?.getBoundingClientRect().width ?? null };
+    const cellRect = cell?.getBoundingClientRect();
+    return {
+      w: r.width,
+      h: r.height,
+      cellW: cellRect?.width ?? null,
+      cellH: cellRect?.height ?? null,
+    };
   });
   expect(m.w / m.h).toBeCloseTo(3, 1); // aspect preserved (not squashed)
   expect(m.cellW).not.toBeNull();
   expect(m.w).toBeLessThanOrEqual(m.cellW! + 1); // fits the cell
+  expect(m.cellH).not.toBeNull();
+  // An image-only paragraph contributes the image's painted height, plus only
+  // table padding/borders. Its text line box must not create a hidden extra gap.
+  expect(m.cellH! - m.h).toBeLessThanOrEqual(18);
 });

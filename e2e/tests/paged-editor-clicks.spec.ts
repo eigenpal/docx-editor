@@ -375,19 +375,26 @@ test.describe('Paged Editor - Click on Empty Areas', () => {
   });
 
   test('click after end of line positions cursor at line end', async ({ page }) => {
-    // Type a short line
     await editor.typeText('Short');
 
-    // Move to somewhere on the page - we'll use keyboard to position
-    await page.keyboard.press('End');
+    const run = page.locator('.layout-page-content .layout-run-text', { hasText: 'Short' }).first();
+    const content = page.locator('.layout-page-content').first();
+    const [runBox, contentBox] = await Promise.all([run.boundingBox(), content.boundingBox()]);
+    expect(runBox).not.toBeNull();
+    expect(contentBox).not.toBeNull();
+
+    // Exercise the painted-DOM pointer fallback: click well past the final
+    // glyph while staying inside the paragraph's page content.
+    const clickX = Math.min(runBox!.x + runBox!.width + 40, contentBox!.x + contentBox!.width - 2);
+    await page.mouse.click(clickX, runBox!.y + runBox!.height / 2);
     await page.keyboard.type('X');
 
-    const content = await page.evaluate(() => {
+    const text = await page.evaluate(() => {
       const pm = document.querySelector('.ProseMirror');
       return pm?.textContent || '';
     });
 
-    expect(content).toBe('ShortX');
+    expect(text).toBe('ShortX');
   });
 });
 

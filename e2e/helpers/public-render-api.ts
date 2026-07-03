@@ -2,8 +2,30 @@ import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import type { Page } from '@playwright/test';
 
-const PARSER_MODULE = `/@fs/${resolve('packages/core/src/docx/parser.ts')}`;
-export const PUBLIC_RENDER_API_MODULE = `/@fs/${resolve('packages/core/src/api.ts')}`;
+const PARSER_MODULE = `/@fs/${resolve('packages/core/dist/docx/parser.mjs')}`;
+export const PUBLIC_RENDER_API_MODULE = `/@fs/${resolve('packages/core/dist/api.mjs')}`;
+
+export async function renderDocumentThroughPublicApi(page: Page, input: unknown): Promise<void> {
+  await page.goto('/');
+  await page.evaluate(
+    async ({ apiModule, documentInput }) => {
+      const api = (await import(apiModule)) as {
+        renderDocument(input: unknown, root: HTMLElement): unknown;
+      };
+      const root = document.createElement('div');
+      root.id = 'public-render-api-root';
+      document.body.replaceChildren(root);
+      const rendered = api.renderDocument(documentInput, root);
+      (
+        window as unknown as {
+          __publicRenderedDocument: unknown;
+        }
+      ).__publicRenderedDocument = rendered;
+    },
+    { apiModule: PUBLIC_RENDER_API_MODULE, documentInput: input }
+  );
+  await page.waitForSelector('#public-render-api-root .layout-page');
+}
 
 /**
  * Render a real DOCX fixture through the supported core rendering facade.

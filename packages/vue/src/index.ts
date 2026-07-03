@@ -18,7 +18,7 @@
 export const VERSION = '0.0.2';
 
 // Main editor contract
-export { default as DocxEditor } from './components/DocxEditor.vue';
+export { default as DocxEditor } from './components/DocxEditor';
 export type { DocxEditorProps, EditorMode } from './components/DocxEditor/types';
 
 // Document factory helpers — re-exported from `@eigenpal/docx-editor-core` so

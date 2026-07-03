@@ -921,6 +921,8 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
     setDocumentFonts,
   });
 
+  const initialSectionProperties = getInitialSectionProperties(history.state);
+  const finalSectionProperties = history.state?.package.document?.finalSectionProperties;
   const {
     imageInputRef,
     docxInputRef,
@@ -1283,17 +1285,13 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
     commentIdAllocator: commentIdAllocatorRef.current,
   });
 
-  const initialSectionProperties = useMemo(
-    () => getInitialSectionProperties(history.state),
-    [history.state]
-  );
-  const finalSectionProperties = history.state?.package.document?.finalSectionProperties;
-
   const {
     headerContent,
     footerContent,
     firstPageHeaderContent,
     firstPageFooterContent,
+    activeHf,
+    hfEditRId,
     handleHeaderFooterDoubleClick,
     handleHeaderFooterSave,
     handleBodyClick,
@@ -1849,9 +1847,10 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
             footerContent={footerContent}
             firstPageHeaderContent={firstPageHeaderContent}
             firstPageFooterContent={firstPageFooterContent}
+            activeHf={activeHf}
+            activeHfRId={hfEditRId}
             hfEditPosition={hfEditPosition}
             setHfEditPosition={setHfEditPosition}
-            hfEditIsFirstPage={hfEditIsFirstPage}
             onHeaderFooterDoubleClick={handleHeaderFooterDoubleClick}
             onHeaderFooterSave={handleHeaderFooterSave}
             onRemoveHeaderFooter={handleRemoveHeaderFooter}

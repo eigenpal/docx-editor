@@ -45,7 +45,9 @@ test('leaving a header returns focus to the body, and the next keystroke lands t
 
   // --- Back out to the body.
   const bodySpan = page.locator('.layout-page-content span[data-doc-from]').first();
-  await bodySpan.click();
+  const bodyBox = await bodySpan.boundingBox();
+  expect(bodyBox).not.toBeNull();
+  await page.mouse.click(bodyBox!.x + bodyBox!.width / 2, bodyBox!.y + bodyBox!.height / 2);
 
   // The header edit mode must close — while it is open the header still owns
   // editing, and the click has done nothing but move a caret the user can see
