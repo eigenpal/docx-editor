@@ -142,15 +142,16 @@ test.describe('public rendering facade', () => {
         caretAt(document: Rendered, position: number): Box | null;
         rectsFor(document: Rendered, from: number, to: number): readonly Box[];
       };
-      const rendered = (
-        window as unknown as { __publicRenderedDocument: Rendered }
-      ).__publicRenderedDocument;
+      const rendered = (window as unknown as { __publicRenderedDocument: Rendered })
+        .__publicRenderedDocument;
       const first = rendered.pages[0]?.boxes.find(
         (box) => box.region === 'body' && box.docFrom !== undefined && box.docTo !== undefined
       );
-      const last = rendered.pages.at(-1)?.boxes.find(
-        (box) => box.region === 'body' && box.docFrom !== undefined && box.docTo !== undefined
-      );
+      const last = rendered.pages
+        .at(-1)
+        ?.boxes.find(
+          (box) => box.region === 'body' && box.docFrom !== undefined && box.docTo !== undefined
+        );
       if (
         first?.docFrom === undefined ||
         first.docTo === undefined ||

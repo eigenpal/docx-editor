@@ -176,9 +176,9 @@ function measureBlocks(
   contentWidth: number | number[],
   pageGeometry?: FloatPageGeometry,
   finalPageGeometry?: FloatPageGeometry
-): Measure[] {
+): LayoutMetrics[] {
   return measureBlocksWithFloats(
-    blocks,
+    nodes,
     contentWidth,
     measureBlock,
     pageGeometry,
@@ -232,20 +232,12 @@ export interface UseDocxEditorReturn {
    * faces + system-resolved), for the picker's "Document fonts" group.
    */
   documentFonts: Ref<FontOption[]>;
-  /** @internal Engine layout state consumed by the first-party Vue shell. */
-  layout: ShallowRef<Layout | null>;
-  /**
-   * The flow blocks behind the current `layout`, and their measures.
-   *
-   * Selection mapping needs them when the painted DOM can't answer — a page
-   * virtualization hasn't rendered, or the frame before a repaint lands. Without
-   * a layout-math fallback the caret simply disappears in those moments.
-   *
-   * @internal
-   */
-  blocks: ShallowRef<FlowBlock[]>;
-  /** @internal Measurements paired with the first-party shell's flow blocks. */
-  measures: ShallowRef<Measure[]>;
+  /** @internal Engine page-layout state consumed by the first-party Vue shell. */
+  pageLayout: ShallowRef<PageLayout | null>;
+  /** @internal Engine content nodes consumed by the first-party Vue shell. */
+  nodes: ShallowRef<ContentNode[]>;
+  /** @internal Layout metrics paired with the first-party shell's content nodes. */
+  metrics: ShallowRef<LayoutMetrics[]>;
   /** Load a DOCX from a binary buffer. */
   loadBuffer: (buffer: ArrayBuffer | Uint8Array | Blob | File) => Promise<void>;
   /** Load a parsed `Document` directly. */
@@ -361,7 +353,6 @@ export function useDocxEditor(options: UseDocxEditorOptions): UseDocxEditorRetur
     const contentWidth = pageSize.w - margins.left - margins.right;
     const theme = document.value.package?.theme ?? null;
     const styles = document.value.package?.styles ?? null;
-    let didPaint = false;
 
     try {
       // Steps 1-5 (nodes → metrics → HF resolve → margin extend → page layout →
@@ -434,7 +425,6 @@ export function useDocxEditor(options: UseDocxEditorOptions): UseDocxEditorRetur
         watermark,
         footnotesByPage,
       } as Parameters<typeof paintPages>[2]);
-      didPaint = true;
 
       // paintPages sets display:flex on the container — fix scrolling
       container.style.overflowY = 'auto';
@@ -452,8 +442,6 @@ export function useDocxEditor(options: UseDocxEditorOptions): UseDocxEditorRetur
     } catch (err) {
       console.error('[useDocxEditor] Layout pipeline error:', err);
       onError?.(err instanceof Error ? err : new Error(String(err)));
-    } finally {
-      if (didPaint) syncCoordinator?.onLayoutComplete(layoutSeq);
     }
   }
 

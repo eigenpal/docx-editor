@@ -8,7 +8,7 @@ test('virtualized pages repaint semantic body and same-height header edits', asy
 
   const result = await page.evaluate(async (painterModule) => {
     const painter = (await import(painterModule)) as {
-      indexBlocksById(blocks: any[], measures: any[]): Map<string, unknown>;
+      indexNodesById(nodes: any[], metrics: any[]): Map<string, unknown>;
       paintPages(pages: any[], container: HTMLElement, options: Record<string, unknown>): string;
     };
     const paragraph = (id: string, text: string, docFrom: number, bold = false) => ({
@@ -26,7 +26,7 @@ test('virtualized pages repaint semantic body and same-height header edits', asy
         },
       ],
     });
-    const measure = {
+    const metric = {
       kind: 'paragraph',
       totalHeight: 20,
       lines: [
@@ -43,8 +43,8 @@ test('virtualized pages repaint semantic body and same-height header edits', asy
       ],
     };
     const makeHeader = (text: string) => ({
-      blocks: [paragraph('header', text, 1)],
-      measures: [measure],
+      nodes: [paragraph('header', text, 1)],
+      metrics: [metric],
       height: 20,
       flowHeight: 20,
       visualTop: 0,
@@ -59,7 +59,7 @@ test('virtualized pages repaint semantic body and same-height header edits', asy
         fragments: [
           {
             kind: 'paragraph',
-            blockId: `body-${index}`,
+            nodeId: `body-${index}`,
             x: 0,
             y: 0,
             width: 260,
@@ -72,8 +72,8 @@ test('virtualized pages repaint semantic body and same-height header edits', asy
         ],
       };
     });
-    let blocks = pages.map((_, index) => paragraph(`body-${index}`, 'alpha', index * 10 + 1));
-    const measures = pages.map(() => measure);
+    let nodes = pages.map((_, index) => paragraph(`body-${index}`, 'alpha', index * 10 + 1));
+    const metrics = pages.map(() => metric);
     const container = document.createElement('div');
     document.body.replaceChildren(container);
     let paintedSignals = 0;
@@ -83,7 +83,7 @@ test('virtualized pages repaint semantic body and same-height header edits', asy
       painter.paintPages(pages, container, {
         document,
         pageGap: 24,
-        blockLookup: painter.indexBlocksById(blocks, measures),
+        nodeLookup: painter.indexNodesById(nodes, metrics),
         headerContent: makeHeader(headerText),
       });
 
@@ -92,16 +92,16 @@ test('virtualized pages repaint semantic body and same-height header edits', asy
       (pageElement) => pageElement.childElementCount > 0
     ).length;
 
-    blocks = blocks.map((block, index) =>
-      index === 0 ? paragraph(block.id, 'omega', block.docFrom) : block
+    nodes = nodes.map((node, index) =>
+      index === 0 ? paragraph(node.id, 'omega', node.docFrom) : node
     );
     const sameLengthKind = paint('AAAAA');
     const sameLengthText =
       container.querySelector<HTMLElement>('[data-page-number="1"] .layout-page-content')
         ?.textContent ?? '';
 
-    blocks = blocks.map((block, index) =>
-      index === 1 ? paragraph(block.id, block.runs[0].text, block.docFrom, true) : block
+    nodes = nodes.map((node, index) =>
+      index === 1 ? paragraph(node.id, node.runs[0].text, node.docFrom, true) : node
     );
     const formattingKind = paint('AAAAA');
     const formattedRun = container.querySelector<HTMLElement>(
@@ -166,7 +166,7 @@ test('virtualized pages repaint section-specific header furniture', async ({ pag
 
   const result = await page.evaluate(async (painterModule) => {
     const painter = (await import(painterModule)) as {
-      indexBlocksById(blocks: any[], measures: any[]): Map<string, unknown>;
+      indexNodesById(nodes: any[], metrics: any[]): Map<string, unknown>;
       paintPages(pages: any[], container: HTMLElement, options: Record<string, unknown>): string;
       registerPageFurniture(page: any, furniture: Record<string, unknown>): void;
     };
@@ -175,7 +175,7 @@ test('virtualized pages repaint section-specific header furniture', async ({ pag
       id,
       runs: [{ kind: 'text', text, docFrom: 1, docTo: text.length + 1 }],
     });
-    const measure = {
+    const metric = {
       kind: 'paragraph',
       totalHeight: 20,
       lines: [
@@ -192,8 +192,8 @@ test('virtualized pages repaint section-specific header furniture', async ({ pag
       ],
     };
     const header = (text: string) => ({
-      blocks: [paragraph(`header-${text}`, text)],
-      measures: [measure],
+      nodes: [paragraph(`header-${text}`, text)],
+      metrics: [metric],
       height: 20,
       flowHeight: 20,
       visualTop: 0,
@@ -206,7 +206,7 @@ test('virtualized pages repaint section-specific header furniture', async ({ pag
       fragments: [
         {
           kind: 'paragraph',
-          blockId: `body-${index}`,
+          nodeId: `body-${index}`,
           x: 0,
           y: 0,
           width: 260,
@@ -218,7 +218,7 @@ test('virtualized pages repaint section-specific header furniture', async ({ pag
         },
       ],
     }));
-    const blocks = pages.map((_, index) => paragraph(`body-${index}`, 'alpha'));
+    const nodes = pages.map((_, index) => paragraph(`body-${index}`, 'alpha'));
     const furniture = (text: string, sectionIndex: number) => ({
       sectionIndex,
       sectionPageNumber: 1,
@@ -237,9 +237,9 @@ test('virtualized pages repaint section-specific header furniture', async ({ pag
     const options = {
       document,
       pageGap: 24,
-      blockLookup: painter.indexBlocksById(
-        blocks,
-        pages.map(() => measure)
+      nodeLookup: painter.indexNodesById(
+        nodes,
+        pages.map(() => metric)
       ),
     };
     painter.paintPages(pages, container, options);

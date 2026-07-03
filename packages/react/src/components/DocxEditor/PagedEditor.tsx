@@ -512,7 +512,7 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
 
         // Only update selection overlay immediately for non-doc-changing transactions
         // (e.g. arrow keys, clicks). For doc changes, the overlay will be updated
-        // after layout completes via the useEffect([pageLayout]) hook, avoiding cursor
+        // after layout completes via the useEffect([layout]) hook, avoiding cursor
         // flicker from stale DOM positions.
         if (!transaction.docChanged) {
           updateSelectionOverlay(newState);
@@ -561,9 +561,9 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
       // multi-click, image-select, hyperlink, context menu) through the
       // HF PM instead of the body PM.
       getHfView: getActiveHfView,
-      layout,
-      blocks,
-      measures,
+      pageLayout,
+      nodes,
+      metrics,
       zoom,
       readOnly,
       hfEditMode,
@@ -779,6 +779,7 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
       onReadyRef,
     });
 
+    // =========================================================================
     // Render
     // =========================================================================
 
