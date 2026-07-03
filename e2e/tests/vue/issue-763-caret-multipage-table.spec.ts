@@ -5,7 +5,36 @@
  * (`useSelectionSync`) resolves the on-window copy like React.
  */
 
-import { test, expect } from '@playwright/test';
+import { test, expect, type Page } from '@playwright/test';
+
+async function readCaretAlignment(page: Page) {
+  return page.evaluate(() => {
+    const caretEl = document.querySelector('[data-testid="caret"]') as HTMLElement | null;
+    if (!caretEl) return { error: 'no caret' };
+    const caret = caretEl.getBoundingClientRect();
+    const caretMid = caret.top + caret.height / 2;
+    const pageAt = (y: number) => {
+      for (const p of Array.from(document.querySelectorAll('.layout-page')) as HTMLElement[]) {
+        const r = p.getBoundingClientRect();
+        if (y >= r.top && y <= r.bottom) return Number(p.dataset.pageNumber || '1') - 1;
+      }
+      return -1;
+    };
+    let line70Page = -1;
+    let line70Y = -1;
+    document.querySelectorAll('.layout-page-content .layout-table .layout-line').forEach((el) => {
+      if (!/\bLine 70\b/.test(el.textContent || '')) return;
+      const r = (el as HTMLElement).getBoundingClientRect();
+      const t = (el as HTMLElement).closest('.layout-table')!.getBoundingClientRect();
+      const mid = (r.top + r.bottom) / 2;
+      if (mid >= t.top - 1 && mid <= t.bottom + 1) {
+        line70Page = pageAt(mid);
+        line70Y = r.top;
+      }
+    });
+    return { caretPage: pageAt(caretMid), caretTop: caret.top, line70Page, line70Y };
+  });
+}
 
 test('Vue: caret follows a table cell across a page break (#763)', async ({ page }) => {
   await page.goto('http://localhost:5174/?e2e=1');
@@ -41,7 +70,9 @@ test('Vue: caret follows a table cell across a page break (#763)', async ({ page
     );
     view.dispatch(view.state.tr.insert(0, table));
   });
-  await page.waitForTimeout(600);
+  await expect
+    .poll(async () => (await readCaretAlignment(page)).line70Page, { timeout: 15000 })
+    .toBeGreaterThanOrEqual(1);
 
   // Place the cursor at the end of the last line of the first table.
   await page.evaluate(() => {
@@ -68,35 +99,22 @@ test('Vue: caret follows a table cell across a page break (#763)', async ({ page
     view.dispatch(view.state.tr.setSelection(TS.create(view.state.doc, last)));
     view.focus();
   });
-  await page.waitForTimeout(300);
+  await expect
+    .poll(
+      async () => {
+        const current = await readCaretAlignment(page);
+        return (
+          current.error === undefined &&
+          current.line70Page >= 1 &&
+          current.caretPage === current.line70Page &&
+          Math.abs(current.caretTop! - current.line70Y!) < 12
+        );
+      },
+      { timeout: 10000 }
+    )
+    .toBe(true);
 
-  const result = await page.evaluate(() => {
-    const caretEl = document.querySelector('[data-testid="caret"]') as HTMLElement | null;
-    if (!caretEl) return { error: 'no caret' };
-    const caret = caretEl.getBoundingClientRect();
-    const caretMid = caret.top + caret.height / 2;
-    const pageAt = (y: number) => {
-      for (const p of Array.from(document.querySelectorAll('.layout-page')) as HTMLElement[]) {
-        const r = p.getBoundingClientRect();
-        if (y >= r.top && y <= r.bottom) return Number(p.dataset.pageNumber || '1') - 1;
-      }
-      return -1;
-    };
-    let line70Page = -1;
-    let line70Y = -1;
-    document.querySelectorAll('.layout-page-content .layout-table .layout-line').forEach((el) => {
-      if (!/\bLine 70\b/.test(el.textContent || '')) return;
-      const r = (el as HTMLElement).getBoundingClientRect();
-      const t = (el as HTMLElement).closest('.layout-table')!.getBoundingClientRect();
-      const mid = (r.top + r.bottom) / 2;
-      if (mid >= t.top - 1 && mid <= t.bottom + 1) {
-        line70Page = pageAt(mid);
-        line70Y = r.top;
-      }
-    });
-    return { caretPage: pageAt(caretMid), caretTop: caret.top, line70Page, line70Y };
-  });
-
+  const result = await readCaretAlignment(page);
   expect(result.error).toBeUndefined();
   expect(result.line70Page).toBeGreaterThanOrEqual(1);
   expect(result.caretPage).toBe(result.line70Page);

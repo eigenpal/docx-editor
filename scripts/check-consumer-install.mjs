@@ -5,9 +5,10 @@ import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 
 const ROOT = path.resolve(import.meta.dirname, '..');
-const tempRoot = mkdtempSync(path.join(tmpdir(), 'docx-editor-vue-consumer-'));
+const tempRoot = mkdtempSync(path.join(tmpdir(), 'docx-editor-consumers-'));
 const packDir = path.join(tempRoot, 'packs');
 const appDir = path.join(tempRoot, 'app');
+const reactAppDir = path.join(tempRoot, 'react-app');
 
 function run(command, args, options = {}) {
   const result = spawnSync(command, args, {
@@ -47,12 +48,13 @@ try {
   mkdirSync(packDir, { recursive: true });
   mkdirSync(path.join(appDir, 'src'), { recursive: true });
 
-  const tarballs = [
+  const sharedTarballs = [
     packPackage('packages/core'),
     packPackage('packages/i18n'),
     packPackage('packages/agents'),
-    packPackage('packages/vue'),
   ];
+  const vueTarballs = [...sharedTarballs, packPackage('packages/vue')];
+  const reactTarballs = [...sharedTarballs, packPackage('packages/react')];
 
   writeFileSync(
     path.join(appDir, 'package.json'),
@@ -72,7 +74,10 @@ try {
     )
   );
 
-  writeFileSync(path.join(appDir, 'index.html'), '<div id="app"></div><script type="module" src="/src/main.ts"></script>\n');
+  writeFileSync(
+    path.join(appDir, 'index.html'),
+    '<div id="app"></div><script type="module" src="/src/main.ts"></script>\n'
+  );
   writeFileSync(
     path.join(appDir, 'src/App.vue'),
     `<script setup lang="ts">
@@ -146,16 +151,103 @@ export default defineConfig({ plugins: [vue()] });
       'vite',
       // vue-tsc currently requires TypeScript's 5.x compiler internals.
       'typescript@5.9.3',
-      ...tarballs,
+      ...vueTarballs,
     ],
     { cwd: appDir }
   );
   run('npm', ['run', 'build'], { cwd: appDir });
   console.log('Fresh Vue consumer install/build passed.');
+
+  mkdirSync(path.join(reactAppDir, 'src'), { recursive: true });
+  writeFileSync(
+    path.join(reactAppDir, 'package.json'),
+    JSON.stringify(
+      {
+        private: true,
+        type: 'module',
+        scripts: {
+          typecheck: 'tsc --noEmit',
+          build: 'npm run typecheck && vite build',
+        },
+        dependencies: {},
+        devDependencies: {},
+      },
+      null,
+      2
+    )
+  );
+  writeFileSync(
+    path.join(reactAppDir, 'index.html'),
+    '<div id="root"></div><script type="module" src="/src/main.tsx"></script>\n'
+  );
+  writeFileSync(
+    path.join(reactAppDir, 'src/main.tsx'),
+    `import { createRoot } from 'react-dom/client';
+import { DocxEditor } from '@eigenpal/docx-editor-react';
+import { caretAt, rectsFor, renderDocument } from '@eigenpal/docx-editor-core/api';
+import '@eigenpal/docx-editor-react/styles.css';
+
+console.assert(
+  typeof renderDocument === 'function' &&
+    typeof caretAt === 'function' &&
+    typeof rectsFor === 'function'
+);
+
+createRoot(document.getElementById('root')!).render(<DocxEditor showToolbar={false} />);
+`
+  );
+  writeFileSync(
+    path.join(reactAppDir, 'src/vite-env.d.ts'),
+    '/// <reference types="vite/client" />\n'
+  );
+  writeFileSync(
+    path.join(reactAppDir, 'vite.config.ts'),
+    `import { defineConfig } from 'vite';
+import react from '@vitejs/plugin-react';
+
+export default defineConfig({ plugins: [react()] });
+`
+  );
+  writeFileSync(
+    path.join(reactAppDir, 'tsconfig.json'),
+    JSON.stringify(
+      {
+        compilerOptions: {
+          strict: true,
+          target: 'ES2022',
+          module: 'ESNext',
+          moduleResolution: 'Bundler',
+          jsx: 'react-jsx',
+          skipLibCheck: true,
+        },
+        include: ['src/**/*.ts', 'src/**/*.tsx'],
+      },
+      null,
+      2
+    )
+  );
+  run(
+    'npm',
+    [
+      'install',
+      '--ignore-scripts',
+      'react',
+      'react-dom',
+      '@types/react',
+      '@types/react-dom',
+      '@vitejs/plugin-react',
+      'vite',
+      'typescript',
+      ...reactTarballs,
+    ],
+    { cwd: reactAppDir }
+  );
+  run('npm', ['run', 'build'], { cwd: reactAppDir });
+  console.log('Fresh React consumer install/build passed.');
 } finally {
   if (process.env.KEEP_CONSUMER_INSTALL_TEMP !== '1') {
     rmSync(tempRoot, { recursive: true, force: true });
   } else {
-    console.log(`Kept temp app at ${appDir}`);
+    console.log(`Kept temp apps at ${appDir} and ${reactAppDir}`);
   }
 }

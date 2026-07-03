@@ -1,11 +1,13 @@
 #!/usr/bin/env node
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
+import { createRequire } from 'node:module';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 
 const root = path.resolve(import.meta.dirname, '..');
 const packageDirs = ['core', 'react', 'vue', 'agents', 'i18n', 'nuxt'];
 const errors = [];
+const require = createRequire(import.meta.url);
 
 function filesBelow(directory) {
   if (!existsSync(directory)) return [];
@@ -53,15 +55,30 @@ for (const packageDir of packageDirs) {
     if (leaksWorkspacePath || importsPrivateCoreSubpath) {
       errors.push(`${path.relative(root, artifact)} exposes a workspace-only source path`);
     }
+
+    if (!isDeclaration && artifact.endsWith('.js')) {
+      for (const match of content.matchAll(/\brequire\(\s*['"](\.[^'"]+)['"]\s*\)/g)) {
+        const request = match[1];
+        const target = path.resolve(path.dirname(artifact), request);
+        const candidates = [target, `${target}.js`, path.join(target, 'index.js')];
+        if (!candidates.some(existsSync)) {
+          errors.push(
+            `${path.relative(root, artifact)} requires missing private artifact ${request}`
+          );
+        }
+      }
+    }
   }
 }
 
-const renderApi = await import(
-  pathToFileURL(path.join(root, 'packages/core/dist/api.mjs')).href
-);
+const renderApi = await import(pathToFileURL(path.join(root, 'packages/core/dist/api.mjs')).href);
+const renderApiCjs = require(path.join(root, 'packages/core/dist/api.js'));
 for (const name of ['renderDocument', 'caretAt', 'rectsFor']) {
   if (typeof renderApi[name] !== 'function') {
     errors.push(`@eigenpal/docx-editor-core/api is missing runtime export ${name}`);
+  }
+  if (typeof renderApiCjs[name] !== 'function') {
+    errors.push(`@eigenpal/docx-editor-core/api CJS is missing runtime export ${name}`);
   }
 }
 
