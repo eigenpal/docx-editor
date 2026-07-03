@@ -80,6 +80,7 @@ test('body content fills both section columns before continuing on the next page
   const secondColumn = firstPage.filter((fragment) => fragment.left === firstPageLefts[1]);
   expect(firstColumn.length).toBeGreaterThan(0);
   expect(secondColumn.length).toBeGreaterThan(0);
+  expect(pages[1].fragments.length).toBeGreaterThan(0);
   expect(Math.max(...firstColumn.map((fragment) => fragment.paragraph))).toBeLessThan(
     Math.min(...secondColumn.map((fragment) => fragment.paragraph))
   );
