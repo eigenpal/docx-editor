@@ -71,8 +71,7 @@ test('Vue: caret follows a table cell across a page break (#763)', async ({ page
   await page.waitForTimeout(300);
 
   const result = await page.evaluate(() => {
-    // Vue paints the caret as `.vue-caret`.
-    const caretEl = document.querySelector('.vue-caret') as HTMLElement | null;
+    const caretEl = document.querySelector('[data-testid="caret"]') as HTMLElement | null;
     if (!caretEl) return { error: 'no caret' };
     const caret = caretEl.getBoundingClientRect();
     const caretMid = caret.top + caret.height / 2;
