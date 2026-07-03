@@ -1,6 +1,6 @@
 /**
- * Node-measurement pipeline for PagedEditor — paragraph/table/image/
- * textBox measurement. The floating-zone pre-scan + per-node cumulative-Y
+ * Block-measurement pipeline for PagedEditor — paragraph/table/image/
+ * textBox measurement. The floating-zone pre-scan + per-block cumulative-Y
  * orchestration lives in core's `measureBlocksWithFloats` so React and Vue
  * stay in lockstep.
  *
@@ -126,9 +126,9 @@ export function measureBlocks(
   contentWidth: number | number[],
   pageGeometry?: FloatPageGeometry,
   finalPageGeometry?: FloatPageGeometry
-): Measure[] {
+): LayoutMetrics[] {
   return measureBlocksWithFloats(
-    blocks,
+    nodes,
     contentWidth,
     measureBlock,
     pageGeometry,

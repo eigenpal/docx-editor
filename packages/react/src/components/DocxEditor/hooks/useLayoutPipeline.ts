@@ -207,7 +207,6 @@ export function useLayoutPipeline(opts: UseLayoutPipelineOptions): UseLayoutPipe
         );
       };
       applyPendingIncrementalScrollSnapshot(true);
-      let didPaint = false;
 
       try {
         // Steps 1-3 (PM doc → nodes → metrics → HF resolve → margin extend →
@@ -289,7 +288,6 @@ export function useLayoutPipeline(opts: UseLayoutPipelineOptions): UseLayoutPipe
             nodeLookup?: NodeLookup;
             footnotesByPage?: Map<number, FootnoteRenderItem[]>;
           });
-          didPaint = true;
 
           const vp = viewportLayoutRef.current;
           if (vp) {
@@ -407,7 +405,6 @@ export function useLayoutPipeline(opts: UseLayoutPipelineOptions): UseLayoutPipe
         console.error('[PagedEditor] Layout pipeline error:', error);
       }
 
-      if (didPaint) syncCoordinator.onLayoutComplete(currentEpoch);
       applyPendingIncrementalScrollSnapshot(false);
     },
     [
@@ -439,7 +436,7 @@ export function useLayoutPipeline(opts: UseLayoutPipelineOptions): UseLayoutPipe
     ]
   );
 
-  // After `setPageLayout`, React still commits `totalHeight` / margin on the viewport wrapper.
+  // After `setLayout`, React still commits `totalHeight` / margin on the viewport wrapper.
   // Restoring scroll here (plus one rAF) matches the committed DOM scrollHeight.
   useLayoutEffect(() => {
     const pending = pendingScrollRestoreRef.current;
