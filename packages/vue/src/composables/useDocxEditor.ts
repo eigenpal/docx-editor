@@ -86,7 +86,7 @@ import {
   applySdtFocus,
 } from '@eigenpal/docx-editor-core/painter-model';
 import type { Document } from '@eigenpal/docx-editor-core/types/document';
-import { createPaintedPagesGuard } from './paintedPagesGuard';
+import { createPaintedPagesGuard } from '@eigenpal/docx-editor-core/internal/paintedPagesGuard';
 
 // ProseMirror CSS — must be imported for the hidden editor to work
 import 'prosemirror-view/style/prosemirror.css';

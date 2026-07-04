@@ -34,6 +34,7 @@ function entriesFromExports(packageRoot, exportsMap) {
   const entries = [];
   for (const [key, value] of Object.entries(exportsMap)) {
     if (key === './package.json') continue;
+    if (key.startsWith('./internal/')) continue;
     if (typeof value !== 'object' || value === null) continue;
     if (typeof value.types !== 'string') continue;
     entries.push({

@@ -40,7 +40,7 @@ import {
   createCellDragTracker,
   findCellPosFromPmPos,
 } from '@eigenpal/docx-editor-core/prosemirror/cellDragSelection';
-import { readCurrentPaintedPages } from './paintedPagesGuard';
+import { readCurrentPaintedPages } from '@eigenpal/docx-editor-core/internal/paintedPagesGuard';
 
 type TableResizeApi = {
   tryStartResize: (e: MouseEvent, view: EditorView) => boolean;
