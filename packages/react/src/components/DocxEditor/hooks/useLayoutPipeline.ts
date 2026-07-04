@@ -58,6 +58,7 @@ import {
   type PendingScrollRestore,
 } from '../internals/scrollRestore';
 import { createPaintedPagesGuard, type PaintedPagesGuard } from './paintedPagesGuard';
+import { usePaintedPagesGuardLifecycle } from './usePaintedPagesGuardLifecycle';
 
 export interface UseLayoutPipelineOptions {
   document: Document | null;
@@ -158,6 +159,7 @@ export function useLayoutPipeline(opts: UseLayoutPipelineOptions): UseLayoutPipe
   if (!paintedPagesGuardRef.current) {
     paintedPagesGuardRef.current = createPaintedPagesGuard(() => onPaintedPagesReadyRef.current());
   }
+  usePaintedPagesGuardLifecycle(paintedPagesGuardRef.current);
   const successfulPaintRef = useRef<ReturnType<PaintedPagesGuard['startPaint']> | null>(null);
   const paintingPagesRef = useRef(false);
 
@@ -548,17 +550,11 @@ export function useLayoutPipeline(opts: UseLayoutPipelineOptions): UseLayoutPipe
     []
   );
 
-  // Clean up pending rAF on unmount
+  // Clean up pending rAF on unmount. Guard disposal/revival lives in a parent
+  // layout effect so Strict Effects cannot leave child passive setup disposed.
   useEffect(() => {
-    if (paintedPagesGuardRef.current?.isDisposed()) {
-      paintedPagesGuardRef.current.revive();
-    }
     const scheduler = schedulerRef.current;
-    const guard = paintedPagesGuardRef.current;
-    return () => {
-      scheduler?.cancel();
-      guard?.dispose();
-    };
+    return () => scheduler?.cancel();
   }, []);
 
   return {
