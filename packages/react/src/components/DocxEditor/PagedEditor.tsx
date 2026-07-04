@@ -48,7 +48,7 @@ import {
 } from './internals/styles';
 import { viewportMinHeightPx } from './internals/scrollUtils';
 import { useLayoutPipeline } from './hooks/useLayoutPipeline';
-import { transactionNeedsDirectOverlayRequest } from './hooks/paintedPagesGuard';
+import { transactionNeedsDirectOverlayRequest } from '@eigenpal/docx-editor-core/internal/paintedPagesGuard';
 import { useSelectionOverlay } from './hooks/useSelectionOverlay';
 import { useImageInteractions } from './hooks/useImageInteractions';
 import { usePagedScrollApi } from './hooks/usePagedScrollApi';

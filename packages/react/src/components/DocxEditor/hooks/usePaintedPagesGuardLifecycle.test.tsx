@@ -3,7 +3,10 @@ import { afterAll, afterEach, beforeAll, describe, expect, mock, test } from 'bu
 import { StrictMode, useEffect } from 'react';
 import { cleanup, render } from '@testing-library/react';
 
-import { createPaintedPagesGuard, type PaintedPagesGuard } from './paintedPagesGuard';
+import {
+  createPaintedPagesGuard,
+  type PaintedPagesGuard,
+} from '@eigenpal/docx-editor-core/internal/paintedPagesGuard';
 import { usePaintedPagesGuardLifecycle } from './usePaintedPagesGuardLifecycle';
 
 beforeAll(() => GlobalRegistrator.register());

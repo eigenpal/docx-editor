@@ -57,7 +57,10 @@ import {
   reclampIncrementalSnapshot,
   type PendingScrollRestore,
 } from '../internals/scrollRestore';
-import { createPaintedPagesGuard, type PaintedPagesGuard } from './paintedPagesGuard';
+import {
+  createPaintedPagesGuard,
+  type PaintedPagesGuard,
+} from '@eigenpal/docx-editor-core/internal/paintedPagesGuard';
 import { usePaintedPagesGuardLifecycle } from './usePaintedPagesGuardLifecycle';
 
 export interface UseLayoutPipelineOptions {

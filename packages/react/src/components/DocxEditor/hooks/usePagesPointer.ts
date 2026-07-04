@@ -53,7 +53,7 @@ import type { OffscreenEditorHostRef } from '../OffscreenEditorHost';
 import type { ImageSelectionInfo } from '../overlays/ImageSelectionOverlay';
 import { useDragAutoScroll } from '../../../hooks/useDragAutoScroll';
 import { useTableResizeState } from './useTableResizeState';
-import { readCurrentPaintedPages } from './paintedPagesGuard';
+import { readCurrentPaintedPages } from '@eigenpal/docx-editor-core/internal/paintedPagesGuard';
 import {
   createCellDragTracker,
   findCellPosFromPmPos as coreFindCellPosFromPmPos,
