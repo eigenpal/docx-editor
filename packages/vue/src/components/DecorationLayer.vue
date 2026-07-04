@@ -13,6 +13,7 @@ const props = defineProps<{
   getPagesContainer: () => HTMLElement | null;
   zoom: number;
   transactionVersion: number;
+  pagesAreCurrent: () => boolean;
 }>();
 
 const overlayRef = ref<HTMLDivElement | null>(null);
@@ -22,6 +23,7 @@ function scheduleSync() {
   if (rafId !== null) cancelAnimationFrame(rafId);
   rafId = requestAnimationFrame(() => {
     rafId = null;
+    if (!props.pagesAreCurrent()) return;
     const view = props.getView();
     const pagesContainer = props.getPagesContainer();
     const overlay = overlayRef.value;
@@ -31,7 +33,18 @@ function scheduleSync() {
 }
 
 onMounted(() => {
-  scheduleSync();
+  const pages = props.getPagesContainer();
+  if (!pages) return;
+  const cancelStaleSync = () => {
+    if (rafId !== null) {
+      cancelAnimationFrame(rafId);
+      rafId = null;
+    }
+  };
+  pages.addEventListener('docx-editor-vue:painted-pages-stale', cancelStaleSync);
+  onBeforeUnmount(() => {
+    pages.removeEventListener('docx-editor-vue:painted-pages-stale', cancelStaleSync);
+  });
 });
 
 onBeforeUnmount(() => {
@@ -42,7 +55,7 @@ onBeforeUnmount(() => {
 });
 
 watch(
-  () => [props.zoom, props.transactionVersion],
+  () => props.transactionVersion,
   () => scheduleSync()
 );
 

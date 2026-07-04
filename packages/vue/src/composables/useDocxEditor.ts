@@ -86,6 +86,7 @@ import {
   applySdtFocus,
 } from '@eigenpal/docx-editor-core/painter-model';
 import type { Document } from '@eigenpal/docx-editor-core/types/document';
+import { createPaintedPagesGuard } from '@eigenpal/docx-editor-core/internal/paintedPagesGuard';
 
 // ProseMirror CSS — must be imported for the hidden editor to work
 import 'prosemirror-view/style/prosemirror.css';
@@ -326,6 +327,37 @@ export function useDocxEditor(options: UseDocxEditorOptions): UseDocxEditorRetur
    */
   const nodes = shallowRef<ContentNode[]>([]);
   const metrics = shallowRef<LayoutMetrics[]>([]);
+  const paintedPagesGuard = createPaintedPagesGuard(() => {
+    const pages = pagesContainer.value;
+    if (!pages) return;
+    pages.dataset.overlayPagesCurrent = 'true';
+    pages.dispatchEvent(new CustomEvent('docx-editor-vue:painted-pages-ready'));
+  });
+  let paintingPages = false;
+  const markPaintedPagesStale = () => {
+    paintedPagesGuard.noteDocumentChange();
+    const pages = pagesContainer.value;
+    if (!pages) return;
+    pages.dataset.overlayPagesCurrent = 'false';
+    pages.dispatchEvent(new CustomEvent('docx-editor-vue:painted-pages-stale'));
+  };
+
+  watch(
+    pagesContainer,
+    (pages, _previous, onCleanup) => {
+      if (!pages) return;
+      const requestRefresh = () => {
+        if (!paintingPages) paintedPagesGuard.requestOverlayRefresh();
+      };
+      pages.addEventListener('painter:painted', requestRefresh);
+      pages.addEventListener('docx-editor-vue:request-overlay-refresh', requestRefresh);
+      onCleanup(() => {
+        pages.removeEventListener('painter:painted', requestRefresh);
+        pages.removeEventListener('docx-editor-vue:request-overlay-refresh', requestRefresh);
+      });
+    },
+    { immediate: true }
+  );
 
   // Use the singleton extension manager — same schema used by toProseDoc/commands
   const mgr = singletonManager;
@@ -408,23 +440,33 @@ export function useDocxEditor(options: UseDocxEditorOptions): UseDocxEditorRetur
       // Step 6: Build block lookup and paint
       const nodeLookup = indexNodesById(newNodes, newMetrics);
 
-      paintPages(newPageLayout.pages, container, {
-        pageGap,
-        showShadow: true,
-        pageBackground: 'var(--doc-page-bg, #ffffff)',
-        nodeLookup,
-        theme,
-        headerContent: headerContentForRender,
-        footerContent: footerContentForRender,
-        firstPageHeaderContent: firstPageHeaderForRender,
-        firstPageFooterContent: firstPageFooterForRender,
-        titlePg: hasTitlePg,
-        headerDistance: headerDistancePx,
-        footerDistance: footerDistancePx,
-        pageBorders,
-        watermark,
-        footnotesByPage,
-      } as Parameters<typeof paintPages>[2]);
+      container.dataset.overlayPagesCurrent = 'false';
+      const paintTicket = paintedPagesGuard.startPaint();
+      paintingPages = true;
+      try {
+        paintPages(newPageLayout.pages, container, {
+          pageGap,
+          showShadow: true,
+          pageBackground: 'var(--doc-page-bg, #ffffff)',
+          nodeLookup,
+          theme,
+          headerContent: headerContentForRender,
+          footerContent: footerContentForRender,
+          firstPageHeaderContent: firstPageHeaderForRender,
+          firstPageFooterContent: firstPageFooterForRender,
+          titlePg: hasTitlePg,
+          headerDistance: headerDistancePx,
+          footerDistance: footerDistancePx,
+          pageBorders,
+          watermark,
+          footnotesByPage,
+        } as Parameters<typeof paintPages>[2]);
+      } catch (error) {
+        paintedPagesGuard.abandonPaint(paintTicket);
+        throw error;
+      } finally {
+        paintingPages = false;
+      }
 
       // paintPages sets display:flex on the container — fix scrolling
       container.style.overflowY = 'auto';
@@ -439,6 +481,9 @@ export function useDocxEditor(options: UseDocxEditorOptions): UseDocxEditorRetur
         container,
         enclosingSdtGroupIds(state.doc, state.selection.from, state.selection.to)
       );
+      if (paintedPagesGuard.finishPaint(paintTicket)) {
+        container.dataset.overlayPagesCurrent = 'true';
+      }
     } catch (err) {
       console.error('[useDocxEditor] Layout pipeline error:', err);
       onError?.(err instanceof Error ? err : new Error(String(err)));
@@ -529,6 +574,7 @@ export function useDocxEditor(options: UseDocxEditorOptions): UseDocxEditorRetur
         // Re-layout on doc changes — coalesced through the shared core
         // scheduler so a burst of keystrokes lays out once per frame.
         if (transaction.docChanged) {
+          markPaintedPagesStale();
           layoutScheduler.schedule(newState);
           // Notify parent about document change
           try {
@@ -556,6 +602,7 @@ export function useDocxEditor(options: UseDocxEditorOptions): UseDocxEditorRetur
             );
           }
         }
+        paintedPagesGuard.requestOverlayRefresh();
       },
     });
 
@@ -563,6 +610,7 @@ export function useDocxEditor(options: UseDocxEditorOptions): UseDocxEditorRetur
     isReady.value = true;
 
     // Initial layout
+    paintedPagesGuard.requestOverlayRefresh();
     runLayoutPipeline(state);
 
     // Auto-focus the hidden ProseMirror so the user can start typing
@@ -744,8 +792,13 @@ export function useDocxEditor(options: UseDocxEditorOptions): UseDocxEditorRetur
           }
           // Only re-layout when the HF doc actually changed — selection-only
           // transactions don't move text so the painter has nothing new.
-          if (tr.docChanged && editorState.value) runLayoutPipeline(editorState.value);
+          if (tr.docChanged && editorState.value) {
+            markPaintedPagesStale();
+            paintedPagesGuard.requestOverlayRefresh();
+            runLayoutPipeline(editorState.value);
+          }
           onHfTransactionRef.value?.(rId, view, tr.docChanged);
+          if (!tr.docChanged) paintedPagesGuard.requestOverlayRefresh();
         },
       });
       hfViews.set(rId, view);
@@ -804,6 +857,7 @@ export function useDocxEditor(options: UseDocxEditorOptions): UseDocxEditorRetur
   // ========================================================================
 
   async function loadBuffer(buffer: ArrayBuffer | Uint8Array | Blob | File) {
+    markPaintedPagesStale();
     parseError.value = null;
     isReady.value = false;
 
@@ -837,6 +891,7 @@ export function useDocxEditor(options: UseDocxEditorOptions): UseDocxEditorRetur
   }
 
   function loadDocument(doc: Document) {
+    markPaintedPagesStale();
     parseError.value = null;
     document.value = doc;
     updateDocumentFonts(doc);
@@ -906,6 +961,7 @@ export function useDocxEditor(options: UseDocxEditorOptions): UseDocxEditorRetur
   // ========================================================================
 
   onBeforeUnmount(() => {
+    paintedPagesGuard.dispose();
     destroy();
   });
 
@@ -934,7 +990,11 @@ export function useDocxEditor(options: UseDocxEditorOptions): UseDocxEditorRetur
     getCommands,
     /** Force a re-layout without a doc change (e.g. after page-setup changes). */
     reLayout() {
-      if (editorView.value) runLayoutPipeline(editorView.value.state);
+      if (editorView.value) {
+        markPaintedPagesStale();
+        paintedPagesGuard.requestOverlayRefresh();
+        runLayoutPipeline(editorView.value.state);
+      }
     },
 
     // HF unification surface — phase 6 of openspec/changes/unify-hf-editing.

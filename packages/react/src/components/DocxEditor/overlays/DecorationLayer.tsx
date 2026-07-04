@@ -39,6 +39,8 @@ interface DecorationLayerProps {
   zoom: number;
   /** Bumps on every PM transaction; drives recomputation. */
   decorationSyncToken: number;
+  /** Guards the deferred DOM read against a newer document transaction. */
+  pagesAreCurrent: () => boolean;
 }
 
 const overlayStyle: React.CSSProperties = {
@@ -55,14 +57,18 @@ export function DecorationLayer({
   getPagesContainer,
   zoom,
   decorationSyncToken,
+  pagesAreCurrent,
 }: DecorationLayerProps) {
   const overlayRef = useRef<HTMLDivElement>(null);
   const rafRef = useRef<number | null>(null);
 
   useEffect(() => {
+    // Token zero means no readiness-approved page paint has completed yet.
+    if (decorationSyncToken === 0) return;
     if (rafRef.current !== null) cancelAnimationFrame(rafRef.current);
     rafRef.current = requestAnimationFrame(() => {
       rafRef.current = null;
+      if (!pagesAreCurrent()) return;
       const view = getView();
       const pagesContainer = getPagesContainer();
       const overlay = overlayRef.current;
@@ -77,7 +83,7 @@ export function DecorationLayer({
     };
     // getView/getPagesContainer are stable closures over refs.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [zoom, decorationSyncToken]);
+  }, [decorationSyncToken]);
 
   return (
     <div

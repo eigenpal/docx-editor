@@ -53,6 +53,7 @@ import type { OffscreenEditorHostRef } from '../OffscreenEditorHost';
 import type { ImageSelectionInfo } from '../overlays/ImageSelectionOverlay';
 import { useDragAutoScroll } from '../../../hooks/useDragAutoScroll';
 import { useTableResizeState } from './useTableResizeState';
+import { readCurrentPaintedPages } from '@eigenpal/docx-editor-core/internal/paintedPagesGuard';
 import {
   createCellDragTracker,
   findCellPosFromPmPos as coreFindCellPosFromPmPos,
@@ -112,6 +113,8 @@ export interface UsePagesPointerOptions {
   setSelectionGeometry: React.Dispatch<React.SetStateAction<SelectionBox[]>>;
   setCaretPosition: React.Dispatch<React.SetStateAction<CaretPosition | null>>;
   buildImageSelectionInfo: (el: HTMLElement, pmPos: number) => ImageSelectionInfo;
+  pagesAreCurrent: () => boolean;
+  requestOverlayRefresh: () => void;
   setIsFocused: React.Dispatch<React.SetStateAction<boolean>>;
   scrollToPositionImpl: (pmPos: number, forParaIdScroll?: boolean) => void;
 }
@@ -128,6 +131,7 @@ export interface UsePagesPointerReturn {
   /** Hide the button immediately (used by the button's onMouseLeave). */
   hideTableInsertButton: () => void;
   getPositionFromMouse: (clientX: number, clientY: number) => number | null;
+  flushPendingImageSelection: () => boolean;
 }
 
 /**
@@ -201,6 +205,8 @@ export function usePagesPointer(opts: UsePagesPointerOptions): UsePagesPointerRe
     setSelectionGeometry,
     setCaretPosition,
     buildImageSelectionInfo,
+    pagesAreCurrent,
+    requestOverlayRefresh,
     setIsFocused,
     scrollToPositionImpl,
   } = opts;
@@ -208,6 +214,7 @@ export function usePagesPointer(opts: UsePagesPointerOptions): UsePagesPointerRe
   // Drag selection state
   const isDraggingRef = useRef(false);
   const dragAnchorRef = useRef<number | null>(null);
+  const pendingImageSelectionRef = useRef<{ clientX: number; clientY: number } | null>(null);
 
   // Table resize state machine (column-between, row, right-edge handles).
   // `getActiveHfView` lets the hook dispatch column/row commits on the HF
@@ -332,6 +339,55 @@ export function usePagesPointer(opts: UsePagesPointerOptions): UsePagesPointerRe
     return hiddenPMRef.current;
   }, [hfEditMode, getHfView, hiddenPMRef]);
 
+  const selectCurrentImageElement = useCallback(
+    (imageEl: HTMLElement): boolean => {
+      const pos = readCurrentPaintedPages(pagesAreCurrent, () => {
+        const docFrom = imageEl.dataset.docFrom;
+        if (docFrom === undefined) return null;
+        const parsed = Number.parseInt(docFrom, 10);
+        return Number.isFinite(parsed) ? parsed : null;
+      });
+      if (pos === null) return false;
+
+      const surface = activeSurface();
+      if (!surface) return false;
+      surface.setNodeSelection(pos);
+      const imageInfo = readCurrentPaintedPages(pagesAreCurrent, () =>
+        buildImageSelectionInfo(imageEl, pos)
+      );
+      if (imageInfo) setSelectedImageInfo(imageInfo);
+      setSelectionGeometry([]);
+      setCaretPosition(null);
+      surface.focus();
+      if (!hfEditMode) setIsFocused(true);
+      return true;
+    },
+    [
+      activeSurface,
+      buildImageSelectionInfo,
+      hfEditMode,
+      pagesAreCurrent,
+      setCaretPosition,
+      setIsFocused,
+      setSelectedImageInfo,
+      setSelectionGeometry,
+    ]
+  );
+
+  const flushPendingImageSelection = useCallback((): boolean => {
+    const pending = pendingImageSelectionRef.current;
+    if (!pending || !pagesAreCurrent()) return false;
+    pendingImageSelectionRef.current = null;
+
+    const pages = pagesContainerRef.current;
+    if (!pages) return false;
+    const stack = pages.ownerDocument.elementsFromPoint(pending.clientX, pending.clientY);
+    const target = stack.find((candidate) => pages.contains(candidate));
+    if (!(target instanceof HTMLElement)) return false;
+    const imageEl = coreFindImageElement(target);
+    return imageEl ? selectCurrentImageElement(imageEl) : false;
+  }, [pagesAreCurrent, pagesContainerRef, selectCurrentImageElement]);
+
   const findCellPosFromPmPos = useCallback(
     (pmPos: number): number | null => {
       const view = activeSurface()?.getView();
@@ -405,20 +461,19 @@ export function usePagesPointer(opts: UsePagesPointerOptions): UsePagesPointerRe
       if (imageEl) {
         e.preventDefault();
         e.stopPropagation();
-        const docFrom = imageEl.dataset.docFrom;
-        if (docFrom !== undefined) {
-          const pos = parseInt(docFrom, 10);
-          surface.setNodeSelection(pos);
-          setSelectedImageInfo(buildImageSelectionInfo(imageEl, pos));
-          setSelectionGeometry([]);
-          setCaretPosition(null);
+        if (!pagesAreCurrent()) {
+          pendingImageSelectionRef.current = { clientX: e.clientX, clientY: e.clientY };
+          requestOverlayRefresh();
+          surface.focus();
+          if (!hfEditMode) setIsFocused(true);
+          return;
         }
-        surface.focus();
-        if (!hfEditMode) setIsFocused(true);
+        selectCurrentImageElement(imageEl);
         return;
       }
 
       // Click outside an image clears the image selection.
+      pendingImageSelectionRef.current = null;
       setSelectedImageInfo(null);
       e.preventDefault();
 
@@ -456,7 +511,9 @@ export function usePagesPointer(opts: UsePagesPointerOptions): UsePagesPointerRe
       setSelectedImageInfo,
       setSelectionGeometry,
       setCaretPosition,
-      buildImageSelectionInfo,
+      pagesAreCurrent,
+      requestOverlayRefresh,
+      selectCurrentImageElement,
       setIsFocused,
     ]
   );
@@ -739,6 +796,10 @@ export function usePagesPointer(opts: UsePagesPointerOptions): UsePagesPointerRe
     (e: React.MouseEvent) => {
       if (!onContextMenu) return;
       e.preventDefault();
+      if (!pagesAreCurrent()) {
+        requestOverlayRefresh();
+        return;
+      }
 
       const surface = activeSurface();
       const view = surface?.getView();
@@ -806,6 +867,8 @@ export function usePagesPointer(opts: UsePagesPointerOptions): UsePagesPointerRe
       getPositionFromMouse,
       zoom,
       pagesContainerRef,
+      pagesAreCurrent,
+      requestOverlayRefresh,
       setIsFocused,
     ]
   );
@@ -822,5 +885,6 @@ export function usePagesPointer(opts: UsePagesPointerOptions): UsePagesPointerRe
     clearTableInsertTimer,
     hideTableInsertButton,
     getPositionFromMouse,
+    flushPendingImageSelection,
   };
 }
