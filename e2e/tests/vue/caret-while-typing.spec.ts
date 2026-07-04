@@ -33,19 +33,28 @@ test('Vue: caret stays visible and follows the text while typing (#736)', async 
     await expect(page.locator('.vue-caret')).toHaveCount(1);
   }
 
-  // The caret must sit on the typed text, not stranded at a stale spot. Assert
-  // it lands within the bounding box of a run that holds the typed marker (a
-  // few px of tolerance), which also covers the "wrong place" symptom in #736.
-  const run = page.locator('.layout-page-content .layout-run-text', { hasText: marker }).last();
-  const runBox = await run.boundingBox();
   const caretBox = await page.locator('.vue-caret').boundingBox();
-  expect(runBox).not.toBeNull();
   expect(caretBox).not.toBeNull();
   const caretCenterY = caretBox!.y + caretBox!.height / 2;
-  expect(caretCenterY).toBeGreaterThan(runBox!.y - 8);
-  expect(caretCenterY).toBeLessThan(runBox!.y + runBox!.height + 8);
-  // Caret x is at or just past the run (it's at the insertion point after the
-  // typed text), never far to the left of where the text was painted.
-  expect(caretBox!.x).toBeGreaterThan(runBox!.x);
-  expect(caretBox!.x).toBeLessThan(runBox!.x + runBox!.width + 12);
+
+  // The marker can wrap across painter runs. Find the inserted fragment on the
+  // caret's line instead of assuming all ten characters remain in one run.
+  const typedRunBoxes = await page
+    .locator('.layout-page-content .layout-run-text')
+    .evaluateAll((runs) =>
+      runs
+        .filter((run) => run.textContent?.includes('Q'))
+        .map((run) => {
+          const rect = run.getBoundingClientRect();
+          return { x: rect.x, y: rect.y, width: rect.width, height: rect.height };
+        })
+    );
+  const currentRun = typedRunBoxes.find(
+    (box) =>
+      caretCenterY > box.y - 8 &&
+      caretCenterY < box.y + box.height + 8 &&
+      caretBox!.x > box.x &&
+      caretBox!.x < box.x + box.width + 12
+  );
+  expect(currentRun).toBeDefined();
 });

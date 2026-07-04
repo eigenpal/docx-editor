@@ -71,6 +71,7 @@ export interface UseSelectionSyncOptions {
   pageLayout: Ref<PageLayout | null>;
   nodes: Ref<ContentNode[]>;
   metrics: Ref<LayoutMetrics[]>;
+  requestOverlayRefresh: () => void;
 }
 
 export interface UseSelectionSyncReturn {
@@ -103,7 +104,7 @@ export function useSelectionSync(opts: UseSelectionSyncOptions): UseSelectionSyn
 
     const sync = (focused: boolean) => () => {
       isFocused.value = focused;
-      updateSelectionOverlay();
+      opts.requestOverlayRefresh();
     };
     const onFocusIn = sync(true);
     const onFocusOut = sync(false);
@@ -123,7 +124,7 @@ export function useSelectionSync(opts: UseSelectionSyncOptions): UseSelectionSyn
       if (frame) return;
       frame = requestAnimationFrame(() => {
         frame = 0;
-        updateSelectionOverlay();
+        opts.requestOverlayRefresh();
       });
     };
     const observer =
@@ -198,6 +199,7 @@ export function useSelectionSync(opts: UseSelectionSyncOptions): UseSelectionSyn
 
     if (caret) {
       const el = doc.createElement('div');
+      el.className = 'vue-caret';
       el.dataset.testid = 'caret';
       el.style.position = 'absolute';
       el.style.left = `${caret.x}px`;
@@ -359,7 +361,7 @@ export function useSelectionSync(opts: UseSelectionSyncOptions): UseSelectionSyn
   // rects are in layout px and the pages are CSS-scaled underneath them.
   watch(
     () => opts.zoom.value,
-    () => updateSelectionOverlay()
+    () => opts.requestOverlayRefresh()
   );
 
   onBeforeUnmount(() => {

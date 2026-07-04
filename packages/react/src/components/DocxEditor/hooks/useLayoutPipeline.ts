@@ -57,6 +57,7 @@ import {
   reclampIncrementalSnapshot,
   type PendingScrollRestore,
 } from '../internals/scrollRestore';
+import { createPaintedPagesGuard, type PaintedPagesGuard } from './paintedPagesGuard';
 
 export interface UseLayoutPipelineOptions {
   document: Document | null;
@@ -87,6 +88,7 @@ export interface UseLayoutPipelineOptions {
   onTotalPagesChange?: (totalPages: number) => void;
   onAnchorPositionsChange?: (positions: Map<string, number>) => void;
   onRenderedDomContextReady?: (context: RenderedDomContext) => void;
+  onPaintedPagesReady: () => void;
 }
 
 export interface UseLayoutPipelineReturn {
@@ -98,6 +100,9 @@ export interface UseLayoutPipelineReturn {
   contentWidth: number;
   runLayoutPipeline: (state: EditorState) => void;
   scheduleLayout: (state: EditorState) => void;
+  markPaintedPagesStale: () => void;
+  requestPaintedOverlayRefresh: () => void;
+  paintedPagesAreCurrent: () => boolean;
 }
 
 export function useLayoutPipeline(opts: UseLayoutPipelineOptions): UseLayoutPipelineReturn {
@@ -122,6 +127,7 @@ export function useLayoutPipeline(opts: UseLayoutPipelineOptions): UseLayoutPipe
     onTotalPagesChange,
     onAnchorPositionsChange,
     onRenderedDomContextReady,
+    onPaintedPagesReady,
   } = opts;
 
   const [pageLayout, setPageLayout] = useState<PageLayout | null>(null);
@@ -140,11 +146,19 @@ export function useLayoutPipeline(opts: UseLayoutPipelineOptions): UseLayoutPipe
   const onTotalPagesChangeRef = useRef(onTotalPagesChange);
   const onAnchorPositionsChangeRef = useRef(onAnchorPositionsChange);
   const onRenderedDomContextReadyRef = useRef(onRenderedDomContextReady);
+  const onPaintedPagesReadyRef = useRef(onPaintedPagesReady);
   const getHfPmDocRef = useRef(getHfPmDoc);
   onTotalPagesChangeRef.current = onTotalPagesChange;
   onAnchorPositionsChangeRef.current = onAnchorPositionsChange;
   onRenderedDomContextReadyRef.current = onRenderedDomContextReady;
+  onPaintedPagesReadyRef.current = onPaintedPagesReady;
   getHfPmDocRef.current = getHfPmDoc;
+
+  const paintedPagesGuardRef = useRef<PaintedPagesGuard | null>(null);
+  if (!paintedPagesGuardRef.current) {
+    paintedPagesGuardRef.current = createPaintedPagesGuard(() => onPaintedPagesReadyRef.current());
+  }
+  const successfulPaintRef = useRef<ReturnType<PaintedPagesGuard['startPaint']> | null>(null);
 
   // Total-pages notifier — fires only when count changes (including N → 0).
   const lastTotalPagesRef = useRef<number>(0);
@@ -266,28 +280,36 @@ export function useLayoutPipeline(opts: UseLayoutPipelineOptions): UseLayoutPipe
           const nodeLookup = indexNodesById(newNodes, newMetrics);
           painterRef.current.setNodeLookup(nodeLookup);
 
-          const paintPagesKind = paintPages(newPageLayout.pages, pagesContainerRef.current, {
-            pageGap,
-            showShadow: true,
-            pageBackground: 'var(--doc-page-bg, #ffffff)',
-            nodeLookup,
-            headerContent: headerContentForRender,
-            footerContent: footerContentForRender,
-            firstPageHeaderContent: firstPageHeaderForRender,
-            firstPageFooterContent: firstPageFooterForRender,
-            titlePg: hasTitlePg,
-            headerDistance: headerDistancePx,
-            footerDistance: footerDistancePx,
-            pageBorders,
-            theme,
-            watermark,
-            footnotesByPage,
-            resolvedCommentIds,
-          } as RenderPageOptions & {
-            pageGap?: number;
-            nodeLookup?: NodeLookup;
-            footnotesByPage?: Map<number, FootnoteRenderItem[]>;
-          });
+          const paintTicket = paintedPagesGuardRef.current!.startPaint();
+          let paintPagesKind: ReturnType<typeof paintPages>;
+          try {
+            paintPagesKind = paintPages(newPageLayout.pages, pagesContainerRef.current, {
+              pageGap,
+              showShadow: true,
+              pageBackground: 'var(--doc-page-bg, #ffffff)',
+              nodeLookup,
+              headerContent: headerContentForRender,
+              footerContent: footerContentForRender,
+              firstPageHeaderContent: firstPageHeaderForRender,
+              firstPageFooterContent: firstPageFooterForRender,
+              titlePg: hasTitlePg,
+              headerDistance: headerDistancePx,
+              footerDistance: footerDistancePx,
+              pageBorders,
+              theme,
+              watermark,
+              footnotesByPage,
+              resolvedCommentIds,
+            } as RenderPageOptions & {
+              pageGap?: number;
+              nodeLookup?: NodeLookup;
+              footnotesByPage?: Map<number, FootnoteRenderItem[]>;
+            });
+            successfulPaintRef.current = paintTicket;
+          } catch (error) {
+            paintedPagesGuardRef.current!.abandonPaint(paintTicket);
+            throw error;
+          }
 
           const vp = viewportLayoutRef.current;
           if (vp) {
@@ -439,6 +461,12 @@ export function useLayoutPipeline(opts: UseLayoutPipelineOptions): UseLayoutPipe
   // After `setLayout`, React still commits `totalHeight` / margin on the viewport wrapper.
   // Restoring scroll here (plus one rAF) matches the committed DOM scrollHeight.
   useLayoutEffect(() => {
+    const successfulPaint = successfulPaintRef.current;
+    successfulPaintRef.current = null;
+    if (successfulPaint) {
+      paintedPagesGuardRef.current?.finishPaint(successfulPaint);
+    }
+
     const pending = pendingScrollRestoreRef.current;
     if (!pending) return;
     pendingScrollRestoreRef.current = null;
@@ -457,6 +485,21 @@ export function useLayoutPipeline(opts: UseLayoutPipelineOptions): UseLayoutPipe
     });
     return () => cancelAnimationFrame(rafId);
   }, [pageLayout, getScrollContainer, pagesContainerRef]);
+
+  // Virtualization can populate a shell without running the full layout hook.
+  // Route that painter signal through the same readiness guard before any
+  // selection, caret, or decoration geometry reads the new DOM.
+  useEffect(() => {
+    const pages = pagesContainerRef.current;
+    if (!pages) return;
+    const onPainted = () => paintedPagesGuardRef.current?.requestOverlayRefresh();
+    pages.addEventListener('painter:painted', onPainted);
+    pages.addEventListener('docx-editor-react:request-overlay-refresh', onPainted);
+    return () => {
+      pages.removeEventListener('painter:painted', onPainted);
+      pages.removeEventListener('docx-editor-react:request-overlay-refresh', onPainted);
+    };
+  }, [pagesContainerRef]);
 
   // =========================================================================
   // Coalesced Layout (rAF throttle)
@@ -479,6 +522,16 @@ export function useLayoutPipeline(opts: UseLayoutPipelineOptions): UseLayoutPipe
   const scheduleLayout = useCallback((state: EditorState) => {
     schedulerRef.current!.schedule(state);
   }, []);
+  const markPaintedPagesStale = useCallback(() => {
+    paintedPagesGuardRef.current!.noteDocumentChange();
+  }, []);
+  const requestPaintedOverlayRefresh = useCallback(() => {
+    paintedPagesGuardRef.current!.requestOverlayRefresh();
+  }, []);
+  const paintedPagesAreCurrent = useCallback(
+    () => paintedPagesGuardRef.current?.pagesAreCurrent() ?? false,
+    []
+  );
 
   // Clean up pending rAF on unmount
   useEffect(() => {
@@ -495,5 +548,8 @@ export function useLayoutPipeline(opts: UseLayoutPipelineOptions): UseLayoutPipe
     contentWidth,
     runLayoutPipeline,
     scheduleLayout,
+    markPaintedPagesStale,
+    requestPaintedOverlayRefresh,
+    paintedPagesAreCurrent,
   };
 }

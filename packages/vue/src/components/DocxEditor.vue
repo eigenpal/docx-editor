@@ -234,7 +234,7 @@
             :get-view="getEditorViewForDecorations"
             :get-pages-container="getPagesContainerForDecorations"
             :zoom="zoom"
-            :transaction-version="stateTick"
+            :transaction-version="paintedOverlayTick"
           />
 
           <!-- Floating "Add comment" button — appears at the right edge
@@ -520,6 +520,7 @@ const hiddenPmRef = ref<HTMLElement | null>(null);
 const pagesRef = ref<HTMLElement | null>(null);
 const pagesViewportRef = ref<HTMLElement | null>(null);
 const stateTick = ref(0);
+const paintedOverlayTick = ref(0);
 const contentChangeSubscribers = new Set<(document: unknown) => void>();
 const selectionChangeSubscribers = new Set<(selection: unknown) => void>();
 let lastEmittedDocument: Document | null = null;
@@ -601,7 +602,6 @@ const {
   },
   onSelectionUpdate: () => {
     stateTick.value++;
-    updateSelectionOverlay();
     const view = editorView.value;
     // The prop mirrors React's `onSelectionChange`, which delivers a
     // `SelectionState` (formatting/style snapshot). The ref-API subscribers
@@ -664,31 +664,10 @@ const activeFormattingView = computed<EditorView | null>(
 
 // Registered in onMounted because `hfEdit` is destructured later in this script setup (TDZ).
 onMounted(() => {
-  setHfTransactionListener((_rId, view) => {
+  setHfTransactionListener((_rId, _view) => {
     // Re-derive toolbar state against the HF selection (incl. selection-only
     // moves the HF dispatch never reports to stateTick) — parity with React (#749).
     stateTick.value++;
-    // Defer a frame so the painter repaints, then re-measure the painted HF rect.
-    requestAnimationFrame(() => {
-      const edit = hfEdit.value;
-      if (!edit) return;
-      applyHfOverlay(view, edit.position);
-      const hfEl = nearestHfHostEl(edit.position);
-      const viewport = pagesViewportRef.value;
-      if (!hfEl || !viewport) return;
-      const el = hfEl.getBoundingClientRect();
-      const vp = viewport.getBoundingClientRect();
-      const z = zoom.value || 1;
-      hfEdit.value = {
-        ...edit,
-        targetRect: {
-          top: (el.top - vp.top + viewport.scrollTop) / z,
-          left: (el.left - vp.left + viewport.scrollLeft) / z,
-          width: el.width / z,
-          height: el.height / z,
-        },
-      };
-    });
   });
   watch(
     () => hfEdit.value,
@@ -712,7 +691,7 @@ onMounted(() => {
         (view.dom as HTMLElement).blur?.();
       }
       // Force the selection overlay to re-render so the body caret disappears.
-      selectionSync.updateSelectionOverlay();
+      requestOverlayRefresh();
     }
   );
 
@@ -722,10 +701,7 @@ onMounted(() => {
     if (!hfEdit.value || rafScroll) return;
     rafScroll = requestAnimationFrame(() => {
       rafScroll = 0;
-      const hf = hfEdit.value;
-      if (!hf?.headerFooter) return;
-      const view = getHfPmView(hf.headerFooter);
-      if (view) applyHfOverlay(view, hf.position);
+      requestOverlayRefresh();
     });
   }
   window.addEventListener('scroll', onHfScroll, true);
@@ -1120,6 +1096,34 @@ function updateSelectionOverlay() {
   selectionSync.updateSelectionOverlay();
 }
 
+function requestOverlayRefresh() {
+  pagesRef.value?.dispatchEvent(new CustomEvent('docx-editor-vue:request-overlay-refresh'));
+}
+
+function updateActiveHfOverlay() {
+  const edit = hfEdit.value;
+  if (!edit?.headerFooter) return;
+  const view = getHfPmView(edit.headerFooter);
+  if (!view) return;
+  applyHfOverlay(view, edit.position);
+
+  const hfEl = nearestHfHostEl(edit.position);
+  const viewport = pagesViewportRef.value;
+  if (!hfEl || !viewport) return;
+  const el = hfEl.getBoundingClientRect();
+  const vp = viewport.getBoundingClientRect();
+  const z = zoom.value || 1;
+  hfEdit.value = {
+    ...edit,
+    targetRect: {
+      top: (el.top - vp.top + viewport.scrollTop) / z,
+      left: (el.left - vp.left + viewport.scrollLeft) / z,
+      width: el.width / z,
+      height: el.height / z,
+    },
+  };
+}
+
 const isHfEditing = computed(() => hfEdit.value !== null);
 const selectionSync = useSelectionSync({
   editorView,
@@ -1133,15 +1137,17 @@ const selectionSync = useSelectionSync({
   pageLayout,
   nodes,
   metrics,
+  requestOverlayRefresh,
 });
 
-usePainterOverlayRefresh(pagesRef, updateSelectionOverlay, () => {
-  const edit = hfEdit.value;
-  if (!edit?.headerFooter) return;
-  const view = getHfPmView(edit.headerFooter);
-  if (view) applyHfOverlay(view, edit.position);
-});
-updateSelectionOverlay();
+usePainterOverlayRefresh(
+  pagesRef,
+  () => {
+    updateSelectionOverlay();
+    paintedOverlayTick.value++;
+  },
+  updateActiveHfOverlay
+);
 
 onBeforeUnmount(() => {
   clearOverlay();
