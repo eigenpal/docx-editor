@@ -37,6 +37,7 @@ interface RefApiInputs {
   documentRef: React.MutableRefObject<Document | null>;
   pageLayout: PageLayout | null;
   runLayoutPipeline: (state: EditorState) => void;
+  requestOverlayRefresh: () => void;
   scrollToPositionImpl: (pmPos: number, forParaIdScroll?: boolean) => void;
   scrollToParaIdImpl: (paraId: string, options?: ScrollToParaIdOptions) => boolean;
   scrollToPageImpl: (pageNumber: number) => void;
@@ -73,6 +74,7 @@ function buildRefApi(inputs: RefApiInputs): PagedEditorRef {
     documentRef,
     pageLayout,
     runLayoutPipeline,
+    requestOverlayRefresh,
     scrollToPositionImpl,
     scrollToParaIdImpl,
     scrollToPageImpl,
@@ -99,7 +101,10 @@ function buildRefApi(inputs: RefApiInputs): PagedEditorRef {
     getLayout: () => pageLayout,
     relayout: () => {
       const state = hiddenPMRef.current?.getState();
-      if (state) runLayoutPipeline(state);
+      if (state) {
+        runLayoutPipeline(state);
+        requestOverlayRefresh();
+      }
     },
     scrollToPosition: scrollToPositionImpl,
     scrollToParaId: scrollToParaIdImpl,
@@ -174,6 +179,7 @@ export function usePagedEditorRefApi(opts: UsePagedEditorRefApiOptions): void {
     documentRef,
     pageLayout,
     runLayoutPipeline,
+    requestOverlayRefresh,
     scrollToPositionImpl,
     scrollToParaIdImpl,
     scrollToPageImpl,
@@ -190,12 +196,20 @@ export function usePagedEditorRefApi(opts: UsePagedEditorRefApiOptions): void {
         documentRef,
         pageLayout,
         runLayoutPipeline,
+        requestOverlayRefresh,
         scrollToPositionImpl,
         scrollToParaIdImpl,
         scrollToPageImpl,
         setIsFocused,
       }),
-    [pageLayout, runLayoutPipeline, scrollToPositionImpl, scrollToParaIdImpl, scrollToPageImpl]
+    [
+      pageLayout,
+      runLayoutPipeline,
+      requestOverlayRefresh,
+      scrollToPositionImpl,
+      scrollToParaIdImpl,
+      scrollToPageImpl,
+    ]
   );
 
   // onReady mirror — dep array intentionally omits `scrollToPositionImpl`
@@ -210,6 +224,7 @@ export function usePagedEditorRefApi(opts: UsePagedEditorRefApiOptions): void {
           documentRef,
           pageLayout,
           runLayoutPipeline,
+          requestOverlayRefresh,
           scrollToPositionImpl,
           scrollToParaIdImpl,
           scrollToPageImpl,
@@ -217,6 +232,6 @@ export function usePagedEditorRefApi(opts: UsePagedEditorRefApiOptions): void {
         })
       );
     }
-  }, [pageLayout, runLayoutPipeline, scrollToParaIdImpl, scrollToPageImpl]);
+  }, [pageLayout, runLayoutPipeline, requestOverlayRefresh, scrollToParaIdImpl, scrollToPageImpl]);
   // NOTE: onReady removed from deps — accessed via ref to prevent infinite loops.
 }

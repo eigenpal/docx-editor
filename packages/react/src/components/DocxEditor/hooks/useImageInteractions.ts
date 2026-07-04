@@ -34,6 +34,8 @@ export interface UseImageInteractionsOptions {
   zoom: number;
   isImageInteractingRef: React.MutableRefObject<boolean>;
   getPositionFromMouse: (clientX: number, clientY: number) => number | null;
+  pagesAreCurrent: () => boolean;
+  requestOverlayRefresh: () => void;
 }
 
 export interface UseImageInteractionsReturn {
@@ -56,6 +58,8 @@ export function useImageInteractions(
     zoom,
     isImageInteractingRef,
     getPositionFromMouse,
+    pagesAreCurrent,
+    requestOverlayRefresh,
   } = opts;
 
   const activeView = useCallback(
@@ -78,12 +82,16 @@ export function useImageInteractions(
 
   const handleImageResize = useCallback(
     (pmPos: number, newWidth: number, newHeight: number) => {
+      if (!pagesAreCurrent()) {
+        requestOverlayRefresh();
+        return;
+      }
       const view = activeView();
       if (!view) return;
       const sel = commitImageResize(view, pmPos, newWidth, newHeight);
       if (sel !== null) selectImage(view, sel);
     },
-    [activeView, selectImage]
+    [activeView, pagesAreCurrent, requestOverlayRefresh, selectImage]
   );
 
   const handleImageResizeStart = useCallback(() => {
@@ -96,6 +104,10 @@ export function useImageInteractions(
 
   const handleImageDragMove = useCallback(
     (pmPos: number, clientX: number, clientY: number) => {
+      if (!pagesAreCurrent()) {
+        requestOverlayRefresh();
+        return;
+      }
       const view = activeView();
       if (!view) return;
       const node = view.state.doc.nodeAt(pmPos);
@@ -147,6 +159,8 @@ export function useImageInteractions(
       zoom,
       hiddenPMRef,
       pagesContainerRef,
+      pagesAreCurrent,
+      requestOverlayRefresh,
       selectImage,
     ]
   );

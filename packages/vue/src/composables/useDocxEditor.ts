@@ -328,18 +328,27 @@ export function useDocxEditor(options: UseDocxEditorOptions): UseDocxEditorRetur
   const nodes = shallowRef<ContentNode[]>([]);
   const metrics = shallowRef<LayoutMetrics[]>([]);
   const paintedPagesGuard = createPaintedPagesGuard(() => {
-    pagesContainer.value?.dispatchEvent(new CustomEvent('docx-editor-vue:painted-pages-ready'));
+    const pages = pagesContainer.value;
+    if (!pages) return;
+    pages.dataset.overlayPagesCurrent = 'true';
+    pages.dispatchEvent(new CustomEvent('docx-editor-vue:painted-pages-ready'));
   });
+  let paintingPages = false;
   const markPaintedPagesStale = () => {
     paintedPagesGuard.noteDocumentChange();
-    pagesContainer.value?.dispatchEvent(new CustomEvent('docx-editor-vue:painted-pages-stale'));
+    const pages = pagesContainer.value;
+    if (!pages) return;
+    pages.dataset.overlayPagesCurrent = 'false';
+    pages.dispatchEvent(new CustomEvent('docx-editor-vue:painted-pages-stale'));
   };
 
   watch(
     pagesContainer,
     (pages, _previous, onCleanup) => {
       if (!pages) return;
-      const requestRefresh = () => paintedPagesGuard.requestOverlayRefresh();
+      const requestRefresh = () => {
+        if (!paintingPages) paintedPagesGuard.requestOverlayRefresh();
+      };
       pages.addEventListener('painter:painted', requestRefresh);
       pages.addEventListener('docx-editor-vue:request-overlay-refresh', requestRefresh);
       onCleanup(() => {
@@ -431,7 +440,9 @@ export function useDocxEditor(options: UseDocxEditorOptions): UseDocxEditorRetur
       // Step 6: Build block lookup and paint
       const nodeLookup = indexNodesById(newNodes, newMetrics);
 
+      container.dataset.overlayPagesCurrent = 'false';
       const paintTicket = paintedPagesGuard.startPaint();
+      paintingPages = true;
       try {
         paintPages(newPageLayout.pages, container, {
           pageGap,
@@ -453,6 +464,8 @@ export function useDocxEditor(options: UseDocxEditorOptions): UseDocxEditorRetur
       } catch (error) {
         paintedPagesGuard.abandonPaint(paintTicket);
         throw error;
+      } finally {
+        paintingPages = false;
       }
 
       // paintPages sets display:flex on the container — fix scrolling
@@ -468,7 +481,9 @@ export function useDocxEditor(options: UseDocxEditorOptions): UseDocxEditorRetur
         container,
         enclosingSdtGroupIds(state.doc, state.selection.from, state.selection.to)
       );
-      paintedPagesGuard.finishPaint(paintTicket);
+      if (paintedPagesGuard.finishPaint(paintTicket)) {
+        container.dataset.overlayPagesCurrent = 'true';
+      }
     } catch (err) {
       console.error('[useDocxEditor] Layout pipeline error:', err);
       onError?.(err instanceof Error ? err : new Error(String(err)));
@@ -595,6 +610,7 @@ export function useDocxEditor(options: UseDocxEditorOptions): UseDocxEditorRetur
     isReady.value = true;
 
     // Initial layout
+    paintedPagesGuard.requestOverlayRefresh();
     runLayoutPipeline(state);
 
     // Auto-focus the hidden ProseMirror so the user can start typing
@@ -778,10 +794,11 @@ export function useDocxEditor(options: UseDocxEditorOptions): UseDocxEditorRetur
           // transactions don't move text so the painter has nothing new.
           if (tr.docChanged && editorState.value) {
             markPaintedPagesStale();
+            paintedPagesGuard.requestOverlayRefresh();
             runLayoutPipeline(editorState.value);
           }
           onHfTransactionRef.value?.(rId, view, tr.docChanged);
-          paintedPagesGuard.requestOverlayRefresh();
+          if (!tr.docChanged) paintedPagesGuard.requestOverlayRefresh();
         },
       });
       hfViews.set(rId, view);
@@ -973,7 +990,11 @@ export function useDocxEditor(options: UseDocxEditorOptions): UseDocxEditorRetur
     getCommands,
     /** Force a re-layout without a doc change (e.g. after page-setup changes). */
     reLayout() {
-      if (editorView.value) runLayoutPipeline(editorView.value.state);
+      if (editorView.value) {
+        markPaintedPagesStale();
+        paintedPagesGuard.requestOverlayRefresh();
+        runLayoutPipeline(editorView.value.state);
+      }
     },
 
     // HF unification surface — phase 6 of openspec/changes/unify-hf-editing.

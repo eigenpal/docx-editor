@@ -3,13 +3,22 @@ interface PaintTicket {
   paintEpoch: number;
 }
 
+export function readCurrentPaintedPages<T>(
+  pagesAreCurrent: () => boolean,
+  read: () => T
+): T | null {
+  return pagesAreCurrent() ? read() : null;
+}
+
 export interface PaintedPagesGuard {
   noteDocumentChange: () => void;
   startPaint: () => PaintTicket;
-  finishPaint: (ticket: PaintTicket) => void;
+  finishPaint: (ticket: PaintTicket) => boolean;
   abandonPaint: (ticket: PaintTicket) => void;
   requestOverlayRefresh: () => void;
   pagesAreCurrent: () => boolean;
+  isDisposed: () => boolean;
+  revive: () => void;
   dispose: () => void;
 }
 
@@ -23,9 +32,10 @@ export function createPaintedPagesGuard(refreshOverlays: () => void): PaintedPag
   let documentEpoch = 0;
   let newestPaintEpoch = 0;
   let paintedDocumentEpoch: number | null = null;
+  let refreshPending = false;
   let disposed = false;
 
-  const pagesAreCurrent = () => paintedDocumentEpoch === documentEpoch;
+  const pagesAreCurrent = () => !disposed && paintedDocumentEpoch === documentEpoch;
 
   return {
     noteDocumentChange() {
@@ -46,11 +56,15 @@ export function createPaintedPagesGuard(refreshOverlays: () => void): PaintedPag
         ticket.paintEpoch !== newestPaintEpoch ||
         ticket.documentEpoch !== documentEpoch
       ) {
-        return;
+        return false;
       }
 
       paintedDocumentEpoch = documentEpoch;
-      refreshOverlays();
+      if (refreshPending) {
+        refreshPending = false;
+        refreshOverlays();
+      }
+      return pagesAreCurrent();
     },
 
     abandonPaint(_ticket) {
@@ -61,14 +75,20 @@ export function createPaintedPagesGuard(refreshOverlays: () => void): PaintedPag
       if (disposed) return;
       if (pagesAreCurrent()) {
         refreshOverlays();
+      } else {
+        refreshPending = true;
       }
     },
 
     pagesAreCurrent,
+    isDisposed: () => disposed,
+    revive() {
+      disposed = false;
+    },
 
     dispose() {
       disposed = true;
-      paintedDocumentEpoch = null;
+      refreshPending = false;
     },
   };
 }

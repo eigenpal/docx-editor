@@ -48,6 +48,7 @@ import {
 } from './internals/styles';
 import { viewportMinHeightPx } from './internals/scrollUtils';
 import { useLayoutPipeline } from './hooks/useLayoutPipeline';
+import { transactionNeedsDirectOverlayRequest } from './hooks/paintedPagesGuard';
 import { useSelectionOverlay } from './hooks/useSelectionOverlay';
 import { useImageInteractions } from './hooks/useImageInteractions';
 import { usePagedScrollApi } from './hooks/usePagedScrollApi';
@@ -490,19 +491,6 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
       requestOverlayRefresh: requestPaintedOverlayRefresh,
     });
 
-    paintedOverlayRefreshRef.current = () => {
-      const state = hiddenPMRef.current?.getState();
-      if (state) handleSelectionChange(state);
-      notifyDecorationLayer();
-      pagesContainerRef.current?.dispatchEvent(
-        new CustomEvent('docx-editor-react:painted-pages-ready')
-      );
-    };
-
-    // =========================================================================
-    // Event Handlers
-    // =========================================================================
-
     /**
      * Handle PM transaction - re-layout on content/selection change.
      */
@@ -525,7 +513,9 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
         // Selection, caret, and decoration refreshes share one readiness gate.
         // Selection-only/meta transactions run now when pages are current;
         // document changes retain and coalesce this request until paint.
-        requestPaintedOverlayRefresh();
+        if (transactionNeedsDirectOverlayRequest(transaction)) {
+          requestPaintedOverlayRefresh();
+        }
       },
       [markPaintedPagesStale, requestPaintedOverlayRefresh, scheduleLayout]
       // NOTE: onDocumentChange removed from dependencies - accessed via ref to prevent infinite loops
@@ -562,6 +552,7 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
       clearTableInsertTimer,
       hideTableInsertButton,
       getPositionFromMouse,
+      flushPendingImageSelection,
     } = usePagesPointer({
       pagesContainerRef,
       hiddenPMRef,
@@ -584,9 +575,21 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
       setSelectionGeometry,
       setCaretPosition,
       buildImageSelectionInfo,
+      pagesAreCurrent: paintedPagesAreCurrent,
+      requestOverlayRefresh: requestPaintedOverlayRefresh,
       setIsFocused,
       scrollToPositionImpl,
     });
+
+    paintedOverlayRefreshRef.current = () => {
+      if (flushPendingImageSelection()) return;
+      const state = hiddenPMRef.current?.getState();
+      if (state) handleSelectionChange(state);
+      notifyDecorationLayer();
+      pagesContainerRef.current?.dispatchEvent(
+        new CustomEvent('docx-editor-react:painted-pages-ready')
+      );
+    };
 
     /**
      * Handle focus on container - redirect to hidden PM.
@@ -652,6 +655,8 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
       zoom,
       isImageInteractingRef,
       getPositionFromMouse,
+      pagesAreCurrent: paintedPagesAreCurrent,
+      requestOverlayRefresh: requestPaintedOverlayRefresh,
     });
 
     /**
@@ -781,6 +786,7 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
       documentRef,
       pageLayout,
       runLayoutPipeline,
+      requestOverlayRefresh: requestPaintedOverlayRefresh,
       scrollToPositionImpl,
       scrollToParaIdImpl,
       scrollToPageImpl,
@@ -905,6 +911,8 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
             imageInfo={selectedImageInfo}
             zoom={zoom}
             isFocused={isFocused}
+            pagesAreCurrent={paintedPagesAreCurrent}
+            requestOverlayRefresh={requestPaintedOverlayRefresh}
             onResize={handleImageResize}
             onResizeStart={handleImageResizeStart}
             onResizeEnd={handleImageResizeEnd}

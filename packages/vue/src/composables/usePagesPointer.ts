@@ -40,6 +40,7 @@ import {
   createCellDragTracker,
   findCellPosFromPmPos,
 } from '@eigenpal/docx-editor-core/prosemirror/cellDragSelection';
+import { readCurrentPaintedPages } from './paintedPagesGuard';
 
 type TableResizeApi = {
   tryStartResize: (e: MouseEvent, view: EditorView) => boolean;
@@ -86,6 +87,8 @@ export interface UsePagesPointerOptions {
   reLayout: () => void;
   emit: (event: string, ...args: unknown[]) => void;
   clearOverlay: () => void;
+  pagesAreCurrent: () => boolean;
+  requestOverlayRefresh: () => void;
   /**
    * Vue parity for the HF editing unification (openspec/changes/unify-hf-editing).
    * Re-mount HF EditorViews when `package.headers/footers` content
@@ -124,6 +127,7 @@ export interface UsePagesPointerReturn {
   clearTableInsertTimer: () => void;
   handleHfSave: (content: BlockContent[]) => void;
   handleHfRemove: () => void;
+  flushPendingImageSelection: () => boolean;
 }
 
 export function usePagesPointer(opts: UsePagesPointerOptions): UsePagesPointerReturn {
@@ -152,6 +156,7 @@ export function usePagesPointer(opts: UsePagesPointerOptions): UsePagesPointerRe
   // ─── Drag-to-select ─────────────────────────────────────────────────────
   let isDragging = false;
   let dragAnchor: number | null = null;
+  let pendingImageSelection: { clientX: number; clientY: number } | null = null;
   // Promote a drag that crosses table-cell boundaries into a CellSelection
   // (shared with React via core), so multi-cell ops are reachable by dragging.
   const cellDrag = createCellDragTracker();
@@ -202,6 +207,46 @@ export function usePagesPointer(opts: UsePagesPointerOptions): UsePagesPointerRe
       if (v) return v;
     }
     return opts.editorView.value;
+  }
+
+  function selectCurrentImageElement(imageEl: HTMLElement): boolean {
+    const docFrom = readCurrentPaintedPages(opts.pagesAreCurrent, () => {
+      const parsed = Number(imageEl.dataset.docFrom);
+      return Number.isFinite(parsed) ? parsed : null;
+    });
+    if (docFrom === null) return false;
+
+    const view = activeView();
+    if (!view) return false;
+    try {
+      view.dispatch(view.state.tr.setSelection(NodeSelection.create(view.state.doc, docFrom)));
+    } catch {
+      return false;
+    }
+    const imageInfo = readCurrentPaintedPages(opts.pagesAreCurrent, () => ({
+      element: imageEl,
+      pmPos: docFrom,
+      width: imageEl.offsetWidth,
+      height: imageEl.offsetHeight,
+    }));
+    if (imageInfo) opts.selectedImage.value = imageInfo;
+    opts.clearOverlay();
+    view.focus();
+    return true;
+  }
+
+  function flushPendingImageSelection(): boolean {
+    const pending = pendingImageSelection;
+    if (!pending || !opts.pagesAreCurrent()) return false;
+    pendingImageSelection = null;
+
+    const pages = opts.pagesRef.value;
+    if (!pages) return false;
+    const stack = pages.ownerDocument.elementsFromPoint(pending.clientX, pending.clientY);
+    const target = stack.find((candidate) => pages.contains(candidate));
+    if (!(target instanceof HTMLElement)) return false;
+    const imageEl = findImageElement(target);
+    return imageEl ? selectCurrentImageElement(imageEl) : false;
   }
 
   function setPmSelection(anchor: number, head?: number) {
@@ -581,26 +626,18 @@ export function usePagesPointer(opts: UsePagesPointerOptions): UsePagesPointerRe
     if (imageEl) {
       event.preventDefault();
       event.stopPropagation();
-      const docFrom = Number(imageEl.dataset.docFrom);
-      if (!isNaN(docFrom)) {
-        try {
-          view.dispatch(view.state.tr.setSelection(NodeSelection.create(view.state.doc, docFrom)));
-        } catch {
-          // Position may not be a valid node anchor.
-        }
-        opts.selectedImage.value = {
-          element: imageEl,
-          pmPos: docFrom,
-          width: imageEl.offsetWidth,
-          height: imageEl.offsetHeight,
-        };
-        opts.clearOverlay();
+      if (!opts.pagesAreCurrent()) {
+        pendingImageSelection = { clientX: event.clientX, clientY: event.clientY };
+        opts.requestOverlayRefresh();
+        view.focus();
+        return;
       }
-      view.focus();
+      selectCurrentImageElement(imageEl);
       return;
     }
 
     // Click outside an image clears the image selection.
+    pendingImageSelection = null;
     opts.selectedImage.value = null;
 
     event.preventDefault();
@@ -735,6 +772,7 @@ export function usePagesPointer(opts: UsePagesPointerOptions): UsePagesPointerRe
     handlePagesDoubleClick,
     handleTableInsertClick,
     clearTableInsertTimer,
+    flushPendingImageSelection,
     // HF editor save/remove (bound to InlineHeaderFooterEditor events)
     handleHfSave,
     handleHfRemove,
