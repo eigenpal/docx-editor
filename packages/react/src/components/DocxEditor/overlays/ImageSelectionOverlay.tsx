@@ -41,6 +41,10 @@ export interface ImageSelectionOverlayProps {
   zoom: number;
   /** Whether the editor is focused */
   isFocused: boolean;
+  /** Adapter-private predicate guarding painted DOM geometry reads. */
+  pagesAreCurrent: () => boolean;
+  /** Retain a geometry refresh until current pages are available. */
+  requestOverlayRefresh: () => void;
   /** Callback when image is resized */
   onResize?: (pmPos: number, newWidth: number, newHeight: number) => void;
   /** Callback when resize starts (to prevent other interactions) */
@@ -148,6 +152,8 @@ export function ImageSelectionOverlay({
   imageInfo,
   zoom,
   isFocused,
+  pagesAreCurrent,
+  requestOverlayRefresh,
   onResize,
   onResizeStart,
   onResizeEnd,
@@ -196,6 +202,11 @@ export function ImageSelectionOverlay({
       setOverlayRect(null);
       return;
     }
+    if (!pagesAreCurrent()) {
+      setOverlayRect(null);
+      requestOverlayRefresh();
+      return;
+    }
 
     // Use the overlay's own offsetParent (the viewport div) for correct coordinates
     const parent = overlayRef.current.offsetParent as HTMLElement | null;
@@ -214,7 +225,7 @@ export function ImageSelectionOverlay({
       width: imageRect.width / zoom,
       height: imageRect.height / zoom,
     });
-  }, [imageInfo, zoom]);
+  }, [imageInfo, pagesAreCurrent, requestOverlayRefresh, zoom]);
 
   // Update position on mount and when dependencies change
   useEffect(() => {
@@ -251,6 +262,10 @@ export function ImageSelectionOverlay({
   const handleResizeStart = useCallback(
     (handle: ResizeHandle, e: React.MouseEvent) => {
       if (!imageInfo || !overlayRect) return;
+      if (!pagesAreCurrent()) {
+        requestOverlayRefresh();
+        return;
+      }
 
       e.preventDefault();
       e.stopPropagation();
@@ -323,13 +338,17 @@ export function ImageSelectionOverlay({
       window.addEventListener('mousemove', handleMouseMove);
       window.addEventListener('mouseup', handleMouseUp);
     },
-    [imageInfo, overlayRect]
+    [imageInfo, overlayRect, pagesAreCurrent, requestOverlayRefresh]
   );
 
   // Handle drag-to-move: mousedown on image body (not a handle) starts a move drag
   const handleBodyMouseDown = useCallback(
     (e: React.MouseEvent) => {
       if (!imageInfo || !overlayRect) return;
+      if (!pagesAreCurrent()) {
+        requestOverlayRefresh();
+        return;
+      }
 
       e.preventDefault();
       e.stopPropagation();
@@ -393,7 +412,7 @@ export function ImageSelectionOverlay({
       window.addEventListener('mousemove', handleMouseMove);
       window.addEventListener('mouseup', handleMouseUp);
     },
-    [imageInfo, overlayRect]
+    [imageInfo, overlayRect, pagesAreCurrent, requestOverlayRefresh]
   );
 
   // Always render the container div so the ref is available for position calculation.

@@ -216,6 +216,20 @@ export function DocxEditorPagedArea({
     Array<{ top: number; left: number; width: number; height: number }>
   >([]);
 
+  const getOwnedPagesElement = useCallback(
+    () => editorContentRef.current?.querySelector<HTMLElement>('.paged-editor__pages') ?? null,
+    [editorContentRef]
+  );
+
+  const getOwnedHfDomScope = useCallback((): globalThis.Document | null => {
+    const root = editorContentRef.current;
+    if (!root) return null;
+    return {
+      querySelectorAll: root.querySelectorAll.bind(root),
+      defaultView: root.ownerDocument.defaultView,
+    } as unknown as globalThis.Document;
+  }, [editorContentRef]);
+
   // The caret/selection rects come back from core in viewport coords. The
   // overlay is portalled into the (`position: relative`) sibling parent of
   // `.paged-editor__pages` and positioned `absolute`, so the browser moves it
@@ -226,17 +240,20 @@ export function DocxEditorPagedArea({
   // scroll delta and the caret would drift away from the footer (#671
   // follow-up). Converting ONCE here yields a scroll-invariant value that the
   // absolutely-positioned div tracks natively with zero per-frame JS.
-  const toHfHostLocal = useCallback(<T extends { top: number; left: number }>(rect: T): T => {
-    const pagesEl = window.document.querySelector('.paged-editor__pages') as HTMLElement | null;
-    const host = pagesEl?.parentElement as HTMLElement | null;
-    if (!host) return rect;
-    const c = host.getBoundingClientRect();
-    return {
-      ...rect,
-      top: rect.top - c.top + host.scrollTop,
-      left: rect.left - c.left + host.scrollLeft,
-    };
-  }, []);
+  const toHfHostLocal = useCallback(
+    <T extends { top: number; left: number }>(rect: T): T => {
+      const pagesEl = getOwnedPagesElement();
+      const host = pagesEl?.parentElement as HTMLElement | null;
+      if (!host) return rect;
+      const c = host.getBoundingClientRect();
+      return {
+        ...rect,
+        top: rect.top - c.top + host.scrollTop,
+        left: rect.left - c.left + host.scrollLeft,
+      };
+    },
+    [getOwnedPagesElement]
+  );
 
   // Recompute the painted HF overlay (caret + drag-selection rects + multi-cell
   // highlight) for the active section from the live HF view. Called on engage,
@@ -249,19 +266,19 @@ export function DocxEditorPagedArea({
         setHfSelectionGeometry([]);
         return;
       }
-      const caret = computeHfCaretRectFromView(view, hfEditPosition, window.document, activeHfRId);
+      const domScope = getOwnedHfDomScope();
+      if (!domScope) return;
+      const caret = computeHfCaretRectFromView(view, hfEditPosition, domScope, activeHfRId);
       setHfCaretRect(caret ? toHfHostLocal(caret) : null);
       setHfSelectionGeometry(
-        readHfSelectionGeometry(view, hfEditPosition, window.document, activeHfRId).map(
-          toHfHostLocal
-        )
+        readHfSelectionGeometry(view, hfEditPosition, domScope, activeHfRId).map(toHfHostLocal)
       );
-      const pagesEl = window.document.querySelector('.paged-editor__pages') as HTMLElement | null;
+      const pagesEl = getOwnedPagesElement();
       // Multi-cell selection renders via `.layout-table-cell-selected`, scoped
       // to the active section so footer selections don't light up header cells.
       if (pagesEl) applyCellSelectionHighlight(pagesEl, view.state, { scope: hfEditPosition });
     },
-    [activeHfRId, hfEditPosition, toHfHostLocal]
+    [activeHfRId, getOwnedHfDomScope, getOwnedPagesElement, hfEditPosition, toHfHostLocal]
   );
 
   // Initial-caret-on-engage: when the user double-clicks into HF mode the
@@ -282,37 +299,26 @@ export function DocxEditorPagedArea({
       if (view) applyHfOverlay(view);
     };
 
-    // Deterministic "painter is done" signal — the shared painter dispatches
-    // `painter:painted` whenever page DOM changes, including lazy virtualized
-    // population. Listen instead of relying only on an rAF chain so the measurement sees the fresh
-    // `data-doc-from` spans. Also invalidate the cached HF DOM snapshot so
-    // the next caret compute re-walks the host.
-    const pagesEl = window.document.querySelector('.paged-editor__pages') as HTMLElement | null;
-    const onPainted = () => {
+    // PagedEditor emits this adapter-private signal only after its readiness
+    // guard confirms that visible DOM matches the latest document epoch.
+    const pagesEl = getOwnedPagesElement();
+    const onPagesReady = () => {
       invalidateHfDomCache();
       measure();
     };
-    pagesEl?.addEventListener('painter:painted', onPainted);
+    pagesEl?.addEventListener('docx-editor-react:painted-pages-ready', onPagesReady);
+    pagesEl?.dispatchEvent(new CustomEvent('docx-editor-react:request-overlay-refresh'));
 
-    // Safety: if the painter doesn't fire for the initial engage (no doc
-    // change → no layout pass), still measure on the next frame so the
-    // caret shows up at all.
-    const raf = requestAnimationFrame(measure);
-
-    // Resize still needs a recompute because the painter re-runs after a
-    // viewport resize and the span layout shifts. The painter dispatches
-    // `painter:painted` after its rerun, but the listener may have been
-    // re-registered between the two — wire resize as a belt-and-braces.
-    const onResize = () => measure();
+    const onResize = () =>
+      pagesEl?.dispatchEvent(new CustomEvent('docx-editor-react:request-overlay-refresh'));
     window.addEventListener('resize', onResize);
 
     return () => {
-      cancelAnimationFrame(raf);
-      pagesEl?.removeEventListener('painter:painted', onPainted);
+      pagesEl?.removeEventListener('docx-editor-react:painted-pages-ready', onPagesReady);
       window.removeEventListener('resize', onResize);
       invalidateHfDomCache();
     };
-  }, [hfEditPosition, hfEditorRef, applyHfOverlay]);
+  }, [hfEditPosition, hfEditorRef, applyHfOverlay, getOwnedPagesElement]);
 
   return (
     <>
@@ -334,35 +340,8 @@ export function DocxEditorPagedArea({
         isSuggesting={isSuggesting}
         author={author}
         onHfTransaction={(rId, view, docChanged) => {
-          // Phase 5: the persistent HF PM is the sole editor. On every
-          // transaction (typing, click → setSelection, undo/redo) we need
-          // the caret to follow — deferred to rAF so the painter's repaint
-          // (triggered by `runLayoutPipeline` inside PagedEditor) lands
-          // before we measure against `data-doc-from` spans. Toolbar
-          // selection state still rides through `onSelectionChange` on
-          // the inline overlay's old wiring path, which now reads from
-          // the persistent view via `hfEditorRef.getView()`.
-          // Painter dispatches `painter:painted` after `paintPages`.
-          // Wait for it so the cache invalidation + caret measurement sees
-          // the fresh span layout. Selection-only transactions skip the
-          // painter, so use a one-shot rAF as a fallback.
-          const pagesEl = window.document.querySelector(
-            '.paged-editor__pages'
-          ) as HTMLElement | null;
-          let painted = false;
-          const apply = () => {
-            if (painted) return;
-            painted = true;
-            invalidateHfDomCache();
-            applyHfOverlay(view);
-          };
-          pagesEl?.addEventListener('painter:painted', apply, { once: true });
-          requestAnimationFrame(() => {
-            if (!painted) {
-              pagesEl?.removeEventListener('painter:painted', apply);
-              apply();
-            }
-          });
+          // Geometry refresh is driven by PagedEditor's readiness signal.
+          // This callback only publishes selection state and host notification.
           onSelectionChange(extractSelectionState(view.state));
           onHfTransaction?.(rId, view, docChanged);
         }}
@@ -496,9 +475,7 @@ export function DocxEditorPagedArea({
       {hfEditPosition &&
         (hfCaretRect || hfSelectionGeometry.length > 0) &&
         (() => {
-          const pagesEl = window.document.querySelector(
-            '.paged-editor__pages'
-          ) as HTMLElement | null;
+          const pagesEl = getOwnedPagesElement();
           const host = pagesEl?.parentElement as HTMLElement | null;
           if (!pagesEl || !host) return null;
           return createPortal(

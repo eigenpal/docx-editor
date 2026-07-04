@@ -25,7 +25,7 @@ import type { OffscreenEditorHostRef } from '../OffscreenEditorHost';
 export interface UseLayoutTriggersOptions {
   hiddenPMRef: React.RefObject<OffscreenEditorHostRef | null>;
   runLayoutPipeline: (state: EditorState) => void;
-  updateSelectionOverlay: (state: EditorState) => void;
+  requestOverlayRefresh: () => void;
   headerContent?: HeaderFooter | null;
   footerContent?: HeaderFooter | null;
   firstPageHeaderContent?: HeaderFooter | null;
@@ -36,7 +36,7 @@ export function useLayoutTriggers(opts: UseLayoutTriggersOptions): void {
   const {
     hiddenPMRef,
     runLayoutPipeline,
-    updateSelectionOverlay,
+    requestOverlayRefresh,
     headerContent,
     footerContent,
     firstPageHeaderContent,
@@ -52,7 +52,7 @@ export function useLayoutTriggers(opts: UseLayoutTriggersOptions): void {
         resetCanvasContext();
         clearAllCaches();
         runLayoutPipeline(view.state);
-        updateSelectionOverlay(view.state);
+        requestOverlayRefresh();
       }
     };
     window.document.fonts.addEventListener('loadingdone', handleFontsLoaded);
@@ -73,6 +73,7 @@ export function useLayoutTriggers(opts: UseLayoutTriggersOptions): void {
     const view = hiddenPMRef.current?.getView();
     if (view) {
       runLayoutPipeline(view.state);
+      requestOverlayRefresh();
     }
   }, [
     headerContent,
