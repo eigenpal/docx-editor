@@ -50,6 +50,7 @@ export interface UseSelectionOverlayOptions {
   hiddenPMRef: React.RefObject<OffscreenEditorHostRef | null>;
   isImageInteractingRef: React.MutableRefObject<boolean>;
   onSelectionChangeRef: React.MutableRefObject<((from: number, to: number) => void) | undefined>;
+  requestOverlayRefresh: () => void;
 }
 
 export interface UseSelectionOverlayReturn {
@@ -75,6 +76,7 @@ export function useSelectionOverlay(opts: UseSelectionOverlayOptions): UseSelect
     hiddenPMRef,
     isImageInteractingRef,
     onSelectionChangeRef,
+    requestOverlayRefresh,
   } = opts;
 
   const [selectionGeometry, setSelectionGeometry] = useState<SelectionBox[]>([]);
@@ -240,29 +242,28 @@ export function useSelectionOverlay(opts: UseSelectionOverlayOptions): UseSelect
         updateSelectionOverlay(state);
       }
 
-      // Defer image-selection check until after layout updates so PM positions
-      // resolve against painted DOM.
-      requestAnimationFrame(() => {
-        const view = hiddenPMRef.current?.getView();
-        if (!view) {
-          setSelectedImageInfo(null);
+      // The readiness guard calls this only after current pages are painted,
+      // so image anchors can be resolved synchronously without leaving a
+      // deferred DOM read that a newer transaction could overtake.
+      const view = hiddenPMRef.current?.getView();
+      if (!view) {
+        setSelectedImageInfo(null);
+        return;
+      }
+      const { selection: sel } = view.state;
+      if (sel instanceof NodeSelection && sel.node.type.name === 'image') {
+        const pmPos = sel.from;
+        const imgEl = pagesContainerRef.current
+          ? findBodyPmAnchor(pagesContainerRef.current, pmPos)
+          : null;
+        if (imgEl) {
+          setSelectedImageInfo(buildImageSelectionInfo(imgEl, pmPos));
           return;
         }
-        const { selection: sel } = view.state;
-        if (sel instanceof NodeSelection && sel.node.type.name === 'image') {
-          const pmPos = sel.from;
-          const imgEl = pagesContainerRef.current
-            ? findBodyPmAnchor(pagesContainerRef.current, pmPos)
-            : null;
-          if (imgEl) {
-            setSelectedImageInfo(buildImageSelectionInfo(imgEl, pmPos));
-            return;
-          }
-        }
-        if (!isImageInteractingRef.current) {
-          setSelectedImageInfo(null);
-        }
-      });
+      }
+      if (!isImageInteractingRef.current) {
+        setSelectedImageInfo(null);
+      }
     },
     [
       updateSelectionOverlay,
@@ -283,23 +284,13 @@ export function useSelectionOverlay(opts: UseSelectionOverlayOptions): UseSelect
     const observer = new ResizeObserver(() => {
       const state = hiddenPMRef.current?.getState();
       if (state) {
-        updateSelectionOverlay(state);
+        requestOverlayRefresh();
       }
     });
 
     observer.observe(container);
     return () => observer.disconnect();
-  }, [updateSelectionOverlay, containerRef, hiddenPMRef]);
-
-  // Update once layout is ready. handleEditorViewReady → runLayoutPipeline is
-  // async; this effect ensures the first overlay pass runs once `layout`
-  // populates.
-  useEffect(() => {
-    const state = hiddenPMRef.current?.getState();
-    if (pageLayout && state) {
-      updateSelectionOverlay(state);
-    }
-  }, [pageLayout, updateSelectionOverlay, hiddenPMRef]);
+  }, [requestOverlayRefresh, containerRef, hiddenPMRef]);
 
   return {
     selectionGeometry,

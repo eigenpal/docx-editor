@@ -336,6 +336,7 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
     /** Viewport wrapper: sync minHeight/marginBottom in layout pipeline before scroll restore. */
     const viewportLayoutRef = useRef<HTMLDivElement>(null);
     const hiddenPMRef = useRef<OffscreenEditorHostRef>(null);
+    const paintedOverlayRefreshRef = useRef<() => void>(() => {});
     /**
      * Persistent hidden PM EditorViews for every distinct HF `rId` — phase 1
      * of the HF editing unification (see openspec/changes/unify-hf-editing/).
@@ -438,6 +439,9 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
       contentWidth,
       runLayoutPipeline,
       scheduleLayout,
+      markPaintedPagesStale,
+      requestPaintedOverlayRefresh,
+      paintedPagesAreCurrent,
     } = useLayoutPipeline({
       document,
       styles,
@@ -459,6 +463,7 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
       onTotalPagesChange,
       onAnchorPositionsChange,
       onRenderedDomContextReady,
+      onPaintedPagesReady: () => paintedOverlayRefreshRef.current(),
     });
 
     // Selection overlay — caret, range rects, image overlay info, plus the
@@ -471,7 +476,6 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
       setCaretPosition,
       setSelectedImageInfo,
       buildImageSelectionInfo,
-      updateSelectionOverlay,
       handleSelectionChange,
     } = useSelectionOverlay({
       pageLayout,
@@ -483,7 +487,17 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
       hiddenPMRef,
       isImageInteractingRef,
       onSelectionChangeRef,
+      requestOverlayRefresh: requestPaintedOverlayRefresh,
     });
+
+    paintedOverlayRefreshRef.current = () => {
+      const state = hiddenPMRef.current?.getState();
+      if (state) handleSelectionChange(state);
+      notifyDecorationLayer();
+      pagesContainerRef.current?.dispatchEvent(
+        new CustomEvent('docx-editor-react:painted-pages-ready')
+      );
+    };
 
     // =========================================================================
     // Event Handlers
@@ -494,12 +508,10 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
      */
     const handleTransaction = useCallback(
       (transaction: Transaction, newState: EditorState) => {
-        // Bump on every transaction (including selection-only and meta-only
-        // ones) so DecorationLayer re-syncs — yCursorPlugin awareness updates
-        // arrive as meta transactions with no doc change.
-        notifyDecorationLayer();
-
         if (transaction.docChanged) {
+          // From this point until a matching paint commits, no overlay may
+          // resolve PM positions against the visible page DOM.
+          markPaintedPagesStale();
           // Content changed - schedule layout (coalesced via rAF)
           scheduleLayout(newState);
 
@@ -510,15 +522,12 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
           }
         }
 
-        // Only update selection overlay immediately for non-doc-changing transactions
-        // (e.g. arrow keys, clicks). For doc changes, the overlay will be updated
-        // after layout completes via the useEffect([layout]) hook, avoiding cursor
-        // flicker from stale DOM positions.
-        if (!transaction.docChanged) {
-          updateSelectionOverlay(newState);
-        }
+        // Selection, caret, and decoration refreshes share one readiness gate.
+        // Selection-only/meta transactions run now when pages are current;
+        // document changes retain and coalesce this request until paint.
+        requestPaintedOverlayRefresh();
       },
-      [scheduleLayout, updateSelectionOverlay, notifyDecorationLayer]
+      [markPaintedPagesStale, requestPaintedOverlayRefresh, scheduleLayout]
       // NOTE: onDocumentChange removed from dependencies - accessed via ref to prevent infinite loops
     );
 
@@ -739,7 +748,7 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
     const handleEditorViewReady = useCallback(
       (view: EditorView) => {
         runLayoutPipeline(view.state);
-        updateSelectionOverlay(view.state);
+        requestPaintedOverlayRefresh();
 
         // Auto-focus the editor so the user can start typing immediately
         if (!readOnly) {
@@ -750,14 +759,14 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
           });
         }
       },
-      [runLayoutPipeline, updateSelectionOverlay, readOnly]
+      [runLayoutPipeline, requestPaintedOverlayRefresh, readOnly]
     );
 
     // Re-layout triggers: web-font load complete + header/footer content changes.
     useLayoutTriggers({
       hiddenPMRef,
       runLayoutPipeline,
-      updateSelectionOverlay,
+      requestOverlayRefresh: requestPaintedOverlayRefresh,
       headerContent,
       footerContent,
       firstPageHeaderContent,
@@ -815,7 +824,7 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
           // applied to the body doc even if focus briefly slips to it.
           readOnly={readOnly || !!hfEditMode}
           onTransaction={handleTransaction}
-          onSelectionChange={handleSelectionChange}
+          onSelectionChange={() => requestPaintedOverlayRefresh()}
           externalPlugins={externalPlugins}
           extensionManager={extensionManager}
           onEditorViewReady={handleEditorViewReady}
@@ -836,10 +845,12 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
             // transactions (arrow keys, click-to-position) don't move text, so
             // the painter has nothing new to paint.
             if (docChanged) {
+              markPaintedPagesStale();
               const bodyState = hiddenPMRef.current?.getState();
               if (bodyState) runLayoutPipeline(bodyState);
             }
             onHfTransaction?.(rId, view, docChanged);
+            requestPaintedOverlayRefresh();
           }}
         />
 
@@ -930,6 +941,7 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
             getPagesContainer={() => pagesContainerRef.current}
             zoom={zoom}
             decorationSyncToken={decorationSyncToken}
+            pagesAreCurrent={paintedPagesAreCurrent}
           />
         </div>
 

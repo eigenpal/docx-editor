@@ -1,7 +1,7 @@
 import { onBeforeUnmount, onMounted, type Ref } from 'vue';
 import { invalidateHfDomCache } from '@eigenpal/docx-editor-core/flow-model';
 
-/** Refresh selection overlays after the shared painter mutates visible pages. */
+/** Refresh overlays only after Vue's page-readiness guard releases them. */
 export function usePainterOverlayRefresh(
   pagesRef: Ref<HTMLElement | null>,
   updateBodyOverlay: () => void,
@@ -10,14 +10,15 @@ export function usePainterOverlayRefresh(
   onMounted(() => {
     const pages = pagesRef.value;
     if (!pages) return;
-    const onPainted = () => {
+    const onPagesReady = () => {
       invalidateHfDomCache();
       updateBodyOverlay();
       updateHfOverlay();
     };
-    pages.addEventListener('painter:painted', onPainted);
+    pages.addEventListener('docx-editor-vue:painted-pages-ready', onPagesReady);
+    pages.dispatchEvent(new CustomEvent('docx-editor-vue:request-overlay-refresh'));
     onBeforeUnmount(() => {
-      pages.removeEventListener('painter:painted', onPainted);
+      pages.removeEventListener('docx-editor-vue:painted-pages-ready', onPagesReady);
       invalidateHfDomCache();
     });
   });

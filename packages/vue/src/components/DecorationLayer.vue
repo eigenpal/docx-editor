@@ -31,7 +31,18 @@ function scheduleSync() {
 }
 
 onMounted(() => {
-  scheduleSync();
+  const pages = props.getPagesContainer();
+  if (!pages) return;
+  const cancelStaleSync = () => {
+    if (rafId !== null) {
+      cancelAnimationFrame(rafId);
+      rafId = null;
+    }
+  };
+  pages.addEventListener('docx-editor-vue:painted-pages-stale', cancelStaleSync);
+  onBeforeUnmount(() => {
+    pages.removeEventListener('docx-editor-vue:painted-pages-stale', cancelStaleSync);
+  });
 });
 
 onBeforeUnmount(() => {
@@ -42,7 +53,7 @@ onBeforeUnmount(() => {
 });
 
 watch(
-  () => [props.zoom, props.transactionVersion],
+  () => props.transactionVersion,
   () => scheduleSync()
 );
 

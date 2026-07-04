@@ -282,33 +282,22 @@ export function DocxEditorPagedArea({
       if (view) applyHfOverlay(view);
     };
 
-    // Deterministic "painter is done" signal — the shared painter dispatches
-    // `painter:painted` whenever page DOM changes, including lazy virtualized
-    // population. Listen instead of relying only on an rAF chain so the measurement sees the fresh
-    // `data-doc-from` spans. Also invalidate the cached HF DOM snapshot so
-    // the next caret compute re-walks the host.
+    // PagedEditor emits this adapter-private signal only after its readiness
+    // guard confirms that visible DOM matches the latest document epoch.
     const pagesEl = window.document.querySelector('.paged-editor__pages') as HTMLElement | null;
-    const onPainted = () => {
+    const onPagesReady = () => {
       invalidateHfDomCache();
       measure();
     };
-    pagesEl?.addEventListener('painter:painted', onPainted);
+    pagesEl?.addEventListener('docx-editor-react:painted-pages-ready', onPagesReady);
+    pagesEl?.dispatchEvent(new CustomEvent('docx-editor-react:request-overlay-refresh'));
 
-    // Safety: if the painter doesn't fire for the initial engage (no doc
-    // change → no layout pass), still measure on the next frame so the
-    // caret shows up at all.
-    const raf = requestAnimationFrame(measure);
-
-    // Resize still needs a recompute because the painter re-runs after a
-    // viewport resize and the span layout shifts. The painter dispatches
-    // `painter:painted` after its rerun, but the listener may have been
-    // re-registered between the two — wire resize as a belt-and-braces.
-    const onResize = () => measure();
+    const onResize = () =>
+      pagesEl?.dispatchEvent(new CustomEvent('docx-editor-react:request-overlay-refresh'));
     window.addEventListener('resize', onResize);
 
     return () => {
-      cancelAnimationFrame(raf);
-      pagesEl?.removeEventListener('painter:painted', onPainted);
+      pagesEl?.removeEventListener('docx-editor-react:painted-pages-ready', onPagesReady);
       window.removeEventListener('resize', onResize);
       invalidateHfDomCache();
     };
@@ -334,35 +323,8 @@ export function DocxEditorPagedArea({
         isSuggesting={isSuggesting}
         author={author}
         onHfTransaction={(rId, view, docChanged) => {
-          // Phase 5: the persistent HF PM is the sole editor. On every
-          // transaction (typing, click → setSelection, undo/redo) we need
-          // the caret to follow — deferred to rAF so the painter's repaint
-          // (triggered by `runLayoutPipeline` inside PagedEditor) lands
-          // before we measure against `data-doc-from` spans. Toolbar
-          // selection state still rides through `onSelectionChange` on
-          // the inline overlay's old wiring path, which now reads from
-          // the persistent view via `hfEditorRef.getView()`.
-          // Painter dispatches `painter:painted` after `paintPages`.
-          // Wait for it so the cache invalidation + caret measurement sees
-          // the fresh span layout. Selection-only transactions skip the
-          // painter, so use a one-shot rAF as a fallback.
-          const pagesEl = window.document.querySelector(
-            '.paged-editor__pages'
-          ) as HTMLElement | null;
-          let painted = false;
-          const apply = () => {
-            if (painted) return;
-            painted = true;
-            invalidateHfDomCache();
-            applyHfOverlay(view);
-          };
-          pagesEl?.addEventListener('painter:painted', apply, { once: true });
-          requestAnimationFrame(() => {
-            if (!painted) {
-              pagesEl?.removeEventListener('painter:painted', apply);
-              apply();
-            }
-          });
+          // Geometry refresh is driven by PagedEditor's readiness signal.
+          // This callback only publishes selection state and host notification.
           onSelectionChange(extractSelectionState(view.state));
           onHfTransaction?.(rId, view, docChanged);
         }}
