@@ -1167,10 +1167,7 @@ onBeforeUnmount(() => {
   clearOverlay();
 });
 
-// Ref-API assembly — single source of truth for the surface
-// described by `DocxEditorRef`. `satisfies DocxEditorRef` lives
-// inside `useDocxEditorRefApi` so signature drift is caught at
-// composable-build time.
+// Ref-API assembly; `useDocxEditorRefApi` catches signature drift at build time.
 const { exposed } = useDocxEditorRefApi({
   editorView,
   pageLayout,
