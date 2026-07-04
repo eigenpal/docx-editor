@@ -475,9 +475,7 @@ export function DocxEditorPagedArea({
       {hfEditPosition &&
         (hfCaretRect || hfSelectionGeometry.length > 0) &&
         (() => {
-          const pagesEl = window.document.querySelector(
-            '.paged-editor__pages'
-          ) as HTMLElement | null;
+          const pagesEl = getOwnedPagesElement();
           const host = pagesEl?.parentElement as HTMLElement | null;
           if (!pagesEl || !host) return null;
           return createPortal(
