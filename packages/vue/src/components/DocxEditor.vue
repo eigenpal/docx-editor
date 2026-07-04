@@ -223,6 +223,8 @@
             :image-info="selectedImage"
             :zoom="zoom"
             :view="activeFormattingView"
+            :pages-are-current="paintedPagesAreCurrent"
+            :request-overlay-refresh="requestOverlayRefresh"
             @open-properties="showImageProperties = true"
             @deselect="selectedImage = null"
             @interact-start="imageInteracting = true"
@@ -235,6 +237,7 @@
             :get-pages-container="getPagesContainerForDecorations"
             :zoom="zoom"
             :transaction-version="paintedOverlayTick"
+            :pages-are-current="paintedPagesAreCurrent"
           />
 
           <!-- Floating "Add comment" button — appears at the right edge
@@ -670,9 +673,12 @@ onMounted(() => {
     stateTick.value++;
   });
   watch(
-    () => hfEdit.value,
-    (e) => {
-      if (!e) {
+    () => {
+      const edit = hfEdit.value;
+      return edit ? `${edit.position}:${edit.rId ?? ''}:${edit.sectionIndex}` : null;
+    },
+    (editKey) => {
+      if (!editKey) {
         clearHfOverlay();
         return;
       }
@@ -975,6 +981,7 @@ const {
   handlePagesDoubleClick,
   handleTableInsertClick,
   clearTableInsertTimer,
+  flushPendingImageSelection,
   handleHfSave,
   handleHfRemove,
 } = usePagesPointer({
@@ -993,6 +1000,8 @@ const {
   reLayout,
   emit,
   clearOverlay,
+  pagesAreCurrent: paintedPagesAreCurrent,
+  requestOverlayRefresh,
   syncHfPMs,
   getHfPmView,
   setDocument,
@@ -1100,6 +1109,10 @@ function requestOverlayRefresh() {
   pagesRef.value?.dispatchEvent(new CustomEvent('docx-editor-vue:request-overlay-refresh'));
 }
 
+function paintedPagesAreCurrent() {
+  return pagesRef.value?.dataset.overlayPagesCurrent === 'true';
+}
+
 function updateActiveHfOverlay() {
   const edit = hfEdit.value;
   if (!edit?.headerFooter) return;
@@ -1143,6 +1156,7 @@ const selectionSync = useSelectionSync({
 usePainterOverlayRefresh(
   pagesRef,
   () => {
+    if (flushPendingImageSelection()) return;
     updateSelectionOverlay();
     paintedOverlayTick.value++;
   },

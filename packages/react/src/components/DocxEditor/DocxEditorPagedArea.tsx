@@ -216,6 +216,20 @@ export function DocxEditorPagedArea({
     Array<{ top: number; left: number; width: number; height: number }>
   >([]);
 
+  const getOwnedPagesElement = useCallback(
+    () => editorContentRef.current?.querySelector<HTMLElement>('.paged-editor__pages') ?? null,
+    [editorContentRef]
+  );
+
+  const getOwnedHfDomScope = useCallback((): globalThis.Document | null => {
+    const root = editorContentRef.current;
+    if (!root) return null;
+    return {
+      querySelectorAll: root.querySelectorAll.bind(root),
+      defaultView: root.ownerDocument.defaultView,
+    } as unknown as globalThis.Document;
+  }, [editorContentRef]);
+
   // The caret/selection rects come back from core in viewport coords. The
   // overlay is portalled into the (`position: relative`) sibling parent of
   // `.paged-editor__pages` and positioned `absolute`, so the browser moves it
@@ -226,17 +240,20 @@ export function DocxEditorPagedArea({
   // scroll delta and the caret would drift away from the footer (#671
   // follow-up). Converting ONCE here yields a scroll-invariant value that the
   // absolutely-positioned div tracks natively with zero per-frame JS.
-  const toHfHostLocal = useCallback(<T extends { top: number; left: number }>(rect: T): T => {
-    const pagesEl = window.document.querySelector('.paged-editor__pages') as HTMLElement | null;
-    const host = pagesEl?.parentElement as HTMLElement | null;
-    if (!host) return rect;
-    const c = host.getBoundingClientRect();
-    return {
-      ...rect,
-      top: rect.top - c.top + host.scrollTop,
-      left: rect.left - c.left + host.scrollLeft,
-    };
-  }, []);
+  const toHfHostLocal = useCallback(
+    <T extends { top: number; left: number }>(rect: T): T => {
+      const pagesEl = getOwnedPagesElement();
+      const host = pagesEl?.parentElement as HTMLElement | null;
+      if (!host) return rect;
+      const c = host.getBoundingClientRect();
+      return {
+        ...rect,
+        top: rect.top - c.top + host.scrollTop,
+        left: rect.left - c.left + host.scrollLeft,
+      };
+    },
+    [getOwnedPagesElement]
+  );
 
   // Recompute the painted HF overlay (caret + drag-selection rects + multi-cell
   // highlight) for the active section from the live HF view. Called on engage,
@@ -249,19 +266,19 @@ export function DocxEditorPagedArea({
         setHfSelectionGeometry([]);
         return;
       }
-      const caret = computeHfCaretRectFromView(view, hfEditPosition, window.document, activeHfRId);
+      const domScope = getOwnedHfDomScope();
+      if (!domScope) return;
+      const caret = computeHfCaretRectFromView(view, hfEditPosition, domScope, activeHfRId);
       setHfCaretRect(caret ? toHfHostLocal(caret) : null);
       setHfSelectionGeometry(
-        readHfSelectionGeometry(view, hfEditPosition, window.document, activeHfRId).map(
-          toHfHostLocal
-        )
+        readHfSelectionGeometry(view, hfEditPosition, domScope, activeHfRId).map(toHfHostLocal)
       );
-      const pagesEl = window.document.querySelector('.paged-editor__pages') as HTMLElement | null;
+      const pagesEl = getOwnedPagesElement();
       // Multi-cell selection renders via `.layout-table-cell-selected`, scoped
       // to the active section so footer selections don't light up header cells.
       if (pagesEl) applyCellSelectionHighlight(pagesEl, view.state, { scope: hfEditPosition });
     },
-    [activeHfRId, hfEditPosition, toHfHostLocal]
+    [activeHfRId, getOwnedHfDomScope, getOwnedPagesElement, hfEditPosition, toHfHostLocal]
   );
 
   // Initial-caret-on-engage: when the user double-clicks into HF mode the
@@ -284,7 +301,7 @@ export function DocxEditorPagedArea({
 
     // PagedEditor emits this adapter-private signal only after its readiness
     // guard confirms that visible DOM matches the latest document epoch.
-    const pagesEl = window.document.querySelector('.paged-editor__pages') as HTMLElement | null;
+    const pagesEl = getOwnedPagesElement();
     const onPagesReady = () => {
       invalidateHfDomCache();
       measure();
@@ -301,7 +318,7 @@ export function DocxEditorPagedArea({
       window.removeEventListener('resize', onResize);
       invalidateHfDomCache();
     };
-  }, [hfEditPosition, hfEditorRef, applyHfOverlay]);
+  }, [hfEditPosition, hfEditorRef, applyHfOverlay, getOwnedPagesElement]);
 
   return (
     <>

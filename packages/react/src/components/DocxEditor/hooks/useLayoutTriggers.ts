@@ -73,6 +73,7 @@ export function useLayoutTriggers(opts: UseLayoutTriggersOptions): void {
     const view = hiddenPMRef.current?.getView();
     if (view) {
       runLayoutPipeline(view.state);
+      requestOverlayRefresh();
     }
   }, [
     headerContent,

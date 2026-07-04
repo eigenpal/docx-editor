@@ -159,6 +159,7 @@ export function useLayoutPipeline(opts: UseLayoutPipelineOptions): UseLayoutPipe
     paintedPagesGuardRef.current = createPaintedPagesGuard(() => onPaintedPagesReadyRef.current());
   }
   const successfulPaintRef = useRef<ReturnType<PaintedPagesGuard['startPaint']> | null>(null);
+  const paintingPagesRef = useRef(false);
 
   // Total-pages notifier — fires only when count changes (including N → 0).
   const lastTotalPagesRef = useRef<number>(0);
@@ -280,8 +281,10 @@ export function useLayoutPipeline(opts: UseLayoutPipelineOptions): UseLayoutPipe
           const nodeLookup = indexNodesById(newNodes, newMetrics);
           painterRef.current.setNodeLookup(nodeLookup);
 
+          pagesEl.dataset.overlayPagesCurrent = 'false';
           const paintTicket = paintedPagesGuardRef.current!.startPaint();
           let paintPagesKind: ReturnType<typeof paintPages>;
+          paintingPagesRef.current = true;
           try {
             paintPagesKind = paintPages(newPageLayout.pages, pagesContainerRef.current, {
               pageGap,
@@ -309,6 +312,8 @@ export function useLayoutPipeline(opts: UseLayoutPipelineOptions): UseLayoutPipe
           } catch (error) {
             paintedPagesGuardRef.current!.abandonPaint(paintTicket);
             throw error;
+          } finally {
+            paintingPagesRef.current = false;
           }
 
           const vp = viewportLayoutRef.current;
@@ -464,7 +469,10 @@ export function useLayoutPipeline(opts: UseLayoutPipelineOptions): UseLayoutPipe
     const successfulPaint = successfulPaintRef.current;
     successfulPaintRef.current = null;
     if (successfulPaint) {
-      paintedPagesGuardRef.current?.finishPaint(successfulPaint);
+      const pagesCurrent = paintedPagesGuardRef.current?.finishPaint(successfulPaint) ?? false;
+      if (pagesCurrent && pagesContainerRef.current) {
+        pagesContainerRef.current.dataset.overlayPagesCurrent = 'true';
+      }
     }
 
     const pending = pendingScrollRestoreRef.current;
@@ -492,7 +500,11 @@ export function useLayoutPipeline(opts: UseLayoutPipelineOptions): UseLayoutPipe
   useEffect(() => {
     const pages = pagesContainerRef.current;
     if (!pages) return;
-    const onPainted = () => paintedPagesGuardRef.current?.requestOverlayRefresh();
+    const onPainted = () => {
+      if (!paintingPagesRef.current) {
+        paintedPagesGuardRef.current?.requestOverlayRefresh();
+      }
+    };
     pages.addEventListener('painter:painted', onPainted);
     pages.addEventListener('docx-editor-react:request-overlay-refresh', onPainted);
     return () => {
@@ -523,8 +535,11 @@ export function useLayoutPipeline(opts: UseLayoutPipelineOptions): UseLayoutPipe
     schedulerRef.current!.schedule(state);
   }, []);
   const markPaintedPagesStale = useCallback(() => {
+    if (pagesContainerRef.current) {
+      pagesContainerRef.current.dataset.overlayPagesCurrent = 'false';
+    }
     paintedPagesGuardRef.current!.noteDocumentChange();
-  }, []);
+  }, [pagesContainerRef]);
   const requestPaintedOverlayRefresh = useCallback(() => {
     paintedPagesGuardRef.current!.requestOverlayRefresh();
   }, []);
@@ -535,8 +550,15 @@ export function useLayoutPipeline(opts: UseLayoutPipelineOptions): UseLayoutPipe
 
   // Clean up pending rAF on unmount
   useEffect(() => {
+    if (paintedPagesGuardRef.current?.isDisposed()) {
+      paintedPagesGuardRef.current.revive();
+    }
     const scheduler = schedulerRef.current;
-    return () => scheduler?.cancel();
+    const guard = paintedPagesGuardRef.current;
+    return () => {
+      scheduler?.cancel();
+      guard?.dispose();
+    };
   }, []);
 
   return {

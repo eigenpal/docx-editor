@@ -80,6 +80,8 @@ const props = defineProps<{
   imageInfo: ImageSelectionInfo | null;
   zoom: number;
   view: EditorView | null;
+  pagesAreCurrent: () => boolean;
+  requestOverlayRefresh: () => void;
 }>();
 
 const emit = defineEmits<{
@@ -158,6 +160,7 @@ function getPagesEl(): HTMLElement | null {
  * React's single-source resolution. Returns null if it's gone.
  */
 function resolveImageEl(): HTMLElement | null {
+  if (!props.pagesAreCurrent()) return null;
   const info = props.imageInfo;
   if (!info) return null;
   if (info.element.isConnected) return info.element;
@@ -168,6 +171,11 @@ function resolveImageEl(): HTMLElement | null {
 }
 
 function updatePosition() {
+  if (!props.pagesAreCurrent()) {
+    overlayRect.value = null;
+    props.requestOverlayRefresh();
+    return;
+  }
   const imgEl = resolveImageEl();
   if (!imgEl || !overlayRootRef.value) {
     overlayRect.value = null;
@@ -418,6 +426,10 @@ const handles = computed<Array<{ pos: ResizeHandle; style: Record<string, string
 
 function startResize(e: MouseEvent, handle: string) {
   if (!props.imageInfo || !overlayRect.value) return;
+  if (!props.pagesAreCurrent()) {
+    props.requestOverlayRefresh();
+    return;
+  }
   resizeHandle = handle as ResizeHandle;
   startX = e.clientX;
   startY = e.clientY;
@@ -470,6 +482,10 @@ function onResizeEnd() {
 
   const v = props.view;
   const info = props.imageInfo;
+  if (!props.pagesAreCurrent()) {
+    props.requestOverlayRefresh();
+    return;
+  }
   if (!v || !info) {
     updatePosition();
     return;
@@ -522,6 +538,10 @@ function angleFromCenter(clientX: number, clientY: number): number {
 
 function startRotate(e: MouseEvent) {
   if (!props.imageInfo) return;
+  if (!props.pagesAreCurrent()) {
+    props.requestOverlayRefresh();
+    return;
+  }
   const rect = props.imageInfo.element.getBoundingClientRect();
   rotateCenterX = rect.left + rect.width / 2;
   rotateCenterY = rect.top + rect.height / 2;
@@ -563,6 +583,13 @@ function onRotateEnd() {
 
   const v = props.view;
   const info = props.imageInfo;
+  if (!props.pagesAreCurrent()) {
+    props.requestOverlayRefresh();
+    if (rotateImgEl) rotateImgEl.style.transform = '';
+    rotateImgEl = null;
+    rotateBaseTransform = null;
+    return;
+  }
   try {
     const node = v && info ? getImageNode(v, info.pmPos) : null;
     if (v && info && node) {
@@ -595,6 +622,10 @@ let moveGhostEl: HTMLElement | null = null;
 
 function startDragMove(e: MouseEvent) {
   if (!props.imageInfo || !overlayRect.value) return;
+  if (!props.pagesAreCurrent()) {
+    props.requestOverlayRefresh();
+    return;
+  }
   const sx = e.clientX;
   const sy = e.clientY;
   const rect = overlayRect.value;
@@ -655,6 +686,10 @@ function startDragMove(e: MouseEvent) {
  *  - inline images: re-insert the image node at the text position under the drop
  */
 function commitDragMove(clientX: number, clientY: number) {
+  if (!props.pagesAreCurrent()) {
+    props.requestOverlayRefresh();
+    return;
+  }
   const v = props.view;
   const info = props.imageInfo;
   if (!v || !info) return;
