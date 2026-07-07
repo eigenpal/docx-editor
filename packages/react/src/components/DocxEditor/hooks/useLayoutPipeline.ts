@@ -20,7 +20,12 @@ import type {
   LayoutMetrics,
   PageLayout,
 } from '@eigenpal/docx-editor-core/pagination-model';
-import { getMargins, getPageSize, getColumns } from '@eigenpal/docx-editor-core/flow-model';
+import {
+  getColumns,
+  getMargins,
+  getPageSize,
+  getVisualScrollHeight,
+} from '@eigenpal/docx-editor-core/flow-model';
 import type { Node as PMNode } from 'prosemirror-model';
 import {
   LayoutPainter,
@@ -324,12 +329,10 @@ export function useLayoutPipeline(opts: UseLayoutPipelineOptions): UseLayoutPipe
           const vp = viewportLayoutRef.current;
           if (vp) {
             const mh = viewportMinHeightPx(newPageLayout, pageGap);
-            vp.style.minHeight = `${mh}px`;
-            if (zoom !== 1) {
-              vp.style.marginBottom = `${mh * (zoom - 1)}px`;
-            } else {
-              vp.style.marginBottom = '';
-            }
+            const visualHeight = getVisualScrollHeight(mh, zoom);
+            vp.style.height = `${visualHeight}px`;
+            vp.style.minHeight = `${visualHeight}px`;
+            vp.style.marginBottom = '';
           }
 
           if (scrollParent?.isConnected && anchor) {

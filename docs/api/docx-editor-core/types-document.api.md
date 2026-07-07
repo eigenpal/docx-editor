@@ -185,6 +185,7 @@ export interface DocumentBody {
 export interface DocumentSettings {
     defaultTableStyle?: string;
     defaultTabMark: number;
+    evenAndOddHeaders?: boolean;
     themeFontLang?: {
         eastAsia?: string;
         bidi?: string;
@@ -1084,6 +1085,11 @@ export interface SymbolContent {
 
 // @public
 export interface TabContent {
+    positional?: {
+        alignment?: 'left' | 'center' | 'right';
+        relativeTo?: 'margin' | 'indent';
+        leader?: TabLeader;
+    };
     // (undocumented)
     type: 'tab';
 }
@@ -1124,7 +1130,7 @@ export interface TableBorders {
 
 // @public
 export interface TableCell {
-    content: (Paragraph | Table)[];
+    content: BlockContent[];
     formatting?: TableCellFormatting;
     propertyChanges?: TableCellPropertyChange[];
     structuralChange?: TableStructuralChangeInfo;

@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
+import { getPageScrollInfo } from '@eigenpal/docx-editor-core/flow-model';
 import type { PagedEditorRef } from '../PagedEditor';
+import { DEFAULT_PAGE_GAP, VIEWPORT_PADDING_TOP } from '../internals/styles';
 
 interface ScrollPageInfo {
   currentPage: number;
@@ -18,9 +20,11 @@ interface ScrollPageInfo {
 export function useScrollPageInfo({
   scrollContainerRef,
   pagedEditorRef,
+  zoom,
 }: {
   scrollContainerRef: React.RefObject<HTMLDivElement | null>;
   pagedEditorRef: React.RefObject<PagedEditorRef | null>;
+  zoom: number;
 }) {
   const [scrollPageInfo, setScrollPageInfo] = useState<ScrollPageInfo>({
     currentPage: 1,
@@ -37,26 +41,14 @@ export function useScrollPageInfo({
       const layout = pagedEditorRef.current?.getLayout();
       if (!layout || layout.pages.length === 0) return;
 
-      const scrollTop = scrollContainerEl.scrollTop;
-      const totalPages = layout.pages.length;
-      const pageGap = 24; // DEFAULT_PAGE_GAP from PagedEditor
-      const paddingTop = 24; // top padding in paged-editor__pages
-
-      const viewportCenter = scrollTop + scrollContainerEl.clientHeight / 2;
-      let accumulatedY = paddingTop;
-      let currentPage = 1;
-
-      for (let i = 0; i < layout.pages.length; i++) {
-        const pageHeight = layout.pages[i].size.h;
-        const pageEnd = accumulatedY + pageHeight;
-        if (viewportCenter < pageEnd) {
-          currentPage = i + 1;
-          break;
-        }
-        accumulatedY = pageEnd + pageGap;
-        currentPage = i + 2;
-      }
-      currentPage = Math.min(currentPage, totalPages);
+      const { currentPage, totalPages } = getPageScrollInfo({
+        layout,
+        scrollTop: scrollContainerEl.scrollTop,
+        viewportHeight: scrollContainerEl.clientHeight,
+        zoom,
+        pageGap: DEFAULT_PAGE_GAP,
+        paddingTop: VIEWPORT_PADDING_TOP,
+      });
 
       setScrollPageInfo({ currentPage, totalPages, visible: true });
 
@@ -75,7 +67,7 @@ export function useScrollPageInfo({
         clearTimeout(scrollFadeTimerRef.current);
       }
     };
-  }, [scrollContainerEl, pagedEditorRef]);
+  }, [scrollContainerEl, pagedEditorRef, zoom]);
 
   return { scrollPageInfo, setScrollPageInfo };
 }
