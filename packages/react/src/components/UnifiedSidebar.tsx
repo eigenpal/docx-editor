@@ -52,6 +52,7 @@ export function UnifiedSidebar({
   const measureRefsRef = useRef<Map<string, (el: HTMLDivElement | null) => void>>(new Map());
 
   const [positionVersion, setPositionVersion] = useState(0);
+  const cardScale = Math.max(0.1, zoom);
 
   const resolved = useMemo(
     () =>
@@ -214,7 +215,15 @@ export function UnifiedSidebar({
 
           const style: React.CSSProperties = hasPositions
             ? yPos !== undefined
-              ? { position: 'absolute', top: yPos, left: 0, right: 0, opacity: 1 }
+              ? {
+                  position: 'absolute',
+                  top: yPos,
+                  left: 0,
+                  right: 0,
+                  opacity: 1,
+                  transform: `scale(${cardScale})`,
+                  transformOrigin: 'top left',
+                }
               : {
                   position: 'absolute',
                   top: 0,
@@ -223,7 +232,11 @@ export function UnifiedSidebar({
                   opacity: 0,
                   visibility: 'hidden',
                 }
-            : { marginBottom: 6 };
+            : {
+                marginBottom: 6 * cardScale,
+                transform: `scale(${cardScale})`,
+                transformOrigin: 'top left',
+              };
 
           const transition = noPosition
             ? 'none'

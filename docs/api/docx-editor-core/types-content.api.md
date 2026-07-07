@@ -718,6 +718,11 @@ export interface SymbolContent {
 
 // @public
 export interface TabContent {
+    positional?: {
+        alignment?: 'left' | 'center' | 'right';
+        relativeTo?: 'margin' | 'indent';
+        leader?: TabLeader;
+    };
     // (undocumented)
     type: 'tab';
 }
@@ -736,7 +741,7 @@ export interface Table {
 
 // @public
 export interface TableCell {
-    content: (Paragraph | Table)[];
+    content: BlockContent[];
     formatting?: TableCellFormatting;
     propertyChanges?: TableCellPropertyChange[];
     structuralChange?: TableStructuralChangeInfo;

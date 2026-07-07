@@ -1453,7 +1453,7 @@ export interface Table {
 
 // @public
 export interface TableCell {
-    content: (Paragraph | Table)[];
+    content: BlockContent[];
     formatting?: TableCellFormatting;
     propertyChanges?: TableCellPropertyChange[];
     structuralChange?: TableStructuralChangeInfo;

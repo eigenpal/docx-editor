@@ -283,7 +283,7 @@ function computePositions() {
   if (root) {
     for (const el of root.querySelectorAll<HTMLElement>('[data-card-id]')) {
       const id = el.dataset.cardId;
-      if (id) cardHeights.set(id, el.offsetHeight);
+      if (id) cardHeights.set(id, el.offsetHeight * props.zoom);
     }
   }
 
@@ -308,7 +308,7 @@ function computePositions() {
 const minHeightPx = computed(() => {
   let max = 0;
   for (const y of resolvedY.value.values()) max = Math.max(max, y);
-  return max + 200; // headroom for the bottom card
+  return max + 200 * props.zoom; // headroom for the bottom card
 });
 
 // Sidebar lives inside the pages-viewport but is a SIBLING of the
@@ -324,15 +324,15 @@ const SIDEBAR_GAP = 16;
 // SIDEBAR_WIDTH is imported from core (340) so React and Vue rails match and
 // stay consistent with SIDEBAR_DOCUMENT_SHIFT (also derived from it).
 // Dynamic CSS boost for the expanded item. Mirrors React
-// DocxEditor.tsx:5029-5044: brighten the comment-anchor highlight
-// (yellow) for the focused comment, and the tracked-change
+// DocxEditorShell.tsx: brighten the comment-anchor highlight
+// for the focused comment, and the tracked-change
 // insertion/deletion spans for the focused tc card.
 const expandedHighlightCss = computed(() => {
   const id = expandedId.value;
   if (!id) return '';
   if (id.startsWith('comment-')) {
     const cid = id.slice('comment-'.length);
-    return `.paged-editor__pages [data-comment-id="${cid}"] { background-color: rgba(255, 212, 0, 0.35) !important; border-bottom: 2px solid rgba(255, 212, 0, 0.7) !important; }`;
+    return `.paged-editor__pages [data-comment-id="${cid}"] { background-color: var(--doc-comment-active-bg) !important; border-bottom-width: 2px !important; border-bottom-style: solid !important; border-bottom-color: var(--doc-comment-active-border) !important; }`;
   }
   if (id.startsWith('tc-')) {
     // id shape: tc-<revisionId>-<index>
@@ -378,7 +378,9 @@ function cardSlotStyle(id: string) {
     // sees comments even when anchor measurement hasn't settled.
     return {
       position: 'static' as const,
-      marginBottom: '8px',
+      marginBottom: 8 * props.zoom + 'px',
+      transform: `scale(${props.zoom})`,
+      transformOrigin: 'top left',
     };
   }
   return {
@@ -386,6 +388,8 @@ function cardSlotStyle(id: string) {
     top: y + 'px',
     left: 0,
     right: 0,
+    transform: `scale(${props.zoom})`,
+    transformOrigin: 'top left',
     transition: 'top 0.15s ease',
   };
 }

@@ -1239,6 +1239,7 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
   const { scrollPageInfo, setScrollPageInfo } = useScrollPageInfo({
     scrollContainerRef,
     pagedEditorRef,
+    zoom: state.zoom,
   });
 
   // Handle save
