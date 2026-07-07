@@ -17,7 +17,10 @@ import { DecorationLayer } from './overlays/DecorationLayer';
 import type { ScrollToParaIdOptions } from '@eigenpal/docx-editor-core/utils';
 
 // Layout bridge
-import { DEFAULT_PAGE_HEIGHT_PX } from '@eigenpal/docx-editor-core/flow-model';
+import {
+  DEFAULT_PAGE_HEIGHT_PX,
+  getVisualScrollHeight,
+} from '@eigenpal/docx-editor-core/flow-model';
 
 // Visual line navigation hook
 import { useVisualLineNavigation } from '../../hooks/useVisualLineNavigation';
@@ -807,6 +810,10 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
         return DEFAULT_PAGE_HEIGHT_PX + VIEWPORT_PADDING_TOP + VIEWPORT_PADDING_BOTTOM;
       return viewportMinHeightPx(pageLayout, pageGap);
     }, [pageLayout, pageGap]);
+    const visualHeight = useMemo(
+      () => getVisualScrollHeight(totalHeight, zoom),
+      [totalHeight, zoom]
+    );
 
     return (
       <div
@@ -864,93 +871,83 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
         <div
           ref={viewportLayoutRef}
           style={{
-            ...viewportStyles,
-            minHeight: totalHeight,
-            // Negative margin at zoom<1 shrinks scroll area to match visual height;
-            // positive margin at zoom>1 grows it so content isn't clipped.
-            marginBottom: zoom !== 1 ? totalHeight * (zoom - 1) : undefined,
-            transform: (() => {
-              const parts: string[] = [];
-              if (commentsSidebarOpen) {
-                // Center page + sidebar as a unit within the container
-                parts.push(`translateX(-${SIDEBAR_DOCUMENT_SHIFT}px)`);
-              }
-              if (zoom !== 1) parts.push(`scale(${zoom})`);
-              return parts.length > 0 ? parts.join(' ') : undefined;
-            })(),
-            transformOrigin: 'top center',
-            transition: 'transform 0.2s ease',
+            position: 'relative',
+            height: visualHeight,
+            minHeight: visualHeight,
+            overflow: 'hidden',
+            overflowAnchor: 'none',
           }}
         >
-          {/* Pages container */}
           <div
-            ref={pagesContainerRef}
-            className={`paged-editor__pages${readOnly ? ' paged-editor--readonly' : ''}${hfEditMode ? ` paged-editor--hf-editing paged-editor--editing-${hfEditMode}` : ''}`}
-            style={pagesContainerStyles}
-            onMouseDown={handlePagesMouseDown}
-            onMouseMove={handlePagesMouseMove}
-            onClick={handlePagesClick}
-            onContextMenu={handlePagesContextMenu}
-            aria-hidden="true" // Visual only, PM provides semantic content
-          />
-
-          {/* Selection overlay — hidden while HF edit mode is active so the
-              body PM caret + selection rects don't render alongside the
-              header's. The HF view owns its own caret via DocxEditorPagedArea
-              `hfCaretRect`. */}
-          <SelectionOverlay
-            selectionGeometry={hfEditMode ? [] : selectionGeometry}
-            caretPosition={hfEditMode ? null : caretPosition}
-            isFocused={isFocused && !hfEditMode}
-            pageGap={pageGap}
-            readOnly={readOnly}
-          />
-
-          {/* Image selection overlay */}
-          <ImageSelectionOverlay
-            imageInfo={selectedImageInfo}
-            zoom={zoom}
-            isFocused={isFocused}
-            pagesAreCurrent={paintedPagesAreCurrent}
-            requestOverlayRefresh={requestPaintedOverlayRefresh}
-            onResize={handleImageResize}
-            onResizeStart={handleImageResizeStart}
-            onResizeEnd={handleImageResizeEnd}
-            onDragMove={handleImageDragMove}
-            onDragStart={handleImageDragStart}
-            onDragEnd={handleImageDragEnd}
-            onContextMenu={handlePagesContextMenu}
-          />
-
-          {/* Table quick action insert button */}
-          {tableInsertButton && (
-            <TableInsertButton
-              type={tableInsertButton.type}
-              x={tableInsertButton.x}
-              y={tableInsertButton.y}
-              onMouseDown={handleTableInsertClick}
-              onMouseEnter={clearTableInsertTimer}
-              onMouseLeave={hideTableInsertButton}
+            style={{
+              ...viewportStyles,
+              minHeight: totalHeight,
+              transform: (() => {
+                const parts: string[] = [];
+                if (commentsSidebarOpen) {
+                  parts.push(`translateX(-${SIDEBAR_DOCUMENT_SHIFT}px)`);
+                }
+                if (zoom !== 1) parts.push(`scale(${zoom})`);
+                return parts.length > 0 ? parts.join(' ') : undefined;
+              })(),
+              transformOrigin: 'top center',
+              transition: 'transform 0.2s ease',
+            }}
+          >
+            <div
+              ref={pagesContainerRef}
+              className={`paged-editor__pages${readOnly ? ' paged-editor--readonly' : ''}${hfEditMode ? ` paged-editor--hf-editing paged-editor--editing-${hfEditMode}` : ''}`}
+              style={pagesContainerStyles}
+              onMouseDown={handlePagesMouseDown}
+              onMouseMove={handlePagesMouseMove}
+              onClick={handlePagesClick}
+              onContextMenu={handlePagesContextMenu}
+              aria-hidden="true"
             />
-          )}
-
-          {/* Plugin overlays (highlights, annotations) */}
-          {pluginOverlays && (
-            <div className="paged-editor__plugin-overlays" style={pluginOverlaysStyles}>
-              {pluginOverlays}
-            </div>
-          )}
-
-          {/* Generic PM decoration forwarder — surfaces yCursorPlugin remote
-              cursors, search-highlight plugins, etc. on the visible pages.
-              No-op when no plugin emits decorations. */}
-          <DecorationLayer
-            getView={() => hiddenPMRef.current?.getView() ?? null}
-            getPagesContainer={() => pagesContainerRef.current}
-            zoom={zoom}
-            decorationSyncToken={decorationSyncToken}
-            pagesAreCurrent={paintedPagesAreCurrent}
-          />
+            <SelectionOverlay
+              selectionGeometry={hfEditMode ? [] : selectionGeometry}
+              caretPosition={hfEditMode ? null : caretPosition}
+              isFocused={isFocused && !hfEditMode}
+              pageGap={pageGap}
+              readOnly={readOnly}
+            />
+            <ImageSelectionOverlay
+              imageInfo={selectedImageInfo}
+              zoom={zoom}
+              isFocused={isFocused}
+              pagesAreCurrent={paintedPagesAreCurrent}
+              requestOverlayRefresh={requestPaintedOverlayRefresh}
+              onResize={handleImageResize}
+              onResizeStart={handleImageResizeStart}
+              onResizeEnd={handleImageResizeEnd}
+              onDragMove={handleImageDragMove}
+              onDragStart={handleImageDragStart}
+              onDragEnd={handleImageDragEnd}
+              onContextMenu={handlePagesContextMenu}
+            />
+            {tableInsertButton && (
+              <TableInsertButton
+                type={tableInsertButton.type}
+                x={tableInsertButton.x}
+                y={tableInsertButton.y}
+                onMouseDown={handleTableInsertClick}
+                onMouseEnter={clearTableInsertTimer}
+                onMouseLeave={hideTableInsertButton}
+              />
+            )}
+            {pluginOverlays && (
+              <div className="paged-editor__plugin-overlays" style={pluginOverlaysStyles}>
+                {pluginOverlays}
+              </div>
+            )}
+            <DecorationLayer
+              getView={() => hiddenPMRef.current?.getView() ?? null}
+              getPagesContainer={() => pagesContainerRef.current}
+              zoom={zoom}
+              decorationSyncToken={decorationSyncToken}
+              pagesAreCurrent={paintedPagesAreCurrent}
+            />
+          </div>
         </div>
 
         {/* Sidebar overlay — positioned to match visual document height, visible overflow for sidebar items */}
@@ -961,7 +958,7 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
               top: 0,
               left: 0,
               right: 0,
-              height: totalHeight * zoom,
+              height: visualHeight,
               pointerEvents: 'none',
               overflow: 'visible',
             }}

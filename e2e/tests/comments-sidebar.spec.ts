@@ -106,8 +106,8 @@ async function getCommentHighlight(page: Page, commentId: number): Promise<strin
 }
 
 function isYellowish(rgb: string): boolean {
-  // 'rgba(255, 212, 0, 0.15)' → keep as-is; covers both the 0.15 default and
-  // the 0.35 expanded override. Anything with rgb starting high-red, high-green,
+  // The default and expanded comment fills have different alpha values, but
+  // both stay yellow. Anything with rgb starting high-red, high-green,
   // low-blue counts.
   const m = rgb.match(/rgba?\(([^)]+)\)/);
   if (!m) return false;

@@ -151,8 +151,10 @@
               display: 'flex',
               flex: '1 0 auto',
               flexDirection: 'column',
-              minHeight: '100%',
+              height: visualPagesHeight + 'px',
+              minHeight: visualPagesHeight + 'px',
               minWidth: minLayoutWidth + 'px',
+              overflow: 'hidden',
             }"
           >
             <div v-if="showRuler && currentSectionProps" class="docx-editor-vue__vertical-ruler">
@@ -399,6 +401,7 @@ import type { EditorView } from 'prosemirror-view';
 import { TextSelection } from 'prosemirror-state';
 import {
   computeHfCaretRectFromView,
+  getVisualScrollHeight,
   readHfSelectionGeometry,
 } from '@eigenpal/docx-editor-core/flow-model';
 import { getSelectionInfo as getSelectionInfoImpl } from '../utils/refApiQueries';
@@ -759,6 +762,14 @@ const pagesContainerStyle = computed(() => {
     transformOrigin: 'top center',
     transition: 'transform 0.2s ease',
   };
+});
+
+const visualPagesHeight = computed(() => {
+  const lay = pageLayout.value;
+  if (!lay || lay.pages.length === 0) return 0;
+  const pagesHeight = lay.pages.reduce((sum, page) => sum + page.size.h, 0);
+  const layoutHeight = pagesHeight + Math.max(0, lay.pages.length - 1) * 24 + 48;
+  return getVisualScrollHeight(layoutHeight, zoom.value);
 });
 
 const rulerRowStyle = computed(() => ({

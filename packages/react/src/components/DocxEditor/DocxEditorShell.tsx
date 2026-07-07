@@ -236,7 +236,7 @@ export function DocxEditorShell({
                       )}
                       {/* Brightened highlight for the focused/expanded sidebar item. */}
                       {expandedSidebarItem && expandedSidebarItem.startsWith('comment-') && (
-                        <style>{`.paged-editor__pages [data-comment-id="${expandedSidebarItem.replace('comment-', '')}"] { background-color: rgba(255, 212, 0, 0.35) !important; border-bottom: 2px solid rgba(255, 212, 0, 0.7) !important; }`}</style>
+                        <style>{`.paged-editor__pages [data-comment-id="${expandedSidebarItem.replace('comment-', '')}"] { background-color: var(--doc-comment-active-bg) !important; border-bottom-width: 2px !important; border-bottom-style: solid !important; border-bottom-color: var(--doc-comment-active-border) !important; }`}</style>
                       )}
                       {expandedSidebarItem?.startsWith('tc-') &&
                         (() => {
