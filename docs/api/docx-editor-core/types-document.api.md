@@ -22,6 +22,8 @@ export interface BlockSdt {
     content: BlockContent[];
     leadingBlockMarkers?: (BookmarkStart | BookmarkEnd)[];
     properties: SdtProperties;
+    rawPreserveText?: string;
+    rawPreserveXml?: string;
     trailingBlockMarkers?: (BookmarkStart | BookmarkEnd)[];
     // (undocumented)
     type: 'blockSdt';
@@ -184,7 +186,7 @@ export interface DocumentBody {
 // @public
 export interface DocumentSettings {
     defaultTableStyle?: string;
-    defaultTabMark: number;
+    defaultTabStop: number;
     evenAndOddHeaders?: boolean;
     themeFontLang?: {
         eastAsia?: string;
@@ -685,6 +687,7 @@ export interface Paragraph {
     propertyChanges?: ParagraphPropertyChange[];
     renderedPageBreakBefore?: boolean;
     sectionProperties?: SectionProperties;
+    sourceLeadingPageBreak?: boolean;
     textId?: string;
     trailingBlockMarkers?: (BookmarkStart | BookmarkEnd)[];
     // (undocumented)
@@ -745,11 +748,11 @@ export interface ParagraphFormatting {
     shading?: ShadingProperties;
     spaceAfter?: number;
     spaceBefore?: number;
-    spacingOverrides?: ParagraphSpacingOverrides;
+    spacingExplicit?: SpacingExplicit;
     styleId?: string;
     suppressAutoHyphens?: boolean;
     suppressLineNumbers?: boolean;
-    tabs?: TabMark[];
+    tabs?: TabStop[];
     widowControl?: boolean;
 }
 
@@ -909,6 +912,12 @@ export interface SectionProperties {
         zOrder?: 'front' | 'back';
     };
     pageHeight?: number;
+    pageNumbers?: {
+        start?: number;
+        format?: string;
+        chapterStyle?: number;
+        chapterSeparator?: string;
+    };
     pageWidth?: number;
     paperSrcFirst?: number;
     paperSrcOther?: number;
@@ -1095,9 +1104,6 @@ export interface TabContent {
 }
 
 // @public
-export type TabJustify = 'left' | 'center' | 'right' | 'decimal' | 'bar' | 'clear' | 'num';
-
-// @public
 export interface Table {
     columnWidths?: number[];
     formatting?: TableFormatting;
@@ -1254,11 +1260,14 @@ export interface TableStructuralChangeInfo {
 export type TableWidthType = 'auto' | 'dxa' | 'nil' | 'pct';
 
 // @public
-export interface TabMark {
-    alignment: TabJustify;
+export interface TabStop {
+    alignment: TabStopAlignment;
     leader?: TabLeader;
     position: number;
 }
+
+// @public
+export type TabStopAlignment = 'left' | 'center' | 'right' | 'decimal' | 'bar' | 'clear' | 'num';
 
 // @public
 export interface TextBox {

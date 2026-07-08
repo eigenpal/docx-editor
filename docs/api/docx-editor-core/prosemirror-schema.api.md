@@ -64,7 +64,7 @@ export interface ImageAttrs {
     // (undocumented)
     alt?: string;
     borderColor?: string;
-    borderKind?: string;
+    borderStyle?: string;
     borderWidth?: number;
     // (undocumented)
     cropBottom?: number;
@@ -201,19 +201,19 @@ export interface ParagraphAttrs {
     _sectionProperties?: SectionProperties;
     // (undocumented)
     shading?: ShadingProperties;
+    sourceLeadingPageBreak?: boolean;
     // (undocumented)
     spaceAfter?: number;
     // (undocumented)
     spaceBefore?: number;
-    spacingOverrides?: ParagraphSpacingOverrides;
+    spacingExplicit?: SpacingExplicit;
     // (undocumented)
     styleId?: string;
     // (undocumented)
-    tabs?: TabMark[];
+    tabs?: TabStop[];
     // (undocumented)
     textId?: string;
     trailingBlockMarkers?: BlockBookmarkMarkers;
-    widowControl?: boolean;
 }
 
 // @public (undocumented)
