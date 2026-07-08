@@ -15,7 +15,7 @@ import {
   findBodyPmAnchor,
   resolveDomPosition,
 } from '@eigenpal/docx-editor-core/flow-model';
-import { findWordBoundaries } from '@eigenpal/docx-editor-core/utils';
+import { findWordBoundariesForPointer } from '@eigenpal/docx-editor-core/utils';
 
 /**
  * Resolve the painted header/footer instance nearest the viewport center — the
@@ -135,15 +135,29 @@ export function selectWord(
   pagesContainer: HTMLElement | null,
   pos: number,
   setPmSelection: (from: number, to: number) => void,
-  hfSection?: 'header' | 'footer'
+  hfSection?: 'header' | 'footer',
+  view?: EditorView | null
 ): void {
+  if (view) {
+    const $pos = view.state.doc.resolve(pos);
+    const parent = $pos.parent;
+    if (parent.isTextblock) {
+      const text = parent.textBetween(0, parent.content.size, undefined, ' ');
+      const [start, end] = findWordBoundariesForPointer(text, $pos.parentOffset);
+      const from = $pos.start() + start;
+      const to = $pos.start() + end;
+      if (from < to) setPmSelection(from, to);
+      return;
+    }
+  }
+
   if (!pagesContainer) return;
   const el = findElementAtPosition(pagesContainer, pos, hfSection);
   if (!el) return;
   const text = el.textContent || '';
   const docFrom = Number(el.dataset.docFrom) || 0;
   const offset = pos - docFrom;
-  const [start, end] = findWordBoundaries(text, offset);
+  const [start, end] = findWordBoundariesForPointer(text, offset);
   const from = docFrom + start;
   const to = docFrom + end;
   if (from < to) {
