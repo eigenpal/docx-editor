@@ -46,7 +46,7 @@ import {
   pointerTargetResolveImage,
 } from '@eigenpal/docx-editor-core/painter-model';
 import type { WrapType } from '@eigenpal/docx-editor-core/docx/wrapTypes';
-import { findWordBoundaries } from '@eigenpal/docx-editor-core/utils';
+import { findWordBoundariesForPointer } from '@eigenpal/docx-editor-core/utils';
 import type { HeaderFooterClickTarget } from './useHeaderFooterEditing';
 
 import type { OffscreenEditorHostRef } from '../OffscreenEditorHost';
@@ -762,9 +762,9 @@ export function usePagesPointer(opts: UsePagesPointerOptions): UsePagesPointerRe
           const $pos = doc.resolve(pmPos);
           const parent = $pos.parent;
           if (parent.isTextblock) {
-            const text = parent.textContent;
+            const text = parent.textBetween(0, parent.content.size, undefined, ' ');
             const offset = $pos.parentOffset;
-            const [start, end] = findWordBoundaries(text, offset);
+            const [start, end] = findWordBoundariesForPointer(text, offset);
             const absStart = $pos.start() + start;
             const absEnd = $pos.start() + end;
             if (absStart < absEnd) surface.setSelection(absStart, absEnd);
