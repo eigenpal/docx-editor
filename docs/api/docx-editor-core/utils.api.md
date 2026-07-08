@@ -231,7 +231,7 @@ export function findNextWordStart(text: string, position: number): number;
 export function findPageBreaks(doc: Document_2): InsertPosition_2[];
 
 // @public
-export function findParagraphBoxesByParaId(root: ParentNode, paraId: string): HTMLElement[];
+export function findParagraphFragmentsByParaId(root: ParentNode, paraId: string): HTMLElement[];
 
 // @public
 export function findPreviousWordStart(text: string, position: number): number;
@@ -255,16 +255,19 @@ export function findWordAt(text: string, position: number): WordSelectionResult;
 export function findWordBoundaries(text: string, position: number): [number, number];
 
 // @public
+export function findWordBoundariesForPointer(text: string, position: number): [number, number];
+
+// @public
 export function findWordEnd(text: string, position: number): number;
 
 // @public
 export function findWordStart(text: string, position: number): number;
 
 // @public
-export function flashParagraphBoxesByParaId(root: ParentNode, paraId: string, options?: ParagraphHighlightOptions): boolean;
+export function flashParagraphElements(elements: Iterable<HTMLElement>, options?: ParagraphHighlightOptions): number;
 
 // @public
-export function flashParagraphElements(elements: Iterable<HTMLElement>, options?: ParagraphHighlightOptions): number;
+export function flashParagraphFragmentsByParaId(root: ParentNode, paraId: string, options?: ParagraphHighlightOptions): boolean;
 
 // @public
 export const FONT_MAPPING: Record<string, string>;
@@ -307,7 +310,7 @@ export function getHighlightRectStyle(rect: HighlightRect, config?: SelectionHig
 export function getLoadedFonts(): string[];
 
 // @public
-export function getMergedSelectionGeometry(containerElement?: HTMLElement | null): HighlightRect[];
+export function getMergedSelectionRects(containerElement?: HTMLElement | null): HighlightRect[];
 
 // @public
 export function getMissingVariables(tags: string[], variables: Record<string, string>): string[];
@@ -328,9 +331,6 @@ export function getSelectedText(): string;
 export function getSelectionBoundingRect(): DOMRect | null;
 
 // @public
-export function getSelectionGeometry(containerElement?: HTMLElement | null): HighlightRect[];
-
-// @public
 export function getSelectionInfo(): {
     node: Node;
     offset: number;
@@ -341,6 +341,9 @@ export function getSelectionInfo(): {
     isCollapsed: boolean;
     text: string;
 } | null;
+
+// @public
+export function getSelectionRects(containerElement?: HTMLElement | null): HighlightRect[];
 
 // @public
 export function getTemplateTags(buffer: ArrayBuffer): string[];
@@ -736,9 +739,6 @@ export function runsToClipboardContent(runs: Run[], includeFormatting?: boolean,
 
 // @public
 export function sanitizeHref(href: string | null | undefined): string | undefined;
-
-// @public
-export function sanitizeImageSrc(src: string | null | undefined): string | undefined;
 
 // @public
 export interface ScrollToParaIdOptions {
