@@ -171,6 +171,42 @@
               class="docx-editor-vue__pages paged-editor__pages"
               :style="pagesContainerStyle"
             />
+
+            <CommentMarginMarkers
+              :comments="comments"
+              :pages-container="pagesRef"
+              :zoom="zoom"
+              :page-width-px="pageWidthPx"
+              :sidebar-open="showSidebar"
+              :resolved-comment-ids="resolvedCommentIds"
+              @marker-click="handleMarkerClick"
+            />
+
+            <UnifiedSidebar
+              :is-open="showSidebar"
+              :comments="comments"
+              :tracked-changes="trackedChanges"
+              :is-adding-comment="isAddingComment"
+              :add-comment-y-position="addCommentYPosition"
+              :show-resolved="true"
+              :pages-container="pagesRef"
+              :page-width-px="pageWidthPx"
+              :zoom="zoom"
+              :active-item-id="activeSidebarItem"
+              @close="showSidebar = false"
+              @add-comment="handleAddComment"
+              @cancel-add-comment="handleCancelAddComment"
+              @comment-reply="handleCommentReply"
+              @comment-resolve="handleCommentResolve"
+              @comment-unresolve="handleCommentUnresolve"
+              @comment-delete="handleCommentDelete"
+              @accept-change="handleAcceptChange"
+              @reject-change="handleRejectChange"
+              @accept-change-by-id="handleAcceptChangeById"
+              @reject-change-by-id="handleRejectChangeById"
+              @tracked-change-reply="handleTrackedChangeReply"
+              @update:active-item-id="(id: string | null) => (activeSidebarItem = id)"
+            />
           </div>
 
           <ContentControlWidgets v-if="!readOnly" :container="pagesRef" :view="editorView" />
@@ -285,42 +321,6 @@
               />
             </svg>
           </button>
-
-          <CommentMarginMarkers
-            :comments="comments"
-            :pages-container="pagesRef"
-            :zoom="zoom"
-            :page-width-px="pageWidthPx"
-            :sidebar-open="showSidebar"
-            :resolved-comment-ids="resolvedCommentIds"
-            @marker-click="handleMarkerClick"
-          />
-
-          <UnifiedSidebar
-            :is-open="showSidebar"
-            :comments="comments"
-            :tracked-changes="trackedChanges"
-            :is-adding-comment="isAddingComment"
-            :add-comment-y-position="addCommentYPosition"
-            :show-resolved="true"
-            :pages-container="pagesRef"
-            :page-width-px="pageWidthPx"
-            :zoom="zoom"
-            :active-item-id="activeSidebarItem"
-            @close="showSidebar = false"
-            @add-comment="handleAddComment"
-            @cancel-add-comment="handleCancelAddComment"
-            @comment-reply="handleCommentReply"
-            @comment-resolve="handleCommentResolve"
-            @comment-unresolve="handleCommentUnresolve"
-            @comment-delete="handleCommentDelete"
-            @accept-change="handleAcceptChange"
-            @reject-change="handleRejectChange"
-            @accept-change-by-id="handleAcceptChangeById"
-            @reject-change-by-id="handleRejectChangeById"
-            @tracked-change-reply="handleTrackedChangeReply"
-            @update:active-item-id="(id: string | null) => (activeSidebarItem = id)"
-          />
 
           <!-- Hyperlink popup — lives inside the scroll container so it
                moves with the link on scroll for free (position: absolute
