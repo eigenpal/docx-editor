@@ -255,6 +255,9 @@ export function findWordAt(text: string, position: number): WordSelectionResult;
 export function findWordBoundaries(text: string, position: number): [number, number];
 
 // @public
+export function findWordBoundariesForPointer(text: string, position: number): [number, number];
+
+// @public
 export function findWordEnd(text: string, position: number): number;
 
 // @public
