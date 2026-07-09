@@ -447,6 +447,7 @@ export interface Paragraph {
     propertyChanges?: ParagraphPropertyChange[];
     renderedPageBreakBefore?: boolean;
     sectionProperties?: SectionProperties;
+    sourceColumnBreakContinuation?: boolean;
     sourceLeadingPageBreak?: boolean;
     textId?: string;
     trailingBlockMarkers?: (BookmarkStart | BookmarkEnd)[];
