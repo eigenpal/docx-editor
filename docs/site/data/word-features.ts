@@ -379,7 +379,8 @@ export const wordFeatures: WordFeature[] = [
     rendering: 'full',
     roundTrip: 'full',
     tier: 'community',
-    notes: 'tbRl/btLr cell text renders via writing-mode and round-trips; not settable from the UI.',
+    notes:
+      'tbRl/btLr cell text renders via writing-mode and round-trips; not settable from the UI.',
   },
 
   // --- Images & drawings ---------------------------------------------------
@@ -632,7 +633,8 @@ export const wordFeatures: WordFeature[] = [
     rendering: 'none',
     roundTrip: 'none',
     tier: 'community',
-    notes: 'Not modeled; numbering start/format (i, ii, A) is dropped and PAGE fields render as arabic.',
+    notes:
+      'Not modeled; numbering start/format (i, ii, A) is dropped and PAGE fields render as arabic.',
   },
 
   // --- Review ---------------------------------------------------------------
@@ -727,12 +729,12 @@ export const wordFeatures: WordFeature[] = [
     id: 'fields.toc',
     name: 'Table of contents',
     category: 'fields',
-    editing: 'none',
+    editing: 'partial',
     rendering: 'full',
     roundTrip: 'full',
     tier: 'community',
     notes:
-      'Existing TOCs render with tab leaders and working links; TOC regeneration is left to Word.',
+      'Existing TOCs render with tab leaders and working links; stale or empty TOCs can be regenerated from document headings.',
   },
   {
     id: 'fields.other-codes',
@@ -788,8 +790,7 @@ export const wordFeatures: WordFeature[] = [
     rendering: 'full',
     roundTrip: 'full',
     tier: 'community',
-    notes:
-      'Add and remove items from the editor; the section configuration itself is read-only.',
+    notes: 'Add and remove items from the editor; the section configuration itself is read-only.',
     docsLink: '/docs/1.x/guides/content-controls',
   },
   {
@@ -820,7 +821,8 @@ export const wordFeatures: WordFeature[] = [
     rendering: 'none',
     roundTrip: 'preserved',
     tier: 'community',
-    notes: 'Never executed, by design (client-side security); the vbaProject part survives open -> save.',
+    notes:
+      'Never executed, by design (client-side security); the vbaProject part survives open -> save.',
   },
   {
     id: 'structure.ole',
@@ -840,7 +842,8 @@ export const wordFeatures: WordFeature[] = [
     rendering: 'none',
     roundTrip: 'preserved',
     tier: 'community',
-    notes: 'Protection settings round-trip but are not enforced; inline permission ranges may be dropped.',
+    notes:
+      'Protection settings round-trip but are not enforced; inline permission ranges may be dropped.',
   },
 
   // --- Collaboration, i18n & editing UX ---------------------------------------
