@@ -186,7 +186,7 @@ export interface DocumentBody {
 // @public
 export interface DocumentSettings {
     defaultTableStyle?: string;
-    defaultTabStop: number;
+    defaultTabMark: number;
     evenAndOddHeaders?: boolean;
     themeFontLang?: {
         eastAsia?: string;
@@ -749,11 +749,11 @@ export interface ParagraphFormatting {
     shading?: ShadingProperties;
     spaceAfter?: number;
     spaceBefore?: number;
-    spacingExplicit?: SpacingExplicit;
+    spacingOverrides?: ParagraphSpacingOverrides;
     styleId?: string;
     suppressAutoHyphens?: boolean;
     suppressLineNumbers?: boolean;
-    tabs?: TabStop[];
+    tabs?: TabMark[];
     widowControl?: boolean;
 }
 
@@ -1105,6 +1105,9 @@ export interface TabContent {
 }
 
 // @public
+export type TabJustify = 'left' | 'center' | 'right' | 'decimal' | 'bar' | 'clear' | 'num';
+
+// @public
 export interface Table {
     columnWidths?: number[];
     formatting?: TableFormatting;
@@ -1261,14 +1264,11 @@ export interface TableStructuralChangeInfo {
 export type TableWidthType = 'auto' | 'dxa' | 'nil' | 'pct';
 
 // @public
-export interface TabStop {
-    alignment: TabStopAlignment;
+export interface TabMark {
+    alignment: TabJustify;
     leader?: TabLeader;
     position: number;
 }
-
-// @public
-export type TabStopAlignment = 'left' | 'center' | 'right' | 'decimal' | 'bar' | 'clear' | 'num';
 
 // @public
 export interface TextBox {

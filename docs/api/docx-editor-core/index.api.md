@@ -139,23 +139,10 @@ export interface BookmarkStart {
 export function buildExtendedSelectionContext(doc: Document_2, range: Range_2, options?: SelectionContextOptions): ExtendedSelectionContext;
 
 // @public
-export function buildFootnoteContentMap(footnotes: Footnote[], footnoteRefs: Array<{
-    footnoteId: number;
-}>, contentWidth: number, options: ConvertFootnoteOptions): Map<number, FootnoteContent>;
-
-// @public
-export function buildFootnoteRenderItems(pageFootnoteMap: Map<number, number[]>, footnoteContentMap: Map<number, FootnoteContent>, doc: Document_2 | null): Map<number, FootnoteRenderItem[]>;
-
-// @public
 export function buildPatchedDocumentXml(originalXml: string, serializedXml: string, changedIds: Set<string>): string | null;
 
 // @public
 export function buildSelectionContext(doc: Document_2, range: Range_2, options?: SelectionContextOptions): SelectionContext;
-
-// @public
-export function calculateFootnoteReservedHeights(pageFootnoteMap: Map<number, number[]>, footnoteContentMap: Map<number, {
-    height: number;
-}>, columns?: number): Map<number, number>;
 
 // @public
 export function canRenderFont(fontFamily: string, fallbackFont?: string): boolean;
@@ -206,9 +193,6 @@ export interface ClipboardSelection {
 }
 
 // @public
-export function collectFootnoteRefs(blocks: FlowBlock[]): FootnoteRefLocation[];
-
-// @public
 export function colorsEqual(color1: ColorValue | undefined | null, color2: ColorValue | undefined | null, theme: Theme | null | undefined): boolean;
 
 // @public
@@ -255,25 +239,6 @@ export interface CommentRangeStart {
     // (undocumented)
     type: 'commentRangeStart';
 }
-
-// @public
-export type ConvertFootnoteOptions = {
-    styles?: StyleDefinitions | null;
-    theme?: Theme | null;
-    measureBlocks: MeasureBlocksFn;
-    defaultTabStopTwips?: number | null;
-};
-
-// @public (undocumented)
-export type ConvertHeaderFooterOptions = {
-    styles?: StyleDefinitions | null;
-    theme?: Theme | null;
-    measureBlocks: MeasureBlocksFn;
-    defaultTabStopTwips?: number | null;
-};
-
-// @public
-export function convertHeaderFooterToContent(headerFooter: HeaderFooter | null | undefined, contentWidth: number, metrics: HeaderFooterMetrics, options: ConvertHeaderFooterOptions): HeaderFooterContent | undefined;
 
 // @public
 export interface CorePlugin {
@@ -617,9 +582,6 @@ export function findStartPosForParaId(doc: Node_2, paraId: string): number | nul
 // @internal
 export function findTableFromClick(target: EventTarget | null, container?: HTMLElement | null): CellCoordinates | null;
 
-// @public
-export type FlowBlock = ParagraphBlock | TableBlock | ImageBlock | TextBoxBlock | SectionBreakBlock | PageBreakBlock | ColumnBreakBlock;
-
 // @public (undocumented)
 export interface FooterReference {
     // (undocumented)
@@ -637,29 +599,6 @@ export interface Footnote {
     type: 'footnote';
     verbatimXml?: string;
 }
-
-// @public
-export const FOOTNOTE_SEPARATOR_HEIGHT = 12;
-
-// @public
-export type FootnoteContent = {
-    id: number;
-    displayNumber: number;
-    blocks: FlowBlock[];
-    measures: Measure[];
-    height: number;
-};
-
-// @public
-export type FootnoteRefLocation = {
-    footnoteId: number;
-    pmPos: number;
-    tableBlockId?: BlockId;
-    rowIndex?: number;
-};
-
-// @public
-export function footnoteReservedHeightsEqual(a: Map<number, number>, b: Map<number, number>): boolean;
 
 // @public
 export function formatLastSaveTime(date: Date | null): string;
@@ -741,16 +680,6 @@ export interface HeaderFooter {
     verbatimXml?: string;
     watermark?: Watermark;
 }
-
-// @public
-export type HeaderFooterMetrics = {
-    section: 'header' | 'footer';
-    pageSize: {
-        w: number;
-        h: number;
-    };
-    margins: PageMargins;
-};
 
 // @public
 export interface HeaderReference {
@@ -930,19 +859,6 @@ export function isValidVariableName(name: string): boolean;
 export function isWhite(color: ColorValue | undefined | null, theme: Theme | null | undefined): boolean;
 
 // @public (undocumented)
-export type Layout = {
-    pageSize: {
-        w: number;
-        h: number;
-    };
-    pages: Page[];
-    columns?: ColumnLayout;
-    headers?: Record<string, HeaderFooterLayout>;
-    footers?: Record<string, HeaderFooterLayout>;
-    pageGap?: number;
-};
-
-// @public (undocumented)
 export class LayoutCoordinator extends Subscribable<LayoutCoordinatorSnapshot> {
     constructor();
     clearSelectedImage(): void;
@@ -959,7 +875,7 @@ export class LayoutCoordinator extends Subscribable<LayoutCoordinatorSnapshot> {
         right: number;
     }): void;
     startDrag(anchor: number): void;
-    updateSelection(selectionRects: SelectionRect[], caretPosition: CaretPosition_2 | null): void;
+    updateSelection(selectionGeometry: SelectionBox[], caretPosition: CaretPosition_2 | null): void;
 }
 
 // @public
@@ -971,7 +887,7 @@ export interface LayoutCoordinatorSnapshot {
     isImageInteracting: boolean;
     isResizingColumn: boolean;
     selectedImageInfo: ImageSelectionInfo | null;
-    selectionRects: SelectionRect[];
+    selectionGeometry: SelectionBox[];
     version: number;
 }
 
@@ -1016,12 +932,6 @@ export function loadFonts(families: string[], options?: {
 }): Promise<void>;
 
 // @public
-export function mapFootnotesToPages(pages: Page[], footnoteRefs: FootnoteRefLocation[]): Map<number, number[]>;
-
-// @public
-export const MAX_FOOTNOTE_LAYOUT_PASSES = 6;
-
-// @public
 export interface McpSession {
     data: Map<string, unknown>;
     documents: Map<string, LoadedDocument>;
@@ -1045,12 +955,6 @@ export interface McpToolResult {
     content: McpToolContent[];
     isError?: boolean;
 }
-
-// @public
-export type Measure = ParagraphMeasure | ImageMeasure | TableMeasure | TextBoxMeasure | SectionBreakMeasure | PageBreakMeasure | ColumnBreakMeasure;
-
-// @public
-export type MeasureBlocksFn = (blocks: FlowBlock[], contentWidth: number) => Measure[];
 
 // @public
 export interface MoveFrom {
@@ -1079,25 +983,6 @@ export function onFontsLoaded(callback: (fonts: string[]) => void): () => void;
 
 // @public
 export function openPrintWindow(title: string | undefined, content: string): Window | null;
-
-// @public (undocumented)
-export type Page = {
-    number: number;
-    fragments: Fragment[];
-    margins: PageMargins;
-    size: {
-        w: number;
-        h: number;
-    };
-    orientation?: 'portrait' | 'landscape';
-    sectionIndex?: number;
-    sectionPageNumber?: number;
-    headerFooterRefs?: PageHeaderFooterRefs;
-    footnoteIds?: number[];
-    footnoteReservedHeight?: number;
-    footnoteColumns?: number;
-    columns?: ColumnLayout;
-};
 
 // @public
 export interface PanelConfig {
@@ -1189,11 +1074,11 @@ export interface ParagraphFormatting {
     shading?: ShadingProperties;
     spaceAfter?: number;
     spaceBefore?: number;
-    spacingExplicit?: SpacingExplicit;
+    spacingOverrides?: ParagraphSpacingOverrides;
     styleId?: string;
     suppressAutoHyphens?: boolean;
     suppressLineNumbers?: boolean;
-    tabs?: TabStop[];
+    tabs?: TabMark[];
     widowControl?: boolean;
 }
 
@@ -1523,6 +1408,20 @@ export interface SectionProperties {
 }
 
 // @public
+export interface SelectionBox {
+    // (undocumented)
+    height: number;
+    // (undocumented)
+    pageIndex: number;
+    // (undocumented)
+    width: number;
+    // (undocumented)
+    x: number;
+    // (undocumented)
+    y: number;
+}
+
+// @public
 export interface SelectionContext {
     formatting: Partial<TextFormatting>;
     inHyperlink?: boolean;
@@ -1543,20 +1442,6 @@ export interface SelectionContextOptions {
     includeDocumentSummary?: boolean;
     includeSuggestions?: boolean;
     maxSuggestions?: number;
-}
-
-// @public
-export interface SelectionRect {
-    // (undocumented)
-    height: number;
-    // (undocumented)
-    pageIndex: number;
-    // (undocumented)
-    width: number;
-    // (undocumented)
-    x: number;
-    // (undocumented)
-    y: number;
 }
 
 // @public
@@ -1594,34 +1479,6 @@ export interface Shape {
     // (undocumented)
     type: 'shape';
     wrap?: ImageWrap;
-}
-
-// @public
-export function stabilizeFootnoteLayout(args: StabilizeFootnoteLayoutArgs): StabilizeFootnoteLayoutResult;
-
-// @public (undocumented)
-export interface StabilizeFootnoteLayoutArgs {
-    // (undocumented)
-    blocks: FlowBlock[];
-    footnoteColumns?: number;
-    // (undocumented)
-    footnoteContentMap: Map<number, FootnoteContent>;
-    // (undocumented)
-    footnoteRefs: FootnoteRefLocation[];
-    initialLayout: Layout;
-    // (undocumented)
-    layoutOpts: LayoutOptions;
-    // (undocumented)
-    measures: Measure[];
-}
-
-// @public (undocumented)
-export interface StabilizeFootnoteLayoutResult {
-    converged: boolean;
-    // (undocumented)
-    layout: Layout;
-    // (undocumented)
-    pageFootnoteMap: Map<number, number[]>;
 }
 
 // @public
