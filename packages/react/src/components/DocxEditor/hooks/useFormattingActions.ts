@@ -30,10 +30,9 @@ import {
   insertPageBreak,
   insertSectionBreakNextPage,
   insertSectionBreakContinuous,
-  generateTOC,
   insertTable,
 } from '@eigenpal/docx-editor-core/prosemirror/commands';
-import { createStyleResolver } from '@eigenpal/docx-editor-core/prosemirror';
+import { createStyleResolver, insertTableOfContents } from '@eigenpal/docx-editor-core/prosemirror';
 import { getCachedNumberingMap } from '@eigenpal/docx-editor-core/docx';
 import type { EditorView } from 'prosemirror-view';
 import type { FormattingAction } from '../../Toolbar';
@@ -56,6 +55,8 @@ export function useFormattingActions({
   hyperlinkDialog,
   historyStateRef,
   getCachedStyleResolver,
+  onUpdateTableOfContents,
+  onTableOfContentsInserted,
 }: {
   getActiveEditorView: () => EditorView | null | undefined;
   focusActiveEditor: () => void;
@@ -66,6 +67,8 @@ export function useFormattingActions({
   getCachedStyleResolver: (
     styles: Parameters<typeof createStyleResolver>[0]
   ) => ReturnType<typeof createStyleResolver>;
+  onUpdateTableOfContents?: () => boolean;
+  onTableOfContentsInserted?: () => void;
 }) {
   const handleFormat = useCallback(
     (action: FormattingAction) => {
@@ -236,9 +239,11 @@ export function useFormattingActions({
   const handleInsertTOC = useCallback(() => {
     const view = getActiveEditorView();
     if (!view) return;
-    generateTOC(view.state, view.dispatch);
+    insertTableOfContents(view.state, view.dispatch);
+    onTableOfContentsInserted?.();
+    onUpdateTableOfContents?.();
     focusActiveEditor();
-  }, [getActiveEditorView, focusActiveEditor]);
+  }, [getActiveEditorView, focusActiveEditor, onTableOfContentsInserted, onUpdateTableOfContents]);
 
   return {
     handleFormat,

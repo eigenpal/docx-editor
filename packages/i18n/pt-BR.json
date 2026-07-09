@@ -609,7 +609,8 @@
       "makeFormal": "Tornar formal",
       "makeCasual": "Tornar informal",
       "custom": "Personalizado"
-    }
+    },
+    "updateTableOfContents": "Atualizar sumário"
   },
   "documentOutline": {
     "ariaLabel": "Estrutura do documento",
@@ -866,5 +867,8 @@
     "tablePropertiesChanged": null,
     "tableDeleted": null,
     "tableInserted": null
+  },
+  "toc": {
+    "updatePrompt": null
   }
 }

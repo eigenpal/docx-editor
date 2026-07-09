@@ -624,7 +624,8 @@
       "makeFormal": "Jadikan Formal",
       "makeCasual": "Jadikan Santai",
       "custom": "Kustom"
-    }
+    },
+    "updateTableOfContents": "Perbarui daftar isi"
   },
   "documentOutline": {
     "ariaLabel": "Struktur dokumen",
@@ -866,5 +867,8 @@
       "summary": "{count, plural, one {# langkah} other {# langkah}}",
       "earlier": "+ {count, plural, one {# langkah sebelumnya} other {# langkah sebelumnya}}"
     }
+  },
+  "toc": {
+    "updatePrompt": null
   }
 }

@@ -18,7 +18,12 @@ import {
   findImageElement,
 } from '@eigenpal/docx-editor-core/painter-model';
 import { getTableContext } from '@eigenpal/docx-editor-core/prosemirror/extensions/nodes/TableExtension';
+import {
+  isPositionInsideTableOfContents,
+  updateTableOfContents,
+} from '@eigenpal/docx-editor-core/prosemirror';
 import type { ImageLayoutTarget } from '@eigenpal/docx-editor-core/prosemirror/commands';
+import type { Layout } from '@eigenpal/docx-editor-core/layout-engine';
 import type { WrapType } from '@eigenpal/docx-editor-core/docx/wrapTypes';
 import {
   copyImageToClipboard,
@@ -40,6 +45,7 @@ export interface TextContextMenuState {
   hasSelection: boolean;
   inTable: boolean;
   onImage: boolean;
+  inToc: boolean;
   canMergeCells: boolean;
   canSplitCell: boolean;
 }
@@ -50,6 +56,8 @@ export interface UseContextMenusOptions {
   zoom: Ref<number>;
   showImageProperties: Ref<boolean>;
   getCommands: () => Commands;
+  layout: Ref<Layout | null>;
+  onUpdateTableOfContents?: (position?: number | null) => boolean;
   clearOverlay: () => void;
   setPmSelection: (anchor: number, head?: number) => void;
   resolvePos: (clientX: number, clientY: number) => number | null;
@@ -74,6 +82,7 @@ export function useContextMenus(opts: UseContextMenusOptions): UseContextMenusRe
     hasSelection: false,
     inTable: false,
     onImage: false,
+    inToc: false,
     canMergeCells: false,
     canSplitCell: false,
   });
@@ -167,6 +176,7 @@ export function useContextMenus(opts: UseContextMenusOptions): UseContextMenusRe
 
     const tableCtx = getTableContext(view.state);
     const { empty } = view.state.selection;
+    const inToc = isPositionInsideTableOfContents(view.state.doc, view.state.selection.from);
 
     // Right-clicking outside an image clears any open image context menu
     // — otherwise the image menu can stay visible while TextContextMenu
@@ -180,6 +190,7 @@ export function useContextMenus(opts: UseContextMenusOptions): UseContextMenusRe
       hasSelection: !empty,
       inTable: tableCtx.isInTable,
       onImage: !!imageEl,
+      inToc,
       canMergeCells: !!tableCtx.hasMultiCellSelection,
       canSplitCell: !!tableCtx.canSplitCell,
     };
@@ -282,6 +293,14 @@ export function useContextMenus(opts: UseContextMenusOptions): UseContextMenusRe
         view.dispatch(view.state.tr.setSelection(sel));
         break;
       }
+      case 'updateTableOfContents':
+        if (!opts.onUpdateTableOfContents?.(view.state.selection.from)) {
+          updateTableOfContents(view.state, view.dispatch, {
+            position: view.state.selection.from,
+            layout: opts.layout.value,
+          });
+        }
+        break;
       case 'imageProperties':
         if (opts.selectedImage.value) {
           opts.showImageProperties.value = true;

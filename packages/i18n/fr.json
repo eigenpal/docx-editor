@@ -609,7 +609,8 @@
       "makeFormal": "Rendre formel",
       "makeCasual": "Rendre informel",
       "custom": "Personnalisé"
-    }
+    },
+    "updateTableOfContents": "Mettre à jour la table des matières"
   },
   "documentOutline": {
     "ariaLabel": "Plan du document",
@@ -866,5 +867,8 @@
     "tableDeleted": null,
     "tableInserted": null,
     "tablePropertiesChanged": null
+  },
+  "toc": {
+    "updatePrompt": null
   }
 }
