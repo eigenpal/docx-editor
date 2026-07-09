@@ -609,7 +609,8 @@
       "makeFormal": "正式化",
       "makeCasual": "口语化",
       "custom": "自定义"
-    }
+    },
+    "updateTableOfContents": "更新目录"
   },
   "documentOutline": {
     "ariaLabel": "文档大纲",
@@ -866,5 +867,8 @@
     "tablePropertiesChanged": null,
     "tableDeleted": null,
     "tableInserted": null
+  },
+  "toc": {
+    "updatePrompt": null
   }
 }

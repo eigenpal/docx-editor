@@ -24,6 +24,7 @@
     :on-image="contextMenu.onImage"
     :can-merge-cells="contextMenu.canMergeCells"
     :can-split-cell="contextMenu.canSplitCell"
+    :in-toc="contextMenu.inToc"
     @action="(action) => emit('context-menu-action', action)"
     @close="emit('close-context-menu')"
   />

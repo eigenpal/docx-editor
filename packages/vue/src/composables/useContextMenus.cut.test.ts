@@ -39,6 +39,7 @@ function makeOpts() {
     zoom: ref(1),
     showImageProperties: ref(false),
     getCommands: () => ({}),
+    layout: ref(null),
     clearOverlay: () => {},
     setPmSelection: () => {},
     resolvePos: () => null,

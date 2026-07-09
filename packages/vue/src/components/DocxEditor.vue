@@ -405,7 +405,12 @@ import {
   readHfSelectionGeometry,
 } from '@eigenpal/docx-editor-core/flow-model';
 import { getSelectionInfo as getSelectionInfoImpl } from '../utils/refApiQueries';
-import { extractSelectionState } from '@eigenpal/docx-editor-core/prosemirror';
+import {
+  extractSelectionState,
+  hasTableOfContentsNeedingUpdate,
+  insertTableOfContents,
+  updateTableOfContents,
+} from '@eigenpal/docx-editor-core/prosemirror';
 import { nearestHfHostEl } from '../utils/domQueries';
 import Toolbar from './Toolbar.vue';
 import TableToolbar from './ui/TableToolbar.vue';
@@ -1018,6 +1023,56 @@ const {
   setDocument,
 });
 
+const tocSecondPassRequested = ref(false);
+let tocSecondPassTimer: ReturnType<typeof window.setTimeout> | null = null;
+
+function runPendingTocSecondPass() {
+  if (!tocSecondPassRequested.value || !editorView.value || !layout.value) return;
+  tocSecondPassRequested.value = false;
+  updateTableOfContents(editorView.value.state, editorView.value.dispatch, { layout: layout.value });
+}
+
+function requestTocSecondPass() {
+  tocSecondPassRequested.value = true;
+  if (tocSecondPassTimer != null) window.clearTimeout(tocSecondPassTimer);
+  tocSecondPassTimer = window.setTimeout(() => {
+    tocSecondPassTimer = null;
+    requestAnimationFrame(runPendingTocSecondPass);
+  }, 120);
+}
+
+function runTableOfContentsUpdate(position?: number | null): boolean {
+  if (!editorView.value) return false;
+  const updated = updateTableOfContents(editorView.value.state, editorView.value.dispatch, {
+    position,
+    layout: layout.value,
+  });
+  if (updated) requestTocSecondPass();
+  return updated;
+}
+
+function handleInsertTableOfContents() {
+  if (!editorView.value) return;
+  insertTableOfContents(editorView.value.state, editorView.value.dispatch);
+  tocPrompted.value = true;
+  void nextTick(() => {
+    requestAnimationFrame(() => runTableOfContentsUpdate());
+  });
+  editorView.value.focus();
+}
+
+watch(
+  layout,
+  () => {
+    if (tocSecondPassRequested.value) requestAnimationFrame(runPendingTocSecondPass);
+  },
+  { flush: 'post' }
+);
+
+onBeforeUnmount(() => {
+  if (tocSecondPassTimer != null) window.clearTimeout(tocSecondPassTimer);
+});
+
 const {
   contextMenu,
   imageContextMenu,
@@ -1032,9 +1087,11 @@ const {
   zoom,
   showImageProperties,
   getCommands,
+  layout,
   clearOverlay,
   setPmSelection,
   resolvePos,
+  onUpdateTableOfContents: runTableOfContentsUpdate,
 });
 
 const { handleMenuAction, handleMenuTableInsert } = useMenuActions({
@@ -1051,6 +1108,7 @@ const { handleMenuAction, handleMenuTableInsert } = useMenuActions({
   handleInsertPageBreak,
   handleInsertSectionBreakNextPage,
   handleInsertSectionBreakContinuous,
+  handleInsertTOC: handleInsertTableOfContents,
   handleToggleOutline,
   handleToggleSidebar,
   downloadCurrentDocument,
@@ -1070,6 +1128,29 @@ useDocumentLifecycle({
   loadDocument,
   sidebarAutoOpenedRef,
 });
+
+// Prompt at most once per dirty/empty-TOC period: the flag resets only when
+// the doc no longer needs an update, so a decline doesn't re-prompt on every
+// subsequent edit (`document.value` gets a new identity per transaction).
+// Waiting for a non-null layout ensures an accepted update resolves real
+// page numbers (layout is computed async after the view mounts).
+const tocPrompted = ref(false);
+watch(
+  [editorView, layout],
+  ([view, currentLayout]) => {
+    if (!view || readOnly.value) return;
+    if (!hasTableOfContentsNeedingUpdate(view.state.doc)) {
+      tocPrompted.value = false;
+      return;
+    }
+    if (tocPrompted.value || !currentLayout) return;
+    tocPrompted.value = true;
+    if (window.confirm(t('toc.updatePrompt'))) {
+      runTableOfContentsUpdate();
+    }
+  },
+  { flush: 'post' }
+);
 
 const getEditorViewForDecorations = () => editorView.value;
 const getPagesContainerForDecorations = () => pagesRef.value;
@@ -1193,6 +1274,7 @@ const { exposed } = useDocxEditorRefApi({
   save,
   loadDocument,
   loadDocumentBuffer,
+  onUpdateTableOfContents: runTableOfContentsUpdate,
   addComment,
   replyToComment,
   resolveComment,

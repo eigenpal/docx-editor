@@ -2,7 +2,7 @@
  * Menu-bar action dispatcher — translates `MenuBar` action strings into
  * the right side-effect (toggle a dialog, fire a command, re-emit to
  * host). Also owns the two tiny helpers used alongside it: the simple
- * command dispatcher (used by `dirLTR`/`dirRTL`/`insertTOC`) and the
+ * command dispatcher (used by `dirLTR`/`dirRTL`) and the
  * inline table-insert handler the toolbar's table picker emits.
  *
  * The composable is intentionally thin — it takes the dialog `Ref`s
@@ -29,6 +29,7 @@ export interface UseMenuActionsOptions {
   handleInsertPageBreak: () => void;
   handleInsertSectionBreakNextPage: () => void;
   handleInsertSectionBreakContinuous: () => void;
+  handleInsertTOC: () => void;
   handleToggleOutline: () => void;
   handleToggleSidebar: () => void;
   downloadCurrentDocument: () => Promise<void>;
@@ -95,7 +96,7 @@ export function useMenuActions(opts: UseMenuActionsOptions) {
         opts.handleInsertSectionBreakContinuous();
         break;
       case 'insertTOC':
-        execSimpleCommand('generateTOC');
+        opts.handleInsertTOC();
         break;
       case 'outline':
         opts.handleToggleOutline();

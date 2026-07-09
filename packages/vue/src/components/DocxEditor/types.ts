@@ -187,6 +187,8 @@ export type DocxEditorRef = EditorRefLike & {
   loadDocument(doc: Document): void;
   /** Load a DOCX buffer programmatically. */
   loadDocumentBuffer(buffer: DocxInput): Promise<void>;
+  /** Regenerate cached results for detected Table of Contents fields. */
+  updateTableOfContents(): boolean;
   /** Tear down the editor (destroys the PM view + frees listeners). */
   destroy(): void;
   /** List block-level content controls (SDTs), optionally filtered by tag/alias/id/type. */

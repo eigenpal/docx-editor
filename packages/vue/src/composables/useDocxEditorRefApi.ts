@@ -70,6 +70,7 @@ export interface UseDocxEditorRefApiOptions {
   save: () => Promise<ArrayBuffer | null>;
   loadDocument: (doc: Document) => void;
   loadDocumentBuffer: (buffer: DocxInput) => Promise<void>;
+  onUpdateTableOfContents?: () => boolean;
   addComment: (options: {
     paraId: string;
     text: string;
@@ -292,6 +293,10 @@ export function useDocxEditorRefApi(opts: UseDocxEditorRefApiOptions): {
     return getPageContentImpl(opts.editorView.value, opts.pageLayout.value, pageNumber);
   }
 
+  function updateTableOfContentsRef(): boolean {
+    return opts.onUpdateTableOfContents?.() ?? false;
+  }
+
   function onContentChange(listener: (document: unknown) => void): () => void {
     opts.contentChangeSubscribers.add(listener);
     return () => opts.contentChangeSubscribers.delete(listener);
@@ -314,6 +319,7 @@ export function useDocxEditorRefApi(opts: UseDocxEditorRefApiOptions): {
     print,
     loadDocument: opts.loadDocument,
     loadDocumentBuffer: opts.loadDocumentBuffer,
+    updateTableOfContents: updateTableOfContentsRef,
     destroy: opts.destroy,
     getDocument: opts.getDocument,
     getEditorRef,

@@ -609,7 +609,8 @@
       "makeFormal": "הפוך לרשמי",
       "makeCasual": "הפוך ללא רשמי",
       "custom": "מותאם אישית"
-    }
+    },
+    "updateTableOfContents": "עדכן תוכן עניינים"
   },
   "documentOutline": {
     "ariaLabel": "מתווה המסמך",
@@ -866,5 +867,8 @@
     "tablePropertiesChanged": null,
     "tableDeleted": null,
     "tableInserted": null
+  },
+  "toc": {
+    "updatePrompt": null
   }
 }
