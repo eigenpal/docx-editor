@@ -64,7 +64,7 @@ export interface ImageAttrs {
     // (undocumented)
     alt?: string;
     borderColor?: string;
-    borderStyle?: string;
+    borderKind?: string;
     borderWidth?: number;
     // (undocumented)
     cropBottom?: number;
@@ -207,14 +207,15 @@ export interface ParagraphAttrs {
     spaceAfter?: number;
     // (undocumented)
     spaceBefore?: number;
-    spacingExplicit?: SpacingExplicit;
+    spacingOverrides?: ParagraphSpacingOverrides;
     // (undocumented)
     styleId?: string;
     // (undocumented)
-    tabs?: TabStop[];
+    tabs?: TabMark[];
     // (undocumented)
     textId?: string;
     trailingBlockMarkers?: BlockBookmarkMarkers;
+    widowControl?: boolean;
 }
 
 // @public (undocumented)

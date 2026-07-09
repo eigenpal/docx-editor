@@ -31,7 +31,7 @@ export function addRowAbove(state: EditorState, dispatch?: (tr: Transaction) => 
 export function addRowBelow(state: EditorState, dispatch?: (tr: Transaction) => void): boolean;
 
 // @public (undocumented)
-export function addTabStop(position: number, alignment?: TabStopAlignment, leader?: TabLeader): Command;
+export function addTabMark(position: number, alignment?: TabJustify, leader?: TabLeader): Command;
 
 // @public (undocumented)
 export const alignCenter: Command;
@@ -270,7 +270,7 @@ export interface ImageAttrs {
     // (undocumented)
     alt?: string;
     borderColor?: string;
-    borderStyle?: string;
+    borderKind?: string;
     borderWidth?: number;
     // (undocumented)
     cropBottom?: number;
@@ -335,27 +335,6 @@ export function isInTable(state: EditorState): boolean;
 
 // @public
 export function isMarkActive(state: EditorState, markType: MarkType, attrs?: Record<string, unknown>): boolean;
-
-// @public
-export class LayoutSelectionGate {
-    getDebugInfo(): {
-        stateSeq: number;
-        renderSeq: number;
-        layoutUpdating: boolean;
-        hasPendingRender: boolean;
-        isSafe: boolean;
-    };
-    getRenderSeq(): number;
-    getStateSeq(): number;
-    incrementStateSeq(): number;
-    isSafeToRender(): boolean;
-    onLayoutComplete(seq: number): void;
-    onLayoutStart(): void;
-    onRender(callback: RenderCallback): () => void;
-    requestRender(): void;
-    reset(): void;
-    setStateSeq(seq: number): void;
-}
 
 // @public (undocumented)
 export function mergeCells(state: EditorState, dispatch?: (tr: Transaction) => void): boolean;
@@ -448,14 +427,15 @@ export interface ParagraphAttrs {
     spaceAfter?: number;
     // (undocumented)
     spaceBefore?: number;
-    spacingExplicit?: SpacingExplicit;
+    spacingOverrides?: ParagraphSpacingOverrides;
     // (undocumented)
     styleId?: string;
     // (undocumented)
-    tabs?: TabStop[];
+    tabs?: TabMark[];
     // (undocumented)
     textId?: string;
     trailingBlockMarkers?: BlockBookmarkMarkers;
+    widowControl?: boolean;
 }
 
 // @public
@@ -503,7 +483,7 @@ export function removeRepeatingSectionItemTr(state: EditorState, itemPos: number
 export function removeTableBorders(state: EditorState, dispatch?: (tr: Transaction) => void): boolean;
 
 // @public (undocumented)
-export function removeTabStop(position: number): Command;
+export function removeTabMark(position: number): Command;
 
 // @public
 export interface ResolvedParagraphStyle {
@@ -779,7 +759,7 @@ export function toProseDoc(document: Document_2, options?: ToProseDocOptions): N
 
 // @public
 export interface ToProseDocOptions {
-    defaultTabStopTwips?: number | null;
+    defaultTabMarkTwips?: number | null;
     styles?: StyleDefinitions;
 }
 
