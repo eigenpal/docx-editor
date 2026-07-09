@@ -45,7 +45,7 @@ import { Style } from '@eigenpal/docx-editor-core/types/document';
 import { StyleType } from '@eigenpal/docx-editor-core/types/document';
 import { Table } from '@eigenpal/docx-editor-core/types/document';
 import { TableCell } from '@eigenpal/docx-editor-core/types/document';
-import { TabMark } from '@eigenpal/docx-editor-core/types/document';
+import { TabStop } from '@eigenpal/docx-editor-core/types/document';
 import { Theme } from '@eigenpal/docx-editor-core/types/document';
 import { TranslationKey } from '@eigenpal/docx-editor-i18n';
 import { triggerPrint } from '@eigenpal/docx-editor-core';
@@ -482,7 +482,7 @@ export interface HorizontalRulerProps {
     // (undocumented)
     onRightMarginChange?: (marginTwips: number) => void;
     // (undocumented)
-    onTabMarkRemove?: (positionTwips: number) => void;
+    onTabStopRemove?: (positionTwips: number) => void;
     // (undocumented)
     sectionProps?: SectionProperties | null;
     // (undocumented)
@@ -490,7 +490,7 @@ export interface HorizontalRulerProps {
     // (undocumented)
     style?: CSSProperties;
     // (undocumented)
-    tabMarks?: TabMark[] | null;
+    tabStops?: TabStop[] | null;
     // (undocumented)
     unit?: 'inch' | 'cm';
     // (undocumented)
