@@ -1,28 +1,30 @@
 import { useCallback, useEffect, useRef, type RefObject } from 'react';
 import {
+  findTableOfContentsBlocks,
   hasTableOfContentsNeedingUpdate,
   updateTableOfContents,
 } from '@eigenpal/docx-editor-core/prosemirror';
+import { en as defaultLocale } from '@eigenpal/docx-editor-i18n';
 import type { Translations } from '@eigenpal/docx-editor-i18n';
 import type { PagedEditorRef } from '../PagedEditor';
-
-const DEFAULT_TOC_PROMPT =
-  'This document contains a table of contents thats out of date. Regenerate it now?';
 
 export function useTableOfContentsActions({
   isLoading,
   hasDocument,
+  promptRecheckKey,
   readOnly,
   i18n,
   pagedEditorRef,
 }: {
   isLoading: boolean;
   hasDocument: boolean;
+  promptRecheckKey: unknown;
   readOnly: boolean;
   i18n: Translations | undefined;
   pagedEditorRef: RefObject<PagedEditorRef | null>;
 }) {
   const promptedRef = useRef(false);
+  const promptedSignatureRef = useRef<string | null>(null);
   const secondPassRequestedRef = useRef(false);
   const secondPassTimerRef = useRef<number | null>(null);
 
@@ -80,7 +82,13 @@ export function useTableOfContentsActions({
     if (!view) return;
     if (!hasTableOfContentsNeedingUpdate(view.state.doc)) {
       promptedRef.current = false;
+      promptedSignatureRef.current = null;
       return;
+    }
+    const signature = tocPromptSignature(view.state.doc);
+    if (signature !== promptedSignatureRef.current) {
+      promptedRef.current = false;
+      promptedSignatureRef.current = signature;
     }
     if (promptedRef.current) return;
 
@@ -90,7 +98,7 @@ export function useTableOfContentsActions({
         const liveView = pagedEditorRef.current?.getView();
         if (!liveView || !hasTableOfContentsNeedingUpdate(liveView.state.doc)) return;
         promptedRef.current = true;
-        if (window.confirm(i18n?.toc?.updatePrompt ?? DEFAULT_TOC_PROMPT)) {
+        if (window.confirm(i18n?.toc?.updatePrompt ?? defaultLocale.toc.updatePrompt)) {
           updateToc();
         }
       });
@@ -99,11 +107,25 @@ export function useTableOfContentsActions({
       cancelAnimationFrame(outerRaf);
       cancelAnimationFrame(innerRaf);
     };
-  }, [hasDocument, i18n, isLoading, pagedEditorRef, readOnly, updateToc]);
+  }, [hasDocument, i18n, isLoading, pagedEditorRef, promptRecheckKey, readOnly, updateToc]);
 
   return {
     runPendingTocSecondPass: runPendingSecondPass,
     runTableOfContentsUpdate: updateToc,
     handleTableOfContentsInserted: handleInserted,
   };
+}
+
+function tocPromptSignature(doc: Parameters<typeof findTableOfContentsBlocks>[0]): string {
+  return findTableOfContentsBlocks(doc)
+    .filter((block) => block.needsUpdate)
+    .map((block) =>
+      [
+        block.pos,
+        block.instruction.raw,
+        String(block.node.attrs.rawPreserveXml ?? ''),
+        String(block.node.attrs.rawPreserveText ?? ''),
+      ].join('\u001f')
+    )
+    .join('\u001e');
 }
