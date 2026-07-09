@@ -201,6 +201,8 @@ export interface ParagraphAttrs {
     _sectionProperties?: SectionProperties;
     // (undocumented)
     shading?: ShadingProperties;
+    sourceColumnBreakContinuation?: boolean;
+    sourceLeadingPageBreak?: boolean;
     // (undocumented)
     spaceAfter?: number;
     // (undocumented)

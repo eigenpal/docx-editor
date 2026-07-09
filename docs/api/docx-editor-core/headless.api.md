@@ -954,6 +954,8 @@ export interface Paragraph {
     propertyChanges?: ParagraphPropertyChange[];
     renderedPageBreakBefore?: boolean;
     sectionProperties?: SectionProperties;
+    sourceColumnBreakContinuation?: boolean;
+    sourceLeadingPageBreak?: boolean;
     textId?: string;
     trailingBlockMarkers?: (BookmarkStart | BookmarkEnd)[];
     // (undocumented)
@@ -1312,6 +1314,12 @@ export interface SectionProperties {
         zOrder?: 'front' | 'back';
     };
     pageHeight?: number;
+    pageNumbers?: {
+        start?: number;
+        format?: string;
+        chapterStyle?: number;
+        chapterSeparator?: string;
+    };
     pageWidth?: number;
     paperSrcFirst?: number;
     paperSrcOther?: number;
