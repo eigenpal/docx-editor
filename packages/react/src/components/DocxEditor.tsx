@@ -962,6 +962,7 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
     useTableOfContentsActions({
       isLoading: state.isLoading,
       hasDocument: !!history.state,
+      promptRecheckKey: history.state,
       readOnly,
       i18n,
       pagedEditorRef,
@@ -1157,7 +1158,6 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
     hyperlinkDialog,
     historyStateRef,
     getCachedStyleResolver,
-    onUpdateTableOfContents: runTableOfContentsUpdate,
     onTableOfContentsInserted: handleTableOfContentsInserted,
   });
 

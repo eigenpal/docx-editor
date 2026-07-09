@@ -55,7 +55,6 @@ export function useFormattingActions({
   hyperlinkDialog,
   historyStateRef,
   getCachedStyleResolver,
-  onUpdateTableOfContents,
   onTableOfContentsInserted,
 }: {
   getActiveEditorView: () => EditorView | null | undefined;
@@ -67,7 +66,6 @@ export function useFormattingActions({
   getCachedStyleResolver: (
     styles: Parameters<typeof createStyleResolver>[0]
   ) => ReturnType<typeof createStyleResolver>;
-  onUpdateTableOfContents?: () => boolean;
   onTableOfContentsInserted?: () => void;
 }) {
   const handleFormat = useCallback(
@@ -241,9 +239,8 @@ export function useFormattingActions({
     if (!view) return;
     insertTableOfContents(view.state, view.dispatch);
     onTableOfContentsInserted?.();
-    onUpdateTableOfContents?.();
     focusActiveEditor();
-  }, [getActiveEditorView, focusActiveEditor, onTableOfContentsInserted, onUpdateTableOfContents]);
+  }, [getActiveEditorView, focusActiveEditor, onTableOfContentsInserted]);
 
   return {
     handleFormat,
