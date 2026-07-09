@@ -2,10 +2,12 @@ import { nextTick, onBeforeUnmount, ref, watch, type Ref } from 'vue';
 import type { EditorView } from 'prosemirror-view';
 import type { Layout } from '@eigenpal/docx-editor-core/layout-engine';
 import {
+  findTableOfContentsBlocks,
   hasTableOfContentsNeedingUpdate,
   insertTableOfContents,
   updateTableOfContents,
 } from '@eigenpal/docx-editor-core/prosemirror';
+import type { Node as PMNode } from 'prosemirror-model';
 
 export interface UseTableOfContentsActionsOptions {
   editorView: Ref<EditorView | null>;
@@ -26,6 +28,7 @@ export function useTableOfContentsActions({
   t,
 }: UseTableOfContentsActionsOptions): UseTableOfContentsActionsReturn {
   const prompted = ref(false);
+  const promptedSignature = ref<string | null>(null);
   const secondPassRequested = ref(false);
   let secondPassTimer: number | null = null;
 
@@ -80,7 +83,13 @@ export function useTableOfContentsActions({
       if (!view || readOnly.value) return;
       if (!hasTableOfContentsNeedingUpdate(view.state.doc)) {
         prompted.value = false;
+        promptedSignature.value = null;
         return;
+      }
+      const signature = tocPromptSignature(view.state.doc);
+      if (signature !== promptedSignature.value) {
+        prompted.value = false;
+        promptedSignature.value = signature;
       }
       if (prompted.value || !currentLayout) return;
       prompted.value = true;
@@ -99,4 +108,18 @@ export function useTableOfContentsActions({
     runTableOfContentsUpdate,
     handleInsertTableOfContents,
   };
+}
+
+function tocPromptSignature(doc: PMNode): string {
+  return findTableOfContentsBlocks(doc)
+    .filter((block) => block.needsUpdate)
+    .map((block) =>
+      [
+        block.pos,
+        block.instruction.raw,
+        String(block.node.attrs.rawPreserveXml ?? ''),
+        String(block.node.attrs.rawPreserveText ?? ''),
+      ].join('\u001f')
+    )
+    .join('\u001e');
 }
