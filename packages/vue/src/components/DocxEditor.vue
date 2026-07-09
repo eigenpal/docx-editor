@@ -278,8 +278,6 @@
             :pages-are-current="paintedPagesAreCurrent"
           />
 
-          <!-- Floating "Add comment" button — appears at the right edge
-             of the page when the user has a non-empty selection. -->
           <button
             v-if="floatingCommentBtn && !isAddingComment && !readOnly"
             type="button"
@@ -291,9 +289,6 @@
             <MaterialSymbol name="add_comment" :size="16" />
           </button>
 
-          <!-- Table quick-action "+" button — appears on hover near a
-             table edge. Hovering the button cancels the hide-debounce
-             so the user can actually reach it. -->
           <button
             v-if="tableInsertButton && !readOnly"
             type="button"
@@ -322,9 +317,6 @@
             </svg>
           </button>
 
-          <!-- Hyperlink popup — lives inside the scroll container so it
-               moves with the link on scroll for free (position: absolute
-               inside the pages-viewport, no JS scroll listener). -->
           <HyperlinkPopup
             :data="hyperlinkPopupData"
             :read-only="readOnly"
@@ -361,9 +353,6 @@
       </div>
     </div>
 
-    <!-- Hidden file picker for File > Open (mirrors React DocxEditor's
-         `docxInputRef`). Host slots can still expose their own button
-         (e.g. examples/vue/src/App.vue's title-bar-right `Open`). -->
     <input
       ref="docxInputRef"
       type="file"
@@ -371,7 +360,6 @@
       style="display: none"
       @change="handleDocxFileChange"
     />
-    <!-- Hidden image picker for Insert > Image (direct insert, no dialog). -->
     <input
       ref="imageInputRef"
       type="file"
@@ -405,12 +393,7 @@ import {
   readHfSelectionGeometry,
 } from '@eigenpal/docx-editor-core/flow-model';
 import { getSelectionInfo as getSelectionInfoImpl } from '../utils/refApiQueries';
-import {
-  extractSelectionState,
-  hasTableOfContentsNeedingUpdate,
-  insertTableOfContents,
-  updateTableOfContents,
-} from '@eigenpal/docx-editor-core/prosemirror';
+import { extractSelectionState } from '@eigenpal/docx-editor-core/prosemirror';
 import { nearestHfHostEl } from '../utils/domQueries';
 import Toolbar from './Toolbar.vue';
 import TableToolbar from './ui/TableToolbar.vue';
@@ -451,6 +434,7 @@ import { useContextMenus } from '../composables/useContextMenus';
 import { usePagesPointer } from '../composables/usePagesPointer';
 import { useSelectionSync } from '../composables/useSelectionSync';
 import { useMenuActions } from '../composables/useMenuActions';
+import { useTableOfContentsActions } from '../composables/useTableOfContentsActions';
 import { useDocumentLifecycle } from '../composables/useDocumentLifecycle';
 import { usePainterOverlayRefresh } from '../composables/usePainterOverlayRefresh';
 import { useEditorDocumentMetadata } from '../composables/useEditorDocumentMetadata';
@@ -1023,54 +1007,11 @@ const {
   setDocument,
 });
 
-const tocSecondPassRequested = ref(false);
-let tocSecondPassTimer: ReturnType<typeof window.setTimeout> | null = null;
-
-function runPendingTocSecondPass() {
-  if (!tocSecondPassRequested.value || !editorView.value || !layout.value) return;
-  tocSecondPassRequested.value = false;
-  updateTableOfContents(editorView.value.state, editorView.value.dispatch, { layout: layout.value });
-}
-
-function requestTocSecondPass() {
-  tocSecondPassRequested.value = true;
-  if (tocSecondPassTimer != null) window.clearTimeout(tocSecondPassTimer);
-  tocSecondPassTimer = window.setTimeout(() => {
-    tocSecondPassTimer = null;
-    requestAnimationFrame(runPendingTocSecondPass);
-  }, 120);
-}
-
-function runTableOfContentsUpdate(position?: number | null): boolean {
-  if (!editorView.value) return false;
-  const updated = updateTableOfContents(editorView.value.state, editorView.value.dispatch, {
-    position,
-    layout: layout.value,
-  });
-  if (updated) requestTocSecondPass();
-  return updated;
-}
-
-function handleInsertTableOfContents() {
-  if (!editorView.value) return;
-  insertTableOfContents(editorView.value.state, editorView.value.dispatch);
-  tocPrompted.value = true;
-  void nextTick(() => {
-    requestAnimationFrame(() => runTableOfContentsUpdate());
-  });
-  editorView.value.focus();
-}
-
-watch(
+const { runTableOfContentsUpdate, handleInsertTableOfContents } = useTableOfContentsActions({
+  editorView,
   layout,
-  () => {
-    if (tocSecondPassRequested.value) requestAnimationFrame(runPendingTocSecondPass);
-  },
-  { flush: 'post' }
-);
-
-onBeforeUnmount(() => {
-  if (tocSecondPassTimer != null) window.clearTimeout(tocSecondPassTimer);
+  readOnly,
+  t,
 });
 
 const {
@@ -1128,29 +1069,6 @@ useDocumentLifecycle({
   loadDocument,
   sidebarAutoOpenedRef,
 });
-
-// Prompt at most once per dirty/empty-TOC period: the flag resets only when
-// the doc no longer needs an update, so a decline doesn't re-prompt on every
-// subsequent edit (`document.value` gets a new identity per transaction).
-// Waiting for a non-null layout ensures an accepted update resolves real
-// page numbers (layout is computed async after the view mounts).
-const tocPrompted = ref(false);
-watch(
-  [editorView, layout],
-  ([view, currentLayout]) => {
-    if (!view || readOnly.value) return;
-    if (!hasTableOfContentsNeedingUpdate(view.state.doc)) {
-      tocPrompted.value = false;
-      return;
-    }
-    if (tocPrompted.value || !currentLayout) return;
-    tocPrompted.value = true;
-    if (window.confirm(t('toc.updatePrompt'))) {
-      runTableOfContentsUpdate();
-    }
-  },
-  { flush: 'post' }
-);
 
 const getEditorViewForDecorations = () => editorView.value;
 const getPagesContainerForDecorations = () => pagesRef.value;
