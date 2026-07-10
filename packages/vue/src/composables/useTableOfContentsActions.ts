@@ -1,6 +1,6 @@
 import { nextTick, onBeforeUnmount, ref, watch, type Ref } from 'vue';
 import type { EditorView } from 'prosemirror-view';
-import type { Layout } from '@eigenpal/docx-editor-core/layout-engine';
+import type { PageLayout } from '@eigenpal/docx-editor-core/pagination-model';
 import {
   findTableOfContentsBlocks,
   hasTableOfContentsNeedingUpdate,
@@ -8,12 +8,13 @@ import {
   updateTableOfContents,
 } from '@eigenpal/docx-editor-core/prosemirror';
 import type { Node as PMNode } from 'prosemirror-model';
+import type { TFunction } from '@eigenpal/docx-editor-i18n';
 
 export interface UseTableOfContentsActionsOptions {
   editorView: Ref<EditorView | null>;
-  layout: Ref<Layout | null>;
+  layout: Ref<PageLayout | null>;
   readOnly: Ref<boolean>;
-  t: (key: string) => string;
+  t: TFunction;
 }
 
 export interface UseTableOfContentsActionsReturn {

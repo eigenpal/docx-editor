@@ -1009,7 +1009,7 @@ const {
 
 const { runTableOfContentsUpdate, handleInsertTableOfContents } = useTableOfContentsActions({
   editorView,
-  layout,
+  layout: pageLayout,
   readOnly,
   t,
 });
@@ -1028,7 +1028,7 @@ const {
   zoom,
   showImageProperties,
   getCommands,
-  layout,
+  layout: pageLayout,
   clearOverlay,
   setPmSelection,
   resolvePos,
