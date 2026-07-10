@@ -37,6 +37,7 @@ import { useSelectionTracker } from './DocxEditor/hooks/useSelectionTracker';
 import { useFloatingCommentBtn } from './DocxEditor/hooks/useFloatingCommentBtn';
 import { useActiveEditor } from './DocxEditor/hooks/useActiveEditor';
 import { useScrollPageInfo } from './DocxEditor/hooks/useScrollPageInfo';
+import { useTableOfContentsActions } from './DocxEditor/hooks/useTableOfContentsActions';
 import { DocxEditorOverlays } from './DocxEditor/DocxEditorOverlays';
 import { DocxEditorDialogs } from './DocxEditor/DocxEditorDialogs';
 import { DocxEditorToolbar } from './DocxEditor/DocxEditorToolbar';
@@ -406,6 +407,8 @@ export interface DocxEditorRef {
   loadDocument: (doc: Document) => void;
   /** Load a DOCX buffer programmatically (ArrayBuffer, Uint8Array, Blob, or File) */
   loadDocumentBuffer: (buffer: DocxInput) => Promise<void>;
+  /** Regenerate cached results for detected Table of Contents fields. */
+  updateTableOfContents: () => boolean;
   /** Add a comment programmatically. Anchored by Word `w14:paraId` so
    * it survives unrelated edits. Returns the comment ID, or null if
    * the paraId is unknown or the search text isn't found / is ambiguous. */
@@ -692,9 +695,7 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
     commentsSidebarOpen,
     onCommentsSidebarOpenChange
   );
-  // Auto-open the sidebar the first time a comment / tracked change
-  // appears so users see the card without manually toggling. Latches so
-  // a subsequent close stays closed; reset on doc reload.
+  // Auto-open sidebar on first comment/TC card; latch so later closes stick.
   const sidebarAutoOpenedRef = useRef(false);
   const [expandedSidebarItem, setExpandedSidebarItem] = useState<string | null>(null);
   // PagedEditor ref declared early so useCommentManagement (which reads
@@ -949,19 +950,23 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
     focusActiveEditor,
   });
 
-  // Mirror PM state on each external document load (mount-time view creation
-  // is handled by PagedEditor's `onReady` below; this effect catches subsequent
-  // loads via `document`/`documentBuffer` prop changes, which go through
-  // OffscreenEditorHost's `updateState` and never fire `handleDocumentChange`).
-  // Effects run child-first, so `view.state` already reflects the new doc by
-  // the time this runs.
+  // Mirror PM state on external document loads (OffscreenEditorHost updateState path).
   useEffect(() => {
     if (state.isLoading || !history.state) return;
     const view = pagedEditorRef.current?.getView();
     if (view) setPmState(view.state);
   }, [state.isLoading, history.state]);
 
-  // Auto-open the sidebar once if the loaded document already has tracked changes.
+  const { runPendingTocSecondPass, runTableOfContentsUpdate, handleTableOfContentsInserted } =
+    useTableOfContentsActions({
+      isLoading: state.isLoading,
+      hasDocument: !!history.state,
+      promptRecheckKey: history.state,
+      readOnly,
+      i18n,
+      pagedEditorRef,
+    });
+
   useCommentLifecycle({
     commentToRevision,
     setComments,
@@ -974,7 +979,6 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
 
   useFontLifecycle(fonts, onFontsLoadedCallback, onError);
 
-  // Sync editing mode to ProseMirror suggestion mode plugin
   useEffect(() => {
     const view = pagedEditorRef.current?.getView();
     if (view) {
@@ -1153,6 +1157,7 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
     hyperlinkDialog,
     historyStateRef,
     getCachedStyleResolver,
+    onTableOfContentsInserted: handleTableOfContentsInserted,
   });
 
   const handleZoomChange = useCallback((zoom: number) => {
@@ -1191,6 +1196,8 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
     openSplitCellDialog,
     scrollContainerRef,
     editorContentRef,
+    getLayout: () => pagedEditorRef.current?.getLayout() ?? null,
+    onUpdateTableOfContents: runTableOfContentsUpdate,
     i18n,
     onAddComment: useCallback(
       ({ from, to, yPos }: { from: number; to: number; yPos: number | null }) => {
@@ -1284,6 +1291,7 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
     selectionChangeSubscribersRef,
     getCachedStyleResolver,
     commentIdAllocator: commentIdAllocatorRef.current,
+    onUpdateTableOfContents: runTableOfContentsUpdate,
   });
 
   const {
@@ -1623,11 +1631,6 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
     setExpandedSidebarItem(cursorSidebarItem);
   }, [handleSelectionChange, resolvedCommentIds, commentSidebarItems, revisionIdAliases]);
 
-  // Auto-open the sidebar the first time a comment or tracked-change card
-  // is produced — covers the case where the user inserts an empty tracked
-  // table: no cursor anchor exists yet (no inline marks at cursor), so the
-  // cursor-driven open above doesn't fire. Latches via a ref so a later
-  // manual close stays closed.
   useEffect(() => {
     if (sidebarAutoOpenedRef.current) return;
     if (commentSidebarItems.length === 0) return;
@@ -1635,7 +1638,6 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
     setShowCommentsSidebar(true);
   }, [commentSidebarItems]);
 
-  // Exclude expanded resolved comment from hide-set so its text gets highlighted
   const resolvedIdsForRender = useMemo(() => {
     if (!expandedSidebarItem?.startsWith('comment-')) return resolvedCommentIds;
     const expandedId = parseInt(expandedSidebarItem.slice(8), 10);
@@ -1654,7 +1656,6 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
     overflowAnchor: 'none',
   };
 
-  // Render loading state
   if (state.isLoading) {
     return (
       <div
@@ -1667,7 +1668,6 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
     );
   }
 
-  // Render error state
   if (state.parseError) {
     return (
       <div
@@ -1680,7 +1680,6 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
     );
   }
 
-  // Render placeholder when no document
   if (!history.state) {
     return (
       <div
@@ -1899,6 +1898,7 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
             resolvedIdsForRender={resolvedIdsForRender}
             setShowCommentsSidebar={setShowCommentsSidebar}
             onTotalPagesChange={(totalPages) => {
+              requestAnimationFrame(runPendingTocSecondPass);
               setScrollPageInfo((prev) =>
                 prev.totalPages === totalPages ? prev : { ...prev, totalPages }
               );

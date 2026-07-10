@@ -609,7 +609,8 @@
       "makeFormal": "औपचारिक बनाएं",
       "makeCasual": "अनौपचारिक बनाएं",
       "custom": "कस्टम"
-    }
+    },
+    "updateTableOfContents": "विषय-सूची अपडेट करें"
   },
   "documentOutline": {
     "ariaLabel": "दस्तावेज़ की रूपरेखा",
@@ -866,5 +867,8 @@
     "tablePropertiesChanged": null,
     "tableDeleted": null,
     "tableInserted": null
+  },
+  "toc": {
+    "updatePrompt": null
   }
 }

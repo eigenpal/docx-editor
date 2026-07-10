@@ -157,6 +157,9 @@ export function findParagraphByParaId(doc: Node_2, paraId: string): {
 // @public
 export function findStartPosForParaId(doc: Node_2, paraId: string): number | null;
 
+// @public (undocumented)
+export function findTableOfContentsBlocks(doc: Node_2): TocBlockInfo[];
+
 // @public
 export interface FontFamilyAttrs {
     // (undocumented)
@@ -249,6 +252,9 @@ export function getStyleId(state: EditorState): string | null;
 // @public (undocumented)
 export function getTableContext(state: EditorState): TableContextInfo;
 
+// @public (undocumented)
+export function hasTableOfContentsNeedingUpdate(doc: Node_2): boolean;
+
 // @public
 export function headerFooterToProseDoc(content: BlockContent[], options?: ToProseDocOptions & {
     theme?: Theme | null;
@@ -325,6 +331,9 @@ export const insertPageBreak: Command;
 export function insertTable(rows: number, cols: number): (state: EditorState, dispatch?: (tr: Transaction) => void) => boolean;
 
 // @public (undocumented)
+export function insertTableOfContents(state: EditorState, dispatch?: (tr: Transaction) => void): boolean;
+
+// @public (undocumented)
 export function isHyperlinkActive(state: EditorState): boolean;
 
 // @public (undocumented)
@@ -335,6 +344,9 @@ export function isInTable(state: EditorState): boolean;
 
 // @public
 export function isMarkActive(state: EditorState, markType: MarkType, attrs?: Record<string, unknown>): boolean;
+
+// @public (undocumented)
+export function isPositionInsideTableOfContents(doc: Node_2, position: number): boolean;
 
 // @public (undocumented)
 export function mergeCells(state: EditorState, dispatch?: (tr: Transaction) => void): boolean;
@@ -437,6 +449,9 @@ export interface ParagraphAttrs {
     trailingBlockMarkers?: BlockBookmarkMarkers;
     widowControl?: boolean;
 }
+
+// @public (undocumented)
+export function parseTocInstruction(rawInstruction: string): TocInstruction | null;
 
 // @public
 export interface PMContentControl {
@@ -725,6 +740,48 @@ export interface TextColorAttrs {
 export { TextSelection }
 
 // @public (undocumented)
+export interface TocBlockInfo {
+    // (undocumented)
+    instruction: TocInstruction;
+    // (undocumented)
+    needsUpdate: boolean;
+    // (undocumented)
+    node: Node_2;
+    // (undocumented)
+    pos: number;
+}
+
+// @public (undocumented)
+export interface TocHeading {
+    // (undocumented)
+    bookmark: string;
+    // (undocumented)
+    level: number;
+    // (undocumented)
+    pageNumber: number | null;
+    // (undocumented)
+    pmPos: number;
+    // (undocumented)
+    text: string;
+}
+
+// @public (undocumented)
+export interface TocInstruction {
+    // (undocumented)
+    hyperlink: boolean;
+    // (undocumented)
+    outlineEnd: number;
+    // (undocumented)
+    outlineStart: number;
+    // (undocumented)
+    raw: string;
+    // (undocumented)
+    type: 'TOC';
+    // (undocumented)
+    unknownSwitches: string[];
+}
+
+// @public (undocumented)
 export const toggleBold: Command;
 
 // @public (undocumented)
@@ -773,5 +830,14 @@ export interface UnderlineAttrs {
 
 // @public
 export function updateDocumentContent(originalDocument: Document_2, pmDoc: Node_2): Document_2;
+
+// @public (undocumented)
+export function updateTableOfContents(state: EditorState, dispatch?: (tr: Transaction) => void, options?: UpdateTableOfContentsOptions): boolean;
+
+// @public (undocumented)
+export interface UpdateTableOfContentsOptions {
+    layout?: PageLayout | null;
+    position?: number | null;
+}
 
 ```

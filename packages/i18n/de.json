@@ -609,7 +609,8 @@
       "makeFormal": "Formeller formulieren",
       "makeCasual": "Lockerer formulieren",
       "custom": "Benutzerdefiniert"
-    }
+    },
+    "updateTableOfContents": "Inhaltsverzeichnis aktualisieren"
   },
   "documentOutline": {
     "ariaLabel": "Dokumentgliederung",
@@ -866,5 +867,8 @@
     "tablePropertiesChanged": null,
     "tableDeleted": null,
     "tableInserted": null
+  },
+  "toc": {
+    "updatePrompt": null
   }
 }

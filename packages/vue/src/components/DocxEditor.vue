@@ -278,8 +278,6 @@
             :pages-are-current="paintedPagesAreCurrent"
           />
 
-          <!-- Floating "Add comment" button — appears at the right edge
-             of the page when the user has a non-empty selection. -->
           <button
             v-if="floatingCommentBtn && !isAddingComment && !readOnly"
             type="button"
@@ -291,9 +289,6 @@
             <MaterialSymbol name="add_comment" :size="16" />
           </button>
 
-          <!-- Table quick-action "+" button — appears on hover near a
-             table edge. Hovering the button cancels the hide-debounce
-             so the user can actually reach it. -->
           <button
             v-if="tableInsertButton && !readOnly"
             type="button"
@@ -322,9 +317,6 @@
             </svg>
           </button>
 
-          <!-- Hyperlink popup — lives inside the scroll container so it
-               moves with the link on scroll for free (position: absolute
-               inside the pages-viewport, no JS scroll listener). -->
           <HyperlinkPopup
             :data="hyperlinkPopupData"
             :read-only="readOnly"
@@ -361,9 +353,6 @@
       </div>
     </div>
 
-    <!-- Hidden file picker for File > Open (mirrors React DocxEditor's
-         `docxInputRef`). Host slots can still expose their own button
-         (e.g. examples/vue/src/App.vue's title-bar-right `Open`). -->
     <input
       ref="docxInputRef"
       type="file"
@@ -371,7 +360,6 @@
       style="display: none"
       @change="handleDocxFileChange"
     />
-    <!-- Hidden image picker for Insert > Image (direct insert, no dialog). -->
     <input
       ref="imageInputRef"
       type="file"
@@ -446,6 +434,7 @@ import { useContextMenus } from '../composables/useContextMenus';
 import { usePagesPointer } from '../composables/usePagesPointer';
 import { useSelectionSync } from '../composables/useSelectionSync';
 import { useMenuActions } from '../composables/useMenuActions';
+import { useTableOfContentsActions } from '../composables/useTableOfContentsActions';
 import { useDocumentLifecycle } from '../composables/useDocumentLifecycle';
 import { usePainterOverlayRefresh } from '../composables/usePainterOverlayRefresh';
 import { useEditorDocumentMetadata } from '../composables/useEditorDocumentMetadata';
@@ -1018,6 +1007,13 @@ const {
   setDocument,
 });
 
+const { runTableOfContentsUpdate, handleInsertTableOfContents } = useTableOfContentsActions({
+  editorView,
+  layout: pageLayout,
+  readOnly,
+  t,
+});
+
 const {
   contextMenu,
   imageContextMenu,
@@ -1032,9 +1028,11 @@ const {
   zoom,
   showImageProperties,
   getCommands,
+  layout: pageLayout,
   clearOverlay,
   setPmSelection,
   resolvePos,
+  onUpdateTableOfContents: runTableOfContentsUpdate,
 });
 
 const { handleMenuAction, handleMenuTableInsert } = useMenuActions({
@@ -1051,6 +1049,7 @@ const { handleMenuAction, handleMenuTableInsert } = useMenuActions({
   handleInsertPageBreak,
   handleInsertSectionBreakNextPage,
   handleInsertSectionBreakContinuous,
+  handleInsertTOC: handleInsertTableOfContents,
   handleToggleOutline,
   handleToggleSidebar,
   downloadCurrentDocument,
@@ -1193,6 +1192,7 @@ const { exposed } = useDocxEditorRefApi({
   save,
   loadDocument,
   loadDocumentBuffer,
+  onUpdateTableOfContents: runTableOfContentsUpdate,
   addComment,
   replyToComment,
   resolveComment,
