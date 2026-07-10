@@ -163,12 +163,12 @@ export const wordFeatures: WordFeature[] = [
     id: 'text.symbols',
     name: 'Symbol characters (w:sym)',
     category: 'text',
-    editing: 'none',
-    rendering: 'none',
-    roundTrip: 'partial',
+    editing: 'partial',
+    rendering: 'full',
+    roundTrip: 'full',
     tier: 'community',
     notes:
-      'Round-trip through a headless parse/serialize, but are not rendered in the editor and are dropped if the run is edited.',
+      'Symbol runs render and survive ProseMirror edits and save. Symbols can be inserted from the Insert menu, but existing symbol-run properties are not directly editable.',
   },
 
   // --- Paragraphs & styles ---------------------------------------------
@@ -598,12 +598,12 @@ export const wordFeatures: WordFeature[] = [
     id: 'layout.even-odd-headers',
     name: 'Different even & odd headers',
     category: 'layout',
-    editing: 'none',
-    rendering: 'none',
+    editing: 'partial',
+    rendering: 'full',
     roundTrip: 'full',
     tier: 'community',
     notes:
-      'Header/footer references round-trip; the even-page variant is not yet swapped in. Different first page is supported.',
+      'First, even, and default variants are selected per page and editable in place. The section setting that enables different even and odd pages has no UI.',
   },
   {
     id: 'layout.vertical-align',
@@ -631,10 +631,10 @@ export const wordFeatures: WordFeature[] = [
     category: 'layout',
     editing: 'none',
     rendering: 'none',
-    roundTrip: 'none',
+    roundTrip: 'full',
     tier: 'community',
     notes:
-      'Not modeled; numbering start/format (i, ii, A) is dropped and PAGE fields render as arabic.',
+      'Section numbering start, format, chapter style, and chapter separator parse and serialize. PAGE field display still renders as decimal rather than applying pgNumType formatting.',
   },
 
   // --- Review ---------------------------------------------------------------
@@ -734,7 +734,7 @@ export const wordFeatures: WordFeature[] = [
     roundTrip: 'full',
     tier: 'community',
     notes:
-      'Existing TOCs render with tab leaders and working links; stale or empty TOCs can be regenerated from document headings.',
+      'TOCs can be inserted and stale or empty TOCs regenerated from document headings, with tab leaders, page numbers, and working links.',
   },
   {
     id: 'fields.other-codes',

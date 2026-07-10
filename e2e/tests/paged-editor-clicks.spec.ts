@@ -271,6 +271,25 @@ test.describe('Paged Editor - Double/Triple Click Selection', () => {
     }
   });
 
+  test('double-click keeps selection within a tab-separated word', async ({ page }) => {
+    await editor.typeText('Before');
+    await editor.pressTab();
+    await editor.typeText('After');
+
+    const afterSpan = page.locator('.layout-page-content span:has-text("After")').first();
+    const boundingBox = await afterSpan.boundingBox();
+    expect(boundingBox).not.toBeNull();
+
+    await page.mouse.dblclick(
+      boundingBox!.x + boundingBox!.width / 2,
+      boundingBox!.y + boundingBox!.height / 2
+    );
+
+    await expect
+      .poll(() => page.evaluate(() => window.getSelection()?.toString().trim() ?? ''))
+      .toBe('After');
+  });
+
   test('triple-click selects paragraph', async ({ page }) => {
     // Type multiple paragraphs
     await editor.typeText('First paragraph with some text.');
