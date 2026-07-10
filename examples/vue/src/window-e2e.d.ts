@@ -17,6 +17,7 @@ declare global {
       getTotalPages: () => number;
       getCurrentPage: () => number;
       saveByteLength: () => Promise<number | null>;
+      updateTableOfContents: () => boolean;
       agentAddComment: (opts: {
         paraId: string;
         text: string;
