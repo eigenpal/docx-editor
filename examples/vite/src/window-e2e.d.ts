@@ -17,6 +17,7 @@ declare global {
       getTotalPages: () => number;
       getCurrentPage: () => number;
       saveByteLength: () => Promise<number | null>;
+      updateTableOfContents: () => boolean;
       // Content-control (SDT) addressing surface
       agentGetContentControls: (filter?: {
         tag?: string;

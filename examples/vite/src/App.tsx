@@ -350,6 +350,7 @@ export function App() {
         const buffer = await editorRef.current?.save();
         return buffer?.byteLength ?? null;
       },
+      updateTableOfContents: () => editorRef.current?.updateTableOfContents() ?? false,
       // Content-control (SDT) addressing surface.
       agentGetContentControls: (filter?: {
         tag?: string;
