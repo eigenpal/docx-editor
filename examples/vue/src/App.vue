@@ -359,6 +359,7 @@ onMounted(async () => {
         const buffer = await editorRef.value?.save();
         return buffer?.byteLength ?? null;
       },
+      updateTableOfContents: () => editorRef.value?.updateTableOfContents() ?? false,
       agentAddComment: (opts) =>
         editorRef.value?.addComment({
           paraId: opts.paraId,
