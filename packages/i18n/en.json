@@ -47,6 +47,9 @@
     "help": "Help",
     "reportIssue": "Report issue"
   },
+  "toc": {
+    "updatePrompt": "This document contains a table of contents thats out of date. Regenerate it now?"
+  },
   "formattingBar": {
     "groups": {
       "history": "History",
@@ -610,6 +613,7 @@
     "pastePlainTextShortcut": "Ctrl+Shift+V",
     "delete": "Delete",
     "deleteShortcut": "Del",
+    "updateTableOfContents": "Update table of contents",
     "selectAll": "Select All",
     "selectAllShortcut": "Ctrl+A",
     "selected": "Selected:",

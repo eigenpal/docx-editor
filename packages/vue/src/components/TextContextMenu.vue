@@ -57,6 +57,7 @@ const props = defineProps<{
   // cell (prosemirror-tables' splitCell no-ops if it can't split).
   canMergeCells?: boolean;
   canSplitCell?: boolean;
+  inToc?: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -134,6 +135,17 @@ const visibleItems = computed<ContextMenuItem[]>(() => {
         label: t('imageOverlay.deleteImage'),
         action: 'deleteImage',
         shortcut: t('contextMenu.deleteShortcut'),
+      }
+    );
+  }
+
+  if (props.inToc && props.isEditable) {
+    items.push(
+      { id: 'div-toc', label: '', action: '', divider: true },
+      {
+        id: 'updateTableOfContents',
+        label: t('contextMenu.updateTableOfContents'),
+        action: 'updateTableOfContents',
       }
     );
   }

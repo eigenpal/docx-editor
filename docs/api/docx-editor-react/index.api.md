@@ -223,6 +223,7 @@ export interface DocxEditorRef {
         styleId: string;
     }) => boolean;
     setZoom: (zoom: number) => void;
+    updateTableOfContents: () => boolean;
 }
 
 // @public

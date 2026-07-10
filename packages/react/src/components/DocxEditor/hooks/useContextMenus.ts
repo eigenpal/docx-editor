@@ -13,7 +13,10 @@ import {
   selectTable as pmSelectTable,
   deleteTable as pmDeleteTable,
   type TableContextInfo,
+  isPositionInsideTableOfContents,
+  updateTableOfContents,
 } from '@eigenpal/docx-editor-core/prosemirror';
+import type { PageLayout } from '@eigenpal/docx-editor-core/pagination-model';
 import {
   setImageWrapType,
   type ImageLayoutTarget,
@@ -33,6 +36,7 @@ interface ContextMenuState {
   position: { x: number; y: number };
   hasSelection: boolean;
   cursorInTable: boolean;
+  cursorInToc: boolean;
   tableContext: TableContextInfo | null;
 }
 
@@ -59,6 +63,8 @@ export function useContextMenus({
   openSplitCellDialog,
   scrollContainerRef,
   editorContentRef,
+  getLayout,
+  onUpdateTableOfContents,
   i18n,
   onAddComment,
 }: {
@@ -67,6 +73,13 @@ export function useContextMenus({
   openSplitCellDialog: () => void;
   scrollContainerRef: React.RefObject<HTMLDivElement | null>;
   editorContentRef: React.RefObject<HTMLDivElement | null>;
+  getLayout: () =>
+    | {
+        pages: readonly { readonly number: number; readonly size: { w: number; h: number } }[];
+      }
+    | null
+    | undefined;
+  onUpdateTableOfContents?: (position?: number | null) => boolean;
   i18n: Translations | undefined;
   onAddComment: (range: { from: number; to: number; yPos: number | null }) => void;
 }) {
@@ -76,6 +89,7 @@ export function useContextMenus({
     position: { x: 0, y: 0 },
     hasSelection: false,
     cursorInTable: false,
+    cursorInToc: false,
     tableContext: null,
   });
 
@@ -97,11 +111,13 @@ export function useContextMenus({
       const tableContext = view ? getTableContext(view.state) : { isInTable: false };
       const { from, to } = view?.state.selection ?? { from: 0, to: 0 };
       const hasSel = from !== to;
+      const cursorInToc = view ? isPositionInsideTableOfContents(view.state.doc, from) : false;
       setContextMenu({
         isOpen: true,
         position: { x: e.clientX, y: e.clientY },
         hasSelection: hasSel,
         cursorInTable: tableContext.isInTable,
+        cursorInToc,
         tableContext: tableContext.isInTable ? tableContext : null,
       });
     },
@@ -134,11 +150,14 @@ export function useContextMenus({
       }
       const view = getActiveEditorView();
       const tableContext = view ? getTableContext(view.state) : { isInTable: false };
+      const cursorPos = view?.state.selection.from ?? 0;
+      const cursorInToc = view ? isPositionInsideTableOfContents(view.state.doc, cursorPos) : false;
       setContextMenu({
         isOpen: true,
         position: data,
         hasSelection: data.hasSelection,
         cursorInTable: tableContext.isInTable,
+        cursorInToc,
         tableContext: tableContext.isInTable ? tableContext : null,
       });
     },
@@ -196,6 +215,7 @@ export function useContextMenus({
       position: { x: 0, y: 0 },
       hasSelection: false,
       cursorInTable: false,
+      cursorInToc: false,
       tableContext: null,
     });
   }, []);
@@ -233,6 +253,13 @@ export function useContextMenus({
         dividerAfter: !contextMenu.hasSelection && !contextMenu.cursorInTable,
       },
     ];
+    if (contextMenu.cursorInToc) {
+      items.push({
+        action: 'updateTableOfContents',
+        label: t('contextMenu.updateTableOfContents'),
+        dividerAfter: true,
+      });
+    }
     if (contextMenu.hasSelection) {
       items.push({
         action: 'addComment',
@@ -276,7 +303,14 @@ export function useContextMenus({
       shortcut: formatKeys(t('contextMenu.selectAllShortcut')),
     });
     return items;
-  }, [contextMenu.hasSelection, contextMenu.cursorInTable, contextMenu.tableContext, i18n, t]);
+  }, [
+    contextMenu.hasSelection,
+    contextMenu.cursorInTable,
+    contextMenu.cursorInToc,
+    contextMenu.tableContext,
+    i18n,
+    t,
+  ]);
 
   const handleContextMenuAction = useCallback(
     async (action: TextContextAction) => {
@@ -348,6 +382,15 @@ export function useContextMenus({
             )
           );
           break;
+        case 'updateTableOfContents':
+          if (!onUpdateTableOfContents?.(view.state.selection.from)) {
+            updateTableOfContents(view.state, view.dispatch, {
+              position: view.state.selection.from,
+              // Runtime getLayout() returns full PageLayout; public ref type is narrowed.
+              layout: (getLayout() as PageLayout | null | undefined) ?? null,
+            });
+          }
+          break;
         case 'addRowAbove':
           addRowAbove(view.state, view.dispatch);
           break;
@@ -406,6 +449,8 @@ export function useContextMenus({
       openSplitCellDialog,
       scrollContainerRef,
       editorContentRef,
+      getLayout,
+      onUpdateTableOfContents,
       onAddComment,
     ]
   );

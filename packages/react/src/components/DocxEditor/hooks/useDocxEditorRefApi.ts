@@ -66,6 +66,7 @@ export function useDocxEditorRefApi({
   selectionChangeSubscribersRef,
   getCachedStyleResolver,
   commentIdAllocator,
+  onUpdateTableOfContents,
 }: {
   ref: React.ForwardedRef<DocxEditorRef>;
   agentRef: React.RefObject<DocumentAgent | null>;
@@ -88,6 +89,7 @@ export function useDocxEditorRefApi({
     styles: Parameters<typeof createStyleResolver>[0]
   ) => ReturnType<typeof createStyleResolver>;
   commentIdAllocator: CommentIdAllocator;
+  onUpdateTableOfContents?: () => boolean;
 }) {
   useImperativeHandle(
     ref,
@@ -113,6 +115,7 @@ export function useDocxEditorRefApi({
       print: handleDirectPrint,
       loadDocument: loadParsedDocument,
       loadDocumentBuffer: loadBuffer,
+      updateTableOfContents: () => onUpdateTableOfContents?.() ?? false,
 
       addComment: (options) => {
         const view = pagedEditorRef.current?.getView();
@@ -283,6 +286,7 @@ export function useDocxEditorRefApi({
       loadParsedDocument,
       loadBuffer,
       comments,
+      onUpdateTableOfContents,
     ]
   );
 }

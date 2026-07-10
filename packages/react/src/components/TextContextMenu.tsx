@@ -36,6 +36,7 @@ export type TextContextAction =
   | 'splitCell'
   | 'selectTable'
   | 'deleteTable'
+  | 'updateTableOfContents'
   | 'addComment';
 
 /**
@@ -332,6 +333,23 @@ const CommentIcon = () => (
   </svg>
 );
 
+const UpdateTocIcon = () => (
+  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <path
+      d="M12.5 5.2A5 5 0 104 13"
+      stroke="currentColor"
+      strokeWidth="1.5"
+      strokeLinecap="round"
+    />
+    <path
+      d="M12.5 5.2h-3M12.5 5.2V2.3"
+      stroke="currentColor"
+      strokeWidth="1.5"
+      strokeLinecap="round"
+    />
+  </svg>
+);
+
 /**
  * Get icon for action
  */
@@ -370,6 +388,8 @@ function getActionIcon(action: TextContextAction): React.ReactNode {
       return <DeleteTableIcon />;
     case 'addComment':
       return <CommentIcon />;
+    case 'updateTableOfContents':
+      return <UpdateTocIcon />;
     default:
       return null;
   }
@@ -508,6 +528,8 @@ export const TextContextMenu: React.FC<TextContextMenuProps> = ({
         case 'paste':
         case 'pasteAsPlainText':
           return !isEditable || !hasClipboardContent;
+        case 'updateTableOfContents':
+          return !isEditable;
         default:
           return false;
       }
@@ -828,6 +850,7 @@ export function getTextActionLabel(action: TextContextAction): string {
     splitCell: defaultLocale.table.splitCell,
     selectTable: defaultLocale.table.selectTable,
     deleteTable: defaultLocale.table.deleteTable,
+    updateTableOfContents: defaultLocale.contextMenu.updateTableOfContents,
     addComment: 'Comment',
   };
   return labels[action];
@@ -855,6 +878,7 @@ export function getTextActionShortcut(action: TextContextAction): string {
     splitCell: '',
     selectTable: '',
     deleteTable: '',
+    updateTableOfContents: '',
     addComment: '',
   };
   return shortcuts[action];
@@ -887,6 +911,7 @@ export function isTextActionAvailable(
       return hasSelection;
     case 'paste':
     case 'pasteAsPlainText':
+    case 'updateTableOfContents':
       return isEditable;
     case 'addComment':
       return hasSelection;

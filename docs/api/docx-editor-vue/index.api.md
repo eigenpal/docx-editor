@@ -114,6 +114,7 @@ export type DocxEditorRef = EditorRefLike & {
     print(): void;
     loadDocument(doc: Document_2): void;
     loadDocumentBuffer(buffer: DocxInput): Promise<void>;
+    updateTableOfContents(): boolean;
     destroy(): void;
     getContentControls(filter?: ContentControlFilter): PMContentControl[];
     scrollToContentControl(filter: ContentControlFilter): boolean;
