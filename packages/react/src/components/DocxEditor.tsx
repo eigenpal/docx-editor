@@ -695,9 +695,7 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
     commentsSidebarOpen,
     onCommentsSidebarOpenChange
   );
-  // Auto-open the sidebar the first time a comment / tracked change
-  // appears so users see the card without manually toggling. Latches so
-  // a subsequent close stays closed; reset on doc reload.
+  // Auto-open sidebar on first comment/TC card; latch so later closes stick.
   const sidebarAutoOpenedRef = useRef(false);
   const [expandedSidebarItem, setExpandedSidebarItem] = useState<string | null>(null);
   // PagedEditor ref declared early so useCommentManagement (which reads
@@ -952,6 +950,7 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
     focusActiveEditor,
   });
 
+  // Mirror PM state on external document loads (OffscreenEditorHost updateState path).
   useEffect(() => {
     if (state.isLoading || !history.state) return;
     const view = pagedEditorRef.current?.getView();

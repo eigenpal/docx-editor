@@ -16,7 +16,7 @@ import {
   isPositionInsideTableOfContents,
   updateTableOfContents,
 } from '@eigenpal/docx-editor-core/prosemirror';
-import type { Layout } from '@eigenpal/docx-editor-core/layout-engine';
+import type { PageLayout } from '@eigenpal/docx-editor-core/pagination-model';
 import {
   setImageWrapType,
   type ImageLayoutTarget,
@@ -73,7 +73,12 @@ export function useContextMenus({
   openSplitCellDialog: () => void;
   scrollContainerRef: React.RefObject<HTMLDivElement | null>;
   editorContentRef: React.RefObject<HTMLDivElement | null>;
-  getLayout: () => Layout | null | undefined;
+  getLayout: () =>
+    | {
+        pages: readonly { readonly number: number; readonly size: { w: number; h: number } }[];
+      }
+    | null
+    | undefined;
   onUpdateTableOfContents?: (position?: number | null) => boolean;
   i18n: Translations | undefined;
   onAddComment: (range: { from: number; to: number; yPos: number | null }) => void;
@@ -381,7 +386,8 @@ export function useContextMenus({
           if (!onUpdateTableOfContents?.(view.state.selection.from)) {
             updateTableOfContents(view.state, view.dispatch, {
               position: view.state.selection.from,
-              layout: getLayout() ?? null,
+              // Runtime getLayout() returns full PageLayout; public ref type is narrowed.
+              layout: (getLayout() as PageLayout | null | undefined) ?? null,
             });
           }
           break;

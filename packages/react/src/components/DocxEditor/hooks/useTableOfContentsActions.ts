@@ -4,9 +4,16 @@ import {
   hasTableOfContentsNeedingUpdate,
   updateTableOfContents,
 } from '@eigenpal/docx-editor-core/prosemirror';
+import type { PageLayout } from '@eigenpal/docx-editor-core/pagination-model';
 import { en as defaultLocale } from '@eigenpal/docx-editor-i18n';
 import type { Translations } from '@eigenpal/docx-editor-i18n';
 import type { PagedEditorRef } from '../PagedEditor';
+
+function readPageLayout(pagedEditorRef: RefObject<PagedEditorRef | null>): PageLayout | null {
+  // Runtime getLayout() returns the full PageLayout; the public ref type only
+  // exposes page number/size. Cast for TOC page-number resolution.
+  return (pagedEditorRef.current?.getLayout() as PageLayout | null | undefined) ?? null;
+}
 
 export function useTableOfContentsActions({
   isLoading,
@@ -31,7 +38,7 @@ export function useTableOfContentsActions({
   const runPendingSecondPass = useCallback(() => {
     if (!secondPassRequestedRef.current) return;
     const view = pagedEditorRef.current?.getView();
-    const layout = pagedEditorRef.current?.getLayout();
+    const layout = readPageLayout(pagedEditorRef);
     if (!view || !layout) return;
     secondPassRequestedRef.current = false;
     updateTableOfContents(view.state, view.dispatch, { layout });
@@ -54,7 +61,7 @@ export function useTableOfContentsActions({
       if (!view) return false;
       const updated = updateTableOfContents(view.state, view.dispatch, {
         position,
-        layout: pagedEditorRef.current?.getLayout() ?? null,
+        layout: readPageLayout(pagedEditorRef),
       });
       if (updated) requestSecondPass();
       return updated;

@@ -23,7 +23,7 @@ import {
   updateTableOfContents,
 } from '@eigenpal/docx-editor-core/prosemirror';
 import type { ImageLayoutTarget } from '@eigenpal/docx-editor-core/prosemirror/commands';
-import type { Layout } from '@eigenpal/docx-editor-core/layout-engine';
+import type { PageLayout } from '@eigenpal/docx-editor-core/pagination-model';
 import type { WrapType } from '@eigenpal/docx-editor-core/docx/wrapTypes';
 import {
   copyImageToClipboard,
@@ -56,7 +56,7 @@ export interface UseContextMenusOptions {
   zoom: Ref<number>;
   showImageProperties: Ref<boolean>;
   getCommands: () => Commands;
-  layout: Ref<Layout | null>;
+  layout: Ref<PageLayout | null>;
   onUpdateTableOfContents?: (position?: number | null) => boolean;
   clearOverlay: () => void;
   setPmSelection: (anchor: number, head?: number) => void;
