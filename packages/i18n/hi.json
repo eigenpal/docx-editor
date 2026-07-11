@@ -866,7 +866,8 @@
     "rowPropertiesChanged": null,
     "tablePropertiesChanged": null,
     "tableDeleted": null,
-    "tableInserted": null
+    "tableInserted": null,
+    "runPropertiesChanged": null
   },
   "toc": {
     "updatePrompt": null
