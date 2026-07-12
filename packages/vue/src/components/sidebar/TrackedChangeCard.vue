@@ -54,6 +54,15 @@
           ></template
         >
       </template>
+      <template v-else-if="change.type === 'runPropertiesChanged'">
+        {{ t('revisions.runPropertiesChanged')
+        }}<template v-if="change.text"
+          >:
+          <span class="tc-card__changed"
+            >&quot;{{ truncateText(change.text) }}&quot;</span
+          ></template
+        >
+      </template>
       <template v-else-if="change.type === 'paragraphPropertiesChanged'">
         {{ t('revisions.paragraphPropertiesChanged')
         }}<template v-if="change.text"

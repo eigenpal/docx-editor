@@ -588,6 +588,7 @@
     "paragraphMarkInserted": "Inserted paragraph break",
     "paragraphMarkDeleted": "Deleted paragraph break",
     "paragraphPropertiesChanged": "Changed paragraph properties",
+    "runPropertiesChanged": "Changed text formatting",
     "rowInserted": "Inserted row",
     "rowDeleted": "Deleted row",
     "rowPropertiesChanged": "Changed row properties",

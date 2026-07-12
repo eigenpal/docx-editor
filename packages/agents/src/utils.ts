@@ -8,13 +8,12 @@ import type {
   BlockContent,
   Footnote,
   Endnote,
-  Run,
-  Hyperlink,
   ParagraphContent,
   Insertion,
   Deletion,
   MoveFrom,
   MoveTo,
+  TrackedChangeContent,
 } from '@eigenpal/docx-editor-core/headless';
 import {
   getRunText,
@@ -41,13 +40,15 @@ export function isTrackedChange(item: ParagraphContent): item is TrackedChangeIt
   );
 }
 
-export function getTrackedChangeText(content: (Run | Hyperlink)[]): string {
+export function getTrackedChangeText(content: TrackedChangeContent[]): string {
   const parts: string[] = [];
   for (const item of content) {
     if (item.type === 'run') {
       parts.push(getRunText(item));
     } else if (item.type === 'hyperlink') {
       parts.push(getHyperlinkText(item));
+    } else {
+      parts.push(getTrackedChangeText(item.content));
     }
   }
   return parts.join('');
