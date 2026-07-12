@@ -30,10 +30,6 @@
         <template #title-bar-right><slot name="title-bar-right" /></template>
       </DocxEditorMenuBar>
 
-      <!-- Toolbar pill: formatting buttons + editing-mode dropdown. TableToolbar
-           renders into the `table-context` slot (inline in the same pill); the
-           slot is empty when the cursor isn't in a table. -->
-
       <Toolbar
         v-if="showToolbar"
         :view="activeFormattingView"
@@ -221,9 +217,6 @@
             @remove="handleHfRemove"
           />
 
-          <!-- HF selection overlay: blue highlight rects for a drag-selected range
-               in the painted header/footer. Coords are viewport-relative (position:
-               fixed), recomputed on every HF transaction and on scroll/resize. -->
           <div
             v-for="(rect, i) in hfEdit ? hfSelectionGeometry : []"
             :key="`hf-sel-${i}-${rect.top}-${rect.left}`"
@@ -389,10 +382,10 @@ import type { EditorView } from 'prosemirror-view';
 import { TextSelection } from 'prosemirror-state';
 import {
   computeHfCaretRectFromView,
-  getVisualScrollHeight,
   readHfSelectionGeometry,
 } from '@eigenpal/docx-editor-core/flow-model';
 import { getSelectionInfo as getSelectionInfoImpl } from '../utils/refApiQueries';
+import { computeVisualPagesHeight } from '../utils/visualPagesHeight';
 import { extractSelectionState } from '@eigenpal/docx-editor-core/prosemirror';
 import { nearestHfHostEl } from '../utils/domQueries';
 import Toolbar from './Toolbar.vue';
@@ -753,13 +746,9 @@ const pagesContainerStyle = computed(() => {
   };
 });
 
-const visualPagesHeight = computed(() => {
-  const lay = pageLayout.value;
-  if (!lay || lay.pages.length === 0) return 0;
-  const pagesHeight = lay.pages.reduce((sum, page) => sum + page.size.h, 0);
-  const layoutHeight = pagesHeight + Math.max(0, lay.pages.length - 1) * 24 + 48;
-  return getVisualScrollHeight(layoutHeight, zoom.value);
-});
+const visualPagesHeight = computed(() =>
+  computeVisualPagesHeight(pageLayout.value?.pages, zoom.value)
+);
 
 const rulerRowStyle = computed(() => ({
   paddingLeft: '20px',
