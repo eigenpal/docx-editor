@@ -15,6 +15,14 @@ import { test, expect, type Page } from '@playwright/test';
 const SIDEBAR = '.unified-sidebar';
 const TOGGLE = 'button[aria-label="Comments & Changes"]';
 
+type SidebarGeometry = {
+  pageRight: number;
+  sidebarLeft: number;
+  sidebarRight: number;
+  wrapperRight: number;
+  pagesTranslateX: number;
+};
+
 async function openSidebar(page: Page) {
   await page.locator('.docx-editor-vue').waitFor();
   await page.waitForSelector('[data-page-number]');
@@ -25,6 +33,28 @@ async function openSidebar(page: Page) {
     await toggle.click();
   }
   await expect(sidebar).toBeVisible();
+}
+
+async function readSidebarGeometry(page: Page): Promise<SidebarGeometry | null> {
+  return page.evaluate(() => {
+    const pageEl = document.querySelector('.layout-page');
+    const sidebarEl = document.querySelector('.unified-sidebar');
+    const wrapperEl = document.querySelector('.docx-editor-vue__editor-content-wrapper');
+    const pagesEl = document.querySelector('.docx-editor-vue__pages');
+    if (!pageEl || !sidebarEl || !wrapperEl || !pagesEl) return null;
+
+    const pageRect = pageEl.getBoundingClientRect();
+    const sidebarRect = sidebarEl.getBoundingClientRect();
+    const wrapperRect = wrapperEl.getBoundingClientRect();
+    const matrix = new DOMMatrixReadOnly(getComputedStyle(pagesEl).transform);
+    return {
+      pageRight: pageRect.right,
+      sidebarLeft: sidebarRect.left,
+      sidebarRight: sidebarRect.right,
+      wrapperRight: wrapperRect.right,
+      pagesTranslateX: matrix.m41,
+    };
+  });
 }
 
 test('Vue: toolbar button toggles the comments sidebar open and closed', async ({ page }) => {
@@ -55,24 +85,30 @@ test('Vue: comment cards sit in the reserved right sidebar gutter', async ({ pag
   await page.goto('http://localhost:5174/?e2e=1');
   await openSidebar(page);
 
-  const geometry = await page.evaluate(() => {
-    const pageEl = document.querySelector('.layout-page');
-    const sidebarEl = document.querySelector('.unified-sidebar');
-    const wrapperEl = document.querySelector('.docx-editor-vue__editor-content-wrapper');
-    if (!pageEl || !sidebarEl || !wrapperEl) return null;
+  // Opening the sidebar applies a 0.2s translateX on `.docx-editor-vue__pages`.
+  // Poll until both the transform and gutter geometry have settled — a one-shot
+  // read races the transition and sees the page still overlapping the sidebar.
+  let settled: SidebarGeometry | null = null;
+  await expect
+    .poll(
+      async () => {
+        const first = await readSidebarGeometry(page);
+        if (!first) return null;
+        // One animation frame later: mid-transition translateX still moves.
+        await page.evaluate(() => new Promise<void>((r) => requestAnimationFrame(() => r())));
+        const second = await readSidebarGeometry(page);
+        if (!second) return null;
+        if (Math.abs(second.pagesTranslateX - first.pagesTranslateX) >= 0.5) return null;
+        if (second.sidebarLeft < second.pageRight + 8) return null;
+        if (second.sidebarRight > second.wrapperRight) return null;
+        settled = second;
+        return second;
+      },
+      { timeout: 5000 }
+    )
+    .not.toBeNull();
 
-    const pageRect = pageEl.getBoundingClientRect();
-    const sidebarRect = sidebarEl.getBoundingClientRect();
-    const wrapperRect = wrapperEl.getBoundingClientRect();
-    return {
-      pageRight: pageRect.right,
-      sidebarLeft: sidebarRect.left,
-      sidebarRight: sidebarRect.right,
-      wrapperRight: wrapperRect.right,
-    };
-  });
-
-  expect(geometry).not.toBeNull();
-  expect(geometry!.sidebarLeft).toBeGreaterThanOrEqual(geometry!.pageRight + 8);
-  expect(geometry!.sidebarRight).toBeLessThanOrEqual(geometry!.wrapperRight);
+  expect(settled).not.toBeNull();
+  expect(settled!.sidebarLeft).toBeGreaterThanOrEqual(settled!.pageRight + 8);
+  expect(settled!.sidebarRight).toBeLessThanOrEqual(settled!.wrapperRight);
 });
