@@ -152,6 +152,18 @@ export function TrackedChangeCard({
               </>
             ) : null}
           </>
+        ) : change.type === 'runPropertiesChanged' ? (
+          <>
+            {t('revisions.runPropertiesChanged')}
+            {change.text ? (
+              <>
+                {': '}
+                <span style={{ color: 'var(--doc-text-muted)', fontWeight: 500 }}>
+                  &quot;{truncateText(change.text)}&quot;
+                </span>
+              </>
+            ) : null}
+          </>
         ) : change.type === 'paragraphPropertiesChanged' ? (
           <>
             {t('revisions.paragraphPropertiesChanged')}
