@@ -96,6 +96,7 @@ export function LineSpacingPicker({
       <SelectTrigger
         className={cn('h-8 text-sm gap-0.5 px-2', className)}
         style={{ width: 'auto' }}
+        aria-label={t('lineSpacing.label')}
         title={t('lineSpacing.lineSpacingTitle', { label: getOptionLabel(currentOption) })}
       >
         <IconLineSpacing className="h-5 w-5 shrink-0" />

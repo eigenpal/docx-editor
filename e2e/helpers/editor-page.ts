@@ -322,8 +322,9 @@ export class EditorPage {
     if (!textInfo) return false;
 
     // Focus the editor by clicking, then re-select
-    // This ensures ProseMirror is focused and will sync selections
-    const pm = this.page.locator('.ProseMirror');
+    // This ensures ProseMirror is focused and will sync selections.
+    // Prefer the offscreen body host — HF PMs also use .ProseMirror.
+    const pm = this.page.locator('[contenteditable="true"]').first();
     await pm.focus();
 
     // Re-apply the selection after focus
@@ -887,9 +888,16 @@ export class EditorPage {
    * Set paragraph style
    */
   async setParagraphStyle(style: string): Promise<void> {
-    // Native <select> — use selectOption for reliable interaction
-    const stylePicker = this.toolbar.locator('select[aria-label="Select paragraph style"]');
-    await stylePicker.selectOption({ label: style });
+    // Radix Select (React) — open the trigger then pick the option by label.
+    // Vue still uses a native <select>; try that first for cross-adapter helpers.
+    const native = this.toolbar.locator('select[aria-label="Select paragraph style"]');
+    if ((await native.count()) > 0) {
+      await native.selectOption({ label: style });
+    } else {
+      const trigger = this.toolbar.locator('[aria-label="Select paragraph style"]');
+      await trigger.click();
+      await this.page.getByRole('option', { name: style, exact: true }).click();
+    }
     // Refocus editor after selecting style
     await this.focus();
   }
