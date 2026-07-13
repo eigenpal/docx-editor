@@ -66,6 +66,11 @@ test.describe('Bold Formatting', () => {
     await editor.applyBold();
     await editor.typeText(' end');
 
+    await expect
+      .poll(async () =>
+        page.evaluate(() => window.__DOCX_EDITOR_E2E__?.agentGetDocumentText() ?? '')
+      )
+      .toBe('Start bold end');
     await assertions.assertTextIsBold(page, 'bold');
   });
 

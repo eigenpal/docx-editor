@@ -3,17 +3,24 @@
  *
  * Uses Playwright's screenshot comparison to detect visual regressions.
  * Baselines are automatically created on first run.
+ *
+ * Content-building / empty-canvas cases boot via `gotoEmpty()` so they do not
+ * race the demo `sample.docx` fixture. Toolbar screenshots target either the
+ * legacy Toolbar or the current FormattingBar.
  */
 
 import { test, expect } from '@playwright/test';
 import { EditorPage } from '../helpers/editor-page';
+
+/** Demo chrome may expose either legacy Toolbar or FormattingBar. */
+const TOOLBAR = '[data-testid="toolbar"], [data-testid="formatting-bar"]';
 
 test.describe('Visual Regression - Basic States', () => {
   let editor: EditorPage;
 
   test.beforeEach(async ({ page }) => {
     editor = new EditorPage(page);
-    await editor.goto();
+    await editor.gotoEmpty();
     await editor.waitForReady();
     // Wait for fonts and animations
     await page.waitForFunction(() => document.fonts.ready);
@@ -59,7 +66,7 @@ test.describe('Visual Regression - Formatting', () => {
 
   test.beforeEach(async ({ page }) => {
     editor = new EditorPage(page);
-    await editor.goto();
+    await editor.gotoEmpty();
     await editor.waitForReady();
     await page.waitForFunction(() => document.fonts.ready);
     await page.waitForTimeout(500);
@@ -133,14 +140,14 @@ test.describe('Visual Regression - Toolbar', () => {
 
   test.beforeEach(async ({ page }) => {
     editor = new EditorPage(page);
-    await editor.goto();
+    await editor.gotoEmpty();
     await editor.waitForReady();
     await page.waitForFunction(() => document.fonts.ready);
     await page.waitForTimeout(500);
   });
 
   test('toolbar default state', async ({ page }) => {
-    const toolbar = page.locator('[data-testid="toolbar"]');
+    const toolbar = page.locator(TOOLBAR);
     await expect(toolbar).toHaveScreenshot('toolbar-default.png', {
       maxDiffPixels: 50,
       threshold: 0.2,
@@ -154,7 +161,7 @@ test.describe('Visual Regression - Toolbar', () => {
     await editor.applyBold();
     await page.waitForTimeout(200);
 
-    const toolbar = page.locator('[data-testid="toolbar"]');
+    const toolbar = page.locator(TOOLBAR);
     await expect(toolbar).toHaveScreenshot('toolbar-bold-active.png', {
       maxDiffPixels: 50,
       threshold: 0.2,
@@ -169,7 +176,7 @@ test.describe('Visual Regression - Toolbar', () => {
     await editor.applyItalic();
     await page.waitForTimeout(200);
 
-    const toolbar = page.locator('[data-testid="toolbar"]');
+    const toolbar = page.locator(TOOLBAR);
     await expect(toolbar).toHaveScreenshot('toolbar-multiple-active.png', {
       maxDiffPixels: 50,
       threshold: 0.2,
@@ -182,7 +189,7 @@ test.describe('Visual Regression - Selection', () => {
 
   test.beforeEach(async ({ page }) => {
     editor = new EditorPage(page);
-    await editor.goto();
+    await editor.gotoEmpty();
     await editor.waitForReady();
     await page.waitForFunction(() => document.fonts.ready);
     await page.waitForTimeout(500);
@@ -218,7 +225,7 @@ test.describe('Visual Regression - Responsive', () => {
     await page.setViewportSize({ width: 600, height: 800 });
 
     const editor = new EditorPage(page);
-    await editor.goto();
+    await editor.gotoEmpty();
     await editor.waitForReady();
     await page.waitForFunction(() => document.fonts.ready);
     await page.waitForTimeout(500);
@@ -236,7 +243,7 @@ test.describe('Visual Regression - Responsive', () => {
     await page.setViewportSize({ width: 1920, height: 1080 });
 
     const editor = new EditorPage(page);
-    await editor.goto();
+    await editor.gotoEmpty();
     await editor.waitForReady();
     await page.waitForFunction(() => document.fonts.ready);
     await page.waitForTimeout(500);
@@ -270,7 +277,7 @@ test.describe('Component Screenshots', () => {
 
   test.beforeEach(async ({ page }) => {
     editor = new EditorPage(page);
-    await editor.goto();
+    await editor.gotoEmpty();
     await editor.waitForReady();
     await page.waitForFunction(() => document.fonts.ready);
     await page.waitForTimeout(500);
@@ -292,7 +299,7 @@ test.describe('Component Screenshots', () => {
 test.describe('Full Page Screenshots', () => {
   test('full page empty', async ({ page }) => {
     const editor = new EditorPage(page);
-    await editor.goto();
+    await editor.gotoEmpty();
     await editor.waitForReady();
     await page.waitForFunction(() => document.fonts.ready);
     await page.waitForTimeout(500);
@@ -306,7 +313,7 @@ test.describe('Full Page Screenshots', () => {
 
   test('full page with content', async ({ page }) => {
     const editor = new EditorPage(page);
-    await editor.goto();
+    await editor.gotoEmpty();
     await editor.waitForReady();
     await page.waitForFunction(() => document.fonts.ready);
     await page.waitForTimeout(500);
