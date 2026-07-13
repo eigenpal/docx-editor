@@ -931,8 +931,10 @@ export class EditorPage {
         await this.page.getByRole('option', { name: style, exact: true }).click();
       }
     }
-    await this.page.keyboard.press('Escape').catch(() => undefined);
-    await this.focus();
+    // Do NOT refocus here — focusing the contenteditable clears stored marks /
+    // empty-paragraph style attrs (regression covered by paragraph-styles empty
+    // heading tests). Radix SelectTrigger already preventDefault's mousedown
+    // so the hidden PM keeps focus while the picker is used.
   }
 
   /**
@@ -986,11 +988,10 @@ export class EditorPage {
    */
   async undo(): Promise<void> {
     await this.page.keyboard.press('Escape').catch(() => undefined);
-    await this.focus();
-    if (await this.undoButton.isEnabled().catch(() => false)) {
-      await this.undoButton.click({ timeout: 5000 }).catch(async () => {
-        await this.undoShortcut();
-      });
+    // Prefer the toolbar control; fall back to the shortcut only when the
+    // button is missing (not merely disabled — disabled means nothing to undo).
+    if ((await this.undoButton.count()) > 0) {
+      await this.undoButton.click({ timeout: 5000 });
     } else {
       await this.undoShortcut();
     }
@@ -1009,11 +1010,8 @@ export class EditorPage {
    */
   async redo(): Promise<void> {
     await this.page.keyboard.press('Escape').catch(() => undefined);
-    await this.focus();
-    if (await this.redoButton.isEnabled().catch(() => false)) {
-      await this.redoButton.click({ timeout: 5000 }).catch(async () => {
-        await this.redoShortcut();
-      });
+    if ((await this.redoButton.count()) > 0) {
+      await this.redoButton.click({ timeout: 5000 });
     } else {
       await this.redoShortcut();
     }
