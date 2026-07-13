@@ -73,19 +73,24 @@ export function useFormattingActions({
       const view = getActiveEditorView();
       if (!view) return;
 
-      // Focus editor first to ensure we can dispatch commands
-      view.focus();
-
-      // Selection restoration: dropdown clicks (font picker, style picker, etc.)
-      // can move focus to the dropdown portal and collapse the body selection.
-      // Restore the saved selection so the action lands on the user's intended
-      // range. Only the body editor needs this — the HF editor manages its own.
-      const isBodyEditor = view === pagedEditorRef.current?.getView();
+      // Capture focus + selection BEFORE view.focus(). Toolbar buttons
+      // preventDefault mousedown so the hidden PM keeps focus; in that case the
+      // live selection is authoritative. Dropdown portals steal focus and often
+      // leave a collapsed/stale PM selection — only then restore lastSelectionRef.
+      // Restoring while focused overwrites the caret after typing when the
+      // selection-tracker ref lags behind (cursor jumps to the prior mark site).
+      const hadFocus = view.hasFocus();
       const { from, to } = view.state.selection;
       const savedSelection = lastSelectionRef.current;
 
+      // Focus editor first to ensure we can dispatch commands
+      view.focus();
+
+      const isBodyEditor = view === pagedEditorRef.current?.getView();
+
       if (
         isBodyEditor &&
+        !hadFocus &&
         savedSelection &&
         (from !== savedSelection.from || to !== savedSelection.to)
       ) {
@@ -97,6 +102,10 @@ export function useFormattingActions({
         } catch (e) {
           console.warn('Could not restore selection:', e);
         }
+      } else if (isBodyEditor) {
+        // Keep the ref aligned with the live caret so a later focus-stealing
+        // toolbar control still restores the right range.
+        lastSelectionRef.current = { from, to };
       }
 
       if (action === 'bold') return void toggleBold(view.state, view.dispatch);
