@@ -47,10 +47,11 @@ async function setSuggestionMode(
     ({ a, u }) => window.__DOCX_EDITOR_E2E__?.setSuggestionMode(a, u) ?? false,
     { a: active, u: author }
   );
-  // Re-focus the editor: the meta dispatch can trigger a React re-render
+  // Re-focus the body PM: the meta dispatch can trigger a React re-render
   // path that briefly loses contentEditable focus, which makes subsequent
-  // page.keyboard.press('Backspace') target the wrong element.
-  await page.locator('.ProseMirror').first().focus();
+  // page.keyboard.press('Backspace') target the wrong element. Prefer the
+  // offscreen body host — HF PMs also use .ProseMirror.
+  await page.locator('.paged-editor__hidden-pm [contenteditable="true"]').first().focus();
   return ok;
 }
 

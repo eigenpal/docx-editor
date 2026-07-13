@@ -232,13 +232,16 @@ export const OffscreenEditorHost = memo(
         schema,
         doc: pmDoc,
         plugins: [
+          // Suggestion mode must precede extension keymaps so its
+          // handleKeyDown (Enter → pPrIns, Backspace → pPrDel) wins over
+          // BaseKeymap's split/join. Matches Vue body + HF plugin order.
+          ...externalPlugins,
           ...manager.getPlugins(),
           createDocumentStylesPlugin(stylesRef.current),
           createDocumentContextPlugin({
             theme: loaded?.package?.theme ?? null,
             defaultTableStyleId: loaded?.package?.settings?.defaultTableStyle ?? null,
           }),
-          ...externalPlugins,
         ],
       });
 
