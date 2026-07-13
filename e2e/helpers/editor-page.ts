@@ -833,8 +833,10 @@ export class EditorPage {
 
     // Select spacing value from dropdown using role="option" with exact match
     await this.page.getByRole('option', { name: label, exact: true }).click();
-    // Ensure the Radix portal closes so later toolbar clicks (undo) aren't blocked.
-    await this.page.keyboard.press('Escape').catch(() => undefined);
+    // Do NOT press Escape here: once the Radix menu is closed, Escape reaches the
+    // body PM keymap (`selectParentNode`) and selects the whole paragraph, so the
+    // next typed characters replace existing text (line-spacing multi-para tests).
+    await this.dismissOpenOverlays();
   }
 
   /**
@@ -960,15 +962,26 @@ export class EditorPage {
   // ============================================================================
 
   /**
-   * Undo via toolbar
+   * Close a still-open Radix listbox/menu without sending Escape to the body PM
+   * (Escape maps to `selectParentNode` and would select the whole paragraph).
    */
+  async dismissOpenOverlays(): Promise<void> {
+    const overlay = this.page.locator(
+      '[role="listbox"], [role="menu"], [data-radix-popper-content-wrapper]'
+    );
+    if ((await overlay.count()) === 0) return;
+    const first = overlay.first();
+    if (!(await first.isVisible().catch(() => false))) return;
+    await this.page.keyboard.press('Escape').catch(() => undefined);
+  }
+
   /**
    * Undo via the editor keymap. Prefer the shortcut over the toolbar button:
    * `canUndo` is driven by React `pmState`, which can lag a frame behind the
    * live body EditorView after rapid formatting transactions.
    */
   async undo(): Promise<void> {
-    await this.page.keyboard.press('Escape').catch(() => undefined);
+    await this.dismissOpenOverlays();
     await this.focus();
     await this.undoShortcut();
   }
@@ -985,7 +998,7 @@ export class EditorPage {
    * Redo via the editor keymap (see `undo()`).
    */
   async redo(): Promise<void> {
-    await this.page.keyboard.press('Escape').catch(() => undefined);
+    await this.dismissOpenOverlays();
     await this.focus();
     await this.redoShortcut();
   }
