@@ -90,6 +90,9 @@ test.describe('Tracked image insertion', () => {
     }
     await expect(page.locator('.docx-tracked-change-card')).toHaveCount(1);
 
+    // Accept/Reject only render when the card is expanded.
+    await page.locator('.docx-tracked-change-card').first().click();
+    await page.waitForTimeout(150);
     await page.locator('.docx-tracked-change-card button[title="Reject"]').first().click();
     await page.waitForTimeout(200);
     await expect(page.locator('img.layout-run-image')).toHaveCount(0);
@@ -108,6 +111,8 @@ test.describe('Tracked image insertion', () => {
     }
     await expect(page.locator('.docx-tracked-change-card')).toHaveCount(1);
 
+    await page.locator('.docx-tracked-change-card').first().click();
+    await page.waitForTimeout(150);
     await page.locator('.docx-tracked-change-card button[title="Accept"]').first().click();
     await page.waitForTimeout(200);
     await expect(page.locator('img.layout-run-image')).toHaveCount(1);

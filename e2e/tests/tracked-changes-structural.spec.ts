@@ -505,6 +505,8 @@ test.describe('Tracked paragraph-mark revisions (issue #614)', () => {
 
     await expect(page.locator('.docx-tracked-change-card')).toHaveCount(1);
 
+    await page.locator('.docx-tracked-change-card').first().click();
+    await page.waitForTimeout(150);
     await page.locator('.docx-tracked-change-card button[title="Accept"]').first().click();
     await page.waitForTimeout(200);
 
@@ -546,6 +548,8 @@ test.describe('Tracked paragraph-mark revisions (issue #614)', () => {
     // One card — the numbering pPrChange folds into the insertion.
     await expect(page.locator('.docx-tracked-change-card')).toHaveCount(1);
 
+    await page.locator('.docx-tracked-change-card').first().click();
+    await page.waitForTimeout(150);
     await page.locator('.docx-tracked-change-card button[title="Reject"]').first().click();
     await page.waitForTimeout(200);
 
@@ -578,6 +582,8 @@ test.describe('Tracked paragraph-mark revisions (issue #614)', () => {
     }
 
     await expect(page.locator('.docx-tracked-change-card')).toHaveCount(1);
+    await page.locator('.docx-tracked-change-card').first().click();
+    await page.waitForTimeout(150);
     await page.locator('.docx-tracked-change-card button[title="Accept"]').first().click();
     await page.waitForTimeout(200);
 

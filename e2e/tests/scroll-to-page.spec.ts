@@ -1,6 +1,7 @@
 /**
  * E2E coverage for scrollToPage(n) and getTotalPages() (issue #280).
- * Uses the multi-page paraid-test.docx fixture.
+ * Uses the checked-in multi-page issue-68-large.docx fixture (screenshots/
+ * is gitignored and cannot hold paraid-test.docx).
  */
 
 import { test, expect } from '@playwright/test';
@@ -13,7 +14,7 @@ test.describe('scrollToPage / getTotalPages (issue #280)', () => {
     const editor = new EditorPage(page);
     await editor.goto();
     await editor.waitForReady();
-    const docPath = path.resolve(process.cwd(), 'screenshots/paraid-test.docx');
+    const docPath = path.resolve(process.cwd(), 'e2e/fixtures/issue-68-large.docx');
     await editor.loadDocxFile(docPath);
     await page.waitForFunction(() => (window.__DOCX_EDITOR_E2E__?.getTotalPages() ?? 0) > 1, {
       timeout: 10000,
@@ -22,7 +23,7 @@ test.describe('scrollToPage / getTotalPages (issue #280)', () => {
 
   test('getTotalPages reports the layout page count (>1) without scrolling', async ({ page }) => {
     const total = await page.evaluate(() => window.__DOCX_EDITOR_E2E__?.getTotalPages() ?? 0);
-    // paraid-test.docx is intentionally long; multi-page is the whole point.
+    // Multi-page fixture is the whole point of this suite.
     expect(total).toBeGreaterThan(1);
   });
 

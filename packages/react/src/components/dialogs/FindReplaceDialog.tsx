@@ -590,6 +590,7 @@ export function FindReplaceDialog({
               ref={searchInputRef}
               id="find-text"
               type="text"
+              data-testid="find-input"
               className="docx-find-replace-dialog-input"
               style={searchFocused ? INPUT_FOCUS_STYLE : INPUT_STYLE}
               value={searchText}
@@ -657,6 +658,7 @@ export function FindReplaceDialog({
                   ref={replaceInputRef}
                   id="replace-text"
                   type="text"
+                  data-testid="replace-input"
                   className="docx-find-replace-dialog-input"
                   style={replaceFocused ? INPUT_FOCUS_STYLE : INPUT_STYLE}
                   value={replaceText}
@@ -671,6 +673,7 @@ export function FindReplaceDialog({
                   <button
                     type="button"
                     className="docx-find-replace-dialog-button"
+                    data-testid="replace-button"
                     style={hasMatches ? BUTTON_BASE_STYLE : BUTTON_DISABLED_STYLE}
                     onClick={handleReplace}
                     disabled={!hasMatches}
@@ -681,6 +684,7 @@ export function FindReplaceDialog({
                   <button
                     type="button"
                     className="docx-find-replace-dialog-button"
+                    data-testid="replace-all-button"
                     style={hasMatches ? BUTTON_BASE_STYLE : BUTTON_DISABLED_STYLE}
                     onClick={handleReplaceAll}
                     disabled={!hasMatches}
