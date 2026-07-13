@@ -962,15 +962,15 @@ export class EditorPage {
   /**
    * Undo via toolbar
    */
+  /**
+   * Undo via the editor keymap. Prefer the shortcut over the toolbar button:
+   * `canUndo` is driven by React `pmState`, which can lag a frame behind the
+   * live body EditorView after rapid formatting transactions.
+   */
   async undo(): Promise<void> {
     await this.page.keyboard.press('Escape').catch(() => undefined);
-    // Prefer the toolbar control; fall back to the shortcut only when the
-    // button is missing (not merely disabled — disabled means nothing to undo).
-    if ((await this.undoButton.count()) > 0) {
-      await this.undoButton.click({ timeout: 5000 });
-    } else {
-      await this.undoShortcut();
-    }
+    await this.focus();
+    await this.undoShortcut();
   }
 
   /**
@@ -982,15 +982,12 @@ export class EditorPage {
   }
 
   /**
-   * Redo via toolbar
+   * Redo via the editor keymap (see `undo()`).
    */
   async redo(): Promise<void> {
     await this.page.keyboard.press('Escape').catch(() => undefined);
-    if ((await this.redoButton.count()) > 0) {
-      await this.redoButton.click({ timeout: 5000 });
-    } else {
-      await this.redoShortcut();
-    }
+    await this.focus();
+    await this.redoShortcut();
   }
 
   /**
