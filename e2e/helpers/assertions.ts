@@ -328,6 +328,25 @@ export async function assertParagraphAlignment(
   paragraphIndex: number,
   expectedAlignment: 'left' | 'center' | 'right' | 'justify'
 ): Promise<void> {
+  // Prefer PM attrs: the painter implements justify via word-spacing and keeps
+  // CSS text-align as left/right (see renderParagraph), so computed style is
+  // not a reliable signal for justify/`both`.
+  const pmAlignment = await page.evaluate((pIndex) => {
+    const attrs = window.__DOCX_EDITOR_E2E__?.getParagraphAttrs?.(pIndex);
+    const raw = attrs?.alignment;
+    return typeof raw === 'string' ? raw : null;
+  }, paragraphIndex);
+
+  if (pmAlignment != null) {
+    const normalized =
+      pmAlignment === 'both' || pmAlignment === 'justify' ? 'justify' : pmAlignment;
+    expect(
+      normalized,
+      `Expected paragraph ${paragraphIndex} to have alignment "${expectedAlignment}" (PM attrs)`
+    ).toBe(expectedAlignment);
+    return;
+  }
+
   const alignment = await page.evaluate((pIndex) => {
     const paragraph = document.querySelectorAll('.layout-page-content .layout-paragraph')[pIndex];
     if (!paragraph) return '';
@@ -468,8 +487,8 @@ export async function assertTableDimensions(
   expectedRows: number,
   expectedCols: number
 ): Promise<void> {
-  const table = page.locator('table').nth(tableIndex);
-  await expect(table, `Expected table ${tableIndex} to exist`).toBeVisible();
+  const table = page.locator('.paged-editor__hidden-pm table').nth(tableIndex);
+  await expect(table, `Expected table ${tableIndex} to exist`).toBeAttached();
 
   const rows = await table.locator('tr').count();
   const cols = await table.locator('tr').first().locator('td, th').count();
@@ -488,7 +507,7 @@ export async function assertTableCellText(
   col: number,
   expectedText: string
 ): Promise<void> {
-  const table = page.locator('table').nth(tableIndex);
+  const table = page.locator('.paged-editor__hidden-pm table').nth(tableIndex);
   const cell = table.locator('tr').nth(row).locator('td, th').nth(col);
   await expect(
     cell,

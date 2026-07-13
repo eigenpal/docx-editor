@@ -1,5 +1,11 @@
 <template>
-  <div v-if="isOpen" class="find-replace-dialog" @mousedown.stop @keydown.stop>
+  <div
+    v-if="isOpen"
+    class="find-replace-dialog"
+    data-testid="find-replace-dialog"
+    @mousedown.stop
+    @keydown.stop
+  >
     <div class="find-replace-dialog__header">
       <span class="find-replace-dialog__title">{{
         replaceMode ? t('dialogs.findReplace.titleFindReplace') : t('dialogs.findReplace.titleFind')
@@ -16,6 +22,7 @@
           ref="searchInputRef"
           v-model="searchText"
           class="find-replace-dialog__input"
+          data-testid="find-input"
           :placeholder="t('dialogs.findReplace.findPlaceholder')"
           :aria-label="t('dialogs.findReplace.findAriaLabel')"
           @keydown="handleSearchKeyDown"
@@ -58,17 +65,20 @@
         <input
           v-model="replaceText"
           class="find-replace-dialog__input"
+          data-testid="replace-input"
           :placeholder="t('dialogs.findReplace.replacePlaceholder')"
           :aria-label="t('dialogs.findReplace.replaceAriaLabel')"
           @keydown.enter.prevent="handleReplace"
         />
         <button
+          data-testid="replace-button"
           :title="t('dialogs.findReplace.replaceCurrentTitle')"
           @mousedown.prevent="handleReplace"
         >
           {{ t('dialogs.findReplace.replaceButton') }}
         </button>
         <button
+          data-testid="replace-all-button"
           :title="t('dialogs.findReplace.replaceAllTitle')"
           @mousedown.prevent="handleReplaceAll"
         >

@@ -1030,6 +1030,20 @@ export class EditorPage {
   // ============================================================================
 
   /**
+   * Place the caret in the first cell of the first table via the e2e hook.
+   * Visual cell clicks do not always establish `isInTable` for the toolbar.
+   */
+  async focusFirstTableCell(): Promise<void> {
+    const ok = await this.page.evaluate(
+      () => window.__DOCX_EDITOR_E2E__?.focusFirstTableCell?.() ?? false
+    );
+    if (!ok) {
+      throw new Error('focusFirstTableCell: e2e hook returned false (no table cell?)');
+    }
+    await this.page.waitForTimeout(50);
+  }
+
+  /**
    * Insert a table with specified dimensions using the grid selector
    */
   async insertTable(rows: number, cols: number): Promise<void> {
@@ -1060,9 +1074,16 @@ export class EditorPage {
     await this.page.waitForTimeout(100);
     await targetCell.click();
 
-    // Wait for table to be inserted (use generic table selector since prosemirror-tables
-    // column resizing plugin may override the table DOM and not include our docx-table class)
-    await this.page.waitForSelector('.ProseMirror table', { state: 'visible', timeout: 5000 });
+    // Wait for table to be inserted (body PM — not HF views).
+    await this.page.waitForSelector('.paged-editor__hidden-pm table', {
+      state: 'attached',
+      timeout: 5000,
+    });
+    await this.page.waitForSelector('.paged-editor__pages .layout-table', {
+      state: 'visible',
+      timeout: 5000,
+    });
+    await this.focusFirstTableCell();
   }
 
   /**
@@ -1075,6 +1096,10 @@ export class EditorPage {
     const cell = table.locator('.layout-table-row').nth(row).locator('.layout-table-cell').nth(col);
     await cell.scrollIntoViewIfNeeded();
     await cell.click();
+    // Prefer the e2e caret API for the first cell so table toolbar context sticks.
+    if (tableIndex === 0 && row === 0 && col === 0) {
+      await this.focusFirstTableCell().catch(() => undefined);
+    }
   }
 
   /**
@@ -1092,7 +1117,7 @@ export class EditorPage {
    * Get table cell content
    */
   async getTableCellContent(tableIndex: number, row: number, col: number): Promise<string> {
-    const table = this.page.locator('.ProseMirror table').nth(tableIndex);
+    const table = this.page.locator('.paged-editor__hidden-pm table').nth(tableIndex);
     const cell = table.locator('tr').nth(row).locator('td, th').nth(col);
     return (await cell.textContent()) ?? '';
   }
@@ -1101,14 +1126,14 @@ export class EditorPage {
    * Count tables in the document
    */
   async getTableCount(): Promise<number> {
-    return await this.page.locator('.ProseMirror table').count();
+    return await this.page.locator('.paged-editor__hidden-pm table').count();
   }
 
   /**
    * Get table dimensions (rows x cols)
    */
   async getTableDimensions(tableIndex: number): Promise<{ rows: number; cols: number }> {
-    const table = this.page.locator('.ProseMirror table').nth(tableIndex);
+    const table = this.page.locator('.paged-editor__hidden-pm table').nth(tableIndex);
     const rows = await table.locator('tr').count();
     const cols = await table.locator('tr').first().locator('td, th').count();
     return { rows, cols };
@@ -1118,7 +1143,12 @@ export class EditorPage {
    * Open table "More" dropdown (must be in a table first)
    */
   async openTableMore(): Promise<void> {
-    await this.page.locator('[data-testid="toolbar-table-more"]').click();
+    const more = this.page.locator('[data-testid="toolbar-table-more"]');
+    if (!(await more.isVisible().catch(() => false))) {
+      await this.focusFirstTableCell();
+    }
+    await more.waitFor({ state: 'visible', timeout: 5000 });
+    await more.click();
     await this.page.waitForSelector('[role="menu"]', { state: 'visible', timeout: 5000 });
   }
 
@@ -1326,11 +1356,12 @@ export class EditorPage {
    * Open find dialog (Ctrl+F / Cmd+F)
    */
   async openFind(): Promise<void> {
-    // Always use Control: headless Chromium on macOS swallows Cmd+F (native
-    // browser find) before it reaches the editor, so Meta+F never opens the
-    // dialog locally even though it works in CI on Linux. The editor's handler
-    // accepts Ctrl or Cmd, so Control works on every platform.
-    await this.page.keyboard.press('Control+f');
+    // React binds find to metaKey on Mac and ctrlKey elsewhere
+    // (`useKeyboardShortcuts`). Playwright's Meta+f reaches the editor on
+    // Chromium/macOS; Control+f does not match the Mac handler.
+    await this.focus();
+    const modifier = process.platform === 'darwin' ? 'Meta' : 'Control';
+    await this.page.keyboard.press(`${modifier}+f`);
     await this.findReplaceDialog.waitFor();
   }
 
@@ -1338,8 +1369,9 @@ export class EditorPage {
    * Open find & replace dialog (Ctrl+H / Cmd+H)
    */
   async openFindReplace(): Promise<void> {
-    // Control on every platform — see openFind (Cmd+H is also browser-reserved).
-    await this.page.keyboard.press('Control+h');
+    await this.focus();
+    const modifier = process.platform === 'darwin' ? 'Meta' : 'Control';
+    await this.page.keyboard.press(`${modifier}+h`);
     await this.findReplaceDialog.waitFor();
   }
 
@@ -1386,7 +1418,16 @@ export class EditorPage {
    * Close find/replace dialog
    */
   async closeFindReplace(): Promise<void> {
-    await this.page.keyboard.press('Escape');
+    // Prefer the dialog close control: Escape often lands on the body PM
+    // (`selectParentNode`) after replace actions move focus out of the dialog.
+    const closeBtn = this.findReplaceDialog.locator(
+      '.docx-find-replace-dialog-close, .find-replace-dialog__close'
+    );
+    if (await closeBtn.isVisible().catch(() => false)) {
+      await closeBtn.click();
+    } else {
+      await this.page.keyboard.press('Escape');
+    }
     await this.findReplaceDialog.waitFor({ state: 'hidden' });
   }
 

@@ -10,341 +10,164 @@
  */
 
 import { test, expect } from '@playwright/test';
+import { EditorPage } from '../helpers/editor-page';
 
-// Helper to get the modifier key for the current platform
 const getModifier = () => (process.platform === 'darwin' ? 'Meta' : 'Control');
 
+/** Links render in the body PM toDOM and/or the painted page. */
+function linkLocator(page: import('@playwright/test').Page, href: string) {
+  return page
+    .locator(`.paged-editor__hidden-pm a[href="${href}"], .layout-page-content a[href="${href}"]`)
+    .first();
+}
+
+async function typeAndSelect(
+  editor: EditorPage,
+  page: import('@playwright/test').Page,
+  text: string
+) {
+  await editor.focus();
+  await editor.typeText(text);
+  await editor.selectAll();
+  await page.waitForTimeout(50);
+}
+
 test.describe('Hyperlinks', () => {
+  let editor: EditorPage;
+
   test.beforeEach(async ({ page }) => {
-    await page.goto('/');
-    // Wait for editor to be ready
-    await page.waitForSelector('[data-testid="docx-editor"]');
-    await page.waitForTimeout(500);
+    editor = new EditorPage(page);
+    await editor.gotoEmpty();
+    await editor.waitForReady();
+    await editor.focus();
   });
 
   test('should open hyperlink dialog with Cmd+K', async ({ page }) => {
-    // Click in editor to focus
-    const editor = page.locator('.prosemirror-editor-content');
-    await editor.click();
-    await page.waitForTimeout(200);
+    await typeAndSelect(editor, page, 'Click here');
 
-    // Type some text
-    await page.keyboard.type('Click here', { delay: 50 });
-    await page.waitForTimeout(100);
-
-    // Select the text using triple-click (more reliable than Ctrl+A)
-    await editor.click({ clickCount: 3 });
-    await page.waitForTimeout(100);
-
-    // Open hyperlink dialog with Cmd/Ctrl+K
-    // Note: Use keyboard.down/up for modifier keys to be more reliable
     await page.keyboard.down(getModifier());
     await page.keyboard.press('k');
     await page.keyboard.up(getModifier());
 
-    // Wait for dialog to appear
     const dialog = page.locator('.docx-hyperlink-dialog');
     await expect(dialog).toBeVisible({ timeout: 10000 });
-
-    // Check that dialog title is correct
     await expect(page.locator('#hyperlink-dialog-title')).toHaveText('Insert Hyperlink');
   });
 
   test('should open hyperlink dialog via toolbar button', async ({ page }) => {
-    // Click in editor to focus
-    const editor = page.locator('.prosemirror-editor-content');
-    await editor.click();
-    await page.waitForTimeout(200);
+    await typeAndSelect(editor, page, 'Click here');
 
-    // Type some text
-    await page.keyboard.type('Click here', { delay: 50 });
-    await page.waitForTimeout(100);
+    await page.locator('[data-testid="toolbar-insert-link"]').click();
 
-    // Select the text using triple-click
-    await editor.click({ clickCount: 3 });
-    await page.waitForTimeout(100);
-
-    // Click the link button in toolbar
-    const linkButton = page.locator('[data-testid="toolbar-insert-link"]');
-    await linkButton.click();
-
-    // Wait for dialog to appear
     const dialog = page.locator('.docx-hyperlink-dialog');
     await expect(dialog).toBeVisible({ timeout: 10000 });
   });
 
   test('should insert hyperlink with URL', async ({ page }) => {
-    // Click in editor to focus
-    const editor = page.locator('.prosemirror-editor-content');
-    await editor.click();
-    await page.waitForTimeout(200);
+    await typeAndSelect(editor, page, 'Visit Google');
 
-    // Type some text
-    await page.keyboard.type('Visit Google', { delay: 50 });
-    await page.waitForTimeout(100);
-
-    // Select the text using triple-click
-    await editor.click({ clickCount: 3 });
-    await page.waitForTimeout(100);
-
-    // Open hyperlink dialog via toolbar button
-    const linkButton = page.locator('[data-testid="toolbar-insert-link"]');
-    await linkButton.click();
-
-    // Wait for dialog
+    await page.locator('[data-testid="toolbar-insert-link"]').click();
     const dialog = page.locator('.docx-hyperlink-dialog');
     await expect(dialog).toBeVisible({ timeout: 10000 });
 
-    // Enter URL
-    const urlInput = page.locator('#hyperlink-url');
-    await urlInput.fill('https://google.com');
+    await page.locator('#hyperlink-url').fill('https://google.com');
+    await page.locator('.docx-hyperlink-dialog-submit').click();
 
-    // Click Insert button
-    const insertButton = page.locator('.docx-hyperlink-dialog-submit');
-    await insertButton.click();
-
-    // Dialog should close
     await expect(dialog).not.toBeVisible();
-
-    // The text should now be a link (check for <a> tag)
-    const link = editor.locator('a[href="https://google.com"]');
+    const link = linkLocator(page, 'https://google.com');
     await expect(link).toBeVisible({ timeout: 5000 });
     await expect(link).toHaveText('Visit Google');
   });
 
   test('should require URL to submit', async ({ page }) => {
-    // Click in editor to focus
-    const editor = page.locator('.prosemirror-editor-content');
-    await editor.click();
-    await page.waitForTimeout(200);
+    await typeAndSelect(editor, page, 'Click here');
 
-    // Type some text
-    await page.keyboard.type('Click here', { delay: 50 });
-    await page.waitForTimeout(100);
-
-    // Select the text using triple-click
-    await editor.click({ clickCount: 3 });
-    await page.waitForTimeout(100);
-
-    // Open hyperlink dialog via toolbar button
-    const linkButton = page.locator('[data-testid="toolbar-insert-link"]');
-    await linkButton.click();
-
-    // Wait for dialog
+    await page.locator('[data-testid="toolbar-insert-link"]').click();
     const dialog = page.locator('.docx-hyperlink-dialog');
     await expect(dialog).toBeVisible({ timeout: 10000 });
 
-    // Don't enter any URL - submit button should be disabled
-    const urlInput = page.locator('#hyperlink-url');
-    await expect(urlInput).toHaveValue('');
-
-    // The Insert button should be disabled when URL is empty
-    const submitButton = page.locator('.docx-hyperlink-dialog-submit');
-    await expect(submitButton).toBeDisabled();
+    await expect(page.locator('#hyperlink-url')).toHaveValue('');
+    await expect(page.locator('.docx-hyperlink-dialog-submit')).toBeDisabled();
   });
 
   test('should close dialog on Cancel', async ({ page }) => {
-    // Click in editor to focus
-    const editor = page.locator('.prosemirror-editor-content');
-    await editor.click();
-    await page.waitForTimeout(200);
+    await typeAndSelect(editor, page, 'Click here');
 
-    // Type and select text
-    await page.keyboard.type('Click here', { delay: 50 });
-    await page.waitForTimeout(100);
-    await editor.click({ clickCount: 3 });
-    await page.waitForTimeout(100);
-
-    // Open hyperlink dialog via toolbar button
-    const linkButton = page.locator('[data-testid="toolbar-insert-link"]');
-    await linkButton.click();
-
-    // Wait for dialog
+    await page.locator('[data-testid="toolbar-insert-link"]').click();
     const dialog = page.locator('.docx-hyperlink-dialog');
     await expect(dialog).toBeVisible({ timeout: 10000 });
 
-    // Click Cancel
-    const cancelButton = page.locator('.docx-hyperlink-dialog-cancel');
-    await cancelButton.click();
-
-    // Dialog should close
+    await page.locator('.docx-hyperlink-dialog-cancel').click();
     await expect(dialog).not.toBeVisible();
   });
 
   test('should close dialog on Escape', async ({ page }) => {
-    // Click in editor to focus
-    const editor = page.locator('.prosemirror-editor-content');
-    await editor.click();
-    await page.waitForTimeout(200);
+    await typeAndSelect(editor, page, 'Click here');
 
-    // Type and select text
-    await page.keyboard.type('Click here', { delay: 50 });
-    await page.waitForTimeout(100);
-    await editor.click({ clickCount: 3 });
-    await page.waitForTimeout(100);
-
-    // Open hyperlink dialog via toolbar button
-    const linkButton = page.locator('[data-testid="toolbar-insert-link"]');
-    await linkButton.click();
-
-    // Wait for dialog
+    await page.locator('[data-testid="toolbar-insert-link"]').click();
     const dialog = page.locator('.docx-hyperlink-dialog');
     await expect(dialog).toBeVisible({ timeout: 10000 });
 
-    // Focus on the URL input (to ensure dialog has focus)
-    const urlInput = page.locator('#hyperlink-url');
-    await urlInput.focus();
-
-    // Press Escape
+    await page.locator('#hyperlink-url').focus();
     await page.keyboard.press('Escape');
-    await page.waitForTimeout(200);
-
-    // Dialog should close
     await expect(dialog).not.toBeVisible({ timeout: 5000 });
   });
 
   test('should auto-add https:// if protocol missing', async ({ page }) => {
-    // Click in editor to focus
-    const editor = page.locator('.prosemirror-editor-content');
-    await editor.click();
-    await page.waitForTimeout(200);
+    await typeAndSelect(editor, page, 'Google');
 
-    // Type some text
-    await page.keyboard.type('Google', { delay: 50 });
-    await page.waitForTimeout(100);
-
-    // Select the text using triple-click
-    await editor.click({ clickCount: 3 });
-    await page.waitForTimeout(100);
-
-    // Open hyperlink dialog via toolbar button
-    const linkButton = page.locator('[data-testid="toolbar-insert-link"]');
-    await linkButton.click();
-
-    // Wait for dialog
+    await page.locator('[data-testid="toolbar-insert-link"]').click();
     const dialog = page.locator('.docx-hyperlink-dialog');
     await expect(dialog).toBeVisible({ timeout: 10000 });
 
-    // Enter URL without protocol
-    const urlInput = page.locator('#hyperlink-url');
-    await urlInput.fill('google.com');
+    await page.locator('#hyperlink-url').fill('google.com');
+    await page.locator('.docx-hyperlink-dialog-submit').click();
 
-    // Click Insert button
-    const insertButton = page.locator('.docx-hyperlink-dialog-submit');
-    await insertButton.click();
-
-    // The link should have https:// added
-    const link = editor.locator('a[href="https://google.com"]');
-    await expect(link).toBeVisible({ timeout: 5000 });
+    await expect(linkLocator(page, 'https://google.com')).toBeVisible({ timeout: 5000 });
   });
 
   test('should support mailto: links', async ({ page }) => {
-    // Click in editor to focus
-    const editor = page.locator('.prosemirror-editor-content');
-    await editor.click();
-    await page.waitForTimeout(200);
+    await typeAndSelect(editor, page, 'Email us');
 
-    // Type some text
-    await page.keyboard.type('Email us', { delay: 50 });
-    await page.waitForTimeout(100);
-
-    // Select the text using triple-click
-    await editor.click({ clickCount: 3 });
-    await page.waitForTimeout(100);
-
-    // Open hyperlink dialog via toolbar button
-    const linkButton = page.locator('[data-testid="toolbar-insert-link"]');
-    await linkButton.click();
-
-    // Wait for dialog
+    await page.locator('[data-testid="toolbar-insert-link"]').click();
     const dialog = page.locator('.docx-hyperlink-dialog');
     await expect(dialog).toBeVisible({ timeout: 10000 });
 
-    // Enter mailto URL
-    const urlInput = page.locator('#hyperlink-url');
-    await urlInput.fill('mailto:test@example.com');
+    await page.locator('#hyperlink-url').fill('mailto:test@example.com');
+    await page.locator('.docx-hyperlink-dialog-submit').click();
 
-    // Click Insert button
-    const insertButton = page.locator('.docx-hyperlink-dialog-submit');
-    await insertButton.click();
-
-    // The link should be created
-    const link = editor.locator('a[href="mailto:test@example.com"]');
-    await expect(link).toBeVisible({ timeout: 5000 });
+    await expect(linkLocator(page, 'mailto:test@example.com')).toBeVisible({ timeout: 5000 });
   });
 
   test('should open links in new tab', async ({ page }) => {
-    // Click in editor to focus
-    const editor = page.locator('.prosemirror-editor-content');
-    await editor.click();
-    await page.waitForTimeout(200);
+    await typeAndSelect(editor, page, 'External');
 
-    // Type some text
-    await page.keyboard.type('External', { delay: 50 });
-    await page.waitForTimeout(100);
-
-    // Select the text using triple-click
-    await editor.click({ clickCount: 3 });
-    await page.waitForTimeout(100);
-
-    // Open hyperlink dialog via toolbar button
-    const linkButton = page.locator('[data-testid="toolbar-insert-link"]');
-    await linkButton.click();
-
-    // Wait for dialog
+    await page.locator('[data-testid="toolbar-insert-link"]').click();
     const dialog = page.locator('.docx-hyperlink-dialog');
     await expect(dialog).toBeVisible({ timeout: 10000 });
 
-    // Enter URL
-    const urlInput = page.locator('#hyperlink-url');
-    await urlInput.fill('https://example.com');
+    await page.locator('#hyperlink-url').fill('https://example.com');
+    await page.locator('.docx-hyperlink-dialog-submit').click();
 
-    // Click Insert button
-    const insertButton = page.locator('.docx-hyperlink-dialog-submit');
-    await insertButton.click();
-
-    // The link should have target="_blank"
-    const link = editor.locator('a[href="https://example.com"]');
+    const link = linkLocator(page, 'https://example.com');
     await expect(link).toHaveAttribute('target', '_blank');
     await expect(link).toHaveAttribute('rel', 'noopener noreferrer');
   });
 
   test('should insert hyperlink with tooltip', async ({ page }) => {
-    // Click in editor to focus
-    const editor = page.locator('.prosemirror-editor-content');
-    await editor.click();
-    await page.waitForTimeout(200);
+    await typeAndSelect(editor, page, 'Hover me');
 
-    // Type some text
-    await page.keyboard.type('Hover me', { delay: 50 });
-    await page.waitForTimeout(100);
-
-    // Select the text using triple-click
-    await editor.click({ clickCount: 3 });
-    await page.waitForTimeout(100);
-
-    // Open hyperlink dialog via toolbar button
-    const linkButton = page.locator('[data-testid="toolbar-insert-link"]');
-    await linkButton.click();
-
-    // Wait for dialog
+    await page.locator('[data-testid="toolbar-insert-link"]').click();
     const dialog = page.locator('.docx-hyperlink-dialog');
     await expect(dialog).toBeVisible({ timeout: 10000 });
 
-    // Enter URL
-    const urlInput = page.locator('#hyperlink-url');
-    await urlInput.fill('https://example.com');
+    await page.locator('#hyperlink-url').fill('https://example.com');
+    await page.locator('#hyperlink-tooltip').fill('This is a tooltip');
+    await page.locator('.docx-hyperlink-dialog-submit').click();
 
-    // Enter tooltip
-    const tooltipInput = page.locator('#hyperlink-tooltip');
-    await tooltipInput.fill('This is a tooltip');
-
-    // Click Insert button
-    const insertButton = page.locator('.docx-hyperlink-dialog-submit');
-    await insertButton.click();
-
-    // The link should have title attribute
-    const link = editor.locator('a[href="https://example.com"]');
-    await expect(link).toHaveAttribute('title', 'This is a tooltip');
+    await expect(linkLocator(page, 'https://example.com')).toHaveAttribute(
+      'title',
+      'This is a tooltip'
+    );
   });
 });
