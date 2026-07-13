@@ -15,7 +15,8 @@ export async function assertTextIsBold(page: Page, searchText: string): Promise<
   const isBold = await page.evaluate((text) => {
     // Search only in editor content area, not toolbar (which has icon text like "format_bold")
     const contentArea =
-      document.querySelector('.ProseMirror') ||
+      document.querySelector('.layout-page-content') ||
+      document.querySelector('.paged-editor__hidden-pm .ProseMirror') ||
       document.querySelector('.docx-editor-pages') ||
       document.querySelector('.docx-ai-editor');
     if (!contentArea) return false;
@@ -52,7 +53,8 @@ export async function assertTextIsNotBold(page: Page, searchText: string): Promi
   const isBold = await page.evaluate((text) => {
     // Search only in editor content area
     const contentArea =
-      document.querySelector('.ProseMirror') ||
+      document.querySelector('.layout-page-content') ||
+      document.querySelector('.paged-editor__hidden-pm .ProseMirror') ||
       document.querySelector('.docx-editor-pages') ||
       document.querySelector('.docx-ai-editor');
     if (!contentArea) return false;
@@ -90,7 +92,8 @@ export async function assertTextIsItalic(page: Page, searchText: string): Promis
   const isItalic = await page.evaluate((text) => {
     // Search only in editor content area
     const contentArea =
-      document.querySelector('.ProseMirror') ||
+      document.querySelector('.layout-page-content') ||
+      document.querySelector('.paged-editor__hidden-pm .ProseMirror') ||
       document.querySelector('.docx-editor-pages') ||
       document.querySelector('.docx-ai-editor');
     if (!contentArea) return false;
@@ -126,7 +129,8 @@ export async function assertTextIsUnderlined(page: Page, searchText: string): Pr
   const isUnderlined = await page.evaluate((text) => {
     // Search only in editor content area
     const contentArea =
-      document.querySelector('.ProseMirror') ||
+      document.querySelector('.layout-page-content') ||
+      document.querySelector('.paged-editor__hidden-pm .ProseMirror') ||
       document.querySelector('.docx-editor-pages') ||
       document.querySelector('.docx-ai-editor');
     if (!contentArea) return false;
@@ -165,7 +169,8 @@ export async function assertTextHasStrikethrough(page: Page, searchText: string)
   const hasStrike = await page.evaluate((text) => {
     // Search only in editor content area
     const contentArea =
-      document.querySelector('.ProseMirror') ||
+      document.querySelector('.layout-page-content') ||
+      document.querySelector('.paged-editor__hidden-pm .ProseMirror') ||
       document.querySelector('.docx-editor-pages') ||
       document.querySelector('.docx-ai-editor');
     if (!contentArea) return false;
@@ -212,7 +217,8 @@ export async function assertTextHasFontFamily(
   const actualFont = await page.evaluate((text) => {
     // Search only in editor content area
     const contentArea =
-      document.querySelector('.ProseMirror') ||
+      document.querySelector('.layout-page-content') ||
+      document.querySelector('.paged-editor__hidden-pm .ProseMirror') ||
       document.querySelector('.docx-editor-pages') ||
       document.querySelector('.docx-ai-editor');
     if (!contentArea) return '';
@@ -249,7 +255,8 @@ export async function assertTextHasFontSize(
   const actualSize = await page.evaluate((text) => {
     // Search only in editor content area
     const contentArea =
-      document.querySelector('.ProseMirror') ||
+      document.querySelector('.layout-page-content') ||
+      document.querySelector('.paged-editor__hidden-pm .ProseMirror') ||
       document.querySelector('.docx-editor-pages') ||
       document.querySelector('.docx-ai-editor');
     if (!contentArea) return '';
@@ -285,7 +292,8 @@ export async function assertTextHasColor(
   const actualColor = await page.evaluate((text) => {
     // Search only in editor content area
     const contentArea =
-      document.querySelector('.ProseMirror') ||
+      document.querySelector('.layout-page-content') ||
+      document.querySelector('.paged-editor__hidden-pm .ProseMirror') ||
       document.querySelector('.docx-editor-pages') ||
       document.querySelector('.docx-ai-editor');
     if (!contentArea) return '';
@@ -411,7 +419,8 @@ export async function assertDocumentContainsText(page: Page, expectedText: strin
   // Get text only from the editor content area
   const rawText = await page.evaluate(() => {
     const contentArea =
-      document.querySelector('.ProseMirror') ||
+      document.querySelector('.layout-page-content') ||
+      document.querySelector('.paged-editor__hidden-pm .ProseMirror') ||
       document.querySelector('.docx-editor-pages') ||
       document.querySelector('.docx-ai-editor');
     return contentArea?.textContent || '';
@@ -435,7 +444,8 @@ export async function assertDocumentNotContainsText(
   // Get text only from the editor content area
   const rawText = await page.evaluate(() => {
     const contentArea =
-      document.querySelector('.ProseMirror') ||
+      document.querySelector('.layout-page-content') ||
+      document.querySelector('.paged-editor__hidden-pm .ProseMirror') ||
       document.querySelector('.docx-editor-pages') ||
       document.querySelector('.docx-ai-editor');
     return contentArea?.textContent || '';

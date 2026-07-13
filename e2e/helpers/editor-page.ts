@@ -154,7 +154,8 @@ export class EditorPage {
    * Get the first editable content area
    */
   getContentArea(): Locator {
-    return this.page.locator('[contenteditable="true"]').first();
+    // Body offscreen PM — never an HF EditorView (also contenteditable).
+    return this.page.locator('.paged-editor__hidden-pm [contenteditable="true"]').first();
   }
 
   /**
@@ -244,38 +245,12 @@ export class EditorPage {
    * We must walk text nodes and create a range spanning from first to last.
    */
   async selectAll(): Promise<void> {
-    await this.page.evaluate(() => {
-      const contentArea =
-        document.querySelector('.ProseMirror') ||
-        document.querySelector('.docx-editor-pages') ||
-        document.querySelector('.docx-ai-editor');
-      if (!contentArea) return;
-
-      // Walk all text nodes to find first and last with actual content
-      const walker = document.createTreeWalker(contentArea, NodeFilter.SHOW_TEXT, null);
-      let firstTextNode: Text | null = null;
-      let lastTextNode: Text | null = null;
-
-      while (walker.nextNode()) {
-        const text = walker.currentNode.textContent || '';
-        // Include nodes with content (even spaces)
-        if (text.length > 0) {
-          if (!firstTextNode) firstTextNode = walker.currentNode as Text;
-          lastTextNode = walker.currentNode as Text;
-        }
-      }
-
-      if (!firstTextNode || !lastTextNode) return;
-
-      const selection = window.getSelection();
-      if (!selection) return;
-
-      selection.removeAllRanges();
-      const range = document.createRange();
-      range.setStart(firstTextNode, 0);
-      range.setEnd(lastTextNode, lastTextNode.textContent?.length || 0);
-      selection.addRange(range);
-    });
+    // Drive select-all through the body PM keymap so ProseMirror's selection
+    // (and lastSelectionRef) update. DOM Range selection on a random
+    // `.ProseMirror` (body + per-rId HF hosts) does not sync into PM state.
+    await this.focus();
+    const modifier = process.platform === 'darwin' ? 'Meta' : 'Control';
+    await this.page.keyboard.press(`${modifier}+a`);
   }
 
   /**
@@ -284,10 +259,11 @@ export class EditorPage {
   async selectText(searchText: string): Promise<boolean> {
     // First, get the bounding rect of the text we want to select
     const textInfo = await this.page.evaluate((text) => {
-      // Search only within the editor content area (not toolbar which contains icon text like "format_bold")
-      // ProseMirror uses .ProseMirror, legacy editors use .docx-editor-pages or .docx-ai-editor
+      // Prefer painted body text (visible hit-testing). Fall back to the
+      // hidden body PM — never an HF ProseMirror (separate doc / rId).
       const contentArea =
-        document.querySelector('.ProseMirror') ||
+        document.querySelector('.layout-page-content') ||
+        document.querySelector('.paged-editor__hidden-pm .ProseMirror') ||
         document.querySelector('.docx-editor-pages') ||
         document.querySelector('.docx-ai-editor');
       if (!contentArea) return null;
@@ -321,16 +297,15 @@ export class EditorPage {
 
     if (!textInfo) return false;
 
-    // Focus the editor by clicking, then re-select
-    // This ensures ProseMirror is focused and will sync selections.
     // Prefer the offscreen body host — HF PMs also use .ProseMirror.
-    const pm = this.page.locator('[contenteditable="true"]').first();
+    const pm = this.page.locator('.paged-editor__hidden-pm [contenteditable="true"]').first();
     await pm.focus();
 
     // Re-apply the selection after focus
     await this.page.evaluate((text) => {
       const contentArea =
-        document.querySelector('.ProseMirror') ||
+        document.querySelector('.paged-editor__hidden-pm .ProseMirror') ||
+        document.querySelector('.layout-page-content') ||
         document.querySelector('.docx-editor-pages') ||
         document.querySelector('.docx-ai-editor');
       if (!contentArea) return;
@@ -366,7 +341,8 @@ export class EditorPage {
       ({ pIndex, start, end }) => {
         // Try ProseMirror structure first, then fall back to legacy
         const contentArea =
-          document.querySelector('.ProseMirror') ||
+          document.querySelector('.paged-editor__hidden-pm .ProseMirror') ||
+          document.querySelector('.layout-page-content') ||
           document.querySelector('.docx-editor-pages') ||
           document.querySelector('.docx-ai-editor');
         if (!contentArea) return;
