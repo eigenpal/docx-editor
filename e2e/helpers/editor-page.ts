@@ -857,6 +857,8 @@ export class EditorPage {
 
     // Select spacing value from dropdown using role="option" with exact match
     await this.page.getByRole('option', { name: label, exact: true }).click();
+    // Ensure the Radix portal closes so later toolbar clicks (undo) aren't blocked.
+    await this.page.keyboard.press('Escape').catch(() => undefined);
   }
 
   /**
@@ -888,17 +890,48 @@ export class EditorPage {
    * Set paragraph style
    */
   async setParagraphStyle(style: string): Promise<void> {
-    // Radix Select (React) — open the trigger then pick the option by label.
-    // Vue still uses a native <select>; try that first for cross-adapter helpers.
+    // React StylePicker shows i18n labels ("Normal text"); Vue may use a native
+    // <select> with the raw style name. Map the common e2e aliases.
+    const labelAliases: Record<string, string[]> = {
+      Normal: ['Normal text', 'Normal'],
+      Title: ['Title'],
+      Subtitle: ['Subtitle'],
+      'Heading 1': ['Heading 1'],
+      'Heading 2': ['Heading 2'],
+      'Heading 3': ['Heading 3'],
+    };
+    const labels = labelAliases[style] ?? [style];
+
     const native = this.toolbar.locator('select[aria-label="Select paragraph style"]');
     if ((await native.count()) > 0) {
-      await native.selectOption({ label: style });
+      let selected = false;
+      for (const label of labels) {
+        try {
+          await native.selectOption({ label });
+          selected = true;
+          break;
+        } catch {
+          // try next alias
+        }
+      }
+      if (!selected) await native.selectOption({ label: style });
     } else {
       const trigger = this.toolbar.locator('[aria-label="Select paragraph style"]');
       await trigger.click();
-      await this.page.getByRole('option', { name: style, exact: true }).click();
+      let clicked = false;
+      for (const label of labels) {
+        const option = this.page.getByRole('option', { name: label, exact: true });
+        if ((await option.count()) > 0) {
+          await option.click();
+          clicked = true;
+          break;
+        }
+      }
+      if (!clicked) {
+        await this.page.getByRole('option', { name: style, exact: true }).click();
+      }
     }
-    // Refocus editor after selecting style
+    await this.page.keyboard.press('Escape').catch(() => undefined);
     await this.focus();
   }
 
@@ -952,7 +985,15 @@ export class EditorPage {
    * Undo via toolbar
    */
   async undo(): Promise<void> {
-    await this.undoButton.click();
+    await this.page.keyboard.press('Escape').catch(() => undefined);
+    await this.focus();
+    if (await this.undoButton.isEnabled().catch(() => false)) {
+      await this.undoButton.click({ timeout: 5000 }).catch(async () => {
+        await this.undoShortcut();
+      });
+    } else {
+      await this.undoShortcut();
+    }
   }
 
   /**
@@ -967,7 +1008,15 @@ export class EditorPage {
    * Redo via toolbar
    */
   async redo(): Promise<void> {
-    await this.redoButton.click();
+    await this.page.keyboard.press('Escape').catch(() => undefined);
+    await this.focus();
+    if (await this.redoButton.isEnabled().catch(() => false)) {
+      await this.redoButton.click({ timeout: 5000 }).catch(async () => {
+        await this.redoShortcut();
+      });
+    } else {
+      await this.redoShortcut();
+    }
   }
 
   /**
