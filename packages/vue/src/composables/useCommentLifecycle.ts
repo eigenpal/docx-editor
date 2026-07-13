@@ -267,6 +267,10 @@ export function useCommentLifecycle(opts: UseCommentLifecycleOptions) {
     pendingCommentRange.value = null;
     addCommentYPosition.value = null;
     opts.isAddingComment.value = false;
+    // Expand the new card immediately (React parity) — painted-pages
+    // overlay notify can lag, and the caret often sits just outside the mark.
+    opts.activeSidebarItem.value = `comment-${newComment.id}`;
+    opts.showSidebar.value = true;
     opts.emit('change', doc);
   }
 

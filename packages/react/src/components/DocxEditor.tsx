@@ -1,12 +1,5 @@
 /**
- * DocxEditor Component
- *
- * Main component integrating all editor features:
- * - Toolbar for formatting
- * - ProseMirror-based editor for content editing
- * - Zoom control
- * - Error boundary
- * - Loading states
+ * DocxEditor — toolbar, dual-render editing, zoom, and sidebar chrome.
  */
 
 import { useRef, useCallback, useState, useEffect, useMemo, forwardRef } from 'react';
@@ -1390,6 +1383,9 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
         view.dispatch(tr);
       }
       setComments((prev) => [...prev, comment]);
+      // Expand immediately — overlay notify can lag painted-pages readiness.
+      setExpandedSidebarItem(`comment-${comment.id}`);
+      setShowCommentsSidebar(true);
       setIsAddingComment(false);
       setCommentSelectionRange(null);
       setAddCommentYPosition(null);
