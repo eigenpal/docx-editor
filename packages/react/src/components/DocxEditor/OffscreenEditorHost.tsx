@@ -256,9 +256,10 @@ export const OffscreenEditorHost = memo(
           onTransactionRef.current?.(transaction, next);
 
           // `selectionSet` covers an explicit selection move; a document change
-          // moves the selection implicitly (the caret advances as you type), and
-          // the overlay has to follow both.
-          if (transaction.selectionSet || transaction.docChanged) {
+          // moves the selection implicitly (the caret advances as you type).
+          // `storedMarksSet` covers empty-paragraph formatting toggles that
+          // don't move the caret — toolbar state must still refresh.
+          if (transaction.selectionSet || transaction.docChanged || transaction.storedMarksSet) {
             onSelectionChangeRef.current?.(next);
           }
         },

@@ -1,4 +1,5 @@
 import { useCallback } from 'react';
+import { flushSync } from 'react-dom';
 import { TextSelection } from 'prosemirror-state';
 import type { Document } from '@eigenpal/docx-editor-core/types/document';
 import {
@@ -32,7 +33,11 @@ import {
   insertSectionBreakContinuous,
   insertTable,
 } from '@eigenpal/docx-editor-core/prosemirror/commands';
-import { createStyleResolver, insertTableOfContents } from '@eigenpal/docx-editor-core/prosemirror';
+import {
+  createStyleResolver,
+  insertTableOfContents,
+  extractSelectionState,
+} from '@eigenpal/docx-editor-core/prosemirror';
 import { getCachedNumberingMap } from '@eigenpal/docx-editor-core/docx';
 import type { EditorView } from 'prosemirror-view';
 import type { FormattingAction } from '../../Toolbar';
@@ -40,6 +45,7 @@ import { pointsToHalfPoints } from '../../ui/FontSizePicker';
 import { mapHexToHighlightName } from '../../toolbarUtils';
 import type { useHyperlinkDialog } from '../../dialogs/HyperlinkDialog';
 import type { PagedEditorRef } from '../PagedEditor';
+import type { SelectionState } from '@eigenpal/docx-editor-core/prosemirror';
 
 /**
  * Toolbar action handlers: the big `handleFormat` switch that routes
@@ -56,6 +62,7 @@ export function useFormattingActions({
   historyStateRef,
   getCachedStyleResolver,
   onTableOfContentsInserted,
+  syncToolbarFromView,
 }: {
   getActiveEditorView: () => EditorView | null | undefined;
   focusActiveEditor: () => void;
@@ -67,6 +74,8 @@ export function useFormattingActions({
     styles: Parameters<typeof createStyleResolver>[0]
   ) => ReturnType<typeof createStyleResolver>;
   onTableOfContentsInserted?: () => void;
+  /** Push PM selection formatting into the toolbar (empty-para mark toggles). */
+  syncToolbarFromView?: (state: SelectionState | null) => void;
 }) {
   const handleFormat = useCallback(
     (action: FormattingAction) => {
@@ -80,13 +89,21 @@ export function useFormattingActions({
       // Restoring while focused overwrites the caret after typing when the
       // selection-tracker ref lags behind (cursor jumps to the prior mark site).
       const hadFocus = view.hasFocus();
+
+      // Focus only when the editor lost focus (e.g. dropdown). Unconditional
+      // focus() can dispatch a selection-sync transaction that clears
+      // storedMarks before the format command runs — same guard as Vue.
+      if (!hadFocus) {
+        view.focus();
+      }
+
+      // Selection restoration: dropdown clicks (font picker, style picker, etc.)
+      // can move focus to the dropdown portal and collapse the body selection.
+      // Restore the saved selection so the action lands on the user's intended
+      // range. Only the body editor needs this — the HF editor manages its own.
+      const isBodyEditor = view === pagedEditorRef.current?.getView();
       const { from, to } = view.state.selection;
       const savedSelection = lastSelectionRef.current;
-
-      // Focus editor first to ensure we can dispatch commands
-      view.focus();
-
-      const isBodyEditor = view === pagedEditorRef.current?.getView();
 
       if (
         isBodyEditor &&
@@ -108,30 +125,29 @@ export function useFormattingActions({
         lastSelectionRef.current = { from, to };
       }
 
-      if (action === 'bold') return void toggleBold(view.state, view.dispatch);
-      if (action === 'italic') return void toggleItalic(view.state, view.dispatch);
-      if (action === 'underline') return void toggleUnderline(view.state, view.dispatch);
-      if (action === 'strikethrough') return void toggleStrike(view.state, view.dispatch);
-      if (action === 'superscript') return void toggleSuperscript(view.state, view.dispatch);
-      if (action === 'subscript') return void toggleSubscript(view.state, view.dispatch);
-      if (action === 'bulletList') return void toggleBulletList(view.state, view.dispatch);
-      if (action === 'numberedList') return void toggleNumberedList(view.state, view.dispatch);
-      if (action === 'indent') {
+      if (action === 'bold') void toggleBold(view.state, view.dispatch);
+      else if (action === 'italic') void toggleItalic(view.state, view.dispatch);
+      else if (action === 'underline') void toggleUnderline(view.state, view.dispatch);
+      else if (action === 'strikethrough') void toggleStrike(view.state, view.dispatch);
+      else if (action === 'superscript') void toggleSuperscript(view.state, view.dispatch);
+      else if (action === 'subscript') void toggleSubscript(view.state, view.dispatch);
+      else if (action === 'bulletList') void toggleBulletList(view.state, view.dispatch);
+      else if (action === 'numberedList') void toggleNumberedList(view.state, view.dispatch);
+      else if (action === 'indent') {
         if (!increaseListLevel(view.state, view.dispatch)) {
           increaseIndent()(view.state, view.dispatch);
         }
-        return;
-      }
-      if (action === 'outdent') {
+      } else if (action === 'outdent') {
         if (!decreaseListLevel(view.state, view.dispatch)) {
           decreaseIndent()(view.state, view.dispatch);
         }
-        return;
-      }
-      if (action === 'clearFormatting') return void clearFormatting(view.state, view.dispatch);
-      if (action === 'setRtl') return void setRtl(view.state, view.dispatch);
-      if (action === 'setLtr') return void setLtr(view.state, view.dispatch);
-      if (action === 'insertLink') {
+      } else if (action === 'clearFormatting') {
+        void clearFormatting(view.state, view.dispatch);
+      } else if (action === 'setRtl') {
+        void setRtl(view.state, view.dispatch);
+      } else if (action === 'setLtr') {
+        void setLtr(view.state, view.dispatch);
+      } else if (action === 'insertLink') {
         const selectedText = getSelectedText(view.state);
         const existingLink = getHyperlinkAttrs(view.state);
         if (existingLink) {
@@ -144,9 +160,7 @@ export function useFormattingActions({
           hyperlinkDialog.openInsert(selectedText);
         }
         return;
-      }
-
-      if (typeof action === 'object') {
+      } else if (typeof action === 'object') {
         switch (action.type) {
           case 'alignment':
             setAlignment(action.value)(view.state, view.dispatch);
@@ -163,13 +177,11 @@ export function useFormattingActions({
             break;
           }
           case 'highlightColor': {
-            // Convert hex to OOXML named highlight value (e.g., 'FFFF00' → 'yellow')
             const highlightName = action.value ? mapHexToHighlightName(action.value) : '';
             setHighlight(highlightName || action.value)(view.state, view.dispatch);
             break;
           }
           case 'fontSize':
-            // OOXML uses half-points for font sizes
             setFontSize(pointsToHalfPoints(action.value))(view.state, view.dispatch);
             break;
           case 'fontFamily':
@@ -179,7 +191,6 @@ export function useFormattingActions({
             setLineSpacing(action.value)(view.state, view.dispatch);
             break;
           case 'applyStyle': {
-            // Read latest doc through ref to dodge stale closures.
             const currentDoc = historyStateRef.current;
             const styleResolver = currentDoc?.package.styles
               ? getCachedStyleResolver(currentDoc.package.styles)
@@ -201,6 +212,17 @@ export function useFormattingActions({
           }
         }
       }
+
+      // Empty-paragraph mark toggles update storedMarks/DTF without a caret move;
+      // push toolbar state from the live view so aria-pressed doesn't lag paint.
+      // flushSync: toolbar click handlers batch with other updates; without a
+      // sync commit, Playwright can assert aria-pressed before React paints.
+      const live = getActiveEditorView();
+      if (live) {
+        flushSync(() => {
+          syncToolbarFromView?.(extractSelectionState(live.state));
+        });
+      }
     },
     [
       getActiveEditorView,
@@ -209,6 +231,7 @@ export function useFormattingActions({
       hyperlinkDialog,
       historyStateRef,
       getCachedStyleResolver,
+      syncToolbarFromView,
     ]
   );
 

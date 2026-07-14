@@ -12,38 +12,43 @@ import { checkFormattingAtSelection, getParagraphText, getParagraphCount } from 
  * Assert that text is bold
  */
 export async function assertTextIsBold(page: Page, searchText: string): Promise<void> {
-  const isBold = await page.evaluate((text) => {
-    // Search only in editor content area, not toolbar (which has icon text like "format_bold")
-    const contentArea =
-      document.querySelector('.paged-editor__hidden-pm .ProseMirror') ||
-      document.querySelector('.layout-page-content') ||
-      document.querySelector('.docx-editor-pages') ||
-      document.querySelector('.docx-ai-editor');
-    if (!contentArea) return false;
+  await expect
+    .poll(
+      async () => {
+        return page.evaluate((text) => {
+          // Prefer painted pages (user-visible); fall back to body PM toDOM.
+          const contentArea =
+            document.querySelector('.layout-page-content') ||
+            document.querySelector('.paged-editor__hidden-pm .ProseMirror') ||
+            document.querySelector('.docx-editor-pages') ||
+            document.querySelector('.docx-ai-editor');
+          if (!contentArea) return false;
 
-    const walker = document.createTreeWalker(contentArea, NodeFilter.SHOW_TEXT, null);
+          const walker = document.createTreeWalker(contentArea, NodeFilter.SHOW_TEXT, null);
 
-    let node: Text | null;
-    while ((node = walker.nextNode() as Text | null)) {
-      if (node.textContent?.includes(text)) {
-        let element = node.parentElement;
-        while (element) {
-          const style = window.getComputedStyle(element);
-          const fontWeight = style.fontWeight;
-          if (fontWeight === 'bold' || parseInt(fontWeight) >= 700) {
-            return true;
+          let node: Text | null;
+          while ((node = walker.nextNode() as Text | null)) {
+            if (node.textContent?.includes(text)) {
+              let element = node.parentElement;
+              while (element && element !== contentArea) {
+                const style = window.getComputedStyle(element);
+                const fontWeight = style.fontWeight;
+                if (fontWeight === 'bold' || parseInt(fontWeight, 10) >= 700) {
+                  return true;
+                }
+                if (element.tagName === 'STRONG' || element.tagName === 'B') {
+                  return true;
+                }
+                element = element.parentElement;
+              }
+            }
           }
-          if (element.tagName === 'STRONG' || element.tagName === 'B') {
-            return true;
-          }
-          element = element.parentElement;
-        }
-      }
-    }
-    return false;
-  }, searchText);
-
-  expect(isBold, `Expected "${searchText}" to be bold`).toBe(true);
+          return false;
+        }, searchText);
+      },
+      { timeout: 5000, message: `Expected "${searchText}" to be bold` }
+    )
+    .toBe(true);
 }
 
 /**
@@ -89,37 +94,41 @@ export async function assertTextIsNotBold(page: Page, searchText: string): Promi
  * Assert that text is italic
  */
 export async function assertTextIsItalic(page: Page, searchText: string): Promise<void> {
-  const isItalic = await page.evaluate((text) => {
-    // Search only in editor content area
-    const contentArea =
-      document.querySelector('.paged-editor__hidden-pm .ProseMirror') ||
-      document.querySelector('.layout-page-content') ||
-      document.querySelector('.docx-editor-pages') ||
-      document.querySelector('.docx-ai-editor');
-    if (!contentArea) return false;
+  await expect
+    .poll(
+      async () => {
+        return page.evaluate((text) => {
+          const contentArea =
+            document.querySelector('.layout-page-content') ||
+            document.querySelector('.paged-editor__hidden-pm .ProseMirror') ||
+            document.querySelector('.docx-editor-pages') ||
+            document.querySelector('.docx-ai-editor');
+          if (!contentArea) return false;
 
-    const walker = document.createTreeWalker(contentArea, NodeFilter.SHOW_TEXT, null);
+          const walker = document.createTreeWalker(contentArea, NodeFilter.SHOW_TEXT, null);
 
-    let node: Text | null;
-    while ((node = walker.nextNode() as Text | null)) {
-      if (node.textContent?.includes(text)) {
-        let element = node.parentElement;
-        while (element) {
-          const style = window.getComputedStyle(element);
-          if (style.fontStyle === 'italic') {
-            return true;
+          let node: Text | null;
+          while ((node = walker.nextNode() as Text | null)) {
+            if (node.textContent?.includes(text)) {
+              let element = node.parentElement;
+              while (element && element !== contentArea) {
+                const style = window.getComputedStyle(element);
+                if (style.fontStyle === 'italic') {
+                  return true;
+                }
+                if (element.tagName === 'EM' || element.tagName === 'I') {
+                  return true;
+                }
+                element = element.parentElement;
+              }
+            }
           }
-          if (element.tagName === 'EM' || element.tagName === 'I') {
-            return true;
-          }
-          element = element.parentElement;
-        }
-      }
-    }
-    return false;
-  }, searchText);
-
-  expect(isItalic, `Expected "${searchText}" to be italic`).toBe(true);
+          return false;
+        }, searchText);
+      },
+      { timeout: 5000, message: `Expected "${searchText}" to be italic` }
+    )
+    .toBe(true);
 }
 
 /**
@@ -245,7 +254,9 @@ export async function assertTextHasFontFamily(
 }
 
 /**
- * Assert text has a specific font size
+ * Assert text has a specific font size.
+ * `expectedSize` may be CSS pt (`24pt`) or px (`32px`). getComputedStyle always
+ * returns px, so pt expectations are converted at 96dpi (1pt = 4/3px).
  */
 export async function assertTextHasFontSize(
   page: Page,
@@ -253,10 +264,10 @@ export async function assertTextHasFontSize(
   expectedSize: string
 ): Promise<void> {
   const actualSize = await page.evaluate((text) => {
-    // Search only in editor content area
+    // Prefer painted pages — hidden PM toDOM may lack paragraph DTF cascade.
     const contentArea =
-      document.querySelector('.paged-editor__hidden-pm .ProseMirror') ||
       document.querySelector('.layout-page-content') ||
+      document.querySelector('.paged-editor__hidden-pm .ProseMirror') ||
       document.querySelector('.docx-editor-pages') ||
       document.querySelector('.docx-ai-editor');
     if (!contentArea) return '';
@@ -276,9 +287,19 @@ export async function assertTextHasFontSize(
     return '';
   }, searchText);
 
-  expect(actualSize, `Expected "${searchText}" to have font size "${expectedSize}"`).toBe(
-    expectedSize
-  );
+  const parseCssSizeToPx = (value: string): number | null => {
+    const m = value.trim().match(/^([\d.]+)\s*(px|pt)$/i);
+    if (!m) return null;
+    const n = parseFloat(m[1]!);
+    return m[2]!.toLowerCase() === 'pt' ? (n * 96) / 72 : n;
+  };
+
+  const actualPx = parseCssSizeToPx(actualSize);
+  const expectedPx = parseCssSizeToPx(expectedSize);
+  expect(
+    actualPx != null && expectedPx != null && Math.abs(actualPx - expectedPx) < 0.5,
+    `Expected "${searchText}" to have font size "${expectedSize}" (got "${actualSize}")`
+  ).toBe(true);
 }
 
 /**

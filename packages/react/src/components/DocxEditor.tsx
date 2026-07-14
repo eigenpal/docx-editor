@@ -27,6 +27,7 @@ import { useContextMenus } from './DocxEditor/hooks/useContextMenus';
 import { useCommentManagement } from './DocxEditor/hooks/useCommentManagement';
 import { useCommentLifecycle } from './DocxEditor/hooks/useCommentLifecycle';
 import { useSelectionTracker } from './DocxEditor/hooks/useSelectionTracker';
+import type { SelectionStateDelta } from './DocxEditor/hooks/useSelectionTracker';
 import { useFloatingCommentBtn } from './DocxEditor/hooks/useFloatingCommentBtn';
 import { useActiveEditor } from './DocxEditor/hooks/useActiveEditor';
 import { useScrollPageInfo } from './DocxEditor/hooks/useScrollPageInfo';
@@ -62,8 +63,7 @@ import { useTableSelection } from '../hooks/useTableSelection';
 import { useDocumentHistory } from '../hooks/useHistory';
 
 // Extension system
-import { createStarterKit } from '@eigenpal/docx-editor-core/prosemirror/extensions';
-import { ExtensionManager } from '@eigenpal/docx-editor-core/prosemirror/extensions';
+import { singletonManager } from '@eigenpal/docx-editor-core/prosemirror/schema';
 import {
   createSuggestionModePlugin,
   setSuggestionMode,
@@ -576,6 +576,7 @@ import type { EditorMode } from './DocxEditor/internals/editing-modes';
 // pre-serialization range-marker injection.
 
 import { getInitialSectionProperties } from './DocxEditor/internals/pmAnchors';
+import { deriveToolbarSelectionFormatting } from './DocxEditor/internals/deriveToolbarSelectionFormatting';
 import {
   PENDING_COMMENT_ID,
   EMPTY_ANCHOR_POSITIONS,
@@ -791,13 +792,7 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
     enableKeyboardShortcuts: true,
   });
 
-  // Extension manager — built once, provides schema + plugins + commands
-  const extensionManager = useMemo(() => {
-    const mgr = new ExtensionManager(createStarterKit());
-    mgr.buildSchema();
-    mgr.initializeRuntime();
-    return mgr;
-  }, []);
+  const extensionManager = singletonManager; // shared singleton (Vue parity)
 
   // Suggestion mode plugin — merged with external plugins
   const suggestionPlugin = useMemo(
@@ -1037,6 +1032,9 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
     zoom: state.zoom,
   });
 
+  const applySelectionDelta = useCallback((delta: SelectionStateDelta) => {
+    setState((prev) => ({ ...prev, ...delta }));
+  }, []);
   const { handleSelectionChange } = useSelectionTracker({
     getActiveEditorView,
     lastSelectionRef,
@@ -1045,19 +1043,20 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
     historyStateRef,
     getCachedStyleResolver,
     setFloatingCommentBtn,
-    applySelectionDelta: useCallback((delta) => setState((prev) => ({ ...prev, ...delta })), []),
+    applySelectionDelta,
     recomputeFloatingCommentBtn,
     onSelectionChange,
     selectionChangeSubscribersRef,
   });
 
-  // Table selection hook
+  const toolbarSelectionFormatting = useMemo(
+    () => deriveToolbarSelectionFormatting(pmState, state.selectionFormatting, theme),
+    [pmState, state.selectionFormatting, theme]
+  );
   const tableSelection = useTableSelection({
     document: history.state,
     onChange: handleDocumentChange,
-    onSelectionChange: (_context) => {
-      // Could notify parent of table selection changes
-    },
+    onSelectionChange: (_context) => {},
   });
 
   useKeyboardShortcuts({
@@ -1132,7 +1131,7 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
     borderSpecRef,
     historyStateRef,
     getCachedStyleResolver,
-    applySelectionDelta: useCallback((delta) => setState((prev) => ({ ...prev, ...delta })), []),
+    applySelectionDelta,
   });
 
   const {
@@ -1151,6 +1150,7 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
     historyStateRef,
     getCachedStyleResolver,
     onTableOfContentsInserted: handleTableOfContentsInserted,
+    syncToolbarFromView: handleSelectionChange,
   });
 
   const handleZoomChange = useCallback((zoom: number) => {
@@ -1582,6 +1582,9 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
       handleSelectionChange(null);
       return;
     }
+    // Keep pmState in lockstep with selection/stored-marks so undo depth and
+    // any PM-derived UI stay current on empty-paragraph mark toggles too.
+    setPmState(view.state);
     const selectionState = extractSelectionState(view.state);
     handleSelectionChange(selectionState);
 
@@ -1783,7 +1786,7 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
             document={history.state}
             theme={theme}
             pmState={pmState}
-            selectionFormatting={state.selectionFormatting}
+            selectionFormatting={toolbarSelectionFormatting}
             tableContext={state.pmTableContext}
             imageContext={state.pmImageContext}
             readOnly={readOnly}

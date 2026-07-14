@@ -8,6 +8,7 @@
 import { Page, Locator, expect } from '@playwright/test';
 import * as path from 'path';
 import { fileURLToPath } from 'url';
+import { placeCursorInBodyPmText, selectBodyPmTextRange } from './body-pm-selection';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -181,9 +182,16 @@ export class EditorPage {
    * Type text at the current cursor position
    */
   async typeText(text: string): Promise<void> {
-    // Keep the hidden body PM focused — painter/layout can steal DOM focus
-    // after clicks, which makes subsequent Home/arrow keys miss the editor.
-    await this.page.evaluate(() => window.__DOCX_EDITOR_E2E__?.getView?.()?.focus());
+    // Keystrokes must target the hidden body PM. After toolbar/select-all,
+    // focus can sit on chrome — but re-focusing contenteditable clears
+    // storedMarks, so only focus when the PM is not already active (EmptyParagraph
+    // Format will re-derive marks from defaultTextFormatting).
+    const inBodyPm = await this.page.evaluate(
+      () => !!document.activeElement?.closest('.paged-editor__hidden-pm')
+    );
+    if (!inBodyPm) {
+      await this.getContentArea().focus();
+    }
     await this.page.keyboard.type(text);
   }
 
@@ -251,7 +259,15 @@ export class EditorPage {
     // Drive select-all through the body PM keymap so ProseMirror's selection
     // (and lastSelectionRef) update. DOM Range selection on a random
     // `.ProseMirror` (body + per-rId HF hosts) does not sync into PM state.
-    await this.focus();
+    // Only focus when the body PM is not already active — contenteditable
+    // focus() clears storedMarks and would drop empty-run formatting before
+    // the delete/retype cycle can preserve it.
+    const inBodyPm = await this.page.evaluate(
+      () => !!document.activeElement?.closest('.paged-editor__hidden-pm')
+    );
+    if (!inBodyPm) {
+      await this.focus();
+    }
     const modifier = process.platform === 'darwin' ? 'Meta' : 'Control';
     await this.page.keyboard.press(`${modifier}+a`);
   }
@@ -334,6 +350,20 @@ export class EditorPage {
     // Wait for ProseMirror to sync
     await this.page.waitForTimeout(100);
     return true;
+  }
+
+  /** Collapsed caret in `searchText` via body-PM TextSelection (dual-render safe). */
+  async placeCursorInText(searchText: string, offsetWithin = 0): Promise<boolean> {
+    return placeCursorInBodyPmText(this.page, searchText, offsetWithin);
+  }
+
+  /** Select a substring of `searchText` via body-PM TextSelection. */
+  async selectTextRange(
+    searchText: string,
+    startOffset: number,
+    endOffset: number
+  ): Promise<boolean> {
+    return selectBodyPmTextRange(this.page, searchText, startOffset, endOffset);
   }
 
   /**
@@ -476,38 +506,17 @@ export class EditorPage {
     await this.applyToolbarFormat(this.boldButton);
   }
 
-  /**
-   * Click a toolbar formatting button and wait for the editor to be ready for
-   * the next action. A toolbar click moves DOM focus onto the button and
-   * triggers an async re-render that restores the editor's focus and
-   * selection. Wait for focus to return to the document, then for the layout
-   * re-render to settle, so a key pressed right after formatting is not
-   * dropped mid re-render.
-   */
+  /** Toolbar format click + settle (focus may land on the button first). */
   private async applyToolbarFormat(button: Locator): Promise<void> {
     await button.click();
     await this.page
-      .waitForFunction(() => !!document.activeElement?.closest('.ProseMirror'), {
-        timeout: 2000,
-      })
-      .catch(() => {
-        // Focus did not return (e.g. empty selection); fall back to the settle
-        // below so the re-render still completes before the next action.
-      });
+      .waitForFunction(() => !!document.activeElement?.closest('.ProseMirror'), { timeout: 2000 })
+      .catch(() => {});
     await this.waitForEditorSettle();
   }
 
-  /**
-   * Wait for the editor to finish the layout re-render a formatting change
-   * triggers. Until it settles the painted pages are stale and keyboard
-   * navigation (arrows, Home/End) is dropped. Two animation frames flush the
-   * layout pipeline's rAF work; the bounded delay after covers its trailing
-   * timer. This is a settle wait, not a deterministic signal — the editor
-   * exposes no layout-idle hook to await.
-   */
+  /** Two rAFs + short delay for layout pipeline trailing work. */
   private async waitForEditorSettle(): Promise<void> {
-    // Empirically sufficient for the layout pipeline's trailing timer: arrow
-    // keys are reliably handled after this delay and dropped well below it.
     const LAYOUT_SETTLE_MS = 250;
     await this.page.evaluate(
       (settleMs) =>
@@ -583,9 +592,9 @@ export class EditorPage {
     await option.waitFor({ state: 'visible', timeout: 5000 });
     await option.click();
 
-    // Refocus editor after selecting from dropdown
-    await this.focus();
-    await this.page.waitForTimeout(50);
+    // Do NOT refocus — focusing the contenteditable clears stored marks /
+    // empty-paragraph DTF (same regression as setParagraphStyle).
+    await this.waitForEditorSettle();
   }
 
   /**
@@ -597,8 +606,8 @@ export class EditorPage {
     await fontSizePicker.click();
     // Wait for dropdown to open and select the size with exact text match
     await this.page.getByRole('option', { name: size.toString(), exact: true }).click();
-    // Refocus editor after selecting from dropdown
-    await this.focus();
+    // Do NOT refocus — see setFontFamily.
+    await this.waitForEditorSettle();
   }
 
   /**

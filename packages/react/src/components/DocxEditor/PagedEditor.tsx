@@ -514,6 +514,10 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
           }
         }
 
+        if (transaction.selectionSet || transaction.docChanged || transaction.storedMarksSet) {
+          onSelectionChangeRef.current?.(newState.selection.from, newState.selection.to);
+        }
+
         // Selection, caret, and decoration refreshes share one readiness gate.
         // Selection-only/meta transactions run now when pages are current;
         // document changes retain and coalesce this request until paint.

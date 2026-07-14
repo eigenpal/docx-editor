@@ -2,6 +2,8 @@
 declare global {
   interface Window {
     __DOCX_EDITOR_E2E__?: {
+      /** Body EditorView — for precise PM selection in dual-render e2e. */
+      getView: () => import('prosemirror-view').EditorView | null;
       getPmStartForParaId: (paraId: string) => number | null;
       getSelectionAnchor: () => number | null;
       getTextblockEndForParaId: (paraId: string) => number | null;
