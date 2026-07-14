@@ -9,6 +9,7 @@
 
 import { test, expect } from '@playwright/test';
 import { EditorPage } from '../helpers/editor-page';
+import { ensureTrackedChangeCardExpanded } from '../helpers/tracked-changes';
 
 // 1×1 transparent PNG.
 const PNG =
@@ -90,9 +91,7 @@ test.describe('Tracked image insertion', () => {
     }
     await expect(page.locator('.docx-tracked-change-card')).toHaveCount(1);
 
-    // Accept/Reject only render when the card is expanded.
-    await page.locator('.docx-tracked-change-card').first().click();
-    await page.waitForTimeout(150);
+    await ensureTrackedChangeCardExpanded(page);
     await page.locator('.docx-tracked-change-card button[title="Reject"]').first().click();
     await page.waitForTimeout(200);
     await expect(page.locator('img.layout-run-image')).toHaveCount(0);
@@ -111,8 +110,7 @@ test.describe('Tracked image insertion', () => {
     }
     await expect(page.locator('.docx-tracked-change-card')).toHaveCount(1);
 
-    await page.locator('.docx-tracked-change-card').first().click();
-    await page.waitForTimeout(150);
+    await ensureTrackedChangeCardExpanded(page);
     await page.locator('.docx-tracked-change-card button[title="Accept"]').first().click();
     await page.waitForTimeout(200);
     await expect(page.locator('img.layout-run-image')).toHaveCount(1);

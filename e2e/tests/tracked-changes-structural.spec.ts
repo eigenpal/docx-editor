@@ -12,6 +12,7 @@
 
 import { test, expect } from '@playwright/test';
 import { EditorPage } from '../helpers/editor-page';
+import { ensureTrackedChangeCardExpanded } from '../helpers/tracked-changes';
 
 type ParagraphRevision = {
   pPrIns: { revisionId: number; author: string; date: string | null } | null;
@@ -506,8 +507,7 @@ test.describe('Tracked paragraph-mark revisions (issue #614)', () => {
 
     await expect(page.locator('.docx-tracked-change-card')).toHaveCount(1);
 
-    await page.locator('.docx-tracked-change-card').first().click();
-    await page.waitForTimeout(150);
+    await ensureTrackedChangeCardExpanded(page);
     await page.locator('.docx-tracked-change-card button[title="Accept"]').first().click();
     await page.waitForTimeout(200);
 
@@ -549,8 +549,7 @@ test.describe('Tracked paragraph-mark revisions (issue #614)', () => {
     // One card — the numbering pPrChange folds into the insertion.
     await expect(page.locator('.docx-tracked-change-card')).toHaveCount(1);
 
-    await page.locator('.docx-tracked-change-card').first().click();
-    await page.waitForTimeout(150);
+    await ensureTrackedChangeCardExpanded(page);
     await page.locator('.docx-tracked-change-card button[title="Reject"]').first().click();
     await page.waitForTimeout(200);
 
@@ -583,8 +582,7 @@ test.describe('Tracked paragraph-mark revisions (issue #614)', () => {
     }
 
     await expect(page.locator('.docx-tracked-change-card')).toHaveCount(1);
-    await page.locator('.docx-tracked-change-card').first().click();
-    await page.waitForTimeout(150);
+    await ensureTrackedChangeCardExpanded(page);
     await page.locator('.docx-tracked-change-card button[title="Accept"]').first().click();
     await page.waitForTimeout(200);
 
@@ -686,9 +684,8 @@ test.describe('Tracked paragraph-mark revisions (issue #614)', () => {
     await expect(cards).toHaveCount(1);
     await expect(cards.first()).toContainText('Inserted table');
 
-    // Expand the card (Accept/Reject only render when expanded), then accept.
-    await cards.first().click();
-    await page.waitForTimeout(150);
+    // Expand only if needed (caret auto-expand may already have opened it).
+    await ensureTrackedChangeCardExpanded(page, cards.first());
     await page.locator('.docx-tracked-change-card button[title="Accept"]').first().click();
     await page.waitForTimeout(200);
     await expect(cards).toHaveCount(0);
