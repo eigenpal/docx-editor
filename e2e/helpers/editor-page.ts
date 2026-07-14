@@ -181,6 +181,9 @@ export class EditorPage {
    * Type text at the current cursor position
    */
   async typeText(text: string): Promise<void> {
+    // Keep the hidden body PM focused — painter/layout can steal DOM focus
+    // after clicks, which makes subsequent Home/arrow keys miss the editor.
+    await this.page.evaluate(() => window.__DOCX_EDITOR_E2E__?.getView?.()?.focus());
     await this.page.keyboard.type(text);
   }
 
@@ -1238,9 +1241,8 @@ export class EditorPage {
    * Set cell fill color
    */
   async setCellFillColor(color: string): Promise<void> {
-    await this.page.locator('[data-testid="toolbar-table-cell-fill"]').click();
-    await this.page.waitForTimeout(100);
-    await this.page.locator(`button[title="${color}"]`).click();
+    const hex = color.replace(/^#/, '');
+    await this.pickColorFromDropdown('Cell Fill Color', hex);
   }
 
   /**

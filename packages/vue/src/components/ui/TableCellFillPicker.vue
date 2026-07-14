@@ -13,6 +13,7 @@
     :title="t('table.cellFillColor')"
     icon="format_color_fill"
     :auto-label="t('colorPicker.noColor')"
+    data-testid="toolbar-table-cell-fill"
     @change="onChange"
   />
 </template>

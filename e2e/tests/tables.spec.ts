@@ -260,13 +260,14 @@ test.describe('Table Row/Column Operations', () => {
     await editor.clickTableCell(0, 0, 0);
     await editor.addColumnRight();
 
-    // Check that all columns have roughly equal widths
+    // Check that all columns have roughly equal widths on the painted table
+    // (hidden PM <table> is off-screen and does not reflect layout widths).
     const columnWidths = await page.evaluate(() => {
-      const table = document.querySelector('table');
+      const table = document.querySelector('.paged-editor__pages .layout-table');
       if (!table) return [];
-      const firstRow = table.querySelector('tr');
+      const firstRow = table.querySelector('.layout-table-row');
       if (!firstRow) return [];
-      const cells = firstRow.querySelectorAll('td, th');
+      const cells = firstRow.querySelectorAll('.layout-table-cell');
       return Array.from(cells).map((cell) => cell.getBoundingClientRect().width);
     });
 

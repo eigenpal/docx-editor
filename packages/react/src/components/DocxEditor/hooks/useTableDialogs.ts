@@ -34,11 +34,13 @@ import {
   setTableBorderColor,
   setTableBorderWidth,
   createStyleResolver,
+  getTableContext,
 } from '@eigenpal/docx-editor-core/prosemirror';
 import type { EditorView } from 'prosemirror-view';
 import type { useTableSelection } from '../../../hooks/useTableSelection';
 import type { TableAction } from '../../ui/TableToolbar';
 import { getBuiltinTableStyle, type TableStylePreset } from '../../ui/TableStyleGallery';
+import type { SelectionStateDelta } from './useSelectionTracker';
 
 interface SplitCellDialogState {
   isOpen: boolean;
@@ -76,6 +78,7 @@ export function useTableDialogs({
   borderSpecRef,
   historyStateRef,
   getCachedStyleResolver,
+  applySelectionDelta,
 }: {
   getActiveEditorView: () => EditorView | null | undefined;
   focusActiveEditor: () => void;
@@ -85,6 +88,7 @@ export function useTableDialogs({
   getCachedStyleResolver: (
     styles: Parameters<typeof createStyleResolver>[0]
   ) => ReturnType<typeof createStyleResolver>;
+  applySelectionDelta: (delta: SelectionStateDelta) => void;
 }) {
   const [tablePropsOpen, setTablePropsOpen] = useState(false);
   const [splitCellDialogState, setSplitCellDialogState] = useState<SplitCellDialogState>({
@@ -297,6 +301,15 @@ export function useTableDialogs({
       }
 
       focusActiveEditor();
+      // Re-sync table toolbar context from the live selection. Layout teardown
+      // during the transaction can briefly clear it via the selection tracker.
+      const viewAfter = getActiveEditorView();
+      if (viewAfter) {
+        const ctx = getTableContext(viewAfter.state);
+        applySelectionDelta({
+          pmTableContext: ctx.isInTable ? ctx : null,
+        });
+      }
     },
     [
       tableSelection,
@@ -306,6 +319,7 @@ export function useTableDialogs({
       borderSpecRef,
       historyStateRef,
       getCachedStyleResolver,
+      applySelectionDelta,
     ]
   );
 

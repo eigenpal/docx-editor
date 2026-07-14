@@ -1037,7 +1037,6 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
     zoom: state.zoom,
   });
 
-  // Handle selection changes from ProseMirror
   const { handleSelectionChange } = useSelectionTracker({
     getActiveEditorView,
     lastSelectionRef,
@@ -1133,6 +1132,7 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
     borderSpecRef,
     historyStateRef,
     getCachedStyleResolver,
+    applySelectionDelta: useCallback((delta) => setState((prev) => ({ ...prev, ...delta })), []),
   });
 
   const {

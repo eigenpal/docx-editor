@@ -32,14 +32,15 @@ interface BorderSpec {
 
 /** Slice of EditorState that handleSelectionChange writes on every fire. */
 export interface SelectionStateDelta {
-  selectionFormatting: SelectionFormatting;
+  selectionFormatting?: SelectionFormatting;
   paragraphIndentLeft?: number;
   paragraphIndentRight?: number;
   paragraphFirstLineIndent?: number;
   paragraphHangingIndent?: boolean;
   paragraphTabs?: TabMark[] | null;
-  pmTableContext: TableContextInfo | null;
-  pmImageContext: PmImageContext | null;
+  /** Omit when the editor view is briefly unavailable so prior context is kept. */
+  pmTableContext?: TableContextInfo | null;
+  pmImageContext?: PmImageContext | null;
 }
 
 /**
@@ -89,10 +90,13 @@ export function useSelectionTracker({
         lastSelectionRef.current = { from, to };
       }
 
-      let pmTableCtx: TableContextInfo | null = null;
+      // When the view is briefly unavailable (layout teardown mid-transaction),
+      // omit table/image context from the delta so we don't clobber a still-
+      // valid in-table toolbar state with null.
+      let pmTableCtx: TableContextInfo | null | undefined;
       if (view) {
-        pmTableCtx = getTableContext(view.state);
-        if (!pmTableCtx.isInTable) pmTableCtx = null;
+        const ctx = getTableContext(view.state);
+        pmTableCtx = ctx.isInTable ? ctx : null;
       }
 
       // Sync borderSpecRef with the current cell's actual border color so
@@ -105,8 +109,9 @@ export function useSelectionTracker({
       }
 
       // Detect a NodeSelection on an image (right-click + click-to-select).
-      let pmImageCtx: PmImageContext | null = null;
+      let pmImageCtx: PmImageContext | null | undefined;
       if (view) {
+        pmImageCtx = null;
         const sel = view.state.selection;
         const selectedNode = (
           sel as { node?: { type: { name: string }; attrs: Record<string, unknown> } }
@@ -132,8 +137,8 @@ export function useSelectionTracker({
         setFloatingCommentBtn(null);
         applySelectionDelta({
           selectionFormatting: {},
-          pmTableContext: pmTableCtx,
-          pmImageContext: pmImageCtx,
+          ...(pmTableCtx !== undefined ? { pmTableContext: pmTableCtx } : {}),
+          ...(pmImageCtx !== undefined ? { pmImageContext: pmImageCtx } : {}),
         });
         return;
       }
@@ -202,8 +207,8 @@ export function useSelectionTracker({
         paragraphFirstLineIndent: paragraphFormatting.indentFirstLine ?? 0,
         paragraphHangingIndent: paragraphFormatting.hangingIndent ?? false,
         paragraphTabs: paragraphFormatting.tabs ?? null,
-        pmTableContext: pmTableCtx,
-        pmImageContext: pmImageCtx,
+        ...(pmTableCtx !== undefined ? { pmTableContext: pmTableCtx } : {}),
+        ...(pmImageCtx !== undefined ? { pmImageContext: pmImageCtx } : {}),
       });
 
       recomputeFloatingCommentBtn();

@@ -24,8 +24,7 @@ import {
 
 // Visual line navigation hook
 import { useVisualLineNavigation } from '../../hooks/useVisualLineNavigation';
-
-// Sidebar constants
+import { forwardNavKeysToPm } from './internals/forwardNavKeysToPm';
 import { SIDEBAR_DOCUMENT_SHIFT } from '../sidebar/constants';
 
 // Types
@@ -341,19 +340,21 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
     const viewportLayoutRef = useRef<HTMLDivElement>(null);
     const hiddenPMRef = useRef<OffscreenEditorHostRef>(null);
     const paintedOverlayRefreshRef = useRef<() => void>(() => {});
+    // Coalesce rapid caret moves onto one overlay refresh per frame.
+    const selectionOverlayRafRef = useRef<number | null>(null);
+    const scheduleSelectionOverlayRefresh = useCallback(() => {
+      if (selectionOverlayRafRef.current != null) return;
+      selectionOverlayRafRef.current = requestAnimationFrame(() => {
+        selectionOverlayRafRef.current = null;
+        paintedOverlayRefreshRef.current();
+      });
+    }, []);
     /**
-     * Persistent hidden PM EditorViews for every distinct HF `rId` — phase 1
+     * Persistent hidden HF PM EditorViews for every distinct HF `rId` — phase 1
      * of the HF editing unification (see openspec/changes/unify-hf-editing/).
-     * Phase 1 mounts them off-screen with no user input wiring; the painter
-     * pipeline and selection overlay learn to consult them in later phases.
      */
     const hiddenHfPMsRef = useRef<HiddenHeaderFooterPMsRef>(null);
-    /**
-     * Latest `document` prop in a ref — read by HF PM lookup (`getHfPmView`
-     * on the PagedEditorRef). Refs are needed because the imperative-handle
-     * API rebuilds on `[layout, runLayoutPipeline, …]` not on `document`, so
-     * a closure over `document` directly would go stale between rebuilds.
-     */
+    /** Latest `document` prop — read by HF PM lookup on the PagedEditorRef. */
     const documentRef = useRef(document);
     documentRef.current = document;
 
@@ -662,11 +663,7 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
       requestOverlayRefresh: requestPaintedOverlayRefresh,
     });
 
-    /**
-     * Handle keyboard events on container.
-     * Most keyboard handling is done by ProseMirror, but we intercept
-     * specific keys for navigation and ensure focus stays on hidden PM.
-     */
+    /** Keyboard: focus hidden PM, space-as-text, nav-key forwarding. */
     const handleKeyDown = useCallback(
       (e: React.KeyboardEvent) => {
         if (readOnly) return;
@@ -710,17 +707,15 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
           // If PM doesn't handle it (at bounds), the container will scroll
         }
 
-        // Cmd/Ctrl+Home - scroll to top and move cursor to start
         if (e.key === 'Home' && (e.metaKey || e.ctrlKey)) {
           const sc = getScrollContainer();
           if (sc) sc.scrollTop = 0;
         }
-
-        // Cmd/Ctrl+End - scroll to bottom and move cursor to end
         if (e.key === 'End' && (e.metaKey || e.ctrlKey)) {
           const sc = getScrollContainer();
           if (sc) sc.scrollTop = sc.scrollHeight;
         }
+        if (forwardNavKeysToPm(e, hiddenPMRef.current?.getView())) return;
       },
       [readOnly, getScrollContainer]
     );
@@ -837,7 +832,7 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
           // applied to the body doc even if focus briefly slips to it.
           readOnly={readOnly || !!hfEditMode}
           onTransaction={handleTransaction}
-          onSelectionChange={() => requestPaintedOverlayRefresh()}
+          onSelectionChange={scheduleSelectionOverlayRefresh}
           externalPlugins={externalPlugins}
           extensionManager={extensionManager}
           onEditorViewReady={handleEditorViewReady}
