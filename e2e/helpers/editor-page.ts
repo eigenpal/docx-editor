@@ -795,20 +795,24 @@ export class EditorPage {
    * Indent paragraph/list item
    */
   async indent(): Promise<void> {
-    await this.focus();
-    // Prefer Tab (list indent / table cell) over the toolbar button so list
-    // level updates even when the Increase Indent control is stale.
-    await this.page.keyboard.press('Tab');
-    await this.waitForEditorSettle();
+    // Prefer view.focus() over contenteditable.focus() — the latter can reset
+    // the caret to the start of the document (wrong list item for outdent).
+    await this.page.evaluate(() => window.__DOCX_EDITOR_E2E__?.getView?.()?.focus());
+    await this.toolbar.locator('[aria-label="Increase Indent"]').click();
   }
 
   /**
    * Outdent paragraph/list item
    */
   async outdent(): Promise<void> {
-    await this.focus();
+    await this.page.evaluate(() => window.__DOCX_EDITOR_E2E__?.getView?.()?.focus());
+    const decrease = this.toolbar.locator('[aria-label="Decrease Indent"]');
+    if (await decrease.isEnabled()) {
+      await decrease.click();
+      return;
+    }
+    // List outdent via keymap when toolbar canOutdent is stale (level UI lag).
     await this.page.keyboard.press('Shift+Tab');
-    await this.waitForEditorSettle();
   }
 
   // ============================================================================

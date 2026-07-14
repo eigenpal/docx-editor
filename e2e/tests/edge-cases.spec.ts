@@ -270,6 +270,8 @@ test.describe('State Consistency', () => {
     await editor.typeText('Hello');
     await editor.selectAll();
     await editor.applyBold();
+    // Keep selection after mark toggles (Word-faithful); collapse before typing.
+    await page.keyboard.press('ArrowRight');
     await editor.typeText(' World');
 
     await assertions.assertDocumentContainsText(page, 'Hello World');

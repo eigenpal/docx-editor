@@ -125,14 +125,6 @@ export function useFormattingActions({
         lastSelectionRef.current = { from, to };
       }
 
-      const isMarkToggle =
-        action === 'bold' ||
-        action === 'italic' ||
-        action === 'underline' ||
-        action === 'strikethrough' ||
-        action === 'superscript' ||
-        action === 'subscript';
-
       if (action === 'bold') void toggleBold(view.state, view.dispatch);
       else if (action === 'italic') void toggleItalic(view.state, view.dispatch);
       else if (action === 'underline') void toggleUnderline(view.state, view.dispatch);
@@ -217,26 +209,6 @@ export function useFormattingActions({
               applyStyle(action.value)(view.state, view.dispatch);
             }
             break;
-          }
-        }
-      }
-
-      // After applying a mark to a range, collapse to the end so continued
-      // typing appends instead of replacing the formatted selection. Keeps
-      // empty-para / caret-restore behavior intact (collapsed selections skip).
-      if (isMarkToggle && isBodyEditor) {
-        const after = getActiveEditorView();
-        if (after) {
-          const sel = after.state.selection;
-          if (sel.from !== sel.to) {
-            try {
-              after.dispatch(
-                after.state.tr.setSelection(TextSelection.create(after.state.doc, sel.to))
-              );
-              lastSelectionRef.current = { from: sel.to, to: sel.to };
-            } catch {
-              // Selection may be invalid mid-reflow; leave as-is.
-            }
           }
         }
       }
