@@ -205,9 +205,11 @@ export function useDocxEditorRefApi(opts: UseDocxEditorRefApiOptions): {
 
   // Select `[from, to]` so the selection overlay highlights it, then scroll the
   // start into view. Shared by the three location-reveal methods below; mirrors
-  // React's hiddenPM.setSelection + paraId-scroll path.
+  // React's hiddenPM.setSelection (`TextSelection.create`) + paraId-scroll path.
+  // Prefer `create` over `between`: at a block-node position `between` collapses
+  // to a cursor at `to`, while React's create path keeps anchor/head aligned.
   function selectAndReveal(view: EditorView, from: number, to: number): void {
-    const sel = TextSelection.between(view.state.doc.resolve(from), view.state.doc.resolve(to));
+    const sel = TextSelection.create(view.state.doc, from, to);
     view.dispatch(view.state.tr.setSelection(sel));
     opts.scrollVisiblePositionIntoView(from);
   }

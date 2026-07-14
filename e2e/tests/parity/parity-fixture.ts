@@ -74,18 +74,16 @@ export async function openEditor(
   await expect(page.locator(adapter.readySelector)).toBeVisible();
   await expect(page.locator('.paged-editor__pages')).toBeVisible();
   await page.locator('input[type="file"]').first().setInputFiles(PARA_ID_FIXTURE);
+  // Both demos boot with `sample.docx`, which already has pages + paraIds. A
+  // naive "any paraId exists" poll races and lets specs run against the stale
+  // default doc before the fixture finishes loading. Wait for a marker unique
+  // to `example-with-image.docx` instead.
   await expect
     .poll(
       () =>
         page.evaluate(() => {
-          const pageCount = window.__DOCX_EDITOR_E2E__?.getTotalPages() ?? 0;
-          const firstParaId =
-            window.__DOCX_EDITOR_E2E__?.getFirstTextblockParaId() ??
-            window.__DOCX_EDITOR_E2E__
-              ?.agentGetPageContent(1)
-              ?.paragraphs.find((paragraph) => paragraph.text.trim().length > 0)?.paraId ??
-            null;
-          return pageCount > 0 && typeof firstParaId === 'string' && firstParaId.length > 0;
+          const paragraphs = window.__DOCX_EDITOR_E2E__?.agentGetPageContent(1)?.paragraphs ?? [];
+          return paragraphs.some((paragraph) => paragraph.text.includes('Example'));
         }),
       { timeout: 25000 }
     )

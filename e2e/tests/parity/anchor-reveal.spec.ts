@@ -16,11 +16,11 @@ forEachAdapter('highlightRange selects a valid range and reveals it', async (ada
 
   const anchor = await page.evaluate(() => {
     const hook = window.__DOCX_EDITOR_E2E__;
-    // Resolve a real paragraph paraId the same way the fixture's openEditor
-    // does (some demo docs leave the first textblock without a paraId attr).
+    // Prefer a non-empty paragraph: an empty textblock makes `end - 1` land on
+    // the block node position, which TextSelection cannot anchor inside.
     const firstId =
-      hook?.getFirstTextblockParaId() ??
       hook?.agentGetPageContent(1)?.paragraphs.find((p) => p.text.trim().length > 0)?.paraId ??
+      hook?.getFirstTextblockParaId() ??
       null;
     if (!firstId) return null;
     const end = hook?.getTextblockEndForParaId(firstId);
@@ -78,9 +78,14 @@ forEachAdapter('scrollToCommentId resolves a planted comment', async (adapter, {
 
   const result = await page.evaluate(() => {
     const hook = window.__DOCX_EDITOR_E2E__;
-    const firstId = hook?.getFirstTextblockParaId();
-    if (!firstId) return null;
-    const commentId = hook?.agentAddComment({ paraId: firstId, text: 'reveal me' }) ?? null;
+    // `addCommentToRange` refuses empty paragraphs (from >= to). Mirror the
+    // agent-tool-call smoke and target a paragraph with real text.
+    const paraId =
+      hook?.agentGetPageContent(1)?.paragraphs.find((p) => p.text.trim().length > 0)?.paraId ??
+      hook?.getFirstTextblockParaId() ??
+      null;
+    if (!paraId) return null;
+    const commentId = hook?.agentAddComment({ paraId, text: 'reveal me' }) ?? null;
     if (commentId == null) return null;
     const ok = hook?.scrollToCommentId(commentId) ?? false;
     const missing = hook?.scrollToCommentId(999999) ?? true;
