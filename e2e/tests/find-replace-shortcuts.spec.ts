@@ -29,15 +29,12 @@ async function findUniqueLastPagePhrase(page: import('@playwright/test').Page): 
     const lastPageText = lastPage.textContent ?? '';
     if (lastPageText.includes('scrollToPage(3)')) return 'scrollToPage(3)';
 
-    const paintedText = Array.from(
-      document.querySelectorAll<HTMLElement>(
-        '.layout-page-content span[data-doc-from][data-doc-to]'
-      )
-    )
-      .map((span) => span.textContent ?? '')
-      .join('');
-    const documentText = window.__DOCX_EDITOR_E2E__?.agentGetDocumentText() || paintedText;
-    if (!documentText) return null;
+    // Prefer uniqueness against earlier *painted pages*, not agentGetDocumentText:
+    // the demo TOC repeats body phrases, so document-wide uniqueness is often empty.
+    const earlierText = pages
+      .slice(0, -1)
+      .map((p) => p.textContent ?? '')
+      .join('\n');
 
     const spans = Array.from(
       lastPage.querySelectorAll<HTMLElement>(
@@ -50,7 +47,7 @@ async function findUniqueLastPagePhrase(page: import('@playwright/test').Page): 
       for (let start = 0; start <= Math.min(12, text.length - 24); start += 1) {
         const candidate = text.slice(start, Math.min(text.length, start + 32)).trim();
         if (candidate.length < 20) continue;
-        if (documentText.indexOf(candidate) === documentText.lastIndexOf(candidate)) {
+        if (!earlierText.includes(candidate)) {
           return candidate;
         }
       }

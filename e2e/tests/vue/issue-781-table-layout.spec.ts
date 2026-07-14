@@ -19,6 +19,16 @@ test('Vue: resizing a table column switches it to fixed layout (#781)', async ({
     ) as HTMLElement | null;
     if (!handle) return null;
     const r = handle.getBoundingClientRect();
+    // Prefer a point that isn't covered by a crossing row-resize handle.
+    const x = r.x + r.width / 2;
+    let y = r.y + Math.min(20, r.height / 4);
+    for (const cand of [y, r.y + r.height / 2, r.y + r.height - 20]) {
+      const top = document.elementFromPoint(x, cand);
+      if (top?.classList.contains('layout-table-resize-handle')) {
+        y = cand;
+        break;
+      }
+    }
     const docFrom = Number(handle.dataset.tablePmStart ?? '0');
     const view = (
       window as unknown as { __DOCX_EDITOR_E2E__: { getView: () => any } }
@@ -31,7 +41,7 @@ test('Vue: resizing a table column switches it to fixed layout (#781)', async ({
         widths = n.attrs.columnWidths;
       }
     });
-    return { x: r.x + r.width / 2, y: r.y + r.height / 2, docFrom, layout, widths };
+    return { x, y, docFrom, layout, widths };
   });
   expect(before).toBeTruthy();
 

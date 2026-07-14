@@ -67,9 +67,13 @@ async function collectRenderAnomalies(page: Page): Promise<RenderAnomalies> {
       }
       for (const img of images) {
         const imgRect = img.getBoundingClientRect();
+        // Headers with negative visualTop intentionally extend the header band
+        // above the page box (letterhead / anchored media). That overhang is
+        // painted into the page gap when overflow is visible — not a clip.
+        const topSlack = Math.max(0, -headerStyleTop) + 0.5;
         if (
           pageRect &&
-          (imgRect.top < pageRect.top - 0.5 || imgRect.bottom > pageRect.bottom + 0.5)
+          (imgRect.top < pageRect.top - topSlack || imgRect.bottom > pageRect.bottom + 0.5)
         ) {
           clippedHeaderImages.push({
             top: Math.round(imgRect.top),

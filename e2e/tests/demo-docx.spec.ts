@@ -18,7 +18,6 @@
 
 import { test, expect } from '@playwright/test';
 import { EditorPage } from '../helpers/editor-page';
-import * as path from 'path';
 
 const DEMO_DOCX_PATH = 'fixtures/demo/demo.docx';
 
@@ -43,8 +42,8 @@ test.describe('Demo.docx - Document Loading', () => {
   test('shows correct filename after loading', async ({ page }) => {
     await editor.loadDocxFile(DEMO_DOCX_PATH);
 
-    // Filename should appear in header
-    await expect(page.locator('text=demo.docx')).toBeVisible();
+    // TitleBar strips the `.docx` extension for display (DocumentName).
+    await expect(page.getByLabel('Document name')).toHaveValue('demo');
   });
 });
 
@@ -474,16 +473,19 @@ test.describe('Demo.docx - Structural Elements', () => {
   });
 
   test('footnote references are rendered as superscript', async ({ page }) => {
-    // Check in visible pages that footnote refs have superscript styling
+    // Painter uses a paint-only relative offset (not vertical-align:super) so
+    // the line box stays Word-height; assert that raise instead.
     const supRun = page
-      .locator('.paged-editor__pages span[style*="vertical-align: super"]')
+      .locator('.paged-editor__pages span[style*="position: relative"][style*="top: -0.4em"]')
       .first();
     await expect(supRun).toBeVisible();
 
     const display = await supRun.evaluate((el) => {
-      return window.getComputedStyle(el).verticalAlign;
+      const cs = window.getComputedStyle(el);
+      return { position: cs.position, top: cs.top, fontSize: cs.fontSize };
     });
-    expect(display).toContain('super');
+    expect(display.position).toBe('relative');
+    expect(parseFloat(display.top)).toBeLessThan(0);
   });
 
   test('endnote references are rendered as superscript', async ({ page }) => {

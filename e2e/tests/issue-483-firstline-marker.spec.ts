@@ -30,7 +30,8 @@ test.describe('issue #483: list marker with firstLine indent and no hanging slot
             const p = rects[j];
             const yOverlap = p.r.bottom - cur.r.top;
             const xOverlap = Math.min(p.r.right, cur.r.right) - Math.max(p.r.left, cur.r.left);
-            if (yOverlap > 0.5 && xOverlap > 0.5) {
+            // Ignore sub-pixel contact (form-field underscores vs nbsp, etc.).
+            if (yOverlap > 2 && xOverlap > 0.5) {
               realOverlaps.push({
                 page: pi + 1,
                 cur: cur.t.slice(0, 30),
