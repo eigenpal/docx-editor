@@ -28,17 +28,18 @@ test.describe('Font Family', () => {
     await editor.selectAll();
     await editor.setFontFamily('Arial');
 
-    // Verify font was applied
-    const fontFamily = await page.evaluate(() => {
-      const selection = window.getSelection();
-      if (selection && selection.rangeCount > 0) {
-        const range = selection.getRangeAt(0);
-        const element = range.startContainer.parentElement;
-        return window.getComputedStyle(element!).fontFamily;
-      }
-      return '';
+    // After the font dropdown closes, window.getSelection() often points at
+    // chrome — assert the painted run / toolbar instead of the stale DOM selection.
+    const toolbarFont = await page.locator('[aria-label="Select font family"]').textContent();
+    expect(toolbarFont?.toLowerCase()).toContain('arial');
+
+    const paintedFont = await page.evaluate(() => {
+      const run = document.querySelector(
+        '.layout-page-content .layout-run, .layout-page-content span'
+      ) as HTMLElement | null;
+      return run ? window.getComputedStyle(run).fontFamily : '';
     });
-    expect(fontFamily).toContain('Arial');
+    expect(paintedFont).toContain('Arial');
   });
 
   test('change font to Times New Roman', async ({ page }) => {
