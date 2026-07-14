@@ -282,6 +282,7 @@
         { "action": "typeText", "args": { "text": "Hello" } },
         { "action": "selectText", "args": { "text": "Hello" } },
         { "action": "applyBold" },
+        { "action": "pressKey", "args": { "key": "ArrowRight" } },
         { "action": "typeText", "args": { "text": " World" } },
         { "assert": "expectDocumentContains", "args": { "text": "Hello World" } }
       ]
