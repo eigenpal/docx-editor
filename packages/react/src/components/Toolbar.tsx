@@ -325,7 +325,7 @@ export function ToolbarButton({
       onMouseDown={handleMouseDown}
       onClick={disabled ? undefined : onClick}
       disabled={disabled}
-      aria-pressed={active}
+      aria-pressed={active ? true : false}
       aria-label={ariaLabel || title}
       data-testid={testId ? `toolbar-${testId}` : undefined}
     >
@@ -466,10 +466,12 @@ export function Toolbar(explicitProps: ToolbarProps) {
     (fontFamily: string) => {
       if (!disabled && onFormat) {
         onFormat({ type: 'fontFamily', value: fontFamily });
-        requestAnimationFrame(() => onRefocusEditor?.());
+        // Do not refocus here: focus() on an empty paragraph clears storedMarks
+        // / DTF (same regression as style picker). FormatToggle already uses
+        // mousedown preventDefault so the editor keeps focus.
       }
     },
-    [disabled, onFormat, onRefocusEditor]
+    [disabled, onFormat]
   );
 
   const normalizedFonts = React.useMemo(() => normalizeFontFamilies(fontFamilies), [fontFamilies]);
@@ -478,20 +480,18 @@ export function Toolbar(explicitProps: ToolbarProps) {
     (sizeInPoints: number) => {
       if (!disabled && onFormat) {
         onFormat({ type: 'fontSize', value: sizeInPoints });
-        requestAnimationFrame(() => onRefocusEditor?.());
       }
     },
-    [disabled, onFormat, onRefocusEditor]
+    [disabled, onFormat]
   );
 
   const handleTextColorChange = useCallback(
     (color: ColorValue | string) => {
       if (!disabled && onFormat) {
         onFormat({ type: 'textColor', value: color });
-        requestAnimationFrame(() => onRefocusEditor?.());
       }
     },
-    [disabled, onFormat, onRefocusEditor]
+    [disabled, onFormat]
   );
 
   const handleHighlightColorChange = useCallback(
@@ -499,10 +499,9 @@ export function Toolbar(explicitProps: ToolbarProps) {
       if (!disabled && onFormat) {
         const highlightValue = typeof color === 'string' ? color : '';
         onFormat({ type: 'highlightColor', value: highlightValue });
-        requestAnimationFrame(() => onRefocusEditor?.());
       }
     },
-    [disabled, onFormat, onRefocusEditor]
+    [disabled, onFormat]
   );
 
   const handleAlignmentChange = useCallback(
@@ -552,10 +551,11 @@ export function Toolbar(explicitProps: ToolbarProps) {
     (styleId: string) => {
       if (!disabled && onFormat) {
         onFormat({ type: 'applyStyle', value: styleId });
-        requestAnimationFrame(() => onRefocusEditor?.());
+        // Do not refocus — EmptyParagraphFormat + DTF own caret marks; a
+        // post-picker focus() was clearing them before the first keystroke.
       }
     },
-    [disabled, onFormat, onRefocusEditor]
+    [disabled, onFormat]
   );
 
   const handleTableAction = useCallback(

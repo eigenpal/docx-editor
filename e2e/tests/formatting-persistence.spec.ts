@@ -223,8 +223,8 @@ test.describe('Formatting Persistence - Font Properties', () => {
     // Set font size on empty paragraph
     await editor.setFontSize(24);
 
-    // Verify in toolbar
-    await expect(page.locator('[aria-label="Select font size"]')).toContainText('24');
+    // Verify in toolbar (Radix display trigger — not a native <select>)
+    await expect(page.locator('[data-testid="font-size-display"]')).toContainText('24');
 
     // Press Enter to create new paragraph
     await page.keyboard.press('Enter');
@@ -233,14 +233,14 @@ test.describe('Formatting Persistence - Font Properties', () => {
     await page.keyboard.press('ArrowUp');
 
     // Font size should persist
-    await expect(page.locator('[aria-label="Select font size"]')).toContainText('24');
+    await expect(page.locator('[data-testid="font-size-display"]')).toContainText('24');
   });
 });
 
 test.describe('Formatting Persistence - Enter then Change Property in Empty Run', () => {
   // Regression: setMark/removeMark in markUtils.ts used to call setStoredMarks
   // BEFORE setNodeMarkup. ProseMirror's Transaction.addStep clears storedMarks
-  // on every step, so the stored marks were wiped before dispatch â€” typed text
+  // on every step, so the stored marks were wiped before dispatch  typed text
   // fell back to the editor default (Arial 11pt) instead of the chosen property.
 
   let editor: EditorPage;
@@ -352,11 +352,26 @@ test.describe('Formatting Persistence - Toggling Off', () => {
     // Type - should not be bold
     await editor.typeText('Not bold');
 
-    // The text should not be bold
+    // Assert only against our typed text (other strong tags may exist in chrome)
     const isBold = await page.evaluate(() => {
-      const p = document.querySelector('.prosemirror-editor-content p');
-      const strong = p?.querySelector('strong');
-      return strong !== null;
+      const root =
+        document.querySelector('.layout-page-content') ||
+        document.querySelector('.paged-editor__hidden-pm .ProseMirror');
+      if (!root) return false;
+      const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, null);
+      let node: Text | null;
+      while ((node = walker.nextNode() as Text | null)) {
+        if (!node.textContent?.includes('Not bold')) continue;
+        let el: HTMLElement | null = node.parentElement;
+        while (el && el !== root) {
+          const fw = window.getComputedStyle(el).fontWeight;
+          if (fw === 'bold' || parseInt(fw, 10) >= 700) return true;
+          if (el.tagName === 'STRONG' || el.tagName === 'B') return true;
+          el = el.parentElement;
+        }
+        return false;
+      }
+      return false;
     });
     expect(isBold).toBe(false);
   });
