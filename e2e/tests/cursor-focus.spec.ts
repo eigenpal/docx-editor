@@ -84,22 +84,22 @@ test.describe('Cursor Focus - Toolbar Interactions', () => {
   test('cursor stays visible after clicking alignment buttons', async ({ page }) => {
     await editor.typeText('Test text');
 
-    // Click Center alignment
-    await page.getByRole('button', { name: 'Center (Ctrl+E)' }).click();
+    // Alignment is a dropdown — open it and pick Center
+    await editor.alignCenter();
 
     // Verify focus is maintained
     const editorHasFocus = await page.evaluate(() => {
-      const editor = document.querySelector('.ProseMirror');
+      const editor = document.querySelector('.paged-editor__hidden-pm .ProseMirror');
       return document.activeElement === editor || editor?.contains(document.activeElement);
     });
     expect(editorHasFocus).toBe(true);
 
     // Click Right alignment
-    await page.getByRole('button', { name: 'Align Right (Ctrl+R)' }).click();
+    await editor.alignRight();
 
     // Verify focus is still maintained
     const stillHasFocus = await page.evaluate(() => {
-      const editor = document.querySelector('.ProseMirror');
+      const editor = document.querySelector('.paged-editor__hidden-pm .ProseMirror');
       return document.activeElement === editor || editor?.contains(document.activeElement);
     });
     expect(stillHasFocus).toBe(true);
@@ -336,7 +336,7 @@ test.describe('Cursor Focus - Background Click', () => {
     await editor.typeText('Some text');
 
     // Click on the toolbar area (but not on a button)
-    const toolbar = page.getByTestId('toolbar');
+    const toolbar = page.locator('[data-testid="toolbar"], [data-testid="formatting-bar"]');
     const box = await toolbar.boundingBox();
     if (box) {
       // Click on empty area of toolbar (far right where there are no buttons)
@@ -348,7 +348,7 @@ test.describe('Cursor Focus - Background Click', () => {
 
     // Verify editor still has focus
     const editorHasFocus = await page.evaluate(() => {
-      const editor = document.querySelector('.ProseMirror');
+      const editor = document.querySelector('.paged-editor__hidden-pm .ProseMirror');
       return document.activeElement === editor || editor?.contains(document.activeElement);
     });
     expect(editorHasFocus).toBe(true);
@@ -357,7 +357,7 @@ test.describe('Cursor Focus - Background Click', () => {
     await page.keyboard.type(' more');
 
     const text = await page.evaluate(() => {
-      const editor = document.querySelector('.ProseMirror');
+      const editor = document.querySelector('.paged-editor__hidden-pm .ProseMirror');
       return editor?.textContent;
     });
     expect(text).toContain('Some text more');

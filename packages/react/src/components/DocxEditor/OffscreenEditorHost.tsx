@@ -35,6 +35,7 @@ import {
   useRef,
 } from 'react';
 import type { CSSProperties } from 'react';
+import { createPortal } from 'react-dom';
 import { EditorState, NodeSelection, TextSelection } from 'prosemirror-state';
 import type { Plugin, Transaction } from 'prosemirror-state';
 import { EditorView } from 'prosemirror-view';
@@ -380,12 +381,16 @@ export const OffscreenEditorHost = memo(
     // it, the scroll-restore path queries `.paged-editor__hidden-pm .ProseMirror`
     // for the live view, and the Vue adapter puts the same class on its own
     // off-screen host so both are addressable the same way.
-    return (
+    //
+    // Portal to document.body (not the React `document` prop) so focus()/
+    // scrollIntoView on the off-screen PM cannot scroll the paged scroller.
+    return createPortal(
       <div
         ref={hostRef}
         className="paged-editor__hidden-pm"
         style={{ ...OFFSCREEN, width: widthPx }}
-      />
+      />,
+      globalThis.document.body
     );
   })
 );

@@ -103,7 +103,10 @@
 
     <div v-if="!isReady && !parseError" class="docx-editor-vue__loading">Loading...</div>
 
-    <div ref="hiddenPmRef" class="docx-editor-vue__hidden-pm paged-editor__hidden-pm" />
+    <!-- Portal body PM to document.body so focus cannot scroll the paged scroller. -->
+    <Teleport to="body">
+      <div ref="hiddenPmRef" class="docx-editor-vue__hidden-pm paged-editor__hidden-pm" />
+    </Teleport>
 
     <div class="docx-editor-vue__editor-scroll" @mousedown="handleEditorScrollMouseDown">
       <div class="docx-editor-vue__editor-area">

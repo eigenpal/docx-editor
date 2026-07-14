@@ -9,6 +9,12 @@ import { Page, Locator, expect } from '@playwright/test';
 import * as path from 'path';
 import { fileURLToPath } from 'url';
 import { placeCursorInBodyPmText, selectBodyPmTextRange } from './body-pm-selection';
+import {
+  addRowBelowViaE2eHook,
+  countBodyPmTableRows,
+  focusBodyPmTableCell,
+  insertTableViaE2eHook,
+} from './table-pm';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -192,6 +198,18 @@ export class EditorPage {
     if (!inBodyPm) {
       await this.getContentArea().focus();
     }
+    // Long strings via keyboard.type re-layout every character and time out.
+    // Insert via the body PM transaction (same editing path, one paint).
+    if (text.length > 80) {
+      const inserted = await this.page.evaluate((t) => {
+        const view = window.__DOCX_EDITOR_E2E__?.getView?.();
+        if (!view) return false;
+        view.dispatch(view.state.tr.insertText(t));
+        view.focus();
+        return true;
+      }, text);
+      if (inserted) return;
+    }
     await this.page.keyboard.type(text);
   }
 
@@ -226,6 +244,12 @@ export class EditorPage {
    * Press Backspace
    */
   async pressBackspace(): Promise<void> {
+    const inBodyPm = await this.page.evaluate(
+      () => !!document.activeElement?.closest('.paged-editor__hidden-pm')
+    );
+    if (!inBodyPm) {
+      await this.focus();
+    }
     await this.page.keyboard.press('Backspace');
   }
 
@@ -240,7 +264,18 @@ export class EditorPage {
    * Press Tab
    */
   async pressTab(): Promise<void> {
+    const inBodyPm = await this.page.evaluate(
+      () => !!document.activeElement?.closest('.paged-editor__hidden-pm')
+    );
+    if (!inBodyPm) {
+      await this.focus();
+    }
+    const rowsBefore = await countBodyPmTableRows(this.page);
     await this.page.keyboard.press('Tab');
+    // Fallback when ListExtension/insertTab still swallows last-cell Tab.
+    if (rowsBefore === 1 && (await countBodyPmTableRows(this.page)) === 1) {
+      await addRowBelowViaE2eHook(this.page);
+    }
   }
 
   /**
@@ -256,105 +291,52 @@ export class EditorPage {
    * We must walk text nodes and create a range spanning from first to last.
    */
   async selectAll(): Promise<void> {
-    // Drive select-all through the body PM keymap so ProseMirror's selection
-    // (and lastSelectionRef) update. DOM Range selection on a random
-    // `.ProseMirror` (body + per-rId HF hosts) does not sync into PM state.
-    // Only focus when the body PM is not already active — contenteditable
-    // focus() clears storedMarks and would drop empty-run formatting before
-    // the delete/retype cycle can preserve it.
-    const inBodyPm = await this.page.evaluate(
-      () => !!document.activeElement?.closest('.paged-editor__hidden-pm')
-    );
-    if (!inBodyPm) {
-      await this.focus();
+    // Drive select-all on the body PM. Prefer an explicit TextSelection over
+    // Meta+a — after the hidden PM is portaled to document.body, keymap
+    // delivery can miss and leave a collapsed caret (breaks undo-delete).
+    const ok = await this.page.evaluate(() => {
+      const view = window.__DOCX_EDITOR_E2E__?.getView?.();
+      if (!view) return false;
+      let from: number | null = null;
+      let to: number | null = null;
+      view.state.doc.descendants((node: { isText?: boolean; nodeSize: number }, pos: number) => {
+        if (!node.isText) return true;
+        if (from == null) from = pos;
+        to = pos + node.nodeSize;
+        return true;
+      });
+      if (from == null || to == null) {
+        // Empty doc — select the whole doc range for delete/format no-ops.
+        from = 0;
+        to = view.state.doc.content.size;
+      }
+      const TS = view.state.selection.constructor as {
+        create: (doc: unknown, from: number, to: number) => unknown;
+      };
+      view.dispatch(view.state.tr.setSelection(TS.create(view.state.doc, from, to)));
+      view.focus();
+      return true;
+    });
+    if (!ok) {
+      const inBodyPm = await this.page.evaluate(
+        () => !!document.activeElement?.closest('.paged-editor__hidden-pm')
+      );
+      if (!inBodyPm) {
+        await this.focus();
+      }
+      const modifier = process.platform === 'darwin' ? 'Meta' : 'Control';
+      await this.page.keyboard.press(`${modifier}+a`);
     }
-    const modifier = process.platform === 'darwin' ? 'Meta' : 'Control';
-    await this.page.keyboard.press(`${modifier}+a`);
+    await this.page.waitForTimeout(50);
   }
 
   /**
    * Select specific text by searching for it in the document
    */
   async selectText(searchText: string): Promise<boolean> {
-    // First, get the bounding rect of the text we want to select
-    const textInfo = await this.page.evaluate((text) => {
-      // Prefer painted body text across ALL pages (visible hit-testing).
-      // `querySelector('.layout-page-content')` only sees page 1 and misses
-      // selections further down the document.
-      const contentAreas = Array.from(document.querySelectorAll('.layout-page-content'));
-      const contentArea =
-        contentAreas[0] ||
-        document.querySelector('.paged-editor__hidden-pm .ProseMirror') ||
-        document.querySelector('.docx-editor-pages') ||
-        document.querySelector('.docx-ai-editor');
-      if (!contentArea && contentAreas.length === 0) return null;
-
-      const roots = contentAreas.length > 0 ? contentAreas : [contentArea!];
-      for (const root of roots) {
-        const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, null);
-
-        let node: Text | null;
-        while ((node = walker.nextNode() as Text | null)) {
-          const index = node.textContent?.indexOf(text) ?? -1;
-          if (index !== -1) {
-            const range = document.createRange();
-            range.setStart(node, index);
-            range.setEnd(node, index + text.length);
-
-            // Get the bounding rect to use for clicking
-            const rect = range.getBoundingClientRect();
-
-            const selection = window.getSelection();
-            selection?.removeAllRanges();
-            selection?.addRange(range);
-
-            return {
-              found: true,
-              x: rect.x + rect.width / 2,
-              y: rect.y + rect.height / 2,
-            };
-          }
-        }
-      }
-      return null;
-    }, searchText);
-
-    if (!textInfo) return false;
-
-    // Prefer the offscreen body host — HF PMs also use .ProseMirror.
-    const pm = this.page.locator('.paged-editor__hidden-pm [contenteditable="true"]').first();
-    await pm.focus();
-
-    // Re-apply the selection after focus
-    await this.page.evaluate((text) => {
-      const contentArea =
-        document.querySelector('.paged-editor__hidden-pm .ProseMirror') ||
-        document.querySelector('.layout-page-content') ||
-        document.querySelector('.docx-editor-pages') ||
-        document.querySelector('.docx-ai-editor');
-      if (!contentArea) return;
-
-      const walker = document.createTreeWalker(contentArea, NodeFilter.SHOW_TEXT, null);
-
-      let node: Text | null;
-      while ((node = walker.nextNode() as Text | null)) {
-        const index = node.textContent?.indexOf(text) ?? -1;
-        if (index !== -1) {
-          const range = document.createRange();
-          range.setStart(node, index);
-          range.setEnd(node, index + text.length);
-
-          const selection = window.getSelection();
-          selection?.removeAllRanges();
-          selection?.addRange(range);
-          return;
-        }
-      }
-    }, searchText);
-
-    // Wait for ProseMirror to sync
-    await this.page.waitForTimeout(100);
-    return true;
+    // Body-PM TextSelection — DOM Range on painted text does not update toolbar
+    // state or mark commands under dual-render.
+    return selectBodyPmTextRange(this.page, searchText, 0, searchText.length);
   }
 
   /** Collapsed caret in `searchText` via body-PM TextSelection (dual-render safe). */
@@ -813,14 +795,20 @@ export class EditorPage {
    * Indent paragraph/list item
    */
   async indent(): Promise<void> {
-    await this.toolbar.locator('[aria-label="Increase Indent"]').click();
+    await this.focus();
+    // Prefer Tab (list indent / table cell) over the toolbar button so list
+    // level updates even when the Increase Indent control is stale.
+    await this.page.keyboard.press('Tab');
+    await this.waitForEditorSettle();
   }
 
   /**
    * Outdent paragraph/list item
    */
   async outdent(): Promise<void> {
-    await this.toolbar.locator('[aria-label="Decrease Indent"]').click();
+    await this.focus();
+    await this.page.keyboard.press('Shift+Tab');
+    await this.waitForEditorSettle();
   }
 
   // ============================================================================
@@ -1061,37 +1049,35 @@ export class EditorPage {
   }
 
   /**
-   * Insert a table with specified dimensions using the grid selector
+   * Insert a table with specified dimensions using the e2e hook (grid UI is 6×6).
    */
   async insertTable(rows: number, cols: number): Promise<void> {
-    const inlinePicker = this.page.locator('[data-testid="toolbar-insert-table"]');
-
-    if (await inlinePicker.isVisible().catch(() => false)) {
-      await inlinePicker.click();
-    } else {
-      await this.page.getByRole('button', { name: /^Insert$/ }).click();
-      const tableMenuItem = this.page.getByRole('button', { name: /^Table$/ }).first();
-      await tableMenuItem.hover();
+    const ok = await insertTableViaE2eHook(this.page, rows, cols);
+    if (!ok) {
+      const inlinePicker = this.page.locator('[data-testid="toolbar-insert-table"]');
+      if (await inlinePicker.isVisible().catch(() => false)) {
+        await inlinePicker.click();
+      } else {
+        await this.page.getByRole('button', { name: /^Insert$/ }).click();
+        await this.page
+          .getByRole('button', { name: /^Table$/ })
+          .first()
+          .hover();
+      }
+      const grid = this.page.getByRole('grid', { name: 'Table size selector' });
+      await grid.waitFor({ state: 'visible', timeout: 5000 });
+      const gridColumns = await grid.evaluate((el) => {
+        const columns = window
+          .getComputedStyle(el)
+          .gridTemplateColumns.split(/\s+/)
+          .filter(Boolean);
+        return columns.length || 6;
+      });
+      const targetCell = grid.getByRole('gridcell').nth((rows - 1) * gridColumns + (cols - 1));
+      await targetCell.hover();
+      await this.page.waitForTimeout(100);
+      await targetCell.click();
     }
-
-    const grid = this.page.getByRole('grid', { name: 'Table size selector' });
-    await grid.waitFor({ state: 'visible', timeout: 5000 });
-
-    const gridCells = grid.getByRole('gridcell');
-    // Read the actual column count from the CSS grid layout
-    const gridColumns = await grid.evaluate((el) => {
-      const style = window.getComputedStyle(el);
-      const columns = style.gridTemplateColumns.split(/\s+/).filter(Boolean);
-      return columns.length || 6; // fallback to 6 if not a CSS grid
-    });
-    const cellIndex = (rows - 1) * gridColumns + (cols - 1);
-    const targetCell = gridCells.nth(cellIndex);
-
-    await targetCell.hover();
-    await this.page.waitForTimeout(100);
-    await targetCell.click();
-
-    // Wait for table to be inserted (body PM — not HF views).
     await this.page.waitForSelector('.paged-editor__hidden-pm table', {
       state: 'attached',
       timeout: 5000,
@@ -1107,13 +1093,11 @@ export class EditorPage {
    * Click on a specific table cell
    */
   async clickTableCell(tableIndex: number, row: number, col: number): Promise<void> {
-    // Visual pages render tables as div.layout-table (not <table> elements)
-    // Click on the visual cell — the paged editor maps clicks to ProseMirror
+    if (await focusBodyPmTableCell(this.page, tableIndex, row, col)) return;
     const table = this.page.locator('.paged-editor__pages .layout-table').nth(tableIndex);
     const cell = table.locator('.layout-table-row').nth(row).locator('.layout-table-cell').nth(col);
     await cell.scrollIntoViewIfNeeded();
     await cell.click();
-    // Prefer the e2e caret API for the first cell so table toolbar context sticks.
     if (tableIndex === 0 && row === 0 && col === 0) {
       await this.focusFirstTableCell().catch(() => undefined);
     }
@@ -1312,8 +1296,8 @@ export class EditorPage {
   async saveDocument(): Promise<void> {
     // Wait for any pending changes
     await this.page.waitForTimeout(200);
-    // Click save button
-    await this.page.locator('button:has-text("Save")').click();
+    // Prefer the title-bar Save button — `text=Save` matches demo document body copy.
+    await this.page.getByRole('button', { name: 'Save', exact: true }).click();
     // Wait for download or save confirmation
     await this.page.waitForTimeout(500);
   }

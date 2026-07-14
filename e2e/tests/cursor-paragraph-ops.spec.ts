@@ -36,21 +36,6 @@ test.describe('Cursor-Only List Operations', () => {
     // Click bullet list button - should work without selection
     await editor.toggleBulletList();
 
-    // Verify the paragraph became a list item
-    // Use 'p' selector to target paragraph element specifically (not span inside it)
-    const listItem = page.locator('.ProseMirror p');
-    // Check for list marker or list styling
-    const hasListStyle = await listItem.evaluate((el) => {
-      const style = window.getComputedStyle(el);
-      // Check various indicators of list formatting
-      return (
-        el.closest('li') !== null ||
-        el.querySelector('.list-marker') !== null ||
-        style.listStyleType !== 'none' ||
-        el.getAttribute('data-list-type') !== null
-      );
-    });
-
     // The text should still be there
     await assertions.assertDocumentContainsText(page, 'This is a paragraph');
   });
@@ -195,10 +180,11 @@ test.describe('Cursor-Only Alignment Operations', () => {
 
     await page.keyboard.press('Home');
 
-    // Use keyboard shortcut
-    await page.keyboard.press('Control+e');
+    // Mod-e: Meta on macOS, Control elsewhere (matches Word / BaseKeymap Mod-*)
+    const modifier = process.platform === 'darwin' ? 'Meta' : 'Control';
+    await page.keyboard.press(`${modifier}+e`);
 
-    const paragraph = page.locator('.ProseMirror p');
+    const paragraph = page.locator('.paged-editor__hidden-pm .ProseMirror p');
     const textAlign = await paragraph.evaluate((el) => {
       return window.getComputedStyle(el).textAlign;
     });

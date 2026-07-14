@@ -381,10 +381,10 @@ test.describe('Border Color Picker', () => {
   });
 
   test('border color picker shows theme matrix in table context', async ({ page }) => {
-    // Find and click the border color picker button in the toolbar
-    const borderColorBtn = page.locator('.docx-color-picker-button[title="Border Color"]');
-    await expect(borderColorBtn).toBeVisible({ timeout: 5000 });
-    await borderColorBtn.click();
+    // Split-button: arrow half opens the dropdown (apply half only re-applies).
+    const borderColorArrow = page.locator('[title="Border Color"][aria-haspopup="true"]').first();
+    await expect(borderColorArrow).toBeVisible({ timeout: 5000 });
+    await borderColorArrow.click();
 
     // Verify the AdvancedColorPicker dropdown opens with theme matrix
     const dropdown = page.locator('.docx-color-picker-dropdown');
@@ -398,10 +398,10 @@ test.describe('Border Color Picker', () => {
   });
 
   test('apply border color from standard colors', async ({ page }) => {
-    // Open border color picker
-    const borderColorBtn = page.locator('.docx-color-picker-button[title="Border Color"]');
-    await expect(borderColorBtn).toBeVisible({ timeout: 5000 });
-    await borderColorBtn.click();
+    // Open border color picker via the split-button arrow
+    const borderColorArrow = page.locator('[title="Border Color"][aria-haspopup="true"]').first();
+    await expect(borderColorArrow).toBeVisible({ timeout: 5000 });
+    await borderColorArrow.click();
 
     const dropdown = page.locator('.docx-color-picker-dropdown');
     await expect(dropdown).toBeVisible({ timeout: 5000 });

@@ -128,18 +128,8 @@ test.describe('Hyperlink Popup', () => {
   });
 
   test('popup has edit and unlink buttons in edit mode', async ({ page }) => {
-    // Switch to editing mode
-    const viewingToggle = page.locator('text=Editing').first();
-    if (await viewingToggle.isVisible()) {
-      // Already in editing mode
-    } else {
-      const toggle = page.locator('[class*="toggle"], [role="switch"]').first();
-      if (await toggle.isVisible()) {
-        await toggle.click();
-        await page.waitForTimeout(300);
-      }
-    }
-
+    // Demo boots in Editing mode; do not click a generic `[class*=toggle]` —
+    // that matches the disabled Undo button (`ep-toolbar-toggle`).
     const pagesContainer = page.locator('.paged-editor__pages');
     const link = pagesContainer.locator('a[href]').first();
     await expect(link).toBeVisible({ timeout: 10000 });
