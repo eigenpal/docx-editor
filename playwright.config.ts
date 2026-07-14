@@ -84,9 +84,13 @@ export default defineConfig({
   ],
 
   /* Run dev servers before tests */
+  // SKIP_NUXT=1 skips the Nuxt demo (port 3002) so Vue/parity-focused runs
+  // don't fail when the Nuxt workspace package isn't linked.
   webServer: process.env.PERF_REACT_ONLY
     ? [reactDevServer]
-    : [reactDevServer, vueDevServer, nuxtDevServer],
+    : process.env.SKIP_NUXT
+      ? [reactDevServer, vueDevServer]
+      : [reactDevServer, vueDevServer, nuxtDevServer],
 
   /* Output directory for screenshots */
   outputDir: './screenshots/test-results',

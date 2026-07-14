@@ -304,8 +304,12 @@ export function App() {
       getFirstTextblockParaId: () => {
         const view = editorRef.current?.getEditorRef()?.getView?.();
         if (!view) return null;
+        // `Node.descendants` does not abort the walk when the callback returns
+        // false — that only skips children — so without a latch every later
+        // textblock would overwrite `found` and we'd return the LAST paraId.
         let found: string | null = null;
         view.state.doc.descendants((node) => {
+          if (found !== null) return false;
           if (node.isTextblock && node.attrs?.paraId) {
             found = String(node.attrs.paraId);
             return false;

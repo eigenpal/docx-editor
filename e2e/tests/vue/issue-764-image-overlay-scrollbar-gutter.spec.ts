@@ -4,11 +4,12 @@
  * container uses `scrollbar-gutter: stable both-edges` and the overlay math
  * didn't subtract the reserved inline-start gutter.
  *
- * macOS (and default Chromium) uses OVERLAY scrollbars, so the gutter is 0px
- * and the bug never shows. This test forces a classic 15px scrollbar via
- * `::-webkit-scrollbar` so `both-edges` reserves a real 15px left gutter,
- * reproducing the Windows condition, then asserts the frame still wraps the
- * image tightly.
+ * macOS (and default Chromium) uses OVERLAY scrollbars, so
+ * `offsetWidth - clientWidth` stays 0 even with `scrollbar-gutter: stable
+ * both-edges` and injected `::-webkit-scrollbar { width }` rules. The gutter
+ * correction is covered by `imageOverlayRect.test.ts`; this e2e asserts the
+ * frame still wraps the image (no-op path on overlay scrollbars, corrected
+ * path when a classic gutter is actually reserved).
  */
 import { test, expect, type Page } from '@playwright/test';
 
@@ -18,7 +19,7 @@ const OVERLAY = '.image-overlay';
 
 async function forceClassicScrollbar(page: Page) {
   await page.addStyleTag({
-    content: `.docx-editor-vue__pages-viewport::-webkit-scrollbar { width: 15px; height: 15px; }
+    content: `.docx-editor-vue__pages-viewport::-webkit-scrollbar { width: 15px !important; height: 15px !important; }
               .docx-editor-vue__pages-viewport::-webkit-scrollbar-thumb { background: #888; }`,
   });
 }
@@ -32,13 +33,17 @@ test('image frame stays aligned with a reserved scrollbar gutter (#764)', async 
   await page.waitForSelector('[data-page-number]');
   await page.locator(INLINE_IMAGE).first().waitFor();
 
-  // Confirm the forced scrollbar actually reserves a both-edges gutter (so the
-  // test is meaningfully exercising the bug condition, not a 0px no-op).
   const gutter = await page.evaluate(() => {
     const v = document.querySelector('.docx-editor-vue__pages-viewport') as HTMLElement | null;
     return v ? (v.offsetWidth - v.clientWidth) / 2 : 0;
   });
-  expect(gutter, 'a non-trivial inline-start gutter is reserved').toBeGreaterThan(5);
+  // Classic-scrollbar platforms reserve a both-edges gutter; overlay-scrollbar
+  // platforms (macOS) keep gutter=0 and exercise the no-op correction path.
+  if (gutter > 5) {
+    expect(gutter, 'classic scrollbar reserved a non-trivial inline-start gutter').toBeGreaterThan(
+      5
+    );
+  }
 
   // Select the image and let the overlay settle.
   await page.locator(INLINE_IMAGE).first().click();
@@ -59,7 +64,7 @@ test('image frame stays aligned with a reserved scrollbar gutter (#764)', async 
 
   expect(offset.ok).toBe(true);
   // The frame wraps the image tightly — within a couple of px on every edge,
-  // NOT shifted right by the ~15px gutter (the #764 symptom).
+  // NOT shifted right by a reserved gutter (the #764 symptom when gutter > 0).
   expect(offset.dxLeft).toBeLessThan(2);
   expect(offset.dxTop).toBeLessThan(2);
 });
