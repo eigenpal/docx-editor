@@ -159,7 +159,9 @@ test.describe('Visual Regression - Toolbar', () => {
     await editor.typeText('Bold text');
     await editor.selectAll();
     await editor.applyBold();
-    await page.waitForTimeout(200);
+    // Empty-para / selection-tracker sync can lag the click; wait for the
+    // pressed state so the screenshot captures the intended active chrome.
+    await editor.expectToolbarButtonActive('bold');
 
     const toolbar = page.locator(TOOLBAR);
     await expect(toolbar).toHaveScreenshot('toolbar-bold-active.png', {
@@ -174,7 +176,8 @@ test.describe('Visual Regression - Toolbar', () => {
     await editor.selectAll();
     await editor.applyBold();
     await editor.applyItalic();
-    await page.waitForTimeout(200);
+    await editor.expectToolbarButtonActive('bold');
+    await editor.expectToolbarButtonActive('italic');
 
     const toolbar = page.locator(TOOLBAR);
     await expect(toolbar).toHaveScreenshot('toolbar-multiple-active.png', {
@@ -260,10 +263,18 @@ test.describe('Visual Regression - Responsive', () => {
 
 test.describe('Visual Regression - Error States', () => {
   test('loading state', async ({ page }) => {
-    // Navigate without waiting for ready
-    await page.goto('/');
+    // Historically named "loading state", but Playwright's screenshot path
+    // waits for fonts/stability so a bare goto() races a fully-loaded demo.
+    // Stabilize on the demo's initial ready chrome (sample.docx + toolbar
+    // reflecting the heading caret) instead of capturing mid-boot.
+    const editor = new EditorPage(page);
+    await editor.goto();
+    await editor.waitForReady();
+    await page.waitForFunction(() => document.fonts.ready);
+    // Heading under the caret is bold Inter 32 — wait so toolbar sync is done.
+    await editor.expectToolbarButtonActive('bold');
+    await expect(page.locator('[data-testid="font-size-display"]').first()).toContainText('32');
 
-    // Capture loading state quickly
     await expect(page).toHaveScreenshot('loading-state.png', {
       maxDiffPixels: 100,
       threshold: 0.3,
