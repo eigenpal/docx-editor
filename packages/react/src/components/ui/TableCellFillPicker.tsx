@@ -41,16 +41,18 @@ export function TableCellFillPicker({
   );
 
   return (
-    <ColorPicker
-      mode="highlight"
-      value={value}
-      onChange={handleChange}
-      theme={theme}
-      disabled={disabled}
-      title={t('table.cellFillColor')}
-      icon="format_color_fill"
-      autoLabel={t('colorPicker.noColor')}
-    />
+    <div data-testid="toolbar-table-cell-fill" style={{ display: 'inline-block' }}>
+      <ColorPicker
+        mode="highlight"
+        value={value}
+        onChange={handleChange}
+        theme={theme}
+        disabled={disabled}
+        title={t('table.cellFillColor')}
+        icon="format_color_fill"
+        autoLabel={t('colorPicker.noColor')}
+      />
+    </div>
   );
 }
 

@@ -23,6 +23,17 @@ export interface UseFixedDropdownReturn {
   handleMouseDown: (e: React.MouseEvent) => void;
 }
 
+/** Keep a fixed dropdown fully inside the viewport with a small gutter. */
+function clampToViewport(top: number, left: number, width: number, height: number) {
+  const gutter = 8;
+  const maxLeft = Math.max(gutter, window.innerWidth - width - gutter);
+  const maxTop = Math.max(gutter, window.innerHeight - height - gutter);
+  return {
+    top: Math.min(Math.max(gutter, top), maxTop),
+    left: Math.min(Math.max(gutter, left), maxLeft),
+  };
+}
+
 export function useFixedDropdown({
   isOpen,
   onClose,
@@ -42,7 +53,13 @@ export function useFixedDropdown({
       requestAnimationFrame(() => {
         if (dropdownRef.current) {
           const dropRect = dropdownRef.current.getBoundingClientRect();
-          setPos({ top: rect.bottom + 4, left: rect.right - dropRect.width });
+          const next = clampToViewport(
+            rect.bottom + 4,
+            rect.right - dropRect.width,
+            dropRect.width,
+            dropRect.height
+          );
+          setPos(next);
         } else {
           setPos({ top: rect.bottom + 4, left: rect.left });
         }
@@ -55,6 +72,10 @@ export function useFixedDropdown({
   // Close on outside click, escape, scroll
   useEffect(() => {
     if (!isOpen) return;
+
+    // Opening often scrollIntoViews a clipped toolbar button; ignore that burst
+    // so the menu doesn't immediately close.
+    const ignoreScrollUntil = performance.now() + 150;
 
     const handleClickOutside = (e: MouseEvent) => {
       const target = e.target as Node;
@@ -73,11 +94,24 @@ export function useFixedDropdown({
     };
 
     const handleScroll = (e: Event) => {
+      if (performance.now() < ignoreScrollUntil) return;
+
       // Ignore scrolls inside the dropdown's own scrollable list (e.g. the font
       // size presets). Only an ancestor/page scroll, which would detach this
       // fixed-positioned dropdown from its trigger, should close it.
       const target = e.target as Node | null;
       if (target && dropdownRef.current && dropdownRef.current.contains(target)) {
+        return;
+      }
+      // Horizontal toolbar overflow scrolls to reveal a clipped trigger — that
+      // must not dismiss the menu (table "More" sits at the right edge).
+      if (
+        target instanceof Element &&
+        target !== document.documentElement &&
+        target !== document.body &&
+        containerRef.current &&
+        target.contains(containerRef.current)
+      ) {
         return;
       }
       onClose();

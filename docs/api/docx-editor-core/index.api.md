@@ -319,7 +319,7 @@ export interface DeleteTextCommand extends BaseCommand {
 
 // @public
 export interface Deletion {
-    content: TrackedChangeContent[];
+    content: (Run | Hyperlink)[];
     info: TrackedChangeInfo;
     // (undocumented)
     type: 'deletion';
@@ -785,7 +785,7 @@ export interface InsertImageCommand extends BaseCommand {
 
 // @public
 export interface Insertion {
-    content: TrackedChangeContent[];
+    content: (Run | Hyperlink)[];
     info: TrackedChangeInfo;
     // (undocumented)
     type: 'insertion';
@@ -958,7 +958,7 @@ export interface McpToolResult {
 
 // @public
 export interface MoveFrom {
-    content: TrackedChangeContent[];
+    content: (Run | Hyperlink)[];
     info: TrackedChangeInfo;
     // (undocumented)
     type: 'moveFrom';
@@ -966,7 +966,7 @@ export interface MoveFrom {
 
 // @public
 export interface MoveTo {
-    content: TrackedChangeContent[];
+    content: (Run | Hyperlink)[];
     info: TrackedChangeInfo;
     // (undocumented)
     type: 'moveTo';
@@ -1055,58 +1055,6 @@ export interface ParagraphFormatting {
     hangingIndent?: boolean;
     indentFirstLine?: number;
     indentLeft?: number;
-    // @internal
-    _indentProvenance?: {
-        source?: {
-            left?: string;
-            start?: string;
-            right?: string;
-            end?: string;
-            firstLine?: string;
-            hanging?: string;
-        };
-        sourceValues?: {
-            indentLeft?: number;
-            indentRight?: number;
-            indentFirstLine?: number;
-            hangingIndent?: boolean;
-        };
-        resolvedNumbering?: {
-            sourceIdentity: {
-                styleId?: string;
-                numPr?: {
-                    numId?: number;
-                    ilvl?: number;
-                };
-                numPrFromStyle?: {
-                    numId?: number;
-                    ilvl?: number;
-                };
-                indentLeft?: number;
-                indentRight?: number;
-                indentFirstLine?: number;
-                hangingIndent?: boolean;
-                sourceIndent?: {
-                    left?: string;
-                    start?: string;
-                    right?: string;
-                    end?: string;
-                    firstLine?: string;
-                    hanging?: string;
-                };
-            };
-            indentLeft?: number;
-            indentRight?: number;
-            indentFirstLine?: number;
-            hangingIndent?: boolean;
-        };
-        baseline?: {
-            indentLeft?: number;
-            indentRight?: number;
-            indentFirstLine?: number;
-            hangingIndent?: boolean;
-        };
-    };
     indentRight?: number;
     keepLines?: boolean;
     keepNext?: boolean;
