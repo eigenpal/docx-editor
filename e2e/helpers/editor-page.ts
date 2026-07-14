@@ -278,37 +278,42 @@ export class EditorPage {
   async selectText(searchText: string): Promise<boolean> {
     // First, get the bounding rect of the text we want to select
     const textInfo = await this.page.evaluate((text) => {
-      // Prefer painted body text (visible hit-testing). Fall back to the
-      // hidden body PM — never an HF ProseMirror (separate doc / rId).
+      // Prefer painted body text across ALL pages (visible hit-testing).
+      // `querySelector('.layout-page-content')` only sees page 1 and misses
+      // selections further down the document.
+      const contentAreas = Array.from(document.querySelectorAll('.layout-page-content'));
       const contentArea =
-        document.querySelector('.layout-page-content') ||
+        contentAreas[0] ||
         document.querySelector('.paged-editor__hidden-pm .ProseMirror') ||
         document.querySelector('.docx-editor-pages') ||
         document.querySelector('.docx-ai-editor');
-      if (!contentArea) return null;
+      if (!contentArea && contentAreas.length === 0) return null;
 
-      const walker = document.createTreeWalker(contentArea, NodeFilter.SHOW_TEXT, null);
+      const roots = contentAreas.length > 0 ? contentAreas : [contentArea!];
+      for (const root of roots) {
+        const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, null);
 
-      let node: Text | null;
-      while ((node = walker.nextNode() as Text | null)) {
-        const index = node.textContent?.indexOf(text) ?? -1;
-        if (index !== -1) {
-          const range = document.createRange();
-          range.setStart(node, index);
-          range.setEnd(node, index + text.length);
+        let node: Text | null;
+        while ((node = walker.nextNode() as Text | null)) {
+          const index = node.textContent?.indexOf(text) ?? -1;
+          if (index !== -1) {
+            const range = document.createRange();
+            range.setStart(node, index);
+            range.setEnd(node, index + text.length);
 
-          // Get the bounding rect to use for clicking
-          const rect = range.getBoundingClientRect();
+            // Get the bounding rect to use for clicking
+            const rect = range.getBoundingClientRect();
 
-          const selection = window.getSelection();
-          selection?.removeAllRanges();
-          selection?.addRange(range);
+            const selection = window.getSelection();
+            selection?.removeAllRanges();
+            selection?.addRange(range);
 
-          return {
-            found: true,
-            x: rect.x + rect.width / 2,
-            y: rect.y + rect.height / 2,
-          };
+            return {
+              found: true,
+              x: rect.x + rect.width / 2,
+              y: rect.y + rect.height / 2,
+            };
+          }
         }
       }
       return null;

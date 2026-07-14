@@ -32,10 +32,15 @@ test('header trailing empty paragraph with pBdr.bottom renders the horizontal ru
       const paragraphs = h.querySelectorAll<HTMLElement>('.layout-paragraph');
       const data: (typeof results)[number]['paragraphs'] = [];
       paragraphs.forEach((p) => {
+        // Painter draws pBdr on `.layout-paragraph-border`, not the paragraph
+        // element's own border box.
+        const borderBox = p.querySelector<HTMLElement>('.layout-paragraph-border');
         data.push({
           rect: p.getBoundingClientRect(),
           runs: p.querySelectorAll('[data-doc-from]').length,
-          borderBottom: getComputedStyle(p).borderBottomWidth,
+          borderBottom: borderBox
+            ? getComputedStyle(borderBox).borderBottomWidth
+            : getComputedStyle(p).borderBottomWidth,
         });
       });
       results.push({ pageHeaderRect: h.getBoundingClientRect(), paragraphs: data });
