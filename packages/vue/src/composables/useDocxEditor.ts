@@ -307,8 +307,9 @@ export function useDocxEditor(options: UseDocxEditorOptions): UseDocxEditorRetur
   const isReady = ref(false);
   const parseError = ref<string | null>(null);
   // Monotonically increasing generation so a late `parseDocx` result doesn't
-  // overwrite a newer load that started while we were parsing — mirrors React's
-  // `loadGenerationRef` in useDocumentLoader.
+  // overwrite a newer ownership transition (another loadBuffer, loadDocument,
+  // or destroy) that started while we were parsing. Bump at every transition
+  // that takes ownership of `document`, not only at loadBuffer entry.
   let loadGeneration = 0;
   /**
    * Fonts the loaded document references that the browser can render (embedded
@@ -898,6 +899,9 @@ export function useDocxEditor(options: UseDocxEditorOptions): UseDocxEditorRetur
   }
 
   function loadDocument(doc: Document) {
+    // Invalidate any in-flight loadBuffer so its parse cannot clobber this
+    // controlled document once it settles.
+    ++loadGeneration;
     markPaintedPagesStale();
     parseError.value = null;
     document.value = doc;
@@ -954,6 +958,9 @@ export function useDocxEditor(options: UseDocxEditorOptions): UseDocxEditorRetur
   }
 
   function destroy() {
+    // Invalidate in-flight parses so a late settle cannot recreate views /
+    // reassign `document` after teardown.
+    ++loadGeneration;
     destroyEditorView(); // cancels the layout scheduler
     destroyHfPMs();
     document.value = null;
