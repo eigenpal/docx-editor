@@ -1,92 +1,22 @@
-import { GlobalRegistrator } from '@happy-dom/global-registrator';
-import { afterAll, beforeAll, beforeEach, describe, expect, mock, test } from 'bun:test';
-import { ref } from 'vue';
-import { createEmptyDocument } from '@eigenpal/docx-editor-core/utils';
-import type { Document } from '@eigenpal/docx-editor-core/types/document';
+import { expect, test } from 'bun:test';
+import { fileURLToPath } from 'node:url';
 
 /**
- * Proves Vue's loadGeneration gate invalidates in-flight `parseDocx` work across
- * ownership transitions: a late parse must not overwrite `loadDocument`, and must
- * not reassign state after `destroy`.
+ * Run the parser mock in a subprocess. Bun's `mock.module` is process-global
+ * and cannot be safely restored, so using it in the main unit-test process
+ * would leave every later parseDocx test waiting on the deferred mock.
  */
-
-beforeAll(() => GlobalRegistrator.register());
-afterAll(() => GlobalRegistrator.unregister());
-
-type PendingParse = {
-  resolve: (doc: Document) => void;
-  reject: (err: unknown) => void;
-};
-
-const pendingParses: PendingParse[] = [];
-
-mock.module('@eigenpal/docx-editor-core/docx/parser', () => ({
-  parseDocx: (_buffer: ArrayBuffer | Uint8Array) =>
-    new Promise<Document>((resolve, reject) => {
-      pendingParses.push({ resolve, reject });
-    }),
-}));
-
-const { useDocxEditor } = await import('./useDocxEditor');
-
-function settleMicrotasks(): Promise<void> {
-  return new Promise((resolve) => queueMicrotask(() => resolve()));
-}
-
-function mountEditor() {
-  const hiddenContainer = ref<HTMLElement | null>(document.createElement('div'));
-  const pagesContainer = ref<HTMLElement | null>(document.createElement('div'));
-  document.body.appendChild(hiddenContainer.value!);
-  document.body.appendChild(pagesContainer.value!);
-  return useDocxEditor({ hiddenContainer, pagesContainer });
-}
-
-describe('useDocxEditor loadGeneration ownership transitions', () => {
-  beforeEach(() => {
-    pendingParses.length = 0;
+test('loadGeneration rejects stale parses across ownership transitions', async () => {
+  const fixture = fileURLToPath(
+    new URL('./useDocxEditor.loadGeneration.fixture.ts', import.meta.url)
+  );
+  const child = Bun.spawn([process.execPath, fixture], {
+    stdout: 'pipe',
+    stderr: 'pipe',
+    env: process.env,
   });
+  const [exitCode, stderr] = await Promise.all([child.exited, new Response(child.stderr).text()]);
 
-  test('stale loadBuffer parse cannot overwrite a later loadDocument', async () => {
-    const editor = mountEditor();
-    const controlled = createEmptyDocument({ initialText: 'controlled-owned-doc' });
-    controlled.warnings = ['controlled-marker'];
-    const stale = createEmptyDocument({ initialText: 'stale-parse-doc' });
-    stale.warnings = ['stale-marker'];
-
-    const loadPromise = editor.loadBuffer(new ArrayBuffer(8));
-    expect(pendingParses.length).toBe(1);
-
-    editor.loadDocument(controlled);
-    expect(editor.getDocument()?.warnings).toContain('controlled-marker');
-
-    pendingParses[0]!.resolve(stale);
-    await loadPromise;
-    await settleMicrotasks();
-
-    const current = editor.getDocument();
-    expect(current).not.toBe(stale);
-    expect(current?.warnings).toContain('controlled-marker');
-    expect(current?.warnings).not.toContain('stale-marker');
-
-    editor.destroy();
-  });
-
-  test('stale loadBuffer parse cannot apply after destroy', async () => {
-    const editor = mountEditor();
-    const stale = createEmptyDocument({ initialText: 'stale-after-destroy' });
-    stale.warnings = ['stale-after-destroy'];
-
-    const loadPromise = editor.loadBuffer(new ArrayBuffer(8));
-    expect(pendingParses.length).toBe(1);
-
-    editor.destroy();
-    expect(editor.getDocument()).toBeNull();
-
-    pendingParses[0]!.resolve(stale);
-    await loadPromise;
-    await settleMicrotasks();
-
-    expect(editor.getDocument()).toBeNull();
-    expect(editor.isReady.value).toBe(false);
-  });
-});
+  if (exitCode !== 0) throw new Error(stderr);
+  expect(exitCode).toBe(0);
+}, 15_000);
