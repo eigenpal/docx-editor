@@ -22,7 +22,6 @@ import { getSelectionRuns } from '@eigenpal/docx-editor-core';
 import { HighlightRect } from '@eigenpal/docx-editor-core/utils';
 import { isAutoSaveSupported } from '@eigenpal/docx-editor-core';
 import { ParsedClipboardContent } from '@eigenpal/docx-editor-core/utils';
-import * as React$1 from 'react';
 import React__default from 'react';
 import { RefObject } from 'react';
 import { SavedDocumentData } from '@eigenpal/docx-editor-core';
@@ -420,8 +419,6 @@ export function useTrackedChanges(state: EditorState | null): TrackedChangesResu
 
 // @public (undocumented)
 export function useVisualLineNavigation(input: VisualLineNavigationOptions): {
-    stickyXRef: React$1.RefObject<number | null>;
-    lastVisualLineIndexRef: React$1.RefObject<number>;
     getCaretClientX: (pmPos: number) => number | null;
     findLineElementAtPosition: (pmPos: number) => HTMLElement | null;
     findPositionOnLineAtClientX: (lineEl: HTMLElement, clientX: number) => number | null;
@@ -460,7 +457,7 @@ export interface UseWheelZoomReturn {
     zoomToFit: (containerWidth: number, contentWidth: number) => void;
 }
 
-// @public (undocumented)
+// @public
 export interface VisualLineNavigationOptions {
     // (undocumented)
     pagesContainerRef: React.RefObject<HTMLDivElement | null>;

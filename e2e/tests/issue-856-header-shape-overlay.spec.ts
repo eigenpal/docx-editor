@@ -20,6 +20,7 @@ test.describe('#856 header shape overlay', () => {
 
   test('header box does not cover the body and the shape still renders', async () => {
     const info = await editor.page.evaluate(() => {
+      const pageEl = document.querySelector('.layout-page') as HTMLElement | null;
       const header = document.querySelector('.layout-page-header') as HTMLElement | null;
       const content = document.querySelector('.layout-page-content') as HTMLElement | null;
       // The anchored shape renders as a textbox inside the header.
@@ -39,6 +40,9 @@ test.describe('#856 header shape overlay', () => {
         shapeHeight: sr ? Math.round(sr.height) : -1,
         topElementIsBody: !!top?.closest('.layout-page-content'),
         topElementInHeader: !!top?.closest('.layout-page-header'),
+        pageOverflow: pageEl?.style.overflow ?? '',
+        headerOverflow: header?.style.overflow ?? '',
+        headerStyleTop: Number.parseFloat(header?.style.top || '0'),
       };
     });
 
@@ -49,6 +53,12 @@ test.describe('#856 header shape overlay', () => {
     // A point in the body column hits the body, not the header/shape.
     expect(info.topElementIsBody).toBe(true);
     expect(info.topElementInHeader).toBe(false);
+    // Letterhead overhangs into the body but stays inside the page box — do
+    // not unlock page overflow (that would disable body/footer clipping).
+    expect(info.headerOverflow).not.toBe('hidden');
+    if (info.headerStyleTop >= 0) {
+      expect(info.pageOverflow).toBe('hidden');
+    }
   });
 
   test('clicking the body places the caret in the body text', async () => {
