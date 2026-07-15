@@ -16,10 +16,25 @@ test('Vue: VML header logo renders and a left-anchored image is left-aligned (#7
     .locator('input[type="file"]')
     .first()
     .setInputFiles('e2e/fixtures/issue-777-vml-header.docx');
-  await page.waitForSelector('[data-page-number]');
+  // The Vue demo boots with sample.docx, which already has `[data-page-number]`.
+  // Wait for a marker unique to this fixture (scoped to painted pages — the
+  // hidden body PM also carries the same text and would trip strict mode).
+  await expect
+    .poll(
+      () =>
+        page.evaluate(() =>
+          Array.from(document.querySelectorAll('.layout-page-content')).some((el) =>
+            (el.textContent ?? '').includes('Body text below the left-aligned logo.')
+          )
+        ),
+      { timeout: 15000 }
+    )
+    .toBe(true);
+  await expect(page.locator('.layout-page-header img').first()).toBeVisible({
+    timeout: 15000,
+  });
 
   const headerImg = page.locator('.layout-page-header img').first();
-  await expect(headerImg).toHaveCount(1);
   const src = await headerImg.getAttribute('src');
   expect(src && src.length).toBeGreaterThan(0);
 

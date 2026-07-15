@@ -306,6 +306,10 @@ export function useDocxEditor(options: UseDocxEditorOptions): UseDocxEditorRetur
   const editorState = shallowRef<EditorState | null>(null);
   const isReady = ref(false);
   const parseError = ref<string | null>(null);
+  // Monotonically increasing generation so a late `parseDocx` result doesn't
+  // overwrite a newer load that started while we were parsing — mirrors React's
+  // `loadGenerationRef` in useDocumentLoader.
+  let loadGeneration = 0;
   /**
    * Fonts the loaded document references that the browser can render (embedded
    * faces + system-resolved), for the picker's "Document fonts" group. Mirrors
@@ -857,6 +861,7 @@ export function useDocxEditor(options: UseDocxEditorOptions): UseDocxEditorRetur
   // ========================================================================
 
   async function loadBuffer(buffer: ArrayBuffer | Uint8Array | Blob | File) {
+    const generation = ++loadGeneration;
     markPaintedPagesStale();
     parseError.value = null;
     isReady.value = false;
@@ -875,6 +880,7 @@ export function useDocxEditor(options: UseDocxEditorOptions): UseDocxEditorRetur
       }
 
       const doc = await parseDocx(arrayBuf);
+      if (generation !== loadGeneration) return;
       document.value = doc;
       updateDocumentFonts(doc);
 
@@ -884,6 +890,7 @@ export function useDocxEditor(options: UseDocxEditorOptions): UseDocxEditorRetur
       createEditorView();
       syncHfPMs();
     } catch (err) {
+      if (generation !== loadGeneration) return;
       const error = err instanceof Error ? err : new Error(String(err));
       parseError.value = error.message;
       onError?.(error);

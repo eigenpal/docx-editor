@@ -6,6 +6,7 @@
   <div class="app">
     <main class="main">
       <DocxEditor
+        :key="docVersion"
         ref="editorRef"
         :document-buffer="documentBuffer"
         :document="currentDocument"
@@ -32,12 +33,7 @@
           </div>
         </template>
         <template #title-bar-right>
-          <div
-            class="theme-toggle"
-            role="radiogroup"
-            aria-label="Color theme"
-            @mousedown.stop
-          >
+          <div class="theme-toggle" role="radiogroup" aria-label="Color theme" @mousedown.stop>
             <button
               type="button"
               role="radio"
@@ -47,9 +43,20 @@
               title="Light mode"
               @click="colorMode = 'light'"
             >
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <svg
+                width="15"
+                height="15"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
                 <circle cx="12" cy="12" r="4" />
-                <path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4" />
+                <path
+                  d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"
+                />
               </svg>
             </button>
             <button
@@ -61,18 +68,22 @@
               title="Dark mode"
               @click="colorMode = 'dark'"
             >
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <svg
+                width="15"
+                height="15"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
                 <path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z" />
               </svg>
             </button>
           </div>
           <label class="btn btn-primary">
-            <input
-              type="file"
-              accept=".docx"
-              @change="handleFileSelect"
-              class="file-input"
-            />
+            <input type="file" accept=".docx" @change="handleFileSelect" class="file-input" />
             Open
           </label>
           <button class="btn" @click="handleNew">New</button>
@@ -80,11 +91,7 @@
           <span v-if="status" class="status">{{ status }}</span>
         </template>
       </DocxEditor>
-      <AgentPanel
-        v-if="showAgentPanel"
-        :closed="agentClosed"
-        @close="agentClosed = true"
-      >
+      <AgentPanel v-if="showAgentPanel" :closed="agentClosed" @close="agentClosed = true">
         <div data-testid="agent-panel-content" class="agent-panel-body">
           <AgentChatLog
             :messages="messages"
@@ -92,11 +99,7 @@
             :humanize-tool-name="getToolDisplayName"
             :auto-scroll="true"
           />
-          <AgentComposer
-            v-model="input"
-            :disabled="loading"
-            @submit="sendMessage"
-          />
+          <AgentComposer v-model="input" :disabled="loading" @submit="sendMessage" />
         </div>
       </AgentPanel>
     </main>
@@ -159,8 +162,13 @@ const status = ref('');
 const colorMode = ref<'light' | 'dark'>('light');
 // Set once the user starts their own document (New / open a file). The demo
 // fixture fetch below resolves asynchronously and must NOT clobber that
-// choice if it lands afterwards — mirrors examples/vite/src/App.tsx.
-let userStartedOwnDoc = false;
+// choice if it lands afterwards — otherwise Open during the (slow) demo load
+// silently restores the demo. Mirrors examples/vite/src/App.tsx.
+const userStartedOwnDoc = ref(false);
+// Bumped on New / open to force a fresh DocxEditor instance (see handlers) —
+// mirrors React demo `docVersion` so an in-flight sample.docx parse cannot
+// clobber a document the user just opened.
+const docVersion = ref(0);
 
 // E2E hook: ?customFonts=1 wires a custom-font registration against the
 // bundled fixture so the Vue Playwright suite can verify the `fonts` prop.
@@ -332,7 +340,11 @@ onMounted(async () => {
       scrollToPosition: (pmPos: number) => {
         const view = (editorRef.value?.getEditorRef() as any)?.getView?.();
         if (!view) return;
-        view.dispatch(view.state.tr.setSelection(view.state.selection.constructor.near(view.state.doc.resolve(pmPos))));
+        view.dispatch(
+          view.state.tr.setSelection(
+            view.state.selection.constructor.near(view.state.doc.resolve(pmPos))
+          )
+        );
       },
       getDocSize: () => {
         const state = (editorRef.value?.getEditorRef() as any)?.getState?.();
@@ -410,7 +422,8 @@ onMounted(async () => {
       },
       agentApplyFormatting: (opts) => editorRef.value?.applyFormatting(opts) ?? false,
       agentSetParagraphStyle: (opts) => editorRef.value?.setParagraphStyle(opts) ?? false,
-      agentGetPageContent: (pageNumber: number) => editorRef.value?.getPageContent(pageNumber) ?? null,
+      agentGetPageContent: (pageNumber: number) =>
+        editorRef.value?.getPageContent(pageNumber) ?? null,
       agentGetDocumentText: () => extractDocumentText(editorRef.value?.getDocument()),
       // Tracked structural revisions (#614) — mirror of the React demo hooks
       // so the same Playwright spec can run against this adapter.
@@ -616,11 +629,11 @@ onMounted(async () => {
   try {
     const res = await fetch(`${import.meta.env.BASE_URL}sample.docx`);
     const buffer = await res.arrayBuffer();
-    if (userStartedOwnDoc) return; // user already opened/New'd
+    if (userStartedOwnDoc.value) return; // user already moved on
     documentBuffer.value = buffer;
     fileName.value = 'sample.docx';
   } catch {
-    if (userStartedOwnDoc) return;
+    if (userStartedOwnDoc.value) return;
     currentDocument.value = createEmptyDocument();
     fileName.value = 'Untitled.docx';
   }
@@ -635,7 +648,7 @@ function handleFileSelect(event: Event) {
   const file = input.files?.[0];
   if (!file) return;
 
-  userStartedOwnDoc = true;
+  userStartedOwnDoc.value = true;
   status.value = 'Loading...';
   file
     .arrayBuffer()
@@ -644,6 +657,7 @@ function handleFileSelect(event: Event) {
       documentBuffer.value = buffer;
       fileName.value = file.name;
       status.value = '';
+      docVersion.value += 1;
     })
     .catch(() => {
       status.value = 'Error loading file';
@@ -651,11 +665,14 @@ function handleFileSelect(event: Event) {
 }
 
 function handleNew() {
-  userStartedOwnDoc = true;
+  userStartedOwnDoc.value = true;
   documentBuffer.value = null;
   currentDocument.value = createEmptyDocument();
   fileName.value = 'Untitled.docx';
   status.value = '';
+  // Force a fresh editor instance. Switching `documentBuffer` back to an empty
+  // `document` does not reliably re-init content — mirrors React's New handler.
+  docVersion.value += 1;
 }
 
 async function handleSave() {
