@@ -530,6 +530,37 @@ test.describe('Table Navigation', () => {
     expect(cell2Content).toContain('B');
   });
 
+  test('Tab at last cell creates a new row via keymap', async () => {
+    await editor.insertTable(1, 2);
+    await editor.clickTableCell(0, 0, 1);
+    await editor.typeText('Last');
+
+    const before = await editor.getTableDimensions(0);
+    expect(before.rows).toBe(1);
+    expect(before.cols).toBe(2);
+
+    await editor.pressTab();
+
+    const after = await editor.getTableDimensions(0);
+    expect(after.rows).toBe(2);
+    expect(after.cols).toBe(2);
+  });
+
+  test('Tab in first cell of one-row table does not add a row', async () => {
+    await editor.insertTable(1, 2);
+    await editor.clickTableCell(0, 0, 0);
+    await editor.typeText('A');
+
+    await editor.pressTab();
+    await editor.typeText('B');
+
+    const dims = await editor.getTableDimensions(0);
+    expect(dims.rows).toBe(1);
+    expect(dims.cols).toBe(2);
+    expect(await editor.getTableCellContent(0, 0, 0)).toContain('A');
+    expect(await editor.getTableCellContent(0, 0, 1)).toContain('B');
+  });
+
   test('Arrow keys navigate within cell content', async ({ page }) => {
     await editor.insertTable(2, 2);
     await editor.clickTableCell(0, 0, 0);

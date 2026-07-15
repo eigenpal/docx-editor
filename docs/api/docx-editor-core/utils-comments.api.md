@@ -27,7 +27,7 @@ export interface TrackedChangeEntry {
     revisionId: number;
     text: string;
     to: number;
-    type: 'insertion' | 'deletion' | 'replacement' | 'paragraphMarkInsertion' | 'paragraphMarkDeletion' | 'paragraphPropertiesChanged' | 'runPropertiesChanged' | 'rowInserted' | 'rowDeleted' | 'rowPropertiesChanged' | 'cellInserted' | 'cellDeleted' | 'cellMerged' | 'cellPropertiesChanged' | 'tableInserted' | 'tableDeleted' | 'tablePropertiesChanged';
+    type: 'insertion' | 'deletion' | 'replacement' | 'paragraphMarkInsertion' | 'paragraphMarkDeletion' | 'paragraphPropertiesChanged' | 'rowInserted' | 'rowDeleted' | 'rowPropertiesChanged' | 'cellInserted' | 'cellDeleted' | 'cellMerged' | 'cellPropertiesChanged' | 'tableInserted' | 'tableDeleted' | 'tablePropertiesChanged';
 }
 
 // @public (undocumented)

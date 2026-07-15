@@ -186,7 +186,6 @@ export interface ParagraphAttrs {
         formatting?: TextFormatting;
         propertyChanges?: RunPropertyChange[];
     }>;
-    _originalWidowControl?: boolean;
     // (undocumented)
     outlineLevel?: number;
     // (undocumented)

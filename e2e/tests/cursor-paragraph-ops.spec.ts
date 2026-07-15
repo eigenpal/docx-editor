@@ -73,6 +73,11 @@ test.describe('Cursor-Only List Operations', () => {
     // Indent should work without selection
     await editor.indent();
 
+    const level = await page.evaluate(() => {
+      const attrs = window.__DOCX_EDITOR_E2E__?.getParagraphAttrs?.(0);
+      return (attrs?.numPr as { ilvl?: number } | null)?.ilvl ?? -1;
+    });
+    expect(level).toBe(1);
     await assertions.assertDocumentContainsText(page, 'Indentable item');
   });
 
@@ -84,9 +89,21 @@ test.describe('Cursor-Only List Operations', () => {
     // Move cursor (no selection)
     await page.keyboard.press('Home');
 
-    // Outdent should work without selection
+    const levelAfterIndent = await page.evaluate(() => {
+      const attrs = window.__DOCX_EDITOR_E2E__?.getParagraphAttrs?.(0);
+      return (attrs?.numPr as { ilvl?: number } | null)?.ilvl ?? -1;
+    });
+    expect(levelAfterIndent).toBe(1);
+    await expect(page.locator('[aria-label="Decrease Indent"]')).toBeEnabled();
+
+    // Outdent should work without selection — via toolbar, not Shift+Tab
     await editor.outdent();
 
+    const levelAfterOutdent = await page.evaluate(() => {
+      const attrs = window.__DOCX_EDITOR_E2E__?.getParagraphAttrs?.(0);
+      return (attrs?.numPr as { ilvl?: number } | null)?.ilvl ?? -1;
+    });
+    expect(levelAfterOutdent).toBe(0);
     await assertions.assertDocumentContainsText(page, 'Outdentable item');
   });
 });
@@ -233,9 +250,20 @@ test.describe('Cursor-Only Indentation Operations', () => {
     // Move cursor (no selection)
     await page.keyboard.press('Home');
 
-    // Outdent should work without selection
+    const paragraph = page.locator('.paged-editor__hidden-pm .ProseMirror p').first();
+    const marginAfterIndent = await paragraph.evaluate((el) => {
+      return window.getComputedStyle(el).marginLeft;
+    });
+    expect(marginAfterIndent).not.toBe('0px');
+    await expect(page.locator('[aria-label="Decrease Indent"]')).toBeEnabled();
+
+    // Outdent should work without selection — via toolbar, not Shift+Tab
     await editor.outdent();
 
+    const marginAfterOutdent = await paragraph.evaluate((el) => {
+      return window.getComputedStyle(el).marginLeft;
+    });
+    expect(marginAfterOutdent).toBe('0px');
     await assertions.assertDocumentContainsText(page, 'Outdent test');
   });
 

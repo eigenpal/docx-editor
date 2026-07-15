@@ -4,19 +4,20 @@
 
 import type { Page } from '@playwright/test';
 
+/**
+ * Count rows of the table that contains the current selection.
+ * Returns -1 when there is no view or the caret is not inside a table.
+ */
 export async function countBodyPmTableRows(page: Page): Promise<number> {
   return page.evaluate(() => {
     const view = window.__DOCX_EDITOR_E2E__?.getView?.();
     if (!view) return -1;
-    let rows = -1;
-    view.state.doc.descendants((node: { type: { name: string }; childCount: number }) => {
-      if (node.type.name === 'table') {
-        rows = node.childCount;
-        return false;
-      }
-      return true;
-    });
-    return rows;
+    const $from = view.state.selection.$from;
+    for (let d = $from.depth; d > 0; d--) {
+      const node = $from.node(d);
+      if (node.type.name === 'table') return node.childCount;
+    }
+    return -1;
   });
 }
 
