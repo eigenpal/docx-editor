@@ -12,7 +12,7 @@ test('Vue: same-object controlled document echoes preserve typing order and undo
   await page.mouse.click(contentBox!.x + 20, contentBox!.y + 20);
   await page.keyboard.type('abc');
 
-  const bodyEditor = page.locator('.docx-editor-vue .ProseMirror').first();
+  const bodyEditor = page.locator('.paged-editor__hidden-pm .ProseMirror').first();
   await expect(bodyEditor).toHaveText('abc');
 
   await page.keyboard.press('ControlOrMeta+z');
@@ -71,7 +71,7 @@ test('Vue: a previously emitted document can be reopened after an external switc
     hooks.__docxVueSetControlledDocument(external);
   });
 
-  const bodyEditor = page.locator('.docx-editor-vue .ProseMirror').first();
+  const bodyEditor = page.locator('.paged-editor__hidden-pm .ProseMirror').first();
   await expect(bodyEditor).toHaveText('external');
   await page.evaluate(() => {
     const hooks = window as typeof window & {
@@ -104,7 +104,7 @@ test('Vue: a buffer load clears the controlled document echo marker', async ({ p
     hooks.__docxVueSetDocumentBuffer(await response.arrayBuffer());
   });
 
-  const bodyEditor = page.locator('.docx-editor-vue .ProseMirror').first();
+  const bodyEditor = page.locator('.paged-editor__hidden-pm .ProseMirror').first();
   await expect.poll(async () => (await bodyEditor.textContent())?.length ?? 0).toBeGreaterThan(20);
   await page.evaluate(() => {
     const hooks = window as typeof window & {
