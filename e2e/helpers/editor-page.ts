@@ -127,6 +127,14 @@ export class EditorPage {
   }
 
   /**
+   * Navigate with DocxEditor held on its real loading chrome (`?loading=1`).
+   * Parse never completes, so screenshots are race-free.
+   */
+  async gotoLoading(): Promise<void> {
+    await this.page.goto('/?e2e=1&loading=1');
+  }
+
+  /**
    * Wait for the editor to be ready
    */
   async waitForReady(): Promise<void> {

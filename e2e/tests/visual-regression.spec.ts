@@ -263,21 +263,18 @@ test.describe('Visual Regression - Responsive', () => {
 
 test.describe('Visual Regression - Error States', () => {
   test('loading state', async ({ page }) => {
-    // Historically named "loading state", but Playwright's screenshot path
-    // waits for fonts/stability so a bare goto() races a fully-loaded demo.
-    // Stabilize on the demo's initial ready chrome (sample.docx + toolbar
-    // reflecting the heading caret) instead of capturing mid-boot.
+    // Deterministic loading chrome via ?e2e=1&loading=1 (holdDocumentLoad),
+    // not a race against sample.docx parse completing mid-screenshot.
     const editor = new EditorPage(page);
-    await editor.goto();
-    await editor.waitForReady();
+    await editor.gotoLoading();
+    await expect(page.locator('.docx-editor-loading')).toBeVisible({ timeout: 10000 });
+    await expect(page.getByText('Loading document...')).toBeVisible();
     await page.waitForFunction(() => document.fonts.ready);
-    // Heading under the caret is bold Inter 32 — wait so toolbar sync is done.
-    await editor.expectToolbarButtonActive('bold');
-    await expect(page.locator('[data-testid="font-size-display"]').first()).toContainText('32');
 
     await expect(page).toHaveScreenshot('loading-state.png', {
       maxDiffPixels: 100,
       threshold: 0.3,
+      animations: 'disabled',
     });
   });
 });

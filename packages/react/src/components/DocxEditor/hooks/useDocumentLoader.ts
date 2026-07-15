@@ -93,6 +93,18 @@ export function useDocumentLoader({
       const generation = ++loadGenerationRef.current;
       resetForNewDocument();
       setLoadingState({ isLoading: true, parseError: null });
+      // E2E-only: Vite demo `?e2e=1&loading=1` sets holdDocumentLoad / the sticky
+      // __DOCX_EDITOR_E2E_HOLD_LOADING__ flag so visual regression can snapshot
+      // the real loading chrome without racing parse.
+      if (typeof window !== 'undefined') {
+        const w = window as Window & {
+          __DOCX_EDITOR_E2E__?: { holdDocumentLoad?: boolean };
+          __DOCX_EDITOR_E2E_HOLD_LOADING__?: boolean;
+        };
+        if (w.__DOCX_EDITOR_E2E__?.holdDocumentLoad || w.__DOCX_EDITOR_E2E_HOLD_LOADING__) {
+          return;
+        }
+      }
       try {
         const doc = await parseDocx(buffer);
         if (loadGenerationRef.current !== generation) return;

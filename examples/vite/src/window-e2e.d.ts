@@ -2,6 +2,11 @@
 declare global {
   interface Window {
     __DOCX_EDITOR_E2E__?: {
+      /**
+       * When true, documentBuffer load stays on the loading chrome (parse
+       * never completes). Set by the Vite demo under `?e2e=1&loading=1`.
+       */
+      holdDocumentLoad?: boolean;
       /** Body EditorView — for precise PM selection in dual-render e2e. */
       getView: () => import('prosemirror-view').EditorView | null;
       getPmStartForParaId: (paraId: string) => number | null;
