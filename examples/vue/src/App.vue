@@ -718,11 +718,11 @@ function handleDocumentChange(doc: Document) {
     };
     hooks.__docxVueLastEmittedDocument = doc;
     hooks.__docxVueSetControlledDocument = (next) => {
-      userStartedOwnDoc = true;
+      userStartedOwnDoc.value = true;
       currentDocument.value = next;
     };
     hooks.__docxVueSetDocumentBuffer = (next) => {
-      userStartedOwnDoc = true;
+      userStartedOwnDoc.value = true;
       currentDocument.value = null;
       documentBuffer.value = next;
     };

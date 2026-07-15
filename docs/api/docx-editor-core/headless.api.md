@@ -331,7 +331,7 @@ export interface DeleteTextCommand extends BaseCommand {
 
 // @public
 export interface Deletion {
-    content: (Run | Hyperlink)[];
+    content: TrackedChangeContent[];
     info: TrackedChangeInfo;
     // (undocumented)
     type: 'deletion';
@@ -704,7 +704,7 @@ export interface InsertImageOptions {
 
 // @public
 export interface Insertion {
-    content: (Run | Hyperlink)[];
+    content: TrackedChangeContent[];
     info: TrackedChangeInfo;
     // (undocumented)
     type: 'insertion';
@@ -906,7 +906,7 @@ export { McpToolResult as ToolResult }
 
 // @public
 export interface MoveFrom {
-    content: (Run | Hyperlink)[];
+    content: TrackedChangeContent[];
     info: TrackedChangeInfo;
     // (undocumented)
     type: 'moveFrom';
@@ -914,7 +914,7 @@ export interface MoveFrom {
 
 // @public
 export interface MoveTo {
-    content: (Run | Hyperlink)[];
+    content: TrackedChangeContent[];
     info: TrackedChangeInfo;
     // (undocumented)
     type: 'moveTo';
@@ -1002,6 +1002,58 @@ export interface ParagraphFormatting {
     hangingIndent?: boolean;
     indentFirstLine?: number;
     indentLeft?: number;
+    // @internal
+    _indentProvenance?: {
+        source?: {
+            left?: string;
+            start?: string;
+            right?: string;
+            end?: string;
+            firstLine?: string;
+            hanging?: string;
+        };
+        sourceValues?: {
+            indentLeft?: number;
+            indentRight?: number;
+            indentFirstLine?: number;
+            hangingIndent?: boolean;
+        };
+        resolvedNumbering?: {
+            sourceIdentity: {
+                styleId?: string;
+                numPr?: {
+                    numId?: number;
+                    ilvl?: number;
+                };
+                numPrFromStyle?: {
+                    numId?: number;
+                    ilvl?: number;
+                };
+                indentLeft?: number;
+                indentRight?: number;
+                indentFirstLine?: number;
+                hangingIndent?: boolean;
+                sourceIndent?: {
+                    left?: string;
+                    start?: string;
+                    right?: string;
+                    end?: string;
+                    firstLine?: string;
+                    hanging?: string;
+                };
+            };
+            indentLeft?: number;
+            indentRight?: number;
+            indentFirstLine?: number;
+            hangingIndent?: boolean;
+        };
+        baseline?: {
+            indentLeft?: number;
+            indentRight?: number;
+            indentFirstLine?: number;
+            hangingIndent?: boolean;
+        };
+    };
     indentRight?: number;
     keepLines?: boolean;
     keepNext?: boolean;
@@ -1550,6 +1602,9 @@ export interface Theme {
     };
     name?: string;
 }
+
+// @public
+export type TrackedChangeContent = Run | Hyperlink | Insertion | Deletion | MoveFrom | MoveTo;
 
 // @public
 export interface TrackedChangeInfo {
