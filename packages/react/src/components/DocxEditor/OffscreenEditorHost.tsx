@@ -384,13 +384,19 @@ export const OffscreenEditorHost = memo(
     //
     // Portal to document.body (not the React `document` prop) so focus()/
     // scrollIntoView on the off-screen PM cannot scroll the paged scroller.
+    // Do not touch `document` during SSR — Next/Remix still evaluate this
+    // render path on the server. Vue's `<Teleport to="body">` is already
+    // SSR-safe; returning null here matches that no-op until a DOM exists.
+    const portalRoot = typeof globalThis.document !== 'undefined' ? globalThis.document.body : null;
+    if (!portalRoot) return null;
+
     return createPortal(
       <div
         ref={hostRef}
         className="paged-editor__hidden-pm"
         style={{ ...OFFSCREEN, width: widthPx }}
       />,
-      globalThis.document.body
+      portalRoot
     );
   })
 );
