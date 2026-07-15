@@ -84,11 +84,11 @@ test.describe('Cursor-Only List Operations', () => {
   test('outdent list with cursor only (no selection)', async ({ page }) => {
     await editor.typeText('Outdentable item');
     await editor.toggleBulletList();
-    await editor.indent(); // First indent
+    await editor.indent(); // First indent — no caret move after this
 
-    // Move cursor (no selection)
-    await page.keyboard.press('Home');
-
+    // Decrease Indent must enable from the indent transaction alone.
+    // Do not press Home/arrows first: that refreshes selection and would
+    // mask a stale toolbar canOutdent after indent without caret movement.
     const levelAfterIndent = await page.evaluate(() => {
       const attrs = window.__DOCX_EDITOR_E2E__?.getParagraphAttrs?.(0);
       return (attrs?.numPr as { ilvl?: number } | null)?.ilvl ?? -1;
@@ -96,7 +96,7 @@ test.describe('Cursor-Only List Operations', () => {
     expect(levelAfterIndent).toBe(1);
     await expect(page.locator('[aria-label="Decrease Indent"]')).toBeEnabled();
 
-    // Outdent should work without selection — via toolbar, not Shift+Tab
+    // Outdent via toolbar click only — no Shift+Tab fallback
     await editor.outdent();
 
     const levelAfterOutdent = await page.evaluate(() => {
@@ -244,12 +244,10 @@ test.describe('Cursor-Only Indentation Operations', () => {
     // Outdent button is now enabled for paragraph indentation via hasIndent prop
     await editor.typeText('Outdent test');
 
-    // Indent first
+    // Indent first — no caret move after this
     await editor.indent();
 
-    // Move cursor (no selection)
-    await page.keyboard.press('Home');
-
+    // Decrease Indent must enable from the indent transaction alone (no Home).
     const paragraph = page.locator('.paged-editor__hidden-pm .ProseMirror p').first();
     const marginAfterIndent = await paragraph.evaluate((el) => {
       return window.getComputedStyle(el).marginLeft;
@@ -257,7 +255,7 @@ test.describe('Cursor-Only Indentation Operations', () => {
     expect(marginAfterIndent).not.toBe('0px');
     await expect(page.locator('[aria-label="Decrease Indent"]')).toBeEnabled();
 
-    // Outdent should work without selection — via toolbar, not Shift+Tab
+    // Outdent via toolbar click only — no Shift+Tab fallback
     await editor.outdent();
 
     const marginAfterOutdent = await paragraph.evaluate((el) => {
