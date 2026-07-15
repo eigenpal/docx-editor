@@ -37,9 +37,10 @@ async function readCaretAlignment(page: Page) {
 }
 
 test('Vue: caret follows a table cell across a page break (#763)', async ({ page }) => {
-  await page.goto('http://localhost:5174/?e2e=1');
+  // Boot empty — this spec builds its own multipage table and must not race the
+  // demo app's async sample.docx fetch (which can clobber a mid-flight upload).
+  await page.goto('http://localhost:5174/?e2e=1&empty=1');
   await page.locator('.docx-editor-vue').waitFor();
-  await page.locator('input[type="file"]').first().setInputFiles('e2e/fixtures/demo.docx');
   await page.waitForSelector('[data-page-number]');
   await expect
     .poll(
@@ -48,7 +49,7 @@ test('Vue: caret follows a table cell across a page break (#763)', async ({ page
           const view = (
             window as unknown as { __DOCX_EDITOR_E2E__?: { getView?: () => any } }
           ).__DOCX_EDITOR_E2E__?.getView?.();
-          return view?.state.doc.textContent.includes('Demonstration of DOCX support');
+          return view != null;
         }),
       { timeout: 15000 }
     )

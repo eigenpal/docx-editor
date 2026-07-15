@@ -157,6 +157,10 @@ const currentDocument = ref<Document | null>(null);
 const fileName = ref('sample.docx');
 const status = ref('');
 const colorMode = ref<'light' | 'dark'>('light');
+// Set once the user starts their own document (New / open a file). The demo
+// fixture fetch below resolves asynchronously and must NOT clobber that
+// choice if it lands afterwards — mirrors examples/vite/src/App.tsx.
+let userStartedOwnDoc = false;
 
 // E2E hook: ?customFonts=1 wires a custom-font registration against the
 // bundled fixture so the Vue Playwright suite can verify the `fonts` prop.
@@ -612,9 +616,11 @@ onMounted(async () => {
   try {
     const res = await fetch(`${import.meta.env.BASE_URL}sample.docx`);
     const buffer = await res.arrayBuffer();
+    if (userStartedOwnDoc) return; // user already opened/New'd
     documentBuffer.value = buffer;
     fileName.value = 'sample.docx';
   } catch {
+    if (userStartedOwnDoc) return;
     currentDocument.value = createEmptyDocument();
     fileName.value = 'Untitled.docx';
   }
@@ -629,6 +635,7 @@ function handleFileSelect(event: Event) {
   const file = input.files?.[0];
   if (!file) return;
 
+  userStartedOwnDoc = true;
   status.value = 'Loading...';
   file
     .arrayBuffer()
@@ -644,6 +651,7 @@ function handleFileSelect(event: Event) {
 }
 
 function handleNew() {
+  userStartedOwnDoc = true;
   documentBuffer.value = null;
   currentDocument.value = createEmptyDocument();
   fileName.value = 'Untitled.docx';
@@ -693,9 +701,11 @@ function handleDocumentChange(doc: Document) {
     };
     hooks.__docxVueLastEmittedDocument = doc;
     hooks.__docxVueSetControlledDocument = (next) => {
+      userStartedOwnDoc = true;
       currentDocument.value = next;
     };
     hooks.__docxVueSetDocumentBuffer = (next) => {
+      userStartedOwnDoc = true;
       currentDocument.value = null;
       documentBuffer.value = next;
     };
