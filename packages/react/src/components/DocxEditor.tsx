@@ -1578,8 +1578,8 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
   // threads as the cursor sweeps through commented text.
   const handlePagedSelectionChange = useCallback(() => {
     const view = pagedEditorRef.current?.getView();
+    // View can be briefly null during layout teardown — don't wipe toolbar list/indent state.
     if (!view) {
-      handleSelectionChange(null);
       return;
     }
     // Keep pmState in lockstep with selection/stored-marks so undo depth and
