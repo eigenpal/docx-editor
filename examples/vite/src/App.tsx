@@ -252,14 +252,16 @@ export function App() {
     if (googleFontName) void loadFont(googleFontName);
   }, [googleFontName]);
 
-  // E2E opt-in: ?e2e=1 in URL, MODE=test, or VITE_DOCX_EDITOR_E2E=1. Gates the
-  // Playwright debug hooks below. By default E2E still loads the demo fixture
-  // (so existing tests are unaffected); ?empty=1 boots from an empty document
-  // instead, giving tests that build their own content a deterministic start
-  // that doesn't race the demo fetch.
-  const { isE2E, e2eBootEmpty, e2eExternalContent } = useMemo(() => {
+  // E2E: ?e2e=1 (or MODE=test / VITE_DOCX_EDITOR_E2E=1). ?empty=1 boots empty;
+  // ?loading=1 holds DocxEditor on real loading chrome for visual regression.
+  const { isE2E, e2eBootEmpty, e2eExternalContent, e2eForceLoading } = useMemo(() => {
     if (typeof window === 'undefined')
-      return { isE2E: false, e2eBootEmpty: false, e2eExternalContent: false };
+      return {
+        isE2E: false,
+        e2eBootEmpty: false,
+        e2eExternalContent: false,
+        e2eForceLoading: false,
+      };
     const params = new URLSearchParams(window.location.search);
     const env = import.meta.env;
     const e2e =
@@ -267,12 +269,18 @@ export function App() {
     return {
       isE2E: e2e,
       e2eBootEmpty: e2e && params.get('empty') === '1',
-      // Mounts <DocxEditor document={parsed} externalContent /> so e2e can
-      // verify headers/styles render from `document` even when the body PM
-      // is populated externally (e.g. ySyncPlugin).
+      // externalContent: headers/styles from `document` while body PM is external.
       e2eExternalContent: e2e && params.get('externalContent') === '1',
+      e2eForceLoading: e2e && params.get('loading') === '1',
     };
   }, []);
+
+  // Sticky hold survives Strict Mode teardown of __DOCX_EDITOR_E2E__.
+  if (typeof window !== 'undefined' && e2eForceLoading) {
+    (
+      window as Window & { __DOCX_EDITOR_E2E_HOLD_LOADING__?: boolean }
+    ).__DOCX_EDITOR_E2E_HOLD_LOADING__ = true;
+  }
 
   const { zoom: autoZoom, isMobile } = useResponsiveLayout();
 
@@ -281,6 +289,8 @@ export function App() {
     // this leaks an internal API into the public demo at docx-editor.dev.
     if (!isE2E) return;
     window.__DOCX_EDITOR_E2E__ = {
+      // ?loading=1 — pin isLoading after buffer arrives (see useDocumentLoader).
+      holdDocumentLoad: e2eForceLoading,
       // Raw body EditorView — lets specs build precise PM states (e.g. a line
       // with mixed font sizes) without driving the toolbar UI.
       getView: () => editorRef.current?.getEditorRef()?.getView?.() ?? null,
@@ -705,7 +715,7 @@ export function App() {
     return () => {
       delete window.__DOCX_EDITOR_E2E__;
     };
-  }, [isE2E, randomAuthor]);
+  }, [isE2E, e2eForceLoading, randomAuthor]);
 
   // Set once the user starts their own document (New / open a file). The demo
   // fixture fetch below resolves asynchronously and must NOT clobber that
@@ -730,6 +740,7 @@ export function App() {
       if (e2eExternalContent) setDocVersion((v) => v + 1);
       return;
     }
+    // ?loading=1 fetches sample.docx into the real loading branch; hold pins parse.
     fetch(`${import.meta.env.BASE_URL}sample.docx`)
       .then((res) => res.arrayBuffer())
       .then((buffer) => {
@@ -739,10 +750,16 @@ export function App() {
       })
       .catch(() => {
         if (userStartedOwnDocRef.current) return;
+        // Need a buffer to enter isLoading when hold is on.
+        if (e2eForceLoading) {
+          setDocumentBuffer(new ArrayBuffer(1));
+          setFileName('sample.docx');
+          return;
+        }
         setCurrentDocument(createEmptyDocument());
         setFileName('Untitled.docx');
       });
-  }, [e2eBootEmpty, e2eExternalContent]);
+  }, [e2eBootEmpty, e2eExternalContent, e2eForceLoading]);
 
   const handleNewDocument = useCallback(() => {
     userStartedOwnDocRef.current = true;
