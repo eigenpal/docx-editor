@@ -154,7 +154,7 @@ export const DEFAULT_WATERMARK_PRESETS: readonly string[];
 
 // @public
 export interface Deletion {
-    content: TrackedChangeContent[];
+    content: (Run | Hyperlink)[];
     info: TrackedChangeInfo;
     // (undocumented)
     type: 'deletion';
@@ -502,7 +502,7 @@ export interface InlineSdt {
 
 // @public
 export interface Insertion {
-    content: TrackedChangeContent[];
+    content: (Run | Hyperlink)[];
     info: TrackedChangeInfo;
     // (undocumented)
     type: 'insertion';
@@ -580,7 +580,7 @@ export interface MediaFile {
 
 // @public
 export interface MoveFrom {
-    content: TrackedChangeContent[];
+    content: (Run | Hyperlink)[];
     info: TrackedChangeInfo;
     // (undocumented)
     type: 'moveFrom';
@@ -606,7 +606,7 @@ export interface MoveFromRangeStart {
 
 // @public
 export interface MoveTo {
-    content: TrackedChangeContent[];
+    content: (Run | Hyperlink)[];
     info: TrackedChangeInfo;
     // (undocumented)
     type: 'moveTo';
@@ -730,58 +730,6 @@ export interface ParagraphFormatting {
     hangingIndent?: boolean;
     indentFirstLine?: number;
     indentLeft?: number;
-    // @internal
-    _indentProvenance?: {
-        source?: {
-            left?: string;
-            start?: string;
-            right?: string;
-            end?: string;
-            firstLine?: string;
-            hanging?: string;
-        };
-        sourceValues?: {
-            indentLeft?: number;
-            indentRight?: number;
-            indentFirstLine?: number;
-            hangingIndent?: boolean;
-        };
-        resolvedNumbering?: {
-            sourceIdentity: {
-                styleId?: string;
-                numPr?: {
-                    numId?: number;
-                    ilvl?: number;
-                };
-                numPrFromStyle?: {
-                    numId?: number;
-                    ilvl?: number;
-                };
-                indentLeft?: number;
-                indentRight?: number;
-                indentFirstLine?: number;
-                hangingIndent?: boolean;
-                sourceIndent?: {
-                    left?: string;
-                    start?: string;
-                    right?: string;
-                    end?: string;
-                    firstLine?: string;
-                    hanging?: string;
-                };
-            };
-            indentLeft?: number;
-            indentRight?: number;
-            indentFirstLine?: number;
-            hangingIndent?: boolean;
-        };
-        baseline?: {
-            indentLeft?: number;
-            indentRight?: number;
-            indentFirstLine?: number;
-            hangingIndent?: boolean;
-        };
-    };
     indentRight?: number;
     keepLines?: boolean;
     keepNext?: boolean;
@@ -1457,9 +1405,6 @@ export interface ThemeFontScheme {
     majorFont?: ThemeFont;
     minorFont?: ThemeFont;
 }
-
-// @public
-export type TrackedChangeContent = Run | Hyperlink | Insertion | Deletion | MoveFrom | MoveTo;
 
 // @public
 export interface TrackedChangeInfo {

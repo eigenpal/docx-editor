@@ -9,12 +9,7 @@ import { Page, Locator, expect } from '@playwright/test';
 import * as path from 'path';
 import { fileURLToPath } from 'url';
 import { placeCursorInBodyPmText, selectBodyPmTextRange } from './body-pm-selection';
-import {
-  addRowBelowViaE2eHook,
-  countBodyPmTableRows,
-  focusBodyPmTableCell,
-  insertTableViaE2eHook,
-} from './table-pm';
+import { focusBodyPmTableCell, insertTableViaE2eHook } from './table-pm';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -269,7 +264,8 @@ export class EditorPage {
   }
 
   /**
-   * Press Tab
+   * Press Tab — exercises the real keymap (cell nav / add-row / list indent).
+   * Does not call table commands directly; failures here mean the keymap is broken.
    */
   async pressTab(): Promise<void> {
     const inBodyPm = await this.page.evaluate(
@@ -278,12 +274,7 @@ export class EditorPage {
     if (!inBodyPm) {
       await this.focus();
     }
-    const rowsBefore = await countBodyPmTableRows(this.page);
     await this.page.keyboard.press('Tab');
-    // Fallback when ListExtension/insertTab still swallows last-cell Tab.
-    if (rowsBefore === 1 && (await countBodyPmTableRows(this.page)) === 1) {
-      await addRowBelowViaE2eHook(this.page);
-    }
   }
 
   /**
@@ -800,27 +791,27 @@ export class EditorPage {
   }
 
   /**
-   * Indent paragraph/list item
+   * Indent paragraph/list item via the toolbar Increase Indent control.
    */
   async indent(): Promise<void> {
     // Prefer view.focus() over contenteditable.focus() — the latter can reset
     // the caret to the start of the document (wrong list item for outdent).
     await this.page.evaluate(() => window.__DOCX_EDITOR_E2E__?.getView?.()?.focus());
-    await this.toolbar.locator('[aria-label="Increase Indent"]').click();
+    const increase = this.toolbar.locator('[aria-label="Increase Indent"]');
+    await expect(increase).toBeEnabled({ timeout: 5000 });
+    await increase.click();
   }
 
   /**
-   * Outdent paragraph/list item
+   * Outdent paragraph/list item via the toolbar Decrease Indent control.
+   * Waits for canOutdent to enable — does not fall back to Shift+Tab (that
+   * would mask toolbar-state regressions).
    */
   async outdent(): Promise<void> {
     await this.page.evaluate(() => window.__DOCX_EDITOR_E2E__?.getView?.()?.focus());
     const decrease = this.toolbar.locator('[aria-label="Decrease Indent"]');
-    if (await decrease.isEnabled()) {
-      await decrease.click();
-      return;
-    }
-    // List outdent via keymap when toolbar canOutdent is stale (level UI lag).
-    await this.page.keyboard.press('Shift+Tab');
+    await expect(decrease).toBeEnabled({ timeout: 5000 });
+    await decrease.click();
   }
 
   // ============================================================================
