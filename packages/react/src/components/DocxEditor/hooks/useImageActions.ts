@@ -70,7 +70,7 @@ export function useImageActions({
       let opts: { initialPositionEmu?: { horizontalEmu: number; verticalEmu: number } } | undefined;
       if (node.attrs.wrapType === 'inline' && target !== 'inline') {
         const inlineEl = window.document.querySelector(
-          `.layout-run-image[data-doc-from="${pos}"]`
+          `.layout-run-image[data-doc-from="${pos}"], .layout-run-image-wrapper[data-doc-from="${pos}"]`
         ) as HTMLElement | null;
         const captured = inlineEl ? captureInlinePositionEmu(inlineEl, zoom) : undefined;
         if (captured) opts = { initialPositionEmu: captured };

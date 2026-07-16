@@ -246,10 +246,39 @@ test.describe('Tracked paragraph-mark revisions (issue #614)', () => {
     const glyph = insMark.locator('.layout-revision-pmark-glyph').first();
     await expect(glyph).toBeVisible();
     await expect(glyph).toHaveText('¶');
+    await expect(glyph).toHaveCSS('color', 'rgb(46, 125, 50)');
     // Glyph's parent must be a .layout-line (the last line of the fragment),
     // NOT the fragment itself.
     const parentClass = await glyph.evaluate((el) => el.parentElement?.className ?? '');
     expect(parentClass).toContain('layout-line');
+
+    const insertionBars = page.locator(
+      '.layout-page-content > .layout-revision-bars .layout-revision-change-bar.layout-revision-ins'
+    );
+    await expect(insertionBars).not.toHaveCount(0);
+  });
+
+  test('Painted deleted paragraph boundaries show the deleted pilcrow styling', async ({
+    page,
+  }) => {
+    await editor.typeText('Hello');
+    await editor.pressEnter();
+    await editor.typeText('world');
+    await page.keyboard.press('Home');
+
+    expect(await setSuggestionMode(page, true, 'Jane')).toBe(true);
+    await page.keyboard.press('Backspace');
+
+    const delMark = page
+      .locator('.layout-paragraph.layout-revision-pmark.layout-revision-del')
+      .first();
+    await expect(delMark).toBeVisible();
+
+    const glyph = delMark.locator('.layout-revision-pmark-glyph').first();
+    await expect(glyph).toBeVisible();
+    await expect(glyph).toHaveText('¶');
+    await expect(glyph).toHaveCSS('color', 'rgb(198, 40, 40)');
+    await expect(glyph).toHaveCSS('text-decoration-line', 'line-through');
   });
 
   test('acceptChangeById on an unknown revisionId is a no-op (returns false)', async ({ page }) => {
@@ -356,6 +385,25 @@ test.describe('Tracked paragraph-mark revisions (issue #614)', () => {
     await expect(paintedTracked.first()).toBeVisible();
     expect(await paintedTracked.first().getAttribute('data-revision-id')).toBe('77');
 
+    const trackedTable = page.locator('.layout-table.ep-revision-table[data-revision-id="77"]');
+    await expect(trackedTable).toBeVisible();
+    const tableBar = page.locator(
+      '.layout-page-content > .layout-revision-bars .layout-revision-change-bar.layout-revision-ins[data-revision-id="77"]'
+    );
+    await expect(tableBar).toHaveCount(1);
+    const trackedTableBox = await trackedTable.boundingBox();
+    const tableBarBox = await tableBar.first().boundingBox();
+    expect(trackedTableBox).not.toBeNull();
+    expect(tableBarBox).not.toBeNull();
+    expect(Math.abs((tableBarBox?.y ?? 0) - (trackedTableBox?.y ?? 0))).toBeLessThanOrEqual(1);
+    expect(
+      Math.abs(
+        (tableBarBox?.y ?? 0) +
+          (tableBarBox?.height ?? 0) -
+          ((trackedTableBox?.y ?? 0) + (trackedTableBox?.height ?? 0))
+      )
+    ).toBeLessThanOrEqual(1);
+
     // Accept clears the marker (Phase 2 round-trip semantic; full row-remove
     // semantics come with suggesting-aware commands).
     expect(await acceptById(page, 77)).toBe(true);
@@ -388,6 +436,30 @@ test.describe('Tracked paragraph-mark revisions (issue #614)', () => {
     const revId = parseInt(revIdStr ?? '', 10);
     expect(Number.isFinite(revId)).toBe(true);
     expect(await trIns.getAttribute('data-revision-author')).toBe('Jane');
+
+    await expect(
+      page.locator(`.layout-table.ep-revision-table[data-revision-id="${revId}"]`)
+    ).toHaveCount(0);
+    const rowBar = page.locator(
+      `.layout-page-content > .layout-revision-bars .layout-revision-change-bar.layout-revision-ins[data-revision-id="${revId}"]`
+    );
+    await expect(rowBar).toHaveCount(1);
+    const trackedRow = page.locator(
+      `.layout-table-row.ep-revision-row[data-revision-id="${revId}"]`
+    );
+    await expect(trackedRow).toBeVisible();
+    const trackedRowBox = await trackedRow.boundingBox();
+    const rowBarBox = await rowBar.first().boundingBox();
+    expect(trackedRowBox).not.toBeNull();
+    expect(rowBarBox).not.toBeNull();
+    expect(Math.abs((rowBarBox?.y ?? 0) - (trackedRowBox?.y ?? 0))).toBeLessThanOrEqual(1);
+    expect(
+      Math.abs(
+        (rowBarBox?.y ?? 0) +
+          (rowBarBox?.height ?? 0) -
+          ((trackedRowBox?.y ?? 0) + (trackedRowBox?.height ?? 0))
+      )
+    ).toBeLessThanOrEqual(1);
 
     // Accept clears the marker; the row stays.
     expect(await acceptById(page, revId)).toBe(true);
