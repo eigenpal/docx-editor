@@ -8,7 +8,7 @@ Comments anchor discussion to a range of text. The editor reads the document's e
 
 ## The comment model
 
-A `Comment` (exported from `@eigenpal/docx-editor-core`) is:
+A `Comment` (exported from `@docx-editor.dev/core`) is:
 
 ```ts
 interface Comment {
@@ -44,7 +44,7 @@ When `commentsSidebarOpen` is set, it becomes the source of truth: the editor re
 
 ```tsx
 import { useState } from "react";
-import { DocxEditor } from "@eigenpal/docx-editor-react";
+import { DocxEditor } from "@docx-editor.dev/react";
 
 export function ReviewEditor({ buf }: { buf: ArrayBuffer }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -75,8 +75,8 @@ By default the editor owns comment state. To mirror it into your own store (data
 
 ```tsx
 import { useState } from "react";
-import { DocxEditor } from "@eigenpal/docx-editor-react";
-import type { Comment } from "@eigenpal/docx-editor-core";
+import { DocxEditor } from "@docx-editor.dev/react";
+import type { Comment } from "@docx-editor.dev/core";
 
 export function ReviewEditor({ buf, author }: { buf: ArrayBuffer; author: string }) {
   const [comments, setComments] = useState<Comment[]>([]);
@@ -112,7 +112,7 @@ For syncing comments across clients with Yjs, see [Realtime collaboration](/docs
 
 ```tsx
 import { useRef } from "react";
-import { DocxEditor, type DocxEditorRef } from "@eigenpal/docx-editor-react";
+import { DocxEditor, type DocxEditorRef } from "@docx-editor.dev/react";
 
 const ref = useRef<DocxEditorRef>(null);
 

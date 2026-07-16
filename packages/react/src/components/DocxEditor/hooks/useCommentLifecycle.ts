@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import type { EditorState as PMEditorState } from 'prosemirror-state';
-import type { Comment } from '@eigenpal/docx-editor-core/types/content';
+import type { Comment } from '@docx-editor.dev/core/types/content';
 
 /**
  * Small effects that link the comment-management state to the document

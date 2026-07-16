@@ -42,7 +42,7 @@
 
 <script setup lang="ts">
 import { computed } from 'vue';
-import type { HeadingInfo } from '@eigenpal/docx-editor-core/utils/headingCollector';
+import type { HeadingInfo } from '@docx-editor.dev/core/utils/headingCollector';
 import MaterialSymbol from './ui/MaterialSymbol.vue';
 
 const props = withDefaults(

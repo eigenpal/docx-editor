@@ -15,8 +15,8 @@ import React, {
   useSyncExternalStore,
 } from 'react';
 import type { ReactNode, ErrorInfo, CSSProperties } from 'react';
-import { ErrorManager } from '@eigenpal/docx-editor-core';
-import type { ErrorSeverity, ErrorNotification } from '@eigenpal/docx-editor-core';
+import { ErrorManager } from '@docx-editor.dev/core';
+import type { ErrorSeverity, ErrorNotification } from '@docx-editor.dev/core';
 import { useTranslation } from '../i18n';
 
 // Re-export for backwards compat

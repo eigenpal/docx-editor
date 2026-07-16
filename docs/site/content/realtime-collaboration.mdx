@@ -78,7 +78,7 @@ The hook returns `null` until the provider is ready; guard the editor render on 
 ## Step 3. Pass it to DocxEditor
 
 ```tsx
-import { DocxEditor, createEmptyDocument } from '@eigenpal/docx-editor-react';
+import { DocxEditor, createEmptyDocument } from '@docx-editor.dev/react';
 import { useCollaboration } from './useCollaboration';
 
 export function CollaborativeEditor({ room, user }) {
@@ -114,7 +114,7 @@ Two small changes to Step 2's hook first: keep the `Y.Doc` in the state object (
 // useSharedComments.ts
 import { useCallback, useEffect, useState } from 'react';
 import type * as Y from 'yjs';
-import type { Comment } from '@eigenpal/docx-editor-core';
+import type { Comment } from '@docx-editor.dev/core';
 
 export function useSharedComments(ydoc: Y.Doc | null) {
   const [comments, setCommentsState] = useState<Comment[]>([]);

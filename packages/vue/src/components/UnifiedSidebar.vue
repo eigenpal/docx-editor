@@ -79,7 +79,7 @@
 
 <script setup lang="ts">
 import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue';
-import type { Comment } from '@eigenpal/docx-editor-core/types/content';
+import type { Comment } from '@docx-editor.dev/core/types/content';
 import type { TrackedChangeEntry } from './sidebar/sidebarUtils';
 import CommentCard from './sidebar/CommentCard.vue';
 import ResolvedCommentMarker from './sidebar/ResolvedCommentMarker.vue';
@@ -91,7 +91,7 @@ import { resolveItemPositions } from './sidebar/resolveItemPositions';
 import {
   SIDEBAR_DOCUMENT_SHIFT,
   SIDEBAR_WIDTH,
-} from '@eigenpal/docx-editor-core/utils/sidebarConstants';
+} from '@docx-editor.dev/core/utils/sidebarConstants';
 
 const props = defineProps<{
   isOpen: boolean;

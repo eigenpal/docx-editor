@@ -31,7 +31,7 @@ One tool round: the client sends the user message, the model streams a tool call
 Install the editor, the agent toolkit, and the AI SDK:
 
 ```bash
-npm install @eigenpal/docx-editor-react @eigenpal/docx-editor-agents \
+npm install @docx-editor.dev/react @docx-editor.dev/agents \
             ai @ai-sdk/react @ai-sdk/openai
 ```
 
@@ -49,8 +49,8 @@ Set `OPENAI_API_KEY` in your environment (or swap `@ai-sdk/openai` for any AI SD
 // app/api/chat/route.ts
 import { streamText, convertToModelMessages, stepCountIs, type UIMessage } from 'ai';
 import { openai } from '@ai-sdk/openai';
-import { type AgentContextSnapshot } from '@eigenpal/docx-editor-agents/server';
-import { getAiSdkTools } from '@eigenpal/docx-editor-agents/ai-sdk/server';
+import { type AgentContextSnapshot } from '@docx-editor.dev/agents/server';
+import { getAiSdkTools } from '@docx-editor.dev/agents/ai-sdk/server';
 
 // No `execute` on these tools: the AI SDK forwards every call to the
 // client's useChat({ onToolCall }), which runs it against the live editor.
@@ -98,20 +98,20 @@ import { useMemo, useRef, useState } from 'react';
 import dynamic from 'next/dynamic';
 import { useChat } from '@ai-sdk/react';
 import { DefaultChatTransport, lastAssistantMessageIsCompleteWithToolCalls } from 'ai';
-import { type DocxEditorRef } from '@eigenpal/docx-editor-react';
-import '@eigenpal/docx-editor-react/styles.css';
+import { type DocxEditorRef } from '@docx-editor.dev/react';
+import '@docx-editor.dev/react/styles.css';
 import {
   AgentChatLog,
   AgentComposer,
   useDocxAgentTools,
   getToolDisplayName,
   type EditorRefLike,
-} from '@eigenpal/docx-editor-agents/react';
-import { toAgentMessages } from '@eigenpal/docx-editor-agents/ai-sdk/react';
+} from '@docx-editor.dev/agents/react';
+import { toAgentMessages } from '@docx-editor.dev/agents/ai-sdk/react';
 
 // Client-only import; see /docs/1.x/installation for the SSR recipe.
 const DocxEditor = dynamic(
-  () => import('@eigenpal/docx-editor-react').then((m) => ({ default: m.DocxEditor })),
+  () => import('@docx-editor.dev/react').then((m) => ({ default: m.DocxEditor })),
   { ssr: false }
 );
 
@@ -263,7 +263,7 @@ const tools = Object.fromEntries(
 Custom tools are added after the built-ins and are not filtered by `include` or `exclude`. A custom tool with a built-in's name replaces the built-in:
 
 ```tsx
-import type { AgentToolDefinition } from '@eigenpal/docx-editor-agents/react';
+import type { AgentToolDefinition } from '@docx-editor.dev/agents/react';
 
 const fetchClause: AgentToolDefinition<{ name: string }> = {
   name: 'fetch_clause_template',
@@ -286,8 +286,8 @@ import {
   AgentPanel,
   AgentChatLog,
   AgentComposer,
-} from '@eigenpal/docx-editor-agents/vue';
-import { toAgentMessages } from '@eigenpal/docx-editor-agents/ai-sdk/vue';
+} from '@docx-editor.dev/agents/vue';
+import { toAgentMessages } from '@docx-editor.dev/agents/ai-sdk/vue';
 
 const { executeToolCall, toolSchemas } = useAgentBridge({ editorRef, author: 'Assistant' });
 ```

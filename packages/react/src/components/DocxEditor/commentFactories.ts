@@ -13,8 +13,8 @@ export {
   PENDING_COMMENT_ID,
   createCommentIdAllocator,
   type CommentIdAllocator,
-} from '@eigenpal/docx-editor-core/prosemirror/commentIdAllocator';
-export { createComment } from '@eigenpal/docx-editor-core/prosemirror/commentOps';
+} from '@docx-editor.dev/core/prosemirror/commentIdAllocator';
+export { createComment } from '@docx-editor.dev/core/prosemirror/commentOps';
 
 /** Stable empty Map used as the initial anchor-positions state. */
 export const EMPTY_ANCHOR_POSITIONS = new Map<string, number>();

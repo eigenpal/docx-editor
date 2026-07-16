@@ -15,16 +15,16 @@ import {
   type TableContextInfo,
   isPositionInsideTableOfContents,
   updateTableOfContents,
-} from '@eigenpal/docx-editor-core/prosemirror';
-import type { PageLayout } from '@eigenpal/docx-editor-core/pagination-model';
+} from '@docx-editor.dev/core/prosemirror';
+import type { PageLayout } from '@docx-editor.dev/core/pagination-model';
 import {
   setImageWrapType,
   type ImageLayoutTarget,
-} from '@eigenpal/docx-editor-core/prosemirror/commands';
-import type { WrapType } from '@eigenpal/docx-editor-core/docx/wrapTypes';
-import { en as defaultLocale } from '@eigenpal/docx-editor-i18n';
+} from '@docx-editor.dev/core/prosemirror/commands';
+import type { WrapType } from '@docx-editor.dev/core/docx/wrapTypes';
+import { en as defaultLocale } from '@docx-editor.dev/i18n';
 import { useTranslation } from '../../../i18n';
-import type { Translations } from '@eigenpal/docx-editor-i18n';
+import type { Translations } from '@docx-editor.dev/i18n';
 import { useImageContextMenu } from '../../ImageContextMenu';
 import { type TextContextAction, type TextContextMenuItem } from '../../TextContextMenu';
 import { findSelectionYPosition } from '../internals/pmAnchors';

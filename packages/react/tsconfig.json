@@ -20,15 +20,15 @@
     "baseUrl": ".",
     "paths": {
       "@/*": ["./src/*"],
-      "@eigenpal/docx-editor-core": ["../core/src/core.ts"],
-      "@eigenpal/docx-editor-core/headless": ["../core/src/headless.ts"],
-      "@eigenpal/docx-editor-core/core-plugins": ["../core/src/core-plugins/index.ts"],
-      "@eigenpal/docx-editor-core/mcp": ["../core/src/mcp/index.ts"],
-      "@eigenpal/docx-editor-core/plugin-api/*": ["../core/src/plugin-api/*"],
-      "@eigenpal/docx-editor-core/*": ["../core/src/*"],
-      "@eigenpal/docx-editor-agents/react": ["../agents/src/react.ts"],
-      "@eigenpal/docx-editor-agents/bridge": ["../agents/src/bridge.ts"],
-      "@eigenpal/docx-editor-i18n": ["../i18n/src/index.ts"]
+      "@docx-editor.dev/core": ["../core/src/core.ts"],
+      "@docx-editor.dev/core/headless": ["../core/src/headless.ts"],
+      "@docx-editor.dev/core/core-plugins": ["../core/src/core-plugins/index.ts"],
+      "@docx-editor.dev/core/mcp": ["../core/src/mcp/index.ts"],
+      "@docx-editor.dev/core/plugin-api/*": ["../core/src/plugin-api/*"],
+      "@docx-editor.dev/core/*": ["../core/src/*"],
+      "@docx-editor.dev/agents/react": ["../agents/src/react.ts"],
+      "@docx-editor.dev/agents/bridge": ["../agents/src/bridge.ts"],
+      "@docx-editor.dev/i18n": ["../i18n/src/index.ts"]
     }
   },
   "include": ["src"],

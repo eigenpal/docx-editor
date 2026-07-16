@@ -12,8 +12,8 @@ Drop-in components for the common patterns. Each is self-contained; swap the dat
 ```vue
 <script setup lang="ts">
 import { ref, watchEffect } from 'vue';
-import { DocxEditor } from '@eigenpal/docx-editor-vue';
-import '@eigenpal/docx-editor-vue/styles.css';
+import { DocxEditor } from '@docx-editor.dev/vue';
+import '@docx-editor.dev/vue/styles.css';
 
 const props = defineProps<{ url: string }>();
 const buf = ref<ArrayBuffer | null>(null);
@@ -37,7 +37,7 @@ watchEffect(async () => {
 ```vue
 <script setup lang="ts">
 import { ref } from 'vue';
-import { DocxEditor } from '@eigenpal/docx-editor-vue';
+import { DocxEditor } from '@docx-editor.dev/vue';
 
 const file = ref<File | null>(null);
 
@@ -59,7 +59,7 @@ Debounce `save()` on the template ref to persist to a server:
 ```vue
 <script setup lang="ts">
 import { useTemplateRef } from 'vue';
-import { DocxEditor, type DocxEditorRef } from '@eigenpal/docx-editor-vue';
+import { DocxEditor, type DocxEditorRef } from '@docx-editor.dev/vue';
 
 const props = defineProps<{ docId: string }>();
 const editor = useTemplateRef<DocxEditorRef>('editor');
@@ -79,7 +79,7 @@ function onChange() {
 </template>
 ```
 
-For localStorage autosave with crash recovery, use the `useAutoSave` composable from `@eigenpal/docx-editor-vue/composables` instead.
+For localStorage autosave with crash recovery, use the `useAutoSave` composable from `@docx-editor.dev/vue/composables` instead.
 
 ## Persisting comments
 
@@ -87,8 +87,8 @@ The Vue adapter has no controlled `comments` prop (React-only; see [Vue props](/
 
 ```vue
 <script setup lang="ts">
-import { DocxEditor } from '@eigenpal/docx-editor-vue';
-import type { Comment } from '@eigenpal/docx-editor-core';
+import { DocxEditor } from '@docx-editor.dev/vue';
+import type { Comment } from '@docx-editor.dev/core';
 
 defineProps<{ buf: ArrayBuffer; author: string }>();
 
@@ -112,7 +112,7 @@ To create a comment from your own UI, call `editor.value?.addComment({ paraId, t
 
 ```vue
 <script setup lang="ts">
-import { DocxEditor } from '@eigenpal/docx-editor-vue';
+import { DocxEditor } from '@docx-editor.dev/vue';
 
 defineProps<{ buf: ArrayBuffer; reviewer: string }>();
 </script>
@@ -132,7 +132,7 @@ Edits wrap in revision markup and round-trip to Word's `<w:ins>` / `<w:del>`; si
 
 ```vue
 <script setup lang="ts">
-import { DocxEditor } from '@eigenpal/docx-editor-vue';
+import { DocxEditor } from '@docx-editor.dev/vue';
 
 defineProps<{ buf: ArrayBuffer }>();
 
@@ -161,7 +161,7 @@ The `/fonts/...` paths resolve against your site root (`public/` in Vite or a Nu
 
 ```vue
 <script setup lang="ts">
-import { DocxEditor } from '@eigenpal/docx-editor-vue';
+import { DocxEditor } from '@docx-editor.dev/vue';
 
 defineProps<{ buf: ArrayBuffer }>();
 </script>
@@ -189,8 +189,8 @@ Vue exposes the agent toolkit through the `useAgentBridge` composable. There is 
 ```vue
 <script setup lang="ts">
 import { useTemplateRef } from 'vue';
-import { DocxEditor, type DocxEditorRef } from '@eigenpal/docx-editor-vue';
-import { useAgentBridge } from '@eigenpal/docx-editor-agents/vue';
+import { DocxEditor, type DocxEditorRef } from '@docx-editor.dev/vue';
+import { useAgentBridge } from '@docx-editor.dev/agents/vue';
 
 defineProps<{ buf: ArrayBuffer }>();
 const editor = useTemplateRef<DocxEditorRef>('editor');
@@ -206,7 +206,7 @@ const { executeToolCall, toolSchemas } = useAgentBridge({
   <div class="layout">
     <DocxEditor ref="editor" :document-buffer="buf" />
     <!-- your chat pane: AgentChatLog / AgentComposer from
-         @eigenpal/docx-editor-agents/vue, or your own UI -->
+         @docx-editor.dev/agents/vue, or your own UI -->
   </div>
 </template>
 ```

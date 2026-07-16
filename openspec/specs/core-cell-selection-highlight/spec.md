@@ -8,7 +8,7 @@ TBD - created by archiving change unify-orchestration-tier1. Update Purpose afte
 
 ### Requirement: Cell-selection highlight available to both adapters
 
-`@eigenpal/docx-editor-core` SHALL expose `applyCellSelectionHighlight(container, state, options?)`, lifted from React's `internals/domSelection.ts`. It SHALL paint the `.layout-table-cell-selected` class on painted cells whose PM positions fall inside an active `CellSelection`, scoped by `options.scope` (`body` | `header` | `footer`). Both the React and Vue adapters SHALL call it.
+`@docx-editor.dev/core` SHALL expose `applyCellSelectionHighlight(container, state, options?)`, lifted from React's `internals/domSelection.ts`. It SHALL paint the `.layout-table-cell-selected` class on painted cells whose PM positions fall inside an active `CellSelection`, scoped by `options.scope` (`body` | `header` | `footer`). Both the React and Vue adapters SHALL call it.
 
 #### Scenario: React behavior preserved after lift
 

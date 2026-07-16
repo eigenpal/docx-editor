@@ -1,13 +1,13 @@
 /**
- * @eigenpal/docx-editor-vue/plugin-api
+ * @docx-editor.dev/vue/plugin-api
  *
  * Generic plugin interface and host component for integrating external
  * plugins with the Vue editor. Pairs with the framework-agnostic plugin
- * types exported from `@eigenpal/docx-editor-core/plugin-api`.
+ * types exported from `@docx-editor.dev/core/plugin-api`.
  *
  * @example
  * ```ts
- * import { PluginHost, type EditorPlugin } from '@eigenpal/docx-editor-vue/plugin-api';
+ * import { PluginHost, type EditorPlugin } from '@docx-editor.dev/vue/plugin-api';
  * ```
  *
  * @packageDocumentation

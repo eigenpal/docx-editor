@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { Comment } from '@eigenpal/docx-editor-core/types/content';
+import type { Comment } from '@docx-editor.dev/core/types/content';
 import type { PagedEditorRef } from '../PagedEditor';
 import { PENDING_COMMENT_ID } from '../commentFactories';
 

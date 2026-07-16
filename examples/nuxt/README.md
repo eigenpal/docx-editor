@@ -1,6 +1,6 @@
 # Nuxt example
 
-`@eigenpal/nuxt-docx-editor`, the Nuxt 3 & 4 module wrapping the Vue adapter.
+`@docx-editor.dev/nuxt`, the Nuxt 3 & 4 module wrapping the Vue adapter.
 Registering the module is the whole integration: it auto-imports an
 SSR-safe `<DocxEditor>` component and injects the editor stylesheet. No
 manual import, no `<ClientOnly>` wrapper.
@@ -22,7 +22,7 @@ Or from this directory: `bun run dev`.
 
 ```ts
 export default defineNuxtConfig({
-  modules: ['@eigenpal/nuxt-docx-editor'],
+  modules: ['@docx-editor.dev/nuxt'],
 });
 ```
 
@@ -32,7 +32,7 @@ client-only, so it never renders during SSR:
 ```vue
 <script setup lang="ts">
 import { ref } from 'vue';
-import { createEmptyDocument } from '@eigenpal/docx-editor-core';
+import { createEmptyDocument } from '@docx-editor.dev/core';
 
 const doc = ref(createEmptyDocument());
 </script>
@@ -52,7 +52,7 @@ const doc = ref(createEmptyDocument());
 ## Use it in your own Nuxt app
 
 ```bash
-npm install @eigenpal/nuxt-docx-editor @eigenpal/docx-editor-core
+npm install @docx-editor.dev/nuxt @docx-editor.dev/core
 ```
 
 Add the module to `nuxt.config.ts`. The module handles the client-only

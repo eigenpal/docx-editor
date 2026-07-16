@@ -9,7 +9,7 @@ seoTitle: 'DocxReviewer: headless DOCX review'
 
 ```ts
 import { readFile, writeFile } from 'node:fs/promises';
-import { DocxReviewer } from '@eigenpal/docx-editor-agents';
+import { DocxReviewer } from '@docx-editor.dev/agents';
 
 const buffer = await readFile('contract.docx');
 const reviewer = await DocxReviewer.fromBuffer(buffer, 'AI Reviewer');
@@ -151,7 +151,7 @@ const document = reviewer.toDocument(); // the mutated Document model
 `createReviewerBridge(reviewer)` wraps the reviewer in the same `EditorBridge` interface the live editor exposes. That means the [agent tools](/docs/1.x/agents/tools), `executeToolCall`, and the [MCP server](/docs/1.x/agents/mcp) all work against a static file:
 
 ```ts
-import { DocxReviewer, createReviewerBridge, executeToolCall } from '@eigenpal/docx-editor-agents';
+import { DocxReviewer, createReviewerBridge, executeToolCall } from '@docx-editor.dev/agents';
 
 const reviewer = await DocxReviewer.fromBuffer(buffer, 'AI Reviewer');
 const bridge = createReviewerBridge(reviewer);

@@ -6,12 +6,12 @@ order: 50
 seoTitle: 'AI agents for DOCX editing'
 ---
 
-<PackageStats name="@eigenpal/docx-editor-agents" />
+<PackageStats name="@docx-editor.dev/agents" />
 
-`@eigenpal/docx-editor-agents` lets a language model read and edit a Word document: pull out paragraphs, leave comments, suggest tracked changes, apply formatting. The same tools run in three places: a live editor in the browser, a headless reviewer on the server, or an MCP server. You point them at whatever model you already run; the tool definitions are plain JSON Schema, with adapters for the Vercel AI SDK, OpenAI-style function calling, React, and Vue.
+`@docx-editor.dev/agents` lets a language model read and edit a Word document: pull out paragraphs, leave comments, suggest tracked changes, apply formatting. The same tools run in three places: a live editor in the browser, a headless reviewer on the server, or an MCP server. You point them at whatever model you already run; the tool definitions are plain JSON Schema, with adapters for the Vercel AI SDK, OpenAI-style function calling, React, and Vue.
 
 ```bash
-npm install @eigenpal/docx-editor-agents
+npm install @docx-editor.dev/agents
 ```
 
 ## Integration shapes
@@ -30,7 +30,7 @@ Full walkthrough: [AI editing with the Vercel AI SDK](/docs/1.x/agents/ai-editin
 **2. Headless `DocxReviewer` on the server.** Parse a buffer, run a review, serialize the modified DOCX back. No DOM, no editor instance. Fits a queue worker, Lambda, or CI bot.
 
 ```ts
-import { DocxReviewer } from '@eigenpal/docx-editor-agents';
+import { DocxReviewer } from '@docx-editor.dev/agents';
 
 const reviewer = await DocxReviewer.fromBuffer(buffer, 'Reviewer');
 reviewer.addComment({ paragraphIndex: 5, text: 'This cap seems too low.' });
@@ -43,8 +43,8 @@ Reference: [DocxReviewer](/docs/1.x/agents/docx-reviewer).
 **3. MCP server.** Expose the tool catalog over JSON-RPC for any MCP-compatible client. Transport-agnostic core; you own auth, storage, and the transport.
 
 ```ts
-import { McpServer } from '@eigenpal/docx-editor-agents/mcp';
-import { createReviewerBridge } from '@eigenpal/docx-editor-agents';
+import { McpServer } from '@docx-editor.dev/agents/mcp';
+import { createReviewerBridge } from '@docx-editor.dev/agents';
 
 const server = new McpServer(createReviewerBridge(reviewer), {
   name: 'acme-review',
@@ -78,7 +78,7 @@ The pattern is locate-then-mutate, mirroring Word's JS API: locate tools return 
 
 | Subpath                        | Use when                                                                                  |
 | ------------------------------ | ----------------------------------------------------------------------------------------- |
-| `@eigenpal/docx-editor-agents` | `DocxReviewer`, `agentTools`, `getToolSchemas`, `executeToolCall`, `createReviewerBridge` |
+| `@docx-editor.dev/agents` | `DocxReviewer`, `agentTools`, `getToolSchemas`, `executeToolCall`, `createReviewerBridge` |
 | `/react`                       | `useDocxAgentTools`, `useAgentChat`, chat UI components                                   |
 | `/vue`                         | `useAgentBridge`, Vue chat UI components                                                  |
 | `/server`                      | Backend routes that need tool schemas without MCP                                         |

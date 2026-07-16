@@ -8,8 +8,8 @@ seoTitle: 'MCP server for DOCX review'
 `McpServer` exposes the [agent tools](/docs/1.x/agents/tools) over the Model Context Protocol. Use it when an MCP-compatible client should read, comment, or redline a DOCX through your host process.
 
 ```ts
-import { McpServer } from '@eigenpal/docx-editor-agents/mcp';
-import { DocxReviewer, createReviewerBridge } from '@eigenpal/docx-editor-agents';
+import { McpServer } from '@docx-editor.dev/agents/mcp';
+import { DocxReviewer, createReviewerBridge } from '@docx-editor.dev/agents';
 
 const reviewer = await DocxReviewer.fromBuffer(buffer, 'MCP Reviewer');
 const server = new McpServer(createReviewerBridge(reviewer), {
@@ -42,8 +42,8 @@ The host owns everything around the protocol: authentication, loading the right 
 
 ```ts
 import express from 'express';
-import { McpServer } from '@eigenpal/docx-editor-agents/mcp';
-import { DocxReviewer, createReviewerBridge } from '@eigenpal/docx-editor-agents';
+import { McpServer } from '@docx-editor.dev/agents/mcp';
+import { DocxReviewer, createReviewerBridge } from '@docx-editor.dev/agents';
 
 const app = express();
 app.use(express.json());
@@ -74,8 +74,8 @@ For local, single-document use there is a ready-made stdio loop (newline-delimit
 
 ```ts
 import { readFile } from 'node:fs/promises';
-import { runStdioServer } from '@eigenpal/docx-editor-agents/mcp';
-import { DocxReviewer, createReviewerBridge } from '@eigenpal/docx-editor-agents';
+import { runStdioServer } from '@docx-editor.dev/agents/mcp';
+import { DocxReviewer, createReviewerBridge } from '@docx-editor.dev/agents';
 
 const buffer = await readFile(process.argv[2]);
 const reviewer = await DocxReviewer.fromBuffer(buffer, 'MCP Reviewer');

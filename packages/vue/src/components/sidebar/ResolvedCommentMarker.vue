@@ -17,7 +17,7 @@
 </template>
 
 <script setup lang="ts">
-import type { Comment } from '@eigenpal/docx-editor-core/types/content';
+import type { Comment } from '@docx-editor.dev/core/types/content';
 import MaterialSymbol from '../ui/MaterialSymbol.vue';
 
 defineProps<{

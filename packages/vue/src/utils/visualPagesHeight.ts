@@ -1,4 +1,4 @@
-import { getVisualScrollHeight } from '@eigenpal/docx-editor-core/flow-model';
+import { getVisualScrollHeight } from '@docx-editor.dev/core/flow-model';
 
 const PAGE_GAP_PX = 24;
 const VIEWPORT_PADDING_PX = 48;

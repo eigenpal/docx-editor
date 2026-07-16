@@ -1,5 +1,5 @@
 import { describe, test, expect, mock } from 'bun:test';
-import type { Document } from '@eigenpal/docx-editor-core/types/document';
+import type { Document } from '@docx-editor.dev/core/types/document';
 import { useFileIO, type UseFileIOOptions } from './useFileIO';
 
 /**

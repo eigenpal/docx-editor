@@ -17,13 +17,13 @@ export type {
   PanelConfig,
   RenderedDomContext,
   PositionCoordinates,
-} from '@eigenpal/docx-editor-core/plugin-api';
+} from '@docx-editor.dev/core/plugin-api';
 
 import type {
   EditorPluginCore,
   PluginPanelProps,
   RenderedDomContext,
-} from '@eigenpal/docx-editor-core/plugin-api';
+} from '@docx-editor.dev/core/plugin-api';
 
 /**
  * Vue-specific editor plugin interface.
@@ -52,7 +52,7 @@ export interface VueEditorPlugin<TState = any> extends EditorPluginCore<TState> 
 /**
  * Canonical alias — `EditorPlugin` is `VueEditorPlugin` inside the Vue
  * adapter. The package name already encodes the framework; importing
- * `EditorPlugin` from `@eigenpal/docx-editor-vue/plugin-api` reads as
+ * `EditorPlugin` from `@docx-editor.dev/vue/plugin-api` reads as
  * cleanly as the React import. Mirrors React's `EditorPlugin` alias.
  */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any

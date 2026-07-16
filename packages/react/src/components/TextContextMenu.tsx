@@ -7,8 +7,8 @@
 
 import React, { useCallback, useEffect, useRef, useState, useMemo } from 'react';
 import { useTranslation } from '../i18n';
-import { en as defaultLocale } from '@eigenpal/docx-editor-i18n';
-import type { TranslationKey } from '@eigenpal/docx-editor-i18n';
+import { en as defaultLocale } from '@docx-editor.dev/i18n';
+import type { TranslationKey } from '@docx-editor.dev/i18n';
 import { Z_INDEX } from '../styles/zIndex';
 
 // ============================================================================

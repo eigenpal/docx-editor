@@ -14,18 +14,18 @@
 import { onBeforeUnmount, onMounted, ref, shallowRef, type Ref, type ShallowRef } from 'vue';
 import type { EditorView } from 'prosemirror-view';
 import { TextSelection, NodeSelection } from 'prosemirror-state';
-import type { HeaderFooter, BlockContent } from '@eigenpal/docx-editor-core/types/content';
-import type { Document } from '@eigenpal/docx-editor-core/types/document';
-import { findImageElement } from '@eigenpal/docx-editor-core/painter-model';
+import type { HeaderFooter, BlockContent } from '@docx-editor.dev/core/types/content';
+import type { Document } from '@docx-editor.dev/core/types/document';
+import { findImageElement } from '@docx-editor.dev/core/painter-model';
 import {
   detectTableInsertHover,
   TABLE_INSERT_HIDE_DELAY_MS,
-} from '@eigenpal/docx-editor-core/flow-model/tableInsertHover';
-import { resolveHfDomPosition } from '@eigenpal/docx-editor-core/flow-model';
+} from '@docx-editor.dev/core/flow-model/tableInsertHover';
+import { resolveHfDomPosition } from '@docx-editor.dev/core/flow-model';
 import {
   removeHeaderFooterForSection,
   updateSectionPropertiesAt,
-} from '@eigenpal/docx-editor-core/utils/removeHeaderFooterForSection';
+} from '@docx-editor.dev/core/utils/removeHeaderFooterForSection';
 import {
   scrollVisiblePositionIntoView as scrollVisiblePositionIntoViewImpl,
   resolvePos as resolvePosImpl,
@@ -33,14 +33,14 @@ import {
   selectParagraph as selectParagraphImpl,
 } from '../utils/domQueries';
 import type { ImageSelectionInfo } from '../components/imageSelectionTypes';
-import type { PageLayout } from '@eigenpal/docx-editor-core/pagination-model';
+import type { PageLayout } from '@docx-editor.dev/core/pagination-model';
 import type { HyperlinkPopupData } from '../components/ui/hyperlinkPopupTypes';
 import { useDragAutoScroll } from './useDragAutoScroll';
 import {
   createCellDragTracker,
   findCellPosFromPmPos,
-} from '@eigenpal/docx-editor-core/prosemirror/cellDragSelection';
-import { readCurrentPaintedPages } from '@eigenpal/docx-editor-core/internal/paintedPagesGuard';
+} from '@docx-editor.dev/core/prosemirror/cellDragSelection';
+import { readCurrentPaintedPages } from '@docx-editor.dev/core/internal/paintedPagesGuard';
 
 type TableResizeApi = {
   tryStartResize: (e: MouseEvent, view: EditorView) => boolean;
@@ -99,7 +99,7 @@ export interface UsePagesPointerOptions {
   syncHfPMs?: () => void;
   /** Resolve the persistent EditorView for an HF instance (for click routing). */
   getHfPmView?: (
-    hf: import('@eigenpal/docx-editor-core/types/content').HeaderFooter
+    hf: import('@docx-editor.dev/core/types/content').HeaderFooter
   ) => import('prosemirror-view').EditorView | null;
   /**
    * Replace the loaded Document — used by HF materialisation to publish a

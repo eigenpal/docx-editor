@@ -2,7 +2,7 @@
  * /api/roast — server-side AI agent that roasts a DOCX document.
  *
  * Demo of the canonical "build your own server-side agent" pattern from
- * @eigenpal/docx-editor-agents:
+ * @docx-editor.dev/agents:
  *
  *   1. Parse the uploaded DOCX into a DocxReviewer.
  *   2. Wrap it in a paraId-anchored EditorBridge via createReviewerBridge.
@@ -16,7 +16,7 @@
  * minus the MCP transport — we're our own client, so we call executeToolCall
  * directly instead of going through MCP's JSON-RPC.
  *
- * Compare to @eigenpal/docx-editor-agents/mcp:
+ * Compare to @docx-editor.dev/agents/mcp:
  *
  *   const reviewer = await DocxReviewer.fromBuffer(buffer, 'AI');
  *   const bridge   = createReviewerBridge(reviewer);
@@ -34,7 +34,7 @@ import {
   agentTools,
   executeToolCall,
   getToolSchemas,
-} from '@eigenpal/docx-editor-agents';
+} from '@docx-editor.dev/agents';
 
 // SDK v5+ moved type subpaths around; access them via the OpenAI namespace
 // instead of `openai/resources/chat/completions` so the imports keep working

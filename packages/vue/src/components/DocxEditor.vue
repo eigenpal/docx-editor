@@ -386,10 +386,10 @@ import { TextSelection } from 'prosemirror-state';
 import {
   computeHfCaretRectFromView,
   readHfSelectionGeometry,
-} from '@eigenpal/docx-editor-core/flow-model';
+} from '@docx-editor.dev/core/flow-model';
 import { getSelectionInfo as getSelectionInfoImpl } from '../utils/refApiQueries';
 import { computeVisualPagesHeight } from '../utils/visualPagesHeight';
-import { extractSelectionState } from '@eigenpal/docx-editor-core/prosemirror';
+import { extractSelectionState } from '@docx-editor.dev/core/prosemirror';
 import { nearestHfHostEl } from '../utils/domQueries';
 import Toolbar from './Toolbar.vue';
 import TableToolbar from './ui/TableToolbar.vue';
@@ -436,15 +436,15 @@ import { usePainterOverlayRefresh } from '../composables/usePainterOverlayRefres
 import { useEditorDocumentMetadata } from '../composables/useEditorDocumentMetadata';
 import { useDocxEditorRefApi } from '../composables/useDocxEditorRefApi';
 import { useControllableBoolean } from '../composables/useControllableBoolean';
-import type { Document } from '@eigenpal/docx-editor-core/types/document';
-import type { Comment } from '@eigenpal/docx-editor-core/types/content';
-import type { HeadingInfo } from '@eigenpal/docx-editor-core/utils/headingCollector';
+import type { Document } from '@docx-editor.dev/core/types/document';
+import type { Comment } from '@docx-editor.dev/core/types/content';
+import type { HeadingInfo } from '@docx-editor.dev/core/utils/headingCollector';
 import { createTranslator, provideLocale } from '../i18n';
-import { twipsToPixels } from '@eigenpal/docx-editor-core/utils/units';
-import { SIDEBAR_DOCUMENT_SHIFT } from '@eigenpal/docx-editor-core/utils';
+import { twipsToPixels } from '@docx-editor.dev/core/utils/units';
+import { SIDEBAR_DOCUMENT_SHIFT } from '@docx-editor.dev/core/utils';
 import { useColorMode } from '../composables/useColorMode';
 import { useFontLifecycle } from '../composables/useFontLifecycle';
-import { createCommentIdAllocator } from '@eigenpal/docx-editor-core/prosemirror/commentIdAllocator';
+import { createCommentIdAllocator } from '@docx-editor.dev/core/prosemirror/commentIdAllocator';
 
 const props = withDefaults(defineProps<DocxEditorProps>(), {
   documentBuffer: null,

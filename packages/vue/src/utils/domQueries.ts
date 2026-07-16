@@ -14,8 +14,8 @@ import {
   collectBodySpans,
   findBodyPmAnchor,
   resolveDomPosition,
-} from '@eigenpal/docx-editor-core/flow-model';
-import { findWordBoundariesForPointer } from '@eigenpal/docx-editor-core/utils';
+} from '@docx-editor.dev/core/flow-model';
+import { findWordBoundariesForPointer } from '@docx-editor.dev/core/utils';
 
 /**
  * Resolve the painted header/footer instance nearest the viewport center — the

@@ -1,9 +1,9 @@
 import React, { useState, useRef, useCallback, useEffect, useMemo } from 'react';
-import { createEmptyDocument, findStartPosForParaId, parseDocx } from '@eigenpal/docx-editor-core';
-import { setSuggestionMode } from '@eigenpal/docx-editor-core/prosemirror/plugins';
+import { createEmptyDocument, findStartPosForParaId, parseDocx } from '@docx-editor.dev/core';
+import { setSuggestionMode } from '@docx-editor.dev/core/prosemirror/plugins';
 // Re-exported by core, so the demo needs no direct `prosemirror-state` dep
 // (which would break the production build — it isn't in examples/vite deps).
-import { TextSelection } from '@eigenpal/docx-editor-core/prosemirror';
+import { TextSelection } from '@docx-editor.dev/core/prosemirror';
 import {
   acceptChangeById,
   rejectChangeById,
@@ -13,14 +13,10 @@ import {
   deleteRow,
   insertTable,
   insertImageNode,
-} from '@eigenpal/docx-editor-core/prosemirror/commands';
-import { loadFont } from '@eigenpal/docx-editor-core/utils';
-import { DocxEditor, type DocxEditorRef } from '@eigenpal/docx-editor-react';
-import {
-  AgentChatLog,
-  type AgentMessage,
-  getToolDisplayName,
-} from '@eigenpal/docx-editor-agents/react';
+} from '@docx-editor.dev/core/prosemirror/commands';
+import { loadFont } from '@docx-editor.dev/core/utils';
+import { DocxEditor, type DocxEditorRef } from '@docx-editor.dev/react';
+import { AgentChatLog, type AgentMessage, getToolDisplayName } from '@docx-editor.dev/agents/react';
 import { ExampleSwitcher } from '../../shared/ExampleSwitcher';
 import { AdapterSwitcher } from '../../shared/AdapterSwitcher';
 import { BrandLogo } from '../../shared/BrandLogo';
@@ -243,7 +239,7 @@ export function App() {
 
   // E2E hook: ?googleFont=Pacifico demonstrates the existing Google Fonts
   // path. The `fonts` prop is for self-hosted faces; for Google Fonts call
-  // `loadFont(name)` from `@eigenpal/docx-editor-core/utils` directly.
+  // `loadFont(name)` from `@docx-editor.dev/core/utils` directly.
   const googleFontName = useMemo(() => {
     if (typeof window === 'undefined') return null;
     return new URLSearchParams(window.location.search).get('googleFont');

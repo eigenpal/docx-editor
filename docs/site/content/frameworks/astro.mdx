@@ -10,7 +10,7 @@ By the end of this page you have an Astro page that mounts the editor as a React
 ## Install
 
 ```bash
-npm install @eigenpal/docx-editor-react
+npm install @docx-editor.dev/react
 npx astro add react
 ```
 
@@ -41,8 +41,8 @@ import { Editor } from '../components/Editor';
 ```tsx
 // src/components/Editor.tsx
 import { useRef, useState } from 'react';
-import { DocxEditor, type DocxEditorRef } from '@eigenpal/docx-editor-react';
-import '@eigenpal/docx-editor-react/styles.css';
+import { DocxEditor, type DocxEditorRef } from '@docx-editor.dev/react';
+import '@docx-editor.dev/react/styles.css';
 
 export function Editor() {
   const editorRef = useRef<DocxEditorRef>(null);

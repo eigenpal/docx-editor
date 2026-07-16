@@ -76,8 +76,8 @@
  */
 import { ref, watch } from 'vue';
 import type { EditorView } from 'prosemirror-view';
-import { proseDocToBlocks } from '@eigenpal/docx-editor-core/prosemirror/conversion';
-import { schema } from '@eigenpal/docx-editor-core/prosemirror';
+import { proseDocToBlocks } from '@docx-editor.dev/core/prosemirror/conversion';
+import { schema } from '@docx-editor.dev/core/prosemirror';
 
 const props = defineProps<{
   isOpen: boolean;

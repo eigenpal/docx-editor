@@ -12,32 +12,32 @@ import path from 'node:path';
 
 export const PACKAGES = [
   {
-    name: '@eigenpal/docx-editor-core',
+    name: '@docx-editor.dev/core',
     root: 'packages/core',
     pkgSlug: 'docx-editor-core',
   },
   {
-    name: '@eigenpal/docx-editor-i18n',
+    name: '@docx-editor.dev/i18n',
     root: 'packages/i18n',
     pkgSlug: 'docx-editor-i18n',
   },
   {
-    name: '@eigenpal/docx-editor-react',
+    name: '@docx-editor.dev/react',
     root: 'packages/react',
     pkgSlug: 'docx-editor-react',
-    // Strips dev-time `paths` so Extractor follows `@eigenpal/...` via
+    // Strips dev-time `paths` so Extractor follows `@docx-editor.dev/...` via
     // node_modules instead of through source mappings (the source
     // imports JSON locale data Extractor can't analyze).
     tsconfigPath: 'packages/react/tsconfig.api.json',
   },
   {
-    name: '@eigenpal/docx-editor-vue',
+    name: '@docx-editor.dev/vue',
     root: 'packages/vue',
     pkgSlug: 'docx-editor-vue',
     tsconfigPath: 'packages/vue/tsconfig.api.json',
   },
   {
-    name: '@eigenpal/docx-editor-agents',
+    name: '@docx-editor.dev/agents',
     root: 'packages/agents',
     pkgSlug: 'docx-editor-agents',
     // Excludes Vue source files because the Vue adapter for agents

@@ -8,8 +8,8 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@eigenpal/docx-editor-core": "workspace:*",
-    "@eigenpal/docx-editor-react": "workspace:*",
+    "@docx-editor.dev/core": "workspace:*",
+    "@docx-editor.dev/react": "workspace:*",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "y-prosemirror": "^1.2.12",

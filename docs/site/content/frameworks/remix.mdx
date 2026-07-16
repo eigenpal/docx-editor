@@ -10,7 +10,7 @@ This page builds a Remix route that loads a `.docx`, keeps SSR and hydration int
 ## Install
 
 ```bash
-npm install @eigenpal/docx-editor-react
+npm install @docx-editor.dev/react
 ```
 
 ## Mount the editor
@@ -42,8 +42,8 @@ The editor component is plain React, no framework-specific code:
 ```tsx
 // app/components/Editor.tsx
 import { useRef, useState } from 'react';
-import { DocxEditor, type DocxEditorRef } from '@eigenpal/docx-editor-react';
-import '@eigenpal/docx-editor-react/styles.css';
+import { DocxEditor, type DocxEditorRef } from '@docx-editor.dev/react';
+import '@docx-editor.dev/react/styles.css';
 
 export function Editor() {
   const editorRef = useRef<DocxEditorRef>(null);

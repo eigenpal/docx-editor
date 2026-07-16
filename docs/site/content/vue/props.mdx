@@ -14,8 +14,8 @@ Camel-case in TS, kebab-case in the template. Bind with `:` for non-string value
 ```vue
 <script setup lang="ts">
 import { ref } from 'vue';
-import { DocxEditor, type EditorMode } from '@eigenpal/docx-editor-vue';
-import '@eigenpal/docx-editor-vue/styles.css';
+import { DocxEditor, type EditorMode } from '@docx-editor.dev/vue';
+import '@docx-editor.dev/vue/styles.css';
 
 const buf = ref<ArrayBuffer | null>(null);
 const mode = ref<EditorMode>('editing');
@@ -41,7 +41,7 @@ Capture the editor ref with `useTemplateRef` (Vue 3.5+) or `ref="..."` + a `ref(
 ```vue
 <script setup lang="ts">
 import { useTemplateRef } from 'vue';
-import { DocxEditor, type DocxEditorRef } from '@eigenpal/docx-editor-vue';
+import { DocxEditor, type DocxEditorRef } from '@docx-editor.dev/vue';
 
 const editor = useTemplateRef<DocxEditorRef>('editor');
 
@@ -88,8 +88,8 @@ The Vue adapter has no controlled `comments` prop (it is React-only, listed as d
 
 ```vue
 <script setup lang="ts">
-import { DocxEditor } from '@eigenpal/docx-editor-vue';
-import type { Comment } from '@eigenpal/docx-editor-core';
+import { DocxEditor } from '@docx-editor.dev/vue';
+import type { Comment } from '@docx-editor.dev/core';
 
 async function persist(next: Comment[]) {
   await fetch('/api/comments', {
@@ -148,7 +148,7 @@ Behaviour matches React. See the [Dark mode](/docs/1.x/guides/dark-mode) guide f
 
 ```vue
 <script setup lang="ts">
-import { DocxEditor } from '@eigenpal/docx-editor-vue';
+import { DocxEditor } from '@docx-editor.dev/vue';
 
 const fonts = [
   { family: 'Custom Sans', src: '/fonts/CustomSans-Regular.woff2' },
@@ -254,8 +254,8 @@ The React-only `placeholder` and `loadingIndicator` props have no Vue equivalent
 
 ```vue
 <script setup lang="ts">
-import pl from '@eigenpal/docx-editor-i18n/pl';
-import { DocxEditor } from '@eigenpal/docx-editor-vue';
+import pl from '@docx-editor.dev/i18n/pl';
+import { DocxEditor } from '@docx-editor.dev/vue';
 </script>
 
 <template>
@@ -270,8 +270,8 @@ The React `agentPanel` prop has no Vue equivalent (deferred in the parity contra
 ```vue
 <script setup lang="ts">
 import { useTemplateRef } from 'vue';
-import { DocxEditor, type DocxEditorRef } from '@eigenpal/docx-editor-vue';
-import { useAgentBridge } from '@eigenpal/docx-editor-agents/vue';
+import { DocxEditor, type DocxEditorRef } from '@docx-editor.dev/vue';
+import { useAgentBridge } from '@docx-editor.dev/agents/vue';
 
 const editor = useTemplateRef<DocxEditorRef>('editor');
 const { executeToolCall, toolSchemas } = useAgentBridge({

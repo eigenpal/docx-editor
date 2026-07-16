@@ -10,7 +10,7 @@ order: 52
 Every tool ships as an OpenAI-style function definition. Runtimes that accept that shape can use `getToolSchemas()` directly; other runtimes usually need a small mapping layer.
 
 ```ts
-import { getToolSchemas } from '@eigenpal/docx-editor-agents';
+import { getToolSchemas } from '@docx-editor.dev/agents';
 
 const schemas = getToolSchemas();
 // [{ type: 'function', function: { name: 'add_comment', description: '...', parameters: { ... } } }, ...]
@@ -24,7 +24,7 @@ The AI SDK has a dedicated subpath: `getAiSdkTools()` returns the catalog in the
 
 ```ts
 // server route
-import { getAiSdkTools } from '@eigenpal/docx-editor-agents/ai-sdk/server';
+import { getAiSdkTools } from '@docx-editor.dev/agents/ai-sdk/server';
 
 const tools = getAiSdkTools(); // pass to streamText({ tools, ... })
 ```
@@ -37,7 +37,7 @@ Anthropic's Messages API wants `{ name, description, input_schema }` instead of 
 
 ```ts
 import Anthropic from '@anthropic-ai/sdk';
-import { getToolSchemas, executeToolCall } from '@eigenpal/docx-editor-agents';
+import { getToolSchemas, executeToolCall } from '@docx-editor.dev/agents';
 
 const client = new Anthropic();
 
@@ -70,7 +70,7 @@ Same schemas, same shape: pass them to `tools:` in the chat completions API.
 
 ```ts
 import OpenAI from 'openai';
-import { getToolSchemas, executeToolCall } from '@eigenpal/docx-editor-agents';
+import { getToolSchemas, executeToolCall } from '@docx-editor.dev/agents';
 
 const client = new OpenAI();
 
@@ -96,8 +96,8 @@ for (const call of response.choices[0].message.tool_calls ?? []) {
 If your agent already supports MCP, expose the toolkit as a server instead:
 
 ```ts
-import { McpServer } from '@eigenpal/docx-editor-agents/mcp';
-import { DocxReviewer, createReviewerBridge } from '@eigenpal/docx-editor-agents';
+import { McpServer } from '@docx-editor.dev/agents/mcp';
+import { DocxReviewer, createReviewerBridge } from '@docx-editor.dev/agents';
 
 const reviewer = await DocxReviewer.fromBuffer(buffer, 'Agent');
 const server = new McpServer(createReviewerBridge(reviewer));
@@ -111,7 +111,7 @@ See [MCP server](/docs/1.x/agents/mcp) for transports and hosting, and the [API 
 `agentTools` is the underlying tool definition array. Wrap each entry in the shape your framework expects, then dispatch through `executeToolCall` with a bridge. A headless `DocxReviewer` must be wrapped with `createReviewerBridge` first; a live editor uses `createEditorBridge` or the React/Vue hooks.
 
 ```ts
-import { agentTools, executeToolCall, createReviewerBridge } from '@eigenpal/docx-editor-agents';
+import { agentTools, executeToolCall, createReviewerBridge } from '@docx-editor.dev/agents';
 
 const bridge = createReviewerBridge(reviewer);
 

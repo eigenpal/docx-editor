@@ -1,5 +1,5 @@
 /**
- * @eigenpal/docx-editor-vue/composables
+ * @docx-editor.dev/vue/composables
  *
  * Vue composables mirroring the React `hooks` subpath — history, table
  * selection, find/replace, autosave, clipboard, zoom, and the high-level
@@ -7,7 +7,7 @@
  *
  * @example
  * ```ts
- * import { useAutoSave, useFindReplace } from '@eigenpal/docx-editor-vue/composables';
+ * import { useAutoSave, useFindReplace } from '@docx-editor.dev/vue/composables';
  * ```
  *
  * @packageDocumentation

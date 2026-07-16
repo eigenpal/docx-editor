@@ -1,31 +1,31 @@
 ---
-title: "@eigenpal/docx-editor-vue"
+title: "@docx-editor.dev/vue"
 description: "The Vue 3 adapter for docx-editor. It exposes DocxEditor, Vue composables, and UI components under /ui."
 category: "Packages"
 order: 40
 ---
 
-<PackageStats name="@eigenpal/docx-editor-vue" />
+<PackageStats name="@docx-editor.dev/vue" />
 
 ## Status
 
-`@eigenpal/docx-editor-vue` targets Vue 3 and is released in the same fixed version group as the React package. It keeps the same component name, subpath layout, and plugin contract where Vue supports the same surface. Remaining gaps are tracked in the parity contract below.
+`@docx-editor.dev/vue` targets Vue 3 and is released in the same fixed version group as the React package. It keeps the same component name, subpath layout, and plugin contract where Vue supports the same surface. Remaining gaps are tracked in the parity contract below.
 
 ## Install
 
 ```bash
-npm install @eigenpal/docx-editor-vue
+npm install @docx-editor.dev/vue
 ```
 
-Pulls in `@eigenpal/docx-editor-core` and `@eigenpal/docx-editor-i18n`.
+Pulls in `@docx-editor.dev/core` and `@docx-editor.dev/i18n`.
 
 ## Quickstart
 
 ```vue
 <script setup lang="ts">
 import { ref } from 'vue';
-import { DocxEditor } from '@eigenpal/docx-editor-vue';
-import '@eigenpal/docx-editor-vue/styles.css';
+import { DocxEditor } from '@docx-editor.dev/vue';
+import '@docx-editor.dev/vue/styles.css';
 
 const buf = ref<ArrayBuffer | null>(null);
 </script>
@@ -37,12 +37,12 @@ const buf = ref<ArrayBuffer | null>(null);
 
 ## Using with Nuxt
 
-For Nuxt 3 and 4, install [`@eigenpal/nuxt-docx-editor`](/docs/1.x/vue/nuxt), the official Nuxt module. It wraps this adapter and auto-imports an SSR-safe `<DocxEditor>`, so there's no `<ClientOnly>` wrapper to write:
+For Nuxt 3 and 4, install [`@docx-editor.dev/nuxt`](/docs/1.x/vue/nuxt), the official Nuxt module. It wraps this adapter and auto-imports an SSR-safe `<DocxEditor>`, so there's no `<ClientOnly>` wrapper to write:
 
 ```ts
 // nuxt.config.ts
 export default defineNuxtConfig({
-  modules: ['@eigenpal/nuxt-docx-editor'],
+  modules: ['@docx-editor.dev/nuxt'],
 });
 ```
 
@@ -50,12 +50,12 @@ See [Nuxt](/docs/1.x/vue/nuxt) for the module options and what to import from th
 
 ## Subpaths
 
-- `@eigenpal/docx-editor-vue`: `<DocxEditor>`, `DocxEditorProps`, `DocxEditorRef`, `EditorMode`, `renderAsync`, `i18nPlugin`, `provideLocale`
-- `@eigenpal/docx-editor-vue/ui`: `Toolbar`, `EditorToolbar`, `ResponsiveToolbar`, `TableToolbar`, `MenuBar`, `TitleBar`, `ColorPicker`, `FontPicker`, `StylePicker`, and the dialog components (find/replace, hyperlink, page setup, table properties, and more)
-- `@eigenpal/docx-editor-vue/composables`: Vue equivalents of the React hooks (`useDocxEditor`, `useHistory`, `useAutoSave`, `useTrackedChanges`, `useFindReplace`, etc.)
-- `@eigenpal/docx-editor-vue/dialogs`: hyperlink, find/replace, paste special, page setup
-- `@eigenpal/docx-editor-vue/plugin-api`: plugin host
-- `@eigenpal/docx-editor-vue/styles`: CSS
+- `@docx-editor.dev/vue`: `<DocxEditor>`, `DocxEditorProps`, `DocxEditorRef`, `EditorMode`, `renderAsync`, `i18nPlugin`, `provideLocale`
+- `@docx-editor.dev/vue/ui`: `Toolbar`, `EditorToolbar`, `ResponsiveToolbar`, `TableToolbar`, `MenuBar`, `TitleBar`, `ColorPicker`, `FontPicker`, `StylePicker`, and the dialog components (find/replace, hyperlink, page setup, table properties, and more)
+- `@docx-editor.dev/vue/composables`: Vue equivalents of the React hooks (`useDocxEditor`, `useHistory`, `useAutoSave`, `useTrackedChanges`, `useFindReplace`, etc.)
+- `@docx-editor.dev/vue/dialogs`: hyperlink, find/replace, paste special, page setup
+- `@docx-editor.dev/vue/plugin-api`: plugin host
+- `@docx-editor.dev/vue/styles`: CSS
 
 Every export is in the [Vue API reference](/docs/1.x/api/vue).
 
@@ -68,7 +68,7 @@ Every export is in the [Vue API reference](/docs/1.x/api/vue).
 Same toolkit, Vue subpath:
 
 ```ts
-import { useAgentBridge } from '@eigenpal/docx-editor-agents/vue';
+import { useAgentBridge } from '@docx-editor.dev/agents/vue';
 
 const { executeToolCall, toolSchemas } = useAgentBridge({
   editorRef,
@@ -76,7 +76,7 @@ const { executeToolCall, toolSchemas } = useAgentBridge({
 });
 ```
 
-Use the composable instead of the React hook. The server route can still use `@eigenpal/docx-editor-agents/ai-sdk/server`. The React-only `agentPanel` prop has no Vue equivalent yet; render the chat UI components next to the editor (see [Vue examples](/docs/1.x/vue/examples)).
+Use the composable instead of the React hook. The server route can still use `@docx-editor.dev/agents/ai-sdk/server`. The React-only `agentPanel` prop has no Vue equivalent yet; render the chat UI components next to the editor (see [Vue examples](/docs/1.x/vue/examples)).
 
 ## Next steps
 

@@ -26,7 +26,7 @@ un-stub PR.
 - [x] Performance budget scripts exist for cold start, input latency, save, and
       scroll FPS; local verification passes and writes ignored artifacts by default.
 - [x] A fresh consumer app can install the packed Vue package and mount the
-      editor with only `@eigenpal/docx-editor-vue` for basic usage. Direct core or
+      editor with only `@docx-editor.dev/vue` for basic usage. Direct core or
       i18n imports are verified in a separate explicit-dependency variant.
 - [x] Vue README, root README, demo banner, and changesets no longer describe
       the Vue editor as a stub.

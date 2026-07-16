@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "comment": "Cross-adapter parity contract between @eigenpal/docx-editor-react and @eigenpal/docx-editor-vue. Tracked in issue #475 Phase 3. Drives `bun run check:parity-contract`, which parses each adapter's docs/api/<slug>/index.api.md, applies this contract, and fails on undocumented drift. Adding a new prop or ref method to either adapter forces a contract update \u2014 there is no way to silently introduce divergence.",
+  "comment": "Cross-adapter parity contract between @docx-editor.dev/react and @docx-editor.dev/vue. Tracked in issue #475 Phase 3. Drives `bun run check:parity-contract`, which parses each adapter's docs/api/<slug>/index.api.md, applies this contract, and fails on undocumented drift. Adding a new prop or ref method to either adapter forces a contract update \u2014 there is no way to silently introduce divergence.",
   "props": {
     "paired": [
       "author",
@@ -72,7 +72,7 @@
     }
   },
   "ref": {
-    "comment": "DocxEditorRef parity. React's DocxEditorRef declares every member directly. Vue's DocxEditorRef intersects EditorRefLike (from @eigenpal/docx-editor-agents/bridge) plus its own additions \u2014 so members inherited via EditorRefLike are NOT enumerated in Vue's snapshot, but ARE callable at runtime. The contract uses three buckets: `paired` (explicit on both sides), `pairedViaInheritance` (explicit on React, inherited via EditorRefLike on Vue), and `vueExclusive` (only on Vue's DocxEditorRef).",
+    "comment": "DocxEditorRef parity. React's DocxEditorRef declares every member directly. Vue's DocxEditorRef intersects EditorRefLike (from @docx-editor.dev/agents/bridge) plus its own additions \u2014 so members inherited via EditorRefLike are NOT enumerated in Vue's snapshot, but ARE callable at runtime. The contract uses three buckets: `paired` (explicit on both sides), `pairedViaInheritance` (explicit on React, inherited via EditorRefLike on Vue), and `vueExclusive` (only on Vue's DocxEditorRef).",
     "paired": [
       "focus",
       "getAgent",

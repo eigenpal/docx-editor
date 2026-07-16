@@ -9,10 +9,10 @@
  */
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import type { ParsedClipboardContent } from '@eigenpal/docx-editor-core/utils';
-import { readFromClipboard } from '@eigenpal/docx-editor-core/utils';
+import type { ParsedClipboardContent } from '@docx-editor.dev/core/utils';
+import { readFromClipboard } from '@docx-editor.dev/core/utils';
 import { useTranslation } from '../../i18n';
-import type { TranslationKey } from '@eigenpal/docx-editor-i18n';
+import type { TranslationKey } from '@docx-editor.dev/i18n';
 
 // ============================================================================
 // TYPES

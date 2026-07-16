@@ -6,7 +6,7 @@
   colors row · Custom hex input.
 
   Theme-matrix generation and color resolution come from
-  @eigenpal/docx-editor-core/utils so React and Vue stay in lockstep.
+  @docx-editor.dev/core/utils so React and Vue stay in lockstep.
 -->
 <template>
   <div ref="containerRef" class="docx-color-picker" :class="className" :style="style">
@@ -165,14 +165,14 @@
 
 <script setup lang="ts">
 import { ref, computed, watch, onMounted, onBeforeUnmount, type CSSProperties } from 'vue';
-import type { ColorValue, Theme } from '@eigenpal/docx-editor-core/types/document';
+import type { ColorValue, Theme } from '@docx-editor.dev/core/types/document';
 import {
   generateThemeTintShadeMatrix,
   resolveColor,
   resolveColorToHex,
   resolveHighlightColor,
   type ThemeMatrixCell,
-} from '@eigenpal/docx-editor-core/utils';
+} from '@docx-editor.dev/core/utils';
 import MaterialSymbol from './MaterialSymbol.vue';
 import { useTranslation } from '../../i18n';
 

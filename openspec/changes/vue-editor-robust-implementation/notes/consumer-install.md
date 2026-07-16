@@ -6,10 +6,10 @@ Run date: 2026-05-12
 
 Local tarballs were created for:
 
-- `@eigenpal/docx-editor-vue@0.0.1`
-- `@eigenpal/docx-editor-core@0.0.28`
-- `@eigenpal/docx-editor-agents@0.5.1`
-- `@eigenpal/docx-editor-i18n@0.0.1`
+- `@docx-editor.dev/vue@0.0.1`
+- `@docx-editor.dev/core@0.0.28`
+- `@docx-editor.dev/agents@0.5.1`
+- `@docx-editor.dev/i18n@0.0.1`
 
 The first install attempt with only the Vue tarball correctly exposed a release
 packaging blocker: `workspace:*` dependency ranges were preserved in the packed
@@ -18,7 +18,7 @@ publishable internal ranges so released consumers will not need to install core
 or i18n directly for basic editor usage.
 
 Because the renamed internal packages are not published to npm yet, the local
-pack-only check cannot fetch `@eigenpal/docx-editor-core` from the public
+pack-only check cannot fetch `@docx-editor.dev/core` from the public
 registry before the 1.0.0 release. The explicit local-tarball variant below
 verifies the built package graph that npm will resolve after the fixed group is
 published.
@@ -37,5 +37,5 @@ npx vite build
 ```
 
 Result: the app imported `DocxEditor`, `DocxEditorRef`, and
-`@eigenpal/docx-editor-vue/styles.css`, mounted the component with
+`@docx-editor.dev/vue/styles.css`, mounted the component with
 `mode="editing"`, and built successfully.

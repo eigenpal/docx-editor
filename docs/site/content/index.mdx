@@ -24,12 +24,12 @@ seoTitle: 'DOCX Editor for React and Vue'
 
 | Package | What's in it |
 |---|---|
-| [`@eigenpal/docx-editor-react`](/docs/1.x/react) | React adapter. `<DocxEditor>` with toolbar, dialogs, hooks (history, find/replace, autosave, clipboard), plugin host. |
-| [`@eigenpal/docx-editor-vue`](/docs/1.x/vue) | Vue 3 adapter. Same `<DocxEditor>`, same props and ref methods; hooks become composables. |
-| [`@eigenpal/nuxt-docx-editor`](/docs/1.x/vue/nuxt) | Nuxt 3 & 4 module wrapping the Vue adapter. Auto-imports an SSR-safe `<DocxEditor>`. |
-| [`@eigenpal/docx-editor-core`](/docs/1.x/core) | Framework-agnostic core: OOXML parser/serializer, document model, ProseMirror schema, layout engine. |
-| [`@eigenpal/docx-editor-agents`](/docs/1.x/agents) | Agent toolkit: `DocxReviewer` (headless), live-editor bridge, AI SDK adapters, MCP server, chat UI. |
-| [`@eigenpal/docx-editor-i18n`](/docs/1.x/i18n) | Locale data for both adapters. Ships `en`, `de`, `fr`, `he`, `hi`, `pl`, `pt-BR`, `tr`, `zh-CN`. |
+| [`@docx-editor.dev/react`](/docs/1.x/react) | React adapter. `<DocxEditor>` with toolbar, dialogs, hooks (history, find/replace, autosave, clipboard), plugin host. |
+| [`@docx-editor.dev/vue`](/docs/1.x/vue) | Vue 3 adapter. Same `<DocxEditor>`, same props and ref methods; hooks become composables. |
+| [`@docx-editor.dev/nuxt`](/docs/1.x/vue/nuxt) | Nuxt 3 & 4 module wrapping the Vue adapter. Auto-imports an SSR-safe `<DocxEditor>`. |
+| [`@docx-editor.dev/core`](/docs/1.x/core) | Framework-agnostic core: OOXML parser/serializer, document model, ProseMirror schema, layout engine. |
+| [`@docx-editor.dev/agents`](/docs/1.x/agents) | Agent toolkit: `DocxReviewer` (headless), live-editor bridge, AI SDK adapters, MCP server, chat UI. |
+| [`@docx-editor.dev/i18n`](/docs/1.x/i18n) | Locale data for both adapters. Ships `en`, `de`, `fr`, `he`, `hi`, `pl`, `pt-BR`, `tr`, `zh-CN`. |
 
 All packages are Apache 2.0 and released together in a fixed version group.
 
@@ -38,19 +38,19 @@ All packages are Apache 2.0 and released together in a fixed version group.
 **React app.** Install `-react`. It pulls in `-core` and `-i18n`.
 
 ```bash
-npm install @eigenpal/docx-editor-react
+npm install @docx-editor.dev/react
 ```
 
-**Vue 3 app.** Same shape, swap the adapter. On Nuxt, install `@eigenpal/nuxt-docx-editor` instead.
+**Vue 3 app.** Same shape, swap the adapter. On Nuxt, install `@docx-editor.dev/nuxt` instead.
 
 ```bash
-npm install @eigenpal/docx-editor-vue
+npm install @docx-editor.dev/vue
 ```
 
 **Server-side parsing or batch review.** No UI needed: `-core` for the document model, `-agents` for `DocxReviewer`.
 
 ```bash
-npm install @eigenpal/docx-editor-core @eigenpal/docx-editor-agents
+npm install @docx-editor.dev/core @docx-editor.dev/agents
 ```
 
 **AI on top of an existing editor.** Add `-agents` next to `-react` or `-vue`. Use `/mcp` from the same package when your client already supports MCP.

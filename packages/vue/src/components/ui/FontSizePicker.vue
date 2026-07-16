@@ -38,7 +38,7 @@
 // Re-exported for parity with React's FontSizePicker, which exposes these
 // half-point/point unit helpers from the same module as the component.
 // `<script setup>` can't carry re-exports, so they live in a plain block.
-export { halfPointsToPoints, pointsToHalfPoints } from '@eigenpal/docx-editor-core/utils/units';
+export { halfPointsToPoints, pointsToHalfPoints } from '@docx-editor.dev/core/utils/units';
 </script>
 
 <script setup lang="ts">

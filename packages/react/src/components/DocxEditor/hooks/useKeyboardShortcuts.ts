@@ -4,7 +4,7 @@ import {
   getSelectedText,
   getTableContext,
   deleteTable as pmDeleteTable,
-} from '@eigenpal/docx-editor-core/prosemirror';
+} from '@docx-editor.dev/core/prosemirror';
 import type { useTableSelection } from '../../../hooks/useTableSelection';
 import type { useFindReplace } from '../../../hooks/useFindReplace';
 import type { useHyperlinkDialog } from '../../dialogs/HyperlinkDialog';

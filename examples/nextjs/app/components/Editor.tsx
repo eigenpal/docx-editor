@@ -1,8 +1,8 @@
 'use client';
 
 import React, { useState, useRef, useCallback, useEffect } from 'react';
-import { DocxEditor, type DocxEditorRef } from '@eigenpal/docx-editor-react';
-import { createEmptyDocument, type Document } from '@eigenpal/docx-editor-core';
+import { DocxEditor, type DocxEditorRef } from '@docx-editor.dev/react';
+import { createEmptyDocument, type Document } from '@docx-editor.dev/core';
 import { ExampleSwitcher } from '../../../shared/ExampleSwitcher';
 import { GitHubBadge } from '../../../shared/GitHubBadge';
 

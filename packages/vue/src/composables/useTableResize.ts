@@ -26,7 +26,7 @@ import {
   TWIPS_PER_PIXEL,
   MIN_CELL_WIDTH_TWIPS,
   MIN_ROW_HEIGHT_TWIPS,
-} from '@eigenpal/docx-editor-core/prosemirror/tableResize';
+} from '@docx-editor.dev/core/prosemirror/tableResize';
 
 interface ColumnResizeState {
   active: boolean;

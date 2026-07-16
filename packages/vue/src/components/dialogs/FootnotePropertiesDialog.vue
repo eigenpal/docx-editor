@@ -99,7 +99,7 @@ import { computed, ref, watch } from 'vue';
 import type {
   FootnoteProperties,
   EndnoteProperties,
-} from '@eigenpal/docx-editor-core/types/content';
+} from '@docx-editor.dev/core/types/content';
 import { useTranslation } from '../../i18n';
 
 const { t } = useTranslation();

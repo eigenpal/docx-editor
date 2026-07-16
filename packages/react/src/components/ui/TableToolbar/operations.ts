@@ -3,17 +3,17 @@
  * row/column add+delete, cell merge/split, selection bounds + lookups,
  * grid-anchor calculations for irregular merged tables. Used by
  * TableToolbar.tsx and the React table-selection hook; published from
- * `@eigenpal/docx-editor-react`.
+ * `@docx-editor.dev/react`.
  */
 
-import type { Table, TableCell, TableRow } from '@eigenpal/docx-editor-core/types/document';
+import type { Table, TableCell, TableRow } from '@docx-editor.dev/core/types/document';
 import {
   type CellAnchor,
   computeSplitLayout,
   computeSplitDialogDefaults,
   redistributeColumnWidths,
   buildAnchorMaps,
-} from '@eigenpal/docx-editor-core/utils';
+} from '@docx-editor.dev/core/utils';
 import type { TableAction, TableContext, TableSelection, TableSplitConfig } from '../TableToolbar';
 
 // ============================================================================

@@ -53,7 +53,7 @@ Filter the server-side schemas to the same list so the model never sees the excl
 
 ```ts
 // app/api/chat/route.ts
-import { getAiSdkTools } from '@eigenpal/docx-editor-agents/ai-sdk/server';
+import { getAiSdkTools } from '@docx-editor.dev/agents/ai-sdk/server';
 
 const all = getAiSdkTools();
 const tools = Object.fromEntries(
@@ -76,7 +76,7 @@ import {
   createReviewerBridge,
   getToolSchemas,
   executeToolCall,
-} from '@eigenpal/docx-editor-agents';
+} from '@docx-editor.dev/agents';
 import OpenAI from 'openai';
 
 const openai = new OpenAI();

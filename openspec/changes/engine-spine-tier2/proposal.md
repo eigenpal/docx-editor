@@ -33,8 +33,8 @@ Out of scope: shipping `@eigenpal/docx-editor-js` (#89 — becomes cheap _after_
 
 ## Impact
 
-- **`@eigenpal/docx-editor-core`**: gains `editor/` (engine + controller factories) and a matching `exports` key. Largest new core surface to date.
-- **`@eigenpal/docx-editor-react`**: `PagedEditor.tsx` (~1800 lines), `useLayoutPipeline.ts`, `OffscreenEditorHost.tsx`, `HiddenHeaderFooterPMs.tsx`, `useDocumentLoader.ts`, `useFileIO.ts` become thin engine wrappers. No public ref/prop API change.
-- **`@eigenpal/docx-editor-vue`**: `useDocxEditor.ts` (~900 lines) becomes a thin wrapper. **Gains**: columns, scroll-restore, the `painter:painted` signal, rAF coalescing (perf), the load race guard, and selective save — closing several silent divergences.
+- **`@docx-editor.dev/core`**: gains `editor/` (engine + controller factories) and a matching `exports` key. Largest new core surface to date.
+- **`@docx-editor.dev/react`**: `PagedEditor.tsx` (~1800 lines), `useLayoutPipeline.ts`, `OffscreenEditorHost.tsx`, `HiddenHeaderFooterPMs.tsx`, `useDocumentLoader.ts`, `useFileIO.ts` become thin engine wrappers. No public ref/prop API change.
+- **`@docx-editor.dev/vue`**: `useDocxEditor.ts` (~900 lines) becomes a thin wrapper. **Gains**: columns, scroll-restore, the `painter:painted` signal, rAF coalescing (perf), the load race guard, and selective save — closing several silent divergences.
 - **Vanilla package (#89)**: unblocked — becomes a ~150-line wrapper over the engine.
 - **Risk: HIGH.** Unlike Tier 1's pure leaf functions, this is the stateful core editing loop. Behavior-identical refactoring of the two largest components is the hard part. Mitigated by: strict step-by-step sequencing (each step is one PR under the full test suite + parity contract), adopting React (the complete impl) as canonical, and keeping reactivity bridges adapter-side. Per-step the diff is large but the behavior delta should be near-zero for shared paths.

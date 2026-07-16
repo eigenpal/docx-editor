@@ -21,7 +21,7 @@ import {
   addRepeatingSectionItemTr,
   removeRepeatingSectionItemTr,
   type PMContentControl,
-} from '@eigenpal/docx-editor-core/prosemirror';
+} from '@docx-editor.dev/core/prosemirror';
 
 const WIDGET_SELECTOR = '.layout-sdt-widget, .layout-inline-sdt-widget';
 

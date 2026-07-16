@@ -6,7 +6,7 @@ import { cleanup, render } from '@testing-library/react';
 import {
   createPaintedPagesGuard,
   type PaintedPagesGuard,
-} from '@eigenpal/docx-editor-core/internal/paintedPagesGuard';
+} from '@docx-editor.dev/core/internal/paintedPagesGuard';
 import { usePaintedPagesGuardLifecycle } from './usePaintedPagesGuardLifecycle';
 
 beforeAll(() => GlobalRegistrator.register());

@@ -1,10 +1,7 @@
 import { useCallback, useState } from 'react';
 import type { EditorView } from 'prosemirror-view';
-import type { Watermark } from '@eigenpal/docx-editor-core/types/document';
-import {
-  setWatermark,
-  getWatermarkFromState,
-} from '@eigenpal/docx-editor-core/prosemirror/commands';
+import type { Watermark } from '@docx-editor.dev/core/types/document';
+import { setWatermark, getWatermarkFromState } from '@docx-editor.dev/core/prosemirror/commands';
 
 /**
  * Watermark dialog controls. The watermark is a `doc` attribute on the body

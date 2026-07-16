@@ -1,5 +1,5 @@
 import { onBeforeUnmount, onMounted, type Ref } from 'vue';
-import { invalidateHfDomCache } from '@eigenpal/docx-editor-core/flow-model';
+import { invalidateHfDomCache } from '@docx-editor.dev/core/flow-model';
 
 /** Refresh overlays only after Vue's page-readiness guard releases them. */
 export function usePainterOverlayRefresh(

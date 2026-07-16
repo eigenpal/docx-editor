@@ -23,11 +23,11 @@ Open http://localhost:3002, drop in a DOCX, and click **Roast it**.
 Three pieces — copy them into your own app.
 
 **1. Server route (`app/api/chat/route.ts`)** — proxy your LLM call. Imports
-tool schemas from `@eigenpal/docx-editor-agents/server` and passes them to
+tool schemas from `@docx-editor.dev/agents/server` and passes them to
 OpenAI:
 
 ```ts
-import { getToolSchemas } from '@eigenpal/docx-editor-agents/server';
+import { getToolSchemas } from '@docx-editor.dev/agents/server';
 // ...
 const response = await openai.chat.completions.create({
   model: 'gpt-4o',

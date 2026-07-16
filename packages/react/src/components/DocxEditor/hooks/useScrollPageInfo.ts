@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { getPageScrollInfo } from '@eigenpal/docx-editor-core/flow-model';
+import { getPageScrollInfo } from '@docx-editor.dev/core/flow-model';
 import type { PagedEditorRef } from '../PagedEditor';
 import { DEFAULT_PAGE_GAP, VIEWPORT_PADDING_TOP } from '../internals/styles';
 

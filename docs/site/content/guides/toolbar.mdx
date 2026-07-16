@@ -34,7 +34,7 @@ The fastest path: keep the built-in toolbar and override its slots.
 
 ```tsx
 import { useState } from 'react';
-import { DocxEditor } from '@eigenpal/docx-editor-react';
+import { DocxEditor } from '@docx-editor.dev/react';
 
 function App({ buf }: { buf: ArrayBuffer }) {
   const [fileName, setFileName] = useState('Untitled.docx');
@@ -83,10 +83,10 @@ function App({ buf }: { buf: ArrayBuffer }) {
 
 ## Compound components
 
-For full structural control, hide the built-in toolbar and compose `EditorToolbar` from `@eigenpal/docx-editor-react/ui`:
+For full structural control, hide the built-in toolbar and compose `EditorToolbar` from `@docx-editor.dev/react/ui`:
 
 ```tsx
-import { EditorToolbar, type EditorToolbarProps } from '@eigenpal/docx-editor-react/ui';
+import { EditorToolbar, type EditorToolbarProps } from '@docx-editor.dev/react/ui';
 
 function MyChrome({ toolbarProps }: { toolbarProps: EditorToolbarProps }) {
   return (
@@ -118,7 +118,7 @@ The pieces:
 For lower-level assembly, `/ui` also exports `Toolbar` (the formatting strip standalone), `ResponsiveToolbar` (adapts to width), and presentational controls such as `ToolbarButton`, `ToolbarGroup`, and `ToolbarSeparator`. `ToolbarButton` takes `active`, `disabled`, `title`, `ariaLabel`, and `onClick`, and renders its children. Wire them to the same callbacks the standalone `Toolbar` uses: `currentFormatting` (a `SelectionFormatting`) for state and `onFormat` (takes a `FormattingAction`) for dispatch.
 
 ```tsx
-import { ToolbarButton, ToolbarGroup, ToolbarSeparator } from '@eigenpal/docx-editor-react/ui';
+import { ToolbarButton, ToolbarGroup, ToolbarSeparator } from '@docx-editor.dev/react/ui';
 
 <ToolbarGroup label="Text formatting">
   <ToolbarButton title="Bold" ariaLabel="Bold" active={currentFormatting?.bold} onClick={() => onFormat('bold')}>

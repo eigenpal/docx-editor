@@ -11,7 +11,7 @@ import {
   findLineElementAtPosition as coreFindLineElementAtPosition,
   findPositionOnLineAtClientX as coreFindPositionOnLineAtClientX,
   handleVisualLineKeyDown,
-} from '@eigenpal/docx-editor-core/prosemirror/utils/visualLineNavigation';
+} from '@docx-editor.dev/core/prosemirror/utils/visualLineNavigation';
 import type { EditorView } from 'prosemirror-view';
 
 export interface UseVisualLineNavigationReturn {

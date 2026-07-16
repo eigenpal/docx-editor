@@ -2,7 +2,7 @@
 
 ### Requirement: Shared ProseMirror paragraph/text helpers
 
-`@eigenpal/docx-editor-core` SHALL expose `findParaIdRange`, `findTextInPmParagraph`, `getVanillaNodeText`, and `getVanillaTextBetween` from a single framework-agnostic module. Both the React and Vue adapters SHALL import these from core rather than maintaining private copies. The lifted behavior MUST be identical to the pre-lift adapter implementations.
+`@docx-editor.dev/core` SHALL expose `findParaIdRange`, `findTextInPmParagraph`, `getVanillaNodeText`, and `getVanillaTextBetween` from a single framework-agnostic module. Both the React and Vue adapters SHALL import these from core rather than maintaining private copies. The lifted behavior MUST be identical to the pre-lift adapter implementations.
 
 #### Scenario: Resolve a paragraph range by paraId
 

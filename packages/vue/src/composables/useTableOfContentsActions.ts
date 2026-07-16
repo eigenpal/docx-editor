@@ -1,14 +1,14 @@
 import { nextTick, onBeforeUnmount, ref, watch, type Ref } from 'vue';
 import type { EditorView } from 'prosemirror-view';
-import type { PageLayout } from '@eigenpal/docx-editor-core/pagination-model';
+import type { PageLayout } from '@docx-editor.dev/core/pagination-model';
 import {
   findTableOfContentsBlocks,
   hasTableOfContentsNeedingUpdate,
   insertTableOfContents,
   updateTableOfContents,
-} from '@eigenpal/docx-editor-core/prosemirror';
+} from '@docx-editor.dev/core/prosemirror';
 import type { Node as PMNode } from 'prosemirror-model';
-import type { TFunction } from '@eigenpal/docx-editor-i18n';
+import type { TFunction } from '@docx-editor.dev/i18n';
 
 export interface UseTableOfContentsActionsOptions {
   editorView: Ref<EditorView | null>;

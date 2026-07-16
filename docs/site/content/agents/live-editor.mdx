@@ -9,7 +9,7 @@ Reference for wiring model tool calls to a running `<DocxEditor>`. For a complet
 
 ## useDocxAgentTools (React)
 
-The main React hook from `@eigenpal/docx-editor-agents/react`. It creates the bridge to the editor and returns the tool schemas, executor, and context snapshot.
+The main React hook from `@docx-editor.dev/agents/react`. It creates the bridge to the editor and returns the tool schemas, executor, and context snapshot.
 
 ```tsx
 const { tools, executeToolCall, getContext } = useDocxAgentTools({
@@ -41,7 +41,7 @@ Behavior worth knowing:
 The minimal variant: executor plus static schemas, no filtering, no context snapshot.
 
 ```tsx
-import { useAgentChat } from '@eigenpal/docx-editor-agents/react';
+import { useAgentChat } from '@docx-editor.dev/agents/react';
 
 const { executeToolCall, toolSchemas } = useAgentChat({ editorRef, author: 'Assistant' });
 ```
@@ -50,11 +50,11 @@ Use `useDocxAgentTools` unless you specifically want the smaller surface.
 
 ## useAgentBridge (Vue)
 
-The Vue twin, from `@eigenpal/docx-editor-agents/vue`:
+The Vue twin, from `@docx-editor.dev/agents/vue`:
 
 ```ts
 import { ref } from 'vue';
-import { useAgentBridge, type EditorRefLike } from '@eigenpal/docx-editor-agents/vue';
+import { useAgentBridge, type EditorRefLike } from '@docx-editor.dev/agents/vue';
 
 const editorRef = ref<EditorRefLike | null>(null);
 const { executeToolCall, toolSchemas } = useAgentBridge({
@@ -67,11 +67,11 @@ Same `EditorRefLike` contract, same tool catalog, same `AgentToolResult` shape. 
 
 ## createEditorBridge (any host)
 
-For hosts that are neither React nor Vue, build the bridge directly from `@eigenpal/docx-editor-agents/bridge`:
+For hosts that are neither React nor Vue, build the bridge directly from `@docx-editor.dev/agents/bridge`:
 
 ```ts
-import { createEditorBridge, type EditorRefLike } from '@eigenpal/docx-editor-agents/bridge';
-import { executeToolCall, getToolSchemas } from '@eigenpal/docx-editor-agents';
+import { createEditorBridge, type EditorRefLike } from '@docx-editor.dev/agents/bridge';
+import { executeToolCall, getToolSchemas } from '@docx-editor.dev/agents';
 
 const bridge = createEditorBridge(editorHandle satisfies EditorRefLike, 'Assistant');
 const result = executeToolCall('find_text', { query: 'liability' }, bridge);
@@ -104,11 +104,11 @@ const result = executeToolCall('find_text', { query: 'liability' }, bridge);
 />
 ```
 
-The panel shell is configurable through these options; render your own chat UI inside `render`. In Vue the `agentPanel` prop does not exist yet (React-only per the parity contract); mount the `AgentPanel` component from `@eigenpal/docx-editor-agents/vue` next to the editor instead.
+The panel shell is configurable through these options; render your own chat UI inside `render`. In Vue the `agentPanel` prop does not exist yet (React-only per the parity contract); mount the `AgentPanel` component from `@docx-editor.dev/agents/vue` next to the editor instead.
 
 ## Chat UI components
 
-Optional components for the inside of the panel. React: `@eigenpal/docx-editor-agents/react`. Vue: `@eigenpal/docx-editor-agents/vue`.
+Optional components for the inside of the panel. React: `@docx-editor.dev/agents/react`. Vue: `@docx-editor.dev/agents/vue`.
 
 | Component             | Purpose                                                                                                                                                                                    |
 | --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
@@ -118,7 +118,7 @@ Optional components for the inside of the panel. React: `@eigenpal/docx-editor-a
 | `AgentSuggestionChip` | Prompt-suggestion chip for empty states                                                                                                                                                    |
 | `AgentPanel`          | The panel shell itself, for hosts not using the `agentPanel` prop                                                                                                                          |
 
-If you drive the chat with the Vercel AI SDK, `toAgentMessages(chat.messages, chat.status)` from `@eigenpal/docx-editor-agents/ai-sdk/react` (or `/ai-sdk/vue`) converts `useChat`'s `UIMessage[]` into the `AgentMessage[]` shape these components render. You can also render components from another chat UI library or your own design system.
+If you drive the chat with the Vercel AI SDK, `toAgentMessages(chat.messages, chat.status)` from `@docx-editor.dev/agents/ai-sdk/react` (or `/ai-sdk/vue`) converts `useChat`'s `UIMessage[]` into the `AgentMessage[]` shape these components render. You can also render components from another chat UI library or your own design system.
 
 ## paraId anchoring
 

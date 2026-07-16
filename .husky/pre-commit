@@ -10,7 +10,7 @@ fi
 
 # Parity gate — fast (<1s). Blocks drift between the React and Vue adapter
 # exports before it reaches CI. (i18n keys are no longer a parity concern —
-# both adapters read the same @eigenpal/docx-editor-i18n package.)
+# both adapters read the same @docx-editor.dev/i18n package.)
 # Spec: openspec/changes/vue-editor-robust-implementation/specs/vue-react-parity/spec.md
 echo "Running parity gates..."
 bun run check:parity

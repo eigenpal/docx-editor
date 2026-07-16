@@ -5,39 +5,39 @@
 </p>
 
 <p align="center">
-  <a href="https://www.npmjs.com/package/@eigenpal/docx-editor-i18n"><img src="https://img.shields.io/npm/v/@eigenpal/docx-editor-i18n.svg?style=flat-square&color=3B5BDB" alt="npm version" /></a>
-  <a href="https://www.npmjs.com/package/@eigenpal/docx-editor-i18n"><img src="https://img.shields.io/npm/dm/@eigenpal/docx-editor-i18n.svg?style=flat-square&color=3B5BDB" alt="npm downloads" /></a>
+  <a href="https://www.npmjs.com/package/@docx-editor.dev/i18n"><img src="https://img.shields.io/npm/v/@docx-editor.dev/i18n.svg?style=flat-square&color=3B5BDB" alt="npm version" /></a>
+  <a href="https://www.npmjs.com/package/@docx-editor.dev/i18n"><img src="https://img.shields.io/npm/dm/@docx-editor.dev/i18n.svg?style=flat-square&color=3B5BDB" alt="npm downloads" /></a>
   <a href="https://github.com/eigenpal/docx-editor/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-Apache_2.0-blue.svg?style=flat-square&color=3B5BDB" alt="license" /></a>
   <a href="https://docx-editor.dev/editor"><img src="https://img.shields.io/badge/Live_Demo-3B5BDB?style=flat-square&logo=vercel&logoColor=white" alt="Demo" /></a>
   <a href="https://www.docx-editor.dev/docs"><img src="https://img.shields.io/badge/Docs-3B5BDB?style=flat-square&logo=readthedocs&logoColor=white" alt="Documentation" /></a>
 </p>
 
-# @eigenpal/docx-editor-i18n
+# @docx-editor.dev/i18n
 
-Shared locale strings, types, and runtime helpers for the [docx-editor](https://docx-editor.dev) adapters. One source of truth for translations consumed by `@eigenpal/docx-editor-react` and `@eigenpal/docx-editor-vue`.
+Shared locale strings, types, and runtime helpers for the [docx-editor](https://docx-editor.dev) adapters. One source of truth for translations consumed by `@docx-editor.dev/react` and `@docx-editor.dev/vue`.
 
 ## Quick Start
 
 ```bash
-npm install @eigenpal/docx-editor-i18n
+npm install @docx-editor.dev/i18n
 ```
 
 Pass a typed locale to the editor's `i18n` prop:
 
 ```tsx
 // React
-import { de } from '@eigenpal/docx-editor-i18n';
+import { de } from '@docx-editor.dev/i18n';
 <DocxEditor documentBuffer={file} i18n={de} />
 
 // Vue
-import { de } from '@eigenpal/docx-editor-i18n';
+import { de } from '@docx-editor.dev/i18n';
 <DocxEditor :document-buffer="file" :i18n="de" />
 ```
 
 Mix a community locale with custom overrides:
 
 ```ts
-import { de } from '@eigenpal/docx-editor-i18n';
+import { de } from '@docx-editor.dev/i18n';
 
 const myLocale = {
   ...de,
@@ -49,15 +49,15 @@ Keys set to `null` in any locale fall back to English.
 
 ## Packages
 
-| Package                                                                                      | Description                                                                                                                                |
-| -------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
-| [`@eigenpal/docx-editor-react`](https://www.npmjs.com/package/@eigenpal/docx-editor-react)   | <img src="https://cdn.simpleicons.org/react/61DAFB" width="20" align="middle" /> &nbsp; React adapter. Toolbar, paged editor, plugins.     |
-| [`@eigenpal/docx-editor-vue`](https://www.npmjs.com/package/@eigenpal/docx-editor-vue)       | <img src="https://cdn.simpleicons.org/vuedotjs/4FC08D" width="20" align="middle" /> &nbsp; Vue 3 adapter. Toolbar, paged editor, plugins.  |
-| [`@eigenpal/docx-editor-core`](https://www.npmjs.com/package/@eigenpal/docx-editor-core)     | Framework-agnostic core: OOXML parser, serializer, layout engine, ProseMirror schema. Depend on this if you fork the React or Vue adapter. |
-| [`@eigenpal/docx-editor-i18n`](https://www.npmjs.com/package/@eigenpal/docx-editor-i18n)     | Shared locale strings and types consumed by both adapters.                                                                                 |
-| [`@eigenpal/docx-editor-agents`](https://www.npmjs.com/package/@eigenpal/docx-editor-agents) | Agent SDK and chat UI: framework-agnostic bridge, MCP server, AI SDK adapters, plus React UI.                                              |
+| Package                                                                            | Description                                                                                                                                |
+| ---------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| [`@docx-editor.dev/react`](https://www.npmjs.com/package/@docx-editor.dev/react)   | <img src="https://cdn.simpleicons.org/react/61DAFB" width="20" align="middle" /> &nbsp; React adapter. Toolbar, paged editor, plugins.     |
+| [`@docx-editor.dev/vue`](https://www.npmjs.com/package/@docx-editor.dev/vue)       | <img src="https://cdn.simpleicons.org/vuedotjs/4FC08D" width="20" align="middle" /> &nbsp; Vue 3 adapter. Toolbar, paged editor, plugins.  |
+| [`@docx-editor.dev/core`](https://www.npmjs.com/package/@docx-editor.dev/core)     | Framework-agnostic core: OOXML parser, serializer, layout engine, ProseMirror schema. Depend on this if you fork the React or Vue adapter. |
+| [`@docx-editor.dev/i18n`](https://www.npmjs.com/package/@docx-editor.dev/i18n)     | Shared locale strings and types consumed by both adapters.                                                                                 |
+| [`@docx-editor.dev/agents`](https://www.npmjs.com/package/@docx-editor.dev/agents) | Agent SDK and chat UI: framework-agnostic bridge, MCP server, AI SDK adapters, plus React UI.                                              |
 
-> **Forking the adapter?** Keep your fork thin. Depend on `@eigenpal/docx-editor-core` directly so parser, serializer, and rendering fixes land in your build automatically, without backporting each upstream change by hand.
+> **Forking the adapter?** Keep your fork thin. Depend on `@docx-editor.dev/core` directly so parser, serializer, and rendering fixes land in your build automatically, without backporting each upstream change by hand.
 
 ## Available locales
 
@@ -74,7 +74,7 @@ Keys set to `null` in any locale fall back to English.
 BCP-47 codes (`pt-BR`, `zh-CN`) use camelCase JS identifiers (`ptBR`, `zhCN`). For runtime lookup by tag:
 
 ```ts
-import { locales } from '@eigenpal/docx-editor-i18n';
+import { locales } from '@docx-editor.dev/i18n';
 <DocxEditor i18n={locales[userPreferredLocale]} />
 ```
 
@@ -86,13 +86,13 @@ For apps that pick the locale at runtime, the named exports above don't tree-sha
 
 ```ts
 // Static — bundler ships only this locale's strings
-import pl from '@eigenpal/docx-editor-i18n/pl';
+import pl from '@docx-editor.dev/i18n/pl';
 
 // Dynamic — splits into its own chunk, loaded on demand
-const pl = (await import('@eigenpal/docx-editor-i18n/pl')).default;
+const pl = (await import('@docx-editor.dev/i18n/pl')).default;
 ```
 
-Subpaths ship for every locale: `/en`, `/de`, `/he`, `/pl`, `/pt-BR`, `/tr`, `/zh-CN`. Each also exports its locale as a named binding (`import { pl } from '@eigenpal/docx-editor-i18n/pl'`) for callers that prefer non-default imports.
+Subpaths ship for every locale: `/en`, `/de`, `/he`, `/pl`, `/pt-BR`, `/tr`, `/zh-CN`. Each also exports its locale as a named binding (`import { pl } from '@docx-editor.dev/i18n/pl'`) for callers that prefer non-default imports.
 
 ## Types
 
@@ -104,7 +104,7 @@ import type {
   TranslationKey, // 'toolbar.bold' | 'dialogs.findReplace.title' | ...
   LocaleCode, // 'en' | 'de' | 'pt-BR' | ...
   TFunction, // signature of the `t()` callback
-} from '@eigenpal/docx-editor-i18n';
+} from '@docx-editor.dev/i18n';
 ```
 
 ## Non-React/Vue hosts
@@ -112,7 +112,7 @@ import type {
 Build a typed `t()` outside the adapter packages:
 
 ```ts
-import { createT, deepMerge, en, de, type LocaleStrings } from '@eigenpal/docx-editor-i18n';
+import { createT, deepMerge, en, de, type LocaleStrings } from '@docx-editor.dev/i18n';
 
 const merged = deepMerge(en, de) as LocaleStrings;
 const t = createT(merged, 'de');

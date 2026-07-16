@@ -1,6 +1,6 @@
 # Vite example
 
-`@eigenpal/docx-editor-react` in a plain Vite + React SPA. No SSR, so the
+`@docx-editor.dev/react` in a plain Vite + React SPA. No SSR, so the
 editor mounts directly with no lazy-loading wrapper. The simplest of the
 examples. Start here.
 
@@ -27,8 +27,8 @@ Or from this directory: `bun run dev`.
 ## Minimal integration
 
 ```tsx
-import { DocxEditor } from '@eigenpal/docx-editor-react';
-import { createEmptyDocument } from '@eigenpal/docx-editor-core';
+import { DocxEditor } from '@docx-editor.dev/react';
+import { createEmptyDocument } from '@docx-editor.dev/core';
 
 export default function App() {
   return <DocxEditor document={createEmptyDocument()} showToolbar />;
@@ -41,7 +41,7 @@ To open a real file, read it as an `ArrayBuffer` and pass it as
 ## Use it in your own Vite app
 
 ```bash
-npm install @eigenpal/docx-editor-react @eigenpal/docx-editor-core
+npm install @docx-editor.dev/react @docx-editor.dev/core
 ```
 
 The React adapter injects its own CSS. The toolbar icons need the Material

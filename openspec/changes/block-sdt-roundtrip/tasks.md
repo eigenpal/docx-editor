@@ -31,4 +31,4 @@
 - [ ] 5.1 `bun run typecheck` clean
 - [ ] 5.2 New round-trip tests green (see spec scenarios): block SDT over one paragraph; over a table; over multiple children; nested block SDT; bookmark inside `sdtContent`; `sdtEndPr` preserved; empty/absent `sdtContent`; block SDT inside a cell; lock; placeholder docPart; dropDownList with `lastValue` + items; **`sdtPr` child ordering valid**; **no duplicate elements**; **unmodeled type marker (e.g. `w:bibliography`/`w14:checkbox`) preserved, not replaced by `w:richText`**; **unmodeled `w:dataBinding` (with `xpath`+`storeItemID`+`prefixMappings`) survives byte-faithfully**
 - [ ] 5.3 Existing inline SDT tests still green (no serializer regression)
-- [ ] 5.4 `bun run format`; `bun run api:extract` (mandatory — `SdtProperties` is `@public` and changes); `bun changeset` (patch, `@eigenpal/docx-editor-core`)
+- [ ] 5.4 `bun run format`; `bun run api:extract` (mandatory — `SdtProperties` is `@public` and changes); `bun changeset` (patch, `@docx-editor.dev/core`)

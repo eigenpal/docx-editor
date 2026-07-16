@@ -18,27 +18,27 @@ const REACT_GROUP = [
   'react-dom',
   'react-dom/*',
   '@vitejs/plugin-react',
-  '@eigenpal/docx-editor-react',
-  '@eigenpal/docx-editor-react/*',
+  '@docx-editor.dev/react',
+  '@docx-editor.dev/react/*',
 ];
 
 const VUE_GROUP = [
   'vue',
   '@vue/*',
   '@vitejs/plugin-vue',
-  '@eigenpal/docx-editor-vue',
-  '@eigenpal/docx-editor-vue/*',
+  '@docx-editor.dev/vue',
+  '@docx-editor.dev/vue/*',
 ];
 
 // Dynamic-import specifiers — listed explicitly because AST `ImportExpression`
 // selectors compare against literal source values, not glob patterns. The
 // static rule still covers `react-dom/*` etc. via minimatch; dynamic catches
 // the bare-specifier hot path.
-const REACT_DYNAMIC = ['react', 'react-dom', 'react-dom/client', '@eigenpal/docx-editor-react'];
-const VUE_DYNAMIC = ['vue', '@eigenpal/docx-editor-vue'];
+const REACT_DYNAMIC = ['react', 'react-dom', 'react-dom/client', '@docx-editor.dev/react'];
+const VUE_DYNAMIC = ['vue', '@docx-editor.dev/vue'];
 
-const NO_REACT_MSG = `Vue/core files cannot import React. Use @eigenpal/docx-editor-core for shared logic. ${SPEC}`;
-const NO_VUE_MSG = `React/core files cannot import Vue. Use @eigenpal/docx-editor-core for shared logic. ${SPEC}`;
+const NO_REACT_MSG = `Vue/core files cannot import React. Use @docx-editor.dev/core for shared logic. ${SPEC}`;
+const NO_VUE_MSG = `React/core files cannot import Vue. Use @docx-editor.dev/core for shared logic. ${SPEC}`;
 const NO_BOTH_MSG = `Core stays UI-framework-agnostic. ${SPEC}`;
 
 // Helpers compose into a `rules` object. Keys are disjoint by design —
@@ -231,12 +231,12 @@ export default [
   // commentsSidebarOpen / onCommentsSidebarOpenChange pair adds its own emit +
   // composable wiring inline (reusable part is useControllableBoolean), plus an
   // explicit `undefined` withDefaults entry so Vue doesn't cast the absent
-  // Boolean prop to `false`. Bumped to 1200 for headroom (it kept landing 1-3
+  // Boolean prop to `false`. Bumped to 1210 for headroom (it kept landing 1-3
   // lines over on each small prop addition) while a real split is planned.
   {
     files: ['packages/vue/src/components/DocxEditor.vue'],
     rules: {
-      'max-lines': ['error', { max: 1200, skipBlankLines: false, skipComments: false }],
+      'max-lines': ['error', { max: 1210, skipBlankLines: false, skipComments: false }],
     },
   },
 

@@ -10,8 +10,8 @@
 import { NextRequest } from 'next/server';
 import { streamText, type UIMessage, convertToModelMessages, stepCountIs } from 'ai';
 import { openai } from '@ai-sdk/openai';
-import { type AgentContextSnapshot } from '@eigenpal/docx-editor-agents/server';
-import { getAiSdkTools } from '@eigenpal/docx-editor-agents/ai-sdk/server';
+import { type AgentContextSnapshot } from '@docx-editor.dev/agents/server';
+import { getAiSdkTools } from '@docx-editor.dev/agents/ai-sdk/server';
 
 // No `execute` → AI SDK forwards each call to the client's
 // `useChat({ onToolCall })`, where it runs against the live editor via

@@ -4,4 +4,4 @@ export {
   SIDEBAR_PAGE_GAP,
   SIDEBAR_DOCUMENT_SHIFT,
   MIN_CARD_GAP,
-} from '@eigenpal/docx-editor-core/utils/sidebarConstants';
+} from '@docx-editor.dev/core/utils/sidebarConstants';

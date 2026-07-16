@@ -138,18 +138,18 @@ Per Decisions 20 and 21. New scripts live in `scripts/`. Wire pre-commit/pre-pus
 
 - [x] 9.0a Rewrite `packages/agent-use/package.json` `description` to "Agent SDK and chat UI for the DOCX editor — works with React or Vue" (or equivalent that names the four-role reality)
 - [x] 9.0b Write `packages/agent-use/README.md` BEFORE any UI migration. Include: top-level subpath table (`/`, `/bridge`, `/server`, `/mcp`, `/ai-sdk/server`, `/react`, `/vue`) with one-line summary each; a "Migration from 0.x" section with import-path diff for `useAgentChat` (bare → `/react`); an explicit cross-link to the editor packages
-- [x] 9.0c Add `@eigenpal/docx-editor-agents` README to root README's package table
+- [x] 9.0c Add `@docx-editor.dev/agents` README to root README's package table
 
 ### 9b. Prerequisite migration: React agent UI moves into agent-use
 
 - [x] 9.1 Move `<AgentPanel>`, `<AgentChat>`, `<AgentChatLog>`, `<AgentComposer>`, `<AgentSuggestionChip>`, `<AgentTimeline>` from `packages/react/src/components/` to `packages/agent-use/src/react/components/`. Components now own their own English defaults via `packages/agent-use/i18n/en.json` + a small ICU formatter (`src/react/format-message.ts`); consumers wanting i18n pass `*Label` props (typically derived from their own `t()`).
-- [x] 9.2 1.0 is the breaking change — `packages/react/src/index.ts` no longer re-exports agent UI at all. Consumers import directly from `@eigenpal/docx-editor-agents/react`. `DocxEditor.tsx` updated: imports `<AgentPanel>` from the canonical location, and the inner `<LocalizedAgentPanel>` helper forwards `useTranslation()` labels (close, resize handle, default title) down to AgentPanel so the editor's built-in agent slot stays localised without consumer plumbing.
+- [x] 9.2 1.0 is the breaking change — `packages/react/src/index.ts` no longer re-exports agent UI at all. Consumers import directly from `@docx-editor.dev/agents/react`. `DocxEditor.tsx` updated: imports `<AgentPanel>` from the canonical location, and the inner `<LocalizedAgentPanel>` helper forwards `useTranslation()` labels (close, resize handle, default title) down to AgentPanel so the editor's built-in agent slot stays localised without consumer plumbing.
 - [x] 9.3 Framework-isolation lint inside `packages/agent-use/` is in place with custom error messages (`eslint.config.js:40-42` + the per-block `restrictReact`/`restrictVue`/`restrictBoth` rules at `:64-77`, `:144-156`). Each banned import surfaces a specific message citing the spec; §10.3 audit confirmed zero current violations and closed two coverage gaps in `a6179f6`
 - [x] 9.4 Drop the `useAgentChat` re-export from `packages/agent-use/src/bridge.ts` so the framework-agnostic entry stays pure. The hook now ships from `/react` only.
 - [ ] 9.4a Factor tool-running logic that's currently inside `useAgentChat` into a framework-agnostic `createAgentToolRunner(bridgeRef, options)` that both React `useAgentChat` and Vue `useAgentBridge` wrap. Deferred from §9.4: today the framework-agnostic core is already exposed via `agentTools` + `executeToolCall`, so the Vue composable can wrap those directly. The factor-out only earns its keep when the React and Vue hook bodies start diverging.
 - [x] 9.5 Add a changeset documenting the import-path shift; cross-reference the new README's "Migration from 0.x" section
 - [x] 9.5a Drop the legacy `@eigenpal/docx-js-editor` shim from the 1.x train entirely. New surfaces — agent SDK, Vue adapter, core/headless APIs — ship only under their canonical package names.
-- [x] 9.5c Done as part of §9.2 — `packages/react/src/index.ts` no longer re-exports agent UI. `@eigenpal/docx-editor-agents/react` is the single canonical import path. Breaking change documented in the 1.0 changeset.
+- [x] 9.5c Done as part of §9.2 — `packages/react/src/index.ts` no longer re-exports agent UI. `@docx-editor.dev/agents/react` is the single canonical import path. Breaking change documented in the 1.0 changeset.
 - [x] 9.5b Add JSDoc on `EditorRefLike` in `packages/agent-use/src/bridge.ts` documenting the versioning policy from Decision 18 (additions = minor, signature changes = major)
 
 ### 9b. Vue agent SDK subpath
@@ -161,9 +161,9 @@ Per Decisions 20 and 21. New scripts live in `scripts/`. Wire pre-commit/pre-pus
 - [x] 9.10 Moved `AIContextMenu.vue` and `AIResponsePreview.vue` from `packages/vue/src/components/` to `packages/agent-use/src/vue/components/`. Both now read defaults from agent-use's `en.json` (new `aiActions.*` and `aiPreview.*` namespaces) with overridable `labels` prop. `packages/vue/src/index.ts` no longer re-exports them — breaking change for 1.0
 - [x] 9.11 Implemented `useAgentBridge` composable (`src/vue/composables/useAgentBridge.ts`). `useAgentEvents` deferred — bridge exposes no event source today; will land alongside React's `useAgentEvents` once added on both sides
 - [x] 9.12 Vue-side AI SDK adapter at `packages/agent-use/src/ai-sdk/vue.ts` mirrors the React adapter: `toAgentMessages(uiMessages, status)` adapts `@ai-sdk/vue`'s `useChat` output for `<AgentChatLog>`
-- [x] 9.13 Vue `<DocxEditor>` ref typed as `DocxEditorRef` (`packages/vue/src/editor-ref.ts`) which uses `Pick<EditorRefLike, …>` to borrow signatures from `@eigenpal/docx-editor-agents/bridge`. `defineExpose` is wrapped in `satisfies DocxEditorRef` so adding new exposed methods that overlap with EditorRefLike is signature-checked at typecheck time. Currently exposes the editor minimum (save/focus/destroy/getDocument); remaining EditorRefLike methods land incrementally as Vue agent integration grows
+- [x] 9.13 Vue `<DocxEditor>` ref typed as `DocxEditorRef` (`packages/vue/src/editor-ref.ts`) which uses `Pick<EditorRefLike, …>` to borrow signatures from `@docx-editor.dev/agents/bridge`. `defineExpose` is wrapped in `satisfies DocxEditorRef` so adding new exposed methods that overlap with EditorRefLike is signature-checked at typecheck time. Currently exposes the editor minimum (save/focus/destroy/getDocument); remaining EditorRefLike methods land incrementally as Vue agent integration grows
 - [x] 9.14 Playwright parity tests at `e2e/tests/parity/agent-{panel,timeline}.spec.ts` driven by a `forEachAdapter` fixture (`parity-fixture.ts`). New `parity` Playwright project boots both demo dev servers (5173 + 5174) and runs each spec twice, once per adapter (test titles tagged `[react]` / `[vue]`). Covers panel render, close button, resize handle, timeline streaming/done/long-cap behaviour. Tracked-change/comment/tool-error/multi-step rows are deferred behind §9.x agent surface implementation
-- [x] 9.15 `examples/vue/src/App.vue` renders `AgentPanel` + `AgentChatLog` + `AgentComposer` from `@eigenpal/docx-editor-agents/vue` when `?agentPanel=1` is set, with the same `?agentTimeline=streaming|done|long` fixture as the React demo so the parity Playwright suite runs unchanged. Stub assistant reply for the demo flow; real consumers wire `useAgentBridge` + their transport
+- [x] 9.15 `examples/vue/src/App.vue` renders `AgentPanel` + `AgentChatLog` + `AgentComposer` from `@docx-editor.dev/agents/vue` when `?agentPanel=1` is set, with the same `?agentTimeline=streaming|done|long` fixture as the React demo so the parity Playwright suite runs unchanged. Stub assistant reply for the demo flow; real consumers wire `useAgentBridge` + their transport
 
 ## 10. Agentic review passes
 
@@ -189,9 +189,9 @@ Per Decision 16, four named perf budgets with measurement scripts.
 ## 12. Docs
 
 - [ ] 12.1 Replace `examples/vue/` placeholder content with a working demo (use the demo from #245 as a starting point); standardise it with the React example's structure; include `<AgentPanel>` integration so the parity preview shows the agent SDK working in Vue
-- [ ] 12.2 Write `packages/vue/README.md` with quick-start, API reference, and the `<DocxEditor>` props / emits / ref API; cross-reference `@eigenpal/docx-editor-agents/vue` for the agent SDK. **Composable-first**: first code example uses `useDocxEditor()`; the imperative-ref pattern appears later as "for agent integration." Include a copy-pasteable "Add an AI assistant in 30 lines" snippet. Include a "Nuxt usage" section showing `<ClientOnly>` wrapping or `defineAsyncComponent`. Link the per-component map from task 3.1
+- [ ] 12.2 Write `packages/vue/README.md` with quick-start, API reference, and the `<DocxEditor>` props / emits / ref API; cross-reference `@docx-editor.dev/agents/vue` for the agent SDK. **Composable-first**: first code example uses `useDocxEditor()`; the imperative-ref pattern appears later as "for agent integration." Include a copy-pasteable "Add an AI assistant in 30 lines" snippet. Include a "Nuxt usage" section showing `<ClientOnly>` wrapping or `defineAsyncComponent`. Link the per-component map from task 3.1
 - [x] 12.3 `packages/agent-use/README.md` updated: subpath table now lists `/vue` + `/ai-sdk/vue` alongside `/react`; the React component list expanded to include the agent UI components migrated in #351; the live-editor-bridge example now shows React + Vue side by side; "switching adapters is one import line" framing added
-- [x] 12.4 Add a Vue section to root `README.md` Quick Start showing both `npm install @eigenpal/docx-editor-react` and `npm install @eigenpal/docx-editor-vue` paths
+- [x] 12.4 Add a Vue section to root `README.md` Quick Start showing both `npm install @docx-editor.dev/react` and `npm install @docx-editor.dev/vue` paths
 - [x] 12.5 `CLAUDE.md` Editor Architecture section gained a "Vue mounting path" subsection: `<DocxEditor>` mounts via `useDocxEditor()`'s `onMounted`; `EditorView` and `Document` are `shallowRef`; visible pages still come from `painter-model/`, not `toDOM`; reactivity contract refs `notes/reactivity.md`
 - [x] 12.6 `packages/vue/README.md#scope` lists the three v1-omitted features (third-party plugins, real-time collab, SSR/Nuxt) with reasons + parity-matrix tracking. GitHub follow-up issues filed at 1.0 ship per §13.10–13.12
 
@@ -213,12 +213,12 @@ Per Decision 16, four named perf budgets with measurement scripts.
 ### 13c. Vue agent UI un-stub (gates on agent matrix only, may ship in 1.0 or 1.1)
 
 - [ ] 13.7 Verify every **agent SDK** parity matrix row is `done` or `omitted-v1` with a documented reason
-- [ ] 13.8 Remove any `[BETA]` or stub marker from `@eigenpal/docx-editor-agents/vue` description / Vue subpath docs
+- [ ] 13.8 Remove any `[BETA]` or stub marker from `@docx-editor.dev/agents/vue` description / Vue subpath docs
 - [ ] 13.9 If agent UI defers to 1.1: file follow-up issue, document in changeset, mark agent matrix rows as `omitted-v1` with explicit "ships in 1.1" reason
 
 ### 13c. Follow-up tracking
 
-- [x] 13.10 No public 2.0 issue. The fixed-group structure stays as-is through the 1.x line; any future cadence split for `@eigenpal/docx-editor-agents` is an internal scheduling discussion, not a public roadmap commitment. Closed [#366](https://github.com/eigenpal/docx-editor/issues/366) which was filed under the wrong framing
+- [x] 13.10 No public 2.0 issue. The fixed-group structure stays as-is through the 1.x line; any future cadence split for `@docx-editor.dev/agents` is an internal scheduling discussion, not a public roadmap commitment. Closed [#366](https://github.com/eigenpal/docx-editor/issues/366) which was filed under the wrong framing
 - [x] 13.11 Filed [#367](https://github.com/eigenpal/docx-editor/issues/367) — "[1.x] Vue composable plugin API + cross-adapter plugin contract". Built-in plugins work via core's contract today; third-party plugin authoring docs + framework-agnostic plugin shape land in 1.x
 - [x] 13.12 Filed [#368](https://github.com/eigenpal/docx-editor/issues/368) — "[1.x] Agent SDK Vue parity". Tracks the visual baselines + dedicated parity specs + 6 behavioral matrix rows + QA sign-off needed to flip the agent UI gate from `partial` to `done` per Decision 15
 
@@ -229,4 +229,4 @@ Per Decision 16, four named perf budgets with measurement scripts.
 - [ ] 14.3 Run /simplify pass on changed code
 - [ ] 14.4 Address review findings
 - [ ] 14.5 Merge to `1.0.0-release`
-- [ ] 14.6 When the 1.0.0-release train is ready to ship to `main`, Vue and the new `@eigenpal/docx-editor-agents/vue` subpath ride along at 1.0.0 with the fixed group
+- [ ] 14.6 When the 1.0.0-release train is ready to ship to `main`, Vue and the new `@docx-editor.dev/agents/vue` subpath ride along at 1.0.0 with the fixed group

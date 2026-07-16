@@ -4,8 +4,8 @@
  * replace useState; the rest is direct translation.
  */
 import { reactive, computed, type ComputedRef } from 'vue';
-import type { FindMatch, FindOptions } from '@eigenpal/docx-editor-core/utils/findReplace';
-import { createDefaultFindOptions } from '@eigenpal/docx-editor-core/utils/findReplace';
+import type { FindMatch, FindOptions } from '@docx-editor.dev/core/utils/findReplace';
+import { createDefaultFindOptions } from '@docx-editor.dev/core/utils/findReplace';
 
 export type { FindMatch, FindOptions };
 

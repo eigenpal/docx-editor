@@ -15,7 +15,7 @@ import {
   DEFAULT_TEXTBOX_MARGINS,
   DEFAULT_TEXTBOX_WIDTH,
   assertExhaustiveContentNode,
-} from '@eigenpal/docx-editor-core/pagination-model';
+} from '@docx-editor.dev/core/pagination-model';
 import type {
   ContentNode,
   ImageBlock,
@@ -24,7 +24,7 @@ import type {
   TableBlock,
   TableMetrics,
   TextBoxBlock,
-} from '@eigenpal/docx-editor-core/pagination-model';
+} from '@docx-editor.dev/core/pagination-model';
 import {
   type FloatingImageZone,
   type FloatPageGeometry,
@@ -34,7 +34,7 @@ import {
   paragraphLayout,
   measureTable,
   setCachedParagraphMetrics,
-} from '@eigenpal/docx-editor-core/flow-model';
+} from '@docx-editor.dev/core/flow-model';
 
 /**
  * Measure a block based on its type.

@@ -22,14 +22,14 @@ bun run dev:astro   # examples/astro
 | `vite/`                  | Vanilla Vite + React. Default React dev target; point new contributors here first.                              |
 | `vue/`                   | Vue 3 adapter, mirrors the Vite example.                                                                        |
 | `nextjs/`                | Next.js App Router integration.                                                                                 |
-| `nuxt/`                  | Nuxt 3/4 module (`@eigenpal/nuxt-docx-editor`).                                                                 |
+| `nuxt/`                  | Nuxt 3/4 module (`@docx-editor.dev/nuxt`).                                                                      |
 | `astro/`                 | Astro with React island.                                                                                        |
 | `remix/`                 | Remix integration.                                                                                              |
 | `collaboration/`         | Real-time collab proof-of-concept.                                                                              |
 | `parity/`                | Single deployment serving React + Vue adapters with a switcher pill. Used by `bun run preview`.                 |
 | `agents-demo/`           | DocxReviewer + agent tool calls operating on a static `Document` model.                                         |
 | `agent-chat-demo/`       | Live chat panel agent reading the editor + suggesting changes (see `openspec/changes/live-agent-chat/spec.md`). |
-| `plugins/hello-world/`   | Minimal plugin scaffold for `@eigenpal/docx-editor-react`'s plugin API.                                         |
+| `plugins/hello-world/`   | Minimal plugin scaffold for `@docx-editor.dev/react`'s plugin API.                                              |
 | `plugins/docxtemplater/` | Plugin showing docxtemplater variable insertion with live preview.                                              |
 | `shared/`                | Shared switcher widgets + the demo `sample.docx`. Not a runnable example; imported by `vite/` and `vue/`.       |
 | `dev-all.sh`             | Spins up several adapters at once for cross-adapter dogfooding. Backs `bun run dev:demo`.                       |

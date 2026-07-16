@@ -13,9 +13,9 @@ export {
   getAvatarColor,
   truncateText,
   type TrackedChangeEntry,
-} from '@eigenpal/docx-editor-core/utils/comments';
+} from '@docx-editor.dev/core/utils/comments';
 
-import { getAvatarColor } from '@eigenpal/docx-editor-core/utils/comments';
+import { getAvatarColor } from '@docx-editor.dev/core/utils/comments';
 
 /** Inline style for an avatar bubble — mirrors React's avatarStyle(). */
 export function avatarStyle(name: string, size: 32 | 28 = 32): CSSProperties {

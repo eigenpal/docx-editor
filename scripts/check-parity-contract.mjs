@@ -1,6 +1,6 @@
 #!/usr/bin/env node
-// Cross-adapter parity check between @eigenpal/docx-editor-react and
-// @eigenpal/docx-editor-vue. Reads each adapter's API Extractor snapshot
+// Cross-adapter parity check between @docx-editor.dev/react and
+// @docx-editor.dev/vue. Reads each adapter's API Extractor snapshot
 // (`docs/api/<adapter-slug>/index.api.md`), extracts the `DocxEditorProps`
 // and `DocxEditorRef` field names, and applies `scripts/parity/parity.contract.json`.
 //
