@@ -118,7 +118,18 @@ declare global {
         paraAttrs?: Record<string, unknown>
       ) => boolean;
       insertTable: (rows: number, cols: number) => boolean;
-      insertImage: (src: string, width?: number, height?: number) => boolean;
+      insertImage: (
+        src: string,
+        width?: number,
+        height?: number,
+        layoutTarget?:
+          | 'inline'
+          | 'squareLeft'
+          | 'squareRight'
+          | 'topAndBottom'
+          | 'behind'
+          | 'inFront'
+      ) => boolean | Promise<boolean>;
       selectFirstImage: () => boolean;
       plantSimpleTable: () => boolean;
       plantTableRowInsertion: (revisionId: number) => boolean;

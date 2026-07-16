@@ -1,9 +1,6 @@
 import React, { useState, useRef, useCallback, useEffect, useMemo } from 'react';
 import { createEmptyDocument, findStartPosForParaId, parseDocx } from '@docx-editor.dev/core';
 import { setSuggestionMode } from '@docx-editor.dev/core/prosemirror/plugins';
-// Re-exported by core, so the demo needs no direct `prosemirror-state` dep
-// (which would break the production build — it isn't in examples/vite deps).
-import { TextSelection } from '@docx-editor.dev/core/prosemirror';
 import {
   acceptChangeById,
   rejectChangeById,
@@ -12,7 +9,6 @@ import {
   addRowBelow,
   deleteRow,
   insertTable,
-  insertImageNode,
 } from '@docx-editor.dev/core/prosemirror/commands';
 import { loadFont } from '@docx-editor.dev/core/utils';
 import { DocxEditor, type DocxEditorRef } from '@docx-editor.dev/react';
@@ -20,6 +16,7 @@ import { AgentChatLog, type AgentMessage, getToolDisplayName } from '@docx-edito
 import { ExampleSwitcher } from '../../shared/ExampleSwitcher';
 import { AdapterSwitcher } from '../../shared/AdapterSwitcher';
 import { BrandLogo } from '../../shared/BrandLogo';
+import { e2eInsertImage, e2eSelectFirstImage } from './e2eImageHooks';
 
 function extractDocumentText(value: unknown): string {
   if (!value || typeof value !== 'object') return '';
@@ -514,44 +511,20 @@ export function App() {
         if (!view) return false;
         return insertTable(rows, cols)(view.state, view.dispatch);
       },
-      // Test-only: insert an inline image at the cursor via the same helper the
-      // UI uses, so it is wrapped in the `insertion` mark under suggesting mode.
-      insertImage: (src: string, width = 80, height = 60) => {
-        const view = editorRef.current?.getEditorRef()?.getView?.();
-        if (!view) return false;
-        const imageNode = view.state.schema.nodes.image.create({
+      // Test-only: insert an image via the same helper the UI uses, then
+      // optionally promote it into an anchored layout through the real wrap-type
+      // command so tracked-image tests exercise the production PM path.
+      insertImage: (src, width = 80, height = 60, layoutTarget = 'inline') =>
+        e2eInsertImage(
+          () => editorRef.current?.getEditorRef()?.getView?.() ?? null,
           src,
-          alt: 'test image',
           width,
           height,
-          wrapType: 'inline',
-          displayMode: 'inline',
-        });
-        return insertImageNode(view.state, view.dispatch, imageNode, view.state.selection.from);
-      },
-      // Test-only: select the first image (a text selection spanning the atom)
-      // so a following Backspace/Delete exercises the suggesting-mode
-      // atom-deletion path.
-      selectFirstImage: () => {
-        const view = editorRef.current?.getEditorRef()?.getView?.();
-        if (!view) return false;
-        let imgPos: number | null = null;
-        view.state.doc.descendants((node, pos) => {
-          if (imgPos != null) return false;
-          if (node.type.name === 'image') {
-            imgPos = pos;
-            return false;
-          }
-          return true;
-        });
-        if (imgPos == null) return false;
-        const tr = view.state.tr.setSelection(
-          TextSelection.create(view.state.doc, imgPos, imgPos + 1)
-        );
-        view.dispatch(tr);
-        view.focus();
-        return true;
-      },
+          layoutTarget,
+          autoZoom
+        ),
+      selectFirstImage: () =>
+        e2eSelectFirstImage(() => editorRef.current?.getEditorRef()?.getView?.() ?? null),
       plantSimpleTable: () => {
         const view = editorRef.current?.getEditorRef()?.getView?.();
         if (!view) return false;
@@ -711,7 +684,7 @@ export function App() {
     return () => {
       delete window.__DOCX_EDITOR_E2E__;
     };
-  }, [isE2E, e2eForceLoading, randomAuthor]);
+  }, [isE2E, e2eForceLoading, randomAuthor, autoZoom]);
 
   // Set once the user starts their own document (New / open a file). The demo
   // fixture fetch below resolves asynchronously and must NOT clobber that

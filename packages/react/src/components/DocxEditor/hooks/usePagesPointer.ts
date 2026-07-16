@@ -834,7 +834,7 @@ export function usePagesPointer(opts: UsePagesPointerOptions): UsePagesPointerRe
           imageInfo = readImageNodeAt(sel.from);
           if (imageInfo) {
             const inlineEl = pagesContainerRef.current?.querySelector(
-              `.layout-run-image[data-doc-from="${sel.from}"]`
+              `.layout-run-image[data-doc-from="${sel.from}"], .layout-run-image-wrapper[data-doc-from="${sel.from}"]`
             ) as HTMLElement | null;
             if (inlineEl) {
               imageInfo.inlinePositionEmu = captureInlinePositionEmu(inlineEl, zoom);
