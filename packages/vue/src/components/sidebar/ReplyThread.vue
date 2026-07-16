@@ -31,7 +31,7 @@
 
 <script setup lang="ts">
 import { computed } from 'vue';
-import type { Comment } from '@eigenpal/docx-editor-core/types/content';
+import type { Comment } from '@docx-editor.dev/core/types/content';
 import { getCommentText, formatDate } from './sidebarUtils';
 import Avatar from './Avatar.vue';
 

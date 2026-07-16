@@ -82,9 +82,9 @@ try {
     path.join(appDir, 'src/App.vue'),
     `<script setup lang="ts">
 import { ref } from 'vue';
-import { DocxEditor } from '@eigenpal/docx-editor-vue';
-import { caretAt, rectsFor, renderDocument } from '@eigenpal/docx-editor-core/api';
-import '@eigenpal/docx-editor-vue/styles.css';
+import { DocxEditor } from '@docx-editor.dev/vue';
+import { caretAt, rectsFor, renderDocument } from '@docx-editor.dev/core/api';
+import '@docx-editor.dev/vue/styles.css';
 
 const buffer = ref<ArrayBuffer | null>(null);
 console.assert(
@@ -183,9 +183,9 @@ export default defineConfig({ plugins: [vue()] });
   writeFileSync(
     path.join(reactAppDir, 'src/main.tsx'),
     `import { createRoot } from 'react-dom/client';
-import { DocxEditor } from '@eigenpal/docx-editor-react';
-import { caretAt, rectsFor, renderDocument } from '@eigenpal/docx-editor-core/api';
-import '@eigenpal/docx-editor-react/styles.css';
+import { DocxEditor } from '@docx-editor.dev/react';
+import { caretAt, rectsFor, renderDocument } from '@docx-editor.dev/core/api';
+import '@docx-editor.dev/react/styles.css';
 
 console.assert(
   typeof renderDocument === 'function' &&

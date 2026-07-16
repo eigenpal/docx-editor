@@ -5,4 +5,4 @@
  * events, and the `DocxEditorRef` typing flow through to Nuxt consumers. The
  * client-only behaviour is applied by `module.ts` via `addComponent`, not here.
  */
-export { DocxEditor as default } from '@eigenpal/docx-editor-vue';
+export { DocxEditor as default } from '@docx-editor.dev/vue';

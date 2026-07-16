@@ -1,10 +1,5 @@
 import { describe, test, expect } from 'bun:test';
-import type {
-  Document,
-  DocumentBody,
-  Footnote,
-  Endnote,
-} from '@eigenpal/docx-editor-core/headless';
+import type { Document, DocumentBody, Footnote, Endnote } from '@docx-editor.dev/core/headless';
 import { DocxReviewer } from '../DocxReviewer';
 import { applyReview } from '../batch';
 import { makeParagraph, makeParagraphFrom, makeInsertion, makeDeletion } from './_helpers';

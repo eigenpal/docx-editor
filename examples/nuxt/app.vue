@@ -12,7 +12,7 @@
     <main class="main">
       <!--
         <DocxEditor> is auto-imported and registered client-only by
-        @eigenpal/nuxt-docx-editor — no import or <ClientOnly> wrapper needed.
+        @docx-editor.dev/nuxt — no import or <ClientOnly> wrapper needed.
       -->
       <DocxEditor
         :document="documentBuffer ? undefined : currentDocument"
@@ -26,7 +26,7 @@
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue';
-import { createEmptyDocument, type Document } from '@eigenpal/docx-editor-core';
+import { createEmptyDocument, type Document } from '@docx-editor.dev/core';
 
 const documentBuffer = ref<ArrayBuffer | undefined>(undefined);
 const currentDocument = ref<Document | null>(null);

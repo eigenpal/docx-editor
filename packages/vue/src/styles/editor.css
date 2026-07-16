@@ -1,5 +1,5 @@
 /* The editor chrome stylesheet is the single source of truth in
-   @eigenpal/docx-editor-core (packages/core/src/styles/editor.css). This Vue
+   @docx-editor.dev/core (packages/core/src/styles/editor.css). This Vue
    adapter imports it so the color tokens and ALL UI styling are identical to
    React — there are no Vue-only CSS rules. `@tailwind utilities` lives in the
    shared file and is expanded by this package's own Tailwind build (vite

@@ -15,7 +15,7 @@ import type {
   Footnote,
   Endnote,
   ParagraphContent,
-} from '@eigenpal/docx-editor-core/headless';
+} from '@docx-editor.dev/core/headless';
 import { DocxReviewer } from '../DocxReviewer';
 import { ChangeNotFoundError } from '../errors';
 import { makeRun, makeInsertion, makeDeletion, makeParagraph, makeParagraphFrom } from './_helpers';

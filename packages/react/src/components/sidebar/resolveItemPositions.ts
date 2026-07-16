@@ -4,7 +4,7 @@ import type { ReactSidebarItem } from '../../plugin-api/types';
 import {
   resolveItemPositions as coreResolveItemPositions,
   type ResolvedPosition as CoreResolvedPosition,
-} from '@eigenpal/docx-editor-core/plugin-api/resolveItemPositions';
+} from '@docx-editor.dev/core/plugin-api/resolveItemPositions';
 
 export type ResolvedPosition = CoreResolvedPosition<ReactSidebarItem>;
 

@@ -39,7 +39,7 @@ Rationale: matches the existing layout — commands, content controls, and conve
 **2. Adapters delegate, and keep their old import paths via thin re-exports where call sites are many.**
 Rationale: `pmAnchors.ts`/`vanillaText.ts`/`paraTextHelpers.ts` have ~10 import sites; re-exporting from core avoids churn and keeps each PR small. New delegations (ref methods, commit calls) call core directly.
 
-**3. `applyFormatting`/`setParagraphStyle` take an injected `getStyleResolver` dependency; standardize on the `@eigenpal/docx-editor-core/prosemirror/commands` index import.**
+**3. `applyFormatting`/`setParagraphStyle` take an injected `getStyleResolver` dependency; standardize on the `@docx-editor.dev/core/prosemirror/commands` index import.**
 Rationale: the only real divergence is resolver sourcing (React's cached resolver over `historyStateRef` vs Vue's `createStyleResolver`). Inject it rather than baking either in. Alternative (passing a resolved resolver object) is less flexible for React's cache. The name-keyed-registry-vs-typed-switch dispatch question from Tier 3 is **not** in scope here — this lifts one function, not the dispatch layer.
 
 **4. Table-resize, image-commit, and comment-ops lift only the pure readers/commit/transaction builders; FSMs and notify wiring stay in adapters.**

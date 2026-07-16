@@ -21,14 +21,14 @@ Three sentinel states matter:
 - `null` mounts an empty document immediately (useful when collecting input from scratch).
 - `undefined` defers the mount until the buffer arrives, which skips the empty-state flash while a fetch is in flight.
 
-If you already hold a parsed `Document` tree from `@eigenpal/docx-editor-core`, pass it through the `document` prop instead and skip the parser.
+If you already hold a parsed `Document` tree from `@docx-editor.dev/core`, pass it through the `document` prop instead and skip the parser.
 
 ### From a URL
 
 ```tsx
 import { useEffect, useState } from 'react';
-import { DocxEditor } from '@eigenpal/docx-editor-react';
-import '@eigenpal/docx-editor-react/styles.css';
+import { DocxEditor } from '@docx-editor.dev/react';
+import '@docx-editor.dev/react/styles.css';
 
 export function Editor({ url }: { url: string }) {
   const [buf, setBuf] = useState<ArrayBuffer | null>(null);
@@ -55,7 +55,7 @@ export function Editor({ url }: { url: string }) {
 
 ```tsx
 import { useState } from 'react';
-import { DocxEditor } from '@eigenpal/docx-editor-react';
+import { DocxEditor } from '@docx-editor.dev/react';
 
 export function FileEditor() {
   const [file, setFile] = useState<File | null>(null);
@@ -137,7 +137,7 @@ async function downloadDocx(ref: DocxEditorRef, fileName: string) {
 
 ```tsx
 import { useRef } from 'react';
-import { DocxEditor, type DocxEditorRef } from '@eigenpal/docx-editor-react';
+import { DocxEditor, type DocxEditorRef } from '@docx-editor.dev/react';
 
 export function AutosaveEditor({ docId }: { docId: string }) {
   const ref = useRef<DocxEditorRef>(null);
@@ -159,7 +159,7 @@ export function AutosaveEditor({ docId }: { docId: string }) {
 
 Pick a debounce window that matches your backend's write tolerance. 1 to 2 seconds is a reasonable default.
 
-For local crash recovery rather than server persistence, the React adapter ships `useAutoSave` in `@eigenpal/docx-editor-react/hooks`: it persists the parsed `Document` to localStorage on an interval and exposes recovery data (`hasRecoveryData`, `acceptRecovery`) after a reload.
+For local crash recovery rather than server persistence, the React adapter ships `useAutoSave` in `@docx-editor.dev/react/hooks`: it persists the parsed `Document` to localStorage on an interval and exposes recovery data (`hasRecoveryData`, `acceptRecovery`) after a reload.
 
 ## Read-only rendering
 

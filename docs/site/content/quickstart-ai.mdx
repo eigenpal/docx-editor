@@ -13,7 +13,7 @@ This page adds an assistant panel to a Next.js App Router page. The model can re
 ## Install
 
 ```bash
-npm install @eigenpal/docx-editor-react @eigenpal/docx-editor-agents ai @ai-sdk/react @ai-sdk/openai
+npm install @docx-editor.dev/react @docx-editor.dev/agents ai @ai-sdk/react @ai-sdk/openai
 ```
 
 Set `OPENAI_API_KEY` in the environment that runs your Next.js app, or swap `@ai-sdk/openai` for another AI SDK provider.
@@ -30,7 +30,7 @@ the client, which runs it against the live editor.
 // app/api/chat/route.ts
 import { streamText, convertToModelMessages, stepCountIs, type UIMessage } from 'ai';
 import { openai } from '@ai-sdk/openai';
-import { getAiSdkTools } from '@eigenpal/docx-editor-agents/ai-sdk/server';
+import { getAiSdkTools } from '@docx-editor.dev/agents/ai-sdk/server';
 
 export async function POST(req: Request) {
   const { messages } = (await req.json()) as { messages: UIMessage[] };
@@ -60,20 +60,20 @@ import { useMemo, useRef, useState } from 'react';
 import dynamic from 'next/dynamic';
 import { useChat } from '@ai-sdk/react';
 import { DefaultChatTransport, lastAssistantMessageIsCompleteWithToolCalls } from 'ai';
-import { type DocxEditorRef } from '@eigenpal/docx-editor-react';
-import '@eigenpal/docx-editor-react/styles.css';
+import { type DocxEditorRef } from '@docx-editor.dev/react';
+import '@docx-editor.dev/react/styles.css';
 import {
   AgentChatLog,
   AgentComposer,
   useDocxAgentTools,
   getToolDisplayName,
   type EditorRefLike,
-} from '@eigenpal/docx-editor-agents/react';
-import { toAgentMessages } from '@eigenpal/docx-editor-agents/ai-sdk/react';
+} from '@docx-editor.dev/agents/react';
+import { toAgentMessages } from '@docx-editor.dev/agents/ai-sdk/react';
 
 // Client-only import; see /docs/1.x/installation for the SSR recipe.
 const DocxEditor = dynamic(
-  () => import('@eigenpal/docx-editor-react').then((m) => ({ default: m.DocxEditor })),
+  () => import('@docx-editor.dev/react').then((m) => ({ default: m.DocxEditor })),
   { ssr: false }
 );
 

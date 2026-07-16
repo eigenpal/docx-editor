@@ -17,9 +17,9 @@ import { Tooltip } from './Tooltip';
 import { MaterialSymbol } from './MaterialSymbol';
 import { cn } from '../../lib/utils';
 import type { TableAction } from './TableToolbar';
-import type { TableContextInfo } from '@eigenpal/docx-editor-core/prosemirror/extensions';
+import type { TableContextInfo } from '@docx-editor.dev/core/prosemirror/extensions';
 import { useTranslation } from '../../i18n';
-import type { TranslationKey } from '@eigenpal/docx-editor-i18n';
+import type { TranslationKey } from '@docx-editor.dev/i18n';
 
 // ============================================================================
 // TYPES

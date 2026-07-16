@@ -52,10 +52,10 @@ Watermarks in opened documents render as Word shows them, and edits round-trip t
 
 ### Headless
 
-`getDocumentWatermark` and `setDocumentWatermark` from `@eigenpal/docx-editor-core/headless` read and write the same model:
+`getDocumentWatermark` and `setDocumentWatermark` from `@docx-editor.dev/core/headless` read and write the same model:
 
 ```ts
-import { parseDocx, setDocumentWatermark, repackDocx } from "@eigenpal/docx-editor-core/headless";
+import { parseDocx, setDocumentWatermark, repackDocx } from "@docx-editor.dev/core/headless";
 
 let doc = await parseDocx(buffer);
 

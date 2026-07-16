@@ -4,7 +4,7 @@
 
 import { useRef, useCallback, useState, useEffect, useMemo, forwardRef } from 'react';
 import type { CSSProperties, ReactNode } from 'react';
-import type { Document, Theme } from '@eigenpal/docx-editor-core/types/document';
+import type { Document, Theme } from '@docx-editor.dev/core/types/document';
 
 import { cn } from '../lib/utils';
 import { type SelectionFormatting } from './Toolbar';
@@ -47,27 +47,27 @@ import { useCommentSidebarItems, type CommentCallbacks } from '../hooks/useComme
 import { extractTrackedChanges } from '../hooks/useTrackedChanges';
 import { type EditorState as PMEditorState } from 'prosemirror-state';
 import type { ReactSidebarItem } from '../plugin-api/types';
-import type { Comment } from '@eigenpal/docx-editor-core/types/content';
-import type { Translations } from '@eigenpal/docx-editor-i18n';
+import type { Comment } from '@docx-editor.dev/core/types/content';
+import type { Translations } from '@docx-editor.dev/i18n';
 import { type PrintOptions } from './ui/PrintPreview';
 // Dialog hooks and utilities (static imports — lightweight, no UI)
 import { useFindReplace } from './dialogs/FindReplaceDialog';
 import { useHyperlinkDialog } from './dialogs/HyperlinkDialog';
 import { type InlineHeaderFooterEditorRef } from './InlineHeaderFooterEditor';
-import { DocumentAgent } from '@eigenpal/docx-editor-core/agent';
+import { DocumentAgent } from '@docx-editor.dev/core/agent';
 import { DefaultLoadingIndicator, DefaultPlaceholder, ParseError } from './DocxEditorHelpers';
-import { type DocxInput } from '@eigenpal/docx-editor-core/utils';
-import type { FontDefinition, ScrollToParaIdOptions } from '@eigenpal/docx-editor-core/utils';
+import { type DocxInput } from '@docx-editor.dev/core/utils';
+import type { FontDefinition, ScrollToParaIdOptions } from '@docx-editor.dev/core/utils';
 import { useFontLifecycle } from '../hooks/useFontLifecycle';
 import { useTableSelection } from '../hooks/useTableSelection';
 import { useDocumentHistory } from '../hooks/useHistory';
 
 // Extension system
-import { singletonManager } from '@eigenpal/docx-editor-core/prosemirror/schema';
+import { singletonManager } from '@docx-editor.dev/core/prosemirror/schema';
 import {
   createSuggestionModePlugin,
   setSuggestionMode,
-} from '@eigenpal/docx-editor-core/prosemirror/plugins';
+} from '@docx-editor.dev/core/prosemirror/plugins';
 
 // Conversion (for HF inline editor save)
 
@@ -78,20 +78,20 @@ import {
   createStyleResolver,
   type TableContextInfo,
   type PMContentControl,
-} from '@eigenpal/docx-editor-core/prosemirror';
-import type { ContentControlFilter, ContentControlValue } from '@eigenpal/docx-editor-core/agent';
+} from '@docx-editor.dev/core/prosemirror';
+import type { ContentControlFilter, ContentControlValue } from '@docx-editor.dev/core/agent';
 import {
   acceptChange,
   rejectChange,
   acceptChangeById,
   rejectChangeById,
-} from '@eigenpal/docx-editor-core/prosemirror/commands';
-import { collectHeadings } from '@eigenpal/docx-editor-core/utils';
+} from '@docx-editor.dev/core/prosemirror/commands';
+import { collectHeadings } from '@docx-editor.dev/core/utils';
 import {
   prefersColorSchemeDark,
   resolveIsDark,
   subscribeSystemDark,
-} from '@eigenpal/docx-editor-core/utils';
+} from '@docx-editor.dev/core/utils';
 
 // Paginated editor
 import { type PagedEditorRef, DEFAULT_PAGE_WIDTH } from './DocxEditor/PagedEditor';
@@ -545,7 +545,7 @@ interface EditorState {
   paragraphIndentRight: number;
   paragraphFirstLineIndent: number;
   paragraphHangingIndent: boolean;
-  paragraphTabs: import('@eigenpal/docx-editor-core/types/document').TabMark[] | null;
+  paragraphTabs: import('@docx-editor.dev/core/types/document').TabMark[] | null;
   /** ProseMirror table context (for showing table toolbar) */
   pmTableContext: TableContextInfo | null;
   /** Image context when cursor is on an image node */
@@ -572,7 +572,7 @@ import type { EditorMode } from './DocxEditor/internals/editing-modes';
 // ============================================================================
 
 // `injectReplyRangeMarkers` + `injectTCReplyRangeMarkers` live in
-// `@eigenpal/docx-editor-core/docx` so React + Vue share the same
+// `@docx-editor.dev/core/docx` so React + Vue share the same
 // pre-serialization range-marker injection.
 
 import { getInitialSectionProperties } from './DocxEditor/internals/pmAnchors';

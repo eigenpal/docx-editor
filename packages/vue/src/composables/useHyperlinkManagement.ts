@@ -6,7 +6,7 @@
 
 import { ref, type Ref } from 'vue';
 import type { EditorView } from 'prosemirror-view';
-import { findHyperlinkRangeAt } from '@eigenpal/docx-editor-core/prosemirror/commands/formatting';
+import { findHyperlinkRangeAt } from '@docx-editor.dev/core/prosemirror/commands/formatting';
 import type { HyperlinkPopupData } from '../components/ui/hyperlinkPopupTypes';
 export type { HyperlinkPopupData };
 

@@ -1,4 +1,4 @@
-# @eigenpal/docx-editor-agents
+# @docx-editor.dev/agents
 
 ## 1.10.0
 
@@ -20,7 +20,7 @@
 
 ### Patch Changes
 
-- 2dedf30: The agent bridge now re-exports the paragraph-flash option types (`ParagraphHighlightOptions`, `ScrollToParaIdOptions`) from `@eigenpal/docx-editor-core` instead of redeclaring them, so the two definitions can't drift. No change to the public API surface.
+- 2dedf30: The agent bridge now re-exports the paragraph-flash option types (`ParagraphHighlightOptions`, `ScrollToParaIdOptions`) from `@docx-editor.dev/core` instead of redeclaring them, so the two definitions can't drift. No change to the public API surface.
 - 6b1897a: Fix `DocxReviewer.getChanges()` dropping a tracked change when two changes in different paragraphs share a revision id (Word reuses `w:id` across paragraphs), which made the enumerated change list disagree with the count from `acceptAll`/`rejectAll`.
 
 ## 1.6.2
@@ -96,25 +96,25 @@
 
   ## Package restructure (breaking)
 
-  | Old import                                 | New import                                |
-  | ------------------------------------------ | ----------------------------------------- |
-  | `@eigenpal/docx-js-editor`                 | `@eigenpal/docx-editor-react`             |
-  | `@eigenpal/docx-js-editor/react`           | `@eigenpal/docx-editor-react`             |
-  | `@eigenpal/docx-editor-react/core`         | `@eigenpal/docx-editor-core`              |
-  | `@eigenpal/docx-editor-react/headless`     | `@eigenpal/docx-editor-core/headless`     |
-  | `@eigenpal/docx-editor-react/core-plugins` | `@eigenpal/docx-editor-core/core-plugins` |
-  | `@eigenpal/docx-editor-react/mcp`          | `@eigenpal/docx-editor-agents/mcp`        |
-  | `@eigenpal/docx-editor-react/i18n/*.json`  | `@eigenpal/docx-editor-i18n/*.json`       |
+  | Old import                            | New import                           |
+  | ------------------------------------- | ------------------------------------ |
+  | `@eigenpal/docx-js-editor`            | `@docx-editor.dev/react`             |
+  | `@eigenpal/docx-js-editor/react`      | `@docx-editor.dev/react`             |
+  | `@docx-editor.dev/react/core`         | `@docx-editor.dev/core`              |
+  | `@docx-editor.dev/react/headless`     | `@docx-editor.dev/core/headless`     |
+  | `@docx-editor.dev/react/core-plugins` | `@docx-editor.dev/core/core-plugins` |
+  | `@docx-editor.dev/react/mcp`          | `@docx-editor.dev/agents/mcp`        |
+  | `@docx-editor.dev/react/i18n/*.json`  | `@docx-editor.dev/i18n/*.json`       |
 
   The old `@eigenpal/docx-js-editor` package stays on 0.x for legacy maintenance — no 1.x compatibility shim ships. Framework-agnostic utilities (e.g. `createEmptyDocument`) move to core:
 
   ```diff
   - import { DocxEditor, createEmptyDocument } from '@eigenpal/docx-js-editor';
-  + import { DocxEditor } from '@eigenpal/docx-editor-react';
-  + import { createEmptyDocument } from '@eigenpal/docx-editor-core';
+  + import { DocxEditor } from '@docx-editor.dev/react';
+  + import { createEmptyDocument } from '@docx-editor.dev/core';
   ```
 
-  ## Vue 3 adapter (`@eigenpal/docx-editor-vue`)
+  ## Vue 3 adapter (`@docx-editor.dev/vue`)
 
   The Vue package becomes a real adapter (previously a stub). Public API mirrors React:
   - `<DocxEditor>` with matching prop surface
@@ -123,28 +123,28 @@
 
   Parity gates cover insert-table, find/replace, page-setup, context menus, image overlay (resize/move/rotate/aspect-locked corners, dimension tooltip), advanced cell/row options (margins, height rule, text direction, no-wrap), menu-bar icons + shortcuts + carets, toolbar pickers, and the agent UI surface.
 
-  ## Shared i18n package (`@eigenpal/docx-editor-i18n`)
+  ## Shared i18n package (`@docx-editor.dev/i18n`)
 
-  Locale strings move out of `@eigenpal/docx-editor-react` into a dedicated package consumed by both adapters from a single source.
+  Locale strings move out of `@docx-editor.dev/react` into a dedicated package consumed by both adapters from a single source.
 
   ```diff
-  - import de from '@eigenpal/docx-editor-react/i18n/de.json';
-  + import de from '@eigenpal/docx-editor-i18n/de.json';
+  - import de from '@docx-editor.dev/react/i18n/de.json';
+  + import de from '@docx-editor.dev/i18n/de.json';
   ```
 
   The `defaultLocale` value (English) is still re-exported from the adapter packages, unchanged.
 
   ## Agent UI relocation (breaking)
 
-  `AgentPanel`, `AgentChatLog`, `AgentComposer`, `AgentSuggestionChip`, `AgentTimeline` no longer ship from `@eigenpal/docx-editor-react`. They live at:
-  - `@eigenpal/docx-editor-agents/react` — React components + `useAgentChat`
-  - `@eigenpal/docx-editor-agents/vue` — Vue 3 twins, plus `AIContextMenu` and `AIResponsePreview`
-  - `@eigenpal/docx-editor-agents/ai-sdk/react` / `/ai-sdk/vue` — `@ai-sdk/*` adapters
-  - `@eigenpal/docx-editor-agents/bridge` — React-free `createEditorBridge`, `agentTools`, `executeToolCall`, `getToolSchemas`, `createReviewerBridge`. Safe for headless / Vue / Node.
+  `AgentPanel`, `AgentChatLog`, `AgentComposer`, `AgentSuggestionChip`, `AgentTimeline` no longer ship from `@docx-editor.dev/react`. They live at:
+  - `@docx-editor.dev/agents/react` — React components + `useAgentChat`
+  - `@docx-editor.dev/agents/vue` — Vue 3 twins, plus `AIContextMenu` and `AIResponsePreview`
+  - `@docx-editor.dev/agents/ai-sdk/react` / `/ai-sdk/vue` — `@ai-sdk/*` adapters
+  - `@docx-editor.dev/agents/bridge` — React-free `createEditorBridge`, `agentTools`, `executeToolCall`, `getToolSchemas`, `createReviewerBridge`. Safe for headless / Vue / Node.
 
   ```diff
-  - import { AgentPanel, AgentChatLog } from '@eigenpal/docx-editor-react';
-  + import { AgentPanel, AgentChatLog } from '@eigenpal/docx-editor-agents/react';
+  - import { AgentPanel, AgentChatLog } from '@docx-editor.dev/react';
+  + import { AgentPanel, AgentChatLog } from '@docx-editor.dev/agents/react';
   ```
 
   The agent components no longer call `useTranslation` directly — pass localized `*Label` props instead. `<DocxEditor>`'s built-in agent panel slot still forwards localized strings automatically.
@@ -176,12 +176,12 @@
 
   ## License moves to Apache 2.0
 
-  All published packages relicense to Apache 2.0. Notably: `@eigenpal/docx-editor-agents` was AGPL-3.0-or-later — the relicense lifts copyleft obligations on agent embedders.
+  All published packages relicense to Apache 2.0. Notably: `@docx-editor.dev/agents` was AGPL-3.0-or-later — the relicense lifts copyleft obligations on agent embedders.
 
 ### Patch Changes
 
-- c5125ff: Wire API Extractor on `@eigenpal/docx-editor-agents/server`. Tag the 11 public exports with `@public`. Commits the first `etc/agents-server.api.md` snapshot; CI now fails on undocumented public-surface drift via `bun run api:check`. No runtime change.
-- f7b8dc7: Move the source folder from `packages/agent-use` to `packages/agents` so it matches the published npm name (`@eigenpal/docx-editor-agents`). The npm package name, version, exports, and import paths are unchanged — no consumer action needed.
+- c5125ff: Wire API Extractor on `@docx-editor.dev/agents/server`. Tag the 11 public exports with `@public`. Commits the first `etc/agents-server.api.md` snapshot; CI now fails on undocumented public-surface drift via `bun run api:check`. No runtime change.
+- f7b8dc7: Move the source folder from `packages/agent-use` to `packages/agents` so it matches the published npm name (`@docx-editor.dev/agents`). The npm package name, version, exports, and import paths are unchanged — no consumer action needed.
 
 ## 0.5.1
 
@@ -218,7 +218,7 @@
   - **Mutate** — `add_comment`, `suggest_change` (one tool, three modes via empty-string semantics: replacement / deletion / insertion at paragraph end), `reply_comment`, `resolve_comment`
   - **Navigate** — `scroll`
 
-  Exported from `@eigenpal/docx-editor-agents` as `agentTools`, `getToolSchemas()`, `executeToolCall(name, args, bridge)`.
+  Exported from `@docx-editor.dev/agents` as `agentTools`, `getToolSchemas()`, `executeToolCall(name, args, bridge)`.
 
   ## Two bridges, same interface
 
@@ -226,11 +226,11 @@
 
   ```ts
   // Live editor in a browser
-  import { useAgentChat } from '@eigenpal/docx-editor-agents/bridge';
+  import { useAgentChat } from '@docx-editor.dev/agents/bridge';
   const { executeToolCall, toolSchemas } = useAgentChat({ editorRef, author: 'AI' });
 
   // Server-side, against a parsed DOCX
-  import { DocxReviewer, createReviewerBridge } from '@eigenpal/docx-editor-agents';
+  import { DocxReviewer, createReviewerBridge } from '@docx-editor.dev/agents';
   const reviewer = await DocxReviewer.fromBuffer(buffer, 'AI');
   const bridge = createReviewerBridge(reviewer);
   const result = executeToolCall('add_comment', { paraId, text }, bridge);
@@ -241,8 +241,8 @@
   ## MCP server (built-in, spec 2025-06-18)
 
   ```ts
-  import { McpServer, createReviewerBridge, DocxReviewer } from '@eigenpal/docx-editor-agents';
-  import { McpServer as _ } from '@eigenpal/docx-editor-agents/mcp';
+  import { McpServer, createReviewerBridge, DocxReviewer } from '@docx-editor.dev/agents';
+  import { McpServer as _ } from '@docx-editor.dev/agents/mcp';
 
   const server = new McpServer(bridge, { name: 'my-saas', version: '1.0.0' });
   const reply = server.handle(jsonRpcMessage); // sync, transport-free, never throws

@@ -26,7 +26,7 @@ Effect: a document loaded, edited anywhere, and saved comes out with every block
   - `packages/core/src/docx/paragraphParser/content.ts` — inline parser uses the shared helper (local `parseSdtProperties` at `:59`)
   - `packages/core/src/docx/serializer/documentSerializer.ts` — verbatim block branch (`:575-582` today only emits alias+tag)
   - `packages/core/src/docx/__tests__/sdt-content-roundtrip.test.ts` — block fixtures + passthrough/ordering/nesting tests
-- Public API: `SdtProperties`/`BlockSdt`/`SdtType`/`InlineSdt` are `@public`; `bun run api:extract` is **mandatory** (the snapshot will change). Changeset: `patch` for `@eigenpal/docx-editor-core`.
+- Public API: `SdtProperties`/`BlockSdt`/`SdtType`/`InlineSdt` are `@public`; `bun run api:extract` is **mandatory** (the snapshot will change). Changeset: `patch` for `@docx-editor.dev/core`.
 
 ## Open Questions
 

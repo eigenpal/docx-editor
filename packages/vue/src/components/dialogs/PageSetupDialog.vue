@@ -93,8 +93,8 @@
 
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue';
-import type { SectionProperties } from '@eigenpal/docx-editor-core/types/document';
-import { TWIPS_PER_INCH } from '@eigenpal/docx-editor-core/utils';
+import type { SectionProperties } from '@docx-editor.dev/core/types/document';
+import { TWIPS_PER_INCH } from '@docx-editor.dev/core/utils';
 import { useTranslation } from '../../i18n';
 
 const { t } = useTranslation();

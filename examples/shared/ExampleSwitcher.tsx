@@ -188,12 +188,16 @@ export function ExampleSwitcher({ current }: ExampleSwitcherProps) {
                 dangerouslySetInnerHTML={{ __html: example.icon }}
               />
               {example.name}
-              <span style={{ color: 'var(--doc-text-subtle)', marginLeft: 'auto', fontSize: '11px' }}>source</span>
+              <span
+                style={{ color: 'var(--doc-text-subtle)', marginLeft: 'auto', fontSize: '11px' }}
+              >
+                source
+              </span>
             </a>
           ))}
           <div style={{ height: '1px', background: 'var(--doc-border)', margin: '4px 0' }} />
           <a
-            href="https://www.npmjs.com/package/@eigenpal/docx-editor-react"
+            href="https://www.npmjs.com/package/@docx-editor.dev/react"
             target="_blank"
             rel="noopener noreferrer"
             style={dropdownItemStyle}

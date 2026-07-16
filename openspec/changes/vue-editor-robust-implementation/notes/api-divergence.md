@@ -35,7 +35,7 @@ The following React host-customization props are now wired in Vue as well:
 Still divergent from React:
 
 - No controlled comments props (`comments`, `onCommentsChange`) yet.
-- No `agentPanel` prop yet; use `@eigenpal/docx-editor-agents/vue` components directly.
+- No `agentPanel` prop yet; use `@docx-editor.dev/agents/vue` components directly.
 - No `externalContent` mode yet.
 - No placeholder/loading render props, print options, copy/cut/paste callbacks, or margin-guide/ruler-unit props yet.
 

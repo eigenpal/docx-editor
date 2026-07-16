@@ -1,30 +1,30 @@
 ---
-title: "@eigenpal/nuxt-docx-editor"
+title: "@docx-editor.dev/nuxt"
 description: "Official Nuxt 3 and 4 module. Auto-imports an SSR-safe <DocxEditor>, injects the stylesheet, no <ClientOnly> boilerplate."
 category: "Vue"
 order: 43
 ---
 
-<PackageStats name="@eigenpal/nuxt-docx-editor" />
+<PackageStats name="@docx-editor.dev/nuxt" />
 
-`@eigenpal/nuxt-docx-editor` is the official Nuxt module. It wraps [`@eigenpal/docx-editor-vue`](/docs/1.x/vue) and registers an SSR-safe `<DocxEditor>` as an auto-imported component, so a Nuxt app needs no manual import, no `<ClientOnly>` wrapper, and no Vite config. It supports Nuxt 3 and Nuxt 4.
+`@docx-editor.dev/nuxt` is the official Nuxt module. It wraps [`@docx-editor.dev/vue`](/docs/1.x/vue) and registers an SSR-safe `<DocxEditor>` as an auto-imported component, so a Nuxt app needs no manual import, no `<ClientOnly>` wrapper, and no Vite config. It supports Nuxt 3 and Nuxt 4.
 
 For a step-by-step walkthrough with loading, saving, tracked changes, and collaboration, see the [Nuxt DOCX editor guide](/blog/nuxt-docx-editor).
 
 ## Install
 
 ```bash
-npm install @eigenpal/nuxt-docx-editor
+npm install @docx-editor.dev/nuxt
 ```
 
-Pulls in `@eigenpal/docx-editor-vue`, and transitively `@eigenpal/docx-editor-core` and `@eigenpal/docx-editor-i18n`.
+Pulls in `@docx-editor.dev/vue`, and transitively `@docx-editor.dev/core` and `@docx-editor.dev/i18n`.
 
 ## Register the module
 
 ```ts
 // nuxt.config.ts
 export default defineNuxtConfig({
-  modules: ['@eigenpal/nuxt-docx-editor'],
+  modules: ['@docx-editor.dev/nuxt'],
 });
 ```
 
@@ -44,7 +44,7 @@ const buf = ref<ArrayBuffer | null>(null);
 </template>
 ```
 
-No import, no `<ClientOnly>`. `<DocxEditor>` is the Vue adapter's component, registered unchanged: the same props (`document-buffer`, `mode`, `show-toolbar`, `external-plugins`, and the rest), events, and `DocxEditorRef` methods as [`@eigenpal/docx-editor-vue`](/docs/1.x/vue). The full prop list is on [Vue props](/docs/1.x/vue/props). It renders in the browser only (ProseMirror measures DOM geometry at mount), so Nuxt shows a placeholder during SSR and hydrates the editor on the client.
+No import, no `<ClientOnly>`. `<DocxEditor>` is the Vue adapter's component, registered unchanged: the same props (`document-buffer`, `mode`, `show-toolbar`, `external-plugins`, and the rest), events, and `DocxEditorRef` methods as [`@docx-editor.dev/vue`](/docs/1.x/vue). The full prop list is on [Vue props](/docs/1.x/vue/props). It renders in the browser only (ProseMirror measures DOM geometry at mount), so Nuxt shows a placeholder during SSR and hydrates the editor on the client.
 
 ## Load a document
 
@@ -77,7 +77,7 @@ To save, call `save()` on the component's `DocxEditorRef`; it resolves to an `Ar
 
 ```ts
 export default defineNuxtConfig({
-  modules: ['@eigenpal/nuxt-docx-editor'],
+  modules: ['@docx-editor.dev/nuxt'],
   docxEditor: {
     prefix: 'Ep',
     injectStyles: true,
@@ -88,15 +88,15 @@ export default defineNuxtConfig({
 | Option | Type | Default | Description |
 |---|---|---|---|
 | `prefix` | `string` | `''` | Component name prefix. `Ep` registers `<EpDocxEditor>`. |
-| `injectStyles` | `boolean` | `true` | Pushes `@eigenpal/docx-editor-vue/styles.css` into `nuxt.options.css`. Set `false` to import the stylesheet yourself. |
+| `injectStyles` | `boolean` | `true` | Pushes `@docx-editor.dev/vue/styles.css` into `nuxt.options.css`. Set `false` to import the stylesheet yourself. |
 
 ## Composables
 
-Every composable from `@eigenpal/docx-editor-vue/composables` (`useDocxEditor`, `useTrackedChanges`, `useFindReplace`, `useAutoSave`, and the rest) is auto-imported. Use them in any page or component with no import.
+Every composable from `@docx-editor.dev/vue/composables` (`useDocxEditor`, `useTrackedChanges`, `useFindReplace`, `useAutoSave`, and the rest) is auto-imported. Use them in any page or component with no import.
 
 ## What the module does not re-export
 
-The module re-exports the `<DocxEditor>` component and the composables, not the whole adapter. These come from `@eigenpal/docx-editor-vue` directly:
+The module re-exports the `<DocxEditor>` component and the composables, not the whole adapter. These come from `@docx-editor.dev/vue` directly:
 
 - the `DocxEditorProps` and `DocxEditorRef` types
 - `renderAsync`, `createEmptyDocument`
@@ -105,7 +105,7 @@ The module re-exports the `<DocxEditor>` component and the composables, not the 
 If you use any of them, add the adapter to your own `dependencies` so the import is explicit:
 
 ```bash
-npm install @eigenpal/docx-editor-vue
+npm install @docx-editor.dev/vue
 ```
 
 ## Next steps

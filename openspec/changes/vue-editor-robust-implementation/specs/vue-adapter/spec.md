@@ -17,7 +17,7 @@ The Vue adapter is client-only. SSR is out of scope for v1. The `<DocxEditor>` c
 #### Scenario: Mount on server fails with clear guidance
 
 - **WHEN** a Nuxt SSR pass tries to render `<DocxEditor>` server-side
-- **THEN** the component throws a single clear error: "@eigenpal/docx-editor-vue is client-only. Wrap with <ClientOnly> in Nuxt, or use defineAsyncComponent. See packages/vue/README.md#nuxt"
+- **THEN** the component throws a single clear error: "@docx-editor.dev/vue is client-only. Wrap with <ClientOnly> in Nuxt, or use defineAsyncComponent. See packages/vue/README.md#nuxt"
 - **AND** the error does NOT cascade through Vue's rendering pipeline as a generic window-undefined crash
 
 #### Scenario: Nuxt usage documented in Vue README
@@ -92,7 +92,7 @@ The package SHALL export a `useTranslation()` composable returning `{ t }` where
 
 ### Requirement: Plugin host parity (built-in plugins only)
 
-The Vue adapter SHALL accept the same plugin API as React for built-in plugins shipped with `@eigenpal/docx-editor-core`. Third-party plugin authoring is explicitly out of scope for v1; the spec MAY be amended in a follow-up to add Vue-specific composable equivalents of React plugin hooks.
+The Vue adapter SHALL accept the same plugin API as React for built-in plugins shipped with `@docx-editor.dev/core`. Third-party plugin authoring is explicitly out of scope for v1; the spec MAY be amended in a follow-up to add Vue-specific composable equivalents of React plugin hooks.
 
 #### Scenario: Built-in template plugin works in Vue
 
@@ -108,7 +108,7 @@ The Vue adapter SHALL accept the same plugin API as React for built-in plugins s
 
 ### Requirement: Vue editor ref conforms to `EditorRefLike`
 
-The Vue `<DocxEditor>` component's exposed ref SHALL satisfy the `EditorRefLike` interface from `@eigenpal/docx-editor-agents/bridge` strictly. The Vue adapter SHALL export `DocxEditorRef` typed as `EditorRefLike` (or an extension of it) so a typecheck failure surfaces any method drift between adapter and integration contract. Any method not on `EditorRefLike` that consumers rely on SHALL be added to the agent bridge interface, not bolted onto the Vue ref alone.
+The Vue `<DocxEditor>` component's exposed ref SHALL satisfy the `EditorRefLike` interface from `@docx-editor.dev/agents/bridge` strictly. The Vue adapter SHALL export `DocxEditorRef` typed as `EditorRefLike` (or an extension of it) so a typecheck failure surfaces any method drift between adapter and integration contract. Any method not on `EditorRefLike` that consumers rely on SHALL be added to the agent bridge interface, not bolted onto the Vue ref alone.
 
 #### Scenario: Type-level conformance
 
@@ -118,17 +118,17 @@ The Vue `<DocxEditor>` component's exposed ref SHALL satisfy the `EditorRefLike`
 
 #### Scenario: Bridge attaches successfully at runtime
 
-- **WHEN** a Vue consumer creates `const editorRef = ref<DocxEditorRef | null>(null)`, mounts `<DocxEditor :ref="editorRef" />`, and calls `createEditorBridge({ editorRef })` from `@eigenpal/docx-editor-agents`
+- **WHEN** a Vue consumer creates `const editorRef = ref<DocxEditorRef | null>(null)`, mounts `<DocxEditor :ref="editorRef" />`, and calls `createEditorBridge({ editorRef })` from `@docx-editor.dev/agents`
 - **THEN** the bridge initialises without throwing and exposes its full method surface
 - **AND** subsequent `bridge.proposeChange(...)` calls land as edits in the Vue-mounted editor
 
 ### Requirement: Agent SDK Vue subpath
 
-The `@eigenpal/docx-editor-agents` package SHALL gain a `/vue` subpath export at parity with the existing `/react` subpath. The Vue subpath SHALL provide SFC components (`<AgentPanel>`, `<AgentChatLog>`, `<AgentComposer>`, `<AgentSuggestionChip>`, `<AgentTimeline>`) and composables (`useAgentBridge`, `useAgentEvents`) that wrap the framework-agnostic bridge from `@eigenpal/docx-editor-agents`. Same agent, same UX semantics, two UI flavours.
+The `@docx-editor.dev/agents` package SHALL gain a `/vue` subpath export at parity with the existing `/react` subpath. The Vue subpath SHALL provide SFC components (`<AgentPanel>`, `<AgentChatLog>`, `<AgentComposer>`, `<AgentSuggestionChip>`, `<AgentTimeline>`) and composables (`useAgentBridge`, `useAgentEvents`) that wrap the framework-agnostic bridge from `@docx-editor.dev/agents`. Same agent, same UX semantics, two UI flavours.
 
 #### Scenario: Mount agent panel alongside Vue editor
 
-- **WHEN** a Vue host app renders `<DocxEditor>` from `@eigenpal/docx-editor-vue` and `<AgentPanel>` from `@eigenpal/docx-editor-agents/vue` connected by ref
+- **WHEN** a Vue host app renders `<DocxEditor>` from `@docx-editor.dev/vue` and `<AgentPanel>` from `@docx-editor.dev/agents/vue` connected by ref
 - **THEN** the agent panel mounts, accepts user prompts, and dispatches tool calls against the editor
 - **AND** the same DOCX edits the agent makes through the React adapter are reproducible through the Vue adapter
 
@@ -168,7 +168,7 @@ The `@eigenpal/docx-editor-agents` package SHALL gain a `/vue` subpath export at
 
 ### Requirement: Package boundary (no React imports)
 
-`packages/vue/src/**` SHALL contain zero imports of `react`, `react-dom`, `@types/react`, or any subpath of `@eigenpal/docx-editor-react`. Vue-only UI components live in `packages/vue/src/components/`. Shared logic that doesn't depend on Vue lives in `@eigenpal/docx-editor-core` and is consumed via `import` from there.
+`packages/vue/src/**` SHALL contain zero imports of `react`, `react-dom`, `@types/react`, or any subpath of `@docx-editor.dev/react`. Vue-only UI components live in `packages/vue/src/components/`. Shared logic that doesn't depend on Vue lives in `@docx-editor.dev/core` and is consumed via `import` from there.
 
 #### Scenario: Lint flags a forbidden React import
 

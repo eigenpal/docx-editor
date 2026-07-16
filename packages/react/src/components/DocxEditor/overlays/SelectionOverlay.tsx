@@ -10,7 +10,7 @@
  */
 
 import React, { useEffect, useState, useRef } from 'react';
-import type { SelectionBox, CaretPosition } from '@eigenpal/docx-editor-core/flow-model';
+import type { SelectionBox, CaretPosition } from '@docx-editor.dev/core/flow-model';
 
 // =============================================================================
 // TYPES
@@ -243,9 +243,9 @@ export const SelectionOverlay: React.FC<SelectionOverlayProps> = ({
  */
 export function useSelectionOverlay(
   pmSelection: { from: number; to: number } | null,
-  pageLayout: import('@eigenpal/docx-editor-core/pagination-model').PageLayout | null,
-  nodes: import('@eigenpal/docx-editor-core/pagination-model').ContentNode[],
-  metrics: import('@eigenpal/docx-editor-core/pagination-model').LayoutMetrics[]
+  pageLayout: import('@docx-editor.dev/core/pagination-model').PageLayout | null,
+  nodes: import('@docx-editor.dev/core/pagination-model').ContentNode[],
+  metrics: import('@docx-editor.dev/core/pagination-model').LayoutMetrics[]
 ): {
   selectionGeometry: SelectionBox[];
   caretPosition: CaretPosition | null;
@@ -261,23 +261,21 @@ export function useSelectionOverlay(
     }
 
     // Import dynamically to avoid circular dependencies
-    import('@eigenpal/docx-editor-core/flow-model').then(
-      ({ rectsForSelection, getCaretPosition }) => {
-        const { from, to } = pmSelection;
+    import('@docx-editor.dev/core/flow-model').then(({ rectsForSelection, getCaretPosition }) => {
+      const { from, to } = pmSelection;
 
-        if (from === to) {
-          // Collapsed selection - show caret
-          const caret = getCaretPosition(pageLayout, nodes, metrics, from);
-          setCaretPosition(caret);
-          setSelectionGeometry([]);
-        } else {
-          // Range selection - show highlight
-          const rects = rectsForSelection(pageLayout, nodes, metrics, from, to);
-          setSelectionGeometry(rects);
-          setCaretPosition(null);
-        }
+      if (from === to) {
+        // Collapsed selection - show caret
+        const caret = getCaretPosition(pageLayout, nodes, metrics, from);
+        setCaretPosition(caret);
+        setSelectionGeometry([]);
+      } else {
+        // Range selection - show highlight
+        const rects = rectsForSelection(pageLayout, nodes, metrics, from, to);
+        setSelectionGeometry(rects);
+        setCaretPosition(null);
       }
-    );
+    });
   }, [pmSelection, pageLayout, nodes, metrics]);
 
   return { selectionGeometry, caretPosition };

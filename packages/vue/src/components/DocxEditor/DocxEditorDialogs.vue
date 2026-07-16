@@ -66,7 +66,7 @@
 
 <script setup lang="ts">
 import type { EditorView } from 'prosemirror-view';
-import type { SectionProperties, Watermark } from '@eigenpal/docx-editor-core/types/document';
+import type { SectionProperties, Watermark } from '@docx-editor.dev/core/types/document';
 import FindReplaceDialog from '../dialogs/FindReplaceDialog.vue';
 import HyperlinkDialog from '../dialogs/HyperlinkDialog.vue';
 import InsertSymbolDialog from '../dialogs/InsertSymbolDialog.vue';

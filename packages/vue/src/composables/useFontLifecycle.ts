@@ -1,9 +1,5 @@
 import { onBeforeUnmount, watch } from 'vue';
-import {
-  onFontError,
-  loadFontDefinitions,
-  type FontDefinition,
-} from '@eigenpal/docx-editor-core/utils';
+import { onFontError, loadFontDefinitions, type FontDefinition } from '@docx-editor.dev/core/utils';
 
 /**
  * Vue counterpart to React's `useFontLifecycle`.

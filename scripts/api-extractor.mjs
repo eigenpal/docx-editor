@@ -30,14 +30,14 @@ const pkgArgIdx = args.indexOf('--package');
 if (pkgArgIdx !== -1) {
   const next = args[pkgArgIdx + 1];
   if (!next || next.startsWith('--')) {
-    console.error(`--package requires a value, e.g. --package @eigenpal/docx-editor-core`);
+    console.error(`--package requires a value, e.g. --package @docx-editor.dev/core`);
     process.exit(1);
   }
 }
 const pkgArg = pkgArgIdx !== -1 ? args[pkgArgIdx + 1] : null;
 
 if (pkgArg && !pkgArg.startsWith('@')) {
-  console.error(`--package expects a package name like '@eigenpal/docx-editor-core', got '${pkgArg}'`);
+  console.error(`--package expects a package name like '@docx-editor.dev/core', got '${pkgArg}'`);
   process.exit(1);
 }
 

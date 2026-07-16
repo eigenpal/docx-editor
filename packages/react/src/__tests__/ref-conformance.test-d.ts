@@ -1,7 +1,7 @@
 // Type-level: `DocxEditorRef` must stay assignable to `EditorRefLike`.
 // Drift guard for the agent SDK surface. See openspec §8b.1.
 
-import type { EditorRefLike } from '@eigenpal/docx-editor-agents/bridge';
+import type { EditorRefLike } from '@docx-editor.dev/agents/bridge';
 import type { DocxEditorRef } from '../components/DocxEditor';
 
 function assertAssignable<T>(_value: T): void {}

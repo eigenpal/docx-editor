@@ -16,7 +16,7 @@
 import { computed } from 'vue';
 import IconGridDropdown, { type IconGridOption } from './IconGridDropdown.vue';
 import { useTranslation } from '../../i18n';
-import type { TranslationKey } from '@eigenpal/docx-editor-i18n';
+import type { TranslationKey } from '@docx-editor.dev/i18n';
 
 export type TransformAction = 'rotateCW' | 'rotateCCW' | 'flipH' | 'flipV';
 

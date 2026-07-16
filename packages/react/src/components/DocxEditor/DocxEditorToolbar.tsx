@@ -1,12 +1,12 @@
 import type { CSSProperties, ReactNode } from 'react';
 import type { EditorState as PMEditorState } from 'prosemirror-state';
 import { undoDepth, redoDepth } from 'prosemirror-history';
-import type { Theme, Document } from '@eigenpal/docx-editor-core/types/document';
+import type { Theme, Document } from '@docx-editor.dev/core/types/document';
 import { EditorToolbar } from '../EditorToolbar';
 import { ToolbarSeparator, type SelectionFormatting, type FormattingAction } from '../Toolbar';
 import type { FontOption } from '../ui/FontPicker';
 import type { TableAction } from '../ui/TableToolbar';
-import type { TableContextInfo } from '@eigenpal/docx-editor-core/prosemirror';
+import type { TableContextInfo } from '@docx-editor.dev/core/prosemirror';
 import { CommentsSidebarToggle } from './CommentsSidebarToggle';
 import { EditingModeDropdown } from './EditingModeDropdown';
 import { AgentPanelToggle } from './AgentPanelToggle';

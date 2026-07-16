@@ -14,7 +14,7 @@ import type {
   MoveFrom,
   MoveTo,
   StyleDefinitions,
-} from '@eigenpal/docx-editor-core/headless';
+} from '@docx-editor.dev/core/headless';
 import { DocxReviewer } from '../DocxReviewer';
 import { createReviewerBridge } from '../reviewerBridge';
 import { CommentNotFoundError } from '../errors';

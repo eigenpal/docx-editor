@@ -1,6 +1,6 @@
 # Remix example
 
-`@eigenpal/docx-editor-react` in Remix (Vite). Remix renders on the server by
+`@docx-editor.dev/react` in Remix (Vite). Remix renders on the server by
 default, and the editor is browser-only, so the route gates it behind a
 mount check and a `lazy()` import.
 
@@ -56,7 +56,7 @@ server build.
 ## Use it in your own Remix app
 
 ```bash
-npm install @eigenpal/docx-editor-react @eigenpal/docx-editor-core
+npm install @docx-editor.dev/react @docx-editor.dev/core
 ```
 
 Render the editor only after mount (the `useState`/`useEffect` pattern

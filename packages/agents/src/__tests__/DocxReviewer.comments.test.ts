@@ -4,7 +4,7 @@ import type {
   Comment,
   CommentRangeStart,
   CommentRangeEnd,
-} from '@eigenpal/docx-editor-core/headless';
+} from '@docx-editor.dev/core/headless';
 import { TextNotFoundError, CommentNotFoundError } from '../errors';
 import {
   makeRun,

@@ -10,7 +10,7 @@ By the end of this page you have a Nuxt app that opens a `.docx` from disk and e
 ## Install
 
 ```bash
-npm install @eigenpal/nuxt-docx-editor
+npm install @docx-editor.dev/nuxt
 ```
 
 ## Register the module
@@ -18,7 +18,7 @@ npm install @eigenpal/nuxt-docx-editor
 ```ts
 // nuxt.config.ts
 export default defineNuxtConfig({
-  modules: ['@eigenpal/nuxt-docx-editor'],
+  modules: ['@docx-editor.dev/nuxt'],
 });
 ```
 
@@ -51,7 +51,7 @@ async function onFileSelect(event: Event) {
 </template>
 ```
 
-`<DocxEditor>` never renders during SSR; Nuxt shows a placeholder and hydrates the editor on the client. The component is the Vue adapter registered unchanged, so every prop, event, and ref method from `@eigenpal/docx-editor-vue` applies.
+`<DocxEditor>` never renders during SSR; Nuxt shows a placeholder and hydrates the editor on the client. The component is the Vue adapter registered unchanged, so every prop, event, and ref method from `@docx-editor.dev/vue` applies.
 
 <Callout type="info">
   This page is the short version. Module options (`prefix`, `injectStyles`), auto-imported

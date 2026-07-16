@@ -1,6 +1,6 @@
 ---
 title: 'Contributing a translation'
-description: 'Add a new editor language to @eigenpal/docx-editor-i18n: scaffold the locale JSON, fill the strings, validate, and open a PR. Partial translations welcome.'
+description: 'Add a new editor language to @docx-editor.dev/i18n: scaffold the locale JSON, fill the strings, validate, and open a PR. Partial translations welcome.'
 category: 'i18n'
 ---
 
@@ -12,7 +12,7 @@ in the [monorepo](https://github.com/eigenpal/docx-editor).
 `packages/i18n/en.json` is the source of truth. Every other locale mirrors
 its shape; a `null` value falls back to the English string at runtime, and a
 missing key fails CI. Locales publish as named exports and per-locale
-subpaths of `@eigenpal/docx-editor-i18n`.
+subpaths of `@docx-editor.dev/i18n`.
 
 ## Add a language
 

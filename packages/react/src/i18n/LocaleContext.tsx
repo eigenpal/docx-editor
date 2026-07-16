@@ -1,7 +1,7 @@
 import { createContext, useContext, useMemo } from 'react';
 import type { ReactNode } from 'react';
-import { createT, deepMerge, en } from '@eigenpal/docx-editor-i18n';
-import type { LocaleStrings, TFunction, Translations } from '@eigenpal/docx-editor-i18n';
+import { createT, deepMerge, en } from '@docx-editor.dev/i18n';
+import type { LocaleStrings, TFunction, Translations } from '@docx-editor.dev/i18n';
 
 const LocaleContext = createContext<LocaleStrings>(en);
 const LangContext = createContext<string>('en');

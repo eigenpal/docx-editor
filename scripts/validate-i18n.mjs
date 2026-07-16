@@ -23,7 +23,7 @@ import { join } from 'path';
 import { getLeafPaths } from './lib/i18n-keys.mjs';
 import { BCP47_FILENAME, readLocaleCodes } from '../packages/i18n/locale-files.mjs';
 
-// Locale files live in the shared @eigenpal/docx-editor-i18n package — both
+// Locale files live in the shared @docx-editor.dev/i18n package — both
 // the React and Vue adapters read their defaults from here.
 const I18N_DIR = join(import.meta.dirname, '..', 'packages', 'i18n');
 const EN_PATH = join(I18N_DIR, 'en.json');
@@ -257,7 +257,7 @@ function regenerateLocaleExports() {
 }
 
 // ---------------------------------------------------------------------------
-// Per-locale subpath sources — `import pl from '@eigenpal/docx-editor-i18n/pl'`
+// Per-locale subpath sources — `import pl from '@docx-editor.dev/i18n/pl'`
 // only ships that one locale's JSON, instead of pulling every locale through
 // the named exports in index.ts. Each `src/<code>.ts` re-exports its JSON as
 // a typed `PartialLocaleStrings` (or `LocaleStrings` for English). tsup
@@ -276,16 +276,16 @@ function renderLocaleSource(code) {
     : `${name} (\`${code}\`) locale strings. Community-maintained; null leaves fall back to English.`;
 
   return `/**
- * @eigenpal/docx-editor-i18n/${code}
+ * @docx-editor.dev/i18n/${code}
  *
  * ${name} (\`${code}\`) — direct locale subpath for per-locale code-splitting.
  *
  * \`\`\`ts
  * // Static — bundler ships only this locale's strings
- * import ${id} from '@eigenpal/docx-editor-i18n/${code}';
+ * import ${id} from '@docx-editor.dev/i18n/${code}';
  *
  * // Dynamic — splits into its own chunk, loaded on demand
- * const ${id} = (await import('@eigenpal/docx-editor-i18n/${code}')).default;
+ * const ${id} = (await import('@docx-editor.dev/i18n/${code}')).default;
  * \`\`\`
  *
  * For multi-locale apps, prefer the per-locale subpaths over importing
@@ -536,7 +536,7 @@ function cmdNew(lang) {
   // the typed `export const`, extends `LocaleCode`, and slots it into the
   // `locales` record. Contributors only edit the JSON. Also writes a
   // `src/<lang>.ts` re-export and slots it into `package.json` so the
-  // per-locale subpath (`@eigenpal/docx-editor-i18n/<lang>`) works.
+  // per-locale subpath (`@docx-editor.dev/i18n/<lang>`) works.
   regenerateLocaleExports();
   regenerateLocaleSourceFiles();
   regenerateLocalePackageJsonExports();

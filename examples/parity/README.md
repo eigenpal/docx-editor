@@ -4,17 +4,17 @@ Single deployment that serves the React and Vue adapter examples on the same dom
 
 ## Why this exists
 
-The 1.0.0 unification renames packages and ships React and Vue adapters from a shared `@eigenpal/docx-editor-core`. The community-trust signal is "the same DOCX renders identically in both adapters when installed from npm." This deployment proves it by serving both adapters from real `node_modules` resolution paths, not source aliases.
+The 1.0.0 unification renames packages and ships React and Vue adapters from a shared `@docx-editor.dev/core`. The community-trust signal is "the same DOCX renders identically in both adapters when installed from npm." This deployment proves it by serving both adapters from real `node_modules` resolution paths, not source aliases.
 
 The build trick: dev mode aliases `@eigenpal/*` to `packages/*/src` for HMR. Parity mode sets `USE_PUBLISHED_PACKAGES=true` so vite resolves through `node_modules` → workspace `dist/` — the exact bytes a consumer downloads from npm.
 
 ## Routes
 
-| Path      | Source               | Adapter                               |
-| --------- | -------------------- | ------------------------------------- |
-| `/`       | (vercel.json)        | 307 redirects to `/react/`            |
-| `/react/` | `examples/vite/dist` | React (`@eigenpal/docx-editor-react`) |
-| `/vue/`   | `examples/vue/dist`  | Vue (`@eigenpal/docx-editor-vue`)     |
+| Path      | Source               | Adapter                          |
+| --------- | -------------------- | -------------------------------- |
+| `/`       | (vercel.json)        | 307 redirects to `/react/`       |
+| `/react/` | `examples/vite/dist` | React (`@docx-editor.dev/react`) |
+| `/vue/`   | `examples/vue/dist`  | Vue (`@docx-editor.dev/vue`)     |
 
 The switcher pill in each editor's toolbar (`examples/shared/AdapterSwitcher.tsx` for React, inline HTML in Vue's `App.vue`) is just two anchor tags pointing at `/react/` and `/vue/`. Click is a normal navigation.
 

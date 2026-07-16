@@ -1,5 +1,5 @@
 /**
- * @eigenpal/docx-editor-agents/vue
+ * @docx-editor.dev/agents/vue
  *
  * Vue entry. Components and composables that need Vue as a peer dependency.
  *
@@ -27,7 +27,7 @@
  *   AgentChatLog,
  *   AgentComposer,
  *   useAgentBridge,
- * } from '@eigenpal/docx-editor-agents/vue';
+ * } from '@docx-editor.dev/agents/vue';
  *
  * const input = ref('');
  * const messages = ref([]);

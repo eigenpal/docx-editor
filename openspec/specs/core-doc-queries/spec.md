@@ -8,7 +8,7 @@ TBD - created by archiving change unify-orchestration-tier1. Update Purpose afte
 
 ### Requirement: Pure document query functions in core
 
-`@eigenpal/docx-editor-core` SHALL expose `findInDocument(view, query, opts?)`, `getSelectionInfo(view)`, and `getPageContent(view, layout, pageNumber)` as pure functions taking the `EditorView` (and `Layout` where needed) as explicit parameters. Both adapters SHALL delegate their corresponding ref methods to these functions.
+`@docx-editor.dev/core` SHALL expose `findInDocument(view, query, opts?)`, `getSelectionInfo(view)`, and `getPageContent(view, layout, pageNumber)` as pure functions taking the `EditorView` (and `Layout` where needed) as explicit parameters. Both adapters SHALL delegate their corresponding ref methods to these functions.
 
 #### Scenario: Find matches across the document
 

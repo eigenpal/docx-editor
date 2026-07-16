@@ -5,6 +5,6 @@ import App from './App.vue';
 // alias-resolved dev path picks up SFC <style scoped> blocks via the Vue
 // compiler, but the published-package parity build (USE_PUBLISHED_PACKAGES=true)
 // needs this import or the toolbar renders unstyled.
-import '@eigenpal/docx-editor-vue/styles.css';
+import '@docx-editor.dev/vue/styles.css';
 
 createApp(App).mount('#app');

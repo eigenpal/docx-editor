@@ -1,5 +1,5 @@
 /**
- * @eigenpal/docx-editor-agents/ai-sdk/react
+ * @docx-editor.dev/agents/ai-sdk/react
  *
  * Vercel AI SDK adapter (React side). Opt-in.
  *

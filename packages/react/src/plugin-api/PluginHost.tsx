@@ -19,10 +19,7 @@ import {
 import { TextSelection } from 'prosemirror-state';
 import type { EditorView } from 'prosemirror-view';
 import type { Plugin as ProseMirrorPlugin } from 'prosemirror-state';
-import {
-  PluginLifecycleManager,
-  injectStyles as coreInjectStyles,
-} from '@eigenpal/docx-editor-core';
+import { PluginLifecycleManager, injectStyles as coreInjectStyles } from '@docx-editor.dev/core';
 import type {
   ReactEditorPlugin,
   ReactSidebarItem,

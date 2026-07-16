@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import type { HeadingInfo } from '@eigenpal/docx-editor-core/utils';
+import type { HeadingInfo } from '@docx-editor.dev/core/utils';
 import { MaterialSymbol } from './ui/Icons';
 import { useTranslation } from '../i18n';
 

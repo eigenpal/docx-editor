@@ -1,7 +1,7 @@
 import { useCallback } from 'react';
 import { flushSync } from 'react-dom';
 import { TextSelection } from 'prosemirror-state';
-import type { Document } from '@eigenpal/docx-editor-core/types/document';
+import type { Document } from '@docx-editor.dev/core/types/document';
 import {
   toggleBold,
   toggleItalic,
@@ -32,20 +32,20 @@ import {
   insertSectionBreakNextPage,
   insertSectionBreakContinuous,
   insertTable,
-} from '@eigenpal/docx-editor-core/prosemirror/commands';
+} from '@docx-editor.dev/core/prosemirror/commands';
 import {
   createStyleResolver,
   insertTableOfContents,
   extractSelectionState,
-} from '@eigenpal/docx-editor-core/prosemirror';
-import { getCachedNumberingMap } from '@eigenpal/docx-editor-core/docx';
+} from '@docx-editor.dev/core/prosemirror';
+import { getCachedNumberingMap } from '@docx-editor.dev/core/docx';
 import type { EditorView } from 'prosemirror-view';
 import type { FormattingAction } from '../../Toolbar';
 import { pointsToHalfPoints } from '../../ui/FontSizePicker';
 import { mapHexToHighlightName } from '../../toolbarUtils';
 import type { useHyperlinkDialog } from '../../dialogs/HyperlinkDialog';
 import type { PagedEditorRef } from '../PagedEditor';
-import type { SelectionState } from '@eigenpal/docx-editor-core/prosemirror';
+import type { SelectionState } from '@docx-editor.dev/core/prosemirror';
 
 /**
  * Toolbar action handlers: the big `handleFormat` switch that routes

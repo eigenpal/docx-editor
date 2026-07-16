@@ -11,7 +11,7 @@ import type {
   MoveTo,
   Comment,
   ParagraphContent,
-} from '@eigenpal/docx-editor-core/headless';
+} from '@docx-editor.dev/core/headless';
 import { DocxReviewer } from '../DocxReviewer';
 import type { ContentBlock } from '../types';
 

@@ -34,7 +34,7 @@ There are **two ways** to customize the toolbar:
 The simplest way to customize the toolbar:
 
 ```tsx
-import { DocxEditor } from '@eigenpal/docx-editor-react';
+import { DocxEditor } from '@docx-editor.dev/react';
 
 function App() {
   const [fileName, setFileName] = useState('Untitled.docx');
@@ -73,7 +73,7 @@ All existing toolbar props (`showToolbar`, `showZoomControl`, `showRuler`, `tool
 For full control over the toolbar structure, use `EditorToolbar` directly:
 
 ```tsx
-import { EditorToolbar, type EditorToolbarProps } from '@eigenpal/docx-editor-react/ui';
+import { EditorToolbar, type EditorToolbarProps } from '@docx-editor.dev/react/ui';
 
 function MyEditor({ toolbarProps }: { toolbarProps: EditorToolbarProps }) {
   return (

@@ -24,7 +24,7 @@ import {
 } from './protocol';
 
 export interface McpServerOptions {
-  /** Server name reported in `initialize` response. Default: `@eigenpal/docx-editor-agents`. */
+  /** Server name reported in `initialize` response. Default: `@docx-editor.dev/agents`. */
   name?: string;
   /** Server version. Default: `0.0.0` (override at build time). */
   version?: string;
@@ -44,7 +44,7 @@ export class McpServer {
   constructor(bridge: EditorBridge, options: McpServerOptions = {}) {
     this.bridge = bridge;
     this.opts = {
-      name: options.name ?? '@eigenpal/docx-editor-agents',
+      name: options.name ?? '@docx-editor.dev/agents',
       version: options.version ?? '0.0.0',
       protocolVersion: options.protocolVersion ?? DEFAULT_PROTOCOL_VERSION,
     };

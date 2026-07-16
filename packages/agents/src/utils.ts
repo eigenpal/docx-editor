@@ -14,13 +14,13 @@ import type {
   MoveFrom,
   MoveTo,
   TrackedChangeContent,
-} from '@eigenpal/docx-editor-core/headless';
+} from '@docx-editor.dev/core/headless';
 import {
   getRunText,
   getHyperlinkText,
   isHeadingStyle,
   parseHeadingLevel,
-} from '@eigenpal/docx-editor-core/headless';
+} from '@docx-editor.dev/core/headless';
 
 // Re-export from core so other modules import from one place
 export { getRunText, getHyperlinkText, isHeadingStyle, parseHeadingLevel };

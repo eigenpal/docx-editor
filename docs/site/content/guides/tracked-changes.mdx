@@ -12,7 +12,7 @@ Set `mode="suggesting"`. Pair with `onModeChange` if you want to own the mode st
 
 ```tsx
 import { useState } from 'react';
-import { DocxEditor, type EditorMode } from '@eigenpal/docx-editor-react';
+import { DocxEditor, type EditorMode } from '@docx-editor.dev/react';
 
 export function ReviewerEditor({ buf, reviewer }: { buf: ArrayBuffer; reviewer: string }) {
   const [mode, setMode] = useState<EditorMode>('suggesting');
@@ -62,7 +62,7 @@ Each revision records a timestamp at creation. Both fields survive save and relo
 
 ## Accept and reject via API
 
-The accept/reject operations behind the sidebar buttons are exported as ProseMirror commands from `@eigenpal/docx-editor-core/prosemirror/commands`:
+The accept/reject operations behind the sidebar buttons are exported as ProseMirror commands from `@docx-editor.dev/core/prosemirror/commands`:
 
 | Command | Effect |
 |---|---|
@@ -76,8 +76,8 @@ Each returns a `Command` you run against the editor's view. Capture the view wit
 ```tsx
 import { useRef } from 'react';
 import type { EditorView } from 'prosemirror-view';
-import { DocxEditor } from '@eigenpal/docx-editor-react';
-import { acceptAllChanges } from '@eigenpal/docx-editor-core/prosemirror/commands';
+import { DocxEditor } from '@docx-editor.dev/react';
+import { acceptAllChanges } from '@docx-editor.dev/core/prosemirror/commands';
 
 export function BulkReview({ buf }: { buf: ArrayBuffer }) {
   const viewRef = useRef<EditorView | null>(null);
@@ -98,7 +98,7 @@ export function BulkReview({ buf }: { buf: ArrayBuffer }) {
 }
 ```
 
-To enumerate revisions (for your own list UI or an approval workflow), use `extractTrackedChanges` from `@eigenpal/docx-editor-core/prosemirror/utils/extractTrackedChanges`. It takes the editor state and returns the revision entries plus a comment-to-revision map.
+To enumerate revisions (for your own list UI or an approval workflow), use `extractTrackedChanges` from `@docx-editor.dev/core/prosemirror/utils/extractTrackedChanges`. It takes the editor state and returns the revision entries plus a comment-to-revision map.
 
 ## Propose a change programmatically
 

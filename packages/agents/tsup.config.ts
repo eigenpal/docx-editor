@@ -24,6 +24,6 @@ export default defineConfig({
     preset: 'smallest',
   },
   minify: true,
-  noExternal: ['@eigenpal/docx-editor-core'],
+  noExternal: ['@docx-editor.dev/core'],
   external: ['prosemirror-model', 'prosemirror-state', 'prosemirror-view', 'react', 'ai'],
 });

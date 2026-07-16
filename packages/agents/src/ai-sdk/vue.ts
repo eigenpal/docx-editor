@@ -1,5 +1,5 @@
 /**
- * @eigenpal/docx-editor-agents/ai-sdk/vue
+ * @docx-editor.dev/agents/ai-sdk/vue
  *
  * Vercel AI SDK adapter (Vue side). Opt-in.
  *
@@ -13,8 +13,8 @@
  * <script setup lang="ts">
  * import { computed } from 'vue';
  * import { useChat } from '@ai-sdk/vue';
- * import { toAgentMessages } from '@eigenpal/docx-editor-agents/ai-sdk/vue';
- * import { AgentChatLog } from '@eigenpal/docx-editor-agents/vue';
+ * import { toAgentMessages } from '@docx-editor.dev/agents/ai-sdk/vue';
+ * import { AgentChatLog } from '@docx-editor.dev/agents/vue';
  *
  * const chat = useChat({ ... });
  * const messages = computed(() => toAgentMessages(chat.messages.value, chat.status.value));

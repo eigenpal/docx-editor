@@ -1,4 +1,4 @@
-import { AgentPanel } from '@eigenpal/docx-editor-agents/react';
+import { AgentPanel } from '@docx-editor.dev/agents/react';
 import { useTranslation } from '../../i18n';
 import type { AgentPanelOptions } from './types';
 

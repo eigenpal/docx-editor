@@ -60,7 +60,7 @@ import MaterialSymbol from './ui/MaterialSymbol.vue';
 import Popover from './ui/Popover.vue';
 import type { EditorMode } from './DocxEditor/types';
 import { useTranslation } from '../i18n';
-import type { TranslationKey } from '@eigenpal/docx-editor-i18n';
+import type { TranslationKey } from '@docx-editor.dev/i18n';
 
 const { t } = useTranslation();
 

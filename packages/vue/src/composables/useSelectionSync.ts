@@ -34,13 +34,13 @@ import {
   syncImeCaretAnchor,
   type DomCaretPosition,
   type DomSelectionBox,
-} from '@eigenpal/docx-editor-core/flow-model';
-import { applySdtFocus, enclosingSdtGroupIds } from '@eigenpal/docx-editor-core/painter-model';
+} from '@docx-editor.dev/core/flow-model';
+import { applySdtFocus, enclosingSdtGroupIds } from '@docx-editor.dev/core/painter-model';
 import type {
   ContentNode,
   LayoutMetrics,
   PageLayout,
-} from '@eigenpal/docx-editor-core/pagination-model';
+} from '@docx-editor.dev/core/pagination-model';
 
 import type { ImageSelectionInfo } from '../components/imageSelectionTypes';
 

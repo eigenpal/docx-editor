@@ -11,23 +11,23 @@
 
 import { unref, type MaybeRef, type Ref } from 'vue';
 import type { EditorView } from 'prosemirror-view';
-import type { Comment, Document } from '@eigenpal/docx-editor-core/types/document';
+import type { Comment, Document } from '@docx-editor.dev/core/types/document';
 import {
   acceptChange,
   rejectChange,
   acceptChangeById,
   rejectChangeById,
-} from '@eigenpal/docx-editor-core/prosemirror/commands';
-import { extractTrackedChanges } from '@eigenpal/docx-editor-core/prosemirror/utils/extractTrackedChanges';
+} from '@docx-editor.dev/core/prosemirror/commands';
+import { extractTrackedChanges } from '@docx-editor.dev/core/prosemirror/utils/extractTrackedChanges';
 import {
   addCommentToRange,
   applyProposedChange,
   createComment as createCommentCore,
-} from '@eigenpal/docx-editor-core/prosemirror/commentOps';
+} from '@docx-editor.dev/core/prosemirror/commentOps';
 import {
   seedCommentAllocator,
   type CommentIdAllocator,
-} from '@eigenpal/docx-editor-core/prosemirror/commentIdAllocator';
+} from '@docx-editor.dev/core/prosemirror/commentIdAllocator';
 import type { TrackedChangeEntry } from '../components/sidebar/sidebarUtils';
 
 /**

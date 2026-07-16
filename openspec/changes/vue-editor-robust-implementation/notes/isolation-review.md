@@ -63,7 +63,7 @@ adapter entries (which get `restrictReact` or `restrictVue` instead).
   files.
 - **packages/vue/src/** — no React imports. No `useState`/`useEffect`/`useRef`/
   `forwardRef`/`ReactNode`/`JSX.` identifiers in `.ts`/`.tsx`/`.vue` files.
-  `package.json` has only `vue` peer dep + `@eigenpal/docx-editor-core` runtime
+  `package.json` has only `vue` peer dep + `@docx-editor.dev/core` runtime
   dep; no `react` leakage.
 - **packages/agent-use/src/bridge.ts, server.ts, batch.ts, changes.ts,
   comments.ts, content.ts, discovery.ts, DocxReviewer.ts, errors.ts,

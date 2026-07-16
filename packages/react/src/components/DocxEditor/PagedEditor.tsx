@@ -14,13 +14,10 @@ import { SelectionOverlay } from './overlays/SelectionOverlay';
 import { ImageSelectionOverlay } from './overlays/ImageSelectionOverlay';
 import { DecorationLayer } from './overlays/DecorationLayer';
 
-import type { ScrollToParaIdOptions } from '@eigenpal/docx-editor-core/utils';
+import type { ScrollToParaIdOptions } from '@docx-editor.dev/core/utils';
 
 // Layout bridge
-import {
-  DEFAULT_PAGE_HEIGHT_PX,
-  getVisualScrollHeight,
-} from '@eigenpal/docx-editor-core/flow-model';
+import { DEFAULT_PAGE_HEIGHT_PX, getVisualScrollHeight } from '@docx-editor.dev/core/flow-model';
 
 // Visual line navigation hook
 import { useVisualLineNavigation } from '../../hooks/useVisualLineNavigation';
@@ -34,8 +31,8 @@ import type {
   StyleDefinitions,
   SectionProperties,
   HeaderFooter,
-} from '@eigenpal/docx-editor-core/types/document';
-import type { WrapType } from '@eigenpal/docx-editor-core/docx/wrapTypes';
+} from '@docx-editor.dev/core/types/document';
+import type { WrapType } from '@docx-editor.dev/core/docx/wrapTypes';
 import type { RenderedDomContext } from '../../plugin-api/types';
 import {
   DEFAULT_PAGE_WIDTH,
@@ -50,7 +47,7 @@ import {
 } from './internals/styles';
 import { viewportMinHeightPx } from './internals/scrollUtils';
 import { useLayoutPipeline } from './hooks/useLayoutPipeline';
-import { transactionNeedsDirectOverlayRequest } from '@eigenpal/docx-editor-core/internal/paintedPagesGuard';
+import { transactionNeedsDirectOverlayRequest } from '@docx-editor.dev/core/internal/paintedPagesGuard';
 import { useSelectionOverlay } from './hooks/useSelectionOverlay';
 import { useImageInteractions } from './hooks/useImageInteractions';
 import { usePagedScrollApi } from './hooks/usePagedScrollApi';
@@ -101,7 +98,7 @@ export interface PagedEditorProps {
   /** External ProseMirror plugins. */
   externalPlugins?: Plugin[];
   /** Extension manager for plugins/schema/commands (optional — falls back to default) */
-  extensionManager?: import('@eigenpal/docx-editor-core/prosemirror/extensions').ExtensionManager;
+  extensionManager?: import('@docx-editor.dev/core/prosemirror/extensions').ExtensionManager;
   /** Callback when editor is ready. */
   onReady?: (ref: PagedEditorRef) => void;
   /** Callback when rendered DOM context is ready. */

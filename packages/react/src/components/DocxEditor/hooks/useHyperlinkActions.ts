@@ -5,7 +5,7 @@ import {
   setHyperlink,
   removeHyperlink,
   insertHyperlink,
-} from '@eigenpal/docx-editor-core/prosemirror/commands';
+} from '@docx-editor.dev/core/prosemirror/commands';
 import type { EditorView } from 'prosemirror-view';
 import type { HyperlinkData, useHyperlinkDialog } from '../../dialogs/HyperlinkDialog';
 import type { HyperlinkPopupData } from '../../ui/HyperlinkPopup';

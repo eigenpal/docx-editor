@@ -3,10 +3,10 @@ import {
   findTableOfContentsBlocks,
   hasTableOfContentsNeedingUpdate,
   updateTableOfContents,
-} from '@eigenpal/docx-editor-core/prosemirror';
-import type { PageLayout } from '@eigenpal/docx-editor-core/pagination-model';
-import { en as defaultLocale } from '@eigenpal/docx-editor-i18n';
-import type { Translations } from '@eigenpal/docx-editor-i18n';
+} from '@docx-editor.dev/core/prosemirror';
+import type { PageLayout } from '@docx-editor.dev/core/pagination-model';
+import { en as defaultLocale } from '@docx-editor.dev/i18n';
+import type { Translations } from '@docx-editor.dev/i18n';
 import type { PagedEditorRef } from '../PagedEditor';
 
 function readPageLayout(pagedEditorRef: RefObject<PagedEditorRef | null>): PageLayout | null {

@@ -139,11 +139,11 @@
 
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue';
-import type { Watermark } from '@eigenpal/docx-editor-core/types/document';
+import type { Watermark } from '@docx-editor.dev/core/types/document';
 import {
   pictureWatermarkDisplayEmu,
   DEFAULT_WATERMARK_PRESETS,
-} from '@eigenpal/docx-editor-core/types/document';
+} from '@docx-editor.dev/core/types/document';
 import { useTranslation } from '../../i18n';
 
 type Mode = 'none' | 'picture' | 'text';

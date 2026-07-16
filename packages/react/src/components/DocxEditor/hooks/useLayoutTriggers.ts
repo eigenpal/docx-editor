@@ -16,8 +16,8 @@
 
 import { useEffect, useRef } from 'react';
 
-import { clearAllCaches, resetCanvasContext } from '@eigenpal/docx-editor-core/flow-model';
-import type { HeaderFooter } from '@eigenpal/docx-editor-core/types/document';
+import { clearAllCaches, resetCanvasContext } from '@docx-editor.dev/core/flow-model';
+import type { HeaderFooter } from '@docx-editor.dev/core/types/document';
 import type { EditorState } from 'prosemirror-state';
 
 import type { OffscreenEditorHostRef } from '../OffscreenEditorHost';

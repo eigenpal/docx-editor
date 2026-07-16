@@ -13,7 +13,7 @@ are preserved verbatim). This guide covers the APIs for finding and editing them
 ## Headless (server-side / AI pipelines)
 
 Operate directly on a parsed `Document` with no editor or DOM. Import from
-`@eigenpal/docx-editor-core/headless` (or `/agent`).
+`@docx-editor.dev/core/headless` (or `/agent`).
 
 ```ts
 import {
@@ -23,7 +23,7 @@ import {
   setContentControlContent,
   removeContentControl,
   serializeDocx, // or createDocx for bytes
-} from '@eigenpal/docx-editor-core/headless';
+} from '@docx-editor.dev/core/headless';
 
 const doc = await parseDocx(buffer);
 

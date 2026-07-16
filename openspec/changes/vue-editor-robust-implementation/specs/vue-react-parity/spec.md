@@ -21,7 +21,7 @@ For every feature in the React adapter's v1 scope (editing, formatting, lists, t
 - **WHEN** a user presses `Ctrl+B` (or `Cmd+B` on macOS) with a non-empty selection in either adapter
 - **THEN** both apply the bold mark to the selected text
 - **AND** the toolbar bold-button state updates simultaneously
-- **AND** the same shortcut dispatch path is exercised in both (commands resolved through `@eigenpal/docx-editor-core`, not duplicated per-adapter)
+- **AND** the same shortcut dispatch path is exercised in both (commands resolved through `@docx-editor.dev/core`, not duplicated per-adapter)
 
 ### Requirement: Per-component parity matrix
 
@@ -59,7 +59,7 @@ The current matrix:
 | Comments                         | done  | done       | e2e/tests/parity/smoke/agent-tool-call.spec.ts | Sidebar, inline markers, replies, and bridge comment insertion are implemented                                      |
 | Tracked changes                  | done  | done       | tests/parity/tracked-changes.spec.ts           | Vue extracts tracked changes, renders sidebar cards, and wires accept/reject through shared core commands           |
 | Keyboard shortcuts dialog        | done  | done       | tests/parity/keyboard-shortcuts.spec.ts        | Dialog is implemented and localized through shared i18n keys                                                        |
-| AI context menu                  | done  | done       | tests/parity/ai-context-menu.spec.ts           | Vue menu is implemented through `@eigenpal/docx-editor-agents/vue`                                                  |
+| AI context menu                  | done  | done       | tests/parity/ai-context-menu.spec.ts           | Vue menu is implemented through `@docx-editor.dev/agents/vue`                                                       |
 | Document outline                 | done  | done       | tests/parity/document-outline.spec.ts          | Vue outline is implemented with heading navigation                                                                  |
 | i18n (locale switching)          | done  | done       | tests/parity/i18n.spec.ts                      | Vue `i18n` prop provides reactive shared-locale fallback; shared locale validation passes                           |
 | Header / footer editing          | done  | done       | tests/parity/header-footer.spec.ts             | Inline header/footer editor is implemented in Vue                                                                   |
@@ -109,7 +109,7 @@ A parallel Playwright spec suite SHALL exist at `tests/vue/` mirroring the React
 
 ### Requirement: Type-level API surface parity
 
-The Vue and React adapters' public TypeScript surface SHALL be assignable to each other's contract types where the spec demands parity. React's `DocxEditorRef` currently satisfies the full `EditorRefLike` bridge contract from `@eigenpal/docx-editor-agents/bridge`. Vue's `DocxEditorRef` is staged: every bridge method it exposes MUST borrow the `EditorRefLike` signature via `Pick<>`, and the type-level test expands as each method lands. Full Vue assignability flips on before un-stub.
+The Vue and React adapters' public TypeScript surface SHALL be assignable to each other's contract types where the spec demands parity. React's `DocxEditorRef` currently satisfies the full `EditorRefLike` bridge contract from `@docx-editor.dev/agents/bridge`. Vue's `DocxEditorRef` is staged: every bridge method it exposes MUST borrow the `EditorRefLike` signature via `Pick<>`, and the type-level test expands as each method lands. Full Vue assignability flips on before un-stub.
 
 #### Scenario: Vue ref drops an implemented bridge method
 

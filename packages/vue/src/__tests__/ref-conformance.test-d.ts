@@ -1,6 +1,6 @@
 // Type-level: `DocxEditorRef` satisfies the shared agent bridge contract.
 
-import type { EditorRefLike } from '@eigenpal/docx-editor-agents/bridge';
+import type { EditorRefLike } from '@docx-editor.dev/agents/bridge';
 import type { DocxEditorRef } from '../components/DocxEditor/types';
 import type { DocxEditorHandle } from '../renderAsync';
 

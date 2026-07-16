@@ -4,12 +4,12 @@
   "commit": false,
   "fixed": [
     [
-      "@eigenpal/docx-editor-react",
-      "@eigenpal/docx-editor-core",
-      "@eigenpal/docx-editor-agents",
-      "@eigenpal/docx-editor-vue",
-      "@eigenpal/nuxt-docx-editor",
-      "@eigenpal/docx-editor-i18n"
+      "@docx-editor.dev/react",
+      "@docx-editor.dev/core",
+      "@docx-editor.dev/agents",
+      "@docx-editor.dev/vue",
+      "@docx-editor.dev/nuxt",
+      "@docx-editor.dev/i18n"
     ]
   ],
   "linked": [],

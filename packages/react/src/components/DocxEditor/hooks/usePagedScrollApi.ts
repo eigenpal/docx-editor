@@ -17,19 +17,19 @@ import {
   findBodyPmAnchor,
   collectBodySpans,
   getCaretPosition,
-} from '@eigenpal/docx-editor-core/flow-model';
-import { findPageIndexContainingPmPos } from '@eigenpal/docx-editor-core/pagination-model';
+} from '@docx-editor.dev/core/flow-model';
+import { findPageIndexContainingPmPos } from '@docx-editor.dev/core/pagination-model';
 import type {
   ContentNode,
   LayoutMetrics,
   PageLayout,
-} from '@eigenpal/docx-editor-core/pagination-model';
-import { findStartPosForParaId } from '@eigenpal/docx-editor-core/prosemirror';
+} from '@docx-editor.dev/core/pagination-model';
+import { findStartPosForParaId } from '@docx-editor.dev/core/prosemirror';
 import {
   flashParagraphBoxesByParaId,
   type ScrollToParaIdOptions,
-} from '@eigenpal/docx-editor-core/utils';
-import { findVerticalScrollParentOrRoot } from '@eigenpal/docx-editor-core/utils/findVerticalScrollParent';
+} from '@docx-editor.dev/core/utils';
+import { findVerticalScrollParentOrRoot } from '@docx-editor.dev/core/utils/findVerticalScrollParent';
 
 import type { OffscreenEditorHostRef } from '../OffscreenEditorHost';
 import { runAfterPaint, scrollElementCenterIntoContainer } from '../internals/scrollUtils';

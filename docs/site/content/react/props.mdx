@@ -140,7 +140,7 @@ See the [Dark mode](/docs/1.x/guides/dark-mode) guide for how the canvas transfo
 A `FontDefinition` is `{ family, src, weight? }`. `src` is a URL to a `woff2`/`woff`/`ttf`/`otf` file you host. Register multiple weights of the same family as separate entries that share `family`:
 
 ```tsx
-import { DocxEditor } from '@eigenpal/docx-editor-react';
+import { DocxEditor } from '@docx-editor.dev/react';
 
 const FONTS = [
   { family: 'Custom Sans', src: '/fonts/CustomSans-Regular.woff2' },
@@ -158,7 +158,7 @@ Pass a stable reference (module-level or memoized). Inline arrays re-register on
 
 Font-load failures route through `onError` (see [Callbacks](#callbacks)), so you can forward them to your own tracker. With no `onError` attached they fall back to `console.warn`.
 
-For host code that isn't using the React or Vue adapter, `@eigenpal/docx-editor-core/utils` exports `loadFontFromUrl`, `loadFontDefinitions`, `onFontError`, and the `FontDefinition` type so you can drive the same registration directly.
+For host code that isn't using the React or Vue adapter, `@docx-editor.dev/core/utils` exports `loadFontFromUrl`, `loadFontDefinitions`, `onFontError`, and the `FontDefinition` type so you can drive the same registration directly.
 
 ## Title bar customization
 
@@ -238,10 +238,10 @@ Lifecycle and integration hooks.
 
 | Prop | Type | Description |
 |---|---|---|
-| `i18n` | `LocaleStrings \| PartialLocaleStrings` | Locale data from `@eigenpal/docx-editor-i18n`. See [i18n page](/docs/1.x/i18n). |
+| `i18n` | `LocaleStrings \| PartialLocaleStrings` | Locale data from `@docx-editor.dev/i18n`. See [i18n page](/docs/1.x/i18n). |
 
 ```tsx
-import pl from '@eigenpal/docx-editor-i18n/pl';
+import pl from '@docx-editor.dev/i18n/pl';
 
 <DocxEditor documentBuffer={buf} i18n={pl} />;
 ```
@@ -279,7 +279,7 @@ Imperative API exposed through `forwardRef`. Capture a `DocxEditorRef` and call 
 
 ```tsx
 import { useRef } from 'react';
-import { DocxEditor, type DocxEditorRef } from '@eigenpal/docx-editor-react';
+import { DocxEditor, type DocxEditorRef } from '@docx-editor.dev/react';
 
 const editorRef = useRef<DocxEditorRef>(null);
 

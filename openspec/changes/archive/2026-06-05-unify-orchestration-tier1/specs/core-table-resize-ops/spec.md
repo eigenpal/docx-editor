@@ -2,7 +2,7 @@
 
 ### Requirement: Pure table-resize readers and commit builders in core
 
-`@eigenpal/docx-editor-core` SHALL expose `readColumnWidths`, `readRowHeight`, `readLastColumnWidth`, `commitColumnResize`, `commitRowResize`, and `commitRightEdgeResize`, plus the shared constants (`TWIPS_PER_PIXEL`, `MIN_CELL_WIDTH_TWIPS`, `MIN_ROW_HEIGHT_TWIPS`). These are pure `(view, opts) → void | values` functions with no framework coupling. The resize gesture FSMs SHALL remain in each adapter.
+`@docx-editor.dev/core` SHALL expose `readColumnWidths`, `readRowHeight`, `readLastColumnWidth`, `commitColumnResize`, `commitRowResize`, and `commitRightEdgeResize`, plus the shared constants (`TWIPS_PER_PIXEL`, `MIN_CELL_WIDTH_TWIPS`, `MIN_ROW_HEIGHT_TWIPS`). These are pure `(view, opts) → void | values` functions with no framework coupling. The resize gesture FSMs SHALL remain in each adapter.
 
 #### Scenario: Column resize commit
 

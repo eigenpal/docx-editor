@@ -1,16 +1,16 @@
 ---
 title: 'Headless processing'
-description: 'Parse, inspect, mutate, and serialize DOCX files in Node.js or workers with @eigenpal/docx-editor-core/headless. No DOM and no editor UI required.'
+description: 'Parse, inspect, mutate, and serialize DOCX files in Node.js or workers with @docx-editor.dev/core/headless. No DOM and no editor UI required.'
 category: 'Guides'
 seoTitle: 'Headless DOCX processing'
 ---
 
-`@eigenpal/docx-editor-core/headless` is the document engine without the editor UI: the OOXML parser, document model, mutation helpers, and serializer. It runs in Node.js and web workers. Nothing in it touches the DOM.
+`@docx-editor.dev/core/headless` is the document engine without the editor UI: the OOXML parser, document model, mutation helpers, and serializer. It runs in Node.js and web workers. Nothing in it touches the DOM.
 
 Use it for batch pipelines: fill templates, stamp watermarks, extract text, generate documents, and post-process uploads on the server. It produces the same document model that `<DocxEditor>` renders.
 
 ```bash
-npm install @eigenpal/docx-editor-core
+npm install @docx-editor.dev/core
 ```
 
 ## Parse, walk, serialize
@@ -22,7 +22,7 @@ import {
   getParagraphs,
   getParagraphText,
   repackDocx,
-} from "@eigenpal/docx-editor-core/headless";
+} from "@docx-editor.dev/core/headless";
 
 const buffer = await readFile("contract.docx");
 const doc = await parseDocx(buffer);
@@ -50,7 +50,7 @@ The `Document` wraps a `DocxPackage`: `package.document` is the body (`content: 
 `DocumentAgent` wraps a `Document` in a chainable, immutable API. Each call returns a new agent; nothing is mutated in place.
 
 ```ts
-import { DocumentAgent } from "@eigenpal/docx-editor-core/headless";
+import { DocumentAgent } from "@docx-editor.dev/core/headless";
 
 const agent = await DocumentAgent.fromBuffer(buffer);
 
@@ -73,7 +73,7 @@ Beyond text: `insertTable`, `insertImage`, `insertHyperlink`, `replaceRange`, `d
 ## Creating documents from scratch
 
 ```ts
-import { createDocumentWithText, createDocx } from "@eigenpal/docx-editor-core/headless";
+import { createDocumentWithText, createDocx } from "@docx-editor.dev/core/headless";
 
 const doc = createDocumentWithText("Generated on the server.");
 const out = await createDocx(doc);
@@ -86,7 +86,7 @@ const out = await createDocx(doc);
 For `{{variable}}`-style templates, the headless surface bundles a docxtemplater-backed pipeline:
 
 ```ts
-import { detectVariables, parseDocx, processTemplate } from "@eigenpal/docx-editor-core/headless";
+import { detectVariables, parseDocx, processTemplate } from "@docx-editor.dev/core/headless";
 
 const doc = await parseDocx(buffer);
 console.log(detectVariables(doc)); // ["customer_name", "date"]
@@ -99,7 +99,7 @@ const out = processTemplate(buffer, { customer_name: "Acme GmbH", date: "2026-07
 ## When to use this vs DocxReviewer
 
 - **Headless core** (this page) runs code you write against the document model. Use it for template fills, extraction, format conversion steps, and pipelines where the document changes are known in advance.
-- **`DocxReviewer`** from `@eigenpal/docx-editor-agents` wraps this same engine in an LLM tool surface: an agent reads the document, decides what to change, and applies edits (including tracked changes) through tool calls. Use it when the transformation requires judgment. See [DocxReviewer](/docs/1.x/agents/docx-reviewer).
+- **`DocxReviewer`** from `@docx-editor.dev/agents` wraps this same engine in an LLM tool surface: an agent reads the document, decides what to change, and applies edits (including tracked changes) through tool calls. Use it when the transformation requires judgment. See [DocxReviewer](/docs/1.x/agents/docx-reviewer).
 
 A pipeline can fill a template headlessly, then pass the buffer to `DocxReviewer` for model-assisted review.
 

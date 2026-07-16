@@ -1,25 +1,25 @@
 ---
-title: "@eigenpal/docx-editor-react"
+title: "@docx-editor.dev/react"
 description: "React adapter: <DocxEditor>, hooks, dialogs, toolbar, plugin host. Works with Next.js, Vite, Remix, Astro."
 category: "Packages"
 order: 30
 ---
 
-<PackageStats name="@eigenpal/docx-editor-react" />
+<PackageStats name="@docx-editor.dev/react" />
 
 ## Install
 
 ```bash
-npm install @eigenpal/docx-editor-react
+npm install @docx-editor.dev/react
 ```
 
-Pulls in `@eigenpal/docx-editor-core` and `@eigenpal/docx-editor-i18n`. Add `@eigenpal/docx-editor-agents` if you need the agent toolkit.
+Pulls in `@docx-editor.dev/core` and `@docx-editor.dev/i18n`. Add `@docx-editor.dev/agents` if you need the agent toolkit.
 
 ## Quickstart
 
 ```tsx
-import { DocxEditor } from '@eigenpal/docx-editor-react';
-import '@eigenpal/docx-editor-react/styles.css';
+import { DocxEditor } from '@docx-editor.dev/react';
+import '@docx-editor.dev/react/styles.css';
 
 export default function App() {
   return <DocxEditor documentBuffer={null} />;
@@ -32,12 +32,12 @@ On Next.js App Router, render this inside a `"use client"` component. ProseMirro
 
 ## Subpaths
 
-- `@eigenpal/docx-editor-react`: `<DocxEditor>`, `DocxEditorRef`, `DocxEditorProps`, `EditorMode`, `createEmptyDocument` (re-exported from `-core` in 1.0.1)
-- `@eigenpal/docx-editor-react/ui`: `Toolbar`, `EditorToolbar`, `ResponsiveToolbar`, `TableToolbar`, `ToolbarButton`, `ToolbarGroup`, `ToolbarSeparator`, `ColorPicker`, font/color pickers
-- `@eigenpal/docx-editor-react/hooks`: `useHistory`, `useFindReplace`, `useAutoSave`, `useClipboard`, `useTableSelection`, `useWheelZoom`, `useDragAutoScroll`
-- `@eigenpal/docx-editor-react/dialogs`: hyperlink, find/replace, paste special, page setup, keyboard shortcuts
-- `@eigenpal/docx-editor-react/plugin-api`: `PluginHost`, plugin registration types
-- `@eigenpal/docx-editor-react/styles`: CSS
+- `@docx-editor.dev/react`: `<DocxEditor>`, `DocxEditorRef`, `DocxEditorProps`, `EditorMode`, `createEmptyDocument` (re-exported from `-core` in 1.0.1)
+- `@docx-editor.dev/react/ui`: `Toolbar`, `EditorToolbar`, `ResponsiveToolbar`, `TableToolbar`, `ToolbarButton`, `ToolbarGroup`, `ToolbarSeparator`, `ColorPicker`, font/color pickers
+- `@docx-editor.dev/react/hooks`: `useHistory`, `useFindReplace`, `useAutoSave`, `useClipboard`, `useTableSelection`, `useWheelZoom`, `useDragAutoScroll`
+- `@docx-editor.dev/react/dialogs`: hyperlink, find/replace, paste special, page setup, keyboard shortcuts
+- `@docx-editor.dev/react/plugin-api`: `PluginHost`, plugin registration types
+- `@docx-editor.dev/react/styles`: CSS
 
 Every export is in the [API reference](/docs/1.x/api/react).
 
@@ -51,7 +51,7 @@ Every export is in the [API reference](/docs/1.x/api/react).
 
 ```tsx
 import { useRef } from 'react';
-import { DocxEditor, type DocxEditorRef } from '@eigenpal/docx-editor-react';
+import { DocxEditor, type DocxEditorRef } from '@docx-editor.dev/react';
 
 const editorRef = useRef<DocxEditorRef>(null);
 
@@ -65,27 +65,27 @@ The ref also reaches block-level content controls in the live document: `getCont
 
 ## Toolbar
 
-`@eigenpal/docx-editor-react/ui` exports the toolbar pieces. `EditorToolbar` is the full toolbar used by the default editor UI; `Toolbar` is the formatting-button strip on its own; `ResponsiveToolbar` wraps either with adaptive layout. Compose your own from `ToolbarButton`, `ToolbarGroup`, and `ToolbarSeparator`:
+`@docx-editor.dev/react/ui` exports the toolbar pieces. `EditorToolbar` is the full toolbar used by the default editor UI; `Toolbar` is the formatting-button strip on its own; `ResponsiveToolbar` wraps either with adaptive layout. Compose your own from `ToolbarButton`, `ToolbarGroup`, and `ToolbarSeparator`:
 
 ```tsx
-import { DocxEditor } from '@eigenpal/docx-editor-react';
+import { DocxEditor } from '@docx-editor.dev/react';
 import {
   EditorToolbar,
   Toolbar,
   ToolbarButton,
   ToolbarGroup,
-} from '@eigenpal/docx-editor-react/ui';
+} from '@docx-editor.dev/react/ui';
 ```
 
 In 0.x the formatting buttons were called `FormattingBar` and the composite was `Toolbar`. We renamed: the formatting buttons are now `Toolbar`, the composite is `EditorToolbar`. See [migration](/docs/1.x/migration) for the rename table.
 
 ## Agent integration
 
-Wire AI tools to a live editor with `@eigenpal/docx-editor-agents/react`:
+Wire AI tools to a live editor with `@docx-editor.dev/agents/react`:
 
 ```tsx
-import { DocxEditor } from '@eigenpal/docx-editor-react';
-import { useDocxAgentTools } from '@eigenpal/docx-editor-agents/react';
+import { DocxEditor } from '@docx-editor.dev/react';
+import { useDocxAgentTools } from '@docx-editor.dev/agents/react';
 ```
 
 Full client + server wiring is on [Agents → Live editor](/docs/1.x/agents/live-editor).

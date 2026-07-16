@@ -16,16 +16,16 @@
 
 import type { Ref, ShallowRef } from 'vue';
 import type { EditorView } from 'prosemirror-view';
-import type { Document } from '@eigenpal/docx-editor-core/types/document';
-import type { Comment } from '@eigenpal/docx-editor-core/types/content';
-import type { DocxInput } from '@eigenpal/docx-editor-core/utils';
+import type { Document } from '@docx-editor.dev/core/types/document';
+import type { Comment } from '@docx-editor.dev/core/types/content';
+import type { DocxInput } from '@docx-editor.dev/core/utils';
 import {
   flashParagraphBoxesByParaId,
   type ScrollToParaIdOptions,
-} from '@eigenpal/docx-editor-core/utils';
-import type { PageLayout } from '@eigenpal/docx-editor-core/pagination-model';
-import { findPageIndexContainingPmPos } from '@eigenpal/docx-editor-core/pagination-model';
-import { paintAllPagesNow } from '@eigenpal/docx-editor-core/painter-model';
+} from '@docx-editor.dev/core/utils';
+import type { PageLayout } from '@docx-editor.dev/core/pagination-model';
+import { findPageIndexContainingPmPos } from '@docx-editor.dev/core/pagination-model';
+import { paintAllPagesNow } from '@docx-editor.dev/core/painter-model';
 import {
   findContentControlsInPM,
   findContentControlPos,
@@ -33,23 +33,23 @@ import {
   removeContentControlTr,
   setContentControlValueTr,
   type PMContentControl,
-} from '@eigenpal/docx-editor-core/prosemirror';
+} from '@docx-editor.dev/core/prosemirror';
 import {
   ContentControlNotFoundError,
   type ContentControlFilter,
   type ContentControlValue,
-} from '@eigenpal/docx-editor-core/agent';
+} from '@docx-editor.dev/core/agent';
 import {
   findInDocument as findInDocumentImpl,
   getSelectionInfo as getSelectionInfoImpl,
   getPageContent as getPageContentImpl,
 } from '../utils/refApiQueries';
-import { findParaIdRange } from '@eigenpal/docx-editor-core/prosemirror/paraText';
+import { findParaIdRange } from '@docx-editor.dev/core/prosemirror/paraText';
 import {
   findCommentRange,
   findChangeRange,
   clampRangeToDoc,
-} from '@eigenpal/docx-editor-core/prosemirror/queries';
+} from '@docx-editor.dev/core/prosemirror/queries';
 import { TextSelection } from 'prosemirror-state';
 import type { DocxEditorRef } from '../components/DocxEditor/types';
 import type { ApplyFormattingOptions } from './useFormattingActions';

@@ -2,7 +2,7 @@
 
 ### Requirement: Image resize/drag commit functions in core
 
-`@eigenpal/docx-editor-core` SHALL expose `commitImageResize(view, pmPos, width, height)` and `commitImageDragMove(view, opts)` covering the float-vs-inline fork. Float drag updates the node's `position` attribute via `setNodeMarkup`; inline drag deletes at the old position and inserts at a resolved drop position. Hit-testing and gesture tracking SHALL remain in the adapters, which pass a resolved drop position / EMU offset into the commit.
+`@docx-editor.dev/core` SHALL expose `commitImageResize(view, pmPos, width, height)` and `commitImageDragMove(view, opts)` covering the float-vs-inline fork. Float drag updates the node's `position` attribute via `setNodeMarkup`; inline drag deletes at the old position and inserts at a resolved drop position. Hit-testing and gesture tracking SHALL remain in the adapters, which pass a resolved drop position / EMU offset into the commit.
 
 #### Scenario: Resize commit
 

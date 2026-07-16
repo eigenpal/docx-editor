@@ -9,7 +9,7 @@
  * because SFCs render via `<component :is="...">`-style dispatch.
  */
 import { computed, type Ref } from 'vue';
-import type { Comment } from '@eigenpal/docx-editor-core/types/content';
+import type { Comment } from '@docx-editor.dev/core/types/content';
 import type { TrackedChangeEntry } from './useTrackedChanges';
 
 export interface CommentSidebarItem {

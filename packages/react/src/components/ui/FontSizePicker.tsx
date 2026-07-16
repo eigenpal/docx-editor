@@ -47,7 +47,7 @@ const DEFAULT_MAX_SIZE = 400;
 
 // Re-export the canonical half-point conversions from core so the
 // React FontSizePicker keeps its existing import surface.
-export { halfPointsToPoints, pointsToHalfPoints } from '@eigenpal/docx-editor-core/utils/units';
+export { halfPointsToPoints, pointsToHalfPoints } from '@docx-editor.dev/core/utils/units';
 
 /**
  * Find the next size in the preset list (going up)

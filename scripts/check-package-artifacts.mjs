@@ -44,12 +44,12 @@ for (const packageDir of packageDirs) {
       isDeclaration &&
       (/(?:\.\.\/)+core\/src\//.test(content) ||
         /\/packages\/[^/]+\/src\//.test(content) ||
-        /@eigenpal\/docx-editor-core\/(?:flow-model|pagination-model|painter-model|editor)(?:\/|['"])/.test(
+        /@docx-editor\.dev\/core\/(?:flow-model|pagination-model|painter-model|editor)(?:\/|['"])/.test(
           content
         ));
     const importsPrivateCoreSubpath =
       !isDeclaration &&
-      /(?:from\s*|import\s*\()\s*['"]@eigenpal\/docx-editor-core\/(?:flow-model|pagination-model|painter-model|editor)(?:\/|['"])/.test(
+      /(?:from\s*|import\s*\()\s*['"]@docx-editor\.dev\/core\/(?:flow-model|pagination-model|painter-model|editor)(?:\/|['"])/.test(
         content
       );
     if (leaksWorkspacePath || importsPrivateCoreSubpath) {
@@ -75,10 +75,10 @@ const renderApi = await import(pathToFileURL(path.join(root, 'packages/core/dist
 const renderApiCjs = require(path.join(root, 'packages/core/dist/api.js'));
 for (const name of ['renderDocument', 'caretAt', 'rectsFor']) {
   if (typeof renderApi[name] !== 'function') {
-    errors.push(`@eigenpal/docx-editor-core/api is missing runtime export ${name}`);
+    errors.push(`@docx-editor.dev/core/api is missing runtime export ${name}`);
   }
   if (typeof renderApiCjs[name] !== 'function') {
-    errors.push(`@eigenpal/docx-editor-core/api CJS is missing runtime export ${name}`);
+    errors.push(`@docx-editor.dev/core/api CJS is missing runtime export ${name}`);
   }
 }
 

@@ -1,5 +1,5 @@
 {
-  "name": "@eigenpal/docx-editor-i18n",
+  "name": "@docx-editor.dev/i18n",
   "version": "1.10.0",
   "description": "Shared UI locale strings and types for the @eigenpal docx-editor adapters (React and Vue).",
   "sideEffects": false,
@@ -69,10 +69,10 @@
     "README.md"
   ],
   "scripts": {
-    "build": "tsup && node ../../scripts/inject-package-doc.mjs --package @eigenpal/docx-editor-i18n",
+    "build": "tsup && node ../../scripts/inject-package-doc.mjs --package @docx-editor.dev/i18n",
     "typecheck": "tsc --noEmit",
-    "api:extract": "node ../../scripts/api-extractor.mjs --package @eigenpal/docx-editor-i18n --local",
-    "api:check": "node ../../scripts/api-extractor.mjs --package @eigenpal/docx-editor-i18n"
+    "api:extract": "node ../../scripts/api-extractor.mjs --package @docx-editor.dev/i18n --local",
+    "api:check": "node ../../scripts/api-extractor.mjs --package @docx-editor.dev/i18n"
   },
   "devDependencies": {
     "tsup": "^8.0.1",

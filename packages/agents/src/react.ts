@@ -1,5 +1,5 @@
 /**
- * @eigenpal/docx-editor-agents/react
+ * @docx-editor.dev/agents/react
  *
  * React entry. Hooks, components, and types that need React as a peer
  * dependency. Pair with `/server` (or `/ai-sdk/server`) for the API route
@@ -7,7 +7,7 @@
  *
  * @example
  * ```tsx
- * import { useDocxAgentTools } from '@eigenpal/docx-editor-agents/react';
+ * import { useDocxAgentTools } from '@docx-editor.dev/agents/react';
  *
  * const { tools, executeToolCall, getContext } = useDocxAgentTools({
  *   editorRef,
@@ -33,7 +33,7 @@ export type { AgentToolDefinition, AgentToolResult } from './tools';
 export { getToolDisplayName } from './tools';
 export type { EditorRefLike } from './bridge';
 
-// UI components — migrated from @eigenpal/docx-editor-react in 1.0
+// UI components — migrated from @docx-editor.dev/react in 1.0
 // (canonical home is now the agents package; React adapter still re-exports them
 // with @deprecated for one minor and removes in the same train).
 export { AgentPanel } from './react/components/AgentPanel';

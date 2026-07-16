@@ -1,6 +1,6 @@
 ## Why
 
-After the monorepo extraction (`extract-core-monorepo`), the package boundary is clean but ~50% of the editor's business logic remains trapped inside React components and hooks. `PagedEditor.tsx` (2080 lines), `DocxEditor.tsx` (1400 lines), and hooks like `useClipboard`, `useAutoSave`, `useTableSelection` all contain framework-agnostic state machines and coordination logic wrapped in React's `useState`/`useRef`/`useEffect`. A Vue contributor building `@eigenpal/docx-editor-vue` would need to reverse-engineer and reimplement all of this logic, which defeats the purpose of the core extraction.
+After the monorepo extraction (`extract-core-monorepo`), the package boundary is clean but ~50% of the editor's business logic remains trapped inside React components and hooks. `PagedEditor.tsx` (2080 lines), `DocxEditor.tsx` (1400 lines), and hooks like `useClipboard`, `useAutoSave`, `useTableSelection` all contain framework-agnostic state machines and coordination logic wrapped in React's `useState`/`useRef`/`useEffect`. A Vue contributor building `@docx-editor.dev/vue` would need to reverse-engineer and reimplement all of this logic, which defeats the purpose of the core extraction.
 
 ## What Changes
 
@@ -28,8 +28,8 @@ After the monorepo extraction (`extract-core-monorepo`), the package boundary is
 
 ## Impact
 
-- **`@eigenpal/docx-editor-core`**: Gains new exports — coordinator classes, manager classes, `RenderAsyncHandle` interface
-- **`@eigenpal/docx-editor-react`**: `PagedEditor.tsx`, `DocxEditor.tsx`, and hooks become thin React wrappers (~50-70% line reduction). No public API changes.
-- **`@eigenpal/docx-editor-vue`**: Vue contributor can now build components by wrapping the same coordinators/managers in Vue composables instead of reverse-engineering React logic
+- **`@docx-editor.dev/core`**: Gains new exports — coordinator classes, manager classes, `RenderAsyncHandle` interface
+- **`@docx-editor.dev/react`**: `PagedEditor.tsx`, `DocxEditor.tsx`, and hooks become thin React wrappers (~50-70% line reduction). No public API changes.
+- **`@docx-editor.dev/vue`**: Vue contributor can now build components by wrapping the same coordinators/managers in Vue composables instead of reverse-engineering React logic
 - **Testing**: Manager classes are unit-testable in isolation (no DOM/React needed for logic tests)
 - **Risk**: Large internal refactor touching the two biggest components. Requires careful incremental extraction with E2E test validation at each step.

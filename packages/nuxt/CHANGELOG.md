@@ -1,23 +1,23 @@
-# @eigenpal/nuxt-docx-editor
+# @docx-editor.dev/nuxt
 
 ## 1.10.0
 
 ### Patch Changes
 
 - Updated dependencies [53ede3c]
-  - @eigenpal/docx-editor-vue@1.10.0
+  - @docx-editor.dev/vue@1.10.0
 
 ## 1.9.0
 
 ### Patch Changes
 
-- @eigenpal/docx-editor-vue@1.9.0
+- @docx-editor.dev/vue@1.9.0
 
 ## 1.8.3
 
 ### Patch Changes
 
-- @eigenpal/docx-editor-vue@1.8.3
+- @docx-editor.dev/vue@1.8.3
 
 ## 1.8.2
 
@@ -26,19 +26,19 @@
 - Updated dependencies [9022b42]
 - Updated dependencies [9622082]
 - Updated dependencies [7811a73]
-  - @eigenpal/docx-editor-vue@1.8.2
+  - @docx-editor.dev/vue@1.8.2
 
 ## 1.8.1
 
 ### Patch Changes
 
-- @eigenpal/docx-editor-vue@1.8.1
+- @docx-editor.dev/vue@1.8.1
 
 ## 1.8.0
 
 ### Patch Changes
 
-- @eigenpal/docx-editor-vue@1.8.0
+- @docx-editor.dev/vue@1.8.0
 
 ## 1.7.0
 
@@ -53,7 +53,7 @@
 - Updated dependencies [edd0bc2]
 - Updated dependencies [78af476]
 - Updated dependencies [94b5816]
-  - @eigenpal/docx-editor-vue@1.7.0
+  - @docx-editor.dev/vue@1.7.0
 
 ## 1.6.2
 
@@ -61,13 +61,13 @@
 
 - Updated dependencies [768b10e]
 - Updated dependencies [0ac0a4f]
-  - @eigenpal/docx-editor-vue@1.6.2
+  - @docx-editor.dev/vue@1.6.2
 
 ## 1.6.1
 
 ### Patch Changes
 
-- @eigenpal/docx-editor-vue@1.6.1
+- @docx-editor.dev/vue@1.6.1
 
 ## 1.6.0
 
@@ -85,7 +85,7 @@
 - Updated dependencies [7fe09f0]
 - Updated dependencies [7fe09f0]
 - Updated dependencies [7fe09f0]
-  - @eigenpal/docx-editor-vue@1.6.0
+  - @docx-editor.dev/vue@1.6.0
 
 ## 1.5.0
 
@@ -97,7 +97,7 @@
 - Updated dependencies [5cdfa5c]
 - Updated dependencies [5cdfa5c]
 - Updated dependencies [d090d08]
-  - @eigenpal/docx-editor-vue@1.5.0
+  - @docx-editor.dev/vue@1.5.0
 
 ## 1.4.0
 
@@ -106,7 +106,7 @@
 - Updated dependencies [1ab8b30]
 - Updated dependencies [3d36236]
 - Updated dependencies [92690d6]
-  - @eigenpal/docx-editor-vue@1.4.0
+  - @docx-editor.dev/vue@1.4.0
 
 ## 1.3.3
 
@@ -114,7 +114,7 @@
 
 - Updated dependencies [bd704e2]
 - Updated dependencies [bf42c14]
-  - @eigenpal/docx-editor-vue@1.3.3
+  - @docx-editor.dev/vue@1.3.3
 
 ## 1.3.2
 
@@ -123,7 +123,7 @@
 - Updated dependencies [b05e9cf]
 - Updated dependencies [1c254e8]
 - Updated dependencies [6228132]
-  - @eigenpal/docx-editor-vue@1.3.2
+  - @docx-editor.dev/vue@1.3.2
 
 ## 1.3.1
 
@@ -132,7 +132,7 @@
 - Updated dependencies [3fe9c57]
 - Updated dependencies [d100115]
 - Updated dependencies [66cf3a8]
-  - @eigenpal/docx-editor-vue@1.3.1
+  - @docx-editor.dev/vue@1.3.1
 
 ## 1.3.0
 
@@ -147,13 +147,13 @@
 - Updated dependencies [06aea12]
 - Updated dependencies [127985a]
 - Updated dependencies [0f3eb97]
-  - @eigenpal/docx-editor-vue@1.3.0
+  - @docx-editor.dev/vue@1.3.0
 
 ## 1.2.1
 
 ### Patch Changes
 
-- @eigenpal/docx-editor-vue@1.2.1
+- @docx-editor.dev/vue@1.2.1
 
 ## 1.2.0
 
@@ -163,7 +163,7 @@
 - Updated dependencies [d791e05]
 - Updated dependencies [a60ed77]
 - Updated dependencies [a60ed77]
-  - @eigenpal/docx-editor-vue@1.2.0
+  - @docx-editor.dev/vue@1.2.0
 
 ## 1.1.0
 
@@ -176,18 +176,18 @@
 - Updated dependencies [9d7138e]
 - Updated dependencies [9d7138e]
 - Updated dependencies [42ea72d]
-  - @eigenpal/docx-editor-vue@1.1.0
+  - @docx-editor.dev/vue@1.1.0
 
 ## 1.0.3
 
 ### Patch Changes
 
 - Updated dependencies [6d56181]
-  - @eigenpal/docx-editor-vue@1.0.3
+  - @docx-editor.dev/vue@1.0.3
 
 ## 1.0.2
 
 ### Patch Changes
 
-- ffba596: Add `@eigenpal/nuxt-docx-editor`, a Nuxt 3 & 4 module that auto-imports an SSR-safe `<DocxEditor>` component wrapping the Vue adapter.
-  - @eigenpal/docx-editor-vue@1.0.2
+- ffba596: Add `@docx-editor.dev/nuxt`, a Nuxt 3 & 4 module that auto-imports an SSR-safe `<DocxEditor>` component wrapping the Vue adapter.
+  - @docx-editor.dev/vue@1.0.2

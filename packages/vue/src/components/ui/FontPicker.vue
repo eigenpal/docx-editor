@@ -1,7 +1,7 @@
 <!--
   Vue port of packages/react/src/components/ui/FontPicker.tsx —
   font family picker grouped by category. Shares the FontOption
-  type with React via @eigenpal/docx-editor-core/utils/fontOptions.
+  type with React via @docx-editor.dev/core/utils/fontOptions.
   Native <select> with <optgroup> rather than radix-vue.
 -->
 <template>
@@ -50,7 +50,7 @@
 
 <script setup lang="ts">
 import { computed } from 'vue';
-import type { FontOption } from '@eigenpal/docx-editor-core/utils/fontOptions';
+import type { FontOption } from '@docx-editor.dev/core/utils/fontOptions';
 import { getPrimaryFontFamily } from './fontPickerValue';
 
 export type { FontOption };

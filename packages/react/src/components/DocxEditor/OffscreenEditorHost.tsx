@@ -46,13 +46,10 @@ import {
   schema,
   createDocumentStylesPlugin,
   createDocumentContextPlugin,
-} from '@eigenpal/docx-editor-core/prosemirror';
-import { toProseDoc, fromProseDoc } from '@eigenpal/docx-editor-core/prosemirror/conversion';
-import {
-  createStarterKit,
-  ExtensionManager,
-} from '@eigenpal/docx-editor-core/prosemirror/extensions';
-import type { Document, StyleDefinitions } from '@eigenpal/docx-editor-core/types/document';
+} from '@docx-editor.dev/core/prosemirror';
+import { toProseDoc, fromProseDoc } from '@docx-editor.dev/core/prosemirror/conversion';
+import { createStarterKit, ExtensionManager } from '@docx-editor.dev/core/prosemirror/extensions';
+import type { Document, StyleDefinitions } from '@docx-editor.dev/core/types/document';
 
 import 'prosemirror-view/style/prosemirror.css';
 

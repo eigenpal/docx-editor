@@ -10,7 +10,7 @@
 
 import React, { useState, useCallback } from 'react';
 import type { CSSProperties, ReactNode } from 'react';
-import type { NumberFormat } from '@eigenpal/docx-editor-core/types/document';
+import type { NumberFormat } from '@docx-editor.dev/core/types/document';
 import { MaterialSymbol } from './MaterialSymbol';
 import { useTranslation } from '../../i18n';
 
@@ -19,8 +19,8 @@ import { useTranslation } from '../../i18n';
 // ============================================================================
 
 // List-state types live in core; re-exported here for backwards compat.
-export type { ListType, ListState } from '@eigenpal/docx-editor-core/utils/listState';
-import type { ListState } from '@eigenpal/docx-editor-core/utils/listState';
+export type { ListType, ListState } from '@docx-editor.dev/core/utils/listState';
+import type { ListState } from '@docx-editor.dev/core/utils/listState';
 
 /**
  * Props for the ListButtons component
@@ -305,7 +305,7 @@ export {
   getNextIndentLevel,
   getPreviousIndentLevel,
   toggleListType,
-} from '@eigenpal/docx-editor-core/utils/listState';
+} from '@docx-editor.dev/core/utils/listState';
 
 /**
  * Get CSS for list indent

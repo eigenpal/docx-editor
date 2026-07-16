@@ -8,10 +8,10 @@
  * walks used during document setup and `scrollToParaId` navigation.
  */
 
-import { findBodyPmAnchors } from '@eigenpal/docx-editor-core/flow-model';
-import type { Document, SectionProperties } from '@eigenpal/docx-editor-core/types/document';
+import { findBodyPmAnchors } from '@docx-editor.dev/core/flow-model';
+import type { Document, SectionProperties } from '@docx-editor.dev/core/types/document';
 
-// `findParaIdRange` moved to `@eigenpal/docx-editor-core/prosemirror/paraText`;
+// `findParaIdRange` moved to `@docx-editor.dev/core/prosemirror/paraText`;
 // import it from core directly (no re-export here — there were no consumers).
 
 /**

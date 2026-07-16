@@ -5,7 +5,7 @@
  * has .on('data') and Writable has .write".
  *
  * For real Node usage:
- *   import { runStdioServer } from '@eigenpal/docx-editor-agents/mcp';
+ *   import { runStdioServer } from '@docx-editor.dev/agents/mcp';
  *   runStdioServer(bridge);
  *
  * For tests, pass any EventEmitter-shaped Readable + a function-shaped

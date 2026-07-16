@@ -4,7 +4,7 @@ import type { CSSProperties } from 'react';
 import {
   CARD_STYLE_COLLAPSED as CORE_COLLAPSED,
   CARD_STYLE_EXPANDED as CORE_EXPANDED,
-} from '@eigenpal/docx-editor-core/utils/cardStyles';
+} from '@docx-editor.dev/core/utils/cardStyles';
 
 export const CARD_STYLE_COLLAPSED = CORE_COLLAPSED as CSSProperties;
 export const CARD_STYLE_EXPANDED = CORE_EXPANDED as CSSProperties;

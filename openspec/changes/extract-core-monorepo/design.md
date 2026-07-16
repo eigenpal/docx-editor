@@ -1,6 +1,6 @@
 ## Context
 
-The editor is currently a single npm package (`@eigenpal/docx-editor-react`) with ~80% framework-agnostic code and ~20% React UI. The codebase already has clean internal boundaries — separate entry points (`core.ts`, `headless.ts`, `react.ts`, `ui.ts`) and framework-agnostic directories (`src/docx/`, `src/types/`, `src/prosemirror/`, `src/pagination-model/`, `src/painter-model/`, `src/flow-model/`). A community contributor wants to build a Vue wrapper, which requires the core to be importable without React dependencies.
+The editor is currently a single npm package (`@docx-editor.dev/react`) with ~80% framework-agnostic code and ~20% React UI. The codebase already has clean internal boundaries — separate entry points (`core.ts`, `headless.ts`, `react.ts`, `ui.ts`) and framework-agnostic directories (`src/docx/`, `src/types/`, `src/prosemirror/`, `src/pagination-model/`, `src/painter-model/`, `src/flow-model/`). A community contributor wants to build a Vue wrapper, which requires the core to be importable without React dependencies.
 
 Current state:
 
@@ -15,10 +15,10 @@ Current state:
 
 **Goals:**
 
-- Extract framework-agnostic core into `@eigenpal/docx-editor-core` with zero React dependencies
-- Keep `@eigenpal/docx-editor-react` as the React UI package (preserves npm stats, no migration for existing users)
+- Extract framework-agnostic core into `@docx-editor.dev/core` with zero React dependencies
+- Keep `@docx-editor.dev/react` as the React UI package (preserves npm stats, no migration for existing users)
 - Use Bun workspaces for monorepo management (already using Bun as runtime)
-- Enable community Vue/Svelte wrappers that depend only on `@eigenpal/docx-editor-core`
+- Enable community Vue/Svelte wrappers that depend only on `@docx-editor.dev/core`
 - Maintain a single repo, single CI pipeline
 
 **Non-Goals:**
@@ -32,7 +32,7 @@ Current state:
 
 ### 1. Two packages, not more
 
-**Decision:** Split into exactly `@eigenpal/docx-editor-core` and `@eigenpal/docx-editor-react` (React).
+**Decision:** Split into exactly `@docx-editor.dev/core` and `@docx-editor.dev/react` (React).
 
 **Rationale:** More packages (separate layout, prosemirror, UI packages) adds versioning complexity without clear benefit. The Vue contributor needs one clean core dependency. Two packages is the minimum viable split.
 
@@ -48,13 +48,13 @@ Current state:
 
 ### 3. Keep existing package name for React
 
-**Decision:** `@eigenpal/docx-editor-react` stays as the React package name. No rename.
+**Decision:** `@docx-editor.dev/react` stays as the React package name. No rename.
 
 **Rationale:** Preserves npm download stats, existing users don't need to migrate, no deprecation dance.
 
 ### 4. What goes in core vs react
 
-**Core (`@eigenpal/docx-editor-core`):**
+**Core (`@docx-editor.dev/core`):**
 
 - `src/docx/` — DOCX parsing, serialization, XML handling
 - `src/types/` — document model types
@@ -68,7 +68,7 @@ Current state:
 - `src/mcp/` — MCP server tools
 - Entry points: `core.ts`, `headless.ts`
 
-**React (`@eigenpal/docx-editor-react`):**
+**React (`@docx-editor.dev/react`):**
 
 - `src/components/` — React UI components (toolbar, dialogs, pickers)
 - `src/hooks/` — React hooks
@@ -88,7 +88,7 @@ Current state:
 
 ### 6. Internal cross-package imports
 
-**Decision:** React package imports from `@eigenpal/docx-editor-core` (the npm package name), not relative paths.
+**Decision:** React package imports from `@docx-editor.dev/core` (the npm package name), not relative paths.
 
 **Rationale:** Bun workspaces resolve workspace packages by name. This ensures the React package treats core as a proper dependency, matching what external consumers see.
 
@@ -102,7 +102,7 @@ Current state:
 
 **Decision:** Split the current `EditorPlugin` interface into a framework-agnostic core and framework-specific adapters.
 
-**Core interface (`@eigenpal/docx-editor-core`):**
+**Core interface (`@docx-editor.dev/core`):**
 
 ```typescript
 interface EditorPluginCore<TState = any> {
@@ -117,7 +117,7 @@ interface EditorPluginCore<TState = any> {
 }
 ```
 
-**React adapter (`@eigenpal/docx-editor-react`):**
+**React adapter (`@docx-editor.dev/react`):**
 
 ```typescript
 interface ReactEditorPlugin<TState = any> extends EditorPluginCore<TState> {
@@ -130,7 +130,7 @@ interface ReactEditorPlugin<TState = any> extends EditorPluginCore<TState> {
 }
 ```
 
-**Vue adapter (`@eigenpal/docx-editor-vue`):**
+**Vue adapter (`@docx-editor.dev/vue`):**
 
 ```typescript
 interface VueEditorPlugin<TState = any> extends EditorPluginCore<TState> {
@@ -141,7 +141,7 @@ interface VueEditorPlugin<TState = any> extends EditorPluginCore<TState> {
 
 **What moves where:**
 
-- `EditorPluginCore`, `PanelConfig`, `PluginPanelProps` (without ReactNode), `RenderedDomContext` → `@eigenpal/docx-editor-core`
+- `EditorPluginCore`, `PanelConfig`, `PluginPanelProps` (without ReactNode), `RenderedDomContext` → `@docx-editor.dev/core`
 - `PluginHost.tsx` stays in React package as `ReactPluginHost` — renders `Panel` as React components
 - Vue package builds its own `VuePluginHost` — renders `Panel` as Vue components
 - `CorePlugin` (headless command/MCP system) stays in core unchanged — already framework-agnostic
@@ -206,7 +206,7 @@ examples/
 
 ## Risks / Trade-offs
 
-**[Risk] Internal import churn** → Files that currently do `../docx/parser` will need `@eigenpal/docx-editor-core` imports. Mitigation: batch find-and-replace, verify with typecheck.
+**[Risk] Internal import churn** → Files that currently do `../docx/parser` will need `@docx-editor.dev/core` imports. Mitigation: batch find-and-replace, verify with typecheck.
 
 **[Risk] Circular dependencies between packages** → Core must not import from React package. Mitigation: the current code already respects this boundary (core modules don't import React components). Verify with a "no-import" lint rule.
 

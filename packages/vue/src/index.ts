@@ -1,15 +1,15 @@
 /**
- * @eigenpal/docx-editor-vue
+ * @docx-editor.dev/vue
  *
  * Curated root entry for the documented Vue 3 editor API. Advanced surfaces
  * stay public through explicit subpaths:
- * - `@eigenpal/docx-editor-vue/ui`
- * - `@eigenpal/docx-editor-vue/dialogs`
- * - `@eigenpal/docx-editor-vue/composables`
- * - `@eigenpal/docx-editor-vue/plugin-api`
+ * - `@docx-editor.dev/vue/ui`
+ * - `@docx-editor.dev/vue/dialogs`
+ * - `@docx-editor.dev/vue/composables`
+ * - `@docx-editor.dev/vue/plugin-api`
  *
- * Framework-agnostic document utilities live in `@eigenpal/docx-editor-core`.
- * Agent/MCP surfaces live in `@eigenpal/docx-editor-agents`.
+ * Framework-agnostic document utilities live in `@docx-editor.dev/core`.
+ * Agent/MCP surfaces live in `@docx-editor.dev/agents`.
  *
  * @packageDocumentation
  * @public
@@ -21,18 +21,18 @@ export const VERSION = '0.0.2';
 export { default as DocxEditor } from './components/DocxEditor';
 export type { DocxEditorProps, EditorMode } from './components/DocxEditor/types';
 
-// Document factory helpers — re-exported from `@eigenpal/docx-editor-core` so
+// Document factory helpers — re-exported from `@docx-editor.dev/core` so
 // the common "spawn a blank editor" affordance is available without forcing
 // consumers to add `-core` to their dependency tree alongside `-vue`.
 export {
   createEmptyDocument,
   createDocumentWithText,
   type CreateEmptyDocumentOptions,
-} from '@eigenpal/docx-editor-core';
+} from '@docx-editor.dev/core';
 
 // i18n contract — runtime only. Locale string types (LocaleStrings,
 // Translations, PartialLocaleStrings, TranslationKey) live in
-// `@eigenpal/docx-editor-i18n`; import them from there.
+// `@docx-editor.dev/i18n`; import them from there.
 export { useTranslation, provideLocale, i18nPlugin, defaultLocale } from './i18n';
 
 // renderAsync

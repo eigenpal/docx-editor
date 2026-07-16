@@ -13,7 +13,7 @@
 
 import type { Ref } from 'vue';
 import type { EditorView } from 'prosemirror-view';
-import { openReportIssue } from '@eigenpal/docx-editor-core/utils/reportIssue';
+import { openReportIssue } from '@docx-editor.dev/core/utils/reportIssue';
 
 export interface UseMenuActionsOptions {
   editorView: Ref<EditorView | null>;

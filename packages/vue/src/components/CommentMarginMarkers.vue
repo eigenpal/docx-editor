@@ -33,7 +33,7 @@
 
 <script setup lang="ts">
 import { computed, type CSSProperties } from 'vue';
-import type { Comment } from '@eigenpal/docx-editor-core/types/content';
+import type { Comment } from '@docx-editor.dev/core/types/content';
 import MaterialSymbol from './ui/MaterialSymbol.vue';
 
 const props = defineProps<{

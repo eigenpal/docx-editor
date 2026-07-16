@@ -12,7 +12,7 @@ The editor has two plugin systems. **EditorPlugin** extends the browser editor w
 | Environment  | Browser (React)                                 | Node.js (headless)                              |
 | Extends      | `<DocxEditor>` UI: panels, overlays, ProseMirror | `Document` edits via command handlers           |
 | Registration | `<PluginHost plugins={[...]}>`                  | `pluginRegistry.register(plugin)`               |
-| Entry point  | `@eigenpal/docx-editor-react/plugin-api`        | `@eigenpal/docx-editor-core/core-plugins`       |
+| Entry point  | `@docx-editor.dev/react/plugin-api`        | `@docx-editor.dev/core/core-plugins`       |
 
 Building UI inside the editor? Write an EditorPlugin. Processing documents in API routes, Node.js scripts, or CI pipelines? Write a CorePlugin.
 

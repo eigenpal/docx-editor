@@ -45,7 +45,7 @@ import TextContextMenu from '../TextContextMenu.vue';
 import ImageContextMenu from '../ImageContextMenu.vue';
 import type { TextContextMenuState } from '../../composables/useContextMenus';
 import type { ImageContextMenuState, ImageContextMenuTextAction } from '../imageContextMenuTypes';
-import type { ImageLayoutTarget } from '@eigenpal/docx-editor-core/prosemirror/commands';
+import type { ImageLayoutTarget } from '@docx-editor.dev/core/prosemirror/commands';
 
 defineProps<{
   readOnly: boolean;

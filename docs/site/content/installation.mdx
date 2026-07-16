@@ -14,19 +14,19 @@ apps it's one install.
 
 ```bash
 # React
-npm install @eigenpal/docx-editor-react
+npm install @docx-editor.dev/react
 
 # Vue 3
-npm install @eigenpal/docx-editor-vue
+npm install @docx-editor.dev/vue
 
 # Nuxt 3 & 4 (module wrapping the Vue adapter)
-npm install @eigenpal/nuxt-docx-editor
+npm install @docx-editor.dev/nuxt
 
 # Headless / server-side (no UI)
-npm install @eigenpal/docx-editor-core
+npm install @docx-editor.dev/core
 
 # Agent toolkit (layer on top of an adapter)
-npm install @eigenpal/docx-editor-agents
+npm install @docx-editor.dev/agents
 ```
 
 ## Mount it
@@ -40,8 +40,8 @@ document).
 <Tab value="React">
 
 ```tsx
-import { DocxEditor } from '@eigenpal/docx-editor-react';
-import '@eigenpal/docx-editor-react/styles.css';
+import { DocxEditor } from '@docx-editor.dev/react';
+import '@docx-editor.dev/react/styles.css';
 
 export default function App() {
   return <DocxEditor documentBuffer={null} />;
@@ -54,8 +54,8 @@ export default function App() {
 
 ```vue
 <script setup lang="ts">
-import { DocxEditor } from '@eigenpal/docx-editor-vue';
-import '@eigenpal/docx-editor-vue/styles.css';
+import { DocxEditor } from '@docx-editor.dev/vue';
+import '@docx-editor.dev/vue/styles.css';
 </script>
 
 <template>
@@ -104,7 +104,7 @@ model, and `repackDocx` writes it back, preserving every part it didn't
 change.
 
 ```ts
-import { parseDocx, repackDocx } from '@eigenpal/docx-editor-core';
+import { parseDocx, repackDocx } from '@docx-editor.dev/core';
 
 const doc = await parseDocx(buffer);
 // ...inspect or mutate the document model...

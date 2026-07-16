@@ -28,7 +28,7 @@ import { computed } from 'vue';
 import type {
   TemplateTag,
   TagType,
-} from '@eigenpal/docx-editor-core/prosemirror/template/prosemirror-plugin';
+} from '@docx-editor.dev/core/prosemirror/template/prosemirror-plugin';
 
 const props = defineProps<{
   tag: TemplateTag;

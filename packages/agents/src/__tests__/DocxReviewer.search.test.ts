@@ -1,5 +1,5 @@
 import { describe, test, expect } from 'bun:test';
-import type { Insertion, Deletion } from '@eigenpal/docx-editor-core/headless';
+import type { Insertion, Deletion } from '@docx-editor.dev/core/headless';
 import { TextNotFoundError } from '../errors';
 import {
   makeRun,

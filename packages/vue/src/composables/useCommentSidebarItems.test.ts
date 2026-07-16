@@ -1,7 +1,7 @@
 import { describe, test, expect } from 'bun:test';
 import { ref } from 'vue';
-import type { Comment } from '@eigenpal/docx-editor-core/types/content';
-import type { TrackedChangeEntry } from '@eigenpal/docx-editor-core/utils/comments';
+import type { Comment } from '@docx-editor.dev/core/types/content';
+import type { TrackedChangeEntry } from '@docx-editor.dev/core/utils/comments';
 import { useCommentSidebarItems } from './useCommentSidebarItems';
 
 /**

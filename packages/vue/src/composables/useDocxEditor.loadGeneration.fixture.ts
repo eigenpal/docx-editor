@@ -2,8 +2,8 @@
 import { GlobalRegistrator } from '@happy-dom/global-registrator';
 import { mock } from 'bun:test';
 import { ref } from 'vue';
-import { createEmptyDocument } from '@eigenpal/docx-editor-core/utils';
-import type { Document } from '@eigenpal/docx-editor-core/types/document';
+import { createEmptyDocument } from '@docx-editor.dev/core/utils';
+import type { Document } from '@docx-editor.dev/core/types/document';
 
 type PendingParse = {
   resolve: (doc: Document) => void;
@@ -12,7 +12,7 @@ type PendingParse = {
 
 const pendingParses: PendingParse[] = [];
 
-mock.module('@eigenpal/docx-editor-core/docx/parser', () => ({
+mock.module('@docx-editor.dev/core/docx/parser', () => ({
   parseDocx: (_buffer: ArrayBuffer | Uint8Array) =>
     new Promise<Document>((resolve, reject) => {
       pendingParses.push({ resolve, reject });

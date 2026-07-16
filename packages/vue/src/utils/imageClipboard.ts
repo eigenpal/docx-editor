@@ -11,7 +11,7 @@
  */
 
 import type { EditorView } from 'prosemirror-view';
-import { makeRevisionInfo } from '@eigenpal/docx-editor-core/prosemirror/plugins';
+import { makeRevisionInfo } from '@docx-editor.dev/core/prosemirror/plugins';
 import type { Node as PMNode } from 'prosemirror-model';
 import type { Transaction } from 'prosemirror-state';
 

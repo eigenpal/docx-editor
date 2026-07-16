@@ -1,9 +1,5 @@
 import { describe, test, expect } from 'bun:test';
-import type {
-  Comment,
-  CommentRangeStart,
-  CommentRangeEnd,
-} from '@eigenpal/docx-editor-core/headless';
+import type { Comment, CommentRangeStart, CommentRangeEnd } from '@docx-editor.dev/core/headless';
 import { DocxReviewer } from '../DocxReviewer';
 import {
   makeRun,

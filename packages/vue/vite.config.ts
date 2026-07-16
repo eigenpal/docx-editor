@@ -3,42 +3,42 @@ import vue from '@vitejs/plugin-vue';
 import dts from 'vite-plugin-dts';
 import { resolve } from 'path';
 
-// Library build for @eigenpal/docx-editor-vue. Vite (not tsup) because the
+// Library build for @docx-editor.dev/vue. Vite (not tsup) because the
 // package ships .vue SFCs that need the @vitejs/plugin-vue compiler step.
 // External: vue, prosemirror-*, and the editor core — consumers bring those.
 export default defineConfig({
   resolve: {
     alias: [
       {
-        find: /^@eigenpal\/docx-editor-core\/flow-model\/(.+)$/,
+        find: /^@docx-editor\.dev\/core\/flow-model\/(.+)$/,
         replacement: resolve(__dirname, '../core/src/flow-model/$1'),
       },
       {
-        find: '@eigenpal/docx-editor-core/flow-model',
+        find: '@docx-editor.dev/core/flow-model',
         replacement: resolve(__dirname, '../core/src/flow-model/index.ts'),
       },
       {
-        find: /^@eigenpal\/docx-editor-core\/painter-model\/(.+)$/,
+        find: /^@docx-editor\.dev\/core\/painter-model\/(.+)$/,
         replacement: resolve(__dirname, '../core/src/painter-model/$1'),
       },
       {
-        find: '@eigenpal/docx-editor-core/painter-model',
+        find: '@docx-editor.dev/core/painter-model',
         replacement: resolve(__dirname, '../core/src/painter-model/index.ts'),
       },
       {
-        find: /^@eigenpal\/docx-editor-core\/pagination-model\/(.+)$/,
+        find: /^@docx-editor\.dev\/core\/pagination-model\/(.+)$/,
         replacement: resolve(__dirname, '../core/src/pagination-model/$1'),
       },
       {
-        find: '@eigenpal/docx-editor-core/pagination-model',
+        find: '@docx-editor.dev/core/pagination-model',
         replacement: resolve(__dirname, '../core/src/pagination-model/index.ts'),
       },
       {
-        find: '@eigenpal/docx-editor-core/editor',
+        find: '@docx-editor.dev/core/editor',
         replacement: resolve(__dirname, '../core/src/editor/index.ts'),
       },
       {
-        find: '@eigenpal/docx-editor-core/utils/removeHeaderFooterForSection',
+        find: '@docx-editor.dev/core/utils/removeHeaderFooterForSection',
         replacement: resolve(__dirname, '../core/src/utils/removeHeaderFooterForSection.ts'),
       },
     ],
@@ -59,13 +59,15 @@ export default defineConfig({
         'src/composables/useDocxEditorRefApi.ts',
         'src/composables/usePagesPointer.ts',
         'src/composables/useSelectionSync.ts',
+        'src/composables/useContextMenus.ts',
+        'src/composables/useTableOfContentsActions.ts',
       ],
       // Pin the entry root so multi-entry builds still flatten declarations
       // to dist/index.d.ts + dist/ui.d.ts (auto-detect drifts to a parent
       // dir once core's workspace types enter the graph).
       entryRoot: 'src',
-      // Keep workspace package names (`@eigenpal/docx-editor-core`,
-      // `@eigenpal/docx-editor-i18n`) intact in published declarations.
+      // Keep workspace package names (`@docx-editor.dev/core`,
+      // `@docx-editor.dev/i18n`) intact in published declarations.
       // Otherwise tsconfig.json's `paths` field rewrites them to
       // `../../core/src/*.ts` — valid in this repo but broken once
       // consumers install from npm, and a hard fail for API Extractor's
@@ -95,11 +97,11 @@ export default defineConfig({
     rollupOptions: {
       external: (id) => {
         if (id === 'vue' || /^prosemirror-/.test(id)) return true;
-        if (!id.startsWith('@eigenpal/docx-editor-core')) return false;
+        if (!id.startsWith('@docx-editor.dev/core')) return false;
         return !(
-          /^@eigenpal\/docx-editor-core\/(?:editor|flow-model|painter-model|pagination-model)(?:\/|$)/.test(
+          /^@docx-editor\.dev\/core\/(?:editor|flow-model|painter-model|pagination-model)(?:\/|$)/.test(
             id
-          ) || id === '@eigenpal/docx-editor-core/utils/removeHeaderFooterForSection'
+          ) || id === '@docx-editor.dev/core/utils/removeHeaderFooterForSection'
         );
       },
     },

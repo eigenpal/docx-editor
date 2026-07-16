@@ -11,7 +11,7 @@ import type {
   ParagraphContent,
   Footnote,
   Endnote,
-} from '@eigenpal/docx-editor-core/headless';
+} from '@docx-editor.dev/core/headless';
 import type {
   ProposeReplacementOptions,
   ProposeInsertionOptions,
@@ -243,7 +243,7 @@ export function proposeReplacement(body: DocumentBody, options: ProposeReplaceme
   const deletion: Deletion = {
     type: 'deletion',
     info: { id: baseId, author, date: now },
-    content: matchedContent as (Run | import('@eigenpal/docx-editor-core/headless').Hyperlink)[],
+    content: matchedContent as (Run | import('@docx-editor.dev/core/headless').Hyperlink)[],
   };
 
   const insertion: Insertion = {
@@ -301,7 +301,7 @@ export function proposeDeletion(body: DocumentBody, options: ProposeDeletionOpti
   const deletion: Deletion = {
     type: 'deletion',
     info: { id, author, date: now },
-    content: matchedContent as (Run | import('@eigenpal/docx-editor-core/headless').Hyperlink)[],
+    content: matchedContent as (Run | import('@docx-editor.dev/core/headless').Hyperlink)[],
   };
 
   para.content.splice(startIndex, endIndex - startIndex + 1, deletion);

@@ -1,12 +1,12 @@
 import { computed, type ComputedRef, type Ref } from 'vue';
 import type { EditorView } from 'prosemirror-view';
-import { extractSelectionContext } from '@eigenpal/docx-editor-core/prosemirror/plugins/selectionTracker';
+import { extractSelectionContext } from '@docx-editor.dev/core/prosemirror/plugins/selectionTracker';
 import type {
   Document,
   SectionProperties,
   StyleDefinitions,
   Theme,
-} from '@eigenpal/docx-editor-core/types/document';
+} from '@docx-editor.dev/core/types/document';
 
 type ParagraphFormatting = ReturnType<typeof extractSelectionContext>['paragraphFormatting'];
 

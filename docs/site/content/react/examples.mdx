@@ -11,8 +11,8 @@ Each example is a self-contained component. Drop into a React file, swap the dat
 
 ```tsx
 import { useEffect, useState } from 'react';
-import { DocxEditor } from '@eigenpal/docx-editor-react';
-import '@eigenpal/docx-editor-react/styles.css';
+import { DocxEditor } from '@docx-editor.dev/react';
+import '@docx-editor.dev/react/styles.css';
 
 export function Editor({ url }: { url: string }) {
   const [buf, setBuf] = useState<ArrayBuffer | null>(null);
@@ -41,7 +41,7 @@ export function Editor({ url }: { url: string }) {
 
 ```tsx
 import { useState } from 'react';
-import { DocxEditor } from '@eigenpal/docx-editor-react';
+import { DocxEditor } from '@docx-editor.dev/react';
 
 export function FileEditor() {
   const [file, setFile] = useState<File | null>(null);
@@ -65,9 +65,9 @@ export function FileEditor() {
 
 ```tsx
 import { useState } from 'react';
-import { DocxEditor } from '@eigenpal/docx-editor-react';
-import { useAutoSave } from '@eigenpal/docx-editor-react/hooks';
-import type { Document } from '@eigenpal/docx-editor-core';
+import { DocxEditor } from '@docx-editor.dev/react';
+import { useAutoSave } from '@docx-editor.dev/react/hooks';
+import type { Document } from '@docx-editor.dev/core';
 
 export function AutosaveEditor() {
   const [doc, setDoc] = useState<Document | null>(null);
@@ -100,8 +100,8 @@ Own the comment array; mirror into a backing store. (React-only: the Vue adapter
 
 ```tsx
 import { useState } from 'react';
-import { DocxEditor } from '@eigenpal/docx-editor-react';
-import type { Comment } from '@eigenpal/docx-editor-core';
+import { DocxEditor } from '@docx-editor.dev/react';
+import type { Comment } from '@docx-editor.dev/core';
 
 export function ReviewEditor({ buf, author }: { buf: ArrayBuffer; author: string }) {
   const [comments, setComments] = useState<Comment[]>([]);
@@ -127,7 +127,7 @@ export function ReviewEditor({ buf, author }: { buf: ArrayBuffer; author: string
 ## Suggesting mode (tracked changes)
 
 ```tsx
-import { DocxEditor } from '@eigenpal/docx-editor-react';
+import { DocxEditor } from '@docx-editor.dev/react';
 
 export function ReviewerEditor({ buf, reviewer }: { buf: ArrayBuffer; reviewer: string }) {
   return <DocxEditor documentBuffer={buf} author={reviewer} mode='suggesting' />;
@@ -142,9 +142,9 @@ Hide the built-in toolbar and compose controls from `/ui`. `ToolbarButton` takes
 
 ```tsx
 import { useRef, useState } from 'react';
-import { DocxEditor, type DocxEditorRef } from '@eigenpal/docx-editor-react';
-import { ToolbarButton, ToolbarGroup, ToolbarSeparator } from '@eigenpal/docx-editor-react/ui';
-import type { SelectionState } from '@eigenpal/docx-editor-core/prosemirror';
+import { DocxEditor, type DocxEditorRef } from '@docx-editor.dev/react';
+import { ToolbarButton, ToolbarGroup, ToolbarSeparator } from '@docx-editor.dev/react/ui';
+import type { SelectionState } from '@docx-editor.dev/core/prosemirror';
 
 export function CustomChromeEditor({ buf }: { buf: ArrayBuffer }) {
   const editorRef = useRef<DocxEditorRef>(null);
@@ -201,8 +201,8 @@ In 0.x the formatting buttons were called `FormattingBar`. They're now `Toolbar`
 `fonts` registers self-hosted font faces, `fontFamilies` controls the picker; the full rules are under [Props → Fonts](/docs/1.x/react/props#fonts).
 
 ```tsx
-import { DocxEditor } from '@eigenpal/docx-editor-react';
-import '@eigenpal/docx-editor-react/styles.css';
+import { DocxEditor } from '@docx-editor.dev/react';
+import '@docx-editor.dev/react/styles.css';
 
 // Module-level so the array identity is stable across renders.
 const FONTS = [
@@ -228,7 +228,7 @@ The `/fonts/...` paths resolve against your site root (`public/` in Next.js or V
 ## Read-only viewer
 
 ```tsx
-import { DocxEditor } from '@eigenpal/docx-editor-react';
+import { DocxEditor } from '@docx-editor.dev/react';
 
 export function Viewer({ buf }: { buf: ArrayBuffer }) {
   return (
@@ -251,7 +251,7 @@ export function Viewer({ buf }: { buf: ArrayBuffer }) {
 Three props hand state to a CRDT: `externalContent` (skip the built-in loader; Yjs owns the content), `externalPlugins` (the y-prosemirror plugins), and `comments` + `onCommentsChange` (mirror threads into a `Y.Array`):
 
 ```tsx
-import { DocxEditor, createEmptyDocument } from '@eigenpal/docx-editor-react';
+import { DocxEditor, createEmptyDocument } from '@docx-editor.dev/react';
 import { ySyncPlugin, yCursorPlugin, yUndoPlugin } from 'y-prosemirror';
 
 <DocxEditor
@@ -269,7 +269,7 @@ The provider setup, presence, and comment sync live on the canonical page: [Real
 `agentPanel={{ render }}` mounts a resizable side panel next to the document, and `useDocxAgentTools` bridges tool calls to the live editor:
 
 ```tsx
-import { useDocxAgentTools } from '@eigenpal/docx-editor-agents/react';
+import { useDocxAgentTools } from '@docx-editor.dev/agents/react';
 
 const { tools, executeToolCall, getContext } = useDocxAgentTools({ editorRef });
 

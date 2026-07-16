@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { collectHeadings, type HeadingInfo } from '@eigenpal/docx-editor-core/utils';
+import { collectHeadings, type HeadingInfo } from '@docx-editor.dev/core/utils';
 import type { PagedEditorRef } from '../PagedEditor';
 
 /**

@@ -52,13 +52,13 @@
 // Re-exported for parity with React's ListButtons — consumers wiring list
 // state pull these from the same module as the component. `<script setup>`
 // can't carry re-exports, so they live in a plain block.
-export type { ListState } from '@eigenpal/docx-editor-core/utils/listState';
-export { createDefaultListState } from '@eigenpal/docx-editor-core/utils/listState';
+export type { ListState } from '@docx-editor.dev/core/utils/listState';
+export { createDefaultListState } from '@docx-editor.dev/core/utils/listState';
 </script>
 
 <script setup lang="ts">
 import MaterialSymbol from './MaterialSymbol.vue';
-import type { ListState } from '@eigenpal/docx-editor-core/utils/listState';
+import type { ListState } from '@docx-editor.dev/core/utils/listState';
 
 withDefaults(
   defineProps<{

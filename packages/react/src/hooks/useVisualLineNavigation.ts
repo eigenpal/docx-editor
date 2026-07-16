@@ -2,7 +2,7 @@
  * Visual Line Navigation Hook
  *
  * Thin React wrapper around the framework-agnostic algorithm in
- * `@eigenpal/docx-editor-core/prosemirror/utils/visualLineNavigation`.
+ * `@docx-editor.dev/core/prosemirror/utils/visualLineNavigation`.
  * Owns sticky-X state; Vue's composable mirrors this shape.
  */
 
@@ -14,7 +14,7 @@ import {
   findLineElementAtPosition as coreFindLineElementAtPosition,
   findPositionOnLineAtClientX as coreFindPositionOnLineAtClientX,
   handleVisualLineKeyDown,
-} from '@eigenpal/docx-editor-core/prosemirror/utils/visualLineNavigation';
+} from '@docx-editor.dev/core/prosemirror/utils/visualLineNavigation';
 
 export interface VisualLineNavigationOptions {
   pagesContainerRef: React.RefObject<HTMLDivElement | null>;

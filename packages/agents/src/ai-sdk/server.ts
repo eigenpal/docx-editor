@@ -1,17 +1,17 @@
 /**
- * @eigenpal/docx-editor-agents/ai-sdk/server
+ * @docx-editor.dev/agents/ai-sdk/server
  *
  * Vercel AI SDK adapter (server side). Opt-in.
  *
  * The core toolkit is runtime-agnostic. Use this entry only if you're
  * wiring `streamText` / `generateText` from `ai` in your route handler.
  * For LangChain, the Anthropic SDK, or OpenAI direct, import
- * `getToolSchemas` from `@eigenpal/docx-editor-agents/server` and shape it
+ * `getToolSchemas` from `@docx-editor.dev/agents/server` and shape it
  * however your runtime expects.
  *
  * @example
  * ```ts
- * import { getAiSdkTools } from '@eigenpal/docx-editor-agents/ai-sdk/server';
+ * import { getAiSdkTools } from '@docx-editor.dev/agents/ai-sdk/server';
  * import { streamText, stepCountIs, convertToModelMessages } from 'ai';
  *
  * const tools = getAiSdkTools();
@@ -40,8 +40,8 @@ import { agentTools } from '../tools';
  * directly to `streamText({ tools })`. No `execute` is set, so AI SDK
  * forwards each tool call to the client's `useChat({ onToolCall })`
  * handler — wire that to `useDocxAgentTools().executeToolCall` from
- * `@eigenpal/docx-editor-agents/ai-sdk/react` or
- * `@eigenpal/docx-editor-agents/react`.
+ * `@docx-editor.dev/agents/ai-sdk/react` or
+ * `@docx-editor.dev/agents/react`.
  */
 export function getAiSdkTools(): Record<string, Tool> {
   return Object.fromEntries(

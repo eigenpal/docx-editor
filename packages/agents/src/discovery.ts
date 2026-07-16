@@ -9,7 +9,7 @@ import type {
   Footnote,
   Endnote,
   Paragraph,
-} from '@eigenpal/docx-editor-core/headless';
+} from '@docx-editor.dev/core/headless';
 import type { ReviewChange, ReviewComment, ChangeFilter, CommentFilter } from './types';
 import { getParagraphPlainText } from './textSearch';
 import {

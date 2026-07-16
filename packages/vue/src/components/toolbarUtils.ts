@@ -6,4 +6,4 @@
 export {
   HIGHLIGHT_HEX_TO_NAME,
   mapHexToHighlightName,
-} from '@eigenpal/docx-editor-core/utils/highlightColors';
+} from '@docx-editor.dev/core/utils/highlightColors';

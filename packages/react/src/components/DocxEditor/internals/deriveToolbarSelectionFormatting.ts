@@ -9,11 +9,11 @@
  */
 
 import type { EditorState } from 'prosemirror-state';
-import { extractSelectionState } from '@eigenpal/docx-editor-core/prosemirror';
-import { resolveColorToHex } from '@eigenpal/docx-editor-core/utils';
-import type { Theme } from '@eigenpal/docx-editor-core/types/document';
+import { extractSelectionState } from '@docx-editor.dev/core/prosemirror';
+import { resolveColorToHex } from '@docx-editor.dev/core/utils';
+import type { Theme } from '@docx-editor.dev/core/types/document';
 import type { SelectionFormatting } from '../../Toolbar';
-import type { ListState } from '@eigenpal/docx-editor-core/utils/listState';
+import type { ListState } from '@docx-editor.dev/core/utils/listState';
 
 function listStateFromNumPr(
   numPr: { numId?: number; ilvl?: number } | null | undefined

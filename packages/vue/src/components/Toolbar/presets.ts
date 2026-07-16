@@ -4,8 +4,8 @@
  * so Toolbar.vue stays under the file-size cap.
  */
 
-import type { FontOption } from '@eigenpal/docx-editor-core/utils/fontOptions';
-import type { TranslationKey } from '@eigenpal/docx-editor-i18n';
+import type { FontOption } from '@docx-editor.dev/core/utils/fontOptions';
+import type { TranslationKey } from '@docx-editor.dev/i18n';
 
 export const defaultFonts: FontOption[] = [
   { name: 'Arial', fontFamily: 'Arial', category: 'sans-serif' },

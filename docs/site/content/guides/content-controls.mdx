@@ -22,7 +22,7 @@ import {
   parseDocx,
   findContentControls,
   findContentControl,
-} from "@eigenpal/docx-editor-core/headless";
+} from "@docx-editor.dev/core/headless";
 
 const doc = await parseDocx(buffer);
 
@@ -40,7 +40,7 @@ When `showingPlaceholder` is `true`, `text` is the placeholder boilerplate ("Cli
 `setContentControlContent` fills a `richText` or `plainText` control with a string (or `BlockContent[]` headless):
 
 ```ts
-import { setContentControlContent, removeContentControl } from "@eigenpal/docx-editor-core/headless";
+import { setContentControlContent, removeContentControl } from "@docx-editor.dev/core/headless";
 
 let next = setContentControlContent(doc, { tag: "intro" }, "Filled by template");
 
@@ -63,7 +63,7 @@ Safety rules (each overridable with `{ force: true }`):
 `setContentControlValue` updates both the visible content and the structured `w:sdtPr` state:
 
 ```ts
-import { setContentControlValue } from "@eigenpal/docx-editor-core/headless";
+import { setContentControlValue } from "@docx-editor.dev/core/headless";
 
 setContentControlValue(doc, { tag: "status" }, { kind: "dropdown", value: "2" });
 setContentControlValue(doc, { tag: "agree" }, { kind: "checkbox", checked: true });
@@ -79,7 +79,7 @@ In the editor, typed controls also get an interactive trigger at the top-right o
 `createContentControl` wraps a text span in a **new** control — the step that turns a placeholder in a template into a fillable, tagged region (including inside a table cell). It is pure (returns a new `Document`) and returns the created control:
 
 ```ts
-import { createContentControl } from "@eigenpal/docx-editor-core/headless";
+import { createContentControl } from "@docx-editor.dev/core/headless";
 
 // Wrap "[CUSTOMER]" in the paragraph with this Word w14:paraId.
 const { doc: d1, control } = createContentControl(
@@ -103,7 +103,7 @@ The `w:id` is auto-assigned (pass `props.id` to set it yourself), and the result
 Repeating-section controls (`w15:repeatingSection`) round-trip verbatim, and two helpers manage their items:
 
 ```ts
-import { addRepeatingSectionItem, removeRepeatingSectionItem } from "@eigenpal/docx-editor-core/headless";
+import { addRepeatingSectionItem, removeRepeatingSectionItem } from "@docx-editor.dev/core/headless";
 
 // Clone an item (with fresh ids); afterIndex picks the insertion point.
 let next = addRepeatingSectionItem(doc, { tag: "lineItems" }, { afterIndex: 0 });
@@ -142,7 +142,7 @@ import {
   setContentControlValue,
   removeContentControl,
   repackDocx,
-} from "@eigenpal/docx-editor-core/headless";
+} from "@docx-editor.dev/core/headless";
 
 const buffer = await readFile("contract-template.docx");
 let doc = await parseDocx(buffer);

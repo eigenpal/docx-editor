@@ -50,7 +50,7 @@ describe('McpServer.handle — initialize', () => {
     const server = new McpServer(makeBridge());
     const reply = server.handle({ jsonrpc: '2.0', id: 1, method: 'initialize' });
     const result = (reply as JsonRpcSuccess).result as McpInitializeResult;
-    expect(result.serverInfo.name).toBe('@eigenpal/docx-editor-agents');
+    expect(result.serverInfo.name).toBe('@docx-editor.dev/agents');
     expect(result.serverInfo.version).toBe('0.0.0');
     expect(result.protocolVersion).toBe('2025-06-18');
   });

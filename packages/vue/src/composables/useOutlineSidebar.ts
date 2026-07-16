@@ -9,8 +9,8 @@
 import type { Ref } from 'vue';
 import type { EditorView } from 'prosemirror-view';
 import { TextSelection } from 'prosemirror-state';
-import { collectHeadings } from '@eigenpal/docx-editor-core/utils/headingCollector';
-import type { HeadingInfo } from '@eigenpal/docx-editor-core/utils/headingCollector';
+import { collectHeadings } from '@docx-editor.dev/core/utils/headingCollector';
+import type { HeadingInfo } from '@docx-editor.dev/core/utils/headingCollector';
 
 export interface UseOutlineSidebarOptions {
   editorView: Ref<EditorView | null>;

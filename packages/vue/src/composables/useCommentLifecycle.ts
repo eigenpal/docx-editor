@@ -34,16 +34,16 @@
 
 import { ref, onMounted, onBeforeUnmount, watch, unref, type MaybeRef, type Ref } from 'vue';
 import type { EditorView } from 'prosemirror-view';
-import type { Document } from '@eigenpal/docx-editor-core/types/document';
-import type { Comment } from '@eigenpal/docx-editor-core/types/content';
-import { extractTrackedChanges } from '@eigenpal/docx-editor-core/prosemirror/utils/extractTrackedChanges';
+import type { Document } from '@docx-editor.dev/core/types/document';
+import type { Comment } from '@docx-editor.dev/core/types/content';
+import { extractTrackedChanges } from '@docx-editor.dev/core/prosemirror/utils/extractTrackedChanges';
 import { findElementAtPosition } from '../utils/domQueries';
-import { createComment as createCommentCore } from '@eigenpal/docx-editor-core/prosemirror/commentOps';
+import { createComment as createCommentCore } from '@docx-editor.dev/core/prosemirror/commentOps';
 import {
   seedCommentAllocator,
   PENDING_COMMENT_ID,
   type CommentIdAllocator,
-} from '@eigenpal/docx-editor-core/prosemirror/commentIdAllocator';
+} from '@docx-editor.dev/core/prosemirror/commentIdAllocator';
 import type { TrackedChangeEntry } from '../components/sidebar/sidebarUtils';
 import type { CommentCallbacks } from './useCommentManagement';
 

@@ -2,7 +2,7 @@
 
 ### Requirement: applyFormatting and setParagraphStyle in core
 
-`@eigenpal/docx-editor-core` SHALL expose `applyFormatting(view, options, deps)` and `setParagraphStyle(view, options, deps)` where `deps` supplies an injected `getStyleResolver`. The mark/style logic (bold, italic, underline, strike, color, highlight, fontSize, fontFamily, and paragraph style application) MUST match the prior byte-for-byte-identical adapter bodies. Both adapters SHALL delegate, passing their own `EditorView` and style resolver.
+`@docx-editor.dev/core` SHALL expose `applyFormatting(view, options, deps)` and `setParagraphStyle(view, options, deps)` where `deps` supplies an injected `getStyleResolver`. The mark/style logic (bold, italic, underline, strike, color, highlight, fontSize, fontFamily, and paragraph style application) MUST match the prior byte-for-byte-identical adapter bodies. Both adapters SHALL delegate, passing their own `EditorView` and style resolver.
 
 #### Scenario: Apply character marks to a located range
 

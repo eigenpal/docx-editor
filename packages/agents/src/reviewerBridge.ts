@@ -43,8 +43,8 @@ import type {
   RunContent,
   StyleDefinitions,
   TextFormatting,
-} from '@eigenpal/docx-editor-core/headless';
-import { mapHexToHighlightName, pointsToHalfPoints } from '@eigenpal/docx-editor-core/headless';
+} from '@docx-editor.dev/core/headless';
+import { mapHexToHighlightName, pointsToHalfPoints } from '@docx-editor.dev/core/headless';
 import { forEachParagraph, getParagraphAtIndex } from './utils';
 import { CommentNotFoundError } from './errors';
 

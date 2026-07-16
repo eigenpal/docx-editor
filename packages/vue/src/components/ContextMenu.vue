@@ -57,8 +57,8 @@ import { ref, computed, onMounted, onBeforeUnmount, type CSSProperties } from 'v
 import type {
   AIAction,
   SelectionContext,
-} from '@eigenpal/docx-editor-core/types/agentApi';
-import { DEFAULT_AI_ACTIONS } from '@eigenpal/docx-editor-core/types/agentApi';
+} from '@docx-editor.dev/core/types/agentApi';
+import { DEFAULT_AI_ACTIONS } from '@docx-editor.dev/core/types/agentApi';
 
 const props = withDefaults(
   defineProps<{

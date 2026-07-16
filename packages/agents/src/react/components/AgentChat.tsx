@@ -76,7 +76,7 @@ export interface AgentChatLogProps {
   autoScroll?: boolean;
   /**
    * Map a tool name to a friendly label for the per-message timeline.
-   * Pass `getToolDisplayName` from `@eigenpal/docx-editor-agents/react` to
+   * Pass `getToolDisplayName` from `@docx-editor.dev/agents/react` to
    * use the toolkit's registry-aware labels (e.g. "Adding comment").
    */
   humanizeToolName?: (name: string) => string;
@@ -105,7 +105,7 @@ export interface AgentTimelineProps {
   /**
    * Map a tool name to a friendly label. Defaults to a sentence-case
    * conversion of the snake_case name. Pass `getToolDisplayName` from
-   * `@eigenpal/docx-editor-agents/react` to use the toolkit's registry.
+   * `@docx-editor.dev/agents/react` to use the toolkit's registry.
    */
   humanizeName?: (name: string) => string;
   /** "Working… N steps" — pass for i18n. Default English. */

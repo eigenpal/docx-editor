@@ -1,14 +1,14 @@
 /**
- * @eigenpal/docx-editor-i18n/id
+ * @docx-editor.dev/i18n/id
  *
  * Indonesian (`id`) — direct locale subpath for per-locale code-splitting.
  *
  * ```ts
  * // Static — bundler ships only this locale's strings
- * import id from '@eigenpal/docx-editor-i18n/id';
+ * import id from '@docx-editor.dev/i18n/id';
  *
  * // Dynamic — splits into its own chunk, loaded on demand
- * const id = (await import('@eigenpal/docx-editor-i18n/id')).default;
+ * const id = (await import('@docx-editor.dev/i18n/id')).default;
  * ```
  *
  * For multi-locale apps, prefer the per-locale subpaths over importing

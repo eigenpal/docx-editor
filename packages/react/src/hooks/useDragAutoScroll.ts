@@ -7,11 +7,11 @@
  */
 
 import { useCallback, useRef } from 'react';
-import { findVerticalScrollParent } from '@eigenpal/docx-editor-core/utils/findVerticalScrollParent';
+import { findVerticalScrollParent } from '@docx-editor.dev/core/utils/findVerticalScrollParent';
 import {
   AUTO_SCROLL_EDGE_ZONE as EDGE_ZONE,
   computeAutoScrollDelta,
-} from '@eigenpal/docx-editor-core/utils/autoScroll';
+} from '@docx-editor.dev/core/utils/autoScroll';
 
 export interface DragAutoScrollOptions {
   /** Ref to the pages container (used to find the scroll parent). */

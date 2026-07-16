@@ -1,10 +1,10 @@
 ---
 title: 'Headless API'
-description: 'Reference for @eigenpal/docx-editor-core/headless: DOCX parse and serialize, document creation, content controls, templates, watermarks, DocumentAgent.'
+description: 'Reference for @docx-editor.dev/core/headless: DOCX parse and serialize, document creation, content controls, templates, watermarks, DocumentAgent.'
 category: 'Core'
 ---
 
-`@eigenpal/docx-editor-core/headless` aggregates the DOM-free surface of the core package for Node.js scripts, CLI tools, workers, and server-side processing. The smaller subpaths (`/docx`, `/agent`, `/utils`) export the same symbols and tree-shake better; the headless entry exists to make the "no DOM" intent explicit and to give you everything from one import.
+`@docx-editor.dev/core/headless` aggregates the DOM-free surface of the core package for Node.js scripts, CLI tools, workers, and server-side processing. The smaller subpaths (`/docx`, `/agent`, `/utils`) export the same symbols and tree-shake better; the headless entry exists to make the "no DOM" intent explicit and to give you everything from one import.
 
 This page groups the surface by task. Full signatures for every export are in the generated reference: [/docs/1.x/api/core/headless](/docs/1.x/api/core/headless).
 
@@ -20,7 +20,7 @@ This page groups the surface by task. Full signatures for every export are in th
 | `updateMultipleFiles` | `(originalBuffer, updates, options?) => Promise<ArrayBuffer>` | Low-level: replace named parts inside an existing package |
 
 ```ts
-import { parseDocx, repackDocx } from "@eigenpal/docx-editor-core/headless";
+import { parseDocx, repackDocx } from "@docx-editor.dev/core/headless";
 
 const doc = await parseDocx(buffer);
 // ...mutate...
@@ -41,7 +41,7 @@ The parsed `Document` holds a `DocxPackage`: `package.document` (the body), `hea
 Helpers over the body so you do not hand-walk the tree: `getBodyText`, `getParagraphs`, `getParagraphAtIndex`, `getParagraphText`, `getRunText`, `getHyperlinkText`, `getTableText`, `countWords`, `countCharacters`, `getBodyWordCount`, `getBodyCharacterCount`, `getTextBefore`, `getTextAfter`, `getFormattingAtPosition`, `hasImages`, `hasHyperlinks`, `hasTables`, `isHeadingStyle`, `parseHeadingLevel`.
 
 ```ts
-import { getParagraphs, getParagraphText } from "@eigenpal/docx-editor-core/headless";
+import { getParagraphs, getParagraphText } from "@docx-editor.dev/core/headless";
 
 for (const para of getParagraphs(doc.package.document)) {
   console.log(para.paraId, getParagraphText(para));
@@ -81,7 +81,7 @@ A docxtemplater-backed pipeline for `{{variable}}` templates: `processTemplate`,
 Variable detection over a parsed `Document`: `detectVariables`, `detectVariablesDetailed`, `hasTemplateVariables`, `replaceVariables`, `removeVariables`, and related string helpers.
 
 ```ts
-import { processTemplate } from "@eigenpal/docx-editor-core/headless";
+import { processTemplate } from "@docx-editor.dev/core/headless";
 
 const out = processTemplate(buffer, { customer_name: "Acme GmbH" }); // ArrayBuffer
 ```
