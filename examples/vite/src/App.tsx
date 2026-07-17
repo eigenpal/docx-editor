@@ -18,6 +18,30 @@ import { AdapterSwitcher } from '../../shared/AdapterSwitcher';
 import { BrandLogo } from '../../shared/BrandLogo';
 import { e2eInsertImage, e2eSelectFirstImage } from './e2eImageHooks';
 
+/**
+ * Documents the demo can boot from.
+ *
+ * `default` is the element test document real visitors get. `e2e` is a frozen
+ * fixture that boots under ?e2e=1 instead, so the demo document can be reworded
+ * or restyled without rewriting the specs that assert on its text.
+ *
+ * ?doc= overrides the choice. Its only current use is ?doc=default, which lets
+ * the smoke spec assert against the document that actually ships.
+ *
+ * Lookup is an allowlist. The raw param is never interpolated into the fetch
+ * URL, so a crafted ?doc= cannot point the demo at an off-origin document.
+ */
+const DEMO_DOCS = {
+  default: 'sample.docx',
+  e2e: 'e2e-fixture.docx',
+} as const;
+
+function resolveBootDoc(param: string | null, isE2E: boolean): string {
+  const picked = param && DEMO_DOCS[param as keyof typeof DEMO_DOCS];
+  if (picked) return picked;
+  return isE2E ? DEMO_DOCS.e2e : DEMO_DOCS.default;
+}
+
 function extractDocumentText(value: unknown): string {
   if (!value || typeof value !== 'object') return '';
   const maybeText = (value as { text?: unknown }).text;
@@ -247,13 +271,15 @@ export function App() {
 
   // E2E: ?e2e=1 (or MODE=test / VITE_DOCX_EDITOR_E2E=1). ?empty=1 boots empty;
   // ?loading=1 holds DocxEditor on real loading chrome for visual regression.
-  const { isE2E, e2eBootEmpty, e2eExternalContent, e2eForceLoading } = useMemo(() => {
+  // E2E also boots the frozen fixture rather than the demo doc (see DEMO_DOCS).
+  const { isE2E, e2eBootEmpty, e2eExternalContent, e2eForceLoading, bootDoc } = useMemo(() => {
     if (typeof window === 'undefined')
       return {
         isE2E: false,
         e2eBootEmpty: false,
         e2eExternalContent: false,
         e2eForceLoading: false,
+        bootDoc: DEMO_DOCS.default,
       };
     const params = new URLSearchParams(window.location.search);
     const env = import.meta.env;
@@ -265,6 +291,7 @@ export function App() {
       // externalContent: headers/styles from `document` while body PM is external.
       e2eExternalContent: e2e && params.get('externalContent') === '1',
       e2eForceLoading: e2e && params.get('loading') === '1',
+      bootDoc: resolveBootDoc(params.get('doc'), e2e),
     };
   }, []);
 
@@ -709,26 +736,26 @@ export function App() {
       if (e2eExternalContent) setDocVersion((v) => v + 1);
       return;
     }
-    // ?loading=1 fetches sample.docx into the real loading branch; hold pins parse.
-    fetch(`${import.meta.env.BASE_URL}sample.docx`)
+    // ?loading=1 fetches the boot doc into the real loading branch; hold pins parse.
+    fetch(`${import.meta.env.BASE_URL}${bootDoc}`)
       .then((res) => res.arrayBuffer())
       .then((buffer) => {
         if (userStartedOwnDocRef.current) return; // user already moved on
         setDocumentBuffer(buffer);
-        setFileName('sample.docx');
+        setFileName(bootDoc);
       })
       .catch(() => {
         if (userStartedOwnDocRef.current) return;
         // Need a buffer to enter isLoading when hold is on.
         if (e2eForceLoading) {
           setDocumentBuffer(new ArrayBuffer(1));
-          setFileName('sample.docx');
+          setFileName(bootDoc);
           return;
         }
         setCurrentDocument(createEmptyDocument());
         setFileName('Untitled.docx');
       });
-  }, [e2eBootEmpty, e2eExternalContent, e2eForceLoading]);
+  }, [e2eBootEmpty, e2eExternalContent, e2eForceLoading, bootDoc]);
 
   const handleNewDocument = useCallback(() => {
     userStartedOwnDocRef.current = true;

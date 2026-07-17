@@ -100,7 +100,8 @@ test('Vue: a buffer load clears the controlled document echo marker', async ({ p
       __docxVueSetDocumentBuffer?: (next: ArrayBuffer) => void;
     };
     if (!hooks.__docxVueSetDocumentBuffer) throw new Error('missing buffer E2E hook');
-    const response = await fetch('/sample.docx');
+    // The frozen fixture the demo boots under ?e2e=1, not the demo document.
+    const response = await fetch('/e2e-fixture.docx');
     hooks.__docxVueSetDocumentBuffer(await response.arrayBuffer());
   });
 

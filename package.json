@@ -18,6 +18,7 @@
   ],
   "type": "module",
   "scripts": {
+    "demo-doc:build": "bun scripts/demo-doc/build.ts",
     "dev": "bun run --filter './examples/vite' --filter './examples/vue' dev",
     "dev:react": "bun run --filter './examples/vite' dev",
     "dev:vue": "bun run --filter './examples/vue' dev",
