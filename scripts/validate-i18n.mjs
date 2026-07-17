@@ -21,57 +21,13 @@
 import { readFileSync, writeFileSync, readdirSync, existsSync } from 'fs';
 import { join } from 'path';
 import { getLeafPaths } from './lib/i18n-keys.mjs';
+import { deleteNestedValue, setNestedValue } from './lib/nested-object.mjs';
 import { BCP47_FILENAME, readLocaleCodes } from '../packages/i18n/locale-files.mjs';
 
 // Locale files live in the shared @docx-editor.dev/i18n package — both
 // the React and Vue adapters read their defaults from here.
 const I18N_DIR = join(import.meta.dirname, '..', 'packages', 'i18n');
 const EN_PATH = join(I18N_DIR, 'en.json');
-
-// Keys that would mutate the prototype chain rather than the target object.
-const UNSAFE_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
-
-function setNestedValue(obj, path, value) {
-  const parts = path.split('.');
-  // Guard against prototype pollution from a dotted path built out of locale
-  // data: a segment like `__proto__` must never become an object key here.
-  if (parts.some((p) => UNSAFE_KEYS.has(p))) {
-    throw new Error(`Refusing to set unsafe key path: ${path}`);
-  }
-  let current = obj;
-  for (let i = 0; i < parts.length - 1; i++) {
-    if (
-      !(parts[i] in current) ||
-      typeof current[parts[i]] !== 'object' ||
-      current[parts[i]] === null
-    ) {
-      current[parts[i]] = {};
-    }
-    current = current[parts[i]];
-  }
-  current[parts[parts.length - 1]] = value;
-}
-
-function deleteNestedValue(obj, path) {
-  const parts = path.split('.');
-  // Same prototype-pollution guard as setNestedValue. This sink matters more:
-  // its paths come from locale-file data (getLeafPaths), i.e. untrusted input.
-  if (parts.some((p) => UNSAFE_KEYS.has(p))) {
-    throw new Error(`Refusing to delete unsafe key path: ${path}`);
-  }
-  const stack = [obj];
-  for (let i = 0; i < parts.length - 1; i++) {
-    if (!stack[i][parts[i]] || typeof stack[i][parts[i]] !== 'object') return;
-    stack.push(stack[i][parts[i]]);
-  }
-  delete stack[stack.length - 1][parts[parts.length - 1]];
-  // Clean up empty parent objects
-  for (let i = stack.length - 1; i > 0; i--) {
-    if (Object.keys(stack[i]).length === 0) {
-      delete stack[i - 1][parts[i - 1]];
-    } else break;
-  }
-}
 
 /** Build a skeleton object mirroring en.json structure with all leaves set to null */
 function buildSkeleton(obj) {
