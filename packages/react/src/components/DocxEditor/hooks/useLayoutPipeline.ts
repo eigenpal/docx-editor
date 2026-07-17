@@ -112,6 +112,7 @@ export interface UseLayoutPipelineReturn {
   markPaintedPagesStale: () => void;
   requestPaintedOverlayRefresh: () => void;
   paintedPagesAreCurrent: () => boolean;
+  getPaintGeneration: () => number;
 }
 
 export function useLayoutPipeline(opts: UseLayoutPipelineOptions): UseLayoutPipelineReturn {
@@ -170,6 +171,7 @@ export function useLayoutPipeline(opts: UseLayoutPipelineOptions): UseLayoutPipe
   usePaintedPagesGuardLifecycle(paintedPagesGuardRef.current);
   const successfulPaintRef = useRef<ReturnType<PaintedPagesGuard['startPaint']> | null>(null);
   const paintingPagesRef = useRef(false);
+  const paintGenerationRef = useRef(0);
 
   // Total-pages notifier — fires only when count changes (including N → 0).
   const lastTotalPagesRef = useRef<number>(0);
@@ -319,6 +321,8 @@ export function useLayoutPipeline(opts: UseLayoutPipelineOptions): UseLayoutPipe
               footnotesByPage?: Map<number, FootnoteRenderItem[]>;
             });
             successfulPaintRef.current = paintTicket;
+            paintGenerationRef.current += 1;
+            pagesEl.dataset.paintGeneration = String(paintGenerationRef.current);
           } catch (error) {
             paintedPagesGuardRef.current!.abandonPaint(paintTicket);
             throw error;
@@ -555,6 +559,7 @@ export function useLayoutPipeline(opts: UseLayoutPipelineOptions): UseLayoutPipe
     () => paintedPagesGuardRef.current?.pagesAreCurrent() ?? false,
     []
   );
+  const getPaintGeneration = useCallback(() => paintGenerationRef.current, []);
 
   // Clean up pending rAF on unmount. Guard disposal/revival lives in a parent
   // layout effect so Strict Effects cannot leave child passive setup disposed.
@@ -575,5 +580,6 @@ export function useLayoutPipeline(opts: UseLayoutPipelineOptions): UseLayoutPipe
     markPaintedPagesStale,
     requestPaintedOverlayRefresh,
     paintedPagesAreCurrent,
+    getPaintGeneration,
   };
 }

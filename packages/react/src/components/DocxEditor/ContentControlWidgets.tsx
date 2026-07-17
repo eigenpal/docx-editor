@@ -22,8 +22,21 @@ import {
   removeRepeatingSectionItemTr,
   type PMContentControl,
 } from '@docx-editor.dev/core/prosemirror';
+import {
+  syncTocRefreshButtons,
+  createTocRefreshSyncCache,
+  cleanupTocRefreshButtons,
+  applyTocRefreshProxyFocus,
+  getTocRefreshDescriptors,
+} from '@docx-editor.dev/core/painter-model';
+import type {
+  PaintedPagesReadyEvent,
+  TocRefreshDescriptor,
+} from '@docx-editor.dev/core/painter-model';
 
 const WIDGET_SELECTOR = '.layout-sdt-widget, .layout-inline-sdt-widget';
+const TOC_REFRESH_SELECTOR = '.layout-toc-refresh';
+const PAINTED_PAGES_SELECTOR = '.paged-editor__pages';
 
 /** Parse the PM position out of a `sdt@<pos>` group id. */
 function posFromGroupId(id: string | undefined): number | null {
@@ -35,6 +48,10 @@ function posFromDataset(value: string | undefined): number | null {
   if (value == null || value === '') return null;
   const pos = Number(value);
   return Number.isFinite(pos) ? pos : null;
+}
+
+function paintedPagesRoot(container: HTMLElement): HTMLElement {
+  return container.querySelector<HTMLElement>(PAINTED_PAGES_SELECTOR) ?? container;
 }
 
 type ControlTarget = {
@@ -64,6 +81,10 @@ export interface ContentControlWidgetsProps {
   containerRef: React.RefObject<HTMLElement | null>;
   /** Accessor for the live body EditorView. */
   getView: () => EditorView | null;
+  /** Regenerate one stale TOC at the given PM position. */
+  onUpdateTableOfContents: (position: number) => void;
+  /** Translated accessible name for inline TOC refresh buttons. */
+  tocUpdateLabel: string;
 }
 
 function controlByTag(view: EditorView, tag: string): PMContentControl | undefined {
@@ -80,9 +101,16 @@ function controlByTarget(view: EditorView, target: ControlTarget): PMContentCont
 export function ContentControlWidgets({
   containerRef,
   getView,
-}: ContentControlWidgetsProps): React.ReactElement | null {
+  onUpdateTableOfContents,
+  tocUpdateLabel,
+}: ContentControlWidgetsProps): React.ReactElement {
   const [popup, setPopup] = useState<Popup | null>(null);
+  const [tocDescriptors, setTocDescriptors] = useState<TocRefreshDescriptor[]>([]);
   const popupRef = useRef<HTMLDivElement>(null);
+  const tocRefreshCacheRef = useRef(createTocRefreshSyncCache());
+  const focusedTocKeyRef = useRef<string | null>(null);
+  const getViewRef = useRef(getView);
+  getViewRef.current = getView;
 
   const apply = useCallback(
     (target: ControlTarget, value: Parameters<typeof setContentControlValueTr>[2]) => {
@@ -105,6 +133,19 @@ export function ContentControlWidgets({
     },
     [getView]
   );
+
+  const syncTocBlockState = useCallback((): TocRefreshDescriptor[] => {
+    const view = getViewRef.current();
+    if (!view) {
+      setTocDescriptors([]);
+      return [];
+    }
+    const descriptors = getTocRefreshDescriptors(view.state.doc);
+    setTocDescriptors(descriptors);
+    return descriptors;
+  }, []);
+  const syncTocBlockStateRef = useRef(syncTocBlockState);
+  syncTocBlockStateRef.current = syncTocBlockState;
 
   useEffect(() => {
     const container = containerRef.current;
@@ -149,14 +190,34 @@ export function ContentControlWidgets({
       }
     };
 
-    // Stop the trigger's mousedown from moving the PM caret / stealing focus.
+    const refreshToc = (button: HTMLElement) => {
+      const pos = posFromDataset(button.dataset.tocPosition);
+      if (pos != null) onUpdateTableOfContents(pos);
+    };
+
+    // Refresh controls must not reach page-level selection handlers. Other
+    // widgets preserve their existing preventDefault-only behavior.
     const onMouseDown = (e: MouseEvent) => {
       const t = e.target as HTMLElement;
+      if (t?.closest?.(TOC_REFRESH_SELECTOR)) {
+        e.preventDefault();
+        e.stopPropagation();
+        return;
+      }
       if (t?.closest?.(WIDGET_SELECTOR) || t?.closest?.('.layout-sdt-repeat-btn')) {
         e.preventDefault();
       }
     };
     const onClick = (e: MouseEvent) => {
+      const refreshBtn = (e.target as HTMLElement)?.closest?.(
+        TOC_REFRESH_SELECTOR
+      ) as HTMLElement | null;
+      if (refreshBtn) {
+        e.preventDefault();
+        e.stopPropagation();
+        refreshToc(refreshBtn);
+        return;
+      }
       const repeatBtn = (e.target as HTMLElement)?.closest?.(
         '.layout-sdt-repeat-btn'
       ) as HTMLElement | null;
@@ -172,25 +233,109 @@ export function ContentControlWidgets({
       e.stopPropagation();
       activate(trigger);
     };
-    // Keyboard activation (Enter/Space) — explicit so it doesn't depend on the
-    // painter button's native click synthesis.
     const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key !== 'Enter' && e.key !== ' ') return;
       const trigger = (e.target as HTMLElement)?.closest?.(WIDGET_SELECTOR) as HTMLElement | null;
-      if (!trigger) return;
+      if (!trigger || (e.key !== 'Enter' && e.key !== ' ')) return;
       e.preventDefault();
       activate(trigger);
     };
 
-    container.addEventListener('mousedown', onMouseDown);
+    container.addEventListener('mousedown', onMouseDown, true);
     container.addEventListener('click', onClick);
     container.addEventListener('keydown', onKeyDown);
     return () => {
-      container.removeEventListener('mousedown', onMouseDown);
+      container.removeEventListener('mousedown', onMouseDown, true);
       container.removeEventListener('click', onClick);
       container.removeEventListener('keydown', onKeyDown);
     };
-  }, [containerRef, getView, apply]);
+  }, [containerRef, getView, apply, onUpdateTableOfContents]);
+
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+
+    let boundPages: HTMLElement | null = null;
+    let unbind: (() => void) | null = null;
+
+    const bindPages = (pages: HTMLElement) => {
+      if (pages === boundPages) return;
+      unbind?.();
+      boundPages = pages;
+
+      const runSync = (paintGeneration?: string | number | null) => {
+        const view = getViewRef.current();
+        if (!view) return;
+        const descriptors = syncTocBlockStateRef.current();
+        if (
+          focusedTocKeyRef.current != null &&
+          !descriptors.some((descriptor) => descriptor.key === focusedTocKeyRef.current)
+        ) {
+          focusedTocKeyRef.current = null;
+        }
+        syncTocRefreshButtons(
+          pages,
+          {
+            doc: view.state.doc,
+            label: tocUpdateLabel,
+            paintGeneration: paintGeneration ?? pages.dataset.paintGeneration ?? null,
+            focusedTocKey: focusedTocKeyRef.current,
+          },
+          tocRefreshCacheRef.current
+        );
+      };
+
+      const syncTocRefresh = (event: Event) => {
+        runSync((event as PaintedPagesReadyEvent).detail.paintGeneration);
+      };
+
+      const syncInitially = () => {
+        runSync(pages.dataset.paintGeneration ? Number(pages.dataset.paintGeneration) : undefined);
+      };
+      pages.addEventListener('docx-editor-react:painted-pages-ready', syncTocRefresh);
+      syncInitially();
+
+      unbind = () => {
+        pages.removeEventListener('docx-editor-react:painted-pages-ready', syncTocRefresh);
+        cleanupTocRefreshButtons(pages);
+        applyTocRefreshProxyFocus(pages, null);
+      };
+    };
+
+    const ensureBound = () => {
+      const pages = container.querySelector<HTMLElement>(PAINTED_PAGES_SELECTOR);
+      if (!pages) return;
+      if (pages !== boundPages) bindPages(pages);
+    };
+
+    ensureBound();
+    const observer = new MutationObserver(ensureBound);
+    observer.observe(container, { childList: true, subtree: true });
+
+    return () => {
+      observer.disconnect();
+      unbind?.();
+      boundPages = null;
+      unbind = null;
+      focusedTocKeyRef.current = null;
+      setTocDescriptors([]);
+    };
+  }, [containerRef, tocUpdateLabel]);
+
+  useEffect(() => {
+    const container = containerRef.current;
+    const cache = tocRefreshCacheRef.current;
+    if (!container || !cache.doc || cache.paintRoot == null) return;
+    syncTocRefreshButtons(
+      cache.paintRoot,
+      {
+        doc: cache.doc,
+        label: tocUpdateLabel,
+        paintGeneration: cache.paintGeneration,
+        focusedTocKey: focusedTocKeyRef.current,
+      },
+      cache
+    );
+  }, [containerRef, tocUpdateLabel]);
 
   // Close on outside click / Escape.
   useEffect(() => {
@@ -220,6 +365,20 @@ export function ContentControlWidgets({
     ).focus();
   }, [popup]);
 
+  const onProxyFocus = (descriptor: TocRefreshDescriptor) => {
+    focusedTocKeyRef.current = descriptor.key;
+    const container = containerRef.current;
+    if (!container) return;
+    applyTocRefreshProxyFocus(paintedPagesRoot(container), descriptor.position);
+  };
+
+  const onProxyBlur = () => {
+    focusedTocKeyRef.current = null;
+    const container = containerRef.current;
+    if (!container) return;
+    applyTocRefreshProxyFocus(paintedPagesRoot(container), null);
+  };
+
   // Arrow-key roving over the dropdown options.
   const onPopupKeyDown = (e: React.KeyboardEvent) => {
     if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return;
@@ -234,55 +393,78 @@ export function ContentControlWidgets({
     opts[next].focus();
   };
 
-  if (!popup) return null;
-
-  const style: React.CSSProperties = {
-    position: 'fixed',
-    top: popup.rect.bottom + 2,
-    left: popup.rect.left,
-    zIndex: 1000,
-  };
+  const popupStyle: React.CSSProperties | undefined = popup
+    ? {
+        position: 'fixed',
+        top: popup.rect.bottom + 2,
+        left: popup.rect.left,
+        zIndex: 1000,
+      }
+    : undefined;
 
   return (
-    <div
-      ref={popupRef}
-      className="layout-sdt-widget-popup"
-      style={style}
-      role={popup.kind === 'dropdown' ? 'listbox' : undefined}
-      onKeyDown={onPopupKeyDown}
-      onMouseDown={(e) => e.preventDefault()}
-    >
-      {popup.kind === 'dropdown' ? (
-        popup.items.length === 0 ? (
-          <div className="layout-sdt-widget-empty">No options</div>
-        ) : (
-          popup.items.map((it) => {
-            const selected = it.displayText === popup.current;
-            return (
-              <button
-                key={it.value}
-                type="button"
-                role="option"
-                aria-selected={selected}
-                className={`layout-sdt-widget-option${selected ? ' is-selected' : ''}`}
-                onClick={() => apply(popup.target, { kind: 'dropdown', value: it.value })}
-              >
-                {it.displayText}
-              </button>
-            );
-          })
-        )
-      ) : (
-        <input
-          type="date"
-          className="layout-sdt-widget-date"
-          autoFocus
-          defaultValue={popup.current}
-          onChange={(e) => {
-            if (e.target.value) apply(popup.target, { kind: 'date', date: e.target.value });
-          }}
-        />
+    <>
+      {tocDescriptors.length > 0 && (
+        <div className="layout-toc-refresh-proxies">
+          {tocDescriptors.map((descriptor) => (
+            <button
+              key={descriptor.key}
+              type="button"
+              className="layout-toc-refresh-proxy"
+              data-toc-refresh-proxy=""
+              data-toc-key={descriptor.key}
+              data-toc-position={String(descriptor.position)}
+              aria-label={tocUpdateLabel}
+              title={tocUpdateLabel}
+              onFocus={() => onProxyFocus(descriptor)}
+              onBlur={onProxyBlur}
+              onClick={() => onUpdateTableOfContents(descriptor.position)}
+            />
+          ))}
+        </div>
       )}
-    </div>
+      {popup && (
+        <div
+          ref={popupRef}
+          className="layout-sdt-widget-popup"
+          style={popupStyle}
+          role={popup.kind === 'dropdown' ? 'listbox' : undefined}
+          onKeyDown={onPopupKeyDown}
+          onMouseDown={(e) => e.preventDefault()}
+        >
+          {popup.kind === 'dropdown' ? (
+            popup.items.length === 0 ? (
+              <div className="layout-sdt-widget-empty">No options</div>
+            ) : (
+              popup.items.map((it) => {
+                const selected = it.displayText === popup.current;
+                return (
+                  <button
+                    key={it.value}
+                    type="button"
+                    role="option"
+                    aria-selected={selected}
+                    className={`layout-sdt-widget-option${selected ? ' is-selected' : ''}`}
+                    onClick={() => apply(popup.target, { kind: 'dropdown', value: it.value })}
+                  >
+                    {it.displayText}
+                  </button>
+                );
+              })
+            )
+          ) : (
+            <input
+              type="date"
+              className="layout-sdt-widget-date"
+              autoFocus
+              defaultValue={popup.current}
+              onChange={(e) => {
+                if (e.target.value) apply(popup.target, { kind: 'date', date: e.target.value });
+              }}
+            />
+          )}
+        </div>
+      )}
+    </>
   );
 }

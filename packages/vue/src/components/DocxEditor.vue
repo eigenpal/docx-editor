@@ -208,7 +208,13 @@
             />
           </div>
 
-          <ContentControlWidgets v-if="!readOnly" :container="pagesRef" :view="editorView" />
+          <ContentControlWidgets
+            v-if="!readOnly"
+            :container="pagesRef"
+            :view="editorView"
+            :on-update-table-of-contents="runTableOfContentsUpdate"
+            :toc-update-label="t('contextMenu.updateTableOfContents')"
+          />
 
           <InlineHeaderFooterEditor
             :is-open="hfEdit !== null"
@@ -1002,8 +1008,6 @@ const {
 const { runTableOfContentsUpdate, handleInsertTableOfContents } = useTableOfContentsActions({
   editorView,
   layout: pageLayout,
-  readOnly,
-  t,
 });
 
 const {

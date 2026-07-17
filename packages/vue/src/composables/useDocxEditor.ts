@@ -76,6 +76,7 @@ import {
   enclosingSdtGroupIds,
   applySdtFocus,
 } from '@docx-editor.dev/core/painter-model';
+import type { PaintedPagesReadyDetail } from '@docx-editor.dev/core/painter-model';
 import type { Document } from '@docx-editor.dev/core/types/document';
 import { createPaintedPagesGuard } from '@docx-editor.dev/core/internal/paintedPagesGuard';
 
@@ -323,11 +324,16 @@ export function useDocxEditor(options: UseDocxEditorOptions): UseDocxEditorRetur
    */
   const nodes = shallowRef<ContentNode[]>([]);
   const metrics = shallowRef<LayoutMetrics[]>([]);
+  let paintGeneration = 0;
   const paintedPagesGuard = createPaintedPagesGuard(() => {
     const pages = pagesContainer.value;
     if (!pages) return;
     pages.dataset.overlayPagesCurrent = 'true';
-    pages.dispatchEvent(new CustomEvent('docx-editor-vue:painted-pages-ready'));
+    pages.dispatchEvent(
+      new CustomEvent<PaintedPagesReadyDetail>('docx-editor-vue:painted-pages-ready', {
+        detail: { paintGeneration },
+      })
+    );
   });
   let paintingPages = false;
   const markPaintedPagesStale = () => {
@@ -463,6 +469,8 @@ export function useDocxEditor(options: UseDocxEditorOptions): UseDocxEditorRetur
       } finally {
         paintingPages = false;
       }
+      paintGeneration += 1;
+      container.dataset.paintGeneration = String(paintGeneration);
 
       // paintPages sets display:flex on the container — fix scrolling
       container.style.overflowY = 'auto';

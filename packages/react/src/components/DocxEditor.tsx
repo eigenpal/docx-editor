@@ -36,7 +36,7 @@ import { DocxEditorOverlays } from './DocxEditor/DocxEditorOverlays';
 import { DocxEditorDialogs } from './DocxEditor/DocxEditorDialogs';
 import { DocxEditorToolbar } from './DocxEditor/DocxEditorToolbar';
 import { DocxEditorPagedArea } from './DocxEditor/DocxEditorPagedArea';
-import { ContentControlWidgets } from './DocxEditor/ContentControlWidgets';
+import { DocxEditorContentControlLayer } from './DocxEditor/DocxEditorContentControlLayer';
 import { useResetEditorState } from './DocxEditor/hooks/useResetEditorState';
 import { DocxEditorShell } from './DocxEditor/DocxEditorShell';
 import type { FontOption } from './ui/FontPicker';
@@ -947,11 +947,6 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
 
   const { runPendingTocSecondPass, runTableOfContentsUpdate, handleTableOfContentsInserted } =
     useTableOfContentsActions({
-      isLoading: state.isLoading,
-      hasDocument: !!history.state,
-      promptRecheckKey: history.state,
-      readOnly,
-      i18n,
       pagedEditorRef,
     });
 
@@ -1910,9 +1905,11 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
             setFloatingCommentBtn={setFloatingCommentBtn}
           />
           {!readOnly && (
-            <ContentControlWidgets
+            <DocxEditorContentControlLayer
               containerRef={containerRef}
-              getView={() => pagedEditorRef.current?.getView() ?? null}
+              pagedEditorRef={pagedEditorRef}
+              onUpdateTableOfContents={runTableOfContentsUpdate}
+              i18n={i18n}
             />
           )}
         </>

@@ -1,20 +1,11 @@
 import { nextTick, onBeforeUnmount, ref, watch, type Ref } from 'vue';
 import type { EditorView } from 'prosemirror-view';
 import type { PageLayout } from '@docx-editor.dev/core/pagination-model';
-import {
-  findTableOfContentsBlocks,
-  hasTableOfContentsNeedingUpdate,
-  insertTableOfContents,
-  updateTableOfContents,
-} from '@docx-editor.dev/core/prosemirror';
-import type { Node as PMNode } from 'prosemirror-model';
-import type { TFunction } from '@docx-editor.dev/i18n';
+import { insertTableOfContents, updateTableOfContents } from '@docx-editor.dev/core/prosemirror';
 
 export interface UseTableOfContentsActionsOptions {
   editorView: Ref<EditorView | null>;
   layout: Ref<PageLayout | null>;
-  readOnly: Ref<boolean>;
-  t: TFunction;
 }
 
 export interface UseTableOfContentsActionsReturn {
@@ -25,24 +16,26 @@ export interface UseTableOfContentsActionsReturn {
 export function useTableOfContentsActions({
   editorView,
   layout,
-  readOnly,
-  t,
 }: UseTableOfContentsActionsOptions): UseTableOfContentsActionsReturn {
-  const prompted = ref(false);
-  const promptedSignature = ref<string | null>(null);
   const secondPassRequested = ref(false);
+  let secondPassPosition: number | null | undefined;
   let secondPassTimer: number | null = null;
 
   function runPendingSecondPass() {
     if (!secondPassRequested.value || !editorView.value || !layout.value) return;
     secondPassRequested.value = false;
+    const position = secondPassPosition;
+    secondPassPosition = undefined;
     updateTableOfContents(editorView.value.state, editorView.value.dispatch, {
       layout: layout.value,
+      position,
+      force: position != null,
     });
   }
 
-  function requestSecondPass() {
+  function requestSecondPass(position?: number | null) {
     secondPassRequested.value = true;
+    secondPassPosition = position;
     if (secondPassTimer != null) window.clearTimeout(secondPassTimer);
     secondPassTimer = window.setTimeout(() => {
       secondPassTimer = null;
@@ -55,15 +48,15 @@ export function useTableOfContentsActions({
     const updated = updateTableOfContents(editorView.value.state, editorView.value.dispatch, {
       position,
       layout: layout.value,
+      force: position != null,
     });
-    if (updated) requestSecondPass();
+    if (updated) requestSecondPass(position);
     return updated;
   }
 
   function handleInsertTableOfContents() {
     if (!editorView.value) return;
     insertTableOfContents(editorView.value.state, editorView.value.dispatch);
-    prompted.value = true;
     void nextTick(() => {
       requestAnimationFrame(() => runTableOfContentsUpdate());
     });
@@ -78,29 +71,6 @@ export function useTableOfContentsActions({
     { flush: 'post' }
   );
 
-  watch(
-    [editorView, layout],
-    ([view, currentLayout]) => {
-      if (!view || readOnly.value) return;
-      if (!hasTableOfContentsNeedingUpdate(view.state.doc)) {
-        prompted.value = false;
-        promptedSignature.value = null;
-        return;
-      }
-      const signature = tocPromptSignature(view.state.doc);
-      if (signature !== promptedSignature.value) {
-        prompted.value = false;
-        promptedSignature.value = signature;
-      }
-      if (prompted.value || !currentLayout) return;
-      prompted.value = true;
-      if (window.confirm(t('toc.updatePrompt'))) {
-        runTableOfContentsUpdate();
-      }
-    },
-    { flush: 'post' }
-  );
-
   onBeforeUnmount(() => {
     if (secondPassTimer != null) window.clearTimeout(secondPassTimer);
   });
@@ -109,18 +79,4 @@ export function useTableOfContentsActions({
     runTableOfContentsUpdate,
     handleInsertTableOfContents,
   };
-}
-
-function tocPromptSignature(doc: PMNode): string {
-  return findTableOfContentsBlocks(doc)
-    .filter((block) => block.needsUpdate)
-    .map((block) =>
-      [
-        block.pos,
-        block.instruction.raw,
-        String(block.node.attrs.rawPreserveXml ?? ''),
-        String(block.node.attrs.rawPreserveText ?? ''),
-      ].join('\u001f')
-    )
-    .join('\u001e');
 }
