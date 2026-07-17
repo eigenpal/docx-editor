@@ -1,6 +1,6 @@
 {
   "name": "@docx-editor.dev/agents",
-  "version": "1.10.0",
+  "version": "0.0.1",
   "description": "Agent SDK and chat UI for the DOCX editor — framework-agnostic bridge, MCP server, AI SDK adapters, plus React UI (and Vue UI in 1.x)",
   "sideEffects": [
     "*.css"
