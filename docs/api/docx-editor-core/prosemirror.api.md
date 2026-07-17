@@ -155,6 +155,9 @@ export function findParagraphByParaId(doc: Node_2, paraId: string): {
 } | null;
 
 // @public
+export function findStaleTableOfContentsBlocks(doc: Node_2, layout?: PageLayout | null): TocBlockInfo[];
+
+// @public
 export function findStartPosForParaId(doc: Node_2, paraId: string): number | null;
 
 // @public (undocumented)
@@ -837,6 +840,7 @@ export function updateTableOfContents(state: EditorState, dispatch?: (tr: Transa
 
 // @public (undocumented)
 export interface UpdateTableOfContentsOptions {
+    force?: boolean;
     layout?: PageLayout | null;
     position?: number | null;
 }

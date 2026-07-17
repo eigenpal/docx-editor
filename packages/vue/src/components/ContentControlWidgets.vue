@@ -16,9 +16,24 @@ import {
   addRepeatingSectionItemTr,
   removeRepeatingSectionItemTr,
 } from '@docx-editor.dev/core/prosemirror';
+import {
+  syncTocRefreshButtons,
+  createTocRefreshSyncCache,
+  cleanupTocRefreshButtons,
+  applyTocRefreshProxyFocus,
+  getTocRefreshDescriptors,
+} from '@docx-editor.dev/core/painter-model';
+import type {
+  PaintedPagesReadyEvent,
+  TocRefreshDescriptor,
+  TocRefreshSyncCache,
+} from '@docx-editor.dev/core/painter-model';
 import type { ContentControlValue } from '@docx-editor.dev/core/agent';
+import { bindContentControlWidgetListeners } from './contentControlWidgetListeners';
 
 const WIDGET_SELECTOR = '.layout-sdt-widget, .layout-inline-sdt-widget';
+const TOC_REFRESH_SELECTOR = '.layout-toc-refresh';
+const PAINTED_PAGES_SELECTOR = '.paged-editor__pages';
 
 /** Parse the PM position out of a `sdt@<pos>` group id. */
 function posFromGroupId(id: string | undefined): number | null {
@@ -30,6 +45,10 @@ function posFromDataset(value: string | undefined): number | null {
   if (value == null || value === '') return null;
   const pos = Number(value);
   return Number.isFinite(pos) ? pos : null;
+}
+
+function paintedPagesRoot(container: HTMLElement): HTMLElement {
+  return container.querySelector<HTMLElement>(PAINTED_PAGES_SELECTOR) ?? container;
 }
 
 type ControlTarget = {
@@ -47,6 +66,9 @@ function targetFromTrigger(trigger: HTMLElement): ControlTarget | null {
 const props = defineProps<{
   container: HTMLElement | null;
   view: EditorView | null;
+  /** Regenerate one stale TOC at the given PM position. */
+  onUpdateTableOfContents: (position: number) => void;
+  tocUpdateLabel: string;
 }>();
 
 type Popup =
@@ -62,6 +84,20 @@ type Popup =
 
 const popup = ref<Popup | null>(null);
 const popupEl = ref<HTMLElement | null>(null);
+const tocDescriptors = ref<TocRefreshDescriptor[]>([]);
+const tocRefreshCache: TocRefreshSyncCache = createTocRefreshSyncCache();
+const focusedTocKey = ref<string | null>(null);
+
+function syncTocBlockState(): TocRefreshDescriptor[] {
+  const view = props.view;
+  if (!view) {
+    tocDescriptors.value = [];
+    return [];
+  }
+  const descriptors = getTocRefreshDescriptors(view.state.doc);
+  tocDescriptors.value = descriptors;
+  return descriptors;
+}
 
 function apply(target: ControlTarget, value: ContentControlValue): void {
   const view = props.view;
@@ -99,8 +135,18 @@ function repeat(btn: HTMLElement): void {
   }
 }
 
+function refreshToc(button: HTMLElement): void {
+  const pos = posFromDataset(button.dataset.tocPosition);
+  if (pos != null) props.onUpdateTableOfContents(pos);
+}
+
 function onMouseDown(e: MouseEvent): void {
   const t = e.target as HTMLElement;
+  if (t?.closest?.(TOC_REFRESH_SELECTOR)) {
+    e.preventDefault();
+    e.stopPropagation();
+    return;
+  }
   if (t?.closest?.(WIDGET_SELECTOR) || t?.closest?.('.layout-sdt-repeat-btn')) {
     e.preventDefault();
   }
@@ -141,6 +187,13 @@ function activate(trigger: HTMLElement): void {
 }
 
 function onClick(e: MouseEvent): void {
+  const refreshBtn = (e.target as HTMLElement)?.closest?.(TOC_REFRESH_SELECTOR) as HTMLElement | null;
+  if (refreshBtn) {
+    e.preventDefault();
+    e.stopPropagation();
+    refreshToc(refreshBtn);
+    return;
+  }
   const repeatBtn = (e.target as HTMLElement)?.closest?.('.layout-sdt-repeat-btn') as HTMLElement | null;
   if (repeatBtn) {
     e.preventDefault();
@@ -155,13 +208,69 @@ function onClick(e: MouseEvent): void {
   activate(trigger);
 }
 
-// Keyboard activation (Enter/Space) — explicit, not reliant on native button click.
 function onTriggerKeyDown(e: KeyboardEvent): void {
-  if (e.key !== 'Enter' && e.key !== ' ') return;
   const trigger = (e.target as HTMLElement)?.closest?.(WIDGET_SELECTOR) as HTMLElement | null;
-  if (!trigger) return;
+  if (!trigger || (e.key !== 'Enter' && e.key !== ' ')) return;
   e.preventDefault();
   activate(trigger);
+}
+
+function syncTocRefreshForGeneration(paintGeneration?: string | number | null): void {
+  const container = props.container;
+  const view = props.view;
+  if (!container || !view) return;
+  const pages = paintedPagesRoot(container);
+  const descriptors = syncTocBlockState();
+  if (
+    focusedTocKey.value != null &&
+    !descriptors.some((descriptor) => descriptor.key === focusedTocKey.value)
+  ) {
+    focusedTocKey.value = null;
+  }
+  syncTocRefreshButtons(
+    pages,
+    {
+      doc: view.state.doc,
+      label: props.tocUpdateLabel,
+      paintGeneration: paintGeneration ?? pages.dataset.paintGeneration ?? null,
+      focusedTocKey: focusedTocKey.value,
+    },
+    tocRefreshCache
+  );
+}
+
+function syncTocRefresh(event: Event): void {
+  syncTocRefreshForGeneration((event as PaintedPagesReadyEvent).detail.paintGeneration);
+}
+
+function syncTocRefreshInitially(): void {
+  const container = props.container;
+  if (!container || !props.view) return;
+  syncTocRefreshForGeneration(
+    container.dataset.paintGeneration ? Number(container.dataset.paintGeneration) : undefined
+  );
+}
+
+function cleanupTocRefreshUi(container: HTMLElement): void {
+  const pages = paintedPagesRoot(container);
+  cleanupTocRefreshButtons(pages);
+  applyTocRefreshProxyFocus(pages, null);
+  focusedTocKey.value = null;
+  tocDescriptors.value = [];
+}
+
+function onProxyFocus(descriptor: TocRefreshDescriptor): void {
+  focusedTocKey.value = descriptor.key;
+  const container = props.container;
+  if (!container) return;
+  applyTocRefreshProxyFocus(paintedPagesRoot(container), descriptor.position);
+}
+
+function onProxyBlur(): void {
+  focusedTocKey.value = null;
+  const container = props.container;
+  if (!container) return;
+  applyTocRefreshProxyFocus(paintedPagesRoot(container), null);
 }
 
 function onDocMouseDown(e: MouseEvent): void {
@@ -173,22 +282,43 @@ function onKey(e: KeyboardEvent): void {
 
 // (Re)bind delegated listeners when the container element changes.
 let bound: HTMLElement | null = null;
+let unbindBound: (() => void) | null = null;
 watch(
   () => props.container,
-  (el) => {
-    if (bound) {
-      bound.removeEventListener('mousedown', onMouseDown);
-      bound.removeEventListener('click', onClick);
-      bound.removeEventListener('keydown', onTriggerKeyDown);
-    }
+  (el, prev) => {
+    if (prev) cleanupTocRefreshUi(prev);
+    unbindBound?.();
+    unbindBound = null;
     bound = el ?? null;
     if (bound) {
-      bound.addEventListener('mousedown', onMouseDown);
-      bound.addEventListener('click', onClick);
-      bound.addEventListener('keydown', onTriggerKeyDown);
+      unbindBound = bindContentControlWidgetListeners(bound, {
+        onMouseDown,
+        onClick,
+        onKeyDown: onTriggerKeyDown,
+        onPagesReady: syncTocRefresh,
+      });
+      syncTocRefreshInitially();
     }
   },
   { immediate: true }
+);
+
+watch(
+  () => props.tocUpdateLabel,
+  () => {
+    const container = props.container;
+    if (!container || !tocRefreshCache.doc || tocRefreshCache.paintRoot == null) return;
+    syncTocRefreshButtons(
+      tocRefreshCache.paintRoot,
+      {
+        doc: tocRefreshCache.doc,
+        label: props.tocUpdateLabel,
+        paintGeneration: tocRefreshCache.paintGeneration,
+        focusedTocKey: focusedTocKey.value,
+      },
+      tocRefreshCache
+    );
+  }
 );
 
 watch(popup, (p) => {
@@ -221,10 +351,11 @@ function onPopupKeyDown(e: KeyboardEvent): void {
 
 onBeforeUnmount(() => {
   if (bound) {
-    bound.removeEventListener('mousedown', onMouseDown);
-    bound.removeEventListener('click', onClick);
-    bound.removeEventListener('keydown', onTriggerKeyDown);
+    cleanupTocRefreshUi(bound);
   }
+  unbindBound?.();
+  unbindBound = null;
+  bound = null;
   document.removeEventListener('mousedown', onDocMouseDown);
   document.removeEventListener('keydown', onKey);
 });
@@ -236,6 +367,22 @@ function onDateInput(e: Event): void {
 </script>
 
 <template>
+  <div v-if="tocDescriptors.length > 0" class="layout-toc-refresh-proxies">
+    <button
+      v-for="descriptor in tocDescriptors"
+      :key="descriptor.key"
+      type="button"
+      class="layout-toc-refresh-proxy"
+      data-toc-refresh-proxy=""
+      :data-toc-key="descriptor.key"
+      :data-toc-position="String(descriptor.position)"
+      :aria-label="tocUpdateLabel"
+      :title="tocUpdateLabel"
+      @focus="onProxyFocus(descriptor)"
+      @blur="onProxyBlur"
+      @click="onUpdateTableOfContents(descriptor.position)"
+    />
+  </div>
   <div
     v-if="popup"
     ref="popupEl"

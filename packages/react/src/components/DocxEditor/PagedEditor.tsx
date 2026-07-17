@@ -47,6 +47,7 @@ import {
 } from './internals/styles';
 import { viewportMinHeightPx } from './internals/scrollUtils';
 import { useLayoutPipeline } from './hooks/useLayoutPipeline';
+import { usePaintedPagesReadyDispatcher } from './hooks/usePaintedPagesReadyDispatcher';
 import { transactionNeedsDirectOverlayRequest } from '@docx-editor.dev/core/internal/paintedPagesGuard';
 import { useSelectionOverlay } from './hooks/useSelectionOverlay';
 import { useImageInteractions } from './hooks/useImageInteractions';
@@ -444,6 +445,7 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
       markPaintedPagesStale,
       requestPaintedOverlayRefresh,
       paintedPagesAreCurrent,
+      getPaintGeneration,
     } = useLayoutPipeline({
       document,
       styles,
@@ -467,6 +469,10 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
       onRenderedDomContextReady,
       onPaintedPagesReady: () => paintedOverlayRefreshRef.current(),
     });
+    const dispatchPaintedPagesReady = usePaintedPagesReadyDispatcher(
+      pagesContainerRef,
+      getPaintGeneration
+    );
 
     // Selection overlay — caret, range rects, image overlay info, plus the
     // ResizeObserver + post-layout recompute that keep geometry fresh.
@@ -591,9 +597,7 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
       const state = hiddenPMRef.current?.getState();
       if (state) handleSelectionChange(state);
       notifyDecorationLayer();
-      pagesContainerRef.current?.dispatchEvent(
-        new CustomEvent('docx-editor-react:painted-pages-ready')
-      );
+      dispatchPaintedPagesReady();
     };
 
     /**
@@ -610,6 +614,9 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
         // the focus event bubbles up here and would bounce focus back to
         // the body PM, making the inputs impossible to edit.
         if (target.closest('.ep-hyperlink-popup')) return;
+        // Inline TOC refresh is a real keyboard-operable button. Keep DOM
+        // focus on it so Enter/Space reaches the delegated activation handler.
+        if (target.closest('.layout-toc-refresh')) return;
         // Phase 5 of HF editing unification: when focus lands on one of
         // the persistent hidden HF PMs (mounted off-screen as siblings of
         // `.layout-page-content`), don't redirect to the body PM — that
