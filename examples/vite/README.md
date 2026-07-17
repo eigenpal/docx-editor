@@ -17,12 +17,12 @@ Or from this directory: `bun run dev`.
 
 ## Files
 
-| File             | What it does                                          |
-| ---------------- | ----------------------------------------------------- |
-| `src/App.tsx`    | The editor: open `.docx`, edit, render an agent panel |
-| `src/main.tsx`   | React root + `styles.css`                             |
-| `index.html`     | Loads the Material Symbols font for toolbar icons     |
-| `vite.config.ts` | Aliases `@eigenpal/*` to workspace source in dev      |
+| File             | What it does                                            |
+| ---------------- | ------------------------------------------------------- |
+| `src/App.tsx`    | The editor: open `.docx`, edit, render an agent panel   |
+| `src/main.tsx`   | React root + `styles.css`                               |
+| `index.html`     | Loads the Material Symbols font for toolbar icons       |
+| `vite.config.ts` | Aliases `@docx-editor.dev/*` to workspace source in dev |
 
 ## Minimal integration
 

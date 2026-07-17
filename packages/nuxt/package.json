@@ -1,7 +1,7 @@
 {
   "name": "@docx-editor.dev/nuxt",
   "version": "0.0.1",
-  "description": "Nuxt 3 & 4 module for the @eigenpal/docx-editor WYSIWYG DOCX editor — auto-imports an SSR-safe <DocxEditor> component.",
+  "description": "Nuxt 3 & 4 module for the @docx-editor.dev/vue WYSIWYG DOCX editor — auto-imports an SSR-safe <DocxEditor> component.",
   "type": "module",
   "exports": {
     ".": {

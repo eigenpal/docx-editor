@@ -1,7 +1,7 @@
 {
   "name": "@docx-editor.dev/i18n",
   "version": "0.0.1",
-  "description": "Shared UI locale strings and types for the @eigenpal docx-editor adapters (React and Vue).",
+  "description": "Shared UI locale strings and types for the @docx-editor.dev editor adapters (React and Vue).",
   "sideEffects": false,
   "main": "./dist/index.js",
   "module": "./dist/index.mjs",

@@ -1,6 +1,6 @@
 /**
- * Shared locale data, types, and runtime helpers for the @eigenpal
- * docx-editor adapters.
+ * Shared locale data, types, and runtime helpers for the @docx-editor.dev
+ * editor adapters.
  *
  * Import everything from the package root. `sideEffects: false` lets
  * consumer bundlers tree-shake unused locales.

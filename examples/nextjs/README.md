@@ -6,7 +6,7 @@ rendering. The fix is one `dynamic()` import with `ssr: false`.
 
 ## Run it
 
-This example depends on the `@eigenpal/*` workspace packages, so build them
+This example depends on the `@docx-editor.dev/*` workspace packages, so build them
 once first. From the repo root:
 
 ```bash

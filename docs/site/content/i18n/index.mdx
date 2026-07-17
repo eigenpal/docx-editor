@@ -34,7 +34,7 @@ Two import shapes are supported in 1.0.1+:
 - **Named exports off the root** (`import { pl } from '@docx-editor.dev/i18n'`). Use this when you ship a small static list of locales. Hyphenated codes (`pt-BR`, `zh-CN`) become camelCase exports (`ptBR`, `zhCN`).
 - **Per-locale subpath imports** (`import pl from '@docx-editor.dev/i18n/pl'`). Use this when you dynamically load locales; the per-locale subpath code-splits so users only download the language they need.
 
-The 0.x `import pl from '@eigenpal/docx-js-editor/i18n/pl.json'` JSON pattern is gone, but the new subpath form covers the same use case. See the [migration guide](/docs/1.x/migration#i18n-restructure) for the rewrite.
+The 0.x `import pl from '@eigenpal/docx-js-editor/i18n/pl.json'` JSON pattern is gone. Replace it with `import pl from '@docx-editor.dev/i18n/pl'`.
 
 Verify what your installed version ships:
 
@@ -71,4 +71,3 @@ import { pl } from '@docx-editor.dev/i18n';
 - [Contributing a translation](/docs/1.x/i18n/contributing): add or improve a locale with one JSON file
 - [i18n API reference](/docs/1.x/api/i18n)
 - [React API reference: i18n prop](/docs/1.x/api/react)
-- [Migration: i18n restructure](/docs/1.x/migration#i18n-restructure)
