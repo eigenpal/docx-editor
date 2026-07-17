@@ -154,6 +154,30 @@ function extractDocumentText(value: unknown): string {
 const reactHref = import.meta.env.DEV ? 'http://localhost:5173/' : '/react/';
 const vueHref = import.meta.env.DEV ? 'http://localhost:5174/' : '/vue/';
 
+/**
+ * Documents the demo can boot from. Mirrors examples/vite/src/App.tsx.
+ *
+ * `default` is the element test document real visitors get. `e2e` is a frozen
+ * fixture that boots under ?e2e=1 instead, so the demo document can be reworded
+ * or restyled without rewriting the specs that assert on its text.
+ *
+ * ?doc= overrides the choice. Its only current use is ?doc=default, which lets
+ * the smoke spec assert against the document that actually ships.
+ *
+ * Lookup is an allowlist. The raw param is never interpolated into the fetch
+ * URL, so a crafted ?doc= cannot point the demo at an off-origin document.
+ */
+const DEMO_DOCS = {
+  default: 'sample.docx',
+  e2e: 'e2e-fixture.docx',
+} as const;
+
+function resolveBootDoc(param: string | null, isE2E: boolean): string {
+  const picked = param && DEMO_DOCS[param as keyof typeof DEMO_DOCS];
+  if (picked) return picked;
+  return isE2E ? DEMO_DOCS.e2e : DEMO_DOCS.default;
+}
+
 const editorRef = ref<DocxEditorRef | null>(null);
 const documentBuffer = ref<ArrayBuffer | null>(null);
 const currentDocument = ref<Document | null>(null);
@@ -626,12 +650,13 @@ onMounted(async () => {
     return;
   }
 
+  const bootDoc = resolveBootDoc(params.get('doc'), isE2E);
   try {
-    const res = await fetch(`${import.meta.env.BASE_URL}sample.docx`);
+    const res = await fetch(`${import.meta.env.BASE_URL}${bootDoc}`);
     const buffer = await res.arrayBuffer();
     if (userStartedOwnDoc.value) return; // user already moved on
     documentBuffer.value = buffer;
-    fileName.value = 'sample.docx';
+    fileName.value = bootDoc;
   } catch {
     if (userStartedOwnDoc.value) return;
     currentDocument.value = createEmptyDocument();
