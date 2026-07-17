@@ -6,7 +6,7 @@ mount check and a `lazy()` import.
 
 ## Run it
 
-This example resolves the `@eigenpal/*` packages from their built output, so
+This example resolves the `@docx-editor.dev/*` packages from their built output, so
 build the workspace packages once first. From the repo root:
 
 ```bash

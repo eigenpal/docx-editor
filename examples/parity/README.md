@@ -6,7 +6,7 @@ Single deployment that serves the React and Vue adapter examples on the same dom
 
 The 1.0.0 unification renames packages and ships React and Vue adapters from a shared `@docx-editor.dev/core`. The community-trust signal is "the same DOCX renders identically in both adapters when installed from npm." This deployment proves it by serving both adapters from real `node_modules` resolution paths, not source aliases.
 
-The build trick: dev mode aliases `@eigenpal/*` to `packages/*/src` for HMR. Parity mode sets `USE_PUBLISHED_PACKAGES=true` so vite resolves through `node_modules` → workspace `dist/` — the exact bytes a consumer downloads from npm.
+The build trick: dev mode aliases `@docx-editor.dev/*` to `packages/*/src` for HMR. Parity mode sets `USE_PUBLISHED_PACKAGES=true` so vite resolves through `node_modules` → workspace `dist/` — the exact bytes a consumer downloads from npm.
 
 ## Routes
 
