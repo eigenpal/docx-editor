@@ -13,13 +13,12 @@ Releases follow the canonical [`changesets/action@v1`](https://github.com/change
 | Package                   | Path              | Published?               |
 | ------------------------- | ----------------- | ------------------------ |
 | `@docx-editor.dev/react`  | `packages/react`  | ✅                       |
-| `@docx-editor.dev/core`   | `packages/core`   | ✅                       |
 | `@docx-editor.dev/agents` | `packages/agents` | ✅                       |
 | `@docx-editor.dev/vue`    | `packages/vue`    | ✅                       |
 | `@docx-editor.dev/i18n`   | `packages/i18n`   | ✅ (shared locale JSONs) |
 | `@docx-editor.dev/nuxt`   | `packages/nuxt`   | ✅                       |
 
-All six packages are in a **fixed group** in `.changeset/config.json` — they always ship the same version. A changeset only needs to declare the bump for one; the others follow automatically. `@docx-editor.dev/i18n` ships the locale JSONs that the React and Vue adapters both consume, so adding a new key to `en.json` only needs a changeset on `@docx-editor.dev/i18n` (the consumers pick it up at build time).
+All five packages are in a **fixed group** in `.changeset/config.json` — they always ship the same version. A changeset only needs to declare the bump for one; the others follow automatically. `@docx-editor.dev/i18n` ships the locale JSONs that the React and Vue adapters both consume, so adding a new key to `en.json` only needs a changeset on `@docx-editor.dev/i18n` (the consumers pick it up at build time).
 
 ## Author flow (every contributor, every code PR)
 
@@ -68,7 +67,7 @@ That's the entire release. One PR merge.
 | ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------- |
 | npmjs.com                | Trusted Publisher configured for each published `@docx-editor.dev/*` package → repo `eigenpal/docx-editor`, workflow `release.yml`          |
 | `package.json`           | `"publishConfig": { "access": "public" }` on each published package                                                                         |
-| `.changeset/config.json` | `"access": "public"`; fixed release group for react, core, agents, vue, i18n, and nuxt packages                                             |
+| `.changeset/config.json` | `"access": "public"`; fixed release group for react, agents, vue, i18n, and nuxt packages                                             |
 | GitHub perms             | Settings → Actions → General → Workflow permissions = **Read and write**, **Allow GitHub Actions to create and approve pull requests** = on |
 | GitHub secrets           | `SLACK_WEBHOOK_URL` (optional — release notifications)                                                                                      |
 
