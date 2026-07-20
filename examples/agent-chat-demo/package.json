@@ -1,0 +1,29 @@
+{
+  "name": "agent-chat-demo",
+  "private": true,
+  "scripts": {
+    "dev": "next dev --port 3002",
+    "build": "next build",
+    "start": "next start"
+  },
+  "dependencies": {
+    "@ai-sdk/openai": "^3.0.54",
+    "@ai-sdk/react": "^3.0.171",
+    "@docx-editor.dev/core": "workspace:*",
+    "@docx-editor.dev/agents": "workspace:*",
+    "@docx-editor.dev/react": "workspace:*",
+    "ai": "^6.0.169",
+    "next": "^16.2.4",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^25.6.0",
+    "@types/react": "^19.2.17",
+    "@types/react-dom": "^19.0.0",
+    "autoprefixer": "^10.4.0",
+    "postcss": "^8.4.0",
+    "tailwindcss": "^3.4.0",
+    "typescript": "^6.0.3"
+  }
+}

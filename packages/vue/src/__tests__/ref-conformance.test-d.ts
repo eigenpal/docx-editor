@@ -1,0 +1,32 @@
+// Type-level: `DocxEditorRef` satisfies the shared agent bridge contract.
+
+import type { EditorRefLike } from '@docx-editor.dev/agents/bridge';
+import type { DocxEditorRef } from '../components/DocxEditor/types';
+import type { DocxEditorHandle } from '../renderAsync';
+
+function assertAssignable<T>(_value: T): void {}
+
+declare const vueRef: DocxEditorRef;
+assertAssignable<EditorRefLike>(vueRef);
+assertAssignable<{
+  setZoom(zoom: number): void;
+  getZoom(): number;
+  scrollToPage(pageNumber: number): void;
+  scrollToParaId(
+    paraId: string,
+    options?: { highlight?: { color?: string; durationMs?: number } }
+  ): boolean;
+  scrollToPosition(pmPos: number): void;
+  print(): void;
+  loadDocumentBuffer(buffer: ArrayBuffer): Promise<void>;
+}>(vueRef);
+
+declare const vueHandle: DocxEditorHandle;
+assertAssignable<{
+  setZoom(zoom: number): void;
+  scrollToParaId(
+    paraId: string,
+    options?: { highlight?: { color?: string; durationMs?: number } }
+  ): boolean;
+  scrollToPosition(pmPos: number): void;
+}>(vueHandle);

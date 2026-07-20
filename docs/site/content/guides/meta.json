@@ -1,0 +1,14 @@
+{
+  "title": "Guides",
+  "pages": [
+    "loading-and-saving",
+    "tracked-changes",
+    "comments",
+    "content-controls",
+    "headers-footers",
+    "custom-styles",
+    "toolbar",
+    "dark-mode",
+    "headless-processing"
+  ]
+}

@@ -1,0 +1,95 @@
+import { defineConfig } from 'vite';
+import react from '@vitejs/plugin-react';
+import tailwindcss from 'tailwindcss';
+import autoprefixer from 'autoprefixer';
+import path from 'path';
+
+const monorepoRoot = path.resolve(__dirname, '../..');
+
+async function fetchGitHubStars(): Promise<number | null> {
+  try {
+    const res = await fetch('https://api.github.com/repos/eigenpal/docx-editor');
+    const data = await res.json();
+    if (typeof data.stargazers_count === 'number') return data.stargazers_count;
+  } catch {}
+  return null;
+}
+
+export default defineConfig(async () => {
+  const stars = await fetchGitHubStars();
+  return {
+    plugins: [react()],
+    root: __dirname,
+    resolve: {
+      dedupe: ['react', 'react-dom'],
+      alias: [
+        // Resolve package imports to source for live development
+        // Order matters: more-specific prefixes before less-specific ones
+        {
+          find: '@docx-editor.dev/react',
+          replacement: path.join(monorepoRoot, 'packages/react/src/index.ts'),
+        },
+        {
+          find: '@docx-editor.dev/i18n',
+          replacement: path.join(monorepoRoot, 'packages/i18n/src/index.ts'),
+        },
+        {
+          find: '@docx-editor.dev/agents/react',
+          replacement: path.join(monorepoRoot, 'packages/agents/src/react.ts'),
+        },
+        {
+          find: '@docx-editor.dev/agents/server',
+          replacement: path.join(monorepoRoot, 'packages/agents/src/server.ts'),
+        },
+        {
+          find: /^@docx-editor\.dev\/agents$/,
+          replacement: path.join(monorepoRoot, 'packages/agents/src/index.ts'),
+        },
+        {
+          find: '@docx-editor.dev/core/headless',
+          replacement: path.join(monorepoRoot, 'packages/core/src/headless.ts'),
+        },
+        {
+          find: '@docx-editor.dev/core/core-plugins',
+          replacement: path.join(monorepoRoot, 'packages/core/src/core-plugins/index.ts'),
+        },
+        {
+          find: '@docx-editor.dev/core/mcp',
+          replacement: path.join(monorepoRoot, 'packages/core/src/mcp/index.ts'),
+        },
+        // Wildcard alias for deep core imports (e.g. @docx-editor.dev/core/utils/docxInput)
+        {
+          find: /^@docx-editor\.dev\/core\/(.+)/,
+          replacement: path.join(monorepoRoot, 'packages/core/src/$1'),
+        },
+        // Exact match for bare @docx-editor.dev/core (must come AFTER the prefix match above)
+        {
+          find: /^@docx-editor\.dev\/core$/,
+          replacement: path.join(monorepoRoot, 'packages/core/src/core.ts'),
+        },
+        { find: '@', replacement: path.join(monorepoRoot, 'packages/react/src') },
+      ],
+    },
+    css: {
+      postcss: {
+        plugins: [
+          tailwindcss({ config: path.join(monorepoRoot, 'tailwind.config.js') }),
+          autoprefixer(),
+        ],
+      },
+    },
+    define: {
+      __ENABLE_FRAMEWORK_SWITCHER__: JSON.stringify(
+        process.env.ENABLE_FRAMEWORK_SWITCHER === 'true'
+      ),
+      __GITHUB_STARS__: JSON.stringify(stars),
+    },
+    server: {
+      port: 5273,
+      open: false,
+    },
+    build: {
+      outDir: 'dist',
+    },
+  };
+});

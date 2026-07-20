@@ -1,0 +1,61 @@
+/**
+ * Document-load lifecycle — bridges the `documentBuffer` / `document`
+ * props to `useFileIO`'s `loadDocumentBuffer` / `loadDocument` helpers,
+ * resetting `sidebarAutoOpenedRef` on every swap so a freshly-loaded
+ * doc gets the auto-open treatment. Also handles first-mount load.
+ */
+
+import { watch, onMounted, nextTick, toRaw, type Ref } from 'vue';
+import type { Document } from '@docx-editor.dev/core/types/document';
+import type { DocxInput } from '@docx-editor.dev/core/utils';
+
+export interface UseDocumentLifecycleOptions {
+  documentBuffer: () => DocxInput | null;
+  document: () => Document | null;
+  currentDocument?: () => Document | null;
+  takeLastEmittedDocument?: () => Document | null;
+  loadDocumentBuffer: (buffer: DocxInput) => Promise<void>;
+  loadDocument: (doc: Document) => void;
+  sidebarAutoOpenedRef: Ref<boolean>;
+}
+
+export function useDocumentLifecycle(opts: UseDocumentLifecycleOptions) {
+  async function loadBufferReset(buf: DocxInput) {
+    opts.takeLastEmittedDocument?.();
+    opts.sidebarAutoOpenedRef.value = false;
+    await opts.loadDocumentBuffer(buf);
+  }
+
+  function loadDocReset(doc: Document) {
+    // A controlled host commonly echoes the exact object emitted by `change`.
+    // That object is already the live editor cache; rebuilding ProseMirror here
+    // would erase undo history after every keystroke.
+    const rawDoc = toRaw(doc);
+    const current = opts.currentDocument?.();
+    // Consume the one-shot marker even when `current` already matches. Keeping
+    // it indefinitely would misclassify a later A → B → cached A switch as an
+    // echo of the old edit.
+    const lastEmitted = opts.takeLastEmittedDocument?.();
+    if ((current && rawDoc === toRaw(current)) || (lastEmitted && rawDoc === toRaw(lastEmitted))) {
+      return;
+    }
+    opts.sidebarAutoOpenedRef.value = false;
+    opts.loadDocument(doc);
+  }
+
+  watch(opts.documentBuffer, (buf) => {
+    if (buf) void loadBufferReset(buf);
+  });
+
+  watch(opts.document, (doc) => {
+    if (doc) loadDocReset(doc);
+  });
+
+  onMounted(async () => {
+    await nextTick();
+    const buffer = opts.documentBuffer();
+    const doc = opts.document();
+    if (buffer) await loadBufferReset(buffer);
+    else if (doc) loadDocReset(doc);
+  });
+}

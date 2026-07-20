@@ -1,0 +1,110 @@
+name: CI
+
+# `lint` and `test` run in parallel; `build needs: [lint, test]` so a
+# package can never build before lint has passed (OpenSpec §4.3).
+#
+# Dependabot PRs are handled by dependabot-lockfile.yml (which refreshes
+# bun.lock first and then runs the same checks inline), so we skip them
+# here. GitHub treats skipped required checks as passing since 2022, so
+# branch protection still works.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+# Least-privilege default GITHUB_TOKEN: lint/test/build only read the repo.
+permissions:
+  contents: read
+
+jobs:
+  lint:
+    if: github.actor != 'dependabot[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6.0.3
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Lint
+        run: bun run lint
+
+      - name: Format check
+        run: bun run format:check
+
+  test:
+    if: github.actor != 'dependabot[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6.0.3
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Type check
+        run: bun run typecheck
+
+      - name: i18n locale + typed-exports sync check
+        run: bun run i18n:validate
+
+      - name: Run tests
+        run: bun test
+
+      - name: CLA logic tests
+        run: bash .github/cla/cla.test.sh
+
+  build:
+    if: github.actor != 'dependabot[bot]'
+    runs-on: ubuntu-latest
+    needs: [lint, test]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6.0.3
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Build packages
+        run: bun run build:packages
+        env:
+          NODE_OPTIONS: --max-old-space-size=8192
+
+      - name: API report check
+        run: bun run api:check
+
+      - name: Published-package artifact check
+        run: bun run check:package-artifacts
+
+      - name: Published-package consumer check
+        run: SKIP_CONSUMER_INSTALL_BUILD=1 bun run check:consumer-install
+
+      - name: Parity contract check
+        run: bun run check:parity-contract
+
+      - name: i18n per-locale bundle size check
+        run: bun run check:i18n-bundle-size
+
+      - name: Docs JSON generation (smoke test)
+        # Not committed — `docs/json/` is gitignored. Run as a smoke test
+        # so any breakage in the generator surfaces here instead of when
+        # the docs site (`docx-editor-page`) tries to consume it.
+        run: bun run docs:json

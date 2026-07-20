@@ -1,0 +1,137 @@
+{
+  "name": "@docx-editor.dev/react",
+  "version": "0.0.1",
+  "description": "React DOCX editor adapter for @docx-editor.dev/core.",
+  "main": "./dist/index.js",
+  "module": "./dist/index.mjs",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.js"
+    },
+    "./ui": {
+      "types": "./dist/ui.d.ts",
+      "import": "./dist/ui.mjs",
+      "require": "./dist/ui.js"
+    },
+    "./dialogs": {
+      "types": "./dist/dialogs.d.ts",
+      "import": "./dist/dialogs.mjs",
+      "require": "./dist/dialogs.js"
+    },
+    "./hooks": {
+      "types": "./dist/hooks.d.ts",
+      "import": "./dist/hooks.mjs",
+      "require": "./dist/hooks.js"
+    },
+    "./plugin-api": {
+      "types": "./dist/plugin-api.d.ts",
+      "import": "./dist/plugin-api.mjs",
+      "require": "./dist/plugin-api.js"
+    },
+    "./styles": {
+      "types": "./dist/styles.d.ts",
+      "import": "./dist/styles.mjs",
+      "require": "./dist/styles.js"
+    },
+    "./styles.css": "./dist/styles.css"
+  },
+  "typesVersions": {
+    "*": {
+      "ui": [
+        "./dist/ui.d.ts"
+      ],
+      "dialogs": [
+        "./dist/dialogs.d.ts"
+      ],
+      "hooks": [
+        "./dist/hooks.d.ts"
+      ],
+      "plugin-api": [
+        "./dist/plugin-api.d.ts"
+      ],
+      "styles": [
+        "./dist/styles.d.ts"
+      ]
+    }
+  },
+  "sideEffects": [
+    "*.css"
+  ],
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsup && bun run build:css && node ../../scripts/inject-package-doc.mjs --package @docx-editor.dev/react",
+    "build:css": "tailwindcss -c ./tailwind.config.js -i ./src/styles/editor.css -o ./dist/styles.css --minify",
+    "typecheck": "tsc --noEmit",
+    "api:extract": "node ../../scripts/api-extractor.mjs --package @docx-editor.dev/react --local",
+    "api:check": "node ../../scripts/api-extractor.mjs --package @docx-editor.dev/react"
+  },
+  "peerDependencies": {
+    "prosemirror-commands": "^1.5.2",
+    "prosemirror-dropcursor": "^1.8.2",
+    "prosemirror-history": "^1.4.0",
+    "prosemirror-keymap": "^1.2.2",
+    "prosemirror-model": "^1.19.4",
+    "prosemirror-state": "^1.4.3",
+    "prosemirror-tables": "^1.8.5",
+    "prosemirror-transform": "^1.12.0",
+    "prosemirror-view": "^1.41.6",
+    "react": "^18.0.0 || ^19.0.0",
+    "react-dom": "^18.0.0 || ^19.0.0"
+  },
+  "peerDependenciesMeta": {
+    "react": {
+      "optional": true
+    },
+    "react-dom": {
+      "optional": true
+    }
+  },
+  "dependencies": {
+    "@docx-editor.dev/agents": "^0.0.1",
+    "@docx-editor.dev/core": "^0.0.1",
+    "@docx-editor.dev/i18n": "^0.0.1",
+    "@radix-ui/react-select": "^2.2.6",
+    "clsx": "^2.1.0",
+    "sonner": "^2.0.7"
+  },
+  "devDependencies": {
+    "prosemirror-commands": "^1.5.2",
+    "prosemirror-dropcursor": "^1.8.2",
+    "prosemirror-history": "^1.4.0",
+    "prosemirror-keymap": "^1.2.2",
+    "prosemirror-model": "^1.19.4",
+    "prosemirror-state": "^1.4.3",
+    "prosemirror-tables": "^1.8.5",
+    "prosemirror-transform": "^1.12.0",
+    "prosemirror-view": "^1.41.6"
+  },
+  "keywords": [
+    "docx",
+    "editor",
+    "template",
+    "word",
+    "document",
+    "react",
+    "prosemirror"
+  ],
+  "author": {
+    "name": "Jedr Blaszyk",
+    "email": "jedr@eigenpal.com",
+    "url": "https://github.com/jedrazb"
+  },
+  "license": "Apache-2.0",
+  "homepage": "https://docx-editor.dev/",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/eigenpal/docx-editor.git",
+    "directory": "packages/react"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}

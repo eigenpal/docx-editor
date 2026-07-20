@@ -1,0 +1,53 @@
+{
+  "_lang": "en",
+  "agentPanel": {
+    "defaultTitle": "Assistant",
+    "close": "Close panel",
+    "resizeHandle": "Resize agent panel",
+    "thinking": "Assistant is thinking",
+    "composerPlaceholder": "Ask the assistant…",
+    "send": "Send",
+    "timeline": {
+      "working": "Working… {count, plural, one {# step} other {# steps}}",
+      "summary": "{count, plural, one {# step} other {# steps}}",
+      "earlier": "+ {count, plural, one {# earlier step} other {# earlier steps}}"
+    }
+  },
+  "aiActions": {
+    "header": "AI Actions",
+    "askAi": "Ask AI",
+    "rewrite": "Rewrite",
+    "expand": "Expand",
+    "summarize": "Summarize",
+    "translate": "Translate",
+    "explain": "Explain",
+    "fixGrammar": "Fix grammar",
+    "makeFormal": "Make formal",
+    "makeCasual": "Make casual",
+    "custom": "Custom",
+    "customPlaceholder": "Custom prompt…"
+  },
+  "aiPreview": {
+    "defaultTitle": "AI Response",
+    "labels": {
+      "rewrite": "Rewrite",
+      "expand": "Expand",
+      "summarize": "Summary",
+      "translate": "Translation",
+      "explain": "Explanation",
+      "fixGrammar": "Grammar Fix",
+      "makeFormal": "Formal Version",
+      "makeCasual": "Casual Version",
+      "custom": "AI Response",
+      "askAi": "AI Response"
+    },
+    "loading": "Processing…",
+    "original": "Original:",
+    "suggested": "Suggested:",
+    "edit": "Edit",
+    "discard": "Discard",
+    "accept": "Accept",
+    "retry": "Retry",
+    "close": "Close"
+  }
+}

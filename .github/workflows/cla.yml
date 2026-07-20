@@ -1,0 +1,80 @@
+name: CLA
+
+# All logic lives in .github/cla/cla.sh and is unit-tested by
+# .github/cla/cla.test.sh (run by ci.yml). This workflow is a thin orchestrator
+# that sets the env, checks out main so the script can read/write the
+# signatures file, and invokes the script.
+
+on:
+  pull_request_target:
+    types: [opened, synchronize, reopened]
+  issue_comment:
+    types: [created]
+
+concurrency:
+  group: cla-${{ github.event.pull_request.number || github.event.issue.number }}
+  cancel-in-progress: false
+
+# All write actions go through the eigenpal-release-pal App's installation
+# token, which is in the main-branch ruleset's bypass list. The workflow's
+# own GITHUB_TOKEN is never used for writes — keep it read-only.
+permissions:
+  contents: read
+  pull-requests: read
+  statuses: read
+
+jobs:
+  cla:
+    runs-on: ubuntu-latest
+    # NOTE: the bot login below is hardcoded in three places (this if:,
+    # GIT_AUTHOR_NAME, GIT_AUTHOR_EMAIL). They must stay in sync; missing
+    # this if: when renaming the App would let the bot self-sign again.
+    # GitHub Actions does not allow the env context in job-level if:, so
+    # this can't be DRYed via a workflow-level variable.
+    if: |
+      github.event_name == 'pull_request_target' ||
+      (github.event_name == 'issue_comment' &&
+       github.event.issue.pull_request != null &&
+       github.event.comment.user.login != 'eigenpal-release-pal[bot]' &&
+       (contains(github.event.comment.body, 'I have read the CLA Document and I hereby sign the CLA') ||
+        contains(github.event.comment.body, '!cla-check')))
+    steps:
+      # Mints an installation token for the eigenpal-release-pal App. That App
+      # has contents:write + pull-requests:write + statuses:write on this repo
+      # and is on the main-branch ruleset bypass list, so the bot's push to main
+      # to record signatures is allowed.
+      - name: Mint App installation token
+        id: app-token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          app-id: ${{ secrets.RELEASE_PAL_APP_ID }}
+          private-key: ${{ secrets.RELEASE_PAL_PRIVATE_KEY }}
+
+      - name: Checkout main
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          ref: main
+          token: ${{ steps.app-token.outputs.token }}
+
+      - name: Process CLA
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          GIT_AUTHOR_NAME: 'eigenpal-release-pal[bot]'
+          GIT_AUTHOR_EMAIL: 'eigenpal-release-pal[bot]@users.noreply.github.com'
+          REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.pull_request.number || github.event.issue.number }}
+          EVENT_NAME: ${{ github.event_name }}
+          COMMENT_USER_LOGIN: ${{ github.event.comment.user.login }}
+          COMMENT_USER_ID: ${{ github.event.comment.user.id }}
+          # Always-allowlisted: bots, plus named maintainer handles as a
+          # safety net (in case the org-membership lookup fails for any
+          # reason — private membership, transient API error, etc.).
+          ALLOWLIST: 'dependabot[bot] github-actions[bot] renovate[bot] jedrazb'
+          # Auto-allowlist members of this org. Public members are recognized
+          # via the workflow's GITHUB_TOKEN; private members will be prompted
+          # to sign once (then they're recorded like anyone else). To turn the
+          # org check off entirely, leave CLA_ORG empty.
+          CLA_ORG: 'eigenpal'
+          CLA_URL: ${{ github.server_url }}/${{ github.repository }}/blob/main/CLA.md
+          SIGN_PHRASE: 'I have read the CLA Document and I hereby sign the CLA'
+        run: bash .github/cla/cla.sh
