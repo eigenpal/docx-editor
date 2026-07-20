@@ -12,7 +12,7 @@
     "@docx-editor.dev/core": "^0.0.1",
     "@docx-editor.dev/agents": "workspace:*",
     "@docx-editor.dev/react": "workspace:*",
-    "ai": "^6.0.169",
+    "ai": "^7.0.22",
     "next": "^16.2.4",
     "react": "^19.0.0",
     "react-dom": "^19.0.0"
