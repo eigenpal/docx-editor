@@ -18,6 +18,8 @@
     "declarationMap": true,
     "baseUrl": ".",
     "paths": {
+      "@docx-editor.dev/core": ["../core/src/core.ts"],
+      "@docx-editor.dev/core/*": ["../core/src/*"],
       "@docx-editor.dev/agents/bridge": ["../agents/src/bridge.ts"],
       "@docx-editor.dev/agents/vue": ["../agents/src/vue.ts"],
       "@docx-editor.dev/i18n": ["../i18n/src/index.ts"]

@@ -47,9 +47,9 @@
         "@ai-sdk/openai": "^3.0.54",
         "@ai-sdk/react": "^3.0.171",
         "@docx-editor.dev/agents": "workspace:*",
-        "@docx-editor.dev/core": "^0.0.1",
+        "@docx-editor.dev/core": "workspace:*",
         "@docx-editor.dev/react": "workspace:*",
-        "ai": "^7.0.22",
+        "ai": "^6.0.169",
         "next": "^16.2.4",
         "react": "^19.0.0",
         "react-dom": "^19.0.0",
@@ -68,7 +68,7 @@
       "name": "agents-demo",
       "dependencies": {
         "@docx-editor.dev/agents": "workspace:*",
-        "@docx-editor.dev/core": "^0.0.1",
+        "@docx-editor.dev/core": "workspace:*",
         "@docx-editor.dev/react": "workspace:*",
         "next": "^16.2.6",
         "openai": "^6.36.0",
@@ -86,7 +86,7 @@
       "name": "docx-editor-example-astro",
       "dependencies": {
         "@astrojs/react": "^5.0.4",
-        "@docx-editor.dev/core": "^0.0.1",
+        "@docx-editor.dev/core": "workspace:*",
         "@docx-editor.dev/react": "workspace:*",
         "astro": "^6.3.1",
         "react": "^19.0.0",
@@ -103,7 +103,7 @@
     "examples/collaboration": {
       "name": "docx-editor-example-collaboration",
       "dependencies": {
-        "@docx-editor.dev/core": "^0.0.1",
+        "@docx-editor.dev/core": "workspace:*",
         "@docx-editor.dev/react": "workspace:*",
         "react": "^19.0.0",
         "react-dom": "^19.0.0",
@@ -122,7 +122,7 @@
     "examples/nextjs": {
       "name": "docx-editor-example-nextjs",
       "dependencies": {
-        "@docx-editor.dev/core": "^0.0.1",
+        "@docx-editor.dev/core": "workspace:*",
         "@docx-editor.dev/react": "workspace:*",
         "next": "^16.2.7",
         "react": "^19.0.0",
@@ -139,7 +139,7 @@
     "examples/nuxt": {
       "name": "docx-editor-example-nuxt",
       "dependencies": {
-        "@docx-editor.dev/core": "^0.0.1",
+        "@docx-editor.dev/core": "workspace:*",
         "@docx-editor.dev/nuxt": "workspace:*",
         "@docx-editor.dev/vue": "workspace:*",
         "vue": "^3.5.0",
@@ -152,7 +152,7 @@
     "examples/plugins/docxtemplater": {
       "name": "docx-editor-example-docxtemplater",
       "dependencies": {
-        "@docx-editor.dev/core": "^0.0.1",
+        "@docx-editor.dev/core": "workspace:*",
         "@docx-editor.dev/react": "workspace:*",
         "react": "^19.0.0",
         "react-dom": "^19.0.0",
@@ -168,7 +168,7 @@
     "examples/plugins/hello-world": {
       "name": "docx-editor-example-hello-world",
       "dependencies": {
-        "@docx-editor.dev/core": "^0.0.1",
+        "@docx-editor.dev/core": "workspace:*",
         "@docx-editor.dev/react": "workspace:*",
         "react": "^19.0.0",
         "react-dom": "^19.0.0",
@@ -184,7 +184,7 @@
     "examples/remix": {
       "name": "docx-editor-example-remix",
       "dependencies": {
-        "@docx-editor.dev/core": "^0.0.1",
+        "@docx-editor.dev/core": "workspace:*",
         "@docx-editor.dev/react": "workspace:*",
         "@remix-run/node": "^2.16.0",
         "@remix-run/react": "^2.16.0",
@@ -208,7 +208,7 @@
       "name": "docx-editor-example-vite",
       "dependencies": {
         "@docx-editor.dev/agents": "workspace:*",
-        "@docx-editor.dev/core": "^0.0.1",
+        "@docx-editor.dev/core": "workspace:*",
         "@docx-editor.dev/react": "workspace:*",
         "react": "^19.0.0",
         "react-dom": "^19.0.0",
@@ -225,7 +225,7 @@
       "name": "docx-editor-example-vue",
       "dependencies": {
         "@docx-editor.dev/agents": "workspace:*",
-        "@docx-editor.dev/core": "^0.0.1",
+        "@docx-editor.dev/core": "workspace:*",
         "@docx-editor.dev/i18n": "workspace:*",
         "@docx-editor.dev/vue": "workspace:*",
         "vue": "^3.5.0",
@@ -238,9 +238,8 @@
     },
     "packages/agents": {
       "name": "@docx-editor.dev/agents",
-      "version": "0.0.1",
+      "version": "1.10.0",
       "dependencies": {
-        "@docx-editor.dev/core": "^0.0.1",
         "docxtemplater": "^3.50.0",
         "jszip": "^3.10.1",
         "pizzip": "^3.1.7",
@@ -269,15 +268,45 @@
       ],
     },
     "packages/core": {
-      "name": "@docx-editor.dev/core-contract",
-      "version": "0.0.1",
+      "name": "@docx-editor.dev/core",
+      "version": "1.10.0",
+      "bin": {
+        "docx-editor-mcp": "./dist/mcp-cli.mjs",
+      },
+      "dependencies": {
+        "docxtemplater": "^3.50.0",
+        "dompurify": "^3.2.0",
+        "jszip": "^3.10.1",
+        "pizzip": "^3.1.7",
+        "xml-js": "^1.6.11",
+      },
       "devDependencies": {
-        "typescript": "^5.3.3",
+        "@microsoft/api-extractor": "^7.50.0",
+        "prosemirror-commands": "^1.5.2",
+        "prosemirror-dropcursor": "^1.8.2",
+        "prosemirror-history": "^1.5.0",
+        "prosemirror-keymap": "^1.2.2",
+        "prosemirror-model": "^1.19.4",
+        "prosemirror-state": "^1.4.3",
+        "prosemirror-tables": "^1.8.5",
+        "prosemirror-transform": "^1.12.0",
+        "prosemirror-view": "^1.41.6",
+      },
+      "peerDependencies": {
+        "prosemirror-commands": "^1.5.2",
+        "prosemirror-dropcursor": "^1.8.2",
+        "prosemirror-history": "^1.5.0",
+        "prosemirror-keymap": "^1.2.2",
+        "prosemirror-model": "^1.19.4",
+        "prosemirror-state": "^1.4.3",
+        "prosemirror-tables": "^1.8.5",
+        "prosemirror-transform": "^1.12.0",
+        "prosemirror-view": "^1.32.7",
       },
     },
     "packages/i18n": {
       "name": "@docx-editor.dev/i18n",
-      "version": "0.0.1",
+      "version": "1.10.0",
       "devDependencies": {
         "tsup": "^8.0.1",
         "typescript": "^5.3.3",
@@ -285,9 +314,9 @@
     },
     "packages/nuxt": {
       "name": "@docx-editor.dev/nuxt",
-      "version": "0.0.1",
+      "version": "1.10.0",
       "dependencies": {
-        "@docx-editor.dev/vue": "^0.0.1",
+        "@docx-editor.dev/vue": "^1.10.0",
         "@nuxt/kit": "^3.14.0 || ^4.0.0",
         "prosemirror-commands": "^1.5.2",
         "prosemirror-dropcursor": "^1.8.2",
@@ -311,11 +340,11 @@
     },
     "packages/react": {
       "name": "@docx-editor.dev/react",
-      "version": "0.0.1",
+      "version": "1.10.0",
       "dependencies": {
-        "@docx-editor.dev/agents": "^0.0.1",
-        "@docx-editor.dev/core": "^0.0.1",
-        "@docx-editor.dev/i18n": "^0.0.1",
+        "@docx-editor.dev/agents": "^1.10.0",
+        "@docx-editor.dev/core": "^1.10.0",
+        "@docx-editor.dev/i18n": "^1.10.0",
         "@radix-ui/react-select": "^2.2.6",
         "clsx": "^2.1.0",
         "sonner": "^2.0.7",
@@ -351,11 +380,11 @@
     },
     "packages/vue": {
       "name": "@docx-editor.dev/vue",
-      "version": "0.0.1",
+      "version": "1.10.0",
       "dependencies": {
-        "@docx-editor.dev/agents": "^0.0.1",
-        "@docx-editor.dev/core": "^0.0.1",
-        "@docx-editor.dev/i18n": "^0.0.1",
+        "@docx-editor.dev/agents": "^1.10.0",
+        "@docx-editor.dev/core": "^1.10.0",
+        "@docx-editor.dev/i18n": "^1.10.0",
       },
       "devDependencies": {
         "prosemirror-history": "^1.4.0",
@@ -525,9 +554,7 @@
 
     "@docx-editor.dev/agents": ["@docx-editor.dev/agents@workspace:packages/agents"],
 
-    "@docx-editor.dev/core": ["@docx-editor.dev/core@0.0.1", "", {}, "sha512-bgs6qj+1g0QfmyjK6XHet8xhxxbsgm+zS+dW5NYTjAMMLXQo5QY1erJNmLfjtg7fDehzDrIxNM3jgiFWSYKtuw=="],
-
-    "@docx-editor.dev/core-contract": ["@docx-editor.dev/core-contract@workspace:packages/core"],
+    "@docx-editor.dev/core": ["@docx-editor.dev/core@workspace:packages/core"],
 
     "@docx-editor.dev/i18n": ["@docx-editor.dev/i18n@workspace:packages/i18n"],
 
@@ -1219,6 +1246,8 @@
 
     "@types/resolve": ["@types/resolve@1.20.2", "", {}, "sha512-60BCwRFOZCQhDncwQdxxeOEEkbc5dIMccYLwbxsS4TUNeVECQ/pBJ0j09mrHOl/JJvpRPGwO9SvE4nR2Nb/a4Q=="],
 
+    "@types/trusted-types": ["@types/trusted-types@2.0.7", "", {}, "sha512-ScaPdn1dQczgbl0QFTeTOmVHFULt394XJgOQNoyVhZ6r2vLnMLJfBPd53SB52T/3G36VI1/g2MZaX0cwDuXsfw=="],
+
     "@types/unist": ["@types/unist@3.0.3", "", {}, "sha512-ko/gIFJRv177XgZsZcBwnqJN5x/Gien8qNOn0D5bQU/zAzVf9Zt3BlcUiLqhV9y4ARk0GbT3tnUiPNgnTXzc/Q=="],
 
     "@types/whatwg-mimetype": ["@types/whatwg-mimetype@3.0.2", "", {}, "sha512-c2AKvDT8ToxLIOUlN51gTiHXflsfIFisS4pO7pDPoKouJCESkhZnEy623gwP9laCy5lnLDAw1vAzu2vM2YLOrA=="],
@@ -1312,8 +1341,6 @@
     "@vue/shared": ["@vue/shared@3.5.33", "", {}, "sha512-5vR2QIlmaLG77Ygd4pMP6+SGQ5yox9VhtnbDWTy9DzMzdmeLxZ1QqxrywEZ9sa1AVubfIJyaCG3ytyWU81ufcQ=="],
 
     "@web3-storage/multipart-parser": ["@web3-storage/multipart-parser@1.0.0", "", {}, "sha512-BEO6al7BYqcnfX15W2cnGR+Q566ACXAT9UQykORCWW80lmkpWsnEob6zJS1ZVBKsSJC8+7vJkHwlp+lXG1UCdw=="],
-
-    "@workflow/serde": ["@workflow/serde@4.1.0", "", {}, "sha512-pav4F2BoirECWR7Nf1TKt+2eETcBj7jj4cBefQ8VXQCA6NPkaKeLfj/zMgi+3zYV5ZIBT4GuUiphsj0/b9hPQQ=="],
 
     "@xmldom/xmldom": ["@xmldom/xmldom@0.9.10", "", {}, "sha512-A9gOqLdi6cV4ibazAjcQufGj0B1y/vDqYrcuP6d/6x8P27gRS8643Dj9o1dEKtB6O7fwxb2FgBmJS2mX7gpvdw=="],
 
@@ -1704,6 +1731,8 @@
     "domelementtype": ["domelementtype@2.3.0", "", {}, "sha512-OLETBj6w0OsagBwdXnPdN0cnMfF9opN69co+7ZrbfPGrdpPVNBUj02spi6B1N7wChLQiPn4CSH/zJvXw56gmHw=="],
 
     "domhandler": ["domhandler@5.0.3", "", { "dependencies": { "domelementtype": "^2.3.0" } }, "sha512-cgwlv/1iFQiFnU96XXgROh8xTeetsnJiDsTc7TYCLFd9+/WNkIqPTxiM/8pSd8VIrhXGTf1Ny1q1hquVqDJB5w=="],
+
+    "dompurify": ["dompurify@3.4.10", "", { "optionalDependencies": { "@types/trusted-types": "^2.0.7" } }, "sha512-0xzNv0e7oYC6yyuOGZIABPM4qtg3QxLFniDNPP4ZP90wR8Yq3zgwpRbrNiT4N3IKqDbbYFEJLV+JWEs19aZ//w=="],
 
     "domutils": ["domutils@3.2.2", "", { "dependencies": { "dom-serializer": "^2.0.0", "domelementtype": "^2.3.0", "domhandler": "^5.0.3" } }, "sha512-6kZKyUajlDuqlHKVX1w7gyslj9MPIXzIFiz/rGu35uC1wMi+kMhQwGhl4lt9unC9Vb9INnY9Z3/ZA3+FhASLaw=="],
 
@@ -3597,8 +3626,6 @@
 
     "accepts/negotiator": ["negotiator@0.6.3", "", {}, "sha512-+EUsqGPLsM+j/zdChZjsnX51g4XrHFOIXwfnCVPGlQk/k5giakcKsuxCObBRu6DSm9opw/O6slWbJdghQM4bBg=="],
 
-    "agent-chat-demo/ai": ["ai@7.0.31", "", { "dependencies": { "@ai-sdk/gateway": "4.0.23", "@ai-sdk/provider": "4.0.3", "@ai-sdk/provider-utils": "5.0.11" }, "peerDependencies": { "zod": "^3.25.76 || ^4.1.8" } }, "sha512-pJfwKXjF5kw0rKRTePwYo60EfWb8wfzJAgf3ojln/YkOsVVKttzZAJVcRPsg37Z3a06ZdKkxX+DSrMAFlPm5Mw=="],
-
     "agent-chat-demo/postcss": ["postcss@8.5.14", "", { "dependencies": { "nanoid": "^3.3.11", "picocolors": "^1.1.1", "source-map-js": "^1.2.1" } }, "sha512-SoSL4+OSEtR99LHFZQiJLkT59C5B1amGO1NzTwj7TT1qCUgUO6hxOvzkOYxD+vMrXBM3XJIKzokoERdqQq/Zmg=="],
 
     "agent-chat-demo/typescript": ["typescript@6.0.3", "", { "bin": { "tsc": "bin/tsc", "tsserver": "bin/tsserver" } }, "sha512-y2TvuxSZPDyQakkFRPZHKFm+KKVqIisdg9/CZwm9ftvKXLP8NRWj38/ODjNbr43SsoXqNuAisEf1GdCxqWcdBw=="],
@@ -4420,12 +4447,6 @@
     "@vercel/nft/glob/minimatch": ["minimatch@10.2.5", "", { "dependencies": { "brace-expansion": "^5.0.5" } }, "sha512-MULkVLfKGYDFYejP07QOurDLLQpcjk7Fw+7jXS2R2czRQzR56yHRveU5NDJEOviH+hETZKSkIk5c+T23GjFUMg=="],
 
     "@vercel/nft/glob/path-scurry": ["path-scurry@2.0.2", "", { "dependencies": { "lru-cache": "^11.0.0", "minipass": "^7.1.2" } }, "sha512-3O/iVVsJAPsOnpwWIeD+d6z/7PmqApyQePUtCndjatj/9I5LylHvt5qluFaBT3I5h3r1ejfR056c+FCv+NnNXg=="],
-
-    "agent-chat-demo/ai/@ai-sdk/gateway": ["@ai-sdk/gateway@4.0.23", "", { "dependencies": { "@ai-sdk/provider": "4.0.3", "@ai-sdk/provider-utils": "5.0.11", "@vercel/oidc": "3.2.0" }, "peerDependencies": { "zod": "^3.25.76 || ^4.1.8" } }, "sha512-f85diFdPMXYJpxCjOYZchMQkRH8h3r6lhK4Q2xmzJ7UA2OQ80L3W7tFu61742xGQK7zHWm5AhxYhNuc50H9SGQ=="],
-
-    "agent-chat-demo/ai/@ai-sdk/provider": ["@ai-sdk/provider@4.0.3", "", { "dependencies": { "json-schema": "^0.4.0" } }, "sha512-e0CpNWJUY7OxAFAnCZkw+ri9QOHWwTs1tXP42782KFGCU07qt8NiXCrCVowyCB5dP2r5/Uls+g2oPd8kOJn9dw=="],
-
-    "agent-chat-demo/ai/@ai-sdk/provider-utils": ["@ai-sdk/provider-utils@5.0.11", "", { "dependencies": { "@ai-sdk/provider": "4.0.3", "@standard-schema/spec": "^1.1.0", "@workflow/serde": "4.1.0", "eventsource-parser": "^3.0.8" }, "peerDependencies": { "zod": "^3.25.76 || ^4.1.8" } }, "sha512-7/96wE+ZsKB35iS9ASyllrE4Ym/EolXEB7AkuJ5FI++fmS85BVTAs77890C+1Z2jwHfBKjBQSBmsliOsAh0iFQ=="],
 
     "archiver-utils/readable-stream/string_decoder": ["string_decoder@1.3.0", "", { "dependencies": { "safe-buffer": "~5.2.0" } }, "sha512-hkRX8U1WjJFd8LsDJ2yQ/wWWxaopEsABU1XfkM8A+j0+85JAGppt16cr1Whg6KIbb4okU6Mql6BOj+uup/wKeA=="],
 

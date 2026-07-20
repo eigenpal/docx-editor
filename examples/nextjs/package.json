@@ -7,7 +7,7 @@
     "start": "next start --port 3000"
   },
   "dependencies": {
-    "@docx-editor.dev/core": "^0.0.1",
+    "@docx-editor.dev/core": "workspace:*",
     "@docx-editor.dev/react": "workspace:*",
     "next": "^16.2.7",
     "react": "^19.0.0",

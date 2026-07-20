@@ -8,7 +8,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@docx-editor.dev/core": "^0.0.1",
+    "@docx-editor.dev/core": "workspace:*",
     "@docx-editor.dev/react": "workspace:*",
     "react": "^19.0.0",
     "react-dom": "^19.0.0"

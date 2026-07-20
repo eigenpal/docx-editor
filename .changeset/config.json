@@ -5,6 +5,7 @@
   "fixed": [
     [
       "@docx-editor.dev/react",
+      "@docx-editor.dev/core",
       "@docx-editor.dev/agents",
       "@docx-editor.dev/vue",
       "@docx-editor.dev/nuxt",
@@ -15,7 +16,5 @@
   "access": "public",
   "baseBranch": "main",
   "updateInternalDependencies": "patch",
-  "ignore": [
-    "@docx-editor.dev/core-contract"
-  ]
+  "ignore": []
 }

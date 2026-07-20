@@ -20,11 +20,17 @@
     "baseUrl": ".",
     "paths": {
       "@/*": ["./packages/react/src/*"],
-      "@docx-editor.dev/react": ["./packages/react/src/index.ts"]
+      "@docx-editor.dev/react": ["./packages/react/src/index.ts"],
+      "@docx-editor.dev/core": ["./packages/core/src/core.ts"],
+      "@docx-editor.dev/core/headless": ["./packages/core/src/headless.ts"],
+      "@docx-editor.dev/core/core-plugins": ["./packages/core/src/core-plugins/index.ts"],
+      "@docx-editor.dev/core/mcp": ["./packages/core/src/mcp/index.ts"],
+      "@docx-editor.dev/core/*": ["./packages/core/src/*"]
     }
   },
   "include": [
     "src",
+    "packages/core/src",
     "packages/react/src",
     "examples/shared",
     "examples/vite",

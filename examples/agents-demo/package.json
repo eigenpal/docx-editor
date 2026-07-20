@@ -7,7 +7,7 @@
     "start": "next start"
   },
   "dependencies": {
-    "@docx-editor.dev/core": "^0.0.1",
+    "@docx-editor.dev/core": "workspace:*",
     "@docx-editor.dev/agents": "workspace:*",
     "@docx-editor.dev/react": "workspace:*",
     "next": "^16.2.6",
@@ -16,7 +16,7 @@
     "react-dom": "^19.0.0"
   },
   "devDependencies": {
-    "@types/node": "^26.1.1",
+    "@types/node": "^25.6.0",
     "@types/react": "^19.2.17",
     "@types/react-dom": "^19.0.0",
     "typescript": "^6.0.3"

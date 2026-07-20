@@ -24,7 +24,7 @@ which is local to `Toolbar.tsx`. Vue's `BasicToolbar` reads the same
 `TextFormatting` / `ParagraphFormatting` shapes directly from PM
 marks/attrs and dispatches via PM commands — no parallel
 `extractFormattingState` needed. The framework-agnostic bit (the
-OOXML highlight color map + `mapHexToHighlightName`) was lifted to
+OOXML highlight color map + `mapHexToHighlightName`) was centralized to
 `packages/core/src/utils/highlightColors.ts` and is re-exported by
 both adapter `toolbarUtils.ts` files; only the React-coupled state
 extractor stays.

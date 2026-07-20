@@ -1,6 +1,6 @@
 # Vue Editor Performance Review (OpenSpec §10.4)
 
-Branch: `1.0.0-release` @ `f5369eb`. **This is static analysis, not a profile run.**
+Branch: `1.0.0-release` @ `archived-checkpoint-f5369eb`. **This is static analysis, not a profile run.**
 The §10.4 task asks to "profile against a 200-paragraph fixture, compare to React"
 and design.md Decision 16 specifies four scripted budgets (cold-start TTI ≤1500ms p95,
 input-latency p95 within 10% of React, save round-trip within 5%, scroll-FPS ≥50).

@@ -1,6 +1,6 @@
 # Framework-Isolation Audit (OpenSpec §10.3)
 
-Branch: `1.0.0-release` @ `f83549a`. Lint baseline: `bun run lint` reports
+Branch: `1.0.0-release` @ `archived-checkpoint-f83549a`. Lint baseline: `bun run lint` reports
 **0 errors, 146 warnings** — zero current isolation violations.
 
 ## What the lint enforces today

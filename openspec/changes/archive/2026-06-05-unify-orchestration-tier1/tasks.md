@@ -3,7 +3,7 @@ Each numbered group is one independently-shippable PR. Land in order (1 is a dep
 ## 1. paraText helpers → core (foundation)
 
 - [ ] 1.1 Diff React (`internals/pmAnchors.ts:52-64`, `internals/vanillaText.ts:13-93`) vs Vue (`utils/paraTextHelpers.ts`) copies; note any drift
-- [ ] 1.2 Create `packages/core/src/prosemirror/paraText.ts` with `findParaIdRange`, `findTextInPmParagraph`, `getVanillaNodeText`, `getVanillaTextBetween` (canonical = more complete copy if drifted)
+- [ ] 1.2 Create `packages/core/src/prosemirror/paraText.ts` with `findParaIdRange`, `findTextInPmParagraph`, `getVanillaNodeText`, `getVanillaTextBetween` (canonical behavior = the union of documented observable cases when adapters differ)
 - [ ] 1.3 Add `./prosemirror/paraText` to `packages/core/package.json` exports
 - [ ] 1.4 React: convert `pmAnchors.ts` / `vanillaText.ts` paraText functions to re-exports from core
 - [ ] 1.5 Vue: convert `utils/paraTextHelpers.ts` to re-export from core; remove the `TODO(file-size-cap)`
@@ -56,7 +56,7 @@ Each numbered group is one independently-shippable PR. Land in order (1 is a dep
 
 ## 7. Drag auto-scroll math → core + wire Vue
 
-- [ ] 7.1 Lift scroll-delta math + `EDGE_ZONE`/`MAX_SPEED` to a core helper (`computeAutoScrollDelta(rect,mouse)`), co-located with `findVerticalScrollParent`; add export key
+- [ ] 7.1 Centralize scroll-delta math + `EDGE_ZONE`/`MAX_SPEED` to a core helper (`computeAutoScrollDelta(rect,mouse)`), co-located with `findVerticalScrollParent`; add export key
 - [ ] 7.2 React: `hooks/useDragAutoScroll.ts` uses core delta math (shell unchanged)
 - [ ] 7.3 Vue: `composables/useDragAutoScroll.ts` uses core delta math AND wire it into the Vue pointer handler (currently never called)
 - [ ] 7.4 Core unit test: `autoScroll.test.ts` — zero delta outside edge zone, non-linear speed curve inside zone, top vs bottom edge; add an **automated Vue spec** asserting drag-to-edge scrolls the container
@@ -75,6 +75,6 @@ Each numbered group is one independently-shippable PR. Land in order (1 is a dep
 
 ## 9. Wrap-up
 
-- [ ] 9.1 Confirm both adapters retain no duplicated copies of any lifted function (grep the twins)
+- [ ] 9.1 Confirm both adapters retain no duplicated copies of any centralized function (verify adapters delegate to the shared contract)
 - [ ] 9.2 Run `bun run typecheck` + a broad Playwright pass before final validation
 - [ ] 9.3 Update issue #696 with Tier 1 completion; note remaining Tier 2/3 scope

@@ -1,4 +1,4 @@
-# Vue Agent UI — Accessibility Review (1.0.0-release, tip a6179f6)
+# Vue Agent UI — Accessibility Review (1.0.0-release, tip archived-checkpoint-a6179f6)
 
 Static axe-core-style review of the seven Vue components under `packages/agent-use/src/vue/components/`. No tools were run; all findings come from reading the templates and inline styles.
 

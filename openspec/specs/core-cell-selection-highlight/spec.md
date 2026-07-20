@@ -2,23 +2,23 @@
 
 ## Purpose
 
-TBD - created by archiving change unify-orchestration-tier1. Update Purpose after archive.
+Defines framework-neutral contracts for behavior shared by supported adapters.
 
 ## Requirements
 
 ### Requirement: Cell-selection highlight available to both adapters
 
-`@docx-editor.dev/core` SHALL expose `applyCellSelectionHighlight(container, state, options?)`, lifted from React's `internals/domSelection.ts`. It SHALL paint the `.layout-table-cell-selected` class on painted cells whose PM positions fall inside an active `CellSelection`, scoped by `options.scope` (`body` | `header` | `footer`). Both the React and Vue adapters SHALL call it.
+`@docx-editor.dev/core` SHALL expose `applyCellSelectionHighlight(container, state, options?)` as a framework-neutral DOM projection helper. It SHALL paint the `.layout-table-cell-selected` class on painted cells whose PM positions fall inside an active `CellSelection`, scoped by `options.scope` (`body` | `header` | `footer`). Both the React and Vue adapters SHALL call it.
 
-#### Scenario: React behavior preserved after lift
+#### Scenario: Active cell selection is projected
 
 - **WHEN** a CellSelection is active and `applyCellSelectionHighlight` runs against the body scope
-- **THEN** the same set of cells receive `.layout-table-cell-selected` as before the lift
+- **THEN** exactly the cells whose mapped positions intersect the active `CellSelection` receive `.layout-table-cell-selected`
 
 #### Scenario: Vue gains cell-selection highlight
 
 - **WHEN** a user selects multiple table cells in the Vue editor
-- **THEN** the selected cells are visually highlighted, matching React (Vue previously rendered no highlight)
+- **THEN** the selected cells are visually highlighted consistently in every supported adapter
 
 #### Scenario: Non-cell selection clears highlight
 

@@ -12,6 +12,11 @@ import path from 'node:path';
 
 export const PACKAGES = [
   {
+    name: '@docx-editor.dev/core',
+    root: 'packages/core',
+    pkgSlug: 'docx-editor-core',
+  },
+  {
     name: '@docx-editor.dev/i18n',
     root: 'packages/i18n',
     pkgSlug: 'docx-editor-i18n',

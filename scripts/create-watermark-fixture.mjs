@@ -9,7 +9,7 @@
  */
 import { readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
-import { parseDocx, repackDocx, setDocumentWatermark } from '@docx-editor.dev/core/headless';
+import { parseDocx, repackDocx, setDocumentWatermark } from '../packages/core/src/headless.ts';
 
 const base = path.resolve('e2e/fixtures/section-inheritance-header-footer.docx');
 const out = path.resolve('e2e/fixtures/watermark-confidential.docx');

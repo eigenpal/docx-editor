@@ -9,7 +9,7 @@
   },
   "dependencies": {
     "@astrojs/react": "^5.0.4",
-    "@docx-editor.dev/core": "^0.0.1",
+    "@docx-editor.dev/core": "workspace:*",
     "@docx-editor.dev/react": "workspace:*",
     "astro": "^6.3.1",
     "react": "^19.0.0",

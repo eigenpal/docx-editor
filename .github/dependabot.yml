@@ -35,6 +35,18 @@ updates:
         update-types: ["minor", "patch"]
 
   - package-ecosystem: "npm"
+    directory: "/packages/core"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    cooldown:
+      default-days: 7
+    groups:
+      dev-dependencies:
+        dependency-type: "development"
+        update-types: ["minor", "patch"]
+
+  - package-ecosystem: "npm"
     directory: "/packages/i18n"
     schedule:
       interval: "weekly"

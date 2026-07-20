@@ -1,6 +1,6 @@
 ## Why
 
-Tier 1 (#706) lifted the duplicated pure `(view, args) → result` logic into core. What remains duplicated is the **stateful orchestration**: the layout pipeline, the ProseMirror view lifecycle, the transaction→repaint loop, and the load/save session seam. Each lives twice — `useLayoutPipeline.ts` + `PagedEditor.tsx` + `OffscreenEditorHost.tsx` + `HiddenHeaderFooterPMs.tsx` + `useDocumentLoader.ts` + `useFileIO.ts` on the React side, and `useDocxEditor.ts` on the Vue side — and has silently drifted. Exploration confirms the orchestration is ~85% identical; only the reactivity primitive (React refs/effects vs Vue refs/watch) and a handful of React-only features differ.
+Tier 1 (#706) centralized the duplicated pure `(view, args) → result` logic into core. What remains duplicated is the **stateful orchestration**: the layout pipeline, the ProseMirror view lifecycle, the transaction→repaint loop, and the load/save session seam. Each lives twice — `useLayoutPipeline.ts` + `PagedEditor.tsx` + `OffscreenEditorHost.tsx` + `HiddenHeaderFooterPMs.tsx` + `useDocumentLoader.ts` + `useFileIO.ts` on the React side, and `useDocxEditor.ts` on the Vue side — and has silently drifted. Exploration confirms the orchestration is ~85% identical; only the reactivity primitive (React refs/effects vs Vue refs/watch) and a handful of React-only features differ.
 
 Tier 2 lifts that orchestration into a `DocxEditorEngine` class in `packages/core/src/editor/`, behind dependency-injected seams (view factories, host elements, output callbacks). This (a) removes the largest remaining duplication, (b) closes the silent Vue parity gaps the drift created, and (c) reduces the vanilla JS package (#89) to a thin wrapper. Where adapters diverge, React is the more complete implementation, so the engine adopts React's behavior — which closes most of the issue's "Tier 3" gaps in the same pass.
 
@@ -23,7 +23,7 @@ Out of scope: shipping `@eigenpal/docx-editor-js` (#89 — becomes cheap _after_
 ### New Capabilities
 
 - `editor-engine`: `DocxEditorEngine` class in `core/editor/` — the top-level orchestrator tying PM views, layout pipeline, transaction loop, and load/save together behind DI'd framework seams.
-- `engine-layout-run`: `engine.run(state)` — the shared 6-step layout pass with DI'd output hooks (lifted from React's superset; Vue reaches parity).
+- `engine-layout-run`: `engine.run(state)` — the shared 6-step layout pass with DI'd output hooks (centralized from React's superset; Vue reaches parity).
 - `engine-scheduler`: `engine.scheduleLayout(state)` — rAF coalescing so rapid transactions collapse to one layout/paint per frame, in both adapters.
 - `engine-transaction-loop`: `engine.handleTransaction(tr, state)` — the shared transaction→repaint handler (scroll-flag strip, SDT-focus, schedule-vs-immediate).
 - `engine-view-lifecycle`: body + per-rId HF EditorView create/teardown/writeback behind a `mountView`/`destroyView` DI seam.

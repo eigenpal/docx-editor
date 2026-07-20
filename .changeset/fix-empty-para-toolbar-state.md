@@ -1,4 +1,5 @@
 ---
+'@docx-editor.dev/core': patch
 '@docx-editor.dev/react': patch
 ---
 

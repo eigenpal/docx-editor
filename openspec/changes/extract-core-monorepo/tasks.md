@@ -53,7 +53,7 @@
 
 - [x] 6.1 Update all imports in `packages/react/` that reference core modules to use `@docx-editor.dev/core` instead of relative paths
 - [x] 6.2 Keep `packages/react/src/index.ts` scoped to React-owned adapter exports; import core utilities from `@docx-editor.dev/core`
-- [x] 6.3 Do not publish a legacy `@eigenpal/docx-js-editor` shim in 1.x; import canonical packages directly
+- [x] 6.3 Do not publish a retired `@eigenpal/docx-js-editor` shim in 1.x; import canonical packages directly
 - [x] 6.4 Verify all internal imports in `packages/core/` use relative paths within the package
 
 ## 7. Build Configuration

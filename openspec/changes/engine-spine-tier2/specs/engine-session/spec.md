@@ -36,4 +36,4 @@ The engine SHALL expose `save({ selective })` performing: sync PM content (and c
 #### Scenario: Reply-range markers injected
 
 - **WHEN** the document has comment/tracked-change replies
-- **THEN** reply-range markers are injected before serialization, matching prior behavior in both adapters
+- **THEN** reply-range markers are injected before serialization, according to the documented operation contract in both adapters

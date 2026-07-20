@@ -22,4 +22,4 @@ The engine SHALL expose `handleTransaction(tr, newState)` implementing the share
 #### Scenario: Header/footer transactions relayout the body
 
 - **WHEN** an HF EditorView transaction changes its doc
-- **THEN** the engine writes the HF content back to the Document and schedules a body relayout, matching prior behavior
+- **THEN** the engine writes the HF content back to the Document and schedules a body relayout, according to the documented operation contract
