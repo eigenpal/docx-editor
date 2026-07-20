@@ -1,7 +1,7 @@
 /**
  * `@docx-editor.dev/core/editor` — the browser editor facade.
  *
- * CONTRACT ONLY. The implementation ships from a separate repository.
+ * CONTRACT ONLY.
  */
 
 import type { DocEdits, DocQueries } from './index';
@@ -19,7 +19,7 @@ import type {
 
 export type * from './types';
 
-const NOT_IMPLEMENTED = 'contract-only stub: the implementation ships from the core repository';
+const NOT_IMPLEMENTED = 'contract-only stub: no implementation';
 
 export interface EditorConfig {
   host: EditorHost;

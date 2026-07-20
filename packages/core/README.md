@@ -1,8 +1,8 @@
 # `@docx-editor.dev/core` (contract)
 
 **This package contains no implementation.** It declares the public API that
-`@docx-editor.dev/core` must satisfy. The implementation ships from a separate
-repository and is installed from npm.
+`@docx-editor.dev/core` must satisfy. The published package is installed from
+npm.
 
 It is `"private": true` and must never be published. Publishing it would shadow
 the real package on npm with a set of functions that throw.

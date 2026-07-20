@@ -23,7 +23,7 @@
  * listener that currently drives them from the React adapter; callers use
  * `editor.relayout({ sync: true })` instead.
  *
- * CONTRACT ONLY. The implementation ships from a separate repository.
+ * CONTRACT ONLY.
  */
 
 import type { EditorScope } from './editor';
@@ -31,7 +31,7 @@ import type { PageLayout, Point, Rect } from './types';
 
 export type * from './types';
 
-const NOT_IMPLEMENTED = 'contract-only stub: the implementation ships from the core repository';
+const NOT_IMPLEMENTED = 'contract-only stub: no implementation';
 
 /**
  * A geometry position. Distinct from `DocAnchor` on purpose: `{ paraId, search }`

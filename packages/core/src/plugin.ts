@@ -4,7 +4,7 @@
  * Separate from `core/editor` because plugin authors and adapter authors are
  * different audiences: the plugin contract should move slower than the engine.
  *
- * CONTRACT ONLY. The implementation ships from a separate repository.
+ * CONTRACT ONLY.
  */
 
 import type { JSONSchema, Unsubscribe } from './types';
@@ -12,7 +12,7 @@ import type { Editor, EditorCommand, EditorSnapshot } from './editor';
 
 export type { Editor, EditorCommand, EditorSnapshot };
 
-const NOT_IMPLEMENTED = 'contract-only stub: the implementation ships from the core repository';
+const NOT_IMPLEMENTED = 'contract-only stub: no implementation';
 
 export interface Extension {
   readonly name: string;

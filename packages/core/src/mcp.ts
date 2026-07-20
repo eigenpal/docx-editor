@@ -6,12 +6,12 @@
  * A TypeScript union produces neither: it vanishes at compile time, and
  * `tools/list` needs real schemas and real descriptions at runtime.
  *
- * CONTRACT ONLY. The implementation ships from a separate repository.
+ * CONTRACT ONLY.
  */
 
 import type { JSONSchema } from './types';
 
-const NOT_IMPLEMENTED = 'contract-only stub: the implementation ships from the core repository';
+const NOT_IMPLEMENTED = 'contract-only stub: no implementation';
 
 export interface McpToolDefinition {
   readonly name: string;

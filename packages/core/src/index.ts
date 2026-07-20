@@ -5,8 +5,7 @@
  * back. This is the entry `packages/agents` uses and the entry any headless or
  * server-side consumer needs.
  *
- * CONTRACT ONLY. The implementation ships from a separate repository; every
- * function here throws.
+ * CONTRACT ONLY. Every function here throws.
  */
 
 import type {
@@ -29,7 +28,7 @@ import type {
 
 export type * from './types';
 
-const NOT_IMPLEMENTED = 'contract-only stub: the implementation ships from the core repository';
+const NOT_IMPLEMENTED = 'contract-only stub: no implementation';
 
 // ─── Parse / serialize ───────────────────────────────────────────────────────
 

@@ -2,7 +2,7 @@
   "name": "@docx-editor.dev/core",
   "version": "0.0.1",
   "private": true,
-  "description": "Contract-only definition of the @docx-editor.dev/core public API. The implementation lives in a separate repository; this package declares the boundary it must satisfy.",
+  "description": "Contract-only definition of the @docx-editor.dev/core public API. Declares the boundary the implementation must satisfy.",
   "type": "module",
   "exports": {
     ".": {
