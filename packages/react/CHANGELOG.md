@@ -1,5 +1,22 @@
 # @eigenpal/docx-js-editor
 
+## 0.0.2
+
+### Patch Changes
+
+- 5793007: Expand newly added comment cards immediately and restore the Line spacing toolbar aria-label for e2e and a11y parity.
+- e6f2f23: Add find/replace dialog data-testid hooks for stable e2e selectors.
+- 053e45b: Fix editing/toolbar regressions: close history on Backspace/Delete so undo restores deleted text, portal the hidden body PM outside the paged scroller, add Mod alignment shortcuts, stop table Tab from being swallowed by insertTab, and make list Tab/Shift+Tab indent at a caret.
+- 05c5271: Persist empty-paragraph formatting through focus/selection churn and keep the toolbar in sync with stored marks. Mark toggles rebind to the editor schema (and match by name) so bold/italic turn off correctly when duplicate ExtensionManager copies are loaded. Fixes empty-run bold/italic/font toggles being lost after Enter or delete-and-retype.
+- 543e206: Fix table cell click/caret placement, keep the table toolbar open beyond the first cell, and move ArrowLeft/Right via explicit PM selection so in-cell navigation stays in sync with the hidden editor.
+- ae33cd8: Keep Decrease Indent enabled after list indent: do not clear toolbar formatting when the editor view is briefly unavailable, and derive list level from live ProseMirror state.
+- 7115f3d: Keep the off-screen body ProseMirror portal SSR-safe: skip `document.body` access during server render while still portaling to `document.body` in the browser.
+- dc5112a: Make suggesting-mode Enter/Backspace create paragraph-mark revisions again, and stamp data-revision-author on painted tracked runs.
+- e1f8a54: Keep the caret in place when toggling marks from the toolbar while the editor still has focus, so typed formatting no longer jumps to a stale selection.
+- 74d49f8: Hold document parse under the Vite demo `?e2e=1&loading=1` flag so visual regression can snapshot real loading chrome without races.
+- 2e18906: Keep header letterhead shapes from blocking body clicks in the React stylesheet, fold inline image distT/distB into line height, and avoid clipping overflowing header media.
+  - @docx-editor.dev/i18n@0.0.2
+
 ## 1.10.0
 
 ### Minor Changes

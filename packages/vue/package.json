@@ -1,6 +1,6 @@
 {
   "name": "@docx-editor.dev/vue",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "Vue 3 DOCX editor adapter for @docx-editor.dev/core.",
   "type": "module",
   "main": "./dist/index.cjs",
@@ -85,7 +85,7 @@
   "dependencies": {
     "@docx-editor.dev/agents": "^0.0.1",
     "@docx-editor.dev/core": "^0.0.1",
-    "@docx-editor.dev/i18n": "^0.0.1"
+    "@docx-editor.dev/i18n": "^0.0.2"
   },
   "keywords": [
     "docx",

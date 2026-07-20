@@ -1,6 +1,6 @@
 {
   "name": "@docx-editor.dev/nuxt",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "Nuxt 3 & 4 module for the @docx-editor.dev/vue WYSIWYG DOCX editor — auto-imports an SSR-safe <DocxEditor> component.",
   "type": "module",
   "exports": {
@@ -28,7 +28,7 @@
   },
   "dependencies": {
     "@nuxt/kit": "^3.14.0 || ^4.0.0",
-    "@docx-editor.dev/vue": "^0.0.1",
+    "@docx-editor.dev/vue": "^0.0.2",
     "prosemirror-commands": "^1.5.2",
     "prosemirror-dropcursor": "^1.8.2",
     "prosemirror-history": "^1.4.0",

@@ -1,5 +1,18 @@
 # @docx-editor.dev/vue
 
+## 0.0.2
+
+### Patch Changes
+
+- e6f2f23: Add find/replace dialog data-testid hooks for stable e2e selectors.
+- 053e45b: Fix editing/toolbar regressions: close history on Backspace/Delete so undo restores deleted text, portal the hidden body PM outside the paged scroller, add Mod alignment shortcuts, stop table Tab from being swallowed by insertTab, and make list Tab/Shift+Tab indent at a caret.
+- 543e206: Fix table cell click/caret placement, keep the table toolbar open beyond the first cell, and move ArrowLeft/Right via explicit PM selection so in-cell navigation stays in sync with the hidden editor.
+- fa7335a: Keep Vue comment sidebar cards in the reserved gutter so they stay off the document page.
+- c956e4e: Invalidate in-flight Vue document parses on `loadDocument` and `destroy` so a late buffer parse cannot overwrite a controlled document or apply after teardown.
+- 6be5395: Ignore stale document loads in Vue so a late sample.docx parse cannot overwrite a file the user just opened.
+- 2e18906: Keep header letterhead shapes from blocking body clicks in the React stylesheet, fold inline image distT/distB into line height, and avoid clipping overflowing header media.
+  - @docx-editor.dev/i18n@0.0.2
+
 ## 1.10.0
 
 ### Patch Changes
