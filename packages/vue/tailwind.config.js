@@ -10,7 +10,7 @@ const __configDir = path.dirname(fileURLToPath(import.meta.url));
  * @type {import('tailwindcss').Config}
  */
 export default {
-  presets: [require('../core/tailwind-preset.cjs')],
+  presets: [require('@docx-editor.dev/core/tailwind-preset.cjs')],
   // Scope all utilities under .ep-root to avoid clashing with host app CSS
   important: '.ep-root',
   // Only scan library source files, not demo. Absolute path so this works no
