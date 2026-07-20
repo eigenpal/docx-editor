@@ -15,5 +15,7 @@
   "access": "public",
   "baseBranch": "main",
   "updateInternalDependencies": "patch",
-  "ignore": []
+  "ignore": [
+    "@docx-editor.dev/core-contract"
+  ]
 }

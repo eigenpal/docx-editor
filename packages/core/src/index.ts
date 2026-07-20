@@ -11,6 +11,11 @@
 import type {
   ContainerRef,
   ContentControlFilter,
+  ContentControlType,
+  DocComment,
+  DocRange,
+  Revision,
+  StyleDefinitions,
   DocTarget,
   DocxDocument,
   DocxDocumentJSON,
@@ -33,11 +38,11 @@ const NOT_IMPLEMENTED = 'contract-only stub: no implementation';
 // ─── Parse / serialize ───────────────────────────────────────────────────────
 
 export function parseDocx(_input: ArrayBuffer | Uint8Array): Promise<DocxDocument> {
-  throw new Error(NOT_IMPLEMENTED);
+  return Promise.reject(new Error(NOT_IMPLEMENTED));
 }
 
 export function serializeDocx(_doc: DocxDocument): Promise<ArrayBuffer> {
-  throw new Error(NOT_IMPLEMENTED);
+  return Promise.reject(new Error(NOT_IMPLEMENTED));
 }
 
 /**
@@ -67,7 +72,7 @@ export interface DocEdits {
   deleteText: { target: DocTarget };
   applyFormatting: { target: DocTarget; marks: RunFormatting };
   setParagraphStyle: { target: DocTarget; styleId: string };
-  insertTable: { target: DocTarget; rows: number; columns: number };
+  insertTable: { target: DocTarget; rows: number; cols: number };
   insertImage: { target: DocTarget; data: Uint8Array; extent?: Extent };
   insertHyperlink: { target: DocTarget; href: string; text?: string };
   removeHyperlink: { target: DocTarget };
@@ -90,8 +95,8 @@ export interface DocEdits {
 
   acceptRevision: { id: number; part?: 'body' | 'footnote' | 'endnote'; noteId?: number };
   rejectRevision: { id: number; part?: 'body' | 'footnote' | 'endnote'; noteId?: number };
-  acceptAllRevisions: Record<string, never>;
-  rejectAllRevisions: Record<string, never>;
+  acceptAllRevisions: Record<never, never>;
+  rejectAllRevisions: Record<never, never>;
 
   setContentControlValue: { target: DocTarget; value: string };
   removeContentControl: { target: DocTarget };
@@ -120,13 +125,41 @@ export interface DocQueries {
   contentControls: { filter?: ContentControlFilter };
   revisions: { part?: 'body' | 'footnote' | 'endnote' };
   comments: { resolved?: boolean };
-  styles: Record<string, never>;
-  variables: Record<string, never>;
+  styles: Record<never, never>;
+  variables: Record<never, never>;
 }
 
 export type DocQuery = { [K in keyof DocQueries]: { type: K } & DocQueries[K] }[keyof DocQueries];
 
-export function queryDoc<Q extends DocQuery>(_doc: DocxDocument, _query: Q): unknown {
+/** What each query returns. Keyed identically to `DocQueries`. */
+export interface DocQueryResults {
+  paragraphs: readonly ParagraphSummary[];
+  findText: readonly DocRange[];
+  contentControls: readonly ContentControlSummary[];
+  revisions: readonly Revision[];
+  comments: readonly DocComment[];
+  styles: StyleDefinitions;
+  variables: Readonly<Record<string, string>>;
+}
+
+export interface ParagraphSummary {
+  readonly paraId?: string;
+  readonly text: string;
+  readonly styleId?: string;
+}
+
+export interface ContentControlSummary {
+  readonly id: string;
+  readonly tag?: string;
+  readonly alias?: string;
+  readonly controlType: ContentControlType;
+  readonly locked?: boolean;
+}
+
+export function queryDoc<K extends keyof DocQueries>(
+  _doc: DocxDocument,
+  _query: { type: K } & DocQueries[K]
+): DocQueryResults[K] {
   throw new Error(NOT_IMPLEMENTED);
 }
 
@@ -154,7 +187,7 @@ export function generateThemeTintShadeMatrix(_scheme: ThemeColorScheme): string[
   throw new Error(NOT_IMPLEMENTED);
 }
 export function loadDocumentFonts(_doc: DocxDocument): Promise<void> {
-  throw new Error(NOT_IMPLEMENTED);
+  return Promise.reject(new Error(NOT_IMPLEMENTED));
 }
 export function getEmbeddedFontFamilies(_doc: DocxDocument): string[] {
   throw new Error(NOT_IMPLEMENTED);
@@ -165,7 +198,10 @@ export function getRenderableDocumentFonts(_doc: DocxDocument): FontDefinition[]
 export function parseClipboardHtml(_html: string, _theme?: Theme): Run[] {
   throw new Error(NOT_IMPLEMENTED);
 }
-export function setDocumentWatermark(_doc: DocxDocument, _watermark: Watermark | null): DocxDocument {
+export function setDocumentWatermark(
+  _doc: DocxDocument,
+  _watermark: Watermark | null
+): DocxDocument {
   throw new Error(NOT_IMPLEMENTED);
 }
 

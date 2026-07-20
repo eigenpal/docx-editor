@@ -82,7 +82,7 @@ export interface DocxDocument {
   readonly body: DocumentBody;
   readonly styles: StyleDefinitions;
   readonly theme?: Theme;
-  readonly comments: readonly Comment[];
+  readonly comments: readonly DocComment[];
   readonly revisions: readonly Revision[];
 }
 
@@ -183,7 +183,7 @@ export interface ContentControlFilter {
   readonly controlType?: ContentControlType;
 }
 
-export interface Comment {
+export interface DocComment {
   readonly id: string;
   readonly author: string;
   readonly date: string;
@@ -234,7 +234,12 @@ export interface NumberingRef {
 
 export type ColorValue =
   | { readonly kind: 'hex'; readonly value: string }
-  | { readonly kind: 'theme'; readonly slot: string; readonly tint?: number; readonly shade?: number }
+  | {
+      readonly kind: 'theme';
+      readonly slot: string;
+      readonly tint?: number;
+      readonly shade?: number;
+    }
   | { readonly kind: 'auto' };
 
 export interface Theme {
@@ -281,5 +286,11 @@ export interface Point {
 }
 
 export type JSONSchema = Readonly<Record<string, unknown>>;
+
+/** An editor extension. Declared here so `core/editor` can type its config
+ * without importing `core/plugin`, which imports `core/editor`. */
+export interface Extension {
+  readonly name: string;
+}
 
 export type Unsubscribe = () => void;

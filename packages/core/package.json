@@ -1,33 +1,27 @@
 {
-  "name": "@docx-editor.dev/core",
+  "name": "@docx-editor.dev/core-contract",
   "version": "0.0.1",
   "private": true,
-  "description": "Contract-only definition of the @docx-editor.dev/core public API. Declares the boundary the implementation must satisfy.",
+  "description": "Contract-only declaration of the @docx-editor.dev/core public API. Not the implementation; never published.",
   "type": "module",
   "exports": {
     ".": {
-      "types": "./src/index.ts",
-      "default": "./src/index.ts"
+      "types": "./src/index.ts"
     },
     "./editor": {
-      "types": "./src/editor.ts",
-      "default": "./src/editor.ts"
+      "types": "./src/editor.ts"
     },
     "./geometry": {
-      "types": "./src/geometry.ts",
-      "default": "./src/geometry.ts"
+      "types": "./src/geometry.ts"
     },
     "./plugin": {
-      "types": "./src/plugin.ts",
-      "default": "./src/plugin.ts"
+      "types": "./src/plugin.ts"
     },
     "./mcp": {
-      "types": "./src/mcp.ts",
-      "default": "./src/mcp.ts"
+      "types": "./src/mcp.ts"
     },
     "./types": {
-      "types": "./src/types-barrel.ts",
-      "default": "./src/types-barrel.ts"
+      "types": "./src/types-barrel.ts"
     }
   },
   "scripts": {

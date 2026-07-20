@@ -4,14 +4,18 @@
  * CONTRACT ONLY.
  */
 
-import type { DocEdits, DocQueries } from './index';
+import type { ContentControlSummary, DocEdits, DocQueries, DocQueryResults } from './index';
 import type {
   ColorValue,
   ContentControlFilter,
   DocAnchor,
   DocRange,
   DocxDocument,
+  Revision,
+  RunFormatting,
+  ExecErrorCode,
   ExecResult,
+  Extension,
   PageLayout,
   Unsubscribe,
   Watermark,
@@ -25,7 +29,7 @@ export interface EditorConfig {
   host: EditorHost;
   document?: DocxDocument;
   /** Defaults to `createStarterKit()` from `core/plugin`. */
-  extensions?: unknown[];
+  extensions?: readonly Extension[];
   /** Default author for the tracked-change commands. */
   author?: string;
   locale?: string;
@@ -77,6 +81,8 @@ export interface EditorHost {
   onTotalPages?(total: number): void;
 }
 
+export type CanResult = { ok: true } | { ok: false; code: ExecErrorCode; reason: string };
+
 export type MeasureBlocksFn = (
   nodes: readonly unknown[],
   contentWidth: number | number[]
@@ -93,11 +99,15 @@ export interface Editor {
   getDocument(): DocxDocument;
 
   exec(command: EditorCommand, options?: { scope?: EditorScope }): ExecResult;
-  can(command: EditorCommand, options?: { scope?: EditorScope }): ExecResult;
+  /** Dry run: reports whether `exec` would apply. Never reports `changed`. */
+  can(command: EditorCommand, options?: { scope?: EditorScope }): CanResult;
   setActiveScope(scope: Exclude<EditorScope, { kind: 'all' }>): void;
   getActiveScope(): Exclude<EditorScope, { kind: 'all' }>;
 
-  query<Q extends EditorQuery>(query: Q, options?: { scope?: EditorScope }): unknown;
+  query<K extends keyof EditorQueries>(
+    query: { type: K } & EditorQueries[K],
+    options?: { scope?: EditorScope }
+  ): EditorQueryResults[K];
   snapshot(options?: { scope?: EditorScope }): EditorSnapshot;
 
   getTotalPages(): number;
@@ -116,7 +126,15 @@ export interface Editor {
  * `exec` resolves `{ type, ... }` through the extension registry, which is
  * already the production dispatch path.
  */
-export interface EditorCommands extends DocEdits {
+/**
+ * In the editor a command targets the current selection unless told otherwise,
+ * so the document layer's required `target` becomes optional here.
+ */
+type SelectionTargeted<T> = {
+  [K in keyof T]: T[K] extends { target: infer G } ? Omit<T[K], 'target'> & { target?: G } : T[K];
+};
+
+export interface EditorCommands extends SelectionTargeted<DocEdits> {
   toggleMark: { mark: string };
   setMarkAttr: { mark: string; attr: string; value: unknown };
   setAlignment: { align: 'left' | 'center' | 'right' | 'justify' };
@@ -125,21 +143,21 @@ export interface EditorCommands extends DocEdits {
 
   insertRow: { where: 'above' | 'below' };
   insertColumn: { where: 'left' | 'right' };
-  deleteRow: Record<string, never>;
-  deleteColumn: Record<string, never>;
-  deleteTable: Record<string, never>;
-  mergeCells: Record<string, never>;
+  deleteRow: Record<never, never>;
+  deleteColumn: Record<never, never>;
+  deleteTable: Record<never, never>;
+  mergeCells: Record<never, never>;
   splitCell: { rows: number; cols: number };
   setCellFill: { color: ColorValue };
-  toggleHeaderRow: Record<string, never>;
+  toggleHeaderRow: Record<never, never>;
 
-  insertPageBreak: Record<string, never>;
+  insertPageBreak: Record<never, never>;
   insertSectionBreak: { kind: string };
   setWatermark: { watermark: Watermark | null };
   refreshToc: { tocId?: string };
 
-  undo: Record<string, never>;
-  redo: Record<string, never>;
+  undo: Record<never, never>;
+  redo: Record<never, never>;
   setSelection: { anchor: DocAnchor } | { range: DocRange };
 }
 
@@ -148,22 +166,49 @@ export type EditorCommand = {
 }[keyof EditorCommands];
 
 export interface EditorQueries extends DocQueries {
-  selection: Record<string, never>;
-  selectionFormatting: Record<string, never>;
-  tableContext: Record<string, never>;
+  selection: Record<never, never>;
+  selectionFormatting: Record<never, never>;
+  tableContext: Record<never, never>;
   hyperlinkAt: { pos?: number; fallbackHref?: string };
-  selectedText: Record<string, never>;
-  watermark: Record<string, never>;
-  splitCellConfig: Record<string, never>;
+  selectedText: Record<never, never>;
+  watermark: Record<never, never>;
+  splitCellConfig: Record<never, never>;
   contentControlAt: { filter?: ContentControlFilter };
   isInsideToc: { pos: number };
-  trackedChanges: Record<string, never>;
+  trackedChanges: Record<never, never>;
   pageContent: { page: number };
 }
 
 export type EditorQuery = {
   [K in keyof EditorQueries]: { type: K } & EditorQueries[K];
 }[keyof EditorQueries];
+
+/** What each editor query returns. Keyed identically to `EditorQueries`. */
+export interface EditorQueryResults extends DocQueryResults {
+  selection: DocRange | null;
+  selectionFormatting: RunFormatting | null;
+  tableContext: TableContext | null;
+  hyperlinkAt: HyperlinkInfo | null;
+  selectedText: string;
+  watermark: Watermark | null;
+  splitCellConfig: { maxRows: number; maxCols: number } | null;
+  contentControlAt: ContentControlSummary | null;
+  isInsideToc: boolean;
+  trackedChanges: readonly Revision[];
+  pageContent: readonly PageLayout[];
+}
+
+export interface TableContext {
+  readonly rows: number;
+  readonly columns: number;
+  readonly rowIndex: number;
+  readonly columnIndex: number;
+}
+
+export interface HyperlinkInfo {
+  readonly href: string;
+  readonly range: DocRange;
+}
 
 /**
  * Named `EditorSnapshot`, not `EditorState`: the latter collides with
@@ -176,10 +221,16 @@ export interface EditorSnapshot {
   readonly parseError: string | null;
   readonly zoom: number;
   readonly selection: DocRange | null;
-  readonly formatting: unknown | null;
-  readonly table: unknown | null;
-  readonly image: unknown | null;
+  readonly formatting: RunFormatting | null;
+  readonly table: TableContext | null;
+  readonly image: ImageContext | null;
   readonly page: { readonly current: number; readonly total: number };
+}
+
+export interface ImageContext {
+  readonly widthEmu: number;
+  readonly heightEmu: number;
+  readonly wrap: 'inline' | 'square' | 'tight' | 'topAndBottom' | 'behind' | 'inFront';
 }
 
 export interface EditorError extends Error {

@@ -269,7 +269,7 @@
       ],
     },
     "packages/core": {
-      "name": "@docx-editor.dev/core",
+      "name": "@docx-editor.dev/core-contract",
       "version": "0.0.1",
       "devDependencies": {
         "typescript": "^5.3.3",
@@ -525,7 +525,9 @@
 
     "@docx-editor.dev/agents": ["@docx-editor.dev/agents@workspace:packages/agents"],
 
-    "@docx-editor.dev/core": ["@docx-editor.dev/core@workspace:packages/core"],
+    "@docx-editor.dev/core": ["@docx-editor.dev/core@0.0.1", "", {}, "sha512-bgs6qj+1g0QfmyjK6XHet8xhxxbsgm+zS+dW5NYTjAMMLXQo5QY1erJNmLfjtg7fDehzDrIxNM3jgiFWSYKtuw=="],
+
+    "@docx-editor.dev/core-contract": ["@docx-editor.dev/core-contract@workspace:packages/core"],
 
     "@docx-editor.dev/i18n": ["@docx-editor.dev/i18n@workspace:packages/i18n"],
 

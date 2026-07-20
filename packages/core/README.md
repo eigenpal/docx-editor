@@ -1,11 +1,15 @@
-# `@docx-editor.dev/core` (contract)
+# `@docx-editor.dev/core-contract`
 
 **This package contains no implementation.** It declares the public API that
 `@docx-editor.dev/core` must satisfy. The published package is installed from
 npm.
 
-It is `"private": true` and must never be published. Publishing it would shadow
-the real package with a set of functions that throw.
+It is deliberately named `@docx-editor.dev/core-contract`, not
+`@docx-editor.dev/core`. Sharing the name would make the workspace resolve every
+consumer to this package instead of the published one, silently, since a
+workspace member outranks the registry. It is also `"private": true`, and every
+entry is types-only: there is no `default` condition, so a runtime import fails
+loudly rather than resolving to functions that throw.
 
 ## Why it exists
 
@@ -15,14 +19,14 @@ typechecked before an implementation exists. This package is that contract.
 
 ## Shape
 
-| Entry | For | Status |
-| --- | --- | --- |
-| `@docx-editor.dev/core` | agents, headless, server | stable |
-| `@docx-editor.dev/core/editor` | React / Vue adapters | stable |
-| `@docx-editor.dev/core/geometry` | adapter internals | `@experimental`, semver-exempt |
-| `@docx-editor.dev/core/plugin` | extension authors | stable |
-| `@docx-editor.dev/core/mcp` | MCP hosts | stable |
-| `@docx-editor.dev/core/types` | everyone | type-only, zero runtime |
+| Entry                            | For                      | Status                         |
+| -------------------------------- | ------------------------ | ------------------------------ |
+| `@docx-editor.dev/core`          | agents, headless, server | stable                         |
+| `@docx-editor.dev/core/editor`   | React / Vue adapters     | stable                         |
+| `@docx-editor.dev/core/geometry` | adapter internals        | `@experimental`, semver-exempt |
+| `@docx-editor.dev/core/plugin`   | extension authors        | stable                         |
+| `@docx-editor.dev/core/mcp`      | MCP hosts                | stable                         |
+| `@docx-editor.dev/core/types`    | everyone                 | type-only, zero runtime        |
 
 Entries are split by audience. A headless consumer wants a document and never a
 DOM type; an adapter wants an editor; an extension author wants neither, only a
