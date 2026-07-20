@@ -146,9 +146,6 @@ export default [
   // React adapter: no Vue imports.
   { files: ['packages/react/src/**/*.{ts,tsx}'], rules: restrictVue },
 
-  // Core: framework-agnostic; no React, no Vue.
-  { files: ['packages/core/src/**/*.{ts,tsx}'], rules: restrictBoth },
-
   // Agent-use UI subpaths mirror the editor adapters.
   { files: ['packages/agents/src/vue/**/*.{ts,tsx,vue}'], rules: restrictReact },
   { files: ['packages/agents/src/react/**/*.{ts,tsx}'], rules: restrictVue },
@@ -198,29 +195,6 @@ export default [
     },
   },
 
-  // pagination/types.ts is the canonical schema definition for the
-  // layout model — single file by design (cross-referencing types). Bumped
-  // modestly above the default to accommodate new revision-tracking and
-  // table-pagination fields without forcing a split that would obscure the
-  // schema.
-  {
-    files: ['packages/core/src/pagination-model/types.ts'],
-    rules: {
-      'max-lines': ['error', { max: 1085, skipBlankLines: false, skipComments: false }],
-    },
-  },
-
-  // renderTable.ts is one cohesive table renderer (row/cell/fragment painting,
-  // border + cut-edge geometry, span handling, RTL bidi column mirror, resize
-  // handles). Bumped modestly above the default rather than split, which would
-  // scatter the shared grid/column geometry across files.
-  {
-    files: ['packages/core/src/painter-model/renderTable.ts'],
-    rules: {
-      'max-lines': ['error', { max: 1040, skipBlankLines: false, skipComments: false }],
-    },
-  },
-
   // DocxEditor.vue is the host component — same role as React's
   // DocxEditor.tsx (which has a 2000-line cap). The React-parity callback
   // props (#720) add per-prop wiring that must live inline in the SFC (the
@@ -249,19 +223,6 @@ export default [
   // into core, per MEMORY.md) is planned; the cap still enforces a ceiling.
   {
     files: ['packages/vue/src/composables/useDocxEditor.ts'],
-    rules: {
-      'max-lines': ['error', { max: 1060, skipBlankLines: false, skipComments: false }],
-    },
-  },
-
-  // paragraphLayout.ts is the line-breaker — one cohesive measurement + wrap
-  // algorithm (empty-para metrics, intrinsic-width scan, cross-run glue, float
-  // zones, tab stops, image lines). The file sat right at the default 1000 cap;
-  // the cross-run glue fix (footnote-ref no-split) pushed it just over. Modest
-  // headroom while a real split (extract the per-run-kind handlers) is planned;
-  // the cap still enforces a ceiling so it can't grow unbounded.
-  {
-    files: ['packages/core/src/flow-model/metrics/paragraphLayout.ts'],
     rules: {
       'max-lines': ['error', { max: 1060, skipBlankLines: false, skipComments: false }],
     },
