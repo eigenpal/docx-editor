@@ -10,7 +10,8 @@ const __configDir = path.dirname(fileURLToPath(import.meta.url));
  * @type {import('tailwindcss').Config}
  */
 export default {
-  presets: [require('./packages/core/tailwind-preset.cjs')],
+  // Core ships from npm, so the shared preset resolves through node_modules.
+  presets: [require('@docx-editor.dev/core/tailwind-preset.cjs')],
   // Absolute paths so example builds (cd examples/vite && vite build) still scan the right files.
   content: [
     path.join(__configDir, 'packages/react/src/**/*.{ts,tsx}'),
