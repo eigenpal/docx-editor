@@ -1,0 +1,46 @@
+---
+title: 'Word JS API parity'
+description: 'Office.js verb mapping for the DOCX agent toolkit. Migrating a Word add-in is mostly a rename; parity with the bridge is enforced at compile time.'
+category: 'Agents'
+order: 53
+---
+
+The toolkit shadows the shape of Microsoft's Office.js Word API on purpose. If your model has been trained on Office.js examples, it picks up our tools without re-prompting. If you're migrating a Word add-in, the rename map below is the only diff.
+
+`WordCompatBridge` is a TypeScript interface that formally documents every method we mirror. A compile-time static assertion fails the build if a method goes out of sync.
+
+## Verb map
+
+Two layers are in play: each snake_case tool name delegates to an `EditorBridge` method, which in turn mirrors an Office.js verb. For example, the `find_text` tool calls `bridge.findText(query, options?)`, and `reply_comment` calls `bridge.replyTo(commentId, options)`. The table shows the tool-call shapes an agent sends.
+
+| Office.js                                       | Tool call                                              | Notes                                          |
+| ----------------------------------------------- | ------------------------------------------------------ | ---------------------------------------------- |
+| `Range.insertComment(text)`                     | `add_comment { paraId, text }`                         | We address by stable `paraId`, not by `Range`. |
+| `Body.search(query)`                            | `find_text { query }`                                  | Returns matches tagged with `paraId`s.         |
+| `Comment.reply(text)`                           | `reply_comment { commentId, text }`                    |                                                |
+| `Comment.resolved = true`                       | `resolve_comment { commentId }`                        |                                                |
+| `Range.scrollIntoView()`                        | `scroll { paraId }`                                    | Bridge method: `scrollTo(paraId)`.             |
+| `Range.insertText(text, location)`              | `suggest_change { paraId, search, replaceWith }`       | Inserts as a tracked change.                   |
+| `Range.font.bold = true`                        | `apply_formatting { paraId, marks: { bold: true } }`   | Marks are nested under `marks`.                |
+| `Range.paragraphFormat.styleName = "Heading 1"` | `set_paragraph_style { paraId, styleId: 'Heading1' }`  | Takes a style id, not a style name.            |
+
+## Addressing model
+
+Office.js uses `Range` objects that are live and tied to a document model. JSON-RPC tool transports can't ferry live objects: they need a string ID that survives serialization, network round-trips, and concurrent edits.
+
+The toolkit uses Word's `w14:paraId` attribute. Every paragraph in a Word-authored `.docx` has one. They're stable across edits, concurrent collaboration, and tool loop iterations. `read_document` returns paragraphs tagged with their `paraId`; every mutate tool takes a `paraId` as input.
+
+## Migrating a Word add-in
+
+1. Replace `Word.run(async (context) => { ... })` with a `DocxReviewer.fromBuffer(buffer)` (headless) or `useDocxAgentTools({ editorRef })` (live editor) wiring.
+2. Replace `Range`-based addressing with `paraId`-based addressing. Use `findText` or `read_document` to resolve a paragraph first.
+3. Replace each Office.js method call with its tool equivalent from the table above.
+
+For agents you're writing fresh, you don't need this mapping at all. Call the tools directly.
+
+## Next steps
+
+- [Tools reference](/docs/1.x/agents/tools), full schemas and examples
+- [AI editing tutorial](/docs/1.x/agents/ai-editing), wire to a `<DocxEditor>`
+- [Live editor bridge](/docs/1.x/agents/live-editor), the `EditorBridge` surface this contract checks
+- [Bring your own agent](/docs/1.x/agents/bring-your-own), provider adapters

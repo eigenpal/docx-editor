@@ -1,0 +1,84 @@
+# Dependencies
+node_modules/
+
+# Build outputs
+dist/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Debug screenshots/images in root
+/*.png
+
+# Claude Code (local-only files)
+.claude/settings.local.json
+.claude/CLAUDE.local.md
+.claude/worktrees/
+.worktrees/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Test coverage
+coverage/
+
+# Playwright
+playwright-report/
+test-results/
+
+screenshots/
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Lock files (optional - uncomment if you want to track)
+# bun.lock
+
+# Built packages
+*.tgz
+
+# npm lock file (using bun.lock)
+package-lock.json
+
+# Build info
+*.tsbuildinfo
+next-env.d.ts
+
+# Examples framework artifacts
+examples/*/node_modules/
+examples/plugins/*/node_modules/
+examples/*/.next/
+examples/*/.astro/
+examples/*/build/
+examples/*/bun.lockb
+examples/*/package-lock.json
+examples/plugins/*/bun.lockb
+examples/plugins/*/package-lock.json
+
+# ECMA-376 PDFs and supplementary ZIPs; run `bun run reference:fetch` to populate.
+reference/ecma-376/**/*.pdf
+reference/ecma-376/**/*.zip
+
+# API Extractor temp output (committed snapshots live in docs/api/<pkg-slug>/)
+packages/*/temp/
+
+# Consumer-generated docs JSON. Regenerate with `bun run docs:json`.
+# Not committed — consumer (e.g. docs-editor-page) clones the repo and
+# runs the script itself. See CLAUDE.md → Docs JSON.
+docs/json/
+examples/vite/public/DC_Template_Descricao_Cargo_Controlado_Enterprise.docx
+examples/vue/public/DC_Template_Descricao_Cargo_Controlado_Enterprise.docx
+.gstack/
+.pr-checklist.json

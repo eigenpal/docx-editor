@@ -1,0 +1,110 @@
+---
+title: 'Headless processing'
+description: 'Parse, inspect, mutate, and serialize DOCX files in Node.js or workers with @docx-editor.dev/core/headless. No DOM and no editor UI required.'
+category: 'Guides'
+seoTitle: 'Headless DOCX processing'
+---
+
+`@docx-editor.dev/core/headless` is the document engine without the editor UI: the OOXML parser, document model, mutation helpers, and serializer. It runs in Node.js and web workers. Nothing in it touches the DOM.
+
+Use it for batch pipelines: fill templates, stamp watermarks, extract text, generate documents, and post-process uploads on the server. It produces the same document model that `<DocxEditor>` renders.
+
+```bash
+npm install @docx-editor.dev/core
+```
+
+## Parse, walk, serialize
+
+```ts
+import { readFile, writeFile } from "node:fs/promises";
+import {
+  parseDocx,
+  getParagraphs,
+  getParagraphText,
+  repackDocx,
+} from "@docx-editor.dev/core/headless";
+
+const buffer = await readFile("contract.docx");
+const doc = await parseDocx(buffer);
+
+// The body lives at doc.package.document; helpers save you the tree-walking.
+for (const para of getParagraphs(doc.package.document)) {
+  console.log(para.paraId, getParagraphText(para));
+}
+
+const out = await repackDocx(doc); // ArrayBuffer
+await writeFile("contract-out.docx", Buffer.from(out));
+```
+
+The `Document` wraps a `DocxPackage`: `package.document` is the body (`content: BlockContent[]` of paragraphs, tables, and block SDTs), plus `headers`, `footers`, `media`, `numbering`, `styles`, and the rest of the OOXML parts. Text helpers cover the common reads: `getBodyText`, `getParagraphText`, `getTableText`, `getBodyWordCount`, `hasTables`, `hasImages`, and more.
+
+### Two ways back to bytes
+
+- `repackDocx(doc)` round-trips against the document's original buffer, carrying every untouched part through verbatim. Use it whenever the document came from `parseDocx`. It throws if there is no original buffer.
+- `createDocx(doc)` builds a fresh package from scratch. Use it for documents you created in code.
+
+`serializeDocx(doc)` returns the `document.xml` markup as a string, not a `.docx` file; reach for it only when you need the raw XML.
+
+## Mutating with DocumentAgent
+
+`DocumentAgent` wraps a `Document` in a chainable, immutable API. Each call returns a new agent; nothing is mutated in place.
+
+```ts
+import { DocumentAgent } from "@docx-editor.dev/core/headless";
+
+const agent = await DocumentAgent.fromBuffer(buffer);
+
+console.log(agent.getWordCount(), agent.getPageCount(), agent.getVariables());
+
+const edited = agent
+  .insertText({ paragraphIndex: 0, offset: 0 }, "CONFIDENTIAL: ")
+  .applyStyle(0, "Heading1");
+
+const filled = await edited.applyVariables({
+  customer_name: "Jane Doe",
+  date: "2026-07-01",
+});
+
+const out = await filled.toBuffer(); // ArrayBuffer
+```
+
+Beyond text: `insertTable`, `insertImage`, `insertHyperlink`, `replaceRange`, `deleteRange`, `applyFormatting`, `applyParagraphFormatting`, `mergeParagraphs`, and `executeCommands` for batched `AgentCommand` arrays. `toBlob()` exists for browser contexts.
+
+## Creating documents from scratch
+
+```ts
+import { createDocumentWithText, createDocx } from "@docx-editor.dev/core/headless";
+
+const doc = createDocumentWithText("Generated on the server.");
+const out = await createDocx(doc);
+```
+
+`createEmptyDocument(options?)` gives you a blank `Document` to build up with `DocumentAgent` or content-control fills.
+
+## Templates and variables
+
+For `{{variable}}`-style templates, the headless surface bundles a docxtemplater-backed pipeline:
+
+```ts
+import { detectVariables, parseDocx, processTemplate } from "@docx-editor.dev/core/headless";
+
+const doc = await parseDocx(buffer);
+console.log(detectVariables(doc)); // ["customer_name", "date"]
+
+const out = processTemplate(buffer, { customer_name: "Acme GmbH", date: "2026-07-01" }); // ArrayBuffer
+```
+
+`validateTemplate`, `getMissingVariables`, `previewTemplate`, and `processTemplateDetailed` cover validation and error reporting. For structured fills anchored to Word content controls instead of mustache tags, see [Content controls](/docs/1.x/guides/content-controls); both work headless.
+
+## When to use this vs DocxReviewer
+
+- **Headless core** (this page) runs code you write against the document model. Use it for template fills, extraction, format conversion steps, and pipelines where the document changes are known in advance.
+- **`DocxReviewer`** from `@docx-editor.dev/agents` wraps this same engine in an LLM tool surface: an agent reads the document, decides what to change, and applies edits (including tracked changes) through tool calls. Use it when the transformation requires judgment. See [DocxReviewer](/docs/1.x/agents/docx-reviewer).
+
+A pipeline can fill a template headlessly, then pass the buffer to `DocxReviewer` for model-assisted review.
+
+## Next steps
+
+- [Core headless API](/docs/1.x/core/headless) for the full export list
+- [Content controls](/docs/1.x/guides/content-controls) for tag-addressed document generation
+- [AI & Agents](/docs/1.x/agents) for the agent-driven alternative

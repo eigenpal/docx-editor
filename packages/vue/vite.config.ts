@@ -1,0 +1,110 @@
+import { defineConfig } from 'vite';
+import vue from '@vitejs/plugin-vue';
+import dts from 'vite-plugin-dts';
+import { resolve } from 'path';
+
+// Library build for @docx-editor.dev/vue. Vite (not tsup) because the
+// package ships .vue SFCs that need the @vitejs/plugin-vue compiler step.
+// External: vue, prosemirror-*, and the editor core — consumers bring those.
+export default defineConfig({
+  resolve: {
+    alias: [
+      {
+        find: /^@docx-editor\.dev\/core\/flow-model\/(.+)$/,
+        replacement: resolve(__dirname, '../core/src/flow-model/$1'),
+      },
+      {
+        find: '@docx-editor.dev/core/flow-model',
+        replacement: resolve(__dirname, '../core/src/flow-model/index.ts'),
+      },
+      {
+        find: /^@docx-editor\.dev\/core\/painter-model\/(.+)$/,
+        replacement: resolve(__dirname, '../core/src/painter-model/$1'),
+      },
+      {
+        find: '@docx-editor.dev/core/painter-model',
+        replacement: resolve(__dirname, '../core/src/painter-model/index.ts'),
+      },
+      {
+        find: /^@docx-editor\.dev\/core\/pagination-model\/(.+)$/,
+        replacement: resolve(__dirname, '../core/src/pagination-model/$1'),
+      },
+      {
+        find: '@docx-editor.dev/core/pagination-model',
+        replacement: resolve(__dirname, '../core/src/pagination-model/index.ts'),
+      },
+      {
+        find: '@docx-editor.dev/core/editor',
+        replacement: resolve(__dirname, '../core/src/editor/index.ts'),
+      },
+      {
+        find: '@docx-editor.dev/core/utils/removeHeaderFooterForSection',
+        replacement: resolve(__dirname, '../core/src/utils/removeHeaderFooterForSection.ts'),
+      },
+    ],
+  },
+  plugins: [
+    vue(),
+    // Exclude __tests__ + *.test-d.ts so type-level conformance tests don't
+    // leak into the published tarball (dist/ → npm). Reviewer caught this
+    // on PR #359.
+    dts({
+      include: ['src/**/*'],
+      exclude: [
+        'src/**/__tests__/**',
+        'src/**/*.test-d.ts',
+        // First-party shell plumbing. These modules are bundled into DocxEditor
+        // but are not package subpaths; emitting standalone declarations would
+        // preserve workspace-only rendering-model imports in the npm tarball.
+        'src/composables/useDocxEditorRefApi.ts',
+        'src/composables/usePagesPointer.ts',
+        'src/composables/useSelectionSync.ts',
+        'src/composables/useContextMenus.ts',
+        'src/composables/useTableOfContentsActions.ts',
+      ],
+      // Pin the entry root so multi-entry builds still flatten declarations
+      // to dist/index.d.ts + dist/ui.d.ts (auto-detect drifts to a parent
+      // dir once core's workspace types enter the graph).
+      entryRoot: 'src',
+      // Keep workspace package names (`@docx-editor.dev/core`,
+      // `@docx-editor.dev/i18n`) intact in published declarations.
+      // Otherwise tsconfig.json's `paths` field rewrites them to
+      // `../../core/src/*.ts` — valid in this repo but broken once
+      // consumers install from npm, and a hard fail for API Extractor's
+      // surface check since it would walk the source.
+      pathsToAliases: false,
+      // Don't ship `.d.ts.map`. Maps point at source `.ts` files that
+      // aren't in the published tarball, so they're dead weight.
+      compilerOptions: { declarationMap: false, stripInternal: true },
+    }),
+  ],
+  build: {
+    lib: {
+      // Keep public subpaths backed by real JS chunks so consumers can import
+      // composables/plugin APIs without dragging in the full editor shell.
+      entry: {
+        index: resolve(__dirname, 'src/index.ts'),
+        ui: resolve(__dirname, 'src/ui.ts'),
+        composables: resolve(__dirname, 'src/composables/index.ts'),
+        dialogs: resolve(__dirname, 'src/components/dialogs/index.ts'),
+        'plugin-api': resolve(__dirname, 'src/plugin-api/index.ts'),
+        styles: resolve(__dirname, 'src/styles/index.ts'),
+      },
+      formats: ['es', 'cjs'],
+      fileName: (format, entryName) => `${entryName}.${format === 'es' ? 'js' : 'cjs'}`,
+      cssFileName: 'docx-editor-vue',
+    },
+    rollupOptions: {
+      external: (id) => {
+        if (id === 'vue' || /^prosemirror-/.test(id)) return true;
+        if (!id.startsWith('@docx-editor.dev/core')) return false;
+        return !(
+          /^@docx-editor\.dev\/core\/(?:editor|flow-model|painter-model|pagination-model)(?:\/|$)/.test(
+            id
+          ) || id === '@docx-editor.dev/core/utils/removeHeaderFooterForSection'
+        );
+      },
+    },
+    emptyOutDir: true,
+  },
+});

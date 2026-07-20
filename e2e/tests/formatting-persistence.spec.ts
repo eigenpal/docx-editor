@@ -1,0 +1,378 @@
+/**
+ * Formatting Persistence Tests
+ *
+ * Tests for paragraph-level formatting persistence:
+ * - Set formatting on empty paragraph, navigate away, return - formatting should persist
+ * - Set formatting, type, delete all, type again - formatting should persist
+ * - Multiple formatting types should persist together
+ */
+
+import { test, expect } from '@playwright/test';
+import { EditorPage } from '../helpers/editor-page';
+import * as assertions from '../helpers/assertions';
+
+test.describe('Formatting Persistence - Empty Paragraph', () => {
+  let editor: EditorPage;
+
+  test.beforeEach(async ({ page }) => {
+    editor = new EditorPage(page);
+    await editor.goto();
+    await editor.waitForReady();
+    await editor.newDocument();
+    await editor.focus();
+  });
+
+  test('bold persists when navigating away and back', async ({ page }) => {
+    // Set bold on empty paragraph
+    await editor.applyBold();
+
+    // Verify bold is active in toolbar
+    await expect(page.getByTestId('toolbar-bold')).toHaveAttribute('aria-pressed', 'true');
+
+    // Press Enter to create new paragraph
+    await page.keyboard.press('Enter');
+
+    // Bold should not be active in new paragraph
+    await expect(page.getByTestId('toolbar-bold')).not.toHaveAttribute('aria-pressed', 'true');
+
+    // Navigate back to first paragraph
+    await page.keyboard.press('ArrowUp');
+
+    // Bold should be active again
+    await expect(page.getByTestId('toolbar-bold')).toHaveAttribute('aria-pressed', 'true');
+
+    // Type text - should be bold
+    await editor.typeText('Bold text');
+    await assertions.assertTextIsBold(page, 'Bold text');
+  });
+
+  test('italic persists when navigating away and back', async ({ page }) => {
+    // Set italic on empty paragraph
+    await editor.applyItalic();
+
+    // Press Enter to create new paragraph
+    await page.keyboard.press('Enter');
+
+    // Navigate back to first paragraph
+    await page.keyboard.press('ArrowUp');
+
+    // Italic should be active
+    await expect(page.getByTestId('toolbar-italic')).toHaveAttribute('aria-pressed', 'true');
+
+    // Type text - should be italic
+    await editor.typeText('Italic text');
+    await assertions.assertTextIsItalic(page, 'Italic text');
+  });
+
+  test('underline persists when navigating away and back', async ({ page }) => {
+    // Set underline on empty paragraph
+    await editor.applyUnderline();
+
+    // Press Enter to create new paragraph
+    await page.keyboard.press('Enter');
+
+    // Navigate back to first paragraph
+    await page.keyboard.press('ArrowUp');
+
+    // Underline should be active
+    await expect(page.getByTestId('toolbar-underline')).toHaveAttribute('aria-pressed', 'true');
+
+    // Type text - should be underlined
+    await editor.typeText('Underlined text');
+    await assertions.assertTextIsUnderlined(page, 'Underlined text');
+  });
+
+  test('combined formatting persists when navigating away and back', async ({ page }) => {
+    // Set multiple formats on empty paragraph
+    await editor.applyBold();
+    await editor.applyItalic();
+    await editor.applyUnderline();
+
+    // Press Enter to create new paragraph
+    await page.keyboard.press('Enter');
+
+    // Navigate back to first paragraph
+    await page.keyboard.press('ArrowUp');
+
+    // All formats should be active
+    await expect(page.getByTestId('toolbar-bold')).toHaveAttribute('aria-pressed', 'true');
+    await expect(page.getByTestId('toolbar-italic')).toHaveAttribute('aria-pressed', 'true');
+    await expect(page.getByTestId('toolbar-underline')).toHaveAttribute('aria-pressed', 'true');
+
+    // Type text
+    await editor.typeText('Combined');
+    await assertions.assertTextIsBold(page, 'Combined');
+    await assertions.assertTextIsItalic(page, 'Combined');
+    await assertions.assertTextIsUnderlined(page, 'Combined');
+  });
+});
+
+test.describe('Formatting Persistence - Delete and Retype', () => {
+  let editor: EditorPage;
+
+  test.beforeEach(async ({ page }) => {
+    editor = new EditorPage(page);
+    await editor.goto();
+    await editor.waitForReady();
+    await editor.newDocument();
+    await editor.focus();
+  });
+
+  test('bold persists after typing, selecting all, and retyping', async ({ page }) => {
+    // Set bold and type
+    await editor.applyBold();
+    await editor.typeText('Initial bold');
+
+    // Select all and delete
+    await editor.selectAll();
+    await page.keyboard.press('Backspace');
+
+    // Type again - should still be bold
+    await editor.typeText('Still bold');
+    await assertions.assertTextIsBold(page, 'Still bold');
+  });
+
+  test('italic persists after delete and retype', async ({ page }) => {
+    // Set italic and type
+    await editor.applyItalic();
+    await editor.typeText('Initial italic');
+
+    // Select all and delete
+    await editor.selectAll();
+    await page.keyboard.press('Backspace');
+
+    // Type again - should still be italic
+    await editor.typeText('Still italic');
+    await assertions.assertTextIsItalic(page, 'Still italic');
+  });
+
+  test('formatting persists through multiple delete cycles', async ({ page }) => {
+    // Set bold
+    await editor.applyBold();
+    await editor.typeText('First');
+
+    // Delete and retype - cycle 1
+    await editor.selectAll();
+    await page.keyboard.press('Backspace');
+    await editor.typeText('Second');
+    await assertions.assertTextIsBold(page, 'Second');
+
+    // Delete and retype - cycle 2
+    await editor.selectAll();
+    await page.keyboard.press('Backspace');
+    await editor.typeText('Third');
+    await assertions.assertTextIsBold(page, 'Third');
+
+    // Delete and retype - cycle 3
+    await editor.selectAll();
+    await page.keyboard.press('Backspace');
+    await editor.typeText('Fourth');
+    await assertions.assertTextIsBold(page, 'Fourth');
+  });
+
+  test('combined formatting persists after delete and retype', async ({ page }) => {
+    // Set multiple formats
+    await editor.applyBold();
+    await editor.applyItalic();
+    await editor.typeText('Combined text');
+
+    // Select all and delete
+    await editor.selectAll();
+    await page.keyboard.press('Backspace');
+
+    // Type again - all formats should persist
+    await editor.typeText('New combined');
+    await assertions.assertTextIsBold(page, 'New combined');
+    await assertions.assertTextIsItalic(page, 'New combined');
+  });
+});
+
+test.describe('Formatting Persistence - Font Properties', () => {
+  let editor: EditorPage;
+
+  test.beforeEach(async ({ page }) => {
+    editor = new EditorPage(page);
+    await editor.goto();
+    await editor.waitForReady();
+    await editor.newDocument();
+    await editor.focus();
+  });
+
+  test('font family persists when navigating away and back', async ({ page }) => {
+    // Set font family on empty paragraph
+    await editor.setFontFamily('Georgia');
+
+    // Verify in toolbar
+    await expect(page.locator('[aria-label="Select font family"]')).toContainText('Georgia');
+
+    // Press Enter to create new paragraph
+    await page.keyboard.press('Enter');
+
+    // Navigate back to first paragraph
+    await page.keyboard.press('ArrowUp');
+
+    // Font family should persist
+    await expect(page.locator('[aria-label="Select font family"]')).toContainText('Georgia');
+
+    // Type text
+    await editor.typeText('Georgia text');
+    await assertions.assertDocumentContainsText(page, 'Georgia text');
+  });
+
+  test('font size persists when navigating away and back', async ({ page }) => {
+    // Set font size on empty paragraph
+    await editor.setFontSize(24);
+
+    // Verify in toolbar (Radix display trigger — not a native <select>)
+    await expect(page.locator('[data-testid="font-size-display"]')).toContainText('24');
+
+    // Press Enter to create new paragraph
+    await page.keyboard.press('Enter');
+
+    // Navigate back to first paragraph
+    await page.keyboard.press('ArrowUp');
+
+    // Font size should persist
+    await expect(page.locator('[data-testid="font-size-display"]')).toContainText('24');
+  });
+});
+
+test.describe('Formatting Persistence - Enter then Change Property in Empty Run', () => {
+  // Regression: setMark/removeMark in markUtils.ts used to call setStoredMarks
+  // BEFORE setNodeMarkup. ProseMirror's Transaction.addStep clears storedMarks
+  // on every step, so the stored marks were wiped before dispatch  typed text
+  // fell back to the editor default (Arial 11pt) instead of the chosen property.
+
+  let editor: EditorPage;
+
+  test.beforeEach(async ({ page }) => {
+    editor = new EditorPage(page);
+    await editor.goto();
+    await editor.waitForReady();
+    await editor.newDocument();
+    await editor.focus();
+  });
+
+  test('font family applied in empty run after Enter is used by typed text', async ({ page }) => {
+    await editor.typeText('First paragraph');
+    await page.keyboard.press('Enter');
+    // Cursor is now in an empty new paragraph.
+    await editor.setFontFamily('Georgia');
+    await editor.typeText('Georgia text');
+
+    await assertions.assertTextHasFontFamily(page, 'Georgia text', 'Georgia');
+  });
+
+  test('font size applied in empty run after Enter is used by typed text', async ({ page }) => {
+    await editor.typeText('First paragraph');
+    await page.keyboard.press('Enter');
+    await editor.setFontSize(24);
+    await editor.typeText('Big text');
+
+    await assertions.assertTextHasFontSize(page, 'Big text', '24pt');
+  });
+
+  test('text color applied in empty run after Enter is used by typed text', async ({ page }) => {
+    await editor.typeText('First paragraph');
+    await page.keyboard.press('Enter');
+    await editor.setTextColor('#FF0000');
+    await editor.typeText('Red text');
+
+    await assertions.assertTextHasColor(page, 'Red text', 'rgb(255, 0, 0)');
+  });
+
+  test('combined font family + size + color in empty run after Enter persists on typed text', async ({
+    page,
+  }) => {
+    await editor.typeText('First paragraph');
+    await page.keyboard.press('Enter');
+    await editor.setFontFamily('Verdana');
+    await editor.setFontSize(18);
+    await editor.setTextColor('#0000FF');
+    await editor.typeText('Styled text');
+
+    await assertions.assertTextHasFontFamily(page, 'Styled text', 'Verdana');
+    await assertions.assertTextHasFontSize(page, 'Styled text', '18pt');
+    await assertions.assertTextHasColor(page, 'Styled text', 'rgb(0, 0, 255)');
+  });
+
+  test('font change in empty run survives a second Enter and typing', async ({ page }) => {
+    // Mirrors user report: "still when hitting enter and starting a new run styles are lost".
+    await editor.typeText('First');
+    await page.keyboard.press('Enter');
+    await editor.setFontFamily('Georgia');
+    await editor.typeText('Second');
+    await page.keyboard.press('Enter');
+    await editor.typeText('Third');
+
+    await assertions.assertTextHasFontFamily(page, 'Second', 'Georgia');
+    await assertions.assertTextHasFontFamily(page, 'Third', 'Georgia');
+  });
+});
+
+test.describe('Formatting Persistence - Toggling Off', () => {
+  let editor: EditorPage;
+
+  test.beforeEach(async ({ page }) => {
+    editor = new EditorPage(page);
+    await editor.goto();
+    await editor.waitForReady();
+    await editor.newDocument();
+    await editor.focus();
+  });
+
+  test('toggling bold off persists', async ({ page }) => {
+    // Set bold, then toggle off
+    await editor.applyBold();
+    await expect(page.getByTestId('toolbar-bold')).toHaveAttribute('aria-pressed', 'true');
+
+    await editor.applyBold(); // Toggle off
+    await expect(page.getByTestId('toolbar-bold')).not.toHaveAttribute('aria-pressed', 'true');
+
+    // Navigate away and back
+    await page.keyboard.press('Enter');
+    await page.keyboard.press('ArrowUp');
+
+    // Bold should still be off
+    await expect(page.getByTestId('toolbar-bold')).not.toHaveAttribute('aria-pressed', 'true');
+  });
+
+  test('toggling format on after type/delete clears formatting', async ({ page }) => {
+    // Set bold and type
+    await editor.applyBold();
+    await editor.typeText('Bold text');
+
+    // Delete all
+    await editor.selectAll();
+    await page.keyboard.press('Backspace');
+
+    // Now toggle bold OFF
+    await editor.applyBold();
+
+    // Type - should not be bold
+    await editor.typeText('Not bold');
+
+    // Assert only against our typed text (other strong tags may exist in chrome)
+    const isBold = await page.evaluate(() => {
+      const root =
+        document.querySelector('.layout-page-content') ||
+        document.querySelector('.paged-editor__hidden-pm .ProseMirror');
+      if (!root) return false;
+      const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, null);
+      let node: Text | null;
+      while ((node = walker.nextNode() as Text | null)) {
+        if (!node.textContent?.includes('Not bold')) continue;
+        let el: HTMLElement | null = node.parentElement;
+        while (el && el !== root) {
+          const fw = window.getComputedStyle(el).fontWeight;
+          if (fw === 'bold' || parseInt(fw, 10) >= 700) return true;
+          if (el.tagName === 'STRONG' || el.tagName === 'B') return true;
+          el = el.parentElement;
+        }
+        return false;
+      }
+      return false;
+    });
+    expect(isBold).toBe(false);
+  });
+});

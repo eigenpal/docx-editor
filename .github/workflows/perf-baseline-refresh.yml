@@ -1,0 +1,76 @@
+name: Perf Baseline Refresh
+
+# Re-capture the large-document perf baseline on the CI runner and commit it to
+# main, so the committed numbers stay current and machine-matched with what the
+# `perf-check` label run measures.
+#
+# workflow_dispatch only: this is the single place the eigenpal-release-pal App
+# token is used, and it only ever runs trusted code from `main`. Keeping it out
+# of perf-check.yml means no secret is reachable from a PR-triggered run.
+
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: perf-baseline-refresh
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  PERF_SPEC: e2e/tests/performance-large-docs-comments-suggestions.spec.ts
+  PERF_BASELINE: e2e/perf-baselines/large-docs-comments-suggestions.json
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Mint App installation token
+        id: app-token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          app-id: ${{ secrets.RELEASE_PAL_APP_ID }}
+          private-key: ${{ secrets.RELEASE_PAL_PRIVATE_KEY }}
+
+      - name: Checkout main
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          ref: main
+          token: ${{ steps.app-token.outputs.token }}
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Install Playwright (chromium)
+        run: npx playwright install --with-deps chromium
+
+      - name: Capture baseline
+        env:
+          PERF_EMIT_JSON: '1'
+          PERF_REACT_ONLY: '1'
+          PERF_OUT_DIR: e2e/perf-baselines
+        run: |
+          npx playwright test "$PERF_SPEC" \
+            --project=chromium --workers=1 --retries=0 --timeout=120000
+
+      - name: Commit refreshed baseline
+        env:
+          GIT_AUTHOR_NAME: 'eigenpal-release-pal[bot]'
+          GIT_AUTHOR_EMAIL: 'eigenpal-release-pal[bot]@users.noreply.github.com'
+          GIT_COMMITTER_NAME: 'eigenpal-release-pal[bot]'
+          GIT_COMMITTER_EMAIL: 'eigenpal-release-pal[bot]@users.noreply.github.com'
+        run: |
+          if git diff --quiet -- "$PERF_BASELINE"; then
+            echo "Baseline unchanged — nothing to commit."
+            exit 0
+          fi
+          git add "$PERF_BASELINE"
+          git commit -m "chore: refresh large-doc perf baseline"
+          git push origin main

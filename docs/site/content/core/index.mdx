@@ -1,0 +1,95 @@
+---
+title: "@docx-editor.dev/core"
+description: "Framework-agnostic core: document tree, OOXML parser/serializer, ProseMirror schema, plugin contract. Underlies both the React and Vue adapters."
+category: "Packages"
+order: 20
+---
+
+<PackageStats name="@docx-editor.dev/core" />
+
+## What's in it
+
+The core package contains the document tree, OOXML parser and serializer, ProseMirror schema, layout engine, and plugin contract. It has no framework dependency. The React and Vue adapters depend on it. Install `-core` directly for headless DOCX processing or custom hosts.
+
+```bash
+npm install @docx-editor.dev/core
+```
+
+## When to use it directly
+
+- Server-side `.docx` processing: parse a buffer, walk the tree, mutate, and serialize back out.
+- Headless extraction: pull text, tables, headers/footers without rendering.
+- Custom renderer or DOM bridge against the shared schema.
+- Plugins that need to work in React, Vue, and headless contexts. Use the `core-plugins` subpath.
+
+If you want the editor UI in a React or Vue app, install `@docx-editor.dev/react` or `@docx-editor.dev/vue`. Both pull `-core` transitively.
+
+## In this section
+
+<Cards>
+  <Card
+    title="Architecture"
+    href="/docs/1.x/core/architecture"
+    description="The dual-renderer design: hidden ProseMirror for editing state, layout painter for Word-fidelity pages, and the data flow between them."
+  />
+  <Card
+    title="Headless API"
+    href="/docs/1.x/core/headless"
+    description="Parse, mutate, and serialize DOCX in Node or workers: text helpers, content controls, templates, watermarks, DocumentAgent."
+  />
+</Cards>
+
+## Subpaths
+
+The most common subpaths:
+
+- `@docx-editor.dev/core`: root barrel
+- `@docx-editor.dev/core/headless`: the full DOM-free surface in one import
+- `@docx-editor.dev/core/docx/parser`: `parseDocx(buffer)` → `Document` tree
+- `@docx-editor.dev/core/docx/rezip`: `repackDocx` / `createDocx` → `.docx` bytes
+- `@docx-editor.dev/core/types/document`: `Document`, `Paragraph`, `Run`, `Insertion`, `Deletion`, `Comment`
+- `@docx-editor.dev/core/core-plugins`: plugin contract for non-React, non-Vue hosts
+
+All generated subpaths are in the [API reference](/docs/1.x/api/core).
+
+## Parse, mutate, serialize
+
+```ts
+import {
+  parseDocx,
+  getParagraphs,
+  getParagraphText,
+  repackDocx,
+} from '@docx-editor.dev/core/headless';
+
+const buffer = await fetch('./document.docx').then((r) => r.arrayBuffer());
+const doc = await parseDocx(buffer);
+
+for (const para of getParagraphs(doc.package.document)) {
+  console.log(para.paraId, getParagraphText(para));
+}
+
+const out = await repackDocx(doc); // ArrayBuffer, ready to download or store
+```
+
+The tree shape is the same one the editor renders. Code written against `-core` can run before or after a document is opened in the live editor. Full walkthrough: [Headless processing](/docs/1.x/guides/headless-processing).
+
+## Content controls
+
+Block-level content controls (Word's `w:sdt`) are addressable by tag, alias, id, or type. `findContentControls` lists matches, `setContentControlContent` fills a control, `setContentControlValue` sets typed values (dropdown selection, checkbox, date), and `addRepeatingSectionItem` / `removeRepeatingSectionItem` manage repeating sections. Edits preserve the control's identity and raw properties, so content controls can act as anchors for templates and document automation.
+
+```ts
+import { findContentControls, setContentControlValue } from '@docx-editor.dev/core/headless';
+
+const boxes = findContentControls(doc, { type: 'checkbox' });
+const next = setContentControlValue(doc, { tag: 'agreed' }, { kind: 'checkbox', checked: true });
+```
+
+Full behavior contract (locks, typed controls, data binding): [Content controls guide](/docs/1.x/guides/content-controls).
+
+## Next steps
+
+- [Architecture](/docs/1.x/core/architecture) for how the pieces fit
+- [Headless API](/docs/1.x/core/headless) for the grouped DOM-free surface
+- [API reference (70 subpaths)](/docs/1.x/api/core)
+- [Plugins](/docs/1.x/plugins) for the plugin contract
