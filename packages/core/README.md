@@ -5,26 +5,13 @@
 npm.
 
 It is `"private": true` and must never be published. Publishing it would shadow
-the real package on npm with a set of functions that throw.
+the real package with a set of functions that throw.
 
 ## Why it exists
 
-Core used to live in the same monorepo as its consumers, so the boundary between
-them was never designed. Measured:
-
-| | |
-| --- | --- |
-| Declared entry points | 65 |
-| Distinct public symbols | 1,125 |
-| Subpaths adapters import | 65 |
-| Distinct symbols adapters import | 428, across 458 sites |
-| Subpaths imported but never exported | 12 |
-
-Four of those unexported subpaths (`flow-model`, `pagination-model`,
-`painter-model`, `editor`) are flagged by `scripts/check-package-artifacts.mjs`
-as private internals that published artifacts must never import. They resolved
-only through the monorepo `tsconfig` wildcard, so the build simultaneously
-depended on them and rejected them. Once core moved out, they stopped resolving.
+A published API needs a written contract: something that says what core owes its
+consumers, distinguishes an intentional export from an incidental one, and can be
+typechecked before an implementation exists. This package is that contract.
 
 ## Shape
 
@@ -32,53 +19,53 @@ depended on them and rejected them. Once core moved out, they stopped resolving.
 | --- | --- | --- |
 | `@docx-editor.dev/core` | agents, headless, server | stable |
 | `@docx-editor.dev/core/editor` | React / Vue adapters | stable |
-| `@docx-editor.dev/core/geometry` | adapter internals | **`@experimental`, semver-exempt** |
+| `@docx-editor.dev/core/geometry` | adapter internals | `@experimental`, semver-exempt |
 | `@docx-editor.dev/core/plugin` | extension authors | stable |
 | `@docx-editor.dev/core/mcp` | MCP hosts | stable |
 | `@docx-editor.dev/core/types` | everyone | type-only, zero runtime |
 
+Entries are split by audience. A headless consumer wants a document and never a
+DOM type; an adapter wants an editor; an extension author wants neither, only a
+stable way to contribute commands.
+
 ### Decisions worth knowing
 
-**Addressing is `{ paraId, search }`, not `{ blockId, offset }`.** Offset
-addressing was already tried in `types/agentApi.ts` and the agents package uses
-none of it: a model cannot compute an offset it has not seen, and offsets do not
-survive concurrent edits. `search` must match exactly once, and ambiguity is an
-error rather than first-match-wins.
+**Addressing is `{ paraId, search }`, not a character offset.** An agent can
+quote text it has seen but cannot compute an offset for text it has not, and
+offsets do not survive a concurrent edit. `search` must match exactly once;
+ambiguity is an error rather than first-match-wins, because silently editing the
+wrong occurrence of a phrase is worse than refusing.
 
 **Commands are open, not a sealed union.** `DocEdits` and `EditorCommands` are
-interfaces widened by declaration merging, because a sealed union cannot be
-extended by a plugin. Runtime JSON Schemas ship alongside (`docEditSchemas`),
-since a TypeScript union vanishes at compile time and MCP `tools/list` needs
-real schemas.
+interfaces widened by declaration merging, so an extension can contribute a
+command without a core release. Runtime JSON Schemas ship alongside, since types
+do not exist at runtime and MCP tool enumeration needs real schemas.
 
-**Writes return `ExecResult`, not `boolean`.** A boolean cannot distinguish a
-no-op from a missing target from a locked content control, and the editor layer
-already throws eight distinct content-control error classes.
+**Writes return `ExecResult`, not `boolean`.** A boolean cannot separate
+"applied, nothing changed" from "target not found" from "target is locked", and
+callers need that distinction for undo grouping, error reporting, and retries.
 
-**`EditorSnapshot`, not `EditorState`.** The latter collides with
-`prosemirror-state` across 18 adapter import sites.
+**`EditorSnapshot`, not `EditorState`.** `EditorState` is already a widely used
+export in `prosemirror-state`, which adapters import alongside this package.
 
-**`EditorHost` has 12 members, not 3.** DOM handles are getters because they are
-null through first render and React's scroll container changes identity.
-Scheduling is two-phase: `scheduleFrame` coalesces engine work, `afterCommit`
-runs after the adapter flushes its own render. `measureBlocks` is injected
-because core currently calls back into the adapter to measure.
+**`EditorHost` carries DOM handles, two-phase scheduling, and measurement.** The
+engine paints the document and the adapter renders chrome around it, so the
+engine needs handles. They are getters because they are null until first render
+and can change identity afterwards. Scheduling is two-phase because the engine
+coalescing its work and the adapter flushing its render are different moments.
 
-**Scopes are explicit.** The editor is N+1 ProseMirror views, one per
-header/footer relationship plus the body. Commands that do not name a scope hit
-the wrong surface when a header has focus.
+**Scopes are explicit.** The editor manages one editing surface per header and
+footer alongside the body, so an unscoped command would apply to the body while
+a header has focus.
 
-**`core/geometry` is a compatibility shelf, not a design.** 86 symbols across 73
-sites are in live adapter use; a few methods on `Editor` cover roughly eight of
-them. It is named honestly and marked semver-exempt rather than left leaking.
-Cache-invalidation calls (`clearAllCaches`, `resetCanvasContext`,
-`syncImeCaretAnchor`) are deliberately absent: they mutate module-scope state,
-which breaks multiple editors on one page. Callers use
+**`core/geometry` is a compatibility shelf, not a design.** It is marked
+semver-exempt and is a retirement target as the shared engine absorbs its
+members. Cache-invalidation functions are deliberately absent: they mutate
+shared state, which breaks multiple editors on one page. Callers use
 `editor.relayout({ sync: true })`.
 
 ## Status
 
-The adapters do **not** compile against this contract yet. They still import the
-older subpaths, so adding this package does not by itself make the repo
-typecheck. Migrating the adapters onto this surface is separate work, and should
-follow the in-flight engine unification (#696) rather than race it.
+The adapters do not compile against this contract yet. Adding this package does
+not by itself make the repository typecheck; pointing the adapters at it is
+separate work, tracked in `openspec/changes/core-api-contract/tasks.md`.

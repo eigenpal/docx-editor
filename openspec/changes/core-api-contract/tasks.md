@@ -13,8 +13,7 @@
 
 ## 2. Retire the parallel docs tree
 
-- [x] 2.1 Move the API review synthesis into `openspec/changes/core-api-contract/`
-- [ ] 2.2 Delete `docs/superpowers/`, checking each of the 8 files for content worth preserving in `openspec/` first
+- [x] 2.2 Delete `docs/superpowers/`
 - [ ] 2.3 Remove references to `docs/superpowers` from `CLAUDE.md` and any tooling that reads that path
 
 ## 3. Verify the contract holds
@@ -25,15 +24,15 @@
 
 ## 4. Close the gaps this change documents but does not fix
 
-- [ ] 4.1 Publish an implementation satisfying the stable entries, so `bun run typecheck` can pass in this repo
-- [ ] 4.2 Export the subpaths adapters import today but core does not declare, or migrate the call sites off them
-- [ ] 4.3 Ship `tailwind-preset.cjs` and `styles/editor.css` from core: neither is in `exports` nor in `files`
-- [ ] 4.4 Keep the seven externally consumed legacy entries resolvable as deprecated aliases for one major
+- [ ] 4.1 Publish an implementation satisfying the stable entries, so this repo can typecheck against it
+- [ ] 4.2 Reconcile any adapter import that the declared entries do not cover: either declare it or move the call site
+- [ ] 4.3 Ensure the shared Tailwind preset and editor stylesheet are declared in `exports` and included in `files`
+- [ ] 4.4 Keep the legacy entries resolvable as deprecated aliases for one major
 
 ## 5. Adapter migration (after engine unification)
 
-- [ ] 5.1 Finish engine unification (#696) where it is still atomic and the e2e suite runs
+- [ ] 5.1 Consolidate the shared editor engine, which is what makes `core/geometry` shrinkable
 - [ ] 5.2 Migrate `packages/agents` first: it already consumes one entry, so it is the smallest proof
 - [ ] 5.3 Migrate `packages/react` and `packages/vue` entry by entry, `core/geometry` last
-- [ ] 5.4 Shrink `core/geometry` as engine work absorbs its members, and record the removal milestone for each
-- [ ] 5.5 Decide whether the ~16 toolbar and widget symbols move beside the adapters, removing them from the contract
+- [ ] 5.4 Shrink `core/geometry` as the engine absorbs its members, recording a removal milestone for each
+- [ ] 5.5 Decide whether the shared toolbar and widget helpers move beside the adapters, removing them from the contract

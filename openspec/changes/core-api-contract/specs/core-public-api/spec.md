@@ -16,7 +16,7 @@
 
 ### Requirement: No implicit source-path resolution
 
-No consumer package SHALL depend on resolving core through a `tsconfig` `paths` wildcard, a bundler alias into core's source tree, or a relative path into `packages/core`.
+No consumer package SHALL depend on resolving core through a `tsconfig` `paths` wildcard, a bundler alias into core's source tree, or a relative path into its source.
 
 #### Scenario: Build without workspace path mappings
 
@@ -48,7 +48,7 @@ The contract package in this repository SHALL be marked `"private": true` and SH
 
 ### Requirement: Deprecation window for externally consumed entries
 
-Entries with consumers outside the first-party adapters (`./api`, `./core-plugins`, `./mcp`, `./docx/serializer`, `./managers/AutoSaveManager`, `./plugin-api/types`, `./utils/textSelection`) SHALL remain resolvable for at least one major version after their replacement ships.
+Entries with consumers outside the first-party adapters SHALL remain resolvable for at least one major version after their replacement ships.
 
 #### Scenario: External consumer upgrades one major
 

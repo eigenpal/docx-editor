@@ -5,22 +5,17 @@
  *
  * SEMVER-EXEMPT. This entry may change or disappear in a minor release.
  *
- * It exists because 86 symbols across 73 call sites are in live adapter use
- * today, reaching into `flow-model`, `pagination-model`, and `painter-model`,
- * which are not exported at all. A handful of methods on `Editor` covers about
- * eight of them. Deleting the rest with no replacement would break both
- * adapters, so they are named here honestly rather than left leaking through a
- * tsconfig wildcard.
+ * It exists because the adapters depend on measurement, hit-testing, and paint
+ * primitives that the `Editor` facade does not yet cover. Naming them here is
+ * preferable to leaving the dependency undeclared.
  *
- * This is the retirement target: as engine orchestration moves into core,
- * entries here get absorbed by `Editor` and removed. Do not build new
- * integrations against it.
+ * This is a retirement target: as the shared engine absorbs these
+ * responsibilities, entries here are removed. Do not build new integrations
+ * against it.
  *
- * Deliberately NOT exposed: `clearAllCaches`, `resetCanvasContext`,
- * `invalidateHfDomCache`, `syncImeCaretAnchor`, `resetImeCaretAnchor`. They
- * mutate module-scope state, which defeats the facade and breaks multiple
- * editor instances on one page. Core owns the `document.fonts` `loadingdone`
- * listener that currently drives them from the React adapter; callers use
+ * Cache-invalidation functions are deliberately not exposed: they mutate shared
+ * state, which defeats the facade and breaks multiple editor instances on one
+ * page. The engine owns font-load invalidation itself; callers use
  * `editor.relayout({ sync: true })` instead.
  *
  * CONTRACT ONLY.
