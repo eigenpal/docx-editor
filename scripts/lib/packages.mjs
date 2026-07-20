@@ -12,11 +12,6 @@ import path from 'node:path';
 
 export const PACKAGES = [
   {
-    name: '@docx-editor.dev/core',
-    root: 'packages/core',
-    pkgSlug: 'docx-editor-core',
-  },
-  {
     name: '@docx-editor.dev/i18n',
     root: 'packages/i18n',
     pkgSlug: 'docx-editor-i18n',
@@ -35,14 +30,6 @@ export const PACKAGES = [
     root: 'packages/vue',
     pkgSlug: 'docx-editor-vue',
     tsconfigPath: 'packages/vue/tsconfig.api.json',
-  },
-  {
-    name: '@docx-editor.dev/agents',
-    root: 'packages/agents',
-    pkgSlug: 'docx-editor-agents',
-    // Excludes Vue source files because the Vue adapter for agents
-    // builds with a separate Vite pass.
-    tsconfigPath: 'packages/agents/tsconfig.tsup.json',
   },
 ];
 

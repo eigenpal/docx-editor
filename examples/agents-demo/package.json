@@ -7,8 +7,8 @@
     "start": "next start"
   },
   "dependencies": {
-    "@docx-editor.dev/core": "workspace:*",
-    "@docx-editor.dev/agents": "workspace:*",
+    "@docx-editor.dev/core": "^0.0.1",
+    "@docx-editor.dev/agents": "^0.0.1",
     "@docx-editor.dev/react": "workspace:*",
     "next": "^16.2.6",
     "openai": "^6.36.0",

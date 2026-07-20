@@ -39,7 +39,10 @@ const VUE_DYNAMIC = ['vue', '@docx-editor.dev/vue'];
 
 const NO_REACT_MSG = `Vue/core files cannot import React. Use @docx-editor.dev/core for shared logic. ${SPEC}`;
 const NO_VUE_MSG = `React/core files cannot import Vue. Use @docx-editor.dev/core for shared logic. ${SPEC}`;
-const NO_BOTH_MSG = `Core stays UI-framework-agnostic. ${SPEC}`;
+// NO_BOTH_MSG / restrictBoth guarded the core + agents packages, which now
+// live in a separate repo. Kept here because the adapters may need a
+// framework-agnostic shared surface again.
+const NO_BOTH_MSG = `Stays UI-framework-agnostic. ${SPEC}`;
 
 // Helpers compose into a `rules` object. Keys are disjoint by design —
 // restrictStatic owns `no-restricted-imports`, restrictDynamic owns
@@ -146,32 +149,8 @@ export default [
   // React adapter: no Vue imports.
   { files: ['packages/react/src/**/*.{ts,tsx}'], rules: restrictVue },
 
-  // Core: framework-agnostic; no React, no Vue.
-  { files: ['packages/core/src/**/*.{ts,tsx}'], rules: restrictBoth },
-
-  // Agent-use UI subpaths mirror the editor adapters.
-  { files: ['packages/agents/src/vue/**/*.{ts,tsx,vue}'], rules: restrictReact },
-  { files: ['packages/agents/src/react/**/*.{ts,tsx}'], rules: restrictVue },
-
-  // Top-level adapter entries: vue.ts can import Vue but not React; symmetric
-  // for react.ts. Mirrors how packages/{vue,react}/src/index.ts work.
-  // The two top-level React hooks (useAgentChat, useDocxAgentTools) are
-  // React-only — they import React legitimately, and `restrictVue` bans
-  // them from also importing Vue. Without this rule a future Vue
-  // import in either file would lint clean (gap caught by §10.3 audit).
-  {
-    files: ['packages/agents/src/vue.ts', 'packages/agents/src/ai-sdk/vue.ts'],
-    rules: restrictReact,
-  },
-  {
-    files: [
-      'packages/agents/src/react.ts',
-      'packages/agents/src/ai-sdk/react.ts',
-      'packages/agents/src/useAgentChat.ts',
-      'packages/agents/src/useDocxAgentTools.ts',
-    ],
-    rules: restrictVue,
-  },
+  // The core and agents framework-isolation rules moved to the core repo
+  // along with those packages.
 
   // The DocxEditor entry components (React and Vue twins) have a relaxed
   // 2000-line cap while the extraction effort (tracked in MEMORY.md)
@@ -195,29 +174,6 @@ export default [
     files: ['e2e/helpers/editor-page.ts'],
     rules: {
       'max-lines': ['error', { max: 1650, skipBlankLines: false, skipComments: false }],
-    },
-  },
-
-  // pagination/types.ts is the canonical schema definition for the
-  // layout model — single file by design (cross-referencing types). Bumped
-  // modestly above the default to accommodate new revision-tracking and
-  // table-pagination fields without forcing a split that would obscure the
-  // schema.
-  {
-    files: ['packages/core/src/pagination-model/types.ts'],
-    rules: {
-      'max-lines': ['error', { max: 1085, skipBlankLines: false, skipComments: false }],
-    },
-  },
-
-  // renderTable.ts is one cohesive table renderer (row/cell/fragment painting,
-  // border + cut-edge geometry, span handling, RTL bidi column mirror, resize
-  // handles). Bumped modestly above the default rather than split, which would
-  // scatter the shared grid/column geometry across files.
-  {
-    files: ['packages/core/src/painter-model/renderTable.ts'],
-    rules: {
-      'max-lines': ['error', { max: 1040, skipBlankLines: false, skipComments: false }],
     },
   },
 
@@ -254,19 +210,6 @@ export default [
     },
   },
 
-  // paragraphLayout.ts is the line-breaker — one cohesive measurement + wrap
-  // algorithm (empty-para metrics, intrinsic-width scan, cross-run glue, float
-  // zones, tab stops, image lines). The file sat right at the default 1000 cap;
-  // the cross-run glue fix (footnote-ref no-split) pushed it just over. Modest
-  // headroom while a real split (extract the per-run-kind handlers) is planned;
-  // the cap still enforces a ceiling so it can't grow unbounded.
-  {
-    files: ['packages/core/src/flow-model/metrics/paragraphLayout.ts'],
-    rules: {
-      'max-lines': ['error', { max: 1060, skipBlankLines: false, skipComments: false }],
-    },
-  },
-
   // Toolbar.vue is the formatting-bar SFC — a single template/script/style
   // block covering every toolbar control. Localizing the tooltips and adding
   // aria-labels pushed it just over the default 1000, since each labelled
@@ -278,25 +221,5 @@ export default [
     rules: {
       'max-lines': ['error', { max: 1200, skipBlankLines: false, skipComments: false }],
     },
-  },
-
-  // Agent-use framework-agnostic surface — top-level utilities + tools/,
-  // ai-sdk/ (excluding the per-framework entry files), i18n/, __tests__/.
-  // TODO: drop the `ignores` list once task §9 migrates the React hooks
-  // into src/react/.
-  {
-    files: [
-      'packages/agents/src/*.{ts,tsx}',
-      'packages/agents/src/{tools,ai-sdk,i18n,__tests__}/**/*.{ts,tsx}',
-    ],
-    ignores: [
-      'packages/agents/src/react.ts',
-      'packages/agents/src/vue.ts',
-      'packages/agents/src/useAgentChat.ts',
-      'packages/agents/src/useDocxAgentTools.ts',
-      'packages/agents/src/ai-sdk/react.ts',
-      'packages/agents/src/ai-sdk/vue.ts',
-    ],
-    rules: restrictBoth,
   },
 ];

@@ -8,8 +8,6 @@ const entries = {
   vue: collectNamedExports(resolve(root, 'packages/vue/src/index.ts')),
   reactUi: collectNamedExports(resolve(root, 'packages/react/src/ui.ts')),
   reactPluginApi: collectNamedExports(resolve(root, 'packages/react/src/plugin-api/index.ts')),
-  agentsReact: collectNamedExports(resolve(root, 'packages/agents/src/react.ts')),
-  agentsVue: collectNamedExports(resolve(root, 'packages/agents/src/vue.ts')),
 };
 
 const required = {
@@ -54,21 +52,8 @@ const required = {
       'createTemplatePlugin',
     ],
   },
-  'agent UI kit canonical entries': {
-    entries: ['agentsReact', 'agentsVue'],
-    names: [
-      'AgentPanel',
-      'AgentPanelProps',
-      'AgentChatLog',
-      'AgentComposer',
-      'AgentSuggestionChip',
-      'AgentTimeline',
-      'AgentMessage',
-      'AgentToolCall',
-      'EditorRefLike',
-      'getToolDisplayName',
-    ],
-  },
+  // The 'agent UI kit canonical entries' group moved to the core/agents repo
+  // along with `@docx-editor.dev/agents`.
 };
 
 let failed = false;

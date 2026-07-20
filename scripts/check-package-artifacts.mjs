@@ -1,13 +1,10 @@
 #!/usr/bin/env node
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
-import { createRequire } from 'node:module';
 import path from 'node:path';
-import { pathToFileURL } from 'node:url';
 
 const root = path.resolve(import.meta.dirname, '..');
-const packageDirs = ['core', 'react', 'vue', 'agents', 'i18n', 'nuxt'];
+const packageDirs = ['react', 'vue', 'i18n', 'nuxt'];
 const errors = [];
-const require = createRequire(import.meta.url);
 
 function filesBelow(directory) {
   if (!existsSync(directory)) return [];
@@ -71,16 +68,8 @@ for (const packageDir of packageDirs) {
   }
 }
 
-const renderApi = await import(pathToFileURL(path.join(root, 'packages/core/dist/api.mjs')).href);
-const renderApiCjs = require(path.join(root, 'packages/core/dist/api.js'));
-for (const name of ['renderDocument', 'caretAt', 'rectsFor']) {
-  if (typeof renderApi[name] !== 'function') {
-    errors.push(`@docx-editor.dev/core/api is missing runtime export ${name}`);
-  }
-  if (typeof renderApiCjs[name] !== 'function') {
-    errors.push(`@docx-editor.dev/core/api CJS is missing runtime export ${name}`);
-  }
-}
+// The `@docx-editor.dev/core/api` runtime-export check lives in the core
+// repo — core ships from npm and its dist/ is not present here.
 
 if (errors.length > 0) {
   console.error(errors.join('\n'));

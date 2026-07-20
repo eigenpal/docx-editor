@@ -10,16 +10,16 @@ Releases follow the canonical [`changesets/action@v1`](https://github.com/change
 
 ## Packages
 
-| Package                   | Path              | Published?               |
-| ------------------------- | ----------------- | ------------------------ |
-| `@docx-editor.dev/react`  | `packages/react`  | ✅                       |
-| `@docx-editor.dev/core`   | `packages/core`   | ✅                       |
-| `@docx-editor.dev/agents` | `packages/agents` | ✅                       |
-| `@docx-editor.dev/vue`    | `packages/vue`    | ✅                       |
-| `@docx-editor.dev/i18n`   | `packages/i18n`   | ✅ (shared locale JSONs) |
-| `@docx-editor.dev/nuxt`   | `packages/nuxt`   | ✅                       |
+| Package                  | Path             | Published?               |
+| ------------------------ | ---------------- | ------------------------ |
+| `@docx-editor.dev/react` | `packages/react` | ✅                       |
+| `@docx-editor.dev/vue`   | `packages/vue`   | ✅                       |
+| `@docx-editor.dev/i18n`  | `packages/i18n`  | ✅ (shared locale JSONs) |
+| `@docx-editor.dev/nuxt`  | `packages/nuxt`  | ✅                       |
 
-All six packages are in a **fixed group** in `.changeset/config.json` — they always ship the same version. A changeset only needs to declare the bump for one; the others follow automatically. `@docx-editor.dev/i18n` ships the locale JSONs that the React and Vue adapters both consume, so adding a new key to `en.json` only needs a changeset on `@docx-editor.dev/i18n` (the consumers pick it up at build time).
+All four packages are in a **fixed group** in `.changeset/config.json` — they always ship the same version. A changeset only needs to declare the bump for one; the others follow automatically. `@docx-editor.dev/i18n` ships the locale JSONs that the React and Vue adapters both consume, so adding a new key to `en.json` only needs a changeset on `@docx-editor.dev/i18n` (the consumers pick it up at build time).
+
+`@docx-editor.dev/core` and `@docx-editor.dev/agents` are developed and released from a separate repository. This repo consumes them from npm like any other dependency — bumping to a new core release means updating the version range in the adapter `package.json` files, not adding a changeset here.
 
 ## Author flow (every contributor, every code PR)
 

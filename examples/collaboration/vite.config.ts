@@ -23,8 +23,9 @@ export default defineConfig(async () => {
     resolve: {
       dedupe: ['react', 'react-dom'],
       alias: [
-        // Resolve package imports to source for live development
-        // Order matters: more-specific prefixes before less-specific ones
+        // Resolve workspace-local package imports to source for live
+        // development. `@docx-editor.dev/core` and `/agents` live in a
+        // separate repo and resolve from node_modules.
         {
           find: '@docx-editor.dev/react',
           replacement: path.join(monorepoRoot, 'packages/react/src/index.ts'),
@@ -32,40 +33,6 @@ export default defineConfig(async () => {
         {
           find: '@docx-editor.dev/i18n',
           replacement: path.join(monorepoRoot, 'packages/i18n/src/index.ts'),
-        },
-        {
-          find: '@docx-editor.dev/agents/react',
-          replacement: path.join(monorepoRoot, 'packages/agents/src/react.ts'),
-        },
-        {
-          find: '@docx-editor.dev/agents/server',
-          replacement: path.join(monorepoRoot, 'packages/agents/src/server.ts'),
-        },
-        {
-          find: /^@docx-editor\.dev\/agents$/,
-          replacement: path.join(monorepoRoot, 'packages/agents/src/index.ts'),
-        },
-        {
-          find: '@docx-editor.dev/core/headless',
-          replacement: path.join(monorepoRoot, 'packages/core/src/headless.ts'),
-        },
-        {
-          find: '@docx-editor.dev/core/core-plugins',
-          replacement: path.join(monorepoRoot, 'packages/core/src/core-plugins/index.ts'),
-        },
-        {
-          find: '@docx-editor.dev/core/mcp',
-          replacement: path.join(monorepoRoot, 'packages/core/src/mcp/index.ts'),
-        },
-        // Wildcard alias for deep core imports (e.g. @docx-editor.dev/core/utils/docxInput)
-        {
-          find: /^@docx-editor\.dev\/core\/(.+)/,
-          replacement: path.join(monorepoRoot, 'packages/core/src/$1'),
-        },
-        // Exact match for bare @docx-editor.dev/core (must come AFTER the prefix match above)
-        {
-          find: /^@docx-editor\.dev\/core$/,
-          replacement: path.join(monorepoRoot, 'packages/core/src/core.ts'),
         },
         { find: '@', replacement: path.join(monorepoRoot, 'packages/react/src') },
       ],

@@ -48,11 +48,10 @@ try {
   mkdirSync(packDir, { recursive: true });
   mkdirSync(path.join(appDir, 'src'), { recursive: true });
 
-  const sharedTarballs = [
-    packPackage('packages/core'),
-    packPackage('packages/i18n'),
-    packPackage('packages/agents'),
-  ];
+  // `@docx-editor.dev/core` and `/agents` ship from a separate repo, so they
+  // are not packed here — npm resolves them from the registry as transitive
+  // deps of the adapters, which is what a real consumer gets.
+  const sharedTarballs = [packPackage('packages/i18n')];
   const vueTarballs = [...sharedTarballs, packPackage('packages/vue')];
   const reactTarballs = [...sharedTarballs, packPackage('packages/react')];
 
