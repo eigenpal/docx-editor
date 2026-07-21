@@ -6,6 +6,8 @@
 - [ ] 0.4 Freeze canonical comparator formats for authored state, anchors, Yjs state vectors, shaped runs, pagination fingerprints, semantic trees, hit tests, PDF semantics, and benchmark evidence.
 - [ ] 0.5 Add import-graph and package-authority checks proving current-stack `DocxEditorEngine` orchestration is non-authoritative, future `EditorHost` is PM-free, and no alternate object-model namespace is exported.
 - [ ] 0.6 Before implementation, review and freeze versioned oracle artifacts for exact Yjs schema/invariants and collision precedence, normalization precedence, IME strings, selection grapheme boundaries/affinities, undo histories, fixture inputs/outputs, and comparators.
+- [ ] 0.7 Freeze source DOCX bytes/hashes plus an independently reviewed reference-render corpus with pagination, geometry, raster/text/link/semantic metrics, feature matrix, separate 100+ tracked-revision versus engine-history classes, and PDF/UA-1 validation before output implementation.
+- [ ] 0.8 Freeze shaping inputs, justification opportunity/exclusion/remainder/bidi allocation, text-fit limits, display/semantic IDs, referential integrity, grapheme caret/ligature affinity, pointer transparency/hit eligibility, anchors, tree, clusters, z-order, clips, transforms, and their independent expected outputs before implementing layout or renderers.
 
 ## 1. Prerequisite spike and architecture record
 
@@ -99,16 +101,16 @@
 
 ## 8. Resolved caches, layout, display list, and outputs
 
-- [ ] 8.1 Implement caches recording revision as provenance and permitting cross-revision reuse only for unchanged dependency/input fingerprints and producer version against immutable operation resource/configuration/extension/shaping snapshots; restart affected work on epoch changes.
-- [ ] 8.2 Freeze `ShapingEnvironment` inputs, fixed-point scale/rounding, licensed fallbacks, and exact glyph/cluster/advance comparator before integrating shaping.
-- [ ] 8.3 Implement deterministic measurement for paragraphs, lists, controls, inline and floating images, fields, comments, revisions, and relationship-backed resources; verify missing or over-limit resources produce typed diagnostics or declared fallback without external fetch.
-- [ ] 8.4 Implement section, column, header, footer, note, and page-flow layout with authored geometry and dependencies; verify a header-height change invalidates every dependent section page.
-- [ ] 8.5 Implement table layout for fixed and auto widths, merged cells, row splitting, repeated headers, clipping, and closing borders; verify deterministic fragments for rows and vertical merges crossing pages.
-- [ ] 8.6 Implement dependency-graph construction and closure expansion for style, numbering, section, story, font, image, table, field, note, and annotation keys; verify instrumentation never reuses an entry whose dependency changed.
+- [ ] 8.1 Implement the frozen `ShapingEnvironment`, fixed-point scale/rounding, licensed fallbacks, and exact glyph/cluster/advance comparator.
+- [ ] 8.2 Implement dependency-graph construction and closure expansion for style, numbering, section, story, font, image, table, field, note, and annotation keys before any cache consumer; verify instrumentation never reuses an entry whose dependency changed.
+- [ ] 8.3 Implement caches recording revision as provenance and permitting cross-revision reuse only for unchanged dependency/input fingerprints and producer version against immutable operation resource/configuration/extension/shaping snapshots; restart affected work on epoch changes.
+- [ ] 8.4 Implement deterministic measurement for paragraphs, lists, controls, inline and floating images, fields, comments, revisions, and relationship-backed resources; verify missing or over-limit resources produce typed diagnostics or declared fallback without external fetch.
+- [ ] 8.5 Implement section, column, header, footer, note, and page-flow layout with authored geometry and dependencies; verify a header-height change invalidates every dependent section page.
+- [ ] 8.6 Implement table layout for fixed and auto widths, merged cells, row splitting, repeated headers, clipping, and closing borders; verify deterministic fragments for rows and vertical merges crossing pages.
 - [ ] 8.7 Implement pagination result states `converged`, fully revalidated `cycleResolved`, and `nonConverged` with diagnostic-only stable prefix forbidden from complete save/export, plus fingerprint/frontier/pass/tie-break trace rules.
 - [ ] 8.8 Implement page-dependent field, destination, note, reference, and numbering resolution plus oscillating field/note fixtures against the convergence contract.
-- [ ] 8.9 Freeze and implement justification opportunity/exclusion/remainder/bidi allocation and text-fit limits plus display/semantic IDs, referential integrity, grapheme caret/ligature affinity, pointer transparency/hit eligibility, anchors, tree, clusters, z-order, clips, and transforms.
-- [ ] 8.10 Implement safe DOM construction, accessible DOM, transformed/clipped hit testing, tagged PDF semantics, and `ActualText` extraction fixtures.
+- [ ] 8.9 Implement the independently frozen justification, text-fit, semantic/display-list identity, caret, hit-testing, anchoring, reading-order, clipping, transform, and z-order algorithms and verify them against the section 0 oracle.
+- [ ] 8.10 Implement safe DOM construction, accessible DOM, transformed/clipped hit testing, tagged PDF semantics, and `ActualText` extraction fixtures against the frozen reference corpus.
 - [ ] 8.11 Implement native PDF output over the display list with font embedding or subsetting, positioned glyphs, images, transforms, clipping, and internal and sanitized external links; verify server export runs without a browser and matches declared DOM geometry metrics.
 - [ ] 8.12 Apply artifact-specific comparators: exact shaped integers/page breaks/fixed geometry/anchors/semantic tree/hit results, canonical semantic PDF inspection, and explicit tolerance only for a documented unavoidable raster comparison.
 
@@ -158,12 +160,12 @@
 
 ## 13. Performance baselines and conformance gates
 
-- [ ] 13.1 Freeze source DOCX bytes/hashes plus an independently reviewed reference-render corpus with pagination, geometry, raster/text/link/semantic metrics, feature matrix, and separate 100+ tracked-revision versus engine-history classes; pin PDF/UA-1 validation.
-- [ ] 13.2 Implement at least 5 warmups and 30 process-isolated measured runs per case with predeclared percentile and 95% bootstrap CI, dispersion/noise threshold, no post-hoc outlier removal, whole-case environment-invalid rerun, cold/warm state, memory/raw results, and frozen comparator version.
-- [ ] 13.3 Record baselines for parse and open, first useful layout, bounded incremental edit, pagination, synchronization, selective and full save, DOCX and PDF export, and peak and retained memory across every representative class.
-- [ ] 13.4 Ratify numerical budgets from retained baseline data and user-representative workloads, recording approver, fixture version, methodology, threshold, and rationale; keep any milestone unaccepted until every required budget is approved.
-- [ ] 13.5 Count semantic identities, dependency vertices, projection ranges, cache entries, measured blocks, pagination pages, display items, serialization ranges, DOM nodes, allocations, queues, and worker messages; prohibit work beyond closure/frontier absent a named global dependency.
-- [ ] 13.6 Test cancellation linearization: pre-publication abort rolls back all effects; post-publication abort returns commit ID/revision and cancels derived work; child budgets/workers release before root, alongside latency/checkpoint/queue/spill/N/N+1/overflow tests.
+- [ ] 13.1 Implement at least 5 warmups and 30 process-isolated measured runs per case with predeclared percentile and 95% bootstrap CI, dispersion/noise threshold, no post-hoc outlier removal, whole-case environment-invalid rerun, cold/warm state, memory/raw results, and frozen comparator version.
+- [ ] 13.2 Instrument semantic identities, dependency vertices, projection ranges, cache entries, measured blocks, pagination pages, display items, serialization ranges, DOM nodes, allocations, queues, worker messages, cancellation checkpoints, and cancellation latency before collecting baselines; prohibit work beyond closure/frontier absent a named global dependency.
+- [ ] 13.3 Record baselines for parse and open, first useful layout, bounded incremental edit, pagination, synchronization, selective and full save, DOCX and PDF export, peak and retained memory, cancellation/checkpoint latency, queue depth, and spill cleanup across every representative class.
+- [ ] 13.4 Ratify numerical budgets from retained baseline data and user-representative workloads, recording approver, fixture version, methodology, threshold, and rationale; keep any milestone unaccepted until every required performance and cancellation budget is approved.
+- [ ] 13.5 Test bounded local edits against ratified frontier/counter budgets and reject hidden whole-document scans, allocation, projection, serialization, or display rebuilding outside a named global dependency.
+- [ ] 13.6 Test cancellation linearization against ratified latency/checkpoint budgets: pre-publication abort rolls back all effects; post-publication abort returns commit ID/revision and cancels derived work; child budgets/workers release before root, alongside queue/spill/N/N+1/overflow tests.
 - [ ] 13.7 Run malicious-input conformance for archive bombs and traversal, unsafe XML, excessive depth and counts, unsafe URLs and zero-click fetches, XML injection, prototype pollution, malformed updates, oversized snapshots, inert executable content, and tenant isolation; assert safe failure and no partial state.
 - [ ] 13.8 Complete the conformance matrix for package fidelity, semantic operations, normalization, identities, anchors, local/Yjs history and undo, convergence, persistence, migrations, offline replay, binding, runtimes, layout, display lists, DOM, hit testing, PDF, public API, MCP, RPC, generated clients, citations, and extension combinations; retain machine-readable evidence for every cell.
 

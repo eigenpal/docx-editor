@@ -12,7 +12,7 @@ adapters MUST NOT expose a branded compatibility namespace or alias.
 `DocxEditor.run` SHALL create a revision-aware `DocxEditor.RequestContext`.
 Proxy reads MUST be declared with `load` and materialized by `sync`; proxy writes
 MUST queue as semantic operations and commit atomically on `sync`. Tracked
-objects MUST have explicit lifetime beyond a run scope.
+objects MUST support explicit reuse across syncs within the creating run scope.
 
 #### Scenario: Load and write in one context
 - **WHEN** a caller loads body text, queues multiple inserts, and calls `sync`
@@ -371,8 +371,8 @@ by declared option, and release store resources. An editor MAY dispose a handle
 only when it explicitly created and owns that handle.
 
 #### Scenario: Headless document later receives an editor
-- **WHEN** a server-created document handle is transferred to an authorized browser runtime and attached
-- **THEN** the editor MUST project the same canonical store revision without reparse or duplicate state
+- **WHEN** an authorized browser opens a server-created authoritative document through addressable synchronization or a versioned snapshot and attaches an editor
+- **THEN** the browser MUST create a local handle at an equivalent canonical revision and attach without reparsing DOCX bytes or creating a second authoritative store
 
 ### Requirement: Feature inventory and lock matrix are normative
 The IDL MUST enumerate base commands/queries for create/open/save/export,

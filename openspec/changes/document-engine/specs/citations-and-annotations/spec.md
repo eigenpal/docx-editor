@@ -52,7 +52,9 @@ silently reattach to unrelated text.
 
 ### Requirement: Comments and tracked changes are semantic state
 The engine SHALL store comment threads, replies, status, authorship, dates, and
-tracked insert/delete/format/structural revisions in canonical or replicated model state.
+tracked insert/delete/format/structural revisions in canonical authored state.
+When collaboration is enabled, the replication backend MUST mirror that
+canonical semantic state in its model-shaped replicated representation.
 Tracked operations MUST require explicit author identity and honor accept,
 reject, lock, and permission rules.
 
