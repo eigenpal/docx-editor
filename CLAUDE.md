@@ -11,7 +11,7 @@ This repo is **contracts + adapters**, not the engine implementation.
 - `packages/core` is `@docx-editor.dev/core-contract`: declarations only,
   `"private": true`, never published. Six entries (`.`, `./editor`,
   `./geometry`, `./plugin`, `./mcp`, `./types`). See
-  `openspec/changes/core-api-contract/`.
+  `openspec/changes/document-engine/`.
 - The **real engine is to be implemented.** It ships as `@docx-editor.dev/core`
   and is **consumed from npm** by the adapters; its source is not in this tree.
   There is no `painter-model`, `flow-model`, `pagination-model`, or `prosemirror`
@@ -22,48 +22,54 @@ This repo is **contracts + adapters**, not the engine implementation.
 - Published packages: `@docx-editor.dev/{react,vue,nuxt,agents,i18n}` and the
   npm `core`. The in-repo `core-contract` is private.
 
-The next-generation engine is being designed greenfield. **The design source of
-truth is `openspec/changes/`, not this file.** This file is the operational
-contract for working in the repo; the changes hold the architecture.
+The next-generation engine is being designed greenfield. **The design sources of
+truth are `openspec/changes/engine-core-spike/` (the prerequisite falsification
+gate) and `openspec/changes/document-engine/` (the production contract), not
+this file.** This file is the operational contract for working in the repo.
+
+`openspec/changes/engine-spine-tier2/` remains a current-stack delivery change.
+Its `DocxEditorEngine` orchestration name is not the greenfield public object
+model and is non-authoritative for the target. Do not absorb or delete that
+change during greenfield consolidation. Future `EditorHost` contracts MUST NOT
+expose ProseMirror types or view access; all such mapping belongs to
+`EditorBinding`.
 
 ## Engine architecture (target)
 
-Defined across the openspec changes; do not restate their detail here, read them:
+Defined by the two authoritative changes above; do not restate their detail
+here. `engine-core-spike` must pass all fifteen gates before production work on
+the canonical store, replication coordinator, editor binding, anchors, or
+bounded-work architecture proceeds. Production shaping, layout, output, and
+performance remain gated by `document-engine` conformance. `document-engine`
+owns the lossless package model,
+semantic store, editor binding, layout/output, `DocxEditor.*` object model,
+extension/runtime ports, addressable sync, server/language bindings, durable
+annotations, and performance/conformance contracts.
 
-- `modular-core-api` — the contracts: batched proxy object model
-  (`run`/`RequestContext`/`load`/`sync`), runtime **ports**
-  (metrics/fonts/images), the **display-list IR** + `RenderBackend`, the
-  **capability registry**, and the **`DocumentStore`** canonical-model seam.
-- `chromium-free-rendering-engine` — deterministic (browser-free) text shaping,
-  the DOM-free layout pipeline, and a native PDF emitter over the IR.
-- `ooxml-document-pipeline` — the end-to-end path and the concrete choices:
-  `fast-xml-parser` at the trust boundary, the canonical operation-based model,
-  ProseMirror as a projection, and the `Word.*`-shaped object model.
-- `remote-document-sync` — the hosting/sync seam; the CRDT backend of the
-  `DocumentStore`.
-
-The pipeline, one line: `parse (fast-xml-parser) -> capability parse ->
+The pipeline, one line: `bounded OPC/XML parse -> capability parse ->
 DocumentStore(model) -> { ProseMirror projection · layout: measure -> paginate ->
 resolve -> emit -> DisplayItem[] -> RenderBackend }`.
 
 Load-bearing rules the changes commit to:
 
 - **Model-canonical, one source of truth.** `store.model` is always current and
-  canonical; `store.apply(op)` is the only mutation path. ProseMirror and the
-  display list are *projections*; the CRDT is a *swappable backend*, not a second
-  representation. Solo and collaboration differ only in the store backend, never
-  in which representation holds truth (this is how `y-prosemirror` already works).
+  canonical authored OPC/OOXML package state; `store.apply(op)` is the only
+  mutation path. Resolved caches retain revision provenance and reuse only by
+  unchanged dependency/input fingerprints and operation environment. ProseMirror
+  and the display list are projections; CRDT details stay behind the
+  `ReplicatedStoreBackend`.
 - **ProseMirror is the editing engine but never canonical.** It processes
   keystrokes and produces transactions; `EditorBinding` maps each transaction to
   `DocOp`s applied to the store, and maps an inbound `ModelChange` back into the
   `EditorState`. Layout reads `store.model`, never the `EditorView` or DOM. A
   server agent mutates the same store with no view at all.
-- **One currency.** A `DocOp` (the anchor-addressed edit from `core-api-contract`)
-  is the unit of edit, undo, sync delta, and persistence — so keystroke, agent
-  edit, and offline replay travel one path.
-- **The model is office-js-shaped.** Its tree and property names mirror the Word
-  object model, so the object model is a thin lazy facade with no translation
-  layer, and add-in code ports (client + worker + server, no add-in dependency).
+- **Four distinct contracts.** `DocOp` is the semantic mutation vocabulary,
+  `ModelChange` is the committed notification, replication updates are opaque
+  backend bytes, and snapshots are full encoded state.
+- **`DocxEditor.*` is the only public object-model namespace.** It exposes
+  familiar Office JavaScript-style `run`/`RequestContext`/`load`/`sync` semantics
+  as a lazy facade over the authored model in browser, worker, and server
+  runtimes.
 - **One positioned IR, many backends.** DOM, PDF, print, and hit-test all consume
   `DisplayItem[]`; no backend re-derives geometry or interprets CSS.
 
@@ -115,9 +121,10 @@ return type, or core's internal types leak into the API Extractor snapshot.
 **Treat every value from a DOCX, pasted HTML, or embedded part as
 attacker-controlled.** A `.docx` is a zip of XML an attacker fully controls: font
 names, hyperlink targets, shape attrs, image rels, run text. Sanitize at the
-**parse/trust boundary** (the `fast-xml-parser` read + `NodeCapability.parse`, PM
-`parseDOM`), not at render time, so every downstream consumer gets the clean
-value. This is the `ooxml-parse-boundary` capability.
+**bounded parse/trust boundary** (the parser-neutral XML read plus registered
+capability parsing, and PM `parseDOM` where applicable), not at render time, so
+every downstream runtime sink receives a sanitized projection. The authoritative
+contract is `document-engine/specs/lossless-package-model/`.
 
 When you add/touch anything that **parses or renders unknown files** (parsers,
 capability parse/serialize, IR emit / painter, PM `toDOM`/`parseDOM`, clipboard,
@@ -131,9 +138,9 @@ print), audit these before merging:
   every `href`, image `hlinkHref`, and `window.open(...)` arg.
 - **Escape strings interpolated into CSS** — `@font-face` family names and any
   inline `style` built from file data.
-- **XML safety** — the parser must not resolve DTDs/external entities (XXE) or
-  expand nested entities (billion-laughs). `fast-xml-parser` is configured for
-  this at the boundary.
+- **XML safety** — the selected parser must not resolve DTDs/external entities
+  (XXE) or expand nested entities (billion-laughs); parser choice is an
+  implementation detail behind the bounded trust boundary.
 - **Zip safety** — decompression-ratio/size cap (zip bomb); reject part/rel/media
   paths with `..` or a leading `/` (path traversal).
 - **No zero-click external fetch** — never auto-load a remote target from a file
