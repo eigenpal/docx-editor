@@ -1,7 +1,11 @@
 import { describe, expect, test } from 'bun:test';
 import JSZip from 'jszip';
+import { deflateRawSync } from 'node:zlib';
 import {
   POC_PARAGRAPH_ID,
+  POC_CUSTOM_NS,
+  POC_NS,
+  POC_W_NS,
   POC_ZIP_MAX_BYTES,
   POC_ZIP_MAX_DECOMPRESSION_RATIO,
   POC_ZIP_MAX_ENTRIES,
@@ -27,6 +31,7 @@ interface ZipInput {
   readonly path?: string;
   readonly nameBytes?: Uint8Array;
   readonly data: Uint8Array;
+  readonly compressedData?: Uint8Array;
   readonly flags?: number;
   readonly method?: number;
   readonly extra?: Uint8Array;
@@ -78,6 +83,7 @@ function buildClassicZip(entries: readonly ZipInput[], comment = new Uint8Array(
     const nameBytes = entry.nameBytes ?? new TextEncoder().encode(entry.path ?? '');
     const localName = entry.local?.nameBytes ?? nameBytes;
     const data = entry.data;
+    const compressedData = entry.compressedData ?? data;
     const flags = entry.flags ?? UTF8_FLAG;
     const method = entry.method ?? 0;
     const extra = entry.extra ?? new Uint8Array();
@@ -90,14 +96,14 @@ function buildClassicZip(entries: readonly ZipInput[], comment = new Uint8Array(
       ...u16(entry.local?.method ?? method),
       ...u16(0), ...u16(0),
       ...u32(entry.local?.crc ?? crc),
-      ...u32(entry.local?.compressedSize ?? data.length),
+      ...u32(entry.local?.compressedSize ?? compressedData.length),
       ...u32(entry.local?.uncompressedSize ?? data.length),
       ...u16(localName.length),
       ...u16(localExtra.length),
       ...localName,
       ...localExtra,
     ];
-    local.push(...localHeader, ...data);
+    local.push(...localHeader, ...compressedData);
     central.push(
       0x50, 0x4b, 0x01, 0x02,
       ...u16(20), ...u16(20),
@@ -105,7 +111,7 @@ function buildClassicZip(entries: readonly ZipInput[], comment = new Uint8Array(
       ...u16(entry.central?.method ?? method),
       ...u16(0), ...u16(0),
       ...u32(entry.central?.crc ?? crc),
-      ...u32(entry.central?.compressedSize ?? data.length),
+      ...u32(entry.central?.compressedSize ?? compressedData.length),
       ...u32(entry.central?.uncompressedSize ?? data.length),
       ...u16(nameBytes.length),
       ...u16(extra.length),
@@ -114,7 +120,7 @@ function buildClassicZip(entries: readonly ZipInput[], comment = new Uint8Array(
       ...nameBytes,
       ...extra
     );
-    localOffset += localHeader.length + data.length;
+    localOffset += localHeader.length + compressedData.length;
   }
   const end = [
     0x50, 0x4b, 0x05, 0x06,
@@ -260,6 +266,15 @@ describe('POC DOCX classic ZIP preflight', () => {
     await expect(loadPocDocx(buildClassicZip(entries))).rejects.toThrow(/extra field/i);
   });
 
+  test('rejects duplicate and case-colliding required paths', async () => {
+    const entries = await fixtureEntries();
+    await expect(loadPocDocx(buildClassicZip([...entries, entries[4]!]))).rejects.toThrow(/duplicate/i);
+    entries[4] = { ...entries[4]!, path: 'Word/document.xml' };
+    await expect(loadPocDocx(buildClassicZip([...entries, { ...(await fixtureEntries())[4]! }]))).rejects.toThrow(
+      /case collision/i
+    );
+  });
+
   test.each([
     ['parent segment', '../word/document.xml'],
     ['dot segment', 'word/./document.xml'],
@@ -328,6 +343,26 @@ describe('POC DOCX classic ZIP preflight', () => {
     };
     await expect(loadPocDocx(buildClassicZip(entries))).rejects.toThrow(/crc/i);
   });
+
+  test('rejects coherent declared size that differs from inflated payload', async () => {
+    const entries = await fixtureEntries();
+    const document = entries[4]!;
+    const compressedData = new Uint8Array(deflateRawSync(document.data));
+    entries[4] = {
+      ...document,
+      method: 8,
+      compressedData,
+      local: {
+        compressedSize: compressedData.length,
+        uncompressedSize: document.data.length - 1,
+      },
+      central: {
+        compressedSize: compressedData.length,
+        uncompressedSize: document.data.length - 1,
+      },
+    };
+    await expect(loadPocDocx(buildClassicZip(entries))).rejects.toThrow();
+  });
 });
 
 describe('POC DOCX XML and relationship boundary', () => {
@@ -354,7 +389,7 @@ describe('POC DOCX XML and relationship boundary', () => {
   test.each([
     [
       'prefixed single-quoted external mode',
-      `<r:Relationships xmlns:r='x'><r:Relationship Id='x' Type='x' Target='word/document.xml' TargetMode='eXtErNaL'/></r:Relationships>`,
+      `<r:Relationships xmlns:r='http://schemas.openxmlformats.org/package/2006/relationships'><r:Relationship Id='x' Type='x' Target='word/document.xml' TargetMode='eXtErNaL'/></r:Relationships>`,
     ],
     [
       'entity-encoded remote scheme',
@@ -372,6 +407,18 @@ describe('POC DOCX XML and relationship boundary', () => {
       'traversal target',
       `<Relationships xmlns='x'><Relationship Id='x' Type='x' Target='../document.xml'/></Relationships>`,
     ],
+    [
+      'whitespace/entity-obscured external mode',
+      `<Relationships xmlns='http://schemas.openxmlformats.org/package/2006/relationships'><Relationship Id='x' Type='x' Target='word/document.xml' TargetMode=' &#x09;eXtErNaL&#x0A; '/></Relationships>`,
+    ],
+    [
+      'leading whitespace remote target',
+      `<Relationships xmlns='http://schemas.openxmlformats.org/package/2006/relationships'><Relationship Id='x' Type='x' Target=' &#x09;https://evil.test/x '/></Relationships>`,
+    ],
+    [
+      'entity-obscured traversal target',
+      `<Relationships xmlns='http://schemas.openxmlformats.org/package/2006/relationships'><Relationship Id='x' Type='x' Target='..&#x09;/document.xml'/></Relationships>`,
+    ],
   ])('rejects relationship variant: %s', async (_label, xml) => {
     await expect(loadPocDocx(await replaceEntry('_rels/.rels', xml))).rejects.toThrow(/relationship|external|remote|target/i);
   });
@@ -379,6 +426,83 @@ describe('POC DOCX XML and relationship boundary', () => {
   test('rejects malformed relationship attributes', async () => {
     const xml = `<Relationships xmlns='x'><Relationship Id='x' Type='x' Target='word/document.xml' Broken/></Relationships>`;
     await expect(loadPocDocx(await replaceEntry('_rels/.rels', xml))).rejects.toThrow(/attribute|relationship/i);
+  });
+
+  test.each([
+    [
+      'lowercase child',
+      `<Relationships xmlns='http://schemas.openxmlformats.org/package/2006/relationships'><relationship Id='x' Type='x' Target='word/document.xml'/></Relationships>`,
+    ],
+    [
+      'unknown child',
+      `<Relationships xmlns='http://schemas.openxmlformats.org/package/2006/relationships'><Unknown/></Relationships>`,
+    ],
+    [
+      'wrong namespace',
+      `<Relationships xmlns='urn:wrong'><Relationship Id='x' Type='x' Target='word/document.xml'/></Relationships>`,
+    ],
+    [
+      'unknown target mode',
+      `<Relationships xmlns='http://schemas.openxmlformats.org/package/2006/relationships'><Relationship Id='x' Type='x' Target='word/document.xml' TargetMode='other'/></Relationships>`,
+    ],
+    [
+      'duplicate ID',
+      `<Relationships xmlns='http://schemas.openxmlformats.org/package/2006/relationships'><Relationship Id='x' Type='x' Target='word/document.xml'/><Relationship Id='x' Type='x' Target='word/document.xml'/></Relationships>`,
+    ],
+  ])('rejects closed RELS grammar: %s', async (_label, xml) => {
+    await expect(loadPocDocx(await replaceEntry('_rels/.rels', xml))).rejects.toThrow(/relationship|rels|namespace|mode|id/i);
+  });
+});
+
+describe('POC required package semantics', () => {
+  test('rejects missing and unknown content-type declarations', async () => {
+    const entries = await fixtureEntries();
+    const contentTypes = new TextDecoder().decode(entries[0]!.data);
+    const missing = contentTypes.replace(
+      '  <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>\n',
+      ''
+    );
+    await expect(loadPocDocx(await replaceEntry('[Content_Types].xml', missing))).rejects.toThrow(/content type/i);
+    const unknown = contentTypes.replace('</Types>', '<Default Extension="bin" ContentType="x"/></Types>');
+    await expect(loadPocDocx(await replaceEntry('[Content_Types].xml', unknown))).rejects.toThrow(/content type/i);
+    const duplicate = contentTypes.replace(
+      '</Types>',
+      '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/></Types>'
+    );
+    await expect(loadPocDocx(await replaceEntry('[Content_Types].xml', duplicate))).rejects.toThrow(
+      /duplicate content type/i
+    );
+  });
+
+  test('rejects missing required root and document relationships', async () => {
+    const entries = await fixtureEntries();
+    const rootRels = new TextDecoder().decode(entries[1]!.data);
+    const documentRels = new TextDecoder().decode(entries[2]!.data);
+    await expect(
+      loadPocDocx(await replaceEntry('_rels/.rels', rootRels.replace(/<Relationship[^>]+\/>/, '')))
+    ).rejects.toThrow(/required.*relationship|relationship.*required/i);
+    await expect(
+      loadPocDocx(
+        await replaceEntry(
+          'word/_rels/document.xml.rels',
+          documentRels.replace(/<Relationship[^>]+\/>/, '')
+        )
+      )
+    ).rejects.toThrow(/required.*relationship|relationship.*required/i);
+  });
+
+  test('rejects styles and document namespace rebinding', async () => {
+    const entries = await fixtureEntries();
+    const styles = new TextDecoder().decode(entries[3]!.data);
+    await expect(
+      loadPocDocx(await replaceEntry('word/styles.xml', styles.replace(POC_W_NS, 'urn:wrong')))
+    ).rejects.toThrow(/namespace|styles/i);
+    const document = new TextDecoder().decode(entries[4]!.data);
+    for (const namespace of [POC_W_NS, POC_NS, POC_CUSTOM_NS]) {
+      await expect(
+        loadPocDocx(await replaceEntry('word/document.xml', document.replace(namespace, 'urn:wrong')))
+      ).rejects.toThrow(/namespace|binding/i);
+    }
   });
 });
 
@@ -436,6 +560,19 @@ describe('POC document shape tokenizer', () => {
     const longText = 'x'.repeat(MAX_RUN_TEXT_LENGTH + 1);
     const textPayload = xml.replace('<w:t>bold</w:t>', `<w:t>${longText}</w:t>`);
     await expect(loadPocDocx(await replaceEntry('word/document.xml', textPayload))).rejects.toThrow(/run text/i);
+  });
+
+  test('enforces aggregate editable text bound', async () => {
+    const xml = await documentXml();
+    const runs = Array.from(
+      { length: 3 },
+      () => `<w:r><w:t>${'x'.repeat(3000)}</w:t></w:r>`
+    ).join('');
+    const payload = xml.replace(
+      /<poc:OwnedStart\/>[\s\S]*?<poc:OwnedEnd\/>/,
+      `<poc:OwnedStart/>${runs}<poc:OwnedEnd/>`
+    );
+    await expect(loadPocDocx(await replaceEntry('word/document.xml', payload))).rejects.toThrow(/owned text|aggregate text/i);
   });
 
   test('decodes predefined and numeric entities without interpreting markup', async () => {

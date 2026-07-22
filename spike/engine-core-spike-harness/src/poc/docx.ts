@@ -19,6 +19,18 @@ const POC_MAX_RUN_TEXT_LENGTH = 4096;
 const POC_MAX_TOTAL_TEXT_LENGTH = 8192;
 const UTF8_FLAG = 0x0800;
 const ALLOWED_FLAGS = UTF8_FLAG;
+const CONTENT_TYPES_NS = 'http://schemas.openxmlformats.org/package/2006/content-types';
+const RELATIONSHIPS_NS = 'http://schemas.openxmlformats.org/package/2006/relationships';
+const OFFICE_DOCUMENT_REL_TYPE =
+  'http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument';
+const STYLES_REL_TYPE =
+  'http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles';
+const RELS_CONTENT_TYPE = 'application/vnd.openxmlformats-package.relationships+xml';
+const XML_CONTENT_TYPE = 'application/xml';
+const DOCUMENT_CONTENT_TYPE =
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml';
+const STYLES_CONTENT_TYPE =
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml';
 
 const REQUIRED_ENTRIES = [
   '[Content_Types].xml',
@@ -121,6 +133,13 @@ interface ParsedDocument {
   readonly capsuleBytes: Uint8Array;
 }
 
+interface ParsedRelationship {
+  readonly id: string;
+  readonly type: string;
+  readonly target: string;
+  readonly mode: 'internal';
+}
+
 const utf8Decoder = new TextDecoder('utf-8', { fatal: true });
 const utf8Encoder = new TextEncoder();
 
@@ -173,15 +192,28 @@ export async function loadPocDocx(input: Uint8Array): Promise<LoadedPocDocx> {
   }
 
   const xmlByPath = new Map<string, string>();
+  const tokensByPath = new Map<string, readonly XmlToken[]>();
   for (const path of REQUIRED_ENTRIES) {
     const bytes = inflated.get(path)!;
     if (bytes.length > POC_XML_MAX_BYTES) throw new Error(`${path} exceeds XML byte cap`);
     const xml = decodeAndValidateXml(bytes, path);
-    tokenizeXml(xml);
+    const tokens = tokenizeXml(xml);
     xmlByPath.set(path, xml);
+    tokensByPath.set(path, tokens);
   }
-  validateRelationships(tokenizeXml(xmlByPath.get('_rels/.rels')!));
-  validateRelationships(tokenizeXml(xmlByPath.get('word/_rels/document.xml.rels')!));
+  validateContentTypes(tokensByPath.get('[Content_Types].xml')!);
+  const rootRelationships = validateRelationships(tokensByPath.get('_rels/.rels')!);
+  validateRequiredRelationship(
+    rootRelationships,
+    'rId1',
+    OFFICE_DOCUMENT_REL_TYPE,
+    'word/document.xml'
+  );
+  const documentRelationships = validateRelationships(
+    tokensByPath.get('word/_rels/document.xml.rels')!
+  );
+  validateRequiredRelationship(documentRelationships, 'rId1', STYLES_REL_TYPE, 'styles.xml');
+  validateStyles(tokensByPath.get('word/styles.xml')!);
   const parsed = parsePocDocument(xmlByPath.get('word/document.xml')!);
 
   const sourceBacking = new Uint8Array(source);
@@ -490,37 +522,128 @@ function parseStartTag(body: string): Pick<XmlToken, 'name' | 'attributes' | 'se
   return { name, attributes: Object.freeze(attributes), selfClosing };
 }
 
-function validateRelationships(tokens: readonly XmlToken[]): void {
-  for (const token of tokens) {
-    if (token.kind !== 'start' || localName(token.name!) !== 'Relationship') continue;
+function validateRelationships(tokens: readonly XmlToken[]): readonly ParsedRelationship[] {
+  const rootIndex = singleRootIndex(tokens);
+  const root = tokens[rootIndex]!;
+  if (localName(root.name!) !== 'Relationships') throw new Error('RELS root must be Relationships');
+  const prefix = namespacePrefix(root.name!);
+  const namespaceAttribute = prefix === '' ? 'xmlns' : `xmlns:${prefix}`;
+  if (
+    root.attributes!.length !== 1 ||
+    getAttributeExact(root.attributes!, namespaceAttribute) !== RELATIONSHIPS_NS
+  ) {
+    throw new Error('RELS root must bind the package relationships namespace exactly');
+  }
+  const expectedChildName = prefix === '' ? 'Relationship' : `${prefix}:Relationship`;
+  const children = directChildTokens(tokens, rootIndex);
+  if (children.some((token) => token.name !== expectedChildName)) {
+    throw new Error('RELS contains unknown or mis-cased child');
+  }
+  const relationships: ParsedRelationship[] = [];
+  const ids = new Set<string>();
+  for (const token of children) {
     if (!token.selfClosing) throw new Error('relationship elements must be self-closing');
     const attributes = token.attributes!;
     for (const attribute of attributes) {
-      const name = localName(attribute.name);
-      if (!['Id', 'Type', 'Target', 'TargetMode'].includes(name)) {
+      if (!['Id', 'Type', 'Target', 'TargetMode'].includes(attribute.name)) {
         throw new Error('unknown relationship attribute');
       }
     }
-    const target = getAttribute(attributes, 'Target');
-    const id = getAttribute(attributes, 'Id');
-    const type = getAttribute(attributes, 'Type');
+    const target = normalizedAttribute(attributes, 'Target');
+    const id = normalizedAttribute(attributes, 'Id');
+    const type = normalizedAttribute(attributes, 'Type');
     if (target === undefined || id === undefined || type === undefined) {
       throw new Error('relationship requires Id, Type, and Target attributes');
     }
-    const mode = getAttribute(attributes, 'TargetMode');
-    if (mode !== undefined && mode.toLowerCase() === 'external') {
-      throw new Error('external relationship mode rejected');
+    if (id.length === 0 || type.length === 0 || target.length === 0) {
+      throw new Error('relationship attributes must be non-empty');
     }
-    const stripped = stripControls(target);
-    if (/^[A-Za-z][A-Za-z0-9+.-]*:/.test(stripped)) throw new Error('remote relationship target rejected');
-    if (stripped.startsWith('/') || stripped.startsWith('\\') || stripped.includes('\\')) {
+    if (ids.has(id)) throw new Error('relationship IDs must be unique');
+    ids.add(id);
+    const mode = normalizedAttribute(attributes, 'TargetMode');
+    if (mode !== undefined && mode.toLowerCase() !== 'internal') {
+      throw new Error('only absent or internal relationship mode is accepted');
+    }
+    if (/^[A-Za-z][A-Za-z0-9+.-]*:/.test(target)) throw new Error('remote relationship target rejected');
+    if (target.startsWith('/') || target.startsWith('\\') || target.includes('\\')) {
       throw new Error('absolute relationship target rejected');
     }
-    const segments = stripped.split('/');
+    const segments = target.split('/');
     if (segments.some((segment) => segment === '.' || segment === '..')) {
       throw new Error('relationship traversal target rejected');
     }
+    relationships.push(Object.freeze({ id, type, target, mode: 'internal' }));
   }
+  return Object.freeze(relationships);
+}
+
+function validateRequiredRelationship(
+  relationships: readonly ParsedRelationship[],
+  id: string,
+  type: string,
+  target: string
+): void {
+  if (
+    relationships.length !== 1 ||
+    relationships[0]!.id !== id ||
+    relationships[0]!.type !== type ||
+    relationships[0]!.target !== target ||
+    relationships[0]!.mode !== 'internal'
+  ) {
+    throw new Error('required package relationship is missing or incorrect');
+  }
+}
+
+function validateContentTypes(tokens: readonly XmlToken[]): void {
+  const rootIndex = singleRootIndex(tokens);
+  const root = tokens[rootIndex]!;
+  if (
+    root.name !== 'Types' ||
+    root.attributes!.length !== 1 ||
+    getAttributeExact(root.attributes!, 'xmlns') !== CONTENT_TYPES_NS
+  ) {
+    throw new Error('content types root namespace is invalid');
+  }
+  const expected = new Set([
+    `Default|rels|${RELS_CONTENT_TYPE}`,
+    `Default|xml|${XML_CONTENT_TYPE}`,
+    `Override|/word/document.xml|${DOCUMENT_CONTENT_TYPE}`,
+    `Override|/word/styles.xml|${STYLES_CONTENT_TYPE}`,
+  ]);
+  const observed = new Set<string>();
+  for (const child of directChildTokens(tokens, rootIndex)) {
+    if (!child.selfClosing || (child.name !== 'Default' && child.name !== 'Override')) {
+      throw new Error('unknown content type child');
+    }
+    const requiredNames =
+      child.name === 'Default' ? ['Extension', 'ContentType'] : ['PartName', 'ContentType'];
+    if (
+      child.attributes!.length !== requiredNames.length ||
+      child.attributes!.some((attribute) => !requiredNames.includes(attribute.name))
+    ) {
+      throw new Error('content type attributes are invalid');
+    }
+    const key =
+      child.name === 'Default'
+        ? `Default|${getAttributeExact(child.attributes!, 'Extension')}|${getAttributeExact(child.attributes!, 'ContentType')}`
+        : `Override|${getAttributeExact(child.attributes!, 'PartName')}|${getAttributeExact(child.attributes!, 'ContentType')}`;
+    if (!expected.has(key) || observed.has(key)) throw new Error('unknown or duplicate content type entry');
+    observed.add(key);
+  }
+  if (observed.size !== expected.size) throw new Error('required content type entry is missing');
+}
+
+function validateStyles(tokens: readonly XmlToken[]): void {
+  const rootIndex = singleRootIndex(tokens);
+  const root = tokens[rootIndex]!;
+  if (
+    root.name !== 'w:styles' ||
+    root.attributes!.length !== 1 ||
+    getAttributeExact(root.attributes!, 'xmlns:w') !== POC_W_NS
+  ) {
+    throw new Error('styles root namespace is invalid');
+  }
+  validateNamespaceDeclarations(tokens, new Map([['w', POC_W_NS]]));
 }
 
 function parsePocDocument(xml: string): ParsedDocument {
@@ -684,6 +807,22 @@ function validateOuterPocShape(tokens: readonly XmlToken[]): void {
   if (documentIndex < 0 || bodyIndex < 0 || paragraphIndex < 0 || pPrIndex < 0) {
     throw new Error('POC document namespace or outer shape invalid');
   }
+  const document = tokens[documentIndex]!;
+  const requiredBindings = new Map([
+    ['w', POC_W_NS],
+    ['poc', POC_NS],
+    ['custom', POC_CUSTOM_NS],
+  ]);
+  if (
+    document.attributes!.length !== requiredBindings.size ||
+    [...requiredBindings].some(
+      ([prefix, namespace]) =>
+        getAttributeExact(document.attributes!, `xmlns:${prefix}`) !== namespace
+    )
+  ) {
+    throw new Error('POC document namespace bindings are invalid');
+  }
+  validateNamespaceDeclarations(tokens, requiredBindings);
   if (!sameStrings(directChildNames(tokens, documentIndex), ['w:body'])) {
     throw new Error('POC document contains unknown root child');
   }
@@ -709,6 +848,68 @@ function directChildNames(tokens: readonly XmlToken[], parentIndex: number): str
     }
   }
   return names;
+}
+
+function directChildTokens(tokens: readonly XmlToken[], parentIndex: number): XmlToken[] {
+  const parentEnd = findMatchingEndIndex(tokens, parentIndex);
+  const children: XmlToken[] = [];
+  let depth = 0;
+  for (let index = parentIndex + 1; index < parentEnd; index += 1) {
+    const token = tokens[index]!;
+    if (token.kind === 'text') {
+      if (depth === 0 && token.text!.trim().length !== 0) {
+        throw new Error('unexpected text in closed XML grammar');
+      }
+      continue;
+    }
+    if (token.kind === 'start') {
+      if (depth === 0) children.push(token);
+      if (!token.selfClosing) depth += 1;
+    } else {
+      depth -= 1;
+    }
+  }
+  return children;
+}
+
+function singleRootIndex(tokens: readonly XmlToken[]): number {
+  let rootIndex = -1;
+  let depth = 0;
+  for (let index = 0; index < tokens.length; index += 1) {
+    const token = tokens[index]!;
+    if (token.kind === 'text') {
+      if (depth === 0 && token.text!.trim().length !== 0) throw new Error('text outside XML root');
+      continue;
+    }
+    if (token.kind === 'start') {
+      if (depth === 0) {
+        if (rootIndex !== -1) throw new Error('XML part must contain exactly one root');
+        rootIndex = index;
+      }
+      if (!token.selfClosing) depth += 1;
+    } else {
+      depth -= 1;
+    }
+  }
+  if (rootIndex < 0 || tokens[rootIndex]!.selfClosing) throw new Error('XML part requires a non-empty root');
+  return rootIndex;
+}
+
+function validateNamespaceDeclarations(
+  tokens: readonly XmlToken[],
+  expected: ReadonlyMap<string, string>
+): void {
+  for (const token of tokens) {
+    if (token.kind !== 'start') continue;
+    for (const attribute of token.attributes!) {
+      if (attribute.name === 'xmlns') throw new Error('unexpected default namespace binding');
+      if (!attribute.name.startsWith('xmlns:')) continue;
+      const prefix = attribute.name.slice('xmlns:'.length);
+      if (expected.get(prefix) !== attribute.value) {
+        throw new Error('namespace prefix rebinding or unknown binding rejected');
+      }
+    }
+  }
 }
 
 function validateTokenNesting(tokens: readonly XmlToken[]): void {
@@ -937,6 +1138,29 @@ function getAttribute(attributes: readonly XmlAttribute[], name: string): string
 
 function getAttributeExact(attributes: readonly XmlAttribute[], name: string): string | undefined {
   return attributes.find((attribute) => attribute.name === name)?.value;
+}
+
+function normalizedAttribute(
+  attributes: readonly XmlAttribute[],
+  name: string
+): string | undefined {
+  const value = getAttributeExact(attributes, name);
+  return value === undefined ? undefined : normalizeSecurityValue(value);
+}
+
+function normalizeSecurityValue(value: string): string {
+  let normalized = '';
+  for (const char of value) {
+    const point = char.codePointAt(0)!;
+    if (point <= 0x20 || point === 0x7f) continue;
+    normalized += char;
+  }
+  return normalized.trim();
+}
+
+function namespacePrefix(name: string): string {
+  const colon = name.indexOf(':');
+  return colon < 0 ? '' : name.slice(0, colon);
 }
 
 function isStart(token: XmlToken | undefined, name: string, selfClosing: boolean): boolean {
