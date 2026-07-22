@@ -29,6 +29,8 @@ export {
 export {
   createPocDocxFixture,
   loadPocDocx,
+  savePocDocx,
+  escapeXmlText,
   POC_PARAGRAPH_ID,
   POC_ZIP_MAX_BYTES,
   POC_ZIP_MAX_ENTRIES,
@@ -39,6 +41,7 @@ export {
   POC_XML_MAX_SCAN_STEPS,
   type LoadedPocDocx,
   type PocRun,
+  type PocSaveSnapshot,
 } from './poc/docx';
 export {
   createPocStore,

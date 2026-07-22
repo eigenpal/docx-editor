@@ -65,7 +65,14 @@ describe('poc EditorDriver boundary', () => {
     await driver.type('!');
     expect((host as PocEditorDriverHost & HTMLElement).dataset.syncStatus).toBe('converged');
     expect(await driver.undo()).toEqual({ status: 'applied', changed: true });
-    expect(await driver.save()).toMatchObject({ status: 'failed', code: 'not-implemented' });
+    const saveResult = await driver.save();
+    expect(saveResult.status).toBe('saved');
+    expect((host as PocEditorDriverHost & HTMLElement).dataset.saveStatus).toBe('saved');
+    await driver.loadDocx(saveResult.bytes!);
+    expect(await driver.query({ type: 'selectedText' })).toEqual({
+      type: 'selectedText',
+      text: '',
+    });
     host.remove();
   });
 

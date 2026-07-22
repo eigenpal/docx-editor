@@ -98,6 +98,12 @@ export interface LoadedPocDocx {
   readonly sourceBytes: Uint8Array;
 }
 
+export interface PocSaveSnapshot {
+  readonly paragraphId: string;
+  readonly text: string;
+  readonly runs: readonly PocRun[];
+}
+
 interface ZipEntryMeta {
   readonly path: string;
   readonly nameBytes: Uint8Array;
@@ -231,6 +237,137 @@ export async function loadPocDocx(input: Uint8Array): Promise<LoadedPocDocx> {
     },
   };
   return Object.freeze(result);
+}
+
+export function escapeXmlText(value: string): string {
+  let output = '';
+  for (const char of value) {
+    switch (char) {
+      case '&':
+        output += '&amp;';
+        break;
+      case '<':
+        output += '&lt;';
+        break;
+      case '>':
+        output += '&gt;';
+        break;
+      case '"':
+        output += '&quot;';
+        break;
+      case "'":
+        output += '&apos;';
+        break;
+      default:
+        output += char;
+    }
+  }
+  validateXmlCharacters(output);
+  return output;
+}
+
+export async function savePocDocx(
+  source: LoadedPocDocx,
+  snapshot: PocSaveSnapshot
+): Promise<Uint8Array> {
+  if (!source || typeof source !== 'object') throw new Error('save source is required');
+  const sourceBytes = source.sourceBytes;
+  if (!(sourceBytes instanceof Uint8Array)) throw new Error('save source bytes are required');
+  const trusted = await loadPocDocx(sourceBytes);
+  validateSaveSnapshot(snapshot, trusted);
+
+  const zip = await JSZip.loadAsync(trusted.sourceBytes);
+  const documentXml = buildSavedDocumentXml(trusted, snapshot);
+  const parts: Array<[string, string]> = [];
+  for (const path of REQUIRED_ENTRIES) {
+    if (path === 'word/document.xml') {
+      parts.push([path, documentXml]);
+      continue;
+    }
+    const file = zip.file(path);
+    if (!file) throw new Error(`trusted source missing required entry ${path}`);
+    parts.push([path, await file.async('string')]);
+  }
+  return buildStoredFixture(parts);
+}
+
+function validateSaveSnapshot(snapshot: PocSaveSnapshot, trusted: LoadedPocDocx): void {
+  if (!snapshot || typeof snapshot !== 'object') throw new Error('save snapshot is required');
+  if (typeof snapshot.paragraphId !== 'string' || snapshot.paragraphId.length === 0) {
+    throw new Error('save snapshot paragraphId is required');
+  }
+  if (snapshot.paragraphId !== trusted.paragraphId) {
+    throw new Error('save snapshot paragraph identity mismatch');
+  }
+  if (typeof snapshot.text !== 'string') throw new Error('save snapshot text is required');
+  if (snapshot.text.length > POC_MAX_TOTAL_TEXT_LENGTH) {
+    throw new Error('save snapshot text exceeds bound');
+  }
+  if (!Array.isArray(snapshot.runs)) throw new Error('save snapshot runs are required');
+  if (snapshot.runs.length === 0) throw new Error('save snapshot runs must not be empty');
+  if (snapshot.runs.length > POC_MAX_RUNS) throw new Error('save snapshot run count exceeds bound');
+
+  let reconstructed = '';
+  for (let index = 0; index < snapshot.runs.length; index += 1) {
+    const run = snapshot.runs[index]!;
+    if (!run || typeof run !== 'object') throw new Error('save snapshot run is invalid');
+    if (typeof run.text !== 'string') throw new Error('save snapshot run text is invalid');
+    if (typeof run.bold !== 'boolean' || typeof run.italic !== 'boolean') {
+      throw new Error('save snapshot run formatting is invalid');
+    }
+    if (run.text.length > POC_MAX_RUN_TEXT_LENGTH) {
+      throw new Error('save snapshot run text exceeds bound');
+    }
+    validateXmlCharacters(run.text);
+    reconstructed += run.text;
+    const previous = snapshot.runs[index - 1];
+    if (
+      previous &&
+      previous.bold === run.bold &&
+      previous.italic === run.italic
+    ) {
+      throw new Error('save snapshot runs are not maximally merged');
+    }
+  }
+  if (reconstructed !== snapshot.text) {
+    throw new Error('save snapshot runs do not reconstruct text');
+  }
+}
+
+function buildSavedDocumentXml(trusted: LoadedPocDocx, snapshot: PocSaveSnapshot): string {
+  const ownedRuns = snapshot.runs.map((run) => serializePocRun(run)).join('');
+  const capsule = utf8Decoder.decode(trusted.capsuleBytes);
+  if (!capsule.startsWith('<custom:PocUnsupported') || !capsule.endsWith('</custom:PocUnsupported>')) {
+    throw new Error('trusted capsule substring shape is invalid');
+  }
+  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:document xmlns:w="${POC_W_NS}" xmlns:poc="${POC_NS}" xmlns:custom="${POC_CUSTOM_NS}">
+  <w:body>
+    <w:p>
+      <w:pPr><poc:ParagraphId>${escapeXmlText(snapshot.paragraphId)}</poc:ParagraphId></w:pPr>
+      <poc:OwnedStart/>
+      ${ownedRuns}
+      <poc:OwnedEnd/>
+      ${capsule}
+    </w:p>
+    <w:sectPr>
+      <w:pgSz w:w="12240" w:h="15840"/>
+      <w:pgMar w:top="1440" w:right="1440" w:bottom="1440" w:left="1440"/>
+    </w:sectPr>
+  </w:body>
+</w:document>`;
+}
+
+function serializePocRun(run: PocRun): string {
+  let runProperties = '';
+  if (run.bold || run.italic) {
+    const marks: string[] = [];
+    if (run.bold) marks.push('<w:b/>');
+    if (run.italic) marks.push('<w:i/>');
+    runProperties = `<w:rPr>${marks.join('')}</w:rPr>`;
+  }
+  const spaceAttribute = startsOrEndsXmlWhitespace(run.text) ? ' xml:space="preserve"' : '';
+  return `<w:r>${runProperties}<w:t${spaceAttribute}>${escapeXmlText(run.text)}</w:t></w:r>`;
 }
 
 function preflightClassicZip(bytes: Uint8Array): readonly ZipEntryMeta[] {

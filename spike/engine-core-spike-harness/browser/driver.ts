@@ -112,11 +112,7 @@ export function createPocEditorDriver(options: CreatePocEditorDriverOptions): Ed
       return requireSession().undo();
     },
     async save() {
-      const result: DocxEditor.SaveResult = Object.freeze({
-        status: 'failed',
-        code: 'not-implemented',
-        reason: 'DOCX save/reopen is milestone 4',
-      });
+      const result = await requireSession().saveDocx();
       setStatus(session?.snapshotsConverged() ? 'converged' : 'connected', result.status);
       return result;
     },

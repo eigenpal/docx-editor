@@ -71,11 +71,7 @@ export function createHeadlessPocEditorDriver(): EditorDriver {
       return requireSession().undo();
     },
     async save() {
-      return Object.freeze({
-        status: 'failed',
-        code: 'not-implemented',
-        reason: 'DOCX save/reopen is milestone 4',
-      });
+      return requireSession().saveDocx();
     },
   };
 

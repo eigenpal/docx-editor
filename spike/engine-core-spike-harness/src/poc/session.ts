@@ -3,7 +3,7 @@ import * as Y from 'yjs';
 import type { DocxEditor } from '../driver/editor-driver';
 import { docRange } from '../driver/editor-driver';
 import { snapshotAndValidateCommand } from '../vocabulary/validate';
-import { type LoadedPocDocx } from './docx';
+import { type LoadedPocDocx, savePocDocx } from './docx';
 import {
   BINDING_RECONCILIATION_ORIGIN,
   isBindingReconciliationOrigin,
@@ -71,6 +71,7 @@ export interface PocEditorSession {
   subscribeEditable(listener: (snapshot: PocSnapshot) => void): () => void;
   subscribeReplica(listener: (snapshot: PocSnapshot) => void): () => void;
   snapshotsConverged(): boolean;
+  saveDocx(): Promise<DocxEditor.SaveResult>;
 }
 
 function diffUpdate(source: PocStore, target: PocStore): Uint8Array {
@@ -273,6 +274,21 @@ export function createPocEditorSession(
     },
     snapshotsConverged() {
       return snapshotsEqual(editable.snapshot(), replica.snapshot());
+    },
+    async saveDocx() {
+      try {
+        const bytes = await savePocDocx(loaded, editable.snapshot());
+        return Object.freeze({
+          status: 'saved',
+          bytes: new Uint8Array(bytes),
+        });
+      } catch (error) {
+        return Object.freeze({
+          status: 'failed',
+          code: 'save-failed',
+          reason: error instanceof Error ? error.message : 'save failed',
+        });
+      }
     },
   };
 }
