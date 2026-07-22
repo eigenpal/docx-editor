@@ -71,8 +71,6 @@ const STYLES_XML = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 </w:styles>`;
 
 const CAPSULE_XML = `<custom:PocUnsupported xmlns:custom="${POC_CUSTOM_NS}" xmlns:w="${POC_W_NS}"><custom:Payload>deadbeef</custom:Payload></custom:PocUnsupported>`;
-const OWNED_START_MARKER = '<poc:OwnedStart/>';
-const OWNED_END_MARKER = '<poc:OwnedEnd/>';
 const SAVE_SOURCE_KEYS = ['capsuleBytes', 'paragraphId', 'runs', 'sourceBytes', 'text'] as const;
 
 const DOCUMENT_XML = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
@@ -408,14 +406,27 @@ function validateSaveSnapshot(snapshot: PocSaveSnapshot, trusted: LoadedPocDocx)
 }
 
 function locateOwnedRegion(documentXml: string): { readonly prefix: string; readonly suffix: string } {
-  const startMarker = documentXml.indexOf(OWNED_START_MARKER);
-  if (startMarker < 0) throw new Error('owned start marker missing from trusted document.xml');
-  const afterStart = startMarker + OWNED_START_MARKER.length;
-  const endMarker = documentXml.indexOf(OWNED_END_MARKER, afterStart);
-  if (endMarker < 0) throw new Error('owned end marker missing from trusted document.xml');
+  const tokens = tokenizeXml(documentXml);
+  const ownedStarts = tokens.filter(
+    (token) => token.kind === 'start' && token.name === 'poc:OwnedStart' && token.selfClosing
+  );
+  const ownedEnds = tokens.filter(
+    (token) => token.kind === 'start' && token.name === 'poc:OwnedEnd' && token.selfClosing
+  );
+  if (ownedStarts.length !== 1 || ownedEnds.length !== 1) {
+    throw new Error('owned markers missing from trusted document.xml');
+  }
+  const ownedStart = ownedStarts[0]!;
+  const ownedEnd = ownedEnds[0]!;
+  if (ownedStart.attributes!.length !== 0 || ownedEnd.attributes!.length !== 0) {
+    throw new Error('owned marker shape invalid in trusted document.xml');
+  }
+  if (ownedEnd.start <= ownedStart.end) {
+    throw new Error('owned marker order invalid in trusted document.xml');
+  }
   return Object.freeze({
-    prefix: documentXml.slice(0, afterStart),
-    suffix: documentXml.slice(endMarker),
+    prefix: documentXml.slice(0, ownedStart.end),
+    suffix: documentXml.slice(ownedEnd.start),
   });
 }
 

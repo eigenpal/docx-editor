@@ -448,6 +448,41 @@ describe('POC savePocDocx trust-boundary inputs', () => {
 });
 
 describe('POC savePocDocx unowned document preservation', () => {
+  test('splices using tokenizer offsets for whitespace-equivalent owned markers', async () => {
+    const loaded = await loadedWithDocumentXml((xml) =>
+      xml
+        .replace('<poc:OwnedStart/>', '<poc:OwnedStart />')
+        .replace('<poc:OwnedEnd/>', '<poc:OwnedEnd />')
+    );
+    const trustedXml = await documentXmlFromBytes(loaded.sourceBytes);
+    expect(trustedXml).toContain('<poc:OwnedStart />');
+    expect(trustedXml).toContain('<poc:OwnedEnd />');
+    const ownedStartEnd =
+      trustedXml.indexOf('<poc:OwnedStart />') + '<poc:OwnedStart />'.length;
+    const ownedEndStart = trustedXml.indexOf('<poc:OwnedEnd />', ownedStartEnd);
+    const prefix = trustedXml.slice(0, ownedStartEnd);
+    const suffix = trustedXml.slice(ownedEndStart);
+
+    const saved = await savePocDocx(loaded, {
+      paragraphId: loaded.paragraphId,
+      text: 'edited marker spacing',
+      runs: [{ text: 'edited marker spacing', bold: false, italic: false }],
+    });
+    const savedXml = await documentXmlFromBytes(saved);
+    expect(savedXml.startsWith(prefix)).toBe(true);
+    expect(savedXml.endsWith(suffix)).toBe(true);
+    expect(
+      bytesEqual(
+        new TextEncoder().encode(extractCapsuleSubstring(savedXml)),
+        loaded.capsuleBytes
+      )
+    ).toBe(true);
+
+    const reopened = await loadPocDocx(saved);
+    expect(reopened.text).toBe('edited marker spacing');
+    expect(reopened.paragraphId).toBe(POC_PARAGRAPH_ID);
+  });
+
   test('preserves trusted unowned prefix and suffix bytes including capsule and section geometry', async () => {
     const loaded = await loadedWithDocumentXml((xml) =>
       xml.replace('w:w="12240"', 'w:w="9999"').replace('<w:body>', '<w:body>\n  ')
