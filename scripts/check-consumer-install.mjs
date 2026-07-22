@@ -10,6 +10,23 @@ const packDir = path.join(tempRoot, 'packs');
 const appDir = path.join(tempRoot, 'app');
 const reactAppDir = path.join(tempRoot, 'react-app');
 
+function coreContractPaths(projectDir) {
+  const publicEntries = {
+    '@docx-editor.dev/core': 'packages/core/src/index.ts',
+    '@docx-editor.dev/core/editor': 'packages/core/src/editor.ts',
+    '@docx-editor.dev/core/geometry': 'packages/core/src/geometry.ts',
+    '@docx-editor.dev/core/plugin': 'packages/core/src/plugin.ts',
+    '@docx-editor.dev/core/mcp': 'packages/core/src/mcp.ts',
+    '@docx-editor.dev/core/types': 'packages/core/src/types-barrel.ts',
+  };
+  return Object.fromEntries(
+    Object.entries(publicEntries).map(([specifier, relativeTarget]) => [
+      specifier,
+      [path.relative(projectDir, path.join(ROOT, relativeTarget))],
+    ])
+  );
+}
+
 function run(command, args, options = {}) {
   const result = spawnSync(command, args, {
     cwd: options.cwd ?? ROOT,
@@ -82,15 +99,16 @@ try {
     `<script setup lang="ts">
 import { ref } from 'vue';
 import { DocxEditor } from '@docx-editor.dev/vue';
-import { caretAt, rectsFor, renderDocument } from '@docx-editor.dev/core/api';
+import * as VueUi from '@docx-editor.dev/vue/ui';
+import * as VueDialogs from '@docx-editor.dev/vue/dialogs';
+import * as VueComposables from '@docx-editor.dev/vue/composables';
+import * as VuePluginApi from '@docx-editor.dev/vue/plugin-api';
 import '@docx-editor.dev/vue/styles.css';
 
 const buffer = ref<ArrayBuffer | null>(null);
-console.assert(
-  typeof renderDocument === 'function' &&
-    typeof caretAt === 'function' &&
-    typeof rectsFor === 'function'
-);
+const exportedSurfaceChecks = [VueUi, VueDialogs, VueComposables, VuePluginApi];
+console.assert(exportedSurfaceChecks.every((entry) => typeof entry === 'object' && entry !== null));
+void exportedSurfaceChecks;
 
 async function loadFile(event: Event) {
   const file = (event.target as HTMLInputElement).files?.[0];
@@ -125,12 +143,14 @@ export default defineConfig({ plugins: [vue()] });
     JSON.stringify(
       {
         compilerOptions: {
+          baseUrl: '.',
           strict: true,
           target: 'ES2022',
           module: 'ESNext',
           moduleResolution: 'Bundler',
           jsx: 'preserve',
           skipLibCheck: true,
+          paths: coreContractPaths(appDir),
         },
         include: ['src/**/*.ts', 'src/**/*.vue'],
       },
@@ -183,14 +203,15 @@ export default defineConfig({ plugins: [vue()] });
     path.join(reactAppDir, 'src/main.tsx'),
     `import { createRoot } from 'react-dom/client';
 import { DocxEditor } from '@docx-editor.dev/react';
-import { caretAt, rectsFor, renderDocument } from '@docx-editor.dev/core/api';
+import * as ReactUi from '@docx-editor.dev/react/ui';
+import * as ReactDialogs from '@docx-editor.dev/react/dialogs';
+import * as ReactHooks from '@docx-editor.dev/react/hooks';
+import * as ReactPluginApi from '@docx-editor.dev/react/plugin-api';
 import '@docx-editor.dev/react/styles.css';
 
-console.assert(
-  typeof renderDocument === 'function' &&
-    typeof caretAt === 'function' &&
-    typeof rectsFor === 'function'
-);
+const exportedSurfaceChecks = [ReactUi, ReactDialogs, ReactHooks, ReactPluginApi];
+console.assert(exportedSurfaceChecks.every((entry) => typeof entry === 'object' && entry !== null));
+void exportedSurfaceChecks;
 
 createRoot(document.getElementById('root')!).render(<DocxEditor showToolbar={false} />);
 `
@@ -212,12 +233,14 @@ export default defineConfig({ plugins: [react()] });
     JSON.stringify(
       {
         compilerOptions: {
+          baseUrl: '.',
           strict: true,
           target: 'ES2022',
           module: 'ESNext',
           moduleResolution: 'Bundler',
           jsx: 'react-jsx',
           skipLibCheck: true,
+          paths: coreContractPaths(reactAppDir),
         },
         include: ['src/**/*.ts', 'src/**/*.tsx'],
       },

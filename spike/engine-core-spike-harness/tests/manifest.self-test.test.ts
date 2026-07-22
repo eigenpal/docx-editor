@@ -52,6 +52,7 @@ describe('manifest.v1 self-test', () => {
       'comparatorContracts',
       'manifest',
       'migrationInventory',
+      'packageTestInventory',
       'scopeManifest',
       'vocabulary',
       'yjsSchema',
@@ -71,6 +72,7 @@ describe('manifest.v1 self-test', () => {
       vocabulary: read('oracles/docx-editor-vocabulary.v1.json'),
       comparatorContracts: read('oracles/comparator-contracts.v1.json'),
       migrationInventory: read('migration/playwright-inventory.v1.json'),
+      packageTestInventory: read('migration/package-test-inventory.v1.json'),
       scopeManifest: read('oracles/scope-manifest.v1.json'),
     };
     const serialize = (value: unknown): string => {

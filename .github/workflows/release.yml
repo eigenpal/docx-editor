@@ -8,7 +8,7 @@ name: Release
 #    changesets (they were drained by `changeset version`), and instead
 #    publishes the new versions to npm.
 #
-# The heavy gate (lint, format, typecheck, tests, build, Playwright, parity)
+# The heavy gate (lint, format, typecheck, tests, build, parity)
 # only guards the PUBLISH path (mode 2). On the PR-update path (mode 1) those
 # steps are skipped: `changeset version` just rewrites versions + CHANGELOGs,
 # needs no build, and the work is already validated by each contributing PR's
@@ -118,35 +118,6 @@ jobs:
           # tsup's dts worker (rollup-plugin-dts) loads the full TS program;
           # core's 67 entries OOM under the default 1.5 GB heap.
           NODE_OPTIONS: --max-old-space-size=8192
-
-      # Restore the browser binaries from cache so the common path skips the
-      # download from cdn.playwright.dev. Keyed on the lockfile so a
-      # @playwright/test bump invalidates it; a miss falls through to a fresh
-      # download.
-      - name: Cache Playwright browsers
-        if: ${{ steps.pending.outputs.publishing == 'true' }}
-        uses: actions/cache@v5
-        with:
-          path: ~/.cache/ms-playwright
-          key: playwright-${{ runner.os }}-${{ hashFiles('bun.lock') }}
-
-      # `--with-deps` shells out to apt-get; a post-install needrestart prompt
-      # can hang it, so NEEDRESTART_MODE=a + noninteractive suppress it.
-      # timeout-minutes turns any remaining hang into a fast failure.
-      #
-      # NB: Playwright < 1.60.0 deadlocks here on Node >= 24.16 — a vendored
-      # yauzl regression hangs extraction *after* the download hits 100%
-      # (microsoft/playwright#40724). `setup-node` pins Node 24, whose runner
-      # default crossed 24.16, so every publish-path run hung until the job
-      # timeout. The fix is the >=1.60.0 bump in package.json, not a longer
-      # timeout. Keep this pinned at >=1.60.0.
-      - name: Install Playwright browsers for parity gate
-        if: ${{ steps.pending.outputs.publishing == 'true' }}
-        timeout-minutes: 10
-        run: npx playwright install --with-deps chromium
-        env:
-          DEBIAN_FRONTEND: noninteractive
-          NEEDRESTART_MODE: a
 
       - name: Parity prepublish gate
         if: ${{ steps.pending.outputs.publishing == 'true' }}

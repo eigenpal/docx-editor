@@ -55,6 +55,9 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
+      - name: Spike oracle tests
+        run: bun run test:spike:oracles
+
       - name: Type check
         run: bun run typecheck
 

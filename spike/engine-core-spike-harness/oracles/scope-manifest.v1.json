@@ -22,7 +22,8 @@
     "seeded-rng-diagnostics",
     "fixture-comparators",
     "engine-neutral-editor-driver-contract",
-    "playwright-migration-inventory"
+    "playwright-migration-inventory",
+    "package-test-migration-inventory"
   ],
   "explicitlyForbiddenInSpike": [
     "production-document-engine",
@@ -40,7 +41,7 @@
   "implementationSurface": {
     "status": "harness-audit-only-not-engine-runtime-enforcement",
     "derivation": "Imports, exports, and @spike-features annotations are scanned from every src/**/*.ts file. The SHA-256 of canonical derived modules is authoritative; per-module imports/exports below are non-authoritative review notes.",
-    "derivedSurfaceHash": "efa22347ace248bc8cb1966aa6f8bba8ac18ed5b8c5b453b8f9e7f89871b3720",
+    "derivedSurfaceHash": "65f0bb1ffb8c427a8cc7f4be03bb662a2b1e42d4f222e1ce44e0d7abdd30f229",
     "modules": [
       {
         "path": "src/canonical-json.ts",

@@ -237,17 +237,15 @@ describe('third review adversarial regressions', () => {
   });
 
   test('behavioral migration candidates retain reusable current suites', () => {
-    const candidates = inventory.suites['behavioral-migration-candidate'];
+    const candidates = inventory.tombstones
+      .filter((tombstone) => tombstone.coupling.category === 'behavioral-migration-candidate')
+      .map((tombstone) => tombstone.source);
     expect(candidates).toContain('e2e/tests/text-editing.spec.ts');
     expect(candidates).toContain('e2e/tests/formatting.spec.ts');
     expect(candidates).toContain('e2e/tests/formatting-persistence.spec.ts');
     expect(candidates).toContain('e2e/tests/scenario-driven.spec.ts');
-    for (const path of candidates) {
-      expect(
-        inventory.behavioralCandidateCoupling[
-          path as keyof typeof inventory.behavioralCandidateCoupling
-        ]
-      ).toBeTruthy();
+    for (const tombstone of inventory.tombstones) {
+      expect(tombstone.coupling.reason).toBeTruthy();
     }
   });
 });

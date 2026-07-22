@@ -33,13 +33,17 @@ bun run typecheck
 # Unit tests
 bun test
 
-# E2E tests (requires Playwright browsers)
-npx playwright install --with-deps chromium
-npx playwright test --timeout=30000 --workers=4
+# Engine spike tests and type checking
+bun run test:spike
+bun run typecheck:spike
 
-# Single test file
-npx playwright test e2e/tests/formatting.spec.ts --timeout=30000
+# Public API, adapter parity, and locales
+bun run check:parity
+bun run api:check
+bun run i18n:validate
 ```
+
+Browser E2E returns only after the public `EditorDriver` boundary exists.
 
 ## Code Style
 
@@ -60,7 +64,7 @@ Contributors are required to sign our [Contributor License Agreement](CLA.md). T
 1. **Fork** the repository and create a branch from `main`
 2. **Read the code** before modifying it — understand the dual rendering system (see [Architecture](docs/ARCHITECTURE.md))
 3. **Make your changes** — keep them focused and minimal
-4. **Add/update tests** for your changes (see `e2e/` for E2E tests)
+4. **Add/update package or spike tests** for your changes
 5. **Verify** everything works:
    ```bash
    bun run typecheck && bun test && bun run build:packages
@@ -106,7 +110,8 @@ The editor ships first-party adapters for React (`packages/react`) and Vue (`pac
 
 **When you touch layout, parsing, or rendering logic, put it in core, not in an adapter.** If you copy a 30-line helper from React to Vue, you've created a divergence trap. The footnote convergence loop (`stabilizeFootnoteLayout` in `packages/core/src/flow-model/footnoteLayout.ts`) is the canonical example: one helper, both adapters call it.
 
-Parity smoke tests live under `e2e/tests/parity/smoke/` and run each spec against both demos. Add one when you fix a bug that could plausibly affect rendering on either side.
+Use `bun run check:parity` for adapter contract and surface parity. Browser parity
+coverage returns with the public `EditorDriver` boundary.
 
 ## Reporting Bugs
 

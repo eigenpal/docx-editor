@@ -6,6 +6,7 @@ import bindingOracle from '../oracles/binding-oracle.v1.json';
 import vocabulary from '../oracles/docx-editor-vocabulary.v1.json';
 import comparatorContracts from '../oracles/comparator-contracts.v1.json';
 import migrationInventory from '../migration/playwright-inventory.v1.json';
+import packageTestInventory from '../migration/package-test-inventory.v1.json';
 import scopeManifest from '../oracles/scope-manifest.v1.json';
 
 export function sha256Hex(input: string): string {
@@ -26,6 +27,7 @@ export function frozenOracleBundle(): Record<string, unknown> {
     vocabulary,
     comparatorContracts,
     migrationInventory,
+    packageTestInventory,
     scopeManifest,
   };
 }

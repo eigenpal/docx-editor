@@ -15,6 +15,9 @@ import {
   type EditorHost,
   type EditorSnapshot,
 } from '../editor';
+import { type DocPoint, type SelectionBox } from '../geometry';
+import { type McpContext, type McpToolDefinition } from '../mcp';
+import { type Extension, type PluginContext, type RenderedPage } from '../plugin';
 import type { DocAnchor, DocxDocument } from '../types';
 
 // A no-arg command must be constructible. `Record<string, never>` made this
@@ -26,6 +29,22 @@ const deleteRowCmd: EditorCommand = { type: 'deleteRow' };
 // Commands with arguments.
 const boldCmd: EditorCommand = { type: 'toggleMark', mark: 'bold' };
 const tableCmd: EditorCommand = { type: 'insertTable', rows: 3, cols: 4 };
+
+// Declaration-only public entries must resolve for a consumer without exposing
+// any ProseMirror-facing types.
+declare const point: DocPoint;
+const pmPos: number = point.pmPos;
+const boxes: readonly SelectionBox[] = [];
+declare const extension: Extension;
+declare const tool: McpToolDefinition;
+declare const pluginContext: PluginContext;
+const rendered: RenderedPage | null = pluginContext.getRenderedPage(1);
+const handlerResult: Promise<unknown> = tool.handler({}, {} as McpContext);
+void pmPos;
+void boxes;
+void extension;
+void rendered;
+void handlerResult;
 
 // A minimal host. Everything optional is omitted on purpose: a host that
 // implements only the required members must still typecheck.

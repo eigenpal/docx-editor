@@ -1,206 +1,2787 @@
 {
-  "version": "playwright-migration-inventory/1.0.0",
-  "description": "Classification of current Playwright suites for migration to engine-neutral DocxEditor EditorDriver.",
+  "version": "playwright-migration-inventory/1.1.0",
+  "description": "Per-suite behavior tombstones for migration to engine-neutral requirements and conformance coverage.",
   "crossAdapterLifecycleScenario": {
     "id": "lifecycle-bold-roundtrip-v1",
     "source": "oracles/docx-editor-vocabulary.v1.json#crossAdapterLifecycleScenario",
-    "adapters": ["react", "vue"],
+    "adapters": [
+      "react",
+      "vue"
+    ],
     "status": "frozen-not-wired",
-    "note": "Do not add as default repo E2E until EditorDriver adapter exists"
+    "note": "Do not add as default repo E2E until EditorDriver adapter exists",
+    "destination": {
+      "change": "engine-core-spike",
+      "area": "gates/gate-12-engine-neutral-driver"
+    }
   },
-  "classificationRules": {
-    "engine-neutral-now": [
-      "Only suites already expressible solely through EditorDriver methods and DocxEditor commands/queries",
-      "No current Playwright suite qualifies; the frozen cross-adapter lifecycle scenario is the first candidate once driver adapters exist"
-    ],
-    "behavioral-migration-candidate": [
-      "Reusable semantic behavior after replacing current debug-hook, DOM, or EditorPage transport",
-      "Current coupling is recorded and does not make these suites engine-neutral today"
-    ],
-    "legacy-ui-or-debug-coupled": [
-      "DOM selectors, keyboard/toolbar behavior, debug hooks, painter details, or hidden EditorPage coupling"
-    ],
-    "legacy-geometry": [
-      "pagination, scroll, caret metrics, table layout geometry, virtualization, overlay rects"
-    ],
-    "legacy-visual": ["screenshot/visual regression and rendering parity pixel checks"],
-    "legacy-header-footer": ["header/footer stories, HF toolbars, section HF inheritance"],
-    "legacy-performance": ["large-doc perf baselines and timing thresholds"]
-  },
-  "suites": {
-    "engine-neutral-now": [],
-    "behavioral-migration-candidate": [
-      "e2e/tests/text-editing.spec.ts",
-      "e2e/tests/formatting.spec.ts",
-      "e2e/tests/formatting-persistence.spec.ts",
-      "e2e/tests/scenario-driven.spec.ts",
-      "e2e/tests/parity/smoke/type-characters.spec.ts",
-      "e2e/tests/parity/smoke/toggle-bold.spec.ts",
-      "e2e/tests/parity/smoke/save-roundtrip.spec.ts"
-    ],
-    "legacy-ui-or-debug-coupled": [
-      "e2e/tests/find-replace-shortcuts.spec.ts",
-      "e2e/tests/alignment.spec.ts",
-      "e2e/tests/colors.spec.ts",
-      "e2e/tests/lists.spec.ts",
-      "e2e/tests/line-spacing.spec.ts",
-      "e2e/tests/paragraph-styles.spec.ts",
-      "e2e/tests/hyperlinks.spec.ts",
-      "e2e/tests/hyperlink-popup.spec.ts",
-      "e2e/tests/agent-bridge.spec.ts",
-      "e2e/tests/agent-bridge-formatting.spec.ts",
-      "e2e/tests/agent-panel.spec.ts",
-      "e2e/tests/agent-timeline.spec.ts",
-      "e2e/tests/cursor-paragraph-ops.spec.ts",
-      "e2e/tests/cross-paragraph-selection.spec.ts",
-      "e2e/tests/cursor-focus.spec.ts",
-      "e2e/tests/toolbar-state.spec.ts",
-      "e2e/tests/default-document.spec.ts",
-      "e2e/tests/edge-cases.spec.ts",
-      "e2e/tests/content-controls.spec.ts",
-      "e2e/tests/content-control-widgets.spec.ts",
-      "e2e/tests/content-control-repeating.spec.ts",
-      "e2e/tests/comment-button.spec.ts",
-      "e2e/tests/comments-sidebar.spec.ts",
-      "e2e/tests/tracked-changes-structural.spec.ts",
-      "e2e/tests/tracked-image.spec.ts",
-      "e2e/tests/issue-761-paste-suggestion.spec.ts",
-      "e2e/tests/split-color-button.spec.ts",
-      "e2e/tests/superscript-line-height.spec.ts",
-      "e2e/tests/demo-docx.spec.ts",
-      "e2e/tests/help-menu.spec.ts",
-      "e2e/tests/toc-hyperlink-tabs.spec.ts",
-      "e2e/tests/vue/issue-889-show-help-menu.spec.ts",
-      "e2e/tests/clipboard-image-paste.spec.ts",
-      "e2e/tests/parity/smoke/agent-tool-call.spec.ts",
-      "e2e/tests/parity/toc-insertion-update.spec.ts",
-      "e2e/tests/parity/agent-panel.spec.ts",
-      "e2e/tests/parity/agent-timeline.spec.ts",
-      "e2e/tests/vue/controlled-document-undo.spec.ts",
-      "e2e/tests/vue/issue-761-paste-suggestion.spec.ts",
-      "e2e/tests/vue/comments-sidebar-toggle.spec.ts",
-      "e2e/tests/vue/context-menu-token-scope.spec.ts",
-      "e2e/tests/vue/i18n-locale.spec.ts",
-      "e2e/tests/vue/mount.spec.ts",
-      "e2e/tests/nuxt/mount.spec.ts",
-      "e2e/tests/parity/smoke/mount.spec.ts"
-    ],
-    "legacy-geometry": [
-      "e2e/tests/scroll-to-page.spec.ts",
-      "e2e/tests/scroll-to-paragraph.spec.ts",
-      "e2e/tests/body-multi-column-pagination.spec.ts",
-      "e2e/tests/floating-table-pagination.spec.ts",
-      "e2e/tests/deleted-section-break-pagination.spec.ts",
-      "e2e/tests/paged-editor-clicks.spec.ts",
-      "e2e/tests/document-scrollbar.spec.ts",
-      "e2e/tests/border-overlay-layout.spec.ts",
-      "e2e/tests/generic-rendering-regression.spec.ts",
-      "e2e/tests/virtualization-invalidation.spec.ts",
-      "e2e/tests/issue-319-section-pagination.spec.ts",
-      "e2e/tests/issue-386-numbering.spec.ts",
-      "e2e/tests/issue-472-floating-textbox.spec.ts",
-      "e2e/tests/issue-483-firstline-marker.spec.ts",
-      "e2e/tests/issue-705-anchored-header-pagination.spec.ts",
-      "e2e/tests/issue-734-rtl-table.spec.ts",
-      "e2e/tests/issue-748-caret-height-mixed-fonts.spec.ts",
-      "e2e/tests/issue-763-caret-multipage-table.spec.ts",
-      "e2e/tests/issue-781-table-layout.spec.ts",
-      "e2e/tests/issue-862-select-table.spec.ts",
-      "e2e/tests/issue-928-zoom-caret-height.spec.ts",
-      "e2e/tests/float-text-wrapping.spec.ts",
-      "e2e/tests/table-add-column-regression.spec.ts",
-      "e2e/tests/table-cell-text-selection.spec.ts",
-      "e2e/tests/table-context-menu.spec.ts",
-      "e2e/tests/table-merge-split.spec.ts",
-      "e2e/tests/tables.spec.ts",
-      "e2e/tests/empty-table-row-vmerge.spec.ts",
-      "e2e/tests/image-fit-container.spec.ts",
-      "e2e/tests/image-layout-modes.spec.ts",
-      "e2e/tests/image-resize-handles.spec.ts",
-      "e2e/tests/image-context-menu.spec.ts",
-      "e2e/tests/image-roundtrip.spec.ts",
-      "e2e/tests/agent-paraid-allocator.spec.ts",
-      "e2e/tests/public-render-api.spec.ts",
-      "e2e/tests/parity/anchor-reveal.spec.ts",
-      "e2e/tests/parity/smoke/footnote-convergence.spec.ts",
-      "e2e/tests/vue/document-scrollbar.spec.ts",
-      "e2e/tests/vue/caret-while-typing.spec.ts",
-      "e2e/tests/vue/cell-drag-selection.spec.ts",
-      "e2e/tests/vue/image-fit-container.spec.ts",
-      "e2e/tests/vue/image-insert.spec.ts",
-      "e2e/tests/vue/image-overlay-follow.spec.ts",
-      "e2e/tests/vue/image-resize-handles.spec.ts",
-      "e2e/tests/vue/issue-734-rtl-table.spec.ts",
-      "e2e/tests/vue/issue-746-getdocument-paraids.spec.ts",
-      "e2e/tests/vue/issue-748-caret-height-mixed-fonts.spec.ts",
-      "e2e/tests/vue/issue-762-delete-multiple-rows.spec.ts",
-      "e2e/tests/vue/issue-763-caret-multipage-table.spec.ts",
-      "e2e/tests/vue/issue-764-image-overlay-scrollbar-gutter.spec.ts",
-      "e2e/tests/vue/issue-781-table-layout.spec.ts",
-      "e2e/tests/vue/issue-862-select-table.spec.ts",
-      "e2e/tests/vue/issue-887-outline-ruler-overlap.spec.ts",
-      "e2e/tests/vue/selection-resize.spec.ts",
-      "e2e/tests/comprehensive-torture-regressions.spec.ts",
-      "e2e/tests/vue/comprehensive-torture-regressions.spec.ts"
-    ],
-    "legacy-visual": [
-      "e2e/tests/visual-regression.spec.ts",
-      "e2e/tests/visual-check.spec.ts",
-      "e2e/tests/vue/rendering-parity.spec.ts",
-      "e2e/tests/parity/smoke/watermark-render.spec.ts",
-      "e2e/tests/parity/smoke/watermark-presets.spec.ts",
-      "e2e/tests/issue-777-vml-header-render.spec.ts",
-      "e2e/tests/issue-856-header-shape-overlay.spec.ts",
-      "e2e/tests/vue/issue-777-vml-header-render.spec.ts",
-      "e2e/tests/vue/issue-856-header-shape-overlay.spec.ts",
-      "e2e/tests/alternatecontent-textbox.spec.ts",
-      "e2e/tests/header-vml-emf.spec.ts",
-      "e2e/tests/header-overflow-diagnostic.spec.ts",
-      "e2e/tests/embedded-fonts.spec.ts",
-      "e2e/tests/vue/embedded-fonts.spec.ts",
-      "e2e/tests/fonts.spec.ts",
-      "e2e/tests/vue/fonts.spec.ts"
-    ],
-    "legacy-header-footer": [
-      "e2e/tests/hf-body-focus-handoff.spec.ts",
-      "e2e/tests/hf-click-and-type.spec.ts",
-      "e2e/tests/hf-field-insert.spec.ts",
-      "e2e/tests/hf-footer-caret-section.spec.ts",
-      "e2e/tests/hf-selection-rects.spec.ts",
-      "e2e/tests/hf-toolbar-and-zindex.spec.ts",
-      "e2e/tests/hf-trailing-rule.spec.ts",
-      "e2e/tests/hf-type-then-insert.spec.ts",
-      "e2e/tests/header-footer-horizontal-regression.spec.ts",
-      "e2e/tests/header-footer-tables.spec.ts",
-      "e2e/tests/header-footer-textbox.spec.ts",
-      "e2e/tests/header-right-tab.spec.ts",
-      "e2e/tests/header-selection-bleed.spec.ts",
-      "e2e/tests/footer-page-number.spec.ts",
-      "e2e/tests/footnote-bottom-overflow.spec.ts",
-      "e2e/tests/section-header-footer-rendering.spec.ts",
-      "e2e/tests/section-inheritance.spec.ts",
-      "e2e/tests/sdt-header-content.spec.ts",
-      "e2e/tests/titlePg-header-footer.spec.ts",
-      "e2e/tests/issue-740-header-zero-distance.spec.ts",
-      "e2e/tests/vue/hf-body-focus-handoff.spec.ts",
-      "e2e/tests/vue/hf-click-and-type.spec.ts",
-      "e2e/tests/vue/hf-text-selection.spec.ts",
-      "e2e/tests/vue/issue-749-hf-formatting.spec.ts"
-    ],
-    "legacy-performance": [
-      "e2e/tests/performance-large-docs.spec.ts",
-      "e2e/tests/performance-large-docs-comments-suggestions.spec.ts"
-    ]
-  },
-  "behavioralCandidateCoupling": {
-    "e2e/tests/text-editing.spec.ts": "Uses current EditorPage keyboard, ProseMirror selection, and DOM assertions; semantic type/delete behavior is reusable after transport replacement.",
-    "e2e/tests/formatting.spec.ts": "Uses current toolbar, DOM, and ProseMirror selection transport; bold/italic command and formatting-query behavior is reusable.",
-    "e2e/tests/formatting-persistence.spec.ts": "Uses current debug load/save and DOM inspection transport; formatting save/reopen behavior is reusable.",
-    "e2e/tests/scenario-driven.spec.ts": "Uses scenario runner and current EditorPage/DOM transport; semantic operation sequence is reusable.",
-    "e2e/tests/parity/smoke/type-characters.spec.ts": "Uses current page keyboard/DOM transport; typing assertion is reusable.",
-    "e2e/tests/parity/smoke/toggle-bold.spec.ts": "Uses current toolbar/selection transport; bold command/query behavior is reusable.",
-    "e2e/tests/parity/smoke/save-roundtrip.spec.ts": "Uses current adapter/debug save transport; save/reopen semantic assertion is reusable."
-  },
+  "tombstones": [
+    {
+      "source": "e2e/tests/text-editing.spec.ts",
+      "status": "behavior-tombstone",
+      "coupling": {
+        "category": "behavioral-migration-candidate",
+        "reason": "Uses current EditorPage keyboard, ProseMirror selection, and DOM assertions; semantic type/delete behavior is reusable after transport replacement."
+      },
+      "intent": {
+        "kind": "observable",
+        "summary": "Semantic typing, formatting, and save-roundtrip behavior to preserve behind an engine-neutral driver."
+      },
+      "retainedFixtureRefs": [],
+      "destination": {
+        "change": "engine-core-spike",
+        "area": "gates/gate-12-engine-neutral-driver"
+      }
+    },
+    {
+      "source": "e2e/tests/formatting.spec.ts",
+      "status": "behavior-tombstone",
+      "coupling": {
+        "category": "behavioral-migration-candidate",
+        "reason": "Uses current toolbar, DOM, and ProseMirror selection transport; bold/italic command and formatting-query behavior is reusable."
+      },
+      "intent": {
+        "kind": "observable",
+        "summary": "Semantic typing, formatting, and save-roundtrip behavior to preserve behind an engine-neutral driver."
+      },
+      "retainedFixtureRefs": [],
+      "destination": {
+        "change": "engine-core-spike",
+        "area": "gates/gate-12-engine-neutral-driver"
+      }
+    },
+    {
+      "source": "e2e/tests/formatting-persistence.spec.ts",
+      "status": "behavior-tombstone",
+      "coupling": {
+        "category": "behavioral-migration-candidate",
+        "reason": "Uses current debug load/save and DOM inspection transport; formatting save/reopen behavior is reusable."
+      },
+      "intent": {
+        "kind": "observable",
+        "summary": "Semantic typing, formatting, and save-roundtrip behavior to preserve behind an engine-neutral driver."
+      },
+      "retainedFixtureRefs": [],
+      "destination": {
+        "change": "engine-core-spike",
+        "area": "gates/gate-12-engine-neutral-driver"
+      }
+    },
+    {
+      "source": "e2e/tests/scenario-driven.spec.ts",
+      "status": "behavior-tombstone",
+      "coupling": {
+        "category": "behavioral-migration-candidate",
+        "reason": "Uses scenario runner and current EditorPage/DOM transport; semantic operation sequence is reusable."
+      },
+      "intent": {
+        "kind": "observable",
+        "summary": "Semantic typing, formatting, and save-roundtrip behavior to preserve behind an engine-neutral driver."
+      },
+      "retainedFixtureRefs": [],
+      "destination": {
+        "change": "engine-core-spike",
+        "area": "gates/gate-12-engine-neutral-driver"
+      }
+    },
+    {
+      "source": "e2e/tests/parity/smoke/type-characters.spec.ts",
+      "status": "behavior-tombstone",
+      "coupling": {
+        "category": "behavioral-migration-candidate",
+        "reason": "Uses current page keyboard/DOM transport; typing assertion is reusable."
+      },
+      "intent": {
+        "kind": "observable",
+        "summary": "Semantic typing, formatting, and save-roundtrip behavior to preserve behind an engine-neutral driver."
+      },
+      "retainedFixtureRefs": [],
+      "destination": {
+        "change": "engine-core-spike",
+        "area": "gates/gate-12-engine-neutral-driver"
+      }
+    },
+    {
+      "source": "e2e/tests/parity/smoke/toggle-bold.spec.ts",
+      "status": "behavior-tombstone",
+      "coupling": {
+        "category": "behavioral-migration-candidate",
+        "reason": "Uses current toolbar/selection transport; bold command/query behavior is reusable."
+      },
+      "intent": {
+        "kind": "observable",
+        "summary": "Semantic typing, formatting, and save-roundtrip behavior to preserve behind an engine-neutral driver."
+      },
+      "retainedFixtureRefs": [],
+      "destination": {
+        "change": "engine-core-spike",
+        "area": "gates/gate-12-engine-neutral-driver"
+      }
+    },
+    {
+      "source": "e2e/tests/parity/smoke/save-roundtrip.spec.ts",
+      "status": "behavior-tombstone",
+      "coupling": {
+        "category": "behavioral-migration-candidate",
+        "reason": "Uses current adapter/debug save transport; save/reopen semantic assertion is reusable."
+      },
+      "intent": {
+        "kind": "observable",
+        "summary": "Semantic typing, formatting, and save-roundtrip behavior to preserve behind an engine-neutral driver."
+      },
+      "retainedFixtureRefs": [],
+      "destination": {
+        "change": "engine-core-spike",
+        "area": "gates/gate-12-engine-neutral-driver"
+      }
+    },
+    {
+      "source": "e2e/tests/find-replace-shortcuts.spec.ts",
+      "status": "behavior-tombstone",
+      "coupling": {
+        "category": "legacy-ui-or-debug-coupled",
+        "reason": "DOM selectors, keyboard/toolbar behavior, debug hooks, painter details, or hidden EditorPage coupling."
+      },
+      "intent": {
+        "kind": "observable",
+        "summary": "Visible command, annotation, agent, and adapter interaction behavior that is currently coupled to legacy toolbar, DOM, debug hooks, or mount wiring."
+      },
+      "retainedFixtureRefs": [],
+      "destination": {
+        "change": "document-engine",
+        "area": "editor-binding/adapter-ui-conformance"
+      }
+    },
+    {
+      "source": "e2e/tests/alignment.spec.ts",
+      "status": "behavior-tombstone",
+      "coupling": {
+        "category": "legacy-ui-or-debug-coupled",
+        "reason": "DOM selectors, keyboard/toolbar behavior, debug hooks, painter details, or hidden EditorPage coupling."
+      },
+      "intent": {
+        "kind": "observable",
+        "summary": "Visible command, annotation, agent, and adapter interaction behavior that is currently coupled to legacy toolbar, DOM, debug hooks, or mount wiring."
+      },
+      "retainedFixtureRefs": [],
+      "destination": {
+        "change": "document-engine",
+        "area": "editor-binding/adapter-ui-conformance"
+      }
+    },
+    {
+      "source": "e2e/tests/colors.spec.ts",
+      "status": "behavior-tombstone",
+      "coupling": {
+        "category": "legacy-ui-or-debug-coupled",
+        "reason": "DOM selectors, keyboard/toolbar behavior, debug hooks, painter details, or hidden EditorPage coupling."
+      },
+      "intent": {
+        "kind": "observable",
+        "summary": "Visible command, annotation, agent, and adapter interaction behavior that is currently coupled to legacy toolbar, DOM, debug hooks, or mount wiring."
+      },
+      "retainedFixtureRefs": [],
+      "destination": {
+        "change": "document-engine",
+        "area": "editor-binding/adapter-ui-conformance"
+      }
+    },
+    {
+      "source": "e2e/tests/lists.spec.ts",
+      "status": "behavior-tombstone",
+      "coupling": {
+        "category": "legacy-ui-or-debug-coupled",
+        "reason": "DOM selectors, keyboard/toolbar behavior, debug hooks, painter details, or hidden EditorPage coupling."
+      },
+      "intent": {
+        "kind": "observable",
+        "summary": "Visible command, annotation, agent, and adapter interaction behavior that is currently coupled to legacy toolbar, DOM, debug hooks, or mount wiring."
+      },
+      "retainedFixtureRefs": [],
+      "destination": {
+        "change": "document-engine",
+        "area": "editor-binding/adapter-ui-conformance"
+      }
+    },
+    {
+      "source": "e2e/tests/line-spacing.spec.ts",
+      "status": "behavior-tombstone",
+      "coupling": {
+        "category": "legacy-ui-or-debug-coupled",
+        "reason": "DOM selectors, keyboard/toolbar behavior, debug hooks, painter details, or hidden EditorPage coupling."
+      },
+      "intent": {
+        "kind": "observable",
+        "summary": "Visible command, annotation, agent, and adapter interaction behavior that is currently coupled to legacy toolbar, DOM, debug hooks, or mount wiring."
+      },
+      "retainedFixtureRefs": [],
+      "destination": {
+        "change": "document-engine",
+        "area": "editor-binding/adapter-ui-conformance"
+      }
+    },
+    {
+      "source": "e2e/tests/paragraph-styles.spec.ts",
+      "status": "behavior-tombstone",
+      "coupling": {
+        "category": "legacy-ui-or-debug-coupled",
+        "reason": "DOM selectors, keyboard/toolbar behavior, debug hooks, painter details, or hidden EditorPage coupling."
+      },
+      "intent": {
+        "kind": "observable",
+        "summary": "Visible command, annotation, agent, and adapter interaction behavior that is currently coupled to legacy toolbar, DOM, debug hooks, or mount wiring."
+      },
+      "retainedFixtureRefs": [],
+      "destination": {
+        "change": "document-engine",
+        "area": "editor-binding/adapter-ui-conformance"
+      }
+    },
+    {
+      "source": "e2e/tests/hyperlinks.spec.ts",
+      "status": "behavior-tombstone",
+      "coupling": {
+        "category": "legacy-ui-or-debug-coupled",
+        "reason": "DOM selectors, keyboard/toolbar behavior, debug hooks, painter details, or hidden EditorPage coupling."
+      },
+      "intent": {
+        "kind": "observable",
+        "summary": "Visible command, annotation, agent, and adapter interaction behavior that is currently coupled to legacy toolbar, DOM, debug hooks, or mount wiring."
+      },
+      "retainedFixtureRefs": [],
+      "destination": {
+        "change": "document-engine",
+        "area": "editor-binding/adapter-ui-conformance"
+      }
+    },
+    {
+      "source": "e2e/tests/hyperlink-popup.spec.ts",
+      "status": "behavior-tombstone",
+      "coupling": {
+        "category": "legacy-ui-or-debug-coupled",
+        "reason": "DOM selectors, keyboard/toolbar behavior, debug hooks, painter details, or hidden EditorPage coupling."
+      },
+      "intent": {
+        "kind": "observable",
+        "summary": "Visible command, annotation, agent, and adapter interaction behavior that is currently coupled to legacy toolbar, DOM, debug hooks, or mount wiring."
+      },
+      "retainedFixtureRefs": [
+        "e2e/fixtures/demo/demo.docx"
+      ],
+      "destination": {
+        "change": "document-engine",
+        "area": "editor-binding/adapter-ui-conformance"
+      }
+    },
+    {
+      "source": "e2e/tests/agent-bridge.spec.ts",
+      "status": "behavior-tombstone",
+      "coupling": {
+        "category": "legacy-ui-or-debug-coupled",
+        "reason": "DOM selectors, keyboard/toolbar behavior, debug hooks, painter details, or hidden EditorPage coupling."
+      },
+      "intent": {
+        "kind": "observable",
+        "summary": "Visible command, annotation, agent, and adapter interaction behavior that is currently coupled to legacy toolbar, DOM, debug hooks, or mount wiring."
+      },
+      "retainedFixtureRefs": [
+        "e2e/fixtures/example-with-image.docx"
+      ],
+      "destination": {
+        "change": "document-engine",
+        "area": "editor-binding/adapter-ui-conformance"
+      }
+    },
+    {
+      "source": "e2e/tests/agent-bridge-formatting.spec.ts",
+      "status": "behavior-tombstone",
+      "coupling": {
+        "category": "legacy-ui-or-debug-coupled",
+        "reason": "DOM selectors, keyboard/toolbar behavior, debug hooks, painter details, or hidden EditorPage coupling."
+      },
+      "intent": {
+        "kind": "observable",
+        "summary": "Visible command, annotation, agent, and adapter interaction behavior that is currently coupled to legacy toolbar, DOM, debug hooks, or mount wiring."
+      },
+      "retainedFixtureRefs": [
+        "e2e/fixtures/example-with-image.docx"
+      ],
+      "destination": {
+        "change": "document-engine",
+        "area": "editor-binding/adapter-ui-conformance"
+      }
+    },
+    {
+      "source": "e2e/tests/agent-panel.spec.ts",
+      "status": "behavior-tombstone",
+      "coupling": {
+        "category": "legacy-ui-or-debug-coupled",
+        "reason": "DOM selectors, keyboard/toolbar behavior, debug hooks, painter details, or hidden EditorPage coupling."
+      },
+      "intent": {
+        "kind": "observable",
+        "summary": "Visible command, annotation, agent, and adapter interaction behavior that is currently coupled to legacy toolbar, DOM, debug hooks, or mount wiring."
+      },
+      "retainedFixtureRefs": [],
+      "destination": {
+        "change": "document-engine",
+        "area": "editor-binding/adapter-ui-conformance"
+      }
+    },
+    {
+      "source": "e2e/tests/agent-timeline.spec.ts",
+      "status": "behavior-tombstone",
+      "coupling": {
+        "category": "legacy-ui-or-debug-coupled",
+        "reason": "DOM selectors, keyboard/toolbar behavior, debug hooks, painter details, or hidden EditorPage coupling."
+      },
+      "intent": {
+        "kind": "observable",
+        "summary": "Visible command, annotation, agent, and adapter interaction behavior that is currently coupled to legacy toolbar, DOM, debug hooks, or mount wiring."
+      },
+      "retainedFixtureRefs": [],
+      "destination": {
+        "change": "document-engine",
+        "area": "editor-binding/adapter-ui-conformance"
+      }
+    },
+    {
+      "source": "e2e/tests/cursor-paragraph-ops.spec.ts",
+      "status": "behavior-tombstone",
+      "coupling": {
+        "category": "legacy-ui-or-debug-coupled",
+        "reason": "DOM selectors, keyboard/toolbar behavior, debug hooks, painter details, or hidden EditorPage coupling."
+      },
+      "intent": {
+        "kind": "observable",
+        "summary": "Visible command, annotation, agent, and adapter interaction behavior that is currently coupled to legacy toolbar, DOM, debug hooks, or mount wiring."
+      },
+      "retainedFixtureRefs": [],
+      "destination": {
+        "change": "document-engine",
+        "area": "editor-binding/adapter-ui-conformance"
+      }
+    },
+    {
+      "source": "e2e/tests/cross-paragraph-selection.spec.ts",
+      "status": "behavior-tombstone",
+      "coupling": {
+        "category": "legacy-ui-or-debug-coupled",
+        "reason": "DOM selectors, keyboard/toolbar behavior, debug hooks, painter details, or hidden EditorPage coupling."
+      },
+      "intent": {
+        "kind": "observable",
+        "summary": "Visible command, annotation, agent, and adapter interaction behavior that is currently coupled to legacy toolbar, DOM, debug hooks, or mount wiring."
+      },
+      "retainedFixtureRefs": [],
+      "destination": {
+        "change": "document-engine",
+        "area": "editor-binding/adapter-ui-conformance"
+      }
+    },
+    {
+      "source": "e2e/tests/cursor-focus.spec.ts",
+      "status": "behavior-tombstone",
+      "coupling": {
+        "category": "legacy-ui-or-debug-coupled",
+        "reason": "DOM selectors, keyboard/toolbar behavior, debug hooks, painter details, or hidden EditorPage coupling."
+      },
+      "intent": {
+        "kind": "observable",
+        "summary": "Visible command, annotation, agent, and adapter interaction behavior that is currently coupled to legacy toolbar, DOM, debug hooks, or mount wiring."
+      },
+      "retainedFixtureRefs": [],
+      "destination": {
+        "change": "document-engine",
+        "area": "editor-binding/adapter-ui-conformance"
+      }
+    },
+    {
+      "source": "e2e/tests/toolbar-state.spec.ts",
+      "status": "behavior-tombstone",
+      "coupling": {
+        "category": "legacy-ui-or-debug-coupled",
+        "reason": "DOM selectors, keyboard/toolbar behavior, debug hooks, painter details, or hidden EditorPage coupling."
+      },
+      "intent": {
+        "kind": "observable",
+        "summary": "Visible command, annotation, agent, and adapter interaction behavior that is currently coupled to legacy toolbar, DOM, debug hooks, or mount wiring."
+      },
+      "retainedFixtureRefs": [],
+      "destination": {
+        "change": "document-engine",
+        "area": "editor-binding/adapter-ui-conformance"
+      }
+    },
+    {
+      "source": "e2e/tests/default-document.spec.ts",
+      "status": "behavior-tombstone",
+      "coupling": {
+        "category": "legacy-ui-or-debug-coupled",
+        "reason": "DOM selectors, keyboard/toolbar behavior, debug hooks, painter details, or hidden EditorPage coupling."
+      },
+      "intent": {
+        "kind": "observable",
+        "summary": "Visible command, annotation, agent, and adapter interaction behavior that is currently coupled to legacy toolbar, DOM, debug hooks, or mount wiring."
+      },
+      "retainedFixtureRefs": [],
+      "destination": {
+        "change": "document-engine",
+        "area": "editor-binding/adapter-ui-conformance"
+      }
+    },
+    {
+      "source": "e2e/tests/edge-cases.spec.ts",
+      "status": "behavior-tombstone",
+      "coupling": {
+        "category": "legacy-ui-or-debug-coupled",
+        "reason": "DOM selectors, keyboard/toolbar behavior, debug hooks, painter details, or hidden EditorPage coupling."
+      },
+      "intent": {
+        "kind": "observable",
+        "summary": "Visible command, annotation, agent, and adapter interaction behavior that is currently coupled to legacy toolbar, DOM, debug hooks, or mount wiring."
+      },
+      "retainedFixtureRefs": [],
+      "destination": {
+        "change": "document-engine",
+        "area": "editor-binding/adapter-ui-conformance"
+      }
+    },
+    {
+      "source": "e2e/tests/content-controls.spec.ts",
+      "status": "behavior-tombstone",
+      "coupling": {
+        "category": "legacy-ui-or-debug-coupled",
+        "reason": "DOM selectors, keyboard/toolbar behavior, debug hooks, painter details, or hidden EditorPage coupling."
+      },
+      "intent": {
+        "kind": "observable",
+        "summary": "Visible command, annotation, agent, and adapter interaction behavior that is currently coupled to legacy toolbar, DOM, debug hooks, or mount wiring."
+      },
+      "retainedFixtureRefs": [
+        "e2e/fixtures/block-sdt-comprehensive.docx"
+      ],
+      "destination": {
+        "change": "document-engine",
+        "area": "editor-binding/adapter-ui-conformance"
+      }
+    },
+    {
+      "source": "e2e/tests/content-control-widgets.spec.ts",
+      "status": "behavior-tombstone",
+      "coupling": {
+        "category": "legacy-ui-or-debug-coupled",
+        "reason": "DOM selectors, keyboard/toolbar behavior, debug hooks, painter details, or hidden EditorPage coupling."
+      },
+      "intent": {
+        "kind": "observable",
+        "summary": "Visible command, annotation, agent, and adapter interaction behavior that is currently coupled to legacy toolbar, DOM, debug hooks, or mount wiring."
+      },
+      "retainedFixtureRefs": [
+        "e2e/fixtures/block-sdt-widgets.docx",
+        "e2e/fixtures/inline-checkbox-controls.docx"
+      ],
+      "destination": {
+        "change": "document-engine",
+        "area": "editor-binding/adapter-ui-conformance"
+      }
+    },
+    {
+      "source": "e2e/tests/content-control-repeating.spec.ts",
+      "status": "behavior-tombstone",
+      "coupling": {
+        "category": "legacy-ui-or-debug-coupled",
+        "reason": "DOM selectors, keyboard/toolbar behavior, debug hooks, painter details, or hidden EditorPage coupling."
+      },
+      "intent": {
+        "kind": "observable",
+        "summary": "Visible command, annotation, agent, and adapter interaction behavior that is currently coupled to legacy toolbar, DOM, debug hooks, or mount wiring."
+      },
+      "retainedFixtureRefs": [
+        "e2e/fixtures/block-sdt-repeating.docx"
+      ],
+      "destination": {
+        "change": "document-engine",
+        "area": "editor-binding/adapter-ui-conformance"
+      }
+    },
+    {
+      "source": "e2e/tests/comment-button.spec.ts",
+      "status": "behavior-tombstone",
+      "coupling": {
+        "category": "legacy-ui-or-debug-coupled",
+        "reason": "DOM selectors, keyboard/toolbar behavior, debug hooks, painter details, or hidden EditorPage coupling."
+      },
+      "intent": {
+        "kind": "observable",
+        "summary": "Visible command, annotation, agent, and adapter interaction behavior that is currently coupled to legacy toolbar, DOM, debug hooks, or mount wiring."
+      },
+      "retainedFixtureRefs": [
+        "e2e/fixtures/demo/demo.docx"
+      ],
+      "destination": {
+        "change": "document-engine",
+        "area": "editor-binding/adapter-ui-conformance"
+      }
+    },
+    {
+      "source": "e2e/tests/comments-sidebar.spec.ts",
+      "status": "behavior-tombstone",
+      "coupling": {
+        "category": "legacy-ui-or-debug-coupled",
+        "reason": "DOM selectors, keyboard/toolbar behavior, debug hooks, painter details, or hidden EditorPage coupling."
+      },
+      "intent": {
+        "kind": "observable",
+        "summary": "Visible command, annotation, agent, and adapter interaction behavior that is currently coupled to legacy toolbar, DOM, debug hooks, or mount wiring."
+      },
+      "retainedFixtureRefs": [],
+      "destination": {
+        "change": "document-engine",
+        "area": "editor-binding/adapter-ui-conformance"
+      }
+    },
+    {
+      "source": "e2e/tests/tracked-changes-structural.spec.ts",
+      "status": "behavior-tombstone",
+      "coupling": {
+        "category": "legacy-ui-or-debug-coupled",
+        "reason": "DOM selectors, keyboard/toolbar behavior, debug hooks, painter details, or hidden EditorPage coupling."
+      },
+      "intent": {
+        "kind": "observable",
+        "summary": "Visible command, annotation, agent, and adapter interaction behavior that is currently coupled to legacy toolbar, DOM, debug hooks, or mount wiring."
+      },
+      "retainedFixtureRefs": [],
+      "destination": {
+        "change": "document-engine",
+        "area": "editor-binding/adapter-ui-conformance"
+      }
+    },
+    {
+      "source": "e2e/tests/tracked-image.spec.ts",
+      "status": "behavior-tombstone",
+      "coupling": {
+        "category": "legacy-ui-or-debug-coupled",
+        "reason": "DOM selectors, keyboard/toolbar behavior, debug hooks, painter details, or hidden EditorPage coupling."
+      },
+      "intent": {
+        "kind": "observable",
+        "summary": "Visible command, annotation, agent, and adapter interaction behavior that is currently coupled to legacy toolbar, DOM, debug hooks, or mount wiring."
+      },
+      "retainedFixtureRefs": [],
+      "destination": {
+        "change": "document-engine",
+        "area": "editor-binding/adapter-ui-conformance"
+      }
+    },
+    {
+      "source": "e2e/tests/issue-761-paste-suggestion.spec.ts",
+      "status": "behavior-tombstone",
+      "coupling": {
+        "category": "legacy-ui-or-debug-coupled",
+        "reason": "DOM selectors, keyboard/toolbar behavior, debug hooks, painter details, or hidden EditorPage coupling."
+      },
+      "intent": {
+        "kind": "observable",
+        "summary": "Visible command, annotation, agent, and adapter interaction behavior that is currently coupled to legacy toolbar, DOM, debug hooks, or mount wiring."
+      },
+      "retainedFixtureRefs": [],
+      "destination": {
+        "change": "document-engine",
+        "area": "editor-binding/adapter-ui-conformance"
+      }
+    },
+    {
+      "source": "e2e/tests/split-color-button.spec.ts",
+      "status": "behavior-tombstone",
+      "coupling": {
+        "category": "legacy-ui-or-debug-coupled",
+        "reason": "DOM selectors, keyboard/toolbar behavior, debug hooks, painter details, or hidden EditorPage coupling."
+      },
+      "intent": {
+        "kind": "observable",
+        "summary": "Visible command, annotation, agent, and adapter interaction behavior that is currently coupled to legacy toolbar, DOM, debug hooks, or mount wiring."
+      },
+      "retainedFixtureRefs": [],
+      "destination": {
+        "change": "document-engine",
+        "area": "editor-binding/adapter-ui-conformance"
+      }
+    },
+    {
+      "source": "e2e/tests/superscript-line-height.spec.ts",
+      "status": "behavior-tombstone",
+      "coupling": {
+        "category": "legacy-ui-or-debug-coupled",
+        "reason": "DOM selectors, keyboard/toolbar behavior, debug hooks, painter details, or hidden EditorPage coupling."
+      },
+      "intent": {
+        "kind": "observable",
+        "summary": "Visible command, annotation, agent, and adapter interaction behavior that is currently coupled to legacy toolbar, DOM, debug hooks, or mount wiring."
+      },
+      "retainedFixtureRefs": [],
+      "destination": {
+        "change": "document-engine",
+        "area": "editor-binding/adapter-ui-conformance"
+      }
+    },
+    {
+      "source": "e2e/tests/demo-docx.spec.ts",
+      "status": "behavior-tombstone",
+      "coupling": {
+        "category": "legacy-ui-or-debug-coupled",
+        "reason": "DOM selectors, keyboard/toolbar behavior, debug hooks, painter details, or hidden EditorPage coupling."
+      },
+      "intent": {
+        "kind": "observable",
+        "summary": "Visible command, annotation, agent, and adapter interaction behavior that is currently coupled to legacy toolbar, DOM, debug hooks, or mount wiring."
+      },
+      "retainedFixtureRefs": [
+        "e2e/fixtures/demo/demo.docx"
+      ],
+      "destination": {
+        "change": "document-engine",
+        "area": "editor-binding/adapter-ui-conformance"
+      }
+    },
+    {
+      "source": "e2e/tests/help-menu.spec.ts",
+      "status": "behavior-tombstone",
+      "coupling": {
+        "category": "legacy-ui-or-debug-coupled",
+        "reason": "DOM selectors, keyboard/toolbar behavior, debug hooks, painter details, or hidden EditorPage coupling."
+      },
+      "intent": {
+        "kind": "observable",
+        "summary": "Visible command, annotation, agent, and adapter interaction behavior that is currently coupled to legacy toolbar, DOM, debug hooks, or mount wiring."
+      },
+      "retainedFixtureRefs": [],
+      "destination": {
+        "change": "document-engine",
+        "area": "editor-binding/adapter-ui-conformance"
+      }
+    },
+    {
+      "source": "e2e/tests/toc-hyperlink-tabs.spec.ts",
+      "status": "behavior-tombstone",
+      "coupling": {
+        "category": "legacy-ui-or-debug-coupled",
+        "reason": "DOM selectors, keyboard/toolbar behavior, debug hooks, painter details, or hidden EditorPage coupling."
+      },
+      "intent": {
+        "kind": "observable",
+        "summary": "Visible command, annotation, agent, and adapter interaction behavior that is currently coupled to legacy toolbar, DOM, debug hooks, or mount wiring."
+      },
+      "retainedFixtureRefs": [
+        "e2e/fixtures/toc-hyperlink-tabs.docx"
+      ],
+      "destination": {
+        "change": "document-engine",
+        "area": "editor-binding/adapter-ui-conformance"
+      }
+    },
+    {
+      "source": "e2e/tests/vue/issue-889-show-help-menu.spec.ts",
+      "status": "behavior-tombstone",
+      "coupling": {
+        "category": "legacy-ui-or-debug-coupled",
+        "reason": "DOM selectors, keyboard/toolbar behavior, debug hooks, painter details, or hidden EditorPage coupling."
+      },
+      "intent": {
+        "kind": "observable",
+        "summary": "Visible command, annotation, agent, and adapter interaction behavior that is currently coupled to legacy toolbar, DOM, debug hooks, or mount wiring."
+      },
+      "retainedFixtureRefs": [],
+      "destination": {
+        "change": "document-engine",
+        "area": "editor-binding/adapter-ui-conformance"
+      }
+    },
+    {
+      "source": "e2e/tests/clipboard-image-paste.spec.ts",
+      "status": "behavior-tombstone",
+      "coupling": {
+        "category": "legacy-ui-or-debug-coupled",
+        "reason": "DOM selectors, keyboard/toolbar behavior, debug hooks, painter details, or hidden EditorPage coupling."
+      },
+      "intent": {
+        "kind": "observable",
+        "summary": "Visible command, annotation, agent, and adapter interaction behavior that is currently coupled to legacy toolbar, DOM, debug hooks, or mount wiring."
+      },
+      "retainedFixtureRefs": [
+        "e2e/fixtures/empty.docx",
+        "e2e/fixtures/test-image.png"
+      ],
+      "destination": {
+        "change": "document-engine",
+        "area": "editor-binding/adapter-ui-conformance"
+      }
+    },
+    {
+      "source": "e2e/tests/parity/smoke/agent-tool-call.spec.ts",
+      "status": "behavior-tombstone",
+      "coupling": {
+        "category": "legacy-ui-or-debug-coupled",
+        "reason": "DOM selectors, keyboard/toolbar behavior, debug hooks, painter details, or hidden EditorPage coupling."
+      },
+      "intent": {
+        "kind": "observable",
+        "summary": "Visible command, annotation, agent, and adapter interaction behavior that is currently coupled to legacy toolbar, DOM, debug hooks, or mount wiring."
+      },
+      "retainedFixtureRefs": [],
+      "destination": {
+        "change": "document-engine",
+        "area": "editor-binding/adapter-ui-conformance"
+      }
+    },
+    {
+      "source": "e2e/tests/parity/toc-insertion-update.spec.ts",
+      "status": "behavior-tombstone",
+      "coupling": {
+        "category": "legacy-ui-or-debug-coupled",
+        "reason": "DOM selectors, keyboard/toolbar behavior, debug hooks, painter details, or hidden EditorPage coupling."
+      },
+      "intent": {
+        "kind": "observable",
+        "summary": "Visible command, annotation, agent, and adapter interaction behavior that is currently coupled to legacy toolbar, DOM, debug hooks, or mount wiring."
+      },
+      "retainedFixtureRefs": [],
+      "destination": {
+        "change": "document-engine",
+        "area": "editor-binding/adapter-ui-conformance"
+      }
+    },
+    {
+      "source": "e2e/tests/parity/agent-panel.spec.ts",
+      "status": "behavior-tombstone",
+      "coupling": {
+        "category": "legacy-ui-or-debug-coupled",
+        "reason": "DOM selectors, keyboard/toolbar behavior, debug hooks, painter details, or hidden EditorPage coupling."
+      },
+      "intent": {
+        "kind": "observable",
+        "summary": "Visible command, annotation, agent, and adapter interaction behavior that is currently coupled to legacy toolbar, DOM, debug hooks, or mount wiring."
+      },
+      "retainedFixtureRefs": [],
+      "destination": {
+        "change": "document-engine",
+        "area": "editor-binding/adapter-ui-conformance"
+      }
+    },
+    {
+      "source": "e2e/tests/parity/agent-timeline.spec.ts",
+      "status": "behavior-tombstone",
+      "coupling": {
+        "category": "legacy-ui-or-debug-coupled",
+        "reason": "DOM selectors, keyboard/toolbar behavior, debug hooks, painter details, or hidden EditorPage coupling."
+      },
+      "intent": {
+        "kind": "observable",
+        "summary": "Visible command, annotation, agent, and adapter interaction behavior that is currently coupled to legacy toolbar, DOM, debug hooks, or mount wiring."
+      },
+      "retainedFixtureRefs": [],
+      "destination": {
+        "change": "document-engine",
+        "area": "editor-binding/adapter-ui-conformance"
+      }
+    },
+    {
+      "source": "e2e/tests/vue/controlled-document-undo.spec.ts",
+      "status": "behavior-tombstone",
+      "coupling": {
+        "category": "legacy-ui-or-debug-coupled",
+        "reason": "DOM selectors, keyboard/toolbar behavior, debug hooks, painter details, or hidden EditorPage coupling."
+      },
+      "intent": {
+        "kind": "observable",
+        "summary": "Visible command, annotation, agent, and adapter interaction behavior that is currently coupled to legacy toolbar, DOM, debug hooks, or mount wiring."
+      },
+      "retainedFixtureRefs": [],
+      "destination": {
+        "change": "document-engine",
+        "area": "editor-binding/adapter-ui-conformance"
+      }
+    },
+    {
+      "source": "e2e/tests/vue/issue-761-paste-suggestion.spec.ts",
+      "status": "behavior-tombstone",
+      "coupling": {
+        "category": "legacy-ui-or-debug-coupled",
+        "reason": "DOM selectors, keyboard/toolbar behavior, debug hooks, painter details, or hidden EditorPage coupling."
+      },
+      "intent": {
+        "kind": "observable",
+        "summary": "Visible command, annotation, agent, and adapter interaction behavior that is currently coupled to legacy toolbar, DOM, debug hooks, or mount wiring."
+      },
+      "retainedFixtureRefs": [],
+      "destination": {
+        "change": "document-engine",
+        "area": "editor-binding/adapter-ui-conformance"
+      }
+    },
+    {
+      "source": "e2e/tests/vue/comments-sidebar-toggle.spec.ts",
+      "status": "behavior-tombstone",
+      "coupling": {
+        "category": "legacy-ui-or-debug-coupled",
+        "reason": "DOM selectors, keyboard/toolbar behavior, debug hooks, painter details, or hidden EditorPage coupling."
+      },
+      "intent": {
+        "kind": "observable",
+        "summary": "Visible command, annotation, agent, and adapter interaction behavior that is currently coupled to legacy toolbar, DOM, debug hooks, or mount wiring."
+      },
+      "retainedFixtureRefs": [],
+      "destination": {
+        "change": "document-engine",
+        "area": "editor-binding/adapter-ui-conformance"
+      }
+    },
+    {
+      "source": "e2e/tests/vue/context-menu-token-scope.spec.ts",
+      "status": "behavior-tombstone",
+      "coupling": {
+        "category": "legacy-ui-or-debug-coupled",
+        "reason": "DOM selectors, keyboard/toolbar behavior, debug hooks, painter details, or hidden EditorPage coupling."
+      },
+      "intent": {
+        "kind": "observable",
+        "summary": "Visible command, annotation, agent, and adapter interaction behavior that is currently coupled to legacy toolbar, DOM, debug hooks, or mount wiring."
+      },
+      "retainedFixtureRefs": [],
+      "destination": {
+        "change": "document-engine",
+        "area": "editor-binding/adapter-ui-conformance"
+      }
+    },
+    {
+      "source": "e2e/tests/vue/i18n-locale.spec.ts",
+      "status": "behavior-tombstone",
+      "coupling": {
+        "category": "legacy-ui-or-debug-coupled",
+        "reason": "DOM selectors, keyboard/toolbar behavior, debug hooks, painter details, or hidden EditorPage coupling."
+      },
+      "intent": {
+        "kind": "observable",
+        "summary": "Visible command, annotation, agent, and adapter interaction behavior that is currently coupled to legacy toolbar, DOM, debug hooks, or mount wiring."
+      },
+      "retainedFixtureRefs": [],
+      "destination": {
+        "change": "document-engine",
+        "area": "editor-binding/adapter-ui-conformance"
+      }
+    },
+    {
+      "source": "e2e/tests/vue/mount.spec.ts",
+      "status": "behavior-tombstone",
+      "coupling": {
+        "category": "legacy-ui-or-debug-coupled",
+        "reason": "DOM selectors, keyboard/toolbar behavior, debug hooks, painter details, or hidden EditorPage coupling."
+      },
+      "intent": {
+        "kind": "observable",
+        "summary": "Visible command, annotation, agent, and adapter interaction behavior that is currently coupled to legacy toolbar, DOM, debug hooks, or mount wiring."
+      },
+      "retainedFixtureRefs": [],
+      "destination": {
+        "change": "document-engine",
+        "area": "editor-binding/adapter-ui-conformance"
+      }
+    },
+    {
+      "source": "e2e/tests/nuxt/mount.spec.ts",
+      "status": "behavior-tombstone",
+      "coupling": {
+        "category": "legacy-ui-or-debug-coupled",
+        "reason": "DOM selectors, keyboard/toolbar behavior, debug hooks, painter details, or hidden EditorPage coupling."
+      },
+      "intent": {
+        "kind": "observable",
+        "summary": "Visible command, annotation, agent, and adapter interaction behavior that is currently coupled to legacy toolbar, DOM, debug hooks, or mount wiring."
+      },
+      "retainedFixtureRefs": [],
+      "destination": {
+        "change": "document-engine",
+        "area": "editor-binding/adapter-ui-conformance"
+      }
+    },
+    {
+      "source": "e2e/tests/parity/smoke/mount.spec.ts",
+      "status": "behavior-tombstone",
+      "coupling": {
+        "category": "legacy-ui-or-debug-coupled",
+        "reason": "DOM selectors, keyboard/toolbar behavior, debug hooks, painter details, or hidden EditorPage coupling."
+      },
+      "intent": {
+        "kind": "observable",
+        "summary": "Visible command, annotation, agent, and adapter interaction behavior that is currently coupled to legacy toolbar, DOM, debug hooks, or mount wiring."
+      },
+      "retainedFixtureRefs": [],
+      "destination": {
+        "change": "document-engine",
+        "area": "editor-binding/adapter-ui-conformance"
+      }
+    },
+    {
+      "source": "e2e/tests/scroll-to-page.spec.ts",
+      "status": "behavior-tombstone",
+      "coupling": {
+        "category": "legacy-geometry",
+        "reason": "Pagination, scroll, caret metrics, table layout geometry, virtualization, and overlay rectangles depend on the legacy renderer."
+      },
+      "intent": {
+        "kind": "observable",
+        "summary": "Pagination, scrolling, caret, selection, table, image, and overlay geometry behavior tied to the legacy renderer."
+      },
+      "retainedFixtureRefs": [
+        "e2e/fixtures/issue-68-large.docx"
+      ],
+      "destination": {
+        "change": "document-engine",
+        "area": "layout-output/geometry-conformance"
+      }
+    },
+    {
+      "source": "e2e/tests/scroll-to-paragraph.spec.ts",
+      "status": "behavior-tombstone",
+      "coupling": {
+        "category": "legacy-geometry",
+        "reason": "Pagination, scroll, caret metrics, table layout geometry, virtualization, and overlay rectangles depend on the legacy renderer."
+      },
+      "intent": {
+        "kind": "observable",
+        "summary": "Pagination, scrolling, caret, selection, table, image, and overlay geometry behavior tied to the legacy renderer."
+      },
+      "retainedFixtureRefs": [],
+      "destination": {
+        "change": "document-engine",
+        "area": "layout-output/geometry-conformance"
+      }
+    },
+    {
+      "source": "e2e/tests/body-multi-column-pagination.spec.ts",
+      "status": "behavior-tombstone",
+      "coupling": {
+        "category": "legacy-geometry",
+        "reason": "Pagination, scroll, caret metrics, table layout geometry, virtualization, and overlay rectangles depend on the legacy renderer."
+      },
+      "intent": {
+        "kind": "observable",
+        "summary": "Pagination, scrolling, caret, selection, table, image, and overlay geometry behavior tied to the legacy renderer."
+      },
+      "retainedFixtureRefs": [],
+      "destination": {
+        "change": "document-engine",
+        "area": "layout-output/geometry-conformance"
+      }
+    },
+    {
+      "source": "e2e/tests/floating-table-pagination.spec.ts",
+      "status": "behavior-tombstone",
+      "coupling": {
+        "category": "legacy-geometry",
+        "reason": "Pagination, scroll, caret metrics, table layout geometry, virtualization, and overlay rectangles depend on the legacy renderer."
+      },
+      "intent": {
+        "kind": "observable",
+        "summary": "Pagination, scrolling, caret, selection, table, image, and overlay geometry behavior tied to the legacy renderer."
+      },
+      "retainedFixtureRefs": [
+        "e2e/fixtures/floating-table-full-width-paginates.docx"
+      ],
+      "destination": {
+        "change": "document-engine",
+        "area": "layout-output/geometry-conformance"
+      }
+    },
+    {
+      "source": "e2e/tests/deleted-section-break-pagination.spec.ts",
+      "status": "behavior-tombstone",
+      "coupling": {
+        "category": "legacy-geometry",
+        "reason": "Pagination, scroll, caret metrics, table layout geometry, virtualization, and overlay rectangles depend on the legacy renderer."
+      },
+      "intent": {
+        "kind": "observable",
+        "summary": "Pagination, scrolling, caret, selection, table, image, and overlay geometry behavior tied to the legacy renderer."
+      },
+      "retainedFixtureRefs": [
+        "e2e/fixtures/list-pagination-break.docx"
+      ],
+      "destination": {
+        "change": "document-engine",
+        "area": "layout-output/geometry-conformance"
+      }
+    },
+    {
+      "source": "e2e/tests/paged-editor-clicks.spec.ts",
+      "status": "behavior-tombstone",
+      "coupling": {
+        "category": "legacy-geometry",
+        "reason": "Pagination, scroll, caret metrics, table layout geometry, virtualization, and overlay rectangles depend on the legacy renderer."
+      },
+      "intent": {
+        "kind": "observable",
+        "summary": "Pagination, scrolling, caret, selection, table, image, and overlay geometry behavior tied to the legacy renderer."
+      },
+      "retainedFixtureRefs": [],
+      "destination": {
+        "change": "document-engine",
+        "area": "layout-output/geometry-conformance"
+      }
+    },
+    {
+      "source": "e2e/tests/document-scrollbar.spec.ts",
+      "status": "behavior-tombstone",
+      "coupling": {
+        "category": "legacy-geometry",
+        "reason": "Pagination, scroll, caret metrics, table layout geometry, virtualization, and overlay rectangles depend on the legacy renderer."
+      },
+      "intent": {
+        "kind": "observable",
+        "summary": "Pagination, scrolling, caret, selection, table, image, and overlay geometry behavior tied to the legacy renderer."
+      },
+      "retainedFixtureRefs": [],
+      "destination": {
+        "change": "document-engine",
+        "area": "layout-output/geometry-conformance"
+      }
+    },
+    {
+      "source": "e2e/tests/border-overlay-layout.spec.ts",
+      "status": "behavior-tombstone",
+      "coupling": {
+        "category": "legacy-geometry",
+        "reason": "Pagination, scroll, caret metrics, table layout geometry, virtualization, and overlay rectangles depend on the legacy renderer."
+      },
+      "intent": {
+        "kind": "observable",
+        "summary": "Pagination, scrolling, caret, selection, table, image, and overlay geometry behavior tied to the legacy renderer."
+      },
+      "retainedFixtureRefs": [
+        "e2e/fixtures/border-overlay-layout-demo.docx"
+      ],
+      "destination": {
+        "change": "document-engine",
+        "area": "layout-output/geometry-conformance"
+      }
+    },
+    {
+      "source": "e2e/tests/generic-rendering-regression.spec.ts",
+      "status": "behavior-tombstone",
+      "coupling": {
+        "category": "legacy-geometry",
+        "reason": "Pagination, scroll, caret metrics, table layout geometry, virtualization, and overlay rectangles depend on the legacy renderer."
+      },
+      "intent": {
+        "kind": "observable",
+        "summary": "Pagination, scrolling, caret, selection, table, image, and overlay geometry behavior tied to the legacy renderer."
+      },
+      "retainedFixtureRefs": [
+        "e2e/fixtures/generic-render-regression.docx"
+      ],
+      "destination": {
+        "change": "document-engine",
+        "area": "layout-output/geometry-conformance"
+      }
+    },
+    {
+      "source": "e2e/tests/virtualization-invalidation.spec.ts",
+      "status": "behavior-tombstone",
+      "coupling": {
+        "category": "legacy-geometry",
+        "reason": "Pagination, scroll, caret metrics, table layout geometry, virtualization, and overlay rectangles depend on the legacy renderer."
+      },
+      "intent": {
+        "kind": "observable",
+        "summary": "Pagination, scrolling, caret, selection, table, image, and overlay geometry behavior tied to the legacy renderer."
+      },
+      "retainedFixtureRefs": [],
+      "destination": {
+        "change": "document-engine",
+        "area": "layout-output/geometry-conformance"
+      }
+    },
+    {
+      "source": "e2e/tests/issue-319-section-pagination.spec.ts",
+      "status": "behavior-tombstone",
+      "coupling": {
+        "category": "legacy-geometry",
+        "reason": "Pagination, scroll, caret metrics, table layout geometry, virtualization, and overlay rectangles depend on the legacy renderer."
+      },
+      "intent": {
+        "kind": "observable",
+        "summary": "Pagination, scrolling, caret, selection, table, image, and overlay geometry behavior tied to the legacy renderer."
+      },
+      "retainedFixtureRefs": [
+        "e2e/fixtures/issue-319-sections.docx"
+      ],
+      "destination": {
+        "change": "document-engine",
+        "area": "layout-output/geometry-conformance"
+      }
+    },
+    {
+      "source": "e2e/tests/issue-386-numbering.spec.ts",
+      "status": "behavior-tombstone",
+      "coupling": {
+        "category": "legacy-geometry",
+        "reason": "Pagination, scroll, caret metrics, table layout geometry, virtualization, and overlay rectangles depend on the legacy renderer."
+      },
+      "intent": {
+        "kind": "observable",
+        "summary": "Pagination, scrolling, caret, selection, table, image, and overlay geometry behavior tied to the legacy renderer."
+      },
+      "retainedFixtureRefs": [
+        "e2e/fixtures/docx-editor-numbering.docx"
+      ],
+      "destination": {
+        "change": "document-engine",
+        "area": "layout-output/geometry-conformance"
+      }
+    },
+    {
+      "source": "e2e/tests/issue-472-floating-textbox.spec.ts",
+      "status": "behavior-tombstone",
+      "coupling": {
+        "category": "legacy-geometry",
+        "reason": "Pagination, scroll, caret metrics, table layout geometry, virtualization, and overlay rectangles depend on the legacy renderer."
+      },
+      "intent": {
+        "kind": "observable",
+        "summary": "Pagination, scrolling, caret, selection, table, image, and overlay geometry behavior tied to the legacy renderer."
+      },
+      "retainedFixtureRefs": [
+        "e2e/fixtures/issue-472-floating-textbox.docx"
+      ],
+      "destination": {
+        "change": "document-engine",
+        "area": "layout-output/geometry-conformance"
+      }
+    },
+    {
+      "source": "e2e/tests/issue-483-firstline-marker.spec.ts",
+      "status": "behavior-tombstone",
+      "coupling": {
+        "category": "legacy-geometry",
+        "reason": "Pagination, scroll, caret metrics, table layout geometry, virtualization, and overlay rectangles depend on the legacy renderer."
+      },
+      "intent": {
+        "kind": "observable",
+        "summary": "Pagination, scrolling, caret, selection, table, image, and overlay geometry behavior tied to the legacy renderer."
+      },
+      "retainedFixtureRefs": [
+        "e2e/fixtures/issue-483-firstline-marker.docx"
+      ],
+      "destination": {
+        "change": "document-engine",
+        "area": "layout-output/geometry-conformance"
+      }
+    },
+    {
+      "source": "e2e/tests/issue-705-anchored-header-pagination.spec.ts",
+      "status": "behavior-tombstone",
+      "coupling": {
+        "category": "legacy-geometry",
+        "reason": "Pagination, scroll, caret metrics, table layout geometry, virtualization, and overlay rectangles depend on the legacy renderer."
+      },
+      "intent": {
+        "kind": "observable",
+        "summary": "Pagination, scrolling, caret, selection, table, image, and overlay geometry behavior tied to the legacy renderer."
+      },
+      "retainedFixtureRefs": [
+        "e2e/fixtures/issue-705-anchored-header-letterhead.docx"
+      ],
+      "destination": {
+        "change": "document-engine",
+        "area": "layout-output/geometry-conformance"
+      }
+    },
+    {
+      "source": "e2e/tests/issue-734-rtl-table.spec.ts",
+      "status": "behavior-tombstone",
+      "coupling": {
+        "category": "legacy-geometry",
+        "reason": "Pagination, scroll, caret metrics, table layout geometry, virtualization, and overlay rectangles depend on the legacy renderer."
+      },
+      "intent": {
+        "kind": "observable",
+        "summary": "Pagination, scrolling, caret, selection, table, image, and overlay geometry behavior tied to the legacy renderer."
+      },
+      "retainedFixtureRefs": [
+        "e2e/fixtures/rtl-table-bidivisual.docx"
+      ],
+      "destination": {
+        "change": "document-engine",
+        "area": "layout-output/geometry-conformance"
+      }
+    },
+    {
+      "source": "e2e/tests/issue-748-caret-height-mixed-fonts.spec.ts",
+      "status": "behavior-tombstone",
+      "coupling": {
+        "category": "legacy-geometry",
+        "reason": "Pagination, scroll, caret metrics, table layout geometry, virtualization, and overlay rectangles depend on the legacy renderer."
+      },
+      "intent": {
+        "kind": "observable",
+        "summary": "Pagination, scrolling, caret, selection, table, image, and overlay geometry behavior tied to the legacy renderer."
+      },
+      "retainedFixtureRefs": [],
+      "destination": {
+        "change": "document-engine",
+        "area": "layout-output/geometry-conformance"
+      }
+    },
+    {
+      "source": "e2e/tests/issue-763-caret-multipage-table.spec.ts",
+      "status": "behavior-tombstone",
+      "coupling": {
+        "category": "legacy-geometry",
+        "reason": "Pagination, scroll, caret metrics, table layout geometry, virtualization, and overlay rectangles depend on the legacy renderer."
+      },
+      "intent": {
+        "kind": "observable",
+        "summary": "Pagination, scrolling, caret, selection, table, image, and overlay geometry behavior tied to the legacy renderer."
+      },
+      "retainedFixtureRefs": [],
+      "destination": {
+        "change": "document-engine",
+        "area": "layout-output/geometry-conformance"
+      }
+    },
+    {
+      "source": "e2e/tests/issue-781-table-layout.spec.ts",
+      "status": "behavior-tombstone",
+      "coupling": {
+        "category": "legacy-geometry",
+        "reason": "Pagination, scroll, caret metrics, table layout geometry, virtualization, and overlay rectangles depend on the legacy renderer."
+      },
+      "intent": {
+        "kind": "observable",
+        "summary": "Pagination, scrolling, caret, selection, table, image, and overlay geometry behavior tied to the legacy renderer."
+      },
+      "retainedFixtureRefs": [],
+      "destination": {
+        "change": "document-engine",
+        "area": "layout-output/geometry-conformance"
+      }
+    },
+    {
+      "source": "e2e/tests/issue-862-select-table.spec.ts",
+      "status": "behavior-tombstone",
+      "coupling": {
+        "category": "legacy-geometry",
+        "reason": "Pagination, scroll, caret metrics, table layout geometry, virtualization, and overlay rectangles depend on the legacy renderer."
+      },
+      "intent": {
+        "kind": "observable",
+        "summary": "Pagination, scrolling, caret, selection, table, image, and overlay geometry behavior tied to the legacy renderer."
+      },
+      "retainedFixtureRefs": [],
+      "destination": {
+        "change": "document-engine",
+        "area": "layout-output/geometry-conformance"
+      }
+    },
+    {
+      "source": "e2e/tests/issue-928-zoom-caret-height.spec.ts",
+      "status": "behavior-tombstone",
+      "coupling": {
+        "category": "legacy-geometry",
+        "reason": "Pagination, scroll, caret metrics, table layout geometry, virtualization, and overlay rectangles depend on the legacy renderer."
+      },
+      "intent": {
+        "kind": "observable",
+        "summary": "Pagination, scrolling, caret, selection, table, image, and overlay geometry behavior tied to the legacy renderer."
+      },
+      "retainedFixtureRefs": [],
+      "destination": {
+        "change": "document-engine",
+        "area": "layout-output/geometry-conformance"
+      }
+    },
+    {
+      "source": "e2e/tests/float-text-wrapping.spec.ts",
+      "status": "behavior-tombstone",
+      "coupling": {
+        "category": "legacy-geometry",
+        "reason": "Pagination, scroll, caret metrics, table layout geometry, virtualization, and overlay rectangles depend on the legacy renderer."
+      },
+      "intent": {
+        "kind": "observable",
+        "summary": "Pagination, scrolling, caret, selection, table, image, and overlay geometry behavior tied to the legacy renderer."
+      },
+      "retainedFixtureRefs": [
+        "e2e/fixtures/float-wrap-comprehensive-test.docx",
+        "e2e/fixtures/generic-render-regression.docx",
+        "e2e/fixtures/stacked-floats-with-floating-table.docx"
+      ],
+      "destination": {
+        "change": "document-engine",
+        "area": "layout-output/geometry-conformance"
+      }
+    },
+    {
+      "source": "e2e/tests/table-add-column-regression.spec.ts",
+      "status": "behavior-tombstone",
+      "coupling": {
+        "category": "legacy-geometry",
+        "reason": "Pagination, scroll, caret metrics, table layout geometry, virtualization, and overlay rectangles depend on the legacy renderer."
+      },
+      "intent": {
+        "kind": "observable",
+        "summary": "Pagination, scrolling, caret, selection, table, image, and overlay geometry behavior tied to the legacy renderer."
+      },
+      "retainedFixtureRefs": [],
+      "destination": {
+        "change": "document-engine",
+        "area": "layout-output/geometry-conformance"
+      }
+    },
+    {
+      "source": "e2e/tests/table-cell-text-selection.spec.ts",
+      "status": "behavior-tombstone",
+      "coupling": {
+        "category": "legacy-geometry",
+        "reason": "Pagination, scroll, caret metrics, table layout geometry, virtualization, and overlay rectangles depend on the legacy renderer."
+      },
+      "intent": {
+        "kind": "observable",
+        "summary": "Pagination, scrolling, caret, selection, table, image, and overlay geometry behavior tied to the legacy renderer."
+      },
+      "retainedFixtureRefs": [
+        "e2e/fixtures/table-cell-selection-drag.docx"
+      ],
+      "destination": {
+        "change": "document-engine",
+        "area": "layout-output/geometry-conformance"
+      }
+    },
+    {
+      "source": "e2e/tests/table-context-menu.spec.ts",
+      "status": "behavior-tombstone",
+      "coupling": {
+        "category": "legacy-geometry",
+        "reason": "Pagination, scroll, caret metrics, table layout geometry, virtualization, and overlay rectangles depend on the legacy renderer."
+      },
+      "intent": {
+        "kind": "observable",
+        "summary": "Pagination, scrolling, caret, selection, table, image, and overlay geometry behavior tied to the legacy renderer."
+      },
+      "retainedFixtureRefs": [
+        "e2e/fixtures/with-tables.docx"
+      ],
+      "destination": {
+        "change": "document-engine",
+        "area": "layout-output/geometry-conformance"
+      }
+    },
+    {
+      "source": "e2e/tests/table-merge-split.spec.ts",
+      "status": "behavior-tombstone",
+      "coupling": {
+        "category": "legacy-geometry",
+        "reason": "Pagination, scroll, caret metrics, table layout geometry, virtualization, and overlay rectangles depend on the legacy renderer."
+      },
+      "intent": {
+        "kind": "observable",
+        "summary": "Pagination, scrolling, caret, selection, table, image, and overlay geometry behavior tied to the legacy renderer."
+      },
+      "retainedFixtureRefs": [],
+      "destination": {
+        "change": "document-engine",
+        "area": "layout-output/geometry-conformance"
+      }
+    },
+    {
+      "source": "e2e/tests/tables.spec.ts",
+      "status": "behavior-tombstone",
+      "coupling": {
+        "category": "legacy-geometry",
+        "reason": "Pagination, scroll, caret metrics, table layout geometry, virtualization, and overlay rectangles depend on the legacy renderer."
+      },
+      "intent": {
+        "kind": "observable",
+        "summary": "Pagination, scrolling, caret, selection, table, image, and overlay geometry behavior tied to the legacy renderer."
+      },
+      "retainedFixtureRefs": [],
+      "destination": {
+        "change": "document-engine",
+        "area": "layout-output/geometry-conformance"
+      }
+    },
+    {
+      "source": "e2e/tests/empty-table-row-vmerge.spec.ts",
+      "status": "behavior-tombstone",
+      "coupling": {
+        "category": "legacy-geometry",
+        "reason": "Pagination, scroll, caret metrics, table layout geometry, virtualization, and overlay rectangles depend on the legacy renderer."
+      },
+      "intent": {
+        "kind": "observable",
+        "summary": "Pagination, scrolling, caret, selection, table, image, and overlay geometry behavior tied to the legacy renderer."
+      },
+      "retainedFixtureRefs": [
+        "e2e/fixtures/empty-table-row-vmerge.docx"
+      ],
+      "destination": {
+        "change": "document-engine",
+        "area": "layout-output/geometry-conformance"
+      }
+    },
+    {
+      "source": "e2e/tests/image-fit-container.spec.ts",
+      "status": "behavior-tombstone",
+      "coupling": {
+        "category": "legacy-geometry",
+        "reason": "Pagination, scroll, caret metrics, table layout geometry, virtualization, and overlay rectangles depend on the legacy renderer."
+      },
+      "intent": {
+        "kind": "observable",
+        "summary": "Pagination, scrolling, caret, selection, table, image, and overlay geometry behavior tied to the legacy renderer."
+      },
+      "retainedFixtureRefs": [],
+      "destination": {
+        "change": "document-engine",
+        "area": "layout-output/geometry-conformance"
+      }
+    },
+    {
+      "source": "e2e/tests/image-layout-modes.spec.ts",
+      "status": "behavior-tombstone",
+      "coupling": {
+        "category": "legacy-geometry",
+        "reason": "Pagination, scroll, caret metrics, table layout geometry, virtualization, and overlay rectangles depend on the legacy renderer."
+      },
+      "intent": {
+        "kind": "observable",
+        "summary": "Pagination, scrolling, caret, selection, table, image, and overlay geometry behavior tied to the legacy renderer."
+      },
+      "retainedFixtureRefs": [
+        "e2e/fixtures/image-layout-modes-demo.docx"
+      ],
+      "destination": {
+        "change": "document-engine",
+        "area": "layout-output/geometry-conformance"
+      }
+    },
+    {
+      "source": "e2e/tests/image-resize-handles.spec.ts",
+      "status": "behavior-tombstone",
+      "coupling": {
+        "category": "legacy-geometry",
+        "reason": "Pagination, scroll, caret metrics, table layout geometry, virtualization, and overlay rectangles depend on the legacy renderer."
+      },
+      "intent": {
+        "kind": "observable",
+        "summary": "Pagination, scrolling, caret, selection, table, image, and overlay geometry behavior tied to the legacy renderer."
+      },
+      "retainedFixtureRefs": [
+        "e2e/fixtures/empty.docx",
+        "e2e/fixtures/test-image.png"
+      ],
+      "destination": {
+        "change": "document-engine",
+        "area": "layout-output/geometry-conformance"
+      }
+    },
+    {
+      "source": "e2e/tests/image-context-menu.spec.ts",
+      "status": "behavior-tombstone",
+      "coupling": {
+        "category": "legacy-geometry",
+        "reason": "Pagination, scroll, caret metrics, table layout geometry, virtualization, and overlay rectangles depend on the legacy renderer."
+      },
+      "intent": {
+        "kind": "observable",
+        "summary": "Pagination, scrolling, caret, selection, table, image, and overlay geometry behavior tied to the legacy renderer."
+      },
+      "retainedFixtureRefs": [
+        "e2e/fixtures/image-layout-modes-demo.docx"
+      ],
+      "destination": {
+        "change": "document-engine",
+        "area": "layout-output/geometry-conformance"
+      }
+    },
+    {
+      "source": "e2e/tests/image-roundtrip.spec.ts",
+      "status": "behavior-tombstone",
+      "coupling": {
+        "category": "legacy-geometry",
+        "reason": "Pagination, scroll, caret metrics, table layout geometry, virtualization, and overlay rectangles depend on the legacy renderer."
+      },
+      "intent": {
+        "kind": "observable",
+        "summary": "Pagination, scrolling, caret, selection, table, image, and overlay geometry behavior tied to the legacy renderer."
+      },
+      "retainedFixtureRefs": [
+        "e2e/fixtures/example-with-image.docx",
+        "e2e/fixtures/test-image.png"
+      ],
+      "destination": {
+        "change": "document-engine",
+        "area": "layout-output/geometry-conformance"
+      }
+    },
+    {
+      "source": "e2e/tests/agent-paraid-allocator.spec.ts",
+      "status": "behavior-tombstone",
+      "coupling": {
+        "category": "legacy-geometry",
+        "reason": "Pagination, scroll, caret metrics, table layout geometry, virtualization, and overlay rectangles depend on the legacy renderer."
+      },
+      "intent": {
+        "kind": "observable",
+        "summary": "Pagination, scrolling, caret, selection, table, image, and overlay geometry behavior tied to the legacy renderer."
+      },
+      "retainedFixtureRefs": [
+        "e2e/fixtures/example-with-image.docx"
+      ],
+      "destination": {
+        "change": "document-engine",
+        "area": "layout-output/geometry-conformance"
+      }
+    },
+    {
+      "source": "e2e/tests/public-render-api.spec.ts",
+      "status": "behavior-tombstone",
+      "coupling": {
+        "category": "legacy-geometry",
+        "reason": "Pagination, scroll, caret metrics, table layout geometry, virtualization, and overlay rectangles depend on the legacy renderer."
+      },
+      "intent": {
+        "kind": "observable",
+        "summary": "Pagination, scrolling, caret, selection, table, image, and overlay geometry behavior tied to the legacy renderer."
+      },
+      "retainedFixtureRefs": [
+        "e2e/fixtures/demo.docx",
+        "e2e/fixtures/demo/demo.docx",
+        "e2e/fixtures/docx-editor-numbering.docx",
+        "e2e/fixtures/footnote-bottom-overflow.docx",
+        "e2e/fixtures/header-with-table-and-paragraphs.docx",
+        "e2e/fixtures/header-with-table.docx",
+        "e2e/fixtures/issue-472-floating-textbox.docx",
+        "e2e/fixtures/repeated-table-header.docx",
+        "e2e/fixtures/rtl-table-bidivisual.docx",
+        "e2e/fixtures/watermark-confidential.docx",
+        "e2e/fixtures/wrap-none-positioned-image-demo.docx"
+      ],
+      "destination": {
+        "change": "document-engine",
+        "area": "layout-output/geometry-conformance"
+      }
+    },
+    {
+      "source": "e2e/tests/parity/anchor-reveal.spec.ts",
+      "status": "behavior-tombstone",
+      "coupling": {
+        "category": "legacy-geometry",
+        "reason": "Pagination, scroll, caret metrics, table layout geometry, virtualization, and overlay rectangles depend on the legacy renderer."
+      },
+      "intent": {
+        "kind": "observable",
+        "summary": "Pagination, scrolling, caret, selection, table, image, and overlay geometry behavior tied to the legacy renderer."
+      },
+      "retainedFixtureRefs": [],
+      "destination": {
+        "change": "document-engine",
+        "area": "layout-output/geometry-conformance"
+      }
+    },
+    {
+      "source": "e2e/tests/parity/smoke/footnote-convergence.spec.ts",
+      "status": "behavior-tombstone",
+      "coupling": {
+        "category": "legacy-geometry",
+        "reason": "Pagination, scroll, caret metrics, table layout geometry, virtualization, and overlay rectangles depend on the legacy renderer."
+      },
+      "intent": {
+        "kind": "observable",
+        "summary": "Pagination, scrolling, caret, selection, table, image, and overlay geometry behavior tied to the legacy renderer."
+      },
+      "retainedFixtureRefs": [
+        "e2e/fixtures/footnote-bottom-overflow.docx",
+        "e2e/fixtures/footnote-overlap-regression.docx"
+      ],
+      "destination": {
+        "change": "document-engine",
+        "area": "layout-output/geometry-conformance"
+      }
+    },
+    {
+      "source": "e2e/tests/vue/document-scrollbar.spec.ts",
+      "status": "behavior-tombstone",
+      "coupling": {
+        "category": "legacy-geometry",
+        "reason": "Pagination, scroll, caret metrics, table layout geometry, virtualization, and overlay rectangles depend on the legacy renderer."
+      },
+      "intent": {
+        "kind": "observable",
+        "summary": "Pagination, scrolling, caret, selection, table, image, and overlay geometry behavior tied to the legacy renderer."
+      },
+      "retainedFixtureRefs": [],
+      "destination": {
+        "change": "document-engine",
+        "area": "layout-output/geometry-conformance"
+      }
+    },
+    {
+      "source": "e2e/tests/vue/caret-while-typing.spec.ts",
+      "status": "behavior-tombstone",
+      "coupling": {
+        "category": "legacy-geometry",
+        "reason": "Pagination, scroll, caret metrics, table layout geometry, virtualization, and overlay rectangles depend on the legacy renderer."
+      },
+      "intent": {
+        "kind": "observable",
+        "summary": "Pagination, scrolling, caret, selection, table, image, and overlay geometry behavior tied to the legacy renderer."
+      },
+      "retainedFixtureRefs": [
+        "e2e/fixtures/demo.docx"
+      ],
+      "destination": {
+        "change": "document-engine",
+        "area": "layout-output/geometry-conformance"
+      }
+    },
+    {
+      "source": "e2e/tests/vue/cell-drag-selection.spec.ts",
+      "status": "behavior-tombstone",
+      "coupling": {
+        "category": "legacy-geometry",
+        "reason": "Pagination, scroll, caret metrics, table layout geometry, virtualization, and overlay rectangles depend on the legacy renderer."
+      },
+      "intent": {
+        "kind": "observable",
+        "summary": "Pagination, scrolling, caret, selection, table, image, and overlay geometry behavior tied to the legacy renderer."
+      },
+      "retainedFixtureRefs": [],
+      "destination": {
+        "change": "document-engine",
+        "area": "layout-output/geometry-conformance"
+      }
+    },
+    {
+      "source": "e2e/tests/vue/image-fit-container.spec.ts",
+      "status": "behavior-tombstone",
+      "coupling": {
+        "category": "legacy-geometry",
+        "reason": "Pagination, scroll, caret metrics, table layout geometry, virtualization, and overlay rectangles depend on the legacy renderer."
+      },
+      "intent": {
+        "kind": "observable",
+        "summary": "Pagination, scrolling, caret, selection, table, image, and overlay geometry behavior tied to the legacy renderer."
+      },
+      "retainedFixtureRefs": [
+        "e2e/fixtures/empty.docx"
+      ],
+      "destination": {
+        "change": "document-engine",
+        "area": "layout-output/geometry-conformance"
+      }
+    },
+    {
+      "source": "e2e/tests/vue/image-insert.spec.ts",
+      "status": "behavior-tombstone",
+      "coupling": {
+        "category": "legacy-geometry",
+        "reason": "Pagination, scroll, caret metrics, table layout geometry, virtualization, and overlay rectangles depend on the legacy renderer."
+      },
+      "intent": {
+        "kind": "observable",
+        "summary": "Pagination, scrolling, caret, selection, table, image, and overlay geometry behavior tied to the legacy renderer."
+      },
+      "retainedFixtureRefs": [
+        "e2e/fixtures/wide-test-image.png"
+      ],
+      "destination": {
+        "change": "document-engine",
+        "area": "layout-output/geometry-conformance"
+      }
+    },
+    {
+      "source": "e2e/tests/vue/image-overlay-follow.spec.ts",
+      "status": "behavior-tombstone",
+      "coupling": {
+        "category": "legacy-geometry",
+        "reason": "Pagination, scroll, caret metrics, table layout geometry, virtualization, and overlay rectangles depend on the legacy renderer."
+      },
+      "intent": {
+        "kind": "observable",
+        "summary": "Pagination, scrolling, caret, selection, table, image, and overlay geometry behavior tied to the legacy renderer."
+      },
+      "retainedFixtureRefs": [
+        "e2e/fixtures/image-layout-modes-demo.docx"
+      ],
+      "destination": {
+        "change": "document-engine",
+        "area": "layout-output/geometry-conformance"
+      }
+    },
+    {
+      "source": "e2e/tests/vue/image-resize-handles.spec.ts",
+      "status": "behavior-tombstone",
+      "coupling": {
+        "category": "legacy-geometry",
+        "reason": "Pagination, scroll, caret metrics, table layout geometry, virtualization, and overlay rectangles depend on the legacy renderer."
+      },
+      "intent": {
+        "kind": "observable",
+        "summary": "Pagination, scrolling, caret, selection, table, image, and overlay geometry behavior tied to the legacy renderer."
+      },
+      "retainedFixtureRefs": [
+        "e2e/fixtures/empty.docx",
+        "e2e/fixtures/test-image.png"
+      ],
+      "destination": {
+        "change": "document-engine",
+        "area": "layout-output/geometry-conformance"
+      }
+    },
+    {
+      "source": "e2e/tests/vue/issue-734-rtl-table.spec.ts",
+      "status": "behavior-tombstone",
+      "coupling": {
+        "category": "legacy-geometry",
+        "reason": "Pagination, scroll, caret metrics, table layout geometry, virtualization, and overlay rectangles depend on the legacy renderer."
+      },
+      "intent": {
+        "kind": "observable",
+        "summary": "Pagination, scrolling, caret, selection, table, image, and overlay geometry behavior tied to the legacy renderer."
+      },
+      "retainedFixtureRefs": [
+        "e2e/fixtures/rtl-table-bidivisual.docx"
+      ],
+      "destination": {
+        "change": "document-engine",
+        "area": "layout-output/geometry-conformance"
+      }
+    },
+    {
+      "source": "e2e/tests/vue/issue-746-getdocument-paraids.spec.ts",
+      "status": "behavior-tombstone",
+      "coupling": {
+        "category": "legacy-geometry",
+        "reason": "Pagination, scroll, caret metrics, table layout geometry, virtualization, and overlay rectangles depend on the legacy renderer."
+      },
+      "intent": {
+        "kind": "observable",
+        "summary": "Pagination, scrolling, caret, selection, table, image, and overlay geometry behavior tied to the legacy renderer."
+      },
+      "retainedFixtureRefs": [],
+      "destination": {
+        "change": "document-engine",
+        "area": "layout-output/geometry-conformance"
+      }
+    },
+    {
+      "source": "e2e/tests/vue/issue-748-caret-height-mixed-fonts.spec.ts",
+      "status": "behavior-tombstone",
+      "coupling": {
+        "category": "legacy-geometry",
+        "reason": "Pagination, scroll, caret metrics, table layout geometry, virtualization, and overlay rectangles depend on the legacy renderer."
+      },
+      "intent": {
+        "kind": "observable",
+        "summary": "Pagination, scrolling, caret, selection, table, image, and overlay geometry behavior tied to the legacy renderer."
+      },
+      "retainedFixtureRefs": [],
+      "destination": {
+        "change": "document-engine",
+        "area": "layout-output/geometry-conformance"
+      }
+    },
+    {
+      "source": "e2e/tests/vue/issue-762-delete-multiple-rows.spec.ts",
+      "status": "behavior-tombstone",
+      "coupling": {
+        "category": "legacy-geometry",
+        "reason": "Pagination, scroll, caret metrics, table layout geometry, virtualization, and overlay rectangles depend on the legacy renderer."
+      },
+      "intent": {
+        "kind": "observable",
+        "summary": "Pagination, scrolling, caret, selection, table, image, and overlay geometry behavior tied to the legacy renderer."
+      },
+      "retainedFixtureRefs": [],
+      "destination": {
+        "change": "document-engine",
+        "area": "layout-output/geometry-conformance"
+      }
+    },
+    {
+      "source": "e2e/tests/vue/issue-763-caret-multipage-table.spec.ts",
+      "status": "behavior-tombstone",
+      "coupling": {
+        "category": "legacy-geometry",
+        "reason": "Pagination, scroll, caret metrics, table layout geometry, virtualization, and overlay rectangles depend on the legacy renderer."
+      },
+      "intent": {
+        "kind": "observable",
+        "summary": "Pagination, scrolling, caret, selection, table, image, and overlay geometry behavior tied to the legacy renderer."
+      },
+      "retainedFixtureRefs": [],
+      "destination": {
+        "change": "document-engine",
+        "area": "layout-output/geometry-conformance"
+      }
+    },
+    {
+      "source": "e2e/tests/vue/issue-764-image-overlay-scrollbar-gutter.spec.ts",
+      "status": "behavior-tombstone",
+      "coupling": {
+        "category": "legacy-geometry",
+        "reason": "Pagination, scroll, caret metrics, table layout geometry, virtualization, and overlay rectangles depend on the legacy renderer."
+      },
+      "intent": {
+        "kind": "observable",
+        "summary": "Pagination, scrolling, caret, selection, table, image, and overlay geometry behavior tied to the legacy renderer."
+      },
+      "retainedFixtureRefs": [
+        "e2e/fixtures/image-layout-modes-demo.docx"
+      ],
+      "destination": {
+        "change": "document-engine",
+        "area": "layout-output/geometry-conformance"
+      }
+    },
+    {
+      "source": "e2e/tests/vue/issue-781-table-layout.spec.ts",
+      "status": "behavior-tombstone",
+      "coupling": {
+        "category": "legacy-geometry",
+        "reason": "Pagination, scroll, caret metrics, table layout geometry, virtualization, and overlay rectangles depend on the legacy renderer."
+      },
+      "intent": {
+        "kind": "observable",
+        "summary": "Pagination, scrolling, caret, selection, table, image, and overlay geometry behavior tied to the legacy renderer."
+      },
+      "retainedFixtureRefs": [
+        "e2e/fixtures/with-tables.docx"
+      ],
+      "destination": {
+        "change": "document-engine",
+        "area": "layout-output/geometry-conformance"
+      }
+    },
+    {
+      "source": "e2e/tests/vue/issue-862-select-table.spec.ts",
+      "status": "behavior-tombstone",
+      "coupling": {
+        "category": "legacy-geometry",
+        "reason": "Pagination, scroll, caret metrics, table layout geometry, virtualization, and overlay rectangles depend on the legacy renderer."
+      },
+      "intent": {
+        "kind": "observable",
+        "summary": "Pagination, scrolling, caret, selection, table, image, and overlay geometry behavior tied to the legacy renderer."
+      },
+      "retainedFixtureRefs": [],
+      "destination": {
+        "change": "document-engine",
+        "area": "layout-output/geometry-conformance"
+      }
+    },
+    {
+      "source": "e2e/tests/vue/issue-887-outline-ruler-overlap.spec.ts",
+      "status": "behavior-tombstone",
+      "coupling": {
+        "category": "legacy-geometry",
+        "reason": "Pagination, scroll, caret metrics, table layout geometry, virtualization, and overlay rectangles depend on the legacy renderer."
+      },
+      "intent": {
+        "kind": "observable",
+        "summary": "Pagination, scrolling, caret, selection, table, image, and overlay geometry behavior tied to the legacy renderer."
+      },
+      "retainedFixtureRefs": [],
+      "destination": {
+        "change": "document-engine",
+        "area": "layout-output/geometry-conformance"
+      }
+    },
+    {
+      "source": "e2e/tests/vue/selection-resize.spec.ts",
+      "status": "behavior-tombstone",
+      "coupling": {
+        "category": "legacy-geometry",
+        "reason": "Pagination, scroll, caret metrics, table layout geometry, virtualization, and overlay rectangles depend on the legacy renderer."
+      },
+      "intent": {
+        "kind": "observable",
+        "summary": "Pagination, scrolling, caret, selection, table, image, and overlay geometry behavior tied to the legacy renderer."
+      },
+      "retainedFixtureRefs": [],
+      "destination": {
+        "change": "document-engine",
+        "area": "layout-output/geometry-conformance"
+      }
+    },
+    {
+      "source": "e2e/tests/comprehensive-torture-regressions.spec.ts",
+      "status": "behavior-tombstone",
+      "coupling": {
+        "category": "legacy-geometry",
+        "reason": "Pagination, scroll, caret metrics, table layout geometry, virtualization, and overlay rectangles depend on the legacy renderer."
+      },
+      "intent": {
+        "kind": "observable",
+        "summary": "Pagination, scrolling, caret, selection, table, image, and overlay geometry behavior tied to the legacy renderer."
+      },
+      "retainedFixtureRefs": [
+        "e2e/fixtures/comprehensive-word-element-test.docx"
+      ],
+      "destination": {
+        "change": "document-engine",
+        "area": "layout-output/geometry-conformance"
+      }
+    },
+    {
+      "source": "e2e/tests/vue/comprehensive-torture-regressions.spec.ts",
+      "status": "behavior-tombstone",
+      "coupling": {
+        "category": "legacy-geometry",
+        "reason": "Pagination, scroll, caret metrics, table layout geometry, virtualization, and overlay rectangles depend on the legacy renderer."
+      },
+      "intent": {
+        "kind": "observable",
+        "summary": "Pagination, scrolling, caret, selection, table, image, and overlay geometry behavior tied to the legacy renderer."
+      },
+      "retainedFixtureRefs": [
+        "e2e/fixtures/comprehensive-word-element-test.docx"
+      ],
+      "destination": {
+        "change": "document-engine",
+        "area": "layout-output/geometry-conformance"
+      }
+    },
+    {
+      "source": "e2e/tests/visual-regression.spec.ts",
+      "status": "behavior-tombstone",
+      "coupling": {
+        "category": "legacy-visual",
+        "reason": "Screenshot/visual regression and rendering parity checks are pinned to legacy paint output."
+      },
+      "intent": {
+        "kind": "observable",
+        "summary": "Rendering parity, font, watermark, header-shape, and screenshot baselines tied to legacy paint output."
+      },
+      "retainedFixtureRefs": [],
+      "destination": {
+        "change": "document-engine",
+        "area": "layout-output/rendering-conformance"
+      }
+    },
+    {
+      "source": "e2e/tests/visual-check.spec.ts",
+      "status": "behavior-tombstone",
+      "coupling": {
+        "category": "legacy-visual",
+        "reason": "Screenshot/visual regression and rendering parity checks are pinned to legacy paint output."
+      },
+      "intent": {
+        "kind": "observable",
+        "summary": "Rendering parity, font, watermark, header-shape, and screenshot baselines tied to legacy paint output."
+      },
+      "retainedFixtureRefs": [
+        "e2e/fixtures/demo/demo.docx"
+      ],
+      "destination": {
+        "change": "document-engine",
+        "area": "layout-output/rendering-conformance"
+      }
+    },
+    {
+      "source": "e2e/tests/vue/rendering-parity.spec.ts",
+      "status": "behavior-tombstone",
+      "coupling": {
+        "category": "legacy-visual",
+        "reason": "Screenshot/visual regression and rendering parity checks are pinned to legacy paint output."
+      },
+      "intent": {
+        "kind": "observable",
+        "summary": "Rendering parity, font, watermark, header-shape, and screenshot baselines tied to legacy paint output."
+      },
+      "retainedFixtureRefs": [
+        "e2e/fixtures/border-overlay-layout-demo.docx",
+        "e2e/fixtures/header-with-table.docx",
+        "e2e/fixtures/issue-740-header-zero-distance.docx",
+        "e2e/fixtures/titlePg-header-footer.docx"
+      ],
+      "destination": {
+        "change": "document-engine",
+        "area": "layout-output/rendering-conformance"
+      }
+    },
+    {
+      "source": "e2e/tests/parity/smoke/watermark-render.spec.ts",
+      "status": "behavior-tombstone",
+      "coupling": {
+        "category": "legacy-visual",
+        "reason": "Screenshot/visual regression and rendering parity checks are pinned to legacy paint output."
+      },
+      "intent": {
+        "kind": "observable",
+        "summary": "Rendering parity, font, watermark, header-shape, and screenshot baselines tied to legacy paint output."
+      },
+      "retainedFixtureRefs": [
+        "e2e/fixtures/watermark-confidential.docx"
+      ],
+      "destination": {
+        "change": "document-engine",
+        "area": "layout-output/rendering-conformance"
+      }
+    },
+    {
+      "source": "e2e/tests/parity/smoke/watermark-presets.spec.ts",
+      "status": "behavior-tombstone",
+      "coupling": {
+        "category": "legacy-visual",
+        "reason": "Screenshot/visual regression and rendering parity checks are pinned to legacy paint output."
+      },
+      "intent": {
+        "kind": "observable",
+        "summary": "Rendering parity, font, watermark, header-shape, and screenshot baselines tied to legacy paint output."
+      },
+      "retainedFixtureRefs": [],
+      "destination": {
+        "change": "document-engine",
+        "area": "layout-output/rendering-conformance"
+      }
+    },
+    {
+      "source": "e2e/tests/issue-777-vml-header-render.spec.ts",
+      "status": "behavior-tombstone",
+      "coupling": {
+        "category": "legacy-visual",
+        "reason": "Screenshot/visual regression and rendering parity checks are pinned to legacy paint output."
+      },
+      "intent": {
+        "kind": "observable",
+        "summary": "Rendering parity, font, watermark, header-shape, and screenshot baselines tied to legacy paint output."
+      },
+      "retainedFixtureRefs": [
+        "e2e/fixtures/issue-777-vml-header.docx"
+      ],
+      "destination": {
+        "change": "document-engine",
+        "area": "layout-output/rendering-conformance"
+      }
+    },
+    {
+      "source": "e2e/tests/issue-856-header-shape-overlay.spec.ts",
+      "status": "behavior-tombstone",
+      "coupling": {
+        "category": "legacy-visual",
+        "reason": "Screenshot/visual regression and rendering parity checks are pinned to legacy paint output."
+      },
+      "intent": {
+        "kind": "observable",
+        "summary": "Rendering parity, font, watermark, header-shape, and screenshot baselines tied to legacy paint output."
+      },
+      "retainedFixtureRefs": [
+        "e2e/fixtures/issue-856-custom-header.docx"
+      ],
+      "destination": {
+        "change": "document-engine",
+        "area": "layout-output/rendering-conformance"
+      }
+    },
+    {
+      "source": "e2e/tests/vue/issue-777-vml-header-render.spec.ts",
+      "status": "behavior-tombstone",
+      "coupling": {
+        "category": "legacy-visual",
+        "reason": "Screenshot/visual regression and rendering parity checks are pinned to legacy paint output."
+      },
+      "intent": {
+        "kind": "observable",
+        "summary": "Rendering parity, font, watermark, header-shape, and screenshot baselines tied to legacy paint output."
+      },
+      "retainedFixtureRefs": [
+        "e2e/fixtures/issue-777-vml-header.docx"
+      ],
+      "destination": {
+        "change": "document-engine",
+        "area": "layout-output/rendering-conformance"
+      }
+    },
+    {
+      "source": "e2e/tests/vue/issue-856-header-shape-overlay.spec.ts",
+      "status": "behavior-tombstone",
+      "coupling": {
+        "category": "legacy-visual",
+        "reason": "Screenshot/visual regression and rendering parity checks are pinned to legacy paint output."
+      },
+      "intent": {
+        "kind": "observable",
+        "summary": "Rendering parity, font, watermark, header-shape, and screenshot baselines tied to legacy paint output."
+      },
+      "retainedFixtureRefs": [
+        "e2e/fixtures/issue-856-custom-header.docx"
+      ],
+      "destination": {
+        "change": "document-engine",
+        "area": "layout-output/rendering-conformance"
+      }
+    },
+    {
+      "source": "e2e/tests/alternatecontent-textbox.spec.ts",
+      "status": "behavior-tombstone",
+      "coupling": {
+        "category": "legacy-visual",
+        "reason": "Screenshot/visual regression and rendering parity checks are pinned to legacy paint output."
+      },
+      "intent": {
+        "kind": "observable",
+        "summary": "Rendering parity, font, watermark, header-shape, and screenshot baselines tied to legacy paint output."
+      },
+      "retainedFixtureRefs": [
+        "e2e/fixtures/alternatecontent-textbox.docx"
+      ],
+      "destination": {
+        "change": "document-engine",
+        "area": "layout-output/rendering-conformance"
+      }
+    },
+    {
+      "source": "e2e/tests/header-vml-emf.spec.ts",
+      "status": "behavior-tombstone",
+      "coupling": {
+        "category": "legacy-visual",
+        "reason": "Screenshot/visual regression and rendering parity checks are pinned to legacy paint output."
+      },
+      "intent": {
+        "kind": "observable",
+        "summary": "Rendering parity, font, watermark, header-shape, and screenshot baselines tied to legacy paint output."
+      },
+      "retainedFixtureRefs": [
+        "e2e/fixtures/header-vml-emf.docx"
+      ],
+      "destination": {
+        "change": "document-engine",
+        "area": "layout-output/rendering-conformance"
+      }
+    },
+    {
+      "source": "e2e/tests/header-overflow-diagnostic.spec.ts",
+      "status": "behavior-tombstone",
+      "coupling": {
+        "category": "legacy-visual",
+        "reason": "Screenshot/visual regression and rendering parity checks are pinned to legacy paint output."
+      },
+      "intent": {
+        "kind": "observable",
+        "summary": "Rendering parity, font, watermark, header-shape, and screenshot baselines tied to legacy paint output."
+      },
+      "retainedFixtureRefs": [
+        "e2e/fixtures/header-with-table-and-paragraphs.docx"
+      ],
+      "destination": {
+        "change": "document-engine",
+        "area": "layout-output/rendering-conformance"
+      }
+    },
+    {
+      "source": "e2e/tests/embedded-fonts.spec.ts",
+      "status": "behavior-tombstone",
+      "coupling": {
+        "category": "legacy-visual",
+        "reason": "Screenshot/visual regression and rendering parity checks are pinned to legacy paint output."
+      },
+      "intent": {
+        "kind": "observable",
+        "summary": "Rendering parity, font, watermark, header-shape, and screenshot baselines tied to legacy paint output."
+      },
+      "retainedFixtureRefs": [
+        "e2e/fixtures/embedded-font.docx"
+      ],
+      "destination": {
+        "change": "document-engine",
+        "area": "layout-output/rendering-conformance"
+      }
+    },
+    {
+      "source": "e2e/tests/vue/embedded-fonts.spec.ts",
+      "status": "behavior-tombstone",
+      "coupling": {
+        "category": "legacy-visual",
+        "reason": "Screenshot/visual regression and rendering parity checks are pinned to legacy paint output."
+      },
+      "intent": {
+        "kind": "observable",
+        "summary": "Rendering parity, font, watermark, header-shape, and screenshot baselines tied to legacy paint output."
+      },
+      "retainedFixtureRefs": [
+        "e2e/fixtures/embedded-font.docx"
+      ],
+      "destination": {
+        "change": "document-engine",
+        "area": "layout-output/rendering-conformance"
+      }
+    },
+    {
+      "source": "e2e/tests/fonts.spec.ts",
+      "status": "behavior-tombstone",
+      "coupling": {
+        "category": "legacy-visual",
+        "reason": "Screenshot/visual regression and rendering parity checks are pinned to legacy paint output."
+      },
+      "intent": {
+        "kind": "observable",
+        "summary": "Rendering parity, font, watermark, header-shape, and screenshot baselines tied to legacy paint output."
+      },
+      "retainedFixtureRefs": [],
+      "destination": {
+        "change": "document-engine",
+        "area": "layout-output/rendering-conformance"
+      }
+    },
+    {
+      "source": "e2e/tests/vue/fonts.spec.ts",
+      "status": "behavior-tombstone",
+      "coupling": {
+        "category": "legacy-visual",
+        "reason": "Screenshot/visual regression and rendering parity checks are pinned to legacy paint output."
+      },
+      "intent": {
+        "kind": "observable",
+        "summary": "Rendering parity, font, watermark, header-shape, and screenshot baselines tied to legacy paint output."
+      },
+      "retainedFixtureRefs": [],
+      "destination": {
+        "change": "document-engine",
+        "area": "layout-output/rendering-conformance"
+      }
+    },
+    {
+      "source": "e2e/tests/hf-body-focus-handoff.spec.ts",
+      "status": "behavior-tombstone",
+      "coupling": {
+        "category": "legacy-header-footer",
+        "reason": "Header/footer stories, toolbars, inheritance, and note placement are coupled to the legacy document surface."
+      },
+      "intent": {
+        "kind": "observable",
+        "summary": "Header/footer editing, rendering, inheritance, and footnote placement behavior."
+      },
+      "retainedFixtureRefs": [
+        "e2e/fixtures/header-with-table.docx"
+      ],
+      "destination": {
+        "change": "document-engine",
+        "area": "layout-output/header-footer-conformance"
+      }
+    },
+    {
+      "source": "e2e/tests/hf-click-and-type.spec.ts",
+      "status": "behavior-tombstone",
+      "coupling": {
+        "category": "legacy-header-footer",
+        "reason": "Header/footer stories, toolbars, inheritance, and note placement are coupled to the legacy document surface."
+      },
+      "intent": {
+        "kind": "observable",
+        "summary": "Header/footer editing, rendering, inheritance, and footnote placement behavior."
+      },
+      "retainedFixtureRefs": [
+        "e2e/fixtures/header-with-table.docx"
+      ],
+      "destination": {
+        "change": "document-engine",
+        "area": "layout-output/header-footer-conformance"
+      }
+    },
+    {
+      "source": "e2e/tests/hf-field-insert.spec.ts",
+      "status": "behavior-tombstone",
+      "coupling": {
+        "category": "legacy-header-footer",
+        "reason": "Header/footer stories, toolbars, inheritance, and note placement are coupled to the legacy document surface."
+      },
+      "intent": {
+        "kind": "observable",
+        "summary": "Header/footer editing, rendering, inheritance, and footnote placement behavior."
+      },
+      "retainedFixtureRefs": [
+        "e2e/fixtures/header-with-table.docx"
+      ],
+      "destination": {
+        "change": "document-engine",
+        "area": "layout-output/header-footer-conformance"
+      }
+    },
+    {
+      "source": "e2e/tests/hf-footer-caret-section.spec.ts",
+      "status": "behavior-tombstone",
+      "coupling": {
+        "category": "legacy-header-footer",
+        "reason": "Header/footer stories, toolbars, inheritance, and note placement are coupled to the legacy document surface."
+      },
+      "intent": {
+        "kind": "observable",
+        "summary": "Header/footer editing, rendering, inheritance, and footnote placement behavior."
+      },
+      "retainedFixtureRefs": [
+        "e2e/fixtures/section-inheritance-header-footer.docx"
+      ],
+      "destination": {
+        "change": "document-engine",
+        "area": "layout-output/header-footer-conformance"
+      }
+    },
+    {
+      "source": "e2e/tests/hf-selection-rects.spec.ts",
+      "status": "behavior-tombstone",
+      "coupling": {
+        "category": "legacy-header-footer",
+        "reason": "Header/footer stories, toolbars, inheritance, and note placement are coupled to the legacy document surface."
+      },
+      "intent": {
+        "kind": "observable",
+        "summary": "Header/footer editing, rendering, inheritance, and footnote placement behavior."
+      },
+      "retainedFixtureRefs": [
+        "e2e/fixtures/header-with-table.docx"
+      ],
+      "destination": {
+        "change": "document-engine",
+        "area": "layout-output/header-footer-conformance"
+      }
+    },
+    {
+      "source": "e2e/tests/hf-toolbar-and-zindex.spec.ts",
+      "status": "behavior-tombstone",
+      "coupling": {
+        "category": "legacy-header-footer",
+        "reason": "Header/footer stories, toolbars, inheritance, and note placement are coupled to the legacy document surface."
+      },
+      "intent": {
+        "kind": "observable",
+        "summary": "Header/footer editing, rendering, inheritance, and footnote placement behavior."
+      },
+      "retainedFixtureRefs": [
+        "e2e/fixtures/header-with-table.docx"
+      ],
+      "destination": {
+        "change": "document-engine",
+        "area": "layout-output/header-footer-conformance"
+      }
+    },
+    {
+      "source": "e2e/tests/hf-trailing-rule.spec.ts",
+      "status": "behavior-tombstone",
+      "coupling": {
+        "category": "legacy-header-footer",
+        "reason": "Header/footer stories, toolbars, inheritance, and note placement are coupled to the legacy document surface."
+      },
+      "intent": {
+        "kind": "observable",
+        "summary": "Header/footer editing, rendering, inheritance, and footnote placement behavior."
+      },
+      "retainedFixtureRefs": [
+        "e2e/fixtures/template-with-hf-rule.docx"
+      ],
+      "destination": {
+        "change": "document-engine",
+        "area": "layout-output/header-footer-conformance"
+      }
+    },
+    {
+      "source": "e2e/tests/hf-type-then-insert.spec.ts",
+      "status": "behavior-tombstone",
+      "coupling": {
+        "category": "legacy-header-footer",
+        "reason": "Header/footer stories, toolbars, inheritance, and note placement are coupled to the legacy document surface."
+      },
+      "intent": {
+        "kind": "observable",
+        "summary": "Header/footer editing, rendering, inheritance, and footnote placement behavior."
+      },
+      "retainedFixtureRefs": [
+        "e2e/fixtures/header-with-table.docx"
+      ],
+      "destination": {
+        "change": "document-engine",
+        "area": "layout-output/header-footer-conformance"
+      }
+    },
+    {
+      "source": "e2e/tests/header-footer-horizontal-regression.spec.ts",
+      "status": "behavior-tombstone",
+      "coupling": {
+        "category": "legacy-header-footer",
+        "reason": "Header/footer stories, toolbars, inheritance, and note placement are coupled to the legacy document surface."
+      },
+      "intent": {
+        "kind": "observable",
+        "summary": "Header/footer editing, rendering, inheritance, and footnote placement behavior."
+      },
+      "retainedFixtureRefs": [
+        "e2e/fixtures/generic-header-footer-horizontal-regression.docx"
+      ],
+      "destination": {
+        "change": "document-engine",
+        "area": "layout-output/header-footer-conformance"
+      }
+    },
+    {
+      "source": "e2e/tests/header-footer-tables.spec.ts",
+      "status": "behavior-tombstone",
+      "coupling": {
+        "category": "legacy-header-footer",
+        "reason": "Header/footer stories, toolbars, inheritance, and note placement are coupled to the legacy document surface."
+      },
+      "intent": {
+        "kind": "observable",
+        "summary": "Header/footer editing, rendering, inheritance, and footnote placement behavior."
+      },
+      "retainedFixtureRefs": [
+        "e2e/fixtures/header-with-table.docx"
+      ],
+      "destination": {
+        "change": "document-engine",
+        "area": "layout-output/header-footer-conformance"
+      }
+    },
+    {
+      "source": "e2e/tests/header-footer-textbox.spec.ts",
+      "status": "behavior-tombstone",
+      "coupling": {
+        "category": "legacy-header-footer",
+        "reason": "Header/footer stories, toolbars, inheritance, and note placement are coupled to the legacy document surface."
+      },
+      "intent": {
+        "kind": "observable",
+        "summary": "Header/footer editing, rendering, inheritance, and footnote placement behavior."
+      },
+      "retainedFixtureRefs": [
+        "e2e/fixtures/header-footer-textbox.docx"
+      ],
+      "destination": {
+        "change": "document-engine",
+        "area": "layout-output/header-footer-conformance"
+      }
+    },
+    {
+      "source": "e2e/tests/header-right-tab.spec.ts",
+      "status": "behavior-tombstone",
+      "coupling": {
+        "category": "legacy-header-footer",
+        "reason": "Header/footer stories, toolbars, inheritance, and note placement are coupled to the legacy document surface."
+      },
+      "intent": {
+        "kind": "observable",
+        "summary": "Header/footer editing, rendering, inheritance, and footnote placement behavior."
+      },
+      "retainedFixtureRefs": [
+        "e2e/fixtures/header-inline-image-dist.docx",
+        "e2e/fixtures/header-right-tab.docx"
+      ],
+      "destination": {
+        "change": "document-engine",
+        "area": "layout-output/header-footer-conformance"
+      }
+    },
+    {
+      "source": "e2e/tests/header-selection-bleed.spec.ts",
+      "status": "behavior-tombstone",
+      "coupling": {
+        "category": "legacy-header-footer",
+        "reason": "Header/footer stories, toolbars, inheritance, and note placement are coupled to the legacy document surface."
+      },
+      "intent": {
+        "kind": "observable",
+        "summary": "Header/footer editing, rendering, inheritance, and footnote placement behavior."
+      },
+      "retainedFixtureRefs": [
+        "e2e/fixtures/header-with-table.docx"
+      ],
+      "destination": {
+        "change": "document-engine",
+        "area": "layout-output/header-footer-conformance"
+      }
+    },
+    {
+      "source": "e2e/tests/footer-page-number.spec.ts",
+      "status": "behavior-tombstone",
+      "coupling": {
+        "category": "legacy-header-footer",
+        "reason": "Header/footer stories, toolbars, inheritance, and note placement are coupled to the legacy document surface."
+      },
+      "intent": {
+        "kind": "observable",
+        "summary": "Header/footer editing, rendering, inheritance, and footnote placement behavior."
+      },
+      "retainedFixtureRefs": [
+        "e2e/fixtures/footer-page-number.docx"
+      ],
+      "destination": {
+        "change": "document-engine",
+        "area": "layout-output/header-footer-conformance"
+      }
+    },
+    {
+      "source": "e2e/tests/footnote-bottom-overflow.spec.ts",
+      "status": "behavior-tombstone",
+      "coupling": {
+        "category": "legacy-header-footer",
+        "reason": "Header/footer stories, toolbars, inheritance, and note placement are coupled to the legacy document surface."
+      },
+      "intent": {
+        "kind": "observable",
+        "summary": "Header/footer editing, rendering, inheritance, and footnote placement behavior."
+      },
+      "retainedFixtureRefs": [
+        "e2e/fixtures/footnote-bottom-overflow.docx",
+        "e2e/fixtures/footnote-overlap-regression.docx"
+      ],
+      "destination": {
+        "change": "document-engine",
+        "area": "layout-output/header-footer-conformance"
+      }
+    },
+    {
+      "source": "e2e/tests/section-header-footer-rendering.spec.ts",
+      "status": "behavior-tombstone",
+      "coupling": {
+        "category": "legacy-header-footer",
+        "reason": "Header/footer stories, toolbars, inheritance, and note placement are coupled to the legacy document surface."
+      },
+      "intent": {
+        "kind": "observable",
+        "summary": "Header/footer editing, rendering, inheritance, and footnote placement behavior."
+      },
+      "retainedFixtureRefs": [],
+      "destination": {
+        "change": "document-engine",
+        "area": "layout-output/header-footer-conformance"
+      }
+    },
+    {
+      "source": "e2e/tests/section-inheritance.spec.ts",
+      "status": "behavior-tombstone",
+      "coupling": {
+        "category": "legacy-header-footer",
+        "reason": "Header/footer stories, toolbars, inheritance, and note placement are coupled to the legacy document surface."
+      },
+      "intent": {
+        "kind": "observable",
+        "summary": "Header/footer editing, rendering, inheritance, and footnote placement behavior."
+      },
+      "retainedFixtureRefs": [
+        "e2e/fixtures/section-inheritance-header-footer.docx"
+      ],
+      "destination": {
+        "change": "document-engine",
+        "area": "layout-output/header-footer-conformance"
+      }
+    },
+    {
+      "source": "e2e/tests/sdt-header-content.spec.ts",
+      "status": "behavior-tombstone",
+      "coupling": {
+        "category": "legacy-header-footer",
+        "reason": "Header/footer stories, toolbars, inheritance, and note placement are coupled to the legacy document surface."
+      },
+      "intent": {
+        "kind": "observable",
+        "summary": "Header/footer editing, rendering, inheritance, and footnote placement behavior."
+      },
+      "retainedFixtureRefs": [
+        "e2e/fixtures/sdt-header-content.docx"
+      ],
+      "destination": {
+        "change": "document-engine",
+        "area": "layout-output/header-footer-conformance"
+      }
+    },
+    {
+      "source": "e2e/tests/titlePg-header-footer.spec.ts",
+      "status": "behavior-tombstone",
+      "coupling": {
+        "category": "legacy-header-footer",
+        "reason": "Header/footer stories, toolbars, inheritance, and note placement are coupled to the legacy document surface."
+      },
+      "intent": {
+        "kind": "observable",
+        "summary": "Header/footer editing, rendering, inheritance, and footnote placement behavior."
+      },
+      "retainedFixtureRefs": [
+        "e2e/fixtures/titlePg-header-footer.docx"
+      ],
+      "destination": {
+        "change": "document-engine",
+        "area": "layout-output/header-footer-conformance"
+      }
+    },
+    {
+      "source": "e2e/tests/issue-740-header-zero-distance.spec.ts",
+      "status": "behavior-tombstone",
+      "coupling": {
+        "category": "legacy-header-footer",
+        "reason": "Header/footer stories, toolbars, inheritance, and note placement are coupled to the legacy document surface."
+      },
+      "intent": {
+        "kind": "observable",
+        "summary": "Header/footer editing, rendering, inheritance, and footnote placement behavior."
+      },
+      "retainedFixtureRefs": [
+        "e2e/fixtures/issue-740-header-zero-distance.docx"
+      ],
+      "destination": {
+        "change": "document-engine",
+        "area": "layout-output/header-footer-conformance"
+      }
+    },
+    {
+      "source": "e2e/tests/vue/hf-body-focus-handoff.spec.ts",
+      "status": "behavior-tombstone",
+      "coupling": {
+        "category": "legacy-header-footer",
+        "reason": "Header/footer stories, toolbars, inheritance, and note placement are coupled to the legacy document surface."
+      },
+      "intent": {
+        "kind": "observable",
+        "summary": "Header/footer editing, rendering, inheritance, and footnote placement behavior."
+      },
+      "retainedFixtureRefs": [
+        "e2e/fixtures/header-with-table.docx"
+      ],
+      "destination": {
+        "change": "document-engine",
+        "area": "layout-output/header-footer-conformance"
+      }
+    },
+    {
+      "source": "e2e/tests/vue/hf-click-and-type.spec.ts",
+      "status": "behavior-tombstone",
+      "coupling": {
+        "category": "legacy-header-footer",
+        "reason": "Header/footer stories, toolbars, inheritance, and note placement are coupled to the legacy document surface."
+      },
+      "intent": {
+        "kind": "observable",
+        "summary": "Header/footer editing, rendering, inheritance, and footnote placement behavior."
+      },
+      "retainedFixtureRefs": [
+        "e2e/fixtures/header-with-table.docx"
+      ],
+      "destination": {
+        "change": "document-engine",
+        "area": "layout-output/header-footer-conformance"
+      }
+    },
+    {
+      "source": "e2e/tests/vue/hf-text-selection.spec.ts",
+      "status": "behavior-tombstone",
+      "coupling": {
+        "category": "legacy-header-footer",
+        "reason": "Header/footer stories, toolbars, inheritance, and note placement are coupled to the legacy document surface."
+      },
+      "intent": {
+        "kind": "observable",
+        "summary": "Header/footer editing, rendering, inheritance, and footnote placement behavior."
+      },
+      "retainedFixtureRefs": [
+        "e2e/fixtures/header-with-table.docx"
+      ],
+      "destination": {
+        "change": "document-engine",
+        "area": "layout-output/header-footer-conformance"
+      }
+    },
+    {
+      "source": "e2e/tests/vue/issue-749-hf-formatting.spec.ts",
+      "status": "behavior-tombstone",
+      "coupling": {
+        "category": "legacy-header-footer",
+        "reason": "Header/footer stories, toolbars, inheritance, and note placement are coupled to the legacy document surface."
+      },
+      "intent": {
+        "kind": "observable",
+        "summary": "Header/footer editing, rendering, inheritance, and footnote placement behavior."
+      },
+      "retainedFixtureRefs": [
+        "e2e/fixtures/header-with-table.docx"
+      ],
+      "destination": {
+        "change": "document-engine",
+        "area": "layout-output/header-footer-conformance"
+      }
+    },
+    {
+      "source": "e2e/tests/performance-large-docs.spec.ts",
+      "status": "behavior-tombstone",
+      "coupling": {
+        "category": "legacy-performance",
+        "reason": "Large-document timing thresholds were captured against the legacy engine stack and transport."
+      },
+      "intent": {
+        "kind": "observable",
+        "summary": "Large-document latency and throughput baselines from the legacy stack."
+      },
+      "retainedFixtureRefs": [
+        "e2e/fixtures/issue-68-large.docx"
+      ],
+      "destination": {
+        "change": "document-engine",
+        "area": "performance/performance-conformance"
+      }
+    },
+    {
+      "source": "e2e/tests/performance-large-docs-comments-suggestions.spec.ts",
+      "status": "behavior-tombstone",
+      "coupling": {
+        "category": "legacy-performance",
+        "reason": "Large-document timing thresholds were captured against the legacy engine stack and transport."
+      },
+      "intent": {
+        "kind": "observable",
+        "summary": "Large-document latency and throughput baselines from the legacy stack."
+      },
+      "retainedFixtureRefs": [
+        "e2e/fixtures/issue-68-large-comments-suggestions.docx"
+      ],
+      "destination": {
+        "change": "document-engine",
+        "area": "performance/performance-conformance"
+      }
+    },
+    {
+      "source": "e2e/editor.spec.ts",
+      "status": "behavior-tombstone",
+      "coupling": {
+        "category": "legacy-ui-or-debug-coupled",
+        "reason": "The page-load and empty-state smoke checks depend on the legacy demo root, #app mount, console filtering, and generated screenshots."
+      },
+      "intent": {
+        "kind": "observable",
+        "summary": "The editor demo loads without unexpected runtime errors and presents a visible initial document state."
+      },
+      "retainedFixtureRefs": [],
+      "destination": {
+        "change": "document-engine",
+        "area": "editor-binding/adapter-ui-conformance"
+      }
+    },
+    {
+      "source": "e2e/visual.spec.ts",
+      "status": "behavior-tombstone",
+      "coupling": {
+        "category": "legacy-visual",
+        "reason": "The visual smoke checks depend on the legacy demo root, CSS selectors, optional component discovery, console filtering, and generated screenshots."
+      },
+      "intent": {
+        "kind": "observable",
+        "summary": "The document surface and visible editor components render without unexpected runtime errors."
+      },
+      "retainedFixtureRefs": [],
+      "destination": {
+        "change": "document-engine",
+        "area": "layout-output/rendering-conformance"
+      }
+    }
+  ],
   "helpersRequiringMigration": [
     "e2e/helpers/editor-page.ts",
     "e2e/helpers/body-pm-selection.ts",
@@ -209,5 +2790,5 @@
     "e2e/helpers/find-page.ts",
     "e2e/helpers/perf-metrics.ts"
   ],
-  "editorPageNote": "e2e/helpers/editor-page.ts (~1600 lines) remains legacy; lifecycle scenario is frozen in vocabulary oracle, not wired yet"
+  "editorPageNote": "e2e/helpers/editor-page.ts is tombstoned; the lifecycle scenario is frozen in the vocabulary oracle and remains unwired"
 }

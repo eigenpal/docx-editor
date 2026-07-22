@@ -184,17 +184,6 @@ export default [
     },
   },
 
-  // editor-page.ts is the e2e Page Object Model — a single class covering
-  // every editor interaction. It's intentionally one file; the cap still
-  // enforces a ceiling (modest headroom over its current size) so it can't
-  // grow unbounded.
-  {
-    files: ['e2e/helpers/editor-page.ts'],
-    rules: {
-      'max-lines': ['error', { max: 1650, skipBlankLines: false, skipComments: false }],
-    },
-  },
-
   // DocxEditor.vue is the host component — same role as React's
   // DocxEditor.tsx (which has a 2000-line cap). The React-parity callback
   // props (#720) add per-prop wiring that must live inline in the SFC (the

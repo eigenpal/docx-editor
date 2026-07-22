@@ -77,13 +77,15 @@ Load-bearing rules the changes commit to:
 
 ```bash
 bun run typecheck
-bun run test:e2e          # Playwright; specs live in e2e/. Narrow with --grep.
+bun test                  # Package and unit tests
+bun run test:spike
+bun run typecheck:spike
 bun run check:parity      # export + editor-contract + docs-surface + parity-contract + adapter-css
 bun run api:check         # API Extractor snapshot drift
 bun run i18n:validate
 ```
 
-- Narrow E2E to the area you touched (`npx playwright test e2e/... --grep "<pattern>" --timeout=30000`); never run the full suite except final validation.
+- Browser E2E returns only after the public `EditorDriver` boundary exists.
 - `bun run format` before pushing.
 
 ## React/Vue parity

@@ -139,11 +139,15 @@ be inspected through canonical semantic objects for pages, text/`ActualText`,
 tags, links, geometry, fonts, and images; byte hashes MAY be used only after
 metadata, object order, compression, and subset naming are canonicalized.
 
-An independent reviewed reference-render corpus MUST be frozen before output
-implementation with source bytes and expected pagination, fixed-point geometry,
-raster checkpoints/tolerances, extracted logical text, semantic reading order,
-and internal/external link destinations. Engine output MUST be measured against
-those references, not only against another engine backend. Tagged PDF MUST
+A standards-first output evidence corpus MUST be frozen before output
+implementation with source bytes, OpenSpec/OOXML-authored expected pagination,
+fixed-point geometry, raster checkpoints/tolerances, extracted logical text,
+semantic reading order, and internal/external link destinations. Browser
+observations are deferred and, if later captured, MAY be recorded only as
+corroborating fixture evidence; they MUST NOT replace the authored
+expectations or artifact comparators. Engine output MUST be measured against
+that explicit comparator set, not only against another engine backend or
+against internal DOM or ProseMirror geometry. Tagged PDF MUST
 validate against PDF/UA-1 with a pinned validator/version and SHALL retain
 validator reports; selecting another profile requires a reviewed design change.
 

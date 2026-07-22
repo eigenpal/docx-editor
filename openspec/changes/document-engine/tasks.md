@@ -6,8 +6,9 @@
 - [ ] 0.4 Freeze canonical comparator formats for authored state, anchors, Yjs state vectors, shaped runs, pagination fingerprints, semantic trees, hit tests, PDF semantics, and benchmark evidence.
 - [ ] 0.5 Add import-graph and package-authority checks proving current-stack `DocxEditorEngine` orchestration is non-authoritative, future `EditorHost` is PM-free, and no alternate object-model namespace is exported.
 - [ ] 0.6 Before implementation, review and freeze versioned oracle artifacts for exact Yjs schema/invariants and collision precedence, normalization precedence, IME strings, selection grapheme boundaries/affinities, undo histories, fixture inputs/outputs, and comparators.
-- [ ] 0.7 Freeze source DOCX bytes/hashes plus an independently reviewed reference-render corpus with pagination, geometry, raster/text/link/semantic metrics, feature matrix, separate 100+ tracked-revision versus engine-history classes, and PDF/UA-1 validation before output implementation.
+- [ ] 0.7 Freeze source DOCX bytes/hashes plus a standards-first output evidence corpus with OpenSpec/OOXML-authored expected pagination, geometry, raster/text/link/semantic metrics, feature matrix, separate 100+ tracked-revision versus engine-history classes, and PDF/UA-1 validation before output implementation; browser observations remain deferred and, if later captured, act only as corroborating fixture evidence.
 - [ ] 0.8 Freeze shaping inputs, justification opportunity/exclusion/remainder/bidi allocation, text-fit limits, display/semantic IDs, referential integrity, grapheme caret/ligature affinity, pointer transparency/hit eligibility, anchors, tree, clusters, z-order, clips, transforms, and their independent expected outputs before implementing layout or renderers.
+- [ ] 0.9 Redevelop browser E2E only after a public engine-neutral `EditorDriver`/`DocxEditor.*` transport exists; assertions MUST target stable command/query results and `DisplayItem`/DOCX/PDF comparators rather than internal DOM or ProseMirror geometry, and no browser E2E command may return before that driver exists.
 
 ## 1. Prerequisite spike and architecture record
 
