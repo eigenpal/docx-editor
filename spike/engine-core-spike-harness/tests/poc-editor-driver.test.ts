@@ -2,6 +2,7 @@
 import { describe, expect, test } from 'bun:test';
 import { GlobalRegistrator } from '@happy-dom/global-registrator';
 import { EditorView } from 'prosemirror-view';
+import * as Y from 'yjs';
 import { createPocDocxFixture } from '../src/poc/docx';
 import { createPocEditorDriver, type PocEditorDriverHost } from '../browser/driver';
 import { nonEmptyString, type EditorDriver } from '../src/driver/editor-driver';
@@ -136,6 +137,41 @@ describe('poc EditorDriver boundary', () => {
     });
     expect(host.querySelector('#editable-host')?.textContent).toBe(expected);
     expect(host.querySelector('#replica-host')?.textContent).toBe(expected);
+    host.remove();
+  });
+
+  test('allocated browser session accepts Yjs runtime constructor aliases', async () => {
+    const { host, driver } = createDriverHosts();
+    const constructors = [Y.ContentAny, Y.ContentDeleted, Y.ContentEmbed, Y.ContentString] as const;
+    const names = constructors.map((constructor) => constructor.name);
+    constructors.forEach((constructor) => {
+      Object.defineProperty(constructor, 'name', {
+        configurable: true,
+        value: `_${constructor.name}`,
+      });
+    });
+
+    let result;
+    try {
+      await driver.loadDocx(await createPocDocxFixture());
+      await driver.selectText('Hello');
+      result = await driver.execute({ type: 'toggleMark', mark: 'italic' });
+    } finally {
+      constructors.forEach((constructor, index) => {
+        Object.defineProperty(constructor, 'name', {
+          configurable: true,
+          value: names[index],
+        });
+      });
+    }
+
+    expect(result).toEqual({ status: 'applied', changed: true });
+    expect(await driver.query({ type: 'selectionFormatting' })).toEqual({
+      type: 'selectionFormatting',
+      formatting: { bold: false, italic: true },
+    });
+    expect(host.querySelector('#editable-host em')?.textContent).toBe('Hello');
+    expect(host.querySelector('#replica-host em')?.textContent).toBe('Hello');
     host.remove();
   });
 });

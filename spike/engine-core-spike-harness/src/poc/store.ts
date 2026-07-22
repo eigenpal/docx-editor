@@ -682,7 +682,7 @@ function assertValidDifferentialUpdate(
         throw new TypeError('differential update overwrites a creation-only key');
       }
       seenMapKeys.add(key);
-      if (struct.content.constructor.name !== 'ContentAny') {
+      if (!(struct.content instanceof Y.ContentAny)) {
         throw new TypeError('mark contribution must contain plain JSON');
       }
       const content = struct.content.getContent();
@@ -692,16 +692,16 @@ function assertValidDifferentialUpdate(
       continue;
     }
 
-    const contentName = struct.content.constructor.name;
+    const isStringContent = struct.content instanceof Y.ContentString;
     if (
-      contentName !== 'ContentString' &&
-      contentName !== 'ContentEmbed' &&
-      contentName !== 'ContentDeleted'
+      !isStringContent &&
+      !(struct.content instanceof Y.ContentEmbed) &&
+      !(struct.content instanceof Y.ContentDeleted)
     ) {
       throw new TypeError('bodySequence differential content is not permitted');
     }
     if (
-      contentName === 'ContentString' &&
+      isStringContent &&
       (() => {
         const values = struct.content.getContent();
         if (values.some((value) => typeof value !== 'string')) return true;
