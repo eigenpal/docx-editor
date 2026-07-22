@@ -180,6 +180,56 @@ describe('POC savePocDocx round trip', () => {
     expect(reopened.paragraphId).toBe(POC_PARAGRAPH_ID);
   });
 
+  test('round-trips adjacent whitespace-equivalent owned markers for empty content', async () => {
+    const loaded = await loadedWithDocumentXml((xml) =>
+      xml.replace(
+        /<poc:OwnedStart\/>[\s\S]*?<poc:OwnedEnd\/>/,
+        '<poc:OwnedStart /><poc:OwnedEnd />'
+      )
+    );
+    const trustedXml = await documentXmlFromBytes(loaded.sourceBytes);
+    const ownedStartEnd =
+      trustedXml.indexOf('<poc:OwnedStart />') + '<poc:OwnedStart />'.length;
+    const ownedEndStart = trustedXml.indexOf('<poc:OwnedEnd />', ownedStartEnd);
+    expect(ownedEndStart).toBe(ownedStartEnd);
+    const prefix = trustedXml.slice(0, ownedStartEnd);
+    const suffix = trustedXml.slice(ownedEndStart);
+    const emptySnapshot: PocSaveSnapshot = {
+      paragraphId: loaded.paragraphId,
+      text: '',
+      runs: [],
+    };
+
+    const firstSave = await savePocDocx(loaded, emptySnapshot);
+    const firstXml = await documentXmlFromBytes(firstSave);
+    expect(firstXml.startsWith(prefix)).toBe(true);
+    expect(firstXml.endsWith(suffix)).toBe(true);
+    expect(
+      bytesEqual(
+        new TextEncoder().encode(extractCapsuleSubstring(firstXml)),
+        loaded.capsuleBytes
+      )
+    ).toBe(true);
+
+    const reopened = await loadPocDocx(firstSave);
+    expect(reopened.text).toBe('');
+    expect(reopened.runs).toEqual([]);
+
+    const secondSave = await savePocDocx(reopened, {
+      paragraphId: reopened.paragraphId,
+      text: reopened.text,
+      runs: reopened.runs,
+    });
+    const secondXml = await documentXmlFromBytes(secondSave);
+    expect(secondXml.startsWith(prefix)).toBe(true);
+    expect(secondXml.endsWith(suffix)).toBe(true);
+    expect(await loadPocDocx(secondSave)).toMatchObject({
+      paragraphId: POC_PARAGRAPH_ID,
+      text: '',
+      runs: [],
+    });
+  });
+
   test('preserves stable paragraph identity', async () => {
     const { loaded, snapshot } = await snapshotFromStore((store) => {
       store.insert(store.snapshot().text.length, '!');

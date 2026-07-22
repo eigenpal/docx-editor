@@ -421,7 +421,7 @@ function locateOwnedRegion(documentXml: string): { readonly prefix: string; read
   if (ownedStart.attributes!.length !== 0 || ownedEnd.attributes!.length !== 0) {
     throw new Error('owned marker shape invalid in trusted document.xml');
   }
-  if (ownedEnd.start <= ownedStart.end) {
+  if (ownedEnd.start < ownedStart.end) {
     throw new Error('owned marker order invalid in trusted document.xml');
   }
   return Object.freeze({
