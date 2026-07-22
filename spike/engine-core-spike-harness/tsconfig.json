@@ -10,5 +10,5 @@
     "isolatedModules": true,
     "lib": ["ES2022", "DOM"]
   },
-  "include": ["src/**/*.ts", "tests/**/*.ts", "browser/**/*.ts", "vite.config.ts"]
+  "include": ["src/**/*.ts", "tests/**/*.ts", "browser/**/*.ts", "vite.config.ts", "playwright.config.ts"]
 }

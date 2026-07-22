@@ -80,6 +80,29 @@ export function createPocEditorDriver(options: CreatePocEditorDriverOptions): Ed
       }
       return result;
     },
+    async applyRemoteEdit(input: { readonly text: string }) {
+      const current = requireSession();
+      if (input.text.length === 0) {
+        return Object.freeze({
+          status: 'noOp',
+          changed: false,
+          reason: 'empty text',
+        });
+      }
+      const before = JSON.stringify(current.editable.snapshot());
+      current.applyRemoteReplicaEdit((store) => {
+        store.insert(store.snapshot().text.length, input.text);
+      });
+      if (binding) {
+        syncPmSelectionFromSession(session!, binding.editableView);
+      }
+      setStatus(current.snapshotsConverged() ? 'converged' : 'connected');
+      const changed = JSON.stringify(current.editable.snapshot()) !== before;
+      return Object.freeze({
+        status: changed ? 'applied' : 'noOp',
+        ...(changed ? { changed: true } : { changed: false, reason: 'no store change' }),
+      });
+    },
     async query<T extends DocxEditor.Query['type']>(
       query: Extract<DocxEditor.Query, { type: T }>
     ): Promise<Extract<DocxEditor.QueryResult, { type: T }>> {
@@ -109,7 +132,12 @@ export function createPocEditorDriver(options: CreatePocEditorDriverOptions): Ed
       } as Extract<DocxEditor.QueryResult, { type: T }>;
     },
     async undo() {
-      return requireSession().undo();
+      const result = requireSession().undo();
+      if (binding && result.status === 'applied') {
+        syncPmSelectionFromSession(session!, binding.editableView);
+      }
+      setStatus(session?.snapshotsConverged() ? 'converged' : 'connected');
+      return result;
     },
     async save() {
       const result = await requireSession().saveDocx();

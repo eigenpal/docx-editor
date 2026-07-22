@@ -39,6 +39,25 @@ export function createHeadlessPocEditorDriver(): EditorDriver {
         reason: 'command type is not supported by the POC driver',
       });
     },
+    async applyRemoteEdit(input: { readonly text: string }) {
+      const current = requireSession();
+      if (input.text.length === 0) {
+        return Object.freeze({
+          status: 'noOp',
+          changed: false,
+          reason: 'empty text',
+        });
+      }
+      const before = JSON.stringify(current.editable.snapshot());
+      current.applyRemoteReplicaEdit((store) => {
+        store.insert(store.snapshot().text.length, input.text);
+      });
+      const changed = JSON.stringify(current.editable.snapshot()) !== before;
+      return Object.freeze({
+        status: changed ? 'applied' : 'noOp',
+        ...(changed ? { changed: true } : { changed: false, reason: 'no store change' }),
+      });
+    },
     async query<T extends DocxEditor.Query['type']>(
       query: Extract<DocxEditor.Query, { type: T }>
     ): Promise<Extract<DocxEditor.QueryResult, { type: T }>> {

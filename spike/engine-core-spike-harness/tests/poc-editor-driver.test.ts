@@ -32,6 +32,7 @@ function assertDriverShape(driver: EditorDriver): void {
   expect(typeof driver.type).toBe('function');
   expect(typeof driver.execute).toBe('function');
   expect(typeof driver.query).toBe('function');
+  expect(typeof driver.applyRemoteEdit).toBe('function');
   expect(typeof driver.undo).toBe('function');
   expect(typeof driver.save).toBe('function');
   expect('getView' in driver).toBe(false);
@@ -72,6 +73,33 @@ describe('poc EditorDriver boundary', () => {
     expect(await driver.query({ type: 'selectedText' })).toEqual({
       type: 'selectedText',
       text: '',
+    });
+    host.remove();
+  });
+
+  test('local undo preserves remote work applied through applyRemoteEdit', async () => {
+    const { host, driver } = createDriverHosts();
+    await driver.loadDocx(await createPocDocxFixture());
+    await driver.selectText('Hello');
+    await driver.type('Hi');
+    await driver.selectText('Hi');
+    expect(await driver.execute({ type: 'toggleMark', mark: 'bold' })).toEqual({
+      status: 'applied',
+      changed: true,
+    });
+    expect(await driver.applyRemoteEdit({ text: 'REMOTE' })).toEqual({
+      status: 'applied',
+      changed: true,
+    });
+    expect(await driver.undo()).toEqual({ status: 'applied', changed: true });
+    expect(await driver.query({ type: 'findText', text: nonEmptyString('Hi bold italicREMOTE') })).toEqual({
+      type: 'findText',
+      ranges: [
+        expect.objectContaining({
+          start: 0,
+          end: 'Hi bold italicREMOTE'.length,
+        }),
+      ],
     });
     host.remove();
   });

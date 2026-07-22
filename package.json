@@ -35,7 +35,7 @@
     "preview": "bun run build && bunx serve examples/parity/dist -p 4173",
     "test": "bun test",
     "test:watch": "bun test --watch",
-    "test:spike": "cd spike/engine-core-spike-harness && bun test",
+    "test:spike": "cd spike/engine-core-spike-harness && bun run test",
     "dev:spike:poc": "cd spike/engine-core-spike-harness && bun run dev:poc",
     "build:spike:poc": "cd spike/engine-core-spike-harness && bun run build:poc",
     "test:spike:oracles": "cd spike/engine-core-spike-harness && bun test tests/manifest.self-test.test.ts tests/yjs-schema.test.ts tests/yjs-v2-oracles.test.ts tests/comparators.test.ts tests/vocabulary.test.ts tests/review-regressions.test.ts tests/second-review-regressions.test.ts tests/third-review-regressions.test.ts tests/fourth-review-regressions.test.ts tests/migration-inventory.test.ts tests/test-boundary-guard.test.ts",

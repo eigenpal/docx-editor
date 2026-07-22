@@ -69,6 +69,7 @@ export interface EditorDriver {
   query<T extends DocxEditor.Query['type']>(
     query: Extract<DocxEditor.Query, { type: T }>
   ): Promise<Extract<DocxEditor.QueryResult, { type: T }>>;
+  applyRemoteEdit(input: { readonly text: string }): Promise<DocxEditor.CommandResult>;
   undo(): Promise<DocxEditor.CommandResult>;
   save(): Promise<DocxEditor.SaveResult>;
 }

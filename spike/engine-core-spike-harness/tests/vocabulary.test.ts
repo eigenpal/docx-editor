@@ -101,9 +101,10 @@ describe('EditorDriver contract shape', () => {
       'type',
       'execute',
       'query',
+      'applyRemoteEdit',
       'undo',
       'save',
     ] as const satisfies readonly (keyof import('../src/driver/editor-driver').EditorDriver)[];
-    expect(driverShape).toHaveLength(7);
+    expect(driverShape).toHaveLength(8);
   });
 });
