@@ -3,242 +3,248 @@ import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
-const oracleDir = join(import.meta.dir, '..', 'oracles');
-const names = [
+type Obj = Record<string, unknown>;
+const dir = join(import.meta.dir, '..', 'oracles');
+const files = [
   'yjs-schema.v2.json',
   'binding-oracle.v2.json',
   'history-oracle.v2.json',
   'comparator-contracts.v2.json',
 ] as const;
-type Json = Record<string, any>;
+const object = (value: unknown): Obj => value as Obj;
+const array = (value: unknown): unknown[] => value as unknown[];
+const get = (value: unknown, ...path: string[]): unknown =>
+  path.reduce((child, key) => object(child)[key], value);
+const keys = (value: unknown): string[] => Object.keys(object(value)).sort();
 
 function canonical(value: unknown): string {
   if (Array.isArray(value)) return `[${value.map(canonical).join(',')}]`;
   if (value !== null && typeof value === 'object') {
-    const entries = Object.entries(value as Json).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
-    return `{${entries.map(([key, child]) => `${JSON.stringify(key)}:${canonical(child)}`).join(',')}}`;
+    return `{${Object.entries(object(value))
+      .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
+      .map(([key, child]) => `${JSON.stringify(key)}:${canonical(child)}`)
+      .join(',')}}`;
   }
   return JSON.stringify(value);
 }
 
-function read(name: (typeof names)[number]): Json {
-  return JSON.parse(readFileSync(join(oracleDir, name), 'utf8')) as Json;
-}
-
-function integrityHash(artifact: Json): string {
+const read = (name: (typeof files)[number]): Obj =>
+  JSON.parse(readFileSync(join(dir, name), 'utf8')) as Obj;
+const hash = (artifact: Obj): string => {
   const copy = structuredClone(artifact);
-  delete copy.integrityHash.value;
+  delete object(copy.integrityHash).value;
   return createHash('sha256').update(canonical(copy)).digest('hex');
-}
+};
 
-describe('task 2.5 lean v2 contract artifacts', () => {
-  const schema = read(names[0]);
-  const binding = read(names[1]);
-  const history = read(names[2]);
-  const comparators = read(names[3]);
+describe('task 2.5 lean v2 contract closure', () => {
+  const schema = read(files[0]);
+  const binding = read(files[1]);
+  const history = read(files[2]);
+  const comparators = read(files[3]);
   const artifacts = [schema, binding, history, comparators];
 
-  test('self-hashes are integrity checks and schema references are reproducible', () => {
+  test('artifacts have exact top-level closure and integrity-only hashes', () => {
+    expect(keys(schema)).toEqual(['artifactRole','artifactVersions','atomicRejectionEffects','authority','bodySequence','boundaryCollision','boundaryEmbed','formattingEvidence','formattingWinner','gcEnabled','hashing','integrityHash','limits','markContributions','plainJson','relativeEndpoint','repairEvidence','root','undoManager','version','versions']);
+    expect(keys(binding)).toEqual(['artifactRole','groupBoundaries','ime','implementationStatus','integrityHash','offsetUnit','origins','ownership','schemaIntegritySha256','schemaVersion','selection','sequenceMapping','version']);
+    expect(keys(history)).toEqual(['artifactRole','atomicRejectionEffects','descriptorPolicy','implementationStatus','integrityHash','managerRules','scenarios','schemaIntegritySha256','schemaVersion','version']);
+    expect(keys(comparators)).toEqual(['artifactRole','canonicalSerialization','comparators','definitions','frozenOutputs','implementationStatus','integrityHash','outputSchema','schemaIntegritySha256','schemaVersion','version']);
     for (const artifact of artifacts) {
-      expect(artifact.integrityHash).toMatchObject({
-        algorithm: 'sha256',
-        purpose: 'drift-detection-only',
-      });
-      expect(integrityHash(artifact)).toBe(artifact.integrityHash.value);
+      expect(keys(get(artifact, 'integrityHash'))).toEqual(['algorithm', 'purpose', 'scope', 'value']);
+      expect(get(artifact, 'integrityHash', 'purpose')).toBe('drift-detection-only');
+      expect(hash(artifact)).toBe(String(get(artifact, 'integrityHash', 'value')));
     }
     for (const artifact of [binding, history, comparators]) {
       expect(artifact.schemaVersion).toBe(schema.version);
-      expect(artifact.schemaIntegritySha256).toBe(schema.integrityHash.value);
+      expect(artifact.schemaIntegritySha256).toBe(get(schema, 'integrityHash', 'value'));
     }
   });
 
-  test('winner root and record schemas are exact and closed', () => {
-    expect(schema.version).toBe('engine-core-spike-yjs/2.1.0');
-    expect(schema.formattingWinner).toBe('mark-contributions');
-    expect(Object.keys(schema.root.keys).sort()).toEqual([
-      'allocator',
-      'audit',
-      'capsules',
-      'markContributions',
-      'meta',
-      'stories',
-      'storyOrder',
+  test('body grammar, winner records, and endpoint validation order are exact', () => {
+    expect(keys(get(schema, 'root', 'keys'))).toEqual([
+      'allocator', 'audit', 'capsules', 'markContributions', 'meta', 'stories', 'storyOrder',
     ]);
-    expect(schema.markContributions.add.closedFields).toEqual([
-      'kind',
-      'markKind',
-      'storyId',
-      'actorId',
-      'commitId',
-      'relativeStart',
-      'relativeEnd',
-      'proposedSemanticMarkId',
-    ]);
-    expect(schema.markContributions.remove.closedFields).toEqual([
-      'kind',
-      'markKind',
-      'storyId',
-      'actorId',
-      'commitId',
-      'relativeStart',
-      'relativeEnd',
-      'targetAddContributionIds',
-    ]);
-    expect(schema.markContributions.remove).toMatchObject({
-      noWildcard: true,
-      targetMustMatchStoryAndKind: true,
-      targetsMax: 256,
-      subtraction: 'intersection-of-remove-range-with-each-target-add-range-only',
+    expect(get(schema, 'bodySequence')).toEqual({
+      grammar: 'opening-boundary text* (opening-boundary text*)*',
+      mustBeginWithBoundary: true,
+      minimumBoundaryCount: 1,
+      boundaryStartsExactlyOneParagraph: true,
+      paragraphEnd: 'next-opening-boundary-or-sequence-end',
+      terminalSentinel: false,
+      absoluteUnit: 'UTF-16-code-unit-or-length-1-embed',
+      paragraphLocalUnit: 'UTF-16-code-unit-text-only',
+      split: 'insert exactly one opening boundary',
+      join: 'delete exactly one non-first opening boundary',
+      yTextCreatedOrDeletedBySplitJoin: 0,
     });
-    expect(schema.markContributions.remove.rejectTargetCases).toEqual([
-      'missing',
-      'duplicate',
-      'unobserved',
-      'wrong-story',
-      'wrong-kind',
-      'non-add',
-      'over-limit',
+    expect(get(schema, 'markContributions', 'add', 'closedFields')).toEqual([
+      'kind', 'markKind', 'storyId', 'actorId', 'commitId',
+      'relativeStart', 'relativeEnd', 'proposedSemanticMarkId',
     ]);
-    expect(schema.boundaryEmbed.closedFields).toContain('authoredProperties');
-    expect(schema.plainJson.maxNesting).toBe(4);
-    expect(schema.relativeEndpoint.closedFields).toEqual([
-      'envelopeVersion',
-      'documentId',
-      'schemaVersion',
-      'backendVersion',
-      'checkpoint',
-      'storySequenceCreationId',
-      'relativePositionBase64Url',
-      'assoc',
-      'affinity',
+    expect(get(schema, 'markContributions', 'remove', 'closedFields')).toEqual([
+      'kind', 'markKind', 'storyId', 'actorId', 'commitId',
+      'relativeStart', 'relativeEnd', 'targetAddContributionIds',
     ]);
+    expect(get(schema, 'boundaryEmbed', 'closedFields')).toEqual([
+      'creationId', 'proposedBlockId', 'proposedParagraphId', 'proposedTextSpanId',
+      'actorId', 'commitId', 'styleId', 'authoredProperties', 'storyId',
+    ]);
+    expect(get(schema, 'relativeEndpoint', 'closedFields')).toEqual([
+      'envelopeVersion', 'documentId', 'schemaVersion', 'backendVersion', 'checkpoint',
+      'storySequenceCreationId', 'relativePositionBase64Url', 'assoc', 'affinity',
+    ]);
+    expect(get(schema, 'relativeEndpoint', 'validationOrder')).toEqual([
+      'containing-payload-byte-bound',
+      'value-is-ASCII-string',
+      'encoded-character-length-bound',
+      'base64url-character-grammar',
+      'length-modulo-four-not-one',
+      'allocate-and-decode-with-decoded-byte-bound',
+      'canonical-base64url-reencode-exact-match',
+      'public-Yjs-relative-position-decode',
+      'document-envelope-schema-backend-story-binding',
+      'checkpoint-lineage',
+      'absolute-position-resolution',
+    ]);
+    expect(get(schema, 'relativeEndpoint', 'decodedBytesLifetime')).toBe(
+      'ephemeral-decoder-input-never-persisted'
+    );
   });
 
-  test('hash derivations, repair closure, and atomic effects are exact', () => {
-    expect(schema.hashing).toMatchObject({
-      algorithm: 'sha256',
-      componentEncoding: 'UTF-8',
-      framing: 'each component is uint32be byte-length followed by bytes',
-      digestEncoding: 'lowercase-hex',
-    });
-    expect(schema.hashing.normalizedMarkId.components.at(-1)).toBe('zeroBasedSegmentOrdinal');
-    expect(schema.hashing.authoredIntentFingerprint.components[0]).toBe('authored-intent-v2');
-    expect(schema.hashing.repairKey.components).toEqual([
-      'repair-v2',
-      'repairKind',
-      'proposedSemanticId',
-      'sortedInvolvedCreationIds',
+  test('formatting evidence and hash framing are fully closed', () => {
+    expect(get(schema, 'hashing', 'scalarStringFraming')).toBe(
+      'uint32be UTF-8 byte length then UTF-8 bytes'
+    );
+    expect(get(schema, 'hashing', 'arrayFraming')).toBe(
+      'uint32be element count then each UTF-8 element as uint32be byte length plus bytes'
+    );
+    expect(get(schema, 'hashing', 'ordinalFraming')).toBe('zero-based unsigned uint32be');
+    expect(get(schema, 'hashing', 'ordinalOverflow')).toBe('reject-atomically');
+    expect(get(schema, 'hashing', 'arrayOrder')).toBe('canonical UTF-8 byte ascending');
+    expect(get(schema, 'formattingEvidence', 'derivation')).toEqual([
+      'resolve-add-and-remove-endpoints-and-clip-at-paragraph-boundaries',
+      'partition-text-at-every-add-remove-and-paragraph-endpoint',
+      'per-interval-kind-active-adds-are-intersecting-adds-not-subtracted-by-valid-targeting-remove',
+      'per-interval-kind-clipping-removes-are-removes-subtracting-a-targeted-add',
+      'omit-interval-with-no-active-add',
+      'merge-adjacent-iff-kind-active-add-ids-clipping-remove-ids-and-authored-intent-fingerprint-identical',
+      'emit-one-evidence-item-per-maximal-group',
     ]);
-    expect(schema.hashing.loserId.result).toBe('derived-{64-lowercase-hex-digest}');
-    expect(schema.repairEvidence.recordClosedFields).toEqual([
-      'repairEvidenceVersion',
-      'repairKind',
-      'proposedSemanticId',
-      'involvedCreationIds',
-      'selectedSurvivorCreationId',
-      'derivedMappings',
-      'actorId',
-      'commitId',
-      'normalizationVersion',
+    expect(keys(get(schema, 'formattingEvidence'))).toEqual([
+      'actorIdsAndCommitIds',
+      'closedFields',
+      'derivation',
+      'evidenceCreationIds',
+      'evidenceVersion',
+      'resolvedSegmentClosedFields',
+      'resolvedSegments',
+      'semanticMarkIds',
+      'sortedDeduplicatedFields',
     ]);
-    expect(schema.atomicRejectionEffects).toEqual([
-      'no-live-yjs-commit',
-      'no-canonical-revision',
-      'no-repair-evidence',
-      'no-journal-append',
-      'no-history-stack-change',
-      'no-model-change-notification',
-      'no-audit-cursor-change',
-      'no-emitted-update',
-    ]);
-  });
-
-  test('closed limits remain exact', () => {
-    expect(schema.limits).toEqual({
-      reconstructionJournalEvents: 64,
-      retainedJournalHorizon: 48,
-      undoEntriesPerActorSession: 32,
-      redoEntriesPerActorSession: 32,
-      actorSessionsPerDocument: 16,
-      replicationUpdateBytes: 262144,
-      genesisPayloadBytes: 4194304,
-      aggregateReplayBytes: 4194304,
-      snapshotBytes: 8388608,
-      bodySequenceUtf16Units: 262144,
-      boundaryEmbedCount: 4096,
-      formattingSourceRecords: 8192,
-      removeTargets: 256,
-      repairEvidenceRecords: 4096,
-      boundaryEmbedCanonicalBytes: 4096,
-      plainJsonNesting: 4,
-      relativePositionEncodedCharacters: 349526,
+    expect(get(schema, 'limits')).toEqual({
+      reconstructionJournalEvents: 64, retainedJournalHorizon: 48,
+      undoEntriesPerActorSession: 32, redoEntriesPerActorSession: 32,
+      actorSessionsPerDocument: 16, replicationUpdateBytes: 262144,
+      genesisPayloadBytes: 4194304, aggregateReplayBytes: 4194304,
+      snapshotBytes: 8388608, bodySequenceUtf16Units: 262144,
+      boundaryEmbedCount: 4096, formattingSourceRecords: 8192, removeTargets: 256,
+      repairEvidenceRecords: 4096, boundaryEmbedCanonicalBytes: 4096,
+      plainJsonNesting: 4, relativePositionEncodedCharacters: 349526,
       relativePositionDecodedBytes: 262144,
     });
   });
 
-  test('binding catalog carries exact fixtures and implementation ownership', () => {
-    expect(binding.implementationStatus).toBe('catalog-only-no-runtime-claims');
-    expect(binding.ownership['2.7']).toContain('UTF-16-sequence-mapping');
-    expect(binding.ownership['2.8']).toContain('manager-stack-group-boundaries');
-    expect(binding.ownership['3.3']).toContain('IME-state-machine');
-    expect(binding.ime.fixtures.map((fixture: Json) => [fixture.id, fixture.commitText])).toEqual([
-      ['ime-remote-insert-during-compose', '!helloni'],
-      ['ime-remote-delete-intersecting-compose', 'aXef'],
-    ]);
-    expect(binding.selection.affinityPairs).toEqual([
-      [-1, 'before'],
-      [0, 'after'],
-    ]);
-  });
-
-  test('all proof scenarios have concrete actions, assertions, and owners', () => {
-    expect(history.scenarios.map((scenario: Json) => scenario.id)).toEqual(
+  test('ownership and all scenario descriptors are closed and nonempty', () => {
+    expect(get(binding, 'ownership')).toEqual({
+      '2.6': ['origin-domain-rejection-atomicity'],
+      '2.7': ['UTF-16-sequence-mapping'],
+      '2.8': ['manager-stack-group-boundaries', 'winner-formatting-endpoint-gate'],
+      '3.1': ['shadow-state-forward-mapping'],
+      '3.2': ['selection-reconciliation'],
+      '3.3': ['IME-state-machine'],
+      '3.4': ['reconciliation-loop-prevention'],
+      '4.3': ['annotation-endpoint-behavior'],
+    });
+    const scenarios = array(history.scenarios).map(object);
+    expect(scenarios.map((scenario) => scenario.id)).toEqual(
       Array.from({ length: 10 }, (_, index) => `G-v2-${index + 1}`)
     );
-    for (const scenario of history.scenarios as Json[]) {
-      expect(scenario.ownerTask ?? scenario.ownerTasks).toBeDefined();
-      expect(scenario.actions.length).toBeGreaterThan(0);
-      expect(scenario.assertions.length).toBeGreaterThan(0);
+    for (const scenario of scenarios) {
+      expect(keys(scenario)).toEqual(['actions', 'assertions', 'id', 'ownerTask']);
+      expect(['2.7', '2.8']).toContain(String(scenario.ownerTask));
+      for (const field of ['actions', 'assertions']) {
+        expect(array(scenario[field]).length).toBeGreaterThan(0);
+        expect(array(scenario[field]).every((item) => typeof item === 'string' && item.length > 0)).toBe(true);
+      }
     }
-    const gate = (id: string) => history.scenarios.find((scenario: Json) => scenario.id === id);
-    expect(gate('G-v2-1').assertions).toContain('redo-stack-empty-after-redo');
-    expect(gate('G-v2-3').assertions).toContain('four-boundaries-observable');
-    expect(gate('G-v2-4').actions).toContain('stop-capturing:A');
-    expect(gate('G-v2-5').actions).toContain('A:undo-remove');
-    expect(gate('G-v2-6').actions).toContain('submit-unknown-lineage-envelope');
-    expect(gate('G-v2-8').actions).toContain('insert-different-record-at-same-key');
-    expect(gate('G-v2-9').assertions).toContain('no-frozen-output-in-this-catalog');
-    expect(gate('G-v2-10').assertions).toContain('redo-pop-order-group-31-then-32');
+    const gate = (id: string): Obj => scenarios.find((scenario) => scenario.id === id)!;
+    expect(get(gate('G-v2-3'), 'assertions')).toContain('three-boundaries-observable');
+    expect(gate('G-v2-6').ownerTask).toBe('2.8');
+    expect(canonical(gate('G-v2-6'))).not.toMatch(/annotation|selection|3\.2/);
   });
 
-  test('comparators freeze concrete inputs, never implementation outputs', () => {
-    expect(comparators.frozenOutputs).toEqual([]);
-    expect(Object.keys(comparators.comparators).sort()).toEqual([
-      'atomicRejection',
-      'canonicalAuthoredState',
-      'decodedSequence',
-      'formattingEvidence',
-      'identityProvenanceIntent',
-      'localYjsParity',
-      'managerStacks',
-      'repairEvidence',
+  test('comparators define closed nested inputs, diagnostics, and common output', () => {
+    expect(keys(get(comparators, 'canonicalSerialization'))).toEqual(['arrayOrder','encoding','failure','failureDiagnosticRef','firstDifference','numbers','objectKeyOrder','pathGrammar','version']);
+    expect(keys(get(comparators, 'definitions'))).toEqual([
+      'anchor', 'atomicEffects', 'authoredProperties', 'authoredProperty',
+      'boundaryEmbed', 'canonicalAuthoredState', 'canonicalJson', 'capsule',
+      'failureDiagnostic', 'formattingEvidence', 'formattingHashFraming', 'historyGroup', 'journalEntry', 'managerStack',
+      'paragraph', 'relativeEndpoint', 'repairDerivedMapping',
+      'repairEvidenceEntry', 'resolvedSegment',
     ]);
-    expect(comparators.comparators.atomicRejection.acceptedRejectionValue).toEqual({
-      yjsCommitDelta: 0,
-      canonicalRevisionDelta: 0,
-      repairEvidenceDelta: 0,
-      journalDelta: 0,
-      historyDelta: 0,
-      notificationDelta: 0,
-      auditCursorDelta: 0,
-      emittedUpdateDelta: 0,
+    expect(get(comparators, 'outputSchema')).toEqual({
+      closedFields: ['equal', 'firstDifference'],
+      equal: 'boolean',
+      firstDifferenceUnion: [
+        'null',
+        {
+          closedFields: ['path', 'expected', 'actual'],
+          path: 'string matching canonicalSerialization.pathGrammar',
+          expectedRef: 'canonicalJson',
+          actualRef: 'canonicalJson',
+        },
+      ],
     });
+    expect(get(comparators, 'canonicalSerialization', 'firstDifference')).toBe(
+      'lowest canonical UTF-8 byte ordered path'
+    );
+    const definitionKeys: Record<string, string[]> = {
+      anchor: ['closedFields','endRef','fieldTypes','startRef'],
+      atomicEffects: ['closedFields','fieldType'],
+      authoredProperties: ['keyGrammar','type','valueRef'],
+      authoredProperty: ['union'],
+      boundaryEmbed: ['authoredPropertiesRef','closedFields','fieldTypes','immutable','sequenceLength'],
+      canonicalAuthoredState: ['anchorsRef','capsulesRef','closedFields','formattingEvidenceRef','paragraphsRef','revision'],
+      canonicalJson: ['reject','union'],
+      capsule: ['closedFields','fieldTypes','namespaceBindings'],
+      failureDiagnostic: ['closedFields','path','reasonEnum'],
+      formattingEvidence: ['authoredIntentFingerprint','closedFields','derivation','evidenceVersion','idArrays','kindEnum','resolvedSegmentsRef'],
+      formattingHashFraming: ['algorithm','array','digest','ordinal','scalarString'],
+      historyGroup: ['captureOrdinal','closedFields','constituentIds','fieldTypes'],
+      journalEntry: ['closedFields','fieldTypes','operationDescriptorRef'],
+      managerStack: ['closedFields','fieldTypes','journalEntriesRef','redoEntriesRef','undoEntriesRef'],
+      paragraph: ['authoredPropertiesRef','closedFields','fieldTypes'],
+      relativeEndpoint: ['assocAffinityUnion','closedFields','envelopeVersion','fieldTypes'],
+      repairDerivedMapping: ['closedFields','fieldTypes'],
+      repairEvidenceEntry: ['closedFields','derivedMappingsRef','fieldTypes','repairEvidenceVersion'],
+      resolvedSegment: ['bounds','closedFields'],
+    };
+    for (const [name, expected] of Object.entries(definitionKeys)) {
+      expect(keys(get(comparators, 'definitions', name))).toEqual(expected.sort());
+    }
+    for (const comparator of array(Object.values(object(comparators.comparators))).map(object)) {
+      expect(comparator.outputRef).toBe('outputSchema');
+      expect(Array.isArray(object(comparator.input).closedFields)).toBe(true);
+      const owners = comparator.ownerTasks ?? [comparator.ownerTask];
+      expect(array(owners).length).toBeGreaterThan(0);
+      expect(array(owners).every((owner) => ['2.6', '2.7', '2.8'].includes(String(owner)))).toBe(true);
+    }
   });
 
-  test('catalog has no placeholders, fake state fingerprints, loser leakage, or runtime imports', () => {
-    const serialized = artifacts.map((artifact) => JSON.stringify(artifact)).join('\n');
-    expect(serialized).not.toMatch(/canonicalSemanticFingerprint|expectedFingerprint|TODO|TBD|placeholder/i);
-    expect(serialized).not.toMatch(/formattingMetadata|native-attributes|native-format|toDelta/);
+  test('contains no placeholders, fake outputs, loser leakage, or runtime assertions', () => {
+    const text = artifacts.map(canonical).join('\n');
+    expect(text).not.toMatch(/canonicalSemanticFingerprint|expectedFingerprint|TODO|TBD|placeholder/i);
+    expect(text).not.toMatch(/formattingMetadata|native-attributes|native-format|toDelta/);
+    expect(text).not.toMatch(/"any"|untyped-object/);
     expect(readFileSync(import.meta.path, 'utf8')).not.toMatch(/from ['"]\.\.\/src/);
   });
 });

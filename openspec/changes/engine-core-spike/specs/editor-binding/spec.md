@@ -52,7 +52,9 @@ tracked transaction MUST clear redo only for the same actor+session manager;
 another actor or session MUST NOT clear it. Undo/redo controls MUST reflect the
 public manager's stack availability and pop order after explicit capture
 boundaries. Implementation MUST pass G-v2-1..G-v2-10 before task 2.8
-acceptance; v1 task 2.2 backend acceptance does not prove v2.
+acceptance. G-v2-6 covers winner formatting endpoints only; selection and
+annotation endpoints remain separate task 3.2 and 4.3/main-gate obligations. v1
+task 2.2 backend acceptance does not prove v2.
 
 #### Scenario: One actor undoes after concurrent edits
 - **WHEN** two actors make concurrent edits and one actor invokes undo

@@ -102,7 +102,10 @@ creation-keyed `marks` maps with destructive normalization) is **rejected** — 
 
 - One long-lived `bodySequence: Y.Text` per story, created at bootstrap; split/join
   insert/remove immutable paragraph-boundary embeds only — never create/delete a
-  `Y.Text`.
+  `Y.Text`. The sequence begins with at least one opening boundary; each boundary
+  starts one paragraph ending at the next boundary or sequence end; there is no
+  terminal sentinel. Split inserts one opening boundary and join removes one
+  non-first opening boundary.
 - Boundary items are immutable length-1 plain JSON values inserted with
   `Y.Text.insertEmbed`, never nested `Y.AbstractType` values. Paragraph-local
   UTF-16 is API input resolved at commit, not persisted endpoint currency.
@@ -122,6 +125,11 @@ creation-keyed `marks` maps with destructive normalization) is **rejected** — 
   boundary items. Boundary collisions, normalized mark IDs/provenance, and
   monotonic repair keying follow the lean winner contract; repair MUST NOT
   destructively rewrite actor-authored state.
+- Formatting evidence partitions boundary-clipped text at all add/remove/
+  paragraph endpoints, applies only valid targeted removes per interval/kind,
+  omits intervals without active adds, and merges only identical kind,
+  contributor, clipping-remove, and authored-intent sets. Its IDs/provenance
+  follow the closed derivation and uint32be/UTF-8 hash framing in the v2 design.
 - GC disabled. Typed mutation origins. Closed trust-boundary limits (see v2
   design doc).
 
@@ -313,6 +321,8 @@ Other sessions do not. Undo/redo controls follow manager stacks exactly. Local
 backend matches behavior, not mechanism. Closed preflight limits and the ten
 named v2 proof gates (G-v2-1..G-v2-10 in
 `yjs-schema-v2-design.md`) are mandatory.
+G-v2-6 is a task 2.8 winner-formatting-endpoint gate only. Selection and
+annotation endpoint behavior remains separately owned by tasks 3.2 and 4.3.
 
 ### Acceptance gates (all fifteen must hold)
 

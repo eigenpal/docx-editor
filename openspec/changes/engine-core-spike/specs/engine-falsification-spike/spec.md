@@ -59,9 +59,18 @@ visits.
 ### Requirement: The reviewed KISS formatting result is authoritative
 The spike SHALL treat the reviewed task 2.4 KISS experiment and its immutable
 creation-only `mark-contributions` winner as authoritative selection evidence.
+The procedure runs exactly `overlap-undo`, `observed-disable`,
+`mark-independence`, `endpoint-affinity`, `split-tail`, and `reopen-history`;
+resets the same deterministic per-role client-ID schedule per candidate;
+exchanges concurrent cases in both delivery orders; directly asserts the
+represented semantics and 16-record/20,000-byte resource bounds; and measures
+genesis-excluded source-update plus terminal-snapshot Yjs bytes. Eligibility
+requires all six cases. Lower measured bytes wins and an exact tie selects
+Candidate B.
 The abandoned
 `experiments/yjs-formatting-bakeoff/oracle/**` corpus is unexecuted historical
-work and MUST NOT supply requirements, fixtures, or expected outputs.
+work. Its seeded/frozen-corpus procedure, every-limit claim, and projection-work
+tie-break MUST NOT supply requirements, fixtures, or expected outputs.
 
 #### Scenario: Formatting winner is consumed
 - **WHEN** v2 contract or implementation work begins

@@ -82,17 +82,21 @@ At bootstrap each story record creates exactly one `bodySequence: Y.Text` that
 lives for the document lifetime. Split and join NEVER create or delete a
 `Y.Text`.
 
-The sequence alternates:
+The sequence grammar is:
 
 ```
-[ boundaryEmbed₀, text₀, boundaryEmbed₁, text₁, …, boundaryEmbedₙ, textₙ ]
+[ openingBoundary₀, text₀, openingBoundary₁, text₁, …, openingBoundaryₙ, textₙ ]
 ```
 
-- **Boundary embeds** are plain immutable JSON values inserted only with
+- **Opening boundary embeds** are plain immutable JSON values inserted only with
   `Y.Text.insertEmbed`. They MUST NOT be `Y.XmlElement`, `Y.Map`, `Y.Array`,
   `Y.Text`, or any other `Y.AbstractType`, directly or recursively.
-- **Text runs** are plain UTF-16 insertions into `bodySequence` between boundary
-  embeds.
+- **Text runs** are plain UTF-16 insertions after an opening boundary and before
+  the next opening boundary or sequence end.
+
+The sequence MUST begin with one opening boundary and contain at least one
+opening boundary. Each opening boundary starts exactly one paragraph. The final
+paragraph ends at sequence end; there is no terminal sentinel.
 
 Every boundary embed has Yjs sequence length exactly **1**. Absolute sequence
 indices count each UTF-16 code unit as one and each embed as one. Paragraph-local
@@ -114,10 +118,9 @@ creation-time-only fields:
 - `styleId`, authored paragraph properties (spike toy shape)
 - `storyId` (parent story creation id)
 
-Split inserts one new boundary embed at the split offset within the paragraph
-text span; join deletes exactly one boundary embed (the join target). Identity
-rules (R8, below) apply to projected paragraph IDs, not to mutating embed
-payloads.
+Split inserts one new opening boundary at the split offset within the paragraph
+text span. Join deletes exactly one non-first opening boundary. Identity rules
+(R8, below) apply to projected paragraph IDs, not to mutating embed payloads.
 
 Validation recursively rejects non-plain objects, accessors, prototypes other
 than `Object.prototype`/`null`, and nested shared types. The maximum plain-JSON
@@ -145,14 +148,15 @@ type RelativeEndpointEnvelopeV2 = {
 
 The envelope is plain JSON and never stores `Uint8Array`. Encoding obtains bytes
 only from the public Yjs relative-position API and stores unpadded base64url.
-Before decoding, validation MUST check that the containing payload is within its
-frozen byte ceiling, the string length is at most
-`ceil(256 KiB × 4 / 3) = 349526` ASCII characters, characters match
-`^[A-Za-z0-9_-]+$`, no padding/whitespace exists, and `length % 4 !== 1`.
-Only then may the decoder allocate bytes. It MUST reject unless re-encoding the
-decoded bytes produces the exact original canonical string and decoded length
-is at most 256 KiB. Decoded bytes are ephemeral decoder input and never stored
-in authored state, envelopes, snapshots, journals, or audit records.
+Validation order is fixed. First bound the containing payload. Then, before any
+decode allocation, require an ASCII string, enforce the 349526-character bound,
+match `^[A-Za-z0-9_-]+$`, reject padding/whitespace, and require
+`length % 4 !== 1`. Allocate only a decoded buffer bounded to 256 KiB, then
+require exact canonical base64url re-encoding. Only after those checks may the
+public Yjs relative-position decoder run, followed in order by
+document/envelope/schema/backend/story binding, checkpoint lineage, and absolute
+resolution checks. Decoded bytes are ephemeral decoder input and are never
+stored in authored state, envelopes, snapshots, journals, or audit records.
 
 `affinity: 'before'` requires `assoc: -1`;
 `affinity: 'after'` requires `assoc: 0`; any mismatch is invalid. Envelopes bind
@@ -198,87 +202,53 @@ type FormattingEvidence = {
 }
 ```
 
-Arrays are sorted by canonical byte order and deduplicated; resolved segments
-are half-open, ordered, non-overlapping for one evidence item, and clipped at
-paragraph boundaries. `globalStart`/`globalEnd` are ephemeral projection output,
-not persisted endpoint currency. `authoredIntentFingerprint` proves authored
-omission/raw lexical intent from the canonical authored fixture; it is not a
-replacement storage field. Canonical mark projection, normalized mark ID
-derivation, repair, `ModelChange`, local/Yjs parity, and the v2 oracle consume
-only this contract. No authoritative pre-bakeoff requirement may depend on
-Candidate A or Candidate B storage topology.
+Derivation first resolves add/remove endpoint ranges and clips them at opening
+paragraph boundaries. It partitions text at every add endpoint, remove
+endpoint, and paragraph endpoint. For each interval and mark kind, active add
+IDs are intersecting add IDs not subtracted on that interval by a valid remove
+targeting them; clipping remove IDs are removes that subtract a targeted add on
+that interval. Intervals with no active adds are omitted. Adjacent intervals
+merge if and only if kind, active add IDs, clipping remove IDs, and
+`authoredIntentFingerprint` are identical.
 
-## Formatting A/B falsification (must precede v2 oracle)
+Each resulting maximal group emits one evidence item. `evidenceCreationIds` is
+the sorted union of active add IDs and clipping remove IDs. `semanticMarkIds`
+is the sorted proposed-ID set from active adds. `actorIds` and `commitIds` are
+the sorted provenance sets from all `evidenceCreationIds`. `resolvedSegments`
+are the group's clipped, ordered, non-overlapping half-open intervals.
+All ID/provenance arrays sort by canonical UTF-8 byte order and deduplicate.
+`globalStart`/`globalEnd` are ephemeral projection output, never persisted
+endpoint currency.
 
-Task 2.4 implements an isolated, disposable comparison from identical fixtures:
+All SHA-256 derivations use explicit framing. A scalar string is its unsigned
+uint32be UTF-8 byte length followed by its UTF-8 bytes. An array is unsigned
+uint32be element count followed by each UTF-8 element as unsigned uint32be byte
+length plus bytes. The zero-based segment ordinal is an unsigned uint32be;
+overflow rejects atomically. Arrays sort by canonical UTF-8 byte order before
+framing. Digests are lowercase hexadecimal.
 
-### Candidate A — native `Y.Text` formatting
+## Formatting A/B falsification (reviewed KISS authority)
 
-The isolated task 2.4 implementation is frozen exactly:
+The authoritative task 2.4 procedure is the direct `yjs-formatting-kiss.ts`
+experiment. It runs exactly `overlap-undo`, `observed-disable`,
+`mark-independence`, `endpoint-affinity`, `split-tail`, and `reopen-history`.
+Each candidate starts from the same reset deterministic per-role client-ID
+schedule. Every concurrent case is exchanged in both delivery orders. The six
+cases directly assert the represented overlap, causal disable, independent
+marks/provenance/authored intent/read-only normalization, endpoint affinity,
+split-tail/join convergence, and reopen undo/redo semantics.
 
-- `bodySequence` attribute keys are exactly `bold` and `italic`.
-- Enable resolves the paragraph-local API range to a global sequence range and
-  calls
-  `bodySequence.format(globalStart, length, { [key]: contributionId })`.
-  `key` is `bold` or `italic`; the value is a collision-free
-  `ContributionId` string.
-- A creation-only `formattingMetadata:
-  Y.Map<ContributionId, PlainJsonRecord>` stores exactly `semanticMarkId`,
-  `actorId`, `commitId`, and `kind`. A unique key is inserted once and MUST
-  never be overwritten or deleted.
-- Disable resolves the paragraph-local API range to the global sequence and
-  calls `bodySequence.format(globalStart, length, { [key]: null })`.
-- Projection reads ordered `bodySequence.toDelta()` segments. Active `bold` and
-  `italic` `ContributionId` string values map through `formattingMetadata` to
-  half-open text-only resolved ranges, clip at paragraph boundaries, and merge
-  only in canonical authored projection. An unknown metadata ID or metadata
-  `kind` unequal to the attribute key rejects the staged update atomically.
-  Each maximal canonical segment derives its normalized ID from
-  `"engine-core-spike-native-format-v2"`, kind, sorted active ContributionIds,
-  and the zero-based segment ordinal for that exact ID set. Metadata preserves
-  semantic mark ID and actor/commit provenance.
-- `formattingMetadata` is creation-only experiment evidence outside
-  `Y.UndoManager`; formatting history itself is the tracked `bodySequence`.
+Resource evidence is direct: at most 16 formatting records and at most 20,000
+encoded Yjs bytes in the bounded split-tail case, collision-free scenario client
+IDs, and exact byte accounting over genesis-excluded source-operation updates
+plus terminal `Y.encodeStateAsUpdate` snapshots. A candidate is eligible only if
+all six cases pass. If both pass, lower measured real-Yjs bytes wins; an exact
+byte tie selects Candidate B. If neither passes, v2 remains blocked.
 
-Candidate A is expected to expose whether native same-key formatting loses
-multiple overlapping owners or lets an observed disable erase an unseen enable.
-Those cases MUST be tested directly and MAY fail Candidate A. No second mutable
-mark store, ownership side channel, custom conflict merge, compensating rewrite,
-or other special workaround is allowed.
-
-### Candidate B — immutable range contributions (task 2.4 winner, authoritative)
-
-Use the creation-only add/remove records specified below. Task 2.4 selected this
-representation; task 2.5 v2 oracles freeze it as the sole formatting storage
-topology. Loser Candidate A evidence remains isolated under task 2.4 only.
-
-### Exact winner criteria
-
-Both candidates run the same seeds, operation groups, delivery orders,
-snapshot/reopen checkpoints, and closed limits. A candidate is eligible only if
-all criteria pass without hidden destructive normalization:
-
-1. overlapping same-kind edits preserve the other actor's work through
-   actor-local undo;
-2. disabling causally observed formatting does not disable an unseen concurrent
-   enable;
-3. bold and italic remain independent under overlap, undo, and merge;
-4. endpoints/coverage follow text through insert, delete, split, and join;
-5. deterministic semantic mark IDs and complete actor/commit/creation
-   provenance survive convergence;
-6. authored omission and raw lexical intent survive projection/export/reopen;
-7. undo, reopen, and redo preserve untracked remote/repair work and manager
-   stack semantics;
-8. normalization performs no destructive write to actor-authored formatting
-   history;
-9. replicas converge under every delivery order and seeded run; and
-10. all closed resource bounds pass.
-
-If exactly one candidate passes, it wins. If both pass, choose the lower maximum
-encoded snapshot + aggregate update bytes across the frozen corpus; if still
-tied, choose the lower maximum projection work count; if still tied, prefer
-Candidate B for explicit causal provenance. If neither passes, task 2.5 is
-blocked and schema v2 MUST NOT be frozen.
+The abandoned `experiments/yjs-formatting-bakeoff/oracle/**` corpus, seeded or
+frozen-corpus procedures, claims to cover every v2 limit, and projection-work
+tie-break are unexecuted non-authoritative historical work and MUST NOT be
+consumed.
 
 ## Candidate B detail: mark contributions (authoritative)
 
@@ -320,11 +290,9 @@ Authored bold/italic ranges are a deterministic pure function of:
 bodySequence order + boundary embeds + markContributions (+ repair evidence)
 ```
 
-Projection resolves contribution envelopes to absolute sequence positions,
-orders the pair, and clips the range at every boundary item. Boundary embeds are
-never included in mark coverage; a resolved range crossing boundaries becomes
-one paragraph-local projected segment per non-empty text intersection. An
-inverted, empty, dormant, or wholly embed-only range projects nothing.
+Projection follows the complete `FormattingEvidence` derivation above.
+Boundary embeds are never included in mark coverage. Inverted, empty, dormant,
+wholly embed-only, and no-active-add intervals project nothing.
 
 For each maximal normalized segment, `semanticMarkId` is derived
 deterministically as:
@@ -346,14 +314,14 @@ normalization does not collapse or rewrite source contributions.
 
 ## Canonical paragraph projection
 
-Paragraphs are a deterministic projection of boundary embed order:
+Paragraphs are a deterministic projection of opening boundary order:
 
-- Paragraph *i* is bounded by `boundaryEmbedᵢ` (start) and `boundaryEmbedᵢ₊₁`
-  (end), with text = UTF-16 content strictly between them.
+- Opening boundary *i* starts paragraph *i*. Its text continues until opening
+  boundary *i+1* or sequence end. There is no terminal sentinel.
 - Split: new boundary at offset → two paragraphs; first keeps projected
   survivor paragraph ID, tail mints new ID (R8).
-- Join: remove one boundary → one paragraph; survivor ID is the first block's
-  projected ID.
+- Join: remove one non-first opening boundary → one paragraph; survivor ID is
+  the first block's projected ID.
 
 Concurrent boundary embeds at the same Yjs position follow converged Yjs item
 order. Every boundary remains observable, including adjacent boundaries that
@@ -493,7 +461,7 @@ assertions test-first for the behavior they own.
 | **G-v2-3 Concurrent boundaries** | Two actors insert boundaries at same text offset; merge + projection deterministic; no nested type creation |
 | **G-v2-4 Overlapping bold/italic** | Winner preserves same-kind actor-local undo and bold/italic independence under overlap |
 | **G-v2-5 Observed disable vs unseen enable** | Winner disables observed formatting only; unseen concurrent enable survives merge and undo |
-| **G-v2-6 Endpoint affinities** | Versioned relative envelopes follow assoc/affinity; wrong-doc, stale, and unresolvable cases reject/detach exactly as frozen |
+| **G-v2-6 Winner formatting endpoints** | Task 2.8 proves contribution-range assoc/affinity, wrong binding rejection, retained-ancestor resolution, and stale/unresolvable existing formatting ranges becoming dormant without rewrite. Selection and annotation behavior belongs to tasks 3.2 and 4.3, not this gate. |
 | **G-v2-7 No nested shared types on split/mark** | Split/join/format ops create zero `Y.AbstractType` children; boundaries are length-1 plain JSON embeds and any winner records are plain JSON |
 | **G-v2-8 No destructive normalization** | Post-merge repair never rewrites winner-owned formatting history or embed payloads; repair evidence is monotonic |
 | **G-v2-9 Local/Yjs parity** | Task 2.7 directly compares local and Yjs canonical outputs for each applicable scenario |

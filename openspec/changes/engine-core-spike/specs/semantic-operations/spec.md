@@ -104,7 +104,10 @@ length-1 plain JSON values inserted with `Y.Text.insertEmbed`, never
 `Y.XmlElement` or another nested `Y.AbstractType`; split inserts one embed, join
 removes one, and neither creates or deletes a `Y.Text`. Absolute sequence
 mapping MUST count an embed as one while paragraph-local UTF-16 mapping MUST
-exclude embeds.
+exclude embeds. The sequence MUST begin with at least one opening boundary.
+Each boundary starts exactly one paragraph whose text ends at the next boundary
+or sequence end; there is no terminal sentinel. Split inserts one opening
+boundary and join removes one non-first opening boundary.
 
 Formatting MUST use the reviewed task 2.4 KISS winner, `mark-contributions`,
 and expose only the representation-neutral
@@ -115,6 +118,17 @@ omission/raw intent, and half-open boundary-clipped resolved segments. The task
 deterministic evidence/normalized-ID derivation; no loser root or comparator may
 remain. The abandoned `experiments/yjs-formatting-bakeoff/oracle/**` corpus is
 unexecuted historical work and MUST NOT be consumed.
+
+Evidence derivation MUST resolve and boundary-clip contribution ranges,
+partition text at every add/remove/paragraph endpoint, subtract only valid
+targeted removes per interval/kind, omit intervals with no active add, and merge
+adjacent intervals only when kind, active-add IDs, clipping-remove IDs, and
+authored-intent fingerprint all match. Each maximal group emits one evidence
+item with the sorted union of contributing IDs, proposed IDs from active adds,
+provenance from all contributing IDs, and the group's clipped intervals. Hash
+arrays MUST frame uint32be count then uint32be-length-prefixed UTF-8 elements;
+scalar strings MUST be uint32be-length-prefixed UTF-8; ordinal MUST be unsigned
+uint32be and overflow MUST reject.
 
 Concurrent boundary collisions MUST retain every boundary in converged sequence
 order, project adjacent boundaries as zero-text paragraphs, and resolve proposed
