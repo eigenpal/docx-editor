@@ -12,15 +12,24 @@ if (!editableHost || !replicaHost || !statusHost) {
 
 const driver = createPocEditorDriver({ editableHost, replicaHost, statusHost });
 
+const preserveEditorSelection = (event: MouseEvent): void => {
+  event.preventDefault();
+  event.stopPropagation();
+};
+
 document.querySelector<HTMLButtonElement>('#load-fixture')?.addEventListener('click', async () => {
   await driver.loadDocx(await createPocDocxFixture());
 });
 
-document.querySelector<HTMLButtonElement>('#toggle-bold')?.addEventListener('click', async () => {
+const boldButton = document.querySelector<HTMLButtonElement>('#toggle-bold');
+boldButton?.addEventListener('mousedown', preserveEditorSelection);
+boldButton?.addEventListener('click', async () => {
   await driver.execute({ type: 'toggleMark', mark: 'bold' });
 });
 
-document.querySelector<HTMLButtonElement>('#toggle-italic')?.addEventListener('click', async () => {
+const italicButton = document.querySelector<HTMLButtonElement>('#toggle-italic');
+italicButton?.addEventListener('mousedown', preserveEditorSelection);
+italicButton?.addEventListener('click', async () => {
   await driver.execute({ type: 'toggleMark', mark: 'italic' });
 });
 
