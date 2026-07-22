@@ -3,8 +3,8 @@
 Approved redesign constraints after the v1 falsification verdict. This document
 supersedes the nested `Y.Map`/`Y.Text` per-paragraph schema frozen in
 `spike/engine-core-spike-harness/oracles/yjs-schema.v1.json` for new spike work,
-except that the authoritative formatting representation remains intentionally
-open until the task 2.4 A/B falsification completes. v1 oracle artifacts and
+except that the authoritative formatting representation is **`mark-contributions`**
+(frozen in task 2.5 v2 oracles after task 2.4 A/B falsification). v1 oracle artifacts and
 tasks 1.1–2.3 remain historical evidence only; they do not prove v2 acceptance.
 
 ## Verdict (narrow)
@@ -37,8 +37,11 @@ Yjs mechanism or shared-type topology.
 - Custom persistence for updates, snapshots, bounded reconstruction,
   compaction, and replay
 
-The only pending stack choice is formatting representation: native `Y.Text`
-formatting attributes versus immutable creation-only range contributions.
+**Task 2.4 winner (authoritative):** `mark-contributions` — immutable
+creation-only add/remove records in root `markContributions`. Candidate A
+(`formattingMetadata` + native `Y.Text` attributes) failed overlapping
+same-kind actor undo and observed-disable/unseen-enable criteria. Loser-only
+roots, fields, and comparators MUST NOT appear in v2 oracle artifacts.
 
 ## Authority and scope
 
@@ -61,7 +64,7 @@ Versioned root `Y.Map` keys for the one-body spike:
 | `meta` | `Y.Map` | `schemaVersion`, `backendVersion`, `documentId`, `normalizationVersion`, monotonic repair evidence (see Repair) |
 | `storyOrder` | `Y.Array<CreationId>` | Ordered story creation IDs (spike: one body story) |
 | `stories` | `Y.Map<CreationId, StoryRecord>` | Bootstrap metadata; the one body story owns one long-lived `bodySequence: Y.Text` |
-| formatting evidence root | winner-dependent | Candidate A uses `formattingMetadata`; Candidate B uses `markContributions` |
+| formatting evidence root | `markContributions` | Immutable creation-only add/remove contribution records (task 2.4 winner) |
 | `capsules` | `Y.Map<CreationId, CapsuleRecord>` | Unchanged spike capsule ownership/bytes |
 | `allocator` | `Y.Map` | Monotonic ID allocation; **outside** `UndoManager` scope |
 | `audit` | `Y.Map` | Redacted audit cursor/index; **outside** `UndoManager` scope |
@@ -239,14 +242,11 @@ Those cases MUST be tested directly and MAY fail Candidate A. No second mutable
 mark store, ownership side channel, custom conflict merge, compensating rewrite,
 or other special workaround is allowed.
 
-### Candidate B — immutable range contributions (recommended)
+### Candidate B — immutable range contributions (task 2.4 winner, authoritative)
 
-Use the creation-only add/remove records specified below. This is the current
-recommendation because observed-remove/unseen-enable and authored provenance
-align better with document-format semantics, but it is **not authoritative**
-until the bake-off passes. Authoritative v2 requirements and oracles MUST select
-the measured winner, record why the loser failed, and remove loser-only roots
-and comparators.
+Use the creation-only add/remove records specified below. Task 2.4 selected this
+representation; task 2.5 v2 oracles freeze it as the sole formatting storage
+topology. Loser Candidate A evidence remains isolated under task 2.4 only.
 
 ### Exact winner criteria
 
@@ -276,7 +276,7 @@ tied, choose the lower maximum projection work count; if still tied, prefer
 Candidate B for explicit causal provenance. If neither passes, task 2.5 is
 blocked and schema v2 MUST NOT be frozen.
 
-## Candidate B detail: mark contributions (recommended, not yet authoritative)
+## Candidate B detail: mark contributions (authoritative)
 
 Marks are not relative-endpoint maps rewritten by normalization. They are stable
 **add** and **remove** contribution records in `markContributions`, uniquely
@@ -497,7 +497,7 @@ fingerprints.
 Passing G-v2-1..G-v2-10 is necessary for task 2.8 (actor-local history); passing
 historical v1 task 2.2 acceptance is not sufficient.
 
-## Oracle artifacts (next implementation commits)
+## Oracle artifacts (frozen task 2.5)
 
 | Artifact | Purpose |
 | --- | --- |
