@@ -93,23 +93,52 @@ interface EditorBinding {           // the ONLY PM-aware layer, in the binding p
 No PM type exists in the store or backend. Yjs holds the **document model**, not
 a PM fragment; the PM↔model map is solely the `EditorBinding` (R6).
 
-### R5 — Concrete Yjs schema is part of the spike, with invariants
+### R5 — Spike-only Yjs schema v2; v1 rejected
 
-The spike root map is versioned and contains `meta`, `storyOrder`, `stories`,
-`blocks`, `texts`, `marks`, `capsules`, and `allocator`. `storyOrder` and each
-story's block order are `Y.Array<CreationId>`; records are keyed by
-collision-free creation identity and retain proposed semantic ID plus
-actor/commit provenance; paragraph text
-is `Y.Text`; marks are creation-keyed `Y.Map` records retaining semantic mark
-IDs with half-open relative start/end endpoints and affinity; the capsule is a `Y.Map` record containing exact
-bytes and ownership metadata. Parent IDs are mandatory. Transaction origins are
-typed mutation origins. GC is disabled for the harness so tombstones remain
-inspectable. Every concurrent semantic-ID candidate remains observable and
-collisions are renamed by lexicographic
-`ActorId/CommitId` ordering and every reference is repaired. Convergence ≠
-validity: after any merge a **deterministic
-repair/normalization pass (R7)** restores DOCX invariants (e.g. row deleted while
-a cell in it is edited → cell edit reparented or dropped by rule).
+The v1 nested model-shaped schema (`blocks`, `texts`, per-paragraph `Y.Text`,
+creation-keyed `marks` maps with destructive normalization) is **rejected** — see
+`yjs-schema-v2-design.md` and task 2.2 historical evidence. New work follows
+**schema v2 for the falsification harness only**:
+
+- One long-lived `bodySequence: Y.Text` per story, created at bootstrap; split/join
+  insert/remove immutable paragraph-boundary embeds only — never create/delete a
+  `Y.Text`.
+- Boundary items are immutable length-1 plain JSON values inserted with
+  `Y.Text.insertEmbed`, never nested `Y.AbstractType` values. Paragraph-local
+  UTF-16 is API input resolved at commit, not persisted endpoint currency.
+- Plain-JSON relative endpoint envelopes store bounded canonical
+  `relativePositionBase64Url: string`, never `Uint8Array`; decoding allocates
+  bytes only after character, length, and canonical re-encode validation.
+- Formatting representation is selected by a pre-oracle A/B falsification:
+  native `Y.Text` formatting attributes versus immutable creation-only range
+  contributions. Contributions are recommended for document-format semantics
+  but are not authoritative until the experiment passes.
+- The winner MUST preserve same-kind actor undo, observed-disable/unseen-enable,
+  bold/italic independence, endpoint behavior through text/split/join, semantic
+  mark identity/provenance, authored omission/raw intent, undo/reopen/redo,
+  non-destructive normalization, convergence, and closed resource bounds.
+- Canonical paragraphs and marks are a deterministic projection from sequence +
+  the representation-neutral `FormattingEvidence` winner contract, clipping at
+  boundary items. Boundary collisions, normalized mark IDs/provenance, and
+  monotonic repair keying follow the frozen winner oracle; repair MUST NOT
+  destructively rewrite actor-authored state.
+- GC disabled. Typed mutation origins. Closed trust-boundary limits (see v2
+  design doc).
+
+Convergence ≠ validity: after any merge a **deterministic repair/normalization
+pass (R7)** still restores spike invariants, but without mutating embed payloads
+or winner-owned formatting history. The sole production authority is
+`openspec/changes/document-engine/design.md` plus
+`openspec/changes/document-engine/specs/**`; this spike selects only a one-body
+proof representation and makes no production table or mark schema commitment.
+The migration ledger is non-authoritative inventory by its own header, and no
+ledger contradiction can expand this spike's authority.
+
+The approved supporting stack is Yjs; public `Y.UndoManager`;
+`y-protocols/awareness` for ephemeral presence; custom
+`DocOp`/projection/repair/capsules/`ModelChange`; custom `EditorBinding`;
+transport-neutral networking (`y-websocket` spike/demo only); and custom
+update/snapshot/compaction persistence.
 
 ### R6 — EditorBinding is a first-class engine
 
@@ -139,6 +168,11 @@ DocOp → validate → canonical model transaction → deterministic repair/norm
       → one committed ModelChange → PM reconciles to the normalized result
 ```
 
+Under v2, normalize means **project** paragraphs/marks from sequence + the
+bake-off winner's `FormattingEvidence` and append monotonic repair evidence when needed; it MUST NOT
+destructively rewrite boundary embeds or winner-owned formatting history (see
+`yjs-schema-v2-design.md`).
+
 PM plugins / `appendTransaction` MUST NOT mutate canonical semantics after
 commit; any normalization they emit is converted to `DocOp`s before being
 treated as committed. Repair is deterministic so replicas converge to the same
@@ -154,26 +188,31 @@ ID; delete+undo restores the original ID; concurrent split/delete resolves by th
 repair pass (R7).
 
 ```ts
-type DocAnchor = { storyId: StoryId; blockId: BlockId
-                   relativeTextPosition?: BackendRelativePosition; affinity: 'before' | 'after' }
+type DocAnchor = {
+  storyId: StoryId
+  start: OpaqueRelativeEndpointEnvelope
+  end: OpaqueRelativeEndpointEnvelope
+}
 ```
 
-The spike pins annotation-anchor behavior for concurrent edits. Insertion at an
-anchor follows its affinity; deletion of the full anchored range collapses both
-ends to the deletion boundary and marks the annotation detached; a split keeps
-an endpoint with the text it addressed, using the new tail ID when that text
-moves to the tail; a join remaps endpoints from the removed block to the
-surviving block at the equivalent text boundary. Deterministic repair applies
-delete before split/join when their targets no longer survive. An anchor never
-silently attaches to unrelated text.
+The spike pins annotation endpoints as opaque, versioned public-API-encoded
+`Y.RelativePosition` envelopes bound to document ID, schema/backend versions,
+checkpoint, story-sequence creation ID, assoc, and affinity. Paragraph-local
+UTF-16 is accepted only as API input and encoded during commit preflight.
+Insertion follows assoc/affinity; full deletion collapses/detaches when deletion
+mapping proves the boundary. Wrong-document/version/sequence envelopes reject;
+unverifiable stale input rejects; an existing unresolvable endpoint detaches to
+the proved deletion boundary or resolves detached/null. It never attaches to
+unrelated text.
 
 `store.transact` commits multi-op, multi-part changes (insert image = body node +
 relationship + media part + content type) as **one** revision; subscribers never
 see intermediate invalid state.
 
 The public spike exposes an opaque `AnchorHandle`; the structure above is
-private. Trusted spike snapshot/awareness envelopes bind encoded relative bytes
-to document ID, backend/schema version, checkpoint, and affinity.
+private. Trusted spike snapshot/awareness envelopes bind bounded canonical
+base64url relative-position strings to document ID, backend/schema version,
+checkpoint, story-sequence creation ID, assoc, and affinity.
 
 ### R9 — Incremental layout is dependency-aware, not "only the changed block"
 
@@ -255,9 +294,17 @@ binding.
 
 The spike distinguishes `MutationOrigin`, `ProjectionOrigin`, and
 `AwarenessOrigin`. Projection reconciliation never enters store history or
-updates. Undo fixtures pin actor/session/group identity, redo invalidation,
-remote interleaving, identity restoration, normalization ownership, and
-snapshot/reopen behavior.
+updates. Undo uses public `Y.UndoManager` per actor/session scoped to
+`bodySequence` plus only the winner-tracked types frozen by task 2.5; it uses a
+stable origin token, explicit
+`stopCapturing` group boundaries, and a bounded reconstruction journal for
+durable reopen; allocator, audit, awareness, capsules, and repair metadata stay
+outside manager scope. Untracked remote/repair work preserves redo; only a new
+eligible tracked transaction clears redo for the same actor+session manager.
+Other sessions do not. Undo/redo controls follow manager stacks exactly. Local
+backend matches behavior, not mechanism. Closed preflight limits and the ten
+named v2 proof gates (G-v2-1..G-v2-10 in
+`yjs-schema-v2-design.md`) are mandatory.
 
 ### Acceptance gates (all fifteen must hold)
 
@@ -300,9 +347,9 @@ concurrent op sets converge. This runs before any feature is added.
 
 ### Order after green
 
-paste + lists → tables → multiple stories + package parts → full OOXML pipeline.
 If the spike cannot hold any of the fifteen gates cleanly, reconsider the
-architecture here, not after the DOCX model exists.
+replication/history experiment here. Passing it does not change any
+`document-engine` contract or conformance requirement.
 
 ## Risks / Trade-offs
 
@@ -320,10 +367,8 @@ architecture here, not after the DOCX model exists.
 
 ## Open Questions (deferred to the spike or later, not blocking)
 
-- The spike pins only its paragraph/text/mark schema; production table shapes
-  remain a production schema task.
-- Undo mechanism: Yjs `UndoManager` vs store-level inverse `DocOp`s (spike
-  decides; behavior must match solo/collab).
+- Undo mechanism: **resolved** — public `Y.UndoManager` + bounded reconstruction
+  journal; v1 nested schema rejected (`yjs-schema-v2-design.md`).
 - Persistence/schema-evolution versioning (required before "durable addressable
   documents" is claimed; not needed for the spike).
 - Snapshot cadence, update-log compaction, GC.

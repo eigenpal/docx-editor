@@ -9,7 +9,9 @@ The spike SHALL define `DocOp`, `ModelChange`, opaque replication updates, and s
 
 ### Requirement: One normalization path commits semantic state
 Every mutation in the spike SHALL pass through semantic validation, canonical
-model mutation, deterministic normalization, one revision commit, and one
+model mutation, deterministic normalization (v2: projection from sequence +
+the task 2.4 winner's `FormattingEvidence` plus monotonic repair evidence,
+without destructive rewrite of actor-authored containers), one revision commit, and one
 `ModelChange` carrying before/after toy structural ranges, identity mappings,
 commit ID, and mutation origin. A projection MUST NOT become authoritative
 before the normalized model commit.
@@ -27,11 +29,17 @@ The spike SHALL support insert, delete, split, join, bold, and italic semantic o
 
 ### Requirement: Internal annotation anchors survive concurrent edits
 The spike SHALL expose one opaque citation/annotation `AnchorHandle`. Its private
-record MAY use story/block identity, backend-relative text position, and
-affinity. Trusted snapshot and awareness serialization MUST use a versioned
-document/checkpoint-bound envelope. Insertion at an endpoint MUST follow
-affinity; full-range deletion MUST collapse/detach; split/join MUST remap by
-addressed text; and an anchor MUST NOT attach to unrelated text.
+record MUST use start/end public-API-encoded `Y.RelativePosition` envelopes
+bound to envelope version, document ID, schema/backend version, checkpoint,
+story-sequence creation ID, assoc, and affinity. Each plain-JSON envelope MUST
+store canonical bounded `relativePositionBase64Url: string`, never
+`Uint8Array`; bytes MAY exist only ephemerally after the design's bounded
+character/length/canonical-reencode validation succeeds. Paragraph-local UTF-16
+offsets MAY enter the API but MUST resolve to envelopes during commit preflight
+and MUST NOT persist. Wrong-document/version/sequence, malformed,
+unknown-lineage, or initially unresolvable endpoints MUST reject atomically. An
+existing endpoint made unresolvable by deletion MUST detach at a proved deletion
+boundary or resolve detached/null; it MUST NOT attach to unrelated text.
 
 #### Scenario: Concurrent insertion follows affinity
 - **WHEN** a replica inserts text exactly at an annotation endpoint while another replica retains the annotation
@@ -43,7 +51,11 @@ addressed text; and an anchor MUST NOT attach to unrelated text.
 
 #### Scenario: Concurrent split and join remap endpoints
 - **WHEN** concurrent edits split the anchored paragraph and later join the resulting paragraphs
-- **THEN** each endpoint follows its addressed text into the split tail when applicable and resolves in the surviving joined block at the equivalent boundary
+- **THEN** each relative endpoint follows its addressed sequence item and projection resolves it in the correct split or joined paragraph without rewriting the envelope
+
+#### Scenario: Endpoint belongs to another document
+- **WHEN** an annotation or winner-defined range operation supplies an envelope bound to another document or story sequence
+- **THEN** preflight rejects the whole transaction with no canonical, Yjs, history, repair, audit, or notification effect
 
 ### Requirement: Origin and awareness metadata are explicit
 Committed changes SHALL use `MutationOrigin` for human, agent, remote, undo,
@@ -82,24 +94,83 @@ and Yjs stages and emit no revision, history, notification, or update.
 - **WHEN** a transaction callback opens another transaction
 - **THEN** the outer transaction MUST abort with a typed error and both stores MUST remain unchanged
 
-### Requirement: Toy Yjs schema is exact
-The root MUST contain versioned `meta`, `storyOrder`, `stories`, `blocks`,
-`texts`, `marks`, `capsules`, and `allocator` keys using the container and
-ownership rules in the design. Marks MUST use half-open relative endpoints and
-affinity; GC MUST be disabled. Records MUST be keyed by collision-free creation
-identity and retain proposed semantic ID and actor/commit provenance; every
-collision candidate MUST remain observable until actor/commit-ordered repair.
+### Requirement: Toy Yjs schema v2 is exact
+The spike MUST use the v2 sequence + bake-off-winner schema in
+`yjs-schema-v2-design.md`. The root SHALL contain versioned `meta`, `storyOrder`,
+`stories` (each with one bootstrap `bodySequence: Y.Text`), `capsules`,
+`allocator`, and `audit`, plus only the winner-owned formatting evidence root
+frozen by task 2.5. Paragraph boundaries MUST be immutable
+length-1 plain JSON values inserted with `Y.Text.insertEmbed`, never
+`Y.XmlElement` or another nested `Y.AbstractType`; split inserts one embed, join
+removes one, and neither creates or deletes a `Y.Text`. Absolute sequence
+mapping MUST count an embed as one while paragraph-local UTF-16 mapping MUST
+exclude embeds.
+
+Formatting MUST use the task 2.4 winner and expose only the representation-neutral
+`FormattingEvidence` contract to semantic projection. Evidence MUST preserve
+stable creation identity, semantic mark IDs, actor/commit provenance, authored
+omission/raw intent, and half-open boundary-clipped resolved segments. The task
+2.5 oracle MUST freeze only the winner's storage topology and deterministic
+evidence/normalized-ID derivation; no loser root or comparator may remain.
+
+Concurrent boundary collisions MUST retain every boundary in converged sequence
+order, project adjacent boundaries as zero-text paragraphs, and resolve proposed
+ID collisions by lexicographic `(actorId, commitId, creationId)` precedence.
+Repair evidence MUST use a deterministic version/kind/proposal/involved-ID key,
+allow only absent-key insert or identical idempotent replay, and MUST NOT
+update/delete evidence, embeds, winner-owned formatting history, or actor text. GC MUST be
+disabled. The v1 nested `blocks`/`texts`/`marks` schema is rejected historical
+evidence only.
 
 #### Scenario: Schema fingerprint is computed
-- **WHEN** two replicas converge after a mark edit and ID collision
-- **THEN** decoded root/container types, order, ownership, endpoints, repaired IDs, tombstones, and canonical fingerprint MUST match
+- **WHEN** two replicas converge after concurrent boundary and formatting edits
+- **THEN** decoded sequence order, winner `FormattingEvidence`, repair evidence, tombstones, and canonical fingerprint MUST match
+
+#### Scenario: v1 nested schema is not authoritative
+- **WHEN** implementation work begins after the v2 design approval
+- **THEN** `yjs-schema.v2.json` and v2 history/binding oracles MUST be frozen before backend or undo code ships
+
+### Requirement: Formatting representation is selected before v2 freeze
+Before any v2 oracle is frozen, an isolated A/B falsification MUST compare
+native `Y.Text` formatting attributes with immutable creation-only range
+contributions using identical fixtures, seeds, delivery orders, checkpoints, and
+limits. The winner MUST pass: overlapping same-kind actor undo; observed disable
+versus unseen enable; bold/italic independence; endpoint/coverage behavior under
+text, split, and join; semantic mark ID and provenance preservation; authored
+omission/raw intent; undo/reopen/redo; non-destructive normalization;
+convergence; and all resource bounds. Tie-breaking and neither-passes behavior
+MUST follow `yjs-schema-v2-design.md`. Before selection, authoritative schema
+requirements MUST depend only on `FormattingEvidence`, not either candidate's
+storage or mutation mechanism.
+
+#### Scenario: Neither formatting candidate passes
+- **WHEN** both A/B candidates fail at least one mandatory winner criterion
+- **THEN** v2 oracle freeze and all dependent implementation tasks remain blocked
+
+### Requirement: V2 trust limits are closed and atomic
+The spike MUST preflight a staging document before any local transaction, remote
+update, snapshot restore, or journal replay mutates live state. Preflight SHALL
+enforce these ceilings: 64 reconstruction-journal events; 48-event retained horizon; 32 undo
+and 32 redo entries per actor session; 16 actor sessions; 256 KiB update; 4 MiB
+genesis payload; 4 MiB aggregate replay bytes; 8 MiB snapshot; 256 KiB
+`bodySequence` UTF-16 units; 4096 boundaries; 8192 formatting-evidence source
+records; 256 causal-disable targets where the winner uses them; 4096
+repair-evidence records; 4 KiB canonical embed payload; and
+validation nesting 4. Any malformed input or single/aggregate breach MUST reject
+the whole operation with no live Yjs/canonical commit, revision, repair,
+journal/history/audit change, notification, or emitted update.
+
+#### Scenario: Aggregate replay exceeds its ceiling
+- **WHEN** individually valid replay records exceed 4 MiB in aggregate
+- **THEN** preflight rejects the replay before any live state or history stack changes
 
 ### Requirement: Spike snapshot restores proof state
 The durable spike snapshot MUST contain schema/normalization version, document
 ID, authored/Yjs state, ID allocator, local revision, state vector/checkpoint,
 opaque anchor envelopes, update coverage, actor/session/group history, redo
-eligibility, and origin-safe audit cursor. Restore MUST publish only after every
-component validates.
+eligibility, reconstruction-journal limits/horizon, and origin-safe audit
+cursor. Restore MUST publish only after every component and aggregate limit
+validates.
 
 #### Scenario: Snapshot reopens after undo
 - **WHEN** the spike snapshots after an undo and remote interleaving
