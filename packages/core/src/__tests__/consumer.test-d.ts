@@ -15,7 +15,7 @@ import {
   type EditorHost,
   type EditorSnapshot,
 } from '../editor';
-import { type DocPoint, type SelectionBox } from '../geometry';
+import { type DisplayPage, type DocPoint } from '../geometry';
 import { type McpContext, type McpToolDefinition } from '../mcp';
 import { type Extension, type PluginContext, type RenderedPage } from '../plugin';
 import type { DocAnchor, DocxDocument } from '../types';
@@ -33,15 +33,15 @@ const tableCmd: EditorCommand = { type: 'insertTable', rows: 3, cols: 4 };
 // Declaration-only public entries must resolve for a consumer without exposing
 // any ProseMirror-facing types.
 declare const point: DocPoint;
-const pmPos: number = point.pmPos;
-const boxes: readonly SelectionBox[] = [];
+const docPos: number = point.docPos;
+const pages: readonly DisplayPage[] = [];
 declare const extension: Extension;
 declare const tool: McpToolDefinition;
 declare const pluginContext: PluginContext;
 const rendered: RenderedPage | null = pluginContext.getRenderedPage(1);
 const handlerResult: Promise<unknown> = tool.handler({}, {} as McpContext);
-void pmPos;
-void boxes;
+void docPos;
+void pages;
 void extension;
 void rendered;
 void handlerResult;
@@ -57,7 +57,6 @@ const host: EditorHost = {
     cb();
     return () => {};
   },
-  measureBlocks: () => [],
 };
 
 export function exercise(editor: Editor, doc: DocxDocument): void {
@@ -91,6 +90,17 @@ export function exercise(editor: Editor, doc: DocxDocument): void {
   const snap: EditorSnapshot = editor.snapshot();
   const bold: boolean | undefined = snap.formatting?.bold;
   void bold;
+
+  // Geometry queries are typed and never expose an editing engine's positions.
+  const display: readonly DisplayPage[] = editor.getDisplay();
+  const firstPage: number | undefined = display[0]?.index;
+  const rectCount: number = editor.getSelectionRects().length;
+  const caretX: number | undefined = editor.getCaretRect()?.x;
+  const hitPos: number | undefined = editor.hitTest({ x: 10, y: 20 })?.docPos;
+  void firstPage;
+  void rectCount;
+  void caretX;
+  void hitPos;
 
   // Document-layer queries are typed the same way.
   const paras = queryDoc(doc, { type: 'paragraphs' });

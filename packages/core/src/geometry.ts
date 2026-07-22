@@ -1,126 +1,110 @@
 /**
- * `@docx-editor.dev/core/geometry` — measurement, hit-testing, and paint.
+ * `@docx-editor.dev/core/geometry` — the positioned render IR.
  *
- * @experimental
+ * Core lays the document out and emits an immutable, framework-agnostic
+ * positioned render list. A framework adapter paints that list and forwards
+ * pointer/scroll events; it never measures, never interprets layout, and never
+ * touches an editing engine's internals. Selection and caret geometry are
+ * queries on `Editor` (see `core/editor`), not members of this list, because
+ * they are derived from the current selection rather than from document
+ * content.
  *
- * SEMVER-EXEMPT. This entry may change or disappear in a minor release.
+ * All boxes are in document content pixels at 96 px/in before zoom, the same
+ * coordinate space as `DisplayPage.box`.
  *
- * It exists because the adapters depend on measurement, hit-testing, and paint
- * primitives that the `Editor` facade does not yet cover. Naming them here is
- * preferable to leaving the dependency undeclared.
- *
- * This is a retirement target: as the shared engine absorbs these
- * responsibilities, entries here are removed. Do not build new integrations
- * against it.
- *
- * Cache-invalidation functions are deliberately not exposed: they mutate shared
- * state, which defeats the facade and breaks multiple editor instances on one
- * page. The engine owns font-load invalidation itself; callers use
- * `editor.relayout({ sync: true })` instead.
- *
- * CONTRACT ONLY.
+ * CONTRACT ONLY. This module is type declarations; it has no runtime.
  */
 
 import type { EditorScope } from './editor';
-import type { PageLayout, Point, Rect } from './types';
+import type { ColorValue, Point, Rect } from './types';
 
 export type * from './types';
 
-const NOT_IMPLEMENTED = 'contract-only stub: no implementation';
-
 /**
- * A geometry position. Distinct from `DocAnchor` on purpose: `{ paraId, search }`
- * is incoherent as the result of a hit test, which resolves to a document
- * offset inside a specific view.
+ * A resolved document position inside one view. Distinct from `DocAnchor`
+ * (`{ paraId, search }`) on purpose: a hit test resolves to a concrete document
+ * offset in a specific body or header/footer view, not to a searchable anchor.
  */
 export interface DocPoint {
-  readonly pmPos: number;
+  /** Zero-based document offset within the addressed view. */
+  readonly docPos: number;
   readonly scope: EditorScope;
 }
 
-export interface SelectionBox extends Rect {
-  readonly pageNumber: number;
+/** One positioned run of shaped text sharing a single resolved style. */
+export interface GlyphRun {
+  readonly text: string;
+  readonly box: Rect;
+  readonly fontFamily: string;
+  readonly fontSizePx: number;
+  readonly color: ColorValue;
+  readonly bold?: boolean;
+  readonly italic?: boolean;
+  readonly underline?: boolean;
+  readonly strike?: boolean;
 }
 
-// ─── Measurement ─────────────────────────────────────────────────────────────
-
-export function measureBlocksWithFloats(..._args: unknown[]): unknown[] {
-  throw new Error(NOT_IMPLEMENTED);
-}
-export function measureTable(..._args: unknown[]): unknown {
-  throw new Error(NOT_IMPLEMENTED);
-}
-export function paragraphLayout(..._args: unknown[]): unknown {
-  throw new Error(NOT_IMPLEMENTED);
+/** A raster or vector image the engine has already resolved to a paintable
+ * source. The engine only ever resolves same-origin or embedded parts, so an
+ * adapter can paint `url` without an external fetch. */
+export interface ImageRef {
+  readonly url: string;
+  readonly altText?: string;
 }
 
-// ─── Hit-testing and pointer ─────────────────────────────────────────────────
-
-export function pointerToDocPos(..._args: unknown[]): DocPoint | null {
-  throw new Error(NOT_IMPLEMENTED);
-}
-export function resolveDomPosition(..._args: unknown[]): DocPoint | null {
-  throw new Error(NOT_IMPLEMENTED);
-}
-export function resolveHfDomPosition(..._args: unknown[]): DocPoint | null {
-  throw new Error(NOT_IMPLEMENTED);
-}
-export function resolveFragmentTarget(..._args: unknown[]): unknown | null {
-  throw new Error(NOT_IMPLEMENTED);
-}
-export function resolveTableCellTarget(..._args: unknown[]): unknown | null {
-  throw new Error(NOT_IMPLEMENTED);
-}
-export function findWordBoundariesForPointer(..._args: unknown[]): unknown | null {
-  throw new Error(NOT_IMPLEMENTED);
-}
-export function findBodyPmAnchor(_root: ParentNode): HTMLElement | null {
-  throw new Error(NOT_IMPLEMENTED);
-}
-export function findBodyPmAnchors(_root: ParentNode): HTMLElement[] {
-  throw new Error(NOT_IMPLEMENTED);
-}
-export function createCellDragTracker(..._args: unknown[]): unknown {
-  throw new Error(NOT_IMPLEMENTED);
-}
-export function detectTableInsertHover(_point: Point, ..._args: unknown[]): unknown | null {
-  throw new Error(NOT_IMPLEMENTED);
+/** One drawn edge of a table border or a page-break cut rule. */
+export interface BorderSeg {
+  readonly from: Point;
+  readonly to: Point;
+  readonly widthPx: number;
+  readonly color: ColorValue;
+  readonly style: 'single' | 'double' | 'dotted' | 'dashed';
 }
 
-// ─── Selection geometry ──────────────────────────────────────────────────────
+/**
+ * One positioned thing to paint. Every content-bearing item carries
+ * `docFrom`/`docTo`/`scope`, which is what lets selection map to geometry
+ * without the adapter ever holding a document position of its own.
+ *
+ * The variant set is the paint projection of the pagination content model; new
+ * content kinds add a variant here and are surfaced by the `rendering-engine`
+ * spec.
+ */
+export type DisplayItem =
+  | {
+      readonly kind: 'text';
+      readonly box: Rect;
+      readonly runs: readonly GlyphRun[];
+      readonly docFrom: number;
+      readonly docTo: number;
+      readonly blockId: number;
+      readonly scope: EditorScope;
+    }
+  | {
+      readonly kind: 'image';
+      readonly box: Rect;
+      readonly src: ImageRef;
+      readonly docFrom: number;
+      readonly docTo: number;
+      readonly scope: EditorScope;
+    }
+  | { readonly kind: 'fill'; readonly box: Rect; readonly color: ColorValue }
+  | {
+      readonly kind: 'tableBorder';
+      readonly segments: readonly BorderSeg[];
+      readonly cut?: 'top' | 'bottom';
+    }
+  | {
+      readonly kind: 'decoration';
+      readonly box: Rect;
+      readonly role: 'comment' | 'trackedChange';
+      readonly refId: string;
+    };
 
-export function readSelectionGeometry(..._args: unknown[]): SelectionBox[] {
-  throw new Error(NOT_IMPLEMENTED);
+/** One painted page: its box in content space and the items inside it. */
+export interface DisplayPage {
+  /** Zero-based page index. */
+  readonly index: number;
+  readonly box: Rect;
+  readonly items: readonly DisplayItem[];
 }
-export function readHfSelectionGeometry(..._args: unknown[]): SelectionBox[] {
-  throw new Error(NOT_IMPLEMENTED);
-}
-export function computeHfCaretRectFromView(..._args: unknown[]): Rect | null {
-  throw new Error(NOT_IMPLEMENTED);
-}
-
-// ─── Paint ───────────────────────────────────────────────────────────────────
-
-export function paintPages(
-  _pages: readonly PageLayout[],
-  _container: HTMLElement,
-  _options?: unknown
-): 'full' | 'incremental' {
-  throw new Error(NOT_IMPLEMENTED);
-}
-
-export declare class LayoutPainter {
-  paint(pages: readonly PageLayout[]): void;
-  destroy(): void;
-}
-
-/** Stays in core: reads DOM that core itself painted. */
-export function applySdtFocus(..._args: unknown[]): void {
-  throw new Error(NOT_IMPLEMENTED);
-}
-export function applyCellSelectionHighlight(..._args: unknown[]): void {
-  throw new Error(NOT_IMPLEMENTED);
-}
-
-export declare const PAGE_CLASS_NAMES: Readonly<Record<string, string>>;
-export declare const TABLE_CLASS_NAMES: Readonly<Record<string, string>>;

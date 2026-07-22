@@ -5,18 +5,20 @@
  */
 
 import type { ContentControlSummary, DocEdits, DocQueries, DocQueryResults } from './index';
+import type { DisplayPage, DocPoint } from './geometry';
 import type {
   ColorValue,
   ContentControlFilter,
   DocAnchor,
   DocRange,
   DocxDocument,
+  Point,
+  Rect,
   Revision,
   RunFormatting,
   ExecErrorCode,
   ExecResult,
   Extension,
-  PageLayout,
   Unsubscribe,
   Watermark,
 } from './types';
@@ -37,7 +39,7 @@ export interface EditorConfig {
 }
 
 /**
- * The editor is N+1 ProseMirror views: one body plus one per header/footer
+ * The editor is N+1 editing views: one body plus one per header/footer
  * relationship. Commands must say which one they target, or they silently hit
  * the wrong surface when a header is focused.
  */
@@ -48,13 +50,13 @@ export type EditorScope =
   | { kind: 'all' };
 
 /**
- * Everything a framework adapter must supply.
+ * Everything a framework adapter must supply. The adapter is a renderer and an
+ * event forwarder: it hands core DOM to paint into, schedules frames, and
+ * receives a positioned `DisplayPage[]` to render. It does not measure, lay
+ * out, or interpret the document — core owns all of that.
  *
  * DOM handles are getters, not values: all of them are null through first
  * render, and React's scroll container can change identity between renders.
- * `measureBlocks` is injected because core currently calls back into the
- * adapter to measure; that inverts in a later step and this member retires
- * with it.
  */
 export interface EditorHost {
   getBodyHostEl(): HTMLElement | null;
@@ -72,21 +74,14 @@ export interface EditorHost {
    */
   afterCommit?(callback: () => void): void;
 
-  measureBlocks: MeasureBlocksFn;
-
-  onLayout?(pages: readonly PageLayout[]): void;
-  onPainted?(kind: 'full' | 'incremental'): void;
+  /** Core emitted a fresh positioned render list; paint it. */
+  onDisplay?(pages: readonly DisplayPage[]): void;
   onScrollRestore?(pending: PendingScrollRestore): void;
   onSelectionChange?(snapshot: EditorSnapshot): void;
   onTotalPages?(total: number): void;
 }
 
 export type CanResult = { ok: true } | { ok: false; code: ExecErrorCode; reason: string };
-
-export type MeasureBlocksFn = (
-  nodes: readonly unknown[],
-  contentWidth: number | number[]
-) => unknown[];
 
 export interface PendingScrollRestore {
   readonly top: number;
@@ -112,6 +107,20 @@ export interface Editor {
 
   getTotalPages(): number;
   getCurrentPage(mode?: 'viewport' | 'caret'): number;
+
+  // ─── Geometry (core owns layout; the adapter only paints and forwards) ─────
+  /** The current positioned render list. Also delivered via the `display`
+   * event and `EditorHost.onDisplay`. */
+  getDisplay(): readonly DisplayPage[];
+  /** Selection rectangles in content-pixel space; defaults to the current
+   * selection. Empty when the selection is collapsed. */
+  getSelectionRects(range?: DocRange): readonly Rect[];
+  /** Caret rectangle for a position; defaults to the current caret. */
+  getCaretRect(pos?: DocAnchor): Rect | null;
+  /** Resolve a client-space point to a document position for pointer handling. */
+  hitTest(point: Point): DocPoint | null;
+  getPageGeometry(): readonly { index: number; box: Rect }[];
+  getScrollGeometry(): { contentHeight: number; pageTops: readonly number[] };
 
   /** Replaces the module-scope cache-invalidation calls adapters make today. */
   relayout(options?: { sync?: boolean }): void;
@@ -195,7 +204,7 @@ export interface EditorQueryResults extends DocQueryResults {
   contentControlAt: ContentControlSummary | null;
   isInsideToc: boolean;
   trackedChanges: readonly Revision[];
-  pageContent: readonly PageLayout[];
+  pageContent: DisplayPage | null;
 }
 
 export interface TableContext {
@@ -211,9 +220,9 @@ export interface HyperlinkInfo {
 }
 
 /**
- * Named `EditorSnapshot`, not `EditorState`: the latter collides with
- * `prosemirror-state`'s export across 18 adapter import sites, several of which
- * already alias around it.
+ * A read model of the current editor state, safe to hand to framework
+ * rendering. Named `EditorSnapshot` rather than `EditorState` so it never
+ * collides with an editing engine's own state type.
  */
 export interface EditorSnapshot {
   readonly scope: EditorScope;
@@ -240,8 +249,7 @@ export interface EditorError extends Error {
 export interface EditorEvents {
   change: (document: DocxDocument) => void;
   selectionChange: (snapshot: EditorSnapshot) => void;
-  layout: (pages: readonly PageLayout[]) => void;
-  painted: (kind: 'full' | 'incremental') => void;
+  display: (pages: readonly DisplayPage[]) => void;
   error: (error: EditorError) => void;
 }
 

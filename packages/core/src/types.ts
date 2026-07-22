@@ -264,14 +264,7 @@ export interface FontDefinition {
   readonly embedded: boolean;
 }
 
-// ─── Layout output ───────────────────────────────────────────────────────────
-
-export interface PageLayout {
-  readonly pageNumber: number;
-  readonly widthPx: number;
-  readonly heightPx: number;
-  readonly contentBox: Rect;
-}
+// ─── Geometry primitives ─────────────────────────────────────────────────────
 
 export interface Rect {
   readonly x: number;
