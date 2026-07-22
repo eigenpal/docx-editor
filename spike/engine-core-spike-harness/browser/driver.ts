@@ -63,6 +63,7 @@ export function createPocEditorDriver(options: CreatePocEditorDriverOptions): Ed
     },
     async type(text: string) {
       requireSession().typeText(text);
+      if (binding) syncPmSelectionFromSession(session!, binding.editableView);
     },
     async execute(command: DocxEditor.Command) {
       const current = requireSession();

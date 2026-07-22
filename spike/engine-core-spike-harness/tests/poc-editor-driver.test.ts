@@ -1,6 +1,7 @@
 /** @spike-features engine-neutral-editor-driver-contract, bold-mark, italic-mark */
 import { describe, expect, test } from 'bun:test';
 import { GlobalRegistrator } from '@happy-dom/global-registrator';
+import { EditorView } from 'prosemirror-view';
 import { createPocDocxFixture } from '../src/poc/docx';
 import { createPocEditorDriver, type PocEditorDriverHost } from '../browser/driver';
 import { nonEmptyString, type EditorDriver } from '../src/driver/editor-driver';
@@ -94,6 +95,47 @@ describe('poc EditorDriver boundary', () => {
     expect(host.querySelectorAll('#replica-host .ProseMirror')).toHaveLength(1);
     expect(host.querySelector('#editable-host')?.textContent).toBe('Hello bold italic');
     expect(host.querySelector('#replica-host')?.textContent).toBe('Hello bold italic');
+    host.remove();
+  });
+
+  test('driver replacement synchronizes the cursor before a real ProseMirror edit', async () => {
+    const { host, driver } = createDriverHosts();
+    const originalUpdateState = EditorView.prototype.updateState;
+    let editableView: EditorView | null = null;
+    EditorView.prototype.updateState = function (state) {
+      if (this.dom.getAttribute('aria-label') === 'Editable POC paragraph') {
+        editableView = this;
+      }
+      originalUpdateState.call(this, state);
+    };
+
+    try {
+      await driver.loadDocx(await createPocDocxFixture());
+      await driver.selectText('bold');
+      await driver.type('X');
+    } finally {
+      EditorView.prototype.updateState = originalUpdateState;
+    }
+
+    expect(editableView).not.toBeNull();
+    const view = editableView as unknown as EditorView;
+    expect(view.state.selection.from).toBe(8);
+    expect(view.state.selection.to).toBe(8);
+
+    view.dispatch(view.state.tr.insertText('!'));
+
+    const expected = 'Hello X! italic';
+    expect(await driver.query({ type: 'findText', text: nonEmptyString(expected) })).toEqual({
+      type: 'findText',
+      ranges: [
+        expect.objectContaining({
+          start: 0,
+          end: expected.length,
+        }),
+      ],
+    });
+    expect(host.querySelector('#editable-host')?.textContent).toBe(expected);
+    expect(host.querySelector('#replica-host')?.textContent).toBe(expected);
     host.remove();
   });
 });
