@@ -22,7 +22,7 @@ export namespace DocxEditor {
 
   export type Command = {
     readonly type: 'toggleMark';
-    readonly mark: 'bold';
+    readonly mark: 'bold' | 'italic';
     readonly scope?: BodyScope;
   };
 
@@ -47,6 +47,13 @@ export namespace DocxEditor {
         readonly formatting: RunFormatting | null;
       }
     | { readonly type: 'selection'; readonly range: DocRange | null };
+
+  export interface SaveResult {
+    readonly status: 'saved' | 'failed';
+    readonly bytes?: Uint8Array;
+    readonly code?: string;
+    readonly reason?: string;
+  }
 }
 
 /**
@@ -62,7 +69,8 @@ export interface EditorDriver {
   query<T extends DocxEditor.Query['type']>(
     query: Extract<DocxEditor.Query, { type: T }>
   ): Promise<Extract<DocxEditor.QueryResult, { type: T }>>;
-  save(): Promise<Uint8Array>;
+  undo(): Promise<DocxEditor.CommandResult>;
+  save(): Promise<DocxEditor.SaveResult>;
 }
 
 export function nonEmptyString(value: string): DocxEditor.NonEmptyString {

@@ -195,7 +195,7 @@ describe('task 2.3 review regressions — public command result shape', () => {
     const store = createSemanticDocumentStore(createFrozenAuthoredFixture());
     const invalid = executeCommandOnServer(serverContext(store), {
       type: 'toggleMark',
-      mark: 'italic',
+      mark: 'underline' as 'bold',
     });
     expect(invalid).toEqual({
       status: 'failed',

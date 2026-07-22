@@ -49,6 +49,16 @@ export {
   type PocStore,
 } from './poc/store';
 export {
+  BINDING_RECONCILIATION_ORIGIN,
+  createPocEditorSession,
+  isBindingReconciliationOrigin,
+  type CreatePocEditorSessionOptions,
+  type PocEditorSession,
+  type TextSelection,
+} from './poc/session';
+export { POC_STORY_ID } from './poc/constants';
+export { createHeadlessPocEditorDriver } from './poc/headless-driver';
+export {
   validateCommand,
   validateQuery,
   snapshotAndValidateCommand,

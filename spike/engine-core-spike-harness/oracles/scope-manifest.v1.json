@@ -41,7 +41,7 @@
   "implementationSurface": {
     "status": "harness-audit-only-not-engine-runtime-enforcement",
     "derivation": "Imports, exports, and @spike-features annotations are scanned from every src/**/*.ts file. The SHA-256 of canonical derived modules is authoritative; per-module imports/exports below are non-authoritative review notes.",
-    "derivedSurfaceHash": "7e53ae41640da1136a3b0a641607d0daf4a389a7e26ef4a2d2f94c8a654dcc59",
+    "derivedSurfaceHash": "4beac7866a66ae9858b443660c99147a3a93c3beaefc82649d4b17a9f2046251",
     "modules": [
       {
         "path": "src/canonical-json.ts",
@@ -334,8 +334,29 @@
         "features": ["fixture-comparators"]
       },
       {
+        "path": "src/poc/constants.ts",
+        "features": ["engine-neutral-editor-driver-contract"]
+      },
+      {
         "path": "src/poc/docx.ts",
         "features": ["one-preservation-capsule"]
+      },
+      {
+        "path": "src/poc/headless-driver.ts",
+        "features": [
+          "bold-mark",
+          "engine-neutral-editor-driver-contract",
+          "italic-mark"
+        ]
+      },
+      {
+        "path": "src/poc/session.ts",
+        "features": [
+          "bold-mark",
+          "engine-neutral-editor-driver-contract",
+          "italic-mark",
+          "yjs-backend"
+        ]
       },
       {
         "path": "src/poc/store.ts",

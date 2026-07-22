@@ -60,7 +60,7 @@
       "required": ["type", "mark"],
       "properties": {
         "type": { "const": "toggleMark" },
-        "mark": { "const": "bold" },
+        "mark": { "type": "string", "enum": ["bold", "italic"] },
         "scope": { "$ref": "#/$defs/bodyScope" }
       },
       "additionalProperties": false

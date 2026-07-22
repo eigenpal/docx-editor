@@ -129,7 +129,7 @@ describe('server execution — schema-backed command', () => {
     const store = createSemanticDocumentStore(createFrozenAuthoredFixture());
     const result = executeCommandOnServer(serverContext(store), {
       type: 'toggleMark',
-      mark: 'italic',
+      mark: 'underline' as 'bold',
     });
     expect(result.status).toBe('failed');
     if (result.status === 'failed') expect(result.code).toBe('invalid-command');

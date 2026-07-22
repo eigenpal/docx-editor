@@ -61,7 +61,7 @@ describe('task 2.3 review regressions — command trust boundary', () => {
     const first = snapshotAndValidateCommand(mutable);
     expect(first.errors).toEqual([]);
     expect(first.snapshot).toEqual({ type: 'toggleMark', mark: 'bold' });
-    mutable.mark = 'italic';
+    mutable.mark = 'underline';
     expect(snapshotAndValidateCommand(mutable).errors.length).toBeGreaterThan(0);
   });
 

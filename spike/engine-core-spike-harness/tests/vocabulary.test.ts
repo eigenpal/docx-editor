@@ -19,9 +19,11 @@ describe('DocxEditor vocabulary', () => {
     expect(vocabulary.forbiddenAliases).toEqual([]);
   });
 
-  test('toggleMark command validates against JSON schema', () => {
-    const cmd: DocxEditor.Command = { type: 'toggleMark', mark: 'bold' };
-    expect(validateCommand(cmd)).toBe(true);
+  test('toggleMark command validates bold and italic against JSON schema', () => {
+    const bold: DocxEditor.Command = { type: 'toggleMark', mark: 'bold' };
+    expect(validateCommand(bold)).toBe(true);
+    const italic: DocxEditor.Command = { type: 'toggleMark', mark: 'italic' };
+    expect(validateCommand(italic)).toBe(true);
     expect(getValidationErrors()).toEqual([]);
   });
 
@@ -38,7 +40,7 @@ describe('DocxEditor vocabulary', () => {
     expect(validateCommand({ type: 'undo' })).toBe(false);
     expect(validateCommand({ type: 'redo' })).toBe(false);
     expect(validateCommand({ type: 'setSelection', range: {} })).toBe(false);
-    expect(validateCommand({ type: 'toggleMark', mark: 'italic' })).toBe(false);
+    expect(validateCommand({ type: 'toggleMark', mark: 'underline' as 'bold' })).toBe(false);
     expect(validateQuery({ type: 'findText', text: '' })).toBe(false);
     expect(getValidationErrors().length).toBeGreaterThan(0);
   });
@@ -99,8 +101,9 @@ describe('EditorDriver contract shape', () => {
       'type',
       'execute',
       'query',
+      'undo',
       'save',
     ] as const satisfies readonly (keyof import('../src/driver/editor-driver').EditorDriver)[];
-    expect(driverShape).toHaveLength(6);
+    expect(driverShape).toHaveLength(7);
   });
 });
