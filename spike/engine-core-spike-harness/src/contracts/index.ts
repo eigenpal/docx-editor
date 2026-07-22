@@ -51,6 +51,7 @@ export {
   createMutationOrigin,
   createProjectionOrigin,
   originDomainsDoNotOverlap,
+  originDomainsMatchBindingOracleV2,
   snapshotAndValidateAwarenessOrigin,
   snapshotAndValidateMutationOrigin,
   snapshotAndValidateProjectionOrigin,
@@ -89,6 +90,17 @@ export {
   type TransactionRejection,
   type TransactionRejectionReason,
 } from './transaction-context';
+export {
+  createSynchronousTransactionExecutor,
+  type SynchronousTransactionExecutor,
+  type SynchronousTransactionExecutorHooks,
+  type SynchronousTransactionFailure,
+  type SynchronousTransactionResult,
+  type SynchronousTransactionRollbackDiagnostic,
+  type SynchronousTransactionStage,
+  type SynchronousTransactionSuccess,
+  type TransactionMutationCapability,
+} from './synchronous-transaction-executor';
 export {
   ENCRYPTED_REPLAY_JOURNAL_VERSION,
   REDACTED_AUDIT_INDEX_VERSION,

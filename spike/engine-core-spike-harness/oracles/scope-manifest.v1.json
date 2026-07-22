@@ -41,7 +41,7 @@
   "implementationSurface": {
     "status": "harness-audit-only-not-engine-runtime-enforcement",
     "derivation": "Imports, exports, and @spike-features annotations are scanned from every src/**/*.ts file. The SHA-256 of canonical derived modules is authoritative; per-module imports/exports below are non-authoritative review notes.",
-    "derivedSurfaceHash": "65f0bb1ffb8c427a8cc7f4be03bb662a2b1e42d4f222e1ce44e0d7abdd30f229",
+    "derivedSurfaceHash": "518a5b7249674b074ad4424faf9a7b45e9ba74ac896999434d8e28a9ae2a9654",
     "modules": [
       {
         "path": "src/canonical-json.ts",
@@ -136,6 +136,10 @@
       {
         "path": "src/contracts/snapshot.ts",
         "features": ["insert-delete-split-join-operations", "yjs-backend"]
+      },
+      {
+        "path": "src/contracts/synchronous-transaction-executor.ts",
+        "features": ["insert-delete-split-join-operations", "origin-metadata"]
       },
       {
         "path": "src/contracts/transaction-context.ts",

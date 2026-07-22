@@ -1,5 +1,5 @@
 /** @spike-features origin-metadata, awareness-metadata */
-import yjsSchema from '../../oracles/yjs-schema.v1.json';
+import bindingOracle from '../../oracles/binding-oracle.v2.json';
 import {
   collectValidation,
   hasExactKeys,
@@ -280,16 +280,28 @@ function validateTrustedAwarenessOrigin(origin: AwarenessOrigin): readonly strin
 }
 
 export function originDomainsDoNotOverlap(): boolean {
+  return originDomainsMatchBindingOracleV2();
+}
+
+export function originDomainsMatchBindingOracleV2(): boolean {
+  const oracleOrigins = bindingOracle.origins as {
+    mutation: readonly string[];
+    projection: readonly string[];
+    awareness: readonly string[];
+  };
   return (
-    yjsSchema.originTags.mutation.every((kind) => MUTATION_ORIGIN_KINDS.includes(kind as MutationOriginKind)) &&
-    yjsSchema.originTags.projection.every((kind) =>
+    oracleOrigins.mutation.every((kind) => MUTATION_ORIGIN_KINDS.includes(kind as MutationOriginKind)) &&
+    oracleOrigins.projection.every((kind) =>
       PROJECTION_ORIGIN_KINDS.includes(kind as ProjectionOriginKind)
     ) &&
-    yjsSchema.originTags.awareness.every((kind) =>
+    oracleOrigins.awareness.every((kind) =>
       AWARENESS_ORIGIN_KINDS.includes(kind as AwarenessOriginKind)
     ) &&
     new Set([...MUTATION_ORIGIN_KINDS, ...PROJECTION_ORIGIN_KINDS, ...AWARENESS_ORIGIN_KINDS]).size ===
-      MUTATION_ORIGIN_KINDS.length + PROJECTION_ORIGIN_KINDS.length + AWARENESS_ORIGIN_KINDS.length
+      MUTATION_ORIGIN_KINDS.length + PROJECTION_ORIGIN_KINDS.length + AWARENESS_ORIGIN_KINDS.length &&
+    oracleOrigins.mutation.length === MUTATION_ORIGIN_KINDS.length &&
+    oracleOrigins.projection.length === PROJECTION_ORIGIN_KINDS.length &&
+    oracleOrigins.awareness.length === AWARENESS_ORIGIN_KINDS.length
   );
 }
 

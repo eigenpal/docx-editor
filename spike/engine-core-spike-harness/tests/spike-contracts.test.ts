@@ -419,7 +419,13 @@ describe('spike contracts — synchronous transaction context types', () => {
       }),
     });
     expect(ctx.actorId).toBe('actor-alice');
-    expect(ctx.rejectionReasons).toEqual(['async-callback', 'nested-transaction', 'reentrant-transaction']);
+    expect(ctx.rejectionReasons).toEqual([
+      'async-callback',
+      'mixed-origin',
+      'nested-transaction',
+      'preflight-failure',
+      'reentrant-transaction',
+    ]);
   });
 });
 

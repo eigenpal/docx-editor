@@ -16,7 +16,9 @@ export const TRANSACTION_CONTEXT_VERSION = 'transaction-context/1';
 
 export const TRANSACTION_REJECTION_REASONS = [
   'async-callback',
+  'mixed-origin',
   'nested-transaction',
+  'preflight-failure',
   'reentrant-transaction',
 ] as const;
 

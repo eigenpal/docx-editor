@@ -351,7 +351,9 @@ describe('adversarial synchronous transaction context', () => {
       },
       rejectionReasons: [
         'async-callback',
+        'mixed-origin',
         'nested-transaction',
+        'preflight-failure',
         'reentrant-transaction',
       ],
     };
