@@ -45,9 +45,20 @@ queued notifications, real two-replica convergence, and actor-local undo:
 - narrow POC limitation: client-ID claims persist for the module lifetime, so
   teardown/recreation with the same ID is intentionally unsupported
 
-### Milestone 3 — pending
+### Milestone 3 — complete and review-approved
 
-Visible ProseMirror editor and read-only replica through `EditorDriver`.
+Visible ProseMirror editor and read-only replica backed by the canonical store
+and exposed through `EditorDriver` without exposing `EditorView`:
+
+- initial implementation: `checkpoint-1ab1532a`
+- real PM transaction, reconciliation, repeat-load, and selection hardening:
+  `checkpoint-5557ee20`, `checkpoint-d29e97ee`
+- toolbar focus preservation: `checkpoint-f2781924`
+- browser-runtime Yjs validation fix: `checkpoint-66e59565`
+- result: 582 spike tests, typecheck, and Vite build pass; focused acceptance
+  review found no remaining blockers
+- browser evidence: live load, selected italic toggle, replica convergence,
+  undo, and repeat load were verified at `http://localhost:5199/`
 
 ### Milestone 4 — pending
 
