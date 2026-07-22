@@ -574,8 +574,8 @@ gates in this change.
   normative production authority of `document-engine/design.md` and its
   capability specifications, their surviving behavioral obligations are
   cataloged in
-  `spike/engine-core-spike-harness/migration/playwright-inventory.v1.json`,
-  `spike/engine-core-spike-harness/migration/package-test-inventory.v1.json`,
+  `packages/core/spike/migration/playwright-inventory.v1.json`,
+  `packages/core/spike/migration/package-test-inventory.v1.json`,
   and applicable OpenSpec requirements. `engine-core-spike` remains only the
   independent, non-shipping evidence input defined above.
 - **retired** — Inventory entries marked implementation-only have no replacement

@@ -84,7 +84,7 @@ One deterministic Chromium Playwright flow proves the binary finish line:
 - initial E2E and result record: `checkpoint-be6049c9`
 - independent DOM/XML assertions and deterministic server lifecycle:
   `checkpoint-ea38f722`
-- exact command: `cd spike/engine-core-spike-harness && bun run test:e2e`
+- exact command: `cd packages/core/spike && bun run test:e2e`
 - result: 1 passed at `http://localhost:5199/`; 608 spike tests, 85 oracle
   tests, typecheck, Vite build, and strict OpenSpec validation pass
 - full evidence and unchanged deferred risks: `poc-result.md`

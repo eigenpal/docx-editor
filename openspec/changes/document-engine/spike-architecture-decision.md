@@ -24,29 +24,29 @@ requirements, implementation status, and executable tests.
 ## Evidence baseline
 
 - Final Chromium flow:
-  `cd spike/engine-core-spike-harness && bun run test:e2e`
+  `cd packages/core/spike && bun run test:e2e`
 - POC implementation evidence:
   `openspec/changes/engine-core-spike/implementation-status.md`
 - Scope and deferred risks:
   `openspec/changes/engine-core-spike/design.md` and
   `openspec/changes/engine-core-spike/poc-result.md`
 - Candidate B formatting experiment:
-  `spike/engine-core-spike-harness/tests/yjs-formatting-kiss.test.ts`
+  `packages/core/spike/tests/yjs-formatting-kiss.test.ts`
 - Actor-local undo and convergence:
-  `spike/engine-core-spike-harness/tests/poc-store.test.ts`
+  `packages/core/spike/tests/poc-store.test.ts`
 - Model-first binding and loop prevention:
-  `spike/engine-core-spike-harness/tests/poc-pm-binding.test.ts` and
-  `spike/engine-core-spike-harness/tests/poc-editor-driver.test.ts`
+  `packages/core/spike/tests/poc-pm-binding.test.ts` and
+  `packages/core/spike/tests/poc-editor-driver.test.ts`
 - Bounded load/save and capsule preservation:
-  `spike/engine-core-spike-harness/tests/poc-docx.test.ts`,
-  `spike/engine-core-spike-harness/tests/poc-save.test.ts`, and
-  `spike/engine-core-spike-harness/e2e/poc-finish-line.spec.ts`
+  `packages/core/spike/tests/poc-docx.test.ts`,
+  `packages/core/spike/tests/poc-save.test.ts`, and
+  `packages/core/spike/e2e/poc-finish-line.spec.ts`
 - Rejected v1/inverse-history evidence:
-  `spike/engine-core-spike-harness/tests/history-inverse-docop-falsification.test.ts`
+  `packages/core/spike/tests/history-inverse-docop-falsification.test.ts`
   and
-  `spike/engine-core-spike-harness/tests/yjs-undo-manager-experiment.test.ts`
+  `packages/core/spike/tests/yjs-undo-manager-experiment.test.ts`
 - Synchronous transaction and typed-origin evidence:
-  `spike/engine-core-spike-harness/tests/synchronous-transaction-executor.test.ts`
+  `packages/core/spike/tests/synchronous-transaction-executor.test.ts`
 
 These tests are deterministic. A seed is required and recorded by future
 randomized production tests; deterministic fixtures do not manufacture a seed.
@@ -166,8 +166,9 @@ independently inspects saved XML.
 
 ### ADR-S9 — Spike implementation remains disposable
 
-No production package may import from
-`spike/engine-core-spike-harness/**`. Production code reimplements accepted
+No production module may import from `packages/core/spike/**`. The nested
+directory is excluded from the declaration-only core package's exports and
+TypeScript project. Production code reimplements accepted
 contracts behind production package boundaries and conformance tests. Historical
 v1 backends, abandoned formatting-oracle corpora, and POC-only fixture parsers
 are evidence or tombstones, not source modules to migrate.

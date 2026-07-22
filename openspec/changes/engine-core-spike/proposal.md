@@ -86,5 +86,6 @@ uncompressed `word/document.xml`.
 - **Contracts**: the four capability specs describe POC behavior only; they do
   not supersede `document-engine`.
 - **Harness only**: spike code is disposable proof in
-  `spike/engine-core-spike-harness/` and `e2e/`; it is not shipped surface.
+  `packages/core/spike/` and its local `e2e/`; it is not shipped surface or part
+  of the declaration-only core contract.
 - **No product migration**: adapters and published packages are out of scope.

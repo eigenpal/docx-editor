@@ -1,8 +1,12 @@
 # `@docx-editor.dev/core-contract`
 
-**This package contains no implementation.** It declares the public API that
-`@docx-editor.dev/core` must satisfy. The published package is installed from
-npm.
+**This package's exported surface contains no implementation.** It declares the
+public API that `@docx-editor.dev/core` must satisfy. The published package is
+installed from npm.
+
+The nested `spike/` directory temporarily holds the completed disposable engine
+POC. It is excluded from this package's exports and TypeScript project and must
+not be imported by production modules.
 
 It is deliberately named `@docx-editor.dev/core-contract`, not
 `@docx-editor.dev/core`. Sharing the name would make the workspace resolve every

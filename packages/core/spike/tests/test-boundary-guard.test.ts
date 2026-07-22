@@ -3,7 +3,7 @@ import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { dirname, join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const repoRoot = join(dirname(fileURLToPath(import.meta.url)), '../../..');
+const repoRoot = join(dirname(fileURLToPath(import.meta.url)), '../../../..');
 
 const guardedCheckScripts = [
   'scripts/check-consumer-install.mjs',
@@ -114,7 +114,7 @@ describe('surviving test boundary guard', () => {
     const guardedFiles = [
       ...guardedCheckScripts,
       ...guardedPackageTestRoots.flatMap((root) => walkFiles(root)),
-    ].filter((file) => file !== 'spike/engine-core-spike-harness/tests/test-boundary-guard.test.ts');
+    ].filter((file) => file !== 'packages/core/spike/tests/test-boundary-guard.test.ts');
 
     const violations: string[] = [];
     for (const relativePath of guardedFiles) {

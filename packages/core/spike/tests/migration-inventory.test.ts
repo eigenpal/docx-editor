@@ -3,8 +3,8 @@ import { existsSync, readFileSync, statSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const repoRoot = join(dirname(fileURLToPath(import.meta.url)), '../../..');
-const migrationDir = join(repoRoot, 'spike/engine-core-spike-harness/migration');
+const repoRoot = join(dirname(fileURLToPath(import.meta.url)), '../../../..');
+const migrationDir = join(repoRoot, 'packages/core/spike/migration');
 
 type InventoryDestination = {
   change: 'engine-core-spike' | 'document-engine';

@@ -1,20 +1,20 @@
 {
   "version": "package-test-migration-inventory/1.0.0",
-  "description": "Classification of current package tests against the legacy core architecture versus engine-neutral retained coverage.",
+  "description": "Classification of retired package-coupled tests and engine-neutral retained coverage.",
   "legacyCoreCoupled": {
     "durableBehavior": [
       {
         "status": "durable-behavior-tombstone",
         "coupling": {
           "category": "legacy-adapter-binding",
-          "reason": "These adapter tests depend on the current editor binding, ProseMirror-facing view behavior, legacy core document types, or adapter-owned toolbar, file-open, and TOC proxy wiring, but they still describe durable user-visible behavior."
+          "reason": "These adapter tests depend on the current editor binding, ProseMirror-facing view behavior, retired package document types, or adapter-owned toolbar, file-open, and TOC proxy wiring, but they still describe durable user-visible behavior."
         },
         "intent": {
           "kind": "observable",
           "summary": "React and Vue adapter load lifecycle, toolbar visibility, file-open customization, comment-threading, context-menu focus, visible scroll behavior, and TOC proxy behavior tied to the current editor binding."
         },
         "destination": {
-          "change": "document-engine",
+          "change": "typed-ooxml-paragraph-editor",
           "area": "editor-binding/adapter-behavior-conformance"
         },
         "retainedFixtureRefs": [],
@@ -33,14 +33,14 @@
         "status": "durable-behavior-tombstone",
         "coupling": {
           "category": "legacy-bridge-surface",
-          "reason": "These bridge integration tests exercise the current editor bridge and reviewer bridge surfaces that are layered directly over the legacy core architecture."
+          "reason": "These bridge integration tests exercise the current editor bridge and reviewer bridge surfaces that are layered directly over the retired package architecture."
         },
         "intent": {
           "kind": "observable",
-          "summary": "Editor bridge, reviewer bridge, and hosted MCP integration behavior exposed on top of the legacy bridge contracts."
+          "summary": "Editor bridge, reviewer bridge, and hosted MCP integration behavior exposed on top of the retired bridge contracts."
         },
         "destination": {
-          "change": "document-engine",
+          "change": "typed-ooxml-paragraph-editor",
           "area": "server-bindings/mcp-bridge-conformance"
         },
         "retainedFixtureRefs": ["e2e/fixtures/with-tables.docx"],
@@ -54,14 +54,14 @@
         "status": "durable-behavior-tombstone",
         "coupling": {
           "category": "legacy-headless-core-surface",
-          "reason": "These headless reviewer tests operate directly on the current headless document model, tracked-change surface, comment surface, and save/reload behavior of the legacy core package."
+          "reason": "These headless reviewer tests operate directly on the current headless document model, tracked-change surface, comment surface, and save/reload behavior of the retired package surface."
         },
         "intent": {
           "kind": "observable",
-          "summary": "Headless read/search/comment/change/note-body/save-roundtrip behavior bound to the old headless core surface."
+          "summary": "Headless read/search/comment/change/note-body/save-roundtrip behavior bound to the retired headless core surface."
         },
         "destination": {
-          "change": "document-engine",
+          "change": "typed-ooxml-paragraph-editor",
           "area": "server-bindings/headless-reviewer-conformance"
         },
         "retainedFixtureRefs": [
@@ -84,14 +84,14 @@
         "status": "durable-behavior-tombstone",
         "coupling": {
           "category": "legacy-bridge-surface",
-          "reason": "These MCP stdio and server tests contain durable framing, lifecycle, and protocol-envelope behavior, but they instantiate the legacy EditorBridge and route through its fixed tool surface."
+          "reason": "These MCP stdio and server tests contain durable framing, lifecycle, and protocol-envelope behavior, but they instantiate the retired EditorBridge and route through its fixed tool surface."
         },
         "intent": {
           "kind": "observable",
-          "summary": "MCP stdio chunking, lifecycle, initialization, error-envelope, and request-routing behavior currently coupled to the legacy bridge."
+          "summary": "MCP stdio chunking, lifecycle, initialization, error-envelope, and request-routing behavior currently coupled to the retired bridge."
         },
         "destination": {
-          "change": "document-engine",
+          "change": "typed-ooxml-paragraph-editor",
           "area": "server-bindings/mcp-transport-conformance"
         },
         "retainedFixtureRefs": [],
@@ -104,14 +104,14 @@
         "status": "durable-behavior-tombstone",
         "coupling": {
           "category": "legacy-bridge-surface",
-          "reason": "This test uses a synthetic legacy EditorBridge, but it preserves durable shared tool-schema validation, normalization, and clean-text behavior that must migrate independently of that bridge."
+          "reason": "This test uses a synthetic retired EditorBridge, but it preserves durable shared tool-schema validation, normalization, and clean-text behavior that must be independently specified outside that bridge."
         },
         "intent": {
           "kind": "observable",
           "summary": "Tool schema compatibility with no empty enum members; rejection of invalid underline, highlight, and break values; highlight 'none' normalization; and clean-text reads that exclude revision and comment-anchor annotations."
         },
         "destination": {
-          "change": "document-engine",
+          "change": "typed-ooxml-paragraph-editor",
           "area": "server-bindings/shared-tool-runtime-schema-conformance"
         },
         "retainedFixtureRefs": [],
@@ -127,10 +127,10 @@
         },
         "intent": {
           "kind": "implementation-only",
-          "summary": "Runtime and type-level method-presence parity checks for the legacy bridge wrapper and adapter refs."
+          "summary": "Runtime and type-level method-presence parity checks for the retired bridge wrapper and adapter refs."
         },
         "destination": {
-          "change": "document-engine",
+          "change": "typed-ooxml-paragraph-editor",
           "area": "server-bindings/bridge-surface-audit"
         },
         "retainedFixtureRefs": [],
@@ -151,7 +151,7 @@
           "summary": "Hidden PM host portal behavior and painted-pages event and guard lifecycle internals."
         },
         "destination": {
-          "change": "document-engine",
+          "change": "typed-ooxml-paragraph-editor",
           "area": "editor-binding/adapter-internal-surface-audit"
         },
         "retainedFixtureRefs": [],
@@ -170,10 +170,10 @@
         },
         "intent": {
           "kind": "implementation-only",
-          "summary": "Adapter re-export coverage for the legacy core font-option normalization utility."
+          "summary": "Adapter re-export coverage for the retired package font-option normalization utility."
         },
         "destination": {
-          "change": "document-engine",
+          "change": "typed-ooxml-paragraph-editor",
           "area": "adapter-runtime/utility-surface-audit"
         },
         "retainedFixtureRefs": [],
@@ -186,14 +186,14 @@
       "status": "engine-neutral-retained",
       "coupling": {
         "category": "engine-neutral",
-        "reason": "These are utility-level, UI-level, and declaration-contract tests with no dependency on the legacy core package, headless reviewer, or ProseMirror binding."
+        "reason": "These are utility-level, UI-level, and declaration-contract tests with no dependency on the retired package surface, headless reviewer, or ProseMirror binding."
       },
       "intent": {
         "kind": "observable",
         "summary": "Adapter UI, declaration-contract, and i18n utility behavior that should remain live through the engine migration."
       },
       "destination": {
-        "change": "document-engine",
+        "change": "typed-ooxml-paragraph-editor",
         "area": "adapter-runtime/utility-regressions"
       },
       "retainedFixtureRefs": [],
@@ -213,14 +213,14 @@
       "status": "engine-neutral-retained",
       "coupling": {
         "category": "engine-neutral",
-        "reason": "This test validates JSON-RPC line framing, response encoders, type guards, and standard error codes without importing or instantiating the legacy bridge."
+        "reason": "This test validates JSON-RPC line framing, response encoders, type guards, and standard error codes without importing or instantiating the retired bridge."
       },
       "intent": {
         "kind": "observable",
-        "summary": "Transport-neutral JSON-RPC framing and protocol primitives that remain valid without legacy engine or bridge semantics."
+        "summary": "Transport-neutral JSON-RPC framing and protocol primitives that remain valid without retired engine or bridge semantics."
       },
       "destination": {
-        "change": "document-engine",
+        "change": "typed-ooxml-paragraph-editor",
         "area": "server-bindings/mcp-transport-contract"
       },
       "retainedFixtureRefs": [],

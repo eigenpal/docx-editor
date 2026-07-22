@@ -1,6 +1,6 @@
 {
   "version": "playwright-migration-inventory/1.1.0",
-  "description": "Per-suite behavior tombstones for migration to engine-neutral requirements and conformance coverage.",
+  "description": "Historical suite records for independently specified engine-neutral requirements and conformance coverage.",
   "crossAdapterLifecycleScenario": {
     "id": "lifecycle-bold-roundtrip-v1",
     "source": "oracles/docx-editor-vocabulary.v1.json#crossAdapterLifecycleScenario",
@@ -11,7 +11,7 @@
     "status": "frozen-not-wired",
     "note": "Do not add as default repo E2E until EditorDriver adapter exists",
     "destination": {
-      "change": "engine-core-spike",
+      "change": "typed-ooxml-paragraph-editor",
       "area": "gates/gate-12-engine-neutral-driver"
     }
   },
@@ -21,7 +21,7 @@
       "status": "behavior-tombstone",
       "coupling": {
         "category": "behavioral-migration-candidate",
-        "reason": "Uses current EditorPage keyboard, ProseMirror selection, and DOM assertions; semantic type/delete behavior is reusable after transport replacement."
+        "reason": "Uses current EditorPage keyboard, ProseMirror selection, and DOM assertions; semantic type/delete behavior is to be independently re-specified behind an engine-neutral transport."
       },
       "intent": {
         "kind": "observable",
@@ -29,7 +29,7 @@
       },
       "retainedFixtureRefs": [],
       "destination": {
-        "change": "engine-core-spike",
+        "change": "typed-ooxml-paragraph-editor",
         "area": "gates/gate-12-engine-neutral-driver"
       }
     },
@@ -38,7 +38,7 @@
       "status": "behavior-tombstone",
       "coupling": {
         "category": "behavioral-migration-candidate",
-        "reason": "Uses current toolbar, DOM, and ProseMirror selection transport; bold/italic command and formatting-query behavior is reusable."
+        "reason": "Uses current toolbar, DOM, and ProseMirror selection transport; bold/italic command and formatting-query behavior is to be independently re-specified."
       },
       "intent": {
         "kind": "observable",
@@ -46,7 +46,7 @@
       },
       "retainedFixtureRefs": [],
       "destination": {
-        "change": "engine-core-spike",
+        "change": "typed-ooxml-paragraph-editor",
         "area": "gates/gate-12-engine-neutral-driver"
       }
     },
@@ -55,7 +55,7 @@
       "status": "behavior-tombstone",
       "coupling": {
         "category": "behavioral-migration-candidate",
-        "reason": "Uses current debug load/save and DOM inspection transport; formatting save/reopen behavior is reusable."
+        "reason": "Uses current debug load/save and DOM inspection transport; formatting save/reopen behavior is to be independently re-specified."
       },
       "intent": {
         "kind": "observable",
@@ -63,7 +63,7 @@
       },
       "retainedFixtureRefs": [],
       "destination": {
-        "change": "engine-core-spike",
+        "change": "typed-ooxml-paragraph-editor",
         "area": "gates/gate-12-engine-neutral-driver"
       }
     },
@@ -72,7 +72,7 @@
       "status": "behavior-tombstone",
       "coupling": {
         "category": "behavioral-migration-candidate",
-        "reason": "Uses scenario runner and current EditorPage/DOM transport; semantic operation sequence is reusable."
+        "reason": "Uses scenario runner and current EditorPage/DOM transport; semantic operation sequence is to be independently re-specified."
       },
       "intent": {
         "kind": "observable",
@@ -80,7 +80,7 @@
       },
       "retainedFixtureRefs": [],
       "destination": {
-        "change": "engine-core-spike",
+        "change": "typed-ooxml-paragraph-editor",
         "area": "gates/gate-12-engine-neutral-driver"
       }
     },
@@ -89,7 +89,7 @@
       "status": "behavior-tombstone",
       "coupling": {
         "category": "behavioral-migration-candidate",
-        "reason": "Uses current page keyboard/DOM transport; typing assertion is reusable."
+        "reason": "Uses current page keyboard/DOM transport; typing assertion is to be independently re-specified."
       },
       "intent": {
         "kind": "observable",
@@ -97,7 +97,7 @@
       },
       "retainedFixtureRefs": [],
       "destination": {
-        "change": "engine-core-spike",
+        "change": "typed-ooxml-paragraph-editor",
         "area": "gates/gate-12-engine-neutral-driver"
       }
     },
@@ -106,7 +106,7 @@
       "status": "behavior-tombstone",
       "coupling": {
         "category": "behavioral-migration-candidate",
-        "reason": "Uses current toolbar/selection transport; bold command/query behavior is reusable."
+        "reason": "Uses current toolbar/selection transport; bold command/query behavior is to be independently re-specified."
       },
       "intent": {
         "kind": "observable",
@@ -114,7 +114,7 @@
       },
       "retainedFixtureRefs": [],
       "destination": {
-        "change": "engine-core-spike",
+        "change": "typed-ooxml-paragraph-editor",
         "area": "gates/gate-12-engine-neutral-driver"
       }
     },
@@ -123,7 +123,7 @@
       "status": "behavior-tombstone",
       "coupling": {
         "category": "behavioral-migration-candidate",
-        "reason": "Uses current adapter/debug save transport; save/reopen semantic assertion is reusable."
+        "reason": "Uses current adapter/debug save transport; save/reopen semantic assertion is to be independently re-specified."
       },
       "intent": {
         "kind": "observable",
@@ -131,7 +131,7 @@
       },
       "retainedFixtureRefs": [],
       "destination": {
-        "change": "engine-core-spike",
+        "change": "typed-ooxml-paragraph-editor",
         "area": "gates/gate-12-engine-neutral-driver"
       }
     },
@@ -144,11 +144,11 @@
       },
       "intent": {
         "kind": "observable",
-        "summary": "Visible command, annotation, agent, and adapter interaction behavior that is currently coupled to legacy toolbar, DOM, debug hooks, or mount wiring."
+        "summary": "Visible command, annotation, agent, and adapter interaction behavior that is currently coupled to retired toolbar, DOM, debug hooks, or mount wiring."
       },
       "retainedFixtureRefs": [],
       "destination": {
-        "change": "document-engine",
+        "change": "typed-ooxml-paragraph-editor",
         "area": "editor-binding/adapter-ui-conformance"
       }
     },
@@ -161,11 +161,11 @@
       },
       "intent": {
         "kind": "observable",
-        "summary": "Visible command, annotation, agent, and adapter interaction behavior that is currently coupled to legacy toolbar, DOM, debug hooks, or mount wiring."
+        "summary": "Visible command, annotation, agent, and adapter interaction behavior that is currently coupled to retired toolbar, DOM, debug hooks, or mount wiring."
       },
       "retainedFixtureRefs": [],
       "destination": {
-        "change": "document-engine",
+        "change": "typed-ooxml-paragraph-editor",
         "area": "editor-binding/adapter-ui-conformance"
       }
     },
@@ -178,11 +178,11 @@
       },
       "intent": {
         "kind": "observable",
-        "summary": "Visible command, annotation, agent, and adapter interaction behavior that is currently coupled to legacy toolbar, DOM, debug hooks, or mount wiring."
+        "summary": "Visible command, annotation, agent, and adapter interaction behavior that is currently coupled to retired toolbar, DOM, debug hooks, or mount wiring."
       },
       "retainedFixtureRefs": [],
       "destination": {
-        "change": "document-engine",
+        "change": "typed-ooxml-paragraph-editor",
         "area": "editor-binding/adapter-ui-conformance"
       }
     },
@@ -195,11 +195,11 @@
       },
       "intent": {
         "kind": "observable",
-        "summary": "Visible command, annotation, agent, and adapter interaction behavior that is currently coupled to legacy toolbar, DOM, debug hooks, or mount wiring."
+        "summary": "Visible command, annotation, agent, and adapter interaction behavior that is currently coupled to retired toolbar, DOM, debug hooks, or mount wiring."
       },
       "retainedFixtureRefs": [],
       "destination": {
-        "change": "document-engine",
+        "change": "typed-ooxml-paragraph-editor",
         "area": "editor-binding/adapter-ui-conformance"
       }
     },
@@ -212,11 +212,11 @@
       },
       "intent": {
         "kind": "observable",
-        "summary": "Visible command, annotation, agent, and adapter interaction behavior that is currently coupled to legacy toolbar, DOM, debug hooks, or mount wiring."
+        "summary": "Visible command, annotation, agent, and adapter interaction behavior that is currently coupled to retired toolbar, DOM, debug hooks, or mount wiring."
       },
       "retainedFixtureRefs": [],
       "destination": {
-        "change": "document-engine",
+        "change": "typed-ooxml-paragraph-editor",
         "area": "editor-binding/adapter-ui-conformance"
       }
     },
@@ -229,11 +229,11 @@
       },
       "intent": {
         "kind": "observable",
-        "summary": "Visible command, annotation, agent, and adapter interaction behavior that is currently coupled to legacy toolbar, DOM, debug hooks, or mount wiring."
+        "summary": "Visible command, annotation, agent, and adapter interaction behavior that is currently coupled to retired toolbar, DOM, debug hooks, or mount wiring."
       },
       "retainedFixtureRefs": [],
       "destination": {
-        "change": "document-engine",
+        "change": "typed-ooxml-paragraph-editor",
         "area": "editor-binding/adapter-ui-conformance"
       }
     },
@@ -246,11 +246,11 @@
       },
       "intent": {
         "kind": "observable",
-        "summary": "Visible command, annotation, agent, and adapter interaction behavior that is currently coupled to legacy toolbar, DOM, debug hooks, or mount wiring."
+        "summary": "Visible command, annotation, agent, and adapter interaction behavior that is currently coupled to retired toolbar, DOM, debug hooks, or mount wiring."
       },
       "retainedFixtureRefs": [],
       "destination": {
-        "change": "document-engine",
+        "change": "typed-ooxml-paragraph-editor",
         "area": "editor-binding/adapter-ui-conformance"
       }
     },
@@ -263,13 +263,13 @@
       },
       "intent": {
         "kind": "observable",
-        "summary": "Visible command, annotation, agent, and adapter interaction behavior that is currently coupled to legacy toolbar, DOM, debug hooks, or mount wiring."
+        "summary": "Visible command, annotation, agent, and adapter interaction behavior that is currently coupled to retired toolbar, DOM, debug hooks, or mount wiring."
       },
       "retainedFixtureRefs": [
         "e2e/fixtures/demo/demo.docx"
       ],
       "destination": {
-        "change": "document-engine",
+        "change": "typed-ooxml-paragraph-editor",
         "area": "editor-binding/adapter-ui-conformance"
       }
     },
@@ -282,13 +282,13 @@
       },
       "intent": {
         "kind": "observable",
-        "summary": "Visible command, annotation, agent, and adapter interaction behavior that is currently coupled to legacy toolbar, DOM, debug hooks, or mount wiring."
+        "summary": "Visible command, annotation, agent, and adapter interaction behavior that is currently coupled to retired toolbar, DOM, debug hooks, or mount wiring."
       },
       "retainedFixtureRefs": [
         "e2e/fixtures/example-with-image.docx"
       ],
       "destination": {
-        "change": "document-engine",
+        "change": "typed-ooxml-paragraph-editor",
         "area": "editor-binding/adapter-ui-conformance"
       }
     },
@@ -301,13 +301,13 @@
       },
       "intent": {
         "kind": "observable",
-        "summary": "Visible command, annotation, agent, and adapter interaction behavior that is currently coupled to legacy toolbar, DOM, debug hooks, or mount wiring."
+        "summary": "Visible command, annotation, agent, and adapter interaction behavior that is currently coupled to retired toolbar, DOM, debug hooks, or mount wiring."
       },
       "retainedFixtureRefs": [
         "e2e/fixtures/example-with-image.docx"
       ],
       "destination": {
-        "change": "document-engine",
+        "change": "typed-ooxml-paragraph-editor",
         "area": "editor-binding/adapter-ui-conformance"
       }
     },
@@ -320,11 +320,11 @@
       },
       "intent": {
         "kind": "observable",
-        "summary": "Visible command, annotation, agent, and adapter interaction behavior that is currently coupled to legacy toolbar, DOM, debug hooks, or mount wiring."
+        "summary": "Visible command, annotation, agent, and adapter interaction behavior that is currently coupled to retired toolbar, DOM, debug hooks, or mount wiring."
       },
       "retainedFixtureRefs": [],
       "destination": {
-        "change": "document-engine",
+        "change": "typed-ooxml-paragraph-editor",
         "area": "editor-binding/adapter-ui-conformance"
       }
     },
@@ -337,11 +337,11 @@
       },
       "intent": {
         "kind": "observable",
-        "summary": "Visible command, annotation, agent, and adapter interaction behavior that is currently coupled to legacy toolbar, DOM, debug hooks, or mount wiring."
+        "summary": "Visible command, annotation, agent, and adapter interaction behavior that is currently coupled to retired toolbar, DOM, debug hooks, or mount wiring."
       },
       "retainedFixtureRefs": [],
       "destination": {
-        "change": "document-engine",
+        "change": "typed-ooxml-paragraph-editor",
         "area": "editor-binding/adapter-ui-conformance"
       }
     },
@@ -354,11 +354,11 @@
       },
       "intent": {
         "kind": "observable",
-        "summary": "Visible command, annotation, agent, and adapter interaction behavior that is currently coupled to legacy toolbar, DOM, debug hooks, or mount wiring."
+        "summary": "Visible command, annotation, agent, and adapter interaction behavior that is currently coupled to retired toolbar, DOM, debug hooks, or mount wiring."
       },
       "retainedFixtureRefs": [],
       "destination": {
-        "change": "document-engine",
+        "change": "typed-ooxml-paragraph-editor",
         "area": "editor-binding/adapter-ui-conformance"
       }
     },
@@ -371,11 +371,11 @@
       },
       "intent": {
         "kind": "observable",
-        "summary": "Visible command, annotation, agent, and adapter interaction behavior that is currently coupled to legacy toolbar, DOM, debug hooks, or mount wiring."
+        "summary": "Visible command, annotation, agent, and adapter interaction behavior that is currently coupled to retired toolbar, DOM, debug hooks, or mount wiring."
       },
       "retainedFixtureRefs": [],
       "destination": {
-        "change": "document-engine",
+        "change": "typed-ooxml-paragraph-editor",
         "area": "editor-binding/adapter-ui-conformance"
       }
     },
@@ -388,11 +388,11 @@
       },
       "intent": {
         "kind": "observable",
-        "summary": "Visible command, annotation, agent, and adapter interaction behavior that is currently coupled to legacy toolbar, DOM, debug hooks, or mount wiring."
+        "summary": "Visible command, annotation, agent, and adapter interaction behavior that is currently coupled to retired toolbar, DOM, debug hooks, or mount wiring."
       },
       "retainedFixtureRefs": [],
       "destination": {
-        "change": "document-engine",
+        "change": "typed-ooxml-paragraph-editor",
         "area": "editor-binding/adapter-ui-conformance"
       }
     },
@@ -405,11 +405,11 @@
       },
       "intent": {
         "kind": "observable",
-        "summary": "Visible command, annotation, agent, and adapter interaction behavior that is currently coupled to legacy toolbar, DOM, debug hooks, or mount wiring."
+        "summary": "Visible command, annotation, agent, and adapter interaction behavior that is currently coupled to retired toolbar, DOM, debug hooks, or mount wiring."
       },
       "retainedFixtureRefs": [],
       "destination": {
-        "change": "document-engine",
+        "change": "typed-ooxml-paragraph-editor",
         "area": "editor-binding/adapter-ui-conformance"
       }
     },
@@ -422,11 +422,11 @@
       },
       "intent": {
         "kind": "observable",
-        "summary": "Visible command, annotation, agent, and adapter interaction behavior that is currently coupled to legacy toolbar, DOM, debug hooks, or mount wiring."
+        "summary": "Visible command, annotation, agent, and adapter interaction behavior that is currently coupled to retired toolbar, DOM, debug hooks, or mount wiring."
       },
       "retainedFixtureRefs": [],
       "destination": {
-        "change": "document-engine",
+        "change": "typed-ooxml-paragraph-editor",
         "area": "editor-binding/adapter-ui-conformance"
       }
     },
@@ -439,11 +439,11 @@
       },
       "intent": {
         "kind": "observable",
-        "summary": "Visible command, annotation, agent, and adapter interaction behavior that is currently coupled to legacy toolbar, DOM, debug hooks, or mount wiring."
+        "summary": "Visible command, annotation, agent, and adapter interaction behavior that is currently coupled to retired toolbar, DOM, debug hooks, or mount wiring."
       },
       "retainedFixtureRefs": [],
       "destination": {
-        "change": "document-engine",
+        "change": "typed-ooxml-paragraph-editor",
         "area": "editor-binding/adapter-ui-conformance"
       }
     },
@@ -456,13 +456,13 @@
       },
       "intent": {
         "kind": "observable",
-        "summary": "Visible command, annotation, agent, and adapter interaction behavior that is currently coupled to legacy toolbar, DOM, debug hooks, or mount wiring."
+        "summary": "Visible command, annotation, agent, and adapter interaction behavior that is currently coupled to retired toolbar, DOM, debug hooks, or mount wiring."
       },
       "retainedFixtureRefs": [
         "e2e/fixtures/block-sdt-comprehensive.docx"
       ],
       "destination": {
-        "change": "document-engine",
+        "change": "typed-ooxml-paragraph-editor",
         "area": "editor-binding/adapter-ui-conformance"
       }
     },
@@ -475,14 +475,14 @@
       },
       "intent": {
         "kind": "observable",
-        "summary": "Visible command, annotation, agent, and adapter interaction behavior that is currently coupled to legacy toolbar, DOM, debug hooks, or mount wiring."
+        "summary": "Visible command, annotation, agent, and adapter interaction behavior that is currently coupled to retired toolbar, DOM, debug hooks, or mount wiring."
       },
       "retainedFixtureRefs": [
         "e2e/fixtures/block-sdt-widgets.docx",
         "e2e/fixtures/inline-checkbox-controls.docx"
       ],
       "destination": {
-        "change": "document-engine",
+        "change": "typed-ooxml-paragraph-editor",
         "area": "editor-binding/adapter-ui-conformance"
       }
     },
@@ -495,13 +495,13 @@
       },
       "intent": {
         "kind": "observable",
-        "summary": "Visible command, annotation, agent, and adapter interaction behavior that is currently coupled to legacy toolbar, DOM, debug hooks, or mount wiring."
+        "summary": "Visible command, annotation, agent, and adapter interaction behavior that is currently coupled to retired toolbar, DOM, debug hooks, or mount wiring."
       },
       "retainedFixtureRefs": [
         "e2e/fixtures/block-sdt-repeating.docx"
       ],
       "destination": {
-        "change": "document-engine",
+        "change": "typed-ooxml-paragraph-editor",
         "area": "editor-binding/adapter-ui-conformance"
       }
     },
@@ -514,13 +514,13 @@
       },
       "intent": {
         "kind": "observable",
-        "summary": "Visible command, annotation, agent, and adapter interaction behavior that is currently coupled to legacy toolbar, DOM, debug hooks, or mount wiring."
+        "summary": "Visible command, annotation, agent, and adapter interaction behavior that is currently coupled to retired toolbar, DOM, debug hooks, or mount wiring."
       },
       "retainedFixtureRefs": [
         "e2e/fixtures/demo/demo.docx"
       ],
       "destination": {
-        "change": "document-engine",
+        "change": "typed-ooxml-paragraph-editor",
         "area": "editor-binding/adapter-ui-conformance"
       }
     },
@@ -533,11 +533,11 @@
       },
       "intent": {
         "kind": "observable",
-        "summary": "Visible command, annotation, agent, and adapter interaction behavior that is currently coupled to legacy toolbar, DOM, debug hooks, or mount wiring."
+        "summary": "Visible command, annotation, agent, and adapter interaction behavior that is currently coupled to retired toolbar, DOM, debug hooks, or mount wiring."
       },
       "retainedFixtureRefs": [],
       "destination": {
-        "change": "document-engine",
+        "change": "typed-ooxml-paragraph-editor",
         "area": "editor-binding/adapter-ui-conformance"
       }
     },
@@ -550,11 +550,11 @@
       },
       "intent": {
         "kind": "observable",
-        "summary": "Visible command, annotation, agent, and adapter interaction behavior that is currently coupled to legacy toolbar, DOM, debug hooks, or mount wiring."
+        "summary": "Visible command, annotation, agent, and adapter interaction behavior that is currently coupled to retired toolbar, DOM, debug hooks, or mount wiring."
       },
       "retainedFixtureRefs": [],
       "destination": {
-        "change": "document-engine",
+        "change": "typed-ooxml-paragraph-editor",
         "area": "editor-binding/adapter-ui-conformance"
       }
     },
@@ -567,11 +567,11 @@
       },
       "intent": {
         "kind": "observable",
-        "summary": "Visible command, annotation, agent, and adapter interaction behavior that is currently coupled to legacy toolbar, DOM, debug hooks, or mount wiring."
+        "summary": "Visible command, annotation, agent, and adapter interaction behavior that is currently coupled to retired toolbar, DOM, debug hooks, or mount wiring."
       },
       "retainedFixtureRefs": [],
       "destination": {
-        "change": "document-engine",
+        "change": "typed-ooxml-paragraph-editor",
         "area": "editor-binding/adapter-ui-conformance"
       }
     },
@@ -584,11 +584,11 @@
       },
       "intent": {
         "kind": "observable",
-        "summary": "Visible command, annotation, agent, and adapter interaction behavior that is currently coupled to legacy toolbar, DOM, debug hooks, or mount wiring."
+        "summary": "Visible command, annotation, agent, and adapter interaction behavior that is currently coupled to retired toolbar, DOM, debug hooks, or mount wiring."
       },
       "retainedFixtureRefs": [],
       "destination": {
-        "change": "document-engine",
+        "change": "typed-ooxml-paragraph-editor",
         "area": "editor-binding/adapter-ui-conformance"
       }
     },
@@ -601,11 +601,11 @@
       },
       "intent": {
         "kind": "observable",
-        "summary": "Visible command, annotation, agent, and adapter interaction behavior that is currently coupled to legacy toolbar, DOM, debug hooks, or mount wiring."
+        "summary": "Visible command, annotation, agent, and adapter interaction behavior that is currently coupled to retired toolbar, DOM, debug hooks, or mount wiring."
       },
       "retainedFixtureRefs": [],
       "destination": {
-        "change": "document-engine",
+        "change": "typed-ooxml-paragraph-editor",
         "area": "editor-binding/adapter-ui-conformance"
       }
     },
@@ -618,11 +618,11 @@
       },
       "intent": {
         "kind": "observable",
-        "summary": "Visible command, annotation, agent, and adapter interaction behavior that is currently coupled to legacy toolbar, DOM, debug hooks, or mount wiring."
+        "summary": "Visible command, annotation, agent, and adapter interaction behavior that is currently coupled to retired toolbar, DOM, debug hooks, or mount wiring."
       },
       "retainedFixtureRefs": [],
       "destination": {
-        "change": "document-engine",
+        "change": "typed-ooxml-paragraph-editor",
         "area": "editor-binding/adapter-ui-conformance"
       }
     },
@@ -635,13 +635,13 @@
       },
       "intent": {
         "kind": "observable",
-        "summary": "Visible command, annotation, agent, and adapter interaction behavior that is currently coupled to legacy toolbar, DOM, debug hooks, or mount wiring."
+        "summary": "Visible command, annotation, agent, and adapter interaction behavior that is currently coupled to retired toolbar, DOM, debug hooks, or mount wiring."
       },
       "retainedFixtureRefs": [
         "e2e/fixtures/demo/demo.docx"
       ],
       "destination": {
-        "change": "document-engine",
+        "change": "typed-ooxml-paragraph-editor",
         "area": "editor-binding/adapter-ui-conformance"
       }
     },
@@ -654,11 +654,11 @@
       },
       "intent": {
         "kind": "observable",
-        "summary": "Visible command, annotation, agent, and adapter interaction behavior that is currently coupled to legacy toolbar, DOM, debug hooks, or mount wiring."
+        "summary": "Visible command, annotation, agent, and adapter interaction behavior that is currently coupled to retired toolbar, DOM, debug hooks, or mount wiring."
       },
       "retainedFixtureRefs": [],
       "destination": {
-        "change": "document-engine",
+        "change": "typed-ooxml-paragraph-editor",
         "area": "editor-binding/adapter-ui-conformance"
       }
     },
@@ -671,13 +671,13 @@
       },
       "intent": {
         "kind": "observable",
-        "summary": "Visible command, annotation, agent, and adapter interaction behavior that is currently coupled to legacy toolbar, DOM, debug hooks, or mount wiring."
+        "summary": "Visible command, annotation, agent, and adapter interaction behavior that is currently coupled to retired toolbar, DOM, debug hooks, or mount wiring."
       },
       "retainedFixtureRefs": [
         "e2e/fixtures/toc-hyperlink-tabs.docx"
       ],
       "destination": {
-        "change": "document-engine",
+        "change": "typed-ooxml-paragraph-editor",
         "area": "editor-binding/adapter-ui-conformance"
       }
     },
@@ -690,11 +690,11 @@
       },
       "intent": {
         "kind": "observable",
-        "summary": "Visible command, annotation, agent, and adapter interaction behavior that is currently coupled to legacy toolbar, DOM, debug hooks, or mount wiring."
+        "summary": "Visible command, annotation, agent, and adapter interaction behavior that is currently coupled to retired toolbar, DOM, debug hooks, or mount wiring."
       },
       "retainedFixtureRefs": [],
       "destination": {
-        "change": "document-engine",
+        "change": "typed-ooxml-paragraph-editor",
         "area": "editor-binding/adapter-ui-conformance"
       }
     },
@@ -707,14 +707,14 @@
       },
       "intent": {
         "kind": "observable",
-        "summary": "Visible command, annotation, agent, and adapter interaction behavior that is currently coupled to legacy toolbar, DOM, debug hooks, or mount wiring."
+        "summary": "Visible command, annotation, agent, and adapter interaction behavior that is currently coupled to retired toolbar, DOM, debug hooks, or mount wiring."
       },
       "retainedFixtureRefs": [
         "e2e/fixtures/empty.docx",
         "e2e/fixtures/test-image.png"
       ],
       "destination": {
-        "change": "document-engine",
+        "change": "typed-ooxml-paragraph-editor",
         "area": "editor-binding/adapter-ui-conformance"
       }
     },
@@ -727,11 +727,11 @@
       },
       "intent": {
         "kind": "observable",
-        "summary": "Visible command, annotation, agent, and adapter interaction behavior that is currently coupled to legacy toolbar, DOM, debug hooks, or mount wiring."
+        "summary": "Visible command, annotation, agent, and adapter interaction behavior that is currently coupled to retired toolbar, DOM, debug hooks, or mount wiring."
       },
       "retainedFixtureRefs": [],
       "destination": {
-        "change": "document-engine",
+        "change": "typed-ooxml-paragraph-editor",
         "area": "editor-binding/adapter-ui-conformance"
       }
     },
@@ -744,11 +744,11 @@
       },
       "intent": {
         "kind": "observable",
-        "summary": "Visible command, annotation, agent, and adapter interaction behavior that is currently coupled to legacy toolbar, DOM, debug hooks, or mount wiring."
+        "summary": "Visible command, annotation, agent, and adapter interaction behavior that is currently coupled to retired toolbar, DOM, debug hooks, or mount wiring."
       },
       "retainedFixtureRefs": [],
       "destination": {
-        "change": "document-engine",
+        "change": "typed-ooxml-paragraph-editor",
         "area": "editor-binding/adapter-ui-conformance"
       }
     },
@@ -761,11 +761,11 @@
       },
       "intent": {
         "kind": "observable",
-        "summary": "Visible command, annotation, agent, and adapter interaction behavior that is currently coupled to legacy toolbar, DOM, debug hooks, or mount wiring."
+        "summary": "Visible command, annotation, agent, and adapter interaction behavior that is currently coupled to retired toolbar, DOM, debug hooks, or mount wiring."
       },
       "retainedFixtureRefs": [],
       "destination": {
-        "change": "document-engine",
+        "change": "typed-ooxml-paragraph-editor",
         "area": "editor-binding/adapter-ui-conformance"
       }
     },
@@ -778,11 +778,11 @@
       },
       "intent": {
         "kind": "observable",
-        "summary": "Visible command, annotation, agent, and adapter interaction behavior that is currently coupled to legacy toolbar, DOM, debug hooks, or mount wiring."
+        "summary": "Visible command, annotation, agent, and adapter interaction behavior that is currently coupled to retired toolbar, DOM, debug hooks, or mount wiring."
       },
       "retainedFixtureRefs": [],
       "destination": {
-        "change": "document-engine",
+        "change": "typed-ooxml-paragraph-editor",
         "area": "editor-binding/adapter-ui-conformance"
       }
     },
@@ -795,11 +795,11 @@
       },
       "intent": {
         "kind": "observable",
-        "summary": "Visible command, annotation, agent, and adapter interaction behavior that is currently coupled to legacy toolbar, DOM, debug hooks, or mount wiring."
+        "summary": "Visible command, annotation, agent, and adapter interaction behavior that is currently coupled to retired toolbar, DOM, debug hooks, or mount wiring."
       },
       "retainedFixtureRefs": [],
       "destination": {
-        "change": "document-engine",
+        "change": "typed-ooxml-paragraph-editor",
         "area": "editor-binding/adapter-ui-conformance"
       }
     },
@@ -812,11 +812,11 @@
       },
       "intent": {
         "kind": "observable",
-        "summary": "Visible command, annotation, agent, and adapter interaction behavior that is currently coupled to legacy toolbar, DOM, debug hooks, or mount wiring."
+        "summary": "Visible command, annotation, agent, and adapter interaction behavior that is currently coupled to retired toolbar, DOM, debug hooks, or mount wiring."
       },
       "retainedFixtureRefs": [],
       "destination": {
-        "change": "document-engine",
+        "change": "typed-ooxml-paragraph-editor",
         "area": "editor-binding/adapter-ui-conformance"
       }
     },
@@ -829,11 +829,11 @@
       },
       "intent": {
         "kind": "observable",
-        "summary": "Visible command, annotation, agent, and adapter interaction behavior that is currently coupled to legacy toolbar, DOM, debug hooks, or mount wiring."
+        "summary": "Visible command, annotation, agent, and adapter interaction behavior that is currently coupled to retired toolbar, DOM, debug hooks, or mount wiring."
       },
       "retainedFixtureRefs": [],
       "destination": {
-        "change": "document-engine",
+        "change": "typed-ooxml-paragraph-editor",
         "area": "editor-binding/adapter-ui-conformance"
       }
     },
@@ -846,11 +846,11 @@
       },
       "intent": {
         "kind": "observable",
-        "summary": "Visible command, annotation, agent, and adapter interaction behavior that is currently coupled to legacy toolbar, DOM, debug hooks, or mount wiring."
+        "summary": "Visible command, annotation, agent, and adapter interaction behavior that is currently coupled to retired toolbar, DOM, debug hooks, or mount wiring."
       },
       "retainedFixtureRefs": [],
       "destination": {
-        "change": "document-engine",
+        "change": "typed-ooxml-paragraph-editor",
         "area": "editor-binding/adapter-ui-conformance"
       }
     },
@@ -863,11 +863,11 @@
       },
       "intent": {
         "kind": "observable",
-        "summary": "Visible command, annotation, agent, and adapter interaction behavior that is currently coupled to legacy toolbar, DOM, debug hooks, or mount wiring."
+        "summary": "Visible command, annotation, agent, and adapter interaction behavior that is currently coupled to retired toolbar, DOM, debug hooks, or mount wiring."
       },
       "retainedFixtureRefs": [],
       "destination": {
-        "change": "document-engine",
+        "change": "typed-ooxml-paragraph-editor",
         "area": "editor-binding/adapter-ui-conformance"
       }
     },
@@ -880,11 +880,11 @@
       },
       "intent": {
         "kind": "observable",
-        "summary": "Visible command, annotation, agent, and adapter interaction behavior that is currently coupled to legacy toolbar, DOM, debug hooks, or mount wiring."
+        "summary": "Visible command, annotation, agent, and adapter interaction behavior that is currently coupled to retired toolbar, DOM, debug hooks, or mount wiring."
       },
       "retainedFixtureRefs": [],
       "destination": {
-        "change": "document-engine",
+        "change": "typed-ooxml-paragraph-editor",
         "area": "editor-binding/adapter-ui-conformance"
       }
     },
@@ -897,11 +897,11 @@
       },
       "intent": {
         "kind": "observable",
-        "summary": "Visible command, annotation, agent, and adapter interaction behavior that is currently coupled to legacy toolbar, DOM, debug hooks, or mount wiring."
+        "summary": "Visible command, annotation, agent, and adapter interaction behavior that is currently coupled to retired toolbar, DOM, debug hooks, or mount wiring."
       },
       "retainedFixtureRefs": [],
       "destination": {
-        "change": "document-engine",
+        "change": "typed-ooxml-paragraph-editor",
         "area": "editor-binding/adapter-ui-conformance"
       }
     },
@@ -914,11 +914,11 @@
       },
       "intent": {
         "kind": "observable",
-        "summary": "Visible command, annotation, agent, and adapter interaction behavior that is currently coupled to legacy toolbar, DOM, debug hooks, or mount wiring."
+        "summary": "Visible command, annotation, agent, and adapter interaction behavior that is currently coupled to retired toolbar, DOM, debug hooks, or mount wiring."
       },
       "retainedFixtureRefs": [],
       "destination": {
-        "change": "document-engine",
+        "change": "typed-ooxml-paragraph-editor",
         "area": "editor-binding/adapter-ui-conformance"
       }
     },
@@ -927,17 +927,17 @@
       "status": "behavior-tombstone",
       "coupling": {
         "category": "legacy-geometry",
-        "reason": "Pagination, scroll, caret metrics, table layout geometry, virtualization, and overlay rectangles depend on the legacy renderer."
+        "reason": "Pagination, scroll, caret metrics, table layout geometry, virtualization, and overlay rectangles depend on the retired renderer."
       },
       "intent": {
         "kind": "observable",
-        "summary": "Pagination, scrolling, caret, selection, table, image, and overlay geometry behavior tied to the legacy renderer."
+        "summary": "Pagination, scrolling, caret, selection, table, image, and overlay geometry behavior tied to the retired renderer."
       },
       "retainedFixtureRefs": [
         "e2e/fixtures/issue-68-large.docx"
       ],
       "destination": {
-        "change": "document-engine",
+        "change": "typed-ooxml-paragraph-editor",
         "area": "layout-output/geometry-conformance"
       }
     },
@@ -946,15 +946,15 @@
       "status": "behavior-tombstone",
       "coupling": {
         "category": "legacy-geometry",
-        "reason": "Pagination, scroll, caret metrics, table layout geometry, virtualization, and overlay rectangles depend on the legacy renderer."
+        "reason": "Pagination, scroll, caret metrics, table layout geometry, virtualization, and overlay rectangles depend on the retired renderer."
       },
       "intent": {
         "kind": "observable",
-        "summary": "Pagination, scrolling, caret, selection, table, image, and overlay geometry behavior tied to the legacy renderer."
+        "summary": "Pagination, scrolling, caret, selection, table, image, and overlay geometry behavior tied to the retired renderer."
       },
       "retainedFixtureRefs": [],
       "destination": {
-        "change": "document-engine",
+        "change": "typed-ooxml-paragraph-editor",
         "area": "layout-output/geometry-conformance"
       }
     },
@@ -963,15 +963,15 @@
       "status": "behavior-tombstone",
       "coupling": {
         "category": "legacy-geometry",
-        "reason": "Pagination, scroll, caret metrics, table layout geometry, virtualization, and overlay rectangles depend on the legacy renderer."
+        "reason": "Pagination, scroll, caret metrics, table layout geometry, virtualization, and overlay rectangles depend on the retired renderer."
       },
       "intent": {
         "kind": "observable",
-        "summary": "Pagination, scrolling, caret, selection, table, image, and overlay geometry behavior tied to the legacy renderer."
+        "summary": "Pagination, scrolling, caret, selection, table, image, and overlay geometry behavior tied to the retired renderer."
       },
       "retainedFixtureRefs": [],
       "destination": {
-        "change": "document-engine",
+        "change": "typed-ooxml-paragraph-editor",
         "area": "layout-output/geometry-conformance"
       }
     },
@@ -980,17 +980,17 @@
       "status": "behavior-tombstone",
       "coupling": {
         "category": "legacy-geometry",
-        "reason": "Pagination, scroll, caret metrics, table layout geometry, virtualization, and overlay rectangles depend on the legacy renderer."
+        "reason": "Pagination, scroll, caret metrics, table layout geometry, virtualization, and overlay rectangles depend on the retired renderer."
       },
       "intent": {
         "kind": "observable",
-        "summary": "Pagination, scrolling, caret, selection, table, image, and overlay geometry behavior tied to the legacy renderer."
+        "summary": "Pagination, scrolling, caret, selection, table, image, and overlay geometry behavior tied to the retired renderer."
       },
       "retainedFixtureRefs": [
         "e2e/fixtures/floating-table-full-width-paginates.docx"
       ],
       "destination": {
-        "change": "document-engine",
+        "change": "typed-ooxml-paragraph-editor",
         "area": "layout-output/geometry-conformance"
       }
     },
@@ -999,17 +999,17 @@
       "status": "behavior-tombstone",
       "coupling": {
         "category": "legacy-geometry",
-        "reason": "Pagination, scroll, caret metrics, table layout geometry, virtualization, and overlay rectangles depend on the legacy renderer."
+        "reason": "Pagination, scroll, caret metrics, table layout geometry, virtualization, and overlay rectangles depend on the retired renderer."
       },
       "intent": {
         "kind": "observable",
-        "summary": "Pagination, scrolling, caret, selection, table, image, and overlay geometry behavior tied to the legacy renderer."
+        "summary": "Pagination, scrolling, caret, selection, table, image, and overlay geometry behavior tied to the retired renderer."
       },
       "retainedFixtureRefs": [
         "e2e/fixtures/list-pagination-break.docx"
       ],
       "destination": {
-        "change": "document-engine",
+        "change": "typed-ooxml-paragraph-editor",
         "area": "layout-output/geometry-conformance"
       }
     },
@@ -1018,15 +1018,15 @@
       "status": "behavior-tombstone",
       "coupling": {
         "category": "legacy-geometry",
-        "reason": "Pagination, scroll, caret metrics, table layout geometry, virtualization, and overlay rectangles depend on the legacy renderer."
+        "reason": "Pagination, scroll, caret metrics, table layout geometry, virtualization, and overlay rectangles depend on the retired renderer."
       },
       "intent": {
         "kind": "observable",
-        "summary": "Pagination, scrolling, caret, selection, table, image, and overlay geometry behavior tied to the legacy renderer."
+        "summary": "Pagination, scrolling, caret, selection, table, image, and overlay geometry behavior tied to the retired renderer."
       },
       "retainedFixtureRefs": [],
       "destination": {
-        "change": "document-engine",
+        "change": "typed-ooxml-paragraph-editor",
         "area": "layout-output/geometry-conformance"
       }
     },
@@ -1035,15 +1035,15 @@
       "status": "behavior-tombstone",
       "coupling": {
         "category": "legacy-geometry",
-        "reason": "Pagination, scroll, caret metrics, table layout geometry, virtualization, and overlay rectangles depend on the legacy renderer."
+        "reason": "Pagination, scroll, caret metrics, table layout geometry, virtualization, and overlay rectangles depend on the retired renderer."
       },
       "intent": {
         "kind": "observable",
-        "summary": "Pagination, scrolling, caret, selection, table, image, and overlay geometry behavior tied to the legacy renderer."
+        "summary": "Pagination, scrolling, caret, selection, table, image, and overlay geometry behavior tied to the retired renderer."
       },
       "retainedFixtureRefs": [],
       "destination": {
-        "change": "document-engine",
+        "change": "typed-ooxml-paragraph-editor",
         "area": "layout-output/geometry-conformance"
       }
     },
@@ -1052,17 +1052,17 @@
       "status": "behavior-tombstone",
       "coupling": {
         "category": "legacy-geometry",
-        "reason": "Pagination, scroll, caret metrics, table layout geometry, virtualization, and overlay rectangles depend on the legacy renderer."
+        "reason": "Pagination, scroll, caret metrics, table layout geometry, virtualization, and overlay rectangles depend on the retired renderer."
       },
       "intent": {
         "kind": "observable",
-        "summary": "Pagination, scrolling, caret, selection, table, image, and overlay geometry behavior tied to the legacy renderer."
+        "summary": "Pagination, scrolling, caret, selection, table, image, and overlay geometry behavior tied to the retired renderer."
       },
       "retainedFixtureRefs": [
         "e2e/fixtures/border-overlay-layout-demo.docx"
       ],
       "destination": {
-        "change": "document-engine",
+        "change": "typed-ooxml-paragraph-editor",
         "area": "layout-output/geometry-conformance"
       }
     },
@@ -1071,17 +1071,17 @@
       "status": "behavior-tombstone",
       "coupling": {
         "category": "legacy-geometry",
-        "reason": "Pagination, scroll, caret metrics, table layout geometry, virtualization, and overlay rectangles depend on the legacy renderer."
+        "reason": "Pagination, scroll, caret metrics, table layout geometry, virtualization, and overlay rectangles depend on the retired renderer."
       },
       "intent": {
         "kind": "observable",
-        "summary": "Pagination, scrolling, caret, selection, table, image, and overlay geometry behavior tied to the legacy renderer."
+        "summary": "Pagination, scrolling, caret, selection, table, image, and overlay geometry behavior tied to the retired renderer."
       },
       "retainedFixtureRefs": [
         "e2e/fixtures/generic-render-regression.docx"
       ],
       "destination": {
-        "change": "document-engine",
+        "change": "typed-ooxml-paragraph-editor",
         "area": "layout-output/geometry-conformance"
       }
     },
@@ -1090,15 +1090,15 @@
       "status": "behavior-tombstone",
       "coupling": {
         "category": "legacy-geometry",
-        "reason": "Pagination, scroll, caret metrics, table layout geometry, virtualization, and overlay rectangles depend on the legacy renderer."
+        "reason": "Pagination, scroll, caret metrics, table layout geometry, virtualization, and overlay rectangles depend on the retired renderer."
       },
       "intent": {
         "kind": "observable",
-        "summary": "Pagination, scrolling, caret, selection, table, image, and overlay geometry behavior tied to the legacy renderer."
+        "summary": "Pagination, scrolling, caret, selection, table, image, and overlay geometry behavior tied to the retired renderer."
       },
       "retainedFixtureRefs": [],
       "destination": {
-        "change": "document-engine",
+        "change": "typed-ooxml-paragraph-editor",
         "area": "layout-output/geometry-conformance"
       }
     },
@@ -1107,17 +1107,17 @@
       "status": "behavior-tombstone",
       "coupling": {
         "category": "legacy-geometry",
-        "reason": "Pagination, scroll, caret metrics, table layout geometry, virtualization, and overlay rectangles depend on the legacy renderer."
+        "reason": "Pagination, scroll, caret metrics, table layout geometry, virtualization, and overlay rectangles depend on the retired renderer."
       },
       "intent": {
         "kind": "observable",
-        "summary": "Pagination, scrolling, caret, selection, table, image, and overlay geometry behavior tied to the legacy renderer."
+        "summary": "Pagination, scrolling, caret, selection, table, image, and overlay geometry behavior tied to the retired renderer."
       },
       "retainedFixtureRefs": [
         "e2e/fixtures/issue-319-sections.docx"
       ],
       "destination": {
-        "change": "document-engine",
+        "change": "typed-ooxml-paragraph-editor",
         "area": "layout-output/geometry-conformance"
       }
     },
@@ -1126,17 +1126,17 @@
       "status": "behavior-tombstone",
       "coupling": {
         "category": "legacy-geometry",
-        "reason": "Pagination, scroll, caret metrics, table layout geometry, virtualization, and overlay rectangles depend on the legacy renderer."
+        "reason": "Pagination, scroll, caret metrics, table layout geometry, virtualization, and overlay rectangles depend on the retired renderer."
       },
       "intent": {
         "kind": "observable",
-        "summary": "Pagination, scrolling, caret, selection, table, image, and overlay geometry behavior tied to the legacy renderer."
+        "summary": "Pagination, scrolling, caret, selection, table, image, and overlay geometry behavior tied to the retired renderer."
       },
       "retainedFixtureRefs": [
         "e2e/fixtures/docx-editor-numbering.docx"
       ],
       "destination": {
-        "change": "document-engine",
+        "change": "typed-ooxml-paragraph-editor",
         "area": "layout-output/geometry-conformance"
       }
     },
@@ -1145,17 +1145,17 @@
       "status": "behavior-tombstone",
       "coupling": {
         "category": "legacy-geometry",
-        "reason": "Pagination, scroll, caret metrics, table layout geometry, virtualization, and overlay rectangles depend on the legacy renderer."
+        "reason": "Pagination, scroll, caret metrics, table layout geometry, virtualization, and overlay rectangles depend on the retired renderer."
       },
       "intent": {
         "kind": "observable",
-        "summary": "Pagination, scrolling, caret, selection, table, image, and overlay geometry behavior tied to the legacy renderer."
+        "summary": "Pagination, scrolling, caret, selection, table, image, and overlay geometry behavior tied to the retired renderer."
       },
       "retainedFixtureRefs": [
         "e2e/fixtures/issue-472-floating-textbox.docx"
       ],
       "destination": {
-        "change": "document-engine",
+        "change": "typed-ooxml-paragraph-editor",
         "area": "layout-output/geometry-conformance"
       }
     },
@@ -1164,17 +1164,17 @@
       "status": "behavior-tombstone",
       "coupling": {
         "category": "legacy-geometry",
-        "reason": "Pagination, scroll, caret metrics, table layout geometry, virtualization, and overlay rectangles depend on the legacy renderer."
+        "reason": "Pagination, scroll, caret metrics, table layout geometry, virtualization, and overlay rectangles depend on the retired renderer."
       },
       "intent": {
         "kind": "observable",
-        "summary": "Pagination, scrolling, caret, selection, table, image, and overlay geometry behavior tied to the legacy renderer."
+        "summary": "Pagination, scrolling, caret, selection, table, image, and overlay geometry behavior tied to the retired renderer."
       },
       "retainedFixtureRefs": [
         "e2e/fixtures/issue-483-firstline-marker.docx"
       ],
       "destination": {
-        "change": "document-engine",
+        "change": "typed-ooxml-paragraph-editor",
         "area": "layout-output/geometry-conformance"
       }
     },
@@ -1183,17 +1183,17 @@
       "status": "behavior-tombstone",
       "coupling": {
         "category": "legacy-geometry",
-        "reason": "Pagination, scroll, caret metrics, table layout geometry, virtualization, and overlay rectangles depend on the legacy renderer."
+        "reason": "Pagination, scroll, caret metrics, table layout geometry, virtualization, and overlay rectangles depend on the retired renderer."
       },
       "intent": {
         "kind": "observable",
-        "summary": "Pagination, scrolling, caret, selection, table, image, and overlay geometry behavior tied to the legacy renderer."
+        "summary": "Pagination, scrolling, caret, selection, table, image, and overlay geometry behavior tied to the retired renderer."
       },
       "retainedFixtureRefs": [
         "e2e/fixtures/issue-705-anchored-header-letterhead.docx"
       ],
       "destination": {
-        "change": "document-engine",
+        "change": "typed-ooxml-paragraph-editor",
         "area": "layout-output/geometry-conformance"
       }
     },
@@ -1202,17 +1202,17 @@
       "status": "behavior-tombstone",
       "coupling": {
         "category": "legacy-geometry",
-        "reason": "Pagination, scroll, caret metrics, table layout geometry, virtualization, and overlay rectangles depend on the legacy renderer."
+        "reason": "Pagination, scroll, caret metrics, table layout geometry, virtualization, and overlay rectangles depend on the retired renderer."
       },
       "intent": {
         "kind": "observable",
-        "summary": "Pagination, scrolling, caret, selection, table, image, and overlay geometry behavior tied to the legacy renderer."
+        "summary": "Pagination, scrolling, caret, selection, table, image, and overlay geometry behavior tied to the retired renderer."
       },
       "retainedFixtureRefs": [
         "e2e/fixtures/rtl-table-bidivisual.docx"
       ],
       "destination": {
-        "change": "document-engine",
+        "change": "typed-ooxml-paragraph-editor",
         "area": "layout-output/geometry-conformance"
       }
     },
@@ -1221,15 +1221,15 @@
       "status": "behavior-tombstone",
       "coupling": {
         "category": "legacy-geometry",
-        "reason": "Pagination, scroll, caret metrics, table layout geometry, virtualization, and overlay rectangles depend on the legacy renderer."
+        "reason": "Pagination, scroll, caret metrics, table layout geometry, virtualization, and overlay rectangles depend on the retired renderer."
       },
       "intent": {
         "kind": "observable",
-        "summary": "Pagination, scrolling, caret, selection, table, image, and overlay geometry behavior tied to the legacy renderer."
+        "summary": "Pagination, scrolling, caret, selection, table, image, and overlay geometry behavior tied to the retired renderer."
       },
       "retainedFixtureRefs": [],
       "destination": {
-        "change": "document-engine",
+        "change": "typed-ooxml-paragraph-editor",
         "area": "layout-output/geometry-conformance"
       }
     },
@@ -1238,15 +1238,15 @@
       "status": "behavior-tombstone",
       "coupling": {
         "category": "legacy-geometry",
-        "reason": "Pagination, scroll, caret metrics, table layout geometry, virtualization, and overlay rectangles depend on the legacy renderer."
+        "reason": "Pagination, scroll, caret metrics, table layout geometry, virtualization, and overlay rectangles depend on the retired renderer."
       },
       "intent": {
         "kind": "observable",
-        "summary": "Pagination, scrolling, caret, selection, table, image, and overlay geometry behavior tied to the legacy renderer."
+        "summary": "Pagination, scrolling, caret, selection, table, image, and overlay geometry behavior tied to the retired renderer."
       },
       "retainedFixtureRefs": [],
       "destination": {
-        "change": "document-engine",
+        "change": "typed-ooxml-paragraph-editor",
         "area": "layout-output/geometry-conformance"
       }
     },
@@ -1255,15 +1255,15 @@
       "status": "behavior-tombstone",
       "coupling": {
         "category": "legacy-geometry",
-        "reason": "Pagination, scroll, caret metrics, table layout geometry, virtualization, and overlay rectangles depend on the legacy renderer."
+        "reason": "Pagination, scroll, caret metrics, table layout geometry, virtualization, and overlay rectangles depend on the retired renderer."
       },
       "intent": {
         "kind": "observable",
-        "summary": "Pagination, scrolling, caret, selection, table, image, and overlay geometry behavior tied to the legacy renderer."
+        "summary": "Pagination, scrolling, caret, selection, table, image, and overlay geometry behavior tied to the retired renderer."
       },
       "retainedFixtureRefs": [],
       "destination": {
-        "change": "document-engine",
+        "change": "typed-ooxml-paragraph-editor",
         "area": "layout-output/geometry-conformance"
       }
     },
@@ -1272,15 +1272,15 @@
       "status": "behavior-tombstone",
       "coupling": {
         "category": "legacy-geometry",
-        "reason": "Pagination, scroll, caret metrics, table layout geometry, virtualization, and overlay rectangles depend on the legacy renderer."
+        "reason": "Pagination, scroll, caret metrics, table layout geometry, virtualization, and overlay rectangles depend on the retired renderer."
       },
       "intent": {
         "kind": "observable",
-        "summary": "Pagination, scrolling, caret, selection, table, image, and overlay geometry behavior tied to the legacy renderer."
+        "summary": "Pagination, scrolling, caret, selection, table, image, and overlay geometry behavior tied to the retired renderer."
       },
       "retainedFixtureRefs": [],
       "destination": {
-        "change": "document-engine",
+        "change": "typed-ooxml-paragraph-editor",
         "area": "layout-output/geometry-conformance"
       }
     },
@@ -1289,15 +1289,15 @@
       "status": "behavior-tombstone",
       "coupling": {
         "category": "legacy-geometry",
-        "reason": "Pagination, scroll, caret metrics, table layout geometry, virtualization, and overlay rectangles depend on the legacy renderer."
+        "reason": "Pagination, scroll, caret metrics, table layout geometry, virtualization, and overlay rectangles depend on the retired renderer."
       },
       "intent": {
         "kind": "observable",
-        "summary": "Pagination, scrolling, caret, selection, table, image, and overlay geometry behavior tied to the legacy renderer."
+        "summary": "Pagination, scrolling, caret, selection, table, image, and overlay geometry behavior tied to the retired renderer."
       },
       "retainedFixtureRefs": [],
       "destination": {
-        "change": "document-engine",
+        "change": "typed-ooxml-paragraph-editor",
         "area": "layout-output/geometry-conformance"
       }
     },
@@ -1306,11 +1306,11 @@
       "status": "behavior-tombstone",
       "coupling": {
         "category": "legacy-geometry",
-        "reason": "Pagination, scroll, caret metrics, table layout geometry, virtualization, and overlay rectangles depend on the legacy renderer."
+        "reason": "Pagination, scroll, caret metrics, table layout geometry, virtualization, and overlay rectangles depend on the retired renderer."
       },
       "intent": {
         "kind": "observable",
-        "summary": "Pagination, scrolling, caret, selection, table, image, and overlay geometry behavior tied to the legacy renderer."
+        "summary": "Pagination, scrolling, caret, selection, table, image, and overlay geometry behavior tied to the retired renderer."
       },
       "retainedFixtureRefs": [
         "e2e/fixtures/float-wrap-comprehensive-test.docx",
@@ -1318,7 +1318,7 @@
         "e2e/fixtures/stacked-floats-with-floating-table.docx"
       ],
       "destination": {
-        "change": "document-engine",
+        "change": "typed-ooxml-paragraph-editor",
         "area": "layout-output/geometry-conformance"
       }
     },
@@ -1327,15 +1327,15 @@
       "status": "behavior-tombstone",
       "coupling": {
         "category": "legacy-geometry",
-        "reason": "Pagination, scroll, caret metrics, table layout geometry, virtualization, and overlay rectangles depend on the legacy renderer."
+        "reason": "Pagination, scroll, caret metrics, table layout geometry, virtualization, and overlay rectangles depend on the retired renderer."
       },
       "intent": {
         "kind": "observable",
-        "summary": "Pagination, scrolling, caret, selection, table, image, and overlay geometry behavior tied to the legacy renderer."
+        "summary": "Pagination, scrolling, caret, selection, table, image, and overlay geometry behavior tied to the retired renderer."
       },
       "retainedFixtureRefs": [],
       "destination": {
-        "change": "document-engine",
+        "change": "typed-ooxml-paragraph-editor",
         "area": "layout-output/geometry-conformance"
       }
     },
@@ -1344,17 +1344,17 @@
       "status": "behavior-tombstone",
       "coupling": {
         "category": "legacy-geometry",
-        "reason": "Pagination, scroll, caret metrics, table layout geometry, virtualization, and overlay rectangles depend on the legacy renderer."
+        "reason": "Pagination, scroll, caret metrics, table layout geometry, virtualization, and overlay rectangles depend on the retired renderer."
       },
       "intent": {
         "kind": "observable",
-        "summary": "Pagination, scrolling, caret, selection, table, image, and overlay geometry behavior tied to the legacy renderer."
+        "summary": "Pagination, scrolling, caret, selection, table, image, and overlay geometry behavior tied to the retired renderer."
       },
       "retainedFixtureRefs": [
         "e2e/fixtures/table-cell-selection-drag.docx"
       ],
       "destination": {
-        "change": "document-engine",
+        "change": "typed-ooxml-paragraph-editor",
         "area": "layout-output/geometry-conformance"
       }
     },
@@ -1363,17 +1363,17 @@
       "status": "behavior-tombstone",
       "coupling": {
         "category": "legacy-geometry",
-        "reason": "Pagination, scroll, caret metrics, table layout geometry, virtualization, and overlay rectangles depend on the legacy renderer."
+        "reason": "Pagination, scroll, caret metrics, table layout geometry, virtualization, and overlay rectangles depend on the retired renderer."
       },
       "intent": {
         "kind": "observable",
-        "summary": "Pagination, scrolling, caret, selection, table, image, and overlay geometry behavior tied to the legacy renderer."
+        "summary": "Pagination, scrolling, caret, selection, table, image, and overlay geometry behavior tied to the retired renderer."
       },
       "retainedFixtureRefs": [
         "e2e/fixtures/with-tables.docx"
       ],
       "destination": {
-        "change": "document-engine",
+        "change": "typed-ooxml-paragraph-editor",
         "area": "layout-output/geometry-conformance"
       }
     },
@@ -1382,15 +1382,15 @@
       "status": "behavior-tombstone",
       "coupling": {
         "category": "legacy-geometry",
-        "reason": "Pagination, scroll, caret metrics, table layout geometry, virtualization, and overlay rectangles depend on the legacy renderer."
+        "reason": "Pagination, scroll, caret metrics, table layout geometry, virtualization, and overlay rectangles depend on the retired renderer."
       },
       "intent": {
         "kind": "observable",
-        "summary": "Pagination, scrolling, caret, selection, table, image, and overlay geometry behavior tied to the legacy renderer."
+        "summary": "Pagination, scrolling, caret, selection, table, image, and overlay geometry behavior tied to the retired renderer."
       },
       "retainedFixtureRefs": [],
       "destination": {
-        "change": "document-engine",
+        "change": "typed-ooxml-paragraph-editor",
         "area": "layout-output/geometry-conformance"
       }
     },
@@ -1399,15 +1399,15 @@
       "status": "behavior-tombstone",
       "coupling": {
         "category": "legacy-geometry",
-        "reason": "Pagination, scroll, caret metrics, table layout geometry, virtualization, and overlay rectangles depend on the legacy renderer."
+        "reason": "Pagination, scroll, caret metrics, table layout geometry, virtualization, and overlay rectangles depend on the retired renderer."
       },
       "intent": {
         "kind": "observable",
-        "summary": "Pagination, scrolling, caret, selection, table, image, and overlay geometry behavior tied to the legacy renderer."
+        "summary": "Pagination, scrolling, caret, selection, table, image, and overlay geometry behavior tied to the retired renderer."
       },
       "retainedFixtureRefs": [],
       "destination": {
-        "change": "document-engine",
+        "change": "typed-ooxml-paragraph-editor",
         "area": "layout-output/geometry-conformance"
       }
     },
@@ -1416,17 +1416,17 @@
       "status": "behavior-tombstone",
       "coupling": {
         "category": "legacy-geometry",
-        "reason": "Pagination, scroll, caret metrics, table layout geometry, virtualization, and overlay rectangles depend on the legacy renderer."
+        "reason": "Pagination, scroll, caret metrics, table layout geometry, virtualization, and overlay rectangles depend on the retired renderer."
       },
       "intent": {
         "kind": "observable",
-        "summary": "Pagination, scrolling, caret, selection, table, image, and overlay geometry behavior tied to the legacy renderer."
+        "summary": "Pagination, scrolling, caret, selection, table, image, and overlay geometry behavior tied to the retired renderer."
       },
       "retainedFixtureRefs": [
         "e2e/fixtures/empty-table-row-vmerge.docx"
       ],
       "destination": {
-        "change": "document-engine",
+        "change": "typed-ooxml-paragraph-editor",
         "area": "layout-output/geometry-conformance"
       }
     },
@@ -1435,15 +1435,15 @@
       "status": "behavior-tombstone",
       "coupling": {
         "category": "legacy-geometry",
-        "reason": "Pagination, scroll, caret metrics, table layout geometry, virtualization, and overlay rectangles depend on the legacy renderer."
+        "reason": "Pagination, scroll, caret metrics, table layout geometry, virtualization, and overlay rectangles depend on the retired renderer."
       },
       "intent": {
         "kind": "observable",
-        "summary": "Pagination, scrolling, caret, selection, table, image, and overlay geometry behavior tied to the legacy renderer."
+        "summary": "Pagination, scrolling, caret, selection, table, image, and overlay geometry behavior tied to the retired renderer."
       },
       "retainedFixtureRefs": [],
       "destination": {
-        "change": "document-engine",
+        "change": "typed-ooxml-paragraph-editor",
         "area": "layout-output/geometry-conformance"
       }
     },
@@ -1452,17 +1452,17 @@
       "status": "behavior-tombstone",
       "coupling": {
         "category": "legacy-geometry",
-        "reason": "Pagination, scroll, caret metrics, table layout geometry, virtualization, and overlay rectangles depend on the legacy renderer."
+        "reason": "Pagination, scroll, caret metrics, table layout geometry, virtualization, and overlay rectangles depend on the retired renderer."
       },
       "intent": {
         "kind": "observable",
-        "summary": "Pagination, scrolling, caret, selection, table, image, and overlay geometry behavior tied to the legacy renderer."
+        "summary": "Pagination, scrolling, caret, selection, table, image, and overlay geometry behavior tied to the retired renderer."
       },
       "retainedFixtureRefs": [
         "e2e/fixtures/image-layout-modes-demo.docx"
       ],
       "destination": {
-        "change": "document-engine",
+        "change": "typed-ooxml-paragraph-editor",
         "area": "layout-output/geometry-conformance"
       }
     },
@@ -1471,18 +1471,18 @@
       "status": "behavior-tombstone",
       "coupling": {
         "category": "legacy-geometry",
-        "reason": "Pagination, scroll, caret metrics, table layout geometry, virtualization, and overlay rectangles depend on the legacy renderer."
+        "reason": "Pagination, scroll, caret metrics, table layout geometry, virtualization, and overlay rectangles depend on the retired renderer."
       },
       "intent": {
         "kind": "observable",
-        "summary": "Pagination, scrolling, caret, selection, table, image, and overlay geometry behavior tied to the legacy renderer."
+        "summary": "Pagination, scrolling, caret, selection, table, image, and overlay geometry behavior tied to the retired renderer."
       },
       "retainedFixtureRefs": [
         "e2e/fixtures/empty.docx",
         "e2e/fixtures/test-image.png"
       ],
       "destination": {
-        "change": "document-engine",
+        "change": "typed-ooxml-paragraph-editor",
         "area": "layout-output/geometry-conformance"
       }
     },
@@ -1491,17 +1491,17 @@
       "status": "behavior-tombstone",
       "coupling": {
         "category": "legacy-geometry",
-        "reason": "Pagination, scroll, caret metrics, table layout geometry, virtualization, and overlay rectangles depend on the legacy renderer."
+        "reason": "Pagination, scroll, caret metrics, table layout geometry, virtualization, and overlay rectangles depend on the retired renderer."
       },
       "intent": {
         "kind": "observable",
-        "summary": "Pagination, scrolling, caret, selection, table, image, and overlay geometry behavior tied to the legacy renderer."
+        "summary": "Pagination, scrolling, caret, selection, table, image, and overlay geometry behavior tied to the retired renderer."
       },
       "retainedFixtureRefs": [
         "e2e/fixtures/image-layout-modes-demo.docx"
       ],
       "destination": {
-        "change": "document-engine",
+        "change": "typed-ooxml-paragraph-editor",
         "area": "layout-output/geometry-conformance"
       }
     },
@@ -1510,18 +1510,18 @@
       "status": "behavior-tombstone",
       "coupling": {
         "category": "legacy-geometry",
-        "reason": "Pagination, scroll, caret metrics, table layout geometry, virtualization, and overlay rectangles depend on the legacy renderer."
+        "reason": "Pagination, scroll, caret metrics, table layout geometry, virtualization, and overlay rectangles depend on the retired renderer."
       },
       "intent": {
         "kind": "observable",
-        "summary": "Pagination, scrolling, caret, selection, table, image, and overlay geometry behavior tied to the legacy renderer."
+        "summary": "Pagination, scrolling, caret, selection, table, image, and overlay geometry behavior tied to the retired renderer."
       },
       "retainedFixtureRefs": [
         "e2e/fixtures/example-with-image.docx",
         "e2e/fixtures/test-image.png"
       ],
       "destination": {
-        "change": "document-engine",
+        "change": "typed-ooxml-paragraph-editor",
         "area": "layout-output/geometry-conformance"
       }
     },
@@ -1530,17 +1530,17 @@
       "status": "behavior-tombstone",
       "coupling": {
         "category": "legacy-geometry",
-        "reason": "Pagination, scroll, caret metrics, table layout geometry, virtualization, and overlay rectangles depend on the legacy renderer."
+        "reason": "Pagination, scroll, caret metrics, table layout geometry, virtualization, and overlay rectangles depend on the retired renderer."
       },
       "intent": {
         "kind": "observable",
-        "summary": "Pagination, scrolling, caret, selection, table, image, and overlay geometry behavior tied to the legacy renderer."
+        "summary": "Pagination, scrolling, caret, selection, table, image, and overlay geometry behavior tied to the retired renderer."
       },
       "retainedFixtureRefs": [
         "e2e/fixtures/example-with-image.docx"
       ],
       "destination": {
-        "change": "document-engine",
+        "change": "typed-ooxml-paragraph-editor",
         "area": "layout-output/geometry-conformance"
       }
     },
@@ -1549,11 +1549,11 @@
       "status": "behavior-tombstone",
       "coupling": {
         "category": "legacy-geometry",
-        "reason": "Pagination, scroll, caret metrics, table layout geometry, virtualization, and overlay rectangles depend on the legacy renderer."
+        "reason": "Pagination, scroll, caret metrics, table layout geometry, virtualization, and overlay rectangles depend on the retired renderer."
       },
       "intent": {
         "kind": "observable",
-        "summary": "Pagination, scrolling, caret, selection, table, image, and overlay geometry behavior tied to the legacy renderer."
+        "summary": "Pagination, scrolling, caret, selection, table, image, and overlay geometry behavior tied to the retired renderer."
       },
       "retainedFixtureRefs": [
         "e2e/fixtures/demo.docx",
@@ -1569,7 +1569,7 @@
         "e2e/fixtures/wrap-none-positioned-image-demo.docx"
       ],
       "destination": {
-        "change": "document-engine",
+        "change": "typed-ooxml-paragraph-editor",
         "area": "layout-output/geometry-conformance"
       }
     },
@@ -1578,15 +1578,15 @@
       "status": "behavior-tombstone",
       "coupling": {
         "category": "legacy-geometry",
-        "reason": "Pagination, scroll, caret metrics, table layout geometry, virtualization, and overlay rectangles depend on the legacy renderer."
+        "reason": "Pagination, scroll, caret metrics, table layout geometry, virtualization, and overlay rectangles depend on the retired renderer."
       },
       "intent": {
         "kind": "observable",
-        "summary": "Pagination, scrolling, caret, selection, table, image, and overlay geometry behavior tied to the legacy renderer."
+        "summary": "Pagination, scrolling, caret, selection, table, image, and overlay geometry behavior tied to the retired renderer."
       },
       "retainedFixtureRefs": [],
       "destination": {
-        "change": "document-engine",
+        "change": "typed-ooxml-paragraph-editor",
         "area": "layout-output/geometry-conformance"
       }
     },
@@ -1595,18 +1595,18 @@
       "status": "behavior-tombstone",
       "coupling": {
         "category": "legacy-geometry",
-        "reason": "Pagination, scroll, caret metrics, table layout geometry, virtualization, and overlay rectangles depend on the legacy renderer."
+        "reason": "Pagination, scroll, caret metrics, table layout geometry, virtualization, and overlay rectangles depend on the retired renderer."
       },
       "intent": {
         "kind": "observable",
-        "summary": "Pagination, scrolling, caret, selection, table, image, and overlay geometry behavior tied to the legacy renderer."
+        "summary": "Pagination, scrolling, caret, selection, table, image, and overlay geometry behavior tied to the retired renderer."
       },
       "retainedFixtureRefs": [
         "e2e/fixtures/footnote-bottom-overflow.docx",
         "e2e/fixtures/footnote-overlap-regression.docx"
       ],
       "destination": {
-        "change": "document-engine",
+        "change": "typed-ooxml-paragraph-editor",
         "area": "layout-output/geometry-conformance"
       }
     },
@@ -1615,15 +1615,15 @@
       "status": "behavior-tombstone",
       "coupling": {
         "category": "legacy-geometry",
-        "reason": "Pagination, scroll, caret metrics, table layout geometry, virtualization, and overlay rectangles depend on the legacy renderer."
+        "reason": "Pagination, scroll, caret metrics, table layout geometry, virtualization, and overlay rectangles depend on the retired renderer."
       },
       "intent": {
         "kind": "observable",
-        "summary": "Pagination, scrolling, caret, selection, table, image, and overlay geometry behavior tied to the legacy renderer."
+        "summary": "Pagination, scrolling, caret, selection, table, image, and overlay geometry behavior tied to the retired renderer."
       },
       "retainedFixtureRefs": [],
       "destination": {
-        "change": "document-engine",
+        "change": "typed-ooxml-paragraph-editor",
         "area": "layout-output/geometry-conformance"
       }
     },
@@ -1632,17 +1632,17 @@
       "status": "behavior-tombstone",
       "coupling": {
         "category": "legacy-geometry",
-        "reason": "Pagination, scroll, caret metrics, table layout geometry, virtualization, and overlay rectangles depend on the legacy renderer."
+        "reason": "Pagination, scroll, caret metrics, table layout geometry, virtualization, and overlay rectangles depend on the retired renderer."
       },
       "intent": {
         "kind": "observable",
-        "summary": "Pagination, scrolling, caret, selection, table, image, and overlay geometry behavior tied to the legacy renderer."
+        "summary": "Pagination, scrolling, caret, selection, table, image, and overlay geometry behavior tied to the retired renderer."
       },
       "retainedFixtureRefs": [
         "e2e/fixtures/demo.docx"
       ],
       "destination": {
-        "change": "document-engine",
+        "change": "typed-ooxml-paragraph-editor",
         "area": "layout-output/geometry-conformance"
       }
     },
@@ -1651,15 +1651,15 @@
       "status": "behavior-tombstone",
       "coupling": {
         "category": "legacy-geometry",
-        "reason": "Pagination, scroll, caret metrics, table layout geometry, virtualization, and overlay rectangles depend on the legacy renderer."
+        "reason": "Pagination, scroll, caret metrics, table layout geometry, virtualization, and overlay rectangles depend on the retired renderer."
       },
       "intent": {
         "kind": "observable",
-        "summary": "Pagination, scrolling, caret, selection, table, image, and overlay geometry behavior tied to the legacy renderer."
+        "summary": "Pagination, scrolling, caret, selection, table, image, and overlay geometry behavior tied to the retired renderer."
       },
       "retainedFixtureRefs": [],
       "destination": {
-        "change": "document-engine",
+        "change": "typed-ooxml-paragraph-editor",
         "area": "layout-output/geometry-conformance"
       }
     },
@@ -1668,17 +1668,17 @@
       "status": "behavior-tombstone",
       "coupling": {
         "category": "legacy-geometry",
-        "reason": "Pagination, scroll, caret metrics, table layout geometry, virtualization, and overlay rectangles depend on the legacy renderer."
+        "reason": "Pagination, scroll, caret metrics, table layout geometry, virtualization, and overlay rectangles depend on the retired renderer."
       },
       "intent": {
         "kind": "observable",
-        "summary": "Pagination, scrolling, caret, selection, table, image, and overlay geometry behavior tied to the legacy renderer."
+        "summary": "Pagination, scrolling, caret, selection, table, image, and overlay geometry behavior tied to the retired renderer."
       },
       "retainedFixtureRefs": [
         "e2e/fixtures/empty.docx"
       ],
       "destination": {
-        "change": "document-engine",
+        "change": "typed-ooxml-paragraph-editor",
         "area": "layout-output/geometry-conformance"
       }
     },
@@ -1687,17 +1687,17 @@
       "status": "behavior-tombstone",
       "coupling": {
         "category": "legacy-geometry",
-        "reason": "Pagination, scroll, caret metrics, table layout geometry, virtualization, and overlay rectangles depend on the legacy renderer."
+        "reason": "Pagination, scroll, caret metrics, table layout geometry, virtualization, and overlay rectangles depend on the retired renderer."
       },
       "intent": {
         "kind": "observable",
-        "summary": "Pagination, scrolling, caret, selection, table, image, and overlay geometry behavior tied to the legacy renderer."
+        "summary": "Pagination, scrolling, caret, selection, table, image, and overlay geometry behavior tied to the retired renderer."
       },
       "retainedFixtureRefs": [
         "e2e/fixtures/wide-test-image.png"
       ],
       "destination": {
-        "change": "document-engine",
+        "change": "typed-ooxml-paragraph-editor",
         "area": "layout-output/geometry-conformance"
       }
     },
@@ -1706,17 +1706,17 @@
       "status": "behavior-tombstone",
       "coupling": {
         "category": "legacy-geometry",
-        "reason": "Pagination, scroll, caret metrics, table layout geometry, virtualization, and overlay rectangles depend on the legacy renderer."
+        "reason": "Pagination, scroll, caret metrics, table layout geometry, virtualization, and overlay rectangles depend on the retired renderer."
       },
       "intent": {
         "kind": "observable",
-        "summary": "Pagination, scrolling, caret, selection, table, image, and overlay geometry behavior tied to the legacy renderer."
+        "summary": "Pagination, scrolling, caret, selection, table, image, and overlay geometry behavior tied to the retired renderer."
       },
       "retainedFixtureRefs": [
         "e2e/fixtures/image-layout-modes-demo.docx"
       ],
       "destination": {
-        "change": "document-engine",
+        "change": "typed-ooxml-paragraph-editor",
         "area": "layout-output/geometry-conformance"
       }
     },
@@ -1725,18 +1725,18 @@
       "status": "behavior-tombstone",
       "coupling": {
         "category": "legacy-geometry",
-        "reason": "Pagination, scroll, caret metrics, table layout geometry, virtualization, and overlay rectangles depend on the legacy renderer."
+        "reason": "Pagination, scroll, caret metrics, table layout geometry, virtualization, and overlay rectangles depend on the retired renderer."
       },
       "intent": {
         "kind": "observable",
-        "summary": "Pagination, scrolling, caret, selection, table, image, and overlay geometry behavior tied to the legacy renderer."
+        "summary": "Pagination, scrolling, caret, selection, table, image, and overlay geometry behavior tied to the retired renderer."
       },
       "retainedFixtureRefs": [
         "e2e/fixtures/empty.docx",
         "e2e/fixtures/test-image.png"
       ],
       "destination": {
-        "change": "document-engine",
+        "change": "typed-ooxml-paragraph-editor",
         "area": "layout-output/geometry-conformance"
       }
     },
@@ -1745,17 +1745,17 @@
       "status": "behavior-tombstone",
       "coupling": {
         "category": "legacy-geometry",
-        "reason": "Pagination, scroll, caret metrics, table layout geometry, virtualization, and overlay rectangles depend on the legacy renderer."
+        "reason": "Pagination, scroll, caret metrics, table layout geometry, virtualization, and overlay rectangles depend on the retired renderer."
       },
       "intent": {
         "kind": "observable",
-        "summary": "Pagination, scrolling, caret, selection, table, image, and overlay geometry behavior tied to the legacy renderer."
+        "summary": "Pagination, scrolling, caret, selection, table, image, and overlay geometry behavior tied to the retired renderer."
       },
       "retainedFixtureRefs": [
         "e2e/fixtures/rtl-table-bidivisual.docx"
       ],
       "destination": {
-        "change": "document-engine",
+        "change": "typed-ooxml-paragraph-editor",
         "area": "layout-output/geometry-conformance"
       }
     },
@@ -1764,15 +1764,15 @@
       "status": "behavior-tombstone",
       "coupling": {
         "category": "legacy-geometry",
-        "reason": "Pagination, scroll, caret metrics, table layout geometry, virtualization, and overlay rectangles depend on the legacy renderer."
+        "reason": "Pagination, scroll, caret metrics, table layout geometry, virtualization, and overlay rectangles depend on the retired renderer."
       },
       "intent": {
         "kind": "observable",
-        "summary": "Pagination, scrolling, caret, selection, table, image, and overlay geometry behavior tied to the legacy renderer."
+        "summary": "Pagination, scrolling, caret, selection, table, image, and overlay geometry behavior tied to the retired renderer."
       },
       "retainedFixtureRefs": [],
       "destination": {
-        "change": "document-engine",
+        "change": "typed-ooxml-paragraph-editor",
         "area": "layout-output/geometry-conformance"
       }
     },
@@ -1781,15 +1781,15 @@
       "status": "behavior-tombstone",
       "coupling": {
         "category": "legacy-geometry",
-        "reason": "Pagination, scroll, caret metrics, table layout geometry, virtualization, and overlay rectangles depend on the legacy renderer."
+        "reason": "Pagination, scroll, caret metrics, table layout geometry, virtualization, and overlay rectangles depend on the retired renderer."
       },
       "intent": {
         "kind": "observable",
-        "summary": "Pagination, scrolling, caret, selection, table, image, and overlay geometry behavior tied to the legacy renderer."
+        "summary": "Pagination, scrolling, caret, selection, table, image, and overlay geometry behavior tied to the retired renderer."
       },
       "retainedFixtureRefs": [],
       "destination": {
-        "change": "document-engine",
+        "change": "typed-ooxml-paragraph-editor",
         "area": "layout-output/geometry-conformance"
       }
     },
@@ -1798,15 +1798,15 @@
       "status": "behavior-tombstone",
       "coupling": {
         "category": "legacy-geometry",
-        "reason": "Pagination, scroll, caret metrics, table layout geometry, virtualization, and overlay rectangles depend on the legacy renderer."
+        "reason": "Pagination, scroll, caret metrics, table layout geometry, virtualization, and overlay rectangles depend on the retired renderer."
       },
       "intent": {
         "kind": "observable",
-        "summary": "Pagination, scrolling, caret, selection, table, image, and overlay geometry behavior tied to the legacy renderer."
+        "summary": "Pagination, scrolling, caret, selection, table, image, and overlay geometry behavior tied to the retired renderer."
       },
       "retainedFixtureRefs": [],
       "destination": {
-        "change": "document-engine",
+        "change": "typed-ooxml-paragraph-editor",
         "area": "layout-output/geometry-conformance"
       }
     },
@@ -1815,15 +1815,15 @@
       "status": "behavior-tombstone",
       "coupling": {
         "category": "legacy-geometry",
-        "reason": "Pagination, scroll, caret metrics, table layout geometry, virtualization, and overlay rectangles depend on the legacy renderer."
+        "reason": "Pagination, scroll, caret metrics, table layout geometry, virtualization, and overlay rectangles depend on the retired renderer."
       },
       "intent": {
         "kind": "observable",
-        "summary": "Pagination, scrolling, caret, selection, table, image, and overlay geometry behavior tied to the legacy renderer."
+        "summary": "Pagination, scrolling, caret, selection, table, image, and overlay geometry behavior tied to the retired renderer."
       },
       "retainedFixtureRefs": [],
       "destination": {
-        "change": "document-engine",
+        "change": "typed-ooxml-paragraph-editor",
         "area": "layout-output/geometry-conformance"
       }
     },
@@ -1832,17 +1832,17 @@
       "status": "behavior-tombstone",
       "coupling": {
         "category": "legacy-geometry",
-        "reason": "Pagination, scroll, caret metrics, table layout geometry, virtualization, and overlay rectangles depend on the legacy renderer."
+        "reason": "Pagination, scroll, caret metrics, table layout geometry, virtualization, and overlay rectangles depend on the retired renderer."
       },
       "intent": {
         "kind": "observable",
-        "summary": "Pagination, scrolling, caret, selection, table, image, and overlay geometry behavior tied to the legacy renderer."
+        "summary": "Pagination, scrolling, caret, selection, table, image, and overlay geometry behavior tied to the retired renderer."
       },
       "retainedFixtureRefs": [
         "e2e/fixtures/image-layout-modes-demo.docx"
       ],
       "destination": {
-        "change": "document-engine",
+        "change": "typed-ooxml-paragraph-editor",
         "area": "layout-output/geometry-conformance"
       }
     },
@@ -1851,17 +1851,17 @@
       "status": "behavior-tombstone",
       "coupling": {
         "category": "legacy-geometry",
-        "reason": "Pagination, scroll, caret metrics, table layout geometry, virtualization, and overlay rectangles depend on the legacy renderer."
+        "reason": "Pagination, scroll, caret metrics, table layout geometry, virtualization, and overlay rectangles depend on the retired renderer."
       },
       "intent": {
         "kind": "observable",
-        "summary": "Pagination, scrolling, caret, selection, table, image, and overlay geometry behavior tied to the legacy renderer."
+        "summary": "Pagination, scrolling, caret, selection, table, image, and overlay geometry behavior tied to the retired renderer."
       },
       "retainedFixtureRefs": [
         "e2e/fixtures/with-tables.docx"
       ],
       "destination": {
-        "change": "document-engine",
+        "change": "typed-ooxml-paragraph-editor",
         "area": "layout-output/geometry-conformance"
       }
     },
@@ -1870,15 +1870,15 @@
       "status": "behavior-tombstone",
       "coupling": {
         "category": "legacy-geometry",
-        "reason": "Pagination, scroll, caret metrics, table layout geometry, virtualization, and overlay rectangles depend on the legacy renderer."
+        "reason": "Pagination, scroll, caret metrics, table layout geometry, virtualization, and overlay rectangles depend on the retired renderer."
       },
       "intent": {
         "kind": "observable",
-        "summary": "Pagination, scrolling, caret, selection, table, image, and overlay geometry behavior tied to the legacy renderer."
+        "summary": "Pagination, scrolling, caret, selection, table, image, and overlay geometry behavior tied to the retired renderer."
       },
       "retainedFixtureRefs": [],
       "destination": {
-        "change": "document-engine",
+        "change": "typed-ooxml-paragraph-editor",
         "area": "layout-output/geometry-conformance"
       }
     },
@@ -1887,15 +1887,15 @@
       "status": "behavior-tombstone",
       "coupling": {
         "category": "legacy-geometry",
-        "reason": "Pagination, scroll, caret metrics, table layout geometry, virtualization, and overlay rectangles depend on the legacy renderer."
+        "reason": "Pagination, scroll, caret metrics, table layout geometry, virtualization, and overlay rectangles depend on the retired renderer."
       },
       "intent": {
         "kind": "observable",
-        "summary": "Pagination, scrolling, caret, selection, table, image, and overlay geometry behavior tied to the legacy renderer."
+        "summary": "Pagination, scrolling, caret, selection, table, image, and overlay geometry behavior tied to the retired renderer."
       },
       "retainedFixtureRefs": [],
       "destination": {
-        "change": "document-engine",
+        "change": "typed-ooxml-paragraph-editor",
         "area": "layout-output/geometry-conformance"
       }
     },
@@ -1904,15 +1904,15 @@
       "status": "behavior-tombstone",
       "coupling": {
         "category": "legacy-geometry",
-        "reason": "Pagination, scroll, caret metrics, table layout geometry, virtualization, and overlay rectangles depend on the legacy renderer."
+        "reason": "Pagination, scroll, caret metrics, table layout geometry, virtualization, and overlay rectangles depend on the retired renderer."
       },
       "intent": {
         "kind": "observable",
-        "summary": "Pagination, scrolling, caret, selection, table, image, and overlay geometry behavior tied to the legacy renderer."
+        "summary": "Pagination, scrolling, caret, selection, table, image, and overlay geometry behavior tied to the retired renderer."
       },
       "retainedFixtureRefs": [],
       "destination": {
-        "change": "document-engine",
+        "change": "typed-ooxml-paragraph-editor",
         "area": "layout-output/geometry-conformance"
       }
     },
@@ -1921,17 +1921,17 @@
       "status": "behavior-tombstone",
       "coupling": {
         "category": "legacy-geometry",
-        "reason": "Pagination, scroll, caret metrics, table layout geometry, virtualization, and overlay rectangles depend on the legacy renderer."
+        "reason": "Pagination, scroll, caret metrics, table layout geometry, virtualization, and overlay rectangles depend on the retired renderer."
       },
       "intent": {
         "kind": "observable",
-        "summary": "Pagination, scrolling, caret, selection, table, image, and overlay geometry behavior tied to the legacy renderer."
+        "summary": "Pagination, scrolling, caret, selection, table, image, and overlay geometry behavior tied to the retired renderer."
       },
       "retainedFixtureRefs": [
         "e2e/fixtures/comprehensive-word-element-test.docx"
       ],
       "destination": {
-        "change": "document-engine",
+        "change": "typed-ooxml-paragraph-editor",
         "area": "layout-output/geometry-conformance"
       }
     },
@@ -1940,17 +1940,17 @@
       "status": "behavior-tombstone",
       "coupling": {
         "category": "legacy-geometry",
-        "reason": "Pagination, scroll, caret metrics, table layout geometry, virtualization, and overlay rectangles depend on the legacy renderer."
+        "reason": "Pagination, scroll, caret metrics, table layout geometry, virtualization, and overlay rectangles depend on the retired renderer."
       },
       "intent": {
         "kind": "observable",
-        "summary": "Pagination, scrolling, caret, selection, table, image, and overlay geometry behavior tied to the legacy renderer."
+        "summary": "Pagination, scrolling, caret, selection, table, image, and overlay geometry behavior tied to the retired renderer."
       },
       "retainedFixtureRefs": [
         "e2e/fixtures/comprehensive-word-element-test.docx"
       ],
       "destination": {
-        "change": "document-engine",
+        "change": "typed-ooxml-paragraph-editor",
         "area": "layout-output/geometry-conformance"
       }
     },
@@ -1967,7 +1967,7 @@
       },
       "retainedFixtureRefs": [],
       "destination": {
-        "change": "document-engine",
+        "change": "typed-ooxml-paragraph-editor",
         "area": "layout-output/rendering-conformance"
       }
     },
@@ -1986,7 +1986,7 @@
         "e2e/fixtures/demo/demo.docx"
       ],
       "destination": {
-        "change": "document-engine",
+        "change": "typed-ooxml-paragraph-editor",
         "area": "layout-output/rendering-conformance"
       }
     },
@@ -2008,7 +2008,7 @@
         "e2e/fixtures/titlePg-header-footer.docx"
       ],
       "destination": {
-        "change": "document-engine",
+        "change": "typed-ooxml-paragraph-editor",
         "area": "layout-output/rendering-conformance"
       }
     },
@@ -2027,7 +2027,7 @@
         "e2e/fixtures/watermark-confidential.docx"
       ],
       "destination": {
-        "change": "document-engine",
+        "change": "typed-ooxml-paragraph-editor",
         "area": "layout-output/rendering-conformance"
       }
     },
@@ -2044,7 +2044,7 @@
       },
       "retainedFixtureRefs": [],
       "destination": {
-        "change": "document-engine",
+        "change": "typed-ooxml-paragraph-editor",
         "area": "layout-output/rendering-conformance"
       }
     },
@@ -2063,7 +2063,7 @@
         "e2e/fixtures/issue-777-vml-header.docx"
       ],
       "destination": {
-        "change": "document-engine",
+        "change": "typed-ooxml-paragraph-editor",
         "area": "layout-output/rendering-conformance"
       }
     },
@@ -2082,7 +2082,7 @@
         "e2e/fixtures/issue-856-custom-header.docx"
       ],
       "destination": {
-        "change": "document-engine",
+        "change": "typed-ooxml-paragraph-editor",
         "area": "layout-output/rendering-conformance"
       }
     },
@@ -2101,7 +2101,7 @@
         "e2e/fixtures/issue-777-vml-header.docx"
       ],
       "destination": {
-        "change": "document-engine",
+        "change": "typed-ooxml-paragraph-editor",
         "area": "layout-output/rendering-conformance"
       }
     },
@@ -2120,7 +2120,7 @@
         "e2e/fixtures/issue-856-custom-header.docx"
       ],
       "destination": {
-        "change": "document-engine",
+        "change": "typed-ooxml-paragraph-editor",
         "area": "layout-output/rendering-conformance"
       }
     },
@@ -2139,7 +2139,7 @@
         "e2e/fixtures/alternatecontent-textbox.docx"
       ],
       "destination": {
-        "change": "document-engine",
+        "change": "typed-ooxml-paragraph-editor",
         "area": "layout-output/rendering-conformance"
       }
     },
@@ -2158,7 +2158,7 @@
         "e2e/fixtures/header-vml-emf.docx"
       ],
       "destination": {
-        "change": "document-engine",
+        "change": "typed-ooxml-paragraph-editor",
         "area": "layout-output/rendering-conformance"
       }
     },
@@ -2177,7 +2177,7 @@
         "e2e/fixtures/header-with-table-and-paragraphs.docx"
       ],
       "destination": {
-        "change": "document-engine",
+        "change": "typed-ooxml-paragraph-editor",
         "area": "layout-output/rendering-conformance"
       }
     },
@@ -2196,7 +2196,7 @@
         "e2e/fixtures/embedded-font.docx"
       ],
       "destination": {
-        "change": "document-engine",
+        "change": "typed-ooxml-paragraph-editor",
         "area": "layout-output/rendering-conformance"
       }
     },
@@ -2215,7 +2215,7 @@
         "e2e/fixtures/embedded-font.docx"
       ],
       "destination": {
-        "change": "document-engine",
+        "change": "typed-ooxml-paragraph-editor",
         "area": "layout-output/rendering-conformance"
       }
     },
@@ -2232,7 +2232,7 @@
       },
       "retainedFixtureRefs": [],
       "destination": {
-        "change": "document-engine",
+        "change": "typed-ooxml-paragraph-editor",
         "area": "layout-output/rendering-conformance"
       }
     },
@@ -2249,7 +2249,7 @@
       },
       "retainedFixtureRefs": [],
       "destination": {
-        "change": "document-engine",
+        "change": "typed-ooxml-paragraph-editor",
         "area": "layout-output/rendering-conformance"
       }
     },
@@ -2268,7 +2268,7 @@
         "e2e/fixtures/header-with-table.docx"
       ],
       "destination": {
-        "change": "document-engine",
+        "change": "typed-ooxml-paragraph-editor",
         "area": "layout-output/header-footer-conformance"
       }
     },
@@ -2287,7 +2287,7 @@
         "e2e/fixtures/header-with-table.docx"
       ],
       "destination": {
-        "change": "document-engine",
+        "change": "typed-ooxml-paragraph-editor",
         "area": "layout-output/header-footer-conformance"
       }
     },
@@ -2306,7 +2306,7 @@
         "e2e/fixtures/header-with-table.docx"
       ],
       "destination": {
-        "change": "document-engine",
+        "change": "typed-ooxml-paragraph-editor",
         "area": "layout-output/header-footer-conformance"
       }
     },
@@ -2325,7 +2325,7 @@
         "e2e/fixtures/section-inheritance-header-footer.docx"
       ],
       "destination": {
-        "change": "document-engine",
+        "change": "typed-ooxml-paragraph-editor",
         "area": "layout-output/header-footer-conformance"
       }
     },
@@ -2344,7 +2344,7 @@
         "e2e/fixtures/header-with-table.docx"
       ],
       "destination": {
-        "change": "document-engine",
+        "change": "typed-ooxml-paragraph-editor",
         "area": "layout-output/header-footer-conformance"
       }
     },
@@ -2363,7 +2363,7 @@
         "e2e/fixtures/header-with-table.docx"
       ],
       "destination": {
-        "change": "document-engine",
+        "change": "typed-ooxml-paragraph-editor",
         "area": "layout-output/header-footer-conformance"
       }
     },
@@ -2382,7 +2382,7 @@
         "e2e/fixtures/template-with-hf-rule.docx"
       ],
       "destination": {
-        "change": "document-engine",
+        "change": "typed-ooxml-paragraph-editor",
         "area": "layout-output/header-footer-conformance"
       }
     },
@@ -2401,7 +2401,7 @@
         "e2e/fixtures/header-with-table.docx"
       ],
       "destination": {
-        "change": "document-engine",
+        "change": "typed-ooxml-paragraph-editor",
         "area": "layout-output/header-footer-conformance"
       }
     },
@@ -2420,7 +2420,7 @@
         "e2e/fixtures/generic-header-footer-horizontal-regression.docx"
       ],
       "destination": {
-        "change": "document-engine",
+        "change": "typed-ooxml-paragraph-editor",
         "area": "layout-output/header-footer-conformance"
       }
     },
@@ -2439,7 +2439,7 @@
         "e2e/fixtures/header-with-table.docx"
       ],
       "destination": {
-        "change": "document-engine",
+        "change": "typed-ooxml-paragraph-editor",
         "area": "layout-output/header-footer-conformance"
       }
     },
@@ -2458,7 +2458,7 @@
         "e2e/fixtures/header-footer-textbox.docx"
       ],
       "destination": {
-        "change": "document-engine",
+        "change": "typed-ooxml-paragraph-editor",
         "area": "layout-output/header-footer-conformance"
       }
     },
@@ -2478,7 +2478,7 @@
         "e2e/fixtures/header-right-tab.docx"
       ],
       "destination": {
-        "change": "document-engine",
+        "change": "typed-ooxml-paragraph-editor",
         "area": "layout-output/header-footer-conformance"
       }
     },
@@ -2497,7 +2497,7 @@
         "e2e/fixtures/header-with-table.docx"
       ],
       "destination": {
-        "change": "document-engine",
+        "change": "typed-ooxml-paragraph-editor",
         "area": "layout-output/header-footer-conformance"
       }
     },
@@ -2516,7 +2516,7 @@
         "e2e/fixtures/footer-page-number.docx"
       ],
       "destination": {
-        "change": "document-engine",
+        "change": "typed-ooxml-paragraph-editor",
         "area": "layout-output/header-footer-conformance"
       }
     },
@@ -2536,7 +2536,7 @@
         "e2e/fixtures/footnote-overlap-regression.docx"
       ],
       "destination": {
-        "change": "document-engine",
+        "change": "typed-ooxml-paragraph-editor",
         "area": "layout-output/header-footer-conformance"
       }
     },
@@ -2553,7 +2553,7 @@
       },
       "retainedFixtureRefs": [],
       "destination": {
-        "change": "document-engine",
+        "change": "typed-ooxml-paragraph-editor",
         "area": "layout-output/header-footer-conformance"
       }
     },
@@ -2572,7 +2572,7 @@
         "e2e/fixtures/section-inheritance-header-footer.docx"
       ],
       "destination": {
-        "change": "document-engine",
+        "change": "typed-ooxml-paragraph-editor",
         "area": "layout-output/header-footer-conformance"
       }
     },
@@ -2591,7 +2591,7 @@
         "e2e/fixtures/sdt-header-content.docx"
       ],
       "destination": {
-        "change": "document-engine",
+        "change": "typed-ooxml-paragraph-editor",
         "area": "layout-output/header-footer-conformance"
       }
     },
@@ -2610,7 +2610,7 @@
         "e2e/fixtures/titlePg-header-footer.docx"
       ],
       "destination": {
-        "change": "document-engine",
+        "change": "typed-ooxml-paragraph-editor",
         "area": "layout-output/header-footer-conformance"
       }
     },
@@ -2629,7 +2629,7 @@
         "e2e/fixtures/issue-740-header-zero-distance.docx"
       ],
       "destination": {
-        "change": "document-engine",
+        "change": "typed-ooxml-paragraph-editor",
         "area": "layout-output/header-footer-conformance"
       }
     },
@@ -2648,7 +2648,7 @@
         "e2e/fixtures/header-with-table.docx"
       ],
       "destination": {
-        "change": "document-engine",
+        "change": "typed-ooxml-paragraph-editor",
         "area": "layout-output/header-footer-conformance"
       }
     },
@@ -2667,7 +2667,7 @@
         "e2e/fixtures/header-with-table.docx"
       ],
       "destination": {
-        "change": "document-engine",
+        "change": "typed-ooxml-paragraph-editor",
         "area": "layout-output/header-footer-conformance"
       }
     },
@@ -2686,7 +2686,7 @@
         "e2e/fixtures/header-with-table.docx"
       ],
       "destination": {
-        "change": "document-engine",
+        "change": "typed-ooxml-paragraph-editor",
         "area": "layout-output/header-footer-conformance"
       }
     },
@@ -2705,7 +2705,7 @@
         "e2e/fixtures/header-with-table.docx"
       ],
       "destination": {
-        "change": "document-engine",
+        "change": "typed-ooxml-paragraph-editor",
         "area": "layout-output/header-footer-conformance"
       }
     },
@@ -2724,7 +2724,7 @@
         "e2e/fixtures/issue-68-large.docx"
       ],
       "destination": {
-        "change": "document-engine",
+        "change": "typed-ooxml-paragraph-editor",
         "area": "performance/performance-conformance"
       }
     },
@@ -2743,7 +2743,7 @@
         "e2e/fixtures/issue-68-large-comments-suggestions.docx"
       ],
       "destination": {
-        "change": "document-engine",
+        "change": "typed-ooxml-paragraph-editor",
         "area": "performance/performance-conformance"
       }
     },
@@ -2760,7 +2760,7 @@
       },
       "retainedFixtureRefs": [],
       "destination": {
-        "change": "document-engine",
+        "change": "typed-ooxml-paragraph-editor",
         "area": "editor-binding/adapter-ui-conformance"
       }
     },
@@ -2777,7 +2777,7 @@
       },
       "retainedFixtureRefs": [],
       "destination": {
-        "change": "document-engine",
+        "change": "typed-ooxml-paragraph-editor",
         "area": "layout-output/rendering-conformance"
       }
     }

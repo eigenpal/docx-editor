@@ -11,7 +11,9 @@ This repo is **contracts + adapters**, not the engine implementation.
 - `packages/core` is `@docx-editor.dev/core-contract`: declarations only,
   `"private": true`, never published. Six entries (`.`, `./editor`,
   `./geometry`, `./plugin`, `./mcp`, `./types`). See
-  `openspec/changes/document-engine/`.
+  `openspec/changes/document-engine/`. Its nested `spike/` directory temporarily
+  holds disposable POC evidence and is excluded from exports and the core
+  TypeScript project; production modules must not import it.
 - The **real engine is to be implemented.** It ships as `@docx-editor.dev/core`
   and is **consumed from npm** by the adapters; its source is not in this tree.
   There is no `painter-model`, `flow-model`, `pagination-model`, or `prosemirror`
