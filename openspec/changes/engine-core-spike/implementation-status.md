@@ -31,16 +31,19 @@ captured unsupported capsule bytes:
 - hardening: `checkpoint-994f400a`, `checkpoint-a114eaae`
 - result: focused loader and trust-boundary tests pass
 
-### Milestone 2 — implementation under correction
+### Milestone 2 — complete and review-approved
 
-Initial tiny collaborative Yjs store:
+Tiny collaborative Yjs store with stable operation identity, atomic staged
+publish, exact prospective-state validation, maximal formatting projection,
+queued notifications, real two-replica convergence, and actor-local undo:
 
-- implementation: `checkpoint-598808ab`
-- current state: direct RED regressions and correctness fixes are in progress
-- open reviewed defects: stable Yjs operation client identity, atomic staged
-  publish, exact remote schema validation, maximal formatting projection,
-  listener queueing, and direct concurrency/undo evidence
-- acceptance: unchecked until those fixes pass focused review
+- initial implementation: `checkpoint-598808ab`
+- correctness hardening: `checkpoint-5690b441`
+- identity and formatting-undo hardening: `checkpoint-c45c8b45`
+- result: 24 focused tests and spike typecheck pass; focused acceptance review
+  found no remaining blockers
+- narrow POC limitation: client-ID claims persist for the module lifetime, so
+  teardown/recreation with the same ID is intentionally unsupported
 
 ### Milestone 3 — pending
 
