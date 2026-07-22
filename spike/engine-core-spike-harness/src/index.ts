@@ -27,6 +27,21 @@ export {
   type ReconstructionJournal,
 } from './experiment/yjs-undo-manager/index';
 export {
+  createPocDocxFixture,
+  loadPocDocx,
+  savePocDocx,
+  POC_PARAGRAPH_ID,
+  POC_ZIP_MAX_BYTES,
+  POC_ZIP_MAX_ENTRIES,
+  POC_ZIP_MAX_ENTRY_UNCOMPRESSED_BYTES,
+  POC_ZIP_MAX_TOTAL_UNCOMPRESSED_BYTES,
+  POC_ZIP_MAX_DECOMPRESSION_RATIO,
+  POC_XML_MAX_BYTES,
+  POC_XML_MAX_SCAN_STEPS,
+  type LoadedPocDocx,
+  type PocRun,
+} from './poc/docx';
+export {
   validateCommand,
   validateQuery,
   snapshotAndValidateCommand,

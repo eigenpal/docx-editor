@@ -41,7 +41,7 @@
   "implementationSurface": {
     "status": "harness-audit-only-not-engine-runtime-enforcement",
     "derivation": "Imports, exports, and @spike-features annotations are scanned from every src/**/*.ts file. The SHA-256 of canonical derived modules is authoritative; per-module imports/exports below are non-authoritative review notes.",
-    "derivedSurfaceHash": "518a5b7249674b074ad4424faf9a7b45e9ba74ac896999434d8e28a9ae2a9654",
+    "derivedSurfaceHash": "284c5dbb95f59c33a5d0fb4ce690a2ab794ee40c9779a1c5ff4bb6cd8d97de53",
     "modules": [
       {
         "path": "src/canonical-json.ts",
@@ -332,6 +332,10 @@
       {
         "path": "src/oracle-hash.ts",
         "features": ["fixture-comparators"]
+      },
+      {
+        "path": "src/poc/docx.ts",
+        "features": ["one-preservation-capsule"]
       },
       {
         "path": "src/rng/seeded-rng.ts",
