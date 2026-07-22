@@ -33,7 +33,9 @@ export interface EditorConfig {
   document?: DocxDocument;
   /** Defaults to `createStarterKit()` from `core/plugin`. */
   extensions?: readonly Extension[];
-  /** Default author for the tracked-change commands. */
+  /** Ambient author for authored commands (comments, tracked changes), sourced
+   * the way the Office JS API sources it from context. A command may still
+   * override it per call. */
   author?: string;
   locale?: string;
   zoom?: number;
@@ -164,13 +166,17 @@ export interface Editor {
  */
 /**
  * In the editor a command targets the current selection unless told otherwise,
- * so the document layer's required `target` becomes optional here.
+ * and authoring is ambient — the author comes from `EditorConfig`/the session,
+ * the way the Office JS API sources it from context — so the document layer's
+ * required `target` and `author` both become optional here.
  */
-type SelectionTargeted<T> = {
-  [K in keyof T]: T[K] extends { target: infer G } ? Omit<T[K], 'target'> & { target?: G } : T[K];
+type EditorCommandShape<T> = {
+  [K in keyof T]: Omit<T[K], 'target' | 'author'> &
+    (T[K] extends { target: infer G } ? { target?: G } : unknown) &
+    (T[K] extends { author: infer A } ? { author?: A } : unknown);
 };
 
-export interface EditorCommands extends SelectionTargeted<DocEdits> {
+export interface EditorCommands extends EditorCommandShape<DocEdits> {
   toggleMark: { mark: string };
   setMarkAttr: { mark: string; attr: string; value: unknown };
   setAlignment: { align: 'left' | 'center' | 'right' | 'justify' };
@@ -187,8 +193,10 @@ export interface EditorCommands extends SelectionTargeted<DocEdits> {
   setCellFill: { color: ColorValue };
   toggleHeaderRow: Record<never, never>;
 
-  insertPageBreak: Record<never, never>;
-  insertSectionBreak: { kind: string };
+  // Page/section breaks go through the inherited `insertBreak`. The Office JS
+  // API we intend to expose has a single insertBreak(breakType); section
+  // subtypes (continuous / next-page / even / odd) ride that open breakType
+  // when it lands, not a separate command here.
   setWatermark: { watermark: Watermark | null };
   refreshToc: { tocId?: string };
 

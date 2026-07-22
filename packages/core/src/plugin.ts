@@ -7,16 +7,14 @@
  * CONTRACT ONLY.
  */
 
-import type { JSONSchema, Unsubscribe } from './types';
+import type { Extension, JSONSchema, Unsubscribe } from './types';
 import type { Editor, EditorCommand, EditorSnapshot } from './editor';
 
-export type { Editor, EditorCommand, EditorSnapshot };
+// `Extension` lives in `core/types` (the leaf) to avoid the editor↔plugin
+// cycle; re-exported here so plugin authors and adapters share one identity.
+export type { Editor, EditorCommand, EditorSnapshot, Extension };
 
 const NOT_IMPLEMENTED = 'contract-only stub: no implementation';
-
-export interface Extension {
-  readonly name: string;
-}
 export interface ExtensionSpec {
   name: string;
   commands?: Record<string, (...args: never[]) => unknown>;
