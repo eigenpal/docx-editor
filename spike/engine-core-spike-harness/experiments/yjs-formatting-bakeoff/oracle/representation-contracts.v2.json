@@ -1,0 +1,252 @@
+{
+  "artifactVersion": "formatting-bakeoff-representations/2",
+  "crossCandidateExclusion": {
+    "excludedFromSemanticFingerprint": [
+      "candidateNormalizedSemanticMarkId",
+      "candidateStorageEvidence",
+      "candidateRawEvidenceHash"
+    ],
+    "excludedFromWinnerEligibility": true,
+    "requiredPerCandidate": "each candidate must match its own frozen derivation and storage evidence and preserve both across every listed delivery/reopen checkpoint"
+  },
+  "derivationHash": {
+    "encoding": "canonical JSON UTF-8 without trailing LF",
+    "format": "mark-normalized-<lowercase sha256 hex>"
+  },
+  "candidateA": {
+    "domain": "engine-core-spike-native-format-v2",
+    "derivations": [
+      {
+        "expectedId": "mark-normalized-197d2051b9390a6776c0bd775a49afd5b8b306dc846da473dead09e17a56dbd6",
+        "input": [
+          "engine-core-spike-native-format-v2",
+          "bold",
+          [
+            "contrib-A-bold"
+          ],
+          0
+        ],
+        "scenarioId": "overlap-A-only"
+      },
+      {
+        "expectedId": "mark-normalized-bdb5174350f54402c57f1b9462ee01de8a98d4499df0eee130be99f66ee3c3d9",
+        "input": [
+          "engine-core-spike-native-format-v2",
+          "bold",
+          [
+            "contrib-B-bold"
+          ],
+          0
+        ],
+        "scenarioId": "overlap-B-only"
+      },
+      {
+        "expectedId": "mark-normalized-3b06fb85b6ee6c2f999fad28613609344f021270b55749d65f38e1c91c98ddb7",
+        "input": [
+          "engine-core-spike-native-format-v2",
+          "bold",
+          [
+            "contrib-A-affinity"
+          ],
+          0
+        ],
+        "scenarioId": "split-leading-segment"
+      },
+      {
+        "expectedId": "mark-normalized-6bfdcb1bebbce0d5346cb21cacb5c3f939386b124ee13cfbc3ab2140730244a9",
+        "input": [
+          "engine-core-spike-native-format-v2",
+          "bold",
+          [
+            "contrib-A-affinity"
+          ],
+          1
+        ],
+        "scenarioId": "split-tail-segment"
+      }
+    ],
+    "storageEvidence": [
+      {
+        "expectedMetadataKeys": [
+          "contrib-A-bold"
+        ],
+        "expectedOrderedAttributeSpans": [
+          {
+            "attributes": {
+              "bold": "contrib-A-bold"
+            },
+            "globalEnd": 5,
+            "globalStart": 1
+          }
+        ],
+        "scenarioId": "state-A-bold",
+        "source": "ordered bodySequence.toDelta()"
+      },
+      {
+        "expectedMetadataKeys": [
+          "contrib-A-affinity"
+        ],
+        "expectedOrderedAttributeSpans": [
+          {
+            "attributes": {
+              "bold": "contrib-A-affinity"
+            },
+            "globalEnd": 4,
+            "globalStart": 2
+          },
+          {
+            "attributes": {
+              "bold": "contrib-A-affinity"
+            },
+            "globalEnd": 7,
+            "globalStart": 5
+          }
+        ],
+        "scenarioId": "state-split",
+        "source": "ordered bodySequence.toDelta()"
+      }
+    ]
+  },
+  "candidateB": {
+    "domain": "engine-core-spike-mark-v2",
+    "derivations": [
+      {
+        "expectedId": "mark-normalized-8d1fb275dfba9408f3f53d78867cbf2e71fdad73080e72a9d70e4cf1c196ab77",
+        "input": [
+          "engine-core-spike-mark-v2",
+          "bold",
+          [
+            "contrib-A-bold"
+          ],
+          [],
+          0
+        ],
+        "scenarioId": "overlap-A-only"
+      },
+      {
+        "expectedId": "mark-normalized-fae37f9937789b98fa6e696be86fc3b7396ab1e6562de892152a56a65da4b526",
+        "input": [
+          "engine-core-spike-mark-v2",
+          "bold",
+          [
+            "contrib-A-bold",
+            "contrib-B-bold"
+          ],
+          [],
+          0
+        ],
+        "scenarioId": "overlap-A-B"
+      },
+      {
+        "expectedId": "mark-normalized-3d69572129e0f405743d77fee1c78b170b77dbe5f5609d5c9038b69a6e201ef5",
+        "input": [
+          "engine-core-spike-mark-v2",
+          "bold",
+          [
+            "contrib-B-bold"
+          ],
+          [],
+          0
+        ],
+        "scenarioId": "overlap-B-only"
+      },
+      {
+        "expectedId": "mark-normalized-eec73c913a962eddd8f0f25871dfe2687199f9e53d7313eea4d82b6c9a8b6311",
+        "input": [
+          "engine-core-spike-mark-v2",
+          "bold",
+          [
+            "contrib-A-affinity"
+          ],
+          [],
+          0
+        ],
+        "scenarioId": "split-leading-segment"
+      },
+      {
+        "expectedId": "mark-normalized-c0de66c83500a9f565d56a2480cd7ffb37859a549d9a8f434d2bb7c868604949",
+        "input": [
+          "engine-core-spike-mark-v2",
+          "bold",
+          [
+            "contrib-A-affinity"
+          ],
+          [],
+          1
+        ],
+        "scenarioId": "split-tail-segment"
+      }
+    ],
+    "storageEvidence": [
+      {
+        "expectedOrderedRecords": [
+          {
+            "actorId": "actor-A",
+            "commitId": "commit-A-observed",
+            "contributionId": "contrib-A-observed",
+            "endBinding": {
+              "affinity": "after",
+              "assoc": 0,
+              "checkpoint": "cp-000",
+              "paragraphId": "paragraph-1",
+              "utf16Offset": 5
+            },
+            "kind": "add",
+            "markKind": "bold",
+            "proposedSemanticMarkId": "mark-A-observed",
+            "startBinding": {
+              "affinity": "before",
+              "assoc": -1,
+              "checkpoint": "cp-000",
+              "paragraphId": "paragraph-1",
+              "utf16Offset": 1
+            }
+          },
+          {
+            "actorId": "actor-A",
+            "commitId": "commit-A-remove",
+            "contributionId": "contrib-A-remove",
+            "endBinding": {
+              "affinity": "after",
+              "assoc": 0,
+              "checkpoint": "cp-observed-add",
+              "paragraphId": "paragraph-1",
+              "utf16Offset": 5
+            },
+            "kind": "remove",
+            "markKind": "bold",
+            "startBinding": {
+              "affinity": "before",
+              "assoc": -1,
+              "checkpoint": "cp-observed-add",
+              "paragraphId": "paragraph-1",
+              "utf16Offset": 3
+            },
+            "targetAddContributionIds": [
+              "contrib-A-observed"
+            ]
+          }
+        ],
+        "scenarioId": "state-observed-remove",
+        "source": "ordered immutable mark contribution records"
+      }
+    ]
+  },
+  "nonDestructiveStorageAssertions": {
+    "candidateA": [
+      "ordered toDelta attribute spans unchanged by repair",
+      "formatting metadata keys are creation-only"
+    ],
+    "candidateB": [
+      "add/remove records unchanged by repair",
+      "relative endpoint envelopes unchanged by projection"
+    ]
+  },
+  "stabilityCheckpoints": [
+    "cp-merged-overlap",
+    "cp-observed-unseen-merged",
+    "cp-split",
+    "cp-joined",
+    "cp-history-undone"
+  ]
+}
