@@ -57,14 +57,20 @@ export interface SynchronousTransactionExecutor<TStage, TPublished> {
     callback: (
       capability: TransactionMutationCapability,
       staged: SynchronousTransactionStage<TStage>
-    ) => unknown
+    ) => void
   ): SynchronousTransactionResult<TPublished>;
 }
 
 /**
  * Stage/preflight operate only on caller-provided isolated state. Rollback restores
  * any publish attempt; arbitrary callback side effects outside that isolated state
- * are not magically atomic.
+ * are not magically atomic. Preflight, callback, and rollback must return exactly
+ * `undefined`.
+ *
+ * Publish returns `TPublished`. The executor descriptor-classifies that value but
+ * never Promise-assimilates or awaits it. A proxy whose `then` exists only through
+ * a virtual `get` trap is therefore an opaque synchronous published value: detecting
+ * it would require executing attacker code, which this boundary never does.
  */
 export function createSynchronousTransactionExecutor<TStage, TPublished>(
   hooks: SynchronousTransactionExecutorHooks<TStage, TPublished>
@@ -84,9 +90,9 @@ export function createSynchronousTransactionExecutor<TStage, TPublished>(
         nonAtomic: true,
       };
     }
-    if (classifyThenable(outcome) !== 'not-thenable') {
+    if (outcome !== undefined) {
       return {
-        message: 'rollback returned an asynchronous or hostile thenable',
+        message: 'rollback must return exactly undefined',
         nonAtomic: true,
       };
     }
@@ -152,19 +158,22 @@ export function createSynchronousTransactionExecutor<TStage, TPublished>(
         if (current.poison !== null) {
           return finishRejected(current, current.poison, false);
         }
-        if (preflightOutcome.kind === 'thenable') {
-          return finishRejected(
-            current,
-            createTransactionRejection('async-callback', 'preflight returned a thenable'),
-            false
-          );
-        }
         if (preflightOutcome.kind === 'throw') {
           return finishRejected(
             current,
             createTransactionRejection(
               'preflight-failure',
               safeThrownMessage(preflightOutcome.thrown, 'preflight threw an unsafe value')
+            ),
+            false
+          );
+        }
+        if (preflightOutcome.value !== undefined) {
+          return finishRejected(
+            current,
+            createTransactionRejection(
+              'async-callback',
+              'preflight must return exactly undefined'
             ),
             false
           );
@@ -177,15 +186,18 @@ export function createSynchronousTransactionExecutor<TStage, TPublished>(
         if (current.poison !== null) {
           return finishRejected(current, current.poison, true);
         }
-        if (callbackOutcome.kind === 'thenable') {
-          return finishRejected(
-            current,
-            createTransactionRejection('async-callback', 'transaction callback returned a thenable'),
-            true
-          );
-        }
         if (callbackOutcome.kind === 'throw') {
           return finishThrown(current, callbackOutcome.thrown);
+        }
+        if (callbackOutcome.value !== undefined) {
+          return finishRejected(
+            current,
+            createTransactionRejection(
+              'async-callback',
+              'transaction callback must return exactly undefined'
+            ),
+            true
+          );
         }
 
         current.phase = 'publish';
@@ -193,15 +205,15 @@ export function createSynchronousTransactionExecutor<TStage, TPublished>(
         if (current.poison !== null) {
           return finishRejected(current, current.poison, true);
         }
-        if (publishOutcome.kind === 'thenable') {
+        if (publishOutcome.kind === 'throw') {
+          return finishThrown(current, publishOutcome.thrown);
+        }
+        if (classifyThenable(publishOutcome.value) !== 'not-thenable') {
           return finishRejected(
             current,
             createTransactionRejection('async-callback', 'publish returned a thenable'),
             true
           );
-        }
-        if (publishOutcome.kind === 'throw') {
-          return finishThrown(current, publishOutcome.thrown);
         }
 
         return { ok: true, published: publishOutcome.value };
@@ -248,8 +260,7 @@ function isTransactionControlError(error: unknown): error is TransactionControlE
 
 type SyncOutcome<TReturn> =
   | { readonly kind: 'return'; readonly value: TReturn }
-  | { readonly kind: 'throw'; readonly thrown: unknown }
-  | { readonly kind: 'thenable' };
+  | { readonly kind: 'throw'; readonly thrown: unknown };
 
 function runSync<TReturn>(fn: () => TReturn): SyncOutcome<TReturn>;
 function runSync<TArg, TReturn>(fn: (arg: TArg) => TReturn, arg: TArg): SyncOutcome<TReturn>;
@@ -264,7 +275,6 @@ function runSync<TArg, TReturn>(
     if (isTransactionControlError(error)) throw error;
     return { kind: 'throw', thrown: error };
   }
-  if (classifyThenable(outcome) !== 'not-thenable') return { kind: 'thenable' };
   return { kind: 'return', value: outcome };
 }
 

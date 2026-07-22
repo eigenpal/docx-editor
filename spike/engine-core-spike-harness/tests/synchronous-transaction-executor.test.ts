@@ -700,3 +700,105 @@ describe('task 2.6 mandatory review regressions', () => {
     expect(originDomainsMatchBindingOracleV2()).toBe(true);
   });
 });
+
+describe('task 2.6 final descriptor-safe boundary', () => {
+  function virtualThenProxy<T extends object>(
+    target: T,
+    onGetThen: () => void
+  ): T {
+    return new Proxy(target, {
+      get(inner, key, receiver) {
+        if (key === 'then') {
+          onGetThen();
+          return () => {};
+        }
+        return Reflect.get(inner, key, receiver);
+      },
+    });
+  }
+
+  test('rejects get-only virtual then from every void phase without invoking its get trap', () => {
+    for (const phase of ['preflight', 'callback', 'rollback'] as const) {
+      let getThenCalls = 0;
+      let stageCalls = 0;
+      let rollbackCalls = 0;
+      const virtual = virtualThenProxy({}, () => {
+        getThenCalls += 1;
+      });
+      const executor = createSynchronousTransactionExecutor<Stage, Published>({
+        preflight() {
+          if (phase === 'preflight') return virtual as unknown as void;
+        },
+        publish(stage) {
+          return { revision: 1, text: stage.text };
+        },
+        rollback() {
+          rollbackCalls += 1;
+          if (phase === 'rollback') return virtual as unknown as void;
+        },
+      });
+
+      const result = executor.transact(humanContext(), { text: phase }, () => {
+        stageCalls += 1;
+        if (phase === 'callback' || phase === 'rollback') return virtual;
+      });
+
+      expect(result.ok).toBe(false);
+      if (phase !== 'rollback') {
+        expect(result.ok === false && result.reason).toBe('async-callback');
+      } else {
+        expect(result.ok === false && result.reason).toBe('async-callback');
+        expect(result.ok === false && result.rollbackFailure).toEqual({
+          message: 'rollback must return exactly undefined',
+          nonAtomic: true,
+        });
+      }
+      expect(stageCalls).toBe(phase === 'preflight' ? 0 : 1);
+      expect(rollbackCalls).toBe(phase === 'preflight' ? 0 : 1);
+      expect(getThenCalls).toBe(0);
+    }
+  });
+
+  test('does not assimilate opaque published values with get-only virtual then', () => {
+    let getThenCalls = 0;
+    const published = virtualThenProxy(
+      { revision: 1, text: 'opaque' },
+      () => {
+        getThenCalls += 1;
+      }
+    );
+    const executor = createSynchronousTransactionExecutor<Stage, Published>({
+      preflight() {},
+      publish() {
+        return published;
+      },
+      rollback() {
+        throw new Error('rollback must not run');
+      },
+    });
+
+    const result = executor.transact(humanContext(), { text: 'opaque' }, () => {});
+
+    expect(result.ok).toBe(true);
+    expect(result.ok && result.published === published).toBe(true);
+    expect(getThenCalls).toBe(0);
+  });
+
+  test('rejects a native Promise from publish and rolls back exactly once', () => {
+    let rollbackCalls = 0;
+    const executor = createSynchronousTransactionExecutor<Stage, Published>({
+      preflight() {},
+      publish() {
+        return Promise.resolve({ revision: 1, text: 'async' }) as unknown as Published;
+      },
+      rollback() {
+        rollbackCalls += 1;
+      },
+    });
+
+    const result = executor.transact(humanContext(), { text: 'async' }, () => {});
+
+    expect(result.ok === false && result.reason).toBe('async-callback');
+    expect(rollbackCalls).toBe(1);
+  });
+});
