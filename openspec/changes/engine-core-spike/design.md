@@ -109,18 +109,18 @@ creation-keyed `marks` maps with destructive normalization) is **rejected** — 
 - Plain-JSON relative endpoint envelopes store bounded canonical
   `relativePositionBase64Url: string`, never `Uint8Array`; decoding allocates
   bytes only after character, length, and canonical re-encode validation.
-- Formatting representation is selected by a pre-oracle A/B falsification:
-  native `Y.Text` formatting attributes versus immutable creation-only range
-  contributions. Contributions are recommended for document-format semantics
-  but are not authoritative until the experiment passes.
-- The winner MUST preserve same-kind actor undo, observed-disable/unseen-enable,
+- The reviewed task 2.4 KISS experiment selected immutable creation-only
+  `mark-contributions`; that executed focused result is authoritative for this
+  spike. The abandoned `experiments/yjs-formatting-bakeoff/oracle/**` corpus is
+  unexecuted historical work and is neither consumed nor authoritative.
+- The selected representation MUST preserve same-kind actor undo, observed-disable/unseen-enable,
   bold/italic independence, endpoint behavior through text/split/join, semantic
   mark identity/provenance, authored omission/raw intent, undo/reopen/redo,
   non-destructive normalization, convergence, and closed resource bounds.
 - Canonical paragraphs and marks are a deterministic projection from sequence +
   the representation-neutral `FormattingEvidence` winner contract, clipping at
   boundary items. Boundary collisions, normalized mark IDs/provenance, and
-  monotonic repair keying follow the frozen winner oracle; repair MUST NOT
+  monotonic repair keying follow the lean winner contract; repair MUST NOT
   destructively rewrite actor-authored state.
 - GC disabled. Typed mutation origins. Closed trust-boundary limits (see v2
   design doc).
@@ -275,6 +275,14 @@ Before gate execution the harness freezes:
   full-document scans/rebuilds, and at most 128 dependency-edge visits.
 
 These are fixture-owned proof ceilings, not production budgets.
+
+Task 2.5 is intentionally smaller than the older preimplementation-oracle
+approach. Its four compatibility artifacts freeze closed schema/constants,
+behavior ownership, comparator input schemas, and concise G-v2-1..G-v2-10
+action/assertion descriptors only. They do not freeze exhaustive fixtures,
+implementation output, or canonical-state fingerprints. Artifact self-hashes
+detect accidental drift only. Tasks 2.6–2.8 and 3.x add direct executable
+expected-state assertions test-first for the behavior they own.
 
 ### R12 — Coordinator, transaction, and projection protocols are executable
 

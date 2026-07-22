@@ -3,9 +3,10 @@
 Approved redesign constraints after the v1 falsification verdict. This document
 supersedes the nested `Y.Map`/`Y.Text` per-paragraph schema frozen in
 `spike/engine-core-spike-harness/oracles/yjs-schema.v1.json` for new spike work,
-except that the authoritative formatting representation is **`mark-contributions`**
-(frozen in task 2.5 v2 oracles after task 2.4 A/B falsification). v1 oracle artifacts and
-tasks 1.1–2.3 remain historical evidence only; they do not prove v2 acceptance.
+except that the authoritative formatting representation is
+**`mark-contributions`**, selected by the reviewed task 2.4 KISS experiment and
+frozen as a lean task 2.5 contract. v1 oracle artifacts and tasks 1.1–2.3 remain
+historical evidence only; they do not prove v2 acceptance.
 
 ## Verdict (narrow)
 
@@ -42,6 +43,9 @@ creation-only add/remove records in root `markContributions`. Candidate A
 (`formattingMetadata` + native `Y.Text` attributes) failed overlapping
 same-kind actor undo and observed-disable/unseen-enable criteria. Loser-only
 roots, fields, and comparators MUST NOT appear in v2 oracle artifacts.
+The abandoned `experiments/yjs-formatting-bakeoff/oracle/**` corpus was never
+executed and is non-authoritative; v2 work MUST NOT read or derive contracts
+from it.
 
 ## Authority and scope
 
@@ -474,16 +478,17 @@ restore atomically: no Yjs commit, canonical revision, repair evidence, journal
 append, history change, notification, audit cursor, or emitted update. Awareness
 and audit channels remain non-authoritative.
 
-## Named v2 proof gates (pre-implementation oracle)
+## Named v2 proof scenarios
 
-After task 2.4 selects formatting, these gates MUST appear in
-`yjs-schema.v2.json` and binding/history oracle artifacts before backend/history
-implementation (task 2.5). Each gate has frozen fixtures and expected
-fingerprints.
+The lean task 2.5 artifacts catalog these scenarios as action/assertion
+descriptors before backend/history implementation. They intentionally contain
+no precomputed canonical states or descriptor hashes presented as semantic
+fingerprints. Tasks 2.6–2.8 and 3.x write direct executable expected-state
+assertions test-first for the behavior they own.
 
 | Gate | Proves |
 | --- | --- |
-| **G-v2-1 Same-tail split remote undo** | Actor A splits tail; actor B edits tail; A undoes split; reopen; redo — B's edit survives; IDs match oracle |
+| **G-v2-1 Same-tail split remote undo** | Actor A splits tail; actor B edits tail; A undoes split; reopen; redo — B's edit survives; IDs and manager-stack transitions satisfy task 2.8 assertions |
 | **G-v2-2 Join both ranges** | Concurrent joins on adjacent boundaries converge; undo/redo restores actor-local join eligibility |
 | **G-v2-3 Concurrent boundaries** | Two actors insert boundaries at same text offset; merge + projection deterministic; no nested type creation |
 | **G-v2-4 Overlapping bold/italic** | Winner preserves same-kind actor-local undo and bold/italic independence under overlap |
@@ -491,19 +496,21 @@ fingerprints.
 | **G-v2-6 Endpoint affinities** | Versioned relative envelopes follow assoc/affinity; wrong-doc, stale, and unresolvable cases reject/detach exactly as frozen |
 | **G-v2-7 No nested shared types on split/mark** | Split/join/format ops create zero `Y.AbstractType` children; boundaries are length-1 plain JSON embeds and any winner records are plain JSON |
 | **G-v2-8 No destructive normalization** | Post-merge repair never rewrites winner-owned formatting history or embed payloads; repair evidence is monotonic |
-| **G-v2-9 Local/Yjs parity** | Local and Yjs backends produce identical canonical fingerprints for every gate fixture |
+| **G-v2-9 Local/Yjs parity** | Task 2.7 directly compares local and Yjs canonical outputs for each applicable scenario |
 | **G-v2-10 Durable compaction** | Limits, compaction, snapshot + bounded journal replay restore manager stack eligibility and canonical state |
 
 Passing G-v2-1..G-v2-10 is necessary for task 2.8 (actor-local history); passing
 historical v1 task 2.2 acceptance is not sufficient.
 
-## Oracle artifacts (frozen task 2.5)
+## Lean contract artifacts (frozen task 2.5)
 
 | Artifact | Purpose |
 | --- | --- |
 | `oracles/yjs-schema.v2.json` | Root keys, embed schema, selected formatting representation, repair evidence, limits |
 | `oracles/binding-oracle.v2.json` | IME, selection affinities, grouping boundaries aligned to sequence model |
-| `oracles/history-oracle.v2.json` | Per-gate fixtures G-v2-1..G-v2-10, journal reconstruction expectations |
-| `oracles/comparator-contracts.v2.json` | Sequence projection fingerprint, winner-format hash, embed-order comparator |
+| `oracles/history-oracle.v2.json` | G-v2-1..G-v2-10 action/assertion catalog and owning implementation tasks |
+| `oracles/comparator-contracts.v2.json` | Canonical input schemas and serialization rules for future direct comparisons |
 
-v1 oracle files remain read-only historical references until explicitly archived.
+Artifact self-hashes are integrity checks only, not correctness approval.
+Compatibility filenames do not imply exhaustive preimplementation outputs. v1
+oracle files remain read-only historical references until explicitly archived.

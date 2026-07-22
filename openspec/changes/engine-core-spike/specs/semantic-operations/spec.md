@@ -106,12 +106,15 @@ removes one, and neither creates or deletes a `Y.Text`. Absolute sequence
 mapping MUST count an embed as one while paragraph-local UTF-16 mapping MUST
 exclude embeds.
 
-Formatting MUST use the task 2.4 winner and expose only the representation-neutral
+Formatting MUST use the reviewed task 2.4 KISS winner, `mark-contributions`,
+and expose only the representation-neutral
 `FormattingEvidence` contract to semantic projection. Evidence MUST preserve
 stable creation identity, semantic mark IDs, actor/commit provenance, authored
 omission/raw intent, and half-open boundary-clipped resolved segments. The task
-2.5 oracle MUST freeze only the winner's storage topology and deterministic
-evidence/normalized-ID derivation; no loser root or comparator may remain.
+2.5 contract MUST freeze only the winner's closed storage topology and
+deterministic evidence/normalized-ID derivation; no loser root or comparator may
+remain. The abandoned `experiments/yjs-formatting-bakeoff/oracle/**` corpus is
+unexecuted historical work and MUST NOT be consumed.
 
 Concurrent boundary collisions MUST retain every boundary in converged sequence
 order, project adjacent boundaries as zero-text paragraphs, and resolve proposed
@@ -122,30 +125,22 @@ update/delete evidence, embeds, winner-owned formatting history, or actor text. 
 disabled. The v1 nested `blocks`/`texts`/`marks` schema is rejected historical
 evidence only.
 
-#### Scenario: Schema fingerprint is computed
+#### Scenario: Schema comparison is implemented
 - **WHEN** two replicas converge after concurrent boundary and formatting edits
-- **THEN** decoded sequence order, winner `FormattingEvidence`, repair evidence, tombstones, and canonical fingerprint MUST match
+- **THEN** the task 2.7 tests directly compare decoded sequence order, winner `FormattingEvidence`, repair evidence, and canonical authored state using the frozen comparator input schemas
 
 #### Scenario: v1 nested schema is not authoritative
 - **WHEN** implementation work begins after the v2 design approval
 - **THEN** `yjs-schema.v2.json` and v2 history/binding oracles MUST be frozen before backend or undo code ships
 
-### Requirement: Formatting representation is selected before v2 freeze
-Before any v2 oracle is frozen, an isolated A/B falsification MUST compare
-native `Y.Text` formatting attributes with immutable creation-only range
-contributions using identical fixtures, seeds, delivery orders, checkpoints, and
-limits. The winner MUST pass: overlapping same-kind actor undo; observed disable
-versus unseen enable; bold/italic independence; endpoint/coverage behavior under
-text, split, and join; semantic mark ID and provenance preservation; authored
-omission/raw intent; undo/reopen/redo; non-destructive normalization;
-convergence; and all resource bounds. Tie-breaking and neither-passes behavior
-MUST follow `yjs-schema-v2-design.md`. Before selection, authoritative schema
-requirements MUST depend only on `FormattingEvidence`, not either candidate's
-storage or mutation mechanism.
+### Requirement: Reviewed formatting selection is fixed
+The spike SHALL treat the reviewed task 2.4 KISS experiment as authoritative
+and use `mark-contributions` as the v2 representation. Historical unexecuted
+oracle corpora MUST NOT supersede or supplement that result.
 
-#### Scenario: Neither formatting candidate passes
-- **WHEN** both A/B candidates fail at least one mandatory winner criterion
-- **THEN** v2 oracle freeze and all dependent implementation tasks remain blocked
+#### Scenario: Winner contract is frozen
+- **WHEN** task 2.5 records the v2 storage contract
+- **THEN** it contains only `mark-contributions` fields and rules, while implementation tasks own direct executable behavioral assertions
 
 ### Requirement: V2 trust limits are closed and atomic
 The spike MUST preflight a staging document before any local transaction, remote

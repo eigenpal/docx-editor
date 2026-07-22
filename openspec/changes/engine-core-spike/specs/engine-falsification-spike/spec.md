@@ -56,43 +56,35 @@ visits.
 - **WHEN** the frozen style edit is applied
 - **THEN** every counter MUST stay within its ceiling and pagination MUST reach the exact fingerprint within four passes
 
-### Requirement: Formatting A/B precedes v2 oracle freeze
-The harness MUST first run an isolated, commit-sized falsification comparing
-native `Y.Text` formatting attributes with immutable creation-only range
-contributions. It MUST use identical fixtures and freeze pass/fail evidence for
-overlapping same-kind actor undo, observed-disable/unseen-enable, bold/italic
-independence, text/split/join endpoint behavior, semantic mark identity and
-provenance, authored omission/raw intent, undo/reopen/redo, non-destructive
-normalization, convergence, and resource bounds. Contributions are the current
-recommendation, not an authoritative requirement before this experiment.
+### Requirement: The reviewed KISS formatting result is authoritative
+The spike SHALL treat the reviewed task 2.4 KISS experiment and its immutable
+creation-only `mark-contributions` winner as authoritative selection evidence.
+The abandoned
+`experiments/yjs-formatting-bakeoff/oracle/**` corpus is unexecuted historical
+work and MUST NOT supply requirements, fixtures, or expected outputs.
 
-#### Scenario: Formatting winner is selected
-- **WHEN** the A/B experiment completes
-- **THEN** the exact winner rule and tie-breakers in `yjs-schema-v2-design.md` select one representation, or both failures block v2 oracle freeze
+#### Scenario: Formatting winner is consumed
+- **WHEN** v2 contract or implementation work begins
+- **THEN** it uses only `mark-contributions` and does not read the abandoned corpus
 
-### Requirement: Reviewed oracle artifacts precede implementation
-Versioned oracle artifacts MUST be reviewed and frozen before implementing the
-code they judge. v2 work SHALL use `yjs-schema.v2.json`, `binding-oracle.v2.json`,
-`history-oracle.v2.json`, and `comparator-contracts.v2.json` aligned to
-`yjs-schema-v2-design.md`, including the selected v2 formatting representation;
-plain JSON length-1 boundary embeds; versioned opaque relative endpoint
-envelopes with bounded canonical base64url strings and rejection/detach rules;
-the winner's `FormattingEvidence`, normalized-ID, collision, and
-non-destructive repair semantics; all closed preflight ceilings; exact IME
-inputs/expected strings; selection grapheme boundaries and affinities; public
-manager-stack redo rules; grouped undo/redo/snapshot histories; fixtures
-G-v2-1..G-v2-10; and comparator versions. v1 oracle files remain historical
-evidence. The v2 oracle set MUST contain only the winner's root, fields,
-mutation rules, `FormattingEvidence` derivation, and comparators; loser evidence
-remains isolated under task 2.4 and MUST NOT leak into the schema. Implementation-produced output MUST NOT be promoted to its own oracle.
+### Requirement: Lean reviewed contracts precede implementation
+Task 2.5 SHALL keep the compatibility artifacts `yjs-schema.v2.json`,
+`binding-oracle.v2.json`, `history-oracle.v2.json`, and
+`comparator-contracts.v2.json` while freezing only
+closed winner schema/constants, ownership responsibilities, comparator input
+schemas, and concise G-v2-1..G-v2-10 action/assertion descriptors. They MUST NOT
+freeze implementation output, exhaustive fixtures, or hashes presented as
+canonical-state fingerprints. Artifact self-hashes are integrity checks only,
+not independent correctness approval. Tasks 2.6–2.8 and 3.x MUST write direct
+executable expected-state assertions test-first for the behavior they own.
 
 #### Scenario: Gate implementation starts
 - **WHEN** v2 backend, normalization, binding, selection, IME, or undo code is proposed
-- **THEN** its reviewed v2 oracle artifact MUST already exist with an independent approval record
+- **THEN** its lean reviewed contract and scenario responsibility MUST already exist, and the owning task adds the executable assertion
 
-#### Scenario: v2 proof gates are frozen before history code
+#### Scenario: v2 proof scenarios are cataloged before history code
 - **WHEN** Y.UndoManager integration or actor-local history is implemented
-- **THEN** fixtures for G-v2-1..G-v2-10 MUST already be frozen with expected canonical fingerprints
+- **THEN** G-v2-1..G-v2-10 action/assertion descriptors identify the owning tasks without claiming precomputed canonical states
 
 ### Requirement: All fifteen acceptance gates are mandatory
 The spike SHALL pass all fifteen acceptance gates before the architecture is accepted for production implementation.
@@ -127,7 +119,7 @@ The spike SHALL pass all fifteen acceptance gates before the architecture is acc
 
 #### Scenario: Gate 8 limits undo to local changes
 - **WHEN** one actor invokes undo after concurrent edits including v2 sequence splits, joins, and winner-owned formatting
-- **THEN** grouping, same-session-only redo invalidation, remote/repair redo preservation, identity restoration, G-v2-1..G-v2-10 expectations, closed limits, and snapshot/reopen history match the frozen v2 oracles
+- **THEN** grouping, same-session-only redo invalidation, remote/repair redo preservation, identity restoration, closed limits, and snapshot/reopen history pass the direct executable assertions owned by tasks 2.7–2.8
 
 #### Scenario: Gate 9 lays out canonical state in every runtime
 - **WHEN** browser and server layout receive equivalent canonical models and layout inputs

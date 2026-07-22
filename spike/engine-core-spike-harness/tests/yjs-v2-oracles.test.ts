@@ -3,232 +3,242 @@ import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
-const ORACLE_DIR = join(import.meta.dir, '..', 'oracles');
+const oracleDir = join(import.meta.dir, '..', 'oracles');
+const names = [
+  'yjs-schema.v2.json',
+  'binding-oracle.v2.json',
+  'history-oracle.v2.json',
+  'comparator-contracts.v2.json',
+] as const;
+type Json = Record<string, any>;
 
-function codeUnitCompare(a: string, b: string): number {
-  return a < b ? -1 : a > b ? 1 : 0;
+function canonical(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map(canonical).join(',')}]`;
+  if (value !== null && typeof value === 'object') {
+    const entries = Object.entries(value as Json).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
+    return `{${entries.map(([key, child]) => `${JSON.stringify(key)}:${canonical(child)}`).join(',')}}`;
+  }
+  return JSON.stringify(value);
 }
 
-/** Independent canonicalizer — must not import harness src. */
-function canonicalize(value: unknown, ancestors = new WeakSet<object>()): string {
-  if (value === null) return 'null';
-  if (typeof value === 'string' || typeof value === 'boolean') return JSON.stringify(value);
-  if (typeof value === 'number') {
-    if (!Number.isFinite(value)) throw new TypeError('non-finite number');
-    return JSON.stringify(value);
-  }
-  if (typeof value !== 'object') throw new TypeError(`reject ${typeof value}`);
-  if (ancestors.has(value as object)) throw new TypeError('cycle');
-  ancestors.add(value as object);
-  try {
-    if (Array.isArray(value)) {
-      return `[${value.map((child) => canonicalize(child, ancestors)).join(',')}]`;
+function read(name: (typeof names)[number]): Json {
+  return JSON.parse(readFileSync(join(oracleDir, name), 'utf8')) as Json;
+}
+
+function integrityHash(artifact: Json): string {
+  const copy = structuredClone(artifact);
+  delete copy.integrityHash.value;
+  return createHash('sha256').update(canonical(copy)).digest('hex');
+}
+
+describe('task 2.5 lean v2 contract artifacts', () => {
+  const schema = read(names[0]);
+  const binding = read(names[1]);
+  const history = read(names[2]);
+  const comparators = read(names[3]);
+  const artifacts = [schema, binding, history, comparators];
+
+  test('self-hashes are integrity checks and schema references are reproducible', () => {
+    for (const artifact of artifacts) {
+      expect(artifact.integrityHash).toMatchObject({
+        algorithm: 'sha256',
+        purpose: 'drift-detection-only',
+      });
+      expect(integrityHash(artifact)).toBe(artifact.integrityHash.value);
     }
-    if (Object.getPrototypeOf(value) !== Object.prototype) {
-      throw new TypeError('non-plain object');
-    }
-    const keys = Object.keys(value as Record<string, unknown>).sort(codeUnitCompare);
-    return `{${keys
-      .map(
-        (key) =>
-          `${JSON.stringify(key)}:${canonicalize((value as Record<string, unknown>)[key], ancestors)}`
-      )
-      .join(',')}}`;
-  } finally {
-    ancestors.delete(value as object);
-  }
-}
-
-function oracleHash(value: Record<string, unknown>): string {
-  const clone = structuredClone(value);
-  if (clone.oracleHash && typeof clone.oracleHash === 'object') {
-    delete (clone.oracleHash as Record<string, unknown>).value;
-  }
-  return createHash('sha256').update(canonicalize(clone)).digest('hex');
-}
-
-function readOracle<T extends Record<string, unknown>>(name: string): T {
-  return JSON.parse(readFileSync(join(ORACLE_DIR, name), 'utf8')) as T;
-}
-
-function gateFingerprint(expected: Record<string, unknown>): string {
-  const clone = { ...expected };
-  delete clone.canonicalSemanticFingerprint;
-  return createHash('sha256').update(canonicalize(clone)).digest('hex');
-}
-
-const LOSER_PATTERNS = [
-  'formattingMetadata',
-  'native-attributes',
-  'native-format',
-  'engine-core-spike-native-format-v2',
-  'Candidate A',
-  'Candidate B',
-  'toDelta',
-  '"blocks"',
-  '"texts"',
-  '"marks"',
-];
-
-describe('v2 reviewed oracle artifacts (task 2.5)', () => {
-  const schema = readOracle<Record<string, unknown>>('yjs-schema.v2.json');
-  const binding = readOracle<Record<string, unknown>>('binding-oracle.v2.json');
-  const history = readOracle<Record<string, unknown>>('history-oracle.v2.json');
-  const comparators = readOracle<Record<string, unknown>>('comparator-contracts.v2.json');
-
-  test('artifacts exist with independent SHA-256 oracle hashes', () => {
-    for (const artifact of [schema, binding, history, comparators]) {
-      const hash = (artifact.oracleHash as { value: string }).value;
-      expect(hash).toMatch(/^[0-9a-f]{64}$/);
-      expect(oracleHash(artifact)).toBe(hash);
+    for (const artifact of [binding, history, comparators]) {
+      expect(artifact.schemaVersion).toBe(schema.version);
+      expect(artifact.schemaIntegritySha256).toBe(schema.integrityHash.value);
     }
   });
 
-  test('cross-artifact versions and references align', () => {
+  test('winner root and record schemas are exact and closed', () => {
+    expect(schema.version).toBe('engine-core-spike-yjs/2.1.0');
     expect(schema.formattingWinner).toBe('mark-contributions');
-    expect(schema.version).toBe('engine-core-spike-yjs/2.0.0');
-    expect(binding.version).toBe('engine-core-spike-binding-oracle/2.0.0');
-    expect(history.version).toBe('engine-core-spike-history-oracle/2.0.0');
-    expect(comparators.version).toBe('engine-core-spike-comparators/2.0.0');
-    const refs = schema.artifactReferences as Record<string, string>;
-    expect(refs.bindingOracle).toBe(binding.version as string);
-    expect(refs.historyOracle).toBe(history.version as string);
-    expect(refs.comparatorContracts).toBe(comparators.version as string);
-    expect((binding.artifactReferences as Record<string, string>).yjsSchema).toBe(
-      schema.version as string
-    );
-    expect((history.artifactReferences as Record<string, string>).yjsSchema).toBe(
-      schema.version as string
-    );
-    expect((comparators.artifactReferences as Record<string, string>).yjsSchema).toBe(
-      schema.version as string
-    );
-  });
-
-  test('winner-only root topology with markContributions and one bodySequence', () => {
-    const keys = Object.keys((schema.root as { keys: Record<string, unknown> }).keys).sort();
-    expect(keys).toEqual(['allocator', 'audit', 'capsules', 'markContributions', 'meta', 'stories', 'storyOrder']);
-    expect(keys).not.toContain('blocks');
-    expect(keys).not.toContain('texts');
-    expect(keys).not.toContain('marks');
-    expect(keys).not.toContain('formattingMetadata');
-    const stories = (schema.root as { keys: { stories: { record: { fields: Record<string, { type: string }> } } } })
-      .keys.stories.record.fields;
-    expect(stories.bodySequence.type).toBe('Y.Text');
-    const mc = (schema.root as { keys: { markContributions: { containerType: string } } }).keys.markContributions;
-    expect(mc.containerType).toBe('Y.Map');
-  });
-
-  test('closed limits match design exactly', () => {
-    const limits = schema.limits as Record<string, number>;
-    expect(limits).toEqual({
-      maxReconstructionJournalEvents: 64,
-      retainedJournalHorizon: 48,
-      maxUndoEntriesPerSession: 32,
-      maxRedoEntriesPerSession: 32,
-      maxActorSessions: 16,
-      maxReplicationUpdateBytes: 262144,
-      maxGenesisPayloadBytes: 4194304,
-      maxAggregateReplayBytes: 4194304,
-      maxSnapshotBytes: 8388608,
-      maxBodySequenceUtf16Units: 262144,
-      maxBoundaryEmbedCount: 4096,
-      maxFormattingEvidenceSourceRecords: 8192,
-      maxCausalDisableTargets: 256,
-      maxRepairEvidenceRecords: 4096,
-      maxCanonicalEmbedPayloadBytes: 4096,
-      maxValidationNesting: 4,
-      maxRelativePositionBase64UrlChars: 349526,
-      maxDecodedRelativePositionBytes: 262144,
-    });
-    expect(history.limits).toEqual(limits);
-  });
-
-  test('FormattingEvidence and repair keying are frozen', () => {
-    const fe = schema.formattingEvidence as { evidenceVersion: string; normalizedIdInputs: readonly string[] };
-    expect(fe.evidenceVersion).toBe('formatting-evidence/2');
-    expect(fe.normalizedIdInputs).toEqual([
-      'engine-core-spike-mark-v2',
+    expect(Object.keys(schema.root.keys).sort()).toEqual([
+      'allocator',
+      'audit',
+      'capsules',
+      'markContributions',
+      'meta',
+      'stories',
+      'storyOrder',
+    ]);
+    expect(schema.markContributions.add.closedFields).toEqual([
+      'kind',
       'markKind',
-      'sortedActiveAddContributionIds',
-      'sortedClippingRemoveContributionIds',
-      'segmentOrdinal',
+      'storyId',
+      'actorId',
+      'commitId',
+      'relativeStart',
+      'relativeEnd',
+      'proposedSemanticMarkId',
     ]);
-    const repair = schema.repairEvidence as { keyInputs: readonly string[] };
-    expect(repair.keyInputs).toEqual(['repair-v2', 'repairKind', 'proposedSemanticId', 'sortedInvolvedCreationIds']);
+    expect(schema.markContributions.remove.closedFields).toEqual([
+      'kind',
+      'markKind',
+      'storyId',
+      'actorId',
+      'commitId',
+      'relativeStart',
+      'relativeEnd',
+      'targetAddContributionIds',
+    ]);
+    expect(schema.markContributions.remove).toMatchObject({
+      noWildcard: true,
+      targetMustMatchStoryAndKind: true,
+      targetsMax: 256,
+      subtraction: 'intersection-of-remove-range-with-each-target-add-range-only',
+    });
+    expect(schema.markContributions.remove.rejectTargetCases).toEqual([
+      'missing',
+      'duplicate',
+      'unobserved',
+      'wrong-story',
+      'wrong-kind',
+      'non-add',
+      'over-limit',
+    ]);
+    expect(schema.boundaryEmbed.closedFields).toContain('authoredProperties');
+    expect(schema.plainJson.maxNesting).toBe(4);
+    expect(schema.relativeEndpoint.closedFields).toEqual([
+      'envelopeVersion',
+      'documentId',
+      'schemaVersion',
+      'backendVersion',
+      'checkpoint',
+      'storySequenceCreationId',
+      'relativePositionBase64Url',
+      'assoc',
+      'affinity',
+    ]);
   });
 
-  test('binding oracle preserves exact IME strings and sequence affinities', () => {
-    expect(binding.offsetUnit).toBe('UTF-16-code-unit');
-    const ime = binding.ime as {
-      fixtures: Array<{ id: string; commitExpectedText: string; cancelExpectedText: string }>;
-    };
-    const insert = ime.fixtures.find((f) => f.id === 'ime-remote-insert-during-compose');
-    expect(insert?.commitExpectedText).toBe('!helloni');
-    expect(insert?.cancelExpectedText).toBe('!hello');
-    const envelope = schema.relativeEndpointEnvelope as { envelopeVersion: string; assocAffinityPairs: unknown };
-    expect(envelope.envelopeVersion).toBe('relative-endpoint/2');
-    expect(envelope.assocAffinityPairs).toEqual([
-      { affinity: 'before', assoc: -1 },
-      { affinity: 'after', assoc: 0 },
+  test('hash derivations, repair closure, and atomic effects are exact', () => {
+    expect(schema.hashing).toMatchObject({
+      algorithm: 'sha256',
+      componentEncoding: 'UTF-8',
+      framing: 'each component is uint32be byte-length followed by bytes',
+      digestEncoding: 'lowercase-hex',
+    });
+    expect(schema.hashing.normalizedMarkId.components.at(-1)).toBe('zeroBasedSegmentOrdinal');
+    expect(schema.hashing.authoredIntentFingerprint.components[0]).toBe('authored-intent-v2');
+    expect(schema.hashing.repairKey.components).toEqual([
+      'repair-v2',
+      'repairKind',
+      'proposedSemanticId',
+      'sortedInvolvedCreationIds',
+    ]);
+    expect(schema.hashing.loserId.result).toBe('derived-{64-lowercase-hex-digest}');
+    expect(schema.repairEvidence.recordClosedFields).toEqual([
+      'repairEvidenceVersion',
+      'repairKind',
+      'proposedSemanticId',
+      'involvedCreationIds',
+      'selectedSurvivorCreationId',
+      'derivedMappings',
+      'actorId',
+      'commitId',
+      'normalizationVersion',
+    ]);
+    expect(schema.atomicRejectionEffects).toEqual([
+      'no-live-yjs-commit',
+      'no-canonical-revision',
+      'no-repair-evidence',
+      'no-journal-append',
+      'no-history-stack-change',
+      'no-model-change-notification',
+      'no-audit-cursor-change',
+      'no-emitted-update',
     ]);
   });
 
-  test('history oracle freezes all ten gates with executable fixtures', () => {
-    const gates = (history.gates as Array<Record<string, unknown>>).map((g) => g.id);
-    expect(gates).toEqual([
-      'G-v2-1',
-      'G-v2-2',
-      'G-v2-3',
-      'G-v2-4',
-      'G-v2-5',
-      'G-v2-6',
-      'G-v2-7',
-      'G-v2-8',
-      'G-v2-9',
-      'G-v2-10',
-    ]);
-    for (const gate of history.gates as Array<Record<string, unknown>>) {
-      expect(gate.preState).toBeDefined();
-      expect(gate.actions).toBeDefined();
-      const expected = gate.expected as Record<string, unknown>;
-      expect(expected.canonicalSemanticFingerprint).toMatch(/^[0-9a-f]{64}$/);
-      expect(gateFingerprint(expected)).toBe(expected.canonicalSemanticFingerprint as string);
-    }
+  test('closed limits remain exact', () => {
+    expect(schema.limits).toEqual({
+      reconstructionJournalEvents: 64,
+      retainedJournalHorizon: 48,
+      undoEntriesPerActorSession: 32,
+      redoEntriesPerActorSession: 32,
+      actorSessionsPerDocument: 16,
+      replicationUpdateBytes: 262144,
+      genesisPayloadBytes: 4194304,
+      aggregateReplayBytes: 4194304,
+      snapshotBytes: 8388608,
+      bodySequenceUtf16Units: 262144,
+      boundaryEmbedCount: 4096,
+      formattingSourceRecords: 8192,
+      removeTargets: 256,
+      repairEvidenceRecords: 4096,
+      boundaryEmbedCanonicalBytes: 4096,
+      plainJsonNesting: 4,
+      relativePositionEncodedCharacters: 349526,
+      relativePositionDecodedBytes: 262144,
+    });
   });
 
-  test('manager-stack redo rules and rejection atomicity are frozen', () => {
-    const redo = history.managerStackRedo as Record<string, unknown>;
-    expect(redo.remotePreservesRedo).toBe(true);
-    expect(redo.repairPreservesRedo).toBe(true);
-    expect(redo.sameSessionTrackedClearsRedo).toBe(true);
-    expect(redo.otherActorSessionPreservesRedo).toBe(true);
-    expect(history.rejectionAtomicity).toBe(
-      'no-yjs-commit-no-canonical-revision-no-repair-no-journal-no-history-no-notification'
+  test('binding catalog carries exact fixtures and implementation ownership', () => {
+    expect(binding.implementationStatus).toBe('catalog-only-no-runtime-claims');
+    expect(binding.ownership['2.7']).toContain('UTF-16-sequence-mapping');
+    expect(binding.ownership['2.8']).toContain('manager-stack-group-boundaries');
+    expect(binding.ownership['3.3']).toContain('IME-state-machine');
+    expect(binding.ime.fixtures.map((fixture: Json) => [fixture.id, fixture.commitText])).toEqual([
+      ['ime-remote-insert-during-compose', '!helloni'],
+      ['ime-remote-delete-intersecting-compose', 'aXef'],
+    ]);
+    expect(binding.selection.affinityPairs).toEqual([
+      [-1, 'before'],
+      [0, 'after'],
+    ]);
+  });
+
+  test('all proof scenarios have concrete actions, assertions, and owners', () => {
+    expect(history.scenarios.map((scenario: Json) => scenario.id)).toEqual(
+      Array.from({ length: 10 }, (_, index) => `G-v2-${index + 1}`)
     );
+    for (const scenario of history.scenarios as Json[]) {
+      expect(scenario.ownerTask ?? scenario.ownerTasks).toBeDefined();
+      expect(scenario.actions.length).toBeGreaterThan(0);
+      expect(scenario.assertions.length).toBeGreaterThan(0);
+    }
+    const gate = (id: string) => history.scenarios.find((scenario: Json) => scenario.id === id);
+    expect(gate('G-v2-1').assertions).toContain('redo-stack-empty-after-redo');
+    expect(gate('G-v2-3').assertions).toContain('four-boundaries-observable');
+    expect(gate('G-v2-4').actions).toContain('stop-capturing:A');
+    expect(gate('G-v2-5').actions).toContain('A:undo-remove');
+    expect(gate('G-v2-6').actions).toContain('submit-unknown-lineage-envelope');
+    expect(gate('G-v2-8').actions).toContain('insert-different-record-at-same-key');
+    expect(gate('G-v2-9').assertions).toContain('no-frozen-output-in-this-catalog');
+    expect(gate('G-v2-10').assertions).toContain('redo-pop-order-group-31-then-32');
   });
 
-  test('comparator contracts cover winner-only comparison inputs', () => {
-    const defs = Object.keys(comparators.definitions as Record<string, unknown>).sort();
-    expect(defs).toEqual([
+  test('comparators freeze concrete inputs, never implementation outputs', () => {
+    expect(comparators.frozenOutputs).toEqual([]);
+    expect(Object.keys(comparators.comparators).sort()).toEqual([
       'atomicRejection',
-      'canonicalSemanticFingerprint',
-      'canonicalState',
-      'decodedSequenceEmbedOrder',
+      'canonicalAuthoredState',
+      'decodedSequence',
       'formattingEvidence',
+      'identityProvenanceIntent',
       'localYjsParity',
       'managerStacks',
-      'normalizedIdsProvenanceAuthoredIntent',
       'repairEvidence',
     ]);
-    expect(defs).not.toContain('nativeFormatDelta');
-    expect(defs).not.toContain('formattingMetadata');
+    expect(comparators.comparators.atomicRejection.acceptedRejectionValue).toEqual({
+      yjsCommitDelta: 0,
+      canonicalRevisionDelta: 0,
+      repairEvidenceDelta: 0,
+      journalDelta: 0,
+      historyDelta: 0,
+      notificationDelta: 0,
+      auditCursorDelta: 0,
+      emittedUpdateDelta: 0,
+    });
   });
 
-  test('no loser leakage in serialized artifacts', () => {
-    const bundle = [schema, binding, history, comparators].map((a) => JSON.stringify(a)).join('\n');
-    for (const pattern of LOSER_PATTERNS) {
-      expect(bundle.includes(pattern)).toBe(false);
-    }
+  test('catalog has no placeholders, fake state fingerprints, loser leakage, or runtime imports', () => {
+    const serialized = artifacts.map((artifact) => JSON.stringify(artifact)).join('\n');
+    expect(serialized).not.toMatch(/canonicalSemanticFingerprint|expectedFingerprint|TODO|TBD|placeholder/i);
+    expect(serialized).not.toMatch(/formattingMetadata|native-attributes|native-format|toDelta/);
+    expect(readFileSync(import.meta.path, 'utf8')).not.toMatch(/from ['"]\.\.\/src/);
   });
 });
