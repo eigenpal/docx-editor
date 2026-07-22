@@ -60,10 +60,19 @@ and exposed through `EditorDriver` without exposing `EditorView`:
 - browser evidence: live load, selected italic toggle, replica convergence,
   undo, and repeat load were verified at `http://localhost:5199/`
 
-### Milestone 4 — pending
+### Milestone 4 — complete and review-approved
 
-DOCX save/reopen integration with escaped authored text, stable paragraph
-identity, semantic formatting preservation, and exact capsule substring bytes.
+Bounded save/reopen from the canonical snapshot with exact owned-region
+replacement and trusted unowned XML preservation:
+
+- initial implementation: `checkpoint-66d4826d`
+- empty document, closed-shape input, and unowned-byte hardening: `checkpoint-5a7920e8`
+- tokenizer-offset marker splicing: `checkpoint-45b672ca`
+- adjacent empty-region resave: `checkpoint-661cbd13`
+- result: 607 spike tests, 85 oracle tests, typecheck, Vite build, and strict
+  OpenSpec validation pass; focused acceptance review found no blockers
+- retained boundary: one validated POC fixture shape, not a general OOXML
+  serializer
 
 ### Milestone 5 — pending
 
