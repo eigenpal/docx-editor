@@ -41,6 +41,14 @@ export {
   type PocRun,
 } from './poc/docx';
 export {
+  createPocStore,
+  getDeterministicBootstrapUpdate,
+  POC_STORE_PARAGRAPH_ID,
+  type CreatePocStoreOptions,
+  type PocSnapshot,
+  type PocStore,
+} from './poc/store';
+export {
   validateCommand,
   validateQuery,
   snapshotAndValidateCommand,

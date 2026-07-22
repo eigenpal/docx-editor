@@ -24,7 +24,7 @@ milestone and not evidence of POC product progress.
 Zero POC product milestones are complete at rewrite time.
 
 - [x] **Milestone 1 — Bounded minimal DOCX boundary.** Generate and load one deterministic DOCX through bounded ZIP/XML checks; reject DTDs, traversal, oversized parts, and external relationships; capture one unsupported capsule substring from uncompressed `word/document.xml`.
-- [ ] **Milestone 2 — Tiny canonical Yjs store.** Use one `Y.Text`, Candidate B mark contributions, and the synchronous executor for insert/delete and bold/italic; prove two-replica synchronization and actor-local undo that preserves remote work.
+- [x] **Milestone 2 — Tiny canonical Yjs store.** Use one `Y.Text`, Candidate B mark contributions, and the synchronous executor for insert/delete and bold/italic; prove two-replica synchronization and actor-local undo that preserves remote work.
 - [ ] **Milestone 3 — Visible ProseMirror editor through EditorDriver.** Mount the editable surface and read-only replica; expose load, inspection, editing, formatting, undo, save, and reopen through the public `EditorDriver` without exposing `EditorView`.
 - [ ] **Milestone 4 — Save and reopen integration.** Rebuild the owned paragraph region, XML-escape authored text, save and reopen through the minimal adapter, preserve semantic state and stable paragraph identity, and preserve exactly the captured unsupported capsule substring.
 - [ ] **Milestone 5 — One Playwright E2E finish line.** Drive load → edit → formatting → replica convergence → remote edit → actor-local undo preserving remote work → save → reopen through `EditorDriver`; assert semantic state, stable paragraph identity, and exact captured capsule substring preservation; record the result in `poc-result.md`.

@@ -41,7 +41,7 @@
   "implementationSurface": {
     "status": "harness-audit-only-not-engine-runtime-enforcement",
     "derivation": "Imports, exports, and @spike-features annotations are scanned from every src/**/*.ts file. The SHA-256 of canonical derived modules is authoritative; per-module imports/exports below are non-authoritative review notes.",
-    "derivedSurfaceHash": "12d8f910f84c165d32972857f44bd1e6ca4ca38e07a2314f98a0734d5a0b3e6c",
+    "derivedSurfaceHash": "7e53ae41640da1136a3b0a641607d0daf4a389a7e26ef4a2d2f94c8a654dcc59",
     "modules": [
       {
         "path": "src/canonical-json.ts",
@@ -336,6 +336,14 @@
       {
         "path": "src/poc/docx.ts",
         "features": ["one-preservation-capsule"]
+      },
+      {
+        "path": "src/poc/store.ts",
+        "features": [
+          "insert-delete-split-join-operations",
+          "origin-metadata",
+          "yjs-backend"
+        ]
       },
       {
         "path": "src/rng/seeded-rng.ts",
