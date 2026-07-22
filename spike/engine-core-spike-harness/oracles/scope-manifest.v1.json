@@ -41,7 +41,7 @@
   "implementationSurface": {
     "status": "harness-audit-only-not-engine-runtime-enforcement",
     "derivation": "Imports, exports, and @spike-features annotations are scanned from every src/**/*.ts file. The SHA-256 of canonical derived modules is authoritative; per-module imports/exports below are non-authoritative review notes.",
-    "derivedSurfaceHash": "284c5dbb95f59c33a5d0fb4ce690a2ab794ee40c9779a1c5ff4bb6cd8d97de53",
+    "derivedSurfaceHash": "12d8f910f84c165d32972857f44bd1e6ca4ca38e07a2314f98a0734d5a0b3e6c",
     "modules": [
       {
         "path": "src/canonical-json.ts",

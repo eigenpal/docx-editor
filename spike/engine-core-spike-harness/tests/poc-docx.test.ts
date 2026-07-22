@@ -9,32 +9,48 @@ import {
   POC_ZIP_MAX_TOTAL_UNCOMPRESSED_BYTES,
   createPocDocxFixture,
   loadPocDocx,
-  savePocDocx,
   type LoadedPocDocx,
-  type PocRun,
 } from '../src/poc/docx';
 
-const FIXED_ZIP_DATE = new Date('1980-01-01T00:00:00Z');
+const UTF8_FLAG = 0x0800;
+const MAX_RUNS = 32;
+const MAX_RUN_TEXT_LENGTH = 4096;
+const REQUIRED_PATHS = [
+  '[Content_Types].xml',
+  '_rels/.rels',
+  'word/_rels/document.xml.rels',
+  'word/styles.xml',
+  'word/document.xml',
+] as const;
 
-async function loadFixture(): Promise<LoadedPocDocx> {
-  return loadPocDocx(await createPocDocxFixture());
+interface ZipInput {
+  readonly path?: string;
+  readonly nameBytes?: Uint8Array;
+  readonly data: Uint8Array;
+  readonly flags?: number;
+  readonly method?: number;
+  readonly extra?: Uint8Array;
+  readonly local?: Partial<{
+    nameBytes: Uint8Array;
+    flags: number;
+    method: number;
+    crc: number;
+    compressedSize: number;
+    uncompressedSize: number;
+    extra: Uint8Array;
+  }>;
+  readonly central?: Partial<{
+    flags: number;
+    method: number;
+    crc: number;
+    compressedSize: number;
+    uncompressedSize: number;
+    localOffset: number;
+  }>;
 }
 
 function bytesEqual(a: Uint8Array, b: Uint8Array): boolean {
-  if (a.length !== b.length) return false;
-  for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return false;
-  return true;
-}
-
-function crc32(data: Uint8Array): number {
-  let crc = 0xffffffff;
-  for (const byte of data) {
-    crc ^= byte;
-    for (let bit = 0; bit < 8; bit++) {
-      crc = (crc >>> 1) ^ (crc & 1 ? 0xedb88320 : 0);
-    }
-  }
-  return (crc ^ 0xffffffff) >>> 0;
+  return a.length === b.length && a.every((byte, index) => byte === b[index]);
 }
 
 function u16(value: number): number[] {
@@ -45,151 +61,110 @@ function u32(value: number): number[] {
   return [value & 0xff, (value >>> 8) & 0xff, (value >>> 16) & 0xff, (value >>> 24) & 0xff];
 }
 
-function buildStoredZip(entries: ReadonlyArray<{ path: string; data: Uint8Array; flags?: number }>): Uint8Array {
-  const localParts: number[] = [];
-  const centralParts: number[] = [];
-  let offset = 0;
+function crc32(data: Uint8Array): number {
+  let crc = 0xffffffff;
+  for (const byte of data) {
+    crc ^= byte;
+    for (let bit = 0; bit < 8; bit += 1) crc = (crc >>> 1) ^ (crc & 1 ? 0xedb88320 : 0);
+  }
+  return (crc ^ 0xffffffff) >>> 0;
+}
+
+function buildClassicZip(entries: readonly ZipInput[], comment = new Uint8Array()): Uint8Array {
+  const local: number[] = [];
+  const central: number[] = [];
+  let localOffset = 0;
   for (const entry of entries) {
-    const nameBytes = new TextEncoder().encode(entry.path);
+    const nameBytes = entry.nameBytes ?? new TextEncoder().encode(entry.path ?? '');
+    const localName = entry.local?.nameBytes ?? nameBytes;
     const data = entry.data;
-    const flags = entry.flags ?? 0;
+    const flags = entry.flags ?? UTF8_FLAG;
+    const method = entry.method ?? 0;
+    const extra = entry.extra ?? new Uint8Array();
+    const crc = crc32(data);
+    const localExtra = entry.local?.extra ?? extra;
     const localHeader = [
-      0x50,
-      0x4b,
-      0x03,
-      0x04,
+      0x50, 0x4b, 0x03, 0x04,
       ...u16(20),
-      ...u16(flags),
-      ...u16(0),
-      ...u16(0),
-      ...u16(0),
-      ...u16(0),
-      ...u32(crc32(data)),
-      ...u32(data.length),
-      ...u32(data.length),
-      ...u16(nameBytes.length),
-      ...u16(0),
-      ...nameBytes,
+      ...u16(entry.local?.flags ?? flags),
+      ...u16(entry.local?.method ?? method),
+      ...u16(0), ...u16(0),
+      ...u32(entry.local?.crc ?? crc),
+      ...u32(entry.local?.compressedSize ?? data.length),
+      ...u32(entry.local?.uncompressedSize ?? data.length),
+      ...u16(localName.length),
+      ...u16(localExtra.length),
+      ...localName,
+      ...localExtra,
     ];
-    localParts.push(...localHeader, ...data);
-    const centralHeader = [
-      0x50,
-      0x4b,
-      0x01,
-      0x02,
-      ...u16(20),
-      ...u16(20),
-      ...u16(flags),
-      ...u16(0),
-      ...u16(0),
-      ...u16(0),
-      ...u32(crc32(data)),
-      ...u32(data.length),
-      ...u32(data.length),
+    local.push(...localHeader, ...data);
+    central.push(
+      0x50, 0x4b, 0x01, 0x02,
+      ...u16(20), ...u16(20),
+      ...u16(entry.central?.flags ?? flags),
+      ...u16(entry.central?.method ?? method),
+      ...u16(0), ...u16(0),
+      ...u32(entry.central?.crc ?? crc),
+      ...u32(entry.central?.compressedSize ?? data.length),
+      ...u32(entry.central?.uncompressedSize ?? data.length),
       ...u16(nameBytes.length),
-      ...u16(0),
-      ...u16(0),
-      ...u16(0),
-      ...u16(0),
-      ...u32(0),
-      ...u32(offset),
+      ...u16(extra.length),
+      ...u16(0), ...u16(0), ...u16(0), ...u32(0),
+      ...u32(entry.central?.localOffset ?? localOffset),
       ...nameBytes,
-    ];
-    centralParts.push(...centralHeader);
-    offset += localHeader.length + data.length;
+      ...extra
+    );
+    localOffset += localHeader.length + data.length;
   }
-  const centralOffset = localParts.length;
-  const centralSize = centralParts.length;
-  const endRecord = [
-    0x50,
-    0x4b,
-    0x05,
-    0x06,
-    ...u16(0),
-    ...u16(0),
-    ...u16(entries.length),
-    ...u16(entries.length),
-    ...u32(centralSize),
-    ...u32(centralOffset),
-    ...u16(0),
+  const end = [
+    0x50, 0x4b, 0x05, 0x06,
+    ...u16(0), ...u16(0),
+    ...u16(entries.length), ...u16(entries.length),
+    ...u32(central.length), ...u32(local.length),
+    ...u16(comment.length), ...comment,
   ];
-  return new Uint8Array([...localParts, ...centralParts, ...endRecord]);
+  return new Uint8Array([...local, ...central, ...end]);
 }
 
-function patchCentralDirectorySize(
-  zipBytes: Uint8Array,
-  entryPath: string,
-  patch: { compressedSize?: number; uncompressedSize?: number }
-): Uint8Array {
-  const patched = new Uint8Array(zipBytes);
-  const readU16At = (offset: number) => patched[offset]! | (patched[offset + 1]! << 8);
-  const readU32At = (offset: number) =>
-    (patched[offset]! |
-      (patched[offset + 1]! << 8) |
-      (patched[offset + 2]! << 16) |
-      (patched[offset + 3]! << 24)) >>>
-    0;
-  const writeU32At = (offset: number, value: number) => {
-    patched[offset] = value & 0xff;
-    patched[offset + 1] = (value >>> 8) & 0xff;
-    patched[offset + 2] = (value >>> 16) & 0xff;
-    patched[offset + 3] = (value >>> 24) & 0xff;
-  };
-  let eocdOffset = -1;
-  for (let index = patched.length - 22; index >= 0; index -= 1) {
-    if (readU32At(index) !== 0x06054b50) continue;
-    const commentLength = readU16At(index + 20);
-    if (index + 22 + commentLength !== patched.length) continue;
-    const centralSize = readU32At(index + 12);
-    const centralOffset = readU32At(index + 16);
-    if (centralOffset + centralSize !== index) continue;
-    eocdOffset = index;
-    break;
-  }
-  if (eocdOffset < 0) throw new Error('EOCD not found');
-  const totalEntries = readU16At(eocdOffset + 10);
-  let offset = readU32At(eocdOffset + 16);
-  for (let index = 0; index < totalEntries; index += 1) {
-    if (readU32At(offset) !== 0x02014b50) throw new Error('invalid central directory entry');
-    const fileNameLength = readU16At(offset + 28);
-    const extraLength = readU16At(offset + 30);
-    const commentLength = readU16At(offset + 32);
-    const nameStart = offset + 46;
-    const path = new TextDecoder().decode(patched.slice(nameStart, nameStart + fileNameLength));
-    if (path === entryPath) {
-      if (patch.compressedSize !== undefined) writeU32At(offset + 20, patch.compressedSize);
-      if (patch.uncompressedSize !== undefined) writeU32At(offset + 24, patch.uncompressedSize);
-      return patched;
-    }
-    offset = nameStart + fileNameLength + extraLength + commentLength;
-  }
-  throw new Error(`entry not found: ${entryPath}`);
+async function fixtureEntries(): Promise<ZipInput[]> {
+  const zip = await JSZip.loadAsync(await createPocDocxFixture());
+  return Promise.all(
+    REQUIRED_PATHS.map(async (path) => ({
+      path,
+      data: await zip.file(path)!.async('uint8array'),
+    }))
+  );
 }
 
-async function replaceZipEntry(source: Uint8Array, path: string, data: string | Uint8Array): Promise<Uint8Array> {
-  const zip = await JSZip.loadAsync(source);
-  zip.file(path, data, { date: FIXED_ZIP_DATE });
-  return zip.generateAsync({
-    type: 'uint8array',
-    compression: 'DEFLATE',
-    compressionOptions: { level: 9 },
-  });
+async function replaceEntry(path: string, text: string): Promise<Uint8Array> {
+  const entries = await fixtureEntries();
+  return buildClassicZip(
+    entries.map((entry) =>
+      entry.path === path ? { path, data: new TextEncoder().encode(text) } : entry
+    )
+  );
 }
 
-async function documentXmlFromFixture(): Promise<string> {
-  const fixture = await createPocDocxFixture();
-  const zip = await JSZip.loadAsync(fixture);
+async function documentXml(): Promise<string> {
+  const zip = await JSZip.loadAsync(await createPocDocxFixture());
   return zip.file('word/document.xml')!.async('string');
 }
 
-describe('POC DOCX fixture', () => {
-  test('createPocDocxFixture is byte-identical across calls', async () => {
+async function loadFixture(): Promise<LoadedPocDocx> {
+  return loadPocDocx(await createPocDocxFixture());
+}
+
+describe('POC DOCX deterministic fixture', () => {
+  test('independent generation is byte-identical and standards-minimal', async () => {
     const first = await createPocDocxFixture();
     const second = await createPocDocxFixture();
+    expect(first).not.toBe(second);
     expect(bytesEqual(first, second)).toBe(true);
+    const zip = await JSZip.loadAsync(first);
+    expect(Object.keys(zip.files).sort()).toEqual([...REQUIRED_PATHS].sort());
   });
 
-  test('loads editable text, runs, paragraph identity, and capsule bytes', async () => {
+  test('loads one paragraph with exact text, formatting, identity, and capsule', async () => {
     const loaded = await loadFixture();
     expect(loaded.paragraphId).toBe(POC_PARAGRAPH_ID);
     expect(loaded.text).toBe('Hello bold italic');
@@ -199,246 +174,273 @@ describe('POC DOCX fixture', () => {
       { text: ' ', bold: false, italic: false },
       { text: 'italic', bold: false, italic: true },
     ]);
-    const documentXml = await documentXmlFromFixture();
-    const capsuleStart = documentXml.indexOf('<custom:PocUnsupported');
-    expect(capsuleStart).toBeGreaterThanOrEqual(0);
-    const capsuleEnd = documentXml.indexOf('</custom:PocUnsupported>') + '</custom:PocUnsupported>'.length;
-    expect(Buffer.from(loaded.capsuleBytes).toString('utf8')).toBe(documentXml.slice(capsuleStart, capsuleEnd));
+    expect(Buffer.from(loaded.capsuleBytes).toString('utf8')).toContain('deadbeef');
   });
 
-  test('returns defensive copies of bytes and runs', async () => {
+  test('fixture marks leading or trailing whitespace with xml:space preserve', async () => {
+    const xml = await documentXml();
+    expect(xml).toContain('<w:t xml:space="preserve">Hello </w:t>');
+    expect(xml).toContain('<w:t xml:space="preserve"> </w:t>');
+  });
+
+  test('same loaded result returns defensive byte copies and deeply frozen records', async () => {
     const loaded = await loadFixture();
-    const source = loaded.sourceBytes;
-    const capsule = loaded.capsuleBytes;
-    source[0] = source[0]! ^ 0xff;
-    capsule[0] = capsule[0]! ^ 0xff;
-    const again = await loadFixture();
-    expect(bytesEqual(again.sourceBytes, await createPocDocxFixture())).toBe(true);
-    expect(again.runs[0]?.text).toBe('Hello ');
-    expect(Object.isFrozen(again.runs)).toBe(true);
-    expect(Object.isFrozen(again.runs[0])).toBe(true);
+    const sourceBefore = loaded.sourceBytes;
+    const capsuleBefore = loaded.capsuleBytes;
+    sourceBefore[0] ^= 0xff;
+    capsuleBefore[0] ^= 0xff;
+    expect(bytesEqual(loaded.sourceBytes, await createPocDocxFixture())).toBe(true);
+    expect(Buffer.from(loaded.capsuleBytes).toString('utf8')).toContain('deadbeef');
+    expect(loaded.sourceBytes).not.toBe(loaded.sourceBytes);
+    expect(loaded.capsuleBytes).not.toBe(loaded.capsuleBytes);
+    expect(Object.isFrozen(loaded)).toBe(true);
+    expect(Object.isFrozen(loaded.runs)).toBe(true);
+    expect(Object.isFrozen(loaded.runs[0])).toBe(true);
   });
 });
 
-describe('POC DOCX trust boundary — ZIP limits', () => {
-  test('rejects archives exceeding the input byte cap', async () => {
-    const oversized = new Uint8Array(POC_ZIP_MAX_BYTES + 1);
-    await expect(loadPocDocx(oversized)).rejects.toThrow(/byte cap/i);
+describe('POC DOCX classic ZIP preflight', () => {
+  test('rejects input byte and entry count caps', async () => {
+    await expect(loadPocDocx(new Uint8Array(POC_ZIP_MAX_BYTES + 1))).rejects.toThrow(/byte cap/i);
+    const entries = Array.from({ length: POC_ZIP_MAX_ENTRIES + 1 }, (_, index) => ({
+      path: `part-${index}.xml`,
+      data: new Uint8Array([index]),
+    }));
+    await expect(loadPocDocx(buildClassicZip(entries))).rejects.toThrow(/entry count/i);
   });
 
-  test('rejects archives with too many entries', async () => {
-    const entries = Array.from({ length: POC_ZIP_MAX_ENTRIES + 1 }, (_, index) => ({
-      path: `part-${index}.txt`,
-      data: new Uint8Array([97]),
-    }));
-    await expect(loadPocDocx(buildStoredZip(entries))).rejects.toThrow(/entry/i);
+  test('rejects truncation, comments, trailing bytes, and multi-disk EOCD', async () => {
+    const fixture = await createPocDocxFixture();
+    await expect(loadPocDocx(fixture.slice(0, -1))).rejects.toThrow(/truncated|end of central/i);
+    await expect(loadPocDocx(buildClassicZip(await fixtureEntries(), new Uint8Array([1])))).rejects.toThrow(/comment/i);
+    await expect(loadPocDocx(new Uint8Array([...fixture, 0]))).rejects.toThrow(/trailing|end of central/i);
+    const multiDisk = new Uint8Array(fixture);
+    multiDisk[multiDisk.length - 18] = 1;
+    await expect(loadPocDocx(multiDisk)).rejects.toThrow(/single-disk/i);
+  });
+
+  test('rejects ZIP64 sentinels and ZIP64 records', async () => {
+    const fixture = await createPocDocxFixture();
+    const sentinel = new Uint8Array(fixture);
+    sentinel[sentinel.length - 12] = 0xff;
+    sentinel[sentinel.length - 11] = 0xff;
+    await expect(loadPocDocx(sentinel)).rejects.toThrow(/zip64/i);
+    const locator = new Uint8Array([...fixture.slice(0, -22), 0x50, 0x4b, 0x06, 0x07, ...new Uint8Array(16), ...fixture.slice(-22)]);
+    await expect(loadPocDocx(locator)).rejects.toThrow(/zip64/i);
   });
 
   test.each([
-    ['..', '../word/document.xml'],
+    ['encryption', 0x0001, /encrypt/i],
+    ['data descriptor', UTF8_FLAG | 0x0008, /descriptor/i],
+    ['unknown flag', UTF8_FLAG | 0x0010, /flag/i],
+    ['missing canonical UTF-8 flag', 0, /utf-8 flag/i],
+  ])('rejects %s flag configuration', async (_label, flags, message) => {
+    const entries = await fixtureEntries();
+    entries[0] = { ...entries[0]!, flags };
+    await expect(loadPocDocx(buildClassicZip(entries))).rejects.toThrow(message);
+  });
+
+  test('rejects unsupported compression methods', async () => {
+    const entries = await fixtureEntries();
+    entries[0] = { ...entries[0]!, method: 12 };
+    await expect(loadPocDocx(buildClassicZip(entries))).rejects.toThrow(/compression method/i);
+  });
+
+  test('rejects invalid UTF-8 names, non-ASCII names, and extra-field name overrides', async () => {
+    const entries = await fixtureEntries();
+    entries[0] = { ...entries[0]!, nameBytes: new Uint8Array([0xc3, 0x28]) };
+    await expect(loadPocDocx(buildClassicZip(entries))).rejects.toThrow(/utf-8/i);
+    entries[0] = { ...entries[0]!, path: 'é.xml', nameBytes: undefined };
+    await expect(loadPocDocx(buildClassicZip(entries))).rejects.toThrow(/ascii/i);
+    entries[0] = {
+      ...entries[0]!,
+      path: '[Content_Types].xml',
+      extra: new Uint8Array([0x75, 0x70, 0x01, 0x00, 0x00]),
+    };
+    await expect(loadPocDocx(buildClassicZip(entries))).rejects.toThrow(/extra field/i);
+  });
+
+  test.each([
+    ['parent segment', '../word/document.xml'],
+    ['dot segment', 'word/./document.xml'],
     ['absolute', '/word/document.xml'],
     ['backslash', 'word\\document.xml'],
-    ['nul', 'word/document\u0000.xml'],
-  ])('rejects traversal path (%s) using original central-directory name', async (_label, unsafePath) => {
-    const fixture = await createPocDocxFixture();
-    const zip = await JSZip.loadAsync(fixture);
-    const documentXml = await zip.file('word/document.xml')!.async('uint8array');
-    const malicious = buildStoredZip([
-      { path: '[Content_Types].xml', data: new TextEncoder().encode('<Types/>') },
-      { path: unsafePath, data: documentXml },
-    ]);
-    await expect(loadPocDocx(malicious)).rejects.toThrow(/path/i);
+    ['NUL', 'word/document\u0000.xml'],
+  ])('rejects unsafe path: %s', async (_label, path) => {
+    const entries = await fixtureEntries();
+    entries[4] = { ...entries[4]!, path };
+    await expect(loadPocDocx(buildClassicZip(entries))).rejects.toThrow(/path/i);
   });
 
-  test('rejects declared per-entry uncompressed size above cap', async () => {
-    const fixture = await createPocDocxFixture();
-    const zip = await JSZip.loadAsync(fixture);
-    const tiny = new Uint8Array([0x78]);
-    const parts = [
-      '[Content_Types].xml',
-      '_rels/.rels',
-      'word/_rels/document.xml.rels',
-      'word/styles.xml',
-      'word/document.xml',
-    ] as const;
-    const entries = await Promise.all(
-      parts.map(async (path) => ({
-        path,
-        data: path === 'word/document.xml' ? tiny : await zip.file(path)!.async('uint8array'),
-      }))
-    );
-    const stored = buildStoredZip(entries);
-    const patched = patchCentralDirectorySize(stored, 'word/document.xml', {
-      uncompressedSize: POC_ZIP_MAX_ENTRY_UNCOMPRESSED_BYTES + 1,
-    });
-    await expect(loadPocDocx(patched)).rejects.toThrow(/uncompressed/i);
+  test.each([
+    ['filename', { nameBytes: new TextEncoder().encode('word/other.xml') }],
+    ['flags', { flags: 0 }],
+    ['method', { method: 8 }],
+    ['CRC', { crc: 1 }],
+    ['compressed size', { compressedSize: 1 }],
+    ['uncompressed size', { uncompressedSize: 1 }],
+  ])('rejects local-central %s mismatch', async (_label, local) => {
+    const entries = await fixtureEntries();
+    entries[4] = { ...entries[4]!, local };
+    await expect(loadPocDocx(buildClassicZip(entries))).rejects.toThrow(/local.*central|mismatch/i);
   });
 
-  test('rejects decompression ratio before inflating when metadata allows the check', async () => {
-    const fixture = await createPocDocxFixture();
-    const zip = await JSZip.loadAsync(fixture);
-    const documentXml = await zip.file('word/document.xml')!.async('uint8array');
-    const parts = [
-      '[Content_Types].xml',
-      '_rels/.rels',
-      'word/_rels/document.xml.rels',
-      'word/styles.xml',
-      'word/document.xml',
-    ] as const;
-    const entries = await Promise.all(
-      parts.map(async (path) => ({
-        path,
-        data: path === 'word/document.xml' ? documentXml : await zip.file(path)!.async('uint8array'),
-      }))
-    );
-    const stored = buildStoredZip(entries);
-    const patched = patchCentralDirectorySize(stored, 'word/document.xml', {
-      compressedSize: 1,
-      uncompressedSize: POC_ZIP_MAX_DECOMPRESSION_RATIO + 1,
-    });
-    await expect(loadPocDocx(patched)).rejects.toThrow(/ratio/i);
+  test('rejects overlapping entry ranges and invalid offsets', async () => {
+    const entries = await fixtureEntries();
+    entries[1] = { ...entries[1]!, central: { localOffset: 0 } };
+    await expect(loadPocDocx(buildClassicZip(entries))).rejects.toThrow(/overlap|offset/i);
+    entries[1] = { ...entries[1]!, central: { localOffset: 0xffffffff } };
+    await expect(loadPocDocx(buildClassicZip(entries))).rejects.toThrow(/zip64|offset|range/i);
   });
 
-  test('rejects aggregate uncompressed size after decompression', async () => {
-    const fixture = await createPocDocxFixture();
-    const zip = await JSZip.loadAsync(fixture);
+  test('preflights declared per-entry, aggregate, and ratio caps', async () => {
+    const entries = await fixtureEntries();
+    entries[4] = {
+      ...entries[4]!,
+      local: { uncompressedSize: POC_ZIP_MAX_ENTRY_UNCOMPRESSED_BYTES + 1 },
+      central: { uncompressedSize: POC_ZIP_MAX_ENTRY_UNCOMPRESSED_BYTES + 1 },
+    };
+    await expect(loadPocDocx(buildClassicZip(entries))).rejects.toThrow(/entry.*uncompressed/i);
+
     const filler = new Uint8Array(30 * 1024);
-    filler.fill(97);
-    const requiredEntries = await Promise.all(
-      ([
-        '[Content_Types].xml',
-        '_rels/.rels',
-        'word/_rels/document.xml.rels',
-        'word/styles.xml',
-        'word/document.xml',
-      ] as const).map(async (path) => ({
-        path,
-        data: await zip.file(path)!.async('uint8array'),
-      }))
-    );
-    const fillerEntries = ['extra/a.bin', 'extra/b.bin', 'extra/c.bin', 'extra/d.bin', 'extra/e.bin'].map(
-      (path) => ({ path, data: filler })
-    );
-    await expect(loadPocDocx(buildStoredZip([...requiredEntries, ...fillerEntries]))).rejects.toThrow(/aggregate/i);
-  });
-
-  test('rejects duplicate required entries', async () => {
-    const fixture = await createPocDocxFixture();
-    const zip = await JSZip.loadAsync(fixture);
-    const documentXml = await zip.file('word/document.xml')!.async('uint8array');
-    const duplicate = buildStoredZip([
-      { path: '[Content_Types].xml', data: await zip.file('[Content_Types].xml')!.async('uint8array') },
-      { path: '_rels/.rels', data: await zip.file('_rels/.rels')!.async('uint8array') },
-      { path: 'word/_rels/document.xml.rels', data: await zip.file('word/_rels/document.xml.rels')!.async('uint8array') },
-      { path: 'word/styles.xml', data: await zip.file('word/styles.xml')!.async('uint8array') },
-      { path: 'word/document.xml', data: documentXml },
-      { path: 'word/document.xml', data: documentXml },
-    ]);
-    await expect(loadPocDocx(duplicate)).rejects.toThrow(/duplicate/i);
-  });
-
-  test('rejects case-colliding entry paths', async () => {
-    const fixture = await createPocDocxFixture();
-    const zip = await JSZip.loadAsync(fixture);
-    zip.file('Word/document.xml', await zip.file('word/document.xml')!.async('string'), {
-      date: FIXED_ZIP_DATE,
-    });
-    await expect(
-      loadPocDocx(
-        await zip.generateAsync({
-          type: 'uint8array',
-          compression: 'DEFLATE',
-          compressionOptions: { level: 9 },
-        })
-      )
-    ).rejects.toThrow(/collision/i);
-  });
-
-  test('rejects encrypted zip entries when flagged', async () => {
-    const fixture = await createPocDocxFixture();
-    const zip = await JSZip.loadAsync(fixture);
-    const documentXml = await zip.file('word/document.xml')!.async('uint8array');
-    const encrypted = buildStoredZip([
-      { path: '[Content_Types].xml', data: await zip.file('[Content_Types].xml')!.async('uint8array') },
-      { path: '_rels/.rels', data: await zip.file('_rels/.rels')!.async('uint8array') },
-      { path: 'word/_rels/document.xml.rels', data: await zip.file('word/_rels/document.xml.rels')!.async('uint8array') },
-      { path: 'word/styles.xml', data: await zip.file('word/styles.xml')!.async('uint8array') },
-      { path: 'word/document.xml', data: documentXml, flags: 0x0001 },
-    ]);
-    await expect(loadPocDocx(encrypted)).rejects.toThrow(/encrypt/i);
-  });
-});
-
-describe('POC DOCX trust boundary — XML and relationships', () => {
-  test('rejects DOCTYPE and ENTITY declarations before interpretation', async () => {
-    const fixture = await createPocDocxFixture();
-    for (const payload of [
-      '<!DOCTYPE w:document [<!ENTITY x "1">]><w:document/>',
-      '<?xml version="1.0"?><!DOCTYPE foo SYSTEM "http://evil.test/x.dtd"><w:document/>',
-      '<root><!ENTITY x "1"></root>',
-    ]) {
-      await expect(loadPocDocx(await replaceZipEntry(fixture, 'word/document.xml', payload))).rejects.toThrow(
-        /dtd|entity/i
-      );
-    }
-  });
-
-  test('rejects external relationship targets', async () => {
-    const fixture = await createPocDocxFixture();
-    const externalRoot = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
-  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml" TargetMode="External"/>
-</Relationships>`;
-    await expect(loadPocDocx(await replaceZipEntry(fixture, '_rels/.rels', externalRoot))).rejects.toThrow(
-      /external/i
-    );
-  });
-
-  test('rejects remote relationship targets even without TargetMode', async () => {
-    const fixture = await createPocDocxFixture();
-    const remote = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
-  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="https://evil.test/doc.xml"/>
-</Relationships>`;
-    await expect(loadPocDocx(await replaceZipEntry(fixture, '_rels/.rels', remote))).rejects.toThrow(/external|remote/i);
-  });
-
-  test('rejects malformed owned markers and duplicate capsule occurrences', async () => {
-    const fixture = await createPocDocxFixture();
-    const documentXml = await documentXmlFromFixture();
-    const missingStart = documentXml.replace('<poc:OwnedStart/>', '');
-    await expect(loadPocDocx(await replaceZipEntry(fixture, 'word/document.xml', missingStart))).rejects.toThrow(
-      /owned/i
-    );
-    const duplicateCapsule = documentXml.replace('</custom:PocUnsupported>', '</custom:PocUnsupported><custom:PocUnsupported/>');
-    await expect(loadPocDocx(await replaceZipEntry(fixture, 'word/document.xml', duplicateCapsule))).rejects.toThrow(
-      /capsule/i
-    );
-  });
-});
-
-describe('POC DOCX save boundary', () => {
-  test('save/reopen preserves text, formatting, paragraph identity, and exact capsule bytes', async () => {
-    const loaded = await loadFixture();
-    const editedRuns: PocRun[] = [
-      { text: 'Saved ', bold: false, italic: false },
-      { text: 'bold', bold: true, italic: false },
-      { text: ' & ', bold: false, italic: false },
-      { text: 'italic', bold: false, italic: true },
+    const aggregate = [
+      ...(await fixtureEntries()),
+      ...Array.from({ length: 5 }, (_, index) => ({ path: `extra/${index}.xml`, data: filler })),
     ];
-    const saved = await savePocDocx(loaded, editedRuns);
-    const reopened = await loadPocDocx(saved);
-    expect(reopened.paragraphId).toBe(POC_PARAGRAPH_ID);
-    expect(reopened.text).toBe('Saved bold & italic');
-    expect(reopened.runs).toEqual(editedRuns);
-    expect(bytesEqual(reopened.capsuleBytes, loaded.capsuleBytes)).toBe(true);
+    await expect(loadPocDocx(buildClassicZip(aggregate))).rejects.toThrow(/aggregate/i);
 
-    const zip = await JSZip.loadAsync(saved);
-    const documentXml = await zip.file('word/document.xml')!.async('string');
-    expect(documentXml).toContain('&amp;');
-    expect(documentXml).not.toContain('Saved bold & italic');
-    const capsuleStart = documentXml.indexOf('<custom:PocUnsupported');
-    const capsuleEnd = documentXml.indexOf('</custom:PocUnsupported>') + '</custom:PocUnsupported>'.length;
-    expect(documentXml.slice(capsuleStart, capsuleEnd)).toBe(Buffer.from(loaded.capsuleBytes).toString('utf8'));
+    const ratio = await fixtureEntries();
+    ratio[4] = {
+      ...ratio[4]!,
+      local: { compressedSize: 1, uncompressedSize: POC_ZIP_MAX_DECOMPRESSION_RATIO + 1 },
+      central: { compressedSize: 1, uncompressedSize: POC_ZIP_MAX_DECOMPRESSION_RATIO + 1 },
+    };
+    await expect(loadPocDocx(buildClassicZip(ratio))).rejects.toThrow(/ratio/i);
+  });
+
+  test('post-inflate verifies declared size and CRC', async () => {
+    const entries = await fixtureEntries();
+    const document = entries[4]!;
+    entries[4] = {
+      ...document,
+      local: { crc: 1 },
+      central: { crc: 1 },
+    };
+    await expect(loadPocDocx(buildClassicZip(entries))).rejects.toThrow(/crc/i);
+  });
+});
+
+describe('POC DOCX XML and relationship boundary', () => {
+  test.each([
+    ['[Content_Types].xml', '<! DOCTYPE Types><Types/>'],
+    ['_rels/.rels', '<!DoCtYpE Relationships><Relationships/>'],
+    ['word/_rels/document.xml.rels', '<! ENTITY x "y"><Relationships/>'],
+    ['word/styles.xml', '<!eNtItY x "y"><w:styles/>'],
+  ])('rejects DTD/entity variants in %s', async (path, xml) => {
+    await expect(loadPocDocx(await replaceEntry(path, xml))).rejects.toThrow(/dtd|entity/i);
+  });
+
+  test('requires UTF-8 XML with optional UTF-8 BOM only', async () => {
+    const xml = await documentXml();
+    await expect(
+      loadPocDocx(await replaceEntry('word/document.xml', xml.replace('encoding="UTF-8"', 'encoding="UTF-16"')))
+    ).rejects.toThrow(/utf-8|encoding/i);
+    const bom = new Uint8Array([0xef, 0xbb, 0xbf, ...new TextEncoder().encode(xml)]);
+    const entries = await fixtureEntries();
+    entries[4] = { ...entries[4]!, data: bom };
+    await expect(loadPocDocx(buildClassicZip(entries))).resolves.toMatchObject({ paragraphId: POC_PARAGRAPH_ID });
+  });
+
+  test.each([
+    [
+      'prefixed single-quoted external mode',
+      `<r:Relationships xmlns:r='x'><r:Relationship Id='x' Type='x' Target='word/document.xml' TargetMode='eXtErNaL'/></r:Relationships>`,
+    ],
+    [
+      'entity-encoded remote scheme',
+      `<Relationships xmlns='x'><Relationship Id='x' Type='x' Target='java&#x73;cript:alert(1)'/></Relationships>`,
+    ],
+    [
+      'control-obscured remote scheme',
+      `<Relationships xmlns='x'><Relationship Id='x' Type='x' Target='https&#x0A;://evil.test/x'/></Relationships>`,
+    ],
+    [
+      'absolute target',
+      `<Relationships xmlns='x'><Relationship Id='x' Type='x' Target='/word/document.xml'/></Relationships>`,
+    ],
+    [
+      'traversal target',
+      `<Relationships xmlns='x'><Relationship Id='x' Type='x' Target='../document.xml'/></Relationships>`,
+    ],
+  ])('rejects relationship variant: %s', async (_label, xml) => {
+    await expect(loadPocDocx(await replaceEntry('_rels/.rels', xml))).rejects.toThrow(/relationship|external|remote|target/i);
+  });
+
+  test('rejects malformed relationship attributes', async () => {
+    const xml = `<Relationships xmlns='x'><Relationship Id='x' Type='x' Target='word/document.xml' Broken/></Relationships>`;
+    await expect(loadPocDocx(await replaceEntry('_rels/.rels', xml))).rejects.toThrow(/attribute|relationship/i);
+  });
+});
+
+describe('POC document shape tokenizer', () => {
+  test('parses explicit false and zero bold/italic values', async () => {
+    const xml = (await documentXml())
+      .replace('<w:b/>', '<w:b w:val="false"/>')
+      .replace('<w:i/>', '<w:i w:val="0"/>');
+    const loaded = await loadPocDocx(await replaceEntry('word/document.xml', xml));
+    expect(loaded.runs[1]?.bold).toBe(false);
+    expect(loaded.runs[3]?.italic).toBe(false);
+  });
+
+  test.each([
+    ['unknown owned markup', '<poc:OwnedStart/>', '<poc:OwnedStart/><w:tab/>'],
+    [
+      'wrong owned namespace prefix',
+      '<w:r><w:rPr><w:b/></w:rPr><w:t>bold</w:t></w:r>',
+      '<x:r><x:rPr><x:b/></x:rPr><x:t>bold</x:t></x:r>',
+    ],
+    ['markup inside text', '<w:t>bold</w:t>', '<w:t>bo<w:b/>ld</w:t>'],
+    ['unknown paragraph properties', '</w:pPr>', '<w:keepNext/></w:pPr>'],
+    ['unknown body child', '<w:sectPr>', '<w:bookmarkStart/><w:sectPr>'],
+    ['duplicate paragraph', '</w:p>', '</w:p><w:p/>'],
+    ['duplicate capsule', '</custom:PocUnsupported>', '</custom:PocUnsupported><custom:PocUnsupported/>'],
+    ['missing owned end', '<poc:OwnedEnd/>', ''],
+  ])('rejects malformed exact shape: %s', async (_label, before, after) => {
+    const xml = (await documentXml()).replace(before, after);
+    await expect(loadPocDocx(await replaceEntry('word/document.xml', xml))).rejects.toThrow();
+  });
+
+  test('enforces xml:space preserve for boundary whitespace', async () => {
+    const xml = (await documentXml()).replace('<w:t xml:space="preserve">Hello </w:t>', '<w:t>Hello </w:t>');
+    await expect(loadPocDocx(await replaceEntry('word/document.xml', xml))).rejects.toThrow(/xml:space|whitespace/i);
+  });
+
+  test('rejects invalid XML controls and unknown text attributes', async () => {
+    const xml = (await documentXml()).replace('Hello ', `Hello \u0001`);
+    await expect(loadPocDocx(await replaceEntry('word/document.xml', xml))).rejects.toThrow(/control|xml character/i);
+    const unknown = (await documentXml()).replace(
+      '<w:t xml:space="preserve">Hello </w:t>',
+      '<w:t xml:space="preserve" bad="1">Hello </w:t>'
+    );
+    await expect(loadPocDocx(await replaceEntry('word/document.xml', unknown))).rejects.toThrow(/attribute|markup/i);
+  });
+
+  test('enforces run count and per-run text bounds', async () => {
+    const xml = await documentXml();
+    const tooManyRuns = '<w:r><w:t>x</w:t></w:r>'.repeat(MAX_RUNS + 1);
+    const countPayload = xml.replace(
+      /<poc:OwnedStart\/>[\s\S]*?<poc:OwnedEnd\/>/,
+      `<poc:OwnedStart/>${tooManyRuns}<poc:OwnedEnd/>`
+    );
+    await expect(loadPocDocx(await replaceEntry('word/document.xml', countPayload))).rejects.toThrow(/run count/i);
+    const longText = 'x'.repeat(MAX_RUN_TEXT_LENGTH + 1);
+    const textPayload = xml.replace('<w:t>bold</w:t>', `<w:t>${longText}</w:t>`);
+    await expect(loadPocDocx(await replaceEntry('word/document.xml', textPayload))).rejects.toThrow(/run text/i);
+  });
+
+  test('decodes predefined and numeric entities without interpreting markup', async () => {
+    const xml = (await documentXml()).replace('<w:t>bold</w:t>', '<w:t>&lt;&amp;&#65;&#x42;</w:t>');
+    const loaded = await loadPocDocx(await replaceEntry('word/document.xml', xml));
+    expect(loaded.runs[1]?.text).toBe('<&AB');
   });
 });

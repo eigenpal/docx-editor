@@ -29,7 +29,6 @@ export {
 export {
   createPocDocxFixture,
   loadPocDocx,
-  savePocDocx,
   POC_PARAGRAPH_ID,
   POC_ZIP_MAX_BYTES,
   POC_ZIP_MAX_ENTRIES,
