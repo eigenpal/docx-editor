@@ -15,8 +15,10 @@ groups map with their parent requirement unless a correction is called out.
   baseline or compatibility input.
 
 The production authority is `document-engine/design.md` plus the ten capability
-specifications. `engine-core-spike` remains an independent prerequisite and is
-strengthened separately as a fifteen-gate falsification change.
+specifications. The completed `engine-core-spike` KISS browser POC remains an
+independent, disposable evidence input. Its accepted decisions are consolidated
+in `spike-architecture-decision.md`; production implementation and conformance
+remain in this change.
 
 ## Cross-source contradiction resolution
 
@@ -486,9 +488,12 @@ strengthened separately as a fifteen-gate falsification change.
 
 ## `engine-core-spike`
 
-The spike remains independent. Its artifacts are accounted for so the
-production change depends on its explicitly strengthened fifteen-gate risk
-boundary.
+The spike remains independent and disposable. Its five reviewed milestones and
+one Playwright finish line establish the narrow evidence recorded in
+`engine-core-spike/poc-result.md`. The former fifteen-gate program is retired as
+a spike prerequisite; surviving package, store, binding, layout, security, and
+performance obligations are assigned to the production tasks and conformance
+gates in this change.
 
 ### `proposal.md`
 
@@ -504,8 +509,9 @@ boundary.
 - **migrated** — Revision-aware server contexts -> server/language bindings.
 - **migrated** — Mandatory security mechanics -> design D10/D14, sync, server,
   and performance security conformance.
-- **migrated** — Narrow one-story/text/local+Yjs spike scope and architecture
-  falsification intent -> prerequisite step 1 in design Migration Plan.
+- **migrated** — Narrow one-story/text/local+Yjs POC evidence and architecture
+  decisions -> accepted prerequisite evidence and
+  `spike-architecture-decision.md` in Migration Plan step 1.
 - **migrated** — Later backend only through conformance -> sync and performance
   specs.
 
@@ -534,11 +540,11 @@ boundary.
   server contexts -> layout/output and server specs.
 - **migrated** — R11 auth/authz, limits, tenant isolation, malformed update,
   audit, and no external loads -> sync/server/security conformance.
-- **migrated** — Spike gates for local operations, model-first commit,
+- **migrated** — Former spike proposals for local operations, model-first commit,
   two-client convergence, headless edit, caret-before insertion, caret deletion,
   IME, per-user undo, model-only layout parity, and authored export/reopen ->
   editor-binding, store, layout, lossless, and conformance acceptance suites.
-- **migrated** — Strengthened gates for selective capsule preservation,
+- **migrated** — Former strengthened-gate proposals for selective capsule preservation,
   browser/server schema-command parity, concurrent annotation anchors,
   origin/awareness separation, and bounded large-document edit work ->
   lossless, object-model, annotation, sync, binding, and performance
@@ -547,10 +553,14 @@ boundary.
   conformance requirements.
 - **migrated** — Post-spike sequence paste/lists, tables, multi-story/package,
   full OOXML -> consolidated design Migration Plan.
-- **deferred** — Exact Yjs table and mark record shapes -> spike selects shapes;
-  production invariant is model-shaped state in sync spec.
-- **deferred** — Undo mechanism choice -> spike must select an implementation;
-  behavior is fixed in semantic-store requirements.
+- **corrected** — The POC selected a long-lived flat story sequence plus
+  immutable Candidate B mark contributions and rejected the v1 nested shape.
+  Production task 5.2 owns the complete root schema, containers, provenance,
+  annotations, allocators, migrations, and invariants.
+- **corrected** — The POC selected actor/session-scoped `Y.UndoManager` composed
+  with semantic repair and rejected inverse-`DocOp` collaborative history.
+  Production tasks 4.11–4.12 and 5.6–5.10 own common behavior, durable redo,
+  compaction, persistence, GC, retention, and client lifecycle.
 - **migrated** — Persistence/schema-evolution question -> required before
   durable addressable documents in store and sync specs.
 - **deferred** — Snapshot cadence, compaction, and garbage-collection defaults
@@ -567,7 +577,7 @@ boundary.
   `spike/engine-core-spike-harness/migration/playwright-inventory.v1.json`,
   `spike/engine-core-spike-harness/migration/package-test-inventory.v1.json`,
   and applicable OpenSpec requirements. `engine-core-spike` remains only the
-  independent prerequisite defined above.
+  independent, non-shipping evidence input defined above.
 - **retired** — Inventory entries marked implementation-only have no replacement
   requirement. They remain tombstones and migration audit input, not future
   conformance obligations.

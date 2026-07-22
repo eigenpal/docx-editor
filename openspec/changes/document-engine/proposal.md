@@ -78,5 +78,6 @@ capabilities remain independent delivery changes.
   dependencies to their owning packages.
 - **Migration:** absorbs `modular-core-api`, `ooxml-document-pipeline`,
   `chromium-free-rendering-engine`, `remote-document-sync`, and
-  `core-api-contract`; `engine-core-spike` remains the prerequisite
-  falsification gate.
+  `core-api-contract`; the completed `engine-core-spike` KISS browser POC and
+  `spike-architecture-decision.md` are prerequisite evidence. Production
+  implementation and conformance remain owned entirely by this change.

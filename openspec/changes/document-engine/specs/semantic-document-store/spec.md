@@ -81,8 +81,12 @@ awareness, and display items without exposing backend bytes.
 ### Requirement: History and undo are behaviorally consistent
 Solo and collaborative stores SHALL expose equivalent undo grouping, redo, ID
 restoration, and origin reporting. Collaborative undo MUST affect only eligible
-changes authored by the current user. The implementation mechanism MUST be
-selected by the falsification spike.
+changes authored by the current user. As fixed by
+`../../spike-architecture-decision.md`, the Yjs backend MUST use an
+actor/session-scoped `Y.UndoManager` over eligible tracked local origins,
+composed with semantic validation, normalization, grouping, identity behavior,
+and notifications. Hand-authored inverse `DocOp` history MUST NOT implement
+collaborative transformation.
 
 #### Scenario: Per-user collaborative undo
 - **WHEN** two users edit and the first user invokes undo

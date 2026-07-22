@@ -66,8 +66,10 @@ unchanged.
 
 ## POC milestones
 
-Zero POC product milestones are complete at rewrite time. The OpenSpec rewrite is
-completed setup/decision work and does not count as product progress.
+At scope-rewrite time zero POC product milestones were complete. All five are
+now review-approved; current evidence is recorded in `implementation-status.md`
+and `poc-result.md`. The OpenSpec rewrite remains setup/decision work and does
+not count as a product milestone.
 
 ### Milestone 1 — Bounded minimal DOCX boundary
 

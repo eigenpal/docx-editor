@@ -276,11 +276,14 @@ replication. `AwarenessOrigin` identifies ephemeral presence and never enters
 authored state. Projection-generated transactions are ignored by the forward
 mapper.
 
-Undo behavior is defined, not its mechanism: solo and collaborative modes expose
-the same grouping and redo behavior, and collaborative undo affects only the
-current user's eligible changes. The falsification spike decides whether local
-inverse operations, Yjs undo facilities, or a composed mechanism satisfies that
-contract.
+Undo behavior is defined at the common store contract: solo and collaborative
+modes expose the same grouping and redo behavior, and collaborative undo affects
+only the current user's eligible changes. The completed POC rejected
+hand-authored inverse `DocOp` history for collaboration and selected a composed
+mechanism: actor/session-scoped `Y.UndoManager` transforms tracked local Yjs
+work, while the semantic store/coordinator owns validation, normalization,
+identity behavior, grouping, and notifications. See
+`spike-architecture-decision.md` ADR-S4.
 
 History records `ActorId`, `SessionId`, group ID, commit ID, mutation origin,
 forward/inverse operations, identity tombstones, and normalization ownership.
@@ -565,8 +568,9 @@ layout, and export enforce depth, count, time, memory, and output limits.
   declares ownership boundaries and invalidation rules; package-part diff tests
   verify untouched capsules and deterministic regeneration.
 - **Bidirectional editor reconciliation is the highest-risk subsystem** -> the
-  falsification spike gates full implementation with IME, selection, undo, and
-  randomized parity tests.
+  completed POC proves the narrow model-first/loop-prevention direction; tasks
+  6.3–6.10 gate production step mapping, fallback, incremental reconciliation,
+  selections, IME, origins, and randomized parity.
 - **Deterministic repair can discard concurrently edited invalid descendants** ->
   rules are explicit, stable-ID based, auditable, and property-tested for replica
   agreement.
@@ -589,7 +593,8 @@ layout, and export enforce depth, count, time, memory, and output limits.
 
 ## Migration Plan
 
-1. Complete the falsification spike gates before building the production model.
+1. Accept the completed KISS browser POC evidence and
+   `spike-architecture-decision.md`; keep the spike disposable.
 2. Implement the bounded package reader, authored model, preservation capsules,
    identities, and selective serializer with package-part diff fixtures.
 3. Implement semantic operations, local store, normalization, history, external
@@ -620,8 +625,11 @@ canonical persisted state.
 Production-critical architecture is decided above. The following choices must
 be settled by their named milestone without changing the contracts:
 
-- The falsification spike will select the undo implementation that satisfies
-  equal solo/collaborative behavior and per-user collaborative undo.
+- Tasks 4.11–4.12 and 5.6–5.10 will ratify durable redo, compaction, persistence,
+  GC, retention, and client lifecycle around the POC-selected collaborative undo
+  mechanism.
+- Tasks 6.3–6.8 and 6.10 will select the exact unsupported-step fallback,
+  incremental reconciliation, complete selection, and IME implementation.
 - The package-model milestone will select the streaming XML strategy and
   preservation-capsule granularity from measured fixtures.
 - The shaping milestone will select libraries and redistributable fallback

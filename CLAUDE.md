@@ -22,10 +22,12 @@ This repo is **contracts + adapters**, not the engine implementation.
 - Published packages: `@docx-editor.dev/{react,vue,nuxt,agents,i18n}` and the
   npm `core`. The in-repo `core-contract` is private.
 
-The next-generation engine is being designed greenfield. **The design sources of
-truth are `openspec/changes/engine-core-spike/` (the prerequisite falsification
-gate) and `openspec/changes/document-engine/` (the production contract), not
-this file.** This file is the operational contract for working in the repo.
+The next-generation engine is being designed greenfield. **The evidence source
+is the completed disposable POC in `openspec/changes/engine-core-spike/`; the
+production design and conformance source of truth is
+`openspec/changes/document-engine/`, including
+`spike-architecture-decision.md`, not this file.** This file is the operational
+contract for working in the repo.
 
 `openspec/changes/engine-spine-tier2/` remains a current-stack delivery change.
 Its `DocxEditorEngine` orchestration name is not the greenfield public object
@@ -36,12 +38,14 @@ expose ProseMirror types or view access; all such mapping belongs to
 
 ## Engine architecture (target)
 
-Defined by the two authoritative changes above; do not restate their detail
-here. `engine-core-spike` must pass all fifteen gates before production work on
-the canonical store, replication coordinator, editor binding, anchors, or
-bounded-work architecture proceeds. Production shaping, layout, output, and
-performance remain gated by `document-engine` conformance. `document-engine`
-owns the lossless package model,
+Defined by the production authority above and informed by the completed spike
+evidence; do not restate their detail here. The five-milestone
+`engine-core-spike` KISS browser POC is complete and its accepted decisions are
+consolidated in the production ADR. Production work proceeds only through
+`document-engine` task sequencing and MUST reimplement accepted contracts
+without importing spike modules. Package, store, binding, layout, output,
+security, and performance acceptance remain gated by `document-engine`
+conformance. `document-engine` owns the lossless package model,
 semantic store, editor binding, layout/output, `DocxEditor.*` object model,
 extension/runtime ports, addressable sync, server/language bindings, durable
 annotations, and performance/conformance contracts.

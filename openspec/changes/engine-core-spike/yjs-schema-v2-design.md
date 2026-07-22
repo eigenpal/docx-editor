@@ -17,7 +17,9 @@ Current POC scope and acceptance live in:
 - [`specs/core-kiss/spec.md`](./specs/core-kiss/spec.md)
 
 The POC is a disposable, non-shipping browser proof. Production authority
-remains the `document-engine` change.
+remains the `document-engine` change. Accepted spike decisions are consolidated
+for production in
+[`../document-engine/spike-architecture-decision.md`](../document-engine/spike-architecture-decision.md).
 
 ## Decisions retained from the earlier work
 
@@ -82,4 +84,4 @@ The historical lean JSON contracts may be consulted as implementation notes:
 
 Their compatibility filenames, descriptors, and integrity hashes do not define
 POC acceptance, do not require oracle re-freezing, and cannot expand the five
-pending product milestones or the single Playwright finish line.
+completed product milestones or the single Playwright finish line.
