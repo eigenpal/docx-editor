@@ -36,8 +36,8 @@ These items are evidence, not prerequisites that can block or expand POC scope:
   typed origins reject async, nested, reentrant, and mixed-origin transactions
   atomically.
 
-See `yjs-schema-v2-design.md` for the v2 schema narrative that informed the
-retained stack choices. That document is reference material, not a POC task list.
+See `yjs-schema-v2-design.md` for a concise historical, non-normative decision
+record. It is not a current implementation design or POC task list.
 
 ## POC architecture
 
@@ -47,7 +47,7 @@ bounded DOCX bytes
   → tiny canonical Yjs store (one bodySequence + markContributions)
   → { ProseMirror editor · read-only replica view }
   → EditorDriver (load / edit / bold / italic / undo / save / reopen)
-  → save patches owned paragraph only; capsule bytes untouched
+  → save rebuilds owned paragraph; captured capsule substring untouched
   → Playwright finish line
 ```
 
@@ -57,43 +57,50 @@ updates. One `Y.UndoManager` per actor/session scopes to tracked local work;
 remote updates remain untracked so local undo preserves remote edits.
 
 **One paragraph, one capsule.** The fixture has one editable paragraph with text,
-bold, and italic, plus one unsupported OOXML capsule whose bytes MUST survive
-save/reopen unchanged.
+bold, and italic, plus one unsupported OOXML capsule substring captured from
+uncompressed `word/document.xml`; that substring's bytes MUST survive save/reopen
+unchanged.
 
 ## POC milestones
 
-### Milestone 1 — OpenSpec rewrite (this commit)
+Zero POC product milestones are complete at rewrite time. The OpenSpec rewrite is
+completed setup/decision work and does not count as product progress.
 
-Replace falsification tasks with the five milestones below, declare the Playwright
-finish line, move former gate/oracle obligations to deferred risks, and mark this
-milestone complete.
-
-### Milestone 2 — Bounded minimal DOCX adapter
+### Milestone 1 — Bounded minimal DOCX boundary
 
 Generate one deterministic in-memory DOCX with one paragraph and one unsupported
 capsule. Load through bounded JSZip/XML validation. Reject DTDs, oversized parts,
-traversal paths, and external relationships. Save patches only the owned paragraph
-range with XML-escaped text.
+traversal paths, and external relationships. Capture the unsupported capsule
+substring from uncompressed `word/document.xml`.
 
-### Milestone 3 — Tiny canonical Yjs store and collaboration
+### Milestone 2 — Tiny canonical Yjs store
 
 Project the fixture into one `Y.Text` body sequence and immutable mark
 contributions. Support insert/delete and bold/italic toggles through the existing
 synchronous transaction foundation. Two replicas converge via real Yjs updates.
 Actor-local undo preserves remote work.
 
-### Milestone 4 — ProseMirror browser surface and EditorDriver
+### Milestone 3 — Visible ProseMirror editor through EditorDriver
 
 Mount a minimal Vite page with an editable ProseMirror surface and a read-only
 synchronized replica. Expose load, text/format inspection, edit, undo, save, and
 reopen through the existing public `EditorDriver` without exposing `EditorView`.
 Show connection, save, and reopen status without production UI chrome.
 
-### Milestone 5 — Save/reopen Playwright finish line
+### Milestone 4 — Save and reopen integration
+
+Rebuild the owned paragraph region with XML-escaped authored text, save, and
+reopen through the same adapter. Compare semantic text, bold/italic coverage,
+stable paragraph identity, and the exact captured unsupported capsule substring.
+Other required DOCX parts remain semantically valid; ZIP metadata and entry
+compression are not archive-byte comparators.
+
+### Milestone 5 — One Playwright E2E finish line
 
 One Playwright test drives the full product sequence through `EditorDriver` and
-asserts reopened text, formatting, stable paragraph identity, and exact capsule
-preservation. Record result and deferred risks in `poc-result.md`.
+asserts reopened text, formatting, stable paragraph identity, and exact captured
+capsule substring preservation. Record result and deferred risks in
+`poc-result.md`.
 
 ## Binary completion condition
 
@@ -105,7 +112,7 @@ The POC is complete when one Playwright flow proves:
 4. observe the second replica converge;
 5. apply a remote edit and prove local undo preserves it;
 6. save and reopen;
-7. verify semantic state and capsule bytes.
+7. verify semantic state and the exact captured unsupported capsule substring.
 
 No other gate suite, oracle re-freeze, or synthetic layout proof is required
 for completion.
@@ -125,10 +132,9 @@ for completion.
 The following are **not** POC blockers. They are recorded risks deferred to
 production conformance or later work:
 
-- The former **fifteen acceptance gates** and exhaustive gate suite (tasks 5.x,
-  6.x).
-- **G-v2-1..G-v2-10** descriptor re-freezes and v2 backend migration breadth
-  beyond what the POC store needs (old tasks 2.7–2.9).
+- The former exhaustive acceptance-gate suite and decision-record phase.
+- Former named v2 scenario re-freezes and backend migration breadth beyond what
+  the POC store needs.
 - **Synthetic layout**, pagination fingerprints, toy shaping fixtures, and
   bounded-work counter ceilings (old task 4.5, gate 15).
 - **Annotation anchor** concurrent-edit matrix, IME composition state machine,
@@ -150,7 +156,12 @@ Loaded DOCX bytes are untrusted. The minimal adapter MUST:
 - use a parser that does not resolve DTDs or external entities;
 - reject external relationship targets and traversal fetches;
 - escape every attacker-derived string written back into XML;
-- preserve the unsupported capsule and all unowned bytes exactly.
+- preserve exactly the captured unsupported capsule substring in uncompressed
+  `word/document.xml`.
+
+The owned paragraph region may be rebuilt. Other ZIP metadata and entry
+compression may change, and other required parts need only remain semantically
+valid; they are not archive-byte comparators.
 
 ## Risks / Trade-offs
 

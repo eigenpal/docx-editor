@@ -16,7 +16,8 @@ This change now defines a **disposable browser POC** whose only job is to prove
 one visible product sequence through the public `EditorDriver`: load a bounded
 minimal DOCX, edit and format one paragraph, synchronize two Yjs replicas,
 perform actor-local undo that preserves remote work, save, reopen, and preserve
-semantic content plus untouched capsule bytes.
+semantic content plus the exact captured unsupported capsule substring in
+uncompressed `word/document.xml`.
 
 ## What Changes
 
@@ -34,9 +35,11 @@ semantic content plus untouched capsule bytes.
   the synchronous transaction/origin executor; ProseMirror as editing surface with
   model-canonical commit order; bounded parsing and exact preservation of one
   unsupported OOXML capsule.
-- **Five POC milestones:** OpenSpec rewrite; bounded minimal DOCX adapter; tiny
-  canonical Yjs store and collaboration; ProseMirror browser surface through
-  `EditorDriver`; save/reopen Playwright finish line.
+- **Five pending POC milestones:** bounded minimal DOCX boundary; tiny canonical
+  Yjs store with two-replica synchronization and actor-local undo; visible
+  ProseMirror editor through `EditorDriver`; save/reopen integration preserving
+  semantic state and the captured capsule substring; one Playwright E2E finish
+  line. The OpenSpec rewrite is completed setup, not product progress.
 - **Binary completion.** One focused Playwright flow proves load → edit → bold →
   replica convergence → remote edit → local undo preserving remote work → save →
   reopen → semantic and capsule preservation.
@@ -45,7 +48,9 @@ semantic content plus untouched capsule bytes.
   expectations.
 - **Security boundary.** The minimal DOCX adapter MUST enforce bounded ZIP/XML,
   reject DTDs/oversized parts/traversal paths/external relationships, XML-escape
-  authored text, and preserve untouched capsule bytes exactly.
+  authored text, and preserve exactly the captured unsupported capsule substring
+  in uncompressed `word/document.xml`. The owned paragraph region may be rebuilt;
+  ZIP metadata and entry compression may change.
 - **EditorDriver unblocks browser E2E.** The existing public `EditorDriver`
   boundary enables the focused Playwright flow. This POC does not claim full
   adapter or browser parity with production packages.
@@ -55,7 +60,8 @@ semantic content plus untouched capsule bytes.
 ### New Capabilities
 
 - `canonical-document-model`: the POC's one-paragraph authored model, stable
-  paragraph identity, and one unsupported capsule preserved byte-for-byte on save.
+  paragraph identity, and one captured unsupported capsule substring preserved
+  byte-for-byte on save.
 - `semantic-operations`: the POC store's text insertion/deletion, bold/italic
   toggles, two-replica Yjs convergence, and actor-local undo preserving remote
   work.

@@ -35,19 +35,21 @@ written back into `word/document.xml`.
 
 ### Requirement: Unsupported capsule bytes are preserved exactly
 The POC fixture SHALL include one unsupported OOXML capsule with deterministic
-bytes. Save SHALL patch only the owned editable paragraph range in
-`word/document.xml` and MUST preserve the capsule and every unowned byte
-byte-for-byte.
+bytes captured as a substring of uncompressed `word/document.xml`. Save MAY
+rebuild the owned editable paragraph region but MUST preserve that captured
+capsule substring byte-for-byte. Other required parts MUST remain semantically
+valid; ZIP metadata and entry compression MAY change and are not byte
+comparators.
 
 #### Scenario: Edited paragraph leaves capsule untouched
 - **WHEN** text or formatting changes in the owned paragraph and save runs
-- **THEN** capsule bytes and all bytes outside the owned paragraph range remain
-  identical to the loaded source
+- **THEN** the captured capsule substring in uncompressed `word/document.xml`
+  remains identical to the loaded source
 
 #### Scenario: Reopen preserves capsule and semantics
 - **WHEN** the saved DOCX is loaded again through the same adapter
 - **THEN** reopened text, bold/italic coverage, stable paragraph identity, and
-  capsule bytes match the saved intent
+  captured capsule substring match the saved intent
 
 ### Requirement: Stable paragraph identity follows POC edit rules
 The POC model SHALL preserve one stable paragraph identity across load, edit,

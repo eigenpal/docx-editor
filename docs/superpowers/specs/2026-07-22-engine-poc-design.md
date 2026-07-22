@@ -7,7 +7,8 @@ binary product milestone:
 
 > Open a bounded minimal DOCX in a browser, edit and format its paragraph,
 > synchronize two Yjs replicas, undo only the local actor's change, save, reopen,
-> and preserve semantic content plus untouched capsule bytes.
+> and preserve semantic content plus the exact captured unsupported capsule
+> substring in uncompressed `word/document.xml`.
 
 The POC is complete when one Playwright flow proves that sequence through the
 public `EditorDriver`.
@@ -19,13 +20,17 @@ public `EditorDriver`.
 - Immutable Candidate B mark-contribution records.
 - The synchronous transaction/origin executor.
 - ProseMirror as the editing surface; the model remains canonical.
-- Bounded parsing and exact preservation of one unsupported OOXML capsule.
+- Bounded parsing and exact preservation of one captured unsupported OOXML
+  capsule substring in uncompressed `word/document.xml`.
 
 The previous v1 schema rejection remains historical evidence. The large,
 unexecuted formatting oracle and the fifteen-gate program are not POC
 prerequisites.
 
 ## Milestones
+
+All five product milestones are initially pending. The completed OpenSpec rewrite
+is setup/decision history and does not count as product progress.
 
 ### 1. Minimal DOCX boundary
 
@@ -48,10 +53,11 @@ status without introducing production UI.
 
 ### 4. Save and reopen
 
-Patch only the owned paragraph range in `word/document.xml`. Preserve the
-unsupported capsule bytes exactly. Reopen the generated DOCX through the same
-adapter and compare text, bold/italic coverage, stable paragraph identity, and
-capsule bytes.
+Rebuild the owned paragraph region in `word/document.xml`. Preserve the captured
+unsupported capsule substring exactly. Other ZIP metadata and entry compression
+may change; other required parts remain semantically valid but are not
+archive-byte comparators. Reopen through the same adapter and compare text,
+bold/italic coverage, stable paragraph identity, and the capsule substring.
 
 ### 5. End-to-end finish line
 

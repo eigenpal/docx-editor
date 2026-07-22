@@ -1,6 +1,8 @@
 ## Retained historical decisions (closed)
 
 These tasks are complete evidence. They do not reopen and are not POC blockers.
+The OpenSpec scope rewrite is completed setup/decision work, not a product
+milestone and not evidence of POC product progress.
 
 - [x] 1.1 Create an isolated, non-shipping spike harness with deterministic fixtures, seeded randomization, revision/origin logging, and explicit assertions that the implementation contains only the scoped proof features.
 - [x] 1.2 Define the tiny authored model for one body story, paragraphs, text, bold/italic marks, stable paragraph IDs, authored omission/raw lexical values, and one ordered unsupported OOXML capsule.
@@ -19,18 +21,20 @@ These tasks are complete evidence. They do not reopen and are not POC blockers.
 
 ## POC milestones
 
-- [x] **Milestone 1 — OpenSpec rewrite.** Replace remaining falsification tasks with five POC milestones, declare the Playwright finish line, move fifteen gates and oracle obligations to deferred risks, and align proposal, design, tasks, and capability specs.
-- [ ] **Milestone 2 — Bounded minimal DOCX adapter.** Deterministic fixture; bounded JSZip/XML load; reject DTD/traversal/external relationships; save patches owned paragraph only; preserve capsule bytes exactly; focused unit tests in `spike/engine-core-spike-harness/tests/poc-docx.test.ts`.
-- [ ] **Milestone 3 — Tiny canonical Yjs store and collaboration.** One `Y.Text` plus Candidate B mark contributions; insert/delete and bold/italic toggles via synchronous transactions; two-replica convergence; actor-local undo preserving remote work; focused unit tests in `spike/engine-core-spike-harness/tests/poc-store.test.ts`.
-- [ ] **Milestone 4 — ProseMirror browser surface and EditorDriver.** Minimal Vite page with editable editor and read-only replica; load/edit/bold/italic/undo/save/reopen through public `EditorDriver`; model-first reconciliation; focused binding tests in `spike/engine-core-spike-harness/tests/poc-browser-binding.test.ts`.
-- [ ] **Milestone 5 — Save/reopen Playwright finish line.** One Playwright test in `e2e/engine-poc.spec.ts` proves load → edit → bold → replica convergence → remote edit → local undo preserving remote work → save → reopen → semantic and capsule preservation; record result in `poc-result.md`.
+Zero POC product milestones are complete at rewrite time.
+
+- [ ] **Milestone 1 — Bounded minimal DOCX boundary.** Generate and load one deterministic DOCX through bounded ZIP/XML checks; reject DTDs, traversal, oversized parts, and external relationships; capture one unsupported capsule substring from uncompressed `word/document.xml`.
+- [ ] **Milestone 2 — Tiny canonical Yjs store.** Use one `Y.Text`, Candidate B mark contributions, and the synchronous executor for insert/delete and bold/italic; prove two-replica synchronization and actor-local undo that preserves remote work.
+- [ ] **Milestone 3 — Visible ProseMirror editor through EditorDriver.** Mount the editable surface and read-only replica; expose load, inspection, editing, formatting, undo, save, and reopen through the public `EditorDriver` without exposing `EditorView`.
+- [ ] **Milestone 4 — Save and reopen integration.** Rebuild the owned paragraph region, XML-escape authored text, save and reopen through the minimal adapter, preserve semantic state and stable paragraph identity, and preserve exactly the captured unsupported capsule substring.
+- [ ] **Milestone 5 — One Playwright E2E finish line.** Drive load → edit → formatting → replica convergence → remote edit → actor-local undo preserving remote work → save → reopen through `EditorDriver`; assert semantic state, stable paragraph identity, and exact captured capsule substring preservation; record the result in `poc-result.md`.
 
 ## Deferred risks (not POC tasks)
 
 The former falsification program items below are explicitly deferred. They do not
 block POC completion:
 
-- v2 backend migration breadth, G-v2-1..G-v2-10 re-freezes, audit/replay (old 2.7–2.9)
+- v2 backend migration breadth, former named-scenario re-freezes, audit/replay
 - binding IME/selection/annotation breadth (old 3.2–3.4)
 - architecture-suitability fixtures: selective patch comparator, browser/server command parity, annotation anchor matrix, awareness instrumentation, synthetic layout (old 4.1–4.5)
 - fifteen-gate suite and property/fuzz parity harness (old 5.1–5.7, 6.1–6.3)

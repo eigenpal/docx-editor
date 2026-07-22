@@ -62,9 +62,9 @@ production toolbar chrome or claim adapter parity with React/Vue hosts.
 ### Requirement: Former binding breadth is deferred
 The POC MUST defer IME composition state machines, full selection matrices,
 annotation anchor remapping, browser/server command parity, schema-backed
-`DocxEditor.*` command equivalence proofs, and G-v2-1..G-v2-10 descriptor gates.
-They MUST NOT block POC milestone acceptance unless the Playwright finish line
-fails on the specific behavior under test.
+`DocxEditor.*` command equivalence proofs, and former named-v2-scenario
+descriptor gates. They MUST NOT block POC milestone acceptance unless the
+Playwright finish line fails on the specific behavior under test.
 
 #### Scenario: IME matrix is proposed before finish line
 - **WHEN** work is proposed to implement the former frozen IME fixture before the
@@ -73,11 +73,11 @@ fails on the specific behavior under test.
   behavior
 
 ### Requirement: Focused binding tests precede browser E2E breadth
-Milestone 4 SHALL include direct behavior tests for model-first text mapping,
+Milestone 3 SHALL include direct behavior tests for model-first text mapping,
 selection-assisted mark toggles, reconciliation from snapshots, and loop
 prevention before the Playwright finish line is required to pass.
 
 #### Scenario: Binding unit tests pass
-- **WHEN** milestone 4 binding tests run
+- **WHEN** milestone 3 binding tests run
 - **THEN** they assert store-first commit order and reconciliation behavior
   without requiring production adapter parity tests

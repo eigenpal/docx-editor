@@ -63,7 +63,7 @@ formatting-bakeoff oracle corpus MUST NOT be consumed.
 ### Requirement: Former semantic breadth is deferred
 The POC MUST defer full split/join identity matrices, opaque anchor envelopes,
 replication coordinator idempotence proofs, PM-free server command parity, toy
-layout fingerprints, audit/replay separation, and G-v2-1..G-v2-10 exhaustive
+layout fingerprints, audit/replay separation, and former named-v2-scenario
 re-proofs. They MUST NOT block POC milestone acceptance unless the Playwright
 finish line fails on the specific behavior under test.
 

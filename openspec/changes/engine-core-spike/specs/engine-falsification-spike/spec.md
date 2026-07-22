@@ -49,14 +49,27 @@ that block POC milestones or require oracle re-freezes before later milestones.
 #### Scenario: POC implementation begins after retained work
 - **WHEN** a POC milestone adds code
 - **THEN** it MAY build on retained decisions without rerunning v1 falsification,
-  exhaustive oracle generation, or the former fifteen-gate suite
+  exhaustive oracle generation, or the former acceptance-gate suite
+
+### Requirement: Product progress starts at zero
+The POC MUST define exactly five product milestones, all pending at rewrite
+time: bounded minimal DOCX boundary; tiny canonical Yjs store with two-replica
+sync and actor-local undo; visible ProseMirror editor through `EditorDriver`;
+save/reopen integration preserving semantic state and the captured capsule
+substring; and one Playwright E2E finish line. The completed OpenSpec rewrite
+MUST remain setup/decision history and MUST NOT count as a product milestone.
+
+#### Scenario: Rewrite status is inspected
+- **WHEN** POC progress is reported immediately after the scope rewrite
+- **THEN** zero of five product milestones are complete
 
 ### Requirement: Binary completion is one Playwright flow
 The POC SHALL be complete when one focused Playwright test driven through the
 public `EditorDriver` proves: open page; load deterministic DOCX; edit and bold
 text; second replica convergence; remote edit followed by local undo preserving
 remote work; save and reopen; reopened text, formatting, stable paragraph
-identity, and exact capsule preservation.
+identity, and exact preservation of the captured unsupported capsule substring
+in uncompressed `word/document.xml`.
 
 #### Scenario: Finish line passes
 - **WHEN** the Playwright flow completes successfully
@@ -80,11 +93,11 @@ expectations. Descriptor-only artifacts MUST NOT block milestone acceptance.
   new exhaustive oracle corpora
 
 ### Requirement: Former falsification gates are deferred risks
-The POC MUST record the former fifteen acceptance gates, G-v2-1..G-v2-10
-exhaustive re-proofs, synthetic layout fixtures, annotation/awareness/audit
-breadth, browser/server command parity, and property/fuzz parity harnesses as
-deferred risks and non-goals. They MUST NOT be treated as mandatory POC
-completion criteria.
+The POC MUST record the former acceptance-gate suite, named v2 scenario
+re-proofs, synthetic layout fixtures, annotation/awareness/audit breadth,
+browser/server command parity, and property/fuzz parity harnesses as deferred
+risks and non-goals. They MUST NOT be treated as mandatory POC completion
+criteria.
 
 #### Scenario: Deferred gate work is proposed mid-POC
 - **WHEN** work is proposed to prove gate 15 pagination counters or gate 13
