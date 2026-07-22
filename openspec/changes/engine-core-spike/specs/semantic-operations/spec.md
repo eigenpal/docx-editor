@@ -43,12 +43,6 @@ updates MUST remain untracked so local undo reverses only the local actor's work
   invokes undo
 - **THEN** actor A's local change is reversed and actor B's remote change remains
 
-#### Scenario: Remote update does not clear eligible redo incorrectly
-- **WHEN** an actor undoes an eligible local group and additional remote updates
-  arrive before redo
-- **THEN** remote work is preserved and redo semantics follow the public manager
-  for the same actor/session
-
 ### Requirement: Retained v2 stack choices apply to the POC store
 The POC store SHALL use one bootstrap `bodySequence: Y.Text`, plain JSON
 opening-boundary embeds for the single paragraph, and immutable Candidate B
