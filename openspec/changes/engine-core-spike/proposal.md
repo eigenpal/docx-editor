@@ -35,7 +35,7 @@ uncompressed `word/document.xml`.
   the synchronous transaction/origin executor; ProseMirror as editing surface with
   model-canonical commit order; bounded parsing and exact preservation of one
   unsupported OOXML capsule.
-- **Five pending POC milestones:** bounded minimal DOCX boundary; tiny canonical
+- **Five POC milestones:** bounded minimal DOCX boundary; tiny canonical
   Yjs store with two-replica synchronization and actor-local undo; visible
   ProseMirror editor through `EditorDriver`; save/reopen integration preserving
   semantic state and the captured capsule substring; one Playwright E2E finish

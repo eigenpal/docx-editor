@@ -5,6 +5,9 @@ Updated: 2026-07-22
 This is the durable progress record for the v2 KISS browser POC. `tasks.md`
 remains the acceptance checklist.
 
+**Overall status:** complete and review-approved. This is POC evidence only;
+production conformance remains owned by `document-engine`.
+
 ## Retained completed work
 
 - Harness, authored model, contracts, and public `EditorDriver`: retained
@@ -74,10 +77,17 @@ replacement and trusted unowned XML preservation:
 - retained boundary: one validated POC fixture shape, not a general OOXML
   serializer
 
-### Milestone 5 — pending
+### Milestone 5 — complete and review-approved
 
-One Playwright flow is the binary finish line. Completion evidence will be
-written to `poc-result.md`.
+One deterministic Chromium Playwright flow proves the binary finish line:
+
+- initial E2E and result record: `checkpoint-be6049c9`
+- independent DOM/XML assertions and deterministic server lifecycle:
+  `checkpoint-ea38f722`
+- exact command: `cd spike/engine-core-spike-harness && bun run test:e2e`
+- result: 1 passed at `http://localhost:5199/`; 608 spike tests, 85 oracle
+  tests, typecheck, Vite build, and strict OpenSpec validation pass
+- full evidence and unchanged deferred risks: `poc-result.md`
 
 ## Current implementation authority
 
