@@ -31,12 +31,8 @@ production design and conformance source of truth is
 `spike-architecture-decision.md`, not this file.** This file is the operational
 contract for working in the repo.
 
-`openspec/changes/engine-spine-tier2/` remains a current-stack delivery change.
-Its `DocxEditorEngine` orchestration name is not the greenfield public object
-model and is non-authoritative for the target. Do not absorb or delete that
-change during greenfield consolidation. Future `EditorHost` contracts MUST NOT
-expose ProseMirror types or view access; all such mapping belongs to
-`EditorBinding`.
+Future `EditorHost` contracts MUST NOT expose ProseMirror types or view access;
+all such mapping belongs to `EditorBinding`.
 
 ## Engine architecture (target)
 

@@ -7,11 +7,9 @@ canonical representation, synchronization currency, editor ownership,
 incremental layout, addressing, and public naming. This design consolidates
 those pieces into one implementation authority.
 
-`engine-spine-tier2` remains a separate current-stack delivery change. Its
-`DocxEditorEngine` orchestration is not the greenfield public object model and is
-non-authoritative here. It is not absorbed or deleted. Any PM-bearing host
-method in that current stack MUST NOT enter the future `EditorHost`;
-`EditorBinding` remains the sole PM-aware target boundary.
+The future `EditorHost` is PM-free and `EditorBinding` remains the sole
+PM-aware target boundary. No current-stack orchestration object is an
+alternative public object model or production authority.
 
 The input and output fidelity target is OPC/OOXML. A package contains multiple
 related stories and parts, authored values whose omission is meaningful,

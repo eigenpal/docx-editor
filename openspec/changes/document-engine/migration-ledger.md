@@ -595,19 +595,17 @@ gates in this change.
   exists; until then the inventories, schema-backed commands, and non-browser
   comparators carry the surviving obligations.
 
-## Current-stack authority boundary
+## Retired current-stack proposal
 
-- **retained outside consolidation** — `engine-spine-tier2` remains a
-  current-stack delivery change and is neither absorbed nor deleted.
-- **corrected authority** — Its `DocxEditorEngine` name describes current-stack
-  orchestration only. It is not the greenfield `DocxEditor.*` object model and
-  is non-authoritative for the target API.
-- **corrected boundary** — PM-bearing current host methods are retired delivery
-  detail. Future `EditorHost` is PM-free; only `EditorBinding` may depend on
-  ProseMirror.
+- **retired and removed** — `engine-spine-tier2` is no longer an active
+  current-stack delivery change and was not absorbed into the greenfield
+  production implementation.
+- **retained boundary** — Future `EditorHost` is PM-free; only `EditorBinding`
+  may depend on ProseMirror. No current-stack orchestration name is an
+  alternative `DocxEditor.*` object model or implementation authority.
 - **verification destination** — production tasks 0.5, 6.1, 7.12, and 14.5
-  prevent current-stack orchestration and host internals from leaking into
-  target declarations or packages.
+  prevent retired orchestration and host internals from leaking into target
+  declarations or packages.
 
 ## First-round correction evidence
 
@@ -649,8 +647,8 @@ Retirement evidence is recorded only where it exists:
       correction pass.
 - [x] OpenSpec discovery after removal shows only `engine-core-spike` and
       `document-engine` among those selected greenfield consolidation changes.
-- [x] The current-stack `engine-spine-tier2` authority boundary remains explicit
-      and unabsorbed.
+- [x] The `engine-spine-tier2` source proposal is retired and removed without
+      becoming a production authority or implementation source.
 - [ ] Post-fix independent verification reports no remaining applicable
       Blocker/High issue.
 
