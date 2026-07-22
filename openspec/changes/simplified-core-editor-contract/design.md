@@ -1,3 +1,15 @@
+## Status
+
+**Provisional and intentionally open-ended.** This explores the adapter-facing
+shape of the editor; it is not a locked contract. The `DisplayItem` union,
+`GlyphRun`, `EditorScope`, and position/geometry types are deliberately
+non-exhaustive and carry explicit extension points (a `custom` render item, a
+`props` bag, open scope kinds) so the surface can grow without a breaking
+change. It does **not** supersede `document-engine`, which remains authoritative
+for the public object model and namespace (`DocxEditor.*`); where the two differ
+on how the browser facade is finally exposed, `document-engine` wins and this
+change is expected to fold into it. Acceptance here is typecheck-only.
+
 ## Context
 
 Adapters need to do everything a document editor does — load, edit, query,

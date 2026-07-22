@@ -12,13 +12,17 @@ import type { DocxEditorProps, DocxEditorRef } from './types';
  */
 export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
   function DocxEditor(props, ref) {
-    const { document: doc, zoom, locale, className, onReady, onChange } = props;
+    const { document: doc, className } = props;
 
     const bodyRef = useRef<HTMLDivElement | null>(null);
     const pagesRef = useRef<HTMLDivElement | null>(null);
     const scrollRef = useRef<HTMLDivElement | null>(null);
     const editorRef = useRef<Editor | null>(null);
     const [pages, setPages] = useState<readonly DisplayPage[]>([]);
+
+    // Latest props/callbacks, read inside effects without retriggering them.
+    const propsRef = useRef(props);
+    propsRef.current = props;
 
     const host = useMemo<EditorHost>(
       () => ({
@@ -35,17 +39,32 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
       []
     );
 
+    // Create the editor once. `document`/`zoom`/`locale` seed the initial
+    // config; later document changes flow through `load` below, not a
+    // teardown, so undo/selection/scroll survive parent re-renders.
     useEffect(() => {
-      const editor = createEditor({ host, document: doc, zoom, locale });
+      const p = propsRef.current;
+      const editor = createEditor({ host, document: p.document, zoom: p.zoom, locale: p.locale });
       editorRef.current = editor;
-      onReady?.(editor);
-      const off = onChange ? editor.on('change', onChange) : undefined;
+      propsRef.current.onReady?.(editor);
+      const off = editor.on('change', (d) => propsRef.current.onChange?.(d));
       return () => {
-        off?.();
+        off();
         editor.destroy();
         editorRef.current = null;
       };
-    }, [host, doc, zoom, locale, onReady, onChange]);
+    }, [host]);
+
+    // Reload on document-identity change (skip the initial mount, which already
+    // loaded it via createEditor).
+    const seededDoc = useRef(true);
+    useEffect(() => {
+      if (seededDoc.current) {
+        seededDoc.current = false;
+        return;
+      }
+      if (doc) editorRef.current?.load(doc);
+    }, [doc]);
 
     useImperativeHandle(
       ref,

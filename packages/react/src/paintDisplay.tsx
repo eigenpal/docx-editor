@@ -59,11 +59,13 @@ function paintItem(item: DisplayItem, key: number): ReactElement | null {
             top: item.box.y,
             width: item.box.width,
             height: item.box.height,
+            backgroundColor: item.color.kind === 'hex' ? item.color.value : undefined,
           }}
         />
       );
-    case 'tableBorder':
-    case 'decoration':
+    default:
+      // tableBorder, decoration, custom, and any future kind: not painted by
+      // this minimal renderer. The union is intentionally non-exhaustive.
       return null;
   }
 }

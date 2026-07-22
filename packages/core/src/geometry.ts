@@ -15,7 +15,7 @@
  * CONTRACT ONLY. This module is type declarations; it has no runtime.
  */
 
-import type { EditorScope } from './editor';
+import type { ViewScope } from './editor';
 import type { ColorValue, Point, Rect } from './types';
 
 export type * from './types';
@@ -23,15 +23,21 @@ export type * from './types';
 /**
  * A resolved document position inside one view. Distinct from `DocAnchor`
  * (`{ paraId, search }`) on purpose: a hit test resolves to a concrete document
- * offset in a specific body or header/footer view, not to a searchable anchor.
+ * offset in a specific view, not to a searchable anchor.
  */
 export interface DocPoint {
   /** Zero-based document offset within the addressed view. */
   readonly docPos: number;
-  readonly scope: EditorScope;
+  readonly scope: ViewScope;
 }
 
-/** One positioned run of shaped text sharing a single resolved style. */
+/**
+ * One positioned run of shaped text sharing a single resolved style. The named
+ * fields are the common ones; `props` is a deliberately open bag for any
+ * additional resolved run properties (highlight, baseline, letter-spacing,
+ * caps, effects, direction, …) so the contract can carry more without a
+ * breaking change. Adapters read what they understand and ignore the rest.
+ */
 export interface GlyphRun {
   readonly text: string;
   readonly box: Rect;
@@ -42,6 +48,8 @@ export interface GlyphRun {
   readonly italic?: boolean;
   readonly underline?: boolean;
   readonly strike?: boolean;
+  /** Open extension point for further resolved run properties. */
+  readonly props?: Readonly<Record<string, unknown>>;
 }
 
 /** A raster or vector image the engine has already resolved to a paintable
@@ -64,11 +72,15 @@ export interface BorderSeg {
 /**
  * One positioned thing to paint. Every content-bearing item carries
  * `docFrom`/`docTo`/`scope`, which is what lets selection map to geometry
- * without the adapter ever holding a document position of its own.
+ * without the adapter ever holding a document position of its own. Items that
+ * are repainted slices (repeated table headers, merged-cell continuations) set
+ * `synthetic: true` so selection mapping can skip them.
  *
- * The variant set is the paint projection of the pagination content model; new
- * content kinds add a variant here and are surfaced by the `rendering-engine`
- * spec.
+ * **This union is intentionally non-exhaustive.** It starts with the common
+ * cases; the engine may emit further kinds (shapes, text boxes, watermarks,
+ * paragraph/page borders, and so on) and richer `role`s. Adapters MUST paint
+ * the kinds they understand and ignore unknown ones — see the `custom` escape
+ * hatch — rather than assume this list is closed.
  */
 export type DisplayItem =
   | {
@@ -78,7 +90,9 @@ export type DisplayItem =
       readonly docFrom: number;
       readonly docTo: number;
       readonly blockId: number;
-      readonly scope: EditorScope;
+      readonly scope: ViewScope;
+      /** A repainted slice (e.g. repeated header); not selectable. */
+      readonly synthetic?: boolean;
     }
   | {
       readonly kind: 'image';
@@ -86,7 +100,8 @@ export type DisplayItem =
       readonly src: ImageRef;
       readonly docFrom: number;
       readonly docTo: number;
-      readonly scope: EditorScope;
+      readonly scope: ViewScope;
+      readonly synthetic?: boolean;
     }
   | { readonly kind: 'fill'; readonly box: Rect; readonly color: ColorValue }
   | {
@@ -97,8 +112,22 @@ export type DisplayItem =
   | {
       readonly kind: 'decoration';
       readonly box: Rect;
-      readonly role: 'comment' | 'trackedChange';
+      /** Open-ended: comment/tracked-change today, more roles later. */
+      readonly role: string;
       readonly refId: string;
+      /** Free-form detail for the role (revision subtype, author, colour, …). */
+      readonly detail?: Readonly<Record<string, unknown>>;
+    }
+  /**
+   * Escape hatch for anything not yet modelled as a first-class variant. Lets
+   * the engine ship new positioned content before the contract names it;
+   * adapters that don't recognise `name` skip it.
+   */
+  | {
+      readonly kind: 'custom';
+      readonly name: string;
+      readonly box: Rect;
+      readonly detail?: unknown;
     };
 
 /** One painted page: its box in content space and the items inside it. */

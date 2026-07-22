@@ -33,7 +33,7 @@
       "optional": true
     }
   },
-  "dependencies": {
+  "devDependencies": {
     "@docx-editor.dev/core-contract": "workspace:*"
   },
   "keywords": [

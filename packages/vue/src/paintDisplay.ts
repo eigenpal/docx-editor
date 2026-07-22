@@ -58,10 +58,12 @@ function paintItem(item: DisplayItem, key: number): VNode | null {
           top: `${item.box.y}px`,
           width: `${item.box.width}px`,
           height: `${item.box.height}px`,
+          backgroundColor: item.color.kind === 'hex' ? item.color.value : undefined,
         },
       });
-    case 'tableBorder':
-    case 'decoration':
+    default:
+      // tableBorder, decoration, custom, and any future kind: not painted by
+      // this minimal renderer. The union is intentionally non-exhaustive.
       return null;
   }
 }

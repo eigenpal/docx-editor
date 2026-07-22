@@ -1,10 +1,12 @@
 ## ADDED Requirements
 
-### Requirement: One framework-facing editor surface
+### Requirement: The adapter-facing surface exposes no engine types
 
-The contract SHALL expose exactly two adapter-facing shapes — `Editor` (the
-facade) and `EditorHost` (what the adapter supplies) — and no others. No editing
-engine type appears on the public surface.
+An adapter drives the editor through `Editor` (the facade) and supplies
+`EditorHost`. Whatever else the contract exposes, no member of the public
+surface SHALL reference an editing-engine or layout-internal type. The surface
+is deliberately open-ended and expected to grow; this requirement constrains
+what it must NOT leak, not an exact member count.
 
 #### Scenario: A consumer builds the editor without engine types
 

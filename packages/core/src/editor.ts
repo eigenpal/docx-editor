@@ -10,6 +10,7 @@ import type {
   ColorValue,
   ContentControlFilter,
   DocAnchor,
+  DocLocation,
   DocRange,
   DocxDocument,
   Point,
@@ -40,14 +41,36 @@ export interface EditorConfig {
 
 /**
  * The editor is N+1 editing views: one body plus one per header/footer
- * relationship. Commands must say which one they target, or they silently hit
- * the wrong surface when a header is focused.
+ * relationship, plus footnotes, text boxes, and other addressable regions.
+ * Commands must say which one they target, or they silently hit the wrong
+ * surface when a header is focused.
+ *
+ * Intentionally open-ended: this set is expected to grow (notes, frames, and
+ * whatever regions later prove addressable), so treat it as non-exhaustive
+ * rather than a closed enum.
  */
 export type EditorScope =
   | { kind: 'body' }
   | { kind: 'headerFooter'; rId: string }
+  /** A footnote/endnote region, addressed by note id. */
+  | { kind: 'note'; id: string }
+  /** A text box or floating frame with its own content, addressed by id. */
+  | { kind: 'frame'; id: string }
   /** Read-only aggregate across every view. Valid for queries, not for writes. */
   | { kind: 'all' };
+
+/** A concrete editing view — every scope except the read-only `all` aggregate. */
+export type ViewScope = Exclude<EditorScope, { kind: 'all' }>;
+
+/**
+ * A position the engine can resolve. Kept deliberately open: any accepted
+ * address form, including a `hitTest` result. New forms may be added without
+ * breaking callers, so do not treat this as a closed set.
+ */
+export type EditorPosition = DocAnchor | DocLocation | DocPoint;
+
+/** A selection expressed with any accepted position form. */
+export type EditorSelection = DocRange | { from: EditorPosition; to: EditorPosition } | DocPoint;
 
 /**
  * Everything a framework adapter must supply. The adapter is a renderer and an
@@ -96,8 +119,8 @@ export interface Editor {
   exec(command: EditorCommand, options?: { scope?: EditorScope }): ExecResult;
   /** Dry run: reports whether `exec` would apply. Never reports `changed`. */
   can(command: EditorCommand, options?: { scope?: EditorScope }): CanResult;
-  setActiveScope(scope: Exclude<EditorScope, { kind: 'all' }>): void;
-  getActiveScope(): Exclude<EditorScope, { kind: 'all' }>;
+  setActiveScope(scope: ViewScope): void;
+  getActiveScope(): ViewScope;
 
   query<K extends keyof EditorQueries>(
     query: { type: K } & EditorQueries[K],
@@ -113,11 +136,15 @@ export interface Editor {
    * event and `EditorHost.onDisplay`. */
   getDisplay(): readonly DisplayPage[];
   /** Selection rectangles in content-pixel space; defaults to the current
-   * selection. Empty when the selection is collapsed. */
-  getSelectionRects(range?: DocRange): readonly Rect[];
-  /** Caret rectangle for a position; defaults to the current caret. */
-  getCaretRect(pos?: DocAnchor): Rect | null;
-  /** Resolve a client-space point to a document position for pointer handling. */
+   * selection. Accepts any position form (including a `hitTest` result).
+   * Empty when the selection is collapsed. */
+  getSelectionRects(range?: EditorSelection): readonly Rect[];
+  /** Caret rectangle for a position; defaults to the current caret. Accepts
+   * any position form, including a `hitTest` result. */
+  getCaretRect(pos?: EditorPosition): Rect | null;
+  /** Resolve a client-space point to a document position for pointer handling.
+   * The returned `DocPoint` is accepted directly by `setSelection`,
+   * `getCaretRect`, and `getSelectionRects`. */
   hitTest(point: Point): DocPoint | null;
   getPageGeometry(): readonly { index: number; box: Rect }[];
   getScrollGeometry(): { contentHeight: number; pageTops: readonly number[] };
@@ -167,7 +194,7 @@ export interface EditorCommands extends SelectionTargeted<DocEdits> {
 
   undo: Record<never, never>;
   redo: Record<never, never>;
-  setSelection: { anchor: DocAnchor } | { range: DocRange };
+  setSelection: { anchor: EditorPosition } | { range: EditorSelection };
 }
 
 export type EditorCommand = {

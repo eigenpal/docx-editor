@@ -1,4 +1,4 @@
-import { defineComponent, h, onBeforeUnmount, onMounted, ref, type PropType } from 'vue';
+import { defineComponent, h, onBeforeUnmount, onMounted, ref, watch, type PropType } from 'vue';
 import { createEditor, type Editor, type EditorHost } from '@docx-editor.dev/core-contract/editor';
 import type { DisplayPage } from '@docx-editor.dev/core-contract/geometry';
 import type { DocxDocument } from '@docx-editor.dev/core-contract/types';
@@ -53,6 +53,15 @@ export default defineComponent({
       emit('ready', editor);
       editor.on('change', (doc) => emit('change', doc));
     });
+
+    // Reload on document change (does not fire on initial value — createEditor
+    // already loaded it), mirroring the React adapter.
+    watch(
+      () => props.document,
+      (doc) => {
+        if (doc) editor?.load(doc);
+      }
+    );
 
     onBeforeUnmount(() => {
       editor?.destroy();
