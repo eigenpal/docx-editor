@@ -210,7 +210,7 @@
   "oracleHash": {
     "algorithm": "SHA-256",
     "procedure": "SHA-256 over UTF-8 deterministic canonical JSON of an object keyed manifest, yjsSchema, bindingOracle, vocabulary, comparatorContracts, migrationInventory, packageTestInventory, scopeManifest. Emit JSON directly without rebuilding objects; recursively sort every key, including integer-like keys, by ascending ECMAScript UTF-16 code-unit lexical comparison (a < b), never locale collation; preserve dense array order. In manifest, omit only oracleHash.value to avoid circular inclusion.",
-    "value": "a96e3a8a91ad7cfbe018cc890be4d306c9bb28caa821748bb1d1790ff4d5e1ca"
+    "value": "68d98de629f6524456eeec7c3ca6efcd0578a1bb79af836232c70a74255c7783"
   },
   "comparatorVersions": {
     "xmlPartRange": "3.0.0",

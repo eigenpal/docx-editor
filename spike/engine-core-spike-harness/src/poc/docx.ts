@@ -1,5 +1,10 @@
 /** @spike-features one-preservation-capsule */
 import JSZip from 'jszip';
+import {
+  readClosedDataObject,
+  snapshotBytes,
+  snapshotDenseArray,
+} from '../contracts/closed-input';
 
 export const POC_PARAGRAPH_ID = 'poc-para-001';
 export const POC_NS = 'http://docx-editor.dev/poc/1';
@@ -66,6 +71,9 @@ const STYLES_XML = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 </w:styles>`;
 
 const CAPSULE_XML = `<custom:PocUnsupported xmlns:custom="${POC_CUSTOM_NS}" xmlns:w="${POC_W_NS}"><custom:Payload>deadbeef</custom:Payload></custom:PocUnsupported>`;
+const OWNED_START_MARKER = '<poc:OwnedStart/>';
+const OWNED_END_MARKER = '<poc:OwnedEnd/>';
+const SAVE_SOURCE_KEYS = ['capsuleBytes', 'paragraphId', 'runs', 'sourceBytes', 'text'] as const;
 
 const DOCUMENT_XML = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <w:document xmlns:w="${POC_W_NS}" xmlns:poc="${POC_NS}" xmlns:custom="${POC_CUSTOM_NS}">
@@ -270,14 +278,13 @@ export async function savePocDocx(
   source: LoadedPocDocx,
   snapshot: PocSaveSnapshot
 ): Promise<Uint8Array> {
-  if (!source || typeof source !== 'object') throw new Error('save source is required');
-  const sourceBytes = source.sourceBytes;
-  if (!(sourceBytes instanceof Uint8Array)) throw new Error('save source bytes are required');
-  const trusted = await loadPocDocx(sourceBytes);
-  validateSaveSnapshot(snapshot, trusted);
+  const captured = captureSaveInputs(source, snapshot);
+  const trusted = await loadPocDocx(captured.sourceBytes);
+  validateSaveSnapshot(captured.snapshot, trusted);
 
   const zip = await JSZip.loadAsync(trusted.sourceBytes);
-  const documentXml = buildSavedDocumentXml(trusted, snapshot);
+  const trustedDocumentXml = await zip.file('word/document.xml')!.async('string');
+  const documentXml = spliceOwnedDocumentXml(trustedDocumentXml, captured.snapshot);
   const parts: Array<[string, string]> = [];
   for (const path of REQUIRED_ENTRIES) {
     if (path === 'word/document.xml') {
@@ -291,41 +298,107 @@ export async function savePocDocx(
   return buildStoredFixture(parts);
 }
 
-function validateSaveSnapshot(snapshot: PocSaveSnapshot, trusted: LoadedPocDocx): void {
-  if (!snapshot || typeof snapshot !== 'object') throw new Error('save snapshot is required');
-  if (typeof snapshot.paragraphId !== 'string' || snapshot.paragraphId.length === 0) {
-    throw new Error('save snapshot paragraphId is required');
+interface CapturedSaveInputs {
+  readonly sourceBytes: Uint8Array;
+  readonly snapshot: PocSaveSnapshot;
+}
+
+function captureSaveInputs(source: LoadedPocDocx, snapshot: PocSaveSnapshot): CapturedSaveInputs {
+  validateSaveSourceShape(source);
+  const sourceBytes = snapshotBytes(source.sourceBytes, 'save source.sourceBytes');
+  return Object.freeze({
+    sourceBytes,
+    snapshot: captureSaveSnapshot(snapshot),
+  });
+}
+
+function validateSaveSourceShape(source: LoadedPocDocx): void {
+  if (!source || typeof source !== 'object') throw new TypeError('save source is required');
+  if (Object.getOwnPropertySymbols(source).length !== 0) {
+    throw new TypeError('save source symbol properties are forbidden');
   }
+  const names = Object.getOwnPropertyNames(source).sort();
+  const expected = [...SAVE_SOURCE_KEYS].sort();
+  if (names.length !== expected.length || names.some((name, index) => name !== expected[index])) {
+    throw new TypeError('save source fields are invalid');
+  }
+  for (const key of ['paragraphId', 'text', 'runs'] as const) {
+    const descriptor = Object.getOwnPropertyDescriptor(source, key);
+    if (!descriptor || !descriptor.enumerable || !('value' in descriptor)) {
+      throw new TypeError(`save source ${key} accessor is forbidden`);
+    }
+  }
+  for (const key of ['sourceBytes', 'capsuleBytes'] as const) {
+    const descriptor = Object.getOwnPropertyDescriptor(source, key);
+    if (!descriptor || !descriptor.enumerable) {
+      throw new TypeError(`save source ${key} descriptor is invalid`);
+    }
+    const value = source[key];
+    if (!(value instanceof Uint8Array) || Object.getPrototypeOf(value) !== Uint8Array.prototype) {
+      throw new TypeError(`save source ${key} must be a Uint8Array`);
+    }
+  }
+  if (typeof source.paragraphId !== 'string' || source.paragraphId.length === 0) {
+    throw new TypeError('save source paragraphId is invalid');
+  }
+  if (typeof source.text !== 'string') throw new TypeError('save source text is invalid');
+  if (!Array.isArray(source.runs)) throw new TypeError('save source runs are invalid');
+}
+
+function captureSaveSnapshot(snapshot: PocSaveSnapshot): PocSaveSnapshot {
+  const record = readClosedDataObject(snapshot, ['paragraphId', 'text', 'runs'], 'save snapshot');
+  const paragraphId = record.paragraphId;
+  const text = record.text;
+  if (typeof paragraphId !== 'string' || paragraphId.length === 0) {
+    throw new TypeError('save snapshot paragraphId is invalid');
+  }
+  if (typeof text !== 'string') throw new TypeError('save snapshot text is invalid');
+  const runValues = snapshotDenseArray(record.runs, 'save snapshot.runs');
+  const runs = Object.freeze(
+    runValues.map((run, index) => {
+      const runRecord = readClosedDataObject(
+        run,
+        ['bold', 'italic', 'text'],
+        `save snapshot.runs[${index}]`
+      );
+      const runText = runRecord.text;
+      const bold = runRecord.bold;
+      const italic = runRecord.italic;
+      if (typeof runText !== 'string') throw new TypeError(`save snapshot.runs[${index}].text is invalid`);
+      if (typeof bold !== 'boolean' || typeof italic !== 'boolean') {
+        throw new TypeError(`save snapshot.runs[${index}] formatting is invalid`);
+      }
+      return Object.freeze({ text: runText, bold, italic });
+    })
+  );
+  return Object.freeze({ paragraphId, text, runs });
+}
+
+function validateSaveSnapshot(snapshot: PocSaveSnapshot, trusted: LoadedPocDocx): void {
   if (snapshot.paragraphId !== trusted.paragraphId) {
     throw new Error('save snapshot paragraph identity mismatch');
   }
-  if (typeof snapshot.text !== 'string') throw new Error('save snapshot text is required');
   if (snapshot.text.length > POC_MAX_TOTAL_TEXT_LENGTH) {
     throw new Error('save snapshot text exceeds bound');
   }
-  if (!Array.isArray(snapshot.runs)) throw new Error('save snapshot runs are required');
-  if (snapshot.runs.length === 0) throw new Error('save snapshot runs must not be empty');
   if (snapshot.runs.length > POC_MAX_RUNS) throw new Error('save snapshot run count exceeds bound');
+  if (snapshot.text.length === 0) {
+    if (snapshot.runs.length !== 0) throw new Error('empty save snapshot must have no runs');
+    return;
+  }
+  if (snapshot.runs.length === 0) throw new Error('non-empty save snapshot requires runs');
 
   let reconstructed = '';
   for (let index = 0; index < snapshot.runs.length; index += 1) {
     const run = snapshot.runs[index]!;
-    if (!run || typeof run !== 'object') throw new Error('save snapshot run is invalid');
-    if (typeof run.text !== 'string') throw new Error('save snapshot run text is invalid');
-    if (typeof run.bold !== 'boolean' || typeof run.italic !== 'boolean') {
-      throw new Error('save snapshot run formatting is invalid');
-    }
+    if (run.text.length === 0) throw new Error('save snapshot run text must not be empty');
     if (run.text.length > POC_MAX_RUN_TEXT_LENGTH) {
       throw new Error('save snapshot run text exceeds bound');
     }
     validateXmlCharacters(run.text);
     reconstructed += run.text;
     const previous = snapshot.runs[index - 1];
-    if (
-      previous &&
-      previous.bold === run.bold &&
-      previous.italic === run.italic
-    ) {
+    if (previous && previous.bold === run.bold && previous.italic === run.italic) {
       throw new Error('save snapshot runs are not maximally merged');
     }
   }
@@ -334,31 +407,26 @@ function validateSaveSnapshot(snapshot: PocSaveSnapshot, trusted: LoadedPocDocx)
   }
 }
 
-function buildSavedDocumentXml(trusted: LoadedPocDocx, snapshot: PocSaveSnapshot): string {
+function locateOwnedRegion(documentXml: string): { readonly prefix: string; readonly suffix: string } {
+  const startMarker = documentXml.indexOf(OWNED_START_MARKER);
+  if (startMarker < 0) throw new Error('owned start marker missing from trusted document.xml');
+  const afterStart = startMarker + OWNED_START_MARKER.length;
+  const endMarker = documentXml.indexOf(OWNED_END_MARKER, afterStart);
+  if (endMarker < 0) throw new Error('owned end marker missing from trusted document.xml');
+  return Object.freeze({
+    prefix: documentXml.slice(0, afterStart),
+    suffix: documentXml.slice(endMarker),
+  });
+}
+
+function spliceOwnedDocumentXml(documentXml: string, snapshot: PocSaveSnapshot): string {
+  const { prefix, suffix } = locateOwnedRegion(documentXml);
   const ownedRuns = snapshot.runs.map((run) => serializePocRun(run)).join('');
-  const capsule = utf8Decoder.decode(trusted.capsuleBytes);
-  if (!capsule.startsWith('<custom:PocUnsupported') || !capsule.endsWith('</custom:PocUnsupported>')) {
-    throw new Error('trusted capsule substring shape is invalid');
-  }
-  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<w:document xmlns:w="${POC_W_NS}" xmlns:poc="${POC_NS}" xmlns:custom="${POC_CUSTOM_NS}">
-  <w:body>
-    <w:p>
-      <w:pPr><poc:ParagraphId>${escapeXmlText(snapshot.paragraphId)}</poc:ParagraphId></w:pPr>
-      <poc:OwnedStart/>
-      ${ownedRuns}
-      <poc:OwnedEnd/>
-      ${capsule}
-    </w:p>
-    <w:sectPr>
-      <w:pgSz w:w="12240" w:h="15840"/>
-      <w:pgMar w:top="1440" w:right="1440" w:bottom="1440" w:left="1440"/>
-    </w:sectPr>
-  </w:body>
-</w:document>`;
+  return `${prefix}${ownedRuns}${suffix}`;
 }
 
 function serializePocRun(run: PocRun): string {
+  if (run.text.length === 0) throw new Error('cannot serialize empty owned run text');
   let runProperties = '';
   if (run.bold || run.italic) {
     const marks: string[] = [];
@@ -897,7 +965,12 @@ function parseOwnedRuns(tokens: readonly XmlToken[]): readonly PocRun[] {
     runs.push(Object.freeze({ text, bold, italic }));
     if (runs.length > POC_MAX_RUNS) throw new Error('run count exceeds bound');
   }
-  if (runs.length === 0) throw new Error('owned span must contain editable runs');
+  if (runs.length === 0) {
+    if (tokens.some((token) => token.kind === 'start')) {
+      throw new Error('owned span must contain editable runs');
+    }
+    return Object.freeze(runs);
+  }
   if (runs.reduce((length, run) => length + run.text.length, 0) > POC_MAX_TOTAL_TEXT_LENGTH) {
     throw new Error('owned text exceeds bound');
   }
