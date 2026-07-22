@@ -13,7 +13,8 @@ Current POC scope and acceptance live in:
 - [`proposal.md`](./proposal.md)
 - [`design.md`](./design.md)
 - [`tasks.md`](./tasks.md)
-- [`../../../docs/superpowers/specs/2026-07-22-engine-poc-design.md`](../../../docs/superpowers/specs/2026-07-22-engine-poc-design.md)
+- [`implementation-status.md`](./implementation-status.md)
+- [`specs/core-kiss/spec.md`](./specs/core-kiss/spec.md)
 
 The POC is a disposable, non-shipping browser proof. Production authority
 remains the `document-engine` change.

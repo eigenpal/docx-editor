@@ -11,6 +11,9 @@ This design **replaces** the remaining falsification program with a disposable
 browser POC. The change path `engine-core-spike` is retained for history; prose
 here refers to a POC, not an open-ended architecture gate.
 
+This OpenSpec change is the sole POC planning, specification, task, and status
+record. External planning-document trees do not govern implementation.
+
 **Authority:** a non-shipping browser POC in the spike harness. It is not
 production engine conformance. The sole production authority remains
 `openspec/changes/document-engine/design.md` plus
@@ -83,9 +86,9 @@ Actor-local undo preserves remote work.
 ### Milestone 3 — Visible ProseMirror editor through EditorDriver
 
 Mount a minimal Vite page with an editable ProseMirror surface and a read-only
-synchronized replica. Expose load, text/format inspection, edit, undo, save, and
-reopen through the existing public `EditorDriver` without exposing `EditorView`.
-Show connection, save, and reopen status without production UI chrome.
+synchronized replica. Expose load, text/format inspection, edit, and undo
+through the existing public `EditorDriver` without exposing `EditorView`.
+Show connection and synchronization status without production UI chrome.
 
 ### Milestone 4 — Save and reopen integration
 

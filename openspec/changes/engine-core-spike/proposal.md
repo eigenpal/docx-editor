@@ -68,8 +68,10 @@ uncompressed `word/document.xml`.
 - `editor-binding`: minimal ProseMirror binding and `EditorDriver` transport for
   load, edit, format inspection, undo, save, and reopen without exposing
   `EditorView`.
-- `engine-falsification-spike`: the disposable browser POC scope, milestones,
+- `engine-poc`: the disposable browser POC scope, milestones,
   finish line, stop rules, deferred risks, and retained historical decisions.
+- `core-kiss`: the v2/Candidate B decision, direct-behavior-test rule, and
+  bounded implementation discipline that keeps the POC reachable.
 
 ### Modified Capabilities
 
