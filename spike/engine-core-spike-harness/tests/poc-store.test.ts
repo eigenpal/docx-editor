@@ -193,9 +193,9 @@ describe('poc store', () => {
     const baseLeft = createReplica(loaded, 'actor-left', 'session-left', 601);
     const baseRight = createReplica(loaded, 'actor-right', 'session-right', 602);
 
-    const runOrder = (applyFirst: 'left' | 'right') => {
-      const left = createReplica(loaded, 'actor-left', 'session-left', 611);
-      const right = createReplica(loaded, 'actor-right', 'session-right', 612);
+    const runOrder = (applyFirst: 'left' | 'right', clientOffset: number) => {
+      const left = createReplica(loaded, 'actor-left', 'session-left', 611 + clientOffset);
+      const right = createReplica(loaded, 'actor-right', 'session-right', 612 + clientOffset);
       left.insert(0, '!');
       right.toggleMark(11, 17, 'bold');
       const leftUpdate = diffUpdate(left, baseRight);
@@ -217,8 +217,8 @@ describe('poc store', () => {
       ]);
     };
 
-    runOrder('left');
-    runOrder('right');
+    runOrder('left', 0);
+    runOrder('right', 2);
   });
 
   test('local text edit then remote text edit then local undo preserves remote text', async () => {
@@ -244,8 +244,21 @@ describe('poc store', () => {
     remote.toggleMark(4, 6, 'bold');
     applyDiff(local, remote);
     expect(local.undo()).toBe(true);
-    expect(local.snapshot().runs.some((run) => run.bold && run.text.includes('o '))).toBe(true);
-    expect(local.snapshot().runs.some((run) => run.bold && run.text === 'Hell')).toBe(false);
+    const expectedAfterUndo = {
+      paragraphId: loaded.paragraphId,
+      text: 'Hello bold italic',
+      runs: [
+        { text: 'Hell', bold: false, italic: false },
+        { text: 'o bold', bold: true, italic: false },
+        { text: ' ', bold: false, italic: false },
+        { text: 'italic', bold: false, italic: true },
+      ],
+    };
+    expect(local.snapshot()).toEqual(expectedAfterUndo);
+
+    applyDiff(remote, local);
+    expect(remote.snapshot()).toEqual(expectedAfterUndo);
+    expect(remote.snapshot()).toEqual(local.snapshot());
   });
 
   test('observed disable preserves unseen concurrent enable', async () => {
@@ -324,26 +337,68 @@ describe('poc store', () => {
     }
   });
 
-  test('recreated actor/session stores never reuse contribution keys', async () => {
+  test('imported actor/session stores never reuse contribution keys', async () => {
     const loaded = await loadedFixture();
     const first = createReplica(loaded, 'actor-recreated', 'session-recreated', 1601);
     first.toggleMark(0, 5, 'bold');
     const firstKeys = contributionKeys(first);
-
-    const sameClient = createReplica(loaded, 'actor-recreated', 'session-recreated', 1601);
-    sameClient.applyRemoteUpdate(first.encodeUpdate());
-    sameClient.toggleMark(10, 11, 'bold');
-    const sameClientKeys = contributionKeys(sameClient);
 
     const distinctClient = createReplica(loaded, 'actor-recreated', 'session-recreated', 1602);
     distinctClient.applyRemoteUpdate(first.encodeUpdate());
     distinctClient.toggleMark(11, 12, 'bold');
     const distinctClientKeys = contributionKeys(distinctClient);
 
-    expect(new Set(sameClientKeys).size).toBe(sameClientKeys.length);
     expect(new Set(distinctClientKeys).size).toBe(distinctClientKeys.length);
-    expect(sameClientKeys.filter((key) => !firstKeys.includes(key))).toHaveLength(1);
     expect(distinctClientKeys.filter((key) => !firstKeys.includes(key))).toHaveLength(1);
+  });
+
+  test('rejects duplicate live client identity before two replicas can diverge', async () => {
+    const loaded = await loadedFixture();
+    const first = createReplica(loaded, 'actor-identity-a', 'session-identity-a', 1603);
+    expect(() => createReplica(loaded, 'actor-identity-b', 'session-identity-b', 1603)).toThrow(
+      /clientId|identity|claimed|collision/i
+    );
+
+    const second = createReplica(loaded, 'actor-identity-b', 'session-identity-b', 1604);
+    first.insert(0, 'A');
+    applyDiff(second, first);
+    expect(second.snapshot()).toEqual(first.snapshot());
+  });
+
+  test('rejects bootstrap clientId and keeps accepted identity stable through insert and undo', async () => {
+    const loaded = await loadedFixture();
+    let clientAccessorCalls = 0;
+    const hostile = Object.defineProperty(
+      { actorId: 'actor-bootstrap', sessionId: 'session-bootstrap' },
+      'clientId',
+      {
+        enumerable: true,
+        get() {
+          clientAccessorCalls += 1;
+          return 1;
+        },
+      }
+    );
+    expect(() => createPocStore(loaded, hostile as never)).toThrow(/options|descriptor|accessor/i);
+    expect(clientAccessorCalls).toBe(0);
+    expect(() => createReplica(loaded, 'actor-bootstrap', 'session-bootstrap', 1)).toThrow(
+      /bootstrap|reserved|clientId/i
+    );
+
+    const warnings: unknown[][] = [];
+    const originalWarn = console.warn;
+    console.warn = (...args: unknown[]) => warnings.push(args);
+    try {
+      const store = createReplica(loaded, 'actor-bootstrap', 'session-bootstrap', 1605);
+      store.insert(0, 'A');
+      expect(store.clientId).toBe(1605);
+      expect(store.undo()).toBe(true);
+      expect(store.clientId).toBe(1605);
+      expect(store.snapshot().text).toBe('Hello bold italic');
+      expect(warnings.flat().join(' ')).not.toMatch(/client-id|client id|collision/i);
+    } finally {
+      console.warn = originalWarn;
+    }
   });
 
   test('rejects hidden duplicate assignments, overwrites, and exact-schema malformed records atomically', async () => {

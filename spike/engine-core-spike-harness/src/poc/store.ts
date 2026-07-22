@@ -49,6 +49,9 @@ const POC_MAX_UPDATE_BYTES = 256 * 1024;
 const POC_MAX_ID_LENGTH = 256;
 const POC_MAX_ENDPOINT_LENGTH = 1024;
 const POC_MAX_REMOVE_TARGETS = 256;
+// This disposable POC has no replica lifecycle API, so accepted client IDs are
+// claimed for the lifetime of the module rather than reused ambiguously.
+const claimedStoreClientIds = new Set<number>();
 
 type MarkKind = 'bold' | 'italic';
 
@@ -81,6 +84,7 @@ const bootstrapCache = new Map<string, Uint8Array>();
 export function createPocStore(loaded: LoadedPocDocx, options: CreatePocStoreOptions): PocStore {
   const identity = snapshotStoreOptions(options);
   validateLoadedSnapshot(loaded);
+  claimStoreClientId(identity.clientId);
 
   const doc = new Y.Doc({ gc: false });
   doc.clientID = identity.clientId;
@@ -407,11 +411,21 @@ function snapshotStoreOptions(options: CreatePocStoreOptions): Readonly<CreatePo
   ) {
     throw new TypeError('clientId must be a positive integer');
   }
+  if (clientId === BOOTSTRAP_CLIENT_ID) {
+    throw new TypeError('clientId is reserved for deterministic bootstrap state');
+  }
   return Object.freeze({
     actorId: actorId as string,
     sessionId: sessionId as string,
     clientId: clientId as number,
   });
+}
+
+function claimStoreClientId(clientId: number): void {
+  if (claimedStoreClientIds.has(clientId)) {
+    throw new TypeError(`clientId ${clientId} is already claimed by a live POC store identity`);
+  }
+  claimedStoreClientIds.add(clientId);
 }
 
 function validateLoadedSnapshot(loaded: LoadedPocDocx): void {
