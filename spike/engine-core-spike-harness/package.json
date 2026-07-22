@@ -6,7 +6,8 @@
   "type": "module",
   "scripts": {
     "test": "bun test",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "experiment:formatting": "bun experiments/yjs-formatting-kiss.ts"
   },
   "dependencies": {
     "ajv": "^8.12.0",
