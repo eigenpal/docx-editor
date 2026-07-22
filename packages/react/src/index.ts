@@ -23,9 +23,5 @@ export type {
   EditorSnapshot,
   EditorScope,
 } from '@docx-editor.dev/core-contract/editor';
-export type {
-  DisplayPage,
-  DisplayItem,
-  DocPoint,
-} from '@docx-editor.dev/core-contract/geometry';
+export type { DisplayPage, DisplayItem, DocPoint } from '@docx-editor.dev/core-contract/geometry';
 export type { DocxDocument } from '@docx-editor.dev/core-contract/types';
