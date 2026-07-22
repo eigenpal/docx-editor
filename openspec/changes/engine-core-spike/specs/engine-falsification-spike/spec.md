@@ -1,166 +1,103 @@
 ## ADDED Requirements
 
-### Requirement: The spike remains deliberately narrow
-The implementation SHALL be a disposable architecture-falsification harness limited to one body story, paragraphs, text, bold and italic marks, stable paragraph identities, insert/delete/split/join operations, local and Yjs backends, minimal canonical-model layout, one preservation capsule, one schema-backed command, one annotation anchor, origin and awareness metadata, and one synthetic large-document fixture. It MUST NOT implement the production document engine.
+### Requirement: The POC remains deliberately narrow
+The implementation SHALL be a disposable browser POC limited to one body story,
+one editable paragraph, text, bold and italic marks, stable paragraph identity,
+text insertion and deletion, bold/italic toggles, two Yjs replicas, one
+unsupported OOXML preservation capsule, a minimal ProseMirror editor, a
+read-only synchronized replica view, and save/reopen through the public
+`EditorDriver`. It MUST NOT implement the production document engine, production
+adapter parity, or package migration.
 
-#### Scenario: Spike scope is reviewed
-- **WHEN** the spike implementation and dependencies are inspected
-- **THEN** every component exists to exercise a named acceptance gate and no production feature breadth has been added
+#### Scenario: POC scope is reviewed
+- **WHEN** the POC implementation and dependencies are inspected
+- **THEN** every component exists to exercise a POC milestone or the Playwright
+  finish line and no production feature breadth has been added
 
-### Requirement: The approved spike stack remains bounded
-The spike SHALL use Yjs with one long-lived `Y.Text` per story, plain immutable
-paragraph-boundary embeds, stable creation-keyed structural records, bound
-`Y.RelativePosition` envelopes, public `Y.UndoManager`, and
-`y-protocols/awareness` for ephemeral presence. `DocOp`, document projection,
-repair, capsules, `ModelChange`, ProseMirror `EditorBinding`, and
-update/snapshot/compaction persistence SHALL remain custom engine contracts.
-Networking SHALL be transport-neutral; `y-websocket` MAY wire the spike/demo but
-MUST NOT become an engine/store/protocol dependency.
+### Requirement: POC authority is narrow
+This change SHALL prove one browser-visible editing sequence only. It MUST NOT
+accept production shaping, pagination, display-list, accessibility, PDF,
+performance, multiple stories, cells, tables, or production schema behavior. The
+sole production authority is `openspec/changes/document-engine/design.md` plus
+`openspec/changes/document-engine/specs/**`. Completing the POC does not replace
+production conformance gates.
+
+#### Scenario: Production work is proposed after POC completion
+- **WHEN** production layout or export work is proposed
+- **THEN** the production layout/output and performance conformance gates MUST
+  still be required independently of the POC result
+
+### Requirement: Retained stack choices are fixed
+The POC SHALL use Yjs with one long-lived `bodySequence: Y.Text`, plain JSON
+opening-boundary embeds, immutable Candidate B `mark-contributions`, the
+synchronous transaction/origin executor from completed spike work, public
+`Y.UndoManager` per actor/session for local undo, and ProseMirror as the editing
+surface with model-canonical commit order. Networking MAY use any transport for
+the demo page and MUST NOT become a production engine dependency.
 
 #### Scenario: Demo transport is replaced
-- **WHEN** the spike demo substitutes another transport for `y-websocket`
-- **THEN** semantic operations, replication bytes, awareness, persistence, projection, and binding contracts remain unchanged
+- **WHEN** the POC page substitutes another transport for demo wiring
+- **THEN** store semantics, Yjs update bytes, and EditorDriver contracts remain
+  unchanged
 
-### Requirement: Spike authority is narrow
-Passing the spike SHALL accept or falsify only the canonical authored store,
-replication coordinator, editor binding, anchors, origin/awareness, undo
-mechanism, and fixture-bounded-work architecture. It MUST NOT accept production
-shaping, pagination, display-list, accessibility, PDF, performance, multiple
-stories, cells, tables, or production schema behavior. Yjs schema v2 is
-spike-only. The sole production authority is
-`openspec/changes/document-engine/design.md` plus
-`openspec/changes/document-engine/specs/**`. This spike selects only a one-body
-proof representation and MUST NOT commit to a production table or mark schema.
-The migration ledger is non-authoritative inventory by its own header; no
-ledger entry or contradiction can expand spike authority.
+### Requirement: Retained historical decisions do not reopen
+The POC MUST treat completed harness work, v1 schema rejection, Candidate B
+selection, lean v2 contract artifacts, and the synchronous transaction executor
+as closed historical evidence. They MUST NOT be treated as open prerequisites
+that block POC milestones or require oracle re-freezes before later milestones.
 
-#### Scenario: All spike gates pass
-- **WHEN** production layout work is proposed
-- **THEN** the production layout/output and performance conformance gates MUST still be required
+#### Scenario: POC implementation begins after retained work
+- **WHEN** a POC milestone adds code
+- **THEN** it MAY build on retained decisions without rerunning v1 falsification,
+  exhaustive oracle generation, or the former fifteen-gate suite
 
-### Requirement: Toy layout fixture and ceilings are frozen
-The harness MUST freeze the exact capsule bytes/ownership/namespace/siblings;
-exact source paragraph text/style records and zero-based indexing; versioned toy
-glyph advances, fixed-point scale, and rounding; a 128-paragraph fixture with
-four paragraphs per page; the exact `style-A` source mutation affecting
-paragraphs 64–67; cold/warm cache state; and expected canonical fingerprint
-bytes plus hash of page paragraph IDs, used height, and next-flow ID. The
-reviewed manifest MUST define included setup/projection/measurement/pagination
-phases and each counter increment, fail after four pagination passes, and carry
-an independently produced oracle/hash frozen before implementation. Ceilings are
-four measured and projected paragraphs, restart at zero-based paragraph 64, two
-paginated pages, zero whole-document scans/rebuilds, and 128 dependency-edge
-visits.
+### Requirement: Binary completion is one Playwright flow
+The POC SHALL be complete when one focused Playwright test driven through the
+public `EditorDriver` proves: open page; load deterministic DOCX; edit and bold
+text; second replica convergence; remote edit followed by local undo preserving
+remote work; save and reopen; reopened text, formatting, stable paragraph
+identity, and exact capsule preservation.
 
-#### Scenario: Dependency-changing edit is measured
-- **WHEN** the frozen style edit is applied
-- **THEN** every counter MUST stay within its ceiling and pagination MUST reach the exact fingerprint within four passes
+#### Scenario: Finish line passes
+- **WHEN** the Playwright flow completes successfully
+- **THEN** the POC is accepted as complete without requiring the former fifteen
+  gates, synthetic layout proofs, or exhaustive protocol review suites
 
-### Requirement: The reviewed KISS formatting result is authoritative
-The spike SHALL treat the reviewed task 2.4 KISS experiment and its immutable
-creation-only `mark-contributions` winner as authoritative selection evidence.
-The procedure runs exactly `overlap-undo`, `observed-disable`,
-`mark-independence`, `endpoint-affinity`, `split-tail`, and `reopen-history`;
-resets the same deterministic per-role client-ID schedule per candidate;
-exchanges concurrent cases in both delivery orders; directly asserts the
-represented semantics and 16-record/20,000-byte resource bounds; and measures
-genesis-excluded source-update plus terminal-snapshot Yjs bytes. Eligibility
-requires all six cases. Lower measured bytes wins and an exact tie selects
-Candidate B.
-The abandoned
-`experiments/yjs-formatting-bakeoff/oracle/**` corpus is unexecuted historical
-work. Its seeded/frozen-corpus procedure, every-limit claim, and projection-work
-tie-break MUST NOT supply requirements, fixtures, or expected outputs.
+#### Scenario: Finish line fails on product behavior
+- **WHEN** the Playwright flow fails on load, edit, convergence, undo, save,
+  reopen, or capsule preservation
+- **THEN** implementation work MUST fix the failing product behavior before the
+  POC is marked complete
 
-#### Scenario: Formatting winner is consumed
-- **WHEN** v2 contract or implementation work begins
-- **THEN** it uses only `mark-contributions` and does not read the abandoned corpus
+### Requirement: Stop rule governs new proof artifacts
+The POC MUST NOT add new `*-oracle`, `*-protocol`, or `*-review` suites unless
+a failing POC product behavior requires one. Direct behavior tests own
+expectations. Descriptor-only artifacts MUST NOT block milestone acceptance.
 
-### Requirement: Lean reviewed contracts precede implementation
-Task 2.5 SHALL keep the compatibility artifacts `yjs-schema.v2.json`,
-`binding-oracle.v2.json`, `history-oracle.v2.json`, and
-`comparator-contracts.v2.json` while freezing only
-closed winner schema/constants, ownership responsibilities, comparator input
-schemas, and concise G-v2-1..G-v2-10 action/assertion descriptors. They MUST NOT
-freeze implementation output, exhaustive fixtures, or hashes presented as
-canonical-state fingerprints. Artifact self-hashes are integrity checks only,
-not independent correctness approval. Tasks 2.6–2.8 and 3.x MUST write direct
-executable expected-state assertions test-first for the behavior they own.
+#### Scenario: A milestone adds tests
+- **WHEN** a POC milestone lands focused tests
+- **THEN** those tests assert product behavior directly rather than depending on
+  new exhaustive oracle corpora
 
-#### Scenario: Gate implementation starts
-- **WHEN** v2 backend, normalization, binding, selection, IME, or undo code is proposed
-- **THEN** its lean reviewed contract and scenario responsibility MUST already exist, and the owning task adds the executable assertion
+### Requirement: Former falsification gates are deferred risks
+The POC MUST record the former fifteen acceptance gates, G-v2-1..G-v2-10
+exhaustive re-proofs, synthetic layout fixtures, annotation/awareness/audit
+breadth, browser/server command parity, and property/fuzz parity harnesses as
+deferred risks and non-goals. They MUST NOT be treated as mandatory POC
+completion criteria.
 
-#### Scenario: v2 proof scenarios are cataloged before history code
-- **WHEN** Y.UndoManager integration or actor-local history is implemented
-- **THEN** G-v2-1..G-v2-10 action/assertion descriptors identify the owning tasks without claiming precomputed canonical states
+#### Scenario: Deferred gate work is proposed mid-POC
+- **WHEN** work is proposed to prove gate 15 pagination counters or gate 13
+  annotation matrices before the Playwright finish line passes
+- **THEN** that work is out of POC scope unless the Playwright flow itself fails
+  on the behavior under test
 
-### Requirement: All fifteen acceptance gates are mandatory
-The spike SHALL pass all fifteen acceptance gates before the architecture is accepted for production implementation.
+### Requirement: POC result is recorded at completion
+When milestone 5 passes, the change SHALL record the Playwright command/URL,
+pass/fail evidence, and deferred risks in
+`openspec/changes/engine-core-spike/poc-result.md`.
 
-#### Scenario: Gate 1 maps local typing
-- **WHEN** local typing occurs in the browser projection
-- **THEN** it produces `DocOp` values and no raw ProseMirror commit passes the binding
-
-#### Scenario: Gate 2 commits the model first
-- **WHEN** a mapped projection transaction is processed
-- **THEN** the model is normalized and updated before the projection is treated as committed
-
-#### Scenario: Gate 3 converges Yjs replicas
-- **WHEN** two Yjs-backed replicas exchange concurrent supported edits
-- **THEN** they converge on the same canonical authored and anchor fingerprints with every stable update/constituent ID applied; state vectors remain diagnostic only
-
-#### Scenario: Gate 4 reconciles a headless server edit
-- **WHEN** a PM-free and DOM-free server inserts text through a `DocOp`
-- **THEN** both browser replicas reconcile to the committed server state
-
-#### Scenario: Gate 5 preserves selection before a remote insertion
-- **WHEN** a remote insertion is committed before the local caret
-- **THEN** the caret preserves its logical anchored position
-
-#### Scenario: Gate 6 resolves selection inside a remote deletion
-- **WHEN** a remote deletion contains the local caret
-- **THEN** the caret resolves by the explicit deletion-boundary rule without a crash
-
-#### Scenario: Gate 7 preserves IME composition
-- **WHEN** remote reconciliation is requested during IME composition
-- **THEN** the frozen insert/delete conflict fixtures produce their exact expected strings, one local history group, and no duplicate composition text
-
-#### Scenario: Gate 8 limits undo to local changes
-- **WHEN** one actor invokes undo after concurrent edits including v2 sequence splits, joins, and winner-owned formatting
-- **THEN** grouping, same-session-only redo invalidation, remote/repair redo preservation, identity restoration, closed limits, and snapshot/reopen history pass the direct executable assertions owned by tasks 2.7–2.8
-
-#### Scenario: Gate 9 lays out canonical state in every runtime
-- **WHEN** browser and server layout receive equivalent canonical models and layout inputs
-- **THEN** they produce the exact toy fingerprint with exact fixed-point shaping inputs without reading an `EditorView`
-
-#### Scenario: Gate 10 preserves authored properties across reopen
-- **WHEN** the spike exports and reopens an edited fixture
-- **THEN** semantic content and authored properties survive without resolved-value normalization
-
-#### Scenario: Gate 11 preserves selective OOXML state
-- **WHEN** selective export follows a supported edit
-- **THEN** only the frozen owned byte range and required container metadata differ while capsule bytes, namespace context, sibling position, and all unowned bytes remain identical
-
-#### Scenario: Gate 12 proves browser and server command parity
-- **WHEN** the same schema-backed `DocxEditor.*` command runs from identical state through browser binding and PM-free server execution
-- **THEN** both paths produce equivalent canonical state and semantic results
-
-#### Scenario: Gate 13 preserves an annotation anchor
-- **WHEN** concurrent insertion, deletion, split, and join affect the anchored range
-- **THEN** its versioned relative envelopes follow assoc/affinity, collapse/detach on unresolvable deletion, reject wrong bindings, and resolve across split/join without attaching to unrelated text
-
-#### Scenario: Gate 14 separates origin and awareness without loops
-- **WHEN** mutation, projection, and awareness activity is observed
-- **THEN** the three typed origin domains remain distinct, projection emits no feedback operation, and awareness remains outside authored state
-
-#### Scenario: Gate 15 bounds large-document edit work
-- **WHEN** a bounded edit is applied to the synthetic large-document fixture
-- **THEN** all frozen counter ceilings and the four-pass fingerprint bound MUST pass
-
-### Requirement: The parity harness is reproducible
-The spike SHALL provide deterministic fixtures and a golden parity harness for projection-to-model mapping, reverse reconciliation, browser/server command execution, local/Yjs conformance, export/reopen preservation, anchor behavior, and bounded layout work. A failed gate MUST identify the fixture, seed where randomized, origin, revisions, and divergent state or work trace.
-
-#### Scenario: A randomized parity failure is diagnosable
-- **WHEN** a seeded randomized operation sequence produces divergent projection, model, replica, or layout state
-- **THEN** the harness reports the seed, operation sequence, origins, revisions, and minimal divergent outputs needed to reproduce the failure
+#### Scenario: POC completes
+- **WHEN** the Playwright finish line passes
+- **THEN** `poc-result.md` documents the result and unresolved deferred risks
+  without converting the harness into production engine code

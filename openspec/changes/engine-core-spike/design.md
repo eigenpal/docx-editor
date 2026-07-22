@@ -3,390 +3,168 @@
 An architecture review of commit `checkpoint-e743b783` accepted the model-canonical
 direction but found the three components carrying the real complexity —
 `DocumentModel`, `DocumentStore` + replication backend, and `EditorBinding` —
-underspecified, and flagged statements that presented unsolved problems as
-architectural consequences. This design resolves the foundational contracts and
-defines a falsification spike. It supersedes the conflicting framing in
-`modular-core-api` D5 (DocumentSource), `remote-document-sync` D1 (corrected),
-and `ooxml-document-pipeline` D3/D5 (authored-vs-resolved).
+underspecified. Prior spike work produced closed historical evidence: harness
+scaffolding, v1 schema rejection, Candidate B immutable mark contributions, lean
+v2 contract artifacts, and a synchronous transaction/origin executor.
 
-Process note: the review lists many "decide first" items and a risk-first spike.
-Those are resolved by tiering — a small set of decisions *frames* the spike
-(below), and the spike *empirically settles* the rest. We do not front-load a
-months-long spec pass.
+This design **replaces** the remaining falsification program with a disposable
+browser POC. The change path `engine-core-spike` is retained for history; prose
+here refers to a POC, not an open-ended architecture gate.
 
-## Resolved decisions (pre-spike)
-
-### R1 — The Office JavaScript-style shape is a facade; the canonical store is a lossless package model
-
-The `DocxEditor.*` object model is application ergonomics, not a storage schema. It
-cannot express run boundaries, paragraph-mark props, field instruction/result
-spans, bookmarks/permissions, content controls, tracked structural changes,
-relationship IDs/target modes, theme-ref-vs-resolved color, raw/omitted values,
-unsupported extension elements, or significant XML order. Storing only resolved
-API values loses authored intent on export (direct formatting written onto every
-run).
-
-```
-Canonical package model (authored, lossless)
-  ├── semantic editable stories        (body, headers, footers, notes, comments, textboxes)
-  ├── authored OOXML properties         (as-authored, incl. explicit-omission)
-  ├── stable part + relationship identities
-  ├── preservation capsules             (opaque, for unsupported/unknown content + order)
-  └── derived caches (fingerprinted; revision provenance)
-
-DocxEditor.* object model  →  lazy facade/views over the canonical model
-```
-
-### R2 — Authored is canonical; resolved cache records provenance
-
-```ts
-interface DocumentModel { authored: AuthoredPackageModel; revision: ModelRevision }
-interface ResolvedModelCache { revision: ModelRevision; stylesByNodeId: Map<NodeId, ResolvedStyle> }
-```
-
-Measurement reads the resolved cache; serialization reads `authored`. Entries
-record revision as provenance and dependency/input fingerprints; a style
-mutation invalidates only dependent entries, while cross-revision reuse requires
-matching fingerprints and immutable operation environment. This is foundational.
-
-### R3 — Four contracts, not "one currency"
-
-`DocOp` is the single semantic **mutation vocabulary**. It is not the sync
-currency. Distinct, named:
-
-- **`DocOp`** — semantic op (insert/delete/split/join/setMark/setProp/…), the
-  input to `store.apply`, invertible, carries story/part ownership.
-- **`ModelChange`** — committed notification (dirty nodes + revision) consumed by
-  `EditorBinding` reconciliation and layout invalidation.
-- **replication update** — opaque backend bytes on the wire.
-- **snapshot** — full encoded state for initial sync / persistence.
-
-Decisions pinned: a redacted audit index is distinct from an access-controlled,
-encrypted replay journal containing complete versioned `DocOp` payloads;
-replication updates compact into snapshots; a remote update is translated to
-`ModelChange` by the replication coordinator after staged merge/normalization
-(it need not expose the originating `DocOp`s);
-`encode()` is a full snapshot, distinct from incremental updates.
-
-### R4 — Three boundaries; PM-free replication
-
-```ts
-interface DocumentStore {          // semantic, PM-free, canonical
-  readonly model: DocumentModel
-  apply(op: DocOp, origin?: Origin): ApplyResult
-  transact(origin: Origin, fn: () => void): ApplyResult      // atomic, one revision (R8)
-  subscribeModel(cb: (c: ModelChange, o: Origin) => void): Unsubscribe
-  createAnchor(a: DocAnchor): AnchorHandle
-  resolveAnchor(h: AnchorHandle): DocAnchor | null
-}
-interface ReplicatedStoreBackend { // opaque bytes; the CRDT lives here; PM-free
-  encodeSnapshot(): Uint8Array
-  applyRemoteUpdate(u: Uint8Array, o?: Origin): void
-  subscribeUpdates(cb: (u: Uint8Array, o: Origin) => void): Unsubscribe
-  awareness?: AwarenessChannel
-}
-interface EditorBinding {           // the ONLY PM-aware layer, in the binding package
-  bind(store: DocumentStore, view: EditorView): Unsubscribe
-}
-```
-
-No PM type exists in the store or backend. Yjs holds the **document model**, not
-a PM fragment; the PM↔model map is solely the `EditorBinding` (R6).
-
-### R5 — Spike-only Yjs schema v2; v1 rejected
-
-The v1 nested model-shaped schema (`blocks`, `texts`, per-paragraph `Y.Text`,
-creation-keyed `marks` maps with destructive normalization) is **rejected** — see
-`yjs-schema-v2-design.md` and task 2.2 historical evidence. New work follows
-**schema v2 for the falsification harness only**:
-
-- One long-lived `bodySequence: Y.Text` per story, created at bootstrap; split/join
-  insert/remove immutable paragraph-boundary embeds only — never create/delete a
-  `Y.Text`. The sequence begins with at least one opening boundary; each boundary
-  starts one paragraph ending at the next boundary or sequence end; there is no
-  terminal sentinel. Split inserts one opening boundary and join removes one
-  non-first opening boundary.
-- Boundary items are immutable length-1 plain JSON values inserted with
-  `Y.Text.insertEmbed`, never nested `Y.AbstractType` values. Paragraph-local
-  UTF-16 is API input resolved at commit, not persisted endpoint currency.
-- Plain-JSON relative endpoint envelopes store bounded canonical
-  `relativePositionBase64Url: string`, never `Uint8Array`; decoding allocates
-  bytes only after character, length, and canonical re-encode validation.
-- The reviewed task 2.4 KISS experiment selected immutable creation-only
-  `mark-contributions`; that executed focused result is authoritative for this
-  spike. The abandoned `experiments/yjs-formatting-bakeoff/oracle/**` corpus is
-  unexecuted historical work and is neither consumed nor authoritative.
-- The selected representation MUST preserve same-kind actor undo, observed-disable/unseen-enable,
-  bold/italic independence, endpoint behavior through text/split/join, semantic
-  mark identity/provenance, authored omission/raw intent, undo/reopen/redo,
-  non-destructive normalization, convergence, and closed resource bounds.
-- Canonical paragraphs and marks are a deterministic projection from sequence +
-  the representation-neutral `FormattingEvidence` winner contract, clipping at
-  boundary items. Boundary collisions, normalized mark IDs/provenance, and
-  monotonic repair keying follow the lean winner contract; repair MUST NOT
-  destructively rewrite actor-authored state.
-- Formatting evidence partitions boundary-clipped text at all add/remove/
-  paragraph endpoints, applies only valid targeted removes per interval/kind,
-  omits intervals without active adds, and merges only identical kind,
-  contributor, clipping-remove, and authored-intent sets. Its IDs/provenance
-  follow the closed derivation and uint32be/UTF-8 hash framing in the v2 design.
-- GC disabled. Typed mutation origins. Closed trust-boundary limits (see v2
-  design doc).
-
-Convergence ≠ validity: after any merge a **deterministic repair/normalization
-pass (R7)** still restores spike invariants, but without mutating embed payloads
-or winner-owned formatting history. The sole production authority is
+**Authority:** a non-shipping browser POC in the spike harness. It is not
+production engine conformance. The sole production authority remains
 `openspec/changes/document-engine/design.md` plus
-`openspec/changes/document-engine/specs/**`; this spike selects only a one-body
-proof representation and makes no production table or mark schema commitment.
-The migration ledger is non-authoritative inventory by its own header, and no
-ledger contradiction can expand this spike's authority.
+`openspec/changes/document-engine/specs/**`.
 
-The approved supporting stack is Yjs; public `Y.UndoManager`;
-`y-protocols/awareness` for ephemeral presence; custom
-`DocOp`/projection/repair/capsules/`ModelChange`; custom `EditorBinding`;
-transport-neutral networking (`y-websocket` spike/demo only); and custom
-update/snapshot/compaction persistence.
+## Retained historical decisions (closed, not reopenable)
 
-### R6 — EditorBinding is a first-class engine
+These items are evidence, not prerequisites that can block or expand POC scope:
 
-```ts
-interface OperationMapper {
-  canMap(step: Step, ctx: MappingContext): boolean
-  toOperations(step: Step, ctx: MappingContext): DocOp[]      // forward: PM → ops
-  reconcile(change: ModelChange, state: EditorState): Transaction | null  // reverse
-}
-```
+- **Harness and contracts (tasks 1.1–1.8).** Disposable spike harness, tiny
+  authored model definition, distinct spike contracts, retired test retirement
+  inventories, and the public `EditorDriver` boundary that now unblocks focused
+  browser E2E.
+- **v1 rejection (tasks 2.1–2.3).** The nested v1 schema path is falsified
+  historical evidence only; it does not authorize new v1 work.
+- **Candidate B (task 2.4).** The reviewed KISS experiment selected immutable
+  creation-only `mark-contributions`. The abandoned formatting-bakeoff oracle
+  corpus is unexecuted historical work and is neither consumed nor authoritative.
+- **Lean contracts (task 2.5).** Compatibility artifacts freeze closed schema/
+  constants and scenario descriptors for reproducibility only; they do not freeze
+  implementation output or canonical-state fingerprints.
+- **Transaction executor (task 2.6).** Synchronous transaction context and
+  typed origins reject async, nested, reentrant, and mixed-origin transactions
+  atomically.
 
-- **Extensible**: extensions that add content types register a mapper.
-- **Unsupported-transaction fallback policy (explicit)**: if no mapper claims a
-  step, the binding applies it only to a shadow `EditorState` and derives
-  identity-preserving `ReplaceBlockContent` when capsule ownership is proven.
-  Semantic `ReplaceNode` mints identity. No fallback bypasses `store.apply`.
-- **Reverse reconciliation** must: map model ranges to PM positions via
-  `DocAnchor`; prefer minimal steps, fall back to block replace; preserve
-  selection, stored marks, node/cell selections; defer during IME composition;
-  **tag generated transactions** with a binding origin so they do not round-trip
-  back into `DocOp`s (loop prevention); update decorations/relative positions.
+See `yjs-schema-v2-design.md` for the v2 schema narrative that informed the
+retained stack choices. That document is reference material, not a POC task list.
 
-### R7 — One authoritative normalization path
+## POC architecture
 
 ```
-DocOp → validate → canonical model transaction → deterministic repair/normalize
-      → one committed ModelChange → PM reconciles to the normalized result
+bounded DOCX bytes
+  → minimal DOCX adapter (ZIP/XML trust boundary)
+  → tiny canonical Yjs store (one bodySequence + markContributions)
+  → { ProseMirror editor · read-only replica view }
+  → EditorDriver (load / edit / bold / italic / undo / save / reopen)
+  → save patches owned paragraph only; capsule bytes untouched
+  → Playwright finish line
 ```
 
-Under v2, normalize means **project** paragraphs/marks from sequence + the
-bake-off winner's `FormattingEvidence` and append monotonic repair evidence when needed; it MUST NOT
-destructively rewrite boundary embeds or winner-owned formatting history (see
-`yjs-schema-v2-design.md`).
+**Model-canonical editing.** ProseMirror processes keystrokes; the store commits
+first; the view reconciles from store snapshots. Two Yjs replicas exchange real
+updates. One `Y.UndoManager` per actor/session scopes to tracked local work;
+remote updates remain untracked so local undo preserves remote edits.
 
-PM plugins / `appendTransaction` MUST NOT mutate canonical semantics after
-commit; any normalization they emit is converted to `DocOp`s before being
-treated as committed. Repair is deterministic so replicas converge to the same
-normalized state.
+**One paragraph, one capsule.** The fixture has one editable paragraph with text,
+bold, and italic, plus one unsupported OOXML capsule whose bytes MUST survive
+save/reopen unchanged.
 
-### R8 — Stable identity, compound anchors, atomic multi-story transactions
+## POC milestones
 
-Stable IDs for stories, blocks, paragraphs, tables/rows/cells, runs (where
-needed), comments, revisions, bookmarks, relationships, parts. Identity rules:
-split keeps the ID on the **first** fragment and mints a new one for the tail;
-join keeps the **surviving (first)** ID; move keeps ID; block replace mints a new
-ID; delete+undo restores the original ID; concurrent split/delete resolves by the
-repair pass (R7).
+### Milestone 1 — OpenSpec rewrite (this commit)
 
-```ts
-type DocAnchor = {
-  storyId: StoryId
-  start: OpaqueRelativeEndpointEnvelope
-  end: OpaqueRelativeEndpointEnvelope
-}
-```
+Replace falsification tasks with the five milestones below, declare the Playwright
+finish line, move former gate/oracle obligations to deferred risks, and mark this
+milestone complete.
 
-The spike pins annotation endpoints as opaque, versioned public-API-encoded
-`Y.RelativePosition` envelopes bound to document ID, schema/backend versions,
-checkpoint, story-sequence creation ID, assoc, and affinity. Paragraph-local
-UTF-16 is accepted only as API input and encoded during commit preflight.
-Insertion follows assoc/affinity; full deletion collapses/detaches when deletion
-mapping proves the boundary. Wrong-document/version/sequence envelopes reject;
-unverifiable stale input rejects; an existing unresolvable endpoint detaches to
-the proved deletion boundary or resolves detached/null. It never attaches to
-unrelated text.
+### Milestone 2 — Bounded minimal DOCX adapter
 
-`store.transact` commits multi-op, multi-part changes (insert image = body node +
-relationship + media part + content type) as **one** revision; subscribers never
-see intermediate invalid state.
+Generate one deterministic in-memory DOCX with one paragraph and one unsupported
+capsule. Load through bounded JSZip/XML validation. Reject DTDs, oversized parts,
+traversal paths, and external relationships. Save patches only the owned paragraph
+range with XML-escaped text.
 
-The public spike exposes an opaque `AnchorHandle`; the structure above is
-private. Trusted spike snapshot/awareness envelopes bind bounded canonical
-base64url relative-position strings to document ID, backend/schema version,
-checkpoint, story-sequence creation ID, assoc, and affinity.
+### Milestone 3 — Tiny canonical Yjs store and collaboration
 
-### R9 — Incremental layout is dependency-aware, not "only the changed block"
+Project the fixture into one `Y.Text` body sequence and immutable mark
+contributions. Support insert/delete and bold/italic toggles through the existing
+synchronous transaction foundation. Two replicas converge via real Yjs updates.
+Actor-local undo preserves remote work.
 
-Guarantee: a `ModelChange` avoids remeasuring unaffected blocks *where
-dependencies permit*; pagination **resumes from the earliest affected flow
-position and runs until page state re-converges**. Dependency closure: changed
-block → style/numbering deps → measure dirty set → pagination restart point →
-downstream until convergence → cross-reference (page #, PAGEREF/TOC) second pass.
+### Milestone 4 — ProseMirror browser surface and EditorDriver
 
-### R10 — Display list carries opaque anchors; server contexts are revision-aware
+Mount a minimal Vite page with an editable ProseMirror surface and a read-only
+synchronized replica. Expose load, text/format inspection, edit, undo, save, and
+reopen through the existing public `EditorDriver` without exposing `EditorView`.
+Show connection, save, and reopen status without production UI chrome.
 
-Painted items carry opaque anchor handles (not PM offsets); the
-`EditorBinding` resolves anchors ↔ PM positions for hit-testing and selection.
-Server edit contexts pin `baseRevision`; each `sync()` reconciles to latest;
-writes on stale ranges are anchor-adjusted or rejected by precondition; one
-`sync()` is atomic (R8).
+### Milestone 5 — Save/reopen Playwright finish line
 
-### R11 — Security mechanics specified (policy still integration-owned)
+One Playwright test drives the full product sequence through `EditorDriver` and
+asserts reopened text, formatting, stable paragraph identity, and exact capsule
+preservation. Record result and deferred risks in `poc-result.md`.
 
-Seams that MUST exist even though policy is the developer's: auth hook before
-joining a room; authz hook before `applyRemoteUpdate`; max update/snapshot size;
-rate-limit integration point; per-document tenancy key; malformed-update
-rejection; server-side export limits; audit metadata on server-originated ops;
-explicit refusal to load remote external resources.
+## Binary completion condition
 
-## The falsification spike
+The POC is complete when one Playwright flow proves:
 
-The spike's authority is deliberately narrow: it may accept or falsify the
-canonical authored store, replication coordinator, editor binding, anchor,
-origin/awareness separation, undo mechanism, and bounded-work architecture.
-It does not accept production shaping, pagination, display-list, PDF,
-accessibility, or performance claims; those retain production conformance gates.
+1. open the POC page;
+2. load the deterministic DOCX;
+3. edit and bold text;
+4. observe the second replica converge;
+5. apply a remote edit and prove local undo preserves it;
+6. save and reopen;
+7. verify semantic state and capsule bytes.
 
-Scope (deliberately tiny): one body story; paragraphs; text; bold/italic;
-stable paragraph IDs; insert/delete/split/join `DocOp`s; **Yjs and local**
-backends behind `ReplicatedStoreBackend`; minimal layout from canonical
-paragraphs; one unsupported OOXML preservation capsule; a schema-backed
-`DocxEditor.*` command exposed through browser binding and PM-free server
-execution; one citation/annotation anchor; origin and awareness metadata; a
-synthetic large-document fixture; and a golden parity harness. These additions
-are proof fixtures only, not production feature implementations.
+No other gate suite, oracle re-freeze, or synthetic layout proof is required
+for completion.
 
-Before gate execution the harness freezes:
+## Stop rules
 
-- one exact unsupported capsule byte sequence, byte boundaries, owning
-  paragraph child slot, namespace bindings, and previous/next sibling bytes;
-- one toy `ShapingEnvironment` containing a versioned glyph-advance table,
-  fixed-point scale, and round-half-away-from-zero rule;
-- a reviewed pre-implementation manifest with exact source text/style records,
-  zero-based indices, and a 128-paragraph fixture with dependency `style-A`,
-  four paragraphs per toy page, and the exact style mutation affecting
-  paragraphs 64–67;
-- cold/warm cache state and expected pagination fingerprint bytes/hash of
-  ordered paragraph IDs, fixed-point used height, and next-flow ID, independently
-  produced before implementation, with at most four passes before failure;
-- included setup/projection/measurement/pagination phases and exact counter
-  increment definitions;
-- fixture ceilings: at most 4 measured paragraphs, 4 projected paragraphs,
-  restart at paragraph 64, at most 2 paginated pages after restart, 0
-  full-document scans/rebuilds, and at most 128 dependency-edge visits.
+- No new `*-oracle`, `*-protocol`, or `*-review` suite unless a failing POC
+  product behavior requires it.
+- Prefer direct behavior tests over descriptor-only artifacts.
+- A milestone is accepted when its focused behavior tests pass and the end-to-end
+  flow still passes; speculative edge-case expansion is deferred.
+- Unresolved risks are recorded at completion and do not expand scope unless they
+  break the POC's defined flow or trust boundary.
 
-These are fixture-owned proof ceilings, not production budgets.
+## Explicit non-goals and deferred risks
 
-Task 2.5 is intentionally smaller than the older preimplementation-oracle
-approach. Its four compatibility artifacts freeze closed schema/constants,
-behavior ownership, comparator input schemas, and concise G-v2-1..G-v2-10
-action/assertion descriptors only. They do not freeze exhaustive fixtures,
-implementation output, or canonical-state fingerprints. Artifact self-hashes
-detect accidental drift only. Tasks 2.6–2.8 and 3.x add direct executable
-expected-state assertions test-first for the behavior they own.
+The following are **not** POC blockers. They are recorded risks deferred to
+production conformance or later work:
 
-### R12 — Coordinator, transaction, and projection protocols are executable
+- The former **fifteen acceptance gates** and exhaustive gate suite (tasks 5.x,
+  6.x).
+- **G-v2-1..G-v2-10** descriptor re-freezes and v2 backend migration breadth
+  beyond what the POC store needs (old tasks 2.7–2.9).
+- **Synthetic layout**, pagination fingerprints, toy shaping fixtures, and
+  bounded-work counter ceilings (old task 4.5, gate 15).
+- **Annotation anchor** concurrent-edit matrix, IME composition state machine,
+  selection matrix breadth, and awareness/origin audit instrumentation beyond what
+  the Playwright flow needs (old tasks 3.2–3.4, 4.3–4.4, gates 5–7, 13–14).
+- **Browser/server command parity**, PM-free server execution, audit/replay
+  journals, and schema-backed `DocxEditor.*` command equivalence (old tasks 2.3,
+  2.9, 4.2, gate 12).
+- **Property/fuzz parity harness** and seeded convergence suites (old task 5.7).
+- **Production package migration**, adapter parity, and publishing.
+- **Full adapter/browser parity** with React/Vue production hosts.
 
-The spike implements the production-shaped state transitions in miniature:
-local semantic transactions stage canonical and Yjs changes, normalize, commit
-both or neither, assign commit/update IDs and one local revision, notify once,
-and suppress echo. Remote updates authenticate/deduplicate, stage merge,
-normalize/repair inside the same Yjs transaction, publish once, and propagate
-repair once. Delivery is at-least-once and deduplicates stable update/constituent
-IDs; state vectors optimize synchronization and never prove delete-set coverage.
+## Security boundary (mandatory)
 
-`store.transact` supplies a synchronous context, rejects nesting/async/reentry,
-and rolls back on exceptions. Browser dispatch maps the complete transaction
-against a shadow `EditorState`; the actual view is reconciled only after
-canonical commit. `ModelChange` carries before/after ranges needed by the toy
-binding.
+Loaded DOCX bytes are untrusted. The minimal adapter MUST:
 
-The spike distinguishes `MutationOrigin`, `ProjectionOrigin`, and
-`AwarenessOrigin`. Projection reconciliation never enters store history or
-updates. Undo uses public `Y.UndoManager` per actor/session scoped to
-`bodySequence` plus only the winner-tracked types frozen by task 2.5; it uses a
-stable origin token, explicit
-`stopCapturing` group boundaries, and a bounded reconstruction journal for
-durable reopen; allocator, audit, awareness, capsules, and repair metadata stay
-outside manager scope. Untracked remote/repair work preserves redo; only a new
-eligible tracked transaction clears redo for the same actor+session manager.
-Other sessions do not. Undo/redo controls follow manager stacks exactly. Local
-backend matches behavior, not mechanism. Closed preflight limits and the ten
-named v2 proof gates (G-v2-1..G-v2-10 in
-`yjs-schema-v2-design.md`) are mandatory.
-G-v2-6 is a task 2.8 winner-formatting-endpoint gate only. Selection and
-annotation endpoint behavior remains separately owned by tasks 3.2 and 4.3.
-
-### Acceptance gates (all fifteen must hold)
-
-1. Local typing produces `DocOp`s (never a raw PM commit past the binding).
-2. The model is updated before PM is treated as committed (R7 order).
-3. Two Yjs clients converge on identical `authored` model.
-4. A headless server (no PM, no DOM) inserts text via `DocOp` and both clients reconcile.
-5. Remote insertion **before the caret** preserves the local selection.
-6. Remote deletion **containing the caret** resolves the selection by rule, no crash.
-7. **IME composition** stays correct (reconciliation deferred during compose).
-8. Undo affects only the local user's changes (per-user undo).
-9. Layout reads `store.model`, never the `EditorView`; same model ⇒ same pagination on client and server.
-10. Export→reopen preserves semantic content **and authored properties** (no resolved-value normalization).
-11. Selective export preserves an untouched unsupported OOXML capsule byte-for-byte
-    while retaining authored omission and raw lexical values in the edited part.
-12. The same schema-backed `DocxEditor.*` command produces equivalent canonical
-    state through the browser binding and through PM-free server execution.
-13. A citation/annotation internal anchor obeys the R8 affinity, collapse,
-    detach, split-remap, and join-remap rules under concurrent insertion,
-    deletion, split, and join.
-14. Origin and awareness metadata distinguish human, agent, remote, undo, and
-    binding-reconciliation activity; binding reconciliation emits no feedback
-    loop and awareness does not enter authored state.
-15. A bounded edit in a synthetic large document performs no whole-document
-    projection or rebuild, changes one dependency, converges to the canonical
-    toy fingerprint within four passes, and remains within every frozen fixture
-    counter ceiling.
-
-### Parity harness (the proof, not unit tests)
-
-```
-model₀ + PM transaction → DocOps → model₁       ⟺   model₀ + expected DocOps → model₁
-model₀ + EditorState + remote DocOps → ModelChange → reconciled EditorState
-                                                  ⟺   equivalent PM doc + preserved selection
-schema command + browser binding → model₁       ⟺   schema command + PM-free server → model₁
-```
-
-Property/fuzz variant: random transactions keep PM and model consistent; random
-concurrent op sets converge. This runs before any feature is added.
-
-### Order after green
-
-If the spike cannot hold any of the fifteen gates cleanly, reconsider the
-replication/history experiment here. Passing it does not change any
-`document-engine` contract or conformance requirement.
+- cap ZIP decompression ratio and part sizes;
+- reject paths with `..` or a leading `/`;
+- use a parser that does not resolve DTDs or external entities;
+- reject external relationship targets and traversal fetches;
+- escape every attacker-derived string written back into XML;
+- preserve the unsupported capsule and all unowned bytes exactly.
 
 ## Risks / Trade-offs
 
-- **The `EditorBinding` is the highest-risk code in the system** → property-test
-  gate (above) before anything builds on it; it is a first-class capability, not
-  an adapter.
-- **Authored+cache doubles model bookkeeping** → cache is derived,
-  fingerprinted with revision provenance, never serialized, and rebuilt on
-  demand.
-- **Backend-neutrality can be assumed falsely** → build local + Yjs together; a
-  conformance suite gates any later Automerge backend (`swappable` = tested, not
-  assumed).
-- **Repair determinism is subtle** → repair rules are pure functions of the
-  converged state; property-tested for replica agreement.
+- **EditorBinding remains high-risk** → the POC proves one paragraph flow, not
+  production reconciliation breadth.
+- **Yjs undo scope is intentionally narrow** → one actor/session manager on
+  tracked types only; durable reopen history beyond the Playwright flow is
+  deferred.
+- **DOCX adapter is minimal** → one fixture shape; general OOXML coverage belongs
+  in `document-engine`.
 
-## Open Questions (deferred to the spike or later, not blocking)
+## Open Questions (deferred, not POC blockers)
 
-- Undo mechanism: **resolved** — public `Y.UndoManager` + bounded reconstruction
-  journal; v1 nested schema rejected (`yjs-schema-v2-design.md`).
-- Persistence/schema-evolution versioning (required before "durable addressable
-  documents" is claimed; not needed for the spike).
-- Snapshot cadence, update-log compaction, GC.
+- Production persistence, snapshot compaction, and schema evolution.
+- Full anchor, IME, and selection matrices.
+- Audit/replay and server isolation semantics.
+- Layout, pagination, PDF, and performance conformance.

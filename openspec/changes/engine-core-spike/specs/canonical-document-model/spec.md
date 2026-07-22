@@ -1,32 +1,68 @@
 ## ADDED Requirements
 
-### Requirement: Authored package state is canonical
-The spike SHALL represent its one body story, paragraphs, text, bold and italic marks, stable paragraph identities, authored omission, raw lexical values, and one unsupported OOXML capsule in an authored canonical model. Resolved formatting or layout values MUST remain derived data with revision provenance and dependency/input fingerprints; cross-revision reuse is allowed only when fingerprints and the immutable operation environment match. Derived values MUST NOT replace authored values.
+### Requirement: Authored package state is canonical for the POC paragraph
+The POC SHALL represent one body story with one editable paragraph, text, bold
+and italic marks, stable paragraph identity, and one unsupported OOXML capsule in
+an authored canonical projection. Resolved formatting values MUST remain derived
+data used only for inspection and save projection; they MUST NOT replace authored
+values on export.
 
 #### Scenario: Derived values do not normalize authored state
-- **WHEN** the spike resolves formatting and lays out a paragraph whose property is omitted or stored with a raw lexical value
-- **THEN** the canonical model and a subsequent export retain the authored omission or raw lexical value rather than materializing the resolved value
+- **WHEN** the POC resolves formatting for display or save projection
+- **THEN** the canonical store and subsequent save retain authored intent for the
+  owned paragraph rather than materializing unrelated resolved values into OOXML
 
-### Requirement: Selective export preserves unsupported content
-Before gate execution the spike MUST freeze the capsule's exact input bytes,
-byte boundaries, owning paragraph-child slot, captured namespace bindings, and
-previous/next sibling bytes. The serializer SHALL patch only the owned edited
-text bytes and MUST preserve the capsule and every unowned byte byte-for-byte.
+### Requirement: Minimal DOCX adapter enforces a mandatory trust boundary
+The POC minimal DOCX adapter SHALL treat loaded bytes as untrusted. It MUST cap
+ZIP decompression ratio and part sizes, reject entry paths with `..` or a leading
+`/`, use parser-neutral XML reads that do not resolve DTDs or external entities,
+reject external relationship targets, and XML-escape every attacker-derived string
+written back into `word/document.xml`.
 
-#### Scenario: Edited text leaves an unsupported capsule untouched
-- **WHEN** a semantic text operation changes a supported paragraph and selective export runs
-- **THEN** the exact uncompressed XML-part comparator MUST limit differences to the owned range while the semantic ZIP comparator MAY allow recompression metadata/CRC/size/offset/directory changes, and capsule, namespace, sibling position, and unowned XML bytes MUST remain identical
+#### Scenario: Traversal path is rejected
+- **WHEN** a DOCX entry path contains `..` or begins with `/`
+- **THEN** load fails before any XML is parsed or emitted
 
-### Requirement: Stable paragraph identity follows edit rules
-The spike model SHALL preserve paragraph identity across insertion and deletion, SHALL retain the original identity on the first fragment after split, SHALL mint a new identity for the tail, and SHALL retain the first surviving identity after join.
+#### Scenario: External relationship is rejected
+- **WHEN** a relationship target requires external fetch or traversal outside the
+  bounded package
+- **THEN** load fails closed
 
-#### Scenario: Split and join preserve deterministic identity
-- **WHEN** a paragraph is split and the resulting paragraphs are joined
-- **THEN** the first fragment keeps the original identity, the split tail receives a new identity, and the join keeps the first surviving identity
+#### Scenario: DTD or oversized part is rejected
+- **WHEN** a part exceeds configured bounds or declares a DTD/external entity
+  surface
+- **THEN** load fails closed with no partial model commit
 
-### Requirement: The facade has one public namespace
-The spike SHALL expose its familiar Office JavaScript-style facade only as `DocxEditor.*` and MUST NOT declare another public namespace or alias.
+### Requirement: Unsupported capsule bytes are preserved exactly
+The POC fixture SHALL include one unsupported OOXML capsule with deterministic
+bytes. Save SHALL patch only the owned editable paragraph range in
+`word/document.xml` and MUST preserve the capsule and every unowned byte
+byte-for-byte.
 
-#### Scenario: Facade entry points are inspected
-- **WHEN** the spike's public facade declarations and schema-backed command entry points are enumerated
-- **THEN** every facade entry is rooted at `DocxEditor.*` and no alternate namespace or alias is present
+#### Scenario: Edited paragraph leaves capsule untouched
+- **WHEN** text or formatting changes in the owned paragraph and save runs
+- **THEN** capsule bytes and all bytes outside the owned paragraph range remain
+  identical to the loaded source
+
+#### Scenario: Reopen preserves capsule and semantics
+- **WHEN** the saved DOCX is loaded again through the same adapter
+- **THEN** reopened text, bold/italic coverage, stable paragraph identity, and
+  capsule bytes match the saved intent
+
+### Requirement: Stable paragraph identity follows POC edit rules
+The POC model SHALL preserve one stable paragraph identity across load, edit,
+format toggles, save, and reopen for the single editable paragraph.
+
+#### Scenario: Save and reopen retain paragraph identity
+- **WHEN** the POC saves and reopens the fixture
+- **THEN** the editable paragraph retains the same stable identity established at
+  initial load
+
+### Requirement: Deterministic fixture generation
+The POC SHALL generate one standards-minimal deterministic DOCX fixture in memory
+with exactly one editable paragraph and one unsupported capsule so Playwright and
+unit tests share the same bytes.
+
+#### Scenario: Fixture bytes are reproducible
+- **WHEN** `createPocDocxFixture()` is invoked twice in a clean process
+- **THEN** both results produce identical byte sequences

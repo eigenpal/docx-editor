@@ -5,98 +5,78 @@ The model-canonical direction (`modular-core-api`, `chromium-free-rendering-engi
 `checkpoint-e743b783` correctly found that it concentrates the hard complexity into three
 components the specs treated as adapters — the canonical **DocumentModel**, the
 **DocumentStore** + its replication backend, and the **EditorBinding** (PM↔model
-mapping). Those are the engine. Several statements also presented unsolved
-problems as consequences of the architecture (one currency; only-changed-blocks
-relayout; whole-doc projection is "half the work").
+mapping). Those are the engine.
 
-This change does two things: (1) resolves the foundational contracts those three
-components need, as first-class specs; and (2) defines a **risk-first vertical
-spike** whose only job is to *falsify* the architecture before the full OOXML
-pipeline is built. If the narrow slice cannot hold IME, selection, undo, and
-remote reconciliation cleanly, the architecture is reconsidered here — cheaply —
-not after the DOCX model exists.
+Prior work in this change produced retained historical evidence: a disposable
+harness, v1 schema rejection, Candidate B immutable mark contributions, lean v2
+contracts, and a synchronous transaction/origin executor. That work is closed and
+does not reopen.
+
+This change now defines a **disposable browser POC** whose only job is to prove
+one visible product sequence through the public `EditorDriver`: load a bounded
+minimal DOCX, edit and format one paragraph, synchronize two Yjs replicas,
+perform actor-local undo that preserves remote work, save, reopen, and preserve
+semantic content plus untouched capsule bytes.
 
 ## What Changes
 
-- **Office JavaScript-style shape is a facade, not the storage schema.** The canonical store is
-  an authored, lossless package model (runs, paragraph-mark props, field
-  boundaries, bookmarks, content controls, relationship IDs, theme refs, raw/
-  omitted values, unsupported-content capsules, order where significant). The
-  `DocxEditor.*` object model is a lazy facade over it.
-- **Authored is canonical; resolved is a derived cache.** Style/numbering
-  resolution is a fingerprinted cache with revision provenance, not stored in the tree, so export never
-  normalizes authored intent into direct formatting.
-- **Four named contracts, not "one currency."** `DocOp` (semantic mutation
-  vocabulary), `ModelChange` (committed change notification), backend replication
-  update (opaque bytes), and snapshot are distinct. The backend converts
-  committed ops into replication updates.
-- **Three boundaries, PM-free replication.** `DocumentStore` (semantic, PM-free),
-  `ReplicatedStoreBackend` (opaque bytes; the CRDT lives here), `EditorBinding`
-  (the only PM-aware layer). No PM type in the CRDT package. (`remote-document-sync`
-  D1 corrected accordingly.)
-- **EditorBinding is a first-class engine.** An extensible `OperationMapper`
-  (step→ops, model-change→reconcile), an explicit unsupported-transaction
-  fallback policy, one authoritative normalization path, and defined reverse
-  reconciliation (selection/IME/loop-prevention/origin-tagging).
-- **Stable identity + compound anchors** with defined split/join/move/delete
-  semantics; projections carry opaque engine anchor handles, not PM offsets or
-  public backend-relative bytes.
-- **Atomic multi-story transactions** (`store.transact`) so one command touching
-  body + relationship + media + numbering commits as one revision.
-- **Incremental layout narrowed** to dependency-aware invalidation with a
-  pagination restart point, not "only the changed block".
-- **Server isolation** via revision-aware `RequestContext` (`baseRevision`,
-  precondition-carrying ops).
-- **Security mechanics** (not policy): auth/authz hooks, size/rate/resource
-  limits, malformed-update handling, audit metadata — seams specified even though
-  policy stays integration-owned.
-- **A falsification spike**: one body story, paragraphs, text, bold/italic, stable
-  paragraph IDs, insert/delete/split/join, Yjs + local backends, minimal layout —
-  gated on fifteen pass/fail proofs.
-- **Five architecture-suitability proofs added without widening production
-  scope**: selective preservation of unsupported OOXML and authored lexical
-  intent; browser/server parity for one schema-backed `DocxEditor.*` command;
-  concurrent edit survival for one annotation anchor; explicit origin and
-  awareness separation without loops; and bounded dirty measurement and
-  pagination restart work for one synthetic large-document edit.
-- **Narrow authority.** Passing the spike accepts only the canonical-store,
-  replication-coordinator, editor-binding, anchor, origin/awareness, undo, and
-  fixture-bounded-work architecture. Production shaping, pagination, output,
-  accessibility, PDF, and performance remain gated by `document-engine`.
-- **Executable toy layout.** The synthetic fixture pins deterministic toy
-  shaping inputs, one dependency-changing edit, a canonical pagination
-  fingerprint with a pass bound, and concrete fixture-owned work ceilings.
+- **Scope replacement, not additive layer.** The open-ended falsification
+  program (fifteen gates, exhaustive oracle freezes, synthetic layout, annotation/
+  awareness/audit breadth, old E2E blocking) is superseded by five POC milestones
+  and one Playwright finish line. Those former obligations become explicit
+  deferred risks and non-goals, not POC blockers.
+- **Narrow authority.** This is a non-shipping browser POC in the spike harness.
+  It does not accept production engine conformance, package migration, or
+  publishing. Production shaping, layout, output, accessibility, PDF, and
+  performance remain gated by `document-engine`.
+- **Retained decisions carried forward:** one long-lived `Y.Text` body story;
+  plain JSON opening-boundary embeds; immutable Candidate B mark contributions;
+  the synchronous transaction/origin executor; ProseMirror as editing surface with
+  model-canonical commit order; bounded parsing and exact preservation of one
+  unsupported OOXML capsule.
+- **Five POC milestones:** OpenSpec rewrite; bounded minimal DOCX adapter; tiny
+  canonical Yjs store and collaboration; ProseMirror browser surface through
+  `EditorDriver`; save/reopen Playwright finish line.
+- **Binary completion.** One focused Playwright flow proves load → edit → bold →
+  replica convergence → remote edit → local undo preserving remote work → save →
+  reopen → semantic and capsule preservation.
+- **Stop rule.** No new `*-oracle`, `*-protocol`, or `*-review` suite unless a
+  failing POC product behavior requires it. Direct behavior tests own
+  expectations.
+- **Security boundary.** The minimal DOCX adapter MUST enforce bounded ZIP/XML,
+  reject DTDs/oversized parts/traversal paths/external relationships, XML-escape
+  authored text, and preserve untouched capsule bytes exactly.
+- **EditorDriver unblocks browser E2E.** The existing public `EditorDriver`
+  boundary enables the focused Playwright flow. This POC does not claim full
+  adapter or browser parity with production packages.
 
 ## Capabilities
 
 ### New Capabilities
 
-- `canonical-document-model`: the authored, lossless package model + preservation
-  capsules + stable IDs + fingerprinted resolved cache with revision provenance; the `DocxEditor.*`
-  Office JavaScript-style facade over it.
-- `semantic-operations`: `DocOp`/`ModelChange`/replication-update/snapshot as four
-  contracts, `store.transact` atomicity, identity-under-edit rules, and opaque
-  engine-owned anchor handles.
-- `editor-binding`: the `OperationMapper` contract, unsupported-transaction
-  fallback policy, single normalization path, and reverse reconciliation
-  (selection/IME/loops), with the parity property-test as an acceptance gate.
-- `engine-falsification-spike`: the narrow vertical slice and its fifteen pass/fail
-  gates that must hold before the full OOXML pipeline is built.
+- `canonical-document-model`: the POC's one-paragraph authored model, stable
+  paragraph identity, and one unsupported capsule preserved byte-for-byte on save.
+- `semantic-operations`: the POC store's text insertion/deletion, bold/italic
+  toggles, two-replica Yjs convergence, and actor-local undo preserving remote
+  work.
+- `editor-binding`: minimal ProseMirror binding and `EditorDriver` transport for
+  load, edit, format inspection, undo, save, and reopen without exposing
+  `EditorView`.
+- `engine-falsification-spike`: the disposable browser POC scope, milestones,
+  finish line, stop rules, deferred risks, and retained historical decisions.
 
 ### Modified Capabilities
 
-<!-- This spike records prerequisite architecture proofs. The authoritative
+<!-- This POC records prerequisite architecture evidence. The authoritative
      production corrections and complete contracts live in document-engine. -->
 
 ## Impact
 
-- **Sequencing**: this spike gates use of the canonical store, replication
-  coordinator, editor binding, anchors, origin/awareness, undo, and bounded-work
-  architecture in the production pipeline. Production shaping, layout, output,
-  and performance still require their own conformance gates.
-- **Contracts**: pins DocumentModel/DocOp/ModelChange/DocumentStore/EditorBinding
-  as first-class specs; downstream changes depend on them.
-- **Backends**: local + Yjs built together (seam-neutrality canary); Automerge is
-  reached only against the conformance suite, never assumed.
-- **No product behavior**: this is contracts + a throwaway-scope spike; the spike
-  code is a falsification harness, not shipped surface.
+- **Sequencing**: completing the POC does not unblock production pipeline work
+  beyond recording retained decisions and deferred risks. Production conformance
+  still requires `document-engine`.
+- **Contracts**: the four capability specs describe POC behavior only; they do
+  not supersede `document-engine`.
+- **Harness only**: spike code is disposable proof in
+  `spike/engine-core-spike-harness/` and `e2e/`; it is not shipped surface.
+- **No product migration**: adapters and published packages are out of scope.
