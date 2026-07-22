@@ -1,4 +1,5 @@
 /** @spike-features yjs-backend, insert-delete-split-join-operations, origin-metadata */
+/* eslint-disable max-lines -- the POC store is intentionally constrained to one module */
 import * as Y from 'yjs';
 import {
   createMutationOrigin,
@@ -20,6 +21,7 @@ export interface PocSnapshot {
 
 export interface PocStore {
   readonly actorId: string;
+  readonly clientId: number;
   snapshot(): PocSnapshot;
   insert(offset: number, text: string): void;
   delete(start: number, end: number): void;
@@ -44,6 +46,9 @@ const POC_MAX_TEXT_LENGTH = 8192;
 const POC_MAX_INSERT_LENGTH = 4096;
 const POC_MAX_CONTRIBUTIONS = 256;
 const POC_MAX_UPDATE_BYTES = 256 * 1024;
+const POC_MAX_ID_LENGTH = 256;
+const POC_MAX_ENDPOINT_LENGTH = 1024;
+const POC_MAX_REMOVE_TARGETS = 256;
 
 type MarkKind = 'bold' | 'italic';
 
@@ -67,81 +72,114 @@ interface MarkSegment {
 interface LocalMutationStage {
   readonly liveDoc: Y.Doc;
   stagedDoc: Y.Doc;
-  liveSnapshot: Uint8Array;
+  update: Uint8Array;
   readonly trackedOrigin: string;
 }
 
 const bootstrapCache = new Map<string, Uint8Array>();
 
 export function createPocStore(loaded: LoadedPocDocx, options: CreatePocStoreOptions): PocStore {
-  validateStoreOptions(options);
+  const identity = snapshotStoreOptions(options);
   validateLoadedSnapshot(loaded);
 
   const doc = new Y.Doc({ gc: false });
-  doc.clientID = options.clientId;
+  doc.clientID = identity.clientId;
   Y.applyUpdate(doc, getDeterministicBootstrapUpdate(loaded), 'poc-bootstrap');
 
   const bodySequence = doc.getText(BODY_SEQUENCE_KEY);
   const markContributions = doc.getMap<Record<string, unknown>>(MARK_CONTRIBUTIONS_KEY);
-  const trackedOrigin = createStableTrackedOrigin(options.actorId, options.sessionId);
+  const trackedOrigin = createStableTrackedOrigin(identity.actorId, identity.sessionId);
   const undoManager = new Y.UndoManager([bodySequence, markContributions], {
     trackedOrigins: new Set([trackedOrigin]),
     captureTimeout: Number.MAX_SAFE_INTEGER,
     ignoreRemoteMapChanges: true,
   });
 
-  let operationCounter = 0;
+  const contributionPrefix = `${identity.actorId}:${identity.sessionId}:${identity.clientId}:op:`;
+  let operationCounter = nextContributionSequence(markContributions, contributionPrefix);
   let remoteUpdateCounter = 0;
   const listeners = new Set<(snapshot: PocSnapshot) => void>();
+  const actionQueue: Array<() => void> = [];
+  const notificationQueue: PocSnapshot[] = [];
+  let drainingActions = false;
+  let deliveringNotifications = false;
 
   const executor = createSynchronousTransactionExecutor<LocalMutationStage, void>({
     preflight(stage) {
-      stage.liveSnapshot = Y.encodeStateAsUpdate(stage.liveDoc);
-      stage.stagedDoc = cloneDocFromUpdate(stage.liveSnapshot, stage.liveDoc.clientID);
+      const liveUpdate = Y.encodeStateAsUpdate(stage.liveDoc);
+      const operationClientId = allocateOperationClientId(
+        identity.clientId,
+        operationCounter,
+        stage.liveDoc
+      );
+      stage.stagedDoc = cloneDocFromUpdate(liveUpdate, operationClientId);
     },
     publish(stage) {
-      const update = Y.encodeStateAsUpdate(stage.stagedDoc, Y.encodeStateVector(stage.liveDoc));
-      if (update.byteLength === 0) return;
-      Y.applyUpdate(stage.liveDoc, update, stage.trackedOrigin);
-      assertValidPocDoc(stage.liveDoc, loaded.paragraphId);
-    },
-    rollback(stage) {
-      const reverse = Y.encodeStateAsUpdate(
-        cloneDocFromUpdate(stage.liveSnapshot, stage.liveDoc.clientID),
-        Y.encodeStateVector(stage.liveDoc)
-      );
-      if (reverse.byteLength > 0) {
-        Y.applyUpdate(stage.liveDoc, reverse, 'poc-rollback');
+      if (stage.update.byteLength > 0) {
+        Y.applyUpdate(stage.liveDoc, stage.update, stage.trackedOrigin);
       }
     },
+    rollback() {},
   });
+
+  const deliverNotifications = (): void => {
+    if (deliveringNotifications) return;
+    deliveringNotifications = true;
+    try {
+      while (notificationQueue.length > 0) {
+        const next = notificationQueue.shift()!;
+        const delivery = [...listeners];
+        for (const listener of delivery) {
+          try {
+            listener(next);
+          } catch {
+            // Listener failures are isolated from store publication and peers.
+          }
+        }
+      }
+    } finally {
+      deliveringNotifications = false;
+    }
+  };
 
   const notifyIfChanged = (before: PocSnapshot): void => {
     const after = snapshot();
     if (snapshotsEqual(before, after)) return;
-    for (const listener of listeners) listener(after);
+    notificationQueue.push(after);
+    deliverNotifications();
   };
 
-  const runLocalMutation = (mutate: (ctx: {
-    body: Y.Text;
-    marks: Y.Map<Record<string, unknown>>;
-    doc: Y.Doc;
-  }) => void): boolean => {
+  const enqueueAction = (action: () => void): void => {
+    actionQueue.push(action);
+    if (drainingActions) return;
+    drainingActions = true;
+    try {
+      while (actionQueue.length > 0) {
+        actionQueue.shift()!();
+      }
+    } finally {
+      drainingActions = false;
+    }
+  };
+
+  const runLocalMutation = (
+    mutate: (ctx: { body: Y.Text; marks: Y.Map<Record<string, unknown>>; doc: Y.Doc }) => void
+  ): boolean => {
     const before = snapshot();
     const stage: LocalMutationStage = {
       liveDoc: doc,
       stagedDoc: doc,
-      liveSnapshot: new Uint8Array(),
+      update: new Uint8Array(),
       trackedOrigin,
     };
     const context = createSynchronousTransactionContext({
-      actorId: options.actorId,
-      sessionId: options.sessionId,
-      groupId: `${options.sessionId}-poc`,
-      transactionId: `${options.sessionId}-poc-${operationCounter}`,
+      actorId: identity.actorId,
+      sessionId: identity.sessionId,
+      groupId: `${identity.sessionId}-poc`,
+      transactionId: `${identity.sessionId}-poc-${operationCounter}`,
       origin: createMutationOrigin('human', {
-        actorId: options.actorId,
-        sessionId: options.sessionId,
+        actorId: identity.actorId,
+        sessionId: identity.sessionId,
       }),
     });
     const result = executor.transact(context, stage, (_capability, staged) => {
@@ -152,6 +190,11 @@ export function createPocStore(loaded: LoadedPocDocx, options: CreatePocStoreOpt
         mutate({ body, marks, doc: stagedDoc });
       }, trackedOrigin);
       assertValidPocDoc(stagedDoc, loaded.paragraphId);
+      staged.value.update = Y.encodeStateAsUpdate(
+        stagedDoc,
+        Y.encodeStateVector(staged.value.liveDoc)
+      );
+      assertValidDifferentialUpdate(staged.value.update, staged.value.liveDoc, loaded.paragraphId);
     });
     if (!result.ok) return false;
     operationCounter += 1;
@@ -163,74 +206,111 @@ export function createPocStore(loaded: LoadedPocDocx, options: CreatePocStoreOpt
   const snapshot = (): PocSnapshot => deepFreezeSnapshot(projectSnapshot(doc, loaded.paragraphId));
 
   return Object.freeze({
-    actorId: options.actorId,
+    actorId: identity.actorId,
+    clientId: identity.clientId,
     snapshot,
     insert(offset: number, text: string) {
-      if (!validateInsertInput(offset, text, readParagraphText(doc))) return;
-      runLocalMutation(({ body }) => {
-        body.insert(textOffsetToBodyIndex(offset), text);
+      enqueueAction(() => {
+        if (!validateInsertInput(offset, text, readParagraphText(doc))) return;
+        runLocalMutation(({ body }) => {
+          body.insert(textOffsetToBodyIndex(offset), text);
+        });
       });
     },
     delete(start: number, end: number) {
-      if (!validateDeleteInput(start, end, readParagraphText(doc))) return;
-      const range = normalizeRange(start, end);
-      runLocalMutation(({ body }) => {
-        body.delete(textOffsetToBodyIndex(range.start), range.end - range.start);
+      enqueueAction(() => {
+        if (!validateDeleteInput(start, end, readParagraphText(doc))) return;
+        const range = normalizeRange(start, end);
+        runLocalMutation(({ body }) => {
+          body.delete(textOffsetToBodyIndex(range.start), range.end - range.start);
+        });
       });
     },
     toggleMark(start: number, end: number, kind: MarkKind) {
-      if (!validateMarkKind(kind)) return;
-      const text = readParagraphText(doc);
-      if (!validateMarkRange(start, end, text)) return;
-      const range = normalizeRange(start, end);
-      runLocalMutation(({ body, marks, doc: stagedDoc }) => {
-        const segments = resolveMarkSegments(body, marks, stagedDoc);
-        if (isRangeFullyMarked(segments, kind, range.start, range.end)) {
-          disableMark(body, marks, stagedDoc, kind, range, options.actorId, options.sessionId, operationCounter);
-        } else {
-          enableMark(
-            body,
-            marks,
-            stagedDoc,
-            kind,
-            range,
-            `${options.actorId}:${options.sessionId}:${operationCounter}`,
-            options.actorId,
-            `${options.sessionId}:${operationCounter}`
-          );
-        }
+      enqueueAction(() => {
+        if (!validateMarkKind(kind)) return;
+        const text = readParagraphText(doc);
+        if (!validateMarkRange(start, end, text)) return;
+        const range = normalizeRange(start, end);
+        operationCounter = Math.max(
+          operationCounter,
+          nextContributionSequence(markContributions, contributionPrefix)
+        );
+        const operationIdentity = `${contributionPrefix}${operationCounter}`;
+        runLocalMutation(({ body, marks, doc: stagedDoc }) => {
+          const segments = resolveMarkSegments(body, marks, stagedDoc);
+          if (isRangeFullyMarked(segments, kind, range.start, range.end)) {
+            disableMark(
+              body,
+              marks,
+              stagedDoc,
+              kind,
+              range,
+              `${operationIdentity}:remove:${kind}`,
+              identity.actorId,
+              `${identity.sessionId}:${identity.clientId}:${operationCounter}`
+            );
+          } else {
+            enableMark(
+              body,
+              marks,
+              stagedDoc,
+              kind,
+              range,
+              `${operationIdentity}:add:${kind}`,
+              identity.actorId,
+              `${identity.sessionId}:${identity.clientId}:${operationCounter}`
+            );
+          }
+        });
       });
     },
     undo(): boolean {
       if (undoManager.undoStack.length === 0) return false;
-      const before = snapshot();
-      undoManager.undo();
-      undoManager.stopCapturing();
-      notifyIfChanged(before);
+      enqueueAction(() => {
+        const before = snapshot();
+        undoManager.undo();
+        undoManager.stopCapturing();
+        notifyIfChanged(before);
+      });
       return true;
     },
     encodeUpdate(): Uint8Array {
       return new Uint8Array(Y.encodeStateAsUpdate(doc));
     },
     applyRemoteUpdate(update: Uint8Array) {
-      if (!validateUpdateBytes(update)) return;
-      const before = snapshot();
-      const staged = cloneDocFromUpdate(Y.encodeStateAsUpdate(doc), doc.clientID);
-      const remoteOrigin = createRemoteUntrackedOrigin({
-        actorId: 'remote',
-        replicaId: `replica-${remoteUpdateCounter}`,
-        sessionId: 'remote',
-        updateId: `update-${remoteUpdateCounter}`,
+      enqueueAction(() => {
+        if (!validateUpdateBytes(update)) return;
+        if (!updateHasNovelContent(update, doc)) return;
+        const before = snapshot();
+        const incomingClients = new Set(
+          Y.decodeUpdate(update).structs.map((struct) => struct.id.client)
+        );
+        const staged = cloneDocFromUpdate(
+          Y.encodeStateAsUpdate(doc),
+          allocateOperationClientId(identity.clientId, remoteUpdateCounter, doc, incomingClients)
+        );
+        const remoteOrigin = createRemoteUntrackedOrigin({
+          actorId: 'remote',
+          replicaId: `replica-${remoteUpdateCounter}`,
+          sessionId: 'remote',
+          updateId: `update-${remoteUpdateCounter}`,
+        });
+        try {
+          assertValidDifferentialUpdate(update, doc, loaded.paragraphId);
+          Y.applyUpdate(staged, update, remoteOrigin);
+          assertValidPocDoc(staged, loaded.paragraphId);
+        } catch {
+          return;
+        }
+        remoteUpdateCounter += 1;
+        Y.applyUpdate(doc, update, remoteOrigin);
+        operationCounter = Math.max(
+          operationCounter,
+          nextContributionSequence(markContributions, contributionPrefix)
+        );
+        notifyIfChanged(before);
       });
-      try {
-        Y.applyUpdate(staged, update, remoteOrigin);
-        assertValidPocDoc(staged, loaded.paragraphId);
-      } catch {
-        return;
-      }
-      remoteUpdateCounter += 1;
-      Y.applyUpdate(doc, update, remoteOrigin);
-      notifyIfChanged(before);
     },
     subscribe(listener: (snapshot: PocSnapshot) => void): () => void {
       if (typeof listener !== 'function') throw new TypeError('listener must be a function');
@@ -295,13 +375,43 @@ export function getDeterministicBootstrapUpdate(loaded: LoadedPocDocx): Uint8Arr
   return new Uint8Array(update);
 }
 
-function validateStoreOptions(options: CreatePocStoreOptions): void {
+function snapshotStoreOptions(options: CreatePocStoreOptions): Readonly<CreatePocStoreOptions> {
   if (!options || typeof options !== 'object') throw new TypeError('options must be an object');
-  if (validateSpikeId(options.actorId, 'actorId')) throw new TypeError('invalid actorId');
-  if (validateSpikeId(options.sessionId, 'sessionId')) throw new TypeError('invalid sessionId');
-  if (!Number.isInteger(options.clientId) || options.clientId <= 0) {
+  const names = Object.getOwnPropertyNames(options);
+  const symbols = Object.getOwnPropertySymbols(options);
+  const expected = ['actorId', 'clientId', 'sessionId'];
+  if (
+    symbols.length !== 0 ||
+    names.length !== expected.length ||
+    [...names].sort().some((name, index) => name !== expected[index])
+  ) {
+    throw new TypeError('options must contain exactly actorId, sessionId, and clientId');
+  }
+  const values: Record<string, unknown> = Object.create(null) as Record<string, unknown>;
+  for (const name of expected) {
+    const descriptor = Object.getOwnPropertyDescriptor(options, name);
+    if (!descriptor || !('value' in descriptor)) {
+      throw new TypeError(`options ${name} descriptor must be own data`);
+    }
+    values[name] = descriptor.value;
+  }
+  const actorId = values.actorId;
+  const sessionId = values.sessionId;
+  const clientId = values.clientId;
+  if (validateSpikeId(actorId, 'actorId')) throw new TypeError('invalid actorId');
+  if (validateSpikeId(sessionId, 'sessionId')) throw new TypeError('invalid sessionId');
+  if (
+    !Number.isInteger(clientId) ||
+    (clientId as number) <= 0 ||
+    (clientId as number) > 0xffff_ffff
+  ) {
     throw new TypeError('clientId must be a positive integer');
   }
+  return Object.freeze({
+    actorId: actorId as string,
+    sessionId: sessionId as string,
+    clientId: clientId as number,
+  });
 }
 
 function validateLoadedSnapshot(loaded: LoadedPocDocx): void {
@@ -309,8 +419,16 @@ function validateLoadedSnapshot(loaded: LoadedPocDocx): void {
   if (typeof loaded.paragraphId !== 'string' || loaded.paragraphId.length === 0) {
     throw new TypeError('loaded paragraphId is required');
   }
+  if (
+    loaded.paragraphId.length > POC_MAX_ID_LENGTH ||
+    containsInvalidSurrogateBoundary(loaded.paragraphId)
+  ) {
+    throw new TypeError('loaded paragraphId is invalid');
+  }
   if (typeof loaded.text !== 'string') throw new TypeError('loaded text is required');
   if (loaded.text.length > POC_MAX_TEXT_LENGTH) throw new TypeError('loaded text exceeds bound');
+  if (containsInvalidSurrogateBoundary(loaded.text))
+    throw new TypeError('loaded text is invalid UTF-16');
   if (!Array.isArray(loaded.runs)) throw new TypeError('loaded runs are required');
 }
 
@@ -421,11 +539,167 @@ function containsInvalidSurrogateBoundary(text: string): boolean {
   return false;
 }
 
+function isSurrogateSplitOffset(text: string, offset: number): boolean {
+  return (
+    offset > 0 &&
+    offset < text.length &&
+    isHighSurrogate(text[offset - 1]!) &&
+    isLowSurrogate(text[offset]!)
+  );
+}
+
 function cloneDocFromUpdate(update: Uint8Array, clientId: number): Y.Doc {
   const clone = new Y.Doc({ gc: false });
   clone.clientID = clientId;
   Y.applyUpdate(clone, update);
   return clone;
+}
+
+function allocateOperationClientId(
+  storeClientId: number,
+  sequence: number,
+  doc: Y.Doc,
+  additionalOccupied: ReadonlySet<number> = new Set()
+): number {
+  const occupied = Y.decodeStateVector(Y.encodeStateVector(doc));
+  for (let probe = 0; probe < 0xffff_ffff; probe += 1) {
+    let hash = 0x811c9dc5;
+    const input = `${storeClientId}:${sequence}:${probe}`;
+    for (let index = 0; index < input.length; index += 1) {
+      hash ^= input.charCodeAt(index);
+      hash = Math.imul(hash, 0x01000193);
+    }
+    const candidate = hash >>> 0;
+    if (
+      candidate !== 0 &&
+      candidate !== storeClientId &&
+      !occupied.has(candidate) &&
+      !additionalOccupied.has(candidate)
+    ) {
+      return candidate;
+    }
+  }
+  throw new TypeError('unable to allocate collision-free operation clientId');
+}
+
+function nextContributionSequence(marks: Y.Map<Record<string, unknown>>, prefix: string): number {
+  let next = 0;
+  for (const key of marks.keys()) {
+    if (!key.startsWith(prefix)) continue;
+    const suffix = key.slice(prefix.length);
+    const separator = suffix.indexOf(':');
+    const encoded = separator === -1 ? suffix : suffix.slice(0, separator);
+    if (!/^(0|[1-9][0-9]*)$/.test(encoded)) continue;
+    const sequence = Number(encoded);
+    if (Number.isSafeInteger(sequence)) next = Math.max(next, sequence + 1);
+  }
+  return next;
+}
+
+function updateHasNovelContent(update: Uint8Array, doc: Y.Doc): boolean {
+  try {
+    const current = Y.decodeStateVector(Y.encodeStateVector(doc));
+    const decoded = Y.decodeUpdate(update);
+    if (
+      decoded.structs.some(
+        (struct) => struct.id.clock + struct.length > (current.get(struct.id.client) ?? 0)
+      )
+    ) {
+      return true;
+    }
+    for (const [clientId, ranges] of decoded.ds.clients) {
+      const structs = doc.store.clients.get(clientId) ?? [];
+      for (const range of ranges) {
+        const end = range.clock + range.len;
+        let clock = range.clock;
+        while (clock < end) {
+          const struct = structs.find(
+            (candidate) =>
+              candidate.id.clock <= clock && candidate.id.clock + candidate.length > clock
+          );
+          if (!struct || !struct.deleted) return true;
+          clock = Math.min(end, struct.id.clock + struct.length);
+        }
+      }
+    }
+    return false;
+  } catch {
+    return false;
+  }
+}
+
+function assertValidDifferentialUpdate(
+  update: Uint8Array,
+  liveDoc: Y.Doc,
+  paragraphId: string
+): void {
+  if (update.byteLength === 0) return;
+  const decoded = Y.decodeUpdate(update);
+  const current = Y.decodeStateVector(Y.encodeStateVector(liveDoc));
+  const seenMapKeys = new Set<string>();
+  const liveMarks = liveDoc.getMap<Record<string, unknown>>(MARK_CONTRIBUTIONS_KEY);
+
+  for (const struct of decoded.structs) {
+    const coveredClock = current.get(struct.id.client) ?? 0;
+    if (struct.id.clock + struct.length <= coveredClock) continue;
+    if (struct.id.clock < coveredClock) {
+      throw new TypeError('differential update partially overlaps covered structs');
+    }
+    if (!(struct instanceof Y.Item)) continue;
+
+    const parent = struct.parent as unknown;
+    if (
+      typeof parent === 'string' &&
+      parent !== BODY_SEQUENCE_KEY &&
+      parent !== MARK_CONTRIBUTIONS_KEY
+    ) {
+      throw new TypeError('differential update introduces unknown root');
+    }
+
+    if (struct.parentSub !== null) {
+      const key = struct.parentSub;
+      if (key.length === 0 || key.length > POC_MAX_ID_LENGTH) {
+        throw new TypeError('invalid contribution key in differential update');
+      }
+      if (seenMapKeys.has(key)) {
+        throw new TypeError('differential update assigns a creation key more than once');
+      }
+      if (liveMarks.has(key)) {
+        throw new TypeError('differential update overwrites a creation-only key');
+      }
+      seenMapKeys.add(key);
+      if (struct.content.constructor.name !== 'ContentAny') {
+        throw new TypeError('mark contribution must contain plain JSON');
+      }
+      const content = struct.content.getContent();
+      if (content.length !== 1)
+        throw new TypeError('mark contribution assignment must be singular');
+      validateContributionRecord(content[0], key);
+      continue;
+    }
+
+    const contentName = struct.content.constructor.name;
+    if (
+      contentName !== 'ContentString' &&
+      contentName !== 'ContentEmbed' &&
+      contentName !== 'ContentDeleted'
+    ) {
+      throw new TypeError('bodySequence differential content is not permitted');
+    }
+    if (
+      contentName === 'ContentString' &&
+      (() => {
+        const values = struct.content.getContent();
+        if (values.some((value) => typeof value !== 'string')) return true;
+        const text = (values as string[]).join('');
+        return containsInvalidSurrogateBoundary(text) || text.includes('\uFFFD');
+      })()
+    ) {
+      throw new TypeError('bodySequence differential contains invalid UTF-16');
+    }
+  }
+
+  void paragraphId;
 }
 
 function assertValidPocDoc(doc: Y.Doc, paragraphId: string): void {
@@ -448,44 +722,92 @@ function assertValidPocDoc(doc: Y.Doc, paragraphId: string): void {
     throw new TypeError('bodySequence must start with opening boundary embed');
   }
   const boundary = first.insert as BoundaryEmbed;
-  if (boundary.kind !== 'paragraph-boundary' || boundary.paragraphId !== paragraphId) {
+  if (
+    !hasExactOwnKeys(boundary as unknown as Record<string, unknown>, ['kind', 'paragraphId']) ||
+    boundary.kind !== 'paragraph-boundary' ||
+    boundary.paragraphId !== paragraphId
+  ) {
     throw new TypeError('invalid opening boundary embed');
   }
-  if (delta.some((item: { insert?: unknown }, index: number) => index > 0 && typeof item.insert === 'object')) {
+  if (
+    delta.some(
+      (item: { insert?: unknown; attributes?: unknown }, index: number) =>
+        item.attributes !== undefined || (index > 0 && typeof item.insert !== 'string')
+    )
+  ) {
     throw new TypeError('bodySequence must not contain interior embeds');
   }
 
   const text = readParagraphText(doc);
   if (text.length > POC_MAX_TEXT_LENGTH) throw new TypeError('paragraph text exceeds bound');
+  if (containsInvalidSurrogateBoundary(text))
+    throw new TypeError('paragraph text is invalid UTF-16');
 
   let contributionCount = 0;
+  const records = new Map<string, Record<string, unknown>>();
   marks.forEach((record, key) => {
     contributionCount += 1;
-    if (contributionCount > POC_MAX_CONTRIBUTIONS) throw new TypeError('mark contribution count exceeds bound');
+    if (contributionCount > POC_MAX_CONTRIBUTIONS)
+      throw new TypeError('mark contribution count exceeds bound');
     validateContributionRecord(record, key);
+    records.set(key, record);
   });
+  validateContributionSemantics(records, doc, body, text);
 
   projectSnapshot(doc, paragraphId);
 }
 
 function validateContributionRecord(record: unknown, key: string): void {
+  if (typeof key !== 'string' || key.length === 0 || key.length > POC_MAX_ID_LENGTH) {
+    throw new TypeError('invalid contribution id');
+  }
   if (!isPlainRecord(record)) throw new TypeError(`invalid contribution record ${key}`);
   if (record.kind !== 'add' && record.kind !== 'remove') {
     throw new TypeError(`invalid contribution kind for ${key}`);
   }
+  const expectedKeys =
+    record.kind === 'add'
+      ? ['actorId', 'commitId', 'kind', 'markKind', 'relativeEnd', 'relativeStart']
+      : [
+          'actorId',
+          'commitId',
+          'kind',
+          'markKind',
+          'relativeEnd',
+          'relativeStart',
+          'targetAddContributionIds',
+        ];
+  if (!hasExactOwnKeys(record, expectedKeys)) {
+    throw new TypeError(`contribution record has unexpected fields for ${key}`);
+  }
   if (record.markKind !== 'bold' && record.markKind !== 'italic') {
     throw new TypeError(`invalid mark kind for ${key}`);
   }
-  if (typeof record.actorId !== 'string' || record.actorId.length === 0) {
+  if (
+    typeof record.actorId !== 'string' ||
+    record.actorId.length === 0 ||
+    record.actorId.length > POC_MAX_ID_LENGTH ||
+    containsInvalidSurrogateBoundary(record.actorId)
+  ) {
     throw new TypeError(`invalid actorId for ${key}`);
   }
-  if (typeof record.commitId !== 'string' || record.commitId.length === 0) {
+  if (
+    typeof record.commitId !== 'string' ||
+    record.commitId.length === 0 ||
+    record.commitId.length > POC_MAX_ID_LENGTH ||
+    containsInvalidSurrogateBoundary(record.commitId)
+  ) {
     throw new TypeError(`invalid commitId for ${key}`);
   }
   if (typeof record.relativeStart !== 'string' || typeof record.relativeEnd !== 'string') {
     throw new TypeError(`invalid endpoints for ${key}`);
   }
-  if (!/^[A-Za-z0-9_-]+$/.test(record.relativeStart) || !/^[A-Za-z0-9_-]+$/.test(record.relativeEnd)) {
+  if (
+    record.relativeStart.length > POC_MAX_ENDPOINT_LENGTH ||
+    record.relativeEnd.length > POC_MAX_ENDPOINT_LENGTH ||
+    !/^[A-Za-z0-9_-]+$/.test(record.relativeStart) ||
+    !/^[A-Za-z0-9_-]+$/.test(record.relativeEnd)
+  ) {
     throw new TypeError(`endpoint encoding must be canonical base64url for ${key}`);
   }
   if (record.kind === 'remove') {
@@ -493,8 +815,51 @@ function validateContributionRecord(record: unknown, key: string): void {
       throw new TypeError(`remove record requires targets for ${key}`);
     }
     const targets = record.targetAddContributionIds as unknown[];
-    if (targets.length === 0 || targets.some((target) => typeof target !== 'string')) {
+    if (
+      targets.length === 0 ||
+      targets.length > POC_MAX_REMOVE_TARGETS ||
+      targets.some(
+        (target) =>
+          typeof target !== 'string' || target.length === 0 || target.length > POC_MAX_ID_LENGTH
+      ) ||
+      new Set(targets).size !== targets.length
+    ) {
       throw new TypeError(`invalid remove targets for ${key}`);
+    }
+  }
+}
+
+function hasExactOwnKeys(record: Record<string, unknown>, expected: readonly string[]): boolean {
+  if (Object.getOwnPropertySymbols(record).length !== 0) return false;
+  const actual = Object.getOwnPropertyNames(record).sort();
+  const sortedExpected = [...expected].sort();
+  return (
+    actual.length === sortedExpected.length &&
+    actual.every((name, index) => name === sortedExpected[index])
+  );
+}
+
+function validateContributionSemantics(
+  records: ReadonlyMap<string, Record<string, unknown>>,
+  doc: Y.Doc,
+  body: Y.Text,
+  text: string
+): void {
+  for (const [id, record] of records) {
+    const start = bodyIndexToTextOffset(decodeEndpoint(doc, body, record.relativeStart as string));
+    const end = bodyIndexToTextOffset(decodeEndpoint(doc, body, record.relativeEnd as string));
+    if (start < 0 || end < 0 || start > end || end > text.length) {
+      throw new TypeError(`contribution endpoints are out of range for ${id}`);
+    }
+    if (isSurrogateSplitOffset(text, start) || isSurrogateSplitOffset(text, end)) {
+      throw new TypeError(`contribution endpoint splits UTF-16 for ${id}`);
+    }
+    if (record.kind !== 'remove') continue;
+    for (const targetId of record.targetAddContributionIds as readonly string[]) {
+      const target = records.get(targetId);
+      if (!target || target.kind !== 'add' || target.markKind !== record.markKind) {
+        throw new TypeError(`remove target is missing or incompatible for ${id}`);
+      }
     }
   }
 }
@@ -504,7 +869,9 @@ function isPlainRecord(value: unknown): value is Record<string, unknown> {
     typeof value === 'object' &&
     value !== null &&
     Object.getPrototypeOf(value) === Object.prototype &&
-    !Object.values(value as Record<string, unknown>).some((field) => field instanceof Y.AbstractType)
+    !Object.values(value as Record<string, unknown>).some(
+      (field) => field instanceof Y.AbstractType
+    )
   );
 }
 
@@ -518,7 +885,11 @@ function setCreationOnly(
 }
 
 function encodeEndpoint(body: Y.Text, index: number, affinity: 'before' | 'after'): string {
-  const relative = Y.createRelativePositionFromTypeIndex(body, index, affinity === 'before' ? -1 : 0);
+  const relative = Y.createRelativePositionFromTypeIndex(
+    body,
+    index,
+    affinity === 'before' ? -1 : 0
+  );
   return btoa(String.fromCharCode(...Y.encodeRelativePosition(relative)))
     .replace(/\+/g, '-')
     .replace(/\//g, '_')
@@ -526,11 +897,22 @@ function encodeEndpoint(body: Y.Text, index: number, affinity: 'before' | 'after
 }
 
 function decodeEndpoint(doc: Y.Doc, body: Y.Text, value: string): number {
-  if (!/^[A-Za-z0-9_-]+$/.test(value)) throw new TypeError('endpoint is not canonical base64url');
+  if (
+    value.length === 0 ||
+    value.length > POC_MAX_ENDPOINT_LENGTH ||
+    !/^[A-Za-z0-9_-]+$/.test(value)
+  ) {
+    throw new TypeError('endpoint is not canonical base64url');
+  }
   const base64 = value.replace(/-/g, '+').replace(/_/g, '/');
   const binary = atob(base64 + '='.repeat((4 - (base64.length % 4)) % 4));
   const bytes = Uint8Array.from(binary, (character) => character.charCodeAt(0));
-  const absolute = Y.createAbsolutePositionFromRelativePosition(Y.decodeRelativePosition(bytes), doc);
+  const canonical = btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '');
+  if (canonical !== value) throw new TypeError('endpoint is not canonical base64url');
+  const absolute = Y.createAbsolutePositionFromRelativePosition(
+    Y.decodeRelativePosition(bytes),
+    doc
+  );
   if (!absolute || absolute.type !== body) throw new TypeError('endpoint detached');
   return absolute.index;
 }
@@ -566,24 +948,26 @@ function disableMark(
   doc: Y.Doc,
   kind: MarkKind,
   range: TextRange,
+  contributionId: string,
   actorId: string,
-  sessionId: string,
-  counter: number
+  commitId: string
 ): void {
   const targets: string[] = [];
   marks.forEach((record, id) => {
     if (record.kind !== 'add' || record.markKind !== kind) return;
-    const addStart = bodyIndexToTextOffset(decodeEndpoint(doc, body, record.relativeStart as string));
+    const addStart = bodyIndexToTextOffset(
+      decodeEndpoint(doc, body, record.relativeStart as string)
+    );
     const addEnd = bodyIndexToTextOffset(decodeEndpoint(doc, body, record.relativeEnd as string));
     if (addStart < range.end && addEnd > range.start) targets.push(id);
   });
   const uniqueTargets = [...new Set(targets)].sort();
   if (uniqueTargets.length === 0) return;
-  setCreationOnly(marks, `${actorId}:${sessionId}:remove:${counter}`, {
+  setCreationOnly(marks, contributionId, {
     kind: 'remove',
     markKind: kind,
     actorId,
-    commitId: `${sessionId}:disable:${counter}`,
+    commitId,
     relativeStart: encodeEndpoint(body, textOffsetToBodyIndex(range.start), 'after'),
     relativeEnd: encodeEndpoint(body, textOffsetToBodyIndex(range.end), 'before'),
     targetAddContributionIds: Object.freeze(uniqueTargets),
@@ -595,6 +979,7 @@ function resolveMarkSegments(
   marks: Y.Map<Record<string, unknown>>,
   doc: Y.Doc
 ): readonly MarkSegment[] {
+  const textLength = readParagraphText(doc).length;
   const adds: MarkSegment[] = [];
   const removals: Array<{
     kind: MarkKind;
@@ -604,8 +989,14 @@ function resolveMarkSegments(
   }> = [];
 
   marks.forEach((record, id) => {
-    const start = bodyIndexToTextOffset(decodeEndpoint(doc, body, record.relativeStart as string));
-    const end = bodyIndexToTextOffset(decodeEndpoint(doc, body, record.relativeEnd as string));
+    const decodedStart = bodyIndexToTextOffset(
+      decodeEndpoint(doc, body, record.relativeStart as string)
+    );
+    const decodedEnd = bodyIndexToTextOffset(
+      decodeEndpoint(doc, body, record.relativeEnd as string)
+    );
+    const start = Math.max(0, Math.min(textLength, decodedStart));
+    const end = Math.max(start, Math.min(textLength, decodedEnd));
     if (record.kind === 'add') {
       adds.push({ kind: record.markKind as MarkKind, start, end, contributionId: id });
     } else if (record.kind === 'remove') {
@@ -619,15 +1010,18 @@ function resolveMarkSegments(
   });
 
   return adds.flatMap((add) =>
-    subtractIntervals(add.start, add.end, removals
-      .filter((remove) => remove.kind === add.kind && remove.targets.includes(add.contributionId))
-      .map(({ start, end }) => ({ start, end })))
-      .map((interval) => ({
-        kind: add.kind,
-        start: interval.start,
-        end: interval.end,
-        contributionId: add.contributionId,
-      }))
+    subtractIntervals(
+      add.start,
+      add.end,
+      removals
+        .filter((remove) => remove.kind === add.kind && remove.targets.includes(add.contributionId))
+        .map(({ start, end }) => ({ start, end }))
+    ).map((interval) => ({
+      kind: add.kind,
+      start: interval.start,
+      end: interval.end,
+      contributionId: add.contributionId,
+    }))
   );
 }
 
@@ -656,7 +1050,11 @@ function isRangeFullyMarked(
   end: number
 ): boolean {
   for (let index = start; index < end; index += 1) {
-    if (!segments.some((segment) => segment.kind === kind && segment.start <= index && index < segment.end)) {
+    if (
+      !segments.some(
+        (segment) => segment.kind === kind && segment.start <= index && index < segment.end
+      )
+    ) {
       return false;
     }
   }
@@ -679,11 +1077,17 @@ function projectSnapshot(doc: Y.Doc, paragraphId: string): PocSnapshot {
     const start = sorted[index]!;
     const end = sorted[index + 1]!;
     if (start === end) continue;
-    runs.push({
+    const run = {
       text: text.slice(start, end),
       bold: isRangeFullyMarked(segments, 'bold', start, end),
       italic: isRangeFullyMarked(segments, 'italic', start, end),
-    });
+    };
+    const previous = runs[runs.length - 1];
+    if (previous && previous.bold === run.bold && previous.italic === run.italic) {
+      previous.text += run.text;
+    } else {
+      runs.push(run);
+    }
   }
   return {
     paragraphId,

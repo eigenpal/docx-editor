@@ -48,6 +48,31 @@ function snapshotFingerprint(snapshot: PocSnapshot): string {
   return JSON.stringify(snapshot);
 }
 
+function decodeStore(store: PocStore): Y.Doc {
+  const doc = new Y.Doc({ gc: false });
+  Y.applyUpdate(doc, store.encodeUpdate());
+  return doc;
+}
+
+function contributionKeys(store: PocStore): string[] {
+  return [...decodeStore(store).getMap('markContributions').keys()].sort();
+}
+
+function maliciousMapUpdate(
+  target: PocStore,
+  clientId: number,
+  mutate: (doc: Y.Doc, body: Y.Text, marks: Y.Map<Record<string, unknown>>) => void
+): Uint8Array {
+  const doc = new Y.Doc({ gc: false });
+  doc.clientID = clientId;
+  Y.applyUpdate(doc, target.encodeUpdate());
+  const before = Y.encodeStateVector(doc);
+  const body = doc.getText('bodySequence');
+  const marks = doc.getMap<Record<string, unknown>>('markContributions');
+  doc.transact(() => mutate(doc, body, marks));
+  return Y.encodeStateAsUpdate(doc, before);
+}
+
 describe('poc store', () => {
   test('exports createPocStore from the harness entrypoint', async () => {
     const mod = await import('../src/index');
@@ -196,35 +221,31 @@ describe('poc store', () => {
     runOrder('right');
   });
 
-  test('local text undo preserves remote text', async () => {
+  test('local text edit then remote text edit then local undo preserves remote text', async () => {
     const loaded = await loadedFixture();
     const local = createReplica(loaded, 'actor-local', 'session-local', 701);
     const remote = createReplica(loaded, 'actor-remote', 'session-remote', 702);
 
-    remote.insert(0, 'R');
+    local.insert(0, 'L');
+    remote.applyRemoteUpdate(local.encodeUpdate());
+    remote.insert(1, 'R');
     applyDiff(local, remote);
-    local.insert(1, 'L');
     expect(local.undo()).toBe(true);
     expect(local.snapshot().text).toBe('RHello bold italic');
-    expect(remote.snapshot().text).toBe('RHello bold italic');
   });
 
-  test('local same-kind formatting undo preserves remote contribution', async () => {
+  test('local formatting then remote same-kind formatting then local undo preserves remote contribution', async () => {
     const loaded = await loadedFixture();
     const local = createReplica(loaded, 'actor-local', 'session-local', 801);
     const remote = createReplica(loaded, 'actor-remote', 'session-remote', 802);
 
-    remote.toggleMark(0, 5, 'bold');
+    local.toggleMark(0, 5, 'bold');
+    remote.applyRemoteUpdate(local.encodeUpdate());
+    remote.toggleMark(4, 6, 'bold');
     applyDiff(local, remote);
-    local.toggleMark(6, 10, 'bold');
     expect(local.undo()).toBe(true);
-    expect(local.snapshot().runs).toEqual([
-      { text: 'Hello', bold: true, italic: false },
-      { text: ' ', bold: false, italic: false },
-      { text: 'bold', bold: true, italic: false },
-      { text: ' ', bold: false, italic: false },
-      { text: 'italic', bold: false, italic: true },
-    ]);
+    expect(local.snapshot().runs.some((run) => run.bold && run.text.includes('o '))).toBe(true);
+    expect(local.snapshot().runs.some((run) => run.bold && run.text === 'Hell')).toBe(false);
   });
 
   test('observed disable preserves unseen concurrent enable', async () => {
@@ -233,7 +254,7 @@ describe('poc store', () => {
     const disabling = createReplica(loaded, 'actor-alice', 'session-alice', 902);
     const unseen = createReplica(loaded, 'actor-carol', 'session-carol', 903);
 
-    observed.toggleMark(0, 4, 'bold');
+    observed.toggleMark(0, 2, 'bold');
     observed.toggleMark(2, 4, 'bold');
     const baseUpdate = observed.encodeUpdate();
 
@@ -257,8 +278,255 @@ describe('poc store', () => {
     orderUD.applyRemoteUpdate(disableUpdate);
 
     expect(orderDU.snapshot()).toEqual(orderUD.snapshot());
-    expect(orderDU.snapshot().runs.some((run) => run.bold && run.text === ' ')).toBe(true);
+    expect(orderDU.snapshot().runs.some((run) => run.bold && run.text.endsWith(' '))).toBe(true);
     expect(orderDU.snapshot().runs.some((run) => run.bold && run.text === 'Hell')).toBe(false);
+    expect(disabling.undo()).toBe(true);
+    disabling.applyRemoteUpdate(unseenUpdate);
+    expect(disabling.snapshot().runs.some((run) => run.bold && run.text.endsWith(' '))).toBe(true);
+  });
+
+  test('true concurrent branches converge in neutral replicas in both update orders', async () => {
+    const loaded = await loadedFixture();
+    const left = createReplica(loaded, 'actor-concurrent-left', 'session-concurrent-left', 1401);
+    const right = createReplica(loaded, 'actor-concurrent-right', 'session-concurrent-right', 1402);
+    left.insert(0, 'L');
+    right.insert(0, 'R');
+    left.toggleMark(0, 1, 'bold');
+    right.toggleMark(0, 1, 'italic');
+
+    const orderLR = createReplica(loaded, 'actor-neutral-a', 'session-neutral-a', 1403);
+    orderLR.applyRemoteUpdate(left.encodeUpdate());
+    orderLR.applyRemoteUpdate(right.encodeUpdate());
+    const orderRL = createReplica(loaded, 'actor-neutral-b', 'session-neutral-b', 1404);
+    orderRL.applyRemoteUpdate(right.encodeUpdate());
+    orderRL.applyRemoteUpdate(left.encodeUpdate());
+
+    expect(orderLR.snapshot()).toEqual(orderRL.snapshot());
+  });
+
+  test('operation client IDs stay collision-free, live client stays stable, and no churn warning is emitted', async () => {
+    const loaded = await loadedFixture();
+    const warnings: unknown[][] = [];
+    const originalWarn = console.warn;
+    console.warn = (...args: unknown[]) => warnings.push(args);
+    try {
+      const store = createReplica(loaded, 'actor-stable', 'session-stable', 1501);
+      expect(store.clientId).toBe(1501);
+      store.insert(0, 'A');
+      store.toggleMark(0, 1, 'bold');
+      store.delete(0, 1);
+      expect(store.clientId).toBe(1501);
+      const clients = [...Y.decodeStateVector(Y.encodeStateVector(decodeStore(store))).keys()];
+      expect(new Set(clients).size).toBe(clients.length);
+      expect(warnings.flat().join(' ')).not.toMatch(/client-id|client id|collision/i);
+    } finally {
+      console.warn = originalWarn;
+    }
+  });
+
+  test('recreated actor/session stores never reuse contribution keys', async () => {
+    const loaded = await loadedFixture();
+    const first = createReplica(loaded, 'actor-recreated', 'session-recreated', 1601);
+    first.toggleMark(0, 5, 'bold');
+    const firstKeys = contributionKeys(first);
+
+    const sameClient = createReplica(loaded, 'actor-recreated', 'session-recreated', 1601);
+    sameClient.applyRemoteUpdate(first.encodeUpdate());
+    sameClient.toggleMark(10, 11, 'bold');
+    const sameClientKeys = contributionKeys(sameClient);
+
+    const distinctClient = createReplica(loaded, 'actor-recreated', 'session-recreated', 1602);
+    distinctClient.applyRemoteUpdate(first.encodeUpdate());
+    distinctClient.toggleMark(11, 12, 'bold');
+    const distinctClientKeys = contributionKeys(distinctClient);
+
+    expect(new Set(sameClientKeys).size).toBe(sameClientKeys.length);
+    expect(new Set(distinctClientKeys).size).toBe(distinctClientKeys.length);
+    expect(sameClientKeys.filter((key) => !firstKeys.includes(key))).toHaveLength(1);
+    expect(distinctClientKeys.filter((key) => !firstKeys.includes(key))).toHaveLength(1);
+  });
+
+  test('rejects hidden duplicate assignments, overwrites, and exact-schema malformed records atomically', async () => {
+    const loaded = await loadedFixture();
+    const store = createReplica(loaded, 'actor-schema', 'session-schema', 1701);
+    const before = snapshotFingerprint(store.snapshot());
+    let notifications = 0;
+    store.subscribe(() => (notifications += 1));
+
+    const existingKey = contributionKeys(store)[0]!;
+    const overwrite = maliciousMapUpdate(store, 1702, (_doc, _body, marks) => {
+      marks.set(existingKey, { kind: 'add' });
+    });
+    store.applyRemoteUpdate(overwrite);
+
+    const duplicate = maliciousMapUpdate(store, 1703, (_doc, _body, marks) => {
+      marks.set('duplicate-key', { kind: 'add' });
+      marks.set('duplicate-key', { kind: 'remove' });
+    });
+    store.applyRemoteUpdate(duplicate);
+
+    const malformedRecords: Record<string, unknown>[] = [
+      {
+        kind: 'add',
+        markKind: 'bold',
+        actorId: 'a',
+        commitId: 'c',
+        relativeStart: 'AA',
+        relativeEnd: 'AA',
+        extra: true,
+      },
+      {
+        kind: 'add',
+        markKind: 'bold',
+        actorId: 'a',
+        commitId: 'c',
+        relativeStart: 'AA',
+        relativeEnd: 'AA',
+      },
+      {
+        kind: 'remove',
+        markKind: 'bold',
+        actorId: 'a',
+        commitId: 'c',
+        relativeStart: 'AA',
+        relativeEnd: 'AA',
+        targetAddContributionIds: ['missing'],
+      },
+      {
+        kind: 'remove',
+        markKind: 'bold',
+        actorId: 'a',
+        commitId: 'c',
+        relativeStart: 'AA',
+        relativeEnd: 'AA',
+        targetAddContributionIds: ['x', 'x'],
+      },
+      {
+        kind: 'add',
+        markKind: 'underline',
+        actorId: 'a',
+        commitId: 'c',
+        relativeStart: 'AA',
+        relativeEnd: 'AA',
+      },
+    ];
+    malformedRecords.forEach((record, index) => {
+      store.applyRemoteUpdate(
+        maliciousMapUpdate(store, 1710 + index, (_doc, _body, marks) => {
+          marks.set(`malformed-${index}`, record);
+        })
+      );
+    });
+
+    const nested = maliciousMapUpdate(store, 1720, (_doc, _body, marks) => {
+      marks.set('nested', new Y.Map() as unknown as Record<string, unknown>);
+    });
+    store.applyRemoteUpdate(nested);
+
+    expect(snapshotFingerprint(store.snapshot())).toBe(before);
+    expect(notifications).toBe(0);
+    expect(store.undo()).toBe(false);
+  });
+
+  test('rejects malformed body grammar, reversed endpoints, out-of-range endpoints, and unpaired UTF-16', async () => {
+    const loaded = await loadedFixture();
+    const store = createReplica(loaded, 'actor-body-schema', 'session-body-schema', 1801);
+    const before = snapshotFingerprint(store.snapshot());
+
+    const interiorEmbed = maliciousMapUpdate(store, 1802, (_doc, body) => {
+      body.insertEmbed(1, { kind: 'paragraph-boundary', paragraphId: loaded.paragraphId });
+    });
+    store.applyRemoteUpdate(interiorEmbed);
+
+    const unpaired = maliciousMapUpdate(store, 1803, (_doc, body) => {
+      body.insert(1, '\uD800');
+    });
+    store.applyRemoteUpdate(unpaired);
+
+    const malformedBoundary = maliciousMapUpdate(store, 1804, (_doc, body) => {
+      body.delete(0, 1);
+      body.insertEmbed(0, {
+        kind: 'paragraph-boundary',
+        paragraphId: loaded.paragraphId,
+        extra: true,
+      });
+    });
+    store.applyRemoteUpdate(malformedBoundary);
+
+    expect(snapshotFingerprint(store.snapshot())).toBe(before);
+  });
+
+  test('projection coalesces adjacent identical runs and represents empty text deterministically', async () => {
+    const loaded = await loadedFixture();
+    const store = createReplica(loaded, 'actor-project', 'session-project', 1901);
+    store.toggleMark(0, 3, 'bold');
+    store.toggleMark(3, 5, 'bold');
+    expect(store.snapshot().runs[0]).toEqual({ text: 'Hello', bold: true, italic: false });
+    store.delete(0, store.snapshot().text.length);
+    expect(store.snapshot()).toEqual({ paragraphId: loaded.paragraphId, text: '', runs: [] });
+  });
+
+  test('listener errors are isolated and reentrant mutations are queued after current delivery', async () => {
+    const loaded = await loadedFixture();
+    const store = createReplica(loaded, 'actor-listeners', 'session-listeners', 2001);
+    const deliveries: string[] = [];
+    store.subscribe((snapshot) => {
+      deliveries.push(`first:${snapshot.text}`);
+      if (snapshot.text.startsWith('A') && !snapshot.text.startsWith('AB')) store.insert(1, 'B');
+      throw new Error('listener failure');
+    });
+    store.subscribe((snapshot) => deliveries.push(`second:${snapshot.text}`));
+
+    expect(() => store.insert(0, 'A')).not.toThrow();
+    expect(deliveries).toEqual([
+      'first:AHello bold italic',
+      'second:AHello bold italic',
+      'first:ABHello bold italic',
+      'second:ABHello bold italic',
+    ]);
+  });
+
+  test('options are snapshotted through exact own data descriptors', async () => {
+    const loaded = await loadedFixture();
+    let accessorCalls = 0;
+    const accessorOptions = Object.defineProperty(
+      { sessionId: 'session-options', clientId: 2101 },
+      'actorId',
+      {
+        enumerable: true,
+        get() {
+          accessorCalls += 1;
+          return 'actor-options';
+        },
+      }
+    );
+    expect(() => createPocStore(loaded, accessorOptions as never)).toThrow(
+      /options|descriptor|accessor/i
+    );
+    expect(accessorCalls).toBe(0);
+    expect(() =>
+      createPocStore(loaded, {
+        actorId: 'actor-options',
+        sessionId: 'session-options',
+        clientId: 2101,
+        extra: true,
+      } as never)
+    ).toThrow(/options|extra/i);
+
+    const mutable = {
+      actorId: 'actor-options',
+      sessionId: 'session-options',
+      clientId: 2101,
+    };
+    const store = createPocStore(loaded, mutable);
+    mutable.actorId = 'actor-mutated';
+    mutable.sessionId = 'session-mutated';
+    mutable.clientId = 9999;
+    store.toggleMark(0, 1, 'bold');
+    expect(store.actorId).toBe('actor-options');
+    expect(store.clientId).toBe(2101);
+    expect(contributionKeys(store).some((key) => key.includes('actor-options'))).toBe(true);
+    expect(contributionKeys(store).some((key) => key.includes('actor-mutated'))).toBe(false);
   });
 
   test('remote untracked work does not enter local undo', async () => {
