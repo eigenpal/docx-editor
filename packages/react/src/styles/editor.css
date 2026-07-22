@@ -1,6 +1,0 @@
-/* The editor chrome stylesheet is the single source of truth in
-   @docx-editor.dev/core. Both the React and Vue adapters import it so the
-   color tokens and UI styling never drift. `@tailwind utilities` lives in the
-   shared file and is expanded by this package's own Tailwind build
-   (build:css). Core ships from npm, so this resolves through node_modules. */
-@import '@docx-editor.dev/core/styles/editor.css';

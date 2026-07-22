@@ -20,9 +20,12 @@
     "baseUrl": ".",
     "paths": {
       "@/*": ["./src/*"],
-      "@docx-editor.dev/agents/react": ["../agents/src/react.ts"],
-      "@docx-editor.dev/agents/bridge": ["../agents/src/bridge.ts"],
-      "@docx-editor.dev/i18n": ["../i18n/src/index.ts"]
+      "@docx-editor.dev/core-contract": ["../core/src/index.ts"],
+      "@docx-editor.dev/core-contract/editor": ["../core/src/editor.ts"],
+      "@docx-editor.dev/core-contract/geometry": ["../core/src/geometry.ts"],
+      "@docx-editor.dev/core-contract/types": ["../core/src/types-barrel.ts"],
+      "@docx-editor.dev/core-contract/plugin": ["../core/src/plugin.ts"],
+      "@docx-editor.dev/core-contract/mcp": ["../core/src/mcp.ts"]
     }
   },
   "include": ["src"],
