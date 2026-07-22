@@ -1,0 +1,40 @@
+/** @spike-features fixture-comparators */
+export * from './oracle-hash';
+export * from './canonical-json';
+export * from './comparators/index';
+export * from './rng/seeded-rng';
+export * from './diagnostics/failure-report';
+export * from './diagnostics/revision-origin-log';
+export * from './scope/assert-scope';
+export * from './scope/audit-surface';
+export * from './driver/editor-driver';
+export * from './execution/index';
+export * from './model/index';
+export * from './store/index';
+export * from './contracts/index';
+export {
+  UNDO_EXPERIMENT_DECISION,
+  UNDO_EXPERIMENT_MECHANISM,
+  UNDO_EXPERIMENT_REJECTED,
+  UNDO_EXPERIMENT_VERDICT,
+  UNDO_EXPERIMENT_LIMITATIONS,
+  UNDO_EXPERIMENT_RETAINED_REPLAY_HORIZON,
+  createYjsUndoManagerExperiment,
+  decodeReconstructionJournal,
+  replayReconstructionJournal,
+  compactJournalRetainingHorizon,
+  type YjsUndoManagerExperiment,
+  type ReconstructionJournal,
+} from './experiment/yjs-undo-manager/index';
+export {
+  validateCommand,
+  validateQuery,
+  snapshotAndValidateCommand,
+  snapshotAndValidateQuery,
+  getValidationErrors,
+  loadOracleManifest,
+  loadYjsSchemaOracle,
+  loadBindingOracle,
+  loadVocabularyOracle,
+  loadScopeManifest,
+} from './vocabulary/validate';

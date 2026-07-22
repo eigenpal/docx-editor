@@ -1,0 +1,540 @@
+{
+  "version": "engine-core-spike-scope/1.0.0",
+  "description": "Proof features allowed in the disposable spike harness. Any component not listed here is out of scope.",
+  "allowedProofFeatures": [
+    "one-body-story",
+    "paragraphs",
+    "text",
+    "bold-mark",
+    "italic-mark",
+    "stable-paragraph-ids",
+    "insert-delete-split-join-operations",
+    "local-backend",
+    "yjs-backend",
+    "minimal-canonical-layout",
+    "one-preservation-capsule",
+    "one-schema-backed-docx-editor-command",
+    "one-annotation-anchor",
+    "origin-metadata",
+    "awareness-metadata",
+    "synthetic-128-paragraph-fixture",
+    "golden-parity-harness",
+    "seeded-rng-diagnostics",
+    "fixture-comparators",
+    "engine-neutral-editor-driver-contract",
+    "playwright-migration-inventory"
+  ],
+  "explicitlyForbiddenInSpike": [
+    "production-document-engine",
+    "full-ooxml-pipeline",
+    "pdf-output",
+    "accessibility-tree",
+    "production-pagination",
+    "production-shaping",
+    "display-list-painter",
+    "prosemirror-in-store",
+    "prosemirror-in-backend",
+    "alternate-public-namespace",
+    "docx-editor-e2e-debug-hooks-as-driver"
+  ],
+  "implementationSurface": {
+    "status": "harness-audit-only-not-engine-runtime-enforcement",
+    "derivation": "Imports, exports, and @spike-features annotations are scanned from every src/**/*.ts file. The SHA-256 of canonical derived modules is authoritative; per-module imports/exports below are non-authoritative review notes.",
+    "derivedSurfaceHash": "efa22347ace248bc8cb1966aa6f8bba8ac18ed5b8c5b453b8f9e7f89871b3720",
+    "modules": [
+      {
+        "path": "src/canonical-json.ts",
+        "features": ["fixture-comparators"]
+      },
+      {
+        "path": "src/comparators/canonical-state.ts",
+        "features": ["fixture-comparators"]
+      },
+      {
+        "path": "src/comparators/counter-ceilings.ts",
+        "features": ["fixture-comparators", "synthetic-128-paragraph-fixture"]
+      },
+      {
+        "path": "src/comparators/index.ts",
+        "features": ["fixture-comparators"]
+      },
+      {
+        "path": "src/comparators/pagination-fingerprint.ts",
+        "features": ["fixture-comparators", "minimal-canonical-layout"]
+      },
+      {
+        "path": "src/comparators/semantic-zip.ts",
+        "features": ["fixture-comparators", "one-preservation-capsule"]
+      },
+      {
+        "path": "src/comparators/xml-part-range.ts",
+        "features": ["fixture-comparators", "one-preservation-capsule"]
+      },
+      {
+        "path": "src/comparators/yjs-schema-fingerprint.ts",
+        "features": ["fixture-comparators", "yjs-backend"]
+      },
+      {
+        "path": "src/contracts/anchor.ts",
+        "features": ["one-annotation-anchor"]
+      },
+      {
+        "path": "src/contracts/audit.ts",
+        "features": ["insert-delete-split-join-operations", "origin-metadata"]
+      },
+      {
+        "path": "src/contracts/awareness.ts",
+        "features": ["awareness-metadata", "origin-metadata"]
+      },
+      {
+        "path": "src/contracts/brands.ts",
+        "features": ["awareness-metadata", "insert-delete-split-join-operations", "origin-metadata"]
+      },
+      {
+        "path": "src/contracts/closed-input.ts",
+        "features": [
+          "awareness-metadata",
+          "insert-delete-split-join-operations",
+          "one-annotation-anchor",
+          "origin-metadata"
+        ]
+      },
+      {
+        "path": "src/contracts/doc-op.ts",
+        "features": ["insert-delete-split-join-operations"]
+      },
+      {
+        "path": "src/contracts/ids.ts",
+        "features": ["insert-delete-split-join-operations", "origin-metadata"]
+      },
+      {
+        "path": "src/contracts/index.ts",
+        "features": [
+          "awareness-metadata",
+          "insert-delete-split-join-operations",
+          "one-annotation-anchor",
+          "origin-metadata"
+        ]
+      },
+      {
+        "path": "src/contracts/model-change.ts",
+        "features": ["insert-delete-split-join-operations", "origin-metadata"]
+      },
+      {
+        "path": "src/contracts/origins.ts",
+        "features": ["awareness-metadata", "origin-metadata"]
+      },
+      {
+        "path": "src/contracts/replication-update.ts",
+        "features": ["insert-delete-split-join-operations", "yjs-backend"]
+      },
+      {
+        "path": "src/contracts/separation.ts",
+        "features": ["awareness-metadata", "insert-delete-split-join-operations", "origin-metadata"]
+      },
+      {
+        "path": "src/contracts/snapshot.ts",
+        "features": ["insert-delete-split-join-operations", "yjs-backend"]
+      },
+      {
+        "path": "src/contracts/transaction-context.ts",
+        "features": ["insert-delete-split-join-operations", "origin-metadata"]
+      },
+      {
+        "path": "src/diagnostics/failure-report.ts",
+        "features": ["seeded-rng-diagnostics"]
+      },
+      {
+        "path": "src/diagnostics/revision-origin-log.ts",
+        "features": ["origin-metadata"]
+      },
+      {
+        "path": "src/driver/editor-driver.ts",
+        "features": [
+          "engine-neutral-editor-driver-contract",
+          "one-schema-backed-docx-editor-command"
+        ]
+      },
+      {
+        "path": "src/experiment/yjs-undo-manager/index.ts",
+        "features": ["insert-delete-split-join-operations", "origin-metadata", "yjs-backend"]
+      },
+      {
+        "path": "src/experiment/yjs-undo-manager/journal.ts",
+        "features": ["origin-metadata", "yjs-backend"]
+      },
+      {
+        "path": "src/experiment/yjs-undo-manager/mechanism.ts",
+        "features": ["insert-delete-split-join-operations", "origin-metadata", "yjs-backend"]
+      },
+      {
+        "path": "src/experiment/yjs-undo-manager/origin-tokens.ts",
+        "features": ["origin-metadata", "yjs-backend"]
+      },
+      {
+        "path": "src/experiment/yjs-undo-manager/quotas.ts",
+        "features": ["origin-metadata", "yjs-backend"]
+      },
+      {
+        "path": "src/experiment/yjs-undo-manager/runner.ts",
+        "features": ["insert-delete-split-join-operations", "origin-metadata", "yjs-backend"]
+      },
+      {
+        "path": "src/experiment/yjs-undo-manager/scope.ts",
+        "features": ["yjs-backend"]
+      },
+      {
+        "path": "src/experiment/yjs-undo-manager/session.ts",
+        "features": ["origin-metadata", "yjs-backend"]
+      },
+      {
+        "path": "src/experiment/yjs-undo-manager/types.ts",
+        "features": ["origin-metadata", "yjs-backend"]
+      },
+      {
+        "path": "src/execution/index.ts",
+        "features": ["insert-delete-split-join-operations", "one-schema-backed-docx-editor-command"]
+      },
+      {
+        "path": "src/execution/mark-range.ts",
+        "features": ["bold-mark", "italic-mark"]
+      },
+      {
+        "path": "src/execution/semantic-command.ts",
+        "features": ["bold-mark", "one-schema-backed-docx-editor-command"]
+      },
+      {
+        "path": "src/execution/server-execution.ts",
+        "features": [
+          "bold-mark",
+          "insert-delete-split-join-operations",
+          "one-schema-backed-docx-editor-command",
+          "origin-metadata"
+        ]
+      },
+      {
+        "path": "src/index.ts",
+        "features": ["fixture-comparators"]
+      },
+      {
+        "path": "src/model/authored-property.ts",
+        "features": [
+          "bold-mark",
+          "italic-mark",
+          "one-body-story",
+          "one-preservation-capsule",
+          "paragraphs",
+          "stable-paragraph-ids",
+          "synthetic-128-paragraph-fixture",
+          "text"
+        ]
+      },
+      {
+        "path": "src/model/block-id-index.ts",
+        "features": [
+          "one-body-story",
+          "paragraphs",
+          "stable-paragraph-ids",
+          "synthetic-128-paragraph-fixture"
+        ]
+      },
+      {
+        "path": "src/model/internal/block-id-index-instrumentation.ts",
+        "features": ["one-body-story", "stable-paragraph-ids", "synthetic-128-paragraph-fixture"]
+      },
+      {
+        "path": "src/model/fingerprint.ts",
+        "features": [
+          "bold-mark",
+          "italic-mark",
+          "one-body-story",
+          "one-preservation-capsule",
+          "paragraphs",
+          "stable-paragraph-ids",
+          "synthetic-128-paragraph-fixture",
+          "text"
+        ]
+      },
+      {
+        "path": "src/model/fixture.ts",
+        "features": [
+          "bold-mark",
+          "italic-mark",
+          "one-body-story",
+          "one-preservation-capsule",
+          "paragraphs",
+          "stable-paragraph-ids",
+          "synthetic-128-paragraph-fixture",
+          "text"
+        ]
+      },
+      {
+        "path": "src/model/immutability.ts",
+        "features": [
+          "bold-mark",
+          "italic-mark",
+          "one-body-story",
+          "one-preservation-capsule",
+          "paragraphs",
+          "stable-paragraph-ids",
+          "synthetic-128-paragraph-fixture",
+          "text"
+        ]
+      },
+      {
+        "path": "src/model/index.ts",
+        "features": [
+          "bold-mark",
+          "italic-mark",
+          "one-body-story",
+          "one-preservation-capsule",
+          "paragraphs",
+          "stable-paragraph-ids",
+          "synthetic-128-paragraph-fixture",
+          "text"
+        ]
+      },
+      {
+        "path": "src/model/resolved-cache.ts",
+        "features": ["minimal-canonical-layout", "synthetic-128-paragraph-fixture"]
+      },
+      {
+        "path": "src/model/types.ts",
+        "features": [
+          "bold-mark",
+          "italic-mark",
+          "one-body-story",
+          "one-preservation-capsule",
+          "paragraphs",
+          "stable-paragraph-ids",
+          "synthetic-128-paragraph-fixture",
+          "text"
+        ]
+      },
+      {
+        "path": "src/model/validators.ts",
+        "features": [
+          "bold-mark",
+          "italic-mark",
+          "one-body-story",
+          "one-preservation-capsule",
+          "paragraphs",
+          "stable-paragraph-ids",
+          "synthetic-128-paragraph-fixture",
+          "text"
+        ]
+      },
+      {
+        "path": "src/oracle-hash.ts",
+        "features": ["fixture-comparators"]
+      },
+      {
+        "path": "src/rng/seeded-rng.ts",
+        "features": ["seeded-rng-diagnostics"]
+      },
+      {
+        "path": "src/scope/assert-scope.ts",
+        "features": ["fixture-comparators"]
+      },
+      {
+        "path": "src/scope/audit-surface.ts",
+        "features": ["fixture-comparators"]
+      },
+      {
+        "path": "src/store/apply-result.ts",
+        "features": ["insert-delete-split-join-operations", "origin-metadata"]
+      },
+      {
+        "path": "src/store/backend/conformance.ts",
+        "features": ["insert-delete-split-join-operations", "local-backend", "origin-metadata"]
+      },
+      {
+        "path": "src/store/backend/coverage.ts",
+        "features": ["local-backend"]
+      },
+      {
+        "path": "src/store/backend/index.ts",
+        "features": ["insert-delete-split-join-operations", "local-backend", "origin-metadata"]
+      },
+      {
+        "path": "src/store/backend/local-backend.ts",
+        "features": ["insert-delete-split-join-operations", "local-backend", "origin-metadata"]
+      },
+      {
+        "path": "src/store/backend/local-snapshot.ts",
+        "features": [
+          "insert-delete-split-join-operations",
+          "local-backend",
+          "one-preservation-capsule",
+          "origin-metadata"
+        ]
+      },
+      {
+        "path": "src/store/backend/remote-diff.ts",
+        "features": ["yjs-backend"]
+      },
+      {
+        "path": "src/store/backend/staging.ts",
+        "features": ["insert-delete-split-join-operations", "local-backend"]
+      },
+      {
+        "path": "src/store/backend/types.ts",
+        "features": ["insert-delete-split-join-operations", "local-backend", "origin-metadata"]
+      },
+      {
+        "path": "src/store/backend/yjs-backend.ts",
+        "features": ["yjs-backend"]
+      },
+      {
+        "path": "src/store/backend/yjs-conformance.ts",
+        "features": ["yjs-backend"]
+      },
+      {
+        "path": "src/store/document-store.ts",
+        "features": ["insert-delete-split-join-operations", "local-backend", "origin-metadata"]
+      },
+      {
+        "path": "src/store/history/index.ts",
+        "features": ["insert-delete-split-join-operations", "origin-metadata"]
+      },
+      {
+        "path": "src/store/history/inverse.ts",
+        "features": ["insert-delete-split-join-operations", "origin-metadata"]
+      },
+      {
+        "path": "src/store/history/manager.ts",
+        "features": ["insert-delete-split-join-operations", "origin-metadata"]
+      },
+      {
+        "path": "src/store/history/mechanism.ts",
+        "features": ["insert-delete-split-join-operations", "origin-metadata"]
+      },
+      {
+        "path": "src/store/history/snapshot-payload.ts",
+        "features": ["insert-delete-split-join-operations", "origin-metadata"]
+      },
+      {
+        "path": "src/store/history/types.ts",
+        "features": ["insert-delete-split-join-operations", "origin-metadata"]
+      },
+      {
+        "path": "src/store/draft.ts",
+        "features": [
+          "bold-mark",
+          "insert-delete-split-join-operations",
+          "italic-mark",
+          "one-body-story",
+          "one-preservation-capsule",
+          "paragraphs",
+          "stable-paragraph-ids",
+          "text"
+        ]
+      },
+      {
+        "path": "src/store/index.ts",
+        "features": ["insert-delete-split-join-operations", "local-backend", "origin-metadata"]
+      },
+      {
+        "path": "src/store/mutate.ts",
+        "features": ["bold-mark", "insert-delete-split-join-operations", "italic-mark"]
+      },
+      {
+        "path": "src/store/operation-environment.ts",
+        "features": ["insert-delete-split-join-operations", "stable-paragraph-ids"]
+      },
+      {
+        "path": "src/store/publish-metadata.ts",
+        "features": ["insert-delete-split-join-operations", "local-backend", "origin-metadata"]
+      },
+      {
+        "path": "src/store/replication-coordinator.ts",
+        "features": ["insert-delete-split-join-operations", "origin-metadata", "yjs-backend"]
+      },
+      {
+        "path": "src/store/utf16.ts",
+        "features": ["insert-delete-split-join-operations"]
+      },
+      {
+        "path": "src/store/yjs/constants.ts",
+        "features": ["yjs-backend"]
+      },
+      {
+        "path": "src/store/yjs/doc-access.ts",
+        "features": ["yjs-backend"]
+      },
+      {
+        "path": "src/store/yjs/doc-bootstrap.ts",
+        "features": ["yjs-backend"]
+      },
+      {
+        "path": "src/store/yjs/doc-caches.ts",
+        "features": ["yjs-backend"]
+      },
+      {
+        "path": "src/store/yjs/doc-decode.ts",
+        "features": ["yjs-backend"]
+      },
+      {
+        "path": "src/store/yjs/doc-derive.ts",
+        "features": ["yjs-backend"]
+      },
+      {
+        "path": "src/store/yjs/doc-repair.ts",
+        "features": ["yjs-backend"]
+      },
+      {
+        "path": "src/store/yjs/doc-sync.ts",
+        "features": ["yjs-backend"]
+      },
+      {
+        "path": "src/store/yjs/doc-types.ts",
+        "features": ["yjs-backend"]
+      },
+      {
+        "path": "src/store/yjs/doc.ts",
+        "features": ["yjs-backend"]
+      },
+      {
+        "path": "src/store/yjs/endpoints.ts",
+        "features": ["yjs-backend"]
+      },
+      {
+        "path": "src/store/yjs/identity.ts",
+        "features": ["yjs-backend"]
+      },
+      {
+        "path": "src/store/yjs/snapshot.ts",
+        "features": ["yjs-backend"]
+      },
+      {
+        "path": "src/store/yjs/structural-provenance.ts",
+        "features": ["yjs-backend"]
+      },
+      {
+        "path": "src/store/yjs/token-sequence.ts",
+        "features": ["yjs-backend"]
+      },
+      {
+        "path": "src/vocabulary/validate.ts",
+        "features": ["one-schema-backed-docx-editor-command"]
+      }
+    ]
+  },
+  "gateMapping": {
+    "gate-1": ["insert-delete-split-join-operations", "one-body-story"],
+    "gate-2": ["minimal-canonical-layout"],
+    "gate-3": ["yjs-backend"],
+    "gate-4": ["local-backend", "one-schema-backed-docx-editor-command"],
+    "gate-5": ["one-annotation-anchor"],
+    "gate-6": ["one-annotation-anchor"],
+    "gate-7": ["origin-metadata"],
+    "gate-8": ["origin-metadata"],
+    "gate-9": ["minimal-canonical-layout", "synthetic-128-paragraph-fixture"],
+    "gate-10": ["one-preservation-capsule"],
+    "gate-11": ["one-preservation-capsule", "fixture-comparators"],
+    "gate-12": ["one-schema-backed-docx-editor-command", "engine-neutral-editor-driver-contract"],
+    "gate-13": ["one-annotation-anchor"],
+    "gate-14": ["origin-metadata", "awareness-metadata"],
+    "gate-15": ["synthetic-128-paragraph-fixture", "fixture-comparators"]
+  }
+}

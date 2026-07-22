@@ -1,0 +1,223 @@
+{
+  "version": "engine-core-spike-oracle/1.0.0",
+  "approvalRecord": {
+    "reviewedAt": "2026-07-21",
+    "reviewerRole": "harness-pre-implementation-freeze",
+    "status": "frozen"
+  },
+  "indexing": {
+    "paragraphIndexBase": 0,
+    "styleMutationRange": "inclusive-64-through-67",
+    "textRanges": "half-open-UTF-16-code-units"
+  },
+  "fixture": {
+    "paragraphCount": 128,
+    "paragraphsPerPage": 4,
+    "storyId": "story-body-0",
+    "sourceParagraphs": [
+      {
+        "index": 0,
+        "paragraphId": "para-000",
+        "text": "p000",
+        "styleId": "style-default"
+      },
+      {
+        "index": 64,
+        "paragraphId": "para-064",
+        "text": "p064",
+        "styleId": "style-A"
+      },
+      {
+        "index": 65,
+        "paragraphId": "para-065",
+        "text": "p065",
+        "styleId": "style-A"
+      },
+      {
+        "index": 66,
+        "paragraphId": "para-066",
+        "text": "p066",
+        "styleId": "style-A"
+      },
+      {
+        "index": 67,
+        "paragraphId": "para-067",
+        "text": "p067",
+        "styleId": "style-A"
+      }
+    ],
+    "sourceParagraphPattern": {
+      "textTemplate": "p{index:03d}",
+      "defaultStyleId": "style-default",
+      "styleAIndices": [64, 65, 66, 67]
+    }
+  },
+  "styleMutation": {
+    "styleId": "style-A",
+    "affectedParagraphIndices": [64, 65, 66, 67],
+    "before": {
+      "lineHeightTwips": 240,
+      "spaceAfterTwips": 0
+    },
+    "after": {
+      "lineHeightTwips": 288,
+      "spaceAfterTwips": 120
+    }
+  },
+  "unsupportedCapsule": {
+    "byteBoundaryStart": 0,
+    "byteBoundaryEnd": 235,
+    "bytesHex": "3c637573746f6d3a5370696b65556e737570706f7274656420786d6c6e733a637573746f6d3d22687474703a2f2f6578616d706c652e636f6d2f7370696b652f756e737570706f727465642f312220786d6c6e733a773d22687474703a2f2f736368656d61732e6f70656e786d6c666f726d6174732e6f72672f776f726470726f63657373696e676d6c2f323030362f6d61696e2220746f6b656e3d226f7261636c652d7631223e3c637573746f6d3a5061796c6f61643e64656164626565663c2f637573746f6d3a5061796c6f61643e3c2f637573746f6d3a5370696b65556e737570706f727465643e",
+    "ownerSlot": {
+      "storyId": "story-body-0",
+      "blockId": "block-para-003",
+      "childIndex": 1
+    },
+    "namespaceBindings": {
+      "w": "http://schemas.openxmlformats.org/wordprocessingml/2006/main",
+      "custom": "http://example.com/spike/unsupported/1"
+    },
+    "previousSiblingBytesHex": "3c773a7220786d6c6e733a773d22687474703a2f2f736368656d61732e6f70656e786d6c666f726d6174732e6f72672f776f726470726f63657373696e676d6c2f323030362f6d61696e223e3c773a743e703030333c2f773a743e3c2f773a723e",
+    "nextSiblingBytesHex": "3c773a7220786d6c6e733a773d22687474703a2f2f736368656d61732e6f70656e786d6c666f726d6174732e6f72672f776f726470726f63657373696e676d6c2f323030362f6d61696e223e3c773a62722f3e3c2f773a723e"
+  },
+  "shapingEnvironment": {
+    "version": "toy-shaping/1",
+    "fixedPointScale": 16,
+    "fixedPointUnit": "one-sixteenth-twip",
+    "roundingRule": "round-half-away-from-zero",
+    "paragraphUsedHeightPolicy": "line-height-plus-space-after-in-twips",
+    "defaultParagraphLineHeightTwips": 240,
+    "defaultParagraphSpaceAfterTwips": 0,
+    "defaultParagraphUsedHeightTwips": 240,
+    "defaultParagraphUsedHeightFixed": 3840,
+    "styleALineHeightTwipsAfterMutation": 288,
+    "styleASpaceAfterTwipsAfterMutation": 120,
+    "styleAUsedHeightTwipsAfterMutation": 408,
+    "styleAUsedHeightFixedAfterMutation": 6528,
+    "glyphAdvancesFixed": {
+      "0": 480,
+      "1": 480,
+      "2": 480,
+      "3": 480,
+      "4": 480,
+      "5": 480,
+      "6": 480,
+      "7": 480,
+      "8": 480,
+      "9": 480,
+      " ": 320,
+      "a": 480,
+      "b": 480,
+      "c": 480,
+      "d": 480,
+      "e": 480,
+      "f": 480,
+      "g": 480,
+      "h": 480,
+      "i": 480,
+      "j": 480,
+      "k": 480,
+      "l": 480,
+      "m": 480,
+      "n": 480,
+      "o": 480,
+      "p": 480,
+      "q": 480,
+      "r": 480,
+      "s": 480,
+      "t": 480,
+      "u": 480,
+      "v": 480,
+      "w": 480,
+      "x": 480,
+      "y": 480,
+      "z": 480
+    }
+  },
+  "cacheState": {
+    "cold": {
+      "resolvedStylesPopulated": false,
+      "measurementCacheEmpty": true,
+      "dependencyFingerprints": []
+    },
+    "warm": {
+      "resolvedStylesPopulated": true,
+      "measurementCacheEmpty": false,
+      "dependencyFingerprints": ["style-A:240:0", "style-default:240:0"]
+    },
+    "warmAfterMutation": {
+      "resolvedStylesPopulated": true,
+      "measurementCacheEmpty": false,
+      "dependencyFingerprints": ["style-A:288:120", "style-default:240:0"],
+      "invalidatedParagraphIndices": [64, 65, 66, 67]
+    }
+  },
+  "pagination": {
+    "restartParagraphIndex": 64,
+    "maxPasses": 4,
+    "fingerprint": {
+      "algorithm": "SHA-256",
+      "canonicalBytesEncoding": "UTF-8 canonical JSON emitted directly without rebuilding objects; recursively sort every key, including integer-like keys, by ascending ECMAScript UTF-16 code-unit lexical comparison (a < b), never locale collation; preserve dense array order",
+      "structure": {
+        "restartParagraphIndex": 64,
+        "passes": 2,
+        "pages": [
+          {
+            "pageIndex": 16,
+            "paragraphIds": ["para-064", "para-065", "para-066", "para-067"],
+            "usedHeightFixed": 26112,
+            "nextFlowId": "para-068"
+          },
+          {
+            "pageIndex": 17,
+            "paragraphIds": ["para-068", "para-069", "para-070", "para-071"],
+            "usedHeightFixed": 15360,
+            "nextFlowId": "para-072"
+          }
+        ]
+      },
+      "canonicalBytesHex": "7b227061676573223a5b7b226e657874466c6f774964223a22706172612d303638222c2270616765496e646578223a31362c22706172616772617068496473223a5b22706172612d303634222c22706172612d303635222c22706172612d303636222c22706172612d303637225d2c22757365644865696768744669786564223a32363131327d2c7b226e657874466c6f774964223a22706172612d303732222c2270616765496e646578223a31372c22706172616772617068496473223a5b22706172612d303638222c22706172612d303639222c22706172612d303730222c22706172612d303731225d2c22757365644865696768744669786564223a31353336307d5d2c22706173736573223a322c2272657374617274506172616772617068496e646578223a36347d",
+      "hash": "30bbc312aaf71b7a53e85170a9b2746f93f21f33f29dc3f58ac5e46ab1815699"
+    }
+  },
+  "phases": ["setup", "projection", "measurement", "pagination"],
+  "counters": {
+    "measuredParagraphs": {
+      "incrementWhen": "a paragraph enters the measure dirty set and measure completes",
+      "ceiling": 4
+    },
+    "projectedParagraphs": {
+      "incrementWhen": "a paragraph is emitted by the projection pass",
+      "ceiling": 4
+    },
+    "paginatedPages": {
+      "incrementWhen": "a page box is committed during pagination restart",
+      "ceiling": 2
+    },
+    "fullDocumentScans": {
+      "incrementWhen": "the entire story is traversed for layout",
+      "ceiling": 0
+    },
+    "fullDocumentRebuilds": {
+      "incrementWhen": "the display list is rebuilt from scratch",
+      "ceiling": 0
+    },
+    "dependencyEdgeVisits": {
+      "incrementWhen": "a style or numbering dependency edge is visited during closure",
+      "ceiling": 128
+    }
+  },
+  "oracleHash": {
+    "algorithm": "SHA-256",
+    "procedure": "SHA-256 over UTF-8 deterministic canonical JSON of an object keyed manifest, yjsSchema, bindingOracle, vocabulary, comparatorContracts, migrationInventory, scopeManifest. Emit JSON directly without rebuilding objects; recursively sort every key, including integer-like keys, by ascending ECMAScript UTF-16 code-unit lexical comparison (a < b), never locale collation; preserve dense array order. In manifest, omit only oracleHash.value to avoid circular inclusion.",
+    "value": "7009c21b3d66ac993b5f00c36a96274c575ec01c08b56aed2b32d87565323933"
+  },
+  "comparatorVersions": {
+    "xmlPartRange": "3.0.0",
+    "semanticZip": "4.0.0",
+    "canonicalState": "5.0.0",
+    "yjsSchemaFingerprint": "5.0.0",
+    "paginationFingerprint": "4.0.0",
+    "counterCeilings": "2.0.0"
+  }
+}

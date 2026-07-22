@@ -1,0 +1,280 @@
+{
+  "version": "engine-core-spike-yjs/1.0.0",
+  "gcEnabled": false,
+  "backendVersion": "yjs-backend/1.0.0",
+  "schemaVersion": "1.0.0",
+  "normalizationVersion": "1.0.0",
+  "root": {
+    "containerType": "Y.Map",
+    "keys": {
+      "meta": {
+        "containerType": "Y.Map",
+        "fields": {
+          "schemaVersion": { "type": "string", "required": true },
+          "backendVersion": { "type": "string", "required": true },
+          "documentId": { "type": "string", "required": true },
+          "normalizationVersion": { "type": "string", "required": true },
+          "collisionCandidates": { "type": "Y.Map", "required": true },
+          "tombstones": { "type": "Y.Map", "required": true },
+          "splitTailEditJournal": { "type": "Y.Map", "required": true }
+        }
+      },
+      "storyOrder": {
+        "containerType": "Y.Array",
+        "elementType": "CreationId"
+      },
+      "stories": {
+        "containerType": "Y.Map",
+        "recordKey": "CreationId",
+        "record": {
+          "containerType": "Y.Map",
+          "fields": {
+            "creationId": { "type": "CreationId", "required": true },
+            "semanticId": { "type": "SemanticId", "required": true },
+            "proposedSemanticId": { "type": "SemanticId", "required": true },
+            "actorId": { "type": "ActorId", "required": true },
+            "commitId": { "type": "CommitId", "required": true },
+            "storyKind": { "type": "string", "enum": ["body"], "required": true },
+            "blockOrder": { "type": "Y.Array", "elementType": "CreationId", "required": true },
+            "parentId": { "type": "CreationId", "required": false }
+          }
+        }
+      },
+      "blocks": {
+        "containerType": "Y.Map",
+        "recordKey": "CreationId",
+        "record": {
+          "containerType": "Y.Map",
+          "fields": {
+            "creationId": { "type": "CreationId", "required": true },
+            "semanticId": { "type": "SemanticId", "required": true },
+            "proposedSemanticId": { "type": "SemanticId", "required": true },
+            "actorId": { "type": "ActorId", "required": true },
+            "commitId": { "type": "CommitId", "required": true },
+            "storyId": { "type": "CreationId", "required": true },
+            "parentId": { "type": "CreationId", "required": true },
+            "blockKind": { "type": "string", "enum": ["paragraph"], "required": true },
+            "paragraphId": { "type": "SemanticId", "required": true },
+            "proposedParagraphId": { "type": "SemanticId", "required": true },
+            "textId": { "type": "CreationId", "required": true },
+            "markIds": { "type": "Y.Array", "elementType": "CreationId", "required": true },
+            "capsuleIds": { "type": "Y.Array", "elementType": "CreationId", "required": true },
+            "styleId": { "type": "string", "required": true },
+            "authoredProperties": { "type": "object", "required": true }
+          }
+        }
+      },
+      "texts": {
+        "containerType": "Y.Map",
+        "recordKey": "CreationId",
+        "record": {
+          "containerType": "Y.Map",
+          "fields": {
+            "creationId": { "type": "CreationId", "required": true },
+            "semanticId": { "type": "SemanticId", "required": true },
+            "proposedSemanticId": { "type": "SemanticId", "required": true },
+            "actorId": { "type": "ActorId", "required": true },
+            "commitId": { "type": "CommitId", "required": true },
+            "parentBlockId": { "type": "CreationId", "required": true },
+            "content": { "type": "Y.Text", "required": true },
+            "structuralSplitOffset": { "type": "number", "required": false },
+            "structuralOriginalTail": { "type": "string", "required": false },
+            "authoredContributions": {
+              "type": "Y.Map",
+              "required": false,
+              "recordKey": "CreationId",
+              "element": {
+                "type": "object",
+                "fields": {
+                  "kind": { "type": "string", "enum": ["insert", "delete"], "required": true },
+                  "tokenId": { "type": "CreationId", "required": false },
+                  "leftAnchor": {
+                    "type": "object",
+                    "required": false,
+                    "fields": {
+                      "kind": { "type": "string", "enum": ["origin", "end", "base", "token"], "required": true },
+                      "offset": { "type": "number", "required": false },
+                      "tokenId": { "type": "string", "required": false }
+                    }
+                  },
+                  "rightAnchor": {
+                    "type": "object",
+                    "required": false,
+                    "fields": {
+                      "kind": { "type": "string", "enum": ["origin", "end", "base", "token"], "required": true },
+                      "offset": { "type": "number", "required": false },
+                      "tokenId": { "type": "string", "required": false }
+                    }
+                  },
+                  "affinity": { "type": "string", "enum": ["before", "after"], "required": false },
+                  "anchorSplitOffset": { "type": "number", "required": true },
+                  "text": { "type": "string", "required": false },
+                  "tombstonedTokenIds": { "type": "array", "elementType": "string", "required": false },
+                  "observedInsertCreationIds": { "type": "array", "elementType": "CreationId", "required": false },
+                  "actorId": { "type": "ActorId", "required": true },
+                  "commitId": { "type": "CommitId", "required": true },
+                  "creationId": { "type": "CreationId", "required": true },
+                  "sourceClientId": { "type": "number", "required": true }
+                }
+              }
+            }
+          }
+        }
+      },
+      "marks": {
+        "containerType": "Y.Map",
+        "recordKey": "CreationId",
+        "record": {
+          "containerType": "Y.Map",
+          "fields": {
+            "creationId": { "type": "CreationId", "required": true },
+            "semanticId": { "type": "SemanticId", "required": true },
+            "proposedSemanticId": { "type": "SemanticId", "required": true },
+            "actorId": { "type": "ActorId", "required": true },
+            "commitId": { "type": "CommitId", "required": true },
+            "parentTextId": { "type": "CreationId", "required": true },
+            "markKind": { "type": "string", "enum": ["bold", "italic"], "required": true },
+            "start": { "type": "RelativeEndpointEnvelope", "required": true },
+            "end": { "type": "RelativeEndpointEnvelope", "required": true }
+          }
+        }
+      },
+      "capsules": {
+        "containerType": "Y.Map",
+        "recordKey": "CreationId",
+        "record": {
+          "containerType": "Y.Map",
+          "fields": {
+            "creationId": { "type": "CreationId", "required": true },
+            "semanticId": { "type": "SemanticId", "required": true },
+            "proposedSemanticId": { "type": "SemanticId", "required": true },
+            "actorId": { "type": "ActorId", "required": true },
+            "commitId": { "type": "CommitId", "required": true },
+            "ownerStoryId": { "type": "SemanticId", "required": true },
+            "ownerBlockId": { "type": "SemanticId", "required": true },
+            "parentBlockId": { "type": "CreationId", "required": true },
+            "childIndex": { "type": "number", "required": true },
+            "byteBoundaryStart": { "type": "number", "required": true },
+            "byteBoundaryEnd": { "type": "number", "required": true },
+            "bytesHex": { "type": "string", "required": true },
+            "namespaceBindings": { "type": "object", "required": true },
+            "previousSiblingBytesHex": { "type": "string", "required": true },
+            "nextSiblingBytesHex": { "type": "string", "required": true }
+          }
+        }
+      },
+      "allocator": {
+        "containerType": "Y.Map",
+        "recordKey": "ActorId",
+        "record": {
+          "containerType": "Y.Map",
+          "fields": {
+            "actorId": { "type": "ActorId", "required": true },
+            "nextLocalSeq": { "type": "number", "required": true },
+            "nextCommitSeq": { "type": "number", "required": true },
+            "observedSemanticIds": {
+              "type": "Y.Map",
+              "keyType": "SemanticId",
+              "valueType": "boolean",
+              "required": true
+            }
+          }
+        }
+      }
+    }
+  },
+  "creationIdFormat": "{actorId}:{commitSeq}:{localSeq}",
+  "creationIdGrammar": "^(?<actorId>[^:]+):(?<commitSeq>0|[1-9][0-9]*):(?<localSeq>0|[1-9][0-9]*)$",
+  "commitIdGrammar": "^commit-(?<commitSeq>0|[1-9][0-9]*)$; commitSeq must equal the CreationId commitSeq for the record",
+  "semanticIdProvenance": {
+    "proposedSemanticId": "string",
+    "actorId": "string",
+    "commitId": "string",
+    "retainedUntilRepair": true
+  },
+  "ownershipAndOrder": {
+    "parentReferenceRule": "Every non-root record has required ownership references: blocks.parentId, texts.parentBlockId, marks.parentTextId, and capsules.parentBlockId. A mark's owning block is derived uniquely through its owning text and blocks.markIds. The body story is root-owned and has no parentId.",
+    "storyBlockOrderSource": "stories[blockOrder]",
+    "markOrderSource": "blocks[markIds]",
+    "capsuleOrderSource": "blocks[capsuleIds]"
+  },
+  "markEndpoints": {
+    "convention": "half-open",
+    "startInclusive": true,
+    "endExclusive": true,
+    "offsetUnit": "Yjs-relative-position",
+    "envelope": {
+      "version": "relative-endpoint/1",
+      "fields": {
+        "documentId": "string",
+        "backendVersion": "string",
+        "schemaVersion": "string",
+        "checkpoint": "string",
+        "textCreationId": "CreationId",
+        "affinity": "before|after",
+        "relativeBytes": "opaque-base64url"
+      }
+    },
+    "defaultStartAffinity": "before",
+    "defaultEndAffinity": "after"
+  },
+  "originTags": {
+    "mutation": ["human", "agent", "remote", "undo", "redo", "repair"],
+    "projection": ["binding-reconciliation"],
+    "awareness": ["presence", "selection-ephemeral"]
+  },
+  "collisionPrecedence": {
+    "order": [
+      "ActorId-UTF16-code-unit-ascending",
+      "CommitId-UTF16-code-unit-ascending",
+      "CreationId-localSeq-numeric-ascending",
+      "CreationId-UTF16-code-unit-ascending"
+    ],
+    "repairRule": "Winner retains proposedSemanticId. Every loser becomes a bounded valid SemanticId derived from proposedSemanticId, actorId, commitId, and creationId; all references are repaired."
+  },
+  "allocatorMergeBehavior": {
+    "counters": "per-actor-monotonic-max",
+    "observedSemanticIds": "per-actor-set-union",
+    "writerRule": "only the matching actor may increment its own record"
+  },
+  "allocatorSafety": {
+    "counterRule": "For each actor, nextCommitSeq is strictly greater than every parsed CreationId and CommitId commitSeq, and nextLocalSeq is strictly greater than every CreationId localSeq, observed for that actor across live records, collision candidates, and tombstones.",
+    "semanticCoverage": "Each actor observedSemanticIds set contains every proposedSemanticId and semanticId observed for that actor across live records, collision candidates, and tombstones.",
+    "missingActorRule": "Every actor with any observed creation ID has exactly one allocator record."
+  },
+  "decodedContainerEvidence": {
+    "topLevelSharedTypes": "Exactly one top-level shared Y.Map named root",
+    "rootContainerType": "Y.Map",
+    "rootKeyContainers": "rootContainers exact key-to-container map",
+    "storyOrderContainerType": "Y.Array",
+    "recordContainerType": "Every story, block, text, mark, capsule, and allocator actor record is Y.Map",
+    "storyBlockOrderContainerType": "Y.Array",
+    "blockMarkIdsContainerType": "Y.Array",
+    "blockCapsuleIdsContainerType": "Y.Array",
+    "textContentContainerType": "Y.Text",
+    "allocatorContainerType": "Y.Map actor-keyed",
+    "allocatorObservedSemanticIdsContainerType": "Y.Map set"
+  },
+  "anchorEnvelope": {
+    "version": "anchor-envelope/1",
+    "trustedFields": [
+      "documentId",
+      "backendVersion",
+      "schemaVersion",
+      "checkpoint",
+      "affinity",
+      "relativeBytes"
+    ],
+    "encoding": "opaque-base64url"
+  },
+  "seedRecords": {
+    "documentId": "doc-spike-oracle-001",
+    "storyCreationId": "actor-seed:0:1",
+    "storySemanticId": "story-body-0",
+    "firstBlockCreationId": "actor-seed:0:2",
+    "firstBlockSemanticId": "block-para-000",
+    "firstTextCreationId": "actor-seed:0:3",
+    "capsuleCreationId": "actor-seed:0:4",
+    "capsuleSemanticId": "capsule-spike-unsupported-0"
+  }
+}

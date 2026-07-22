@@ -1,0 +1,79 @@
+{
+  "version": "engine-core-spike-comparators/1.0.0",
+  "definitions": {
+    "xmlPartRange": {
+      "version": "3.0.0",
+      "rule": "Owned byte range may change length only with complete before/after ownership evidence. Prefix and suffix bytes are exact. Capsule bytes, namespace bindings, owner slot, and previous/next sibling bytes are exact. Byte-identical input may omit evidence."
+    },
+    "semanticZip": {
+      "version": "4.0.0",
+      "exactMetadataSchema": [
+        "path",
+        "crc32",
+        "compressedSize",
+        "uncompressedSize",
+        "offset",
+        "compressionMethod",
+        "directoryIndex",
+        "lastModifiedIso"
+      ],
+      "allowedMetadataFields": [
+        "crc32",
+        "compressedSize",
+        "uncompressedSize",
+        "offset",
+        "compressionMethod",
+        "directoryIndex"
+      ],
+      "rule": "Entry set, map key, and meta.path are exact. Unknown metadata keys fail. Every payload must be a Uint8Array and is exact unless an owned changed path passes the XML range comparator. Only allowedMetadataFields may differ; every other exact-schema field is exact."
+    },
+    "canonicalState": {
+      "version": "5.0.0",
+      "fields": [
+        "revision",
+        "paragraph text and IDs",
+        "marks and endpoints",
+        "authored omitted/raw/value properties",
+        "capsule ownership and bytes",
+        "anchors",
+        "command/query result data"
+      ],
+      "jsonSafety": "Unknown/result data recursively accepts only null, booleans, finite numbers, strings, dense arrays without extra keys, and Object.prototype objects with safe enumerable data keys. Reject undefined, non-finite numbers, functions, symbols, cycles, sparse arrays, accessors, unsafe keys, and unsupported prototypes.",
+      "keyOrder": "direct manual serialization in ascending ECMAScript UTF-16 code-unit lexical comparison using a < b for every key including integer-like keys; never rebuild an object and never use locale collation",
+      "capsuleOwnerIdentity": "capsules.ownerBlockId is the canonical block ID and must equal manifest.unsupportedCapsule.ownerSlot.blockId; it is never a paragraph semantic ID",
+      "identityAndBytes": "Block, paragraph, mark, capsule, and anchor IDs are nonempty and globally unique. Mark kinds/ranges are valid and nonzero. Capsule and sibling bytes are nonempty even-length hexadecimal.",
+      "authoredPropertyVariants": {
+        "omitted": "Exact keys {state}; state is omitted.",
+        "raw": "Exact keys {state,rawLexical}; state is raw and rawLexical matches ^-?[0-9]{1,32}$.",
+        "value": "Exact keys {state,value}; state is value and value is a boolean, a nonempty string, or a finite safe integer.",
+        "closedUnion": "Unknown states and all extra or missing fields fail."
+      }
+    },
+    "yjsSchemaFingerprint": {
+      "version": "5.0.0",
+      "fields": [
+        "root containers",
+        "story/block order",
+        "record ownership",
+        "Y.Map text records with Y.Text child",
+        "relative endpoint envelopes",
+        "semantic/proposed IDs and actor/commit provenance",
+        "collision candidates and deterministic repaired IDs",
+        "validated unique tombstones",
+        "exact backend/schema/normalization versions",
+        "story/block/mark kinds, styles, namespaces",
+        "actor-keyed allocator records",
+        "nested Y.Map/Y.Array/Y.Text container evidence"
+      ],
+      "rule": "Every record exactly matches the frozen fields and carries exact container tags for root, root maps, records, order arrays, mark/capsule arrays, Y.Text content, allocator actor map, and observed-ID maps. Creation IDs obey actorId:commitSeq:localSeq; CommitIds obey commit-{commitSeq} and agree with CreationId. Relative endpoints bind nonempty document/backend/schema/checkpoint/text fields, exact affinities, and canonical base64url bytes. Every story, block, text, mark, and capsule occurs exactly once in its owning order/membership and agrees with all references. Each actor allocator counter is strictly beyond all observed creation and commit sequences and its observed semantic set covers all current/proposed IDs. Collision precedence is ActorId, CommitId, numeric localSeq, then CreationId in UTF-16 code-unit order. Invalid identical replicas fail validation."
+    },
+    "paginationFingerprint": {
+      "version": "4.0.0",
+      "rule": "Canonicalize actual page structures as UTF-8 canonical JSON, then compare exact bytes and SHA-256."
+    },
+    "counterCeilings": {
+      "version": "2.0.0",
+      "rule": "All counters are required nonnegative integers and must not exceed nonnegative integer ceilings."
+    }
+  }
+}
