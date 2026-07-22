@@ -3,11 +3,9 @@ import { describe, expect, test } from 'bun:test';
 import { GlobalRegistrator } from '@happy-dom/global-registrator';
 import { createPocDocxFixture } from '../src/poc/docx';
 import { createPocEditorDriver, type PocEditorDriverHost } from '../browser/driver';
-import type { EditorDriver } from '../src/driver/editor-driver';
+import { nonEmptyString, type EditorDriver } from '../src/driver/editor-driver';
 
-GlobalRegistrator.register();
-
-let nextDriverClientId = 710;
+if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register();
 
 function createDriverHosts(): {
   host: HTMLDivElement;
@@ -18,14 +16,10 @@ function createDriverHosts(): {
   host.innerHTML =
     '<div id="editable-host"></div><div id="replica-host"></div><div id="poc-status" aria-live="polite"></div>';
   document.body.appendChild(host);
-  const editableClientId = nextDriverClientId++;
-  const replicaClientId = nextDriverClientId++;
   const driver = createPocEditorDriver({
     editableHost: host.querySelector('#editable-host')!,
     replicaHost: host.querySelector('#replica-host')!,
     statusHost: host.querySelector('#poc-status')!,
-    editableClientId,
-    replicaClientId,
   });
   return { host, driver };
 }
@@ -54,7 +48,10 @@ describe('poc EditorDriver boundary', () => {
 
     await driver.loadDocx(await createPocDocxFixture());
     await driver.selectText('bold');
-    expect(await driver.query({ type: 'selectedText' })).toEqual({ type: 'selectedText', text: 'bold' });
+    expect(await driver.query({ type: 'selectedText' })).toEqual({
+      type: 'selectedText',
+      text: 'bold',
+    });
     expect(await driver.execute({ type: 'toggleMark', mark: 'bold' })).toEqual({
       status: 'applied',
       changed: true,
@@ -78,6 +75,25 @@ describe('poc EditorDriver boundary', () => {
       status: 'applied',
       changed: true,
     });
+    host.remove();
+  });
+
+  test('repeated load replaces the session and tears down the previous views', async () => {
+    const { host, driver } = createDriverHosts();
+    const bytes = await createPocDocxFixture();
+
+    await driver.loadDocx(bytes);
+    await driver.type('first');
+    await driver.loadDocx(bytes);
+
+    expect(await driver.query({ type: 'findText', text: nonEmptyString('first') })).toEqual({
+      type: 'findText',
+      ranges: [],
+    });
+    expect(host.querySelectorAll('#editable-host .ProseMirror')).toHaveLength(1);
+    expect(host.querySelectorAll('#replica-host .ProseMirror')).toHaveLength(1);
+    expect(host.querySelector('#editable-host')?.textContent).toBe('Hello bold italic');
+    expect(host.querySelector('#replica-host')?.textContent).toBe('Hello bold italic');
     host.remove();
   });
 });

@@ -2,16 +2,13 @@
 import type { DocxEditor, EditorDriver } from '../driver/editor-driver';
 import { nonEmptyString } from '../driver/editor-driver';
 import { loadPocDocx } from './docx';
-import { createPocEditorSession, type PocEditorSession } from './session';
+import {
+  allocatePocEditorSessionOptions,
+  createPocEditorSession,
+  type PocEditorSession,
+} from './session';
 
-export interface CreateHeadlessPocEditorDriverOptions {
-  readonly editableClientId?: number;
-  readonly replicaClientId?: number;
-}
-
-export function createHeadlessPocEditorDriver(
-  options: CreateHeadlessPocEditorDriverOptions = {}
-): EditorDriver {
+export function createHeadlessPocEditorDriver(): EditorDriver {
   let session: PocEditorSession | null = null;
 
   const requireSession = (): PocEditorSession => {
@@ -22,18 +19,7 @@ export function createHeadlessPocEditorDriver(
   const driver: EditorDriver = {
     async loadDocx(bytes: Uint8Array) {
       const loaded = await loadPocDocx(bytes);
-      session = createPocEditorSession(loaded, {
-        editable: {
-          actorId: 'driver-editable',
-          sessionId: 'driver-editable-session',
-          clientId: options.editableClientId ?? 801,
-        },
-        replica: {
-          actorId: 'driver-replica',
-          sessionId: 'driver-replica-session',
-          clientId: options.replicaClientId ?? 802,
-        },
-      });
+      session = createPocEditorSession(loaded, allocatePocEditorSessionOptions('headless'));
     },
     async selectText(text: string) {
       if (!requireSession().selectText(text)) {

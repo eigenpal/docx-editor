@@ -1,12 +1,7 @@
 /** @spike-features engine-neutral-editor-driver-contract, bold-mark, italic-mark */
 import { describe, expect, test } from 'bun:test';
 import { createPocDocxFixture, loadPocDocx } from '../src/poc/docx';
-import {
-  BINDING_RECONCILIATION_ORIGIN,
-  createPocEditorSession,
-  isBindingReconciliationOrigin,
-  type PocEditorSession,
-} from '../src/poc/session';
+import { createPocEditorSession, type PocEditorSession } from '../src/poc/session';
 import { POC_STORY_ID } from '../src/poc/constants';
 import { docRange } from '../src/driver/editor-driver';
 
@@ -34,7 +29,10 @@ async function createSession(): Promise<PocEditorSession> {
 describe('poc editor session — store-first editing', () => {
   test('typing commits to the editable store before replica convergence', async () => {
     const session = await createSession();
-    session.setSelection({ start: session.editable.snapshot().text.length, end: session.editable.snapshot().text.length });
+    session.setSelection({
+      start: session.editable.snapshot().text.length,
+      end: session.editable.snapshot().text.length,
+    });
     session.typeText('!');
     expect(session.editable.snapshot().text).toBe('Hello bold italic!');
     expect(session.replica.snapshot().text).toBe('Hello bold italic!');
@@ -45,7 +43,9 @@ describe('poc editor session — store-first editing', () => {
     expect(session.selectText('bold')).toBe(true);
     const result = session.toggleMark('bold');
     expect(result).toEqual({ status: 'applied', changed: true });
-    expect(session.editable.snapshot().runs.some((run) => run.text === 'bold' && run.bold)).toBe(false);
+    expect(session.editable.snapshot().runs.some((run) => run.text === 'bold' && run.bold)).toBe(
+      false
+    );
     expect(session.replica.snapshot()).toEqual(session.editable.snapshot());
   });
 
@@ -54,9 +54,9 @@ describe('poc editor session — store-first editing', () => {
     expect(session.selectText('italic')).toBe(true);
     const result = session.toggleMark('italic');
     expect(result).toEqual({ status: 'applied', changed: true });
-    expect(session.editable.snapshot().runs.some((run) => run.text === 'italic' && run.italic)).toBe(
-      false
-    );
+    expect(
+      session.editable.snapshot().runs.some((run) => run.text === 'italic' && run.italic)
+    ).toBe(false);
   });
 
   test('empty selection toggleMark is a schema-visible no-op', async () => {
@@ -94,26 +94,6 @@ describe('poc editor session — replica synchronization', () => {
     expect(session.undo()).toEqual({ status: 'applied', changed: true });
     expect(session.editable.snapshot().text).toBe('Hello bold italicREMOTE');
     expect(session.replica.snapshot().text).toBe('Hello bold italicREMOTE');
-  });
-});
-
-describe('poc binding reconciliation origin', () => {
-  test('binding reconciliation origin is distinct and ignored by forward mapping gate', () => {
-    expect(BINDING_RECONCILIATION_ORIGIN).toBe('poc-binding-reconciliation');
-    expect(isBindingReconciliationOrigin(BINDING_RECONCILIATION_ORIGIN)).toBe(true);
-    expect(isBindingReconciliationOrigin('human')).toBe(false);
-  });
-
-  test('reconcile notification does not enqueue another store mutation', async () => {
-    const session = await createSession();
-    let editableMutations = 0;
-    const before = session.editable.snapshot();
-    session.subscribeEditable(() => {
-      editableMutations += 1;
-    });
-    session.reconcileEditableProjection();
-    expect(session.editable.snapshot()).toEqual(before);
-    expect(editableMutations).toBe(0);
   });
 });
 

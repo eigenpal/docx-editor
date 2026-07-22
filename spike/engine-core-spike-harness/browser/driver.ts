@@ -1,7 +1,15 @@
 import type { DocxEditor, EditorDriver } from '../src/driver/editor-driver';
 import { loadPocDocx } from '../src/poc/docx';
-import { createPocEditorSession, type PocEditorSession } from '../src/poc/session';
-import { mountPocEditorBinding, syncPmSelectionFromSession, type PocEditorBinding } from './pm-binding';
+import {
+  allocatePocEditorSessionOptions,
+  createPocEditorSession,
+  type PocEditorSession,
+} from '../src/poc/session';
+import {
+  mountPocEditorBinding,
+  syncPmSelectionFromSession,
+  type PocEditorBinding,
+} from './pm-binding';
 
 export interface PocEditorDriverHost extends HTMLElement {
   dataset: DOMStringMap & {
@@ -14,15 +22,11 @@ export interface CreatePocEditorDriverOptions {
   readonly editableHost: HTMLElement;
   readonly replicaHost: HTMLElement;
   readonly statusHost: HTMLElement;
-  readonly editableClientId?: number;
-  readonly replicaClientId?: number;
 }
 
 export function createPocEditorDriver(options: CreatePocEditorDriverOptions): EditorDriver {
   let session: PocEditorSession | null = null;
   let binding: PocEditorBinding | null = null;
-  const editableClientId = options.editableClientId ?? 701;
-  const replicaClientId = options.replicaClientId ?? 702;
 
   const setStatus = (syncStatus: string, saveStatus = 'idle'): void => {
     const host = options.statusHost.closest('[data-poc-root]') as PocEditorDriverHost | null;
@@ -42,18 +46,7 @@ export function createPocEditorDriver(options: CreatePocEditorDriverOptions): Ed
     async loadDocx(bytes: Uint8Array) {
       binding?.destroy();
       const loaded = await loadPocDocx(bytes);
-      session = createPocEditorSession(loaded, {
-        editable: {
-          actorId: 'browser-editable',
-          sessionId: `browser-editable-session-${editableClientId}`,
-          clientId: editableClientId,
-        },
-        replica: {
-          actorId: 'browser-replica',
-          sessionId: `browser-replica-session-${replicaClientId}`,
-          clientId: replicaClientId,
-        },
-      });
+      session = createPocEditorSession(loaded, allocatePocEditorSessionOptions('browser'));
       binding = mountPocEditorBinding({
         session,
         editableHost: options.editableHost,

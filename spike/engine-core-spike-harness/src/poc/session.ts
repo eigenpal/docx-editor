@@ -4,8 +4,17 @@ import type { DocxEditor } from '../driver/editor-driver';
 import { docRange } from '../driver/editor-driver';
 import { snapshotAndValidateCommand } from '../vocabulary/validate';
 import { type LoadedPocDocx } from './docx';
-import { BINDING_RECONCILIATION_ORIGIN, isBindingReconciliationOrigin, POC_STORY_ID } from './constants';
-import { createPocStore, type CreatePocStoreOptions, type PocSnapshot, type PocStore } from './store';
+import {
+  BINDING_RECONCILIATION_ORIGIN,
+  isBindingReconciliationOrigin,
+  POC_STORY_ID,
+} from './constants';
+import {
+  createPocStore,
+  type CreatePocStoreOptions,
+  type PocSnapshot,
+  type PocStore,
+} from './store';
 
 export { BINDING_RECONCILIATION_ORIGIN, isBindingReconciliationOrigin };
 
@@ -21,6 +30,27 @@ export interface CreatePocEditorSessionOptions {
   readonly replica: PocEditorIdentity;
 }
 
+let nextPocSessionClientId = 0x1000_0000;
+
+export function allocatePocEditorSessionOptions(
+  label: 'browser' | 'headless'
+): CreatePocEditorSessionOptions {
+  const editableClientId = nextPocSessionClientId++;
+  const replicaClientId = nextPocSessionClientId++;
+  return {
+    editable: {
+      actorId: `${label}-editable`,
+      sessionId: `${label}-editable-${editableClientId}`,
+      clientId: editableClientId,
+    },
+    replica: {
+      actorId: `${label}-replica`,
+      sessionId: `${label}-replica-${replicaClientId}`,
+      clientId: replicaClientId,
+    },
+  };
+}
+
 export interface PocEditorSession {
   readonly loaded: LoadedPocDocx;
   readonly editable: PocStore;
@@ -29,6 +59,7 @@ export interface PocEditorSession {
   setSelection(selection: TextSelection): void;
   selectText(text: string): boolean;
   typeText(text: string): void;
+  replaceSelection(text: string): void;
   toggleMark(mark: 'bold' | 'italic'): DocxEditor.CommandResult;
   undo(): DocxEditor.CommandResult;
   findText(text: string): readonly DocxEditor.DocRange[];
@@ -37,7 +68,6 @@ export interface PocEditorSession {
   selectionRange(): DocxEditor.DocRange | null;
   syncEditableToReplica(): void;
   applyRemoteReplicaEdit(mutate: (store: PocStore) => void): void;
-  reconcileEditableProjection(): void;
   subscribeEditable(listener: (snapshot: PocSnapshot) => void): () => void;
   subscribeReplica(listener: (snapshot: PocSnapshot) => void): () => void;
   snapshotsConverged(): boolean;
@@ -55,6 +85,14 @@ function normalizeSelection(selection: TextSelection): TextSelection {
   return selection.start <= selection.end
     ? selection
     : { start: selection.end, end: selection.start };
+}
+
+function clampSelection(selection: TextSelection, textLength: number): TextSelection {
+  const normalized = normalizeSelection(selection);
+  return {
+    start: Math.max(0, Math.min(normalized.start, textLength)),
+    end: Math.max(0, Math.min(normalized.end, textLength)),
+  };
 }
 
 function findOccurrences(text: string, needle: string): readonly TextSelection[] {
@@ -111,7 +149,6 @@ export function createPocEditorSession(
   const editable = createPocStore(loaded, options.editable);
   const replica = createPocStore(loaded, options.replica);
   let selection: TextSelection = { start: 0, end: 0 };
-  let reconciling = false;
 
   const toDocRange = (range: TextSelection): DocxEditor.DocRange =>
     docRange({
@@ -126,9 +163,23 @@ export function createPocEditorSession(
   };
 
   const commitLocalEdit = (apply: () => void): void => {
-    if (reconciling) return;
     apply();
     syncEditableToReplica();
+  };
+
+  const replaceSelection = (text: string): void => {
+    const current = clampSelection(selection, editable.snapshot().text.length);
+    if (current.start === current.end && text.length === 0) return;
+    commitLocalEdit(() => {
+      if (current.start !== current.end) {
+        editable.delete(current.start, current.end);
+      }
+      if (text.length > 0) {
+        editable.insert(current.start, text);
+      }
+      const nextOffset = current.start + text.length;
+      selection = { start: nextOffset, end: nextOffset };
+    });
   };
 
   return {
@@ -136,10 +187,10 @@ export function createPocEditorSession(
     editable,
     replica,
     getSelection() {
-      return normalizeSelection(selection);
+      return clampSelection(selection, editable.snapshot().text.length);
     },
     setSelection(next) {
-      selection = normalizeSelection(next);
+      selection = clampSelection(next, editable.snapshot().text.length);
     },
     selectText(text) {
       const match = findOccurrences(editable.snapshot().text, text)[0];
@@ -149,15 +200,9 @@ export function createPocEditorSession(
     },
     typeText(text) {
       if (text.length === 0) return;
-      commitLocalEdit(() => {
-        const current = normalizeSelection(selection);
-        if (current.start !== current.end) {
-          editable.delete(current.start, current.end);
-        }
-        editable.insert(current.start, text);
-        selection = { start: current.start + text.length, end: current.start + text.length };
-      });
+      replaceSelection(text);
     },
+    replaceSelection,
     toggleMark(mark) {
       const validation = snapshotAndValidateCommand({ type: 'toggleMark', mark });
       if (validation.errors.length > 0 || !validation.snapshot) {
@@ -190,6 +235,7 @@ export function createPocEditorSession(
       if (!editable.undo()) {
         return Object.freeze({ status: 'noOp', changed: false, reason: 'empty undo stack' });
       }
+      selection = clampSelection(selection, editable.snapshot().text.length);
       syncEditableToReplica();
       const changed = !snapshotsEqual(before, editable.snapshot());
       return Object.freeze({
@@ -217,14 +263,7 @@ export function createPocEditorSession(
     applyRemoteReplicaEdit(mutate) {
       mutate(replica);
       editable.applyRemoteUpdate(diffUpdate(replica, editable));
-    },
-    reconcileEditableProjection() {
-      reconciling = true;
-      try {
-        void BINDING_RECONCILIATION_ORIGIN;
-      } finally {
-        reconciling = false;
-      }
+      selection = clampSelection(selection, editable.snapshot().text.length);
     },
     subscribeEditable(listener) {
       return editable.subscribe(listener);

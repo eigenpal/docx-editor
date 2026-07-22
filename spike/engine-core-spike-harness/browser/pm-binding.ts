@@ -4,6 +4,7 @@ import { EditorView } from 'prosemirror-view';
 import type { PocSnapshot } from '../src/poc/store';
 import {
   BINDING_RECONCILIATION_ORIGIN,
+  isBindingReconciliationOrigin,
   type PocEditorSession,
   type TextSelection as SessionSelection,
 } from '../src/poc/session';
@@ -53,10 +54,7 @@ function posToOffset(pos: number): number {
   return Math.max(0, pos - 1);
 }
 
-function createStateFromSnapshot(
-  snapshot: PocSnapshot,
-  selection: SessionSelection
-): EditorState {
+function createStateFromSnapshot(snapshot: PocSnapshot, selection: SessionSelection): EditorState {
   const doc = snapshotToDoc(snapshot);
   const from = offsetToPos(snapshot, selection.start);
   const to = offsetToPos(snapshot, selection.end);
@@ -67,32 +65,46 @@ function createStateFromSnapshot(
   });
 }
 
-function mapTransactionToSession(session: PocEditorSession, transaction: Transaction): boolean {
-  if (transaction.getMeta(BINDING_RECONCILIATION_META)) return false;
-  let mapped = false;
-  for (const step of transaction.steps) {
-    const json = step.toJSON() as {
-      stepType?: string;
-      from?: number;
-      to?: number;
-      slice?: { content?: Array<{ text?: string }> };
-    };
-    if (json.stepType !== 'replace') continue;
-    const from = posToOffset(json.from ?? 0);
-    const to = posToOffset(json.to ?? 0);
-    const inserted = json.slice?.content?.map((node) => node.text ?? '').join('') ?? '';
-    session.setSelection({ start: from, end: to });
-    if (from !== to) {
-      session.typeText('');
-      mapped = true;
-    }
-    if (inserted.length > 0) {
-      session.setSelection({ start: from, end: from });
-      session.typeText(inserted);
-      mapped = true;
-    }
+function transactionSelection(transaction: Transaction): SessionSelection {
+  return {
+    start: posToOffset(transaction.selection.from),
+    end: posToOffset(transaction.selection.to),
+  };
+}
+
+function mapTextChangeToSession(
+  session: PocEditorSession,
+  previousText: string,
+  transaction: Transaction
+): boolean {
+  const nextText = transaction.doc.textContent;
+  if (previousText === nextText) return false;
+
+  let prefixLength = 0;
+  while (
+    prefixLength < previousText.length &&
+    prefixLength < nextText.length &&
+    previousText[prefixLength] === nextText[prefixLength]
+  ) {
+    prefixLength += 1;
   }
-  return mapped;
+
+  let suffixLength = 0;
+  while (
+    suffixLength < previousText.length - prefixLength &&
+    suffixLength < nextText.length - prefixLength &&
+    previousText[previousText.length - suffixLength - 1] ===
+      nextText[nextText.length - suffixLength - 1]
+  ) {
+    suffixLength += 1;
+  }
+
+  session.setSelection({
+    start: prefixLength,
+    end: previousText.length - suffixLength,
+  });
+  session.replaceSelection(nextText.slice(prefixLength, nextText.length - suffixLength));
+  return true;
 }
 
 export interface MountPocEditorBindingOptions {
@@ -109,25 +121,30 @@ export interface PocEditorBinding {
 }
 
 export function mountPocEditorBinding(options: MountPocEditorBindingOptions): PocEditorBinding {
-  let reconciling = false;
   const { session, editableHost, replicaHost, onStatusChange } = options;
 
   const updateStatus = (): void => {
     onStatusChange?.(session.snapshotsConverged() ? 'converged' : 'connected');
   };
 
-  let editableView!: EditorView;
-  let replicaView!: EditorView;
-
   const reconcileEditable = (): void => {
-    reconciling = true;
-    try {
-      editableView.updateState(
-        createStateFromSnapshot(session.editable.snapshot(), session.getSelection())
-      );
-    } finally {
-      reconciling = false;
-    }
+    const snapshot = session.editable.snapshot();
+    const nextDoc = snapshotToDoc(snapshot);
+    const selection = session.getSelection();
+    const transaction = editableView.state.tr.replaceWith(
+      0,
+      editableView.state.doc.content.size,
+      nextDoc.content
+    );
+    transaction.setSelection(
+      TextSelection.create(
+        transaction.doc,
+        offsetToPos(snapshot, selection.start),
+        offsetToPos(snapshot, selection.end)
+      )
+    );
+    transaction.setMeta(BINDING_RECONCILIATION_META, BINDING_RECONCILIATION_ORIGIN);
+    editableView.dispatch(transaction);
   };
 
   const reconcileReplica = (): void => {
@@ -136,19 +153,30 @@ export function mountPocEditorBinding(options: MountPocEditorBindingOptions): Po
     );
   };
 
-  editableView = new EditorView(editableHost, {
+  const editableView = new EditorView(editableHost, {
     editable: () => true,
     state: createStateFromSnapshot(session.editable.snapshot(), session.getSelection()),
     dispatchTransaction(transaction) {
-      if (reconciling || transaction.getMeta(BINDING_RECONCILIATION_META)) {
+      if (isBindingReconciliationOrigin(transaction.getMeta(BINDING_RECONCILIATION_META))) {
         editableView.updateState(editableView.state.apply(transaction));
         return;
       }
-      const before = JSON.stringify(session.editable.snapshot());
-      if (!mapTransactionToSession(session, transaction)) {
+
+      if (!transaction.docChanged) {
+        session.setSelection(transactionSelection(transaction));
+        editableView.updateState(editableView.state.apply(transaction));
         return;
       }
+
+      const before = JSON.stringify(session.editable.snapshot());
+      const previousText = editableView.state.doc.textContent;
+      if (!mapTextChangeToSession(session, previousText, transaction)) {
+        reconcileEditable();
+        return;
+      }
+      session.setSelection(transactionSelection(transaction));
       if (JSON.stringify(session.editable.snapshot()) === before) {
+        reconcileEditable();
         return;
       }
       reconcileEditable();
@@ -162,7 +190,7 @@ export function mountPocEditorBinding(options: MountPocEditorBindingOptions): Po
     },
   });
 
-  replicaView = new EditorView(replicaHost, {
+  const replicaView = new EditorView(replicaHost, {
     editable: () => false,
     state: createStateFromSnapshot(session.replica.snapshot(), { start: 0, end: 0 }),
     attributes: {
@@ -172,7 +200,6 @@ export function mountPocEditorBinding(options: MountPocEditorBindingOptions): Po
   });
 
   const unsubscribeEditable = session.subscribeEditable(() => {
-    if (reconciling) return;
     reconcileEditable();
     updateStatus();
   });
