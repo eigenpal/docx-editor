@@ -69,6 +69,9 @@ The store SHALL resolve external targets into opaque engine-owned
 backend-relative text position, and affinity. Split, join, move, delete, undo,
 and concurrent edit semantics MUST be shared by selections, annotations,
 awareness, and display items without exposing backend bytes.
+The Yjs backend SHALL represent its private edit-surviving text positions with
+`Y.RelativePosition`; other backends SHALL satisfy the same observable anchor
+contract without exposing or emulating Yjs wire types publicly.
 
 #### Scenario: Insertion at an anchor
 - **WHEN** concurrent text is inserted exactly at an internal anchor

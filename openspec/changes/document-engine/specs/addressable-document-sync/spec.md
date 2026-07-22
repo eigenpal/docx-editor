@@ -53,6 +53,10 @@ Awareness SHALL carry bounded cursor/selection anchors, participant identity, an
 optional presence metadata separately from authored state. It MUST be
 authenticated, authorized, rate-limited, expiring, and excluded from snapshots,
 history, DOCX, and undo.
+The Yjs synchronization package SHALL use `y-protocols/awareness` for awareness
+state clocks and propagation. The engine/server SHALL still own authentication,
+authorization, payload limits, lease/expiry policy, and trusted anchor
+envelopes.
 
 #### Scenario: Participant disconnects uncleanly
 - **WHEN** an awareness lease expires without a close message

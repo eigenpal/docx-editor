@@ -422,6 +422,13 @@ worker, and server adapters supply only the ports available in that runtime.
 Optional output and collaboration packages are distribution-gated; core has no
 license-key branch or degraded entitlement mode.
 
+`technology-selection.md` is the dependency-selection record for these package
+boundaries. It distinguishes selected collaboration mechanisms from candidates
+that require milestone bake-offs and fixes the infrastructure that production
+MUST NOT hand-roll. Candidate names are not production dependencies until their
+owning milestone records the required license, runtime, determinism, security,
+bounded-work, performance, fallback, and version evidence.
+
 Resource budgets form a parent/child reservation tree owned by the initiating
 operation. Parsers, extensions, workers, layout passes, transport queues, and
 streams reserve work before use, check cancellation at declared bounded
@@ -630,10 +637,18 @@ be settled by their named milestone without changing the contracts:
   mechanism.
 - Tasks 6.3–6.8 and 6.10 will select the exact unsupported-step fallback,
   incremental reconciliation, complete selection, and IME implementation.
-- The package-model milestone will select the streaming XML strategy and
-  preservation-capsule granularity from measured fixtures.
-- The shaping milestone will select libraries and redistributable fallback
-  fonts after license, determinism, and fidelity evaluation.
+- The package-model milestone will evaluate `fflate` and
+  `fast-xml-parser` under `technology-selection.md`, then select the streaming
+  strategy and preservation-capsule granularity from measured fixtures.
+  `fast-xml-parser` remains a candidate until hostile DTD/entity, lexical
+  fidelity, ordered-node, bounded-work, and cross-runtime gates pass. `JSZip`
+  and the spike tokenizer are not production selections.
+- The shaping milestone will evaluate `harfbuzzjs` plus `fontkit`, Unicode
+  bidi/UAX #14 implementations, `Intl.Segmenter`, and redistributable fallback
+  fonts under the technology-selection gates.
+- The output, schema, RPC, and persistence milestones will similarly resolve
+  the recorded `pdf-lib`/`pdfkit`, TypeBox/Zod/AJV,
+  Connect/gRPC/OpenAPI, and `y-indexeddb`/`y-leveldb` candidates.
 - The persistence milestone will ratify snapshot cadence, update compaction,
   garbage collection, and retention defaults from measured workloads.
 - The performance milestone will ratify numerical latency and memory thresholds
