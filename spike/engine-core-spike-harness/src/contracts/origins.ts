@@ -9,16 +9,19 @@ import {
 } from './closed-input';
 import { validateSpikeId } from './ids';
 
-export const MUTATION_ORIGIN_KINDS = [
+export const MUTATION_ORIGIN_KINDS = Object.freeze([
   'human',
   'agent',
   'remote',
   'undo',
   'redo',
   'repair',
-] as const;
-export const PROJECTION_ORIGIN_KINDS = ['binding-reconciliation'] as const;
-export const AWARENESS_ORIGIN_KINDS = ['presence', 'selection-ephemeral'] as const;
+] as const);
+export const PROJECTION_ORIGIN_KINDS = Object.freeze(['binding-reconciliation'] as const);
+export const AWARENESS_ORIGIN_KINDS = Object.freeze([
+  'presence',
+  'selection-ephemeral',
+] as const);
 
 export type MutationOriginKind = (typeof MUTATION_ORIGIN_KINDS)[number];
 export type ProjectionOriginKind = (typeof PROJECTION_ORIGIN_KINDS)[number];

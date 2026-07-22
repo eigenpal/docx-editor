@@ -1,6 +1,9 @@
 /** @spike-features insert-delete-split-join-operations, origin-metadata */
 import { describe, expect, test } from 'bun:test';
 import {
+  AWARENESS_ORIGIN_KINDS,
+  MUTATION_ORIGIN_KINDS,
+  PROJECTION_ORIGIN_KINDS,
   createAwarenessOrigin,
   createMutationOrigin,
   createProjectionOrigin,
@@ -31,6 +34,7 @@ type EffectKind =
 interface EffectLedger {
   readonly counts: Record<EffectKind, number>;
   record(kind: EffectKind): void;
+  restore(snapshot: Record<EffectKind, number>): void;
   snapshot(): Record<EffectKind, number>;
 }
 
@@ -49,6 +53,11 @@ function createEffectLedger(): EffectLedger {
     counts,
     record(kind) {
       counts[kind] += 1;
+    },
+    restore(snapshot) {
+      for (const kind of Object.keys(counts) as EffectKind[]) {
+        counts[kind] = snapshot[kind];
+      }
     },
     snapshot() {
       return { ...counts };
@@ -424,5 +433,270 @@ describe('task 2.6 synchronous transaction executor', () => {
     expect(external.leaked).toBe('during-stage');
     expect(rollbackCalls).toHaveLength(1);
     expect(rollbackCalls[0]?.text).toBe('PUBLISH_THROW');
+  });
+});
+
+describe('task 2.6 mandatory review regressions', () => {
+  test('rejects native, inherited, accessor, and hostile proxy thenables without invoking accessors', () => {
+    const rejectedValues: unknown[] = [
+      Promise.resolve(undefined),
+      Object.create({ then() {} }),
+    ];
+    let accessorCalls = 0;
+    rejectedValues.push(
+      Object.defineProperty({}, 'then', {
+        get() {
+          accessorCalls += 1;
+          return () => {};
+        },
+      }),
+      new Proxy(
+        {},
+        {
+          getOwnPropertyDescriptor() {
+            throw new Error('descriptor trap');
+          },
+        }
+      ),
+      new Proxy(
+        {},
+        {
+          getPrototypeOf() {
+            throw new Error('prototype trap');
+          },
+        }
+      )
+    );
+
+    for (const value of rejectedValues) {
+      const ledger = createEffectLedger();
+      const baseline = ledger.snapshot();
+      const { executor, rollbackCalls } = createHarness(ledger);
+      const result = executor.transact(humanContext(), { text: 'stage' }, () => value);
+      assertRejectedWithZeroEffects(result, ledger, baseline, 'async-callback');
+      expect(rollbackCalls).toHaveLength(1);
+    }
+    expect(accessorCalls).toBe(0);
+  });
+
+  test('validates candidate origins through snapshots without invoking getters or proxy traps', () => {
+    const ledger = createEffectLedger();
+    const baseline = ledger.snapshot();
+    const { executor, rollbackCalls } = createHarness(ledger);
+    const same = {
+      domain: 'mutation',
+      kind: 'human',
+      actorId: 'actor-alice',
+      sessionId: 'session-alice-1',
+    };
+    const accepted = executor.transact(humanContext(), { text: 'same' }, (capability) => {
+      capability.assertMutationOrigin(same);
+    });
+    expect(accepted.ok).toBe(true);
+
+    let getterCalls = 0;
+    const accessor = Object.defineProperty(
+      {
+        kind: 'human',
+        actorId: 'actor-alice',
+        sessionId: 'session-alice-1',
+      },
+      'domain',
+      {
+        enumerable: true,
+        get() {
+          getterCalls += 1;
+          return 'mutation';
+        },
+      }
+    );
+    const hostile = new Proxy(
+      {},
+      {
+        getOwnPropertyDescriptor() {
+          throw new Error('origin descriptor trap');
+        },
+      }
+    );
+    for (const candidate of [accessor, hostile, { domain: 'mutation', kind: 'human' }]) {
+      const result = executor.transact(humanContext(), { text: 'bad' }, (capability) => {
+        try {
+          capability.assertMutationOrigin(candidate);
+        } catch {
+          // The outer transaction must remain poisoned.
+        }
+      });
+      expect(result.ok === false && result.reason).toBe('mixed-origin');
+    }
+    expect(getterCalls).toBe(0);
+    expect(rollbackCalls).toHaveLength(3);
+    expect(ledger.snapshot()).toEqual({
+      ...baseline,
+      canonical: 1,
+      yjs: 1,
+      revision: 1,
+      update: 1,
+      notification: 1,
+    });
+  });
+
+  test('checks nested poison after preflight without staging or rollback', () => {
+    const ledger = createEffectLedger();
+    const baseline = ledger.snapshot();
+    let stageCalls = 0;
+    let rollbackCalls = 0;
+    let executor: SynchronousTransactionExecutor<Stage, Published>;
+    executor = createSynchronousTransactionExecutor({
+      preflight() {
+        executor.transact(
+          humanContext({ transactionId: 'txn-preflight-nested' }),
+          { text: 'inner' },
+          () => {}
+        );
+      },
+      publish(stage) {
+        return { revision: 1, text: stage.text };
+      },
+      rollback() {
+        rollbackCalls += 1;
+      },
+    });
+
+    const result = executor.transact(humanContext(), { text: 'outer' }, () => {
+      stageCalls += 1;
+    });
+    assertRejectedWithZeroEffects(result, ledger, baseline, 'nested-transaction');
+    expect(stageCalls).toBe(0);
+    expect(rollbackCalls).toBe(0);
+  });
+
+  test('checks caught mixed-origin poison after preflight without staging or rollback', () => {
+    const ledger = createEffectLedger();
+    const baseline = ledger.snapshot();
+    let stageCalls = 0;
+    let rollbackCalls = 0;
+    const different = createMutationOrigin('agent', {
+      actorId: 'actor-bob',
+      sessionId: 'session-bob-1',
+    });
+    const executor = createSynchronousTransactionExecutor<Stage, Published>({
+      preflight(_stage, capability) {
+        try {
+          capability.assertMutationOrigin(different);
+        } catch {
+          // The poison must be observed before stage.
+        }
+      },
+      publish(stage) {
+        return { revision: 1, text: stage.text };
+      },
+      rollback() {
+        rollbackCalls += 1;
+      },
+    });
+
+    const result = executor.transact(humanContext(), { text: 'outer' }, () => {
+      stageCalls += 1;
+    });
+    assertRejectedWithZeroEffects(result, ledger, baseline, 'mixed-origin');
+    expect(stageCalls).toBe(0);
+    expect(rollbackCalls).toBe(0);
+  });
+
+  test('rollback restores every effect after publish throws or returns a thenable', () => {
+    for (const mode of ['throw', 'thenable'] as const) {
+      const ledger = createEffectLedger();
+      ledger.record('audit');
+      const baseline = ledger.snapshot();
+      let rollbackCalls = 0;
+      const executor = createSynchronousTransactionExecutor<Stage, Published>({
+        preflight() {},
+        publish(stage) {
+          for (const kind of Object.keys(ledger.counts) as EffectKind[]) {
+            ledger.record(kind);
+          }
+          if (mode === 'throw') throw new Error('publish failed after effects');
+          return thenable({ revision: 2, text: stage.text }) as unknown as Published;
+        },
+        rollback() {
+          rollbackCalls += 1;
+          ledger.restore(baseline);
+        },
+      });
+
+      const result = executor.transact(humanContext(), { text: mode }, () => {});
+      expect(result.ok).toBe(false);
+      if (mode === 'thenable') {
+        expect(result.ok === false && result.reason).toBe('async-callback');
+      }
+      expect(rollbackCalls).toBe(1);
+      expect(ledger.snapshot()).toEqual(baseline);
+    }
+  });
+
+  test('hostile rollback failure preserves typed reason, diagnoses non-atomicity, and resets executor', () => {
+    let failRollback = true;
+    let publishThenable = true;
+    let messageCalls = 0;
+    let toStringCalls = 0;
+    const hostile = Object.defineProperties(
+      {},
+      {
+        message: {
+          get() {
+            messageCalls += 1;
+            return 'hostile message';
+          },
+        },
+        toString: {
+          value() {
+            toStringCalls += 1;
+            return 'hostile string';
+          },
+        },
+      }
+    );
+    const executor = createSynchronousTransactionExecutor<Stage, Published>({
+      preflight() {},
+      publish(stage) {
+        if (publishThenable) {
+          return thenable({ revision: 1, text: stage.text }) as unknown as Published;
+        }
+        return { revision: 2, text: stage.text };
+      },
+      rollback() {
+        if (failRollback) throw hostile;
+      },
+    });
+
+    const rejected = executor.transact(humanContext(), { text: 'first' }, () => {});
+    expect(rejected.ok === false && rejected.reason).toBe('async-callback');
+    expect(rejected.ok === false && rejected.rollbackFailure?.message).toBe(
+      'rollback failed with an unsafe thrown value'
+    );
+    expect(rejected.ok === false && rejected.rollbackFailure?.nonAtomic).toBe(true);
+    expect(messageCalls).toBe(0);
+    expect(toStringCalls).toBe(0);
+
+    failRollback = false;
+    publishThenable = false;
+    const recovered = executor.transact(
+      humanContext({ transactionId: 'txn-after-hostile-rollback' }),
+      { text: 'second' },
+      () => {}
+    );
+    expect(recovered.ok).toBe(true);
+  });
+
+  test('origin-kind arrays are runtime frozen and remain oracle-aligned after mutation attempts', () => {
+    for (const kinds of [
+      MUTATION_ORIGIN_KINDS,
+      PROJECTION_ORIGIN_KINDS,
+      AWARENESS_ORIGIN_KINDS,
+    ]) {
+      expect(Object.isFrozen(kinds)).toBe(true);
+      expect(() => (kinds as unknown as string[]).push('hostile-kind')).toThrow();
+    }
+    expect(originDomainsMatchBindingOracleV2()).toBe(true);
   });
 });

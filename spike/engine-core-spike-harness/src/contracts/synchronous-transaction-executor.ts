@@ -1,6 +1,8 @@
 /** @spike-features insert-delete-split-join-operations, origin-metadata */
 import {
-  originKindIsMutationOnly,
+  snapshotAndValidateAwarenessOrigin,
+  snapshotAndValidateMutationOrigin,
+  snapshotAndValidateProjectionOrigin,
   type MutationOrigin,
 } from './origins';
 import {
@@ -23,6 +25,7 @@ export interface SynchronousTransactionStage<TStage> {
 
 export interface SynchronousTransactionRollbackDiagnostic {
   readonly message: string;
+  readonly nonAtomic: true;
 }
 
 export type SynchronousTransactionSuccess<TPublished> = {
@@ -42,7 +45,7 @@ export type SynchronousTransactionResult<TPublished> =
   | SynchronousTransactionFailure;
 
 export interface SynchronousTransactionExecutorHooks<TStage, TPublished> {
-  readonly preflight: (stage: TStage) => void;
+  readonly preflight: (stage: TStage, capability: TransactionMutationCapability) => void;
   readonly publish: (stage: TStage) => TPublished;
   readonly rollback: (stage: TStage) => void;
 }
@@ -68,19 +71,23 @@ export function createSynchronousTransactionExecutor<TStage, TPublished>(
 ): SynchronousTransactionExecutor<TStage, TPublished> {
   let active: ActiveTransaction<TStage> | null = null;
 
-  const clearActive = (): void => {
-    active = null;
-  };
-
   const invokeRollback = (current: ActiveTransaction<TStage>): SynchronousTransactionRollbackDiagnostic | undefined => {
     if (current.rollbackInvoked || current.phase === 'preflight') return undefined;
     current.phase = 'rollback';
     current.rollbackInvoked = true;
+    let outcome: unknown;
     try {
-      hooks.rollback(current.stage);
+      outcome = hooks.rollback(current.stage);
     } catch (error) {
       return {
-        message: error instanceof Error ? error.message : String(error),
+        message: safeThrownMessage(error, 'rollback failed with an unsafe thrown value'),
+        nonAtomic: true,
+      };
+    }
+    if (classifyThenable(outcome) !== 'not-thenable') {
+      return {
+        message: 'rollback returned an asynchronous or hostile thenable',
+        nonAtomic: true,
       };
     }
     return undefined;
@@ -92,17 +99,19 @@ export function createSynchronousTransactionExecutor<TStage, TPublished>(
     shouldRollback: boolean
   ): SynchronousTransactionFailure => {
     const rollbackFailure = shouldRollback ? invokeRollback(current) : undefined;
-    clearActive();
     return failureFromRejection(rejection, rollbackFailure);
   };
 
   const finishThrown = (
     current: ActiveTransaction<TStage>,
-    message: string
+    thrown: unknown
   ): SynchronousTransactionFailure => {
     const rollbackFailure = invokeRollback(current);
-    clearActive();
-    return { ok: false, message, rollbackFailure };
+    return {
+      ok: false,
+      message: safeThrownMessage(thrown, 'transaction phase threw an unsafe value'),
+      rollbackFailure,
+    };
   };
 
   const rejectConcurrent = (
@@ -128,77 +137,81 @@ export function createSynchronousTransactionExecutor<TStage, TPublished>(
         return rejectConcurrent(active);
       }
 
-      active = {
+      const current: ActiveTransaction<TStage> = {
         context,
         stage,
         phase: 'preflight',
         poison: null,
         rollbackInvoked: false,
       };
+      active = current;
 
       try {
-        const preflightOutcome = runSync(hooks.preflight, stage);
+        const capability = createCapability(current);
+        const preflightOutcome = runSync(() => hooks.preflight(stage, capability));
+        if (current.poison !== null) {
+          return finishRejected(current, current.poison, false);
+        }
         if (preflightOutcome.kind === 'thenable') {
           return finishRejected(
-            active,
+            current,
             createTransactionRejection('async-callback', 'preflight returned a thenable'),
             false
           );
         }
         if (preflightOutcome.kind === 'throw') {
           return finishRejected(
-            active,
-            createTransactionRejection('preflight-failure', preflightOutcome.message),
+            current,
+            createTransactionRejection(
+              'preflight-failure',
+              safeThrownMessage(preflightOutcome.thrown, 'preflight threw an unsafe value')
+            ),
             false
           );
         }
 
-        active.phase = 'stage';
-        const capability = createCapability(active);
+        current.phase = 'stage';
         const staged: SynchronousTransactionStage<TStage> = { value: stage };
-        const callbackOutcome = runSync(() => callback(capability, staged), undefined);
+        const callbackOutcome = runSync(() => callback(capability, staged));
 
-        if (active.poison !== null) {
-          return finishRejected(active, active.poison, true);
+        if (current.poison !== null) {
+          return finishRejected(current, current.poison, true);
         }
         if (callbackOutcome.kind === 'thenable') {
           return finishRejected(
-            active,
+            current,
             createTransactionRejection('async-callback', 'transaction callback returned a thenable'),
             true
           );
         }
         if (callbackOutcome.kind === 'throw') {
-          return finishThrown(active, callbackOutcome.message);
+          return finishThrown(current, callbackOutcome.thrown);
         }
 
-        active.phase = 'publish';
+        current.phase = 'publish';
         const publishOutcome = runSync(hooks.publish, stage);
-        if (active.poison !== null) {
-          return finishRejected(active, active.poison, true);
+        if (current.poison !== null) {
+          return finishRejected(current, current.poison, true);
         }
         if (publishOutcome.kind === 'thenable') {
           return finishRejected(
-            active,
+            current,
             createTransactionRejection('async-callback', 'publish returned a thenable'),
             true
           );
         }
         if (publishOutcome.kind === 'throw') {
-          return finishThrown(active, publishOutcome.message);
+          return finishThrown(current, publishOutcome.thrown);
         }
 
-        const published = publishOutcome.value;
-        clearActive();
-        return { ok: true, published };
+        return { ok: true, published: publishOutcome.value };
       } catch (error) {
-        if (active === null) {
-          return { ok: false, message: error instanceof Error ? error.message : String(error) };
-        }
         if (isTransactionControlError(error)) {
-          return finishRejected(active, error.rejection, active.phase !== 'preflight');
+          return finishRejected(current, error.rejection, current.phase !== 'preflight');
         }
-        return finishThrown(active, error instanceof Error ? error.message : String(error));
+        return finishThrown(current, error);
+      } finally {
+        if (active === current) active = null;
       }
     },
   };
@@ -219,16 +232,23 @@ class TransactionControlError extends Error {
     super(rejection.message);
     this.name = 'TransactionControlError';
     this.rejection = rejection;
+    TRANSACTION_CONTROL_ERRORS.add(this);
   }
 }
 
+const TRANSACTION_CONTROL_ERRORS = new WeakSet<object>();
+
 function isTransactionControlError(error: unknown): error is TransactionControlError {
-  return error instanceof TransactionControlError;
+  return (
+    error !== null &&
+    (typeof error === 'object' || typeof error === 'function') &&
+    TRANSACTION_CONTROL_ERRORS.has(error)
+  );
 }
 
 type SyncOutcome<TReturn> =
   | { readonly kind: 'return'; readonly value: TReturn }
-  | { readonly kind: 'throw'; readonly message: string }
+  | { readonly kind: 'throw'; readonly thrown: unknown }
   | { readonly kind: 'thenable' };
 
 function runSync<TReturn>(fn: () => TReturn): SyncOutcome<TReturn>;
@@ -242,35 +262,82 @@ function runSync<TArg, TReturn>(
     outcome = arg === undefined ? (fn as () => TReturn)() : (fn as (value: TArg) => TReturn)(arg);
   } catch (error) {
     if (isTransactionControlError(error)) throw error;
-    return {
-      kind: 'throw',
-      message: error instanceof Error ? error.message : String(error),
-    };
+    return { kind: 'throw', thrown: error };
   }
-  if (isThenable(outcome)) return { kind: 'thenable' };
+  if (classifyThenable(outcome) !== 'not-thenable') return { kind: 'thenable' };
   return { kind: 'return', value: outcome };
 }
 
-function isThenable(value: unknown): value is PromiseLike<unknown> {
-  return (
-    value !== null &&
-    (typeof value === 'object' || typeof value === 'function') &&
-    typeof (value as PromiseLike<unknown>).then === 'function'
-  );
+type ThenableClassification = 'not-thenable' | 'thenable' | 'hostile';
+
+function classifyThenable(value: unknown): ThenableClassification {
+  if (
+    value === null ||
+    (typeof value !== 'object' && typeof value !== 'function')
+  ) {
+    return 'not-thenable';
+  }
+
+  const visited = new Set<object>();
+  let current: object | null = value;
+  while (current !== null) {
+    if (visited.has(current)) return 'hostile';
+    visited.add(current);
+
+    let descriptor: PropertyDescriptor | undefined;
+    try {
+      descriptor = Object.getOwnPropertyDescriptor(current, 'then');
+    } catch {
+      return 'hostile';
+    }
+    if (descriptor !== undefined) {
+      if (!('value' in descriptor)) return 'hostile';
+      return typeof descriptor.value === 'function' ? 'thenable' : 'not-thenable';
+    }
+    try {
+      current = Object.getPrototypeOf(current) as object | null;
+    } catch {
+      return 'hostile';
+    }
+  }
+  return 'not-thenable';
 }
 
 function createCapability<TStage>(active: ActiveTransaction<TStage>): TransactionMutationCapability {
   return Object.freeze({
     origin: active.context.origin,
     assertMutationOrigin(candidate: unknown): void {
-      if (!originKindIsMutationOnly(candidate)) {
-        rejectMixedOrigin(active, 'origin domain is not mutation');
+      const mutation = safelySnapshotOrigin(snapshotAndValidateMutationOrigin, candidate);
+      if (mutation !== null) {
+        if (!mutationOriginsEqual(mutation, active.context.origin)) {
+          rejectMixedOrigin(active, 'mutation origin mismatch');
+        }
+        return;
       }
-      if (!mutationOriginsEqual(candidate, active.context.origin)) {
-        rejectMixedOrigin(active, 'mutation origin mismatch');
+      if (safelySnapshotOrigin(snapshotAndValidateProjectionOrigin, candidate) !== null) {
+        rejectMixedOrigin(active, 'projection origins cannot mutate');
       }
+      if (safelySnapshotOrigin(snapshotAndValidateAwarenessOrigin, candidate) !== null) {
+        rejectMixedOrigin(active, 'awareness origins cannot mutate');
+      }
+      rejectMixedOrigin(active, 'invalid mutation origin');
     },
   });
+}
+
+function safelySnapshotOrigin<T>(
+  validator: (candidate: unknown) => {
+    readonly snapshot: T | null;
+    readonly errors: readonly string[];
+  },
+  candidate: unknown
+): T | null {
+  try {
+    const result = validator(candidate);
+    return result.errors.length === 0 ? result.snapshot : null;
+  } catch {
+    return null;
+  }
 }
 
 function rejectMixedOrigin<TStage>(active: ActiveTransaction<TStage>, detail: string): never {
@@ -324,4 +391,28 @@ function failureFromRejection(
     message: rejection.message,
     rollbackFailure,
   };
+}
+
+function safeThrownMessage(thrown: unknown, fallback: string): string {
+  if (typeof thrown === 'string' && thrown.length > 0) return thrown;
+  if (
+    thrown === null ||
+    (typeof thrown !== 'object' && typeof thrown !== 'function')
+  ) {
+    return fallback;
+  }
+  try {
+    const descriptor = Object.getOwnPropertyDescriptor(thrown, 'message');
+    if (
+      descriptor !== undefined &&
+      'value' in descriptor &&
+      typeof descriptor.value === 'string' &&
+      descriptor.value.length > 0
+    ) {
+      return descriptor.value;
+    }
+  } catch {
+    return fallback;
+  }
+  return fallback;
 }
