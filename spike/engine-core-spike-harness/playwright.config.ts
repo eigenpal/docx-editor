@@ -32,7 +32,7 @@ export default defineConfig({
   webServer: {
     command: 'bun run dev:poc',
     url: pocBaseUrl,
-    reuseExistingServer: !process.env.CI,
+    reuseExistingServer: false,
     timeout: 60_000,
   },
 });

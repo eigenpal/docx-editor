@@ -14,7 +14,7 @@ cd spike/engine-core-spike-harness && bun run test:e2e
 Equivalent:
 
 ```bash
-cd spike/engine-core-spike-harness && playwright test e2e/poc-finish-line.spec.ts --timeout=30000 --workers=1
+cd spike/engine-core-spike-harness && bunx playwright test e2e/poc-finish-line.spec.ts --timeout=30000 --workers=1
 ```
 
 **URL:** `http://localhost:5199/` (Vite POC dev server, strict port 5199)
