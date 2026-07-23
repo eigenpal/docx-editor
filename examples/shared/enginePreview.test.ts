@@ -39,9 +39,24 @@ describe('renderDocxPreview (shared read-only projection)', () => {
     const nodes = allNodes(el);
     const pages = el.children.filter((n) => n.attrs.class === 'doc-page');
     expect(pages.length).toBe(result.pageCount); // one page element per layout page
-    expect(nodes.some((n) => n.tag === 'div' && n.style.border)).toBe(true); // table cell rects
-    const text = nodes.filter((n) => n.tag === 'span').map((n) => n.textContent).join(' ');
-    for (const cell of ['A1', 'B2', 'C3']) expect(text).toContain(cell); // visible table text
+
+    // Table cell rects have real, non-zero geometry (not zero-sized/degenerate).
+    const px = (v?: string) => (v ? parseFloat(v) : NaN);
+    const cellRects = nodes.filter((n) => n.tag === 'div' && n.style.border);
+    expect(cellRects.length).toBeGreaterThanOrEqual(9); // 3x3 table
+    for (const r of cellRects) {
+      expect(px(r.style.width)).toBeGreaterThan(0);
+      expect(px(r.style.height)).toBeGreaterThan(0);
+      expect(Number.isFinite(px(r.style.left))).toBe(true);
+      expect(Number.isFinite(px(r.style.top))).toBe(true);
+    }
+    // Visible cell text is positioned inside the page (non-negative, finite coords).
+    const spans = nodes.filter((n) => n.tag === 'span');
+    const text = spans.map((n) => n.textContent).join(' ');
+    for (const cell of ['A1', 'B2', 'C3']) expect(text).toContain(cell);
+    const a1 = spans.find((n) => n.textContent === 'A1')!;
+    expect(px(a1.style.left)).toBeGreaterThanOrEqual(0);
+    expect(px(a1.style.top)).toBeGreaterThanOrEqual(0);
   });
 
   test('an invalid file shows a visible error and does not throw', () => {
