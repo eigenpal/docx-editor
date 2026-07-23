@@ -17,6 +17,7 @@ import { EditorState } from 'prosemirror-state';
 import { keymap } from 'prosemirror-keymap';
 import { baseKeymap } from 'prosemirror-commands';
 import { history, undo, redo } from 'prosemirror-history';
+import { captureSelection, resolveSelection } from '@docx-editor.dev/engine-binding';
 import { openDocxSession, type DocxEditorSession } from './docxEditorSession.ts';
 import { renderDocxPreview, renderModelPreview } from './enginePreview.ts';
 
@@ -109,10 +110,20 @@ export function mountDocxEditor(container: HTMLElement, bytes: Uint8Array): Moun
       // stack and the plugins survive.
       if (res.rejected) {
         reconciling = true;
+        // Capture the caret as an authored anchor (paragraph semId + offset) BEFORE reverting,
+        // then restore it against the reverted doc so a refused edit doesn't also jump the
+        // cursor to the top. A deleted/new paragraph collapses to a surviving boundary.
+        const anchor = captureSelection(next);
         const canonical = session.projectDoc();
-        view.dispatch(
-          view.state.tr.replaceWith(0, view.state.doc.content.size, canonical.content).setMeta('addToHistory', false),
-        );
+        const revert = view.state.tr
+          .replaceWith(0, view.state.doc.content.size, canonical.content)
+          .setMeta('addToHistory', false);
+        try {
+          revert.setSelection(resolveSelection(anchor, revert.doc));
+        } catch {
+          // Fall back to the default mapped selection if the anchor cannot be resolved.
+        }
+        view.dispatch(revert);
         reconciling = false;
       }
       // A committed edit changed the canonical model — re-tag any new paragraphs with the

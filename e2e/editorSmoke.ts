@@ -53,6 +53,25 @@ export function editorSmoke(adapter: string, baseUrl: string): void {
       expect(await page.evaluate(() => window.__docxEditorDriver!.getBodyText())).toContain('X');
     });
 
+    test('a refused edit snaps back without corrupting the model, and the editor keeps working', async ({ page }) => {
+      await page.goto(`${baseUrl}/?edit=1`);
+      await expect(page.getByTestId('editor-status')).toHaveText('Editable (paragraphs)');
+      const before = await page.evaluate(() => window.__docxEditorDriver!.getBodyText());
+
+      // Select the whole document and type: a multi-paragraph delete the mapper refuses.
+      await page.getByTestId('editor-host').locator('p').first().click();
+      await page.keyboard.press('ControlOrMeta+a');
+      await page.keyboard.type('Z');
+      // The canonical model is untouched — nothing was dropped.
+      expect(await page.evaluate(() => window.__docxEditorDriver!.getBodyText())).toBe(before);
+
+      // The editor still works after the snap-back: a plain edit commits normally.
+      await page.getByTestId('editor-host').locator('p').first().click();
+      await page.keyboard.press('End');
+      await page.keyboard.type('!OK');
+      expect(await page.evaluate(() => window.__docxEditorDriver!.getBodyText())).toContain('!OK');
+    });
+
     test('a document with a table opens read-only (no editing)', async ({ page }) => {
       await page.goto(`${baseUrl}/?edit=1&fixture=with-tables.docx`);
       await expect(page.getByTestId('editor-status')).toContainText('Read-only');
