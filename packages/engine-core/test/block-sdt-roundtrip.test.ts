@@ -7,7 +7,8 @@
 import { describe, expect, test } from 'bun:test';
 import { readFileSync } from 'node:fs';
 import { unzipSync, strFromU8 } from 'fflate';
-import { parseDocx, writeDocx } from '../src/package/opc.ts';
+import { parseDocx } from '../src/package/docx/read.ts';
+import { writeDocx } from '../src/package/docx/write.ts';
 import type { PackageModel, Story, SdtRecord } from '../src/model/index.ts';
 
 const FIX = `${import.meta.dir}/../../../e2e/fixtures`;

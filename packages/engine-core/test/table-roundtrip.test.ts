@@ -6,7 +6,8 @@
 import { describe, expect, test } from 'bun:test';
 import { readFileSync } from 'node:fs';
 import { zipSync, unzipSync, strToU8, strFromU8 } from 'fflate';
-import { parseDocx, documentXml } from '../src/package/opc.ts';
+import { parseDocx } from '../src/package/docx/read.ts';
+import { documentXml } from '../src/package/docx/write.ts';
 import { DocumentStore, ORIGIN_IDS, bodyStoryId, type TableRecord, type ParagraphRecord, type PackageModel, type Story, type Block } from '../src/index.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';

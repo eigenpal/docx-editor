@@ -61,10 +61,9 @@ export {
   type DocxParseRejection,
   type ParseResult,
   parseDocx,
-  writeDocx,
-  documentXml,
   isPlainEditableDocx,
-} from './opc.ts';
+} from './docx/read.ts';
+export { writeDocx, documentXml } from './docx/write.ts';
 export {
   isValidNCName,
   isValidQName,
