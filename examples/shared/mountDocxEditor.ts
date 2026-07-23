@@ -87,6 +87,7 @@ export function mountDocxEditor(container: HTMLElement, bytes: Uint8Array): Moun
   const raf = (container.ownerDocument?.defaultView ?? (typeof window !== 'undefined' ? window : undefined))
     ?.requestAnimationFrame;
   let repaintQueued = false;
+  let destroyed = false; // guards deferred rAF callbacks against a torn-down view
   const paintNow = () => renderModelPreview(session.currentModel(), pagedPane, {}, doc);
   const repaintPaged = () => {
     if (!raf) return paintNow();
@@ -94,7 +95,7 @@ export function mountDocxEditor(container: HTMLElement, bytes: Uint8Array): Moun
     repaintQueued = true;
     raf(() => {
       repaintQueued = false;
-      paintNow();
+      if (!destroyed) paintNow();
     });
   };
 
@@ -122,17 +123,15 @@ export function mountDocxEditor(container: HTMLElement, bytes: Uint8Array): Moun
       },
       compositionend: () => {
         const win = container.ownerDocument?.defaultView;
-        const flush = () => {
-          imeComposing = false; // the final composed transaction has now been deferred to here
-          const before = compositionBeforeSel;
-          compositionBeforeSel = undefined;
-          if (!pendingCompositionCommit) return;
-          pendingCompositionCommit = false;
-          if (!reconciling) commitEdit(before);
-        };
         // Let ProseMirror apply its final composition transaction first, then commit once.
-        if (win?.requestAnimationFrame) win.requestAnimationFrame(flush);
-        else flush();
+        if (win?.requestAnimationFrame) win.requestAnimationFrame(flushComposition);
+        else flushComposition();
+        return false;
+      },
+      // If the field loses focus mid-composition (so compositionend may never fire), flush any
+      // pending composed edit now so imeComposing can never stick true and freeze future commits.
+      blur: () => {
+        if (imeComposing) flushComposition();
         return false;
       },
     },
@@ -150,6 +149,18 @@ export function mountDocxEditor(container: HTMLElement, bytes: Uint8Array): Moun
       commitEdit(beforeSel);
     },
   });
+
+  // Commit a deferred IME composition once, with the pre-composition caret. Idempotent and
+  // safe after teardown, so it can be driven from either compositionend's rAF or a mid-
+  // composition blur without double-committing or touching a destroyed view.
+  function flushComposition() {
+    imeComposing = false;
+    const before = compositionBeforeSel;
+    compositionBeforeSel = undefined;
+    if (!pendingCompositionCommit || destroyed) return;
+    pendingCompositionCommit = false;
+    if (!reconciling) commitEdit(before);
+  }
 
   // Selection history keyed by UNDO-STACK DEPTH (not revision — the store mints a fresh
   // revision on every undo, so a revision key never matches on the way back). selectionAt[d] is
@@ -238,5 +249,11 @@ export function mountDocxEditor(container: HTMLElement, bytes: Uint8Array): Moun
     reconciling = false;
   }
   paintNow(); // initial paginated render from the loaded model — synchronous so it's visible at once
-  return { driver, destroy: () => view.destroy() };
+  return {
+    driver,
+    destroy: () => {
+      destroyed = true; // stop any queued rAF repaint / composition flush from touching the view
+      view.destroy();
+    },
+  };
 }
