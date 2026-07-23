@@ -55,6 +55,9 @@ export {
   blockPatchEdited,
   hasBlockSerialize,
   isTopLevelEditable,
+  blockSemanticOps,
+  blockNestedBlocks,
+  walkBlockTree,
 } from './block-capabilities.ts';
 export {
   type SplitResult,

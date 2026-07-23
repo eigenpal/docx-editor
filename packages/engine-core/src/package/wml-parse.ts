@@ -32,6 +32,7 @@ import {
   type CellMargins,
   type GridColumn,
   type VMerge,
+  walkBlockTree,
 } from '../model/index.ts';
 
 /** Parse a bounded integer attribute; NaN/Infinity/non-integers become undefined so
@@ -533,18 +534,15 @@ export function deepCountTables(container: Extract<XmlNode, { type: 'element' }>
   return n;
 }
 
-/** Count every table projected into the model (top-level and nested in cells). Every
- *  source `w:tbl` must become a TableRecord, or a table is hidden and we fail closed. */
+/** Count every table projected into the model (top-level and nested in cells / content controls).
+ *  Every source `w:tbl` must become a TableRecord, or a table is hidden and we fail closed. Uses
+ *  the registry's generic block-tree walk, so a new container kind counts nested tables without
+ *  editing this function (comprehensive 3.2 scan/count + identity traversal). */
 export function countModelTables(blocks: readonly Block[]): number {
   let n = 0;
-  for (const b of blocks) {
-    if (b.kind === 'table') {
-      n += 1;
-      for (const row of b.rows) for (const cell of row.cells) n += countModelTables(cell.blocks);
-    } else if (b.kind === 'sdt') {
-      n += countModelTables(b.blocks); // a table nested inside a content control must still count
-    }
-  }
+  walkBlockTree(blocks, (b) => {
+    if (b.kind === 'table') n += 1;
+  });
   return n;
 }
 

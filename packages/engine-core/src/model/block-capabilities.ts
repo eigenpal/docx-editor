@@ -55,6 +55,14 @@ export interface CoreBlockCapability {
    *  a top-level body block; a non-editable kind is preserved read-only (never regenerated
    *  structurally). Defaults to non-editable when a kind omits it. */
   readonly editPolicy?: { readonly topLevelEditable: boolean };
+  /** The DocOp ids this kind OWNS as semantic operations (comprehensive 3.2). Declares the edit
+   *  vocabulary a kind participates in; a completeness check (comprehensive 3.9) can require an
+   *  editable kind to name real semantic operations rather than none. */
+  readonly semanticOps?: readonly string[];
+  /** The nested body blocks a CONTAINER kind holds (a table's cell blocks, an SDT's content);
+   *  empty for a leaf. Enables generic identity traversal / counting (comprehensive 3.2 scan/count
+   *  + identity traversal) without a central switch. Defaults to no nested blocks. */
+  readonly nestedBlocks?: (block: Block) => readonly Block[];
 }
 
 const registry = new Map<BlockKind, CoreBlockCapability>();
@@ -81,6 +89,17 @@ export const hasBlockSerialize = (kind: BlockKind): boolean => !!registry.get(ki
  *  A kind with no declared policy is treated as non-editable (preserved read-only), so a new kind
  *  is safe by default until it registers real editable handlers. */
 export const isTopLevelEditable = (kind: BlockKind): boolean => registry.get(kind)?.editPolicy?.topLevelEditable === true;
+/** The DocOp ids a block kind owns as semantic operations (empty if it declares none). */
+export const blockSemanticOps = (kind: BlockKind): readonly string[] => registry.get(kind)?.semanticOps ?? [];
+/** The nested body blocks a block holds (empty for a leaf kind). */
+export const blockNestedBlocks = (block: Block): readonly Block[] => registry.get(block.kind)?.nestedBlocks?.(block) ?? [];
+/** Walk a block and all its descendants (pre-order) through the registry — no central switch. */
+export function walkBlockTree(blocks: readonly Block[], visit: (block: Block) => void): void {
+  for (const b of blocks) {
+    visit(b);
+    walkBlockTree(blockNestedBlocks(b), visit);
+  }
+}
 
 // --- built-in hash + normalize (pure, model-level). Serialize is contributed from package/. ---
 
@@ -112,6 +131,18 @@ registerCoreBlockCapability({
   },
   normalize: (block) => normalizeParagraph(block as ParagraphRecord),
   editPolicy: { topLevelEditable: true }, // paragraphs are the editable top-level block kind
+  // The semantic edit vocabulary the paragraph kind owns (the DocOp ids that create/edit
+  // paragraphs). A container/read-only kind owns none until it registers real handlers.
+  semanticOps: [
+    'setParagraphRuns',
+    'insertText',
+    'splitParagraph',
+    'joinParagraphs',
+    'insertParagraph',
+    'appendParagraph',
+    'replaceParagraph',
+    'deleteParagraph',
+  ],
 });
 
 registerCoreBlockCapability({
@@ -125,6 +156,7 @@ registerCoreBlockCapability({
     const blocks = recurse(s.blocks);
     return blocks === s.blocks ? s : { ...s, blocks };
   },
+  nestedBlocks: (block) => (block as SdtRecord).blocks,
 });
 
 registerCoreBlockCapability({
@@ -154,4 +186,5 @@ registerCoreBlockCapability({
     });
     return changed ? { ...t, rows } : t;
   },
+  nestedBlocks: (block) => (block as TableRecord).rows.flatMap((r) => r.cells.flatMap((c) => c.blocks)),
 });
