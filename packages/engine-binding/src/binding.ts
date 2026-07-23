@@ -69,16 +69,30 @@ function firstDivergence(nodes: readonly PMNode[], blocks: readonly Block[]): nu
   return i;
 }
 
-/** Whether nodes[0..count) correspond 1:1 to blocks[0..count) by identity. */
+/** Whether a PM node's CONTENT still equals its block's — so a paragraph edited alongside a
+ *  split/join is NOT mistaken for an untouched neighbour (a read-only atom is content-fixed). */
+function sameContent(node: PMNode, block: Block): boolean {
+  if (node.type.name !== 'paragraph' || block.kind !== 'paragraph') return true;
+  return runsEqual(block.runs, paragraphNodeToRuns(node));
+}
+
+/** Whether nodes[0..count) correspond 1:1 to blocks[0..count) by identity AND content — used
+ *  to prove the region around a split/join is genuinely untouched (else fail closed). */
 function prefixAligns(nodes: readonly PMNode[], blocks: readonly Block[], count: number): boolean {
-  for (let i = 0; i < count; i += 1) if (!nodeMatchesBlock(nodes[i], blocks[i])) return false;
+  for (let i = 0; i < count; i += 1) {
+    const b = blocks[i];
+    if (!nodeMatchesBlock(nodes[i], b) || !sameContent(nodes[i], b)) return false;
+  }
   return true;
 }
 
-/** Whether nodes[ni..] correspond 1:1 and in order to blocks[bi..] by identity. */
+/** Whether nodes[ni..] correspond 1:1 and in order to blocks[bi..] by identity AND content. */
 function alignsAfter(nodes: readonly PMNode[], ni: number, blocks: readonly Block[], bi: number): boolean {
   if (nodes.length - ni !== blocks.length - bi) return false;
-  for (let a = ni, b = bi; a < nodes.length; a += 1, b += 1) if (!nodeMatchesBlock(nodes[a], blocks[b])) return false;
+  for (let a = ni, b = bi; a < nodes.length; a += 1, b += 1) {
+    const bl = blocks[b];
+    if (!nodeMatchesBlock(nodes[a], bl) || !sameContent(nodes[a], bl)) return false;
+  }
   return true;
 }
 

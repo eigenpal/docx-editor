@@ -182,6 +182,19 @@ describe('selective preservation: ordinary documents are editable, package kept 
     expect(openDocxSession(docx('<w:p><?custom data?><w:r><w:t>hi</w:t></w:r></w:p>')).editable).toBe(false);
   });
 
+  test('content BETWEEN paragraphs (comment/bookmark) makes the document read-only', () => {
+    // A comment or bookmark between two paragraphs is not inside any block range; a structural
+    // edit would splice it away. The document opens read-only so nothing can drop it.
+    const withComment = docx('<w:p><w:r><w:t>a</w:t></w:r></w:p><!--between--><w:p><w:r><w:t>b</w:t></w:r></w:p>');
+    const session = openDocxSession(withComment);
+    expect(session.editable).toBe(false);
+    expect(session.save()).toEqual(withComment); // saved verbatim
+    const withBookmark = docx(
+      '<w:p><w:r><w:t>a</w:t></w:r></w:p><w:bookmarkStart w:id="0" w:name="m"/><w:p><w:r><w:t>b</w:t></w:r></w:p>',
+    );
+    expect(openDocxSession(withBookmark).editable).toBe(false);
+  });
+
   test('an empty / sectPr-only body opens read-only and saves the original bytes (no throw)', () => {
     const empty = docx('<w:sectPr><w:pgSz w:w="12240" w:h="15840"/></w:sectPr>');
     const session = openDocxSession(empty);

@@ -47,6 +47,17 @@ describe('forward-mapper identity guards', () => {
     expect(blocks[1].id).not.toBe(ids[0]); // tail gets a fresh id (no duplicate)
   });
 
+  test('a split COMBINED with an edit to another paragraph fails closed (no dropped edit)', () => {
+    const { store, binding, ids } = twoParagraphBinding(); // ids[0]='one', ids[1]='two'
+    // Split ids[0] ('on'+'e'='one', a clean split) but ALSO change ids[1] to 'EDITED'. The
+    // second edit must not be silently dropped: the whole transaction fails closed.
+    const doc = docSchema.node('doc', null, [para(ids[0], 'on'), para(ids[0], 'e'), para(ids[1], 'EDITED')]);
+    const res = binding.commitFromDoc(doc);
+    expect(res.rejected).toBe(true);
+    expect(res.ops.length).toBe(0);
+    expect(store.currentRevision).toBe(0);
+  });
+
   test('a duplicated id whose text does NOT match a clean split fails closed', () => {
     const { store, binding, ids } = twoParagraphBinding();
     // 'on' + 'X' != 'one' — a split combined with an edit is refused (nothing corrupted).

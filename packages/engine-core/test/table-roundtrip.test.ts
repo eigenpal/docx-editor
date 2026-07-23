@@ -357,4 +357,14 @@ describe('cell-edit fails closed on non-fully-captured paragraphs (review findin
     const m = tableWithCell00('<w:p><w:r><w:t>a</w:t><w:t>b</w:t></w:r></w:p>');
     expect(() => documentXml(editCell00(m, 'EDITED'))).toThrow(/fail closed/);
   });
+  test('editing a cell whose original carries a comment/PI fails closed (readXml drops it)', () => {
+    // readXml strips comments/PIs, so paragraphFullyCaptured on the parsed node would MISS them;
+    // the raw-slice guard must reject so regeneration never silently deletes the comment.
+    expect(() => documentXml(editCell00(tableWithCell00('<w:p><!--keep--><w:r><w:t>a</w:t></w:r></w:p>'), 'EDITED'))).toThrow(
+      /fail closed/,
+    );
+    expect(() => documentXml(editCell00(tableWithCell00('<w:p><?pi x?><w:r><w:t>a</w:t></w:r></w:p>'), 'EDITED'))).toThrow(
+      /fail closed/,
+    );
+  });
 });

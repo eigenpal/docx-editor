@@ -154,9 +154,10 @@ function patchEditedTable(tableText: string, tableStart: number, baseline: Table
   const patches: { start: number; end: number; xml: string }[] = [];
   for (let i = 0; i < curParas.length; i += 1) {
     if (hashPreservableBlock(curParas[i]) === hashPreservableBlock(baseParas[i])) continue; // unchanged
-    const origP = readXml(tableText.slice(spans[i].start, spans[i].end));
-    const pEl = origP.ok ? origP.nodes.find(el) : undefined;
-    if (!pEl || !paragraphFullyCaptured(pEl)) return null; // would drop unmodeled content
+    // Guard the RAW slice, not a parsed node: readXml discards comments/PIs, so a cell
+    // paragraph carrying <!-- --> or <? ?> must fail closed here too — regenerating it would
+    // silently delete that content.
+    if (!sliceIsFullyCapturedParagraph(tableText.slice(spans[i].start, spans[i].end))) return null;
     patches.push({ start: tableStart + spans[i].start, end: tableStart + spans[i].end, xml: paragraphXml(curParas[i]) });
   }
   return patches;
@@ -197,6 +198,16 @@ function regenerateBlockRegion(
   }
   if (!blocks.every((b) => b.kind === 'paragraph')) {
     throw new Error('structural edit produced a non-paragraph block — fail closed');
+  }
+  // The region [regionStart, regionEnd) is replaced wholesale by the regenerated paragraphs,
+  // so ANY bytes BETWEEN consecutive block ranges would be dropped. A non-empty gap means the
+  // blocks are not contiguous direct siblings — an inter-block comment/PI, a bookmark, or a
+  // wrapping element's close tag (e.g. </w:customXml> or an SDT boundary) sits there. Deleting
+  // it would corrupt the document or lose content, so fail closed.
+  for (let i = 1; i < docRanges.length; i += 1) {
+    if (original.slice(docRanges[i - 1][1].end, docRanges[i][1].start).length !== 0) {
+      throw new Error('structural edit across non-contiguous blocks (inter-block content would be lost) — fail closed');
+    }
   }
   const regionStart = docRanges[0][1].start;
   const regionEnd = docRanges[docRanges.length - 1][1].end;

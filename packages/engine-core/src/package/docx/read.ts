@@ -301,11 +301,21 @@ export function isModelBodyPatchable(model: PackageModel): boolean {
   if (docText === undefined) return false;
   const blocks = model.stories.get(bodyStoryId(model))?.blocks ?? [];
   if (blocks.length === 0) return false;
+  const ranges: { start: number; end: number }[] = [];
   for (const b of blocks) {
     if (b.kind !== 'paragraph') return false; // tables/SDTs are read-only (not top-level patchable)
     const r = pres.blockRanges.get(b.id);
-    if (!r) return false; // e.g. a synthetic empty-body paragraph with no source range
+    if (!r || r.partName !== DOC_PART) return false; // e.g. a synthetic empty-body paragraph with no source range
     if (!sliceIsFullyCapturedParagraph(docText.slice(r.start, r.end))) return false; // unmodeled/comment -> read-only
+    ranges.push({ start: r.start, end: r.end });
+  }
+  // The body blocks must be CONTIGUOUS direct siblings. Any bytes between consecutive block
+  // ranges — an inter-block comment/PI, a bookmark, or a wrapping element's boundary (an SDT
+  // or </w:customXml>) — would be dropped the moment a structural edit regenerates the block
+  // region. Such a document opens read-only so no edit can ever silently corrupt or lose it.
+  ranges.sort((a, b) => a.start - b.start);
+  for (let i = 1; i < ranges.length; i += 1) {
+    if (ranges[i].start !== ranges[i - 1].end) return false;
   }
   return true;
 }
