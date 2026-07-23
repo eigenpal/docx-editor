@@ -81,3 +81,51 @@ describe('forward-mapper identity guards', () => {
     expect(paragraphNodeToRuns(para('x', 'hi')).map((r) => r.text).join('')).toBe('hi');
   });
 });
+
+describe('adjacent same-format runs are not spuriously rewritten', () => {
+  function twoRunBinding() {
+    const bytes = zipSync({
+      '[Content_Types].xml': strToU8(
+        '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">' +
+          '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/></Types>',
+      ),
+      'word/document.xml': strToU8(
+        `<w:document xmlns:w="${W}"><w:body>` +
+          '<w:p><w:r><w:t>a</w:t></w:r><w:r><w:t>b</w:t></w:r></w:p>' + // two adjacent plain runs
+          '<w:p><w:r><w:t>x</w:t></w:r></w:p>' +
+          '</w:body></w:document>',
+      ),
+    });
+    const r = parseDocx(bytes);
+    if (!r.ok) throw new Error(r.reason);
+    const store = new DocumentStore(r.model);
+    const ids = r.model.stories.get(bodyStoryId(r.model))!.blocks.map((b) => b.id);
+    return { store, binding: new EditorBinding(store), ids };
+  }
+  const paraOf = (store: DocumentStore, id: string) =>
+    store.currentModel.stories.get(bodyStoryId(store.currentModel))!.blocks.find((b) => b.id === id) as {
+      runs: { text: string }[];
+    };
+  const textOf = (store: DocumentStore, id: string) => paraOf(store, id).runs.map((r) => r.text).join('');
+
+  test('reprojecting (PM coalesces the two runs) commits NOTHING — no spurious rewrite', () => {
+    const { store, binding, ids } = twoRunBinding();
+    expect(paraOf(store, ids[0]).runs).toHaveLength(2); // authored segmentation on load
+    const res = binding.commitFromDoc(binding.projectDoc()); // PM merges "a"+"b" -> "ab"
+    expect(res.ops).toHaveLength(0); // the binding does NOT rewrite an unchanged paragraph
+    expect(paraOf(store, ids[0]).runs).toHaveLength(2); // no commit -> segmentation intact
+  });
+
+  test('editing the OTHER paragraph emits ONE op and never drops the two-run text', () => {
+    const { store, binding, ids } = twoRunBinding();
+    const doc = docSchema.node('doc', null, [binding.projectDoc().child(0), para(ids[1], 'X!')]);
+    const res = binding.commitFromDoc(doc);
+    // Exactly one op — the binding does not fabricate an edit for the untouched paragraph.
+    expect(res.ops).toHaveLength(1);
+    expect(res.ops[0]).toMatchObject({ op: 'setParagraphRuns', paragraphId: ids[1] });
+    // The untouched paragraph's TEXT is fully preserved (the store may canonicalize its
+    // adjacent identical-format runs — lossless in text and formatting).
+    expect(textOf(store, ids[0])).toBe('ab');
+    expect(textOf(store, ids[1])).toBe('X!');
+  });
+});

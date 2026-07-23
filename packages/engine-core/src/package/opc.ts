@@ -195,13 +195,16 @@ const ROOT_RELS_XML =
 
 type XmlElement = Extract<XmlNode, { type: 'element' }>;
 
-function anyRelationship(nodes: readonly XmlNode[]): boolean {
-  return nodes.some((n) => el(n) && (n.name === 'Relationship' || anyRelationship(n.children)));
-}
+// The exact content types writeDocx re-emits — a present value that differs would be
+// rewritten (lossy), so the gate requires these precisely.
+const CT_RELS = 'application/vnd.openxmlformats-package.relationships+xml';
+const CT_XML = 'application/xml';
+const CT_MAIN = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml';
 
 /** Whether [Content_Types].xml is exactly what writeDocx re-emits: only the two package
- *  Defaults (rels, xml) and the single main-document Override. Any extra Default/Override
- *  (an image/header/styles content type) or unexpected element would be dropped on save. */
+ *  Defaults (rels, xml) and the single main-document Override, each with its standard
+ *  ContentType. Any extra/renamed Default or Override, or a differing content-type value,
+ *  would be dropped or rewritten on save. */
 function isStandardContentTypes(data: Uint8Array): boolean {
   const rx = readXml(strFromU8(data));
   if (!rx.ok) return false;
@@ -211,12 +214,25 @@ function isStandardContentTypes(data: Uint8Array): boolean {
     if (!el(c)) continue;
     if (c.name === 'Default') {
       const ext = (c.attributes['Extension'] ?? '').toLowerCase();
-      if (ext !== 'rels' && ext !== 'xml') return false;
+      const ct = c.attributes['ContentType'] ?? '';
+      if (ext === 'rels') { if (ct !== CT_RELS) return false; }
+      else if (ext === 'xml') { if (ct !== CT_XML) return false; }
+      else return false;
     } else if (c.name === 'Override') {
-      if (c.attributes['PartName'] !== '/word/document.xml') return false;
+      if (c.attributes['PartName'] !== '/word/document.xml' || c.attributes['ContentType'] !== CT_MAIN) return false;
     } else return false;
   }
   return true;
+}
+
+/** Whether a relationships part is EMPTY of relationships (its root has no element child).
+ *  A present document rels writeDocx does not re-emit, so anything in it would be dropped. */
+function relsEmpty(data: Uint8Array): boolean {
+  const rx = readXml(strFromU8(data));
+  if (!rx.ok) return false;
+  const root = rx.nodes.find((n): n is XmlElement => el(n) && n.name === 'Relationships');
+  if (!root) return rx.nodes.every((n) => !el(n)); // no Relationships root and no stray elements
+  return root.children.every((c) => !el(c));
 }
 
 /** Whether a relationships part contains ONLY internal relationships targeting
@@ -278,16 +294,16 @@ export function isPlainEditableDocx(bytes: Uint8Array): boolean {
   // one. Present but non-standard IS lossy (it would be replaced), so validate it.
   if (contentTypes && !isStandardContentTypes(contentTypes)) return false;
   if (rootRels && !relsTargetOnly(rootRels, 'word/document.xml')) return false;
-  if (docRels) {
-    const rx = readXml(strFromU8(docRels));
-    if (!rx.ok || anyRelationship(rx.nodes)) return false; // a doc rel implies an image/link/header
-  }
+  if (docRels && !relsEmpty(docRels)) return false; // any doc-rel payload is dropped on save
   const xml = readXml(strFromU8(docXml));
   if (!xml.ok) return false;
   // The shell must be exactly <w:document><w:body>…</w:body></w:document> with only
-  // namespace attributes: writeDocx emits only that.
-  const doc = xml.nodes.find((n): n is XmlElement => el(n) && n.name === 'w:document');
-  if (!doc || !onlyNamespaceAttrs(doc)) return false;
+  // namespace attributes: writeDocx emits only that. Reject any additional top-level
+  // element (a second root / stray content the reader tolerates).
+  const roots = xml.nodes.filter(el);
+  if (roots.length !== 1 || roots[0].name !== 'w:document') return false;
+  const doc = roots[0];
+  if (!onlyNamespaceAttrs(doc)) return false;
   const docChildren = doc.children.filter(el);
   if (docChildren.length !== 1 || docChildren[0].name !== 'w:body' || !onlyNamespaceAttrs(docChildren[0])) return false;
   const body = docChildren[0];

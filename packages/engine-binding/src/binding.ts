@@ -14,6 +14,7 @@ import { Node as PMNode } from 'prosemirror-model';
 import {
   DocumentStore,
   bodyStoryId,
+  normalizeRuns,
   ORIGIN_IDS,
   type DocOp,
   type BatchResult,
@@ -30,8 +31,13 @@ const MUTATION = ORIGIN_IDS.mutationHuman;
  *  no-commit result — the canonical store is left untouched. */
 class BindingRejection extends Error {}
 
+/** Compare run lists up to normalization. ProseMirror coalesces adjacent text with
+ *  identical marks during projection, so an UNCHANGED paragraph whose model runs merge to
+ *  the same normalized form must map to ZERO ops — otherwise re-projecting an untouched
+ *  paragraph would spuriously rewrite (and collapse) its authored run segmentation. A real
+ *  text/formatting edit still differs after normalization. */
 function runsEqual(a: readonly RunRecord[], b: readonly RunRecord[]): boolean {
-  return JSON.stringify(a) === JSON.stringify(b);
+  return JSON.stringify(normalizeRuns(a)) === JSON.stringify(normalizeRuns(b));
 }
 
 export interface ForwardResult {
