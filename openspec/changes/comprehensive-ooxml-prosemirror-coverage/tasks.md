@@ -34,7 +34,7 @@
 
 ## 4. Promote one production editor composition
 
-- [ ] 4.1 Move framework-independent session ownership from `examples/shared/docxEditorSession.ts` behind the production `Editor` implementation.
+- [x] 4.1 Move framework-independent session ownership from `examples/shared/docxEditorSession.ts` behind the production `Editor` implementation.
 - [ ] 4.2 Move ProseMirror mounting, canonical commit, rejection snap-back, paginated repaint, save, and disposal from `examples/shared/mountDocxEditor.ts` behind `Editor` plus `EditorHost`.
 - [ ] 4.3 Replace contract-only throwing `createEditor` with the production composition without leaking PM types or view access.
 - [ ] 4.4 Wire `packages/react` to the production `Editor` using host getters, scheduling, post-commit notification, and common display output.

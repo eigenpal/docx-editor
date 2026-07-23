@@ -97,11 +97,11 @@ export const hasBlockProjector = (kind: string): boolean => projectors.has(kind)
 /** Enforce the BINDING lane of feature completeness (comprehensive 3.9): every core block kind that
  *  is editable in the model MUST be round-trippable through the binding — its edited PM node must map
  *  back to DocOps. Presence of a projector is NOT sufficient (a projector can target the read-only
- *  atom, or an editable node the reverse mapper cannot turn into DocOps); the kind must be DECLARED
- *  binding-editable (registerBlockProjector(..., { editable: true })), which the registrant may only
- *  do once the forward mapper genuinely supports it. A core kind that is editable but not
- *  binding-editable would silently lose edits in the browser; reject it here, before a document is
- *  opened, rather than as a lost edit or a mid-edit rejection at runtime. Throws listing every gap. */
+ *  atom, or an editable node the reverse mapper cannot turn into DocOps); the kind must be in the
+ *  reverse lane's BINDING_EDITABLE_KINDS (an internal fact, not a caller flag). A core kind that is
+ *  editable but not binding-editable would silently lose edits in the browser; reject it here, before
+ *  a document is opened, rather than as a lost edit or a mid-edit rejection at runtime. Throws
+ *  listing every gap. */
 export function assertBindingLaneComplete(): void {
   const schema = buildDocSchema(); // an unbuildable schema surfaces here too
   const missing: string[] = [];

@@ -33,3 +33,4 @@ export { modelToDoc, paragraphNodeToRuns } from './projection.ts';
 export { EditorBinding, type ForwardResult } from './binding.ts';
 export { type SelectionAnchor, captureSelection, resolveSelection } from './selection.ts';
 export { type ImeState, type InboundChange, ImeSession } from './ime.ts';
+export { type ApplyResult, type DocxEditorSession, openDocxSession } from './session.ts';
