@@ -35,7 +35,10 @@ function el(node: XmlNode): node is Extract<XmlNode, { type: 'element' }> {
 }
 
 // Run-wrapping elements whose child w:r must still be collected (OOXML review).
-const RUN_WRAPPERS = new Set(['w:hyperlink', 'w:ins', 'w:del', 'w:smartTag', 'w:sdt', 'w:sdtContent']);
+// w:fldSimple wraps a simple field's RESULT runs (ECMA-376 Part 1 §17.16.19); its
+// w:instr instruction attribute stays inert (not a run), but the result w:r text
+// is the displayed content and must be collected (e.g. "Page X of Y").
+const RUN_WRAPPERS = new Set(['w:hyperlink', 'w:ins', 'w:del', 'w:smartTag', 'w:sdt', 'w:sdtContent', 'w:fldSimple']);
 
 /** Collect every w:r element under a node, recursing through run wrappers. */
 function collectRunElements(node: Extract<XmlNode, { type: 'element' }>): Extract<XmlNode, { type: 'element' }>[] {
