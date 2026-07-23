@@ -130,13 +130,23 @@ interface TableCtx {
 function layoutTable(table: TableRecord, ctx: TableCtx, startY: number): number {
   const { margin, contentRight, contentBottom, metrics, builder } = ctx;
   const cols = columnWidths(table, contentRight - margin);
+  const push = (it: DisplayItem): void => builder.push(it);
+  // Leading rows flagged w:tblHeader repeat atop each page the table continues onto.
+  const headerRows: TableRowRecord[] = [];
+  for (const row of table.rows) {
+    if (row.props?.isHeader) headerRows.push(row);
+    else break;
+  }
   let y = startY;
   for (const row of table.rows) {
+    const isHeader = row.props?.isHeader === true;
     if (y + metrics.lineHeight + 2 * CELL_PAD > contentBottom && y > margin) {
       builder.break();
       y = margin;
+      // Re-emit the header rows before a continuing body row (not before a header itself).
+      if (!isHeader) for (const hr of headerRows) y = emitRow(hr, cols, margin, y, metrics, push);
     }
-    y = emitRow(row, cols, margin, y, metrics, (it) => builder.push(it));
+    y = emitRow(row, cols, margin, y, metrics, push);
   }
   return y;
 }

@@ -70,6 +70,19 @@ describe('table layout', () => {
     expect(xs.size).toBeGreaterThanOrEqual(2);
   });
 
+  test('a tblHeader row repeats atop each page when the table paginates', () => {
+    const header = '<w:tr><w:trPr><w:tblHeader/></w:trPr><w:tc><w:p><w:r><w:t>HDR</w:t></w:r></w:p></w:tc></w:tr>';
+    const bodyRows = Array.from({ length: 12 }, (_, i) => `<w:tr><w:tc><w:p><w:r><w:t>R${i}</w:t></w:r></w:p></w:tc></w:tr>`).join('');
+    const model = parseInner(`<w:tbl>${header}${bodyRows}</w:tbl>`);
+    // A short page so the table spans multiple pages.
+    const result = layoutBody(model, opts({ pageHeight: 3600 }));
+    expect(result.pages.length).toBeGreaterThan(1);
+    const hdrOnPage = result.pages.map((p) => p.items.some((i) => i.type === 'text' && i.text === 'HDR'));
+    expect(hdrOnPage[0]).toBe(true); // header on the first page
+    expect(hdrOnPage[1]).toBe(true); // AND repeated on the second page
+    expect(hdrOnPage.filter(Boolean).length).toBe(result.pages.length); // on every page the table occupies
+  });
+
   test('column widths come from the grid when present', () => {
     const model = withTablesModel();
     const table = model.stories.get(bodyStoryId(model))!.blocks.find((b) => b.kind === 'table') as TableRecord;
