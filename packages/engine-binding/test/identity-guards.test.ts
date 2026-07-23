@@ -51,12 +51,29 @@ describe('forward-mapper identity guards', () => {
     expect(store.currentRevision).toBe(0);
   });
 
-  test('a genuinely new paragraph (semId null) is the only append path', () => {
+  test('adding a paragraph (structural, e.g. paste/split) fails closed in this checkpoint', () => {
     const { store, binding, ids } = twoParagraphBinding();
     const doc = docSchema.node('doc', null, [para(ids[0], 'one'), para(ids[1], 'two'), para(null, 'three')]);
     const res = binding.commitFromDoc(doc);
+    expect(res.rejected).toBe(true);
+    expect(store.currentRevision).toBe(0);
+  });
+
+  test('reordering paragraphs (unchanged text) fails closed', () => {
+    const { store, binding, ids } = twoParagraphBinding();
+    const doc = docSchema.node('doc', null, [para(ids[1], 'two'), para(ids[0], 'one')]);
+    const res = binding.commitFromDoc(doc);
+    expect(res.rejected).toBe(true);
+    expect(store.currentRevision).toBe(0);
+  });
+
+  test('an in-place text edit of one paragraph maps to exactly one op', () => {
+    const { store, binding, ids } = twoParagraphBinding();
+    const doc = docSchema.node('doc', null, [para(ids[0], 'ONE!'), para(ids[1], 'two')]);
+    const res = binding.commitFromDoc(doc);
     expect(res.rejected).toBeUndefined();
-    expect(res.ops.some((o) => o.op === 'appendParagraph')).toBe(true);
+    expect(res.ops).toHaveLength(1);
+    expect(res.ops[0].op).toBe('setParagraphRuns');
     expect(store.currentRevision).toBe(1);
   });
 

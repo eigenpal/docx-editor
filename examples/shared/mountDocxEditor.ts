@@ -62,20 +62,28 @@ export function mountDocxEditor(container: HTMLElement, bytes: Uint8Array): Moun
     keymap({ Enter: noop, 'Shift-Enter': noop, 'Mod-Enter': noop }),
     keymap(baseKeymap),
   ];
-  const freshState = () => EditorState.create({ doc: session.projectDoc(), plugins });
+  let reconciling = false;
 
   const view = new EditorView(container, {
-    state: freshState(),
+    state: EditorState.create({ doc: session.projectDoc(), plugins }),
     editable: () => session.editable,
     dispatchTransaction(tr) {
       const next = view.state.apply(tr);
       view.updateState(next);
-      if (!tr.docChanged) return;
+      if (reconciling || !tr.docChanged) return;
       const res = session.applyPmDoc(next.doc);
-      // If the store refused the edit (it would disturb a read-only block or split a
-      // paragraph), snap the view back to the canonical projection — with plugins intact —
-      // so the view can never diverge from the model.
-      if (res.rejected) view.updateState(freshState());
+      // If the store refused the edit (a structural change or a read-only block), snap the
+      // view's content back to the canonical projection so the view can never diverge from
+      // the model. Keep it out of the undo history and guard reentrancy so the prior undo
+      // stack and the plugins survive.
+      if (res.rejected) {
+        reconciling = true;
+        const canonical = session.projectDoc();
+        view.dispatch(
+          view.state.tr.replaceWith(0, view.state.doc.content.size, canonical.content).setMeta('addToHistory', false),
+        );
+        reconciling = false;
+      }
     },
   });
   container.classList.add('docx-editable');

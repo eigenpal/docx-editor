@@ -56,63 +56,38 @@ export class EditorBinding {
     return EditorState.create({ schema: docSchema, doc: this.projectDoc() });
   }
 
-  /** Derive the DocOps that turn the current authored state into `newDoc`. Only paragraph
-   *  text changes produce ops; read-only non-paragraph blocks (projected as blockEmbed
-   *  atoms) must map back to their exact canonical block by semId and are never mutated.
-   *  Any structural disturbance of a read-only block throws {@link BindingRejection}. */
+  /** Derive the DocOps that turn the current authored state into `newDoc`. This checkpoint
+   *  supports ONLY in-place text edits: the PM top-level nodes must correspond 1:1 and IN
+   *  ORDER to the canonical body blocks (a paragraph node ↔ a paragraph block, a blockEmbed
+   *  atom ↔ its exact non-paragraph block, matched by semId). A changed paragraph emits one
+   *  `setParagraphRuns`; a read-only atom emits nothing. ANY structural change — a new,
+   *  removed, reordered, split, duplicated, or retyped block — throws {@link BindingRejection}
+   *  so nothing is silently dropped, misordered, or mutated (structural editing is a later
+   *  increment). */
   mapDocToOps(newDoc: PMNode): DocOp[] {
     const model = this.store.currentModel;
-    const storyId = bodyStoryId(model);
-    const story = model.stories.get(storyId)!;
-    const byId = new Map<string, Block>(story.blocks.map((b) => [b.id, b]));
+    const blocks = model.stories.get(bodyStoryId(model))!.blocks;
     const ops: DocOp[] = [];
-    const seen = new Set<string>();
-    let sym = 0;
-
+    let i = 0;
     newDoc.forEach((node) => {
+      const block: Block | undefined = blocks[i];
+      if (!block) throw new BindingRejection('a block was added'); // more PM nodes than canonical blocks
       if (node.type.name === 'blockEmbed') {
-        // A read-only block. It MUST map back to an existing non-paragraph block; then it
-        // is left untouched. A missing/mismatched atom is an illegal edit — fail closed.
-        const semId = node.attrs.semId as string | null;
-        const existing = semId ? byId.get(semId) : undefined;
-        if (!existing || existing.kind === 'paragraph' || seen.has(semId!)) {
-          // Missing, retyped, or DUPLICATED read-only block — an illegal structural edit.
-          throw new BindingRejection('read-only block cannot be added, moved, duplicated, or altered');
+        if (block.kind === 'paragraph' || node.attrs.semId !== block.id) {
+          throw new BindingRejection('read-only block moved, replaced, or retyped');
         }
-        seen.add(semId!);
-        return;
-      }
-      if (node.type.name !== 'paragraph') return;
-      const semId = node.attrs.semId as string | null;
-      const runs = paragraphNodeToRuns(node);
-      const existing = semId ? byId.get(semId) : undefined;
-      if (existing) {
-        if (existing.kind !== 'paragraph' || seen.has(semId!)) {
-          // A paragraph node claiming a non-paragraph block's identity, or a DUPLICATED
-          // paragraph id (e.g. a split that copied semId) — fail closed rather than let the
-          // last node silently win and drop the other half.
-          throw new BindingRejection('paragraph edit targets a non-paragraph or duplicated block');
+      } else if (node.type.name === 'paragraph') {
+        if (block.kind !== 'paragraph' || node.attrs.semId !== block.id) {
+          throw new BindingRejection('paragraph added, removed, reordered, or split');
         }
-        seen.add(semId!);
-        if (!runsEqual(existing.runs, runs)) ops.push({ op: 'setParagraphRuns', paragraphId: semId!, runs });
-      } else if (semId !== null) {
-        // A non-null id that names no current block is a stale or forged projection (or a
-        // split that copied an id) — fail closed rather than append+delete real content.
-        throw new BindingRejection('unknown paragraph identity');
+        const runs = paragraphNodeToRuns(node);
+        if (!runsEqual(block.runs, runs)) ops.push({ op: 'setParagraphRuns', paragraphId: block.id, runs });
       } else {
-        // A genuinely new paragraph (semId null); mint identity.
-        const symbolicId = `$b${(sym += 1)}`;
-        ops.push({ op: 'appendParagraph', storyId, symbolicId });
-        if (runs.length > 0) ops.push({ op: 'setParagraphRuns', paragraphId: symbolicId, runs });
+        throw new BindingRejection(`unexpected node type '${node.type.name}'`);
       }
+      i += 1;
     });
-    for (const [id, block] of byId) {
-      if (seen.has(id)) continue;
-      // A vanished paragraph is a delete; a vanished read-only block is illegal (would
-      // drop unsupported content) — fail closed rather than emit a wrong/destructive op.
-      if (block.kind === 'paragraph') ops.push({ op: 'deleteParagraph', paragraphId: id });
-      else throw new BindingRejection('a read-only block was removed');
-    }
+    if (i !== blocks.length) throw new BindingRejection('a block was removed'); // fewer PM nodes than blocks
     return ops;
   }
 

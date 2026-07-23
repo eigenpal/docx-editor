@@ -193,46 +193,103 @@ const ROOT_RELS_XML =
   `<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/>` +
   `</Relationships>`;
 
+type XmlElement = Extract<XmlNode, { type: 'element' }>;
+
 function anyRelationship(nodes: readonly XmlNode[]): boolean {
   return nodes.some((n) => el(n) && (n.name === 'Relationship' || anyRelationship(n.children)));
 }
 
+/** Whether [Content_Types].xml is exactly what writeDocx re-emits: only the two package
+ *  Defaults (rels, xml) and the single main-document Override. Any extra Default/Override
+ *  (an image/header/styles content type) or unexpected element would be dropped on save. */
+function isStandardContentTypes(data: Uint8Array): boolean {
+  const rx = readXml(strFromU8(data));
+  if (!rx.ok) return false;
+  const types = rx.nodes.find((n): n is XmlElement => el(n) && n.name === 'Types');
+  if (!types) return false;
+  for (const c of types.children) {
+    if (!el(c)) continue;
+    if (c.name === 'Default') {
+      const ext = (c.attributes['Extension'] ?? '').toLowerCase();
+      if (ext !== 'rels' && ext !== 'xml') return false;
+    } else if (c.name === 'Override') {
+      if (c.attributes['PartName'] !== '/word/document.xml') return false;
+    } else return false;
+  }
+  return true;
+}
+
+/** Whether a relationships part contains ONLY internal relationships targeting
+ *  `word/document.xml` (what the root rels holds and writeDocx re-emits). Any other target
+ *  or an external relationship implies a part/link writeDocx does not reproduce. */
+function relsTargetOnly(data: Uint8Array, target: string): boolean {
+  const rx = readXml(strFromU8(data));
+  if (!rx.ok) return false;
+  let seen = 0;
+  const walk = (nodes: readonly XmlNode[]): boolean =>
+    nodes.every((n) => {
+      if (!el(n)) return true;
+      if (n.name === 'Relationship') {
+        seen += 1;
+        if (n.attributes['TargetMode'] === 'External') return false;
+        return (n.attributes['Target'] ?? '') === target;
+      }
+      return walk(n.children);
+    });
+  return walk(rx.nodes) && seen >= 1;
+}
+
+/** Whether an element has only namespace-declaration attributes (xmlns / xmlns:*). Any
+ *  other attribute (mc:Ignorable, w:conformance, a body attribute, ...) is not reproduced
+ *  by the minimal writer. */
+function onlyNamespaceAttrs(e: XmlElement): boolean {
+  return Object.keys(e.attributes).every((k) => k === 'xmlns' || k.startsWith('xmlns:'));
+}
+
 /**
- * Whether a DOCX is a PLAIN, losslessly-editable document: its package holds only the
- * minimal parts writeDocx reproduces (content-types, root rels, document.xml, and an
- * empty document rels), and its body is nothing but fully-captured paragraphs. Anything
- * writeDocx would DROP or FLATTEN on save — styles/numbering/headers/footers/media/theme,
- * any document relationship, section properties, a table or SDT, or a paragraph carrying a
- * hyperlink/field/tab/break/pPr/unmodeled rPr — makes it non-editable. Such documents open
- * READ-ONLY so an edit-and-save can never silently lose content. Conservative by design:
- * a false negative is only a missed edit; a false positive would drop data.
+ * Whether a DOCX is a PLAIN, losslessly-editable document — one the minimal writer
+ * reproduces EXACTLY. It must hold only the parts writeDocx emits (a standard
+ * [Content_Types].xml, a root rels that targets only word/document.xml, word/document.xml,
+ * and an empty document rels), its w:document/w:body shell must carry only namespace
+ * attributes and no child other than the single w:body, and the body must be nothing but
+ * fully-captured paragraphs. Anything writeDocx would DROP or FLATTEN on save — an extra
+ * part/relationship/content-type, a document/body attribute, a w:background/second body,
+ * section properties, a table or SDT, or a paragraph with a hyperlink/field/tab/break/pPr/
+ * unmodeled rPr — makes it read-only, so an edit-and-save can never silently lose content.
+ * Conservative by design: a false negative is only a missed edit; a false positive drops data.
  */
 export function isPlainEditableDocx(bytes: Uint8Array): boolean {
   const zip = readZip(bytes);
   if (!zip.ok) return false;
   let docXml: Uint8Array | undefined;
-  let relsXml: Uint8Array | undefined;
+  let contentTypes: Uint8Array | undefined;
+  let rootRels: Uint8Array | undefined;
+  let docRels: Uint8Array | undefined;
   for (const [name, data] of zip.entries) {
     const n = name.toLowerCase();
     if (n === '/word/document.xml') docXml = data;
-    else if (n === '/[content_types].xml' || n === '/_rels/.rels') continue;
-    else if (n === '/word/_rels/document.xml.rels') relsXml = data;
+    else if (n === '/[content_types].xml') contentTypes = data;
+    else if (n === '/_rels/.rels') rootRels = data;
+    else if (n === '/word/_rels/document.xml.rels') docRels = data;
     else return false; // any other part (styles/numbering/header/footer/media/...) is lost on save
   }
   if (!docXml) return false;
-  if (relsXml) {
-    const rx = readXml(strFromU8(relsXml));
-    if (!rx.ok || anyRelationship(rx.nodes)) return false; // a rel implies an image/link/header target
+  // A missing content-types / root rels is not lossy — the writer supplies the standard
+  // one. Present but non-standard IS lossy (it would be replaced), so validate it.
+  if (contentTypes && !isStandardContentTypes(contentTypes)) return false;
+  if (rootRels && !relsTargetOnly(rootRels, 'word/document.xml')) return false;
+  if (docRels) {
+    const rx = readXml(strFromU8(docRels));
+    if (!rx.ok || anyRelationship(rx.nodes)) return false; // a doc rel implies an image/link/header
   }
   const xml = readXml(strFromU8(docXml));
   if (!xml.ok) return false;
-  // The shell must be exactly <w:document><w:body>…</w:body></w:document>: writeDocx emits
-  // only that, so a w:background, a second w:body, or any other w:document child would be
-  // dropped on save.
-  const doc = xml.nodes.find((n): n is Extract<XmlNode, { type: 'element' }> => el(n) && n.name === 'w:document');
-  if (!doc) return false;
+  // The shell must be exactly <w:document><w:body>…</w:body></w:document> with only
+  // namespace attributes: writeDocx emits only that.
+  const doc = xml.nodes.find((n): n is XmlElement => el(n) && n.name === 'w:document');
+  if (!doc || !onlyNamespaceAttrs(doc)) return false;
   const docChildren = doc.children.filter(el);
-  if (docChildren.length !== 1 || docChildren[0].name !== 'w:body') return false;
+  if (docChildren.length !== 1 || docChildren[0].name !== 'w:body' || !onlyNamespaceAttrs(docChildren[0])) return false;
   const body = docChildren[0];
   let sawParagraph = false;
   for (const child of body.children) {

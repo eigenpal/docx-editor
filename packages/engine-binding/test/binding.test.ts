@@ -48,29 +48,29 @@ describe('forward mapping (6.3, 6.4)', () => {
     expect(store.currentModel.stories.get(bodyStoryId(store.currentModel))!.blocks[0].id).toBe(p1);
   });
 
-  test('a new paragraph maps to appendParagraph (mints identity)', () => {
+  test('ADDING a paragraph fails closed (structural editing is deferred)', () => {
     const { binding, store, p1 } = seeded();
     const edited = docSchema.node('doc', null, [
       docSchema.node('paragraph', { semId: p1 }, [docSchema.text('Hello')]),
       docSchema.node('paragraph', { semId: null }, [docSchema.text('second')]),
     ]);
-    const { ops } = binding.commitFromDoc(edited);
-    expect(ops[0]).toMatchObject({ op: 'appendParagraph' });
-    const blocks = store.currentModel.stories.get(bodyStoryId(store.currentModel))!.blocks;
-    expect(blocks).toHaveLength(2);
-    expect(paragraphText(store.currentModel, (blocks[1] as ParagraphRecord).id)).toBe('second');
+    const res = binding.commitFromDoc(edited);
+    expect(res.rejected).toBe(true);
+    expect(res.ops).toHaveLength(0);
+    // Store untouched — still one paragraph.
+    expect(store.currentModel.stories.get(bodyStoryId(store.currentModel))!.blocks).toHaveLength(1);
   });
 
-  test('a removed paragraph maps to deleteParagraph', () => {
+  test('REMOVING a paragraph fails closed (structural editing is deferred)', () => {
     const { binding, store, p1 } = seeded();
-    // Add a second paragraph, then produce a doc missing it.
     store.transact(HUMAN, (c) => c.apply({ op: 'appendParagraph', storyId: bodyStoryId(store.currentModel) }));
     const edited = docSchema.node('doc', null, [
       docSchema.node('paragraph', { semId: p1 }, [docSchema.text('Hello')]),
     ]);
-    const { ops } = binding.commitFromDoc(edited);
-    expect(ops.some((o) => o.op === 'deleteParagraph')).toBe(true);
-    expect(store.currentModel.stories.get(bodyStoryId(store.currentModel))!.blocks).toHaveLength(1);
+    const res = binding.commitFromDoc(edited);
+    expect(res.rejected).toBe(true);
+    // Store untouched — still two paragraphs.
+    expect(store.currentModel.stories.get(bodyStoryId(store.currentModel))!.blocks).toHaveLength(2);
   });
 
   test('marks round-trip through projection and forward mapping', () => {

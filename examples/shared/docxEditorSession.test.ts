@@ -126,4 +126,35 @@ describe('the editability gate never marks a lossy document editable', () => {
     });
     expect(openDocxSession(bytes).editable).toBe(false);
   });
+
+  test('a w:document attribute the writer drops (mc:Ignorable) opens read-only', () => {
+    const bytes = zipSync({
+      '[Content_Types].xml': strToU8(
+        '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">' +
+          '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/></Types>',
+      ),
+      'word/document.xml': strToU8(
+        `<w:document xmlns:w="${W}" mc:Ignorable="w14"><w:body><w:p><w:r><w:t>hi</w:t></w:r></w:p></w:body></w:document>`,
+      ),
+    });
+    expect(openDocxSession(bytes).editable).toBe(false);
+  });
+
+  test('an extra content-type override opens read-only (it implies a dropped part)', () => {
+    const withExtraCt = zipSync({
+      '[Content_Types].xml': strToU8(
+        '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">' +
+          '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>' +
+          '<Default Extension="xml" ContentType="application/xml"/>' +
+          '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>' +
+          '<Override PartName="/word/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/></Types>',
+      ),
+      '_rels/.rels': strToU8(
+        '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' +
+          '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/></Relationships>',
+      ),
+      'word/document.xml': strToU8(`<w:document xmlns:w="${W}"><w:body><w:p><w:r><w:t>hi</w:t></w:r></w:p></w:body></w:document>`),
+    });
+    expect(openDocxSession(withExtraCt).editable).toBe(false);
+  });
 });
