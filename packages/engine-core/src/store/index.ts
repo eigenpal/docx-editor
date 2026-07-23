@@ -45,3 +45,10 @@ export {
   serializeAnchorEnvelope,
   restoreAnchorEnvelope,
 } from './anchor-envelope.ts';
+export {
+  type EnvelopeLimits,
+  type EnvelopeRejection,
+  type EnvelopeCheck,
+  DEFAULT_ENVELOPE_LIMITS,
+  validateEnvelope,
+} from './envelope.ts';

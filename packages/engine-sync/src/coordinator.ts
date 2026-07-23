@@ -9,6 +9,7 @@ import {
   DocumentStore,
   bodyStoryId,
   ORIGIN_IDS,
+  validateEnvelope,
   type ModelChange,
   type ReplicationUpdate,
 } from '@docx-editor.dev/engine-core';
@@ -104,7 +105,10 @@ export class ReplicationCoordinator {
    */
   remoteMerge(update: ReplicationUpdate): RemoteMerge {
     this.remotePhase = 'authenticating';
-    if (update.documentId !== this.backend.documentId) {
+    // Validate the envelope BEFORE any backend mutation (task 5.5): protocol,
+    // document identity, hex integrity/truncation, and size bound.
+    const check = validateEnvelope(update, { documentId: this.backend.documentId, protocolVersion: 1 });
+    if (!check.ok) {
       this.remotePhase = 'idle';
       return { ok: false };
     }
