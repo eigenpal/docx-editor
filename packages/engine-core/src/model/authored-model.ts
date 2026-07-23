@@ -305,9 +305,14 @@ export interface BlockRange {
   readonly partName: string; // key into PreservationState.originalParts
   readonly start: number; // inclusive character offset in the original part text
   readonly end: number; // exclusive character offset
-  /** Semantic hash of the block at parse time; a differing current hash = edited,
-   *  so the range must be reserialized rather than reused verbatim (invalidation). */
+  /** NORMALIZED semantic hash of the block at parse time. A differing current hash = the block
+   *  was semantically edited, so it must be reserialized rather than reused verbatim. Normalized
+   *  so a canonical no-op (run re-segmentation) does not look like an edit. */
   readonly baselineHash: string;
+  /** EXACT hash of the block's original source-slice bytes. Used for integrity/rebinding: the
+   *  slice re-read from the (possibly restored) part must be byte-identical to parse time, or the
+   *  snapshot drifted/was tampered — a check the normalized baselineHash cannot make. */
+  readonly sourceHash: string;
 }
 
 /**

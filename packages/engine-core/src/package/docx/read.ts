@@ -12,7 +12,13 @@ import {
   countModelTables, hasNonWWordBinding, countTreeBlocks,
 } from '../wml-parse.ts';
 import { relatedStoryParts, parseStoryParagraphs, parseStyles, parseDocDefaults, parseNumbering } from '../wml-parts.ts';
-import { DOC_PART, hashPreservableBlock, paragraphFullyCaptured, sliceIsFullyCapturedParagraph } from '../wml-preserve.ts';
+import {
+  DOC_PART,
+  hashPreservableBlock,
+  hashSourceSlice,
+  paragraphFullyCaptured,
+  sliceIsFullyCapturedParagraph,
+} from '../wml-preserve.ts';
 import {
   createEmptyModel,
   bodyStoryId,
@@ -106,7 +112,13 @@ export function parseDocx(bytes: Uint8Array, options: ParseOptions = {}): ParseR
       const block = blockFromSpan(docText, span, alloc);
       if (!block) return { ok: false, reason: 'xml-error', detail: 'preservation fragment parse failed' };
       blocks.push(block);
-      blockRanges.set(block.id, { partName: DOC_PART, start: span.start, end: span.end, baselineHash: hashPreservableBlock(block) });
+      blockRanges.set(block.id, {
+        partName: DOC_PART,
+        start: span.start,
+        end: span.end,
+        baselineHash: hashPreservableBlock(block),
+        sourceHash: hashSourceSlice(docText.slice(span.start, span.end)),
+      });
     }
     if (blocks.length !== spans.length || countTreeBlocks(body) !== blocks.length) {
       return { ok: false, reason: 'xml-error', detail: 'preservation scan/tree mismatch' };

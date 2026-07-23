@@ -7,7 +7,9 @@ import { describe, expect, test } from 'bun:test';
 import { zipSync, strToU8, unzipSync, strFromU8 } from 'fflate';
 import { parseDocx, writeDocx, DocumentStore, bodyStoryId, ORIGIN_IDS } from '../src/index.ts';
 import type { ParagraphRecord } from '../src/index.ts';
-import { sliceIsFullyCapturedParagraph } from '../src/package/wml-preserve.ts';
+import { sliceIsFullyCapturedParagraph, DOC_PART } from '../src/package/wml-preserve.ts';
+import { setParagraphRuns } from '../src/model/index.ts';
+import type { PackageModel } from '../src/index.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 function docx(bodyInner: string, extra: Record<string, string> = {}): Uint8Array {
@@ -81,6 +83,32 @@ describe('3.10 preservation baseline hashing normalizes before comparing', () =>
     // A is untouched — its authored two-run segmentation is preserved verbatim.
     expect(xml).toContain('<w:r><w:t>foo</w:t></w:r><w:r><w:t>bar</w:t></w:r>');
     expect(xml).not.toContain('foobar'); // NOT merged/regenerated
+  });
+
+  test('EXACT source-hash integrity rejects a tampered-but-normalization-equivalent slice', () => {
+    // A ('foo'+'bar') and B; parse, then TAMPER the preserved source so A's slice becomes
+    // 'fo'+'obar' (same length, normalizes to the same 'foobar') while keeping the ranges +
+    // baseline (semantic) hash. Editing B then saving must FAIL the integrity check, because the
+    // exact source-hash no longer matches — the normalized baseline hash alone could not detect it.
+    const A = '<w:p><w:r><w:t>foo</w:t></w:r><w:r><w:t>bar</w:t></w:r></w:p>';
+    const B = '<w:p><w:r><w:t>editme</w:t></w:r></w:p>';
+    const parsed = parseDocx(docx(A + B + SECT), { preserveAll: true });
+    if (!parsed.ok) throw new Error('parse failed');
+    const model = parsed.model;
+    const original = model.preservation!.originalParts.get(DOC_PART)!;
+    const tampered = original.replace(
+      '<w:t>foo</w:t></w:r><w:r><w:t>bar</w:t>',
+      '<w:t>fo</w:t></w:r><w:r><w:t>obar</w:t>',
+    );
+    expect(tampered).not.toBe(original);
+    expect(tampered.length).toBe(original.length); // ranges stay valid
+    const parts = new Map(model.preservation!.originalParts).set(DOC_PART, tampered);
+    const bId = model.stories.get(bodyStoryId(model))!.blocks[1].id;
+    const edited: PackageModel = {
+      ...setParagraphRuns(model, bId, [{ text: 'EDITED' }]),
+      preservation: { ...model.preservation!, originalParts: parts },
+    };
+    expect(() => writeDocx(edited)).toThrow(/tampered or drifted|source hash/i);
   });
 });
 

@@ -64,6 +64,12 @@ export function hashPreservableBlock(block: Block): string {
   return stableHash(contentForHash(block));
 }
 
+/** EXACT hash of a block's original source-slice bytes (integrity/rebinding), independent of the
+ *  normalized semantic hash: it detects a drifted/tampered slice that still normalizes equal. */
+export function hashSourceSlice(sliceText: string): string {
+  return stableHash(sliceText);
+}
+
 /** Cell paragraphs of a SIMPLE table (w:tr › w:tc › w:p only) in document order, or
  *  null if any cell holds a nested table / non-paragraph block (edit unsupported). */
 function simpleCellParagraphs(table: TableRecord): ParagraphRecord[] | null {
@@ -217,8 +223,9 @@ function regenerateBlockRegion(
     if (!sliceIsFullyCapturedParagraph(sliceText)) {
       throw new Error('structural edit to a document with a non-paragraph or unmodeled block — fail closed');
     }
-    const reparsed = blockFromText(sliceText, throwaway);
-    if (!reparsed || hashPreservableBlock(reparsed) !== r.baselineHash) {
+    // EXACT integrity: the source slice must be byte-identical to parse time. Using the normalized
+    // baselineHash here would accept a tampered-but-normalization-equivalent slice.
+    if (hashSourceSlice(sliceText) !== r.sourceHash || !blockFromText(sliceText, throwaway)) {
       throw new Error(`preservation range for block ${id} drifted or was tampered — fail closed`);
     }
   }
@@ -259,8 +266,10 @@ export function emitPreservedPart(model: PackageModel, original: string, ranges:
   for (const [id, r] of docRanges) {
     const sliceText = original.slice(r.start, r.end);
     const reparsed = blockFromText(sliceText, throwaway);
-    if (!reparsed || hashPreservableBlock(reparsed) !== r.baselineHash) {
-      throw new Error(`preservation range for block ${id} does not match its baseline hash (tampered or drifted snapshot)`);
+    // EXACT integrity (byte-identical source slice), independent of the normalized edit-detection
+    // hash below — so a tampered slice that normalizes equal is still rejected.
+    if (!reparsed || hashSourceSlice(sliceText) !== r.sourceHash) {
+      throw new Error(`preservation range for block ${id} does not match its source hash (tampered or drifted snapshot)`);
     }
     const block = byId.get(id)!;
     if (hashPreservableBlock(block) === r.baselineHash) continue; // unchanged -> verbatim
