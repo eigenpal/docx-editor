@@ -188,8 +188,62 @@ export interface TableRecord {
   readonly props?: TableProps;
 }
 
-// SDT and other block kinds still land later; the union stays open.
-export type Block = ParagraphRecord | TableRecord;
+/** Content-control lock state (w:sdtPr › w:lock @w:val). */
+export type SdtLock = 'unlocked' | 'sdtLocked' | 'contentLocked' | 'sdtContentLocked';
+
+/**
+ * Coarse structured-document-tag control kind, from the discriminating child of
+ * w:sdtPr (w:richText, w:text, w14:checkbox, w:dropDownList, w:comboBox, w:date,
+ * w:picture, w:docPartObj/w:docPartList, w15:repeatingSection[Item], w:citation,
+ * w:bibliography, w:group, w:equation). 'unknown' when none is recognized. The
+ * exhaustive control payload (checkbox glyphs, list items, date format, data
+ * binding, w14/w15 props) is NOT modeled here — it is preserved verbatim through
+ * the SDT's preservation range; this is the semantic header for query/render.
+ */
+export type SdtControlType =
+  | 'richText'
+  | 'text'
+  | 'checkbox'
+  | 'dropDownList'
+  | 'comboBox'
+  | 'date'
+  | 'picture'
+  | 'docPartObj'
+  | 'docPartList'
+  | 'repeatingSection'
+  | 'repeatingSectionItem'
+  | 'citation'
+  | 'bibliography'
+  | 'group'
+  | 'equation'
+  | 'unknown';
+
+/** Semantic header of a structured document tag (content control), parsed from
+ *  w:sdtPr. Every field is optional because w:sdtPr may omit any of them. */
+export interface SdtProps {
+  readonly docId?: number; // w:id @w:val (the document's own SDT id, not engine identity)
+  readonly tag?: string; // w:tag @w:val (programmatic tag)
+  readonly alias?: string; // w:alias @w:val (friendly title)
+  readonly lock?: SdtLock; // w:lock @w:val
+  readonly controlType?: SdtControlType; // discriminating child of w:sdtPr
+  readonly dataBinding?: boolean; // w:dataBinding present (XML-bound control)
+}
+
+/**
+ * A block-level structured document tag (content control): w:sdt wrapping block
+ * content. Modeled structurally (NOT flattened) so its properties survive and its
+ * nested blocks stay addressable. Byte-faithful re-emit comes from the preservation
+ * range covering the whole w:sdt; edits inside currently fail closed on save.
+ */
+export interface SdtRecord {
+  readonly kind: 'sdt';
+  readonly id: string;
+  readonly props: SdtProps;
+  readonly blocks: readonly Block[]; // nested w:sdtContent blocks (paragraphs, tables, nested SDTs)
+}
+
+// Table and block-SDT land here; the union stays open for future block kinds.
+export type Block = ParagraphRecord | TableRecord | SdtRecord;
 
 export type StoryKind = 'body' | 'header' | 'footer' | 'footnote' | 'endnote' | 'comment' | 'textbox';
 

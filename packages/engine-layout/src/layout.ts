@@ -7,11 +7,24 @@
 import {
   bodyStoryId,
   type PackageModel,
+  type Block,
   type ParagraphRecord,
   type TableRecord,
   type TableRowRecord,
   type TableCellRecord,
 } from '@docx-editor.dev/engine-core';
+
+/** Expand block-level SDTs (content controls) into their nested blocks so downstream
+ *  flow code sees only paragraphs and tables. A content control is transparent to
+ *  layout; its control kind does not change how the content flows. */
+function flattenSdt(blocks: readonly Block[]): (ParagraphRecord | TableRecord)[] {
+  const out: (ParagraphRecord | TableRecord)[] = [];
+  for (const b of blocks) {
+    if (b.kind === 'sdt') out.push(...flattenSdt(b.blocks));
+    else out.push(b);
+  }
+  return out;
+}
 import type { MetricsPort } from './metrics.ts';
 import type { DisplayItem, Page, LayoutResult, TextItem, RectItem } from './display-item.ts';
 
@@ -68,13 +81,24 @@ export function layoutBody(model: PackageModel, opts: LayoutOptions): LayoutResu
   };
 
   const story = model.stories.get(bodyStoryId(model))!;
-  for (const block of story.blocks) {
-    if (block.kind === 'table') {
-      y = layoutTable(block, { margin, contentRight, contentBottom, metrics, builder }, y);
-      x = margin;
-      continue;
+  // A block-level SDT (content control) is transparent to flow layout: its nested blocks
+  // lay out in place, so the loop recurses through SDT content rather than special-casing
+  // each control kind. Tables paginate via layoutTable; everything else is a paragraph.
+  const layoutBlocks = (blocks: readonly Block[]): void => {
+    for (const block of blocks) {
+      if (block.kind === 'table') {
+        y = layoutTable(block, { margin, contentRight, contentBottom, metrics, builder }, y);
+        x = margin;
+        continue;
+      }
+      if (block.kind === 'sdt') {
+        layoutBlocks(block.blocks);
+        continue;
+      }
+      layoutParagraph(block);
     }
-    const p = block as ParagraphRecord;
+  };
+  const layoutParagraph = (p: ParagraphRecord): void => {
     let offset = 0;
     for (const run of p.runs) {
       const bold = run.props?.bold === true;
@@ -108,7 +132,9 @@ export function layoutBody(model: PackageModel, opts: LayoutOptions): LayoutResu
       }
     }
     newLine(); // paragraph break
-  }
+  };
+
+  layoutBlocks(story.blocks);
 
   return { pages: builder.finish(), status: 'converged' };
 }
@@ -226,7 +252,7 @@ function flowCell(cell: TableCellRecord, left: number, right: number, top: numbe
   let y = top;
   let started = false;
   const width = Math.max(right - left, metrics.spaceWidth);
-  for (const block of cell.blocks) {
+  for (const block of flattenSdt(cell.blocks)) {
     if (block.kind === 'table') {
       if (started) y += metrics.lineHeight; // gap before the nested table
       y = emitTable(block, left, right, y, metrics, push);

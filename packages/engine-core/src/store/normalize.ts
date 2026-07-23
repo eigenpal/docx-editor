@@ -13,6 +13,7 @@ import {
   type TableRecord,
   type TableRowRecord,
   type TableCellRecord,
+  type SdtRecord,
 } from '../model/index.ts';
 import { canonicalize } from '../comparators/index.ts';
 
@@ -65,10 +66,18 @@ function normalizeTable(t: TableRecord): TableRecord {
   return changed ? { ...t, rows } : t;
 }
 
-/** Normalize a block by kind. Recurses through tables (rows -> cells -> nested
- *  blocks) so a table never reaches paragraph-only code paths. */
+function normalizeSdt(s: SdtRecord): SdtRecord {
+  const blocks = normalizeBlocks(s.blocks);
+  return blocks === s.blocks ? s : { ...s, blocks };
+}
+
+/** Normalize a block by kind. Recurses through tables (rows -> cells -> nested blocks)
+ *  and content controls (SDT content) so nested content never reaches paragraph-only
+ *  code paths. */
 function normalizeBlock(block: Block): Block {
-  return block.kind === 'table' ? normalizeTable(block) : normalizeParagraph(block);
+  if (block.kind === 'table') return normalizeTable(block);
+  if (block.kind === 'sdt') return normalizeSdt(block);
+  return normalizeParagraph(block);
 }
 
 /** Normalize a block list, returning the SAME array reference when nothing changed. */

@@ -18,6 +18,10 @@ import {
   type StyleRecord,
   type NumberingRecord,
   type TableRecord,
+  type SdtRecord,
+  type SdtProps,
+  type SdtControlType,
+  type SdtLock,
   type TableRowRecord,
   type TableCellRecord,
   type TableProps,
@@ -422,8 +426,88 @@ function parseTable(tbl: Extract<XmlNode, { type: 'element' }>, alloc: IdentityA
   };
 }
 
-/** Build a block from a source substring (a w:p / w:tbl fragment). Returns undefined
- *  for a parse failure or an unexpected root, so callers can fail closed. */
+// The discriminating child of w:sdtPr -> coarse control type. Namespaced names are
+// kept verbatim by the reader (e.g. w14:checkbox, w15:repeatingSection).
+const SDT_CONTROL_TYPES: Record<string, SdtControlType> = {
+  'w:richText': 'richText',
+  'w:text': 'text',
+  'w:checkbox': 'checkbox',
+  'w14:checkbox': 'checkbox',
+  'w:dropDownList': 'dropDownList',
+  'w:comboBox': 'comboBox',
+  'w:date': 'date',
+  'w:picture': 'picture',
+  'w:docPartObj': 'docPartObj',
+  'w:docPartList': 'docPartList',
+  'w15:repeatingSection': 'repeatingSection',
+  'w15:repeatingSectionItem': 'repeatingSectionItem',
+  'w:citation': 'citation',
+  'w:bibliography': 'bibliography',
+  'w:group': 'group',
+  'w:equation': 'equation',
+};
+
+const SDT_LOCKS: ReadonlySet<string> = new Set(['unlocked', 'sdtLocked', 'contentLocked', 'sdtContentLocked']);
+
+/** Parse the semantic header of a content control from w:sdtPr. Exhaustive control
+ *  payload (glyphs, list items, date/binding, w14/w15 props) is NOT modeled — it rides
+ *  the SDT's verbatim preservation range; this captures only id/tag/alias/lock/type. */
+function parseSdtProps(sdtPr: Extract<XmlNode, { type: 'element' }> | undefined): SdtProps {
+  if (!sdtPr) return {};
+  const props: {
+    docId?: number;
+    tag?: string;
+    alias?: string;
+    lock?: SdtLock;
+    controlType?: SdtControlType;
+    dataBinding?: boolean;
+  } = {};
+  const val = (name: string): string | undefined => {
+    const child = childElements(sdtPr, name)[0];
+    return child ? attr(child, 'w:val') : undefined;
+  };
+  const id = intAttr(val('w:id'));
+  if (id !== undefined) props.docId = id;
+  const tag = val('w:tag');
+  if (tag !== undefined) props.tag = tag;
+  const alias = val('w:alias');
+  if (alias !== undefined) props.alias = alias;
+  const lockVal = val('w:lock');
+  if (lockVal !== undefined && SDT_LOCKS.has(lockVal)) props.lock = lockVal as SdtLock;
+  for (const child of sdtPr.children) {
+    if (!el(child)) continue;
+    if (child.name === 'w:dataBinding') props.dataBinding = true;
+    const ct = SDT_CONTROL_TYPES[child.name];
+    if (ct && props.controlType === undefined) props.controlType = ct;
+  }
+  return props;
+}
+
+/** Structural blocks of an SDT's w:sdtContent (paragraphs, tables, nested SDTs),
+ *  descending only the transparent w:customXml grouping wrapper. */
+function parseSdtContentBlocks(content: Extract<XmlNode, { type: 'element' }>, alloc: IdentityAllocator): Block[] {
+  const blocks: Block[] = [];
+  for (const child of content.children) {
+    if (!el(child)) continue;
+    if (child.name === 'w:p') blocks.push(paragraphFromElement(child, alloc));
+    else if (child.name === 'w:tbl') blocks.push(parseTable(child, alloc));
+    else if (child.name === 'w:sdt') blocks.push(parseSdt(child, alloc));
+    else if (child.name === 'w:customXml') blocks.push(...parseSdtContentBlocks(child, alloc));
+  }
+  return blocks;
+}
+
+/** Parse a block-level structured document tag (content control) structurally: its
+ *  w:sdtPr header plus the nested w:sdtContent blocks. Never flattens. */
+function parseSdt(sdt: Extract<XmlNode, { type: 'element' }>, alloc: IdentityAllocator): SdtRecord {
+  const props = parseSdtProps(childElements(sdt, 'w:sdtPr')[0]);
+  const content = childElements(sdt, 'w:sdtContent')[0];
+  const blocks = content ? parseSdtContentBlocks(content, alloc) : [];
+  return { kind: 'sdt', id: alloc.allocate('control'), props, blocks };
+}
+
+/** Build a block from a source substring (a w:p / w:tbl / block-level w:sdt fragment).
+ *  Returns undefined for a parse failure or an unexpected root, so callers fail closed. */
 export function blockFromText(text: string, alloc: IdentityAllocator): Block | undefined {
   const fx = readXml(text);
   if (!fx.ok) return undefined;
@@ -431,6 +515,7 @@ export function blockFromText(text: string, alloc: IdentityAllocator): Block | u
   if (!rootEl) return undefined;
   if (rootEl.name === 'w:tbl') return parseTable(rootEl, alloc);
   if (rootEl.name === 'w:p') return paragraphFromElement(rootEl, alloc);
+  if (rootEl.name === 'w:sdt') return parseSdt(rootEl, alloc);
   return undefined;
 }
 
@@ -475,9 +560,12 @@ export function deepCountTables(container: Extract<XmlNode, { type: 'element' }>
 export function countModelTables(blocks: readonly Block[]): number {
   let n = 0;
   for (const b of blocks) {
-    if (b.kind !== 'table') continue;
-    n += 1;
-    for (const row of b.rows) for (const cell of row.cells) n += countModelTables(cell.blocks);
+    if (b.kind === 'table') {
+      n += 1;
+      for (const row of b.rows) for (const cell of row.cells) n += countModelTables(cell.blocks);
+    } else if (b.kind === 'sdt') {
+      n += countModelTables(b.blocks); // a table nested inside a content control must still count
+    }
   }
   return n;
 }
@@ -498,21 +586,31 @@ export function hasNonWWordBinding(nodes: readonly XmlNode[]): boolean {
   return false;
 }
 
-/** Count top-level w:p/w:tbl blocks in the PARSED body tree, descending into
- *  block-level w:sdt exactly as the span scanner does. A disagreement between this
- *  count and the scanner's span count means the scanner mis-owns content, so the
- *  parse is rejected. */
+/** Count top-level blocks in the PARSED body tree exactly as the span scanner counts
+ *  spans: w:p, w:tbl, and a block-level w:sdt each count as ONE (the SDT is NOT
+ *  descended — its content is one structural block); w:customXml is transparent and is
+ *  descended. A disagreement between this count and the scanner's span count means the
+ *  scanner mis-owns content, so the parse is rejected. */
 export function countTreeBlocks(container: Extract<XmlNode, { type: 'element' }>): number {
   let n = 0;
   for (const child of container.children) {
     if (!el(child)) continue;
-    if (child.name === 'w:p' || child.name === 'w:tbl') n += 1;
-    else if (child.name === 'w:sdt') {
-      const content = childElements(child, 'w:sdtContent')[0];
-      if (content) n += countTreeBlocks(content);
-    } else if (child.name === 'w:customXml') {
+    if (child.name === 'w:p' || child.name === 'w:tbl' || child.name === 'w:sdt') n += 1;
+    else if (child.name === 'w:customXml') {
       n += countTreeBlocks(child);
     }
   }
   return n;
+}
+
+/** Whether the parsed body tree contains a block-level w:sdt (content control) at top
+ *  level, descending only the transparent w:customXml wrapper. Used to force the
+ *  structural-preservation path so a content control is never flattened away. */
+export function treeHasBlockSdt(container: Extract<XmlNode, { type: 'element' }>): boolean {
+  for (const child of container.children) {
+    if (!el(child)) continue;
+    if (child.name === 'w:sdt') return true;
+    if (child.name === 'w:customXml' && treeHasBlockSdt(child)) return true;
+  }
+  return false;
 }

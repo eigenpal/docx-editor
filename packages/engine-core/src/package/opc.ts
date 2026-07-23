@@ -12,8 +12,8 @@ import { blockXml } from './wml-serialize.ts';
 import {
   W_NS, collectParagraphElements, relatedStoryParts, parseStoryParagraphs,
   parseStyles, parseNumbering, paragraphFromElement, blockFromSpan,
-  treeHasTable, deepHasTable, deepCountTables, countModelTables, hasNonWWordBinding,
-  countTreeBlocks,
+  treeHasTable, treeHasBlockSdt, deepHasTable, deepCountTables, countModelTables,
+  hasNonWWordBinding, countTreeBlocks,
 } from './wml-parse.ts';
 import { DOC_PART, hashPreservableBlock, emitPreservedPart } from './wml-preserve.ts';
 import {
@@ -71,7 +71,12 @@ export function parseDocx(bytes: Uint8Array): ParseResult {
     if (!(e instanceof ScanError)) throw e;
     spans = null;
   }
-  const wantsPreservation = (body ? treeHasTable(body) : false) || (spans?.some((s) => s.name === 'w:tbl') ?? false);
+  // Tables AND block-level content controls (w:sdt) activate the structural span-driven
+  // preservation path so neither is flattened; everything else takes the flat paragraph
+  // parse. Verbatim re-emit keeps an unedited document byte-identical.
+  const wantsPreservation =
+    (body ? treeHasTable(body) || treeHasBlockSdt(body) : false) ||
+    (spans?.some((s) => s.name === 'w:tbl' || s.name === 'w:sdt') ?? false);
   // Safety net: a table exists somewhere but the block traversals (which descend only
   // through known wrappers w:sdt/w:customXml) did not reach it — fail closed rather
   // than silently drop it on the flat path.
@@ -81,20 +86,21 @@ export function parseDocx(bytes: Uint8Array): ParseResult {
   const blocks: Block[] = [];
   let preservation: PreservationState | undefined;
   if (wantsPreservation) {
-    // A table document MUST scan cleanly and its spans MUST match the parsed tree's
-    // top-level blocks exactly, or ranges could mis-own content (guards decoy tags in
-    // comments, malformed nesting, and the reader's non-strict well-formedness). Any
-    // failure rejects the document rather than falling back to a lossy flat parse.
-    if (!spans || !body) return { ok: false, reason: 'xml-error', detail: 'table document failed strict span scan' };
+    // A preserved (table / content-control) document MUST scan cleanly and its spans
+    // MUST match the parsed tree's top-level blocks exactly, or ranges could mis-own
+    // content (guards decoy tags in comments, malformed nesting, and the reader's
+    // non-strict well-formedness). Any failure rejects the document rather than falling
+    // back to a lossy flat parse.
+    if (!spans || !body) return { ok: false, reason: 'xml-error', detail: 'preserved document failed strict span scan' };
     const blockRanges = new Map<string, BlockRange>();
     for (const span of spans) {
       const block = blockFromSpan(docText, span, alloc);
-      if (!block) return { ok: false, reason: 'xml-error', detail: 'table preservation fragment parse failed' };
+      if (!block) return { ok: false, reason: 'xml-error', detail: 'preservation fragment parse failed' };
       blocks.push(block);
       blockRanges.set(block.id, { partName: DOC_PART, start: span.start, end: span.end, baselineHash: hashPreservableBlock(block) });
     }
     if (blocks.length !== spans.length || countTreeBlocks(body) !== blocks.length) {
-      return { ok: false, reason: 'xml-error', detail: 'table preservation scan/tree mismatch' };
+      return { ok: false, reason: 'xml-error', detail: 'preservation scan/tree mismatch' };
     }
     // Every source table MUST be projected into the model — even when one reachable
     // table already activated preservation, a second table hidden in an unsupported

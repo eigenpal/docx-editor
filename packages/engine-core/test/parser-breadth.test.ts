@@ -5,7 +5,7 @@
 import { describe, expect, test } from 'bun:test';
 import { zipSync, strToU8 } from 'fflate';
 import { parseDocx } from '../src/index.ts';
-import { bodyStoryId, type ParagraphRecord, type TableRecord } from '../src/index.ts';
+import { bodyStoryId, type ParagraphRecord, type TableRecord, type SdtRecord } from '../src/index.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 
@@ -60,7 +60,22 @@ describe('table + block-SDT text recovery', () => {
     expect(cell(0)).toBe('cell1');
     expect(cell(1)).toBe('cell2');
   });
-  test('block SDT content is recovered (table-free doc still flattens SDT)', () => {
-    expect(texts(docx('<w:sdt><w:sdtContent><w:p><w:r><w:t>sdttext</w:t></w:r></w:p></w:sdtContent></w:sdt>'))).toEqual(['sdttext']);
+  test('a block SDT becomes ONE structural block with recursively addressable content', () => {
+    const r = parseDocx(
+      docx(
+        '<w:sdt><w:sdtPr><w:tag w:val="t1"/><w:richText/></w:sdtPr>' +
+          '<w:sdtContent><w:p><w:r><w:t>sdttext</w:t></w:r></w:p></w:sdtContent></w:sdt>',
+      ),
+    );
+    if (!r.ok) throw new Error(`parse failed: ${r.reason}`);
+    const blocks = r.model.stories.get(bodyStoryId(r.model))!.blocks;
+    // The SDT is exactly ONE block (not flattened into its inner paragraph).
+    expect(blocks.map((b) => b.kind)).toEqual(['sdt']);
+    const sdt = blocks[0] as SdtRecord;
+    expect(sdt.props.tag).toBe('t1');
+    expect(sdt.props.controlType).toBe('richText');
+    // Nested content stays addressable.
+    const inner = sdt.blocks[0] as ParagraphRecord;
+    expect(inner.runs.map((run) => run.text).join('')).toBe('sdttext');
   });
 });

@@ -118,13 +118,15 @@ function findOpen(s: string, name: string, from: number, before: number): number
 }
 
 export interface BlockSpan {
-  readonly name: 'w:p' | 'w:tbl';
+  readonly name: 'w:p' | 'w:tbl' | 'w:sdt';
   readonly start: number;
   readonly end: number;
 }
 
-/** Emit spans for each w:p / w:tbl directly under [start,end), descending into
- *  block-level w:sdt > w:sdtContent and w:customXml so wrapped blocks are still found. */
+/** Emit spans for each top-level block under [start,end): w:p, w:tbl, and a block-level
+ *  w:sdt (content control) emitted as ONE span covering the whole w:sdt (its nested
+ *  content is parsed structurally, not flattened). w:customXml is a transparent grouping
+ *  wrapper and is still descended so wrapped blocks are found. */
 function walkBlockSpans(s: string, start: number, end: number, out: BlockSpan[]): void {
   let i = start;
   while (i < end) {
@@ -157,16 +159,8 @@ function walkBlockSpans(s: string, start: number, end: number, out: BlockSpan[])
     }
     const name = tagNameAt(s, lt);
     const span = elementSpanEnd(s, lt);
-    if (name === 'w:p' || name === 'w:tbl') {
+    if (name === 'w:p' || name === 'w:tbl' || name === 'w:sdt') {
       out.push({ name, start: lt, end: Math.min(span, end) });
-    } else if (name === 'w:sdt') {
-      const cOpen = findOpen(s, 'w:sdtContent', lt, span);
-      if (cOpen >= 0) {
-        const inner = openTagEnd(s, cOpen).end;
-        const cEnd = elementSpanEnd(s, cOpen);
-        const closeAt = s.lastIndexOf('</w:sdtContent', cEnd);
-        walkBlockSpans(s, inner, closeAt < 0 ? cEnd : closeAt, out);
-      }
     } else if (name === 'w:customXml') {
       const inner = openTagEnd(s, lt).end;
       const closeAt = s.lastIndexOf('</w:customXml', span);
@@ -176,7 +170,8 @@ function walkBlockSpans(s: string, start: number, end: number, out: BlockSpan[])
   }
 }
 
-/** Ordered spans of every top-level body block (w:p / w:tbl) in document.xml text. */
+/** Ordered spans of every top-level body block (w:p / w:tbl / block-level w:sdt) in
+ *  document.xml text. */
 export function scanBodyBlockSpans(docText: string): BlockSpan[] {
   const bodyLt = findOpen(docText, 'w:body', 0, docText.length);
   if (bodyLt < 0) return [];

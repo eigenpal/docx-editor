@@ -19,10 +19,11 @@ export function paragraphXml(p: ParagraphRecord): string {
   return `<w:p>${p.runs.map(runXml).join('')}</w:p>`;
 }
 
-/** Regenerate one block's XML. Paragraphs are supported; a TABLE cannot be regenerated
- *  yet, so an edited table/cell fails closed (its verbatim range is only reused while
- *  unchanged). */
+/** Regenerate one block's XML. Only paragraphs are regenerated; a TABLE or block-level
+ *  SDT (content control) cannot be regenerated faithfully from the coarse model (grid,
+ *  borders, w14/w15 control payload would be lost), so it fails closed — its verbatim
+ *  preservation range is the only byte-faithful source and is reused while unchanged. */
 export function blockXml(block: Block): string {
   if (block.kind === 'paragraph') return paragraphXml(block);
-  throw new Error('table/cell editing must fail closed: table regeneration is not implemented (fidelity slice 1)');
+  throw new Error('table/SDT regeneration is not implemented: byte-faithful output requires the verbatim preservation range');
 }

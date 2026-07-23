@@ -29,6 +29,9 @@ function contentForHash(block: Block): unknown {
   if (block.kind === 'paragraph') {
     return { kind: 'paragraph', runs: block.runs, ...(block.props ? { props: block.props } : {}) };
   }
+  if (block.kind === 'sdt') {
+    return { kind: 'sdt', props: block.props, blocks: block.blocks.map(contentForHash) };
+  }
   return {
     kind: 'table',
     ...(block.grid ? { grid: block.grid } : {}),
