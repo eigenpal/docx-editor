@@ -53,6 +53,29 @@ export function editorSmoke(adapter: string, baseUrl: string): void {
       expect(await page.evaluate(() => window.__docxEditorDriver!.getBodyText())).toContain('X');
     });
 
+    test('undo and redo drive the canonical store through a structural split', async ({ page }) => {
+      await page.goto(`${baseUrl}/?edit=1`);
+      await expect(page.getByTestId('editor-status')).toHaveText('Editable (paragraphs)');
+      const before = await page.evaluate(() => window.__docxEditorDriver!.getBodyText());
+      const count = () => page.evaluate(() => window.__docxEditorDriver!.getBodyText().split('\n').length);
+      const beforeCount = before.split('\n').length;
+
+      // Split the first paragraph (a structural edit that mints a new block id).
+      await page.getByTestId('editor-host').locator('p').first().click();
+      await page.keyboard.press('Home');
+      await page.keyboard.press('Enter');
+      expect(await count()).toBe(beforeCount + 1);
+
+      // Undo reverts the split ON THE CANONICAL MODEL (the view's own history could not — it
+      // would restore a stale id the mapper rejects).
+      await page.keyboard.press('ControlOrMeta+z');
+      expect(await page.evaluate(() => window.__docxEditorDriver!.getBodyText())).toBe(before);
+
+      // Redo re-applies it.
+      await page.keyboard.press('ControlOrMeta+Shift+z');
+      expect(await count()).toBe(beforeCount + 1);
+    });
+
     test('a refused edit snaps back without corrupting the model, and the editor keeps working', async ({ page }) => {
       await page.goto(`${baseUrl}/?edit=1`);
       await expect(page.getByTestId('editor-status')).toHaveText('Editable (paragraphs)');

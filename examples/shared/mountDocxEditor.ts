@@ -16,7 +16,6 @@ import { EditorView } from 'prosemirror-view';
 import { EditorState } from 'prosemirror-state';
 import { keymap } from 'prosemirror-keymap';
 import { baseKeymap } from 'prosemirror-commands';
-import { history, undo, redo } from 'prosemirror-history';
 import { captureSelection, resolveSelection } from '@docx-editor.dev/engine-binding';
 import { openDocxSession, type DocxEditorSession } from './docxEditorSession.ts';
 import { renderDocxPreview, renderModelPreview } from './enginePreview.ts';
@@ -53,12 +52,12 @@ export function mountDocxEditor(container: HTMLElement, bytes: Uint8Array): Moun
     return { session, driver, destroy: () => container.replaceChildren() };
   }
 
-  // Build once so the initial state and the reject snap-back share the same plugins
-  // (history + keymaps must survive a rejected edit). Enter (paragraph split) is handled by
-  // the base keymap; the forward mapper turns it into one splitParagraph DocOp.
+  // Undo/redo drive the CANONICAL store, not ProseMirror's view history: a structural edit
+  // (split/join/insert) deletes/mints block ids, so replaying the view's own history would
+  // restore stale ids the mapper rejects. Instead Mod-z/Mod-y rewind the store and reproject.
+  // Enter (paragraph split) is handled by the base keymap; the mapper turns it into a DocOp.
   const plugins = [
-    history(),
-    keymap({ 'Mod-z': undo, 'Mod-y': redo, 'Shift-Mod-z': redo }),
+    keymap({ 'Mod-z': () => doUndo(), 'Mod-y': () => doRedo(), 'Shift-Mod-z': () => doRedo() }),
     keymap(baseKeymap),
   ];
   // Two panes: the ProseMirror EDIT surface (left) and the paginated DISPLAY the canonical
@@ -135,26 +134,49 @@ export function mountDocxEditor(container: HTMLElement, bytes: Uint8Array): Moun
   function commitEdit() {
     const state = view.state;
     const res = session.applyPmDoc(state.doc);
-    if (res.rejected) {
-      reconciling = true;
-      // Capture the caret as an authored anchor (paragraph semId + offset) BEFORE reverting,
-      // then restore it against the reverted doc so a refused edit doesn't also jump the cursor
-      // to the top. A deleted/new paragraph collapses to a surviving boundary.
-      const anchor = captureSelection(state);
-      const canonical = session.projectDoc();
-      const revert = state.tr.replaceWith(0, state.doc.content.size, canonical.content).setMeta('addToHistory', false);
-      try {
-        revert.setSelection(resolveSelection(anchor, revert.doc));
-      } catch {
-        // Fall back to the default mapped selection if the anchor cannot be resolved.
-      }
-      view.dispatch(revert);
-      reconciling = false;
-    }
+    // A refused edit snaps the view back to the canonical projection so it can never diverge.
+    if (res.rejected) reprojectFromModel();
     if (res.committed) {
       syncSemIds();
       repaintPaged();
     }
+  }
+
+  // Replace the view's content with the current canonical projection, restoring the caret as an
+  // authored anchor (paragraph semId + offset) so a snap-back or an undo/redo does not jump the
+  // cursor to the top. A deleted/new paragraph collapses to a surviving boundary. History-
+  // excluded and reentrancy-guarded so it never re-triggers a commit.
+  function reprojectFromModel() {
+    reconciling = true;
+    const anchor = captureSelection(view.state);
+    const canonical = session.projectDoc();
+    const tr = view.state.tr
+      .replaceWith(0, view.state.doc.content.size, canonical.content)
+      .setMeta('addToHistory', false);
+    try {
+      tr.setSelection(resolveSelection(anchor, tr.doc));
+    } catch {
+      // Fall back to the default mapped selection if the anchor cannot be resolved.
+    }
+    view.dispatch(tr);
+    reconciling = false;
+  }
+
+  // Mod-z / Mod-y rewind the CANONICAL store and reproject; always consume the key so the
+  // browser never runs its own contentEditable undo against our managed document.
+  function doUndo(): boolean {
+    if (session.undo()) {
+      reprojectFromModel();
+      repaintPaged();
+    }
+    return true;
+  }
+  function doRedo(): boolean {
+    if (session.redo()) {
+      reprojectFromModel();
+      repaintPaged();
+    }
+    return true;
   }
 
   // Re-tag the view's projected paragraphs with the canonical block ids by position. After a

@@ -45,6 +45,12 @@ export interface DocxEditorSession {
   bodyBlockIds(): string[];
   /** The current canonical model — the source of truth the paginated display repaints from. */
   currentModel(): PackageModel;
+  /** Undo the last committed edit on the CANONICAL store; returns whether the model changed
+   *  (so the caller can reproject the view). Structural edits (split/join/insert) undo
+   *  correctly here — the view's own history cannot, because it would restore stale ids. */
+  undo(): boolean;
+  /** Redo the last undone edit on the canonical store; returns whether the model changed. */
+  redo(): boolean;
   /** Serialize the canonical model back to DOCX bytes. */
   save(): Uint8Array;
 }
@@ -94,6 +100,8 @@ export function openDocxSession(bytes: Uint8Array): DocxEditorSession {
       const m = store.currentModel;
       return m.stories.get(bodyStoryId(m))!.blocks.map((b) => b.id);
     },
+    undo: () => (editable && store.canUndo() ? store.undo().ok : false),
+    redo: () => (editable && store.canRedo() ? store.redoLast().ok : false),
     currentModel: () => store.currentModel,
     // Only an editable document re-serializes (verbatim package + patched paragraphs). A
     // read-only document is returned EXACTLY as opened — writeDocx could throw on a
