@@ -145,6 +145,76 @@ export class YjsBackend implements ReplicatedStoreBackend {
     }, this.localOrigin);
   }
 
+  // --- binding support (task 5.3 / ADR-S10) ---
+
+  /**
+   * Subscribe to Y.Doc updates from ANY source, including a provider writing the
+   * doc directly. The callback receives the Yjs transaction origin so the caller
+   * can ignore this backend's own local-origin echoes. Returns an unsubscribe.
+   */
+  onUpdate(cb: (origin: unknown) => void): () => void {
+    const handler = (_update: Uint8Array, origin: unknown) => cb(origin);
+    this.doc.on('update', handler);
+    return () => this.doc.off('update', handler);
+  }
+
+  /** Whether a Y.Doc transaction origin is this backend's local-edit origin. */
+  isLocalDocOrigin(origin: unknown): boolean {
+    return origin === this.localOrigin;
+  }
+
+  /**
+   * Reconcile the Yjs adapter to a canonical model, under the LOCAL origin (so a
+   * binding ignores the resulting echo). Thin baseline: it upserts paragraph blocks
+   * (append new, replace changed runs), rewrites each story's block order to match
+   * the model (handling insert/move), and drops orphaned blocks. NOT yet mirrored:
+   * non-paragraph blocks (tables/SDT), story deletion, and fine-grained text CRDT —
+   * those arrive with the fidelity work and full collaborative editing (deferred).
+   */
+  syncFromModel(model: PackageModel): void {
+    this.doc.transact(() => {
+      const blocksMap = this.doc.getMap('blocks') as Y.Map<YBlock>;
+      for (const story of model.stories.values()) {
+        if (!this.storyKind().has(story.id)) {
+          this.storyKind().set(story.id, story.kind);
+          this.storyOrder().push([story.id]);
+        }
+        let order = this.blockOrder().get(story.id) as Y.Array<string> | undefined;
+        if (!order) {
+          order = new Y.Array<string>();
+          this.blockOrder().set(story.id, order);
+        }
+        const bySem = new Map<string, string>(); // semId -> creationId
+        for (const cid of order.toArray()) {
+          const yb = blocksMap.get(cid);
+          if (yb) bySem.set(yb.get('semId') as string, cid);
+        }
+        const desired: string[] = [];
+        for (const block of story.blocks) {
+          if (block.kind !== 'paragraph') continue; // tables/SDT deferred
+          const p = block as ParagraphRecord;
+          let cid = bySem.get(p.id);
+          if (cid) {
+            const yb = blocksMap.get(cid)!;
+            const runs = yb.get('runs') as Y.Array<Y.Map<unknown>>;
+            if (!this.runsMatch(runs, p.runs)) yb.set('runs', this.buildRuns(p.runs));
+          } else {
+            cid = this.putBlock(p);
+          }
+          desired.push(cid);
+        }
+        const prev = order.toArray();
+        const sameOrder = prev.length === desired.length && prev.every((c, i) => c === desired[i]);
+        if (!sameOrder) {
+          if (prev.length) order.delete(0, prev.length);
+          if (desired.length) order.insert(0, desired);
+        }
+        const keep = new Set(desired);
+        for (const cid of prev) if (!keep.has(cid)) blocksMap.delete(cid);
+      }
+    }, this.localOrigin);
+  }
+
   // --- backend contract ---
 
   snapshot(): Snapshot {
@@ -232,24 +302,48 @@ export class YjsBackend implements ReplicatedStoreBackend {
   }
 
   private appendBlockInternal(storyId: string, block: ParagraphRecord): void {
-    const creationId = this.nextCreationId();
-    const yblock = new Y.Map<unknown>();
-    yblock.set('semId', block.id);
-    const runs = new Y.Array<Y.Map<unknown>>();
-    for (const r of block.runs) {
-      const yr = new Y.Map<unknown>();
-      yr.set('t', r.text);
-      if (r.props) yr.set('p', JSON.stringify(r.props));
-      runs.push([yr]);
-    }
-    yblock.set('runs', runs);
-    (this.doc.getMap('blocks') as Y.Map<YBlock>).set(creationId, yblock);
+    const creationId = this.putBlock(block);
     let order = this.blockOrder().get(storyId);
     if (!order) {
       order = new Y.Array<string>();
       this.blockOrder().set(storyId, order);
     }
     order.push([creationId]);
+  }
+
+  /** Create a Yjs block record (semId + runs) under a fresh creation id and store
+   *  it in the `blocks` map WITHOUT touching any story order. Returns the id. */
+  private putBlock(block: ParagraphRecord): string {
+    const creationId = this.nextCreationId();
+    const yblock = new Y.Map<unknown>();
+    yblock.set('semId', block.id);
+    yblock.set('runs', this.buildRuns(block.runs));
+    (this.doc.getMap('blocks') as Y.Map<YBlock>).set(creationId, yblock);
+    return creationId;
+  }
+
+  private buildRuns(runs: readonly RunRecord[]): Y.Array<Y.Map<unknown>> {
+    const arr = new Y.Array<Y.Map<unknown>>();
+    for (const r of runs) {
+      const yr = new Y.Map<unknown>();
+      yr.set('t', r.text);
+      if (r.props) yr.set('p', JSON.stringify(r.props));
+      arr.push([yr]);
+    }
+    return arr;
+  }
+
+  /** True if a run array already equals the desired runs (skip a churn write). */
+  private runsMatch(arr: Y.Array<Y.Map<unknown>>, runs: readonly RunRecord[]): boolean {
+    if (arr.length !== runs.length) return false;
+    for (let i = 0; i < runs.length; i++) {
+      const yr = arr.get(i);
+      if ((yr.get('t') as string) !== runs[i].text) return false;
+      const p = yr.get('p') as string | undefined;
+      const want = runs[i].props ? JSON.stringify(runs[i].props) : undefined;
+      if (p !== want) return false;
+    }
+    return true;
   }
 
   private findBlockBySemId(semId: string): YBlock | undefined {

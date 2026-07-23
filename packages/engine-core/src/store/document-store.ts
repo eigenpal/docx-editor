@@ -195,10 +195,12 @@ export class DocumentStore {
   }
 
   /**
-   * Coordinator-only (task 5.3): publish an authored model DERIVED from a backend
-   * merge as one monotonic revision + one ModelChange. The merge already happened
-   * in the backend; this never re-runs DocOp validation. A backend MUST NOT call
-   * this or `notify` itself — only the ReplicationCoordinator may.
+   * Binding-only (task 5.3 / ADR-S10): publish an authored model DERIVED from a
+   * backend merge as one monotonic revision + one ModelChange. The merge already
+   * happened in the backend; this never re-runs DocOp validation. A backend MUST
+   * NOT mutate canonical state or call `notify` itself — canonical state changes
+   * only through store entries, and the optional `YjsBinding` is the sole caller of
+   * this on the replication path.
    */
   publishDerived(
     model: PackageModel,

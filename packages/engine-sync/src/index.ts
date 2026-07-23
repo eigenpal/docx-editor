@@ -1,6 +1,8 @@
 // @docx-editor.dev/engine-sync
 //
-// Synchronization: local + Yjs ReplicatedStoreBackend, the sole ReplicationCoordinator, relative-position anchors, snapshots, persistence, and awareness. Owns all Yjs types.
+// OPTIONAL synchronization: local + Yjs ReplicatedStoreBackend and a thin YjsBinding
+// over an externally-owned Y.Doc (ADR-S10; supersedes the removed ReplicationCoordinator).
+// Owns all Yjs types; engine-core runs fully without this package.
 //
 // Production placement is fixed by document-engine task 1.4. Responsibilities and
 // dependency rules: docs/architecture/production-engine-packages.md. This is a
@@ -14,12 +16,5 @@ export const ENGINE_SYNC_PACKAGE = '@docx-editor.dev/engine-sync' as const;
 export type { ReplicatedStoreBackend } from './backend.ts';
 export { LocalBackend, SNAPSHOT_SCHEMA_VERSION, NORMALIZATION_VERSION } from './local-backend.ts';
 export { YjsBackend, type YjsBackendOptions } from './yjs-backend.ts';
-export {
-  ReplicationCoordinator,
-  type LocalPhase,
-  type RemotePhase,
-  type LocalCommit,
-  type RemoteMerge,
-} from './coordinator.ts';
-export { OfflineQueue } from './offline-queue.ts';
+export { YjsBinding } from './binding.ts';
 export { type Role, type Presence, PresenceRegistry, canSubmitUpdate, canExport } from './awareness.ts';
