@@ -50,6 +50,20 @@ function pmTextLength(runs: readonly RunRecord[]): number {
   return runs.reduce((n, r) => n + r.text.length, 0);
 }
 
+/** The concatenated text of a run list. */
+function runsText(runs: readonly RunRecord[]): string {
+  return runs.map((r) => r.text).join('');
+}
+
+/** Whether the boundary between two text halves falls INSIDE a UTF-16 surrogate pair (the
+ *  first half ends on a high surrogate and the second begins on the matching low surrogate). */
+function splitsSurrogatePair(head: string, tail: string): boolean {
+  if (head.length === 0 || tail.length === 0) return false;
+  const hi = head.charCodeAt(head.length - 1);
+  const lo = tail.charCodeAt(0);
+  return hi >= 0xd800 && hi <= 0xdbff && lo >= 0xdc00 && lo <= 0xdfff;
+}
+
 /** Whether a PM node corresponds to a canonical block by KIND and semId — NOT by content,
  *  so an in-place text edit still "matches" its block (same identity, different runs). */
 function nodeMatchesBlock(node: PMNode | undefined, block: Block | undefined): boolean {
@@ -185,8 +199,15 @@ export class EditorBinding {
     // (text AND formatting) must equal X's runs. A split that also changes text or marks is a
     // combined edit and fails closed, so no run change is ever silently dropped.
     const headRuns = paragraphNodeToRuns(head);
-    if (!runsEqual([...headRuns, ...paragraphNodeToRuns(tail)], blockRuns(x))) {
+    const tailRuns = paragraphNodeToRuns(tail);
+    if (!runsEqual([...headRuns, ...tailRuns], blockRuns(x))) {
       throw new BindingRejection('split combined with an edit is not supported');
+    }
+    // The offset is a UTF-16 code-unit index (matching the store's slice). If it falls BETWEEN
+    // a surrogate pair, each half keeps a lone surrogate that becomes U+FFFD on UTF-8 save —
+    // corrupting the text. Reject: an astral character must stay whole in one half.
+    if (splitsSurrogatePair(runsText(headRuns), runsText(tailRuns))) {
+      throw new BindingRejection('split inside a surrogate pair would corrupt text');
     }
     return [{ op: 'splitParagraph', paragraphId: x.id, offset: pmTextLength(headRuns) }];
   }

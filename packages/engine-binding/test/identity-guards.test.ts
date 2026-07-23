@@ -106,6 +106,31 @@ describe('forward-mapper identity guards', () => {
     expect(store.currentRevision).toBe(0);
   });
 
+  test('a split BETWEEN a surrogate pair fails closed (would corrupt the astral char)', () => {
+    // Model paragraph "😀X" (😀 = 😀). A split whose boundary lands between the
+    // surrogates recombines under normalization (so the clean-split check passes) but the store
+    // would slice at code-unit 1, leaving lone surrogates that become U+FFFD on UTF-8 save.
+    const bytes = zipSync({
+      '[Content_Types].xml': strToU8(
+        '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">' +
+          '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/></Types>',
+      ),
+      'word/document.xml': strToU8(`<w:document xmlns:w="${W}"><w:body><w:p><w:r><w:t>😀X</w:t></w:r></w:p></w:body></w:document>`),
+    });
+    const r = parseDocx(bytes);
+    if (!r.ok) throw new Error(r.reason);
+    const store = new DocumentStore(r.model);
+    const binding = new EditorBinding(store);
+    const id = r.model.stories.get(bodyStoryId(r.model))!.blocks[0].id;
+    const doc = docSchema.node('doc', null, [para(id, '\uD83D'), para(id, '\uDE00X')]);
+    const res = binding.commitFromDoc(doc);
+    expect(res.rejected).toBe(true);
+    expect(store.currentRevision).toBe(0);
+    // A split AFTER the whole emoji (offset 2) is fine — the astral char stays whole.
+    const ok = docSchema.node('doc', null, [para(id, '😀'), para(id, 'X')]);
+    expect(binding.commitFromDoc(ok).ops).toEqual([{ op: 'splitParagraph', paragraphId: id, offset: 2 }]);
+  });
+
   test('splitting at the START of a paragraph (empty head, copied id) commits cleanly', () => {
     const { store, binding, ids } = twoParagraphBinding(); // ids[1]='two'
     // Enter at the start of the 2nd paragraph: [one, ''(two-id), 'two'(two-id)] — a valid split.
