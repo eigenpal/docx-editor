@@ -1,18 +1,103 @@
-> **Delivery priority (revised — ADR-S10): fidelity-first.** The product differentiator
-> is user-visible DOCX fidelity, so the active work order is vertical import→model→
-> layout→render→export slices, verified against real `e2e/fixtures/*.docx` + browser
-> screenshots, NOT the collaboration spine. Elevated to the front: **2.7** (structural
-> tables/SDT parse — stop flattening into paragraphs), **§3** preservation capsules
-> (lossless unknown OOXML), **§8** layout/table-layout/faithful render, and
-> export/reopen. A fidelity task is DONE only when structure round-trips and renders —
-> never when content is merely flattened or lives in standalone helpers. Collaboration
-> (§5.3–5.9, §10) is a thin optional baseline, deferred (see the §5/§10 scope notes).
+# Document engine delivery roadmap
+
+## Completion rules
+
+- The ordered roadmap below controls **execution order**. The numbered requirements
+  in sections 0–14 remain the traceability backlog and the only completion authority.
+- Mark a requirement `[x]` only when **every clause and verification in its sentence**
+  passes against production code. Types, helpers, isolated unit tests, or one feature
+  slice are partial evidence and do not complete a broad requirement.
+- A fidelity slice is complete only when a real DOCX imports into structural authored
+  records, preserves unsupported OOXML, lays out and renders, exports, and reopens to
+  the declared equivalence metric. Flattened text or a standalone preview is not done.
+- Update a requirement checkbox in the same commit that lands its final evidence.
+  Keep partial and deferred requirements unchecked; partial groundwork does not
+  increment the completed-requirement count.
+
+## Active execution queue
+
+1. **Finish the structural table slice (active, partial).** Complete the current
+   import→model→preservation→layout→DOM→export/reopen work for ordinary, merged,
+   nested, repeated-header, wrapped, unknown-child, and lexical-width table fixtures.
+   Exit only when edited cells serialize and reopen, nested and merged tables have
+   declared geometry, repeated headers paginate, and DOM output consumes the same
+   layout result. This advances parts of 2.7, 3.1–3.7, 8.6, and 8.10 without
+   completing those broad requirements.
+2. **Expose a read-only adapter preview checkpoint.** Use the production
+   parse→layout→display pipeline to open the same real DOCX fixture in the React and
+   Vue demos. Share projection logic, require matching page counts and visible table
+   geometry, surface invalid-file errors, and label editing/save as unsupported.
+   This is integration evidence only: it does not complete `DocxEditor.createEditor`,
+   ProseMirror binding, adapter migration, or a fidelity slice by itself.
+3. **Split the package monolith.** Complete 2.10 before adding another OOXML feature:
+   keep OPC orchestration in `package/opc.ts` and move WordprocessingML parsing,
+   preservation, and serialization into focused capability modules.
+4. **Record the package-reader selection.** Complete 1.3 and record why the selected
+   ZIP/XML stack satisfies bounded parsing, hostile-input, lexical-fidelity, and
+   browser/worker/server requirements.
+5. **Add structural SDTs/content controls.** Import block and inline SDTs without
+   flattening; preserve properties, locks, tags, aliases, nested content, and unknown
+   siblings; render and export/reopen them through the same vertical slice.
+6. **Resolve authored formatting.** Finish styles, numbering, themes, paragraph/run
+   properties, table styles, inheritance, and list rendering without materializing
+   resolved values into authored state.
+7. **Add document-flow breadth.** Implement sections, headers/footers, notes,
+   comments, text boxes, images/relationships, fields, controls/locks, and tracked
+   revisions as structural records with lossless export/reopen.
+8. **Close remaining preservation and DOCX export breadth.** Each feature above must
+   land its minimum preservation/export/reopen path in its own slice. Then complete
+   ownership-scoped capsules, namespace/sibling reinsertion, selective byte-range
+   serialization, package-part diff fixtures, and the combined adversarial gate
+   across all supported stories.
+9. **Close layout and output.** Add shaping, dependency-aware invalidation, sections,
+   columns, tables, pagination convergence, hit testing, accessible DOM, and native
+   PDF over one anchored display list.
+10. **Finish semantic editing and the public object model.** Expand DocOps,
+   normalization, targets, schemas, request-context batching, proxies, commands, and
+   queries in the same vertical slice as each supported structure rather than as a
+   late global pass.
+11. **Finish ProseMirror binding, then adapters.** Implement shadow transaction
+   mapping, incremental reverse reconciliation, selections, IME, loop prevention,
+   `DocxEditor.createEditor`, and finally React/Vue parity through the shared binding.
+12. **Finish headless/server surfaces.** After parse/edit/layout/export are stable,
+    complete the headless workflow, RPC schemas/streaming, generated clients,
+    annotations/citations, conformance budgets, adapter migration, docs, and release.
+
+## Deferred work
+
+- **Optional collaboration:** 4.10, 4.12, 5.3–5.10, and all of section 10 remain
+  deferred until a real consumer requires collaborative tables/SDTs and provider
+  conformance. Tasks 5.1–5.2 remain local snapshot obligations but are not on the
+  fidelity-first critical path. Existing Yjs code is partial groundwork, not the
+  active product path.
+- **Premature downstream breadth:** generated language clients, full citation APIs,
+  performance ratification, and adapter migration remain deferred until the
+  fidelity, layout, binding, and public API prerequisites above are complete.
+
+## Existing partial groundwork
+
+- **Registry/runtime:** 0.1, 0.3, 1.3, and 1.5 have registries, frozen ID subsets,
+  runtime budgets/snapshots, package-reader dependencies, and replay experiments,
+  but not the complete ID, isolation, selection-record, or production replay gates.
+- **Package/fidelity:** 2.3–2.7, 2.10, and 3.1–3.6 have bounded ZIP/XML readers,
+  structural table parsing, preservation ranges, identities, and selective-save
+  experiments, but not streaming/spooling, edited-table save/reopen, capsule
+  reinsertion, or the package-module split.
+- **Semantic store:** 4.3–4.9 and 4.11 have paragraph operations, normalization,
+  targets, model-change evidence, and audit/history helpers; they do not yet cover
+  full authored structures. Collaborative anchors and undo remain deferred.
+- **Optional sync and binding:** 5.1–5.3 and 6.1–6.9 contain local/Yjs backends, a
+  thin binding, projection, selection, and IME prototypes. They remain unchecked
+  until their complete contracts and real-DOCX conformance pass.
+- **Layout/output and public/server surfaces:** 8.6 has basic table geometry; 7.8,
+  9.6, 11.1, 11.4, 11.6, and 11.8 have result, package-boundary, RPC, and client
+  groundwork only. Sections 12–13 likewise contain helpers, not complete capabilities.
 
 ## 0. Foundational registry, ports, budgets, and reviewed oracles
 
-- [x] 0.1 Implement the capability/runtime registry and freeze globally stable capability, command, query, dependency-key, runtime-port, result, origin, and schema IDs plus version/collision/replacement rules before any store or layout consumer is implemented.
+- [ ] 0.1 Implement the capability/runtime registry and freeze globally stable capability, command, query, dependency-key, runtime-port, result, origin, and schema IDs plus version/collision/replacement rules before any store or layout consumer is implemented.
 - [ ] 0.2 Bake off TypeBox plus AJV against Zod with stable JSON-Schema emission under `technology-selection.md`, then define the schema-first IDL that generates `DocOp`, command/query payloads, external targets, `DocxEditor.*` declarations, runtime validators, MCP descriptors, and RPC schemas; declare semantic-core dispatch and host-owned transport.
-- [x] 0.3 Implement runtime-port resolution, immutable per-operation resource/configuration snapshots, hierarchical budgets, overflow-safe accounting, cancellation point-of-no-return/checkpoints, worker isolation, queue/spill cleanup, and finite defaults with non-disableable hard ceilings before store/layout consumers.
+- [ ] 0.3 Implement runtime-port resolution, immutable per-operation resource/configuration snapshots, hierarchical budgets, overflow-safe accounting, cancellation point-of-no-return/checkpoints, worker isolation, queue/spill cleanup, and finite defaults with non-disableable hard ceilings before store/layout consumers.
 - [x] 0.4 Freeze canonical comparator formats for authored state, anchors, Yjs state vectors, shaped runs, pagination fingerprints, semantic trees, hit tests, PDF semantics, and benchmark evidence.
 - [x] 0.5 Add import-graph and package-authority checks proving current-stack `DocxEditorEngine` orchestration is non-authoritative, future `EditorHost` is PM-free, and no alternate object-model namespace is exported.
 - [ ] 0.6 Before implementation, review and freeze versioned oracle artifacts for exact Yjs schema/invariants and collision precedence, normalization precedence, IME strings, selection grapheme boundaries/affinities, undo histories, fixture inputs/outputs, and comparators.
@@ -26,7 +111,7 @@
 - [x] 1.2 Approve `spike-architecture-decision.md`, fixing the canonical-model boundary, synchronous transaction path, flat story-sequence/Candidate B strategy, actor-scoped `Y.UndoManager`, origin separation, bounded trust boundary, EditorBinding/EditorDriver boundaries, rejected alternatives, and disposable-spike rule. Assign unsupported-step fallback, IME, anchors, durability/compaction, full package parsing, and other unresolved breadth to their named production tasks; every accepted decision cites reproducible spike evidence, with seeds required where tests are randomized.
 - [ ] 1.3 Bake off `fflate` plus `fast-xml-parser` under `technology-selection.md`, including hostile DTD/entity rejection, ordered-node and raw-lexical fidelity, bounded/incremental operation, and browser/worker/server parity, then record the production package-reader strategy and measurable resource-limit approach after spike evidence; capsule granularity is already fixed for the spike fixture and production granularity is selected from representative production fixtures. Treat `JSZip` and the custom spike tokenizer as non-production POC choices.
 - [x] 1.4 Define production package responsibilities and dependency rules for semantic core, editor binding, synchronization, layout, outputs, server hosting, and generated clients; add an import-graph test proving semantic core is PM-free, DOM-free, Yjs-free, transport-neutral, and PDF-free.
-- [x] 1.5 Freeze shared conformance fixture formats for revisions, origins, operations, model changes, snapshots, updates, anchors, authored-state hashes, and output hashes; verify the spike evidence can be replayed by the production harness without converting spike code into shipping code.
+- [ ] 1.5 Freeze shared conformance fixture formats for revisions, origins, operations, model changes, snapshots, updates, anchors, authored-state hashes, and output hashes; verify the spike evidence can be replayed by the production harness without converting spike code into shipping code.
 - [x] 1.6 Add a milestone gate that checks the spike remains independent and disposable, the decision record is approved, and no production package depends on spike implementation modules.
 
 ## 2. Bounded trust boundary and authored package model
@@ -34,19 +119,20 @@
 - [x] 2.1 Define finite defaults, non-disableable hard ceilings, units, phases, overflow-safe counters, deterministic time/memory substitutes, cancellation/cleanup, and N/N+1 tests for every package/XML/output resource limit.
 - [x] 2.2 Implement the ZIP/OPC/internal-target normalization profile rejecting controls, backslashes, drive/UNC, encoded separators/dot segments, absolute/traversal, normalized duplicates before inflation, and owner-relative escape; separately validate and retain external absolute URIs without owner resolution or implicit fetch.
 - [ ] 2.3 Implement bounded streaming or spooling for package entries and large media with backpressure, cancellation, integrity checks, and no duplicate whole-media buffers; verify peak buffering stays within the configured chunk budget.
-- [x] 2.4 Implement an XML reader that refuses DTDs, external entities, and entity expansion while preserving namespaces, significant child order, attributes, whitespace, and raw lexical values without coercion; verify round-trip fixtures containing omissions and zero-padded values.
-- [x] 2.5 Use null-prototype parser intermediates, recursively reject dangerous keys before capability dispatch, and preserve unregistered content inertly.
-- [x] 2.6 Define authored relationships and ordered content-type Default/Override records plus prerequisite ASCII extension matching, Override precedence, duplicate/conflict/orphan/MIME/normalized-part-name/edit-ownership rules and N/N+1 fixtures before implementing package semantics.
+- [ ] 2.4 Implement an XML reader that refuses DTDs, external entities, and entity expansion while preserving namespaces, significant child order, attributes, whitespace, and raw lexical values without coercion; verify round-trip fixtures containing omissions and zero-padded values.
+- [ ] 2.5 Use null-prototype parser intermediates, recursively reject dangerous keys before capability dispatch, and preserve unregistered content inertly.
+- [ ] 2.6 Define authored relationships and ordered content-type Default/Override records plus prerequisite ASCII extension matching, Override precedence, duplicate/conflict/orphan/MIME/normalized-part-name/edit-ownership rules and N/N+1 fixtures before implementing package semantics.
 - [ ] 2.7 Implement semantic parsers for body, sections, headers, footers, notes, comments, text boxes, tables, controls and locks, tracked revisions, images, relationships, styles, numbering, themes, and inert fields; verify each fixture produces editable authored records without resolved-value materialization.
 - [x] 2.8 Preserve raw relationship/citation targets for validated XML serialization while projecting sanitized runtime sink URLs; preserve unsupported fields/macros/ActiveX/OLE/embedded objects/executable relationships inertly with no semantic exposure/execute/fetch, implement explicit non-lossless scrub export, prohibit HTML-from-string, escape CSS strings, and test every runtime sink with zero external requests.
 - [x] 2.9 Implement create-from-scratch authored package initialization with valid minimal content types, root relationships, document part, styles, numbering, and identity state; verify an empty created model can be semantically edited before any serialization support is invoked.
+- [ ] 2.10 Split the oversized `package/opc.ts` by WordprocessingML capability, not by individual OOXML element: retain only DOCX ZIP/part orchestration and the public `parseDocx`/`writeDocx` flow in `opc.ts`; extract `wordprocessingml/paragraphs.ts`, `tables.ts`, `stories.ts`, `styles-numbering.ts`, `preservation.ts`, and `serialize.ts` with one clear responsibility each. Preserve existing public exports and behavior, introduce no dependency cycles or alternate package authority, and verify focused module tests plus the existing parse, preservation, table, save/reopen, typecheck, and malicious-input suites remain unchanged.
 
 ## 3. Preservation, identity, and selective serialization
 
 - [ ] 3.1 Define ownership-scoped preservation capsules for unknown elements, attributes, parts, relationships, lexical values, and significant ordering; verify supported edits invalidate only capsules owned by replaced regions.
 - [ ] 3.2 Implement capsule capture and reinsertion for supported-parent and unsupported-part fixtures; verify export and reopen preserve unknown material and relative ordering beside edited content.
-- [x] 3.3 Implement stable identity allocation and preservation for stories, blocks, paragraphs, tables, rows, cells, anchorable runs, parts, relationships, controls, bookmarks, comments, revisions, and annotations; add deterministic collision tests.
-- [x] 3.4 Implement identity rules for split, join, move, semantic replacement, deletion, and undo restoration; verify exact IDs across forward, undo, redo, save, and reopen sequences.
+- [ ] 3.3 Implement stable identity allocation and preservation for stories, blocks, paragraphs, tables, rows, cells, anchorable runs, parts, relationships, controls, bookmarks, comments, revisions, and annotations; add deterministic collision tests.
+- [ ] 3.4 Implement identity rules for split, join, move, semantic replacement, deletion, and undo restoration; verify exact IDs across forward, undo, redo, save, and reopen sequences.
 - [ ] 3.5 Implement QName validation, controlled prefix allocation, XML value escaping, URI validation, and capsule namespace/sibling reinsertion; validate regenerated parts and injection fixtures.
 - [ ] 3.6 Implement byte-range selective patching with an exact uncompressed XML-part range comparator and a semantic ZIP-container comparator that permits recompression metadata/CRC/size/offset/directory changes; preserve every unowned XML byte and reuse eligible untouched entries.
 - [ ] 3.7 Implement complete DOCX export for opened and newly created models, including required content types, relationships, media, and related stories; verify both outputs reopen to equivalent authored-state hashes.
@@ -56,17 +142,17 @@
 ## 4. Semantic store, operations, anchors, and history
 
 - [x] 4.1 Define separate typed contracts for JSON-safe `DocOp`, committed `ModelChange`, opaque replication update bytes, and full snapshot state; add compile-time and runtime tests preventing one contract from being accepted as another.
-- [x] 4.2 Implement a PM-free `DocumentStore` over authored state with explicit synchronous `TransactionContext`, rejected async/nested/reentrant transactions, rollback, subscription, history, and opaque anchor interfaces.
-- [x] 4.3 Define capability-owned semantic operations for text, marks, paragraphs, structures, stories, package parts, relationships, styles, numbering, controls, locks, comments, revisions, citations, and exports; verify every operation is JSON-safe and runtime-schema validated.
-- [x] 4.4 Implement one validation pipeline for command schemas, authorization, locks, document identity, base revision, target resolution, and preconditions; verify every failure returns a typed result before mutation.
-- [x] 4.5 Implement atomic transactions and positional batches with transaction-local symbolic IDs, topological dependency validation/staged resolution, `aborted` results, failed-sync loads materialized from an explicit unchanged reconciled revision, discarded candidate values, and no revision/history/notification/update on failure.
-- [x] 4.6 Implement deterministic normalization and repair rules for structural conflicts, invalid descendants, marks, tables, stories, relationships, and identities; property-test equivalent converged inputs for byte-equivalent normalized authored state.
-- [x] 4.7 Implement `ModelChange` before/after structural descriptors or the binding revision index, including deleted ranges, moves, split/join maps, normalization effects, commit IDs, origins, and dependency keys.
-- [x] 4.8 Implement JSON-safe external targets using paragraph identity plus an optional unique phrase or explicit location discriminator, with story and container identity for non-paragraph targets; verify missing, ambiguous, stale, kind-mismatched, and out-of-bounds targets fail without mutation.
-- [x] 4.9 Implement revision-aware external target resolution that records the resolved revision and rechecks commit preconditions; verify equivalent serialized targets resolve identically or return the same typed failure across processes.
+- [ ] 4.2 Implement a PM-free `DocumentStore` over authored state with explicit synchronous `TransactionContext`, rejected async/nested/reentrant transactions, rollback, subscription, history, and opaque anchor interfaces.
+- [ ] 4.3 Define capability-owned semantic operations for text, marks, paragraphs, structures, stories, package parts, relationships, styles, numbering, controls, locks, comments, revisions, citations, and exports; verify every operation is JSON-safe and runtime-schema validated.
+- [ ] 4.4 Implement one validation pipeline for command schemas, authorization, locks, document identity, base revision, target resolution, and preconditions; verify every failure returns a typed result before mutation.
+- [ ] 4.5 Implement atomic transactions and positional batches with transaction-local symbolic IDs, topological dependency validation/staged resolution, `aborted` results, failed-sync loads materialized from an explicit unchanged reconciled revision, discarded candidate values, and no revision/history/notification/update on failure.
+- [ ] 4.6 Implement deterministic normalization and repair rules for structural conflicts, invalid descendants, marks, tables, stories, relationships, and identities; property-test equivalent converged inputs for byte-equivalent normalized authored state.
+- [ ] 4.7 Implement `ModelChange` before/after structural descriptors or the binding revision index, including deleted ranges, moves, split/join maps, normalization effects, commit IDs, origins, and dependency keys.
+- [ ] 4.8 Implement JSON-safe external targets using paragraph identity plus an optional unique phrase or explicit location discriminator, with story and container identity for non-paragraph targets; verify missing, ambiguous, stale, kind-mismatched, and out-of-bounds targets fail without mutation.
+- [ ] 4.9 Implement revision-aware external target resolution that records the resolved revision and rechecks commit preconditions; verify equivalent serialized targets resolve identically or return the same typed failure across processes.
 - [ ] 4.10 Implement opaque engine anchor handles plus trusted versioned document-bound backend/awareness/persistence envelopes; select `Y.RelativePosition` for private Yjs text positions, keep backend-relative bytes private, and test restore/migration/stale-handle failures.
-- [x] 4.11 Implement typed origins, actor/session/group IDs, a redacted audit index, separate encrypted access-controlled complete-versioned-DocOp replay journal with independent retention/security, redo invalidation, repair ownership, identity restoration, and snapshot/reopen history rules.
-- [x] 4.12 Implement actor-local collaborative undo semantics at the store contract boundary; verify two users can interleave edits and each undo or redo only eligible personal history while all replicas converge.
+- [ ] 4.11 Implement typed origins, actor/session/group IDs, a redacted audit index, separate encrypted access-controlled complete-versioned-DocOp replay journal with independent retention/security, redo invalidation, repair ownership, identity restoration, and snapshot/reopen history rules.
+- [ ] 4.12 Implement actor-local collaborative undo semantics at the store contract boundary; verify two users can interleave edits and each undo or redo only eligible personal history while all replicas converge.
 
 ## 5. Local and Yjs backends, persistence, and migrations
 
@@ -78,8 +164,8 @@
 > be marked done until an actual consumer needs them. Effort is redirected to the
 > fidelity track (see the note under §2/§3/§8).
 
-- [x] 5.1 Implement the local replicated-store backend with opaque update and full snapshot APIs distinct from semantic operations and model changes; verify snapshot restore reproduces authored state, anchors, revisions, and history behavior.
-- [x] 5.2 Pin and implement the reviewed versioned Yjs schema using collision-free creation-keyed records retaining semantic ID plus actor/commit provenance, all container/ownership/order/mark/annotation/allocator/origin/GC invariants, and candidate-preserving deterministic collision repair.
+- [ ] 5.1 Implement the local replicated-store backend with opaque update and full snapshot APIs distinct from semantic operations and model changes; verify snapshot restore reproduces authored state, anchors, revisions, and history behavior.
+- [ ] 5.2 Pin and implement the reviewed versioned Yjs schema using collision-free creation-keyed records retaining semantic ID plus actor/commit provenance, all container/ownership/order/mark/annotation/allocator/origin/GC invariants, and candidate-preserving deterministic collision repair.
 - [ ] 5.3 Implement the OPTIONAL thin `YjsBinding` over an externally-owned `Y.Doc` (revised per ADR-S10; supersedes the removed sole `ReplicationCoordinator`): remote doc-update/transaction subscription → `backend.deriveModel()` → `store.publishDerived(model, remoteOrigin)` as one atomic revision; local committed-`ModelChange` subscription → mirror changed blocks into the doc inside `doc.transact(fn, localOrigin)`; echo suppression by Yjs transaction origin (no app-level id set); and tests proving backends never mutate/notify canonical state directly and that `engine-core` runs with no Yjs integration.
 - [ ] 5.4 Implement Yjs backend-relative anchors with `Y.RelativePosition` and local behavioral equivalents behind the shared anchor contract; run identical affinity, deletion, split, join, move, and undo fixtures against both backends.
 - [ ] 5.5 Implement versioned replication-update and snapshot envelopes containing protocol/schema version, document identity, tenant key where applicable, revision/checkpoint metadata, and declared byte size; reject malformed, oversized, truncated, and wrong-document envelopes before mutation.
@@ -87,19 +173,23 @@
 - [ ] 5.7 Implement versioned, resumable model and backend migrations with applied-migration records, validation before publication, and prior-checkpoint recovery; verify interruption at every write boundary never exposes partial migrated state.
 - [ ] 5.8 Implement atomic snapshot compaction that preserves updates arriving during compaction and retains a recoverable checkpoint until validation; verify each concurrent update appears exactly once after crash recovery.
 - [ ] 5.9 Run the shared backend conformance suite for semantic operations, normalization, stable identities, anchors, history, undo, snapshots, migrations, model changes, and malicious envelopes; require local and Yjs results to match declared equivalence metrics.
-- [x] 5.10 Add seeded two-client Yjs convergence tests for valid and conflicting operations delivered in different orders; failures must report seed, operations, updates, revisions, origins, divergent records, and anchor states.
+- [ ] 5.10 Add seeded two-client Yjs convergence tests for valid and conflicting operations delivered in different orders; failures must report seed, operations, updates, revisions, origins, divergent records, and anchor states.
 
 ## 6. Editor binding and ProseMirror projection
 
-- [x] 6.1 Implement the `EditorBinding` package as the only PM-aware integration and add dependency tests proving headless parse, edit, synchronization, layout, and export work when the package is absent.
-- [x] 6.2 Implement authored-model-to-ProseMirror projection for editable stories, semantic marks, structures, controls, comments, revisions, and stable identity metadata; verify rebuilding a fixture projection preserves semantic content without becoming canonical state.
+> **Scope:** This section resumes after structural parsing, preservation, layout, and
+> export/reopen are stable for the active fidelity features. Existing binding,
+> selection, and IME helpers are partial groundwork and remain unchecked.
+
+- [ ] 6.1 Implement the `EditorBinding` package as the only PM-aware integration and add dependency tests proving headless parse, edit, synchronization, layout, and export work when the package is absent.
+- [ ] 6.2 Implement authored-model-to-ProseMirror projection for editable stories, semantic marks, structures, controls, comments, revisions, and stable identity metadata; verify rebuilding a fixture projection preserves semantic content without becoming canonical state.
 - [ ] 6.3 Map complete multi-step/appended transactions against a shadow `EditorState`, evolving mappings, and one store transaction; discard shadow state on rejection and reconcile the actual view only after canonical commit.
-- [x] 6.4 Implement identity-preserving `ReplaceBlockContent` only for proven owned content, distinct from identity-minting `ReplaceNode`; reject unsafe capsule ownership.
-- [x] 6.5 Implement reverse reconciliation from before/after `ModelChange` evidence or a binding revision index using minimal steps and identity-preserving content fallback.
-- [x] 6.6 Preserve text selections, stored marks, node selections, and table-cell selections through reconciliation using internal anchors; verify insertion-before-caret, selected-node move, cell deletion, and full-range deletion cases.
-- [x] 6.7 Implement deterministic affinity-based collapse or clearing for selections whose content is deleted; verify no deleted selection resolves onto unrelated content and all resulting selections are valid.
-- [x] 6.8 Implement the explicit IME state machine with start revision, anchored range, initial/composed text, ordered inbound queue, commit/cancel ordering, one history group, and exact insertion/deletion conflict strings.
-- [x] 6.9 Tag canonical writes only with `MutationOrigin`, binding work with `ProjectionOrigin`, and presence with `AwarenessOrigin`; prove projection and awareness never enter history/audit/snapshot/replication.
+- [ ] 6.4 Implement identity-preserving `ReplaceBlockContent` only for proven owned content, distinct from identity-minting `ReplaceNode`; reject unsafe capsule ownership.
+- [ ] 6.5 Implement reverse reconciliation from before/after `ModelChange` evidence or a binding revision index using minimal steps and identity-preserving content fallback.
+- [ ] 6.6 Preserve text selections, stored marks, node selections, and table-cell selections through reconciliation using internal anchors; verify insertion-before-caret, selected-node move, cell deletion, and full-range deletion cases.
+- [ ] 6.7 Implement deterministic affinity-based collapse or clearing for selections whose content is deleted; verify no deleted selection resolves onto unrelated content and all resulting selections are valid.
+- [ ] 6.8 Implement the explicit IME state machine with start revision, anchored range, initial/composed text, ordered inbound queue, commit/cancel ordering, one history group, and exact insertion/deletion conflict strings.
+- [ ] 6.9 Tag canonical writes only with `MutationOrigin`, binding work with `ProjectionOrigin`, and presence with `AwarenessOrigin`; prove projection and awareness never enter history/audit/snapshot/replication.
 - [ ] 6.10 Require editable extensions to register deterministic forward mapping, reverse reconciliation, affected-range calculation, anchor semantics, and fallback policy; run golden and seeded property tests for projection/model parity, selections, origins, revisions, and loop prevention.
 
 ## 7. Public object model and shared schemas
@@ -111,7 +201,7 @@
 - [ ] 7.5 Implement document, body, range, paragraph, table, row, cell, section, header, footer, image, content-control, comment, tracked-change, and citation proxies with lazy collections and valid insertion locations; verify invalid locations return `invalidArgs` with no partial mutation.
 - [x] 7.6 Define explicit body, active-story, specific related-story, and read-only aggregate scopes for commands and queries; verify an omitted write scope targets the active header or footer rather than silently falling back to body.
 - [ ] 7.7 Generate one lifecycle/schema/result layer for `DocxEditor.parse`/`.create` and one command/query/`DocOp` source for `DocxEditor.applyEdits`/`.query`, browser, agent, MCP, proxies, and RPC; semantic core owns dispatch and hosts own transport.
-- [x] 7.8 Implement the versioned redacted `DocxEditor.Result` taxonomy for application/validation/conflict/resource outcomes and typed exceptions only when transport/protocol failure prevents a valid envelope; include retryability/RPC mapping and one boundary fixture per class.
+- [ ] 7.8 Implement the versioned redacted `DocxEditor.Result` taxonomy for application/validation/conflict/resource outcomes and typed exceptions only when transport/protocol failure prevents a valid envelope; include retryability/RPC mapping and one boundary fixture per class.
 - [ ] 7.9 Implement shared search, text and formatting, section, table, header/footer, image and relationship, control and lock, comment, tracked-change, citation, and selective export commands and queries; verify aggregate search replacements obey story, lock, ambiguity, and stale-target rules.
 - [ ] 7.10 Generate versioned JSON Schemas and runtime validators from the common registries for every automation-visible command, query, target, result, and error; verify schema acceptance and rejection match in-process validation.
 - [x] 7.11 Generate MCP tool schemas directly from the shared command/query registry and implement schema-bound dispatch through semantic transactions; verify enumerated schemas equal registry schemas and invalid tool input opens no write transaction.
@@ -135,12 +225,12 @@
 
 ## 9. Extension integration, distribution, and conformance
 
-- [x] 9.1 Integrate every consumer with the foundational capability/runtime registry from section 0 and reject editable capabilities missing a required contribution.
+- [ ] 9.1 Integrate every consumer with the foundational capability/runtime registry from section 0 and reject editable capabilities missing a required contribution.
 - [ ] 9.2 Verify the section 0 package-owned IDs, collision/replacement/version/priority rules, dependency keys, runtime ports, and generated `DocxEditor.*` augmentation across installed feature combinations.
 - [ ] 9.3 Implement cycle, conflict, replacement, missing-port, and incompatible-version diagnostics before document open; test each diagnostic names the complete responsible feature chain.
 - [ ] 9.4 Verify foundational ports for fonts, shaping, images, clocks, identity, persistence, transport, scheduling, audit, authorization, resource accounting, and external-resource consent in worker/server configurations with no unavailable browser globals.
 - [ ] 9.5 Enforce deterministic, cancellation-aware, budgeted extension hooks with declared dependency keys and no hidden global mutable state; verify an over-budget hook terminates without partial canonical commit.
-- [x] 9.6 Establish package distribution boundaries so base parse, semantic edit, and DOCX save do not require PM, Yjs, transport, browser, or PDF dependencies; verify optional APIs and dependencies are absent at build time when packages are not installed.
+- [ ] 9.6 Establish package distribution boundaries so base parse, semantic edit, and DOCX save do not require PM, Yjs, transport, browser, or PDF dependencies; verify optional APIs and dependencies are absent at build time when packages are not installed.
 - [ ] 9.7 Export stable extension-authoring contracts, capability identifiers, schema registration, runtime ports, shared stylesheet, preset, and required assets through declared package entries; add package-content and undeclared-import CI checks.
 - [ ] 9.8 Add browser, worker, and server conformance for supported feature combinations, replacements, absent optional packages, missing ports, and registration orders; compare resolved registries, authored state, layout, and output hashes.
 
@@ -165,7 +255,11 @@
 
 ## 11. Server RPC and generated language clients
 
-- [x] 11.1 Implement immutable reads/rebase/CAS and idempotency keys bound to tenant/document/schema/operation hash with same-key/different-hash conflict, finite retention/retry window, and post-expiry new-attempt preconditions.
+> **Scope:** Keep the existing RPC/client code as partial groundwork. Resume this
+> section after the headless parse→edit→layout→DOCX/PDF path and public schemas are
+> stable; generated clients must not drive the fidelity roadmap.
+
+- [ ] 11.1 Implement immutable reads/rebase/CAS and idempotency keys bound to tenant/document/schema/operation hash with same-key/different-hash conflict, finite retention/retry window, and post-expiry new-attempt preconditions.
 - [ ] 11.2 Implement a headless server workflow for parse, create, query, semantic edit, synchronization, layout, DOCX save, and PDF export with no DOM, browser process, PM, or editor host; verify replace-text plus image-insertion exports against in-process fixtures.
 - [ ] 11.3 Bake off Connect, gRPC, and OpenAPI tooling under `technology-selection.md`, then define versioned RPC schemas for lifecycle, external targets, commands, queries, request-context batches, results, errors, snapshots, updates, binary references, and export streams by reusing common runtime validators.
 - [ ] 11.4 Implement RPC dispatch, atomic sync, revision preconditions, authorization/audit origins, and the exception boundary: application/validation/conflict/resource failures return common results; only transport/protocol failures preventing a valid envelope throw typed exceptions.
@@ -175,6 +269,10 @@
 - [ ] 11.8 Run shared direct-versus-RPC conformance through JavaScript, Python, and each generated client for create, parse, operations, queries, errors, revisions, malicious inputs, DOCX save, and PDF output; compare authored-state and output hashes or declared equivalence metrics.
 
 ## 12. Citations and durable annotations
+
+> **Scope:** Defer the full annotation/citation API until their OOXML structures,
+> preservation, and display-list output exist. Current helper types and deletion
+> policies are partial evidence only.
 
 - [ ] 12.1 Implement shared durable anchor primitives for comments, tracked changes, citations, bookmarks, and presence ranges while retaining kind-specific schemas, permissions, histories, and serialization; verify boundary affinity converges across replicas.
 - [ ] 12.2 Pin the citation OOXML persistence profile, ownership, stable-ID encoding, marker/source/bibliography records, relationships/content types, unknown-field preservation, and canonical equivalence comparator.
@@ -186,6 +284,10 @@
 
 ## 13. Performance baselines and conformance gates
 
+> **Scope:** Instrumentation may land with active slices, but baseline collection,
+> budget ratification, and the full matrix happen only after representative fidelity,
+> layout, binding, and export workflows exist.
+
 - [ ] 13.1 Implement at least 5 warmups and 30 process-isolated measured runs per case with predeclared percentile and 95% bootstrap CI, dispersion/noise threshold, no post-hoc outlier removal, whole-case environment-invalid rerun, cold/warm state, memory/raw results, and frozen comparator version.
 - [ ] 13.2 Instrument semantic identities, dependency vertices, projection ranges, cache entries, measured blocks, pagination pages, display items, serialization ranges, DOM nodes, allocations, queues, worker messages, cancellation checkpoints, and cancellation latency before collecting baselines; prohibit work beyond closure/frontier absent a named global dependency.
 - [ ] 13.3 Record baselines for parse and open, first useful layout, bounded incremental edit, pagination, synchronization, selective and full save, DOCX and PDF export, peak and retained memory, cancellation/checkpoint latency, queue depth, and spill cleanup across every representative class.
@@ -196,6 +298,10 @@
 - [ ] 13.8 Complete the conformance matrix for package fidelity, semantic operations, normalization, identities, anchors, local/Yjs history and undo, convergence, persistence, migrations, offline replay, binding, runtimes, layout, display lists, DOM, hit testing, PDF, public API, MCP, RPC, generated clients, citations, and extension combinations; retain machine-readable evidence for every cell.
 
 ## 14. Adapter adoption, compatibility, documentation, and release
+
+> **Scope:** This is the final adoption track. Start only after
+> `DocxEditor.createEditor`, `EditorBinding`, layout/output, and the public object model
+> are stable enough to migrate both adapters without duplicating engine logic.
 
 - [ ] 14.1 Inventory every adapter, agent, demo, test, and documentation import against declared production entries, using the existing contract declarations as a baseline; verify the inventory contains no workspace alias or undeclared source path.
 - [ ] 14.2 Add CI assertions that the private contract package is never published, production entries resolve without `tsconfig` paths or bundler aliases, undeclared subpaths fail, and package files contain every declared stylesheet, preset, asset, schema, and declaration.
