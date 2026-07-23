@@ -65,6 +65,13 @@ export {
   documentXml,
 } from './opc.ts';
 export {
+  isValidNCName,
+  isValidQName,
+  assertValidQName,
+  isValidUri,
+  PrefixAllocator,
+} from './qname.ts';
+export {
   type HrefProjection,
   type InertExecutableKind,
   type ContentItem,
