@@ -1000,6 +1000,7 @@ function paragraphFullyCaptured(pEl: Extract<XmlNode, { type: 'element' }>): boo
     if (c.type === 'text') { if (c.value.trim() !== '') return false; continue; }
     if (c.name !== 'w:r' || Object.keys(c.attributes).length > 0) return false;
     let hasText = false;
+    let tCount = 0;
     for (const rc of c.children) {
       if (rc.type === 'text') { if (rc.value.trim() !== '') return false; continue; }
       if (rc.name === 'w:rPr') {
@@ -1009,6 +1010,8 @@ function paragraphFullyCaptured(pEl: Extract<XmlNode, { type: 'element' }>): boo
           if (Object.keys(pr.attributes).length > 0) return false; // explicit on/off not modeled
         }
       } else if (rc.name === 'w:t') {
+        tCount += 1;
+        if (tCount > 1) return false; // multiple w:t collapse into one on regen (segmentation lost)
         if (Object.keys(rc.attributes).some((k) => k !== 'xml:space')) return false;
         if (textContent(rc).length > 0) hasText = true;
       } else {

@@ -116,3 +116,10 @@ describe('zip name integrity (review findings 5, 8)', () => {
     expect(readZip(evil)).toMatchObject({ ok: false, reason: 'bad-name' });
   });
 });
+
+describe('zip case-folded OPC equivalence (review round 2, findings 5/8)', () => {
+  test('case-equivalent entry names are rejected before inflation', () => {
+    const evil = zipSync({ 'word/document.xml': strToU8('a'), 'Word/Document.xml': strToU8('b') });
+    expect(readZip(evil)).toMatchObject({ ok: false, reason: 'bad-name' });
+  });
+});

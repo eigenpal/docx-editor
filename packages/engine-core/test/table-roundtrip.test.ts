@@ -348,4 +348,8 @@ describe('cell-edit fails closed on non-fully-captured paragraphs (review findin
     const m = tableWithCell00('<w:p><w:r/><w:r><w:t>a</w:t></w:r></w:p>');
     expect(() => documentXml(editCell00(m, 'EDITED'))).toThrow(/fail closed/);
   });
+  test('editing a cell whose run has multiple w:t fails closed (segmentation collapses)', () => {
+    const m = tableWithCell00('<w:p><w:r><w:t>a</w:t><w:t>b</w:t></w:r></w:p>');
+    expect(() => documentXml(editCell00(m, 'EDITED'))).toThrow(/fail closed/);
+  });
 });

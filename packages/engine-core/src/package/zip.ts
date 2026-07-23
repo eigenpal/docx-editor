@@ -4,7 +4,7 @@
 // guard) BEFORE the bytes are handed on. Writing produces a deterministic archive.
 
 import { unzipSync, zipSync, strToU8, strFromU8 } from 'fflate';
-import { normalizePartName } from './opc-names.ts';
+import { normalizePartName, partNameKey } from './opc-names.ts';
 
 export type ZipRejection = 'too-many-entries' | 'too-large' | 'bad-name' | 'inflate-error';
 
@@ -55,14 +55,15 @@ export function readZip(bytes: Uint8Array, limits: ZipLimits = DEFAULT_ZIP_LIMIT
           badDetail = `${file.name}: ${norm.reason}`;
           throw new ZipViolation('bad-name');
         }
-        // Reject two entries whose names normalize to the same canonical part (e.g.
-        // `word/document.xml` vs `word/%64ocument.xml`) — last-wins would smuggle/omit
-        // a part. Checked BEFORE inflation.
-        if (seenNorms.has(norm.partName)) {
-          badDetail = `${file.name}: normalized duplicate of ${norm.partName}`;
+        // Reject two entries whose names are OPC-equivalent (normalized AND case-folded,
+        // e.g. `word/document.xml` vs `word/%64ocument.xml` vs `Word/Document.xml`) —
+        // last-wins would smuggle/omit a part. Checked BEFORE inflation.
+        const key = partNameKey(norm.partName);
+        if (seenNorms.has(key)) {
+          badDetail = `${file.name}: OPC-equivalent duplicate of ${norm.partName}`;
           throw new ZipViolation('bad-name');
         }
-        seenNorms.add(norm.partName);
+        seenNorms.add(key);
         // Compression-ratio zip-bomb guard, checked before decompressing.
         if (file.originalSize / Math.max(1, file.size) > maxRatio) throw new ZipViolation('too-large');
         totalUncompressed += file.originalSize;
@@ -89,13 +90,15 @@ export function readZip(bytes: Uint8Array, limits: ZipLimits = DEFAULT_ZIP_LIMIT
  *  never be smuggled into a ZIP entry (write-side path-traversal guard). */
 export function writeZip(entries: ReadonlyMap<string, Uint8Array>): Uint8Array {
   const record: Record<string, Uint8Array> = {};
+  const seen = new Set<string>();
   for (const [partName, data] of entries) {
     const norm = normalizePartName(partName);
     if (!norm.ok) throw new Error(`unsafe part name on write: ${partName} (${norm.reason})`);
+    const fold = partNameKey(norm.partName); // OPC case-folded equivalence
+    if (seen.has(fold)) throw new Error(`OPC-equivalent duplicate part name on write: ${norm.partName}`);
+    seen.add(fold);
     // Canonical part names carry a leading slash; ZIP entry names do not.
-    const key = norm.partName.replace(/^\//, '');
-    if (key in record) throw new Error(`duplicate normalized part name on write: ${key}`);
-    record[key] = data;
+    record[norm.partName.replace(/^\//, '')] = data;
   }
   return zipSync(record);
 }
