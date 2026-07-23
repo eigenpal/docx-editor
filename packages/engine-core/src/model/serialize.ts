@@ -22,6 +22,8 @@ export interface SerializedModel {
   readonly numbering: readonly NumberingRecord[];
   readonly parts: readonly PartRecord[];
   readonly identity: IdentityState;
+  /** [blockId, verbatimXml] pairs for preserved blocks (tables). Omitted when empty. */
+  readonly preservedXml?: readonly (readonly [string, string])[];
 }
 
 export function encodeModel(model: PackageModel): SerializedModel {
@@ -33,6 +35,7 @@ export function encodeModel(model: PackageModel): SerializedModel {
     numbering: model.numbering,
     parts: [...model.parts.values()],
     identity: model.identity,
+    ...(model.preservedXml && model.preservedXml.size > 0 ? { preservedXml: [...model.preservedXml] } : {}),
   };
 }
 
@@ -45,5 +48,6 @@ export function decodeModel(s: SerializedModel): PackageModel {
     numbering: s.numbering,
     parts: new Map(s.parts.map((part) => [part.partName, part])),
     identity: s.identity,
+    ...(s.preservedXml ? { preservedXml: new Map(s.preservedXml) } : {}),
   };
 }

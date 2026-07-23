@@ -43,22 +43,11 @@ export interface ParagraphRecord {
 // values keep their RAW LEXICAL string so authored distinctions never round-trip
 // through a number.
 //
-// Preservation of unknown OOXML is NOT done by putting raw XML on these records
-// (neither scattered `preserved` strings nor a whole-subtree string): a semantic
-// record cannot reliably restore the original position/namespace context of unknown
-// children that way. Instead each record carries an opaque `source: SourceRef` into
-// the ORIGINAL token tree, which is retained SEPARATELY (populated by the parser,
-// task 3.1). On save, untouched (non-dirty) ranges are reused verbatim from that
-// tree and only owned/edited ranges are patched. The retained-tree container and
-// patch-on-save land with the parser/serializer step. ---
-
-/** Opaque, stable reference from a semantic record to its origin in the separately
- *  retained original OOXML token tree. Lets serialization reuse untouched source
- *  ranges verbatim and patch only owned regions. Assigned by the parser. */
-export interface SourceRef {
-  readonly part: string; // owning part name, e.g. '/word/document.xml'
-  readonly path: readonly number[]; // child-index path to the origin node in that part's tree
-}
+// Preservation of unknown OOXML is NOT done by putting raw XML on these records.
+// Instead the ORIGINAL XML of a preservable block is kept verbatim in
+// `PackageModel.preservedXml`, keyed by the block id (see below). While a block is
+// unedited, serialization emits those bytes exactly, so reopen is lossless. Table
+// editing (and the finer patch-on-save machinery it needs) is deferred. ---
 
 /** A single border edge. Applies to table edges (w:top/bottom/left/right/start/end/
  *  insideH/insideV) and cell diagonals (w:tl2br/w:tr2bl). Lexical sz/space are kept raw. */
@@ -173,14 +162,12 @@ export interface TableCellRecord {
   /** Nested block content — paragraphs and, recursively, tables. */
   readonly blocks: readonly Block[];
   readonly props?: TableCellProps;
-  readonly source?: SourceRef; // origin in the retained tree (cell-granular reuse)
 }
 
 export interface TableRowRecord {
   readonly id: string;
   readonly cells: readonly TableCellRecord[];
   readonly props?: TableRowProps;
-  readonly source?: SourceRef; // origin in the retained tree (row-granular reuse)
 }
 
 /** A grid column (w:gridCol). `w` is the RAW lexical width, optional. */
@@ -194,11 +181,6 @@ export interface TableRecord {
   readonly rows: readonly TableRowRecord[];
   readonly grid?: readonly GridColumn[]; // w:tblGrid
   readonly props?: TableProps;
-  /** Origin of this table in the separately-retained original token tree. While the
-   *  table is not dirty, serialize reuses that source range verbatim (lossless). */
-  readonly source?: SourceRef;
-  /** Set once an edit mutates the table; a dirty table reserializes from the fields. */
-  readonly dirty?: boolean;
 }
 
 // SDT and other block kinds still land later; the union stays open.
@@ -241,6 +223,13 @@ export interface PackageModel {
   readonly numbering: readonly NumberingRecord[];
   readonly parts: ReadonlyMap<string, PartRecord>;
   readonly identity: IdentityState;
+  /**
+   * Verbatim original XML for preservable blocks (currently tables), keyed by block
+   * id. Snapshot-owned so it survives encode/decode. While a block is unedited,
+   * serialization emits its entry exactly for a lossless round-trip; a block with no
+   * entry is serialized from its structural fields. (Read-only tables today.)
+   */
+  readonly preservedXml?: ReadonlyMap<string, string>;
 }
 
 // Standard OOXML/OPC relationship type URIs used by create-from-scratch.

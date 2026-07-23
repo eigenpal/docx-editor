@@ -4,7 +4,6 @@ export {
   type RunRecord,
   type ParagraphProps,
   type ParagraphRecord,
-  type SourceRef,
   type BorderEdge,
   type Borders,
   type Shading,
