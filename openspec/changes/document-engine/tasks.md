@@ -251,12 +251,12 @@
 - [ ] 6.1 Implement the `EditorBinding` package as the only PM-aware integration and add dependency tests proving headless parse, edit, synchronization, layout, and export work when the package is absent.
 - [ ] 6.2 Implement authored-model-to-ProseMirror projection for editable stories, semantic marks, structures, controls, comments, revisions, and stable identity metadata; verify rebuilding a fixture projection preserves semantic content without becoming canonical state.
 - [ ] 6.3 Map complete multi-step/appended transactions against a shadow `EditorState`, evolving mappings, and one store transaction; discard shadow state on rejection and reconcile the actual view only after canonical commit.
-- [ ] 6.4 Implement identity-preserving `ReplaceBlockContent` only for proven owned content, distinct from identity-minting `ReplaceNode`; reject unsafe capsule ownership.
+- [x] 6.4 Implement identity-preserving `ReplaceBlockContent` only for proven owned content, distinct from identity-minting `ReplaceNode`; reject unsafe capsule ownership.
 - [ ] 6.5 Implement reverse reconciliation from before/after `ModelChange` evidence or a binding revision index using minimal steps and identity-preserving content fallback.
 - [ ] 6.6 Preserve text selections, stored marks, node selections, and table-cell selections through reconciliation using internal anchors; verify insertion-before-caret, selected-node move, cell deletion, and full-range deletion cases.
 - [ ] 6.7 Implement deterministic affinity-based collapse or clearing for selections whose content is deleted; verify no deleted selection resolves onto unrelated content and all resulting selections are valid.
 - [ ] 6.8 Implement the explicit IME state machine with start revision, anchored range, initial/composed text, ordered inbound queue, commit/cancel ordering, one history group, and exact insertion/deletion conflict strings.
-- [ ] 6.9 Tag canonical writes only with `MutationOrigin`, binding work with `ProjectionOrigin`, and presence with `AwarenessOrigin`; prove projection and awareness never enter history/audit/snapshot/replication.
+- [x] 6.9 Tag canonical writes only with `MutationOrigin`, binding work with `ProjectionOrigin`, and presence with `AwarenessOrigin`; prove projection and awareness never enter history/audit/snapshot/replication.
 - [ ] 6.10 Require editable extensions to register deterministic forward mapping, reverse reconciliation, affected-range calculation, anchor semantics, and fallback policy; run golden and seeded property tests for projection/model parity, selections, origins, revisions, and loop prevention.
 
 ## 7. Public object model and shared schemas

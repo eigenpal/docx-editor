@@ -5,6 +5,7 @@
 // a browser. `transact` is the only mutation entry; batches are all-or-nothing.
 
 import { type PackageModel } from '../model/index.ts';
+import { NON_CANONICAL_ORIGINS } from '../registry/frozen-ids.ts';
 import { normalize } from './normalize.ts';
 import { buildModelChange } from './model-change.ts';
 import { validateDocOp, applyDocOp } from './docops.ts';
@@ -67,6 +68,15 @@ interface Commit {
   readonly modelChange: ModelChange;
 }
 
+/** A canonical write MUST carry a MutationOrigin. A ProjectionOrigin (binding/view work) or an
+ *  AwarenessOrigin (presence) performing a canonical write is a programming error — it would leak
+ *  projection/awareness into history, audit, snapshot, and replication (design D5 / task 6.9). */
+function assertCanonicalOrigin(origin: string): void {
+  if (NON_CANONICAL_ORIGINS.includes(origin)) {
+    throw new Error(`non-canonical origin '${origin}' may not perform a canonical store write (projection/awareness never enter history/audit)`);
+  }
+}
+
 export class DocumentStore {
   private model: PackageModel;
   private revision = 0;
@@ -114,6 +124,7 @@ export class DocumentStore {
 
   /** Synchronous transaction. Rejects async/nested/reentrant; rolls back on any failure. */
   transact(origin: string, callback: (ctx: TransactionContext) => void, opts: TransactOptions = {}): CommitResult {
+    assertCanonicalOrigin(origin);
     if (this.inTransaction) throw new Error('nested/reentrant transaction is not allowed');
     if (opts.baseRevision !== undefined && opts.baseRevision !== this.revision) {
       return { ok: false, failure: { kind: 'conflict', message: `baseRevision ${opts.baseRevision} != current ${this.revision}` } };
@@ -150,6 +161,7 @@ export class DocumentStore {
    * later ops in the batch can target it.
    */
   applyEdits(ops: readonly DocOp[], origin: string): BatchResult {
+    assertCanonicalOrigin(origin);
     // Pre-validate every op positionally without mutating.
     const failingIndices: number[] = [];
     ops.forEach((op, i) => {
@@ -210,6 +222,7 @@ export class DocumentStore {
     model: PackageModel,
     origin: string,
   ): { ok: true; commitId: string; revision: number; modelChange: ModelChange } {
+    assertCanonicalOrigin(origin);
     const before = this.model;
     const fromRevision = this.revision;
     this.revision += 1;

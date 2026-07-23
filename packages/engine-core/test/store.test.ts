@@ -97,6 +97,22 @@ describe('4.2 synchronous transactions', () => {
     const r = store.transact(HUMAN, (c) => c.apply({ op: 'insertText', paragraphId: '', text: 'x' }));
     expect(r).toMatchObject({ ok: false, failure: { kind: 'validation' } });
   });
+
+  test('6.9: a projection or awareness origin cannot perform a canonical write (never enters history)', () => {
+    const { store, p1 } = newStore();
+    const rev = store.currentRevision;
+    // A ProjectionOrigin (binding/view work) or AwarenessOrigin (presence) is not a canonical write.
+    expect(() => store.applyEdits([{ op: 'insertText', paragraphId: p1, text: 'x' }], ORIGIN_IDS.projection)).toThrow(
+      /non-canonical origin/,
+    );
+    expect(() => store.transact(ORIGIN_IDS.awareness, (c) => c.apply({ op: 'insertText', paragraphId: p1, text: 'y' }))).toThrow(
+      /non-canonical origin/,
+    );
+    expect(() => store.publishDerived(store.currentModel, ORIGIN_IDS.projection)).toThrow(/non-canonical origin/);
+    // No commit, no history entry — projection/awareness left the canonical state untouched.
+    expect(store.currentRevision).toBe(rev);
+    expect(store.canUndo()).toBe(false);
+  });
 });
 
 describe('4.5 all-or-nothing batches', () => {
