@@ -10,11 +10,11 @@ import { readXml, findElement, childElements } from './xml-reader.ts';
 import { scanBodyBlockSpans, ScanError, type BlockSpan } from './wml-scan.ts';
 import { blockXml } from './wml-serialize.ts';
 import {
-  W_NS, collectParagraphElements, relatedStoryParts, parseStoryParagraphs,
-  parseStyles, parseNumbering, paragraphFromElement, blockFromSpan,
+  W_NS, collectParagraphElements, paragraphFromElement, blockFromSpan,
   treeHasTable, treeHasBlockSdt, deepHasTable, deepCountTables, countModelTables,
   hasNonWWordBinding, countTreeBlocks,
 } from './wml-parse.ts';
+import { relatedStoryParts, parseStoryParagraphs, parseStyles, parseNumbering } from './wml-parts.ts';
 import { DOC_PART, hashPreservableBlock, emitPreservedPart } from './wml-preserve.ts';
 import {
   createEmptyModel,
