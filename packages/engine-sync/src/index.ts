@@ -22,3 +22,4 @@ export {
   type RemoteMerge,
 } from './coordinator.ts';
 export { OfflineQueue } from './offline-queue.ts';
+export { type Role, type Presence, PresenceRegistry, canSubmitUpdate, canExport } from './awareness.ts';
