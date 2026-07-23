@@ -58,3 +58,10 @@ export {
   type MigrationResult,
   MigrationRunner,
 } from './migration.ts';
+export {
+  type Checkpoint,
+  type Compactable,
+  type CompactionResult,
+  compact,
+  materialize,
+} from './compaction.ts';
