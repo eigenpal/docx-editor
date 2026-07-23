@@ -23,19 +23,50 @@
    declared geometry, repeated headers paginate, and DOM output consumes the same
    layout result. This advances parts of 2.7, 3.1–3.7, 8.6, and 8.10 without
    completing those broad requirements.
-2. **Expose a read-only adapter preview checkpoint.** Use the production
-   parse→layout→display pipeline to open the same real DOCX fixture in the React and
-   Vue demos. Share projection logic, require matching page counts and visible table
-   geometry, surface invalid-file errors, and label editing/save as unsupported.
-   This is integration evidence only: it does not complete `DocxEditor.createEditor`,
-   ProseMirror binding, adapter migration, or a fidelity slice by itself.
-3. **Split the package monolith.** Complete 2.10 before adding another OOXML feature:
+2. **Split the package monolith.** Complete 2.10 before adding another OOXML feature:
    keep OPC orchestration in `package/opc.ts` and move WordprocessingML parsing,
    preservation, and serialization into focused capability modules.
-4. **Record the package-reader selection.** Complete 1.3 and record why the selected
+3. **Deliver the first end-to-end browser editing experience (next product
+   priority).** Open a real DOCX in both React and Vue, project body paragraphs into
+   ProseMirror, map text insertion/deletion and basic selection through one semantic
+   `DocOp` transaction into the canonical `DocumentStore`, relayout from
+   `store.model`, repaint, save DOCX, and reopen with the edit preserved. Tables,
+   SDTs, images, and unsupported content MUST remain visible but read-only or fail
+   closed—never flatten or disappear. React and Vue MUST expose the same minimal
+   load/edit/save behavior in the same change, with one engine-neutral `EditorDriver`
+   smoke test per adapter; the checkpoint is incomplete if only one framework works.
+   Do not add Yjs or wait for full formatting, feature breadth, or the complete public
+   object model. This is an early vertical checkpoint and does not complete the broad
+   requirements in 0.9, section 6, 7.12, or 14.5.
+   — LANDED (checkpoint): both React and Vue open a real DOCX, project body paragraphs
+   into a live ProseMirror view (engine-binding `EditorBinding`/`docSchema`/`modelToDoc`),
+   map insert/delete/selection to ONE `setParagraphRuns`/`appendParagraph`/`deleteParagraph`
+   DocOp per change through the canonical `DocumentStore`, and Save+reopen re-serializes
+   and reparses with the edit preserved. The two adapters share one framework-agnostic
+   mount (`examples/shared/mountDocxEditor.ts`) + the engine-neutral session
+   (`docxEditorSession.ts`), exposing an identical window `EditorDriver`; one Playwright
+   smoke test per adapter passes (`e2e/*-editor.smoke.spec.ts`, `bun run test:e2e:editor`).
+   Unsupported content is READ-ONLY, never flattened: `modelToDoc` projects tables/SDTs as
+   read-only `blockEmbed` atoms and the forward mapper fails closed on any structural
+   disturbance; editing is gated by `isPlainEditableDocx` (only documents the minimal
+   writer reproduces losslessly are editable — anything with extra parts, relationships,
+   section props, tables/SDTs, or inline hyperlink/field/tab/pPr opens read-only and saves
+   verbatim). No Yjs. DEFERRED (thin baseline, not this checkpoint): a separate paginated
+   layout-repaint pane for the editable view (the PM view is the editable render; the
+   canonical model is proven via save/reopen + model-read body text), paragraph REORDER
+   detection (no `moveBlock` emitted yet), and live-EditorView reconciliation — store
+   subscription, selection restoration, and IME. Broad 0.9 / section 6 / 7.12 / 14.5 stay
+   unchecked.
+4. **Freeze the feature-lane integration contract.** Use the paragraph and table
+   verticals to stabilize capability-level parse, preservation, serialization,
+   identity, semantic-operation, projection, layout, display, and fixture hooks.
+   Exit when a new OOXML feature can be added primarily as a focused module plus
+   registration and conformance fixtures rather than central parser/store/layout
+   switches; then independent feature lanes may run in isolated worktrees.
+5. **Record the package-reader selection.** Complete 1.3 and record why the selected
    ZIP/XML stack satisfies bounded parsing, hostile-input, lexical-fidelity, and
    browser/worker/server requirements.
-5. **Add structural SDTs/content controls.** Import block and inline SDTs without
+6. **Add structural SDTs/content controls.** Import block and inline SDTs without
    flattening; preserve properties, locks, tags, aliases, nested content, and unknown
    siblings; render and export/reopen them through the same vertical slice.
    — IN PROGRESS: block-level w:sdt now imports as a first-class `SdtRecord` (parsed
@@ -57,28 +88,29 @@
    otherwise-untouched preserved paragraph/table/SDT as "edited" — the baseline hash
    should be computed on the normalized block (or emit should tolerate normalization-
    equivalent changes); tracked as a preservation follow-up.
-6. **Resolve authored formatting.** Finish styles, numbering, themes, paragraph/run
+7. **Resolve authored formatting.** Finish styles, numbering, themes, paragraph/run
    properties, table styles, inheritance, and list rendering without materializing
    resolved values into authored state.
-7. **Add document-flow breadth.** Implement sections, headers/footers, notes,
+8. **Add document-flow breadth.** Implement sections, headers/footers, notes,
    comments, text boxes, images/relationships, fields, controls/locks, and tracked
    revisions as structural records with lossless export/reopen.
-8. **Close remaining preservation and DOCX export breadth.** Each feature above must
+9. **Close remaining preservation and DOCX export breadth.** Each feature above must
    land its minimum preservation/export/reopen path in its own slice. Then complete
    ownership-scoped capsules, namespace/sibling reinsertion, selective byte-range
    serialization, package-part diff fixtures, and the combined adversarial gate
    across all supported stories.
-9. **Close layout and output.** Add shaping, dependency-aware invalidation, sections,
+10. **Close layout and output.** Add shaping, dependency-aware invalidation, sections,
    columns, tables, pagination convergence, hit testing, accessible DOM, and native
    PDF over one anchored display list.
-10. **Finish semantic editing and the public object model.** Expand DocOps,
+11. **Finish semantic editing and the public object model.** Expand DocOps,
    normalization, targets, schemas, request-context batching, proxies, commands, and
    queries in the same vertical slice as each supported structure rather than as a
    late global pass.
-11. **Finish ProseMirror binding, then adapters.** Implement shadow transaction
-   mapping, incremental reverse reconciliation, selections, IME, loop prevention,
-   `DocxEditor.createEditor`, and finally React/Vue parity through the shared binding.
-12. **Finish headless/server surfaces.** After parse/edit/layout/export are stable,
+12. **Close ProseMirror-binding and adapter breadth.** Extend the proven paragraph
+   editing vertical to structures, marks, related stories, shadow transaction
+   mapping, incremental reverse reconciliation, rich selections, IME, loop
+   prevention, complete `DocxEditor.createEditor`, and final React/Vue parity.
+13. **Finish headless/server surfaces.** After parse/edit/layout/export are stable,
     complete the headless workflow, RPC schemas/streaming, generated clients,
     annotations/citations, conformance budgets, adapter migration, docs, and release.
 
@@ -90,8 +122,10 @@
   fidelity-first critical path. Existing Yjs code is partial groundwork, not the
   active product path.
 - **Premature downstream breadth:** generated language clients, full citation APIs,
-  performance ratification, and adapter migration remain deferred until the
-  fidelity, layout, binding, and public API prerequisites above are complete.
+  performance ratification, and full adapter migration remain deferred until the
+  fidelity, layout, binding, and public API prerequisites above are complete. The
+  paired paragraph-editing checkpoint in queue item 3 is intentionally early and
+  does not authorize the remaining 14.x migration.
 
 ## Existing partial groundwork
 
@@ -196,9 +230,12 @@
 
 ## 6. Editor binding and ProseMirror projection
 
-> **Scope:** This section resumes after structural parsing, preservation, layout, and
-> export/reopen are stable for the active fidelity features. Existing binding,
-> selection, and IME helpers are partial groundwork and remain unchecked.
+> **Scope:** Implement the smallest paragraph-only subset of 6.1–6.5 immediately for
+> active-queue item 3: project body paragraphs, map insertion/deletion through one
+> canonical transaction, reconcile after commit, relayout, save, and reopen. Keep
+> unsupported structures visible but read-only or fail closed. The broad requirements
+> below remain unchecked until their complete structure, selection, IME, origin, and
+> conformance clauses pass; Yjs is not a prerequisite for this early editing slice.
 
 - [ ] 6.1 Implement the `EditorBinding` package as the only PM-aware integration and add dependency tests proving headless parse, edit, synchronization, layout, and export work when the package is absent.
 - [ ] 6.2 Implement authored-model-to-ProseMirror projection for editable stories, semantic marks, structures, controls, comments, revisions, and stable identity metadata; verify rebuilding a fixture projection preserves semantic content without becoming canonical state.
@@ -318,9 +355,11 @@
 
 ## 14. Adapter adoption, compatibility, documentation, and release
 
-> **Scope:** This is the final adoption track. Start only after
-> `DocxEditor.createEditor`, `EditorBinding`, layout/output, and the public object model
-> are stable enough to migrate both adapters without duplicating engine logic.
+> **Scope:** This is the final adoption track. Active-queue item 3 intentionally wires
+> one paired paragraph-editing vertical into the React and Vue demos early. Full
+> adapter migration starts only after `DocxEditor.createEditor`, `EditorBinding`,
+> layout/output, and the public object model are stable enough to migrate both
+> adapters without duplicating engine logic.
 
 - [ ] 14.1 Inventory every adapter, agent, demo, test, and documentation import against declared production entries, using the existing contract declarations as a baseline; verify the inventory contains no workspace alias or undeclared source path.
 - [ ] 14.2 Add CI assertions that the private contract package is never published, production entries resolve without `tsconfig` paths or bundler aliases, undeclared subpaths fail, and package files contain every declared stylesheet, preset, asset, schema, and declaration.
