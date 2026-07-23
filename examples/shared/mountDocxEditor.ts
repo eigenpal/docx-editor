@@ -96,45 +96,66 @@ export function mountDocxEditor(container: HTMLElement, bytes: Uint8Array): Moun
   };
 
   let reconciling = false;
+  let pendingCompositionCommit = false;
   const view = new EditorView(editPane, {
     state: EditorState.create({ doc: session.projectDoc(), plugins }),
     editable: () => session.editable,
+    // While an IME composition is active, ProseMirror mutates the DOM directly and dispatches
+    // interim transactions; committing (which would reproject on a rejection) mid-composition
+    // disrupts the IME. Defer the commit and flush it once composition ends (compositionend).
+    handleDOMEvents: {
+      compositionend: () => {
+        const win = container.ownerDocument?.defaultView;
+        const flush = () => {
+          if (!pendingCompositionCommit) return;
+          pendingCompositionCommit = false;
+          if (!reconciling) commitEdit();
+        };
+        // Let ProseMirror apply its final composition transaction first, then commit.
+        if (win?.requestAnimationFrame) win.requestAnimationFrame(flush);
+        else flush();
+        return false;
+      },
+    },
     dispatchTransaction(tr) {
       const next = view.state.apply(tr);
       view.updateState(next);
       if (reconciling || !tr.docChanged) return;
-      const res = session.applyPmDoc(next.doc);
-      // If the store refused the edit (a structural change or a read-only block), snap the
-      // view's content back to the canonical projection so the view can never diverge from
-      // the model. Keep it out of the undo history and guard reentrancy so the prior undo
-      // stack and the plugins survive.
-      if (res.rejected) {
-        reconciling = true;
-        // Capture the caret as an authored anchor (paragraph semId + offset) BEFORE reverting,
-        // then restore it against the reverted doc so a refused edit doesn't also jump the
-        // cursor to the top. A deleted/new paragraph collapses to a surviving boundary.
-        const anchor = captureSelection(next);
-        const canonical = session.projectDoc();
-        const revert = view.state.tr
-          .replaceWith(0, view.state.doc.content.size, canonical.content)
-          .setMeta('addToHistory', false);
-        try {
-          revert.setSelection(resolveSelection(anchor, revert.doc));
-        } catch {
-          // Fall back to the default mapped selection if the anchor cannot be resolved.
-        }
-        view.dispatch(revert);
-        reconciling = false;
+      if (view.composing) {
+        pendingCompositionCommit = true; // defer until compositionend
+        return;
       }
-      // A committed edit changed the canonical model — re-tag any new paragraphs with the
-      // ids the store minted (so a split's tail keeps identity for the next edit), then
-      // repaint the paginated display from the canonical model.
-      if (res.committed) {
-        syncSemIds();
-        repaintPaged();
-      }
+      commitEdit();
     },
   });
+
+  // Map the current view doc to the store. On a refused edit, snap back to the canonical
+  // projection (never let the view diverge); on a committed edit, re-tag new paragraphs and
+  // repaint the paginated display.
+  function commitEdit() {
+    const state = view.state;
+    const res = session.applyPmDoc(state.doc);
+    if (res.rejected) {
+      reconciling = true;
+      // Capture the caret as an authored anchor (paragraph semId + offset) BEFORE reverting,
+      // then restore it against the reverted doc so a refused edit doesn't also jump the cursor
+      // to the top. A deleted/new paragraph collapses to a surviving boundary.
+      const anchor = captureSelection(state);
+      const canonical = session.projectDoc();
+      const revert = state.tr.replaceWith(0, state.doc.content.size, canonical.content).setMeta('addToHistory', false);
+      try {
+        revert.setSelection(resolveSelection(anchor, revert.doc));
+      } catch {
+        // Fall back to the default mapped selection if the anchor cannot be resolved.
+      }
+      view.dispatch(revert);
+      reconciling = false;
+    }
+    if (res.committed) {
+      syncSemIds();
+      repaintPaged();
+    }
+  }
 
   // Re-tag the view's projected paragraphs with the canonical block ids by position. After a
   // split the store mints a new tail id; the PM tail still reads semId=null. One
