@@ -32,6 +32,16 @@ export function editorSmoke(adapter: string, baseUrl: string): void {
       expect(await page.evaluate(() => window.__docxEditorDriver!.getBodyText())).toContain(marker);
       // ...and it survives a real save -> reopen round-trip.
       expect(await page.evaluate(() => window.__docxEditorDriver!.saveAndReopenText())).toContain(marker);
+      // ...and the PAGINATED pane (repainted from the canonical model by the incremental
+      // painter) reflects the edit — the marker's letters appear as positioned spans.
+      await expect
+        .poll(() =>
+          page.evaluate(() => {
+            const paged = document.querySelector('.docx-paged-pane');
+            return paged ? paged.textContent!.replace(/\s+/g, '') : '';
+          }),
+        )
+        .toContain(marker.replace(/\s+/g, ''));
     });
 
     test('pressing Enter splits a paragraph and the split survives save + reopen', async ({ page }) => {

@@ -48,10 +48,12 @@ export function renderModelPreview(
   return { ok: true, pageCount: layout.pages.length };
 }
 
-/** A stable fingerprint of a laid-out page's paint content — two pages with the same items
- *  produce byte-identical DOM, so an unchanged page can keep its existing element. */
+/** A stable fingerprint of everything renderPageElement paints for a page — its dimensions
+ *  AND its display items — so two pages with the same fingerprint produce byte-identical DOM and
+ *  an unchanged page can keep its existing element. Dimensions are included so a page that keeps
+ *  its items but changes size (a different section page size) is not falsely reused. */
 function pageFingerprint(page: Page): string {
-  return JSON.stringify(page.items);
+  return JSON.stringify({ w: page.width, h: page.height, items: page.items });
 }
 
 export interface PagePainter {
