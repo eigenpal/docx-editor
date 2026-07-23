@@ -63,3 +63,15 @@ describe('renderDocxPreview (shared read-only projection)', () => {
     expect(el.children.length).toBe(firstCount); // not doubled
   });
 });
+
+describe('deterministic page count (locks React/Vue parity by construction)', () => {
+  test('the same fixture always yields the same page count', () => {
+    const bytes = readFileSync(`${import.meta.dir}/../../e2e/fixtures/repeated-table-header.docx`);
+    const a = renderDocxPreview(bytes, mockDom().container, {}, mockDom().doc);
+    const b = renderDocxPreview(bytes, mockDom().container, {}, mockDom().doc);
+    // Both demos call this one path, so identical bytes -> identical page count.
+    expect(a.ok && b.ok).toBe(true);
+    expect(a.pageCount).toBe(b.pageCount);
+    expect(a.pageCount).toBeGreaterThan(0);
+  });
+});
