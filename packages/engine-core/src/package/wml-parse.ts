@@ -515,33 +515,36 @@ export function treeHasBlockSdt(container: Extract<XmlNode, { type: 'element' }>
   return false;
 }
 
-/** Count the BLOCK children an SDT projects: exactly what parseSdtContentBlocks extracts
- *  (w:p / w:tbl / nested w:sdt, descending the transparent w:customXml wrapper). Zero for
- *  an inline (run-content) SDT or an empty/absent w:sdtContent. */
-function sdtContentBlockCount(sdt: Extract<XmlNode, { type: 'element' }>): number {
+/** Whether an SDT's w:sdtContent holds BLOCK content (a w:p or w:tbl) anywhere in its
+ *  subtree, through ANY wrapper — including ones the structural parser does NOT descend
+ *  (w:ins / w:del / w:smartTag / unknown foreign elements), not just w:customXml. This is
+ *  DELIBERATELY broader than parseSdtContentBlocks: it powers the fail-closed net, whose
+ *  job is to detect content that would be lost, not to mirror what the model captures. An
+ *  inline (run-content) SDT has no w:p/w:tbl and returns false. */
+function sdtHasDeepBlockContent(sdt: Extract<XmlNode, { type: 'element' }>): boolean {
   const content = childElements(sdt, 'w:sdtContent')[0];
-  if (!content) return 0;
-  const walk = (container: Extract<XmlNode, { type: 'element' }>): number => {
-    let n = 0;
+  if (!content) return false;
+  const walk = (container: Extract<XmlNode, { type: 'element' }>): boolean => {
     for (const child of container.children) {
       if (!el(child)) continue;
-      if (child.name === 'w:p' || child.name === 'w:tbl' || child.name === 'w:sdt') n += 1;
-      else if (child.name === 'w:customXml') n += walk(child);
+      if (child.name === 'w:p' || child.name === 'w:tbl') return true;
+      if (walk(child)) return true;
     }
-    return n;
+    return false;
   };
   return walk(content);
 }
 
 /** Whether a block-level content control (a w:sdt carrying block content) appears
  *  ANYWHERE in the subtree, including inside wrappers the structural traversals do NOT
- *  descend (w:ins, mc:AlternateContent, unknown foreign elements). Used as a flat-path
- *  fail-closed net: on the non-preserved path a block SDT hidden in an unsupported
- *  wrapper would be silently dropped, so its presence must reject the document instead. */
+ *  descend (w:ins, w:del, mc:AlternateContent, unknown foreign elements) AND when the
+ *  block content itself sits under such a wrapper inside w:sdtContent. Used as a flat-path
+ *  fail-closed net: on the non-preserved path a block SDT hidden this way would be
+ *  silently dropped, so its presence must reject the document instead. */
 export function deepHasBlockSdt(container: Extract<XmlNode, { type: 'element' }>): boolean {
   for (const child of container.children) {
     if (!el(child)) continue;
-    if (child.name === 'w:sdt' && sdtContentBlockCount(child) > 0) return true;
+    if (child.name === 'w:sdt' && sdtHasDeepBlockContent(child)) return true;
     if (deepHasBlockSdt(child)) return true;
   }
   return false;

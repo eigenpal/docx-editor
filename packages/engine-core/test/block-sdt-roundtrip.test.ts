@@ -201,3 +201,36 @@ describe('block-SDT security + fail-closed nets (SDT review High/Medium)', () =>
     }
   });
 });
+
+describe('block-SDT compositional-bypass net (SDT review round 2)', () => {
+  test('block content wrapped in w:ins INSIDE an SDT, hidden under w:foreign, fails closed', () => {
+    // The inner w:ins is not a wrapper the model descends, and the outer w:foreign hides
+    // the SDT from the structural path — the deep net must still catch the block content.
+    const r = parseDocx(synthDocx(
+      '<w:foreign><w:sdt><w:sdtPr><w:tag w:val="deep"/></w:sdtPr><w:sdtContent>' +
+        '<w:ins><w:p><w:r><w:t>secret</w:t></w:r></w:p></w:ins>' +
+        '</w:sdtContent></w:sdt></w:foreign>',
+    ));
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.detail).toContain('unsupported container');
+  });
+
+  test('a table wrapped in w:del inside an SDT under w:foreign also fails closed', () => {
+    const r = parseDocx(synthDocx(
+      '<w:foreign><w:sdt><w:sdtContent><w:del><w:tbl><w:tr><w:tc>' +
+        '<w:p><w:r><w:t>x</w:t></w:r></w:p></w:tc></w:tr></w:tbl></w:del>' +
+        '</w:sdtContent></w:sdt></w:foreign>',
+    ));
+    expect(r.ok).toBe(false);
+  });
+
+  test('an inline SDT whose content is runs-in-w:ins under w:foreign still does NOT trip', () => {
+    // No w:p/w:tbl anywhere in the SDT content -> inline -> stays on the flat path.
+    const r = parseDocx(synthDocx(
+      '<w:p><w:r><w:t>a</w:t></w:r></w:p>' +
+        '<w:foreign><w:sdt><w:sdtContent><w:ins><w:r><w:t>inline</w:t></w:r></w:ins>' +
+        '</w:sdtContent></w:sdt></w:foreign>',
+    ));
+    expect(r.ok).toBe(true);
+  });
+});
