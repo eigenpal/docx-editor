@@ -12,6 +12,7 @@ import { IdentityAllocator } from '../model/identity.ts';
 import {
   type Block,
   type ParagraphRecord,
+  type ParagraphProps,
   type RunRecord,
   type RunProps,
   type TableRecord,
@@ -91,13 +92,43 @@ function parseRun(run: Extract<XmlNode, { type: 'element' }>): RunRecord | undef
     }
   }
   const rPr = childElements(run, 'w:rPr')[0];
-  const props: RunProps = {};
+  const props: { styleId?: string; bold?: boolean; italic?: boolean } = {};
   if (rPr) {
-    if (childElements(rPr, 'w:b').length > 0) (props as { bold?: boolean }).bold = true;
-    if (childElements(rPr, 'w:i').length > 0) (props as { italic?: boolean }).italic = true;
+    // Character-style link (w:rStyle) — the resolver's char-style layer. Formatting
+    // toggles stay presence-only here to preserve the from-scratch serialize contract
+    // (paragraphFullyCaptured already rejects runs with explicit-on/off b/i or an rStyle).
+    const styleId = childElements(rPr, 'w:rStyle')[0]?.attributes['w:val'];
+    if (styleId) props.styleId = styleId;
+    if (childElements(rPr, 'w:b').length > 0) props.bold = true;
+    if (childElements(rPr, 'w:i').length > 0) props.italic = true;
   }
   if (text.length === 0 && Object.keys(props).length === 0) return undefined;
   return Object.keys(props).length > 0 ? { text, props } : { text };
+}
+
+/** A boolean toggle rPr child (w:b/w:i): present with no val or a truthy val => true;
+ *  explicit w:val of 0/false/off => false; absent => undefined (omitted/inherit). */
+function toggleProp(rPr: Extract<XmlNode, { type: 'element' }>, name: string): boolean | undefined {
+  const child = childElements(rPr, name)[0];
+  if (!child) return undefined;
+  const v = child.attributes['w:val'];
+  if (v === undefined) return true;
+  return !(v === '0' || v === 'false' || v === 'off');
+}
+
+/** Read run formatting (bold/italic/underline) from a w:rPr element, honoring explicit
+ *  on/off. Shared by run, style, and docDefaults parsing. Every field is present only
+ *  when the rPr sets it (absent => omitted/inherit). Underline: w:u @w:val="none" => off,
+ *  any other value or bare presence => on. */
+export function parseRPr(rPr: Extract<XmlNode, { type: 'element' }>): RunProps {
+  const props: { bold?: boolean; italic?: boolean; underline?: boolean } = {};
+  const b = toggleProp(rPr, 'w:b');
+  if (b !== undefined) props.bold = b;
+  const i = toggleProp(rPr, 'w:i');
+  if (i !== undefined) props.italic = i;
+  const u = childElements(rPr, 'w:u')[0];
+  if (u) props.underline = u.attributes['w:val'] !== 'none';
+  return props;
 }
 
 /**
@@ -244,13 +275,34 @@ function parseCellProps(tcPr: Extract<XmlNode, { type: 'element' }> | undefined)
   return Object.keys(props).length > 0 ? props : undefined;
 }
 
+/** Authored paragraph properties from w:pPr (style link + list membership). Every field
+ *  is present only when set (absent => omitted/inherit). Formatting VALUES stay omitted
+ *  in authored state — the style resolver derives effective formatting, this only records
+ *  the links (pStyle/numPr) resolution needs. */
+function parseParagraphProps(pEl: Extract<XmlNode, { type: 'element' }>): ParagraphProps | undefined {
+  const pPr = childElements(pEl, 'w:pPr')[0];
+  if (!pPr) return undefined;
+  const props: { styleId?: string; numId?: string; ilvl?: number } = {};
+  const styleId = childElements(pPr, 'w:pStyle')[0]?.attributes['w:val'];
+  if (styleId) props.styleId = styleId;
+  const numPr = childElements(pPr, 'w:numPr')[0];
+  if (numPr) {
+    const numId = childElements(numPr, 'w:numId')[0]?.attributes['w:val'];
+    if (numId) props.numId = numId;
+    const ilvl = intAttr(childElements(numPr, 'w:ilvl')[0]?.attributes['w:val']);
+    if (ilvl !== undefined) props.ilvl = ilvl;
+  }
+  return Object.keys(props).length > 0 ? props : undefined;
+}
+
 export function paragraphFromElement(pEl: Extract<XmlNode, { type: 'element' }>, alloc: IdentityAllocator): ParagraphRecord {
   const runs: RunRecord[] = [];
   for (const runEl of collectRunElements(pEl)) {
     const run = parseRun(runEl);
     if (run) runs.push(run);
   }
-  return { kind: 'paragraph', id: alloc.allocate('paragraph'), runs };
+  const props = parseParagraphProps(pEl);
+  return { kind: 'paragraph', id: alloc.allocate('paragraph'), runs, ...(props ? { props } : {}) };
 }
 
 /** Block children of a cell (w:p / nested w:tbl), descending block wrappers so

@@ -28,6 +28,7 @@ export {
   type StoryKind,
   type Story,
   type StyleRecord,
+  type DocDefaults,
   type NumberingRecord,
   type PartRecord,
   type IdentityState,

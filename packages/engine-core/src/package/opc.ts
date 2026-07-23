@@ -14,7 +14,7 @@ import {
   treeHasTable, treeHasBlockSdt, deepHasTable, deepHasBlockSdt, deepCountTables,
   countModelTables, hasNonWWordBinding, countTreeBlocks,
 } from './wml-parse.ts';
-import { relatedStoryParts, parseStoryParagraphs, parseStyles, parseNumbering } from './wml-parts.ts';
+import { relatedStoryParts, parseStoryParagraphs, parseStyles, parseDocDefaults, parseNumbering } from './wml-parts.ts';
 import { DOC_PART, hashPreservableBlock, emitPreservedPart } from './wml-preserve.ts';
 import {
   createEmptyModel,
@@ -142,11 +142,13 @@ export function parseDocx(bytes: Uint8Array): ParseResult {
   }
 
   const styles = parseStyles(zip.entries);
+  const docDefaults = parseDocDefaults(zip.entries);
   const numbering = parseNumbering(zip.entries);
   const model: PackageModel = {
     ...base,
     stories,
     styles: styles.length > 0 ? styles : base.styles,
+    ...(docDefaults ? { docDefaults } : {}),
     numbering,
     identity: alloc.state(),
     ...(preservation ? { preservation } : {}),

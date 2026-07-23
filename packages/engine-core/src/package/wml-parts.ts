@@ -8,12 +8,14 @@
 import { readXml, findElement, childElements, type XmlNode } from './xml-reader.ts';
 import { strFromU8 } from './zip.ts';
 import { resolveInternalTarget } from './opc-names.ts';
-import { el, collectParagraphElements, paragraphFromElement } from './wml-parse.ts';
+import { el, collectParagraphElements, paragraphFromElement, parseRPr } from './wml-parse.ts';
 import { IdentityAllocator } from '../model/identity.ts';
 import {
   type ParagraphRecord,
   type StyleRecord,
   type NumberingRecord,
+  type DocDefaults,
+  type RunProps,
 } from '../model/index.ts';
 
 /** Collect every `Relationship` element from a rels part's tree. */
@@ -83,9 +85,37 @@ export function parseStyles(entries: ReadonlyMap<string, Uint8Array>): StyleReco
     const type: StyleRecord['type'] = t === 'character' || t === 'table' || t === 'numbering' ? t : 'paragraph';
     const name = childElements(style, 'w:name')[0]?.attributes['w:val'] ?? id;
     const isDefault = style.attributes['w:default'] === '1' || style.attributes['w:default'] === 'true';
-    out.push(isDefault ? { id, name, type, isDefault: true } : { id, name, type });
+    const basedOn = childElements(style, 'w:basedOn')[0]?.attributes['w:val'];
+    const rPr = childElements(style, 'w:rPr')[0];
+    const runProps = rPr ? parseRPr(rPr) : undefined;
+    out.push({
+      id,
+      name,
+      type,
+      ...(isDefault ? { isDefault: true } : {}),
+      ...(basedOn ? { basedOn } : {}),
+      ...(runProps && Object.keys(runProps).length > 0 ? { runProps } : {}),
+    });
   }
   return out;
+}
+
+/** Parse word/styles.xml's w:docDefaults into document-wide default formatting — the
+ *  lowest layer of style resolution. Resolution-only; never authored onto content. */
+export function parseDocDefaults(entries: ReadonlyMap<string, Uint8Array>): DocDefaults | undefined {
+  const part = entries.get('/word/styles.xml');
+  if (!part) return undefined;
+  const sx = readXml(strFromU8(part));
+  if (!sx.ok) return undefined;
+  const root = findElement(sx.nodes, 'w:styles');
+  if (!root) return undefined;
+  const docDefaults = childElements(root, 'w:docDefaults')[0];
+  if (!docDefaults) return undefined;
+  const rPrDefault = childElements(docDefaults, 'w:rPrDefault')[0];
+  const rPr = rPrDefault ? childElements(rPrDefault, 'w:rPr')[0] : undefined;
+  const runProps: RunProps | undefined = rPr ? parseRPr(rPr) : undefined;
+  if (!runProps || Object.keys(runProps).length === 0) return undefined;
+  return { runProps };
 }
 
 /** Parse word/numbering.xml into authored numbering records (task 2.7). */

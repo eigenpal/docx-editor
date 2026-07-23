@@ -258,6 +258,19 @@ export interface StyleRecord {
   readonly name: string;
   readonly type: 'paragraph' | 'character' | 'table' | 'numbering';
   readonly isDefault?: boolean;
+  /** w:basedOn @w:val — the parent style this one inherits from (resolution only). */
+  readonly basedOn?: string;
+  /** Run formatting this style DEFINES (from its w:rPr). Authored values only; a field
+   *  is present only when the style sets it. Consumed by the style resolver (a derived
+   *  projection), never merged into a run's authored props. */
+  readonly runProps?: RunProps;
+}
+
+/** Document-wide default formatting (w:docDefaults). The lowest layer of the style
+ *  resolution stack, below every named style. Resolution-only; never authored onto a
+ *  run/paragraph. */
+export interface DocDefaults {
+  readonly runProps?: RunProps;
 }
 
 export interface NumberingRecord {
@@ -279,6 +292,7 @@ export interface PackageModel {
   readonly relationships: readonly RelationshipRecord[];
   readonly stories: ReadonlyMap<string, Story>;
   readonly styles: readonly StyleRecord[];
+  readonly docDefaults?: DocDefaults;
   readonly numbering: readonly NumberingRecord[];
   readonly parts: ReadonlyMap<string, PartRecord>;
   readonly identity: IdentityState;
