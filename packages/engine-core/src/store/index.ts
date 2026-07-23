@@ -65,3 +65,12 @@ export {
   compact,
   materialize,
 } from './compaction.ts';
+export {
+  type AnnotationKind,
+  type AnnotationPolicy,
+  type AnnotationState,
+  type AnnotationRange,
+  type Annotation,
+  onBlockDeleted,
+  onRangeDeleted,
+} from './annotation.ts';
