@@ -234,3 +234,27 @@ describe('block-SDT compositional-bypass net (SDT review round 2)', () => {
     expect(r.ok).toBe(true);
   });
 });
+
+describe('block-SDT nested-sdt bypass (SDT review round 3)', () => {
+  test('a nested w:sdt (no direct w:p/w:tbl) hidden under w:foreign fails closed', () => {
+    // The outer SDT projects the inner SDT as a nested SdtRecord on the structural path,
+    // so a hidden nested-SDT-only chain must NOT be silently dropped on the flat path.
+    const r = parseDocx(synthDocx(
+      '<w:foreign><w:sdt><w:sdtPr><w:tag w:val="outer"/></w:sdtPr><w:sdtContent>' +
+        '<w:sdt><w:sdtPr><w:tag w:val="inner"/></w:sdtPr><w:sdtContent>' +
+        '<w:r><w:t>x</w:t></w:r></w:sdtContent></w:sdt>' +
+        '</w:sdtContent></w:sdt></w:foreign>',
+    ));
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.detail).toContain('unsupported container');
+  });
+
+  test('a nested w:sdt wrapped in w:ins under w:foreign also fails closed', () => {
+    const r = parseDocx(synthDocx(
+      '<w:foreign><w:sdt><w:sdtContent><w:ins>' +
+        '<w:sdt><w:sdtContent><w:r><w:t>y</w:t></w:r></w:sdtContent></w:sdt>' +
+        '</w:ins></w:sdtContent></w:sdt></w:foreign>',
+    ));
+    expect(r.ok).toBe(false);
+  });
+});

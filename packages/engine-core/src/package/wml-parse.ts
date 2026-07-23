@@ -515,19 +515,21 @@ export function treeHasBlockSdt(container: Extract<XmlNode, { type: 'element' }>
   return false;
 }
 
-/** Whether an SDT's w:sdtContent holds BLOCK content (a w:p or w:tbl) anywhere in its
- *  subtree, through ANY wrapper — including ones the structural parser does NOT descend
- *  (w:ins / w:del / w:smartTag / unknown foreign elements), not just w:customXml. This is
- *  DELIBERATELY broader than parseSdtContentBlocks: it powers the fail-closed net, whose
- *  job is to detect content that would be lost, not to mirror what the model captures. An
- *  inline (run-content) SDT has no w:p/w:tbl and returns false. */
+/** Whether an SDT's w:sdtContent holds BLOCK content (a w:p, w:tbl, or a nested block
+ *  w:sdt) anywhere in its subtree, through ANY wrapper — including ones the structural
+ *  parser does NOT descend (w:ins / w:del / w:smartTag / unknown foreign elements), not
+ *  just w:customXml. DELIBERATELY broader than parseSdtContentBlocks: it powers the
+ *  fail-closed net, whose job is to detect content that would be lost, not to mirror what
+ *  the model captures. A nested w:sdt counts as block content (it is projected as a nested
+ *  SdtRecord on the structural path, so it must not vanish on the flat path). An inline
+ *  (run-content) SDT has no w:p/w:tbl/w:sdt and returns false. */
 function sdtHasDeepBlockContent(sdt: Extract<XmlNode, { type: 'element' }>): boolean {
   const content = childElements(sdt, 'w:sdtContent')[0];
   if (!content) return false;
   const walk = (container: Extract<XmlNode, { type: 'element' }>): boolean => {
     for (const child of container.children) {
       if (!el(child)) continue;
-      if (child.name === 'w:p' || child.name === 'w:tbl') return true;
+      if (child.name === 'w:p' || child.name === 'w:tbl' || child.name === 'w:sdt') return true;
       if (walk(child)) return true;
     }
     return false;
