@@ -46,11 +46,15 @@ export {
   type CoreBlockCapability,
   type RecurseNormalize,
   type RecurseHash,
+  type BlockPatch,
+  type PatchContext,
   registerCoreBlockCapability,
   blockHashContent,
   blockNormalize,
   blockSerialize,
+  blockPatchEdited,
   hasBlockSerialize,
+  isTopLevelEditable,
 } from './block-capabilities.ts';
 export {
   type SplitResult,

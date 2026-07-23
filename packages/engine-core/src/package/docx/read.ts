@@ -29,6 +29,7 @@ import {
   type BlockRange,
   type PreservationState,
   validatePreservation,
+  isTopLevelEditable,
 } from '../../model/index.ts';
 import { IdentityAllocator } from '../../model/identity.ts';
 
@@ -315,7 +316,7 @@ export function isModelBodyPatchable(model: PackageModel): boolean {
   if (blocks.length === 0) return false;
   const ranges: { start: number; end: number }[] = [];
   for (const b of blocks) {
-    if (b.kind !== 'paragraph') return false; // tables/SDTs are read-only (not top-level patchable)
+    if (!isTopLevelEditable(b.kind)) return false; // non-editable kinds (tables/SDTs) open read-only
     const r = pres.blockRanges.get(b.id);
     if (!r || r.partName !== DOC_PART) return false; // e.g. a synthetic empty-body paragraph with no source range
     if (!sliceIsFullyCapturedParagraph(docText.slice(r.start, r.end))) return false; // unmodeled/comment -> read-only

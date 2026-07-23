@@ -19,6 +19,24 @@ export type RecurseNormalize = (blocks: readonly Block[]) => readonly Block[];
 /** Hash a nested block (passed to a container capability's hashContent). */
 export type RecurseHash = (block: Block) => unknown;
 
+/** A byte-range replacement within a preserved part (the smallest owned range regenerated for an
+ *  edited block; other bytes stay verbatim). */
+export interface BlockPatch {
+  readonly start: number;
+  readonly end: number;
+  readonly xml: string;
+}
+
+/** What an edited-block patcher needs: the current (edited) model block, the block reparsed from
+ *  the ORIGINAL source slice (the baseline), that slice's text, and its absolute byte range. */
+export interface PatchContext {
+  readonly block: Block;
+  readonly reparsed: Block;
+  readonly sliceText: string;
+  readonly rangeStart: number;
+  readonly rangeEnd: number;
+}
+
 /** The core operations one block kind contributes. Each is optional at registration so different
  *  layers can add their part; a caller fetching a missing op gets a clear error. */
 export interface CoreBlockCapability {
@@ -29,6 +47,14 @@ export interface CoreBlockCapability {
   readonly normalize?: (block: Block, recurse: RecurseNormalize) => Block;
   /** Regenerate the block's WordprocessingML (throws if it is not byte-faithfully regenerable). */
   readonly serialize?: (block: Block) => string;
+  /** Regenerate the SMALLEST owned byte-range(s) for an EDITED block, leaving every other byte
+   *  verbatim (preservation ownership). Throws to fail closed when the edit is not byte-faithfully
+   *  patchable (unmodeled content, a structural/kind change). */
+  readonly patchEdited?: (ctx: PatchContext) => readonly BlockPatch[];
+  /** Edit policy (design decision 3). `topLevelEditable` = this kind may be semantically edited as
+   *  a top-level body block; a non-editable kind is preserved read-only (never regenerated
+   *  structurally). Defaults to non-editable when a kind omits it. */
+  readonly editPolicy?: { readonly topLevelEditable: boolean };
 }
 
 const registry = new Map<BlockKind, CoreBlockCapability>();
@@ -49,7 +75,12 @@ function opFor<K extends keyof CoreBlockCapability>(kind: BlockKind, op: K): Non
 export const blockHashContent = (block: Block, recurse: RecurseHash): unknown => opFor(block.kind, 'hashContent')(block, recurse);
 export const blockNormalize = (block: Block, recurse: RecurseNormalize): Block => opFor(block.kind, 'normalize')(block, recurse);
 export const blockSerialize = (block: Block): string => opFor(block.kind, 'serialize')(block);
+export const blockPatchEdited = (ctx: PatchContext): readonly BlockPatch[] => opFor(ctx.block.kind, 'patchEdited')(ctx);
 export const hasBlockSerialize = (kind: BlockKind): boolean => !!registry.get(kind)?.serialize;
+/** Whether a block kind may be semantically edited as a top-level body block (design decision 3).
+ *  A kind with no declared policy is treated as non-editable (preserved read-only), so a new kind
+ *  is safe by default until it registers real editable handlers. */
+export const isTopLevelEditable = (kind: BlockKind): boolean => registry.get(kind)?.editPolicy?.topLevelEditable === true;
 
 // --- built-in hash + normalize (pure, model-level). Serialize is contributed from package/. ---
 
@@ -80,6 +111,7 @@ registerCoreBlockCapability({
     return { kind: 'paragraph', runs: normalizeRuns(p.runs), ...(p.props ? { props: p.props } : {}) };
   },
   normalize: (block) => normalizeParagraph(block as ParagraphRecord),
+  editPolicy: { topLevelEditable: true }, // paragraphs are the editable top-level block kind
 });
 
 registerCoreBlockCapability({

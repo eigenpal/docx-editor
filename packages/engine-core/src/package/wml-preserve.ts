@@ -10,7 +10,7 @@ import { scanCellParagraphSpans } from './wml-scan.ts';
 import { paragraphXml } from './wml-serialize.ts';
 import { el, blockFromText } from './wml-parse.ts';
 import { IdentityAllocator } from '../model/identity.ts';
-import { blockHashContent } from '../model/index.ts';
+import { blockHashContent, blockPatchEdited, blockSerialize, isTopLevelEditable, registerCoreBlockCapability } from '../model/index.ts';
 import { stableHash } from '../comparators/index.ts';
 import {
   bodyStoryId,
@@ -176,6 +176,36 @@ function patchEditedTable(tableText: string, tableStart: number, baseline: Table
   return patches;
 }
 
+// Register the preservation PATCH-OWNERSHIP capabilities (comprehensive 3.3): each editable block
+// kind owns how it regenerates the smallest byte-range for an in-place edit. A paragraph regenerates
+// its whole (fully-captured) slice; a table patches only its edited cell paragraphs; anything else
+// fails closed. Migrating this off the central switch means a new editable kind registers a patcher.
+registerCoreBlockCapability({
+  kind: 'paragraph',
+  patchEdited: (ctx) => {
+    if (ctx.reparsed.kind !== 'paragraph') throw new Error('block kind changed on edit — fail closed');
+    // Regenerate in place ONLY if the ORIGINAL slice was fully captured (so regeneration drops no
+    // unmodeled content — comments/PIs included), leaving every other byte verbatim.
+    if (!sliceIsFullyCapturedParagraph(ctx.sliceText)) throw new Error('paragraph carries unmodeled content — fail closed');
+    return [{ start: ctx.rangeStart, end: ctx.rangeEnd, xml: paragraphXml(ctx.block as ParagraphRecord) }];
+  },
+});
+registerCoreBlockCapability({
+  kind: 'table',
+  patchEdited: (ctx) => {
+    if (ctx.reparsed.kind !== 'table' || ctx.block.kind !== 'table') throw new Error('block kind changed on edit — fail closed');
+    const cellPatches = patchEditedTable(ctx.sliceText, ctx.rangeStart, ctx.reparsed, ctx.block);
+    if (!cellPatches) throw new Error('table was edited structurally or in unmodeled content — fail closed');
+    return cellPatches;
+  },
+});
+registerCoreBlockCapability({
+  kind: 'sdt',
+  patchEdited: () => {
+    throw new Error('block-SDT regeneration is not implemented — fail closed');
+  },
+});
+
 /**
  * Re-emit a preserved part. UNCHANGED blocks are emitted verbatim. A changed TABLE is
  * patched at the level of its EDITED CELL PARAGRAPHS only (the smallest owned range) —
@@ -210,7 +240,7 @@ function regenerateBlockRegion(
       throw new Error(`preservation range for block ${id} drifted or was tampered — fail closed`);
     }
   }
-  if (!blocks.every((b) => b.kind === 'paragraph')) {
+  if (!blocks.every((b) => isTopLevelEditable(b.kind))) {
     throw new Error('structural edit produced a non-paragraph block — fail closed');
   }
   // The region [regionStart, regionEnd) is replaced wholesale by the regenerated paragraphs,
@@ -225,7 +255,7 @@ function regenerateBlockRegion(
   }
   const regionStart = docRanges[0][1].start;
   const regionEnd = docRanges[docRanges.length - 1][1].end;
-  const newBody = blocks.map((b) => paragraphXml(b as ParagraphRecord)).join('');
+  const newBody = blocks.map((b) => blockSerialize(b)).join(''); // each editable block via its capability
   return original.slice(0, regionStart) + newBody + original.slice(regionEnd);
 }
 
@@ -254,22 +284,9 @@ export function emitPreservedPart(model: PackageModel, original: string, ranges:
     }
     const block = byId.get(id)!;
     if (hashPreservableBlock(block) === r.baselineHash) continue; // unchanged -> verbatim
-    if (block.kind === 'table' && reparsed.kind === 'table') {
-      const cellPatches = patchEditedTable(sliceText, r.start, reparsed, block);
-      if (!cellPatches) throw new Error(`table ${id} was edited structurally or in unmodeled content — fail closed`);
-      patches.push(...cellPatches);
-    } else if (block.kind === 'paragraph' && reparsed.kind === 'paragraph') {
-      // An edited TOP-LEVEL paragraph: regenerate it in place ONLY if its ORIGINAL slice
-      // was fully captured (so regeneration drops no unmodeled content, comments/PIs
-      // included), leaving every other byte — styles, relationships, section properties,
-      // sibling blocks — verbatim.
-      if (!sliceIsFullyCapturedParagraph(sliceText)) {
-        throw new Error(`paragraph ${id} carries unmodeled content — fail closed`);
-      }
-      patches.push({ start: r.start, end: r.end, xml: paragraphXml(block) });
-    } else {
-      throw new Error(`preserved block ${id} was edited; only paragraph and cell-paragraph edits regenerate — fail closed`);
-    }
+    // An EDITED block: dispatch to its registered patcher for the smallest owned byte-range
+    // (fails closed inside the capability when the edit is not byte-faithfully patchable).
+    patches.push(...blockPatchEdited({ block, reparsed, sliceText, rangeStart: r.start, rangeEnd: r.end }));
   }
   patches.sort((a, b) => b.start - a.start); // highest offset first so earlier offsets stay valid
   let out = original;
