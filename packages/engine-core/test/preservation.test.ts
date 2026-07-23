@@ -7,6 +7,8 @@ import { createEmptyModel, encodeModel, decodeModel, type PackageModel, type Ser
 
 const PART = '/word/document.xml';
 const TEXT = '<w:document><w:body><w:p/></w:body></w:document>';
+// A preserved document must also retain its package parts (finding 7).
+const PKG: readonly (readonly [string, string])[] = [[PART, '00']];
 
 /** A valid preservation: the range references a REAL top-level block (createEmptyModel
  *  seeds body block `p-1`) and stays in bounds, so it passes decode validation. */
@@ -18,6 +20,7 @@ function withPreservation(): PackageModel {
     preservation: {
       originalParts: new Map([[PART, TEXT]]),
       blockRanges: new Map([[blockId, { partName: PART, start: 20, end: 26, baselineHash: 'h-abc' }]]),
+      packageParts: new Map([[PART, new Uint8Array([0])]]),
     },
   };
 }
@@ -34,7 +37,7 @@ describe('preservation encode/decode', () => {
   test('decode rejects an out-of-bounds range', () => {
     const bad: SerializedModel = {
       ...encodeModel(createEmptyModel()),
-      preservation: { originalParts: [[PART, 'short']], blockRanges: [['p-1', { partName: PART, start: 0, end: 999, baselineHash: 'x' }]] },
+      preservation: { originalParts: [[PART, 'short']], blockRanges: [['p-1', { partName: PART, start: 0, end: 999, baselineHash: 'x' }]], packageParts: PKG },
     };
     expect(() => decodeModel(bad)).toThrow(/out-of-bounds/);
   });
@@ -50,7 +53,7 @@ describe('preservation decode validation', () => {
   test('a block range referencing an unretained part is rejected (orphan)', () => {
     const bad: SerializedModel = {
       ...encodeModel(createEmptyModel()),
-      preservation: { originalParts: [], blockRanges: [['t1', { partName: '/nope.xml', start: 0, end: 1, baselineHash: 'x' }]] },
+      preservation: { originalParts: [], blockRanges: [['t1', { partName: '/nope.xml', start: 0, end: 1, baselineHash: 'x' }]], packageParts: PKG },
     };
     expect(() => decodeModel(bad)).toThrow(/unknown part/);
   });
@@ -75,5 +78,23 @@ describe('preservation decode validation', () => {
       },
     };
     expect(() => decodeModel(bad)).toThrow(/duplicate/);
+  });
+});
+
+describe('preservation package integrity', () => {
+  test('ranges without package parts are rejected (finding 7: no silent lossy export)', () => {
+    const bad: SerializedModel = {
+      ...encodeModel(createEmptyModel()),
+      preservation: { originalParts: [[PART, TEXT]], blockRanges: [['p-1', { partName: PART, start: 20, end: 26, baselineHash: 'h' }]] },
+    };
+    expect(() => decodeModel(bad)).toThrow(/no package parts/);
+  });
+
+  test('malformed package-part hex is rejected on decode (finding 6)', () => {
+    const bad: SerializedModel = {
+      ...encodeModel(createEmptyModel()),
+      preservation: { originalParts: [[PART, TEXT]], blockRanges: [], packageParts: [[PART, 'zz']] },
+    };
+    expect(() => decodeModel(bad)).toThrow(/invalid hex/);
   });
 });

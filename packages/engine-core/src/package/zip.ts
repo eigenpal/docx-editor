@@ -40,6 +40,7 @@ export function readZip(bytes: Uint8Array, limits: ZipLimits = DEFAULT_ZIP_LIMIT
   let entryCount = 0;
   let totalUncompressed = 0;
   let badDetail: string | undefined;
+  const seenNorms = new Set<string>();
 
   let raw: Record<string, Uint8Array>;
   try {
@@ -54,6 +55,14 @@ export function readZip(bytes: Uint8Array, limits: ZipLimits = DEFAULT_ZIP_LIMIT
           badDetail = `${file.name}: ${norm.reason}`;
           throw new ZipViolation('bad-name');
         }
+        // Reject two entries whose names normalize to the same canonical part (e.g.
+        // `word/document.xml` vs `word/%64ocument.xml`) — last-wins would smuggle/omit
+        // a part. Checked BEFORE inflation.
+        if (seenNorms.has(norm.partName)) {
+          badDetail = `${file.name}: normalized duplicate of ${norm.partName}`;
+          throw new ZipViolation('bad-name');
+        }
+        seenNorms.add(norm.partName);
         // Compression-ratio zip-bomb guard, checked before decompressing.
         if (file.originalSize / Math.max(1, file.size) > maxRatio) throw new ZipViolation('too-large');
         totalUncompressed += file.originalSize;
@@ -74,12 +83,19 @@ export function readZip(bytes: Uint8Array, limits: ZipLimits = DEFAULT_ZIP_LIMIT
   return { ok: true, entries };
 }
 
-/** Deflate a set of canonical-part-name -> bytes into a ZIP archive. */
+/** Deflate a set of canonical-part-name -> bytes into a ZIP archive. Every part name
+ *  is re-validated through the OPC normalization profile before writing, so a
+ *  traversal/encoded/normalized-alias name from an untrusted serialized model can
+ *  never be smuggled into a ZIP entry (write-side path-traversal guard). */
 export function writeZip(entries: ReadonlyMap<string, Uint8Array>): Uint8Array {
   const record: Record<string, Uint8Array> = {};
   for (const [partName, data] of entries) {
-    // ZIP entry names have no leading slash.
-    record[partName.replace(/^\//, '')] = data;
+    const norm = normalizePartName(partName);
+    if (!norm.ok) throw new Error(`unsafe part name on write: ${partName} (${norm.reason})`);
+    // Canonical part names carry a leading slash; ZIP entry names do not.
+    const key = norm.partName.replace(/^\//, '');
+    if (key in record) throw new Error(`duplicate normalized part name on write: ${key}`);
+    record[key] = data;
   }
   return zipSync(record);
 }

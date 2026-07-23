@@ -98,6 +98,12 @@ export function decodeModel(s: SerializedModel): PackageModel {
 export function validatePreservation(model: PackageModel): void {
   const p = model.preservation;
   if (!p) return;
+  // A preserved document that has source ranges MUST retain its package parts, or
+  // writeDocx would silently fall back to a lossy minimal export. Reject the
+  // inconsistent (tampered/partial) snapshot instead.
+  if ((p.originalParts.size > 0 || p.blockRanges.size > 0) && !(p.packageParts && p.packageParts.size > 0)) {
+    throw new Error('preservation has source ranges but no package parts (inconsistent snapshot)');
+  }
   const ids = new Set<string>();
   for (const story of model.stories.values()) for (const b of story.blocks) ids.add(b.id);
   const byPart = new Map<string, { start: number; end: number }[]>();

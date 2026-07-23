@@ -982,24 +982,40 @@ function tableSkeleton(table: TableRecord): unknown {
   };
 }
 
-/** Whether a paragraph element contains ONLY content the model fully captures, so
- *  regenerating it drops nothing. Strict: no paragraph attributes (rsid…), no w:pPr,
- *  only w:r children whose children are w:rPr(b/i only)/w:t/w:tab/w:br/w:cr/w:noBreakHyphen. */
+/**
+ * Whether a paragraph is regenerable BYTE-FAITHFULLY from the model, so patching it
+ * drops or misrepresents nothing. STRICT — the model only captures w:t text and
+ * bold/italic PRESENCE, so this rejects anything the regenerator (`paragraphXml`)
+ * cannot reproduce exactly:
+ *  - any paragraph attribute (rsid…) or w:pPr or non-w:r child;
+ *  - any w:r attribute;
+ *  - a w:tab/w:br/w:cr/w:noBreakHyphen (regen would flatten it to a literal char);
+ *  - w:b/w:i with ANY attribute (an explicit w:val="0"/"false" would flip to enabled);
+ *  - any other w:rPr child, or a w:t attribute other than xml:space;
+ *  - an empty run (no non-empty w:t) that the model drops or that would gain a w:t.
+ */
 function paragraphFullyCaptured(pEl: Extract<XmlNode, { type: 'element' }>): boolean {
   if (Object.keys(pEl.attributes).length > 0) return false;
   for (const c of pEl.children) {
     if (c.type === 'text') { if (c.value.trim() !== '') return false; continue; }
     if (c.name !== 'w:r' || Object.keys(c.attributes).length > 0) return false;
+    let hasText = false;
     for (const rc of c.children) {
       if (rc.type === 'text') { if (rc.value.trim() !== '') return false; continue; }
       if (rc.name === 'w:rPr') {
-        for (const pr of rc.children) if (pr.type === 'element' && pr.name !== 'w:b' && pr.name !== 'w:i') return false;
+        for (const pr of rc.children) {
+          if (pr.type === 'text') { if (pr.value.trim() !== '') return false; continue; }
+          if (pr.name !== 'w:b' && pr.name !== 'w:i') return false; // only b/i are modeled
+          if (Object.keys(pr.attributes).length > 0) return false; // explicit on/off not modeled
+        }
       } else if (rc.name === 'w:t') {
         if (Object.keys(rc.attributes).some((k) => k !== 'xml:space')) return false;
-      } else if (!['w:tab', 'w:br', 'w:cr', 'w:noBreakHyphen'].includes(rc.name)) {
-        return false;
+        if (textContent(rc).length > 0) hasText = true;
+      } else {
+        return false; // w:tab/w:br/w:cr/w:noBreakHyphen or anything else is not regenerable
       }
     }
+    if (!hasText) return false; // an empty run is dropped / would gain an added <w:t>
   }
   return true;
 }

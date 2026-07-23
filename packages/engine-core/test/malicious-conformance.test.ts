@@ -109,3 +109,10 @@ describe('no partial state', () => {
     expect('model' in r).toBe(false);
   });
 });
+
+describe('zip name integrity (review findings 5, 8)', () => {
+  test('two entries whose names normalize to the same part are rejected before inflation', () => {
+    const evil = zipSync({ 'word/document.xml': strToU8('a'), 'word/%64ocument.xml': strToU8('b') });
+    expect(readZip(evil)).toMatchObject({ ok: false, reason: 'bad-name' });
+  });
+});

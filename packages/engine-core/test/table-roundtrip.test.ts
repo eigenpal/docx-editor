@@ -314,3 +314,38 @@ describe('editing a preserved table document', () => {
     expect(() => documentXml(edited)).toThrow(/fail closed/);
   });
 });
+
+describe('cell-edit fails closed on non-fully-captured paragraphs (review findings 1-3)', () => {
+  function tableWithCell00(cell00: string): PackageModel {
+    const inner = `<w:tbl><w:tr><w:tc>${cell00}</w:tc><w:tc><w:p><w:r><w:t>b</w:t></w:r></w:p></w:tc></w:tr></w:tbl>`;
+    const r = parseDocx(docx(inner));
+    if (!r.ok) throw new Error(`parse failed: ${r.reason}`);
+    return r.model;
+  }
+  function editCell00(model: PackageModel, text: string): PackageModel {
+    const bid = bodyStoryId(model);
+    const body = model.stories.get(bid)!;
+    const blocks = body.blocks.map((b) => {
+      if (b.kind !== 'table') return b;
+      const t = b as TableRecord;
+      const c00 = t.rows[0].cells[0];
+      const p = c00.blocks[0] as ParagraphRecord;
+      const nc = { ...c00, blocks: [{ ...p, runs: [{ text }] }] };
+      return { ...t, rows: [{ ...t.rows[0], cells: [nc, ...t.rows[0].cells.slice(1)] }, ...t.rows.slice(1)] };
+    });
+    return { ...model, stories: new Map(model.stories).set(bid, { ...body, blocks }) };
+  }
+
+  test('editing a cell whose original has a w:tab fails closed (would flatten the tab)', () => {
+    const m = tableWithCell00('<w:p><w:r><w:t>a</w:t><w:tab/><w:t>c</w:t></w:r></w:p>');
+    expect(() => documentXml(editCell00(m, 'EDITED'))).toThrow(/fail closed/);
+  });
+  test('editing a cell with explicit-off bold fails closed (would flip it to enabled)', () => {
+    const m = tableWithCell00('<w:p><w:r><w:rPr><w:b w:val="0"/></w:rPr><w:t>a</w:t></w:r></w:p>');
+    expect(() => documentXml(editCell00(m, 'EDITED'))).toThrow(/fail closed/);
+  });
+  test('editing a cell containing an empty run fails closed (would drop it)', () => {
+    const m = tableWithCell00('<w:p><w:r/><w:r><w:t>a</w:t></w:r></w:p>');
+    expect(() => documentXml(editCell00(m, 'EDITED'))).toThrow(/fail closed/);
+  });
+});
