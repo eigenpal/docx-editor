@@ -126,7 +126,7 @@ function firstDivergence(nodes: readonly PMNode[], blocks: readonly Block[]): nu
 /** Whether a PM node's CONTENT still equals its block's — so a paragraph edited alongside a
  *  split/join is NOT mistaken for an untouched neighbour (a read-only atom is content-fixed). */
 function sameContent(node: PMNode, block: Block): boolean {
-  if (node.type.name !== 'paragraph' || block.kind !== 'paragraph') return true;
+  if (!isParagraph(node) || block.kind !== 'paragraph') return true; // role-driven, not a hardcoded name
   return runsEqual(block.runs, paragraphNodeToRuns(node));
 }
 

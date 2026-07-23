@@ -79,18 +79,12 @@ registerBlockProjector('paragraph', (block, schema) => {
 });
 registerDefaultBlockProjector((block: Block, schema) => schema.node('blockEmbed', { semId: block.id, kind: block.kind }));
 
-// The composed ProseMirror schema, built LAZILY on first access (not at module load), so a feature
-// can import the package, register its node/mark/projector, and have it included before the schema
-// is first used. Access is via a Proxy so `docSchema` stays a plain importable value; methods are
-// bound to the real schema. Once accessed the schema is frozen (further registration is rejected).
-export const docSchema: Schema = new Proxy({} as Schema, {
-  get(_t, prop, receiver) {
-    const schema = buildDocSchema();
-    const value = Reflect.get(schema, prop, receiver);
-    return typeof value === 'function' ? value.bind(schema) : value;
-  },
-  has(_t, prop) {
-    return prop in buildDocSchema();
-  },
-});
+// The composed ProseMirror schema — a REAL Schema built once from every capability registered
+// above (a lazy Proxy stand-in was tried and rejected: it is not transparently a Schema, so PM
+// identity / spread / instanceof / `state.schema === doc.type.schema` checks break). Registration
+// therefore happens at module-load time: the built-ins here, plus any feature whose registration
+// module is evaluated BEFORE this one. NOTE (known limitation): because this build is eager,
+// registering a NEW node/mark AFTER engine-binding is imported is not yet supported (a deferred-
+// build entry point is a follow-up); the current editable surface is paragraph + read-only atom.
+export const docSchema: Schema = buildDocSchema();
 
