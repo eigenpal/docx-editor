@@ -149,12 +149,14 @@ describe('editing a preserved table document', () => {
     expect(out).toContain('<w:tbl>'); // the table survives untouched
   });
 
-  test('a structural op (append a block) fails closed on serialize', () => {
+  test('a structural op on a table document fails closed on serialize (table not regenerable)', () => {
     const parsed = parseDocx(bytes());
     if (!parsed.ok) throw new Error('parse failed');
     const store = new DocumentStore(parsed.model);
+    // A structural body edit would regenerate the block region, but this document's body
+    // holds a table (not a fully-captured paragraph) — so it fails closed.
     store.transact(ORIGIN_IDS.mutationHuman, (ctx) => ctx.apply({ op: 'appendParagraph', storyId: bodyStoryId(store.currentModel) }));
-    expect(() => documentXml(store.currentModel)).toThrow(/structural change/);
+    expect(() => documentXml(store.currentModel)).toThrow(/fail closed/);
   });
 
   test('a decoy <w:body>/<w:tbl> inside a prolog comment does not fool the scanner', () => {

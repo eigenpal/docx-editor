@@ -104,13 +104,15 @@ export function validatePreservation(model: PackageModel): void {
   if ((p.originalParts.size > 0 || p.blockRanges.size > 0) && !(p.packageParts && p.packageParts.size > 0)) {
     throw new Error('preservation has source ranges but no package parts (inconsistent snapshot)');
   }
-  const ids = new Set<string>();
-  for (const story of model.stories.values()) for (const b of story.blocks) ids.add(b.id);
+  // NOTE: a range's blockId indexes the ORIGINAL document snapshot, not the live model.
+  // A structural edit (split/join/insert/delete) legitimately leaves ranges whose block is
+  // no longer current; emitPreservedPart regenerates the block region in that case. So this
+  // validates snapshot INTEGRITY (bounds, overlap, part existence, package parts) and does
+  // NOT require every range's block to still exist.
   const byPart = new Map<string, { start: number; end: number }[]>();
   for (const [blockId, r] of p.blockRanges) {
     const text = p.originalParts.get(r.partName);
     if (text === undefined) throw new Error(`preservation range for block ${blockId} references unknown part ${r.partName}`);
-    if (!ids.has(blockId)) throw new Error(`preservation range references a missing block ${blockId}`);
     if (!Number.isInteger(r.start) || !Number.isInteger(r.end)) throw new Error(`non-integer preservation range for block ${blockId}`);
     if (!(r.start >= 0 && r.start < r.end && r.end <= text.length)) throw new Error(`out-of-bounds preservation range for block ${blockId}`);
     const list = byPart.get(r.partName) ?? [];

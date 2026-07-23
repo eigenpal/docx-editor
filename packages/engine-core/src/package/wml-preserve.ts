@@ -159,13 +159,53 @@ function patchEditedTable(tableText: string, tableStart: number, baseline: Table
  * paragraph block, add/remove/reorder) FAILS CLOSED. Each baseline hash is re-bound to
  * its current source slice so a tampered/drifted snapshot is rejected.
  */
+/**
+ * Regenerate the block region of a preserved document.xml after a STRUCTURAL body edit.
+ * Lossless only when (a) every ORIGINAL block was a fully-captured paragraph whose slice
+ * still matches its baseline hash (no drift/tamper, nothing unmodeled to drop) and (b)
+ * every CURRENT block is a paragraph (regenerable via paragraphXml). Otherwise fails
+ * closed. Everything before the first block and after the last (a trailing w:sectPr, the
+ * body/document close) is spliced back verbatim; only the block sequence is rewritten.
+ */
+function regenerateBlockRegion(
+  blocks: readonly Block[],
+  original: string,
+  docRanges: readonly (readonly [string, BlockRange])[],
+): string {
+  if (docRanges.length === 0) throw new Error('structural edit with no preserved block region — fail closed');
+  const throwaway = new IdentityAllocator();
+  for (const [id, r] of docRanges) {
+    const sliceText = original.slice(r.start, r.end);
+    const fx = readXml(sliceText);
+    const origP = fx.ok ? fx.nodes.find(el) : undefined;
+    if (!origP || origP.name !== 'w:p' || !paragraphFullyCaptured(origP)) {
+      throw new Error('structural edit to a document with a non-paragraph or unmodeled block — fail closed');
+    }
+    const reparsed = blockFromText(sliceText, throwaway);
+    if (!reparsed || hashPreservableBlock(reparsed) !== r.baselineHash) {
+      throw new Error(`preservation range for block ${id} drifted or was tampered — fail closed`);
+    }
+  }
+  if (!blocks.every((b) => b.kind === 'paragraph')) {
+    throw new Error('structural edit produced a non-paragraph block — fail closed');
+  }
+  const regionStart = docRanges[0][1].start;
+  const regionEnd = docRanges[docRanges.length - 1][1].end;
+  const newBody = blocks.map((b) => paragraphXml(b as ParagraphRecord)).join('');
+  return original.slice(0, regionStart) + newBody + original.slice(regionEnd);
+}
+
 export function emitPreservedPart(model: PackageModel, original: string, ranges: ReadonlyMap<string, BlockRange>): string {
   const bodyStory = model.stories.get(bodyStoryId(model))!;
   const docRanges = [...ranges].filter(([, r]) => r.partName === DOC_PART).sort((a, b) => a[1].start - b[1].start);
   const rangeOrder = docRanges.map(([id]) => id);
   const bodyIds = bodyStory.blocks.map((b) => b.id);
   if (bodyIds.length !== rangeOrder.length || bodyIds.some((id, i) => id !== rangeOrder[i])) {
-    throw new Error('structural change to a preserved document (block added, removed, or reordered) must fail closed until regeneration exists');
+    // A STRUCTURAL edit (paragraph split/join/insert/delete/reorder): regenerate the whole
+    // block region from the current model, keeping everything OUTSIDE it — leading content,
+    // the trailing w:sectPr, the body/document shell, and every other package part —
+    // verbatim. Guarded to the all-fully-captured-paragraph case so it is lossless.
+    return regenerateBlockRegion(bodyStory.blocks, original, docRanges);
   }
   const byId = new Map(bodyStory.blocks.map((b) => [b.id, b] as const));
   const throwaway = new IdentityAllocator();
