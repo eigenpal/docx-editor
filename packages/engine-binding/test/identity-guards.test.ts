@@ -7,8 +7,10 @@
 import { describe, expect, test } from 'bun:test';
 import { zipSync, strToU8 } from 'fflate';
 import { docSchema, EditorBinding, paragraphNodeToRuns } from '../src/index.ts';
-import { DocumentStore, parseDocx, bodyStoryId } from '@docx-editor.dev/engine-core';
+import { DocumentStore, parseDocx, bodyStoryId, ORIGIN_IDS } from '@docx-editor.dev/engine-core';
 import type { Node as PMNode } from 'prosemirror-model';
+
+const HUMAN = ORIGIN_IDS.mutationHuman;
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 function twoParagraphBinding() {
@@ -55,6 +57,32 @@ describe('forward-mapper identity guards', () => {
     const res = binding.commitFromDoc(doc);
     expect(res.rejected).toBe(true);
     expect(res.ops.length).toBe(0);
+    expect(store.currentRevision).toBe(0);
+  });
+
+  test('a JOIN combined with an edit BEFORE the joined pair fails closed', () => {
+    const { store, binding, ids } = twoParagraphBinding(); // ids[0]='one', ids[1]='two'
+    store.transact(HUMAN, (c) => c.apply({ op: 'appendParagraph', storyId: bodyStoryId(store.currentModel) }));
+    const ids2 = store.currentModel.stories.get(bodyStoryId(store.currentModel))!.blocks.map((b) => b.id);
+    store.transact(HUMAN, (c) => c.apply({ op: 'insertText', paragraphId: ids2[2], text: 'three' }));
+    // Join ids[1]+ids2[2] ('two'+'three') cleanly, but ALSO edit ids[0] 'one'->'EDIT'. The
+    // pre-survivor edit must not be dropped: fail closed.
+    const doc = docSchema.node('doc', null, [para(ids[0], 'EDIT'), para(ids[1], 'twothree')]);
+    const res = binding.commitFromDoc(doc);
+    expect(res.rejected).toBe(true);
+    expect(res.ops.length).toBe(0);
+  });
+
+  test('a split that also changes FORMATTING (not just text) fails closed', () => {
+    const { store, binding, ids } = twoParagraphBinding(); // ids[0]='one'
+    // Same text ('on'+'e'='one') but the head is now bold — a formatting edit rides the split.
+    const doc = docSchema.node('doc', null, [
+      docSchema.node('paragraph', { semId: ids[0] }, [docSchema.text('on', [docSchema.marks.bold.create()])]),
+      docSchema.node('paragraph', { semId: ids[0] }, [docSchema.text('e')]),
+      para(ids[1], 'two'),
+    ]);
+    const res = binding.commitFromDoc(doc);
+    expect(res.rejected).toBe(true);
     expect(store.currentRevision).toBe(0);
   });
 

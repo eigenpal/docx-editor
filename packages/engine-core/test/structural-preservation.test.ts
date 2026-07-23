@@ -7,6 +7,7 @@ import { describe, expect, test } from 'bun:test';
 import { zipSync, strToU8, unzipSync, strFromU8 } from 'fflate';
 import { parseDocx, writeDocx, DocumentStore, bodyStoryId, ORIGIN_IDS } from '../src/index.ts';
 import type { ParagraphRecord } from '../src/index.ts';
+import { sliceIsFullyCapturedParagraph } from '../src/package/wml-preserve.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 function docx(bodyInner: string, extra: Record<string, string> = {}): Uint8Array {
@@ -32,6 +33,22 @@ const bodyParas = (store: DocumentStore) =>
     .get(bodyStoryId(store.currentModel))!
     .blocks.filter((b): b is ParagraphRecord => b.kind === 'paragraph');
 const savedDocXml = (store: DocumentStore) => strFromU8(unzipSync(writeDocx(store.currentModel))['word/document.xml']);
+
+describe('sliceIsFullyCapturedParagraph: a range must be EXACTLY one lone paragraph', () => {
+  test('accepts a clean lone paragraph', () => {
+    expect(sliceIsFullyCapturedParagraph('<w:p><w:r><w:t>hi</w:t></w:r></w:p>')).toBe(true);
+  });
+  test('rejects a range that swallows a following sibling (bookmark / SDT / stray text)', () => {
+    // A restored/tampered range whose end reaches past </w:p> into the next sibling would be
+    // deleted wholesale on regeneration — must fail closed even though the first element parses.
+    expect(sliceIsFullyCapturedParagraph('<w:p><w:r><w:t>a</w:t></w:r></w:p><w:bookmarkStart w:id="0" w:name="m"/>')).toBe(false);
+    expect(sliceIsFullyCapturedParagraph('<w:p><w:r><w:t>a</w:t></w:r></w:p><w:p><w:r><w:t>b</w:t></w:r></w:p>')).toBe(false);
+    expect(sliceIsFullyCapturedParagraph('<w:p><w:r><w:t>a</w:t></w:r></w:p>trailing')).toBe(false);
+  });
+  test('rejects a comment/PI-bearing paragraph (readXml would drop it)', () => {
+    expect(sliceIsFullyCapturedParagraph('<w:p><!--k--><w:r><w:t>a</w:t></w:r></w:p>')).toBe(false);
+  });
+});
 
 describe('structural editing regenerates the block region, keeps sectPr + parts verbatim', () => {
   test('splitParagraph: one paragraph becomes two; sectPr and styles.xml survive', () => {

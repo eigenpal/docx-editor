@@ -40,16 +40,14 @@ function isParagraph(node: PMNode): boolean {
   return node.type.name === 'paragraph';
 }
 
-/** The plain text of a projected paragraph node (its runs concatenated). */
-function pmText(node: PMNode): string {
-  return paragraphNodeToRuns(node)
-    .map((r) => r.text)
-    .join('');
+/** A canonical block's runs (empty for a non-paragraph block). */
+function blockRuns(block: Block): readonly RunRecord[] {
+  return block.kind === 'paragraph' ? block.runs : [];
 }
 
-/** The plain text of a canonical block (empty for a non-paragraph block). */
-function blockText(block: Block): string {
-  return block.kind === 'paragraph' ? block.runs.map((r) => r.text).join('') : '';
+/** The character length of a run list — the split offset splitParagraph cuts at. */
+function pmTextLength(runs: readonly RunRecord[]): number {
+  return runs.reduce((n, r) => n + r.text.length, 0);
 }
 
 /** Whether a PM node corresponds to a canonical block by KIND and semId — NOT by content,
@@ -178,12 +176,19 @@ export class EditorBinding {
     ) {
       throw new BindingRejection('unsupported paragraph insertion');
     }
-    if (pmText(head) + pmText(tail) !== blockText(x)) throw new BindingRejection('split combined with an edit is not supported');
-    return [{ op: 'splitParagraph', paragraphId: x.id, offset: pmText(head).length }];
+    // A clean split only reorders X's OWN runs at a boundary — the concatenated head+tail runs
+    // (text AND formatting) must equal X's runs. A split that also changes text or marks is a
+    // combined edit and fails closed, so no run change is ever silently dropped.
+    const headRuns = paragraphNodeToRuns(head);
+    if (!runsEqual([...headRuns, ...paragraphNodeToRuns(tail)], blockRuns(x))) {
+      throw new BindingRejection('split combined with an edit is not supported');
+    }
+    return [{ op: 'splitParagraph', paragraphId: x.id, offset: pmTextLength(headRuns) }];
   }
 
   /** One fewer paragraph: canonical [X, Y] were joined into X (Y removed, X keeps its id).
-   *  A clean join (concatenated text unchanged) maps to one joinParagraphs; else fails closed. */
+   *  A clean join (X's + Y's runs concatenated, unchanged) maps to one joinParagraphs; else
+   *  fails closed. */
   private mapJoin(nodes: readonly PMNode[], blocks: readonly Block[]): DocOp[] {
     const bk = firstDivergence(nodes, blocks); // index of the removed Y in the canonical
     const y = blocks[bk];
@@ -192,11 +197,14 @@ export class EditorBinding {
     if (
       !y || y.kind !== 'paragraph' || !x || x.kind !== 'paragraph' ||
       !survivor || !isParagraph(survivor) || survivor.attrs.semId !== x.id ||
+      !prefixAligns(nodes, blocks, bk - 1) || // the blocks BEFORE the survivor are unchanged
       !alignsAfter(nodes, bk, blocks, bk + 1) // the blocks after Y are unchanged
     ) {
       throw new BindingRejection('unsupported paragraph deletion');
     }
-    if (pmText(survivor) !== blockText(x) + blockText(y)) throw new BindingRejection('join combined with an edit is not supported');
+    if (!runsEqual(paragraphNodeToRuns(survivor), [...blockRuns(x), ...blockRuns(y)])) {
+      throw new BindingRejection('join combined with an edit is not supported');
+    }
     return [{ op: 'joinParagraphs', firstId: x.id, secondId: y.id }];
   }
 

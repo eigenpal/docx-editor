@@ -100,15 +100,24 @@ function tableSkeleton(table: TableRecord): unknown {
  *  - any other w:rPr child, or a w:t attribute other than xml:space;
  *  - an empty run (no non-empty w:t) that the model drops or that would gain a w:t.
  */
-/** Whether a raw source slice is a single, fully-captured paragraph with NOTHING the
+/** Whether a raw source slice is EXACTLY a single, fully-captured paragraph with NOTHING the
  *  reader silently drops. readXml discards XML comments and processing instructions, so a
  *  paragraph carrying `<!-- … -->` or `<? … ?>` would pass the element-level check yet lose
- *  that content on regeneration — the raw markers are rejected here. */
+ *  that content on regeneration — the raw markers are rejected here. The slice must ALSO be a
+ *  lone `w:p`: a range drawn to swallow a following sibling (a `w:bookmarkStart`, an SDT
+ *  boundary, stray text) is rejected, since regeneration re-emits only the paragraph and would
+ *  delete everything else the range covered. */
 export function sliceIsFullyCapturedParagraph(sliceText: string): boolean {
   if (sliceText.includes('<!--') || sliceText.includes('<?')) return false; // comment / PI would be dropped
+  // readXml discards top-level text OUTSIDE elements, so trailing raw content (a swallowed
+  // `...</w:p>trailing`) would be invisible to a node scan yet lost on regeneration. Require
+  // the trimmed slice to END exactly at the paragraph close (trailing whitespace is fine).
+  if (!sliceText.trim().endsWith('</w:p>')) return false;
   const fx = readXml(sliceText);
-  const p = fx.ok ? fx.nodes.find(el) : undefined;
-  return !!p && p.name === 'w:p' && paragraphFullyCaptured(p);
+  if (!fx.ok) return false;
+  const els = fx.nodes.filter(el);
+  if (els.length !== 1) return false; // zero, or a swallowed trailing element sibling → fail closed
+  return els[0].name === 'w:p' && paragraphFullyCaptured(els[0]);
 }
 
 export function paragraphFullyCaptured(pEl: Extract<XmlNode, { type: 'element' }>): boolean {
