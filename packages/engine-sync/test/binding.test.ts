@@ -113,3 +113,33 @@ describe('disconnect stops bridging', () => {
     expect(store.currentRevision).toBe(before); // nothing published
   });
 });
+
+// Hardening (ADR-S10): the thin binding must fail closed on unsupported content and
+// must not let a local undo clobber a converged remote merge.
+describe('safety: unsupported content fails closed', () => {
+  test('syncFromModel refuses a document containing a table', () => {
+    const store = new DocumentStore(createEmptyModel());
+    const backend = YjsBackend.fromModel('doc', 'A', store.currentModel);
+    // Commit a table into the store, then attempt to mirror it.
+    const bodyId = bodyStoryId(store.currentModel);
+    const model = store.currentModel;
+    const body = model.stories.get(bodyId)!;
+    const table = { kind: 'table' as const, id: 't1', rows: [{ id: 'r1', cells: [{ id: 'c1', blocks: [] }] }] };
+    const withTable = { ...model, stories: new Map(model.stories).set(bodyId, { ...body, blocks: [...body.blocks, table] }) };
+    store.publishDerived(withTable, ORIGIN_IDS.mutationRemote);
+    expect(() => backend.syncFromModel(store.currentModel)).toThrow(/table/);
+  });
+});
+
+describe('safety: semantic undo is suspended while connected', () => {
+  test('undo is a no-op while a binding is connected, and resumes after disconnect', () => {
+    const { store, binding } = connectedPeer('A');
+    store.transact(ORIGIN_IDS.mutationHuman, (ctx) => ctx.apply({ op: 'insertText', paragraphId: P1, text: 'z' }));
+    expect(store.canUndo()).toBe(false);
+    expect(store.undo().ok).toBe(false); // refused while replicated
+    expect(store.isHistorySuspended).toBe(true);
+    binding.disconnect();
+    expect(store.isHistorySuspended).toBe(false);
+    expect(store.canUndo()).toBe(true); // history available again
+  });
+});

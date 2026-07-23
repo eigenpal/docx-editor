@@ -222,14 +222,34 @@ export class DocumentStore {
 
   // --- history ---
 
+  private historySuspended = false;
+
+  /**
+   * Suspend local semantic history (ADR-S10). While a YjsBinding is connected the
+   * canonical model is co-authored through the CRDT, so a local `undo` that rewinds
+   * to a pre-merge snapshot would clobber a converged remote merge when mirrored
+   * back into the Y.Doc. The binding suspends history on connect; collaborative
+   * undo (via the backend's actor-scoped Y.UndoManager) is a separate, deferred path.
+   */
+  suspendHistory(): void {
+    this.historySuspended = true;
+  }
+  resumeHistory(): void {
+    this.historySuspended = false;
+  }
+  get isHistorySuspended(): boolean {
+    return this.historySuspended;
+  }
+
   canUndo(): boolean {
-    return this.history.length > 0;
+    return !this.historySuspended && this.history.length > 0;
   }
   canRedo(): boolean {
-    return this.redo.length > 0;
+    return !this.historySuspended && this.redo.length > 0;
   }
 
   undo(): CommitResult {
+    if (this.historySuspended) return { ok: false, failure: { kind: 'aborted', message: 'history suspended while replicated' } };
     const commit = this.history.pop();
     if (!commit) return { ok: false, failure: { kind: 'aborted', message: 'nothing to undo' } };
     this.redo.push(commit);
@@ -241,6 +261,7 @@ export class DocumentStore {
   }
 
   redoLast(): CommitResult {
+    if (this.historySuspended) return { ok: false, failure: { kind: 'aborted', message: 'history suspended while replicated' } };
     const commit = this.redo.pop();
     if (!commit) return { ok: false, failure: { kind: 'aborted', message: 'nothing to redo' } };
     this.history.push(commit);

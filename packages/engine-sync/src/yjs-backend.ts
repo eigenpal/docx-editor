@@ -172,6 +172,20 @@ export class YjsBackend implements ReplicatedStoreBackend {
    * those arrive with the fidelity work and full collaborative editing (deferred).
    */
   syncFromModel(model: PackageModel): void {
+    // Fail closed (ADR-S10). The thin baseline only mirrors paragraph blocks. A
+    // non-paragraph block (table/SDT) would be dropped and its story block-order
+    // corrupted, so refuse the whole sync rather than silently damage the document.
+    // Collaboration for non-paragraph content is deferred; do not connect a
+    // YjsBinding to a document that contains tables.
+    for (const story of model.stories.values()) {
+      for (const block of story.blocks) {
+        if (block.kind !== 'paragraph') {
+          throw new Error(
+            `YjsBinding cannot mirror a '${block.kind}' block; non-paragraph collaboration is deferred (ADR-S10).`,
+          );
+        }
+      }
+    }
     this.doc.transact(() => {
       const blocksMap = this.doc.getMap('blocks') as Y.Map<YBlock>;
       for (const story of model.stories.values()) {

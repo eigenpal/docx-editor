@@ -3,7 +3,7 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "description": "Synchronization: local + Yjs ReplicatedStoreBackend, the sole ReplicationCoordinator, relative-position anchors, snapshots, persistence, and awareness. Owns all Yjs types.",
+  "description": "Optional synchronization: local + Yjs ReplicatedStoreBackend and a thin YjsBinding over an externally-owned Y.Doc. Owns all Yjs types.",
   "exports": {
     ".": {
       "types": "./src/index.ts",
@@ -14,7 +14,8 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@docx-editor.dev/engine-core": "workspace:*"
+    "@docx-editor.dev/engine-core": "workspace:*",
+    "yjs": "^13.6.0"
   },
   "devDependencies": {
     "typescript": "^5.3.3"

@@ -55,6 +55,12 @@ export class YjsBinding {
       this.backend.syncFromModel(this.store.currentModel);
     });
 
+    // Local semantic undo is unsafe under replication: an undo rewinds to a
+    // pre-merge snapshot that, mirrored back into the Y.Doc, would clobber a
+    // converged remote merge. Suspend it while connected; collaborative undo via the
+    // backend's actor-scoped Y.UndoManager is a separate, deferred path (ADR-S10).
+    this.store.suspendHistory();
+
     this.offs = [offDoc, offStore];
     return () => this.disconnect();
   }
@@ -62,5 +68,6 @@ export class YjsBinding {
   disconnect(): void {
     for (const off of this.offs) off();
     this.offs = [];
+    this.store.resumeHistory();
   }
 }
