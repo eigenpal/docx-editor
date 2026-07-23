@@ -4,7 +4,7 @@
 // innerHTML/HTML-from-string (security contract). Fixed-point layout units (twips,
 // 1/1440in) convert to CSS px (96/in).
 
-import type { LayoutResult, Page, TextItem } from '@docx-editor.dev/engine-layout';
+import type { LayoutResult, Page, TextItem, RectItem } from '@docx-editor.dev/engine-layout';
 
 const TWIPS_PER_PX = 15; // 1440 twips/in ÷ 96 px/in
 
@@ -25,10 +25,27 @@ export function renderPageElement(page: Page, doc: Document): HTMLElement {
   el.style.overflow = 'hidden';
 
   for (const item of page.items) {
-    if (item.type !== 'text') continue;
-    el.appendChild(renderTextItem(item, doc));
+    // Rects (cell borders/shading) paint first so text sits on top.
+    if (item.type === 'rect') el.appendChild(renderRectItem(item, doc));
+  }
+  for (const item of page.items) {
+    if (item.type === 'text') el.appendChild(renderTextItem(item, doc));
   }
   return el;
+}
+
+function renderRectItem(item: RectItem, doc: Document): HTMLElement {
+  const div = doc.createElement('div');
+  div.style.position = 'absolute';
+  div.style.left = `${px(item.x)}px`;
+  div.style.top = `${px(item.y)}px`;
+  div.style.width = `${px(item.width)}px`;
+  div.style.height = `${px(item.height)}px`;
+  div.style.boxSizing = 'border-box';
+  if (item.stroke) div.style.border = '1px solid #000';
+  // fill is a bare hex from the layout; re-validate at this CSS sink (security contract).
+  if (item.fill && /^[0-9a-fA-F]{6}$/.test(item.fill)) div.style.background = `#${item.fill}`;
+  return div;
 }
 
 function renderTextItem(item: TextItem, doc: Document): HTMLElement {

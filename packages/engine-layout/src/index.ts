@@ -14,6 +14,7 @@ export const ENGINE_LAYOUT_PACKAGE = '@docx-editor.dev/engine-layout' as const;
 export {
   type Anchor,
   type TextItem,
+  type RectItem,
   type DisplayItem,
   type Page,
   type LayoutResult,

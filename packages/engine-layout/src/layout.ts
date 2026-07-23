@@ -14,9 +14,9 @@ import {
 import type { MetricsPort } from './metrics.ts';
 import type { DisplayItem, Page, LayoutResult, TextItem, RectItem } from './display-item.ts';
 
-/** Twips (1/1440 in) to layout px (96 px/in): px = twips * 96 / 1440 = twips / 15. */
-const TWIPS_PER_PX = 15;
-const CELL_PAD = 4;
+// Layout coordinates are in twips (the page and metrics are twips), and OOXML grid
+// widths are already twips — so column widths are used directly, never rescaled.
+const CELL_PAD = 60; // ~4px of cell padding, in twips
 
 export interface LayoutOptions {
   readonly pageWidth: number;
@@ -130,7 +130,7 @@ interface TableCtx {
 function layoutTable(table: TableRecord, ctx: TableCtx, startY: number): number {
   const { margin, contentRight, contentBottom, metrics, builder } = ctx;
   const contentWidth = contentRight - margin;
-  const cols = columnPx(table, contentWidth);
+  const cols = columnWidths(table, contentWidth);
   let y = startY;
 
   for (const row of table.rows) {
@@ -168,12 +168,12 @@ function layoutTable(table: TableRecord, ctx: TableCtx, startY: number): number 
   return y;
 }
 
-/** Column widths in px: from the grid (twips) when present, else even distribution. */
-function columnPx(table: TableRecord, contentWidth: number): number[] {
+/** Column widths in twips: from the grid when present, else even distribution. */
+function columnWidths(table: TableRecord, contentWidth: number): number[] {
   if (table.grid && table.grid.length > 0) {
     return table.grid.map((c) => {
       const tw = c.w !== undefined ? Number(c.w) : NaN;
-      return Number.isFinite(tw) && tw > 0 ? Math.round(tw / TWIPS_PER_PX) : Math.round(contentWidth / table.grid!.length);
+      return Number.isFinite(tw) && tw > 0 ? Math.round(tw) : Math.round(contentWidth / table.grid!.length);
     });
   }
   const colCount = Math.max(1, ...table.rows.map((r) => r.cells.reduce((n, c) => n + Math.max(1, c.props?.gridSpan ?? 1), 0)));
