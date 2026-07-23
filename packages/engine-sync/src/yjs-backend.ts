@@ -14,6 +14,7 @@ import {
   normalize,
   type PackageModel,
   type Story,
+  type Block,
   type ParagraphRecord,
   type RunRecord,
   type SerializedModel,
@@ -24,6 +25,29 @@ import type { ReplicatedStoreBackend } from './backend.ts';
 
 /** Pinned Yjs schema version (task 5.2); bumped only via a reviewed migration. */
 export const YJS_SCHEMA_VERSION = 1;
+
+/**
+ * Throw if a model holds content the Yjs adapter cannot represent yet — any
+ * non-paragraph block (tables/SDT), recursively. Table collaboration is deferred
+ * (ADR-S10), so every Yjs entry point (backend seeding, binding connection, and
+ * pre-publication) rejects such a model UP FRONT rather than silently dropping
+ * content or leaving the store and Y.Doc divergent.
+ */
+export function assertYjsCompatibleModel(model: PackageModel): void {
+  for (const story of model.stories.values()) {
+    for (const block of story.blocks) assertYjsCompatibleBlock(block, story.id);
+  }
+}
+
+function assertYjsCompatibleBlock(block: Block, storyId: string): void {
+  if (block.kind === 'paragraph') return;
+  // Only paragraphs are representable today; any other kind (e.g. a table, whose
+  // cells could themselves nest blocks) is rejected before it can be lost.
+  throw new Error(
+    `Yjs collaboration does not support '${block.kind}' blocks yet (story '${storyId}', ADR-S10); ` +
+      `do not create or connect a Yjs backend for a document containing tables.`,
+  );
+}
 
 type YBlock = Y.Map<unknown>; // { semId: string, runs: Y.Array<Y.Map{t,p}> }
 
@@ -89,6 +113,7 @@ export class YjsBackend implements ReplicatedStoreBackend {
   /** Seed a backend from an authored model (static parts live in `meta`). Pass
    *  `opts.doc` to seed the adapter onto your own provider-attached Y.Doc. */
   static fromModel(documentId: string, actorId: string, model: PackageModel, opts: YjsBackendOptions = {}): YjsBackend {
+    assertYjsCompatibleModel(model); // reject tables up front (path 1); never crash mid-seed
     const backend = new YjsBackend(documentId, actorId, opts);
     backend.doc.transact(() => {
       backend.meta().set('schemaVersion', String(YJS_SCHEMA_VERSION));
@@ -172,20 +197,10 @@ export class YjsBackend implements ReplicatedStoreBackend {
    * those arrive with the fidelity work and full collaborative editing (deferred).
    */
   syncFromModel(model: PackageModel): void {
-    // Fail closed (ADR-S10). The thin baseline only mirrors paragraph blocks. A
-    // non-paragraph block (table/SDT) would be dropped and its story block-order
-    // corrupted, so refuse the whole sync rather than silently damage the document.
-    // Collaboration for non-paragraph content is deferred; do not connect a
-    // YjsBinding to a document that contains tables.
-    for (const story of model.stories.values()) {
-      for (const block of story.blocks) {
-        if (block.kind !== 'paragraph') {
-          throw new Error(
-            `YjsBinding cannot mirror a '${block.kind}' block; non-paragraph collaboration is deferred (ADR-S10).`,
-          );
-        }
-      }
-    }
+    // Fail closed (ADR-S10): refuse before mutating anything. In practice the binding
+    // rejects connection when tables are present, so this never fires during normal
+    // operation — it is the last-line guard against store/Y.Doc divergence.
+    assertYjsCompatibleModel(model);
     this.doc.transact(() => {
       const blocksMap = this.doc.getMap('blocks') as Y.Map<YBlock>;
       for (const story of model.stories.values()) {

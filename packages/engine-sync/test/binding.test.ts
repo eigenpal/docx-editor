@@ -114,32 +114,76 @@ describe('disconnect stops bridging', () => {
   });
 });
 
-// Hardening (ADR-S10): the thin binding must fail closed on unsupported content and
-// must not let a local undo clobber a converged remote merge.
-describe('safety: unsupported content fails closed', () => {
-  test('syncFromModel refuses a document containing a table', () => {
-    const store = new DocumentStore(createEmptyModel());
-    const backend = YjsBackend.fromModel('doc', 'A', store.currentModel);
-    // Commit a table into the store, then attempt to mirror it.
-    const bodyId = bodyStoryId(store.currentModel);
-    const model = store.currentModel;
-    const body = model.stories.get(bodyId)!;
-    const table = { kind: 'table' as const, id: 't1', rows: [{ id: 'r1', cells: [{ id: 'c1', blocks: [] }] }] };
-    const withTable = { ...model, stories: new Map(model.stories).set(bodyId, { ...body, blocks: [...body.blocks, table] }) };
-    store.publishDerived(withTable, ORIGIN_IDS.mutationRemote);
-    expect(() => backend.syncFromModel(store.currentModel)).toThrow(/table/);
+// Hardening (ADR-S10): the three fail-closed Yjs paths, and history that cannot be
+// undone across the collaboration boundary.
+const TABLE = { kind: 'table' as const, id: 't1', rows: [{ id: 'r1', cells: [{ id: 'c1', blocks: [] }] }] };
+
+function storeWithTable(): DocumentStore {
+  const store = new DocumentStore(createEmptyModel());
+  const bodyId = bodyStoryId(store.currentModel);
+  const body = store.currentModel.stories.get(bodyId)!;
+  const withTable = { ...store.currentModel, stories: new Map(store.currentModel.stories).set(bodyId, { ...body, blocks: [...body.blocks, TABLE] }) };
+  store.publishDerived(withTable, ORIGIN_IDS.mutationRemote);
+  return store;
+}
+
+describe('safety: tables fail closed on every Yjs path', () => {
+  test('path 1 — fromModel rejects a table-seeded model up front (no mid-seed crash)', () => {
+    const model = storeWithTable().currentModel;
+    expect(() => YjsBackend.fromModel('doc', 'A', model)).toThrow(/table/);
+  });
+
+  test('paths 2 & 3 — connect() is rejected up front when the store holds a table', () => {
+    const store = storeWithTable();
+    const backend = YjsBackend.fromModel('doc', 'A', createEmptyModel()); // empty backend
+    const binding = new YjsBinding(store, backend);
+    // Rejecting here prevents a remote merge from dropping the table AND prevents a
+    // local commit succeeding then the mirror throwing (store/Y.Doc divergence).
+    expect(() => binding.connect()).toThrow(/table/);
+    expect(store.isHistorySuspended).toBe(false); // failed connect left no side effects
+  });
+
+  test('syncFromModel refuses a table (last-line guard)', () => {
+    const backend = YjsBackend.fromModel('doc', 'A', createEmptyModel());
+    expect(() => backend.syncFromModel(storeWithTable().currentModel)).toThrow(/table/);
   });
 });
 
-describe('safety: semantic undo is suspended while connected', () => {
-  test('undo is a no-op while a binding is connected, and resumes after disconnect', () => {
+describe('safety: history cannot be undone across the collaboration boundary', () => {
+  test('pre-collaboration undo history is forked away on connect', () => {
+    const store = new DocumentStore(createEmptyModel());
+    store.transact(ORIGIN_IDS.mutationHuman, (ctx) => ctx.apply({ op: 'insertText', paragraphId: P1, text: 'pre' }));
+    expect(store.canUndo()).toBe(true);
+    const binding = new YjsBinding(store, YjsBackend.fromModel('doc', 'A', store.currentModel));
+    binding.connect();
+    binding.disconnect();
+    expect(store.canUndo()).toBe(false); // the pre-collab edit is not restorable
+  });
+
+  test('undo is suspended while connected; new post-disconnect edits are undoable', () => {
     const { store, binding } = connectedPeer('A');
     store.transact(ORIGIN_IDS.mutationHuman, (ctx) => ctx.apply({ op: 'insertText', paragraphId: P1, text: 'z' }));
-    expect(store.canUndo()).toBe(false);
-    expect(store.undo().ok).toBe(false); // refused while replicated
+    expect(store.canUndo()).toBe(false); // suspended, and not accumulating
+    expect(store.undo().ok).toBe(false);
     expect(store.isHistorySuspended).toBe(true);
+
     binding.disconnect();
     expect(store.isHistorySuspended).toBe(false);
-    expect(store.canUndo()).toBe(true); // history available again
+    expect(store.canUndo()).toBe(false); // nothing accumulated during collaboration
+
+    store.transact(ORIGIN_IDS.mutationHuman, (ctx) => ctx.apply({ op: 'insertText', paragraphId: P1, text: 'after' }));
+    expect(store.canUndo()).toBe(true); // fresh post-collab edit is undoable
+  });
+
+  test('suspension is reference-counted (two connects need two disconnects)', () => {
+    const store = new DocumentStore(createEmptyModel());
+    const b1 = new YjsBinding(store, YjsBackend.fromModel('doc', 'A', store.currentModel));
+    const b2 = new YjsBinding(store, YjsBackend.fromModel('doc', 'B', store.currentModel));
+    b1.connect();
+    b2.connect();
+    b1.disconnect();
+    expect(store.isHistorySuspended).toBe(true); // b2 still connected
+    b2.disconnect();
+    expect(store.isHistorySuspended).toBe(false);
   });
 });

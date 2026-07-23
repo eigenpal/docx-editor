@@ -222,34 +222,41 @@ export class DocumentStore {
 
   // --- history ---
 
-  private historySuspended = false;
+  private historySuspendCount = 0;
 
   /**
-   * Suspend local semantic history (ADR-S10). While a YjsBinding is connected the
+   * Suspend local semantic history (ADR-S10), reference-counted so multiple
+   * connections and one-per-store are both safe. While a YjsBinding is connected the
    * canonical model is co-authored through the CRDT, so a local `undo` that rewinds
-   * to a pre-merge snapshot would clobber a converged remote merge when mirrored
-   * back into the Y.Doc. The binding suspends history on connect; collaborative
-   * undo (via the backend's actor-scoped Y.UndoManager) is a separate, deferred path.
+   * to a pre-collaboration snapshot would clobber converged remote state. Entering
+   * suspension FORKS AWAY the existing history (so it can never be undone across the
+   * collaboration boundary), and no undoable history accumulates while suspended.
+   * Collaborative undo (via the backend's actor-scoped Y.UndoManager) is a separate,
+   * deferred path.
    */
   suspendHistory(): void {
-    this.historySuspended = true;
+    if (this.historySuspendCount === 0) {
+      this.history.length = 0;
+      this.redo.length = 0;
+    }
+    this.historySuspendCount += 1;
   }
   resumeHistory(): void {
-    this.historySuspended = false;
+    if (this.historySuspendCount > 0) this.historySuspendCount -= 1;
   }
   get isHistorySuspended(): boolean {
-    return this.historySuspended;
+    return this.historySuspendCount > 0;
   }
 
   canUndo(): boolean {
-    return !this.historySuspended && this.history.length > 0;
+    return !this.isHistorySuspended && this.history.length > 0;
   }
   canRedo(): boolean {
-    return !this.historySuspended && this.redo.length > 0;
+    return !this.isHistorySuspended && this.redo.length > 0;
   }
 
   undo(): CommitResult {
-    if (this.historySuspended) return { ok: false, failure: { kind: 'aborted', message: 'history suspended while replicated' } };
+    if (this.isHistorySuspended) return { ok: false, failure: { kind: 'aborted', message: 'history suspended while replicated' } };
     const commit = this.history.pop();
     if (!commit) return { ok: false, failure: { kind: 'aborted', message: 'nothing to undo' } };
     this.redo.push(commit);
@@ -261,7 +268,7 @@ export class DocumentStore {
   }
 
   redoLast(): CommitResult {
-    if (this.historySuspended) return { ok: false, failure: { kind: 'aborted', message: 'history suspended while replicated' } };
+    if (this.isHistorySuspended) return { ok: false, failure: { kind: 'aborted', message: 'history suspended while replicated' } };
     const commit = this.redo.pop();
     if (!commit) return { ok: false, failure: { kind: 'aborted', message: 'nothing to redo' } };
     this.history.push(commit);
@@ -340,8 +347,13 @@ export class DocumentStore {
     const commitId = `commit-${this.commitCounter}`;
     const modelChange = buildModelChange(fromRevision, this.revision, commitId, origin, effects, normalized !== working);
     this.model = normalized;
-    this.history.push({ before, after: normalized, modelChange });
-    this.redo.length = 0;
+    // While history is suspended (replicated), do NOT accumulate undoable commits —
+    // otherwise disconnect would re-expose an undo path across the collaboration
+    // boundary. Collaborative undo is the backend's Y.UndoManager, deferred (ADR-S10).
+    if (!this.isHistorySuspended) {
+      this.history.push({ before, after: normalized, modelChange });
+      this.redo.length = 0;
+    }
     this.record(commitId, modelChange, ops);
     this.notify(modelChange);
     return { commitId, revision: this.revision, modelChange };

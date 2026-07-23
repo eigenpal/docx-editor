@@ -18,7 +18,7 @@
 // deferred — this is the thin baseline.
 
 import { DocumentStore, ORIGIN_IDS } from '@docx-editor.dev/engine-core';
-import { YjsBackend } from './yjs-backend.ts';
+import { YjsBackend, assertYjsCompatibleModel } from './yjs-backend.ts';
 
 export class YjsBinding {
   private offs: (() => void)[] = [];
@@ -41,10 +41,17 @@ export class YjsBinding {
   connect(): () => void {
     if (this.connected) return () => this.disconnect();
 
+    // Reject connection UP FRONT if the document holds content the adapter cannot
+    // represent (tables). This prevents (a) a remote update deriving a paragraph-only
+    // model that silently drops existing tables, and (b) a local commit succeeding and
+    // then the mirror throwing, leaving store and Y.Doc divergent (ADR-S10).
+    assertYjsCompatibleModel(this.store.currentModel);
+
     // Remote -> store: a provider or peer mutated the external Y.Doc.
     const offDoc = this.backend.onUpdate((origin) => {
       if (this.backend.isLocalDocOrigin(origin)) return; // our own mirror echo
       const derived = this.backend.deriveModel();
+      assertYjsCompatibleModel(derived); // never publish a model that dropped content
       this.store.publishDerived(derived, ORIGIN_IDS.mutationRemote);
     });
 
