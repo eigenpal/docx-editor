@@ -1,10 +1,34 @@
+> **Scope (revised — see ADR-S10).** This capability is OPTIONAL and NOT part of
+> `engine-core`'s committed surface. `engine-core` commits only to (a) the canonical
+> store authority and (b) a thin, optional `YjsBinding` over an EXTERNALLY-OWNED
+> `Y.Doc`. The engine does NOT own a hosted hub, WebSocket/SSE transports, an
+> addressable-URL resolver, an offline queue, or awareness transport — those are the
+> concern of whatever provider (`y-websocket`, `y-indexeddb`, custom) the consumer
+> attaches to their own `Y.Doc`. Non-collaborative users never load this capability.
+> The requirements below therefore describe an OPTIONAL hosted-sync integration
+> package, not an `engine-core` obligation; their tasks are DEFERRED (see tasks §10).
+> The load-bearing, non-deferred commitments are: the Yjs schema adapter is mandatory
+> (arbitrary external Yjs structures never become canonical), Yjs types stay out of
+> `engine-core`'s public API, and PM mapping stays in `EditorBinding`.
+
 ## ADDED Requirements
 
-### Requirement: Yjs backend stores model-shaped data
-The first replicated backend SHALL use Yjs records shaped around authored parts,
-stable-ID blocks, collaborative text, explicit marks and annotations, tables,
-styles, numbering, relationships, and preservation capsules. It MUST NOT store a
-ProseMirror XML fragment or expose PM types.
+### Requirement: The Yjs binding is optional and adapts an external Y.Doc
+`engine-core` MUST run fully without any Yjs integration (single-user, local
+baseline). The optional `YjsBinding` SHALL attach to a `Y.Doc` the CONSUMER owns
+and to which they attach any standard provider; it MUST NOT construct a private
+hosted document or require a hosted sync service. The binding SHALL apply a
+mandatory, versioned Yjs schema adapter shaped around authored parts, stable-ID
+blocks, collaborative text, explicit marks and annotations, tables, styles,
+numbering, relationships, and preservation capsules. It MUST NOT store a
+ProseMirror XML fragment, expose PM types from the store/backend, or treat
+arbitrary external Yjs structures as canonical. Remote convergence is published
+into the canonical store via `publishDerived`; local commits are mirrored into
+the `Y.Doc` under a local transaction origin so the binding ignores its own echo.
+
+#### Scenario: Consumer brings their own provider
+- **WHEN** a consumer creates a `Y.Doc`, attaches a standard provider, and hands the doc to the binding
+- **THEN** the binding MUST synchronize through that doc without any engine-owned hub or transport, and a non-collaborative build MUST omit the binding entirely
 
 #### Scenario: Backend state is inspected
 - **WHEN** a replicated document is decoded for conformance testing

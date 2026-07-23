@@ -105,45 +105,41 @@ the prior checkpoint.
 - **WHEN** a process stops after writing a candidate migrated snapshot but before validation and publication
 - **THEN** reopening MUST use or resume from a valid checkpoint and MUST NOT expose partially migrated state
 
-### Requirement: ReplicationCoordinator commits canonical and backend state
-The `ReplicationCoordinator` MUST implement one atomic state machine for local
-commits and remote merges. Local commits SHALL stage semantic and backend
-changes, normalize once, assign one commit ID and local revision, commit both,
-emit one `ModelChange`, and publish one update ID/state vector. Remote merges
-SHALL authenticate and deduplicate the envelope, stage backend merge, derive
-authored state, run structural repair inside the same backend transaction,
-publish one local revision and `ModelChange`, and propagate repair exactly once.
-Only the coordinator MAY stage a backend merge, derive/normalize canonical
-state, publish either state, or notify canonical subscribers. A backend MUST
-NOT mutate canonical state or emit `ModelChange` directly. Stable update and
-constituent IDs SHALL provide deduplication; state vectors MAY optimize
-synchronization but MUST NOT prove update or delete-set coverage.
-The legal local transitions are `idle -> validating -> staging -> normalizing ->
-committing -> published -> idle`; remote transitions are `idle ->
-authenticating -> deduplicating -> stagingMerge -> normalizing -> committing ->
-published -> idle`. Any pre-publication failure MUST transition through
-`rollingBack -> idle`; duplicate coverage returns from `deduplicating` to
-`idle`. No observer may read staged states.
+### Requirement: The canonical store is the sole authority; a backend never mutates it directly
+The authored `DocumentStore` model is canonical. A replication backend MUST NOT
+mutate canonical state or emit `ModelChange` directly; canonical state changes
+ONLY through the store's own entries — `transact`, `applyEdits`, `undo`/`redo`,
+and `publishDerived(model, origin)`. A remote merge that has already converged in
+the backend is published as ONE atomic revision via `publishDerived`, which emits
+one `ModelChange` and one monotonic revision. Local commits and remote merges
+share the same normalize-once, one-commit-ID, one-revision, one-`ModelChange`
+guarantee. This requirement is transport- and CRDT-neutral: it holds whether
+there is no backend, a local backend, or an external Yjs document.
 
-#### Scenario: Backend commit fails
-- **WHEN** canonical staging succeeds but backend commit fails
-- **THEN** both staged states MUST roll back and no revision, history, notification, audit entry, or update MUST be emitted
+> Supersedes the former "sole `ReplicationCoordinator`" state machine (see ADR-S10).
+> There is no public coordinator; the Yjs boundary is an optional `YjsBinding`
+> (see the addressable-document-sync capability).
 
-#### Scenario: Duplicate remote update arrives
-- **WHEN** a stable update ID or every stable constituent update ID is already applied
-- **THEN** the coordinator MUST return a successful no-op without revision or echo
+#### Scenario: Remote merge publishes atomically
+- **WHEN** a backend has merged a remote change and the derived model is published through `publishDerived`
+- **THEN** exactly one revision, one `ModelChange`, and one history entry MUST result, and observers MUST never read intermediate staged state
+
+#### Scenario: A backend attempts to notify canonical subscribers directly
+- **WHEN** any replication backend tries to mutate canonical state or emit a `ModelChange` without going through a store entry
+- **THEN** that path MUST NOT exist in the public surface; only store entries change canonical state
 
 ### Requirement: Remote validation distinguishes intent from structure
 Local commands MUST pass schema, authorization, lock, revision, target, and
-precondition validation before mutation. Remote update envelopes MUST pass
-authentication, authorization, identity, version, size, and integrity checks;
-merged state MUST pass deterministic structural validation and repair. The
-engine MUST NOT claim to reconstruct remote command intent that is absent from
-opaque updates.
+precondition validation before mutation. Merged remote state MUST pass
+deterministic structural validation and repair before it is published as a
+derived revision. The engine MUST NOT claim to reconstruct remote command intent
+that is absent from opaque backend updates. Envelope-level authentication,
+authorization, size, and identity checks are the concern of whichever transport
+carries the updates (an optional binding/provider), not of the canonical store.
 
 #### Scenario: Remote merge is unrecoverably invalid
-- **WHEN** staged merged state violates a non-repairable canonical invariant
-- **THEN** the coordinator MUST reject publication, retain prior canonical/backend state, and report malformed update evidence
+- **WHEN** merged backend state violates a non-repairable canonical invariant
+- **THEN** publication MUST be rejected, prior canonical state retained, and malformed-update evidence reported
 
 ### Requirement: Transactions use an explicit synchronous context
 `DocumentStore.transact(origin, callback)` SHALL pass a synchronous

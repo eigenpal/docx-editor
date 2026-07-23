@@ -1,3 +1,13 @@
+> **Delivery priority (revised — ADR-S10): fidelity-first.** The product differentiator
+> is user-visible DOCX fidelity, so the active work order is vertical import→model→
+> layout→render→export slices, verified against real `e2e/fixtures/*.docx` + browser
+> screenshots, NOT the collaboration spine. Elevated to the front: **2.7** (structural
+> tables/SDT parse — stop flattening into paragraphs), **§3** preservation capsules
+> (lossless unknown OOXML), **§8** layout/table-layout/faithful render, and
+> export/reopen. A fidelity task is DONE only when structure round-trips and renders —
+> never when content is merely flattened or lives in standalone helpers. Collaboration
+> (§5.3–5.9, §10) is a thin optional baseline, deferred (see the §5/§10 scope notes).
+
 ## 0. Foundational registry, ports, budgets, and reviewed oracles
 
 - [x] 0.1 Implement the capability/runtime registry and freeze globally stable capability, command, query, dependency-key, runtime-port, result, origin, and schema IDs plus version/collision/replacement rules before any store or layout consumer is implemented.
@@ -60,9 +70,17 @@
 
 ## 5. Local and Yjs backends, persistence, and migrations
 
+> **Scope (revised — ADR-S10).** Collaboration is a THIN, optional baseline; the
+> engine runs fully single-user without any Yjs. Tasks 5.4–5.9 (backend-relative
+> anchors, replication/snapshot envelopes, snapshot restore, migrations, compaction,
+> shared conformance) are DEFERRED as optional hosted-sync/durability work — they are
+> a provider/optional-package concern, not an `engine-core` obligation, and MUST NOT
+> be marked done until an actual consumer needs them. Effort is redirected to the
+> fidelity track (see the note under §2/§3/§8).
+
 - [x] 5.1 Implement the local replicated-store backend with opaque update and full snapshot APIs distinct from semantic operations and model changes; verify snapshot restore reproduces authored state, anchors, revisions, and history behavior.
 - [x] 5.2 Pin and implement the reviewed versioned Yjs schema using collision-free creation-keyed records retaining semantic ID plus actor/commit provenance, all container/ownership/order/mark/annotation/allocator/origin/GC invariants, and candidate-preserving deterministic collision repair.
-- [x] 5.3 Implement the sole `ReplicationCoordinator` local/remote state machines with atomic staging, canonical derivation/normalization, rollback, repair, stable commit/update/constituent IDs, state vectors only as sync optimization, monotonic revisions, idempotence, echo suppression, and tests proving backends never mutate/notify canonical state directly.
+- [ ] 5.3 Implement the OPTIONAL thin `YjsBinding` over an externally-owned `Y.Doc` (revised per ADR-S10; supersedes the removed sole `ReplicationCoordinator`): remote doc-update/transaction subscription → `backend.deriveModel()` → `store.publishDerived(model, remoteOrigin)` as one atomic revision; local committed-`ModelChange` subscription → mirror changed blocks into the doc inside `doc.transact(fn, localOrigin)`; echo suppression by Yjs transaction origin (no app-level id set); and tests proving backends never mutate/notify canonical state directly and that `engine-core` runs with no Yjs integration.
 - [ ] 5.4 Implement Yjs backend-relative anchors with `Y.RelativePosition` and local behavioral equivalents behind the shared anchor contract; run identical affinity, deletion, split, join, move, and undo fixtures against both backends.
 - [ ] 5.5 Implement versioned replication-update and snapshot envelopes containing protocol/schema version, document identity, tenant key where applicable, revision/checkpoint metadata, and declared byte size; reject malformed, oversized, truncated, and wrong-document envelopes before mutation.
 - [ ] 5.6 Implement required snapshot payload and atomic restore for authored/model-shaped state, ID allocator, anchor encoding, normalization version, local revision, state vector, update cursor, migrations, audit cursor, and declared undo/redo history; compare state fingerprints rather than local revision sequences.
@@ -127,6 +145,13 @@
 - [ ] 9.8 Add browser, worker, and server conformance for supported feature combinations, replacements, absent optional packages, missing ports, and registration orders; compare resolved registries, authored state, layout, and output hashes.
 
 ## 10. Addressable synchronization and secure hub
+
+> **Scope (revised — ADR-S10).** This entire section is DEFERRED and OPTIONAL. The
+> engine does NOT own a hosted hub, WebSocket/SSE transports, an addressable-URL
+> resolver, an offline queue, or awareness transport; consumers bring their own
+> `Y.Doc` + provider (which owns transport/persistence/offline/awareness). These
+> tasks belong to a separate optional hosted-sync package, not `engine-core`, and are
+> not required for the fidelity-first roadmap.
 
 - [ ] 10.1 Implement authenticated document-URL resolution to canonical document identity, tenant key, endpoint capabilities, protocol versions, and authorization context; verify unauthorized resolution discloses neither snapshot nor awareness data.
 - [ ] 10.2 Implement connection states, state-vector handshake optimization, snapshot-tail barrier, stable update/constituent IDs, explicit ID acknowledgement/retry/queue deletion, compaction-gap recovery, and at-least-once idempotence; never infer delete-set coverage from a state vector.

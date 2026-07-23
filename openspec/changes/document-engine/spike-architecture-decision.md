@@ -237,3 +237,55 @@ and the prerequisite wording are accepted. The order remains:
 
 The completed POC is a reproducible evidence input to those tasks. It does not
 waive any production capability or conformance requirement.
+
+## ADR-S10: Optional external-Y.Doc binding supersedes the sole coordinator; fidelity-first
+
+This entry SUPERSEDES the "sole `ReplicationCoordinator`" framing in ADR-S3/S4/S5,
+the consequences list item 4 ("local/Yjs backends plus the sole replication
+coordinator"), and Known-finding #5. It does not rewrite those; it records what we
+learned building them and the corrected direction.
+
+**Two pitfalls learned.**
+
+1. *The coordinator was the wrong shape for real, external Yjs.* A public
+   `ReplicationCoordinator` that owns a private `Y.Doc` and takes remote changes only
+   through an explicit `remoteMerge(update)` call cannot see a standard provider
+   (`y-websocket`, `y-indexeddb`, custom) that mutates the `Y.Doc` directly. It also
+   re-implemented echo/dedup that Yjs already does, emitted full state instead of
+   incremental updates, committed canonical state before the backend mutation with no
+   real rollback, and only ever mirrored two paragraph `DocOp`s.
+
+2. *A model-canonical collaborative binding is y-prosemirror-scale work.* Because the
+   authored DOCX model is canonical, the Yjs shape is model-shaped, not PM-shaped, so
+   `y-prosemirror`/`@tiptap/y-tiptap` (which assume the Yjs fragment mirrors PM nodes)
+   cannot be reused as a small fork. Full collaborative editing (PM-step→DocOp,
+   ModelChange→minimal PM transaction, `Y.RelativePosition` mapping, selection/IME
+   reconciliation, schema recovery, cross-binding loop prevention) is a major component.
+
+**Corrected decisions.**
+
+- **No public coordinator.** Replace it with an OPTIONAL, internal `YjsBinding` over an
+  externally-owned `Y.Doc`. Remote: subscribe to the doc's `update`/`afterTransaction`
+  events; on a non-local origin, `backend.deriveModel()` → `store.publishDerived(model,
+  remoteOrigin)` = one atomic revision (Yjs is the merge authority; no DocOp
+  reconstruction). Local: subscribe to committed `ModelChange` and mirror changed blocks
+  into the doc inside `doc.transact(fn, LOCAL_ORIGIN)`. Echo suppression is by Yjs
+  transaction origin, not an app-level set.
+- **Bring-your-own Y.Doc + provider.** The engine does NOT own a hosted hub, transports,
+  addressable-URL resolver, or offline queue. The provider owns transport, persistence,
+  offline replay, and awareness. Non-collaborative users never load the integration. The
+  Yjs schema adapter stays mandatory (arbitrary external Yjs structures never become
+  canonical); Yjs types stay out of `engine-core`'s public API.
+- **PM stays native.** Keep the DOCX model canonical, but make the browser binding as
+  PM-native as possible: do NOT reimplement PM's transaction/selection/IME machinery —
+  only replace PM's role as durable canonical storage.
+- **Thin baseline, honestly marked.** The collaboration layer is a thin baseline now;
+  full collaborative-editing parity is DEFERRED and MUST NOT be marked done until built
+  and conformance-tested. Effort is redirected to user-visible DOCX fidelity (tables,
+  SDTs, styles/numbering, sections/headers/footers/images, faithful render, export/reopen),
+  delivered as vertical import→model→layout→render→export slices verified against real
+  fixtures. A fidelity task is not "done" when content is merely flattened.
+- **Target packaging.** The PM- and Yjs-specific pieces are optional, swappable integration
+  packages (intent names `@docx-editor.dev/engine-binding-prosemirror`,
+  `@docx-editor.dev/engine-sync-yjs`); implemented `y-prosemirror` algorithms carry MIT
+  attribution and are treated as inspired-by, not a fork. Physical rename deferred.

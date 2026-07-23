@@ -129,24 +129,22 @@ update encoding, snapshots, relative positions, and awareness. Neither exposes a
 ProseMirror type. A local backend implements the same behavioral contract
 without networking.
 
-A `ReplicationCoordinator` is the only bridge between them. For a local commit
-it opens a synchronous `TransactionContext`, validates all operations, stages
-canonical and backend mutations, normalizes once inside the same backend
-transaction, assigns one commit ID and one monotonic local revision, commits
-both or rolls both back, emits one `ModelChange`, then publishes stable update
-and constituent IDs plus state-vector metadata. For a remote merge it authenticates and deduplicates the
-envelope, applies bytes to staged backend state, projects merged model-shaped
-records into staged authored state, runs post-merge structural validation and
-deterministic repair, writes repairs inside the same backend transaction, and
-atomically publishes one local revision and one `ModelChange`. Intent-level
-locks and stale preconditions are not reconstructed from remote bytes;
-authorization is enforced on the envelope. Duplicate stable update/constituent
-IDs are no-ops; state vectors optimize exchange and never prove update or
-delete-set coverage. Repair updates share the commit ID,
-propagate once, and are suppressed when echoed.
-Only the coordinator stages backend merges, derives/normalizes canonical state,
-publishes either state, and notifies canonical subscribers. A backend never
-mutates canonical state or emits `ModelChange` directly.
+An optional `YjsBinding` bridges an EXTERNALLY-OWNED `Y.Doc` to the store (revised
+per ADR-S10; there is no public `ReplicationCoordinator`). It is thin and
+origin-driven. Remote: it subscribes to the doc's update/transaction events, and on
+a non-local origin derives the merged model from the backend and publishes it into
+the store via `publishDerived`, which normalizes once and emits exactly one
+`ModelChange` and one monotonic revision — Yjs is the merge authority, so remote
+command intent is never reconstructed from opaque bytes. Local: it subscribes to
+committed `ModelChange` and mirrors the changed blocks into the `Y.Doc` inside a
+`doc.transact(fn, localOrigin)`, so the provider computes the incremental update and
+the binding ignores its own echo by origin. Duplicate delivery is already idempotent
+at the CRDT layer, so there is no application-level update-id set. Transport,
+persistence, offline replay, and awareness belong to the consumer's provider, not the
+engine. The load-bearing invariant is unchanged: a backend never mutates canonical
+state or emits `ModelChange` directly — canonical state changes only through store
+entries (`transact`/`applyEdits`/`undo`/`publishDerived`). `engine-core` runs fully
+without any Yjs integration.
 
 Yjs stores model-shaped records keyed by collision-free creation identity with
 ordered creation-ID collections. Each record retains proposed semantic ID and

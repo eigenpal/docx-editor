@@ -12,11 +12,15 @@ needed so implementation can proceed from a coherent, testable architecture.
   revision provenance.
 - Separate semantic operations, committed model notifications, opaque
   replication updates, and snapshots into distinct contracts.
-- Define one atomic replication coordinator for local commits and remote merges,
-  with staged canonical/backend state, deterministic repair, rollback,
-  commit/update IDs, state vectors, idempotence, and echo suppression.
-- Make `DocumentStore` semantic and ProseMirror-free, keep CRDT details behind a
-  replication backend, and make `EditorBinding` the only ProseMirror-aware layer.
+- Keep the canonical store the sole authority for canonical state and provide an
+  OPTIONAL, thin `YjsBinding` over an externally-owned `Y.Doc` for collaboration
+  (revised per ADR-S10; no public replication coordinator). Remote convergence is
+  published via `publishDerived`; local commits mirror into the doc under a local
+  origin; echo suppression is by Yjs transaction origin. Transport/persistence/
+  awareness belong to the consumer's provider; `engine-core` runs without any Yjs.
+- Make `DocumentStore` semantic and ProseMirror-free, keep CRDT details behind an
+  optional backend/binding, and make `EditorBinding` the only ProseMirror-aware
+  layer — replacing PM's durable-storage role only, never its editing machinery.
 - Define deterministic normalization, stable identity, edit-surviving anchors,
   atomic multi-story transactions, history, undo, persistence, and schema
   evolution.
