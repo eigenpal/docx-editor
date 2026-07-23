@@ -18,7 +18,7 @@ import { keymap } from 'prosemirror-keymap';
 import { baseKeymap } from 'prosemirror-commands';
 import { captureSelection, resolveSelection, type SelectionAnchor } from '@docx-editor.dev/engine-binding';
 import { openDocxSession } from './docxEditorSession.ts';
-import { renderDocxPreview, renderModelPreview } from './enginePreview.ts';
+import { renderDocxPreview, createPagePainter } from './enginePreview.ts';
 
 /** Engine-neutral test/automation boundary — identical shape in both adapters. */
 export interface EditorDriver {
@@ -80,15 +80,17 @@ export function mountDocxEditor(container: HTMLElement, bytes: Uint8Array): Moun
   pagedPane.style.cssText = 'flex:1; min-width:0; overflow:auto; background:#eceff1; padding:12px';
   container.append(editPane, pagedPane);
 
-  // The paginated pane is a full re-layout of the whole model. Typing commits one edit per
-  // keystroke, so painting synchronously each time re-lays-out the entire document per key.
-  // Coalesce with requestAnimationFrame: many commits within a frame collapse to ONE repaint
-  // from the latest canonical model. (No rAF — e.g. a headless environment — paints inline.)
+  // The paginated pane re-lays-out the model, but an INCREMENTAL painter patches only the pages
+  // whose display items changed (reusing unchanged pages' DOM) instead of rebuilding the whole
+  // document. Typing also commits one edit per keystroke, so the paint is additionally coalesced
+  // with requestAnimationFrame: many commits within a frame collapse to ONE patch from the latest
+  // canonical model. (No rAF — e.g. a headless environment — paints inline.)
+  const painter = createPagePainter(pagedPane, doc, {});
   const raf = (container.ownerDocument?.defaultView ?? (typeof window !== 'undefined' ? window : undefined))
     ?.requestAnimationFrame;
   let repaintQueued = false;
   let destroyed = false; // guards deferred rAF callbacks against a torn-down view
-  const paintNow = () => renderModelPreview(session.currentModel(), pagedPane, {}, doc);
+  const paintNow = () => painter.paint(session.currentModel());
   const repaintPaged = () => {
     if (!raf) return paintNow();
     if (repaintQueued) return;

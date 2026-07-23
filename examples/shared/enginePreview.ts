@@ -5,8 +5,8 @@
 // editing or saving. It imports ONLY the production engine — no ProseMirror, no legacy
 // core implementation, no spike.
 import { parseDocx, type PackageModel } from '@docx-editor.dev/engine-core';
-import { layoutBody, HelveticaMetrics } from '@docx-editor.dev/engine-layout';
-import { renderToDom } from '@docx-editor.dev/engine-output';
+import { layoutBody, HelveticaMetrics, type Page } from '@docx-editor.dev/engine-layout';
+import { renderToDom, renderPageElement } from '@docx-editor.dev/engine-output';
 
 export interface PreviewResult {
   /** Whether the file parsed and rendered. */
@@ -46,6 +46,59 @@ export function renderModelPreview(
   });
   renderToDom(layout, container, doc);
   return { ok: true, pageCount: layout.pages.length };
+}
+
+/** A stable fingerprint of a laid-out page's paint content — two pages with the same items
+ *  produce byte-identical DOM, so an unchanged page can keep its existing element. */
+function pageFingerprint(page: Page): string {
+  return JSON.stringify(page.items);
+}
+
+export interface PagePainter {
+  /** Re-layout `model` and patch ONLY the pages whose paint content changed, reusing the DOM
+   *  of unchanged pages. Returns the outcome (page count) like renderModelPreview. */
+  paint(model: PackageModel): PreviewResult;
+}
+
+/**
+ * Create a stateful, INCREMENTAL paginated painter bound to `container`. Unlike
+ * renderModelPreview (which clears and rebuilds every page on each call), this keeps the prior
+ * per-page fingerprints and page elements: on repaint it re-lays-out the model (layout is a
+ * fast pure pass) but replaces only the page elements whose display items actually changed, and
+ * adds/removes trailing pages as the page count changes. So typing that only touches one page
+ * never tears down and recreates the whole document's DOM. The container must hold ONLY page
+ * elements (this owns its children).
+ */
+export function createPagePainter(
+  container: HTMLElement,
+  doc: Document = container.ownerDocument ?? document,
+  options: PreviewOptions = {},
+): PagePainter {
+  let prints: string[] = [];
+  return {
+    paint(model: PackageModel): PreviewResult {
+      const layout = layoutBody(model, {
+        pageWidth: options.pageWidth ?? DEFAULTS.pageWidth,
+        pageHeight: options.pageHeight ?? DEFAULTS.pageHeight,
+        margin: options.margin ?? DEFAULTS.margin,
+        metrics: new HelveticaMetrics(),
+      });
+      const pages = layout.pages;
+      for (let i = 0; i < pages.length; i += 1) {
+        const fp = pageFingerprint(pages[i]);
+        const existing = container.children[i] as HTMLElement | undefined;
+        if (existing && prints[i] === fp) continue; // page unchanged — keep its DOM
+        const el = renderPageElement(pages[i], doc);
+        if (existing) container.replaceChild(el, existing);
+        else container.appendChild(el);
+        prints[i] = fp;
+      }
+      // Drop trailing pages the model no longer produces.
+      while (container.children.length > pages.length) container.removeChild(container.lastChild!);
+      prints = prints.slice(0, pages.length);
+      return { ok: true, pageCount: pages.length };
+    },
+  };
 }
 
 /**
