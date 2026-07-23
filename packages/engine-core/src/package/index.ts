@@ -64,6 +64,13 @@ export {
   isPlainEditableDocx,
 } from './docx/read.ts';
 export { writeDocx, documentXml } from './docx/write.ts';
+// Feature-lane contract: register a new top-level block kind's element parser without
+// editing a central switch (document-engine feature-lane freeze).
+export {
+  type BlockElementParser,
+  registerBlockElementParser,
+  blockElementParser,
+} from './wml-parse.ts';
 export {
   isValidNCName,
   isValidQName,
