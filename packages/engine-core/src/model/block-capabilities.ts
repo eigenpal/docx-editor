@@ -73,8 +73,15 @@ export interface CoreBlockCapability {
 
 const registry = new Map<BlockKind, CoreBlockCapability>();
 /** The PARSE lane, folded into this one registry module so there is no SEPARATE global parser Map
- *  elsewhere (registry unification). Keyed by OOXML root element name. */
-const blockParsers = new Map<string, BlockElementParser>();
+ *  elsewhere (registry unification). Keyed by OOXML root element name; each records the block kind
+ *  it produces so an editable kind's parser presence can be verified. */
+const blockParsers = new Map<string, { readonly parse: BlockElementParser; readonly kind: BlockKind }>();
+
+// A monotonically increasing version bumped on EVERY registration. A memoized resolver (the
+// document-open completeness/resolution) keys its cache on this, so a registration AFTER an open
+// re-validates instead of being silently accepted by a stale cache.
+let registrationVersion = 0;
+export const blockRegistryVersion = (): number => registrationVersion;
 
 /** Register (or AUGMENT) a block kind's core capability. Additive across DIFFERENT ops (the model
  *  layer contributes hash+normalize, the package layer serialize+patch), but re-registering an op a
@@ -90,14 +97,21 @@ export function registerCoreBlockCapability(cap: CoreBlockCapability): void {
     }
   }
   registry.set(cap.kind, { ...prev, ...cap, kind: cap.kind });
+  registrationVersion += 1;
 }
 
-/** Register the parser for a top-level block element name (the parse lane of a block feature). */
-export function registerBlockElementParser(elementName: string, parse: BlockElementParser): void {
-  blockParsers.set(elementName, parse);
+/** Register the parser for a top-level block element name (the parse lane of a block feature),
+ *  declaring the block kind it produces. Re-registering the SAME element is rejected — duplicate
+ *  parser ownership is a bug, not a silent last-wins override (mirrors the capability policy). */
+export function registerBlockElementParser(elementName: string, parse: BlockElementParser, kind: BlockKind): void {
+  if (blockParsers.has(elementName)) throw new Error(`duplicate parser for block element '${elementName}'`);
+  blockParsers.set(elementName, { parse, kind });
+  registrationVersion += 1;
 }
 /** The registered parser for a block element name, if any. */
-export const blockElementParser = (elementName: string): BlockElementParser | undefined => blockParsers.get(elementName);
+export const blockElementParser = (elementName: string): BlockElementParser | undefined => blockParsers.get(elementName)?.parse;
+/** Whether some element parser produces a given block kind (the parse lane of that editable kind). */
+export const kindHasParser = (kind: BlockKind): boolean => [...blockParsers.values()].some((p) => p.kind === kind);
 
 function opFor<K extends keyof CoreBlockCapability>(kind: BlockKind, op: K): NonNullable<CoreBlockCapability[K]> {
   const cap = registry.get(kind);
@@ -109,7 +123,7 @@ function opFor<K extends keyof CoreBlockCapability>(kind: BlockKind, op: K): Non
 /** Parse a top-level block element by its root element name through the unified registry, or
  *  undefined for an unregistered element (caller fails closed). */
 export const blockParseElement = (elementName: string, element: unknown, alloc: IdentityAllocator): Block | undefined =>
-  blockParsers.get(elementName)?.(element, alloc);
+  blockParsers.get(elementName)?.parse(element, alloc);
 
 export const blockHashContent = (block: Block, recurse: RecurseHash): unknown => opFor(block.kind, 'hashContent')(block, recurse);
 export const blockNormalize = (block: Block, recurse: RecurseNormalize): Block => opFor(block.kind, 'normalize')(block, recurse);
@@ -128,8 +142,28 @@ export const registeredBlockKinds = (): BlockKind[] => [...registry.keys()];
 export function blockCapabilityHas(kind: BlockKind, op: keyof CoreBlockCapability): boolean {
   return registry.get(kind)?.[op] !== undefined;
 }
-/** Whether ANY element parser is registered (the parse lane is populated). */
+/** Whether ANY element parser is registered (the parse lane is populated at all). */
 export const hasAnyBlockParser = (): boolean => blockParsers.size > 0;
+
+/** Test seam: snapshot the whole block registry so a test can mutate it and restore afterward
+ *  (the registry is process-global module state; tests must leave it as they found it). */
+export interface BlockRegistrySnapshot {
+  readonly caps: ReadonlyMap<BlockKind, CoreBlockCapability>;
+  readonly parsers: ReadonlyMap<string, { parse: BlockElementParser; kind: BlockKind }>;
+  readonly version: number;
+}
+export const snapshotBlockRegistryForTest = (): BlockRegistrySnapshot => ({
+  caps: new Map(registry),
+  parsers: new Map(blockParsers),
+  version: registrationVersion,
+});
+export function restoreBlockRegistryForTest(snap: BlockRegistrySnapshot): void {
+  registry.clear();
+  for (const [k, v] of snap.caps) registry.set(k, v);
+  blockParsers.clear();
+  for (const [k, v] of snap.parsers) blockParsers.set(k, v);
+  registrationVersion = snap.version + 1; // bump so any memoized resolver re-validates
+}
 /** The nested body blocks a block holds (empty for a leaf kind). */
 export const blockNestedBlocks = (block: Block): readonly Block[] => registry.get(block.kind)?.nestedBlocks?.(block) ?? [];
 /** Walk a block and all its descendants (pre-order) through the registry — no central switch. */

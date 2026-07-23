@@ -12,9 +12,14 @@ import {
   blockCapabilityHas,
   blockSemanticOps,
   hasAnyBlockParser,
+  kindHasParser,
+  blockRegistryVersion,
   type BlockKind,
   type CoreBlockCapability,
 } from '../model/index.ts';
+import { DOC_OP_KINDS } from '../store/contracts.ts';
+
+const VALID_DOC_OPS: ReadonlySet<string> = new Set(DOC_OP_KINDS);
 
 /** Pipeline roles an editable content-type capability must contribute. */
 export type PipelineRole = 'parse' | 'serialize' | 'command' | 'query';
@@ -96,8 +101,15 @@ export function assertCoreBlockRegistryComplete(): void {
   if (!hasAnyBlockParser()) throw new Error('core registry incomplete: no block element parser is registered');
   for (const kind of registeredBlockKinds()) {
     if (!isTopLevelEditable(kind)) continue;
-    const missing = REQUIRED_EDITABLE_BLOCK_OPS.filter((op) => !blockCapabilityHas(kind, op));
-    if (blockSemanticOps(kind).length === 0) missing.push('semanticOps');
+    const missing: string[] = REQUIRED_EDITABLE_BLOCK_OPS.filter((op) => !blockCapabilityHas(kind, op));
+    if (!kindHasParser(kind)) missing.push('parse'); // an editable kind must have its OWN parse lane
+    const ops = blockSemanticOps(kind);
+    // semanticOps must be non-empty AND name REAL DocOps (not arbitrary strings).
+    if (ops.length === 0) missing.push('semanticOps');
+    else {
+      const bogus = ops.filter((op) => !VALID_DOC_OPS.has(op));
+      if (bogus.length > 0) missing.push(`semanticOps(unknown: ${bogus.join(',')})`);
+    }
     if (missing.length > 0) throw new Error(`editable block kind '${kind}' incomplete: missing ${missing.join(', ')}`);
   }
 }
@@ -105,12 +117,15 @@ export function assertCoreBlockRegistryComplete(): void {
 const CAPABILITY_ID = (kind: BlockKind): string => `${ROOT}.capability.block-${kind}`;
 
 let cachedCoreRegistry: ResolvedRegistry | undefined;
+let cachedAtVersion = -1;
 
 /** Resolve the core registry AT DOCUMENT OPEN: verify editable completeness, then resolve a bundle
  *  that mirrors the registered block kinds through the versioned FeatureBundle registry (validating
- *  ids/versions/duplicates/cycles). Memoized — the built-in registrations are load-time constants. */
+ *  ids/versions/duplicates/cycles). Cached, but keyed on the registry's version, so a registration
+ *  AFTER an open re-validates (a stale cache never masks a newly incomplete editable kind). */
 export function resolveCoreRegistry(): ResolvedRegistry {
-  if (cachedCoreRegistry) return cachedCoreRegistry;
+  const version = blockRegistryVersion();
+  if (cachedCoreRegistry && cachedAtVersion === version) return cachedCoreRegistry;
   assertCoreBlockRegistryComplete();
   const blockContributions: Contribution[] = registeredBlockKinds().map((kind) => ({
     kind: 'capability',
@@ -123,10 +138,12 @@ export function resolveCoreRegistry(): ResolvedRegistry {
     contributions: [...BASE_BUNDLE.contributions, ...blockContributions],
   };
   cachedCoreRegistry = resolve([bundle]);
+  cachedAtVersion = version;
   return cachedCoreRegistry;
 }
 
 /** Test seam: forget the memoized core registry so a re-registration is re-validated. */
 export function resetCoreRegistryCache(): void {
   cachedCoreRegistry = undefined;
+  cachedAtVersion = -1;
 }

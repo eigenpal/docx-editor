@@ -468,10 +468,11 @@ function parseSdt(sdt: Extract<XmlNode, { type: 'element' }>, alloc: IdentityAll
 // serialize, normalize, patch, edit policy, traversal) register on the same capability.
 type ElementNode = Extract<XmlNode, { type: 'element' }>;
 
-// Built-in block kinds (the model-typed element node is cast from the registry's `unknown`).
-registerBlockElementParser('w:p', (elx, alloc) => paragraphFromElement(elx as ElementNode, alloc));
-registerBlockElementParser('w:tbl', (elx, alloc) => parseTable(elx as ElementNode, alloc));
-registerBlockElementParser('w:sdt', (elx, alloc) => parseSdt(elx as ElementNode, alloc));
+// Built-in block kinds (the model-typed element node is cast from the registry's `unknown`); each
+// declares the block kind its parser produces so an editable kind's parse lane can be verified.
+registerBlockElementParser('w:p', (elx, alloc) => paragraphFromElement(elx as ElementNode, alloc), 'paragraph');
+registerBlockElementParser('w:tbl', (elx, alloc) => parseTable(elx as ElementNode, alloc), 'table');
+registerBlockElementParser('w:sdt', (elx, alloc) => parseSdt(elx as ElementNode, alloc), 'sdt');
 
 /** Build a block from a source substring (a top-level block element fragment). Dispatches through
  *  the unified parse registry; returns undefined for a parse failure or an unregistered root

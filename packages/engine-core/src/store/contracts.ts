@@ -30,6 +30,20 @@ export type DocOp =
 
 export type DocOpKind = DocOp['op'];
 
+/** Runtime list of every DocOp id (kept in sync with the union by `satisfies`). Used to validate
+ *  that a block capability's declared semanticOps name REAL DocOps, not arbitrary strings. */
+export const DOC_OP_KINDS = [
+  'appendParagraph',
+  'insertParagraph',
+  'insertText',
+  'splitParagraph',
+  'joinParagraphs',
+  'moveBlock',
+  'replaceParagraph',
+  'setParagraphRuns',
+  'deleteParagraph',
+] as const satisfies readonly DocOpKind[];
+
 /** Structural effect of one applied op, feeding ModelChange (task 4.7). */
 export interface OpEffect {
   readonly dirty: readonly string[];

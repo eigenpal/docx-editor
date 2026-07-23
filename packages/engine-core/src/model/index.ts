@@ -65,6 +65,10 @@ export {
   registeredBlockKinds,
   blockCapabilityHas,
   hasAnyBlockParser,
+  kindHasParser,
+  blockRegistryVersion,
+  snapshotBlockRegistryForTest,
+  restoreBlockRegistryForTest,
 } from './block-capabilities.ts';
 export {
   type SplitResult,

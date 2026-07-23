@@ -10,6 +10,10 @@ import {
   assertCoreBlockRegistryComplete,
   resolveCoreRegistry,
   resetCoreRegistryCache,
+  registerCoreBlockCapability,
+  registerBlockElementParser,
+  snapshotBlockRegistryForTest,
+  restoreBlockRegistryForTest,
   parseDocx,
   writeDocx,
   DocumentStore,
@@ -51,6 +55,38 @@ describe('core registry unification: FeatureBundle connected to runtime handlers
     for (const kind of ['paragraph', 'table', 'sdt']) {
       expect(registry.get('capability', `dev.docx-editor.core.capability.block-${kind}`)).toBeDefined();
     }
+  });
+
+  test('a registration AFTER open re-validates: an incomplete editable kind is then rejected', () => {
+    resolveCoreRegistry(); // prime the memoized cache
+    const snap = snapshotBlockRegistryForTest();
+    try {
+      // Make SDT editable but with NO semantic operations — the version bump must invalidate the
+      // cache so the next resolution catches it (the High: stale cache masked this).
+      registerCoreBlockCapability({ kind: 'sdt', editPolicy: { topLevelEditable: true } });
+      expect(() => resolveCoreRegistry()).toThrow(/editable block kind 'sdt' incomplete: missing semanticOps/);
+    } finally {
+      restoreBlockRegistryForTest(snap);
+      resetCoreRegistryCache();
+    }
+    expect(() => resolveCoreRegistry()).not.toThrow(); // restored to a complete state
+  });
+
+  test('semanticOps must name REAL DocOps (a bogus op id fails completeness)', () => {
+    const snap = snapshotBlockRegistryForTest();
+    try {
+      registerCoreBlockCapability({ kind: 'sdt', editPolicy: { topLevelEditable: true }, semanticOps: ['not-a-docop'] });
+      expect(() => assertCoreBlockRegistryComplete()).toThrow(/semanticOps\(unknown: not-a-docop\)/);
+    } finally {
+      restoreBlockRegistryForTest(snap);
+      resetCoreRegistryCache();
+    }
+  });
+
+  test('a duplicate element parser is rejected (no silent last-wins override)', () => {
+    expect(() => registerBlockElementParser('w:p', () => ({ kind: 'paragraph', id: 'x', runs: [] }), 'paragraph')).toThrow(
+      /duplicate parser for block element 'w:p'/,
+    );
   });
 
   test('opening any document runs the core-registry resolution (parse succeeds with it wired in)', () => {
