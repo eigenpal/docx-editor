@@ -95,8 +95,12 @@ export class EditorBinding {
         }
         seen.add(semId!);
         if (!runsEqual(existing.runs, runs)) ops.push({ op: 'setParagraphRuns', paragraphId: semId!, runs });
+      } else if (semId !== null) {
+        // A non-null id that names no current block is a stale or forged projection (or a
+        // split that copied an id) — fail closed rather than append+delete real content.
+        throw new BindingRejection('unknown paragraph identity');
       } else {
-        // New paragraph (e.g. typed after Enter at end); mint identity.
+        // A genuinely new paragraph (semId null); mint identity.
         const symbolicId = `$b${(sym += 1)}`;
         ops.push({ op: 'appendParagraph', storyId, symbolicId });
         if (runs.length > 0) ops.push({ op: 'setParagraphRuns', paragraphId: symbolicId, runs });

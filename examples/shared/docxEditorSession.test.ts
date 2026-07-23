@@ -111,4 +111,19 @@ describe('the editability gate never marks a lossy document editable', () => {
     );
     expect(session.editable).toBe(false);
   });
+
+  test('a w:background before the body opens read-only (it would be dropped)', () => {
+    // A shell child other than w:body (here w:background) is not reproduced by the writer.
+    const bytes = zipSync({
+      '[Content_Types].xml': strToU8(
+        '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">' +
+          '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/></Types>',
+      ),
+      'word/document.xml': strToU8(
+        `<w:document xmlns:w="${W}"><w:background w:color="FFFF00"/>` +
+          '<w:body><w:p><w:r><w:t>hi</w:t></w:r></w:p></w:body></w:document>',
+      ),
+    });
+    expect(openDocxSession(bytes).editable).toBe(false);
+  });
 });

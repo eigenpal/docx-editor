@@ -5,9 +5,12 @@
 // tables/SDTs opens READ-ONLY through the engine preview (real geometry, nothing
 // flattened). Exposes an engine-neutral EditorDriver for browser smoke tests.
 //
-// Text insertion, deletion, selection, Enter (split), Backspace/Delete (join), and undo/
-// redo are handled by the ProseMirror base keymap + history; every resulting change maps
-// to DocOps. Rich formatting and structural editing are later increments.
+// Text insertion, deletion, selection, Backspace/Delete (including paragraph join), and
+// undo/redo are handled by the ProseMirror base keymap + history; every resulting change
+// maps to DocOps. Paragraph SPLIT (Enter) is intentionally disabled for this checkpoint —
+// the forward mapper matches paragraphs by identity and cannot yet place a split's new
+// half, so allowing it would misorder or drop content. Rich formatting and structural
+// editing (split, reorder) are later increments.
 
 import { EditorView } from 'prosemirror-view';
 import { EditorState } from 'prosemirror-state';
@@ -49,24 +52,30 @@ export function mountDocxEditor(container: HTMLElement, bytes: Uint8Array): Moun
     return { session, driver, destroy: () => container.replaceChildren() };
   }
 
+  // Build once so the initial state and the reject snap-back share the same plugins
+  // (history + keymaps must survive a rejected edit).
+  const noop = () => true;
+  const plugins = [
+    history(),
+    keymap({ 'Mod-z': undo, 'Mod-y': redo, 'Shift-Mod-z': redo }),
+    // Swallow paragraph-split keys before the base keymap can split.
+    keymap({ Enter: noop, 'Shift-Enter': noop, 'Mod-Enter': noop }),
+    keymap(baseKeymap),
+  ];
+  const freshState = () => EditorState.create({ doc: session.projectDoc(), plugins });
+
   const view = new EditorView(container, {
-    state: EditorState.create({
-      doc: session.projectDoc(),
-      plugins: [
-        history(),
-        keymap({ 'Mod-z': undo, 'Mod-y': redo, 'Shift-Mod-z': redo }),
-        keymap(baseKeymap),
-      ],
-    }),
+    state: freshState(),
     editable: () => session.editable,
     dispatchTransaction(tr) {
       const next = view.state.apply(tr);
       view.updateState(next);
       if (!tr.docChanged) return;
       const res = session.applyPmDoc(next.doc);
-      // If the store refused the edit (it would disturb a read-only block), snap the view
-      // back to the canonical projection so the view can never diverge from the model.
-      if (res.rejected) view.updateState(EditorState.create({ doc: session.projectDoc() }));
+      // If the store refused the edit (it would disturb a read-only block or split a
+      // paragraph), snap the view back to the canonical projection — with plugins intact —
+      // so the view can never diverge from the model.
+      if (res.rejected) view.updateState(freshState());
     },
   });
   container.classList.add('docx-editable');

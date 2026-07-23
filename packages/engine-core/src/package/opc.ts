@@ -6,7 +6,7 @@
 // round-trip that gate 5 (parse->edit->save->reopen) exercises.
 
 import { readZip, writeZip, strToU8, strFromU8, type ZipRejection } from './zip.ts';
-import { readXml, findElement, childElements } from './xml-reader.ts';
+import { readXml, findElement, childElements, type XmlNode } from './xml-reader.ts';
 import { scanBodyBlockSpans, ScanError, type BlockSpan } from './wml-scan.ts';
 import { blockXml } from './wml-serialize.ts';
 import {
@@ -193,7 +193,7 @@ const ROOT_RELS_XML =
   `<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/>` +
   `</Relationships>`;
 
-function anyRelationship(nodes: readonly import('./xml-reader.ts').XmlNode[]): boolean {
+function anyRelationship(nodes: readonly XmlNode[]): boolean {
   return nodes.some((n) => el(n) && (n.name === 'Relationship' || anyRelationship(n.children)));
 }
 
@@ -226,8 +226,14 @@ export function isPlainEditableDocx(bytes: Uint8Array): boolean {
   }
   const xml = readXml(strFromU8(docXml));
   if (!xml.ok) return false;
-  const body = findElement(xml.nodes, 'w:body');
-  if (!body) return false;
+  // The shell must be exactly <w:document><w:body>…</w:body></w:document>: writeDocx emits
+  // only that, so a w:background, a second w:body, or any other w:document child would be
+  // dropped on save.
+  const doc = xml.nodes.find((n): n is Extract<XmlNode, { type: 'element' }> => el(n) && n.name === 'w:document');
+  if (!doc) return false;
+  const docChildren = doc.children.filter(el);
+  if (docChildren.length !== 1 || docChildren[0].name !== 'w:body') return false;
+  const body = docChildren[0];
   let sawParagraph = false;
   for (const child of body.children) {
     if (!el(child)) continue;
