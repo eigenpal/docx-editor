@@ -24,6 +24,9 @@ export {
   registerDefaultBlockProjector,
   nodeRole,
   projectBlock,
+  hasBlockProjector,
+  isBindingEditableKind,
+  assertBindingLaneComplete,
   buildDocSchema,
 } from './binding-capabilities.ts';
 export { modelToDoc, paragraphNodeToRuns } from './projection.ts';

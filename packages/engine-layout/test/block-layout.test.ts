@@ -4,9 +4,17 @@
 
 import { describe, expect, test } from 'bun:test';
 import { layoutBody, type LayoutOptions } from '../src/layout.ts';
-import { registerBlockLayout } from '../src/block-layout.ts';
+import { registerBlockLayout, hasBlockLayout, assertLayoutLaneComplete } from '../src/block-layout.ts';
 import { DeterministicMetrics } from '../src/metrics.ts';
-import { createEmptyModel, bodyStoryId, type Block, type PackageModel } from '@docx-editor.dev/engine-core';
+import {
+  createEmptyModel,
+  bodyStoryId,
+  registerCoreBlockCapability,
+  snapshotBlockRegistryForTest,
+  restoreBlockRegistryForTest,
+  type Block,
+  type PackageModel,
+} from '@docx-editor.dev/engine-core';
 
 function opts(): LayoutOptions {
   return { pageWidth: 12240, pageHeight: 15840, margin: 1440, metrics: new DeterministicMetrics() };
@@ -42,5 +50,42 @@ describe('layout dispatches blocks through the registry', () => {
   test('an unregistered block kind fails closed rather than being silently skipped', () => {
     const model = modelWith([{ kind: 'mystery' } as unknown as Block]);
     expect(() => layoutBody(model, opts())).toThrow(/no block layout handler registered/);
+  });
+});
+
+describe('layout lane feature-completeness (comprehensive 3.9)', () => {
+  test('the built-in kinds all have a layout handler', () => {
+    expect(hasBlockLayout('paragraph')).toBe(true);
+    expect(hasBlockLayout('table')).toBe(true);
+    expect(hasBlockLayout('sdt')).toBe(true);
+    expect(() => assertLayoutLaneComplete()).not.toThrow();
+  });
+
+  test('a registered core kind with no layout handler is rejected up front', () => {
+    const snap = snapshotBlockRegistryForTest();
+    try {
+      // A core kind (editable or read-only) that contributes no flow-layout handler would fail
+      // closed only mid-render; the lane check surfaces the gap before a document is laid out.
+      registerCoreBlockCapability({ kind: 'callout' as Block['kind'], editPolicy: { topLevelEditable: false } });
+      expect(() => assertLayoutLaneComplete()).toThrow(/layout lane incomplete[\s\S]*callout/);
+    } finally {
+      restoreBlockRegistryForTest(snap);
+    }
+    expect(() => assertLayoutLaneComplete()).not.toThrow();
+  });
+
+  test('the version-keyed guard catches a late kind with no layout handler through layoutBody', () => {
+    layoutBody(modelWith([{ kind: 'paragraph', id: 'p', runs: [{ text: 'x' }] }]), opts()); // latch version
+    const snap = snapshotBlockRegistryForTest();
+    try {
+      // A late core kind with no layout handler bumps blockRegistryVersion, so the NEXT layoutBody
+      // re-validates (not skipped by a one-shot latch) and rejects — even for a paragraph-only doc.
+      registerCoreBlockCapability({ kind: 'callout' as Block['kind'], editPolicy: { topLevelEditable: false } });
+      const paraOnly = modelWith([{ kind: 'paragraph', id: 'p2', runs: [{ text: 'y' }] }]);
+      expect(() => layoutBody(paraOnly, opts())).toThrow(/layout lane incomplete[\s\S]*callout/);
+    } finally {
+      restoreBlockRegistryForTest(snap);
+    }
+    expect(() => layoutBody(modelWith([{ kind: 'paragraph', id: 'p3', runs: [{ text: 'z' }] }]), opts())).not.toThrow();
   });
 });

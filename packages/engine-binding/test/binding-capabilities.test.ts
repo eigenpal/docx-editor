@@ -3,9 +3,24 @@
 // (paragraph editable; every other kind a read-only atom) — modelToDoc has no block.kind switch.
 
 import { describe, expect, test } from 'bun:test';
-import { docSchema, modelToDoc, EditorBinding, nodeRole } from '../src/index.ts';
-import { projectBlock } from '../src/binding-capabilities.ts';
-import { createEmptyModel, bodyStoryId, DocumentStore, type Block, type PackageModel } from '@docx-editor.dev/engine-core';
+import { docSchema, modelToDoc, EditorBinding, nodeRole, hasBlockProjector, assertBindingLaneComplete } from '../src/index.ts';
+import {
+  projectBlock,
+  registerBlockProjector,
+  isBindingEditableKind,
+  snapshotBindingRegistryForTest,
+  restoreBindingRegistryForTest,
+} from '../src/binding-capabilities.ts';
+import {
+  createEmptyModel,
+  bodyStoryId,
+  DocumentStore,
+  registerCoreBlockCapability,
+  snapshotBlockRegistryForTest,
+  restoreBlockRegistryForTest,
+  type Block,
+  type PackageModel,
+} from '@docx-editor.dev/engine-core';
 
 describe('composed schema + per-kind projection', () => {
   test('the composed schema has exactly the registered nodes and marks', () => {
@@ -61,5 +76,68 @@ describe('composed schema + per-kind projection', () => {
     const doc = binding.projectDoc();
     expect(doc.type.name).toBe('doc');
     expect(doc.firstChild!.type.name).toBe('paragraph');
+  });
+});
+
+describe('binding lane feature-completeness (comprehensive 3.9)', () => {
+  test('the built-in surface passes: paragraph is editable and declared binding-editable', () => {
+    expect(hasBlockProjector('paragraph')).toBe(true); // first-class editable projection
+    expect(isBindingEditableKind('paragraph')).toBe(true); // reverse lane round-trips it
+    expect(hasBlockProjector('table')).toBe(false); // read-only, rides the default embed
+    expect(isBindingEditableKind('table')).toBe(false);
+    expect(() => assertBindingLaneComplete()).not.toThrow();
+  });
+
+  test('an editable core kind with no binding projector is rejected (would become uneditable)', () => {
+    const snap = snapshotBlockRegistryForTest();
+    try {
+      // A core kind that is top-level-editable but contributes NO binding projector: it would
+      // silently fall back to the read-only embed, so the lane check must reject it.
+      registerCoreBlockCapability({
+        kind: 'callout' as Block['kind'],
+        editPolicy: { topLevelEditable: true },
+        semanticOps: ['setParagraphRuns'],
+      });
+      expect(() => assertBindingLaneComplete()).toThrow(/binding lane incomplete[\s\S]*callout[\s\S]*no binding projector/);
+    } finally {
+      restoreBlockRegistryForTest(snap);
+    }
+    expect(() => assertBindingLaneComplete()).not.toThrow(); // restored
+  });
+
+  test('an editable core kind with a projector the reverse lane cannot map is still rejected', () => {
+    // The soundness case: a projector EXISTS, but the kind is not in the reverse lane's
+    // BINDING_EDITABLE_KINDS, so its edits cannot map to DocOps — a projector alone is NOT proof of a
+    // round-trip. Editability is an internal reverse-lane fact, never a projector/caller assertion,
+    // so we register a projector for a fresh kind AND make it core-editable, then check rejection.
+    const coreSnap = snapshotBlockRegistryForTest();
+    const bindSnap = snapshotBindingRegistryForTest();
+    registerBlockProjector('widget', (block, schema) => schema.node('blockEmbed', { semId: block.id, kind: block.kind }));
+    try {
+      registerCoreBlockCapability({ kind: 'widget' as Block['kind'], editPolicy: { topLevelEditable: true } });
+      expect(isBindingEditableKind('widget')).toBe(false); // never became editable — no caller flag
+      expect(() => assertBindingLaneComplete()).toThrow(
+        /binding lane incomplete[\s\S]*widget[\s\S]*cannot map its edits to DocOps/,
+      );
+    } finally {
+      restoreBlockRegistryForTest(coreSnap);
+      restoreBindingRegistryForTest(bindSnap); // no projector leak into sibling/watch-mode tests
+    }
+    expect(() => assertBindingLaneComplete()).not.toThrow(); // restored
+  });
+
+  test('the version-keyed guard catches a late incomplete editable kind through the real constructor', () => {
+    const store = new DocumentStore(createEmptyModel());
+    new EditorBinding(store); // first open latches the current registry version (complete)
+    const snap = snapshotBlockRegistryForTest();
+    try {
+      // Registering a late editable kind with no projector bumps blockRegistryVersion, so the NEXT
+      // construction re-validates (not skipped by a one-shot latch) and rejects.
+      registerCoreBlockCapability({ kind: 'callout' as Block['kind'], editPolicy: { topLevelEditable: true } });
+      expect(() => new EditorBinding(store)).toThrow(/binding lane incomplete[\s\S]*callout/);
+    } finally {
+      restoreBlockRegistryForTest(snap);
+    }
+    expect(() => new EditorBinding(store)).not.toThrow(); // restored version re-validates clean
   });
 });

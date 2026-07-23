@@ -76,7 +76,7 @@ registerBlockProjector('paragraph', (block, schema) => {
   const p = block as ParagraphRecord;
   const inline = p.runs.filter((r) => r.text.length > 0).map((r) => runToText(r, schema));
   return schema.node('paragraph', { semId: p.id }, inline);
-});
+}); // paragraph editability is the reverse-lane fact BINDING_EDITABLE_KINDS, not a projector flag
 registerDefaultBlockProjector((block: Block, schema) => schema.node('blockEmbed', { semId: block.id, kind: block.kind }));
 
 // The composed ProseMirror schema — a REAL Schema built once from every capability registered

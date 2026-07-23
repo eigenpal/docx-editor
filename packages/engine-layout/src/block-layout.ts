@@ -5,7 +5,7 @@
 // layout handler instead of editing layoutBody. All arithmetic stays integer/fixed-point, so
 // fingerprints are unchanged.
 
-import type { Block } from '@docx-editor.dev/engine-core';
+import { type Block, registeredBlockKinds } from '@docx-editor.dev/engine-core';
 import type { DisplayItem } from './display-item.ts';
 import type { MetricsPort } from './metrics.ts';
 
@@ -45,4 +45,20 @@ export function layoutBlock(block: Block, ctx: BlockLayoutContext): void {
   const fn = registry.get(block.kind);
   if (!fn) throw new Error(`no block layout handler registered for kind '${block.kind}'`);
   fn(block, ctx);
+}
+
+/** Whether a block kind has a registered layout handler. */
+export const hasBlockLayout = (kind: string): boolean => registry.has(kind);
+
+/** Enforce the LAYOUT lane of feature completeness (comprehensive 3.9): every registered core block
+ *  kind — editable OR read-only — MUST contribute a flow-layout handler, because a paginated
+ *  document renders every block it contains. `layoutBlock` fails closed at layout time, but this
+ *  check surfaces the gap up front (at composition / before a document is opened) so an
+ *  under-registered feature is rejected rather than discovered mid-render. Throws listing every
+ *  block kind that lacks a handler. */
+export function assertLayoutLaneComplete(): void {
+  const missing = registeredBlockKinds().filter((kind) => !registry.has(kind));
+  if (missing.length > 0) {
+    throw new Error(`layout lane incomplete — no layout handler for block kind(s): ${missing.join(', ')}`);
+  }
 }

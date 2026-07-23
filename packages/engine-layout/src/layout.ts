@@ -6,6 +6,7 @@
 
 import {
   bodyStoryId,
+  blockRegistryVersion,
   type PackageModel,
   type Block,
   type ParagraphRecord,
@@ -14,7 +15,13 @@ import {
   type TableCellRecord,
   type SdtRecord,
 } from '@docx-editor.dev/engine-core';
-import { registerBlockLayout, layoutBlock, type BlockLayoutContext, type LayoutBuilder } from './block-layout.ts';
+import {
+  registerBlockLayout,
+  layoutBlock,
+  assertLayoutLaneComplete,
+  type BlockLayoutContext,
+  type LayoutBuilder,
+} from './block-layout.ts';
 
 /** Expand block-level SDTs (content controls) into their nested blocks so downstream
  *  flow code sees only paragraphs and tables. A content control is transparent to
@@ -64,7 +71,18 @@ class PageBuilder {
   }
 }
 
+// The layout lane is verified when a document is laid out (comprehensive 3.9): every registered
+// block kind must have a flow-layout handler. Keyed on the core block registry version (NOT a
+// one-shot boolean) so a kind registered AFTER the first layout still re-validates. -1 forces the
+// first layout to check.
+let layoutLaneVerifiedAtVersion = -1;
+
 export function layoutBody(model: PackageModel, opts: LayoutOptions): LayoutResult {
+  const registryVersion = blockRegistryVersion();
+  if (layoutLaneVerifiedAtVersion !== registryVersion) {
+    assertLayoutLaneComplete();
+    layoutLaneVerifiedAtVersion = registryVersion;
+  }
   const { pageWidth, pageHeight, margin, metrics } = opts;
   const contentRight = pageWidth - margin;
   const contentBottom = pageHeight - margin;

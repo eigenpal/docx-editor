@@ -16,6 +16,7 @@ import {
   bodyStoryId,
   normalizeRuns,
   ORIGIN_IDS,
+  blockRegistryVersion,
   type DocOp,
   type BatchResult,
   type Block,
@@ -23,7 +24,7 @@ import {
 } from '@docx-editor.dev/engine-core';
 import { docSchema } from './schema.ts';
 import { modelToDoc, paragraphNodeToRuns } from './projection.ts';
-import { nodeRole } from './binding-capabilities.ts';
+import { nodeRole, isBindingEditableKind, assertBindingLaneComplete } from './binding-capabilities.ts';
 
 const MUTATION = ORIGIN_IDS.mutationHuman;
 
@@ -109,9 +110,11 @@ function nodeMatchesBlock(node: PMNode | undefined, block: Block | undefined): b
   // split/join/insert/paste while the model keeps the original kind.
   const role = nodeRole(node.type.name);
   if (role === 'atom') {
-    return block.kind !== 'paragraph' && node.attrs.semId === block.id && node.attrs.kind === block.kind;
+    // A read-only atom must match a NON-editable-kind block by id AND kind (isBindingEditableKind
+    // is the single source of truth for what the reverse lane treats as editable, == paragraph).
+    return !isBindingEditableKind(block.kind) && node.attrs.semId === block.id && node.attrs.kind === block.kind;
   }
-  if (role === 'paragraph') return block.kind === 'paragraph' && node.attrs.semId === block.id;
+  if (role === 'paragraph') return isBindingEditableKind(block.kind) && node.attrs.semId === block.id;
   return false;
 }
 
@@ -161,8 +164,21 @@ export interface ForwardResult {
   readonly rejected?: boolean;
 }
 
+/** The binding lane is verified when an EditorBinding opens a document (comprehensive 3.9): every
+ *  editable core block kind must project to a first-class editable PM node. Keyed on the core block
+ *  registry version (NOT a one-shot boolean) so a kind registered AFTER the first open still
+ *  re-validates — a late editable kind bumps the version and is caught, mirroring the core lane's
+ *  version-keyed cache. -1 forces the first open to check. */
+let bindingLaneVerifiedAtVersion = -1;
+
 export class EditorBinding {
-  constructor(private readonly store: DocumentStore) {}
+  constructor(private readonly store: DocumentStore) {
+    const version = blockRegistryVersion();
+    if (bindingLaneVerifiedAtVersion !== version) {
+      assertBindingLaneComplete();
+      bindingLaneVerifiedAtVersion = version;
+    }
+  }
 
   get schema() {
     return docSchema;
@@ -220,13 +236,16 @@ export class EditorBinding {
         // A read-only atom must map to its EXACT block — same id AND same kind. Checking kind
         // too rejects a retyped atom (e.g. a table node relabelled 'sdt') that would otherwise
         // commit zero ops and leave the view diverged from the model.
-        if (block.kind === 'paragraph' || node.attrs.semId !== block.id || node.attrs.kind !== block.kind) {
+        if (isBindingEditableKind(block.kind) || node.attrs.semId !== block.id || node.attrs.kind !== block.kind) {
           throw new BindingRejection('read-only block moved, replaced, or retyped');
         }
       } else if (role === 'paragraph') {
-        if (block.kind !== 'paragraph' || node.attrs.semId !== block.id) {
+        if (!isBindingEditableKind(block.kind) || node.attrs.semId !== block.id) {
           throw new BindingRejection('paragraph reordered or retargeted');
         }
+        // The reverse lane's run mapping is paragraph-shaped (BINDING_EDITABLE_KINDS is paragraph);
+        // narrow to ParagraphRecord and fail closed if a future editable kind is not paragraph-shaped.
+        if (block.kind !== 'paragraph') throw new BindingRejection('editable block kind has no run reverse-mapping');
         const runs = paragraphNodeToRuns(node);
         if (!runsEqual(block.runs, runs)) {
           // Overwriting a paragraph whose runs carry metadata the projection drops (id/styleId/

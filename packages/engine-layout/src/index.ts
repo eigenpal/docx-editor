@@ -21,3 +21,12 @@ export {
 } from './display-item.ts';
 export { type MetricsPort, DeterministicMetrics, HelveticaMetrics } from './metrics.ts';
 export { type LayoutOptions, layoutBody, hitTest } from './layout.ts';
+export {
+  type LayoutBuilder,
+  type BlockLayoutContext,
+  type BlockLayout,
+  registerBlockLayout,
+  layoutBlock,
+  hasBlockLayout,
+  assertLayoutLaneComplete,
+} from './block-layout.ts';
