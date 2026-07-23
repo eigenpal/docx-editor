@@ -13,8 +13,11 @@ export const ENGINE_SERVER_PACKAGE = '@docx-editor.dev/engine-server' as const;
 
 export {
   RPC_PROTOCOL_VERSION,
+  COMMAND_SCHEMA_VERSION,
+  DEFAULT_TENANT,
   type RpcRequest,
   type RpcResponse,
+  type RpcCallOptions,
   RpcTransportError,
   RpcServer,
   RpcClient,

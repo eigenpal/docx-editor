@@ -140,7 +140,7 @@
 
 ## 11. Server RPC and generated language clients
 
-- [ ] 11.1 Implement immutable reads/rebase/CAS and idempotency keys bound to tenant/document/schema/operation hash with same-key/different-hash conflict, finite retention/retry window, and post-expiry new-attempt preconditions.
+- [x] 11.1 Implement immutable reads/rebase/CAS and idempotency keys bound to tenant/document/schema/operation hash with same-key/different-hash conflict, finite retention/retry window, and post-expiry new-attempt preconditions.
 - [ ] 11.2 Implement a headless server workflow for parse, create, query, semantic edit, synchronization, layout, DOCX save, and PDF export with no DOM, browser process, PM, or editor host; verify replace-text plus image-insertion exports against in-process fixtures.
 - [ ] 11.3 Bake off Connect, gRPC, and OpenAPI tooling under `technology-selection.md`, then define versioned RPC schemas for lifecycle, external targets, commands, queries, request-context batches, results, errors, snapshots, updates, binary references, and export streams by reusing common runtime validators.
 - [ ] 11.4 Implement RPC dispatch, atomic sync, revision preconditions, authorization/audit origins, and the exception boundary: application/validation/conflict/resource failures return common results; only transport/protocol failures preventing a valid envelope throw typed exceptions.

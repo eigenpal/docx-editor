@@ -36,8 +36,11 @@ export class DocxClient {
   insertText(paragraphId: string, text: string): DocxEditor.Result<string | undefined> {
     return this.gen.insertText({ paragraphId, text });
   }
+  /** Append a paragraph to the body. The base facade declares the body scope
+   *  explicitly; targeting an active header/footer uses the raw generated client
+   *  with a scope context on the transport. */
   appendParagraph(): DocxEditor.Result<string | undefined> {
-    return this.gen.appendParagraph({});
+    return this.gen.appendParagraph({ scope: 'body' });
   }
   getParagraphText(paragraphId: string): DocxEditor.Result<string | undefined> {
     return this.gen.getParagraphText({ paragraphId });

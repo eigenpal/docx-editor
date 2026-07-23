@@ -46,7 +46,7 @@ describe('generated client', () => {
     const server = new RpcServer();
     server.createDocument('doc1');
     const gen = makeGeneratedClient(rpcTransport(server, 'doc1'));
-    const pid = (gen.appendParagraph({}).value as string) ?? '';
+    const pid = (gen.appendParagraph({ scope: 'body' }).value as string) ?? '';
     gen.insertText({ paragraphId: pid, text: 'q' });
     const q = gen.getParagraphText({ paragraphId: pid });
     expect(q).toMatchObject({ status: 'ok', value: 'q' });
