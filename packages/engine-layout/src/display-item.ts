@@ -24,7 +24,19 @@ export interface TextItem {
   readonly anchor: Anchor;
 }
 
-export type DisplayItem = TextItem;
+/** A positioned rectangle — a table/cell border box and/or a shading fill. Backends
+ *  stroke the border when `stroke` is set and paint `fill` (hex 'RRGGBB') behind it. */
+export interface RectItem {
+  readonly type: 'rect';
+  readonly x: number;
+  readonly y: number;
+  readonly width: number;
+  readonly height: number;
+  readonly stroke?: boolean;
+  readonly fill?: string;
+}
+
+export type DisplayItem = TextItem | RectItem;
 
 export interface Page {
   readonly index: number;

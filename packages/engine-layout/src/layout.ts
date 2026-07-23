@@ -4,9 +4,19 @@
 // is integer/fixed-point, so the same model + ports + config produce byte-identical
 // pages in browser, worker, and server (the cross-runtime comparator, gate 9).
 
-import { bodyStoryId, type PackageModel, type ParagraphRecord } from '@docx-editor.dev/engine-core';
+import {
+  bodyStoryId,
+  type PackageModel,
+  type ParagraphRecord,
+  type TableRecord,
+  type TableCellRecord,
+} from '@docx-editor.dev/engine-core';
 import type { MetricsPort } from './metrics.ts';
-import type { DisplayItem, Page, LayoutResult, TextItem } from './display-item.ts';
+import type { DisplayItem, Page, LayoutResult, TextItem, RectItem } from './display-item.ts';
+
+/** Twips (1/1440 in) to layout px (96 px/in): px = twips * 96 / 1440 = twips / 15. */
+const TWIPS_PER_PX = 15;
+const CELL_PAD = 4;
 
 export interface LayoutOptions {
   readonly pageWidth: number;
@@ -58,6 +68,11 @@ export function layoutBody(model: PackageModel, opts: LayoutOptions): LayoutResu
 
   const story = model.stories.get(bodyStoryId(model))!;
   for (const block of story.blocks) {
+    if (block.kind === 'table') {
+      y = layoutTable(block, { margin, contentRight, contentBottom, metrics, builder }, y);
+      x = margin;
+      continue;
+    }
     const p = block as ParagraphRecord;
     let offset = 0;
     for (const run of p.runs) {
@@ -95,6 +110,126 @@ export function layoutBody(model: PackageModel, opts: LayoutOptions): LayoutResu
   }
 
   return { pages: builder.finish(), status: 'converged' };
+}
+
+interface TableCtx {
+  readonly margin: number;
+  readonly contentRight: number;
+  readonly contentBottom: number;
+  readonly metrics: MetricsPort;
+  readonly builder: PageBuilder;
+}
+
+/**
+ * Lay out a table: derive column widths from the grid (or distribute the content
+ * width evenly), flow each cell's paragraphs within its column box, size each row to
+ * its tallest cell, and emit a border rect (plus a shading fill) per cell. Rows
+ * paginate between each other; a single row is not split across pages (v1). Returns
+ * the y just below the table.
+ */
+function layoutTable(table: TableRecord, ctx: TableCtx, startY: number): number {
+  const { margin, contentRight, contentBottom, metrics, builder } = ctx;
+  const contentWidth = contentRight - margin;
+  const cols = columnPx(table, contentWidth);
+  let y = startY;
+
+  for (const row of table.rows) {
+    // Paginate between rows: if even one line of the row would not fit, break first.
+    if (y + metrics.lineHeight + 2 * CELL_PAD > contentBottom && y > margin) {
+      builder.break();
+      y = margin;
+    }
+    const rowTop = y;
+    const cellTexts: { rect: RectItem; items: TextItem[] }[] = [];
+    let rowBottom = rowTop + metrics.lineHeight + 2 * CELL_PAD; // min row height
+    let colCursor = 0;
+
+    for (const cell of row.cells) {
+      const span = Math.max(1, cell.props?.gridSpan ?? 1);
+      const cellX = margin + sumCols(cols, 0, colCursor);
+      const cellW = sumCols(cols, colCursor, Math.min(colCursor + span, cols.length)) || contentWidth;
+      colCursor += span;
+
+      const items: TextItem[] = [];
+      const bottom = flowCell(cell, cellX + CELL_PAD, cellX + cellW - CELL_PAD, rowTop + CELL_PAD, metrics, (it) => items.push(it));
+      const cellBottom = bottom + CELL_PAD;
+      if (cellBottom > rowBottom) rowBottom = cellBottom;
+      const fill = shadeFill(cell);
+      cellTexts.push({ rect: { type: 'rect', x: cellX, y: rowTop, width: cellW, height: 0, stroke: true, ...(fill ? { fill } : {}) }, items });
+    }
+
+    const rowHeight = rowBottom - rowTop;
+    for (const { rect, items } of cellTexts) {
+      builder.push({ ...rect, height: rowHeight }); // border/shading sized to the row
+      for (const it of items) builder.push(it);
+    }
+    y = rowBottom;
+  }
+  return y;
+}
+
+/** Column widths in px: from the grid (twips) when present, else even distribution. */
+function columnPx(table: TableRecord, contentWidth: number): number[] {
+  if (table.grid && table.grid.length > 0) {
+    return table.grid.map((c) => {
+      const tw = c.w !== undefined ? Number(c.w) : NaN;
+      return Number.isFinite(tw) && tw > 0 ? Math.round(tw / TWIPS_PER_PX) : Math.round(contentWidth / table.grid!.length);
+    });
+  }
+  const colCount = Math.max(1, ...table.rows.map((r) => r.cells.reduce((n, c) => n + Math.max(1, c.props?.gridSpan ?? 1), 0)));
+  const w = Math.floor(contentWidth / colCount);
+  return Array.from({ length: colCount }, () => w);
+}
+
+function sumCols(cols: readonly number[], from: number, to: number): number {
+  let s = 0;
+  for (let i = from; i < to && i < cols.length; i += 1) s += cols[i];
+  return s;
+}
+
+function shadeFill(cell: TableCellRecord): string | undefined {
+  const fill = cell.props?.shading?.fill;
+  return fill && fill !== 'auto' && /^[0-9a-fA-F]{6}$/.test(fill) ? fill : undefined;
+}
+
+/** Flow a cell's paragraph text within [left,right] from `top`; returns bottom y. No
+ *  pagination inside a cell (v1). Each paragraph starts on a new line. */
+function flowCell(cell: TableCellRecord, left: number, right: number, top: number, metrics: MetricsPort, push: (it: TextItem) => void): number {
+  let x = left;
+  let y = top;
+  let started = false;
+  const width = Math.max(right - left, metrics.spaceWidth);
+  for (const block of cell.blocks) {
+    if (block.kind !== 'paragraph') continue; // nested tables in cells: v1 skips geometry
+    if (started) {
+      y += metrics.lineHeight;
+      x = left;
+    }
+    started = true;
+    let offset = 0;
+    for (const run of block.runs) {
+      const bold = run.props?.bold === true;
+      const italic = run.props?.italic === true;
+      for (const part of run.text.split(/(\s+)/)) {
+        if (part.length === 0) continue;
+        if (/^\s+$/.test(part)) {
+          x += metrics.spaceWidth * part.length;
+          offset += part.length;
+          continue;
+        }
+        let wordWidth = 0;
+        for (const ch of part) wordWidth += metrics.advance(ch, bold, italic);
+        if (x + wordWidth > left + width && x > left) {
+          y += metrics.lineHeight;
+          x = left;
+        }
+        push({ type: 'text', x, y, width: wordWidth, height: metrics.lineHeight, text: part, bold, italic, anchor: { paragraphId: block.id, offset } });
+        x += wordWidth;
+        offset += part.length;
+      }
+    }
+  }
+  return y + metrics.lineHeight;
 }
 
 /**
