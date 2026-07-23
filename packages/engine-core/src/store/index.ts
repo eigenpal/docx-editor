@@ -74,3 +74,17 @@ export {
   onBlockDeleted,
   onRangeDeleted,
 } from './annotation.ts';
+export {
+  type Comment,
+  type RevisionKind,
+  type RevisionStatus,
+  type TrackedRevision,
+  type RevisionResult,
+  reply,
+  resolveComment,
+  reopenComment,
+  threadOf,
+  acceptRevision,
+  rejectRevision,
+  pendingRevisions,
+} from './comments-revisions.ts';
