@@ -49,7 +49,9 @@
    SDT is not yet addressable through the paragraph-lookup APIs (edit/identity-ops/
    external-target/anchors search only story.blocks) — blocked on the same SDT-editing
    deferral; (b) block content inside a non-transparent wrapper (w:ins/w:del/w:smartTag)
-   within an SDT is omitted from the model though byte-preserved. PRE-EXISTING (not
+   within an SDT is omitted from the MODEL though byte-preserved on the preservation path
+   — and on the flat path such content now FAILS CLOSED (deepHasBlockSdt scans the SDT
+   subtree deeply), so it is never silently dropped. PRE-EXISTING (not
    SDT-specific): normalize() merges adjacent runs AFTER the preservation baseline hash
    is taken, so an empty store transaction can later make emitPreservedPart reject an
    otherwise-untouched preserved paragraph/table/SDT as "edited" — the baseline hash
