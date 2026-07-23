@@ -45,6 +45,23 @@ function blockRuns(block: Block): readonly RunRecord[] {
   return block.kind === 'paragraph' ? block.runs : [];
 }
 
+/** Whether a run round-trips LOSSLESSLY through the ProseMirror projection, which represents
+ *  only the PRESENCE of bold/italic. A run carrying a stable id, a styleId, underline, or an
+ *  explicit-off bold/italic would lose that metadata if its paragraph were re-set from a
+ *  projected (PM-derived) run list — so such a paragraph must never be overwritten by an edit. */
+function runIsProjectable(run: RunRecord): boolean {
+  if (run.id !== undefined) return false;
+  const p = run.props;
+  if (!p) return true;
+  if (p.styleId !== undefined || p.underline !== undefined) return false;
+  return p.bold !== false && p.italic !== false; // explicit-off is not representable
+}
+
+/** Whether every run of a paragraph block round-trips losslessly through projection. */
+function paragraphIsProjectable(block: Block): boolean {
+  return block.kind === 'paragraph' && block.runs.every(runIsProjectable);
+}
+
 /** The character length of a run list — the split offset splitParagraph cuts at. */
 function pmTextLength(runs: readonly RunRecord[]): number {
   return runs.reduce((n, r) => n + r.text.length, 0);
@@ -84,7 +101,12 @@ function hasLoneSurrogate(text: string): boolean {
  *  so an in-place text edit still "matches" its block (same identity, different runs). */
 function nodeMatchesBlock(node: PMNode | undefined, block: Block | undefined): boolean {
   if (!node || !block) return false;
-  if (node.type.name === 'blockEmbed') return block.kind !== 'paragraph' && node.attrs.semId === block.id;
+  // A read-only atom must match its block by id AND kind — so a retyped atom (a table relabelled
+  // 'sdt') is never treated as unchanged in a prefix/suffix alignment and cannot ride along a
+  // split/join/insert/paste while the model keeps the original kind.
+  if (node.type.name === 'blockEmbed') {
+    return block.kind !== 'paragraph' && node.attrs.semId === block.id && node.attrs.kind === block.kind;
+  }
   if (node.type.name === 'paragraph') return block.kind === 'paragraph' && node.attrs.semId === block.id;
   return false;
 }
@@ -201,7 +223,12 @@ export class EditorBinding {
           throw new BindingRejection('paragraph reordered or retargeted');
         }
         const runs = paragraphNodeToRuns(node);
-        if (!runsEqual(block.runs, runs)) ops.push({ op: 'setParagraphRuns', paragraphId: block.id, runs });
+        if (!runsEqual(block.runs, runs)) {
+          // Overwriting a paragraph whose runs carry metadata the projection drops (id/styleId/
+          // underline/explicit-off) would silently lose it — refuse rather than corrupt.
+          if (!paragraphIsProjectable(block)) throw new BindingRejection('paragraph carries unprojectable run metadata');
+          ops.push({ op: 'setParagraphRuns', paragraphId: block.id, runs });
+        }
       } else throw new BindingRejection(`unexpected node type '${node.type.name}'`);
     });
     return ops;
@@ -270,6 +297,10 @@ export class EditorBinding {
     }
     // Everything after the inserted run is the UNCHANGED tail of the canonical blocks.
     if (!alignsAfter(nodes, prefix + k + 1, blocks, prefix + 1)) return null;
+    // The paste overwrites P (and moves its tail into a new paragraph). If P's ORIGINAL runs carry
+    // metadata the projection drops (id/styleId/underline/explicit-off), the paste would silently
+    // lose it — refuse.
+    if (!paragraphIsProjectable(block)) return null;
     // A paste that redistributes the paragraph's text must never leave a run holding a lone
     // surrogate (a boundary drawn inside an astral character) — it would corrupt on save.
     const affected = [target, ...nodes.slice(prefix + 1, prefix + 1 + k)];

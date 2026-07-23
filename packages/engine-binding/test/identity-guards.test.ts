@@ -7,7 +7,7 @@
 import { describe, expect, test } from 'bun:test';
 import { zipSync, strToU8 } from 'fflate';
 import { docSchema, EditorBinding, paragraphNodeToRuns } from '../src/index.ts';
-import { DocumentStore, parseDocx, bodyStoryId, ORIGIN_IDS } from '@docx-editor.dev/engine-core';
+import { DocumentStore, parseDocx, bodyStoryId, ORIGIN_IDS, createEmptyModel } from '@docx-editor.dev/engine-core';
 import type { Node as PMNode } from 'prosemirror-model';
 
 const HUMAN = ORIGIN_IDS.mutationHuman;
@@ -231,6 +231,51 @@ describe('read-only atoms are matched by kind, not just id', () => {
   test('the untouched table projection commits nothing', () => {
     const { binding, doc } = tableBinding();
     expect(binding.commitFromDoc(doc).ops).toHaveLength(0);
+  });
+
+  test('a paste next to a RETYPED atom in the suffix fails closed (kind checked in alignment)', () => {
+    const { store, binding, doc } = tableBinding(); // [paragraph p, table t]
+    const p = doc.child(0);
+    const embed = doc.child(1);
+    // Edit p (paste head) + a new paragraph, but the trailing atom is relabelled table->sdt.
+    const forged = docSchema.node('doc', null, [
+      docSchema.node('paragraph', p.attrs, [docSchema.text('pX')]),
+      docSchema.node('paragraph', { semId: null }, [docSchema.text('Y')]),
+      docSchema.node('blockEmbed', { semId: embed.attrs.semId, kind: 'sdt' }), // was 'table'
+    ]);
+    const res = binding.commitFromDoc(forged);
+    expect(res.rejected).toBe(true);
+    expect(store.currentRevision).toBe(0);
+  });
+});
+
+describe('unprojectable run metadata is never overwritten', () => {
+  function underlineBinding() {
+    const model = createEmptyModel();
+    const store = new DocumentStore(model);
+    const id = model.stories.get(bodyStoryId(model))!.blocks[0].id;
+    // A run whose underline the ProseMirror projection cannot represent.
+    store.transact(HUMAN, (c) => c.apply({ op: 'setParagraphRuns', paragraphId: id, runs: [{ text: 'AB', props: { underline: true } }] }));
+    return { store, binding: new EditorBinding(store), id };
+  }
+
+  test('editing a paragraph whose run has underline fails closed (would drop it)', () => {
+    const { store, binding, id } = underlineBinding();
+    const doc = docSchema.node('doc', null, [docSchema.node('paragraph', { semId: id }, [docSchema.text('ABX')])]);
+    const res = binding.commitFromDoc(doc);
+    expect(res.rejected).toBe(true);
+    expect(store.currentRevision).toBe(1); // only the seeding transact
+  });
+
+  test('a mid-paragraph paste into an underlined paragraph fails closed', () => {
+    const { store, binding, id } = underlineBinding();
+    const doc = docSchema.node('doc', null, [
+      docSchema.node('paragraph', { semId: id }, [docSchema.text('AX')]),
+      docSchema.node('paragraph', { semId: null }, [docSchema.text('YB')]),
+    ]);
+    const res = binding.commitFromDoc(doc);
+    expect(res.rejected).toBe(true);
+    expect(store.currentRevision).toBe(1);
   });
 });
 
