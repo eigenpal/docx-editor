@@ -76,6 +76,22 @@ export function editorSmoke(adapter: string, baseUrl: string): void {
       expect(await count()).toBe(beforeCount + 1);
     });
 
+    test('undo restores the caret to the edited paragraph, not the document end', async ({ page }) => {
+      await page.goto(`${baseUrl}/?edit=1`);
+      await expect(page.getByTestId('editor-status')).toHaveText('Editable (paragraphs)');
+      await page.getByTestId('editor-host').locator('p').first().click();
+      await page.keyboard.press('End'); // put the caret in the first paragraph
+      await page.keyboard.press('Enter'); // split it (a structural edit that mints a new block)
+      await page.keyboard.press('ControlOrMeta+z'); // undo; the caret must return to the FIRST paragraph
+      await page.keyboard.type('Q');
+
+      const lines = (await page.evaluate(() => window.__docxEditorDriver!.getBodyText())).split('\n');
+      // The fix: the caret returns to where it was (the first paragraph). The old bug placed it
+      // at the document END because the split's tail id no longer resolved after the undo.
+      expect(lines[0].includes('Q'), `body=${JSON.stringify(lines)}`).toBe(true);
+      expect(lines[lines.length - 1].includes('Q')).toBe(false);
+    });
+
     test('a refused edit snaps back without corrupting the model, and the editor keeps working', async ({ page }) => {
       await page.goto(`${baseUrl}/?edit=1`);
       await expect(page.getByTestId('editor-status')).toHaveText('Editable (paragraphs)');

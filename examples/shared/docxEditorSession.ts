@@ -45,6 +45,9 @@ export interface DocxEditorSession {
   bodyBlockIds(): string[];
   /** The current canonical model — the source of truth the paginated display repaints from. */
   currentModel(): PackageModel;
+  /** The store's current revision — used to key a per-revision selection history so undo/redo
+   *  can restore the caret that was active at each revision. */
+  revision(): number;
   /** Undo the last committed edit on the CANONICAL store; returns whether the model changed
    *  (so the caller can reproject the view). Structural edits (split/join/insert) undo
    *  correctly here — the view's own history cannot, because it would restore stale ids. */
@@ -103,6 +106,7 @@ export function openDocxSession(bytes: Uint8Array): DocxEditorSession {
     undo: () => (editable && store.canUndo() ? store.undo().ok : false),
     redo: () => (editable && store.canRedo() ? store.redoLast().ok : false),
     currentModel: () => store.currentModel,
+    revision: () => store.currentRevision,
     // Only an editable document re-serializes (verbatim package + patched paragraphs). A
     // read-only document is returned EXACTLY as opened — writeDocx could throw on a
     // degenerate preservation snapshot (e.g. an empty or sectPr-only body) or drop parts.

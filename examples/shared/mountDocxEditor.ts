@@ -16,7 +16,7 @@ import { EditorView } from 'prosemirror-view';
 import { EditorState } from 'prosemirror-state';
 import { keymap } from 'prosemirror-keymap';
 import { baseKeymap } from 'prosemirror-commands';
-import { captureSelection, resolveSelection } from '@docx-editor.dev/engine-binding';
+import { captureSelection, resolveSelection, type SelectionAnchor } from '@docx-editor.dev/engine-binding';
 import { openDocxSession, type DocxEditorSession } from './docxEditorSession.ts';
 import { renderDocxPreview, renderModelPreview } from './enginePreview.ts';
 
@@ -117,6 +117,9 @@ export function mountDocxEditor(container: HTMLElement, bytes: Uint8Array): Moun
       },
     },
     dispatchTransaction(tr) {
+      // Capture the caret BEFORE the edit is applied — the store's model-only history has no
+      // selection, so we key a selection by revision to restore the pre-edit caret on undo.
+      const beforeSel = captureSelection(view.state);
       const next = view.state.apply(tr);
       view.updateState(next);
       if (reconciling || !tr.docChanged) return;
@@ -124,37 +127,47 @@ export function mountDocxEditor(container: HTMLElement, bytes: Uint8Array): Moun
         pendingCompositionCommit = true; // defer until compositionend
         return;
       }
-      commitEdit();
+      commitEdit(beforeSel);
     },
   });
+
+  // Selection history keyed by UNDO-STACK DEPTH (not revision — the store mints a fresh
+  // revision on every undo, so a revision key never matches on the way back). selectionAt[d] is
+  // the caret to restore when the store's undo stack is at depth d. `undoDepth` mirrors the
+  // store's history length: a forward commit increments it, undo decrements, redo increments.
+  const selectionAt = new Map<number, SelectionAnchor>();
+  let undoDepth = 0;
+  selectionAt.set(0, captureSelection(view.state));
 
   // Map the current view doc to the store. On a refused edit, snap back to the canonical
   // projection (never let the view diverge); on a committed edit, re-tag new paragraphs and
   // repaint the paginated display.
-  function commitEdit() {
-    const state = view.state;
-    const res = session.applyPmDoc(state.doc);
+  function commitEdit(beforeSel?: SelectionAnchor) {
+    const res = session.applyPmDoc(view.state.doc);
     // A refused edit snaps the view back to the canonical projection so it can never diverge.
     if (res.rejected) reprojectFromModel();
     if (res.committed) {
+      if (beforeSel) selectionAt.set(undoDepth, beforeSel); // caret at the level we're leaving
+      undoDepth += 1;
       syncSemIds();
+      selectionAt.set(undoDepth, captureSelection(view.state)); // post-edit caret (for redo)
       repaintPaged();
     }
   }
 
-  // Replace the view's content with the current canonical projection, restoring the caret as an
-  // authored anchor (paragraph semId + offset) so a snap-back or an undo/redo does not jump the
-  // cursor to the top. A deleted/new paragraph collapses to a surviving boundary. History-
-  // excluded and reentrancy-guarded so it never re-triggers a commit.
-  function reprojectFromModel() {
+  // Replace the view's content with the current canonical projection, restoring the caret from
+  // `anchor` (or the current caret) so a snap-back or an undo/redo does not jump the cursor to
+  // the top. A deleted/new paragraph collapses to a surviving boundary. History-excluded and
+  // reentrancy-guarded so it never re-triggers a commit.
+  function reprojectFromModel(anchor?: SelectionAnchor) {
     reconciling = true;
-    const anchor = captureSelection(view.state);
+    const a = anchor ?? captureSelection(view.state);
     const canonical = session.projectDoc();
     const tr = view.state.tr
       .replaceWith(0, view.state.doc.content.size, canonical.content)
       .setMeta('addToHistory', false);
     try {
-      tr.setSelection(resolveSelection(anchor, tr.doc));
+      tr.setSelection(resolveSelection(a, tr.doc));
     } catch {
       // Fall back to the default mapped selection if the anchor cannot be resolved.
     }
@@ -162,18 +175,21 @@ export function mountDocxEditor(container: HTMLElement, bytes: Uint8Array): Moun
     reconciling = false;
   }
 
-  // Mod-z / Mod-y rewind the CANONICAL store and reproject; always consume the key so the
-  // browser never runs its own contentEditable undo against our managed document.
+  // Mod-z / Mod-y rewind the CANONICAL store and reproject, restoring the caret recorded for the
+  // revision we land on; always consume the key so the browser never runs its own contentEditable
+  // undo against our managed document.
   function doUndo(): boolean {
     if (session.undo()) {
-      reprojectFromModel();
+      undoDepth = Math.max(0, undoDepth - 1);
+      reprojectFromModel(selectionAt.get(undoDepth));
       repaintPaged();
     }
     return true;
   }
   function doRedo(): boolean {
     if (session.redo()) {
-      reprojectFromModel();
+      undoDepth += 1;
+      reprojectFromModel(selectionAt.get(undoDepth));
       repaintPaged();
     }
     return true;
