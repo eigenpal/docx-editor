@@ -17,13 +17,18 @@ import {
   ORIGIN_IDS,
   type DocOp,
   type BatchResult,
-  type ParagraphRecord,
+  type Block,
   type RunRecord,
 } from '@docx-editor.dev/engine-core';
 import { docSchema } from './schema.ts';
 import { modelToDoc, paragraphNodeToRuns } from './projection.ts';
 
 const MUTATION = ORIGIN_IDS.mutationHuman;
+
+/** A structural edit the forward mapper refuses to apply (it would flatten, delete, or
+ *  mutate a read-only non-paragraph block). commitFromDoc turns it into a rejected,
+ *  no-commit result — the canonical store is left untouched. */
+class BindingRejection extends Error {}
 
 function runsEqual(a: readonly RunRecord[], b: readonly RunRecord[]): boolean {
   return JSON.stringify(a) === JSON.stringify(b);
@@ -32,6 +37,8 @@ function runsEqual(a: readonly RunRecord[], b: readonly RunRecord[]): boolean {
 export interface ForwardResult {
   readonly ops: readonly DocOp[];
   readonly result?: BatchResult;
+  /** True when the edit was refused (fail closed) — no DocOps, no commit. */
+  readonly rejected?: boolean;
 }
 
 export class EditorBinding {
@@ -49,22 +56,40 @@ export class EditorBinding {
     return EditorState.create({ schema: docSchema, doc: this.projectDoc() });
   }
 
-  /** Derive the DocOps that turn the current authored state into `newDoc`. */
+  /** Derive the DocOps that turn the current authored state into `newDoc`. Only paragraph
+   *  text changes produce ops; read-only non-paragraph blocks (projected as blockEmbed
+   *  atoms) must map back to their exact canonical block by semId and are never mutated.
+   *  Any structural disturbance of a read-only block throws {@link BindingRejection}. */
   mapDocToOps(newDoc: PMNode): DocOp[] {
     const model = this.store.currentModel;
     const storyId = bodyStoryId(model);
     const story = model.stories.get(storyId)!;
-    const byId = new Map(story.blocks.map((b) => [b.id, b as ParagraphRecord]));
+    const byId = new Map<string, Block>(story.blocks.map((b) => [b.id, b]));
     const ops: DocOp[] = [];
     const seen = new Set<string>();
     let sym = 0;
 
     newDoc.forEach((node) => {
+      if (node.type.name === 'blockEmbed') {
+        // A read-only block. It MUST map back to an existing non-paragraph block; then it
+        // is left untouched. A missing/mismatched atom is an illegal edit — fail closed.
+        const semId = node.attrs.semId as string | null;
+        const existing = semId ? byId.get(semId) : undefined;
+        if (!existing || existing.kind === 'paragraph') {
+          throw new BindingRejection('read-only block cannot be added, moved, or altered');
+        }
+        seen.add(semId!);
+        return;
+      }
       if (node.type.name !== 'paragraph') return;
       const semId = node.attrs.semId as string | null;
       const runs = paragraphNodeToRuns(node);
       const existing = semId ? byId.get(semId) : undefined;
       if (existing) {
+        if (existing.kind !== 'paragraph') {
+          // A paragraph node claims a non-paragraph block's identity — fail closed.
+          throw new BindingRejection('paragraph edit targets a non-paragraph block');
+        }
         seen.add(semId!);
         if (!runsEqual(existing.runs, runs)) ops.push({ op: 'setParagraphRuns', paragraphId: semId!, runs });
       } else {
@@ -74,13 +99,26 @@ export class EditorBinding {
         if (runs.length > 0) ops.push({ op: 'setParagraphRuns', paragraphId: symbolicId, runs });
       }
     });
-    for (const id of byId.keys()) if (!seen.has(id)) ops.push({ op: 'deleteParagraph', paragraphId: id });
+    for (const [id, block] of byId) {
+      if (seen.has(id)) continue;
+      // A vanished paragraph is a delete; a vanished read-only block is illegal (would
+      // drop unsupported content) — fail closed rather than emit a wrong/destructive op.
+      if (block.kind === 'paragraph') ops.push({ op: 'deleteParagraph', paragraphId: id });
+      else throw new BindingRejection('a read-only block was removed');
+    }
     return ops;
   }
 
-  /** Forward: map an edited PM doc to DocOps and commit ONE store transaction. */
+  /** Forward: map an edited PM doc to DocOps and commit ONE store transaction. An edit
+   *  that disturbs a read-only block is refused (fail closed): no ops, no commit. */
   commitFromDoc(newDoc: PMNode): ForwardResult {
-    const ops = this.mapDocToOps(newDoc);
+    let ops: DocOp[];
+    try {
+      ops = this.mapDocToOps(newDoc);
+    } catch (e) {
+      if (e instanceof BindingRejection) return { ops: [], rejected: true };
+      throw e;
+    }
     if (ops.length === 0) return { ops };
     return { ops, result: this.store.applyEdits(ops, MUTATION) };
   }

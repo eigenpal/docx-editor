@@ -18,11 +18,17 @@ function paragraphToNode(p: ParagraphRecord): PMNode {
   return docSchema.node('paragraph', { semId: p.id }, inline);
 }
 
-/** Project the body story into a ProseMirror doc. */
+/** Project the body story into a ProseMirror doc. Paragraphs are editable; every other
+ *  block kind (table, SDT, ...) projects as a READ-ONLY atom carrying its authored semId,
+ *  so unsupported content stays visible and structurally intact rather than flattened. */
 export function modelToDoc(model: PackageModel): PMNode {
   const story = model.stories.get(bodyStoryId(model))!;
-  const paras = story.blocks.map((b) => paragraphToNode(b as ParagraphRecord));
-  return docSchema.node('doc', null, paras.length > 0 ? paras : [docSchema.node('paragraph', { semId: null })]);
+  const nodes = story.blocks.map((b) =>
+    b.kind === 'paragraph'
+      ? paragraphToNode(b)
+      : docSchema.node('blockEmbed', { semId: b.id, kind: b.kind }),
+  );
+  return docSchema.node('doc', null, nodes.length > 0 ? nodes : [docSchema.node('paragraph', { semId: null })]);
 }
 
 /** Read a paragraph node's inline content back into authored runs. */
