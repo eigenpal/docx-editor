@@ -17,6 +17,8 @@ import {
   type ParagraphRecord,
   type RunRecord,
   type RunProps,
+  type StyleRecord,
+  type NumberingRecord,
 } from '../model/index.ts';
 import { IdentityAllocator } from '../model/identity.ts';
 
@@ -162,6 +164,45 @@ function parseStoryParagraphs(root: Extract<XmlNode, { type: 'element' }>, alloc
   });
 }
 
+/** Parse word/styles.xml into authored style records (task 2.7). */
+function parseStyles(entries: ReadonlyMap<string, Uint8Array>): StyleRecord[] {
+  const part = entries.get('/word/styles.xml');
+  if (!part) return [];
+  const sx = readXml(strFromU8(part));
+  if (!sx.ok) return [];
+  const root = findElement(sx.nodes, 'w:styles');
+  if (!root) return [];
+  const out: StyleRecord[] = [];
+  for (const style of childElements(root, 'w:style') as Extract<XmlNode, { type: 'element' }>[]) {
+    const id = style.attributes['w:styleId'];
+    if (!id) continue;
+    const t = style.attributes['w:type'];
+    const type: StyleRecord['type'] = t === 'character' || t === 'table' || t === 'numbering' ? t : 'paragraph';
+    const name = childElements(style, 'w:name')[0]?.attributes['w:val'] ?? id;
+    const isDefault = style.attributes['w:default'] === '1' || style.attributes['w:default'] === 'true';
+    out.push(isDefault ? { id, name, type, isDefault: true } : { id, name, type });
+  }
+  return out;
+}
+
+/** Parse word/numbering.xml into authored numbering records (task 2.7). */
+function parseNumbering(entries: ReadonlyMap<string, Uint8Array>): NumberingRecord[] {
+  const part = entries.get('/word/numbering.xml');
+  if (!part) return [];
+  const sx = readXml(strFromU8(part));
+  if (!sx.ok) return [];
+  const root = findElement(sx.nodes, 'w:numbering');
+  if (!root) return [];
+  const out: NumberingRecord[] = [];
+  for (const num of childElements(root, 'w:num') as Extract<XmlNode, { type: 'element' }>[]) {
+    const numId = num.attributes['w:numId'];
+    if (!numId) continue;
+    const abstractId = childElements(num, 'w:abstractNumId')[0]?.attributes['w:val'] ?? '';
+    out.push({ numId, abstractId });
+  }
+  return out;
+}
+
 export function parseDocx(bytes: Uint8Array): ParseResult {
   const zip = readZip(bytes);
   if (!zip.ok) return { ok: false, reason: zip.reason, detail: zip.detail };
@@ -209,7 +250,18 @@ export function parseDocx(bytes: Uint8Array): ParseResult {
     stories.set(sid, { id: sid, kind: spec.kind, blocks });
   }
 
-  return { ok: true, model: { ...base, stories, identity: alloc.state() } };
+  const styles = parseStyles(zip.entries);
+  const numbering = parseNumbering(zip.entries);
+  return {
+    ok: true,
+    model: {
+      ...base,
+      stories,
+      styles: styles.length > 0 ? styles : base.styles,
+      numbering,
+      identity: alloc.state(),
+    },
+  };
 }
 
 function runXml(run: RunRecord): string {
