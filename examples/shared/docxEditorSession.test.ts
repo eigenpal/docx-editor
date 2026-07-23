@@ -85,76 +85,61 @@ describe('document with a table: read-only, verbatim, never flattened', () => {
   });
 });
 
-describe('the editability gate never marks a lossy document editable', () => {
-  test('a document with a styles.xml part opens read-only (styles would be dropped)', () => {
+describe('selective preservation: ordinary documents are editable, package kept verbatim', () => {
+  test('a document with a styles.xml part is EDITABLE and keeps styles on save', () => {
     const withStyles = docx('<w:p><w:r><w:t>hi</w:t></w:r></w:p>', {
       'word/styles.xml': `<w:styles xmlns:w="${W}"><w:style w:type="paragraph" w:styleId="A"><w:name w:val="A"/></w:style></w:styles>`,
     });
     const session = openDocxSession(withStyles);
-    expect(session.editable).toBe(false);
-    expect(session.save()).toEqual(withStyles); // returned verbatim
+    expect(session.editable).toBe(true);
+    // Unedited save re-emits the whole package verbatim, styles.xml included.
+    const saved = unzipSync(session.save());
+    expect(saved['word/styles.xml']).toBeDefined();
+    expect(strFromU8(saved['word/document.xml'])).toContain('hi');
   });
 
-  test('a paragraph with a hyperlink opens read-only (inline structure would flatten)', () => {
-    const session = openDocxSession(docx('<w:p><w:hyperlink><w:r><w:t>link</w:t></w:r></w:hyperlink></w:p>'));
-    expect(session.editable).toBe(false);
+  test('editing a paragraph patches it while styles.xml survives verbatim', () => {
+    const withStyles = docx('<w:p><w:r><w:t>hi</w:t></w:r></w:p>', {
+      'word/styles.xml': `<w:styles xmlns:w="${W}"><w:style w:type="paragraph" w:styleId="A"><w:name w:val="A"/></w:style></w:styles>`,
+    });
+    const session = openDocxSession(withStyles);
+    const edited = withFirstParagraphText(session.projectDoc(), 'CHANGED');
+    expect(session.applyPmDoc(edited).committed).toBe(true);
+    const saved = unzipSync(session.save());
+    expect(strFromU8(saved['word/document.xml'])).toContain('CHANGED');
+    expect(saved['word/styles.xml']).toBeDefined(); // preserved through the edit
+    // Reopen: the edit survives.
+    expect(openDocxSession(session.save()).bodyText()).toBe('CHANGED');
   });
 
-  test('a paragraph carrying a tab/break opens read-only', () => {
-    const session = openDocxSession(docx('<w:p><w:r><w:t>a</w:t><w:tab/><w:t>b</w:t></w:r></w:p>'));
-    expect(session.editable).toBe(false);
-  });
-
-  test('a paragraph with section properties opens read-only (sectPr would be dropped)', () => {
-    const session = openDocxSession(
+  test('section properties, a w:background, and mc:Ignorable are all editable + preserved', () => {
+    const sect = openDocxSession(
       docx('<w:p><w:r><w:t>a</w:t></w:r></w:p><w:sectPr><w:pgSz w:w="12240" w:h="15840"/></w:sectPr>'),
     );
-    expect(session.editable).toBe(false);
+    expect(sect.editable).toBe(true);
+    expect(strFromU8(unzipSync(sect.save())['word/document.xml'])).toContain('<w:sectPr>');
+
+    const bg = openDocxSession(
+      zipSync({
+        '[Content_Types].xml': strToU8(
+          '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">' +
+            '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/></Types>',
+        ),
+        'word/document.xml': strToU8(
+          `<w:document xmlns:w="${W}" mc:Ignorable="w14"><w:background w:color="FFFF00"/>` +
+            '<w:body><w:p><w:r><w:t>hi</w:t></w:r></w:p></w:body></w:document>',
+        ),
+      }),
+    );
+    expect(bg.editable).toBe(true);
+    expect(strFromU8(unzipSync(bg.save())['word/document.xml'])).toContain('<w:background');
   });
 
-  test('a w:background before the body opens read-only (it would be dropped)', () => {
-    // A shell child other than w:body (here w:background) is not reproduced by the writer.
-    const bytes = zipSync({
-      '[Content_Types].xml': strToU8(
-        '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">' +
-          '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/></Types>',
-      ),
-      'word/document.xml': strToU8(
-        `<w:document xmlns:w="${W}"><w:background w:color="FFFF00"/>` +
-          '<w:body><w:p><w:r><w:t>hi</w:t></w:r></w:p></w:body></w:document>',
-      ),
-    });
-    expect(openDocxSession(bytes).editable).toBe(false);
+  test('a paragraph with a hyperlink stays read-only (its content is not patchable)', () => {
+    expect(openDocxSession(docx('<w:p><w:hyperlink><w:r><w:t>link</w:t></w:r></w:hyperlink></w:p>')).editable).toBe(false);
   });
 
-  test('a w:document attribute the writer drops (mc:Ignorable) opens read-only', () => {
-    const bytes = zipSync({
-      '[Content_Types].xml': strToU8(
-        '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">' +
-          '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/></Types>',
-      ),
-      'word/document.xml': strToU8(
-        `<w:document xmlns:w="${W}" mc:Ignorable="w14"><w:body><w:p><w:r><w:t>hi</w:t></w:r></w:p></w:body></w:document>`,
-      ),
-    });
-    expect(openDocxSession(bytes).editable).toBe(false);
-  });
-
-  test('an extra content-type override opens read-only (it implies a dropped part)', () => {
-    const withExtraCt = zipSync({
-      '[Content_Types].xml': strToU8(
-        '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">' +
-          '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>' +
-          '<Default Extension="xml" ContentType="application/xml"/>' +
-          '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>' +
-          '<Override PartName="/word/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/></Types>',
-      ),
-      '_rels/.rels': strToU8(
-        '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' +
-          '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/></Relationships>',
-      ),
-      'word/document.xml': strToU8(`<w:document xmlns:w="${W}"><w:body><w:p><w:r><w:t>hi</w:t></w:r></w:p></w:body></w:document>`),
-    });
-    expect(openDocxSession(withExtraCt).editable).toBe(false);
+  test('a paragraph carrying a tab stays read-only', () => {
+    expect(openDocxSession(docx('<w:p><w:r><w:t>a</w:t><w:tab/><w:t>b</w:t></w:r></w:p>')).editable).toBe(false);
   });
 });

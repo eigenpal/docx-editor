@@ -15,6 +15,7 @@ import { relatedStoryParts, parseStoryParagraphs, parseStyles, parseDocDefaults,
 import { DOC_PART, hashPreservableBlock, paragraphFullyCaptured } from '../wml-preserve.ts';
 import {
   createEmptyModel,
+  bodyStoryId,
   type PackageModel,
   type Story,
   type Block,
@@ -31,7 +32,14 @@ export type ParseResult =
   | { readonly ok: true; readonly model: PackageModel }
   | { readonly ok: false; readonly reason: DocxParseRejection; readonly detail?: string };
 
-export function parseDocx(bytes: Uint8Array): ParseResult {
+export interface ParseOptions {
+  /** Force the verbatim structural-preservation path even for a table-free document, so
+   *  every part and every unedited byte round-trips losslessly (used to open ordinary
+   *  documents — styles/relationships/section properties — for editing). */
+  readonly preserveAll?: boolean;
+}
+
+export function parseDocx(bytes: Uint8Array, options: ParseOptions = {}): ParseResult {
   const zip = readZip(bytes);
   if (!zip.ok) return { ok: false, reason: zip.reason, detail: zip.detail };
   const docPart = zip.entries.get('/word/document.xml');
@@ -70,6 +78,7 @@ export function parseDocx(bytes: Uint8Array): ParseResult {
   // preservation path so neither is flattened; everything else takes the flat paragraph
   // parse. Verbatim re-emit keeps an unedited document byte-identical.
   const wantsPreservation =
+    options.preserveAll ||
     (body ? treeHasTable(body) || treeHasBlockSdt(body) : false) ||
     (spans?.some((s) => s.name === 'w:tbl' || s.name === 'w:sdt') ?? false);
   // Safety net: a table OR a block-level content control exists somewhere the structural
@@ -274,5 +283,32 @@ export function isPlainEditableDocx(bytes: Uint8Array): boolean {
     sawParagraph = true;
   }
   return sawParagraph;
+}
+
+/**
+ * Whether a model parsed with `preserveAll` is SELECTIVELY editable: its body is nothing
+ * but paragraphs whose original source slice is fully captured, so an edit to any of them
+ * regenerates losslessly while every other byte of the package — styles, relationships,
+ * section properties, media, sibling parts — is re-emitted verbatim from the preservation
+ * snapshot. Unlike isPlainEditableDocx, this ALLOWS a document to carry arbitrary
+ * unmodeled parts and shell, because they survive untouched. A table/SDT body block (not a
+ * top-level paragraph) or a paragraph with unmodeled content makes the document read-only.
+ */
+export function isModelBodyPatchable(model: PackageModel): boolean {
+  const pres = model.preservation;
+  if (!pres) return false;
+  const docText = pres.originalParts.get(DOC_PART);
+  if (docText === undefined) return false;
+  const blocks = model.stories.get(bodyStoryId(model))?.blocks ?? [];
+  if (blocks.length === 0) return false;
+  for (const b of blocks) {
+    if (b.kind !== 'paragraph') return false; // tables/SDTs are read-only (not top-level patchable)
+    const r = pres.blockRanges.get(b.id);
+    if (!r) return false;
+    const fx = readXml(docText.slice(r.start, r.end));
+    const pEl = fx.ok ? fx.nodes.find(el) : undefined;
+    if (!pEl || pEl.name !== 'w:p' || !paragraphFullyCaptured(pEl)) return false; // unmodeled -> read-only
+  }
+  return true;
 }
 

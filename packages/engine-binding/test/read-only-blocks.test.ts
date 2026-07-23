@@ -63,10 +63,10 @@ describe('projection preserves non-paragraph blocks as read-only atoms', () => {
     );
   });
 
-  test('a preserved (table) document is read-only: a body-paragraph edit still saves fail-closed', () => {
-    // The forward mapper WILL produce a targeted op (the store is not the boundary), but a
-    // preserved document cannot regenerate an edited top-level paragraph — writeDocx fails
-    // closed. This is exactly why the editor opens documents with tables/SDTs read-only.
+  test('editing a fully-captured body paragraph in a preserved doc patches it; table verbatim', () => {
+    // Selective preservation: the edit regenerates only that paragraph in place; the table
+    // and every other byte stay verbatim. (The editor still opens table docs read-only at
+    // the SESSION level because the whole body must be patchable — covered separately.)
     const store = storeFrom(MIXED);
     const binding = new EditorBinding(store);
     const doc = binding.projectDoc();
@@ -79,8 +79,9 @@ describe('projection preserves non-paragraph blocks as read-only atoms', () => {
     expect(res.ops.length).toBe(1);
     expect(res.ops[0].op).toBe('setParagraphRuns');
     expect(bodyBlockKinds(store)).toEqual(['paragraph', 'table', 'paragraph']); // table structurally intact
-    // Saving the edited preserved document fails closed rather than dropping content.
-    expect(() => writeDocx(store.currentModel)).toThrow();
+    const out = strFromU8(unzipSync(writeDocx(store.currentModel))['word/document.xml']);
+    expect(out).toContain('BEFORE!'); // edited paragraph patched
+    expect(out).toContain('cell'); // table cell text preserved verbatim
   });
 
   test('deleting a read-only atom fails closed (no commit, table preserved)', () => {

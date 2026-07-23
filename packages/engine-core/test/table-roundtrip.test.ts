@@ -135,16 +135,18 @@ describe('merged, nested, and lexical-width tables', () => {
 describe('editing a preserved table document', () => {
   const bytes = () => readFileSync(`${import.meta.dir}/../../../e2e/fixtures/with-tables.docx`);
 
-  test('editing a preserved top-level paragraph fails closed (no lossy regeneration)', () => {
+  test('editing a fully-captured top-level paragraph patches it; table stays verbatim', () => {
     const parsed = parseDocx(bytes());
     if (!parsed.ok) throw new Error('parse failed');
     const store = new DocumentStore(parsed.model);
     const bodyId = bodyStoryId(store.currentModel);
     const para = store.currentModel.stories.get(bodyId)!.blocks.find((b) => b.kind === 'paragraph') as ParagraphRecord;
-    // Regenerating minimal runs would drop w:pPr/hyperlinks/fields, so any edit to a
-    // preserved block fails closed until ownership-aware regeneration exists.
+    // Selective preservation: an edit to a fully-captured top-level paragraph regenerates
+    // ONLY that paragraph in place; the table and every other byte stay verbatim.
     store.transact(ORIGIN_IDS.mutationHuman, (ctx) => ctx.apply({ op: 'setParagraphRuns', paragraphId: para.id, runs: [{ text: 'EDITED' }] }));
-    expect(() => documentXml(store.currentModel)).toThrow(/fail closed/);
+    const out = documentXml(store.currentModel);
+    expect(out).toContain('EDITED');
+    expect(out).toContain('<w:tbl>'); // the table survives untouched
   });
 
   test('a structural op (append a block) fails closed on serialize', () => {

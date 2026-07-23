@@ -8,7 +8,7 @@ import type { Node as PMNode } from 'prosemirror-model';
 import {
   parseDocx,
   writeDocx,
-  isPlainEditableDocx,
+  isModelBodyPatchable,
   DocumentStore,
   bodyStoryId,
   type PackageModel,
@@ -55,14 +55,19 @@ function bodyParagraphs(store: DocumentStore): ParagraphRecord[] {
 /** Open a DOCX into an editing session. Throws only when the bytes are not a parseable
  *  package (an unsupported-but-parseable document opens read-only instead). */
 export function openDocxSession(bytes: Uint8Array): DocxEditorSession {
-  const parsed = parseDocx(bytes);
-  if (!parsed.ok) throw new Error(`cannot open document: ${parsed.reason}${parsed.detail ? ` (${parsed.detail})` : ''}`);
-  const model = parsed.model;
+  // Prefer the verbatim SELECTIVE-PRESERVATION path so ordinary documents (styles,
+  // relationships, section properties) can be edited: every part and every unedited byte
+  // round-trips losslessly while edited paragraphs are patched in place. Fall back to a
+  // flat parse (read-only) when strict preservation cannot be established.
+  const parsed = parseDocx(bytes, { preserveAll: true });
+  const result = parsed.ok ? parsed : parseDocx(bytes);
+  if (!result.ok) throw new Error(`cannot open document: ${result.reason}${result.detail ? ` (${result.detail})` : ''}`);
+  const model = result.model;
   const store = new DocumentStore(model);
   const binding = new EditorBinding(store);
-  // Lossless-editability is a property of the ORIGINAL package, decided independently of
-  // the (lossy) minimal writer: only a plain paragraph document qualifies.
-  const editable = isPlainEditableDocx(bytes);
+  // Editable when the body is patchable paragraphs under preservation; otherwise read-only
+  // (tables/SDTs, unmodeled paragraph content, or an unpreservable document).
+  const editable = isModelBodyPatchable(model);
 
   return {
     editable,
@@ -82,8 +87,9 @@ export function openDocxSession(bytes: Uint8Array): DocxEditorSession {
         .join('\n');
     },
     currentModel: () => store.currentModel,
-    // Editable docs re-serialize from the canonical model; a read-only doc is returned
-    // exactly as opened (the minimal writer would drop its parts).
-    save: () => (editable ? writeDocx(store.currentModel) : bytes),
+    // A preserved model re-emits verbatim (edited paragraphs patched); a model without a
+    // preservation snapshot (the flat fallback) is returned exactly as opened so the
+    // minimal writer never drops its parts.
+    save: () => (model.preservation ? writeDocx(store.currentModel) : bytes),
   };
 }

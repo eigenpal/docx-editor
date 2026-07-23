@@ -60,8 +60,10 @@ export {
 export {
   type DocxParseRejection,
   type ParseResult,
+  type ParseOptions,
   parseDocx,
   isPlainEditableDocx,
+  isModelBodyPatchable,
 } from './docx/read.ts';
 export { writeDocx, documentXml } from './docx/write.ts';
 // Feature-lane contract: register a new top-level block kind's element parser without

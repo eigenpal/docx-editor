@@ -182,8 +182,18 @@ export function emitPreservedPart(model: PackageModel, original: string, ranges:
       const cellPatches = patchEditedTable(sliceText, r.start, reparsed, block);
       if (!cellPatches) throw new Error(`table ${id} was edited structurally or in unmodeled content — fail closed`);
       patches.push(...cellPatches);
+    } else if (block.kind === 'paragraph' && reparsed.kind === 'paragraph') {
+      // An edited TOP-LEVEL paragraph: regenerate it in place ONLY if its ORIGINAL slice
+      // was fully captured (so regeneration drops no unmodeled content), leaving every
+      // other byte — styles, relationships, section properties, sibling blocks — verbatim.
+      const origXml = readXml(sliceText);
+      const origP = origXml.ok ? origXml.nodes.find(el) : undefined;
+      if (!origP || !paragraphFullyCaptured(origP)) {
+        throw new Error(`paragraph ${id} carries unmodeled content — fail closed`);
+      }
+      patches.push({ start: r.start, end: r.end, xml: paragraphXml(block) });
     } else {
-      throw new Error(`preserved block ${id} was edited; only cell-paragraph edits regenerate — fail closed`);
+      throw new Error(`preserved block ${id} was edited; only paragraph and cell-paragraph edits regenerate — fail closed`);
     }
   }
   patches.sort((a, b) => b.start - a.start); // highest offset first so earlier offsets stay valid
