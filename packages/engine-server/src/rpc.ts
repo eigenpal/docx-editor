@@ -31,7 +31,16 @@ export class RpcTransportError extends Error {
 
 export class RpcServer {
   private readonly docs = new Map<string, DocxEditor.DocumentHandle>();
-  private readonly idempotency = new Map<string, { hash: string; response: RpcResponse }>();
+  private readonly idempotency = new Map<string, { hash: string; response: RpcResponse; at: number }>();
+  private readonly clock: () => number;
+  private readonly retentionWindow: number;
+
+  constructor(opts: { clock?: () => number; retentionWindow?: number } = {}) {
+    let tick = 0;
+    this.clock = opts.clock ?? (() => (tick += 1));
+    // Idempotency keys are retained for this window; after it, a repeat is a NEW attempt.
+    this.retentionWindow = opts.retentionWindow ?? Number.MAX_SAFE_INTEGER;
+  }
 
   createDocument(documentId: string): DocxEditor.DocumentHandle {
     const handle = DocxEditor.create();
@@ -53,19 +62,22 @@ export class RpcServer {
     const doc = this.docs.get(req.documentId);
     if (!doc) throw new RpcTransportError(`unknown document ${req.documentId}`);
 
-    // --- idempotency (task 11.1) ---
+    // --- idempotency with finite retention (task 11.1) ---
     if (req.idempotencyKey !== undefined) {
+      const now = this.clock();
       const hash = stableHash({ documentId: req.documentId, method: req.method, params: req.params });
       const prior = this.idempotency.get(req.idempotencyKey);
-      if (prior) {
+      const live = prior !== undefined && now - prior.at <= this.retentionWindow;
+      if (prior && live) {
         if (prior.hash !== hash) {
-          // Same key, different request hash -> conflict RESULT (not an exception).
+          // Same key, different request hash within retention -> conflict RESULT.
           return { result: { status: 'conflict', message: 'idempotency key reused with a different request', revision: doc.revision } };
         }
         return prior.response; // idempotent replay
       }
+      // No live entry (new or expired) -> a fresh attempt.
       const response: RpcResponse = { result: DocxEditor.mcp.dispatch(doc, req.method, req.params) };
-      this.idempotency.set(req.idempotencyKey, { hash, response });
+      this.idempotency.set(req.idempotencyKey, { hash, response, at: now });
       return response;
     }
 

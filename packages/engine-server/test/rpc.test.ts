@@ -71,6 +71,23 @@ describe('idempotency (task 11.1)', () => {
     expect(server.store('doc1')!.currentRevision).toBe(1); // committed once, not twice
   });
 
+  test('after the retention window expires, the same key is a new attempt', () => {
+    let now = 0;
+    const server = new RpcServer({ clock: () => now, retentionWindow: 2 });
+    server.createDocument('doc1');
+    const client = new RpcClient(server);
+
+    now = 1;
+    client.call('doc1', 'appendParagraph', {}, 'k'); // commit #1, stored at=1
+    now = 2;
+    client.call('doc1', 'appendParagraph', {}, 'k'); // within window -> replay, no new commit
+    expect(server.store('doc1')!.currentRevision).toBe(1);
+
+    now = 10; // past the retention window (10 - 1 > 2)
+    client.call('doc1', 'appendParagraph', {}, 'k'); // expired -> fresh attempt, commit #2
+    expect(server.store('doc1')!.currentRevision).toBe(2);
+  });
+
   test('same key + different request is a conflict', () => {
     const server = new RpcServer();
     const doc = server.createDocument('doc1');
