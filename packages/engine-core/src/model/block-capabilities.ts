@@ -67,9 +67,19 @@ export interface CoreBlockCapability {
 
 const registry = new Map<BlockKind, CoreBlockCapability>();
 
-/** Register (or augment) a block kind's core capability. Additive: later calls merge new ops. */
+/** Register (or AUGMENT) a block kind's core capability. Additive across DIFFERENT ops (the model
+ *  layer contributes hash+normalize, the package layer serialize+patch), but re-registering an
+ *  op a kind ALREADY owns is rejected — duplicate operation ownership is a bug (design decision 1:
+ *  one owner per capability op), not a silent global override. */
 export function registerCoreBlockCapability(cap: CoreBlockCapability): void {
   const prev = registry.get(cap.kind);
+  if (prev) {
+    for (const key of Object.keys(cap) as (keyof CoreBlockCapability)[]) {
+      if (key !== 'kind' && cap[key] !== undefined && prev[key] !== undefined) {
+        throw new Error(`duplicate core block capability op '${String(key)}' for kind '${cap.kind}'`);
+      }
+    }
+  }
   registry.set(cap.kind, { ...prev, ...cap, kind: cap.kind });
 }
 

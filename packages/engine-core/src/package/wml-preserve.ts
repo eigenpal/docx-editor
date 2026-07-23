@@ -234,9 +234,12 @@ function regenerateBlockRegion(
     if (!sliceIsFullyCapturedParagraph(sliceText)) {
       throw new Error('structural edit to a document with a non-paragraph or unmodeled block — fail closed');
     }
-    // EXACT integrity: the source slice must be byte-identical to parse time. Using the normalized
-    // baselineHash here would accept a tampered-but-normalization-equivalent slice.
-    if (hashSourceSlice(sliceText) !== r.sourceHash || !blockFromText(sliceText, throwaway)) {
+    // Integrity requires BOTH hashes to still agree with the source slice: the exact sourceHash
+    // (byte-identical to parse time — rejects a tampered-but-normalization-equivalent slice) AND
+    // the semantic baselineHash consistent with the reparsed slice (rejects an independently
+    // tampered baselineHash field that would otherwise fool the edit-detection below).
+    const reparsed = blockFromText(sliceText, throwaway);
+    if (hashSourceSlice(sliceText) !== r.sourceHash || !reparsed || hashPreservableBlock(reparsed) !== r.baselineHash) {
       throw new Error(`preservation range for block ${id} drifted or was tampered — fail closed`);
     }
   }
@@ -279,14 +282,21 @@ export function emitPreservedPart(model: PackageModel, original: string, ranges:
     const reparsed = blockFromText(sliceText, throwaway);
     // EXACT integrity (byte-identical source slice), independent of the normalized edit-detection
     // hash below — so a tampered slice that normalizes equal is still rejected.
-    if (!reparsed || hashSourceSlice(sliceText) !== r.sourceHash) {
-      throw new Error(`preservation range for block ${id} does not match its source hash (tampered or drifted snapshot)`);
+    // Integrity requires BOTH: exact source bytes AND a baselineHash consistent with the reparsed
+    // slice, so neither hash can be independently tampered to fool the edit-detection below.
+    if (!reparsed || hashSourceSlice(sliceText) !== r.sourceHash || hashPreservableBlock(reparsed) !== r.baselineHash) {
+      throw new Error(`preservation range for block ${id} does not match its baseline/source hash (tampered or drifted snapshot)`);
     }
     const block = byId.get(id)!;
     if (hashPreservableBlock(block) === r.baselineHash) continue; // unchanged -> verbatim
     // An EDITED block: dispatch to its registered patcher for the smallest owned byte-range
-    // (fails closed inside the capability when the edit is not byte-faithfully patchable).
-    patches.push(...blockPatchEdited({ block, reparsed, sliceText, rangeStart: r.start, rangeEnd: r.end }));
+    // (fails closed inside the capability when the edit is not byte-faithfully patchable). The
+    // block id is re-attached to any failure so diagnostics still name the offending block.
+    try {
+      patches.push(...blockPatchEdited({ block, reparsed, sliceText, rangeStart: r.start, rangeEnd: r.end }));
+    } catch (e) {
+      throw new Error(`preserved block ${id} was edited but could not be regenerated: ${(e as Error).message}`);
+    }
   }
   patches.sort((a, b) => b.start - a.start); // highest offset first so earlier offsets stay valid
   let out = original;

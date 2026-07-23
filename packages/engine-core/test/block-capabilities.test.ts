@@ -78,13 +78,14 @@ describe('block-capability registry: core operations dispatch by kind', () => {
     expect(() => blockNormalize(bogus, (bs) => bs)).toThrow(/no core block capability .*mystery/);
   });
 
-  test('a newly registered kind participates without editing any switch', () => {
-    registerCoreBlockCapability({
-      kind: 'sdt', // augment: give SDT a (test-only) editable policy + no-op normalize
-      normalize: (b) => b,
-    });
+  test('re-registering an op a kind already owns is REJECTED (no silent global override)', () => {
+    // sdt already owns normalize (built-in); a second normalize registration must throw rather
+    // than clobber it, so one feature cannot silently replace another's core operation.
+    expect(() => registerCoreBlockCapability({ kind: 'sdt', normalize: (b) => b })).toThrow(
+      /duplicate core block capability op 'normalize'/,
+    );
+    // The built-in registrations still stand.
     const model = createEmptyModel();
-    // The built-in registrations still stand for the real kinds.
     expect(isTopLevelEditable('paragraph')).toBe(true);
     expect(model.stories.get(bodyStoryId(model))).toBeDefined();
   });

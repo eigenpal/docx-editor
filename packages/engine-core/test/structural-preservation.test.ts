@@ -7,7 +7,7 @@ import { describe, expect, test } from 'bun:test';
 import { zipSync, strToU8, unzipSync, strFromU8 } from 'fflate';
 import { parseDocx, writeDocx, DocumentStore, bodyStoryId, ORIGIN_IDS } from '../src/index.ts';
 import type { ParagraphRecord } from '../src/index.ts';
-import { sliceIsFullyCapturedParagraph, DOC_PART } from '../src/package/wml-preserve.ts';
+import { sliceIsFullyCapturedParagraph, DOC_PART, hashPreservableBlock } from '../src/package/wml-preserve.ts';
 import { setParagraphRuns } from '../src/model/index.ts';
 import type { PackageModel } from '../src/index.ts';
 
@@ -109,6 +109,27 @@ describe('3.10 preservation baseline hashing normalizes before comparing', () =>
       preservation: { ...model.preservation!, originalParts: parts },
     };
     expect(() => writeDocx(edited)).toThrow(/tampered or drifted|source hash/i);
+  });
+
+  test('integrity rejects a tampered baselineHash even when the source bytes are unchanged', () => {
+    // Parse [A='AA', B]; edit A to 'BB' in the model; then TAMPER A's baselineHash to the EDITED
+    // block's hash so edit-detection would think A is unchanged and emit the stale source 'AA'.
+    // The source bytes are untouched (sourceHash valid), so ONLY the baselineHash-vs-reparsed check
+    // catches it — save must throw, not silently drop the edit.
+    const A = '<w:p><w:r><w:t>AA</w:t></w:r></w:p>';
+    const B = '<w:p><w:r><w:t>bb</w:t></w:r></w:p>';
+    const parsed = parseDocx(docx(A + B + SECT), { preserveAll: true });
+    if (!parsed.ok) throw new Error('parse failed');
+    const aId = parsed.model.stories.get(bodyStoryId(parsed.model))!.blocks[0].id;
+    const editedModel = setParagraphRuns(parsed.model, aId, [{ text: 'BB' }]);
+    const editedA = editedModel.stories.get(bodyStoryId(editedModel))!.blocks[0];
+    const ranges = new Map(editedModel.preservation!.blockRanges);
+    ranges.set(aId, { ...ranges.get(aId)!, baselineHash: hashPreservableBlock(editedA) }); // forged
+    const tampered: PackageModel = {
+      ...editedModel,
+      preservation: { ...editedModel.preservation!, blockRanges: ranges },
+    };
+    expect(() => writeDocx(tampered)).toThrow(/tampered or drifted|baseline/i);
   });
 });
 
