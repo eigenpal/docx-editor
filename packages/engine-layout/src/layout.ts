@@ -9,6 +9,7 @@ import {
   type PackageModel,
   type ParagraphRecord,
   type TableRecord,
+  type TableRowRecord,
   type TableCellRecord,
 } from '@docx-editor.dev/engine-core';
 import type { MetricsPort } from './metrics.ts';
@@ -121,51 +122,59 @@ interface TableCtx {
 }
 
 /**
- * Lay out a table: derive column widths from the grid (or distribute the content
- * width evenly), flow each cell's paragraphs within its column box, size each row to
- * its tallest cell, and emit a border rect (plus a shading fill) per cell. Rows
- * paginate between each other; a single row is not split across pages (v1). Returns
- * the y just below the table.
+ * Lay out a TOP-LEVEL table with row pagination. Column widths come from the grid (or
+ * an even split); each row is emitted via the shared `emitRow`, and a row that would
+ * not fit forces a page break first (a single row is not split across pages, v1).
+ * Returns the y just below the table.
  */
 function layoutTable(table: TableRecord, ctx: TableCtx, startY: number): number {
   const { margin, contentRight, contentBottom, metrics, builder } = ctx;
-  const contentWidth = contentRight - margin;
-  const cols = columnWidths(table, contentWidth);
+  const cols = columnWidths(table, contentRight - margin);
   let y = startY;
-
   for (const row of table.rows) {
-    // Paginate between rows: if even one line of the row would not fit, break first.
     if (y + metrics.lineHeight + 2 * CELL_PAD > contentBottom && y > margin) {
       builder.break();
       y = margin;
     }
-    const rowTop = y;
-    const cellTexts: { rect: RectItem; items: TextItem[] }[] = [];
-    let rowBottom = rowTop + metrics.lineHeight + 2 * CELL_PAD; // min row height
-    let colCursor = 0;
-
-    for (const cell of row.cells) {
-      const span = Math.max(1, cell.props?.gridSpan ?? 1);
-      const cellX = margin + sumCols(cols, 0, colCursor);
-      const cellW = sumCols(cols, colCursor, Math.min(colCursor + span, cols.length)) || contentWidth;
-      colCursor += span;
-
-      const items: TextItem[] = [];
-      const bottom = flowCell(cell, cellX + CELL_PAD, cellX + cellW - CELL_PAD, rowTop + CELL_PAD, metrics, (it) => items.push(it));
-      const cellBottom = bottom + CELL_PAD;
-      if (cellBottom > rowBottom) rowBottom = cellBottom;
-      const fill = shadeFill(cell);
-      cellTexts.push({ rect: { type: 'rect', x: cellX, y: rowTop, width: cellW, height: 0, stroke: true, ...(fill ? { fill } : {}) }, items });
-    }
-
-    const rowHeight = rowBottom - rowTop;
-    for (const { rect, items } of cellTexts) {
-      builder.push({ ...rect, height: rowHeight }); // border/shading sized to the row
-      for (const it of items) builder.push(it);
-    }
-    y = rowBottom;
+    y = emitRow(row, cols, margin, y, metrics, (it) => builder.push(it));
   }
   return y;
+}
+
+/** Emit a table within [left,right] from `top` with NO pagination (used for nested
+ *  tables inside a cell). Returns the y just below the table. */
+function emitTable(table: TableRecord, left: number, right: number, top: number, metrics: MetricsPort, push: (it: DisplayItem) => void): number {
+  const cols = columnWidths(table, right - left);
+  let y = top;
+  for (const row of table.rows) y = emitRow(row, cols, left, y, metrics, push);
+  return y;
+}
+
+/** Emit one row: place each cell in its column box, flow its content (paragraphs and
+ *  nested tables), size the row to its tallest cell, and push a border/shading rect
+ *  per cell. Returns the row's bottom y. */
+function emitRow(row: TableRowRecord, cols: readonly number[], left: number, rowTop: number, metrics: MetricsPort, push: (it: DisplayItem) => void): number {
+  const total = cols.reduce((a, b) => a + b, 0);
+  const cellData: { rect: RectItem; items: DisplayItem[] }[] = [];
+  let rowBottom = rowTop + metrics.lineHeight + 2 * CELL_PAD; // min row height
+  let colCursor = 0;
+  for (const cell of row.cells) {
+    const span = Math.max(1, cell.props?.gridSpan ?? 1);
+    const cellX = left + sumCols(cols, 0, colCursor);
+    const cellW = sumCols(cols, colCursor, Math.min(colCursor + span, cols.length)) || total;
+    colCursor += span;
+    const items: DisplayItem[] = [];
+    const bottom = flowCell(cell, cellX + CELL_PAD, cellX + cellW - CELL_PAD, rowTop + CELL_PAD, metrics, (it) => items.push(it));
+    if (bottom + CELL_PAD > rowBottom) rowBottom = bottom + CELL_PAD;
+    const fill = shadeFill(cell);
+    cellData.push({ rect: { type: 'rect', x: cellX, y: rowTop, width: cellW, height: 0, stroke: true, ...(fill ? { fill } : {}) }, items });
+  }
+  const rowHeight = rowBottom - rowTop;
+  for (const { rect, items } of cellData) {
+    push({ ...rect, height: rowHeight }); // border/shading sized to the row
+    for (const it of items) push(it);
+  }
+  return rowBottom;
 }
 
 /** Column widths in twips: from the grid when present, else even distribution. */
@@ -192,15 +201,22 @@ function shadeFill(cell: TableCellRecord): string | undefined {
   return fill && fill !== 'auto' && /^[0-9a-fA-F]{6}$/.test(fill) ? fill : undefined;
 }
 
-/** Flow a cell's paragraph text within [left,right] from `top`; returns bottom y. No
- *  pagination inside a cell (v1). Each paragraph starts on a new line. */
-function flowCell(cell: TableCellRecord, left: number, right: number, top: number, metrics: MetricsPort, push: (it: TextItem) => void): number {
+/** Flow a cell's blocks within [left,right] from `top`; returns bottom y. No
+ *  pagination inside a cell (v1). Paragraphs flow line-by-line; a NESTED table is laid
+ *  out with its own declared geometry (rows/cells/rects) inside the cell box. */
+function flowCell(cell: TableCellRecord, left: number, right: number, top: number, metrics: MetricsPort, push: (it: DisplayItem) => void): number {
   let x = left;
   let y = top;
   let started = false;
   const width = Math.max(right - left, metrics.spaceWidth);
   for (const block of cell.blocks) {
-    if (block.kind !== 'paragraph') continue; // nested tables in cells: v1 skips geometry
+    if (block.kind === 'table') {
+      if (started) y += metrics.lineHeight; // gap before the nested table
+      y = emitTable(block, left, right, y, metrics, push);
+      started = true;
+      x = left;
+      continue;
+    }
     if (started) {
       y += metrics.lineHeight;
       x = left;

@@ -4,8 +4,19 @@
 
 import { describe, expect, test } from 'bun:test';
 import { readFileSync } from 'node:fs';
+import { zipSync, strToU8 } from 'fflate';
 import { layoutBody, DeterministicMetrics, type LayoutOptions } from '../src/index.ts';
 import { parseDocx, bodyStoryId, type TableRecord } from '@docx-editor.dev/engine-core';
+
+const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
+function docxOf(inner: string): Uint8Array {
+  return zipSync({ '[Content_Types].xml': strToU8('<Types/>'), 'word/document.xml': strToU8(`<w:document xmlns:w="${W}"><w:body>${inner}</w:body></w:document>`) });
+}
+function parseInner(inner: string) {
+  const r = parseDocx(docxOf(inner));
+  if (!r.ok) throw new Error(`parse failed: ${r.reason}`);
+  return r.model;
+}
 
 function opts(over: Partial<LayoutOptions> = {}): LayoutOptions {
   return { pageWidth: 12240, pageHeight: 15840, margin: 1440, metrics: new DeterministicMetrics(), ...over };
@@ -40,6 +51,23 @@ describe('table layout', () => {
       expect(r.width).toBeGreaterThan(0);
       expect(r.height).toBeGreaterThan(0);
     }
+  });
+
+  test('a nested table in a cell has declared geometry (its own cell rects), not skipped', () => {
+    const inner =
+      '<w:tbl><w:tr><w:tc>' +
+      '<w:tbl><w:tr><w:tc><w:p><w:r><w:t>innercell</w:t></w:r></w:p></w:tc></w:tr></w:tbl>' +
+      '</w:tc></w:tr></w:tbl>';
+    const result = layoutBody(parseInner(inner), opts());
+    const items = result.pages.flatMap((p) => p.items);
+    const rects = items.filter((i) => i.type === 'rect');
+    const texts = items.filter((i) => i.type === 'text');
+    // Outer cell rect + inner cell rect = the nested table has geometry, not skipped.
+    expect(rects.length).toBeGreaterThanOrEqual(2);
+    expect(texts.map((t) => (t.type === 'text' ? t.text : '')).join(' ')).toContain('innercell');
+    // The inner cell rect is indented inside the outer cell rect (distinct x positions).
+    const xs = new Set(rects.map((r) => (r.type === 'rect' ? r.x : -1)));
+    expect(xs.size).toBeGreaterThanOrEqual(2);
   });
 
   test('column widths come from the grid when present', () => {
