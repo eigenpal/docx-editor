@@ -44,6 +44,13 @@ export const DOC_OP_KINDS = [
   'deleteParagraph',
 ] as const satisfies readonly DocOpKind[];
 
+// Compile-time EXHAUSTIVENESS: every DocOpKind must appear in DOC_OP_KINDS. `satisfies` alone only
+// rejects WRONG entries; this rejects a MISSING one too (a newly added DocOp forces adding it here,
+// so it is never treated as a bogus semantic op).
+type _MissingDocOp = Exclude<DocOpKind, (typeof DOC_OP_KINDS)[number]>;
+const _docOpKindsExhaustive: _MissingDocOp extends never ? true : ['DOC_OP_KINDS missing', _MissingDocOp] = true;
+void _docOpKindsExhaustive;
+
 /** Structural effect of one applied op, feeding ModelChange (task 4.7). */
 export interface OpEffect {
   readonly dirty: readonly string[];

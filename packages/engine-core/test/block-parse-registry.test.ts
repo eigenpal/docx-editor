@@ -24,11 +24,15 @@ describe('block-kind parse registry', () => {
   test('a NEW block kind is recognized after registration, no central switch touched', () => {
     // A fictional block element the engine has never heard of.
     const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
-    registerBlockElementParser('w:altChunkStub', (elx, alloc): Block => ({
-      kind: 'paragraph',
-      id: alloc.allocate('paragraph'),
-      runs: [{ text: `[${elx.name}]` }],
-    }));
+    registerBlockElementParser(
+      'w:altChunkStub',
+      (elx, alloc) => ({
+        kind: 'paragraph' as const,
+        id: alloc.allocate('paragraph'),
+        runs: [{ text: `[${(elx as { name: string }).name}]` }],
+      }),
+      'paragraph',
+    );
     const block = blockFromText(`<w:altChunkStub xmlns:w="${W}"/>`, new IdentityAllocator());
     expect(block?.kind).toBe('paragraph');
     expect((block as { runs: { text: string }[] }).runs[0].text).toBe('[w:altChunkStub]');

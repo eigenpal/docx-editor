@@ -14,6 +14,7 @@ import {
   registerBlockElementParser,
   snapshotBlockRegistryForTest,
   restoreBlockRegistryForTest,
+  isTopLevelEditable,
   parseDocx,
   writeDocx,
   DocumentStore,
@@ -70,6 +71,22 @@ describe('core registry unification: FeatureBundle connected to runtime handlers
       resetCoreRegistryCache();
     }
     expect(() => resolveCoreRegistry()).not.toThrow(); // restored to a complete state
+  });
+
+  test('mutating a registered editPolicy object after registration cannot flip editability', () => {
+    const snap = snapshotBlockRegistryForTest();
+    try {
+      const policy = { topLevelEditable: false };
+      registerCoreBlockCapability({ kind: 'sdt', editPolicy: policy });
+      resolveCoreRegistry(); // caches (sdt non-editable => complete)
+      policy.topLevelEditable = true; // mutate the CALLER's object after registration
+      // The stored editPolicy is a frozen CLONE, so this is a no-op — sdt stays non-editable and the
+      // cached completeness result remains valid (the High: aliased metadata bypassed the cache).
+      expect(isTopLevelEditable('sdt')).toBe(false);
+    } finally {
+      restoreBlockRegistryForTest(snap);
+      resetCoreRegistryCache();
+    }
   });
 
   test('semanticOps must name REAL DocOps (a bogus op id fails completeness)', () => {

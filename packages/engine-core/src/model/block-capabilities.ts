@@ -96,16 +96,36 @@ export function registerCoreBlockCapability(cap: CoreBlockCapability): void {
       }
     }
   }
-  registry.set(cap.kind, { ...prev, ...cap, kind: cap.kind });
+  const merged: CoreBlockCapability = { ...prev, ...cap, kind: cap.kind };
+  // CLONE + FREEZE the completeness-bearing metadata so a caller cannot mutate its own object AFTER
+  // registration to change editability/semantic-ops without a version bump (which would leave a
+  // memoized completeness result stale). Handlers stay by reference (functions are not mutated).
+  const frozen: CoreBlockCapability = {
+    ...merged,
+    ...(merged.editPolicy ? { editPolicy: Object.freeze({ ...merged.editPolicy }) } : {}),
+    ...(merged.semanticOps ? { semanticOps: Object.freeze([...merged.semanticOps]) } : {}),
+  };
+  registry.set(cap.kind, frozen);
   registrationVersion += 1;
 }
 
 /** Register the parser for a top-level block element name (the parse lane of a block feature),
- *  declaring the block kind it produces. Re-registering the SAME element is rejected — duplicate
- *  parser ownership is a bug, not a silent last-wins override (mirrors the capability policy). */
-export function registerBlockElementParser(elementName: string, parse: BlockElementParser, kind: BlockKind): void {
+ *  declaring the block kind it produces. Generic over K so the parser's RETURN TYPE must match the
+ *  declared kind (a mismatch is a compile error). Re-registering the SAME element is rejected —
+ *  duplicate parser ownership is a bug, not a silent last-wins override (mirrors the capability
+ *  policy). At parse time the produced block's kind is verified against the declared kind. */
+export function registerBlockElementParser<K extends BlockKind>(
+  elementName: string,
+  parse: (element: unknown, alloc: IdentityAllocator) => Extract<Block, { kind: K }>,
+  kind: K,
+): void {
   if (blockParsers.has(elementName)) throw new Error(`duplicate parser for block element '${elementName}'`);
-  blockParsers.set(elementName, { parse, kind });
+  const guarded: BlockElementParser = (element, alloc) => {
+    const block = parse(element, alloc);
+    if (block.kind !== kind) throw new Error(`parser for '${elementName}' declared kind '${kind}' but produced '${block.kind}'`);
+    return block;
+  };
+  blockParsers.set(elementName, { parse: guarded, kind });
   registrationVersion += 1;
 }
 /** The registered parser for a block element name, if any. */
@@ -162,7 +182,9 @@ export function restoreBlockRegistryForTest(snap: BlockRegistrySnapshot): void {
   for (const [k, v] of snap.caps) registry.set(k, v);
   blockParsers.clear();
   for (const [k, v] of snap.parsers) blockParsers.set(k, v);
-  registrationVersion = snap.version + 1; // bump so any memoized resolver re-validates
+  // Bump from the CURRENT version (not the snapshot's), so restoring can never land on a version a
+  // stale cache already holds (which would reuse the mutated registry's resolution).
+  registrationVersion += 1;
 }
 /** The nested body blocks a block holds (empty for a leaf kind). */
 export const blockNestedBlocks = (block: Block): readonly Block[] => registry.get(block.kind)?.nestedBlocks?.(block) ?? [];
