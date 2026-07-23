@@ -24,7 +24,7 @@ async function load(url: string): Promise<void> {
     host.value.replaceChildren();
     mounted = mountDocxEditor(host.value, bytes);
     (window as unknown as { __docxEditorDriver?: EditorDriver }).__docxEditorDriver = mounted.driver;
-    status.value = mounted.session.editable ? 'Editable (paragraphs)' : 'Read-only (contains tables/SDTs)';
+    status.value = mounted.driver.editable ? 'Editable (paragraphs)' : 'Read-only (contains tables/SDTs)';
   } catch (e) {
     status.value = `Could not open this file (${(e as Error).message}).`;
   }

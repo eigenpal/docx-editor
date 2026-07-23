@@ -17,7 +17,7 @@ import { EditorState } from 'prosemirror-state';
 import { keymap } from 'prosemirror-keymap';
 import { baseKeymap } from 'prosemirror-commands';
 import { captureSelection, resolveSelection, type SelectionAnchor } from '@docx-editor.dev/engine-binding';
-import { openDocxSession, type DocxEditorSession } from './docxEditorSession.ts';
+import { openDocxSession } from './docxEditorSession.ts';
 import { renderDocxPreview, renderModelPreview } from './enginePreview.ts';
 
 /** Engine-neutral test/automation boundary — identical shape in both adapters. */
@@ -31,10 +31,14 @@ export interface EditorDriver {
 }
 
 export interface MountedEditor {
-  readonly session: DocxEditorSession;
+  /** The engine-neutral automation surface (body text, save+reopen, editable). */
   readonly driver: EditorDriver;
   destroy(): void;
 }
+// NOTE: the raw DocxEditorSession is deliberately NOT exposed. Its undo/redo mutate the store
+// directly; calling them outside the mount would bypass the view reprojection, caret restoration,
+// and undo-depth bookkeeping, desyncing the view from the model. Undo/redo run only through the
+// mount's keymap; consumers read editability via `driver.editable`.
 
 /** Mount an editor (or read-only preview) for `bytes` into `container`. */
 export function mountDocxEditor(container: HTMLElement, bytes: Uint8Array): MountedEditor {
@@ -49,7 +53,7 @@ export function mountDocxEditor(container: HTMLElement, bytes: Uint8Array): Moun
     // Read-only: render the whole document (paragraphs + real tables/SDTs) through the
     // engine preview. Nothing is editable; nothing is flattened.
     renderDocxPreview(bytes, container, {});
-    return { session, driver, destroy: () => container.replaceChildren() };
+    return { driver, destroy: () => container.replaceChildren() };
   }
 
   // Undo/redo drive the CANONICAL store, not ProseMirror's view history: a structural edit
@@ -96,6 +100,10 @@ export function mountDocxEditor(container: HTMLElement, bytes: Uint8Array): Moun
 
   let reconciling = false;
   let pendingCompositionCommit = false;
+  // The caret BEFORE a deferred IME composition began — recorded so the composition's flushed
+  // commit stores the correct pre-edit anchor (undo must return to where the composition started,
+  // not to a stale depth-0 selection).
+  let compositionBeforeSel: SelectionAnchor | undefined;
   const view = new EditorView(editPane, {
     state: EditorState.create({ doc: session.projectDoc(), plugins }),
     editable: () => session.editable,
@@ -103,12 +111,18 @@ export function mountDocxEditor(container: HTMLElement, bytes: Uint8Array): Moun
     // interim transactions; committing (which would reproject on a rejection) mid-composition
     // disrupts the IME. Defer the commit and flush it once composition ends (compositionend).
     handleDOMEvents: {
+      compositionstart: () => {
+        compositionBeforeSel = captureSelection(view.state); // caret before the composition
+        return false;
+      },
       compositionend: () => {
         const win = container.ownerDocument?.defaultView;
         const flush = () => {
           if (!pendingCompositionCommit) return;
           pendingCompositionCommit = false;
-          if (!reconciling) commitEdit();
+          const before = compositionBeforeSel;
+          compositionBeforeSel = undefined;
+          if (!reconciling) commitEdit(before);
         };
         // Let ProseMirror apply its final composition transaction first, then commit.
         if (win?.requestAnimationFrame) win.requestAnimationFrame(flush);
@@ -118,7 +132,7 @@ export function mountDocxEditor(container: HTMLElement, bytes: Uint8Array): Moun
     },
     dispatchTransaction(tr) {
       // Capture the caret BEFORE the edit is applied — the store's model-only history has no
-      // selection, so we key a selection by revision to restore the pre-edit caret on undo.
+      // selection, so we key a selection by undo depth to restore the pre-edit caret on undo.
       const beforeSel = captureSelection(view.state);
       const next = view.state.apply(tr);
       view.updateState(next);
@@ -218,5 +232,5 @@ export function mountDocxEditor(container: HTMLElement, bytes: Uint8Array): Moun
     reconciling = false;
   }
   paintNow(); // initial paginated render from the loaded model — synchronous so it's visible at once
-  return { session, driver, destroy: () => view.destroy() };
+  return { driver, destroy: () => view.destroy() };
 }

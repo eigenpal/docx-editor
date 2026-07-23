@@ -31,7 +31,7 @@ export function DocxEditable({ fixtureUrl }: DocxEditableProps): React.ReactElem
         host.current.replaceChildren();
         mounted = mountDocxEditor(host.current, bytes);
         window.__docxEditorDriver = mounted.driver;
-        setStatus(mounted.session.editable ? 'Editable (paragraphs)' : 'Read-only (contains tables/SDTs)');
+        setStatus(mounted.driver.editable ? 'Editable (paragraphs)' : 'Read-only (contains tables/SDTs)');
       } catch (e) {
         if (!cancelled) setStatus(`Could not open this file (${(e as Error).message}).`);
       }
