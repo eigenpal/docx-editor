@@ -236,6 +236,22 @@ describe('editing a preserved table document', () => {
     if (!r.ok) expect(r.reason).toBe('xml-error');
   });
 
+  test('sdt-wrapped rows and cell content inside a table are projected (not empty)', () => {
+    const inner =
+      '<w:tbl>' +
+      '<w:sdt><w:sdtContent>' + // an sdt wrapping the row
+      '<w:tr><w:tc>' +
+      '<w:sdt><w:sdtContent><w:p><w:r><w:t>wrapped-cell</w:t></w:r></w:p></w:sdtContent></w:sdt>' + // sdt wrapping cell content
+      '</w:tc></w:tr>' +
+      '</w:sdtContent></w:sdt>' +
+      '</w:tbl>';
+    const { model, orig, out } = roundTrip(docx(inner));
+    const t = bodyBlocks(model).find((b) => b.kind === 'table') as TableRecord;
+    expect(t.rows).toHaveLength(1); // the sdt-wrapped row is projected
+    expect(cellText(t, 0, 0)).toBe('wrapped-cell'); // the sdt-wrapped cell content is projected
+    expect(out).toBe(orig);
+  });
+
   test('a non-numeric gridSpan does not crash parseDocx (returns a result)', () => {
     const inner = '<w:tbl><w:tr><w:tc><w:tcPr><w:gridSpan w:val="notnum"/></w:tcPr><w:p><w:r><w:t>x</w:t></w:r></w:p></w:tc></w:tr></w:tbl>';
     const r = parseDocx(docx(inner));

@@ -150,8 +150,10 @@ function parseRun(run: Extract<XmlNode, { type: 'element' }>): RunRecord | undef
 /**
  * Collect every paragraph (w:p) under a container, recovering text from tables
  * (w:tbl › w:tr › w:tc) and block SDT (w:sdt › w:sdtContent) by flattening their
- * cell/content paragraphs. Structural table fidelity is a follow-up; this recovers
- * the text the review found was 100% lost.
+ * cell/content paragraphs. Used for related stories (header/footer/notes) and for
+ * table-free body documents. NOTE (scope): related-story tables are still FLATTENED
+ * here — structural tables in headers/footers/notes, and full related-part export,
+ * are the next slice (body-level document.xml tables are the current one).
  */
 function collectParagraphElements(container: Extract<XmlNode, { type: 'element' }>): Extract<XmlNode, { type: 'element' }>[] {
   const paras: Extract<XmlNode, { type: 'element' }>[] = [];
@@ -590,15 +592,48 @@ function paragraphFromElement(pEl: Extract<XmlNode, { type: 'element' }>, alloc:
   return { kind: 'paragraph', id: alloc.allocate('paragraph'), runs };
 }
 
-/** Parse the direct block children (w:p / nested w:tbl) of a cell. */
+/** Block children of a cell (w:p / nested w:tbl), descending block wrappers so
+ *  wrapper-wrapped cell content is still projected (not just direct children). */
 function cellBlocks(tc: Extract<XmlNode, { type: 'element' }>, alloc: IdentityAllocator): Block[] {
   const blocks: Block[] = [];
   for (const child of tc.children) {
     if (!el(child)) continue;
     if (child.name === 'w:p') blocks.push(paragraphFromElement(child, alloc));
     else if (child.name === 'w:tbl') blocks.push(parseTable(child, alloc));
+    else if (child.name === 'w:sdt') {
+      const content = childElements(child, 'w:sdtContent')[0];
+      if (content) blocks.push(...cellBlocks(content, alloc));
+    } else if (child.name === 'w:customXml') blocks.push(...cellBlocks(child, alloc));
   }
   return blocks;
+}
+
+/** Rows of a table, descending block wrappers (w:sdt/w:customXml) that may wrap w:tr. */
+function collectRows(container: Extract<XmlNode, { type: 'element' }>): Extract<XmlNode, { type: 'element' }>[] {
+  const rows: Extract<XmlNode, { type: 'element' }>[] = [];
+  for (const child of container.children) {
+    if (!el(child)) continue;
+    if (child.name === 'w:tr') rows.push(child);
+    else if (child.name === 'w:sdt') {
+      const content = childElements(child, 'w:sdtContent')[0];
+      if (content) rows.push(...collectRows(content));
+    } else if (child.name === 'w:customXml') rows.push(...collectRows(child));
+  }
+  return rows;
+}
+
+/** Cells of a row, descending block wrappers (w:sdt/w:customXml) that may wrap w:tc. */
+function collectCells(row: Extract<XmlNode, { type: 'element' }>): Extract<XmlNode, { type: 'element' }>[] {
+  const cells: Extract<XmlNode, { type: 'element' }>[] = [];
+  for (const child of row.children) {
+    if (!el(child)) continue;
+    if (child.name === 'w:tc') cells.push(child);
+    else if (child.name === 'w:sdt') {
+      const content = childElements(child, 'w:sdtContent')[0];
+      if (content) cells.push(...collectCells(content));
+    } else if (child.name === 'w:customXml') cells.push(...collectCells(child));
+  }
+  return cells;
 }
 
 function parseTable(tbl: Extract<XmlNode, { type: 'element' }>, alloc: IdentityAllocator): TableRecord {
@@ -607,9 +642,9 @@ function parseTable(tbl: Extract<XmlNode, { type: 'element' }>, alloc: IdentityA
   const grid: GridColumn[] = gridEl
     ? childElements(gridEl, 'w:gridCol').map((c) => (c.attributes['w:w'] !== undefined ? { w: c.attributes['w:w'] } : {}))
     : [];
-  const rows: TableRowRecord[] = childElements(tbl, 'w:tr').map((tr) => {
+  const rows: TableRowRecord[] = collectRows(tbl).map((tr) => {
     const trPr = childElements(tr, 'w:trPr')[0];
-    const cells: TableCellRecord[] = childElements(tr, 'w:tc').map((tc) => {
+    const cells: TableCellRecord[] = collectCells(tr).map((tc) => {
       const tcPr = childElements(tc, 'w:tcPr')[0];
       const props = parseCellProps(tcPr);
       return { id: alloc.allocate('cell'), blocks: cellBlocks(tc, alloc), ...(props ? { props } : {}) };
