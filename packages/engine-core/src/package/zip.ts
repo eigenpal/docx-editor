@@ -10,36 +10,66 @@ export type ZipRejection = 'too-many-entries' | 'too-large' | 'bad-name' | 'infl
 
 export interface ZipLimits {
   readonly maxEntries: number;
+  /** Max total UNCOMPRESSED bytes across the archive. */
   readonly maxTotalBytes: number;
+  /** Max per-entry uncompressed:compressed ratio (zip-bomb guard). */
+  readonly maxRatio?: number;
 }
 
-export const DEFAULT_ZIP_LIMITS: ZipLimits = { maxEntries: 10_000, maxTotalBytes: 512 * 1024 * 1024 };
+export const DEFAULT_ZIP_LIMITS: ZipLimits = { maxEntries: 10_000, maxTotalBytes: 512 * 1024 * 1024, maxRatio: 200 };
 
 export type ZipReadResult =
   | { readonly ok: true; readonly entries: ReadonlyMap<string, Uint8Array> }
   | { readonly ok: false; readonly reason: ZipRejection; readonly detail?: string };
 
-/** Inflate a ZIP archive with bounds + OPC name normalization. Keys are canonical part names. */
+class ZipViolation extends Error {
+  constructor(readonly reason: ZipRejection) {
+    super(reason);
+  }
+}
+
+/**
+ * Inflate a ZIP archive with bounds + OPC name normalization. Entry name, count,
+ * compression-ratio, and total-uncompressed-size limits are enforced BEFORE each
+ * entry is decompressed (via fflate's pre-inflation filter), so a zip bomb or a
+ * traversal name is rejected without ever being inflated. Keys are canonical part
+ * names.
+ */
 export function readZip(bytes: Uint8Array, limits: ZipLimits = DEFAULT_ZIP_LIMITS): ZipReadResult {
+  const maxRatio = limits.maxRatio ?? 200;
+  let entryCount = 0;
+  let totalUncompressed = 0;
+  let badDetail: string | undefined;
+
   let raw: Record<string, Uint8Array>;
   try {
-    raw = unzipSync(bytes);
-  } catch {
+    raw = unzipSync(bytes, {
+      // `size` = compressed, `originalSize` = uncompressed. This runs BEFORE inflation.
+      filter: (file) => {
+        if (file.name.endsWith('/')) return false; // directory entry — never inflated
+        entryCount += 1;
+        if (entryCount > limits.maxEntries) throw new ZipViolation('too-many-entries');
+        const norm = normalizePartName(file.name);
+        if (!norm.ok) {
+          badDetail = `${file.name}: ${norm.reason}`;
+          throw new ZipViolation('bad-name');
+        }
+        // Compression-ratio zip-bomb guard, checked before decompressing.
+        if (file.originalSize / Math.max(1, file.size) > maxRatio) throw new ZipViolation('too-large');
+        totalUncompressed += file.originalSize;
+        if (totalUncompressed > limits.maxTotalBytes) throw new ZipViolation('too-large');
+        return true;
+      },
+    });
+  } catch (e) {
+    if (e instanceof ZipViolation) return { ok: false, reason: e.reason, detail: badDetail };
     return { ok: false, reason: 'inflate-error' };
   }
-  const names = Object.keys(raw);
-  if (names.length > limits.maxEntries) return { ok: false, reason: 'too-many-entries' };
 
   const entries = new Map<string, Uint8Array>();
-  let total = 0;
-  for (const name of names) {
-    if (name.endsWith('/')) continue; // directory entry
+  for (const [name, data] of Object.entries(raw)) {
     const norm = normalizePartName(name);
-    if (!norm.ok) return { ok: false, reason: 'bad-name', detail: `${name}: ${norm.reason}` };
-    const data = raw[name];
-    total += data.length;
-    if (total > limits.maxTotalBytes) return { ok: false, reason: 'too-large' };
-    entries.set(norm.partName, data);
+    if (norm.ok) entries.set(norm.partName, data);
   }
   return { ok: true, entries };
 }

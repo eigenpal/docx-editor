@@ -29,6 +29,14 @@ describe('archive attacks', () => {
     const big = zipSync({ 'word/document.xml': strToU8('x'.repeat(1_000_000)) });
     expect(readZip(big, { maxEntries: 100, maxTotalBytes: 1000 })).toMatchObject({ ok: false, reason: 'too-large' });
   });
+  test('zip bomb: a high compression ratio is rejected BEFORE inflation, even under a generous size limit', () => {
+    // Small compressed, huge uncompressed -> caught by the ratio guard, not the total.
+    const bomb = zipSync({ 'word/document.xml': strToU8('A'.repeat(2_000_000)) }, { level: 9 });
+    expect(readZip(bomb, { maxEntries: 100, maxTotalBytes: 1_000_000_000, maxRatio: 200 })).toMatchObject({
+      ok: false,
+      reason: 'too-large',
+    });
+  });
   test('path traversal entry name is rejected before inflation', () => {
     const evil = zipSync({ 'word/../../etc/passwd': strToU8('x') });
     expect(readZip(evil)).toMatchObject({ ok: false, reason: 'bad-name' });
