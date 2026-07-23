@@ -128,16 +128,45 @@ describe('forward mapping (6.3, 6.4)', () => {
     expect(blocks.map((b) => (b as ParagraphRecord).runs.map((r) => r.text).join(''))).toEqual(['Hello', 'a', 'b']);
   });
 
-  test('a paste combined with an edit to an existing paragraph fails closed', () => {
-    const { binding, store, p1 } = seeded();
+  test('a mid-paragraph paste (edit P + new paragraphs after it) maps to setParagraphRuns + inserts', () => {
+    const { binding, store, p1 } = seeded(); // p1 = 'Hello'
+    const storyId = bodyStoryId(store.currentModel);
+    // What ProseMirror produces pasting 'AAA\nBBB\nCCC' at offset 5 of 'Hello': the paragraph
+    // keeps its id with the paste head appended, then two new paragraphs.
     const edited = docSchema.node('doc', null, [
-      docSchema.node('paragraph', { semId: p1 }, [docSchema.text('CHANGED')]), // existing edited
-      docSchema.node('paragraph', { semId: null }, [docSchema.text('a')]),
-      docSchema.node('paragraph', { semId: null }, [docSchema.text('b')]),
+      docSchema.node('paragraph', { semId: p1 }, [docSchema.text('HelloAAA')]),
+      docSchema.node('paragraph', { semId: null }, [docSchema.text('BBB')]),
+      docSchema.node('paragraph', { semId: null }, [docSchema.text('CCC')]),
+    ]);
+    const res = binding.commitFromDoc(edited);
+    expect(res.rejected).toBeUndefined();
+    expect(res.ops).toEqual([
+      { op: 'setParagraphRuns', paragraphId: p1, runs: [{ text: 'HelloAAA' }] },
+      { op: 'insertParagraph', storyId, index: 1, runs: [{ text: 'BBB' }] },
+      { op: 'insertParagraph', storyId, index: 2, runs: [{ text: 'CCC' }] },
+    ]);
+    const blocks = store.currentModel.stories.get(storyId)!.blocks;
+    expect(blocks[0].id).toBe(p1); // the pasted-into paragraph keeps its identity
+    expect(blocks.map((b) => (b as ParagraphRecord).runs.map((r) => r.text).join(''))).toEqual(['HelloAAA', 'BBB', 'CCC']);
+  });
+
+  test('an edit to a paragraph NOT at the insertion boundary + an insert fails closed', () => {
+    const { binding, store, p1 } = seeded(); // one paragraph
+    const p2 = (() => {
+      store.transact(HUMAN, (c) => c.apply({ op: 'appendParagraph', storyId: bodyStoryId(store.currentModel) }));
+      return store.currentModel.stories.get(bodyStoryId(store.currentModel))!.blocks[1].id;
+    })();
+    store.transact(HUMAN, (c) => c.apply({ op: 'insertText', paragraphId: p2, text: 'Two' }));
+    // Edit p1 AND insert a new paragraph after p2 — the edited paragraph is not adjacent to the
+    // new one, so it is not a mid-paragraph paste; fail closed rather than guess.
+    const edited = docSchema.node('doc', null, [
+      docSchema.node('paragraph', { semId: p1 }, [docSchema.text('EDITED')]),
+      docSchema.node('paragraph', { semId: p2 }, [docSchema.text('Two')]),
+      docSchema.node('paragraph', { semId: null }, [docSchema.text('new')]),
     ]);
     const res = binding.commitFromDoc(edited);
     expect(res.rejected).toBe(true);
-    expect(store.currentModel.stories.get(bodyStoryId(store.currentModel))!.blocks).toHaveLength(1);
+    expect(store.currentModel.stories.get(bodyStoryId(store.currentModel))!.blocks).toHaveLength(2);
   });
 
   test('marks round-trip through projection and forward mapping', () => {

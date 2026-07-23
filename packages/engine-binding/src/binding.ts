@@ -152,13 +152,19 @@ export class EditorBinding {
 
     const delta = nodes.length - blocks.length;
     if (delta > 0) {
-      // Prefer a clean boundary INSERTION (every existing block unchanged, k brand-new
-      // paragraphs). A single extra paragraph that is NOT a clean insertion may instead be a
-      // split of an existing paragraph.
+      // In precedence: a clean boundary INSERTION (every existing block unchanged); then a clean
+      // SPLIT of one paragraph (Δ=1, its own runs merely reordered); then a mid-paragraph PASTE
+      // (one paragraph edited + k new paragraphs after it). Each returns null when it does not
+      // match, so the next is tried; only if none match do we fail closed.
       const inserted = this.mapInsert(nodes, blocks, storyId);
       if (inserted) return inserted;
-      if (delta === 1) return this.mapSplit(nodes, blocks);
-      throw new BindingRejection('unsupported structural edit (insertion combined with an edit, or multi)');
+      if (delta === 1) {
+        const split = this.trySplit(nodes, blocks); // throws only on a corrupting (surrogate) split
+        if (split) return split;
+      }
+      const pasted = this.mapPasteIntoParagraph(nodes, blocks, storyId);
+      if (pasted) return pasted;
+      throw new BindingRejection('unsupported structural edit (paste or insertion combined with a change)');
     }
     if (delta === -1) return this.mapJoin(nodes, blocks);
     if (delta !== 0) throw new BindingRejection('unsupported structural edit (multi-paragraph deletion)');
@@ -185,13 +191,13 @@ export class EditorBinding {
     return ops;
   }
 
-  /** One extra paragraph: exactly one canonical paragraph X was split into two consecutive
-   *  paragraphs. ProseMirror's splitBlock keeps X's id on the HEAD and copies it to the tail
-   *  (a mid-split) or leaves the tail's id null (an end-split) — so the head, not the tail, is
-   *  the stable anchor. The head sits just before the first identity divergence; the tail is
-   *  the node after it. A clean split (concatenated text unchanged) maps to one splitParagraph
-   *  at the head's length; anything else fails closed. */
-  private mapSplit(nodes: readonly PMNode[], blocks: readonly Block[]): DocOp[] {
+  /** One extra paragraph that is a clean SPLIT of one canonical paragraph X into two consecutive
+   *  paragraphs — its OWN runs merely reordered at a boundary, nothing else changed. ProseMirror's
+   *  splitBlock keeps X's id on the HEAD and copies it to the tail (a mid-split) or leaves the
+   *  tail's id null (an end-split), so the head is the stable anchor. Returns the splitParagraph
+   *  op, or null when the shape is NOT a clean split (so a caller can try a paste); throws only
+   *  when the split IS clean but would corrupt an astral character (fail closed). */
+  private trySplit(nodes: readonly PMNode[], blocks: readonly Block[]): DocOp[] | null {
     const bk = firstDivergence(nodes, blocks) - 1; // head = last node that still matched its block
     const x = blocks[bk];
     const head = nodes[bk];
@@ -200,27 +206,59 @@ export class EditorBinding {
       bk < 0 || !x || x.kind !== 'paragraph' ||
       !head || !isParagraph(head) || head.attrs.semId !== x.id ||
       // The tail is the split's NEW half: PM leaves its id null (end-split) or copies the head's
-      // id (mid-split). Any other id means it is forging an existing block's identity — reject.
+      // id (mid-split). Any other id means it is forging an existing block's identity.
       !tail || !isParagraph(tail) || (tail.attrs.semId !== null && tail.attrs.semId !== x.id) ||
       !prefixAligns(nodes, blocks, bk) || !alignsAfter(nodes, bk + 2, blocks, bk + 1)
     ) {
-      throw new BindingRejection('unsupported paragraph insertion');
+      return null; // not a split shape — let the paste path try
     }
     // A clean split only reorders X's OWN runs at a boundary — the concatenated head+tail runs
-    // (text AND formatting) must equal X's runs. A split that also changes text or marks is a
-    // combined edit and fails closed, so no run change is ever silently dropped.
+    // (text AND formatting) must equal X's runs. If not, this is not a split (it may be a paste).
     const headRuns = paragraphNodeToRuns(head);
     const tailRuns = paragraphNodeToRuns(tail);
-    if (!runsEqual([...headRuns, ...tailRuns], blockRuns(x))) {
-      throw new BindingRejection('split combined with an edit is not supported');
-    }
+    if (!runsEqual([...headRuns, ...tailRuns], blockRuns(x))) return null;
     // The offset is a UTF-16 code-unit index (matching the store's slice). If it falls BETWEEN
     // a surrogate pair, each half keeps a lone surrogate that becomes U+FFFD on UTF-8 save —
-    // corrupting the text. Reject: an astral character must stay whole in one half.
+    // corrupting the text. This IS a clean split, so REJECT (don't fall through to paste, which
+    // would re-corrupt via setParagraphRuns): an astral character must stay whole in one half.
     if (splitsSurrogatePair(runsText(headRuns), runsText(tailRuns))) {
       throw new BindingRejection('split inside a surrogate pair would corrupt text');
     }
     return [{ op: 'splitParagraph', paragraphId: x.id, offset: pmTextLength(headRuns) }];
+  }
+
+  /** A mid-paragraph PASTE: one existing paragraph P (at a boundary) has its content CHANGED and
+   *  k brand-new paragraphs are inserted right after it — exactly what ProseMirror produces when
+   *  a multi-line clipboard is pasted inside a paragraph (P keeps its id and gains the paste head;
+   *  the middle lines are new; the last new line carries P's tail). Maps to one setParagraphRuns
+   *  (P's new content) plus k insertParagraph ops. Returns null when the shape does not match
+   *  (every surrounding block must be unchanged in identity AND content), so nothing else is
+   *  touched. */
+  private mapPasteIntoParagraph(nodes: readonly PMNode[], blocks: readonly Block[], storyId: string): DocOp[] | null {
+    // The prefix ends at the first block whose identity OR content changed — the paste target P.
+    let prefix = 0;
+    while (prefix < blocks.length && nodeMatchesBlock(nodes[prefix], blocks[prefix]) && sameContent(nodes[prefix], blocks[prefix])) {
+      prefix += 1;
+    }
+    const target = nodes[prefix];
+    const block = blocks[prefix];
+    // P must be an EXISTING paragraph (same id) whose content changed (guaranteed: the prefix
+    // stopped here). A new (null) node here would be a pure insertion (handled by mapInsert).
+    if (!target || !isParagraph(target) || !block || block.kind !== 'paragraph' || target.attrs.semId !== block.id) {
+      return null;
+    }
+    const k = nodes.length - blocks.length; // number of NEW paragraphs after P
+    for (let j = prefix + 1; j <= prefix + k; j += 1) {
+      const n = nodes[j];
+      if (!n || !isParagraph(n) || n.attrs.semId !== null) return null; // the extra lines must be new
+    }
+    // Everything after the inserted run is the UNCHANGED tail of the canonical blocks.
+    if (!alignsAfter(nodes, prefix + k + 1, blocks, prefix + 1)) return null;
+    const ops: DocOp[] = [{ op: 'setParagraphRuns', paragraphId: block.id, runs: paragraphNodeToRuns(target) }];
+    for (let j = 0; j < k; j += 1) {
+      ops.push({ op: 'insertParagraph', storyId, index: prefix + 1 + j, runs: paragraphNodeToRuns(nodes[prefix + 1 + j]) });
+    }
+    return ops;
   }
 
   /** One fewer paragraph: canonical [X, Y] were joined into X (Y removed, X keeps its id).

@@ -102,6 +102,24 @@ describe('structural editing: split (Enter) and join survive save + reopen', () 
     expect(openDocxSession(session.save()).bodyText()).toBe('hello\none\ntwo\nworld');
   });
 
+  test('a mid-paragraph paste commits and round-trips', () => {
+    const session = openDocxSession(docx(PARAS)); // hello | world
+    const doc = session.projectDoc();
+    // Paste 'AAA\nBBB\nCCC' at offset 3 of 'hello': the paragraph keeps its id ('hel'+'AAA'),
+    // two new paragraphs, the last carrying the tail ('CCC'+'lo').
+    const pasted = docSchema.node('doc', null, [
+      docSchema.node('paragraph', doc.child(0).attrs, docSchema.text('helAAA')),
+      docSchema.node('paragraph', { semId: null }, docSchema.text('BBB')),
+      docSchema.node('paragraph', { semId: null }, docSchema.text('CCClo')),
+      doc.child(1),
+    ]);
+    const res = session.applyPmDoc(pasted);
+    expect(res.committed).toBe(true);
+    expect(res.opCount).toBe(3); // setParagraphRuns + 2 inserts
+    expect(session.bodyText()).toBe('helAAA\nBBB\nCCClo\nworld');
+    expect(openDocxSession(session.save()).bodyText()).toBe('helAAA\nBBB\nCCClo\nworld');
+  });
+
   test('joining two paragraphs commits and round-trips', () => {
     const session = openDocxSession(docx(PARAS)); // hello | world
     const doc = session.projectDoc();
