@@ -53,10 +53,14 @@
    section props, tables/SDTs, or inline hyperlink/field/tab/pPr opens read-only and saves
    verbatim). No Yjs. DEFERRED (thin baseline, not this checkpoint): a separate paginated
    layout-repaint pane for the editable view (the PM view is the editable render; the
-   canonical model is proven via save/reopen + model-read body text), paragraph REORDER
-   detection (no `moveBlock` emitted yet), and live-EditorView reconciliation — store
-   subscription, selection restoration, and IME. Broad 0.9 / section 6 / 7.12 / 14.5 stay
-   unchecked.
+   canonical model is proven via save/reopen + model-read body text), ALL structural
+   editing — split (Enter is disabled), reorder, and multi-paragraph paste all FAIL CLOSED
+   via a strict 1:1 in-order mapper — and live-EditorView reconciliation (store
+   subscription, selection restoration, IME). ACCEPTED as lossless canonicalization (not a
+   content drop): the store merges adjacent identical-format runs into its canonical form
+   on commit, so an edited document's redundant run boundaries may coalesce — text and
+   formatting are fully preserved. Reviewed 4 rounds with cursor-agent gpt-5.6-sol.
+   Broad 0.9 / section 6 / 7.12 / 14.5 stay unchecked.
 4. **Freeze the feature-lane integration contract.** Use the paragraph and table
    verticals to stabilize capability-level parse, preservation, serialization,
    identity, semantic-operation, projection, layout, display, and fixture hooks.
