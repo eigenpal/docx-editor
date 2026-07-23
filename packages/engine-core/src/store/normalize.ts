@@ -1,65 +1,18 @@
-// Deterministic normalization + repair (document-engine task 4.6). Rules are
-// idempotent and order-free so equivalent converged inputs produce byte-equivalent
-// normalized authored state: adjacent runs with identical props merge, empty runs
-// drop, and a story is never left with zero blocks. Identity is preserved (no id
-// is minted or dropped here).
+// Deterministic model normalization (document-engine task 4.6). Rules are idempotent and
+// order-free so equivalent converged inputs produce byte-equivalent normalized authored state.
+// The PER-KIND rules (merge adjacent identical-prop runs, recurse tables/SDTs) live in the model
+// block-capability registry (comprehensive 3.2/3.3) — this module only walks stories and dispatches
+// each block through `blockNormalize`, so a new block kind normalizes by registering a capability,
+// not by editing a switch here. Identity is preserved (no id is minted or dropped).
 
-import {
-  type PackageModel,
-  type ParagraphRecord,
-  type Story,
-  type Block,
-  type TableRecord,
-  type TableRowRecord,
-  type TableCellRecord,
-  type SdtRecord,
-} from '../model/index.ts';
-import { normalizeRuns } from '../model/normalize-runs.ts';
+import { type PackageModel, type Story, type Block, blockNormalize, normalizeRuns } from '../model/index.ts';
 
 export { normalizeRuns };
 
-function normalizeParagraph(p: ParagraphRecord): ParagraphRecord {
-  const runs = normalizeRuns(p.runs);
-  return runs.length === p.runs.length && runs.every((r, i) => r === p.runs[i]) ? p : { ...p, runs };
-}
-
-function normalizeCell(cell: TableCellRecord): TableCellRecord {
-  const blocks = normalizeBlocks(cell.blocks);
-  return blocks === cell.blocks ? cell : { ...cell, blocks };
-}
-
-function normalizeRow(row: TableRowRecord): TableRowRecord {
-  let changed = false;
-  const cells = row.cells.map((c) => {
-    const nc = normalizeCell(c);
-    if (nc !== c) changed = true;
-    return nc;
-  });
-  return changed ? { ...row, cells } : row;
-}
-
-function normalizeTable(t: TableRecord): TableRecord {
-  let changed = false;
-  const rows = t.rows.map((r) => {
-    const nr = normalizeRow(r);
-    if (nr !== r) changed = true;
-    return nr;
-  });
-  return changed ? { ...t, rows } : t;
-}
-
-function normalizeSdt(s: SdtRecord): SdtRecord {
-  const blocks = normalizeBlocks(s.blocks);
-  return blocks === s.blocks ? s : { ...s, blocks };
-}
-
-/** Normalize a block by kind. Recurses through tables (rows -> cells -> nested blocks)
- *  and content controls (SDT content) so nested content never reaches paragraph-only
- *  code paths. */
+/** Normalize one block by dispatching to its registered capability; the capability recurses nested
+ *  blocks (table cells, SDT content) back through `normalizeBlocks`, so no kind is special-cased. */
 function normalizeBlock(block: Block): Block {
-  if (block.kind === 'table') return normalizeTable(block);
-  if (block.kind === 'sdt') return normalizeSdt(block);
-  return normalizeParagraph(block);
+  return blockNormalize(block, normalizeBlocks);
 }
 
 /** Normalize a block list, returning the SAME array reference when nothing changed. */

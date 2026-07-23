@@ -10,7 +10,7 @@ import { scanCellParagraphSpans } from './wml-scan.ts';
 import { paragraphXml } from './wml-serialize.ts';
 import { el, blockFromText } from './wml-parse.ts';
 import { IdentityAllocator } from '../model/identity.ts';
-import { normalizeRuns } from '../model/normalize-runs.ts';
+import { blockHashContent } from '../model/index.ts';
 import { stableHash } from '../comparators/index.ts';
 import {
   bodyStoryId,
@@ -26,31 +26,12 @@ export const DOC_PART = '/word/document.xml';
 
 /** Content view of a block with all stable IDs stripped, so the hash reflects
  *  semantic CONTENT and is stable across a re-parse (which allocates fresh ids). */
+// Identity-stripped content view for the hash. Each block kind's shape is owned by its registered
+// core capability (comprehensive 3.3); this dispatches through the registry and recurses nested
+// blocks through the SAME path, so a new kind is hashed by registering a capability, not by editing
+// a switch. Paragraph runs are hashed NORMALIZED (comprehensive 3.10) inside the capability.
 function contentForHash(block: Block): unknown {
-  if (block.kind === 'paragraph') {
-    // Hash the NORMALIZED runs (adjacent identical-prop runs merged, empty runs dropped). The
-    // store normalizes every block on every commit, so an UNTOUCHED paragraph whose runs merge
-    // (e.g. two adjacent plain runs) would otherwise hash differently from its pre-normalization
-    // baseline and be wrongly treated as edited — then regenerated, losing the authored run
-    // segmentation. Normalizing both sides makes a normalization-equivalent block compare equal
-    // and re-emit VERBATIM (comprehensive 3.10).
-    return { kind: 'paragraph', runs: normalizeRuns(block.runs), ...(block.props ? { props: block.props } : {}) };
-  }
-  if (block.kind === 'sdt') {
-    return { kind: 'sdt', props: block.props, blocks: block.blocks.map(contentForHash) };
-  }
-  return {
-    kind: 'table',
-    ...(block.grid ? { grid: block.grid } : {}),
-    ...(block.props ? { props: block.props } : {}),
-    rows: block.rows.map((r) => ({
-      ...(r.props ? { props: r.props } : {}),
-      cells: r.cells.map((c) => ({
-        ...(c.props ? { props: c.props } : {}),
-        blocks: c.blocks.map(contentForHash),
-      })),
-    })),
-  };
+  return blockHashContent(block, contentForHash);
 }
 
 /**

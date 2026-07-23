@@ -42,6 +42,17 @@ export { type SerializedModel, encodeModel, decodeModel, validatePreservation } 
 export { appendParagraph, insertParagraph, insertTextIntoParagraph, setParagraphRuns, paragraphText } from './edit.ts';
 export { normalizeRuns } from './normalize-runs.ts';
 export {
+  type BlockKind,
+  type CoreBlockCapability,
+  type RecurseNormalize,
+  type RecurseHash,
+  registerCoreBlockCapability,
+  blockHashContent,
+  blockNormalize,
+  blockSerialize,
+  hasBlockSerialize,
+} from './block-capabilities.ts';
+export {
   type SplitResult,
   type ReplaceResult,
   type DeleteResult,
