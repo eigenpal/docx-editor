@@ -68,7 +68,6 @@ export {
   isValidNCName,
   isValidQName,
   assertValidQName,
-  isValidUri,
   PrefixAllocator,
 } from './qname.ts';
 export {

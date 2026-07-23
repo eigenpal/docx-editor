@@ -1,7 +1,7 @@
 // XML serialization name-safety tests (document-engine task 3.5).
 
 import { describe, expect, test } from 'bun:test';
-import { isValidQName, assertValidQName, isValidUri, PrefixAllocator, escapeXml } from '../src/index.ts';
+import { isValidQName, assertValidQName, PrefixAllocator, escapeXml } from '../src/index.ts';
 
 describe('QName validation', () => {
   test('accepts valid element/attribute QNames', () => {
@@ -34,16 +34,5 @@ describe('controlled prefix allocation', () => {
     const alloc = new PrefixAllocator();
     alloc.prefixFor('urn:x');
     expect(alloc.bindings()).toEqual([{ prefix: 'ns1', uri: 'urn:x' }]);
-  });
-});
-
-describe('URI validation', () => {
-  test('accepts well-formed absolute/relative URIs, rejects control chars', () => {
-    expect(isValidUri('https://example.com/a')).toBe(true);
-    expect(isValidUri('media/image1.png')).toBe(true);
-    expect(isValidUri('mailto:a@b.com')).toBe(true);
-    expect(isValidUri('has\x00null')).toBe(false);
-    expect(isValidUri('has space')).toBe(false);
-    expect(isValidUri('')).toBe(false);
   });
 });

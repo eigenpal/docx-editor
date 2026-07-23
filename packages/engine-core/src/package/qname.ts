@@ -59,12 +59,7 @@ export class PrefixAllocator {
   }
 }
 
-// A URI that is safe to write into a validated href/target (allowlist-ish; the
-// runtime-sink allowlist is stricter, in sinks.ts). Rejects control chars.
-const SAFE_URI = /^[A-Za-z][A-Za-z0-9+.-]*:[^\s]*$|^[^\s:]+(\/[^\s]*)?$/;
-
-export function isValidUri(uri: string): boolean {
-  // eslint-disable-next-line no-control-regex
-  if (/[\x00-\x1f\x7f]/.test(uri)) return false;
-  return uri.length > 0 && SAFE_URI.test(uri);
-}
+// NOTE: there is deliberately no generic URI "validator" here. Raw external
+// targets are preserved verbatim in the authored record (lossless-package-model);
+// safety is applied at the RUNTIME sink via the allowlist in sinks.ts
+// (sanitizeHref), not by a pass/fail URI check that would give false confidence.
