@@ -76,7 +76,23 @@ export function mountDocxEditor(container: HTMLElement, bytes: Uint8Array): Moun
   pagedPane.style.cssText = 'flex:1; min-width:0; overflow:auto; background:#eceff1; padding:12px';
   container.append(editPane, pagedPane);
 
-  const repaintPaged = () => renderModelPreview(session.currentModel(), pagedPane, {}, doc);
+  // The paginated pane is a full re-layout of the whole model. Typing commits one edit per
+  // keystroke, so painting synchronously each time re-lays-out the entire document per key.
+  // Coalesce with requestAnimationFrame: many commits within a frame collapse to ONE repaint
+  // from the latest canonical model. (No rAF — e.g. a headless environment — paints inline.)
+  const raf = (container.ownerDocument?.defaultView ?? (typeof window !== 'undefined' ? window : undefined))
+    ?.requestAnimationFrame;
+  let repaintQueued = false;
+  const paintNow = () => renderModelPreview(session.currentModel(), pagedPane, {}, doc);
+  const repaintPaged = () => {
+    if (!raf) return paintNow();
+    if (repaintQueued) return;
+    repaintQueued = true;
+    raf(() => {
+      repaintQueued = false;
+      paintNow();
+    });
+  };
 
   let reconciling = false;
   const view = new EditorView(editPane, {
@@ -131,6 +147,6 @@ export function mountDocxEditor(container: HTMLElement, bytes: Uint8Array): Moun
     view.dispatch(tr.setMeta('addToHistory', false));
     reconciling = false;
   }
-  repaintPaged(); // initial paginated render from the loaded model
+  paintNow(); // initial paginated render from the loaded model — synchronous so it's visible at once
   return { session, driver, destroy: () => view.destroy() };
 }
