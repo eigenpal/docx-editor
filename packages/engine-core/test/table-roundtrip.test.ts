@@ -167,6 +167,28 @@ describe('editing a preserved table document', () => {
     }
   });
 
+  test('malformed table XML (mismatched close) is rejected, not mis-preserved', () => {
+    // <w:tc> closed as </w:td>: lenient reader accepts it; strict span scanner rejects.
+    const inner = '<w:tbl><w:tr><w:tc><w:p><w:r><w:t>x</w:t></w:r></w:p></w:td></w:tr></w:tbl>';
+    const r = parseDocx(docx(inner));
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.reason).toBe('xml-error');
+  });
+
+  test('an unclosed table is rejected', () => {
+    const inner = '<w:tbl><w:tr><w:tc><w:p><w:r><w:t>x</w:t></w:r></w:p></w:tc></w:tr>'; // missing </w:tbl>
+    const r = parseDocx(docx(inner));
+    expect(r.ok).toBe(false);
+  });
+
+  test('a valid non-w: prefix WordprocessingML document fails closed (no silent data loss)', () => {
+    const xml = `<?xml version="1.0"?><x:document xmlns:x="${W}"><x:body><x:tbl><x:tr><x:tc><x:p><x:r><x:t>hi</x:t></x:r></x:p></x:tc></x:tr></x:tbl></x:body></x:document>`;
+    const bytes = zipSync({ '[Content_Types].xml': strToU8('<Types/>'), 'word/document.xml': strToU8(xml) });
+    const r = parseDocx(bytes);
+    expect(r.ok).toBe(false); // rejected rather than returning an empty, lossy model
+    if (!r.ok) expect(r.reason).toBe('xml-error');
+  });
+
   test('a non-numeric gridSpan does not crash parseDocx (returns a result)', () => {
     const inner = '<w:tbl><w:tr><w:tc><w:tcPr><w:gridSpan w:val="notnum"/></w:tcPr><w:p><w:r><w:t>x</w:t></w:r></w:p></w:tc></w:tr></w:tbl>';
     const r = parseDocx(docx(inner));

@@ -307,31 +307,47 @@ function openTagEnd(s: string, lt: number): { end: number; selfClosing: boolean 
   return { end: s.length, selfClosing: false };
 }
 
-/** Index just past the end of the element opening at `lt` (well-formed input). */
+/** Raised when the span scanner sees XML that is not well-formed (the reader is
+ *  lenient, so the scanner enforces well-formedness itself). Callers fail closed. */
+class ScanError extends Error {}
+
+/**
+ * Index just past the end of the element opening at `lt`. NAME-AWARE: it tracks the
+ * open-tag name stack and throws {@link ScanError} on a mismatched or missing close
+ * tag, so malformed-but-lenient-parsed XML cannot yield a wrong ownership range.
+ */
 function elementSpanEnd(s: string, lt: number): number {
   const open = openTagEnd(s, lt);
   if (open.selfClosing) return open.end;
-  let depth = 1;
+  const stack: string[] = [tagNameAt(s, lt)];
   let i = open.end;
-  while (depth > 0 && i < s.length) {
+  while (stack.length > 0) {
     const nx = s.indexOf('<', i);
-    if (nx < 0) return s.length;
+    if (nx < 0) throw new ScanError('unclosed element');
     if (s.startsWith('<!--', nx)) {
       const e = s.indexOf('-->', nx);
-      i = e < 0 ? s.length : e + 3;
+      if (e < 0) throw new ScanError('unterminated comment');
+      i = e + 3;
     } else if (s.startsWith('<![CDATA[', nx)) {
       const e = s.indexOf(']]>', nx);
-      i = e < 0 ? s.length : e + 3;
+      if (e < 0) throw new ScanError('unterminated cdata');
+      i = e + 3;
     } else if (s.startsWith('<?', nx)) {
       const e = s.indexOf('?>', nx);
-      i = e < 0 ? s.length : e + 2;
+      if (e < 0) throw new ScanError('unterminated pi');
+      i = e + 2;
+    } else if (s.startsWith('<!', nx)) {
+      const e = s.indexOf('>', nx);
+      if (e < 0) throw new ScanError('unterminated declaration');
+      i = e + 1;
     } else if (s[nx + 1] === '/') {
       const gt = s.indexOf('>', nx);
-      i = gt < 0 ? s.length : gt + 1;
-      depth -= 1;
+      if (gt < 0) throw new ScanError('unterminated close tag');
+      if (stack.pop() !== tagNameAt(s, nx)) throw new ScanError('mismatched close tag');
+      i = gt + 1;
     } else {
       const o = openTagEnd(s, nx);
-      if (!o.selfClosing) depth += 1;
+      if (!o.selfClosing) stack.push(tagNameAt(s, nx));
       i = o.end;
     }
   }
@@ -395,6 +411,11 @@ function walkBlockSpans(s: string, start: number, end: number, out: BlockSpan[])
     if (s.startsWith('<?', lt)) {
       const e = s.indexOf('?>', lt);
       i = e < 0 ? end : e + 2;
+      continue;
+    }
+    if (s.startsWith('<!', lt)) {
+      const e = s.indexOf('>', lt);
+      i = e < 0 ? end : e + 1;
       continue;
     }
     if (s[lt + 1] === '/') {
@@ -613,6 +634,21 @@ function blockFromSpan(docText: string, span: BlockSpan, alloc: IdentityAllocato
   return blockFromText(docText.slice(span.start, span.end), alloc);
 }
 
+/** Whether the parsed body tree contains a table at top level (descending into
+ *  block-level w:sdt). Used so a malformed TABLE document is rejected rather than
+ *  silently falling back to a flat, lossy parse. */
+function treeHasTable(container: Extract<XmlNode, { type: 'element' }>): boolean {
+  for (const child of container.children) {
+    if (!el(child)) continue;
+    if (child.name === 'w:tbl') return true;
+    if (child.name === 'w:sdt') {
+      const content = childElements(child, 'w:sdtContent')[0];
+      if (content && treeHasTable(content)) return true;
+    }
+  }
+  return false;
+}
+
 /** Count top-level w:p/w:tbl blocks in the PARSED body tree, descending into
  *  block-level w:sdt exactly as the span scanner does. A disagreement between this
  *  count and the scanner's span count means the scanner mis-owns content, so the
@@ -640,6 +676,20 @@ export function parseDocx(bytes: Uint8Array): ParseResult {
   const xml = readXml(docText);
   if (!xml.ok) return { ok: false, reason: 'xml-error', detail: xml.reason };
 
+  // Reject a document that binds the WordprocessingML namespace to a non-`w` prefix
+  // (or the default namespace). The parser matches literal `w:` names, so such a valid
+  // document would otherwise silently lose ALL content; fail closed until names are
+  // resolved by namespace URI rather than QName.
+  const root = xml.nodes.find(el);
+  if (root) {
+    for (const [k, v] of Object.entries(root.attributes)) {
+      if (v !== W_NS) continue;
+      if (k === 'xmlns' || (k.startsWith('xmlns:') && k.slice(6) !== 'w')) {
+        return { ok: false, reason: 'xml-error', detail: 'wordprocessingml bound to a non-w namespace prefix (unsupported)' };
+      }
+    }
+  }
+
   const body = findElement(xml.nodes, 'w:body');
   const alloc = new IdentityAllocator();
   const storyId = alloc.allocate('story');
@@ -648,26 +698,32 @@ export function parseDocx(bytes: Uint8Array): ParseResult {
   // original document.xml text + per-block ranges are retained for lossless re-emit.
   // A table-free body keeps the existing flat paragraph parse (no preservation),
   // leaving those documents byte-for-byte unchanged in behavior.
-  const spans = scanBodyBlockSpans(docText);
+  // Scan block spans strictly; a ScanError means malformed XML the lenient reader
+  // accepted (mismatched/unclosed tags), so preservation cannot be trusted.
+  let spans: BlockSpan[] | null;
+  try {
+    spans = scanBodyBlockSpans(docText);
+  } catch (e) {
+    if (!(e instanceof ScanError)) throw e;
+    spans = null;
+  }
+  const wantsPreservation = (body ? treeHasTable(body) : false) || (spans?.some((s) => s.name === 'w:tbl') ?? false);
   const blocks: Block[] = [];
   let preservation: PreservationState | undefined;
-  if (spans.some((s) => s.name === 'w:tbl')) {
+  if (wantsPreservation) {
+    // A table document MUST scan cleanly and its spans MUST match the parsed tree's
+    // top-level blocks exactly, or ranges could mis-own content (guards decoy tags in
+    // comments, malformed nesting, and the reader's non-strict well-formedness). Any
+    // failure rejects the document rather than falling back to a lossy flat parse.
+    if (!spans || !body) return { ok: false, reason: 'xml-error', detail: 'table document failed strict span scan' };
     const blockRanges = new Map<string, BlockRange>();
-    let failed = false;
     for (const span of spans) {
       const block = blockFromSpan(docText, span, alloc);
-      if (!block) {
-        failed = true;
-        break;
-      }
+      if (!block) return { ok: false, reason: 'xml-error', detail: 'table preservation fragment parse failed' };
       blocks.push(block);
       blockRanges.set(block.id, { partName: DOC_PART, start: span.start, end: span.end, baselineHash: hashPreservableBlock(block) });
     }
-    // Fail closed on any fragment-parse failure or scanner/tree disagreement: the
-    // scanner's spans MUST match the parsed tree's top-level blocks exactly, or ranges
-    // could mis-own content (guards decoy tags in comments, malformed nesting, and the
-    // reader's non-strict well-formedness).
-    if (failed || !body || blocks.length !== spans.length || countTreeBlocks(body) !== blocks.length) {
+    if (blocks.length !== spans.length || countTreeBlocks(body) !== blocks.length) {
       return { ok: false, reason: 'xml-error', detail: 'table preservation scan/tree mismatch' };
     }
     preservation = { originalParts: new Map([[DOC_PART, docText]]), blockRanges };
