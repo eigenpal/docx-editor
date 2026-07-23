@@ -157,6 +157,22 @@ describe('4.7 ModelChange + 4.3 DocOps', () => {
     expect(r.modelChange.created).toHaveLength(1);
     expect(r.modelChange.dirty).toContain(p1);
   });
+
+  test('insertParagraph inserts a new paragraph at an index, minting an id, clamped to the end', () => {
+    const { store, storyId, p1 } = newStore();
+    store.transact(HUMAN, (c) => c.apply({ op: 'insertText', paragraphId: p1, text: 'A' }));
+    const r = store.transact(HUMAN, (c) => c.apply({ op: 'insertParagraph', storyId, index: 0, runs: [{ text: 'first' }] }));
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.modelChange.created).toHaveLength(1);
+    const blocks = store.currentModel.stories.get(storyId)!.blocks;
+    expect(blocks.map((b) => (b as ParagraphRecord).runs.map((run) => run.text).join(''))).toEqual(['first', 'A']);
+    expect(blocks[0].id).not.toBe(p1); // brand-new id, not a duplicate
+    // An out-of-range index clamps to the end (append).
+    store.transact(HUMAN, (c) => c.apply({ op: 'insertParagraph', storyId, index: 99, runs: [{ text: 'last' }] }));
+    const after = store.currentModel.stories.get(storyId)!.blocks;
+    expect((after[after.length - 1] as ParagraphRecord).runs.map((run) => run.text).join('')).toBe('last');
+  });
 });
 
 describe('undo / redo and anchors', () => {

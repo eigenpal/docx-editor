@@ -5,6 +5,7 @@
 
 import {
   appendParagraph,
+  insertParagraph,
   insertTextIntoParagraph,
   setParagraphRuns,
   splitParagraph,
@@ -28,6 +29,10 @@ export function validateDocOp(op: DocOp): DocOpValidation {
   switch (op.op) {
     case 'appendParagraph':
       return isStr(op.storyId) ? { ok: true } : { ok: false, reason: 'appendParagraph.storyId' };
+    case 'insertParagraph':
+      return isStr(op.storyId) && isInt(op.index) && Array.isArray(op.runs)
+        ? { ok: true }
+        : { ok: false, reason: 'insertParagraph.fields' };
     case 'insertText':
       return isStr(op.paragraphId) && typeof op.text === 'string'
         ? { ok: true }
@@ -71,6 +76,10 @@ export function applyDocOp(model: PackageModel, op: DocOp): { model: PackageMode
   switch (op.op) {
     case 'appendParagraph': {
       const { model: m, paragraphId } = appendParagraph(model, op.storyId);
+      return { model: m, effect: { dirty: [op.storyId], deleted: [], created: [paragraphId], dependencyKeys: storyDep } };
+    }
+    case 'insertParagraph': {
+      const { model: m, paragraphId } = insertParagraph(model, op.storyId, op.index, op.runs);
       return { model: m, effect: { dirty: [op.storyId], deleted: [], created: [paragraphId], dependencyKeys: storyDep } };
     }
     case 'insertText': {

@@ -86,6 +86,22 @@ describe('structural editing: split (Enter) and join survive save + reopen', () 
     expect(reopened.bodyText()).toBe('hel\nlo\nworld');
   });
 
+  test('pasting new paragraphs at a boundary commits and round-trips', () => {
+    const session = openDocxSession(docx(PARAS)); // hello | world
+    const doc = session.projectDoc();
+    const pasted = docSchema.node('doc', null, [
+      doc.child(0),
+      docSchema.node('paragraph', { semId: null }, docSchema.text('one')),
+      docSchema.node('paragraph', { semId: null }, docSchema.text('two')),
+      doc.child(1),
+    ]);
+    const res = session.applyPmDoc(pasted);
+    expect(res.committed).toBe(true);
+    expect(res.opCount).toBe(2);
+    expect(session.bodyText()).toBe('hello\none\ntwo\nworld');
+    expect(openDocxSession(session.save()).bodyText()).toBe('hello\none\ntwo\nworld');
+  });
+
   test('joining two paragraphs commits and round-trips', () => {
     const session = openDocxSession(docx(PARAS)); // hello | world
     const doc = session.projectDoc();

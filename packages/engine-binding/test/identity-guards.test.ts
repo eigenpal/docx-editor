@@ -149,12 +149,15 @@ describe('forward-mapper identity guards', () => {
     expect(store.currentRevision).toBe(0);
   });
 
-  test('appending a genuinely new paragraph (new content, not a clean split) fails closed', () => {
+  test('appending a genuinely new paragraph at the end maps to insertParagraph', () => {
     const { store, binding, ids } = twoParagraphBinding();
+    const storyId = bodyStoryId(store.currentModel);
     const doc = docSchema.node('doc', null, [para(ids[0], 'one'), para(ids[1], 'two'), para(null, 'three')]);
     const res = binding.commitFromDoc(doc);
-    expect(res.rejected).toBe(true);
-    expect(store.currentRevision).toBe(0);
+    expect(res.rejected).toBeUndefined();
+    expect(res.ops).toEqual([{ op: 'insertParagraph', storyId, index: 2, runs: [{ text: 'three' }] }]);
+    expect(store.currentRevision).toBe(1);
+    expect(store.currentModel.stories.get(storyId)!.blocks).toHaveLength(3);
   });
 
   test('reordering paragraphs (unchanged text) fails closed', () => {

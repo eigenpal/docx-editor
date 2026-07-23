@@ -135,22 +135,33 @@ export class EditorBinding {
   }
 
   /** Derive the DocOps that turn the current authored state into `newDoc`. Supports in-place
-   *  text edits (per paragraph) plus the two common STRUCTURAL edits: a paragraph SPLIT
-   *  (Enter) and a JOIN (Backspace/Delete at a boundary). The PM top-level nodes otherwise
-   *  correspond 1:1 and IN ORDER to the canonical body blocks (paragraph↔paragraph by semId,
-   *  blockEmbed atom↔its exact non-paragraph block). A reorder, a multi-paragraph paste, a
-   *  split-with-edit, or any disturbance of a read-only block throws {@link BindingRejection}
-   *  (fail closed) so nothing is silently dropped, misordered, or mutated. */
+   *  text edits (per paragraph), a paragraph SPLIT (Enter) or JOIN (Backspace at a boundary),
+   *  and the INSERTION of whole new paragraphs at a paragraph boundary (paste). The PM
+   *  top-level nodes otherwise correspond 1:1 and IN ORDER to the canonical body blocks
+   *  (paragraph↔paragraph by semId, blockEmbed atom↔its exact non-paragraph block). A reorder,
+   *  a mid-paragraph paste (insert + split at once), an insert/split/join combined with an edit
+   *  to an untouched paragraph, or any disturbance of a read-only block throws
+   *  {@link BindingRejection} (fail closed) so nothing is silently dropped, misordered, or
+   *  mutated. */
   mapDocToOps(newDoc: PMNode): DocOp[] {
     const model = this.store.currentModel;
-    const blocks = model.stories.get(bodyStoryId(model))!.blocks;
+    const storyId = bodyStoryId(model);
+    const blocks = model.stories.get(storyId)!.blocks;
     const nodes: PMNode[] = [];
     newDoc.forEach((n) => nodes.push(n));
 
     const delta = nodes.length - blocks.length;
-    if (delta === 1) return this.mapSplit(nodes, blocks);
+    if (delta > 0) {
+      // Prefer a clean boundary INSERTION (every existing block unchanged, k brand-new
+      // paragraphs). A single extra paragraph that is NOT a clean insertion may instead be a
+      // split of an existing paragraph.
+      const inserted = this.mapInsert(nodes, blocks, storyId);
+      if (inserted) return inserted;
+      if (delta === 1) return this.mapSplit(nodes, blocks);
+      throw new BindingRejection('unsupported structural edit (insertion combined with an edit, or multi)');
+    }
     if (delta === -1) return this.mapJoin(nodes, blocks);
-    if (delta !== 0) throw new BindingRejection('unsupported structural edit (multi-paragraph)');
+    if (delta !== 0) throw new BindingRejection('unsupported structural edit (multi-paragraph deletion)');
 
     // Δ=0: strictly in-place. Each node maps 1:1 to its canonical block by kind + semId.
     const ops: DocOp[] = [];
@@ -232,6 +243,35 @@ export class EditorBinding {
       throw new BindingRejection('join combined with an edit is not supported');
     }
     return [{ op: 'joinParagraphs', firstId: x.id, secondId: y.id }];
+  }
+
+  /** k extra paragraphs (k ≥ 1): a clean INSERTION of k brand-new paragraphs at ONE boundary —
+   *  every existing block is unchanged (identity AND content) and the k inserted nodes are all
+   *  new (semId null) paragraphs. Maps to k insertParagraph ops at the boundary index. Returns
+   *  null when the shape is NOT a clean boundary insertion (so a Δ=1 caller can try a split);
+   *  a mid-paragraph paste (which also splits) or an insert-plus-edit is not a clean insertion
+   *  and falls through to fail closed. */
+  private mapInsert(nodes: readonly PMNode[], blocks: readonly Block[], storyId: string): DocOp[] | null {
+    // The prefix ends at the first node that does not match its block by identity AND content.
+    // A brand-new paragraph has semId null, which never matches an existing block, so the prefix
+    // stops exactly where the inserted run begins.
+    let prefix = 0;
+    while (prefix < blocks.length && nodeMatchesBlock(nodes[prefix], blocks[prefix]) && sameContent(nodes[prefix], blocks[prefix])) {
+      prefix += 1;
+    }
+    const k = nodes.length - blocks.length;
+    // The k inserted nodes must all be genuinely new paragraphs (a read-only atom can't be pasted).
+    for (let j = prefix; j < prefix + k; j += 1) {
+      const n = nodes[j];
+      if (!n || !isParagraph(n) || n.attrs.semId !== null) return null;
+    }
+    // Everything after the inserted run must be the UNCHANGED tail of the canonical blocks.
+    if (!alignsAfter(nodes, prefix + k, blocks, prefix)) return null;
+    const ops: DocOp[] = [];
+    for (let j = 0; j < k; j += 1) {
+      ops.push({ op: 'insertParagraph', storyId, index: prefix + j, runs: paragraphNodeToRuns(nodes[prefix + j]) });
+    }
+    return ops;
   }
 
   /** Forward: map an edited PM doc to DocOps and commit ONE store transaction. An edit

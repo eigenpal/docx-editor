@@ -28,6 +28,27 @@ export function appendParagraph(
   return { model: { ...model, stories, identity: alloc.state() }, paragraphId };
 }
 
+/** Insert a NEW paragraph (with the given runs) at `index` in a story, minting an id.
+ *  The index is clamped to [0, blocks.length], so inserting at or past the end appends. */
+export function insertParagraph(
+  model: PackageModel,
+  storyId: string,
+  index: number,
+  runs: readonly RunRecord[],
+): { model: PackageModel; paragraphId: string } {
+  const story = model.stories.get(storyId);
+  if (!story) throw new Error(`unknown story ${storyId}`);
+  const at = Math.max(0, Math.min(index, story.blocks.length));
+  const alloc = new IdentityAllocator(model.identity);
+  const paragraphId = alloc.allocate('paragraph');
+  const paragraph: ParagraphRecord = { kind: 'paragraph', id: paragraphId, runs: [...runs] };
+  const blocks = [...story.blocks];
+  blocks.splice(at, 0, paragraph);
+  const stories = new Map(model.stories);
+  stories.set(storyId, { ...story, blocks });
+  return { model: { ...model, stories, identity: alloc.state() }, paragraphId };
+}
+
 /** Append a text run to a paragraph (by id), searching every story. */
 export function insertTextIntoParagraph(
   model: PackageModel,

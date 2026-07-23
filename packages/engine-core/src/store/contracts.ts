@@ -13,6 +13,13 @@ import type { RunProps, RunRecord } from '../model/index.ts';
 /** JSON-safe semantic mutation. `op` is the capability-owned operation id. */
 export type DocOp =
   | { readonly op: 'appendParagraph'; readonly storyId: string; readonly symbolicId?: string }
+  | {
+      readonly op: 'insertParagraph';
+      readonly storyId: string;
+      readonly index: number;
+      readonly runs: readonly RunRecord[];
+      readonly symbolicId?: string;
+    }
   | { readonly op: 'insertText'; readonly paragraphId: string; readonly text: string; readonly props?: RunProps }
   | { readonly op: 'splitParagraph'; readonly paragraphId: string; readonly offset: number }
   | { readonly op: 'joinParagraphs'; readonly firstId: string; readonly secondId: string }

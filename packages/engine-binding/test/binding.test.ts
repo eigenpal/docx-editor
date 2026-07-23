@@ -82,16 +82,20 @@ describe('forward mapping (6.3, 6.4)', () => {
     expect(paragraphText(store.currentModel, p1)).toBe('HelloWorld');
   });
 
-  test('a genuine paragraph INSERTION with new content fails closed (not a clean split)', () => {
+  test('inserting a new paragraph after an existing one maps to insertParagraph', () => {
     const { binding, store, p1 } = seeded();
+    const storyId = bodyStoryId(store.currentModel);
     const edited = docSchema.node('doc', null, [
       docSchema.node('paragraph', { semId: p1 }, [docSchema.text('Hello')]),
       docSchema.node('paragraph', { semId: null }, [docSchema.text('second')]),
     ]);
     const res = binding.commitFromDoc(edited);
-    expect(res.rejected).toBe(true); // split combined with new text is refused
-    expect(res.ops).toHaveLength(0);
-    expect(store.currentModel.stories.get(bodyStoryId(store.currentModel))!.blocks).toHaveLength(1);
+    expect(res.rejected).toBeUndefined();
+    expect(res.ops).toEqual([{ op: 'insertParagraph', storyId, index: 1, runs: [{ text: 'second' }] }]);
+    const blocks = store.currentModel.stories.get(storyId)!.blocks;
+    expect(blocks).toHaveLength(2);
+    expect(blocks[0].id).toBe(p1); // the existing paragraph keeps its identity
+    expect((blocks[1] as ParagraphRecord).runs.map((r) => r.text).join('')).toBe('second');
   });
 
   test('DELETING a whole non-empty paragraph fails closed (its content would be lost)', () => {
@@ -106,10 +110,28 @@ describe('forward mapping (6.3, 6.4)', () => {
     expect(store.currentModel.stories.get(bodyStoryId(store.currentModel))!.blocks).toHaveLength(2);
   });
 
-  test('a multi-paragraph paste (two new blocks) fails closed', () => {
+  test('a multi-paragraph paste (two new blocks) maps to two insertParagraph ops in order', () => {
     const { binding, store, p1 } = seeded();
+    const storyId = bodyStoryId(store.currentModel);
     const edited = docSchema.node('doc', null, [
       docSchema.node('paragraph', { semId: p1 }, [docSchema.text('Hello')]),
+      docSchema.node('paragraph', { semId: null }, [docSchema.text('a')]),
+      docSchema.node('paragraph', { semId: null }, [docSchema.text('b')]),
+    ]);
+    const res = binding.commitFromDoc(edited);
+    expect(res.rejected).toBeUndefined();
+    expect(res.ops).toEqual([
+      { op: 'insertParagraph', storyId, index: 1, runs: [{ text: 'a' }] },
+      { op: 'insertParagraph', storyId, index: 2, runs: [{ text: 'b' }] },
+    ]);
+    const blocks = store.currentModel.stories.get(storyId)!.blocks;
+    expect(blocks.map((b) => (b as ParagraphRecord).runs.map((r) => r.text).join(''))).toEqual(['Hello', 'a', 'b']);
+  });
+
+  test('a paste combined with an edit to an existing paragraph fails closed', () => {
+    const { binding, store, p1 } = seeded();
+    const edited = docSchema.node('doc', null, [
+      docSchema.node('paragraph', { semId: p1 }, [docSchema.text('CHANGED')]), // existing edited
       docSchema.node('paragraph', { semId: null }, [docSchema.text('a')]),
       docSchema.node('paragraph', { semId: null }, [docSchema.text('b')]),
     ]);

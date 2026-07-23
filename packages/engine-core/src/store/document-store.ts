@@ -174,7 +174,11 @@ export class DocumentStore {
         const { model, effect } = applyDocOp(working, resolved);
         working = model;
         effects.push(effect);
-        if (resolved.op === 'appendParagraph' && op.op === 'appendParagraph' && op.symbolicId) {
+        if (
+          (resolved.op === 'appendParagraph' || resolved.op === 'insertParagraph') &&
+          (op.op === 'appendParagraph' || op.op === 'insertParagraph') &&
+          op.symbolicId
+        ) {
           symbolic.set(op.symbolicId, effect.created[0]);
         }
       }

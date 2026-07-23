@@ -39,7 +39,7 @@ export {
 export { type IdKindName, IdentityAllocator } from './identity.ts';
 export { createEmptyModel, bodyStoryId } from './create.ts';
 export { type SerializedModel, encodeModel, decodeModel, validatePreservation } from './serialize.ts';
-export { appendParagraph, insertTextIntoParagraph, setParagraphRuns, paragraphText } from './edit.ts';
+export { appendParagraph, insertParagraph, insertTextIntoParagraph, setParagraphRuns, paragraphText } from './edit.ts';
 export {
   type SplitResult,
   type ReplaceResult,
