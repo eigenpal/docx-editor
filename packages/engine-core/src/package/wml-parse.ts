@@ -324,25 +324,28 @@ function parseTable(tbl: Extract<XmlNode, { type: 'element' }>, alloc: IdentityA
 }
 
 // The discriminating child of w:sdtPr -> coarse control type. Namespaced names are
-// kept verbatim by the reader (e.g. w14:checkbox, w15:repeatingSection).
-const SDT_CONTROL_TYPES: Record<string, SdtControlType> = {
-  'w:richText': 'richText',
-  'w:text': 'text',
-  'w:checkbox': 'checkbox',
-  'w14:checkbox': 'checkbox',
-  'w:dropDownList': 'dropDownList',
-  'w:comboBox': 'comboBox',
-  'w:date': 'date',
-  'w:picture': 'picture',
-  'w:docPartObj': 'docPartObj',
-  'w:docPartList': 'docPartList',
-  'w15:repeatingSection': 'repeatingSection',
-  'w15:repeatingSectionItem': 'repeatingSectionItem',
-  'w:citation': 'citation',
-  'w:bibliography': 'bibliography',
-  'w:group': 'group',
-  'w:equation': 'equation',
-};
+// kept verbatim by the reader (e.g. w14:checkbox, w15:repeatingSection). A Map (not a
+// plain object) is used deliberately: element names are attacker-controlled, and a
+// plain-object lookup on `constructor`/`__proto__`/`toString` would return an inherited
+// prototype member (a function) instead of undefined and poison `controlType`.
+const SDT_CONTROL_TYPES: ReadonlyMap<string, SdtControlType> = new Map([
+  ['w:richText', 'richText'],
+  ['w:text', 'text'],
+  ['w:checkbox', 'checkbox'],
+  ['w14:checkbox', 'checkbox'],
+  ['w:dropDownList', 'dropDownList'],
+  ['w:comboBox', 'comboBox'],
+  ['w:date', 'date'],
+  ['w:picture', 'picture'],
+  ['w:docPartObj', 'docPartObj'],
+  ['w:docPartList', 'docPartList'],
+  ['w15:repeatingSection', 'repeatingSection'],
+  ['w15:repeatingSectionItem', 'repeatingSectionItem'],
+  ['w:citation', 'citation'],
+  ['w:bibliography', 'bibliography'],
+  ['w:group', 'group'],
+  ['w:equation', 'equation'],
+]);
 
 const SDT_LOCKS: ReadonlySet<string> = new Set(['unlocked', 'sdtLocked', 'contentLocked', 'sdtContentLocked']);
 
@@ -374,7 +377,7 @@ function parseSdtProps(sdtPr: Extract<XmlNode, { type: 'element' }> | undefined)
   for (const child of sdtPr.children) {
     if (!el(child)) continue;
     if (child.name === 'w:dataBinding') props.dataBinding = true;
-    const ct = SDT_CONTROL_TYPES[child.name];
+    const ct = SDT_CONTROL_TYPES.get(child.name);
     if (ct && props.controlType === undefined) props.controlType = ct;
   }
   return props;
@@ -508,6 +511,38 @@ export function treeHasBlockSdt(container: Extract<XmlNode, { type: 'element' }>
     if (!el(child)) continue;
     if (child.name === 'w:sdt') return true;
     if (child.name === 'w:customXml' && treeHasBlockSdt(child)) return true;
+  }
+  return false;
+}
+
+/** Count the BLOCK children an SDT projects: exactly what parseSdtContentBlocks extracts
+ *  (w:p / w:tbl / nested w:sdt, descending the transparent w:customXml wrapper). Zero for
+ *  an inline (run-content) SDT or an empty/absent w:sdtContent. */
+function sdtContentBlockCount(sdt: Extract<XmlNode, { type: 'element' }>): number {
+  const content = childElements(sdt, 'w:sdtContent')[0];
+  if (!content) return 0;
+  const walk = (container: Extract<XmlNode, { type: 'element' }>): number => {
+    let n = 0;
+    for (const child of container.children) {
+      if (!el(child)) continue;
+      if (child.name === 'w:p' || child.name === 'w:tbl' || child.name === 'w:sdt') n += 1;
+      else if (child.name === 'w:customXml') n += walk(child);
+    }
+    return n;
+  };
+  return walk(content);
+}
+
+/** Whether a block-level content control (a w:sdt carrying block content) appears
+ *  ANYWHERE in the subtree, including inside wrappers the structural traversals do NOT
+ *  descend (w:ins, mc:AlternateContent, unknown foreign elements). Used as a flat-path
+ *  fail-closed net: on the non-preserved path a block SDT hidden in an unsupported
+ *  wrapper would be silently dropped, so its presence must reject the document instead. */
+export function deepHasBlockSdt(container: Extract<XmlNode, { type: 'element' }>): boolean {
+  for (const child of container.children) {
+    if (!el(child)) continue;
+    if (child.name === 'w:sdt' && sdtContentBlockCount(child) > 0) return true;
+    if (deepHasBlockSdt(child)) return true;
   }
   return false;
 }

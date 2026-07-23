@@ -159,3 +159,45 @@ describe('block-SDT scanner/tree cross-check edge cases', () => {
     expect(identical).toBe(true);
   });
 });
+
+describe('block-SDT security + fail-closed nets (SDT review High/Medium)', () => {
+  test('a block SDT hidden in an unsupported wrapper fails closed (not silently dropped)', () => {
+    // <w:foreign> is not a wrapper the structural traversal descends; on the flat path
+    // nothing is preserved, so a block SDT inside it would be lost. Must reject.
+    const r = parseDocx(synthDocx('<w:foreign><w:sdt><w:sdtPr><w:tag w:val="hidden"/></w:sdtPr>' +
+      '<w:sdtContent><w:p><w:r><w:t>secret</w:t></w:r></w:p></w:sdtContent></w:sdt></w:foreign>'));
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.detail).toContain('unsupported container');
+  });
+
+  test('a reachable SDT plus one hidden in a wrapper: still parses (bytes preserved verbatim)', () => {
+    // Preservation active (reachable SDT) => whole document.xml is byte-preserved, so the
+    // hidden one is NOT lost on save even though it is not structurally modeled.
+    const { identical } = roundTrips(
+      '<w:sdt><w:sdtPr><w:tag w:val="ok"/></w:sdtPr><w:sdtContent><w:p><w:r><w:t>a</w:t></w:r></w:p></w:sdtContent></w:sdt>' +
+        '<w:foreign><w:sdt><w:sdtPr><w:tag w:val="hidden"/></w:sdtPr><w:sdtContent><w:p><w:r><w:t>b</w:t></w:r></w:p></w:sdtContent></w:sdt></w:foreign>',
+    );
+    expect(identical).toBe(true);
+  });
+
+  test('an inline (run-content) SDT hidden in a wrapper does NOT trip the block-SDT net', () => {
+    // Inline controls carry run content, not block content; they are intentionally
+    // flattened, so a table-free doc with only inline SDTs stays on the flat path.
+    const r = parseDocx(synthDocx('<w:p><w:r><w:t>x</w:t></w:r></w:p>' +
+      '<w:ins><w:sdt><w:sdtContent><w:r><w:t>inline</w:t></w:r></w:sdtContent></w:sdt></w:ins>'));
+    expect(r.ok).toBe(true);
+  });
+
+  test('an attacker-controlled w:sdtPr child name (constructor/__proto__) cannot crash parse', () => {
+    for (const evil of ['constructor', '__proto__', 'toString', 'hasOwnProperty']) {
+      const r = parseDocx(synthDocx(`<w:sdt><w:sdtPr><w:tag w:val="e"/><${evil}/></w:sdtPr>` +
+        '<w:sdtContent><w:p><w:r><w:t>t</w:t></w:r></w:p></w:sdtContent></w:sdt>'));
+      expect(r.ok).toBe(true);
+      if (r.ok) {
+        const sdt = bodyBlocks(r.model).find((b): b is SdtRecord => b.kind === 'sdt')!;
+        // controlType must be a real SdtControlType or undefined, never an inherited function.
+        expect(sdt.props.controlType === undefined || typeof sdt.props.controlType === 'string').toBe(true);
+      }
+    }
+  });
+});

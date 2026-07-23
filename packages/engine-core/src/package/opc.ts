@@ -11,8 +11,8 @@ import { scanBodyBlockSpans, ScanError, type BlockSpan } from './wml-scan.ts';
 import { blockXml } from './wml-serialize.ts';
 import {
   W_NS, collectParagraphElements, paragraphFromElement, blockFromSpan,
-  treeHasTable, treeHasBlockSdt, deepHasTable, deepCountTables, countModelTables,
-  hasNonWWordBinding, countTreeBlocks,
+  treeHasTable, treeHasBlockSdt, deepHasTable, deepHasBlockSdt, deepCountTables,
+  countModelTables, hasNonWWordBinding, countTreeBlocks,
 } from './wml-parse.ts';
 import { relatedStoryParts, parseStoryParagraphs, parseStyles, parseNumbering } from './wml-parts.ts';
 import { DOC_PART, hashPreservableBlock, emitPreservedPart } from './wml-preserve.ts';
@@ -77,11 +77,16 @@ export function parseDocx(bytes: Uint8Array): ParseResult {
   const wantsPreservation =
     (body ? treeHasTable(body) || treeHasBlockSdt(body) : false) ||
     (spans?.some((s) => s.name === 'w:tbl' || s.name === 'w:sdt') ?? false);
-  // Safety net: a table exists somewhere but the block traversals (which descend only
-  // through known wrappers w:sdt/w:customXml) did not reach it — fail closed rather
-  // than silently drop it on the flat path.
+  // Safety net: a table OR a block-level content control exists somewhere the structural
+  // block traversals (which descend only through the known wrappers w:sdt/w:customXml)
+  // did not reach — e.g. hidden inside w:ins / mc:AlternateContent / an unknown foreign
+  // element. On the flat path nothing is preserved, so silently dropping it would lose
+  // content; fail closed instead.
   if (body && !wantsPreservation && deepHasTable(body)) {
     return { ok: false, reason: 'xml-error', detail: 'table in an unsupported container (fail closed)' };
+  }
+  if (body && !wantsPreservation && deepHasBlockSdt(body)) {
+    return { ok: false, reason: 'xml-error', detail: 'block content control in an unsupported container (fail closed)' };
   }
   const blocks: Block[] = [];
   let preservation: PreservationState | undefined;
