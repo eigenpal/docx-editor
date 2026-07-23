@@ -4,7 +4,8 @@
 
 import { describe, expect, test } from 'bun:test';
 import { readFileSync } from 'node:fs';
-import { renderDocxPreview } from './enginePreview.ts';
+import { parseDocx } from '@docx-editor.dev/engine-core';
+import { renderDocxPreview, renderModelPreview } from './enginePreview.ts';
 
 class El {
   style: Record<string, string> = {};
@@ -76,6 +77,26 @@ describe('renderDocxPreview (shared read-only projection)', () => {
     const firstCount = el.children.length;
     renderDocxPreview(bytes, container, {}, doc);
     expect(el.children.length).toBe(firstCount); // not doubled
+  });
+});
+
+describe('renderModelPreview (paginated display from the canonical model)', () => {
+  test('renders a parsed model directly (the editor repaints this from store.model)', () => {
+    const bytes = readFileSync(`${import.meta.dir}/../../e2e/fixtures/editable-sample.docx`);
+    const parsed = parseDocx(bytes);
+    expect(parsed.ok).toBe(true);
+    if (!parsed.ok) return;
+    const { doc, container, el } = mockDom();
+    const result = renderModelPreview(parsed.model, container, {}, doc);
+    expect(result.ok).toBe(true);
+    expect(result.pageCount).toBeGreaterThan(0);
+    // Re-rendering the same model is idempotent (used on every keystroke).
+    const before = el.children.length;
+    renderModelPreview(parsed.model, container, {}, doc);
+    expect(el.children.length).toBe(before);
+    // The model's paragraph text reaches the paginated display.
+    const text = allNodes(el).filter((n) => n.tag === 'span').map((n) => n.textContent).join(' ');
+    expect(text).toContain('Edit');
   });
 });
 

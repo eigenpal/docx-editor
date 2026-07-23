@@ -18,7 +18,7 @@ import { keymap } from 'prosemirror-keymap';
 import { baseKeymap } from 'prosemirror-commands';
 import { history, undo, redo } from 'prosemirror-history';
 import { openDocxSession, type DocxEditorSession } from './docxEditorSession.ts';
-import { renderDocxPreview } from './enginePreview.ts';
+import { renderDocxPreview, renderModelPreview } from './enginePreview.ts';
 
 /** Engine-neutral test/automation boundary — identical shape in both adapters. */
 export interface EditorDriver {
@@ -62,9 +62,26 @@ export function mountDocxEditor(container: HTMLElement, bytes: Uint8Array): Moun
     keymap({ Enter: noop, 'Shift-Enter': noop, 'Mod-Enter': noop }),
     keymap(baseKeymap),
   ];
-  let reconciling = false;
+  // Two panes: the ProseMirror EDIT surface (left) and the paginated DISPLAY the canonical
+  // model repaints into (right). Typing updates store.model, then the paginated pane is
+  // re-laid-out from store.model — so the visible page reflects the canonical state, not
+  // just the raw contentEditable surface.
+  const doc = container.ownerDocument ?? document;
+  container.replaceChildren();
+  container.classList.add('docx-editable');
+  container.style.cssText = 'display:flex; gap:16px; height:100%; min-height:0';
+  const editPane = doc.createElement('div');
+  editPane.className = 'docx-edit-pane';
+  editPane.style.cssText = 'flex:0 0 42%; min-width:0; overflow:auto; padding:8px 12px; outline:none';
+  const pagedPane = doc.createElement('div');
+  pagedPane.className = 'docx-paged-pane';
+  pagedPane.style.cssText = 'flex:1; min-width:0; overflow:auto; background:#eceff1; padding:12px';
+  container.append(editPane, pagedPane);
 
-  const view = new EditorView(container, {
+  const repaintPaged = () => renderModelPreview(session.currentModel(), pagedPane, {}, doc);
+
+  let reconciling = false;
+  const view = new EditorView(editPane, {
     state: EditorState.create({ doc: session.projectDoc(), plugins }),
     editable: () => session.editable,
     dispatchTransaction(tr) {
@@ -84,8 +101,10 @@ export function mountDocxEditor(container: HTMLElement, bytes: Uint8Array): Moun
         );
         reconciling = false;
       }
+      // A committed edit changed the canonical model — repaint the paginated display from it.
+      if (res.committed) repaintPaged();
     },
   });
-  container.classList.add('docx-editable');
+  repaintPaged(); // initial paginated render from the loaded model
   return { session, driver, destroy: () => view.destroy() };
 }

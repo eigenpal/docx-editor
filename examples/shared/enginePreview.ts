@@ -4,7 +4,7 @@
 // framework duplicates any layout/paint logic. It is strictly read-only: there is no
 // editing or saving. It imports ONLY the production engine — no ProseMirror, no legacy
 // core implementation, no spike.
-import { parseDocx } from '@docx-editor.dev/engine-core';
+import { parseDocx, type PackageModel } from '@docx-editor.dev/engine-core';
 import { layoutBody, HelveticaMetrics } from '@docx-editor.dev/engine-layout';
 import { renderToDom } from '@docx-editor.dev/engine-output';
 
@@ -27,6 +27,28 @@ export interface PreviewOptions {
 const DEFAULTS = { pageWidth: 12240, pageHeight: 15840, margin: 1440 } as const;
 
 /**
+ * Render a canonical `PackageModel` into `container` as paginated pages (layout ->
+ * display list -> DOM). The container is cleared first so re-rendering is idempotent —
+ * this is the paginated display the editor repaints from `store.model` after every edit.
+ */
+export function renderModelPreview(
+  model: PackageModel,
+  container: HTMLElement,
+  options: PreviewOptions = {},
+  doc: Document = container.ownerDocument ?? document,
+): PreviewResult {
+  while (container.firstChild) container.removeChild(container.firstChild);
+  const layout = layoutBody(model, {
+    pageWidth: options.pageWidth ?? DEFAULTS.pageWidth,
+    pageHeight: options.pageHeight ?? DEFAULTS.pageHeight,
+    margin: options.margin ?? DEFAULTS.margin,
+    metrics: new HelveticaMetrics(),
+  });
+  renderToDom(layout, container, doc);
+  return { ok: true, pageCount: layout.pages.length };
+}
+
+/**
  * Render a DOCX (as bytes) into `container` as a read-only preview. Invalid input is
  * surfaced as a visible error element (never thrown), and the container is cleared
  * first so re-rendering is idempotent. Returns the outcome for the host UI/tests.
@@ -47,13 +69,5 @@ export function renderDocxPreview(
     container.appendChild(err);
     return { ok: false, pageCount: 0, error: parsed.reason };
   }
-
-  const layout = layoutBody(parsed.model, {
-    pageWidth: options.pageWidth ?? DEFAULTS.pageWidth,
-    pageHeight: options.pageHeight ?? DEFAULTS.pageHeight,
-    margin: options.margin ?? DEFAULTS.margin,
-    metrics: new HelveticaMetrics(),
-  });
-  renderToDom(layout, container, doc);
-  return { ok: true, pageCount: layout.pages.length };
+  return renderModelPreview(parsed.model, container, options, doc);
 }

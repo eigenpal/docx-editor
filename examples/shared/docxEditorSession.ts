@@ -11,6 +11,7 @@ import {
   isPlainEditableDocx,
   DocumentStore,
   bodyStoryId,
+  type PackageModel,
   type ParagraphRecord,
 } from '@docx-editor.dev/engine-core';
 import { EditorBinding } from '@docx-editor.dev/engine-binding';
@@ -38,6 +39,8 @@ export interface DocxEditorSession {
   applyPmDoc(doc: PMNode): ApplyResult;
   /** Body text (paragraphs joined by newlines) from the CANONICAL model, not the view. */
   bodyText(): string;
+  /** The current canonical model — the source of truth the paginated display repaints from. */
+  currentModel(): PackageModel;
   /** Serialize the canonical model back to DOCX bytes. */
   save(): Uint8Array;
 }
@@ -78,6 +81,7 @@ export function openDocxSession(bytes: Uint8Array): DocxEditorSession {
         .map((p) => p.runs.map((r) => r.text).join(''))
         .join('\n');
     },
+    currentModel: () => store.currentModel,
     // Editable docs re-serialize from the canonical model; a read-only doc is returned
     // exactly as opened (the minimal writer would drop its parts).
     save: () => (editable ? writeDocx(store.currentModel) : bytes),
