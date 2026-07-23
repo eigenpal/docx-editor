@@ -38,6 +38,13 @@
 5. **Add structural SDTs/content controls.** Import block and inline SDTs without
    flattening; preserve properties, locks, tags, aliases, nested content, and unknown
    siblings; render and export/reopen them through the same vertical slice.
+   — IN PROGRESS: block-level w:sdt now imports as a first-class `SdtRecord` (parsed
+   id/tag/alias/lock/control-type header + addressable nested blocks) on the shared
+   span-driven verbatim-preservation path, lays out transparently, and round-trips
+   byte-identically (exhaustive w14/w15 control payload rides the preservation range).
+   DEFERRED: inline/run-level SDTs (still flattened via RUN_WRAPPERS), SDTs nested in
+   table cells (cellBlocks still flattens), editing inside an SDT (fails closed on save),
+   and control-chrome rendering.
 6. **Resolve authored formatting.** Finish styles, numbering, themes, paragraph/run
    properties, table styles, inheritance, and list rendering without materializing
    resolved values into authored state.
