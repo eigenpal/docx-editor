@@ -131,6 +131,17 @@ describe('forward-mapper identity guards', () => {
     expect(binding.commitFromDoc(ok).ops).toEqual([{ op: 'splitParagraph', paragraphId: id, offset: 2 }]);
   });
 
+  test('inserting a SINGLE EMPTY paragraph after one maps to splitParagraph (props inherit)', () => {
+    const { store, binding, ids } = twoParagraphBinding(); // ids[0]='one', ids[1]='two'
+    // Structurally an empty new paragraph after 'one'; this is the Enter-at-end shape and must
+    // use splitParagraph (which preserves the source paragraph's properties), not insertParagraph.
+    const doc = docSchema.node('doc', null, [para(ids[0], 'one'), para(null, ''), para(ids[1], 'two')]);
+    const res = binding.commitFromDoc(doc);
+    expect(res.ops).toEqual([{ op: 'splitParagraph', paragraphId: ids[0], offset: 3 }]);
+    expect(res.rejected).toBeUndefined();
+    expect(store.currentModel.stories.get(bodyStoryId(store.currentModel))!.blocks).toHaveLength(3);
+  });
+
   test('splitting at the START of a paragraph (empty head, copied id) commits cleanly', () => {
     const { store, binding, ids } = twoParagraphBinding(); // ids[1]='two'
     // Enter at the start of the 2nd paragraph: [one, ''(two-id), 'two'(two-id)] — a valid split.

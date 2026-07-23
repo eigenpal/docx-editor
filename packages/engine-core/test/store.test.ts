@@ -168,10 +168,23 @@ describe('4.7 ModelChange + 4.3 DocOps', () => {
     const blocks = store.currentModel.stories.get(storyId)!.blocks;
     expect(blocks.map((b) => (b as ParagraphRecord).runs.map((run) => run.text).join(''))).toEqual(['first', 'A']);
     expect(blocks[0].id).not.toBe(p1); // brand-new id, not a duplicate
-    // An out-of-range index clamps to the end (append).
-    store.transact(HUMAN, (c) => c.apply({ op: 'insertParagraph', storyId, index: 99, runs: [{ text: 'last' }] }));
+    // Inserting AT the end (index === length) is allowed.
+    store.transact(HUMAN, (c) => c.apply({ op: 'insertParagraph', storyId, index: 2, runs: [{ text: 'last' }] }));
     const after = store.currentModel.stories.get(storyId)!.blocks;
     expect((after[after.length - 1] as ParagraphRecord).runs.map((run) => run.text).join('')).toBe('last');
+    const rev = store.currentRevision;
+    // An out-of-range index is REJECTED (aborted), not clamped — no silent misordering.
+    const bad = store.transact(HUMAN, (c) => c.apply({ op: 'insertParagraph', storyId, index: 99, runs: [{ text: 'x' }] }));
+    expect(bad.ok).toBe(false);
+    expect(store.currentRevision).toBe(rev); // unchanged
+  });
+
+  test('insertParagraph with malformed runs fails validation (no apply-time throw)', () => {
+    const { store, storyId } = newStore();
+    // A run without a string `text` must be rejected at validation, never reach normalizeRuns.
+    const r = store.transact(HUMAN, (c) => c.apply({ op: 'insertParagraph', storyId, index: 0, runs: [{} as never] }));
+    expect(r.ok).toBe(false);
+    expect(store.currentRevision).toBe(0);
   });
 });
 

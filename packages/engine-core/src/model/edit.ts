@@ -29,7 +29,9 @@ export function appendParagraph(
 }
 
 /** Insert a NEW paragraph (with the given runs) at `index` in a story, minting an id.
- *  The index is clamped to [0, blocks.length], so inserting at or past the end appends. */
+ *  `index` must be within [0, blocks.length] (length = append); an out-of-range index is
+ *  REJECTED rather than clamped, so a stale/invalid position can never silently misorder the
+ *  canonical block sequence. */
 export function insertParagraph(
   model: PackageModel,
   storyId: string,
@@ -38,12 +40,14 @@ export function insertParagraph(
 ): { model: PackageModel; paragraphId: string } {
   const story = model.stories.get(storyId);
   if (!story) throw new Error(`unknown story ${storyId}`);
-  const at = Math.max(0, Math.min(index, story.blocks.length));
+  if (index < 0 || index > story.blocks.length) {
+    throw new Error(`insertParagraph index ${index} out of range [0, ${story.blocks.length}]`);
+  }
   const alloc = new IdentityAllocator(model.identity);
   const paragraphId = alloc.allocate('paragraph');
   const paragraph: ParagraphRecord = { kind: 'paragraph', id: paragraphId, runs: [...runs] };
   const blocks = [...story.blocks];
-  blocks.splice(at, 0, paragraph);
+  blocks.splice(index, 0, paragraph);
   const stories = new Map(model.stories);
   stories.set(storyId, { ...story, blocks });
   return { model: { ...model, stories, identity: alloc.state() }, paragraphId };

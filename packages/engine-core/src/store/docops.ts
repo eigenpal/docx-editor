@@ -23,6 +23,16 @@ export type DocOpValidation = { readonly ok: true } | { readonly ok: false; read
 
 const isStr = (v: unknown): v is string => typeof v === 'string' && v.length > 0;
 const isInt = (v: unknown): v is number => typeof v === 'number' && Number.isInteger(v) && v >= 0;
+/** Every run must be an object with a string `text` (props, if present, an object) — so a
+ *  malformed run can never reach normalization/serialization and throw or coerce silently. */
+const isRuns = (v: unknown): boolean =>
+  Array.isArray(v) &&
+  v.every((r) => {
+    if (typeof r !== 'object' || r === null) return false;
+    const rec = r as { text?: unknown; props?: unknown };
+    if (typeof rec.text !== 'string') return false;
+    return rec.props === undefined || (typeof rec.props === 'object' && rec.props !== null);
+  });
 
 /** Schema-validate a DocOp's shape before any mutation (task 4.4 entry point). */
 export function validateDocOp(op: DocOp): DocOpValidation {
@@ -30,7 +40,7 @@ export function validateDocOp(op: DocOp): DocOpValidation {
     case 'appendParagraph':
       return isStr(op.storyId) ? { ok: true } : { ok: false, reason: 'appendParagraph.storyId' };
     case 'insertParagraph':
-      return isStr(op.storyId) && isInt(op.index) && Array.isArray(op.runs)
+      return isStr(op.storyId) && isInt(op.index) && isRuns(op.runs)
         ? { ok: true }
         : { ok: false, reason: 'insertParagraph.fields' };
     case 'insertText':
@@ -50,11 +60,11 @@ export function validateDocOp(op: DocOp): DocOpValidation {
         ? { ok: true }
         : { ok: false, reason: 'moveBlock.fields' };
     case 'replaceParagraph':
-      return isStr(op.paragraphId) && Array.isArray(op.runs)
+      return isStr(op.paragraphId) && isRuns(op.runs)
         ? { ok: true }
         : { ok: false, reason: 'replaceParagraph.fields' };
     case 'setParagraphRuns':
-      return isStr(op.paragraphId) && Array.isArray(op.runs)
+      return isStr(op.paragraphId) && isRuns(op.runs)
         ? { ok: true }
         : { ok: false, reason: 'setParagraphRuns.fields' };
     case 'deleteParagraph':

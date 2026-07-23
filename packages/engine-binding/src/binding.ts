@@ -267,6 +267,12 @@ export class EditorBinding {
     }
     // Everything after the inserted run must be the UNCHANGED tail of the canonical blocks.
     if (!alignsAfter(nodes, prefix + k, blocks, prefix)) return null;
+    // Inserting a SINGLE EMPTY paragraph right after an existing paragraph is ambiguous with an
+    // end-of-paragraph split (Enter). Defer to the split path so the new paragraph inherits the
+    // source paragraph's properties (a split preserves style; a bare insert would not).
+    if (k === 1 && prefix >= 1 && blocks[prefix - 1].kind === 'paragraph' && pmTextLength(paragraphNodeToRuns(nodes[prefix])) === 0) {
+      return null;
+    }
     const ops: DocOp[] = [];
     for (let j = 0; j < k; j += 1) {
       ops.push({ op: 'insertParagraph', storyId, index: prefix + j, runs: paragraphNodeToRuns(nodes[prefix + j]) });
