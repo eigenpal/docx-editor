@@ -3,7 +3,7 @@
 // height, and byte-identical output across repeated ("cross-runtime") runs.
 
 import { describe, expect, test } from 'bun:test';
-import { layoutBody, hitTest, DeterministicMetrics, type LayoutOptions } from '../src/index.ts';
+import { layoutBody, hitTest, DeterministicMetrics, HelveticaMetrics, type LayoutOptions } from '../src/index.ts';
 import {
   createEmptyModel,
   bodyStoryId,
@@ -74,6 +74,27 @@ describe('cross-runtime determinism (gate 9)', () => {
     const base = fingerprint('paginationFingerprint', layoutBody(modelWith(['abc']), opts()));
     const changed = fingerprint('paginationFingerprint', layoutBody(modelWith(['abcd']), opts()));
     expect(changed).not.toBe(base);
+  });
+});
+
+describe('proportional Helvetica metrics', () => {
+  test('advances are proportional (W wider than i) and deterministic', () => {
+    const m = new HelveticaMetrics();
+    expect(m.advance('W', false, false)).toBeGreaterThan(m.advance('i', false, false));
+    expect(m.advance('m', false, false)).toBeGreaterThan(m.advance('l', false, false));
+    expect(m.spaceWidth).toBeGreaterThan(0);
+    // Deterministic: same char -> same advance, integer.
+    expect(m.advance('a', false, false)).toBe(new HelveticaMetrics().advance('a', false, false));
+    expect(Number.isInteger(m.advance('a', false, false))).toBe(true);
+    // Bold is slightly wider.
+    expect(m.advance('a', true, false)).toBeGreaterThanOrEqual(m.advance('a', false, false));
+  });
+  test('layout with proportional metrics stays deterministic (gate 9)', () => {
+    const model = modelWith(['proportional metrics render cleanly']);
+    const o = opts({ metrics: new HelveticaMetrics() });
+    expect(fingerprint('paginationFingerprint', layoutBody(model, o))).toBe(
+      fingerprint('paginationFingerprint', layoutBody(model, o)),
+    );
   });
 });
 

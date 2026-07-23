@@ -18,5 +18,5 @@ export {
   type Page,
   type LayoutResult,
 } from './display-item.ts';
-export { type MetricsPort, DeterministicMetrics } from './metrics.ts';
+export { type MetricsPort, DeterministicMetrics, HelveticaMetrics } from './metrics.ts';
 export { type LayoutOptions, layoutBody, hitTest } from './layout.ts';
