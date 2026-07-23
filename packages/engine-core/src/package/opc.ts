@@ -165,6 +165,8 @@ function collectParagraphElements(container: Extract<XmlNode, { type: 'element' 
     } else if (child.name === 'w:sdt') {
       const content = childElements(child, 'w:sdtContent')[0];
       if (content) paras.push(...collectParagraphElements(content));
+    } else if (child.name === 'w:customXml') {
+      paras.push(...collectParagraphElements(child)); // transparent block wrapper
     }
   }
   return paras;
@@ -438,6 +440,10 @@ function walkBlockSpans(s: string, start: number, end: number, out: BlockSpan[])
         const closeAt = s.lastIndexOf('</w:sdtContent', cEnd);
         walkBlockSpans(s, inner, closeAt < 0 ? cEnd : closeAt, out);
       }
+    } else if (name === 'w:customXml') {
+      const inner = openTagEnd(s, lt).end;
+      const closeAt = s.lastIndexOf('</w:customXml', span);
+      walkBlockSpans(s, inner, closeAt < 0 ? span : closeAt, out);
     }
     i = span;
   }
@@ -648,6 +654,18 @@ function treeHasTable(container: Extract<XmlNode, { type: 'element' }>): boolean
       const content = childElements(child, 'w:sdtContent')[0];
       if (content && treeHasTable(content)) return true;
     }
+    if (child.name === 'w:customXml' && treeHasTable(child)) return true;
+  }
+  return false;
+}
+
+/** Whether a table appears ANYWHERE in the subtree (any wrapper, any depth). Used as
+ *  a safety net: a table the block traversals don't reach must fail closed, never be
+ *  silently dropped. */
+function deepHasTable(container: Extract<XmlNode, { type: 'element' }>): boolean {
+  for (const child of container.children) {
+    if (!el(child)) continue;
+    if (child.name === 'w:tbl' || deepHasTable(child)) return true;
   }
   return false;
 }
@@ -664,6 +682,8 @@ function countTreeBlocks(container: Extract<XmlNode, { type: 'element' }>): numb
     else if (child.name === 'w:sdt') {
       const content = childElements(child, 'w:sdtContent')[0];
       if (content) n += countTreeBlocks(content);
+    } else if (child.name === 'w:customXml') {
+      n += countTreeBlocks(child);
     }
   }
   return n;
@@ -711,6 +731,12 @@ export function parseDocx(bytes: Uint8Array): ParseResult {
     spans = null;
   }
   const wantsPreservation = (body ? treeHasTable(body) : false) || (spans?.some((s) => s.name === 'w:tbl') ?? false);
+  // Safety net: a table exists somewhere but the block traversals (which descend only
+  // through known wrappers w:sdt/w:customXml) did not reach it — fail closed rather
+  // than silently drop it on the flat path.
+  if (body && !wantsPreservation && deepHasTable(body)) {
+    return { ok: false, reason: 'xml-error', detail: 'table in an unsupported container (fail closed)' };
+  }
   const blocks: Block[] = [];
   let preservation: PreservationState | undefined;
   if (wantsPreservation) {

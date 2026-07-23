@@ -195,6 +195,25 @@ describe('editing a preserved table document', () => {
     if (!r.ok) expect(r.reason).toBe('xml-error');
   });
 
+  test('a table wrapped in w:customXml is preserved (descended, not silently lost)', () => {
+    const inner =
+      '<w:customXml w:element="Foo"><w:customXmlPr/>' +
+      '<w:tbl><w:tr><w:tc><w:p><w:r><w:t>wrapped</w:t></w:r></w:p></w:tc></w:tr></w:tbl>' +
+      '</w:customXml>';
+    const { model, orig, out } = roundTrip(docx(inner));
+    // The table is projected as a structural block AND the document round-trips verbatim.
+    expect(bodyBlocks(model).filter((b) => b.kind === 'table')).toHaveLength(1);
+    expect(out).toBe(orig);
+  });
+
+  test('a table in an unsupported wrapper fails closed (never silently dropped)', () => {
+    // w:foreign is not a known block wrapper; the deep-table safety net rejects it.
+    const inner = '<w:foreign><w:tbl><w:tr><w:tc><w:p><w:r><w:t>x</w:t></w:r></w:p></w:tc></w:tr></w:tbl></w:foreign>';
+    const r = parseDocx(docx(inner));
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.reason).toBe('xml-error');
+  });
+
   test('a non-numeric gridSpan does not crash parseDocx (returns a result)', () => {
     const inner = '<w:tbl><w:tr><w:tc><w:tcPr><w:gridSpan w:val="notnum"/></w:tcPr><w:p><w:r><w:t>x</w:t></w:r></w:p></w:tc></w:tr></w:tbl>';
     const r = parseDocx(docx(inner));
