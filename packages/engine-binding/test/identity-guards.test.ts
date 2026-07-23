@@ -96,6 +96,26 @@ describe('forward-mapper identity guards', () => {
     expect(store.currentRevision).toBe(0);
   });
 
+  test("a split whose TAIL forges another block's id fails closed", () => {
+    const { store, binding, ids } = twoParagraphBinding(); // ids[0]='one', ids[1]='two'
+    // Head keeps ids[0] and text concatenates cleanly, but the tail claims ids[1] (a real other
+    // block) instead of null-or-copied — reject rather than corrupt identities.
+    const doc = docSchema.node('doc', null, [para(ids[0], 'on'), para(ids[1], 'e'), para(ids[1], 'two')]);
+    const res = binding.commitFromDoc(doc);
+    expect(res.rejected).toBe(true);
+    expect(store.currentRevision).toBe(0);
+  });
+
+  test('splitting at the START of a paragraph (empty head, copied id) commits cleanly', () => {
+    const { store, binding, ids } = twoParagraphBinding(); // ids[1]='two'
+    // Enter at the start of the 2nd paragraph: [one, ''(two-id), 'two'(two-id)] — a valid split.
+    const doc = docSchema.node('doc', null, [para(ids[0], 'one'), para(ids[1], ''), para(ids[1], 'two')]);
+    const res = binding.commitFromDoc(doc);
+    expect(res.rejected).toBeUndefined();
+    expect(res.ops).toEqual([{ op: 'splitParagraph', paragraphId: ids[1], offset: 0 }]);
+    expect(store.currentModel.stories.get(bodyStoryId(store.currentModel))!.blocks).toHaveLength(3);
+  });
+
   test('a stale / forged non-null id fails closed (no append+delete)', () => {
     const { store, binding, ids } = twoParagraphBinding();
     const doc = docSchema.node('doc', null, [para(ids[0], 'one'), para('p-nonexistent', 'ghost')]);
@@ -132,6 +152,46 @@ describe('forward-mapper identity guards', () => {
 
   test('paragraphNodeToRuns still reads plain text (sanity)', () => {
     expect(paragraphNodeToRuns(para('x', 'hi')).map((r) => r.text).join('')).toBe('hi');
+  });
+});
+
+describe('read-only atoms are matched by kind, not just id', () => {
+  function tableBinding() {
+    const bytes = zipSync({
+      '[Content_Types].xml': strToU8(
+        '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">' +
+          '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/></Types>',
+      ),
+      'word/document.xml': strToU8(
+        `<w:document xmlns:w="${W}"><w:body>` +
+          '<w:p><w:r><w:t>p</w:t></w:r></w:p><w:tbl><w:tr><w:tc><w:p><w:r><w:t>c</w:t></w:r></w:p></w:tc></w:tr></w:tbl>' +
+          '</w:body></w:document>',
+      ),
+    });
+    const r = parseDocx(bytes);
+    if (!r.ok) throw new Error(r.reason);
+    const store = new DocumentStore(r.model);
+    return { store, binding: new EditorBinding(store), doc: new EditorBinding(store).projectDoc() };
+  }
+
+  test('an atom RETYPED (kind changed) fails closed rather than committing zero ops', () => {
+    const { store, binding, doc } = tableBinding();
+    const embed = doc.child(1);
+    expect(embed.type.name).toBe('blockEmbed');
+    expect(embed.attrs.kind).toBe('table');
+    // Forge the atom's kind to 'sdt' while keeping its id — the view would diverge from the model.
+    const forged = docSchema.node('doc', null, [
+      doc.child(0),
+      docSchema.node('blockEmbed', { semId: embed.attrs.semId, kind: 'sdt' }),
+    ]);
+    const res = binding.commitFromDoc(forged);
+    expect(res.rejected).toBe(true);
+    expect(store.currentRevision).toBe(0);
+  });
+
+  test('the untouched table projection commits nothing', () => {
+    const { binding, doc } = tableBinding();
+    expect(binding.commitFromDoc(doc).ops).toHaveLength(0);
   });
 });
 

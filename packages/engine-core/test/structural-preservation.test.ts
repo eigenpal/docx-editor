@@ -48,6 +48,21 @@ describe('sliceIsFullyCapturedParagraph: a range must be EXACTLY one lone paragr
   test('rejects a comment/PI-bearing paragraph (readXml would drop it)', () => {
     expect(sliceIsFullyCapturedParagraph('<w:p><!--k--><w:r><w:t>a</w:t></w:r></w:p>')).toBe(false);
   });
+  test('rejects LEADING raw text before the paragraph (readXml would drop it)', () => {
+    expect(sliceIsFullyCapturedParagraph('KEEP<w:p><w:r><w:t>a</w:t></w:r></w:p>')).toBe(false);
+  });
+  test('accepts a self-closed empty paragraph <w:p/>', () => {
+    expect(sliceIsFullyCapturedParagraph('<w:p/>')).toBe(true);
+  });
+  test('rejects xml:space="default" (regen would rewrite it to "preserve")', () => {
+    expect(sliceIsFullyCapturedParagraph('<w:p><w:r><w:t xml:space="default"> a </w:t></w:r></w:p>')).toBe(false);
+    expect(sliceIsFullyCapturedParagraph('<w:p><w:r><w:t xml:space="preserve"> a </w:t></w:r></w:p>')).toBe(true);
+  });
+  test('rejects a run with two w:rPr (parser reads only the first; the second is dropped)', () => {
+    expect(sliceIsFullyCapturedParagraph('<w:p><w:r><w:rPr><w:b/></w:rPr><w:rPr><w:i/></w:rPr><w:t>a</w:t></w:r></w:p>')).toBe(
+      false,
+    );
+  });
 });
 
 describe('structural editing regenerates the block region, keeps sectPr + parts verbatim', () => {

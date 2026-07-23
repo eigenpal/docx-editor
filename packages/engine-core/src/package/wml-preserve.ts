@@ -109,14 +109,17 @@ function tableSkeleton(table: TableRecord): unknown {
  *  delete everything else the range covered. */
 export function sliceIsFullyCapturedParagraph(sliceText: string): boolean {
   if (sliceText.includes('<!--') || sliceText.includes('<?')) return false; // comment / PI would be dropped
-  // readXml discards top-level text OUTSIDE elements, so trailing raw content (a swallowed
-  // `...</w:p>trailing`) would be invisible to a node scan yet lost on regeneration. Require
-  // the trimmed slice to END exactly at the paragraph close (trailing whitespace is fine).
-  if (!sliceText.trim().endsWith('</w:p>')) return false;
+  // readXml discards top-level text OUTSIDE elements, so raw content before or after the
+  // paragraph (a swallowed `KEEP<w:p>…` or `…</w:p>trailing`) is invisible to a node scan yet
+  // lost on regeneration. Require the trimmed slice to BEGIN and END exactly at the paragraph
+  // element (an empty paragraph may be self-closed `<w:p/>`); trailing whitespace is fine.
+  const t = sliceText.trim();
+  if (!t.startsWith('<w:p')) return false;
+  if (!t.endsWith('</w:p>') && !t.endsWith('/>')) return false;
   const fx = readXml(sliceText);
   if (!fx.ok) return false;
   const els = fx.nodes.filter(el);
-  if (els.length !== 1) return false; // zero, or a swallowed trailing element sibling → fail closed
+  if (els.length !== 1) return false; // zero, or a swallowed sibling element → fail closed
   return els[0].name === 'w:p' && paragraphFullyCaptured(els[0]);
 }
 
@@ -127,9 +130,12 @@ export function paragraphFullyCaptured(pEl: Extract<XmlNode, { type: 'element' }
     if (c.name !== 'w:r' || Object.keys(c.attributes).length > 0) return false;
     let hasText = false;
     let tCount = 0;
+    let rPrCount = 0;
     for (const rc of c.children) {
       if (rc.type === 'text') { if (rc.value.trim() !== '') return false; continue; }
       if (rc.name === 'w:rPr') {
+        rPrCount += 1;
+        if (rPrCount > 1) return false; // only the FIRST w:rPr is read on parse; a second would be dropped
         for (const pr of rc.children) {
           if (pr.type === 'text') { if (pr.value.trim() !== '') return false; continue; }
           if (pr.name !== 'w:b' && pr.name !== 'w:i') return false; // only b/i are modeled
@@ -138,7 +144,11 @@ export function paragraphFullyCaptured(pEl: Extract<XmlNode, { type: 'element' }
       } else if (rc.name === 'w:t') {
         tCount += 1;
         if (tCount > 1) return false; // multiple w:t collapse into one on regen (segmentation lost)
-        if (Object.keys(rc.attributes).some((k) => k !== 'xml:space')) return false;
+        // The regenerator emits xml:space="preserve" (never "default"); any other xml:space
+        // value would be rewritten and change whitespace semantics, so accept only "preserve".
+        for (const k of Object.keys(rc.attributes)) {
+          if (k !== 'xml:space' || rc.attributes[k] !== 'preserve') return false;
+        }
         if (textContent(rc).length > 0) hasText = true;
       } else {
         return false; // w:tab/w:br/w:cr/w:noBreakHyphen or anything else is not regenerable

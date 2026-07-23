@@ -143,7 +143,10 @@ export class EditorBinding {
     nodes.forEach((node, i) => {
       const block = blocks[i];
       if (node.type.name === 'blockEmbed') {
-        if (block.kind === 'paragraph' || node.attrs.semId !== block.id) {
+        // A read-only atom must map to its EXACT block — same id AND same kind. Checking kind
+        // too rejects a retyped atom (e.g. a table node relabelled 'sdt') that would otherwise
+        // commit zero ops and leave the view diverged from the model.
+        if (block.kind === 'paragraph' || node.attrs.semId !== block.id || node.attrs.kind !== block.kind) {
           throw new BindingRejection('read-only block moved, replaced, or retyped');
         }
       } else if (node.type.name === 'paragraph') {
@@ -171,7 +174,9 @@ export class EditorBinding {
     if (
       bk < 0 || !x || x.kind !== 'paragraph' ||
       !head || !isParagraph(head) || head.attrs.semId !== x.id ||
-      !tail || !isParagraph(tail) ||
+      // The tail is the split's NEW half: PM leaves its id null (end-split) or copies the head's
+      // id (mid-split). Any other id means it is forging an existing block's identity — reject.
+      !tail || !isParagraph(tail) || (tail.attrs.semId !== null && tail.attrs.semId !== x.id) ||
       !prefixAligns(nodes, blocks, bk) || !alignsAfter(nodes, bk + 2, blocks, bk + 1)
     ) {
       throw new BindingRejection('unsupported paragraph insertion');
