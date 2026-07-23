@@ -9,19 +9,24 @@ import { PreviewBanner } from '../../shared/PreviewBanner';
 // fixture URL respects the deployment base (e.g. /react/).
 const params = new URLSearchParams(location.search);
 const enginePreview = params.get('preview') === 'engine';
+const editMode = params.get('edit') === '1';
 const base = import.meta.env.BASE_URL;
 // `?fixture=<name>.docx` picks which same-origin fixture the preview loads (default
 // with-tables.docx). Sanitized to a bare .docx basename so the value can never become a
 // path-traversal or cross-origin URL.
 const fixtureParam = params.get('fixture') ?? '';
-const fixtureName = /^[\w.-]+\.docx$/.test(fixtureParam) ? fixtureParam : 'with-tables.docx';
+const defaultFixture = editMode ? 'editable-sample.docx' : 'with-tables.docx';
+const fixtureName = /^[\w.-]+\.docx$/.test(fixtureParam) ? fixtureParam : defaultFixture;
 
 const container = document.getElementById('app');
 if (container) {
   const root = createRoot(container);
   void (async () => {
     let view: ReactNode;
-    if (enginePreview) {
+    if (editMode) {
+      const { DocxEditable } = await import('../../shared/DocxEditable.tsx');
+      view = <DocxEditable fixtureUrl={`${base}${fixtureName}`} />;
+    } else if (enginePreview) {
       // Explicit .tsx: on a case-insensitive filesystem an extensionless import of
       // `EnginePreview` resolves to the sibling `enginePreview.ts` (the render helper,
       // which has no `EnginePreview` export) before the `.tsx` component.

@@ -12,6 +12,11 @@ export const docSchema = new Schema({
       group: 'block',
       // The authored paragraph id, threaded through so edits keep identity.
       attrs: { semId: { default: null } },
+      // toDOM lets the schema also drive a live EditorView (not just headless mapping).
+      toDOM() {
+        return ['p', 0];
+      },
+      parseDOM: [{ tag: 'p' }],
     },
     // A non-paragraph authored block (table, SDT, ...) projected READ-ONLY. It is an
     // opaque atom (no editable content, not selectable) that carries the block's authored
@@ -39,7 +44,7 @@ export const docSchema = new Schema({
     text: { group: 'inline' },
   },
   marks: {
-    bold: {},
-    italic: {},
+    bold: { toDOM: () => ['strong', 0], parseDOM: [{ tag: 'strong' }, { tag: 'b' }] },
+    italic: { toDOM: () => ['em', 0], parseDOM: [{ tag: 'em' }, { tag: 'i' }] },
   },
 });

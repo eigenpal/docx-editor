@@ -11,15 +11,20 @@ import '@docx-editor.dev/vue/styles.css';
 // ProseMirror or the legacy core; the fixture URL respects the deployment base.
 const params = new URLSearchParams(location.search);
 const enginePreview = params.get('preview') === 'engine';
+const editMode = params.get('edit') === '1';
 const base = import.meta.env.BASE_URL;
 // `?fixture=<name>.docx` picks which same-origin fixture the preview loads (default
 // with-tables.docx). Sanitized to a bare .docx basename so the value can never become a
 // path-traversal or cross-origin URL.
 const fixtureParam = params.get('fixture') ?? '';
-const fixtureName = /^[\w.-]+\.docx$/.test(fixtureParam) ? fixtureParam : 'with-tables.docx';
+const defaultFixture = editMode ? 'editable-sample.docx' : 'with-tables.docx';
+const fixtureName = /^[\w.-]+\.docx$/.test(fixtureParam) ? fixtureParam : defaultFixture;
 
 void (async () => {
-  if (enginePreview) {
+  if (editMode) {
+    const DocxEditable = (await import('../../shared/DocxEditable.vue')).default;
+    createApp(DocxEditable, { fixtureUrl: `${base}${fixtureName}` }).mount('#app');
+  } else if (enginePreview) {
     const EnginePreview = (await import('../../shared/EnginePreview.vue')).default;
     createApp(EnginePreview, { fixtureUrl: `${base}${fixtureName}` }).mount('#app');
   } else {
