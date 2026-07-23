@@ -1,0 +1,24 @@
+{
+  "name": "@docx-editor.dev/engine-core",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Semantic core: bounded OPC/OOXML trust boundary, canonical authored package model, DocumentStore, DocOp/ModelChange contracts, opaque anchors, history, and the DocxEditor.* dispatch/registry. PM-free, DOM-free, Yjs-free, transport-neutral, PDF-free. Becomes the published @docx-editor.dev/core at the section 7/14 migration.",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "import": "./src/index.ts"
+    }
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "typescript": "^5.3.3"
+  },
+  "license": "Apache-2.0",
+  "dependencies": {
+    "fflate": "^0.8.2",
+    "fast-xml-parser": "^4.5.0"
+  }
+}

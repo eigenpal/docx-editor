@@ -1,0 +1,26 @@
+{
+  "name": "@docx-editor.dev/engine-server",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Server hosting: addressable-sync hub, versioned RPC, headless parse/edit/layout/save/export, tenant isolation, and streaming. Owns transport.",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "import": "./src/index.ts"
+    }
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@docx-editor.dev/engine-core": "workspace:*",
+    "@docx-editor.dev/engine-sync": "workspace:*",
+    "@docx-editor.dev/engine-layout": "workspace:*",
+    "@docx-editor.dev/engine-output": "workspace:*"
+  },
+  "devDependencies": {
+    "typescript": "^5.3.3"
+  },
+  "license": "Apache-2.0"
+}

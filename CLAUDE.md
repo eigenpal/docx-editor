@@ -14,11 +14,18 @@ This repo is **contracts + adapters**, not the engine implementation.
   `openspec/changes/document-engine/`. Its nested `spike/` directory temporarily
   holds disposable POC evidence and is excluded from exports and the core
   TypeScript project; production modules must not import it.
-- The **real engine is to be implemented.** It ships as `@docx-editor.dev/core`
-  and is **consumed from npm** by the adapters; its source is not in this tree.
-  There is no `painter-model`, `flow-model`, `pagination-model`, or `prosemirror`
-  directory here. The architecture below is the target being built, not code that
-  exists in this repo yet.
+- The **real engine is being implemented in-tree** as production workspace
+  packages under `packages/engine-*` (document-engine task 1.4). The semantic
+  core is `@docx-editor.dev/engine-core` (PM/DOM/Yjs/transport/PDF-free); the
+  peripheral packages are `engine-binding` (PM), `engine-sync` (Yjs),
+  `engine-layout`, `engine-output` (DOM/PDF), `engine-server`, and
+  `engine-clients`. Responsibilities and the enforced dependency DAG are in
+  `docs/architecture/production-engine-packages.md`. The semantic core becomes
+  the published `@docx-editor.dev/core` at the section 7/14 migration; until then
+  adapters keep resolving today's `@docx-editor.dev/core` alias. Production
+  modules MUST NOT import `packages/core/spike/**`. There is still no
+  `painter-model`, `flow-model`, or `pagination-model` directory; the
+  architecture below is the target being built.
 - Adapters: `packages/react`, `packages/vue`, `packages/nuxt`. Plus
   `packages/agents` (headless/agent bridge) and `packages/i18n` (strings).
 - Published packages: `@docx-editor.dev/{react,vue,nuxt,agents,i18n}` and the

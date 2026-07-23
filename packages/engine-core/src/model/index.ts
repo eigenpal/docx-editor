@@ -1,0 +1,33 @@
+// Canonical authored package model (document-engine task 2.9).
+export {
+  type RunProps,
+  type RunRecord,
+  type ParagraphProps,
+  type ParagraphRecord,
+  type Block,
+  type StoryKind,
+  type Story,
+  type StyleRecord,
+  type NumberingRecord,
+  type PartRecord,
+  type IdentityState,
+  type PackageModel,
+  REL_TYPES,
+  CONTENT_TYPES,
+} from './authored-model.ts';
+export { type IdKindName, IdentityAllocator } from './identity.ts';
+export { createEmptyModel, bodyStoryId } from './create.ts';
+export { type SerializedModel, encodeModel, decodeModel } from './serialize.ts';
+export { appendParagraph, insertTextIntoParagraph, setParagraphRuns, paragraphText } from './edit.ts';
+export {
+  type SplitResult,
+  type ReplaceResult,
+  type DeleteResult,
+  splitRunsAt,
+  splitParagraph,
+  joinParagraphs,
+  moveBlock,
+  replaceParagraph,
+  deleteParagraph,
+  restoreParagraph,
+} from './identity-ops.ts';
