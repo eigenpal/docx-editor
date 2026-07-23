@@ -21,3 +21,4 @@ export {
   type LocalCommit,
   type RemoteMerge,
 } from './coordinator.ts';
+export { OfflineQueue } from './offline-queue.ts';
