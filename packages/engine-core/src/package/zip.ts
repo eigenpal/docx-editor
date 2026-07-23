@@ -89,7 +89,9 @@ export function readZip(bytes: Uint8Array, limits: ZipLimits = DEFAULT_ZIP_LIMIT
  *  traversal/encoded/normalized-alias name from an untrusted serialized model can
  *  never be smuggled into a ZIP entry (write-side path-traversal guard). */
 export function writeZip(entries: ReadonlyMap<string, Uint8Array>): Uint8Array {
-  const record: Record<string, Uint8Array> = {};
+  // Null-prototype: a part legitimately named `__proto__` (or `constructor`) must become a
+  // normal own entry, not invoke a prototype setter that would silently drop it.
+  const record: Record<string, Uint8Array> = Object.create(null);
   const seen = new Set<string>();
   for (const [partName, data] of entries) {
     const norm = normalizePartName(partName);

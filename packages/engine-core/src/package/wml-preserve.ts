@@ -100,6 +100,17 @@ function tableSkeleton(table: TableRecord): unknown {
  *  - any other w:rPr child, or a w:t attribute other than xml:space;
  *  - an empty run (no non-empty w:t) that the model drops or that would gain a w:t.
  */
+/** Whether a raw source slice is a single, fully-captured paragraph with NOTHING the
+ *  reader silently drops. readXml discards XML comments and processing instructions, so a
+ *  paragraph carrying `<!-- … -->` or `<? … ?>` would pass the element-level check yet lose
+ *  that content on regeneration — the raw markers are rejected here. */
+export function sliceIsFullyCapturedParagraph(sliceText: string): boolean {
+  if (sliceText.includes('<!--') || sliceText.includes('<?')) return false; // comment / PI would be dropped
+  const fx = readXml(sliceText);
+  const p = fx.ok ? fx.nodes.find(el) : undefined;
+  return !!p && p.name === 'w:p' && paragraphFullyCaptured(p);
+}
+
 export function paragraphFullyCaptured(pEl: Extract<XmlNode, { type: 'element' }>): boolean {
   if (Object.keys(pEl.attributes).length > 0) return false;
   for (const c of pEl.children) {
@@ -176,9 +187,7 @@ function regenerateBlockRegion(
   const throwaway = new IdentityAllocator();
   for (const [id, r] of docRanges) {
     const sliceText = original.slice(r.start, r.end);
-    const fx = readXml(sliceText);
-    const origP = fx.ok ? fx.nodes.find(el) : undefined;
-    if (!origP || origP.name !== 'w:p' || !paragraphFullyCaptured(origP)) {
+    if (!sliceIsFullyCapturedParagraph(sliceText)) {
       throw new Error('structural edit to a document with a non-paragraph or unmodeled block — fail closed');
     }
     const reparsed = blockFromText(sliceText, throwaway);
@@ -224,11 +233,10 @@ export function emitPreservedPart(model: PackageModel, original: string, ranges:
       patches.push(...cellPatches);
     } else if (block.kind === 'paragraph' && reparsed.kind === 'paragraph') {
       // An edited TOP-LEVEL paragraph: regenerate it in place ONLY if its ORIGINAL slice
-      // was fully captured (so regeneration drops no unmodeled content), leaving every
-      // other byte — styles, relationships, section properties, sibling blocks — verbatim.
-      const origXml = readXml(sliceText);
-      const origP = origXml.ok ? origXml.nodes.find(el) : undefined;
-      if (!origP || !paragraphFullyCaptured(origP)) {
+      // was fully captured (so regeneration drops no unmodeled content, comments/PIs
+      // included), leaving every other byte — styles, relationships, section properties,
+      // sibling blocks — verbatim.
+      if (!sliceIsFullyCapturedParagraph(sliceText)) {
         throw new Error(`paragraph ${id} carries unmodeled content — fail closed`);
       }
       patches.push({ start: r.start, end: r.end, xml: paragraphXml(block) });

@@ -17,6 +17,7 @@ export type NameRejection =
   | 'bad-encoding'
   | 'empty-segment'
   | 'dot-segment'
+  | 'unsafe-key'
   | 'segment-trailing-dot'
   | 'traversal-escape'
   | 'not-absolute-uri'
@@ -63,6 +64,10 @@ function screenSegment(seg: string): NameRejection | null {
   if (seg.length === 0) return 'empty-segment';
   if (seg === '.' || seg === '..') return 'dot-segment';
   if (seg.endsWith('.')) return 'segment-trailing-dot';
+  // A segment that is a dangerous object key (__proto__/constructor/prototype) would, when
+  // a part map is materialized as a plain object, invoke a prototype setter — polluting or
+  // silently dropping the entry. Reject such names (fail closed) rather than mishandle them.
+  if (seg === '__proto__' || seg === 'constructor' || seg === 'prototype') return 'unsafe-key';
   return null;
 }
 

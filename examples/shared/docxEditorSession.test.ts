@@ -142,4 +142,16 @@ describe('selective preservation: ordinary documents are editable, package kept 
   test('a paragraph carrying a tab stays read-only', () => {
     expect(openDocxSession(docx('<w:p><w:r><w:t>a</w:t><w:tab/><w:t>b</w:t></w:r></w:p>')).editable).toBe(false);
   });
+
+  test('a paragraph containing an XML comment or PI stays read-only (would be dropped)', () => {
+    expect(openDocxSession(docx('<w:p><!--keepme--><w:r><w:t>hi</w:t></w:r></w:p>')).editable).toBe(false);
+    expect(openDocxSession(docx('<w:p><?custom data?><w:r><w:t>hi</w:t></w:r></w:p>')).editable).toBe(false);
+  });
+
+  test('an empty / sectPr-only body opens read-only and saves the original bytes (no throw)', () => {
+    const empty = docx('<w:sectPr><w:pgSz w:w="12240" w:h="15840"/></w:sectPr>');
+    const session = openDocxSession(empty);
+    expect(session.editable).toBe(false);
+    expect(session.save()).toEqual(empty); // returned exactly, never a writer throw
+  });
 });

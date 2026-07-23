@@ -87,9 +87,9 @@ export function openDocxSession(bytes: Uint8Array): DocxEditorSession {
         .join('\n');
     },
     currentModel: () => store.currentModel,
-    // A preserved model re-emits verbatim (edited paragraphs patched); a model without a
-    // preservation snapshot (the flat fallback) is returned exactly as opened so the
-    // minimal writer never drops its parts.
-    save: () => (model.preservation ? writeDocx(store.currentModel) : bytes),
+    // Only an editable document re-serializes (verbatim package + patched paragraphs). A
+    // read-only document is returned EXACTLY as opened — writeDocx could throw on a
+    // degenerate preservation snapshot (e.g. an empty or sectPr-only body) or drop parts.
+    save: () => (editable ? writeDocx(store.currentModel) : bytes),
   };
 }

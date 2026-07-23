@@ -12,7 +12,7 @@ import {
   countModelTables, hasNonWWordBinding, countTreeBlocks,
 } from '../wml-parse.ts';
 import { relatedStoryParts, parseStoryParagraphs, parseStyles, parseDocDefaults, parseNumbering } from '../wml-parts.ts';
-import { DOC_PART, hashPreservableBlock, paragraphFullyCaptured } from '../wml-preserve.ts';
+import { DOC_PART, hashPreservableBlock, paragraphFullyCaptured, sliceIsFullyCapturedParagraph } from '../wml-preserve.ts';
 import {
   createEmptyModel,
   bodyStoryId,
@@ -304,10 +304,8 @@ export function isModelBodyPatchable(model: PackageModel): boolean {
   for (const b of blocks) {
     if (b.kind !== 'paragraph') return false; // tables/SDTs are read-only (not top-level patchable)
     const r = pres.blockRanges.get(b.id);
-    if (!r) return false;
-    const fx = readXml(docText.slice(r.start, r.end));
-    const pEl = fx.ok ? fx.nodes.find(el) : undefined;
-    if (!pEl || pEl.name !== 'w:p' || !paragraphFullyCaptured(pEl)) return false; // unmodeled -> read-only
+    if (!r) return false; // e.g. a synthetic empty-body paragraph with no source range
+    if (!sliceIsFullyCapturedParagraph(docText.slice(r.start, r.end))) return false; // unmodeled/comment -> read-only
   }
   return true;
 }
