@@ -214,6 +214,28 @@ describe('editing a preserved table document', () => {
     if (!r.ok) expect(r.reason).toBe('xml-error');
   });
 
+  test('a reachable table PLUS a hidden-wrapper table fails closed (count invariant)', () => {
+    const inner =
+      '<w:tbl><w:tr><w:tc><w:p><w:r><w:t>reachable</w:t></w:r></w:p></w:tc></w:tr></w:tbl>' +
+      '<w:foreign><w:tbl><w:tr><w:tc><w:p><w:r><w:t>hidden</w:t></w:r></w:p></w:tc></w:tr></w:tbl></w:foreign>';
+    const r = parseDocx(docx(inner)); // one table activates preservation; the hidden one must not slip through
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.reason).toBe('xml-error');
+  });
+
+  test('a descendant-re-prefixed WordprocessingML table (t:tbl) fails closed', () => {
+    // The w: namespace URI is re-bound to prefix `t` on a descendant, not the root.
+    const xml =
+      `<?xml version="1.0"?><w:document xmlns:w="${W}"><w:body>` +
+      `<w:p><w:r><w:t>p</w:t></w:r></w:p>` +
+      `<t:tbl xmlns:t="${W}"><t:tr><t:tc><t:p><t:r><t:t>x</t:t></t:r></t:p></t:tc></t:tr></t:tbl>` +
+      `</w:body></w:document>`;
+    const bytes = zipSync({ '[Content_Types].xml': strToU8('<Types/>'), 'word/document.xml': strToU8(xml) });
+    const r = parseDocx(bytes);
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.reason).toBe('xml-error');
+  });
+
   test('a non-numeric gridSpan does not crash parseDocx (returns a result)', () => {
     const inner = '<w:tbl><w:tr><w:tc><w:tcPr><w:gridSpan w:val="notnum"/></w:tcPr><w:p><w:r><w:t>x</w:t></w:r></w:p></w:tc></w:tr></w:tbl>';
     const r = parseDocx(docx(inner));

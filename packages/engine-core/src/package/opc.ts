@@ -659,13 +659,46 @@ function treeHasTable(container: Extract<XmlNode, { type: 'element' }>): boolean
   return false;
 }
 
-/** Whether a table appears ANYWHERE in the subtree (any wrapper, any depth). Used as
- *  a safety net: a table the block traversals don't reach must fail closed, never be
- *  silently dropped. */
+/** Whether a table appears ANYWHERE in the subtree (any wrapper, any depth). */
 function deepHasTable(container: Extract<XmlNode, { type: 'element' }>): boolean {
+  return deepCountTables(container) > 0;
+}
+
+/** Count every `w:tbl` element anywhere in the subtree (including nested tables). */
+function deepCountTables(container: Extract<XmlNode, { type: 'element' }>): number {
+  let n = 0;
   for (const child of container.children) {
     if (!el(child)) continue;
-    if (child.name === 'w:tbl' || deepHasTable(child)) return true;
+    if (child.name === 'w:tbl') n += 1;
+    n += deepCountTables(child);
+  }
+  return n;
+}
+
+/** Count every table projected into the model (top-level and nested in cells). Every
+ *  source `w:tbl` must become a TableRecord, or a table is hidden and we fail closed. */
+function countModelTables(blocks: readonly Block[]): number {
+  let n = 0;
+  for (const b of blocks) {
+    if (b.kind !== 'table') continue;
+    n += 1;
+    for (const row of b.rows) for (const cell of row.cells) n += countModelTables(cell.blocks);
+  }
+  return n;
+}
+
+/** Whether the WordprocessingML namespace URI is bound to a non-`w` prefix (or the
+ *  default namespace) on ANY element, at any depth. The parser matches literal `w:`
+ *  QNames, so such a document must fail closed to avoid silent data loss — including a
+ *  table re-prefixed on a descendant (e.g. `t:tbl` with a local `xmlns:t`). */
+function hasNonWWordBinding(nodes: readonly XmlNode[]): boolean {
+  for (const n of nodes) {
+    if (!el(n)) continue;
+    for (const [k, v] of Object.entries(n.attributes)) {
+      if (v !== W_NS) continue;
+      if (k === 'xmlns' || (k.startsWith('xmlns:') && k.slice(6) !== 'w')) return true;
+    }
+    if (hasNonWWordBinding(n.children)) return true;
   }
   return false;
 }
@@ -700,17 +733,11 @@ export function parseDocx(bytes: Uint8Array): ParseResult {
   if (!xml.ok) return { ok: false, reason: 'xml-error', detail: xml.reason };
 
   // Reject a document that binds the WordprocessingML namespace to a non-`w` prefix
-  // (or the default namespace). The parser matches literal `w:` names, so such a valid
-  // document would otherwise silently lose ALL content; fail closed until names are
-  // resolved by namespace URI rather than QName.
-  const root = xml.nodes.find(el);
-  if (root) {
-    for (const [k, v] of Object.entries(root.attributes)) {
-      if (v !== W_NS) continue;
-      if (k === 'xmlns' || (k.startsWith('xmlns:') && k.slice(6) !== 'w')) {
-        return { ok: false, reason: 'xml-error', detail: 'wordprocessingml bound to a non-w namespace prefix (unsupported)' };
-      }
-    }
+  // (or the default namespace) ANYWHERE in the tree. The parser matches literal `w:`
+  // QNames, so such a document — including a table re-prefixed on a descendant — would
+  // otherwise silently lose content; fail closed until names are resolved by URI.
+  if (hasNonWWordBinding(xml.nodes)) {
+    return { ok: false, reason: 'xml-error', detail: 'wordprocessingml bound to a non-w namespace prefix (unsupported)' };
   }
 
   const body = findElement(xml.nodes, 'w:body');
@@ -754,6 +781,12 @@ export function parseDocx(bytes: Uint8Array): ParseResult {
     }
     if (blocks.length !== spans.length || countTreeBlocks(body) !== blocks.length) {
       return { ok: false, reason: 'xml-error', detail: 'table preservation scan/tree mismatch' };
+    }
+    // Every source table MUST be projected into the model — even when one reachable
+    // table already activated preservation, a second table hidden in an unsupported
+    // wrapper would leave semantic addressability silently incomplete. Fail closed.
+    if (deepCountTables(body) !== countModelTables(blocks)) {
+      return { ok: false, reason: 'xml-error', detail: 'a table is not projected (hidden in an unsupported container)' };
     }
     preservation = { originalParts: new Map([[DOC_PART, docText]]), blockRanges };
   } else if (body) {
