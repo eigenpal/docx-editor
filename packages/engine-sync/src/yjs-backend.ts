@@ -27,8 +27,23 @@ export const YJS_SCHEMA_VERSION = 1;
 
 type YBlock = Y.Map<unknown>; // { semId: string, runs: Y.Array<Y.Map{t,p}> }
 
+export interface YjsBackendOptions {
+  /**
+   * Bring-your-own `Y.Doc`. Attach any standard provider to it yourself
+   * (`y-websocket`, `y-indexeddb`, a custom transport) — you are NOT required to
+   * use a hosted sync service or route through this package's transport. When
+   * omitted, an internal gc-enabled doc is created for the zero-config case.
+   *
+   * The engine's Yjs SCHEMA ADAPTER (the `blocks` / `blockOrder` / `storyOrder`
+   * maps) is always applied to whichever doc is used, and is mandatory: arbitrary
+   * external Yjs structures are never treated as the canonical DOCX model. Keep
+   * unrelated app data in separate top-level keys on the same doc.
+   */
+  readonly doc?: Y.Doc;
+}
+
 export class YjsBackend implements ReplicatedStoreBackend {
-  private readonly doc = new Y.Doc({ gc: true });
+  private readonly doc: Y.Doc;
   private clock = 0;
   /** Origin tag for this actor's local edits (tracked for actor-local undo). */
   private readonly localOrigin: string;
@@ -38,10 +53,14 @@ export class YjsBackend implements ReplicatedStoreBackend {
     readonly documentId: string,
     /** Stable actor id — makes creation ids collision-free and tests deterministic. */
     readonly actorId: string,
+    opts: YjsBackendOptions = {},
   ) {
+    const ownsDoc = opts.doc === undefined;
+    this.doc = opts.doc ?? new Y.Doc({ gc: true });
     // Deterministic Yjs clientID from the actor id so concurrent CRDT ordering is
-    // reproducible across runs (seeded convergence, task 5.10). Set before edits.
-    this.doc.clientID = clientIdFor(actorId);
+    // reproducible across runs (seeded convergence, task 5.10). Only stamp a doc we
+    // own — a caller-supplied doc keeps the identity its provider depends on.
+    if (ownsDoc) this.doc.clientID = clientIdFor(actorId);
     this.localOrigin = `local:${actorId}`;
     // Actor-scoped undo (ADR-S4 / task 4.12): the UndoManager tracks ONLY this
     // actor's local edits; remote merges and the initial seed use other origins,
@@ -67,9 +86,10 @@ export class YjsBackend implements ReplicatedStoreBackend {
     return this.undoManager.canUndo();
   }
 
-  /** Seed a backend from an authored model (static parts live in `meta`). */
-  static fromModel(documentId: string, actorId: string, model: PackageModel): YjsBackend {
-    const backend = new YjsBackend(documentId, actorId);
+  /** Seed a backend from an authored model (static parts live in `meta`). Pass
+   *  `opts.doc` to seed the adapter onto your own provider-attached Y.Doc. */
+  static fromModel(documentId: string, actorId: string, model: PackageModel, opts: YjsBackendOptions = {}): YjsBackend {
+    const backend = new YjsBackend(documentId, actorId, opts);
     backend.doc.transact(() => {
       backend.meta().set('schemaVersion', String(YJS_SCHEMA_VERSION));
       // (seed origin below is untracked so the initial content is never undoable)
@@ -85,13 +105,22 @@ export class YjsBackend implements ReplicatedStoreBackend {
     return backend;
   }
 
-  static empty(documentId: string, actorId: string): YjsBackend {
-    return YjsBackend.fromModel(documentId, actorId, createEmptyModel());
+  static empty(documentId: string, actorId: string, opts: YjsBackendOptions = {}): YjsBackend {
+    return YjsBackend.fromModel(documentId, actorId, createEmptyModel(), opts);
+  }
+
+  /**
+   * Attach to a Y.Doc that ALREADY carries the adapter state — e.g. one a standard
+   * provider (`y-websocket`, `y-indexeddb`) has already synced from a peer. The
+   * doc is not re-seeded; the engine simply reads the existing schema keys.
+   */
+  static attach(documentId: string, actorId: string, doc: Y.Doc): YjsBackend {
+    return new YjsBackend(documentId, actorId, { doc });
   }
 
   /** Join an existing document by applying a peer's snapshot (shared base state). */
-  static join(documentId: string, actorId: string, snapshot: Snapshot): YjsBackend {
-    const backend = new YjsBackend(documentId, actorId);
+  static join(documentId: string, actorId: string, snapshot: Snapshot, opts: YjsBackendOptions = {}): YjsBackend {
+    const backend = new YjsBackend(documentId, actorId, opts);
     Y.applyUpdate(backend.doc, hexToBytes(snapshot.bytesHex), 'remote');
     return backend;
   }
