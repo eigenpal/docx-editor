@@ -908,13 +908,131 @@ export function documentXml(model: PackageModel): string {
   );
 }
 
+/** Direct child element spans named `name` within a container's content [start,end). */
+function childSpans(s: string, start: number, end: number, name: string): { start: number; end: number }[] {
+  const out: { start: number; end: number }[] = [];
+  let i = start;
+  while (i < end) {
+    const lt = s.indexOf('<', i);
+    if (lt < 0 || lt >= end) break;
+    if (s.startsWith('<!--', lt)) { const e = s.indexOf('-->', lt); i = e < 0 ? end : e + 3; continue; }
+    if (s.startsWith('<![CDATA[', lt)) { const e = s.indexOf(']]>', lt); i = e < 0 ? end : e + 3; continue; }
+    if (s.startsWith('<?', lt)) { const e = s.indexOf('?>', lt); i = e < 0 ? end : e + 2; continue; }
+    if (s.startsWith('<!', lt)) { const e = s.indexOf('>', lt); i = e < 0 ? end : e + 1; continue; }
+    if (s[lt + 1] === '/') { const gt = s.indexOf('>', lt); i = gt < 0 ? end : gt + 1; continue; }
+    const nm = tagNameAt(s, lt);
+    const span = elementSpanEnd(s, lt);
+    if (nm === name) out.push({ start: lt, end: Math.min(span, end) });
+    i = span;
+  }
+  return out;
+}
+
+/** Content region [start,end) inside an element span (between its open and close tags). */
+function contentRegion(s: string, span: { start: number; end: number }, name: string): { start: number; end: number } {
+  const inner = openTagEnd(s, span.start).end;
+  const closeAt = s.lastIndexOf('</' + name, span.end);
+  return { start: inner, end: closeAt < 0 ? span.end : closeAt };
+}
+
+/** Spans of every direct cell paragraph (w:tr › w:tc › w:p) of a SIMPLE table slice,
+ *  in document order (offsets relative to the slice). No wrapper/nested-table descent. */
+function scanCellParagraphSpans(tableText: string): { start: number; end: number }[] {
+  const out: { start: number; end: number }[] = [];
+  const tbl = childSpans(tableText, 0, tableText.length, 'w:tbl')[0] ?? { start: 0, end: tableText.length };
+  const tblContent = contentRegion(tableText, tbl, 'w:tbl');
+  for (const tr of childSpans(tableText, tblContent.start, tblContent.end, 'w:tr')) {
+    const trc = contentRegion(tableText, tr, 'w:tr');
+    for (const tc of childSpans(tableText, trc.start, trc.end, 'w:tc')) {
+      const tcc = contentRegion(tableText, tc, 'w:tc');
+      out.push(...childSpans(tableText, tcc.start, tcc.end, 'w:p'));
+    }
+  }
+  return out;
+}
+
+/** Cell paragraphs of a SIMPLE table (w:tr › w:tc › w:p only) in document order, or
+ *  null if any cell holds a nested table / non-paragraph block (edit unsupported). */
+function simpleCellParagraphs(table: TableRecord): ParagraphRecord[] | null {
+  const out: ParagraphRecord[] = [];
+  for (const row of table.rows) {
+    for (const cell of row.cells) {
+      for (const b of cell.blocks) {
+        if (b.kind !== 'paragraph') return null;
+        out.push(b);
+      }
+    }
+  }
+  return out;
+}
+
+/** Table structure/props hash with cell paragraph CONTENT stripped — so a change here
+ *  means rows/cells/props/grid changed (structural), not just cell text. */
+function tableSkeleton(table: TableRecord): unknown {
+  return {
+    ...(table.grid ? { grid: table.grid } : {}),
+    ...(table.props ? { props: table.props } : {}),
+    rows: table.rows.map((r) => ({
+      ...(r.props ? { props: r.props } : {}),
+      cells: r.cells.map((c) => ({
+        ...(c.props ? { props: c.props } : {}),
+        blocks: c.blocks.map((b) => (b.kind === 'table' ? tableSkeleton(b) : { kind: 'paragraph' })),
+      })),
+    })),
+  };
+}
+
+/** Whether a paragraph element contains ONLY content the model fully captures, so
+ *  regenerating it drops nothing. Strict: no paragraph attributes (rsid…), no w:pPr,
+ *  only w:r children whose children are w:rPr(b/i only)/w:t/w:tab/w:br/w:cr/w:noBreakHyphen. */
+function paragraphFullyCaptured(pEl: Extract<XmlNode, { type: 'element' }>): boolean {
+  if (Object.keys(pEl.attributes).length > 0) return false;
+  for (const c of pEl.children) {
+    if (c.type === 'text') { if (c.value.trim() !== '') return false; continue; }
+    if (c.name !== 'w:r' || Object.keys(c.attributes).length > 0) return false;
+    for (const rc of c.children) {
+      if (rc.type === 'text') { if (rc.value.trim() !== '') return false; continue; }
+      if (rc.name === 'w:rPr') {
+        for (const pr of rc.children) if (pr.type === 'element' && pr.name !== 'w:b' && pr.name !== 'w:i') return false;
+      } else if (rc.name === 'w:t') {
+        if (Object.keys(rc.attributes).some((k) => k !== 'xml:space')) return false;
+      } else if (!['w:tab', 'w:br', 'w:cr', 'w:noBreakHyphen'].includes(rc.name)) {
+        return false;
+      }
+    }
+  }
+  return true;
+}
+
+/** Patch an EDITED table by regenerating only its changed cell paragraphs (the
+ *  smallest owned range), leaving all other bytes verbatim. Returns absolute-offset
+ *  patches, or null to FAIL CLOSED (nested/complex table, structural/prop change, a
+ *  changed cell paragraph that is not fully captured, or a span/model mismatch). */
+function patchEditedTable(tableText: string, tableStart: number, baseline: TableRecord, current: TableRecord): { start: number; end: number; xml: string }[] | null {
+  const baseParas = simpleCellParagraphs(baseline);
+  const curParas = simpleCellParagraphs(current);
+  if (!baseParas || !curParas || baseParas.length !== curParas.length) return null;
+  if (stableHash(tableSkeleton(baseline)) !== stableHash(tableSkeleton(current))) return null; // structure/props changed
+  const spans = scanCellParagraphSpans(tableText);
+  if (spans.length !== baseParas.length) return null; // wrapped rows / mismatch -> fail closed
+  const patches: { start: number; end: number; xml: string }[] = [];
+  for (let i = 0; i < curParas.length; i += 1) {
+    if (hashPreservableBlock(curParas[i]) === hashPreservableBlock(baseParas[i])) continue; // unchanged
+    const origP = readXml(tableText.slice(spans[i].start, spans[i].end));
+    const pEl = origP.ok ? origP.nodes.find(el) : undefined;
+    if (!pEl || !paragraphFullyCaptured(pEl)) return null; // would drop unmodeled content
+    patches.push({ start: tableStart + spans[i].start, end: tableStart + spans[i].end, xml: paragraphXml(curParas[i]) });
+  }
+  return patches;
+}
+
 /**
- * Read-only re-emit of a preserved part. Every top-level block must be UNCHANGED —
- * any edited block fails closed (no lossy regeneration exists yet), and any structural
- * change (add/remove/reorder) fails closed. Each baseline hash is also re-bound to its
- * CURRENT source slice, so a tampered or drifted snapshot (text moved out from under a
- * range) is rejected rather than splicing foreign XML. When all checks pass, the
- * original text is emitted verbatim.
+ * Re-emit a preserved part. UNCHANGED blocks are emitted verbatim. A changed TABLE is
+ * patched at the level of its EDITED CELL PARAGRAPHS only (the smallest owned range) —
+ * the table's structure/props and every other byte stay verbatim; anything that would
+ * drop content (structural table change, a non-fully-captured cell, a changed
+ * paragraph block, add/remove/reorder) FAILS CLOSED. Each baseline hash is re-bound to
+ * its current source slice so a tampered/drifted snapshot is rejected.
  */
 function emitPreservedPart(model: PackageModel, original: string, ranges: ReadonlyMap<string, BlockRange>): string {
   const bodyStory = model.stories.get(bodyStoryId(model))!;
@@ -926,16 +1044,27 @@ function emitPreservedPart(model: PackageModel, original: string, ranges: Readon
   }
   const byId = new Map(bodyStory.blocks.map((b) => [b.id, b] as const));
   const throwaway = new IdentityAllocator();
+  const patches: { start: number; end: number; xml: string }[] = [];
   for (const [id, r] of docRanges) {
-    if (hashPreservableBlock(byId.get(id)!) !== r.baselineHash) {
-      throw new Error(`preserved block ${id} was edited; regeneration is not implemented (read-only slice) — fail closed`);
-    }
-    const reparsed = blockFromText(original.slice(r.start, r.end), throwaway);
+    const sliceText = original.slice(r.start, r.end);
+    const reparsed = blockFromText(sliceText, throwaway);
     if (!reparsed || hashPreservableBlock(reparsed) !== r.baselineHash) {
       throw new Error(`preservation range for block ${id} does not match its baseline hash (tampered or drifted snapshot)`);
     }
+    const block = byId.get(id)!;
+    if (hashPreservableBlock(block) === r.baselineHash) continue; // unchanged -> verbatim
+    if (block.kind === 'table' && reparsed.kind === 'table') {
+      const cellPatches = patchEditedTable(sliceText, r.start, reparsed, block);
+      if (!cellPatches) throw new Error(`table ${id} was edited structurally or in unmodeled content — fail closed`);
+      patches.push(...cellPatches);
+    } else {
+      throw new Error(`preserved block ${id} was edited; only cell-paragraph edits regenerate — fail closed`);
+    }
   }
-  return original; // all blocks unchanged and slice-verified -> byte-identical
+  patches.sort((a, b) => b.start - a.start); // highest offset first so earlier offsets stay valid
+  let out = original;
+  for (const p of patches) out = out.slice(0, p.start) + p.xml + out.slice(p.end);
+  return out;
 }
 
 const CONTENT_TYPES_XML =

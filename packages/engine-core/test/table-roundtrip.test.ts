@@ -262,23 +262,55 @@ describe('editing a preserved table document', () => {
     }
   });
 
-  test('editing a table cell fails closed (table regeneration is not implemented)', () => {
-    const parsed = parseDocx(bytes());
-    if (!parsed.ok) throw new Error('parse failed');
-    const model = parsed.model;
+  // Edit cell [0,0] of the (only) table, keeping table id/order and everything else.
+  function editFirstCell(model: PackageModel, text: string): PackageModel {
     const bodyId = bodyStoryId(model);
     const body = model.stories.get(bodyId)!;
-    // Change a cell's content while keeping the table id/order (a cell edit).
     const changed: Block[] = body.blocks.map((b) => {
       if (b.kind !== 'table') return b;
       const t = b as TableRecord;
-      const firstCell = t.rows[0].cells[0];
-      const newCell = { ...firstCell, blocks: [{ kind: 'paragraph' as const, id: (firstCell.blocks[0] as ParagraphRecord).id, runs: [{ text: 'CHANGED' }] }] };
+      const c00 = t.rows[0].cells[0];
+      const newCell = { ...c00, blocks: [{ kind: 'paragraph' as const, id: (c00.blocks[0] as ParagraphRecord).id, runs: [{ text }] }] };
       const newRow = { ...t.rows[0], cells: [newCell, ...t.rows[0].cells.slice(1)] };
       return { ...t, rows: [newRow, ...t.rows.slice(1)] };
     });
-    const story: Story = { ...body, blocks: changed };
-    const edited: PackageModel = { ...model, stories: new Map(model.stories).set(bodyId, story) };
+    return { ...model, stories: new Map(model.stories).set(bodyId, { ...body, blocks: changed }) };
+  }
+
+  test('editing a simple cell paragraph serializes the edit and reopens; the rest stays verbatim', () => {
+    const parsed = parseDocx(bytes());
+    if (!parsed.ok) throw new Error('parse failed');
+    const orig = strFromU8(unzipSync(bytes())['word/document.xml']);
+    const out = documentXml(editFirstCell(parsed.model, 'EDITED'));
+
+    expect(out).toContain('EDITED'); // the edit is serialized
+    expect(out).not.toContain('>A1<'); // the old cell text was replaced
+    // Only the edited cell changed — every other cell + the surrounding text is verbatim.
+    for (const kept of ['B1', 'C1', 'A2', 'B2', 'C2', 'A3', 'B3', 'C3', 'Document with tables', 'End of document']) {
+      expect(out).toContain(kept);
+    }
+    // Reopen: the edited cell reads back as "EDITED", structure intact (3x3).
+    const re = parseDocx(zipSync({ '[Content_Types].xml': strToU8('<Types/>'), 'word/document.xml': strToU8(out) }));
+    expect(re.ok).toBe(true);
+    if (re.ok) {
+      const t = re.model.stories.get(bodyStoryId(re.model))!.blocks.find((b) => b.kind === 'table') as TableRecord;
+      expect(t.rows).toHaveLength(3);
+      expect(cellText(t, 0, 0)).toBe('EDITED');
+      expect(cellText(t, 1, 1)).toBe('B2');
+    }
+  });
+
+  test('a structural table change (adding a row) still fails closed', () => {
+    const parsed = parseDocx(bytes());
+    if (!parsed.ok) throw new Error('parse failed');
+    const bodyId = bodyStoryId(parsed.model);
+    const body = parsed.model.stories.get(bodyId)!;
+    const changed: Block[] = body.blocks.map((b) => {
+      if (b.kind !== 'table') return b;
+      const t = b as TableRecord;
+      return { ...t, rows: [...t.rows, t.rows[0]] }; // duplicate the first row -> structural change
+    });
+    const edited: PackageModel = { ...parsed.model, stories: new Map(parsed.model.stories).set(bodyId, { ...body, blocks: changed }) };
     expect(() => documentXml(edited)).toThrow(/fail closed/);
   });
 });
