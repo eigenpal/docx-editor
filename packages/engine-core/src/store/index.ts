@@ -37,3 +37,11 @@ export {
   AuditIndex,
   ReplayJournal,
 } from './audit.ts';
+export {
+  ANCHOR_ENVELOPE_VERSION,
+  type AnchorEnvelope,
+  type AnchorContext,
+  type AnchorRestore,
+  serializeAnchorEnvelope,
+  restoreAnchorEnvelope,
+} from './anchor-envelope.ts';
