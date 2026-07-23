@@ -252,6 +252,13 @@ export interface BlockRange {
 export interface PreservationState {
   readonly originalParts: ReadonlyMap<string, string>;
   readonly blockRanges: ReadonlyMap<string, BlockRange>;
+  /**
+   * Verbatim bytes of EVERY original package part (canonical part name -> bytes),
+   * retained so `writeDocx` can re-emit the whole package losslessly — the main
+   * document part is patched from `originalParts`/`blockRanges`, every other part
+   * (styles, rels, media, headers, ...) is re-emitted byte-for-byte.
+   */
+  readonly packageParts?: ReadonlyMap<string, Uint8Array>;
 }
 
 // Standard OOXML/OPC relationship type URIs used by create-from-scratch.

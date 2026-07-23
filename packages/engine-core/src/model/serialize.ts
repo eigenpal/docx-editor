@@ -14,6 +14,7 @@ import {
 } from './authored-model.ts';
 import type { RelationshipRecord } from '../package/index.ts';
 import type { ContentTypeRecords } from '../package/index.ts';
+import { bytesToHex, hexToBytes } from '../util/hex.ts';
 
 export interface SerializedModel {
   readonly contentTypes: ContentTypeRecords;
@@ -27,6 +28,8 @@ export interface SerializedModel {
   readonly preservation?: {
     readonly originalParts: readonly (readonly [string, string])[];
     readonly blockRanges: readonly (readonly [string, BlockRange])[];
+    /** [partName, hex-encoded bytes] for the verbatim package parts. */
+    readonly packageParts?: readonly (readonly [string, string])[];
   };
 }
 
@@ -41,7 +44,17 @@ export function encodeModel(model: PackageModel): SerializedModel {
     numbering: model.numbering,
     parts: [...model.parts.values()],
     identity: model.identity,
-    ...(hasPreservation ? { preservation: { originalParts: [...p!.originalParts], blockRanges: [...p!.blockRanges] } } : {}),
+    ...(hasPreservation
+      ? {
+          preservation: {
+            originalParts: [...p!.originalParts],
+            blockRanges: [...p!.blockRanges],
+            ...(p!.packageParts && p!.packageParts.size > 0
+              ? { packageParts: [...p!.packageParts].map(([name, bytes]) => [name, bytesToHex(bytes)] as const) }
+              : {}),
+          },
+        }
+      : {}),
   };
 }
 
@@ -68,7 +81,10 @@ export function decodeModel(s: SerializedModel): PackageModel {
   if (!s.preservation) return base;
   const originalParts = mapFromPairs(s.preservation.originalParts, 'preservation part');
   const blockRanges = mapFromPairs(s.preservation.blockRanges, 'preservation block range');
-  const model: PackageModel = { ...base, preservation: { originalParts, blockRanges } };
+  const packageParts = s.preservation.packageParts
+    ? mapFromPairs(s.preservation.packageParts.map(([n, h]) => [n, hexToBytes(h)] as const), 'preservation package part')
+    : undefined;
+  const model: PackageModel = { ...base, preservation: { originalParts, blockRanges, ...(packageParts ? { packageParts } : {}) } };
   validatePreservation(model); // full validation on a restored snapshot, not just duplicates
   return model;
 }

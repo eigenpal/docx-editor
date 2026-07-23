@@ -823,7 +823,7 @@ export function parseDocx(bytes: Uint8Array): ParseResult {
     if (deepCountTables(body) !== countModelTables(blocks)) {
       return { ok: false, reason: 'xml-error', detail: 'a table is not projected (hidden in an unsupported container)' };
     }
-    preservation = { originalParts: new Map([[DOC_PART, docText]]), blockRanges };
+    preservation = { originalParts: new Map([[DOC_PART, docText]]), blockRanges, packageParts: new Map(zip.entries) };
   } else if (body) {
     for (const p of collectParagraphElements(body)) blocks.push(paragraphFromElement(p, alloc));
   }
@@ -952,8 +952,20 @@ const ROOT_RELS_XML =
   `<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/>` +
   `</Relationships>`;
 
-/** Serialize a PackageModel into valid minimal DOCX bytes. */
+/**
+ * Serialize a PackageModel into DOCX bytes. When the model retains the original
+ * package (a parsed document), EVERY part is re-emitted byte-for-byte and only the
+ * main document part is patched from the preservation index — so an unedited document
+ * round-trips losslessly (styles, rels, media, headers all survive). A model with no
+ * retained package (created from scratch) emits a valid minimal document.
+ */
 export function writeDocx(model: PackageModel): Uint8Array {
+  const parts = model.preservation?.packageParts;
+  if (parts && parts.size > 0) {
+    const entries = new Map(parts);
+    entries.set(DOC_PART, strToU8(documentXml(model))); // patch only the main document part
+    return writeZip(entries);
+  }
   const entries = new Map<string, Uint8Array>([
     ['/[Content_Types].xml', strToU8(CONTENT_TYPES_XML)],
     ['/_rels/.rels', strToU8(ROOT_RELS_XML)],
