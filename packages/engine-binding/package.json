@@ -14,7 +14,12 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@docx-editor.dev/engine-core": "workspace:*"
+    "@docx-editor.dev/engine-core": "workspace:*",
+    "prosemirror-commands": "^1.7.1",
+    "prosemirror-keymap": "^1.2.3",
+    "prosemirror-model": "^1.25.4",
+    "prosemirror-state": "^1.4.4",
+    "prosemirror-view": "^1.41.8"
   },
   "devDependencies": {
     "typescript": "^5.3.3"
