@@ -52,6 +52,56 @@ resource limits, and conformance remain engine responsibilities.
 The implementation milestones still pin exact compatible versions and prove
 the shared backend, anchor, undo, and awareness conformance suites.
 
+### ZIP and XML package reader (task 1.3) — SELECTED
+
+The bake-off is resolved. The production package reader uses `fflate` for
+bounded ZIP and `fast-xml-parser` for XML, each behind the engine's bounded
+trust boundary. `JSZip` and the custom spike tokenizer under
+`packages/core/spike/` remain non-production POC choices and are not imported by
+production modules.
+
+- **Packages and pinned versions:** `fflate@^0.8.2` (resolved 0.8.3) and
+  `fast-xml-parser@^4.5.0` (resolved 4.5.7), both direct dependencies of
+  `@docx-editor.dev/engine-core`.
+- **License / redistribution:** both MIT. `fflate` has zero runtime
+  dependencies; `fast-xml-parser`'s only transitive dependency is `strnum`
+  (MIT). No WASM or native artifacts, so no additional redistribution review.
+- **Runtime support:** pure-ESM, dependency-light, and runtime-agnostic — they
+  run identically in browser, worker, and server (Node/Bun) with no DOM, native
+  addon, or platform ICU requirement.
+- **Determinism and lexical fidelity:** `readZip`/`writeZip`
+  (`package/zip.ts`) produce a deterministic archive; the XML reader
+  (`package/xml-reader.ts`) returns an ordered, null-prototype-friendly tree that
+  preserves significant child order, attributes, whitespace, and raw lexical
+  values with `parseTagValue`/`parseAttributeValue` coercion disabled, so no
+  file-supplied value is numerically or boolean-coerced.
+- **Security posture (attacker-controlled input):** the reader pre-rejects
+  DTDs, entity declarations, and external-entity references before parsing
+  (`fast-xml-parser` can otherwise process DOCTYPE/entities), leaves the five
+  predefined entities and numeric refs to be decoded explicitly (no
+  entity-expansion), and rejects `__proto__`/`constructor`/`prototype` keys. ZIP
+  reads enforce an entry-count ceiling, a total-uncompressed-size ceiling, and a
+  per-entry compression-ratio ceiling BEFORE inflation (zip-bomb guard), and
+  normalize every entry name through the OPC profile, rejecting traversal /
+  backslash / encoded / case-folded-duplicate names before the bytes are handed
+  on. XML written back on save is escaped (`escapeXml`), never templated raw.
+- **Bounded / measurable resource limits:** `DEFAULT_ZIP_LIMITS`
+  (`maxEntries: 10_000`, `maxTotalBytes: 512 MiB`, `maxRatio: 200`) are explicit,
+  overridable per call, and enforced during iteration; the XML reader caps input
+  bytes (`maxBytes`) and recursion depth (`MAX_DEPTH = 256`) so hostile nesting
+  fails closed instead of overflowing the stack.
+- **Evidence:** `test/malicious-conformance.test.ts` (zip bomb by size and by
+  ratio, path traversal, case-folded OPC duplicate, DTD/XXE/billion-laughs, deep
+  nesting bound, XML injection on save, prototype pollution),
+  `test/xml-reader.test.ts` (trust-boundary rejections + fidelity preservation),
+  and `test/xml-entities-audit.test.ts` (predefined-entity decode, no
+  double-escape round-trip, bounded deep-XML).
+- **Ownership boundary:** selecting these packages does not move engine
+  semantics into them. Bounded OPC rules, part/relationship ownership,
+  preservation capsules, entity policy, and all resource accounting remain
+  engine-owned; `fflate`/`fast-xml-parser` provide only the inflate/deflate and
+  raw-token/tree primitives behind that boundary.
+
 ## Candidates requiring bake-offs
 
 ### Text shaping and fonts
@@ -81,23 +131,9 @@ the same port.
 
 ### ZIP and XML
 
-Evaluate `fflate` for bounded ZIP compression/decompression and
-[`fast-xml-parser`](https://www.npmjs.com/package/fast-xml-parser) as the leading
-production XML parser candidate, while retaining the option to reject it if it
-cannot satisfy the contract. Its bake-off must cover ESM/browser/worker/server
-operation, ordered-node output, namespace and lexical preservation, bounded or
-incremental input, cancellation, and null-prototype closed intermediates.
-
-`fast-xml-parser` supports DOCTYPE and entity processing, so production MUST
-reject DTDs, external entities, and entity expansion at the bounded trust
-boundary rather than relying on permissive defaults. No file-supplied value may
-be numerically or boolean-coerced. The selected parser must preserve significant
-child order, attributes, whitespace, and raw lexical values and expose no unsafe
-object merge shape.
-
-`JSZip` and the custom XML tokenizer under `packages/core/spike/` are POC
-choices only. They are not selected production dependencies and must not be
-generalized into the production package reader.
+Resolved and SELECTED — see "ZIP and XML package reader (task 1.3)" under
+"Selected dependencies and mechanisms" above (`fflate` + `fast-xml-parser`
+behind the bounded trust boundary).
 
 ### Native PDF
 
@@ -161,7 +197,8 @@ authorization, resource accounting, persistence coordination, and conformance.
 ## Milestone ownership
 
 - Sections 0 and 7 select schema/validation tooling.
-- Sections 1–3 select ZIP/XML tooling and preservation integration.
+- Sections 1–3 select ZIP/XML tooling (task 1.3: `fflate` + `fast-xml-parser`,
+  selected) and preservation integration.
 - Sections 4–6 implement the selected Yjs undo and relative-position mechanisms.
 - Section 8 selects shaping/font, Unicode, and PDF tooling.
 - Section 10 integrates selected awareness and persistence adapters.
