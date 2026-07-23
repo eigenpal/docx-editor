@@ -25,6 +25,26 @@ describe('full deletion applies policy', () => {
     expect(onBlockDeleted(ann('detach'), 'p1').state).toBe('detached');
     expect(onBlockDeleted(ann('tombstone'), 'p1').state).toBe('tombstoned');
   });
+
+  test('REGRESSION: whole-block collapse stays collapsed (not silently detached)', () => {
+    const r = onBlockDeleted(ann('collapse'), 'p1');
+    expect(r.state).toBe('collapsed'); // policy is honored, not swapped for detach
+  });
+
+  test('REGRESSION: cross-block deletion collapses to a SURVIVING endpoint, never reattaches', () => {
+    // Annotation spans p1..p2; delete the start block p1.
+    const spanning = ann('collapse', { startBlock: 'p1', startOffset: 1, endBlock: 'p2', endOffset: 4 });
+    const r = onBlockDeleted(spanning, 'p1');
+    // It is inactive (collapsed), anchored to its OWN surviving end block p2 — not
+    // left active spanning unrelated text, and not reattached to a third block.
+    expect(r.state).toBe('collapsed');
+    expect(r.range.startBlock).toBe('p2');
+    expect(r.range.endBlock).toBe('p2');
+    expect(r.range.startBlock).not.toBe('p1');
+    // A detach-policy spanning annotation simply detaches.
+    const d = onBlockDeleted(ann('detach', { startBlock: 'p1', startOffset: 1, endBlock: 'p2', endOffset: 4 }), 'p2');
+    expect(d.state).toBe('detached');
+  });
 });
 
 describe('partial deletion shifts offsets', () => {

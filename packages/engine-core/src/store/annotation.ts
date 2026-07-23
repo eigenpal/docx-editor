@@ -4,6 +4,10 @@
 // deletion it collapses to a boundary point, detaches, or tombstones per its
 // policy. It NEVER reattaches to unrelated text — an annotation whose content is
 // gone becomes inactive, not relocated.
+//
+// SCOPE: this covers deletion (partial + whole-block). Split/join/move/semantic-
+// replacement re-anchoring (task 12.5's full contract) is NOT yet implemented and
+// requires block-ordering context the store owns; task 12.5 stays open.
 
 export type AnnotationKind = 'comment' | 'tracked-change' | 'citation' | 'bookmark';
 export type AnnotationPolicy = 'collapse' | 'detach' | 'tombstone';
@@ -24,13 +28,13 @@ export interface Annotation {
   readonly state: AnnotationState;
 }
 
-function inactivate(a: Annotation, at?: { block: string; offset: number }): Annotation {
+// Inactivate an annotation per its policy. `at` is the collapse point — a
+// SURVIVING position. Collapse ALWAYS yields the 'collapsed' state (a policy is
+// never silently swapped for 'detached').
+function inactivate(a: Annotation, at: { block: string; offset: number }): Annotation {
   switch (a.policy) {
     case 'collapse':
-      // Collapse to a zero-width point at the boundary (only if the block survives).
-      return at
-        ? { ...a, state: 'collapsed', range: { startBlock: at.block, startOffset: at.offset, endBlock: at.block, endOffset: at.offset } }
-        : { ...a, state: 'detached' };
+      return { ...a, state: 'collapsed', range: { startBlock: at.block, startOffset: at.offset, endBlock: at.block, endOffset: at.offset } };
     case 'detach':
       return { ...a, state: 'detached' };
     case 'tombstone':
@@ -38,21 +42,23 @@ function inactivate(a: Annotation, at?: { block: string; offset: number }): Anno
   }
 }
 
-/** Apply the deletion of a whole block to an annotation. */
+/**
+ * Apply the deletion of a whole block. When a boundary block is deleted the range
+ * boundary is gone; the annotation collapses (per policy) to a SURVIVING endpoint
+ * — it is never left active spanning, nor reattached to, unrelated text.
+ */
 export function onBlockDeleted(a: Annotation, blockId: string): Annotation {
   if (a.state !== 'active') return a;
   const startGone = a.range.startBlock === blockId;
   const endGone = a.range.endBlock === blockId;
-  if (startGone && endGone) return inactivate(a); // wholly inside the deleted block
-  if (startGone) {
-    // Start block gone; anchor the start to the surviving end block's start.
-    return { ...a, range: { ...a.range, startBlock: a.range.endBlock, startOffset: 0 } };
-  }
-  if (endGone) {
-    // End block gone; anchor the end to the surviving start block (unknown length -> its start offset region).
-    return { ...a, range: { ...a.range, endBlock: a.range.startBlock, endOffset: a.range.startOffset } };
-  }
-  return a;
+  if (!startGone && !endGone) return a; // unrelated deletion -> untouched
+  // Collapse to a surviving endpoint (its own start or end), never to another block.
+  const survivor = !startGone
+    ? { block: a.range.startBlock, offset: a.range.startOffset }
+    : !endGone
+      ? { block: a.range.endBlock, offset: a.range.endOffset }
+      : { block: blockId, offset: 0 }; // both endpoints were in the deleted block
+  return inactivate(a, survivor);
 }
 
 /**
