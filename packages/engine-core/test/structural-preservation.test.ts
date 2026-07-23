@@ -65,6 +65,25 @@ describe('sliceIsFullyCapturedParagraph: a range must be EXACTLY one lone paragr
   });
 });
 
+describe('3.10 preservation baseline hashing normalizes before comparing', () => {
+  test('an untouched two-run paragraph re-emits VERBATIM after an edit normalizes the model', () => {
+    // Paragraph A has two adjacent plain runs; B is edited. Editing B normalizes EVERY block in
+    // the model (merging A's two runs to one). A must still survive byte-faithfully, with both
+    // runs — not regenerated to a single merged run.
+    const A = '<w:p><w:r><w:t>foo</w:t></w:r><w:r><w:t>bar</w:t></w:r></w:p>';
+    const B = '<w:p><w:r><w:t>editme</w:t></w:r></w:p>';
+    const store = openPreserved(docx(A + B + SECT));
+    const bId = bodyParas(store)[1].id;
+    store.transact(ORIGIN_IDS.mutationHuman, (c) => c.apply({ op: 'setParagraphRuns', paragraphId: bId, runs: [{ text: 'EDITED' }] }));
+
+    const xml = savedDocXml(store);
+    expect(xml).toContain('EDITED'); // B's edit landed
+    // A is untouched — its authored two-run segmentation is preserved verbatim.
+    expect(xml).toContain('<w:r><w:t>foo</w:t></w:r><w:r><w:t>bar</w:t></w:r>');
+    expect(xml).not.toContain('foobar'); // NOT merged/regenerated
+  });
+});
+
 describe('structural editing regenerates the block region, keeps sectPr + parts verbatim', () => {
   test('splitParagraph: one paragraph becomes two; sectPr and styles.xml survive', () => {
     const store = openPreserved(docx('<w:p><w:r><w:t>helloworld</w:t></w:r></w:p>' + SECT, STYLES));

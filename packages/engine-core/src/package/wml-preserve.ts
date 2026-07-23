@@ -10,6 +10,7 @@ import { scanCellParagraphSpans } from './wml-scan.ts';
 import { paragraphXml } from './wml-serialize.ts';
 import { el, blockFromText } from './wml-parse.ts';
 import { IdentityAllocator } from '../model/identity.ts';
+import { normalizeRuns } from '../model/normalize-runs.ts';
 import { stableHash } from '../comparators/index.ts';
 import {
   bodyStoryId,
@@ -27,7 +28,13 @@ export const DOC_PART = '/word/document.xml';
  *  semantic CONTENT and is stable across a re-parse (which allocates fresh ids). */
 function contentForHash(block: Block): unknown {
   if (block.kind === 'paragraph') {
-    return { kind: 'paragraph', runs: block.runs, ...(block.props ? { props: block.props } : {}) };
+    // Hash the NORMALIZED runs (adjacent identical-prop runs merged, empty runs dropped). The
+    // store normalizes every block on every commit, so an UNTOUCHED paragraph whose runs merge
+    // (e.g. two adjacent plain runs) would otherwise hash differently from its pre-normalization
+    // baseline and be wrongly treated as edited — then regenerated, losing the authored run
+    // segmentation. Normalizing both sides makes a normalization-equivalent block compare equal
+    // and re-emit VERBATIM (comprehensive 3.10).
+    return { kind: 'paragraph', runs: normalizeRuns(block.runs), ...(block.props ? { props: block.props } : {}) };
   }
   if (block.kind === 'sdt') {
     return { kind: 'sdt', props: block.props, blocks: block.blocks.map(contentForHash) };

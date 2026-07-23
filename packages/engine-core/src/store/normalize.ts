@@ -7,7 +7,6 @@
 import {
   type PackageModel,
   type ParagraphRecord,
-  type RunRecord,
   type Story,
   type Block,
   type TableRecord,
@@ -15,26 +14,9 @@ import {
   type TableCellRecord,
   type SdtRecord,
 } from '../model/index.ts';
-import { canonicalize } from '../comparators/index.ts';
+import { normalizeRuns } from '../model/normalize-runs.ts';
 
-function sameProps(a: RunRecord, b: RunRecord): boolean {
-  return canonicalize(a.props ?? null) === canonicalize(b.props ?? null);
-}
-
-/** Merge adjacent identical-prop runs and drop empty runs (keeping run ids where set). */
-export function normalizeRuns(runs: readonly RunRecord[]): RunRecord[] {
-  const out: RunRecord[] = [];
-  for (const run of runs) {
-    if (run.text.length === 0 && run.id === undefined) continue; // drop anonymous empty run
-    const last = out[out.length - 1];
-    if (last && last.id === undefined && run.id === undefined && sameProps(last, run)) {
-      out[out.length - 1] = { ...last, text: last.text + run.text };
-    } else {
-      out.push(run);
-    }
-  }
-  return out;
-}
+export { normalizeRuns };
 
 function normalizeParagraph(p: ParagraphRecord): ParagraphRecord {
   const runs = normalizeRuns(p.runs);
