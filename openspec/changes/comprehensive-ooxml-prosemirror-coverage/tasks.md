@@ -25,9 +25,9 @@
 - [x] 3.3 Migrate paragraph, table, and block-SDT core behavior from central switches into registered capabilities without changing model or serialized output.
 - [x] 3.4 Add engine-binding registration for PM node/mark specs, canonical projection, read-only projection, step mapping, reverse reconciliation, selection, clipboard, and IME hooks.
 - [x] 3.5 Migrate paragraph and generic read-only block projection into binding capabilities with behavior-equivalent tests.
-- [ ] 3.6 Add engine-layout registration for resolution dependencies, measurement, pagination, semantic roles, hit ownership, and display emission.
-- [ ] 3.7 Migrate paragraph, table, and transparent-SDT layout through the layout registry without changing fingerprints.
-- [ ] 3.8 Add engine-output registration or exhaustive common handling for every display-item kind used by DOM, PDF, accessibility, print, and hit testing.
+- [x] 3.6 Add engine-layout registration for resolution dependencies, measurement, pagination, semantic roles, hit ownership, and display emission.
+- [x] 3.7 Migrate paragraph, table, and transparent-SDT layout through the layout registry without changing fingerprints.
+- [x] 3.8 Add engine-output registration or exhaustive common handling for every display-item kind used by DOM, PDF, accessibility, print, and hit testing.
 - [ ] 3.9 Extend registry diagnostics to reject duplicate ownership, missing editable lanes, incompatible versions, cycles, and undeclared runtime ports before document publication.
 - [x] 3.10 Fix preservation baseline hashing so deterministic normalization cannot make an untouched block appear edited.
 - [ ] 3.11 Add a template and generator for a new feature lane including manifest claim, capability registrations, focused fixture, comparators, and paired adapter scenario.

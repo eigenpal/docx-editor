@@ -5,6 +5,7 @@
 // 1/1440in) convert to CSS px (96/in).
 
 import type { LayoutResult, Page, TextItem, RectItem } from '@docx-editor.dev/engine-layout';
+import { registerDisplayItemRenderer, renderDisplayItem, displayItemLayer, orderedLayers } from './output-capabilities.ts';
 
 const TWIPS_PER_PX = 15; // 1440 twips/in ÷ 96 px/in
 
@@ -24,15 +25,19 @@ export function renderPageElement(page: Page, doc: Document): HTMLElement {
   el.style.boxShadow = '0 1px 6px rgba(0,0,0,0.25)';
   el.style.overflow = 'hidden';
 
-  for (const item of page.items) {
-    // Rects (cell borders/shading) paint first so text sits on top.
-    if (item.type === 'rect') el.appendChild(renderRectItem(item, doc));
-  }
-  for (const item of page.items) {
-    if (item.type === 'text') el.appendChild(renderTextItem(item, doc));
+  // Paint by ascending LAYER (rects behind text), preserving document order within each layer, and
+  // dispatch each item through its registered renderer (comprehensive 3.8) — no item.type switch.
+  for (const layer of orderedLayers(page.items)) {
+    for (const item of page.items) {
+      if (displayItemLayer(item.type) === layer) el.appendChild(renderDisplayItem(item, doc));
+    }
   }
   return el;
 }
+
+// Register the built-in display-item renderers with their paint layers (rects behind text).
+registerDisplayItemRenderer('rect', (item, doc) => renderRectItem(item as RectItem, doc), 0);
+registerDisplayItemRenderer('text', (item, doc) => renderTextItem(item as TextItem, doc), 1);
 
 function renderRectItem(item: RectItem, doc: Document): HTMLElement {
   const div = doc.createElement('div');

@@ -12,7 +12,9 @@ import {
   type TableRecord,
   type TableRowRecord,
   type TableCellRecord,
+  type SdtRecord,
 } from '@docx-editor.dev/engine-core';
+import { registerBlockLayout, layoutBlock, type BlockLayoutContext, type LayoutBuilder } from './block-layout.ts';
 
 /** Expand block-level SDTs (content controls) into their nested blocks so downstream
  *  flow code sees only paragraphs and tables. A content control is transparent to
@@ -68,83 +70,98 @@ export function layoutBody(model: PackageModel, opts: LayoutOptions): LayoutResu
   const contentBottom = pageHeight - margin;
   const builder = new PageBuilder(pageWidth, pageHeight);
 
-  let x = margin;
-  let y = margin;
-
-  const newLine = (): void => {
-    y += metrics.lineHeight;
-    x = margin;
-    if (y + metrics.lineHeight > contentBottom) {
-      builder.break();
-      y = margin;
-    }
+  // The shared mutable layout context: each block kind's registered handler advances the cursor and
+  // pushes items through it; a container kind recurses via ctx.layoutBlocks. No block.kind switch.
+  const ctx: BlockLayoutContext = {
+    margin,
+    contentRight,
+    contentBottom,
+    metrics,
+    builder,
+    x: margin,
+    y: margin,
+    newLine() {
+      this.y += metrics.lineHeight;
+      this.x = margin;
+      if (this.y + metrics.lineHeight > contentBottom) {
+        builder.break();
+        this.y = margin;
+      }
+    },
+    layoutBlocks(blocks) {
+      for (const block of blocks) layoutBlock(block, this);
+    },
   };
 
   const story = model.stories.get(bodyStoryId(model))!;
-  // A block-level SDT (content control) is transparent to flow layout: its nested blocks
-  // lay out in place, so the loop recurses through SDT content rather than special-casing
-  // each control kind. Tables paginate via layoutTable; everything else is a paragraph.
-  const layoutBlocks = (blocks: readonly Block[]): void => {
-    for (const block of blocks) {
-      if (block.kind === 'table') {
-        y = layoutTable(block, { margin, contentRight, contentBottom, metrics, builder }, y);
-        x = margin;
-        continue;
-      }
-      if (block.kind === 'sdt') {
-        layoutBlocks(block.blocks);
-        continue;
-      }
-      layoutParagraph(block);
-    }
-  };
-  const layoutParagraph = (p: ParagraphRecord): void => {
-    let offset = 0;
-    for (const run of p.runs) {
-      const bold = run.props?.bold === true;
-      const italic = run.props?.italic === true;
-      // Split into words and whitespace groups, preserving offsets.
-      const parts = run.text.split(/(\s+)/);
-      for (const part of parts) {
-        if (part.length === 0) continue;
-        if (/^\s+$/.test(part)) {
-          x += metrics.spaceWidth * part.length;
-          offset += part.length;
-          continue;
-        }
-        let wordWidth = 0;
-        for (const ch of part) wordWidth += metrics.advance(ch, bold, italic);
-        if (x + wordWidth > contentRight && x > margin) newLine();
-        const item: TextItem = {
-          type: 'text',
-          x,
-          y,
-          width: wordWidth,
-          height: metrics.lineHeight,
-          text: part,
-          bold,
-          italic,
-          anchor: { paragraphId: p.id, offset },
-        };
-        builder.push(item);
-        x += wordWidth;
-        offset += part.length;
-      }
-    }
-    newLine(); // paragraph break
-  };
-
-  layoutBlocks(story.blocks);
+  ctx.layoutBlocks(story.blocks);
 
   return { pages: builder.finish(), status: 'converged' };
 }
+
+// Register the built-in block-layout handlers (comprehensive 3.7). A block-level SDT (content
+// control) is TRANSPARENT to flow layout — its nested blocks lay out in place through the same
+// dispatch; tables paginate via layoutTable; a paragraph breaks into lines by advance width.
+registerBlockLayout('sdt', (block, ctx) => ctx.layoutBlocks((block as SdtRecord).blocks));
+
+registerBlockLayout('table', (block, ctx) => {
+  ctx.y = layoutTable(
+    block as TableRecord,
+    {
+      margin: ctx.margin,
+      contentRight: ctx.contentRight,
+      contentBottom: ctx.contentBottom,
+      metrics: ctx.metrics,
+      builder: ctx.builder,
+    },
+    ctx.y,
+  );
+  ctx.x = ctx.margin;
+});
+
+registerBlockLayout('paragraph', (block, ctx) => {
+  const p = block as ParagraphRecord;
+  let offset = 0;
+  for (const run of p.runs) {
+    const bold = run.props?.bold === true;
+    const italic = run.props?.italic === true;
+    // Split into words and whitespace groups, preserving offsets.
+    const parts = run.text.split(/(\s+)/);
+    for (const part of parts) {
+      if (part.length === 0) continue;
+      if (/^\s+$/.test(part)) {
+        ctx.x += ctx.metrics.spaceWidth * part.length;
+        offset += part.length;
+        continue;
+      }
+      let wordWidth = 0;
+      for (const ch of part) wordWidth += ctx.metrics.advance(ch, bold, italic);
+      if (ctx.x + wordWidth > ctx.contentRight && ctx.x > ctx.margin) ctx.newLine();
+      const item: TextItem = {
+        type: 'text',
+        x: ctx.x,
+        y: ctx.y,
+        width: wordWidth,
+        height: ctx.metrics.lineHeight,
+        text: part,
+        bold,
+        italic,
+        anchor: { paragraphId: p.id, offset },
+      };
+      ctx.builder.push(item);
+      ctx.x += wordWidth;
+      offset += part.length;
+    }
+  }
+  ctx.newLine(); // paragraph break
+});
 
 interface TableCtx {
   readonly margin: number;
   readonly contentRight: number;
   readonly contentBottom: number;
   readonly metrics: MetricsPort;
-  readonly builder: PageBuilder;
+  readonly builder: LayoutBuilder;
 }
 
 /**
