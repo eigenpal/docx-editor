@@ -83,6 +83,20 @@ describe('table layout', () => {
     expect(hdrOnPage.filter(Boolean).length).toBe(result.pages.length); // on every page the table occupies
   });
 
+  test('vMerge continue cells do not duplicate the restart cell content', () => {
+    const rows =
+      '<w:tr><w:tc><w:tcPr><w:vMerge w:val="restart"/></w:tcPr><w:p><w:r><w:t>merged</w:t></w:r></w:p></w:tc>' +
+      '<w:tc><w:p><w:r><w:t>a</w:t></w:r></w:p></w:tc></w:tr>' +
+      '<w:tr><w:tc><w:tcPr><w:vMerge/></w:tcPr><w:p><w:r><w:t>SHOULDHIDE</w:t></w:r></w:p></w:tc>' +
+      '<w:tc><w:p><w:r><w:t>b</w:t></w:r></w:p></w:tc></w:tr>';
+    const result = layoutBody(parseInner(`<w:tbl>${rows}</w:tbl>`), opts());
+    const texts = result.pages.flatMap((p) => p.items).filter((i) => i.type === 'text').map((i) => (i.type === 'text' ? i.text : ''));
+    expect(texts.filter((t) => t === 'merged')).toHaveLength(1); // the merged content appears once
+    expect(texts).not.toContain('SHOULDHIDE'); // the continue cell emits no content
+    expect(texts).toContain('a');
+    expect(texts).toContain('b');
+  });
+
   test('column widths come from the grid when present', () => {
     const model = withTablesModel();
     const table = model.stories.get(bodyStoryId(model))!.blocks.find((b) => b.kind === 'table') as TableRecord;

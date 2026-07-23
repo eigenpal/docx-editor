@@ -174,8 +174,15 @@ function emitRow(row: TableRowRecord, cols: readonly number[], left: number, row
     const cellW = sumCols(cols, colCursor, Math.min(colCursor + span, cols.length)) || total;
     colCursor += span;
     const items: DisplayItem[] = [];
-    const bottom = flowCell(cell, cellX + CELL_PAD, cellX + cellW - CELL_PAD, rowTop + CELL_PAD, metrics, (it) => items.push(it));
-    if (bottom + CELL_PAD > rowBottom) rowBottom = bottom + CELL_PAD;
+    // A vMerge cell that is not the restart (explicit "continue" or a bare <w:vMerge/>)
+    // continues the cell above: it emits NO content, so text is never duplicated.
+    // (Full vertical-span rect height is a refinement; the box is still drawn.)
+    const vm = cell.props?.vMerge;
+    const isVMergeContinue = vm !== undefined && vm.val !== 'restart';
+    if (!isVMergeContinue) {
+      const bottom = flowCell(cell, cellX + CELL_PAD, cellX + cellW - CELL_PAD, rowTop + CELL_PAD, metrics, (it) => items.push(it));
+      if (bottom + CELL_PAD > rowBottom) rowBottom = bottom + CELL_PAD;
+    }
     const fill = shadeFill(cell);
     cellData.push({ rect: { type: 'rect', x: cellX, y: rowTop, width: cellW, height: 0, stroke: true, ...(fill ? { fill } : {}) }, items });
   }
