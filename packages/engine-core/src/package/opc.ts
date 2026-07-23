@@ -7,9 +7,9 @@
 
 import { readZip, writeZip, strToU8, strFromU8, type ZipRejection } from './zip.ts';
 import { readXml, findElement, childElements, textContent, type XmlNode } from './xml-reader.ts';
-import { escapeXml } from './sinks.ts';
 import { resolveInternalTarget } from './opc-names.ts';
 import { scanBodyBlockSpans, scanCellParagraphSpans, ScanError, type BlockSpan } from './wml-scan.ts';
+import { paragraphXml, blockXml } from './wml-serialize.ts';
 import { stableHash } from '../comparators/index.ts';
 import {
   createEmptyModel,
@@ -672,27 +672,6 @@ export function parseDocx(bytes: Uint8Array): ParseResult {
   };
   validatePreservation(model); // integer/in-bounds/exists/non-overlapping
   return { ok: true, model };
-}
-
-function runXml(run: RunRecord): string {
-  const props = run.props;
-  const rPr =
-    props?.bold || props?.italic
-      ? `<w:rPr>${props.bold ? '<w:b/>' : ''}${props.italic ? '<w:i/>' : ''}</w:rPr>`
-      : '';
-  return `<w:r>${rPr}<w:t xml:space="preserve">${escapeXml(run.text)}</w:t></w:r>`;
-}
-
-function paragraphXml(p: ParagraphRecord): string {
-  return `<w:p>${p.runs.map(runXml).join('')}</w:p>`;
-}
-
-/** Regenerate one block's XML. Paragraphs are supported; a TABLE cannot be
- *  regenerated yet, so an edited table/cell fails closed (its verbatim range is only
- *  reused while unchanged). */
-function blockXml(block: Block): string {
-  if (block.kind === 'paragraph') return paragraphXml(block);
-  throw new Error('table/cell editing must fail closed: table regeneration is not implemented (fidelity slice 1)');
 }
 
 /**
