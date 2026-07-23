@@ -258,3 +258,33 @@ describe('block-SDT nested-sdt bypass (SDT review round 3)', () => {
     expect(r.ok).toBe(false);
   });
 });
+
+describe('block-SDT malformed-shape bypass (SDT review round 4)', () => {
+  test('a w:p directly under w:sdt (no w:sdtContent) hidden under w:foreign fails closed', () => {
+    const r = parseDocx(synthDocx(
+      '<w:foreign><w:sdt><w:sdtPr><w:tag w:val="m1"/></w:sdtPr>' +
+        '<w:p><w:r><w:t>loose</w:t></w:r></w:p></w:sdt></w:foreign>',
+    ));
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.detail).toContain('unsupported container');
+  });
+
+  test('block content in a SECOND w:sdtContent hidden under w:foreign fails closed', () => {
+    const r = parseDocx(synthDocx(
+      '<w:foreign><w:sdt>' +
+        '<w:sdtContent><w:r><w:t>a</w:t></w:r></w:sdtContent>' +
+        '<w:sdtContent><w:p><w:r><w:t>b</w:t></w:r></w:p></w:sdtContent>' +
+        '</w:sdt></w:foreign>',
+    ));
+    expect(r.ok).toBe(false);
+  });
+
+  test('an inline SDT (runs only, no block anywhere in the whole element) still does NOT trip', () => {
+    const r = parseDocx(synthDocx(
+      '<w:p><w:r><w:t>a</w:t></w:r></w:p>' +
+        '<w:foreign><w:sdt><w:sdtPr><w:tag w:val="inl"/></w:sdtPr>' +
+        '<w:sdtContent><w:r><w:t>inline</w:t></w:r></w:sdtContent></w:sdt></w:foreign>',
+    ));
+    expect(r.ok).toBe(true);
+  });
+});

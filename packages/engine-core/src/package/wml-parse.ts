@@ -515,17 +515,16 @@ export function treeHasBlockSdt(container: Extract<XmlNode, { type: 'element' }>
   return false;
 }
 
-/** Whether an SDT's w:sdtContent holds BLOCK content (a w:p, w:tbl, or a nested block
- *  w:sdt) anywhere in its subtree, through ANY wrapper — including ones the structural
- *  parser does NOT descend (w:ins / w:del / w:smartTag / unknown foreign elements), not
- *  just w:customXml. DELIBERATELY broader than parseSdtContentBlocks: it powers the
- *  fail-closed net, whose job is to detect content that would be lost, not to mirror what
- *  the model captures. A nested w:sdt counts as block content (it is projected as a nested
- *  SdtRecord on the structural path, so it must not vanish on the flat path). An inline
- *  (run-content) SDT has no w:p/w:tbl/w:sdt and returns false. */
+/** Whether a w:sdt holds BLOCK content (a w:p, w:tbl, or a nested block w:sdt) anywhere in
+ *  its ENTIRE subtree, through ANY wrapper. DELIBERATELY broad and shape-agnostic: it
+ *  powers the fail-closed net, whose job is to detect content that would be lost, not to
+ *  mirror what the model captures. It scans the whole element (NOT only the first
+ *  w:sdtContent) so lenient-but-malformed inputs — a second w:sdtContent, or a w:p placed
+ *  directly under w:sdt — cannot smuggle block content past the net. A nested w:sdt counts
+ *  as block content (projected as a nested SdtRecord on the structural path, so it must not
+ *  vanish on the flat path). w:sdtPr holds only property elements, never w:p/w:tbl/w:sdt,
+ *  so scanning it is harmless. An inline (run-content) SDT matches none and returns false. */
 function sdtHasDeepBlockContent(sdt: Extract<XmlNode, { type: 'element' }>): boolean {
-  const content = childElements(sdt, 'w:sdtContent')[0];
-  if (!content) return false;
   const walk = (container: Extract<XmlNode, { type: 'element' }>): boolean => {
     for (const child of container.children) {
       if (!el(child)) continue;
@@ -534,7 +533,7 @@ function sdtHasDeepBlockContent(sdt: Extract<XmlNode, { type: 'element' }>): boo
     }
     return false;
   };
-  return walk(content);
+  return walk(sdt);
 }
 
 /** Whether a block-level content control (a w:sdt carrying block content) appears
