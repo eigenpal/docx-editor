@@ -26,6 +26,7 @@ import {
   resolveReadScope as _resolveReadScope,
   type Scope as _Scope,
   type ScopeResolution as _ScopeResolution,
+  type ScopeContext as _ScopeContext,
 } from './scopes.ts';
 
 export namespace DocxEditor {
@@ -45,16 +46,19 @@ export namespace DocxEditor {
   export type CommandDef = _CommandDef;
   export type Scope = _Scope;
   export type ScopeResolution = _ScopeResolution;
+  export type ScopeContext = _ScopeContext;
   export const resolveWriteScope = _resolveWriteScope;
   export const resolveReadScope = _resolveReadScope;
 
   /** MCP transport surface: tool schemas generated from the shared registry, and
-   *  schema-bound dispatch that opens no write transaction on invalid input. */
+   *  schema-bound dispatch that opens no write transaction on invalid input. The
+   *  optional scope context carries the active story so an omitted write scope
+   *  targets the active header/footer rather than silently falling back to body. */
   export const mcp = {
     tools: _mcpTools,
     commands: _COMMANDS,
     validateInput: _validateInput,
-    dispatch: (handle: _DocumentHandle, tool: string, input: unknown): _Result<string | undefined> =>
-      _dispatchTool(handle.internalStore, tool, input),
+    dispatch: (handle: _DocumentHandle, tool: string, input: unknown, ctx?: _ScopeContext): _Result<string | undefined> =>
+      _dispatchTool(handle.internalStore, tool, input, ctx),
   };
 }

@@ -5,9 +5,10 @@
 // write transaction — invalid tool input never mutates the store.
 
 import { DocumentStore } from '../store/index.ts';
-import { bodyStoryId, paragraphText } from '../model/index.ts';
+import { paragraphText } from '../model/index.ts';
 import { ORIGIN_IDS } from '../registry/frozen-ids.ts';
 import { ok, type Result } from './result.ts';
+import { resolveWriteScope, type Scope, type ScopeContext } from './scopes.ts';
 
 // Minimal JSON-Schema subset (a full validator is the TypeBox/AJV bake-off, 0.2).
 export interface JsonSchema {
@@ -47,9 +48,19 @@ export const COMMANDS: readonly CommandDef[] = [
   {
     id: `${ROOT}.command.append-paragraph`,
     tool: 'appendParagraph',
-    description: 'Append an empty paragraph to the body.',
+    // The write scope is resolved, never assumed: an omitted scope targets the
+    // ACTIVE story (which may be a header/footer), never a silent body fallback.
+    description:
+      'Append an empty paragraph to a resolved write scope. Optional "scope" is ' +
+      'body | active | story | aggregate (default active); "storyId" is required ' +
+      'when scope is "story". Aggregate is read-only and is rejected for a write.',
     kind: 'command',
-    input: { type: 'object', properties: {}, required: [], additionalProperties: false },
+    input: {
+      type: 'object',
+      properties: { scope: { type: 'string' }, storyId: { type: 'string' } },
+      required: [],
+      additionalProperties: false,
+    },
   },
   {
     id: `${ROOT}.query.paragraph-text`,
@@ -92,11 +103,48 @@ export function validateInput(schema: JsonSchema, input: unknown): ValidationRes
   return errors.length === 0 ? { ok: true } : { ok: false, errors };
 }
 
+type ScopeParse = { readonly ok: true; readonly scope: Scope | undefined } | { readonly ok: false; readonly error: string };
+
+/**
+ * Map the flat `scope`/`storyId` string inputs onto a structured {@link Scope}.
+ * An absent `scope` yields `undefined`, which resolves to the ACTIVE story — the
+ * write is never silently redirected to the body here.
+ */
+function parseScopeInput(obj: Record<string, unknown>): ScopeParse {
+  const raw = obj.scope;
+  if (raw === undefined) return { ok: true, scope: undefined };
+  switch (raw) {
+    case 'body':
+      return { ok: true, scope: { kind: 'body' } };
+    case 'active':
+      return { ok: true, scope: { kind: 'active' } };
+    case 'aggregate':
+      return { ok: true, scope: { kind: 'aggregate' } };
+    case 'story': {
+      const storyId = obj.storyId;
+      if (typeof storyId !== 'string' || storyId.length === 0) {
+        return { ok: false, error: 'scope "story" requires a non-empty storyId' };
+      }
+      return { ok: true, scope: { kind: 'story', storyId } };
+    }
+    default:
+      return { ok: false, error: `unknown scope: ${String(raw)}` };
+  }
+}
+
 /**
  * Schema-bound dispatch of a tool call against a store. Validates input FIRST;
- * invalid input returns a validation Result and opens NO write transaction.
+ * invalid input returns a validation Result and opens NO write transaction. A
+ * write command resolves its target through {@link resolveWriteScope}; an omitted
+ * scope targets `ctx.activeStoryId` (which may be a header/footer) and is REJECTED
+ * — not silently sent to the body — when there is no active story.
  */
-export function dispatchTool(store: DocumentStore, tool: string, input: unknown): Result<string | undefined> {
+export function dispatchTool(
+  store: DocumentStore,
+  tool: string,
+  input: unknown,
+  ctx: ScopeContext = {},
+): Result<string | undefined> {
   const def = COMMANDS.find((c) => c.tool === tool);
   if (!def) return { status: 'validation', message: `unknown tool: ${tool}`, revision: store.currentRevision };
 
@@ -106,14 +154,18 @@ export function dispatchTool(store: DocumentStore, tool: string, input: unknown)
   const obj = input as Record<string, unknown>;
   switch (def.tool) {
     case 'insertText': {
-      const r = store.transact(ORIGIN_IDS.mutationAgent, (ctx) =>
-        ctx.apply({ op: 'insertText', paragraphId: obj.paragraphId as string, text: obj.text as string }),
+      const r = store.transact(ORIGIN_IDS.mutationAgent, (c) =>
+        c.apply({ op: 'insertText', paragraphId: obj.paragraphId as string, text: obj.text as string }),
       );
       return r.ok ? ok(undefined, r.revision) : { status: r.failure.kind, message: r.failure.message, revision: store.currentRevision };
     }
     case 'appendParagraph': {
-      const r = store.transact(ORIGIN_IDS.mutationAgent, (ctx) =>
-        ctx.apply({ op: 'appendParagraph', storyId: bodyStoryId(store.currentModel) }),
+      const parsed = parseScopeInput(obj);
+      if (!parsed.ok) return { status: 'validation', message: parsed.error, revision: store.currentRevision };
+      const resolved = resolveWriteScope(store.currentModel, parsed.scope, ctx);
+      if (!resolved.ok) return { status: 'validation', message: `scope: ${resolved.reason}`, revision: store.currentRevision };
+      const r = store.transact(ORIGIN_IDS.mutationAgent, (c) =>
+        c.apply({ op: 'appendParagraph', storyId: resolved.storyId }),
       );
       return r.ok ? ok(r.modelChange.created[0], r.revision) : { status: r.failure.kind, message: r.failure.message, revision: store.currentRevision };
     }

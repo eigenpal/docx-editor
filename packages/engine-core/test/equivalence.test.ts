@@ -51,7 +51,9 @@ function viaApi(): PackageModel {
 
 function viaMcp(): PackageModel {
   const doc = DocxEditor.create();
-  const created = DocxEditor.mcp.dispatch(doc, 'appendParagraph', {});
+  // The API path targets `document.body`; the equivalent MCP write is an explicit
+  // body scope (an omitted scope would follow the active story, not the body).
+  const created = DocxEditor.mcp.dispatch(doc, 'appendParagraph', { scope: 'body' });
   const pid = created.status === 'ok' ? (created.value as string) : '';
   DocxEditor.mcp.dispatch(doc, 'insertText', { paragraphId: pid, text: 'Hello world' });
   return internal(doc).currentModel;
