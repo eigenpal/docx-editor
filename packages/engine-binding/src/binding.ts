@@ -64,6 +64,22 @@ function splitsSurrogatePair(head: string, tail: string): boolean {
   return hi >= 0xd800 && hi <= 0xdbff && lo >= 0xdc00 && lo <= 0xdfff;
 }
 
+/** Whether a string contains an UNPAIRED UTF-16 surrogate — a lone half of an astral character
+ *  that would become U+FFFD on UTF-8 serialization. Any run carrying one must never be committed. */
+function hasLoneSurrogate(text: string): boolean {
+  for (let i = 0; i < text.length; i += 1) {
+    const c = text.charCodeAt(i);
+    if (c >= 0xd800 && c <= 0xdbff) {
+      const next = text.charCodeAt(i + 1);
+      if (!(next >= 0xdc00 && next <= 0xdfff)) return true; // high surrogate not followed by a low
+      i += 1; // valid pair — skip its low half
+    } else if (c >= 0xdc00 && c <= 0xdfff) {
+      return true; // low surrogate with no preceding high
+    }
+  }
+  return false;
+}
+
 /** Whether a PM node corresponds to a canonical block by KIND and semId — NOT by content,
  *  so an in-place text edit still "matches" its block (same identity, different runs). */
 function nodeMatchesBlock(node: PMNode | undefined, block: Block | undefined): boolean {
@@ -254,6 +270,12 @@ export class EditorBinding {
     }
     // Everything after the inserted run is the UNCHANGED tail of the canonical blocks.
     if (!alignsAfter(nodes, prefix + k + 1, blocks, prefix + 1)) return null;
+    // A paste that redistributes the paragraph's text must never leave a run holding a lone
+    // surrogate (a boundary drawn inside an astral character) — it would corrupt on save.
+    const affected = [target, ...nodes.slice(prefix + 1, prefix + 1 + k)];
+    if (affected.some((n) => hasLoneSurrogate(runsText(paragraphNodeToRuns(n))))) {
+      throw new BindingRejection('paste would split an astral character (surrogate) — refused');
+    }
     const ops: DocOp[] = [{ op: 'setParagraphRuns', paragraphId: block.id, runs: paragraphNodeToRuns(target) }];
     for (let j = 0; j < k; j += 1) {
       ops.push({ op: 'insertParagraph', storyId, index: prefix + 1 + j, runs: paragraphNodeToRuns(nodes[prefix + 1 + j]) });

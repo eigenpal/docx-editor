@@ -150,6 +150,23 @@ describe('forward mapping (6.3, 6.4)', () => {
     expect(blocks.map((b) => (b as ParagraphRecord).runs.map((r) => r.text).join(''))).toEqual(['HelloAAA', 'BBB', 'CCC']);
   });
 
+  test('a mid-paragraph paste that would split a surrogate pair fails closed', () => {
+    const { binding, store } = seeded();
+    const storyId = bodyStoryId(store.currentModel);
+    const p = store.currentModel.stories.get(storyId)!.blocks[0].id;
+    store.transact(HUMAN, (c) => c.apply({ op: 'setParagraphRuns', paragraphId: p, runs: [{ text: 'a😀b' }] }));
+    // A crafted doc whose paste boundary lands between the emoji's surrogates — the halves would
+    // each keep a lone surrogate and corrupt on UTF-8 save.
+    const doc = docSchema.node('doc', null, [
+      docSchema.node('paragraph', { semId: p }, [docSchema.text('a\uD83D')]),
+      docSchema.node('paragraph', { semId: null }, [docSchema.text('mid')]),
+      docSchema.node('paragraph', { semId: null }, [docSchema.text('\uDE00b')]),
+    ]);
+    const res = binding.commitFromDoc(doc);
+    expect(res.rejected).toBe(true);
+    expect(store.currentModel.stories.get(storyId)!.blocks).toHaveLength(1);
+  });
+
   test('an edit to a paragraph NOT at the insertion boundary + an insert fails closed', () => {
     const { binding, store, p1 } = seeded(); // one paragraph
     const p2 = (() => {
