@@ -9,6 +9,7 @@
 // register a capability here instead of editing every switch (design decision 1).
 
 import type { Block, ParagraphRecord, TableRecord, SdtRecord, TableCellRecord, TableRowRecord } from './authored-model.ts';
+import type { IdentityAllocator } from './identity.ts';
 import { normalizeRuns } from './normalize-runs.ts';
 
 export type BlockKind = Block['kind']; // 'paragraph' | 'table' | 'sdt'
@@ -39,6 +40,11 @@ export interface PatchContext {
 
 /** The core operations one block kind contributes. Each is optional at registration so different
  *  layers can add their part; a caller fetching a missing op gets a clear error. */
+/** Parse a top-level block element into an authored Block. The element node is typed `unknown` to
+ *  keep the model layer free of the package XML reader's types; the package-side registration casts
+ *  it. Keyed by OOXML element name (a kind may parse from more than one element). */
+export type BlockElementParser = (element: unknown, alloc: IdentityAllocator) => Block;
+
 export interface CoreBlockCapability {
   readonly kind: BlockKind;
   /** Identity-stripped content view for the preservation content hash. */
@@ -66,11 +72,14 @@ export interface CoreBlockCapability {
 }
 
 const registry = new Map<BlockKind, CoreBlockCapability>();
+/** The PARSE lane, folded into this one registry module so there is no SEPARATE global parser Map
+ *  elsewhere (registry unification). Keyed by OOXML root element name. */
+const blockParsers = new Map<string, BlockElementParser>();
 
 /** Register (or AUGMENT) a block kind's core capability. Additive across DIFFERENT ops (the model
- *  layer contributes hash+normalize, the package layer serialize+patch), but re-registering an
- *  op a kind ALREADY owns is rejected — duplicate operation ownership is a bug (design decision 1:
- *  one owner per capability op), not a silent global override. */
+ *  layer contributes hash+normalize, the package layer serialize+patch), but re-registering an op a
+ *  kind ALREADY owns is rejected — duplicate operation ownership is a bug (design decision 1: one
+ *  owner per capability op), not a silent global override. */
 export function registerCoreBlockCapability(cap: CoreBlockCapability): void {
   const prev = registry.get(cap.kind);
   if (prev) {
@@ -83,12 +92,24 @@ export function registerCoreBlockCapability(cap: CoreBlockCapability): void {
   registry.set(cap.kind, { ...prev, ...cap, kind: cap.kind });
 }
 
+/** Register the parser for a top-level block element name (the parse lane of a block feature). */
+export function registerBlockElementParser(elementName: string, parse: BlockElementParser): void {
+  blockParsers.set(elementName, parse);
+}
+/** The registered parser for a block element name, if any. */
+export const blockElementParser = (elementName: string): BlockElementParser | undefined => blockParsers.get(elementName);
+
 function opFor<K extends keyof CoreBlockCapability>(kind: BlockKind, op: K): NonNullable<CoreBlockCapability[K]> {
   const cap = registry.get(kind);
   const fn = cap?.[op];
   if (!fn) throw new Error(`no core block capability '${String(op)}' registered for block kind '${kind}'`);
   return fn as NonNullable<CoreBlockCapability[K]>;
 }
+
+/** Parse a top-level block element by its root element name through the unified registry, or
+ *  undefined for an unregistered element (caller fails closed). */
+export const blockParseElement = (elementName: string, element: unknown, alloc: IdentityAllocator): Block | undefined =>
+  blockParsers.get(elementName)?.(element, alloc);
 
 export const blockHashContent = (block: Block, recurse: RecurseHash): unknown => opFor(block.kind, 'hashContent')(block, recurse);
 export const blockNormalize = (block: Block, recurse: RecurseNormalize): Block => opFor(block.kind, 'normalize')(block, recurse);
@@ -101,6 +122,14 @@ export const hasBlockSerialize = (kind: BlockKind): boolean => !!registry.get(ki
 export const isTopLevelEditable = (kind: BlockKind): boolean => registry.get(kind)?.editPolicy?.topLevelEditable === true;
 /** The DocOp ids a block kind owns as semantic operations (empty if it declares none). */
 export const blockSemanticOps = (kind: BlockKind): readonly string[] => registry.get(kind)?.semanticOps ?? [];
+/** Every block kind that has registered any capability. */
+export const registeredBlockKinds = (): BlockKind[] => [...registry.keys()];
+/** Whether a kind has registered a given kind-keyed core op (parse is element-keyed, not per-kind). */
+export function blockCapabilityHas(kind: BlockKind, op: keyof CoreBlockCapability): boolean {
+  return registry.get(kind)?.[op] !== undefined;
+}
+/** Whether ANY element parser is registered (the parse lane is populated). */
+export const hasAnyBlockParser = (): boolean => blockParsers.size > 0;
 /** The nested body blocks a block holds (empty for a leaf kind). */
 export const blockNestedBlocks = (block: Block): readonly Block[] => registry.get(block.kind)?.nestedBlocks?.(block) ?? [];
 /** Walk a block and all its descendants (pre-order) through the registry — no central switch. */

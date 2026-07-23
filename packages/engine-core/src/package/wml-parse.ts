@@ -33,6 +33,8 @@ import {
   type GridColumn,
   type VMerge,
   walkBlockTree,
+  registerBlockElementParser,
+  blockParseElement,
 } from '../model/index.ts';
 
 /** Parse a bounded integer attribute; NaN/Infinity/non-integers become undefined so
@@ -459,43 +461,27 @@ function parseSdt(sdt: Extract<XmlNode, { type: 'element' }>, alloc: IdentityAll
   return { kind: 'sdt', id: alloc.allocate('control'), props, blocks };
 }
 
-// ---- Block-kind parse registry (document-engine feature-lane contract). A new top-level
-// block kind registers its OOXML element name and an element->Block parser here; the
-// entry dispatch (blockFromText / blockFromSpan) then recognizes it WITHOUT editing a
-// central switch. Registration is the parse half of a block kind's feature lane — the
-// scanner (block-level span), tree counters, hash, serialize, normalize, projection, and
-// layout are the other lanes a full feature also registers.
+// ---- Block-kind parse registration (feature-lane contract). The parse REGISTRY itself now lives
+// in the unified core block-capability module (model/block-capabilities) — there is no separate
+// global parser Map here. A block kind registers its element parser through registerBlockElementParser
+// (re-exported from the model layer) as the PARSE lane of its feature; the other lanes (hash,
+// serialize, normalize, patch, edit policy, traversal) register on the same capability.
+type ElementNode = Extract<XmlNode, { type: 'element' }>;
 
-/** Turns a top-level block element (e.g. w:p / w:tbl / w:sdt) into an authored Block. */
-export type BlockElementParser = (el: Extract<XmlNode, { type: 'element' }>, alloc: IdentityAllocator) => Block;
+// Built-in block kinds (the model-typed element node is cast from the registry's `unknown`).
+registerBlockElementParser('w:p', (elx, alloc) => paragraphFromElement(elx as ElementNode, alloc));
+registerBlockElementParser('w:tbl', (elx, alloc) => parseTable(elx as ElementNode, alloc));
+registerBlockElementParser('w:sdt', (elx, alloc) => parseSdt(elx as ElementNode, alloc));
 
-const blockElementParsers = new Map<string, BlockElementParser>();
-
-/** Register the parser for a top-level block element. Later registration for the same
- *  element name replaces the earlier one (a feature may override a built-in). */
-export function registerBlockElementParser(elementName: string, parse: BlockElementParser): void {
-  blockElementParsers.set(elementName, parse);
-}
-
-/** The registered parser for a block element name, if any. */
-export function blockElementParser(elementName: string): BlockElementParser | undefined {
-  return blockElementParsers.get(elementName);
-}
-
-// Built-in block kinds.
-registerBlockElementParser('w:p', paragraphFromElement);
-registerBlockElementParser('w:tbl', parseTable);
-registerBlockElementParser('w:sdt', parseSdt);
-
-/** Build a block from a source substring (a top-level block element fragment). Dispatches
- *  through the block-kind parse registry; returns undefined for a parse failure or an
- *  unregistered root element, so callers can fail closed. */
+/** Build a block from a source substring (a top-level block element fragment). Dispatches through
+ *  the unified parse registry; returns undefined for a parse failure or an unregistered root
+ *  element, so callers can fail closed. */
 export function blockFromText(text: string, alloc: IdentityAllocator): Block | undefined {
   const fx = readXml(text);
   if (!fx.ok) return undefined;
   const rootEl = fx.nodes.find(el);
   if (!rootEl) return undefined;
-  return blockElementParsers.get(rootEl.name)?.(rootEl, alloc);
+  return blockParseElement(rootEl.name, rootEl, alloc);
 }
 
 export function blockFromSpan(docText: string, span: BlockSpan, alloc: IdentityAllocator): Block | undefined {

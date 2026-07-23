@@ -1,11 +1,15 @@
 // Capability integration + distribution boundary (document-engine tasks 9.1, 9.6).
 
 import { describe, expect, test } from 'bun:test';
+import { zipSync, strToU8 } from 'fflate';
 import {
   checkEditableComplete,
   buildBaseRegistry,
   PARAGRAPH_CAPABILITY,
   REQUIRED_EDITABLE_ROLES,
+  assertCoreBlockRegistryComplete,
+  resolveCoreRegistry,
+  resetCoreRegistryCache,
   parseDocx,
   writeDocx,
   DocumentStore,
@@ -35,6 +39,29 @@ describe('editable capability completeness (9.1)', () => {
 
   test('every required role is enumerated', () => {
     expect([...REQUIRED_EDITABLE_ROLES].sort()).toEqual(['command', 'parse', 'query', 'serialize']);
+  });
+});
+
+describe('core registry unification: FeatureBundle connected to runtime handlers at open (3.9 / 9.1-9.3)', () => {
+  test('the registered block capabilities are complete and resolve through the versioned registry', () => {
+    expect(() => assertCoreBlockRegistryComplete()).not.toThrow();
+    const registry = resolveCoreRegistry();
+    // The resolved registry carries a capability contribution per registered block kind — the
+    // versioned FeatureBundle registry is now connected to the real handlers.
+    for (const kind of ['paragraph', 'table', 'sdt']) {
+      expect(registry.get('capability', `dev.docx-editor.core.capability.block-${kind}`)).toBeDefined();
+    }
+  });
+
+  test('opening any document runs the core-registry resolution (parse succeeds with it wired in)', () => {
+    resetCoreRegistryCache(); // force a fresh resolution on the next open
+    const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
+    const bytes = zipSync({
+      '[Content_Types].xml': strToU8('<Types/>'),
+      'word/document.xml': strToU8(`<w:document xmlns:w="${W}"><w:body><w:p><w:r><w:t>ok</w:t></w:r></w:p></w:body></w:document>`),
+    });
+    const r = parseDocx(bytes);
+    expect(r.ok).toBe(true);
   });
 });
 

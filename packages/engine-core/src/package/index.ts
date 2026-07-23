@@ -66,13 +66,14 @@ export {
   isModelBodyPatchable,
 } from './docx/read.ts';
 export { writeDocx, documentXml } from './docx/write.ts';
-// Feature-lane contract: register a new top-level block kind's element parser without
-// editing a central switch (document-engine feature-lane freeze).
+// Feature-lane contract: register a new top-level block kind's element parser without editing a
+// central switch. The parse registry now lives in the unified block-capability module (model),
+// re-exported here for the package-facing feature-lane API.
 export {
   type BlockElementParser,
   registerBlockElementParser,
   blockElementParser,
-} from './wml-parse.ts';
+} from '../model/index.ts';
 export {
   isValidNCName,
   isValidQName,

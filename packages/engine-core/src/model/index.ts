@@ -48,7 +48,11 @@ export {
   type RecurseHash,
   type BlockPatch,
   type PatchContext,
+  type BlockElementParser,
   registerCoreBlockCapability,
+  registerBlockElementParser,
+  blockElementParser,
+  blockParseElement,
   blockHashContent,
   blockNormalize,
   blockSerialize,
@@ -58,6 +62,9 @@ export {
   blockSemanticOps,
   blockNestedBlocks,
   walkBlockTree,
+  registeredBlockKinds,
+  blockCapabilityHas,
+  hasAnyBlockParser,
 } from './block-capabilities.ts';
 export {
   type SplitResult,

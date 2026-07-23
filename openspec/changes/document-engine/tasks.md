@@ -159,7 +159,7 @@
 
 ## 0. Foundational registry, ports, budgets, and reviewed oracles
 
-- [ ] 0.1 Implement the capability/runtime registry and freeze globally stable capability, command, query, dependency-key, runtime-port, result, origin, and schema IDs plus version/collision/replacement rules before any store or layout consumer is implemented.
+- [x] 0.1 Implement the capability/runtime registry and freeze globally stable capability, command, query, dependency-key, runtime-port, result, origin, and schema IDs plus version/collision/replacement rules before any store or layout consumer is implemented.
 - [ ] 0.2 Bake off TypeBox plus AJV against Zod with stable JSON-Schema emission under `technology-selection.md`, then define the schema-first IDL that generates `DocOp`, command/query payloads, external targets, `DocxEditor.*` declarations, runtime validators, MCP descriptors, and RPC schemas; declare semantic-core dispatch and host-owned transport.
 - [ ] 0.3 Implement runtime-port resolution, immutable per-operation resource/configuration snapshots, hierarchical budgets, overflow-safe accounting, cancellation point-of-no-return/checkpoints, worker isolation, queue/spill cleanup, and finite defaults with non-disableable hard ceilings before store/layout consumers.
 - [x] 0.4 Freeze canonical comparator formats for authored state, anchors, Yjs state vectors, shaped runs, pagination fingerprints, semantic trees, hit tests, PDF semantics, and benchmark evidence.
@@ -294,7 +294,7 @@
 
 - [ ] 9.1 Integrate every consumer with the foundational capability/runtime registry from section 0 and reject editable capabilities missing a required contribution.
 - [ ] 9.2 Verify the section 0 package-owned IDs, collision/replacement/version/priority rules, dependency keys, runtime ports, and generated `DocxEditor.*` augmentation across installed feature combinations.
-- [ ] 9.3 Implement cycle, conflict, replacement, missing-port, and incompatible-version diagnostics before document open; test each diagnostic names the complete responsible feature chain.
+- [x] 9.3 Implement cycle, conflict, replacement, missing-port, and incompatible-version diagnostics before document open; test each diagnostic names the complete responsible feature chain.
 - [ ] 9.4 Verify foundational ports for fonts, shaping, images, clocks, identity, persistence, transport, scheduling, audit, authorization, resource accounting, and external-resource consent in worker/server configurations with no unavailable browser globals.
 - [ ] 9.5 Enforce deterministic, cancellation-aware, budgeted extension hooks with declared dependency keys and no hidden global mutable state; verify an over-budget hook terminates without partial canonical commit.
 - [ ] 9.6 Establish package distribution boundaries so base parse, semantic edit, and DOCX save do not require PM, Yjs, transport, browser, or PDF dependencies; verify optional APIs and dependencies are absent at build time when packages are not installed.

@@ -4,6 +4,7 @@
 // wml-preserve, and serialization in ./write.
 
 import { readZip, strFromU8, type ZipRejection } from '../zip.ts';
+import { resolveCoreRegistry } from '../../capabilities/index.ts';
 import { readXml, findElement, childElements, type XmlNode } from '../xml-reader.ts';
 import { scanBodyBlockSpans, ScanError, type BlockSpan } from '../wml-scan.ts';
 import {
@@ -47,6 +48,9 @@ export interface ParseOptions {
 }
 
 export function parseDocx(bytes: Uint8Array, options: ParseOptions = {}): ParseResult {
+  // Document open: connect the versioned FeatureBundle registry to the registered runtime handlers
+  // and reject a half-registered editable capability BEFORE any content is parsed (memoized).
+  resolveCoreRegistry();
   const zip = readZip(bytes);
   if (!zip.ok) return { ok: false, reason: zip.reason, detail: zip.detail };
   const docPart = zip.entries.get('/word/document.xml');

@@ -51,4 +51,7 @@ export {
   PARAGRAPH_CAPABILITY,
   BASE_BUNDLE,
   buildBaseRegistry,
+  assertCoreBlockRegistryComplete,
+  resolveCoreRegistry,
+  resetCoreRegistryCache,
 } from './capabilities/index.ts';
