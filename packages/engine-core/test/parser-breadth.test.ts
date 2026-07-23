@@ -5,7 +5,7 @@
 import { describe, expect, test } from 'bun:test';
 import { zipSync, strToU8 } from 'fflate';
 import { parseDocx } from '../src/index.ts';
-import { bodyStoryId, type ParagraphRecord } from '../src/index.ts';
+import { bodyStoryId, type ParagraphRecord, type TableRecord } from '../src/index.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 
@@ -42,7 +42,7 @@ describe('intra-run recovery', () => {
 });
 
 describe('table + block-SDT text recovery', () => {
-  test('table cell paragraphs are no longer lost', () => {
+  test('a table becomes a structural block with recursively addressable cell text', () => {
     const body =
       '<w:p><w:r><w:t>before</w:t></w:r></w:p>' +
       '<w:tbl><w:tr>' +
@@ -50,9 +50,17 @@ describe('table + block-SDT text recovery', () => {
       '<w:tc><w:p><w:r><w:t>cell2</w:t></w:r></w:p></w:tc>' +
       '</w:tr></w:tbl>' +
       '<w:p><w:r><w:t>after</w:t></w:r></w:p>';
-    expect(texts(docx(body))).toEqual(['before', 'cell1', 'cell2', 'after']);
+    const r = parseDocx(docx(body));
+    if (!r.ok) throw new Error(`parse failed: ${r.reason}`);
+    const blocks = r.model.stories.get(bodyStoryId(r.model))!.blocks;
+    // The table is exactly ONE block between the two paragraphs (no flattening).
+    expect(blocks.map((b) => b.kind)).toEqual(['paragraph', 'table', 'paragraph']);
+    const t = blocks[1] as TableRecord;
+    const cell = (c: number) => (t.rows[0].cells[c].blocks[0] as ParagraphRecord).runs.map((run) => run.text).join('');
+    expect(cell(0)).toBe('cell1');
+    expect(cell(1)).toBe('cell2');
   });
-  test('block SDT content is recovered', () => {
+  test('block SDT content is recovered (table-free doc still flattens SDT)', () => {
     expect(texts(docx('<w:sdt><w:sdtContent><w:p><w:r><w:t>sdttext</w:t></w:r></w:p></w:sdtContent></w:sdt>'))).toEqual(['sdttext']);
   });
 });
