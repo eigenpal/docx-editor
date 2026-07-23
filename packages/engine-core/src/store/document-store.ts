@@ -214,8 +214,13 @@ export class DocumentStore {
     const normalized = normalize(model);
     const modelChange = buildModelChange(fromRevision, this.revision, commitId, origin, [], normalized !== model);
     this.model = normalized;
-    this.history.push({ before, after: normalized, modelChange });
-    this.redo.length = 0;
+    // Same suspension guard as publish(): a remote-derived commit while replicated
+    // must NOT become undoable, or disconnect would re-expose an undo that removes
+    // converged remote text from the store while the Y.Doc still holds it (ADR-S10).
+    if (!this.isHistorySuspended) {
+      this.history.push({ before, after: normalized, modelChange });
+      this.redo.length = 0;
+    }
     this.notify(modelChange);
     return { ok: true, commitId, revision: this.revision, modelChange };
   }

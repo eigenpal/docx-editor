@@ -43,11 +43,16 @@ export interface ParagraphRecord {
 // values keep their RAW LEXICAL string so authored distinctions never round-trip
 // through a number.
 //
-// Preservation of unknown OOXML is NOT done by putting raw XML on these records.
-// Instead the ORIGINAL XML of a preservable block is kept verbatim in
-// `PackageModel.preservedXml`, keyed by the block id (see below). While a block is
-// unedited, serialization emits those bytes exactly, so reopen is lossless. Table
-// editing (and the finer patch-on-save machinery it needs) is deferred. ---
+// Preservation of unknown OOXML is NOT done by putting raw XML on these records, and
+// NOT by a per-block fragment string (a fragment loses the root's namespace
+// declarations, inter-block whitespace, and sibling order). Instead the COMPLETE
+// original text of each source part is retained (`PackageModel.preservation`), and
+// each preservable block records a character RANGE into that part plus a baseline
+// semantic hash. Serialization starts from the original part text and re-emits only
+// the ranges whose block's current semantic hash differs from its baseline; every
+// untouched range — and all the root context, whitespace, and siblings around it — is
+// emitted verbatim, so an unedited document is byte-identical. Until table/cell
+// editing can reserialize a changed range, such edits MUST fail closed. ---
 
 /** A single border edge. Applies to table edges (w:top/bottom/left/right/start/end/
  *  insideH/insideV) and cell diagonals (w:tl2br/w:tr2bl). Lexical sz/space are kept raw. */
@@ -223,13 +228,30 @@ export interface PackageModel {
   readonly numbering: readonly NumberingRecord[];
   readonly parts: ReadonlyMap<string, PartRecord>;
   readonly identity: IdentityState;
-  /**
-   * Verbatim original XML for preservable blocks (currently tables), keyed by block
-   * id. Snapshot-owned so it survives encode/decode. While a block is unedited,
-   * serialization emits its entry exactly for a lossless round-trip; a block with no
-   * entry is serialized from its structural fields. (Read-only tables today.)
-   */
-  readonly preservedXml?: ReadonlyMap<string, string>;
+  /** Original-part text plus per-block source ranges for lossless re-emit (see below). */
+  readonly preservation?: PreservationState;
+}
+
+/** Source range of one preservable block within a retained original part. */
+export interface BlockRange {
+  readonly partName: string; // key into PreservationState.originalParts
+  readonly start: number; // inclusive character offset in the original part text
+  readonly end: number; // exclusive character offset
+  /** Semantic hash of the block at parse time; a differing current hash = edited,
+   *  so the range must be reserialized rather than reused verbatim (invalidation). */
+  readonly baselineHash: string;
+}
+
+/**
+ * Snapshot-owned lossless-preservation state. `originalParts` holds each source
+ * part's COMPLETE original text verbatim (namespaces, whitespace, sibling order
+ * intact); `blockRanges` maps a preservable block id to its character range in that
+ * text plus a baseline hash. Serialization starts from the original part and patches
+ * only ranges whose block hash changed.
+ */
+export interface PreservationState {
+  readonly originalParts: ReadonlyMap<string, string>;
+  readonly blockRanges: ReadonlyMap<string, BlockRange>;
 }
 
 // Standard OOXML/OPC relationship type URIs used by create-from-scratch.

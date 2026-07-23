@@ -18,6 +18,8 @@ export {
   type TableRowRecord,
   type GridColumn,
   type TableRecord,
+  type BlockRange,
+  type PreservationState,
   type Block,
   type StoryKind,
   type Story,

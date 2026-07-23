@@ -175,6 +175,22 @@ describe('safety: history cannot be undone across the collaboration boundary', (
     expect(store.canUndo()).toBe(true); // fresh post-collab edit is undoable
   });
 
+  test('a remote-derived merge is NOT undoable after disconnect (regression)', () => {
+    const { store, backend, binding } = connectedPeer('A');
+    // A remote edit arrives and is published into the store.
+    const peer = YjsBackend.join('doc', 'B', backend.snapshot());
+    peer.insertText(P1, 'remote text');
+    backend.applyUpdate(peer.encodeUpdate('u1'));
+    expect(bodyText(store)).toBe('remote text');
+
+    binding.disconnect();
+    // publishDerived must have honored suspension: undoing would strip the remote text
+    // from the store while the Y.Doc still holds it (store/Y.Doc divergence).
+    expect(store.canUndo()).toBe(false);
+    expect(store.undo().ok).toBe(false);
+    expect(bodyText(store)).toBe('remote text'); // unchanged
+  });
+
   test('suspension is reference-counted (two connects need two disconnects)', () => {
     const store = new DocumentStore(createEmptyModel());
     const b1 = new YjsBinding(store, YjsBackend.fromModel('doc', 'A', store.currentModel));
