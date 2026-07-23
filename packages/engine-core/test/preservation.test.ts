@@ -6,22 +6,37 @@ import { describe, expect, test } from 'bun:test';
 import { createEmptyModel, encodeModel, decodeModel, type PackageModel, type SerializedModel } from '../src/index.ts';
 
 const PART = '/word/document.xml';
+const TEXT = '<w:document><w:body><w:p/></w:body></w:document>';
 
+/** A valid preservation: the range references a REAL top-level block (createEmptyModel
+ *  seeds body block `p-1`) and stays in bounds, so it passes decode validation. */
 function withPreservation(): PackageModel {
+  const base = createEmptyModel();
+  const blockId = base.stories.get([...base.stories.keys()][0])!.blocks[0].id;
   return {
-    ...createEmptyModel(),
+    ...base,
     preservation: {
-      originalParts: new Map([[PART, '<w:document><w:body><w:tbl/></w:body></w:document>']]),
-      blockRanges: new Map([['t1', { partName: PART, start: 19, end: 28, baselineHash: 'h-abc' }]]),
+      originalParts: new Map([[PART, TEXT]]),
+      blockRanges: new Map([[blockId, { partName: PART, start: 20, end: 26, baselineHash: 'h-abc' }]]),
     },
   };
 }
 
 describe('preservation encode/decode', () => {
   test('originalParts and blockRanges survive a snapshot round-trip', () => {
-    const decoded = decodeModel(encodeModel(withPreservation()));
-    expect(decoded.preservation!.originalParts.get(PART)).toBe('<w:document><w:body><w:tbl/></w:body></w:document>');
-    expect(decoded.preservation!.blockRanges.get('t1')).toEqual({ partName: PART, start: 19, end: 28, baselineHash: 'h-abc' });
+    const model = withPreservation();
+    const blockId = [...model.preservation!.blockRanges.keys()][0];
+    const decoded = decodeModel(encodeModel(model));
+    expect(decoded.preservation!.originalParts.get(PART)).toBe(TEXT);
+    expect(decoded.preservation!.blockRanges.get(blockId)).toEqual({ partName: PART, start: 20, end: 26, baselineHash: 'h-abc' });
+  });
+
+  test('decode rejects an out-of-bounds range', () => {
+    const bad: SerializedModel = {
+      ...encodeModel(createEmptyModel()),
+      preservation: { originalParts: [[PART, 'short']], blockRanges: [['p-1', { partName: PART, start: 0, end: 999, baselineHash: 'x' }]] },
+    };
+    expect(() => decodeModel(bad)).toThrow(/out-of-bounds/);
   });
 
   test('a model with no preservation encodes/decodes to undefined (omitted when empty)', () => {

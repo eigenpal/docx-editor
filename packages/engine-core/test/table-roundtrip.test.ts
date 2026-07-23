@@ -134,23 +134,16 @@ describe('merged, nested, and lexical-width tables', () => {
 describe('editing a preserved table document', () => {
   const bytes = () => readFileSync(`${import.meta.dir}/../../../e2e/fixtures/with-tables.docx`);
 
-  test('a content edit to a top-level paragraph patches ONLY its range; the table stays verbatim', () => {
+  test('editing a preserved top-level paragraph fails closed (no lossy regeneration)', () => {
     const parsed = parseDocx(bytes());
     if (!parsed.ok) throw new Error('parse failed');
-    const model = parsed.model;
-    const orig = strFromU8(unzipSync(bytes())['word/document.xml']);
-    const store = new DocumentStore(model);
+    const store = new DocumentStore(parsed.model);
     const bodyId = bodyStoryId(store.currentModel);
     const para = store.currentModel.stories.get(bodyId)!.blocks.find((b) => b.kind === 'paragraph') as ParagraphRecord;
-    const table = store.currentModel.stories.get(bodyId)!.blocks.find((b) => b.kind === 'table')!;
-    const tblRange = model.preservation!.blockRanges.get(table.id)!;
-    const tableVerbatim = orig.slice(tblRange.start, tblRange.end);
-
+    // Regenerating minimal runs would drop w:pPr/hyperlinks/fields, so any edit to a
+    // preserved block fails closed until ownership-aware regeneration exists.
     store.transact(ORIGIN_IDS.mutationHuman, (ctx) => ctx.apply({ op: 'setParagraphRuns', paragraphId: para.id, runs: [{ text: 'EDITED' }] }));
-    const out = documentXml(store.currentModel);
-
-    expect(out).toContain('EDITED'); // the edited paragraph regenerated
-    expect(out).toContain(tableVerbatim); // the untouched table range is still verbatim
+    expect(() => documentXml(store.currentModel)).toThrow(/fail closed/);
   });
 
   test('a structural op (append a block) fails closed on serialize', () => {
@@ -159,6 +152,29 @@ describe('editing a preserved table document', () => {
     const store = new DocumentStore(parsed.model);
     store.transact(ORIGIN_IDS.mutationHuman, (ctx) => ctx.apply({ op: 'appendParagraph', storyId: bodyStoryId(store.currentModel) }));
     expect(() => documentXml(store.currentModel)).toThrow(/structural change/);
+  });
+
+  test('a decoy <w:body>/<w:tbl> inside a prolog comment does not fool the scanner', () => {
+    // The real table must still be found and re-emitted verbatim; the comment is inert.
+    const inner = '<w:tbl><w:tr><w:tc><w:p><w:r><w:t>real</w:t></w:r></w:p></w:tc></w:tr></w:tbl>';
+    const xml = `<?xml version="1.0"?><!-- decoy <w:body><w:tbl></w:tbl> --><w:document xmlns:w="${W}"><w:body>${inner}</w:body></w:document>`;
+    const bytes = zipSync({ '[Content_Types].xml': strToU8('<Types/>'), 'word/document.xml': strToU8(xml) });
+    const r = parseDocx(bytes);
+    expect(r.ok).toBe(true);
+    if (r.ok) {
+      expect(bodyBlocks(r.model).filter((b) => b.kind === 'table')).toHaveLength(1);
+      expect(documentXml(r.model)).toBe(xml);
+    }
+  });
+
+  test('a non-numeric gridSpan does not crash parseDocx (returns a result)', () => {
+    const inner = '<w:tbl><w:tr><w:tc><w:tcPr><w:gridSpan w:val="notnum"/></w:tcPr><w:p><w:r><w:t>x</w:t></w:r></w:p></w:tc></w:tr></w:tbl>';
+    const r = parseDocx(docx(inner));
+    expect(r.ok).toBe(true); // NaN never reaches the model or the hash
+    if (r.ok) {
+      const t = bodyBlocks(r.model).find((b) => b.kind === 'table') as TableRecord;
+      expect(t.rows[0].cells[0].props?.gridSpan).toBeUndefined(); // dropped, not NaN
+    }
   });
 
   test('editing a table cell fails closed (table regeneration is not implemented)', () => {

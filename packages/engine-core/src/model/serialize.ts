@@ -68,12 +68,37 @@ export function decodeModel(s: SerializedModel): PackageModel {
   if (!s.preservation) return base;
   const originalParts = mapFromPairs(s.preservation.originalParts, 'preservation part');
   const blockRanges = mapFromPairs(s.preservation.blockRanges, 'preservation block range');
-  // Reject orphan ranges that point at a part we do not retain — they can never
-  // resolve on serialize.
-  for (const [blockId, range] of blockRanges) {
-    if (!originalParts.has(range.partName)) {
-      throw new Error(`preservation range for block ${blockId} references unknown part ${range.partName}`);
+  const model: PackageModel = { ...base, preservation: { originalParts, blockRanges } };
+  validatePreservation(model); // full validation on a restored snapshot, not just duplicates
+  return model;
+}
+
+/**
+ * Validate the preservation index: every range references a retained part and an
+ * existing top-level block, offsets are integers with `0 <= start < end <= length`,
+ * and ranges within one part do not overlap. Called on decode AND before serialize so
+ * a tampered/stale snapshot can never splice XML into the wrong region.
+ */
+export function validatePreservation(model: PackageModel): void {
+  const p = model.preservation;
+  if (!p) return;
+  const ids = new Set<string>();
+  for (const story of model.stories.values()) for (const b of story.blocks) ids.add(b.id);
+  const byPart = new Map<string, { start: number; end: number }[]>();
+  for (const [blockId, r] of p.blockRanges) {
+    const text = p.originalParts.get(r.partName);
+    if (text === undefined) throw new Error(`preservation range for block ${blockId} references unknown part ${r.partName}`);
+    if (!ids.has(blockId)) throw new Error(`preservation range references a missing block ${blockId}`);
+    if (!Number.isInteger(r.start) || !Number.isInteger(r.end)) throw new Error(`non-integer preservation range for block ${blockId}`);
+    if (!(r.start >= 0 && r.start < r.end && r.end <= text.length)) throw new Error(`out-of-bounds preservation range for block ${blockId}`);
+    const list = byPart.get(r.partName) ?? [];
+    list.push({ start: r.start, end: r.end });
+    byPart.set(r.partName, list);
+  }
+  for (const list of byPart.values()) {
+    list.sort((a, b) => a.start - b.start);
+    for (let i = 1; i < list.length; i += 1) {
+      if (list[i].start < list[i - 1].end) throw new Error('overlapping preservation ranges within one part');
     }
   }
-  return { ...base, preservation: { originalParts, blockRanges } };
 }

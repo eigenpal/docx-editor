@@ -33,7 +33,7 @@ export {
 } from './authored-model.ts';
 export { type IdKindName, IdentityAllocator } from './identity.ts';
 export { createEmptyModel, bodyStoryId } from './create.ts';
-export { type SerializedModel, encodeModel, decodeModel } from './serialize.ts';
+export { type SerializedModel, encodeModel, decodeModel, validatePreservation } from './serialize.ts';
 export { appendParagraph, insertTextIntoParagraph, setParagraphRuns, paragraphText } from './edit.ts';
 export {
   type SplitResult,

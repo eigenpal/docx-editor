@@ -36,20 +36,51 @@ import {
   type VMerge,
   type BlockRange,
   type PreservationState,
+  validatePreservation,
 } from '../model/index.ts';
 import { IdentityAllocator } from '../model/identity.ts';
 
 /** The main document part; the only part with lossless range preservation today. */
 const DOC_PART = '/word/document.xml';
 
+/** Content view of a block with all stable IDs stripped, so the hash reflects
+ *  semantic CONTENT and is stable across a re-parse (which allocates fresh ids). */
+function contentForHash(block: Block): unknown {
+  if (block.kind === 'paragraph') {
+    return { kind: 'paragraph', runs: block.runs, ...(block.props ? { props: block.props } : {}) };
+  }
+  return {
+    kind: 'table',
+    ...(block.grid ? { grid: block.grid } : {}),
+    ...(block.props ? { props: block.props } : {}),
+    rows: block.rows.map((r) => ({
+      ...(r.props ? { props: r.props } : {}),
+      cells: r.cells.map((c) => ({
+        ...(c.props ? { props: c.props } : {}),
+        blocks: c.blocks.map(contentForHash),
+      })),
+    })),
+  };
+}
+
 /**
  * One canonical semantic hash of a top-level block, used identically by the parser
- * (to record a baseline) and the serializer (to decide verbatim reuse vs
- * regeneration). It covers the block's COMPLETE semantic subtree — a table hashes its
- * rows, cells, nested blocks, grid, and props.
+ * (baseline) and the serializer (edit detection + slice re-binding). It covers the
+ * block's COMPLETE semantic subtree — a table hashes its rows, cells, nested blocks,
+ * grid, and props — and is ID-INDEPENDENT so re-parsing the same source slice yields
+ * the same hash.
  */
 export function hashPreservableBlock(block: Block): string {
-  return stableHash(block);
+  return stableHash(contentForHash(block));
+}
+
+/** Parse a bounded integer attribute; NaN/Infinity/non-integers become undefined so
+ *  untrusted values never enter the model or throw during hashing (the verbatim range
+ *  still holds the real lexical value). */
+function intAttr(v: string | undefined): number | undefined {
+  if (v === undefined) return undefined;
+  const n = Number(v);
+  return Number.isInteger(n) ? n : undefined;
 }
 
 export type DocxParseRejection = ZipRejection | 'no-document' | 'xml-error';
@@ -307,16 +338,35 @@ function elementSpanEnd(s: string, lt: number): number {
   return i;
 }
 
-/** First `<name ` opening whose full tag name matches, at or after `from`, before `before`. */
+/** First OPENING tag whose full name matches, at/after `from`, before `before`,
+ *  SKIPPING comment/CDATA/PI/decl regions so a decoy `<name>` inside them (e.g. a
+ *  prolog comment containing `<w:body>`) can never be matched. */
 function findOpen(s: string, name: string, from: number, before: number): number {
   let i = from;
-  for (;;) {
-    const idx = s.indexOf('<' + name, i);
-    if (idx < 0 || idx >= before) return -1;
-    const after = s[idx + 1 + name.length];
-    if (after === undefined || NAME_STOP.includes(after)) return idx;
-    i = idx + 1;
+  while (i < before) {
+    const lt = s.indexOf('<', i);
+    if (lt < 0 || lt >= before) return -1;
+    if (s.startsWith('<!--', lt)) {
+      const e = s.indexOf('-->', lt);
+      i = e < 0 ? before : e + 3;
+    } else if (s.startsWith('<![CDATA[', lt)) {
+      const e = s.indexOf(']]>', lt);
+      i = e < 0 ? before : e + 3;
+    } else if (s.startsWith('<?', lt)) {
+      const e = s.indexOf('?>', lt);
+      i = e < 0 ? before : e + 2;
+    } else if (s.startsWith('<!', lt)) {
+      const e = s.indexOf('>', lt);
+      i = e < 0 ? before : e + 1;
+    } else if (s[lt + 1] === '/') {
+      i = lt + 1; // a close tag, not an opening
+    } else if (tagNameAt(s, lt) === name) {
+      return lt;
+    } else {
+      i = lt + 1;
+    }
   }
+  return -1;
 }
 
 interface BlockSpan {
@@ -334,6 +384,11 @@ function walkBlockSpans(s: string, start: number, end: number, out: BlockSpan[])
     if (lt < 0 || lt >= end) break;
     if (s.startsWith('<!--', lt)) {
       const e = s.indexOf('-->', lt);
+      i = e < 0 ? end : e + 3;
+      continue;
+    }
+    if (s.startsWith('<![CDATA[', lt)) {
+      const e = s.indexOf(']]>', lt);
       i = e < 0 ? end : e + 3;
       continue;
     }
@@ -462,15 +517,15 @@ function parseTableProps(tblPr: Extract<XmlNode, { type: 'element' }> | undefine
 function parseRowProps(trPr: Extract<XmlNode, { type: 'element' }> | undefined): TableRowProps | undefined {
   if (!trPr) return undefined;
   const h = childElements(trPr, 'w:trHeight')[0];
-  const gb = childElements(trPr, 'w:gridBefore')[0]?.attributes['w:val'];
-  const ga = childElements(trPr, 'w:gridAfter')[0]?.attributes['w:val'];
+  const gb = intAttr(childElements(trPr, 'w:gridBefore')[0]?.attributes['w:val']);
+  const ga = intAttr(childElements(trPr, 'w:gridAfter')[0]?.attributes['w:val']);
   const props: TableRowProps = {
     ...(childElements(trPr, 'w:tblHeader').length > 0 ? { isHeader: true } : {}),
     ...(childElements(trPr, 'w:cantSplit').length > 0 ? { cantSplit: true } : {}),
     ...(h?.attributes['w:val'] !== undefined ? { height: h.attributes['w:val'] } : {}),
     ...(h?.attributes['w:hRule'] !== undefined ? { heightRule: h.attributes['w:hRule'] } : {}),
-    ...(gb !== undefined ? { gridBefore: Number(gb) } : {}),
-    ...(ga !== undefined ? { gridAfter: Number(ga) } : {}),
+    ...(gb !== undefined ? { gridBefore: gb } : {}),
+    ...(ga !== undefined ? { gridAfter: ga } : {}),
     ...(parseWidth(childElements(trPr, 'w:wBefore')[0]) ? { widthBefore: parseWidth(childElements(trPr, 'w:wBefore')[0])! } : {}),
     ...(parseWidth(childElements(trPr, 'w:wAfter')[0]) ? { widthAfter: parseWidth(childElements(trPr, 'w:wAfter')[0])! } : {}),
   };
@@ -479,12 +534,12 @@ function parseRowProps(trPr: Extract<XmlNode, { type: 'element' }> | undefined):
 
 function parseCellProps(tcPr: Extract<XmlNode, { type: 'element' }> | undefined): TableCellProps | undefined {
   if (!tcPr) return undefined;
-  const gridSpan = tcPr && childElements(tcPr, 'w:gridSpan')[0]?.attributes['w:val'];
+  const gridSpan = intAttr(childElements(tcPr, 'w:gridSpan')[0]?.attributes['w:val']);
   const vMergeEl = childElements(tcPr, 'w:vMerge')[0];
   const vMerge: VMerge | undefined = vMergeEl ? (vMergeEl.attributes['w:val'] !== undefined ? { val: vMergeEl.attributes['w:val'] } : {}) : undefined;
   const props: TableCellProps = {
     ...(parseWidth(childElements(tcPr, 'w:tcW')[0]) ? { width: parseWidth(childElements(tcPr, 'w:tcW')[0])! } : {}),
-    ...(gridSpan !== undefined ? { gridSpan: Number(gridSpan) } : {}),
+    ...(gridSpan !== undefined ? { gridSpan } : {}),
     ...(vMerge !== undefined ? { vMerge } : {}),
     ...(parseBorders(childElements(tcPr, 'w:tcBorders')[0]) ? { borders: parseBorders(childElements(tcPr, 'w:tcBorders')[0])! } : {}),
     ...(parseShd(tcPr) ? { shading: parseShd(tcPr)! } : {}),
@@ -542,36 +597,37 @@ function parseTable(tbl: Extract<XmlNode, { type: 'element' }>, alloc: IdentityA
   };
 }
 
-/** Build a block from its source substring (well-formed w:p / w:tbl fragment). */
-function blockFromSpan(docText: string, span: BlockSpan, alloc: IdentityAllocator): Block | undefined {
-  const fx = readXml(docText.slice(span.start, span.end));
+/** Build a block from a source substring (a w:p / w:tbl fragment). Returns undefined
+ *  for a parse failure or an unexpected root, so callers can fail closed. */
+function blockFromText(text: string, alloc: IdentityAllocator): Block | undefined {
+  const fx = readXml(text);
   if (!fx.ok) return undefined;
   const rootEl = fx.nodes.find(el);
   if (!rootEl) return undefined;
-  return span.name === 'w:tbl' ? parseTable(rootEl, alloc) : paragraphFromElement(rootEl, alloc);
+  if (rootEl.name === 'w:tbl') return parseTable(rootEl, alloc);
+  if (rootEl.name === 'w:p') return paragraphFromElement(rootEl, alloc);
+  return undefined;
 }
 
-/** Validate the range index: integer, in-bounds, block exists, non-overlapping per part. */
-function validateRanges(model: PackageModel): void {
-  const p = model.preservation;
-  if (!p) return;
-  const ids = new Set<string>();
-  for (const story of model.stories.values()) for (const b of story.blocks) ids.add(b.id);
-  const byPart = new Map<string, BlockRange[]>();
-  for (const [blockId, r] of p.blockRanges) {
-    if (!ids.has(blockId)) throw new Error(`preservation range references missing block ${blockId}`);
-    const text = p.originalParts.get(r.partName);
-    if (text === undefined) throw new Error(`preservation range for ${blockId} references unknown part ${r.partName}`);
-    if (!Number.isInteger(r.start) || !Number.isInteger(r.end)) throw new Error(`non-integer range for ${blockId}`);
-    if (!(r.start >= 0 && r.start < r.end && r.end <= text.length)) throw new Error(`out-of-bounds range for ${blockId}`);
-    (byPart.get(r.partName) ?? byPart.set(r.partName, []).get(r.partName)!).push(r);
-  }
-  for (const ranges of byPart.values()) {
-    const sorted = [...ranges].sort((a, b) => a.start - b.start);
-    for (let i = 1; i < sorted.length; i += 1) {
-      if (sorted[i].start < sorted[i - 1].end) throw new Error('overlapping preservation ranges in one part');
+function blockFromSpan(docText: string, span: BlockSpan, alloc: IdentityAllocator): Block | undefined {
+  return blockFromText(docText.slice(span.start, span.end), alloc);
+}
+
+/** Count top-level w:p/w:tbl blocks in the PARSED body tree, descending into
+ *  block-level w:sdt exactly as the span scanner does. A disagreement between this
+ *  count and the scanner's span count means the scanner mis-owns content, so the
+ *  parse is rejected. */
+function countTreeBlocks(container: Extract<XmlNode, { type: 'element' }>): number {
+  let n = 0;
+  for (const child of container.children) {
+    if (!el(child)) continue;
+    if (child.name === 'w:p' || child.name === 'w:tbl') n += 1;
+    else if (child.name === 'w:sdt') {
+      const content = childElements(child, 'w:sdtContent')[0];
+      if (content) n += countTreeBlocks(content);
     }
   }
+  return n;
 }
 
 export function parseDocx(bytes: Uint8Array): ParseResult {
@@ -597,11 +653,22 @@ export function parseDocx(bytes: Uint8Array): ParseResult {
   let preservation: PreservationState | undefined;
   if (spans.some((s) => s.name === 'w:tbl')) {
     const blockRanges = new Map<string, BlockRange>();
+    let failed = false;
     for (const span of spans) {
       const block = blockFromSpan(docText, span, alloc);
-      if (!block) continue;
+      if (!block) {
+        failed = true;
+        break;
+      }
       blocks.push(block);
       blockRanges.set(block.id, { partName: DOC_PART, start: span.start, end: span.end, baselineHash: hashPreservableBlock(block) });
+    }
+    // Fail closed on any fragment-parse failure or scanner/tree disagreement: the
+    // scanner's spans MUST match the parsed tree's top-level blocks exactly, or ranges
+    // could mis-own content (guards decoy tags in comments, malformed nesting, and the
+    // reader's non-strict well-formedness).
+    if (failed || !body || blocks.length !== spans.length || countTreeBlocks(body) !== blocks.length) {
+      return { ok: false, reason: 'xml-error', detail: 'table preservation scan/tree mismatch' };
     }
     preservation = { originalParts: new Map([[DOC_PART, docText]]), blockRanges };
   } else if (body) {
@@ -641,7 +708,7 @@ export function parseDocx(bytes: Uint8Array): ParseResult {
     identity: alloc.state(),
     ...(preservation ? { preservation } : {}),
   };
-  validateRanges(model); // integer/in-bounds/exists/non-overlapping
+  validatePreservation(model); // integer/in-bounds/exists/non-overlapping
   return { ok: true, model };
 }
 
@@ -676,8 +743,10 @@ function blockXml(block: Block): string {
  */
 export function documentXml(model: PackageModel): string {
   const original = model.preservation?.originalParts.get(DOC_PART);
-  if (original !== undefined) return patchDocumentPart(model, original, model.preservation!.blockRanges);
-
+  if (original !== undefined) {
+    validatePreservation(model); // re-validate at the serialize boundary, not only at parse
+    return emitPreservedPart(model, original, model.preservation!.blockRanges);
+  }
   const story = model.stories.get(bodyStoryId(model))!;
   const body = story.blocks.map(blockXml).join('');
   return (
@@ -686,26 +755,34 @@ export function documentXml(model: PackageModel): string {
   );
 }
 
-function patchDocumentPart(model: PackageModel, original: string, ranges: ReadonlyMap<string, BlockRange>): string {
+/**
+ * Read-only re-emit of a preserved part. Every top-level block must be UNCHANGED —
+ * any edited block fails closed (no lossy regeneration exists yet), and any structural
+ * change (add/remove/reorder) fails closed. Each baseline hash is also re-bound to its
+ * CURRENT source slice, so a tampered or drifted snapshot (text moved out from under a
+ * range) is rejected rather than splicing foreign XML. When all checks pass, the
+ * original text is emitted verbatim.
+ */
+function emitPreservedPart(model: PackageModel, original: string, ranges: ReadonlyMap<string, BlockRange>): string {
   const bodyStory = model.stories.get(bodyStoryId(model))!;
   const docRanges = [...ranges].filter(([, r]) => r.partName === DOC_PART).sort((a, b) => a[1].start - b[1].start);
   const rangeOrder = docRanges.map(([id]) => id);
   const bodyIds = bodyStory.blocks.map((b) => b.id);
-  // Same ids in the same order = no add/remove/reorder. Anything else is a structural
-  // op we cannot patch yet -> fail closed.
   if (bodyIds.length !== rangeOrder.length || bodyIds.some((id, i) => id !== rangeOrder[i])) {
     throw new Error('structural change to a preserved document (block added, removed, or reordered) must fail closed until regeneration exists');
   }
   const byId = new Map(bodyStory.blocks.map((b) => [b.id, b] as const));
-  const patches: { start: number; end: number; xml: string }[] = [];
+  const throwaway = new IdentityAllocator();
   for (const [id, r] of docRanges) {
-    const block = byId.get(id)!;
-    if (hashPreservableBlock(block) !== r.baselineHash) patches.push({ start: r.start, end: r.end, xml: blockXml(block) });
+    if (hashPreservableBlock(byId.get(id)!) !== r.baselineHash) {
+      throw new Error(`preserved block ${id} was edited; regeneration is not implemented (read-only slice) — fail closed`);
+    }
+    const reparsed = blockFromText(original.slice(r.start, r.end), throwaway);
+    if (!reparsed || hashPreservableBlock(reparsed) !== r.baselineHash) {
+      throw new Error(`preservation range for block ${id} does not match its baseline hash (tampered or drifted snapshot)`);
+    }
   }
-  patches.sort((a, b) => b.start - a.start); // highest offset first so earlier offsets stay valid
-  let out = original;
-  for (const p of patches) out = out.slice(0, p.start) + p.xml + out.slice(p.end);
-  return out;
+  return original; // all blocks unchanged and slice-verified -> byte-identical
 }
 
 const CONTENT_TYPES_XML =
