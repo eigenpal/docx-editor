@@ -43,8 +43,18 @@
    span-driven verbatim-preservation path, lays out transparently, and round-trips
    byte-identically (exhaustive w14/w15 control payload rides the preservation range).
    DEFERRED: inline/run-level SDTs (still flattened via RUN_WRAPPERS), SDTs nested in
-   table cells (cellBlocks still flattens), editing inside an SDT (fails closed on save),
-   and control-chrome rendering.
+   table cells (cellBlocks still flattens; byte-preserved via the table span, not
+   structurally modeled), editing inside an SDT (fails closed on save), and
+   control-chrome rendering. KNOWN GAPS from review: (a) a paragraph nested inside an
+   SDT is not yet addressable through the paragraph-lookup APIs (edit/identity-ops/
+   external-target/anchors search only story.blocks) — blocked on the same SDT-editing
+   deferral; (b) block content inside a non-transparent wrapper (w:ins/w:del/w:smartTag)
+   within an SDT is omitted from the model though byte-preserved. PRE-EXISTING (not
+   SDT-specific): normalize() merges adjacent runs AFTER the preservation baseline hash
+   is taken, so an empty store transaction can later make emitPreservedPart reject an
+   otherwise-untouched preserved paragraph/table/SDT as "edited" — the baseline hash
+   should be computed on the normalized block (or emit should tolerate normalization-
+   equivalent changes); tracked as a preservation follow-up.
 6. **Resolve authored formatting.** Finish styles, numbering, themes, paragraph/run
    properties, table styles, inheritance, and list rendering without materializing
    resolved values into authored state.
