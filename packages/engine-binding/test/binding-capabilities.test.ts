@@ -3,7 +3,7 @@
 // (paragraph editable; every other kind a read-only atom) — modelToDoc has no block.kind switch.
 
 import { describe, expect, test } from 'bun:test';
-import { docSchema, modelToDoc, EditorBinding } from '../src/index.ts';
+import { docSchema, modelToDoc, EditorBinding, nodeRole } from '../src/index.ts';
 import { projectBlock } from '../src/binding-capabilities.ts';
 import { createEmptyModel, bodyStoryId, DocumentStore, type Block, type PackageModel } from '@docx-editor.dev/engine-core';
 
@@ -46,6 +46,13 @@ describe('composed schema + per-kind projection', () => {
       'blockEmbed',
       'blockEmbed',
     ]);
+  });
+
+  test('registered block nodes declare reverse-mapping roles (the forward mapper dispatches on them)', () => {
+    expect(nodeRole('paragraph')).toBe('paragraph'); // editable text block
+    expect(nodeRole('blockEmbed')).toBe('atom'); // read-only projected block
+    expect(nodeRole('text')).toBeUndefined(); // structural, not a block target
+    expect(nodeRole('doc')).toBeUndefined();
   });
 
   test('the binding still round-trips an edit through the composed schema', () => {

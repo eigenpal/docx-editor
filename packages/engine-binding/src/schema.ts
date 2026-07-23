@@ -19,40 +19,48 @@ import {
 registerBindingNode('doc', { content: 'block+' });
 
 // --- editable paragraph capability: node + marks + projector ---
-registerBindingNode('paragraph', {
-  content: 'text*',
-  group: 'block',
-  // The authored paragraph id, threaded through so edits keep identity.
-  attrs: { semId: { default: null } },
-  // toDOM lets the schema also drive a live EditorView (not just headless mapping).
-  toDOM() {
-    return ['p', 0];
+registerBindingNode(
+  'paragraph',
+  {
+    content: 'text*',
+    group: 'block',
+    // The authored paragraph id, threaded through so edits keep identity.
+    attrs: { semId: { default: null } },
+    // toDOM lets the schema also drive a live EditorView (not just headless mapping).
+    toDOM() {
+      return ['p', 0];
+    },
+    parseDOM: [{ tag: 'p' }],
   },
-  parseDOM: [{ tag: 'p' }],
-});
+  'paragraph', // reverse-mapping role: an editable text block
+);
 
 // --- generic read-only capability: a non-paragraph authored block (table, SDT, ...) projected as
 // an opaque atom that carries the block's authored semId so the forward mapper maps it back to the
 // exact canonical block and never flattens or mutates it. Rendered as a labeled, non-editable box.
-registerBindingNode('blockEmbed', {
-  group: 'block',
-  atom: true,
-  selectable: false,
-  draggable: false,
-  attrs: { semId: { default: null }, kind: { default: 'block' } },
-  toDOM(node) {
-    return [
-      'div',
-      {
-        class: 'docx-block-embed',
-        'data-sem-id': String(node.attrs.semId ?? ''),
-        'data-kind': String(node.attrs.kind ?? 'block'),
-        contenteditable: 'false',
-      },
-      `[${String(node.attrs.kind ?? 'block')}]`,
-    ];
+registerBindingNode(
+  'blockEmbed',
+  {
+    group: 'block',
+    atom: true,
+    selectable: false,
+    draggable: false,
+    attrs: { semId: { default: null }, kind: { default: 'block' } },
+    toDOM(node) {
+      return [
+        'div',
+        {
+          class: 'docx-block-embed',
+          'data-sem-id': String(node.attrs.semId ?? ''),
+          'data-kind': String(node.attrs.kind ?? 'block'),
+          contenteditable: 'false',
+        },
+        `[${String(node.attrs.kind ?? 'block')}]`,
+      ];
+    },
   },
-});
+  'atom', // reverse-mapping role: a read-only projected block
+);
 registerBindingNode('text', { group: 'inline' });
 
 registerBindingMark('bold', { toDOM: () => ['strong', 0], parseDOM: [{ tag: 'strong' }, { tag: 'b' }] });
@@ -71,5 +79,18 @@ registerBlockProjector('paragraph', (block, schema) => {
 });
 registerDefaultBlockProjector((block: Block, schema) => schema.node('blockEmbed', { semId: block.id, kind: block.kind }));
 
-/** The composed ProseMirror schema (built from every registered binding capability). */
-export const docSchema: Schema = buildDocSchema();
+// The composed ProseMirror schema, built LAZILY on first access (not at module load), so a feature
+// can import the package, register its node/mark/projector, and have it included before the schema
+// is first used. Access is via a Proxy so `docSchema` stays a plain importable value; methods are
+// bound to the real schema. Once accessed the schema is frozen (further registration is rejected).
+export const docSchema: Schema = new Proxy({} as Schema, {
+  get(_t, prop, receiver) {
+    const schema = buildDocSchema();
+    const value = Reflect.get(schema, prop, receiver);
+    return typeof value === 'function' ? value.bind(schema) : value;
+  },
+  has(_t, prop) {
+    return prop in buildDocSchema();
+  },
+});
+

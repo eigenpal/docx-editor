@@ -12,7 +12,13 @@ import type { Block } from '@docx-editor.dev/engine-core';
 /** Project one authored block into a ProseMirror node (given the composed schema). */
 export type BlockProjector = (block: Block, schema: Schema) => PMNode;
 
+/** The reverse-mapping role of a PM node: an editable text 'paragraph', or a read-only 'atom'
+ *  (a projected non-editable block). The forward mapper (mapDocToOps) consults these instead of
+ *  hardcoding node names, so a registered node participates in the reverse lane too. */
+export type NodeRole = 'paragraph' | 'atom';
+
 const nodeSpecs = new Map<string, NodeSpec>();
+const nodeRoles = new Map<string, NodeRole>();
 const markSpecs = new Map<string, MarkSpec>();
 const projectors = new Map<string, BlockProjector>(); // keyed by block.kind
 let defaultProjector: BlockProjector | undefined; // for any kind without its own projector (read-only)
@@ -22,12 +28,17 @@ function assertNotBuilt(what: string): void {
   if (composedSchema) throw new Error(`cannot register ${what} after the schema is composed`);
 }
 
-/** Register a PM node spec (a projection target). Duplicate names are rejected. */
-export function registerBindingNode(name: string, spec: NodeSpec): void {
+/** Register a PM node spec (a projection target). `role` declares how the reverse mapper treats it
+ *  ('paragraph' = editable text block, 'atom' = read-only embed); omit for a structural node (doc,
+ *  text) the block mapper never dispatches on. Duplicate names are rejected. */
+export function registerBindingNode(name: string, spec: NodeSpec, role?: NodeRole): void {
   assertNotBuilt('a node');
   if (nodeSpecs.has(name)) throw new Error(`duplicate binding node spec '${name}'`);
   nodeSpecs.set(name, spec);
+  if (role) nodeRoles.set(name, role);
 }
+/** The reverse-mapping role of a PM node name, if it is a block-level projection target. */
+export const nodeRole = (nodeName: string): NodeRole | undefined => nodeRoles.get(nodeName);
 /** Register a PM mark spec (an inline formatting capability). Duplicate names are rejected. */
 export function registerBindingMark(name: string, spec: MarkSpec): void {
   assertNotBuilt('a mark');

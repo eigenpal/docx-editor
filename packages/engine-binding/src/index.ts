@@ -12,6 +12,20 @@
 export const ENGINE_BINDING_PACKAGE = '@docx-editor.dev/engine-binding' as const;
 
 export { docSchema } from './schema.ts';
+// Binding capability registration (comprehensive 3.4): a feature registers its PM node/mark specs
+// and per-kind projector through these instead of editing the schema/projection. Registration must
+// run BEFORE the schema is first built (import a registration module before engine-binding's schema).
+export {
+  type NodeRole,
+  type BlockProjector,
+  registerBindingNode,
+  registerBindingMark,
+  registerBlockProjector,
+  registerDefaultBlockProjector,
+  nodeRole,
+  projectBlock,
+  buildDocSchema,
+} from './binding-capabilities.ts';
 export { modelToDoc, paragraphNodeToRuns } from './projection.ts';
 export { EditorBinding, type ForwardResult } from './binding.ts';
 export { type SelectionAnchor, captureSelection, resolveSelection } from './selection.ts';

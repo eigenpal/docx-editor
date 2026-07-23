@@ -23,6 +23,7 @@ import {
 } from '@docx-editor.dev/engine-core';
 import { docSchema } from './schema.ts';
 import { modelToDoc, paragraphNodeToRuns } from './projection.ts';
+import { nodeRole } from './binding-capabilities.ts';
 
 const MUTATION = ORIGIN_IDS.mutationHuman;
 
@@ -36,8 +37,10 @@ class BindingRejection extends Error {}
  *  the same normalized form must map to ZERO ops — otherwise re-projecting an untouched
  *  paragraph would spuriously rewrite (and collapse) its authored run segmentation. A real
  *  text/formatting edit still differs after normalization. */
+/** Whether a PM node is an EDITABLE text-paragraph node (by its registered reverse role, not a
+ *  hardcoded name) — so a feature's editable text node participates in the reverse mapper too. */
 function isParagraph(node: PMNode): boolean {
-  return node.type.name === 'paragraph';
+  return nodeRole(node.type.name) === 'paragraph';
 }
 
 /** A canonical block's runs (empty for a non-paragraph block). */
@@ -104,10 +107,11 @@ function nodeMatchesBlock(node: PMNode | undefined, block: Block | undefined): b
   // A read-only atom must match its block by id AND kind — so a retyped atom (a table relabelled
   // 'sdt') is never treated as unchanged in a prefix/suffix alignment and cannot ride along a
   // split/join/insert/paste while the model keeps the original kind.
-  if (node.type.name === 'blockEmbed') {
+  const role = nodeRole(node.type.name);
+  if (role === 'atom') {
     return block.kind !== 'paragraph' && node.attrs.semId === block.id && node.attrs.kind === block.kind;
   }
-  if (node.type.name === 'paragraph') return block.kind === 'paragraph' && node.attrs.semId === block.id;
+  if (role === 'paragraph') return block.kind === 'paragraph' && node.attrs.semId === block.id;
   return false;
 }
 
@@ -211,14 +215,15 @@ export class EditorBinding {
     const ops: DocOp[] = [];
     nodes.forEach((node, i) => {
       const block = blocks[i];
-      if (node.type.name === 'blockEmbed') {
+      const role = nodeRole(node.type.name); // reverse-mapping role (capability-driven, not hardcoded)
+      if (role === 'atom') {
         // A read-only atom must map to its EXACT block — same id AND same kind. Checking kind
         // too rejects a retyped atom (e.g. a table node relabelled 'sdt') that would otherwise
         // commit zero ops and leave the view diverged from the model.
         if (block.kind === 'paragraph' || node.attrs.semId !== block.id || node.attrs.kind !== block.kind) {
           throw new BindingRejection('read-only block moved, replaced, or retyped');
         }
-      } else if (node.type.name === 'paragraph') {
+      } else if (role === 'paragraph') {
         if (block.kind !== 'paragraph' || node.attrs.semId !== block.id) {
           throw new BindingRejection('paragraph reordered or retargeted');
         }
