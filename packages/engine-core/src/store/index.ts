@@ -52,3 +52,9 @@ export {
   DEFAULT_ENVELOPE_LIMITS,
   validateEnvelope,
 } from './envelope.ts';
+export {
+  type MigrationStep,
+  type MigrationFailure,
+  type MigrationResult,
+  MigrationRunner,
+} from './migration.ts';
