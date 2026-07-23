@@ -100,31 +100,37 @@ export function mountDocxEditor(container: HTMLElement, bytes: Uint8Array): Moun
 
   let reconciling = false;
   let pendingCompositionCommit = false;
-  // The caret BEFORE a deferred IME composition began — recorded so the composition's flushed
-  // commit stores the correct pre-edit anchor (undo must return to where the composition started,
-  // not to a stale depth-0 selection).
+  // Our OWN composition flag, held true from compositionstart until the post-compositionend flush.
+  // ProseMirror clears `view.composing` and THEN dispatches the final composed transaction, so
+  // relying on view.composing would let that last transaction commit early with the wrong anchor.
+  let imeComposing = false;
+  // The caret BEFORE a deferred IME composition began — so the composition's flushed commit stores
+  // the correct pre-edit anchor (undo must return to where the composition started).
   let compositionBeforeSel: SelectionAnchor | undefined;
   const view = new EditorView(editPane, {
     state: EditorState.create({ doc: session.projectDoc(), plugins }),
     editable: () => session.editable,
     // While an IME composition is active, ProseMirror mutates the DOM directly and dispatches
-    // interim transactions; committing (which would reproject on a rejection) mid-composition
-    // disrupts the IME. Defer the commit and flush it once composition ends (compositionend).
+    // interim (and a final) transaction; committing (which would reproject on a rejection)
+    // disrupts the IME. Defer every transaction from compositionstart until one flush after
+    // compositionend, then commit ONCE with the pre-composition caret.
     handleDOMEvents: {
       compositionstart: () => {
+        imeComposing = true;
         compositionBeforeSel = captureSelection(view.state); // caret before the composition
         return false;
       },
       compositionend: () => {
         const win = container.ownerDocument?.defaultView;
         const flush = () => {
-          if (!pendingCompositionCommit) return;
-          pendingCompositionCommit = false;
+          imeComposing = false; // the final composed transaction has now been deferred to here
           const before = compositionBeforeSel;
           compositionBeforeSel = undefined;
+          if (!pendingCompositionCommit) return;
+          pendingCompositionCommit = false;
           if (!reconciling) commitEdit(before);
         };
-        // Let ProseMirror apply its final composition transaction first, then commit.
+        // Let ProseMirror apply its final composition transaction first, then commit once.
         if (win?.requestAnimationFrame) win.requestAnimationFrame(flush);
         else flush();
         return false;
@@ -137,8 +143,8 @@ export function mountDocxEditor(container: HTMLElement, bytes: Uint8Array): Moun
       const next = view.state.apply(tr);
       view.updateState(next);
       if (reconciling || !tr.docChanged) return;
-      if (view.composing) {
-        pendingCompositionCommit = true; // defer until compositionend
+      if (imeComposing) {
+        pendingCompositionCommit = true; // defer until the post-compositionend flush
         return;
       }
       commitEdit(beforeSel);
