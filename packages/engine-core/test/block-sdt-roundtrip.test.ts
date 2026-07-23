@@ -92,3 +92,70 @@ describe('other block-SDT fixtures import structurally and round-trip verbatim',
     });
   }
 });
+
+// ---- adversarial edge cases: the scanner span count MUST equal the parsed tree block
+// count (opc.parseDocx cross-check), or a valid doc is wrongly rejected / a range
+// mis-owns content. Each of these must import cleanly AND re-emit byte-identically.
+import { zipSync, strToU8 } from 'fflate';
+const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
+function synthDocx(inner: string): Uint8Array {
+  return zipSync({
+    '[Content_Types].xml': strToU8(
+      '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">' +
+        '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/></Types>',
+    ),
+    'word/document.xml': strToU8(`<w:document xmlns:w="${W}"><w:body>${inner}</w:body></w:document>`),
+  });
+}
+function roundTrips(inner: string): { model: PackageModel; identical: boolean } {
+  const bytes = synthDocx(inner);
+  const r = parseDocx(bytes);
+  expect(r.ok).toBe(true);
+  if (!r.ok) throw new Error(`${r.reason} ${r.detail ?? ''}`);
+  return { model: r.model, identical: docXml(writeDocx(r.model)) === docXml(bytes) };
+}
+
+describe('block-SDT scanner/tree cross-check edge cases', () => {
+  test('an SDT with NO w:sdtContent is one block with empty content and round-trips', () => {
+    const { model, identical } = roundTrips('<w:sdt><w:sdtPr><w:tag w:val="empty"/></w:sdtPr></w:sdt>');
+    const blocks = bodyBlocks(model);
+    expect(blocks.map((b) => b.kind)).toEqual(['sdt']);
+    expect((blocks[0] as SdtRecord).blocks.length).toBe(0);
+    expect(identical).toBe(true);
+  });
+
+  test('an SDT nested under a transparent w:customXml wrapper counts as one block', () => {
+    const { model, identical } = roundTrips(
+      '<w:p><w:r><w:t>a</w:t></w:r></w:p>' +
+        '<w:customXml w:element="x"><w:sdt><w:sdtPr><w:tag w:val="wrapped"/></w:sdtPr>' +
+        '<w:sdtContent><w:p><w:r><w:t>b</w:t></w:r></w:p></w:sdtContent></w:sdt></w:customXml>',
+    );
+    // customXml is transparent; the SDT inside it is the block (scanner + tree agree).
+    expect(bodyBlocks(model).map((b) => b.kind)).toEqual(['paragraph', 'sdt']);
+    expect(identical).toBe(true);
+  });
+
+  test('nested SDTs (an SDT inside an SDT) stay structural at both levels', () => {
+    const { model, identical } = roundTrips(
+      '<w:sdt><w:sdtPr><w:tag w:val="outer"/></w:sdtPr><w:sdtContent>' +
+        '<w:sdt><w:sdtPr><w:tag w:val="inner"/></w:sdtPr><w:sdtContent>' +
+        '<w:p><w:r><w:t>deep</w:t></w:r></w:p></w:sdtContent></w:sdt></w:sdtContent></w:sdt>',
+    );
+    const blocks = bodyBlocks(model);
+    expect(blocks.map((b) => b.kind)).toEqual(['sdt']);
+    const outer = blocks[0] as SdtRecord;
+    expect(outer.props.tag).toBe('outer');
+    expect(outer.blocks.map((b) => b.kind)).toEqual(['sdt']);
+    expect((outer.blocks[0] as SdtRecord).props.tag).toBe('inner');
+    expect(identical).toBe(true);
+  });
+
+  test('a decoy </w:sdt> inside a comment does not corrupt span ownership', () => {
+    const { model, identical } = roundTrips(
+      '<w:sdt><w:sdtPr><w:tag w:val="c"/></w:sdtPr><w:sdtContent>' +
+        '<!-- </w:sdt> decoy --><w:p><w:r><w:t>real</w:t></w:r></w:p></w:sdtContent></w:sdt>',
+    );
+    expect(bodyBlocks(model).map((b) => b.kind)).toEqual(['sdt']);
+    expect(identical).toBe(true);
+  });
+});
