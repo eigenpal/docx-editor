@@ -10,3 +10,10 @@
 
 /** Stable package identity used by the import-graph / package-authority checks. */
 export const ENGINE_CLIENTS_PACKAGE = '@docx-editor.dev/engine-clients' as const;
+
+export {
+  type ClientTransport,
+  type ClientMethod,
+  makeGeneratedClient,
+  DocxClient,
+} from './client.ts';
