@@ -22,10 +22,15 @@ if (container) {
   void (async () => {
     let view: ReactNode;
     if (enginePreview) {
-      const { EnginePreview } = await import('../../shared/EnginePreview');
+      // Explicit .tsx: on a case-insensitive filesystem an extensionless import of
+      // `EnginePreview` resolves to the sibling `enginePreview.ts` (the render helper,
+      // which has no `EnginePreview` export) before the `.tsx` component.
+      const { EnginePreview } = await import('../../shared/EnginePreview.tsx');
       view = <EnginePreview fixtureUrl={`${base}${fixtureName}`} />;
     } else {
-      const { App } = await import('./App');
+      // @vite-ignore keeps vite's dependency scanner out of the full editor graph so
+      // the read-only engine preview pre-bundles and loads independently of it.
+      const { App } = await import(/* @vite-ignore */ './App');
       view = <App />;
     }
     root.render(

@@ -6,22 +6,34 @@
   "type": "module",
   "exports": {
     ".": {
-      "types": "./src/index.ts"
+      "types": "./src/index.ts",
+      "import": "./src/index.ts",
+      "default": "./src/index.ts"
     },
     "./editor": {
-      "types": "./src/editor.ts"
+      "types": "./src/editor.ts",
+      "import": "./src/editor.ts",
+      "default": "./src/editor.ts"
     },
     "./geometry": {
-      "types": "./src/geometry.ts"
+      "types": "./src/geometry.ts",
+      "import": "./src/geometry.ts",
+      "default": "./src/geometry.ts"
     },
     "./plugin": {
-      "types": "./src/plugin.ts"
+      "types": "./src/plugin.ts",
+      "import": "./src/plugin.ts",
+      "default": "./src/plugin.ts"
     },
     "./mcp": {
-      "types": "./src/mcp.ts"
+      "types": "./src/mcp.ts",
+      "import": "./src/mcp.ts",
+      "default": "./src/mcp.ts"
     },
     "./types": {
-      "types": "./src/types-barrel.ts"
+      "types": "./src/types-barrel.ts",
+      "import": "./src/types-barrel.ts",
+      "default": "./src/types-barrel.ts"
     }
   },
   "scripts": {

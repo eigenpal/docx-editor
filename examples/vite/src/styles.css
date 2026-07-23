@@ -1,6 +1,7 @@
-/* Import editor styles
-   In standalone usage: @import '@docx-editor.dev/react/styles.css'; */
-@import '../../../packages/react/src/styles/editor.css';
+/* Import editor styles.
+   In standalone usage: @import '@docx-editor.dev/react/styles.css';
+   The demo imports the canonical core chrome stylesheet from source. */
+@import '../../../packages/core/src/styles/editor.css';
 
 @tailwind base;
 @tailwind components;

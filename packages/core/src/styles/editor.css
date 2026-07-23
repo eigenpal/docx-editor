@@ -1,0 +1,1339 @@
+/**
+ * DOCX Editor Styles — SINGLE SOURCE OF TRUTH.
+ *
+ * This file is the one canonical chrome stylesheet for the editor UI. Both the
+ * React and Vue adapters `@import` it from their own src/styles/editor.css, so
+ * the color-token palette and all UI styling can never drift between the two.
+ * Both adapter editor.css files are import-only (enforced by
+ * scripts/check-adapter-css-thin.mjs) — do NOT fork UI styling into an adapter,
+ * add it here.
+ *
+ * Contains:
+ * - CSS custom properties / color tokens (shadcn-compatible + --doc-* chrome
+ *   palette) and the .ep-root.dark scaffold
+ * - Cursor/caret, selection, content-control, popup/menu chrome, etc.
+ *
+ * NOTE: `@tailwind utilities` lives here so the directive is shared; each
+ * adapter's own Tailwind build (React via the CLI, Vue via vite PostCSS)
+ * expands it against that adapter's component sources. We intentionally do NOT
+ * include @tailwind base (preflight) to avoid resetting the host application.
+ */
+
+@tailwind utilities;
+
+/* ============================================================================
+ * CSS CUSTOM PROPERTIES (shadcn theme)
+ * ============================================================================ */
+
+/* Scoped to .ep-root to avoid clashing with host application CSS variables */
+.ep-root {
+  /* ----------------------------------------------------------------------
+   * shadcn / Tailwind tokens (HSL triples). These back the Tailwind utility
+   * classes (bg-primary, text-foreground, bg-muted, ...). These are the
+   * canonical React values (the slate-tinted shadcn palette) — DO NOT change
+   * them; both adapters share them so Vue matches React exactly. The `/
+   * <alpha-value>` form in the Tailwind preset lets opacity modifiers work.
+   * -------------------------------------------------------------------- */
+  --background: 0 0% 100%;
+  --foreground: 222.2 84% 4.9%;
+  --card: 0 0% 100%;
+  --card-foreground: 222.2 84% 4.9%;
+  --popover: 0 0% 100%;
+  --popover-foreground: 222.2 84% 4.9%;
+  --primary: 221.2 83.2% 53.3%;
+  --primary-foreground: 210 40% 98%;
+  --secondary: 210 40% 96.1%;
+  --secondary-foreground: 222.2 47.4% 11.2%;
+  --muted: 210 40% 96.1%;
+  --muted-foreground: 215.4 16.3% 46.9%;
+  --accent: 210 40% 96.1%;
+  --accent-foreground: 222.2 47.4% 11.2%;
+  --destructive: 0 84.2% 60.2%;
+  --destructive-foreground: 210 40% 98%;
+  --border: 214.3 31.8% 91.4%;
+  --input: 214.3 31.8% 91.4%;
+  --ring: 221.2 83.2% 53.3%;
+  --radius: 0.5rem;
+
+  /* ======================================================================
+   * Document-editor chrome palette — the single source of truth for UI
+   * colors. Components reference these via var(--doc-*); component styles
+   * carry no raw hex/rgba. Override the whole set under .ep-root.dark to
+   * theme the UI. The document canvas is painted from the .docx and is
+   * intentionally NOT themed here (it stays Word-faithful, like a page in
+   * Word/Google Docs that stays white regardless of app chrome).
+   * ==================================================================== */
+
+  /* Surfaces */
+  --doc-surface: #ffffff; /* panels, menus, dropdowns, cards */
+  --doc-card: #f8fbff; /* collapsed comment / suggestion cards (near-white) */
+  --doc-bg: #f8f9fa; /* app background behind the page */
+  --doc-bg-subtle: #f5f5f5; /* subtle section backgrounds */
+  --doc-bg-hover: #f1f3f4; /* hover states */
+  --doc-bg-input: #f8f9fa; /* input backgrounds */
+
+  /* Primary action color (Google blue) */
+  --doc-primary: #1a73e8;
+  --doc-primary-hover: #1557b0;
+  --doc-primary-light: #e8f0fe; /* selected/active backgrounds */
+
+  /* Accent (indigo — agent / assistant UI) */
+  --doc-accent: #6366f1;
+  --doc-accent-bg: #eef2ff;
+
+  /* Foreground for text/icons sitting on a colored fill (primary/accent/
+   * dark buttons, badges, tooltips). Inverts in dark mode so contrast holds. */
+  --doc-on-primary: #ffffff;
+
+  /* Active toolbar toggle (bold/italic/comments/...): dark slab in light mode,
+   * Word-accent tint in dark mode (where a dark slab would flip light). */
+  --doc-toggle-active-bg: hsl(var(--foreground));
+  --doc-toggle-active-fg: #ffffff;
+
+  /* Inline comment/annotation marks. Resting highlights stay quiet on the
+   * document canvas; focused sidebar items get the stronger active treatment. */
+  --doc-comment-bg: rgba(255, 212, 0, 0.12);
+  --doc-comment-border: rgba(245, 174, 0, 0.45);
+  --doc-comment-active-bg: rgba(255, 212, 0, 0.35);
+  --doc-comment-active-border: rgba(245, 174, 0, 0.9);
+
+  /* Text */
+  --doc-text: #202124; /* primary text */
+  --doc-text-muted: #5f6368; /* secondary text */
+  --doc-text-subtle: #9aa0a6; /* tertiary/disabled text */
+  --doc-text-placeholder: #999; /* placeholder text */
+
+  /* Borders */
+  --doc-border: #e0e0e0; /* standard borders */
+  --doc-border-light: #dadce0; /* lighter borders */
+  --doc-border-dark: #d0d0d0; /* darker borders (tables) */
+  --doc-border-input: #ccc; /* input borders */
+
+  /* Status */
+  --doc-error: #c5221f; /* error states */
+  --doc-error-bg: #fce8e6; /* error backgrounds */
+  --doc-success: #34a853; /* success states */
+  --doc-success-bg: #e8f5e9; /* success backgrounds */
+  --doc-warning: #f9a825; /* warning states (icon/accent/border) */
+  --doc-warning-bg: #fff8e1; /* warning backgrounds */
+  --doc-warning-text: #856404; /* readable warning text on warning-bg */
+
+  /* Link */
+  --doc-link: #0563c1; /* hyperlinks */
+
+  /* Revision indicators */
+  --doc-revision-insertion: #2e7d32;
+  --doc-revision-deletion: #c62828;
+  --doc-revision-insertion-tint: rgba(46, 125, 50, 0.05);
+  --doc-revision-deletion-tint: rgba(198, 40, 40, 0.05);
+
+  /* Shadows & overlays */
+  --doc-shadow: rgba(0, 0, 0, 0.15);
+  --doc-shadow-strong: rgba(0, 0, 0, 0.3);
+  --doc-shadow-subtle: rgba(0, 0, 0, 0.06);
+  --doc-overlay: rgba(0, 0, 0, 0.5); /* modal backdrops */
+
+  /* Sidebar card elevation (Google-grey, compound) — shared by React's
+   * cardStyles.ts and the Vue comment/tracked-change cards so both match. */
+  --doc-card-shadow: 0 1px 3px rgba(60, 64, 67, 0.2), 0 2px 6px rgba(60, 64, 67, 0.08);
+  --doc-card-shadow-strong: 0 1px 3px rgba(60, 64, 67, 0.3), 0 4px 8px 3px rgba(60, 64, 67, 0.15);
+  /* Elevated dropdown/popover (Tailwind shadow-lg) — mirrors React's Radix
+   * Select content so the Vue toolbar dropdowns match. */
+  --doc-shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -4px rgba(0, 0, 0, 0.1);
+
+  /* Focus ring & text selection (derived from primary) */
+  --doc-focus-ring: rgba(26, 115, 232, 0.4);
+  --doc-selection: rgba(26, 115, 232, 0.3);
+
+  /* Document scroll container scrollbar */
+  --doc-scrollbar-size: 14px;
+  --doc-scrollbar-thumb: color-mix(in srgb, var(--doc-text-muted) 45%, transparent);
+  --doc-scrollbar-thumb-hover: color-mix(in srgb, var(--doc-text-muted) 65%, transparent);
+  --doc-scrollbar-track: transparent;
+}
+
+/* ========================================================================
+ * Dark theme scaffold. Add the `dark` class to the .ep-root element to
+ * enable it (Tailwind darkMode: ['class'] is already configured). Theming is
+ * driven by these token overrides — every UI token above is re-pointed here,
+ * so all chrome re-themes automatically. The document canvas is left untouched
+ * on purpose. Values are intentionally left as TODO placeholders — the
+ * structure is in place so dark mode is a drop-in once the palette is chosen.
+ *
+ * NOTE: because `important: '.ep-root'` emits `dark:` utilities as
+ * `.ep-root .dark\:x:is(.dark *)`, those variants only match DESCENDANTS of a
+ * `.dark` element — NOT the `.ep-root.dark` element itself. So theme the root
+ * via these token overrides (as below), never via a `dark:` utility placed
+ * directly on the `.ep-root` node.
+ * ====================================================================== */
+/* Also targets nested `.ep-root` elements (e.g. the paged-editor root, Radix
+ * portals) so the base `.ep-root` light tokens don't shadow these inside a
+ * dark tree. */
+.ep-root.dark,
+.ep-root.dark .ep-root {
+  /* Palette sampled from Microsoft Word Online dark mode (chrome + canvas).
+   * shadcn / Tailwind tokens (HSL triples) — mirror the --doc-* chrome values
+   * below so shadcn-based components (Select, Button) re-theme in lockstep. */
+  --background: 0 0% 12%; /* #1f1f1f ribbon/surface */
+  --foreground: 0 0% 91%; /* #e8e8e8 */
+  --card: 0 0% 18%; /* #2d2d2d */
+  --card-foreground: 0 0% 91%;
+  --popover: 0 0% 18%; /* #2d2d2d */
+  --popover-foreground: 0 0% 91%;
+  --primary: 212 100% 65%; /* #4e9dff Word accent */
+  --primary-foreground: 0 0% 12%;
+  --secondary: 0 0% 20%; /* #333333 */
+  --secondary-foreground: 0 0% 91%;
+  --muted: 0 0% 20%; /* #333333 */
+  --muted-foreground: 0 0% 63%; /* #a0a0a0 */
+  --accent: 0 0% 23%; /* #3a3a3a */
+  --accent-foreground: 212 100% 65%;
+  --destructive: 0 72% 60%; /* #e05656 */
+  --destructive-foreground: 0 0% 98%;
+  --border: 0 0% 24%; /* #3c3c3c */
+  --input: 0 0% 24%;
+  --ring: 212 100% 60%;
+
+  /* chrome palette (Word Online dark) */
+  --doc-surface: #1f1f1f; /* ribbon / toolbar / title bar */
+  --doc-card: #2d2d2d; /* collapsed comment / suggestion cards */
+  --doc-bg: #262626; /* workspace behind the page */
+  --doc-bg-subtle: #2d2d2d; /* dropdowns, dialogs, panels */
+  --doc-bg-hover: #3a3a3a; /* hover states */
+  --doc-bg-input: #333333; /* input fields */
+  --doc-primary: #4e9dff; /* Word accent blue (Home-tab underline) */
+  --doc-primary-hover: #6cb0ff;
+  --doc-primary-light: rgba(78, 157, 255, 0.18); /* selected/active bg */
+  --doc-accent: #4e9dff;
+  --doc-accent-bg: #1f3047;
+  --doc-on-primary: #1f1f1f; /* text/icon on a filled primary surface */
+  --doc-toggle-active-bg: var(--doc-primary-light);
+  --doc-toggle-active-fg: var(--doc-primary);
+  --doc-comment-bg: rgba(253, 214, 99, 0.16);
+  --doc-comment-border: rgba(253, 214, 99, 0.5);
+  --doc-comment-active-bg: rgba(253, 214, 99, 0.32);
+  --doc-comment-active-border: rgba(253, 214, 99, 0.95);
+  --doc-text: #e8e8e8; /* primary text */
+  --doc-text-muted: #a0a0a0; /* secondary text */
+  --doc-text-subtle: #6e6e6e; /* tertiary/disabled text */
+  --doc-text-placeholder: #6e6e6e;
+  --doc-border: #3c3c3c; /* standard borders */
+  --doc-border-light: #353535; /* lighter borders */
+  --doc-border-dark: #555555; /* darker borders (tables) */
+  --doc-border-input: #4a4a4a; /* input borders */
+  --doc-error: #f28b82;
+  --doc-error-bg: #3c1f1d;
+  --doc-success: #81c995;
+  --doc-success-bg: #1f2e22;
+  --doc-warning: #fdd663;
+  --doc-warning-bg: #332a1a;
+  --doc-warning-text: #fdd663;
+  --doc-link: #6eb9ff;
+  --doc-shadow: rgba(0, 0, 0, 0.4);
+  --doc-shadow-strong: rgba(0, 0, 0, 0.6);
+  --doc-shadow-subtle: rgba(0, 0, 0, 0.2);
+  --doc-card-shadow: 0 1px 3px rgba(0, 0, 0, 0.4), 0 2px 6px rgba(0, 0, 0, 0.2);
+  --doc-card-shadow-strong: 0 1px 3px rgba(0, 0, 0, 0.5), 0 4px 8px 3px rgba(0, 0, 0, 0.3);
+  --doc-shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.5), 0 4px 6px -4px rgba(0, 0, 0, 0.5);
+  --doc-overlay: rgba(0, 0, 0, 0.7);
+  --doc-focus-ring: rgba(78, 157, 255, 0.45);
+  --doc-selection: rgba(78, 157, 255, 0.32);
+
+  /* Document canvas in dark mode (a VIEW transform — the saved DOCX never
+   * changes). Word doesn't just swap two colors; it perceptually inverts the
+   * LIGHTNESS of every document color while keeping its hue, so black text →
+   * white, dark-navy headings → light blue, dark-red → light red, etc. We get
+   * that for free by rendering the page in normal (light) colors and applying
+   * `invert(1) hue-rotate(180deg)` to the whole page below — hue-rotate undoes
+   * the hue flip that invert() introduces, leaving only the lightness flip.
+   *
+   * So the page is painted light here: pre-filter #ccc inverts to the ~#333
+   * canvas Word uses; text stays #000 (→ near-white). Images are inverted back
+   * to normal by the counter-filter below. */
+  --doc-page-bg: #cccccc;
+  /* --doc-page-text stays #000000 (light fallback) so it inverts to white. */
+
+  /* Caret on the dark canvas. The selection overlay sits OUTSIDE the inverted
+   * page (it's a sibling, not filtered), so a black caret would be invisible —
+   * point it at a light colour in dark mode. */
+  --doc-caret: #e8e8e8;
+}
+
+/* Smart lightness inversion of the document canvas — the heart of dark mode.
+ * invert(1) hue-rotate(180deg) flips lightness but preserves hue for ALL
+ * authored colors, so nothing is unreadable. Media is double-inverted back so
+ * photos/logos render normally. */
+.ep-root.dark .layout-page {
+  /* contrast(0.92) softens the pure black/white extremes a plain invert
+   * produces, landing on Word's gentler off-white text / dark-grey fills
+   * rather than #fff on #000. */
+  filter: invert(1) hue-rotate(180deg) contrast(0.92);
+  /* Replace the painter's drop shadow (the filter would turn it into a weird
+   * light glow) with a 1px ring. Pre-invert dark → post-invert a subtle light
+   * border, matching Word's framed dark page. */
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.18) !important;
+}
+.ep-root.dark .layout-page img,
+.ep-root.dark .layout-page svg,
+.ep-root.dark .layout-page canvas,
+.ep-root.dark .layout-page video,
+.ep-root.dark .layout-page [data-no-color-invert] {
+  filter: invert(1) hue-rotate(180deg);
+}
+
+/* Printing is always on white paper: drop the inversion and paint the page
+ * white with black text (matches Word, saves toner). */
+@media print {
+  .ep-root.dark {
+    --doc-page-bg: #ffffff;
+  }
+  .ep-root.dark .layout-page,
+  .ep-root.dark .layout-page img,
+  .ep-root.dark .layout-page svg,
+  .ep-root.dark .layout-page canvas,
+  .ep-root.dark .layout-page video {
+    filter: none;
+  }
+}
+
+/* ============================================================================
+ * DOCUMENT SCROLLBAR
+ * ============================================================================ */
+
+.ep-root .docx-editor__scroll-container,
+.ep-root .docx-editor-vue__pages-viewport {
+  scrollbar-width: auto;
+  scrollbar-color: var(--doc-scrollbar-thumb) var(--doc-scrollbar-track);
+}
+
+.ep-root .docx-editor__scroll-container {
+  /* `both-edges` reserves a symmetric gutter so the centered page stays centered
+     on classic-scrollbar platforms (single-edge nudges it ~7px left). Matches
+     the Vue viewport (DocxEditor.css `__pages-viewport`). */
+  scrollbar-gutter: stable both-edges;
+}
+
+.ep-root .docx-editor__scroll-container::-webkit-scrollbar,
+.ep-root .docx-editor-vue__pages-viewport::-webkit-scrollbar {
+  width: var(--doc-scrollbar-size);
+  height: var(--doc-scrollbar-size);
+}
+
+.ep-root .docx-editor__scroll-container::-webkit-scrollbar-track,
+.ep-root .docx-editor-vue__pages-viewport::-webkit-scrollbar-track {
+  background: var(--doc-scrollbar-track);
+}
+
+.ep-root .docx-editor__scroll-container::-webkit-scrollbar-thumb,
+.ep-root .docx-editor-vue__pages-viewport::-webkit-scrollbar-thumb {
+  background: var(--doc-scrollbar-thumb);
+  border: 3px solid transparent;
+  border-radius: 9999px;
+  background-clip: content-box;
+}
+
+.ep-root .docx-editor__scroll-container:hover::-webkit-scrollbar-thumb,
+.ep-root .docx-editor-vue__pages-viewport:hover::-webkit-scrollbar-thumb {
+  background: var(--doc-scrollbar-thumb-hover);
+  border: 3px solid transparent;
+  border-radius: 9999px;
+  background-clip: content-box;
+}
+
+/* ============================================================================
+ * CURSOR / CARET STYLING
+ * ============================================================================ */
+
+/* Base cursor styles for all editable elements */
+[contenteditable='true'] {
+  /* Black caret for light backgrounds - highly visible */
+  caret-color: #000;
+
+  /* Ensure cursor is always visible */
+  outline: none;
+
+  /* Smooth caret animation */
+  caret-shape: bar;
+}
+
+/* Editable runs - the main text editing elements */
+.docx-run-editable[contenteditable='true'] {
+  caret-color: #000;
+
+  /* Ensure minimum height for cursor visibility in empty runs */
+  min-height: 1em;
+
+  /* Display inline for text flow */
+  display: inline;
+}
+
+/* Empty paragraph cursor placeholder */
+.docx-paragraph-empty [contenteditable='true'] {
+  /* Ensure cursor is visible in empty paragraphs */
+  min-height: 1em;
+  min-width: 1px;
+  display: inline-block;
+}
+
+/* Editable paragraphs container */
+.docx-paragraph-editable {
+  /* Allow cursor placement anywhere in paragraph */
+  cursor: text;
+}
+
+/* ============================================================================
+ * FOCUS STATES
+ * ============================================================================ */
+
+/* Subtle focus indicator without disrupting layout */
+.docx-run-editable[contenteditable='true']:focus {
+  outline: none;
+  /* Optional: very subtle indicator - uncomment if needed */
+  /* box-shadow: 0 0 0 1px rgba(26, 115, 232, 0.2); */
+}
+
+/* Focus within paragraph */
+.docx-paragraph-editable:focus-within {
+  /* No visible border to maintain WYSIWYG fidelity */
+  outline: none;
+}
+
+/* ============================================================================
+ * SELECTION HIGHLIGHTING
+ * ============================================================================ */
+
+/*
+ * Selection highlighting CSS ensures consistent visual feedback when selecting
+ * text across multiple runs (spans) with different formatting.
+ *
+ * Key considerations:
+ * - Use !important to override inline styles from formatting
+ * - Ensure selection is visible against various backgrounds
+ * - Maintain text color (inherit) for readability
+ * - Use rgba for semi-transparent highlight that shows text clearly
+ */
+
+/* Base selection styling for all editable elements */
+.docx-run-editable::selection,
+.docx-run-editable *::selection,
+.docx-run::selection,
+.docx-run *::selection,
+[contenteditable='true']::selection,
+[contenteditable='true'] *::selection {
+  background-color: rgba(26, 115, 232, 0.3) !important;
+  color: inherit !important;
+}
+
+/* Firefox selection */
+.docx-run-editable::-moz-selection,
+.docx-run-editable *::-moz-selection,
+.docx-run::-moz-selection,
+.docx-run *::-moz-selection,
+[contenteditable='true']::-moz-selection,
+[contenteditable='true'] *::-moz-selection {
+  background-color: rgba(26, 115, 232, 0.3) !important;
+  color: inherit !important;
+}
+
+/* Selection in paragraphs - ensure runs within get consistent styling */
+.docx-paragraph::selection,
+.docx-paragraph *::selection,
+.docx-paragraph-editable::selection,
+.docx-paragraph-editable *::selection {
+  background-color: rgba(26, 115, 232, 0.3) !important;
+  color: inherit !important;
+}
+
+.docx-paragraph::-moz-selection,
+.docx-paragraph *::-moz-selection,
+.docx-paragraph-editable::-moz-selection,
+.docx-paragraph-editable *::-moz-selection {
+  background-color: rgba(26, 115, 232, 0.3) !important;
+  color: inherit !important;
+}
+
+/* Selection in hyperlinks */
+.docx-hyperlink::selection,
+.docx-hyperlink *::selection {
+  background-color: rgba(26, 115, 232, 0.3) !important;
+  color: inherit !important;
+}
+
+.docx-hyperlink::-moz-selection,
+.docx-hyperlink *::-moz-selection {
+  background-color: rgba(26, 115, 232, 0.3) !important;
+  color: inherit !important;
+}
+
+/* Selection on highlighted text - use darker selection for visibility */
+.docx-run-highlighted::selection,
+.docx-run-highlighted *::selection {
+  background-color: rgba(26, 115, 232, 0.5) !important;
+  color: inherit !important;
+}
+
+.docx-run-highlighted::-moz-selection,
+.docx-run-highlighted *::-moz-selection {
+  background-color: rgba(26, 115, 232, 0.5) !important;
+  color: inherit !important;
+}
+
+/* Selection on dark background text - lighter selection */
+.docx-run-dark-bg::selection,
+.docx-run-dark-bg *::selection {
+  background-color: rgba(100, 181, 246, 0.5) !important;
+  color: inherit !important;
+}
+
+.docx-run-dark-bg::-moz-selection,
+.docx-run-dark-bg *::-moz-selection {
+  background-color: rgba(100, 181, 246, 0.5) !important;
+  color: inherit !important;
+}
+
+/* Selection on bold text - ensure same style */
+.docx-run-bold::selection,
+.docx-run-bold *::selection {
+  background-color: rgba(26, 115, 232, 0.3) !important;
+  color: inherit !important;
+}
+
+.docx-run-bold::-moz-selection,
+.docx-run-bold *::-moz-selection {
+  background-color: rgba(26, 115, 232, 0.3) !important;
+  color: inherit !important;
+}
+
+/* Selection on italic text - ensure same style */
+.docx-run-italic::selection,
+.docx-run-italic *::selection {
+  background-color: rgba(26, 115, 232, 0.3) !important;
+  color: inherit !important;
+}
+
+.docx-run-italic::-moz-selection,
+.docx-run-italic *::-moz-selection {
+  background-color: rgba(26, 115, 232, 0.3) !important;
+  color: inherit !important;
+}
+
+/* ============================================================================
+ * FIND & REPLACE HIGHLIGHTING
+ * ============================================================================ */
+
+/* Find/replace match highlighting */
+.docx-find-highlight {
+  background-color: rgba(255, 235, 59, 0.5) !important;
+  border-radius: 2px;
+}
+
+/* Current find/replace match */
+.docx-find-highlight-current {
+  background-color: rgba(255, 152, 0, 0.6) !important;
+  border-radius: 2px;
+  outline: 2px solid rgba(255, 152, 0, 0.8);
+}
+
+/* ============================================================================
+ * AI ACTION PREVIEW HIGHLIGHTING
+ * ============================================================================ */
+
+/* Text selected for AI action */
+.docx-ai-selection-preview {
+  background-color: rgba(156, 39, 176, 0.2);
+  border-bottom: 2px dashed rgba(156, 39, 176, 0.6);
+}
+
+/* Transient paragraph flash used by scrollToParaId({ highlight }). */
+.layout-paragraph.docx-paragraph-flash {
+  animation: docx-paragraph-flash-fade var(--docx-paragraph-flash-duration, 1200ms) ease-out both;
+}
+
+@keyframes docx-paragraph-flash-fade {
+  0%,
+  70% {
+    box-shadow: inset 0 0 0 9999px var(--docx-paragraph-flash-color, rgba(255, 235, 59, 0.55));
+  }
+
+  100% {
+    box-shadow: inset 0 0 0 9999px transparent;
+  }
+}
+
+/* ============================================================================
+ * SELECTION OVERLAY (for programmatic highlighting)
+ * ============================================================================ */
+
+/* Container for selection overlay rectangles */
+.docx-selection-overlay-container {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 1;
+  overflow: hidden;
+}
+
+/* Individual selection overlay rectangle */
+.docx-selection-overlay-rect {
+  position: absolute;
+  background-color: rgba(66, 133, 244, 0.25);
+  pointer-events: none;
+  user-select: none;
+}
+
+/* ============================================================================
+ * SPECIAL CONTENT TYPES
+ * ============================================================================ */
+
+/* Highlighted text - ensure caret is visible against yellow */
+.docx-run-highlighted[contenteditable='true'] {
+  caret-color: #333;
+}
+
+/* Dark background text - use white caret */
+.docx-run-dark-bg[contenteditable='true'] {
+  caret-color: #fff;
+}
+
+/* ============================================================================
+ * EDITOR CONTAINER
+ * ============================================================================ */
+
+/* Main editor container */
+.docx-editor {
+  /* Inherit cursor styling */
+  cursor: default;
+}
+
+/* Editor page area */
+.docx-editor-page {
+  cursor: text;
+}
+
+/* Non-editable elements within editor */
+.docx-list-marker,
+.docx-bookmark-start,
+.docx-bookmark-end,
+.docx-field,
+.docx-drawing-placeholder,
+.docx-shape-placeholder {
+  cursor: default;
+  user-select: none;
+}
+
+/* ============================================================================
+ * TEMPLATE VARIABLES
+ * ============================================================================ */
+
+/* Template variable highlighting - non-editable within run */
+.docx-run-has-variable [contenteditable='false'] {
+  cursor: default;
+  user-select: all;
+}
+
+/* ============================================================================
+ * LAYOUT TABLE COLUMN RESIZE
+ * ============================================================================ */
+
+/* ============================================================================
+ * TABLE CELL SELECTION (visible layout table cells)
+ * ============================================================================ */
+
+.layout-table-cell-selected {
+  position: relative;
+  outline: 2px solid rgba(66, 133, 244, 0.6);
+  outline-offset: -2px;
+}
+
+.layout-table-cell-selected::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-color: rgba(66, 133, 244, 0.15);
+  pointer-events: none;
+}
+
+/* ============================================================================
+ * LAYOUT TABLE COLUMN RESIZE
+ * ============================================================================ */
+
+.layout-table-resize-handle {
+  background-color: transparent;
+  transition: background-color 0.15s;
+}
+
+.layout-table-resize-handle:hover,
+.layout-table-resize-handle.dragging {
+  background-color: rgba(66, 133, 244, 0.6);
+}
+
+/* Row resize handles */
+.layout-table-row-resize-handle,
+.layout-table-edge-handle-bottom {
+  background-color: transparent;
+  transition: background-color 0.15s;
+}
+
+.layout-table-row-resize-handle:hover,
+.layout-table-row-resize-handle.dragging,
+.layout-table-edge-handle-bottom:hover,
+.layout-table-edge-handle-bottom.dragging {
+  background-color: rgba(66, 133, 244, 0.6);
+}
+
+/* Right edge handle */
+.layout-table-edge-handle-right {
+  background-color: transparent;
+  transition: background-color 0.15s;
+}
+
+.layout-table-edge-handle-right:hover,
+.layout-table-edge-handle-right.dragging {
+  background-color: rgba(66, 133, 244, 0.6);
+}
+
+/* ============================================================================
+ * READONLY MODE — suppress interactive editing cues
+ * ============================================================================ */
+
+/* Hide table resize handles */
+.paged-editor--readonly .layout-table-resize-handle,
+.paged-editor--readonly .layout-table-row-resize-handle,
+.paged-editor--readonly .layout-table-edge-handle-bottom,
+.paged-editor--readonly .layout-table-edge-handle-right {
+  display: none !important;
+}
+
+/* Remove header/footer hover effects and edit hints */
+.paged-editor--readonly .layout-page-header,
+.paged-editor--readonly .layout-page-footer {
+  cursor: default;
+  pointer-events: none;
+}
+
+/* Remove text cursor from page content */
+.paged-editor--readonly .layout-page-content {
+  cursor: default;
+}
+
+/* Outline heading hover */
+.docx-outline-heading-btn:hover {
+  background-color: var(--doc-bg-hover);
+}
+
+/* React toolbar toggle buttons (bold/italic/comments/...). Owned here, not via
+ * Tailwind utilities: `cn` is clsx-only (no tailwind-merge), so competing
+ * hover:bg utilities don't dedupe and the active slab could lose its color on
+ * hover (white icon on a light bg). The `.ep-root` prefix outranks the
+ * single-class Tailwind hover utilities. */
+.ep-root .ep-toolbar-toggle:hover {
+  background-color: var(--doc-bg-hover);
+  color: var(--doc-text);
+}
+.ep-root .ep-toolbar-toggle[data-active='true'],
+.ep-root .ep-toolbar-toggle[data-active='true']:hover {
+  background-color: var(--doc-toggle-active-bg);
+  color: var(--doc-toggle-active-fg);
+}
+
+/* Outline / navigation toggle button (shown when the panel is collapsed).
+ * Google-Docs-style filled circular control: a resting disc + ring so it
+ * reads as a button against the gray document gutter (--doc-bg), darkening
+ * on hover. Adapters supply only position (it tracks horizontal scroll). */
+.docx-outline-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: 1px solid var(--doc-border-light);
+  background: var(--doc-bg-hover);
+  color: var(--doc-text-muted);
+  cursor: pointer;
+  transition:
+    background-color 0.12s ease,
+    color 0.12s ease,
+    box-shadow 0.12s ease;
+}
+.docx-outline-toggle:hover {
+  background: var(--doc-border);
+  color: var(--doc-text);
+  box-shadow: 0 1px 3px rgba(60, 64, 67, 0.18);
+}
+.docx-outline-toggle:focus-visible {
+  outline: 2px solid var(--doc-primary);
+  outline-offset: 2px;
+}
+
+/* ============================================================================
+ * HEADER / FOOTER EDITING
+ *
+ * These styles are needed when editing headers/footers inline (Google Docs style).
+ * They must be in dist/styles.css since the runtime CSS import in
+ * OffscreenEditorHost.tsx is stripped by tsup (injectStyle: false).
+ * ============================================================================ */
+
+/* Page content area — show text cursor when hovering over editable content */
+.layout-page-content {
+  cursor: text;
+}
+
+/* Block-level Structured Document Tag (content control) boundary.
+   The painter lays body fragments as flat absolutely-positioned siblings, so
+   the boundary is a single overlay box per control (see renderSdtBoundaryBoxes)
+   spanning its fragments at content width — drawn as one rounded rectangle
+   like Word, with a corner label chip revealed on hover/focus. The box is
+   non-interactive so it never steals clicks from the editable content under it.
+   Nested controls each draw their own (slightly inset) box. */
+.layout-block-sdt-box {
+  pointer-events: none;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  box-sizing: border-box;
+  transition: border-color 0.1s ease;
+  z-index: 1;
+}
+.layout-block-sdt-box.is-active,
+.layout-block-sdt-box.is-focused {
+  border-color: rgba(25, 103, 210, 0.5);
+}
+/* Corner label chip — hidden until its control is hovered/active. */
+.layout-block-sdt-label {
+  position: absolute;
+  left: -1px;
+  bottom: 100%;
+  max-width: 160px;
+  height: 16px;
+  padding: 0 6px;
+  font-size: 10px;
+  line-height: 16px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: #fff;
+  background-color: rgba(25, 103, 210, 0.92);
+  border-radius: 4px 4px 0 0;
+  display: none;
+}
+.layout-block-sdt-box.is-active .layout-block-sdt-label,
+.layout-block-sdt-box.is-focused .layout-block-sdt-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+
+/* The refresh button hangs in the page margin, `--toc-refresh-gap` to the left
+   of its boundary box. Both it and the hover bridge below derive their geometry
+   from these two values, so the bridge can never drift out of step with the
+   button it has to reach. */
+.layout-block-sdt-box--has-toc-refresh {
+  --toc-refresh-size: 32px;
+  --toc-refresh-gap: 8px;
+  --toc-refresh-reach: calc(var(--toc-refresh-size) + var(--toc-refresh-gap));
+}
+
+/* Hover bridge — load-bearing, not decoration. The button hangs outside the
+   boundary box, so without this the pointer would cross gutter owned by
+   neither, firing `mouseleave` on the content element: that clears
+   `.is-active`, which drops the button to `pointer-events: none` just as the
+   pointer arrives, and the click falls through to the page. The strip covers
+   the button plus the gap at full box height, so hits resolve to the box (it is
+   the box's own pseudo-element) and `isPointInsideSdtBoundary`'s
+   `box.contains(target)` check keeps the reveal alive across the whole path.
+   Live only while `.is-active`, and under the button (z-index 2), so it swallows
+   neither margin clicks nor the button's own. */
+.layout-block-sdt-box--has-toc-refresh::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: calc(-1 * var(--toc-refresh-reach));
+  width: var(--toc-refresh-reach);
+  pointer-events: none;
+}
+.layout-block-sdt-box--has-toc-refresh.is-active::before {
+  pointer-events: auto;
+}
+
+/* Inline TOC refresh affordance — floating action button appended to the SDT boundary. */
+.layout-block-sdt-box--has-toc-refresh .layout-toc-refresh {
+  position: absolute;
+  top: 0;
+  left: calc(-1 * var(--toc-refresh-gap));
+  transform: translateX(-100%);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--toc-refresh-size);
+  height: var(--toc-refresh-size);
+  padding: 0;
+  margin: 0;
+  border: 1px solid var(--doc-border-light);
+  border-radius: 6px;
+  background: var(--doc-surface);
+  color: var(--doc-text-muted);
+  cursor: pointer;
+  pointer-events: none;
+  box-shadow: 0 1px 3px var(--doc-shadow);
+  opacity: 0;
+  visibility: hidden;
+  transition:
+    opacity 0.15s ease,
+    visibility 0.15s ease,
+    background-color 0.15s ease,
+    box-shadow 0.15s ease;
+  z-index: 2;
+}
+.layout-block-sdt-box--has-toc-refresh.is-active .layout-toc-refresh,
+.layout-block-sdt-box--has-toc-refresh.is-focused .layout-toc-refresh,
+.layout-block-sdt-box--has-toc-refresh:focus-within .layout-toc-refresh,
+.layout-block-sdt-box--has-toc-refresh .layout-toc-refresh.layout-toc-refresh--proxy-focused {
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+}
+.layout-toc-refresh:hover {
+  background: var(--doc-primary-light);
+  color: var(--doc-primary);
+  box-shadow: 0 2px 6px var(--doc-shadow);
+}
+.layout-toc-refresh:focus-visible,
+.layout-toc-refresh.layout-toc-refresh--proxy-focused {
+  outline: 2px solid var(--doc-primary);
+  outline-offset: 1px;
+}
+.layout-toc-refresh svg {
+  display: block;
+  width: 16px;
+  height: 16px;
+}
+
+/* Accessible proxy buttons live outside aria-hidden painted pages. */
+.layout-toc-refresh-proxies {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+.layout-toc-refresh-proxy {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+.layout-toc-refresh-proxy:focus-visible {
+  outline: 2px solid var(--doc-primary);
+  outline-offset: 1px;
+}
+
+/* Header/footer CONTENT is non-interactive in normal mode: a single click on a
+   header/footer is already a no-op (Word parity), and — crucially — a page- or
+   margin-anchored shape (e.g. a full-page letterhead in a header) overflows the
+   band and would otherwise sit on top of the body and swallow clicks meant for
+   the document text (#856). The band element itself keeps pointer events so it
+   stays the double-click-to-edit target; only its content is passed through.
+   Kept here (not only in prosemirror/editor.css) so the React adapter's
+   styles.css build — which compiles this file — ships the rule. */
+.layout-page-header > *,
+.layout-page-footer > * {
+  pointer-events: none;
+}
+
+/* While editing a region, its content must be hittable again so clicks map to
+   header/footer caret positions. */
+.paged-editor--editing-header .layout-page-header > *,
+.paged-editor--editing-footer .layout-page-footer > * {
+  pointer-events: auto;
+}
+
+/* Header/footer areas — double-click hint */
+.layout-page-header,
+.layout-page-footer {
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+}
+.layout-page-header:hover,
+.layout-page-footer:hover {
+  background-color: rgba(37, 99, 235, 0.06);
+}
+/* Show "Double-click to edit" hint on hover when area is empty */
+.layout-page-header:empty:hover::after {
+  content: 'Double-click to add header';
+  display: block;
+  text-align: center;
+  color: var(--doc-text-subtle);
+  font-size: 11px;
+  padding: 4px 0;
+}
+.layout-page-footer:empty:hover::after {
+  content: 'Double-click to add footer';
+  display: block;
+  text-align: center;
+  color: var(--doc-text-subtle);
+  font-size: 11px;
+  padding: 4px 0;
+}
+
+/*
+ * Phase 5 of HF editing unification (openspec/changes/unify-hf-editing/):
+ * the inline overlay no longer mounts a PM EditorView, so the entire
+ * `.hf-editor-pm` rule block (font-strut zeroing, table-layout overrides,
+ * `top: 0.4em` shim, line-height resets) is gone. Painter + persistent
+ * hidden PM are the only HF rendering paths now.
+ */
+
+/* Dim body content when editing header/footer */
+.paged-editor--hf-editing .layout-page-content {
+  opacity: 0.4;
+  pointer-events: none;
+  transition: opacity 0.15s ease;
+}
+
+/* While editing one HF region, the sibling region (and the non-edited area)
+   shows a normal arrow, not the double-click "pointer" hint. The active
+   region's `cursor: text` below wins via later source order. */
+.paged-editor--hf-editing .layout-page-header,
+.paged-editor--hf-editing .layout-page-footer {
+  cursor: default;
+}
+
+/* Dotted border on active header area; text caret since it's being edited */
+.paged-editor--editing-header .layout-page-header {
+  border-bottom: 1px dotted var(--doc-primary);
+  cursor: text;
+}
+
+/* Dotted border on active footer area; text caret since it's being edited */
+.paged-editor--editing-footer .layout-page-footer {
+  border-top: 1px dotted var(--doc-primary);
+  cursor: text;
+}
+
+/*
+ * HF editing unification phase 2 (openspec/changes/unify-hf-editing/):
+ * removed; the painter is now the sole visible HF renderer in both modes
+ * and the inline overlay's PM container moves off-screen instead.
+ */
+
+/* Remove hover effect on header/footer when in editing mode */
+.paged-editor--hf-editing .layout-page-header:hover,
+.paged-editor--hf-editing .layout-page-footer:hover {
+  background-color: transparent;
+}
+
+/* Body caret blink for the Vue adapter's painted caret (useSelectionSync sets
+   `animation: ep-caret-blink ...` inline). React drives its caret's blink from a
+   JS timer instead; both land on the same 530ms half-period, which is the
+   platform default. Defined here so the keyframes aren't duplicated per adapter. */
+@keyframes ep-caret-blink {
+  0%,
+  49% {
+    opacity: 1;
+  }
+  50%,
+  100% {
+    opacity: 0;
+  }
+}
+
+/* HF caret overlay blink. Used by the painted HF caret in both adapters
+   (DocxEditorPagedArea.tsx / DocxEditor.vue set `animation: hf-caret-blink ...`
+   inline). Defined once here so the keyframes aren't duplicated per adapter. */
+@keyframes hf-caret-blink {
+  0%,
+  49% {
+    opacity: 1;
+  }
+  50%,
+  100% {
+    opacity: 0;
+  }
+}
+
+/* Section break indicator */
+.docx-section-break {
+  position: relative;
+}
+.docx-section-break::after {
+  content: 'Section Break (' attr(data-section-break) ')';
+  display: block;
+  text-align: center;
+  font-size: 9px;
+  color: var(--doc-text-muted);
+  border-top: 1px dashed var(--doc-border);
+  margin-top: 4px;
+  padding-top: 2px;
+  pointer-events: none;
+}
+
+/* Hyperlink popup icon button hover */
+.ep-hyperlink-popup__icon-btn:hover {
+  background: var(--doc-bg-hover);
+}
+
+/* =============================================================================
+ * ProseMirror decoration forwarding overlay
+ *
+ * Generic surface for decorations published via PM plugins' `props.decorations`
+ * (the painter doesn't render them itself — see `DecorationLayer.tsx`).
+ * Children are absolutely-positioned inside this container; pointer-events
+ * are off by default so editing isn't blocked. Plugins that need hover/click
+ * on a decoration (e.g. cursor name labels) opt in via inline styles.
+ *
+ * z-index: 11 — one above SelectionOverlay (10) so cursor name labels render
+ * above the local caret.
+ * ============================================================================= */
+.paged-editor__decoration-overlay {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 11;
+}
+
+/* Default styles for y-prosemirror remote cursor decorations. Consumers can
+ * override by providing their own `.ProseMirror-yjs-cursor` rules. */
+.ProseMirror-yjs-cursor {
+  position: relative;
+  margin-left: -1px;
+  margin-right: -1px;
+  border-left: 1px solid;
+  border-right: 1px solid;
+  word-break: normal;
+  pointer-events: none;
+}
+.ProseMirror-yjs-cursor > div {
+  position: absolute;
+  top: -1.05em;
+  left: -1px;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1;
+  color: #fff;
+  padding: 2px 4px;
+  border-radius: 3px 3px 3px 0;
+  white-space: nowrap;
+  user-select: none;
+  pointer-events: none;
+}
+
+/* Tracked-revision styles live in core (prosemirror/editor.css), shared
+   by React + Vue adapters. Do not duplicate here. */
+
+/* Interactive trigger for typed controls (checkbox/dropdown/date). The box is
+   pointer-events:none; the trigger re-enables them so it is clickable. Sits at
+   the top-right corner of the control box. */
+.layout-sdt-widget {
+  position: absolute;
+  top: 1px;
+  right: 1px;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 3px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  line-height: 1;
+  color: var(--doc-primary);
+  background: rgba(255, 255, 255, 0.9);
+  border: 1px solid rgba(25, 103, 210, 0.5);
+  border-radius: 3px;
+  cursor: pointer;
+  pointer-events: auto;
+  opacity: 0.55;
+  transition: opacity 0.1s ease;
+}
+.layout-block-sdt-box.is-active .layout-sdt-widget,
+.layout-block-sdt-box.is-focused .layout-sdt-widget,
+.layout-sdt-widget:focus {
+  opacity: 1;
+}
+.layout-sdt-widget:hover {
+  background: var(--doc-primary-light);
+}
+
+.layout-inline-sdt-widget {
+  cursor: pointer;
+  pointer-events: auto;
+  border-radius: 2px;
+  outline-offset: 1px;
+  user-select: none;
+}
+.layout-inline-sdt-widget:hover,
+.layout-inline-sdt-widget:focus {
+  background: var(--doc-primary-light);
+  outline: 1px solid rgba(25, 103, 210, 0.55);
+}
+
+/* Popup for dropdown/date content-control widgets (rendered by the adapter). */
+.layout-sdt-widget-popup {
+  min-width: 120px;
+  max-height: 240px;
+  overflow-y: auto;
+  background: var(--doc-surface);
+  border: 1px solid var(--doc-border-light);
+  border-radius: 6px;
+  box-shadow: 0 2px 10px var(--doc-shadow);
+  padding: 4px;
+  font-size: 13px;
+}
+.layout-sdt-widget-option {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 6px 10px;
+  border: 0;
+  background: transparent;
+  border-radius: 4px;
+  cursor: pointer;
+  color: var(--doc-text);
+}
+.layout-sdt-widget-option:hover {
+  background: var(--doc-primary-light);
+}
+.layout-sdt-widget-empty {
+  padding: 6px 10px;
+  color: var(--doc-text-muted);
+}
+.layout-sdt-widget-date {
+  font: inherit;
+  padding: 4px 6px;
+  border: 1px solid var(--doc-border-light);
+  border-radius: 4px;
+}
+.layout-sdt-widget-option.is-selected {
+  font-weight: 600;
+  background: var(--doc-bg-hover);
+}
+
+/* Repeating-section item add/remove affordances (bottom-right of the item box). */
+.layout-sdt-repeat-controls {
+  position: absolute;
+  bottom: 1px;
+  right: 1px;
+  display: flex;
+  gap: 2px;
+  opacity: 0.55;
+  pointer-events: none;
+}
+.layout-block-sdt-box.is-active .layout-sdt-repeat-controls,
+.layout-block-sdt-box.is-focused .layout-sdt-repeat-controls {
+  opacity: 1;
+}
+.layout-sdt-repeat-btn {
+  min-width: 16px;
+  height: 16px;
+  padding: 0 3px;
+  font-size: 11px;
+  line-height: 1;
+  color: var(--doc-primary);
+  background: rgba(255, 255, 255, 0.9);
+  border: 1px solid rgba(25, 103, 210, 0.5);
+  border-radius: 3px;
+  cursor: pointer;
+  pointer-events: auto;
+}
+.layout-sdt-repeat-btn:hover {
+  background: var(--doc-primary-light);
+}
+
+/* ============================================================================
+ * Revision indicators shared by both adapters.
+ * Visible painter cues live here so React and Vue stay in lockstep.
+ * ========================================================================== */
+
+.layout-revision-bars {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.layout-revision-change-bar {
+  position: absolute;
+  left: -10px;
+  width: 2px;
+  pointer-events: none;
+}
+
+.layout-revision-change-bar.layout-revision-ins {
+  background-color: var(--doc-revision-insertion);
+}
+
+.layout-revision-change-bar.layout-revision-del {
+  background-color: var(--doc-revision-deletion);
+}
+
+.layout-revision-pmark {
+  position: relative;
+}
+
+.layout-revision-pmark-glyph {
+  display: inline;
+  margin-left: 2px;
+  font-weight: normal;
+  opacity: 0.75;
+  pointer-events: none;
+}
+
+.layout-revision-pmark-glyph.layout-revision-ins {
+  color: var(--doc-revision-insertion);
+}
+
+.layout-revision-pmark-glyph.layout-revision-del {
+  color: var(--doc-revision-deletion);
+  text-decoration: line-through;
+}
+
+.ep-revision-cell.ep-revision-ins {
+  box-shadow: inset 0 3px 0 var(--doc-revision-insertion);
+  background-color: var(--doc-revision-insertion-tint);
+}
+
+.ep-revision-cell.ep-revision-del {
+  box-shadow: inset 0 3px 0 var(--doc-revision-deletion);
+  background-color: var(--doc-revision-deletion-tint);
+  text-decoration: line-through;
+  text-decoration-color: color-mix(in srgb, var(--doc-revision-deletion) 60%, transparent);
+}
+
+.ep-revision-cell.ep-revision-merge {
+  box-shadow: inset 0 3px 0 var(--doc-text-muted);
+  background-color: color-mix(in srgb, var(--doc-text-muted) 8%, transparent);
+}
+
+.layout-run-image.docx-insertion,
+.layout-run-image-wrapper.docx-insertion > .layout-run-image,
+.layout-block-image.docx-insertion,
+.layout-image.docx-insertion,
+.layout-page-floating-image.docx-insertion > img,
+.layout-cell-floating-image.docx-insertion > img,
+.layout-header-footer-floating-image.docx-insertion > img {
+  outline: 2px solid var(--doc-revision-insertion);
+  outline-offset: 1px;
+}
+
+.layout-run-image.docx-deletion,
+.layout-run-image-wrapper.docx-deletion > .layout-run-image,
+.layout-block-image.docx-deletion,
+.layout-image.docx-deletion,
+.layout-page-floating-image.docx-deletion > img,
+.layout-cell-floating-image.docx-deletion > img,
+.layout-header-footer-floating-image.docx-deletion > img {
+  outline: 2px solid var(--doc-revision-deletion);
+  outline-offset: 1px;
+  opacity: 0.6;
+}
