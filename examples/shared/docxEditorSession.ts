@@ -8,6 +8,7 @@ import type { Node as PMNode } from 'prosemirror-model';
 import {
   parseDocx,
   writeDocx,
+  isPlainEditableDocx,
   DocumentStore,
   bodyStoryId,
   type ParagraphRecord,
@@ -24,9 +25,10 @@ export interface ApplyResult {
 }
 
 export interface DocxEditorSession {
-  /** Whether body paragraphs may be edited. A document is editable only when the engine
-   *  can round-trip an edit: paragraph-only body, no lossless-preservation part (tables/
-   *  SDTs take the preservation path and open read-only so nothing is dropped on save). */
+  /** Whether body paragraphs may be edited. Editable ONLY for a document writeDocx
+   *  reproduces losslessly (plain fully-captured paragraphs, no parts/relationships/
+   *  section-props/tables/SDTs/inline structure it would drop). Anything else opens
+   *  read-only so an edit-and-save can never silently lose content. */
   readonly editable: boolean;
   /** Project the current canonical model into a ProseMirror doc for the view. */
   projectDoc(): PMNode;
@@ -55,9 +57,9 @@ export function openDocxSession(bytes: Uint8Array): DocxEditorSession {
   const model = parsed.model;
   const store = new DocumentStore(model);
   const binding = new EditorBinding(store);
-
-  const blocks = model.stories.get(bodyStoryId(model))!.blocks;
-  const editable = !model.preservation && blocks.every((b) => b.kind === 'paragraph');
+  // Lossless-editability is a property of the ORIGINAL package, decided independently of
+  // the (lossy) minimal writer: only a plain paragraph document qualifies.
+  const editable = isPlainEditableDocx(bytes);
 
   return {
     editable,
@@ -65,14 +67,19 @@ export function openDocxSession(bytes: Uint8Array): DocxEditorSession {
     applyPmDoc(doc) {
       if (!editable) return { committed: false, rejected: true, opCount: 0 };
       const res = binding.commitFromDoc(doc);
+      // A BindingRejection OR a store-level failure both mean "not committed" — surface
+      // either as rejected so the view can snap back to the canonical projection.
       const committed = res.result?.ok === true;
-      return { committed, rejected: res.rejected === true, opCount: res.ops.length };
+      const rejected = res.rejected === true || res.result?.ok === false;
+      return { committed, rejected, opCount: res.ops.length };
     },
     bodyText() {
       return bodyParagraphs(store)
         .map((p) => p.runs.map((r) => r.text).join(''))
         .join('\n');
     },
-    save: () => writeDocx(store.currentModel),
+    // Editable docs re-serialize from the canonical model; a read-only doc is returned
+    // exactly as opened (the minimal writer would drop its parts).
+    save: () => (editable ? writeDocx(store.currentModel) : bytes),
   };
 }

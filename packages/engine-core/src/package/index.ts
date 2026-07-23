@@ -63,6 +63,7 @@ export {
   parseDocx,
   writeDocx,
   documentXml,
+  isPlainEditableDocx,
 } from './opc.ts';
 export {
   isValidNCName,

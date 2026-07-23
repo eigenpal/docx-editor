@@ -100,7 +100,7 @@ function tableSkeleton(table: TableRecord): unknown {
  *  - any other w:rPr child, or a w:t attribute other than xml:space;
  *  - an empty run (no non-empty w:t) that the model drops or that would gain a w:t.
  */
-function paragraphFullyCaptured(pEl: Extract<XmlNode, { type: 'element' }>): boolean {
+export function paragraphFullyCaptured(pEl: Extract<XmlNode, { type: 'element' }>): boolean {
   if (Object.keys(pEl.attributes).length > 0) return false;
   for (const c of pEl.children) {
     if (c.type === 'text') { if (c.value.trim() !== '') return false; continue; }

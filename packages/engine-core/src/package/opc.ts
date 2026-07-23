@@ -10,12 +10,12 @@ import { readXml, findElement, childElements } from './xml-reader.ts';
 import { scanBodyBlockSpans, ScanError, type BlockSpan } from './wml-scan.ts';
 import { blockXml } from './wml-serialize.ts';
 import {
-  W_NS, collectParagraphElements, paragraphFromElement, blockFromSpan,
+  W_NS, el, collectParagraphElements, paragraphFromElement, blockFromSpan,
   treeHasTable, treeHasBlockSdt, deepHasTable, deepHasBlockSdt, deepCountTables,
   countModelTables, hasNonWWordBinding, countTreeBlocks,
 } from './wml-parse.ts';
 import { relatedStoryParts, parseStoryParagraphs, parseStyles, parseDocDefaults, parseNumbering } from './wml-parts.ts';
-import { DOC_PART, hashPreservableBlock, emitPreservedPart } from './wml-preserve.ts';
+import { DOC_PART, hashPreservableBlock, emitPreservedPart, paragraphFullyCaptured } from './wml-preserve.ts';
 import {
   createEmptyModel,
   bodyStoryId,
@@ -192,6 +192,51 @@ const ROOT_RELS_XML =
   `<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">` +
   `<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/>` +
   `</Relationships>`;
+
+function anyRelationship(nodes: readonly import('./xml-reader.ts').XmlNode[]): boolean {
+  return nodes.some((n) => el(n) && (n.name === 'Relationship' || anyRelationship(n.children)));
+}
+
+/**
+ * Whether a DOCX is a PLAIN, losslessly-editable document: its package holds only the
+ * minimal parts writeDocx reproduces (content-types, root rels, document.xml, and an
+ * empty document rels), and its body is nothing but fully-captured paragraphs. Anything
+ * writeDocx would DROP or FLATTEN on save — styles/numbering/headers/footers/media/theme,
+ * any document relationship, section properties, a table or SDT, or a paragraph carrying a
+ * hyperlink/field/tab/break/pPr/unmodeled rPr — makes it non-editable. Such documents open
+ * READ-ONLY so an edit-and-save can never silently lose content. Conservative by design:
+ * a false negative is only a missed edit; a false positive would drop data.
+ */
+export function isPlainEditableDocx(bytes: Uint8Array): boolean {
+  const zip = readZip(bytes);
+  if (!zip.ok) return false;
+  let docXml: Uint8Array | undefined;
+  let relsXml: Uint8Array | undefined;
+  for (const [name, data] of zip.entries) {
+    const n = name.toLowerCase();
+    if (n === '/word/document.xml') docXml = data;
+    else if (n === '/[content_types].xml' || n === '/_rels/.rels') continue;
+    else if (n === '/word/_rels/document.xml.rels') relsXml = data;
+    else return false; // any other part (styles/numbering/header/footer/media/...) is lost on save
+  }
+  if (!docXml) return false;
+  if (relsXml) {
+    const rx = readXml(strFromU8(relsXml));
+    if (!rx.ok || anyRelationship(rx.nodes)) return false; // a rel implies an image/link/header target
+  }
+  const xml = readXml(strFromU8(docXml));
+  if (!xml.ok) return false;
+  const body = findElement(xml.nodes, 'w:body');
+  if (!body) return false;
+  let sawParagraph = false;
+  for (const child of body.children) {
+    if (!el(child)) continue;
+    if (child.name !== 'w:p') return false; // w:tbl / w:sdt / w:sectPr / anything else
+    if (!paragraphFullyCaptured(child)) return false; // hyperlink/field/tab/break/pPr/unmodeled rPr
+    sawParagraph = true;
+  }
+  return sawParagraph;
+}
 
 /**
  * Serialize a PackageModel into DOCX bytes. When the model retains the original

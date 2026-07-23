@@ -10,13 +10,14 @@ import { docSchema } from '@docx-editor.dev/engine-binding';
 import { openDocxSession } from './docxEditorSession.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
-function docx(bodyInner: string): Uint8Array {
+function docx(bodyInner: string, extraParts: Record<string, string> = {}): Uint8Array {
   return zipSync({
     '[Content_Types].xml': strToU8(
       '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">' +
         '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/></Types>',
     ),
     'word/document.xml': strToU8(`<w:document xmlns:w="${W}"><w:body>${bodyInner}</w:body></w:document>`),
+    ...Object.fromEntries(Object.entries(extraParts).map(([k, v]) => [k, strToU8(v)])),
   });
 }
 const PARAS = '<w:p><w:r><w:t>hello</w:t></w:r></w:p><w:p><w:r><w:t>world</w:t></w:r></w:p>';
@@ -78,11 +79,36 @@ describe('document with a table: read-only, verbatim, never flattened', () => {
     expect(res.rejected).toBe(true);
     expect(session.bodyText()).toBe('intro'); // unchanged
 
-    // The table is still present and the document saves byte-identically.
-    const after = session.save();
-    expect(strFromU8(unzipSync(after)['word/document.xml'])).toBe(
-      strFromU8(unzipSync(before)['word/document.xml']),
+    // A read-only document saves EXACTLY as opened (nothing dropped).
+    expect(session.save()).toEqual(before);
+    expect(strFromU8(unzipSync(session.save())['word/document.xml'])).toContain('<w:tbl>');
+  });
+});
+
+describe('the editability gate never marks a lossy document editable', () => {
+  test('a document with a styles.xml part opens read-only (styles would be dropped)', () => {
+    const withStyles = docx('<w:p><w:r><w:t>hi</w:t></w:r></w:p>', {
+      'word/styles.xml': `<w:styles xmlns:w="${W}"><w:style w:type="paragraph" w:styleId="A"><w:name w:val="A"/></w:style></w:styles>`,
+    });
+    const session = openDocxSession(withStyles);
+    expect(session.editable).toBe(false);
+    expect(session.save()).toEqual(withStyles); // returned verbatim
+  });
+
+  test('a paragraph with a hyperlink opens read-only (inline structure would flatten)', () => {
+    const session = openDocxSession(docx('<w:p><w:hyperlink><w:r><w:t>link</w:t></w:r></w:hyperlink></w:p>'));
+    expect(session.editable).toBe(false);
+  });
+
+  test('a paragraph carrying a tab/break opens read-only', () => {
+    const session = openDocxSession(docx('<w:p><w:r><w:t>a</w:t><w:tab/><w:t>b</w:t></w:r></w:p>'));
+    expect(session.editable).toBe(false);
+  });
+
+  test('a paragraph with section properties opens read-only (sectPr would be dropped)', () => {
+    const session = openDocxSession(
+      docx('<w:p><w:r><w:t>a</w:t></w:r></w:p><w:sectPr><w:pgSz w:w="12240" w:h="15840"/></w:sectPr>'),
     );
-    expect(strFromU8(unzipSync(after)['word/document.xml'])).toContain('<w:tbl>');
+    expect(session.editable).toBe(false);
   });
 });

@@ -75,8 +75,9 @@ export class EditorBinding {
         // is left untouched. A missing/mismatched atom is an illegal edit — fail closed.
         const semId = node.attrs.semId as string | null;
         const existing = semId ? byId.get(semId) : undefined;
-        if (!existing || existing.kind === 'paragraph') {
-          throw new BindingRejection('read-only block cannot be added, moved, or altered');
+        if (!existing || existing.kind === 'paragraph' || seen.has(semId!)) {
+          // Missing, retyped, or DUPLICATED read-only block — an illegal structural edit.
+          throw new BindingRejection('read-only block cannot be added, moved, duplicated, or altered');
         }
         seen.add(semId!);
         return;
@@ -86,9 +87,11 @@ export class EditorBinding {
       const runs = paragraphNodeToRuns(node);
       const existing = semId ? byId.get(semId) : undefined;
       if (existing) {
-        if (existing.kind !== 'paragraph') {
-          // A paragraph node claims a non-paragraph block's identity — fail closed.
-          throw new BindingRejection('paragraph edit targets a non-paragraph block');
+        if (existing.kind !== 'paragraph' || seen.has(semId!)) {
+          // A paragraph node claiming a non-paragraph block's identity, or a DUPLICATED
+          // paragraph id (e.g. a split that copied semId) — fail closed rather than let the
+          // last node silently win and drop the other half.
+          throw new BindingRejection('paragraph edit targets a non-paragraph or duplicated block');
         }
         seen.add(semId!);
         if (!runsEqual(existing.runs, runs)) ops.push({ op: 'setParagraphRuns', paragraphId: semId!, runs });
