@@ -7,7 +7,14 @@
 import { describe, expect, test } from 'bun:test';
 import { zipSync, strToU8 } from 'fflate';
 import { docSchema, EditorBinding, paragraphNodeToRuns } from '../src/index.ts';
-import { DocumentStore, parseDocx, bodyStoryId, ORIGIN_IDS, createEmptyModel } from '@docx-editor.dev/engine-core';
+import {
+  DocumentStore,
+  parseDocx,
+  bodyStoryId,
+  ORIGIN_IDS,
+  createEmptyModel,
+  type ParagraphRecord,
+} from '@docx-editor.dev/engine-core';
 import type { Node as PMNode } from 'prosemirror-model';
 
 const HUMAN = ORIGIN_IDS.mutationHuman;
@@ -276,6 +283,47 @@ describe('unprojectable run metadata is never overwritten', () => {
     const res = binding.commitFromDoc(doc);
     expect(res.rejected).toBe(true);
     expect(store.currentRevision).toBe(1);
+  });
+
+  test('a paste that splits a surrogate ACROSS two runs fails closed (checked per run)', () => {
+    const model = createEmptyModel();
+    const store = new DocumentStore(model);
+    const id = model.stories.get(bodyStoryId(model))!.blocks[0].id;
+    store.transact(HUMAN, (c) => c.apply({ op: 'setParagraphRuns', paragraphId: id, runs: [{ text: '😀' }] }));
+    const binding = new EditorBinding(store);
+    // The emoji's high surrogate lands in a BOLD run, its low surrogate in a plain run — the
+    // concatenation '😀X' is valid, but each run holds a lone half.
+    const doc = docSchema.node('doc', null, [
+      docSchema.node('paragraph', { semId: id }, [
+        docSchema.text('\uD83D', [docSchema.marks.bold.create()]),
+        docSchema.text('\uDE00X'),
+      ]),
+      docSchema.node('paragraph', { semId: null }, [docSchema.text('Y')]),
+    ]);
+    const res = binding.commitFromDoc(doc);
+    expect(res.rejected).toBe(true);
+    expect(store.currentRevision).toBe(1);
+  });
+});
+
+describe('paste never orphans a paragraph tail from its paragraph properties', () => {
+  test('a mid-paragraph paste into a paragraph WITH paragraph props fails closed', () => {
+    // Build a paragraph carrying paragraph-level props directly in the model.
+    const base = createEmptyModel();
+    const sid = bodyStoryId(base);
+    const block = base.stories.get(sid)!.blocks[0] as ParagraphRecord;
+    const numbered: ParagraphRecord = { ...block, runs: [{ text: 'AB' }], props: { numId: '1', ilvl: 0 } };
+    const model = { ...base, stories: new Map(base.stories).set(sid, { ...base.stories.get(sid)!, blocks: [numbered] }) };
+    const store = new DocumentStore(model);
+    const binding = new EditorBinding(store);
+    // Paste 'X\nY' between A and B: the tail 'YB' would lose the numbering that P keeps.
+    const doc = docSchema.node('doc', null, [
+      docSchema.node('paragraph', { semId: numbered.id }, [docSchema.text('AX')]),
+      docSchema.node('paragraph', { semId: null }, [docSchema.text('YB')]),
+    ]);
+    const res = binding.commitFromDoc(doc);
+    expect(res.rejected).toBe(true);
+    expect(store.currentRevision).toBe(0);
   });
 });
 
