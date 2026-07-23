@@ -39,6 +39,10 @@ export interface DocxEditorSession {
   applyPmDoc(doc: PMNode): ApplyResult;
   /** Body text (paragraphs joined by newlines) from the CANONICAL model, not the view. */
   bodyText(): string;
+  /** The ordered ids of the body blocks in the CANONICAL model. After a structural edit
+   *  (split/join) the view uses this to re-tag its projected paragraphs with the ids the
+   *  store minted, so identity — and the caret — survive without a full reprojection. */
+  bodyBlockIds(): string[];
   /** The current canonical model — the source of truth the paginated display repaints from. */
   currentModel(): PackageModel;
   /** Serialize the canonical model back to DOCX bytes. */
@@ -85,6 +89,10 @@ export function openDocxSession(bytes: Uint8Array): DocxEditorSession {
       return bodyParagraphs(store)
         .map((p) => p.runs.map((r) => r.text).join(''))
         .join('\n');
+    },
+    bodyBlockIds() {
+      const m = store.currentModel;
+      return m.stories.get(bodyStoryId(m))!.blocks.map((b) => b.id);
     },
     currentModel: () => store.currentModel,
     // Only an editable document re-serializes (verbatim package + patched paragraphs). A

@@ -66,6 +66,40 @@ describe('paragraph-only document: full load -> edit -> save -> reopen loop', ()
   });
 });
 
+describe('structural editing: split (Enter) and join survive save + reopen', () => {
+  test('splitting the first paragraph commits and round-trips', () => {
+    const session = openDocxSession(docx(PARAS)); // hello | world
+    const doc = session.projectDoc();
+    const first = doc.child(0);
+    const split = docSchema.node('doc', null, [
+      docSchema.node('paragraph', first.attrs, docSchema.text('hel')),
+      docSchema.node('paragraph', { semId: null }, docSchema.text('lo')),
+      doc.child(1),
+    ]);
+    const res = session.applyPmDoc(split);
+    expect(res.committed).toBe(true);
+    expect(res.rejected).toBe(false);
+    expect(res.opCount).toBe(1);
+    expect(session.bodyText()).toBe('hel\nlo\nworld');
+    // Save + reopen: the new paragraph structure is in the persisted DOCX.
+    const reopened = openDocxSession(session.save());
+    expect(reopened.bodyText()).toBe('hel\nlo\nworld');
+  });
+
+  test('joining two paragraphs commits and round-trips', () => {
+    const session = openDocxSession(docx(PARAS)); // hello | world
+    const doc = session.projectDoc();
+    const join = docSchema.node('doc', null, [
+      docSchema.node('paragraph', doc.child(0).attrs, docSchema.text('helloworld')),
+    ]);
+    const res = session.applyPmDoc(join);
+    expect(res.committed).toBe(true);
+    expect(res.opCount).toBe(1);
+    expect(session.bodyText()).toBe('helloworld');
+    expect(openDocxSession(session.save()).bodyText()).toBe('helloworld');
+  });
+});
+
 describe('document with a table: read-only, verbatim, never flattened', () => {
   test('opens read-only; edits are refused and the save stays byte-identical', () => {
     const before = docx(WITH_TABLE);

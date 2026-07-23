@@ -5,12 +5,12 @@
 // tables/SDTs opens READ-ONLY through the engine preview (real geometry, nothing
 // flattened). Exposes an engine-neutral EditorDriver for browser smoke tests.
 //
-// Text insertion, deletion, selection, Backspace/Delete (including paragraph join), and
-// undo/redo are handled by the ProseMirror base keymap + history; every resulting change
-// maps to DocOps. Paragraph SPLIT (Enter) is intentionally disabled for this checkpoint —
-// the forward mapper matches paragraphs by identity and cannot yet place a split's new
-// half, so allowing it would misorder or drop content. Rich formatting and structural
-// editing (split, reorder) are later increments.
+// Text insertion, deletion, selection, Backspace/Delete (paragraph join), paragraph SPLIT
+// (Enter), and undo/redo are handled by the ProseMirror base keymap + history; every
+// resulting change maps to DocOps. A split mints a new tail block in the store; after the
+// commit the view re-tags its projected paragraphs with the store's ids by position, so
+// identity and the caret survive without a full reprojection. Multi-paragraph paste and
+// block reorder still fail closed (they map to no supported op) and snap back.
 
 import { EditorView } from 'prosemirror-view';
 import { EditorState } from 'prosemirror-state';
@@ -53,13 +53,11 @@ export function mountDocxEditor(container: HTMLElement, bytes: Uint8Array): Moun
   }
 
   // Build once so the initial state and the reject snap-back share the same plugins
-  // (history + keymaps must survive a rejected edit).
-  const noop = () => true;
+  // (history + keymaps must survive a rejected edit). Enter (paragraph split) is handled by
+  // the base keymap; the forward mapper turns it into one splitParagraph DocOp.
   const plugins = [
     history(),
     keymap({ 'Mod-z': undo, 'Mod-y': redo, 'Shift-Mod-z': redo }),
-    // Swallow paragraph-split keys before the base keymap can split.
-    keymap({ Enter: noop, 'Shift-Enter': noop, 'Mod-Enter': noop }),
     keymap(baseKeymap),
   ];
   // Two panes: the ProseMirror EDIT surface (left) and the paginated DISPLAY the canonical
@@ -101,10 +99,38 @@ export function mountDocxEditor(container: HTMLElement, bytes: Uint8Array): Moun
         );
         reconciling = false;
       }
-      // A committed edit changed the canonical model — repaint the paginated display from it.
-      if (res.committed) repaintPaged();
+      // A committed edit changed the canonical model — re-tag any new paragraphs with the
+      // ids the store minted (so a split's tail keeps identity for the next edit), then
+      // repaint the paginated display from the canonical model.
+      if (res.committed) {
+        syncSemIds();
+        repaintPaged();
+      }
     },
   });
+
+  // Re-tag the view's projected paragraphs with the canonical block ids by position. After a
+  // split the store mints a new tail id; the PM tail still reads semId=null. One
+  // attribute-only, history-excluded transaction reconciles identity WITHOUT reprojecting
+  // the whole document, so the caret and undo stack are untouched.
+  function syncSemIds() {
+    const ids = session.bodyBlockIds();
+    let tr = view.state.tr;
+    let changed = false;
+    let idx = 0;
+    view.state.doc.forEach((node, offset) => {
+      const id = ids[idx];
+      if (node.type.name === 'paragraph' && id && node.attrs.semId !== id) {
+        tr = tr.setNodeMarkup(offset, undefined, { ...node.attrs, semId: id });
+        changed = true;
+      }
+      idx += 1;
+    });
+    if (!changed) return;
+    reconciling = true;
+    view.dispatch(tr.setMeta('addToHistory', false));
+    reconciling = false;
+  }
   repaintPaged(); // initial paginated render from the loaded model
   return { session, driver, destroy: () => view.destroy() };
 }

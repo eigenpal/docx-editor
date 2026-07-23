@@ -33,14 +33,28 @@ const para = (semId: string | null, text: string): PMNode =>
   docSchema.node('paragraph', { semId }, text ? docSchema.text(text) : undefined);
 
 describe('forward-mapper identity guards', () => {
-  test('a duplicated paragraph id (naive split) fails closed', () => {
+  test('a CLEAN duplicated-id split (Enter) commits as one splitParagraph', () => {
     const { store, binding, ids } = twoParagraphBinding();
-    // Two nodes carry ids[0] — what an Enter/splitBlock would produce.
+    // Two nodes carry ids[0] with the SAME combined text — exactly what Enter/splitBlock
+    // produces. This is a real split: it commits, and the store mints the tail's identity.
     const doc = docSchema.node('doc', null, [para(ids[0], 'on'), para(ids[0], 'e'), para(ids[1], 'two')]);
+    const res = binding.commitFromDoc(doc);
+    expect(res.rejected).toBeUndefined();
+    expect(res.ops).toEqual([{ op: 'splitParagraph', paragraphId: ids[0], offset: 2 }]);
+    const blocks = store.currentModel.stories.get(bodyStoryId(store.currentModel))!.blocks;
+    expect(blocks.map((b) => b.id)).toHaveLength(3);
+    expect(blocks[0].id).toBe(ids[0]); // head keeps identity
+    expect(blocks[1].id).not.toBe(ids[0]); // tail gets a fresh id (no duplicate)
+  });
+
+  test('a duplicated id whose text does NOT match a clean split fails closed', () => {
+    const { store, binding, ids } = twoParagraphBinding();
+    // 'on' + 'X' != 'one' — a split combined with an edit is refused (nothing corrupted).
+    const doc = docSchema.node('doc', null, [para(ids[0], 'on'), para(ids[0], 'X'), para(ids[1], 'two')]);
     const res = binding.commitFromDoc(doc);
     expect(res.rejected).toBe(true);
     expect(res.ops.length).toBe(0);
-    expect(store.currentRevision).toBe(0); // no commit
+    expect(store.currentRevision).toBe(0);
   });
 
   test('a stale / forged non-null id fails closed (no append+delete)', () => {
@@ -51,7 +65,7 @@ describe('forward-mapper identity guards', () => {
     expect(store.currentRevision).toBe(0);
   });
 
-  test('adding a paragraph (structural, e.g. paste/split) fails closed in this checkpoint', () => {
+  test('appending a genuinely new paragraph (new content, not a clean split) fails closed', () => {
     const { store, binding, ids } = twoParagraphBinding();
     const doc = docSchema.node('doc', null, [para(ids[0], 'one'), para(ids[1], 'two'), para(null, 'three')]);
     const res = binding.commitFromDoc(doc);

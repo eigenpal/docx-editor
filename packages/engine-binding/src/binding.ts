@@ -36,6 +36,52 @@ class BindingRejection extends Error {}
  *  the same normalized form must map to ZERO ops — otherwise re-projecting an untouched
  *  paragraph would spuriously rewrite (and collapse) its authored run segmentation. A real
  *  text/formatting edit still differs after normalization. */
+function isParagraph(node: PMNode): boolean {
+  return node.type.name === 'paragraph';
+}
+
+/** The plain text of a projected paragraph node (its runs concatenated). */
+function pmText(node: PMNode): string {
+  return paragraphNodeToRuns(node)
+    .map((r) => r.text)
+    .join('');
+}
+
+/** The plain text of a canonical block (empty for a non-paragraph block). */
+function blockText(block: Block): string {
+  return block.kind === 'paragraph' ? block.runs.map((r) => r.text).join('') : '';
+}
+
+/** Whether a PM node corresponds to a canonical block by KIND and semId — NOT by content,
+ *  so an in-place text edit still "matches" its block (same identity, different runs). */
+function nodeMatchesBlock(node: PMNode | undefined, block: Block | undefined): boolean {
+  if (!node || !block) return false;
+  if (node.type.name === 'blockEmbed') return block.kind !== 'paragraph' && node.attrs.semId === block.id;
+  if (node.type.name === 'paragraph') return block.kind === 'paragraph' && node.attrs.semId === block.id;
+  return false;
+}
+
+/** The first index at which the node/block sequences stop corresponding (by identity). */
+function firstDivergence(nodes: readonly PMNode[], blocks: readonly Block[]): number {
+  const n = Math.min(nodes.length, blocks.length);
+  let i = 0;
+  while (i < n && nodeMatchesBlock(nodes[i], blocks[i])) i += 1;
+  return i;
+}
+
+/** Whether nodes[0..count) correspond 1:1 to blocks[0..count) by identity. */
+function prefixAligns(nodes: readonly PMNode[], blocks: readonly Block[], count: number): boolean {
+  for (let i = 0; i < count; i += 1) if (!nodeMatchesBlock(nodes[i], blocks[i])) return false;
+  return true;
+}
+
+/** Whether nodes[ni..] correspond 1:1 and in order to blocks[bi..] by identity. */
+function alignsAfter(nodes: readonly PMNode[], ni: number, blocks: readonly Block[], bi: number): boolean {
+  if (nodes.length - ni !== blocks.length - bi) return false;
+  for (let a = ni, b = bi; a < nodes.length; a += 1, b += 1) if (!nodeMatchesBlock(nodes[a], blocks[b])) return false;
+  return true;
+}
+
 function runsEqual(a: readonly RunRecord[], b: readonly RunRecord[]): boolean {
   return JSON.stringify(normalizeRuns(a)) === JSON.stringify(normalizeRuns(b));
 }
@@ -62,39 +108,82 @@ export class EditorBinding {
     return EditorState.create({ schema: docSchema, doc: this.projectDoc() });
   }
 
-  /** Derive the DocOps that turn the current authored state into `newDoc`. This checkpoint
-   *  supports ONLY in-place text edits: the PM top-level nodes must correspond 1:1 and IN
-   *  ORDER to the canonical body blocks (a paragraph node ↔ a paragraph block, a blockEmbed
-   *  atom ↔ its exact non-paragraph block, matched by semId). A changed paragraph emits one
-   *  `setParagraphRuns`; a read-only atom emits nothing. ANY structural change — a new,
-   *  removed, reordered, split, duplicated, or retyped block — throws {@link BindingRejection}
-   *  so nothing is silently dropped, misordered, or mutated (structural editing is a later
-   *  increment). */
+  /** Derive the DocOps that turn the current authored state into `newDoc`. Supports in-place
+   *  text edits (per paragraph) plus the two common STRUCTURAL edits: a paragraph SPLIT
+   *  (Enter) and a JOIN (Backspace/Delete at a boundary). The PM top-level nodes otherwise
+   *  correspond 1:1 and IN ORDER to the canonical body blocks (paragraph↔paragraph by semId,
+   *  blockEmbed atom↔its exact non-paragraph block). A reorder, a multi-paragraph paste, a
+   *  split-with-edit, or any disturbance of a read-only block throws {@link BindingRejection}
+   *  (fail closed) so nothing is silently dropped, misordered, or mutated. */
   mapDocToOps(newDoc: PMNode): DocOp[] {
     const model = this.store.currentModel;
     const blocks = model.stories.get(bodyStoryId(model))!.blocks;
+    const nodes: PMNode[] = [];
+    newDoc.forEach((n) => nodes.push(n));
+
+    const delta = nodes.length - blocks.length;
+    if (delta === 1) return this.mapSplit(nodes, blocks);
+    if (delta === -1) return this.mapJoin(nodes, blocks);
+    if (delta !== 0) throw new BindingRejection('unsupported structural edit (multi-paragraph)');
+
+    // Δ=0: strictly in-place. Each node maps 1:1 to its canonical block by kind + semId.
     const ops: DocOp[] = [];
-    let i = 0;
-    newDoc.forEach((node) => {
-      const block: Block | undefined = blocks[i];
-      if (!block) throw new BindingRejection('a block was added'); // more PM nodes than canonical blocks
+    nodes.forEach((node, i) => {
+      const block = blocks[i];
       if (node.type.name === 'blockEmbed') {
         if (block.kind === 'paragraph' || node.attrs.semId !== block.id) {
           throw new BindingRejection('read-only block moved, replaced, or retyped');
         }
       } else if (node.type.name === 'paragraph') {
         if (block.kind !== 'paragraph' || node.attrs.semId !== block.id) {
-          throw new BindingRejection('paragraph added, removed, reordered, or split');
+          throw new BindingRejection('paragraph reordered or retargeted');
         }
         const runs = paragraphNodeToRuns(node);
         if (!runsEqual(block.runs, runs)) ops.push({ op: 'setParagraphRuns', paragraphId: block.id, runs });
-      } else {
-        throw new BindingRejection(`unexpected node type '${node.type.name}'`);
-      }
-      i += 1;
+      } else throw new BindingRejection(`unexpected node type '${node.type.name}'`);
     });
-    if (i !== blocks.length) throw new BindingRejection('a block was removed'); // fewer PM nodes than blocks
     return ops;
+  }
+
+  /** One extra paragraph: exactly one canonical paragraph X was split into two consecutive
+   *  paragraphs. ProseMirror's splitBlock keeps X's id on the HEAD and copies it to the tail
+   *  (a mid-split) or leaves the tail's id null (an end-split) — so the head, not the tail, is
+   *  the stable anchor. The head sits just before the first identity divergence; the tail is
+   *  the node after it. A clean split (concatenated text unchanged) maps to one splitParagraph
+   *  at the head's length; anything else fails closed. */
+  private mapSplit(nodes: readonly PMNode[], blocks: readonly Block[]): DocOp[] {
+    const bk = firstDivergence(nodes, blocks) - 1; // head = last node that still matched its block
+    const x = blocks[bk];
+    const head = nodes[bk];
+    const tail = nodes[bk + 1];
+    if (
+      bk < 0 || !x || x.kind !== 'paragraph' ||
+      !head || !isParagraph(head) || head.attrs.semId !== x.id ||
+      !tail || !isParagraph(tail) ||
+      !prefixAligns(nodes, blocks, bk) || !alignsAfter(nodes, bk + 2, blocks, bk + 1)
+    ) {
+      throw new BindingRejection('unsupported paragraph insertion');
+    }
+    if (pmText(head) + pmText(tail) !== blockText(x)) throw new BindingRejection('split combined with an edit is not supported');
+    return [{ op: 'splitParagraph', paragraphId: x.id, offset: pmText(head).length }];
+  }
+
+  /** One fewer paragraph: canonical [X, Y] were joined into X (Y removed, X keeps its id).
+   *  A clean join (concatenated text unchanged) maps to one joinParagraphs; else fails closed. */
+  private mapJoin(nodes: readonly PMNode[], blocks: readonly Block[]): DocOp[] {
+    const bk = firstDivergence(nodes, blocks); // index of the removed Y in the canonical
+    const y = blocks[bk];
+    const x = blocks[bk - 1];
+    const survivor = nodes[bk - 1];
+    if (
+      !y || y.kind !== 'paragraph' || !x || x.kind !== 'paragraph' ||
+      !survivor || !isParagraph(survivor) || survivor.attrs.semId !== x.id ||
+      !alignsAfter(nodes, bk, blocks, bk + 1) // the blocks after Y are unchanged
+    ) {
+      throw new BindingRejection('unsupported paragraph deletion');
+    }
+    if (pmText(survivor) !== blockText(x) + blockText(y)) throw new BindingRejection('join combined with an edit is not supported');
+    return [{ op: 'joinParagraphs', firstId: x.id, secondId: y.id }];
   }
 
   /** Forward: map an edited PM doc to DocOps and commit ONE store transaction. An edit

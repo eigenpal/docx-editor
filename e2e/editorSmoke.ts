@@ -34,6 +34,25 @@ export function editorSmoke(adapter: string, baseUrl: string): void {
       expect(await page.evaluate(() => window.__docxEditorDriver!.saveAndReopenText())).toContain(marker);
     });
 
+    test('pressing Enter splits a paragraph and the split survives save + reopen', async ({ page }) => {
+      await page.goto(`${baseUrl}/?edit=1`);
+      await expect(page.getByTestId('editor-status')).toHaveText('Editable (paragraphs)');
+
+      const before = await page.evaluate(() => window.__docxEditorDriver!.getBodyText().split('\n').length);
+      // Split the first paragraph: click into it, go to its start, press Enter.
+      await page.getByTestId('editor-host').locator('p').first().click();
+      await page.keyboard.press('Home');
+      await page.keyboard.press('Enter');
+
+      // The canonical model has one MORE paragraph (an empty head), and it round-trips.
+      expect(await page.evaluate(() => window.__docxEditorDriver!.getBodyText().split('\n').length)).toBe(before + 1);
+      expect(await page.evaluate(() => window.__docxEditorDriver!.saveAndReopenText().split('\n').length)).toBe(before + 1);
+
+      // The caret stays live: typing after the split lands in the canonical model.
+      await page.keyboard.type('X');
+      expect(await page.evaluate(() => window.__docxEditorDriver!.getBodyText())).toContain('X');
+    });
+
     test('a document with a table opens read-only (no editing)', async ({ page }) => {
       await page.goto(`${baseUrl}/?edit=1&fixture=with-tables.docx`);
       await expect(page.getByTestId('editor-status')).toContainText('Read-only');

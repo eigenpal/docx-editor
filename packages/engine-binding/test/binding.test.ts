@@ -48,29 +48,74 @@ describe('forward mapping (6.3, 6.4)', () => {
     expect(store.currentModel.stories.get(bodyStoryId(store.currentModel))!.blocks[0].id).toBe(p1);
   });
 
-  test('ADDING a paragraph fails closed (structural editing is deferred)', () => {
+  test('a clean SPLIT (Enter) maps to one splitParagraph and keeps the head id', () => {
+    const { binding, store, p1 } = seeded(); // p1 = 'Hello'
+    // Enter after "Hel": head keeps p1, tail is a new (null-semId) paragraph.
+    const edited = docSchema.node('doc', null, [
+      docSchema.node('paragraph', { semId: p1 }, [docSchema.text('Hel')]),
+      docSchema.node('paragraph', { semId: null }, [docSchema.text('lo')]),
+    ]);
+    const { ops, result } = binding.commitFromDoc(edited);
+    expect(ops).toEqual([{ op: 'splitParagraph', paragraphId: p1, offset: 3 }]);
+    expect(result?.ok).toBe(true);
+    const blocks = store.currentModel.stories.get(bodyStoryId(store.currentModel))!.blocks;
+    expect(blocks).toHaveLength(2);
+    expect(blocks[0].id).toBe(p1); // head keeps identity
+    expect(paragraphText(store.currentModel, p1)).toBe('Hel');
+    expect((blocks[1] as ParagraphRecord).runs.map((r) => r.text).join('')).toBe('lo');
+  });
+
+  test('a clean JOIN (Backspace at boundary) maps to one joinParagraphs', () => {
+    const { binding, store, p1 } = seeded(); // p1 = 'Hello'
+    store.transact(HUMAN, (c) => c.apply({ op: 'appendParagraph', storyId: bodyStoryId(store.currentModel) }));
+    const p2 = store.currentModel.stories.get(bodyStoryId(store.currentModel))!.blocks[1].id;
+    store.transact(HUMAN, (c) => c.apply({ op: 'insertText', paragraphId: p2, text: 'World' }));
+    // Join: the survivor keeps p1 and carries both texts; p2 is gone.
+    const edited = docSchema.node('doc', null, [
+      docSchema.node('paragraph', { semId: p1 }, [docSchema.text('HelloWorld')]),
+    ]);
+    const { ops, result } = binding.commitFromDoc(edited);
+    expect(ops).toEqual([{ op: 'joinParagraphs', firstId: p1, secondId: p2 }]);
+    expect(result?.ok).toBe(true);
+    const blocks = store.currentModel.stories.get(bodyStoryId(store.currentModel))!.blocks;
+    expect(blocks).toHaveLength(1);
+    expect(paragraphText(store.currentModel, p1)).toBe('HelloWorld');
+  });
+
+  test('a genuine paragraph INSERTION with new content fails closed (not a clean split)', () => {
     const { binding, store, p1 } = seeded();
     const edited = docSchema.node('doc', null, [
       docSchema.node('paragraph', { semId: p1 }, [docSchema.text('Hello')]),
       docSchema.node('paragraph', { semId: null }, [docSchema.text('second')]),
     ]);
     const res = binding.commitFromDoc(edited);
-    expect(res.rejected).toBe(true);
+    expect(res.rejected).toBe(true); // split combined with new text is refused
     expect(res.ops).toHaveLength(0);
-    // Store untouched — still one paragraph.
     expect(store.currentModel.stories.get(bodyStoryId(store.currentModel))!.blocks).toHaveLength(1);
   });
 
-  test('REMOVING a paragraph fails closed (structural editing is deferred)', () => {
+  test('DELETING a whole non-empty paragraph fails closed (its content would be lost)', () => {
     const { binding, store, p1 } = seeded();
     store.transact(HUMAN, (c) => c.apply({ op: 'appendParagraph', storyId: bodyStoryId(store.currentModel) }));
+    const p2 = store.currentModel.stories.get(bodyStoryId(store.currentModel))!.blocks[1].id;
+    store.transact(HUMAN, (c) => c.apply({ op: 'insertText', paragraphId: p2, text: 'World' }));
+    // The survivor still reads only 'Hello' — 'World' vanished: NOT a clean join.
+    const edited = docSchema.node('doc', null, [docSchema.node('paragraph', { semId: p1 }, [docSchema.text('Hello')])]);
+    const res = binding.commitFromDoc(edited);
+    expect(res.rejected).toBe(true);
+    expect(store.currentModel.stories.get(bodyStoryId(store.currentModel))!.blocks).toHaveLength(2);
+  });
+
+  test('a multi-paragraph paste (two new blocks) fails closed', () => {
+    const { binding, store, p1 } = seeded();
     const edited = docSchema.node('doc', null, [
       docSchema.node('paragraph', { semId: p1 }, [docSchema.text('Hello')]),
+      docSchema.node('paragraph', { semId: null }, [docSchema.text('a')]),
+      docSchema.node('paragraph', { semId: null }, [docSchema.text('b')]),
     ]);
     const res = binding.commitFromDoc(edited);
     expect(res.rejected).toBe(true);
-    // Store untouched — still two paragraphs.
-    expect(store.currentModel.stories.get(bodyStoryId(store.currentModel))!.blocks).toHaveLength(2);
+    expect(store.currentModel.stories.get(bodyStoryId(store.currentModel))!.blocks).toHaveLength(1);
   });
 
   test('marks round-trip through projection and forward mapping', () => {
