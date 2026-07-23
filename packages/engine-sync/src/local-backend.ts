@@ -11,6 +11,7 @@ import {
   decodeModel,
   utf8ToHex,
   hexToUtf8,
+  fingerprint,
   type PackageModel,
   type SerializedModel,
   type Snapshot,
@@ -18,7 +19,13 @@ import {
 } from '@docx-editor.dev/engine-core';
 import type { ReplicatedStoreBackend } from './backend.ts';
 
+/** Snapshot payload schema + normalization versions (task 5.6). */
+export const SNAPSHOT_SCHEMA_VERSION = 1;
+export const NORMALIZATION_VERSION = 1;
+
 interface Payload {
+  readonly schemaVersion: number;
+  readonly normalizationVersion: number;
   readonly model: SerializedModel;
   readonly revision: number;
 }
@@ -37,26 +44,43 @@ export class LocalBackend implements ReplicatedStoreBackend {
     return this.store;
   }
 
+  /** Authored-state fingerprint (task 5.6: compare fingerprints, not revision sequences). */
+  stateFingerprint(): string {
+    return fingerprint('authoredState', encodeModel(this.store.currentModel));
+  }
+
+  private payload(): Payload {
+    return {
+      schemaVersion: SNAPSHOT_SCHEMA_VERSION,
+      normalizationVersion: NORMALIZATION_VERSION,
+      model: encodeModel(this.store.currentModel),
+      revision: this.store.currentRevision,
+    };
+  }
+
   snapshot(): Snapshot {
-    const payload: Payload = { model: encodeModel(this.store.currentModel), revision: this.store.currentRevision };
     return {
       envelope: 'snapshot',
       protocolVersion: 1,
       documentId: this.documentId,
       revision: this.store.currentRevision,
-      bytesHex: utf8ToHex(JSON.stringify(payload)),
+      bytesHex: utf8ToHex(JSON.stringify(this.payload())),
     };
   }
 
   static restore(snapshot: Snapshot): LocalBackend {
     if (snapshot.envelope !== 'snapshot') throw new Error('not a snapshot envelope');
     const payload = JSON.parse(hexToUtf8(snapshot.bytesHex)) as Payload;
+    // Atomic restore: reject an unreadable/future schema before building any state.
+    if (payload.schemaVersion !== SNAPSHOT_SCHEMA_VERSION) {
+      throw new Error(`unsupported snapshot schema ${payload.schemaVersion}`);
+    }
     const store = new DocumentStore(decodeModel(payload.model), { revision: payload.revision });
     return new LocalBackend(snapshot.documentId, store);
   }
 
   encodeUpdate(updateId: string): ReplicationUpdate {
-    const payload: Payload = { model: encodeModel(this.store.currentModel), revision: this.store.currentRevision };
+    const payload: Payload = this.payload();
     return {
       envelope: 'update',
       protocolVersion: 1,

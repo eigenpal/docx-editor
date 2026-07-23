@@ -12,7 +12,7 @@
 export const ENGINE_SYNC_PACKAGE = '@docx-editor.dev/engine-sync' as const;
 
 export type { ReplicatedStoreBackend } from './backend.ts';
-export { LocalBackend } from './local-backend.ts';
+export { LocalBackend, SNAPSHOT_SCHEMA_VERSION, NORMALIZATION_VERSION } from './local-backend.ts';
 export { YjsBackend } from './yjs-backend.ts';
 export {
   ReplicationCoordinator,
