@@ -181,6 +181,12 @@ describe('editing a preserved table document', () => {
     expect(r.ok).toBe(false);
   });
 
+  test('a close tag with a quoted ">" (malformed, attributes on end tag) is rejected', () => {
+    const inner = '<w:tbl><w:tr><w:tc><w:p><w:r><w:t>x</w:t></w:r></w:p></w:tc></w:tr></w:tbl foo=">">';
+    const r = parseDocx(docx(inner));
+    expect(r.ok).toBe(false); // quote-aware close-tag scan does not truncate the range
+  });
+
   test('a valid non-w: prefix WordprocessingML document fails closed (no silent data loss)', () => {
     const xml = `<?xml version="1.0"?><x:document xmlns:x="${W}"><x:body><x:tbl><x:tr><x:tc><x:p><x:r><x:t>hi</x:t></x:r></x:p></x:tc></x:tr></x:tbl></x:body></x:document>`;
     const bytes = zipSync({ '[Content_Types].xml': strToU8('<Types/>'), 'word/document.xml': strToU8(xml) });

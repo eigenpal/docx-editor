@@ -341,10 +341,13 @@ function elementSpanEnd(s: string, lt: number): number {
       if (e < 0) throw new ScanError('unterminated declaration');
       i = e + 1;
     } else if (s[nx + 1] === '/') {
-      const gt = s.indexOf('>', nx);
-      if (gt < 0) throw new ScanError('unterminated close tag');
-      if (stack.pop() !== tagNameAt(s, nx)) throw new ScanError('mismatched close tag');
-      i = gt + 1;
+      const closeName = tagNameAt(s, nx);
+      const o = openTagEnd(s, nx); // quote-aware: a '>' inside an attribute value is skipped
+      if (s[o.end - 1] !== '>') throw new ScanError('unterminated close tag');
+      // A close tag is `</name  >` — no attributes allowed (XML spec).
+      if (s.slice(nx + 2 + closeName.length, o.end - 1).trim() !== '') throw new ScanError('malformed close tag');
+      if (stack.pop() !== closeName) throw new ScanError('mismatched close tag');
+      i = o.end;
     } else {
       const o = openTagEnd(s, nx);
       if (!o.selfClosing) stack.push(tagNameAt(s, nx));
