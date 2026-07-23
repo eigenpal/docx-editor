@@ -76,6 +76,25 @@ export function editorSmoke(adapter: string, baseUrl: string): void {
       expect(await count()).toBe(beforeCount + 1);
     });
 
+    test('multi-step undo then redo stays consistent with the canonical model', async ({ page }) => {
+      await page.goto(`${baseUrl}/?edit=1`);
+      await expect(page.getByTestId('editor-status')).toHaveText('Editable (paragraphs)');
+      const line0 = async () => (await page.evaluate(() => window.__docxEditorDriver!.getBodyText())).split('\n')[0];
+      await page.getByTestId('editor-host').locator('p').first().click();
+      await page.keyboard.press('End');
+      await page.keyboard.type('AB'); // two per-keystroke commits
+
+      expect(await line0()).toMatch(/AB$/);
+      await page.keyboard.press('ControlOrMeta+z'); // undo B
+      expect(await line0()).toMatch(/A$/);
+      await page.keyboard.press('ControlOrMeta+z'); // undo A
+      expect(await line0()).toMatch(/paragraph\.$/);
+      await page.keyboard.press('ControlOrMeta+Shift+z'); // redo A
+      expect(await line0()).toMatch(/A$/);
+      await page.keyboard.press('ControlOrMeta+Shift+z'); // redo B
+      expect(await line0()).toMatch(/AB$/);
+    });
+
     test('undo restores the caret to the edited paragraph, not the document end', async ({ page }) => {
       await page.goto(`${baseUrl}/?edit=1`);
       await expect(page.getByTestId('editor-status')).toHaveText('Editable (paragraphs)');
