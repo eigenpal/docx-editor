@@ -50,15 +50,24 @@ package surfaces had silently diverged.
 | `check:export-parity` | **Pass — 47 names match** | fixed this session |
 | `check:parity-contract` | **Pass** | gate repaired at M5-R1; it had been measuring a pre-greenfield surface |
 | `check:adapter-css-thin` | Pass | gate repaired at 6.1; it had been failing on a missing file |
-| `check:editor-contract` | **Fail — pre-existing** | looks for `packages/react/src/components/DocxEditor.tsx`, a path the greenfield strip `checkpoint-701c1a9f` deleted. Fails identically at `checkpoint-90e74c0a`. |
+| `check:editor-contract` | **Pass — repaired** | had been throwing ENOENT on `packages/react/src/components/DocxEditor.tsx`, a path the strip deleted. Repointed at the greenfield types; allowlists reset from ~18 retired props to the three real divergences. |
+| `check:public-docs-surface` | **Fail — pre-existing** | docs-site surface lists plugin symbols (`PluginHost`, `EditorPlugin`, `templatePlugin`, …) that no longer exist. Fails identically at `checkpoint-90e74c0a`; outside this change. |
 | `bun run typecheck` | Fail — pre-existing | `@docx-editor.dev/nuxt` TS5097 only; every package this change touched typechecks clean |
 | `openspec validate --strict` | Pass | |
 
-Three separate CI gates in this repo — `check:adapter-css-thin`,
-`check:parity-contract`, and `check:editor-contract` — were left pointing at
-paths or shapes the greenfield strip removed. Two are now repaired and measuring
-real invariants again; `check:editor-contract` remains for whoever owns the
-adapter-contract check.
+**Four** separate CI gates in this repo were left pointing at paths or shapes the
+greenfield strip `checkpoint-701c1a9f` removed: `check:adapter-css-thin` aborted on a
+missing file, `check:parity-contract` measured a package surface that no longer
+exists, `check:editor-contract` threw ENOENT on a deleted path, and
+`check:public-docs-surface` still lists removed plugin symbols.
+
+Three are now repaired and measuring real invariants again. Each repair was
+verified to still FAIL on real drift, not merely to pass — `check:editor-contract`
+was confirmed by injecting a Vue-only prop and watching it reject. A gate that
+cannot fail is worse than no gate, because it reads as coverage.
+
+`check:public-docs-surface` remains, and belongs to whoever owns the docs-site
+surface.
 
 ## Preserved work untouched
 
