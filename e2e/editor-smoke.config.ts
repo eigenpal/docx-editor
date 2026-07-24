@@ -29,14 +29,14 @@ export default defineConfig({
   webServer: [
     {
       command: `bun run dev -- --port ${REACT_PORT} --strictPort --force`,
-      cwd: 'examples/vite',
+      cwd: '../examples/vite',
       url: `http://localhost:${REACT_PORT}/`,
       reuseExistingServer: !process.env.CI,
       timeout: 120_000,
     },
     {
       command: `bun run dev -- --port ${VUE_PORT} --strictPort --force`,
-      cwd: 'examples/vue',
+      cwd: '../examples/vue',
       url: `http://localhost:${VUE_PORT}/`,
       reuseExistingServer: !process.env.CI,
       timeout: 120_000,

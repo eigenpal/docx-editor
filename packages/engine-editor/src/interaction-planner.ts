@@ -1,5 +1,6 @@
 // Pure PM-free interaction planner (interactive-paginated-editing 5.1–5.2).
 
+import type { ViewScope } from '@docx-editor.dev/core-contract/editor';
 import type {
   InteractionEffect,
   InteractionFrame,
@@ -12,7 +13,16 @@ import type {
   SemanticTarget,
   WordSegmentRecord,
 } from '@docx-editor.dev/core-contract/interaction';
+import type { NavigationGeometry } from './navigation-geometry.ts';
+import { emptyNavigationGeometry } from './navigation-geometry.ts';
+import type { ParagraphTextResolver } from './bidi-policy.ts';
 import { hitTestPointer } from './interaction-geometry.ts';
+import { planKeyboardNavigation } from './keyboard-navigation.ts';
+import {
+  navigationSessionPlanForIntent,
+  type NavigationSession,
+  type NavigationSessionPlan,
+} from './navigation-session.ts';
 import { blockSelectionFromHit, wordSelectionFromHit } from './word-selection.ts';
 
 export interface InteractionPlannerContext {
@@ -20,6 +30,17 @@ export interface InteractionPlannerContext {
   readonly editable: boolean;
   readonly readOnly: boolean;
   readonly hostMetrics?: InteractionHostMetrics;
+  readonly modelRevision?: number;
+  readonly activeScope?: ViewScope;
+  readonly navigationSession?: NavigationSession | null;
+  readonly documentGeneration?: number;
+  readonly resolveParagraphText?: ParagraphTextResolver;
+  readonly navigationGeometry?: NavigationGeometry;
+}
+
+/** Controller plan plus optional transactional navigation-session metadata (task 5.5). */
+export interface PlannedInteraction extends InteractionPlan {
+  readonly navigation?: NavigationSessionPlan;
 }
 
 function rejectEffect(code: InteractionOutcomeCode, reason: string, frameId: InteractionFrame['id']): InteractionEffect {
@@ -169,38 +190,52 @@ function selectionFromBlockHit(
   return { frameId: frame.id, scope: target.scope, anchor, head };
 }
 
-function planClick(context: InteractionPlannerContext, intent: ClickInteractionIntent): InteractionPlan {
+function attachNavigation(
+  plan: InteractionPlan,
+  navigation: NavigationSessionPlan | undefined,
+): PlannedInteraction {
+  return navigation ? { ...plan, navigation } : plan;
+}
+
+function planClick(context: InteractionPlannerContext, intent: ClickInteractionIntent): PlannedInteraction {
   const frameId = context.frame.id;
   const clickRejection = validateNormalizedClickIntent(intent, frameId);
+  const nav = navigationSessionPlanForIntent(context.navigationSession, 'click');
   if (clickRejection) {
-    return { frameId, effects: [clickRejection] };
+    return attachNavigation({ frameId, effects: [clickRejection] }, nav);
   }
 
   const hit = hitTestPointer(context.frame, intent.clientPoint, context.hostMetrics, { frameId: intent.frameId });
   if (!hit.ok) {
-    return { frameId, effects: [rejectEffect(hit.code, hit.reason, hit.frameId ?? frameId)] };
+    return attachNavigation({ frameId, effects: [rejectEffect(hit.code, hit.reason, hit.frameId ?? frameId)] }, nav);
   }
 
   if (hit.value.role === 'selectableText') {
-    return { frameId, effects: [rejectEffect('readOnly', 'hit target is read-only text', frameId)] };
+    return attachNavigation({ frameId, effects: [rejectEffect('readOnly', 'hit target is read-only text', frameId)] }, nav);
   }
   if (hit.value.role !== 'editableText') {
-    return {
-      frameId,
-      effects: [
-        rejectEffect(
-          'unsupported',
-          `hit target role ${hit.value.role} is not supported for click selection (task 5.6+)`,
-          frameId,
-        ),
-      ],
-    };
+    return attachNavigation(
+      {
+        frameId,
+        effects: [
+          rejectEffect(
+            'unsupported',
+            `hit target role ${hit.value.role} is not supported for click selection (task 5.6+)`,
+            frameId,
+          ),
+        ],
+      },
+      nav,
+    );
   }
   if (hit.value.target.kind !== 'text') {
-    return {
-      frameId,
-      effects: [rejectEffect('unsupported', 'only editable text targets may create a caret or range', frameId)],
-    };
+    return attachNavigation(
+      {
+        frameId,
+        effects: [rejectEffect('unsupported', 'only editable text targets may create a caret or range', frameId)],
+      },
+      nav,
+    );
   }
 
   const clickCount = intent.clickCount ?? 1;
@@ -208,81 +243,100 @@ function planClick(context: InteractionPlannerContext, intent: ClickInteractionI
   if (clickCount === 2) {
     const block = blockRecordForTarget(context.frame, hit.value.target);
     if (!block) {
-      return {
-        frameId,
-        effects: [rejectEffect('invalidTarget', 'word selection target block is missing from semantic index', frameId)],
-      };
-    }
-    return {
-      frameId,
-      effects: [
+      return attachNavigation(
         {
-          kind: 'syncSelection',
           frameId,
-          selection: selectionFromWordHit(context.frame, hit.value.target, block.wordSegments, block.graphemeCount),
+          effects: [rejectEffect('invalidTarget', 'word selection target block is missing from semantic index', frameId)],
         },
-        { kind: 'focus', frameId },
-      ],
-    };
+        nav,
+      );
+    }
+    return attachNavigation(
+      {
+        frameId,
+        effects: [
+          {
+            kind: 'syncSelection',
+            frameId,
+            selection: selectionFromWordHit(context.frame, hit.value.target, block.wordSegments, block.graphemeCount),
+          },
+          { kind: 'focus', frameId },
+        ],
+      },
+      nav,
+    );
   }
 
   if (clickCount === 3) {
     const block = blockRecordForTarget(context.frame, hit.value.target);
     if (!block) {
-      return {
-        frameId,
-        effects: [rejectEffect('invalidTarget', 'block selection target block is missing from semantic index', frameId)],
-      };
-    }
-    return {
-      frameId,
-      effects: [
+      return attachNavigation(
         {
-          kind: 'syncSelection',
           frameId,
-          selection: selectionFromBlockHit(context.frame, hit.value.target, block.graphemeCount),
+          effects: [rejectEffect('invalidTarget', 'block selection target block is missing from semantic index', frameId)],
         },
-        { kind: 'focus', frameId },
-      ],
-    };
+        nav,
+      );
+    }
+    return attachNavigation(
+      {
+        frameId,
+        effects: [
+          {
+            kind: 'syncSelection',
+            frameId,
+            selection: selectionFromBlockHit(context.frame, hit.value.target, block.graphemeCount),
+          },
+          { kind: 'focus', frameId },
+        ],
+      },
+      nav,
+    );
   }
 
   const selectionOutcome = selectionFromEditableTextHit(context.frame, hit.value.target, intent.shiftKey);
   if (!selectionOutcome.ok) {
-    return { frameId, effects: [selectionOutcome.effect] };
+    return attachNavigation({ frameId, effects: [selectionOutcome.effect] }, nav);
   }
 
-  return {
-    frameId,
-    effects: [
-      { kind: 'syncSelection', frameId, selection: selectionOutcome.selection },
-      { kind: 'focus', frameId },
-    ],
-  };
+  return attachNavigation(
+    {
+      frameId,
+      effects: [
+        { kind: 'syncSelection', frameId, selection: selectionOutcome.selection },
+        { kind: 'focus', frameId },
+      ],
+    },
+    nav,
+  );
 }
 
 /** Pure planner: maps one intent and frame context to an ordered effect plan. */
-export function planInteraction(context: InteractionPlannerContext, intent: InteractionIntent): InteractionPlan {
+export function planInteraction(context: InteractionPlannerContext, intent: InteractionIntent): PlannedInteraction {
   const rejection = validatePreconditions(context, intent);
   if (rejection) {
     return { frameId: context.frame.id, effects: [rejection] };
   }
 
   const frameId = context.frame.id;
+  const navFor = (kind: string) => navigationSessionPlanForIntent(context.navigationSession, kind);
 
   switch (intent.kind) {
     case 'semanticSelection':
-      return {
-        frameId,
-        effects: [
-          { kind: 'syncSelection', frameId, selection: intent.selection },
-          { kind: 'focus', frameId },
-        ],
-      };
+      return attachNavigation(
+        {
+          frameId,
+          effects: [
+            { kind: 'syncSelection', frameId, selection: intent.selection },
+            { kind: 'focus', frameId },
+          ],
+        },
+        navFor('semanticSelection'),
+      );
     case 'focus':
       return { frameId, effects: [{ kind: 'focus', frameId }] };
     case 'blur':
-      return { frameId, effects: [{ kind: 'blur' }] };
+      return attachNavigation({ frameId, effects: [{ kind: 'blur' }] }, navFor('blur'));
     case 'command':
       return { frameId, effects: [{ kind: 'execCommand', frameId, command: intent.command }] };
     case 'delegateNativeInput':
@@ -319,16 +373,17 @@ export function planInteraction(context: InteractionPlannerContext, intent: Inte
           ),
         ],
       };
-    case 'geometryKeyboard':
-      return {
-        frameId,
-        effects: [
-          rejectEffect(
-            'unsupported',
-            'geometry-aware keyboard interaction is not implemented yet (task 5.5+)',
-            frameId,
-          ),
-        ],
-      };
+    case 'geometryKeyboard': {
+      const keyboard = planKeyboardNavigation({
+        frame: context.frame,
+        intent,
+        priorSession: context.navigationSession ?? null,
+        documentGeneration: context.documentGeneration ?? 0,
+        modelRevision: context.modelRevision ?? context.frame.revisions.modelRevision,
+        paragraphText: context.resolveParagraphText ?? (() => ''),
+        navigation: context.navigationGeometry ?? emptyNavigationGeometry(),
+      });
+      return attachNavigation(keyboard.plan, keyboard.navigation);
+    }
   }
 }

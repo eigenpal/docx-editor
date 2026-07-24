@@ -14,6 +14,7 @@ import { type DependencyKey, keyId } from './dependency-graph.ts';
 export interface LayoutBuilder {
   push(item: DisplayItem): void;
   break(): void;
+  currentPageIndex(): number;
 }
 
 /** The mutable layout cursor + shared context a block-layout handler advances. */

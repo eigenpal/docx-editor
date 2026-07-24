@@ -13,6 +13,7 @@ import type {
 } from '@docx-editor.dev/core-contract/interaction';
 import type { ViewScope } from '@docx-editor.dev/core-contract/editor';
 import { hitTestPointer } from './interaction-geometry.ts';
+import { navigationSessionPlanForIntent, type NavigationSession, type NavigationSessionPlan } from './navigation-session.ts';
 
 export interface PointerDragSession {
   readonly pointerId: number;
@@ -28,6 +29,7 @@ export interface DragPlannerContext {
   readonly readOnly: boolean;
   readonly hostMetrics?: InteractionHostMetrics;
   readonly modelRevision: number;
+  readonly navigationSession?: NavigationSession | null;
 }
 
 export type DragTerminalIntent =
@@ -39,6 +41,7 @@ export interface DragInteractionPlan {
   readonly priorSession: PointerDragSession | null;
   readonly nextSessionOnSuccess: PointerDragSession | null;
   readonly terminal: DragTerminalIntent;
+  readonly navigation?: NavigationSessionPlan;
 }
 
 /** @deprecated Use DragInteractionPlan */
@@ -49,8 +52,16 @@ function dragPlan(
   plan: InteractionPlan,
   nextSessionOnSuccess: PointerDragSession | null,
   terminal: DragTerminalIntent = { kind: 'none' },
+  navigation?: NavigationSessionPlan,
 ): DragInteractionPlan {
-  return { priorSession, plan, nextSessionOnSuccess, terminal };
+  return { priorSession, plan, nextSessionOnSuccess, terminal, navigation };
+}
+
+function navigationClearPlan(
+  context: DragPlannerContext,
+  kind: 'pointerDown' | 'pointerUp',
+): NavigationSessionPlan | undefined {
+  return navigationSessionPlanForIntent(context.navigationSession, kind);
 }
 
 type DragPointerIntent =
@@ -359,6 +370,8 @@ function planPointerDown(
       ],
     },
     nextSession,
+    { kind: 'none' },
+    navigationClearPlan(context, 'pointerDown'),
   );
 }
 
@@ -498,6 +511,7 @@ function planTerminalPointerUp(
     },
     null,
     { kind: 'release', pointerId: session.pointerId, cause: 'pointerUp' },
+    navigationClearPlan(context, 'pointerUp'),
   );
 }
 

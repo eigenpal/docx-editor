@@ -41,6 +41,7 @@ function flattenSdt(blocks: readonly Block[]): (ParagraphRecord | TableRecord)[]
 }
 import type { MetricsPort } from './metrics.ts';
 import type { DisplayItem, Page, LayoutResult, TextItem, RectItem } from './display-item.ts';
+import { layoutParagraphInBox, type ParagraphLayoutSink } from './paragraph-layout.ts';
 
 // Layout coordinates are in twips (the page and metrics are twips), and OOXML grid
 // widths are already twips — so column widths are used directly, never rescaled.
@@ -62,6 +63,10 @@ class PageBuilder {
 
   push(item: DisplayItem): void {
     this.items.push(item);
+  }
+
+  currentPageIndex(): number {
+    return this.pageIndex;
   }
 
   break(): void {
@@ -143,55 +148,22 @@ registerBlockLayout('table', (block, ctx) => {
 });
 
 registerBlockLayout('paragraph', (block, ctx) => {
-  const p = block as ParagraphRecord;
-  let offset = 0;
-  let pushed = false;
-  for (const run of p.runs) {
-    const bold = run.props?.bold === true;
-    const italic = run.props?.italic === true;
-    // Split into words and whitespace groups, preserving offsets.
-    const parts = run.text.split(/(\s+)/);
-    for (const part of parts) {
-      if (part.length === 0) continue;
-      if (/^\s+$/.test(part)) {
-        ctx.x += ctx.metrics.spaceWidth * part.length;
-        offset += part.length;
-        continue;
-      }
-      let wordWidth = 0;
-      for (const ch of part) wordWidth += ctx.metrics.advance(ch, bold, italic);
-      if (ctx.x + wordWidth > ctx.contentRight && ctx.x > ctx.margin) ctx.newLine();
-      const item: TextItem = {
-        type: 'text',
-        x: ctx.x,
-        y: ctx.y,
-        width: wordWidth,
-        height: ctx.metrics.lineHeight,
-        text: part,
-        bold,
-        italic,
-        anchor: { paragraphId: p.id, offset },
-      };
-      ctx.builder.push(item);
-      pushed = true;
-      ctx.x += wordWidth;
-      offset += part.length;
-    }
-  }
-  if (!pushed) {
-    ctx.builder.push({
-      type: 'text',
-      x: ctx.margin,
-      y: ctx.y,
-      width: ctx.contentRight - ctx.margin,
-      height: ctx.metrics.lineHeight,
-      text: '',
-      bold: false,
-      italic: false,
-      anchor: { paragraphId: p.id, offset: 0 },
-    });
-  }
-  ctx.newLine(); // paragraph break
+  const cursor = { x: ctx.x, y: ctx.y };
+  const next = layoutParagraphInBox(
+    block as ParagraphRecord,
+    cursor,
+    ctx.margin,
+    ctx.contentRight,
+    ctx.metrics,
+    ctx.builder,
+    () => {
+      ctx.newLine();
+      cursor.x = ctx.x;
+      cursor.y = ctx.y;
+    },
+  );
+  ctx.x = next.x;
+  ctx.y = next.y;
 });
 
 // Built-in resolution-dependency + semantic-role lanes (comprehensive 3.6). These declare a block's
@@ -264,26 +236,42 @@ function layoutTable(table: TableRecord, ctx: TableCtx, startY: number): number 
       builder.break();
       y = margin;
       // Re-emit the header rows before a continuing body row (not before a header itself).
-      if (!isHeader) for (const hr of headerRows) y = emitRow(hr, cols, margin, y, metrics, push);
+      if (!isHeader) for (const hr of headerRows) y = emitRow(hr, cols, margin, y, metrics, push, builder);
     }
-    y = emitRow(row, cols, margin, y, metrics, push);
+    y = emitRow(row, cols, margin, y, metrics, push, builder);
   }
   return y;
 }
 
 /** Emit a table within [left,right] from `top` with NO pagination (used for nested
  *  tables inside a cell). Returns the y just below the table. */
-function emitTable(table: TableRecord, left: number, right: number, top: number, metrics: MetricsPort, push: (it: DisplayItem) => void): number {
+function emitTable(
+  table: TableRecord,
+  left: number,
+  right: number,
+  top: number,
+  metrics: MetricsPort,
+  push: (it: DisplayItem) => void,
+  builder: LayoutBuilder,
+): number {
   const cols = columnWidths(table, right - left);
   let y = top;
-  for (const row of table.rows) y = emitRow(row, cols, left, y, metrics, push);
+  for (const row of table.rows) y = emitRow(row, cols, left, y, metrics, push, builder);
   return y;
 }
 
 /** Emit one row: place each cell in its column box, flow its content (paragraphs and
  *  nested tables), size the row to its tallest cell, and push a border/shading rect
  *  per cell. Returns the row's bottom y. */
-function emitRow(row: TableRowRecord, cols: readonly number[], left: number, rowTop: number, metrics: MetricsPort, push: (it: DisplayItem) => void): number {
+function emitRow(
+  row: TableRowRecord,
+  cols: readonly number[],
+  left: number,
+  rowTop: number,
+  metrics: MetricsPort,
+  push: (it: DisplayItem) => void,
+  builder: LayoutBuilder,
+): number {
   const total = cols.reduce((a, b) => a + b, 0);
   const cellData: { rect: RectItem; items: DisplayItem[] }[] = [];
   let rowBottom = rowTop + metrics.lineHeight + 2 * CELL_PAD; // min row height
@@ -300,7 +288,7 @@ function emitRow(row: TableRowRecord, cols: readonly number[], left: number, row
     const vm = cell.props?.vMerge;
     const isVMergeContinue = vm !== undefined && vm.val !== 'restart';
     if (!isVMergeContinue) {
-      const bottom = flowCell(cell, cellX + CELL_PAD, cellX + cellW - CELL_PAD, rowTop + CELL_PAD, metrics, (it) => items.push(it));
+      const bottom = flowCell(cell, cellX + CELL_PAD, cellX + cellW - CELL_PAD, rowTop + CELL_PAD, metrics, builder, (it) => items.push(it));
       if (bottom + CELL_PAD > rowBottom) rowBottom = bottom + CELL_PAD;
     }
     const fill = shadeFill(cell);
@@ -341,48 +329,46 @@ function shadeFill(cell: TableCellRecord): string | undefined {
 /** Flow a cell's blocks within [left,right] from `top`; returns bottom y. No
  *  pagination inside a cell (v1). Paragraphs flow line-by-line; a NESTED table is laid
  *  out with its own declared geometry (rows/cells/rects) inside the cell box. */
-function flowCell(cell: TableCellRecord, left: number, right: number, top: number, metrics: MetricsPort, push: (it: DisplayItem) => void): number {
-  let x = left;
-  let y = top;
+function flowCell(
+  cell: TableCellRecord,
+  left: number,
+  right: number,
+  top: number,
+  metrics: MetricsPort,
+  builder: LayoutBuilder,
+  push: (it: DisplayItem) => void,
+): number {
+  const cursor = { x: left, y: top };
   let started = false;
-  const width = Math.max(right - left, metrics.spaceWidth);
+  const sink: ParagraphLayoutSink = { push, currentPageIndex: () => builder.currentPageIndex() };
   for (const block of flattenSdt(cell.blocks)) {
     if (block.kind === 'table') {
-      if (started) y += metrics.lineHeight; // gap before the nested table
-      y = emitTable(block, left, right, y, metrics, push);
+      if (started) cursor.y += metrics.lineHeight;
+      cursor.y = emitTable(block, left, right, cursor.y, metrics, push, builder);
       started = true;
-      x = left;
+      cursor.x = left;
       continue;
     }
     if (started) {
-      y += metrics.lineHeight;
-      x = left;
+      cursor.y += metrics.lineHeight;
+      cursor.x = left;
     }
     started = true;
-    let offset = 0;
-    for (const run of block.runs) {
-      const bold = run.props?.bold === true;
-      const italic = run.props?.italic === true;
-      for (const part of run.text.split(/(\s+)/)) {
-        if (part.length === 0) continue;
-        if (/^\s+$/.test(part)) {
-          x += metrics.spaceWidth * part.length;
-          offset += part.length;
-          continue;
-        }
-        let wordWidth = 0;
-        for (const ch of part) wordWidth += metrics.advance(ch, bold, italic);
-        if (x + wordWidth > left + width && x > left) {
-          y += metrics.lineHeight;
-          x = left;
-        }
-        push({ type: 'text', x, y, width: wordWidth, height: metrics.lineHeight, text: part, bold, italic, anchor: { paragraphId: block.id, offset } });
-        x += wordWidth;
-        offset += part.length;
-      }
-    }
+    layoutParagraphInBox(
+      block,
+      cursor,
+      left,
+      right,
+      metrics,
+      sink,
+      () => {
+        cursor.y += metrics.lineHeight;
+        cursor.x = left;
+      },
+      { trailingNewLine: false },
+    );
   }
-  return y + metrics.lineHeight;
+  return cursor.y + metrics.lineHeight;
 }
 
 /**

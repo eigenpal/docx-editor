@@ -18,6 +18,7 @@ import type {
   ShapedCluster,
 } from '@docx-editor.dev/core-contract/interaction';
 import type { Point, Rect } from '@docx-editor.dev/core-contract/types';
+import type { NavigationGeometry } from './navigation-geometry.ts';
 import { caretAffinity } from './semantic-index.ts';
 import {
   applyInverseAffine,
@@ -320,11 +321,16 @@ function overlayFromPageLocal(
   const transform = meta?.transform;
   const stacked = stackedContentRect(frame, pageIndex, pageLocal, transform);
   if (!stacked) return transform ? 'singular' : null;
-  const clipLocal = meta?.clip ? intersectRects(pageLocal, meta.clip) ?? undefined : undefined;
-  const clip = clipLocal ? clipStackedRect(frame, pageIndex, stacked, clipLocal) ?? undefined : undefined;
-  const clippedRect = clip ? intersectRects(stacked, clip) ?? null : stacked;
-  if (!clippedRect) return null;
-  return { rect: clippedRect, clip };
+  if (meta?.clip) {
+    const clipLocal = intersectRects(pageLocal, meta.clip);
+    if (!clipLocal) return null;
+    const clip = clipStackedRect(frame, pageIndex, stacked, clipLocal) ?? undefined;
+    const clippedRect = clip ? intersectRects(stacked, clip) ?? null : null;
+    if (!clippedRect || clippedRect.width <= 0 || clippedRect.height <= 0) return null;
+    return { rect: clippedRect, clip };
+  }
+  if (stacked.width <= 0 || stacked.height <= 0) return null;
+  return { rect: stacked };
 }
 
 function caretRectForLineWhitespace(
@@ -357,6 +363,103 @@ function caretRectForLineWhitespace(
   };
 }
 
+function caretBoxForTargetOnItem(
+  target: Extract<SemanticTarget, { kind: 'text' }>,
+  block: NonNullable<ReturnType<typeof blockRecord>>,
+  item: Extract<DisplayItem, { kind: 'text' }>,
+): Rect | null {
+  if (item.clusters.length === 0) {
+    const atEnd = target.graphemeOffset >= block.graphemeCount;
+    return {
+      x: atEnd ? item.box.x + item.box.width : item.box.x,
+      y: item.box.y,
+      width: 1,
+      height: item.box.height,
+    };
+  }
+  for (const cluster of item.clusters) {
+    if (target.graphemeOffset < cluster.graphemeFrom || target.graphemeOffset > cluster.graphemeTo) continue;
+    const atEnd = target.graphemeOffset >= cluster.graphemeTo;
+    return {
+      x: atEnd ? cluster.box.x + cluster.box.width : cluster.box.x,
+      y: cluster.box.y,
+      width: 1,
+      height: cluster.box.height,
+    };
+  }
+  if (target.graphemeOffset >= block.graphemeCount) {
+    const last = item.clusters[item.clusters.length - 1]!;
+    return { x: last.box.x + last.box.width, y: last.box.y, width: 1, height: last.box.height };
+  }
+  return null;
+}
+
+/** Caret overlay from layout-published navigation edges (respects clip/transform from painted items). */
+export function navigationEdgeCaretOverlay(
+  frame: InteractionFrame,
+  navigation: NavigationGeometry | null | undefined,
+  target: Extract<SemanticTarget, { kind: 'text' }>,
+): { rect: Rect; clip?: Rect } | 'singular' | null {
+  if (!navigation) return null;
+  const block = blockRecord(frame, target.identity.blockId);
+  if (!block || block.readOnly) return null;
+  for (const line of navigation.visualLines) {
+    if (line.identity.blockId !== target.identity.blockId) continue;
+    for (const edge of line.edges) {
+      const edgeTarget = edge.target;
+      if (
+        edgeTarget.graphemeOffset !== target.graphemeOffset ||
+        edgeTarget.affinity !== target.affinity ||
+        edgeTarget.identity.storyId !== target.identity.storyId
+      ) {
+        continue;
+      }
+      const meta = edge.interaction;
+      return overlayFromPageLocal(
+        frame,
+        line.pageIndex,
+        {
+          x: edge.pageLocalX,
+          y: edge.pageLocalY,
+          width: 1,
+          height: edge.pageLocalHeight,
+        },
+        meta,
+      );
+    }
+  }
+  return null;
+}
+
+/** Caret overlay derived only from bridged display items (respects clip/transform). */
+export function displayBackedCaretOverlay(
+  frame: InteractionFrame,
+  target: Extract<SemanticTarget, { kind: 'text' }>,
+): { rect: Rect; clip?: Rect } | 'singular' | null {
+  const block = blockRecord(frame, target.identity.blockId);
+  if (!block || block.readOnly) return null;
+  for (const page of frame.display) {
+    for (const item of page.items) {
+      if (item.kind !== 'text' || item.semantic.identity.blockId !== target.identity.blockId) continue;
+      const caretBox = caretBoxForTargetOnItem(target, block, item);
+      if (!caretBox) continue;
+      const overlay = overlayFromPageLocal(frame, page.index, caretBox, item.interaction);
+      if (overlay === 'singular') return 'singular';
+      if (overlay) return overlay;
+    }
+  }
+  return null;
+}
+
+/** Resolve caret overlay from layout navigation edges only; display clusters are paint-only. */
+export function caretOverlayForTarget(
+  frame: InteractionFrame,
+  navigation: NavigationGeometry | null | undefined,
+  target: Extract<SemanticTarget, { kind: 'text' }>,
+): { rect: Rect; clip?: Rect } | 'singular' | null {
+  return navigationEdgeCaretOverlay(frame, navigation, target);
+}
+
 function caretRectForTextTarget(
   frame: InteractionFrame,
   target: Extract<SemanticTarget, { kind: 'text' }>,
@@ -382,45 +485,19 @@ function caretRectForTextTarget(
   for (const page of frame.display) {
     for (const item of page.items) {
       if (item.kind !== 'text' || item.semantic.identity.blockId !== target.identity.blockId) continue;
-      const meta = item.interaction;
-      let caretBox: Rect | null = null;
-      if (item.clusters.length === 0) {
-        const atEnd = target.graphemeOffset >= block.graphemeCount;
-        caretBox = {
-          x: atEnd ? item.box.x + item.box.width : item.box.x,
-          y: item.box.y,
-          width: 1,
-          height: item.box.height,
-        };
-      } else {
-        for (const cluster of item.clusters) {
-          if (target.graphemeOffset < cluster.graphemeFrom || target.graphemeOffset > cluster.graphemeTo) continue;
-          const atEnd = target.graphemeOffset >= cluster.graphemeTo;
-          caretBox = {
-            x: atEnd ? cluster.box.x + cluster.box.width : cluster.box.x,
-            y: cluster.box.y,
-            width: 1,
-            height: cluster.box.height,
-          };
-          break;
-        }
-        if (!caretBox && target.graphemeOffset >= block.graphemeCount) {
-          const last = item.clusters[item.clusters.length - 1]!;
-          caretBox = { x: last.box.x + last.box.width, y: last.box.y, width: 1, height: last.box.height };
-        }
-      }
+      const caretBox = caretBoxForTargetOnItem(target, block, item);
       if (!caretBox) continue;
-      const overlay = overlayFromPageLocal(frame, page.index, caretBox, meta);
+      const overlay = overlayFromPageLocal(frame, page.index, caretBox, item.interaction);
       if (overlay === 'singular' || !overlay) continue;
       return {
         frameId: frame.id,
         rect: overlay.rect,
         pageIndex: page.index,
-        writingDirection: meta?.writingDirection ?? 'ltr',
+        writingDirection: item.interaction?.writingDirection ?? 'ltr',
         writingMode: HORIZONTAL_WRITING_MODE,
         affinity: target.affinity,
         clip: overlay.clip,
-        transform: meta?.transform,
+        transform: item.interaction?.transform,
       };
     }
   }

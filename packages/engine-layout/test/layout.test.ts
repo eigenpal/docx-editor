@@ -36,12 +36,14 @@ function modelWith(paragraphs: string[]) {
 describe('display-list emission', () => {
   test('emits anchored text items with fixed-point geometry', () => {
     const result = layoutBody(modelWith(['Hello world']), opts());
-    const items = result.pages[0].items;
-    expect(items).toHaveLength(2); // "Hello" and "world"
-    expect(items[0]).toMatchObject({ type: 'text', text: 'Hello', x: 1440, y: 1440 });
-    expect(items[0].anchor).toMatchObject({ paragraphId: expect.any(String), offset: 0 });
-    expect(items[1].anchor.offset).toBe(6); // "Hello " = 6 chars
-    expect(Number.isInteger(items[1].x)).toBe(true); // integer geometry
+    const textItems = result.pages[0]!.items.filter((item) => item.type === 'text');
+    expect(textItems).toHaveLength(2); // "Hello" and "world"
+    expect(textItems[0]).toMatchObject({ type: 'text', text: 'Hello', x: 1440, y: 1440, line: expect.any(Object) });
+    expect(textItems[0].anchor).toMatchObject({ paragraphId: expect.any(String), offset: 0 });
+    expect(textItems[1]!.anchor.offset).toBe(6); // "Hello " = 6 chars
+    expect(Number.isInteger(textItems[1]!.x)).toBe(true); // integer geometry
+    const caretEdges = result.pages[0]!.items.filter((item) => item.type === 'caretEdge');
+    expect(caretEdges.length).toBeGreaterThan(0);
   });
 
   test('long text wraps to new lines within a page', () => {
@@ -102,7 +104,8 @@ describe('hit-testing from the display list (8.9)', () => {
   test('a point over a word resolves to its anchor + refined offset', () => {
     const metrics = new DeterministicMetrics();
     const result = layoutBody(modelWith(['Hello world']), opts({ metrics }));
-    const second = result.pages[0].items[1]; // "world"
+    const textItems = result.pages[0]!.items.filter((item) => item.type === 'text');
+    const second = textItems[1]!; // "world"
     // A point inside "world" resolves back to its paragraph + offset 6.
     const anchor = hitTest(result, 0, second.x + 5, second.y + 10, metrics);
     expect(anchor).toMatchObject({ offset: 6 });

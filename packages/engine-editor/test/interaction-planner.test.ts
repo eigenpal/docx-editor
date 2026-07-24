@@ -4,7 +4,7 @@ import type {
   InteractionHostMetrics,
   SemanticSelection,
 } from '@docx-editor.dev/core-contract/interaction';
-import { publishFrame, selectionForBlock } from './interaction-test-helpers.ts';
+import { publishFrame, publishFrameBundle, selectionForBlock } from './interaction-test-helpers.ts';
 import { planInteraction, type InteractionPlannerContext } from '../src/interaction-planner.ts';
 
 const METRICS: InteractionHostMetrics = {
@@ -107,15 +107,38 @@ describe('interaction planner (task 5.1)', () => {
     expect(plan.effects[0]).toMatchObject({ kind: 'reject', code: 'unsupported' });
   });
 
-  test('returns unsupported for geometry keyboard intents after preconditions pass', () => {
-    const frame = publishFrame();
-    const plan = planInteraction(plannerContext(frame), {
+  test('plans geometry keyboard through shared preconditions when frame is focused', () => {
+    const { frame, navigation } = publishFrameBundle();
+    const focused = {
+      ...frame,
+      focus: { scope: { kind: 'body' as const }, focused: true },
+      selection: selectionForBlock(frame, frame.semanticIndex.stories[0]!.blocks[0]!.identity.blockId, 0, 0),
+    };
+    const unfocused = planInteraction({ ...plannerContext(frame), navigationGeometry: navigation }, {
       kind: 'geometryKeyboard',
       frameId: frame.id,
-      key: 'ArrowDown',
-      shiftKey: false,
+      key: 'ArrowRight',
     });
-    expect(plan.effects[0]).toMatchObject({ kind: 'reject', code: 'unsupported' });
+    expect(unfocused.effects[0]).toMatchObject({
+      kind: 'reject',
+      code: 'invalidTarget',
+      reason: 'geometry keyboard navigation requires a focused interaction frame',
+    });
+    const planned = planInteraction(
+      {
+        ...plannerContext(focused),
+        navigationGeometry: navigation,
+        documentGeneration: 1,
+        resolveParagraphText: (identity) => 'hello',
+      },
+      {
+        kind: 'geometryKeyboard',
+        frameId: focused.id,
+        key: 'ArrowRight',
+      },
+    );
+    expect(planned.effects.some((e) => e.kind === 'syncSelection')).toBe(true);
+    expect(planned.effects.some((e) => e.kind === 'focus')).toBe(false);
   });
 
   test('plans semantic selection sync then focus on one frame', () => {

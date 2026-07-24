@@ -75,7 +75,7 @@ describe('non-DOM backends handle every display-item kind exhaustively (3.8)', (
         height: 15840,
         items: [
           { type: 'rect', x: 100, y: 100, width: 500, height: 200, stroke: true, fill: 'DDDDDD' },
-          { type: 'text', x: 120, y: 140, width: 300, height: 240, text: 'celltext', bold: false, italic: false, anchor: { paragraphId: 'p', offset: 0 } },
+          { type: 'text', x: 120, y: 140, width: 300, height: 240, text: 'celltext', bold: false, italic: false, anchor: { paragraphId: 'p', offset: 0 }, line: { lineId: 'p:L0', fragmentId: 'p:L0:F0', lineIndex: 0, fragmentIndex: 0 } },
         ],
       },
     ],

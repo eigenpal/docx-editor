@@ -11,6 +11,14 @@ export interface Anchor {
   readonly offset: number;
 }
 
+/** Layout-stable identity for one visual line fragment (task 5.5). */
+export interface VisualLineIdentity {
+  readonly lineId: string;
+  readonly fragmentId: string;
+  readonly lineIndex: number;
+  readonly fragmentIndex: number;
+}
+
 /** A positioned run of text (fixed-point coordinates). */
 export interface TextItem {
   readonly type: 'text';
@@ -22,6 +30,26 @@ export interface TextItem {
   readonly bold: boolean;
   readonly italic: boolean;
   readonly anchor: Anchor;
+  readonly line: VisualLineIdentity;
+}
+
+/** Exact caret edge measured during layout for whitespace or slice boundaries (task 5.5). */
+export interface CaretEdgeItem {
+  readonly type: 'caretEdge';
+  readonly x: number;
+  readonly y: number;
+  readonly height: number;
+  readonly paragraphId: string;
+  readonly graphemeOffset: number;
+  readonly affinity: 'upstream' | 'downstream';
+  readonly line: VisualLineIdentity;
+  /** Geometry-trusted for vertical/page/caret overlay (cumulative advance proof). */
+  readonly navigable: boolean;
+  /** Whole-grapheme horizontal boundary for semantic hit/word/ArrowLeft/Right. */
+  readonly horizontalNavigable: boolean;
+  readonly shaping: 'per-grapheme-advance' | 'unsupported';
+  /** UTF-16 offset in the paragraph at this caret edge — exact paint-slice provenance. */
+  readonly utf16Offset: number;
 }
 
 /** A positioned rectangle — a table/cell border box and/or a shading fill. Backends
@@ -36,7 +64,7 @@ export interface RectItem {
   readonly fill?: string;
 }
 
-export type DisplayItem = TextItem | RectItem;
+export type DisplayItem = TextItem | CaretEdgeItem | RectItem;
 
 export interface Page {
   readonly index: number;

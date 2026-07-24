@@ -14,6 +14,8 @@ function itemText(item: DisplayItem): string[] {
       return [item.text];
     case 'rect':
       return []; // a border/shading rect carries no reading-order text
+    case 'caretEdge':
+      return []; // layout-measured caret geometry only
     default:
       return assertNeverDisplayItem(item);
   }

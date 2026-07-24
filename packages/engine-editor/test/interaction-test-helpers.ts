@@ -113,15 +113,24 @@ export function publishFrame(
   model = modelWith(['hello']),
   options: { pageGapPx?: number; layout?: Parameters<typeof layoutBody>[1] } = {},
 ): InteractionFrame {
+  return publishFrameBundle(model, options).frame;
+}
+
+export function publishFrameBundle(
+  model = modelWith(['hello']),
+  options: { pageGapPx?: number; layout?: Parameters<typeof layoutBody>[1] } = {},
+): { frame: InteractionFrame; navigation: import('../src/navigation-geometry.ts').NavigationGeometry; store: InteractionFrameStore } {
   const layout = layoutBody(model, options.layout ?? LAYOUT);
-  const bridged = toDisplayPages(model, layout.pages);
+  const layoutMetrics = options.layout?.metrics ?? LAYOUT.metrics;
+  const bridged = toDisplayPages(model, layout.pages, layoutMetrics);
   const store = new InteractionFrameStore();
-  return store.publishLayout({
+  const frame = store.publishLayout({
     modelRevision: 1,
     resourceEpoch: 0,
     configurationEpoch: 0,
     display: bridged.display,
     semanticIndex: bridged.semanticIndex,
+    navigationGeometry: bridged.navigationGeometry,
     pageGapPx: options.pageGapPx ?? DEFAULT_PAGE_GAP_PX,
     selection: null,
     caret: null,
@@ -130,6 +139,7 @@ export function publishFrame(
     composition: { active: false, scope: null },
     currentPage: { viewport: 0, caret: 0 },
   });
+  return { frame, navigation: store.getNavigationGeometry(frame.id), store };
 }
 
 export function stackedFrame(pageCount: number, pageGapPx = 24, pageHeight = 1056, pageWidth = 816): InteractionFrame {

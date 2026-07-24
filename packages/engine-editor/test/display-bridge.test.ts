@@ -1,7 +1,11 @@
 // The display bridge reconciles the engine layout IR with model-derived semantic ranges.
 
 import { describe, expect, test } from 'bun:test';
-import { deriveLineWhitespaceBox, toDisplayPages } from '../src/display-bridge.ts';
+import { toDisplayPages } from '../src/display-bridge.ts';
+import { caretOverlayForTarget } from '../src/interaction-geometry.ts';
+import { caretContentX } from '../src/line-catalog.ts';
+import { hasGeometryStopAtOffset } from '../src/navigation-stops.ts';
+import { selectionForBlock, publishFrameBundle } from './interaction-test-helpers.ts';
 import { layoutBody, HelveticaMetrics, type Page } from '@docx-editor.dev/engine-layout';
 import {
   createEmptyModel,
@@ -62,31 +66,93 @@ describe('engine layout IR -> contract display IR', () => {
     }
   });
 
-  test('combining mark bridge item has one cluster, full UTF-16 span, paragraph affinity', () => {
+  test('single-space ab cd offset 3 has geometry stop, x, and overlay', () => {
+    const text = 'ab cd';
+    const bundle = publishFrameBundle(modelWith([text]));
+    const blockId = bundle.frame.semanticIndex.stories[0]!.blocks[0]!.identity.blockId;
+    const storyId = bundle.frame.semanticIndex.stories[0]!.storyId;
+    const target = selectionForBlock(bundle.frame, blockId, 3, 3).head;
+    expect(hasGeometryStopAtOffset(bundle.navigation, storyId, blockId, 3)).toBe(true);
+    const x = caretContentX(bundle.frame, target, bundle.navigation);
+    expect(x).toBeCloseTo(116, 5);
+    expect(caretOverlayForTarget(bundle.frame, bundle.navigation, target)).not.toBeNull();
+    const edge = bundle.navigation.visualLines
+      .flatMap((line) => line.edges)
+      .find((entry) => entry.target.graphemeOffset === 3);
+    expect(edge?.interaction.paintSliceAnchor).toBe(3);
+  });
+
+  test('run-split multi-slice same fragment reports no paint conflicts', () => {
+    const model = createEmptyModel();
+    const storyId = bodyStoryId(model);
+    const store = new DocumentStore(model);
+    const pid = (model.stories.get(storyId)!.blocks[0] as ParagraphRecord).id;
+    store.transact(HUMAN, (c) =>
+      c.apply({
+        op: 'setParagraphRuns',
+        paragraphId: pid,
+        runs: [{ text: 'ab', props: { bold: true } }, { text: 'cd', props: { italic: true } }],
+      }),
+    );
+    const layout = layoutBody(store.currentModel, LAYOUT);
+    const { navigationGeometry } = toDisplayPages(store.currentModel, layout.pages, LAYOUT.metrics);
+    expect(navigationGeometry.paintFragmentConflicts).toEqual([]);
+    expect(navigationGeometry.shapingSupported).toBe(true);
+    const edges = navigationGeometry.visualLines.flatMap((line) => line.edges);
+    expect(edges.every((edge) => edge.interaction.paintSliceAnchor === 0 || edge.interaction.paintSliceAnchor === 2)).toBe(true);
+    expect(edges.some((edge) => edge.target.graphemeOffset === 1 && edge.interaction.paintSliceAnchor === 0)).toBe(true);
+    expect(edges.some((edge) => edge.target.graphemeOffset === 2)).toBe(false);
+    expect(edges.some((edge) => edge.target.graphemeOffset === 3 && edge.interaction.paintSliceAnchor === 2)).toBe(true);
+  });
+
+  test('run-split different z at slice boundary excludes ambiguous caret edges', () => {
+    const model = createEmptyModel();
+    const storyId = bodyStoryId(model);
+    const store = new DocumentStore(model);
+    const pid = (model.stories.get(storyId)!.blocks[0] as ParagraphRecord).id;
+    store.transact(HUMAN, (c) =>
+      c.apply({
+        op: 'setParagraphRuns',
+        paragraphId: pid,
+        runs: [{ text: 'a', props: { bold: true } }, { text: 'bc', props: { italic: true } }],
+      }),
+    );
+    const layout = layoutBody(store.currentModel, LAYOUT);
+    const { navigationGeometry } = toDisplayPages(store.currentModel, layout.pages, LAYOUT.metrics);
+    const edges = navigationGeometry.visualLines.flatMap((line) => line.edges);
+    const sliceAnchors = new Set(edges.map((edge) => edge.interaction.paintSliceAnchor));
+    expect([...sliceAnchors].every((anchor) => anchor === 0 || anchor === 1)).toBe(true);
+    expect(edges.some((edge) => edge.target.graphemeOffset === 1)).toBe(false);
+    expect(edges.some((edge) => edge.target.graphemeOffset === 2 && edge.interaction.paintSliceAnchor === 1)).toBe(true);
+  });
+
+  test('combining mark bridge item has one semantic cluster 0..1', () => {
     const text = 'e\u0301';
     const model = modelWith([text]);
     const pid = (model.stories.get(bodyStoryId(model))!.blocks[0] as ParagraphRecord).id;
     const layout = layoutBody(model, LAYOUT);
-    const { display } = toDisplayPages(model, layout.pages);
-    const item = display.flatMap((p) => p.items).find((i) => i.kind === 'text');
+    const { display, navigationGeometry } = toDisplayPages(model, layout.pages, LAYOUT.metrics);
+    const item = display.flatMap((p) => p.items).find((i) => i.kind === 'text' && i.semantic.identity.blockId === pid);
     if (item?.kind !== 'text') throw new Error('text');
     expect(item.clusters).toHaveLength(1);
-    expect(item.clusters[0]!.utf16To - item.clusters[0]!.utf16From).toBe(text.length);
-    expect(item.clusters[0]!.affinity).toBe('downstream');
+    expect(item.clusters[0]!.graphemeFrom).toBe(0);
+    expect(item.clusters[0]!.graphemeTo).toBe(1);
+    expect(navigationGeometry.visualLines.flatMap((line) => line.edges).every((edge) => edge.target.graphemeOffset !== 1)).toBe(true);
     expect(item.semantic.graphemeFrom).toBe(0);
     expect(item.semantic.graphemeTo).toBe(1);
-    expect(item.semantic.identity.blockId).toBe(pid);
   });
 
-  test('surrogate pair bridge item has one cluster and no internal caret granularity', () => {
+  test('surrogate pair bridge item has one semantic cluster and no geometry-trusted interior caret edges', () => {
     const text = '😀';
     const model = modelWith([text]);
     const layout = layoutBody(model, LAYOUT);
-    const { display, semanticIndex } = toDisplayPages(model, layout.pages);
+    const { display, semanticIndex, navigationGeometry } = toDisplayPages(model, layout.pages, LAYOUT.metrics);
     const item = display.flatMap((p) => p.items).find((i) => i.kind === 'text');
     if (item?.kind !== 'text') throw new Error('text');
     expect(item.clusters).toHaveLength(1);
-    expect(item.clusters[0]!.utf16To - item.clusters[0]!.utf16From).toBe(2);
+    expect(item.clusters[0]!.graphemeFrom).toBe(0);
+    expect(item.clusters[0]!.graphemeTo).toBe(1);
+    expect(navigationGeometry.visualLines.flatMap((line) => line.edges).every((edge) => edge.target.graphemeOffset === 0)).toBe(true);
     const block = indexBlock(semanticIndex, item.semantic.identity.blockId);
     expect(indexEditableStops(semanticIndex, block!.identity.blockId)).toHaveLength(block!.graphemeCount + 1);
   });
@@ -122,7 +188,7 @@ describe('engine layout IR -> contract display IR', () => {
     }
   });
 
-  test('lineWhitespace regions receive precise gap boxes between painted slices', () => {
+  test('lineWhitespace regions receive precise gap boxes from measured caret edges', () => {
     const model = modelWith(['ab cd']);
     const layout = layoutBody(model, LAYOUT);
     const { display, semanticIndex } = toDisplayPages(model, layout.pages);
@@ -130,9 +196,9 @@ describe('engine layout IR -> contract display IR', () => {
     const ws = semanticIndex.ownershipRegions.find((r) => r.kind === 'lineWhitespace' && r.identity.blockId === blockId)!;
     const items = display[0]!.items.filter((i) => i.kind === 'text') as Extract<(typeof display)[0]['items'][number], { kind: 'text' }>[];
     expect(items).toHaveLength(2);
-    const derived = deriveLineWhitespaceBox(ws, items, 5);
-    expect(derived).toEqual(ws.box);
-    expect(derived!.width).toBeLessThan(items[0]!.box.width + items[1]!.box.width);
+    expect(ws.box).toBeDefined();
+    expect(ws.box!.width).toBeGreaterThan(0);
+    expect(ws.box!.width).toBeLessThan(items[0]!.box.width + items[1]!.box.width);
   });
 
   test('empty paragraph emits line-area geometry with stable identity and no visible runs', () => {

@@ -15,11 +15,21 @@ export {
   type Anchor,
   type TextItem,
   type RectItem,
+  type CaretEdgeItem,
+  type VisualLineIdentity,
   type DisplayItem,
   type Page,
   type LayoutResult,
 } from './display-item.ts';
 export { type MetricsPort, DeterministicMetrics, HelveticaMetrics } from './metrics.ts';
+export { type ShapingCapability, PER_GRAPHEME_SHAPING, ASCII_LATIN_SHAPING, UNSUPPORTED_SHAPING, type LigatureInteriorCaret, type CharacterAdvanceProvable } from './shaping.ts';
+export { layoutParagraphInBox, type ParagraphLayoutSink } from './paragraph-layout.ts';
+export {
+  isWholeGraphemeHorizontalBoundary,
+  isGeometryTrustedCaretOffset,
+  isCumulativeGeometryTrustedFromLineOrigin,
+  semanticHorizontalBoundaries,
+} from './horizontal-boundary.ts';
 export { type LayoutOptions, layoutBody, hitTest } from './layout.ts';
 export {
   type GraphemeBoundary,

@@ -16,6 +16,9 @@ import type {
 } from '@docx-editor.dev/core-contract/interaction';
 import type { DisplayPage, GlyphRun } from '@docx-editor.dev/core-contract/geometry';
 import type { Rect } from '@docx-editor.dev/core-contract/types';
+import type { NavigationGeometry } from './navigation-geometry.ts';
+import { NavigationSidecarStore } from './navigation-sidecar-store.ts';
+import { emptyNavigationGeometry } from './navigation-geometry.ts';
 
 export const DEFAULT_PAGE_GAP_PX = 24 as const;
 
@@ -54,6 +57,7 @@ export interface PublishLayoutInput {
   readonly configurationEpoch: number;
   readonly display: readonly DisplayPage[];
   readonly semanticIndex: SemanticPositionIndex;
+  readonly navigationGeometry?: NavigationGeometry;
   readonly pageGapPx?: number;
   readonly selection: SemanticSelection | null;
   readonly caret: CaretGeometry | null;
@@ -353,9 +357,18 @@ export class InteractionFrameStore {
   private layoutRevision = 0;
   private current: InteractionFrame | null = null;
   private pending: { targetModelRevision: number; cancelled: boolean } | null = null;
+  private navigationSidecar = new NavigationSidecarStore();
 
   getFrame(): InteractionFrame | null {
     return this.current;
+  }
+
+  getNavigationGeometry(frameId: InteractionFrameId): NavigationGeometry {
+    return this.navigationSidecar.get(frameId);
+  }
+
+  clearNavigationSidecar(): void {
+    this.navigationSidecar.clear();
   }
 
   getPendingTargetRevision(): number | null {
@@ -410,6 +423,14 @@ export class InteractionFrameStore {
     return this.current;
   }
 
+  private attachNavigation(id: InteractionFrameId, geometry: NavigationGeometry | undefined, reuseFrom?: InteractionFrameId): void {
+    if (geometry) {
+      this.navigationSidecar.publish(id, geometry);
+      return;
+    }
+    if (reuseFrom) this.navigationSidecar.rebase(reuseFrom, id);
+  }
+
   /** Atomically publish a complete layout frame. */
   publishLayout(input: PublishLayoutInput): InteractionFrame {
     this.pending = null;
@@ -421,7 +442,7 @@ export class InteractionFrameStore {
       resourceEpoch: input.resourceEpoch,
       configurationEpoch: input.configurationEpoch,
     };
-    return this.buildFrame(
+    const frame = this.buildFrame(
       id,
       revisions,
       { kind: 'complete' },
@@ -436,6 +457,8 @@ export class InteractionFrameStore {
       undefined,
       input.pageGapPx,
     );
+    this.attachNavigation(id, input.navigationGeometry ?? emptyNavigationGeometry());
+    return frame;
   }
 
   /** Publish selection/focus/composition overlay updates over an unchanged layout revision. */
@@ -450,7 +473,7 @@ export class InteractionFrameStore {
     }
     const id = this.mintId();
     const revisions: InteractionRevisions = { ...base.revisions, modelRevision: input.modelRevision };
-    return this.buildFrame(
+    const frame = this.buildFrame(
       id,
       revisions,
       base.completeness.kind === 'pending' ? base.completeness : { kind: 'complete' },
@@ -468,6 +491,8 @@ export class InteractionFrameStore {
         scrollGeometry: base.scrollGeometry,
       },
     );
+    this.attachNavigation(id, undefined, base.id);
+    return frame;
   }
 
   /** Mark derived layout work in flight; retain the last complete frame for reads. */

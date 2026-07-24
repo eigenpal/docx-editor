@@ -58,13 +58,17 @@ import { createEmptyModel } from '@docx-editor.dev/engine-core';
 import { layoutBody, HelveticaMetrics } from '@docx-editor.dev/engine-layout';
 import { toDisplayPages } from './display-bridge.ts';
 import { InteractionFrameStore, emptyInteractionFrame } from './interaction-frame.ts';
+import type { NavigationGeometry } from './navigation-geometry.ts';
 import { hitTestPointer, deriveCaretGeometry, deriveSelectionGeometry } from './interaction-geometry.ts';
 import { contentToClient } from './coordinate-mapper.ts';
 import { execErrorFromInteraction, invalidSetSelection, semanticSelectionFromCommand, unsupportedSetSelection } from './set-selection.ts';
-import { planInteraction } from './interaction-planner.ts';
+import { planInteraction, type PlannedInteraction } from './interaction-planner.ts';
 import { executeInteractionPlan } from './interaction-executor.ts';
 import { planPointerDragInteraction, type PointerDragSession } from './drag-session.ts';
 import { commitDragSessionAfterExecution } from './drag-dispatch.ts';
+import { commitNavigationSessionAfterExecution, type NavigationSession } from './navigation-session.ts';
+import { paragraphTextById } from './semantic-index.ts';
+import { scopesEqual, type ParagraphTextResolver } from './bidi-policy.ts';
 
 // US Letter, 1in margins, in twips — the same geometry the read-only preview uses.
 const LAYOUT = { pageWidth: 12240, pageHeight: 15840, margin: 1440 } as const;
@@ -146,19 +150,26 @@ export function createEditor(config: EditorConfig): Editor {
   let layoutToken = 0;
   let cancelScheduledLayout: (() => void) | null = null;
   let dragSession: PointerDragSession | null = null;
+  let navigationSession: NavigationSession | null = null;
+  let documentGeneration = 0;
 
   function currentFrame(): InteractionFrame {
     if (destroyed) return emptyInteractionFrame();
     return frames.getFrame() ?? emptyInteractionFrame();
   }
 
-  function layoutInput(display: readonly DisplayPage[], semanticIndex: SemanticPositionIndex) {
+  function layoutInput(
+    display: readonly DisplayPage[],
+    semanticIndex: SemanticPositionIndex,
+    navigationGeometry: NavigationGeometry,
+  ) {
     return {
       modelRevision: session!.revision(),
       resourceEpoch,
       configurationEpoch,
       display,
       semanticIndex,
+      navigationGeometry,
       selection: null,
       caret: null,
       selectionGeometry: null,
@@ -281,9 +292,10 @@ export function createEditor(config: EditorConfig): Editor {
 
   function completeLayoutPublication(token: number, pendingTarget?: number): void {
     if (destroyed || token !== layoutToken || !session) return;
-    const layout = layoutBody(session.currentModel(), { ...LAYOUT, metrics: new HelveticaMetrics() });
-    const bridged = toDisplayPages(session.currentModel(), layout.pages);
-    const input = layoutInput(bridged.display, bridged.semanticIndex);
+    const metrics = new HelveticaMetrics();
+    const layout = layoutBody(session.currentModel(), { ...LAYOUT, metrics });
+    const bridged = toDisplayPages(session.currentModel(), layout.pages, metrics);
+    const input = layoutInput(bridged.display, bridged.semanticIndex, bridged.navigationGeometry);
     const frame =
       pendingTarget !== undefined
         ? frames.tryCompletePendingLayout(input) ?? null
@@ -359,6 +371,7 @@ export function createEditor(config: EditorConfig): Editor {
   }
   function onModelChanged(): void {
     if (!session || destroyed) return;
+    navigationSession = null;
     relayoutAndPaint(true);
     emit('change', { revision: session.revision() });
   }
@@ -386,6 +399,12 @@ export function createEditor(config: EditorConfig): Editor {
     sharedUnsub?.();
     sharedUnsub = null;
     session = next;
+    documentGeneration += 1;
+    dragSession = null;
+    navigationSession = null;
+    cancelScheduledLayoutWork();
+    frames.cancelPendingLayout();
+    frames.clearNavigationSidecar();
     // A read-only shared view has no surface of its own, so subscribe to the shared store to repaint
     // when the OWNING editor commits — a live view, not a stale snapshot.
     if (sharedView) {
@@ -466,9 +485,18 @@ export function createEditor(config: EditorConfig): Editor {
       editable: !readOnly && !sharedView && session?.editable === true,
       readOnly: readOnly || sharedView || !session?.editable,
       hostMetrics,
+      modelRevision: session?.revision() ?? frame.revisions.modelRevision,
+      activeScope,
+      navigationSession,
+      documentGeneration,
+      resolveParagraphText: ((identity, scope) =>
+        session && scopesEqual(scope, activeScope)
+          ? paragraphTextById(session.currentModel(), identity.blockId, identity.storyId)
+          : '') satisfies ParagraphTextResolver,
+      navigationGeometry: frames.getNavigationGeometry(frame.id),
     };
     const dragKinds = new Set(['pointerDown', 'pointerMove', 'pointerUp', 'pointerCancel']);
-    let resolvedPlan;
+    let planned: PlannedInteraction;
     let dragPlanResult;
     if (dragKinds.has(intent.kind)) {
       dragPlanResult = planPointerDragInteraction(
@@ -476,9 +504,9 @@ export function createEditor(config: EditorConfig): Editor {
         intent as Parameters<typeof planPointerDragInteraction>[1],
         dragSession,
       );
-      resolvedPlan = dragPlanResult.plan;
+      planned = dragPlanResult.plan;
     } else {
-      resolvedPlan = planInteraction(plannerBase, intent);
+      planned = planInteraction(plannerBase, intent);
     }
     const execution = executeInteractionPlan(
       {
@@ -526,16 +554,24 @@ export function createEditor(config: EditorConfig): Editor {
         },
         currentFrameId: () => currentFrame().id,
       },
-      resolvedPlan,
+      planned,
     );
     if (dragPlanResult) {
       const finalized = commitDragSessionAfterExecution(dragPlanResult, execution);
       dragSession = finalized.session;
+      if (dragPlanResult.navigation !== undefined) {
+        navigationSession = commitNavigationSessionAfterExecution(dragPlanResult.navigation, execution).session ?? null;
+      } else if (planned.navigation !== undefined) {
+        navigationSession = commitNavigationSessionAfterExecution(planned.navigation, execution).session ?? null;
+      }
       if (finalized.supplementalHostEffects.length === 0) return execution;
       return {
         outcome: execution.outcome,
         hostEffects: [...execution.hostEffects, ...finalized.supplementalHostEffects],
       };
+    }
+    if (planned.navigation !== undefined) {
+      navigationSession = commitNavigationSessionAfterExecution(planned.navigation, execution).session ?? null;
     }
     return execution;
   }
@@ -565,6 +601,7 @@ export function createEditor(config: EditorConfig): Editor {
     },
     setActiveScope: (scope: ViewScope) => {
       activeScope = scope;
+      navigationSession = null;
     },
     getActiveScope: () => activeScope,
     query<K extends keyof EditorQueries>(query: { type: K } & EditorQueries[K]): EditorQueryResults[K] {
@@ -694,8 +731,10 @@ export function createEditor(config: EditorConfig): Editor {
       // is NOT disposed here — the handle keeps the store alive for any other editor holding it.
       destroyed = true;
       dragSession = null;
+      navigationSession = null;
       cancelScheduledLayoutWork();
       frames.cancelPendingLayout();
+      frames.clearNavigationSidecar();
       clearPaintedPagesAssistivePolicy();
       surface?.destroy();
       surface = null;

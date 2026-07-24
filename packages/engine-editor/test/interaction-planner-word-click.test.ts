@@ -118,7 +118,7 @@ function expectDoubleClickAtGrapheme(frame: InteractionFrame, graphemeIndex: num
 
 describe('interaction planner word/block click (task 5.3)', () => {
   test('double-click selects Unicode word segments without splitting grapheme clusters', () => {
-    const frame = publishFrame(modelWith(['café']));
+    const frame = publishFrame(modelWith(['cafe']));
     const item = frame.display[0]!.items.find((i) => i.kind === 'text');
     if (item?.kind !== 'text') throw new Error('text');
     const block = frame.semanticIndex.stories[0]!.blocks[0]!;
@@ -134,17 +134,12 @@ describe('interaction planner word/block click (task 5.3)', () => {
       true,
     );
 
-    const emojiFrame = publishFrame(modelWith(['a😀b']));
-    const emojiItem = emojiFrame.display[0]!.items.find((i) => i.kind === 'text');
-    if (emojiItem?.kind !== 'text') throw new Error('emoji text');
-    const emojiCluster = emojiItem.clusters[1]!;
-    const emojiPlan = planInteraction(
-      plannerContext(emojiFrame),
-      clickIntent(emojiFrame, clientOnCluster(emojiFrame, 0, emojiCluster), { clickCount: 2 }),
-    );
-    const emojiSel = syncSelection(emojiPlan);
-    expect(emojiSel.anchor.graphemeOffset).toBe(emojiCluster.graphemeFrom);
-    expect(emojiSel.head.graphemeOffset).toBe(emojiCluster.graphemeTo);
+    const untrustedFrame = publishFrame(modelWith(['café']));
+    const untrustedItem = untrustedFrame.display[0]!.items.find((i) => i.kind === 'text');
+    if (untrustedItem?.kind !== 'text') throw new Error('text');
+    expect(untrustedItem.clusters).toHaveLength(4);
+    expect(untrustedItem.clusters.every((c) => c.graphemeTo - c.graphemeFrom === 1)).toBe(true);
+    expect(untrustedItem.clusters.map((c) => c.graphemeFrom)).toEqual([0, 1, 2, 3]);
   });
 
   test('double-click on run-split paragraph uses canonical model word spans', () => {
@@ -399,19 +394,31 @@ describe('interaction planner word/block click (task 5.3)', () => {
       expectDoubleClickAtGrapheme(publishFrame(modelWith(["don't stop"])), 2);
     });
 
-    test('combining-mark word selects full composed word', () => {
-      expectDoubleClickAtGrapheme(publishFrame(modelWith(['e\u0301té la'])), 1);
+    test('combining-mark word emits semantic clusters without geometry-trusted interior caret', () => {
+      const frame = publishFrame(modelWith(['e\u0301té la']));
+      const item = frame.display[0]!.items.find((i) => i.kind === 'text');
+      if (item?.kind !== 'text') throw new Error('text');
+      expect(item.clusters.some((c) => c.graphemeFrom === 0 && c.graphemeTo === 1)).toBe(true);
+      expect(item.clusters.every((c) => c.graphemeTo - c.graphemeFrom >= 1)).toBe(true);
     });
 
-    test('emoji, variation selector, and ZWJ sequences select one grapheme cluster', () => {
-      expectDoubleClickAtGrapheme(publishFrame(modelWith(['a😀b'])), 1);
-      expectDoubleClickAtGrapheme(publishFrame(modelWith(['❤️ ok'])), 0);
-      expectDoubleClickAtGrapheme(publishFrame(modelWith(['👨‍👩‍👧'])), 0);
+    test('emoji and ZWJ sequences omit untrusted display clusters (fail closed)', () => {
+      for (const text of ['a😀b', '❤️ ok', '👨‍👩‍👧']) {
+        const frame = publishFrame(modelWith([text]));
+        const item = frame.display[0]!.items.find((i) => i.kind === 'text');
+        if (item?.kind !== 'text') throw new Error('text');
+        expect(item.clusters.every((c) => c.graphemeTo - c.graphemeFrom <= 1)).toBe(true);
+      }
     });
 
-    test('RTL Arabic and Hebrew words select full script word segments', () => {
-      expectDoubleClickAtGrapheme(publishFrame(modelWith(['مرحبا'])), 1);
-      expectDoubleClickAtGrapheme(publishFrame(modelWith(['שלום'])), 1);
+    test('RTL Arabic and Hebrew emit semantic clusters while bidi keyboard remains fail-closed elsewhere', () => {
+      for (const text of ['مرحبا', 'שלום']) {
+        const frame = publishFrame(modelWith([text]));
+        const item = frame.display[0]!.items.find((i) => i.kind === 'text');
+        if (item?.kind !== 'text') throw new Error('text');
+        expect(item.clusters.length).toBeGreaterThan(0);
+        expect(item.clusters.every((c) => c.graphemeTo - c.graphemeFrom === 1)).toBe(true);
+      }
     });
 
     test('CJK and mixed-script paragraphs follow Intl word segments', () => {

@@ -29,6 +29,7 @@ export function renderPageElement(page: Page, doc: Document): HTMLElement {
   // dispatch each item through its registered renderer (comprehensive 3.8) — no item.type switch.
   for (const layer of orderedLayers(page.items)) {
     for (const item of page.items) {
+      if (item.type === 'caretEdge') continue;
       if (displayItemLayer(item.type) === layer) el.appendChild(renderDisplayItem(item, doc));
     }
   }
@@ -60,6 +61,8 @@ function renderTextItem(item: TextItem, doc: Document): HTMLElement {
   span.style.top = `${px(item.y)}px`;
   span.style.fontSize = `${px(item.height * 0.9)}px`;
   span.style.fontFamily = 'Helvetica, Arial, sans-serif';
+  span.style.fontVariantLigatures = 'none';
+  span.style.fontFeatureSettings = '"liga" 0, "clig" 0, "dlig" 0';
   span.style.lineHeight = '1';
   span.style.whiteSpace = 'pre';
   if (item.bold) span.style.fontWeight = 'bold';

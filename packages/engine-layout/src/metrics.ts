@@ -4,6 +4,9 @@
 // bake-off); the deterministic port here gives every character a fixed advance so
 // layout output is exactly reproducible for the cross-runtime comparator.
 
+import type { ShapingCapability, LigatureInteriorCaret, CharacterAdvanceProvable } from './shaping.ts';
+import { ASCII_LATIN_SHAPING, PER_GRAPHEME_SHAPING } from './shaping.ts';
+
 export interface MetricsPort {
   /** Advance width (fixed-point) of a character in a run. */
   advance(char: string, bold: boolean, italic: boolean): number;
@@ -11,6 +14,12 @@ export interface MetricsPort {
   readonly lineHeight: number;
   /** Width of a space (fixed-point). */
   readonly spaceWidth: number;
+  /** Explicit caret-edge capability for keyboard navigation provenance. */
+  readonly shaping: ShapingCapability;
+  /** When shaping.ligatures is opaque, marks interior ligature caret stops non-navigable. */
+  readonly ligatureInteriorCaret?: LigatureInteriorCaret;
+  /** When set, interior caret stops require every code unit in the grapheme to pass this probe. */
+  readonly provesCharacterAdvance?: CharacterAdvanceProvable;
 }
 
 /**
@@ -21,9 +30,14 @@ export interface MetricsPort {
 export class DeterministicMetrics implements MetricsPort {
   readonly lineHeight = 240; // fixed-point units (e.g. 1/20 pt scale)
   readonly spaceWidth = 60;
+  readonly shaping: ShapingCapability = PER_GRAPHEME_SHAPING;
 
-  advance(_char: string, bold: boolean): number {
+  advance(_char: string, bold: boolean, _italic = false): number {
     return bold ? 130 : 120;
+  }
+
+  provesCharacterAdvance(_char: string): boolean {
+    return true;
   }
 }
 
@@ -55,6 +69,7 @@ export class HelveticaMetrics implements MetricsPort {
   readonly lineHeight: number;
   private readonly fontSize: number;
   readonly spaceWidth: number;
+  readonly shaping: ShapingCapability = ASCII_LATIN_SHAPING;
 
   constructor(lineHeightTwips = 240) {
     this.lineHeight = lineHeightTwips;
@@ -66,5 +81,9 @@ export class HelveticaMetrics implements MetricsPort {
     const w = HELVETICA_1000[char] ?? HELVETICA_DEFAULT;
     const base = Math.round((w / 1000) * this.fontSize);
     return bold ? Math.round(base * 1.06) : base;
+  }
+
+  provesCharacterAdvance(char: string): boolean {
+    return char in HELVETICA_1000;
   }
 }

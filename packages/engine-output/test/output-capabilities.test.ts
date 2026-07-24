@@ -25,6 +25,8 @@ class El {
 }
 const mockDoc = { createElement: (t: string) => new El(t) } as unknown as Document;
 
+const TEST_LINE = { lineId: 'test:L0', fragmentId: 'test:L0:F0', lineIndex: 0, fragmentIndex: 0 } as const;
+
 describe('output capability registry', () => {
   test('rects paint before text (layer order), preserving document order within a layer', () => {
     const page: Page = {
@@ -32,9 +34,9 @@ describe('output capability registry', () => {
       width: 12240,
       height: 15840,
       items: [
-        { type: 'text', x: 0, y: 0, width: 10, height: 20, text: 'A', bold: false, italic: false, anchor: { paragraphId: 'p', offset: 0 } },
+        { type: 'text', x: 0, y: 0, width: 10, height: 20, text: 'A', bold: false, italic: false, anchor: { paragraphId: 'p', offset: 0 }, line: TEST_LINE },
         { type: 'rect', x: 0, y: 0, width: 100, height: 40, stroke: true },
-        { type: 'text', x: 20, y: 0, width: 10, height: 20, text: 'B', bold: false, italic: false, anchor: { paragraphId: 'p', offset: 1 } },
+        { type: 'text', x: 20, y: 0, width: 10, height: 20, text: 'B', bold: false, italic: false, anchor: { paragraphId: 'p', offset: 1 }, line: TEST_LINE },
       ],
     };
     const el = renderPageElement(page, mockDoc) as unknown as El;

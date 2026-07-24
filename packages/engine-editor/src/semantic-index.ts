@@ -12,7 +12,6 @@ import {
 } from '@docx-editor.dev/engine-core';
 import {
   graphemeCount,
-  segmentGraphemes,
   segmentWords,
   resolveDefaultWordBoundary,
   utf16OffsetToGrapheme,
@@ -29,10 +28,9 @@ import type {
   SemanticIdentity,
   SemanticPositionIndex,
   SemanticTextSpan,
-  ShapedCluster,
   StorySemanticIndex,
 } from '@docx-editor.dev/core-contract/interaction';
-import type { Rect } from '@docx-editor.dev/core-contract/types';
+import type { BlockTraversalLinks } from './navigation-geometry.ts';
 
 /** Traversal context for capability-owned editability in the body-paragraph lane. */
 export interface ParagraphTraversalContext {
@@ -55,7 +53,11 @@ function flattenSdt(blocks: readonly Block[]): Block[] {
 }
 
 function walkParagraphs(blocks: readonly Block[], context: ParagraphTraversalContext, out: LocatedParagraph[]): void {
-  for (const block of flattenSdt(blocks)) {
+  for (const block of blocks) {
+    if (block.kind === 'sdt') {
+      walkParagraphs((block as SdtRecord).blocks, { inTopLevelBodyFlow: false, inTableCell: context.inTableCell }, out);
+      continue;
+    }
     if (block.kind === 'paragraph') {
       out.push({ paragraph: block as ParagraphRecord, context });
       continue;
@@ -145,6 +147,37 @@ function buildBlockRecords(
   return { records, paragraphs };
 }
 
+/** Top-level editable paragraph adjacency links for keyboard navigation (task 5.5). */
+export function buildTraversalLinks(
+  storyBlocks: readonly Block[],
+  records: readonly BlockSemanticRecord[],
+): Map<string, BlockTraversalLinks> {
+  const byId = new Map(records.map((record) => [record.identity.blockId, record]));
+  const links = new Map<string, BlockTraversalLinks>(
+    records.map((record) => [record.identity.blockId, { previousEditableBlockId: null, nextEditableBlockId: null }]),
+  );
+  let lastEditable: string | null = null;
+  for (const block of storyBlocks) {
+    if (block.kind !== 'paragraph') {
+      lastEditable = null;
+      continue;
+    }
+    const record = byId.get(block.id);
+    if (!record || record.readOnly) {
+      lastEditable = null;
+      continue;
+    }
+    if (lastEditable) {
+      const prevLinks = links.get(lastEditable)!;
+      links.set(lastEditable, { ...prevLinks, nextEditableBlockId: record.identity.blockId });
+      const nextLinks = links.get(record.identity.blockId)!;
+      links.set(record.identity.blockId, { ...nextLinks, previousEditableBlockId: lastEditable });
+    }
+    lastEditable = record.identity.blockId;
+  }
+  return links;
+}
+
 function paragraphRegions(
   scope: ViewScope,
   paragraphs: readonly ParagraphRecord[],
@@ -225,6 +258,18 @@ export function buildSemanticIndex(
   return { stories: [storyIndex], caretStops, ownershipRegions };
 }
 
+export function buildTraversalLinksForModel(
+  model: PackageModel,
+  wordBoundary: WordBoundary = resolveDefaultWordBoundary(),
+): Map<string, BlockTraversalLinks> {
+  const storyId = bodyStoryId(model);
+  const story = model.stories.get(storyId)!;
+  const located: LocatedParagraph[] = [];
+  walkParagraphs(story.blocks, { inTopLevelBodyFlow: true, inTableCell: false }, located);
+  const { records } = buildBlockRecords(storyId, located, wordBoundary);
+  return buildTraversalLinks(story.blocks, records);
+}
+
 /** Deprecated flat view offsets derived from model semantic UTF-16 ranges, not painted items. */
 export function deprecatedFlatDocOffset(
   index: SemanticPositionIndex,
@@ -261,43 +306,11 @@ export function semanticTextSpan(
   };
 }
 
-/** Approximate one visual cluster per grapheme within a painted text slice. */
-export function shapedClustersForSlice(
-  semantic: SemanticTextSpan,
-  itemBox: Rect,
-  sliceText: string,
-  paragraphGraphemeCount: number,
-  direction: 'ltr' | 'rtl' = 'ltr',
-): ShapedCluster[] {
-  const segments = segmentGraphemes(sliceText);
-  if (segments.length === 0) return [];
-  const totalWidth = itemBox.width;
-  const sliceGraphemeFrom = semantic.graphemeFrom;
-  let x = itemBox.x;
-  const widthPer = totalWidth / segments.length;
-  return segments.map((seg, clusterIndex) => {
-    const box: Rect = { x, y: itemBox.y, width: widthPer, height: itemBox.height };
-    x += widthPer;
-    const graphemeFrom = sliceGraphemeFrom + seg.index;
-    const graphemeTo = graphemeFrom + 1;
-    return {
-      clusterIndex,
-      graphemeFrom,
-      graphemeTo,
-      utf16From: semantic.utf16From + seg.utf16From,
-      utf16To: semantic.utf16From + seg.utf16To,
-      box,
-      logicalOrder: direction === 'rtl' ? segments.length - 1 - clusterIndex : clusterIndex,
-      direction,
-      affinity: caretAffinity(graphemeFrom, paragraphGraphemeCount),
-    };
-  });
-}
-
-export function paragraphTextById(model: PackageModel, paragraphId: string): string {
-  const storyId = bodyStoryId(model);
+export function paragraphTextById(model: PackageModel, paragraphId: string, storyId = bodyStoryId(model)): string {
+  const story = model.stories.get(storyId);
+  if (!story) return '';
   const located: LocatedParagraph[] = [];
-  walkParagraphs(model.stories.get(storyId)!.blocks, { inTopLevelBodyFlow: true, inTableCell: false }, located);
+  walkParagraphs(story.blocks, { inTopLevelBodyFlow: storyId === bodyStoryId(model), inTableCell: storyId !== bodyStoryId(model) }, located);
   const found = located.find((l) => l.paragraph.id === paragraphId);
   return found ? paragraphText(found.paragraph) : '';
 }

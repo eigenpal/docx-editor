@@ -2,7 +2,10 @@
 
 import { describe, expect, test } from 'bun:test';
 import type { InteractionFrame, InteractionHostMetrics } from '@docx-editor.dev/core-contract/interaction';
-import { deriveLineWhitespaceBox, toDisplayPages } from '../src/display-bridge.ts';
+import { toDisplayPages } from '../src/display-bridge.ts';
+import { caretOverlayForTarget } from '../src/interaction-geometry.ts';
+import { freezeNavigationGeometry } from '../src/navigation-geometry.ts';
+import { InteractionFrameStore } from '../src/interaction-frame.ts';
 import { contentToClient, IDENTITY_HOST_METRICS } from '../src/coordinate-mapper.ts';
 import { deriveCaretGeometry, hitTestPointer } from '../src/interaction-geometry.ts';
 import { deepFreezeValue } from '../src/interaction-frame.ts';
@@ -278,23 +281,40 @@ describe('lineWhitespace ownership (task 5.3 defect)', () => {
     expect(sync.selection.head.graphemeOffset).toBe(block.graphemeCount);
   });
 
-  test('transformed adjacent slices omit untransformed whitespace gap box', () => {
+  test('singular sidecar transform fails closed for geometry caret overlay', () => {
     const model = modelWith(['ab cd']);
     const layout = layoutBody(model, LAYOUT);
-    const { display, semanticIndex } = toDisplayPages(model, layout.pages);
-    const ws = semanticIndex.ownershipRegions.find((r) => r.kind === 'lineWhitespace');
-    if (!ws) throw new Error('lineWhitespace');
-    const textItems = display[0]!.items.filter((i) => i.kind === 'text');
-    const utf16Len = semanticIndex.stories[0]!.blocks[0]!.utf16Length;
-    expect(deriveLineWhitespaceBox(ws, textItems, utf16Len)).toBeDefined();
-
-    const transformed = textItems.map((item) => ({
-      ...item,
-      interaction: {
-        ...item.interaction!,
-        transform: { a: 1, b: 0.2, c: 0, d: 1, tx: 8, ty: 4 },
-      },
-    }));
-    expect(deriveLineWhitespaceBox(ws, transformed, utf16Len)).toBeUndefined();
+    const { display, semanticIndex, navigationGeometry } = toDisplayPages(model, layout.pages);
+    const store = new InteractionFrameStore();
+    const tamperedNav = freezeNavigationGeometry({
+      ...navigationGeometry,
+      visualLines: navigationGeometry.visualLines.map((line) => ({
+        ...line,
+        edges: line.edges.map((edge) => ({
+          ...edge,
+          interaction: {
+            ...edge.interaction,
+            transform: { a: 0, b: 0, c: 0, d: 0, tx: 0, ty: 0 },
+          },
+        })),
+      })),
+    });
+    const frame = store.publishLayout({
+      modelRevision: 1,
+      resourceEpoch: 0,
+      configurationEpoch: 0,
+      display,
+      semanticIndex,
+      navigationGeometry: tamperedNav,
+      selection: null,
+      caret: null,
+      selectionGeometry: null,
+      focus: { scope: { kind: 'body' }, focused: true },
+      composition: { active: false, scope: null },
+      currentPage: { viewport: 0, caret: 0 },
+    });
+    const textLine = tamperedNav.visualLines.find((line) => line.edges.some((edge) => edge.target.graphemeOffset === 1));
+    expect(textLine).toBeDefined();
+    expect(caretOverlayForTarget(frame, tamperedNav, textLine!.edges.find((e) => e.target.graphemeOffset === 1)!.target)).toBeNull();
   });
 });

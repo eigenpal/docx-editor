@@ -48,6 +48,8 @@ export async function renderPdf(layout: LayoutResult): Promise<Uint8Array> {
           // generator). Skip EXPLICITLY — the exhaustive default below still forces any NEW kind to
           // be handled here rather than silently dropped.
           break;
+        case 'caretEdge':
+          break;
         default:
           assertNeverDisplayItem(item);
       }

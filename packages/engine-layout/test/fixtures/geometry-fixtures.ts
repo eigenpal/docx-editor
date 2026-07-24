@@ -136,8 +136,6 @@ export const GEOMETRY_FIXTURES: readonly GeometryFixtureCase[] = [
     expected: {
       graphemeCounts: [1],
       noInternalCaretStop: true,
-      oneClusterPerGrapheme: true,
-      fullUtf16Span: true,
       hasEditableCaretStops: true,
     },
   },
@@ -146,13 +144,11 @@ export const GEOMETRY_FIXTURES: readonly GeometryFixtureCase[] = [
     version: GEOMETRY_FIXTURE_VERSION,
     class: 'surrogatePairs',
     capability: 'supported',
-    reason: 'UTF-16 surrogate pairs map to one grapheme cluster.',
+    reason: 'UTF-16 surrogate pairs map to one grapheme cluster; geometry-trusted caret edges exclude unsupported advances.',
     input: { paragraphs: [{ text: '😀' }] },
     expected: {
       graphemeCounts: [1],
       noInternalCaretStop: true,
-      oneClusterPerGrapheme: true,
-      fullUtf16Span: true,
       hasEditableCaretStops: true,
     },
   },
@@ -177,7 +173,7 @@ export const GEOMETRY_FIXTURES: readonly GeometryFixtureCase[] = [
     version: GEOMETRY_FIXTURE_VERSION,
     class: 'verticalMovement',
     capability: 'unsupported',
-    reason: 'Vertical caret movement requires engine line geometry from task 3.5+.',
+    reason: 'Vertical keyboard navigation with retained visual advance is validated by focused task 5.5 tests, not this fixture gate.',
     input: { paragraphs: [{ text: 'line one' }, { text: 'line two' }] },
   },
   {
