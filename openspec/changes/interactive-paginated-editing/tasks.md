@@ -1,6 +1,6 @@
 # Interactive paginated editing — accelerated execution tasks
 
-Progress: **39 / 114** complete.
+Progress: **40 / 114** complete.
 
 | Baseline | Count |
 | --- | --- |
@@ -117,7 +117,7 @@ passes.
 
 Prerequisite for M3. Adapters still render no product chrome.
 
-- [ ] 6.1 Add the shared page, semantic/accessibility, selection/caret/composition overlay, and input-host CSS/paint primitives to the single-source core stylesheet. **Deliverable:** `packages/core/src/styles/editor.css` exposes one-surface layer classes/tokens consumed by both adapters.
+- [x] 6.1 Add the shared page, semantic/accessibility, selection/caret/composition overlay, and input-host CSS/paint primitives to the single-source core stylesheet. **Deliverable:** `packages/core/src/styles/editor.css` exposes one-surface layer classes/tokens consumed by both adapters.
 - [ ] M2.1 Implement a shared adapter event bridge module that forwards pointer, keyboard, focus, scroll, and capture events from host DOM to the interaction controller through public contracts only. **Deliverable:** framework-neutral bridge consumed identically by React/Vue hosts.
 - [ ] M2.2 Wire overlay paint helpers so caret/selection rectangles render from interaction-frame geometry with clipping, transforms, writing direction, zoom, and pointer transparency. **Deliverable:** shared paint utilities (extend `packages/react/src/paintDisplay.tsx` pattern).
 - [ ] M2.3 Emit stable public test attributes and/or driver-readable client rectangles on the bounded-document fixture's first editable body-paragraph glyph (e.g. `data-testid="one-surface-click-target"` on the target display item or equivalent public query). **Deliverable:** Playwright and manual gates locate the target by attribute/query center click — never hardcoded page coordinates or whitespace.
@@ -322,7 +322,7 @@ esac
 | **5.7a** | `packages/engine-editor/src/interaction-planner.ts`, `packages/engine-editor/test/interaction-planner.test.ts`, `packages/engine-editor/test/navigation-sidecar.test.ts`, `openspec/changes/interactive-paginated-editing/tasks.md` (planner replaces the originally-listed `navigation-session.ts`: synchronous target re-resolution belongs beside the other planner preconditions, not in the visual-advance sidecar) |
 | **M1-R1** | `openspec/changes/interactive-paginated-editing/evidence/m1/verification-log.md`, `openspec/changes/interactive-paginated-editing/tasks.md` |
 | **M1-R2** | `openspec/changes/interactive-paginated-editing/evidence/m1/summary.md`, `openspec/changes/interactive-paginated-editing/tasks.md` |
-| **6.1** | `packages/core/src/styles/editor.css`, `openspec/changes/interactive-paginated-editing/tasks.md` |
+| **6.1** | `packages/core/src/styles/editor.css`, `packages/react/src/styles/editor.css`, `packages/vue/src/styles/editor.css`, `openspec/changes/interactive-paginated-editing/tasks.md` (both adapter stylesheets were deleted by the greenfield strip `checkpoint-701c1a9f`, which left `check:adapter-css-thin` failing on a missing file; recreated import-only so the M2-R1 gate measures the invariant instead of an ENOENT) |
 | **M2.1** | `packages/engine-editor/src/adapter-event-bridge.ts`, `packages/engine-editor/test/adapter-event-bridge.test.ts`, `openspec/changes/interactive-paginated-editing/tasks.md` |
 | **M2.2** | `packages/engine-editor/src/display-bridge.ts`, `packages/react/src/paintDisplay.tsx`, `packages/vue/src/paintDisplay.ts`, `packages/engine-editor/test/display-bridge.test.ts`, `openspec/changes/interactive-paginated-editing/tasks.md` |
 | **M2.3** | `packages/engine-output/src/dom.ts`, `packages/react/src/paintDisplay.tsx`, `e2e/oneSurfaceHelpers.ts`, `packages/engine-editor/test/display-bridge.test.ts`, `openspec/changes/interactive-paginated-editing/tasks.md` |

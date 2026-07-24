@@ -145,6 +145,11 @@
   --doc-focus-ring: rgba(26, 115, 232, 0.4);
   --doc-selection: rgba(26, 115, 232, 0.3);
 
+  /* Engine-painted caret on the document canvas. Word paints a black caret on
+   * white paper; the dark theme re-points this to a light value below so the
+   * caret stays visible against the inverted page. */
+  --doc-caret: #000000;
+
   /* Document scroll container scrollbar */
   --doc-scrollbar-size: 14px;
   --doc-scrollbar-thumb: color-mix(in srgb, var(--doc-text-muted) 45%, transparent);
@@ -1336,4 +1341,147 @@
   outline: 2px solid var(--doc-revision-deletion);
   outline-offset: 1px;
   opacity: 0.6;
+}
+
+/* ========================================================================
+ * One-surface interactive paginated editing (interactive-paginated-editing
+ * task 6.1).
+ *
+ * The single source of truth for the direct-editing surface. Both adapters
+ * `@import` this file and add no CSS of their own (enforced by
+ * `bun run check:adapter-css-thin`).
+ *
+ * Layer model, bottom to top, inside one scroll container:
+ *
+ *   .ep-one-surface                 positioning context
+ *   └ .ep-one-surface__pages        stacked page boxes
+ *     └ .ep-one-surface__page       one engine-sized page box
+ *       ├ .ep-one-surface__content  painted DisplayItem[] (engine geometry)
+ *       └ .ep-one-surface__overlay  caret + selection, pointer-transparent
+ *
+ * Every box that carries document geometry is positioned by the engine in
+ * content pixels through inline styles. Nothing here invents or overrides a
+ * width, height, x, or y for a page or a display item — the rules below only
+ * supply painting, stacking, and pointer policy. Zoom is applied by the host
+ * as a transform on `.ep-one-surface__pages`; the engine is told about it
+ * through InteractionHostMetrics, so geometry and paint agree.
+ * ======================================================================== */
+
+.ep-one-surface {
+  position: relative;
+  /* Page separation is a paint concern; the engine reports the same gap in
+   * scrollGeometry so hit testing and paint stay in agreement. */
+  --doc-page-gap: 24px;
+}
+
+/* Scroll container. The host reports scrollTop/scrollLeft to the engine as
+ * InteractionHostMetrics.scrollOffset — the engine never reads the DOM. */
+.ep-one-surface__viewport {
+  position: relative;
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+
+.ep-one-surface__pages {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--doc-page-gap);
+  /* Zoom origin must match the engine's assumption: scale about the top-left
+   * of the stack, so client→content conversion is a plain divide by zoom. */
+  transform-origin: 0 0;
+}
+
+.ep-one-surface__page {
+  position: relative;
+  flex: none;
+  background: var(--doc-page-bg);
+  box-shadow: 0 1px 3px var(--doc-shadow);
+  /* Painted items are placed absolutely in page-local coordinates and must not
+   * bleed past the sheet. */
+  overflow: hidden;
+}
+
+/* Painted display items. Text is selected through the engine's semantic
+ * selection, never the browser's, so native selection is suppressed here to
+ * stop a second, contradictory selection appearing on the same glyphs. */
+.ep-one-surface__content {
+  position: absolute;
+  inset: 0;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.ep-one-surface__content > * {
+  position: absolute;
+}
+
+/* Overlay layer: caret and selection rectangles, both derived from
+ * interaction-frame geometry. Pointer-transparent so a click always reaches
+ * the page and resolves through the engine hit test. */
+.ep-one-surface__overlay {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.ep-one-surface__selection-rect {
+  position: absolute;
+  background: var(--doc-selection);
+}
+
+.ep-one-surface__caret {
+  position: absolute;
+  width: 1px;
+  background: var(--doc-caret);
+  animation: ep-caret-blink 1.06s steps(1) infinite;
+}
+
+/* A caret that is being moved or dragged should not blink. */
+.ep-one-surface__caret--steady {
+  animation: none;
+}
+
+/* Right-to-left runs paint their caret on the trailing edge; the engine
+ * supplies the rect, this only marks direction for the host. */
+.ep-one-surface__caret--rtl {
+  direction: rtl;
+}
+
+/* Active IME composition. The composed range stays visible under the engine
+ * selection so the user can see what the input method is holding. */
+.ep-one-surface__composition {
+  position: absolute;
+  border-bottom: 1px solid var(--doc-text);
+  pointer-events: none;
+}
+
+/* Explicit exceptions to overlay pointer-transparency: selection handles and
+ * object controls that must receive their own pointer events. Anything using
+ * this class opts out deliberately — it is not the default for overlay content.
+ */
+.ep-one-surface__overlay-control {
+  pointer-events: auto;
+}
+
+/* The hidden ProseMirror input host. Position, size, clipping, and opacity are
+ * owned imperatively by engine-binding's input-host module, which keeps the
+ * host attached, non-`display:none`, and tracking the engine caret so browser
+ * IME and autofill UI follow it. This class is a marker and containment hint
+ * only and MUST NOT set geometry or visibility, or it would fight that policy.
+ */
+.ep-one-surface__input-host {
+  contain: strict;
+}
+
+/* The host must never expose a second visible or assistive copy of the
+ * document, so its projected content is not painted. */
+.ep-one-surface__input-host * {
+  color: transparent;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ep-one-surface__caret {
+    animation: none;
+  }
 }
