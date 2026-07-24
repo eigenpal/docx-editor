@@ -3,7 +3,7 @@
 // keys). This settles the shape BEFORE the parser populates it.
 
 import { describe, expect, test } from 'bun:test';
-import { createEmptyModel, encodeModel, decodeModel, type PackageModel, type SerializedModel } from '../src/index.ts';
+import { createEmptyModel, encodeModel, decodeModel, diagnoseBodyPatchability, type PackageModel, type SerializedModel } from '../src/index.ts';
 
 const PART = '/word/document.xml';
 const TEXT = '<w:document><w:body><w:p/></w:body></w:document>';
@@ -96,5 +96,15 @@ describe('preservation package integrity', () => {
       preservation: { originalParts: [[PART, TEXT]], blockRanges: [], packageParts: [[PART, 'zz']] },
     };
     expect(() => decodeModel(bad)).toThrow(/invalid hex/);
+  });
+});
+
+describe('read-only diagnostics (comprehensive 4.9)', () => {
+  test('a model with no preservation snapshot diagnoses no-preservation', () => {
+    const res = diagnoseBodyPatchability(createEmptyModel());
+    expect(res.editable).toBe(false);
+    expect(res.diagnostic.code).toBe('no-preservation');
+    expect(res.diagnostic.missingLane).toBe('preservation');
+    expect(typeof res.diagnostic.story).toBe('string'); // names the story
   });
 });

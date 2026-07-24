@@ -10,11 +10,12 @@ import type { Node as PMNode } from 'prosemirror-model';
 import {
   parseDocx,
   writeDocx,
-  isModelBodyPatchable,
+  diagnoseBodyPatchability,
   DocumentStore,
   bodyStoryId,
   type PackageModel,
   type ParagraphRecord,
+  type ReadOnlyDiagnostic,
 } from '@docx-editor.dev/engine-core';
 import { EditorBinding } from './binding.ts';
 
@@ -33,6 +34,9 @@ export interface DocxEditorSession {
    *  section-props/tables/SDTs/inline structure it would drop). Anything else opens
    *  read-only so an edit-and-save can never silently lose content. */
   readonly editable: boolean;
+  /** When the document opened read-only, a structured diagnostic naming the blocking capability,
+   *  QName/context, story, and missing pipeline lane (comprehensive 4.9); null when editable. */
+  readonly readOnlyReason: ReadOnlyDiagnostic | null;
   /** Project the current canonical model into a ProseMirror doc for the view. */
   projectDoc(): PMNode;
   /** Map an edited ProseMirror doc to one DocOp transaction against the store. On a
@@ -85,11 +89,14 @@ export function openDocxSession(bytes: Uint8Array): DocxEditorSession {
   const store = new DocumentStore(model);
   const binding = new EditorBinding(store);
   // Editable when the body is patchable paragraphs under preservation; otherwise read-only
-  // (tables/SDTs, unmodeled paragraph content, or an unpreservable document).
-  const editable = isModelBodyPatchable(model);
+  // (tables/SDTs, unmodeled paragraph content, or an unpreservable document) — with a structured
+  // reason a host can show the user.
+  const patch = diagnoseBodyPatchability(model);
+  const editable = patch.editable;
 
   return {
     editable,
+    readOnlyReason: patch.editable ? null : patch.diagnostic,
     projectDoc: () => binding.projectDoc(),
     applyPmDoc(doc) {
       if (!editable) return { committed: false, rejected: true, opCount: 0 };

@@ -312,28 +312,72 @@ export function isPlainEditableDocx(bytes: Uint8Array): boolean {
  * top-level paragraph) or a paragraph with unmodeled content makes the document read-only.
  */
 export function isModelBodyPatchable(model: PackageModel): boolean {
+  return diagnoseBodyPatchability(model).editable;
+}
+
+/** The OOXML root element a block kind serializes to — for the read-only diagnostic's QName. */
+const BLOCK_QNAME: Readonly<Record<string, string>> = { paragraph: 'w:p', table: 'w:tbl', sdt: 'w:sdt' };
+
+/** Why a document opens read-only (comprehensive 4.9). Names the blocking capability, the QName +
+ *  context, the story, and the missing pipeline lane, so a host can tell a user exactly what to fix
+ *  rather than an opaque "read-only". `story` is the story id the block lives in. */
+export interface ReadOnlyDiagnostic {
+  readonly code:
+    | 'no-preservation' // parsed without preserveAll, or an unpreservable package
+    | 'no-document-part'
+    | 'empty-body'
+    | 'non-editable-kind' // a table/SDT (or other non-paragraph) body block
+    | 'no-source-range' // a synthetic block with no captured source (e.g. empty-body paragraph)
+    | 'unmodeled-content' // a paragraph carrying OOXML the model does not capture (needs capsules)
+    | 'non-contiguous-blocks'; // bytes between sibling blocks would be lost on a structural edit
+  readonly message: string;
+  readonly story: string;
+  /** The block that blocks editing, when a specific one is the cause. */
+  readonly blockId?: string;
+  readonly blockKind?: string;
+  readonly qname?: string;
+  /** The pipeline lane the document lacks for editing. */
+  readonly missingLane: 'preservation' | 'editable-capability' | 'source-range' | 'lossless-capture' | 'contiguity';
+}
+
+export type BodyPatchability = { readonly editable: true } | { readonly editable: false; readonly diagnostic: ReadOnlyDiagnostic };
+
+/** Decide whether the body is selectively editable AND, when not, WHY — the structured read-only
+ *  diagnostic (4.9). `isModelBodyPatchable` is the boolean projection of this. */
+export function diagnoseBodyPatchability(model: PackageModel): BodyPatchability {
+  const story = bodyStoryId(model);
+  const ro = (d: Omit<ReadOnlyDiagnostic, 'story'>): BodyPatchability => ({ editable: false, diagnostic: { ...d, story } });
   const pres = model.preservation;
-  if (!pres) return false;
+  if (!pres) return ro({ code: 'no-preservation', message: 'document has no preservation snapshot (not parsed losslessly)', missingLane: 'preservation' });
   const docText = pres.originalParts.get(DOC_PART);
-  if (docText === undefined) return false;
-  const blocks = model.stories.get(bodyStoryId(model))?.blocks ?? [];
-  if (blocks.length === 0) return false;
+  if (docText === undefined) return ro({ code: 'no-document-part', message: `no ${DOC_PART} in the preservation snapshot`, missingLane: 'preservation' });
+  const blocks = model.stories.get(story)?.blocks ?? [];
+  if (blocks.length === 0) return ro({ code: 'empty-body', message: 'the body has no blocks to edit', missingLane: 'lossless-capture' });
+
   const ranges: { start: number; end: number }[] = [];
   for (const b of blocks) {
-    if (!isTopLevelEditable(b.kind)) return false; // non-editable kinds (tables/SDTs) open read-only
+    const qname = BLOCK_QNAME[b.kind];
+    if (!isTopLevelEditable(b.kind)) {
+      return ro({ code: 'non-editable-kind', message: `body block '${b.kind}' (${qname ?? b.kind}) is not top-level editable; it opens read-only to preserve it`, blockId: b.id, blockKind: b.kind, qname, missingLane: 'editable-capability' });
+    }
     const r = pres.blockRanges.get(b.id);
-    if (!r || r.partName !== DOC_PART) return false; // e.g. a synthetic empty-body paragraph with no source range
-    if (!sliceIsFullyCapturedParagraph(docText.slice(r.start, r.end))) return false; // unmodeled/comment -> read-only
+    if (!r || r.partName !== DOC_PART) {
+      return ro({ code: 'no-source-range', message: `block '${b.id}' (${qname ?? b.kind}) has no captured source range in ${DOC_PART}`, blockId: b.id, blockKind: b.kind, qname, missingLane: 'source-range' });
+    }
+    if (!sliceIsFullyCapturedParagraph(docText.slice(r.start, r.end))) {
+      return ro({ code: 'unmodeled-content', message: `paragraph '${b.id}' (${qname ?? b.kind}) carries OOXML the model does not fully capture; editing it needs preservation capsules`, blockId: b.id, blockKind: b.kind, qname, missingLane: 'lossless-capture' });
+    }
     ranges.push({ start: r.start, end: r.end });
   }
-  // The body blocks must be CONTIGUOUS direct siblings. Any bytes between consecutive block
-  // ranges — an inter-block comment/PI, a bookmark, or a wrapping element's boundary (an SDT
-  // or </w:customXml>) — would be dropped the moment a structural edit regenerates the block
-  // region. Such a document opens read-only so no edit can ever silently corrupt or lose it.
+  // The body blocks must be CONTIGUOUS direct siblings. Any bytes between consecutive block ranges —
+  // an inter-block comment/PI, a bookmark, or a wrapping element's boundary (an SDT or
+  // </w:customXml>) — would be dropped the moment a structural edit regenerates the block region.
   ranges.sort((a, b) => a.start - b.start);
   for (let i = 1; i < ranges.length; i += 1) {
-    if (ranges[i].start !== ranges[i - 1].end) return false;
+    if (ranges[i].start !== ranges[i - 1].end) {
+      return ro({ code: 'non-contiguous-blocks', message: 'unowned bytes between sibling body blocks (a comment, bookmark, or wrapping boundary) would be lost on a structural edit', missingLane: 'contiguity' });
+    }
   }
-  return true;
+  return { editable: true };
 }
 

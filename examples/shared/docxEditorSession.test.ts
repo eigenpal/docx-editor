@@ -42,6 +42,7 @@ describe('paragraph-only document: full load -> edit -> save -> reopen loop', ()
   test('a typed edit maps to one DocOp, commits, and survives save + reopen', () => {
     const session = openDocxSession(docx(PARAS));
     expect(session.editable).toBe(true);
+    expect(session.readOnlyReason).toBeNull(); // editable -> no read-only diagnostic
     expect(session.bodyText()).toBe('hello\nworld');
 
     const edited = withFirstParagraphText(session.projectDoc(), 'HELLO EDIT');
@@ -139,6 +140,14 @@ describe('document with a table: read-only, verbatim, never flattened', () => {
     const before = docx(WITH_TABLE);
     const session = openDocxSession(before);
     expect(session.editable).toBe(false);
+    // A structured read-only diagnostic names the blocking capability, QName, story, and lane (4.9).
+    expect(session.readOnlyReason).toMatchObject({
+      code: 'non-editable-kind',
+      blockKind: 'table',
+      qname: 'w:tbl',
+      missingLane: 'editable-capability',
+    });
+    expect(session.readOnlyReason?.message).toContain('read-only');
 
     // An attempted edit is refused (no commit) — the store is untouched.
     const edited = withFirstParagraphText(session.projectDoc(), 'nope');

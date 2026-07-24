@@ -64,6 +64,9 @@ export {
   parseDocx,
   isPlainEditableDocx,
   isModelBodyPatchable,
+  diagnoseBodyPatchability,
+  type ReadOnlyDiagnostic,
+  type BodyPatchability,
 } from './docx/read.ts';
 export { writeDocx, documentXml } from './docx/write.ts';
 // Feature-lane contract: register a new top-level block kind's element parser without editing a
