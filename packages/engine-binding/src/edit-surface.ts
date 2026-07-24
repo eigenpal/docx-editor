@@ -1,118 +1,192 @@
-// ProseMirror edit-surface mount (document-engine 4.2 / comprehensive 4.2). The PM-aware half of the
-// editor, moved out of examples into the sole PM-integration package: it mounts a minimal
-// ProseMirror EditorView into a host element and turns every change into ONE DocOp transaction
-// against the canonical store (through the session). It does NOT paint — layout/display is the
-// caller's concern (engine-binding may not import engine-layout/output) — it just calls
-// `onModelChanged` after each committed edit / undo / redo so the caller repaints from
-// `session.currentModel()`. The returned handle is PM-FREE, so a PM-free Editor facade can own it
-// without leaking the view.
-//
-// Text insertion, deletion, selection, Backspace/Delete (paragraph join), paragraph SPLIT (Enter),
-// and undo/redo run through the PM base keymap + our store-backed history; every resulting change
-// maps to DocOps. A split mints a new tail block in the store; after the commit the view re-tags its
-// projected paragraphs with the store's ids by position, so identity and the caret survive without a
-// full reprojection. Multi-paragraph paste and block reorder still fail closed and snap back.
+// ProseMirror edit-surface mount (document-engine 4.2; interactive-paginated 4.1–4.2).
 
 import { EditorView } from 'prosemirror-view';
 import { EditorState } from 'prosemirror-state';
 import { keymap } from 'prosemirror-keymap';
 import { baseKeymap } from 'prosemirror-commands';
-import { captureSelection, resolveSelection, type SelectionAnchor } from './selection.ts';
+import type { InteractionFrameId, InteractionOutcome } from '@docx-editor.dev/core-contract/interaction';
+import {
+  captureSelection,
+  captureSelectionRange,
+  resolveSelection,
+  resolveSelectionRange,
+  resolveAtomicSelection,
+  type SelectionAnchor,
+  type SelectionRangeAnchors,
+} from './selection.ts';
+import {
+  createInputHostController,
+  type InputHostAssistiveState,
+  type InputHostControllerOptions,
+  type InputHostPlacement,
+  type InputHostPlacementRequest,
+} from './input-host.ts';
+import { resolveSemanticSelection, type SemanticSelectionSyncRequest } from './semantic-sync.ts';
 import type { DocxEditorSession } from './session.ts';
+
+export interface PmSelectionSnapshot {
+  readonly from: number;
+  readonly to: number;
+  readonly empty: boolean;
+}
 
 /** A PM-FREE handle to a mounted edit surface — no EditorView or PM type leaks out. */
 export interface EditSurface {
-  /** Whether this surface is actually editable (false when the session opened read-only). */
   readonly editable: boolean;
-  /** Move focus into the edit surface. */
-  focus(): void;
-  /** Tear down the view and stop any deferred callback from touching it. */
+  readonly inputHostState: InputHostAssistiveState;
+  focus(options?: { sync?: SemanticSelectionSyncRequest; frameId?: InteractionFrameId }): InteractionOutcome<void>;
+  blur(): void;
   destroy(): void;
+  syncSemanticSelection(request: SemanticSelectionSyncRequest): InteractionOutcome<void>;
+  updateInputHostPlacement(request: InputHostPlacementRequest): InputHostPlacement;
+  retainSelectionForOwnedPopup(): void;
+  releaseOwnedPopup(): void;
+  getSelectionAnchor(): SelectionAnchor;
+  getSelectionRange(): SelectionRangeAnchors;
+  getPmSelection(): PmSelectionSnapshot;
 }
 
 export interface MountEditSurfaceOptions {
-  /** Called after every committed edit, undo, or redo — the caller repaints from
-   *  `session.currentModel()`. Not called for a rejected (snapped-back) edit. */
   onModelChanged?: () => void;
+  inputHost?: InputHostControllerOptions;
+  /** Test-only hook to observe PM doc positions without exporting PM types. */
+  testHooks?: {
+    onReady?: (helpers: {
+      insertText(text: string): void;
+      undo(): void;
+      pmSelection(): PmSelectionSnapshot;
+      stripBlockEmbed(objectId: string): void;
+    }) => void;
+  };
 }
 
-/** Mount a ProseMirror edit surface for `session` into `editHost`. When the session is read-only the
- *  surface mounts nothing and reports `editable: false` (the caller renders a read-only preview). */
+function applyAnchorsToView(
+  view: EditorView,
+  range: { anchor: SelectionAnchor; head: SelectionAnchor },
+  atomicObjectId?: string,
+): boolean {
+  const doc = view.state.doc;
+  if (atomicObjectId) {
+    const nodeSel = resolveAtomicSelection(atomicObjectId, doc);
+    if (!nodeSel) return false;
+    view.dispatch(view.state.tr.setSelection(nodeSel).scrollIntoView());
+    return true;
+  }
+  try {
+    const sel = resolveSelectionRange(range, doc);
+    view.dispatch(view.state.tr.setSelection(sel).scrollIntoView());
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** Mount a ProseMirror edit surface for `session`. When read-only, mounts nothing. */
 export function mountEditSurface(
-  editHost: HTMLElement,
+  mountParent: HTMLElement,
   session: DocxEditorSession,
   options: MountEditSurfaceOptions = {},
 ): EditSurface {
-  if (!session.editable) {
-    return { editable: false, focus: () => {}, destroy: () => {} };
-  }
-  const onModelChanged = options.onModelChanged ?? (() => {});
+  const noopPlacement: InputHostPlacement = {
+    clientRect: { x: 8, y: 8, width: 200, height: 24 },
+    reason: 'fallback',
+  };
+  const noopState: InputHostAssistiveState = {
+    policy: 'sole-editing-projection',
+    paintedPagesAssistiveRole: 'presentation',
+    hostAttached: false,
+    placement: noopPlacement,
+  };
+  const readOnlyOutcome = (): InteractionOutcome<void> => ({
+    ok: false,
+    code: 'readOnly',
+    reason: 'document is read-only',
+  });
 
-  // Undo/redo drive the CANONICAL store, not ProseMirror's view history: a structural edit
-  // (split/join/insert) deletes/mints block ids, so replaying the view's own history would restore
-  // stale ids the mapper rejects. Instead Mod-z/Mod-y rewind the store and reproject. Enter
-  // (paragraph split) is handled by the base keymap; the mapper turns it into a DocOp.
+  if (!session.editable) {
+    return {
+      editable: false,
+      inputHostState: noopState,
+      focus: readOnlyOutcome,
+      blur: () => {},
+      destroy: () => {},
+      syncSemanticSelection: readOnlyOutcome,
+      updateInputHostPlacement: () => noopPlacement,
+      retainSelectionForOwnedPopup: () => {},
+      releaseOwnedPopup: () => {},
+      getSelectionAnchor: () => ({ paragraphId: null, offset: 0, affinity: 'after' }),
+      getSelectionRange: () => ({
+        anchor: { paragraphId: null, offset: 0, affinity: 'after' },
+        head: { paragraphId: null, offset: 0, affinity: 'after' },
+      }),
+      getPmSelection: () => ({ from: 0, to: 0, empty: true }),
+    };
+  }
+
+  const onModelChanged = options.onModelChanged ?? (() => {});
+  const doc = mountParent.ownerDocument ?? document;
+  const inputHost = createInputHostController(doc, options.inputHost);
+  mountParent.append(inputHost.root);
+
+  let ownedPopupDepth = 0;
+  let retainedSemanticSelection: SemanticSelectionSyncRequest | null = null;
+  let localCommitDepth = 0;
+  let modelChangedCalls = 0;
+
   const plugins = [
-    keymap({ 'Mod-z': () => doUndo(), 'Mod-y': () => doRedo(), 'Shift-Mod-z': () => doRedo() }),
+    keymap({
+      'Mod-z': () => doUndo(),
+      'Mod-y': () => doRedo(),
+      'Shift-Mod-z': () => doRedo(),
+    }),
     keymap(baseKeymap),
   ];
 
   let reconciling = false;
   let pendingCompositionCommit = false;
-  let destroyed = false; // guards deferred composition flush against a torn-down view
-  // Our OWN composition flag, held true from compositionstart until the post-compositionend flush.
-  // ProseMirror clears `view.composing` and THEN dispatches the final composed transaction, so
-  // relying on view.composing would let that last transaction commit early with the wrong anchor.
+  let destroyed = false;
   let imeComposing = false;
-  // The caret BEFORE a deferred IME composition began — so the composition's flushed commit stores
-  // the correct pre-edit anchor (undo must return to where the composition started).
   let compositionBeforeSel: SelectionAnchor | undefined;
 
-  const view = new EditorView(editHost, {
+  const view = new EditorView(inputHost.pmMount, {
     state: EditorState.create({ doc: session.projectDoc(), plugins }),
     editable: () => session.editable,
-    // While an IME composition is active, ProseMirror mutates the DOM directly and dispatches
-    // interim (and a final) transaction; committing (which would reproject on a rejection) disrupts
-    // the IME. Defer every transaction from compositionstart until one flush after compositionend,
-    // then commit ONCE with the pre-composition caret.
     handleDOMEvents: {
       compositionstart: () => {
         imeComposing = true;
-        compositionBeforeSel = captureSelection(view.state); // caret before the composition
+        compositionBeforeSel = captureSelection(view.state);
         return false;
       },
       compositionend: () => {
-        const win = editHost.ownerDocument?.defaultView;
-        // Let ProseMirror apply its final composition transaction first, then commit once.
+        const win = inputHost.pmMount.ownerDocument?.defaultView;
         if (win?.requestAnimationFrame) win.requestAnimationFrame(flushComposition);
         else flushComposition();
         return false;
       },
-      // If the field loses focus mid-composition (so compositionend may never fire), flush any
-      // pending composed edit now so imeComposing can never stick true and freeze future commits.
       blur: () => {
         if (imeComposing) flushComposition();
+        if (ownedPopupDepth === 0) inputHost.blur();
         return false;
       },
     },
     dispatchTransaction(tr) {
-      // Capture the caret BEFORE the edit is applied — the store's model-only history has no
-      // selection, so we key a selection by undo depth to restore the pre-edit caret on undo.
       const beforeSel = captureSelection(view.state);
       const next = view.state.apply(tr);
       view.updateState(next);
-      if (reconciling || !tr.docChanged) return;
+      if (reconciling) return;
+      if (tr.selectionSet && !tr.docChanged) {
+        retainedSemanticSelection = null;
+        return;
+      }
+      if (!tr.docChanged) return;
       if (imeComposing) {
-        pendingCompositionCommit = true; // defer until the post-compositionend flush
+        pendingCompositionCommit = true;
         return;
       }
       commitEdit(beforeSel);
     },
   });
 
-  // Commit a deferred IME composition once, with the pre-composition caret. Idempotent and safe
-  // after teardown, so it can be driven from either compositionend's rAF or a mid-composition blur
-  // without double-committing or touching a destroyed view.
   function flushComposition() {
     imeComposing = false;
     const before = compositionBeforeSel;
@@ -122,32 +196,43 @@ export function mountEditSurface(
     if (!reconciling) commitEdit(before);
   }
 
-  // Selection history keyed by UNDO-STACK DEPTH (not revision — the store mints a fresh revision on
-  // every undo, so a revision key never matches on the way back). selectionAt[d] is the caret to
-  // restore when the store's undo stack is at depth d. `undoDepth` mirrors the store's history
-  // length: a forward commit increments it, undo decrements, redo increments.
   const selectionAt = new Map<number, SelectionAnchor>();
   let undoDepth = 0;
   selectionAt.set(0, captureSelection(view.state));
 
-  // Map the current view doc to the store. On a refused edit, snap back to the canonical projection
-  // (never let the view diverge); on a committed edit, re-tag new paragraphs and notify the caller.
+  function notifyModelChanged(): void {
+    modelChangedCalls += 1;
+    onModelChanged();
+  }
+
+  function reapplyRetainedSelection(): void {
+    if (!retainedSemanticSelection || destroyed) return;
+    const resolved = resolveSemanticSelection(session, retainedSemanticSelection);
+    if (!resolved.ok) return;
+    const anchorTarget = retainedSemanticSelection.selection.anchor;
+    const atomicId = anchorTarget.kind === 'atomic' ? anchorTarget.objectId : undefined;
+    applyAnchorsToView(view, resolved.value, atomicId);
+  }
+
   function commitEdit(beforeSel?: SelectionAnchor) {
-    const res = session.applyPmDoc(view.state.doc);
-    if (res.rejected) reprojectFromModel(); // a refused edit snaps the view back so it can never diverge
-    if (res.committed) {
-      if (beforeSel) selectionAt.set(undoDepth, beforeSel); // caret at the level we're leaving
-      undoDepth += 1;
-      syncSemIds();
-      selectionAt.set(undoDepth, captureSelection(view.state)); // post-edit caret (for redo)
-      onModelChanged();
+    localCommitDepth += 1;
+    try {
+      const res = session.applyPmDoc(view.state.doc);
+      if (res.rejected) reprojectFromModel(undefined, false);
+      if (res.committed) {
+        retainedSemanticSelection = null;
+        if (beforeSel) selectionAt.set(undoDepth, beforeSel);
+        undoDepth += 1;
+        syncSemIds();
+        selectionAt.set(undoDepth, captureSelection(view.state));
+        notifyModelChanged();
+      }
+    } finally {
+      localCommitDepth -= 1;
     }
   }
 
-  // Replace the view's content with the current canonical projection, restoring the caret from
-  // `anchor` (or the current caret) so a snap-back or an undo/redo does not jump the cursor to the
-  // top. History-excluded and reentrancy-guarded so it never re-triggers a commit.
-  function reprojectFromModel(anchor?: SelectionAnchor) {
+  function reprojectFromModel(anchor?: SelectionAnchor, reapplySemantic = false) {
     reconciling = true;
     const a = anchor ?? captureSelection(view.state);
     const canonical = session.projectDoc();
@@ -157,35 +242,31 @@ export function mountEditSurface(
     try {
       tr.setSelection(resolveSelection(a, tr.doc));
     } catch {
-      // Fall back to the default mapped selection if the anchor cannot be resolved.
+      // Fall back to default mapped selection.
     }
     view.dispatch(tr);
     reconciling = false;
+    if (reapplySemantic) reapplyRetainedSelection();
   }
 
-  // Mod-z / Mod-y rewind the CANONICAL store and reproject, restoring the caret recorded for the
-  // level we land on; always consume the key so the browser never runs its own contentEditable undo.
   function doUndo(): boolean {
     if (session.undo()) {
       undoDepth = Math.max(0, undoDepth - 1);
-      reprojectFromModel(selectionAt.get(undoDepth));
-      onModelChanged();
-    }
-    return true;
-  }
-  function doRedo(): boolean {
-    if (session.redo()) {
-      undoDepth += 1;
-      reprojectFromModel(selectionAt.get(undoDepth));
-      onModelChanged();
+      reprojectFromModel(selectionAt.get(undoDepth), false);
+      notifyModelChanged();
     }
     return true;
   }
 
-  // Re-tag the view's projected paragraphs with the canonical block ids by position. After a split
-  // the store mints a new tail id; the PM tail still reads semId=null. One attribute-only,
-  // history-excluded transaction reconciles identity WITHOUT reprojecting the whole document, so the
-  // caret and undo stack are untouched.
+  function doRedo(): boolean {
+    if (session.redo()) {
+      undoDepth += 1;
+      reprojectFromModel(selectionAt.get(undoDepth), false);
+      notifyModelChanged();
+    }
+    return true;
+  }
+
   function syncSemIds() {
     const ids = session.bodyBlockIds();
     let tr = view.state.tr;
@@ -205,12 +286,130 @@ export function mountEditSurface(
     reconciling = false;
   }
 
-  return {
+  function applySemanticSelection(request: SemanticSelectionSyncRequest): InteractionOutcome<void> {
+    const resolved = resolveSemanticSelection(session, request);
+    if (!resolved.ok) return resolved;
+    const anchorTarget = request.selection.anchor;
+    const atomicId = anchorTarget.kind === 'atomic' ? anchorTarget.objectId : undefined;
+    if (!applyAnchorsToView(view, resolved.value, atomicId)) {
+      return {
+        ok: false,
+        code: 'invalidTarget',
+        reason: 'semantic selection did not resolve in the ProseMirror projection',
+        frameId: request.frameId,
+      };
+    }
+    retainedSemanticSelection = request;
+    return { ok: true, value: undefined, frameId: request.frameId };
+  }
+
+  const surface: EditSurface = {
     editable: true,
-    focus: () => view.focus(),
-    destroy: () => {
-      destroyed = true; // stop any queued composition flush from touching the view
-      view.destroy();
+    get inputHostState() {
+      return inputHost.assistiveState;
     },
+    focus(options) {
+      const frameId = options?.sync?.frameId ?? options?.frameId;
+      if (options?.sync) {
+        const synced = applySemanticSelection(options.sync);
+        if (!synced.ok) return synced;
+        view.focus();
+        return synced;
+      }
+      if (retainedSemanticSelection) {
+        if (!frameId) {
+          return { ok: false, code: 'invalidTarget', reason: 'focus requires current interaction frame identity' };
+        }
+        if (retainedSemanticSelection.frameId.value !== frameId.value) {
+          return {
+            ok: false,
+            code: 'staleFrame',
+            reason: 'retained semantic selection belongs to a superseded interaction frame',
+            frameId,
+          };
+        }
+        const synced = applySemanticSelection(retainedSemanticSelection);
+        if (!synced.ok) return synced;
+        view.focus();
+        return synced;
+      }
+      if (!frameId) {
+        return { ok: false, code: 'invalidTarget', reason: 'focus requires current interaction frame identity' };
+      }
+      view.focus();
+      return { ok: true, value: undefined, frameId };
+    },
+    blur() {
+      if (ownedPopupDepth > 0) return;
+      view.dom.blur();
+      inputHost.blur();
+    },
+    destroy() {
+      destroyed = true;
+      view.destroy();
+      inputHost.destroy();
+    },
+    syncSemanticSelection: applySemanticSelection,
+    updateInputHostPlacement(request) {
+      return inputHost.updatePlacement(request);
+    },
+    retainSelectionForOwnedPopup() {
+      ownedPopupDepth += 1;
+    },
+    releaseOwnedPopup() {
+      ownedPopupDepth = Math.max(0, ownedPopupDepth - 1);
+    },
+    getSelectionAnchor: () => captureSelection(view.state),
+    getSelectionRange: () => captureSelectionRange(view.state),
+    getPmSelection: () => ({
+      from: view.state.selection.from,
+      to: view.state.selection.to,
+      empty: view.state.selection.empty,
+    }),
   };
+
+  const unsub = session.subscribe(() => {
+    if (destroyed || reconciling || localCommitDepth > 0) return;
+    reprojectFromModel(captureSelection(view.state), true);
+    notifyModelChanged();
+  });
+
+  const priorDestroy = surface.destroy.bind(surface);
+  surface.destroy = () => {
+    unsub();
+    priorDestroy();
+  };
+
+  Object.defineProperty(surface, '__testModelChangedCalls', {
+    enumerable: false,
+    get: () => modelChangedCalls,
+  });
+
+  options.testHooks?.onReady?.({
+    insertText(text: string) {
+      const { from, to } = view.state.selection;
+      view.dispatch(view.state.tr.insertText(text, from, to));
+    },
+    undo() {
+      doUndo();
+    },
+    pmSelection: () => ({
+      from: view.state.selection.from,
+      to: view.state.selection.to,
+      empty: view.state.selection.empty,
+    }),
+    stripBlockEmbed(objectId: string) {
+      let pos: number | null = null;
+      view.state.doc.forEach((node, offset) => {
+        if (pos !== null) return;
+        if (node.type.name === 'blockEmbed' && node.attrs.semId === objectId) pos = offset;
+      });
+      if (pos === null) return;
+      reconciling = true;
+      view.dispatch(view.state.tr.delete(pos, pos + 1).setMeta('addToHistory', false));
+      reconciling = false;
+    },
+  });
+
+  return surface;
 }

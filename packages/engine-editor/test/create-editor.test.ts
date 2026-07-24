@@ -111,13 +111,13 @@ describe('createEditor lifecycle (byte-native, PM-free host)', () => {
   });
 
   test('mode:"view" opens read-only even for a patchable document (no edit surface mounted)', () => {
-    // A real DOM body element is provided; in edit mode this would mount a PM surface. In view mode
-    // it must not — proven by focus() being a no-op (no surface) while display still renders.
     const bodyEl = { ownerDocument: undefined } as unknown as HTMLElement;
     const { host, displays } = makeHost({ getBodyHostEl: () => bodyEl });
     const editor = createEditor({ host, document: docxBytes(), mode: 'view' });
-    expect(displays.length).toBeGreaterThan(0); // renders read-only
-    expect(() => editor.focus()).not.toThrow(); // no surface, inert focus
+    expect(displays.length).toBeGreaterThan(0);
+    const focus = editor.focus();
+    expect(focus.ok).toBe(false);
+    if (!focus.ok) expect(focus.code).toBe('readOnly');
     editor.destroy();
   });
 

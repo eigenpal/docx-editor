@@ -5,13 +5,18 @@
 // content was deleted, the selection collapses by affinity to a surviving
 // boundary and NEVER lands on unrelated content.
 
-import { EditorState, TextSelection } from 'prosemirror-state';
+import { EditorState, TextSelection, NodeSelection } from 'prosemirror-state';
 import { Node as PMNode } from 'prosemirror-model';
 
 export interface SelectionAnchor {
   readonly paragraphId: string | null;
   readonly offset: number;
   readonly affinity: 'before' | 'after';
+}
+
+export interface SelectionRangeAnchors {
+  readonly anchor: SelectionAnchor;
+  readonly head: SelectionAnchor;
 }
 
 /** Capture the caret/anchor of a PM selection as a semantic anchor. */
@@ -22,6 +27,25 @@ export function captureSelection(state: EditorState): SelectionAnchor {
     paragraphId: (para?.attrs?.semId as string | null) ?? null,
     offset: $from.parentOffset,
     affinity: 'after',
+  };
+}
+
+/** Capture anchor and head of the current PM selection. */
+export function captureSelectionRange(state: EditorState): SelectionRangeAnchors {
+  const { $from, $to } = state.selection;
+  const anchorPara = $from.depth >= 1 ? $from.node(1) : $from.parent;
+  const headPara = $to.depth >= 1 ? $to.node(1) : $to.parent;
+  return {
+    anchor: {
+      paragraphId: (anchorPara?.attrs?.semId as string | null) ?? null,
+      offset: $from.parentOffset,
+      affinity: 'after',
+    },
+    head: {
+      paragraphId: (headPara?.attrs?.semId as string | null) ?? null,
+      offset: $to.parentOffset,
+      affinity: 'after',
+    },
   };
 }
 
@@ -61,4 +85,21 @@ export function resolveSelection(anchor: SelectionAnchor, newDoc: PMNode): TextS
   const target = anchor.affinity === 'before' ? paras[0] : paras[paras.length - 1];
   const at = anchor.affinity === 'before' ? target.innerStart : target.innerStart + target.node.content.size;
   return TextSelection.create(newDoc, at);
+}
+
+/** Resolve a semantic anchor/head pair to a ProseMirror TextSelection. */
+export function resolveSelectionRange(range: SelectionRangeAnchors, newDoc: PMNode): TextSelection {
+  const from = resolveSelection(range.anchor, newDoc).from;
+  const to = resolveSelection(range.head, newDoc).to;
+  return TextSelection.create(newDoc, Math.min(from, to), Math.max(from, to));
+}
+
+/** Resolve an atomic object id to a node selection when the block embed is present. */
+export function resolveAtomicSelection(objectId: string, newDoc: PMNode): NodeSelection | null {
+  let pos: number | null = null;
+  newDoc.forEach((node, offset) => {
+    if (pos !== null) return;
+    if (node.type.name === 'blockEmbed' && node.attrs.semId === objectId) pos = offset;
+  });
+  return pos === null ? null : NodeSelection.create(newDoc, pos);
 }

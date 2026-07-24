@@ -43,11 +43,13 @@ import {
   mountEditSurface,
   type DocxEditorSession,
   type EditSurface,
+  type InputHostViewport,
 } from '@docx-editor.dev/engine-binding';
 import { layoutBody, HelveticaMetrics } from '@docx-editor.dev/engine-layout';
 import { toDisplayPages } from './display-bridge.ts';
 import { InteractionFrameStore, emptyInteractionFrame } from './interaction-frame.ts';
 import { hitTestPointer, deriveCaretGeometry, deriveSelectionGeometry } from './interaction-geometry.ts';
+import { contentToClient } from './coordinate-mapper.ts';
 
 // US Letter, 1in margins, in twips — the same geometry the read-only preview uses.
 const LAYOUT = { pageWidth: 12240, pageHeight: 15840, margin: 1440 } as const;
@@ -148,10 +150,45 @@ export function createEditor(config: EditorConfig): Editor {
     };
   }
 
+  function caretClientRect(frame = currentFrame()): Rect | null {
+    if (!frame.caret) return null;
+    const metrics = host.getInteractionHostMetrics?.();
+    if (!metrics) return null;
+    const origin = contentToClient({ x: frame.caret.rect.x, y: frame.caret.rect.y }, metrics);
+    if (!origin.ok) return null;
+    return {
+      x: origin.value.x,
+      y: origin.value.y,
+      width: frame.caret.rect.width,
+      height: frame.caret.rect.height,
+    };
+  }
+
+  function inputHostViewport(): InputHostViewport | undefined {
+    const scroll = host.getScrollContainer?.();
+    if (!scroll) return undefined;
+    const rect = scroll.getBoundingClientRect();
+    return { x: rect.x, y: rect.y, width: rect.width, height: rect.height };
+  }
+
+  function updateInputHostFromFrame(): void {
+    if (!surface?.editable) return;
+    const frame = currentFrame();
+    surface.updateInputHostPlacement({
+      frameId: frame.id,
+      activeFrameId: frame.id,
+      caretClientRect: caretClientRect(frame),
+      pendingLayout: frame.completeness.kind === 'pending',
+      readOnly: readOnly || !session?.editable,
+      viewport: inputHostViewport(),
+    });
+  }
+
   function emitLayoutFrame(frame: InteractionFrame): void {
     host.onDisplay?.(frame.display);
     host.onTotalPages?.(frame.display.length);
     emit('display', frame.display);
+    updateInputHostFromFrame();
   }
 
   function completeLayoutPublication(token: number, pendingTarget?: number): void {
@@ -202,6 +239,7 @@ export function createEditor(config: EditorConfig): Editor {
     if (surface) surface.destroy(); // element was replaced — rebind
     surface = mountEditSurface(bodyEl, session, { onModelChanged });
     mountedBodyEl = bodyEl;
+    updateInputHostFromFrame();
   }
 
   function rejectPointer(
@@ -362,7 +400,18 @@ export function createEditor(config: EditorConfig): Editor {
       ensureSurface();
       relayoutAndPaint(options?.sync !== false);
     },
-    focus: (_scope?: EditorScope) => surface?.focus(),
+    focus: (_scope?: EditorScope): InteractionOutcome<void> => {
+      if (destroyed) {
+        return { ok: false, code: 'unsupported', reason: 'editor is destroyed' };
+      }
+      if (readOnly || sharedView || !session?.editable) {
+        return { ok: false, code: 'readOnly', reason: 'editor is read-only' };
+      }
+      if (!surface) {
+        return { ok: false, code: 'unsupported', reason: 'edit surface is not mounted' };
+      }
+      return surface.focus({ frameId: currentFrame().id });
+    },
     destroy() {
       // Detach THIS editor's projection/host resources; an externally owned (shared-handle) session
       // is NOT disposed here — the handle keeps the store alive for any other editor holding it.

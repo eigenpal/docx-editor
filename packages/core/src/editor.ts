@@ -232,7 +232,7 @@ export interface Editor {
 
   /** Replaces the module-scope cache-invalidation calls adapters make today. */
   relayout(options?: { sync?: boolean }): void;
-  focus(scope?: EditorScope): void;
+  focus(scope?: EditorScope): InteractionOutcome<void>;
   destroy(): void;
 
   on<E extends keyof EditorEvents>(event: E, handler: EditorEvents[E]): Unsubscribe;

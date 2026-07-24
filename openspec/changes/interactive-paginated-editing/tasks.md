@@ -29,9 +29,9 @@
 
 ## 4. Hidden input-host falsification gate
 
-- [ ] 4.1 Mount the ProseMirror input host attached and non-`display:none`, keep it outside visible layout authority, and prevent duplicate visible or assistive document content.
-- [ ] 4.2 Synchronize engine semantic selection to ProseMirror before focus/native input and preserve the engine selection across blur, owned popups, projection reconciliation, and remote changes.
-- [ ] 4.3 Prototype the selected clipped/repositioned input-host technique near the engine caret and record how browser IME/input UI follows the active caret on the supported platform matrix.
+- [x] 4.1 Mount the ProseMirror input host attached and non-`display:none`, keep it outside visible layout authority, and prevent duplicate visible or assistive document content.
+- [x] 4.2 Synchronize engine semantic selection to ProseMirror before focus/native input and preserve the engine selection across blur, owned popups, projection reconciliation, and remote changes.
+- [x] 4.3 Prototype the selected clipped/repositioned input-host technique near the engine caret and record how browser IME/input UI follows the active caret on the supported platform matrix.
 - [ ] 4.4 Add composition tests for start/update/end/cancel, repeated updates, blur, dead keys, surrogate pairs, combining clusters, RTL input, remote invalidation, and capability-boundary rejection with no duplicate or lost text.
 - [ ] 4.5 Add clipboard, beforeinput, drag/drop, keyboard-command, mobile/virtual-keyboard, and focus-transfer tests proving events use existing bounded parsing and store-first validation.
 - [ ] 4.6 Implement the minimum single semantic/accessibility projection required for the body-paragraph gate, including reading order, editability, focus, and selection mapped to canonical identities.

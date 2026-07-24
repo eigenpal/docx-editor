@@ -1,20 +1,9 @@
 // @docx-editor.dev/engine-binding
-//
-// EditorBinding: the ONLY ProseMirror-aware integration. Maps PM transactions to DocOps and reconciles the view from committed ModelChange evidence. No PM type leaks past this boundary.
-//
-// Production placement is fixed by document-engine task 1.4. Responsibilities and
-// dependency rules: docs/architecture/production-engine-packages.md. This is a
-// greenfield skeleton; capability implementation lands in the sections that own it.
-//
-// ADR-S9: production modules MUST NOT import from packages/core/spike/**.
 
 /** Stable package identity used by the import-graph / package-authority checks. */
 export const ENGINE_BINDING_PACKAGE = '@docx-editor.dev/engine-binding' as const;
 
 export { docSchema } from './schema.ts';
-// Binding capability registration (comprehensive 3.4): a feature registers its PM node/mark specs
-// and per-kind projector through these instead of editing the schema/projection. Registration must
-// run BEFORE the schema is first built (import a registration module before engine-binding's schema).
 export {
   type NodeRole,
   type BlockProjector,
@@ -34,4 +23,20 @@ export { EditorBinding, type ForwardResult } from './binding.ts';
 export { type SelectionAnchor, captureSelection, resolveSelection } from './selection.ts';
 export { type ImeState, type InboundChange, ImeSession } from './ime.ts';
 export { type ApplyResult, type DocxEditorSession, openDocxSession } from './session.ts';
-export { type EditSurface, type MountEditSurfaceOptions, mountEditSurface } from './edit-surface.ts';
+export {
+  type EditSurface,
+  type MountEditSurfaceOptions,
+  type PmSelectionSnapshot,
+  mountEditSurface,
+} from './edit-surface.ts';
+export { type SemanticSelectionSyncRequest } from './semantic-sync.ts';
+export {
+  INPUT_HOST_MIN_WIDTH_PX,
+  INPUT_HOST_MIN_HEIGHT_PX,
+  clampRectToViewport,
+  type InputHostAssistiveState,
+  type InputHostPlacement,
+  type InputHostPlacementRequest,
+  type InputHostPlacementReason,
+  type InputHostViewport,
+} from './input-host.ts';
