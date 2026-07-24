@@ -1,5 +1,8 @@
-// The stable engine-neutral EditorDriver (comprehensive 4.7): the automation surface both adapters
+// The stable engine-neutral EditorDriver (comprehensive 4.7; interactive-paginated 4.8): the automation surface both adapters
 // expose so the SAME browser scenarios drive React and Vue. Headless coverage of the surface.
+
+import { GlobalRegistrator } from '@happy-dom/global-registrator';
+if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register();
 
 import { describe, expect, test } from 'bun:test';
 import { createEditor, createEditorDriver, displayText } from '../src/index.ts';
@@ -8,6 +11,8 @@ import type { DisplayPage } from '@docx-editor.dev/core-contract/geometry';
 import type { InteractionHostMetrics } from '@docx-editor.dev/core-contract/interaction';
 import { createEmptyModel, writeDocx } from '@docx-editor.dev/engine-core';
 import { contentToClient } from '../src/coordinate-mapper.ts';
+import { createEditableParagraphFixture } from '../browser/fixtures.ts';
+import { IDENTITY_HOST_METRICS } from '../src/coordinate-mapper.ts';
 
 const METRICS: InteractionHostMetrics = {
   clientOrigin: { x: 24, y: 36 },
@@ -123,5 +128,75 @@ describe('EditorDriver over the production editor', () => {
       { index: 1, box: { x: 0, y: 0, width: 10, height: 10 }, items: [] },
     ];
     expect(displayText(pages)).toBe('hi\n');
+  });
+
+  test('focus, setSelection, accessibility, input-host, and authorizeCaret observations', () => {
+    const body = document.createElement('div');
+    const scroll = document.createElement('div');
+    scroll.getBoundingClientRect = () =>
+      ({ x: 0, y: 0, width: 640, height: 480, top: 0, left: 0, right: 640, bottom: 480, toJSON: () => ({}) }) as DOMRect;
+    document.body.append(scroll);
+    scroll.append(body);
+
+    const host: EditorHost = {
+      getBodyHostEl: () => body,
+      getHfHostEl: () => null,
+      getPagesContainer: () => null,
+      getScrollContainer: () => scroll,
+      getInteractionHostMetrics: () => IDENTITY_HOST_METRICS,
+      scheduleFrame: (cb) => {
+        cb();
+        return () => {};
+      },
+    };
+
+    const editor = createEditor({ host, document: createEditableParagraphFixture() });
+    const driver = createEditorDriver(editor);
+
+    const auth = driver.authorizeCaret(0, 0);
+    expect(auth.ok).toBe(true);
+
+    const obs = driver.accessibilityObservation();
+    expect(obs.focus.focused).toBe(true);
+    expect(obs.entries.some((entry) => entry.text === 'primera línea')).toBe(true);
+
+    const hostObs = driver.inputHostObservation();
+    expect(hostObs?.attached).toBe(true);
+    expect(hostObs?.placementReason).toBe('applied');
+    expect(hostObs?.clientRect.width).toBeGreaterThan(0);
+    expect(hostObs?.clientRect.height).toBeGreaterThan(0);
+
+    const caretClient = driver.caretClientRect();
+    expect(caretClient).not.toBeNull();
+    if (hostObs && caretClient) {
+      expect(Math.abs(hostObs.clientRect.x - caretClient.x)).toBeLessThan(2);
+      expect(Math.abs(hostObs.clientRect.y - caretClient.y)).toBeLessThan(2);
+    }
+
+    const entries = obs.entries.filter((entry) => entry.role === 'editableParagraph');
+    const endOffset = entries[0]!.text.length;
+    const set = driver.setSelection({
+      frameId: editor.getInteractionFrame().id,
+      scope: { kind: 'body' },
+      anchor: {
+        kind: 'text',
+        scope: { kind: 'body' },
+        identity: entries[0]!.identity,
+        graphemeOffset: endOffset,
+        affinity: 'upstream',
+      },
+      head: {
+        kind: 'text',
+        scope: { kind: 'body' },
+        identity: entries[0]!.identity,
+        graphemeOffset: endOffset,
+        affinity: 'downstream',
+      },
+    });
+    expect(set.ok).toBe(true);
+    expect(driver.focus().ok).toBe(true);
+
+    driver.dispose();
+    scroll.remove();
   });
 });

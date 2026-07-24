@@ -11,12 +11,23 @@ import type { Editor } from '@docx-editor.dev/react';
 declare global {
   interface Window {
     __docxAdapterDriver?: EditorDriver;
+    __docxAdapterHarness?: {
+      setZoom(zoom: number): void;
+      getZoom(): number;
+    };
   }
 }
 
-export function DocxAdapterHarness({ fixtureUrl }: { readonly fixtureUrl: string }): React.ReactElement {
+export function DocxAdapterHarness({
+  fixtureUrl,
+  initialZoom = 1,
+}: {
+  readonly fixtureUrl: string;
+  readonly initialZoom?: number;
+}): React.ReactElement {
   const [bytes, setBytes] = useState<Uint8Array | null>(null);
   const [status, setStatus] = useState('Loading…');
+  const [zoom, setZoom] = useState(initialZoom);
 
   useEffect(() => {
     let cancelled = false;
@@ -31,8 +42,16 @@ export function DocxAdapterHarness({ fixtureUrl }: { readonly fixtureUrl: string
     return () => {
       cancelled = true;
       delete window.__docxAdapterDriver;
+      delete window.__docxAdapterHarness;
     };
   }, [fixtureUrl]);
+
+  useEffect(() => {
+    window.__docxAdapterHarness = {
+      setZoom: (next) => setZoom(next),
+      getZoom: () => zoom,
+    };
+  }, [zoom]);
 
   const onReady = (editor: Editor): void => {
     const driver = createEditorDriver(editor);
@@ -46,7 +65,7 @@ export function DocxAdapterHarness({ fixtureUrl }: { readonly fixtureUrl: string
         <span data-testid="adapter-status">{status}</span>
       </div>
       <div style={{ flex: 1, minHeight: 0, overflow: 'auto', padding: 16 }}>
-        {bytes && <DocxEditor document={bytes} onReady={onReady} />}
+        {bytes && <DocxEditor document={bytes} zoom={zoom} onReady={onReady} />}
       </div>
     </div>
   );

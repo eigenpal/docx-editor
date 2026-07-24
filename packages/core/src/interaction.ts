@@ -306,6 +306,23 @@ export interface AccessibilityObservation {
   readonly paintedPagesAssistiveRole: 'presentation' | null;
 }
 
+/** Why the hidden input-host clip shell is at its current client rectangle. */
+export type InputHostPlacementReason =
+  | 'applied'
+  | 'staleFrame'
+  | 'pendingLayout'
+  | 'noCaret'
+  | 'readOnly'
+  | 'fallback';
+
+/** PM-free observation of the attached hidden input-host clip shell. */
+export interface InputHostObservation {
+  readonly attached: boolean;
+  readonly placementReason: InputHostPlacementReason;
+  readonly clientRect: Rect;
+  readonly paintedPagesAssistiveRole: 'presentation' | null;
+}
+
 /** Stacked scroll extent from the current interaction frame. */
 export interface ScrollGeometry {
   readonly contentHeight: number;

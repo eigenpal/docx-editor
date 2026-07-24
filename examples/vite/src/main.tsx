@@ -14,6 +14,8 @@ const editMode = params.get('edit') === '1';
 // exposes the stable EditorDriver on window (comprehensive 4.4/4.8), so a browser test drives the
 // real published package entry rather than the engine mount directly.
 const realAdapter = params.get('realAdapter') === '1';
+const zoomParam = params.get('zoom');
+const initialZoom = zoomParam && Number.isFinite(Number(zoomParam)) && Number(zoomParam) > 0 ? Number(zoomParam) : 1;
 const base = import.meta.env.BASE_URL;
 // `?fixture=<name>.docx` picks which same-origin fixture the preview loads (default
 // with-tables.docx). Sanitized to a bare .docx basename so the value can never become a
@@ -29,7 +31,7 @@ if (container) {
     let view: ReactNode;
     if (realAdapter) {
       const { DocxAdapterHarness } = await import('../../shared/DocxAdapterHarness.tsx');
-      view = <DocxAdapterHarness fixtureUrl={`${base}${fixtureName}`} />;
+      view = <DocxAdapterHarness fixtureUrl={`${base}${fixtureName}`} initialZoom={initialZoom} />;
     } else if (editMode) {
       const { DocxEditable } = await import('../../shared/DocxEditable.tsx');
       view = <DocxEditable fixtureUrl={`${base}${fixtureName}`} />;

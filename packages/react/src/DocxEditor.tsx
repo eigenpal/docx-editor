@@ -1,6 +1,6 @@
 import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react';
 import type { Editor, EditorHost } from '@docx-editor.dev/core-contract/editor';
-import { createEditor } from '@docx-editor.dev/engine-editor';
+import { createEditor, measureInteractionHostMetrics } from '@docx-editor.dev/engine-editor';
 import type { DisplayPage } from '@docx-editor.dev/core-contract/geometry';
 import { paintDisplay } from './paintDisplay';
 import type { DocxEditorProps, DocxEditorRef } from './types';
@@ -31,6 +31,11 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
         getHfHostEl: () => null,
         getPagesContainer: () => pagesRef.current,
         getScrollContainer: () => scrollRef.current,
+        getInteractionHostMetrics: () => {
+          const scroll = scrollRef.current;
+          if (!scroll) return null;
+          return measureInteractionHostMetrics(scroll, propsRef.current.zoom ?? 1);
+        },
         scheduleFrame: (cb) => {
           const id = requestAnimationFrame(cb);
           return () => cancelAnimationFrame(id);
@@ -91,12 +96,15 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
     // Zoom is applied on paint (the contract's DisplayPage boxes are pre-zoom); scale the pages
     // wrapper from its top-left so scrolling still works.
     const zoom = props.zoom ?? 1;
+    useEffect(() => {
+      editorRef.current?.relayout();
+    }, [zoom]);
     return (
-      <div ref={scrollRef} className={className} style={{ overflow: 'auto' }}>
+      <div ref={scrollRef} data-testid="docx-editor-scroll" className={className} style={{ overflow: 'auto' }}>
         <div ref={pagesRef} style={{ transform: `scale(${zoom})`, transformOrigin: 'top left' }}>
           {paintDisplay(pages)}
         </div>
-        <div ref={bodyRef} style={{ position: 'absolute', left: -9999, top: 0 }} />
+        <div ref={bodyRef} style={{ position: 'fixed', width: 0, height: 0, overflow: 'visible', pointerEvents: 'none' }} />
       </div>
     );
   }

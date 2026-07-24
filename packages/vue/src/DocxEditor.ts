@@ -1,6 +1,6 @@
 import { defineComponent, h, onBeforeUnmount, onMounted, ref, watch, type PropType } from 'vue';
 import type { Editor, EditorHost, DocumentSource, DocumentChange } from '@docx-editor.dev/core-contract/editor';
-import { createEditor } from '@docx-editor.dev/engine-editor';
+import { createEditor, measureInteractionHostMetrics } from '@docx-editor.dev/engine-editor';
 import type { DisplayPage } from '@docx-editor.dev/core-contract/geometry';
 import { paintDisplay } from './paintDisplay';
 import type { EditorMode } from './types';
@@ -35,6 +35,11 @@ export default defineComponent({
       getHfHostEl: () => null,
       getPagesContainer: () => pagesEl.value,
       getScrollContainer: () => scrollEl.value,
+      getInteractionHostMetrics: () => {
+        const scroll = scrollEl.value;
+        if (!scroll) return null;
+        return measureInteractionHostMetrics(scroll, props.zoom ?? 1);
+      },
       scheduleFrame: (cb) => {
         const id = requestAnimationFrame(cb);
         return () => cancelAnimationFrame(id);
@@ -66,6 +71,13 @@ export default defineComponent({
       }
     );
 
+    watch(
+      () => props.zoom,
+      () => {
+        editor?.relayout();
+      }
+    );
+
     onBeforeUnmount(() => {
       editor?.destroy();
       editor = null;
@@ -82,7 +94,7 @@ export default defineComponent({
     });
 
     return () =>
-      h('div', { ref: scrollEl, style: { overflow: 'auto' } }, [
+      h('div', { ref: scrollEl, 'data-testid': 'docx-editor-scroll', style: { overflow: 'auto' } }, [
         // Zoom is applied on paint (contract boxes are pre-zoom); scale from top-left.
         h(
           'div',
@@ -92,7 +104,7 @@ export default defineComponent({
           },
           paintDisplay(pages.value)
         ),
-        h('div', { ref: bodyEl, style: { position: 'absolute', left: '-9999px', top: '0' } }),
+        h('div', { ref: bodyEl, style: { position: 'fixed', width: '0', height: '0', overflow: 'visible', pointerEvents: 'none' } }),
       ]);
   },
 });

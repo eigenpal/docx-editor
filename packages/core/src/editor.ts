@@ -10,6 +10,7 @@ import type {
   AccessibilityObservation,
   CaretGeometry,
   HitTestOptions,
+  InputHostObservation,
   InteractionFrame,
   InteractionHostMetrics,
   InteractionOutcome,
@@ -236,6 +237,10 @@ export interface Editor {
   resolvePointer(point: Point, options?: HitTestOptions): InteractionOutcome<SemanticHitTarget>;
   /** PM-free accessibility observation projecting the current interaction frame. */
   getAccessibilityObservation(): AccessibilityObservation;
+  /** PM-free observation of the hidden input-host clip shell when mounted. */
+  getInputHostObservation(): InputHostObservation | null;
+  /** Caret rectangle in client coordinates when host metrics and caret geometry exist. */
+  getCaretClientRect(): Rect | null;
 
   /** Replaces the module-scope cache-invalidation calls adapters make today. */
   relayout(options?: { sync?: boolean }): void;

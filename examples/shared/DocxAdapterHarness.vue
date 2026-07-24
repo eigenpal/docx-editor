@@ -10,10 +10,11 @@ import { DocxEditor } from '@docx-editor.dev/vue';
 import { createEditorDriver, type EditorDriver } from '@docx-editor.dev/engine-editor';
 import type { Editor } from '@docx-editor.dev/vue';
 
-const props = defineProps<{ fixtureUrl: string }>();
+const props = defineProps<{ fixtureUrl: string; initialZoom?: number }>();
 
 const bytes = ref<Uint8Array | null>(null);
 const status = ref('Loading…');
+const zoom = ref(props.initialZoom ?? 1);
 
 async function load(url: string): Promise<void> {
   try {
@@ -23,16 +24,30 @@ async function load(url: string): Promise<void> {
   }
 }
 
+function syncHarness(): void {
+  (window as unknown as { __docxAdapterHarness?: { setZoom(z: number): void; getZoom(): number } }).__docxAdapterHarness = {
+    setZoom: (next) => {
+      zoom.value = next;
+    },
+    getZoom: () => zoom.value,
+  };
+}
+
 function onReady(editor: Editor): void {
   const driver = createEditorDriver(editor);
   (window as unknown as { __docxAdapterDriver?: EditorDriver }).__docxAdapterDriver = driver;
   status.value = driver.editable() ? 'Editable (paragraphs)' : 'Read-only (contains tables/SDTs)';
 }
 
-onMounted(() => void load(props.fixtureUrl));
+onMounted(() => {
+  syncHarness();
+  void load(props.fixtureUrl);
+});
 watch(() => props.fixtureUrl, (url) => void load(url));
+watch(zoom, syncHarness);
 onBeforeUnmount(() => {
   delete (window as unknown as { __docxAdapterDriver?: EditorDriver }).__docxAdapterDriver;
+  delete (window as unknown as { __docxAdapterHarness?: unknown }).__docxAdapterHarness;
 });
 </script>
 
@@ -42,7 +57,7 @@ onBeforeUnmount(() => {
       <span data-testid="adapter-status">{{ status }}</span>
     </div>
     <div style="flex: 1; min-height: 0; overflow: auto; padding: 16px">
-      <DocxEditor v-if="bytes" :document="bytes" @ready="onReady" />
+      <DocxEditor v-if="bytes" :document="bytes" :zoom="zoom" @ready="onReady" />
     </div>
   </div>
 </template>

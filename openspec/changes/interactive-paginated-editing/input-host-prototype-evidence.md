@@ -1,8 +1,9 @@
-# Hidden input-host prototype evidence (task 4.3)
+# Hidden input-host prototype evidence (tasks 4.3 / 4.8)
 
-Status: **prototype only** — browser approval is deferred to task **4.8**. This record
-documents the selected clipping/repositioning technique and the platform questions the
-4.8 falsification gate must answer.
+Status: **approved on Desktop Chromium for the hidden input-host mechanism only** (task
+**4.8**, 2026-07-24 review). Does **not** approve direct painted-page interaction,
+`interactive-paginated`, feature-WYSIWYG, real CJK IME, mobile/virtual keyboard, Firefox, or
+WebKit.
 
 ## Selected technique
 
@@ -13,142 +14,82 @@ The production edit surface mounts ProseMirror inside a **fixed-position clip sh
    adapter-provided mount parent — **not** `display: none`, **not** detached.
 2. A child clip shell (`overflow: hidden`, bounded non-zero `width`/`height`, `clip-path:
    inset(0)`) is repositioned in **client coordinates** near the engine caret rectangle.
-3. **Visual hiding uses `opacity: 0` on the clip shell** — the host remains attached,
-   non-`display:none`, and programmatically focusable; PM text is not visibly duplicated on
-   the painted page surface. **4.8 must falsify** whether opacity-hidden content still leaks
-   to assistive technology or IME candidate UI in unintended ways.
-4. **`pointer-events: none` on root, clip shell, and mount** so painted-page clicks are not
-   intercepted; focus/keyboard/composition remain programmatic. **4.8 must falsify** whether
-   platforms still route IME/clipboard correctly when pointer hit targets are disabled.
-5. ProseMirror mounts into the clip shell's inner mount node (`role="textbox"`,
-   `tabindex="-1"`).
-6. Minimum input bounds: **2×16 CSS px** so the host is never zero-size.
-7. Placement clamps into a deterministic viewport rect supplied by the editor host scroll
-   container (or typed fallback rect).
-8. Styles are applied exclusively through `element.style.setProperty` — no file-derived
-   HTML/CSS string interpolation.
+3. **Visual hiding uses `opacity: 0` on the clip shell** — attached, focusable, non-duplicated
+   on the painted page surface.
+4. **`pointer-events: none` on root, clip shell, and mount** — focus/keyboard/composition remain
+   programmatic.
+5. ProseMirror mounts into the clip shell's inner mount node (`role="textbox"`, `tabindex="-1"`).
+6. Minimum input bounds: **2×16 CSS px**.
+7. Placement clamps into the scroll-container viewport from `EditorHost.getInteractionHostMetrics()`.
+8. Styles via `element.style.setProperty` only.
 
-Placement accepts only caret geometry whose **interaction frame identity matches** the
-currently published frame. Stale, pending, read-only, and no-caret cases retain the last
-safe bounded rectangle and report a typed placement reason (`staleFrame`, `pendingLayout`,
-`readOnly`, `noCaret`, `fallback`).
+After every completed layout publication, `createEditor` **reconciles** the overlay from live PM
+selection/focus via `reconcileSelectionOverlayAfterLayout()` so the clip shell does not silently
+retain a stale `applied` rectangle when the interaction frame is republished.
 
-## Assistive-document policy (prototype)
+`InputHostPlacementReason` is defined once in `@docx-editor.dev/core-contract/interaction`.
 
-Until task **4.6** lands the engine semantic/accessibility projection:
+## Chromium production-adapter gate (task 4.8)
 
-- The hidden ProseMirror input host is the **sole accessible editing projection**.
-- The controller exposes `data-assistive-policy="sole-editing-projection"` and
-  `data-painted-pages-assistive-role="presentation"` so adapters mark painted pages as
-  presentation-only and do **not** expose a second editable document to assistive technology.
-- The mount node carries `role="textbox"`; painted output must not also declare document
-  editing semantics (verified in unit tests; adapter wiring lands in task 6).
-
-## Semantic selection sync (task 4.2)
-
-PM-free APIs in `packages/engine-binding/src/semantic-sync.ts` resolve reviewed
-`SemanticTarget` / `SemanticSelection` values to store-backed anchors using **canonical
-traversal ownership** (table cells and structural blocks reject even when callers omit
-roles). `EditSurface` applies the ProseMirror selection **before** focus, retains semantic
-intent only after successful PM dispatch, clears retained intent on local edits/history,
-and preserves intent across blur/owned-popup/external reconciliation. Invalid/read-only/stale
-targets return typed rejections rather than stale PM positions.
-
-## Browser hypotheses requiring task 4.8 evidence
-
-| Hypothesis | Why it matters | Current status |
-| --- | --- | --- |
-| **`opacity: 0` hides duplicate visible PM text without breaking focus/IME** | Core visual-hiding bet | Unit-tested inline styles only |
-| **`pointer-events: none` prevents hit interception while preserving keyboard/IME** | One-surface click routing | Unit-tested `elementFromPoint` only |
-| IME candidate UI anchors near the repositioned clip shell on **Desktop Chromium** | CJK input viability | **Not measured** |
-| Composition survives layout repaints without duplicate/dropped text | Task 4.4 suite | **Not measured** |
-| Virtual keyboard placement tracks the caret on **mobile Safari/Chrome** | Mobile matrix | **Not claimed** |
-| Focus transfer from painted-page click reaches hidden host with synced selection | Task 6 wiring | **Not automated** |
-| Scroll/zoom reposition every frame without focus loss | Adapter lifecycle | **Not measured** |
-| Accessibility tree exposes **one** coherent editable document | Task 4.7 | **Measured (Chromium harness)** — 9/9 Playwright a11y-tree specs pass; painted pages `aria-hidden`; one `[contenteditable="true"]` owner; canonical text appears once in `ariaSnapshot`; Lighthouse accessibility score **1.0** on harness |
-| Clipboard/beforeinput when host is viewport-clamped at edges | Task 4.5 | **Not measured** |
-
-## Chromium accessibility-tree evidence (task 4.7)
-
-Harness: `packages/engine-editor/browser/` (production `createEditor`, hidden PM host,
-positioned painted pages, localized Spanish fixtures). Tests:
-`packages/engine-editor/e2e/accessibility-tree.spec.ts`.
+Harness: `examples/shared/DocxAdapterHarness.{tsx,vue}` via `?realAdapter=1` (+ optional
+`&zoom=`). Scroll target: `[data-testid="docx-editor-scroll"]`. Driver: `window.__docxAdapterDriver`
+(`createEditorDriver`). Zoom control: `window.__docxAdapterHarness`.
 
 ### Reproducible commands (2026-07-24)
 
 ```bash
-# Bounded Chromium accessibility-tree gate (Playwright + Lighthouse; does not run general E2E)
-cd packages/engine-editor && bun run verify:a11y-tree
+# RED (layout overlay — before reconcileSelectionOverlayAfterLayout)
+bun test packages/engine-editor/test/layout-overlay-reconcile.test.ts
+# Expected: frame.caret null after relayout; placementReason "noCaret"
 
-# Playwright only
-cd packages/engine-editor && bun run test:e2e:a11y-tree
+# GREEN — layout overlay integration
+bun test packages/engine-editor/test/layout-overlay-reconcile.test.ts
+# 2/2 pass
 
-# Lighthouse harness wrapper (starts/waits/stops Vite on 127.0.0.1:5299 when needed)
-cd packages/engine-editor && bun run test:lighthouse:a11y-harness
+# GREEN — paired public-adapter gate (12 tests)
+bun run verify:real-adapter-gate
 
-# Focused unit coverage for this task
-bun test packages/engine-editor/test/set-selection.test.ts packages/engine-editor/test/lighthouse-a11y-gate.test.ts
-bun test packages/engine-binding/test/input-events.test.ts -t "Shift-ArrowRight"
+# GREEN — production load/paginate/save/reopen smoke (2 tests)
+bun run verify:real-adapter-smoke
+
+# GREEN — task 4.7 regression
+bun run verify:a11y-tree
+
+# Focused unit coverage
+bun test packages/engine-editor/test/driver.test.ts \
+  packages/engine-editor/test/host-metrics.test.ts \
+  packages/engine-editor/test/set-selection.test.ts
+
+bun test packages/engine-core/test/adapter-authority.test.ts
+openspec validate interactive-paginated-editing --strict
+git diff --check
 ```
 
-### Measured results (2026-07-24)
+### Measured results
 
 | Gate | Result |
 | --- | --- |
-| Playwright `accessibility-tree.spec.ts` | **9/9 passed** (~2.5s, 1 worker, Chromium) |
-| Lighthouse accessibility score | **1.0** (`failedAuditIds: []`) |
-| `set-selection` unit test | **pass** |
-| `lighthouse-a11y-gate` unit test | **pass** |
-| `Shift-ArrowRight` binding unit test | **pass** |
-| `packages/engine-editor` typecheck | **pass** |
-| `git diff --check` | **pass** (no whitespace errors) |
+| `layout-overlay-reconcile.test.ts` | **2/2 pass** |
+| `verify:real-adapter-gate` | **12/12 pass** |
+| `verify:real-adapter-smoke` | **2/2 pass** |
+| `verify:a11y-tree` | **9/9 + Lighthouse 1.0** |
+| Unit driver/host-metrics/set-selection | **pass** |
+| `adapter-authority.test.ts` | **14/14 pass** |
+| Typechecks (engine-editor, react, vue, binding) | **pass** |
 
-Lighthouse summary written to
-`packages/engine-editor/test-results/lighthouse/a11y-harness-lighthouse-summary.json`:
+### Approval decision
 
-```json
-{
-  "url": "http://127.0.0.1:5299/",
-  "accessibilityScore": 1,
-  "failedAuditIds": [],
-  "failedAuditTitles": [],
-  "note": "Harness-only audit; app-shell issues outside this change are not claimed fixed."
-}
-```
+**Approve** hidden input-host mechanism + paired React/Vue host wiring on **Desktop Chromium**.
 
-CI: `.github/workflows/ci.yml` runs `bun run verify:a11y-tree` after `bunx playwright install chromium`
-(without starting the full editor-smoke E2E suite).
+### Explicit deferrals
 
-| Check | Chromium result |
-| --- | --- |
-| Single canonical editable owner | One `[contenteditable="true"]`; zero `[role=document]` landmarks |
-| Painted pages assistive-hidden | Container + children `aria-hidden="true"`, `presentation-only` marker |
-| Canonical text once in tree | `ariaSnapshot` on mount counts one occurrence per paragraph string |
-| Reading order / empty / Unicode | Full mount `ariaSnapshot` matches `- paragraph: primera línea` / empty / Unicode; observation entries `['primera línea', '', 'café ñ 日本語']` |
-| Localized name | `aria-label="Documento de prueba"` when supplied; attribute absent when omitted |
-| Editable vs view mode | Editable focus authorized; view mode `contenteditable="false"`, focus rejected |
-| Read-only atoms | `role="img"` + localized `aria-label`; perceivable via `getByLabel` |
-| Focus + native selection | After `setSelection` + `focus()` + trusted `Shift+ArrowRight` ×3: non-collapsed selection with exact block id and grapheme offsets **0→3** |
-| Accepted native input | `setSelection` caret + `focus()` + Playwright `type('Z')`; revision increases; one owner; one tree text instance |
-| Composition lifecycle | `compositionstart` → trusted `type('X')` → `compositionupdate` → `compositionend`; revision increases; one owner throughout |
-| Lifecycle coherence | After blur, accepted input, composition, external reload, relayout, container swap, and destroy: `ariaSnapshot` + owner count **1** (or **0** after destroy) with no duplicate editable state |
-| Stable snapshot | `- paragraph: primera línea` / empty paragraph / `- paragraph: café ñ 日本語` |
+- Direct painted-page interaction, `interactive-paginated`, feature-WYSIWYG
+- Real CJK IME, mobile/virtual keyboard, Firefox, WebKit
+- Diagnostic `?edit=1` route
+- Mid-paragraph-start insert caret on painted surface (gate uses end-of-paragraph trusted input)
 
-Public `setSelection` exec maps to `EditSurface.syncSemanticSelection` (frame-bound semantic targets);
-harness uses this path to authorize caret placement before trusted keyboard/composition events.
-No PM/view test hooks are exposed to Playwright.
+## Chromium accessibility-tree evidence (task 4.7)
 
-Lighthouse gate: `packages/engine-editor/scripts/lighthouse-a11y-gate.ts` exits non-zero when
-accessibility score &lt; 1 or any scored audit has `score &lt; 1`. Wrapper:
-`packages/engine-editor/scripts/run-lighthouse-a11y-harness.mjs`.
-
-**4.7 limitations deferred to 4.8:** real browser IME/mobile/virtual-keyboard approval,
-public React/Vue adapter builds, and painted-page pointer hit transfer remain unapproved.
-Composition tests use synthetic `compositionstart`/`update`/`end` with trusted Playwright
-`type()` for the committed glyph (desktop Chromium harness path only).
-
-- No browser/platform approval is claimed before task **4.8**.
-- Diagnostic split-pane edit mode (`?edit=1`) is unrelated to this technique and must not
-  serve as acceptance evidence.
-- Adapter one-surface composition (task 6) is not wired; React/Vue still use retired off-screen
-  body-host positioning until that milestone.
+Harness: `packages/engine-editor/browser/`. Command: `bun run verify:a11y-tree`. **9/9 pass**,
+Lighthouse **1.0**. See prior sections in git history for harness detail; still required CI
+regression alongside 4.8 adapter gates.

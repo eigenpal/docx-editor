@@ -38,6 +38,8 @@ import type {
   SemanticSelection,
   SemanticTarget,
   AccessibilityObservation,
+  InputHostObservation,
+  FocusObservation,
 } from '@docx-editor.dev/core-contract/interaction';
 import {
   openDocxSession,
@@ -193,6 +195,51 @@ export function createEditor(config: EditorConfig): Editor {
     });
   }
 
+  function publishSelectionOverlay(selection: SemanticSelection, focus: FocusObservation): void {
+    if (!session) return;
+    const base = currentFrame();
+    const selectionForFrame = { ...selection, frameId: base.id };
+    const caret = deriveCaretGeometry(base, selectionForFrame.head);
+    const selectionGeometryOutcome = deriveSelectionGeometry(base, selectionForFrame);
+    const selectionGeometry = selectionGeometryOutcome.ok ? selectionGeometryOutcome.value : null;
+    const caretPage = caret?.pageIndex ?? base.currentPage.caret;
+    frames.publishSelection({
+      modelRevision: session.revision(),
+      layoutRevision: base.revisions.layoutRevision,
+      selection: selectionForFrame,
+      caret,
+      selectionGeometry,
+      focus,
+      composition: base.composition,
+      currentPage: { viewport: base.currentPage.viewport, caret: caretPage },
+    });
+    updateInputHostFromFrame();
+  }
+
+  function reconcileSelectionOverlayAfterLayout(): void {
+    if (!surface?.semanticProjectionAttached || !session) {
+      updateInputHostFromFrame();
+      return;
+    }
+    const frame = currentFrame();
+    const obs = surface.getAccessibilityObservation({ frameId: frame.id, scope: activeScope });
+    if (!obs.selection) {
+      updateInputHostFromFrame();
+      return;
+    }
+    const selection: SemanticSelection = {
+      frameId: frame.id,
+      scope: obs.scope,
+      anchor: obs.selection.anchor,
+      head: obs.selection.head,
+    };
+    if (!deriveCaretGeometry(frame, selection.head)) {
+      updateInputHostFromFrame();
+      return;
+    }
+    publishSelectionOverlay(selection, obs.focus);
+  }
+
   function syncPaintedPagesAssistivePolicy(): void {
     const pagesContainer = host.getPagesContainer?.() ?? null;
     if (markedPagesContainer && markedPagesContainer !== pagesContainer) {
@@ -222,7 +269,7 @@ export function createEditor(config: EditorConfig): Editor {
     host.onTotalPages?.(frame.display.length);
     emit('display', frame.display);
     syncPaintedPagesAssistivePolicy();
-    updateInputHostFromFrame();
+    reconcileSelectionOverlayAfterLayout();
   }
 
   function completeLayoutPublication(token: number, pendingTarget?: number): void {
@@ -498,6 +545,17 @@ export function createEditor(config: EditorConfig): Editor {
         paintedPagesAssistiveRole: null,
       });
     },
+    getInputHostObservation: (): InputHostObservation | null => {
+      if (!surface?.semanticProjectionAttached) return null;
+      const state = surface.inputHostState;
+      return {
+        attached: state.hostAttached,
+        placementReason: state.placement.reason,
+        clientRect: state.placement.clientRect,
+        paintedPagesAssistiveRole: state.paintedPagesAssistiveRole,
+      };
+    },
+    getCaretClientRect: (): Rect | null => caretClientRect(),
     getPageGeometry: () => currentFrame().pageGeometry,
     getScrollGeometry: () => currentFrame().scrollGeometry,
 
@@ -515,7 +573,21 @@ export function createEditor(config: EditorConfig): Editor {
       if (!surface) {
         return { ok: false, code: 'unsupported', reason: 'edit surface is not mounted' };
       }
-      return surface.focus({ frameId: currentFrame().id });
+      const outcome = surface.focus({ frameId: currentFrame().id });
+      if (!outcome.ok) return outcome;
+      const obs = surface.getAccessibilityObservation({ frameId: currentFrame().id, scope: activeScope });
+      if (obs.selection) {
+        publishSelectionOverlay(
+          {
+            frameId: currentFrame().id,
+            scope: obs.scope,
+            anchor: obs.selection.anchor,
+            head: obs.selection.head,
+          },
+          { scope: activeScope, focused: true },
+        );
+      }
+      return outcome;
     },
     destroy() {
       // Detach THIS editor's projection/host resources; an externally owned (shared-handle) session

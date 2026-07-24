@@ -19,11 +19,13 @@ import type {
   InteractionFrameId,
   InteractionHostMetrics,
   InteractionOutcome,
+  InputHostObservation,
   SelectionGeometry,
   SemanticHitTarget,
   SemanticSelection,
+  AccessibilityObservation,
 } from '@docx-editor.dev/core-contract/interaction';
-import type { ExecResult, Point } from '@docx-editor.dev/core-contract/types';
+import type { ExecResult, Point, Rect } from '@docx-editor.dev/core-contract/types';
 import { createEditor } from './create-editor.ts';
 
 /** The text a display page shows, in reading order. Layout emits one item per run-part (a maximal
@@ -85,6 +87,20 @@ export interface EditorDriver {
   selectionGeometry(): SelectionGeometry | null;
   /** Semantic selection from the current interaction frame. */
   semanticSelection(): SemanticSelection | null;
+  /** Authorize caret at a body paragraph entry (by reading-order index) then focus. */
+  authorizeCaret(blockIndex: number, graphemeOffset: number): InteractionOutcome<void>;
+  /** PM-free accessibility observation for browser gate assertions. */
+  accessibilityObservation(): AccessibilityObservation;
+  /** Canonical model revision for commit-once assertions. */
+  modelRevision(): number;
+  /** Hidden input-host clip shell observation (null when not mounted). */
+  inputHostObservation(): InputHostObservation | null;
+  /** Caret rectangle in client coordinates when host metrics and caret geometry exist. */
+  caretClientRect(): Rect | null;
+  focus(): InteractionOutcome<void>;
+  setSelection(range: SemanticSelection): ExecResult;
+  /** Republish layout/display from canonical model (sync by default). */
+  relayout(options?: { sync?: boolean }): void;
   /** Client-coordinate pointer intent with typed stale/pending/read-only/unsupported outcomes. */
   pointerAt(point: Point, options?: PointerAtOptions): InteractionOutcome<SemanticHitTarget>;
   displaySnapshot(): DisplaySnapshot;
@@ -117,6 +133,31 @@ function headlessHost() {
 
 /** Wrap a production `Editor` in the stable driver. */
 export function createEditorDriver(editor: Editor): EditorDriver {
+  function paragraphEntry(blockIndex: number) {
+    const entries = editor.getAccessibilityObservation().entries.filter((e) => e.role === 'editableParagraph');
+    const entry = entries[blockIndex];
+    if (!entry) throw new Error(`paragraph index ${blockIndex} is out of range`);
+    return entry;
+  }
+
+  function semanticSelection(blockIndex: number, anchorOffset: number, headOffset: number): SemanticSelection {
+    const entry = paragraphEntry(blockIndex);
+    const frameId = editor.getInteractionFrame().id;
+    const target = (offset: number, affinity: 'upstream' | 'downstream'): SemanticSelection['anchor'] => ({
+      kind: 'text',
+      scope: { kind: 'body' },
+      identity: { storyId: entry.identity.storyId, blockId: entry.identity.blockId },
+      graphemeOffset: offset,
+      affinity,
+    });
+    return {
+      frameId,
+      scope: { kind: 'body' },
+      anchor: target(anchorOffset, 'upstream'),
+      head: target(headOffset, headOffset >= anchorOffset ? 'downstream' : 'upstream'),
+    };
+  }
+
   return {
     load: (source) => editor.load(source),
     editable: () => editor.snapshot().editable,
@@ -131,6 +172,24 @@ export function createEditorDriver(editor: Editor): EditorDriver {
     caretGeometry: () => editor.getCaretGeometry(),
     selectionGeometry: () => editor.getSelectionGeometry(),
     semanticSelection: () => editor.getInteractionFrame().selection,
+    authorizeCaret(blockIndex, graphemeOffset) {
+      const set = editor.exec({ type: 'setSelection', range: semanticSelection(blockIndex, graphemeOffset, graphemeOffset) });
+      if (!set.ok) {
+        return {
+          ok: false,
+          code: set.code === 'locked' ? 'readOnly' : set.code === 'invalidArgs' ? 'invalidTarget' : 'unsupported',
+          reason: set.reason,
+        };
+      }
+      return editor.focus();
+    },
+    accessibilityObservation: () => editor.getAccessibilityObservation(),
+    modelRevision: () => editor.getDocumentHandle().revision,
+    inputHostObservation: () => editor.getInputHostObservation(),
+    caretClientRect: () => editor.getCaretClientRect(),
+    focus: () => editor.focus(),
+    setSelection: (range) => editor.exec({ type: 'setSelection', range }),
+    relayout: (options) => editor.relayout(options),
     pointerAt: (point, options) =>
       editor.resolvePointer(point, {
         frameId: options?.frameId,

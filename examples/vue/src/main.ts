@@ -9,6 +9,8 @@ const editMode = params.get('edit') === '1';
 // `?realAdapter=1` mounts the PRODUCTION @docx-editor.dev/vue DocxEditor with DOCX bytes and exposes
 // the stable EditorDriver on window (comprehensive 4.4/4.8), matching the React harness route.
 const realAdapter = params.get('realAdapter') === '1';
+const zoomParam = params.get('zoom');
+const initialZoom = zoomParam && Number.isFinite(Number(zoomParam)) && Number(zoomParam) > 0 ? Number(zoomParam) : 1;
 const base = import.meta.env.BASE_URL;
 // `?fixture=<name>.docx` picks which same-origin fixture the preview loads (default
 // with-tables.docx). Sanitized to a bare .docx basename so the value can never become a
@@ -20,7 +22,7 @@ const fixtureName = /^[\w.-]+\.docx$/.test(fixtureParam) ? fixtureParam : defaul
 void (async () => {
   if (realAdapter) {
     const DocxAdapterHarness = (await import('../../shared/DocxAdapterHarness.vue')).default;
-    createApp(DocxAdapterHarness, { fixtureUrl: `${base}${fixtureName}` }).mount('#app');
+    createApp(DocxAdapterHarness, { fixtureUrl: `${base}${fixtureName}`, initialZoom }).mount('#app');
   } else if (editMode) {
     const DocxEditable = (await import('../../shared/DocxEditable.vue')).default;
     createApp(DocxEditable, { fixtureUrl: `${base}${fixtureName}` }).mount('#app');

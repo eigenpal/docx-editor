@@ -20,4 +20,5 @@ export {
   pageText,
   displayText,
 } from './driver.ts';
+export { measureInteractionHostMetrics } from './host-metrics.ts';
 export { emptySemanticIndex } from './interaction-frame.ts';

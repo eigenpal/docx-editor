@@ -3,22 +3,16 @@
 // pointer-events:none on root/shell/mount prevents intercepting painted-page clicks.
 // Styles are applied with setProperty only — no file-derived HTML/CSS interpolation.
 
-import type { InteractionFrameId } from '@docx-editor.dev/core-contract/interaction';
+import type { InteractionFrameId, InputHostPlacementReason } from '@docx-editor.dev/core-contract/interaction';
 import type { Rect } from '@docx-editor.dev/core-contract/types';
 import { applyAccessibleNamePolicy, resolveAccessibilityNamePolicy } from './accessibility-projection.ts';
+
+export type { InputHostPlacementReason };
 
 export const INPUT_HOST_MIN_WIDTH_PX = 2;
 export const INPUT_HOST_MIN_HEIGHT_PX = 16;
 export const INPUT_HOST_DEFAULT_WIDTH_PX = 200;
 export const INPUT_HOST_DEFAULT_HEIGHT_PX = 24;
-
-export type InputHostPlacementReason =
-  | 'applied'
-  | 'staleFrame'
-  | 'pendingLayout'
-  | 'noCaret'
-  | 'readOnly'
-  | 'fallback';
 
 export interface InputHostPlacement {
   readonly clientRect: Rect;
