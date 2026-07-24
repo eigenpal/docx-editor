@@ -1,6 +1,6 @@
 # Interactive paginated editing — accelerated execution tasks
 
-Progress: **44 / 114** complete.
+Progress: **45 / 114** complete.
 
 | Baseline | Count |
 | --- | --- |
@@ -122,7 +122,7 @@ Prerequisite for M3. Adapters still render no product chrome.
 - [x] M2.2 Wire overlay paint helpers so caret/selection rectangles render from interaction-frame geometry with clipping, transforms, writing direction, zoom, and pointer transparency. **Deliverable:** shared paint utilities (extend `packages/react/src/paintDisplay.tsx` pattern).
 - [x] M2.3 Emit stable public test attributes and/or driver-readable client rectangles on the bounded-document fixture's first editable body-paragraph glyph (e.g. `data-testid="one-surface-click-target"` on the target display item or equivalent public query). **Deliverable:** Playwright and manual gates locate the target by attribute/query center click — never hardcoded page coordinates or whitespace.
 - [x] M2-R1 Run: `bun test packages/engine-editor/test/display-bridge.test.ts`; `bun run check:adapter-css-thin`; `bun run typecheck`; `openspec validate interactive-paginated-editing --strict`; `git diff --check`. Write pass/fail counts to `openspec/changes/interactive-paginated-editing/evidence/m2/verification-log.md`. Stage and commit per staging manifest.
-- [ ] M2-R2 Write `openspec/changes/interactive-paginated-editing/evidence/m2/summary.md`; stage and commit per staging manifest.
+- [x] M2-R2 Write `openspec/changes/interactive-paginated-editing/evidence/m2/summary.md`; stage and commit per staging manifest.
 
 ---
 
