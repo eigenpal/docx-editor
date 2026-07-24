@@ -10,6 +10,7 @@ import {
 } from '../src/index.ts';
 import { resolveSemanticTarget, resolveSemanticSelection } from '../src/semantic-sync.ts';
 import { resolveSelection } from '../src/selection.ts';
+import { authorizeFocus, dispatchBeforeInput, dispatchHistoryUndo, pmDom } from './input-dom-helpers.ts';
 import {
   DocumentStore,
   createEmptyModel,
@@ -25,8 +26,6 @@ import { expectGraphemeParity } from './grapheme-parity.ts';
 import { graphemeOffsetToUtf16 as layoutGraphemeOffsetToUtf16 } from '@docx-editor.dev/engine-layout';
 
 const HUMAN = ORIGIN_IDS.mutationHuman;
-
-type TestSurface = ReturnType<typeof mountEditSurface> & { __testModelChangedCalls?: number };
 
 function modelWithTableCell(cellText: string): PackageModel {
   const base = createEmptyModel();
@@ -91,8 +90,6 @@ function pmFrom(binding: EditorBinding, paragraphId: string, offset: number): nu
 
 function mountWithHooks(session: ReturnType<typeof editableSession>['session'], parent: HTMLElement, onModelChanged?: () => void) {
   let helpers: {
-    insertText(text: string): void;
-    undo(): void;
     pmSelection(): { from: number; to: number; empty: boolean };
     stripBlockEmbed(objectId: string): void;
   } | undefined;
@@ -217,14 +214,14 @@ describe('edit surface semantic sync', () => {
     const { session, binding, p1 } = editableSession('hello');
     const parent = document.createElement('div');
     document.body.append(parent);
-    const { surface, helpers } = mountWithHooks(session, parent);
-    surface.syncSemanticSelection({ frameId: { value: 1 }, selection: collapsedSelection(session, p1, 1) });
-    surface.focus({ frameId: { value: 1 } });
+    const { surface } = mountWithHooks(session, parent);
+    authorizeFocus(surface, collapsedSelection(session, p1, 1));
+    const dom = pmDom(parent);
     const afterSync = surface.getPmSelection().from;
-    helpers.insertText('Z');
+    dispatchBeforeInput(dom, 'insertText', 'Z');
     expect(surface.getPmSelection().from).not.toBe(afterSync);
     const beforeUndo = surface.getPmSelection().from;
-    helpers.undo();
+    dispatchHistoryUndo(dom);
     expect(surface.getPmSelection().from).toBe(afterSync);
     expect(surface.getPmSelection().from).not.toBe(beforeUndo);
     surface.destroy();
@@ -253,7 +250,7 @@ describe('edit surface semantic sync', () => {
     const parent = document.createElement('div');
     document.body.append(parent);
     let externalCalls = 0;
-    const surface = mountEditSurface(parent, session, { onModelChanged: () => (externalCalls += 1) }) as TestSurface;
+    const surface = mountEditSurface(parent, session, { onModelChanged: () => (externalCalls += 1) });
     surface.syncSemanticSelection({ frameId: { value: 1 }, selection: collapsedSelection(session, p1, 1) });
     surface.focus({ frameId: { value: 1 } });
     const expected = surface.getPmSelection().from;
@@ -265,14 +262,14 @@ describe('edit surface semantic sync', () => {
   });
 
   test('local commit notifies onModelChanged once', () => {
-    const { session } = editableSession('a');
+    const { session, p1 } = editableSession('a');
     let externalCalls = 0;
     const parent = document.createElement('div');
     document.body.append(parent);
-    const { surface, helpers } = mountWithHooks(session, parent, () => (externalCalls += 1));
-    helpers.insertText('b');
+    const { surface } = mountWithHooks(session, parent, () => (externalCalls += 1));
+    authorizeFocus(surface, collapsedSelection(session, p1, 1));
+    dispatchBeforeInput(pmDom(parent), 'insertText', 'b');
     expect(externalCalls).toBe(1);
-    expect(surface.__testModelChangedCalls).toBe(1);
     surface.destroy();
     parent.remove();
   });

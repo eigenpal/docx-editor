@@ -23,6 +23,7 @@ import {
 import type { SemanticSelection } from '@docx-editor.dev/core-contract/interaction';
 import { zipSync, strToU8 } from 'fflate';
 import { flushCompositionFrames } from './composition-dom.ts';
+import { authorizeFocus, dispatchBeforeInput, dispatchModKey, dispatchHistoryUndo, pmDom } from './input-dom-helpers.ts';
 
 const HUMAN = ORIGIN_IDS.mutationHuman;
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
@@ -42,13 +43,9 @@ type CompositionTestHelpers = {
   pushCompositionUpdate(text: string): void;
   endComposition(finalText?: string): Promise<void>;
   readPmParagraph(paragraphId: string): string;
-  insertText(text: string): void;
-  undo(): void;
   pmSelection(): PmSelectionSnapshot;
   stripBlockEmbed(objectId: string): void;
 };
-
-type TestSurface = EditSurface & { __testModelChangedCalls?: number };
 
 function editableSession(initial = '') {
   const model = createEmptyModel();
@@ -110,7 +107,7 @@ function mountWithComposition(
   session: ReturnType<typeof editableSession>['session'],
   parent: HTMLElement,
   onModelChanged?: () => void,
-): { surface: TestSurface; helpers: CompositionTestHelpers } {
+): { surface: EditSurface; helpers: CompositionTestHelpers } {
   let helpers!: CompositionTestHelpers;
   const surface = mountEditSurface(parent, session, {
     onModelChanged,
@@ -119,7 +116,7 @@ function mountWithComposition(
         helpers = h;
       },
     },
-  }) as TestSurface;
+  });
   if (!helpers) throw new Error('composition test hooks not ready');
   return { surface, helpers };
 }
@@ -213,7 +210,9 @@ describe('composition lifecycle through hidden input host', () => {
     expect(paragraphText(store.currentModel, p1)).toBe('abcd');
     expect(surface.getCompositionObservation().lastCancel).toBeNull();
 
-    helpers.undo();
+    surface.syncSemanticSelection({ frameId: { value: 1 }, selection: collapsedSelection(session, p1, 4) });
+    surface.focus({ frameId: { value: 1 } });
+    dispatchHistoryUndo(pmDom(parent));
     expect(paragraphText(store.currentModel, p1)).toBe('ab');
     surface.destroy();
     parent.remove();
@@ -255,7 +254,7 @@ describe('composition lifecycle through hidden input host', () => {
     expect(paragraphText(store.currentModel, p1)).not.toContain('aa');
     expect(paragraphText(store.currentModel, p1)?.length).toBe(2);
 
-    helpers.undo();
+    dispatchModKey(pmDom(parent), 'z');
     expect(paragraphText(store.currentModel, p1)).toBe('');
     expect(store.canUndo()).toBe(false);
     expect(store.currentRevision).toBe(revBefore + 2);
@@ -484,7 +483,7 @@ describe('composition lifecycle through hidden input host', () => {
 
     await helpers.compose({ updates: ['c', 'cd', 'cde'], final: 'cde' });
     expect(paragraphText(store.currentModel, p1)).toBe('abcde');
-    helpers.undo();
+    dispatchModKey(pmDom(parent), 'z');
     expect(paragraphText(store.currentModel, p1)).toBe('ab');
     surface.destroy();
     parent.remove();

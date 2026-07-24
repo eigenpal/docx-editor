@@ -1,10 +1,18 @@
 // ProseMirror edit-surface mount (document-engine 4.2; interactive-paginated 4.1–4.2).
 
 import { EditorView } from 'prosemirror-view';
-import { EditorState } from 'prosemirror-state';
+import { EditorState, TextSelection } from 'prosemirror-state';
 import { keymap } from 'prosemirror-keymap';
-import { baseKeymap } from 'prosemirror-commands';
-import type { InteractionFrameId, InteractionOutcome } from '@docx-editor.dev/core-contract/interaction';
+import {
+  baseKeymap,
+  joinBackward,
+  joinForward,
+  splitBlock,
+  deleteSelection,
+  selectTextblockStart,
+  selectTextblockEnd,
+} from 'prosemirror-commands';
+import type { InteractionFrameId, InteractionOutcome, InputObservation } from '@docx-editor.dev/core-contract/interaction';
 import {
   captureSelection,
   captureSelectionRange,
@@ -34,6 +42,17 @@ import {
 } from './composition.ts';
 import type { CompositionObservation } from '@docx-editor.dev/core-contract/interaction';
 import { paragraphText } from '@docx-editor.dev/engine-core';
+import {
+  boundClipboardHtml,
+  boundClipboardText,
+  isCompositionOwnedBeforeInput,
+  observeInput,
+  rejectClipboardDataTransfer,
+  rejectDropDataTransfer,
+  validatePastedSlice,
+  REJECTED_PASTE_SLICE,
+  type InputRejection,
+} from './input-policy.ts';
 
 export interface PmSelectionSnapshot {
   readonly from: number;
@@ -56,16 +75,15 @@ export interface EditSurface {
   getSelectionRange(): SelectionRangeAnchors;
   getPmSelection(): PmSelectionSnapshot;
   getCompositionObservation(): CompositionObservation;
+  getInputObservation(): InputObservation;
 }
 
 export interface MountEditSurfaceOptions {
   onModelChanged?: () => void;
   inputHost?: InputHostControllerOptions;
-  /** Test-only hook to observe PM doc positions and drive DOM composition. */
+  /** Test-only hook to observe PM-free selection and drive native composition DOM events. */
   testHooks?: {
     onReady?: (helpers: {
-      insertText(text: string): void;
-      undo(): void;
       pmSelection(): PmSelectionSnapshot;
       stripBlockEmbed(objectId: string): void;
       compose(options: {
@@ -144,6 +162,7 @@ export function mountEditSurface(
       }),
       getPmSelection: () => ({ from: 0, to: 0, empty: true }),
       getCompositionObservation: () => observeComposition(false, null),
+      getInputObservation: () => observeInput(null),
     };
   }
 
@@ -155,15 +174,68 @@ export function mountEditSurface(
   let ownedPopupDepth = 0;
   let retainedSemanticSelection: SemanticSelectionSyncRequest | null = null;
   let localCommitDepth = 0;
-  let modelChangedCalls = 0;
+  let layoutPending = false;
+
+  function isUtf16HighSurrogate(code: number): boolean {
+    return code >= 0xd800 && code <= 0xdbff;
+  }
+
+  function isUtf16LowSurrogate(code: number): boolean {
+    return code >= 0xdc00 && code <= 0xdfff;
+  }
+
+  /** Step one UTF-16 code unit without landing inside a surrogate pair. */
+  function safeHorizontalPos(doc: EditorState['doc'], pos: number, dir: -1 | 1, innerStart: number, innerEnd: number): number | null {
+    let next = pos + dir;
+    if (next < innerStart || next > innerEnd) return null;
+    if (dir > 0 && pos < doc.content.size) {
+      const ch = doc.textBetween(pos, pos + 1);
+      if (ch.length === 1 && isUtf16HighSurrogate(ch.charCodeAt(0))) {
+        next = pos + 2;
+        if (next > innerEnd) return null;
+      }
+    } else if (dir < 0 && pos > 0) {
+      const ch = doc.textBetween(pos - 1, pos);
+      if (ch.length === 1 && isUtf16LowSurrogate(ch.charCodeAt(0))) {
+        next = pos - 2;
+        if (next < innerStart) return null;
+      }
+    }
+    return next;
+  }
+
+  /**
+   * Provisional PM keymap navigation (happy-dom lacks native contenteditable caret moves).
+   * Engine-aware visual navigation is task 5; real browser native behavior is task 4.8.
+   */
+  function moveSelectionHorizontally(state: EditorState, dispatch: NonNullable<Parameters<typeof selectTextblockStart>[1]>, dir: -1 | 1): boolean {
+    const { selection } = state;
+    if (!selection.empty) {
+      const pos = dir < 0 ? Math.min(selection.from, selection.to) : Math.max(selection.from, selection.to);
+      dispatch(state.tr.setSelection(TextSelection.create(state.doc, pos)).scrollIntoView());
+      return true;
+    }
+    const $head = selection.$head;
+    if (!$head.parent.isTextblock) return false;
+    const innerStart = $head.start();
+    const innerEnd = innerStart + $head.parent.content.size;
+    const next = safeHorizontalPos(state.doc, $head.pos, dir, innerStart, innerEnd);
+    if (next === null) return false;
+    dispatch(state.tr.setSelection(TextSelection.create(state.doc, next)).scrollIntoView());
+    return true;
+  }
 
   const plugins = [
     keymap({
+      ...baseKeymap,
       'Mod-z': () => doUndo(),
       'Mod-y': () => doRedo(),
       'Shift-Mod-z': () => doRedo(),
+      ArrowLeft: (state, dispatch) => (dispatch ? moveSelectionHorizontally(state, dispatch, -1) : false),
+      ArrowRight: (state, dispatch) => (dispatch ? moveSelectionHorizontally(state, dispatch, 1) : false),
+      Home: selectTextblockStart,
+      End: selectTextblockEnd,
     }),
-    keymap(baseKeymap),
   ];
 
   let reconciling = false;
@@ -175,11 +247,214 @@ export function mountEditSurface(
   let pendingComposedText = '';
   let deferredRemote = false;
   let lastCompositionCancel: CompositionCancelOutcome | null = null;
+  let lastInputRejection: InputRejection | null = null;
+  let inputAuthorized = false;
+  let currentPasteRejected = false;
+
+  function recordInputRejection(rejection: InputRejection) {
+    lastInputRejection = rejection;
+  }
+
+  function clearInputState() {
+    inputAuthorized = false;
+    lastInputRejection = null;
+  }
+
+  function rejectUnauthorizedInput(reason: string): InputRejection {
+    const rejection: InputRejection = {
+      code: 'inputNotAuthorized',
+      reason,
+    };
+    recordInputRejection(rejection);
+    return rejection;
+  }
+
+  function requireInputAuthorized(): InputRejection | null {
+    if (destroyed) {
+      return rejectUnauthorizedInput('input rejected because the edit surface was destroyed');
+    }
+    if (layoutPending) {
+      return rejectUnauthorizedInput('input rejected because layout for the current interaction frame is pending');
+    }
+    if (!inputAuthorized) {
+      return rejectUnauthorizedInput('input rejected because focus did not authorize semantic sync');
+    }
+    return null;
+  }
+
+  function pendingLayoutOutcome(frameId: InteractionFrameId): InteractionOutcome<void> {
+    return {
+      ok: false,
+      code: 'pendingLayout',
+      reason: 'layout for the current interaction frame is not yet published',
+      frameId,
+    };
+  }
+
+  function deleteBackward(view: EditorView) {
+    const { from, empty } = view.state.selection;
+    if (!empty) {
+      deleteSelection(view.state, view.dispatch);
+      return;
+    }
+    if (from > 0) view.dispatch(view.state.tr.delete(from - 1, from));
+    else joinBackward(view.state, view.dispatch);
+  }
+
+  function deleteForward(view: EditorView) {
+    const { from, to, empty } = view.state.selection;
+    if (!empty) {
+      deleteSelection(view.state, view.dispatch);
+      return;
+    }
+    if (to < view.state.doc.content.size) view.dispatch(view.state.tr.delete(from, from + 1));
+    else joinForward(view.state, view.dispatch);
+  }
+
+  function clearInputRejectionOnCommit() {
+    lastInputRejection = null;
+  }
+
+  function rejectPastePipeline(rejection: InputRejection): true {
+    recordInputRejection(rejection);
+    return true;
+  }
 
   const view = new EditorView(inputHost.pmMount, {
     state: EditorState.create({ doc: session.projectDoc(), plugins }),
     editable: () => session.editable,
+    transformPastedHTML(html) {
+      currentPasteRejected = false;
+      const bounded = boundClipboardHtml(html);
+      if (!bounded.ok) {
+        currentPasteRejected = true;
+        recordInputRejection(bounded.rejection);
+        return '';
+      }
+      return bounded.html;
+    },
+    transformPastedText(text) {
+      if (currentPasteRejected) return '';
+      const bounded = boundClipboardText(text);
+      if (!bounded.ok) {
+        currentPasteRejected = true;
+        recordInputRejection(bounded.rejection);
+        return '';
+      }
+      return bounded.text;
+    },
+    transformPasted(slice, pastedView) {
+      if (currentPasteRejected) return REJECTED_PASTE_SLICE;
+      const rejection = validatePastedSlice(slice, pastedView.state.schema);
+      if (rejection) {
+        currentPasteRejected = true;
+        recordInputRejection(rejection);
+        return REJECTED_PASTE_SLICE;
+      }
+      return slice;
+    },
+    handlePaste(_view, event, slice) {
+      const authRejection = requireInputAuthorized();
+      if (authRejection) return rejectPastePipeline(authRejection);
+      if (currentPasteRejected) return true;
+      const transferRejection = rejectClipboardDataTransfer(event.clipboardData);
+      if (transferRejection) return rejectPastePipeline(transferRejection);
+      const html = event.clipboardData?.getData('text/html') ?? '';
+      if (html) {
+        const bounded = boundClipboardHtml(html);
+        if (!bounded.ok) return rejectPastePipeline(bounded.rejection);
+      }
+      const plain = event.clipboardData?.getData('text/plain') ?? '';
+      if (plain) {
+        const bounded = boundClipboardText(plain);
+        if (!bounded.ok) return rejectPastePipeline(bounded.rejection);
+      }
+      const rejection = validatePastedSlice(slice, _view.state.schema);
+      if (rejection) return rejectPastePipeline(rejection);
+      if (slice.size === 0) return true;
+      return false;
+    },
+    handleDrop(_view, event, slice) {
+      const authRejection = requireInputAuthorized();
+      if (authRejection) return rejectPastePipeline(authRejection);
+      const transferRejection = rejectDropDataTransfer(event.dataTransfer);
+      if (transferRejection) return rejectPastePipeline(transferRejection);
+      const rejection = validatePastedSlice(slice, _view.state.schema);
+      if (rejection) return rejectPastePipeline(rejection);
+      if (slice.size === 0) return true;
+      return false;
+    },
     handleDOMEvents: {
+      drop(_view, event) {
+        const authRejection = requireInputAuthorized();
+        if (authRejection) {
+          event.preventDefault();
+          return rejectPastePipeline(authRejection);
+        }
+        const transferRejection = rejectDropDataTransfer(event.dataTransfer);
+        if (transferRejection) {
+          event.preventDefault();
+          return rejectPastePipeline(transferRejection);
+        }
+        return false;
+      },
+      beforeinput(_view, event) {
+        const inputEvent = event as InputEvent;
+        const authRejection = requireInputAuthorized();
+        if (authRejection) {
+          inputEvent.preventDefault();
+          return true;
+        }
+        if (imeComposing || isCompositionOwnedBeforeInput(inputEvent.inputType)) return false;
+
+        const inputType = inputEvent.inputType;
+        if (inputType === 'insertText' && inputEvent.data != null) {
+          const bounded = boundClipboardText(inputEvent.data);
+          if (!bounded.ok) {
+            recordInputRejection(bounded.rejection);
+            inputEvent.preventDefault();
+            return true;
+          }
+          inputEvent.preventDefault();
+          const { from, to } = _view.state.selection;
+          _view.dispatch(_view.state.tr.insertText(bounded.text, from, to));
+          return true;
+        }
+        if (inputType === 'deleteContentBackward') {
+          inputEvent.preventDefault();
+          deleteBackward(_view);
+          return true;
+        }
+        if (inputType === 'deleteContentForward') {
+          inputEvent.preventDefault();
+          deleteForward(_view);
+          return true;
+        }
+        if (inputType === 'insertParagraph') {
+          inputEvent.preventDefault();
+          splitBlock(_view.state, _view.dispatch);
+          return true;
+        }
+        if (inputType === 'historyUndo') {
+          inputEvent.preventDefault();
+          doUndo();
+          return true;
+        }
+        if (inputType === 'historyRedo') {
+          inputEvent.preventDefault();
+          doRedo();
+          return true;
+        }
+        if (inputType === 'insertFromPaste' || inputType === 'insertFromDrop') {
+          return false;
+        }
+        recordInputRejection({
+          code: 'unsupportedInputType',
+          reason: `beforeinput type ${inputType} is not supported`,
+        });
+        inputEvent.preventDefault();
+        return true;
+      },
       compositionstart: () => {
         imeComposing = true;
         lastCompositionCancel = null;
@@ -211,6 +486,7 @@ export function mountEditSurface(
       },
       blur: () => {
         if (imeComposing) flushComposition();
+        clearInputState();
         if (ownedPopupDepth === 0) inputHost.blur();
         return false;
       },
@@ -331,7 +607,6 @@ export function mountEditSurface(
   selectionAt.set(0, captureSelection(view.state));
 
   function notifyModelChanged(): void {
-    modelChangedCalls += 1;
     onModelChanged();
   }
 
@@ -354,6 +629,7 @@ export function mountEditSurface(
       }
       if (res.committed) {
         retainedSemanticSelection = null;
+        clearInputRejectionOnCommit();
         if (beforeSel) selectionAt.set(undoDepth, beforeSel);
         undoDepth += 1;
         syncSemIds();
@@ -444,11 +720,15 @@ export function mountEditSurface(
       return inputHost.assistiveState;
     },
     focus(options) {
+      inputAuthorized = false;
       const frameId = options?.sync?.frameId ?? options?.frameId;
+      if (layoutPending && frameId) return pendingLayoutOutcome(frameId);
       if (options?.sync) {
         const synced = applySemanticSelection(options.sync);
         if (!synced.ok) return synced;
+        if (layoutPending) return pendingLayoutOutcome(options.sync.frameId);
         view.focus();
+        inputAuthorized = true;
         return synced;
       }
       if (retainedSemanticSelection) {
@@ -465,7 +745,9 @@ export function mountEditSurface(
         }
         const synced = applySemanticSelection(retainedSemanticSelection);
         if (!synced.ok) return synced;
+        if (layoutPending) return pendingLayoutOutcome(frameId);
         view.focus();
+        inputAuthorized = true;
         return synced;
       }
       if (!frameId) {
@@ -477,10 +759,12 @@ export function mountEditSurface(
     blur() {
       if (ownedPopupDepth > 0) return;
       view.dom.blur();
+      clearInputState();
       inputHost.blur();
     },
     destroy() {
       destroyed = true;
+      clearInputState();
       imeComposing = false;
       pendingCompositionCommit = false;
       pendingComposedText = '';
@@ -492,7 +776,14 @@ export function mountEditSurface(
     },
     syncSemanticSelection: applySemanticSelection,
     updateInputHostPlacement(request) {
-      return inputHost.updatePlacement(request);
+      const placement = inputHost.updatePlacement(request);
+      if (placement.reason === 'pendingLayout') {
+        layoutPending = true;
+        clearInputState();
+      } else if (placement.reason === 'applied') {
+        layoutPending = false;
+      }
+      return placement;
     },
     retainSelectionForOwnedPopup() {
       ownedPopupDepth += 1;
@@ -508,6 +799,7 @@ export function mountEditSurface(
       empty: view.state.selection.empty,
     }),
     getCompositionObservation: () => observeComposition(imeComposing, lastCompositionCancel),
+    getInputObservation: () => observeInput(lastInputRejection),
   };
 
   const unsub = session.subscribe(() => {
@@ -524,11 +816,6 @@ export function mountEditSurface(
   surface.destroy = () => {
     priorDestroy();
   };
-
-  Object.defineProperty(surface, '__testModelChangedCalls', {
-    enumerable: false,
-    get: () => modelChangedCalls,
-  });
 
   if (options.testHooks?.onReady) {
     const flushFrames = (): Promise<void> =>
@@ -556,13 +843,6 @@ export function mountEditSurface(
       dispatchCompositionEvent('compositionupdate', text);
     };
     options.testHooks.onReady({
-      insertText(text: string) {
-        const { from, to } = view.state.selection;
-        view.dispatch(view.state.tr.insertText(text, from, to));
-      },
-      undo() {
-        doUndo();
-      },
       pmSelection: () => ({
         from: view.state.selection.from,
         to: view.state.selection.to,

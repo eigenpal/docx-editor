@@ -237,6 +237,24 @@ export interface CompositionObservation {
   readonly lastCancel?: CompositionCancelObservation | null;
 }
 
+/** Typed rejection for bounded clipboard/drop/beforeinput handling at the trust boundary. */
+export interface InputRejectionObservation {
+  readonly code:
+    | 'oversizedPayload'
+    | 'unsupportedStructure'
+    | 'unsafeResource'
+    | 'filePayload'
+    | 'capabilityBoundary'
+    | 'unsupportedInputType'
+    | 'inputNotAuthorized';
+  readonly reason: string;
+}
+
+/** Native input observation projected from the live editing surface. */
+export interface InputObservation {
+  readonly lastRejection: InputRejectionObservation | null;
+}
+
 /** Stacked scroll extent from the current interaction frame. */
 export interface ScrollGeometry {
   readonly contentHeight: number;

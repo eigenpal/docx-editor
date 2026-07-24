@@ -22,6 +22,18 @@ export { modelToDoc, paragraphNodeToRuns } from './projection.ts';
 export { EditorBinding, type ForwardResult } from './binding.ts';
 export { type SelectionAnchor, captureSelection, resolveSelection } from './selection.ts';
 export { observeComposition, deriveCompositionOverlay, mapCompositionRangeAfterRemote, applyCompositionOverlay, remoteChangePreservesCompositionAnchor, type CompositionCancelCode, type CompositionCancelOutcome } from './composition.ts';
+export {
+  INPUT_POLICY_LIMITS,
+  REJECTED_PASTE_SLICE,
+  observeInput,
+  boundClipboardText,
+  boundClipboardHtml,
+  rejectClipboardDataTransfer,
+  rejectDropDataTransfer,
+  validatePastedSlice,
+  type InputRejection,
+  type InputRejectionCode,
+} from './input-policy.ts';
 export { type ApplyResult, type DocxEditorSession, openDocxSession } from './session.ts';
 export {
   type EditSurface,
