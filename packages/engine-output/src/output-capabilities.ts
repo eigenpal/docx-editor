@@ -3,8 +3,9 @@
 // A backend renders a page by grouping items by ascending layer (so lower layers paint first) and
 // dispatching each through its registered renderer; an unregistered item kind fails closed rather
 // than being silently dropped. A new display-item kind registers a renderer instead of editing the
-// backend. This module is DOM-shaped (the DOM backend); other backends (PDF) keep their own
-// exhaustive handling until they adopt the same pattern.
+// backend. This registry is DOM-shaped (the DOM backend paints HTMLElements); the non-DOM backends
+// (PDF, semantic/a11y) instead use `assertNeverDisplayItem` for compile-time-exhaustive per-kind
+// handling — a new kind fails their build rather than being silently dropped.
 
 import type { DisplayItem } from '@docx-editor.dev/engine-layout';
 
@@ -38,4 +39,13 @@ export function renderDisplayItem(item: DisplayItem, doc: Document): HTMLElement
 /** The distinct paint layers present in an item list, in ascending order. */
 export function orderedLayers(items: readonly DisplayItem[]): number[] {
   return [...new Set(items.map((i) => displayItemLayer(i.type)))].sort((a, b) => a - b);
+}
+
+/** Compile-time exhaustiveness guard for a display-item switch (comprehensive 3.8). A backend that
+ *  handles items with a switch (PDF, semantic/a11y, hit-test) ends it with `default:
+ *  assertNeverDisplayItem(item)`, so adding a new DisplayItem kind FAILS THE BUILD there — the kind
+ *  can never be silently dropped by a backend that has not decided how to treat it. Throws at runtime
+ *  too (defence in depth) if reached via an untyped value. */
+export function assertNeverDisplayItem(item: never): never {
+  throw new Error(`unhandled display-item kind: ${JSON.stringify(item)}`);
 }

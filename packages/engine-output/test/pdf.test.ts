@@ -62,3 +62,32 @@ describe('semantic reading order (8.10)', () => {
     expect(extractReadingOrder(layout)[0]).toBe('the quick brown fox');
   });
 });
+
+describe('non-DOM backends handle every display-item kind exhaustively (3.8)', () => {
+  // A page carrying BOTH a text run and a rect (table border/shading): the PDF and semantic
+  // backends must handle both kinds without dropping the text or throwing on the rect.
+  const mixed: LayoutResult = {
+    status: 'converged',
+    pages: [
+      {
+        index: 0,
+        width: 12240,
+        height: 15840,
+        items: [
+          { type: 'rect', x: 100, y: 100, width: 500, height: 200, stroke: true, fill: 'DDDDDD' },
+          { type: 'text', x: 120, y: 140, width: 300, height: 240, text: 'celltext', bold: false, italic: false, anchor: { paragraphId: 'p', offset: 0 } },
+        ],
+      },
+    ],
+  };
+
+  test('PDF renders the text and skips the rect without error', async () => {
+    const info = await inspectPdf(await renderPdf(mixed));
+    expect(info.valid).toBe(true);
+    expect(info.pageCount).toBe(1);
+  });
+
+  test('semantic reading order includes the text and omits the rect', () => {
+    expect(extractReadingOrder(mixed)).toEqual(['celltext']);
+  });
+});

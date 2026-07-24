@@ -7,6 +7,7 @@
 
 import { PDFDocument, StandardFonts, type PDFFont } from 'pdf-lib';
 import type { LayoutResult } from '@docx-editor.dev/engine-layout';
+import { assertNeverDisplayItem } from './output-capabilities.ts';
 
 const TWIPS_PER_POINT = 20; // 1440 twips/in ÷ 72 pt/in
 
@@ -30,15 +31,26 @@ export async function renderPdf(layout: LayoutResult): Promise<Uint8Array> {
     const heightPt = toPt(page.height);
     const pdfPage = pdf.addPage([widthPt, heightPt]);
     for (const item of page.items) {
-      if (item.type !== 'text') continue;
-      const sizePt = toPt(item.height) * 0.9; // leading -> glyph size
-      pdfPage.drawText(item.text, {
-        x: toPt(item.x),
-        // PDF y-origin is bottom-left; layout y is top-down.
-        y: heightPt - toPt(item.y) - sizePt,
-        size: sizePt,
-        font: pickFont(item.bold, item.italic),
-      });
+      switch (item.type) {
+        case 'text': {
+          const sizePt = toPt(item.height) * 0.9; // leading -> glyph size
+          pdfPage.drawText(item.text, {
+            x: toPt(item.x),
+            // PDF y-origin is bottom-left; layout y is top-down.
+            y: heightPt - toPt(item.y) - sizePt,
+            size: sizePt,
+            font: pickFont(item.bold, item.italic),
+          });
+          break;
+        }
+        case 'rect':
+          // Table border/shading rects are not yet drawn by the PDF backend (a follow-up behind this
+          // generator). Skip EXPLICITLY — the exhaustive default below still forces any NEW kind to
+          // be handled here rather than silently dropped.
+          break;
+        default:
+          assertNeverDisplayItem(item);
+      }
     }
   }
   return pdf.save();
