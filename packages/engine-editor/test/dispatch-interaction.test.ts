@@ -6,8 +6,8 @@ import { createEditor } from '../src/create-editor.ts';
 import type { Editor, EditorHost } from '@docx-editor.dev/core-contract/editor';
 import type { InteractionFrame } from '@docx-editor.dev/core-contract/interaction';
 import { createEditableParagraphFixture } from '../browser/fixtures.ts';
-import { publishFrame, selectionForBlock } from './interaction-test-helpers.ts';
-import { IDENTITY_HOST_METRICS } from '../src/coordinate-mapper.ts';
+import { clientPointForStackedText, publishFrame, selectionForBlock } from './interaction-test-helpers.ts';
+import { contentToClient, IDENTITY_HOST_METRICS } from '../src/coordinate-mapper.ts';
 
 function hostWith(body: HTMLElement, metrics = IDENTITY_HOST_METRICS): EditorHost {
   return {
@@ -230,6 +230,175 @@ describe('createEditor dispatchInteraction (task 5.1)', () => {
       expect(dispatch.outcome.frameId).toEqual(editor.getInteractionFrame().id);
     }
     expect(dispatch.hostEffects).toEqual([{ kind: 'scroll', delta: { x: 0, y: 16 } }]);
+    editor.destroy();
+    body.remove();
+  });
+});
+
+describe('createEditor dispatchInteraction click (task 5.2)', () => {
+  test('click synchronizes PM, focuses host, publishes coherent frame, and leaves model revision unchanged', () => {
+    const body = document.createElement('div');
+    document.body.append(body);
+    const editor = createEditor({
+      host: hostWith(body),
+      document: createEditableParagraphFixture(),
+      accessibleName: 'Editor',
+    });
+    const revisionBefore = editor.getDocumentHandle().revision;
+    const frame = editor.getInteractionFrame();
+    const textItem = frame.display[0]!.items.find((i) => i.kind === 'text');
+    if (textItem?.kind !== 'text') throw new Error('text');
+    const cluster = textItem.clusters[2] ?? textItem.clusters[0]!;
+    const clientPoint = clientPointForStackedText(frame, 0, {
+      x: cluster.box.x + cluster.box.width * 0.5,
+      y: cluster.box.y + cluster.box.height / 2,
+    });
+
+    const dispatch = editor.dispatchInteraction({
+      kind: 'click',
+      frameId: frame.id,
+      clientPoint,
+    });
+    expect(dispatch.outcome.ok).toBe(true);
+    if (dispatch.outcome.ok) {
+      expect(dispatch.outcome.frameId).toEqual(editor.getInteractionFrame().id);
+      expect(dispatch.outcome.frameId.value).toBeGreaterThan(frame.id.value);
+    }
+    expect(dispatch.hostEffects).toEqual([]);
+    expect(editor.getDocumentHandle().revision).toBe(revisionBefore);
+    expect(editor.getInteractionFrame().focus.focused).toBe(true);
+    expect(editor.getInteractionFrame().selection?.head).toMatchObject({
+      kind: 'text',
+      identity: textItem.semantic.identity,
+    });
+    expect(editor.getInteractionFrame().caret).not.toBeNull();
+    expect(editor.getInputHostObservation()?.attached).toBe(true);
+
+    editor.destroy();
+    body.remove();
+  });
+
+  test('second click plans from newly published frame without controller selection state', () => {
+    const body = document.createElement('div');
+    document.body.append(body);
+    const editor = createEditor({
+      host: hostWith(body),
+      document: createEditableParagraphFixture(),
+      accessibleName: 'Editor',
+    });
+    const frame = editor.getInteractionFrame();
+    const textItem = frame.display[0]!.items.find((i) => i.kind === 'text');
+    if (textItem?.kind !== 'text') throw new Error('text');
+    const firstCluster = textItem.clusters[0]!;
+    const lastCluster = textItem.clusters.at(-1)!;
+    const firstPoint = clientPointForStackedText(frame, 0, {
+      x: firstCluster.box.x + 1,
+      y: firstCluster.box.y + firstCluster.box.height / 2,
+    });
+    const first = editor.dispatchInteraction({ kind: 'click', frameId: frame.id, clientPoint: firstPoint });
+    expect(first.outcome.ok).toBe(true);
+    const afterFirst = editor.getInteractionFrame();
+    const secondPoint = clientPointForStackedText(afterFirst, 0, {
+      x: lastCluster.box.x + lastCluster.box.width - 1,
+      y: lastCluster.box.y + lastCluster.box.height / 2,
+    });
+    const second = editor.dispatchInteraction({ kind: 'click', frameId: afterFirst.id, clientPoint: secondPoint });
+    expect(second.outcome.ok).toBe(true);
+    if (second.outcome.ok) {
+      expect(second.outcome.frameId).toEqual(editor.getInteractionFrame().id);
+    }
+    expect(editor.getInteractionFrame().selection?.head.graphemeOffset).toBeGreaterThan(
+      afterFirst.selection?.head.graphemeOffset ?? -1,
+    );
+
+    editor.destroy();
+    body.remove();
+  });
+
+  test('failed click intents leave PM frame focus and model revision unchanged', () => {
+    const body = document.createElement('div');
+    document.body.append(body);
+    const editor = createEditor({
+      host: hostWith(body),
+      document: createEditableParagraphFixture(),
+      accessibleName: 'Editor',
+    });
+    const frame = editor.getInteractionFrame();
+    const textItem = frame.display[0]!.items.find((i) => i.kind === 'text');
+    if (textItem?.kind !== 'text') throw new Error('text');
+    const cluster = textItem.clusters[1] ?? textItem.clusters[0]!;
+    const validPoint = clientPointForStackedText(frame, 0, {
+      x: cluster.box.x + cluster.box.width * 0.5,
+      y: cluster.box.y + cluster.box.height / 2,
+    });
+    const gapY = frame.scrollGeometry.pageTops[0]! + frame.pageGeometry[0]!.box.height + 10;
+    const gapClient = contentToClient({ x: 100, y: gapY }, IDENTITY_HOST_METRICS);
+    if (!gapClient.ok) throw new Error('gap client');
+    const before = editorInteractionSnapshot(editor);
+
+    const gap = editor.dispatchInteraction({
+      kind: 'click',
+      frameId: frame.id,
+      clientPoint: gapClient.value,
+    });
+    expect(gap.outcome.ok).toBe(false);
+    if (!gap.outcome.ok) expect(gap.outcome.code).toBe('invalidTarget');
+    expect(editorInteractionSnapshot(editor)).toEqual(before);
+
+    const nonPrimary = editor.dispatchInteraction({
+      kind: 'click',
+      frameId: editor.getInteractionFrame().id,
+      clientPoint: validPoint,
+      buttons: 2,
+    });
+    expect(nonPrimary.outcome.ok).toBe(false);
+    if (!nonPrimary.outcome.ok) expect(nonPrimary.outcome.code).toBe('unsupported');
+    expect(editorInteractionSnapshot(editor)).toEqual(before);
+
+    const badCount = editor.dispatchInteraction({
+      kind: 'click',
+      frameId: editor.getInteractionFrame().id,
+      clientPoint: validPoint,
+      clickCount: 0,
+    });
+    expect(badCount.outcome.ok).toBe(false);
+    if (!badCount.outcome.ok) expect(badCount.outcome.code).toBe('unsupported');
+    expect(editorInteractionSnapshot(editor)).toEqual(before);
+
+    editor.destroy();
+    body.remove();
+  });
+
+  test('shift-click with stale frame identity rejects and leaves PM/frame/model unchanged', () => {
+    const body = document.createElement('div');
+    document.body.append(body);
+    const editor = createEditor({
+      host: hostWith(body),
+      document: createEditableParagraphFixture(),
+      accessibleName: 'Editor',
+    });
+    const frame = editor.getInteractionFrame();
+    const textItem = frame.display[0]!.items.find((i) => i.kind === 'text');
+    if (textItem?.kind !== 'text') throw new Error('text');
+    const cluster = textItem.clusters[1] ?? textItem.clusters[0]!;
+    const clientPoint = clientPointForStackedText(frame, 0, {
+      x: cluster.box.x + cluster.box.width * 0.5,
+      y: cluster.box.y + cluster.box.height / 2,
+    });
+    const before = editorInteractionSnapshot(editor);
+
+    const dispatch = editor.dispatchInteraction({
+      kind: 'click',
+      frameId: { value: frame.id.value - 1 },
+      clientPoint,
+      shiftKey: true,
+    });
+    const after = editorInteractionSnapshot(editor);
+
+    expect(dispatch.outcome.ok).toBe(false);
+    if (!dispatch.outcome.ok) expect(dispatch.outcome.code).toBe('staleFrame');
+    expect(after).toEqual(before);
+
     editor.destroy();
     body.remove();
   });

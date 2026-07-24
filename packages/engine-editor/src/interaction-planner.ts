@@ -1,4 +1,4 @@
-// Pure PM-free interaction planner (interactive-paginated-editing 5.1).
+// Pure PM-free interaction planner (interactive-paginated-editing 5.1–5.2).
 
 import type {
   InteractionEffect,
@@ -7,7 +7,11 @@ import type {
   InteractionIntent,
   InteractionOutcomeCode,
   InteractionPlan,
+  PointerInteractionIntent,
+  SemanticSelection,
+  SemanticTarget,
 } from '@docx-editor.dev/core-contract/interaction';
+import { hitTestPointer } from './interaction-geometry.ts';
 
 export interface InteractionPlannerContext {
   readonly frame: InteractionFrame;
@@ -44,6 +48,130 @@ function validatePreconditions(
   return null;
 }
 
+function targetScopeCompatible(current: SemanticSelection, head: SemanticTarget): boolean {
+  if (current.scope.kind !== head.scope.kind) return false;
+  if (current.anchor.kind === 'text' && head.kind === 'text') {
+    return current.anchor.identity.storyId === head.identity.storyId;
+  }
+  return true;
+}
+
+function selectionFromEditableTextHit(
+  frame: InteractionFrame,
+  target: Extract<SemanticTarget, { kind: 'text' }>,
+  shiftKey: boolean | undefined,
+): { ok: true; selection: SemanticSelection } | { ok: false; effect: InteractionEffect } {
+  if (shiftKey) {
+    const current = frame.selection;
+    if (!current) {
+      return { ok: false, effect: rejectEffect('invalidTarget', 'shift-click requires a current semantic selection', frame.id) };
+    }
+    if (current.frameId.value !== frame.id.value) {
+      return {
+        ok: false,
+        effect: rejectEffect('invalidTarget', 'shift-click anchor is not projected on the current interaction frame', frame.id),
+      };
+    }
+    if (!targetScopeCompatible(current, target)) {
+      return {
+        ok: false,
+        effect: rejectEffect('invalidTarget', 'shift-click target is incompatible with the current semantic selection', frame.id),
+      };
+    }
+    return {
+      ok: true,
+      selection: {
+        frameId: frame.id,
+        scope: current.scope,
+        anchor: current.anchor,
+        head: target,
+      },
+    };
+  }
+  return {
+    ok: true,
+    selection: {
+      frameId: frame.id,
+      scope: target.scope,
+      anchor: target,
+      head: target,
+    },
+  };
+}
+
+type ClickInteractionIntent = PointerInteractionIntent & { readonly kind: 'click' };
+
+function validateNormalizedClickIntent(
+  intent: ClickInteractionIntent,
+  frameId: InteractionFrame['id'],
+): InteractionEffect | null {
+  if (intent.button !== undefined && intent.button !== 0) {
+    return rejectEffect('unsupported', 'non-primary click button is not supported', frameId);
+  }
+  if (intent.buttons !== undefined) {
+    if (!Number.isFinite(intent.buttons) || !Number.isInteger(intent.buttons) || intent.buttons < 0) {
+      return rejectEffect('unsupported', 'click buttons bitmask is not a finite non-negative integer', frameId);
+    }
+    if ((intent.buttons & ~1) !== 0) {
+      return rejectEffect('unsupported', 'non-primary click buttons are not supported', frameId);
+    }
+  }
+  if (intent.clickCount !== undefined) {
+    if (!Number.isFinite(intent.clickCount) || !Number.isInteger(intent.clickCount) || intent.clickCount !== 1) {
+      return rejectEffect('unsupported', 'only a normalized single click (clickCount 1) is supported', frameId);
+    }
+  }
+  return null;
+}
+
+function planClick(context: InteractionPlannerContext, intent: ClickInteractionIntent): InteractionPlan {
+  const frameId = context.frame.id;
+  const clickRejection = validateNormalizedClickIntent(intent, frameId);
+  if (clickRejection) {
+    return { frameId, effects: [clickRejection] };
+  }
+
+  const hit = hitTestPointer(context.frame, intent.clientPoint, context.hostMetrics, { frameId: intent.frameId });
+  if (!hit.ok) {
+    return { frameId, effects: [rejectEffect(hit.code, hit.reason, hit.frameId ?? frameId)] };
+  }
+
+  if (hit.value.role === 'selectableText') {
+    return { frameId, effects: [rejectEffect('readOnly', 'hit target is read-only text', frameId)] };
+  }
+  if (hit.value.role !== 'editableText') {
+    return {
+      frameId,
+      effects: [
+        rejectEffect(
+          'unsupported',
+          `hit target role ${hit.value.role} is not supported for click selection (task 5.6+)`,
+          frameId,
+        ),
+      ],
+    };
+  }
+  if (hit.value.target.kind !== 'text') {
+    return {
+      frameId,
+      effects: [rejectEffect('unsupported', 'only editable text targets may create a caret or range', frameId)],
+    };
+  }
+
+  const selectionOutcome = selectionFromEditableTextHit(context.frame, hit.value.target, intent.shiftKey);
+  if (!selectionOutcome.ok) {
+    return { frameId, effects: [selectionOutcome.effect] };
+  }
+
+  return {
+    frameId,
+    effects: [
+      { kind: 'syncSelection', frameId, selection: selectionOutcome.selection },
+      { kind: 'focus', frameId },
+    ],
+  };
+}
+
 /** Pure planner: maps one intent and frame context to an ordered effect plan. */
 export function planInteraction(context: InteractionPlannerContext, intent: InteractionIntent): InteractionPlan {
   const rejection = validatePreconditions(context, intent);
@@ -76,10 +204,11 @@ export function planInteraction(context: InteractionPlannerContext, intent: Inte
       return { frameId, effects: [{ kind: 'releasePointer', pointerId: intent.pointerId }] };
     case 'scroll':
       return { frameId, effects: [{ kind: 'scroll', delta: intent.delta }] };
+    case 'click':
+      return planClick(context, intent as ClickInteractionIntent);
     case 'pointerDown':
     case 'pointerMove':
     case 'pointerUp':
-    case 'click':
     case 'geometryKeyboard':
       return {
         frameId,
@@ -88,7 +217,7 @@ export function planInteraction(context: InteractionPlannerContext, intent: Inte
             'unsupported',
             intent.kind === 'geometryKeyboard'
               ? 'geometry-aware keyboard interaction is not implemented yet (task 5.5+)'
-              : 'pointer interaction semantics are not implemented yet (task 5.2+)',
+              : 'pointer interaction semantics are not implemented yet (task 5.4+)',
             frameId,
           ),
         ],

@@ -388,7 +388,12 @@ export interface PointerInteractionIntent {
   readonly frameId: InteractionFrameId;
   readonly clientPoint: Point;
   readonly pointerId?: number;
+  /** Bitmask of pressed buttons during the gesture; omitted when unknown. */
   readonly buttons?: number;
+  /** Normalized primary button (0). Omitted defaults to primary. */
+  readonly button?: number;
+  /** Normalized click count: exactly 1 when present; omitted defaults to single click. */
+  readonly clickCount?: number;
   readonly shiftKey?: boolean;
   readonly ctrlKey?: boolean;
   readonly metaKey?: boolean;
