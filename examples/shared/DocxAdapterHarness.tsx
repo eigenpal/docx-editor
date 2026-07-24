@@ -4,7 +4,15 @@
 // exercises the actual published package entry: props -> createEditor -> layout -> paint -> save.
 
 import React, { useEffect, useState } from 'react';
-import { DocxEditor } from '@docx-editor.dev/react';
+import {
+  DocxEditor,
+  DocxEditorShell,
+  DocxEditorTitleBar,
+  DocxEditorToolbar,
+  HorizontalRuler,
+  PageIndicator,
+  VerticalRuler,
+} from '@docx-editor.dev/react';
 import { createEditorDriver, type EditorDriver } from '@docx-editor.dev/engine-editor';
 import type { Editor } from '@docx-editor.dev/react';
 
@@ -35,6 +43,9 @@ export function DocxAdapterHarness({
   const [bytes, setBytes] = useState<Uint8Array | null>(null);
   const [status, setStatus] = useState('Loading…');
   const [zoom, setZoom] = useState(initialZoom);
+  // The document title is SHELL state: the engine owns no title contract (M4.0).
+  const [title, setTitle] = useState('Untitled document');
+  const [editor, setEditor] = useState<Editor | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -65,7 +76,12 @@ export function DocxAdapterHarness({
     const driver = createEditorDriver(editor);
     window.__docxAdapterDriver = driver;
     window.__docxAdapterEditor = editor;
+    setEditor(editor);
     setStatus(driver.editable() ? 'Editable (paragraphs)' : 'Read-only (contains tables/SDTs)');
+  };
+
+  const onSave = (): void => {
+    void editor?.save();
   };
 
   return (
@@ -73,9 +89,15 @@ export function DocxAdapterHarness({
       <div style={{ padding: '8px 12px', font: '13px system-ui, sans-serif', color: '#333', borderBottom: '1px solid #e0e0e0' }}>
         <span data-testid="adapter-status">{status}</span>
       </div>
-      <div style={{ flex: 1, minHeight: 0, overflow: 'auto', padding: 16 }}>
+      <DocxEditorShell
+        titleBar={<DocxEditorTitleBar title={title} onTitleChange={setTitle} />}
+        toolbar={<DocxEditorToolbar editor={editor} onSave={onSave} />}
+        horizontalRuler={<HorizontalRuler editor={editor} zoom={zoom} />}
+        verticalRuler={<VerticalRuler editor={editor} zoom={zoom} />}
+        pageIndicator={<PageIndicator editor={editor} />}
+      >
         {bytes && <DocxEditor document={bytes} zoom={zoom} onReady={onReady} />}
-      </div>
+      </DocxEditorShell>
     </div>
   );
 }

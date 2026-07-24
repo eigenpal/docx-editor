@@ -34,3 +34,11 @@ export {
   type ToolbarCommandId,
   type ToolbarCommandState,
 } from './toolbarCommands';
+export { DocxEditorShell, type DocxEditorShellProps } from './DocxEditorShell';
+export { DocxEditorTitleBar, type DocxEditorTitleBarProps } from './DocxEditorTitleBar';
+export { DocxEditorToolbar, type DocxEditorToolbarProps } from './DocxEditorToolbar';
+export { DocxEditorSidebar, DEFERRED_DIALOGS, type DocxEditorSidebarProps, type SidebarPanel, type DeferredDialogId } from './DocxEditorSidebar';
+export { PageIndicator, type PageIndicatorProps } from './PageIndicator';
+export { HorizontalRuler, type HorizontalRulerProps } from './HorizontalRuler';
+export { VerticalRuler, RULER_WIDTH, type VerticalRulerProps } from './VerticalRuler';
+export { generateRulerTicks, rulerPageBox, PX_PER_INCH, PX_PER_CM, type RulerTick, type RulerUnit } from './rulerTicks';

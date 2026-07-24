@@ -1,6 +1,6 @@
 # Interactive paginated editing — accelerated execution tasks
 
-Progress: **53 / 114** complete.
+Progress: **58 / 114** complete.
 
 | Baseline | Count |
 | --- | --- |
@@ -148,11 +148,11 @@ checkout/revert forbidden authority modules.
 
 - [x] M4.0 Ensure PM-free toolbar prerequisites: `Editor.can(command)` before `Editor.exec(command)` for **bold**, **italic**, **underline**, **undo**, and **redo**; save button calls **`Editor.save()`** directly; run `bun run api:extract` + `bun run api:check`. Document title ownership stays in shell/example local state. **Deliverable:** typed command wiring + API snapshot.
 - [x] M4.1 Write shell port inventory and demo-boundary record in `openspec/changes/interactive-paginated-editing/evidence/m4/inventory.md` (retired file → port decision → greenfield contract; museum Apps vs preview default). **Deliverable:** signed port/replace matrix per `design.md` D14.
-- [ ] M4.2 Port core shell layout and page backdrop/shadow presentation from `DocxEditorShell.tsx` onto the greenfield React host. **Deliverable:** scroll host, backdrop, content scoping match retired presentation; no `PagedEditor` or retired hooks.
-- [ ] M4.3 Port document title chrome and page indicator. **Deliverable:** title in local shell state; `PageIndicator` from public editor page queries.
-- [ ] M4.4 Port horizontal and vertical rulers as **display-only** components using **`Editor.getPageGeometry()`** only; omit or disable margin/tab markers and drag controls (no section-geometry contract in this change). **Deliverable:** rulers align to painted page geometry; no margin/tab mutation paths.
-- [ ] M4.5 Port toolbar presentation; formatting/history actions check `Editor.can(command)` then call `Editor.exec(command)`; save button calls `Editor.save()` directly; unsupported controls disabled or hidden; no direct ProseMirror or retired hooks. **Deliverable:** bold/italic/underline/undo/redo via can/exec; save via `Editor.save()`.
-- [ ] M4.6 Port dialogs/sidebar incrementally (supported toggles only); unsupported dialogs disabled/hidden. **Deliverable:** public editor contracts only.
+- [x] M4.2 Port core shell layout and page backdrop/shadow presentation from `DocxEditorShell.tsx` onto the greenfield React host. **Deliverable:** scroll host, backdrop, content scoping match retired presentation; no `PagedEditor` or retired hooks.
+- [x] M4.3 Port document title chrome and page indicator. **Deliverable:** title in local shell state; `PageIndicator` from public editor page queries.
+- [x] M4.4 Port horizontal and vertical rulers as **display-only** components using **`Editor.getPageGeometry()`** only; omit or disable margin/tab markers and drag controls (no section-geometry contract in this change). **Deliverable:** rulers align to painted page geometry; no margin/tab mutation paths.
+- [x] M4.5 Port toolbar presentation; formatting/history actions check `Editor.can(command)` then call `Editor.exec(command)`; save button calls `Editor.save()` directly; unsupported controls disabled or hidden; no direct ProseMirror or retired hooks. **Deliverable:** bold/italic/underline/undo/redo via can/exec; save via `Editor.save()`.
+- [x] M4.6 Port dialogs/sidebar incrementally (supported toggles only); unsupported dialogs disabled/hidden. **Deliverable:** public editor contracts only.
 - [ ] M4.7 Label old default demo Apps (`?edit=1`, retired museum paths) reference-only; document preview default switch boundary in `openspec/changes/interactive-paginated-editing/evidence/m4/demo-boundary.md`. **Deliverable:** no public claim upgrade.
 - [ ] M4-R1 Run: `bun run test:e2e:react-one-surface-interaction`. Write results to `openspec/changes/interactive-paginated-editing/evidence/m4/verification-log.md`. Stage and commit per staging manifest. **Expected:** all scenarios pass.
 - [ ] M4-R2 Manual Chrome shell checklist in `openspec/changes/interactive-paginated-editing/evidence/m4/manual-chrome-shell.md`: toolbar disabled/enabled matches `Editor.can({ type: 'toggleMark', mark: 'bold' })`; click invokes `Editor.exec({ type: 'toggleMark', mark: 'bold' })`; save uses `Editor.save()`; display-only rulers; backdrop/shadows; M3.2 click/type still passes. Stage and commit per staging manifest.
@@ -336,9 +336,9 @@ esac
 | **M3-R2** | `openspec/changes/interactive-paginated-editing/evidence/m3/summary.md`, `openspec/changes/interactive-paginated-editing/browser-platform-matrix.md`, `openspec/changes/interactive-paginated-editing/tasks.md` |
 | **M4.0** | `packages/react/src/toolbarCommands.ts`, `packages/react/src/index.ts`, `packages/react/test/toolbarCommands.test.ts`, `packages/engine-binding/src/edit-surface.ts`, `packages/engine-binding/src/index.ts`, `packages/engine-editor/src/create-editor.ts`, `openspec/changes/interactive-paginated-editing/tasks.md` (`Editor.can`/`exec` supported only `setSelection`, so the engine command path had to land too; `docs/api/docx-editor-react/index.api.md` NOT staged — it is untracked, on the goal's preserve-list, and extracts from a stale `dist`, so it needs a rebuild in its own step)
 | **M4.1** | `openspec/changes/interactive-paginated-editing/evidence/m4/inventory.md`, `openspec/changes/interactive-paginated-editing/tasks.md` |
-| **M4.2** | `packages/react/src/DocxEditorShell.tsx`, `packages/core/src/styles/editor.css`, `openspec/changes/interactive-paginated-editing/tasks.md` |
+| **M4.2** | `packages/react/src/DocxEditorShell.tsx`, `packages/react/src/index.ts`, `packages/core/src/styles/editor.css`, `examples/shared/DocxAdapterHarness.tsx`, `openspec/changes/interactive-paginated-editing/tasks.md` (shell must be exported and mounted, or M4-R1 cannot prove the M3 flow still works through it)
 | **M4.3** | `packages/react/src/DocxEditorTitleBar.tsx`, `packages/react/src/PageIndicator.tsx`, `openspec/changes/interactive-paginated-editing/tasks.md` |
-| **M4.4** | `packages/react/src/HorizontalRuler.tsx`, `packages/react/src/VerticalRuler.tsx`, `openspec/changes/interactive-paginated-editing/tasks.md` |
+| **M4.4** | `packages/react/src/HorizontalRuler.tsx`, `packages/react/src/VerticalRuler.tsx`, `packages/react/src/rulerTicks.ts`, `packages/react/test/rulerTicks.test.ts`, `packages/core/src/styles/editor.css`, `openspec/changes/interactive-paginated-editing/tasks.md` (tick geometry split out so it is testable without a DOM)
 | **M4.5** | `packages/react/src/DocxEditorToolbar.tsx`, `openspec/changes/interactive-paginated-editing/tasks.md` |
 | **M4.6** | `packages/react/src/DocxEditorSidebar.tsx`, `openspec/changes/interactive-paginated-editing/tasks.md` |
 | **M4.7** | `openspec/changes/interactive-paginated-editing/evidence/m4/demo-boundary.md`, `examples/vite/src/App.tsx`, `openspec/changes/interactive-paginated-editing/tasks.md` |
