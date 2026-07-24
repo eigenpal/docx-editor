@@ -1,6 +1,6 @@
 # Interactive paginated editing — accelerated execution tasks
 
-Progress: **41 / 114** complete.
+Progress: **42 / 114** complete.
 
 | Baseline | Count |
 | --- | --- |
@@ -119,7 +119,7 @@ Prerequisite for M3. Adapters still render no product chrome.
 
 - [x] 6.1 Add the shared page, semantic/accessibility, selection/caret/composition overlay, and input-host CSS/paint primitives to the single-source core stylesheet. **Deliverable:** `packages/core/src/styles/editor.css` exposes one-surface layer classes/tokens consumed by both adapters.
 - [x] M2.1 Implement a shared adapter event bridge module that forwards pointer, keyboard, focus, scroll, and capture events from host DOM to the interaction controller through public contracts only. **Deliverable:** framework-neutral bridge consumed identically by React/Vue hosts.
-- [ ] M2.2 Wire overlay paint helpers so caret/selection rectangles render from interaction-frame geometry with clipping, transforms, writing direction, zoom, and pointer transparency. **Deliverable:** shared paint utilities (extend `packages/react/src/paintDisplay.tsx` pattern).
+- [x] M2.2 Wire overlay paint helpers so caret/selection rectangles render from interaction-frame geometry with clipping, transforms, writing direction, zoom, and pointer transparency. **Deliverable:** shared paint utilities (extend `packages/react/src/paintDisplay.tsx` pattern).
 - [ ] M2.3 Emit stable public test attributes and/or driver-readable client rectangles on the bounded-document fixture's first editable body-paragraph glyph (e.g. `data-testid="one-surface-click-target"` on the target display item or equivalent public query). **Deliverable:** Playwright and manual gates locate the target by attribute/query center click — never hardcoded page coordinates or whitespace.
 - [ ] M2-R1 Run: `bun test packages/engine-editor/test/display-bridge.test.ts`; `bun run check:adapter-css-thin`; `bun run typecheck`; `openspec validate interactive-paginated-editing --strict`; `git diff --check`. Write pass/fail counts to `openspec/changes/interactive-paginated-editing/evidence/m2/verification-log.md`. Stage and commit per staging manifest.
 - [ ] M2-R2 Write `openspec/changes/interactive-paginated-editing/evidence/m2/summary.md`; stage and commit per staging manifest.
@@ -324,7 +324,7 @@ esac
 | **M1-R2** | `openspec/changes/interactive-paginated-editing/evidence/m1/summary.md`, `openspec/changes/interactive-paginated-editing/tasks.md` |
 | **6.1** | `packages/core/src/styles/editor.css`, `packages/react/src/styles/editor.css`, `packages/vue/src/styles/editor.css`, `openspec/changes/interactive-paginated-editing/tasks.md` (both adapter stylesheets were deleted by the greenfield strip `checkpoint-701c1a9f`, which left `check:adapter-css-thin` failing on a missing file; recreated import-only so the M2-R1 gate measures the invariant instead of an ENOENT) |
 | **M2.1** | `packages/engine-editor/src/adapter-event-bridge.ts`, `packages/engine-editor/src/index.ts`, `packages/engine-editor/test/adapter-event-bridge.test.ts`, `openspec/changes/interactive-paginated-editing/tasks.md` (`index.ts` added: an unexported bridge cannot be "consumed identically by React/Vue hosts") |
-| **M2.2** | `packages/engine-editor/src/display-bridge.ts`, `packages/react/src/paintDisplay.tsx`, `packages/vue/src/paintDisplay.ts`, `packages/engine-editor/test/display-bridge.test.ts`, `openspec/changes/interactive-paginated-editing/tasks.md` |
+| **M2.2** | `packages/engine-editor/src/display-bridge.ts`, `packages/engine-editor/src/index.ts`, `packages/react/src/paintDisplay.tsx`, `packages/vue/src/paintDisplay.ts`, `packages/engine-editor/test/display-bridge.test.ts`, `openspec/changes/interactive-paginated-editing/tasks.md` (`index.ts` added: both adapters import the overlay helpers through the package entry) |
 | **M2.3** | `packages/engine-output/src/dom.ts`, `packages/react/src/paintDisplay.tsx`, `e2e/oneSurfaceHelpers.ts`, `packages/engine-editor/test/display-bridge.test.ts`, `openspec/changes/interactive-paginated-editing/tasks.md` |
 | **M2-R1** | `openspec/changes/interactive-paginated-editing/evidence/m2/verification-log.md`, `openspec/changes/interactive-paginated-editing/tasks.md` |
 | **M2-R2** | `openspec/changes/interactive-paginated-editing/evidence/m2/summary.md`, `openspec/changes/interactive-paginated-editing/tasks.md` |

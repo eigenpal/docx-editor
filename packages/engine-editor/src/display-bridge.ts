@@ -7,7 +7,11 @@ import type {
   GlyphRun,
   BorderSeg,
 } from '@docx-editor.dev/core-contract/geometry';
-import type { SemanticPositionIndex } from '@docx-editor.dev/core-contract/interaction';
+import type {
+  AffineTransform,
+  InteractionFrame,
+  SemanticPositionIndex,
+} from '@docx-editor.dev/core-contract/interaction';
 import type { ColorValue, Rect, ViewScope } from '@docx-editor.dev/core-contract/editor';
 import type { PositionedInteractionMeta } from '@docx-editor.dev/core-contract/interaction';
 import type { PackageModel } from '@docx-editor.dev/engine-core';
@@ -267,4 +271,85 @@ export function toDisplayPages(
     paintFragmentConflicts: conflicts,
   });
   return { display, semanticIndex: enrichedIndex, navigationGeometry };
+}
+
+// ─── Overlay geometry for adapters (interactive-paginated-editing M2.2) ──────
+//
+// Caret and selection rectangles arrive from the interaction frame in stacked
+// content coordinates. Adapters paint them inside a page box, so the one thing
+// that must not be reinvented per framework is the conversion into page-local
+// space. React and Vue both call `overlaysForFrame` and map the result to
+// elements; neither computes a rectangle.
+//
+// Zoom deliberately does not appear here. The host scales the whole page stack
+// with a CSS transform and reports that same zoom to the engine through
+// InteractionHostMetrics, so an overlay painted inside a page inherits the
+// scale and hit testing still agrees with paint. Baking zoom into these boxes
+// would apply it twice.
+
+/** One paintable overlay rectangle in page-local coordinates. */
+export interface OverlayBox {
+  readonly pageIndex: number;
+  readonly rect: Rect;
+  /** Page-local clip rect, when the source geometry was clipped. */
+  readonly clip?: Rect;
+  readonly transform?: AffineTransform;
+  readonly writingDirection?: 'ltr' | 'rtl';
+}
+
+export interface FrameOverlays {
+  readonly caret: OverlayBox | null;
+  readonly selection: readonly OverlayBox[];
+}
+
+function toPageLocalRect(frame: InteractionFrame, pageIndex: number, rect: Rect): Rect | null {
+  const page = frame.pageGeometry.find((candidate) => candidate.index === pageIndex);
+  if (!page) return null;
+  return { x: rect.x - page.box.x, y: rect.y - page.box.y, width: rect.width, height: rect.height };
+}
+
+/**
+ * Page-local caret and selection overlay boxes for the current frame. Returns
+ * empty geometry rather than guessing when the frame carries no selection.
+ */
+export function overlaysForFrame(frame: InteractionFrame): FrameOverlays {
+  const caretGeometry = frame.caret;
+  let caret: OverlayBox | null = null;
+  if (caretGeometry) {
+    const rect = toPageLocalRect(frame, caretGeometry.pageIndex, caretGeometry.rect);
+    if (rect) {
+      const clip = caretGeometry.clip
+        ? toPageLocalRect(frame, caretGeometry.pageIndex, caretGeometry.clip) ?? undefined
+        : undefined;
+      caret = {
+        pageIndex: caretGeometry.pageIndex,
+        rect,
+        ...(clip ? { clip } : {}),
+        ...(caretGeometry.transform ? { transform: caretGeometry.transform } : {}),
+        writingDirection: caretGeometry.writingDirection,
+      };
+    }
+  }
+
+  const selection: OverlayBox[] = [];
+  const geometry = frame.selectionGeometry;
+  if (geometry) {
+    // rects[i] and pageIndices[i] are pushed in lockstep by the geometry
+    // derivation, so a rect is only paintable when it still has its page.
+    geometry.rects.forEach((rect, index) => {
+      const pageIndex = geometry.pageIndices[index];
+      if (pageIndex === undefined) return;
+      const local = toPageLocalRect(frame, pageIndex, rect);
+      if (!local) return;
+      selection.push({ pageIndex, rect: local });
+    });
+  }
+
+  return { caret, selection };
+}
+
+/** An engine affine transform as a CSS `matrix(...)`, in CSS argument order. */
+export function cssMatrix(transform: AffineTransform): string {
+  const { a, b, c, d, tx, ty } = transform;
+  return `matrix(${a}, ${b}, ${c}, ${d}, ${tx}, ${ty})`;
 }

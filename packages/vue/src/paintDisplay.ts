@@ -1,24 +1,70 @@
 import { h, type VNode } from 'vue';
 import type { DisplayItem, DisplayPage } from '@docx-editor.dev/core-contract/geometry';
-import { runStyle, colorToCss, borderSegLine } from '@docx-editor.dev/engine-editor';
+import type { FrameOverlays, OverlayBox } from '@docx-editor.dev/engine-editor';
+import { runStyle, colorToCss, borderSegLine, cssMatrix } from '@docx-editor.dev/engine-editor';
 
 /**
  * Render a positioned `DisplayPage[]` to VNodes. The adapter paints items where
  * the engine placed them and computes no geometry of its own — styling decisions
  * come from the shared paint helpers so React and Vue paint identically.
+ *
+ * `overlays` are the engine's caret and selection rectangles, already converted
+ * to page-local space by `overlaysForFrame`. They paint into a pointer-transparent
+ * layer above the content so a click still reaches the page and resolves through
+ * the engine hit test.
  */
-export function paintDisplay(pages: readonly DisplayPage[]): VNode[] {
+export function paintDisplay(pages: readonly DisplayPage[], overlays?: FrameOverlays): VNode[] {
   return pages.map((page) =>
     h(
       'div',
       {
         key: page.index,
         'data-page-index': page.index,
+        class: 'ep-one-surface__page',
         style: { position: 'relative', width: `${page.box.width}px`, height: `${page.box.height}px` },
       },
-      page.items.flatMap((item, i) => paintItem(item, i))
+      [
+        h('div', { class: 'ep-one-surface__content' }, page.items.flatMap((item, i) => paintItem(item, i))),
+        ...(overlays ? [paintOverlayLayer(page.index, overlays)] : []),
+      ]
     )
   );
+}
+
+function overlayStyle(box: OverlayBox): Record<string, string> {
+  return {
+    left: `${box.rect.x}px`,
+    top: `${box.rect.y}px`,
+    width: `${box.rect.width}px`,
+    height: `${box.rect.height}px`,
+    ...(box.transform ? { transform: cssMatrix(box.transform), transformOrigin: '0 0' } : {}),
+    ...(box.clip
+      ? {
+          clipPath: `inset(${box.clip.y - box.rect.y}px ${
+            box.rect.x + box.rect.width - (box.clip.x + box.clip.width)
+          }px ${box.rect.y + box.rect.height - (box.clip.y + box.clip.height)}px ${box.clip.x - box.rect.x}px)`,
+        }
+      : {}),
+  };
+}
+
+function paintOverlayLayer(pageIndex: number, overlays: FrameOverlays): VNode {
+  const caret = overlays.caret?.pageIndex === pageIndex ? overlays.caret : null;
+  const rects = overlays.selection.filter((box) => box.pageIndex === pageIndex);
+  return h('div', { class: 'ep-one-surface__overlay' }, [
+    ...rects.map((box, i) =>
+      h('div', { key: `sel.${i}`, class: 'ep-one-surface__selection-rect', style: overlayStyle(box) })
+    ),
+    ...(caret
+      ? [
+          h('div', {
+            'data-testid': 'one-surface-caret',
+            class: `ep-one-surface__caret${caret.writingDirection === 'rtl' ? ' ep-one-surface__caret--rtl' : ''}`,
+            style: overlayStyle(caret),
+          }),
+        ]
+      : []),
+  ]);
 }
 
 function paintItem(item: DisplayItem, key: number): VNode[] {
