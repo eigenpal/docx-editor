@@ -223,10 +223,18 @@ export interface FocusObservation {
   readonly focused: boolean;
 }
 
+/** Typed composition cancel outcome surfaced after a safe abort. */
+export interface CompositionCancelObservation {
+  readonly code: 'remoteInvalidation' | 'capabilityBoundary' | 'cancelled';
+  readonly reason: string;
+}
+
 /** IME/composition observation projected from the live editing surface. */
 export interface CompositionObservation {
   readonly active: boolean;
   readonly scope: ViewScope | null;
+  /** Last safe cancel outcome; null when idle or after a successful commit/new composition. */
+  readonly lastCancel?: CompositionCancelObservation | null;
 }
 
 /** Stacked scroll extent from the current interaction frame. */

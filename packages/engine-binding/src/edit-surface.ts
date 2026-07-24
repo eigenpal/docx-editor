@@ -23,6 +23,17 @@ import {
 } from './input-host.ts';
 import { resolveSemanticSelection, type SemanticSelectionSyncRequest } from './semantic-sync.ts';
 import type { DocxEditorSession } from './session.ts';
+import {
+  observeComposition,
+  remoteChangePreservesCompositionAnchor,
+  mapCompositionRangeAfterRemote,
+  deriveCompositionOverlay,
+  applyCompositionOverlay,
+  type CompositionCancelOutcome,
+  type CompositionSnapshot,
+} from './composition.ts';
+import type { CompositionObservation } from '@docx-editor.dev/core-contract/interaction';
+import { paragraphText } from '@docx-editor.dev/engine-core';
 
 export interface PmSelectionSnapshot {
   readonly from: number;
@@ -44,18 +55,30 @@ export interface EditSurface {
   getSelectionAnchor(): SelectionAnchor;
   getSelectionRange(): SelectionRangeAnchors;
   getPmSelection(): PmSelectionSnapshot;
+  getCompositionObservation(): CompositionObservation;
 }
 
 export interface MountEditSurfaceOptions {
   onModelChanged?: () => void;
   inputHost?: InputHostControllerOptions;
-  /** Test-only hook to observe PM doc positions without exporting PM types. */
+  /** Test-only hook to observe PM doc positions and drive DOM composition. */
   testHooks?: {
     onReady?: (helpers: {
       insertText(text: string): void;
       undo(): void;
       pmSelection(): PmSelectionSnapshot;
       stripBlockEmbed(objectId: string): void;
+      compose(options: {
+        updates: readonly string[];
+        final?: string;
+        cancel?: boolean;
+        during?: () => void;
+        end?: boolean;
+      }): Promise<void>;
+      beginComposition(): void;
+      pushCompositionUpdate(text: string): void;
+      endComposition(finalText?: string): Promise<void>;
+      readPmParagraph(paragraphId: string): string;
     }) => void;
   };
 }
@@ -120,6 +143,7 @@ export function mountEditSurface(
         head: { paragraphId: null, offset: 0, affinity: 'after' },
       }),
       getPmSelection: () => ({ from: 0, to: 0, empty: true }),
+      getCompositionObservation: () => observeComposition(false, null),
     };
   }
 
@@ -146,7 +170,11 @@ export function mountEditSurface(
   let pendingCompositionCommit = false;
   let destroyed = false;
   let imeComposing = false;
-  let compositionBeforeSel: SelectionAnchor | undefined;
+  let compositionSnapshot: CompositionSnapshot | undefined;
+  let compositionRange: { from: number; to: number } | undefined;
+  let pendingComposedText = '';
+  let deferredRemote = false;
+  let lastCompositionCancel: CompositionCancelOutcome | null = null;
 
   const view = new EditorView(inputHost.pmMount, {
     state: EditorState.create({ doc: session.projectDoc(), plugins }),
@@ -154,7 +182,25 @@ export function mountEditSurface(
     handleDOMEvents: {
       compositionstart: () => {
         imeComposing = true;
-        compositionBeforeSel = captureSelection(view.state);
+        lastCompositionCancel = null;
+        const range = captureSelectionRange(view.state);
+        const anchor = range.anchor;
+        const paragraphId = anchor.paragraphId;
+        compositionRange = { from: view.state.selection.from, to: view.state.selection.to };
+        pendingComposedText = '';
+        const selectionStart = Math.min(range.anchor.offset, range.head.offset);
+        const selectionEnd = Math.max(range.anchor.offset, range.head.offset);
+        compositionSnapshot =
+          paragraphId === null
+            ? undefined
+            : {
+                anchor,
+                paragraphId,
+                paragraphText: paragraphText(session.currentModel(), paragraphId) ?? '',
+                selectionStart,
+                selectionEnd,
+                startRevision: session.revision(),
+              };
         return false;
       },
       compositionend: () => {
@@ -181,19 +227,103 @@ export function mountEditSurface(
       if (!tr.docChanged) return;
       if (imeComposing) {
         pendingCompositionCommit = true;
+        if (compositionSnapshot) {
+          pendingComposedText = deriveCompositionOverlay(compositionSnapshot, pmParagraphText(compositionSnapshot.paragraphId));
+        }
         return;
       }
       commitEdit(beforeSel);
     },
   });
 
+  function pmParagraphText(paragraphId: string): string {
+    let text = '';
+    view.state.doc.forEach((node) => {
+      if (node.type.name === 'paragraph' && node.attrs.semId === paragraphId) text = node.textContent;
+    });
+    return text;
+  }
+
+  function compositionHasNetPmChange(overlay: string, snapshot?: CompositionSnapshot): boolean {
+    if (!snapshot) return pendingCompositionCommit;
+    return overlay.length > 0;
+  }
+
+  function cancelComposition(code: CompositionCancelOutcome['code'], reason: string, anchor?: SelectionAnchor) {
+    lastCompositionCancel = { code, reason };
+    pendingCompositionCommit = false;
+    reprojectFromModel(anchor ?? compositionSnapshot?.anchor ?? captureSelection(view.state), true);
+  }
+
+  function applyDeferredRemote() {
+    if (!deferredRemote) return;
+    deferredRemote = false;
+    reprojectFromModel(captureSelection(view.state), true);
+    notifyModelChanged();
+  }
+
+  function applyPendingCompositionToReprojectedDoc(snapshot: CompositionSnapshot, overlay: string) {
+    if (!overlay) return;
+    const canonical = paragraphText(session.currentModel(), snapshot.paragraphId) ?? '';
+    const mapped = mapCompositionRangeAfterRemote(snapshot, canonical);
+    if (!mapped) return;
+    const merged = applyCompositionOverlay(canonical, mapped.selectionStart, mapped.selectionEnd, overlay);
+    let innerStart: number | null = null;
+    let innerEnd = 0;
+    view.state.doc.forEach((node, offset) => {
+      if (node.type.name === 'paragraph' && node.attrs.semId === snapshot.paragraphId) {
+        innerStart = offset + 1;
+        innerEnd = innerStart + node.content.size;
+      }
+    });
+    if (innerStart === null) return;
+    reconciling = true;
+    view.dispatch(view.state.tr.insertText(merged, innerStart, innerEnd).setMeta('addToHistory', false));
+    reconciling = false;
+  }
+
   function flushComposition() {
     imeComposing = false;
-    const before = compositionBeforeSel;
-    compositionBeforeSel = undefined;
-    if (!pendingCompositionCommit || destroyed) return;
+    const snapshot = compositionSnapshot;
+    compositionSnapshot = undefined;
+    compositionRange = undefined;
+    const overlay = pendingComposedText;
+    pendingComposedText = '';
+    if (destroyed) return;
+
+    const hadPending = pendingCompositionCommit;
     pendingCompositionCommit = false;
-    if (!reconciling) commitEdit(before);
+    const anchor = snapshot?.anchor;
+
+    if (deferredRemote && snapshot && !remoteChangePreservesCompositionAnchor(
+      snapshot,
+      paragraphText(session.currentModel(), snapshot.paragraphId) ?? '',
+      session.revision(),
+    )) {
+      cancelComposition('remoteInvalidation', 'remote canonical change intersected the composition anchor');
+      applyDeferredRemote();
+      return;
+    }
+
+    if (deferredRemote && snapshot) {
+      reprojectFromModel(snapshot.anchor, false);
+      applyPendingCompositionToReprojectedDoc(snapshot, overlay);
+    }
+
+    if (hadPending && compositionHasNetPmChange(overlay, snapshot)) {
+      const res = commitEdit(anchor);
+      if (res.rejected) {
+        cancelComposition('capabilityBoundary', 'composition crossed an unsupported capability boundary');
+        applyDeferredRemote();
+        return;
+      }
+      if (res.committed) lastCompositionCancel = null;
+    } else if (hadPending && snapshot && overlay.length === 0) {
+      lastCompositionCancel = { code: 'cancelled', reason: 'composition ended without committed text' };
+      reprojectFromModel(anchor, false);
+    }
+
+    applyDeferredRemote();
   }
 
   const selectionAt = new Map<number, SelectionAnchor>();
@@ -214,11 +344,14 @@ export function mountEditSurface(
     applyAnchorsToView(view, resolved.value, atomicId);
   }
 
-  function commitEdit(beforeSel?: SelectionAnchor) {
+  function commitEdit(beforeSel?: SelectionAnchor): { committed: boolean; rejected: boolean } {
     localCommitDepth += 1;
     try {
       const res = session.applyPmDoc(view.state.doc);
-      if (res.rejected) reprojectFromModel(undefined, false);
+      if (res.rejected) {
+        reprojectFromModel(undefined, false);
+        return { committed: false, rejected: true };
+      }
       if (res.committed) {
         retainedSemanticSelection = null;
         if (beforeSel) selectionAt.set(undoDepth, beforeSel);
@@ -226,7 +359,9 @@ export function mountEditSurface(
         syncSemIds();
         selectionAt.set(undoDepth, captureSelection(view.state));
         notifyModelChanged();
+        return { committed: true, rejected: false };
       }
+      return { committed: false, rejected: false };
     } finally {
       localCommitDepth -= 1;
     }
@@ -346,6 +481,12 @@ export function mountEditSurface(
     },
     destroy() {
       destroyed = true;
+      imeComposing = false;
+      pendingCompositionCommit = false;
+      pendingComposedText = '';
+      compositionSnapshot = undefined;
+      compositionRange = undefined;
+      unsub();
       view.destroy();
       inputHost.destroy();
     },
@@ -366,17 +507,21 @@ export function mountEditSurface(
       to: view.state.selection.to,
       empty: view.state.selection.empty,
     }),
+    getCompositionObservation: () => observeComposition(imeComposing, lastCompositionCancel),
   };
 
   const unsub = session.subscribe(() => {
     if (destroyed || reconciling || localCommitDepth > 0) return;
+    if (imeComposing) {
+      deferredRemote = true;
+      return;
+    }
     reprojectFromModel(captureSelection(view.state), true);
     notifyModelChanged();
   });
 
   const priorDestroy = surface.destroy.bind(surface);
   surface.destroy = () => {
-    unsub();
     priorDestroy();
   };
 
@@ -385,31 +530,89 @@ export function mountEditSurface(
     get: () => modelChangedCalls,
   });
 
-  options.testHooks?.onReady?.({
-    insertText(text: string) {
-      const { from, to } = view.state.selection;
-      view.dispatch(view.state.tr.insertText(text, from, to));
-    },
-    undo() {
-      doUndo();
-    },
-    pmSelection: () => ({
-      from: view.state.selection.from,
-      to: view.state.selection.to,
-      empty: view.state.selection.empty,
-    }),
-    stripBlockEmbed(objectId: string) {
-      let pos: number | null = null;
-      view.state.doc.forEach((node, offset) => {
-        if (pos !== null) return;
-        if (node.type.name === 'blockEmbed' && node.attrs.semId === objectId) pos = offset;
+  if (options.testHooks?.onReady) {
+    const flushFrames = (): Promise<void> =>
+      new Promise((resolve) => {
+        const raf = inputHost.pmMount.ownerDocument?.defaultView?.requestAnimationFrame;
+        if (typeof raf === 'function') raf(() => raf(() => resolve()));
+        else resolve();
       });
-      if (pos === null) return;
-      reconciling = true;
-      view.dispatch(view.state.tr.delete(pos, pos + 1).setMeta('addToHistory', false));
-      reconciling = false;
-    },
-  });
+    const dispatchCompositionEvent = (type: string, data = '') => {
+      view.dom.dispatchEvent(new CompositionEvent(type, { bubbles: true, cancelable: true, data }));
+    };
+    const replaceComposedText = (text: string) => {
+      if (!compositionRange) compositionRange = { from: view.state.selection.from, to: view.state.selection.to };
+      const { from, to } = compositionRange;
+      if (text.length === 0) {
+        if (to > from) view.dispatch(view.state.tr.delete(from, to));
+        compositionRange = { from, to: from };
+        return;
+      }
+      view.dispatch(view.state.tr.insertText(text, from, to));
+      compositionRange = { from, to: from + text.length };
+    };
+    const pushCompositionUpdate = (text: string) => {
+      replaceComposedText(text);
+      dispatchCompositionEvent('compositionupdate', text);
+    };
+    options.testHooks.onReady({
+      insertText(text: string) {
+        const { from, to } = view.state.selection;
+        view.dispatch(view.state.tr.insertText(text, from, to));
+      },
+      undo() {
+        doUndo();
+      },
+      pmSelection: () => ({
+        from: view.state.selection.from,
+        to: view.state.selection.to,
+        empty: view.state.selection.empty,
+      }),
+      stripBlockEmbed(objectId: string) {
+        let pos: number | null = null;
+        view.state.doc.forEach((node, offset) => {
+          if (pos !== null) return;
+          if (node.type.name === 'blockEmbed' && node.attrs.semId === objectId) pos = offset;
+        });
+        if (pos === null) return;
+        reconciling = true;
+        view.dispatch(view.state.tr.delete(pos, pos + 1).setMeta('addToHistory', false));
+        reconciling = false;
+      },
+      readPmParagraph(paragraphId: string) {
+        return pmParagraphText(paragraphId);
+      },
+      beginComposition() {
+        view.focus();
+        dispatchCompositionEvent('compositionstart');
+      },
+      pushCompositionUpdate,
+      async endComposition(finalText?: string) {
+        if (finalText !== undefined) pushCompositionUpdate(finalText);
+        dispatchCompositionEvent('compositionend', finalText ?? '');
+        await flushFrames();
+      },
+      async compose(opts) {
+        view.focus();
+        dispatchCompositionEvent('compositionstart');
+        for (let i = 0; i < opts.updates.length; i += 1) {
+          pushCompositionUpdate(opts.updates[i]!);
+          if (i === 0 && opts.during) opts.during();
+        }
+        if (opts.end === false) return;
+        if (opts.cancel) {
+          pushCompositionUpdate('');
+          dispatchCompositionEvent('compositionend', '');
+        } else {
+          const finalText = opts.final ?? opts.updates[opts.updates.length - 1] ?? '';
+          const lastUpdate = opts.updates[opts.updates.length - 1] ?? '';
+          if (finalText !== lastUpdate) pushCompositionUpdate(finalText);
+          dispatchCompositionEvent('compositionend', finalText);
+        }
+        await flushFrames();
+      },
+    });
+  }
 
   return surface;
 }
