@@ -20,7 +20,7 @@ import {
   paragraphFullyCaptured,
   sliceIsFullyCapturedParagraph,
 } from '../wml-preserve.ts';
-import { extractParagraphPropertiesCapsule, extractParagraphOpenAttributes } from '../preservation-capsule.ts';
+import { extractParagraphPropertiesCapsule, extractParagraphOpenAttributes, extractParagraphRunRPrCapsules } from '../preservation-capsule.ts';
 import {
   createEmptyModel,
   bodyStoryId,
@@ -126,6 +126,21 @@ export function parseDocx(bytes: Uint8Array, options: ParseOptions = {}): ParseR
         const attrs = extractParagraphOpenAttributes(slice);
         if (pPr) block = { ...block, pPrCapsule: pPr };
         if (attrs) block = { ...block, pAttrsCapsule: attrs }; // only when non-empty
+        // Per-run w:rPr capsules, aligned 1:1 to the parsed direct runs (a fully-captured paragraph's
+        // runs ARE its direct <w:r> children in order). Only attach when the alignment holds and at
+        // least one run carries an rPr, so nothing is misattributed.
+        const rPr = extractParagraphRunRPrCapsules(slice);
+        if (rPr && rPr.length === block.runs.length && rPr.some((c) => c !== null)) {
+          // A run with an rPr capsule carries NO modeled props — the capsule holds the full rPr
+          // (incl. b/i). Dropping props keeps the run's identity consistent with the projection
+          // (which emits only the opaque mark) so split/join alignment holds.
+          block = {
+            ...block,
+            runs: block.runs.map((r, i) =>
+              rPr[i] ? { text: r.text, ...(r.id !== undefined ? { id: r.id } : {}), rPrCapsule: rPr[i]! } : r,
+            ),
+          };
+        }
       }
       blocks.push(block);
       blockRanges.set(block.id, {

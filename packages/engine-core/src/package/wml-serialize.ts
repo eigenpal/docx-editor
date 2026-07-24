@@ -8,9 +8,12 @@ import { type Block, type ParagraphRecord, type RunRecord, registerCoreBlockCapa
 import { paragraphInnerWithCapsule } from './preservation-capsule.ts';
 
 function runXml(run: RunRecord): string {
+  // An ownership-scoped w:rPr capsule (verbatim, full run properties) is re-spliced INSTEAD of
+  // regenerating rPr from the modeled bold/italic — the capsule already holds everything (incl. b/i).
   const props = run.props;
-  const rPr =
-    props?.bold || props?.italic
+  const rPr = run.rPrCapsule
+    ? run.rPrCapsule
+    : props?.bold || props?.italic
       ? `<w:rPr>${props.bold ? '<w:b/>' : ''}${props.italic ? '<w:i/>' : ''}</w:rPr>`
       : '';
   return `<w:r>${rPr}<w:t xml:space="preserve">${escapeXml(run.text)}</w:t></w:r>`;

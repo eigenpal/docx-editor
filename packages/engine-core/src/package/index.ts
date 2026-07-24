@@ -68,6 +68,7 @@ export {
   type ReadOnlyDiagnostic,
   type BodyPatchability,
 } from './docx/read.ts';
+export { isRunPropertiesCapsule } from './preservation-capsule.ts';
 export { writeDocx, documentXml } from './docx/write.ts';
 // Feature-lane contract: register a new top-level block kind's element parser without editing a
 // central switch. The parse registry now lives in the unified block-capability module (model),

@@ -281,6 +281,65 @@ describe('paragraph-attributes capsule: rsid/paraId paragraphs are editable, att
   });
 });
 
+describe('run-properties capsule: a styled run (font/color) is editable, rPr preserved (3.1/3.2)', () => {
+  const STYLED_RUN =
+    '<w:p><w:r><w:rPr><w:rFonts w:ascii="Arial"/><w:color w:val="FF0000"/><w:sz w:val="28"/></w:rPr><w:t>colored</w:t></w:r></w:p>' +
+    '<w:p><w:r><w:t>plain</w:t></w:r></w:p>';
+
+  test('a run carrying an unmodeled w:rPr (font/color/size) opens editable', () => {
+    const session = openDocxSession(docx(STYLED_RUN));
+    expect(session.editable).toBe(true);
+    expect(session.readOnlyReason).toBeNull();
+  });
+
+  test('editing a styled-run paragraph preserves its w:rPr verbatim through save + reopen', () => {
+    const session = openDocxSession(docx(STYLED_RUN));
+    const doc = session.projectDoc();
+    // Edit WITHIN the styled run, KEEPING its marks (as ProseMirror does for an in-run text edit) —
+    // this is the case where the run's rPr must survive (replacing the whole run with plain text is
+    // a legitimate formatting reset, handled by withFirstParagraphText and NOT this scenario).
+    const firstRun = doc.child(0).child(0);
+    const edited = docSchema.node('doc', null, [
+      docSchema.node('paragraph', doc.child(0).attrs, docSchema.text('RECOLORED', firstRun.marks)),
+      ...Array.from({ length: doc.childCount - 1 }, (_, i) => doc.child(i + 1)),
+    ]);
+    const res = session.applyPmDoc(edited);
+    expect(res.committed).toBe(true);
+    const savedXml = strFromU8(unzipSync(session.save())['word/document.xml']);
+    expect(savedXml).toContain('<w:rPr><w:rFonts w:ascii="Arial"/><w:color w:val="FF0000"/><w:sz w:val="28"/></w:rPr>');
+    expect(savedXml).toContain('RECOLORED');
+    const reopened = openDocxSession(session.save());
+    expect(reopened.bodyText()).toBe('RECOLORED\nplain');
+    expect(strFromU8(unzipSync(reopened.save())['word/document.xml'])).toContain('<w:color w:val="FF0000"/>');
+  });
+
+  test('a run whose rPr has BOTH modeled b/i AND unmodeled color splits cleanly (props not double-kept)', () => {
+    // The run carries <w:b/> (modeled) + <w:color/> (unmodeled). It is captured as a full rPr capsule
+    // with NO redundant props, so the projection and reverse-mapping agree and Enter splits work.
+    const doc = '<w:p><w:r><w:rPr><w:b/><w:color w:val="FF0000"/></w:rPr><w:t>abcd</w:t></w:r></w:p>';
+    const session = openDocxSession(docx(doc));
+    expect(session.editable).toBe(true);
+    const pm = session.projectDoc();
+    const firstRun = pm.child(0).child(0);
+    const split = docSchema.node('doc', null, [
+      docSchema.node('paragraph', { semId: pm.child(0).attrs.semId }, docSchema.text('ab', firstRun.marks)),
+      docSchema.node('paragraph', { semId: null }, docSchema.text('cd', firstRun.marks)),
+    ]);
+    expect(session.applyPmDoc(split).committed).toBe(true);
+    const savedXml = strFromU8(unzipSync(session.save())['word/document.xml']);
+    // Both halves keep the full rPr (b + color); the split text round-trips.
+    expect(savedXml.match(/<w:color w:val="FF0000"\/>/g)?.length).toBe(2);
+    expect(session.bodyText()).toBe('ab\ncd');
+  });
+
+  test('a table cell run with an unmodeled w:rPr keeps the table read-only (cells do not capsule)', () => {
+    const cellRPr =
+      '<w:p><w:r><w:t>intro</w:t></w:r></w:p>' +
+      '<w:tbl><w:tr><w:tc><w:p><w:r><w:rPr><w:color w:val="00FF00"/></w:rPr><w:t>c</w:t></w:r></w:p></w:tc></w:tr></w:tbl>';
+    expect(openDocxSession(docx(cellRPr)).editable).toBe(false);
+  });
+});
+
 describe('document with a table: read-only, verbatim, never flattened', () => {
   test('opens read-only; edits are refused and the save stays byte-identical', () => {
     const before = docx(WITH_TABLE);

@@ -21,6 +21,13 @@ export interface RunRecord {
   readonly id?: string;
   readonly text: string;
   readonly props?: RunProps;
+  /** An ownership-scoped preservation capsule for the run's leading `<w:rPr>` — the verbatim run
+   *  properties the model does not represent (fonts, size, color, underline styles, language, …),
+   *  captured byte-exact at parse (document-engine 3.1). Re-spliced ahead of the run text on
+   *  serialize INSTEAD of regenerating from `props`, so a run carrying unmodeled formatting stays
+   *  editable (its text) without losing it. When present, `props` (bold/italic) is not serialized —
+   *  the capsule already holds the full rPr. */
+  readonly rPrCapsule?: string;
 }
 
 export interface ParagraphProps {

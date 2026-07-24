@@ -25,7 +25,7 @@ import {
 describe('composed schema + per-kind projection', () => {
   test('the composed schema has exactly the registered nodes and marks', () => {
     expect(Object.keys(docSchema.nodes).sort()).toEqual(['blockEmbed', 'doc', 'paragraph', 'text']);
-    expect(Object.keys(docSchema.marks).sort()).toEqual(['bold', 'italic']);
+    expect(Object.keys(docSchema.marks).sort()).toEqual(['bold', 'italic', 'rawRunProps']);
     expect(docSchema.topNodeType.name).toBe('doc'); // doc registered first stays the top node
   });
 
@@ -61,6 +61,27 @@ describe('composed schema + per-kind projection', () => {
       'blockEmbed',
       'blockEmbed',
     ]);
+  });
+
+  test('applying bold to a capsule run REMOVES the capsule and materializes bold (edit wins visibly)', () => {
+    const capsule = docSchema.marks.rawRunProps.create({ rpr: '<w:rPr><w:color w:val="FF0000"/></w:rPr>' });
+    const bold = docSchema.marks.bold.create();
+    // bold excludes rawRunProps, so adding it removes the opaque capsule.
+    expect(bold.addToSet([capsule]).map((m) => m.type.name).sort()).toEqual(['bold']);
+  });
+
+  test('two different rawRunProps capsules cannot coexist (self-exclusion) — the newer replaces', () => {
+    const a = docSchema.marks.rawRunProps.create({ rpr: '<w:rPr><w:b/></w:rPr>' });
+    const b = docSchema.marks.rawRunProps.create({ rpr: '<w:rPr><w:i/></w:rPr>' });
+    const set = b.addToSet([a]);
+    expect(set.length).toBe(1);
+    expect(set[0].attrs.rpr).toBe('<w:rPr><w:i/></w:rPr>');
+  });
+
+  test('rawRunProps has no parseDOM — a pasted data-raw-rpr span carries no capsule (security)', () => {
+    // Verbatim re-emit makes a paste-origin capsule an injection vector; the schema accepts a capsule
+    // ONLY from the model projection, never from untrusted clipboard DOM.
+    expect(docSchema.marks.rawRunProps.spec.parseDOM).toBeUndefined();
   });
 
   test('registered block nodes declare reverse-mapping roles (the forward mapper dispatches on them)', () => {

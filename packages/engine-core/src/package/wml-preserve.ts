@@ -9,7 +9,7 @@ import { readXml, textContent, type XmlNode } from './xml-reader.ts';
 import { scanCellParagraphSpans } from './wml-scan.ts';
 import { paragraphXml } from './wml-serialize.ts';
 import { el, blockFromText } from './wml-parse.ts';
-import { extractParagraphPropertiesCapsule, extractParagraphOpenAttributes } from './preservation-capsule.ts';
+import { extractParagraphPropertiesCapsule, extractParagraphOpenAttributes, extractParagraphRunRPrCapsules } from './preservation-capsule.ts';
 import { IdentityAllocator } from '../model/identity.ts';
 import { blockHashContent, blockPatchEdited, blockSerialize, isTopLevelEditable, registerCoreBlockCapability } from '../model/index.ts';
 import { stableHash } from '../comparators/index.ts';
@@ -51,12 +51,21 @@ export function hashPreservableBlock(block: Block): string {
  *  parse time (both include the capsule). Without this a paragraph that carried a captured w:pPr
  *  would appear drifted on every re-emit. Returns null on an unparseable slice. */
 function reparseBlockWithCapsule(sliceText: string, alloc: IdentityAllocator): Block | undefined {
-  const block = blockFromText(sliceText, alloc);
+  let block = blockFromText(sliceText, alloc);
   if (block && block.kind === 'paragraph') {
     const pPr = extractParagraphPropertiesCapsule(sliceText);
     const attrs = extractParagraphOpenAttributes(sliceText);
     if (pPr || attrs) {
-      return { ...block, ...(pPr ? { pPrCapsule: pPr } : {}), ...(attrs ? { pAttrsCapsule: attrs } : {}) };
+      block = { ...block, ...(pPr ? { pPrCapsule: pPr } : {}), ...(attrs ? { pAttrsCapsule: attrs } : {}) };
+    }
+    const rPr = extractParagraphRunRPrCapsules(sliceText);
+    if (rPr && rPr.length === block.runs.length && rPr.some((c) => c !== null)) {
+      block = {
+        ...block,
+        runs: block.runs.map((r, i) =>
+          rPr[i] ? { text: r.text, ...(r.id !== undefined ? { id: r.id } : {}), rPrCapsule: rPr[i]! } : r,
+        ),
+      };
     }
   }
   return block;
@@ -152,21 +161,27 @@ export function sliceIsFullyCapturedParagraph(sliceText: string, opts?: { readon
   if ((hasPPrChild || hasOpeningContent) && !allowCapsule) return false;
   if (hasPPrChild && capsule === null) return false; // an uncapturable w:pPr -> fail closed
   if (attrsCapsule === null) return false; // the opening tag could not be cleanly captured -> fail closed
+  // Per-run rPr capsules — only where they are captured/reinserted (top-level, allowCapsule). A cell
+  // run's rPr is NOT captured, so a styled cell run stays read-only. `null` (unclean run structure)
+  // yields no captures, so any run with an rPr beyond b/i falls back to the strict b/i check.
+  const runRPrCapsuled = allowCapsule ? (extractParagraphRunRPrCapsules(sliceText) ?? []).map((c) => c !== null) : [];
   return paragraphFullyCaptured(pEl, {
     pPrCapsuled: capsule !== null,
     pAttrsCapsuled: hasOpeningContent,
+    runRPrCapsuled,
   });
 }
 
 export function paragraphFullyCaptured(
   pEl: Extract<XmlNode, { type: 'element' }>,
-  opts?: { readonly pPrCapsuled?: boolean; readonly pAttrsCapsuled?: boolean },
+  opts?: { readonly pPrCapsuled?: boolean; readonly pAttrsCapsuled?: boolean; readonly runRPrCapsuled?: readonly boolean[] },
 ): boolean {
   // Paragraph opening-tag attributes (rsid…) are preserved verbatim as a capsule when captured;
   // otherwise the paragraph is not byte-faithfully regenerable and stays read-only.
   if (!opts?.pAttrsCapsuled && Object.keys(pEl.attributes).length > 0) return false;
   let pPrConsumed = false;
   let sawRun = false;
+  let runIdx = 0; // index among DIRECT w:r children, aligned to opts.runRPrCapsuled
   for (const c of pEl.children) {
     if (c.type === 'text') { if (c.value.trim() !== '') return false; continue; }
     // A leading w:pPr preserved as an ownership-scoped capsule (opts.pPrCapsuled) is allowed: it is
@@ -180,6 +195,8 @@ export function paragraphFullyCaptured(
     }
     if (c.name !== 'w:r' || Object.keys(c.attributes).length > 0) return false;
     sawRun = true;
+    const rPrCaptured = opts?.runRPrCapsuled?.[runIdx] === true; // this run's rPr is a verbatim capsule
+    runIdx += 1;
     let hasText = false;
     let tCount = 0;
     let rPrCount = 0;
@@ -188,6 +205,8 @@ export function paragraphFullyCaptured(
       if (rc.name === 'w:rPr') {
         rPrCount += 1;
         if (rPrCount > 1) return false; // only the FIRST w:rPr is read on parse; a second would be dropped
+        // A captured rPr is re-spliced VERBATIM, so its children don't need to be model-capturable.
+        if (rPrCaptured) continue;
         for (const pr of rc.children) {
           if (pr.type === 'text') { if (pr.value.trim() !== '') return false; continue; }
           if (pr.name !== 'w:b' && pr.name !== 'w:i') return false; // only b/i are modeled

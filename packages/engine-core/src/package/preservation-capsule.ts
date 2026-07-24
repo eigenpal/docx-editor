@@ -120,6 +120,102 @@ function readTagName(s: string, at: number): string | null {
   return j > at ? s.slice(at, j) : null;
 }
 
+/** The verbatim leading `<w:rPr>…</w:rPr>` bytes of a run — an ownership-scoped capsule for the run
+ *  properties the model does not represent (fonts, size, color, underline styles, language, …). */
+export type RunPropertiesCapsule = string;
+
+/** Extract the leading `<w:rPr>` capsule of a single `<w:r …>…</w:r>` run slice, byte-exact — the
+ *  verbatim run properties, or null when the run has none / they cannot be cleanly isolated. Same
+ *  balanced-match + quote/comment-aware discipline as the paragraph-properties capsule. */
+export function extractRunPropertiesCapsule(runSlice: string): RunPropertiesCapsule | null {
+  const s = runSlice;
+  const open = s.indexOf('<w:r');
+  if (open < 0 || !startsWithTag(s, open, 'w:r')) return null;
+  const openTag = findSelfCloseOrOpenEnd(s, open);
+  if (openTag === null || openTag.selfClosing) return null; // `<w:r/>` has no properties
+  let i = openTag.tagEnd + 1;
+  while (i < s.length && /\s/.test(s[i])) i += 1;
+  if (s.startsWith('<!--', i) || s.startsWith('<?', i)) return null; // comment/PI before props -> fail closed
+  if (!startsWithTag(s, i, 'w:rPr')) return null; // no leading run properties
+  const end = matchElementEnd(s, i, 'w:rPr');
+  if (end === null) return null;
+  const capsule = s.slice(i, end);
+  const parsed = readXml(capsule);
+  if (!parsed.ok) return null;
+  const els = parsed.nodes.filter((n) => n.type === 'element');
+  if (els.length !== 1 || els[0].name !== 'w:rPr') return null;
+  return capsule;
+}
+
+/** The per-run `w:rPr` capsules of a paragraph's source slice, aligned to its DIRECT run children in
+ *  document order (each entry is that run's verbatim leading `<w:rPr>` bytes, or null when the run
+ *  has none). Returns null when the paragraph is not a clean sequence of direct runs (a leading
+ *  `w:pPr` is fine and skipped), so the caller can leave the runs uncapsuled. The result length
+ *  equals the number of direct runs, matching the parsed `ParagraphRecord.runs` for a fully-captured
+ *  paragraph. */
+export function extractParagraphRunRPrCapsules(paragraphSlice: string): (RunPropertiesCapsule | null)[] | null {
+  const s = paragraphSlice;
+  const open = s.indexOf('<w:p');
+  if (open < 0 || !startsWithTag(s, open, 'w:p')) return null;
+  const openTag = findSelfCloseOrOpenEnd(s, open);
+  if (openTag === null) return null;
+  if (openTag.selfClosing) return []; // empty paragraph -> no runs
+  const close = s.lastIndexOf('</w:p>');
+  if (close < openTag.tagEnd + 1) return null;
+  const runSlices = splitDirectRunSlices(s.slice(openTag.tagEnd + 1, close));
+  if (runSlices === null) return null;
+  return runSlices.map((rs) => extractRunPropertiesCapsule(rs));
+}
+
+/** Whether `s` is EXACTLY one well-formed `<w:rPr>…</w:rPr>` (or `<w:rPr/>`) element and nothing
+ *  else — the validity contract for a run-properties capsule. This is the SECURITY gate for a
+ *  capsule that arrives from untrusted input (a pasted `data-raw-rpr` span): a value that is not a
+ *  lone balanced w:rPr is rejected, so no attacker-selected/unescaped OOXML can be re-emitted on save
+ *  (CLAUDE.md untrusted-input / XML-injection boundary). Balanced-matched + well-formedness checked. */
+export function isRunPropertiesCapsule(s: string): boolean {
+  const t = s.trim();
+  if (!t.startsWith('<w:rPr') || !startsWithTag(t, 0, 'w:rPr')) return false;
+  const end = matchElementEnd(t, 0, 'w:rPr');
+  if (end === null || end !== t.length) return false; // trailing content -> not a lone element
+  const parsed = readXml(t);
+  if (!parsed.ok) return false;
+  const els = parsed.nodes.filter((n) => n.type === 'element');
+  return els.length === 1 && els[0].name === 'w:rPr';
+}
+
+/** Split a paragraph's inner content into its direct top-level `<w:r>…</w:r>` (or `<w:r/>`) run
+ *  slices, in document order — so each run's rPr capsule can be extracted and aligned to the parsed
+ *  runs (which, for a fully-captured paragraph, are exactly these direct children in order). Returns
+ *  null on any malformed run structure. A leading `w:pPr` and inter-run whitespace are skipped. */
+export function splitDirectRunSlices(paragraphInner: string): string[] | null {
+  const s = paragraphInner;
+  const runs: string[] = [];
+  let i = 0;
+  while (i < s.length) {
+    // skip whitespace
+    if (/\s/.test(s[i])) {
+      i += 1;
+      continue;
+    }
+    if (!s.startsWith('<', i)) return null; // stray text between runs -> not cleanly splittable
+    if (s.startsWith('<w:pPr', i) && startsWithTag(s, i, 'w:pPr')) {
+      const end = matchElementEnd(s, i, 'w:pPr');
+      if (end === null) return null;
+      i = end;
+      continue;
+    }
+    if (s.startsWith('<w:r', i) && startsWithTag(s, i, 'w:r')) {
+      const end = matchElementEnd(s, i, 'w:r');
+      if (end === null) return null;
+      runs.push(s.slice(i, end));
+      i = end;
+      continue;
+    }
+    return null; // any other element (hyperlink, bookmark, …) -> not a plain run sequence
+  }
+  return runs;
+}
+
 /** Scan the `<w:pPr …>` opening tag starting at `at` (index of '<'), returning where the tag ends
  *  and whether it self-closes. Handles '>' inside attribute values (single/double quoted). */
 function findSelfCloseOrOpenEnd(s: string, at: number): { tagEnd: number; selfClosing: boolean } | null {

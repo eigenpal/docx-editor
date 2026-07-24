@@ -3,7 +3,7 @@
 // so it can never drop or corrupt authored OOXML.
 
 import { describe, expect, test } from 'bun:test';
-import { extractParagraphPropertiesCapsule, paragraphInnerWithCapsule, extractParagraphOpenAttributes } from '../src/package/preservation-capsule.ts';
+import { extractParagraphPropertiesCapsule, paragraphInnerWithCapsule, extractParagraphOpenAttributes, extractRunPropertiesCapsule, splitDirectRunSlices, isRunPropertiesCapsule } from '../src/package/preservation-capsule.ts';
 
 describe('extractParagraphPropertiesCapsule', () => {
   test('captures a leading w:pPr verbatim (attribute order + whitespace preserved)', () => {
@@ -111,5 +111,41 @@ describe('extractParagraphOpenAttributes', () => {
   test('does not match w:pPr as the paragraph tag', () => {
     // A slice that does not begin with a w:p element has no paragraph opening tag.
     expect(extractParagraphOpenAttributes('<w:pPr/>')).toBeNull();
+  });
+})
+
+describe('run-properties capsule', () => {
+  test('extracts a leading w:rPr verbatim', () => {
+    const run = '<w:r><w:rPr><w:rFonts w:ascii="Calibri"/><w:sz w:val="24"/><w:color w:val="FF0000"/></w:rPr><w:t>x</w:t></w:r>';
+    expect(extractRunPropertiesCapsule(run)).toBe('<w:rPr><w:rFonts w:ascii="Calibri"/><w:sz w:val="24"/><w:color w:val="FF0000"/></w:rPr>');
+  });
+  test('returns null for a run with no rPr, or a self-closing run', () => {
+    expect(extractRunPropertiesCapsule('<w:r><w:t>x</w:t></w:r>')).toBeNull();
+    expect(extractRunPropertiesCapsule('<w:r/>')).toBeNull();
+  });
+  test('balanced-matches a nested rPr (w:rPrChange contains a w:rPr)', () => {
+    const cap = '<w:rPr><w:b/><w:rPrChange w:id="1"><w:rPr><w:i/></w:rPr></w:rPrChange></w:rPr>';
+    expect(extractRunPropertiesCapsule(`<w:r>${cap}<w:t>x</w:t></w:r>`)).toBe(cap);
+  });
+  test('splitDirectRunSlices splits direct runs, skipping a leading w:pPr + whitespace', () => {
+    const inner = '<w:pPr><w:jc w:val="left"/></w:pPr> <w:r><w:t>a</w:t></w:r>\n<w:r><w:rPr><w:b/></w:rPr><w:t>b</w:t></w:r>';
+    expect(splitDirectRunSlices(inner)).toEqual(['<w:r><w:t>a</w:t></w:r>', '<w:r><w:rPr><w:b/></w:rPr><w:t>b</w:t></w:r>']);
+  });
+  test('splitDirectRunSlices fails closed on a non-run child (hyperlink)', () => {
+    expect(splitDirectRunSlices('<w:hyperlink><w:r><w:t>x</w:t></w:r></w:hyperlink>')).toBeNull();
+  });
+})
+
+describe('isRunPropertiesCapsule (security: reject forged/malicious capsules)', () => {
+  test('accepts exactly one balanced w:rPr', () => {
+    expect(isRunPropertiesCapsule('<w:rPr><w:b/><w:color w:val="FF0000"/></w:rPr>')).toBe(true);
+    expect(isRunPropertiesCapsule('<w:rPr/>')).toBe(true);
+  });
+  test('rejects anything that is not a lone w:rPr (injection defense)', () => {
+    expect(isRunPropertiesCapsule('<w:rPr/><w:object>evil</w:object>')).toBe(false); // trailing element
+    expect(isRunPropertiesCapsule('<w:object>evil</w:object>')).toBe(false); // wrong root
+    expect(isRunPropertiesCapsule('<w:rPr><w:b/>')).toBe(false); // unbalanced
+    expect(isRunPropertiesCapsule('not xml at all')).toBe(false);
+    expect(isRunPropertiesCapsule('')).toBe(false);
   });
 })

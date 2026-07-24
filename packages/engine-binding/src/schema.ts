@@ -63,10 +63,37 @@ registerBindingNode(
 );
 registerBindingNode('text', { group: 'inline' });
 
-registerBindingMark('bold', { toDOM: () => ['strong', 0], parseDOM: [{ tag: 'strong' }, { tag: 'b' }] });
-registerBindingMark('italic', { toDOM: () => ['em', 0], parseDOM: [{ tag: 'em' }, { tag: 'i' }] });
+// bold/italic EXCLUDE the opaque rawRunProps capsule, so applying b/i to a capsule run REMOVES the
+// capsule and materializes the modeled mark (the user's edit wins, visibly) rather than being
+// discarded by the capsule.
+registerBindingMark('bold', { excludes: 'rawRunProps', toDOM: () => ['strong', 0], parseDOM: [{ tag: 'strong' }, { tag: 'b' }] });
+registerBindingMark('italic', { excludes: 'rawRunProps', toDOM: () => ['em', 0], parseDOM: [{ tag: 'em' }, { tag: 'i' }] });
+// An OPAQUE run-properties capsule mark: it carries the verbatim <w:rPr> bytes of a run whose
+// formatting the model does not represent, so editing the run's TEXT preserves its rPr. Two runs
+// with different capsules carry different `rpr` attrs and stay separate; identical capsules merge
+// (same formatting). The capsule is opaque — the editor cannot toggle its formatting; typed text
+// gets no capsule mark (default formatting). Rendered inert (a plain span carrying the bytes).
+registerBindingMark('rawRunProps', {
+  attrs: { rpr: {} },
+  // Self-exclusion (a run has ONE rPr), and bold/italic exclude it (above) so the opaque capsule and
+  // the modeled marks never coexist.
+  excludes: 'rawRunProps',
+  toDOM: (mark) => ['span', { 'data-raw-rpr': String(mark.attrs.rpr) }, 0],
+  // SECURITY: NO parseDOM. The capsule is re-emitted VERBATIM into document.xml, and even a balanced
+  // w:rPr can carry attacker OOXML (a nested w:object/OLE, duplicate attributes) that a "valid single
+  // w:rPr" check cannot scrub. So a capsule may ONLY come from the ORIGINAL parsed document (lossless
+  // preservation of bytes already in the file) — NEVER from pasted/untrusted DOM. Without a parseDOM
+  // rule, a pasted `data-raw-rpr` span carries no capsule (its text pastes as plain), closing the
+  // untrusted-input / OLE-injection vector. In-editor editing of an original styled run still works:
+  // the mark comes from the model projection (toDOM), and paragraphNodeToRuns re-validates it.
+});
 
 function runToText(run: RunRecord, schema: Schema): PMNode {
+  // A run carrying an ownership-scoped rPr capsule projects with the opaque rawRunProps mark (which
+  // already holds the full rPr, incl. b/i) instead of the modeled bold/italic marks.
+  if (run.rPrCapsule) {
+    return schema.text(run.text, [schema.marks.rawRunProps.create({ rpr: run.rPrCapsule })]);
+  }
   const marks = [];
   if (run.props?.bold) marks.push(schema.marks.bold.create());
   if (run.props?.italic) marks.push(schema.marks.italic.create());
