@@ -13,9 +13,11 @@ import type {
   SemanticTarget,
   WordSegmentRecord,
 } from '@docx-editor.dev/core-contract/interaction';
+import type { Point } from '@docx-editor.dev/core-contract/types';
 import type { NavigationGeometry } from './navigation-geometry.ts';
 import { emptyNavigationGeometry } from './navigation-geometry.ts';
 import type { ParagraphTextResolver } from './bidi-policy.ts';
+import { clientToContent, contentToPageLocal, pointInRect } from './coordinate-mapper.ts';
 import { hitTestPointer } from './interaction-geometry.ts';
 import { planKeyboardNavigation } from './keyboard-navigation.ts';
 import {
@@ -197,6 +199,52 @@ function attachNavigation(
   return navigation ? { ...plan, navigation } : plan;
 }
 
+// ─── Body-paragraph interaction subset (task 5.6a) ───────────────────────────
+// Declared behavior for the regions and roles inside the 5.6a gate. Everything
+// outside the subset fails closed with a typed outcome; nothing here invents
+// geometry — page boxes are read from the published frame only.
+
+/**
+ * True when the pointer is inside a published page box but no display item on
+ * that page covers it — page background or a page margin. Separated from an
+ * item that failed for its own reason (non-invertible transform, unsupported
+ * writing mode), which keeps its original stricter outcome.
+ *
+ * Inter-page gaps are already reported by `contentToPageLocal` and reach the
+ * caller through the hit-test outcome, so both regions stay `invalidTarget`
+ * with a distinct reason: the spec's page-gap scenario is "return no target and
+ * do not move the selection", not a capability gap.
+ */
+function pointerOnPageBackground(
+  frame: InteractionFrame,
+  clientPoint: Point,
+  metrics: InteractionHostMetrics | undefined,
+): boolean {
+  if (!metrics) return false;
+  const content = clientToContent(clientPoint, metrics);
+  if (!content.ok) return false;
+  const pageLocal = contentToPageLocal(content.value, frame);
+  if (!pageLocal.ok) return false;
+  const page = frame.display.find((candidate) => candidate.index === pageLocal.value.pageIndex);
+  if (!page) return false;
+  return !page.items.some((item) => 'box' in item && pointInRect(pageLocal.value.local, item.box));
+}
+
+/**
+ * History and selection commands are document-scoped, not insertions, so a
+ * caret parked in read-only text must not wedge them.
+ */
+const NON_MUTATING_COMMANDS = new Set(['undo', 'redo', 'setSelection']);
+
+function readOnlyBlockInSelection(frame: InteractionFrame, selection: SemanticSelection | null): boolean {
+  if (!selection) return false;
+  const endpoints = [selection.anchor, selection.head];
+  return endpoints.some((endpoint) => {
+    if (endpoint.kind !== 'text') return false;
+    return blockRecordForTarget(frame, endpoint)?.readOnly === true;
+  });
+}
+
 function planClick(context: InteractionPlannerContext, intent: ClickInteractionIntent): PlannedInteraction {
   const frameId = context.frame.id;
   const clickRejection = validateNormalizedClickIntent(intent, frameId);
@@ -207,6 +255,21 @@ function planClick(context: InteractionPlannerContext, intent: ClickInteractionI
 
   const hit = hitTestPointer(context.frame, intent.clientPoint, context.hostMetrics, { frameId: intent.frameId });
   if (!hit.ok) {
+    if (hit.code === 'invalidTarget' && pointerOnPageBackground(context.frame, intent.clientPoint, context.hostMetrics)) {
+      return attachNavigation(
+        {
+          frameId,
+          effects: [
+            rejectEffect(
+              'invalidTarget',
+              'pointer is on page background or a page margin, which owns no caret position',
+              frameId,
+            ),
+          ],
+        },
+        nav,
+      );
+    }
     return attachNavigation({ frameId, effects: [rejectEffect(hit.code, hit.reason, hit.frameId ?? frameId)] }, nav);
   }
 
@@ -338,8 +401,27 @@ export function planInteraction(context: InteractionPlannerContext, intent: Inte
     case 'blur':
       return attachNavigation({ frameId, effects: [{ kind: 'blur' }] }, navFor('blur'));
     case 'command':
+      // Read-only body text is selectable but never mutable: a mutating command
+      // over a read-only block must not reach the store (task 5.6a).
+      if (
+        !NON_MUTATING_COMMANDS.has(intent.command.type) &&
+        readOnlyBlockInSelection(context.frame, context.frame.selection)
+      ) {
+        return {
+          frameId,
+          effects: [rejectEffect('readOnly', 'command rejected because the selection covers read-only text', frameId)],
+        };
+      }
       return { frameId, effects: [{ kind: 'execCommand', frameId, command: intent.command }] };
     case 'delegateNativeInput':
+      if (readOnlyBlockInSelection(context.frame, context.frame.selection)) {
+        return {
+          frameId,
+          effects: [
+            rejectEffect('readOnly', 'native input rejected because the selection covers read-only text', frameId),
+          ],
+        };
+      }
       return { frameId, effects: [{ kind: 'delegateNativeInput', frameId }] };
     case 'capturePointer':
       return { frameId, effects: [{ kind: 'capturePointer', pointerId: intent.pointerId }] };

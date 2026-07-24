@@ -217,6 +217,42 @@ describe('lineWhitespace ownership (task 5.3 defect)', () => {
     expect(plan.effects[0]).toMatchObject({ kind: 'reject', code: 'readOnly' });
   });
 
+  test('read-only whitespace ownership never yields a caret at any click count (task 5.6a)', () => {
+    const frame = publishFrame(modelWithTableCell('a b'));
+    const ws = whitespaceRegion(frame, 'p-cell');
+    if (!ws?.box) throw new Error('ws box');
+    for (const clickCount of [1, 2, 3]) {
+      const plan = planInteraction(
+        { frame, editable: true, readOnly: false, hostMetrics: METRICS },
+        { kind: 'click', frameId: frame.id, clientPoint: pointInWhitespaceBox(frame, ws), clickCount },
+      );
+      expect(plan.effects).toHaveLength(1);
+      expect(plan.effects[0]).toMatchObject({ kind: 'reject', code: 'readOnly' });
+      expect(plan.effects.some((e) => e.kind === 'syncSelection')).toBe(false);
+      expect(plan.effects.some((e) => e.kind === 'focus')).toBe(false);
+    }
+  });
+
+  test('page margin below laid-out body text reports background ownership, not a caret (task 5.6a)', () => {
+    const frame = frameFor('ab cd');
+    const page = frame.display[0]!;
+    const lowestItemBottom = Math.max(...page.items.map((item) => item.box.y + item.box.height));
+    const marginPoint = clientPointForStackedText(
+      frame,
+      0,
+      { x: page.box.width / 2, y: lowestItemBottom + (page.box.height - lowestItemBottom) / 2 },
+      METRICS,
+    );
+    const plan = planInteraction(
+      { frame, editable: true, readOnly: false, hostMetrics: METRICS },
+      { kind: 'click', frameId: frame.id, clientPoint: marginPoint },
+    );
+    expect(plan.effects).toHaveLength(1);
+    expect(plan.effects[0]).toMatchObject({ kind: 'reject', code: 'invalidTarget' });
+    expect((plan.effects[0] as { reason: string }).reason).toContain('page background');
+    expect(plan.effects.some((e) => e.kind === 'syncSelection')).toBe(false);
+  });
+
   test('lineWhitespace without derivable geometry omits box (fail closed)', () => {
     const index = buildSemanticIndex(modelWith(['x']));
     const ws = index.ownershipRegions.find((r) => r.kind === 'lineWhitespace');

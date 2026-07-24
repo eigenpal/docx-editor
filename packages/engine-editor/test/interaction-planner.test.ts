@@ -4,7 +4,14 @@ import type {
   InteractionHostMetrics,
   SemanticSelection,
 } from '@docx-editor.dev/core-contract/interaction';
-import { publishFrame, publishFrameBundle, selectionForBlock } from './interaction-test-helpers.ts';
+import {
+  clientPointForStackedText,
+  modelWithTableCell,
+  publishFrame,
+  publishFrameBundle,
+  selectionForBlock,
+  stackedFrame,
+} from './interaction-test-helpers.ts';
 import { planInteraction, type InteractionPlannerContext } from '../src/interaction-planner.ts';
 
 const METRICS: InteractionHostMetrics = {
@@ -203,5 +210,153 @@ describe('interaction planner (task 5.1)', () => {
     });
     expect(first.effects).toEqual(second.effects);
     expect(first.effects).not.toEqual(alternate.effects);
+  });
+});
+
+describe('body-paragraph interaction subset (task 5.6a)', () => {
+  function clickAt(frame: InteractionFrame, clientPoint: { x: number; y: number }) {
+    return planInteraction(plannerContext(frame), {
+      kind: 'click',
+      frameId: frame.id,
+      clientPoint,
+    });
+  }
+
+  test('editable body text accepts a caret and focuses the input host', () => {
+    const frame = publishFrame();
+    const textItem = frame.display[0]!.items.find((item) => item.kind === 'text')!;
+    const point = clientPointForStackedText(
+      frame,
+      0,
+      { x: textItem.box.x + textItem.box.width / 2, y: textItem.box.y + textItem.box.height / 2 },
+      METRICS,
+    );
+    const plan = clickAt(frame, point);
+    expect(plan.effects.map((e) => e.kind)).toEqual(['syncSelection', 'focus']);
+  });
+
+  test('page background and margin clicks return a typed outcome without changing selection', () => {
+    const frame = stackedFrame(2);
+    const point = clientPointForStackedText(frame, 0, { x: 400, y: 900 }, METRICS);
+    const plan = clickAt(frame, point);
+    expect(plan.effects).toHaveLength(1);
+    expect(plan.effects[0]).toMatchObject({
+      kind: 'reject',
+      code: 'invalidTarget',
+      frameId: frame.id,
+    });
+    expect((plan.effects[0] as { reason: string }).reason).toContain('page background');
+    expect((plan.effects[0] as { reason: string }).reason).toContain('margin');
+    expect(plan.effects.some((e) => e.kind === 'syncSelection')).toBe(false);
+  });
+
+  test('inter-page gap clicks return their own typed reason and move no selection', () => {
+    const frame = stackedFrame(2, 24, 1056, 816);
+    const pageOne = frame.pageGeometry.find((p) => p.index === 0)!.box;
+    const gapPoint = { x: pageOne.x + 400, y: pageOne.y + pageOne.height + 12 };
+    const plan = clickAt(frame, gapPoint);
+    expect(plan.effects).toHaveLength(1);
+    expect(plan.effects[0]).toMatchObject({ kind: 'reject', code: 'invalidTarget' });
+    expect((plan.effects[0] as { reason: string }).reason).toContain('inter-page gap');
+    expect(plan.effects.some((e) => e.kind === 'syncSelection')).toBe(false);
+  });
+
+  test('clicks outside published page geometry stay invalidTarget', () => {
+    const frame = stackedFrame(2);
+    const plan = clickAt(frame, { x: 5000, y: 5000 });
+    expect(plan.effects[0]).toMatchObject({ kind: 'reject', code: 'invalidTarget' });
+  });
+
+  test('read-only body text fails closed and never yields an editable caret', () => {
+    const frame = publishFrame(modelWithTableCell('cell text'));
+    const cellItem = frame.display[0]!.items.find(
+      (item) => item.kind === 'text' && item.semantic.identity.blockId === 'p-cell',
+    )!;
+    const point = clientPointForStackedText(
+      frame,
+      0,
+      { x: cellItem.box.x + cellItem.box.width / 2, y: cellItem.box.y + cellItem.box.height / 2 },
+      METRICS,
+    );
+    for (const clickCount of [1, 2, 3]) {
+      const plan = planInteraction(plannerContext(frame), {
+        kind: 'click',
+        frameId: frame.id,
+        clientPoint: point,
+        clickCount,
+      });
+      expect(plan.effects[0]).toMatchObject({ kind: 'reject', code: 'readOnly' });
+      expect(plan.effects.some((e) => e.kind === 'syncSelection')).toBe(false);
+    }
+  });
+
+  test('declared control and annotation roles fail closed as unsupported', () => {
+    const base = publishFrame();
+    for (const role of ['control', 'annotation', 'atomicObject', 'background'] as const) {
+      const frame: InteractionFrame = {
+        ...base,
+        semanticIndex: {
+          ...base.semanticIndex,
+          caretStops: base.semanticIndex.caretStops.map((stop) => ({ ...stop, role })),
+        },
+      };
+      const textItem = frame.display[0]!.items.find((item) => item.kind === 'text')!;
+      const point = clientPointForStackedText(
+        frame,
+        0,
+        { x: textItem.box.x + 1, y: textItem.box.y + textItem.box.height / 2 },
+        METRICS,
+      );
+      const plan = clickAt(frame, point);
+      expect(plan.effects[0]).toMatchObject({ kind: 'reject', code: 'unsupported' });
+      expect(plan.effects.some((e) => e.kind === 'syncSelection')).toBe(false);
+    }
+  });
+
+  test('native input and commands fail closed when the selection sits in read-only text', () => {
+    const base = publishFrame(modelWithTableCell('cell text'));
+    const frame: InteractionFrame = {
+      ...base,
+      selection: selectionForBlock(base, 'p-cell', 0, 2),
+    };
+    expect(
+      planInteraction(plannerContext(frame), { kind: 'delegateNativeInput', frameId: frame.id }).effects[0],
+    ).toMatchObject({ kind: 'reject', code: 'readOnly' });
+    expect(
+      planInteraction(plannerContext(frame), {
+        kind: 'command',
+        frameId: frame.id,
+        command: { type: 'toggleMark', mark: 'bold' },
+      }).effects[0],
+    ).toMatchObject({ kind: 'reject', code: 'readOnly' });
+  });
+
+  test('history and selection commands stay available over a read-only selection', () => {
+    const base = publishFrame(modelWithTableCell('cell text'));
+    const frame: InteractionFrame = {
+      ...base,
+      selection: selectionForBlock(base, 'p-cell', 0, 2),
+    };
+    for (const command of [{ type: 'undo' as const }, { type: 'redo' as const }]) {
+      expect(
+        planInteraction(plannerContext(frame), { kind: 'command', frameId: frame.id, command }).effects,
+      ).toEqual([{ kind: 'execCommand', frameId: frame.id, command }]);
+    }
+  });
+
+  test('native input and commands still pass through for editable body selections', () => {
+    const base = publishFrame();
+    const blockId = base.semanticIndex.stories[0]!.blocks[0]!.identity.blockId;
+    const frame: InteractionFrame = { ...base, selection: selectionForBlock(base, blockId, 0, 2) };
+    expect(
+      planInteraction(plannerContext(frame), { kind: 'delegateNativeInput', frameId: frame.id }).effects,
+    ).toEqual([{ kind: 'delegateNativeInput', frameId: frame.id }]);
+    expect(
+      planInteraction(plannerContext(frame), {
+        kind: 'command',
+        frameId: frame.id,
+        command: { type: 'undo' },
+      }).effects,
+    ).toEqual([{ kind: 'execCommand', frameId: frame.id, command: { type: 'undo' } }]);
   });
 });
