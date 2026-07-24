@@ -71,6 +71,7 @@
     "prepare": "husky",
     "test:e2e:editor": "playwright test --config e2e/editor-smoke.config.ts",
     "test:e2e:real-adapter-smoke": "playwright test --config e2e/editor-smoke.config.ts e2e/react-real-adapter.smoke.spec.ts e2e/vue-real-adapter.smoke.spec.ts",
+    "test:e2e:react-one-surface-interaction": "playwright test --config e2e/editor-smoke.config.ts e2e/react-one-surface.interaction.spec.ts",
     "verify:real-adapter-smoke": "bun run test:e2e:real-adapter-smoke",
     "test:e2e:real-adapter-gate": "playwright test --config e2e/editor-smoke.config.ts e2e/react-real-adapter.gate.spec.ts e2e/vue-real-adapter.gate.spec.ts",
     "verify:real-adapter-gate": "bun run test:e2e:real-adapter-gate",

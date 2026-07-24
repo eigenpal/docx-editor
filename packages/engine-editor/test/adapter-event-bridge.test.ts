@@ -160,14 +160,23 @@ describe('adapter event bridge wiring (task M2.1)', () => {
     element.emit('pointerdown', pointerEvent({ clientX: 10, clientY: 20, pointerId: 3 }));
     element.emit('pointermove', pointerEvent({ clientX: 11, clientY: 25, pointerId: 3 }));
     element.emit('pointerup', pointerEvent({ clientX: 12, clientY: 30, pointerId: 3 }));
+    // A separate, still press — the click concluding the drag above is
+    // deliberately swallowed (see the drag/click disambiguation tests).
+    element.emit('pointerdown', pointerEvent({ clientX: 12, clientY: 30 }));
     element.emit('click', pointerEvent({ clientX: 12, clientY: 30, detail: 1 }));
 
-    expect(port.intents.map((i) => i.kind)).toEqual(['pointerDown', 'pointerMove', 'pointerUp', 'click']);
+    expect(port.intents.map((i) => i.kind)).toEqual([
+      'pointerDown',
+      'pointerMove',
+      'pointerUp',
+      'pointerDown',
+      'click',
+    ]);
     for (const intent of port.intents) {
       expect(intent.frameId).toEqual(FRAME_ID);
     }
     expect(port.intents[0]).toMatchObject({ clientPoint: { x: 10, y: 20 }, pointerId: 3 });
-    expect(port.intents[3]).toMatchObject({ clientPoint: { x: 12, y: 30 }, clickCount: 1 });
+    expect(port.intents[4]).toMatchObject({ clientPoint: { x: 12, y: 30 }, clickCount: 1 });
   });
 
   test('intents carry no DOM objects, so they stay serializable', () => {
@@ -277,5 +286,99 @@ describe('adapter event bridge wiring (task M2.1)', () => {
     element.emit('pointerdown', pointerEvent());
     element.emit('keydown', keyEvent('ArrowDown'));
     expect(port.intents).toHaveLength(0);
+  });
+});
+
+describe('drag versus click disambiguation (task M3.1)', () => {
+  test('the click that concludes a drag is swallowed so it cannot collapse the range', () => {
+    const element = new FakeElement();
+    const port = fakePort();
+    attachAdapterEventBridge(element, port);
+
+    element.emit('pointerdown', pointerEvent({ clientX: 100, clientY: 200 }));
+    element.emit('pointermove', pointerEvent({ clientX: 140, clientY: 200 }));
+    element.emit('pointerup', pointerEvent({ clientX: 140, clientY: 200, buttons: 0 }));
+    element.emit('click', pointerEvent({ clientX: 140, clientY: 200 }));
+
+    expect(port.intents.map((i) => i.kind)).toEqual(['pointerDown', 'pointerMove', 'pointerUp']);
+    expect(port.intents.some((i) => i.kind === 'click')).toBe(false);
+  });
+
+  test('a still press still produces a click', () => {
+    const element = new FakeElement();
+    const port = fakePort();
+    attachAdapterEventBridge(element, port);
+
+    element.emit('pointerdown', pointerEvent({ clientX: 100, clientY: 200 }));
+    element.emit('pointerup', pointerEvent({ clientX: 100, clientY: 200, buttons: 0 }));
+    element.emit('click', pointerEvent({ clientX: 100, clientY: 200 }));
+
+    expect(port.intents.some((i) => i.kind === 'click')).toBe(true);
+  });
+
+  test('a shaky press within slop is a click, not a drag', () => {
+    const element = new FakeElement();
+    const port = fakePort();
+    attachAdapterEventBridge(element, port);
+
+    element.emit('pointerdown', pointerEvent({ clientX: 100, clientY: 200 }));
+    element.emit('pointermove', pointerEvent({ clientX: 102, clientY: 201 }));
+    element.emit('pointerup', pointerEvent({ clientX: 102, clientY: 201, buttons: 0 }));
+    element.emit('click', pointerEvent({ clientX: 102, clientY: 201 }));
+
+    expect(port.intents.some((i) => i.kind === 'click')).toBe(true);
+  });
+
+  test('drag state does not leak into the next gesture', () => {
+    const element = new FakeElement();
+    const port = fakePort();
+    attachAdapterEventBridge(element, port);
+
+    element.emit('pointerdown', pointerEvent({ clientX: 100, clientY: 200 }));
+    element.emit('pointermove', pointerEvent({ clientX: 160, clientY: 200 }));
+    element.emit('pointerup', pointerEvent({ clientX: 160, clientY: 200, buttons: 0 }));
+    element.emit('click', pointerEvent({ clientX: 160, clientY: 200 }));
+
+    element.emit('pointerdown', pointerEvent({ clientX: 300, clientY: 400 }));
+    element.emit('pointerup', pointerEvent({ clientX: 300, clientY: 400, buttons: 0 }));
+    element.emit('click', pointerEvent({ clientX: 300, clientY: 400 }));
+
+    expect(port.intents.filter((i) => i.kind === 'click')).toHaveLength(1);
+  });
+});
+
+describe('real pointermove button semantics (task M3.1)', () => {
+  test('a move reporting button -1 is forwarded, not filtered as non-primary', () => {
+    const element = new FakeElement();
+    const port = fakePort();
+    attachAdapterEventBridge(element, port);
+
+    // Chrome reports button: -1 on pointermove ("no button changed"). Treating
+    // that as a non-primary button drops every move in a drag.
+    element.emit('pointerdown', pointerEvent({ clientX: 100, clientY: 200, button: 0, buttons: 1 }));
+    element.emit('pointermove', pointerEvent({ clientX: 140, clientY: 200, button: -1, buttons: 1 }));
+    element.emit('pointerup', pointerEvent({ clientX: 140, clientY: 200, button: 0, buttons: 0 }));
+
+    expect(port.intents.map((i) => i.kind)).toEqual(['pointerDown', 'pointerMove', 'pointerUp']);
+  });
+
+  test('a genuinely non-primary button is still rejected', () => {
+    const element = new FakeElement();
+    const port = fakePort();
+    attachAdapterEventBridge(element, port);
+    element.emit('pointerdown', pointerEvent({ button: 2, buttons: 2 }));
+    element.emit('pointermove', pointerEvent({ button: 1, buttons: 4 }));
+    expect(port.intents).toHaveLength(0);
+  });
+
+  test('a drag of button -1 moves swallows its trailing click', () => {
+    const element = new FakeElement();
+    const port = fakePort();
+    attachAdapterEventBridge(element, port);
+    element.emit('pointerdown', pointerEvent({ clientX: 100, clientY: 200, button: 0, buttons: 1 }));
+    element.emit('pointermove', pointerEvent({ clientX: 140, clientY: 200, button: -1, buttons: 1 }));
+    element.emit('pointerup', pointerEvent({ clientX: 140, clientY: 200, button: 0, buttons: 0 }));
+    element.emit('click', pointerEvent({ clientX: 140, clientY: 200, button: 0, buttons: 0 }));
+    expect(port.intents.some((i) => i.kind === 'click')).toBe(false);
   });
 });

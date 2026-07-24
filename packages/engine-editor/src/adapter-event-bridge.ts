@@ -105,8 +105,21 @@ export function keyboardIntentKind(key: string, modifiers: KeyboardModifiers): '
   return 'geometryKeyboard';
 }
 
+/** Pointer travel that turns a press into a drag rather than a click. */
+const DRAG_SLOP_PX = 3;
+
+function movedBeyondSlop(press: { x: number; y: number }, event: BridgePointerEvent): boolean {
+  return Math.abs(event.clientX - press.x) > DRAG_SLOP_PX || Math.abs(event.clientY - press.y) > DRAG_SLOP_PX;
+}
+
+/**
+ * A real `pointermove` reports `button: -1` — "no button changed since the last
+ * event" — not `0`. Rejecting that as non-primary silently drops every move in a
+ * drag, which leaves the range unextended and lets the trailing click collapse
+ * the selection. Only a positive, non-primary button is rejected.
+ */
 function isPrimaryPointer(event: BridgePointerEvent): boolean {
-  if (event.button !== undefined && event.button !== 0) return false;
+  if (event.button !== undefined && event.button > 0) return false;
   if (event.buttons !== undefined && (event.buttons & ~1) !== 0) return false;
   return true;
 }
@@ -151,6 +164,14 @@ const POINTER_KINDS = {
 export function attachAdapterEventBridge(element: BridgeElement, port: BridgeEditorPort): () => void {
   const registered: { type: string; listener: (event: any) => void }[] = [];
 
+  // A drag ends with the browser firing `click` on top of `pointerup`. Forwarding
+  // that click would place a collapsed caret and wipe the range the user just
+  // dragged, so a click that concludes a drag is swallowed. Movement is measured
+  // in client pixels from the press, with a small slop so a shaky click still
+  // counts as a click.
+  let pressPoint: { x: number; y: number } | null = null;
+  let pointerDragged = false;
+
   function on(type: string, listener: (event: any) => void): void {
     element.addEventListener(type, listener);
     registered.push({ type, listener });
@@ -169,6 +190,19 @@ export function attachAdapterEventBridge(element: BridgeElement, port: BridgeEdi
       // pointercancel carries no button state worth filtering; every other
       // pointer phase must be a primary-button gesture.
       if (domType !== 'pointercancel' && !isPrimaryPointer(event)) return;
+
+      if (domType === 'pointerdown') {
+        pressPoint = { x: event.clientX, y: event.clientY };
+        pointerDragged = false;
+      } else if (domType === 'pointermove' && pressPoint) {
+        if (movedBeyondSlop(pressPoint, event)) pointerDragged = true;
+      } else if (domType === 'click') {
+        const concludedDrag = pointerDragged;
+        pressPoint = null;
+        pointerDragged = false;
+        if (concludedDrag) return;
+      }
+
       dispatch({
         kind: intentKind,
         frameId,
