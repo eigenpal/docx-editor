@@ -1,6 +1,6 @@
 # Interactive paginated editing — accelerated execution tasks
 
-Progress: **68 / 114** complete.
+Progress: **69 / 114** complete.
 
 | Baseline | Count |
 | --- | --- |
@@ -176,7 +176,7 @@ Not the formal public **`interactive-paginated`** claim (that remains **8.10**).
 
 - [ ] 6.5 Create `e2e/paired-one-surface.interaction.spec.ts` and `package.json` script `test:e2e:paired-one-surface-interaction` covering React + Vue bounded-document fixture through the one-surface path (click target → type → selection → `Editor.can({ type: 'toggleMark', mark: 'bold' })` then `Editor.exec({ type: 'toggleMark', mark: 'bold' })` → clipboard → synthetic composition → undo/redo → **`Editor.save()`** reopen). **Deliverable:** paired spec green; supersedes separate React/Vue rows in CI when wired.
 - [x] 6.6 Make split edit/preview explicitly diagnostic; remove from normal demo startup after paired preview baseline passes. **Deliverable:** default preview demo uses greenfield one-surface + shell; `?edit=1` diagnostic only.
-- [ ] M6.1 Update `openspec/changes/interactive-paginated-editing/browser-platform-matrix.md` and internal preview notes for **paired bounded-document internal/preview alpha**; feature-support manifest and public docs MUST remain below `interactive-paginated`. **Deliverable:** honesty rules explicit that **8.10** is first public claim.
+- [x] M6.1 Update `openspec/changes/interactive-paginated-editing/browser-platform-matrix.md` and internal preview notes for **paired bounded-document internal/preview alpha**; feature-support manifest and public docs MUST remain below `interactive-paginated`. **Deliverable:** honesty rules explicit that **8.10** is first public claim.
 - [ ] M6-R1 Run: `bun run verify:real-adapter-smoke`; `bun run verify:real-adapter-gate`; `bun run verify:a11y-tree`; `bun run test:e2e:paired-one-surface-interaction`; `bun run check:parity-contract`; `bun run typecheck`; `openspec validate interactive-paginated-editing --strict`; `git diff --cached --check`; `git diff --check`. Write results to `openspec/changes/interactive-paginated-editing/evidence/m6/verification-log.md`. Stage and commit per staging manifest.
 - [ ] M6-R2 Manual paired preview checklist in `openspec/changes/interactive-paginated-editing/evidence/m6/manual-chrome-paired.md` (Vue `http://127.0.0.1:5274/?realAdapter=1` and React `http://127.0.0.1:5273/?realAdapter=1`); independent review (no Blocker/High); write `openspec/changes/interactive-paginated-editing/evidence/m6/summary.md`; mark **6.5** and **6.6** complete; stage and commit per staging manifest. **Allowed:** internal/preview alpha — **not** public `interactive-paginated`.
 
