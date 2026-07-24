@@ -12,7 +12,7 @@ import {
   selectTextblockStart,
   selectTextblockEnd,
 } from 'prosemirror-commands';
-import type { InteractionFrameId, InteractionOutcome, InputObservation } from '@docx-editor.dev/core-contract/interaction';
+import type { InteractionFrameId, InteractionOutcome, InputObservation, AccessibilityObservation } from '@docx-editor.dev/core-contract/interaction';
 import {
   captureSelection,
   captureSelectionRange,
@@ -43,6 +43,13 @@ import {
 import type { CompositionObservation } from '@docx-editor.dev/core-contract/interaction';
 import { paragraphText } from '@docx-editor.dev/engine-core';
 import {
+  observeAccessibilityFromSession,
+  captureAccessibilityState,
+  resolveAccessibilityNamePolicy,
+  reapplyAccessibilityProjectionDom,
+  type AccessibilityObservationRequest,
+} from './accessibility-projection.ts';
+import {
   boundClipboardHtml,
   boundClipboardText,
   isCompositionOwnedBeforeInput,
@@ -63,6 +70,8 @@ export interface PmSelectionSnapshot {
 /** A PM-FREE handle to a mounted edit surface — no EditorView or PM type leaks out. */
 export interface EditSurface {
   readonly editable: boolean;
+  readonly interactionAuthorized: boolean;
+  readonly semanticProjectionAttached: boolean;
   readonly inputHostState: InputHostAssistiveState;
   focus(options?: { sync?: SemanticSelectionSyncRequest; frameId?: InteractionFrameId }): InteractionOutcome<void>;
   blur(): void;
@@ -76,10 +85,15 @@ export interface EditSurface {
   getPmSelection(): PmSelectionSnapshot;
   getCompositionObservation(): CompositionObservation;
   getInputObservation(): InputObservation;
+  getAccessibilityObservation(request: AccessibilityObservationRequest): AccessibilityObservation;
 }
 
 export interface MountEditSurfaceOptions {
   onModelChanged?: () => void;
+  accessibleName?: string;
+  accessibilityAtomLabels?: Readonly<Record<string, string>>;
+  /** When true, mount a read-only semantic projection (contenteditable false, no input authorization). */
+  readOnlyProjection?: boolean;
   inputHost?: InputHostControllerOptions;
   /** Test-only hook to observe PM-free selection and drive native composition DOM events. */
   testHooks?: {
@@ -122,53 +136,19 @@ function applyAnchorsToView(
   }
 }
 
-/** Mount a ProseMirror edit surface for `session`. When read-only, mounts nothing. */
+/** Mount a ProseMirror semantic projection for `session` (editable or read-only). */
 export function mountEditSurface(
   mountParent: HTMLElement,
   session: DocxEditorSession,
   options: MountEditSurfaceOptions = {},
 ): EditSurface {
-  const noopPlacement: InputHostPlacement = {
-    clientRect: { x: 8, y: 8, width: 200, height: 24 },
-    reason: 'fallback',
-  };
-  const noopState: InputHostAssistiveState = {
-    policy: 'sole-editing-projection',
-    paintedPagesAssistiveRole: 'presentation',
-    hostAttached: false,
-    placement: noopPlacement,
-  };
-  const readOnlyOutcome = (): InteractionOutcome<void> => ({
-    ok: false,
-    code: 'readOnly',
-    reason: 'document is read-only',
-  });
-
-  if (!session.editable) {
-    return {
-      editable: false,
-      inputHostState: noopState,
-      focus: readOnlyOutcome,
-      blur: () => {},
-      destroy: () => {},
-      syncSemanticSelection: readOnlyOutcome,
-      updateInputHostPlacement: () => noopPlacement,
-      retainSelectionForOwnedPopup: () => {},
-      releaseOwnedPopup: () => {},
-      getSelectionAnchor: () => ({ paragraphId: null, offset: 0, affinity: 'after' }),
-      getSelectionRange: () => ({
-        anchor: { paragraphId: null, offset: 0, affinity: 'after' },
-        head: { paragraphId: null, offset: 0, affinity: 'after' },
-      }),
-      getPmSelection: () => ({ from: 0, to: 0, empty: true }),
-      getCompositionObservation: () => observeComposition(false, null),
-      getInputObservation: () => observeInput(null),
-    };
-  }
-
+  const readOnlyProjection = options.readOnlyProjection ?? !session.editable;
+  const interactionAuthorized = !readOnlyProjection && session.editable;
   const onModelChanged = options.onModelChanged ?? (() => {});
   const doc = mountParent.ownerDocument ?? document;
-  const inputHost = createInputHostController(doc, options.inputHost);
+  const accessibleNamePolicy = resolveAccessibilityNamePolicy(options.accessibleName);
+  const atomLabels = options.accessibilityAtomLabels;
+  const inputHost = createInputHostController(doc, { ...options.inputHost, accessibleName: options.accessibleName });
   mountParent.append(inputHost.root);
 
   let ownedPopupDepth = 0;
@@ -225,18 +205,20 @@ export function mountEditSurface(
     return true;
   }
 
-  const plugins = [
-    keymap({
-      ...baseKeymap,
-      'Mod-z': () => doUndo(),
-      'Mod-y': () => doRedo(),
-      'Shift-Mod-z': () => doRedo(),
-      ArrowLeft: (state, dispatch) => (dispatch ? moveSelectionHorizontally(state, dispatch, -1) : false),
-      ArrowRight: (state, dispatch) => (dispatch ? moveSelectionHorizontally(state, dispatch, 1) : false),
-      Home: selectTextblockStart,
-      End: selectTextblockEnd,
-    }),
-  ];
+  const plugins = interactionAuthorized
+    ? [
+        keymap({
+          ...baseKeymap,
+          'Mod-z': () => doUndo(),
+          'Mod-y': () => doRedo(),
+          'Shift-Mod-z': () => doRedo(),
+          ArrowLeft: (state, dispatch) => (dispatch ? moveSelectionHorizontally(state, dispatch, -1) : false),
+          ArrowRight: (state, dispatch) => (dispatch ? moveSelectionHorizontally(state, dispatch, 1) : false),
+          Home: selectTextblockStart,
+          End: selectTextblockEnd,
+        }),
+      ]
+    : [];
 
   let reconciling = false;
   let pendingCompositionCommit = false;
@@ -270,6 +252,9 @@ export function mountEditSurface(
   }
 
   function requireInputAuthorized(): InputRejection | null {
+    if (!interactionAuthorized) {
+      return rejectUnauthorizedInput('input rejected because the semantic projection is read-only');
+    }
     if (destroyed) {
       return rejectUnauthorizedInput('input rejected because the edit surface was destroyed');
     }
@@ -322,7 +307,7 @@ export function mountEditSurface(
 
   const view = new EditorView(inputHost.pmMount, {
     state: EditorState.create({ doc: session.projectDoc(), plugins }),
-    editable: () => session.editable,
+    editable: () => interactionAuthorized,
     transformPastedHTML(html) {
       currentPasteRejected = false;
       const bounded = boundClipboardHtml(html);
@@ -512,6 +497,13 @@ export function mountEditSurface(
     },
   });
 
+  function applyAccessibilityDom(): void {
+    view.dom.contentEditable = interactionAuthorized ? 'true' : 'false';
+    view.dom.setAttribute('contenteditable', interactionAuthorized ? 'true' : 'false');
+    reapplyAccessibilityProjectionDom(view.dom, accessibleNamePolicy, atomLabels);
+  }
+  applyAccessibilityDom();
+
   function pmParagraphText(paragraphId: string): string {
     let text = '';
     view.state.doc.forEach((node) => {
@@ -657,6 +649,7 @@ export function mountEditSurface(
     }
     view.dispatch(tr);
     reconciling = false;
+    applyAccessibilityDom();
     if (reapplySemantic) reapplyRetainedSelection();
   }
 
@@ -695,6 +688,7 @@ export function mountEditSurface(
     reconciling = true;
     view.dispatch(tr.setMeta('addToHistory', false));
     reconciling = false;
+    applyAccessibilityDom();
   }
 
   function applySemanticSelection(request: SemanticSelectionSyncRequest): InteractionOutcome<void> {
@@ -715,7 +709,9 @@ export function mountEditSurface(
   }
 
   const surface: EditSurface = {
-    editable: true,
+    editable: interactionAuthorized,
+    interactionAuthorized,
+    semanticProjectionAttached: true,
     get inputHostState() {
       return inputHost.assistiveState;
     },
@@ -728,7 +724,7 @@ export function mountEditSurface(
         if (!synced.ok) return synced;
         if (layoutPending) return pendingLayoutOutcome(options.sync.frameId);
         view.focus();
-        inputAuthorized = true;
+        if (interactionAuthorized) inputAuthorized = true;
         return synced;
       }
       if (retainedSemanticSelection) {
@@ -747,7 +743,7 @@ export function mountEditSurface(
         if (!synced.ok) return synced;
         if (layoutPending) return pendingLayoutOutcome(frameId);
         view.focus();
-        inputAuthorized = true;
+        if (interactionAuthorized) inputAuthorized = true;
         return synced;
       }
       if (!frameId) {
@@ -800,6 +796,20 @@ export function mountEditSurface(
     }),
     getCompositionObservation: () => observeComposition(imeComposing, lastCompositionCancel),
     getInputObservation: () => observeInput(lastInputRejection),
+    getAccessibilityObservation: (request) =>
+      observeAccessibilityFromSession(
+        session,
+        request,
+        captureAccessibilityState({
+          view,
+          scope: request.scope,
+          editable: interactionAuthorized,
+          name: accessibleNamePolicy,
+          frameId: request.frameId,
+          owner: 'proseMirrorInputHost',
+          paintedPagesAssistiveRole: 'presentation',
+        }),
+      ),
   };
 
   const unsub = session.subscribe(() => {

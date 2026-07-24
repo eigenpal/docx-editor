@@ -37,6 +37,7 @@ import type {
   SemanticPositionIndex,
   SemanticSelection,
   SemanticTarget,
+  AccessibilityObservation,
 } from '@docx-editor.dev/core-contract/interaction';
 import {
   openDocxSession,
@@ -44,7 +45,12 @@ import {
   type DocxEditorSession,
   type EditSurface,
   type InputHostViewport,
+  markPaintedPagesPresentationOnly,
+  clearPaintedPagesPresentationOnly,
+  resolveAccessibilityNamePolicy,
+  observeAccessibility,
 } from '@docx-editor.dev/engine-binding';
+import { createEmptyModel } from '@docx-editor.dev/engine-core';
 import { layoutBody, HelveticaMetrics } from '@docx-editor.dev/engine-layout';
 import { toDisplayPages } from './display-bridge.ts';
 import { InteractionFrameStore, emptyInteractionFrame } from './interaction-frame.ts';
@@ -103,6 +109,7 @@ export function createEditor(config: EditorConfig): Editor {
   const host = config.host;
   const readOnly = config.mode === 'view';
   const zoom = config.zoom ?? 1; // the adapter applies zoom on paint; carried in snapshot()
+  const accessibleNamePolicy = resolveAccessibilityNamePolicy(config.accessibleName);
 
   type Handlers = { [E in keyof EditorEvents]: Set<EditorEvents[E]> };
   const handlers: Handlers = { change: new Set(), selectionChange: new Set(), display: new Set(), error: new Set() };
@@ -114,6 +121,7 @@ export function createEditor(config: EditorConfig): Editor {
   let surface: EditSurface | null = null;
   let sharedUnsub: (() => void) | null = null; // store subscription for a live read-only shared view
   let mountedBodyEl: HTMLElement | null = null; // the element `surface` is bound to (host may swap it)
+  let markedPagesContainer: HTMLElement | null = null;
   const frames = new InteractionFrameStore();
   let resourceEpoch = 0;
   const configurationEpoch = 0;
@@ -172,7 +180,7 @@ export function createEditor(config: EditorConfig): Editor {
   }
 
   function updateInputHostFromFrame(): void {
-    if (!surface?.editable) return;
+    if (!surface?.semanticProjectionAttached || !surface.interactionAuthorized) return;
     const frame = currentFrame();
     surface.updateInputHostPlacement({
       frameId: frame.id,
@@ -184,10 +192,35 @@ export function createEditor(config: EditorConfig): Editor {
     });
   }
 
+  function syncPaintedPagesAssistivePolicy(): void {
+    const pagesContainer = host.getPagesContainer?.() ?? null;
+    if (markedPagesContainer && markedPagesContainer !== pagesContainer) {
+      clearPaintedPagesPresentationOnly(markedPagesContainer);
+      markedPagesContainer = null;
+    }
+    if (!pagesContainer) return;
+    if (surface?.semanticProjectionAttached) {
+      markPaintedPagesPresentationOnly(pagesContainer);
+      markedPagesContainer = pagesContainer;
+      return;
+    }
+    if (markedPagesContainer === pagesContainer) {
+      clearPaintedPagesPresentationOnly(pagesContainer);
+      markedPagesContainer = null;
+    }
+  }
+
+  function clearPaintedPagesAssistivePolicy(): void {
+    if (!markedPagesContainer) return;
+    clearPaintedPagesPresentationOnly(markedPagesContainer);
+    markedPagesContainer = null;
+  }
+
   function emitLayoutFrame(frame: InteractionFrame): void {
     host.onDisplay?.(frame.display);
     host.onTotalPages?.(frame.display.length);
     emit('display', frame.display);
+    syncPaintedPagesAssistivePolicy();
     updateInputHostFromFrame();
   }
 
@@ -227,19 +260,23 @@ export function createEditor(config: EditorConfig): Editor {
     completeLayoutPublication(layoutToken);
   }
 
-  // Mount the edit surface if it is wanted (editable + not view-mode) and the host body element is
-  // available — the host may return null through first render (retried on relayout), or later return
-  // a DIFFERENT element (a conforming host need not keep it stable), in which case rebind to the new
-  // one so editing never stays attached to a detached node.
+  // Mount the semantic projection when the host body element is available. Editable documents
+  // authorize input; read-only/view/shared-handle policies choose read-only or no projection.
   function ensureSurface(): void {
-    if (destroyed || readOnly || sharedView || !session || !session.editable) return;
+    if (destroyed || sharedView || !session) return;
     const bodyEl = host.getBodyHostEl();
     if (!bodyEl) return;
-    if (surface && bodyEl === mountedBodyEl) return; // already mounted on this element
-    if (surface) surface.destroy(); // element was replaced — rebind
-    surface = mountEditSurface(bodyEl, session, { onModelChanged });
+    if (surface && bodyEl === mountedBodyEl) return;
+    if (surface) surface.destroy();
+    surface = mountEditSurface(bodyEl, session, {
+      onModelChanged,
+      accessibleName: config.accessibleName,
+      accessibilityAtomLabels: config.accessibilityAtomLabels,
+      readOnlyProjection: readOnly || !session.editable,
+    });
     mountedBodyEl = bodyEl;
     updateInputHostFromFrame();
+    syncPaintedPagesAssistivePolicy();
   }
 
   function rejectPointer(
@@ -393,6 +430,26 @@ export function createEditor(config: EditorConfig): Editor {
       return outcome.ok ? outcome.value : null;
     },
     resolvePointer,
+    getAccessibilityObservation: (): AccessibilityObservation => {
+      const frame = currentFrame();
+      const scope = activeScope;
+      if (surface?.semanticProjectionAttached) {
+        return surface.getAccessibilityObservation({ frameId: frame.id, scope });
+      }
+      return observeAccessibility({
+        frameId: frame.id,
+        scope,
+        modelRevision: session?.revision() ?? 0,
+        editable: !readOnly && !sharedView && session?.editable === true,
+        name: accessibleNamePolicy,
+        focus: { scope: null, focused: false },
+        selectionRange: null,
+        atomicObjectId: null,
+        model: session?.currentModel() ?? createEmptyModel(),
+        owner: 'none',
+        paintedPagesAssistiveRole: null,
+      });
+    },
     getPageGeometry: () => currentFrame().pageGeometry,
     getScrollGeometry: () => currentFrame().scrollGeometry,
 
@@ -418,6 +475,7 @@ export function createEditor(config: EditorConfig): Editor {
       destroyed = true;
       cancelScheduledLayoutWork();
       frames.cancelPendingLayout();
+      clearPaintedPagesAssistivePolicy();
       surface?.destroy();
       surface = null;
       mountedBodyEl = null;

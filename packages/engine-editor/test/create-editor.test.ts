@@ -3,6 +3,9 @@
 // view mounts (that path is covered by the paired browser smoke tests); this proves the composition
 // wiring the adapters depend on.
 
+import { GlobalRegistrator } from '@happy-dom/global-registrator';
+if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register();
+
 import { describe, expect, test } from 'bun:test';
 import { createEditor } from '../src/index.ts';
 import type { EditorHost } from '@docx-editor.dev/core-contract/editor';
@@ -110,15 +113,30 @@ describe('createEditor lifecycle (byte-native, PM-free host)', () => {
     b.destroy();
   });
 
-  test('mode:"view" opens read-only even for a patchable document (no edit surface mounted)', () => {
-    const bodyEl = { ownerDocument: undefined } as unknown as HTMLElement;
-    const { host, displays } = makeHost({ getBodyHostEl: () => bodyEl });
+  test('mode:"view" opens read-only with a semantic projection for accessibility', () => {
+    const bodyEl = document.createElement('div');
+    const pages = document.createElement('div');
+    const scroll = document.createElement('div');
+    scroll.append(pages, bodyEl);
+    document.body.append(scroll);
+    const { host, displays } = makeHost({
+      getBodyHostEl: () => bodyEl,
+      getPagesContainer: () => pages,
+      getScrollContainer: () => scroll,
+    });
     const editor = createEditor({ host, document: docxBytes(), mode: 'view' });
     expect(displays.length).toBeGreaterThan(0);
+    expect(editor.snapshot().editable).toBe(false);
+    expect(bodyEl.querySelector('[data-docx-input-host-mount]')).not.toBeNull();
+    expect(pages.getAttribute('aria-hidden')).toBe('true');
+    const obs = editor.getAccessibilityObservation();
+    expect(obs.owner).toBe('proseMirrorInputHost');
     const focus = editor.focus();
     expect(focus.ok).toBe(false);
     if (!focus.ok) expect(focus.code).toBe('readOnly');
     editor.destroy();
+    expect(pages.hasAttribute('aria-hidden')).toBe(false);
+    scroll.remove();
   });
 
   test('destroy clears the display list and blocks new listeners', () => {

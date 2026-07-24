@@ -255,6 +255,57 @@ export interface InputObservation {
   readonly lastRejection: InputRejectionObservation | null;
 }
 
+/** Who owns the accessible semantic projection for the body-paragraph gate. */
+export type AccessibilityProjectionOwner = 'proseMirrorInputHost' | 'none';
+
+/**
+ * Adapter-provided accessible name policy. When absent, callers MUST NOT invent an
+ * untranslated fallback label in the accessibility tree.
+ */
+export type AccessibilityNamePolicy =
+  | { readonly kind: 'provided'; readonly value: string }
+  | { readonly kind: 'absent' };
+
+/** Canonical accessibility role for one block entry in reading order. */
+export type AccessibilityEntryRole = 'editableParagraph' | 'readOnlyAtom' | 'unsupportedStructure';
+
+/** One canonical block entry projected for accessibility conformance. */
+export interface AccessibilityEntry {
+  readonly orderIndex: number;
+  readonly identity: SemanticIdentity;
+  readonly role: AccessibilityEntryRole;
+  readonly readOnly: boolean;
+  /** UTF-16 text for editable paragraphs; empty for empty paragraphs and atoms. */
+  readonly text: string;
+  /** Declared block kind for read-only atoms (for example `table`). */
+  readonly atomKind?: string;
+}
+
+/** Semantic selection mapped to canonical targets (never PM positions). */
+export interface AccessibilitySelectionObservation {
+  readonly collapsed: boolean;
+  readonly anchor: SemanticTarget;
+  readonly head: SemanticTarget;
+}
+
+/**
+ * PM-free immutable accessibility observation for conformance. Projects store/PM
+ * state without exposing ProseMirror types, DOM ranges, or adapter framework types.
+ */
+export interface AccessibilityObservation {
+  readonly owner: AccessibilityProjectionOwner;
+  readonly scope: ViewScope;
+  readonly frameId: InteractionFrameId;
+  readonly modelRevision: number;
+  readonly editable: boolean;
+  readonly name: AccessibilityNamePolicy;
+  readonly entries: readonly AccessibilityEntry[];
+  readonly focus: FocusObservation;
+  readonly selection: AccessibilitySelectionObservation | null;
+  /** Set only while an attached PM semantic projection owns assistive access. */
+  readonly paintedPagesAssistiveRole: 'presentation' | null;
+}
+
 /** Stacked scroll extent from the current interaction frame. */
 export interface ScrollGeometry {
   readonly contentHeight: number;

@@ -7,6 +7,7 @@
 import type { ContentControlSummary, DocEdits, DocQueries, DocQueryResults } from './index';
 import type { DisplayPage } from './geometry';
 import type {
+  AccessibilityObservation,
   CaretGeometry,
   HitTestOptions,
   InteractionFrame,
@@ -87,6 +88,10 @@ export interface EditorConfig {
    * override it per call. */
   author?: string;
   locale?: string;
+  /** Localized accessible name for the hidden semantic projection; omit to leave the name unset. */
+  accessibleName?: string;
+  /** Localized read-only atom labels keyed by block kind (for example `table`); omit to leave atom names unset. */
+  accessibilityAtomLabels?: Readonly<Record<string, string>>;
   zoom?: number;
   /** `'view'` opens the document read-only (no edit surface is mounted) even when it is otherwise
    *  editable; `'edit'` (default) mounts the editing surface for a patchable document. Sampled at
@@ -229,6 +234,8 @@ export interface Editor {
   getScrollGeometry(): ScrollGeometry;
   /** Resolve pointer intent with typed stale/pending/read-only outcomes (see driver). */
   resolvePointer(point: Point, options?: HitTestOptions): InteractionOutcome<SemanticHitTarget>;
+  /** PM-free accessibility observation projecting the current interaction frame. */
+  getAccessibilityObservation(): AccessibilityObservation;
 
   /** Replaces the module-scope cache-invalidation calls adapters make today. */
   relayout(options?: { sync?: boolean }): void;

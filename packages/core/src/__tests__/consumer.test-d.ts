@@ -132,6 +132,10 @@ export function exercise(editor: Editor, doc: DocxDocument): void {
     void focusCode;
   }
 
+  const a11y = editor.getAccessibilityObservation();
+  void a11y.owner;
+  void a11y.entries.length;
+
   // Document-layer queries are typed the same way.
   const paras = queryDoc(doc, { type: 'paragraphs' });
   const first: string | undefined = paras[0]?.text;

@@ -5,6 +5,7 @@
 
 import type { InteractionFrameId } from '@docx-editor.dev/core-contract/interaction';
 import type { Rect } from '@docx-editor.dev/core-contract/types';
+import { applyAccessibleNamePolicy, resolveAccessibilityNamePolicy } from './accessibility-projection.ts';
 
 export const INPUT_HOST_MIN_WIDTH_PX = 2;
 export const INPUT_HOST_MIN_HEIGHT_PX = 16;
@@ -42,7 +43,7 @@ export interface InputHostPlacementRequest {
 }
 
 export interface InputHostAssistiveState {
-  readonly policy: 'sole-editing-projection';
+  readonly policy: 'sole-semantic-projection';
   readonly paintedPagesAssistiveRole: 'presentation';
   readonly hostAttached: boolean;
   readonly placement: InputHostPlacement;
@@ -50,6 +51,7 @@ export interface InputHostAssistiveState {
 
 export interface InputHostControllerOptions {
   readonly viewport?: InputHostViewport;
+  readonly accessibleName?: string;
 }
 
 export interface InputHostController {
@@ -135,7 +137,7 @@ export function createInputHostController(doc: Document, options: InputHostContr
   const defaultViewport = options.viewport ?? DEFAULT_VIEWPORT;
   const root = doc.createElement('div');
   root.setAttribute('data-docx-input-host', 'true');
-  root.setAttribute('data-assistive-policy', 'sole-editing-projection');
+  root.setAttribute('data-assistive-policy', 'sole-semantic-projection');
   root.setAttribute('data-painted-pages-assistive-role', 'presentation');
 
   const clipShell = doc.createElement('div');
@@ -143,9 +145,8 @@ export function createInputHostController(doc: Document, options: InputHostContr
 
   const pmMount = doc.createElement('div');
   pmMount.setAttribute('data-docx-input-host-mount', 'true');
-  pmMount.setAttribute('role', 'textbox');
-  pmMount.setAttribute('aria-multiline', 'true');
   pmMount.setAttribute('tabindex', '-1');
+  applyAccessibleNamePolicy(pmMount, resolveAccessibilityNamePolicy(options.accessibleName));
 
   clipShell.append(pmMount);
   root.append(clipShell);
@@ -166,7 +167,7 @@ export function createInputHostController(doc: Document, options: InputHostContr
     pmMount,
     get assistiveState(): InputHostAssistiveState {
       return {
-        policy: 'sole-editing-projection',
+        policy: 'sole-semantic-projection',
         paintedPagesAssistiveRole: 'presentation',
         hostAttached: !destroyed && root.isConnected,
         placement: lastPlacement,

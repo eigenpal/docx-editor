@@ -20,9 +20,17 @@ const KEY_CODE_BY_KEY: Readonly<Record<string, number>> = {
 };
 
 export function pmDom(parent: HTMLElement): HTMLElement {
+  const mount = parent.querySelector('[data-docx-input-host-mount]');
+  if (mount instanceof HTMLElement && mount.isContentEditable) return mount;
   const el = parent.querySelector('[data-docx-input-host-mount] [contenteditable="true"]');
   if (!(el instanceof HTMLElement)) throw new Error('ProseMirror contenteditable not found');
   return el;
+}
+
+export function semanticMount(parent: HTMLElement): HTMLElement {
+  const mount = parent.querySelector('[data-docx-input-host-mount]');
+  if (!(mount instanceof HTMLElement)) throw new Error('semantic projection mount not found');
+  return mount;
 }
 
 function findPrimaryTextNode(root: HTMLElement): Text | null {

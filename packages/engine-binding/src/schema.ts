@@ -27,8 +27,8 @@ registerBindingNode(
     // The authored paragraph id, threaded through so edits keep identity.
     attrs: { semId: { default: null } },
     // toDOM lets the schema also drive a live EditorView (not just headless mapping).
-    toDOM() {
-      return ['p', 0];
+    toDOM(node) {
+      return ['p', { 'data-sem-id': String(node.attrs.semId ?? '') }, 0];
     },
     parseDOM: [{ tag: 'p' }],
   },
@@ -43,7 +43,7 @@ registerBindingNode(
   {
     group: 'block',
     atom: true,
-    selectable: false,
+    selectable: true,
     draggable: false,
     attrs: { semId: { default: null }, kind: { default: 'block' } },
     toDOM(node) {
@@ -53,9 +53,9 @@ registerBindingNode(
           class: 'docx-block-embed',
           'data-sem-id': String(node.attrs.semId ?? ''),
           'data-kind': String(node.attrs.kind ?? 'block'),
+          'data-block-role': 'readOnlyAtom',
           contenteditable: 'false',
         },
-        `[${String(node.attrs.kind ?? 'block')}]`,
       ];
     },
   },

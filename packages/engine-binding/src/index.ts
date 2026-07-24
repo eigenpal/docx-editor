@@ -52,3 +52,20 @@ export {
   type InputHostPlacementReason,
   type InputHostViewport,
 } from './input-host.ts';
+export {
+  PAINTED_PAGES_ASSISTIVE_MARKER,
+  applyAccessibleNamePolicy,
+  applyAtomAccessibilityLabels,
+  buildAccessibilityEntries,
+  captureAccessibilityState,
+  clearPaintedPagesPresentationOnly,
+  freezeAccessibilityObservation,
+  markPaintedPagesPresentationOnly,
+  observeAccessibility,
+  observeAccessibilityFromSession,
+  reapplyAccessibilityProjectionDom,
+  resolveAccessibilityNamePolicy,
+  ATOM_EMBED_SELECTOR,
+  type AccessibilityObservationRequest,
+  type ObserveAccessibilityInput,
+} from './accessibility-projection.ts';

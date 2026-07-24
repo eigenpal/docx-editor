@@ -17,6 +17,7 @@ import {
   parseDocx,
   ORIGIN_IDS,
   paragraphText,
+  writeDocx,
   type ParagraphRecord,
 } from '@docx-editor.dev/engine-core';
 import type { SemanticSelection } from '@docx-editor.dev/core-contract/interaction';
@@ -581,7 +582,7 @@ describe('focus transfer and input authorization', () => {
     parent.remove();
   });
 
-  test('read-only session rejects focus and paste', () => {
+  test('read-only semantic projection rejects paste and never authorizes input', () => {
     const model = createEmptyModel();
     const store = new DocumentStore(model);
     const p1 = (model.stories.get(bodyStoryId(model))!.blocks[0] as ParagraphRecord).id;
@@ -598,13 +599,14 @@ describe('focus transfer and input authorization', () => {
       undo: () => false,
       redo: () => false,
       subscribe: () => () => {},
+      save: () => writeDocx(store.currentModel),
     };
     const parent = document.createElement('div');
     document.body.append(parent);
     const surface = mountInputSurface(session, parent);
     const outcome = surface.focus({ frameId: { value: 1 } });
-    expect(outcome.ok).toBe(false);
-    if (!outcome.ok) expect(outcome.code).toBe('readOnly');
+    expect(outcome.ok).toBe(true);
+    expect(surface.interactionAuthorized).toBe(false);
     surface.destroy();
     parent.remove();
   });

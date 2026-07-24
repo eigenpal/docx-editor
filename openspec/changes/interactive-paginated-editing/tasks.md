@@ -34,7 +34,7 @@
 - [x] 4.3 Prototype the selected clipped/repositioned input-host technique near the engine caret and record how browser IME/input UI follows the active caret on the supported platform matrix.
 - [x] 4.4 Add composition tests for start/update/end/cancel, repeated updates, blur, dead keys, surrogate pairs, combining clusters, RTL input, remote invalidation, and capability-boundary rejection with no duplicate or lost text.
 - [x] 4.5 Add clipboard, beforeinput, drag/drop, keyboard-command, mobile/virtual-keyboard, and focus-transfer tests proving events use existing bounded parsing and store-first validation.
-- [ ] 4.6 Implement the minimum single semantic/accessibility projection required for the body-paragraph gate, including reading order, editability, focus, and selection mapped to canonical identities.
+- [x] 4.6 Implement the minimum single semantic/accessibility projection required for the body-paragraph gate, including reading order, editability, focus, and selection mapped to canonical identities.
 - [ ] 4.7 Add accessibility-tree tests proving the hidden ProseMirror projection and engine semantic projection do not expose duplicate documents or contradictory focus/editability.
 - [ ] 4.8 Run the browser/platform gate through public adapter builds and either approve the hidden-host mechanism with recorded evidence or stop and revise it before page-interaction work continues.
 

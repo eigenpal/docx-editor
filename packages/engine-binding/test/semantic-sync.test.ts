@@ -10,7 +10,7 @@ import {
 } from '../src/index.ts';
 import { resolveSemanticTarget, resolveSemanticSelection } from '../src/semantic-sync.ts';
 import { resolveSelection } from '../src/selection.ts';
-import { authorizeFocus, dispatchBeforeInput, dispatchHistoryUndo, pmDom } from './input-dom-helpers.ts';
+import { authorizeFocus, dispatchBeforeInput, dispatchHistoryUndo, dispatchPaste, pmDom, semanticMount } from './input-dom-helpers.ts';
 import {
   DocumentStore,
   createEmptyModel,
@@ -330,15 +330,16 @@ describe('edit surface semantic sync', () => {
     parent.remove();
   });
 
-  test('read-only surface focus returns typed readOnly', () => {
+  test('read-only semantic projection allows focus without input authorization', () => {
     const { session } = editableSession();
     const readOnlySession = { ...session, editable: false };
     const parent = document.createElement('div');
     document.body.append(parent);
-    const surface = mountEditSurface(parent, readOnlySession);
-    const outcome = surface.focus();
-    expect(outcome.ok).toBe(false);
-    if (!outcome.ok) expect(outcome.code).toBe('readOnly');
+    const surface = mountEditSurface(parent, readOnlySession, { readOnlyProjection: true });
+    const outcome = surface.focus({ frameId: { value: 1 } });
+    expect(outcome.ok).toBe(true);
+    expect(surface.interactionAuthorized).toBe(false);
+    expect(surface.getAccessibilityObservation({ frameId: { value: 1 }, scope: { kind: 'body' } }).editable).toBe(false);
     surface.destroy();
     parent.remove();
   });

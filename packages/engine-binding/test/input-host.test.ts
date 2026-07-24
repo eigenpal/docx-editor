@@ -91,11 +91,12 @@ describe('input host controller', () => {
     host.destroy();
   });
 
-  test('assistive policy avoids duplicate document role', () => {
+  test('assistive policy avoids duplicate document role and redundant textbox ARIA', () => {
     const host = createInputHostController(document);
     document.body.append(host.root);
-    expect(host.root.getAttribute('data-assistive-policy')).toBe('sole-editing-projection');
-    expect(host.pmMount.getAttribute('role')).toBe('textbox');
+    expect(host.root.getAttribute('data-assistive-policy')).toBe('sole-semantic-projection');
+    expect(host.pmMount.hasAttribute('role')).toBe(false);
+    expect(host.pmMount.hasAttribute('aria-multiline')).toBe(false);
     expect(host.root.querySelector('[role="document"]')).toBeNull();
     host.destroy();
   });

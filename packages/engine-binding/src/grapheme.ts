@@ -37,3 +37,12 @@ export function graphemeOffsetToUtf16(text: string, graphemeOffset: number): num
   if (clamped >= segments.length) return text.length;
   return segments[clamped]!.utf16From;
 }
+
+export function utf16OffsetToGrapheme(text: string, utf16Offset: number): number {
+  const clamped = Math.max(0, Math.min(utf16Offset, text.length));
+  for (const seg of segmentGraphemes(text)) {
+    if (clamped <= seg.utf16From) return seg.index;
+    if (clamped < seg.utf16To) return seg.index;
+  }
+  return segmentGraphemes(text).length;
+}
