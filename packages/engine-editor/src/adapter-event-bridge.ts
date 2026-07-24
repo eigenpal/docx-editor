@@ -22,8 +22,10 @@ import type {
 
 /** The subset of an element the bridge needs; satisfied by HTMLElement. */
 export interface BridgeElement {
-  addEventListener(type: string, listener: (event: never) => void): void;
-  removeEventListener(type: string, listener: (event: never) => void): void;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- a real
+  // HTMLElement's overloaded listener signature must satisfy this shape.
+  addEventListener(type: string, listener: (event: any) => void, options?: any): void;
+  removeEventListener(type: string, listener: (event: any) => void, options?: any): void;
   setPointerCapture?(pointerId: number): void;
   releasePointerCapture?(pointerId: number): void;
   scrollBy?(options: { left: number; top: number }): void;
@@ -147,9 +149,9 @@ const POINTER_KINDS = {
  * listener it added; calling it twice is safe.
  */
 export function attachAdapterEventBridge(element: BridgeElement, port: BridgeEditorPort): () => void {
-  const registered: { type: string; listener: (event: never) => void }[] = [];
+  const registered: { type: string; listener: (event: any) => void }[] = [];
 
-  function on(type: string, listener: (event: never) => void): void {
+  function on(type: string, listener: (event: any) => void): void {
     element.addEventListener(type, listener);
     registered.push({ type, listener });
   }

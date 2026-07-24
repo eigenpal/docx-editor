@@ -1,6 +1,6 @@
 # Interactive paginated editing — accelerated execution tasks
 
-Progress: **45 / 114** complete.
+Progress: **46 / 114** complete.
 
 | Baseline | Count |
 | --- | --- |
@@ -131,7 +131,7 @@ Prerequisite for M3. Adapters still render no product chrome.
 Real painted-page pointer interaction is mandatory. `authorizeCaret`-only proof is
 insufficient.
 
-- [ ] 6.2 Wire React host coordinates, focus, pointer capture, keyboard/native input, scroll, zoom, and frame lifecycle to the shared controller using only public contracts. **Deliverable:** `packages/react/src/DocxEditor.tsx` routes real pointer events on painted output to the interaction controller.
+- [x] 6.2 Wire React host coordinates, focus, pointer capture, keyboard/native input, scroll, zoom, and frame lifecycle to the shared controller using only public contracts. **Deliverable:** `packages/react/src/DocxEditor.tsx` routes real pointer events on painted output to the interaction controller.
 - [ ] 6.4 Render caret and selection overlays from interaction-frame geometry with correct clipping, transforms, writing direction, zoom, pointer transparency, and explicit handle/control exceptions. **Deliverable:** visible caret/selection on painted pages in React harness.
 - [ ] M3.1 Create `e2e/react-one-surface.interaction.spec.ts`, `e2e/oneSurfaceHelpers.ts`, and `package.json` script `test:e2e:react-one-surface-interaction` (`playwright test --config e2e/editor-smoke.config.ts e2e/react-one-surface.interaction.spec.ts`) before first use. Scenarios: locate M2.3 click target → real pointer click center → type/backspace → shift-click → double-click → drag selection → keyboard nav → clipboard paste → synthetic composition → undo/redo → save/reopen. **Deliverable:** spec green via `bun run test:e2e:react-one-surface-interaction`; no `authorizeCaret` primary proof.
 - [ ] M3.2 Record manual Chrome DevTools pass in `openspec/changes/interactive-paginated-editing/evidence/m3/manual-chrome-checklist.md`: start `bun run dev:react -- --port 5273 --strictPort --force`; open `http://127.0.0.1:5273/?realAdapter=1`; follow runbook §5 M3.2 steps. Stage and commit per staging manifest.
@@ -328,7 +328,7 @@ esac
 | **M2.3** | `packages/engine-output/src/dom.ts`, `packages/engine-editor/src/display-bridge.ts`, `packages/engine-editor/src/index.ts`, `packages/react/src/paintDisplay.tsx`, `e2e/oneSurfaceHelpers.ts`, `packages/engine-editor/test/display-bridge.test.ts`, `openspec/changes/interactive-paginated-editing/tasks.md` (target selection is engine geometry, so it lives in `display-bridge.ts` and is exported; Vue stamps the same attribute at 6.3 per the React-first M3 sequencing) |
 | **M2-R1** | `openspec/changes/interactive-paginated-editing/evidence/m2/verification-log.md`, `openspec/changes/interactive-paginated-editing/tasks.md` |
 | **M2-R2** | `openspec/changes/interactive-paginated-editing/evidence/m2/summary.md`, `openspec/changes/interactive-paginated-editing/tasks.md` |
-| **6.2** | `packages/react/src/DocxEditor.tsx`, `packages/react/test/docx-editor-one-surface.test.ts`, `openspec/changes/interactive-paginated-editing/tasks.md` |
+| **6.2** | `packages/react/src/DocxEditor.tsx`, `packages/react/src/../../engine-editor/src/adapter-event-bridge.ts`, `packages/react/test/docx-editor-one-surface.test.ts`, `openspec/changes/interactive-paginated-editing/tasks.md` (bridge element shape widened so a real `HTMLElement` satisfies it — found only when React first compiled against the M2.1 bridge) |
 | **6.4** | `packages/react/src/paintDisplay.tsx`, `packages/core/src/styles/editor.css`, `openspec/changes/interactive-paginated-editing/tasks.md` |
 | **M3.1** | `e2e/react-one-surface.interaction.spec.ts`, `e2e/oneSurfaceHelpers.ts`, `package.json`, `examples/shared/DocxAdapterHarness.tsx`, `openspec/changes/interactive-paginated-editing/tasks.md` |
 | **M3.2** | `openspec/changes/interactive-paginated-editing/evidence/m3/manual-chrome-checklist.md`, `openspec/changes/interactive-paginated-editing/tasks.md` |
