@@ -74,6 +74,9 @@ export interface EditorConfig {
   author?: string;
   locale?: string;
   zoom?: number;
+  /** `'view'` opens the document read-only (no edit surface is mounted) even when it is otherwise
+   *  editable; `'edit'` (default) mounts the editing surface for a patchable document. */
+  mode?: 'edit' | 'view';
 }
 
 /**

@@ -45,7 +45,14 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
     // teardown, so undo/selection/scroll survive parent re-renders.
     useEffect(() => {
       const p = propsRef.current;
-      const editor = createEditor({ host, document: p.document, zoom: p.zoom, locale: p.locale, author: p.author });
+      const editor = createEditor({
+        host,
+        document: p.document,
+        zoom: p.zoom,
+        locale: p.locale,
+        author: p.author,
+        mode: p.mode,
+      });
       editorRef.current = editor;
       propsRef.current.onReady?.(editor);
       const off = editor.on('change', (c) => propsRef.current.onChange?.(c));
@@ -81,9 +88,14 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
       []
     );
 
+    // Zoom is applied on paint (the contract's DisplayPage boxes are pre-zoom); scale the pages
+    // wrapper from its top-left so scrolling still works.
+    const zoom = props.zoom ?? 1;
     return (
       <div ref={scrollRef} className={className} style={{ overflow: 'auto' }}>
-        <div ref={pagesRef}>{paintDisplay(pages)}</div>
+        <div ref={pagesRef} style={{ transform: `scale(${zoom})`, transformOrigin: 'top left' }}>
+          {paintDisplay(pages)}
+        </div>
         <div ref={bodyRef} style={{ position: 'absolute', left: -9999, top: 0 }} />
       </div>
     );

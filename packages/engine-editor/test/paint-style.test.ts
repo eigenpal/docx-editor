@@ -1,0 +1,49 @@
+// Shared paint helpers (comprehensive 4.6): both adapters read styling from here so a bold 24px run
+// paints identically in React and Vue, hex fills are valid CSS, and borders have paintable boxes.
+
+import { describe, expect, test } from 'bun:test';
+import { colorToCss, runStyle, borderSegBox } from '../src/paint-style.ts';
+import type { GlyphRun, BorderSeg } from '@docx-editor.dev/core-contract/geometry';
+
+describe('colorToCss', () => {
+  test("hex is '#'-prefixed (a bare 'RRGGBB' is not valid CSS)", () => {
+    expect(colorToCss({ kind: 'hex', value: 'DDDDDD' })).toBe('#DDDDDD');
+    expect(colorToCss({ kind: 'hex', value: '#112233' })).toBe('#112233'); // idempotent on a leading #
+  });
+  test('auto and theme inherit (undefined) rather than emit an invalid color', () => {
+    expect(colorToCss({ kind: 'auto' })).toBeUndefined();
+    expect(colorToCss({ kind: 'theme', slot: 'accent1' })).toBeUndefined();
+  });
+});
+
+describe('runStyle', () => {
+  test('carries the run typography the paint used to drop', () => {
+    const run: GlyphRun = {
+      text: 'x',
+      box: { x: 0, y: 0, width: 10, height: 20 },
+      fontFamily: 'Georgia',
+      fontSizePx: 24,
+      color: { kind: 'hex', value: '223344' },
+      bold: true,
+      italic: true,
+    };
+    expect(runStyle(run)).toEqual({
+      fontFamily: 'Georgia',
+      fontSizePx: 24,
+      color: '#223344',
+      fontWeight: 'bold',
+      fontStyle: 'italic',
+    });
+  });
+});
+
+describe('borderSegBox', () => {
+  test('a horizontal segment becomes a 1px-tall box at its min corner', () => {
+    const seg: BorderSeg = { from: { x: 10, y: 5 }, to: { x: 110, y: 5 }, widthPx: 1, color: { kind: 'hex', value: '000000' }, style: 'single' };
+    expect(borderSegBox(seg)).toEqual({ x: 10, y: 5, width: 100, height: 1, color: '#000000' });
+  });
+  test('a vertical segment becomes a 1px-wide box', () => {
+    const seg: BorderSeg = { from: { x: 10, y: 5 }, to: { x: 10, y: 55 }, widthPx: 1, color: { kind: 'hex', value: '000000' }, style: 'single' };
+    expect(borderSegBox(seg)).toEqual({ x: 10, y: 5, width: 1, height: 50, color: '#000000' });
+  });
+});

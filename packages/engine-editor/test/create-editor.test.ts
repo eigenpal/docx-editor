@@ -82,6 +82,51 @@ describe('createEditor lifecycle (byte-native, PM-free host)', () => {
     editor.destroy();
   });
 
+  test('array-typed queries return [] (a consumer may .map without crashing)', () => {
+    const { host } = makeHost();
+    const editor = createEditor({ host, document: docxBytes() });
+    // trackedChanges is declared as an array; a null would crash a consumer calling .map.
+    const tracked = editor.query({ type: 'trackedChanges' });
+    expect(Array.isArray(tracked)).toBe(true);
+    expect(() => (tracked as unknown[]).map((x) => x)).not.toThrow();
+    editor.destroy();
+  });
+
+  test('a document handle round-trips: another editor can load it', () => {
+    const a = createEditor({ host: makeHost().host, document: docxBytes() });
+    const handle = a.getDocumentHandle();
+    expect(typeof handle.revision).toBe('number');
+    // The handle is a real source: a second editor loads it without a parse error.
+    const { host, displays } = makeHost();
+    const b = createEditor({ host, document: handle });
+    expect(displays.length).toBeGreaterThan(0); // loaded + painted, no error
+    a.destroy();
+    b.destroy();
+  });
+
+  test('mode:"view" opens read-only even for a patchable document (no edit surface mounted)', () => {
+    // A real DOM body element is provided; in edit mode this would mount a PM surface. In view mode
+    // it must not — proven by focus() being a no-op (no surface) while display still renders.
+    const bodyEl = { ownerDocument: undefined } as unknown as HTMLElement;
+    const { host, displays } = makeHost({ getBodyHostEl: () => bodyEl });
+    const editor = createEditor({ host, document: docxBytes(), mode: 'view' });
+    expect(displays.length).toBeGreaterThan(0); // renders read-only
+    expect(() => editor.focus()).not.toThrow(); // no surface, inert focus
+    editor.destroy();
+  });
+
+  test('destroy clears the display list and blocks new listeners', () => {
+    const { host } = makeHost();
+    const editor = createEditor({ host, document: docxBytes() });
+    editor.destroy();
+    expect(editor.getDisplay()).toEqual([]);
+    let hits = 0;
+    const off = editor.on('display', () => (hits += 1));
+    editor.relayout(); // destroyed: no-op
+    expect(hits).toBe(0);
+    expect(() => off()).not.toThrow();
+  });
+
   test('a display listener fires on relayout with the same pages', () => {
     const { host } = makeHost();
     const editor = createEditor({ host, document: docxBytes() });

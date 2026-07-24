@@ -24,8 +24,8 @@ describe('engine layout IR -> contract display IR', () => {
     expect(item.box).toEqual({ x: 96, y: 96, width: 20, height: 16 });
     expect(item.runs).toHaveLength(1);
     expect(item.runs[0]).toMatchObject({ text: 'hi', bold: true, italic: false, fontFamily: 'Helvetica' });
-    expect(item.docFrom).toBe(5);
-    expect(item.docTo).toBe(7); // offset + [...'hi'].length
+    expect(item.docFrom).toBe(0); // running view offset starts at 0 (not the per-paragraph offset)
+    expect(item.docTo).toBe(2); // + UTF-16 length of 'hi'
     expect(item.scope).toEqual({ kind: 'body' });
   });
 
@@ -39,6 +39,20 @@ describe('engine layout IR -> contract display IR', () => {
     ]);
     const ids = p.items.map((i) => (i.kind === 'text' ? i.blockId : -1));
     expect(ids).toEqual([0, 1, 0]); // pA=0, pB=1, pA reused
+  });
+
+  test('text doc-offsets accumulate across the view (UTF-16 length), never colliding', () => {
+    const [p] = toDisplayPages([
+      page([
+        { type: 'text', x: 0, y: 0, width: 10, height: 240, text: 'ab', bold: false, italic: false, anchor: { paragraphId: 'p1', offset: 0 } },
+        { type: 'text', x: 0, y: 240, width: 10, height: 240, text: '😀', bold: false, italic: false, anchor: { paragraphId: 'p2', offset: 0 } },
+      ]),
+    ]);
+    const [a, b] = p.items;
+    if (a.kind !== 'text' || b.kind !== 'text') throw new Error('text');
+    expect([a.docFrom, a.docTo]).toEqual([0, 2]); // 'ab'
+    expect(b.docFrom).toBe(3); // 2 + a boundary; strictly greater than a.docTo
+    expect(b.docTo).toBe(3 + '😀'.length); // UTF-16 length (2), matching the layout's advance
   });
 
   test('a rect with fill + stroke becomes a fill item and a 4-segment tableBorder', () => {

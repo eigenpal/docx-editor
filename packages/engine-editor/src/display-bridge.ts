@@ -22,7 +22,7 @@ const boxOf = (it: { x: number; y: number; width: number; height: number }): Rec
   height: px(it.height),
 });
 
-function textItem(it: TextItem, blockId: number): ContractItem {
+function textItem(it: TextItem, blockId: number, docFrom: number): ContractItem {
   const box = boxOf(it);
   const run: GlyphRun = {
     text: it.text,
@@ -37,11 +37,12 @@ function textItem(it: TextItem, blockId: number): ContractItem {
     kind: 'text',
     box,
     runs: [run],
-    // Provisional doc positions: within-paragraph char offsets. Full flat-document selection mapping
-    // (contract docFrom/docTo across the whole story) is a follow-up tied to the selection/hit-test
-    // lane; rendering (box + runs) is exact.
-    docFrom: it.anchor.offset,
-    docTo: it.anchor.offset + [...it.text].length,
+    // docFrom/docTo are monotonic offsets ACROSS the addressed view (contract requirement), using
+    // UTF-16 length to match the layout's own offset advance. They are a provisional flat-position
+    // model: exact within-story selection mapping is a follow-up on the selection/hit-test lane;
+    // rendering (box + runs) is exact.
+    docFrom,
+    docTo: docFrom + it.text.length,
     blockId,
     scope: BODY,
   };
@@ -72,17 +73,9 @@ function rectItems(it: RectItem): ContractItem[] {
   return out;
 }
 
-function bridgeItem(it: DisplayItem, blockIdOf: (paragraphId: string) => number): ContractItem[] {
-  switch (it.type) {
-    case 'text':
-      return [textItem(it, blockIdOf(it.anchor.paragraphId))];
-    case 'rect':
-      return rectItems(it);
-  }
-}
-
 /** Map engine-layout pages to the contract display list (twips → px, anchors → GlyphRuns + doc
- *  positions). Block ids are assigned in first-seen paragraph order within this call. */
+ *  positions). Block ids are assigned in first-seen paragraph order, and text doc-offsets accumulate
+ *  monotonically across the whole view (all pages), both threaded through this single call. */
 export function toDisplayPages(pages: readonly Page[]): DisplayPage[] {
   const blockIds = new Map<string, number>();
   const blockIdOf = (paragraphId: string): number => {
@@ -93,9 +86,21 @@ export function toDisplayPages(pages: readonly Page[]): DisplayPage[] {
     }
     return n;
   };
+  let docOffset = 0; // running flat offset across the addressed view
+  const bridgeItem = (it: DisplayItem): ContractItem[] => {
+    switch (it.type) {
+      case 'text': {
+        const item = textItem(it, blockIdOf(it.anchor.paragraphId), docOffset);
+        docOffset += it.text.length + 1; // + a boundary so consecutive runs never collide
+        return [item];
+      }
+      case 'rect':
+        return rectItems(it);
+    }
+  };
   return pages.map((page) => ({
     index: page.index,
     box: { x: 0, y: 0, width: px(page.width), height: px(page.height) },
-    items: page.items.flatMap((it) => bridgeItem(it, blockIdOf)),
+    items: page.items.flatMap(bridgeItem),
   }));
 }

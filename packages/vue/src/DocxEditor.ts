@@ -51,6 +51,7 @@ export default defineComponent({
         zoom: props.zoom,
         locale: props.locale,
         author: props.author,
+        mode: props.mode,
       });
       emit('ready', editor);
       editor.on('change', (change) => emit('change', change));
@@ -82,7 +83,15 @@ export default defineComponent({
 
     return () =>
       h('div', { ref: scrollEl, style: { overflow: 'auto' } }, [
-        h('div', { ref: pagesEl }, paintDisplay(pages.value)),
+        // Zoom is applied on paint (contract boxes are pre-zoom); scale from top-left.
+        h(
+          'div',
+          {
+            ref: pagesEl,
+            style: { transform: `scale(${props.zoom ?? 1})`, transformOrigin: 'top left' },
+          },
+          paintDisplay(pages.value)
+        ),
         h('div', { ref: bodyEl, style: { position: 'absolute', left: '-9999px', top: '0' } }),
       ]);
   },

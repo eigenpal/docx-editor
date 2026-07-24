@@ -36,12 +36,21 @@ import { toDisplayPages } from './display-bridge.ts';
 // US Letter, 1in margins, in twips — the same geometry the read-only preview uses.
 const LAYOUT = { pageWidth: 12240, pageHeight: 15840, margin: 1440 } as const;
 
+// Maps a minted DocumentHandle to a producer of its current bytes. Weak so a handle (and the bytes
+// it can regenerate) is collectable once no caller holds it — no global document leak.
+const handleBytes = new WeakMap<DocumentHandle, () => Uint8Array>();
+
+const isArrayBuffer = (v: unknown): v is ArrayBuffer =>
+  v instanceof ArrayBuffer || Object.prototype.toString.call(v) === '[object ArrayBuffer]';
+// ArrayBuffer.isView catches Uint8Array cross-realm too (instanceof would miss another realm's).
+const isBytesView = (v: unknown): v is ArrayBufferView => ArrayBuffer.isView(v);
+
 function sourceToBytes(source: DocumentSource): Uint8Array {
-  if (source instanceof Uint8Array) return source;
-  if (source instanceof ArrayBuffer) return new Uint8Array(source);
-  // A DocumentHandle source (hand-off of an existing in-memory document) needs a document registry
-  // the browser facade does not own yet; bytes are the supported source today.
-  throw new Error('createEditor: loading from a DocumentHandle is not yet supported (pass DOCX bytes)');
+  const producer = handleBytes.get(source as DocumentHandle);
+  if (producer) return producer();
+  if (isBytesView(source)) return new Uint8Array(source.buffer, source.byteOffset, source.byteLength);
+  if (isArrayBuffer(source)) return new Uint8Array(source);
+  throw new Error('createEditor: unrecognized DocumentSource (expected DOCX bytes or a handle from getDocumentHandle)');
 }
 
 function bytesToArrayBuffer(u8: Uint8Array): ArrayBuffer {
@@ -54,18 +63,28 @@ const UNSUPPORTED = (what: string): ExecResult => ({
   reason: `${what} is not wired yet (section 5)`,
 });
 
-/** Construct the production editor. `config.document` (DOCX bytes) is loaded at construction. */
-export function createEditor(config: EditorConfig): Editor {
-  const { host } = config;
+// Neutral, correctly-typed defaults for the not-yet-wired query surface: array queries must return
+// [] (a consumer may .map/.filter), text '', booleans false, else null. Keeps a consumer working
+// until the real query lands (section 5) instead of returning a wrongly-typed value that crashes.
+const ARRAY_QUERIES = new Set(['trackedChanges', 'paragraphs', 'findText', 'contentControls', 'comments', 'styles', 'variables']);
+const STRING_QUERIES = new Set(['selectedText']);
+const BOOLEAN_QUERIES = new Set(['isInsideToc']);
+function queryDefault(type: string): unknown {
+  if (ARRAY_QUERIES.has(type)) return [];
+  if (STRING_QUERIES.has(type)) return '';
+  if (BOOLEAN_QUERIES.has(type)) return false;
+  return null;
+}
 
-  // Minimal typed event bus for the four EditorEvents.
+/** Construct the production editor. `config.document` (DOCX bytes or a handle) is loaded now. */
+export function createEditor(config: EditorConfig): Editor {
+  // Destructure ONCE so no long-lived closure retains `config` (and thus config.document bytes).
+  const host = config.host;
+  const readOnly = config.mode === 'view';
+  const zoom = config.zoom ?? 1; // the adapter applies zoom on paint; carried in snapshot()
+
   type Handlers = { [E in keyof EditorEvents]: Set<EditorEvents[E]> };
-  const handlers: Handlers = {
-    change: new Set(),
-    selectionChange: new Set(),
-    display: new Set(),
-    error: new Set(),
-  };
+  const handlers: Handlers = { change: new Set(), selectionChange: new Set(), display: new Set(), error: new Set() };
   function emit<E extends keyof EditorEvents>(event: E, ...args: Parameters<EditorEvents[E]>): void {
     for (const fn of handlers[event]) (fn as (...a: unknown[]) => void)(...args);
   }
@@ -73,6 +92,7 @@ export function createEditor(config: EditorConfig): Editor {
   let session: DocxEditorSession | null = null;
   let surface: EditSurface | null = null;
   let displayPages: readonly DisplayPage[] = [];
+  let handle: DocumentHandle | null = null;
   let activeScope: ViewScope = { kind: 'body' };
   let destroyed = false;
 
@@ -85,29 +105,42 @@ export function createEditor(config: EditorConfig): Editor {
     emit('display', displayPages);
   }
 
+  // Mount the edit surface if it is wanted (editable + not view-mode) and the host body element is
+  // now available — the host may return null through first render, so this is retried on relayout.
+  function ensureSurface(): void {
+    if (destroyed || surface || readOnly || !session || !session.editable) return;
+    const bodyEl = host.getBodyHostEl();
+    if (bodyEl) surface = mountEditSurface(bodyEl, session, { onModelChanged });
+  }
+
   // Called by the edit surface after every committed edit / undo / redo.
   function onModelChanged(): void {
-    if (!session) return;
+    if (!session || destroyed) return;
     relayoutAndPaint();
     emit('change', { revision: session.revision() });
   }
 
   function loadSource(source: DocumentSource): void {
     if (destroyed) return;
-    let bytes: Uint8Array;
+    let next: DocxEditorSession;
     try {
-      bytes = sourceToBytes(source);
-      session = openDocxSession(bytes);
+      next = openDocxSession(sourceToBytes(source));
     } catch (err) {
-      emit('error', Object.assign(new Error(String((err as Error).message ?? err)), { code: 'parse' }));
+      // Transactional: a parse failure keeps the current document intact.
+      emit('error', Object.assign(new Error(String((err as Error)?.message ?? err)), { code: 'parse' }));
       return;
     }
     surface?.destroy();
     surface = null;
-    const bodyEl = host.getBodyHostEl();
-    // The edit surface mounts into the adapter's body host; it may be null through first render, in
-    // which case the document still lays out + paints and the surface mounts on a later load/relayout.
-    if (bodyEl) surface = mountEditSurface(bodyEl, session, { onModelChanged });
+    session = next;
+    // A stable handle for THIS document: live revision + a bytes producer registered weakly.
+    const h: DocumentHandle = Object.defineProperty({} as DocumentHandle, 'revision', {
+      enumerable: true,
+      get: () => next.revision(),
+    });
+    handleBytes.set(h, () => next.save());
+    handle = h;
+    ensureSurface();
     relayoutAndPaint();
   }
 
@@ -120,44 +153,34 @@ export function createEditor(config: EditorConfig): Editor {
       return bytesToArrayBuffer(session.save());
     },
     getDocumentHandle(): DocumentHandle {
-      return { revision: session?.revision() ?? 0 };
+      return handle ?? { revision: 0 };
     },
 
     // ─── Commands / queries: wired feature-by-feature in section 5. ───────────
-    exec(_command: EditorCommand): ExecResult {
-      return UNSUPPORTED('command execution');
-    },
-    can(_command: EditorCommand): CanResult {
-      return { ok: false, code: 'unsupported', reason: 'command execution is not wired yet (section 5)' };
-    },
-    setActiveScope(scope: ViewScope): void {
+    exec: (_command: EditorCommand): ExecResult => UNSUPPORTED('command execution'),
+    can: (_command: EditorCommand): CanResult => ({
+      ok: false,
+      code: 'unsupported',
+      reason: 'command execution is not wired yet (section 5)',
+    }),
+    setActiveScope: (scope: ViewScope) => {
       activeScope = scope;
     },
-    getActiveScope(): ViewScope {
-      return activeScope;
-    },
+    getActiveScope: () => activeScope,
     query<K extends keyof EditorQueries>(query: { type: K } & EditorQueries[K]): EditorQueryResults[K] {
-      // Neutral defaults so a consumer degrades gracefully until the query lands (section 5).
-      const neutral: Record<string, unknown> = {
-        selectedText: '',
-        isInsideToc: false,
-        trackedChanges: [],
-      };
-      return (query.type in neutral ? neutral[query.type as string] : null) as EditorQueryResults[K];
+      return queryDefault(query.type as string) as EditorQueryResults[K];
     },
-    snapshot(): EditorSnapshot {
-      return {
-        scope: activeScope,
-        isLoading: false,
-        parseError: null,
-        zoom: config.zoom ?? 1,
-        selection: null,
-        formatting: null,
-        table: null,
-        image: null,
-        page: { current: 0, total: displayPages.length },
-      };
-    },
+    snapshot: (): EditorSnapshot => ({
+      scope: activeScope,
+      isLoading: false,
+      parseError: null,
+      zoom,
+      selection: null,
+      formatting: null,
+      table: null,
+      image: null,
+      page: { current: 0, total: displayPages.length },
+    }),
 
     getTotalPages: () => displayPages.length,
     getCurrentPage: () => 0, // viewport/caret current-page tracking is a follow-up (needs scroll wiring)
@@ -178,17 +201,23 @@ export function createEditor(config: EditorConfig): Editor {
       return { contentHeight: top, pageTops };
     },
 
-    relayout: (_options?: { sync?: boolean }) => relayoutAndPaint(),
+    relayout: (_options?: { sync?: boolean }) => {
+      ensureSurface(); // a late-available host body element mounts here
+      relayoutAndPaint();
+    },
     focus: (_scope?: EditorScope) => surface?.focus(),
     destroy() {
       destroyed = true;
       surface?.destroy();
       surface = null;
       session = null;
+      handle = null;
+      displayPages = [];
       for (const set of Object.values(handlers)) set.clear();
     },
 
     on<E extends keyof EditorEvents>(event: E, handler: EditorEvents[E]): Unsubscribe {
+      if (destroyed) return () => {}; // never repopulate handlers after teardown
       handlers[event].add(handler);
       return () => handlers[event].delete(handler);
     },
