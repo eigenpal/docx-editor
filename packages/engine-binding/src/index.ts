@@ -37,6 +37,8 @@ export {
 export { type ApplyResult, type DocxEditorSession, openDocxSession } from './session.ts';
 export {
   type EditSurface,
+  type EditSurfaceCommand,
+  type EditSurfaceCommandResult,
   type MountEditSurfaceOptions,
   type PmSelectionSnapshot,
   mountEditSurface,

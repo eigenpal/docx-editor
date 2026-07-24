@@ -1,6 +1,6 @@
 # Interactive paginated editing — accelerated execution tasks
 
-Progress: **51 / 114** complete.
+Progress: **52 / 114** complete.
 
 | Baseline | Count |
 | --- | --- |
@@ -146,7 +146,7 @@ Presentation reference: the recorded presentation baseline. Port presentation an
 user-visible shell behavior component-by-component via `git show`; never wholesale
 checkout/revert forbidden authority modules.
 
-- [ ] M4.0 Ensure PM-free toolbar prerequisites: `Editor.can(command)` before `Editor.exec(command)` for **bold**, **italic**, **underline**, **undo**, and **redo**; save button calls **`Editor.save()`** directly; run `bun run api:extract` + `bun run api:check`. Document title ownership stays in shell/example local state. **Deliverable:** typed command wiring + API snapshot.
+- [x] M4.0 Ensure PM-free toolbar prerequisites: `Editor.can(command)` before `Editor.exec(command)` for **bold**, **italic**, **underline**, **undo**, and **redo**; save button calls **`Editor.save()`** directly; run `bun run api:extract` + `bun run api:check`. Document title ownership stays in shell/example local state. **Deliverable:** typed command wiring + API snapshot.
 - [ ] M4.1 Write shell port inventory and demo-boundary record in `openspec/changes/interactive-paginated-editing/evidence/m4/inventory.md` (retired file → port decision → greenfield contract; museum Apps vs preview default). **Deliverable:** signed port/replace matrix per `design.md` D14.
 - [ ] M4.2 Port core shell layout and page backdrop/shadow presentation from `DocxEditorShell.tsx` onto the greenfield React host. **Deliverable:** scroll host, backdrop, content scoping match retired presentation; no `PagedEditor` or retired hooks.
 - [ ] M4.3 Port document title chrome and page indicator. **Deliverable:** title in local shell state; `PageIndicator` from public editor page queries.
@@ -334,7 +334,7 @@ esac
 | **M3.2** | `openspec/changes/interactive-paginated-editing/evidence/m3/manual-chrome-checklist.md`, `packages/react/src/DocxEditor.tsx`, `packages/core/src/styles/editor.css`, `openspec/changes/interactive-paginated-editing/tasks.md` (the manual pass found the surface was outside `.ep-root` and that two tokens had no light-mode value; fixing what the checklist found beats recording it as broken) |
 | **M3-R1** | `openspec/changes/interactive-paginated-editing/evidence/m3/verification-log.md`, `openspec/changes/interactive-paginated-editing/tasks.md` |
 | **M3-R2** | `openspec/changes/interactive-paginated-editing/evidence/m3/summary.md`, `openspec/changes/interactive-paginated-editing/browser-platform-matrix.md`, `openspec/changes/interactive-paginated-editing/tasks.md` |
-| **M4.0** | `packages/react/src/toolbarCommands.ts`, `packages/react/test/toolbarCommands.test.ts`, `docs/api/docx-editor-react/index.api.md`, `openspec/changes/interactive-paginated-editing/tasks.md` |
+| **M4.0** | `packages/react/src/toolbarCommands.ts`, `packages/react/src/index.ts`, `packages/react/test/toolbarCommands.test.ts`, `packages/engine-binding/src/edit-surface.ts`, `packages/engine-binding/src/index.ts`, `packages/engine-editor/src/create-editor.ts`, `openspec/changes/interactive-paginated-editing/tasks.md` (`Editor.can`/`exec` supported only `setSelection`, so the engine command path had to land too; `docs/api/docx-editor-react/index.api.md` NOT staged — it is untracked, on the goal's preserve-list, and extracts from a stale `dist`, so it needs a rebuild in its own step)
 | **M4.1** | `openspec/changes/interactive-paginated-editing/evidence/m4/inventory.md`, `openspec/changes/interactive-paginated-editing/tasks.md` |
 | **M4.2** | `packages/react/src/DocxEditorShell.tsx`, `packages/core/src/styles/editor.css`, `openspec/changes/interactive-paginated-editing/tasks.md` |
 | **M4.3** | `packages/react/src/DocxEditorTitleBar.tsx`, `packages/react/src/PageIndicator.tsx`, `openspec/changes/interactive-paginated-editing/tasks.md` |

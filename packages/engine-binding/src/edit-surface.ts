@@ -11,6 +11,7 @@ import {
   deleteSelection,
   selectTextblockStart,
   selectTextblockEnd,
+  toggleMark,
 } from 'prosemirror-commands';
 import type { InteractionFrameId, InteractionOutcome, InputObservation, AccessibilityObservation } from '@docx-editor.dev/core-contract/interaction';
 import {
@@ -86,7 +87,35 @@ export interface EditSurface {
   getCompositionObservation(): CompositionObservation;
   getInputObservation(): InputObservation;
   getAccessibilityObservation(request: AccessibilityObservationRequest): AccessibilityObservation;
+  /**
+   * Run one editing command, or report whether it would apply (`dryRun`).
+   * The PM-free vocabulary the public `Editor.can`/`Editor.exec` route through
+   * (interactive-paginated-editing M4.0) — adapters never see ProseMirror.
+   */
+  runEditCommand(command: EditSurfaceCommand, options?: { dryRun?: boolean }): EditSurfaceCommandResult;
 }
+
+/** The editing commands the surface can run today. */
+export type EditSurfaceCommand =
+  | { readonly kind: 'toggleMark'; readonly mark: string }
+  | { readonly kind: 'undo' }
+  | { readonly kind: 'redo' };
+
+export type EditSurfaceCommandResult =
+  | { readonly ok: true; readonly changed: boolean; readonly active?: boolean }
+  | { readonly ok: false; readonly code: 'unsupported' | 'readOnly'; readonly reason: string };
+
+/**
+ * Marks the toolbar may toggle.
+ *
+ * `underline` is deliberately absent. `RunProps.underline` is a boolean, but
+ * `w:u` carries a style (single / double / wave / …), so the serializer rejects
+ * a modeled underline rather than silently downgrading a double underline to a
+ * single one on save. Wiring a toggle for it would either throw on save or lose
+ * the author's formatting, so `can()` reports that reason and the toolbar
+ * disables the control.
+ */
+const TOGGLEABLE_MARKS = new Set(['bold', 'italic']);
 
 export interface MountEditSurfaceOptions {
   onModelChanged?: () => void;
@@ -810,6 +839,45 @@ export function mountEditSurface(
     }),
     getCompositionObservation: () => observeComposition(imeComposing, lastCompositionCancel),
     getInputObservation: () => observeInput(lastInputRejection),
+    runEditCommand: (command, options): EditSurfaceCommandResult => {
+      const dryRun = options?.dryRun === true;
+      if (!interactionAuthorized) {
+        return { ok: false, code: 'readOnly', reason: 'the semantic projection is read-only' };
+      }
+      if (destroyed) {
+        return { ok: false, code: 'readOnly', reason: 'the edit surface was destroyed' };
+      }
+      if (command.kind === 'undo' || command.kind === 'redo') {
+        // History is always available on an editable surface; an undo at the
+        // bottom of the stack still reports ok with changed:false.
+        if (dryRun) return { ok: true, changed: false };
+        const before = undoDepth;
+        if (command.kind === 'undo') doUndo();
+        else doRedo();
+        return { ok: true, changed: undoDepth !== before };
+      }
+      if (command.mark === 'underline') {
+        return {
+          ok: false,
+          code: 'unsupported',
+          reason:
+            'underline is not modeled as a toggle: w:u carries a style (single/double/wave), so a ' +
+            'boolean would downgrade the author formatting on save',
+        };
+      }
+      if (!TOGGLEABLE_MARKS.has(command.mark)) {
+        return { ok: false, code: 'unsupported', reason: `mark ${command.mark} is not toggleable` };
+      }
+      const markType = view.state.schema.marks[command.mark];
+      if (!markType) {
+        return { ok: false, code: 'unsupported', reason: `mark ${command.mark} is not in the schema` };
+      }
+      const toggle = toggleMark(markType);
+      if (dryRun) return { ok: true, changed: toggle(view.state) };
+      const changed = toggle(view.state, view.dispatch);
+      if (changed) notifyModelChanged();
+      return { ok: true, changed };
+    },
     getAccessibilityObservation: (request) =>
       observeAccessibilityFromSession(
         session,

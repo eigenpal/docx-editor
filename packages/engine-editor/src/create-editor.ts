@@ -48,6 +48,7 @@ import {
   mountEditSurface,
   type DocxEditorSession,
   type EditSurface,
+  type EditSurfaceCommand,
   type InputHostViewport,
   markPaintedPagesPresentationOnly,
   clearPaintedPagesPresentationOnly,
@@ -427,6 +428,30 @@ export function createEditor(config: EditorConfig): Editor {
 
   if (config.document !== undefined) loadSource(config.document);
 
+  /**
+   * Map a public editor command onto the PM-free edit-surface command
+   * vocabulary (interactive-paginated-editing M4.0). Returns null for commands
+   * the surface does not speak, which stay `unsupported`.
+   */
+  function editSurfaceCommandFor(command: EditorCommand): EditSurfaceCommand | null {
+    if (command.type === 'undo') return { kind: 'undo' };
+    if (command.type === 'redo') return { kind: 'redo' };
+    if (command.type === 'toggleMark') return { kind: 'toggleMark', mark: command.mark };
+    return null;
+  }
+
+  function runSurfaceCommand(command: EditSurfaceCommand, dryRun: boolean): ExecResult {
+    if (destroyed) return { ok: false, code: 'unsupported', reason: 'editor is destroyed' };
+    if (!surface) {
+      return { ok: false, code: 'unsupported', reason: 'edit surface is not mounted' };
+    }
+    const result = surface.runEditCommand(command, { dryRun });
+    if (!result.ok) {
+      return { ok: false, code: result.code === 'readOnly' ? 'locked' : 'unsupported', reason: result.reason };
+    }
+    return { ok: true, changed: result.changed };
+  }
+
   function execSetSelection(command: Extract<EditorCommand, { type: 'setSelection' }>): ExecResult {
     if (destroyed) return unsupportedSetSelection('editor is destroyed');
     if (readOnly || sharedView || !session?.editable) {
@@ -589,10 +614,17 @@ export function createEditor(config: EditorConfig): Editor {
     // ─── Commands / queries: wired feature-by-feature in section 5. ───────────
     exec(command: EditorCommand): ExecResult {
       if (command.type === 'setSelection') return execSetSelection(command);
+      const surfaceCommand = editSurfaceCommandFor(command);
+      if (surfaceCommand) return runSurfaceCommand(surfaceCommand, false);
       return UNSUPPORTED('command execution');
     },
     can(command: EditorCommand): CanResult {
       if (command.type === 'setSelection') return canSetSelection(command);
+      const surfaceCommand = editSurfaceCommandFor(command);
+      if (surfaceCommand) {
+        const result = runSurfaceCommand(surfaceCommand, true);
+        return result.ok ? { ok: true } : { ok: false, code: result.code, reason: result.reason };
+      }
       return {
         ok: false,
         code: 'unsupported',

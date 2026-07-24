@@ -25,3 +25,12 @@ export type {
 } from '@docx-editor.dev/core-contract/editor';
 export type { DisplayPage, DisplayItem, DocPoint } from '@docx-editor.dev/core-contract/geometry';
 export type { DocxDocument } from '@docx-editor.dev/core-contract/types';
+export {
+  runSave,
+  runToolbarCommand,
+  toolbarCommand,
+  toolbarCommandState,
+  toolbarCommandStates,
+  type ToolbarCommandId,
+  type ToolbarCommandState,
+} from './toolbarCommands';
