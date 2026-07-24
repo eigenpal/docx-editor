@@ -135,6 +135,75 @@ describe('structural editing: split (Enter) and join survive save + reopen', () 
   });
 });
 
+describe('paragraph-properties capsule: a styled paragraph is editable, w:pPr preserved (3.1/3.2)', () => {
+  const STYLED =
+    '<w:p><w:pPr><w:pStyle w:val="Heading1"/><w:jc w:val="center"/></w:pPr><w:r><w:t>Title</w:t></w:r></w:p>' +
+    '<w:p><w:r><w:t>body</w:t></w:r></w:p>';
+
+  test('a paragraph carrying w:pPr now opens editable (was read-only)', () => {
+    const session = openDocxSession(docx(STYLED));
+    expect(session.editable).toBe(true);
+    expect(session.readOnlyReason).toBeNull();
+  });
+
+  test('editing the styled paragraph text preserves its w:pPr verbatim through save + reopen', () => {
+    const session = openDocxSession(docx(STYLED));
+    const res = session.applyPmDoc(withFirstParagraphText(session.projectDoc(), 'New Title'));
+    expect(res.committed).toBe(true);
+    const savedXml = strFromU8(unzipSync(session.save())['word/document.xml']);
+    // The w:pPr capsule (style + justification) is re-spliced byte-exact ahead of the edited runs.
+    expect(savedXml).toContain('<w:pPr><w:pStyle w:val="Heading1"/><w:jc w:val="center"/></w:pPr>');
+    expect(savedXml).toContain('New Title');
+    // Reopen: the edit survives and the styled paragraph is still editable + still carries its w:pPr.
+    const reopened = openDocxSession(session.save());
+    expect(reopened.editable).toBe(true);
+    expect(reopened.bodyText()).toBe('New Title\nbody');
+    expect(strFromU8(unzipSync(reopened.save())['word/document.xml'])).toContain('<w:pStyle w:val="Heading1"/>');
+  });
+
+  test('a w:pPr that is not cleanly capturable (comment before it) keeps the document read-only', () => {
+    const uncapturable = '<w:p><!-- x --><w:pPr><w:jc w:val="left"/></w:pPr><w:r><w:t>t</w:t></w:r></w:p>';
+    expect(openDocxSession(docx(uncapturable)).editable).toBe(false);
+  });
+
+  test('joining a styled paragraph with the next keeps the FIRST paragraph w:pPr (first-survivor)', () => {
+    const session = openDocxSession(docx(STYLED));
+    const doc = session.projectDoc();
+    // Merge "Title" + "body" into one paragraph carrying the first (styled) paragraph's id.
+    const joined = docSchema.node('doc', null, [
+      docSchema.node('paragraph', { semId: doc.child(0).attrs.semId }, docSchema.text('Titlebody')),
+    ]);
+    const res = session.applyPmDoc(joined);
+    expect(res.committed).toBe(true);
+    const savedXml = strFromU8(unzipSync(session.save())['word/document.xml']);
+    expect(savedXml).toContain('<w:pStyle w:val="Heading1"/>'); // the surviving paragraph's w:pPr
+    expect(session.bodyText()).toBe('Titlebody');
+  });
+
+  test('splitting a styled paragraph gives BOTH halves the w:pPr (structural edit, no loss)', () => {
+    const session = openDocxSession(docx(STYLED));
+    const doc = session.projectDoc();
+    // Split the first paragraph "Title" into "Ti" + "tle": head keeps its semId, tail is new (null).
+    const first = doc.child(0);
+    const headSemId = first.attrs.semId;
+    const split = docSchema.node('doc', null, [
+      docSchema.node('paragraph', { semId: headSemId }, docSchema.text('Ti')),
+      docSchema.node('paragraph', { semId: null }, docSchema.text('tle')),
+      ...Array.from({ length: doc.childCount - 1 }, (_, i) => doc.child(i + 1)),
+    ]);
+    const res = session.applyPmDoc(split);
+    expect(res.committed).toBe(true);
+    const savedXml = strFromU8(unzipSync(session.save())['word/document.xml']);
+    // Both halves carry the paragraph style/justification; the split text round-trips.
+    expect(savedXml.match(/<w:pStyle w:val="Heading1"\/>/g)?.length).toBe(2);
+    expect(session.bodyText()).toBe('Ti\ntle\nbody');
+    // Reopen: both styled paragraphs survive.
+    const reopened = openDocxSession(session.save());
+    expect(reopened.bodyText()).toBe('Ti\ntle\nbody');
+    expect(reopened.editable).toBe(true);
+  });
+});
+
 describe('document with a table: read-only, verbatim, never flattened', () => {
   test('opens read-only; edits are refused and the save stays byte-identical', () => {
     const before = docx(WITH_TABLE);

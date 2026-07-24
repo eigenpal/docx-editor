@@ -1,0 +1,91 @@
+// Byte-exact paragraph-properties capsule extraction (document-engine 3.1/3.2/3.5). The capsule MUST
+// be byte-identical to the source and MUST fail closed (null) on anything it cannot cleanly isolate,
+// so it can never drop or corrupt authored OOXML.
+
+import { describe, expect, test } from 'bun:test';
+import { extractParagraphPropertiesCapsule, paragraphInnerWithCapsule } from '../src/package/preservation-capsule.ts';
+
+describe('extractParagraphPropertiesCapsule', () => {
+  test('captures a leading w:pPr verbatim (attribute order + whitespace preserved)', () => {
+    const slice = '<w:p><w:pPr><w:pStyle w:val="Heading1"/><w:spacing w:before="240" w:after="0"/></w:pPr><w:r><w:t>Hi</w:t></w:r></w:p>';
+    expect(extractParagraphPropertiesCapsule(slice)).toBe('<w:pPr><w:pStyle w:val="Heading1"/><w:spacing w:before="240" w:after="0"/></w:pPr>');
+  });
+
+  test('captures a self-closing <w:pPr/>', () => {
+    expect(extractParagraphPropertiesCapsule('<w:p><w:pPr/><w:r><w:t>x</w:t></w:r></w:p>')).toBe('<w:pPr/>');
+  });
+
+  test('preserves exact bytes including single quotes and unusual whitespace', () => {
+    const slice = "<w:p w:rsidR='00AB'>\n  <w:pPr>\t<w:jc w:val='center'/></w:pPr><w:r><w:t>x</w:t></w:r></w:p>";
+    expect(extractParagraphPropertiesCapsule(slice)).toBe("<w:pPr>\t<w:jc w:val='center'/></w:pPr>");
+  });
+
+  test('handles > inside an attribute value in the w:pPr opening tag', () => {
+    const slice = '<w:p><w:pPr w:x="a>b"><w:jc w:val="left"/></w:pPr><w:r><w:t>x</w:t></w:r></w:p>';
+    expect(extractParagraphPropertiesCapsule(slice)).toBe('<w:pPr w:x="a>b"><w:jc w:val="left"/></w:pPr>');
+  });
+
+  test('returns null when there is no leading w:pPr', () => {
+    expect(extractParagraphPropertiesCapsule('<w:p><w:r><w:t>x</w:t></w:r></w:p>')).toBeNull();
+  });
+
+  test('returns null for an empty self-closed paragraph', () => {
+    expect(extractParagraphPropertiesCapsule('<w:p/>')).toBeNull();
+  });
+
+  test('fails closed on a comment before the properties (would be dropped)', () => {
+    expect(extractParagraphPropertiesCapsule('<w:p><!-- c --><w:pPr/><w:r><w:t>x</w:t></w:r></w:p>')).toBeNull();
+  });
+
+  test('fails closed on a malformed / unterminated w:pPr', () => {
+    expect(extractParagraphPropertiesCapsule('<w:p><w:pPr><w:jc w:val="left"/></w:p>')).toBeNull();
+    expect(extractParagraphPropertiesCapsule('<w:p><w:pPr')).toBeNull();
+  });
+
+  test('does not mistake an element merely prefixed w:pPr', () => {
+    expect(extractParagraphPropertiesCapsule('<w:p><w:pPrChange/><w:r><w:t>x</w:t></w:r></w:p>')).toBeNull();
+  });
+
+  test('balanced-matches a NESTED w:pPr (w:pPrChange) — captures the full outer, never truncates', () => {
+    // w:pPrChange (a tracked paragraph-property change) contains a nested <w:pPr>; the first
+    // </w:pPr> closes the INNER one, so naive matching would truncate + corrupt. Depth matching
+    // captures the whole outer element.
+    const full = '<w:pPr><w:pStyle w:val="H1"/><w:pPrChange w:id="1" w:author="X"><w:pPr><w:jc w:val="left"/></w:pPr></w:pPrChange></w:pPr>';
+    expect(extractParagraphPropertiesCapsule(`<w:p>${full}<w:r><w:t>t</w:t></w:r></w:p>`)).toBe(full);
+  });
+
+  test('captures a w:pPr containing a comment verbatim', () => {
+    const cap = '<w:pPr><!-- keep --><w:jc w:val="left"/></w:pPr>';
+    expect(extractParagraphPropertiesCapsule(`<w:p>${cap}<w:r><w:t>t</w:t></w:r></w:p>`)).toBe(cap);
+  });
+
+  test('fails closed on a nested element left unclosed (full tag-stack balance, not just w:pPr depth)', () => {
+    // w:pPrChange is never closed; naive w:pPr-depth matching would capture up to the inner
+    // </w:pPr> and emit a malformed fragment. Full-stack balancing rejects it.
+    expect(extractParagraphPropertiesCapsule('<w:p><w:pPr><w:pPrChange><w:pPr/></w:pPr><w:r><w:t>x</w:t></w:r></w:p>')).toBeNull();
+  });
+
+  test('fails closed on a mismatched close tag', () => {
+    expect(extractParagraphPropertiesCapsule('<w:p><w:pPr><w:jc w:val="l"></w:spacing></w:pPr><w:r/></w:p>')).toBeNull();
+  });
+
+  test('a comment or CDATA close-tag decoy inside w:pPr does not truncate capture', () => {
+    const cap = '<w:pPr><w:jc w:val="l"/><!-- </w:pPr> decoy --></w:pPr>';
+    expect(extractParagraphPropertiesCapsule(`<w:p>${cap}<w:r><w:t>x</w:t></w:r></w:p>`)).toBe(cap);
+  });
+
+  test('is byte-exact: re-extracting the captured capsule from a rebuilt paragraph is stable', () => {
+    const capsule = '<w:pPr><w:jc w:val="right"/></w:pPr>';
+    const inner = paragraphInnerWithCapsule(capsule, '<w:r><w:t>edited</w:t></w:r>');
+    expect(extractParagraphPropertiesCapsule(`<w:p>${inner}</w:p>`)).toBe(capsule);
+  });
+});
+
+describe('paragraphInnerWithCapsule', () => {
+  test('reinserts the capsule before the runs (OOXML child order)', () => {
+    expect(paragraphInnerWithCapsule('<w:pPr/>', '<w:r><w:t>x</w:t></w:r>')).toBe('<w:pPr/><w:r><w:t>x</w:t></w:r>');
+  });
+  test('emits only the runs when there is no capsule', () => {
+    expect(paragraphInnerWithCapsule(undefined, '<w:r><w:t>x</w:t></w:r>')).toBe('<w:r><w:t>x</w:t></w:r>');
+  });
+});

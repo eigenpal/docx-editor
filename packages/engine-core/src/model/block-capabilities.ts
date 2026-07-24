@@ -222,7 +222,15 @@ registerCoreBlockCapability({
   // edited (comprehensive 3.10).
   hashContent: (block) => {
     const p = block as ParagraphRecord;
-    return { kind: 'paragraph', runs: normalizeRuns(p.runs), ...(p.props ? { props: p.props } : {}) };
+    // The pPr capsule is part of the paragraph's identity: two paragraphs with the same runs but
+    // different (or absent) authored properties are distinct, and an unchanged capsule keeps a
+    // text-edited paragraph's baseline stable.
+    return {
+      kind: 'paragraph',
+      runs: normalizeRuns(p.runs),
+      ...(p.props ? { props: p.props } : {}),
+      ...(p.pPrCapsule ? { pPrCapsule: p.pPrCapsule } : {}),
+    };
   },
   normalize: (block) => normalizeParagraph(block as ParagraphRecord),
   editPolicy: { topLevelEditable: true }, // paragraphs are the editable top-level block kind

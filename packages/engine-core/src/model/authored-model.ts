@@ -34,6 +34,12 @@ export interface ParagraphRecord {
   readonly id: string;
   readonly runs: readonly RunRecord[];
   readonly props?: ParagraphProps;
+  /** An ownership-scoped preservation capsule for the paragraph's leading `w:pPr` — the verbatim
+   *  authored properties bytes the model does not otherwise represent (document-engine 3.1). Captured
+   *  byte-exact at parse and re-spliced ahead of the runs on serialize, so a paragraph carrying
+   *  unmodeled properties stays editable (its runs) without losing them. Absent when the paragraph
+   *  had no properties, or when they were not cleanly capturable (the paragraph then stays read-only). */
+  readonly pPrCapsule?: string;
 }
 
 // --- Tables (task 2.7 / fidelity slice 1, ADR-S10). Structural preservation:

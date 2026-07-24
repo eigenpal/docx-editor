@@ -9,6 +9,7 @@ import { readXml, textContent, type XmlNode } from './xml-reader.ts';
 import { scanCellParagraphSpans } from './wml-scan.ts';
 import { paragraphXml } from './wml-serialize.ts';
 import { el, blockFromText } from './wml-parse.ts';
+import { extractParagraphPropertiesCapsule } from './preservation-capsule.ts';
 import { IdentityAllocator } from '../model/identity.ts';
 import { blockHashContent, blockPatchEdited, blockSerialize, isTopLevelEditable, registerCoreBlockCapability } from '../model/index.ts';
 import { stableHash } from '../comparators/index.ts';
@@ -43,6 +44,19 @@ function contentForHash(block: Block): unknown {
  */
 export function hashPreservableBlock(block: Block): string {
   return stableHash(contentForHash(block));
+}
+
+/** Reparse a block's source slice for integrity checks, CAPTURING the same ownership-scoped w:pPr
+ *  capsule the original parse did — so the reparsed block's baseline hash matches the one computed at
+ *  parse time (both include the capsule). Without this a paragraph that carried a captured w:pPr
+ *  would appear drifted on every re-emit. Returns null on an unparseable slice. */
+function reparseBlockWithCapsule(sliceText: string, alloc: IdentityAllocator): Block | undefined {
+  const block = blockFromText(sliceText, alloc);
+  if (block && block.kind === 'paragraph') {
+    const capsule = extractParagraphPropertiesCapsule(sliceText);
+    if (capsule) return { ...block, pPrCapsule: capsule };
+  }
+  return block;
 }
 
 /** EXACT hash of a block's original source-slice bytes (integrity/rebinding), independent of the
@@ -101,7 +115,11 @@ function tableSkeleton(table: TableRecord): unknown {
  *  lone `w:p`: a range drawn to swallow a following sibling (a `w:bookmarkStart`, an SDT
  *  boundary, stray text) is rejected, since regeneration re-emits only the paragraph and would
  *  delete everything else the range covered. */
-export function sliceIsFullyCapturedParagraph(sliceText: string): boolean {
+export function sliceIsFullyCapturedParagraph(sliceText: string, opts?: { readonly allowCapsule?: boolean }): boolean {
+  // A leading w:pPr is only capsule-able where the capsule is actually captured + reinserted — that
+  // is TOP-LEVEL body paragraphs (allowCapsule defaults true). A table CELL paragraph has no capsule
+  // captured, so its caller passes allowCapsule:false and a styled cell keeps the table read-only.
+  const allowCapsule = opts?.allowCapsule ?? true;
   if (sliceText.includes('<!--') || sliceText.includes('<?')) return false; // comment / PI would be dropped
   // readXml discards top-level text OUTSIDE elements, so raw content before or after the
   // paragraph (a swallowed `KEEP<w:p>…` or `…</w:p>trailing`) is invisible to a node scan yet
@@ -114,14 +132,39 @@ export function sliceIsFullyCapturedParagraph(sliceText: string): boolean {
   if (!fx.ok) return false;
   const els = fx.nodes.filter(el);
   if (els.length !== 1) return false; // zero, or a swallowed sibling element → fail closed
-  return els[0].name === 'w:p' && paragraphFullyCaptured(els[0]);
+  const pEl = els[0];
+  if (pEl.name !== 'w:p') return false;
+  // A leading w:pPr is preserved as an ownership-scoped capsule ONLY when it can be captured
+  // byte-exact; a paragraph that has a w:pPr child that is NOT cleanly capturable (e.g. a comment
+  // sits before it, or it is not the leading child) stays read-only. `capsule !== null` means the
+  // leading w:pPr was captured, so paragraphFullyCaptured may skip it.
+  const hasPPrChild = pEl.children.some((c) => c.type === 'element' && c.name === 'w:pPr');
+  if (hasPPrChild && !allowCapsule) return false; // capsules not captured here (cell) -> stay read-only
+  const capsule = extractParagraphPropertiesCapsule(sliceText);
+  if (hasPPrChild && capsule === null) return false; // an uncapturable w:pPr -> fail closed
+  return paragraphFullyCaptured(pEl, { pPrCapsuled: capsule !== null });
 }
 
-export function paragraphFullyCaptured(pEl: Extract<XmlNode, { type: 'element' }>): boolean {
+export function paragraphFullyCaptured(
+  pEl: Extract<XmlNode, { type: 'element' }>,
+  opts?: { readonly pPrCapsuled?: boolean },
+): boolean {
   if (Object.keys(pEl.attributes).length > 0) return false;
+  let pPrConsumed = false;
+  let sawRun = false;
   for (const c of pEl.children) {
     if (c.type === 'text') { if (c.value.trim() !== '') return false; continue; }
+    // A leading w:pPr preserved as an ownership-scoped capsule (opts.pPrCapsuled) is allowed: it is
+    // re-spliced VERBATIM, so its own attributes/children don't need to be model-capturable. It MUST
+    // be the single leading child (before any run); a second w:pPr, or one after a run, is not the
+    // captured capsule and fails closed.
+    if (c.name === 'w:pPr') {
+      if (!opts?.pPrCapsuled || pPrConsumed || sawRun) return false;
+      pPrConsumed = true;
+      continue;
+    }
     if (c.name !== 'w:r' || Object.keys(c.attributes).length > 0) return false;
+    sawRun = true;
     let hasText = false;
     let tCount = 0;
     let rPrCount = 0;
@@ -170,7 +213,9 @@ function patchEditedTable(tableText: string, tableStart: number, baseline: Table
     // Guard the RAW slice, not a parsed node: readXml discards comments/PIs, so a cell
     // paragraph carrying <!-- --> or <? ?> must fail closed here too — regenerating it would
     // silently delete that content.
-    if (!sliceIsFullyCapturedParagraph(tableText.slice(spans[i].start, spans[i].end))) return null;
+    // Cell paragraphs do not capture a w:pPr capsule, so a styled cell paragraph fails closed here
+    // (the whole table stays read-only) rather than dropping its properties on regeneration.
+    if (!sliceIsFullyCapturedParagraph(tableText.slice(spans[i].start, spans[i].end), { allowCapsule: false })) return null;
     patches.push({ start: tableStart + spans[i].start, end: tableStart + spans[i].end, xml: paragraphXml(curParas[i]) });
   }
   return patches;
@@ -238,7 +283,7 @@ function regenerateBlockRegion(
     // (byte-identical to parse time — rejects a tampered-but-normalization-equivalent slice) AND
     // the semantic baselineHash consistent with the reparsed slice (rejects an independently
     // tampered baselineHash field that would otherwise fool the edit-detection below).
-    const reparsed = blockFromText(sliceText, throwaway);
+    const reparsed = reparseBlockWithCapsule(sliceText, throwaway);
     if (hashSourceSlice(sliceText) !== r.sourceHash || !reparsed || hashPreservableBlock(reparsed) !== r.baselineHash) {
       throw new Error(`preservation range for block ${id} drifted or was tampered — fail closed`);
     }
@@ -279,7 +324,7 @@ export function emitPreservedPart(model: PackageModel, original: string, ranges:
   const patches: { start: number; end: number; xml: string }[] = [];
   for (const [id, r] of docRanges) {
     const sliceText = original.slice(r.start, r.end);
-    const reparsed = blockFromText(sliceText, throwaway);
+    const reparsed = reparseBlockWithCapsule(sliceText, throwaway);
     // EXACT integrity (byte-identical source slice), independent of the normalized edit-detection
     // hash below — so a tampered slice that normalizes equal is still rejected.
     // Integrity requires BOTH: exact source bytes AND a baselineHash consistent with the reparsed

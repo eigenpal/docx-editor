@@ -72,7 +72,16 @@ export function splitParagraph(
   const identity = opts.tailId ? model.identity : alloc.state();
 
   const first: ParagraphRecord = { ...para, runs: headRuns };
-  const tail: ParagraphRecord = { kind: 'paragraph', id: tailId, runs: tailRuns, props: para.props };
+  // The tail inherits the head's paragraph properties — including the ownership-scoped w:pPr capsule
+  // — so splitting a styled paragraph gives BOTH halves those properties (as Word does) and never
+  // drops the capsule.
+  const tail: ParagraphRecord = {
+    kind: 'paragraph',
+    id: tailId,
+    runs: tailRuns,
+    props: para.props,
+    ...(para.pPrCapsule ? { pPrCapsule: para.pPrCapsule } : {}),
+  };
   const blocks = loc.story.blocks as ParagraphRecord[];
   const next = [...blocks.slice(0, loc.index), first, tail, ...blocks.slice(loc.index + 1)];
   return { model: { ...replaceStory(model, loc.storyId, next), identity }, tailId };

@@ -21,6 +21,7 @@ import {
   type BatchResult,
   type Block,
   type RunRecord,
+  type ParagraphRecord,
 } from '@docx-editor.dev/engine-core';
 import { docSchema } from './schema.ts';
 import { modelToDoc, paragraphNodeToRuns } from './projection.ts';
@@ -323,10 +324,17 @@ export class EditorBinding {
     if (!alignsAfter(nodes, prefix + k + 1, blocks, prefix + 1)) return null;
     // The paste overwrites P (and moves its tail into a new paragraph). If P's ORIGINAL runs carry
     // metadata the projection drops (id/styleId/underline/explicit-off), the paste would silently
-    // lose it — refuse. Likewise if P has PARAGRAPH-level props (numbering/style/etc.): P keeps
-    // them via setParagraphRuns, but the tail moves to a NEW paragraph and insertParagraph cannot
-    // reproduce them, so the tail would silently lose its list/style context.
-    if (!paragraphIsProjectable(block) || block.props !== undefined) return null;
+    // lose it — refuse. Likewise if P has PARAGRAPH-level props (numbering/style/etc.) OR an
+    // ownership-scoped w:pPr capsule: P keeps them via setParagraphRuns, but the tail moves to a NEW
+    // paragraph and insertParagraph cannot reproduce them, so the tail would silently lose its
+    // list/style/properties context.
+    if (
+      !paragraphIsProjectable(block) ||
+      block.props !== undefined ||
+      (block as ParagraphRecord).pPrCapsule !== undefined
+    ) {
+      return null;
+    }
     // A paste that redistributes the paragraph's text must never leave a run holding a lone
     // surrogate (a boundary inside an astral character) — checked PER RUN, since a pair split
     // across two differently-formatted runs concatenates to a valid string yet serializes each

@@ -5,6 +5,7 @@
 
 import { escapeXml } from './sinks.ts';
 import { type Block, type ParagraphRecord, type RunRecord, registerCoreBlockCapability, blockSerialize } from '../model/index.ts';
+import { paragraphInnerWithCapsule } from './preservation-capsule.ts';
 
 function runXml(run: RunRecord): string {
   const props = run.props;
@@ -16,7 +17,9 @@ function runXml(run: RunRecord): string {
 }
 
 export function paragraphXml(p: ParagraphRecord): string {
-  return `<w:p>${p.runs.map(runXml).join('')}</w:p>`;
+  // Re-splice the ownership-scoped w:pPr capsule (verbatim) ahead of the runs — the OOXML child
+  // order for w:p. Undefined capsule => runs only (byte-identical to the pre-capsule serializer).
+  return `<w:p>${paragraphInnerWithCapsule(p.pPrCapsule, p.runs.map(runXml).join(''))}</w:p>`;
 }
 
 // Register the block-serialize capabilities (comprehensive 3.3). A paragraph regenerates from the

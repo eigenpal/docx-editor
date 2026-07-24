@@ -20,6 +20,7 @@ import {
   paragraphFullyCaptured,
   sliceIsFullyCapturedParagraph,
 } from '../wml-preserve.ts';
+import { extractParagraphPropertiesCapsule } from '../preservation-capsule.ts';
 import {
   createEmptyModel,
   bodyStoryId,
@@ -114,8 +115,15 @@ export function parseDocx(bytes: Uint8Array, options: ParseOptions = {}): ParseR
     if (!spans || !body) return { ok: false, reason: 'xml-error', detail: 'preserved document failed strict span scan' };
     const blockRanges = new Map<string, BlockRange>();
     for (const span of spans) {
-      const block = blockFromSpan(docText, span, alloc);
+      let block = blockFromSpan(docText, span, alloc);
       if (!block) return { ok: false, reason: 'xml-error', detail: 'preservation fragment parse failed' };
+      // Capture the paragraph's leading w:pPr as an ownership-scoped capsule (byte-exact from the
+      // source slice), so a paragraph carrying unmodeled properties can stay editable and re-splice
+      // them verbatim (document-engine 3.2). The baseline hash is then computed WITH the capsule.
+      if (block.kind === 'paragraph') {
+        const capsule = extractParagraphPropertiesCapsule(docText.slice(span.start, span.end));
+        if (capsule) block = { ...block, pPrCapsule: capsule };
+      }
       blocks.push(block);
       blockRanges.set(block.id, {
         partName: DOC_PART,
