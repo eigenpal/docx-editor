@@ -9,6 +9,7 @@ import { zipSync, unzipSync, strToU8, strFromU8 } from 'fflate';
 import { parseDocx } from '../src/package/docx/read.ts';
 import { documentXml } from '../src/package/docx/write.ts';
 import { DocumentStore, ORIGIN_IDS, bodyStoryId, type TableRecord, type ParagraphRecord, type PackageModel, type Story, type Block } from '../src/index.ts';
+import { authoredStateDigest } from '../src/package/authored-digest.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 const MC = 'http://schemas.openxmlformats.org/markup-compatibility/2006';
@@ -303,6 +304,20 @@ describe('editing a preserved table document', () => {
       expect(cellText(t, 0, 0)).toBe('EDITED');
       expect(cellText(t, 1, 1)).toBe('B2');
     }
+  });
+
+  test('a table-cell edit changes the authored-state digest and survives a reopen digest-equal', () => {
+    const parsed = parseDocx(bytes());
+    if (!parsed.ok) throw new Error('parse failed');
+    const edited = editFirstCell(parsed.model, 'EDITED');
+    // The edit changes authored state, so the digest MUST differ from the unedited model (the old
+    // baseline-slice digest would have collapsed them to equal).
+    expect(authoredStateDigest(edited)).not.toBe(authoredStateDigest(parsed.model));
+    // And the edit round-trips: save -> reopen -> the reopened model digests the same as the edit.
+    const out = documentXml(edited);
+    const re = parseDocx(zipSync({ '[Content_Types].xml': strToU8('<Types/>'), 'word/document.xml': strToU8(out) }));
+    if (!re.ok) throw new Error('reopen failed');
+    expect(authoredStateDigest(re.model)).toBe(authoredStateDigest(edited));
   });
 
   test('a structural table change (adding a row) still fails closed', () => {

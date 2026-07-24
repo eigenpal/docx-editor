@@ -9,6 +9,7 @@
 import type { PackageModel, Block, Story, RunRecord } from '../model/authored-model.ts';
 import { normalizeRuns } from '../model/normalize-runs.ts';
 import { canonicalParagraphProps } from '../model/paragraph-props.ts';
+import { hashPreservableBlock } from './wml-preserve.ts';
 import { stableHash } from '../comparators/canonical.ts';
 
 function runDigest(r: RunRecord): unknown {
@@ -17,7 +18,7 @@ function runDigest(r: RunRecord): unknown {
   return { text: r.text, props: r.props ?? null, rPr: r.rPrCapsule ?? null };
 }
 
-function blockDigest(b: Block, model: PackageModel): unknown {
+function blockDigest(b: Block): unknown {
   if (b.kind === 'paragraph') {
     // Strip volatile ids BEFORE normalizing so adjacent identically-formatted runs merge regardless
     // of their (excluded) ids — then lexically-different-but-equivalent segmentations ([{"a"},{"b"}]
@@ -33,20 +34,16 @@ function blockDigest(b: Block, model: PackageModel): unknown {
       runs: normalizeRuns(idless).map(runDigest),
     };
   }
-  // Non-paragraph blocks (table, sdt) are preserved verbatim and never regenerated; their authored
-  // content IS their byte-exact source range, so digest that slice (id-free). A preserved block
-  // ALWAYS has a range; a non-paragraph block with no slice cannot be faithfully compared, so fail
-  // closed rather than collapse two differently-authored tables to an equal {k, slice:null} hash.
-  const range = model.preservation?.blockRanges.get(b.id);
-  const source = range ? model.preservation?.originalParts.get(range.partName) : undefined;
-  if (!range || source === undefined) {
-    throw new Error(`cannot digest a '${b.kind}' block without a preservation source range (block ${b.id})`);
-  }
-  return { k: b.kind, slice: source.slice(range.start, range.end) };
+  // Non-paragraph blocks (table, sdt): digest the block's COMPLETE current semantic subtree via the
+  // same id-independent content hash the exporter uses for edit detection. This reflects a table-cell
+  // paragraph edit (the baseline source slice would NOT — it is the pre-edit bytes, giving edited and
+  // unedited tables the same digest), captures structural props/grid so two differently-authored
+  // tables differ, and stays symmetric across save+reopen (equal model content -> equal hash).
+  return { k: b.kind, h: hashPreservableBlock(b) };
 }
 
-function storyDigest(s: Story, model: PackageModel): unknown {
-  return { kind: s.kind, blocks: s.blocks.map((b) => blockDigest(b, model)) };
+function storyDigest(s: Story): unknown {
+  return { kind: s.kind, blocks: s.blocks.map((b) => blockDigest(b)) };
 }
 
 /**
@@ -59,7 +56,7 @@ function storyDigest(s: Story, model: PackageModel): unknown {
  */
 export function authoredStateProjection(model: PackageModel): unknown {
   return {
-    stories: [...model.stories.values()].map((s) => storyDigest(s, model)),
+    stories: [...model.stories.values()].map((s) => storyDigest(s)),
     styles: model.styles,
     numbering: model.numbering,
     docDefaults: model.docDefaults ?? null, // document-wide default formatting is authored state
