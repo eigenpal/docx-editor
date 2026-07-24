@@ -38,6 +38,42 @@ export function escapeXml(value: string): string {
   return value.replace(/[&<>"']/g, (c) => XML_ESCAPES[c]);
 }
 
+/** True for a UTF-16 code unit forbidden in XML 1.0 character data: a control char other than
+ *  tab/LF/CR, or the non-characters U+FFFE/U+FFFF. (Surrogates are validated as pairs below.) */
+function isForbiddenXmlUnit(cu: number): boolean {
+  if (cu === 0x9 || cu === 0xa || cu === 0xd) return false;
+  if (cu < 0x20) return true;
+  return cu === 0xfffe || cu === 0xffff;
+}
+
+/**
+ * Validate that a string contains only characters legal in XML 1.0 text/attributes. escapeXml
+ * handles the markup-significant characters but leaves control chars, U+FFFE/U+FFFF, and unpaired
+ * surrogates — which would emit malformed XML (or be silently mangled during UTF-8 encoding). Returns
+ * false so a caller can reject fail-closed. Valid supplementary characters (correct surrogate pairs)
+ * pass.
+ */
+export function isValidXmlText(value: string): boolean {
+  for (let i = 0; i < value.length; i++) {
+    const cu = value.charCodeAt(i);
+    if (isForbiddenXmlUnit(cu)) return false;
+    if (cu >= 0xd800 && cu <= 0xdbff) {
+      const next = value.charCodeAt(i + 1);
+      if (!(next >= 0xdc00 && next <= 0xdfff)) return false; // unpaired high surrogate
+      i++; // consume the valid low surrogate
+    } else if (cu >= 0xdc00 && cu <= 0xdfff) {
+      return false; // unpaired low surrogate
+    }
+  }
+  return true;
+}
+
+/** Validate (fail-closed) then XML-escape an authored value bound for an owned attribute/text node. */
+export function escapeXmlChecked(value: string, what: string): string {
+  if (!isValidXmlText(value)) throw new Error(`${what} contains a character not valid in XML 1.0`);
+  return escapeXml(value);
+}
+
 /**
  * CSS string-escape a file-derived value (e.g. an `@font-face` family name or an
  * inline style value). Emits `\<hex> ` escapes for quotes, backslash, and

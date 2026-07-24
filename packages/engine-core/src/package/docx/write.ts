@@ -7,7 +7,7 @@
 import { writeZip, strToU8 } from '../zip.ts';
 import { blockXml } from '../wml-serialize.ts';
 import { W_NS } from '../wml-parse.ts';
-import { escapeXml } from '../sinks.ts';
+import { escapeXmlChecked } from '../sinks.ts';
 import { DOC_PART, emitPreservedPart } from '../wml-preserve.ts';
 import { buildRelationshipSet, type RelationshipRecord } from '../relationships.ts';
 import { buildContentTypeIndex, type ContentTypeRecords } from '../content-types.ts';
@@ -17,10 +17,10 @@ import {
   REL_TYPES,
   CONTENT_TYPES,
   type PackageModel,
-  type Story,
   type StyleRecord,
   type NumberingRecord,
   type RunProps,
+  type DocDefaults,
 } from '../../model/index.ts';
 
 const XML_DECL = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>`;
@@ -29,34 +29,8 @@ const REL_NS = 'http://schemas.openxmlformats.org/package/2006/relationships';
 
 const MAIN_PART = '/word/document.xml';
 
-/** True for a code unit forbidden in XML 1.0 char data: a control char other than tab/LF/CR, or the
- *  non-characters U+FFFE/U+FFFF. (Surrogates are validated as pairs below.) */
-function isForbiddenXmlUnit(cu: number): boolean {
-  if (cu === 0x9 || cu === 0xa || cu === 0xd) return false;
-  if (cu < 0x20) return true;
-  return cu === 0xfffe || cu === 0xffff;
-}
-
-/**
- * Validate then XML-escape an authored value bound for an owned attribute/text node. escapeXml
- * handles &<>"' but leaves control chars, U+FFFE/U+FFFF, and unpaired surrogates — which would emit
- * malformed XML — so reject them fail-closed (a hostile/garbage value can never produce an
- * unopenable part).
- */
-function xmlAttr(value: string, what: string): string {
-  for (let i = 0; i < value.length; i++) {
-    const cu = value.charCodeAt(i);
-    if (isForbiddenXmlUnit(cu)) throw new Error(`${what} contains a character not valid in XML 1.0`);
-    if (cu >= 0xd800 && cu <= 0xdbff) {
-      const next = value.charCodeAt(i + 1);
-      if (!(next >= 0xdc00 && next <= 0xdfff)) throw new Error(`${what} contains an unpaired surrogate`);
-      i++; // consume the valid low surrogate
-    } else if (cu >= 0xdc00 && cu <= 0xdfff) {
-      throw new Error(`${what} contains an unpaired surrogate`);
-    }
-  }
-  return escapeXml(value);
-}
+/** Validate (fail-closed) then XML-escape an authored value bound for an owned attribute/text node. */
+const xmlAttr = escapeXmlChecked;
 
 /**
  * Serialize the body story into a document.xml string. When the model retains the
@@ -77,17 +51,12 @@ export function documentXml(model: PackageModel): string {
   return `${XML_DECL}<w:document xmlns:w="${W_NS}"><w:body>${body}</w:body></w:document>`;
 }
 
-/** Serialize a header/footer story into its part root. Only w:hdr / w:ftr are supported from scratch
- *  (note/comment stories need item wrappers with required ids AND section references we do not yet
- *  emit); any other kind fails closed rather than emit an inert/invalid part. */
-function storyXml(story: Story): string {
-  if (story.kind !== 'header' && story.kind !== 'footer') {
-    throw new Error(`from-scratch export of a '${story.kind}' story is not supported (would emit an invalid or inert part)`);
-  }
-  const inner = story.blocks.map(blockXml).join('');
-  const root = story.kind === 'header' ? 'w:hdr' : 'w:ftr';
-  return `${XML_DECL}<${root} xmlns:w="${W_NS}">${inner}</${root}>`;
-}
+// NOTE: from-scratch export supports ONLY a body story. Header/footer parts additionally require a
+// w:sectPr in document.xml carrying w:headerReference/w:footerReference (with the relationship id)
+// to actually attach in Word — which the model does not yet represent — so emitting the part alone
+// would be inert. Note/comment stories need item wrappers with required ids. Rather than emit an
+// inert or invalid part, from-scratch export FAILS CLOSED on every non-body story (see writeDocx).
+// Opened documents with headers/footers round-trip losslessly through the verbatim PRESERVED path.
 
 // --- OPC scaffolding serializers (from the model, NOT hardcoded) ---
 
@@ -133,7 +102,13 @@ function rPrXml(p: RunProps): string {
   return s ? `<w:rPr>${s}</w:rPr>` : '';
 }
 
-function stylesXml(styles: readonly StyleRecord[]): string {
+function stylesXml(styles: readonly StyleRecord[], docDefaults?: DocDefaults): string {
+  // w:docDefaults (the lowest style-resolution layer) must round-trip too, or a from-scratch model's
+  // document-wide defaults are silently lost.
+  const defaults =
+    docDefaults?.runProps && rPrXml(docDefaults.runProps)
+      ? `<w:docDefaults><w:rPrDefault>${rPrXml(docDefaults.runProps)}</w:rPrDefault></w:docDefaults>`
+      : '';
   const body = styles
     .map((st) => {
       const name = `<w:name w:val="${xmlAttr(st.name, 'style name')}"/>`;
@@ -145,7 +120,7 @@ function stylesXml(styles: readonly StyleRecord[]): string {
       );
     })
     .join('');
-  return `${XML_DECL}<w:styles xmlns:w="${W_NS}">${body}</w:styles>`;
+  return `${XML_DECL}<w:styles xmlns:w="${W_NS}">${defaults}${body}</w:styles>`;
 }
 
 function numberingXml(nums: readonly NumberingRecord[]): string {
@@ -215,12 +190,12 @@ export function writeDocx(model: PackageModel): Uint8Array {
       throw new Error(`from-scratch export cannot serialize media part ${partName} (no authored bytes)`);
     }
     if (partName === MAIN_PART) entries.set(partName, strToU8(documentXml(model)));
-    else if (partName === '/word/styles.xml') entries.set(partName, strToU8(stylesXml(model.styles)));
+    else if (partName === '/word/styles.xml') entries.set(partName, strToU8(stylesXml(model.styles, model.docDefaults)));
     else if (partName === '/word/numbering.xml') entries.set(partName, strToU8(numberingXml(model.numbering)));
     else if (part.storyId && part.storyId !== bodyId) {
-      const story = model.stories.get(part.storyId);
-      if (!story) throw new Error(`declared part ${partName} references missing story ${part.storyId}`);
-      entries.set(partName, strToU8(storyXml(story))); // storyXml fails closed on unsupported kinds
+      // A related story (header/footer/note/comment) needs section references / item wrappers we do
+      // not yet model — emitting the part alone would be inert or invalid, so fail closed.
+      throw new Error(`from-scratch export cannot serialize related story part ${partName} (section references not modeled)`);
     } else {
       throw new Error(`from-scratch export cannot serialize declared part ${partName}`);
     }

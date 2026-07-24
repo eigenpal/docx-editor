@@ -18,13 +18,16 @@ function runDigest(r: RunRecord): unknown {
 
 function blockDigest(b: Block, model: PackageModel): unknown {
   if (b.kind === 'paragraph') {
-    // Normalize runs first so lexically-different-but-equivalent segmentations ([{"a"},{"b"}] vs
-    // [{"ab"}]) share a digest — the model treats them as equal, so the fingerprint must too.
+    // Strip volatile ids BEFORE normalizing so adjacent identically-formatted runs merge regardless
+    // of their (excluded) ids — then lexically-different-but-equivalent segmentations ([{"a"},{"b"}]
+    // vs [{"ab"}]) share a digest, matching how the model treats them.
+    const idless = b.runs.map((r) => ({ text: r.text, ...(r.props ? { props: r.props } : {}), ...(r.rPrCapsule ? { rPrCapsule: r.rPrCapsule } : {}) }));
     return {
       k: 'paragraph',
       pPr: b.pPrCapsule ?? null,
       attrs: b.pAttrsCapsule ?? null,
-      runs: normalizeRuns(b.runs).map(runDigest),
+      props: b.props ?? null, // modeled paragraph props (styleId / numId / ilvl) are authored state
+      runs: normalizeRuns(idless).map(runDigest),
     };
   }
   // Non-paragraph blocks (table, sdt) are preserved verbatim and never regenerated; their authored
@@ -54,6 +57,7 @@ export function authoredStateProjection(model: PackageModel): unknown {
     stories: [...model.stories.values()].map((s) => storyDigest(s, model)),
     styles: model.styles,
     numbering: model.numbering,
+    docDefaults: model.docDefaults ?? null, // document-wide default formatting is authored state
   };
 }
 

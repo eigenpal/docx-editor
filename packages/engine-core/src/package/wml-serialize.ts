@@ -3,9 +3,8 @@
 // intentionally minimal (only the modeled run content); a caller that needs byte-faithful
 // output uses verbatim preservation instead and only regenerates fully-captured blocks.
 
-import { escapeXml } from './sinks.ts';
-import { type Block, type ParagraphRecord, type RunRecord, registerCoreBlockCapability, blockSerialize } from '../model/index.ts';
-import { paragraphInnerWithCapsule } from './preservation-capsule.ts';
+import { escapeXmlChecked } from './sinks.ts';
+import { type Block, type ParagraphRecord, type ParagraphProps, type RunRecord, registerCoreBlockCapability, blockSerialize } from '../model/index.ts';
 
 function runXml(run: RunRecord): string {
   // An ownership-scoped w:rPr capsule (verbatim, full run properties) is re-spliced INSTEAD of
@@ -16,14 +15,32 @@ function runXml(run: RunRecord): string {
     : props?.bold || props?.italic
       ? `<w:rPr>${props.bold ? '<w:b/>' : ''}${props.italic ? '<w:i/>' : ''}</w:rPr>`
       : '';
-  return `<w:r>${rPr}<w:t xml:space="preserve">${escapeXml(run.text)}</w:t></w:r>`;
+  // Run text is authored/edit-derived (a paste can carry control chars); validate fail-closed so a
+  // regenerated run can never emit XML-1.0-invalid character data.
+  return `<w:r>${rPr}<w:t xml:space="preserve">${escapeXmlChecked(run.text, 'run text')}</w:t></w:r>`;
+}
+
+/** Serialize modeled paragraph properties (w:pStyle / w:numPr) into a w:pPr. Used only when the
+ *  paragraph carries no verbatim pPr capsule (a from-scratch or fully-modeled paragraph); a captured
+ *  capsule always wins and is re-spliced verbatim instead. */
+function pPrFromProps(props: ParagraphProps): string {
+  const pStyle = props.styleId ? `<w:pStyle w:val="${escapeXmlChecked(props.styleId, 'paragraph styleId')}"/>` : '';
+  let numPr = '';
+  if (props.numId !== undefined || props.ilvl !== undefined) {
+    const ilvl = props.ilvl !== undefined ? `<w:ilvl w:val="${props.ilvl}"/>` : '';
+    const numId = props.numId !== undefined ? `<w:numId w:val="${escapeXmlChecked(props.numId, 'numId')}"/>` : '';
+    numPr = `<w:numPr>${ilvl}${numId}</w:numPr>`;
+  }
+  return pStyle || numPr ? `<w:pPr>${pStyle}${numPr}</w:pPr>` : '';
 }
 
 export function paragraphXml(p: ParagraphRecord): string {
-  // Re-splice the ownership-scoped opening-tag ATTRIBUTES on <w:p …>, and the w:pPr capsule
-  // (verbatim) ahead of the runs — the OOXML child order for w:p. Undefined capsules => `<w:p>` +
-  // runs only (byte-identical to the pre-capsule serializer).
-  return `<w:p${p.pAttrsCapsule ?? ''}>${paragraphInnerWithCapsule(p.pPrCapsule, p.runs.map(runXml).join(''))}</w:p>`;
+  // Re-splice the ownership-scoped opening-tag ATTRIBUTES on <w:p …>. For the paragraph properties:
+  // a verbatim pPr capsule wins (re-spliced byte-exact); otherwise emit modeled props (w:pStyle /
+  // w:numPr) so a from-scratch or fully-modeled paragraph's style/numbering is not lost. Undefined
+  // capsule + no props => `<w:p>` + runs only (byte-identical to the pre-capsule serializer).
+  const pPr = p.pPrCapsule ?? (p.props ? pPrFromProps(p.props) : '');
+  return `<w:p${p.pAttrsCapsule ?? ''}>${pPr}${p.runs.map(runXml).join('')}</w:p>`;
 }
 
 // Register the block-serialize capabilities (comprehensive 3.3). A paragraph regenerates from the

@@ -9,6 +9,7 @@ import { unzipSync, strFromU8 } from 'fflate';
 import { parseDocx } from '../src/package/docx/read.ts';
 import { writeDocx } from '../src/package/docx/write.ts';
 import { authoredStateDigest } from '../src/package/authored-digest.ts';
+import { compareZipContainers } from '../src/package/package-comparator.ts';
 import { createEmptyModel, bodyStoryId, type PackageModel, type Story } from '../src/model/index.ts';
 
 const FIX = `${import.meta.dir}/../../../e2e/fixtures`;
@@ -110,6 +111,40 @@ describe('created-from-scratch model: complete export reopens to an equivalent a
     expect(authoredStateDigest(reopenModeled(second))).toBe(authoredStateDigest(model));
   });
 
+  test('modeled paragraph props (styleId/numPr) + docDefaults round-trip (sol #3)', () => {
+    const base = createEmptyModel();
+    const sid = bodyStoryId(base);
+    const model: PackageModel = {
+      ...base,
+      docDefaults: { runProps: { bold: true } },
+      stories: new Map(base.stories).set(sid, {
+        id: sid,
+        kind: 'body',
+        blocks: [
+          { kind: 'paragraph', id: 'p-1', props: { styleId: 'Heading1' }, runs: [{ text: 'Title' }] },
+          { kind: 'paragraph', id: 'p-2', props: { numId: '3', ilvl: 1 }, runs: [{ text: 'item' }] },
+        ],
+      }),
+    };
+    const reopened = reopenModeled(writeDocx(model));
+    // The style link, numbering, and document defaults all survive export + reopen.
+    expect(authoredStateDigest(reopened)).toBe(authoredStateDigest(model));
+    const body = [...reopened.stories.values()].find((s) => s.kind === 'body')!;
+    const p0 = body.blocks[0] as Extract<(typeof body.blocks)[number], { kind: 'paragraph' }>;
+    expect(p0.props?.styleId).toBe('Heading1');
+    expect(reopened.docDefaults?.runProps?.bold).toBe(true);
+  });
+
+  test('the from-scratch OPC scaffolding is stable across a round-trip (export == re-export; sol #5)', () => {
+    // The content digest does not model per-file OPC records, so prove the content types +
+    // relationships survive a from-scratch round-trip at the PACKAGE level: export, reopen, re-export,
+    // and assert the two packages are semantically identical (every part, uncompressed).
+    const model = scratchModel();
+    const first = writeDocx(model);
+    const second = writeDocx(reopenModeled(first));
+    expect(compareZipContainers(first, second).unownedChanged).toEqual([]);
+  });
+
   test('adjacent equivalent runs and one merged run share a digest (normalization; sol #10)', () => {
     const base = createEmptyModel();
     const sid = bodyStoryId(base);
@@ -137,6 +172,18 @@ describe('from-scratch export fails closed on what it cannot faithfully serializ
       parts: new Map(m.parts).set('/word/media/image1.png', { kind: 'media', partName: '/word/media/image1.png' }),
     }));
     expect(() => writeDocx(model)).toThrow(/media part/);
+  });
+
+  test('rejects a header story from scratch (a part alone is inert without a w:sectPr headerReference; sol #2)', () => {
+    const model = withParts((m) => {
+      const sid = 'st-hdr';
+      return {
+        ...m,
+        stories: new Map(m.stories).set(sid, { id: sid, kind: 'header', blocks: [] }),
+        parts: new Map(m.parts).set('/word/header1.xml', { kind: 'xml', partName: '/word/header1.xml', storyId: sid }),
+      };
+    });
+    expect(() => writeDocx(model)).toThrow(/related story|section references/);
   });
 
   test('rejects a footnote/comment story kind (needs item wrappers + section refs we do not emit)', () => {
