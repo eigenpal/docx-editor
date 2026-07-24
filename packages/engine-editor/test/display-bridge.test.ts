@@ -364,3 +364,37 @@ describe('deterministic one-surface click target (task M2.3)', () => {
     expect(firstEditableGlyphTarget(frame)).toEqual(firstEditableGlyphTarget(frame));
   });
 });
+
+describe('overlay correctness for a collapsed caret (task 6.4)', () => {
+  test('a collapsed selection paints a caret but no selection highlight', () => {
+    const { frame } = publishFrameBundle(modelWith(['hello world']));
+    const blockId = frame.semanticIndex.stories[0]!.blocks[0]!.identity.blockId;
+    const collapsed = selectionForBlock(frame, blockId, 3, 3);
+    const geometry = deriveSelectionGeometry(frame, collapsed);
+    expect(geometry.ok).toBe(true);
+    const withCaret = {
+      ...frame,
+      selection: collapsed,
+      caret: deriveCaretGeometry(frame, collapsed.head as never),
+      selectionGeometry: geometry.ok ? geometry.value : null,
+    };
+    const overlays = overlaysForFrame(withCaret);
+    expect(overlays.caret).not.toBeNull();
+    // A caret is not a one-character highlight.
+    expect(overlays.selection).toEqual([]);
+  });
+
+  test('a real range still paints its highlight rects', () => {
+    const { frame } = publishFrameBundle(modelWith(['hello world']));
+    const blockId = frame.semanticIndex.stories[0]!.blocks[0]!.identity.blockId;
+    const range = selectionForBlock(frame, blockId, 0, 5);
+    const geometry = deriveSelectionGeometry(frame, range);
+    const withRange = {
+      ...frame,
+      selection: range,
+      caret: deriveCaretGeometry(frame, range.head as never),
+      selectionGeometry: geometry.ok ? geometry.value : null,
+    };
+    expect(overlaysForFrame(withRange).selection.length).toBeGreaterThan(0);
+  });
+});

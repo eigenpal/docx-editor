@@ -10,6 +10,15 @@ import {
 } from '@docx-editor.dev/engine-editor';
 
 /**
+ * An overlay element that deliberately opts out of pointer transparency —
+ * a selection handle or object control that must receive its own events.
+ */
+export interface OverlayControl {
+  readonly id: string;
+  readonly box: OverlayBox;
+}
+
+/**
  * Render a positioned `DisplayPage[]` to DOM. The adapter paints items where the
  * engine placed them and computes no geometry of its own — styling decisions come
  * from the shared paint helpers so React and Vue paint identically.
@@ -23,6 +32,7 @@ export function paintDisplay(
   pages: readonly DisplayPage[],
   overlays?: FrameOverlays,
   clickTarget?: GlyphClickTarget | null,
+  controls?: readonly OverlayControl[],
 ): ReactElement {
   return (
     <>
@@ -38,7 +48,7 @@ export function paintDisplay(
               paintItem(item, i, clickTarget?.pageIndex === page.index && clickTarget.itemIndex === i ? clickTarget : null),
             )}
           </div>
-          {overlays ? paintOverlayLayer(page.index, overlays) : null}
+          {overlays ? paintOverlayLayer(page.index, overlays, controls) : null}
         </div>
       ))}
     </>
@@ -62,9 +72,23 @@ function overlayStyle(box: OverlayBox): CSSProperties {
   };
 }
 
-function paintOverlayLayer(pageIndex: number, overlays: FrameOverlays): ReactElement {
+/**
+ * Caret and selection rectangles for one page.
+ *
+ * The whole layer is pointer-transparent so a click always reaches the page and
+ * resolves through the engine hit test rather than landing on an overlay div.
+ * `controls` is the deliberate exception: selection handles and object controls
+ * that must receive their own pointer events opt in through
+ * `ep-one-surface__overlay-control`. Nothing opts in by default.
+ */
+function paintOverlayLayer(
+  pageIndex: number,
+  overlays: FrameOverlays,
+  controls?: readonly OverlayControl[],
+): ReactElement {
   const caret = overlays.caret?.pageIndex === pageIndex ? overlays.caret : null;
   const rects = overlays.selection.filter((box) => box.pageIndex === pageIndex);
+  const pageControls = (controls ?? []).filter((control) => control.box.pageIndex === pageIndex);
   return (
     <div className="ep-one-surface__overlay">
       {rects.map((box, i) => (
@@ -77,6 +101,14 @@ function paintOverlayLayer(pageIndex: number, overlays: FrameOverlays): ReactEle
           style={overlayStyle(caret)}
         />
       ) : null}
+      {pageControls.map((control) => (
+        <div
+          key={control.id}
+          data-testid={control.id}
+          className="ep-one-surface__overlay-control"
+          style={overlayStyle(control.box)}
+        />
+      ))}
     </div>
   );
 }

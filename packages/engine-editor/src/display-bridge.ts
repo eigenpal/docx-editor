@@ -333,7 +333,11 @@ export function overlaysForFrame(frame: InteractionFrame): FrameOverlays {
 
   const selection: OverlayBox[] = [];
   const geometry = frame.selectionGeometry;
-  if (geometry) {
+  // A collapsed selection still derives cluster-width rects — they exist so
+  // callers can locate the caret's cluster. Painting them would draw a
+  // highlighted character behind every plain caret, so the overlay takes the
+  // caret and drops the rects.
+  if (geometry && !geometry.collapsed) {
     // rects[i] and pageIndices[i] are pushed in lockstep by the geometry
     // derivation, so a rect is only paintable when it still has its page.
     geometry.rects.forEach((rect, index) => {
