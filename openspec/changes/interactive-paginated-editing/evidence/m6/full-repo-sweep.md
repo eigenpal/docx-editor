@@ -51,7 +51,7 @@ package surfaces had silently diverged.
 | `check:parity-contract` | **Pass** | gate repaired at M5-R1; it had been measuring a pre-greenfield surface |
 | `check:adapter-css-thin` | Pass | gate repaired at 6.1; it had been failing on a missing file |
 | `check:editor-contract` | **Pass — repaired** | had been throwing ENOENT on `packages/react/src/components/DocxEditor.tsx`, a path the strip deleted. Repointed at the greenfield types; allowlists reset from ~18 retired props to the three real divergences. |
-| `check:public-docs-surface` | **Fail — pre-existing** | docs-site surface lists plugin symbols (`PluginHost`, `EditorPlugin`, `templatePlugin`, …) that no longer exist. Fails identically at `checkpoint-90e74c0a`; outside this change. |
+| `check:public-docs-surface` | **Fail — pre-existing, and NOT a stale-path bug** | see below |
 | `bun run typecheck` | Fail — pre-existing | `@docx-editor.dev/nuxt` TS5097 only; every package this change touched typechecks clean |
 | `openspec validate --strict` | Pass | |
 
@@ -66,8 +66,24 @@ verified to still FAIL on real drift, not merely to pass — `check:editor-contr
 was confirmed by injecting a Vue-only prop and watching it reject. A gate that
 cannot fail is worse than no gate, because it reads as coverage.
 
-`check:public-docs-surface` remains, and belongs to whoever owns the docs-site
-surface.
+`check:public-docs-surface` remains, and is a **different kind of failure** —
+worth stating precisely rather than lumping in with the other three.
+
+The other three read paths or shapes that no longer exist: broken plumbing,
+repairable without any product decision. This one reports that the greenfield
+packages do not export a surface the public docs still promise:
+
+- `renderAsync`, `DocxEditorHandle`, `RenderAsyncOptions` — missing from **both** adapters
+- `EditorToolbar`, `Toolbar`, `ColorPicker`, `FontOption` — the documented React customization surface
+- `PluginHost`, `EditorPlugin`, `PluginPanelProps`, `RenderedDomContext`, `templatePlugin` — the documented plugin API
+
+That is an accurate signal, not a broken check. Clearing it means either
+reimplementing those surfaces on the greenfield packages or amending what the
+docs promise — a product decision about the published contract, and squarely
+outside this change. Two of those groups are retired authority the architecture
+rules forbid restoring here at all.
+
+Fails identically at `checkpoint-90e74c0a`.
 
 ## Preserved work untouched
 
