@@ -29,6 +29,14 @@ if (container) {
   const root = createRoot(container);
   void (async () => {
     let view: ReactNode;
+    // ── Demo surface boundary (interactive-paginated-editing M4.7) ──────────
+    // `?realAdapter=1` is the ONE-SURFACE editor: the production adapter with
+    // the polished shell, and the only surface any interaction claim is made
+    // about. `?edit=1` is the DIAGNOSTIC split edit/preview pane — it proves
+    // the model pipeline, never painted-page interaction, and task 6.6 removes
+    // it from normal startup. `?enginePreview=1` and the default `App` are
+    // read-only museum surfaces kept for reference. The `/` default does NOT
+    // switch to the one-surface editor until M6 (task 6.6).
     if (realAdapter) {
       const { DocxAdapterHarness } = await import('../../shared/DocxAdapterHarness.tsx');
       view = <DocxAdapterHarness fixtureUrl={`${base}${fixtureName}`} initialZoom={initialZoom} />;

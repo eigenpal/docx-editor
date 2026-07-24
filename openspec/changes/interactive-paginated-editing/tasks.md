@@ -1,6 +1,6 @@
 # Interactive paginated editing — accelerated execution tasks
 
-Progress: **58 / 114** complete.
+Progress: **59 / 114** complete.
 
 | Baseline | Count |
 | --- | --- |
@@ -153,7 +153,7 @@ checkout/revert forbidden authority modules.
 - [x] M4.4 Port horizontal and vertical rulers as **display-only** components using **`Editor.getPageGeometry()`** only; omit or disable margin/tab markers and drag controls (no section-geometry contract in this change). **Deliverable:** rulers align to painted page geometry; no margin/tab mutation paths.
 - [x] M4.5 Port toolbar presentation; formatting/history actions check `Editor.can(command)` then call `Editor.exec(command)`; save button calls `Editor.save()` directly; unsupported controls disabled or hidden; no direct ProseMirror or retired hooks. **Deliverable:** bold/italic/underline/undo/redo via can/exec; save via `Editor.save()`.
 - [x] M4.6 Port dialogs/sidebar incrementally (supported toggles only); unsupported dialogs disabled/hidden. **Deliverable:** public editor contracts only.
-- [ ] M4.7 Label old default demo Apps (`?edit=1`, retired museum paths) reference-only; document preview default switch boundary in `openspec/changes/interactive-paginated-editing/evidence/m4/demo-boundary.md`. **Deliverable:** no public claim upgrade.
+- [x] M4.7 Label old default demo Apps (`?edit=1`, retired museum paths) reference-only; document preview default switch boundary in `openspec/changes/interactive-paginated-editing/evidence/m4/demo-boundary.md`. **Deliverable:** no public claim upgrade.
 - [ ] M4-R1 Run: `bun run test:e2e:react-one-surface-interaction`. Write results to `openspec/changes/interactive-paginated-editing/evidence/m4/verification-log.md`. Stage and commit per staging manifest. **Expected:** all scenarios pass.
 - [ ] M4-R2 Manual Chrome shell checklist in `openspec/changes/interactive-paginated-editing/evidence/m4/manual-chrome-shell.md`: toolbar disabled/enabled matches `Editor.can({ type: 'toggleMark', mark: 'bold' })`; click invokes `Editor.exec({ type: 'toggleMark', mark: 'bold' })`; save uses `Editor.save()`; display-only rulers; backdrop/shadows; M3.2 click/type still passes. Stage and commit per staging manifest.
 - [ ] M4-R3 Independent review (no open Blocker/High); write `openspec/changes/interactive-paginated-editing/evidence/m4/summary.md`; stage and commit per staging manifest; claim remains **internal React alpha with shell**.
