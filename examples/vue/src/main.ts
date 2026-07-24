@@ -1,3 +1,4 @@
+import './styles.css';
 import { createApp } from 'vue';
 
 // `?preview=engine` opens the READ-ONLY production-engine preview instead of the full

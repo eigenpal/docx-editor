@@ -36,6 +36,9 @@ function syncHarness(): void {
 function onReady(editor: Editor): void {
   const driver = createEditorDriver(editor);
   (window as unknown as { __docxAdapterDriver?: EditorDriver }).__docxAdapterDriver = driver;
+  // The public Editor facade, so browser gates can assert TYPED OUTCOMES and not
+  // just visible results — matching the React harness.
+  (window as unknown as { __docxAdapterEditor?: Editor }).__docxAdapterEditor = editor;
   status.value = driver.editable() ? 'Editable (paragraphs)' : 'Read-only (contains tables/SDTs)';
 }
 
@@ -47,6 +50,7 @@ watch(() => props.fixtureUrl, (url) => void load(url));
 watch(zoom, syncHarness);
 onBeforeUnmount(() => {
   delete (window as unknown as { __docxAdapterDriver?: EditorDriver }).__docxAdapterDriver;
+  delete (window as unknown as { __docxAdapterEditor?: Editor }).__docxAdapterEditor;
   delete (window as unknown as { __docxAdapterHarness?: unknown }).__docxAdapterHarness;
 });
 </script>

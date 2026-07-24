@@ -1,7 +1,13 @@
 import { h, type VNode } from 'vue';
 import type { DisplayItem, DisplayPage } from '@docx-editor.dev/core-contract/geometry';
-import type { FrameOverlays, OverlayBox } from '@docx-editor.dev/engine-editor';
-import { runStyle, colorToCss, borderSegLine, cssMatrix } from '@docx-editor.dev/engine-editor';
+import type { FrameOverlays, GlyphClickTarget, OverlayBox } from '@docx-editor.dev/engine-editor';
+import {
+  runStyle,
+  colorToCss,
+  borderSegLine,
+  cssMatrix,
+  ONE_SURFACE_CLICK_TARGET,
+} from '@docx-editor.dev/engine-editor';
 
 /**
  * Render a positioned `DisplayPage[]` to VNodes. The adapter paints items where
@@ -13,7 +19,11 @@ import { runStyle, colorToCss, borderSegLine, cssMatrix } from '@docx-editor.dev
  * layer above the content so a click still reaches the page and resolves through
  * the engine hit test.
  */
-export function paintDisplay(pages: readonly DisplayPage[], overlays?: FrameOverlays): VNode[] {
+export function paintDisplay(
+  pages: readonly DisplayPage[],
+  overlays?: FrameOverlays,
+  clickTarget?: GlyphClickTarget | null,
+): VNode[] {
   return pages.map((page) =>
     h(
       'div',
@@ -24,7 +34,17 @@ export function paintDisplay(pages: readonly DisplayPage[], overlays?: FrameOver
         style: { position: 'relative', width: `${page.box.width}px`, height: `${page.box.height}px` },
       },
       [
-        h('div', { class: 'ep-one-surface__content' }, page.items.flatMap((item, i) => paintItem(item, i))),
+        h(
+          'div',
+          { class: 'ep-one-surface__content' },
+          page.items.flatMap((item, i) =>
+            paintItem(
+              item,
+              i,
+              clickTarget?.pageIndex === page.index && clickTarget.itemIndex === i ? clickTarget : null,
+            ),
+          ),
+        ),
         ...(overlays ? [paintOverlayLayer(page.index, overlays)] : []),
       ]
     )
@@ -67,7 +87,7 @@ function paintOverlayLayer(pageIndex: number, overlays: FrameOverlays): VNode {
   ]);
 }
 
-function paintItem(item: DisplayItem, key: number): VNode[] {
+function paintItem(item: DisplayItem, key: number, clickTarget: GlyphClickTarget | null = null): VNode[] {
   switch (item.kind) {
     case 'text':
       return item.runs.map((run, r) => {
@@ -78,6 +98,7 @@ function paintItem(item: DisplayItem, key: number): VNode[] {
             key: `${key}.${r}`,
             'data-doc-from': item.docFrom,
             'data-doc-to': item.docTo,
+            'data-testid': clickTarget?.runIndex === r ? ONE_SURFACE_CLICK_TARGET : undefined,
             style: {
               position: 'absolute',
               left: `${run.box.x}px`,
