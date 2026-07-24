@@ -349,3 +349,145 @@ interaction, parity, accessibility, performance, or WYSIWYG acceptance gate.
 #### Scenario: Developer opens diagnostic mode
 - **WHEN** an explicit diagnostic option enables a visible ProseMirror projection beside engine output
 - **THEN** the UI SHALL identify it as diagnostic and conformance SHALL continue to run against the one-surface public adapter
+
+### Requirement: Polished retired shell is the product integration target
+The accelerated delivery path SHALL port presentation and user-visible shell
+behavior component-by-component from the polished retired editor shell at git ref
+the recorded presentation baseline around the greenfield production
+adapter. Toolbar, menus, rulers, document title, page backdrop and shadows, and
+dialogs or sidebar chrome MAY land incrementally. The shell MUST NOT
+reintroduce retired geometry, layout, pagination, flow/painter models, or
+ProseMirror adapter authority.
+
+#### Scenario: Shell integrates with production adapter
+- **WHEN** polished shell chrome mounts over the greenfield `Editor` and `EditorHost` composition
+- **THEN** visible chrome SHALL match the retired product presentation and document interaction SHALL remain engine-authoritative
+
+#### Scenario: Retired authority module is requested
+- **WHEN** an implementation attempt imports or restores `PagedEditor`, `useLayoutPipeline`, `usePagesPointer`, or `OffscreenEditorHost` as interaction or layout authority
+- **THEN** that implementation SHALL be rejected and visual components SHALL be implemented only through public editor contracts
+
+### Requirement: Direct manual page interaction gate
+`interactive-paginated` evidence for body paragraphs SHALL require real pointer
+interaction on the visible paginated surface: pointer click placement, visible
+caret, typing and backspace, shift-click extension, double-click word selection,
+pointer-drag range selection, engine keyboard navigation, clipboard operations,
+synthetic composition lifecycle, undo and redo, committed repaint, and save/reopen.
+Evidence that relies solely on `authorizeCaret`, programmatic `setSelection`, or
+equivalent driver-only placement without a real pointer event on painted pages
+SHALL NOT satisfy this gate.
+
+#### Scenario: Manual click types on painted page
+- **WHEN** a conformance or manual gate performs a real pointer click on a painted text position and types characters
+- **THEN** the visible caret SHALL appear at that position, canonical text SHALL update, and the painted surface SHALL repaint the committed result
+
+#### Scenario: Programmatic caret alone is insufficient
+- **WHEN** a gate places the caret only through `authorizeCaret` or programmatic selection APIs without a preceding real pointer event on the paginated surface
+- **THEN** that gate SHALL NOT count toward `interactive-paginated` acceptance
+
+#### Scenario: Manual gate exercises full body-paragraph matrix
+- **WHEN** a milestone gate runs shift-click, double-click, drag selection, keyboard navigation, clipboard paste, synthetic composition, undo, redo, and save/reopen after real painted-page clicks
+- **THEN** each operation SHALL mutate or observe canonical state through the one-surface path and SHALL NOT depend on diagnostic split mode
+
+### Requirement: React-first internal alpha boundary
+React one-surface body-paragraph interaction SHALL be permitted as an internal
+alpha on the public React adapter before Vue parity lands. Public documentation,
+feature-support manifests, demo defaults, and `interactive-paginated` product
+claims MUST NOT upgrade until task **8.10** passes after async layout,
+virtualization, and performance gates. Milestone **M6** MAY record paired
+bounded-document internal/preview alpha only.
+
+#### Scenario: React alpha without Vue
+- **WHEN** React passes the one-surface body-paragraph gate and Vue has not
+- **THEN** internal status MAY record React one-surface alpha only and public claims SHALL remain below `interactive-paginated`
+
+#### Scenario: M6 paired preview without 8.10
+- **WHEN** both adapters pass the M6 paired bounded-document preview gate but task **8.10** has not passed
+- **THEN** internal/preview alpha MAY be recorded and public manifests SHALL remain below `interactive-paginated`
+
+#### Scenario: Formal public claim requires 8.10
+- **WHEN** task **8.10** has not passed async, virtualization, and performance gates
+- **THEN** neither adapter MAY advertise `interactive-paginated` in public manifests or docs
+
+### Requirement: Toolbar formatting SHALL use Editor.can before Editor.exec
+The polished shell toolbar SHALL require `Editor.can(command)` to succeed before
+calling `Editor.exec(command)` for bold, italic, underline, undo, and redo.
+Controls for unsupported commands MUST be disabled or hidden. Chrome MUST NOT
+call ProseMirror APIs, retired layout hooks, or adapter-private editing paths
+directly.
+
+#### Scenario: Supported formatting command
+- **WHEN** a toolbar control maps to a command where `Editor.can(command)` returns supported
+- **THEN** activating the control SHALL invoke `Editor.exec(command)` and SHALL NOT call ProseMirror or retired editor hooks directly
+
+#### Scenario: Unsupported formatting command
+- **WHEN** a toolbar control maps to a command where `Editor.can(command)` does not return supported
+- **THEN** the control SHALL be disabled or hidden and SHALL NOT invoke `Editor.exec` or retired editor hooks
+
+### Requirement: Save SHALL use Editor.save directly
+The shell save control SHALL call **`Editor.save()`** directly. Save MUST NOT
+route through `Editor.can` or `Editor.exec`. Save availability SHALL be gated
+by save/reopen evidence for the current milestone matrix.
+
+#### Scenario: User saves from shell
+- **WHEN** the user activates the save control after passing save/reopen evidence for the current matrix
+- **THEN** the control SHALL invoke `Editor.save()` and SHALL NOT call `Editor.can` or `Editor.exec`
+
+#### Scenario: Save without evidence
+- **WHEN** save/reopen evidence for the current matrix has not passed
+- **THEN** the save control SHALL remain disabled or hidden
+
+### Requirement: Rulers SHALL use Editor.getPageGeometry only
+Horizontal and vertical rulers in the polished shell SHALL render using
+**`Editor.getPageGeometry()`** only. Margin and tab markers and drag controls
+MUST be omitted or disabled. This change MUST NOT add section-geometry queries
+or margin/tab edit contracts.
+
+#### Scenario: Ruler renders without edit affordance
+- **WHEN** the polished shell mounts horizontal or vertical rulers
+- **THEN** rulers SHALL display page geometry from `Editor.getPageGeometry()` and margin/tab markers or drag handles SHALL be omitted or disabled
+
+#### Scenario: Ruler does not mutate state
+- **WHEN** a user interacts with a displayed ruler
+- **THEN** canonical state SHALL NOT change
+
+### Requirement: Browser gates use deterministic rendered click targets
+Playwright and manual browser gates SHALL locate click targets through stable
+public test attributes or driver-readable client rectangles on a fixture text
+glyph in the bounded-document body-paragraph matrix. Gates MUST click the center
+of that target. Gates MUST NOT use hardcoded page coordinates, arbitrary
+whitespace clicks, or `authorizeCaret`-only placement as primary proof.
+
+#### Scenario: Playwright clicks fixture glyph target
+- **WHEN** a one-surface interaction spec runs against the bounded-document fixture
+- **THEN** it SHALL locate the declared click target by public test attribute or driver-readable geometry and perform a real pointer click on that target before typing
+
+#### Scenario: Hardcoded whitespace click is rejected
+- **WHEN** a gate uses fixed page coordinates or whitespace outside a declared click target
+- **THEN** that gate SHALL NOT count toward internal alpha or public interaction acceptance
+
+### Requirement: Retired authority modules are forbidden wholesale restore
+Implementation MUST NOT wholesale-restore `PagedEditor`, `useLayoutPipeline`,
+`usePagesPointer`, `OffscreenEditorHost`, direct adapter `EditorView` ownership,
+or retired flow, pagination, or painter models as interaction or layout
+authority. Visual shell components MAY be implemented one at a time from the
+presentation reference behind the greenfield `Editor` facade.
+
+#### Scenario: Visual component is implemented from presentation reference
+- **WHEN** a retired shell component is implemented from git ref the recorded presentation baseline
+- **THEN** it SHALL consume only public editor queries, `Editor.can`/`Editor.exec` for formatting commands, `Editor.save()` for save, and SHALL NOT import forbidden retired authority modules
+
+### Requirement: Resumable milestone evidence and rollback behavior
+Each milestone SHALL record pass boundaries, verification commands, and evidence
+artifacts before the next milestone begins. If a milestone fails review or
+introduces Blocker or High findings, implementation SHALL stop forward claims,
+MAY retain read-only paginated paint, and MUST preserve canonical authored
+state. Resume work only from the last passing milestone boundary.
+
+#### Scenario: Milestone fails after partial shell integration
+- **WHEN** a shell-integration milestone fails its verification gate
+- **THEN** public interaction claims SHALL remain unchanged, page input MAY fall back to read-only paint, and committed canonical state SHALL remain intact
+
+#### Scenario: Milestone passes with recorded evidence
+- **WHEN** a milestone completes its verification commands and review gate with no open Blocker or High findings
+- **THEN** the next milestone MAY begin and only the claims explicitly allowed for that milestone MAY be recorded

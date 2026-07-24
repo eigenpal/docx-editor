@@ -48,6 +48,15 @@ rendered result.
   preview repaint" and leave broad binding, layout, adapter, feature-fidelity,
   partial-editability, and package-topology tasks open until their actual gates
   pass.
+- **Accelerated delivery:** after task **5.5** and the body-paragraph safety
+  subsets **5.6a** and **5.7a**, port presentation and user-visible shell
+  behavior component-by-component from the polished retired editor shell at git
+  ref the recorded presentation baseline around the greenfield production
+  adapter. React internal alpha lands first; Vue parity is required before the
+  paired bounded-document internal/preview alpha at **M6**. The first formal
+  public **`interactive-paginated`** claim remains task **8.10** after async
+  layout, virtualization, and performance gates. Retired geometry, pagination,
+  flow/painter models, and ProseMirror adapter authority are never restored.
 
 ## Capabilities
 

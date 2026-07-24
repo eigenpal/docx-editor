@@ -367,6 +367,125 @@ The split-pane example may remain behind an explicit diagnostic flag until the
 public path passes. It is then removed from normal demos and never acts as
 completion evidence.
 
+### D14: Polished retired shell is the selected visual and product target
+
+The polished retired editor shell at git ref
+the recorded presentation baseline is the approved product
+presentation target for toolbar, menus, rulers, document title, page
+backdrop/shadows, and dialogs/sidebar chrome. Those surfaces land incrementally
+around the greenfield production adapter (`packages/react/src/DocxEditor.tsx`,
+`packages/vue` production host, `examples/shared/DocxAdapterHarness.*`). The old
+default demo Apps that still mount retired `PagedEditor` remain museum/reference
+only until explicitly migrated; they are not completion evidence.
+
+**Archaeology source:** ref the recorded presentation baseline.
+
+**Reuse (presentation only, port component-by-component via `git show`
+archaeology, never wholesale checkout/revert):**
+
+| Retired asset (ref path) | Port | Replace with |
+| --- | --- | --- |
+| `packages/react/src/components/DocxEditor/DocxEditorShell.tsx` | Scroll host, rulers slot, outline/agent slots, page backdrop, content scoping | Greenfield `EditorHost` metrics + interaction-frame lifecycle |
+| `packages/react/src/components/DocxEditor/DocxEditorToolbar.tsx`, `EditorToolbar.tsx`, `ResponsiveToolbar.tsx` | Toolbar layout, grouping, disabled styling | `Editor.can(command)` then `Editor.exec(command)` |
+| `packages/react/src/components/ui/HorizontalRuler.tsx`, `VerticalRuler.tsx` | Ruler visuals (**display-only**) | `Editor.getPageGeometry()` only; margin/tab markers omitted or disabled |
+| `packages/react/src/components/DocxEditor/PageIndicator.tsx`, document title chrome | Page indicator presentation; title in shell/example local state | Engine page count/current page from interaction frame |
+| `packages/core/src/styles/editor.css` chrome tokens (`--doc-*`, rulers, backdrop) | Visual tokens already single-source | No retired layout classes on painted pages |
+| `packages/vue/src/components/DocxEditor.vue`, `DocxEditorMenuBar.vue`, Vue toolbar/ruler counterparts | Paired Vue shell parity | Same greenfield contracts as React |
+
+**Forbidden wholesale restore (never reintroduce as authority):**
+
+- `PagedEditor.tsx`, `DocxEditorPagedArea.tsx`, `OffscreenEditorHost.tsx`
+- `useLayoutPipeline.ts`, `usePagesPointer.ts`, `usePagedEditorRefApi.ts`
+- Retired flow/pagination/painter models, PM-span selection overlays, and direct
+  adapter `EditorView` ownership
+- Any path that makes ProseMirror DOM, CSS layout, or retired painter geometry
+  authoritative for hit testing, caret, selection, or page breaks
+
+### D15: Accelerated milestone order and rollback boundaries
+
+Execution order is milestone-gated and resumable:
+
+1. **M0** — baseline contracts and hidden input-host evidence (tasks 1–4,
+   complete).
+2. **M1** — finish **5.5**; land body-paragraph **5.6a** and synchronous stale
+   **5.7a** before any adapter page wiring.
+3. **M2** — shared stylesheet, paint, and event bridge for one-surface
+   composition.
+4. **M3** — React no-chrome one-surface proof with real painted-page pointer
+   interaction (not `authorizeCaret`-only).
+5. **M4** — port polished retired shell presentation; toolbar checks
+   `Editor.can(command)` before `Editor.exec(command)` for **bold**, **italic**,
+   **underline**, **undo**, and **redo**; save button calls **`Editor.save()`**
+   directly; rulers display-only via `Editor.getPageGeometry()`.
+6. **M5** — Vue equivalent shell and interaction parity.
+7. **M6** — paired bounded-document **internal/preview alpha** and default demo
+   switch — **not** the formal public `interactive-paginated` claim.
+
+**Formal public claim:** task **8.10** after async layout (**7.x**),
+virtualization/performance (**8.1–8.9**), and ratified benchmarks.
+
+**Explicitly deferred after M6 unless a later milestone reopens them:** full
+**5.6** interaction roles beyond the body-paragraph subset, full **5.7** async
+anchor resolution, **5.8** collaboration, complete async layout (**7.x**),
+viewport virtualization (**8.x** except what M3–M6 require), and broad feature
+lanes (**9.x**).
+
+**Rollback/stopping boundaries:** until M3 passes, retain read-only paginated
+paint and diagnostic split mode. A failed M4–M6 milestone disables new shell
+claims but does not revert canonical state. Blocker/High review findings stop
+forward product claims until resolved. Each milestone records verification
+commands and evidence before the next begins.
+
+### D16: React-first internal alpha is permitted; formal public claim is 8.10
+
+React may ship an internal one-surface alpha after M3 with real painted-page
+interaction on body paragraphs. That alpha MUST NOT be labeled
+`interactive-paginated` in public manifests, docs, or demo defaults. Vue parity
+(M5) and the paired bounded-document internal/preview alpha (M6) MAY proceed
+without upgrading the public manifest. The first formal public
+`interactive-paginated` claim is task **8.10** after async layout,
+virtualization, and performance gates pass.
+
+### D17: Body-paragraph 5.6a and synchronous stale 5.7a gate page wiring
+
+Before adapter one-surface page wiring (M2+), the interaction controller MUST
+pass:
+
+- **5.6a** — editable body-paragraph text, read-only/selectable text within the
+  supported matrix, page background, margins, and inter-page gaps for the
+  body-paragraph safety subset only.
+- **5.7a** — frame-bound pointer targets resolve synchronously against current
+  canonical state for the same subset, returning typed stale/invalid outcomes
+  rather than stale numeric-offset mutations.
+
+Full **5.6** (atomic objects, controls, annotations), full **5.7** (edit-surviving
+anchors under async repagination), and **5.8** collaboration remain explicitly
+scoped and deferred.
+
+### D18: Toolbar formatting uses can/exec; save uses Editor.save
+
+Shell formatting and history controls MUST call `Editor.can(command)` before
+`Editor.exec(command)` for **bold**, **italic**, **underline**, **undo**, and
+**redo**. The save control MUST call **`Editor.save()`** directly — save does
+not use can/exec. Save availability is gated by save/reopen evidence for the
+current milestone matrix. Unsupported commands remain disabled or hidden. Chrome
+MUST NOT invoke ProseMirror APIs, retired formatting hooks, or private binding
+modules. Run `bun run api:extract` and `bun run api:check` when the public editor
+surface changes.
+
+### D19: Rulers are page-geometry-only via Editor.getPageGeometry()
+
+Horizontal and vertical rulers render from **`Editor.getPageGeometry()`** only.
+Margin and tab markers and drag controls are omitted or disabled. This change
+does not add section-geometry queries or margin/tab edit contracts.
+
+### D20: Browser gates use deterministic rendered click targets
+
+The bounded-document fixture exposes stable public test attributes and/or
+driver-readable client rectangles on a known editable body-paragraph glyph.
+Playwright and manual gates click the center of that target — never hardcoded
+page coordinates, whitespace, or `authorizeCaret`-only placement.
+
 ## Risks / Trade-offs
 
 - **Hidden ProseMirror causes IME candidate, virtual-keyboard, or accessibility
@@ -408,28 +527,34 @@ completion evidence.
 4. Wire layout hit testing, caret rectangles, selection rectangles, current
    selection, and current page through the PM-free `Editor` facade.
 5. Pass the hidden-input focus/IME/clipboard/accessibility falsification gate.
-6. Add the shared interaction controller and one-surface page/overlay
-   composition to React and Vue.
+6. **Accelerated path (M1–M6):** finish **5.5**, land **5.6a** and **5.7a**,
+   add shared one-surface composition (M2), prove React no-chrome interaction
+   (M3), port polished retired shell presentation from ref
+   the recorded presentation baseline (M4), reach Vue parity (M5), and
+   pass the paired bounded-document internal/preview alpha gate (M6).
 7. Migrate browser conformance from the split example to public adapters and
    retain split mode only as an explicit diagnostic.
 8. Move layout/repaint off the synchronous input path; add cancellation,
    visible-window prioritization, coherent interaction-frame publication, and
-   stale-frame handling.
+   stale-frame handling (**7.x**, after M6 unless required earlier).
 9. Add page virtualization, overscan, scroll anchoring, drag autoscroll, and
-   unmounted-selection behavior.
+   unmounted-selection behavior (**8.x**).
 10. Run the 300–500-page decision benchmark. Keep the complete hidden
     ProseMirror projection if it passes; otherwise implement and requalify a
     bounded mounted window.
 11. Integrate capability-proven fallback and typed interaction lane by lane,
-    beginning with paragraphs, tables, and images.
-12. Remove normal split-pane paths only after both public adapters pass the
+    beginning with paragraphs, tables, and images (**9.x**).
+12. Record the **first formal public `interactive-paginated` claim** at task
+    **8.10** only after async, virtualization, and performance gates pass.
+13. Remove normal split-pane paths only after both public adapters pass the
     required interaction and save/reopen matrix.
 
-Rollback is milestone-based. Until public adapters pass, the existing painted
-preview and diagnostic split composition remain available. Canonical model and
-DOCX formats do not change. A failed interaction milestone can disable page
-input and return to read-only paint without reverting authored state or feature
-parsers.
+Rollback is milestone-based. Until M3 passes, the existing painted preview and
+diagnostic split composition remain available. M4–M6 may proceed without
+upgrading public `interactive-paginated` claims (first formal public claim at
+**8.10**). Canonical model and DOCX formats do not change. A failed interaction
+milestone can disable page input and return to read-only paint without reverting
+authored state or feature parsers.
 
 ## Open Questions
 

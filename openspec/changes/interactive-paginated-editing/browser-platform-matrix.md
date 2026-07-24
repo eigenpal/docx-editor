@@ -4,6 +4,10 @@ Frozen for `interactive-paginated-editing` task 1.5. Claims below reflect **exec
 automation and recorded manual evidence only. Unsupported platforms are explicitly out of scope
 until listed here with tooling and acceptance criteria.
 
+**Claim hierarchy:** M3–M6 record **internal/preview alpha** only. The **first formal public
+`interactive-paginated` claim** is task **8.10** after async layout, virtualization, and
+performance gates.
+
 ## Required first gate (automation)
 
 | Evidence lane | Tooling | What it proves today | Status |
@@ -16,6 +20,16 @@ until listed here with tooling and acceptance criteria.
 Chromium desktop is the only platform that may block merge for the production-adapter
 lanes above until additional rows are ratified and wired into CI.
 
+## Future named lanes (not automated until tasks land)
+
+| Lane name | Task gate | Automated tooling (planned) | Manual tooling (planned) | Exact requirements | Status |
+| --- | --- | --- | --- | --- | --- |
+| **React one-surface alpha** | M3 (`M3.1`, `6.2`, `6.4`, `M2.3`) | `bun run test:e2e:react-one-surface-interaction` (script + spec created by M3.1) | `openspec/changes/interactive-paginated-editing/evidence/m3/manual-chrome-checklist.md` on `http://127.0.0.1:5273/?realAdapter=1` after `bun run dev:react -- --port 5273 --strictPort --force` | `[data-testid="one-surface-click-target"]` center click → type/backspace → shift/double/drag → keyboard nav → paste → synthetic composition → undo/redo → **`Editor.save()`** reopen; no `authorizeCaret`-only proof | **Not automated** |
+| **React one-surface alpha + polished shell** | M4 (`M4.0`–`M4.7`, `M4-R1`–`M4-R3`) | M3 spec regression; `bun run api:check` after M4.0 | `openspec/changes/interactive-paginated-editing/evidence/m4/inventory.md`, `openspec/changes/interactive-paginated-editing/evidence/m4/demo-boundary.md`, `openspec/changes/interactive-paginated-editing/evidence/m4/manual-chrome-shell.md` on `http://127.0.0.1:5273/?realAdapter=1` | M3 matrix passes; `Editor.can({ type: 'toggleMark', mark: 'bold' })` then `Editor.exec({ type: 'toggleMark', mark: 'bold' })`; **`Editor.save()`** for save; rulers via **`Editor.getPageGeometry()`** only; museum Apps reference-only | **Not automated** |
+| **Vue one-surface alpha** | M5 (`M5.2`, `6.3`, `M5.1`) | `bun run test:e2e:vue-one-surface-interaction` (script + spec created by M5.2) | `openspec/changes/interactive-paginated-editing/evidence/m3/manual-chrome-checklist.md` on `http://127.0.0.1:5274/?realAdapter=1` after `bun run dev:vue -- --port 5274 --strictPort --force` | Same deterministic target + matrix as React | **Not automated** |
+| **Paired bounded-document preview alpha** | M6 (`6.5`, `6.6`, `M6.1`, `M6-R1`, `M6-R2`) | `bun run test:e2e:paired-one-surface-interaction` (script + spec created by 6.5) | `openspec/changes/interactive-paginated-editing/evidence/m6/manual-chrome-paired.md` on React `http://127.0.0.1:5273/?realAdapter=1` and Vue `http://127.0.0.1:5274/?realAdapter=1` | Identical bounded-document matrix both adapters; demo off diagnostic split; **public manifest below `interactive-paginated`** | **Not automated** |
+| **Formal public interactive-paginated** | **8.10** (after **7.x** + **8.1–8.9**) | Expanded paired specs + benchmark harness | `openspec/changes/interactive-paginated-editing/evidence/m8/benchmark.md` | Async coherence, virtualization, ratified 300–500-page budgets | **Not claimed** |
+
 ## Not yet automated (explicit gap)
 
 | Claim | Current status |
@@ -25,6 +39,7 @@ lanes above until additional rows are ratified and wired into CI.
 | Clipboard cut/copy/paste initiated from the paginated surface | **Not automated** |
 | Keyboard navigation derived from engine page/line geometry on the paginated surface | **Not automated** |
 | Caret placement after mid-word insert at paragraph start via painted surface | **Not claimed** — gate uses end-of-paragraph trusted input |
+| Public **`interactive-paginated`** body-paragraph claim | **Not claimed** — first formal claim at task **8.10** only |
 
 Diagnostic split-mode keyboard smoke (`?edit=1`) MUST NOT upgrade any row in this
 table to `interactive-paginated`.
@@ -46,6 +61,10 @@ table to `interactive-paginated`.
 | --- | --- | --- | --- |
 | Load / paginated paint / save / reopen (production adapters) | `verify:real-adapter-smoke` via `?realAdapter=1` | Manual | Not claimed |
 | Hidden input-host mechanism (production adapters) | `verify:real-adapter-gate` via `?realAdapter=1` | Manual | Not claimed |
+| React one-surface alpha (painted-page pointer/type) | Planned `test:e2e:react-one-surface-interaction` | Not claimed | Not claimed |
+| Vue one-surface alpha | Planned `test:e2e:vue-one-surface-interaction` | Not claimed | Not claimed |
+| Paired preview alpha (M6) | Planned `test:e2e:paired-one-surface-interaction` | Not claimed | Not claimed |
+| Formal public `interactive-paginated` | Task **8.10** benchmark suite | Not claimed | Not claimed |
 | Pointer / click / drag on paginated surface | **Not automated** | Not claimed | Not claimed |
 | Typed edit on paginated surface | **Not automated** | Not claimed | Not claimed |
 | Keyboard navigation on paginated surface | **Not automated** | Not claimed | Not claimed |
@@ -59,11 +78,15 @@ table to `interactive-paginated`.
 
 - Paginated preview repaint plus production-adapter load/save/reopen satisfies **`rendered`**
   pipeline evidence only; it does **not** satisfy `interactive-paginated`.
-- Task **4.8** approves only the hidden input-host mechanism and paired adapter host wiring on
-  **Desktop Chromium** through public adapter builds; it does **not** claim direct painted-page
-  interaction, `interactive-paginated`, feature-WYSIWYG, real CJK IME, mobile/virtual keyboard,
-  Firefox, or WebKit.
-- Diagnostic split edit/preview mode (`?edit=1`) is not acceptance evidence for
-  `interactive-paginated`, `feature-wysiwyg`, or any paginated-surface pointer/keyboard row.
-- Adding a platform row requires naming the runner, fixture set, and pass criteria
-  in this file before implementation claims reference it.
+- Task **4.8** approves only the hidden input-host mechanism on **Desktop Chromium**; it does
+  **not** claim direct painted-page interaction, public `interactive-paginated`, or feature-WYSIWYG.
+- **`authorizeCaret`**, programmatic `setSelection`, hardcoded coordinates, or whitespace clicks
+  MUST NOT satisfy one-surface alpha or preview-alpha lanes.
+- M3–M6 internal/preview alpha MUST NOT appear in public manifests as `interactive-paginated`.
+  The first formal public claim is task **8.10** only.
+- Toolbar formatting: `Editor.can` → `Editor.exec` for bold/italic/underline/undo/redo; save:
+  **`Editor.save()`** directly.
+- Rulers: **`Editor.getPageGeometry()`** only; margin/tab markers omitted or disabled.
+- Diagnostic split (`?edit=1`) is not acceptance evidence for `interactive-paginated`.
+- Retired `PagedEditor` demo Apps are museum/reference only until M6 demo switch.
+- Adding a platform row requires naming runner, fixture set, and pass criteria in this file first.
