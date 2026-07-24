@@ -31,6 +31,8 @@ import type {
   InteractionHostMetrics,
   InteractionOutcome,
   InteractionOutcomeCode,
+  InteractionIntent,
+  InteractionDispatchResult,
   SelectionGeometry,
   SelectionGeometryOptions,
   SemanticHitTarget,
@@ -59,6 +61,8 @@ import { InteractionFrameStore, emptyInteractionFrame } from './interaction-fram
 import { hitTestPointer, deriveCaretGeometry, deriveSelectionGeometry } from './interaction-geometry.ts';
 import { contentToClient } from './coordinate-mapper.ts';
 import { execErrorFromInteraction, invalidSetSelection, semanticSelectionFromCommand, unsupportedSetSelection } from './set-selection.ts';
+import { planInteraction } from './interaction-planner.ts';
+import { executeInteractionPlan } from './interaction-executor.ts';
 
 // US Letter, 1in margins, in twips — the same geometry the read-only preview uses.
 const LAYOUT = { pageWidth: 12240, pageHeight: 15840, margin: 1440 } as const;
@@ -442,6 +446,75 @@ export function createEditor(config: EditorConfig): Editor {
     return { ok: true };
   }
 
+  function dispatchInteraction(
+    intent: InteractionIntent,
+    options?: { hostMetrics?: InteractionHostMetrics },
+  ): InteractionDispatchResult {
+    if (destroyed) {
+      return {
+        outcome: { ok: false, code: 'unsupported', reason: 'editor is destroyed' },
+        hostEffects: [],
+      };
+    }
+    const frame = currentFrame();
+    const plan = planInteraction(
+      {
+        frame,
+        editable: !readOnly && !sharedView && session?.editable === true,
+        readOnly: readOnly || sharedView || !session?.editable,
+        hostMetrics: options?.hostMetrics ?? host.getInteractionHostMetrics?.() ?? undefined,
+      },
+      intent,
+    );
+    return executeInteractionPlan(
+      {
+        syncSemanticSelection: (request) => {
+          if (!surface?.semanticProjectionAttached) {
+            return {
+              ok: false,
+              code: 'unsupported',
+              reason: 'edit surface is not mounted',
+              frameId: request.frameId,
+            };
+          }
+          if (activeScope.kind !== 'body') {
+            return {
+              ok: false,
+              code: 'unsupported',
+              reason: 'semantic selection sync is supported for body scope only',
+              frameId: request.frameId,
+            };
+          }
+          return surface.syncSemanticSelection(request);
+        },
+        focus: (request) => {
+          if (!surface) {
+            return { ok: false, code: 'unsupported', reason: 'edit surface is not mounted', frameId: request.frameId };
+          }
+          return surface.focus({ frameId: request.frameId });
+        },
+        blur: () => {
+          surface?.blur();
+        },
+        execCommand: (command) => {
+          if (command.type === 'setSelection') return execSetSelection(command);
+          return UNSUPPORTED('command execution');
+        },
+        delegateNativeInput: (request) => {
+          if (!surface) {
+            return { ok: false, code: 'unsupported', reason: 'edit surface is not mounted', frameId: request.frameId };
+          }
+          return surface.focus({ frameId: request.frameId });
+        },
+        publishSelectionOverlay: (selection) => {
+          publishSelectionOverlay(selection, { scope: activeScope, focused: true });
+        },
+        currentFrameId: () => currentFrame().id,
+      },
+      plan,
+    );
+  }
+
   const editor: Editor = {
     load: loadSource,
     async save(): Promise<ArrayBuffer> {
@@ -525,6 +598,7 @@ export function createEditor(config: EditorConfig): Editor {
       return outcome.ok ? outcome.value : null;
     },
     resolvePointer,
+    dispatchInteraction,
     getAccessibilityObservation: (): AccessibilityObservation => {
       const frame = currentFrame();
       const scope = activeScope;
@@ -573,13 +647,14 @@ export function createEditor(config: EditorConfig): Editor {
       if (!surface) {
         return { ok: false, code: 'unsupported', reason: 'edit surface is not mounted' };
       }
-      const outcome = surface.focus({ frameId: currentFrame().id });
+      const frameId = currentFrame().id;
+      const outcome = surface.focus({ frameId });
       if (!outcome.ok) return outcome;
-      const obs = surface.getAccessibilityObservation({ frameId: currentFrame().id, scope: activeScope });
+      const obs = surface.getAccessibilityObservation({ frameId, scope: activeScope });
       if (obs.selection) {
         publishSelectionOverlay(
           {
-            frameId: currentFrame().id,
+            frameId,
             scope: obs.scope,
             anchor: obs.selection.anchor,
             head: obs.selection.head,
@@ -587,7 +662,7 @@ export function createEditor(config: EditorConfig): Editor {
           { scope: activeScope, focused: true },
         );
       }
-      return outcome;
+      return { ok: true, value: undefined, frameId: currentFrame().id };
     },
     destroy() {
       // Detach THIS editor's projection/host resources; an externally owned (shared-handle) session

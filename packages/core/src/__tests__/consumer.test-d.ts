@@ -132,6 +132,13 @@ export function exercise(editor: Editor, doc: DocxDocument): void {
     void focusCode;
   }
 
+  const dispatch = editor.dispatchInteraction({ kind: 'focus', frameId: frame.id });
+  void dispatch.hostEffects.length;
+  if (!dispatch.outcome.ok) {
+    const dispatchCode: string = dispatch.outcome.code;
+    void dispatchCode;
+  }
+
   const a11y = editor.getAccessibilityObservation();
   void a11y.owner;
   void a11y.entries.length;

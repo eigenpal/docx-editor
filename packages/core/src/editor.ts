@@ -13,6 +13,8 @@ import type {
   InputHostObservation,
   InteractionFrame,
   InteractionHostMetrics,
+  InteractionIntent,
+  InteractionDispatchResult,
   InteractionOutcome,
   SelectionGeometry,
   SelectionGeometryOptions,
@@ -235,6 +237,15 @@ export interface Editor {
   getScrollGeometry(): ScrollGeometry;
   /** Resolve pointer intent with typed stale/pending/read-only outcomes (see driver). */
   resolvePointer(point: Point, options?: HitTestOptions): InteractionOutcome<SemanticHitTarget>;
+  /**
+   * Dispatch one native interaction intent through the shared controller. Applies engine
+   * effects (selection sync, focus, commands) and returns host passthrough effects for
+   * adapters (capture, release, scroll).
+   */
+  dispatchInteraction(
+    intent: InteractionIntent,
+    options?: { hostMetrics?: InteractionHostMetrics },
+  ): InteractionDispatchResult;
   /** PM-free accessibility observation projecting the current interaction frame. */
   getAccessibilityObservation(): AccessibilityObservation;
   /** PM-free observation of the hidden input-host clip shell when mounted. */

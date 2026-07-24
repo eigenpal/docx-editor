@@ -378,6 +378,131 @@ export type InteractionOutcome<T> =
       readonly frameId?: InteractionFrameId;
     };
 
+// ─── Interaction controller (task 5.1) ───────────────────────────────────────
+// PM-free native intents and planned effects. Intents carry normalized serializable
+// data only; effects route through EditorBinding, EditSurface, or host passthrough.
+
+/** Serializable pointer intent (no DOM Event or framework types). */
+export interface PointerInteractionIntent {
+  readonly kind: 'pointerDown' | 'pointerMove' | 'pointerUp' | 'click';
+  readonly frameId: InteractionFrameId;
+  readonly clientPoint: Point;
+  readonly pointerId?: number;
+  readonly buttons?: number;
+  readonly shiftKey?: boolean;
+  readonly ctrlKey?: boolean;
+  readonly metaKey?: boolean;
+  readonly altKey?: boolean;
+}
+
+/** Serializable keyboard intent that requires engine geometry (task 5.5+). */
+export interface GeometryKeyboardInteractionIntent {
+  readonly kind: 'geometryKeyboard';
+  readonly frameId: InteractionFrameId;
+  readonly key: string;
+  readonly shiftKey?: boolean;
+  readonly ctrlKey?: boolean;
+  readonly metaKey?: boolean;
+  readonly altKey?: boolean;
+}
+
+/** Native interaction intent accepted by the shared controller planner. */
+export type InteractionIntent =
+  | { readonly kind: 'semanticSelection'; readonly frameId: InteractionFrameId; readonly selection: SemanticSelection }
+  | { readonly kind: 'focus'; readonly frameId: InteractionFrameId }
+  | { readonly kind: 'blur'; readonly frameId: InteractionFrameId }
+  | { readonly kind: 'command'; readonly frameId: InteractionFrameId; readonly command: import('./editor').EditorCommand }
+  | { readonly kind: 'delegateNativeInput'; readonly frameId: InteractionFrameId }
+  | PointerInteractionIntent
+  | GeometryKeyboardInteractionIntent
+  | { readonly kind: 'capturePointer'; readonly frameId: InteractionFrameId; readonly pointerId: number }
+  | { readonly kind: 'releasePointer'; readonly frameId: InteractionFrameId; readonly pointerId: number }
+  | { readonly kind: 'scroll'; readonly frameId: InteractionFrameId; readonly delta: Point };
+
+/** Engine effect: synchronize semantic selection through EditorBinding. */
+export interface SyncSelectionInteractionEffect {
+  readonly kind: 'syncSelection';
+  readonly frameId: InteractionFrameId;
+  readonly selection: SemanticSelection;
+}
+
+/** Engine effect: focus the edit surface at the current frame. */
+export interface FocusInteractionEffect {
+  readonly kind: 'focus';
+  readonly frameId: InteractionFrameId;
+}
+
+/** Engine effect: blur the edit surface. */
+export interface BlurInteractionEffect {
+  readonly kind: 'blur';
+}
+
+/** Engine effect: execute a public editor command. */
+export interface ExecCommandInteractionEffect {
+  readonly kind: 'execCommand';
+  readonly frameId: InteractionFrameId;
+  readonly command: import('./editor').EditorCommand;
+}
+
+/** Engine effect: authorize native input delegation at the current frame. */
+export interface DelegateNativeInputInteractionEffect {
+  readonly kind: 'delegateNativeInput';
+  readonly frameId: InteractionFrameId;
+}
+
+/** Host effect: request pointer capture (adapter applies). */
+export interface CapturePointerInteractionEffect {
+  readonly kind: 'capturePointer';
+  readonly pointerId: number;
+}
+
+/** Host effect: release pointer capture (adapter applies). */
+export interface ReleasePointerInteractionEffect {
+  readonly kind: 'releasePointer';
+  readonly pointerId: number;
+}
+
+/** Host effect: scroll the pages container (adapter applies). */
+export interface ScrollInteractionEffect {
+  readonly kind: 'scroll';
+  readonly delta: Point;
+}
+
+/** Typed rejection that short-circuits all later planned effects. */
+export interface RejectInteractionEffect {
+  readonly kind: 'reject';
+  readonly code: InteractionOutcomeCode;
+  readonly reason: string;
+  readonly frameId?: InteractionFrameId;
+}
+
+export type InteractionEngineEffect =
+  | SyncSelectionInteractionEffect
+  | FocusInteractionEffect
+  | BlurInteractionEffect
+  | ExecCommandInteractionEffect
+  | DelegateNativeInputInteractionEffect
+  | RejectInteractionEffect;
+
+export type InteractionHostEffect =
+  | CapturePointerInteractionEffect
+  | ReleasePointerInteractionEffect
+  | ScrollInteractionEffect;
+
+/** One ordered controller plan bound to a single interaction frame. */
+export type InteractionEffect = InteractionEngineEffect | InteractionHostEffect;
+
+export interface InteractionPlan {
+  readonly frameId: InteractionFrameId;
+  readonly effects: readonly InteractionEffect[];
+}
+
+/** Result of dispatching one interaction intent through the public editor surface. */
+export interface InteractionDispatchResult {
+  readonly outcome: InteractionOutcome<void>;
+  readonly hostEffects: readonly InteractionHostEffect[];
+}
+
 /** Options for frame-bound pointer resolution. */
 export interface HitTestOptions {
   readonly frameId?: InteractionFrameId;

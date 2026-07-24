@@ -40,7 +40,7 @@
 
 ## 5. Shared pointer and keyboard interaction controller
 
-- [ ] 5.1 Implement a framework-neutral interaction controller that accepts host metrics and native event intent and returns ProseMirror selection/command requests through `EditorBinding`, focus, capture, scroll, or typed rejection effects without owning parallel selection state.
+- [x] 5.1 Implement a framework-neutral interaction controller that accepts host metrics and native event intent and returns ProseMirror selection/command requests through `EditorBinding`, focus, capture, scroll, or typed rejection effects without owning parallel selection state.
 - [ ] 5.2 Implement single-click caret placement and shift-click extension through frame-bound hit targets and `EditorBinding`.
 - [ ] 5.3 Implement Unicode-aware double-click word and capability-owned triple-click block selection without splitting grapheme clusters.
 - [ ] 5.4 Implement pointer-drag selection with capture across lines and pages, preserving semantic anchors when layout frames change.
