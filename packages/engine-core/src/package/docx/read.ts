@@ -345,7 +345,14 @@ export type BodyPatchability = { readonly editable: true } | { readonly editable
 /** Decide whether the body is selectively editable AND, when not, WHY — the structured read-only
  *  diagnostic (4.9). `isModelBodyPatchable` is the boolean projection of this. */
 export function diagnoseBodyPatchability(model: PackageModel): BodyPatchability {
-  const story = bodyStoryId(model);
+  // Resolve the body story defensively: a model with no body story is simply not editable (and
+  // cannot be named), never a thrown error — the guards below must reach a diagnostic, not crash.
+  let story: string;
+  try {
+    story = bodyStoryId(model);
+  } catch {
+    return { editable: false, diagnostic: { code: 'empty-body', message: 'model has no body story', story: '', missingLane: 'lossless-capture' } };
+  }
   const ro = (d: Omit<ReadOnlyDiagnostic, 'story'>): BodyPatchability => ({ editable: false, diagnostic: { ...d, story } });
   const pres = model.preservation;
   if (!pres) return ro({ code: 'no-preservation', message: 'document has no preservation snapshot (not parsed losslessly)', missingLane: 'preservation' });
