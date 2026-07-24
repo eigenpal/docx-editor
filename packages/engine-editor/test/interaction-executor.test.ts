@@ -3,7 +3,8 @@ if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register();
 
 import { describe, expect, test } from 'bun:test';
 import { createEditor } from '../src/create-editor.ts';
-import type { EditorHost } from '@docx-editor.dev/core-contract/editor';
+import type { Editor, EditorHost } from '@docx-editor.dev/core-contract/editor';
+import type { InteractionFrame } from '@docx-editor.dev/core-contract/interaction';
 import { createEditableParagraphFixture } from '../browser/fixtures.ts';
 import { executeInteractionPlan, type InteractionExecutionContext } from '../src/interaction-executor.ts';
 import { planInteraction } from '../src/interaction-planner.ts';
@@ -238,5 +239,44 @@ describe('interaction executor (task 5.1)', () => {
       { kind: 'capturePointer', pointerId: 3 },
       { kind: 'scroll', delta: { x: 0, y: 4 } },
     ]);
+  });
+
+  test('reject-only cleanup returns releasePointer exactly once with no engine effects', () => {
+    const frame = publishFrame();
+    const calls: string[] = [];
+    const result = executeInteractionPlan(
+      mockExecutionContext(frame, {
+        syncSemanticSelection: () => {
+          calls.push('sync');
+          return { ok: true, value: undefined, frameId: frame.id };
+        },
+        focus: () => {
+          calls.push('focus');
+          return { ok: true, value: undefined, frameId: frame.id };
+        },
+        publishSelectionOverlay: () => calls.push('overlay'),
+      }),
+      {
+        frameId: frame.id,
+        effects: [
+          { kind: 'reject', code: 'invalidTarget', reason: 'terminal drag cleanup', frameId: frame.id },
+          { kind: 'releasePointer', pointerId: 5 },
+        ],
+      },
+    );
+    expect(result.outcome.ok).toBe(false);
+    if (!result.outcome.ok) expect(result.outcome.code).toBe('invalidTarget');
+    expect(result.hostEffects).toEqual([{ kind: 'releasePointer', pointerId: 5 }]);
+    expect(calls).toEqual([]);
+  });
+
+  test('ordinary 5.1 reject without cleanup emits no host effects', () => {
+    const frame = publishFrame();
+    const result = executeInteractionPlan(mockExecutionContext(frame), {
+      frameId: frame.id,
+      effects: [{ kind: 'reject', code: 'unsupported', reason: 'blocked', frameId: frame.id }],
+    });
+    expect(result.outcome.ok).toBe(false);
+    expect(result.hostEffects).toEqual([]);
   });
 });

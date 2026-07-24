@@ -466,11 +466,125 @@ function orderedTextRange(
 ): { from: Extract<SemanticTarget, { kind: 'text' }>; to: Extract<SemanticTarget, { kind: 'text' }> } | null {
   if (anchor.kind !== 'text' || head.kind !== 'text') return null;
   if (anchor.identity.blockId !== head.identity.blockId) return null;
+  if (anchor.identity.storyId !== head.identity.storyId) return null;
   if (anchor.graphemeOffset < head.graphemeOffset) return { from: anchor, to: head };
   if (anchor.graphemeOffset > head.graphemeOffset) return { from: head, to: anchor };
   if (anchor.affinity === 'upstream' && head.affinity === 'downstream') return { from: anchor, to: head };
   if (anchor.affinity === 'downstream' && head.affinity === 'upstream') return { from: head, to: anchor };
   return { from: anchor, to: head };
+}
+
+function storyForBlock(frame: InteractionFrame, blockId: string, storyId: string) {
+  return frame.semanticIndex.stories.find(
+    (story) => story.storyId === storyId && story.blocks.some((b) => b.identity.blockId === blockId),
+  );
+}
+
+function compareBlockOrder(
+  frame: InteractionFrame,
+  a: Extract<SemanticTarget, { kind: 'text' }>,
+  b: Extract<SemanticTarget, { kind: 'text' }>,
+): number | null {
+  if (a.identity.storyId !== b.identity.storyId) return null;
+  const story = storyForBlock(frame, a.identity.blockId, a.identity.storyId);
+  if (!story) return null;
+  const blockA = story.blocks.find((block) => block.identity.blockId === a.identity.blockId);
+  const blockB = story.blocks.find((block) => block.identity.blockId === b.identity.blockId);
+  if (!blockA || !blockB) return null;
+  return blockA.orderIndex - blockB.orderIndex;
+}
+
+function selectionRangeForBlock(
+  block: { readonly graphemeCount: number },
+  startOffset: number,
+  endOffset: number,
+): { from: number; to: number } {
+  const from = Math.max(0, Math.min(startOffset, block.graphemeCount));
+  const to = Math.max(0, Math.min(endOffset, block.graphemeCount));
+  return from <= to ? { from, to } : { from: to, to: from };
+}
+
+function selectionRectsForMultiBlockTextRange(
+  frame: InteractionFrame,
+  selection: SemanticSelection,
+  anchor: Extract<SemanticTarget, { kind: 'text' }>,
+  head: Extract<SemanticTarget, { kind: 'text' }>,
+  options?: SelectionGeometryOptions,
+): SelectionGeometry | null {
+  const story = storyForBlock(frame, anchor.identity.blockId, anchor.identity.storyId);
+  if (!story || story.storyId !== head.identity.storyId) return null;
+  const anchorBlock = story.blocks.find((b) => b.identity.blockId === anchor.identity.blockId);
+  const headBlock = story.blocks.find((b) => b.identity.blockId === head.identity.blockId);
+  if (!anchorBlock || !headBlock || anchorBlock.readOnly || headBlock.readOnly) return null;
+
+  const order = compareBlockOrder(frame, anchor, head);
+  if (order === null) return null;
+
+  const startBlock = order <= 0 ? anchorBlock : headBlock;
+  const endBlock = order <= 0 ? headBlock : anchorBlock;
+  const startOffset = order <= 0 ? anchor.graphemeOffset : head.graphemeOffset;
+  const endOffset = order <= 0 ? head.graphemeOffset : anchor.graphemeOffset;
+  if (startBlock.orderIndex > endBlock.orderIndex) return null;
+
+  const rects: Rect[] = [];
+  const pageIndices: number[] = [];
+  const visible = options?.visiblePageIndices ? new Set(options.visiblePageIndices) : null;
+
+  for (const block of story.blocks) {
+    if (block.orderIndex < startBlock.orderIndex || block.orderIndex > endBlock.orderIndex) continue;
+    if (block.readOnly) return null;
+    let range: { from: number; to: number };
+    if (block.identity.blockId === startBlock.identity.blockId && block.identity.blockId === endBlock.identity.blockId) {
+      range = selectionRangeForBlock(block, startOffset, endOffset);
+    } else if (block.identity.blockId === startBlock.identity.blockId) {
+      range = selectionRangeForBlock(block, startOffset, block.graphemeCount);
+    } else if (block.identity.blockId === endBlock.identity.blockId) {
+      range = selectionRangeForBlock(block, 0, endOffset);
+    } else {
+      range = selectionRangeForBlock(block, 0, block.graphemeCount);
+    }
+    const partialSelection: SemanticSelection = {
+      frameId: frame.id,
+      scope: selection.scope,
+      anchor: {
+        kind: 'text',
+        scope: selection.scope,
+        identity: block.identity,
+        graphemeOffset: range.from,
+        affinity: 'upstream',
+      } as Extract<SemanticTarget, { kind: 'text' }>,
+      head: {
+        kind: 'text',
+        scope: selection.scope,
+        identity: block.identity,
+        graphemeOffset: range.to,
+        affinity: 'downstream',
+      } as Extract<SemanticTarget, { kind: 'text' }>,
+    };
+    const partial = selectionRectsForTextRange(
+      frame,
+      partialSelection,
+      partialSelection.anchor as Extract<SemanticTarget, { kind: 'text' }>,
+      partialSelection.head as Extract<SemanticTarget, { kind: 'text' }>,
+      options,
+    );
+    for (let i = 0; i < partial.rects.length; i += 1) {
+      const pageIndex = partial.pageIndices[i];
+      if (visible && pageIndex !== undefined && !visible.has(pageIndex)) continue;
+      rects.push(partial.rects[i]!);
+      if (pageIndex !== undefined) pageIndices.push(pageIndex);
+    }
+  }
+
+  return {
+    frameId: frame.id,
+    selection,
+    rects,
+    pageIndices,
+    collapsed: anchor.graphemeOffset === head.graphemeOffset &&
+      anchor.identity.blockId === head.identity.blockId &&
+      anchor.affinity === head.affinity,
+  };
 }
 
 function selectionRectsForTextRange(
@@ -547,11 +661,21 @@ export function deriveSelectionGeometry(
   }
   const blockA = blockRecord(frame, resolved.anchor.identity.blockId);
   const blockB = blockRecord(frame, resolved.head.identity.blockId);
+  if (!blockA || !blockB) {
+    return reject('invalidTarget', 'selection block is missing from semantic index', frame.id);
+  }
   if (blockA?.readOnly || blockB?.readOnly) {
     return reject('readOnly', 'selection geometry for read-only targets is not editable', frame.id);
   }
+  if (resolved.anchor.identity.storyId !== resolved.head.identity.storyId) {
+    return reject('invalidTarget', 'cross-story selection geometry is not supported', frame.id);
+  }
   if (resolved.anchor.identity.blockId !== resolved.head.identity.blockId) {
-    return reject('unsupported', 'multi-block selection geometry is not proven in the body-paragraph lane', frame.id);
+    const multi = selectionRectsForMultiBlockTextRange(frame, resolved, resolved.anchor, resolved.head, options);
+    if (!multi) {
+      return reject('unsupported', 'multi-block selection geometry could not be resolved in canonical story order', frame.id);
+    }
+    return okValue(multi, frame.id);
   }
   const range = orderedTextRange(resolved.anchor, resolved.head);
   if (!range) return reject('invalidTarget', 'could not order text selection endpoints', frame.id);

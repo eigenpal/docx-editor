@@ -509,7 +509,7 @@ describe('interaction planner click (task 5.2)', () => {
     );
   });
 
-  test('pointerDown remains unsupported for task 5.4 while click is handled separately', () => {
+  test('pointerDown is handled by drag dispatch, not generic planner', () => {
     const frame = publishFrame(modelWith(['x']));
     const item = frame.display[0]!.items.find((i) => i.kind === 'text');
     if (item?.kind !== 'text') throw new Error('text');
@@ -524,7 +524,7 @@ describe('interaction planner click (task 5.2)', () => {
     ).toMatchObject({
       kind: 'reject',
       code: 'unsupported',
-      reason: expect.stringContaining('task 5.4+'),
+      reason: expect.stringContaining('createEditor dispatchInteraction'),
     });
     expect(planInteraction(plannerContext(frame), clickIntent(frame, point)).effects[0]).toMatchObject({
       kind: 'syncSelection',

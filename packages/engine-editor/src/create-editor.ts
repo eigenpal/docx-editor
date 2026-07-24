@@ -63,6 +63,8 @@ import { contentToClient } from './coordinate-mapper.ts';
 import { execErrorFromInteraction, invalidSetSelection, semanticSelectionFromCommand, unsupportedSetSelection } from './set-selection.ts';
 import { planInteraction } from './interaction-planner.ts';
 import { executeInteractionPlan } from './interaction-executor.ts';
+import { planPointerDragInteraction, type PointerDragSession } from './drag-session.ts';
+import { commitDragSessionAfterExecution } from './drag-dispatch.ts';
 
 // US Letter, 1in margins, in twips — the same geometry the read-only preview uses.
 const LAYOUT = { pageWidth: 12240, pageHeight: 15840, margin: 1440 } as const;
@@ -143,6 +145,7 @@ export function createEditor(config: EditorConfig): Editor {
   let destroyed = false;
   let layoutToken = 0;
   let cancelScheduledLayout: (() => void) | null = null;
+  let dragSession: PointerDragSession | null = null;
 
   function currentFrame(): InteractionFrame {
     if (destroyed) return emptyInteractionFrame();
@@ -457,16 +460,27 @@ export function createEditor(config: EditorConfig): Editor {
       };
     }
     const frame = currentFrame();
-    const plan = planInteraction(
-      {
-        frame,
-        editable: !readOnly && !sharedView && session?.editable === true,
-        readOnly: readOnly || sharedView || !session?.editable,
-        hostMetrics: options?.hostMetrics ?? host.getInteractionHostMetrics?.() ?? undefined,
-      },
-      intent,
-    );
-    return executeInteractionPlan(
+    const hostMetrics = options?.hostMetrics ?? host.getInteractionHostMetrics?.() ?? undefined;
+    const plannerBase = {
+      frame,
+      editable: !readOnly && !sharedView && session?.editable === true,
+      readOnly: readOnly || sharedView || !session?.editable,
+      hostMetrics,
+    };
+    const dragKinds = new Set(['pointerDown', 'pointerMove', 'pointerUp', 'pointerCancel']);
+    let resolvedPlan;
+    let dragPlanResult;
+    if (dragKinds.has(intent.kind)) {
+      dragPlanResult = planPointerDragInteraction(
+        { ...plannerBase, modelRevision: session?.revision() ?? frame.revisions.modelRevision },
+        intent as Parameters<typeof planPointerDragInteraction>[1],
+        dragSession,
+      );
+      resolvedPlan = dragPlanResult.plan;
+    } else {
+      resolvedPlan = planInteraction(plannerBase, intent);
+    }
+    const execution = executeInteractionPlan(
       {
         syncSemanticSelection: (request) => {
           if (!surface?.semanticProjectionAttached) {
@@ -507,12 +521,23 @@ export function createEditor(config: EditorConfig): Editor {
           return surface.focus({ frameId: request.frameId });
         },
         publishSelectionOverlay: (selection) => {
-          publishSelectionOverlay(selection, { scope: activeScope, focused: true });
+          const focus = currentFrame().focus;
+          publishSelectionOverlay(selection, focus.focused ? focus : { scope: activeScope, focused: true });
         },
         currentFrameId: () => currentFrame().id,
       },
-      plan,
+      resolvedPlan,
     );
+    if (dragPlanResult) {
+      const finalized = commitDragSessionAfterExecution(dragPlanResult, execution);
+      dragSession = finalized.session;
+      if (finalized.supplementalHostEffects.length === 0) return execution;
+      return {
+        outcome: execution.outcome,
+        hostEffects: [...execution.hostEffects, ...finalized.supplementalHostEffects],
+      };
+    }
+    return execution;
   }
 
   const editor: Editor = {
@@ -668,6 +693,7 @@ export function createEditor(config: EditorConfig): Editor {
       // Detach THIS editor's projection/host resources; an externally owned (shared-handle) session
       // is NOT disposed here — the handle keeps the store alive for any other editor holding it.
       destroyed = true;
+      dragSession = null;
       cancelScheduledLayoutWork();
       frames.cancelPendingLayout();
       clearPaintedPagesAssistivePolicy();

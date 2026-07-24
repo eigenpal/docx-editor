@@ -22,17 +22,32 @@ export interface InteractionExecutionContext {
   currentFrameId(): InteractionFrameId;
 }
 
-function rejectFromPlan(plan: InteractionPlan): InteractionDispatchResult | null {
-  const first = plan.effects[0];
-  if (first?.kind !== 'reject') return null;
+function hostEffectFromPlan(plan: InteractionPlan): InteractionHostEffect[] {
+  const hostEffects: InteractionHostEffect[] = [];
+  for (const effect of plan.effects) {
+    if (effect.kind === 'capturePointer') hostEffects.push({ kind: 'capturePointer', pointerId: effect.pointerId });
+    if (effect.kind === 'releasePointer') hostEffects.push({ kind: 'releasePointer', pointerId: effect.pointerId });
+    if (effect.kind === 'scroll') hostEffects.push({ kind: 'scroll', delta: effect.delta });
+  }
+  return hostEffects;
+}
+
+function rejectOnlyPlan(plan: InteractionPlan): InteractionDispatchResult | null {
+  const reject = plan.effects.find((effect) => effect.kind === 'reject');
+  if (!reject || reject.kind !== 'reject') return null;
+  const hostEffects = hostEffectFromPlan(plan);
+  const engineEffects = plan.effects.filter(
+    (effect) => effect.kind !== 'reject' && effect.kind !== 'capturePointer' && effect.kind !== 'releasePointer' && effect.kind !== 'scroll',
+  );
+  if (engineEffects.length > 0) return null;
   return {
     outcome: {
       ok: false,
-      code: first.code,
-      reason: first.reason,
-      frameId: first.frameId ?? plan.frameId,
+      code: reject.code,
+      reason: reject.reason,
+      frameId: reject.frameId ?? plan.frameId,
     },
-    hostEffects: [],
+    hostEffects,
   };
 }
 
@@ -41,24 +56,30 @@ export function executeInteractionPlan(
   ctx: InteractionExecutionContext,
   plan: InteractionPlan,
 ): InteractionDispatchResult {
-  const early = rejectFromPlan(plan);
-  if (early) return early;
+  const rejectOnly = rejectOnlyPlan(plan);
+  if (rejectOnly) return rejectOnly;
 
   const hostEffects: InteractionHostEffect[] = [];
   let lastSelection: SemanticSelection | null = null;
+  let terminalReject: InteractionOutcome<void> | null = null;
 
   for (const effect of plan.effects) {
+    if (terminalReject) {
+      if (effect.kind === 'capturePointer') hostEffects.push({ kind: 'capturePointer', pointerId: effect.pointerId });
+      if (effect.kind === 'releasePointer') hostEffects.push({ kind: 'releasePointer', pointerId: effect.pointerId });
+      if (effect.kind === 'scroll') hostEffects.push({ kind: 'scroll', delta: effect.delta });
+      continue;
+    }
+
     switch (effect.kind) {
       case 'reject':
-        return {
-          outcome: {
-            ok: false,
-            code: effect.code,
-            reason: effect.reason,
-            frameId: effect.frameId ?? plan.frameId,
-          },
-          hostEffects: [],
+        terminalReject = {
+          ok: false,
+          code: effect.code,
+          reason: effect.reason,
+          frameId: effect.frameId ?? plan.frameId,
         };
+        break;
       case 'syncSelection': {
         const outcome = ctx.syncSemanticSelection({ frameId: effect.frameId, selection: effect.selection });
         if (!outcome.ok) return { outcome, hostEffects: [] };
@@ -94,6 +115,10 @@ export function executeInteractionPlan(
         if (!outcome.ok) return { outcome, hostEffects: [] };
         break;
       }
+      case 'publishSelectionOverlay':
+        ctx.publishSelectionOverlay(effect.selection);
+        lastSelection = effect.selection;
+        break;
       case 'capturePointer':
         hostEffects.push({ kind: 'capturePointer', pointerId: effect.pointerId });
         break;
@@ -104,6 +129,10 @@ export function executeInteractionPlan(
         hostEffects.push({ kind: 'scroll', delta: effect.delta });
         break;
     }
+  }
+
+  if (terminalReject) {
+    return { outcome: terminalReject, hostEffects };
   }
 
   return {

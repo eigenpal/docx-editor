@@ -27,7 +27,13 @@ function rejectEffect(code: InteractionOutcomeCode, reason: string, frameId: Int
 }
 
 function requiresCoordinateMetrics(intent: InteractionIntent): boolean {
-  return intent.kind === 'pointerDown' || intent.kind === 'pointerMove' || intent.kind === 'pointerUp' || intent.kind === 'click' || intent.kind === 'geometryKeyboard';
+  return (
+    intent.kind === 'pointerDown' ||
+    intent.kind === 'pointerMove' ||
+    intent.kind === 'pointerUp' ||
+    intent.kind === 'click' ||
+    intent.kind === 'geometryKeyboard'
+  );
 }
 
 function validatePreconditions(
@@ -292,15 +298,34 @@ export function planInteraction(context: InteractionPlannerContext, intent: Inte
     case 'pointerDown':
     case 'pointerMove':
     case 'pointerUp':
+      return {
+        frameId,
+        effects: [
+          rejectEffect(
+            'unsupported',
+            'pointer drag is handled by createEditor dispatchInteraction (task 5.4)',
+            frameId,
+          ),
+        ],
+      };
+    case 'pointerCancel':
+      return {
+        frameId,
+        effects: [
+          rejectEffect(
+            'unsupported',
+            'pointer cancel is handled by createEditor dispatchInteraction (task 5.4)',
+            frameId,
+          ),
+        ],
+      };
     case 'geometryKeyboard':
       return {
         frameId,
         effects: [
           rejectEffect(
             'unsupported',
-            intent.kind === 'geometryKeyboard'
-              ? 'geometry-aware keyboard interaction is not implemented yet (task 5.5+)'
-              : 'pointer interaction semantics are not implemented yet (task 5.4+)',
+            'geometry-aware keyboard interaction is not implemented yet (task 5.5+)',
             frameId,
           ),
         ],

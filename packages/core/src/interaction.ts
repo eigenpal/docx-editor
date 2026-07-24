@@ -410,7 +410,7 @@ export type InteractionOutcome<T> =
 
 /** Serializable pointer intent (no DOM Event or framework types). */
 export interface PointerInteractionIntent {
-  readonly kind: 'pointerDown' | 'pointerMove' | 'pointerUp' | 'click';
+  readonly kind: 'pointerDown' | 'pointerMove' | 'pointerUp' | 'pointerCancel' | 'click';
   readonly frameId: InteractionFrameId;
   readonly clientPoint: Point;
   readonly pointerId?: number;
@@ -481,6 +481,13 @@ export interface DelegateNativeInputInteractionEffect {
   readonly frameId: InteractionFrameId;
 }
 
+/** Engine effect: publish selection/caret overlay from binding-backed selection without refocusing. */
+export interface PublishSelectionOverlayInteractionEffect {
+  readonly kind: 'publishSelectionOverlay';
+  readonly frameId: InteractionFrameId;
+  readonly selection: SemanticSelection;
+}
+
 /** Host effect: request pointer capture (adapter applies). */
 export interface CapturePointerInteractionEffect {
   readonly kind: 'capturePointer';
@@ -513,6 +520,7 @@ export type InteractionEngineEffect =
   | BlurInteractionEffect
   | ExecCommandInteractionEffect
   | DelegateNativeInputInteractionEffect
+  | PublishSelectionOverlayInteractionEffect
   | RejectInteractionEffect;
 
 export type InteractionHostEffect =

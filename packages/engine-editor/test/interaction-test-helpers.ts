@@ -33,6 +33,52 @@ export function modelWith(texts: string[]): PackageModel {
   return store.currentModel;
 }
 
+export function modelWithParagraphTableParagraph(
+  beforeText: string,
+  cellText: string,
+  afterText: string,
+): PackageModel {
+  const base = createEmptyModel();
+  const storyId = bodyStoryId(base);
+  const story = base.stories.get(storyId)!;
+  const first = story.blocks[0] as ParagraphRecord;
+  const table: TableRecord = {
+    kind: 'table',
+    id: 'tbl-body',
+    rows: [{ id: 'row-1', cells: [{ id: 'cell-1', blocks: [{ kind: 'paragraph', id: 'p-cell', runs: [{ text: cellText }] }] }] }],
+  };
+  const afterParagraph: ParagraphRecord = { kind: 'paragraph', id: 'p-after', runs: [{ text: afterText }] };
+  return {
+    ...base,
+    stories: new Map(base.stories).set(storyId, {
+      ...story,
+      blocks: [
+        { ...first, runs: [{ text: beforeText }] },
+        table,
+        afterParagraph,
+      ],
+    }),
+  };
+}
+
+export function frameWithoutBlock(frame: InteractionFrame, blockId: string): InteractionFrame {
+  const stories = frame.semanticIndex.stories.map((story) => ({
+    ...story,
+    blocks: story.blocks.filter((block) => block.identity.blockId !== blockId),
+  }));
+  return {
+    ...frame,
+    semanticIndex: {
+      ...frame.semanticIndex,
+      stories,
+      caretStops: frame.semanticIndex.caretStops.filter(
+        (stop) => stop.target.kind !== 'text' || stop.target.identity.blockId !== blockId,
+      ),
+      ownershipRegions: frame.semanticIndex.ownershipRegions.filter((region) => region.identity.blockId !== blockId),
+    },
+  };
+}
+
 export function modelWithTableCell(cellText: string): PackageModel {
   const base = createEmptyModel();
   const storyId = bodyStoryId(base);
