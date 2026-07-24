@@ -21,4 +21,14 @@ export {
   displayText,
 } from './driver.ts';
 export { measureInteractionHostMetrics } from './host-metrics.ts';
+export {
+  attachAdapterEventBridge,
+  keyboardIntentKind,
+  normalizeClickCount,
+  type BridgeEditorPort,
+  type BridgeElement,
+  type BridgeKeyboardEvent,
+  type BridgePointerEvent,
+  type KeyboardModifiers,
+} from './adapter-event-bridge.ts';
 export { emptySemanticIndex } from './interaction-frame.ts';
