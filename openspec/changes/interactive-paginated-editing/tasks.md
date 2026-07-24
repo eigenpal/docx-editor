@@ -1,6 +1,6 @@
 # Interactive paginated editing — accelerated execution tasks
 
-Progress: **65 / 114** complete.
+Progress: **66 / 114** complete.
 
 | Baseline | Count |
 | --- | --- |
@@ -166,7 +166,7 @@ checkout/revert forbidden authority modules.
 - [x] M5.1 Port polished shell presentation to Vue with the same inventory matrix as M4. **Deliverable:** paired visual shell on Vue harness; same can/exec and display-only ruler rules.
 - [x] M5.2 Create `e2e/vue-one-surface.interaction.spec.ts` and `package.json` script `test:e2e:vue-one-surface-interaction` before first use; mirror M3.1 target-location pattern. **Deliverable:** spec green via `bun run test:e2e:vue-one-surface-interaction`.
 - [x] M5-R1 Run: `bun run verify:real-adapter-smoke`; `bun run verify:real-adapter-gate`; `bun run test:e2e:vue-one-surface-interaction`; `bun run check:parity-contract`; `bun run typecheck`; `openspec validate interactive-paginated-editing --strict`; `git diff --cached --check`; `git diff --check`. Write results to `openspec/changes/interactive-paginated-editing/evidence/m5/verification-log.md`. Stage and commit per staging manifest.
-- [ ] M5-R2 Write `openspec/changes/interactive-paginated-editing/evidence/m5/summary.md`; stage and commit per staging manifest; no public claim upgrade.
+- [x] M5-R2 Write `openspec/changes/interactive-paginated-editing/evidence/m5/summary.md`; stage and commit per staging manifest; no public claim upgrade.
 
 ---
 
