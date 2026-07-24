@@ -1,13 +1,14 @@
 # Interactive paginated editing — accelerated execution tasks
 
-Progress: **34 / 114** complete.
+Progress: **35 / 114** complete.
 
 | Baseline | Count |
 | --- | --- |
 | M0 historical (tasks 1–4) | **28** |
 | Pre-**5.5** current (adds 5.1–5.4) | **32** |
 | Post-**5.5** (commit **`checkpoint-a7763cfb`**, 33rd task) | **33** |
-| **M0-R1** (this reconciliation) | **34** |
+| **M0-R1** (baseline verification) | **34** |
+| **M0-R2** (authority review) | **35** |
 
 Milestones **M0–M6** define the accelerated delivery order; sections **7–10** retain
 the full deferred scope. The first formal public **`interactive-paginated`** claim
@@ -83,7 +84,7 @@ Evidence artifacts live under `openspec/changes/interactive-paginated-editing/ev
 ### M0 review and evidence
 
 - [x] M0-R1 Write `openspec/changes/interactive-paginated-editing/evidence/m0/baseline-verification.md` recording: M0 historical **28** (tasks 1–4); pre-**5.5** **32** (adds 5.1–5.4); **5.5** completed as 33rd task in commit **`checkpoint-a7763cfb`** (not in progress); cross-check against `openspec/changes/interactive-paginated-editing/input-host-prototype-evidence.md` and `openspec/changes/interactive-paginated-editing/browser-platform-matrix.md` for consistency only. Stage and commit per staging manifest.
-- [ ] M0-R2 Write `openspec/changes/interactive-paginated-editing/evidence/m0/authority-review.md` recording: authority/import test id **1.4** still green; no forbidden retired authority imports in production adapters; **5.5** remains unchecked. Stage and commit per staging manifest.
+- [x] M0-R2 Write `openspec/changes/interactive-paginated-editing/evidence/m0/authority-review.md` recording: authority/import test id **1.4** still green; no forbidden retired authority imports in production adapters; task **5.5** completed as 33rd task in commit **`checkpoint-a7763cfb`** (M0-R2 checkbox text originally assumed **5.5** remained unchecked). Stage and commit per staging manifest.
 
 ---
 
