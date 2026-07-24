@@ -4,7 +4,14 @@
 // output uses verbatim preservation instead and only regenerates fully-captured blocks.
 
 import { escapeXmlChecked } from './sinks.ts';
-import { type Block, type ParagraphRecord, type ParagraphProps, type RunRecord, registerCoreBlockCapability, blockSerialize } from '../model/index.ts';
+import { type Block, type ParagraphRecord, type ParagraphProps, type RunRecord, canonicalParagraphProps, registerCoreBlockCapability, blockSerialize } from '../model/index.ts';
+
+/** Escape run text: validate fail-closed, then escape a literal CR as &#xD;. An unescaped CR is
+ *  legal XML but silently normalized to LF by every parser's line-ending rule, so it would not
+ *  survive a round-trip; the numeric reference preserves it exactly. */
+function escapeRunText(text: string): string {
+  return escapeXmlChecked(text, 'run text').replace(/\r/g, '&#xD;');
+}
 
 function runXml(run: RunRecord): string {
   // An ownership-scoped w:rPr capsule (verbatim, full run properties) is re-spliced INSTEAD of
@@ -15,15 +22,16 @@ function runXml(run: RunRecord): string {
     : props?.bold || props?.italic
       ? `<w:rPr>${props.bold ? '<w:b/>' : ''}${props.italic ? '<w:i/>' : ''}</w:rPr>`
       : '';
-  // Run text is authored/edit-derived (a paste can carry control chars); validate fail-closed so a
-  // regenerated run can never emit XML-1.0-invalid character data.
-  return `<w:r>${rPr}<w:t xml:space="preserve">${escapeXmlChecked(run.text, 'run text')}</w:t></w:r>`;
+  return `<w:r>${rPr}<w:t xml:space="preserve">${escapeRunText(run.text)}</w:t></w:r>`;
 }
 
 /** Serialize modeled paragraph properties (w:pStyle / w:numPr) into a w:pPr. Used only when the
  *  paragraph carries no verbatim pPr capsule (a from-scratch or fully-modeled paragraph); a captured
- *  capsule always wins and is re-spliced verbatim instead. */
-function pPrFromProps(props: ParagraphProps): string {
+ *  capsule always wins and is re-spliced verbatim instead. Props are canonicalized first so a
+ *  degenerate value never emits (matching what the parser yields on reopen). */
+function pPrFromProps(raw: ParagraphProps): string {
+  const props = canonicalParagraphProps(raw);
+  if (!props) return '';
   const pStyle = props.styleId ? `<w:pStyle w:val="${escapeXmlChecked(props.styleId, 'paragraph styleId')}"/>` : '';
   let numPr = '';
   if (props.numId !== undefined || props.ilvl !== undefined) {

@@ -8,6 +8,7 @@
 
 import type { PackageModel, Block, Story, RunRecord } from '../model/authored-model.ts';
 import { normalizeRuns } from '../model/normalize-runs.ts';
+import { canonicalParagraphProps } from '../model/paragraph-props.ts';
 import { stableHash } from '../comparators/canonical.ts';
 
 function runDigest(r: RunRecord): unknown {
@@ -26,18 +27,22 @@ function blockDigest(b: Block, model: PackageModel): unknown {
       k: 'paragraph',
       pPr: b.pPrCapsule ?? null,
       attrs: b.pAttrsCapsule ?? null,
-      props: b.props ?? null, // modeled paragraph props (styleId / numId / ilvl) are authored state
+      // Canonicalize modeled props so a degenerate value ({} / '' id / non-integer ilvl) digests the
+      // same absence the parser produces on reopen.
+      props: canonicalParagraphProps(b.props) ?? null,
       runs: normalizeRuns(idless).map(runDigest),
     };
   }
   // Non-paragraph blocks (table, sdt) are preserved verbatim and never regenerated; their authored
   // content IS their byte-exact source range, so digest that slice (id-free). A preserved block
-  // always has a range; without one (should not occur) fall back to the kind so the digest still
-  // reflects the block's presence rather than throwing.
+  // ALWAYS has a range; a non-paragraph block with no slice cannot be faithfully compared, so fail
+  // closed rather than collapse two differently-authored tables to an equal {k, slice:null} hash.
   const range = model.preservation?.blockRanges.get(b.id);
   const source = range ? model.preservation?.originalParts.get(range.partName) : undefined;
-  const slice = range && source !== undefined ? source.slice(range.start, range.end) : null;
-  return { k: b.kind, slice };
+  if (!range || source === undefined) {
+    throw new Error(`cannot digest a '${b.kind}' block without a preservation source range (block ${b.id})`);
+  }
+  return { k: b.kind, slice: source.slice(range.start, range.end) };
 }
 
 function storyDigest(s: Story, model: PackageModel): unknown {

@@ -145,6 +145,42 @@ describe('created-from-scratch model: complete export reopens to an equivalent a
     expect(compareZipContainers(first, second).unownedChanged).toEqual([]);
   });
 
+  test('degenerate paragraph props ({} / empty ids / non-integer ilvl) round-trip cleanly (sol edge)', () => {
+    const base = createEmptyModel();
+    const sid = bodyStoryId(base);
+    // A model authored with degenerate props must digest the SAME as one with them absent, and
+    // round-trip without drift (the serializer + parser both treat them as absent).
+    const degenerate: PackageModel = {
+      ...base,
+      stories: new Map(base.stories).set(sid, {
+        id: sid,
+        kind: 'body',
+        blocks: [{ kind: 'paragraph', id: 'p-1', props: { styleId: '', numId: '', ilvl: Number.NaN }, runs: [{ text: 'x' }] }],
+      }),
+    };
+    const clean: PackageModel = {
+      ...base,
+      stories: new Map(base.stories).set(sid, { id: sid, kind: 'body', blocks: [{ kind: 'paragraph', id: 'p-1', runs: [{ text: 'x' }] }] }),
+    };
+    expect(authoredStateDigest(degenerate)).toBe(authoredStateDigest(clean));
+    expect(authoredStateDigest(reopenModeled(writeDocx(degenerate)))).toBe(authoredStateDigest(degenerate));
+  });
+
+  test('a literal CR in run text survives export + reopen (escaped as &#xD;, not normalized to LF)', () => {
+    const base = createEmptyModel();
+    const sid = bodyStoryId(base);
+    const model: PackageModel = {
+      ...base,
+      stories: new Map(base.stories).set(sid, { id: sid, kind: 'body', blocks: [{ kind: 'paragraph', id: 'p-1', runs: [{ text: 'a\rb' }] }] }),
+    };
+    const doc = strFromU8(unzipSync(writeDocx(model))['word/document.xml']);
+    expect(doc).toContain('a&#xD;b'); // CR emitted as a numeric ref, not a literal CR
+    const reopened = reopenModeled(writeDocx(model));
+    const body = [...reopened.stories.values()].find((s) => s.kind === 'body')!;
+    const p0 = body.blocks[0] as Extract<(typeof body.blocks)[number], { kind: 'paragraph' }>;
+    expect(p0.runs.map((r) => r.text).join('')).toBe('a\rb'); // CR preserved, not normalized to LF
+  });
+
   test('adjacent equivalent runs and one merged run share a digest (normalization; sol #10)', () => {
     const base = createEmptyModel();
     const sid = bodyStoryId(base);
