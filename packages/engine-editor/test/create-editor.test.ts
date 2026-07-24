@@ -104,6 +104,8 @@ describe('createEditor lifecycle (byte-native, PM-free host)', () => {
     expect(b.getDocumentHandle().revision).toBe(handle.revision); // same live revision source
     const [ba, bb] = [await a.save(), await b.save()];
     expect(new Uint8Array(bb)).toEqual(new Uint8Array(ba)); // same store -> identical bytes
+    // A shared-handle editor is a read-only view (no competing edit surface) — deferred collab.
+    expect(b.snapshot().editable).toBe(false);
     a.destroy();
     b.destroy();
   });

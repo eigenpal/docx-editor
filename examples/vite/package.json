@@ -14,8 +14,10 @@
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "@docx-editor.dev/engine-core": "workspace:*",
+    "@docx-editor.dev/engine-binding": "workspace:*",
     "@docx-editor.dev/engine-layout": "workspace:*",
-    "@docx-editor.dev/engine-output": "workspace:*"
+    "@docx-editor.dev/engine-output": "workspace:*",
+    "@docx-editor.dev/engine-editor": "workspace:*"
   },
   "devDependencies": {
     "@types/react": "^19.2.17",

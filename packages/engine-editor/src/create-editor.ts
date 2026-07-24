@@ -68,14 +68,14 @@ const UNSUPPORTED = (what: string): ExecResult => ({
 // booleans false, else null. Keeps a consumer working until the real query lands (section 5) instead
 // of returning a wrongly-typed value that crashes.
 const ARRAY_QUERIES = new Set(['paragraphs', 'findText', 'contentControls', 'revisions', 'comments', 'trackedChanges']);
-const OBJECT_QUERIES = new Set(['styles', 'variables']); // StyleDefinitions / Record<string,string>
 const STRING_QUERIES = new Set(['selectedText']);
 const BOOLEAN_QUERIES = new Set(['isInsideToc']);
 function queryDefault(type: string): unknown {
   if (ARRAY_QUERIES.has(type)) return [];
-  if (OBJECT_QUERIES.has(type)) return {};
   if (STRING_QUERIES.has(type)) return '';
   if (BOOLEAN_QUERIES.has(type)) return false;
+  if (type === 'styles') return { paragraph: new Map(), character: new Map(), table: new Map() }; // StyleDefinitions
+  if (type === 'variables') return {}; // Record<string,string>
   return null;
 }
 
@@ -97,6 +97,12 @@ export function createEditor(config: EditorConfig): Editor {
   let mountedBodyEl: HTMLElement | null = null; // the element `surface` is bound to (host may swap it)
   let displayPages: readonly DisplayPage[] = [];
   let handle: DocumentHandle | null = null;
+  // True when this editor adopted ANOTHER editor's store via a handle. Such an editor renders and
+  // reads the shared store but does NOT mount its own edit surface: two independent PM surfaces on
+  // one store would each hold a private snapshot and could overwrite each other's canonical
+  // paragraphs. Cross-surface reconciliation is the deferred collaboration work; until then a
+  // shared-handle editor is a read-only view (the originating editor keeps the single edit surface).
+  let sharedView = false;
   let activeScope: ViewScope = { kind: 'body' };
   let destroyed = false;
 
@@ -114,7 +120,7 @@ export function createEditor(config: EditorConfig): Editor {
   // a DIFFERENT element (a conforming host need not keep it stable), in which case rebind to the new
   // one so editing never stays attached to a detached node.
   function ensureSurface(): void {
-    if (destroyed || readOnly || !session || !session.editable) return;
+    if (destroyed || readOnly || sharedView || !session || !session.editable) return;
     const bodyEl = host.getBodyHostEl();
     if (!bodyEl) return;
     if (surface && bodyEl === mountedBodyEl) return; // already mounted on this element
@@ -136,6 +142,7 @@ export function createEditor(config: EditorConfig): Editor {
     const shared = handleSessions.get(source as DocumentHandle);
     if (shared) {
       next = shared; // same-store hand-off from another editor's handle (no re-parse, no clone)
+      sharedView = true; // read-only view of the shared store (see `sharedView`)
     } else {
       try {
         next = openDocxSession(sourceToBytes(source));
@@ -144,6 +151,7 @@ export function createEditor(config: EditorConfig): Editor {
         emit('error', Object.assign(new Error(String((err as Error)?.message ?? err)), { code: 'parse' }));
         return;
       }
+      sharedView = false;
     }
     surface?.destroy();
     surface = null;
@@ -191,7 +199,7 @@ export function createEditor(config: EditorConfig): Editor {
       scope: activeScope,
       isLoading: false,
       parseError: null,
-      editable: !readOnly && session?.editable === true,
+      editable: !readOnly && !sharedView && session?.editable === true,
       zoom,
       selection: null,
       formatting: null,

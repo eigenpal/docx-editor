@@ -74,10 +74,15 @@ function rectItems(it: RectItem): ContractItem[] {
 }
 
 /** Map engine-layout pages to the contract display list (twips → px, anchors → GlyphRuns + doc
- *  positions). Text doc-offsets are TRUE flat offsets across the addressed view: each paragraph's
- *  base is the cumulative length of all prior paragraphs (+1 boundary), and an item's docFrom is its
- *  paragraph base + its within-paragraph anchor offset — correct regardless of spacing or how a
- *  paragraph is split into layout items. Block ids follow first-seen paragraph order. */
+ *  positions). Text doc-offsets are flat offsets across the addressed view: each paragraph's base is
+ *  the cumulative length of all prior paragraphs (+1 boundary), and an item's docFrom is its
+ *  paragraph base + its within-paragraph anchor offset — correct within a rendered paragraph
+ *  regardless of spacing or how it splits into items. LIMITATION: bases are derived from RENDERED
+ *  items, so an empty or whitespace-only paragraph (which layout emits no item for) contributes no
+ *  base, and a following paragraph's flat offset is short by that paragraph's boundary. Exact flat
+ *  offsets require model-derived paragraph lengths — a follow-up on the selection/hit-test lane;
+ *  today these offsets are provisional (data attributes only, no selection wired). Block ids follow
+ *  first-seen paragraph order. */
 export function toDisplayPages(pages: readonly Page[]): DisplayPage[] {
   // Pass 1: each paragraph's length (max anchor.offset + text length seen) in first-seen order.
   const order: string[] = [];

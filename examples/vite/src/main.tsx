@@ -10,12 +10,16 @@ import { PreviewBanner } from '../../shared/PreviewBanner';
 const params = new URLSearchParams(location.search);
 const enginePreview = params.get('preview') === 'engine';
 const editMode = params.get('edit') === '1';
+// `?realAdapter=1` mounts the PRODUCTION @docx-editor.dev/react DocxEditor with DOCX bytes and
+// exposes the stable EditorDriver on window (comprehensive 4.4/4.8), so a browser test drives the
+// real published package entry rather than the engine mount directly.
+const realAdapter = params.get('realAdapter') === '1';
 const base = import.meta.env.BASE_URL;
 // `?fixture=<name>.docx` picks which same-origin fixture the preview loads (default
 // with-tables.docx). Sanitized to a bare .docx basename so the value can never become a
 // path-traversal or cross-origin URL.
 const fixtureParam = params.get('fixture') ?? '';
-const defaultFixture = editMode ? 'editable-sample.docx' : 'with-tables.docx';
+const defaultFixture = editMode || realAdapter ? 'editable-sample.docx' : 'with-tables.docx';
 const fixtureName = /^[\w.-]+\.docx$/.test(fixtureParam) ? fixtureParam : defaultFixture;
 
 const container = document.getElementById('app');
@@ -23,7 +27,10 @@ if (container) {
   const root = createRoot(container);
   void (async () => {
     let view: ReactNode;
-    if (editMode) {
+    if (realAdapter) {
+      const { DocxAdapterHarness } = await import('../../shared/DocxAdapterHarness.tsx');
+      view = <DocxAdapterHarness fixtureUrl={`${base}${fixtureName}`} />;
+    } else if (editMode) {
       const { DocxEditable } = await import('../../shared/DocxEditable.tsx');
       view = <DocxEditable fixtureUrl={`${base}${fixtureName}`} />;
     } else if (enginePreview) {
