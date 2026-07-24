@@ -56,6 +56,10 @@ export interface DocxEditorSession {
   undo(): boolean;
   /** Redo the last undone edit on the canonical store; returns whether the model changed. */
   redo(): boolean;
+  /** Subscribe to canonical commits (any source, incl. another editor sharing this store). Fires
+   *  after every committed revision; returns an unsubscribe. A read-only shared view uses this to
+   *  repaint when the owning editor edits. */
+  subscribe(onChange: () => void): () => void;
   /** Serialize the canonical model back to DOCX bytes. */
   save(): Uint8Array;
 }
@@ -107,6 +111,7 @@ export function openDocxSession(bytes: Uint8Array): DocxEditorSession {
     },
     undo: () => (editable && store.canUndo() ? store.undo().ok : false),
     redo: () => (editable && store.canRedo() ? store.redoLast().ok : false),
+    subscribe: (onChange) => store.subscribe(() => onChange()),
     currentModel: () => store.currentModel,
     revision: () => store.currentRevision,
     // Only an editable document re-serializes (verbatim package + patched paragraphs). A

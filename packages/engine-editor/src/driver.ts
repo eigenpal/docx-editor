@@ -9,17 +9,27 @@ import type { DisplayPage, DocRange } from '@docx-editor.dev/core-contract/geome
 import type { ExecResult } from '@docx-editor.dev/core-contract/types';
 import { createEditor } from './create-editor.ts';
 
-/** The text a display page shows, in reading order. Layout splits a paragraph into one item per
- *  word (the inter-word space is consumed), so items are joined with a single space to reconstruct
- *  readable text (e.g. "Hello" + "world" -> "Hello world"); a single item's runs join tightly. This
- *  is an APPROXIMATION of visible text (it cannot recover exact whitespace or empty paragraphs) —
- *  fine for the smoke driver's "contains" assertions, not a faithful body-text extraction. */
+/** The text a display page shows, in reading order. Layout emits one item per run-part (a maximal
+ *  non-space chunk of a run), consuming inter-word spaces, so text is reconstructed from item BOX
+ *  geometry: contiguous items on a line (no horizontal gap) are one word and join tightly (a
+ *  bold "Hel" + italic "lo" -> "Hello"), a horizontal gap is a consumed space, and a new line is a
+ *  newline. This is an approximation of visible text (it cannot recover exact whitespace runs or
+ *  empty paragraphs) — fine for the smoke driver's "contains" assertions, not faithful extraction. */
 export function pageText(page: DisplayPage): string {
-  const words: string[] = [];
+  let out = '';
+  let prev: { x: number; y: number; right: number } | null = null;
   for (const item of page.items) {
-    if (item.kind === 'text') words.push(item.runs.map((r) => r.text).join(''));
+    if (item.kind !== 'text') continue;
+    const b = item.box;
+    if (prev) {
+      if (Math.abs(b.y - prev.y) >= 1) out += '\n'; // wrapped / next line
+      else if (b.x - prev.right > 1) out += ' '; // a consumed inter-word space
+      // else: contiguous run-parts of one word — no separator
+    }
+    out += item.runs.map((r) => r.text).join('');
+    prev = { x: b.x, y: b.y, right: b.x + b.width };
   }
-  return words.join(' ');
+  return out;
 }
 
 /** The whole display's approximate text: each page's text, pages joined by newlines. */

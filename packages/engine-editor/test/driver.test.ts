@@ -51,6 +51,27 @@ describe('EditorDriver over the production editor', () => {
     driver.dispose();
   });
 
+  test('pageText reconstructs spacing from box geometry (tight word, gap = space, line = newline)', async () => {
+    const { pageText } = await import('../src/driver.ts');
+    const run = (t: string) => ({ text: t, box: { x: 0, y: 0, width: 0, height: 0 }, fontFamily: 'A', fontSizePx: 5, color: { kind: 'auto' as const } });
+    const t = (x: number, y: number, width: number, text: string) => ({
+      kind: 'text' as const,
+      box: { x, y, width, height: 10 },
+      runs: [run(text)],
+      docFrom: 0,
+      docTo: text.length,
+      blockId: 0,
+      scope: { kind: 'body' as const },
+    });
+    const page: DisplayPage = {
+      index: 0,
+      box: { x: 0, y: 0, width: 100, height: 100 },
+      // "Hel"+"lo" contiguous (one word), then a gap before "world", then a new line "next".
+      items: [t(0, 0, 30, 'Hel'), t(30, 0, 20, 'lo'), t(60, 0, 40, 'world'), t(0, 20, 40, 'next')],
+    };
+    expect(pageText(page)).toBe('Hello world\nnext');
+  });
+
   test('displayText joins page text with newlines', () => {
     const pages: DisplayPage[] = [
       { index: 0, box: { x: 0, y: 0, width: 10, height: 10 }, items: [{ kind: 'text', box: { x: 0, y: 0, width: 5, height: 5 }, runs: [{ text: 'hi', box: { x: 0, y: 0, width: 5, height: 5 }, fontFamily: 'A', fontSizePx: 5, color: { kind: 'auto' } }], docFrom: 0, docTo: 2, blockId: 0, scope: { kind: 'body' } }] },

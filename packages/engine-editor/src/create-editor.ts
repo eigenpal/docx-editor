@@ -94,6 +94,7 @@ export function createEditor(config: EditorConfig): Editor {
 
   let session: DocxEditorSession | null = null;
   let surface: EditSurface | null = null;
+  let sharedUnsub: (() => void) | null = null; // store subscription for a live read-only shared view
   let mountedBodyEl: HTMLElement | null = null; // the element `surface` is bound to (host may swap it)
   let displayPages: readonly DisplayPage[] = [];
   let handle: DocumentHandle | null = null;
@@ -156,7 +157,17 @@ export function createEditor(config: EditorConfig): Editor {
     surface?.destroy();
     surface = null;
     mountedBodyEl = null;
+    sharedUnsub?.();
+    sharedUnsub = null;
     session = next;
+    // A read-only shared view has no surface of its own, so subscribe to the shared store to repaint
+    // when the OWNING editor commits — a live view, not a stale snapshot.
+    if (sharedView) {
+      sharedUnsub = next.subscribe(() => {
+        relayoutAndPaint();
+        emit('change', { revision: next.revision() });
+      });
+    }
     // A stable handle for THIS document: live revision + the SESSION registered weakly, so another
     // editor loading the handle shares this exact store.
     const h: DocumentHandle = Object.defineProperty({} as DocumentHandle, 'revision', {
@@ -239,6 +250,8 @@ export function createEditor(config: EditorConfig): Editor {
       surface?.destroy();
       surface = null;
       mountedBodyEl = null;
+      sharedUnsub?.();
+      sharedUnsub = null;
       session = null;
       handle = null;
       displayPages = [];
